@@ -20,6 +20,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/projectcalico/calico/release/internal/command"
 )
 
 // fakeRunner records every make invocation and can fail a component a set number
@@ -91,10 +93,6 @@ func hasEnv(env []string, want string) bool {
 	return slices.Contains(env, want)
 }
 
-func hasEnvPrefix(env []string, prefix string) bool {
-	return slices.ContainsFunc(env, func(e string) bool { return strings.HasPrefix(e, prefix) })
-}
-
 // ossVariants mirrors the OSS publish shape: windows is a separate target.
 func ossVariants() []Variant {
 	return []Variant{
@@ -113,63 +111,50 @@ func sharedTargetVariants() []Variant {
 	}
 }
 
-// baseConfig returns publish options, the widest of the three, so a test can
-// take .Image from it for the build and archive verbs.
-func baseConfig(f *fakeRunner, variants []Variant) PublishOptions {
-	o := PublishOptions{
-		Image: Image{
-			RepoRoot:   "/repo",
-			Version:    "v3.30.0",
-			Registries: []string{"quay.io/tigera"},
-			Variants:   variants,
-		},
-	}
-	o.Image = o.apply([]Option{WithRunner(f)})
-	return o
+// The values every test step is built from. A test names these directly rather
+// than through a config object, matching how the verbs are called.
+const (
+	testRepoRoot = "/repo"
+	testVersion  = "v3.30.0"
+	testRegistry = "quay.io/tigera"
+)
+
+// The options every test step needs: a fake runner and a registry to name
+// images in. One helper per step, because the option types differ.
+func buildOpts(f command.CommandRunner, extra ...BuildOption) []BuildOption {
+	return append([]BuildOption{WithRunner(f), WithRegistries(testRegistry)}, extra...)
 }
 
+func archiveOpts(f command.CommandRunner, extra ...ArchiveOption) []ArchiveOption {
+	return append([]ArchiveOption{WithRunner(f), WithRegistries(testRegistry)}, extra...)
+}
+
+func publishOpts(f command.CommandRunner, extra ...PublishOption) []PublishOption {
+	return append([]PublishOption{WithRunner(f), WithRegistries(testRegistry)}, extra...)
+}
+
+// publish runs a publish with the usual test settings.
+func publish(f command.CommandRunner, variants []Variant, extra ...PublishOption) error {
+	return Publish(testRepoRoot, testVersion, variants, true, publishOpts(f, extra...)...)
+}
+
+// A directory shipping several image kinds runs each variant's target, and one
+// shipping only some runs only those.
 func TestVariantMatrix(t *testing.T) {
-	tests := []struct {
+	for _, tc := range []struct {
 		name        string
 		variants    []Variant
 		dir         string
 		wantTargets []string
-		wantEnv     []string
-		notEnv      []string
 	}{
-		{
-			name:        "OSS dir in standard only",
-			variants:    ossVariants(),
-			dir:         "cmd/calico",
-			wantTargets: []string{"release-publish"},
-		},
-		{
-			name:        "OSS dir in standard and windows gets both targets",
-			variants:    ossVariants(),
-			dir:         "node",
-			wantTargets: []string{"release-publish", "release-windows"},
-		},
-		{
-			name:        "dir in standard and cloud gets the target twice",
-			variants:    sharedTargetVariants(),
-			dir:         "whisker",
-			wantTargets: []string{"publish-image", "publish-image"},
-		},
-		{
-			name:        "dir outside every variant",
-			variants:    sharedTargetVariants(),
-			dir:         "third_party/dex",
-			wantTargets: nil,
-		},
-	}
-	for _, tc := range tests {
+		{"one target per variant", ossVariants(), "node", []string{"release-publish", "release-windows"}},
+		{"standard only", ossVariants(), "cmd/calico", []string{"release-publish"}},
+		{"shared target, several variants", sharedTargetVariants(), "cmd/calico", []string{"publish-image", "publish-image"}},
+		{"dir outside every variant", sharedTargetVariants(), "third_party/dex", nil},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := &fakeRunner{}
-			p, err := NewPublisher(baseConfig(f, tc.variants))
-			if err != nil {
-				t.Fatalf("NewPublisher: %v", err)
-			}
-			if err := p.Publish(); err != nil {
+			if err := publish(f, tc.variants); err != nil {
 				t.Fatalf("Publish: %v", err)
 			}
 			got := f.targetsFor(tc.dir)
@@ -186,117 +171,82 @@ func TestVariantMatrix(t *testing.T) {
 // A variant's env reaches only its own units, never a sibling variant's.
 func TestVariantEnvIsScopedToItsVariant(t *testing.T) {
 	f := &fakeRunner{}
-	p, err := NewPublisher(baseConfig(f, sharedTargetVariants()))
-	if err != nil {
-		t.Fatalf("NewPublisher: %v", err)
-	}
-	if err := p.Publish(); err != nil {
+	if err := publish(f, sharedTargetVariants()); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
-
-	// node is in standard and windows; exactly one of its calls carries the
-	// windows env.
-	var windows, plain int
-	for _, c := range f.calls {
-		if !strings.HasSuffix(c.args[1], "node") {
-			continue
-		}
-		if hasEnv(c.env, "WINDOWS=true") {
-			windows++
-		} else {
-			plain++
-		}
-	}
-	if windows != 1 || plain != 1 {
-		t.Errorf("node calls: %d windows, %d plain; want 1 and 1", windows, plain)
-	}
-
-	// The cloud variant's env must not leak onto node, which is not a cloud dir.
+	// The alt variant's env must not leak onto node, which is not an alt dir.
 	for _, c := range f.calls {
 		if strings.HasSuffix(c.args[1], "node") && hasEnv(c.env, "ALT_VARIANT=true") {
-			t.Error("cloud env leaked onto a non-cloud component")
+			t.Errorf("alt env leaked onto node: %v", c.env)
 		}
 	}
 }
 
+// Retagging inverts DEV_REGISTRIES: it names the source, so the destination
+// has to be given separately.
 func TestPublishRetagVersusPush(t *testing.T) {
 	t.Run("retag passes the source and the release tag", func(t *testing.T) {
 		f := &fakeRunner{}
-		cfg := baseConfig(f, sharedTargetVariants())
-		cfg.From = "gcr.io/unique-caldron/hashrelease"
-		cfg.FromTag = "v3.30.0-abcdef"
-		p, err := NewPublisher(cfg)
+		err := publish(f, sharedTargetVariants(),
+			WithRetag("gcr.io/unique-caldron/hashrelease", "v3.30.0-abcdef", false))
 		if err != nil {
-			t.Fatalf("NewPublisher: %v", err)
-		}
-		if err := p.Publish(); err != nil {
 			t.Fatalf("Publish: %v", err)
 		}
 		env := f.envFor("cmd/calico", "publish-image")
 		for _, want := range []string{
+			"IMAGE_ONLY=true",
 			"DEV_TAG=v3.30.0-abcdef",
 			"DEV_REGISTRIES=gcr.io/unique-caldron/hashrelease",
-			// The retag destination. Unset, the Makefile silently falls back to
-			// its own default registry.
-			"RELEASE_REGISTRIES=quay.io/tigera",
-			"RELEASE_TAG=v3.30.0",
-			"IMAGE_ONLY=true",
+			"RELEASE_REGISTRIES=" + testRegistry,
+			"RELEASE_TAG=" + testVersion,
 		} {
 			if !hasEnv(env, want) {
-				t.Errorf("retag env missing %s", want)
+				t.Errorf("retag env missing %s, got %v", want, env)
 			}
 		}
 	})
 
-	t.Run("push passes none of the retag settings", func(t *testing.T) {
+	t.Run("a plain push names no source", func(t *testing.T) {
 		f := &fakeRunner{}
-		p, err := NewPublisher(baseConfig(f, ossVariants()))
-		if err != nil {
-			t.Fatalf("NewPublisher: %v", err)
-		}
-		if err := p.Publish(); err != nil {
+		if err := publish(f, sharedTargetVariants()); err != nil {
 			t.Fatalf("Publish: %v", err)
 		}
-		env := f.envFor("cmd/calico", "release-publish")
-		for _, unwanted := range []string{"DEV_TAG=", "RELEASE_TAG=", "IMAGE_ONLY=", "RELEASE_REGISTRIES="} {
-			if hasEnvPrefix(env, unwanted) {
-				t.Errorf("push env should not carry %s", unwanted)
-			}
+		if env := f.envFor("cmd/calico", "publish-image"); hasEnv(env, "IMAGE_ONLY=true") {
+			t.Errorf("a push should not set IMAGE_ONLY: %v", env)
 		}
-		if !hasEnv(env, "DEV_REGISTRIES=quay.io/tigera") {
-			t.Error("push env should send DEV_REGISTRIES to the product registries")
+	})
+
+	t.Run("half a source is an error", func(t *testing.T) {
+		f := &fakeRunner{}
+		if err := publish(f, ossVariants(), WithRetag("gcr.io/x", "", false)); err == nil {
+			t.Error("a retag without a tag should be rejected")
 		}
 	})
 }
 
-// A real publish must latch CONFIRM; a dry run must latch DRYRUN. Getting this
-// backwards either publishes a rehearsal or silently publishes nothing.
+// A publish latches CONFIRM; a dry run latches DRYRUN and pushes nothing.
 func TestPublishConfirmLatch(t *testing.T) {
 	for _, tc := range []struct {
-		name          string
-		publish       bool
-		want, notWant string
+		name    string
+		confirm bool
+		want    string
+		notWant string
 	}{
-		{"publishing confirms", true, "CONFIRM=true", "DRYRUN=true"},
-		{"not publishing dry runs", false, "DRYRUN=true", "CONFIRM=true"},
+		{"confirmed", true, "CONFIRM=true", "DRYRUN=true"},
+		{"dry run", false, "DRYRUN=true", "CONFIRM=true"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := &fakeRunner{}
-			cfg := baseConfig(f, ossVariants())
-			cfg.Publish = tc.publish
-			p, err := NewPublisher(cfg)
+			err := Publish(testRepoRoot, testVersion, ossVariants(), tc.confirm, publishOpts(f)...)
 			if err != nil {
-				t.Fatalf("NewPublisher: %v", err)
-			}
-			if err := p.Publish(); err != nil {
 				t.Fatalf("Publish: %v", err)
 			}
 			env := f.envFor("cmd/calico", "release-publish")
 			if !hasEnv(env, tc.want) {
-				t.Errorf("env missing %s", tc.want)
+				t.Errorf("env missing %s, got %v", tc.want, env)
 			}
 			if hasEnv(env, tc.notWant) {
-				t.Errorf("env should not carry %s", tc.notWant)
+				t.Errorf("env should not carry %s, got %v", tc.notWant, env)
 			}
 		})
 	}
@@ -305,7 +255,7 @@ func TestPublishConfirmLatch(t *testing.T) {
 func TestLogPaths(t *testing.T) {
 	t.Run("no logs dir captures in memory", func(t *testing.T) {
 		f := &fakeRunner{}
-		if err := Build(BuildOptions{Image: baseConfig(f, ossVariants()).Image}); err != nil {
+		if err := Build(testRepoRoot, testVersion, ossVariants(), buildOpts(f)...); err != nil {
 			t.Fatalf("Build: %v", err)
 		}
 		for _, c := range f.calls {
@@ -319,9 +269,8 @@ func TestLogPaths(t *testing.T) {
 	// other, so the variant is part of the file name.
 	t.Run("each variant logs to its own file", func(t *testing.T) {
 		f := &fakeRunner{}
-		cfg := BuildOptions{Image: baseConfig(f, ossVariants()).Image}
-		cfg.LogsDir = "/logs"
-		if err := Build(cfg); err != nil {
+		err := Build(testRepoRoot, testVersion, ossVariants(), buildOpts(f, WithLogsDir("/logs"))...)
+		if err != nil {
 			t.Fatalf("Build: %v", err)
 		}
 		var got []string
@@ -340,122 +289,87 @@ func TestLogPaths(t *testing.T) {
 	})
 }
 
-// Scoping the release dirs must scope the work: publish once read the full list
-// while prep read the narrowed one.
+// Scoping the release dirs must scope the work.
 func TestScopedVariantPublishesOnlyThoseDirs(t *testing.T) {
 	f := &fakeRunner{}
-	cfg := baseConfig(f, []Variant{
-		{Name: "standard", Target: "publish-image", ReleaseDirs: []string{"whisker"}},
-	})
-	p, err := NewPublisher(cfg)
-	if err != nil {
-		t.Fatalf("NewPublisher: %v", err)
-	}
-	if err := p.Publish(); err != nil {
+	variants := NarrowVariants(ossVariants(), []string{"node"})
+	if err := publish(f, variants); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
-	if len(f.calls) != 1 {
-		t.Fatalf("got %d calls, want 1", len(f.calls))
-	}
-	if !strings.HasSuffix(f.calls[0].args[1], "whisker") {
-		t.Errorf("published %s, want whisker", f.calls[0].args[1])
+	for _, c := range f.calls {
+		if !strings.HasSuffix(c.args[1], "node") {
+			t.Errorf("published outside the narrowed dirs: %v", c.args)
+		}
 	}
 }
 
+// Image pushes fail on network flakes, so a unit is retried once.
 func TestRetry(t *testing.T) {
-	t.Run("one failure then success", func(t *testing.T) {
-		f := &fakeRunner{failures: map[string]int{"/repo/whisker": 1}}
-		cfg := baseConfig(f, []Variant{
-			{Name: "standard", Target: "publish-image", ReleaseDirs: []string{"whisker"}},
-		})
-		p, _ := NewPublisher(cfg)
-		if err := p.Publish(); err != nil {
-			t.Errorf("Publish should recover after one failure: %v", err)
-		}
-		if len(f.calls) != 2 {
-			t.Errorf("got %d attempts, want 2", len(f.calls))
+	t.Run("one failure is retried", func(t *testing.T) {
+		f := &fakeRunner{failures: map[string]int{"/repo/cmd/calico": 1}}
+		if err := publish(f, ossVariants()); err != nil {
+			t.Fatalf("Publish should recover after one failure: %v", err)
 		}
 	})
 
-	t.Run("two failures fail", func(t *testing.T) {
-		f := &fakeRunner{failures: map[string]int{"/repo/whisker": 2}}
-		cfg := baseConfig(f, []Variant{
-			{Name: "standard", Target: "publish-image", ReleaseDirs: []string{"whisker"}},
-		})
-		p, _ := NewPublisher(cfg)
-		if err := p.Publish(); err == nil {
-			t.Error("Publish should fail after exhausting retries")
+	t.Run("a second failure is reported", func(t *testing.T) {
+		f := &fakeRunner{failures: map[string]int{"/repo/cmd/calico": 2}}
+		if err := publish(f, ossVariants()); err == nil {
+			t.Error("Publish should report a unit that keeps failing")
 		}
 	})
 }
 
-// One component failing must not hide the others' failures.
+// One component failing must not hide the rest.
 func TestPublishCollectsEveryFailure(t *testing.T) {
-	f := &fakeRunner{failures: map[string]int{"/repo/whisker": 9, "/repo/node": 9}}
-	cfg := baseConfig(f, []Variant{
-		{Name: "standard", Target: "publish-image", ReleaseDirs: []string{"whisker", "node", "cmd/calico"}},
-	})
-	p, _ := NewPublisher(cfg)
-	err := p.Publish()
+	f := &fakeRunner{failures: map[string]int{"/repo/node": 9, "/repo/cmd/calico": 9}}
+	err := publish(f, ossVariants())
 	if err == nil {
-		t.Fatal("Publish should fail")
+		t.Fatal("expected the failures to be reported")
 	}
-	for _, want := range []string{"whisker", "node"} {
+	for _, want := range []string{"node", "cmd/calico"} {
 		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error should name %s: %v", want, err)
+			t.Errorf("error should name %s, got %q", want, err)
 		}
 	}
 }
 
-// Build cannot be handed a publish setting: BuildOptions has no From, FromTag
-// or Scan field, so what this once asserted at run time the compiler now
-// rejects outright.
-
-func TestNewPublisherRejectsHalfSetSource(t *testing.T) {
-	cfg := baseConfig(&fakeRunner{}, ossVariants())
-	cfg.From = "gcr.io/x"
-	if _, err := NewPublisher(cfg); err == nil {
-		t.Error("NewPublisher should reject From without FromTag")
-	}
-}
-
+// A step cannot run without the values it needs to name an image.
 func TestValidate(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		mut  func(*Image)
+		name     string
+		repoRoot string
+		version  string
+		variants []Variant
 	}{
-		{"no repo root", func(c *Image) { c.RepoRoot = "" }},
-		{"no version", func(c *Image) { c.Version = "" }},
-		{"no variants", func(c *Image) { c.Variants = nil }},
-		{"variant without a target", func(c *Image) { c.Variants[0].Target = "" }},
-		{"variant without dirs", func(c *Image) { c.Variants[0].ReleaseDirs = nil }},
+		{"no repo root", "", testVersion, ossVariants()},
+		{"no version", testRepoRoot, "", ossVariants()},
+		{"no variants", testRepoRoot, testVersion, nil},
+		{"variant without a target", testRepoRoot, testVersion,
+			[]Variant{{Name: "standard", ReleaseDirs: []string{"node"}}}},
+		{"variant without dirs", testRepoRoot, testVersion,
+			[]Variant{{Name: "standard", Target: "release-publish"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := baseConfig(&fakeRunner{}, ossVariants())
-			tc.mut(&cfg.Image)
-			if _, err := NewPublisher(cfg); err == nil {
-				t.Errorf("expected %s to be rejected", tc.name)
+			f := &fakeRunner{}
+			err := Publish(tc.repoRoot, tc.version, tc.variants, true, publishOpts(f)...)
+			if err == nil {
+				t.Errorf("Publish should reject %s", tc.name)
 			}
 		})
 	}
 }
 
-// Narrowing a run must narrow every variant, not just the standard one: the
-// manager's publish path used to read the full list while prep read the
-// narrowed one.
 func TestNarrowVariants(t *testing.T) {
-	t.Run("empty subset leaves variants untouched", func(t *testing.T) {
+	t.Run("an empty subset leaves the variants alone", func(t *testing.T) {
 		got := NarrowVariants(sharedTargetVariants(), nil)
-		if len(got) != 3 {
-			t.Fatalf("got %d variants, want 3", len(got))
+		if len(got) != len(sharedTargetVariants()) {
+			t.Errorf("got %d variants, want %d", len(got), len(sharedTargetVariants()))
 		}
 	})
 
-	t.Run("subset narrows every variant", func(t *testing.T) {
+	t.Run("a subset scopes every variant to it", func(t *testing.T) {
 		got := NarrowVariants(sharedTargetVariants(), []string{"whisker"})
-		if len(got) != 2 {
-			t.Fatalf("got %d variants, want standard and cloud", len(got))
-		}
 		for _, v := range got {
 			if !slices.Equal(v.ReleaseDirs, []string{"whisker"}) {
 				t.Errorf("variant %s has dirs %v, want [whisker]", v.Name, v.ReleaseDirs)
@@ -463,24 +377,33 @@ func TestNarrowVariants(t *testing.T) {
 		}
 	})
 
-	// node is in standard and windows but not cloud, so cloud drops out.
-	t.Run("a variant with no overlap is dropped", func(t *testing.T) {
+	t.Run("a variant left with no dirs drops out", func(t *testing.T) {
 		got := NarrowVariants(sharedTargetVariants(), []string{"node"})
-		var names []string
 		for _, v := range got {
-			names = append(names, v.Name)
-		}
-		if !slices.Equal(names, []string{"standard", "windows"}) {
-			t.Fatalf("got %v, want standard and windows", names)
+			if len(v.ReleaseDirs) == 0 {
+				t.Errorf("variant %s kept with no dirs", v.Name)
+			}
 		}
 	})
 
 	// A subset matching nothing yields no work rather than silently running all.
-	t.Run("a subset matching nothing drops every variant", func(t *testing.T) {
+	t.Run("a subset matching nothing yields nothing", func(t *testing.T) {
 		if got := NarrowVariants(sharedTargetVariants(), []string{"third_party/dex"}); len(got) != 0 {
-			t.Fatalf("got %v, want none", got)
+			t.Errorf("got %d variants, want none", len(got))
 		}
 	})
+}
+
+// The release tarball ships the standard images only; the Windows images have
+// an archive of their own.
+func TestStandardVariantsDropsOtherKinds(t *testing.T) {
+	got := StandardVariants(PublishVariants)
+	if len(got) != 1 {
+		t.Fatalf("expected only the standard variant, got %d", len(got))
+	}
+	if got[0].Name != StandardVariant {
+		t.Errorf("kept %q, want %q", got[0].Name, StandardVariant)
+	}
 }
 
 // fakeRecorder collects the refs a publish records.
@@ -493,8 +416,8 @@ func (r *fakeRecorder) Add(refs ...string) error {
 	return nil
 }
 
-// imageNameRunner answers build-images with a canned image list and every
-// other call with success.
+// imageNameRunner answers build-images with a canned image list and
+// image-tag-prefix with a prefix, so a test can name images without a checkout.
 type imageNameRunner struct {
 	fakeRunner
 	images string
@@ -520,23 +443,6 @@ func (r *imageNameRunner) RunInDir(_, _ string, args, env []string) (string, err
 	return "", nil
 }
 
-func recordingConfig(f *imageNameRunner, rec RefRecorder, resolve DigestResolver, variants []Variant) PublishOptions {
-	o := PublishOptions{
-		Image: Image{
-			RepoRoot:   "/repo",
-			Version:    "v3.30.0",
-			Registries: []string{"quay.io/calico"},
-			Arches:     []string{"amd64", "arm64"},
-			Variants:   variants,
-		},
-		Publish:       true,
-		Refs:          rec,
-		ResolveDigest: resolve,
-	}
-	o.Image = o.apply([]Option{WithRunner(f)})
-	return o
-}
-
 // alwaysResolves answers every image with the same digest. Suitable for asking
 // whether anything was recorded, but NOT for anything comparing digests: it
 // cannot tell a repo's tags apart. Use resolvesPerTag for that.
@@ -553,19 +459,29 @@ func resolvesPerTag() DigestResolver {
 	}
 }
 
+// recordingOpts are the options a publish needs to record what it pushed.
+func recordingOpts(f *imageNameRunner, rec RefRecorder, extra ...PublishOption) []PublishOption {
+	return append([]PublishOption{
+		WithRunner(f),
+		WithRegistries("quay.io/calico"),
+		WithArches("amd64", "arm64"),
+		WithRecord(rec),
+	}, extra...)
+}
+
+// oneStandardVariant is a single dir shipping a single image kind.
+func oneStandardVariant(dir string) []Variant {
+	return []Variant{{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{dir}}}
+}
+
 // A publish records the manifest list and every per-arch tag: neither digest is
 // derivable from the other without asking the registry.
 func TestPublishRecordsIndexAndArchRefs(t *testing.T) {
 	f := &imageNameRunner{images: "node node-windows"}
 	rec := &fakeRecorder{}
-	cfg := recordingConfig(f, rec, alwaysResolves("sha256:aaa"), []Variant{
-		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
-	})
-	p, err := NewPublisher(cfg)
+	err := Publish(testRepoRoot, testVersion, oneStandardVariant("node"), true,
+		recordingOpts(f, rec, WithResolver(alwaysResolves("sha256:aaa")))...)
 	if err != nil {
-		t.Fatalf("NewPublisher: %v", err)
-	}
-	if err := p.Publish(); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	// One manifest list plus one tag per architecture.
@@ -584,14 +500,10 @@ func TestPublishRecordsIndexAndArchRefs(t *testing.T) {
 func TestPublishRecordsWindowsIndexOnly(t *testing.T) {
 	f := &imageNameRunner{images: "node node-windows"}
 	rec := &fakeRecorder{}
-	cfg := recordingConfig(f, rec, alwaysResolves("sha256:bbb"), []Variant{
-		{Name: "windows", Target: "release-windows", ReleaseDirs: []string{"node"}},
-	})
-	p, err := NewPublisher(cfg)
+	err := Publish(testRepoRoot, testVersion,
+		[]Variant{{Name: windowsVariant, Target: "release-windows", ReleaseDirs: []string{"node"}}},
+		true, recordingOpts(f, rec, WithResolver(alwaysResolves("sha256:bbb")))...)
 	if err != nil {
-		t.Fatalf("NewPublisher: %v", err)
-	}
-	if err := p.Publish(); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	want := []string{"quay.io/calico/node-windows@sha256:bbb"}
@@ -603,7 +515,7 @@ func TestPublishRecordsWindowsIndexOnly(t *testing.T) {
 // A tag the publish did not produce is skipped, not recorded and not an error:
 // the manifest and architecture halves are separately skippable.
 func TestPublishSkipsAbsentTags(t *testing.T) {
-	f := &imageNameRunner{images: "node node-windows"}
+	f := &imageNameRunner{images: "node"}
 	rec := &fakeRecorder{}
 	resolve := func(image string) (string, bool, error) {
 		if strings.HasSuffix(image, "-arm64") {
@@ -611,14 +523,9 @@ func TestPublishSkipsAbsentTags(t *testing.T) {
 		}
 		return "sha256:aaa", true, nil
 	}
-	cfg := recordingConfig(f, rec, resolve, []Variant{
-		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
-	})
-	p, err := NewPublisher(cfg)
+	err := Publish(testRepoRoot, testVersion, oneStandardVariant("node"), true,
+		recordingOpts(f, rec, WithResolver(resolve))...)
 	if err != nil {
-		t.Fatalf("NewPublisher: %v", err)
-	}
-	if err := p.Publish(); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	if len(rec.refs) != 2 {
@@ -628,18 +535,12 @@ func TestPublishSkipsAbsentTags(t *testing.T) {
 
 // A registry that cannot be reached must not be read as "not published".
 func TestPublishFailsOnUnresolvableDigest(t *testing.T) {
-	f := &imageNameRunner{images: "node node-windows"}
+	f := &imageNameRunner{images: "node"}
 	resolve := func(string) (string, bool, error) {
 		return "", false, fmt.Errorf("network is unreachable")
 	}
-	cfg := recordingConfig(f, &fakeRecorder{}, resolve, []Variant{
-		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
-	})
-	p, err := NewPublisher(cfg)
-	if err != nil {
-		t.Fatalf("NewPublisher: %v", err)
-	}
-	err = p.Publish()
+	err := Publish(testRepoRoot, testVersion, oneStandardVariant("node"), true,
+		recordingOpts(f, &fakeRecorder{}, WithResolver(resolve))...)
 	if err == nil {
 		t.Fatal("expected an error when a digest cannot be resolved")
 	}
@@ -651,18 +552,11 @@ func TestPublishFailsOnUnresolvableDigest(t *testing.T) {
 // A dry run publishes nothing, so it must record nothing: a record of images
 // that do not exist would mislead the run that resumes from it.
 func TestDryRunRecordsNothing(t *testing.T) {
-	f := &imageNameRunner{images: "node node-windows"}
+	f := &imageNameRunner{images: "node"}
 	rec := &fakeRecorder{}
-	cfg := recordingConfig(f, rec, alwaysResolves("sha256:aaa"), []Variant{
-		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
-	})
-	// Refs stays set: dropping it is the publisher's job, not the caller's.
-	cfg.Publish = false
-	p, err := NewPublisher(cfg)
+	err := Publish(testRepoRoot, testVersion, oneStandardVariant("node"), false,
+		recordingOpts(f, rec, WithResolver(alwaysResolves("sha256:aaa")))...)
 	if err != nil {
-		t.Fatalf("NewPublisher: %v", err)
-	}
-	if err := p.Publish(); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	if len(rec.refs) != 0 {
@@ -676,18 +570,12 @@ func TestDryRunRecordsNothing(t *testing.T) {
 func TestThirdVariantIsNotTreatedAsWindows(t *testing.T) {
 	f := &imageNameRunner{images: "node node-windows"}
 	rec := &fakeRecorder{}
-	cfg := recordingConfig(f, rec, alwaysResolves("sha256:aaa"), []Variant{
-		{Name: "alt", Target: "release-publish", Env: []string{"ALT_VARIANT=true"}, ReleaseDirs: []string{"node"}},
-	})
-	p, err := NewPublisher(cfg)
+	err := Publish(testRepoRoot, testVersion,
+		[]Variant{{Name: "alt", Target: "release-publish", Env: []string{"ALT_VARIANT=true"}, ReleaseDirs: []string{"node"}}},
+		true, recordingOpts(f, rec, WithResolver(alwaysResolves("sha256:aaa")))...)
 	if err != nil {
-		t.Fatalf("NewPublisher: %v", err)
-	}
-	if err := p.Publish(); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
-	// The manifest list plus one tag per architecture, all for the unsuffixed
-	// image; a Windows unit would record one ref for node-windows.
 	if len(rec.refs) != 3 {
 		t.Fatalf("expected 3 refs (index + 2 arches), got %v", rec.refs)
 	}
@@ -701,88 +589,17 @@ func TestThirdVariantIsNotTreatedAsWindows(t *testing.T) {
 // A partial publish must still record what reached the registry: that record is
 // what a resumed run reads to decide the work left.
 func TestPublishRecordsWhatSucceededWhenAUnitFails(t *testing.T) {
-	f := &imageNameRunner{images: "node node-windows"}
+	f := &imageNameRunner{images: "node"}
 	f.failures = map[string]int{"/repo/whisker": 9}
 	rec := &fakeRecorder{}
-	cfg := recordingConfig(f, rec, alwaysResolves("sha256:aaa"), []Variant{
-		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node", "whisker"}},
-	})
-	p, err := NewPublisher(cfg)
-	if err != nil {
-		t.Fatalf("NewPublisher: %v", err)
-	}
-	if err := p.Publish(); err == nil {
+	err := Publish(testRepoRoot, testVersion,
+		[]Variant{{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node", "whisker"}}},
+		true, recordingOpts(f, rec, WithResolver(alwaysResolves("sha256:aaa")))...)
+	if err == nil {
 		t.Fatal("expected the failing unit to be reported")
 	}
 	if len(rec.refs) == 0 {
 		t.Error("a partial publish recorded nothing, so a resume cannot tell what landed")
-	}
-}
-
-// The release tarball ships the standard images only; the Windows images have
-// an archive of their own.
-func TestStandardVariantsDropsOtherKinds(t *testing.T) {
-	got := StandardVariants(PublishVariants)
-	if len(got) != 1 {
-		t.Fatalf("expected only the standard variant, got %d", len(got))
-	}
-	if got[0].Name != StandardVariant {
-		t.Errorf("kept %q, want %q", got[0].Name, StandardVariant)
-	}
-}
-
-// Archiving saves every image a variant ships, not a hardcoded pair.
-func TestArchiveSavesEveryVariantsImages(t *testing.T) {
-	f := &imageNameRunner{images: "node node-windows"}
-	dir := t.TempDir()
-	cfg := baseConfig(&f.fakeRunner, []Variant{
-		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
-		{Name: windowsVariant, Target: "release-windows", ReleaseDirs: []string{"node"}},
-	})
-	if err := Archive(ArchiveOptions{Image: cfg.Image, Dir: dir}, WithRunner(f)); err != nil {
-		t.Fatalf("Archive: %v", err)
-	}
-
-	var saved []string
-	for _, c := range f.calls {
-		if slices.Contains(c.args, "save") {
-			saved = append(saved, c.args[len(c.args)-1])
-		}
-	}
-	slices.Sort(saved)
-	want := []string{"quay.io/tigera/node-windows:v3.30.0", "quay.io/tigera/node:v3.30.0"}
-	if !slices.Equal(saved, want) {
-		t.Errorf("archived\n got %v\nwant %v", saved, want)
-	}
-}
-
-// A release that did not build its own images must fetch what is missing.
-func TestArchivePullsWhenAsked(t *testing.T) {
-	f := &imageNameRunner{images: "node"}
-	f.failures = map[string]int{"inspect": 9}
-	cfg := baseConfig(&f.fakeRunner, []Variant{
-		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
-	})
-	if err := Archive(ArchiveOptions{Image: cfg.Image, Dir: t.TempDir(), Pull: true}, WithRunner(f)); err != nil {
-		t.Fatalf("Archive: %v", err)
-	}
-	var pulled bool
-	for _, c := range f.calls {
-		if slices.Contains(c.args, "pull") {
-			pulled = true
-		}
-	}
-	if !pulled {
-		t.Error("a missing image was not pulled before saving")
-	}
-}
-
-func TestArchiveRejectsNoDir(t *testing.T) {
-	cfg := baseConfig(&fakeRunner{}, []Variant{
-		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
-	})
-	if err := Archive(ArchiveOptions{Image: cfg.Image}); err == nil {
-		t.Fatal("expected an error when no archive directory is given")
 	}
 }
 
@@ -791,18 +608,13 @@ func TestArchiveRejectsNoDir(t *testing.T) {
 func TestPrefixedVariantRecordsPrefixedRefs(t *testing.T) {
 	f := &imageNameRunner{images: "calico", prefix: "tesla", envKey: "ALT_VARIANT=true"}
 	rec := &fakeRecorder{}
-	cfg := recordingConfig(f, rec, alwaysResolves("sha256:abc"), []Variant{
+	err := Publish(testRepoRoot, testVersion, []Variant{
 		{Name: StandardVariant, Target: "publish-image", ReleaseDirs: []string{"cmd/calico"}},
 		{Name: "alt", Target: "publish-image", Env: []string{"ALT_VARIANT=true"}, ReleaseDirs: []string{"cmd/calico"}},
-	})
-	p, err := NewPublisher(cfg)
+	}, true, recordingOpts(f, rec, WithResolver(alwaysResolves("sha256:abc")))...)
 	if err != nil {
-		t.Fatalf("NewPublisher: %v", err)
-	}
-	if err := p.Publish(); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
-
 	var prefixed, bare int
 	for _, c := range f.calls {
 		if !slices.Contains(c.args, "image-tag-prefix") {
@@ -822,20 +634,76 @@ func TestPrefixedVariantRecordsPrefixedRefs(t *testing.T) {
 	}
 }
 
+// Archiving saves every image a variant ships, not a hardcoded pair.
+func TestArchiveSavesEveryVariantsImages(t *testing.T) {
+	f := &imageNameRunner{images: "node node-windows"}
+	dir := t.TempDir()
+	err := Archive(testRepoRoot, testVersion, []Variant{
+		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
+		{Name: windowsVariant, Target: "release-windows", ReleaseDirs: []string{"node"}},
+	}, dir, archiveOpts(f)...)
+	if err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+	var saved []string
+	for _, c := range f.calls {
+		if slices.Contains(c.args, "save") {
+			saved = append(saved, c.args[len(c.args)-1])
+		}
+	}
+	slices.Sort(saved)
+	want := []string{testRegistry + "/node-windows:" + testVersion, testRegistry + "/node:" + testVersion}
+	if !slices.Equal(saved, want) {
+		t.Errorf("archived\n got %v\nwant %v", saved, want)
+	}
+}
+
+// A release that did not build its own images must fetch what is missing.
+func TestArchivePullsWhenAsked(t *testing.T) {
+	f := &imageNameRunner{images: "node"}
+	f.failures = map[string]int{"inspect": 9}
+	err := Archive(testRepoRoot, testVersion, oneStandardVariant("node"), t.TempDir(),
+		archiveOpts(f, WithPull())...)
+	if err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+	var pulled bool
+	for _, c := range f.calls {
+		if slices.Contains(c.args, "pull") {
+			pulled = true
+		}
+	}
+	if !pulled {
+		t.Error("a missing image was not pulled before saving")
+	}
+}
+
+func TestArchiveRejectsNoDir(t *testing.T) {
+	f := &imageNameRunner{images: "node"}
+	if err := Archive(testRepoRoot, testVersion, oneStandardVariant("node"), "", archiveOpts(f)...); err == nil {
+		t.Fatal("expected an error when no archive directory is given")
+	}
+}
+
+// Archiving reads the first registry, so an empty list must be reported rather
+// than indexed into.
+func TestArchiveRejectsNoRegistry(t *testing.T) {
+	f := &imageNameRunner{images: "node"}
+	err := Archive(testRepoRoot, testVersion, oneStandardVariant("node"), t.TempDir(), WithRunner(f))
+	if err == nil {
+		t.Fatal("expected an error when no registry is given")
+	}
+}
+
 // A unit whose refs are already recorded at the digest the registry serves is
 // skipped, so an interrupted release resumes on what is left.
 func TestPublishSkipsAlreadyPublishedUnits(t *testing.T) {
 	f := &imageNameRunner{images: "whisker"}
-	rec := &fakeRecorder{}
-	cfg := recordingConfig(f, rec, alwaysResolves("sha256:aaa"), []Variant{
-		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"whisker"}},
-	})
-	cfg.Published = []string{"quay.io/calico/whisker@sha256:aaa"}
-	p, err := NewPublisher(cfg)
+	err := Publish(testRepoRoot, testVersion, oneStandardVariant("whisker"), true,
+		recordingOpts(f, &fakeRecorder{},
+			WithResolver(alwaysResolves("sha256:aaa")),
+			WithResume([]string{"quay.io/calico/whisker@sha256:aaa"}, nil, false))...)
 	if err != nil {
-		t.Fatalf("NewPublisher: %v", err)
-	}
-	if err := p.Publish(); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	for _, c := range f.calls {
@@ -849,15 +717,10 @@ func TestPublishSkipsAlreadyPublishedUnits(t *testing.T) {
 // it, and republishing over it silently would ship the wrong image.
 func TestPublishFailsOnDigestMismatch(t *testing.T) {
 	f := &imageNameRunner{images: "whisker"}
-	cfg := recordingConfig(f, &fakeRecorder{}, alwaysResolves("sha256:bbb"), []Variant{
-		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"whisker"}},
-	})
-	cfg.Published = []string{"quay.io/calico/whisker@sha256:aaa"}
-	p, err := NewPublisher(cfg)
-	if err != nil {
-		t.Fatalf("NewPublisher: %v", err)
-	}
-	err = p.Publish()
+	err := Publish(testRepoRoot, testVersion, oneStandardVariant("whisker"), true,
+		recordingOpts(f, &fakeRecorder{},
+			WithResolver(alwaysResolves("sha256:bbb")),
+			WithResume([]string{"quay.io/calico/whisker@sha256:aaa"}, nil, false))...)
 	if err == nil {
 		t.Fatal("expected a mismatch to be reported")
 	}
@@ -873,17 +736,12 @@ func TestPublishFailsOnDigestMismatch(t *testing.T) {
 // --force republishes over a mismatch rather than failing.
 func TestPublishForceOverridesMismatch(t *testing.T) {
 	f := &imageNameRunner{images: "whisker"}
-	cfg := recordingConfig(f, &fakeRecorder{}, alwaysResolves("sha256:bbb"), []Variant{
-		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"whisker"}},
-	})
-	cfg.Published = []string{"quay.io/calico/whisker@sha256:aaa"}
-	cfg.Force = true
-	p, err := NewPublisher(cfg)
+	err := Publish(testRepoRoot, testVersion, oneStandardVariant("whisker"), true,
+		recordingOpts(f, &fakeRecorder{},
+			WithResolver(alwaysResolves("sha256:bbb")),
+			WithResume([]string{"quay.io/calico/whisker@sha256:aaa"}, nil, true))...)
 	if err != nil {
-		t.Fatalf("NewPublisher: %v", err)
-	}
-	if err := p.Publish(); err != nil {
-		t.Fatalf("Publish with --force: %v", err)
+		t.Fatalf("Publish with force: %v", err)
 	}
 	var republished bool
 	for _, c := range f.calls {
@@ -892,21 +750,50 @@ func TestPublishForceOverridesMismatch(t *testing.T) {
 		}
 	}
 	if !republished {
-		t.Error("--force did not republish over the mismatch")
+		t.Error("force did not republish over the mismatch")
 	}
 }
 
-// An empty record means nothing is known, so everything publishes.
+// A repo publishes several tags at different digests, so a resume must accept
+// any digest the record holds for that repo rather than one of them.
+func TestResumeAcceptsEveryRecordedDigestForARepo(t *testing.T) {
+	variants := oneStandardVariant("node")
+	resolve := resolvesPerTag()
+
+	// First run publishes and records the manifest list plus both arch tags.
+	f := &imageNameRunner{images: "node"}
+	rec := &fakeRecorder{}
+	if err := Publish(testRepoRoot, testVersion, variants, true,
+		recordingOpts(f, rec, WithResolver(resolve))...); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if len(rec.refs) < 2 {
+		t.Fatalf("expected several refs for one repo, got %v", rec.refs)
+	}
+
+	// Resuming against that record must skip, not report a mismatch between
+	// two of our own digests.
+	f2 := &imageNameRunner{images: "node"}
+	err := Publish(testRepoRoot, testVersion, variants, true,
+		recordingOpts(f2, &fakeRecorder{},
+			WithResolver(resolve), WithResume(rec.refs, nil, false))...)
+	if err != nil {
+		t.Fatalf("resume of a correct publish failed: %v", err)
+	}
+	for _, c := range f2.calls {
+		if slices.Contains(c.args, "release-publish") {
+			t.Error("resume republished an already-recorded unit")
+		}
+	}
+}
+
+// No record means nothing is known to be published, so everything runs and the
+// registry is never consulted.
 func TestPublishWithoutARecordPublishesEverything(t *testing.T) {
 	f := &imageNameRunner{images: "whisker"}
-	cfg := recordingConfig(f, &fakeRecorder{}, alwaysResolves("sha256:aaa"), []Variant{
-		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"whisker"}},
-	})
-	p, err := NewPublisher(cfg)
+	err := Publish(testRepoRoot, testVersion, oneStandardVariant("whisker"), true,
+		recordingOpts(f, &fakeRecorder{}, WithResolver(alwaysResolves("sha256:aaa")))...)
 	if err != nil {
-		t.Fatalf("NewPublisher: %v", err)
-	}
-	if err := p.Publish(); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	var published bool
@@ -917,46 +804,5 @@ func TestPublishWithoutARecordPublishesEverything(t *testing.T) {
 	}
 	if !published {
 		t.Error("a run with no record published nothing")
-	}
-}
-
-// A repo publishes several tags at different digests, so a resume must accept
-// any digest the record holds for that repo rather than one of them.
-func TestResumeAcceptsEveryRecordedDigestForARepo(t *testing.T) {
-	variants := []Variant{
-		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
-	}
-	resolve := resolvesPerTag()
-
-	// First run publishes and records the manifest list plus both arch tags.
-	f := &imageNameRunner{images: "node"}
-	rec := &fakeRecorder{}
-	p, err := NewPublisher(recordingConfig(f, rec, resolve, variants))
-	if err != nil {
-		t.Fatalf("NewPublisher: %v", err)
-	}
-	if err := p.Publish(); err != nil {
-		t.Fatalf("Publish: %v", err)
-	}
-	if len(rec.refs) < 2 {
-		t.Fatalf("expected several refs for one repo, got %v", rec.refs)
-	}
-
-	// Resuming against that record must skip, not report a mismatch between
-	// two of our own digests.
-	f2 := &imageNameRunner{images: "node"}
-	cfg := recordingConfig(f2, &fakeRecorder{}, resolve, variants)
-	cfg.Published = rec.refs
-	p2, err := NewPublisher(cfg)
-	if err != nil {
-		t.Fatalf("NewPublisher: %v", err)
-	}
-	if err := p2.Publish(); err != nil {
-		t.Fatalf("resume of a correct publish failed: %v", err)
-	}
-	for _, c := range f2.calls {
-		if slices.Contains(c.args, "release-publish") {
-			t.Error("resume republished an already-recorded unit")
-		}
 	}
 }

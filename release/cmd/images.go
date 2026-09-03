@@ -56,16 +56,14 @@ func imagesBuildCommand(cfg *Config) *cli.Command {
 			if err != nil {
 				return err
 			}
-			return images.Build(images.BuildOptions{
-				Image: images.Image{
-					RepoRoot:   cfg.RepoRootDir,
-					Version:    ver.FormattedString(),
-					Registries: c.StringSlice(registryFlag.Name),
-					Arches:     c.StringSlice(archFlag.Name),
-					Variants:   images.NarrowVariants(images.BuildVariants, c.StringSlice(imageReleaseDirsFlag.Name)),
-				},
-				LogsDir: cfg.LogsDir,
-			}, images.WithRunner(imagesRunner))
+			return images.Build(
+				cfg.RepoRootDir, ver.FormattedString(),
+				images.NarrowVariants(images.BuildVariants, c.StringSlice(imageReleaseDirsFlag.Name)),
+				images.WithRunner(imagesRunner),
+				images.WithRegistries(c.StringSlice(registryFlag.Name)...),
+				images.WithArches(c.StringSlice(archFlag.Name)...),
+				images.WithLogsDir(cfg.LogsDir),
+			)
 		},
 	}
 }
@@ -109,29 +107,32 @@ func imagesPublishCommand(cfg *Config) *cli.Command {
 				}
 				refs = w
 			}
-			p, err := images.NewPublisher(images.PublishOptions{
-				Image: images.Image{
-					RepoRoot:   cfg.RepoRootDir,
-					Version:    ver.FormattedString(),
-					Registries: c.StringSlice(registryFlag.Name),
-					Arches:     c.StringSlice(archFlag.Name),
-					Variants:   images.NarrowVariants(images.PublishVariants, dirs),
-				},
-				Publish:           !c.Bool(localFlag.Name),
-				From:              c.String(fromRegistryFlag.Name),
-				FromTag:           c.String(fromTagFlag.Name),
-				SkipDevImageRetag: c.Bool(skipDevImageRetagFlag.Name),
-				LogsDir:           cfg.LogsDir,
-				Scan:              scan,
-				Refs:              refs,
-				Published:         published,
-				Force:             c.Bool(forceFlag.Name),
-				ResolveDigest:     imagesDigestResolver,
-			}, images.WithRunner(imagesRunner))
-			if err != nil {
-				return err
+			opts := []images.PublishOption{
+				images.WithRunner(imagesRunner),
+				images.WithRegistries(c.StringSlice(registryFlag.Name)...),
+				images.WithArches(c.StringSlice(archFlag.Name)...),
+				images.WithLogsDir(cfg.LogsDir),
 			}
-			return p.Publish()
+			if from := c.String(fromRegistryFlag.Name); from != "" {
+				opts = append(opts, images.WithRetag(from,
+					c.String(fromTagFlag.Name), c.Bool(skipDevImageRetagFlag.Name)))
+			}
+			if scan != nil {
+				opts = append(opts, images.WithScan(scan))
+			}
+			if refs != nil {
+				opts = append(opts, images.WithRecord(refs))
+			}
+			if len(published) > 0 {
+				opts = append(opts, images.WithResume(published,
+					imagesDigestResolver, c.Bool(forceFlag.Name)))
+			}
+
+			return images.Publish(
+				cfg.RepoRootDir, ver.FormattedString(),
+				images.NarrowVariants(images.PublishVariants, dirs),
+				!c.Bool(localFlag.Name), opts...,
+			)
 		},
 	}
 }

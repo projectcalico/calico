@@ -29,6 +29,7 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -182,85 +183,202 @@ type Image struct {
 
 // BuildOptions builds the images locally. It reaches no registry, so it carries
 // none of the publish settings.
-type BuildOptions struct {
+// settings is what the options write into. Nothing outside the package builds
+// one: a caller names the required values as arguments and adjusts the rest
+// through options.
+type settings struct {
 	Image
 
-	// LogsDir, when set, gives each unit its own log file. Concurrent units
+	// confirm latches the push. Without it the make targets run as a dry run.
+	confirm bool
+
+	// logsDir, when set, gives each unit its own log file. Concurrent units
 	// otherwise interleave their output into one unreadable stream.
-	LogsDir string
+	logsDir string
+
+	// dir is where an archive writes its tar files.
+	dir string
+
+	// pull fetches an image that is not already local, which a release that
+	// did not build its own images needs.
+	pull bool
+
+	retag *retag
+	scan  *ScanRequest
+	refs  RefRecorder
+
+	// resolve reports a published tag's digest. Defaults to the registry.
+	resolve DigestResolver
+
+	// resume is the record an earlier run left, and how to check it.
+	resume *resume
 }
 
-// ArchiveOptions writes the images to tar files for a release archive.
-type ArchiveOptions struct {
-	Image
+// A step's options. Option reaches every step; the per-step interfaces let a
+// setting reach only the steps that use it, so passing a publish-only option to
+// a build does not compile.
+//
+// An option validates its own input, so a setting that cannot be honoured is
+// reported where it is set rather than being silently ignored.
+type (
+	BuildOption   interface{ applyBuild(*settings) error }
+	ArchiveOption interface{ applyArchive(*settings) error }
+	PublishOption interface{ applyPublish(*settings) error }
 
-	// Dir is where the tar files are written.
-	Dir string
+	Option interface {
+		applyBuild(*settings) error
+		applyArchive(*settings) error
+		applyPublish(*settings) error
+	}
+)
 
-	// Pull fetches an image that is not already local, which a release that did
-	// not build its own images needs.
-	Pull bool
-}
+// setting is a change every step accepts.
+type setting func(*settings) error
 
-// PublishOptions pushes the images to their registries.
-type PublishOptions struct {
-	Image
+func (f setting) applyBuild(s *settings) error   { return f(s) }
+func (f setting) applyArchive(s *settings) error { return f(s) }
+func (f setting) applyPublish(s *settings) error { return f(s) }
 
-	// Publish latches the push. Without it the make targets run as a dry run.
-	Publish bool
+// archiveSetting is a change only an archive accepts.
+type archiveSetting func(*settings) error
 
-	// From and FromTag, when set, publish by retagging the image already at
-	// From/<component>:FromTag rather than pushing a locally built one.
-	From    string
-	FromTag string
+func (f archiveSetting) applyArchive(s *settings) error { return f(s) }
 
-	// SkipDevImageRetag leaves the dev tag in place when retagging.
-	SkipDevImageRetag bool
+// publishSetting is a change only a publish accepts.
+type publishSetting func(*settings) error
 
-	// LogsDir, when set, gives each unit its own log file. Concurrent units
-	// otherwise interleave their output into one unreadable stream.
-	LogsDir string
-
-	Scan *ScanRequest
-
-	// Refs, when set, records the digest refs a publish produced. A dry run
-	// leaves it nil: nothing reached a registry.
-	Refs RefRecorder
-
-	// ResolveDigest reports a published tag's digest. Defaults to the registry.
-	ResolveDigest DigestResolver
-
-	// Published are the refs an earlier run of this version recorded. A unit
-	// whose refs are all present is skipped, so an interrupted release resumes
-	// on what is left rather than pushing everything again.
-	Published []string
-
-	// Force republishes a unit whose published digest differs from the record.
-	// Without it the difference is an error: the tag moved under us.
-	Force bool
-}
-
-// Option overrides a default on a step.
-type Option func(*Image)
+func (f publishSetting) applyPublish(s *settings) error { return f(s) }
 
 // WithRunner substitutes the runner the make targets are driven through.
 func WithRunner(r command.CommandRunner) Option {
-	return func(c *Image) { c.runner = r }
+	return setting(func(s *settings) error {
+		s.runner = r
+		return nil
+	})
 }
 
-// apply layers the options over the config, defaulting anything left unset so a
-// zero-value config runs real commands.
-func (c Image) apply(opts []Option) Image {
-	for _, opt := range opts {
-		opt(&c)
-	}
-	if c.runner == nil {
-		c.runner = &command.RealCommandRunner{}
-	}
-	return c
+// WithRegistries names the registries a step reads from or writes to.
+func WithRegistries(registries ...string) Option {
+	return setting(func(s *settings) error {
+		s.Registries = registries
+		return nil
+	})
 }
 
-// validate rejects a config that cannot describe any work.
+// WithArches limits a step to these architectures. An empty list leaves the
+// make targets to their own default, which is what a caller that named none
+// means.
+func WithArches(arches ...string) Option {
+	return setting(func(s *settings) error {
+		s.Arches = arches
+		return nil
+	})
+}
+
+// WithLogsDir gives each unit its own log file under dir. An empty dir leaves
+// the output captured in memory.
+func WithLogsDir(dir string) Option {
+	return setting(func(s *settings) error {
+		s.logsDir = dir
+		return nil
+	})
+}
+
+// WithPull lets an archive fetch an image that is not already local, which a
+// release that did not build its own images needs.
+func WithPull() ArchiveOption {
+	return archiveSetting(func(s *settings) error {
+		s.pull = true
+		return nil
+	})
+}
+
+// WithRetag publishes by moving the images already at registry/<component>:tag
+// rather than pushing a locally built one. skipDev leaves the dev tag in place.
+func WithRetag(registry, tag string, skipDev bool) PublishOption {
+	return publishSetting(func(s *settings) error {
+		if registry == "" || tag == "" {
+			return fmt.Errorf("retag needs both a registry and a tag, got %q and %q", registry, tag)
+		}
+		s.retag = &retag{registry: registry, tag: tag, skipDev: skipDev}
+		return nil
+	})
+}
+
+// WithScan submits the published images to the scanning service.
+func WithScan(req *ScanRequest) PublishOption {
+	return publishSetting(func(s *settings) error {
+		if req == nil {
+			return fmt.Errorf("no scan request given")
+		}
+		s.scan = req
+		return nil
+	})
+}
+
+// WithRecord records the digest refs a publish produces.
+func WithRecord(rec RefRecorder) PublishOption {
+	return publishSetting(func(s *settings) error {
+		if rec == nil {
+			return fmt.Errorf("no recorder given")
+		}
+		s.refs = rec
+		return nil
+	})
+}
+
+// WithResolver substitutes how a published tag's digest is looked up.
+// Recording needs one whether or not the run is resuming.
+func WithResolver(resolve DigestResolver) PublishOption {
+	return publishSetting(func(s *settings) error {
+		if resolve == nil {
+			return fmt.Errorf("no digest resolver given")
+		}
+		s.resolve = resolve
+		return nil
+	})
+}
+
+// WithResume skips the units an earlier run already published, judged against
+// the refs it recorded. force republishes a unit whose published digest is not
+// one of those refs; without it the difference is an error.
+func WithResume(published []string, resolve DigestResolver, force bool) PublishOption {
+	return publishSetting(func(s *settings) error {
+		if len(published) == 0 {
+			return fmt.Errorf("no recorded refs to resume from")
+		}
+		s.resume = &resume{published: published, force: force}
+		if resolve != nil {
+			s.resolve = resolve
+		}
+		return nil
+	})
+}
+
+// retag is the source a publish moves images from.
+type retag struct {
+	registry string
+	tag      string
+	skipDev  bool
+}
+
+// resume is what an earlier run recorded, and whether to override a mismatch.
+type resume struct {
+	published []string
+	force     bool
+}
+
+// defaults fills in anything the options left unset.
+func (s settings) defaults() settings {
+	if s.runner == nil {
+		s.runner = &command.RealCommandRunner{}
+	}
+	if s.resolve == nil {
+		s.resolve = registry.ResolveDigest
+	}
+	return s
+}
+
 func (c Image) validate() error {
 	var errs []error
 	if c.RepoRoot == "" {
@@ -435,15 +553,18 @@ func (c Image) tagPrefix(u unit) (string, error) {
 //
 // done is true when every ref the unit publishes is already recorded at the
 // digest the registry currently serves.
-func (o PublishOptions) unitState(u unit, resolve DigestResolver) (done bool, err error) {
-	if len(o.Published) == 0 {
+// unitState reports whether a unit still needs publishing, judged against the
+// refs an earlier run recorded. It reads the record rather than the registry:
+// the record already names what landed, and a local read costs nothing.
+func (s settings) unitState(u unit) (done bool, err error) {
+	if s.resume == nil {
 		return false, nil
 	}
-	names, err := o.imageNames(u)
+	names, err := s.imageNames(u)
 	if err != nil {
 		return false, err
 	}
-	tags, err := o.unitTags(u)
+	tags, err := s.unitTags(u)
 	if err != nil {
 		return false, err
 	}
@@ -451,8 +572,8 @@ func (o PublishOptions) unitState(u unit, resolve DigestResolver) (done bool, er
 	// A repo publishes several tags, each at its own digest, and the record
 	// keeps refs rather than tags. So a repo maps to the SET of digests it
 	// recorded, and a tag counts as published when its digest is in that set.
-	recorded := make(map[string]map[string]struct{}, len(o.Published))
-	for _, ref := range o.Published {
+	recorded := make(map[string]map[string]struct{}, len(s.resume.published))
+	for _, ref := range s.resume.published {
 		repo, digest, ok := strings.Cut(ref, "@")
 		if !ok {
 			continue
@@ -463,7 +584,7 @@ func (o PublishOptions) unitState(u unit, resolve DigestResolver) (done bool, er
 		recorded[repo][digest] = struct{}{}
 	}
 
-	for _, reg := range o.Registries {
+	for _, reg := range s.Registries {
 		for _, name := range names {
 			repo := fmt.Sprintf("%s/%s", reg, name)
 			digests, ok := recorded[repo]
@@ -472,7 +593,7 @@ func (o PublishOptions) unitState(u unit, resolve DigestResolver) (done bool, er
 			}
 			for _, tag := range tags {
 				image := fmt.Sprintf("%s:%s", repo, tag)
-				got, exists, err := resolve(image)
+				got, exists, err := s.resolve(image)
 				if err != nil {
 					return false, fmt.Errorf("resolving %s: %w", image, err)
 				}
@@ -480,7 +601,7 @@ func (o PublishOptions) unitState(u unit, resolve DigestResolver) (done bool, er
 					return false, nil
 				}
 				if _, known := digests[got]; !known {
-					if !o.Force {
+					if !s.resume.force {
 						return false, fmt.Errorf(
 							"%s is published at %s; this release recorded %s. "+
 								"Pass --force to republish over it",
@@ -547,71 +668,60 @@ func (c Image) unitTags(u unit) ([]string, error) {
 	return tags, nil
 }
 
-// Build builds every variant's images. Publish-only settings are rejected
-// rather than ignored: a caller setting one meant to publish.
-func Build(o BuildOptions, opts ...Option) error {
-	if err := o.validate(); err != nil {
-		return err
+// publishEnv adds the release latch and, when retagging, the source to pull from.
+func (s settings) publishEnv() []string {
+	env := append(s.env(), utils.EnvTrue(utils.EnvRelease))
+	if s.confirm {
+		env = append(env, utils.EnvTrue(utils.EnvConfirm))
+	} else {
+		env = append(env, utils.EnvTrue(utils.EnvDryRun))
 	}
-	o.Image = o.apply(opts)
-
-	units := o.units(o.env())
-	logrus.WithField("images", len(units)).Info("Building container images")
-	if err := o.runUnits(units, buildStep, o.LogsDir); err != nil {
-		return err
+	if s.retag != nil {
+		// Retagging inverts DEV_REGISTRIES: it becomes the source, so the
+		// destination has to be named separately.
+		env = append(env,
+			utils.EnvTrue(utils.EnvImageOnly),
+			utils.Env(utils.EnvDevTag, s.retag.tag),
+			utils.Env(utils.EnvDevRegistries, s.retag.registry),
+			utils.Env(utils.EnvReleaseRegistries, strings.Join(s.Registries, " ")),
+			utils.Env(utils.EnvReleaseTag, s.Version),
+		)
+		if s.retag.skipDev {
+			env = append(env, utils.EnvTrue(utils.EnvSkipDevImageRetag))
+		}
 	}
-	logrus.Info("Finished building container images")
-	return nil
+	return env
 }
 
-// Archive writes the images every variant ships into dir, one tar each, for
-// shipping in a release archive. pull fetches an image that is not already
-// local, which a release that did not build its own images needs.
-func Archive(o ArchiveOptions, opts ...Option) error {
-	if err := o.validate(); err != nil {
-		return err
+// record writes the digest refs the publish produced. A dry run records
+// nothing, so there is no recorder to write to.
+func (s settings) record(units []unit) error {
+	if s.refs == nil {
+		return nil
 	}
-	if o.Dir == "" {
-		return fmt.Errorf("no directory to archive images into")
-	}
-	o.Image = o.apply(opts)
-
-	units := o.units(o.env())
-	logrus.WithField("images", len(units)).Info("Archiving container images")
-	if err := os.MkdirAll(o.Dir, os.ModePerm); err != nil {
-		return fmt.Errorf("creating images dir: %w", err)
-	}
-
-	// Images come from the first registry: an archive holds one copy, whichever
-	// registry it is pulled from.
-	registry := o.Registries[0]
 	for _, u := range units {
-		names, err := o.imageNames(u)
+		refs, err := s.publishedRefs(u, s.resolve)
 		if err != nil {
-			return err
+			return fmt.Errorf("recording published images for %s: %w", u.dir, err)
 		}
-		for _, name := range names {
-			image := fmt.Sprintf("%s/%s:%s", registry, name, o.Version)
-			if err := o.save(image, filepath.Join(o.Dir, name+".tar"), o.Pull); err != nil {
-				return err
-			}
+		if err := s.refs.Add(refs...); err != nil {
+			return fmt.Errorf("recording published images for %s: %w", u.dir, err)
 		}
 	}
-	logrus.Info("Finished archiving container images")
 	return nil
 }
 
 // save writes one image to a tar file, fetching it first when it is not local.
-func (c Image) save(image, out string, pull bool) error {
-	if pull {
-		if _, err := c.runner.Run("docker", []string{"image", "inspect", image}, nil); err != nil {
+func (s settings) save(image, out string) error {
+	if s.pull {
+		if _, err := s.runner.Run("docker", []string{"image", "inspect", image}, nil); err != nil {
 			logrus.WithField("image", image).Info("Image not found locally, pulling")
-			if _, err := c.runner.Run("docker", []string{"pull", image}, nil); err != nil {
+			if _, err := s.runner.Run("docker", []string{"pull", image}, nil); err != nil {
 				return fmt.Errorf("pulling %s: %w", image, err)
 			}
 		}
 	}
-	if _, err := c.runner.Run("docker", []string{"save", "--output", out, image}, nil); err != nil {
+	if _, err := s.runner.Run("docker", []string{"save", "--output", out, image}, nil); err != nil {
 		return fmt.Errorf("%s %s: %w", archiveStep, image, err)
 	}
 	return nil

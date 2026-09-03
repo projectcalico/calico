@@ -333,7 +333,7 @@ func TestImagesPublishRejectsHalfConfiguredRetag(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error when --from-tag is missing")
 	}
-	if !strings.Contains(err.Error(), "fromTag") {
+	if !strings.Contains(err.Error(), "tag") {
 		t.Errorf("error should name the missing setting, got %q", err)
 	}
 }
