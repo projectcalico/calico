@@ -37,8 +37,6 @@ const (
 
 	// MakeTargetGenVersionsCalico is the make target to regenerate Calico versions.
 	MakeTargetGenVersionsCalico = "gen-versions-calico"
-	// MakeTargetGenVersionsEnterprise is the make target to regenerate Enterprise versions.
-	MakeTargetGenVersionsEnterprise = "gen-versions-enterprise"
 )
 
 // Patterns for components to exclude from version updates
@@ -65,18 +63,16 @@ func (v Versions) ToMap() map[string]string {
 	return result
 }
 
-// VersionConfig holds version, registry, and optional local CRD directory for one product.
+// VersionConfig holds the version and optional local CRD directory for one product.
 type VersionConfig struct {
-	Dir      string
-	Version  string
-	Registry string
+	Dir     string
+	Version string
 }
 
-// VersionsConfig holds configuration for generating both Calico and Enterprise versions.
+// VersionsConfig holds configuration for generating Calico versions.
 type VersionsConfig struct {
 	RepoRootDir string
 	Calico      VersionConfig
-	Enterprise  VersionConfig
 }
 
 // Generate updates the version config files and runs the appropriate make targets
@@ -96,38 +92,11 @@ func (vc *VersionsConfig) Generate() error {
 			env = append(env, fmt.Sprintf("CALICO_CRDS_DIR=%s", crdsDir))
 		}
 	}
-	if vc.Enterprise.Version != "" {
-		err := UpdateEnterpriseConfigVersion(vc.RepoRootDir, vc.Enterprise.Version)
-		if err != nil {
-			return err
-		}
-		makeTargets = append(makeTargets, MakeTargetGenVersionsEnterprise)
-		// Update registry for Enterprise
-		if eRegistry := vc.Enterprise.Registry; eRegistry != "" {
-			logrus.Debugf("Updating Enterprise registry to %s", eRegistry)
-			if err := ModifyComponentImageConfig(vc.RepoRootDir, ComponentImageConfigRelPath, EnterpriseRegistryConfigKey, eRegistry); err != nil {
-				return fmt.Errorf("modifying Enterprise registry config: %w", err)
-			}
-		}
-		// Set ENTERPRISE_CRDS_DIR if specified
-		if crdsDir := vc.Enterprise.Dir; crdsDir != "" {
-			logrus.Warnf("Using local Enterprise CRDs from %s", crdsDir)
-			env = append(env, fmt.Sprintf("ENTERPRISE_CRDS_DIR=%s", crdsDir))
-		}
-	}
 
 	// Run make target to ensure files are formatted correctly and generated files are up to date.
 	if out, err := command.MakeInDir(vc.RepoRootDir, strings.Join(makeTargets, " "), env...); err != nil {
 		logrus.Error(out)
 		return fmt.Errorf("running \"make %s\": %w", strings.Join(makeTargets, " "), err)
-	}
-	return nil
-}
-
-// UpdateEnterpriseConfigVersion sets all component versions and the title in the Enterprise config file to version.
-func UpdateEnterpriseConfigVersion(repoRootDir, version string) error {
-	if err := updateConfigVersions(repoRootDir, EnterpriseConfigPath, version); err != nil {
-		return fmt.Errorf("modifying Enterprise config (%s): %w", EnterpriseConfigPath, err)
 	}
 	return nil
 }
@@ -231,14 +200,6 @@ func excludedComponent(name string) bool {
 func UpdateCalicoComponents(repoDir string, components map[string]string) error {
 	if err := updateConfigVersionsComponents(repoDir, CalicoConfigPath, components); err != nil {
 		return fmt.Errorf("updating Calico components: %w", err)
-	}
-	return nil
-}
-
-// UpdateEnterpriseComponents updates individual component versions in the Enterprise config file.
-func UpdateEnterpriseComponents(repoDir string, components map[string]string) error {
-	if err := updateConfigVersionsComponents(repoDir, EnterpriseConfigPath, components); err != nil {
-		return fmt.Errorf("updating Enterprise components: %w", err)
 	}
 	return nil
 }

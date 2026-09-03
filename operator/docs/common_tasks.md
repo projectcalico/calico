@@ -1,8 +1,9 @@
 # Common Tasks
 
 Day-to-day development procedures for the operator. All `make` targets below run
-from `operator/`. For the workflow and code-generation rules, see
-[dev_guidelines.md](dev_guidelines.md).
+from `operator/`. For the architecture and its invariants, see
+[../DESIGN.md](../DESIGN.md); for code-generation rules, see
+[api_design.md](api_design.md).
 
 ## Adding a new CRD
 

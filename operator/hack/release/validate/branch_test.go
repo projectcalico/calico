@@ -36,8 +36,6 @@ var (
 	releaseBranchPrefix = flag.String("release-branch-prefix", "release", "Release branch prefix")
 	devTagSuffix        = flag.String("dev-tag-suffix", "0.dev", "Dev tag suffix")
 	repo                = flag.String("repo", "tigera/operator", "Operator GitHub repo")
-	calicoRepo          = flag.String("calico-repo", "projectcalico/calico", "Calico GitHub repo")
-	enterpriseRepo      = flag.String("enterprise-repo", "tigera/calico-private", "Calico Enterprise GitHub repo")
 )
 
 func requireStream(t *testing.T) string {
@@ -77,18 +75,6 @@ func calicoConfigVersions(t *testing.T, ref string) *versions.CalicoVersion {
 	return v
 }
 
-func enterpriseConfigVersions(t *testing.T, ref string) *versions.CalicoVersion {
-	t.Helper()
-	v, err := versions.GitRefConfigEnterpriseVersion(ref)
-	if err != nil {
-		t.Fatalf("failed to get Enterprise config versions: %v", err)
-	}
-	if v.Title == "" {
-		t.Fatalf("no version title found in %s", versions.EnterpriseConfigPath)
-	}
-	return v
-}
-
 // fetchReleaseBranch fetches the release branch ref so git show works.
 func fetchReleaseBranch(t *testing.T, branch string) string {
 	t.Helper()
@@ -117,8 +103,6 @@ func TestBranchCutCalico(t *testing.T) {
 		t.Fatalf("calico version is still %s on release branch", defaultBaseBranch)
 	}
 
-	checkGitBranchExists(t, fmt.Sprintf("git@github.com:%s.git", *calicoRepo), cv.Title)
-
 	// Check that the version in the config file matches the VERSION_TAG in Makefile.
 	content, err := command.GitShowFile(fmt.Sprintf("%s/%s", *remote, branch), "Makefile")
 	if err != nil {
@@ -146,19 +130,6 @@ func extractMakefileVar(content, name string) (string, error) {
 		return "", fmt.Errorf("%s assignment not found", name)
 	}
 	return m[1], nil
-}
-
-func TestBranchCutEnterprise(t *testing.T) {
-	stream := requireStream(t)
-	branch := releaseBranchName(stream)
-	ref := fetchReleaseBranch(t, branch)
-
-	cv := enterpriseConfigVersions(t, ref)
-	if cv.Title == defaultBaseBranch {
-		t.Fatalf("enterprise version is still %s on release branch", defaultBaseBranch)
-	}
-
-	checkGitBranchExists(t, fmt.Sprintf("git@github.com:%s.git", *enterpriseRepo), cv.Title)
 }
 
 func TestBranchCutNextDevRelease(t *testing.T) {

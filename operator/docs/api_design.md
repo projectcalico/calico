@@ -2,7 +2,7 @@
 
 Design principles and the concrete Go/kubebuilder coding conventions for CRD
 types under `api/v1/`. The post-change workflow (code generation, validation)
-is in [`dev_guidelines.md`](dev_guidelines.md).
+is under [After every API change](#after-every-api-change).
 
 When adding or changing a CRD field, follow these and finish with the
 [checklist](#checklist-for-a-new-field). APIs follow the
@@ -116,7 +116,7 @@ upstream Kubernetes field names and semantics.
 
 ## After every API change
 
-See [`dev_guidelines.md`](dev_guidelines.md) for detail. In short:
+The commands live in [`../CLAUDE.md`](../CLAUDE.md). In short:
 
 1. `make gen-files` — regenerates CRD manifests, `zz_generated.deepcopy.go`, and
    client sets. Never hand-edit generated files.

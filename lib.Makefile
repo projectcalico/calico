@@ -1691,6 +1691,21 @@ helm: bin/helm
 bin/helm: bin/.helm-updated-$(HELM_VERSION)
 
 ###############################################################################
+# Dev image build variables. Used by the root Makefile's image and push
+# targets, and by the operator image marker below.
+###############################################################################
+DEV_IMAGE_PATH ?= calico
+DEV_IMAGE_TAG ?= $(GIT_VERSION)
+DEV_IMAGE_REGISTRY ?= docker.io
+DEV_STAMP_DIR := $(REPO_ROOT)/.dev-stamps
+
+# Map calico/<name>:test-build → $(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH)/<name>:$(DEV_IMAGE_TAG)
+# filter-registry strips "docker.io/" since Docker Hub doesn't use it in image refs.
+DEV_IMAGE_PREFIX = $(if $(filter docker.io,$(DEV_IMAGE_REGISTRY)),$(DEV_IMAGE_PATH),$(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH))
+DEV_CALICO_IMAGES = $(foreach img,$(KIND_CALICO_IMAGES),$(DEV_IMAGE_PREFIX)/$(subst calico/,,$(firstword $(subst :, ,$(img)))):$(DEV_IMAGE_TAG))
+DEV_OPERATOR_IMAGE = $(DEV_IMAGE_PREFIX)/operator:$(DEV_IMAGE_TAG)
+
+###############################################################################
 # Common functions for setting up a kind cluster with Calico for testing.
 ###############################################################################
 KIND_INFRA_DIR := $(REPO_ROOT)/hack/test/kind/infra
@@ -1719,6 +1734,7 @@ KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
 	$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH) \
 	$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH) \
+	$(REPO_ROOT)/operator/.image.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-gateway/.envoy-gateway.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-proxy/.envoy-proxy.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH) \
@@ -1774,6 +1790,19 @@ $(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH): \
 	$(MAKE) -C $(REPO_ROOT)/key-cert-provisioner image
 	echo "test-signer:latest-$(ARCH)" > $@
 
+# The operator bakes the component refs it installs into the image, so
+# image-exists gets the expected ref: a changed DEV_IMAGE_* triple must
+# rebuild even though the recorded image still exists.
+$(REPO_ROOT)/operator/.image.created-$(ARCH): \
+    $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/operator/.image.created-$(ARCH) $(DEV_OPERATOR_IMAGE)) \
+    $(call local-deps-go-files,operator) $(KIND_INFRA_DIR)/calico_versions.yml
+	rm -f $@
+	DEV_IMAGE_TAG=$(DEV_IMAGE_TAG) \
+	  DEV_IMAGE_REGISTRY=$(DEV_IMAGE_REGISTRY) \
+	  DEV_IMAGE_PATH=$(DEV_IMAGE_PATH) \
+	  $(KIND_INFRA_DIR)/build-operator.sh
+	echo "$(DEV_OPERATOR_IMAGE)" > $@
+
 # Envoy components: the third_party/envoy-* sub-makes use their own marker
 # names (.envoy-<comp>.created-$(ARCH)). The sub-make handles fetching
 # upstream sources and building the image as calico/envoy-<comp>:latest-$(ARCH).
@@ -1791,6 +1820,13 @@ $(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH):
 $(REPO_ROOT)/third_party/cni-plugins/.cni-plugins.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/third_party/cni-plugins image
 
+# The registry/path/tag every kind lane bakes into its images.
+# hack/test/kind/infra/values.yaml pins the same triple.
+KIND_DEV_IMAGE_ARGS = \
+	    DEV_IMAGE_REGISTRY=localhost:5000 \
+	    DEV_IMAGE_PATH=calico \
+	    DEV_IMAGE_TAG=$(KIND_TEST_BUILD_TAG)
+
 ## Build all component images and push them to the local kind registry.
 # This invokes the same `make push` pipeline used by the release flow, with
 # kind-flavored DEV_IMAGE_REGISTRY/PATH/TAG so images land at
@@ -1800,10 +1836,14 @@ $(REPO_ROOT)/third_party/cni-plugins/.cni-plugins.created-$(ARCH):
 # inside the kind nodes mirrors localhost:5000 to http://kind-registry:5000.
 .PHONY: kind-build-images
 kind-build-images: kind-registry-up
-	$(MAKE) -C $(REPO_ROOT) push \
-	    DEV_IMAGE_REGISTRY=localhost:5000 \
-	    DEV_IMAGE_PATH=calico \
-	    DEV_IMAGE_TAG=$(KIND_TEST_BUILD_TAG)
+	$(MAKE) -C $(REPO_ROOT) push $(KIND_DEV_IMAGE_ARGS)
+
+## Build only the operator image, with the kind component references baked in.
+# CI's "Build: operator image" block runs this and caches the result so the
+# kind lanes load it instead of compiling the operator per job.
+.PHONY: kind-operator-image
+kind-operator-image:
+	$(MAKE) -C $(REPO_ROOT) operator-image $(KIND_DEV_IMAGE_ARGS)
 
 # Create a kind cluster and deploy Calico on it via Helm. Assumes images are
 # already built and tagged as test-build in the local Docker daemon. If a
@@ -1918,20 +1958,6 @@ $(ENVTEST_MIN_ASSETS_MARKER):
 		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
 		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_MIN_K8S_VERSION)'
 	touch $@
-
-###############################################################################
-# Dev image build variables. Targets that use these are in the root Makefile.
-###############################################################################
-DEV_IMAGE_PATH ?= calico
-DEV_IMAGE_TAG ?= $(GIT_VERSION)
-DEV_IMAGE_REGISTRY ?= docker.io
-DEV_STAMP_DIR := $(REPO_ROOT)/.dev-stamps
-
-# Map calico/<name>:test-build → $(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH)/<name>:$(DEV_IMAGE_TAG)
-# filter-registry strips "docker.io/" since Docker Hub doesn't use it in image refs.
-DEV_IMAGE_PREFIX = $(if $(filter docker.io,$(DEV_IMAGE_REGISTRY)),$(DEV_IMAGE_PATH),$(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH))
-DEV_CALICO_IMAGES = $(foreach img,$(KIND_CALICO_IMAGES),$(DEV_IMAGE_PREFIX)/$(subst calico/,,$(firstword $(subst :, ,$(img)))):$(DEV_IMAGE_TAG))
-DEV_OPERATOR_IMAGE = $(DEV_IMAGE_PREFIX)/operator:$(DEV_IMAGE_TAG)
 
 ###############################################################################
 # Common functions for launching a local etcd instance.

@@ -14,8 +14,7 @@ own CRD (`operator/api/v1`), controller
 ## Where the standards live
 
 - **API design / CRD types in `operator/api/v1`:** [`operator/docs/api_design.md`](../../operator/docs/api_design.md)
-- **Architecture & design rationale:** [`operator/docs/principles.md`](../../operator/docs/principles.md)
-- **Developer workflow, code generation, cherry-picks:** [`operator/docs/dev_guidelines.md`](../../operator/docs/dev_guidelines.md)
+- **Architecture & design rationale:** [`operator/DESIGN.md`](../../operator/DESIGN.md)
 - **Running, testing, debugging:** [`operator/docs/common_tasks.md`](../../operator/docs/common_tasks.md)
 
 ## Reviewing changes to `operator/api/v1` CRD types
