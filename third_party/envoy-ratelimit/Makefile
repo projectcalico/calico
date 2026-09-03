@@ -49,6 +49,9 @@ $(ENVOY_RATELIMIT_FETCHED):
 			patch -d envoy-ratelimit -p1 -F0 < "$$patch" || exit 1; \
 		fi; \
 	done
+# 	Record what the generator diffs against, while the tree still holds
+# 	upstream's go.mod and go.sum. No-op for a tree fetched with git clone.
+	../../hack/thirdparty/init-dep-baseline.sh envoy-ratelimit
 	touch $@
 
 .PHONY: init-source
