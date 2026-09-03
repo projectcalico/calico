@@ -18,9 +18,11 @@
 # is a strict subset of full-fv, so adds nothing on a weekly cadence.
 version: condensed
 generateName: e2e-openstack-
-# Sundays 17:00 UTC (the handler emits no CronWorkflow timezone, so cron
-# fields are UTC).
-schedule: 0 17 * * 0
+# Feb 31 never fires.  Without the overrides noted above this would install
+# master packages and images, so it would report this branch's name while
+# testing master.  Un-park it once v3.33.0 ships the calico-3.33 PPA and the
+# matching images, adding those overrides at the same time.
+schedule: 0 0 31 2 *
 globalPrologue: |
   cd "${CI_HOME}/${CI_GIT_DIR}"
   export ARGO_WORKFLOW_NAME="{{workflow.name}}"
