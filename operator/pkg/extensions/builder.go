@@ -32,20 +32,11 @@ type BuildOptions struct {
 // resolved, so it can query the cluster for anything else the variant needs.
 type Builder func(ctx context.Context, variant opv1.ProductVariant, clientset kubernetes.Interface, opts BuildOptions) (Extensions, error)
 
-// variantBuilder builds the extensions the running variant supplies.
-var variantBuilder Builder
-
-// RegisterVariantBuilder declares how the running variant builds its extensions.
-// Call from an init(): startup reads the registry as soon as the variant resolves.
-func RegisterVariantBuilder(b Builder) {
-	variantBuilder = b
-}
-
-// Build returns the extensions the operator runs with. A build that ships no
-// variant extends nothing.
-func Build(ctx context.Context, variant opv1.ProductVariant, clientset kubernetes.Interface, opts BuildOptions) (Extensions, error) {
-	if variantBuilder == nil {
+// Build returns the extensions the operator runs with. A build that supplies no
+// builder extends nothing.
+func Build(ctx context.Context, b Builder, variant opv1.ProductVariant, clientset kubernetes.Interface, opts BuildOptions) (Extensions, error) {
+	if b == nil {
 		return Extensions{}, nil
 	}
-	return variantBuilder(ctx, variant, clientset, opts)
+	return b(ctx, variant, clientset, opts)
 }
