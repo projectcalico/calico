@@ -26,8 +26,8 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 )
 
-// coreExtensions extends nothing, so the controller renders the core output.
-var coreExtensions extensions.Extensions
+// noopExtensions extends nothing, so the controller renders the core output.
+var noopExtensions extensions.Extensions
 
 func TestStatus(t *testing.T) {
 	logf.SetLogger(zap.New(zap.WriteTo(ginkgo.GinkgoWriter), zap.UseDevMode(true), zap.Level(uzap.NewAtomicLevelAt(uzap.DebugLevel))))
