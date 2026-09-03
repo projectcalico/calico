@@ -128,8 +128,11 @@ var _ reconcile.Reconciler = &reconcileCSR{}
 // conditions for signer name "tigera.io/operator-signer". This is the controller that monitors, approves and signs
 // these CSRs. It will only sign requests that are pre-defined and reject others in order to avoid malicious requests.
 type reconcileCSR struct {
-	client        client.Client
-	clientset     kubernetes.Interface
+	client    client.Client
+	clientset kubernetes.Interface
+	// The extension looks up a HostEndpoint by spec.node. Serving that from the
+	// manager's cache would need a field index and an informer holding every
+	// HostEndpoint, for a lookup that wants one.
 	restConfig    *rest.Config
 	scheme        *runtime.Scheme
 	provider      operatorv1.Provider

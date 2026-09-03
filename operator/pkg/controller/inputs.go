@@ -62,8 +62,6 @@ type Inputs struct {
 	// cached client cannot serve.
 	K8sClientset kubernetes.Interface
 
-	// RESTConfig lets an extension build an uncached clientset for its own API
-	// flavor, for a lookup the manager's cache cannot serve without a
-	// cluster-wide informer. Set only by controllers whose extensions need one.
+	// RESTConfig lets an extension build a clientset for its own API flavor.
 	RESTConfig *rest.Config
 }

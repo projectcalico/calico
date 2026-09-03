@@ -1080,8 +1080,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
-	// The variant defaults its own FelixConfiguration fields, which are not on the type
-	// above, so it patches the resource itself once the core defaults are persisted.
+	// Provide the extension a chance to default any fields it needs.
 	if err := r.ext.DefaultFelixConfiguration(ctx, r.client, &defaulted.Spec); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error defaulting FelixConfiguration for the variant", err, reqLogger)
 		return reconcile.Result{}, err
