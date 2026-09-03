@@ -7,8 +7,3 @@ linters:
       - common-false-positives
       - legacy
       - std-error-handling
-    rules:
-      # TODO(CORE-13495): answer each deprecated call site and drop this rule.
-      - linters:
-          - staticcheck
-        text: "SA1019:"

@@ -6,7 +6,7 @@ ENVOY_GATEWAY_IMAGE ?= envoy-gateway
 BUILD_IMAGES ?= $(ENVOY_GATEWAY_IMAGE)
 
 # For updating this version please see
-# https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
+# operator/docs/common_tasks.md, "Updating the bundled version of Envoy Gateway".
 ENVOY_GATEWAY_VERSION=v1.8.2
 
 ##############################################################################

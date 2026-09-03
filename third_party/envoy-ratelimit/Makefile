@@ -6,7 +6,7 @@ ENVOY_RATELIMIT_IMAGE ?= envoy-ratelimit
 BUILD_IMAGES ?= $(ENVOY_RATELIMIT_IMAGE)
 
 # For updating this version please see
-# https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
+# operator/docs/common_tasks.md, "Updating the bundled version of Envoy Gateway".
 ENVOY_RATELIMIT_VERSION=ff287602
 ENVOY_RATELIMIT_REPO=https://github.com/envoyproxy/ratelimit.git
 
