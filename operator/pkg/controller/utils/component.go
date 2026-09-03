@@ -18,18 +18,14 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
-	"maps"
 	"reflect"
 	"regexp"
 	"slices"
 	"strings"
 	"sync"
 
-	esv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/elasticsearch/v1"
-	kbv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/kibana/v1"
 	"github.com/go-logr/logr"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	apps "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -246,9 +242,8 @@ func (c *componentHandler) createOrUpdateObject(ctx context.Context, obj client.
 	}
 
 	multipleOwners := checkIfMultipleOwnersLabel(om.GetObjectMeta())
-	// Add owner ref for controller owned resources,
-	switch obj.(type) {
-	default:
+	// Add owner ref for controller owned resources.
+	if variantObjectRules == nil || !variantObjectRules.SkipOwnerReference(obj) {
 		if c.cr != nil && !skipAddingOwnerReference(c.cr, om.GetObjectMeta()) {
 			if multipleOwners {
 				if err := controllerutil.SetOwnerReference(c.cr, om.GetObjectMeta(), c.scheme); err != nil {
@@ -661,6 +656,12 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 	// adjusting the caller's copy.
 	desired = desired.DeepCopyObject().(client.Object)
 
+	if variantObjectRules != nil {
+		if merged, ok := variantObjectRules.MergeState(desired, current); ok {
+			return merged
+		}
+	}
+
 	currentMeta := current.(metav1.ObjectMetaAccessor).GetObjectMeta()
 	desiredMeta := desired.(metav1.ObjectMetaAccessor).GetObjectMeta()
 
@@ -800,38 +801,6 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 			dsa.ImagePullSecrets = csa.ImagePullSecrets
 		}
 		return dsa
-	case *esv1.Elasticsearch:
-		// Only update if the spec has changed
-		csa := current.(*esv1.Elasticsearch)
-		dsa := desired.(*esv1.Elasticsearch)
-
-		if reflect.DeepEqual(csa.Spec, dsa.Spec) {
-			return csa
-		}
-
-		// ECK sets these values so we need to copy them over to avoid and update battle
-		// Note: This should be revisited when the ECK version moves to GA, as it would be impossible to remove annotations
-		// or finalizers from Elasticsearch.
-		dsa.Annotations = csa.Annotations
-		dsa.Finalizers = csa.Finalizers
-		dsa.Status = csa.Status
-		return dsa
-	case *kbv1.Kibana:
-		// Only update if the spec has changed
-		csa := current.(*kbv1.Kibana)
-		dsa := desired.(*kbv1.Kibana)
-		if reflect.DeepEqual(csa.Spec, dsa.Spec) {
-			return csa
-		}
-
-		// ECK sets these values so we need to copy them over to avoid and update battle
-		// Note: This should be revisited when the ECK version moves to GA, as it would be impossible to remove annotations
-		// or finalizers from Kibana.
-		dsa.Annotations = csa.Annotations
-		dsa.Finalizers = csa.Finalizers
-		dsa.Spec.ElasticsearchRef = csa.Spec.ElasticsearchRef
-		dsa.Status = csa.Status
-		return dsa
 	case *v3.NetworkPolicy:
 		cnp := current.(*v3.NetworkPolicy)
 		dnp := desired.(*v3.NetworkPolicy)
@@ -867,13 +836,11 @@ func modifyPodSpec(obj client.Object, f func(*v1.PodSpec)) {
 		f(&x.Spec.JobTemplate.Spec.Template.Spec)
 	case *batchv1.Job:
 		f(&x.Spec.Template.Spec)
-	case *kbv1.Kibana:
-		f(&x.Spec.PodTemplate.Spec)
-	case *esv1.Elasticsearch:
-		// elasticsearch resource describes multiple nodeSets which each have a pod spec.
-		nodeSets := x.Spec.NodeSets
-		for i := range nodeSets {
-			f(&nodeSets[i].PodTemplate.Spec)
+	default:
+		if variantObjectRules != nil {
+			for _, spec := range variantObjectRules.PodSpecs(obj) {
+				f(spec)
+			}
 		}
 	}
 }
@@ -957,25 +924,8 @@ func ensureOSSchedulingRestrictions(obj client.Object, osType rmeta.OSType) {
 		return
 	}
 
-	// Some object types don't have a v1.PodSpec an instead use a custom spec. Handle those here.
-	switch x := obj.(type) {
-	case *monitoringv1.Alertmanager:
-		// Prometheus operator types don't have a template spec which is of v1.PodSpec type.
-		// We can't add it to the podSpecs list and assign osType in the for loop below.
-		podSpec := &x.Spec
-		if podSpec.NodeSelector == nil {
-			podSpec.NodeSelector = make(map[string]string)
-		}
-		podSpec.NodeSelector["kubernetes.io/os"] = string(osType)
-		return
-	case *monitoringv1.Prometheus:
-		// Prometheus operator types don't have a template spec which is of v1.PodSpec type.
-		// We can't add it to the podSpecs list and assign osType in the for loop below.
-		podSpec := &x.Spec
-		if podSpec.NodeSelector == nil {
-			podSpec.NodeSelector = make(map[string]string)
-		}
-		podSpec.NodeSelector["kubernetes.io/os"] = string(osType)
+	// A kind whose pod template is not a v1.PodTemplateSpec is the variant's to pin.
+	if variantObjectRules != nil && variantObjectRules.SetNodeSelector(obj, "kubernetes.io/os", string(osType)) {
 		return
 	}
 
@@ -1013,16 +963,11 @@ func setProbeTimeouts(obj client.Object) {
 		containers = obj.Spec.Template.Spec.Containers
 	case *apps.DaemonSet:
 		containers = obj.Spec.Template.Spec.Containers
-	case *esv1.Elasticsearch:
-		for _, nodeset := range obj.Spec.NodeSets {
-			containers = append(containers, nodeset.PodTemplate.Spec.Containers...)
-		}
-	case *kbv1.Kibana:
-		containers = obj.Spec.PodTemplate.Spec.Containers
-	case *monitoringv1.Prometheus:
-		containers = obj.Spec.Containers
 	default:
-		return
+		if variantObjectRules == nil {
+			return
+		}
+		containers = variantObjectRules.Containers(obj)
 	}
 
 	for _, container := range containers {
@@ -1116,20 +1061,10 @@ func setStandardSelectorAndLabels(obj client.Object, customResource metav1.Objec
 			}
 		}
 		podTemplate = &d.Spec.Template
-	case *monitoringv1.Prometheus:
-		d := obj
-		if d.Spec.PodMetadata == nil {
-			d.Spec.PodMetadata = &monitoringv1.EmbeddedObjectMetadata{Labels: make(map[string]string)}
-		}
-		maps.Copy(d.Spec.PodMetadata.Labels, d.Labels)
-	case *monitoringv1.Alertmanager:
-		d := obj
-		if d.Spec.PodMetadata == nil {
-			d.Spec.PodMetadata = &monitoringv1.EmbeddedObjectMetadata{Labels: make(map[string]string)}
-		}
-		maps.Copy(d.Spec.PodMetadata.Labels, d.Labels)
 	default:
-		return
+		if variantObjectRules == nil || !variantObjectRules.CopyLabelsToPods(obj) {
+			return
+		}
 	}
 	if podTemplate != nil {
 		if podTemplate.Labels == nil {

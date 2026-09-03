@@ -19,13 +19,10 @@ import (
 	stderrors "errors"
 	"fmt"
 
-	esv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/elasticsearch/v1"
-	kbv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/kibana/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	ocsv1 "github.com/openshift/api/security/v1"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	apps "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -841,19 +838,6 @@ var _ = Describe("Component handler tests", func() {
 			nodeSelectors = x.Spec.JobTemplate.Spec.Template.Spec.NodeSelector
 		case *batchv1.Job:
 			nodeSelectors = x.Spec.Template.Spec.NodeSelector
-		case *kbv1.Kibana:
-			nodeSelectors = x.Spec.PodTemplate.Spec.NodeSelector
-		case *esv1.Elasticsearch:
-			// elasticsearch resource describes multiple nodeSets which each have a nodeSelector.
-			nodeSets := x.Spec.NodeSets
-			for _, ns := range nodeSets {
-				Expect(ns.PodTemplate.Spec.NodeSelector).Should(Equal(expectedNodeSelectors))
-			}
-			return
-		case *monitoringv1.Alertmanager:
-			nodeSelectors = x.Spec.NodeSelector
-		case *monitoringv1.Prometheus:
-			nodeSelectors = x.Spec.NodeSelector
 		default:
 			Expect(fmt.Errorf("unexpected type passed to test")).ToNot(HaveOccurred())
 		}
@@ -1120,57 +1104,6 @@ var _ = Describe("Component handler tests", func() {
 				"kubernetes.io/os": "windows",
 			},
 		),
-		Entry("sets the required annotations for kibana",
-			&fakeComponent{
-				supportedOSType: rmeta.OSTypeLinux,
-				objs: []client.Object{&kbv1.Kibana{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-kibana"},
-					Spec: kbv1.KibanaSpec{
-						PodTemplate: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								NodeSelector: map[string]string{},
-							},
-						},
-					},
-				}},
-			},
-			client.ObjectKey{Name: "test-kibana"},
-			&kbv1.Kibana{},
-			map[string]string{
-				"kubernetes.io/os": "linux",
-			},
-		),
-		Entry("sets the required annotations for an elasticsearch nodeset",
-			&fakeComponent{
-				supportedOSType: rmeta.OSTypeLinux,
-				objs: []client.Object{&esv1.Elasticsearch{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-elasticsearch"},
-					Spec: esv1.ElasticsearchSpec{
-						NodeSets: []esv1.NodeSet{
-							{
-								PodTemplate: corev1.PodTemplateSpec{
-									Spec: corev1.PodSpec{
-										NodeSelector: map[string]string{},
-									},
-								},
-							},
-							{
-								PodTemplate: corev1.PodTemplateSpec{
-									Spec: corev1.PodSpec{
-										NodeSelector: nil,
-									},
-								},
-							},
-						},
-					},
-				}},
-			},
-			client.ObjectKey{Name: "test-elasticsearch"},
-			&esv1.Elasticsearch{},
-			map[string]string{
-				"kubernetes.io/os": "linux",
-			},
-		),
 		Entry("linux - leaves other annotations alone and sets the required ones",
 			&fakeComponent{
 				supportedOSType: rmeta.OSTypeLinux,
@@ -1215,46 +1148,6 @@ var _ = Describe("Component handler tests", func() {
 			map[string]string{
 				"kubernetes.io/foo": "bar",
 				"kubernetes.io/os":  "windows",
-			},
-		),
-		Entry("linux - sets the required annotations for Prometheus Alertmanager nodes",
-			&fakeComponent{
-				supportedOSType: rmeta.OSTypeLinux,
-				objs: []client.Object{&monitoringv1.Alertmanager{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-alertmanager"},
-					Spec: monitoringv1.AlertmanagerSpec{
-						NodeSelector: map[string]string{
-							"kubernetes.io/a": "b",
-						},
-					},
-				}},
-			},
-			client.ObjectKey{Name: "test-alertmanager"},
-			&monitoringv1.Alertmanager{},
-			map[string]string{
-				"kubernetes.io/a":  "b",
-				"kubernetes.io/os": "linux",
-			},
-		),
-		Entry("linux - sets the required annotations for Prometheus nodes",
-			&fakeComponent{
-				supportedOSType: rmeta.OSTypeLinux,
-				objs: []client.Object{&monitoringv1.Prometheus{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-prometheus"},
-					Spec: monitoringv1.PrometheusSpec{
-						CommonPrometheusFields: monitoringv1.CommonPrometheusFields{
-							NodeSelector: map[string]string{
-								"kubernetes.io/a": "b",
-							},
-						},
-					},
-				}},
-			},
-			client.ObjectKey{Name: "test-prometheus"},
-			&monitoringv1.Prometheus{},
-			map[string]string{
-				"kubernetes.io/a":  "b",
-				"kubernetes.io/os": "linux",
 			},
 		),
 	)
@@ -1593,65 +1486,6 @@ var _ = Describe("Component handler tests", func() {
 							},
 						},
 					},
-					&esv1.Elasticsearch{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-elasticsearch",
-							Namespace: "test-namespace",
-						},
-						Spec: esv1.ElasticsearchSpec{
-							NodeSets: []esv1.NodeSet{
-								{
-									PodTemplate: corev1.PodTemplateSpec{
-										Spec: corev1.PodSpec{
-											Containers: []corev1.Container{
-												{
-													Name:           "test-elasticsearch-container",
-													LivenessProbe:  &corev1.Probe{},
-													ReadinessProbe: &corev1.Probe{},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-					&kbv1.Kibana{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-kibana",
-							Namespace: "test-namespace",
-						},
-						Spec: kbv1.KibanaSpec{
-							PodTemplate: corev1.PodTemplateSpec{
-								Spec: corev1.PodSpec{
-									Containers: []corev1.Container{
-										{
-											Name:           "test-kibana-container",
-											LivenessProbe:  &corev1.Probe{},
-											ReadinessProbe: &corev1.Probe{},
-										},
-									},
-								},
-							},
-						},
-					},
-					&monitoringv1.Prometheus{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-prometheus",
-							Namespace: "test-namespace",
-						},
-						Spec: monitoringv1.PrometheusSpec{
-							CommonPrometheusFields: monitoringv1.CommonPrometheusFields{
-								Containers: []corev1.Container{
-									{
-										Name:           "test-prometheus-container",
-										LivenessProbe:  &corev1.Probe{},
-										ReadinessProbe: &corev1.Probe{},
-									},
-								},
-							},
-						},
-					},
 				},
 			}
 
@@ -1671,24 +1505,7 @@ var _ = Describe("Component handler tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			containers = append(containers, ds.Spec.Template.Spec.Containers...)
 
-			var es esv1.Elasticsearch
-			err = c.Get(ctx, client.ObjectKey{Name: "test-elasticsearch", Namespace: "test-namespace"}, &es)
-			Expect(err).NotTo(HaveOccurred())
-			for _, nodeset := range es.Spec.NodeSets {
-				containers = append(containers, nodeset.PodTemplate.Spec.Containers...)
-			}
-
-			var kb kbv1.Kibana
-			err = c.Get(ctx, client.ObjectKey{Name: "test-kibana", Namespace: "test-namespace"}, &kb)
-			Expect(err).NotTo(HaveOccurred())
-			containers = append(containers, kb.Spec.PodTemplate.Spec.Containers...)
-
-			var prom monitoringv1.Prometheus
-			err = c.Get(ctx, client.ObjectKey{Name: "test-prometheus", Namespace: "test-namespace"}, &prom)
-			Expect(err).NotTo(HaveOccurred())
-			containers = append(containers, prom.Spec.Containers...)
-
-			Expect(containers).To(HaveLen(5))
+			Expect(containers).To(HaveLen(2))
 			for _, c := range containers {
 				Expect(c.LivenessProbe.FailureThreshold).To(BeEquivalentTo(3))
 				Expect(c.LivenessProbe.PeriodSeconds).To(BeEquivalentTo(60))
