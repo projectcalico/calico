@@ -13,11 +13,12 @@ fails=0
 got_all=()
 
 # check <expected-suffix-after-BASE> <env>...
+# A later assignment wins, so a cell can override RELEASE_STREAM.
 check() {
   local want="${BASE}/$1"; shift
   local got
-  got=$(env -i PATH="${PATH}" ARGO_WORKFLOW_NAME="${WF}" RELEASE_STREAM=master "$@" \
-        "${BUILDER}")
+  got=$(env -i PATH="${PATH}" ARGO_WORKFLOW_NAME="${WF}" CI_GIT_REF_TYPE=NIGHTLY \
+        RELEASE_STREAM=master "$@" "${BUILDER}")
   got_all+=("${got}")
   if [[ "${got}" != "${want}" ]]; then
     printf 'FAIL\n  want %s\n  got  %s\n' "${want}" "${got}"
@@ -52,15 +53,9 @@ check master/gcp-kubeadm/calico-vpp-dpdk.yaml/HUGEPAGES/VXLAN/16:00 \
 check master/gcp-kubeadm/calico-vpp-dpdk.yaml/HUGEPAGES/WG/16:00 \
   PROVISIONER=gcp-kubeadm VPP_MANIFEST_FILE=calico-vpp-dpdk.yaml \
   ENABLE_HUGEPAGES=true ENABLE_WIREGUARD=true
-
-# The regression cell overrides the stream, so it needs its own invocation.
-v328=$(env -i PATH="${PATH}" ARGO_WORKFLOW_NAME="${WF}" RELEASE_STREAM=v3.28 \
-       PROVISIONER=gcp-kubeadm VPP_MANIFEST_FILE=calico-vpp-nohuge.yaml "${BUILDER}")
-got_all+=("${v328}")
-if [[ "${v328}" != "${BASE}/v3.28/gcp-kubeadm/calico-vpp-nohuge.yaml/16:00" ]]; then
-  printf 'FAIL (v3.28)\n  got %s\n' "${v328}"
-  fails=$((fails + 1))
-fi
+# The regression cell is the only one that moves the stream segment.
+check v3.28/gcp-kubeadm/calico-vpp-nohuge.yaml/16:00 \
+  PROVISIONER=gcp-kubeadm VPP_MANIFEST_FILE=calico-vpp-nohuge.yaml RELEASE_STREAM=v3.28
 
 uniq_count=$(printf '%s\n' "${got_all[@]}" | sort -u | wc -l)
 if [[ "${uniq_count}" -ne "${#got_all[@]}" ]]; then
@@ -69,19 +64,36 @@ if [[ "${uniq_count}" -ne "${#got_all[@]}" ]]; then
   fails=$((fails + 1))
 fi
 
-# A PR run has no epoch to anchor on, so it must publish nothing rather than
-# scatter junk through the bucket the maintainers read.
-for name in e2e-vpp-13133-pr-83729 e2e-vpp-13133-pr-m5xdw ''; do
-  out=$(env -i PATH="${PATH}" ARGO_WORKFLOW_NAME="${name}" RELEASE_STREAM=master \
-        PROVISIONER=gcp-kubeadm "${BUILDER}")
+# publishes_nothing <label> <env>...
+publishes_nothing() {
+  local label="$1"; shift
+  local out
+  out=$(env -i PATH="${PATH}" "$@" "${BUILDER}")
   if [[ -n "${out}" ]]; then
-    printf 'FAIL: name %q should yield no prefix, got %s\n' "${name}" "${out}"
+    printf 'FAIL: %s should yield no prefix, got %s\n' "${label}" "${out}"
     fails=$((fails + 1))
   fi
+}
+
+# Only the CronWorkflow is labelled NIGHTLY, so nothing else may write to the
+# bucket the maintainers read -- a `[cron-ci]` run on a PR least of all.
+for rt in PR MERGE TAG BRANCH ''; do
+  publishes_nothing "CI_GIT_REF_TYPE=${rt:-<unset>}" \
+    ARGO_WORKFLOW_NAME="${WF}" CI_GIT_REF_TYPE="${rt}" \
+    RELEASE_STREAM=master PROVISIONER=gcp-kubeadm
+done
+
+# Belt and braces: even labelled NIGHTLY, a name carrying no epoch has no anchor
+# to share between steps. The 5-digit suffix must not read as one.
+for name in e2e-vpp-13133-pr-83729 e2e-vpp-13133-pr-m5xdw ''; do
+  publishes_nothing "name ${name:-<unset>}" \
+    ARGO_WORKFLOW_NAME="${name}" CI_GIT_REF_TYPE=NIGHTLY \
+    RELEASE_STREAM=master PROVISIONER=gcp-kubeadm
 done
 
 if [[ "${fails}" -eq 0 ]]; then
-  echo "ok: 12 cells, all distinct, non-scheduled runs publish nothing"
+  printf 'ok: %s cells, all distinct; non-scheduled runs publish nothing\n' \
+    "${#got_all[@]}"
 else
   echo "${fails} failure(s)"
   exit 1

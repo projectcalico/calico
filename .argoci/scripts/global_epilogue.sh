@@ -27,6 +27,18 @@ echo "[INFO] publishing artifacts to ${CI_ARTIFACT_STEP_STORAGE}"
 # maintainers' tooling expects (date/stream/provisioner/manifest/flags/time).
 # Only .argoci/cron/e2e-vpp.yaml sets the prefix, and only for scheduled runs,
 # so an empty or malformed value just means "no copy".
+# Run twice: once before `bz destroy` so the logs survive a destroy that hangs,
+# and again after so the prefix ends up holding whatever destroy left behind —
+# which is what the Semaphore layout contained.
+publish_vpp_logs() {
+  case "${VPP_RESULTS_PREFIX:-}" in gs://*) ;; *) return 0 ;; esac
+  # Guard on the directory: were BZ_LOGS_DIR empty the source would be "/.",
+  # which is readable, recurses, and succeeds.
+  if [[ -d "${BZ_LOGS_DIR:-}" ]]; then
+    gsutil -m cp -r "${BZ_LOGS_DIR}/." "${VPP_RESULTS_PREFIX}/logs/" || true
+  fi
+}
+
 publish_vpp_copy() {
   case "${VPP_RESULTS_PREFIX:-}" in gs://*) ;; *) return 0 ;; esac
   echo "[INFO] publishing vpp copy to ${VPP_RESULTS_PREFIX}"
@@ -37,19 +49,7 @@ publish_vpp_copy() {
   if [[ -f "${REPORT_DIR}/junit.xml" ]]; then
     gsutil cp "${REPORT_DIR}/junit.xml" "${VPP_RESULTS_PREFIX}/junit.xml" || true
   fi
-  # Guard on the directory: were BZ_LOGS_DIR empty the source would be "/.",
-  # which is readable, recurses, and succeeds.
-  if [[ -d "${BZ_LOGS_DIR:-}" ]]; then
-    gsutil -m cp -r "${BZ_LOGS_DIR}/." "${VPP_RESULTS_PREFIX}/logs/" || true
-  fi
-}
-
-publish_vpp_destroy_log() {
-  case "${VPP_RESULTS_PREFIX:-}" in gs://*) ;; *) return 0 ;; esac
-  if [[ -f "${BZ_LOGS_DIR:-}/destroy.log" ]]; then
-    gsutil cp "${BZ_LOGS_DIR}/destroy.log" \
-              "${VPP_RESULTS_PREFIX}/logs/destroy.log" || true
-  fi
+  publish_vpp_logs
 }
 
 # Capture diags on failure (or always for cert runs).
@@ -98,6 +98,6 @@ bz destroy |& tee "${BZ_LOGS_DIR}/destroy.log" || true
 if [[ -f "${BZ_LOGS_DIR}/destroy.log" ]]; then
   artifact push job "${BZ_LOGS_DIR}/destroy.log" -d logs/destroy.log -f || true
 fi
-publish_vpp_destroy_log
+publish_vpp_logs
 
 echo "[INFO] exiting global_epilogue (CI_EXIT_CODE=${CI_EXIT_CODE})"

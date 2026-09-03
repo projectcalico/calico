@@ -6,10 +6,16 @@
 # against it, so the shape here is deliberately theirs rather than ours.
 set -euo pipefail
 
-# One anchor shared by every step in the run. Calling date as each step exits
-# would scatter a single run across sibling minute directories. Argo's random
-# suffix is 5 characters, so a 10-digit field cannot be one -- and a run with no
-# epoch is a PR run, which must not write into the bucket the maintainers read.
+# Scheduled runs only. A PR-triggered run (including `[cron-ci]`) must not write
+# into the bucket the maintainers read, and the handler labels the trigger for
+# us: NIGHTLY for the CronWorkflow, PR/MERGE/TAG/BRANCH otherwise. Anything
+# else, including the variable being absent, publishes nothing.
+[[ "${CI_GIT_REF_TYPE:-}" == NIGHTLY ]] || exit 0
+
+# One anchor shared by every step in the run, taken from the epoch the cron
+# workflow is named after. Calling date as each step exits would scatter a
+# single run across sibling minute directories. Argo's random suffix is 5
+# characters, so a 10-digit field cannot be one.
 suffix="${ARGO_WORKFLOW_NAME:-}"
 suffix="${suffix##*-}"
 [[ "${suffix}" =~ ^[0-9]{10}$ ]] || exit 0

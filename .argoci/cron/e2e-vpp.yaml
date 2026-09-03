@@ -23,13 +23,15 @@ globalPrologue: |
   export USE_LATEST_RELEASE="${USE_LATEST_RELEASE:-false}"
   export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
   export VPP_VERSION="${VPP_VERSION:-master}"
-  # Last, so it sees every variable above. Assign-then-export: with
-  # `export X="$(...)"` the status is export's, so a broken builder would go
-  # unnoticed and simply publish nothing.
+  source .argoci/scripts/global_prologue.sh
+  # After the prologue, so PROVISIONER has its default; the builder runs under
+  # `set -u` and a step relying on that default would otherwise die unbound.
+  # Only the epilogue reads this, so the ordering costs nothing. Assign-then-
+  # export: with `export X="$(...)"` the status is export's, so a broken builder
+  # would go unnoticed and simply publish nothing.
   VPP_RESULTS_PREFIX="$(.argoci/scripts/vpp_metadata.sh)" ||
     { echo "[WARN] vpp_metadata.sh failed; not publishing a vpp copy"; VPP_RESULTS_PREFIX=""; }
   export VPP_RESULTS_PREFIX
-  source .argoci/scripts/global_prologue.sh
 globalEpilogue: |
   source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
 defaults:
