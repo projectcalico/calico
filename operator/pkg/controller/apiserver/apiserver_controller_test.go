@@ -21,8 +21,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/stretchr/testify/mock"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/stretchr/testify/mock"
 	admregv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
