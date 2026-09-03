@@ -94,12 +94,27 @@ func GetMinReadySeconds(overrides any) *int32 {
 	return value.Interface().(*int32)
 }
 
+// GetPodTemplateMetadata reads the labels and annotations by field rather than by
+// type, since not every override type spells its pod template metadata as
+// operator.Metadata.
 func GetPodTemplateMetadata(overrides any) *operator.Metadata {
 	value := getField(overrides, "Spec", "Template", "Metadata")
 	if !value.IsValid() || value.IsNil() {
 		return nil
 	}
-	return value.Interface().(*operator.Metadata)
+	if md, ok := value.Interface().(*operator.Metadata); ok {
+		return md
+	}
+
+	md := &operator.Metadata{}
+	elem := value.Elem()
+	if labels := elem.FieldByName("Labels"); labels.IsValid() {
+		md.Labels, _ = labels.Interface().(map[string]string)
+	}
+	if annotations := elem.FieldByName("Annotations"); annotations.IsValid() {
+		md.Annotations, _ = annotations.Interface().(map[string]string)
+	}
+	return md
 }
 
 func GetTerminationGracePeriodSeconds(overrides any) *int64 {
@@ -390,7 +405,7 @@ func applyReplicatedPodResourceOverrides(r *replicatedPodResource, overrides any
 	// `Resources` or non-nil `Ports`, those attributes replace those for the corresponding container in
 	// `r.podTemplateSpec.Spec.InitContainers`.
 	if initContainers := GetInitContainers(overrides); initContainers != nil {
-		mergeContainers(r.podTemplateSpec.Spec.InitContainers, initContainers)
+		MergeContainers(r.podTemplateSpec.Spec.InitContainers, initContainers)
 	}
 
 	// If `overrides` has a Spec.Template.Spec.Containers field, and it includes containers with
@@ -638,9 +653,21 @@ func ApplyPodTemplateOverrides(podtemplate *corev1.PodTemplate, overrides any) {
 	podtemplate.Template = *r.podTemplateSpec
 }
 
-// mergeContainers copies the ResourceRequirements from the provided containers
+// ApplyPodTemplateSpecOverrides applies the overrides to a bare pod template spec,
+// for a resource whose pod template is not wrapped in one of the kinds above.
+func ApplyPodTemplateSpecOverrides(spec *corev1.PodTemplateSpec, overrides any) {
+	// Catch if caller passes in an explicit nil.
+	if overrides == nil || spec == nil {
+		return
+	}
+	r := &replicatedPodResource{podTemplateSpec: spec}
+	applyReplicatedPodResourceOverrides(r, overrides)
+	*spec = *r.podTemplateSpec
+}
+
+// MergeContainers copies the ResourceRequirements from the provided containers
 // to the current corev1.Containers.
-func mergeContainers(current []corev1.Container, provided []corev1.Container) {
+func MergeContainers(current []corev1.Container, provided []corev1.Container) {
 	providedMap := make(map[string]corev1.Container)
 	for _, c := range provided {
 		providedMap[c.Name] = c

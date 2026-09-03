@@ -43,7 +43,7 @@ type Options struct {
 	Extensions extensions.Builder
 
 	// UncachedObjects are read straight from the apiserver rather than through the
-	// manager's cache, for a kind whose cached copy goes stale.
+	// manager's cache, so that extensions can disable caches as needed.
 	UncachedObjects []client.Object
 
 	// Collectors builds the Prometheus collectors registered alongside the operator's

@@ -1538,3 +1538,63 @@ func defaultedDeployment() appsv1.Deployment {
 	ds.Spec.Template.Spec.InitContainers = addContainer(ds.Spec.Template.Spec.InitContainers)
 	return ds
 }
+
+var _ = Describe("Overrides for a resource the core operator does not name", func() {
+	// egwMetadata stands in for an override type that spells its pod template
+	// metadata as its own type rather than as operator.Metadata.
+	type egwMetadata struct {
+		Labels      map[string]string
+		Annotations map[string]string
+	}
+	type egwTemplate struct{ Metadata *egwMetadata }
+	type egwSpec struct{ Template *egwTemplate }
+	type egwOverride struct{ Spec *egwSpec }
+
+	It("reads pod template metadata off an override type of its own", func() {
+		o := &egwOverride{Spec: &egwSpec{Template: &egwTemplate{Metadata: &egwMetadata{
+			Labels:      map[string]string{"l": "1"},
+			Annotations: map[string]string{"a": "2"},
+		}}}}
+		md := GetPodTemplateMetadata(o)
+		Expect(md).NotTo(BeNil())
+		Expect(md.Labels).To(HaveKeyWithValue("l", "1"))
+		Expect(md.Annotations).To(HaveKeyWithValue("a", "2"))
+	})
+
+	It("still reads an override type that uses operator.Metadata", func() {
+		o := &v1.CalicoNodeDaemonSet{
+			Spec: &v1.CalicoNodeDaemonSetSpec{
+				Template: &v1.CalicoNodeDaemonSetPodTemplateSpec{
+					Metadata: &v1.Metadata{Labels: map[string]string{"l": "1"}},
+				},
+			},
+		}
+		Expect(GetPodTemplateMetadata(o).Labels).To(HaveKeyWithValue("l", "1"))
+	})
+
+	It("returns nil when the override sets no pod template metadata", func() {
+		Expect(GetPodTemplateMetadata(&egwOverride{Spec: &egwSpec{Template: &egwTemplate{}}})).To(BeNil())
+	})
+
+	It("applies overrides to a bare pod template spec", func() {
+		spec := &corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c"}}},
+		}
+		ApplyPodTemplateSpecOverrides(spec, &v1.CalicoNodeDaemonSet{
+			Spec: &v1.CalicoNodeDaemonSetSpec{
+				Template: &v1.CalicoNodeDaemonSetPodTemplateSpec{
+					Spec: &v1.CalicoNodeDaemonSetPodSpec{
+						NodeSelector: map[string]string{"n": "1"},
+					},
+				},
+			},
+		})
+		Expect(spec.Spec.NodeSelector).To(HaveKeyWithValue("n", "1"))
+	})
+
+	It("leaves the pod template spec alone for a nil override", func() {
+		spec := &corev1.PodTemplateSpec{Spec: corev1.PodSpec{Hostname: "unchanged"}}
+		ApplyPodTemplateSpecOverrides(spec, nil)
+		Expect(spec.Spec.Hostname).To(Equal("unchanged"))
+	})
+})
