@@ -222,6 +222,14 @@ type (
 	}
 )
 
+// Each adapter must satisfy the interfaces its options are returned as, so a
+// missing apply method fails here rather than at a call site.
+var (
+	_ Option        = setting(nil)
+	_ ArchiveOption = archiveSetting(nil)
+	_ PublishOption = publishSetting(nil)
+)
+
 // setting is a change every step accepts.
 type setting func(*settings) error
 
@@ -274,11 +282,11 @@ func WithLogsDir(dir string) Option {
 	})
 }
 
-// WithPull lets an archive fetch an image that is not already local, which a
-// release that did not build its own images needs.
-func WithPull() ArchiveOption {
+// WithPull sets whether an archive may fetch an image that is not already
+// local, which a release that did not build its own images needs.
+func WithPull(pull bool) ArchiveOption {
 	return archiveSetting(func(s *settings) error {
-		s.pull = true
+		s.pull = pull
 		return nil
 	})
 }
@@ -394,20 +402,21 @@ func (c Image) env() []string {
 // runUnits runs every unit concurrently, collecting failures rather than
 // stopping at the first: one component failing should not hide the rest.
 func (s settings) runUnits(units []unit) error {
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	var errs []error
-
+	// errgroup would report only the first failure, and one component failing
+	// should not hide the rest, so every error is collected.
+	var (
+		wg   sync.WaitGroup
+		mu   sync.Mutex
+		errs = make([]error, 0, len(units))
+	)
 	for _, u := range units {
-		wg.Add(1)
-		go func(u unit) {
-			defer wg.Done()
+		wg.Go(func() {
 			if err := s.runUnit(u); err != nil {
 				mu.Lock()
+				defer mu.Unlock()
 				errs = append(errs, err)
-				mu.Unlock()
 			}
-		}(u)
+		})
 	}
 	wg.Wait()
 	return errors.Join(errs...)
@@ -485,7 +494,7 @@ func (c Image) imageNames(u unit) ([]string, error) {
 
 	wantWindows := u.variant == windowsVariant
 	var names []string
-	for _, name := range strings.Fields(out) {
+	for name := range strings.FieldsSeq(out) {
 		if strings.HasSuffix(name, windowsImageSuffix) == wantWindows {
 			names = append(names, name)
 		}

@@ -165,7 +165,7 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 // newSettings validates what every step requires and layers the options over
 // it. It is generic so each step passes only the option type it accepts.
 func newSettings[O any](step, repoRoot, version string, variants []Variant, opts []O) (settings, error) {
-	s := settings{Image: Image{RepoRoot: repoRoot, Version: version, Variants: variants}}
+	s := settings{RepoRoot: repoRoot, Version: version, Variants: variants}
 	s.Apply([]command.Option{command.WithName(step)})
 	if err := s.validate(); err != nil {
 		return s, s.Errorf("%w", err)

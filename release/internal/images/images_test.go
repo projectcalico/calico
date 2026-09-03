@@ -665,7 +665,7 @@ func TestArchivePullsWhenAsked(t *testing.T) {
 	f := &imageNameRunner{images: "node"}
 	f.failures = map[string]int{"inspect": 9}
 	err := Archive(testRepoRoot, testVersion, oneStandardVariant("node"), t.TempDir(),
-		archiveOpts(f, WithPull())...)
+		archiveOpts(f, WithPull(true))...)
 	if err != nil {
 		t.Fatalf("Archive: %v", err)
 	}

@@ -1665,9 +1665,7 @@ func (r *CalicoManager) archiveContainerImages(dir string) error {
 		images.WithRunner(r.runner),
 		images.WithRegistries(r.imageRegistries...),
 		images.WithArches(r.architectures...),
-	}
-	if pull {
-		opts = append(opts, images.WithPull())
+		images.WithPull(pull),
 	}
 	// Standard images only: the release tarball ships what a user deploys, and
 	// the Windows images have an archive of their own.
