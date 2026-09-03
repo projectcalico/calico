@@ -706,6 +706,20 @@ commit-and-push-pr:
 # GitHub API helpers
 #   Helper macros and targets to help with communicating with the github API
 ###############################################################################
+# Fetch from a remote repo. Both wrappers centralise the retry and throttling
+# handling; see the scripts for what they do and when not to use them.
+
+# Download a file. $(1) is the URL, $(2) the destination path.
+define fetch_file
+	$(REPO_ROOT)/hack/fetch-file $(1) $(2)
+endef
+
+# Check out a pinned revision. $(1) is the repo URL, $(2) the revision,
+# $(3) the destination directory.
+define fetch_repo
+	$(REPO_ROOT)/hack/fetch-repo $(1) $(2) $(3)
+endef
+
 GIT_COMMIT_MESSAGE?="Automatic Pin Updates"
 GIT_COMMIT_TITLE?="Semaphore Auto Pin Update"
 GIT_PR_BRANCH_BASE?=$(SEMAPHORE_GIT_BRANCH)
