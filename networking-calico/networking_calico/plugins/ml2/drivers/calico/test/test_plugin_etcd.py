@@ -3019,11 +3019,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
     def test_try_to_update_port_status_fail_sqlalchemy(self, _m_spawn):
         # As above, but for the non-DBError arm of the handler.  Worth its own
         # test because that "except sa_exc.SQLAlchemyError" is only evaluated
-        # when something other than a DBError reaches it: while sqlalchemy was
-        # mocked out, the name resolved to a MagicMock attribute rather than a
-        # class, and reaching this line raised TypeError -- "catching classes
-        # that do not inherit from BaseException is not allowed" -- instead of
-        # scheduling the retry.
+        # when something other than a DBError reaches it.
         self.driver._get_db()
         self.driver._init_start_endpoint_status_watcher()
 
