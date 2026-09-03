@@ -23,11 +23,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	policyv1 "k8s.io/api/policy/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -47,7 +45,6 @@ import (
 	rcertificatemanagement "github.com/projectcalico/calico/operator/pkg/render/certificatemanagement"
 	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
 	"github.com/projectcalico/calico/operator/pkg/render/kubecontrollers"
-	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 const clusterDomain = "cluster.local"
@@ -57,11 +54,9 @@ const clusterDomain = "cluster.local"
 func allCalicoComponents(
 	k8sServiceEp k8sapi.ServiceEndpoint,
 	cr *operatorv1.InstallationSpec,
-	managementCluster *operatorv1.ManagementCluster,
 	managementClusterConnection *operatorv1.ManagementClusterConnection,
 	pullSecrets []*corev1.Secret,
 	typhaNodeTLS *render.TyphaNodeTLS,
-	managerInternalTLSSecret certificatemanagement.KeyPairInterface,
 	bt map[string]string,
 	up bool,
 	nodeAppArmorProfile string,
@@ -119,7 +114,6 @@ func allCalicoComponents(
 		ServiceAccounts: []string{render.CalicoNodeObjectName, render.TyphaServiceAccountName},
 		KeyPairOptions: []rcertificatemanagement.KeyPairOption{
 			rcertificatemanagement.NewKeyPairOption(typhaNodeTLS.NodeSecret, true, true),
-			rcertificatemanagement.NewKeyPairOption(managerInternalTLSSecret, true, true),
 			rcertificatemanagement.NewKeyPairOption(typhaNodeTLS.TyphaSecret, true, true),
 		},
 		TrustedBundle: typhaNodeTLS.TrustedBundle,
@@ -133,7 +127,6 @@ var _ = Describe("Rendering tests", func() {
 	var logBuffer bytes.Buffer
 	var logWriter *bufio.Writer
 	var typhaNodeTLS *render.TyphaNodeTLS
-	var internalManagerKeyPair certificatemanagement.KeyPairInterface
 	logSeverity := operatorv1.LogLevelInfo
 	logFileMaxSize := resource.MustParse("100Mi")
 	var logFileMaxAgeDays uint32 = 30
@@ -187,9 +180,6 @@ var _ = Describe("Rendering tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		typhaNodeTLS = getTyphaNodeTLS(cli, certificateManager)
-		internalManagerKeyPair, err = certificateManager.GetOrCreateKeyPair(cli, render.ManagerInternalTLSSecretName, common.OperatorNamespace(), []string{render.FelixCommonName})
-		Expect(err).NotTo(HaveOccurred())
-
 		logWriter = bufio.NewWriter(&logBuffer)
 		render.SetTestLogger(zap.New(zap.UseDevMode(true), zap.WriteTo(logWriter)))
 	})
@@ -213,7 +203,7 @@ var _ = Describe("Rendering tests", func() {
 		// - 6 kube-controllers resources (ServiceAccount, ClusterRole, Binding, Deployment, Service, Secret,RoleBinding)
 		// - 1 namespace
 		// - 2 Windows node resources (ConfigMap, DaemonSet)
-		c, err := allCalicoComponents(k8sServiceEp, instance, nil, nil, nil, typhaNodeTLS, nil, nil, false, "", dns.DefaultClusterDomain, 9094, nil)
+		c, err := allCalicoComponents(k8sServiceEp, instance, nil, nil, typhaNodeTLS, nil, false, "", dns.DefaultClusterDomain, 9094, nil)
 		Expect(err).To(BeNil(), "Expected Calico to create successfully %s", err)
 		Expect(componentCount(c)).To(Equal(5 + 3 + 4 + 1 + 6 + 6 + 1 + 2))
 	})
@@ -226,80 +216,14 @@ var _ = Describe("Rendering tests", func() {
 		var nodeMetricsPort int32 = 9081
 		instance.Variant = operatorv1.CalicoEnterprise
 		instance.NodeMetricsPort = &nodeMetricsPort
-		c, err := allCalicoComponents(k8sServiceEp, instance, nil, nil, nil, typhaNodeTLS, nil, nil, false, "", dns.DefaultClusterDomain, 9094, nil)
+		c, err := allCalicoComponents(k8sServiceEp, instance, nil, nil, typhaNodeTLS, nil, false, "", dns.DefaultClusterDomain, 9094, nil)
 		Expect(err).To(BeNil(), "Expected Calico to create successfully %s", err)
 		Expect(componentCount(c)).To(Equal(5 + 3 + 4 + 1 + 6 + 6 + 1 + 2))
 	})
 
-	It("should render all resources when variant is Tigera Secure and Management Cluster", func() {
-		// For this scenario, we expect the basic resources plus the following for Tigera Secure:
-		// - X Same as default config for EE
-		// - pass in InternalManagerTLSSecret
-		var nodeMetricsPort int32 = 9081
-		instance.Variant = operatorv1.CalicoEnterprise
-		instance.NodeMetricsPort = &nodeMetricsPort
-
-		c, err := allCalicoComponents(k8sServiceEp, instance, &operatorv1.ManagementCluster{}, nil, nil, typhaNodeTLS, internalManagerKeyPair, nil, false, "", dns.DefaultClusterDomain, 9094, nil)
-		Expect(err).To(BeNil(), "Expected Calico to create successfully %s", err)
-
-		expectedResources := []client.Object{
-			// Namespaces first.
-			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "Namespace", APIVersion: "v1"}},
-
-			// Typha objects.
-			&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: render.TyphaServiceAccountName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "ServiceAccount", APIVersion: "v1"}},
-			&rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: common.TyphaDeploymentName}, TypeMeta: metav1.TypeMeta{Kind: "ClusterRole", APIVersion: "rbac.authorization.k8s.io/v1"}},
-			&rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: common.TyphaDeploymentName}, TypeMeta: metav1.TypeMeta{Kind: "ClusterRoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"}},
-			&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: render.TyphaServiceName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "Service", APIVersion: "v1"}},
-			&policyv1.PodDisruptionBudget{ObjectMeta: metav1.ObjectMeta{Name: common.TyphaDeploymentName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "PodDisruptionBudget", APIVersion: "policy/v1"}},
-			&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: common.TyphaDeploymentName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"}},
-
-			// Node objects.
-			&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: common.NodeDaemonSetName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "ServiceAccount", APIVersion: "v1"}},
-			&rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: common.NodeDaemonSetName}, TypeMeta: metav1.TypeMeta{Kind: "ClusterRole", APIVersion: "rbac.authorization.k8s.io/v1"}},
-			&rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: common.NodeDaemonSetName}, TypeMeta: metav1.TypeMeta{Kind: "ClusterRoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"}},
-			&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "calico-cni-plugin", Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "ServiceAccount", APIVersion: "v1"}},
-			&rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "calico-cni-plugin"}, TypeMeta: metav1.TypeMeta{Kind: "ClusterRole", APIVersion: "rbac.authorization.k8s.io/v1"}},
-			&rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "calico-cni-plugin"}, TypeMeta: metav1.TypeMeta{Kind: "ClusterRoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"}},
-			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "cni-config", Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"}},
-			&appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: common.NodeDaemonSetName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "DaemonSet", APIVersion: "apps/v1"}},
-
-			// Kube-controllers objects.
-			&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: common.KubeControllersDeploymentName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "ServiceAccount", APIVersion: "v1"}},
-			&rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: common.KubeControllersDeploymentName}, TypeMeta: metav1.TypeMeta{Kind: "ClusterRole", APIVersion: "rbac.authorization.k8s.io/v1"}},
-			&rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: common.KubeControllersDeploymentName}, TypeMeta: metav1.TypeMeta{Kind: "ClusterRoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"}},
-			&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: common.KubeControllersDeploymentName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"}},
-			&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "calico-kube-controllers-metrics", Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "Service", APIVersion: "v1"}},
-
-			// Windows node objects. The Windows node-metrics Service is added by the
-			// enterprise modifier at the componentHandler, so it is not in this output.
-			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "cni-config-windows", Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"}},
-			&appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: common.WindowsDaemonSetName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "DaemonSet", APIVersion: "apps/v1"}},
-
-			// Certificate Management objects
-			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "tigera-ca-bundle", Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"}},
-			&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: render.NodeTLSSecretName, Namespace: common.OperatorNamespace()}, TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"}},
-			&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: render.NodeTLSSecretName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"}},
-			&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: render.ManagerInternalTLSSecretName, Namespace: common.OperatorNamespace()}, TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"}},
-			&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: render.ManagerInternalTLSSecretName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"}},
-			&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: render.TyphaTLSSecretName, Namespace: common.OperatorNamespace()}, TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"}},
-			&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: render.TyphaTLSSecretName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"}},
-
-			// 	Tigera operator secret rolebinding
-			&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: render.TigeraOperatorSecrets, Namespace: common.CalicoNamespace}},
-		}
-
-		var resources []client.Object
-		for _, component := range c {
-			toCreate, _ := component.Objects()
-			resources = append(resources, toCreate...)
-		}
-		rtest.ExpectResources(resources, expectedResources)
-	})
-
 	It("should render calico with a apparmor profile if annotation is present in installation", func() {
 		apparmorProf := "foobar"
-		comps, err := allCalicoComponents(k8sServiceEp, instance, nil, nil, nil, typhaNodeTLS, nil, nil, false, apparmorProf, dns.DefaultClusterDomain, 0, nil)
+		comps, err := allCalicoComponents(k8sServiceEp, instance, nil, nil, typhaNodeTLS, nil, false, apparmorProf, dns.DefaultClusterDomain, 0, nil)
 		Expect(err).To(BeNil(), "Expected Calico to create successfully %s", err)
 		var cn *appsv1.DaemonSet
 		for _, comp := range comps {
@@ -323,7 +247,7 @@ var _ = Describe("Rendering tests", func() {
 		}
 		bgpLayout.Name = "bgp-layout"
 		bgpLayout.Namespace = common.OperatorNamespace()
-		comps, err := allCalicoComponents(k8sServiceEp, instance, nil, nil, nil, typhaNodeTLS, nil, nil, false, "", dns.DefaultClusterDomain, 0, bgpLayout)
+		comps, err := allCalicoComponents(k8sServiceEp, instance, nil, nil, typhaNodeTLS, nil, false, "", dns.DefaultClusterDomain, 0, bgpLayout)
 		Expect(err).To(BeNil(), "Expected Calico to create successfully %s", err)
 		var cm *corev1.ConfigMap
 		var ds *appsv1.DaemonSet
@@ -345,7 +269,7 @@ var _ = Describe("Rendering tests", func() {
 	})
 
 	It("should set node priority class to system-node-critical", func() {
-		comps, err := allCalicoComponents(k8sServiceEp, instance, nil, nil, nil, typhaNodeTLS, nil, nil, false, "", dns.DefaultClusterDomain, 0, nil)
+		comps, err := allCalicoComponents(k8sServiceEp, instance, nil, nil, typhaNodeTLS, nil, false, "", dns.DefaultClusterDomain, 0, nil)
 		Expect(err).To(BeNil(), "Expected Calico to create successfully %s", err)
 		var cn *appsv1.DaemonSet
 		for _, comp := range comps {
@@ -361,7 +285,7 @@ var _ = Describe("Rendering tests", func() {
 	})
 
 	It("should set typha priority class to system-cluster-critical", func() {
-		comps, err := allCalicoComponents(k8sServiceEp, instance, nil, nil, nil, typhaNodeTLS, nil, nil, false, "", dns.DefaultClusterDomain, 0, nil)
+		comps, err := allCalicoComponents(k8sServiceEp, instance, nil, nil, typhaNodeTLS, nil, false, "", dns.DefaultClusterDomain, 0, nil)
 		Expect(err).To(BeNil(), "Expected Calico to create successfully %s", err)
 		var cn *appsv1.Deployment
 		for _, comp := range comps {
@@ -377,7 +301,7 @@ var _ = Describe("Rendering tests", func() {
 	})
 
 	It("should set kube controllers priority class to system-cluster-critical", func() {
-		comps, err := allCalicoComponents(k8sServiceEp, instance, nil, nil, nil, typhaNodeTLS, nil, nil, false, "", dns.DefaultClusterDomain, 0, nil)
+		comps, err := allCalicoComponents(k8sServiceEp, instance, nil, nil, typhaNodeTLS, nil, false, "", dns.DefaultClusterDomain, 0, nil)
 		Expect(err).To(BeNil(), "Expected Calico to create successfully %s", err)
 		var cn *appsv1.Deployment
 		for _, comp := range comps {

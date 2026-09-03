@@ -25,7 +25,7 @@ import (
 
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/stringsutil"
 	"github.com/go-logr/logr"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -264,10 +264,6 @@ func createPeriodicReconcileChannel(period time.Duration) chan event.GenericEven
 
 func WaitToAddClusterInformationWatch(controller ctrlruntime.Controller, c kubernetes.Interface, log logr.Logger, flag *ReadyFlag) {
 	WaitToAddResourceWatch(controller, c, log, flag, []client.Object{&v3.ClusterInformation{TypeMeta: metav1.TypeMeta{Kind: v3.KindClusterInformation}}})
-}
-
-func WaitToAddPolicyRecommendationScopeWatch(controller ctrlruntime.Controller, c kubernetes.Interface, log logr.Logger, flag *ReadyFlag) {
-	WaitToAddResourceWatch(controller, c, log, flag, []client.Object{&v3.PolicyRecommendationScope{TypeMeta: metav1.TypeMeta{Kind: v3.KindPolicyRecommendationScope}}})
 }
 
 func WaitToAddNetworkPolicyWatches(controller ctrlruntime.Controller, c kubernetes.Interface, log logr.Logger, policies []types.NamespacedName) {
