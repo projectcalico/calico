@@ -1482,12 +1482,15 @@ CRANE_URL = https://github.com/google/go-containerregistry/releases/download/$(C
 
 .PHONY: bin/crane
 bin/crane: $(REPO_ROOT)/bin/crane
+# Moved into place last: a half-extracted binary looks complete to make.
 $(REPO_ROOT)/bin/crane:
 	$(info ::: Downloading crane from $(CRANE_URL))
 	@mkdir -p $(REPO_ROOT)/bin
-	@curl -sSfL --retry 5 --retry-all-errors -o /tmp/calico-crane.tar.gz $(CRANE_URL)
-	@tar xz -C $(REPO_ROOT)/bin -f /tmp/calico-crane.tar.gz crane
-	@rm -f /tmp/calico-crane.tar.gz
+	@tmp=$$(mktemp -d) && trap 'rm -rf "$$tmp"' EXIT && \
+		curl -sSfL --retry 5 --retry-all-errors -o "$$tmp/crane.tar.gz" $(CRANE_URL) && \
+		tar xz -C "$$tmp" -f "$$tmp/crane.tar.gz" crane && \
+		chmod +x "$$tmp/crane" && \
+		mv "$$tmp/crane" $@
 
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.

@@ -434,15 +434,14 @@ release-windows-archive: release-prereqs
 	$(MAKE) build-windows-archive WINDOWS_ARCHIVE_TAG=$(VERSION)
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs .release-$(VERSION).published
-.release-$(VERSION).published:
-	# Push node images.
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-
-	# Push Windows images.
-	$(MAKE) release-windows IMAGETAG=$(VERSION) CONFIRM=$(CONFIRM)
-
-	touch $@
+# The registry decides the skip, so a fresh checkout answers like one that pushed.
+release-publish: release-prereqs bin/crane
+	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)"; then \
+		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \
+	else \
+		$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM); \
+		$(MAKE) release-windows IMAGETAG=$(VERSION) CONFIRM=$(CONFIRM); \
+	fi
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
