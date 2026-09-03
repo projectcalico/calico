@@ -23,6 +23,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -35,11 +36,11 @@ func Build(repoRoot, version string, variants []Variant, opts ...BuildOption) er
 	}
 
 	units := s.units(s.env())
-	s.logger().WithField("images", len(units)).Info("Building container images")
+	s.Logger().WithField("images", len(units)).Info("Building container images")
 	if err := s.runUnits(units); err != nil {
 		return err
 	}
-	s.logger().Info("Finished building container images")
+	s.Logger().Info("Finished building container images")
 	return nil
 }
 
@@ -51,15 +52,15 @@ func Archive(repoRoot, version string, variants []Variant, tarDir string, opts .
 		return err
 	}
 	if tarDir == "" {
-		return s.errorf("no directory to write images to")
+		return s.Errorf("no directory to write images to")
 	}
 	if len(s.Registries) == 0 {
-		return s.errorf("no registry to archive images from")
+		return s.Errorf("no registry to archive images from")
 	}
 	s.dir = tarDir
 
 	units := s.units(s.env())
-	s.logger().WithField("images", len(units)).Info("Archiving container images")
+	s.Logger().WithField("images", len(units)).Info("Archiving container images")
 	if err := os.MkdirAll(tarDir, os.ModePerm); err != nil {
 		return fmt.Errorf("creating images dir: %w", err)
 	}
@@ -70,16 +71,16 @@ func Archive(repoRoot, version string, variants []Variant, tarDir string, opts .
 	for _, u := range units {
 		names, err := s.imageNames(u)
 		if err != nil {
-			return s.errorf("%w", err)
+			return s.Errorf("%w", err)
 		}
 		for _, name := range names {
 			image := fmt.Sprintf("%s/%s:%s", reg, name, s.Version)
 			if err := save(s, image, filepath.Join(tarDir, name+".tar")); err != nil {
-				return s.errorf("%w", err)
+				return s.Errorf("%w", err)
 			}
 		}
 	}
-	s.logger().Info("Finished archiving container images")
+	s.Logger().Info("Finished archiving container images")
 	return nil
 }
 
@@ -116,10 +117,10 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 		return err
 	}
 	if len(s.Registries) == 0 {
-		return s.errorf("no registries to publish to")
+		return s.Errorf("no registries to publish to")
 	}
 	if resolve == nil {
-		return s.errorf("no digest resolver given")
+		return s.Errorf("no digest resolver given")
 	}
 	s.resolve = resolve
 	s.confirm = confirm
@@ -134,10 +135,10 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 		return err
 	}
 	if len(units) == 0 {
-		s.logger().Info("Every image is already published")
+		s.Logger().Info("Every image is already published")
 		return nil
 	}
-	s.logger().WithField("images", len(units)).Info("Publishing container images")
+	s.Logger().WithField("images", len(units)).Info("Publishing container images")
 	publishErr := s.runUnits(units)
 
 	// Record before reporting a failure: a partial publish is exactly the run
@@ -148,15 +149,15 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 	if publishErr != nil {
 		return publishErr
 	}
-	s.logger().Info("Finished publishing container images")
+	s.Logger().Info("Finished publishing container images")
 
 	if s.scan == nil {
 		return nil
 	}
-	s.logger().Info("Sending images to ISS")
+	s.Logger().Info("Sending images to ISS")
 	scanner := imagescanner.New(s.scan.Config)
 	if err := scanner.Scan(s.scan.ProductCode, s.scan.Images, s.scan.Stream, s.scan.Release, s.scan.OutputDir); err != nil {
-		s.logger().WithError(err).Error("Failed to scan images")
+		s.Logger().WithError(err).Error("Failed to scan images")
 	}
 	return nil
 }
@@ -164,13 +165,14 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 // newSettings validates what every step requires and layers the options over
 // it. It is generic so each step passes only the option type it accepts.
 func newSettings[O any](step, repoRoot, version string, variants []Variant, opts []O) (settings, error) {
-	s := settings{step: step, Image: Image{RepoRoot: repoRoot, Version: version, Variants: variants}}
+	s := settings{Image: Image{RepoRoot: repoRoot, Version: version, Variants: variants}}
+	s.Apply([]command.Option{command.WithName(step)})
 	if err := s.validate(); err != nil {
-		return s, s.errorf("%w", err)
+		return s, s.Errorf("%w", err)
 	}
 	for _, opt := range opts {
 		if err := applyTo(opt, &s); err != nil {
-			return s, err
+			return s, s.Errorf("%w", err)
 		}
 	}
 	return s.defaults(), nil
@@ -203,15 +205,11 @@ func pending(s settings, units []unit) ([]unit, error) {
 			return nil, err
 		}
 		if done {
-			s.logger().WithFields(logrus.Fields{"variant": u.variant, "component": u.dir}).
+			s.Logger().WithFields(logrus.Fields{"variant": u.variant, "component": u.dir}).
 				Info("Already published, skipping")
 			continue
 		}
 		out = append(out, u)
 	}
 	return out, nil
-}
-
-func (s settings) errorf(format string, args ...any) error {
-	return fmt.Errorf("%s: %w", s.step, fmt.Errorf(format, args...))
 }

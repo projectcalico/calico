@@ -32,16 +32,12 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-// maxRetries is how many times a unit is retried. Image pushes fail on network
-// flakes often enough that one retry saves a whole release run.
-const maxRetries = 1
-
 // Steps that drive images. The name becomes the log directory and the verb in
 // a failure, so a new step adds one here rather than passing a literal.
 const (
-	buildStep   = "build"
-	publishStep = "publish"
-	archiveStep = "archive"
+	buildStep   = "images-build"
+	publishStep = "images-publish"
+	archiveStep = "images-archive"
 )
 
 const (
@@ -175,9 +171,8 @@ type Image struct {
 	Arches     []string
 	Variants   []Variant
 
-	// runner is unexported so it can only be set through WithRunner, which
-	// keeps the zero-value config pointed at real commands.
-	runner command.CommandRunner
+	// Step carries the runner every release step drives commands through.
+	command.Step
 }
 
 // BuildOptions builds the images locally. It reaches no registry, so it carries
@@ -188,14 +183,8 @@ type Image struct {
 type settings struct {
 	Image
 
-	step string
-
 	// confirm latches the push. Without it the make targets run as a dry run.
 	confirm bool
-
-	// logsDir, when set, gives each unit its own log file. Concurrent units
-	// otherwise interleave their output into one unreadable stream.
-	logsDir string
 
 	// dir is where an archive writes its tar files.
 	dir string
@@ -253,7 +242,7 @@ func (f publishSetting) applyPublish(s *settings) error { return f(s) }
 // WithRunner substitutes the runner the make targets are driven through.
 func WithRunner(r command.CommandRunner) Option {
 	return setting(func(s *settings) error {
-		s.runner = r
+		s.Apply([]command.Option{command.WithRunner(r)})
 		return nil
 	})
 }
@@ -280,7 +269,7 @@ func WithArches(arches ...string) Option {
 // the output captured in memory.
 func WithLogsDir(dir string) Option {
 	return setting(func(s *settings) error {
-		s.logsDir = dir
+		s.Apply([]command.Option{command.WithLogsDir(dir)})
 		return nil
 	})
 }
@@ -356,9 +345,6 @@ type resume struct {
 
 // defaults fills in anything the options left unset.
 func (s settings) defaults() settings {
-	if s.runner == nil {
-		s.runner = &command.RealCommandRunner{}
-	}
 	return s
 }
 
@@ -429,45 +415,34 @@ func (s settings) runUnits(units []unit) error {
 
 // runUnit runs one unit's make target, retrying on failure.
 func (s settings) runUnit(u unit) error {
-	log := s.logger().WithFields(logrus.Fields{"variant": u.variant, "component": u.dir, "target": u.target})
+	log := s.Logger().WithFields(logrus.Fields{"variant": u.variant, "component": u.dir, "target": u.target})
 	dir := filepath.Join(s.RepoRoot, u.dir)
 
 	args := append([]string{"-C", dir}, strings.Fields(u.target)...)
 	for attempt := 0; ; attempt++ {
-		out, err := s.run(args, u.env, s.logPath(u))
+		out, err := s.Run("make", args, u.env, s.logPath(u))
 		if err == nil {
 			log.Debug(out)
 			return nil
 		}
-		if attempt < maxRetries {
+		if attempt < command.MaxRetries {
 			log.WithError(err).WithField("attempt", attempt).Warn("Image step failed, retrying")
 			continue
 		}
 		// Surface the captured output; the failure cause is usually only in there.
 		log.Error(out)
-		return s.errorf("%s images in %s: %w", u.variant, u.dir, err)
+		return s.Errorf("%s images in %s: %w", u.variant, u.dir, err)
 	}
-}
-
-// run sends output to logPath when there is one, else captures it in memory.
-func (c Image) run(args, env []string, logPath string) (string, error) {
-	if logPath == "" {
-		return c.runner.RunInDir("", "make", args, env)
-	}
-	return c.runner.RunInDirToFile("", "make", args, env, logPath)
 }
 
 // logPath namespaces the logs under the image step, with the variant in the
 // file name so a component shipping several image kinds keeps a log per kind.
 func (s settings) logPath(u unit) string {
-	if s.logsDir == "" {
-		return ""
-	}
 	slug := strings.ReplaceAll(filepath.Clean(u.dir), string(filepath.Separator), "-")
 	if u.variant != StandardVariant {
 		slug += "-" + u.variant
 	}
-	return filepath.Join(s.logsDir, "images-"+s.step, slug+".log")
+	return s.LogPath(slug)
 }
 
 // unit is one make invocation: a variant's target in one component directory.
@@ -503,7 +478,7 @@ func (c Image) imageNames(u unit) ([]string, error) {
 	// RELEASE selects the released image names, set here so they cannot
 	// depend on the caller's environment.
 	env := append(slices.Clone(u.env), utils.EnvTrue(utils.EnvRelease))
-	out, err := c.runner.RunInDir("", "make", []string{"-C", dir, "-s", "build-images"}, env)
+	out, err := c.Runner().RunInDir("", "make", []string{"-C", dir, "-s", "build-images"}, env)
 	if err != nil {
 		return nil, fmt.Errorf("reading images in %s: %w", u.dir, err)
 	}
@@ -526,7 +501,7 @@ func (c Image) imageNames(u unit) ([]string, error) {
 // than declared here.
 func (c Image) tagPrefix(u unit) (string, error) {
 	dir := filepath.Join(c.RepoRoot, u.dir)
-	out, err := c.runner.RunInDir("", "make", []string{"-C", dir, "-s", "image-tag-prefix"}, u.env)
+	out, err := c.Runner().RunInDir("", "make", []string{"-C", dir, "-s", "image-tag-prefix"}, u.env)
 	if err != nil {
 		return "", fmt.Errorf("reading tag prefix in %s: %w", u.dir, err)
 	}
@@ -675,19 +650,15 @@ func record(s settings, units []unit) error {
 // save writes one image to a tar file, fetching it first when it is not local.
 func save(s settings, image, out string) error {
 	if s.pull {
-		if _, err := s.runner.Run("docker", []string{"image", "inspect", image}, nil); err != nil {
-			s.logger().WithField("image", image).Info("Image not found locally, pulling")
-			if _, err := s.runner.Run("docker", []string{"pull", image}, nil); err != nil {
+		if _, err := s.Runner().Run("docker", []string{"image", "inspect", image}, nil); err != nil {
+			s.Logger().WithField("image", image).Info("Image not found locally, pulling")
+			if _, err := s.Runner().Run("docker", []string{"pull", image}, nil); err != nil {
 				return fmt.Errorf("pulling %s: %w", image, err)
 			}
 		}
 	}
-	if _, err := s.runner.Run("docker", []string{"save", "--output", out, image}, nil); err != nil {
-		return fmt.Errorf("%s: %w", s.step, err)
+	if _, err := s.Runner().Run("docker", []string{"save", "--output", out, image}, nil); err != nil {
+		return s.Errorf("%w", err)
 	}
 	return nil
-}
-
-func (s settings) logger() *logrus.Entry {
-	return logrus.WithField("step", s.step)
 }
