@@ -104,6 +104,17 @@
       "enabled": true
     },
     {
+      "description": "Bundled third-party images: off by default, so a newly added release branch never picks them up implicitly. Must carry no matchUpdateTypes: enabled is resolved before lookup, and an update-type gate would stop this and the rule below from ever applying",
+      "matchDepNames": ["envoyproxy/gateway", "quay.io/tigera/envoybinary", "https://github.com/envoyproxy/ratelimit", "istio/istio"],
+      "enabled": false
+    },
+    {
+      "description": "Bundled third-party images: on for master only. A bump on a release branch is a backport risk decision, so it stays with hack/cherry-pick-pull",
+      "matchDepNames": ["envoyproxy/gateway", "quay.io/tigera/envoybinary", "https://github.com/envoyproxy/ratelimit", "istio/istio"],
+      "matchBaseBranches": ["master"],
+      "enabled": true
+    },
+    {
       "description": "Block all minor, major, and digest updates",
       "matchUpdateTypes": ["minor", "major", "digest"],
       "enabled": false
@@ -112,6 +123,13 @@
       "description": "Allow golang.org/x minor updates",
       "matchPackageNames": ["golang.org/x/**"],
       "matchUpdateTypes": ["minor"],
+      "enabled": true
+    },
+    {
+      "description": "envoy-ratelimit is pinned to a commit, so its updates arrive as digests rather than versions -- exempt it from the global digest block. Patch-only still holds for the other three",
+      "matchDepNames": ["https://github.com/envoyproxy/ratelimit"],
+      "matchBaseBranches": ["master"],
+      "matchUpdateTypes": ["digest"],
       "enabled": true
     },
     {
@@ -130,16 +148,9 @@
       }
     },
     {
-      "description": "Bundled third-party images: off by default, so a newly added release branch never picks them up implicitly",
-      "matchDepNames": ["envoyproxy/gateway", "quay.io/tigera/envoybinary", "https://github.com/envoyproxy/ratelimit", "istio/istio"],
-      "enabled": false
-    },
-    {
-      "description": "Bundled third-party images: patch updates only, master only, grouped into a single PR. Digest is listed because envoy-ratelimit is pinned to a commit, so its updates arrive as digests rather than versions; minor and major stay blocked by the rule above, since those need patch rebases and API/RBAC review",
+      "description": "Bundled third-party images: group into a single PR and rebuild the derived dependency patches on the branch. Sets no enabled/updateType keys -- doing so here, after the minor/major block above, would undo it",
       "matchDepNames": ["envoyproxy/gateway", "quay.io/tigera/envoybinary", "https://github.com/envoyproxy/ratelimit", "istio/istio"],
       "matchBaseBranches": ["master"],
-      "matchUpdateTypes": ["patch", "digest"],
-      "enabled": true,
       "groupName": "third-party-images",
       "postUpgradeTasks": {
         "commands": ["make regen-thirdparty-dep-patches"],
