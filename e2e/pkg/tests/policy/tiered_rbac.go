@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -183,6 +184,9 @@ var _ = describe.CalicoDescribe(
 				_, err := f.ClientSet.RbacV1().RoleBindings(f.Namespace.Name).Create(ctx, &setup.nsBindings[i], metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred(), "failed to create RoleBinding %s", setup.nsBindings[i].Name)
 			}
+
+			By("Waiting for the RBAC grants to take effect")
+			waitForTieredRBAC(ctx, f.ClientSet, setup)
 		})
 
 		Context("NetworkPolicy", func() {
@@ -1221,6 +1225,96 @@ func buildTieredRBACResources(testTier, otherTier, suffix, namespace string, exp
 	return setup
 }
 
+// waitForTieredRBAC blocks until the API server's authorizer honours every binding in setup.
+// RBAC objects only take effect once the authorizer's informers observe them, so a spec that
+// impersonates a test user straight after the creates can still be denied.
+func waitForTieredRBAC(ctx context.Context, cs kubernetes.Interface, setup tieredRBACSetup) {
+	probes := tieredRBACProbes(setup)
+	Eventually(func() error {
+		return checkTieredRBACProbes(ctx, cs, probes)
+	}, 30*time.Second, 250*time.Millisecond).Should(Succeed(), "tiered RBAC grants did not take effect")
+}
+
+// tieredRBACProbes returns one SubjectAccessReview per binding subject in setup, each asking
+// for a rule of the bound role. A rule with ResourceNames is preferred. Specs run in parallel
+// and all impersonate the same fixed user names, so another process may already hold a binding
+// for the same user with the same base rules; only the per-spec tier names in ResourceNames
+// prove that this spec's own role and binding have reached the authorizer. A role with no named
+// rule falls back to its first rule, which is weaker but only used by specs that assert a denial.
+func tieredRBACProbes(setup tieredRBACSetup) []*authorizationv1.SubjectAccessReview {
+	rules := make(map[rbacv1.RoleRef][]rbacv1.PolicyRule, len(setup.roles)+len(setup.nsRoles))
+	for _, r := range setup.roles {
+		rules[rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: r.Name}] = r.Rules
+	}
+	for _, r := range setup.nsRoles {
+		rules[rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: r.Name}] = r.Rules
+	}
+
+	var probes []*authorizationv1.SubjectAccessReview
+	for _, b := range setup.bindings {
+		for _, s := range b.Subjects {
+			if p := tieredRBACProbe(s, "", rules[b.RoleRef]); p != nil {
+				probes = append(probes, p)
+			}
+		}
+	}
+	for _, b := range setup.nsBindings {
+		for _, s := range b.Subjects {
+			if p := tieredRBACProbe(s, b.Namespace, rules[b.RoleRef]); p != nil {
+				probes = append(probes, p)
+			}
+		}
+	}
+	return probes
+}
+
+// tieredRBACProbe builds a SubjectAccessReview asking whether subject may exercise one of
+// rules, preferring a rule with ResourceNames. It returns nil when there is nothing to ask.
+func tieredRBACProbe(subject rbacv1.Subject, namespace string, rules []rbacv1.PolicyRule) *authorizationv1.SubjectAccessReview {
+	if len(rules) == 0 {
+		return nil
+	}
+	rule := rules[0]
+	for _, r := range rules {
+		if len(r.ResourceNames) > 0 {
+			rule = r
+			break
+		}
+	}
+	attrs := &authorizationv1.ResourceAttributes{
+		Namespace: namespace,
+		Verb:      rule.Verbs[0],
+		Group:     rule.APIGroups[0],
+		Resource:  rule.Resources[0],
+	}
+	if len(rule.ResourceNames) > 0 {
+		attrs.Name = rule.ResourceNames[0]
+	}
+	return &authorizationv1.SubjectAccessReview{
+		Spec: authorizationv1.SubjectAccessReviewSpec{
+			ResourceAttributes: attrs,
+			User:               subject.Name,
+		},
+	}
+}
+
+// checkTieredRBACProbes returns an error naming the first probe the authorizer still denies,
+// or nil once every probe is allowed.
+func checkTieredRBACProbes(ctx context.Context, cs kubernetes.Interface, probes []*authorizationv1.SubjectAccessReview) error {
+	for _, p := range probes {
+		res, err := cs.AuthorizationV1().SubjectAccessReviews().Create(ctx, p, metav1.CreateOptions{})
+		if err != nil {
+			return err
+		}
+		if !res.Status.Allowed {
+			a := p.Spec.ResourceAttributes
+			return fmt.Errorf("user %s may not yet %s %s %q in namespace %q: %s",
+				p.Spec.User, a.Verb, a.Resource, a.Name, a.Namespace, res.Status.Reason)
+		}
+	}
+	return nil
+}
+
 // hasTieredPolicyWebhook reports whether the tiered policy admission webhook is installed. A
 // manifest install in v3 CRD mode ships it alongside the passthrough ClusterRole.
 func hasTieredPolicyWebhook(ctx context.Context, cs kubernetes.Interface) bool {
@@ -1297,6 +1391,9 @@ var _ = describe.CalicoDescribe(
 
 			By("Creating RBAC resources for test users")
 			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name, expectPassthrough)
+			// This suite grants only the cluster-scoped roles, so the namespaced
+			// grants must not be created or waited for.
+			setup.nsRoles, setup.nsBindings = nil, nil
 			for i := range setup.roles {
 				_, err := f.ClientSet.RbacV1().ClusterRoles().Create(ctx, &setup.roles[i], metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1305,6 +1402,9 @@ var _ = describe.CalicoDescribe(
 				_, err := f.ClientSet.RbacV1().ClusterRoleBindings().Create(ctx, &setup.bindings[i], metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			}
+
+			By("Waiting for the RBAC grants to take effect")
+			waitForTieredRBAC(ctx, f.ClientSet, setup)
 		})
 
 		AfterEach(func() {
