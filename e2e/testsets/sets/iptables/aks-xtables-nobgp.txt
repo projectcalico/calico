@@ -98,6 +98,8 @@
 [sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath xtables-only [RequiresXtables] egress-2N2 ApplyOnForward=true, egress [Serial]
 [sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath xtables-only [RequiresXtables] ingress-2N2 ApplyOnForward=false, ingress [Serial]
 [sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath xtables-only [RequiresXtables] ingress-2N2 ApplyOnForward=true, ingress [Serial]
+[sig-calico] [Team:CORE] [Feature:Ingress-Gateway] [Category:Operator] [RequiresGoldmane] whisker access via calico ingress gateway Whisker accessible through Gateway in the install namespace should clean up gateway resources when spec.ingressGateway is removed [Serial]
+[sig-calico] [Team:CORE] [Feature:Ingress-Gateway] [Category:Operator] [RequiresGoldmane] whisker access via calico ingress gateway Whisker accessible through Gateway in the install namespace should serve the Whisker UI through the Gateway [Serial]
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should correctly isolate namespaces [Conformance]
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should provide a default allow [Conformance]
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should support a 'deny egress' policy [Conformance]
