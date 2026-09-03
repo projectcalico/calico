@@ -19,26 +19,70 @@ include ../../lib.Makefile
 ##############################################################################
 # Build
 ##############################################################################
+ENVOY_GATEWAY_FETCHED=.envoy-gateway.fetched
 ENVOY_GATEWAY_DOWNLOADED=.envoy-gateway.downloaded
+
+DEP_PINS=dep-pins.txt
+DEP_PATCH=dep-patches/0001-CVE-dependency-fixes.patch
+
+# 	Patches live in two directories:
+# 	  patches/     - functional changes to upstream source. Written and
+# 	                 reviewed by hand; only ever verified to still apply.
+# 	  dep-patches/ - dependency pins for CVE remediation, touching go.mod and
+# 	                 go.sum only. Derived from $(DEP_PINS), so these are
+# 	                 regenerated rather than edited.
+# 	-F0 disables patch's default fuzz factor: a patch whose context no longer
+# 	matches must fail rather than land somewhere approximate.
+#
+# 	The two are applied by separate targets so the generator can start from a
+# 	tree carrying the functional patches but not the derived ones -- including
+# 	when the checked-in derived patch no longer applies, which is exactly when
+# 	it needs regenerating.
+
+# 	Upstream at the pinned tag, with the functional patches applied. The tree is
+# 	removed first so a re-extraction cannot leave files, or a generator
+# 	baseline, behind from an older tag.
+$(ENVOY_GATEWAY_FETCHED):
+	rm -rf envoy-gateway && mkdir -p envoy-gateway
+	curl -sSfL --retry 5 -o /tmp/envoy-gateway.tar.gz https://github.com/envoyproxy/gateway/archive/refs/tags/$(ENVOY_GATEWAY_VERSION).tar.gz
+	tar xz --strip-components 1 -C envoy-gateway -f /tmp/envoy-gateway.tar.gz && rm -f /tmp/envoy-gateway.tar.gz
+	for patch in patches/*.patch; do \
+		if [ -f "$$patch" ]; then \
+			patch -d envoy-gateway -p1 -F0 < "$$patch" || exit 1; \
+		fi; \
+	done
+# 	Record what the generator diffs against, while the tree still holds
+# 	upstream's go.mod and go.sum. No-op for a tree fetched with git clone.
+	../../hack/thirdparty/init-dep-baseline.sh envoy-gateway
+	touch $@
 
 .PHONY: init-source
 init-source: $(ENVOY_GATEWAY_DOWNLOADED)
-$(ENVOY_GATEWAY_DOWNLOADED):
-	mkdir -p envoy-gateway
-	curl -sSfL --retry 5 -o /tmp/envoy-gateway.tar.gz https://github.com/envoyproxy/gateway/archive/refs/tags/$(ENVOY_GATEWAY_VERSION).tar.gz
-	tar xz --strip-components 1 -C envoy-gateway -f /tmp/envoy-gateway.tar.gz && rm -f /tmp/envoy-gateway.tar.gz
-
-# 	Apply patches for the specified Envoy Gateway version if patches directory exists.
-# 	This code checks for the presence of a patches directory corresponding to ENVOY_GATEWAY_VERSION.
-# 	If the directory exists, it iterates over all .patch files within it.
-# 	For each valid patch file, it applies the patch to the envoy-gateway directory using patch -p1.
-	for patch in patches/*.patch; do \
+$(ENVOY_GATEWAY_DOWNLOADED): $(ENVOY_GATEWAY_FETCHED)
+# 	Reset the derived files to the baseline recorded at fetch time, so
+# 	re-applying is idempotent across incremental builds.
+	cd envoy-gateway && git checkout -- go.mod go.sum
+	for patch in dep-patches/*.patch; do \
 		if [ -f "$$patch" ]; then \
-			patch -d envoy-gateway -p1 < "$$patch"; \
+			patch -d envoy-gateway -p1 -F0 < "$$patch" || exit 1; \
 		fi; \
-	done; \
-
+	done
 	touch $@
+
+# 	Rebuild $(DEP_PATCH) from $(DEP_PINS). Runs in the pinned Go toolchain
+# 	because go mod tidy's output depends on the Go version.
+.PHONY: regen-dep-patches
+regen-dep-patches: $(ENVOY_GATEWAY_FETCHED)
+	$(DOCKER_GO_BUILD) ../../hack/thirdparty/regen-dep-patch.sh envoy-gateway $(DEP_PINS) $(DEP_PATCH)
+
+# 	Fail if the checked-in patch is not what the pins produce.
+.PHONY: check-dep-patches
+check-dep-patches: regen-dep-patches
+	@git diff --exit-code -- $(DEP_PATCH) || { \
+		echo "ERROR: $(DEP_PATCH) is not what $(DEP_PINS) produces."; \
+		echo "Run 'make -C third_party/envoy-gateway regen-dep-patches' and commit the result."; \
+		exit 1; \
+	}
 
 .PHONY: build
 build: bin/envoy-gateway-$(ARCH)
