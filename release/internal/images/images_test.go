@@ -805,3 +805,7 @@ func TestPublishWithoutARecordPublishesEverything(t *testing.T) {
 		t.Error("a run with no record published nothing")
 	}
 }
+
+// Step-specific helpers are functions taking settings rather than methods on
+// it, so a step cannot reach another step's helper at all. What this once
+// checked at run time the package structure now prevents.

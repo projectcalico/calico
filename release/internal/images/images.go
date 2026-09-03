@@ -188,6 +188,8 @@ type Image struct {
 type settings struct {
 	Image
 
+	step string
+
 	// confirm latches the push. Without it the make targets run as a dry run.
 	confirm bool
 
@@ -405,7 +407,7 @@ func (c Image) env() []string {
 
 // runUnits runs every unit concurrently, collecting failures rather than
 // stopping at the first: one component failing should not hide the rest.
-func (c Image) runUnits(units []unit, phase, logsDir string) error {
+func (s settings) runUnits(units []unit) error {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var errs []error
@@ -414,7 +416,7 @@ func (c Image) runUnits(units []unit, phase, logsDir string) error {
 		wg.Add(1)
 		go func(u unit) {
 			defer wg.Done()
-			if err := c.runUnit(u, phase, logsDir); err != nil {
+			if err := s.runUnit(u); err != nil {
 				mu.Lock()
 				errs = append(errs, err)
 				mu.Unlock()
@@ -426,13 +428,13 @@ func (c Image) runUnits(units []unit, phase, logsDir string) error {
 }
 
 // runUnit runs one unit's make target, retrying on failure.
-func (c Image) runUnit(u unit, phase, logsDir string) error {
-	log := logrus.WithFields(logrus.Fields{"variant": u.variant, "component": u.dir, "target": u.target})
-	dir := filepath.Join(c.RepoRoot, u.dir)
+func (s settings) runUnit(u unit) error {
+	log := s.logger().WithFields(logrus.Fields{"variant": u.variant, "component": u.dir, "target": u.target})
+	dir := filepath.Join(s.RepoRoot, u.dir)
 
 	args := append([]string{"-C", dir}, strings.Fields(u.target)...)
 	for attempt := 0; ; attempt++ {
-		out, err := c.run(args, u.env, c.logPath(u, phase, logsDir))
+		out, err := s.run(args, u.env, s.logPath(u))
 		if err == nil {
 			log.Debug(out)
 			return nil
@@ -443,7 +445,7 @@ func (c Image) runUnit(u unit, phase, logsDir string) error {
 		}
 		// Surface the captured output; the failure cause is usually only in there.
 		log.Error(out)
-		return fmt.Errorf("%s %s images in %s: %w", phase, u.variant, u.dir, err)
+		return s.errorf("%s images in %s: %w", u.variant, u.dir, err)
 	}
 }
 
@@ -457,15 +459,15 @@ func (c Image) run(args, env []string, logPath string) (string, error) {
 
 // logPath namespaces the logs under the image step, with the variant in the
 // file name so a component shipping several image kinds keeps a log per kind.
-func (c Image) logPath(u unit, phase, logsDir string) string {
-	if logsDir == "" {
+func (s settings) logPath(u unit) string {
+	if s.logsDir == "" {
 		return ""
 	}
 	slug := strings.ReplaceAll(filepath.Clean(u.dir), string(filepath.Separator), "-")
 	if u.variant != StandardVariant {
 		slug += "-" + u.variant
 	}
-	return filepath.Join(logsDir, "images-"+phase, slug+".log")
+	return filepath.Join(s.logsDir, "images-"+s.step, slug+".log")
 }
 
 // unit is one make invocation: a variant's target in one component directory.
@@ -540,7 +542,7 @@ func (c Image) tagPrefix(u unit) (string, error) {
 // unitState reports whether a unit still needs publishing, judged against the
 // refs an earlier run recorded. It reads the record rather than the registry:
 // the record already names what landed, and a local read costs nothing.
-func (s settings) unitState(u unit) (done bool, err error) {
+func unitState(s settings, u unit) (done bool, err error) {
 	if s.resume == nil {
 		return false, nil
 	}
@@ -652,34 +654,9 @@ func (c Image) unitTags(u unit) ([]string, error) {
 	return tags, nil
 }
 
-// publishEnv adds the release latch and, when retagging, the source to pull from.
-func (s settings) publishEnv() []string {
-	env := append(s.env(), utils.EnvTrue(utils.EnvRelease))
-	if s.confirm {
-		env = append(env, utils.EnvTrue(utils.EnvConfirm))
-	} else {
-		env = append(env, utils.EnvTrue(utils.EnvDryRun))
-	}
-	if s.retag != nil {
-		// Retagging inverts DEV_REGISTRIES: it becomes the source, so the
-		// destination has to be named separately.
-		env = append(env,
-			utils.EnvTrue(utils.EnvImageOnly),
-			utils.Env(utils.EnvDevTag, s.retag.tag),
-			utils.Env(utils.EnvDevRegistries, s.retag.registry),
-			utils.Env(utils.EnvReleaseRegistries, strings.Join(s.Registries, " ")),
-			utils.Env(utils.EnvReleaseTag, s.Version),
-		)
-		if s.retag.skipDev {
-			env = append(env, utils.EnvTrue(utils.EnvSkipDevImageRetag))
-		}
-	}
-	return env
-}
-
 // record writes the digest refs the publish produced. A dry run records
 // nothing, so there is no recorder to write to.
-func (s settings) record(units []unit) error {
+func record(s settings, units []unit) error {
 	if s.refs == nil {
 		return nil
 	}
@@ -696,17 +673,21 @@ func (s settings) record(units []unit) error {
 }
 
 // save writes one image to a tar file, fetching it first when it is not local.
-func (s settings) save(image, out string) error {
+func save(s settings, image, out string) error {
 	if s.pull {
 		if _, err := s.runner.Run("docker", []string{"image", "inspect", image}, nil); err != nil {
-			logrus.WithField("image", image).Info("Image not found locally, pulling")
+			s.logger().WithField("image", image).Info("Image not found locally, pulling")
 			if _, err := s.runner.Run("docker", []string{"pull", image}, nil); err != nil {
 				return fmt.Errorf("pulling %s: %w", image, err)
 			}
 		}
 	}
 	if _, err := s.runner.Run("docker", []string{"save", "--output", out, image}, nil); err != nil {
-		return fmt.Errorf("%s %s: %w", archiveStep, image, err)
+		return fmt.Errorf("%s: %w", s.step, err)
 	}
 	return nil
+}
+
+func (s settings) logger() *logrus.Entry {
+	return logrus.WithField("step", s.step)
 }

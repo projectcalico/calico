@@ -19,45 +19,47 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 // Build builds every variant's images.
 func Build(repoRoot, version string, variants []Variant, opts ...BuildOption) error {
-	s, err := newSettings(repoRoot, version, variants, opts)
+	s, err := newSettings(buildStep, repoRoot, version, variants, opts)
 	if err != nil {
-		return fmt.Errorf("build: %w", err)
+		return err
 	}
 
 	units := s.units(s.env())
-	logrus.WithField("images", len(units)).Info("Building container images")
-	if err := s.runUnits(units, buildStep, s.logsDir); err != nil {
+	s.logger().WithField("images", len(units)).Info("Building container images")
+	if err := s.runUnits(units); err != nil {
 		return err
 	}
-	logrus.Info("Finished building container images")
+	s.logger().Info("Finished building container images")
 	return nil
 }
 
 // Archive writes the images every variant ships into tarDir, one tar each, for
 // a release archive to pick up.
 func Archive(repoRoot, version string, variants []Variant, tarDir string, opts ...ArchiveOption) error {
-	s, err := newSettings(repoRoot, version, variants, opts)
+	s, err := newSettings(archiveStep, repoRoot, version, variants, opts)
 	if err != nil {
-		return fmt.Errorf("archive: %w", err)
+		return err
 	}
 	if tarDir == "" {
-		return fmt.Errorf("archive: no directory to write images to")
+		return s.errorf("no directory to write images to")
 	}
 	if len(s.Registries) == 0 {
-		return fmt.Errorf("archive: no registry to archive images from")
+		return s.errorf("no registry to archive images from")
 	}
 	s.dir = tarDir
 
 	units := s.units(s.env())
-	logrus.WithField("images", len(units)).Info("Archiving container images")
+	s.logger().WithField("images", len(units)).Info("Archiving container images")
 	if err := os.MkdirAll(tarDir, os.ModePerm); err != nil {
 		return fmt.Errorf("creating images dir: %w", err)
 	}
@@ -68,32 +70,56 @@ func Archive(repoRoot, version string, variants []Variant, tarDir string, opts .
 	for _, u := range units {
 		names, err := s.imageNames(u)
 		if err != nil {
-			return fmt.Errorf()
+			return s.errorf("%w", err)
 		}
 		for _, name := range names {
 			image := fmt.Sprintf("%s/%s:%s", reg, name, s.Version)
-			if err := s.save(image, filepath.Join(tarDir, name+".tar")); err != nil {
-				return err
+			if err := save(s, image, filepath.Join(tarDir, name+".tar")); err != nil {
+				return s.errorf("%w", err)
 			}
 		}
 	}
-	logrus.Info("Finished archiving container images")
+	s.logger().Info("Finished archiving container images")
 	return nil
+}
+
+func publishEnv(s settings) []string {
+	env := append(s.env(), utils.EnvTrue(utils.EnvRelease))
+	if s.confirm {
+		env = append(env, utils.EnvTrue(utils.EnvConfirm))
+	} else {
+		env = append(env, utils.EnvTrue(utils.EnvDryRun))
+	}
+	if s.retag != nil {
+		// Retagging inverts DEV_REGISTRIES: it becomes the source, so the
+		// destination has to be named separately.
+		env = append(env,
+			utils.EnvTrue(utils.EnvImageOnly),
+			utils.Env(utils.EnvDevTag, s.retag.tag),
+			utils.Env(utils.EnvDevRegistries, s.retag.registry),
+			utils.Env(utils.EnvReleaseRegistries, strings.Join(s.Registries, " ")),
+			utils.Env(utils.EnvReleaseTag, s.Version),
+		)
+		if s.retag.skipDev {
+			env = append(env, utils.EnvTrue(utils.EnvSkipDevImageRetag))
+		}
+	}
+	return env
 }
 
 // Publish pushes every variant's images to their registries. confirm latches
 // the push: without it the make targets run as a dry run, so it is an argument
 // rather than an option a caller can forget.
 func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve DigestResolver, opts ...PublishOption) error {
-	s, err := newSettings(repoRoot, version, variants, opts)
+	s, err := newSettings(publishStep, repoRoot, version, variants, opts)
 	if err != nil {
-		return fmt.Errorf("publish: %w", err)
+		return err
 	}
 	if len(s.Registries) == 0 {
-		return fmt.Errorf("publish: no registries to publish to")
+		return s.errorf("no registries to publish to")
 	}
 	if resolve == nil {
-		return fmt.Errorf("publish: no digest resolver given")
+		return s.errorf("no digest resolver given")
 	}
 	s.resolve = resolve
 	s.confirm = confirm
@@ -103,39 +129,44 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 		s.refs = nil
 	}
 
-	units, err := s.pending(s.units(s.publishEnv()))
+	units, err := pending(s, s.units(publishEnv(s)))
 	if err != nil {
 		return err
 	}
 	if len(units) == 0 {
-		logrus.Info("Every image is already published")
+		s.logger().Info("Every image is already published")
 		return nil
 	}
-	logrus.WithField("images", len(units)).Info("Publishing container images")
-	publishErr := s.runUnits(units, publishStep, s.logsDir)
+	s.logger().WithField("images", len(units)).Info("Publishing container images")
+	publishErr := s.runUnits(units)
 
 	// Record before reporting a failure: a partial publish is exactly the run
 	// whose record decides what a resume still has to do.
-	if err := s.record(units); err != nil {
+	if err := record(s, units); err != nil {
 		return errors.Join(publishErr, err)
 	}
 	if publishErr != nil {
 		return publishErr
 	}
-	logrus.Info("Finished publishing container images")
+	s.logger().Info("Finished publishing container images")
 
-	if s.scan != nil {
-		s.submitScan(*s.scan)
+	if s.scan == nil {
+		return nil
+	}
+	s.logger().Info("Sending images to ISS")
+	scanner := imagescanner.New(s.scan.Config)
+	if err := scanner.Scan(s.scan.ProductCode, s.scan.Images, s.scan.Stream, s.scan.Release, s.scan.OutputDir); err != nil {
+		s.logger().WithError(err).Error("Failed to scan images")
 	}
 	return nil
 }
 
 // newSettings validates what every step requires and layers the options over
 // it. It is generic so each step passes only the option type it accepts.
-func newSettings[O any](repoRoot, version string, variants []Variant, opts []O) (settings, error) {
-	s := settings{Image: Image{RepoRoot: repoRoot, Version: version, Variants: variants}}
+func newSettings[O any](step, repoRoot, version string, variants []Variant, opts []O) (settings, error) {
+	s := settings{step: step, Image: Image{RepoRoot: repoRoot, Version: version, Variants: variants}}
 	if err := s.validate(); err != nil {
-		return s, fmt.Errorf("settings: %w", err)
+		return s, s.errorf("%w", err)
 	}
 	for _, opt := range opts {
 		if err := applyTo(opt, &s); err != nil {
@@ -161,18 +192,18 @@ func applyTo(opt any, s *settings) error {
 
 // pending drops the units an earlier run already published, so a release
 // interrupted partway resumes on what is left.
-func (s settings) pending(units []unit) ([]unit, error) {
+func pending(s settings, units []unit) ([]unit, error) {
 	if s.resume == nil {
 		return units, nil
 	}
 	var out []unit
 	for _, u := range units {
-		done, err := s.unitState(u)
+		done, err := unitState(s, u)
 		if err != nil {
 			return nil, err
 		}
 		if done {
-			logrus.WithFields(logrus.Fields{"variant": u.variant, "component": u.dir}).
+			s.logger().WithFields(logrus.Fields{"variant": u.variant, "component": u.dir}).
 				Info("Already published, skipping")
 			continue
 		}
@@ -181,12 +212,6 @@ func (s settings) pending(units []unit) ([]unit, error) {
 	return out, nil
 }
 
-// submitScan reports failures without returning them: the scanning service must
-// not be able to fail a release.
-func (s settings) submitScan(req ScanRequest) {
-	logrus.Info("Sending images to ISS")
-	scanner := imagescanner.New(req.Config)
-	if err := scanner.Scan(req.ProductCode, req.Images, req.Stream, req.Release, req.OutputDir); err != nil {
-		logrus.WithError(err).Error("Failed to scan images")
-	}
+func (s settings) errorf(format string, args ...any) error {
+	return fmt.Errorf("%s: %w", s.step, fmt.Errorf(format, args...))
 }
