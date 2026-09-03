@@ -1056,34 +1056,6 @@ value:
 		}
 	})
 
-	It("should not create per-namespace resources for open-source", func() {
-		installation := &operatorv1.InstallationSpec{
-			Variant: operatorv1.Calico,
-		}
-		gatewayAPI := &operatorv1.GatewayAPI{
-			Spec: operatorv1.GatewayAPISpec{
-				GatewayClasses: []operatorv1.GatewayClassSpec{{Name: "tigera-gateway-class"}},
-			},
-		}
-		gatewayComp, gatewayCompErr := GatewayAPIImplementationComponent(&GatewayAPIImplementationConfig{
-			Scheme:            testScheme(),
-			Installation:      installation,
-			GatewayAPI:        gatewayAPI,
-			GatewayNamespaces: []string{"default"},
-		})
-		Expect(gatewayCompErr).NotTo(HaveOccurred())
-
-		objsToCreate, _ := gatewayComp.Objects()
-
-		// Open-source should NOT have the shared per-namespace CRB.
-		_, err := rtest.GetResourceOfType[*rbacv1.ClusterRoleBinding](objsToCreate, GatewayNamespacesCRBName, "")
-		Expect(err).To(HaveOccurred())
-
-		// Open-source should NOT have waf-http-filter SA at all.
-		_, err = rtest.GetResourceOfType[*corev1.ServiceAccount](objsToCreate, "waf-http-filter", "default")
-		Expect(err).To(HaveOccurred())
-	})
-
 	It("should queue the legacy tigera-gateway install for cleanup on every reconcile", func() {
 		installation := &operatorv1.InstallationSpec{Variant: operatorv1.CalicoEnterprise}
 		gatewayAPI := &operatorv1.GatewayAPI{

@@ -105,15 +105,10 @@ var _ = Describe("ManagementClusterConnection controller tests", func() {
 		secret, err := certificateManager.GetOrCreateKeyPair(c, render.GuardianSecretName, common.OperatorNamespace(), []string{"a"})
 		Expect(err).NotTo(HaveOccurred())
 
-		pcSecret, err := certificateManager.GetOrCreateKeyPair(c, render.PacketCaptureServerCert, common.OperatorNamespace(), []string{"a"})
-		Expect(err).NotTo(HaveOccurred())
-
 		queryServerSecret, err := certificateManager.GetOrCreateKeyPair(c, render.CalicoAPIServerTLSSecretName, common.OperatorNamespace(), []string{"a"})
 		Expect(err).NotTo(HaveOccurred())
 
 		err = c.Create(ctx, secret.Secret(common.OperatorNamespace()))
-		Expect(err).NotTo(HaveOccurred())
-		err = c.Create(ctx, pcSecret.Secret(common.OperatorNamespace()))
 		Expect(err).NotTo(HaveOccurred())
 		err = c.Create(ctx, queryServerSecret.Secret(common.OperatorNamespace()))
 		Expect(err).NotTo(HaveOccurred())

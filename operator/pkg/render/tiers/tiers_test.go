@@ -21,10 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/projectcalico/calico/operator/pkg/common"
-	"github.com/projectcalico/calico/operator/pkg/render"
 	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
-	"github.com/projectcalico/calico/operator/pkg/render/logstorage/eck"
-	"github.com/projectcalico/calico/operator/pkg/render/logstorage/kibana"
 	"github.com/projectcalico/calico/operator/pkg/render/testutils"
 	"github.com/projectcalico/calico/operator/pkg/render/tiers"
 )
@@ -65,19 +62,9 @@ var _ = Describe("Tiers rendering tests", func() {
 	BeforeEach(func() {
 		// Establish default config for test cases to override.
 		cfg = &tiers.Config{
-			OpenShift:      false,
-			DNSEgressCIDRs: getDNSEgressCIDRs(testutils.IPV4),
-			CalicoNamespaces: []string{
-				common.CalicoNamespace,
-				render.DexNamespace,
-				render.ElasticsearchNamespace,
-				render.IntrusionDetectionNamespace,
-				kibana.Namespace,
-				eck.OperatorNamespace,
-				render.PacketCaptureNamespace,
-				common.TigeraPrometheusNamespace,
-				"tigera-skraper",
-			},
+			OpenShift:        false,
+			DNSEgressCIDRs:   getDNSEgressCIDRs(testutils.IPV4),
+			CalicoNamespaces: []string{common.CalicoNamespace},
 		}
 	})
 

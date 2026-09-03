@@ -25,9 +25,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
-	"github.com/projectcalico/calico/operator/pkg/common"
 )
 
 const (
@@ -96,22 +93,6 @@ func CreateSourceEntityRule(namespace string, deploymentName string) v3.EntityRu
 	return v3.EntityRule{
 		Selector:          fmt.Sprintf("k8s-app == '%s'", deploymentName),
 		NamespaceSelector: fmt.Sprintf("kubernetes.io/metadata.name == '%s'", namespace),
-	}
-}
-
-// GetOIDCEgressRule creates egress rule for oidc connection.
-// the result will include an egress rules with the urlString passed in:
-//  1. egress rule: egress rule assuming the oidc is external to the cluster
-func GetOIDCEgressRule(parsedURL *url.URL) v3.Rule {
-	hostname := parsedURL.Hostname()
-	OIDCEntityRuleExternal := v3.EntityRule{
-		Domains: []string{hostname},
-	}
-
-	return v3.Rule{
-		Action:      v3.Allow,
-		Protocol:    &TCPProtocol,
-		Destination: OIDCEntityRuleExternal,
 	}
 }
 
@@ -223,91 +204,6 @@ var KubeAPIServerEntityRule = v3.EntityRule{
 var KonnectivityAgentEntityRule = v3.EntityRule{
 	NamespaceSelector: "kubernetes.io/metadata.name == 'kube-system'",
 	Selector:          "app == 'konnectivity-agent' || k8s-app == 'konnectivity-agent'",
-}
-
-// Helper creates a helper for building network policies for multi-tenant capable components.
-// It takes two arguments:
-// - mt: true if running in multi-tenant mode, false otherwise.
-// - ns: The tenant's namespce.
-func Helper(mt bool, ns string) *NetworkPolicyHelper {
-	return &NetworkPolicyHelper{
-		multiTenant: mt,
-		ns:          ns,
-	}
-}
-
-// DefaultHelper returns a NetworkPolicyHelper configured for services that
-// only run in single-tenant clusters.
-func DefaultHelper() *NetworkPolicyHelper {
-	return &NetworkPolicyHelper{
-		multiTenant: false,
-		ns:          "",
-	}
-}
-
-type NetworkPolicyHelper struct {
-	multiTenant bool
-	ns          string
-}
-
-func (h *NetworkPolicyHelper) namespace(def string) string {
-	if !h.multiTenant {
-		return def
-	}
-	return h.ns
-}
-
-// ESGatewayEntityRule returns an entity rule that selects es-gateway pods in the given namespace.
-func (h *NetworkPolicyHelper) ESGatewayEntityRule() v3.EntityRule {
-	return CreateEntityRule(h.namespace("tigera-elasticsearch"), "tigera-secure-es-gateway", 5554)
-}
-
-func (h *NetworkPolicyHelper) ESGatewaySourceEntityRule() v3.EntityRule {
-	return CreateSourceEntityRule(h.namespace("tigera-elasticsearch"), "tigera-secure-es-gateway")
-}
-
-func (h *NetworkPolicyHelper) ESGatewayServiceSelectorEntityRule() v3.EntityRule {
-	return CreateServiceSelectorEntityRule(h.namespace("tigera-elasticsearch"), "tigera-secure-es-gateway-http")
-}
-
-func (h *NetworkPolicyHelper) LinseedEntityRule() v3.EntityRule {
-	return CreateEntityRule(h.namespace("tigera-elasticsearch"), "tigera-linseed", 8444)
-}
-
-func (h *NetworkPolicyHelper) LinseedSourceEntityRule() v3.EntityRule {
-	return CreateSourceEntityRule(h.namespace("tigera-elasticsearch"), "tigera-linseed")
-}
-
-func (h *NetworkPolicyHelper) DashboardInstallerEntityRule() v3.EntityRule {
-	return CreateEntityRule(h.namespace("tigera-elasticsearch"), "dashboards-installer")
-}
-
-func (h *NetworkPolicyHelper) DashboardInstallerSourceEntityRule() v3.EntityRule {
-	return CreateSourceEntityRule(h.namespace("tigera-elasticsearch"), "dashboards-installer")
-}
-
-func (h *NetworkPolicyHelper) LinseedServiceSelectorEntityRule() v3.EntityRule {
-	return CreateServiceSelectorEntityRule(h.namespace("tigera-elasticsearch"), "tigera-linseed")
-}
-
-func (h *NetworkPolicyHelper) ManagerEntityRule() v3.EntityRule {
-	return CreateEntityRule(h.namespace("calico-system"), "calico-manager", 9443)
-}
-
-func (h *NetworkPolicyHelper) ManagerSourceEntityRule() v3.EntityRule {
-	return CreateSourceEntityRule(h.namespace("calico-system"), "calico-manager")
-}
-
-func (h *NetworkPolicyHelper) APIServerSourceEntityRule(v operatorv1.ProductVariant) v3.EntityRule {
-	return CreateSourceEntityRule(h.namespace("calico-system"), "calico-apiserver")
-}
-
-func (h *NetworkPolicyHelper) PolicyRecommendationSourceEntityRule() v3.EntityRule {
-	return CreateSourceEntityRule(h.namespace(common.CalicoNamespace), "tigera-policy-recommendation")
-}
-
-func (h *NetworkPolicyHelper) IntrusionDetectionSourceEntityRule() v3.EntityRule {
-	return CreateSourceEntityRule(h.namespace("tigera-intrusion-detection"), "intrusion-detection-controller")
 }
 
 // DeprecatedAllowTigeraNetworkPolicyObject returns a CNP object with the
