@@ -279,8 +279,9 @@ foss-checks:
 .PHONY: ci
 ## Run what CI runs
 # Not `test`, which lib.Makefile defines as `ut fv st`. The FV block runs the
-# kind suite on its own.
-ci: clean format-check validate-gen-versions static-checks image-all fmt vet ut gen-files fix-changed dirty-check test-crds
+# kind suite on its own. amd64 only here; the "Operator: multi-arch build"
+# block covers the other arches.
+ci: clean format-check validate-gen-versions static-checks image fmt vet ut gen-files fix-changed dirty-check test-crds
 
 # This repository is public and the Enterprise CRDs come from one that is not,
 # so only the core half is checked here. The Enterprise generated files are

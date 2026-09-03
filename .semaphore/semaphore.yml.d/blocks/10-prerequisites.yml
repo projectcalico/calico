@@ -345,21 +345,9 @@
           - zstd -3 --rm /tmp/whisker-image.tar
           - gcloud storage cp /tmp/whisker-image.tar.zst "${GCS_WORKFLOW_DIR}/whisker-image.tar.zst"
 - name: "Build: operator image"
-  # The operator image the kind lanes deploy. Unlike the other component
-  # images it bakes in the references it will install
+  # The operator image bakes in the references it will install
   # (localhost:5000/calico/<name>:test-build), so this producer builds it
-  # through the same `make kind-operator-image` its consumers run and every
-  # kind lane can share the one tarball.
-  #
-  # hack/dev-build.sh gates the rebuild on a record of the inputs the image was
-  # built from, not on a marker file, so that stamp ships alongside the
-  # tarball for load-cached-images to restore. Upload it first: a tarball
-  # without its stamp would fail the consumer's untolerated gcloud cp.
-  #
-  # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)") list this
-  # block in their `dependencies:`, so CHANGE_IN_WITH_DEPENDENTS() folds their
-  # triggers into the arg below — this block's own inputs, the operator's Go
-  # closure plus the versions file build-operator.sh reads.
+  # through the same `make kind-operator-image` its consumers run.
   run:
     when: "${CHANGE_IN_WITH_DEPENDENTS(operator,non-go:/operator/,non-go:/hack/test/kind/infra/calico_versions.yml)}"
   dependencies: []
@@ -375,7 +363,6 @@
       - name: "Build and cache operator image"
         commands:
           - make kind-operator-image
-          - gcloud storage cp .dev-stamps/operator.inputs "${GCS_WORKFLOW_DIR}/operator.inputs"
           - docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
           - zstd -3 --rm /tmp/operator-image.tar
           - gcloud storage cp /tmp/operator-image.tar.zst "${GCS_WORKFLOW_DIR}/operator-image.tar.zst"
