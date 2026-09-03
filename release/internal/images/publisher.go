@@ -27,10 +27,10 @@ import (
 )
 
 type Publisher struct {
-	cfg Config
+	cfg PublishOptions
 }
 
-func NewPublisher(cfg Config, opts ...Option) (*Publisher, error) {
+func NewPublisher(cfg PublishOptions, opts ...Option) (*Publisher, error) {
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
@@ -45,7 +45,8 @@ func NewPublisher(cfg Config, opts ...Option) (*Publisher, error) {
 		// images exist when they do not.
 		cfg.Refs = nil
 	}
-	return &Publisher{cfg: cfg.apply(opts)}, nil
+	cfg.Image = cfg.apply(opts)
+	return &Publisher{cfg: cfg}, nil
 }
 
 func (p *Publisher) Publish() error {
@@ -58,7 +59,7 @@ func (p *Publisher) Publish() error {
 		return nil
 	}
 	logrus.WithField("images", len(units)).Info("Publishing container images")
-	publishErr := p.cfg.runUnits(units, publishStep)
+	publishErr := p.cfg.runUnits(units, publishStep, p.cfg.LogsDir)
 
 	// Record before reporting a failure: a partial publish is exactly the run
 	// whose record decides what a resume still has to do.

@@ -56,13 +56,15 @@ func imagesBuildCommand(cfg *Config) *cli.Command {
 			if err != nil {
 				return err
 			}
-			return images.Build(images.Config{
-				RepoRoot:   cfg.RepoRootDir,
-				Version:    ver.FormattedString(),
-				Registries: c.StringSlice(registryFlag.Name),
-				Arches:     c.StringSlice(archFlag.Name),
-				Variants:   images.NarrowVariants(images.BuildVariants, c.StringSlice(imageReleaseDirsFlag.Name)),
-				LogsDir:    cfg.LogsDir,
+			return images.Build(images.BuildOptions{
+				Image: images.Image{
+					RepoRoot:   cfg.RepoRootDir,
+					Version:    ver.FormattedString(),
+					Registries: c.StringSlice(registryFlag.Name),
+					Arches:     c.StringSlice(archFlag.Name),
+					Variants:   images.NarrowVariants(images.BuildVariants, c.StringSlice(imageReleaseDirsFlag.Name)),
+				},
+				LogsDir: cfg.LogsDir,
 			}, images.WithRunner(imagesRunner))
 		},
 	}
@@ -107,22 +109,23 @@ func imagesPublishCommand(cfg *Config) *cli.Command {
 				}
 				refs = w
 			}
-			p, err := images.NewPublisher(images.Config{
-				RepoRoot:   cfg.RepoRootDir,
-				Version:    ver.FormattedString(),
-				Registries: c.StringSlice(registryFlag.Name),
-				Arches:     c.StringSlice(archFlag.Name),
-				Variants:   images.NarrowVariants(images.PublishVariants, dirs),
-				Publish:    !c.Bool(localFlag.Name),
-				From:       c.String(fromRegistryFlag.Name),
-				FromTag:    c.String(fromTagFlag.Name),
-				LogsDir:    cfg.LogsDir,
-				Scan:       scan,
-				Refs:       refs,
-				Published:  published,
-				Force:      c.Bool(forceFlag.Name),
-
+			p, err := images.NewPublisher(images.PublishOptions{
+				Image: images.Image{
+					RepoRoot:   cfg.RepoRootDir,
+					Version:    ver.FormattedString(),
+					Registries: c.StringSlice(registryFlag.Name),
+					Arches:     c.StringSlice(archFlag.Name),
+					Variants:   images.NarrowVariants(images.PublishVariants, dirs),
+				},
+				Publish:           !c.Bool(localFlag.Name),
+				From:              c.String(fromRegistryFlag.Name),
+				FromTag:           c.String(fromTagFlag.Name),
 				SkipDevImageRetag: c.Bool(skipDevImageRetagFlag.Name),
+				LogsDir:           cfg.LogsDir,
+				Scan:              scan,
+				Refs:              refs,
+				Published:         published,
+				Force:             c.Bool(forceFlag.Name),
 				ResolveDigest:     imagesDigestResolver,
 			}, images.WithRunner(imagesRunner))
 			if err != nil {

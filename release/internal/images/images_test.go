@@ -113,13 +113,19 @@ func sharedTargetVariants() []Variant {
 	}
 }
 
-func baseConfig(f *fakeRunner, variants []Variant) Config {
-	return Config{
-		RepoRoot:   "/repo",
-		Version:    "v3.30.0",
-		Registries: []string{"quay.io/tigera"},
-		Variants:   variants,
-	}.apply([]Option{WithRunner(f)})
+// baseConfig returns publish options, the widest of the three, so a test can
+// take .Image from it for the build and archive verbs.
+func baseConfig(f *fakeRunner, variants []Variant) PublishOptions {
+	o := PublishOptions{
+		Image: Image{
+			RepoRoot:   "/repo",
+			Version:    "v3.30.0",
+			Registries: []string{"quay.io/tigera"},
+			Variants:   variants,
+		},
+	}
+	o.Image = o.apply([]Option{WithRunner(f)})
+	return o
 }
 
 func TestVariantMatrix(t *testing.T) {
@@ -299,7 +305,7 @@ func TestPublishConfirmLatch(t *testing.T) {
 func TestLogPaths(t *testing.T) {
 	t.Run("no logs dir captures in memory", func(t *testing.T) {
 		f := &fakeRunner{}
-		if err := Build(baseConfig(f, ossVariants())); err != nil {
+		if err := Build(BuildOptions{Image: baseConfig(f, ossVariants()).Image}); err != nil {
 			t.Fatalf("Build: %v", err)
 		}
 		for _, c := range f.calls {
@@ -313,7 +319,7 @@ func TestLogPaths(t *testing.T) {
 	// other, so the variant is part of the file name.
 	t.Run("each variant logs to its own file", func(t *testing.T) {
 		f := &fakeRunner{}
-		cfg := baseConfig(f, ossVariants())
+		cfg := BuildOptions{Image: baseConfig(f, ossVariants()).Image}
 		cfg.LogsDir = "/logs"
 		if err := Build(cfg); err != nil {
 			t.Fatalf("Build: %v", err)
@@ -401,23 +407,9 @@ func TestPublishCollectsEveryFailure(t *testing.T) {
 	}
 }
 
-func TestBuildRejectsPublishSettings(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		mut  func(*Config)
-	}{
-		{"From", func(c *Config) { c.From = "gcr.io/x"; c.FromTag = "v1" }},
-		{"Scan", func(c *Config) { c.Scan = &ScanRequest{} }},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := baseConfig(&fakeRunner{}, ossVariants())
-			tc.mut(&cfg)
-			if err := Build(cfg); err == nil {
-				t.Errorf("Build should reject %s", tc.name)
-			}
-		})
-	}
-}
+// Build cannot be handed a publish setting: BuildOptions has no From, FromTag
+// or Scan field, so what this once asserted at run time the compiler now
+// rejects outright.
 
 func TestNewPublisherRejectsHalfSetSource(t *testing.T) {
 	cfg := baseConfig(&fakeRunner{}, ossVariants())
@@ -430,17 +422,17 @@ func TestNewPublisherRejectsHalfSetSource(t *testing.T) {
 func TestValidate(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		mut  func(*Config)
+		mut  func(*Image)
 	}{
-		{"no repo root", func(c *Config) { c.RepoRoot = "" }},
-		{"no version", func(c *Config) { c.Version = "" }},
-		{"no variants", func(c *Config) { c.Variants = nil }},
-		{"variant without a target", func(c *Config) { c.Variants[0].Target = "" }},
-		{"variant without dirs", func(c *Config) { c.Variants[0].ReleaseDirs = nil }},
+		{"no repo root", func(c *Image) { c.RepoRoot = "" }},
+		{"no version", func(c *Image) { c.Version = "" }},
+		{"no variants", func(c *Image) { c.Variants = nil }},
+		{"variant without a target", func(c *Image) { c.Variants[0].Target = "" }},
+		{"variant without dirs", func(c *Image) { c.Variants[0].ReleaseDirs = nil }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := baseConfig(&fakeRunner{}, ossVariants())
-			tc.mut(&cfg)
+			tc.mut(&cfg.Image)
 			if _, err := NewPublisher(cfg); err == nil {
 				t.Errorf("expected %s to be rejected", tc.name)
 			}
@@ -528,17 +520,21 @@ func (r *imageNameRunner) RunInDir(_, _ string, args, env []string) (string, err
 	return "", nil
 }
 
-func recordingConfig(f *imageNameRunner, rec RefRecorder, resolve DigestResolver, variants []Variant) Config {
-	return Config{
-		RepoRoot:      "/repo",
-		Version:       "v3.30.0",
-		Registries:    []string{"quay.io/calico"},
-		Arches:        []string{"amd64", "arm64"},
-		Variants:      variants,
+func recordingConfig(f *imageNameRunner, rec RefRecorder, resolve DigestResolver, variants []Variant) PublishOptions {
+	o := PublishOptions{
+		Image: Image{
+			RepoRoot:   "/repo",
+			Version:    "v3.30.0",
+			Registries: []string{"quay.io/calico"},
+			Arches:     []string{"amd64", "arm64"},
+			Variants:   variants,
+		},
 		Publish:       true,
 		Refs:          rec,
 		ResolveDigest: resolve,
-	}.apply([]Option{WithRunner(f)})
+	}
+	o.Image = o.apply([]Option{WithRunner(f)})
+	return o
 }
 
 // alwaysResolves answers every image with the same digest. Suitable for asking
@@ -743,7 +739,7 @@ func TestArchiveSavesEveryVariantsImages(t *testing.T) {
 		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
 		{Name: windowsVariant, Target: "release-windows", ReleaseDirs: []string{"node"}},
 	})
-	if err := Archive(cfg, dir, false, WithRunner(f)); err != nil {
+	if err := Archive(ArchiveOptions{Image: cfg.Image, Dir: dir}, WithRunner(f)); err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
 
@@ -767,7 +763,7 @@ func TestArchivePullsWhenAsked(t *testing.T) {
 	cfg := baseConfig(&f.fakeRunner, []Variant{
 		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
 	})
-	if err := Archive(cfg, t.TempDir(), true, WithRunner(f)); err != nil {
+	if err := Archive(ArchiveOptions{Image: cfg.Image, Dir: t.TempDir(), Pull: true}, WithRunner(f)); err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
 	var pulled bool
@@ -785,7 +781,7 @@ func TestArchiveRejectsNoDir(t *testing.T) {
 	cfg := baseConfig(&fakeRunner{}, []Variant{
 		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
 	})
-	if err := Archive(cfg, "", false); err == nil {
+	if err := Archive(ArchiveOptions{Image: cfg.Image}); err == nil {
 		t.Fatal("expected an error when no archive directory is given")
 	}
 }

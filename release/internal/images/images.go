@@ -165,15 +165,49 @@ type RefRecorder interface {
 // nil error when the tag is absent; auth and network failures return an error.
 type DigestResolver func(image string) (digest string, exists bool, err error)
 
-// Config is the data the builder and the publisher derive from. Nothing here is
-// product-specific: a caller supplies the variants its product ships.
-type Config struct {
+// Image is what every step needs to name the images a release ships. The steps
+// embed it and add only the settings their own verb uses, so a setting that
+// belongs to one verb cannot be passed to another.
+type Image struct {
 	RepoRoot   string
 	Version    string
 	Registries []string
 	Arches     []string
-	Publish    bool
 	Variants   []Variant
+
+	// runner is unexported so it can only be set through WithRunner, which
+	// keeps the zero-value config pointed at real commands.
+	runner command.CommandRunner
+}
+
+// BuildOptions builds the images locally. It reaches no registry, so it carries
+// none of the publish settings.
+type BuildOptions struct {
+	Image
+
+	// LogsDir, when set, gives each unit its own log file. Concurrent units
+	// otherwise interleave their output into one unreadable stream.
+	LogsDir string
+}
+
+// ArchiveOptions writes the images to tar files for a release archive.
+type ArchiveOptions struct {
+	Image
+
+	// Dir is where the tar files are written.
+	Dir string
+
+	// Pull fetches an image that is not already local, which a release that did
+	// not build its own images needs.
+	Pull bool
+}
+
+// PublishOptions pushes the images to their registries.
+type PublishOptions struct {
+	Image
+
+	// Publish latches the push. Without it the make targets run as a dry run.
+	Publish bool
 
 	// From and FromTag, when set, publish by retagging the image already at
 	// From/<component>:FromTag rather than pushing a locally built one.
@@ -204,23 +238,19 @@ type Config struct {
 	// Force republishes a unit whose published digest differs from the record.
 	// Without it the difference is an error: the tag moved under us.
 	Force bool
-
-	// runner is unexported so it can only be set through WithRunner, which
-	// keeps the zero-value config pointed at real commands.
-	runner command.CommandRunner
 }
 
-// Option overrides a default on a builder or publisher.
-type Option func(*Config)
+// Option overrides a default on a step.
+type Option func(*Image)
 
 // WithRunner substitutes the runner the make targets are driven through.
 func WithRunner(r command.CommandRunner) Option {
-	return func(c *Config) { c.runner = r }
+	return func(c *Image) { c.runner = r }
 }
 
 // apply layers the options over the config, defaulting anything left unset so a
 // zero-value config runs real commands.
-func (c Config) apply(opts []Option) Config {
+func (c Image) apply(opts []Option) Image {
 	for _, opt := range opts {
 		opt(&c)
 	}
@@ -231,7 +261,7 @@ func (c Config) apply(opts []Option) Config {
 }
 
 // validate rejects a config that cannot describe any work.
-func (c Config) validate() error {
+func (c Image) validate() error {
 	var errs []error
 	if c.RepoRoot == "" {
 		errs = append(errs, fmt.Errorf("no repository root specified"))
@@ -257,7 +287,7 @@ func (c Config) validate() error {
 }
 
 // env returns the environment every variant's target receives.
-func (c Config) env() []string {
+func (c Image) env() []string {
 	env := append(os.Environ(),
 		utils.Env(utils.EnvVersion, c.Version),
 		utils.Env(utils.EnvImageTag, c.Version),
@@ -273,7 +303,7 @@ func (c Config) env() []string {
 
 // runUnits runs every unit concurrently, collecting failures rather than
 // stopping at the first: one component failing should not hide the rest.
-func (c Config) runUnits(units []unit, phase string) error {
+func (c Image) runUnits(units []unit, phase, logsDir string) error {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var errs []error
@@ -282,7 +312,7 @@ func (c Config) runUnits(units []unit, phase string) error {
 		wg.Add(1)
 		go func(u unit) {
 			defer wg.Done()
-			if err := c.runUnit(u, phase); err != nil {
+			if err := c.runUnit(u, phase, logsDir); err != nil {
 				mu.Lock()
 				errs = append(errs, err)
 				mu.Unlock()
@@ -294,13 +324,13 @@ func (c Config) runUnits(units []unit, phase string) error {
 }
 
 // runUnit runs one unit's make target, retrying on failure.
-func (c Config) runUnit(u unit, phase string) error {
+func (c Image) runUnit(u unit, phase, logsDir string) error {
 	log := logrus.WithFields(logrus.Fields{"variant": u.variant, "component": u.dir, "target": u.target})
 	dir := filepath.Join(c.RepoRoot, u.dir)
 
 	args := append([]string{"-C", dir}, strings.Fields(u.target)...)
 	for attempt := 0; ; attempt++ {
-		out, err := c.run(args, u.env, c.logPath(u, phase))
+		out, err := c.run(args, u.env, c.logPath(u, phase, logsDir))
 		if err == nil {
 			log.Debug(out)
 			return nil
@@ -316,7 +346,7 @@ func (c Config) runUnit(u unit, phase string) error {
 }
 
 // run sends output to logPath when there is one, else captures it in memory.
-func (c Config) run(args, env []string, logPath string) (string, error) {
+func (c Image) run(args, env []string, logPath string) (string, error) {
 	if logPath == "" {
 		return c.runner.RunInDir("", "make", args, env)
 	}
@@ -325,15 +355,15 @@ func (c Config) run(args, env []string, logPath string) (string, error) {
 
 // logPath namespaces the logs under the image step, with the variant in the
 // file name so a component shipping several image kinds keeps a log per kind.
-func (c Config) logPath(u unit, phase string) string {
-	if c.LogsDir == "" {
+func (c Image) logPath(u unit, phase, logsDir string) string {
+	if logsDir == "" {
 		return ""
 	}
 	slug := strings.ReplaceAll(filepath.Clean(u.dir), string(filepath.Separator), "-")
 	if u.variant != StandardVariant {
 		slug += "-" + u.variant
 	}
-	return filepath.Join(c.LogsDir, "images-"+phase, slug+".log")
+	return filepath.Join(logsDir, "images-"+phase, slug+".log")
 }
 
 // unit is one make invocation: a variant's target in one component directory.
@@ -346,7 +376,7 @@ type unit struct {
 
 // units expands the variants into work. A directory shipping more than one kind
 // of image appears once per variant.
-func (c Config) units(baseEnv []string) []unit {
+func (c Image) units(baseEnv []string) []unit {
 	var out []unit
 	for _, v := range c.Variants {
 		for _, dir := range v.ReleaseDirs {
@@ -364,7 +394,7 @@ func (c Config) units(baseEnv []string) []unit {
 const windowsImageSuffix = "-windows"
 
 // imageNames returns the image names a unit publishes.
-func (c Config) imageNames(u unit) ([]string, error) {
+func (c Image) imageNames(u unit) ([]string, error) {
 	dir := filepath.Join(c.RepoRoot, u.dir)
 	// RELEASE selects the released image names, set here so they cannot
 	// depend on the caller's environment.
@@ -390,7 +420,7 @@ func (c Config) imageNames(u unit) ([]string, error) {
 // tagPrefix returns the prefix a unit's published tags carry. The component
 // Makefile derives it from the variant's own environment, so it is read rather
 // than declared here.
-func (c Config) tagPrefix(u unit) (string, error) {
+func (c Image) tagPrefix(u unit) (string, error) {
 	dir := filepath.Join(c.RepoRoot, u.dir)
 	out, err := c.runner.RunInDir("", "make", []string{"-C", dir, "-s", "image-tag-prefix"}, u.env)
 	if err != nil {
@@ -405,15 +435,15 @@ func (c Config) tagPrefix(u unit) (string, error) {
 //
 // done is true when every ref the unit publishes is already recorded at the
 // digest the registry currently serves.
-func (c Config) unitState(u unit, resolve DigestResolver) (done bool, err error) {
-	if len(c.Published) == 0 {
+func (o PublishOptions) unitState(u unit, resolve DigestResolver) (done bool, err error) {
+	if len(o.Published) == 0 {
 		return false, nil
 	}
-	names, err := c.imageNames(u)
+	names, err := o.imageNames(u)
 	if err != nil {
 		return false, err
 	}
-	tags, err := c.unitTags(u)
+	tags, err := o.unitTags(u)
 	if err != nil {
 		return false, err
 	}
@@ -421,8 +451,8 @@ func (c Config) unitState(u unit, resolve DigestResolver) (done bool, err error)
 	// A repo publishes several tags, each at its own digest, and the record
 	// keeps refs rather than tags. So a repo maps to the SET of digests it
 	// recorded, and a tag counts as published when its digest is in that set.
-	recorded := make(map[string]map[string]struct{}, len(c.Published))
-	for _, ref := range c.Published {
+	recorded := make(map[string]map[string]struct{}, len(o.Published))
+	for _, ref := range o.Published {
 		repo, digest, ok := strings.Cut(ref, "@")
 		if !ok {
 			continue
@@ -433,7 +463,7 @@ func (c Config) unitState(u unit, resolve DigestResolver) (done bool, err error)
 		recorded[repo][digest] = struct{}{}
 	}
 
-	for _, reg := range c.Registries {
+	for _, reg := range o.Registries {
 		for _, name := range names {
 			repo := fmt.Sprintf("%s/%s", reg, name)
 			digests, ok := recorded[repo]
@@ -450,7 +480,7 @@ func (c Config) unitState(u unit, resolve DigestResolver) (done bool, err error)
 					return false, nil
 				}
 				if _, known := digests[got]; !known {
-					if !c.Force {
+					if !o.Force {
 						return false, fmt.Errorf(
 							"%s is published at %s; this release recorded %s. "+
 								"Pass --force to republish over it",
@@ -465,7 +495,7 @@ func (c Config) unitState(u unit, resolve DigestResolver) (done bool, err error)
 }
 
 // publishedRefs returns the digest refs a unit put in the registries.
-func (c Config) publishedRefs(u unit, resolve DigestResolver) ([]string, error) {
+func (c Image) publishedRefs(u unit, resolve DigestResolver) ([]string, error) {
 	names, err := c.imageNames(u)
 	if err != nil {
 		return nil, err
@@ -499,7 +529,7 @@ func (c Config) publishedRefs(u unit, resolve DigestResolver) ([]string, error) 
 
 // unitTags returns the tags a unit publishes. The Windows variant copies only
 // its manifest list to the release tag, so it has no per-architecture tags.
-func (c Config) unitTags(u unit) ([]string, error) {
+func (c Image) unitTags(u unit) ([]string, error) {
 	prefix, err := c.tagPrefix(u)
 	if err != nil {
 		return nil, err
@@ -519,21 +549,15 @@ func (c Config) unitTags(u unit) ([]string, error) {
 
 // Build builds every variant's images. Publish-only settings are rejected
 // rather than ignored: a caller setting one meant to publish.
-func Build(cfg Config, opts ...Option) error {
-	if err := cfg.validate(); err != nil {
+func Build(o BuildOptions, opts ...Option) error {
+	if err := o.validate(); err != nil {
 		return err
 	}
-	if cfg.From != "" || cfg.FromTag != "" {
-		return fmt.Errorf("from is a publish setting and cannot be used to build")
-	}
-	if cfg.Scan != nil {
-		return fmt.Errorf("scan is a publish setting and cannot be used to build")
-	}
-	cfg = cfg.apply(opts)
+	o.Image = o.apply(opts)
 
-	units := cfg.units(cfg.env())
+	units := o.units(o.env())
 	logrus.WithField("images", len(units)).Info("Building container images")
-	if err := cfg.runUnits(units, buildStep); err != nil {
+	if err := o.runUnits(units, buildStep, o.LogsDir); err != nil {
 		return err
 	}
 	logrus.Info("Finished building container images")
@@ -543,35 +567,32 @@ func Build(cfg Config, opts ...Option) error {
 // Archive writes the images every variant ships into dir, one tar each, for
 // shipping in a release archive. pull fetches an image that is not already
 // local, which a release that did not build its own images needs.
-func Archive(cfg Config, dir string, pull bool, opts ...Option) error {
-	if err := cfg.validate(); err != nil {
+func Archive(o ArchiveOptions, opts ...Option) error {
+	if err := o.validate(); err != nil {
 		return err
 	}
-	if len(cfg.Registries) == 0 {
-		return fmt.Errorf("no registry to archive images from")
-	}
-	if dir == "" {
+	if o.Dir == "" {
 		return fmt.Errorf("no directory to archive images into")
 	}
-	cfg = cfg.apply(opts)
+	o.Image = o.apply(opts)
 
-	units := cfg.units(cfg.env())
+	units := o.units(o.env())
 	logrus.WithField("images", len(units)).Info("Archiving container images")
-	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(o.Dir, os.ModePerm); err != nil {
 		return fmt.Errorf("creating images dir: %w", err)
 	}
 
 	// Images come from the first registry: an archive holds one copy, whichever
 	// registry it is pulled from.
-	registry := cfg.Registries[0]
+	registry := o.Registries[0]
 	for _, u := range units {
-		names, err := cfg.imageNames(u)
+		names, err := o.imageNames(u)
 		if err != nil {
 			return err
 		}
 		for _, name := range names {
-			image := fmt.Sprintf("%s/%s:%s", registry, name, cfg.Version)
-			if err := cfg.save(image, filepath.Join(dir, name+".tar"), pull); err != nil {
+			image := fmt.Sprintf("%s/%s:%s", registry, name, o.Version)
+			if err := o.save(image, filepath.Join(o.Dir, name+".tar"), o.Pull); err != nil {
 				return err
 			}
 		}
@@ -581,7 +602,7 @@ func Archive(cfg Config, dir string, pull bool, opts ...Option) error {
 }
 
 // save writes one image to a tar file, fetching it first when it is not local.
-func (c Config) save(image, out string, pull bool) error {
+func (c Image) save(image, out string, pull bool) error {
 	if pull {
 		if _, err := c.runner.Run("docker", []string{"image", "inspect", image}, nil); err != nil {
 			logrus.WithField("image", image).Info("Image not found locally, pulling")

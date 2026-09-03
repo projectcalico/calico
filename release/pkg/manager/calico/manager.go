@@ -1294,13 +1294,15 @@ func (r *CalicoManager) buildContainerImages() error {
 		logrus.Info("Skip building container images")
 		return nil
 	}
-	return images.Build(images.Config{
-		RepoRoot:   r.repoRoot,
-		Version:    r.calicoVersion,
-		Registries: r.imageRegistries,
-		Arches:     r.architectures,
-		Variants:   images.NarrowVariants(images.BuildVariants, r.imageReleaseDirs),
-		LogsDir:    r.logsDir,
+	return images.Build(images.BuildOptions{
+		Image: images.Image{
+			RepoRoot:   r.repoRoot,
+			Version:    r.calicoVersion,
+			Registries: r.imageRegistries,
+			Arches:     r.architectures,
+			Variants:   images.NarrowVariants(images.BuildVariants, r.imageReleaseDirs),
+		},
+		LogsDir: r.logsDir,
 	}, images.WithRunner(r.runner))
 }
 
@@ -1457,12 +1459,14 @@ func (r *CalicoManager) publishContainerImages() error {
 	if err != nil {
 		return err
 	}
-	p, err := images.NewPublisher(images.Config{
-		RepoRoot:      r.repoRoot,
-		Version:       r.calicoVersion,
-		Registries:    r.imageRegistries,
-		Arches:        r.architectures,
-		Variants:      images.NarrowVariants(images.PublishVariants, r.imageReleaseDirs),
+	p, err := images.NewPublisher(images.PublishOptions{
+		Image: images.Image{
+			RepoRoot:   r.repoRoot,
+			Version:    r.calicoVersion,
+			Registries: r.imageRegistries,
+			Arches:     r.architectures,
+			Variants:   images.NarrowVariants(images.PublishVariants, r.imageReleaseDirs),
+		},
 		Publish:       true,
 		LogsDir:       r.logsDir,
 		Scan:          r.scanRequest(),
@@ -1512,16 +1516,18 @@ func (r *CalicoManager) publishBranchTag() error {
 
 	// The arch images must carry the branch tag before the manifest can list
 	// them as its children.
-	p, err := images.NewPublisher(images.Config{
-		RepoRoot:   r.repoRoot,
-		Version:    tag,
-		Registries: r.imageRegistries,
-		Arches:     r.architectures,
-		Variants: images.NarrowVariants([]images.Variant{{
-			Name:        images.StandardVariant,
-			Target:      "retag-build-images-with-registries push-images-to-registries push-manifests",
-			ReleaseDirs: images.VariantDirs(images.PublishVariants),
-		}}, r.imageReleaseDirs),
+	p, err := images.NewPublisher(images.PublishOptions{
+		Image: images.Image{
+			RepoRoot:   r.repoRoot,
+			Version:    tag,
+			Registries: r.imageRegistries,
+			Arches:     r.architectures,
+			Variants: images.NarrowVariants([]images.Variant{{
+				Name:        images.StandardVariant,
+				Target:      "retag-build-images-with-registries push-images-to-registries push-manifests",
+				ReleaseDirs: images.VariantDirs(images.PublishVariants),
+			}}, r.imageReleaseDirs),
+		},
 		Publish: true,
 		LogsDir: r.logsDir,
 	}, images.WithRunner(r.runner))
@@ -1651,15 +1657,19 @@ func (r *CalicoManager) determineBranch() (string, error) {
 func (r *CalicoManager) archiveContainerImages(dir string) error {
 	// A hashrelease that did not build its own images has to fetch them.
 	pull := r.isHashRelease && !r.images
-	return images.Archive(images.Config{
-		RepoRoot:   r.repoRoot,
-		Version:    r.calicoVersion,
-		Registries: r.imageRegistries,
-		Arches:     r.architectures,
-		// Standard images only: the release tarball ships what a user deploys,
-		// and the Windows images have an archive of their own.
-		Variants: images.NarrowVariants(images.StandardVariants(images.PublishVariants), r.imageReleaseDirs),
-	}, dir, pull, images.WithRunner(r.runner))
+	return images.Archive(images.ArchiveOptions{
+		Image: images.Image{
+			RepoRoot:   r.repoRoot,
+			Version:    r.calicoVersion,
+			Registries: r.imageRegistries,
+			Arches:     r.architectures,
+			// Standard images only: the release tarball ships what a user
+			// deploys, and the Windows images have an archive of their own.
+			Variants: images.NarrowVariants(images.StandardVariants(images.PublishVariants), r.imageReleaseDirs),
+		},
+		Dir:  dir,
+		Pull: pull,
+	}, images.WithRunner(r.runner))
 }
 
 func (r *CalicoManager) git(args ...string) (string, error) {
