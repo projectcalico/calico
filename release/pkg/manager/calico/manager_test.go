@@ -870,3 +870,76 @@ func TestClearStagedE2EBinaries(t *testing.T) {
 	// Idempotent: a build that never staged anything must not error.
 	require.NoError(t, r.clearStagedE2EBinaries())
 }
+
+// The zero-output guard and the relink-on-rerun fix both used to live in the
+// collect step; they moved here when that step went away, so keep them covered.
+func TestBuildE2EBinariesStaging(t *testing.T) {
+	tests := []struct {
+		name        string
+		produced    []string
+		preexisting []string
+		wantErr     bool
+		wantStaged  int
+	}{
+		{
+			name:       "produced binaries are staged",
+			produced:   []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"},
+			wantStaged: 2,
+		},
+		{
+			name:        "a rerun relinks over the previous build",
+			produced:    []string{"e2e-linux-amd64.test"},
+			preexisting: []string{"e2e-linux-amd64.test"},
+			wantStaged:  1,
+		},
+		{
+			name:    "a build that produced nothing errors",
+			wantErr: true,
+		},
+		{
+			name:     "only unrelated output errors",
+			produced: []string{"README"},
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repoRoot, outputDir := t.TempDir(), t.TempDir()
+			buildOut := filepath.Join(repoRoot, "e2e", "bin", "k8s")
+			require.NoError(t, os.MkdirAll(buildOut, 0o755))
+			for _, name := range tt.produced {
+				require.NoError(t, os.WriteFile(filepath.Join(buildOut, name), []byte(name), 0o755))
+			}
+
+			r := &CalicoManager{
+				runner:        newFakeRunner().on("make", "", nil),
+				repoRoot:      repoRoot,
+				outputDir:     outputDir,
+				calicoVersion: "v3.30.0",
+				architectures: []string{"amd64", "arm64"},
+			}
+			for _, name := range tt.preexisting {
+				require.NoError(t, os.MkdirAll(r.e2eBinariesDir(), 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(r.e2eBinariesDir(), name), []byte("stale"), 0o755))
+			}
+
+			err := r.buildE2EBinaries()
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			staged, err := r.stagedE2EBinaries()
+			require.NoError(t, err)
+			require.Len(t, staged, tt.wantStaged)
+			// A rerun must land the new build, not leave the stale file behind.
+			for _, name := range tt.produced {
+				content, err := os.ReadFile(filepath.Join(r.e2eBinariesDir(), name))
+				require.NoError(t, err)
+				require.Equal(t, name, string(content))
+			}
+		})
+	}
+}
