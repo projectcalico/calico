@@ -176,8 +176,7 @@ type jsonListResponseWriter[Body any] struct {
 }
 
 func (rs *jsonListResponseWriter[Body]) WriteResponse(ctx apicontext.Context, status int, w http.ResponseWriter) error {
-	w.WriteHeader(status)
-	writeJSONResponse(w, rs.items)
+	writeJSONResponse(w, status, rs.items)
 	return nil
 }
 
@@ -187,7 +186,6 @@ type jsonErrorResponseWriter struct {
 }
 
 func (rs *jsonErrorResponseWriter) WriteResponse(ctx apicontext.Context, status int, w http.ResponseWriter) error {
-	w.WriteHeader(status)
-	writeJSONResponse(w, ErrorResponse{Error: rs.error})
+	writeJSONResponse(w, status, ErrorResponse{Error: rs.error})
 	return nil
 }
