@@ -2,7 +2,10 @@
 # Migrated from the Semaphore e2e pipeline of the same name — maintained here by hand.
 version: condensed
 generateName: e2e-vpp-
-schedule: 0 16 * * 1,3,5
+# Feb 31 never fires: VPP is not covered on this release branch.  The steps
+# below still pin master and a v3.28 regression matrix, so they would not be
+# testing this branch anyway.  Manual runs stay available via /argoci cron.
+schedule: 0 0 31 2 *
 globalPrologue: |
   cd "${CI_HOME}/${CI_GIT_DIR}"
   export ARGO_WORKFLOW_NAME="{{workflow.name}}"
