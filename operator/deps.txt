@@ -134,7 +134,6 @@ github.com/spf13/cobra v1.10.2
 github.com/spf13/pflag v1.0.10
 github.com/stretchr/objx v0.5.3
 github.com/stretchr/testify v1.11.1
-github.com/tigera/api v0.0.0-20260604222052-a4ab1787c00b
 github.com/urfave/cli v1.22.16
 github.com/urfave/cli/v3 v3.10.0
 github.com/x448/float16 v0.8.4
@@ -192,6 +191,13 @@ sigs.k8s.io/yaml v1.6.0
 
 local:api/admission
 local:api/config/crd
+local:api/pkg/apis/projectcalico/v3
+local:api/pkg/client/applyconfiguration_generated/internal
+local:api/pkg/client/applyconfiguration_generated/projectcalico/v3
+local:api/pkg/client/clientset_generated/clientset
+local:api/pkg/client/clientset_generated/clientset/scheme
+local:api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3
+local:api/pkg/lib/numorstring
 local:libcalico-go/config/crd
 local:operator/api/v1
 local:operator/cmd
@@ -248,16 +254,13 @@ local:operator/pkg/controller/utils/imageset
 local:operator/pkg/controller/whisker
 local:operator/pkg/crds
 local:operator/pkg/ctrlruntime
+local:operator/pkg/daemon
 local:operator/pkg/dns
 local:operator/pkg/extensions
 local:operator/pkg/render
 local:operator/pkg/render/certificatemanagement
-local:operator/pkg/render/common/authentication
-local:operator/pkg/render/common/authentication/tigera/key_validator_config
 local:operator/pkg/render/common/components
 local:operator/pkg/render/common/configmap
-local:operator/pkg/render/common/elasticsearch
-local:operator/pkg/render/common/kibana
 local:operator/pkg/render/common/meta
 local:operator/pkg/render/common/networkpolicy
 local:operator/pkg/render/common/podaffinity
@@ -267,13 +270,11 @@ local:operator/pkg/render/common/secret
 local:operator/pkg/render/common/securitycontext
 local:operator/pkg/render/common/securitycontextconstraints
 local:operator/pkg/render/common/selector
-local:operator/pkg/render/common/wafmanagement
 local:operator/pkg/render/gateway
 local:operator/pkg/render/gatewayapi
 local:operator/pkg/render/goldmane
 local:operator/pkg/render/istio
 local:operator/pkg/render/kubecontrollers
-local:operator/pkg/render/manager
 local:operator/pkg/render/tiers
 local:operator/pkg/render/webhooks
 local:operator/pkg/render/whisker
@@ -281,5 +282,4 @@ local:operator/pkg/tls
 local:operator/pkg/tls/certificatemanagement
 local:operator/pkg/tls/certkeyusage
 local:operator/pkg/uigateway
-local:operator/pkg/url
 local:operator/version
