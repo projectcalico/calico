@@ -1469,12 +1469,12 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	if needsNamespaceMigration {
 		if err := r.namespaceMigration.Run(ctx, reqLogger); err != nil {
 			r.status.SetDegraded(operatorv1.ResourceMigrationError, "error migrating resources to calico-system", err, reqLogger)
-			// We should always requeue a migration problem. Don't return error
-			// to make sure we never start backing off retrying.
-			return reconcile.Result{Requeue: true}, nil
+			// Poll rather than returning the error, so a migration problem does not
+			// push the reconcile onto the error backoff.
+			return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
 		}
 		// Requeue so we can update our resources (without the migration changes)
-		return reconcile.Result{Requeue: true}, nil
+		return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
 	} else if r.namespaceMigration.NeedCleanup() {
 		if err := r.namespaceMigration.CleanupMigration(ctx, reqLogger); err != nil {
 			r.status.SetDegraded(operatorv1.ResourceMigrationError, "error migrating resources to calico-system", err, reqLogger)

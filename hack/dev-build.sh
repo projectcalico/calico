@@ -20,7 +20,6 @@
 #
 # Usage:
 #   dev-build.sh --tag         Tag locally-built images for the dev registry
-#   dev-build.sh --operator    Build the operator image if inputs changed
 #   dev-build.sh --push        Push dev-tagged images to the registry
 #
 # Environment (--tag):
@@ -29,14 +28,6 @@
 #   DEV_IMAGE_TAG    - Tag to apply
 #   ARCH             - Architecture suffix for source tags
 #   STAMP_DIR        - Directory for stamp files
-#
-# Environment (--operator):
-#   STAMP_DIR          - Directory for stamp files
-#   KIND_INFRA_DIR     - Path to hack/test/kind/infra/
-#   REPO_ROOT          - Path to the root of this repo
-#   DEV_IMAGE_TAG      - Tag for the operator image
-#   DEV_IMAGE_REGISTRY - Registry for the operator image
-#   DEV_IMAGE_PATH     - Path within the registry
 #
 # Environment (--push):
 #   DEV_IMAGES - Space-separated target image refs to push
@@ -56,35 +47,12 @@ tag() {
     echo "Tagged $(echo $CALICO_IMAGES | wc -w) images as ${DEV_IMAGE_PREFIX}/*:${DEV_IMAGE_TAG}"
 }
 
-# Build the operator image if its inputs (tag, registry, source, versions)
-# have changed since the last run.
-operator() {
-    mkdir -p "$STAMP_DIR"
-    versions_hash=$(md5sum "${KIND_INFRA_DIR}/calico_versions.yml" | cut -d' ' -f1)
-    # Untracked files under operator/ are invisible here, so a brand-new source
-    # file wants an explicit rebuild.
-    operator_hash=$( { git -C "$REPO_ROOT" rev-parse HEAD:operator
-                       git -C "$REPO_ROOT" diff HEAD -- operator; } | md5sum | cut -d' ' -f1)
-    cur_inputs="${DEV_IMAGE_TAG}:${DEV_IMAGE_REGISTRY}:${DEV_IMAGE_PATH}:${operator_hash}:${versions_hash}"
-    stamp="${STAMP_DIR}/operator.inputs"
-    prev_inputs=$(cat "$stamp" 2>/dev/null || echo "")
-
-    if [ "$cur_inputs" = "$prev_inputs" ]; then
-        echo "Operator unchanged (inputs match)"
-    else
-        echo "Building operator (inputs changed)..."
-        cd "$KIND_INFRA_DIR"
-        DEV_IMAGE_TAG="$DEV_IMAGE_TAG" \
-            DEV_IMAGE_REGISTRY="$DEV_IMAGE_REGISTRY" \
-            DEV_IMAGE_PATH="$DEV_IMAGE_PATH" \
-            ./build-operator.sh
-        echo "$cur_inputs" > "$stamp"
-    fi
-}
-
 # Push dev-tagged images to the remote registry. Skips images whose
 # docker image ID hasn't changed since the last push.
 push() {
+    # The stamp dir is not created anywhere else; a fresh workspace has none.
+    mkdir -p "$STAMP_DIR"
+
     pushed=0
     skipped=0
 
@@ -108,11 +76,10 @@ push() {
 }
 
 case "${1:-}" in
-    --tag)      tag ;;
-    --operator) operator ;;
-    --push)     push ;;
+    --tag)  tag ;;
+    --push) push ;;
     *)
-        echo "Usage: $0 --tag | --operator | --push" >&2
+        echo "Usage: $0 --tag | --push" >&2
         exit 1
         ;;
 esac

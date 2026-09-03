@@ -82,9 +82,10 @@ release-build: .release-$(VERSION).created
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
 	touch $@
 
-release-publish: release-prereqs .release-$(VERSION).published
-# The stamp records that this checkout pushed the images. A dry run reaches no
-# registry, so it must not leave one behind for a later real publish to skip.
-.release-$(VERSION).published:
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	$(if $(CONFIRM),touch $@)
+.PHONY: release-publish
+release-publish: release-prereqs bin/crane
+	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
+		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \
+	else \
+		$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM); \
+	fi

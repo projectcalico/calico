@@ -1228,13 +1228,37 @@ func (r *CalicoManager) buildReleaseTar() error {
 	return nil
 }
 
+// e2eSupportedArches are the arches e2e runners consume; ppc64le/s390x have no
+// e2e runners and only cost build time and disk.
+var e2eSupportedArches = []string{"amd64", "arm64"}
+
+// e2eArchitectures returns the e2e-supported subset of the configured arches.
+// An empty configured set means "all arches" (the tooling-wide convention) and
+// resolves to all supported e2e arches.
+func e2eArchitectures(configured []string) []string {
+	if len(configured) == 0 {
+		return slices.Clone(e2eSupportedArches)
+	}
+	var arches []string
+	for _, arch := range configured {
+		if slices.Contains(e2eSupportedArches, arch) {
+			arches = append(arches, arch)
+		}
+	}
+	return arches
+}
+
 func (r *CalicoManager) buildE2EBinaries() error {
+	arches := e2eArchitectures(r.architectures)
+	if len(arches) == 0 {
+		logrus.Warnf("e2e binaries requested but none of %v is a supported e2e arch (amd64/arm64); skipping", r.architectures)
+		return nil
+	}
 	logrus.Info("Building multi-arch e2e test binaries")
 	e2eDir := filepath.Join(r.repoRoot, "e2e")
-	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", r.calicoVersion))
-	if len(r.architectures) > 0 {
-		env = append(env, fmt.Sprintf("VALIDARCHES=%s", strings.Join(r.architectures, " ")))
-	}
+	// Restrict the build via ARCHES, not VALIDARCHES: lib.Makefile assigns
+	// VALIDARCHES with `=`, so it ignores the env.
+	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", r.calicoVersion), "ARCHES="+strings.Join(arches, " "))
 	out, err := r.makeInDirectoryWithOutput(e2eDir, "build-all", env...)
 	if err != nil {
 		logrus.Error(out)

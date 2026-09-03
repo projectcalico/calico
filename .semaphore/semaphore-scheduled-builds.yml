@@ -592,6 +592,28 @@ blocks:
             - docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
             - zstd -3 --rm /tmp/whisker-image.tar
             - gcloud storage cp /tmp/whisker-image.tar.zst "${GCS_WORKFLOW_DIR}/whisker-image.tar.zst"
+  - name: "Build: operator image"
+    # The operator image bakes in the references it will install
+    # (localhost:5000/calico/<name>:test-build), so this producer builds it
+    # through the same `make kind-operator-image` its consumers run.
+    run:
+      when: "true"
+    dependencies: []
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      jobs:
+        - name: "Build and cache operator image"
+          commands:
+            - make kind-operator-image
+            - docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
+            - zstd -3 --rm /tmp/operator-image.tar
+            - gcloud storage cp /tmp/operator-image.tar.zst "${GCS_WORKFLOW_DIR}/operator-image.tar.zst"
   - name: Prerequisites
     skip:
       # Always skip, this is a dummy job used to group prerequisite checks.
@@ -941,6 +963,7 @@ blocks:
       - "Build: calico image"
       - "Build: node image"
       - "Build: whisker image"
+      - "Build: operator image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
@@ -1533,6 +1556,7 @@ blocks:
       - Prerequisites
       - "Build: calico image"
       - "Build: node image"
+      - "Build: operator image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
@@ -1777,6 +1801,28 @@ blocks:
         always:
           commands:
             - 'test-results publish --ignore-missing ./report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Operator" || true'
+  - name: "Operator: multi-arch build"
+    # The operator has no cgo and no build constraints, so cross-compiling the
+    # binary is the whole of the per-arch coverage. `make cd` and the release
+    # build assemble the images.
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd operator
+      jobs:
+        - name: "Operator: build multi-arch binaries"
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
   - name: "Operator FV"
     run:
       when: "true"
