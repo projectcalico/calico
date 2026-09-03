@@ -9,6 +9,10 @@
 # contents until checkout, so it costs round-trips rather than a full clone.
 set -euo pipefail
 
+# Inherited from a make recipe these point at the calling repo, and every git
+# command below would act on it instead of $dest.
+unset GIT_DIR GIT_WORK_TREE
+
 if [ $# -lt 3 ] || [ $# -gt 4 ]; then
 	echo "usage: $0 <repo-url> <revision> <dest> [--with-history]" >&2
 	exit 1
@@ -24,11 +28,12 @@ if [ -n "$with_history" ] && [ "$with_history" != "--with-history" ]; then
 	exit 1
 fi
 
-# Throttled anonymous clones get a 401; without this git blocks on the
-# credential prompt until the job times out.
-if [ -n "${SEMAPHORE:-}" ]; then
-	export GIT_TERMINAL_PROMPT=0
-fi
+# Throttled anonymous fetches get a 401; without this git blocks on the
+# credential prompt until the job times out. Anything needing credentials
+# should use a helper or an ssh remote, not an interactive prompt.
+export GIT_TERMINAL_PROMPT=0
+# GitHub throttles HTTP/2 harder than HTTP/1.1.
+export GIT_HTTP_VERSION=HTTP/1.1
 
 mkdir -p "$dest"
 cd "$dest"
@@ -37,18 +42,34 @@ git init -q .
 # Every run: a directory left by an earlier build may have a stale origin.
 git remote add origin "$repo" 2>/dev/null || git remote set-url origin "$repo"
 
+# Retry: a throttled or flaky fetch is a transient failure, not a missing ref.
+retry() {
+	local n=1
+	until "$@"; do
+		if [ $n -ge 3 ]; then
+			return 1
+		fi
+		echo "$0: $1 failed, retrying in $((n * 5))s..." >&2
+		sleep $((n * 5))
+		n=$((n + 1))
+	done
+}
+
 if ! git cat-file -e "${rev}^{commit}" 2>/dev/null; then
 	if [ -n "$with_history" ]; then
-		git fetch -q --filter=blob:none origin
-	# Only a full SHA or an advertised ref can be fetched shallow.
+		retry git fetch -q --filter=blob:none origin
 	elif printf '%s' "$rev" | grep -qE '^[0-9a-f]{40}$'; then
-		git fetch -q --depth 1 origin "$rev"
-	elif git ls-remote --exit-code origin "$rev" >/dev/null 2>&1; then
-		git fetch -q --depth 1 origin "+refs/tags/$rev:refs/tags/$rev" 2>/dev/null ||
-			git fetch -q --depth 1 origin "$rev:refs/fetched/$rev"
+		retry git fetch -q --depth 1 origin "$rev"
 	else
-		git fetch -q origin
+		# ls-remote separates "no such ref" (exit 2) from a transport failure,
+		# so a throttled lookup does not silently downgrade to a full fetch.
+		if retry git ls-remote --exit-code origin "$rev" >/dev/null; then
+			retry git fetch -q --depth 1 origin "$rev:refs/fetched/$rev"
+		else
+			retry git fetch -q --filter=blob:none origin
+		fi
 	fi
 fi
 
-git checkout -q "$rev" 2>/dev/null || git checkout -q "refs/fetched/$rev"
+git checkout -q --detach "$rev" 2>/dev/null ||
+	git checkout -q --detach "refs/fetched/$rev"

@@ -1,6 +1,6 @@
 ---
 applyTo:
-  - "**/Makefile"
+  - "**/*Makefile"
   - "**/*.mk"
 ---
 

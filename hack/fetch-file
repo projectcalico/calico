@@ -14,9 +14,19 @@ url=$1
 dest=$2
 
 mkdir -p "$(dirname "$dest")"
+
+# Download beside the target and move into place, so an interrupted transfer
+# cannot leave a truncated file that make treats as up to date.
+tmp="$dest.tmp.$$"
+trap 'rm -f "$tmp"' EXIT
+
 # Use HTTP/1.1 to avoid issues with some servers that throttle HTTP/2 more aggressively.
 curl --fail --silent --show-error --location \
   --http1.1 \
   --retry 5 --retry-all-errors \
-  --output "$dest" \
+  --connect-timeout 30 \
+  --speed-limit 1024 --speed-time 60 \
+  --output "$tmp" \
   "$url"
+
+mv -f "$tmp" "$dest"

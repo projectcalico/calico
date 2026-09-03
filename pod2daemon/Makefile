@@ -76,7 +76,8 @@ $(BINDIR)/node-driver-registrar-%: clone-registrar-upstream
 			mv $(REGISTRAR_IMAGE)/$(BINDIR)/csi-node-driver-registrar $@
 
 clone-registrar-upstream:
-	$(call fetch_repo,$(UPSTREAM_REGISTRAR_REPO),$(UPSTREAM_REGISTRAR_TAG),$(REGISTRAR_IMAGE))
+	# The upstream build derives its version string from `git describe`.
+	$(call fetch_repo,$(UPSTREAM_REGISTRAR_REPO),$(UPSTREAM_REGISTRAR_TAG),$(REGISTRAR_IMAGE),--with-history)
 	rm -rf ./$(REGISTRAR_IMAGE)/vendor
 	# Reset go.mod/go.sum to the pinned commit and (re-)apply the CVE dependency
 	# patch. The reset keeps this idempotent across repeated incremental builds.
