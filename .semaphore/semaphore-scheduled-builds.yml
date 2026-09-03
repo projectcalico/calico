@@ -593,21 +593,9 @@ blocks:
             - zstd -3 --rm /tmp/whisker-image.tar
             - gcloud storage cp /tmp/whisker-image.tar.zst "${GCS_WORKFLOW_DIR}/whisker-image.tar.zst"
   - name: "Build: operator image"
-    # The operator image the kind lanes deploy. Unlike the other component
-    # images it bakes in the references it will install
+    # The operator image bakes in the references it will install
     # (localhost:5000/calico/<name>:test-build), so this producer builds it
-    # through the same `make kind-operator-image` its consumers run and every
-    # kind lane can share the one tarball.
-    #
-    # hack/dev-build.sh gates the rebuild on a record of the inputs the image was
-    # built from, not on a marker file, so that stamp ships alongside the
-    # tarball for load-cached-images to restore. Upload it first: a tarball
-    # without its stamp would fail the consumer's untolerated gcloud cp.
-    #
-    # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)") list this
-    # block in their `dependencies:`, so CHANGE_IN_WITH_DEPENDENTS() folds their
-    # triggers into the arg below — this block's own inputs, the operator's Go
-    # closure plus everything else under operator/.
+    # through the same `make kind-operator-image` its consumers run.
     run:
       when: "true"
     dependencies: []
@@ -623,7 +611,6 @@ blocks:
         - name: "Build and cache operator image"
           commands:
             - make kind-operator-image
-            - gcloud storage cp .dev-stamps/operator.inputs "${GCS_WORKFLOW_DIR}/operator.inputs"
             - docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
             - zstd -3 --rm /tmp/operator-image.tar
             - gcloud storage cp /tmp/operator-image.tar.zst "${GCS_WORKFLOW_DIR}/operator-image.tar.zst"
@@ -1814,6 +1801,28 @@ blocks:
         always:
           commands:
             - 'test-results publish --ignore-missing ./report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Operator" || true'
+  - name: "Operator: multi-arch build"
+    # The operator has no cgo and no build constraints, so cross-compiling the
+    # binary is the whole of the per-arch coverage. `make cd` and the release
+    # build assemble the images.
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd operator
+      jobs:
+        - name: "Operator: build multi-arch binaries"
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
   - name: "Operator FV"
     run:
       when: "true"
