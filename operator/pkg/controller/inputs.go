@@ -20,8 +20,8 @@ package controller
 import (
 	"context"
 
-	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
@@ -58,8 +58,12 @@ type Inputs struct {
 	// Terminating reports that the resource this controller owns is being deleted.
 	Terminating bool
 
-	// K8sClientset and CalicoClient are set only by controllers whose extensions
-	// read resources the cached client cannot serve.
+	// K8sClientset is set only by controllers whose extensions read resources the
+	// cached client cannot serve.
 	K8sClientset kubernetes.Interface
-	CalicoClient calicoclient.Interface
+
+	// RESTConfig lets an extension build an uncached clientset for its own API
+	// flavor, for a lookup the manager's cache cannot serve without a
+	// cluster-wide informer. Set only by controllers whose extensions need one.
+	RESTConfig *rest.Config
 }
