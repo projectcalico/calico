@@ -14,6 +14,9 @@ This file is **operational guidance** for agents working in this repo: build com
 - **ALWAYS** remove `FIt`/`FDescribe` before committing. Nothing in the repo
   catches these for you — check your own diff.
 - **ALWAYS** commit generated files alongside source changes.
+- **ALWAYS** pass `$(CURL_GITHUB_OPTS)` to a `curl` that downloads from GitHub,
+  and never add an auth token to one. See
+  [`.github/instructions/external-downloads.instructions.md`](../.github/instructions/external-downloads.instructions.md).
 
 ## Essential Build Commands
 
