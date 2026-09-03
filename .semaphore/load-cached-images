@@ -35,3 +35,10 @@ load_image "calico/calico"   "calico-image.tar.zst"   "${REPO_ROOT}/cmd/calico/.
 load_image "calico/node"     "node-image.tar.zst"     "${REPO_ROOT}/node/.image.created-${ARCH}"
 load_image "calico/whisker"  "whisker-image.tar.zst"  "${REPO_ROOT}/whisker/.image.created-${ARCH}"
 load_image "tigera/operator" "operator-image.tar.zst" "${REPO_ROOT}/operator/.image.created-${ARCH}"
+
+# Upstream images. Their markers live in the component directory and double as
+# the sub-make's own build stamp.
+load_image "calico/envoy-gateway"           "envoy-gateway-image.tar.zst"           "${REPO_ROOT}/third_party/envoy-gateway/.envoy-gateway.created-${ARCH}"
+load_image "calico/envoy-proxy"             "envoy-proxy-image.tar.zst"             "${REPO_ROOT}/third_party/envoy-proxy/.envoy-proxy.created-${ARCH}"
+load_image "calico/envoy-ratelimit"         "envoy-ratelimit-image.tar.zst"         "${REPO_ROOT}/third_party/envoy-ratelimit/.envoy-ratelimit.created-${ARCH}"
+load_image "calico/third-party-cni-plugins" "third-party-cni-plugins-image.tar.zst" "${REPO_ROOT}/third_party/cni-plugins/.cni-plugins.created-${ARCH}"
