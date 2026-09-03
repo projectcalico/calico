@@ -20,8 +20,8 @@ import (
 	"net/url"
 	"strings"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	"github.com/tigera/api/pkg/lib/numorstring"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -252,10 +252,10 @@ func ParseHostPort(destination string) (string, numorstring.Port, error) {
 }
 
 // EntityRuleForHostPort builds the tightest destination rule for a host: a
-// Services match for an in-cluster Service, an exact net for a literal IP,
-// otherwise the domain. It always constrains the destination, never returning a
-// ports-only rule. A Services match carries the Service's own ports, since
-// Calico rejects a rule that sets both.
+// Services match for an in-cluster Service and an exact net for a literal IP. A
+// Services match carries the Service's own ports, since Calico rejects a rule
+// that sets both. A host that is neither gets a ports-only rule, because Calico
+// policy cannot match a destination domain.
 func EntityRuleForHostPort(host, clusterDomain string, ports ...numorstring.Port) v3.EntityRule {
 	if ns, name, ok := ClusterServiceWithDomain(host, clusterDomain); ok {
 		return CreateServiceSelectorEntityRule(ns, name)
@@ -270,7 +270,6 @@ func EntityRuleForHostPort(host, clusterDomain string, ports ...numorstring.Port
 		rule.Nets = []string{ip.String() + suffix}
 		return rule
 	}
-	rule.Domains = []string{host}
 	return rule
 }
 

@@ -29,7 +29,7 @@ import (
 	kbv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/kibana/v1"
 	"github.com/go-logr/logr"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	apps "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -248,8 +248,6 @@ func (c *componentHandler) createOrUpdateObject(ctx context.Context, obj client.
 	multipleOwners := checkIfMultipleOwnersLabel(om.GetObjectMeta())
 	// Add owner ref for controller owned resources,
 	switch obj.(type) {
-	case *v3.UISettings:
-		// Never add controller ref for UISettings since these are always GCd through the UISettingsGroup.
 	default:
 		if c.cr != nil && !skipAddingOwnerReference(c.cr, om.GetObjectMeta()) {
 			if multipleOwners {
@@ -834,18 +832,6 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 		dsa.Spec.ElasticsearchRef = csa.Spec.ElasticsearchRef
 		dsa.Status = csa.Status
 		return dsa
-	case *v3.UISettings:
-		// Only update if the spec has changed
-		cui := current.(*v3.UISettings)
-		dui := desired.(*v3.UISettings)
-		if reflect.DeepEqual(cui.Spec, dui.Spec) {
-			return cui
-		}
-
-		// UISettings are always owned by the group, so never modify the OwnerReferences that are returned by the
-		// APIServer.
-		dui.SetOwnerReferences(cui.GetOwnerReferences())
-		return dui
 	case *v3.NetworkPolicy:
 		cnp := current.(*v3.NetworkPolicy)
 		dnp := desired.(*v3.NetworkPolicy)

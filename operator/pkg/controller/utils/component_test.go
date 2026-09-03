@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	ocsv1 "github.com/openshift/api/security/v1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	apps "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -431,58 +431,6 @@ var _ = Describe("Component handler tests", func() {
 		err = c.Get(ctx, nsKey, ns)
 		Expect(err).To(BeNil())
 		Expect(ns.GetAnnotations()).To(Equal(expectedAnnotations))
-	})
-
-	It("merges UISettings leaving owners unchanged", func() {
-		fc := &fakeComponent{
-			supportedOSType: rmeta.OSTypeLinux,
-			objs: []client.Object{&v3.UISettings{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test.test-settings",
-					OwnerReferences: []metav1.OwnerReference{{
-						APIVersion: "projectcalico.org/v3",
-						Kind:       "UISettingsGroup",
-						Name:       "owner",
-						UID:        "abcde",
-					}},
-				},
-				Spec: v3.UISettingsSpec{
-					Group:       "test",
-					Description: "just a test",
-					Layer: &v3.UIGraphLayer{
-						Nodes: []v3.UIGraphNode{},
-					},
-				},
-			}},
-		}
-
-		err := handler.CreateOrUpdateOrDelete(ctx, fc, sm)
-		Expect(err).To(BeNil())
-
-		By("checking that the UISettings is created and ownerref is not modified")
-		uiKey := client.ObjectKey{
-			Name: "test.test-settings",
-		}
-		ui := &v3.UISettings{}
-		err = c.Get(ctx, uiKey, ui)
-		Expect(err).To(BeNil())
-		Expect(ui.OwnerReferences).To(HaveLen(1))
-		Expect(ui.OwnerReferences[0].Name).To(Equal("owner"))
-
-		By("overwriting the description and updating the owner.")
-		ui.Spec.Description = "another test"
-		ui.OwnerReferences[0].Name = "differentowner"
-		fc.objs = []client.Object{ui}
-		err = handler.CreateOrUpdateOrDelete(ctx, fc, sm)
-		Expect(err).To(BeNil())
-
-		By("checking that the uisettings is updated with description, but ownerref is not modified")
-		ui = &v3.UISettings{}
-		err = c.Get(ctx, uiKey, ui)
-		Expect(err).To(BeNil())
-		Expect(ui.OwnerReferences).To(HaveLen(1))
-		Expect(ui.OwnerReferences[0].Name).To(Equal("owner"))
-		Expect(ui.Spec.Description).To(Equal("another test"))
 	})
 
 	It("merges labels and reconciles only operator added labels", func() {

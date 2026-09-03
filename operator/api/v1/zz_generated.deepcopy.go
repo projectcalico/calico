@@ -22,7 +22,7 @@ package v1
 
 import (
 	"github.com/envoyproxy/gateway/api/v1alpha1"
-	"github.com/tigera/api/pkg/lib/numorstring"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"

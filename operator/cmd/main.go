@@ -27,7 +27,6 @@ import (
 
 	"github.com/cloudflare/cfssl/log"
 	"github.com/go-logr/logr"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -328,17 +327,9 @@ admission policy installation; once an Installation exists it is the authority o
 		}),
 		LeaderElection:   enableLeaderElection,
 		LeaderElectionID: "operator-lock",
-		// We should test this again in the future to see if the problem with LicenseKey updates
-		// being missed is resolved. Prior to controller-runtime 0.7 we observed Test failures
-		// where LicenseKey updates would be missed and the client cache did not have the LicenseKey.
-		// The controller-runtime was updated and we made use of this ClientDisableCacheFor feature
-		// for the LicenseKey. We should test again in the future to see if the cache issue is fixed
-		// and we can remove this. Here is a link to the upstream issue
-		// https://github.com/kubernetes-sigs/controller-runtime/issues/1316
 		Client: client.Options{
 			Cache: &client.CacheOptions{
 				DisableFor: []client.Object{
-					&v3.LicenseKey{},
 					// Pods are only listed by label/namespace selector from a handful of
 					// controllers. Caching them starts a shared informer that holds every pod
 					// in the cluster in memory (~36 MiB per 1000 pods), so read them uncached
@@ -588,7 +579,7 @@ admission policy installation; once an Installation exists it is the authority o
 
 	// Register custom Prometheus metrics collector.
 	if common.MetricsEnabled() {
-		collector := metrics.NewOperatorCollector(mgr.GetClient(), variant.IsEnterprise())
+		collector := metrics.NewOperatorCollector(mgr.GetClient())
 		ctrlmetrics.Registry.MustRegister(collector)
 	}
 

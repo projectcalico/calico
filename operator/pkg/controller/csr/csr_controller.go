@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	calicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset"
+	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"

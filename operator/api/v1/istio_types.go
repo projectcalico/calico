@@ -15,7 +15,7 @@
 package v1
 
 import (
-	"github.com/tigera/api/pkg/lib/numorstring"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

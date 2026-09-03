@@ -25,7 +25,7 @@ import (
 	"sync"
 
 	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	admissionregv1 "k8s.io/api/admissionregistration/v1"
