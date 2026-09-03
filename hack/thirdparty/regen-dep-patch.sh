@@ -17,11 +17,13 @@
 #
 #   regen-dep-patch.sh <upstream-tree> <pin-file> <output-patch>
 #
-# The upstream tree must be a git checkout at the pinned upstream ref. go.mod
-# and go.sum are reset to that ref first, so this is idempotent: the output
-# depends only on the pin file and the ref, never on what the tree happened to
-# contain. Functional patches are left applied -- they touch source only, and
-# the emitted diff is scoped to go.mod and go.sum.
+# go.mod and go.sum are reset to the pinned upstream ref first, so this is
+# idempotent: the output depends only on the pin file and the ref, never on what
+# the tree happened to contain. Functional patches are left applied -- they
+# touch source only, and the emitted diff is scoped to go.mod and go.sum.
+#
+# Components fetched with git clone carry the ref to reset to. Components
+# extracted from a tarball are given one by init-dep-baseline.sh at fetch time.
 #
 # Run inside $(DOCKER_GO_BUILD) so the Go toolchain is the pinned one. Running
 # it with a different Go can produce a different go.sum, which the drift check
@@ -86,7 +88,15 @@ if [ ${#pin_lines[@]} -eq 0 ]; then
 	exit 0
 fi
 
-[ -d "$TREE/.git" ] || { echo "error: $TREE is not a git checkout" >&2; exit 1; }
+# The baseline must have been recorded at fetch time, when the tree still held
+# upstream's files. Creating one here would capture whatever the tree holds
+# now, and if a dependency patch is already applied every pin would read as
+# satisfied and this would delete the patch it was asked to rebuild.
+[ -d "$TREE/.git" ] || {
+	echo "error: $TREE has no baseline to diff against." >&2
+	echo "       It is recorded by the component's fetch target; run 'make clean' and retry." >&2
+	exit 1
+}
 
 # Reset the derived files to the pinned ref, discarding any previously applied
 # dependency patch.
