@@ -32,6 +32,13 @@
 # the module back down. If every pin is satisfied the patch is removed
 # entirely, which is the correct end state for a component that upstream has
 # caught up with.
+#
+# The pin file owns the output: a missing or empty pin file means the component
+# declares no dependency pins, so the derived patch is removed and the script
+# succeeds. That is what lets an aggregate regeneration run over components
+# that have not been onboarded yet -- but it also means a component whose
+# dependency patch is still maintained by hand must not be passed to this
+# script, or the patch will be deleted.
 
 set -e -u -o pipefail
 
@@ -52,20 +59,38 @@ PATCH_AUTHOR="Tigera <noreply@tigera.io>"
 PATCH_DATE="Thu, 1 Jan 1970 00:00:00 +0000"
 PATCH_SUBJECT="Update dependencies for CVE fixes"
 
+# drop_output <reason> -- leave the component with no derived patch.
+drop_output() {
+	if [ -e "$OUT" ]; then
+		rm -f "$OUT"
+		echo "removed $OUT: $1"
+	else
+		echo "no patch needed: $1"
+	fi
+}
+
+# Pins are "<module> <version>" lines; everything else is rationale that gets
+# copied into the patch header verbatim.
+if [ -f "$PIN_FILE" ]; then
+	mapfile -t pin_lines < <(grep -vE '^[[:space:]]*(#|$)' "$PIN_FILE" || true)
+else
+	pin_lines=()
+fi
+
+if [ ${#pin_lines[@]} -eq 0 ]; then
+	if [ -f "$PIN_FILE" ]; then
+		drop_output "$PIN_FILE declares no pins"
+	else
+		drop_output "no pin file at $PIN_FILE"
+	fi
+	exit 0
+fi
+
 [ -d "$TREE/.git" ] || { echo "error: $TREE is not a git checkout" >&2; exit 1; }
-[ -f "$PIN_FILE" ] || { echo "error: no pin file at $PIN_FILE" >&2; exit 1; }
 
 # Reset the derived files to the pinned ref, discarding any previously applied
 # dependency patch.
 git -C "$TREE" checkout -- go.mod go.sum
-
-# Pins are "<module> <version>" lines; everything else is rationale that gets
-# copied into the patch header verbatim.
-mapfile -t pin_lines < <(grep -vE '^[[:space:]]*(#|$)' "$PIN_FILE" || true)
-if [ ${#pin_lines[@]} -eq 0 ]; then
-	echo "error: $PIN_FILE declares no pins" >&2
-	exit 1
-fi
 
 # selected_version <module> -- the version the module graph currently resolves
 # to, or the empty string if the module is not in the graph at all.
@@ -126,12 +151,7 @@ done
 diff=$(git -C "$TREE" -c core.abbrev=7 diff -- go.mod go.sum)
 
 if [ -z "$diff" ]; then
-	if [ -e "$OUT" ]; then
-		rm -f "$OUT"
-		echo "removed $OUT: the pinned ref satisfies every pin on its own"
-	else
-		echo "no patch needed: the pinned ref satisfies every pin on its own"
-	fi
+	drop_output "the pinned ref satisfies every pin on its own"
 	exit 0
 fi
 
