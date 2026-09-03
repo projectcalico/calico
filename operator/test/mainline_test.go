@@ -47,9 +47,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"github.com/projectcalico/calico/operator/pkg/crds"
-	"github.com/projectcalico/calico/operator/pkg/enterprise"
-	entcontroller "github.com/projectcalico/calico/operator/pkg/enterprise/controller"
-	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
 	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
@@ -78,7 +75,7 @@ var _ = Describe("Mainline component function tests", func() {
 		cleanupResources(c)
 
 		By("Verifying CRDs are installed")
-		verifyCRDsExist(c, operator.CalicoEnterprise)
+		verifyCRDsExist(c, operator.Calico)
 
 		By("Creating the tigera-operator namespace, if it doesn't exist")
 		ns := &corev1.Namespace{
@@ -235,7 +232,7 @@ var _ = Describe("Mainline component function tests", func() {
 
 var _ = Describe("Mainline component function tests - multi-tenant", func() {
 	It("should set up all controllers correctly in multi-tenant mode", func() {
-		_, _, cancel, _ := setupManager(ManageCRDsDisable, MultiTenant, operator.CalicoEnterprise)
+		_, _, cancel, _ := setupManager(ManageCRDsDisable, MultiTenant, operator.Calico)
 		cancel()
 	})
 })
@@ -339,8 +336,6 @@ func setupManager(manageCRDs bool, multiTenant bool, variant operator.ProductVar
 	err := controller.AddToManager(mgr, options.ControllerOptions{
 		DetectedProvider: operator.ProviderNone,
 		Variant:          variant,
-		Extensions:       enterprise.New(variant, eoptions.Options{}),
-		Controllers:      entcontroller.Controllers(variant),
 		ManageCRDs:       manageCRDs,
 		ShutdownContext:  ctx,
 		K8sClientset:     clientset,
@@ -555,7 +550,7 @@ func verifyCRDsExist(c client.Client, variant operator.ProductVariant) {
 		crdNames = append(crdNames, fmt.Sprintf("%s.%s", x.Spec.Names.Plural, x.Spec.Group))
 	}
 
-	// Eventually all the Enterprise CRDs should be available
+	// Eventually all the CRDs should be available
 	EventuallyWithOffset(1, func() error {
 		for _, n := range crdNames {
 			crd := &apiextensionsv1.CustomResourceDefinition{

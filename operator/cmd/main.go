@@ -67,8 +67,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	"github.com/projectcalico/calico/operator/pkg/crds"
 	"github.com/projectcalico/calico/operator/pkg/dns"
-	"github.com/projectcalico/calico/operator/pkg/enterprise"
-	entcontroller "github.com/projectcalico/calico/operator/pkg/enterprise/controller"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	operatortls "github.com/projectcalico/calico/operator/pkg/tls"
 	"github.com/projectcalico/calico/operator/version"
@@ -112,7 +111,6 @@ func main() {
 	var showVersion bool
 	var printImages string
 	var printCalicoCRDs string
-	var printEnterpriseCRDs string
 	var sgSetup bool
 	var manageCRDs bool
 	var preDelete bool
@@ -141,11 +139,6 @@ func main() {
 	flag.StringVar(
 		&printCalicoCRDs, "print-calico-crds", "",
 		`Print the Calico CRDs the operator has bundled then exit. Possible values: all, <crd prefix>.
-If a value other than 'all' is specified, the first CRD with a prefix of the specified value will be printed.`,
-	)
-	flag.StringVar(
-		&printEnterpriseCRDs, "print-enterprise-crds", "",
-		`Print the Enterprise CRDs the operator has bundled then exit. Possible values: all, <crd prefix>.
 If a value other than 'all' is specified, the first CRD with a prefix of the specified value will be printed.`,
 	)
 	flag.StringVar(&urlOnlyKubeconfig, "url-only-kubeconfig", "", "Path to a kubeconfig, but only for the apiserver url.")
@@ -194,8 +187,6 @@ admission policy installation; once an Installation exists it is the authority o
 			cmpnts = append(cmpnts, components.EnterpriseImages...)
 		} else if strings.ToLower(printImages) == "listcalico" {
 			cmpnts = components.CalicoImages
-		} else if strings.ToLower(printImages) == "listenterprise" {
-			cmpnts = components.EnterpriseImages
 		} else {
 			fmt.Println("Invalid option for --print-images flag", printImages)
 			os.Exit(1)
@@ -210,14 +201,6 @@ admission policy installation; once an Installation exists it is the authority o
 
 	if printCalicoCRDs != "" {
 		if err := showCRDs(operatortigeraiov1.Calico, printCalicoCRDs); err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		os.Exit(0)
-	}
-
-	if printEnterpriseCRDs != "" {
-		if err := showCRDs(operatortigeraiov1.CalicoEnterprise, printEnterpriseCRDs); err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
@@ -455,7 +438,7 @@ admission policy installation; once an Installation exists it is the authority o
 		}
 	}
 
-	extensionRegistry, err := enterprise.Build(ctx, variant, clientset, manageCRDs, v3CRDs)
+	extensionRegistry, err := extensions.Build(ctx, variant, clientset, extensions.BuildOptions{ManageCRDs: manageCRDs, UseV3CRDs: v3CRDs})
 	if err != nil {
 		setupLog.Error(err, "Failed to build the variant's extensions")
 		os.Exit(1)
@@ -579,6 +562,7 @@ admission policy installation; once an Installation exists it is the authority o
 		os.Exit(1)
 	}
 
+	variantControllers := options.VariantControllers(variant)
 	options := options.ControllerOptions{
 		DetectedProvider:  provider,
 		Variant:           variant,
@@ -595,7 +579,7 @@ admission policy installation; once an Installation exists it is the authority o
 		UseV3CRDs:         v3CRDs,
 		APIDiscovery:      apiDiscovery,
 		Extensions:        extensionRegistry,
-		Controllers:       entcontroller.Controllers(variant),
+		Controllers:       variantControllers,
 	}
 
 	err = controller.AddToManager(mgr, options)

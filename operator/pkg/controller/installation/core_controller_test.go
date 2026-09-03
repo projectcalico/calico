@@ -17,7 +17,6 @@ package installation
 import (
 	"bytes"
 	"context"
-	_ "embed"
 	"fmt"
 	"time"
 
@@ -51,6 +50,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/common/discovery"
 	"github.com/projectcalico/calico/operator/pkg/components"
+	"github.com/projectcalico/calico/operator/pkg/controller"
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
@@ -58,19 +58,13 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 	"github.com/projectcalico/calico/operator/pkg/dns"
-	"github.com/projectcalico/calico/operator/pkg/enterprise/render/monitor"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	"github.com/projectcalico/calico/operator/pkg/render/common/rbacmanagement"
 	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
 	"github.com/projectcalico/calico/operator/pkg/tls"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 	"github.com/projectcalico/calico/operator/test"
-)
-
-var (
-	//go:embed testdata/custom-node-certs.crt
-	customNodeCert []byte
-	//go:embed testdata/custom-node-certs-urisan.crt
-	customNodeCertURISAN []byte
 )
 
 var errMismatchedError = fmt.Errorf("installation spec.kubernetesProvider 'DockerEnterprise' does not match auto-detected value 'OpenShift'")
@@ -157,11 +151,10 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 			r = ReconcileInstallation{
-				ext: testExtensions.Installation(),
+				ext: coreExtensions.Installation(),
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
 					DetectedProvider: operator.ProviderNone,
-					Variant:          operator.CalicoEnterprise,
+					Variant:          operator.Calico,
 					ShutdownContext:  ctx,
 				},
 				config:              nil, // there is no fake for config
@@ -180,10 +173,6 @@ var _ = Describe("Testing core-controller installation", func() {
 			certificateManager, err := certificatemanager.Create(c, nil, "", common.OperatorNamespace(), certificatemanager.AllowCACreation())
 			Expect(err).NotTo(HaveOccurred())
 
-			prometheusTLS, err := certificateManager.GetOrCreateKeyPair(c, monitor.PrometheusClientTLSSecretName, common.OperatorNamespace(), []string{monitor.PrometheusClientTLSSecretName})
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(c.Create(ctx, prometheusTLS.Secret(common.OperatorNamespace()))).NotTo(HaveOccurred())
 			Expect(c.Create(ctx, certificateManager.KeyPair().Secret(common.OperatorNamespace()))).NotTo(HaveOccurred())
 			Expect(c.Create(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "calico-system"}})).NotTo(HaveOccurred())
 
@@ -193,12 +182,12 @@ var _ = Describe("Testing core-controller installation", func() {
 				&operator.Installation{
 					ObjectMeta: metav1.ObjectMeta{Name: "default"},
 					Spec: operator.InstallationSpec{
-						Variant:               operator.CalicoEnterprise,
+						Variant:               operator.Calico,
 						Registry:              "some.registry.org/",
-						CertificateManagement: &operator.CertificateManagement{CACert: prometheusTLS.GetCertificatePEM()},
+						CertificateManagement: &operator.CertificateManagement{CACert: certificateManager.KeyPair().GetCertificatePEM()},
 					},
 					Status: operator.InstallationStatus{
-						Variant: operator.CalicoEnterprise,
+						Variant: operator.Calico,
 						Computed: &operator.InstallationSpec{
 							Registry: "some.registry.org/",
 							// The test is provider agnostic.
@@ -224,94 +213,6 @@ var _ = Describe("Testing core-controller installation", func() {
 
 		AfterEach(func() {
 			cancel()
-		})
-
-		Context("non-cluster host tests", func() {
-			nonClusterHostObjectMeta := metav1.ObjectMeta{Name: "tigera-secure"}
-
-			BeforeEach(func() {
-				By("Creating a NonClusterHost CR")
-				Expect(c.Create(ctx, &operator.NonClusterHost{
-					TypeMeta:   metav1.TypeMeta{Kind: "NonClusterHost", APIVersion: "operator.tigera.io/v1"},
-					ObjectMeta: nonClusterHostObjectMeta,
-				})).NotTo(HaveOccurred())
-
-			})
-
-			AfterEach(func() {
-				Expect(c.Delete(ctx, &operator.NonClusterHost{ObjectMeta: nonClusterHostObjectMeta})).NotTo(HaveOccurred())
-			})
-
-			It("should create a separate Typha deployment for non-cluster hosts", func() {
-				_, err := r.Reconcile(ctx, reconcile.Request{})
-				Expect(err).NotTo(HaveOccurred())
-
-				deploy := appsv1.Deployment{}
-				err = c.Get(ctx, types.NamespacedName{Name: "calico-typha-noncluster-host", Namespace: common.CalicoNamespace}, &deploy)
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(deploy.Spec.Template.Spec.Containers).To(HaveLen(1))
-				Expect(deploy.Spec.Template.Spec.Containers[0].Env).To(ContainElements(
-					corev1.EnvVar{Name: "TYPHA_CLIENTCN", Value: "typha-client-noncluster-host"},
-				))
-			})
-
-			It("should use the common name from node-certs-noncluster-host certificate", func() {
-				secret := &corev1.Secret{
-					TypeMeta:   metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"},
-					ObjectMeta: metav1.ObjectMeta{Name: "node-certs-noncluster-host", Namespace: common.OperatorNamespace()},
-					Data: map[string][]byte{
-						"tls.crt": customNodeCert,
-						"tls.key": []byte("tls.key"),
-					},
-				}
-				Expect(c.Create(ctx, secret)).NotTo(HaveOccurred())
-
-				defer func() {
-					Expect(c.Delete(ctx, secret)).NotTo(HaveOccurred())
-				}()
-
-				_, err := r.Reconcile(ctx, reconcile.Request{})
-				Expect(err).NotTo(HaveOccurred())
-
-				deploy := appsv1.Deployment{}
-				err = c.Get(ctx, types.NamespacedName{Name: "calico-typha-noncluster-host", Namespace: common.CalicoNamespace}, &deploy)
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(deploy.Spec.Template.Spec.Containers).To(HaveLen(1))
-				Expect(deploy.Spec.Template.Spec.Containers[0].Env).To(ContainElements(
-					corev1.EnvVar{Name: "TYPHA_CLIENTCN", Value: "custom-node-certs"},
-				))
-			})
-
-			It("should use the URI SAN from node-certs-noncluster-host certificate", func() {
-				secret := &corev1.Secret{
-					TypeMeta:   metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"},
-					ObjectMeta: metav1.ObjectMeta{Name: "node-certs-noncluster-host", Namespace: common.OperatorNamespace()},
-					Data: map[string][]byte{
-						"tls.crt": customNodeCertURISAN,
-						"tls.key": []byte("tls.key"),
-					},
-				}
-				err := c.Create(ctx, secret)
-				Expect(err).NotTo(HaveOccurred())
-
-				defer func() {
-					Expect(c.Delete(ctx, secret)).NotTo(HaveOccurred())
-				}()
-
-				_, err = r.Reconcile(ctx, reconcile.Request{})
-				Expect(err).NotTo(HaveOccurred())
-
-				deploy := appsv1.Deployment{}
-				err = c.Get(ctx, types.NamespacedName{Name: "calico-typha-noncluster-host", Namespace: common.CalicoNamespace}, &deploy)
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(deploy.Spec.Template.Spec.Containers).To(HaveLen(1))
-				Expect(deploy.Spec.Template.Spec.Containers[0].Env).To(ContainElements(
-					corev1.EnvVar{Name: "TYPHA_CLIENTURISAN", Value: "spiffe://example.org/calico-node"},
-				))
-			})
 		})
 
 		Context("with Goldmane installed", func() {
@@ -410,16 +311,11 @@ var _ = Describe("Testing core-controller installation", func() {
 
 		It("degrades with a configuration reason when the extension rejects the configuration", func() {
 			mockStatus.On("SetDegraded", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return()
-
-			port := 0
-			Expect(c.Create(ctx, &v3.FelixConfiguration{
-				ObjectMeta: metav1.ObjectMeta{Name: "default"},
-				Spec:       v3.FelixConfigurationSpec{PrometheusReporterPort: &port},
-			})).NotTo(HaveOccurred())
+			r.ext = rejectingInstallation{coreExtensions.Installation()}
 
 			_, err := r.Reconcile(ctx, reconcile.Request{})
 			Expect(err).To(HaveOccurred())
-			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operator.InvalidConfigurationError, "invalid metrics port: felixConfiguration prometheusReporterPort=0 not supported", mock.Anything, mock.Anything)
+			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operator.InvalidConfigurationError, "the extension rejected the configuration", mock.Anything, mock.Anything)
 		})
 
 		Context("image tests", func() {
@@ -440,9 +336,9 @@ var _ = Describe("Testing core-controller installation", func() {
 				Expect(controller).ToNot(BeNil())
 				Expect(controller.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s:%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraCalico.Image,
-						components.ComponentTigeraCalico.Version)))
+						components.CalicoImagePath,
+						components.ComponentCalico.Image,
+						components.ComponentCalico.Version)))
 
 				d = appsv1.Deployment{
 					TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"},
@@ -457,17 +353,17 @@ var _ = Describe("Testing core-controller installation", func() {
 				Expect(typha).ToNot(BeNil())
 				Expect(typha.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s:%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraCalico.Image,
-						components.ComponentTigeraCalico.Version)))
+						components.CalicoImagePath,
+						components.ComponentCalico.Image,
+						components.ComponentCalico.Version)))
 				Expect(d.Spec.Template.Spec.InitContainers).To(HaveLen(1))
 				csrinit := test.GetContainer(d.Spec.Template.Spec.InitContainers, fmt.Sprintf("%s-key-cert-provisioner", render.TyphaTLSSecretName))
 				Expect(csrinit).ToNot(BeNil())
 				Expect(csrinit.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s:%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraCalico.Image,
-						components.ComponentTigeraCalico.Version)))
+						components.CalicoImagePath,
+						components.ComponentCalico.Image,
+						components.ComponentCalico.Version)))
 
 				ds := appsv1.DaemonSet{
 					TypeMeta: metav1.TypeMeta{Kind: "DaemonSet", APIVersion: "apps/v1"},
@@ -482,62 +378,55 @@ var _ = Describe("Testing core-controller installation", func() {
 				Expect(node).ToNot(BeNil())
 				Expect(node.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s:%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraNode.Image,
-						components.ComponentTigeraNode.Version)))
-				Expect(ds.Spec.Template.Spec.InitContainers).To(HaveLen(6))
+						components.CalicoImagePath,
+						components.ComponentCalicoNode.Image,
+						components.ComponentCalicoNode.Version)))
+				Expect(ds.Spec.Template.Spec.InitContainers).To(HaveLen(5))
 				fv := test.GetContainer(ds.Spec.Template.Spec.InitContainers, "flexvol-driver")
 				Expect(fv).ToNot(BeNil())
 				Expect(fv.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s:%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraCalico.Image,
-						components.ComponentTigeraCalico.Version)))
+						components.CalicoImagePath,
+						components.ComponentCalico.Image,
+						components.ComponentCalico.Version)))
 				cni := test.GetContainer(ds.Spec.Template.Spec.InitContainers, "install-cni")
 				Expect(cni).ToNot(BeNil())
 				Expect(cni.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s:%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraCalico.Image,
-						components.ComponentTigeraCalico.Version)))
+						components.CalicoImagePath,
+						components.ComponentCalico.Image,
+						components.ComponentCalico.Version)))
 				cniPlugins := test.GetContainer(ds.Spec.Template.Spec.InitContainers, "cni-plugins")
 				Expect(cniPlugins).ToNot(BeNil())
 				Expect(cniPlugins.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s:%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraCNIPlugins.Image,
-						components.ComponentTigeraCNIPlugins.Version)))
+						components.CalicoImagePath,
+						components.ComponentCalicoCNIPlugins.Image,
+						components.ComponentCalicoCNIPlugins.Version)))
 				csrinit = test.GetContainer(ds.Spec.Template.Spec.InitContainers, fmt.Sprintf("%s-key-cert-provisioner", render.NodeTLSSecretName))
 				Expect(csrinit).ToNot(BeNil())
 				Expect(csrinit.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s:%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraCalico.Image,
-						components.ComponentTigeraCalico.Version)))
-				csrinit2 := test.GetContainer(ds.Spec.Template.Spec.InitContainers, fmt.Sprintf("%s-key-cert-provisioner", render.NodePrometheusTLSServerSecret))
-				Expect(csrinit2).ToNot(BeNil())
-				Expect(csrinit2.Image).To(Equal(
-					fmt.Sprintf("some.registry.org/%s%s:%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraCalico.Image,
-						components.ComponentTigeraCalico.Version)))
+						components.CalicoImagePath,
+						components.ComponentCalico.Image,
+						components.ComponentCalico.Version)))
 				bpfInit := test.GetContainer(ds.Spec.Template.Spec.InitContainers, "ebpf-bootstrap")
 				Expect(bpfInit).ToNot(BeNil())
 				Expect(bpfInit.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s:%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraNode.Image,
-						components.ComponentTigeraNode.Version)))
+						components.CalicoImagePath,
+						components.ComponentCalicoNode.Image,
+						components.ComponentCalicoNode.Version)))
 			})
 
 			It("should use images from imageset", func() {
 				imageSet := &operator.ImageSet{
-					ObjectMeta: metav1.ObjectMeta{Name: "enterprise-" + components.EnterpriseRelease},
+					ObjectMeta: metav1.ObjectMeta{Name: "calico-" + components.CalicoRelease},
 					Spec: operator.ImageSetSpec{
 						Images: []operator.Image{
-							{Image: "tigera/calico", Digest: "sha256:tigeracalicohash"},
-							{Image: "tigera/node", Digest: "sha256:tigeranodehash"},
-							{Image: "tigera/third-party-cni-plugins", Digest: "sha256:tigeracnipluginshash"},
+							{Image: "calico/calico", Digest: "sha256:calicohash"},
+							{Image: "calico/node", Digest: "sha256:nodehash"},
+							{Image: "calico/third-party-cni-plugins", Digest: "sha256:cnipluginshash"},
 						},
 					},
 				}
@@ -559,9 +448,9 @@ var _ = Describe("Testing core-controller installation", func() {
 				Expect(controller).ToNot(BeNil())
 				Expect(controller.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s@%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraCalico.Image,
-						"sha256:tigeracalicohash")))
+						components.CalicoImagePath,
+						components.ComponentCalico.Image,
+						"sha256:calicohash")))
 
 				d = appsv1.Deployment{
 					TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"},
@@ -576,17 +465,17 @@ var _ = Describe("Testing core-controller installation", func() {
 				Expect(typha).ToNot(BeNil())
 				Expect(typha.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s@%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraCalico.Image,
-						"sha256:tigeracalicohash")))
+						components.CalicoImagePath,
+						components.ComponentCalico.Image,
+						"sha256:calicohash")))
 				Expect(d.Spec.Template.Spec.InitContainers).To(HaveLen(1))
 				csrinit := test.GetContainer(d.Spec.Template.Spec.InitContainers, fmt.Sprintf("%s-key-cert-provisioner", render.TyphaTLSSecretName))
 				Expect(csrinit).ToNot(BeNil())
 				Expect(csrinit.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s@%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraCalico.Image,
-						"sha256:tigeracalicohash")))
+						components.CalicoImagePath,
+						components.ComponentCalico.Image,
+						"sha256:calicohash")))
 
 				ds := appsv1.DaemonSet{
 					TypeMeta: metav1.TypeMeta{Kind: "DaemonSet", APIVersion: "apps/v1"},
@@ -601,66 +490,59 @@ var _ = Describe("Testing core-controller installation", func() {
 				Expect(node).ToNot(BeNil())
 				Expect(node.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s@%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraNode.Image,
-						"sha256:tigeranodehash")))
-				Expect(ds.Spec.Template.Spec.InitContainers).To(HaveLen(6))
+						components.CalicoImagePath,
+						components.ComponentCalicoNode.Image,
+						"sha256:nodehash")))
+				Expect(ds.Spec.Template.Spec.InitContainers).To(HaveLen(5))
 				fv := test.GetContainer(ds.Spec.Template.Spec.InitContainers, "flexvol-driver")
 				Expect(fv).ToNot(BeNil())
 				Expect(fv.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s@%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraCalico.Image,
-						"sha256:tigeracalicohash")))
+						components.CalicoImagePath,
+						components.ComponentCalico.Image,
+						"sha256:calicohash")))
 				cni := test.GetContainer(ds.Spec.Template.Spec.InitContainers, "install-cni")
 				Expect(cni).ToNot(BeNil())
 				Expect(cni.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s@%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraCalico.Image,
-						"sha256:tigeracalicohash")))
+						components.CalicoImagePath,
+						components.ComponentCalico.Image,
+						"sha256:calicohash")))
 				cniPlugins := test.GetContainer(ds.Spec.Template.Spec.InitContainers, "cni-plugins")
 				Expect(cniPlugins).ToNot(BeNil())
 				Expect(cniPlugins.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s@%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraCNIPlugins.Image,
-						"sha256:tigeracnipluginshash")))
+						components.CalicoImagePath,
+						components.ComponentCalicoCNIPlugins.Image,
+						"sha256:cnipluginshash")))
 				csrinit = test.GetContainer(ds.Spec.Template.Spec.InitContainers, fmt.Sprintf("%s-key-cert-provisioner", render.NodeTLSSecretName))
 				Expect(csrinit).ToNot(BeNil())
 				Expect(csrinit.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s@%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraCalico.Image,
-						"sha256:tigeracalicohash")))
-				csrinit2 := test.GetContainer(ds.Spec.Template.Spec.InitContainers, fmt.Sprintf("%s-key-cert-provisioner", render.NodePrometheusTLSServerSecret))
-				Expect(csrinit2).ToNot(BeNil())
-				Expect(csrinit2.Image).To(Equal(
-					fmt.Sprintf("some.registry.org/%s%s@%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraCalico.Image,
-						"sha256:tigeracalicohash")))
+						components.CalicoImagePath,
+						components.ComponentCalico.Image,
+						"sha256:calicohash")))
 
 				bpfInit := test.GetContainer(ds.Spec.Template.Spec.InitContainers, "ebpf-bootstrap")
 				Expect(bpfInit).ToNot(BeNil())
 				Expect(bpfInit.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s@%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraNode.Image,
-						"sha256:tigeranodehash")))
+						components.CalicoImagePath,
+						components.ComponentCalicoNode.Image,
+						"sha256:nodehash")))
 				inst := operator.Installation{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "default",
 					},
 				}
 				Expect(test.GetResource(c, &inst)).To(BeNil())
-				Expect(inst.Status.ImageSet).To(Equal("enterprise-" + components.EnterpriseRelease))
+				Expect(inst.Status.ImageSet).To(Equal("calico-" + components.CalicoRelease))
 			})
 
 			It("should error if correct variant imageset with wrong version", func() {
 				mockStatus.On("SetDegraded", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return()
 				imageSet := &operator.ImageSet{
-					ObjectMeta: metav1.ObjectMeta{Name: "enterprise-wrong"},
+					ObjectMeta: metav1.ObjectMeta{Name: "calico-wrong"},
 				}
 				Expect(c.Create(ctx, imageSet)).ToNot(HaveOccurred())
 
@@ -669,7 +551,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			})
 			It("should succeed if other variant imageset exists", func() {
 				imageSet := &operator.ImageSet{
-					ObjectMeta: metav1.ObjectMeta{Name: "calico-versiondoesntmatter"},
+					ObjectMeta: metav1.ObjectMeta{Name: "enterprise-versiondoesntmatter"},
 				}
 				Expect(c.Create(ctx, imageSet)).ToNot(HaveOccurred())
 
@@ -688,9 +570,9 @@ var _ = Describe("Testing core-controller installation", func() {
 				Expect(controller).ToNot(BeNil())
 				Expect(controller.Image).To(Equal(
 					fmt.Sprintf("some.registry.org/%s%s:%s",
-						components.TigeraImagePath,
-						components.ComponentTigeraCalico.Image,
-						components.ComponentTigeraCalico.Version)))
+						components.CalicoImagePath,
+						components.ComponentCalico.Image,
+						components.ComponentCalico.Version)))
 			})
 
 			It("should update version", func() {
@@ -703,16 +585,6 @@ var _ = Describe("Testing core-controller installation", func() {
 				_, err := r.Reconcile(ctx, reconcile.Request{})
 				Expect(err).ShouldNot(HaveOccurred())
 
-				Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, instance)).NotTo(HaveOccurred())
-				Expect(instance.Status.CalicoVersion).To(Equal(components.EnterpriseRelease))
-				Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, instance)).NotTo(HaveOccurred())
-
-				instance.Status.CalicoVersion = "v3.23"
-				instance.Spec.Variant = operator.Calico
-				Expect(c.Update(ctx, instance)).NotTo(HaveOccurred())
-
-				_, err = r.Reconcile(ctx, reconcile.Request{})
-				Expect(err).ShouldNot(HaveOccurred())
 				Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, instance)).NotTo(HaveOccurred())
 				Expect(instance.Status.CalicoVersion).To(Equal(components.CalicoRelease))
 			})
@@ -818,11 +690,10 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 			r = ReconcileInstallation{
-				ext: testExtensions.Installation(),
+				ext: coreExtensions.Installation(),
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
 					DetectedProvider: operator.ProviderNone,
-					Variant:          operator.CalicoEnterprise,
+					Variant:          operator.Calico,
 					ClusterDomain:    dns.DefaultClusterDomain,
 				},
 				config:              nil, // there is no fake for config
@@ -841,11 +712,11 @@ var _ = Describe("Testing core-controller installation", func() {
 			cr = &operator.Installation{
 				ObjectMeta: metav1.ObjectMeta{Name: "default"},
 				Spec: operator.InstallationSpec{
-					Variant:  operator.CalicoEnterprise,
+					Variant:  operator.Calico,
 					Registry: "some.registry.org/",
 				},
 				Status: operator.InstallationStatus{
-					Variant: operator.CalicoEnterprise,
+					Variant: operator.Calico,
 					Computed: &operator.InstallationSpec{
 						Registry: "some.registry.org/",
 						// The test is provider agnostic.
@@ -879,9 +750,6 @@ var _ = Describe("Testing core-controller installation", func() {
 			certificateManager, err = certificatemanager.Create(c, nil, "", common.OperatorNamespace(), certificatemanager.AllowCACreation())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(c.Create(ctx, certificateManager.KeyPair().Secret(common.OperatorNamespace()))) // Persist the root-ca in the operator namespace.
-			prometheusTLS, err := certificateManager.GetOrCreateKeyPair(c, monitor.PrometheusClientTLSSecretName, common.OperatorNamespace(), []string{monitor.PrometheusClientTLSSecretName})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(c.Create(ctx, prometheusTLS.Secret(common.OperatorNamespace()))).NotTo(HaveOccurred())
 			Expect(c.Create(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "calico-system"}})).NotTo(HaveOccurred())
 		})
 
@@ -999,11 +867,10 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 			r = ReconcileInstallation{
-				ext: testExtensions.Installation(),
+				ext: coreExtensions.Installation(),
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
 					DetectedProvider: operator.ProviderNone,
-					Variant:          operator.CalicoEnterprise,
+					Variant:          operator.Calico,
 					ShutdownContext:  ctx,
 				},
 				config:              nil, // there is no fake for config
@@ -1041,7 +908,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			cr = &operator.Installation{
 				ObjectMeta: metav1.ObjectMeta{Name: "default"},
 				Spec: operator.InstallationSpec{
-					Variant:               operator.CalicoEnterprise,
+					Variant:               operator.Calico,
 					Registry:              "some.registry.org/",
 					CertificateManagement: &operator.CertificateManagement{CACert: cert},
 					ImagePullSecrets: []corev1.LocalObjectReference{{
@@ -1050,11 +917,6 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				Status: operator.InstallationStatus{},
 			}
-			certificateManager, err := certificatemanager.Create(c, nil, "", common.OperatorNamespace(), certificatemanager.AllowCACreation())
-			Expect(err).NotTo(HaveOccurred())
-			prometheusTLS, err := certificateManager.GetOrCreateKeyPair(c, monitor.PrometheusClientTLSSecretName, common.OperatorNamespace(), []string{monitor.PrometheusClientTLSSecretName})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(c.Create(ctx, prometheusTLS.Secret(common.OperatorNamespace()))).NotTo(HaveOccurred())
 			Expect(c.Create(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "calico-system"}})).NotTo(HaveOccurred())
 			pullSecrets := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "tigera-pull-secret", Namespace: common.OperatorNamespace()}}
 			Expect(c.Create(ctx, pullSecrets)).NotTo(HaveOccurred())
@@ -1757,20 +1619,6 @@ var _ = Describe("Testing core-controller installation", func() {
 			Expect(*fc.Spec.BPFEnabled).To(BeTrue())
 		})
 
-		It("generates FelixConfiguration with correct DNS service for Rancher", func() {
-			cr.Spec.KubernetesProvider = operator.ProviderRKE2
-			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
-			_, err := r.Reconcile(ctx, reconcile.Request{})
-			Expect(err).ShouldNot(HaveOccurred())
-
-			// We should get a felix configuration with Rancher's DNS service.
-			fc := &v3.FelixConfiguration{}
-			err = c.Get(ctx, types.NamespacedName{Name: "default"}, fc)
-			Expect(err).ShouldNot(HaveOccurred())
-			Expect(fc.Spec.DNSTrustedServers).NotTo(BeNil())
-			Expect(*fc.Spec.DNSTrustedServers).To(ConsistOf("k8s-service:kube-system/rke2-coredns-rke2-coredns"))
-		})
-
 		It("should Reconcile with AWS CNI config", func() {
 			cr.Spec.CNI = &operator.CNISpec{Type: operator.PluginAmazonVPC}
 			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
@@ -2331,11 +2179,10 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 			r = ReconcileInstallation{
-				ext: testExtensions.Installation(),
+				ext: coreExtensions.Installation(),
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
 					DetectedProvider: operator.ProviderNone,
-					Variant:          operator.CalicoEnterprise,
+					Variant:          operator.Calico,
 					ClusterDomain:    dns.DefaultClusterDomain,
 				},
 				config:              nil, // there is no fake for config
@@ -2354,7 +2201,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			cr = &operator.Installation{
 				ObjectMeta: metav1.ObjectMeta{Name: "default"},
 				Spec: operator.InstallationSpec{
-					Variant:            operator.CalicoEnterprise,
+					Variant:            operator.Calico,
 					Registry:           "some.registry.org/",
 					KubernetesProvider: operator.ProviderEKS,
 					CNI: &operator.CNISpec{
@@ -2365,7 +2212,7 @@ var _ = Describe("Testing core-controller installation", func() {
 					},
 				},
 				Status: operator.InstallationStatus{
-					Variant: operator.CalicoEnterprise,
+					Variant: operator.Calico,
 					Computed: &operator.InstallationSpec{
 						Registry: "some.registry.org/",
 						// The test is provider agnostic.
@@ -2381,9 +2228,6 @@ var _ = Describe("Testing core-controller installation", func() {
 			certificateManager, err = certificatemanager.Create(c, nil, "", common.OperatorNamespace(), certificatemanager.AllowCACreation())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(c.Create(ctx, certificateManager.KeyPair().Secret(common.OperatorNamespace()))) // Persist the root-ca in the operator namespace.
-			prometheusTLS, err := certificateManager.GetOrCreateKeyPair(c, monitor.PrometheusClientTLSSecretName, common.OperatorNamespace(), []string{monitor.PrometheusClientTLSSecretName})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(c.Create(ctx, prometheusTLS.Secret(common.OperatorNamespace()))).NotTo(HaveOccurred())
 			Expect(c.Create(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "calico-system"}})).NotTo(HaveOccurred())
 		})
 
@@ -2445,11 +2289,10 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			componentHandler = newFakeComponentHandler()
 			r = ReconcileInstallation{
-				ext: testExtensions.Installation(),
+				ext: coreExtensions.Installation(),
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
 					DetectedProvider: operator.ProviderNone,
-					Variant:          operator.CalicoEnterprise,
+					Variant:          operator.Calico,
 					ShutdownContext:  ctx,
 				},
 				config:              nil, // there is no fake for config
@@ -2470,10 +2313,6 @@ var _ = Describe("Testing core-controller installation", func() {
 			certificateManager, err := certificatemanager.Create(c, nil, "", common.OperatorNamespace(), certificatemanager.AllowCACreation())
 			Expect(err).NotTo(HaveOccurred())
 
-			prometheusTLS, err := certificateManager.GetOrCreateKeyPair(c, monitor.PrometheusClientTLSSecretName, common.OperatorNamespace(), []string{monitor.PrometheusClientTLSSecretName})
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(c.Create(ctx, prometheusTLS.Secret(common.OperatorNamespace()))).NotTo(HaveOccurred())
 			Expect(c.Create(ctx, certificateManager.KeyPair().Secret(common.OperatorNamespace()))).NotTo(HaveOccurred())
 			Expect(c.Create(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "calico-system"}})).NotTo(HaveOccurred())
 
@@ -2483,12 +2322,12 @@ var _ = Describe("Testing core-controller installation", func() {
 				&operator.Installation{
 					ObjectMeta: metav1.ObjectMeta{Name: "default"},
 					Spec: operator.InstallationSpec{
-						Variant:               operator.CalicoEnterprise,
+						Variant:               operator.Calico,
 						Registry:              "some.registry.org/",
-						CertificateManagement: &operator.CertificateManagement{CACert: prometheusTLS.GetCertificatePEM()},
+						CertificateManagement: &operator.CertificateManagement{CACert: certificateManager.KeyPair().GetCertificatePEM()},
 					},
 					Status: operator.InstallationStatus{
-						Variant: operator.CalicoEnterprise,
+						Variant: operator.Calico,
 						Computed: &operator.InstallationSpec{
 							Registry: "some.registry.org/",
 							// The test is provider agnostic.
@@ -2613,9 +2452,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should create v1 MAPs when v1 is served", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext: coreExtensions.Installation(),
 			opts: options.ControllerOptions{
-				Extensions:   testExtensions,
 				ManageCRDs:   true,
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
@@ -2648,9 +2486,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should create v1beta1 MAPs when only v1beta1 is served", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext: coreExtensions.Installation(),
 			opts: options.ControllerOptions{
-				Extensions:   testExtensions,
 				ManageCRDs:   true,
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1Beta1),
@@ -2681,9 +2518,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should create v1alpha1 MAPs when only v1alpha1 is served", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext: coreExtensions.Installation(),
 			opts: options.ControllerOptions{
-				Extensions:   testExtensions,
 				ManageCRDs:   true,
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1Alpha1),
@@ -2714,9 +2550,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should not create MAPs when no served version exists and should set degraded", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext: coreExtensions.Installation(),
 			opts: options.ControllerOptions{
-				Extensions:   testExtensions,
 				ManageCRDs:   true,
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(""),
@@ -2736,9 +2571,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should not create MAPs when v3CRDs=false", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext: coreExtensions.Installation(),
 			opts: options.ControllerOptions{
-				Extensions:   testExtensions,
 				ManageCRDs:   true,
 				UseV3CRDs:    false,
 				APIDiscovery: discoveryFor(admission.VersionV1),
@@ -2757,9 +2591,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should not create MAPs when manageCRDs=false", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext: coreExtensions.Installation(),
 			opts: options.ControllerOptions{
-				Extensions:   testExtensions,
 				ManageCRDs:   false,
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
@@ -2791,9 +2624,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		}
 
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext: coreExtensions.Installation(),
 			opts: options.ControllerOptions{
-				Extensions:   testExtensions,
 				ManageCRDs:   true,
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
@@ -2837,9 +2669,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		}
 
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext: coreExtensions.Installation(),
 			opts: options.ControllerOptions{
-				Extensions:   testExtensions,
 				ManageCRDs:   true,
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
@@ -2857,30 +2688,6 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		Expect(componentHandler.objectsToDelete).To(BeEmpty())
 	})
 
-	// This build registers no Enterprise policies, so the Enterprise path creates
-	// nothing. pkg/admission covers what a registered variant produces.
-	It("should create nothing for a variant that registers no policies", func() {
-		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
-			opts: options.ControllerOptions{
-				Extensions:   testExtensions,
-				ManageCRDs:   true,
-				UseV3CRDs:    true,
-				APIDiscovery: discoveryFor(admission.VersionV1),
-			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
-				return componentHandler
-			},
-		}
-
-		installation.Spec.Variant = operator.CalicoEnterprise
-
-		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
-		Expect(componentHandler.objectsToCreate).To(BeEmpty())
-	})
 })
 
 var _ = Describe("updateValidatingAdmissionPolicies", func() {
@@ -2936,9 +2743,8 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should create v1 VAPs when v1 is served", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext: coreExtensions.Installation(),
 			opts: options.ControllerOptions{
-				Extensions:   testExtensions,
 				ManageCRDs:   true,
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
@@ -2971,9 +2777,8 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should create v1beta1 VAPs when only v1beta1 is served", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext: coreExtensions.Installation(),
 			opts: options.ControllerOptions{
-				Extensions:   testExtensions,
 				ManageCRDs:   true,
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1Beta1),
@@ -3004,9 +2809,8 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should create v1alpha1 VAPs when only v1alpha1 is served", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext: coreExtensions.Installation(),
 			opts: options.ControllerOptions{
-				Extensions:   testExtensions,
 				ManageCRDs:   true,
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1Alpha1),
@@ -3025,9 +2829,8 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should skip without degrading when no served version exists", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext: coreExtensions.Installation(),
 			opts: options.ControllerOptions{
-				Extensions:   testExtensions,
 				ManageCRDs:   true,
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(""),
@@ -3047,9 +2850,8 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should not create VAPs when v3CRDs=false", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext: coreExtensions.Installation(),
 			opts: options.ControllerOptions{
-				Extensions:   testExtensions,
 				ManageCRDs:   true,
 				UseV3CRDs:    false,
 				APIDiscovery: discoveryFor(admission.VersionV1),
@@ -3081,9 +2883,8 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 		}
 
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext: coreExtensions.Installation(),
 			opts: options.ControllerOptions{
-				Extensions:   testExtensions,
 				ManageCRDs:   true,
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
@@ -3107,30 +2908,17 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 		Expect(deletedNames).To(HaveKey("stale-binding"))
 	})
 
-	// See the mutating case above: no Enterprise policies are registered here.
-	It("should create nothing for a variant that registers no policies", func() {
-		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
-			opts: options.ControllerOptions{
-				Extensions:   testExtensions,
-				ManageCRDs:   true,
-				UseV3CRDs:    true,
-				APIDiscovery: discoveryFor(admission.VersionV1),
-			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
-				return componentHandler
-			},
-		}
-
-		installation.Spec.Variant = operator.CalicoEnterprise
-
-		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
-		Expect(componentHandler.objectsToCreate).To(BeEmpty())
-	})
 })
+
+// rejectingInstallation rejects the configuration, so the controller's degrade path
+// runs without a variant extension in the tree.
+type rejectingInstallation struct {
+	extensions.InstallationExtension
+}
+
+func (rejectingInstallation) ExtendInputs(_ context.Context, ci controller.Inputs) (controller.Inputs, []certificatemanagement.KeyPairInterface, error) {
+	return ci, nil, extensions.Degradedf(operator.InvalidConfigurationError, "the extension rejected the configuration")
+}
 
 func fixedReplicaCounter(replicas int) typhaautoscaler.ReplicaCounter {
 	return func(context.Context, client.Client) (int, error) {

@@ -30,9 +30,9 @@ import (
 	gapiv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	"github.com/projectcalico/calico/operator/pkg/common"
-	euigateway "github.com/projectcalico/calico/operator/pkg/enterprise/uigateway"
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	"github.com/projectcalico/calico/operator/pkg/render/gateway"
+	rgatewayapi "github.com/projectcalico/calico/operator/pkg/render/gatewayapi"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
@@ -70,7 +70,7 @@ var _ = Describe("Gateway component render", func() {
 			BackendCABundleConfigMapName: caBundleCM,
 			TLSKeyPair:                   kp,
 			ResourcePrefix:               prefix,
-			ExtraProxyObjects:            euigateway.ProxyObjects(bkNS),
+			ExtraProxyObjects:            proxyObjects(bkNS),
 			OpenShift:                    false,
 		}
 	})
@@ -405,7 +405,7 @@ var _ = Describe("Gateway deletion component", func() {
 			StaleNamespace:    gwNS,
 			BackendNamespace:  bkNS,
 			TLSSecretName:     tlsSecret,
-			ExtraProxyObjects: euigateway.ProxyObjects(gwNS),
+			ExtraProxyObjects: proxyObjects(gwNS),
 		}
 	})
 
@@ -432,7 +432,7 @@ var _ = Describe("Gateway deletion component", func() {
 				BackendCABundleConfigMapName: "tigera-ca-bundle",
 				TLSKeyPair:                   certificatemanagement.NewKeyPair(secret, []string{""}, ""),
 				ResourcePrefix:               prefix,
-				ExtraProxyObjects:            euigateway.ProxyObjects(bkNS),
+				ExtraProxyObjects:            proxyObjects(bkNS),
 			}
 			created, _ := gateway.Component(renderCfg).Objects()
 
@@ -674,6 +674,14 @@ var _ = Describe("Gateway deletion component", func() {
 		})
 	})
 })
+
+// proxyObjects stands in for what a variant hands Configuration.ExtraProxyObjects.
+func proxyObjects(namespace string) []client.Object {
+	return []client.Object{
+		rgatewayapi.GatewayNamespaceServiceAccount(namespace),
+		rgatewayapi.GatewayNamespaceRoleBinding(namespace),
+	}
+}
 
 func findObject[T client.Object](objs []client.Object, name, ns string) T {
 	for _, obj := range objs {
