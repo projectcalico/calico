@@ -43,7 +43,9 @@ protobuf proto/udsver.pb.go: proto/udsver.proto
 	$(MAKE) fix-changed
 
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
-UPSTREAM_REGISTRAR_TAG     ?= 2d18e12bc5077c36cbd564be7eab9ea94c0c85fb #https://github.com/kubernetes-csi/node-driver-registrar/commit/2d18e12bc5077c36cbd564be7eab9ea94c0c85fb
+UPSTREAM_REGISTRAR_REPO    ?= https://github.com/$(UPSTREAM_REGISTRAR_PROJECT).git
+# https://github.com/kubernetes-csi/node-driver-registrar/commit/2d18e12bc5077c36cbd564be7eab9ea94c0c85fb
+UPSTREAM_REGISTRAR_TAG     ?= 2d18e12bc5077c36cbd564be7eab9ea94c0c85fb
 
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
 	go build -tags $(TAGS) -buildvcs=false -v -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
@@ -74,16 +76,16 @@ $(BINDIR)/node-driver-registrar-%: clone-registrar-upstream
 			mv $(REGISTRAR_IMAGE)/$(BINDIR)/csi-node-driver-registrar $@
 
 clone-registrar-upstream:
-ifeq ("$(wildcard ./$(REGISTRAR_IMAGE))", "")
-	@echo "Directory does not exist."
-	git clone --depth 1 --single-branch https://github.com/$(UPSTREAM_REGISTRAR_PROJECT).git
-else
-	@echo "Upstream repo already cloned."
-endif
+	mkdir -p $(REGISTRAR_IMAGE)
 	cd $(REGISTRAR_IMAGE) && \
-	  git checkout $(UPSTREAM_REGISTRAR_TAG) || \
-	  git fetch --tags origin $(UPSTREAM_REGISTRAR_TAG) && \
-	  git checkout $(UPSTREAM_REGISTRAR_TAG)
+	  if [ ! -d .git ]; then \
+	    git init -q . && \
+	    git remote add origin $(UPSTREAM_REGISTRAR_REPO); \
+	  fi && \
+	  if ! git cat-file -e $(UPSTREAM_REGISTRAR_TAG)^{commit} 2>/dev/null; then \
+	    git fetch -q --depth 1 origin $(UPSTREAM_REGISTRAR_TAG); \
+	  fi && \
+	  git checkout -q $(UPSTREAM_REGISTRAR_TAG)
 	rm -rf ./$(REGISTRAR_IMAGE)/vendor
 	# Reset go.mod/go.sum to the pinned commit and (re-)apply the CVE dependency
 	# patch. The reset keeps this idempotent across repeated incremental builds.

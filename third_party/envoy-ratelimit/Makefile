@@ -8,6 +8,7 @@ BUILD_IMAGES ?= $(ENVOY_RATELIMIT_IMAGE)
 # For updating this version please see
 # https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
 ENVOY_RATELIMIT_VERSION=ff287602
+ENVOY_RATELIMIT_REPO=https://github.com/envoyproxy/ratelimit.git
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -24,7 +25,7 @@ ENVOY_RATELIMIT_DOWNLOADED=.envoy-ratelimit.downloaded
 .PHONY: init-source
 init-source: $(ENVOY_RATELIMIT_DOWNLOADED)
 $(ENVOY_RATELIMIT_DOWNLOADED):
-	git clone -n https://github.com/envoyproxy/ratelimit.git envoy-ratelimit
+	git clone -n --filter=blob:none $(ENVOY_RATELIMIT_REPO) envoy-ratelimit
 	cd envoy-ratelimit && git checkout $(ENVOY_RATELIMIT_VERSION)
 # 	Apply patches for the specified Envoy Ratelimit version if patches directory exists.
 # 	This code checks for the presence of a patches directory corresponding to ENVOY_RATELIMIT_VERSION.
