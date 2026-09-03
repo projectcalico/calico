@@ -152,15 +152,17 @@ runs:
    packet is marked "seen/approved" so Calico's egress HEP does not
    re-run policy on it.
 
-> **Two uses of `vxlan.calico`.** NodePort forwarding and the
-> pod-to-pod overlay share the device (flow-mode, see
-> [bpf-encap-fragments-icmp.md → VXLAN in eBPF mode](./bpf-encap-fragments-icmp.md))
-> and are told apart by VNI. NodePort forwarding is always present in
-> BPF mode whatever the overlay encap is, and uses the reserved VNI
-> **`0xca11c0`** (`CALI_VXLAN_VNI` in `felix/bpf-gpl/nat.h`); overlay
-> traffic uses the operator-configured VNI. The BPF program sets the
-> tunnel key (destination node IP + VNI) per packet, so neither use
-> implies the other.
+> **Two uses of the VXLAN wire format, one device.** The pod-to-pod
+> overlay encapsulates *through* the kernel `vxlan.calico` device
+> (flow-mode, see
+> [bpf-encap-fragments-icmp.md → VXLAN in eBPF mode](./bpf-encap-fragments-icmp.md)),
+> with the operator-configured VNI. NodePort forwarding does **not**
+> use that device: `vxlan_encap` (`felix/bpf-gpl/nat4.h`) writes the
+> eth/IP/UDP/VXLAN headers into the packet itself, with the reserved
+> VNI **`0xca11c0`** (`CALI_VXLAN_VNI` in `felix/bpf-gpl/nat.h`), and
+> the packet leaves as ordinary host traffic. It is present in BPF
+> mode whatever the overlay encap is. VNI is how the receiving node's
+> program tells the two apart.
 
 ### Return path (non-DSR)
 
