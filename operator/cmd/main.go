@@ -562,7 +562,6 @@ admission policy installation; once an Installation exists it is the authority o
 		os.Exit(1)
 	}
 
-	variantControllers := options.VariantControllers(variant)
 	options := options.ControllerOptions{
 		DetectedProvider:  provider,
 		Variant:           variant,
@@ -579,7 +578,6 @@ admission policy installation; once an Installation exists it is the authority o
 		UseV3CRDs:         v3CRDs,
 		APIDiscovery:      apiDiscovery,
 		Extensions:        extensionRegistry,
-		Controllers:       variantControllers,
 	}
 
 	err = controller.AddToManager(mgr, options)
