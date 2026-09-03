@@ -135,7 +135,8 @@ func publishOpts(f command.CommandRunner, extra ...PublishOption) []PublishOptio
 
 // publish runs a publish with the usual test settings.
 func publish(f command.CommandRunner, variants []Variant, extra ...PublishOption) error {
-	return Publish(testRepoRoot, testVersion, variants, true, publishOpts(f, extra...)...)
+	return Publish(testRepoRoot, testVersion, variants, true,
+		alwaysResolves("sha256:aaa"), publishOpts(f, extra...)...)
 }
 
 // A directory shipping several image kinds runs each variant's target, and one
@@ -237,7 +238,8 @@ func TestPublishConfirmLatch(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := &fakeRunner{}
-			err := Publish(testRepoRoot, testVersion, ossVariants(), tc.confirm, publishOpts(f)...)
+			err := Publish(testRepoRoot, testVersion, ossVariants(), tc.confirm,
+				alwaysResolves("sha256:aaa"), publishOpts(f)...)
 			if err != nil {
 				t.Fatalf("Publish: %v", err)
 			}
@@ -352,7 +354,7 @@ func TestValidate(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := &fakeRunner{}
-			err := Publish(tc.repoRoot, tc.version, tc.variants, true, publishOpts(f)...)
+			err := Publish(tc.repoRoot, tc.version, tc.variants, true, alwaysResolves("sha256:aaa"), publishOpts(f)...)
 			if err == nil {
 				t.Errorf("Publish should reject %s", tc.name)
 			}
@@ -480,7 +482,7 @@ func TestPublishRecordsIndexAndArchRefs(t *testing.T) {
 	f := &imageNameRunner{images: "node node-windows"}
 	rec := &fakeRecorder{}
 	err := Publish(testRepoRoot, testVersion, oneStandardVariant("node"), true,
-		recordingOpts(f, rec, WithResolver(alwaysResolves("sha256:aaa")))...)
+		alwaysResolves("sha256:aaa"), recordingOpts(f, rec)...)
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -502,7 +504,7 @@ func TestPublishRecordsWindowsIndexOnly(t *testing.T) {
 	rec := &fakeRecorder{}
 	err := Publish(testRepoRoot, testVersion,
 		[]Variant{{Name: windowsVariant, Target: "release-windows", ReleaseDirs: []string{"node"}}},
-		true, recordingOpts(f, rec, WithResolver(alwaysResolves("sha256:bbb")))...)
+		true, alwaysResolves("sha256:bbb"), recordingOpts(f, rec)...)
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -524,7 +526,7 @@ func TestPublishSkipsAbsentTags(t *testing.T) {
 		return "sha256:aaa", true, nil
 	}
 	err := Publish(testRepoRoot, testVersion, oneStandardVariant("node"), true,
-		recordingOpts(f, rec, WithResolver(resolve))...)
+		resolve, recordingOpts(f, rec)...)
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -540,7 +542,7 @@ func TestPublishFailsOnUnresolvableDigest(t *testing.T) {
 		return "", false, fmt.Errorf("network is unreachable")
 	}
 	err := Publish(testRepoRoot, testVersion, oneStandardVariant("node"), true,
-		recordingOpts(f, &fakeRecorder{}, WithResolver(resolve))...)
+		resolve, recordingOpts(f, &fakeRecorder{})...)
 	if err == nil {
 		t.Fatal("expected an error when a digest cannot be resolved")
 	}
@@ -555,7 +557,7 @@ func TestDryRunRecordsNothing(t *testing.T) {
 	f := &imageNameRunner{images: "node"}
 	rec := &fakeRecorder{}
 	err := Publish(testRepoRoot, testVersion, oneStandardVariant("node"), false,
-		recordingOpts(f, rec, WithResolver(alwaysResolves("sha256:aaa")))...)
+		alwaysResolves("sha256:aaa"), recordingOpts(f, rec)...)
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -572,7 +574,7 @@ func TestThirdVariantIsNotTreatedAsWindows(t *testing.T) {
 	rec := &fakeRecorder{}
 	err := Publish(testRepoRoot, testVersion,
 		[]Variant{{Name: "alt", Target: "release-publish", Env: []string{"ALT_VARIANT=true"}, ReleaseDirs: []string{"node"}}},
-		true, recordingOpts(f, rec, WithResolver(alwaysResolves("sha256:aaa")))...)
+		true, alwaysResolves("sha256:aaa"), recordingOpts(f, rec)...)
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -594,7 +596,7 @@ func TestPublishRecordsWhatSucceededWhenAUnitFails(t *testing.T) {
 	rec := &fakeRecorder{}
 	err := Publish(testRepoRoot, testVersion,
 		[]Variant{{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node", "whisker"}}},
-		true, recordingOpts(f, rec, WithResolver(alwaysResolves("sha256:aaa")))...)
+		true, alwaysResolves("sha256:aaa"), recordingOpts(f, rec)...)
 	if err == nil {
 		t.Fatal("expected the failing unit to be reported")
 	}
@@ -611,7 +613,7 @@ func TestPrefixedVariantRecordsPrefixedRefs(t *testing.T) {
 	err := Publish(testRepoRoot, testVersion, []Variant{
 		{Name: StandardVariant, Target: "publish-image", ReleaseDirs: []string{"cmd/calico"}},
 		{Name: "alt", Target: "publish-image", Env: []string{"ALT_VARIANT=true"}, ReleaseDirs: []string{"cmd/calico"}},
-	}, true, recordingOpts(f, rec, WithResolver(alwaysResolves("sha256:abc")))...)
+	}, true, alwaysResolves("sha256:abc"), recordingOpts(f, rec)...)
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -699,10 +701,9 @@ func TestArchiveRejectsNoRegistry(t *testing.T) {
 // skipped, so an interrupted release resumes on what is left.
 func TestPublishSkipsAlreadyPublishedUnits(t *testing.T) {
 	f := &imageNameRunner{images: "whisker"}
-	err := Publish(testRepoRoot, testVersion, oneStandardVariant("whisker"), true,
+	err := Publish(testRepoRoot, testVersion, oneStandardVariant("whisker"), true, alwaysResolves("sha256:aaa"),
 		recordingOpts(f, &fakeRecorder{},
-			WithResolver(alwaysResolves("sha256:aaa")),
-			WithResume([]string{"quay.io/calico/whisker@sha256:aaa"}, nil, false))...)
+			WithResume([]string{"quay.io/calico/whisker@sha256:aaa"}, false))...)
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -717,10 +718,9 @@ func TestPublishSkipsAlreadyPublishedUnits(t *testing.T) {
 // it, and republishing over it silently would ship the wrong image.
 func TestPublishFailsOnDigestMismatch(t *testing.T) {
 	f := &imageNameRunner{images: "whisker"}
-	err := Publish(testRepoRoot, testVersion, oneStandardVariant("whisker"), true,
+	err := Publish(testRepoRoot, testVersion, oneStandardVariant("whisker"), true, alwaysResolves("sha256:bbb"),
 		recordingOpts(f, &fakeRecorder{},
-			WithResolver(alwaysResolves("sha256:bbb")),
-			WithResume([]string{"quay.io/calico/whisker@sha256:aaa"}, nil, false))...)
+			WithResume([]string{"quay.io/calico/whisker@sha256:aaa"}, false))...)
 	if err == nil {
 		t.Fatal("expected a mismatch to be reported")
 	}
@@ -736,10 +736,9 @@ func TestPublishFailsOnDigestMismatch(t *testing.T) {
 // --force republishes over a mismatch rather than failing.
 func TestPublishForceOverridesMismatch(t *testing.T) {
 	f := &imageNameRunner{images: "whisker"}
-	err := Publish(testRepoRoot, testVersion, oneStandardVariant("whisker"), true,
+	err := Publish(testRepoRoot, testVersion, oneStandardVariant("whisker"), true, alwaysResolves("sha256:bbb"),
 		recordingOpts(f, &fakeRecorder{},
-			WithResolver(alwaysResolves("sha256:bbb")),
-			WithResume([]string{"quay.io/calico/whisker@sha256:aaa"}, nil, true))...)
+			WithResume([]string{"quay.io/calico/whisker@sha256:aaa"}, true))...)
 	if err != nil {
 		t.Fatalf("Publish with force: %v", err)
 	}
@@ -763,8 +762,8 @@ func TestResumeAcceptsEveryRecordedDigestForARepo(t *testing.T) {
 	// First run publishes and records the manifest list plus both arch tags.
 	f := &imageNameRunner{images: "node"}
 	rec := &fakeRecorder{}
-	if err := Publish(testRepoRoot, testVersion, variants, true,
-		recordingOpts(f, rec, WithResolver(resolve))...); err != nil {
+	if err := Publish(testRepoRoot, testVersion, variants, true, resolve,
+		recordingOpts(f, rec)...); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	if len(rec.refs) < 2 {
@@ -774,9 +773,9 @@ func TestResumeAcceptsEveryRecordedDigestForARepo(t *testing.T) {
 	// Resuming against that record must skip, not report a mismatch between
 	// two of our own digests.
 	f2 := &imageNameRunner{images: "node"}
-	err := Publish(testRepoRoot, testVersion, variants, true,
+	err := Publish(testRepoRoot, testVersion, variants, true, resolve,
 		recordingOpts(f2, &fakeRecorder{},
-			WithResolver(resolve), WithResume(rec.refs, nil, false))...)
+			WithResume(rec.refs, false))...)
 	if err != nil {
 		t.Fatalf("resume of a correct publish failed: %v", err)
 	}
@@ -792,7 +791,7 @@ func TestResumeAcceptsEveryRecordedDigestForARepo(t *testing.T) {
 func TestPublishWithoutARecordPublishesEverything(t *testing.T) {
 	f := &imageNameRunner{images: "whisker"}
 	err := Publish(testRepoRoot, testVersion, oneStandardVariant("whisker"), true,
-		recordingOpts(f, &fakeRecorder{}, WithResolver(alwaysResolves("sha256:aaa")))...)
+		alwaysResolves("sha256:aaa"), recordingOpts(f, &fakeRecorder{})...)
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}

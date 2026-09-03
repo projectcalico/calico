@@ -1471,16 +1471,13 @@ func (r *CalicoManager) publishContainerImages() error {
 	if scan := r.scanRequest(); scan != nil {
 		opts = append(opts, images.WithScan(scan))
 	}
-	if r.resolveDigest != nil {
-		opts = append(opts, images.WithResolver(r.resolveDigest))
-	}
 	if len(published) > 0 {
-		opts = append(opts, images.WithResume(published, nil, false))
+		opts = append(opts, images.WithResume(published, false))
 	}
 	if err := images.Publish(
 		r.repoRoot, r.calicoVersion,
 		images.NarrowVariants(images.PublishVariants, r.imageReleaseDirs),
-		true, opts...,
+		true, r.digestResolver(), opts...,
 	); err != nil {
 		return fmt.Errorf("publish images: %w", err)
 	}
@@ -1489,6 +1486,15 @@ func (r *CalicoManager) publishContainerImages() error {
 		return r.publishBranchTag()
 	}
 	return nil
+}
+
+// digestResolver reports a published tag's digest, defaulting to the registry.
+// Tests substitute one so they never reach the network.
+func (r *CalicoManager) digestResolver() images.DigestResolver {
+	if r.resolveDigest != nil {
+		return r.resolveDigest
+	}
+	return registry.ResolveDigest
 }
 
 // scanRequest is the image scan submission for this release, or nil when
@@ -1527,7 +1533,7 @@ func (r *CalicoManager) publishBranchTag() error {
 			Target:      "retag-build-images-with-registries push-images-to-registries push-manifests",
 			ReleaseDirs: images.VariantDirs(images.PublishVariants),
 		}}, r.imageReleaseDirs),
-		true,
+		true, r.digestResolver(),
 		images.WithRunner(r.runner),
 		images.WithRegistries(r.imageRegistries...),
 		images.WithArches(r.architectures...),

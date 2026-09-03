@@ -49,10 +49,10 @@ func Archive(repoRoot, version string, variants []Variant, tarDir string, opts .
 		return fmt.Errorf("archive: %w", err)
 	}
 	if tarDir == "" {
-		return fmt.Errorf("no directory to archive images into")
+		return fmt.Errorf("archive: no directory to write images to")
 	}
 	if len(s.Registries) == 0 {
-		return fmt.Errorf("no registry to archive images from")
+		return fmt.Errorf("archive: no registry to archive images from")
 	}
 	s.dir = tarDir
 
@@ -68,7 +68,7 @@ func Archive(repoRoot, version string, variants []Variant, tarDir string, opts .
 	for _, u := range units {
 		names, err := s.imageNames(u)
 		if err != nil {
-			return err
+			return fmt.Errorf()
 		}
 		for _, name := range names {
 			image := fmt.Sprintf("%s/%s:%s", reg, name, s.Version)
@@ -84,14 +84,18 @@ func Archive(repoRoot, version string, variants []Variant, tarDir string, opts .
 // Publish pushes every variant's images to their registries. confirm latches
 // the push: without it the make targets run as a dry run, so it is an argument
 // rather than an option a caller can forget.
-func Publish(repoRoot, version string, variants []Variant, confirm bool, opts ...PublishOption) error {
+func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve DigestResolver, opts ...PublishOption) error {
 	s, err := newSettings(repoRoot, version, variants, opts)
 	if err != nil {
 		return fmt.Errorf("publish: %w", err)
 	}
 	if len(s.Registries) == 0 {
-		return fmt.Errorf("no registries to publish to")
+		return fmt.Errorf("publish: no registries to publish to")
 	}
+	if resolve == nil {
+		return fmt.Errorf("publish: no digest resolver given")
+	}
+	s.resolve = resolve
 	s.confirm = confirm
 	if !confirm {
 		// A dry run reaches no registry, so anything it recorded would claim

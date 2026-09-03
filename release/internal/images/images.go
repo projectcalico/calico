@@ -29,7 +29,6 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
-	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -327,30 +326,15 @@ func WithRecord(rec RefRecorder) PublishOption {
 	})
 }
 
-// WithResolver substitutes how a published tag's digest is looked up.
-// Recording needs one whether or not the run is resuming.
-func WithResolver(resolve DigestResolver) PublishOption {
-	return publishSetting(func(s *settings) error {
-		if resolve == nil {
-			return fmt.Errorf("no digest resolver given")
-		}
-		s.resolve = resolve
-		return nil
-	})
-}
-
 // WithResume skips the units an earlier run already published, judged against
 // the refs it recorded. force republishes a unit whose published digest is not
 // one of those refs; without it the difference is an error.
-func WithResume(published []string, resolve DigestResolver, force bool) PublishOption {
+func WithResume(published []string, force bool) PublishOption {
 	return publishSetting(func(s *settings) error {
 		if len(published) == 0 {
 			return fmt.Errorf("no recorded refs to resume from")
 		}
 		s.resume = &resume{published: published, force: force}
-		if resolve != nil {
-			s.resolve = resolve
-		}
 		return nil
 	})
 }
@@ -372,9 +356,6 @@ type resume struct {
 func (s settings) defaults() settings {
 	if s.runner == nil {
 		s.runner = &command.RealCommandRunner{}
-	}
-	if s.resolve == nil {
-		s.resolve = registry.ResolveDigest
 	}
 	return s
 }
@@ -401,7 +382,10 @@ func (c Image) validate() error {
 			errs = append(errs, fmt.Errorf("variant %q has no release directories", v.Name))
 		}
 	}
-	return errors.Join(errs...)
+	if errs != nil {
+		return fmt.Errorf("validate: %w", errors.Join(errs...))
+	}
+	return nil
 }
 
 // env returns the environment every variant's target receives.

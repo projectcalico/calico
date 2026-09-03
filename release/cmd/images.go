@@ -123,16 +123,14 @@ func imagesPublishCommand(cfg *Config) *cli.Command {
 			if refs != nil {
 				opts = append(opts, images.WithRecord(refs))
 			}
-			// Recording resolves digests whether or not the run is resuming.
-			opts = append(opts, images.WithResolver(imagesDigestResolver))
 			if len(published) > 0 {
-				opts = append(opts, images.WithResume(published, nil, c.Bool(forceFlag.Name)))
+				opts = append(opts, images.WithResume(published, c.Bool(forceFlag.Name)))
 			}
 
 			return images.Publish(
 				cfg.RepoRootDir, ver.FormattedString(),
 				images.NarrowVariants(images.PublishVariants, dirs),
-				!c.Bool(localFlag.Name), opts...,
+				!c.Bool(localFlag.Name), imagesDigestResolver, opts...,
 			)
 		},
 	}
