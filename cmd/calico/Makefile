@@ -102,7 +102,7 @@ cd: image-all cd-common
 # Release
 ###############################################################################
 ## Produces a clean build of the combined calico image at the specified version.
-.PHONY: release-build
+.PHONY: release-build release-publish
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
@@ -112,7 +112,6 @@ release-build: .release-$(VERSION).created
 
 ## Pushes the combined calico image to the registries.
 .PHONY: release-publish
-# The registry decides the skip, so a fresh checkout answers like one that pushed.
 release-publish: release-prereqs bin/crane
 	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)"; then \
 		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \

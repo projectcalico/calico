@@ -1486,11 +1486,11 @@ bin/crane: $(REPO_ROOT)/bin/crane
 $(REPO_ROOT)/bin/crane:
 	$(info ::: Downloading crane from $(CRANE_URL))
 	@mkdir -p $(REPO_ROOT)/bin
-	@tmp=$$(mktemp -d) && trap 'rm -rf "$$tmp"' EXIT && \
+	@tmp=$$(mktemp -d $(REPO_ROOT)/bin/.crane.XXXXXX) && trap 'rm -rf "$$tmp"' EXIT && \
 		curl -sSfL --retry 5 --retry-all-errors -o "$$tmp/crane.tar.gz" $(CRANE_URL) && \
 		tar xz -C "$$tmp" -f "$$tmp/crane.tar.gz" crane && \
 		chmod +x "$$tmp/crane" && \
-		mv "$$tmp/crane" $@
+		mv "$$tmp/crane" "$@"
 
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.

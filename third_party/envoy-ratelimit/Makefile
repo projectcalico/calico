@@ -77,7 +77,7 @@ ci: image
 
 cd: image-all cd-common
 
-.PHONY: release-build
+.PHONY: release-build release-publish
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
@@ -86,7 +86,6 @@ release-build: .release-$(VERSION).created
 	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
 	touch $@
 
-# The registry decides the skip, so a fresh checkout answers like one that pushed.
 release-publish: release-prereqs bin/crane
 	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)"; then \
 		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \

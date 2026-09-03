@@ -434,6 +434,7 @@ release-windows-archive: release-prereqs
 	$(MAKE) build-windows-archive WINDOWS_ARCHIVE_TAG=$(VERSION)
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
+.PHONY: release-publish release-publish-linux release-publish-windows
 release-publish: release-publish-linux release-publish-windows
 
 release-publish-linux: release-prereqs bin/crane
