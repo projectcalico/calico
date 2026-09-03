@@ -1,6 +1,6 @@
 # crd.projectcalico.org/v1 and operator.tigera.io/v1 APIs
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_apiservers.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_apiservers.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2995,7 +2995,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_gatewayapis.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_gatewayapis.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -8765,7 +8765,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_goldmanes.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_goldmanes.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -10357,7 +10357,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_imagesets.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_imagesets.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -10437,7 +10437,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_installations.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_installations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -11829,9 +11829,8 @@ spec:
                       type: string
                     ipPools:
                       description: |-
-                        IPPools contains a list of IP pools to manage. If nil, the operator chooses: on a cluster with no
-                        operator-managed pools it creates a single IPv4 pool, and on a cluster that already has them it keeps
-                        the pools in use. Provide an empty list to manage IP pools out-of-band; the operator then deletes the
+                        IPPools contains a list of IP pools to manage. If unset, the operator fills it in with defaults based
+                        on cluster state. Provide an empty list to manage IP pools out-of-band; the operator then deletes the
                         pools it owns and creates none.
                         IP pools in this list will be reconciled by the operator and should not be modified out-of-band.
                       items:
@@ -11860,7 +11859,13 @@ spec:
                             description:
                               CIDR contains the address range for the IP
                               Pool in classless inter-domain routing format.
+                            maxLength: 43
                             type: string
+                            x-kubernetes-validations:
+                              - message:
+                                  cidr must be in canonical form, for example 192.168.0.0/16
+                                  or fd00:10:244::/64
+                                rule: isCIDR(self) && string(cidr(self).masked()) == self
                           disableBGPExport:
                             default: false
                             description: |-
@@ -11908,6 +11913,9 @@ spec:
                         type: object
                       maxItems: 25
                       type: array
+                      x-kubernetes-list-map-keys:
+                        - cidr
+                      x-kubernetes-list-type: map
                     kubeProxyManagement:
                       description: |-
                         KubeProxyManagement controls whether the operator manages the kube-proxy DaemonSet.
@@ -13369,9 +13377,9 @@ spec:
                                       x-kubernetes-list-type: atomic
                                   type: object
                                 dnsPolicy:
-                                  description:
-                                    DNSPolicy is the DNS policy for the calico-node
-                                    pods.
+                                  description: |-
+                                    DNSPolicy is the DNS policy for the calico-node pods. Defaults to Default, which uses the node's
+                                    own resolver, since calico-node runs before cluster DNS is reachable.
                                   enum:
                                     - ""
                                     - Default
@@ -19972,7 +19980,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_istios.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_istios.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -23430,7 +23438,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_managementclusterconnections.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_managementclusterconnections.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -23850,7 +23858,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_tigerastatuses.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_tigerastatuses.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -23883,9 +23891,14 @@ spec:
           jsonPath: .status.conditions[?(@.type=='Available')].lastTransitionTime
           name: Since
           type: date
+        - description: Human-readable summary of the component's current state.
+          jsonPath: .status.message
+          name: Message
+          type: string
         - description: Error message when the component is degraded.
           jsonPath: .status.conditions[?(@.type=='Degraded')].message
-          name: Message
+          name: Error
+          priority: 1
           type: string
       name: v1
       schema:
@@ -23963,6 +23976,12 @@ spec:
                       - type
                     type: object
                   type: array
+                message:
+                  description: |-
+                    Message is a human-readable summary of the component's current state: the degraded
+                    message if degraded, the progressing message if progressing, then any warnings.
+                    Empty when healthy with no warnings.
+                  type: string
               required:
                 - conditions
               type: object
@@ -23972,7 +23991,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_whiskers.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_whiskers.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -24011,6 +24030,34 @@ spec:
               type: object
             spec:
               properties:
+                ingressGateway:
+                  description: |-
+                    IngressGateway configures Calico Ingress Gateway access to the Whisker UI.
+                    When set, the operator renders Gateway API resources (Gateway, HTTPRoute,
+                    Backend, ReferenceGrant, TLS Secret) to expose Whisker via CIG.
+                    Requires a GatewayAPI CR to be present.
+                  properties:
+                    gatewayClassName:
+                      description: |-
+                        GatewayClassName selects the GatewayClass for the Gateway resource.
+                        If not set and the GatewayAPI CR has exactly one class, that class is
+                        used. If not set and multiple classes exist, the component degrades
+                        until the user specifies one.
+                      type: string
+                    gatewayNamespace:
+                      description: |-
+                        GatewayNamespace is the namespace where the Gateway and Envoy Proxy pods
+                        run. Defaults to "calico-system".
+                      type: string
+                    hostname:
+                      description: |-
+                        Hostname for the Gateway listener. Must match the Authentication CR's
+                        managerDomain when OIDC is configured (Manager only).
+                      minLength: 1
+                      type: string
+                  required:
+                    - hostname
+                  type: object
                 notifications:
                   description: |-
                     Default: Enabled
@@ -28508,6 +28555,8 @@ spec:
                   description: |-
                     LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format "N/unit",
                     where N is a number and unit is one of: second, minute, hour, or day. For example: "10/second" or "100/hour".
+                    When LogConnectionTransitions is enabled, this also bounds the follow-up logs: a connection whose
+                    initial log was suppressed by this rate limit gets no follow-up log either.
                   pattern: ^[1-9]\d{0,3}/(?:second|minute|hour|day)$
                   type: string
                 logActionRateLimitBurst:
@@ -28517,6 +28566,33 @@ spec:
                   maximum: 9999
                   minimum: 0
                   type: integer
+                logConnectionTransitions:
+                  description: |-
+                    LogConnectionTransitions controls whether Felix emits an additional kernel log recording the
+                    first observed response for each connection that matched a policy rule with a Log action.
+                    When set to FirstResponseAfterLog, each connection whose initial log was emitted gets one
+                    follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the
+                    transition: "-est" when the first reply packet is seen, "-rst" when the response is a TCP
+                    RST (connection refused), or "-icmp-err" when the response is a related ICMP error (e.g.
+                    port unreachable). The log body is the standard kernel packet log of the response packet,
+                    so the flow is identified by its 5-tuple and can be correlated with the original policy Log
+                    line (with source and destination swapped). A logged connection with no follow-up log never
+                    received a response. Connections whose initial log was suppressed by LogActionRateLimit get
+                    no follow-up log either, so every follow-up log pairs with an initial one. Enabling this
+                    consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+                    [Default: Disabled]
+                  enum:
+                    - Disabled
+                    - FirstResponseAfterLog
+                  type: string
+                logConnectionTransitionsPrefix:
+                  description: |-
+                    LogConnectionTransitionsPrefix is the log prefix used for the logs emitted when
+                    LogConnectionTransitions is enabled; the transition suffix ("-est", "-rst" or "-icmp-err")
+                    is appended to it. Unlike LogPrefix, it does not support %-specifiers (such as %p): the
+                    rules that emit these logs are shared by all policies, so per-policy values cannot be
+                    substituted and any %-specifiers are rendered literally. [Default: calico-response]
+                  type: string
                 logDebugFilenameRegex:
                   description: |-
                     LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.

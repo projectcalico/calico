@@ -1,0 +1,88 @@
+{
+  "apiVersion": "projectcalico.org/v3",
+  "kind": "NetworkPolicy",
+  "metadata": {
+    "name": "calico-system.intrusion-detection-controller",
+    "namespace": "tigera-intrusion-detection"
+  },
+  "spec": {
+    "order": 1,
+    "tier": "calico-system",
+    "selector": "k8s-app == 'intrusion-detection-controller'",
+    "types": [
+      "Ingress",
+      "Egress"
+    ],
+    "ingress": [
+      {
+        "action": "Deny"
+      }
+    ],
+    "egress": [
+      {
+        "action": "Deny",
+        "protocol": "TCP",
+        "destination": {
+          "nets": [
+            "169.254.0.0/16"
+          ]
+        }
+      },
+      {
+        "action": "Deny",
+        "protocol": "TCP",
+        "destination": {
+          "nets": [
+            "fe80::/10"
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "UDP",
+        "destination": {
+          "namespaceSelector": "kubernetes.io/metadata.name == 'kube-system'",
+          "selector": "k8s-app in { 'kube-dns', 'coredns' }",
+          "ports": [
+            53
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "selector": "k8s-app == 'tigera-linseed'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-elasticsearch'",
+          "ports": [
+            8444
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "namespaceSelector": "kubernetes.io/metadata.name == '<MANAGER_NAMESPACE>'",
+          "selector": "k8s-app == '<MANAGER_NAME>'",
+          "ports": [
+            9443
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "services": {
+            "name": "kubernetes",
+	    "namespace": "default"
+	  }
+        }
+      },
+      {
+        "action": "Pass"
+      }
+    ]
+  }
+}

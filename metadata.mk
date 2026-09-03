@@ -2,16 +2,20 @@
 # This file contains Makefile configuration parameters and metadata for this branch.
 #################################################################################################
 # The project Go version
-GO_VERSION=1.26.5
+GO_VERSION=1.27.0
 # Version of Kubernetes to use for dependencies, tests, registry.k8s.io/kubectl, and kubectl binary release.
-K8S_VERSION=v1.37.0-beta.0
+K8S_VERSION=v1.37.0
 # The version of LLVM to use for go-build and calico/base images.
 LLVM_VERSION=21.1.8
 # Calico toolchain versions and the calico/base image to use.
-GO_BUILD_VER=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)
+# Set when go-build is rebuilt for the same Go/LLVM/Kubernetes versions, which is
+# published as -1, -2 and so on. Empty for a normal tag; clear it whenever any of
+# those three versions moves.
+GO_BUILD_VER_SUFFIX=
+GO_BUILD_VER=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)$(GO_BUILD_VER_SUFFIX)
 RUST_BUILD_VER=1.96.0
 
-CALICO_BASE_VER=ubi9-1783525764
+CALICO_BASE_VER=ubi9-1787783643
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
@@ -84,11 +88,6 @@ NFTABLES_VER=1.1.1
 NFTABLES_SHA256=6358830f3a64f31e39b0ad421d7dadcd240b72343ded48d8ef13b8faf204865a
 LIBNFTNL_VER=1.2.8
 LIBNFTNL_SHA256=37fea5d6b5c9b08de7920d298de3cdc942e7ae64b1a3e8b880b2d390ae67ad95
-
-# The operator branch corresponding to this branch.
-OPERATOR_BRANCH       ?= master
-OPERATOR_ORGANIZATION ?= tigera
-OPERATOR_GIT_REPO     ?= operator
 
 # quay.io expiry time for hashrelease/dev images
 QUAY_EXPIRE_DAYS=90

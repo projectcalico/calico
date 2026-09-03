@@ -30,7 +30,6 @@ image.tar
 
 /* Image build stamp files for kind testing */
 .stamp.*
-hack/test/kind/infra/operator
 
 /* Created by local kind cluster */
 hack/test/kind/kind
@@ -60,3 +59,6 @@ release/internal/defaults/metadata.mk
 /shellcheck
 /shellcheck.tar.xz
 /shellcheck-v*/
+
+# Built by `go build ./hack/test/spider`.
+/spider

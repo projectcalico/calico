@@ -81,13 +81,21 @@
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC NetworkPolicy should deny creation by a user without tier GET access [Conformance]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC NetworkPolicy should deny creation by a user without tier policy access
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC NetworkPolicy should deny update by a user without tier GET access
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC collection delete should allow a collection delete by a user with full tier RBAC
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC collection delete should deny a collection delete by a user without tier policy access [Conformance]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC default tier should not allow deleting the default tier
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC default tier should not allow updating the default tier
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC list via tier RBAC [RequiresCalicoAPIServer] should allow listing policies in the permitted tier
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC list via tier RBAC [RequiresCalicoAPIServer] should deny listing when user lacks tier policy access
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC namespace-scoped tier access should confine a namespaced tier grant to its own namespace [Conformance]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC old-style vs new-style name disambiguation [RequiresCalicoAPIServer] should independently authorize bare and tier-prefixed policy names
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC operator-rendered passthrough [RequiresOperator] should grant the tiered policy write verbs and no read verbs in v3 CRD mode
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC read-only access should allow reading but deny writing for a read-only user [Conformance]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC resource-name exact match [RequiresCalicoAPIServer] should allow access to the named policy but deny access to others
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC staged policies should allow staged global policy writes by a user with full tier RBAC
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC staged policies should allow staged policy writes by a user with full tier RBAC [Conformance]
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC staged policies should deny staged global policy creation by a user without tier GET access
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC staged policies should deny staged policy creation by a user without tier GET access [Conformance]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC tier isolation should restrict a user to only their permitted tier [Conformance]
 [sig-calico] [Team:CORE] [Feature:BGPPeer] [RequiresBGP] [Category:Networking] BGP password should enforce BGP password authentication [Serial]
 [sig-calico] [Team:CORE] [Feature:BGPPeer] [RequiresBGP] [Category:Networking] [RequiresBGPMesh] BGP export tests should not export pools with export disabled [Serial]
@@ -328,13 +336,13 @@
 [sig-node] NodeLease NodeLease should have OwnerReferences set [NodeConformance]
 [sig-node] NodeLease NodeLease the kubelet should create and update a lease in the kube-node-lease namespace [NodeConformance]
 [sig-node] NodeLease NodeLease the kubelet should report node status infrequently [NodeConformance]
-[sig-node] Override hostname of Pod [FeatureGate:HostnameOverride] a pod has hostnameOverride field with value that is a valid DNS subdomain. [Beta] [NodeConformance]
-[sig-node] Override hostname of Pod [FeatureGate:HostnameOverride] a pod with hostNetwork and hostnameOverride fields will fail to be created [Beta] [NodeConformance]
-[sig-node] Override hostname of Pod [FeatureGate:HostnameOverride] a pod with hostname and hostnameOverride fields will have hostnameOverride as hostname [Beta] [NodeConformance]
-[sig-node] Override hostname of Pod [FeatureGate:HostnameOverride] a pod with non-RFC1123 subdomain string for hostnameOverride field will fail to be created [Beta] [NodeConformance]
-[sig-node] Override hostname of Pod [FeatureGate:HostnameOverride] a pod with only hostnameOverride field will have hostnameOverride as hostname [Beta] [NodeConformance]
-[sig-node] Override hostname of Pod [FeatureGate:HostnameOverride] a pod with setHostnameAsFQDN and hostnameOverride fields will fail to be created [Beta] [NodeConformance]
-[sig-node] Override hostname of Pod [FeatureGate:HostnameOverride] a pod with subdomain and hostnameOverride fields will have hostnameOverride as hostname [Beta] [NodeConformance]
+[sig-node] Override hostname of Pod a pod has hostnameOverride field with value that is a valid DNS subdomain. [NodeConformance]
+[sig-node] Override hostname of Pod a pod with hostNetwork and hostnameOverride fields will fail to be created [NodeConformance]
+[sig-node] Override hostname of Pod a pod with hostname and hostnameOverride fields will have hostnameOverride as hostname [NodeConformance]
+[sig-node] Override hostname of Pod a pod with non-RFC1123 subdomain string for hostnameOverride field will fail to be created [NodeConformance]
+[sig-node] Override hostname of Pod a pod with only hostnameOverride field will have hostnameOverride as hostname [NodeConformance]
+[sig-node] Override hostname of Pod a pod with setHostnameAsFQDN and hostnameOverride fields will fail to be created [NodeConformance]
+[sig-node] Override hostname of Pod a pod with subdomain and hostnameOverride fields will have hostnameOverride as hostname [NodeConformance]
 [sig-node] Pod Extended (container restart policy) [FeatureGate:ContainerRestartRules] Container Restart Rules should not restart container on rule mismatch, container restart policy Never [Beta] [NodeConformance]
 [sig-node] Pod Extended (container restart policy) [FeatureGate:ContainerRestartRules] Container Restart Rules should restart container on container-level restart policy Always [Beta] [NodeConformance]
 [sig-node] Pod Extended (container restart policy) [FeatureGate:ContainerRestartRules] Container Restart Rules should restart container on container-level restart policy Never [Beta] [NodeConformance]
@@ -342,9 +350,6 @@
 [sig-node] Pod Extended (container restart policy) [FeatureGate:ContainerRestartRules] Container Restart Rules should restart container on rule match [Beta] [NodeConformance]
 [sig-node] Pod InPlace Resize Container burstable pods - extended 6 containers - various operations performed (including adding limits and requests) [MinimumKubeletVersion:1.34] [Conformance]
 [sig-node] Pod InPlace Resize Container burstable pods - extended resize with equivalents [MinimumKubeletVersion:1.34] [Conformance]
-[sig-node] Pod InPlace Resize Container guaranteed pods with multiple containers 3 containers - increase cpu & mem on c1, c2, decrease cpu & mem on c3 - net increase [MinimumKubeletVersion:1.34] [Conformance]
-[sig-node] Pod InPlace Resize Container guaranteed pods with multiple containers 3 containers - increase cpu & mem on c1, decrease cpu & mem on c2, c3 - net decrease [MinimumKubeletVersion:1.34] [Conformance]
-[sig-node] Pod InPlace Resize Container guaranteed pods with multiple containers 3 containers - increase: CPU (c1,c3), memory (c2, c3) ; decrease: CPU (c2) [MinimumKubeletVersion:1.34] [Conformance]
 [sig-node] Pod InPlace Resize Container resize pod via the replace endpoint [MinimumKubeletVersion:1.34] [Conformance]
 [sig-node] PodOSRejection Kubelet [LinuxOnly] should reject pod when the node OS doesn't match pod's OS [NodeConformance]
 [sig-node] PodTemplates should delete a collection of pod templates [Conformance]

@@ -338,14 +338,16 @@ type Config struct {
 	InterfacePrefix  string           `config:"iface-list;cali;non-zero,die-on-fail"`
 	InterfaceExclude []*regexp.Regexp `config:"iface-list-regexp;kube-ipvs0"`
 
-	ChainInsertMode             string `config:"oneof(insert,append);insert;non-zero,die-on-fail"`
-	DefaultEndpointToHostAction string `config:"oneof(DROP,RETURN,ACCEPT);DROP;non-zero,die-on-fail"`
-	IptablesFilterAllowAction   string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
-	IptablesMangleAllowAction   string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
-	IptablesFilterDenyAction    string `config:"oneof(DROP,REJECT);DROP;non-zero,die-on-fail"`
-	LogPrefix                   string `config:"string;calico-packet"`
-	LogActionRateLimit          string `config:"log-rate;"`
-	LogActionRateLimitBurst     int    `config:"int(0,9999);5"`
+	ChainInsertMode                string `config:"oneof(insert,append);insert;non-zero,die-on-fail"`
+	DefaultEndpointToHostAction    string `config:"oneof(DROP,RETURN,ACCEPT);DROP;non-zero,die-on-fail"`
+	IptablesFilterAllowAction      string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
+	IptablesMangleAllowAction      string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
+	IptablesFilterDenyAction       string `config:"oneof(DROP,REJECT);DROP;non-zero,die-on-fail"`
+	LogPrefix                      string `config:"string;calico-packet"`
+	LogActionRateLimit             string `config:"log-rate;"`
+	LogActionRateLimitBurst        int    `config:"int(0,9999);5"`
+	LogConnectionTransitions       string `config:"oneof(Disabled,FirstResponseAfterLog);Disabled"`
+	LogConnectionTransitionsPrefix string `config:"string;calico-response"`
 
 	LogFilePath string `config:"file;/var/log/calico/felix.log;die-on-fail"`
 
@@ -1310,7 +1312,8 @@ func (config *Config) RouteTableIndices() []idalloc.IndexRange {
 	} else if config.RouteTableRange != (idalloc.IndexRange{}) {
 		log.Warn("Both `RouteTableRanges` and deprecated `RouteTableRange` options are set. `RouteTableRanges` value will be given precedence.")
 	}
-	return config.RouteTableRanges
+	// Clone so that callers cannot mutate our copy of the config.
+	return slices.Clone(config.RouteTableRanges)
 }
 
 func (config *Config) GetBPFAttachType() v3.BPFAttachOption {

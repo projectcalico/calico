@@ -6,7 +6,7 @@ ENVOY_PROXY_IMAGE ?= envoy-proxy
 BUILD_IMAGES ?= $(ENVOY_PROXY_IMAGE)
 
 # For updating this version please see
-# https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
+# operator/docs/common_tasks.md, "Updating the bundled version of Envoy Gateway".
 # See https://gateway.envoyproxy.io/news/releases/matrix/ for version compatibility.
 ENVOYBINARY_IMAGE ?= quay.io/tigera/envoybinary:v1.38.3-a1e8aefd3a
 

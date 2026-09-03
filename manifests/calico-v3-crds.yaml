@@ -3144,6 +3144,8 @@ spec:
                   description: |-
                     LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format "N/unit",
                     where N is a number and unit is one of: second, minute, hour, or day. For example: "10/second" or "100/hour".
+                    When LogConnectionTransitions is enabled, this also bounds the follow-up logs: a connection whose
+                    initial log was suppressed by this rate limit gets no follow-up log either.
                   pattern: ^[1-9]\d{0,3}/(?:second|minute|hour|day)$
                   type: string
                 logActionRateLimitBurst:
@@ -3153,6 +3155,33 @@ spec:
                   maximum: 9999
                   minimum: 0
                   type: integer
+                logConnectionTransitions:
+                  description: |-
+                    LogConnectionTransitions controls whether Felix emits an additional kernel log recording the
+                    first observed response for each connection that matched a policy rule with a Log action.
+                    When set to FirstResponseAfterLog, each connection whose initial log was emitted gets one
+                    follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the
+                    transition: "-est" when the first reply packet is seen, "-rst" when the response is a TCP
+                    RST (connection refused), or "-icmp-err" when the response is a related ICMP error (e.g.
+                    port unreachable). The log body is the standard kernel packet log of the response packet,
+                    so the flow is identified by its 5-tuple and can be correlated with the original policy Log
+                    line (with source and destination swapped). A logged connection with no follow-up log never
+                    received a response. Connections whose initial log was suppressed by LogActionRateLimit get
+                    no follow-up log either, so every follow-up log pairs with an initial one. Enabling this
+                    consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+                    [Default: Disabled]
+                  enum:
+                    - Disabled
+                    - FirstResponseAfterLog
+                  type: string
+                logConnectionTransitionsPrefix:
+                  description: |-
+                    LogConnectionTransitionsPrefix is the log prefix used for the logs emitted when
+                    LogConnectionTransitions is enabled; the transition suffix ("-est", "-rst" or "-icmp-err")
+                    is appended to it. Unlike LogPrefix, it does not support %-specifiers (such as %p): the
+                    rules that emit these logs are shared by all policies, so per-policy values cannot be
+                    substituted and any %-specifiers are rendered literally. [Default: calico-response]
+                  type: string
                 logDebugFilenameRegex:
                   description: |-
                     LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
@@ -12787,6 +12816,28 @@ rules:
       - list
       - watch
 ---
+# Source: calico/templates/calico-webhooks.yaml
+# Tiered policy writes are authorized per tier by the webhook below, so the verbs are
+# granted to everyone here. Reads have no webhook and stay subject to ordinary RBAC.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: calico-tiered-policy-passthrough
+rules:
+  - apiGroups:
+      - projectcalico.org
+    resources:
+      - networkpolicies
+      - globalnetworkpolicies
+      - stagednetworkpolicies
+      - stagedglobalnetworkpolicies
+    verbs:
+      - create
+      - update
+      - patch
+      - delete
+      - deletecollection
+---
 # Source: calico/templates/tier-getter.yaml
 # Implements the necessary permissions for the kube-controller-manager to interact with
 # Tiers and Tiered Policies for GC.
@@ -12859,6 +12910,20 @@ subjects:
   - kind: ServiceAccount
     name: calico-webhooks
     namespace: kube-system
+---
+# Source: calico/templates/calico-webhooks.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-tiered-policy-passthrough
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-tiered-policy-passthrough
+subjects:
+  - kind: Group
+    name: system:authenticated
+    apiGroup: rbac.authorization.k8s.io
 ---
 # Source: calico/templates/tier-getter.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -12963,6 +13028,7 @@ spec:
               name: cni-bin-dir
           securityContext:
             privileged: true
+            runAsUser: 0
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
@@ -13005,6 +13071,7 @@ spec:
               name: cni-net-dir
           securityContext:
             privileged: true
+            runAsUser: 0
         # This init container mounts the necessary filesystems needed by the BPF data plane
         # i.e. bpf at /sys/fs/bpf and cgroup2 at /run/calico/cgroup. It also configures the initial
         # networking to allow communication with the API Server. Calico-node initialization is executed
@@ -13350,6 +13417,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - component
+            - webhooks
             - webhook
             - --tls-cert-file=/certs/tls.crt
             - --tls-private-key-file=/certs/tls.key

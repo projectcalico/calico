@@ -1,0 +1,44 @@
+{
+  "apiVersion": "projectcalico.org/v3",
+  "kind": "NetworkPolicy",
+  "metadata": {
+    "name": "calico-system.elasticsearch-internal",
+    "namespace": "tigera-elasticsearch"
+  },
+  "spec": {
+    "order": 1,
+    "tier": "calico-system",
+    "selector": "elasticsearch.k8s.elastic.co/cluster-name == 'tigera-secure'",
+    "types": [
+      "Ingress",
+      "Egress"
+    ],
+    "ingress": [
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "source": {
+          "selector": "elasticsearch.k8s.elastic.co/cluster-name == 'tigera-secure'"
+        },
+        "destination": {
+          "ports": [
+            9300
+          ]
+        }
+      }
+    ],
+    "egress": [
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-elasticsearch'",
+          "selector": "elasticsearch.k8s.elastic.co/cluster-name == 'tigera-secure'",
+          "ports": [
+            9300
+          ]
+        }
+      }
+    ]
+  }
+}

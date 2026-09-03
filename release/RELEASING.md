@@ -115,13 +115,9 @@ commit have passed, and press the `Publish official release` manual promotion bu
 
 Wait for this job to complete before moving on to the next step.
 
-### 4.c Build and publish tigera/operator
+### 4.c Build and publish the operator
 
-Follow the tigera/operator release instructions in the Operator version (vA.B.C) corresponding to the release
-
-```txt
-https://github.com/tigera/operator/blob/release-vA.B/RELEASING.md
-```
+Follow the release instructions in [`operator/RELEASING.md`](../operator/RELEASING.md).
 
 ### 4.d Publish the release on Github
 

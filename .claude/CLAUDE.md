@@ -141,11 +141,32 @@ every matching sub-design.
 1. Before writing or reviewing code in a component, read that component's
    `DESIGN.md` (or, for Felix, the sub-designs matching the paths you touch).
 2. Follow links. A design is a graph, not a single node.
-3. A PR that changes how a component works — its behaviour, data model,
-   configuration surface, or any invariant the design records — must update the
-   relevant `DESIGN.md` in the same PR. Exemptions: bug fix restoring documented
-   behaviour, mechanical refactor, comment or log-message edits, dependency
-   bumps. If in doubt, update the doc.
+3. A design doc records the design, not the change that introduced it, and
+   **the default is no edit**. Edit one only when a sentence in it is now
+   false, a new invariant exists that a future change could silently break, or
+   a new concept exists that the doc's mental model does not name. A new
+   behaviour, flag, field, config key, or bug fix is not by itself any of
+   those. A warranted edit lands **in the same PR as the code**, in the doc
+   covering the area — for Felix, the matching sub-design, not the index.
+4. A warranted edit is normally **one to three lines**, into the section that
+   already covers the area — never a paraphrase of the commit message or PR
+   description, and no new `###` heading for a new behaviour. Past about five
+   lines you are narrating the change. A doc already past ~500 lines gets
+   compressed by the next PR that touches it, not grown.
+5. **In doubt, propose — don't write.** Keep the edit out of the PR: show the
+   user the target file, the target section and the exact lines, and wait for
+   approval. Raise it at the pre-commit checkpoint, batched into a single ask,
+   so it never blocks the code work. When one of the three conditions in rule 3
+   clearly holds, just make the edit.
+6. Before writing or reviewing a design-doc edit, load the
+   [`design-doc-edits`](skills/design-doc-edits/SKILL.md) skill — the altitude
+   rule, the worked example and the reviewer criteria are there rather than
+   here, so they are not in context for every session.
+
+Rules 3-5 are mirrored for Copilot in
+[`.github/copilot-instructions.md` → Documentation map](../.github/copilot-instructions.md)
+— keep the two in sync. Copilot has no skills, so rule 6's content is a file it
+reads rather than a skill it loads.
 
 ## Tests required for code changes
 
@@ -175,6 +196,15 @@ Per-area sub-designs carry area-specific test conventions on top of this rule
 **ALWAYS** use the PR template (`.github/PULL_REQUEST_TEMPLATE.md`). The only mandatory section is the **Release Note** — fill it in with a one-line summary of the user-facing impact of the change. Take a broad view of "user-facing": bug fixes, new features, performance improvements, and behavioral changes all qualify. If there is genuinely no user-facing impact, write "None".
 
 Every PR needs one docs label (`docs-pr-required`, `docs-completed`, or `docs-not-required`) and one release note label (`release-note-required` or `release-note-not-required`). Optional: `cherry-pick-candidate` (bug fix backports), `needs-operator-pr` (requires operator change).
+
+## AI-assisted contribution policy
+
+[`AI_POLICY.md`](../AI_POLICY.md) at the repo root governs contributions written with AI assistance. The parts that affect what you produce:
+
+- The PR description discloses the assistance - the PR template has an **AI assistance** line for it.
+- Never add an AI co-author or `Assisted-By:` trailer to a commit.
+- The human author has to be able to explain the change without you, so leave the code and the PR description in a state they can defend.
+- Don't reply to review comments on their behalf.
 
 ## Additional Resources
 

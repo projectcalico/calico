@@ -1,0 +1,50 @@
+{
+  "apiVersion": "projectcalico.org/v3",
+  "kind": "NetworkPolicy",
+  "metadata": {
+    "name": "calico-system.allow-calico-fluent-bit",
+    "namespace": "calico-system"
+  },
+  "spec": {
+    "tier": "calico-system",
+    "order": 1,
+    "selector": "k8s-app == 'calico-fluent-bit' || k8s-app == 'calico-fluent-bit-windows'",
+    "types": [
+      "Ingress",
+      "Egress"
+    ],
+    "ingress": [
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "source": {
+          "selector": "k8s-app == 'tigera-prometheus'",
+          "namespaceSelector": "name == 'tigera-prometheus'"
+        },
+        "destination": {
+          "ports": [
+            "2020"
+          ]
+        }
+      }
+    ],
+    "egress": [
+      {
+        "action": "Deny",
+        "protocol": "TCP",
+        "source": {
+        },
+        "destination": {
+          "selector": "k8s-app == 'guardian'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'calico-system'",
+          "notPorts": [
+            8080
+          ]
+        }
+      },
+      {
+        "action": "Allow"
+      }
+    ]
+  }
+}

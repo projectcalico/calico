@@ -26,7 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
-	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 )
@@ -52,6 +52,8 @@ const (
 
 	ChainFailsafeIn  = ChainNamePrefix + "failsafe-in"
 	ChainFailsafeOut = ChainNamePrefix + "failsafe-out"
+
+	ChainConnStateLog = ChainNamePrefix + "log-conn"
 
 	ChainNATPrerouting  = ChainNamePrefix + "PREROUTING"
 	ChainNATPostrouting = ChainNamePrefix + "POSTROUTING"
@@ -428,6 +430,19 @@ type Config struct {
 	LogActionRateLimit      string
 	LogActionRateLimitBurst int
 
+	// LogConnectionTransitions is set when the LogConnectionTransitions config param is
+	// FirstResponseAfterLog (and the dataplane supports it).
+	LogConnectionTransitions bool
+	// LogConnectionTransitionsPrefix is the log prefix for connection transition logs; the
+	// transition suffix ("-est" etc.) is appended to it.  Used verbatim: unlike LogPrefix,
+	// %-specifiers are not substituted (the rules are shared by all policies).
+	LogConnectionTransitionsPrefix string
+	// MarkConnStateLog is the connmark bit used when LogConnectionTransitions is
+	// enabled; it means "connection matched a Log rule but no response has been seen yet".
+	// Only allocated when the feature is enabled; validate() has an explicit exception
+	// allowing it to be zero otherwise.
+	MarkConnStateLog uint32
+
 	EndpointToHostAction string
 	FilterAllowAction    string
 	MangleAllowAction    string
@@ -478,6 +493,10 @@ func (c *Config) validate() {
 				log.WithField("field", fieldName).Debug("Ignoring unused field in BPF mode.")
 				continue
 			}
+			if fieldName == "MarkConnStateLog" && !c.LogConnectionTransitions {
+				// Only allocated when connection transition logging is enabled.
+				continue
+			}
 			bits := myValue.Field(i).Interface().(uint32)
 			if bits == 0 {
 				log.WithField("field", fieldName).Panic(
@@ -508,22 +527,22 @@ func NewRenderer(config Config, nft bool) RuleRenderer {
 	var ret generictables.Action = iptables.ReturnAction{}
 
 	if nft {
-		actions = nftables.Actions()
-		reject = nftables.RejectAction{}
-		accept = nftables.AcceptAction{}
-		drop = nftables.DropAction{}
-		ret = nftables.ReturnAction{}
+		actions = nftrender.Actions()
+		reject = nftrender.RejectAction{}
+		accept = nftrender.AcceptAction{}
+		drop = nftrender.DropAction{}
+		ret = nftrender.ReturnAction{}
 	}
 
 	newMatchFn := func() generictables.MatchCriteria {
 		if nft {
-			return nftables.Match()
+			return nftrender.Match()
 		}
 		return iptables.Match()
 	}
 	combineMatches := iptables.Combine
 	if nft {
-		combineMatches = nftables.Combine
+		combineMatches = nftrender.Combine
 	}
 
 	// First, what should we do when packets are not accepted.
@@ -590,8 +609,8 @@ func NewRenderer(config Config, nft bool) RuleRenderer {
 	maxNameLength := iptables.MaxChainNameLength
 	wildcard := iptables.Wildcard
 	if nft {
-		wildcard = nftables.Wildcard
-		maxNameLength = nftables.MaxChainNameLength
+		wildcard = nftrender.Wildcard
+		maxNameLength = nftrender.MaxChainNameLength
 	}
 
 	return &DefaultRuleRenderer{

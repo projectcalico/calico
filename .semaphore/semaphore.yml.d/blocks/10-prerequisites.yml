@@ -99,7 +99,7 @@
   run:
     when: >-
       ${FORCE_RUN} or
-      change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/apis/migration', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+      change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/apis/migration', '/operator/api', '/operator/pkg/crds', '/operator/pkg/admission', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
   dependencies: []
   task:
     jobs:
@@ -111,6 +111,7 @@
           - make -C felix gen-files
           - make -C goldmane gen-files
           - make -C kube-controllers gen-files
+          - make -C operator gen-files
           - make gen-manifests
           - make fix-changed
           - make check-ocp-no-crds
@@ -343,6 +344,28 @@
           - docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
           - zstd -3 --rm /tmp/whisker-image.tar
           - gcloud storage cp /tmp/whisker-image.tar.zst "${GCS_WORKFLOW_DIR}/whisker-image.tar.zst"
+- name: "Build: operator image"
+  # The operator image bakes in the references it will install
+  # (localhost:5000/calico/<name>:test-build), so this producer builds it
+  # through the same `make kind-operator-image` its consumers run.
+  run:
+    when: "${CHANGE_IN_WITH_DEPENDENTS(operator,non-go:/operator/,non-go:/hack/test/kind/infra/calico_versions.yml)}"
+  dependencies: []
+  task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "calico"
+    agent:
+      machine:
+        type: f1-standard-4
+        os_image: ubuntu2204
+    jobs:
+      - name: "Build and cache operator image"
+        commands:
+          - make kind-operator-image
+          - docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
+          - zstd -3 --rm /tmp/operator-image.tar
+          - gcloud storage cp /tmp/operator-image.tar.zst "${GCS_WORKFLOW_DIR}/operator-image.tar.zst"
 - name: Prerequisites
   skip:
     # Always skip, this is a dummy job used to group prerequisite checks.

@@ -1,0 +1,40 @@
+version: v1.0
+name: Publish operator images
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+execution_time_limit:
+  minutes: 90
+global_job_config:
+  secrets:
+    - name: docker
+    - name: quay-robot-semaphore_v2
+    - name: operator-redhat-connect
+    - name: google-service-account-for-gcr
+  prologue:
+    commands:
+      - checkout
+      # Semaphore does a shallow clone on a commit without tags; unshallow it so
+      # GIT_VERSION resolves.
+      - retry git fetch --unshallow
+      # The build pulls calico/go-build and calico/base from Docker Hub, which is
+      # rate limited for anonymous pulls.
+      - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
+      - echo $QUAY_TOKEN | docker login --username "$QUAY_USERNAME" --password-stdin quay.io
+      - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+blocks:
+  - name: Publish operator images and multi-arch manifests
+    dependencies: []
+    skip:
+      when: "branch !~ '.+'"
+    task:
+      jobs:
+        - name: Publish to quay.io
+          commands:
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C operator cd push-manifests-with-tag CONFIRM=true; fi
+        - name: Publish cloud variant to GCR
+          commands:
+            - gcloud auth activate-service-account --key-file=/home/semaphore/secrets/secret.google-service-account-key.json
+            - docker login -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C operator cd VARIANT=cloud CONFIRM=true; fi
