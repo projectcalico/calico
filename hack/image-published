@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# image-published CRANE REGISTRIES IMAGES TAG
+#
+# Exits 0 when every registry/image:TAG resolves, 1 when any is absent or
+# unreadable. A failed lookup exits 1: republishing beats a wrong skip.
+
+set -u
+
+crane=${1:?usage: image-published CRANE REGISTRIES IMAGES TAG}
+registries=${2:?}
+images=${3:?}
+tag=${4:?}
+
+: "${CRANE_LOOKUP_RETRIES:=3}"
+: "${CRANE_LOOKUP_RETRY_DELAY:=3}"
+
+# resolved reports whether an image tag exists, retrying to ride out a flaky
+# registry. "MANIFEST_UNKNOWN" is a real answer, so it returns without retrying.
+resolved() {
+	local image=$1 attempt=1 out
+	while :; do
+		if out=$("$crane" digest "$image" 2>&1); then
+			return 0
+		fi
+		if printf '%s' "$out" | grep -qiE 'MANIFEST_UNKNOWN|NAME_UNKNOWN|not found|404'; then
+			return 1
+		fi
+		if [ "$attempt" -ge "$CRANE_LOOKUP_RETRIES" ]; then
+			echo "WARNING: could not check ${image} after ${attempt} attempts, assuming not published: ${out}" >&2
+			return 1
+		fi
+		attempt=$((attempt + 1))
+		sleep "$CRANE_LOOKUP_RETRY_DELAY"
+	done
+}
+
+for registry in $registries; do
+	for image in $images; do
+		resolved "${registry}/${image}:${tag}" || exit 1
+	done
+done
