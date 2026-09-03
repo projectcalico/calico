@@ -116,7 +116,7 @@ type KubeControllersConfiguration struct {
 	Rules []rbacv1.PolicyRule
 	// NetworkPolicy, when set, is rendered into the install namespace (and the
 	// deprecated allow-tigera policy named DeprecatedNetworkPolicyName is deleted).
-	NetworkPolicy               *v3.NetworkPolicy
+	NetworkPolicy               client.Object
 	DeprecatedNetworkPolicyName string
 	// ExtraEnv is appended to the deployment's container env.
 	ExtraEnv []corev1.EnvVar
@@ -162,7 +162,7 @@ func (c calicoKubeControllersPolicy) KubeControllersPolicyConfig() *KubeControll
 	return c.cfg
 }
 
-func NewCalicoKubeControllersPolicy(cfg *KubeControllersConfiguration, defaultDeny *v3.NetworkPolicy) render.Component {
+func NewCalicoKubeControllersPolicy(cfg *KubeControllersConfiguration, defaultDeny client.Object) render.Component {
 	toCreate := []client.Object{kubeControllersCalicoSystemPolicy(cfg)}
 
 	if defaultDeny != nil {
