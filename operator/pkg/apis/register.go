@@ -92,6 +92,20 @@ func init() {
 	AddToSchemes = append(AddToSchemes, netattachv1.AddToScheme)
 }
 
+var (
+	// variantV3Types are always in the projectcalico.org/v3 API group, and
+	// variantVariableTypes follow the backing API group like the core types do.
+	variantV3Types       []runtime.Object
+	variantVariableTypes []runtime.Object
+)
+
+// RegisterVariantTypes adds the API types a variant installs beyond the operator's
+// own. Call it before the operator starts; a process serves one variant.
+func RegisterVariantTypes(alwaysV3, variable []runtime.Object) {
+	variantV3Types = append(variantV3Types, alwaysV3...)
+	variantVariableTypes = append(variantVariableTypes, variable...)
+}
+
 func calicoSchemeBuilder(useV3 bool) func(*runtime.Scheme) error {
 	// We need to register the correct API groups based on the backing API group in use. This
 	// is a bit tricky, because some types are always in the same group, while others vary based on
@@ -113,6 +127,8 @@ func calicoSchemeBuilder(useV3 bool) func(*runtime.Scheme) error {
 			&v3.TierList{},
 		}
 
+		v3Types = append(v3Types, variantV3Types...)
+
 		// Handle types that are always in the crd.projectcalico.org/v1 API group.
 		v1Types := []runtime.Object{}
 
@@ -129,6 +145,7 @@ func calicoSchemeBuilder(useV3 bool) func(*runtime.Scheme) error {
 			&v3.KubeControllersConfiguration{},
 			&v3.KubeControllersConfigurationList{},
 		}
+		variableTypes = append(variableTypes, variantVariableTypes...)
 		if useV3 {
 			log.Info("Registering Calico CRD types with projectcalico.org/v3 API group")
 			v3Types = append(v3Types, variableTypes...)
