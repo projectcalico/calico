@@ -34,10 +34,9 @@ import (
 
 // Context keys for branch/prep commands
 const (
-	branchNameCtxKey              contextKey = "branch-name"
-	baseBranchCtxKey              contextKey = "base-branch"
-	calicoConfigVersionCtxKey     contextKey = "calico-config-version"
-	enterpriseConfigVersionCtxKey contextKey = "enterprise-config-version"
+	branchNameCtxKey          contextKey = "branch-name"
+	baseBranchCtxKey          contextKey = "base-branch"
+	calicoConfigVersionCtxKey contextKey = "calico-config-version"
 )
 
 var (
@@ -73,19 +72,14 @@ var branchCutCommand = &cli.Command{
 	Description: `The branch command creates a new branch for the release off of the current branch (which should be master or a release branch).
 	The new branch name is in the format <release-branch-prefix>-<stream> (e.g. release-v1.43).
 
-	The config versions are updated based on the provided Calico and Enterprise refs, which should point to branches or tags in the respective repositories.
+	The config versions are updated based on the provided Calico ref, which should point to a branch or tag in the Calico repository.
 	If the base branch is not a release branch, an empty commit and dev tag are also created on the base branch to allow for proper versioning of future commits on the base branch.`,
 	Flags: []cli.Flag{
 		streamFlag,
 		calicoRefFlag,
-		calicoGitRepoFlag,
-		enterpriseRefFlag,
-		enterpriseGitRepoFlag,
 		releaseBranchPrefixFlag,
 		devTagSuffixFlag,
 		calicoDirFlag,
-		enterpriseDirFlag,
-		enterpriseRegistryFlag,
 		skipBranchCheckFlag,
 		skipValidationFlag,
 		localFlag,
@@ -134,9 +128,6 @@ var branchCutContextValuesFunc = func(ctx context.Context, c *cli.Command) (cont
 	if calicoRef := c.String(calicoRefFlag.Name); calicoRef != "" {
 		ctx = context.WithValue(ctx, calicoConfigVersionCtxKey, calicoRef)
 	}
-	if enterpriseRef := c.String(enterpriseRefFlag.Name); enterpriseRef != "" {
-		ctx = context.WithValue(ctx, enterpriseConfigVersionCtxKey, enterpriseRef)
-	}
 	return ctx, nil
 }
 
@@ -159,8 +150,7 @@ var isReleaseBranch = func(releaseBranchPrefix, branch string) (bool, error) {
 // validateBranchRefs validates that the required ref flags are set for branch creation.
 //   - check that the stream flag is in the correct format
 //   - check that the operator branch does not already exist
-//   - check that both calico and enterprise refs are provided
-//   - check that the provided calico and enterprise refs exist as a branch or tag in the remote repository
+//   - check that the calico ref is provided
 //   - check that the base operator branch is either a release branch (or master) (if not skipping branch check)
 var validateBranchRefs = func(ctx context.Context, c *cli.Command) (context.Context, error) {
 	// check that the stream format is valid
@@ -185,29 +175,9 @@ var validateBranchRefs = func(ctx context.Context, c *cli.Command) (context.Cont
 		return ctx, fmt.Errorf("branch %s already exists in remote %s, please choose a different name or delete the existing branch", branchName, remote)
 	}
 
-	// check that both calico and enterprise refs are provided
-	calicoRef := c.String(calicoRefFlag.Name)
-	enterpriseRef := c.String(enterpriseRefFlag.Name)
-	if calicoRef == "" || enterpriseRef == "" {
-		return ctx, fmt.Errorf("both --%s and --%s are required for branch creation", calicoRefFlag.Name, enterpriseRefFlag.Name)
-	}
-
-	// check that the provided calico and enterprise refs exist as a branch or tag in the remote repository
-	for _, check := range []struct {
-		ref  string
-		repo string
-		flag string
-	}{
-		{calicoRef, c.String(calicoGitRepoFlag.Name), calicoRefFlag.Name},
-		{enterpriseRef, c.String(enterpriseGitRepoFlag.Name), enterpriseRefFlag.Name},
-	} {
-		out, err := command.GitLsRemote(fmt.Sprintf("git@github.com:%s", check.repo), check.ref, "--heads", "--tags")
-		if err != nil {
-			return ctx, fmt.Errorf("checking if ref %q exists in %s: %w", check.ref, check.repo, err)
-		}
-		if !command.GitRefExistsInRemote(out, check.ref) {
-			return ctx, fmt.Errorf("ref %q not found as a branch or tag in %s", check.ref, check.repo)
-		}
+	// check that the calico ref is provided
+	if c.String(calicoRefFlag.Name) == "" {
+		return ctx, fmt.Errorf("--%s is required for branch creation", calicoRefFlag.Name)
 	}
 
 	// check operator base branch is either the default base branch or a release branch (if not skipping branch check)
@@ -381,7 +351,7 @@ func switchBranch(ctx context.Context, branchName string) error {
 }
 
 // branchCutActionCommon switches to a new branch, modifies config versions, and commits the changes.
-// It reads the branch name and calico/enterprise versions from context (set by Before functions).
+// It reads the branch name and calico version from context (set by Before functions).
 // It returns the repo root directory for subsequent operations.
 func branchCutActionCommon(ctx context.Context, c *cli.Command, preCommitFunc func(ctx context.Context, c *cli.Command, repoRoot string) (changedFiles []string, err error), commitMsg string) (string, error) {
 	branchName, err := contextString(ctx, branchNameCtxKey)
@@ -412,25 +382,15 @@ func branchCutActionCommon(ctx context.Context, c *cli.Command, preCommitFunc fu
 }
 
 // modifyConfigVersions updates config versions and runs make targets to regenerate files.
-// It reads calico/enterprise versions from context (set by Before functions).
+// It reads the calico version from context (set by Before functions).
 func modifyConfigVersions(ctx context.Context, c *cli.Command, repoRootDir string) error {
-	// Missing context keys are treated as empty strings; Generate() skips the update for empty versions.
+	// A missing context key is treated as an empty string; Generate() skips the update for an empty version.
 	calicoVersion, _ := ctx.Value(calicoConfigVersionCtxKey).(string)
-	enterpriseVersion, _ := ctx.Value(enterpriseConfigVersionCtxKey).(string)
-	enterpriseRegistry := c.String(enterpriseRegistryFlag.Name)
-	if enterpriseRegistry == "" {
-		enterpriseRegistry = quayRegistry
-	}
 	verCfg := &versions.VersionsConfig{
 		RepoRootDir: repoRootDir,
 		Calico: versions.VersionConfig{
 			Version: calicoVersion,
 			Dir:     c.String(calicoDirFlag.Name),
-		},
-		Enterprise: versions.VersionConfig{
-			Version:  enterpriseVersion,
-			Registry: addTrailingSlash(enterpriseRegistry),
-			Dir:      c.String(enterpriseDirFlag.Name),
 		},
 	}
 	return verCfg.Generate()
@@ -456,8 +416,6 @@ var branchValidateCommand = &cli.Command{
 		releaseBranchPrefixFlag,
 		streamFlag,
 		devTagSuffixFlag,
-		calicoGitRepoFlag,
-		enterpriseGitRepoFlag,
 		&cli.StringFlag{
 			Name:     "base-branch",
 			Category: operatorFlagCategory,
@@ -506,8 +464,6 @@ var branchValidateAction = func(ctx context.Context, c *cli.Command) (string, ma
 		"-run", "^TestBranchCut",
 		fmt.Sprintf("-stream=%s", stream),
 		fmt.Sprintf("-repo=%s", c.String(gitRepoFlag.Name)),
-		fmt.Sprintf("-calico-repo=%s", c.String(calicoGitRepoFlag.Name)),
-		fmt.Sprintf("-enterprise-repo=%s", c.String(enterpriseGitRepoFlag.Name)),
 		fmt.Sprintf("-release-branch-prefix=%s", c.String(releaseBranchPrefixFlag.Name)),
 		fmt.Sprintf("-dev-tag-suffix=%s", c.String(devTagSuffixFlag.Name)),
 		fmt.Sprintf("-base-branch=%s", baseBranch),

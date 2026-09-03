@@ -279,8 +279,9 @@ foss-checks:
 .PHONY: ci
 ## Run what CI runs
 # Not `test`, which lib.Makefile defines as `ut fv st`. The FV block runs the
-# kind suite on its own.
-ci: clean format-check validate-gen-versions static-checks image-all fmt vet ut gen-files fix-changed dirty-check test-crds
+# kind suite on its own. amd64 only here; the "Operator: multi-arch build"
+# block covers the other arches.
+ci: clean format-check validate-gen-versions static-checks image fmt vet ut gen-files fix-changed dirty-check test-crds
 
 # This repository is public and the Enterprise CRDs come from one that is not,
 # so only the core half is checked here. The Enterprise generated files are
@@ -368,7 +369,7 @@ hack/release/ut:
 	sh -c '$(GIT_CONFIG_SSH) \
 	gotestsum --format=testname --junitfile report/release/ut.xml $$(go list $(PACKAGE_NAME)/hack/release/... | grep -v /hack/release/validate)'
 
-release-from: hack/bin/release var-require-all-VERSION-OPERATOR_BASE_VERSION var-require-one-of-EE_IMAGES_VERSIONS-OS_IMAGES_VERSIONS
+release-from: hack/bin/release var-require-all-VERSION-OPERATOR_BASE_VERSION-OS_IMAGES_VERSIONS
 	hack/bin/release from
 
 # operator-release-prereqs checks the environment on top of lib.Makefile's own
@@ -378,10 +379,10 @@ ifdef LOCAL_BUILD
 	$(error LOCAL_BUILD must not be set for a release)
 endif
 
-release-prep: hack/bin/release hack/bin/gh var-require-all-VERSION var-require-one-of-CALICO_VERSION-ENTERPRISE_VERSION
+release-prep: hack/bin/release hack/bin/gh var-require-all-VERSION
 	@REPO=$(REPO) hack/bin/release prep
 
-create-release-branch: hack/bin/release var-require-all-CALICO_REF-ENTERPRISE_REF var-require-one-of-STREAM-RELEASE_STREAM
+create-release-branch: hack/bin/release var-require-all-CALICO_REF var-require-one-of-STREAM-RELEASE_STREAM
 	hack/bin/release branch cut
 
 GOTESTSUM_VERSION?=1.13.0

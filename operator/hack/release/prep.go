@@ -35,19 +35,13 @@ var prepCommand = &cli.Command{
 	Description: `This involves updating version configuration files, creating a new git branch with the changes,
 pushing the branch to remote, and creating a PR against the release branch.
 
-The Calico and Enterprise versions specified must exist as a tag in their respective GitHub repositories.
-Otherwise, use the environment variables "CALICO_CRDS_DIR" and "ENTERPRISE_CRDS_DIR"
-to point to local repositories for Calico and Enterprise respectively.`,
+Calico CRDs come from the working tree. Set the environment variable "CALICO_CRDS_DIR" to take them
+from another checkout instead.`,
 	Flags: []cli.Flag{
 		versionFlag,
 		releaseBranchPrefixFlag,
 		calicoVersionFlag,
 		calicoDirFlag,
-		calicoGitRepoFlag,
-		enterpriseVersionFlag,
-		enterpriseDirFlag,
-		enterpriseGitRepoFlag,
-		enterpriseRegistryFlag,
 		skipValidationFlag,
 		skipMilestoneFlag,
 		skipBranchCheckFlag,
@@ -61,17 +55,9 @@ to point to local repositories for Calico and Enterprise respectively.`,
 }
 
 // validatePrepRefs checks the required refs for release prep:
-//   - check that at least one of calico or enterprise version is provided
 //   - if calico version is not provided, check that the version in calico_versions.yml is a released version
-//   - check that the provided calico and enterprise refs exist as a tag in the remote repository (if local directory not provided)
 //   - check that the base branch is a release branch (if not skipped)
 var validatePrepRefs = func(ctx context.Context, c *cli.Command) (context.Context, error) {
-	// check that at least one of calico/enterprise version is set for prep
-	ctx, err := checkAtLeastOneOfFlags(ctx, c, calicoVersionFlag.Name, enterpriseVersionFlag.Name)
-	if err != nil {
-		return ctx, err
-	}
-
 	// If Calico is not passed in, check the version in calico_versions.yml is a released version.
 	// An operator release must always include a released Calico version.
 	calicoVersion := c.String(calicoVersionFlag.Name)
@@ -91,33 +77,6 @@ var validatePrepRefs = func(ctx context.Context, c *cli.Command) (context.Contex
 		return ctx, fmt.Errorf("error validating Calico version format: %w", err)
 	} else if !valid {
 		return ctx, fmt.Errorf("every release must contain a released Calico version, but found %s", calicoVersion)
-	}
-
-	// check that the ref for calico and/or enterprise provided exists as a tag in the specified remote repository
-	// unless a local directory is provided for the respective component, in which case we assume the version exists since it is being pulled from the local repo
-	for _, check := range []struct {
-		repo     string
-		tag      string
-		flag     string
-		localDir string
-	}{
-		{tag: calicoVersion, repo: c.String(calicoGitRepoFlag.Name), localDir: c.String(calicoDirFlag.Name), flag: calicoVersionFlag.Name},
-		{tag: c.String(enterpriseVersionFlag.Name), repo: c.String(enterpriseGitRepoFlag.Name), localDir: c.String(enterpriseDirFlag.Name), flag: enterpriseVersionFlag.Name},
-	} {
-		if check.tag == "" {
-			continue
-		}
-		if check.localDir != "" {
-			logrus.Warnf("Local directory provided for %s, skipping remote ref validation", check.flag)
-			continue
-		}
-		out, err := command.GitLsRemoteTags(fmt.Sprintf("git@github.com:%s", check.repo), check.tag)
-		if err != nil {
-			return ctx, fmt.Errorf("checking if ref %q exists in %s: %w", check.tag, check.repo, err)
-		}
-		if !command.GitRefExistsInRemote(out, check.tag) {
-			return ctx, fmt.Errorf("ref %q not found as a tag in %s", check.tag, check.repo)
-		}
 	}
 
 	// check operator base branch is a release branch unless skipped
@@ -159,9 +118,6 @@ var prepContextValuesFunc = func(ctx context.Context, c *cli.Command) (context.C
 	ctx = context.WithValue(ctx, branchNameCtxKey, fmt.Sprintf("build-%s", version))
 	if calicoVer := c.String(calicoVersionFlag.Name); calicoVer != "" {
 		ctx = context.WithValue(ctx, calicoConfigVersionCtxKey, calicoVer)
-	}
-	if epVer := c.String(enterpriseVersionFlag.Name); epVer != "" {
-		ctx = context.WithValue(ctx, enterpriseConfigVersionCtxKey, epVer)
 	}
 	return ctx, nil
 }
