@@ -43,5 +43,5 @@ violations of:
 See `operator/docs/api_design.md` for the full conventions, the Deployment override
 pattern, and the per-field checklist. After API/CRD changes, `make gen-files`
 then `make dirty-check` must be run; generated files
-(`zz_generated.deepcopy.go`, `pkg/imports/crds/`, `pkg/components/`) are not
+(`zz_generated.deepcopy.go`, `pkg/crds/`, `pkg/components/`) are not
 hand-edited.

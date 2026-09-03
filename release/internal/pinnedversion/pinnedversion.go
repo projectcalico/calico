@@ -196,6 +196,9 @@ func generatePinnedVersionFile(p *CalicoPinnedVersions) error {
 	}
 
 	logrus.WithField("file", pinnedVersionPath).Info("Creating pinned version file")
+	if err := os.MkdirAll(p.Dir, utils.DirPerms); err != nil {
+		return fmt.Errorf("cannot create pinned version directory: %w", err)
+	}
 	pinnedVersionFile, err := os.Create(pinnedVersionPath)
 	if err != nil {
 		return fmt.Errorf("cannot create pinned version file: %w", err)
