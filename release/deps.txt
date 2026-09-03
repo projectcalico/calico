@@ -81,6 +81,7 @@ local:release/internal/ci
 local:release/internal/command
 local:release/internal/defaults
 local:release/internal/hashreleaseserver
+local:release/internal/images
 local:release/internal/imagescanner
 local:release/internal/outputs
 local:release/internal/pinnedversion
