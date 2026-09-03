@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Download a file. Use instead of curl in build files.
+#
+#   hack/fetch-file <url> <dest>
+
+set -euo pipefail
+
+if [ $# -ne 2 ]; then
+  echo "usage: $0 <url> <dest>" >&2
+  exit 1
+fi
+
+url=$1
+dest=$2
+
+mkdir -p "$(dirname "$dest")"
+# Use HTTP/1.1 to avoid issues with some servers that throttle HTTP/2 more aggressively.
+curl --fail --silent --show-error --location \
+  --http1.1 \
+  --retry 5 --retry-all-errors \
+  --output "$dest" \
+  "$url"
