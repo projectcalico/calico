@@ -32,10 +32,16 @@ anonymous clone otherwise blocks on that prompt until the job times out.
 
 Re-running does no network I/O once the revision is present.
 
-A shallow fetch leaves one commit and no tags, which suits a repo the build
-only takes files from. If something runs `git describe` or a merge-base
-against it, clone it with `--filter=blob:none` instead: that keeps full
-history at the cost of fetching blobs during checkout.
+By default it fetches only the pinned commit, leaving no tags — fine for a
+repo the build only takes files from. If something runs `git describe` or a
+merge-base against the checkout, pass `--with-history`:
+
+```make
+	$(call fetch_repo,$(THING_REPO),$(THING_SHA),thing,--with-history)
+```
+
+That keeps every commit but still skips file contents until checkout, so it
+costs round-trips rather than a full clone.
 
 ## Keep the repo URL in a variable
 

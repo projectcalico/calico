@@ -2,23 +2,21 @@
 # Download a file. Use instead of curl in build files.
 #
 #   hack/fetch-file <url> <dest>
-#
-# GitHub throttles HTTP/2 harder than HTTP/1.1, and CI runners share a source
-# IP. A token would not help: these URLs are CDN-served and not rate limited
-# by identity, and a stale one makes raw.githubusercontent.com return 404.
+
 set -euo pipefail
 
 if [ $# -ne 2 ]; then
-	echo "usage: $0 <url> <dest>" >&2
-	exit 1
+  echo "usage: $0 <url> <dest>" >&2
+  exit 1
 fi
 
 url=$1
 dest=$2
 
 mkdir -p "$(dirname "$dest")"
+# Use HTTP/1.1 to avoid issues with some servers that throttle HTTP/2 more aggressively.
 curl --fail --silent --show-error --location \
-	--http1.1 \
-	--retry 5 --retry-all-errors \
-	--output "$dest" \
-	"$url"
+  --http1.1 \
+  --retry 5 --retry-all-errors \
+  --output "$dest" \
+  "$url"

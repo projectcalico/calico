@@ -1,20 +1,28 @@
 #!/usr/bin/env bash
 # Check out a pinned revision. Use instead of git clone in build files.
 #
-#   hack/fetch-repo <repo-url> <revision> <dest>
+#   hack/fetch-repo <repo-url> <revision> <dest> [--with-history]
 #
-# Leaves one commit and no tags, so `git describe` and merge-base do not work
-# against it. Clone with --filter=blob:none if the build needs those.
+# Fetches only the pinned commit, leaving no tags, so `git describe` and
+# merge-base do not work against the result. Pass --with-history when the
+# build reads git state: that keeps every commit but still skips file
+# contents until checkout, so it costs round-trips rather than a full clone.
 set -euo pipefail
 
-if [ $# -ne 3 ]; then
-	echo "usage: $0 <repo-url> <revision> <dest>" >&2
+if [ $# -lt 3 ] || [ $# -gt 4 ]; then
+	echo "usage: $0 <repo-url> <revision> <dest> [--with-history]" >&2
 	exit 1
 fi
 
 repo=$1
 rev=$2
 dest=$3
+with_history=${4:-}
+
+if [ -n "$with_history" ] && [ "$with_history" != "--with-history" ]; then
+	echo "$0: unknown option: $with_history" >&2
+	exit 1
+fi
 
 # Throttled anonymous clones get a 401; without this git blocks on the
 # credential prompt until the job times out.
@@ -30,8 +38,10 @@ git init -q .
 git remote add origin "$repo" 2>/dev/null || git remote set-url origin "$repo"
 
 if ! git cat-file -e "${rev}^{commit}" 2>/dev/null; then
+	if [ -n "$with_history" ]; then
+		git fetch -q --filter=blob:none origin
 	# Only a full SHA or an advertised ref can be fetched shallow.
-	if printf '%s' "$rev" | grep -qE '^[0-9a-f]{40}$'; then
+	elif printf '%s' "$rev" | grep -qE '^[0-9a-f]{40}$'; then
 		git fetch -q --depth 1 origin "$rev"
 	elif git ls-remote --exit-code origin "$rev" >/dev/null 2>&1; then
 		git fetch -q --depth 1 origin "+refs/tags/$rev:refs/tags/$rev" 2>/dev/null ||
