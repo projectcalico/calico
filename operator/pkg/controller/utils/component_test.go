@@ -24,8 +24,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	ocsv1 "github.com/openshift/api/security/v1"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	apps "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -58,7 +58,7 @@ const (
 var _ = Describe("Component handler tests", func() {
 	var (
 		c        client.Client
-		instance *operatorv1.Manager
+		instance *operatorv1.APIServer
 		ctx      context.Context
 		scheme   *runtime.Scheme
 		sm       status.StatusManager
@@ -81,9 +81,9 @@ var _ = Describe("Component handler tests", func() {
 		sm = status.New(c, "fake-component", &common.VersionInfo{Major: 1, Minor: 19})
 
 		// We need to provide something to handler even though it seems to be unused..
-		instance = &operatorv1.Manager{
-			TypeMeta:   metav1.TypeMeta{Kind: "Manager", APIVersion: "operator.tigera.io/v1"},
-			ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
+		instance = &operatorv1.APIServer{
+			TypeMeta:   metav1.TypeMeta{Kind: "APIServer", APIVersion: "operator.tigera.io/v1"},
+			ObjectMeta: metav1.ObjectMeta{Name: "default"},
 		}
 		handler = NewComponentHandler(logf.Log, c, scheme, instance)
 	})
@@ -183,8 +183,8 @@ var _ = Describe("Component handler tests", func() {
 		t := true
 		expectOR := metav1.OwnerReference{
 			APIVersion:         "operator.tigera.io/v1",
-			Kind:               "Manager",
-			Name:               "tigera-secure",
+			Kind:               "APIServer",
+			Name:               "default",
 			Controller:         &t,
 			BlockOwnerDeletion: &t,
 		}
@@ -433,58 +433,6 @@ var _ = Describe("Component handler tests", func() {
 		Expect(ns.GetAnnotations()).To(Equal(expectedAnnotations))
 	})
 
-	It("merges UISettings leaving owners unchanged", func() {
-		fc := &fakeComponent{
-			supportedOSType: rmeta.OSTypeLinux,
-			objs: []client.Object{&v3.UISettings{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test.test-settings",
-					OwnerReferences: []metav1.OwnerReference{{
-						APIVersion: "projectcalico.org/v3",
-						Kind:       "UISettingsGroup",
-						Name:       "owner",
-						UID:        "abcde",
-					}},
-				},
-				Spec: v3.UISettingsSpec{
-					Group:       "test",
-					Description: "just a test",
-					Layer: &v3.UIGraphLayer{
-						Nodes: []v3.UIGraphNode{},
-					},
-				},
-			}},
-		}
-
-		err := handler.CreateOrUpdateOrDelete(ctx, fc, sm)
-		Expect(err).To(BeNil())
-
-		By("checking that the UISettings is created and ownerref is not modified")
-		uiKey := client.ObjectKey{
-			Name: "test.test-settings",
-		}
-		ui := &v3.UISettings{}
-		err = c.Get(ctx, uiKey, ui)
-		Expect(err).To(BeNil())
-		Expect(ui.OwnerReferences).To(HaveLen(1))
-		Expect(ui.OwnerReferences[0].Name).To(Equal("owner"))
-
-		By("overwriting the description and updating the owner.")
-		ui.Spec.Description = "another test"
-		ui.OwnerReferences[0].Name = "differentowner"
-		fc.objs = []client.Object{ui}
-		err = handler.CreateOrUpdateOrDelete(ctx, fc, sm)
-		Expect(err).To(BeNil())
-
-		By("checking that the uisettings is updated with description, but ownerref is not modified")
-		ui = &v3.UISettings{}
-		err = c.Get(ctx, uiKey, ui)
-		Expect(err).To(BeNil())
-		Expect(ui.OwnerReferences).To(HaveLen(1))
-		Expect(ui.OwnerReferences[0].Name).To(Equal("owner"))
-		Expect(ui.Spec.Description).To(Equal("another test"))
-	})
-
 	It("merges labels and reconciles only operator added labels", func() {
 		fc := &fakeComponent{
 			supportedOSType: rmeta.OSTypeLinux,
@@ -504,12 +452,12 @@ var _ = Describe("Component handler tests", func() {
 		By("checking that the namespace is created and desired label is present")
 		expectedLabels := map[string]string{
 			fakeComponentLabelKey:          fakeComponentLabelValue,
-			"app.kubernetes.io/instance":   "tigera-secure",
+			"app.kubernetes.io/instance":   "default",
 			"app.kubernetes.io/managed-by": "tigera-operator",
 			"app.kubernetes.io/part-of":    "Calico",
 			"app.kubernetes.io/name":       "test-namespace",
 			"k8s-app":                      "test-namespace",
-			"app.kubernetes.io/component":  "Manager.operator.tigera.io",
+			"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
 		}
 		nsKey := client.ObjectKey{
 			Name: "test-namespace",
@@ -561,8 +509,8 @@ var _ = Describe("Component handler tests", func() {
 			"extra":                        "extra-value",
 			fakeComponentLabelKey:          fakeComponentLabelValue,
 			"k8s-app":                      "test-namespace",
-			"app.kubernetes.io/component":  "Manager.operator.tigera.io",
-			"app.kubernetes.io/instance":   "tigera-secure",
+			"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
+			"app.kubernetes.io/instance":   "default",
 			"app.kubernetes.io/managed-by": "tigera-operator",
 			"app.kubernetes.io/name":       "test-namespace",
 			"app.kubernetes.io/part-of":    "Calico",
@@ -580,9 +528,9 @@ var _ = Describe("Component handler tests", func() {
 			"app.kubernetes.io/part-of":    "Calico",
 			"k8s-app":                      "test-namespace",
 			"app.kubernetes.io/name":       "test-namespace",
-			"app.kubernetes.io/component":  "Manager.operator.tigera.io",
+			"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
 			"app.kubernetes.io/managed-by": "tigera-operator",
-			"app.kubernetes.io/instance":   "tigera-secure",
+			"app.kubernetes.io/instance":   "default",
 		}
 		ns.Labels = labels
 		err = c.Update(ctx, ns)
@@ -593,8 +541,8 @@ var _ = Describe("Component handler tests", func() {
 			"cattle-not-pets":              "indeed",
 			"extra":                        "extra-value",
 			fakeComponentLabelKey:          "not-present",
-			"app.kubernetes.io/component":  "Manager.operator.tigera.io",
-			"app.kubernetes.io/instance":   "tigera-secure",
+			"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
+			"app.kubernetes.io/instance":   "default",
 			"app.kubernetes.io/managed-by": "tigera-operator",
 			"app.kubernetes.io/name":       "test-namespace",
 			"app.kubernetes.io/part-of":    "Calico",
@@ -631,11 +579,11 @@ var _ = Describe("Component handler tests", func() {
 			"cattle-not-pets":              "indeed",
 			"extra":                        "extra-value",
 			fakeComponentLabelKey:          fakeComponentLabelValue,
-			"app.kubernetes.io/component":  "Manager.operator.tigera.io",
+			"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
 			"app.kubernetes.io/managed-by": "tigera-operator",
 			"app.kubernetes.io/name":       "test-namespace",
 			"k8s-app":                      "test-namespace",
-			"app.kubernetes.io/instance":   "tigera-secure",
+			"app.kubernetes.io/instance":   "default",
 			"app.kubernetes.io/part-of":    "Calico",
 		}
 		ns = &corev1.Namespace{}
@@ -1318,12 +1266,12 @@ var _ = Describe("Component handler tests", func() {
 				Name: "my-service",
 				Labels: map[string]string{
 					"old":                          "should-be-preserved",
-					"app.kubernetes.io/instance":   "tigera-secure",
+					"app.kubernetes.io/instance":   "default",
 					"app.kubernetes.io/managed-by": "tigera-operator",
 					"app.kubernetes.io/name":       "my-service",
 					"app.kubernetes.io/part-of":    "Calico",
 					"k8s-app":                      "my-service",
-					"app.kubernetes.io/component":  "Manager.operator.tigera.io",
+					"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
 				},
 			},
 			Spec: corev1.ServiceSpec{
@@ -1342,12 +1290,12 @@ var _ = Describe("Component handler tests", func() {
 		Expect(svcWithIP.Spec.ClusterIP).To(Equal("10.96.0.1"))
 		Expect(svcWithIP.Labels).To(Equal(map[string]string{
 			"old":                          "should-be-preserved",
-			"app.kubernetes.io/instance":   "tigera-secure",
+			"app.kubernetes.io/instance":   "default",
 			"app.kubernetes.io/managed-by": "tigera-operator",
 			"app.kubernetes.io/name":       "my-service",
 			"app.kubernetes.io/part-of":    "Calico",
 			"k8s-app":                      "my-service",
-			"app.kubernetes.io/component":  "Manager.operator.tigera.io",
+			"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
 		}))
 
 		// Now pretend we're the new operator version, wanting to remove the cluster IP.
@@ -1377,10 +1325,10 @@ var _ = Describe("Component handler tests", func() {
 			"new":                          "should-be-added",
 			"k8s-app":                      "my-service",
 			"app.kubernetes.io/name":       "my-service",
-			"app.kubernetes.io/instance":   "tigera-secure",
+			"app.kubernetes.io/instance":   "default",
 			"app.kubernetes.io/managed-by": "tigera-operator",
 			"app.kubernetes.io/part-of":    "Calico",
-			"app.kubernetes.io/component":  "Manager.operator.tigera.io",
+			"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
 		}))
 
 		// The fake client resets the resource version to 1 on create.
@@ -1397,8 +1345,8 @@ var _ = Describe("Component handler tests", func() {
 			"new":                          "should-be-added",
 			"newer":                        "should-be-added",
 			"k8s-app":                      "my-service",
-			"app.kubernetes.io/instance":   "tigera-secure",
-			"app.kubernetes.io/component":  "Manager.operator.tigera.io",
+			"app.kubernetes.io/instance":   "default",
+			"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
 			"app.kubernetes.io/managed-by": "tigera-operator",
 			"app.kubernetes.io/name":       "my-service",
 			"app.kubernetes.io/part-of":    "Calico",
@@ -1871,8 +1819,8 @@ var _ = Describe("Component handler tests", func() {
 			expectedLabels := map[string]string{
 				"k8s-app":                      "test-daemonset",
 				"app.kubernetes.io/name":       "test-daemonset",
-				"app.kubernetes.io/component":  "Manager.operator.tigera.io",
-				"app.kubernetes.io/instance":   "tigera-secure",
+				"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
+				"app.kubernetes.io/instance":   "default",
 				"app.kubernetes.io/managed-by": "tigera-operator",
 				"app.kubernetes.io/part-of":    "Calico",
 			}
@@ -1913,8 +1861,8 @@ var _ = Describe("Component handler tests", func() {
 			expectedLabels := map[string]string{
 				"k8s-app":                      "test-daemonset",
 				"app.kubernetes.io/name":       "test-daemonset",
-				"app.kubernetes.io/component":  "Manager.operator.tigera.io",
-				"app.kubernetes.io/instance":   "tigera-secure",
+				"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
+				"app.kubernetes.io/instance":   "default",
 				"app.kubernetes.io/managed-by": "tigera-operator",
 				"app.kubernetes.io/part-of":    "Calico",
 			}
@@ -1950,10 +1898,10 @@ var _ = Describe("Component handler tests", func() {
 			expectedLabels := map[string]string{
 				"k8s-app":                      "test-deployment",
 				"app.kubernetes.io/name":       "test-deployment",
-				"app.kubernetes.io/instance":   "tigera-secure",
+				"app.kubernetes.io/instance":   "default",
 				"app.kubernetes.io/managed-by": "tigera-operator",
 				"app.kubernetes.io/part-of":    "Calico",
-				"app.kubernetes.io/component":  "Manager.operator.tigera.io",
+				"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
 			}
 			expectedSelector := metav1.LabelSelector{
 				MatchLabels: map[string]string{"k8s-app": "test-deployment"},
@@ -1993,8 +1941,8 @@ var _ = Describe("Component handler tests", func() {
 			expectedLabels := map[string]string{
 				"k8s-app":                      "test-deployment",
 				"app.kubernetes.io/name":       "test-deployment",
-				"app.kubernetes.io/component":  "Manager.operator.tigera.io",
-				"app.kubernetes.io/instance":   "tigera-secure",
+				"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
+				"app.kubernetes.io/instance":   "default",
 				"app.kubernetes.io/managed-by": "tigera-operator",
 				"app.kubernetes.io/part-of":    "Calico",
 			}
