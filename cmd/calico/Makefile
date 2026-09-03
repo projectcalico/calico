@@ -113,7 +113,7 @@ release-build: .release-$(VERSION).created
 ## Pushes the combined calico image to the registries.
 .PHONY: release-publish
 release-publish: release-prereqs bin/crane
-	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)"; then \
+	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
 		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \
 	else \
 		$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM); \

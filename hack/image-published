@@ -14,10 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# image-published CRANE REGISTRIES IMAGES TAG
+# image-published CRANE REGISTRIES IMAGES TAG [ARCHES]
 #
-# Exits 0 when every registry/image:TAG resolves, 1 when any is absent or
+# Exits 0 when TAG and every TAG-ARCH resolve, 1 when any is absent or
 # unreadable. A failed lookup exits 1: republishing beats a wrong skip.
+#
+# The bare tag alone is not enough: the amd64 push writes it before the other
+# arches have finished, so it is present while the release is incomplete.
 
 set -u
 
@@ -25,6 +28,7 @@ crane=${1:?usage: image-published CRANE REGISTRIES IMAGES TAG}
 registries=${2:?}
 images=${3:?}
 tag=${4:?}
+arches=${5:-}
 
 : "${CRANE_LOOKUP_RETRIES:=3}"
 : "${CRANE_LOOKUP_RETRY_DELAY:=3}"
@@ -52,5 +56,8 @@ resolved() {
 for registry in $registries; do
 	for image in $images; do
 		resolved "${registry}/${image}:${tag}" || exit 1
+		for arch in $arches; do
+			resolved "${registry}/${image}:${tag}-${arch}" || exit 1
+		done
 	done
 done
