@@ -19,8 +19,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	"github.com/tigera/api/pkg/lib/numorstring"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -62,8 +62,8 @@ var _ = Describe("felix env parser", func() {
 		}))
 	})
 
-	It("converts a *uint32", func() {
-		m := uint32(20)
+	It("converts an *int64", func() {
+		m := int64(20)
 		fe, err := patchFromVal("iptablesmarkmask", "20")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(fe).To(Equal(patch{
