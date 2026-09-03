@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	calicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset"
 	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -35,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -110,18 +110,10 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 }
 
 func newReconciler(mgr manager.Manager, opts options.ControllerOptions) (reconcile.Reconciler, error) {
-	// Looks up HostEndpoints with a spec.node field selector. Serving that from the
-	// manager's cache would need a registered field index and an informer holding every
-	// HostEndpoint in the cluster, for a lookup that only ever wants one.
-	calicoClient, err := calicoclient.NewForConfig(mgr.GetConfig())
-	if err != nil {
-		return nil, err
-	}
-
 	return &reconcileCSR{
 		client:        mgr.GetClient(),
 		clientset:     opts.K8sClientset,
-		calicoClient:  calicoClient,
+		restConfig:    mgr.GetConfig(),
 		scheme:        mgr.GetScheme(),
 		provider:      opts.DetectedProvider,
 		clusterDomain: opts.ClusterDomain,
@@ -138,7 +130,7 @@ var _ reconcile.Reconciler = &reconcileCSR{}
 type reconcileCSR struct {
 	client        client.Client
 	clientset     kubernetes.Interface
-	calicoClient  calicoclient.Interface
+	restConfig    *rest.Config
 	scheme        *runtime.Scheme
 	provider      operatorv1.Provider
 	clusterDomain string
@@ -162,7 +154,7 @@ func (r *reconcileCSR) Reconcile(ctx context.Context, request reconcile.Request)
 		RenderInputs: render.Inputs{Installation: &instance.Spec, ClusterDomain: r.clusterDomain},
 		Client:       r.client,
 		K8sClientset: r.clientset,
-		CalicoClient: r.calicoClient,
+		RESTConfig:   r.restConfig,
 	}
 	ci, _, err := r.extensions.CSR().ExtendInputs(ctx, ci)
 	if err != nil {

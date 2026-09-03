@@ -17,6 +17,7 @@ package render
 import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var (
@@ -26,7 +27,14 @@ var (
 	FelixCommonName          = "typha-client"
 	NodePriorityClassName    = "system-node-critical"
 	ClusterPriorityClassName = "system-cluster-critical"
+
+	// Linseed signer secret names in a management cluster, current then legacy. A managed
+	// cluster trusts whichever it finds so flow uploads verify.
+	VoltronLinseedPublicCert       = "calico-voltron-linseed-certs-public"
+	LegacyVoltronLinseedPublicCert = "tigera-voltron-linseed-certs-public"
 )
+
+var log = logf.Log.WithName("render")
 
 // A Renderer is capable of generating components to be installed on the cluster.
 type Renderer interface {

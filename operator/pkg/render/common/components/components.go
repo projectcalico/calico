@@ -19,9 +19,7 @@ import (
 	"reflect"
 	"strings"
 
-	kbv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/kibana/v1"
 	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -100,10 +98,6 @@ func GetPodTemplateMetadata(overrides any) *operator.Metadata {
 	value := getField(overrides, "Spec", "Template", "Metadata")
 	if !value.IsValid() || value.IsNil() {
 		return nil
-	}
-	// SPECIAL CASE: EgressGateway uses a different type for its metadata.
-	if v, egressGatewayCase := value.Interface().(*operator.EgressGatewayMetadata); egressGatewayCase {
-		return &operator.Metadata{Labels: v.Labels, Annotations: v.Annotations}
 	}
 	return value.Interface().(*operator.Metadata)
 }
@@ -642,48 +636,6 @@ func ApplyPodTemplateOverrides(podtemplate *corev1.PodTemplate, overrides any) {
 	podtemplate.Labels = r.labels
 	podtemplate.Annotations = r.annotations
 	podtemplate.Template = *r.podTemplateSpec
-}
-
-// ApplyKibanaOverrides applies the overrides to the given Kibana.
-// Note: overrides must not be nil pointer.
-func ApplyKibanaOverrides(k *kbv1.Kibana, overrides any) {
-	// Catch if caller passes in an explicit nil.
-	if overrides == nil {
-		return
-	}
-
-	// Pull out the data we'll override from the DaemonSet.
-	r := &replicatedPodResource{
-		podTemplateSpec: &k.Spec.PodTemplate,
-	}
-	// Apply the overrides.
-	applyReplicatedPodResourceOverrides(r, overrides)
-
-	// Set the possibly new fields back onto the kibana.
-	k.Spec.PodTemplate = *r.podTemplateSpec
-}
-
-// ApplyPrometheusOverrides applies the overrides to the given Prometheus.
-// Note: overrides must not be nil pointer.
-func ApplyPrometheusOverrides(prom *monitoringv1.Prometheus, overrides *operator.Prometheus) {
-	// Catch if caller passes in an explicit nil.
-	if overrides == nil {
-		return
-	}
-
-	prometheusFields := &prom.Spec.CommonPrometheusFields
-
-	// Override additional or operator generated containers.
-	if containers := overrides.GetContainers(); containers != nil {
-		mergeContainers(prometheusFields.Containers, containers)
-	}
-
-	// Define resources requests and limits for prometheus Pods.
-	if resources := overrides.GetPrometheusResource(); resources != nil {
-		prometheusFields.Resources = *resources
-	}
-
-	prom.Spec.CommonPrometheusFields = *prometheusFields
 }
 
 // mergeContainers copies the ResourceRequirements from the provided containers

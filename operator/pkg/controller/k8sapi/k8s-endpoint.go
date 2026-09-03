@@ -19,8 +19,8 @@ import (
 	"os"
 	"strings"
 
-	calicov3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	"github.com/tigera/api/pkg/lib/numorstring"
+	calicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	v1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
