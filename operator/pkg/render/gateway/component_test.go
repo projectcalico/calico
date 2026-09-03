@@ -24,6 +24,7 @@ import (
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gapi "sigs.k8s.io/gateway-api/apis/v1"
@@ -32,7 +33,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	"github.com/projectcalico/calico/operator/pkg/render/gateway"
-	rgatewayapi "github.com/projectcalico/calico/operator/pkg/render/gatewayapi"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
@@ -147,7 +147,7 @@ var _ = Describe("Gateway component render", func() {
 		})
 
 		It("renders the supplied objects and the proxy NetworkPolicy", func() {
-			sa := findObject[*corev1.ServiceAccount](toCreate, "waf-http-filter", gwNS)
+			sa := findObject[*corev1.ServiceAccount](toCreate, extraProxyName, gwNS)
 			Expect(sa).NotTo(BeNil())
 			np := findObject[*v3.NetworkPolicy](toCreate, networkpolicy.CalicoComponentPolicyPrefix+prefix+"-gateway-proxy", gwNS)
 			Expect(np).NotTo(BeNil())
@@ -500,7 +500,7 @@ var _ = Describe("Gateway deletion component", func() {
 		})
 
 		It("includes the supplied extra proxy objects", func() {
-			sa := findObject[*corev1.ServiceAccount](toDelete, "waf-http-filter", gwNS)
+			sa := findObject[*corev1.ServiceAccount](toDelete, extraProxyName, gwNS)
 			Expect(sa).NotTo(BeNil())
 			np := findObject[*v3.NetworkPolicy](toDelete, networkpolicy.CalicoComponentPolicyPrefix+prefix+"-gateway-proxy", gwNS)
 			Expect(np).NotTo(BeNil())
@@ -649,7 +649,7 @@ var _ = Describe("Gateway deletion component", func() {
 			})
 
 			It("deletes the supplied proxy objects and NetworkPolicy from the backend namespace", func() {
-				Expect(findObject[*corev1.ServiceAccount](toDelete, "waf-http-filter", bkNS)).NotTo(BeNil())
+				Expect(findObject[*corev1.ServiceAccount](toDelete, extraProxyName, bkNS)).NotTo(BeNil())
 				np := findObject[*v3.NetworkPolicy](toDelete, networkpolicy.CalicoComponentPolicyPrefix+prefix+"-gateway-proxy", bkNS)
 				Expect(np).NotTo(BeNil())
 			})
@@ -675,11 +675,21 @@ var _ = Describe("Gateway deletion component", func() {
 	})
 })
 
-// proxyObjects stands in for what a variant hands Configuration.ExtraProxyObjects.
+// extraProxyName names the fixture objects the tests hand ExtraProxyObjects.
+const extraProxyName = "extra-proxy-object"
+
+// proxyObjects are fixtures for the objects a variant hands
+// Configuration.ExtraProxyObjects, which the component only passes through.
 func proxyObjects(namespace string) []client.Object {
 	return []client.Object{
-		rgatewayapi.GatewayNamespaceServiceAccount(namespace),
-		rgatewayapi.GatewayNamespaceRoleBinding(namespace),
+		&corev1.ServiceAccount{
+			TypeMeta:   metav1.TypeMeta{Kind: "ServiceAccount", APIVersion: "v1"},
+			ObjectMeta: metav1.ObjectMeta{Name: extraProxyName, Namespace: namespace},
+		},
+		&rbacv1.RoleBinding{
+			TypeMeta:   metav1.TypeMeta{Kind: "RoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"},
+			ObjectMeta: metav1.ObjectMeta{Name: extraProxyName, Namespace: namespace},
+		},
 	}
 }
 
