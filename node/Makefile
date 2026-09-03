@@ -434,12 +434,19 @@ release-windows-archive: release-prereqs
 	$(MAKE) build-windows-archive WINDOWS_ARCHIVE_TAG=$(VERSION)
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
-# The registry decides the skip, so a fresh checkout answers like one that pushed.
-release-publish: release-prereqs bin/crane
+release-publish: release-publish-linux release-publish-windows
+
+release-publish-linux: release-prereqs bin/crane
 	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)"; then \
 		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \
 	else \
 		$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM); \
+	fi
+
+release-publish-windows: release-prereqs bin/crane
+	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(WINDOWS_IMAGE)" "$(VERSION)"; then \
+		echo "$(WINDOWS_IMAGE):$(VERSION) is already published, skipping"; \
+	else \
 		$(MAKE) release-windows IMAGETAG=$(VERSION) CONFIRM=$(CONFIRM); \
 	fi
 
