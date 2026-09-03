@@ -15,13 +15,19 @@
 package crds
 
 import (
+	_ "embed"
 	"fmt"
+	"os"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	opv1 "github.com/projectcalico/calico/operator/api/v1"
 )
+
+//go:embed calico_operator_crds.txt
+var calicoOperatorCRDList string
 
 // The real test here is simply calling these functions will result in a panic if any of the CRDs cannot be parsed
 
@@ -35,21 +41,8 @@ var _ = Describe("test crds pkg", func() {
 			Expect(func() { Expect(GetCRDs(opv1.Calico, v3)).ToNot(BeEmpty()) }).ToNot(Panic())
 		})
 
-		It("gets the operator's own CRDs for Enterprise, whose others are registered elsewhere", func() {
-			enterpriseCRDs = nil
-			crds := GetCRDs(opv1.CalicoEnterprise, v3)
-			Expect(crds).ToNot(BeEmpty())
-
-			crdNames := map[string]bool{}
-			for _, crd := range crds {
-				crdNames[crd.Name] = true
-			}
-			Expect(crdNames).To(HaveKey("logstorages.operator.tigera.io"))
-			Expect(crdNames).ToNot(HaveKey("wafpolicies.applicationlayer.projectcalico.org"))
-		})
-
 		It(fmt.Sprintf("includes K8s policy CRDs for Calico (v3=%t)", v3), func() {
-			calicoCRDs = nil
+			clear(crdCache)
 			crds := GetCRDs(opv1.Calico, v3)
 			crdNames := map[string]bool{}
 			for _, crd := range crds {
@@ -64,7 +57,7 @@ var _ = Describe("test crds pkg", func() {
 			})
 			DeferCleanup(func() {
 				variantCRDs = map[opv1.ProductVariant][]CRDSource{}
-				enterpriseCRDs = nil
+				clear(crdCache)
 			})
 
 			crdNames := map[string]bool{}
@@ -75,16 +68,32 @@ var _ = Describe("test crds pkg", func() {
 		})
 	}
 
-	It("can parse Operator CRDs used with calico", func() {
-		Expect(func() { Expect(getOperatorCRDSource(opv1.Calico)).ToNot(BeEmpty()) }).ToNot(Panic())
-	})
-
-	It("can parse Operator CRDs used with Enterprise", func() {
-		Expect(func() { Expect(getOperatorCRDSource(opv1.CalicoEnterprise)).ToNot(BeEmpty()) }).ToNot(Panic())
+	It("can parse the operator's own CRDs", func() {
+		Expect(func() { Expect(getOperatorCRDSource()).ToNot(BeEmpty()) }).ToNot(Panic())
 	})
 
 	It("installs GatewayAPI CRD with Calico OSS", func() {
-		Expect(getOperatorCRDSource(opv1.Calico)).To(HaveKey(ContainSubstring("gatewayapis")))
+		Expect(getOperatorCRDSource()).To(HaveKey(ContainSubstring("gatewayapis")))
+	})
+
+	// manifests/generate.sh folds the operator CRDs into the bundles from this list,
+	// so a CRD the operator installs but the list omits never reaches the manifests.
+	It("ships exactly the operator CRDs calico_operator_crds.txt lists", func() {
+		listed := map[string]bool{}
+		for _, line := range strings.Split(calicoOperatorCRDList, "\n") {
+			if name := strings.TrimSpace(line); name != "" && !strings.HasPrefix(name, "#") {
+				listed[name] = true
+			}
+		}
+
+		entries, err := os.ReadDir("operator")
+		Expect(err).NotTo(HaveOccurred())
+		onDisk := map[string]bool{}
+		for _, e := range entries {
+			onDisk[e.Name()] = true
+		}
+
+		Expect(onDisk).To(Equal(listed))
 	})
 })
 

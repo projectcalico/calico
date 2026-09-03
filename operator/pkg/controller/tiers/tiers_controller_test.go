@@ -19,8 +19,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/stretchr/testify/mock"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,7 +29,6 @@ import (
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/apis"
-	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
@@ -94,19 +93,6 @@ var _ = Describe("tier controller tests", func() {
 				},
 			})).NotTo(HaveOccurred())
 
-		Expect(c.Create(
-			ctx,
-			&v3.LicenseKey{
-				ObjectMeta: metav1.ObjectMeta{Name: "default"},
-				Status: v3.LicenseKeyStatus{
-					Features: []string{
-						common.TiersFeature,
-						common.EgressAccessControlFeature,
-					},
-				},
-			},
-		)).NotTo(HaveOccurred())
-
 		Expect(c.Create(ctx, &operatorv1.APIServer{
 			ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
 			Status:     operatorv1.APIServerStatus{State: operatorv1.TigeraStatusReady},
@@ -153,54 +139,4 @@ var _ = Describe("tier controller tests", func() {
 		mockStatus.AssertExpectations(GinkgoT())
 	})
 
-	It("should not require license", func() {
-		Expect(c.Delete(ctx, &v3.LicenseKey{ObjectMeta: metav1.ObjectMeta{Name: "default"}})).ToNot(HaveOccurred())
-		mockStatus = &status.MockStatus{}
-		r = ReconcileTiers{
-			client:             c,
-			scheme:             scheme,
-			status:             mockStatus,
-			tierWatchReady:     readyFlag,
-			policyWatchesReady: readyFlag,
-			opts: options.ControllerOptions{
-				DetectedProvider: operatorv1.ProviderNone,
-			},
-		}
-		mockStatus.On("OnCRFound")
-		mockStatus.On("ReadyToMonitor")
-		mockStatus.On("ClearDegraded")
-		_, err := r.Reconcile(ctx, reconcile.Request{})
-		Expect(err).ShouldNot(HaveOccurred())
-		mockStatus.AssertExpectations(GinkgoT())
-	})
-
-	It("should not require license with tiers feature", func() {
-		license := &v3.LicenseKey{
-			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Status: v3.LicenseKeyStatus{
-				Features: []string{
-					common.EgressAccessControlFeature,
-				},
-			},
-		}
-		Expect(c.Delete(ctx, &v3.LicenseKey{ObjectMeta: license.ObjectMeta}))
-		Expect(c.Create(ctx, license)).ToNot(HaveOccurred())
-		mockStatus = &status.MockStatus{}
-		r = ReconcileTiers{
-			client:             c,
-			scheme:             scheme,
-			status:             mockStatus,
-			tierWatchReady:     readyFlag,
-			policyWatchesReady: readyFlag,
-			opts: options.ControllerOptions{
-				DetectedProvider: operatorv1.ProviderNone,
-			},
-		}
-		mockStatus.On("OnCRFound")
-		mockStatus.On("ReadyToMonitor")
-		mockStatus.On("ClearDegraded")
-		_, err := r.Reconcile(ctx, reconcile.Request{})
-		Expect(err).ShouldNot(HaveOccurred())
-		mockStatus.AssertExpectations(GinkgoT())
-	})
 })

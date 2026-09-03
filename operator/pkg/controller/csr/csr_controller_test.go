@@ -28,7 +28,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	fakecalicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset/fake"
+	fakecalicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/fake"
 	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
