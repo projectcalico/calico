@@ -140,7 +140,12 @@
       "matchBaseBranches": ["master"],
       "matchUpdateTypes": ["patch", "digest"],
       "enabled": true,
-      "groupName": "third-party-images"
+      "groupName": "third-party-images",
+      "postUpgradeTasks": {
+        "commands": ["make regen-thirdparty-dep-patches"],
+        "fileFilters": ["**/dep-patches/*.patch"],
+        "executionMode": "branch"
+      }
     }
   ]
 }
