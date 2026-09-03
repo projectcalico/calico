@@ -15,24 +15,39 @@
 package registry
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 )
 
 const TigeraOperatorImage = "tigera/operator"
 
-func CheckImage(image string) (bool, error) {
+// ResolveDigest returns the manifest digest of image, authenticating with the
+// ambient Docker credentials. exists is false with a nil error when the tag is
+// absent; auth and network failures return an error instead.
+func ResolveDigest(image string) (digest string, exists bool, err error) {
 	ref, err := name.ParseReference(image)
 	if err != nil {
-		return false, fmt.Errorf("failed to parse image reference for %s: %w", image, err)
+		return "", false, fmt.Errorf("failed to parse image reference for %s: %w", image, err)
 	}
-
-	_, err = remote.Head(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	desc, err := remote.Head(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
 	if err != nil {
-		return false, fmt.Errorf("failed to get image descriptor for %s: %w", image, err)
+		var te *transport.Error
+		if errors.As(err, &te) && te.StatusCode == http.StatusNotFound {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("failed to resolve digest for %s: %w", image, err)
 	}
-	return true, nil
+	return desc.Digest.String(), true, nil
+}
+
+// CheckImage reports whether image is present in its registry.
+func CheckImage(image string) (bool, error) {
+	_, exists, err := ResolveDigest(image)
+	return exists, err
 }
