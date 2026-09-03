@@ -28,10 +28,9 @@ if [ -n "$with_history" ] && [ "$with_history" != "--with-history" ]; then
 	exit 1
 fi
 
-# Throttled anonymous fetches get a 401; without this git blocks on the
-# credential prompt until the job times out. Anything needing credentials
-# should use a helper or an ssh remote, not an interactive prompt.
-export GIT_TERMINAL_PROMPT=0
+# Callers outside make get the same default lib.Makefile sets, so a throttled
+# fetch fails instead of blocking on git's credential prompt.
+export GIT_TERMINAL_PROMPT=${GIT_TERMINAL_PROMPT:-0}
 # GitHub throttles HTTP/2 harder than HTTP/1.1.
 export GIT_HTTP_VERSION=HTTP/1.1
 
