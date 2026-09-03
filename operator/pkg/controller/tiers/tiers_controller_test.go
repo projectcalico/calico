@@ -17,6 +17,7 @@ package tiers
 import (
 	"context"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -29,10 +30,13 @@ import (
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/apis"
+	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
+	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
 )
 
 var _ = Describe("tier controller tests", func() {
@@ -139,4 +143,26 @@ var _ = Describe("tier controller tests", func() {
 		mockStatus.AssertExpectations(GinkgoT())
 	})
 
+	It("allows DNS access to the namespaces the variant contributes", func() {
+		r.opts.Extensions = extensions.New(extensions.Set{Tiers: dnsClientNamespaces{"tigera-manager", "tigera-prometheus"}})
+
+		cfg, res := r.prepareTiersConfig(ctx, logr.Discard())
+		Expect(res).To(BeNil())
+		Expect(cfg.CalicoNamespaces).To(Equal([]string{common.CalicoNamespace, "tigera-manager", "tigera-prometheus"}))
+	})
+
+	It("allows DNS access to the core namespace alone when the variant contributes none", func() {
+		cfg, res := r.prepareTiersConfig(ctx, logr.Discard())
+		Expect(res).To(BeNil())
+		Expect(cfg.CalicoNamespaces).To(Equal([]string{common.CalicoNamespace}))
+	})
 })
+
+// dnsClientNamespaces is a variant that contributes namespaces and nothing else.
+type dnsClientNamespaces []string
+
+func (dnsClientNamespaces) Watches(ctrlruntime.Controller) error { return nil }
+
+func (n dnsClientNamespaces) DNSClientNamespaces(context.Context, client.Client) ([]string, error) {
+	return n, nil
+}

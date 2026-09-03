@@ -152,4 +152,27 @@ var _ = Describe("Tiers rendering tests", func() {
 			Entry("for when ipMode is not provided", nil),
 		)
 	})
+
+	Context("the namespaces allowed to reach cluster DNS", func() {
+		selectorFor := func(namespaces ...string) string {
+			cfg.CalicoNamespaces = namespaces
+			resources, _ := tiers.Tiers(cfg).Objects()
+			policy := testutils.GetCalicoSystemPolicyFromResources(
+				types.NamespacedName{Name: "calico-system.cluster-dns", Namespace: "kube-system"}, resources)
+			return policy.Spec.Ingress[0].Source.Selector
+		}
+
+		It("selects the one namespace the core operator runs in", func() {
+			Expect(selectorFor(common.CalicoNamespace)).To(Equal("projectcalico.org/namespace in {'calico-system'}"))
+		})
+
+		It("selects every namespace a variant contributes", func() {
+			Expect(selectorFor(common.CalicoNamespace, "tigera-manager", "tigera-prometheus")).To(
+				Equal("projectcalico.org/namespace in {'calico-system','tigera-manager','tigera-prometheus'}"))
+		})
+
+		It("selects nothing when no namespace is given", func() {
+			Expect(selectorFor()).To(Equal("projectcalico.org/namespace in {}"))
+		})
+	})
 })
