@@ -19,9 +19,13 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/components"
+	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 )
 
 var _ = Describe("Options", func() {
@@ -71,6 +75,25 @@ var _ = Describe("Options", func() {
 			cmpnts, ok := Options{Images: map[string][]components.Component{"list": extra}}.imageSet("list")
 			Expect(ok).To(BeTrue())
 			Expect(cmpnts).To(Equal(extra))
+		})
+	})
+
+	Describe("Collectors", func() {
+		It("registers nothing when the caller supplied no factory", func() {
+			Expect(Options{}.Collectors).To(BeNil())
+		})
+
+		It("builds the caller's collectors from the client it is given", func() {
+			var got client.Client
+			collector := prometheus.NewGauge(prometheus.GaugeOpts{Name: "test_metric"})
+			opts := Options{Collectors: func(c client.Client) []prometheus.Collector {
+				got = c
+				return []prometheus.Collector{collector}
+			}}
+
+			cli := ctrlrfake.DefaultFakeClientBuilder(runtime.NewScheme()).Build()
+			Expect(opts.Collectors(cli)).To(ConsistOf(collector))
+			Expect(got).To(Equal(cli))
 		})
 	})
 

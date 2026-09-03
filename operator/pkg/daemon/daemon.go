@@ -586,8 +586,10 @@ admission policy installation; once an Installation exists it is the authority o
 	// Register custom Prometheus metrics collector.
 	if common.MetricsEnabled() {
 		ctrlmetrics.Registry.MustRegister(metrics.NewOperatorCollector(mgr.GetClient()))
-		for _, collector := range opts.Collectors {
-			ctrlmetrics.Registry.MustRegister(collector)
+		if opts.Collectors != nil {
+			for _, collector := range opts.Collectors(mgr.GetClient()) {
+				ctrlmetrics.Registry.MustRegister(collector)
+			}
 		}
 	}
 

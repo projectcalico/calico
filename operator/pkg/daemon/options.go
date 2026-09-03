@@ -46,9 +46,10 @@ type Options struct {
 	// manager's cache, for a kind whose cached copy goes stale.
 	UncachedObjects []client.Object
 
-	// Collectors are Prometheus collectors registered alongside the operator's own,
-	// for metrics only the variant can gather.
-	Collectors []prometheus.Collector
+	// Collectors builds the Prometheus collectors registered alongside the operator's
+	// own, for metrics only the variant can gather. It takes the manager's client,
+	// which the caller does not have.
+	Collectors func(client.Client) []prometheus.Collector
 
 	// AfterParse runs once the flags are parsed, so a caller that registered its own
 	// flag on flag.CommandLine can act on it. Returning true exits zero, like the
