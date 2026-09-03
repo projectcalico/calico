@@ -88,7 +88,7 @@ endif
 	# Reset go.mod/go.sum to the pinned commit and (re-)apply the CVE dependency
 	# patch. The reset keeps this idempotent across repeated incremental builds.
 	cd $(REGISTRAR_IMAGE) && git checkout -- go.mod go.sum
-	patch -d $(REGISTRAR_IMAGE) -p1 < node-driver-registrar-patches/0001-CVE-dependency-fixes.patch
+	patch -d $(REGISTRAR_IMAGE) -p1 -F0 < node-driver-registrar-dep-patches/0001-CVE-dependency-fixes.patch
 
 clean-registrar:
 	rm -rf ./$(REGISTRAR_IMAGE)
