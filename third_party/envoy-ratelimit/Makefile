@@ -26,13 +26,19 @@ init-source: $(ENVOY_RATELIMIT_DOWNLOADED)
 $(ENVOY_RATELIMIT_DOWNLOADED):
 	git clone -n https://github.com/envoyproxy/ratelimit.git envoy-ratelimit
 	cd envoy-ratelimit && git checkout $(ENVOY_RATELIMIT_VERSION)
-# 	Apply patches for the specified Envoy Ratelimit version if patches directory exists.
-# 	This code checks for the presence of a patches directory corresponding to ENVOY_RATELIMIT_VERSION.
-# 	If the directory exists, it iterates over all .patch files within it.
-# 	For each valid patch file, it applies the patch to the envoy-ratelimit directory using patch -p1.
-	for patch in patches/*.patch; do \
+# 	Patches live in two directories, applied in this order:
+# 	  patches/     - functional changes to upstream source. Written and
+# 	                 reviewed by hand; only ever verified to still apply.
+# 	  dep-patches/ - dependency pins for CVE remediation, touching go.mod and
+# 	                 go.sum only. Derived from the pinned versions, so these
+# 	                 are regenerated rather than edited.
+# 	-F0 disables patch's default fuzz factor: a patch whose context no longer
+# 	matches must fail rather than land somewhere approximate.
+# 	There are no functional patches here today, so patches/ does not exist;
+# 	the -f guard skips it.
+	for patch in patches/*.patch dep-patches/*.patch; do \
 		if [ -f "$$patch" ]; then \
-			patch -d envoy-ratelimit -p1 < "$$patch" || exit 1; \
+			patch -d envoy-ratelimit -p1 -F0 < "$$patch" || exit 1; \
 		fi; \
 	done
 	touch $@

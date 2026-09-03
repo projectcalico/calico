@@ -28,13 +28,17 @@ $(ENVOY_GATEWAY_DOWNLOADED):
 	curl -sSfL --retry 5 -o /tmp/envoy-gateway.tar.gz https://github.com/envoyproxy/gateway/archive/refs/tags/$(ENVOY_GATEWAY_VERSION).tar.gz
 	tar xz --strip-components 1 -C envoy-gateway -f /tmp/envoy-gateway.tar.gz && rm -f /tmp/envoy-gateway.tar.gz
 
-# 	Apply patches for the specified Envoy Gateway version if patches directory exists.
-# 	This code checks for the presence of a patches directory corresponding to ENVOY_GATEWAY_VERSION.
-# 	If the directory exists, it iterates over all .patch files within it.
-# 	For each valid patch file, it applies the patch to the envoy-gateway directory using patch -p1.
-	for patch in patches/*.patch; do \
+# 	Patches live in two directories, applied in this order:
+# 	  patches/     - functional changes to upstream source. Written and
+# 	                 reviewed by hand; only ever verified to still apply.
+# 	  dep-patches/ - dependency pins for CVE remediation, touching go.mod and
+# 	                 go.sum only. Derived from the pinned versions, so these
+# 	                 are regenerated rather than edited.
+# 	-F0 disables patch's default fuzz factor: a patch whose context no longer
+# 	matches must fail rather than land somewhere approximate.
+	for patch in patches/*.patch dep-patches/*.patch; do \
 		if [ -f "$$patch" ]; then \
-			patch -d envoy-gateway -p1 < "$$patch" || exit 1; \
+			patch -d envoy-gateway -p1 -F0 < "$$patch" || exit 1; \
 		fi; \
 	done
 	touch $@
