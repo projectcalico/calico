@@ -347,7 +347,7 @@ release-github: hack/bin/release var-require-all-VERSION-GITHUB_TOKEN
 GITHUB_CLI_VERSION?=2.62.0
 hack/bin/gh:
 	mkdir -p hack/bin
-	curl -sSL -o hack/bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
+	curl -sSL $(CURL_GITHUB_OPTS) -o hack/bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
 	tar -zxvf hack/bin/gh.tgz -C hack/bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
 	chmod +x $@
 	rm hack/bin/gh.tgz
@@ -387,7 +387,7 @@ create-release-branch: hack/bin/release var-require-all-CALICO_REF var-require-o
 
 GOTESTSUM_VERSION?=1.13.0
 $(HACK_BIN)/gotestsum: $(HACK_BIN)
-	@curl -sSL -o $(HACK_BIN)/gotestsum.tar.gz https://github.com/gotestyourself/gotestsum/releases/download/v$(GOTESTSUM_VERSION)/gotestsum_$(GOTESTSUM_VERSION)_$(NATIVE_OS)_$(NATIVE_ARCH).tar.gz
+	@curl -sSL $(CURL_GITHUB_OPTS) -o $(HACK_BIN)/gotestsum.tar.gz https://github.com/gotestyourself/gotestsum/releases/download/v$(GOTESTSUM_VERSION)/gotestsum_$(GOTESTSUM_VERSION)_$(NATIVE_OS)_$(NATIVE_ARCH).tar.gz
 	@tar -zxvf $(HACK_BIN)/gotestsum.tar.gz -C $(HACK_BIN) gotestsum
 	@chmod +x $@
 	@rm $(HACK_BIN)/gotestsum.tar.gz
