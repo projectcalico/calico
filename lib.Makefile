@@ -408,6 +408,10 @@ DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL) 
 	--build-arg GIT_VERSION=$(GIT_VERSION) \
 	--build-arg UBI_IMAGE=$(UBI_IMAGE)
 
+# Fail a clone that needs credentials instead of blocking on git's terminal
+# prompt, which hangs a CI job until the pipeline timeout.
+export GIT_TERMINAL_PROMPT ?= 0
+
 DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--init \
@@ -415,6 +419,7 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 		$(DOCKER_GIT_WORKTREE_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
+		-e GIT_TERMINAL_PROMPT=$(GIT_TERMINAL_PROMPT) \
 		$(GOARCH_FLAGS) \
 		-e GOPATH=/go \
 		-e OS=$(BUILDOS) \
@@ -706,6 +711,18 @@ commit-and-push-pr:
 # GitHub API helpers
 #   Helper macros and targets to help with communicating with the github API
 ###############################################################################
+# Download a file. $(1) is the URL, $(2) the destination path.
+define fetch_file
+	$(REPO_ROOT)/hack/fetch-file $(1) $(2)
+endef
+
+# Check out a pinned revision. $(1) is the repo URL, $(2) the revision,
+# $(3) the destination directory. Pass --with-history as $(4) if the build
+# reads git state from the checkout.
+define fetch_repo
+	$(REPO_ROOT)/hack/fetch-repo $(1) $(2) $(3) $(4)
+endef
+
 GIT_COMMIT_MESSAGE?="Automatic Pin Updates"
 GIT_COMMIT_TITLE?="Semaphore Auto Pin Update"
 GIT_PR_BRANCH_BASE?=$(SEMAPHORE_GIT_BRANCH)
