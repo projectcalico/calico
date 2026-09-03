@@ -28,7 +28,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	fakecalicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset/fake"
 	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -128,7 +127,6 @@ var _ = Describe("CSR controller tests", func() {
 	var (
 		cli                client.Client
 		clientset          *fake.Clientset
-		calicoClientset    *fakecalicoclient.Clientset
 		ctx                context.Context
 		r                  reconcileCSR
 		scheme             *runtime.Scheme
@@ -149,7 +147,6 @@ var _ = Describe("CSR controller tests", func() {
 		// Create a client that will have a crud interface of k8s objects.
 		cli = ctrlrfake.DefaultFakeClientBuilder(scheme).WithStatusSubresource(ctrlrclient.TypesWithStatuses(scheme, certificatesv1.SchemeGroupVersion)...).Build()
 		clientset = fake.NewClientset()
-		calicoClientset = fakecalicoclient.NewSimpleClientset()
 		installation = &operatorv1.Installation{
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
 			Spec: operatorv1.InstallationSpec{
@@ -166,7 +163,6 @@ var _ = Describe("CSR controller tests", func() {
 		r = reconcileCSR{
 			client:        cli,
 			clientset:     clientset,
-			calicoClient:  calicoClientset,
 			scheme:        scheme,
 			provider:      operatorv1.ProviderNone,
 			clusterDomain: dns.DefaultClusterDomain,

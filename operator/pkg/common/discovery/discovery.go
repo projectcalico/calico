@@ -31,51 +31,6 @@ import (
 
 const gkeNodeLabelPrefix = "cloud.google.com/gke-"
 
-// EnterpriseAPIsExist reports whether the cluster serves the Calico Enterprise APIs.
-func EnterpriseAPIsExist(clientset kubernetes.Interface) (bool, error) {
-	resources, err := clientset.Discovery().ServerResourcesForGroupVersion("operator.tigera.io/v1")
-	if err != nil {
-		return false, err
-	}
-	for _, r := range resources.APIResources {
-		switch r.Kind {
-		case "LogCollector":
-			fallthrough
-		case "LogStorage":
-			fallthrough
-		case "Compliance":
-			fallthrough
-		case "IntrusionDetection":
-			fallthrough
-		case "ApplicationLayer":
-			fallthrough
-		case "Monitor":
-			fallthrough
-		case "ManagementCluster":
-			fallthrough
-		case "EgressGateway":
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func MultiTenant(ctx context.Context, c kubernetes.Interface) (bool, error) {
-	resources, err := c.Discovery().ServerResourcesForGroupVersion("operator.tigera.io/v1")
-	if err != nil {
-		return false, err
-	}
-	for _, res := range resources.APIResources {
-		if strings.EqualFold(res.Kind, "Manager") {
-			// If the Manager is namespaced, it means we're operating in multi-tenant mode.
-			return res.Namespaced, nil
-		}
-	}
-
-	// Default to single-tenant.
-	return false, nil
-}
-
 func AutoDiscoverProvider(ctx context.Context, clientset kubernetes.Interface) (operatorv1.Provider, error) {
 	// First, try to determine the platform based on the present API groups.
 	if platform, err := autodetectFromGroup(ctx, clientset); err != nil {

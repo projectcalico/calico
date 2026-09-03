@@ -41,6 +41,10 @@ type StartupExtension interface {
 
 	// Cloud reports whether this binary was built for the variant's hosted product.
 	Cloud() bool
+
+	// Controllers are the reconcilers the variant adds to the core set. They are added
+	// after the core controllers, so a variant can watch resources those own.
+	Controllers() []Controller
 }
 
 // noopStartup runs the core operator's behavior unchanged.
@@ -64,4 +68,8 @@ func (noopStartup) MultiTenant() bool {
 
 func (noopStartup) Cloud() bool {
 	return false
+}
+
+func (noopStartup) Controllers() []Controller {
+	return nil
 }
