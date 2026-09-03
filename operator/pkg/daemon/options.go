@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -17,6 +17,7 @@
 package daemon
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatortigeraiov1 "github.com/projectcalico/calico/operator/api/v1"
@@ -44,6 +45,10 @@ type Options struct {
 	// UncachedObjects are read straight from the apiserver rather than through the
 	// manager's cache, for a kind whose cached copy goes stale.
 	UncachedObjects []client.Object
+
+	// Collectors are Prometheus collectors registered alongside the operator's own,
+	// for metrics only the variant can gather.
+	Collectors []prometheus.Collector
 
 	// AfterParse runs once the flags are parsed, so a caller that registered its own
 	// flag on flag.CommandLine can act on it. Returning true exits zero, like the

@@ -1,5 +1,5 @@
 // Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -585,8 +585,10 @@ admission policy installation; once an Installation exists it is the authority o
 
 	// Register custom Prometheus metrics collector.
 	if common.MetricsEnabled() {
-		collector := metrics.NewOperatorCollector(mgr.GetClient())
-		ctrlmetrics.Registry.MustRegister(collector)
+		ctrlmetrics.Registry.MustRegister(metrics.NewOperatorCollector(mgr.GetClient()))
+		for _, collector := range opts.Collectors {
+			ctrlmetrics.Registry.MustRegister(collector)
+		}
 	}
 
 	setupLog.Info("starting manager")

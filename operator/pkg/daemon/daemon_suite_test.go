@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package extensions_test
+package daemon
 
 import (
 	"testing"
@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestExtensions(t *testing.T) {
+func TestDaemon(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "pkg/extensions Suite")
+	RunSpecs(t, "pkg/daemon Suite")
 }

@@ -16,6 +16,10 @@ package clusterconnection_test
 
 import (
 	"context"
+	"strconv"
+	"strings"
+
+	"golang.org/x/net/http/httpproxy"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -454,4 +458,91 @@ var _ = Describe("ManagementClusterConnection controller tests", func() {
 		})
 	})
 
+	Context("pod proxy resolution", func() {
+		BeforeEach(func() {
+			Expect(c.Create(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "calico-system"}})).NotTo(HaveOccurred())
+			// Resolution only runs when the deployment's availability has changed since the
+			// last reconcile, so the transition time has to be non-zero.
+			dpl.Status.Conditions = []appsv1.DeploymentCondition{{
+				Type:               appsv1.DeploymentAvailable,
+				Status:             v1.ConditionTrue,
+				LastTransitionTime: metav1.Now(),
+			}}
+			Expect(c.Create(ctx, dpl)).NotTo(HaveOccurred())
+			Expect(c.Status().Update(ctx, dpl)).NotTo(HaveOccurred())
+		})
+
+		DescribeTable("reads the proxy environment off the Guardian containers",
+			func(lowercase bool, pods []*test.ProxyConfig, expected []*httpproxy.Config) {
+				for i, pod := range pods {
+					createPodWithProxy(ctx, c, pod, lowercase, i)
+				}
+
+				_, err := r.Reconcile(ctx, reconcile.Request{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(clusterconnection.ResolvedPodProxies(r)).To(ConsistOf(expected))
+			},
+			Entry("a pod with no proxy set", false,
+				[]*test.ProxyConfig{nil},
+				[]*httpproxy.Config{nil}),
+			Entry("uppercase variables", false,
+				[]*test.ProxyConfig{{HTTPSProxy: "https://proxy.io:8080", NoProxy: "1.2.3.4"}},
+				[]*httpproxy.Config{{HTTPSProxy: "https://proxy.io:8080", NoProxy: "1.2.3.4"}}),
+			Entry("lowercase variables", true,
+				[]*test.ProxyConfig{{HTTPSProxy: "https://proxy.io:8080", NoProxy: "1.2.3.4"}},
+				[]*httpproxy.Config{{HTTPSProxy: "https://proxy.io:8080", NoProxy: "1.2.3.4"}}),
+			Entry("no_proxy on its own", false,
+				[]*test.ProxyConfig{{NoProxy: "1.2.3.4"}},
+				[]*httpproxy.Config{{NoProxy: "1.2.3.4"}}),
+			Entry("one proxied replica and one without", false,
+				[]*test.ProxyConfig{{HTTPSProxy: "https://proxy.io:8080"}, nil},
+				[]*httpproxy.Config{{HTTPSProxy: "https://proxy.io:8080"}, nil}),
+		)
+	})
+
 })
+
+// createPodWithProxy creates a Guardian pod whose container carries the proxy
+// environment the reconciler reads. HTTP_PROXY is set to a wrong value alongside
+// HTTPS_PROXY, to catch a reconciler that reads the wrong variable.
+func createPodWithProxy(ctx context.Context, c client.Client, config *test.ProxyConfig, lowercase bool, replicaNum int) {
+	pod := v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      render.GuardianDeploymentName + strconv.Itoa(replicaNum),
+			Namespace: render.GuardianNamespace,
+			Labels: map[string]string{
+				"k8s-app":                render.GuardianDeploymentName,
+				"app.kubernetes.io/name": render.GuardianDeploymentName,
+			},
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{{
+				Name: render.GuardianContainerName,
+				Env:  []v1.EnvVar{},
+			}},
+		},
+	}
+
+	if config != nil {
+		httpsProxyVarName := "HTTPS_PROXY"
+		httpProxyVarName := "HTTP_PROXY"
+		noProxyVarName := "NO_PROXY"
+		if lowercase {
+			httpsProxyVarName = strings.ToLower(httpsProxyVarName)
+			httpProxyVarName = strings.ToLower(httpProxyVarName)
+			noProxyVarName = strings.ToLower(noProxyVarName)
+		}
+		if config.HTTPSProxy != "" {
+			pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env,
+				v1.EnvVar{Name: httpsProxyVarName, Value: config.HTTPSProxy},
+				v1.EnvVar{Name: httpProxyVarName, Value: "http://wrong-proxy-url.com/"},
+			)
+		}
+		if config.NoProxy != "" {
+			pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env,
+				v1.EnvVar{Name: noProxyVarName, Value: config.NoProxy})
+		}
+	}
+
+	Expect(c.Create(ctx, &pod)).NotTo(HaveOccurred())
+}

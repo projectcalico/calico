@@ -2682,6 +2682,28 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		Expect(componentHandler.objectsToDelete).To(BeEmpty())
 	})
 
+	It("should create nothing for a variant that ships no policies", func() {
+		r = ReconcileInstallation{
+			ext: coreExtensions.Installation(),
+			opts: options.ControllerOptions{
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1),
+			},
+			client: clientFor(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
+				return componentHandler
+			},
+		}
+
+		installation.Spec.Variant = operator.CalicoEnterprise
+
+		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(componentHandler.objectsToCreate).To(BeEmpty())
+	})
+
 })
 
 var _ = Describe("updateValidatingAdmissionPolicies", func() {
@@ -2900,6 +2922,28 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 		}
 		Expect(deletedNames).To(HaveKey("stale-policy"))
 		Expect(deletedNames).To(HaveKey("stale-binding"))
+	})
+
+	It("should create nothing for a variant that ships no policies", func() {
+		r = ReconcileInstallation{
+			ext: coreExtensions.Installation(),
+			opts: options.ControllerOptions{
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1),
+			},
+			client: clientFor(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
+				return componentHandler
+			},
+		}
+
+		installation.Spec.Variant = operator.CalicoEnterprise
+
+		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(componentHandler.objectsToCreate).To(BeEmpty())
 	})
 
 })
