@@ -22,6 +22,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -1264,7 +1265,8 @@ func (config *Config) RouteTableIndices() []idalloc.IndexRange {
 	} else if config.RouteTableRange != (idalloc.IndexRange{}) {
 		log.Warn("Both `RouteTableRanges` and deprecated `RouteTableRange` options are set. `RouteTableRanges` value will be given precedence.")
 	}
-	return config.RouteTableRanges
+	// Clone so that callers cannot mutate our copy of the config.
+	return slices.Clone(config.RouteTableRanges)
 }
 
 func (config *Config) GetBPFAttachType() v3.BPFAttachOption {
