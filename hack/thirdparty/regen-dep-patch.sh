@@ -17,10 +17,10 @@
 #
 #   regen-dep-patch.sh <upstream-tree> <pin-file> <output-patch>
 #
-# go.mod and go.sum are reset to the upstream ref first, so the output depends
-# only on the pin file and the ref. Functional patches stay applied; they touch
-# source only. Cloned trees carry the ref to reset to; extracted ones are given
-# a baseline by init-dep-baseline.sh at fetch time.
+# go.mod and go.sum are reset first -- to the baseline init-dep-baseline.sh
+# recorded at fetch time for an extracted tree, or to the checked-out ref for a
+# cloned one -- so the output depends only on the pin file and that starting
+# point. Custom patches stay applied.
 #
 # Run inside $(DOCKER_GO_BUILD): go mod tidy's output depends on the Go version.
 #
