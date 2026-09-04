@@ -94,9 +94,6 @@ func init() {
 
 func printVersion() {
 	log.Info(fmt.Sprintf("Version: %v", version.VERSION))
-	if version.BuildVariant != "" {
-		log.Info(fmt.Sprintf("Variant: %s", version.BuildVariant))
-	}
 	log.Info(fmt.Sprintf("Go Version: %s", goruntime.Version()))
 	log.Info(fmt.Sprintf("Go OS/Arch: %s/%s", goruntime.GOOS, goruntime.GOARCH))
 }
@@ -184,9 +181,6 @@ admission policy installation; once an Installation exists it is the authority o
 		fmt.Println("Calico:", components.CalicoRelease)
 		for _, name := range slices.Sorted(maps.Keys(opts.Versions)) {
 			fmt.Printf("%s: %s\n", name, opts.Versions[name])
-		}
-		if version.BuildVariant != "" {
-			fmt.Println("Variant:", version.BuildVariant)
 		}
 		os.Exit(0)
 	}

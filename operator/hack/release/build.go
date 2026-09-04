@@ -28,7 +28,6 @@ import (
 
 	"github.com/projectcalico/calico/operator/hack/release/internal/command"
 	"github.com/projectcalico/calico/operator/hack/release/internal/middleware"
-	"github.com/projectcalico/calico/operator/hack/release/internal/setup"
 	"github.com/projectcalico/calico/operator/hack/release/internal/versions"
 )
 
@@ -177,12 +176,6 @@ var buildAction = func(ctx context.Context, c *cli.Command) (string, map[string]
 	} else {
 		buildLog = buildLog.WithField("release", true)
 		buildEnv = append(buildEnv, "RELEASE=true")
-		if setup.IsCloud {
-			// Cloud releases carry a -cloud suffix, so VERSION (vX.Y.Z-cloud) differs from the git
-			// tag (vX.Y.Z). Pass GIT_VERSION=VERSION so the Makefile's VERSION==GIT_VERSION guard
-			// passes and the operator binary reports the -cloud version.
-			buildEnv = append(buildEnv, fmt.Sprintf("GIT_VERSION=%s", version))
-		}
 	}
 
 	// Build the Operator and verify the build

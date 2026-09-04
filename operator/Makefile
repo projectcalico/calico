@@ -39,21 +39,10 @@ PACKAGE_NAME = github.com/projectcalico/calico/operator
 # These sit above metadata.mk, whose Calico defaults would otherwise win, and use
 # ?= for the registry so a hashrelease can send the image somewhere else (see
 # hack/release/README.md).
-CLOUD_LDFLAGS =
-ifeq ($(VARIANT),cloud)
-# Calico Cloud variant: operator-cloud on GCR, amd64 only.
-BUILD_IMAGES    = tigera-tesla/operator-cloud
-DEV_REGISTRIES ?= gcr.io
-ARCHES          = amd64
-BINARY_NAME    ?= operator-cloud
-# Bake cloud mode into the operator binary so it cannot be disabled at runtime.
-CLOUD_LDFLAGS = -X $(PACKAGE_NAME)/version.BuildVariant=cloud
-else
 BUILD_IMAGES    = tigera/operator
 DEV_REGISTRIES ?= quay.io
 ARCHES          = amd64 arm64 ppc64le s390x
 BINARY_NAME    ?= operator
-endif
 
 include ../metadata.mk
 
@@ -128,7 +117,7 @@ $(BINDIR)/$(BINARY_NAME)-$(ARCH): $(SRC_FILES) $(ENVOY_GATEWAY_CHART) $(ISTIO_CH
 	mkdir -p $(BINDIR)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
-	go build -buildvcs=false -v -o $(BINDIR)/$(BINARY_NAME)-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) $(CLOUD_LDFLAGS) -s -w" ./cmd/'
+	go build -buildvcs=false -v -o $(BINDIR)/$(BINARY_NAME)-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) -s -w" ./cmd/'
 
 OPERATOR_IMAGE_NAME = $(firstword $(BUILD_IMAGES))
 IMAGE_BUILD_MARKER  = operator_container-$(ARCH).created
@@ -301,11 +290,6 @@ release-tag: var-require-all-RELEASE_TAG-GITHUB_TOKEN
 	$(MAKE) release VERSION=$(RELEASE_TAG)
 	REPO=$(REPO) $(MAKE) release-publish VERSION=$(RELEASE_TAG)
 
-# Calico Cloud releases reuse release-tag with VARIANT=cloud, e.g.
-# `make release-tag VARIANT=cloud RELEASE_TAG=vX.Y.Z-cloud`. The release tool applies cloud
-# behavior (GCR/operator-cloud image, vX.Y.Z-cloud version format, no GitHub release) at runtime
-# based on VARIANT. Cloud tags are the regular operator version with a -cloud suffix.
-
 ## Generate release notes for the specified VERSION.
 release-notes: hack/bin/release var-require-all-VERSION-GITHUB_TOKEN
 	REPO=$(REPO) hack/bin/release notes
@@ -357,11 +341,6 @@ hack/bin/release: $(shell find ./hack/release -type f)
 	$(DOCKER_GO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
 	go build -buildvcs=false -o hack/bin/release ./hack/release'
-
-# Calico Cloud releases use the same release binary and targets with VARIANT=cloud, e.g.
-# `make release VARIANT=cloud` / `make release-tag VARIANT=cloud`. The release tool activates its
-# cloud behavior (GCR/operator-cloud image, vX.Y.Z-cloud version format, no GitHub release) at
-# runtime when VARIANT=cloud; no separate binary or build tag is required.
 
 hack/release/ut:
 	mkdir -p report/release

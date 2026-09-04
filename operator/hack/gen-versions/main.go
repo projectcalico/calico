@@ -22,25 +22,22 @@ import (
 )
 
 const (
-	eeVersionsTpl    = "enterprise.go.tpl"
-	osVersionsTpl    = "calico.go.tpl"
-	cloudVersionsTpl = "cloud.go.tpl"
+	eeVersionsTpl = "enterprise.go.tpl"
+	osVersionsTpl = "calico.go.tpl"
 )
 
 var (
-	templateDir       string
-	debug             bool
-	eeVersionsPath    string
-	osVersionsPath    string
-	cloudVersionsPath string
+	templateDir    string
+	debug          bool
+	eeVersionsPath string
+	osVersionsPath string
 )
 
 func main() {
-	flag.StringVar(&templateDir, "template-dir", "hack/gen-versions/", "path to directory containing templates files named calico.go.tpl, enterprise.go.tpl and cloud.go.tpl")
+	flag.StringVar(&templateDir, "template-dir", "hack/gen-versions/", "path to directory containing templates files named calico.go.tpl and enterprise.go.tpl")
 	flag.BoolVar(&debug, "debug", false, "enable debug logging")
 	flag.StringVar(&eeVersionsPath, "ee-versions", "", "path to enterprise versions file")
 	flag.StringVar(&osVersionsPath, "os-versions", "", "path to calico versions file")
-	flag.StringVar(&cloudVersionsPath, "cloud-versions", "", "path to cloud versions file")
 	flag.Parse()
 
 	if debug {
@@ -50,13 +47,13 @@ func main() {
 
 	// Exactly one of the versions flags must be set.
 	set := 0
-	for _, p := range []string{osVersionsPath, eeVersionsPath, cloudVersionsPath} {
+	for _, p := range []string{osVersionsPath, eeVersionsPath} {
 		if p != "" {
 			set++
 		}
 	}
 	if set != 1 {
-		log.Println("must specify exactly one of -os-versions, -ee-versions or -cloud-versions")
+		log.Println("must specify exactly one of -os-versions or -ee-versions")
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
@@ -68,10 +65,6 @@ func main() {
 		}
 	case eeVersionsPath != "":
 		if err := run(eeVersionsPath, filepath.Join(templateDir, eeVersionsTpl)); err != nil {
-			log.Fatalln(err)
-		}
-	case cloudVersionsPath != "":
-		if err := run(cloudVersionsPath, filepath.Join(templateDir, cloudVersionsTpl)); err != nil {
 			log.Fatalln(err)
 		}
 	}
