@@ -149,7 +149,7 @@ require (
 	sigs.k8s.io/gateway-api v1.5.1
 	sigs.k8s.io/gateway-api/conformance v1.5.1
 	sigs.k8s.io/kind v0.32.0
-	sigs.k8s.io/knftables v0.0.22
+	sigs.k8s.io/knftables v0.0.23-0.20260903141422-0087e9ef619d
 	sigs.k8s.io/network-policy-api v0.2.0
 	sigs.k8s.io/randfill v1.0.0
 	sigs.k8s.io/secrets-store-csi-driver v1.6.0
@@ -493,8 +493,5 @@ replace (
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.37.0
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.37.0
 )
-
-// Flowtable counter support has not landed in an upstream knftables release yet.
-replace sigs.k8s.io/knftables => github.com/projectcalico/knftables v0.0.23-0.20260831184608-e620411b33fd
 
 replace github.com/projectcalico/calico/operator/api => ./operator/api

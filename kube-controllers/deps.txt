@@ -82,7 +82,6 @@ github.com/patrickmn/go-cache v2.1.0+incompatible
 github.com/peterbourgon/diskv v2.0.1+incompatible
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 github.com/projectcalico/calico
-github.com/projectcalico/knftables v0.0.23-0.20260831184608-e620411b33fd
 github.com/prometheus/client_golang v1.24.0
 github.com/prometheus/client_model v0.6.2
 github.com/prometheus/common v0.70.0
@@ -159,6 +158,7 @@ kubevirt.io/containerized-data-importer-api v1.64.0
 kubevirt.io/controller-lifecycle-operator-sdk/api v0.2.4
 sigs.k8s.io/controller-runtime v0.24.1
 sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730
+sigs.k8s.io/knftables v0.0.23-0.20260903141422-0087e9ef619d
 sigs.k8s.io/kustomize/api v0.21.1
 sigs.k8s.io/kustomize/kyaml v0.21.1
 sigs.k8s.io/network-policy-api v0.2.0
