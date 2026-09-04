@@ -19,10 +19,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 func TestApis(t *testing.T) {

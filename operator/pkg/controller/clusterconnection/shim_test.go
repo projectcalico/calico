@@ -21,7 +21,6 @@ import (
 	"context"
 
 	"golang.org/x/net/http/httpproxy"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
