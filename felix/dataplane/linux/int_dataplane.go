@@ -2245,11 +2245,8 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				},
 			)
 
-			// A flow that pre-dates BPF and is forwarded between two host interfaces
-			// matches none of the accepts above, so a DROP policy on FORWARD would kill
-			// it. Linux conntrack vetted it, which is the same signal INPUT trusts.
-			// Must stay after the to-workload jumps so that workload destinations keep
-			// going through the dispatch chain.
+			// Forwarded between two host interfaces, so matched by none of the accepts
+			// above. Linux conntrack vetted it, the same signal INPUT trusts.
 			fwdRules = append(fwdRules,
 				generictables.Rule{
 					Match: d.newMatch().

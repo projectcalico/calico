@@ -5581,9 +5581,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// outlive that deletion: the DNAT binding lives in the Linux conntrack
 				// entry, not in the rule.
 				//
-				// Pinned to one matrix point to keep the cost down.  Neither DSR nor the
-				// tunnel affects the pod-to-ClusterIP path.  The addresses and the rules
-				// below are v4, hence the explicit IPv6 exclusion.
+				// Pinned to one matrix point to keep the cost down; these flows pre-date
+				// BPF so they never take the DSR or tunnel path.  The addresses below are
+				// v4, hence the explicit IPv6 exclusion.
 				if testOpts.dsr && !testOpts.ipv6 && testOpts.tunnel == "none" {
 					const (
 						migrationSvcIP   = "10.101.0.99"
@@ -5692,19 +5692,34 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Expect(err).NotTo(HaveOccurred())
 						Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(1))
 
+						// The masquerade mimics kube-proxy, which SNATs node port traffic so
+						// that replies come back via the ingress node.  Only the iptables run
+						// reproduces the regression: nftables mode sets the FORWARD policy to
+						// ACCEPT (see infrastructure.Felix), so nothing drops the packet there.
 						By("Installing the NodePort rules kube-proxy would have written")
 						f := tc.Felixes[0]
 						target := net.JoinHostPort(backend.IP, backend.Ports)
-						f.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat", "-N", "KUBE-SERVICES")
-						f.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat", "-A", "KUBE-SERVICES",
-							"-m", "addrtype", "--dst-type", "LOCAL", "-p", "tcp",
-							"--dport", fmt.Sprint(nodePort), "-j", "DNAT", "--to-destination", target)
-						f.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat",
-							"-I", "PREROUTING", "-j", "KUBE-SERVICES")
-						// kube-proxy masquerades node port traffic so replies come back via
-						// the ingress node.
-						f.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat", "-A", "POSTROUTING",
-							"-d", backend.IP, "-p", "tcp", "--dport", backend.Ports, "-j", "MASQUERADE")
+						if NFTMode() {
+							f.Exec("nft", "add", "table", "ip", "kube-proxy")
+							f.Exec("nft", "add", "chain", "ip", "kube-proxy", "nodeports",
+								"{ type nat hook prerouting priority dstnat ; }")
+							f.Exec("nft", "add", "rule", "ip", "kube-proxy", "nodeports",
+								"fib", "daddr", "type", "local", "tcp", "dport", fmt.Sprint(nodePort),
+								"dnat", "to", target)
+							f.Exec("nft", "add", "chain", "ip", "kube-proxy", "masq",
+								"{ type nat hook postrouting priority srcnat ; }")
+							f.Exec("nft", "add", "rule", "ip", "kube-proxy", "masq",
+								"ip", "daddr", backend.IP, "tcp", "dport", backend.Ports, "masquerade")
+						} else {
+							f.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat", "-N", "KUBE-SERVICES")
+							f.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat", "-A", "KUBE-SERVICES",
+								"-m", "addrtype", "--dst-type", "LOCAL", "-p", "tcp",
+								"--dport", fmt.Sprint(nodePort), "-j", "DNAT", "--to-destination", target)
+							f.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat",
+								"-I", "PREROUTING", "-j", "KUBE-SERVICES")
+							f.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat", "-A", "POSTROUTING",
+								"-d", backend.IP, "-p", "tcp", "--dport", backend.Ports, "-j", "MASQUERADE")
+						}
 
 						By("Starting persistent connection from the external client to the node port")
 						pc = &PersistentConnection{
