@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
-	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -106,7 +105,6 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithVersion(ver.FormattedString()),
 					calico.WithOperatorVersion(operatorVer.FormattedString()),
-					calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
 					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithLogsDir(filepath.Join(cfg.LogsDir, ver.FormattedString())),
@@ -150,7 +148,6 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithVersion(ver.FormattedString()),
 					calico.WithOperatorVersion(operatorVer.FormattedString()),
-					calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
 					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithLogsDir(filepath.Join(cfg.LogsDir, ver.FormattedString())),
@@ -197,7 +194,6 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 		repoFlag,
 		repoRemoteFlag,
 	}
-	flags = append(flags, operatorGitFlags...)
 	return &cli.Command{
 		Name:  "public",
 		Usage: "Make a published release available to the public",
@@ -212,7 +208,6 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 				calico.WithRepoRoot(cfg.RepoRootDir),
 				calico.WithVersion(ver.FormattedString()),
 				calico.WithOperatorVersion(operatorVer.FormattedString()),
-				calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
 				calico.WithGithubOrg(c.String(orgFlag.Name)),
 				calico.WithRepoName(c.String(repoFlag.Name)),
 				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
@@ -231,26 +226,8 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 	}
 }
 
-func determineOperatorReleaseVersion(c *cli.Command, tmpDir string) (string, error) {
-	// Clone the operator repository to determine the operator version.
-	operatorDir := filepath.Join(tmpDir, c.String(operatorRepoFlag.Name))
-	if err := operator.Clone(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name), operatorDir); err != nil {
-		return "", fmt.Errorf("clone operator repository: %w", err)
-	}
-	defer func() { _ = os.RemoveAll(operatorDir) }()
-	operatorGitVer, err := command.GitVersion(operatorDir, true)
-	if err != nil {
-		return "", fmt.Errorf("determine operator git version: %w", err)
-	}
-	operatorVer, err := version.DetermineReleaseVersion(version.New(operatorGitVer), operator.DefaultDevTagSuffix)
-	if err != nil {
-		return "", err
-	}
-	return operatorVer.FormattedString(), nil
-}
-
 func releasePrepCommand(cfg *Config) *cli.Command {
-	flags := append(slices.Clone(productFlags), operatorGitFlags...)
+	flags := slices.Clone(productFlags)
 	flags = append(flags,
 		githubTokenFlag,
 		branchCheckFlag,
@@ -270,10 +247,7 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 			outs := map[string]any{
 				"version": ver.FormattedString(),
 			}
-			operatorVer, err := determineOperatorReleaseVersion(c, cfg.TmpDir)
-			if err != nil {
-				return "", outs, err
-			}
+			operatorVer := ver.FormattedString()
 			outs["operator"] = operatorVer
 
 			// Generate release notes
@@ -287,7 +261,6 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 				calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 				calico.WithVersion(ver.FormattedString()),
 				calico.WithOperatorVersion(operatorVer),
-				calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
 				calico.WithGithubOrg(c.String(orgFlag.Name)),
 				calico.WithRepoName(c.String(repoFlag.Name)),
 				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
@@ -313,7 +286,6 @@ func releaseBuildFlags() []cli.Flag {
 	f = append(f,
 		registryFlag,
 		archFlag)
-	f = append(f, operatorGitFlags...)
 	f = append(f,
 		branchCheckFlag,
 		validationFlag,
@@ -333,7 +305,6 @@ func releasePublishFlags() []cli.Flag {
 		branchCheckFlag,
 		validationFlag,
 	)
-	f = append(f, operatorGitFlags...)
 	return f
 }
 

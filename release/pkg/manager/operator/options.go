@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,23 +43,9 @@ func WithCalicoVersion(version string) Option {
 	}
 }
 
-func WithReleaseBranchPrefix(prefix string) Option {
-	return func(o *OperatorManager) error {
-		o.releaseBranchPrefix = prefix
-		return nil
-	}
-}
-
 func WithValidate(validate bool) Option {
 	return func(o *OperatorManager) error {
 		o.validate = validate
-		return nil
-	}
-}
-
-func WithReleaseBranchValidation(validate bool) Option {
-	return func(o *OperatorManager) error {
-		o.validateBranch = validate
 		return nil
 	}
 }

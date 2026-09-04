@@ -157,7 +157,8 @@ clean: clean-windows
 	rm -rf certs *.tar $(NODE_CONTAINER_BIN_DIR)
 	rm -rf $(BUILD_DEPS)
 	rm -rf filesystem/included-source
-	rm -rf $(REPO_ROOT)/hack/test/kind/infra/operator
+	# Left behind by the old kind flow, which cloned the operator instead of building it in tree.
+	rm -rf ../hack/test/kind/infra/operator
 	rm -rf dist
 	rm -rf bin
 	# We build these as part of the node build, so clean them as part of the clean.
@@ -433,15 +434,22 @@ release-windows-archive: release-prereqs
 	$(MAKE) build-windows-archive WINDOWS_ARCHIVE_TAG=$(VERSION)
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs .release-$(VERSION).published
-.release-$(VERSION).published:
-	# Push node images.
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+.PHONY: release-publish release-publish-linux release-publish-windows
+release-publish: release-publish-linux release-publish-windows
 
-	# Push Windows images.
-	$(MAKE) release-windows IMAGETAG=$(VERSION) CONFIRM=$(CONFIRM)
+release-publish-linux: release-prereqs bin/crane
+	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
+		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \
+	else \
+		$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM); \
+	fi
 
-	touch $@
+release-publish-windows: release-prereqs bin/crane
+	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(WINDOWS_IMAGE)" "$(VERSION)"; then \
+		echo "$(WINDOWS_IMAGE):$(VERSION) is already published, skipping"; \
+	else \
+		$(MAKE) release-windows IMAGETAG=$(VERSION) CONFIRM=$(CONFIRM); \
+	fi
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.

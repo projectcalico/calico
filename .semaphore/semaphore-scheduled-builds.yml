@@ -215,6 +215,8 @@ promotions:
     pipeline_file: push-images/whisker.yml
   - name: Push Envoy images
     pipeline_file: push-images/envoy.yml
+  - name: Push operator images
+    pipeline_file: push-images/operator.yml
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
     auto_promote:
@@ -347,7 +349,7 @@ blocks:
     run:
       when: >-
         true or
-        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/apis/migration', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/apis/migration', '/operator/api', '/operator/pkg/crds', '/operator/pkg/admission', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       jobs:
@@ -359,6 +361,7 @@ blocks:
             - make -C felix gen-files
             - make -C goldmane gen-files
             - make -C kube-controllers gen-files
+            - make -C operator gen-files
             - make gen-manifests
             - make fix-changed
             - make check-ocp-no-crds
@@ -589,6 +592,28 @@ blocks:
             - docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
             - zstd -3 --rm /tmp/whisker-image.tar
             - gcloud storage cp /tmp/whisker-image.tar.zst "${GCS_WORKFLOW_DIR}/whisker-image.tar.zst"
+  - name: "Build: operator image"
+    # The operator image bakes in the references it will install
+    # (localhost:5000/calico/<name>:test-build), so this producer builds it
+    # through the same `make kind-operator-image` its consumers run.
+    run:
+      when: "true"
+    dependencies: []
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      jobs:
+        - name: "Build and cache operator image"
+          commands:
+            - make kind-operator-image
+            - docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
+            - zstd -3 --rm /tmp/operator-image.tar
+            - gcloud storage cp /tmp/operator-image.tar.zst "${GCS_WORKFLOW_DIR}/operator-image.tar.zst"
   - name: Prerequisites
     skip:
       # Always skip, this is a dummy job used to group prerequisite checks.
@@ -938,6 +963,7 @@ blocks:
       - "Build: calico image"
       - "Build: node image"
       - "Build: whisker image"
+      - "Build: operator image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
@@ -1530,6 +1556,7 @@ blocks:
       - Prerequisites
       - "Build: calico image"
       - "Build: node image"
+      - "Build: operator image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
@@ -1752,6 +1779,75 @@ blocks:
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
+  - name: Operator
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      prologue:
+        commands:
+          - .semaphore/load-cached-images
+          - cd operator
+      jobs:
+        - name: "Operator: static checks and unit tests"
+          commands:
+            - export TEST_SUITE_PREFIX="operator"
+            - ../.semaphore/run-and-monitor make-ci.log make ci
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --ignore-missing ./report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Operator" || true'
+  - name: "Operator: multi-arch build"
+    # The operator has no cgo and no build constraints, so cross-compiling the
+    # binary is the whole of the per-arch coverage. `make cd` and the release
+    # build assemble the images.
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd operator
+      jobs:
+        - name: "Operator: build multi-arch binaries"
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+  - name: "Operator FV"
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+      - "Build: calico image"
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      prologue:
+        commands:
+          - .semaphore/load-cached-images
+          - cd operator
+      jobs:
+        - name: "Operator: FV on kind"
+          execution_time_limit:
+            minutes: 60
+          commands:
+            - export TEST_SUITE_PREFIX="operator-fv"
+            - ../.semaphore/run-and-monitor make-fv.log make fv
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --ignore-missing ./report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Operator FV" || true'
   - name: pod2daemon
     run:
       when: "true"

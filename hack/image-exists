@@ -14,19 +14,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# image-exists STAMP_FILE
+# image-exists STAMP_FILE [EXPECTED_REF]
 #
-# Prints MISSING-IMAGE on stdout when STAMP_FILE records an image ref that
-# Docker doesn't have locally. Used as a Make prereq via $(shell) so a
-# pruned image forces the stamp's rule to re-run even when the stamp's
-# mtime is fresh.
+# Prints MISSING-IMAGE when the stamp's recorded image ref is absent from
+# Docker or differs from EXPECTED_REF. Used as a Make prereq via $(shell), so
+# either case forces the stamp's rule to re-run.
 
 set -u
 
-stamp=${1:?usage: image-exists STAMP_FILE}
+stamp=${1:?usage: image-exists STAMP_FILE [EXPECTED_REF]}
+expected=${2:-}
 
 [ -f "$stamp" ] || exit 0
 img=$(cat "$stamp")
 [ -n "$img" ] || exit 0
+if [ -n "$expected" ] && [ "$img" != "$expected" ]; then
+    echo MISSING-IMAGE
+    exit 0
+fi
 docker image inspect "$img" >/dev/null 2>&1 && exit 0
 echo MISSING-IMAGE

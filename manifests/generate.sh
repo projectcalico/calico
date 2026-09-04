@@ -80,7 +80,7 @@ ${HELM} -n tigera-operator template \
 # This manifest is used in "Calico the hard way" documentation.
 ##########################################################################
 echo "# CustomResourceDefinitions for Calico the Hard Way" > crds.yaml
-for FILE in $(ls ../charts/calico/crds); do
+for FILE in $(ls ../charts/calico/crds/*.yaml | xargs -n1 basename); do
 	${HELM} template ../charts/calico \
 		--include-crds \
 		--show-only "crds/$FILE" \
@@ -94,13 +94,20 @@ done
 ##########################################################################
 # Build manifest which includes both Calico and Operator CRDs.
 ##########################################################################
+# The operator CRDs a Calico install ships come from the operator's own generated
+# copies, listed in the file both this script and pkg/crds/crds.go read.
+OPERATOR_CRD_DIR=../operator/pkg/crds/operator
+append_operator_crds() {
+	local out=$1
+	for FILE in $(grep -v '^#' ../operator/pkg/crds/calico_operator_crds.txt); do
+		echo "---" >> $out
+		echo "# Source: operator/pkg/crds/operator/$FILE" >> $out
+		cat $OPERATOR_CRD_DIR/$FILE >> $out
+	done
+}
+
 echo "# crd.projectcalico.org/v1 and operator.tigera.io/v1 APIs" > v1_crd_projectcalico_org.yaml
-for FILE in $(ls ../charts/crd.projectcalico.org.v1/templates/*.yaml | xargs -n1 basename); do
-	${HELM} template \
-		--show-only templates/$FILE \
-		--set version=$CALICO_VERSION \
-		../charts/crd.projectcalico.org.v1 >> v1_crd_projectcalico_org.yaml
-done
+append_operator_crds v1_crd_projectcalico_org.yaml
 for FILE in $(ls ../charts/crd.projectcalico.org.v1/templates/calico/*.yaml | xargs -n1 basename); do
 	${HELM} template \
 		--show-only templates/calico/$FILE \
@@ -129,6 +136,7 @@ generate_v3_bundle() {
 			--api-versions admissionregistration.k8s.io/$map_version/MutatingAdmissionPolicy \
 			../charts/projectcalico.org.v3 >> $out
 	done
+	append_operator_crds $out
 	for FILE in $(ls ../charts/projectcalico.org.v3/templates/calico/*.yaml | xargs -n1 basename); do
 		${HELM} template \
 			--show-only templates/calico/$FILE \

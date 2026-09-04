@@ -66,30 +66,27 @@ var (
 func NewManager(opts ...Option) *CalicoManager {
 	// Configure defaults here.
 	b := &CalicoManager{
-		runner:            &command.RealCommandRunner{},
-		productCode:       utils.CalicoProductCode,
-		validate:          true,
-		validateBranch:    true,
-		manifests:         true,
-		images:            true,
-		archiveImages:     true,
-		binaries:          true,
-		ocpBundle:         true,
-		tarball:           true,
-		windowsArchive:    true,
-		helmCharts:        true,
-		helmIndex:         true,
-		e2eBinaries:       true,
-		gitRef:            true,
-		githubRelease:     true,
-		imageRegistries:   defaultRegistries,
-		helmRegistries:    registry.DefaultHelmRegistries,
-		helmRepoURL:       utils.CalicoHelmRepoURL,
-		operatorRegistry:  operator.DefaultRegistry,
-		operatorImage:     operator.DefaultImage,
-		operatorGithubOrg: operator.Organization(),
-		operatorRepo:      operator.Repo(),
-		operatorBranch:    operator.Branch(),
+		runner:           &command.RealCommandRunner{},
+		productCode:      utils.CalicoProductCode,
+		validate:         true,
+		validateBranch:   true,
+		manifests:        true,
+		images:           true,
+		archiveImages:    true,
+		binaries:         true,
+		ocpBundle:        true,
+		tarball:          true,
+		windowsArchive:   true,
+		helmCharts:       true,
+		helmIndex:        true,
+		e2eBinaries:      true,
+		gitRef:           true,
+		githubRelease:    true,
+		imageRegistries:  defaultRegistries,
+		helmRegistries:   registry.DefaultHelmRegistries,
+		helmRepoURL:      utils.CalicoHelmRepoURL,
+		operatorRegistry: operator.DefaultRegistry,
+		operatorImage:    operator.DefaultImage,
 	}
 
 	// Run through provided options.
@@ -151,12 +148,9 @@ type CalicoManager struct {
 	calicoVersion string
 
 	// operator variables
-	operatorImage     string
-	operatorRegistry  string
-	operatorVersion   string
-	operatorGithubOrg string
-	operatorRepo      string
-	operatorBranch    string
+	operatorImage    string
+	operatorRegistry string
+	operatorVersion  string
 
 	// outputDir is the directory to which we should write release artifacts, and from
 	// which we should read them for publishing.
@@ -454,14 +448,9 @@ func (r *CalicoManager) PreHashreleaseValidate() error {
 }
 
 func (r *CalicoManager) checkCodeGeneration() error {
-	env := append(os.Environ(),
-		fmt.Sprintf("OPERATOR_ORGANIZATION=%s", r.operatorGithubOrg),
-		fmt.Sprintf("OPERATOR_GIT_REPO=%s", r.operatorRepo),
-		fmt.Sprintf("OPERATOR_BRANCH=%s", r.operatorBranch),
-	)
-	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "get-operator-crds generate check-dirty", env...); err != nil {
+	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate check-dirty"); err != nil {
 		logrus.WithError(err).Error("Failed to check code generation")
-		return fmt.Errorf("code generation error, try 'make get-operator-crds generate' to fix")
+		return fmt.Errorf("code generation error, try 'make generate' to fix")
 	}
 	return nil
 }
@@ -1239,13 +1228,37 @@ func (r *CalicoManager) buildReleaseTar() error {
 	return nil
 }
 
+// e2eSupportedArches are the arches e2e runners consume; ppc64le/s390x have no
+// e2e runners and only cost build time and disk.
+var e2eSupportedArches = []string{"amd64", "arm64"}
+
+// e2eArchitectures returns the e2e-supported subset of the configured arches.
+// An empty configured set means "all arches" (the tooling-wide convention) and
+// resolves to all supported e2e arches.
+func e2eArchitectures(configured []string) []string {
+	if len(configured) == 0 {
+		return slices.Clone(e2eSupportedArches)
+	}
+	var arches []string
+	for _, arch := range configured {
+		if slices.Contains(e2eSupportedArches, arch) {
+			arches = append(arches, arch)
+		}
+	}
+	return arches
+}
+
 func (r *CalicoManager) buildE2EBinaries() error {
+	arches := e2eArchitectures(r.architectures)
+	if len(arches) == 0 {
+		logrus.Warnf("e2e binaries requested but none of %v is a supported e2e arch (amd64/arm64); skipping", r.architectures)
+		return nil
+	}
 	logrus.Info("Building multi-arch e2e test binaries")
 	e2eDir := filepath.Join(r.repoRoot, "e2e")
-	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", r.calicoVersion))
-	if len(r.architectures) > 0 {
-		env = append(env, fmt.Sprintf("VALIDARCHES=%s", strings.Join(r.architectures, " ")))
-	}
+	// Restrict the build via ARCHES, not VALIDARCHES: lib.Makefile assigns
+	// VALIDARCHES with `=`, so it ignores the env.
+	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", r.calicoVersion), "ARCHES="+strings.Join(arches, " "))
 	out, err := r.makeInDirectoryWithOutput(e2eDir, "build-all", env...)
 	if err != nil {
 		logrus.Error(out)
@@ -1761,9 +1774,6 @@ func (r *CalicoManager) releaseBranchPrereqs() error {
 		logrus.Warn("Skipping pre-release branch validation")
 		return nil
 	}
-	if r.operatorBranch == "" {
-		return fmt.Errorf("operator branch not specified")
-	}
 	return nil
 }
 
@@ -1859,9 +1869,8 @@ func (r *CalicoManager) cutPlan() (*branch.CutPlan, error) {
 }
 
 // derivedBranchEdits returns the edits to make in the freshly-cut-branch.
-func derivedBranchEdits(derived, stream, operatorBranch string) []branch.Edit {
+func derivedBranchEdits(derived, stream string) []branch.Edit {
 	return []branch.Edit{
-		{File: "metadata.mk", Pattern: `^OPERATOR_BRANCH.*`, Replacement: fmt.Sprintf("OPERATOR_BRANCH ?= %s", operatorBranch), Required: true},
 		{File: "test-tools/mocknode/mock-node.yaml", Pattern: `([a-zA-Z .]+)([a-zA-Z.]+/mock-node:)[^[:space:]]+`, Replacement: fmt.Sprintf(`${1}${2}%s`, derived)},
 		{File: "process/testing/aso/export-env.sh", Pattern: `export RELEASE_STREAM="\$\{RELEASE_STREAM:=master\}"`, Replacement: fmt.Sprintf(`export RELEASE_STREAM="${RELEASE_STREAM:=%s}"`, stream)},
 		{File: "process/testing/aso/install-calico.sh", Pattern: `: \$\{RELEASE_STREAM:="master"\} # Default to master`, Replacement: fmt.Sprintf(`: ${RELEASE_STREAM:="%s"} # Default to %s`, stream, stream)},
@@ -1872,14 +1881,15 @@ func derivedBranchEdits(derived, stream, operatorBranch string) []branch.Edit {
 // edits, rewrites helm values, and runs code generation, returning changed files.
 func (r *CalicoManager) prepareDerived(derived string) ([]string, error) {
 	stream := strings.TrimPrefix(derived, r.releaseBranchPrefix+"-")
-	written, _, err := branch.ApplyEdits(r.repoRoot, derivedBranchEdits(derived, stream, r.operatorBranch))
+	written, _, err := branch.ApplyEdits(r.repoRoot, derivedBranchEdits(derived, stream))
 	if err != nil {
 		return nil, err
 	}
 
-	// Set calico version and operator version to their respective branches for pre-release branch.
+	// The operator ships on Calico's version stream, so a pre-release branch
+	// pins both to the derived branch.
 	r.calicoVersion = derived
-	r.operatorVersion = r.operatorBranch
+	r.operatorVersion = derived
 
 	logrus.WithFields(logrus.Fields{
 		"calico_version":   r.calicoVersion,
@@ -1963,12 +1973,7 @@ func (r *CalicoManager) updateAndCommitPrep() error {
 	if err := r.modifyHelmChartsValues(); err != nil {
 		return fmt.Errorf("failed to update chart versions: %w", err)
 	}
-	env := append(os.Environ(),
-		fmt.Sprintf("OPERATOR_ORGANIZATION=%s", r.operatorGithubOrg),
-		fmt.Sprintf("OPERATOR_GIT_REPO=%s", r.operatorRepo),
-		fmt.Sprintf("OPERATOR_BRANCH=%s", r.operatorBranch),
-	)
-	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate", env...); err != nil {
+	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate"); err != nil {
 		return fmt.Errorf("failed to run make generate: %w", err)
 	}
 
