@@ -871,6 +871,33 @@ func TestClearStagedE2EBinaries(t *testing.T) {
 	require.NoError(t, r.clearStagedE2EBinaries())
 }
 
+// clearStagedE2EBinaries removes a directory, so pin its blast radius: only
+// files/e2e/ goes, never a sibling artifact or the upload directory itself.
+func TestClearStagedE2EBinariesScope(t *testing.T) {
+	outputDir := t.TempDir()
+	r := &CalicoManager{outputDir: outputDir}
+
+	keep := map[string]string{
+		"release-v3.30.0.tgz":            filepath.Join(outputDir, "release-v3.30.0.tgz"),
+		"files/other/thing.txt":          filepath.Join(outputDir, "files", "other", "thing.txt"),
+		"manifests/tigera-operator.yaml": filepath.Join(outputDir, "manifests", "tigera-operator.yaml"),
+	}
+	for _, path := range keep {
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+		require.NoError(t, os.WriteFile(path, []byte("keep"), 0o644))
+	}
+	require.NoError(t, os.MkdirAll(r.e2eBinariesDir(), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(r.e2eBinariesDir(), "e2e-linux-amd64.test"), []byte("go"), 0o755))
+
+	require.NoError(t, r.clearStagedE2EBinaries())
+
+	require.NoDirExists(t, r.e2eBinariesDir())
+	for name, path := range keep {
+		require.FileExists(t, path, "%s must survive", name)
+	}
+	require.DirExists(t, outputDir)
+}
+
 // The zero-output guard and the relink-on-rerun fix both used to live in the
 // collect step; they moved here when that step went away, so keep them covered.
 func TestBuildE2EBinariesStaging(t *testing.T) {
