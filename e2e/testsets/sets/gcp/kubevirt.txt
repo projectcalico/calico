@@ -1,9 +1,9 @@
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should assign static IP via annotation and preserve it across migration
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should preserve VM IP across VMI recreation (reboot)
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should preserve VM IP across pod recreation
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should preserve VM IP address across live migration
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should promote target pod to active IPAM owner after migration
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should release IPAM handle when VM is deleted
+[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresRealKubeVirt] [Category:Networking] KubeVirt IP persistence should assign static IP via annotation and preserve it across migration
+[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresRealKubeVirt] [Category:Networking] KubeVirt IP persistence should preserve VM IP across VMI recreation (reboot)
+[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresRealKubeVirt] [Category:Networking] KubeVirt IP persistence should preserve VM IP across pod recreation
+[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresRealKubeVirt] [Category:Networking] KubeVirt IP persistence should preserve VM IP address across live migration
+[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresRealKubeVirt] [Category:Networking] KubeVirt IP persistence should promote target pod to active IPAM owner after migration
+[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresRealKubeVirt] [Category:Networking] KubeVirt IP persistence should release IPAM handle when VM is deleted
 [sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresRealKubeVirt] [Category:Networking] KubeVirt live migration eBGP external client [ExternalNode] should maintain TCP connection from eBGP external client across two consecutive migrations
 [sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresRealKubeVirt] [Category:Networking] KubeVirt live migration should maintain TCP connection over iBGP across two consecutive live migrations
 [sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresRealKubeVirt] [Category:Networking] KubeVirt live migration should prefer the local workload route on the migration target node

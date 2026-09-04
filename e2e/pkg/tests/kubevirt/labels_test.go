@@ -67,6 +67,48 @@ func TestEveryKubeVirtSuiteDeclaresTheKubeVirtFeature(t *testing.T) {
 	}
 }
 
+// The Feature label does not say which kind of KubeVirt a suite needs, and the
+// lanes that run one kind exclude the other, so a suite declaring neither runs
+// where it cannot pass.
+func TestEveryKubeVirtSuiteDeclaresTheKubeVirtItNeeds(t *testing.T) {
+	fset := token.NewFileSet()
+	paths, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatalf("listing the KubeVirt suites: %v", err)
+	}
+	var checked int
+	for _, path := range paths {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			t.Fatalf("parsing %s: %v", path, err)
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || !isDescribeCall(call, "CalicoDescribe") {
+				return true
+			}
+			checked++
+			for _, arg := range call.Args {
+				inner, ok := arg.(*ast.CallExpr)
+				if !ok {
+					continue
+				}
+				if isDescribeCall(inner, "RequiresRealKubeVirt") || isDescribeCall(inner, "RequiresMockVirt") {
+					return true
+				}
+			}
+			t.Errorf("%s: suite declares neither RequiresRealKubeVirt nor RequiresMockVirt", fset.Position(call.Pos()))
+			return true
+		})
+	}
+	if checked == 0 {
+		t.Fatal("found no KubeVirt suites, so this guard checks nothing")
+	}
+}
+
 // isDescribeCall reports whether the call is describe.<name>(...).
 func isDescribeCall(call *ast.CallExpr, name string) bool {
 	sel, ok := call.Fun.(*ast.SelectorExpr)
