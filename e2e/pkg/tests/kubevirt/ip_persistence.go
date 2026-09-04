@@ -50,6 +50,7 @@ import (
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("KubeVirt"),
+	describe.RequiresRealKubeVirt(),
 	describe.WithCategory(describe.Networking),
 	"KubeVirt IP persistence",
 	func() {
