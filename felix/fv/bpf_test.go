@@ -5574,6 +5574,104 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				It("should keep a connection up between hosts and local workloads when BPF is enabled", func() {
 					verifyConnectivityWhileEnablingBPF(hostW[0], w[0][0])
 				})
+
+				// Connections through a service must survive the switch too.  kube-proxy
+				// does not run in the FV, so we install the DNAT it would have written,
+				// in the chains Felix deletes on the switch.  The connection has to
+				// outlive that deletion: the DNAT binding lives in the Linux conntrack
+				// entry, not in the rule.
+				//
+				// Pinned to one matrix point to keep the cost down.  Neither DSR nor the
+				// tunnel affects the pod-to-ClusterIP path.  The addresses and the rules
+				// below are v4, hence the explicit IPv6 exclusion.
+				if testOpts.dsr && !testOpts.ipv6 && testOpts.tunnel == "none" {
+					const (
+						migrationSvcIP   = "10.101.0.99"
+						migrationSvcPort = 8090
+					)
+
+					installKubeProxyService := func(felix *infrastructure.Felix, backend *workload.Workload) {
+						target := net.JoinHostPort(backend.IP, backend.Ports)
+						if NFTMode() {
+							felix.Exec("nft", "add", "table", "ip", "kube-proxy")
+							felix.Exec("nft", "add", "chain", "ip", "kube-proxy", "services",
+								"{ type nat hook prerouting priority dstnat ; }")
+							felix.Exec("nft", "add", "rule", "ip", "kube-proxy", "services",
+								"ip", "daddr", migrationSvcIP, "tcp", "dport", fmt.Sprint(migrationSvcPort),
+								"dnat", "to", target)
+							return
+						}
+						felix.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat",
+							"-N", "KUBE-SERVICES")
+						felix.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat",
+							"-A", "KUBE-SERVICES", "-d", migrationSvcIP, "-p", "tcp",
+							"--dport", fmt.Sprint(migrationSvcPort),
+							"-j", "DNAT", "--to-destination", target)
+						felix.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat",
+							"-I", "PREROUTING", "-j", "KUBE-SERVICES")
+					}
+
+					// Marker that Felix's kube-proxy cleanup takes away, and the
+					// command that shows whether it is still there.
+					kubeProxyMarker := "KUBE-SERVICES"
+					dumpRulesCmd := []string{"iptables-save", "-t", "nat"}
+					if NFTMode() {
+						kubeProxyMarker = "kube-proxy"
+						dumpRulesCmd = []string{"nft", "list", "ruleset"}
+					}
+					verifySvcConnectivityWhileEnablingBPF := func(client, backend *workload.Workload) {
+						By("Creating the service")
+						// Must agree with the DNAT target below, which uses the same port.
+						backendPort, err := strconv.Atoi(backend.Ports)
+						Expect(err).NotTo(HaveOccurred())
+						testSvc := k8sService("migration-svc", migrationSvcIP, backend,
+							migrationSvcPort, backendPort, 0, testOpts.protocol)
+						k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+						_, err = k8sClient.CoreV1().Services(testSvc.Namespace).Create(
+							context.Background(), testSvc, metav1.CreateOptions{})
+						Expect(err).NotTo(HaveOccurred())
+						Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(1),
+							"Service endpoints didn't get created? Is controller-manager happy?")
+
+						By("Installing the rules kube-proxy would have written")
+						installKubeProxyService(tc.Felixes[0], backend)
+						// Also proves the dump command works, so that the check for
+						// their removal below cannot pass vacuously.
+						Expect(tc.Felixes[0].ExecOutputFn(dumpRulesCmd...)()).
+							To(ContainSubstring(kubeProxyMarker))
+
+						By("Starting persistent connection via the service")
+						pc = client.StartPersistentConnection(migrationSvcIP, migrationSvcPort,
+							workload.PersistentConnectionOpts{
+								MonitorConnectivity: true,
+								Timeout:             60 * time.Second,
+							})
+
+						By("having initial connectivity", expectPongs)
+						By("enabling BPF mode", enableBPF) // Waits for BPF programs to be installed
+						By("removing the kube-proxy rules", func() {
+							Eventually(tc.Felixes[0].ExecOutputFn(dumpRulesCmd...), "30s", "1s").
+								ShouldNot(ContainSubstring(kubeProxyMarker))
+						})
+						By("still having connectivity on the existing connection", expectPongs)
+
+						By("having connectivity on a new connection via the service", func() {
+							cc.ResetExpectations()
+							cc.Expect(Some, client, TargetIP(migrationSvcIP),
+								ExpectWithPorts(uint16(migrationSvcPort)))
+							cc.CheckConnectivity()
+							cc.ResetExpectations()
+						})
+					}
+
+					It("should keep a connection to a service with a local backend up when BPF is enabled", func() {
+						verifySvcConnectivityWhileEnablingBPF(w[0][1], w[0][0])
+					})
+
+					It("should keep a connection to a service with a remote backend up when BPF is enabled", func() {
+						verifySvcConnectivityWhileEnablingBPF(w[0][1], w[1][0])
+					})
+				}
 			}
 		})
 
