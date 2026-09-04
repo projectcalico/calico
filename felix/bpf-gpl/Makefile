@@ -6,6 +6,7 @@
 .SUFFIXES:
 
 LIBBPF_DIR=libbpf
+LIBBPF_REPO=https://github.com/libbpf/libbpf.git
 LIBBPF_FILE_CREATED=.libbpf-$(LIBBPF_VERSION)
 
 # C flags for compiling BPF programs. "-target bpf" enables some workarounds
@@ -144,15 +145,11 @@ ut-objs: $(UT_OBJS)
 map-objs: $(MAP_OBJS)
 
 libbpf: $(LIBBPF_FILE_CREATED)
-# Clone libbpf at the pinned version in a single network round-trip.
-# Using `--branch $(LIBBPF_VERSION)` with `--depth 1` avoids a separate
-# `git fetch --tags` call, which was a flake source (GitHub occasionally
-# returns HTTP 500 for tag listings).
+# A plain clone, not hack/fetch-repo: this directory ships as the GPL source
+# tarball in the node image and must build on its own.
 #
-# NO_LIBBPF_CLONE=1 turns the clone into a hard failure. CI sets this
-# after restoring the libbpf tarball from GCS so that a missing marker
-# surfaces as an error instead of silently re-cloning (which would
-# negate the cache and restore the HTTP 500 flake risk).
+# CI sets NO_LIBBPF_CLONE=1 after restoring the libbpf tarball from GCS, so a
+# missing marker fails instead of silently re-cloning past the cache.
 $(LIBBPF_FILE_CREATED):
 	@if [ -n "$$NO_LIBBPF_CLONE" ]; then \
 		echo "ERROR: libbpf clone triggered but NO_LIBBPF_CLONE is set." >&2; \
@@ -160,7 +157,16 @@ $(LIBBPF_FILE_CREATED):
 		exit 1; \
 	fi
 	rm -rf $(LIBBPF_DIR) .libbpf-*
-	env -u GIT_DIR -u GIT_WORK_TREE git clone --depth 1 --branch $(LIBBPF_VERSION) https://github.com/libbpf/libbpf.git
+	@n=1; until env -u GIT_DIR -u GIT_WORK_TREE GIT_TERMINAL_PROMPT=0 \
+	    git -c http.version=HTTP/1.1 \
+	    $${GITHUB_TOKEN:+-c credential.https://github.com.helper='!f() { echo username=x-access-token; echo "password=$$GITHUB_TOKEN"; }; f'} \
+	    clone --depth 1 --branch $(LIBBPF_VERSION) $(LIBBPF_REPO); do \
+		if [ $$n -ge 3 ]; then exit 1; fi; \
+		echo "libbpf clone failed, retrying in $$((n * 30))s..." >&2; \
+		rm -rf $(LIBBPF_DIR); \
+		sleep $$((n * 30)); \
+		n=$$((n + 1)); \
+	done
 	touch $(LIBBPF_FILE_CREATED)
 
 

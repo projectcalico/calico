@@ -412,6 +412,9 @@ DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL) 
 # prompt, which hangs a CI job until the pipeline timeout.
 export GIT_TERMINAL_PROMPT ?= 0
 
+fetch_file = $(REPO_ROOT)/hack/fetch-file $(1) $(2)
+fetch_repo = $(REPO_ROOT)/hack/fetch-repo $(1) $(2) $(3)
+
 DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--init \
@@ -1471,7 +1474,7 @@ check-dirty:
 bin/yq:
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
-	curl -sSf -L --retry 5 -o $(TMP)/yq4.tar.gz https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz
+	$(call fetch_file,https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz,$(TMP)/yq4.tar.gz)
 	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
 	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
 
@@ -1492,7 +1495,7 @@ $(REPO_ROOT)/bin/crane:
 	$(info ::: Downloading crane from $(CRANE_URL))
 	@mkdir -p $(REPO_ROOT)/bin
 	@tmp=$$(mktemp -d $(REPO_ROOT)/bin/.crane.XXXXXX) && trap 'rm -rf "$$tmp"' EXIT && \
-		curl -sSfL --retry 5 --retry-all-errors -o "$$tmp/crane.tar.gz" $(CRANE_URL) && \
+		$(call fetch_file,$(CRANE_URL),"$$tmp/crane.tar.gz") && \
 		tar xz -C "$$tmp" -f "$$tmp/crane.tar.gz" crane && \
 		chmod +x "$$tmp/crane" && \
 		mv "$$tmp/crane" "$@"

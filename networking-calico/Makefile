@@ -27,7 +27,7 @@ tox-fv-%: upper-constraints-%.txt
 	$(MAKE) tox-fv PIP_CONSTRAINT=/code/upper-constraints-$*.txt
 
 upper-constraints-caracal.txt:
-	curl -fsSL --retry 5 https://raw.githubusercontent.com/openstack/requirements/refs/heads/$$(./infer-openstack-branch.sh caracal requirements)/upper-constraints.txt -o $@
+	../hack/fetch-file https://raw.githubusercontent.com/openstack/requirements/refs/heads/$$(./infer-openstack-branch.sh caracal requirements)/upper-constraints.txt $@
 
 fmtpy: build-test-container
 	$(RUN_TEST_CONTAINER) tox -e black
