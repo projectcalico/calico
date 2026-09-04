@@ -23,7 +23,6 @@ ENVOY_GATEWAY_FETCHED=.envoy-gateway.fetched
 ENVOY_GATEWAY_DOWNLOADED=.envoy-gateway.downloaded
 
 DEP_PINS=dep-pins.txt
-DEP_PATCH=dep-patches/0001-CVE-dependency-fixes.patch
 
 # 	patches/     - functional changes to upstream source; hand-written, only
 # 	               ever verified to still apply.
@@ -64,17 +63,17 @@ $(ENVOY_GATEWAY_DOWNLOADED): $(ENVOY_GATEWAY_FETCHED)
 	done
 	touch $@
 
-# 	Rebuild $(DEP_PATCH) from $(DEP_PINS), in the pinned Go toolchain --
+# 	Rebuild dep-patches/ from $(DEP_PINS), in the pinned Go toolchain --
 # 	go mod tidy's output depends on the Go version.
 .PHONY: regen-dep-patches
 regen-dep-patches: $(ENVOY_GATEWAY_FETCHED)
-	$(DOCKER_GO_BUILD) ../../hack/thirdparty/regen-dep-patch.sh envoy-gateway $(DEP_PINS) $(DEP_PATCH)
+	$(DOCKER_GO_BUILD) ../../hack/thirdparty/regen-dep-patch.sh envoy-gateway $(DEP_PINS) dep-patches/0001-CVE-dependency-fixes.patch
 
 # 	Fail if the checked-in patch is not what the pins produce.
 .PHONY: check-dep-patches
 check-dep-patches: regen-dep-patches
-	@git diff --exit-code -- $(DEP_PATCH) || { \
-		echo "ERROR: $(DEP_PATCH) is not what $(DEP_PINS) produces."; \
+	@git diff --exit-code -- dep-patches || { \
+		echo "ERROR: dep-patches/ is not what $(DEP_PINS) produces."; \
 		echo "Run 'make -C third_party/envoy-gateway regen-dep-patches' and commit the result."; \
 		exit 1; \
 	}
