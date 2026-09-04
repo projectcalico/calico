@@ -93,17 +93,17 @@ func init() {
 }
 
 var (
-	// variantV3Types are always in the projectcalico.org/v3 API group, and
-	// variantVariableTypes follow the backing API group like the core types do.
-	variantV3Types       []runtime.Object
-	variantVariableTypes []runtime.Object
+	// extraV3Types are always in the projectcalico.org/v3 API group, and extraTypes
+	// follow the backing API group like the core types do.
+	extraV3Types []runtime.Object
+	extraTypes   []runtime.Object
 )
 
-// RegisterVariantTypes adds the API types a variant installs beyond the operator's
-// own. Call it before the operator starts; a process serves one variant.
-func RegisterVariantTypes(alwaysV3, variable []runtime.Object) {
-	variantV3Types = append(variantV3Types, alwaysV3...)
-	variantVariableTypes = append(variantVariableTypes, variable...)
+// RegisterTypes adds API types beyond the operator's own. Call it before the
+// operator starts.
+func RegisterTypes(alwaysV3, variable []runtime.Object) {
+	extraV3Types = append(extraV3Types, alwaysV3...)
+	extraTypes = append(extraTypes, variable...)
 }
 
 func calicoSchemeBuilder(useV3 bool) func(*runtime.Scheme) error {
@@ -127,7 +127,7 @@ func calicoSchemeBuilder(useV3 bool) func(*runtime.Scheme) error {
 			&v3.TierList{},
 		}
 
-		v3Types = append(v3Types, variantV3Types...)
+		v3Types = append(v3Types, extraV3Types...)
 
 		// Handle types that are always in the crd.projectcalico.org/v1 API group.
 		v1Types := []runtime.Object{}
@@ -145,7 +145,7 @@ func calicoSchemeBuilder(useV3 bool) func(*runtime.Scheme) error {
 			&v3.KubeControllersConfiguration{},
 			&v3.KubeControllersConfigurationList{},
 		}
-		variableTypes = append(variableTypes, variantVariableTypes...)
+		variableTypes = append(variableTypes, extraTypes...)
 		if useV3 {
 			log.Info("Registering Calico CRD types with projectcalico.org/v3 API group")
 			v3Types = append(v3Types, variableTypes...)

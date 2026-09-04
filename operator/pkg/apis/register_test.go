@@ -29,20 +29,20 @@ func TestApis(t *testing.T) {
 	RunSpecs(t, "pkg/apis Suite")
 }
 
-var _ = Describe("RegisterVariantTypes", func() {
+var _ = Describe("RegisterTypes", func() {
 	var (
 		v1GV = schema.GroupVersion{Group: "crd.projectcalico.org", Version: "v1"}
 		v3GV = schema.GroupVersion{Group: "projectcalico.org", Version: "v3"}
 	)
 
 	AfterEach(func() {
-		variantV3Types = nil
-		variantVariableTypes = nil
+		extraV3Types = nil
+		extraTypes = nil
 	})
 
 	// The core types stand in for a variant's, since this package cannot name one.
 	registerStubs := func() {
-		RegisterVariantTypes(
+		RegisterTypes(
 			[]runtime.Object{&v3.NetworkSet{}},
 			[]runtime.Object{&v3.BGPFilter{}},
 		)

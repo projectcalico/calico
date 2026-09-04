@@ -108,6 +108,7 @@ func Run(opts Options) {
 	var leaderElectionLeaseDuration time.Duration
 	var leaderElectionRenewDeadline time.Duration
 	var leaderElectionRetryPeriod time.Duration
+
 	// urlOnlyKubeconfig is a slight hack; we need to get the apiserver from the
 	// kubeconfig but should use the in-cluster service account
 	var urlOnlyKubeconfig string

@@ -32,7 +32,8 @@ type Options struct {
 	// an Installation exists. Empty accepts Calico alone.
 	Variants []operatortigeraiov1.ProductVariant
 
-	// Versions are extra lines -version prints after the operator's own, in name order.
+	// Versions are extra lines -version prints after the operator's own, in name
+	// order. The key is the label printed, the value the version printed after it.
 	Versions map[string]string
 
 	// Images are the component sets -print-images prints, keyed by the flag value. An
@@ -47,8 +48,7 @@ type Options struct {
 	UncachedObjects []client.Object
 
 	// Collectors builds the Prometheus collectors registered alongside the operator's
-	// own, for metrics only the variant can gather. It takes the manager's client,
-	// which the caller does not have.
+	// own, for extensions to register their own metrics.
 	Collectors func(client.Client) []prometheus.Collector
 
 	// AfterParse runs once the flags are parsed, so a caller that registered its own

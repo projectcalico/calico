@@ -130,6 +130,7 @@ var _ reconcile.Reconciler = &reconcileCSR{}
 type reconcileCSR struct {
 	client    client.Client
 	clientset kubernetes.Interface
+
 	// The extension looks up a HostEndpoint by spec.node. Serving that from the
 	// manager's cache would need a field index and an informer holding every
 	// HostEndpoint, for a lookup that wants one.

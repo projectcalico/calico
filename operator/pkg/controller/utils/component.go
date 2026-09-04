@@ -243,7 +243,7 @@ func (c *componentHandler) createOrUpdateObject(ctx context.Context, obj client.
 
 	multipleOwners := checkIfMultipleOwnersLabel(om.GetObjectMeta())
 	// Add owner ref for controller owned resources.
-	if variantObjectRules == nil || !variantObjectRules.SkipOwnerReference(obj) {
+	if extensionObjectRules == nil || !extensionObjectRules.SkipAddingOwnerReference(obj) {
 		if c.cr != nil && !skipAddingOwnerReference(c.cr, om.GetObjectMeta()) {
 			if multipleOwners {
 				if err := controllerutil.SetOwnerReference(c.cr, om.GetObjectMeta(), c.scheme); err != nil {
@@ -656,8 +656,9 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 	// adjusting the caller's copy.
 	desired = desired.DeepCopyObject().(client.Object)
 
-	if variantObjectRules != nil {
-		if merged, ok := variantObjectRules.MergeState(desired, current); ok {
+	// Provide an opportunity for extensions to handle their own types.
+	if extensionObjectRules != nil {
+		if merged, ok := extensionObjectRules.MergeState(desired, current); ok {
 			return merged
 		}
 	}
@@ -837,10 +838,9 @@ func modifyPodSpec(obj client.Object, f func(*v1.PodSpec)) {
 	case *batchv1.Job:
 		f(&x.Spec.Template.Spec)
 	default:
-		if variantObjectRules != nil {
-			for _, spec := range variantObjectRules.PodSpecs(obj) {
-				f(spec)
-			}
+		// Provide an opportunity for extensions to handle their own types.
+		if extensionObjectRules != nil {
+			extensionObjectRules.ModifyPodSpec(obj, f)
 		}
 	}
 }
@@ -924,8 +924,8 @@ func ensureOSSchedulingRestrictions(obj client.Object, osType rmeta.OSType) {
 		return
 	}
 
-	// A kind whose pod template is not a v1.PodTemplateSpec is the variant's to pin.
-	if variantObjectRules != nil && variantObjectRules.SetNodeSelector(obj, "kubernetes.io/os", string(osType)) {
+	// Provide an opportunity for extensions to handle their own types.
+	if extensionObjectRules != nil && extensionObjectRules.EnsureOSSchedulingRestrictions(obj, "kubernetes.io/os", string(osType)) {
 		return
 	}
 
@@ -964,10 +964,10 @@ func setProbeTimeouts(obj client.Object) {
 	case *apps.DaemonSet:
 		containers = obj.Spec.Template.Spec.Containers
 	default:
-		if variantObjectRules == nil {
-			return
+		// Provide an opportunity for extensions to handle their own types.
+		if extensionObjectRules != nil {
+			containers = extensionObjectRules.Containers(obj)
 		}
-		containers = variantObjectRules.Containers(obj)
 	}
 
 	for _, container := range containers {
@@ -1062,7 +1062,8 @@ func setStandardSelectorAndLabels(obj client.Object, customResource metav1.Objec
 		}
 		podTemplate = &d.Spec.Template
 	default:
-		if variantObjectRules == nil || !variantObjectRules.CopyLabelsToPods(obj) {
+		// Provide an opportunity for extensions to handle their own types.
+		if extensionObjectRules == nil || !extensionObjectRules.SetStandardSelectorAndLabels(obj) {
 			return
 		}
 	}

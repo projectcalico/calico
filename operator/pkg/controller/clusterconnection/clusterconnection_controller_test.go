@@ -89,8 +89,7 @@ var _ = Describe("ManagementClusterConnection controller tests", func() {
 
 		Expect(c.Create(ctx, &v3.ClusterInformation{ObjectMeta: metav1.ObjectMeta{Name: "default"}})).NotTo(HaveOccurred())
 
-		r = clusterconnection.NewReconcilerWithShims(c, clientScheme, mockStatus, operatorv1.ProviderNone, ready, ready,
-			options.ControllerOptions{Variant: operatorv1.Calico})
+		r = clusterconnection.NewReconcilerWithShims(c, clientScheme, mockStatus, operatorv1.ProviderNone, ready, ready, options.ControllerOptions{Variant: operatorv1.Calico})
 		dpl = &appsv1.Deployment{
 			TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"},
 			ObjectMeta: metav1.ObjectMeta{
