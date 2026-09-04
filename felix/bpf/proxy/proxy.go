@@ -464,17 +464,20 @@ const (
 	ReapTerminatingUDPImmediatelly = "TerminatingImmediately"
 
 	ExcludeServiceAnnotation          = "projectcalico.org/natExcludeService"
+	NoEndpointsActionAnnotation       = "lb.projectcalico.org/no-endpoints-action"
 	ExternalTrafficStrategyAnnotation = "lb.projectcalico.org/external-traffic-strategy"
 )
 
 var (
 	ExternalTrafficStrategyMaglev = "maglev"
+	NoEndpointsActionForward      = "Forward"
 )
 
 type ServiceAnnotations interface {
 	ReapTerminatingUDP() bool
 	ExcludeService() bool
 	UseMaglev() bool
+	NoEndpointsAction() string
 	TopologyMode() string
 }
 
@@ -482,6 +485,7 @@ type servicePortAnnotations struct {
 	reapTerminatingUDP bool
 	excludeService     bool
 	useMaglev          bool
+	noEndpointsAction  string
 	topologyMode       string
 }
 
@@ -495,6 +499,10 @@ func (s *servicePortAnnotations) ExcludeService() bool {
 
 func (s *servicePortAnnotations) UseMaglev() bool {
 	return s.useMaglev
+}
+
+func (s *servicePortAnnotations) NoEndpointsAction() string {
+	return s.noEndpointsAction
 }
 
 func (s *servicePortAnnotations) TopologyMode() string {
@@ -524,6 +532,10 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 
 	if a, ok := s.Annotations[ExternalTrafficStrategyAnnotation]; ok && strings.EqualFold(a, ExternalTrafficStrategyMaglev) {
 		svc.useMaglev = true
+	}
+
+	if v, ok := s.Annotations[NoEndpointsActionAnnotation]; ok {
+		svc.noEndpointsAction = v
 	}
 
 	if v, ok := s.Annotations[v1.AnnotationTopologyMode]; ok {
