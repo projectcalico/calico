@@ -62,7 +62,8 @@ var _ = Describe("GatewayAPI tests", func() {
 			Scheme: mgr.GetScheme(),
 		}).SetupWithManager(mgr, options.ControllerOptions{
 			DetectedProvider: operator.ProviderNone,
-			Variant:          operator.Calico,
+			Variant:          testVariant,
+			Extensions:       testExtensions,
 			ManageCRDs:       ManageCRDsDisable,
 			ShutdownContext:  shutdownContext,
 			K8sClientset:     clientset,
@@ -179,7 +180,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		instance := &operator.Installation{
 			TypeMeta:   metav1.TypeMeta{Kind: "Installation", APIVersion: "operator.tigera.io/v1"},
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Spec:       operator.InstallationSpec{Variant: operator.Calico},
+			Spec:       operator.InstallationSpec{Variant: testVariant},
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
@@ -225,7 +226,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		instance := &operator.Installation{
 			TypeMeta:   metav1.TypeMeta{Kind: "Installation", APIVersion: "operator.tigera.io/v1"},
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Spec:       operator.InstallationSpec{Variant: operator.Calico},
+			Spec:       operator.InstallationSpec{Variant: testVariant},
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
@@ -329,7 +330,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		instance := &operator.Installation{
 			TypeMeta:   metav1.TypeMeta{Kind: "Installation", APIVersion: "operator.tigera.io/v1"},
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Spec:       operator.InstallationSpec{Registry: "myregistry.io/", Variant: operator.Calico},
+			Spec:       operator.InstallationSpec{Registry: "myregistry.io/", Variant: testVariant},
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
@@ -382,7 +383,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		instance := &operator.Installation{
 			TypeMeta:   metav1.TypeMeta{Kind: "Installation", APIVersion: "operator.tigera.io/v1"},
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Spec:       operator.InstallationSpec{Registry: "myregistry.io/", Variant: operator.Calico},
+			Spec:       operator.InstallationSpec{Registry: "myregistry.io/", Variant: testVariant},
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
@@ -441,7 +442,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		instance := &operator.Installation{
 			TypeMeta:   metav1.TypeMeta{Kind: "Installation", APIVersion: "operator.tigera.io/v1"},
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Spec:       operator.InstallationSpec{Registry: "myregistry.io/", Variant: operator.Calico},
+			Spec:       operator.InstallationSpec{Registry: "myregistry.io/", Variant: testVariant},
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
@@ -501,7 +502,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		instance := &operator.Installation{
 			TypeMeta:   metav1.TypeMeta{Kind: "Installation", APIVersion: "operator.tigera.io/v1"},
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Spec:       operator.InstallationSpec{Registry: "myregistry.io/", Variant: operator.Calico},
+			Spec:       operator.InstallationSpec{Registry: "myregistry.io/", Variant: testVariant},
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())

@@ -39,12 +39,11 @@ func NewReconcilerWithShims(
 	provider operatorv1.Provider,
 	tierWatchReady *utils.ReadyFlag,
 	clusterInfoWatchReady *utils.ReadyFlag,
+	opts options.ControllerOptions,
 ) reconcile.Reconciler {
-	opts := options.ControllerOptions{
-		ShutdownContext: context.Background(),
-		Variant:         operatorv1.Calico,
+	if opts.ShutdownContext == nil {
+		opts.ShutdownContext = context.Background()
 	}
-
 	return newReconciler(cli, schema, status, provider, tierWatchReady, clusterInfoWatchReady, opts)
 }
 
