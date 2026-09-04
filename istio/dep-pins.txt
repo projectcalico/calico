@@ -1,0 +1,21 @@
+# Dependency pins applied on top of the pinned istio/istio tag (ISTIO_VERSION)
+# to remediate CVEs in the bundled images.
+#
+# Each entry is a minimum version. `go mod tidy` settles the rest, so modules
+# that move only as a consequence -- the other golang.org/x modules, and
+# prometheus' transitive deps in go.sum -- are not listed.
+#
+# github.com/moby/spdystream v0.5.1 clears GO-2026-4958 / CVE-2026-35469, a
+# memory DoS in the SPDY frame parser.
+#
+# github.com/prometheus/prometheus v0.311.3 clears CVE-2026-42154 /
+# GHSA-8rm2-7qqf-34qm, a heap-allocation DoS in remote-read snappy decoding,
+# and CVE-2026-42151 / GHSA-wg65-39gg-5wfj, an Azure AD OAuth secret stored in
+# plaintext.
+#
+# golang.org/x/net v0.56.0 sits above its CVE floor: CVE-2026-33814 was fixed
+# in v0.53.0, which the pinned tag already ships. Pinned higher to match
+# calico's own modules.
+github.com/moby/spdystream v0.5.1
+github.com/prometheus/prometheus v0.311.3
+golang.org/x/net v0.56.0
