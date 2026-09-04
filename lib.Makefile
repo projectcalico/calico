@@ -262,6 +262,11 @@ BUILD_ID:=$(shell git rev-parse HEAD || uuidgen | sed 's/-//g')
 GIT_DESCRIPTION=$(shell git describe --tags --dirty --always --abbrev=12 || echo '<unknown>')
 endif
 
+# The tag cd-common publishes every image at for this branch, and so the only tag a build
+# that names no version of its own can pull. Feature branches fall back to master.
+GIT_BRANCH ?= $(if $(SEMAPHORE_GIT_BRANCH),$(SEMAPHORE_GIT_BRANCH),$(shell git rev-parse --abbrev-ref HEAD 2>/dev/null))
+BRANCH_IMAGE_TAG ?= $(if $(filter master release-%,$(GIT_BRANCH)),$(GIT_BRANCH),master)
+
 # Calculate a timestamp for any build artifacts.
 ifneq ($(OS),Windows_NT)
 DATE:=$(shell date -u +'%FT%T%z')

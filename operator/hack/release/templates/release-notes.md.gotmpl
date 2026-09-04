@@ -1,9 +1,4 @@
 {{ .Date }}
-
-#### Included Calico versions
-{{ range $product, $version := .Versions }}
-{{ $product }} version: {{ $version }}
-{{- end }}
 {{- if .Enhancements }}
 
 #### Enhancements

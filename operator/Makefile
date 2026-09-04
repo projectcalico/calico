@@ -81,6 +81,16 @@ else
   GIT_VERSION?=$(shell git describe --tags --dirty --always --abbrev=12)
 endif
 
+# The version, registry and image path the built operator resolves Calico images at. A
+# build that names no version gets the tag cd publishes for this branch; the release
+# tooling passes the version it publishes at, and the kind rig what it just pushed.
+CALICO_VERSION    ?= $(BRANCH_IMAGE_TAG)
+CALICO_REGISTRY   ?=
+CALICO_IMAGE_PATH ?=
+CALICO_LDFLAGS = -X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(CALICO_VERSION) \
+                 -X $(PACKAGE_NAME)/pkg/components.calicoRegistry=$(CALICO_REGISTRY) \
+                 -X $(PACKAGE_NAME)/pkg/components.calicoImagePath=$(CALICO_IMAGE_PATH)
+
 # To update the Istio version, see "Updating the bundled version of Istio" in docs/common_tasks.md.
 ISTIO_HELM_REPO ?= https://istio-release.storage.googleapis.com/charts
 ISTIO_VERSION ?= 1.29.2
@@ -128,7 +138,7 @@ $(BINDIR)/$(BINARY_NAME)-$(ARCH): $(SRC_FILES) $(ENVOY_GATEWAY_CHART) $(ISTIO_CH
 	mkdir -p $(BINDIR)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
-	go build -buildvcs=false -v -o $(BINDIR)/$(BINARY_NAME)-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) $(CLOUD_LDFLAGS) -s -w" ./cmd/'
+	go build -buildvcs=false -v -o $(BINDIR)/$(BINARY_NAME)-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) $(CALICO_LDFLAGS) $(CLOUD_LDFLAGS) -s -w" ./cmd/'
 
 OPERATOR_IMAGE_NAME = $(firstword $(BUILD_IMAGES))
 IMAGE_BUILD_MARKER  = operator_container-$(ARCH).created
@@ -147,6 +157,13 @@ ifeq ($(ARCH),amd64)
 	docker tag $(OPERATOR_IMAGE_NAME):latest-$(ARCH) $(OPERATOR_IMAGE_NAME):latest
 endif
 	touch $@
+
+# The component references are ldflags, which Make cannot see, so a build that
+# changes them asks for the relink explicitly.
+.PHONY: dev-image
+dev-image:
+	rm -f $(BINDIR)/$(BINARY_NAME)-$(ARCH) $(IMAGE_BUILD_MARKER)
+	$(MAKE) image
 
 .PHONY: image-all
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
@@ -197,10 +214,13 @@ fv: kind-cluster-create deploy-crds load-container-images run-fvs kind-cluster-d
 run-fvs: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	-mkdir -p .go-pkg-cache report
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-	gotestsum --format testname --junitfile report/operator_fv.xml -- $(FV_DIR)/... $(GO_TEST_ARGS) -timeout $(FV_TEST_TIMEOUT) $(GINKGO_FOCUS_ARG)'
+	gotestsum --format testname --junitfile report/operator_fv.xml -- $(FV_DIR)/... $(GO_TEST_ARGS) -timeout $(FV_TEST_TIMEOUT) $(FV_LDFLAGS) $(GINKGO_FOCUS_ARG)'
 
-# The tag the operator resolves for these components, from config/calico_versions.yml.
-FV_IMAGE_TAG ?= master
+# The tag the FV suite's in-process operator resolves for the components below, and
+# loads them into kind under. Stamped into the test binary the same way a real build
+# stamps the operator.
+FV_IMAGE_TAG ?= $(CALICO_VERSION)
+FV_LDFLAGS    = -ldflags "-X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(FV_IMAGE_TAG)"
 FV_IMAGES     = calico/calico calico/node calico/whisker
 
 # Prefer the images built from this commit, which CI restores from its cache before
@@ -281,14 +301,7 @@ foss-checks:
 # Not `test`, which lib.Makefile defines as `ut fv st`. The FV block runs the
 # kind suite on its own. amd64 only here; the "Operator: multi-arch build"
 # block covers the other arches.
-ci: clean format-check validate-gen-versions static-checks image fmt vet ut gen-files fix-changed dirty-check test-crds
-
-# This repository is public and the Enterprise CRDs come from one that is not,
-# so only the core half is checked here. The Enterprise generated files are
-# committed and revalidated where their source lives.
-validate-gen-versions:
-	$(MAKE) gen-versions-calico
-	$(MAKE) dirty-check
+ci: clean format-check static-checks image fmt vet ut gen-files fix-changed dirty-check test-crds
 
 ## Deploys images to registry
 cd: image-all cd-common
@@ -311,8 +324,19 @@ release-notes: hack/bin/release var-require-all-VERSION-GITHUB_TOKEN
 	REPO=$(REPO) hack/bin/release notes
 
 ## Build a release from start to finish.
-release: clean hack/bin/release
+release: clean hack/bin/release check-release-image-tags
 	hack/bin/release build
+
+# The tag is compiled in, so a release that fell through to the branch default would ship
+# an operator naming the images this branch publishes for development.
+.PHONY: check-release-image-tags
+check-release-image-tags:
+	@if [ "$(ALLOW_BRANCH_IMAGE_TAGS)" = "true" ]; then exit 0; fi; \
+	if [ "$(CALICO_VERSION)" = "$(BRANCH_IMAGE_TAG)" ]; then \
+		echo "A release must name the tag it publishes at, not the branch default $(BRANCH_IMAGE_TAG)."; \
+		echo "Set CALICO_VERSION, build through the release tooling, or pass ALLOW_BRANCH_IMAGE_TAGS=true."; \
+		exit 1; \
+	fi
 
 ## Produces a clean build of release artifacts at the specified version.
 release-build: operator-release-prereqs var-require-all-VERSION-GIT_VERSION
@@ -369,7 +393,7 @@ hack/release/ut:
 	sh -c '$(GIT_CONFIG_SSH) \
 	gotestsum --format=testname --junitfile report/release/ut.xml $$(go list $(PACKAGE_NAME)/hack/release/... | grep -v /hack/release/validate)'
 
-release-from: hack/bin/release var-require-all-VERSION-OPERATOR_BASE_VERSION-OS_IMAGES_VERSIONS
+release-from: hack/bin/release var-require-all-VERSION-OPERATOR_BASE_VERSION
 	hack/bin/release from
 
 # operator-release-prereqs checks the environment on top of lib.Makefile's own
@@ -416,25 +440,6 @@ $(OPERATOR_SDK_BARE): $(OPERATOR_SDK)
 
 ## Generating code after API changes.
 gen-files: manifests generate
-
-OS_VERSIONS?=config/calico_versions.yml
-EE_VERSIONS?=config/enterprise_versions.yml
-
-.PHONY: gen-versions gen-versions-calico gen-versions-enterprise
-
-gen-versions: gen-versions-calico gen-versions-enterprise
-
-gen-versions-calico: $(BINDIR)/gen-versions
-	$(BINDIR)/gen-versions -os-versions=$(OS_VERSIONS) > pkg/components/calico.go
-
-gen-versions-enterprise: $(BINDIR)/gen-versions
-	$(BINDIR)/gen-versions -ee-versions=$(EE_VERSIONS) > pkg/components/enterprise.go
-
-$(BINDIR)/gen-versions: $(shell find ./hack/gen-versions -type f)
-	mkdir -p $(BINDIR)
-	$(DOCKER_GO_BUILD) \
-	sh -c '$(GIT_CONFIG_SSH) \
-	go build -buildvcs=false -o $(BINDIR)/gen-versions ./hack/gen-versions'
 
 .PHONY: prepull-image
 prepull-image:
@@ -571,6 +576,11 @@ bundle-crd-clean:
 bundle-validate: $(OPERATOR_SDK_BARE)
 	$(OPERATOR_SDK_BARE) bundle validate bundle/$(VERSION)
 
+# The Calico release the bundle's manifests come from. GIT_VERSION cannot serve
+# here: the bundle fetches manifests by git ref, and a describe of an untagged
+# commit is not one.
+BUNDLE_CALICO_VERSION ?= $(shell git describe --tags --abbrev=0)
+
 .PHONY: bundle-manifests
 bundle-manifests:
 ifndef VERSION
@@ -579,7 +589,7 @@ endif
 ifndef PREV_VERSION
 	$(error PREV_VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
 endif
-	$(eval EXTRA_DOCKER_ARGS += -e BUNDLE_CRD_DIR=$(BUNDLE_CRD_DIR) -e BUNDLE_DEPLOY_DIR=$(BUNDLE_DEPLOY_DIR))
+	$(eval EXTRA_DOCKER_ARGS += -e BUNDLE_CRD_DIR=$(BUNDLE_CRD_DIR) -e BUNDLE_DEPLOY_DIR=$(BUNDLE_DEPLOY_DIR) -e CALICO_VERSION=$(BUNDLE_CALICO_VERSION))
 	$(DOCKER_GO_BUILD) "hack/gen-bundle/get-manifests.sh"
 
 .PHONY: bundle-generate
