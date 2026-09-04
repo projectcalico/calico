@@ -47,6 +47,37 @@
       "depNameTemplate": "calico/base",
       "datasourceTemplate": "docker",
       "versioningTemplate": "regex:^(?<compatibility>ubi\\d+)-(?<patch>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^third_party\\/envoy-gateway\\/Makefile$/"],
+      "matchStrings": ["ENVOY_GATEWAY_VERSION=v(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "envoyproxy/gateway",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^third_party\\/envoy-proxy\\/Makefile$/"],
+      "matchStrings": ["ENVOYBINARY_IMAGE \\?= quay\\.io\\/tigera\\/envoybinary:(?<currentValue>v\\d+\\.\\d+\\.\\d+-[0-9a-f]+)"],
+      "depNameTemplate": "quay.io/tigera/envoybinary",
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-(?<build>[0-9a-f]+)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^third_party\\/envoy-ratelimit\\/Makefile$/"],
+      "matchStrings": ["ENVOY_RATELIMIT_VERSION=(?<currentDigest>[0-9a-f]{8,40})"],
+      "depNameTemplate": "https://github.com/envoyproxy/ratelimit",
+      "currentValueTemplate": "main",
+      "datasourceTemplate": "git-refs"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^istio\\/Makefile$/"],
+      "matchStrings": ["ISTIO_VERSION \\?= (?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "istio/istio",
+      "datasourceTemplate": "github-releases"
     }
   ],
   "packageRules": [
@@ -73,6 +104,17 @@
       "enabled": true
     },
     {
+      "description": "Bundled third-party images: off by default, so a new release branch never picks them up implicitly. No matchUpdateTypes here or in the rule below: enabled is resolved before lookup, so an update-type gate stops the rule ever applying",
+      "matchDepNames": ["envoyproxy/gateway", "quay.io/tigera/envoybinary", "https://github.com/envoyproxy/ratelimit", "istio/istio"],
+      "enabled": false
+    },
+    {
+      "description": "Bundled third-party images: on for master only. A bump on a release branch is a backport risk decision, so it stays with hack/cherry-pick-pull",
+      "matchDepNames": ["envoyproxy/gateway", "quay.io/tigera/envoybinary", "https://github.com/envoyproxy/ratelimit", "istio/istio"],
+      "matchBaseBranches": ["master"],
+      "enabled": true
+    },
+    {
       "description": "Block all minor, major, and digest updates",
       "matchUpdateTypes": ["minor", "major", "digest"],
       "enabled": false
@@ -81,6 +123,13 @@
       "description": "Allow golang.org/x minor updates",
       "matchPackageNames": ["golang.org/x/**"],
       "matchUpdateTypes": ["minor"],
+      "enabled": true
+    },
+    {
+      "description": "envoy-ratelimit is commit-pinned, so its updates arrive as digests -- exempt it from the global digest block",
+      "matchDepNames": ["https://github.com/envoyproxy/ratelimit"],
+      "matchBaseBranches": ["master"],
+      "matchUpdateTypes": ["digest"],
       "enabled": true
     },
     {
@@ -95,6 +144,17 @@
       "postUpgradeTasks": {
         "commands": ["make gen-deps-files"],
         "fileFilters": ["**/deps.txt"],
+        "executionMode": "branch"
+      }
+    },
+    {
+      "description": "Bundled third-party images: one PR, and rebuild the derived dependency patches on the branch. Sets no enabled key -- after the block above, that would undo it",
+      "matchDepNames": ["envoyproxy/gateway", "quay.io/tigera/envoybinary", "https://github.com/envoyproxy/ratelimit", "istio/istio"],
+      "matchBaseBranches": ["master"],
+      "groupName": "third-party-images",
+      "postUpgradeTasks": {
+        "commands": ["make regen-thirdparty-dep-patches"],
+        "fileFilters": ["**/patches/02-auto-gen-patches/*.patch"],
         "executionMode": "branch"
       }
     }
