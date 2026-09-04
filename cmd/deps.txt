@@ -53,6 +53,7 @@ github.com/fsnotify/fsnotify v1.10.1
 github.com/fxamacker/cbor/v2 v2.9.2
 github.com/gabriel-vasile/mimetype v1.4.13
 github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
+github.com/go-chi/chi/v5 v5.3.0
 github.com/go-errors/errors v1.5.1
 github.com/go-kit/log v0.2.1
 github.com/go-logfmt/logfmt v0.6.1
@@ -102,7 +103,7 @@ github.com/json-iterator/go v1.1.12
 github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 github.com/kelseyhightower/envconfig v1.4.0
 github.com/kelseyhightower/memkv v0.1.1
-github.com/klauspost/compress v1.19.0
+github.com/klauspost/compress v1.20.0
 github.com/klauspost/cpuid/v2 v2.2.10
 github.com/kylelemons/godebug v1.1.0
 github.com/leodido/go-urn v1.4.0
@@ -483,6 +484,7 @@ local:kube-controllers/pkg/status
 local:lib/datastructures/hashring
 local:lib/httpmachinery/pkg/apiutil
 local:lib/httpmachinery/pkg/codec
+local:lib/httpmachinery/pkg/compression
 local:lib/httpmachinery/pkg/context
 local:lib/httpmachinery/pkg/header
 local:lib/httpmachinery/pkg/server
@@ -593,5 +595,7 @@ local:webhooks/pkg/utils
 local:webhooks/pkg/webhook
 local:whisker-backend/cmd/whiskerbackend
 local:whisker-backend/pkg/apis/v1
+local:whisker-backend/pkg/auth
 local:whisker-backend/pkg/config
 local:whisker-backend/pkg/handlers/v1
+local:whisker-backend/pkg/upstream/goldmane

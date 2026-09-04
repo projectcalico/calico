@@ -40,6 +40,7 @@ type httpServer struct {
 	addr        string
 	shutdownCtx context.Context
 	serverErrs  chan error
+	middleware  []apiutil.MiddlewareFunc
 }
 
 type Router interface {
@@ -60,7 +61,7 @@ func NewHTTPServer(router Router, apis []apiutil.Endpoint, options ...Option) (H
 
 	srv.srv.Addr = srv.addr
 	srv.srv.TLSConfig = srv.tlsConfig
-	srv.srv.Handler = router.RegisterAPIs(apis)
+	srv.srv.Handler = router.RegisterAPIs(apis, srv.middleware...)
 
 	return srv, nil
 }

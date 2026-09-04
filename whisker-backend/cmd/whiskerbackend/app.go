@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,33 +21,58 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/compression"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/server"
 	gorillaadpt "github.com/projectcalico/calico/lib/httpmachinery/pkg/server/adaptors/gorilla"
 	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/lib/std/log"
+	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 	"github.com/projectcalico/calico/whisker-backend/pkg/config"
 	v1 "github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
+	goldmaneupstream "github.com/projectcalico/calico/whisker-backend/pkg/upstream/goldmane"
 )
 
-func Run(ctx context.Context, cfg *config.Config) {
+// Option customizes Run. Production wiring needs none; options exist for tests.
+type Option func(*runOptions)
+
+type runOptions struct {
+	newBackend func(cfg *config.Config) (whiskerv1.FlowsBackend, []apiutil.Middleware, []v1.FlowsOption)
+}
+
+// WithFlowsBackend serves flows from the given backend instead of the one
+// newFlowsBackend builds, bypassing that wiring entirely — including its
+// endpoint middleware and flow handler options. For tests that exercise the
+// HTTP surface against a bespoke upstream.
+func WithFlowsBackend(backend whiskerv1.FlowsBackend) Option {
+	return func(o *runOptions) {
+		o.newBackend = func(*config.Config) (whiskerv1.FlowsBackend, []apiutil.Middleware, []v1.FlowsOption) {
+			return backend, nil, nil
+		}
+	}
+}
+
+func Run(ctx context.Context, cfg *config.Config, options ...Option) {
 	log.SetDefaultLogger(logrusr.New(logrus.StandardLogger()))
 
 	// Config fields are file paths and host:port only — no inline credentials or key material.
 	logrus.WithField("cfg", cfg.String()).Info("Applying configuration...")
 
-	// Generate credentials for the Goldmane client.
-	creds, err := client.ClientCredentials(cfg.TLSCertPath, cfg.TLSKeyPath, cfg.CACertPath)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
+	// newFlowsBackend is defined per repo (backend_oss.go / backend_enterprise.go):
+	// each repo's file wires its flow upstream together with the endpoint
+	// middleware and flow handler options that upstream requires.
+	runOpts := runOptions{newBackend: newFlowsBackend}
+	for _, o := range options {
+		o(&runOpts)
 	}
-
-	gmCli, err := client.NewFlowsAPIClient(cfg.GoldmaneHost, grpc.WithTransportCredentials(creds))
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create goldmane client.")
-	}
+	backend, endpointMiddleware, flowsOpts := runOpts.newBackend(cfg)
 
 	opts := []server.Option{
 		server.WithAddr(cfg.HostAddr()),
+		// A page of flows is large and highly repetitive, so it compresses by
+		// orders of magnitude. Browsers offer zstd or gzip; a client that offers
+		// neither is served the response unchanged.
+		server.WithMiddleware(compression.NewResponseCompressor()),
 	}
 
 	if cfg.ServerTLSCertPath == "" || cfg.ServerTLSKeyPath == "" {
@@ -55,11 +80,12 @@ func Run(ctx context.Context, cfg *config.Config) {
 	}
 	opts = append(opts, server.WithTLSFiles(cfg.ServerTLSCertPath, cfg.ServerTLSKeyPath))
 
-	flowsAPI := v1.NewFlows(gmCli)
+	flowsAPI := v1.NewFlows(backend, flowsOpts...)
+	endpoints := withMiddleware(flowsAPI.APIs(), endpointMiddleware...)
 
 	srv, err := server.NewHTTPServer(
 		gorillaadpt.NewRouter(),
-		flowsAPI.APIs(),
+		endpoints,
 		opts...,
 	)
 	if err != nil {
@@ -74,4 +100,31 @@ func Run(ctx context.Context, cfg *config.Config) {
 	if err := srv.WaitForShutdown(); err != nil {
 		logrus.WithError(err).Fatal("An unexpected error occurred while waiting for shutdown.")
 	}
+}
+
+// newGoldmaneBackend builds the Goldmane flow backend: the only upstream in OSS
+// builds and the fallback for enterprise ones.
+// withMiddleware appends the given middleware (auth + cluster-ID on the
+// enterprise path) to every endpoint, after any the endpoint declares for
+// itself. Applying it to the whole list means an endpoint added later cannot be
+// served unauthenticated by accident.
+func withMiddleware(endpoints []apiutil.Endpoint, middleware ...apiutil.Middleware) []apiutil.Endpoint {
+	for i := range endpoints {
+		endpoints[i].Middleware = append(endpoints[i].Middleware, middleware...)
+	}
+	return endpoints
+}
+
+func newGoldmaneBackend(cfg *config.Config) whiskerv1.FlowsBackend {
+	logrus.Info("Using Goldmane upstream for flow data.")
+	creds, err := client.ClientCredentials(cfg.TLSCertPath, cfg.TLSKeyPath, cfg.CACertPath)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
+	}
+
+	gmCli, err := client.NewFlowsAPIClient(cfg.GoldmaneHost, grpc.WithTransportCredentials(creds))
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create goldmane client.")
+	}
+	return goldmaneupstream.NewBackend(gmCli)
 }
