@@ -145,7 +145,7 @@ func TestRoundTripsTheBody(t *testing.T) {
 
 		gr, err := gzip.NewReader(rsp.Body)
 		Expect(err).NotTo(HaveOccurred())
-		defer gr.Close()
+		defer func() { _ = gr.Close() }()
 		decoded, err := io.ReadAll(gr)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(decoded)).To(Equal(body))
@@ -241,12 +241,12 @@ func TestStreamsEachFlush(t *testing.T) {
 			req.Header.Set("Accept-Encoding", tc.acceptEncoding)
 			rsp, err := (&http.Transport{DisableCompression: true}).RoundTrip(req)
 			Expect(err).NotTo(HaveOccurred())
-			defer rsp.Body.Close()
+			defer func() { _ = rsp.Body.Close() }()
 			Expect(rsp.Header.Get("Content-Encoding")).To(Equal(tc.acceptEncoding))
 
 			decoded, err := tc.open(rsp.Body)
 			Expect(err).NotTo(HaveOccurred())
-			defer decoded.Close()
+			defer func() { _ = decoded.Close() }()
 
 			// The first event must arrive before the handler is released to
 			// write the second.
