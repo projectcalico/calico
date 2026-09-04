@@ -81,13 +81,13 @@ else
   GIT_VERSION?=$(shell git describe --tags --dirty --always --abbrev=12)
 endif
 
-# The tag, registry and image path the built operator resolves Calico images at. A build
-# that names no tag gets the one cd publishes for this branch; the release tooling passes
-# the tag it publishes at, and the kind rig passes what it just pushed.
-CALICO_IMAGE_TAG  ?= $(BRANCH_IMAGE_TAG)
+# The version, registry and image path the built operator resolves Calico images at. A
+# build that names no version gets the tag cd publishes for this branch; the release
+# tooling passes the version it publishes at, and the kind rig what it just pushed.
+CALICO_VERSION    ?= $(BRANCH_IMAGE_TAG)
 CALICO_REGISTRY   ?=
 CALICO_IMAGE_PATH ?=
-CALICO_LDFLAGS = -X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(CALICO_IMAGE_TAG) \
+CALICO_LDFLAGS = -X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(CALICO_VERSION) \
                  -X $(PACKAGE_NAME)/pkg/components.calicoRegistry=$(CALICO_REGISTRY) \
                  -X $(PACKAGE_NAME)/pkg/components.calicoImagePath=$(CALICO_IMAGE_PATH)
 
@@ -219,7 +219,7 @@ run-fvs: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 # The tag the FV suite's in-process operator resolves for the components below, and
 # loads them into kind under. Stamped into the test binary the same way a real build
 # stamps the operator.
-FV_IMAGE_TAG ?= $(CALICO_IMAGE_TAG)
+FV_IMAGE_TAG ?= $(CALICO_VERSION)
 FV_LDFLAGS    = -ldflags "-X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(FV_IMAGE_TAG)"
 FV_IMAGES     = calico/calico calico/node calico/whisker
 
@@ -332,9 +332,9 @@ release: clean hack/bin/release check-release-image-tags
 .PHONY: check-release-image-tags
 check-release-image-tags:
 	@if [ "$(ALLOW_BRANCH_IMAGE_TAGS)" = "true" ]; then exit 0; fi; \
-	if [ "$(CALICO_IMAGE_TAG)" = "$(BRANCH_IMAGE_TAG)" ]; then \
+	if [ "$(CALICO_VERSION)" = "$(BRANCH_IMAGE_TAG)" ]; then \
 		echo "A release must name the tag it publishes at, not the branch default $(BRANCH_IMAGE_TAG)."; \
-		echo "Set it, build through the release tooling, or pass ALLOW_BRANCH_IMAGE_TAGS=true."; \
+		echo "Set CALICO_VERSION, build through the release tooling, or pass ALLOW_BRANCH_IMAGE_TAGS=true."; \
 		exit 1; \
 	fi
 
