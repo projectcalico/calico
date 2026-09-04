@@ -15,13 +15,18 @@
 package whisker
 
 import (
+	"context"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/controller"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
+	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	rwhisker "github.com/projectcalico/calico/operator/pkg/render/whisker"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 const ingressGatewayWarning = "ingressgateway-variant"
@@ -49,6 +54,16 @@ func (e *Extension) ValidateAndDefault(cr *operatorv1.Whisker, st status.StatusM
 		"spec.ingressGateway on the Whisker resource is ignored on Calico Enterprise; expose the UI through the Manager resource's spec.ingressGateway instead")
 	cr.Spec.IngressGateway = nil
 	return nil
+}
+
+// Watches registers nothing: Enterprise renders whisker from the core watches alone.
+func (e *Extension) Watches(ctrlruntime.Controller) error {
+	return nil
+}
+
+// ExtendInputs leaves the inputs as gathered, since Enterprise has no whisker to wire.
+func (e *Extension) ExtendInputs(_ context.Context, ci controller.Inputs) (controller.Inputs, []certificatemanagement.KeyPairInterface, error) {
+	return ci, nil, nil
 }
 
 // Modify dispatches over the components the whisker controller renders.
