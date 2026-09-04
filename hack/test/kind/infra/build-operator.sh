@@ -20,7 +20,7 @@ OPERATOR_DIR=$(cd "${INFRA_DIR}/../../../../operator" && pwd)
 pushd "${OPERATOR_DIR}"
 
 make dev-image \
-    CALICO_IMAGE_TAG="${DEV_IMAGE_TAG}" \
+    CALICO_VERSION="${DEV_IMAGE_TAG}" \
     CALICO_REGISTRY="${DEV_IMAGE_REGISTRY}" \
     CALICO_IMAGE_PATH="${DEV_IMAGE_PATH}"
 
