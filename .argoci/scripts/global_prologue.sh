@@ -238,7 +238,7 @@ echo "[INFO] initialising bz profile..."
 # cause. pipefail is set above, so tee cannot mask bz's status.
 ( cd "${HOME}" && bz init profile -n "${BZ_PROFILE_NAME}" --skip-prompt --secretsPath "${HOME}/secrets" ) \
   |& tee "${BZ_LOGS_DIR}/initialize.log" \
-  || { echo "[ERROR] bz init profile failed — see initialize.log"; exit 1; }
+  || { echo "[ERROR] bz init profile failed — see ${BZ_LOGS_DIR}/initialize.log"; exit 1; }
 mkdir -p "${BZ_LOCAL_DIR}" "${REPORT_DIR}" "${BZ_LOCAL_DIR}/config"
 # bz provision prereq wants the docker auth at <profile>/.local/config/docker_auth.json
 # (the DOCKER_AUTH_FILE env alone does not redirect the prereq check).
