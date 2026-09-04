@@ -5671,6 +5671,65 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					It("should keep a connection to a service with a remote backend up when BPF is enabled", func() {
 						verifySvcConnectivityWhileEnablingBPF(w[0][1], w[1][0])
 					})
+
+					// External client -> NodePort.  With a backend on another node the
+					// forwarded legs enter and leave on the same host interface, which is
+					// the case that matched none of the BPF-mode FORWARD accepts.
+					verifyNodePortWhileEnablingBPF := func(backend *workload.Workload) {
+						const (
+							npSvcIP  = "10.101.0.98"
+							nodePort = 30333
+						)
+						backendPort, err := strconv.Atoi(backend.Ports)
+						Expect(err).NotTo(HaveOccurred())
+
+						By("Creating the NodePort service")
+						testSvc := k8sService("migration-np", npSvcIP, backend,
+							migrationSvcPort, backendPort, int32(nodePort), testOpts.protocol)
+						k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+						_, err = k8sClient.CoreV1().Services(testSvc.Namespace).Create(
+							context.Background(), testSvc, metav1.CreateOptions{})
+						Expect(err).NotTo(HaveOccurred())
+						Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(1))
+
+						By("Installing the NodePort rules kube-proxy would have written")
+						f := tc.Felixes[0]
+						target := net.JoinHostPort(backend.IP, backend.Ports)
+						f.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat", "-N", "KUBE-SERVICES")
+						f.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat", "-A", "KUBE-SERVICES",
+							"-m", "addrtype", "--dst-type", "LOCAL", "-p", "tcp",
+							"--dport", fmt.Sprint(nodePort), "-j", "DNAT", "--to-destination", target)
+						f.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat",
+							"-I", "PREROUTING", "-j", "KUBE-SERVICES")
+						// kube-proxy masquerades node port traffic so replies come back via
+						// the ingress node.
+						f.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat", "-A", "POSTROUTING",
+							"-d", backend.IP, "-p", "tcp", "--dport", backend.Ports, "-j", "MASQUERADE")
+
+						By("Starting persistent connection from the external client to the node port")
+						pc = &PersistentConnection{
+							Runtime:             externalClient,
+							RuntimeName:         externalClient.Name,
+							IP:                  felixIP(0),
+							Port:                nodePort,
+							Protocol:            testOpts.protocol,
+							MonitorConnectivity: true,
+							Timeout:             60 * time.Second,
+						}
+						Expect(pc.Start()).NotTo(HaveOccurred())
+
+						By("having initial connectivity", expectPongs)
+						By("enabling BPF mode", enableBPF)
+						By("still having connectivity on the existing connection", expectPongs)
+					}
+
+					It("should keep an external nodeport connection with a local backend up when BPF is enabled", func() {
+						verifyNodePortWhileEnablingBPF(w[0][0])
+					})
+
+					It("should keep an external nodeport connection with a remote backend up when BPF is enabled", func() {
+						verifyNodePortWhileEnablingBPF(w[1][0])
+					})
 				}
 			}
 		})
