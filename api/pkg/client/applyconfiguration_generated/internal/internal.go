@@ -1436,6 +1436,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.GlobalNetworkPolicySpec
       default: {}
+    - name: status
+      type:
+        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.PolicyStatus
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.GlobalNetworkPolicySpec
   map:
     fields:
@@ -1921,6 +1924,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.NetworkPolicySpec
       default: {}
+    - name: status
+      type:
+        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.PolicyStatus
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.NetworkPolicySpec
   map:
     fields:
@@ -2007,6 +2013,17 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: reconcilerPeriod
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
+- name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.PolicyStatus
+  map:
+    fields:
+    - name: conditions
+      type:
+        list:
+          elementType:
+            namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Condition
+          elementRelationship: associative
+          keys:
+          - type
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.PrefixAdvertisement
   map:
     fields:
@@ -2201,6 +2218,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.StagedGlobalNetworkPolicySpec
       default: {}
+    - name: status
+      type:
+        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.PolicyStatus
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.StagedGlobalNetworkPolicySpec
   map:
     fields:
@@ -2272,6 +2292,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.StagedKubernetesNetworkPolicySpec
       default: {}
+    - name: status
+      type:
+        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.PolicyStatus
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.StagedKubernetesNetworkPolicySpec
   map:
     fields:
@@ -2317,6 +2340,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.StagedNetworkPolicySpec
       default: {}
+    - name: status
+      type:
+        namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.PolicyStatus
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.StagedNetworkPolicySpec
   map:
     fields:
