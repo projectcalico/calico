@@ -16,6 +16,9 @@ global_job_config:
       - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
       - checkout
       - ssh-add ~/.ssh/id_rsa
+      # The published tag is the branch name, taken from the environment rather
+      # than from git, matching the other push-images pipelines.
+      - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
 blocks:
   - name: Publish e2e test utility images
     dependencies: []
