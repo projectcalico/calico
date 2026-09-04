@@ -16,6 +16,7 @@ package images
 
 import (
 	"fmt"
+	"path"
 	"slices"
 	"strings"
 	"sync"
@@ -427,6 +428,19 @@ type imageNameRunner struct {
 	// mimicking a Makefile that sets IMAGETAG_PREFIX from a variant's env.
 	prefix string
 	envKey string
+	// perDir names each image after its own directory, so a test can tell the
+	// units' results apart.
+	perDir bool
+}
+
+// dirArg returns the directory a make invocation was pointed at.
+func dirArg(args []string) string {
+	for i, a := range args {
+		if a == "-C" && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
 }
 
 func (r *imageNameRunner) RunInDir(_, _ string, args, env []string) (string, error) {
@@ -434,6 +448,9 @@ func (r *imageNameRunner) RunInDir(_, _ string, args, env []string) (string, err
 		return "", err
 	}
 	if slices.Contains(args, "build-images") {
+		if r.perDir {
+			return path.Base(dirArg(args)), nil
+		}
 		return r.images, nil
 	}
 	if slices.Contains(args, "image-tag-prefix") {
@@ -809,3 +826,61 @@ func TestPublishWithoutARecordPublishesEverything(t *testing.T) {
 // Step-specific helpers are functions taking settings rather than methods on
 // it, so a step cannot reach another step's helper at all. What this once
 // checked at run time the package structure now prevents.
+
+// The lookups run concurrently, so the record must still come back in the
+// units' order: a reader diffing two runs' records compares them line by line.
+func TestPublishRecordsInUnitOrder(t *testing.T) {
+	dirs := []string{"node", "whisker", "cmd/calico", "istio"}
+	f := &imageNameRunner{perDir: true}
+	rec := &fakeRecorder{}
+	if err := Publish(testRepoRoot, testVersion,
+		[]Variant{{Name: StandardVariant, Target: "release-publish", ReleaseDirs: dirs}},
+		true, resolvesPerTag(), recordingOpts(f, rec)...); err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	// Each unit names its image after its own directory, so the record's refs
+	// must first mention the directories in the order the units were given.
+	var seen []string
+	for _, ref := range rec.refs {
+		name := path.Base(strings.SplitN(ref, "@", 2)[0])
+		if len(seen) == 0 || seen[len(seen)-1] != name {
+			seen = append(seen, name)
+		}
+	}
+	want := []string{"node", "whisker", "calico", "istio"}
+	if !slices.Equal(seen, want) {
+		t.Errorf("record out of order:\n got %v\nwant %v", seen, want)
+	}
+}
+
+// A skipped unit must not shift the ones left to publish: pending resolves the
+// units concurrently and has to put the survivors back in order.
+func TestResumeKeepsPendingUnitsInOrder(t *testing.T) {
+	dirs := []string{"node", "whisker", "cmd/calico", "istio"}
+	variants := []Variant{{Name: StandardVariant, Target: "release-publish", ReleaseDirs: dirs}}
+	resolve := resolvesPerTag()
+
+	// Seed a record covering only whisker, so the other three are still owed.
+	seed := &fakeRecorder{}
+	if err := Publish(testRepoRoot, testVersion,
+		[]Variant{{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"whisker"}}},
+		true, resolve, recordingOpts(&imageNameRunner{perDir: true}, seed)...); err != nil {
+		t.Fatalf("seeding publish: %v", err)
+	}
+
+	f := &imageNameRunner{perDir: true}
+	if err := Publish(testRepoRoot, testVersion, variants, true, resolve,
+		recordingOpts(f, &fakeRecorder{}, WithResume(seed.refs, false))...); err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	// Only whisker was recorded, so every other unit must still publish. A
+	// mis-indexed skip shows up as the wrong directory being left out.
+	for _, dir := range []string{"node", "cmd/calico", "istio"} {
+		if !slices.Contains(f.targetsFor(dir), "release-publish") {
+			t.Errorf("%s was not recorded, so it should have been published", dir)
+		}
+	}
+	if slices.Contains(f.targetsFor("whisker"), "release-publish") {
+		t.Error("whisker was already recorded, so it should have been skipped")
+	}
+}

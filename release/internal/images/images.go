@@ -41,7 +41,6 @@ const (
 )
 
 const (
-	// StandardVariant is the product's main image, the one every component ships.
 	StandardVariant = "standard"
 
 	// windowsVariant is named apart from the rest and published without
@@ -87,7 +86,6 @@ type Variant struct {
 	ReleaseDirs []string
 }
 
-// ScanRequest is one submission to the image scanning service.
 type ScanRequest struct {
 	imagescanner.Config
 
@@ -100,14 +98,11 @@ type ScanRequest struct {
 
 	Stream string
 
-	// Release distinguishes a release scan from a hashrelease one.
 	Release bool
 
 	OutputDir string
 }
 
-// VariantDirs lists every release directory the variants cover, in order and
-// without duplicates.
 func VariantDirs(variants []Variant) []string {
 	seen := map[string]struct{}{}
 	var out []string
@@ -123,8 +118,7 @@ func VariantDirs(variants []Variant) []string {
 	return out
 }
 
-// StandardVariants keeps only the variant every component ships, dropping the
-// Windows and any other kind.
+// StandardVariants drops the Windows and any other kind.
 func StandardVariants(variants []Variant) []Variant {
 	var out []Variant
 	for _, v := range variants {
@@ -152,7 +146,6 @@ func NarrowVariants(variants []Variant, dirs []string) []Variant {
 	return out
 }
 
-// RefRecorder records the digest refs a publish put in a registry.
 type RefRecorder interface {
 	Add(refs ...string) error
 }
@@ -161,9 +154,7 @@ type RefRecorder interface {
 // nil error when the tag is absent; auth and network failures return an error.
 type DigestResolver func(image string) (digest string, exists bool, err error)
 
-// Image is what every step needs to name the images a release ships. The steps
-// embed it and add only the settings their own verb uses, so a setting that
-// belongs to one verb cannot be passed to another.
+// Image is what every step needs to name the images a release ships.
 type Image struct {
 	RepoRoot   string
 	Version    string
@@ -171,12 +162,9 @@ type Image struct {
 	Arches     []string
 	Variants   []Variant
 
-	// Step carries the runner every release step drives commands through.
 	command.Step
 }
 
-// BuildOptions builds the images locally. It reaches no registry, so it carries
-// none of the publish settings.
 // settings is what the options write into. Nothing outside the package builds
 // one: a caller names the required values as arguments and adjusts the rest
 // through options.
@@ -186,7 +174,6 @@ type settings struct {
 	// confirm latches the push. Without it the make targets run as a dry run.
 	confirm bool
 
-	// dir is where an archive writes its tar files.
 	dir string
 
 	// pull fetches an image that is not already local, which a release that
@@ -230,24 +217,20 @@ var (
 	_ PublishOption = publishSetting(nil)
 )
 
-// setting is a change every step accepts.
 type setting func(*settings) error
 
 func (f setting) applyBuild(s *settings) error   { return f(s) }
 func (f setting) applyArchive(s *settings) error { return f(s) }
 func (f setting) applyPublish(s *settings) error { return f(s) }
 
-// archiveSetting is a change only an archive accepts.
 type archiveSetting func(*settings) error
 
 func (f archiveSetting) applyArchive(s *settings) error { return f(s) }
 
-// publishSetting is a change only a publish accepts.
 type publishSetting func(*settings) error
 
 func (f publishSetting) applyPublish(s *settings) error { return f(s) }
 
-// WithRunner substitutes the runner the make targets are driven through.
 func WithRunner(r command.CommandRunner) Option {
 	return setting(func(s *settings) error {
 		s.Apply([]command.Option{command.WithRunner(r)})
@@ -255,7 +238,6 @@ func WithRunner(r command.CommandRunner) Option {
 	})
 }
 
-// WithRegistries names the registries a step reads from or writes to.
 func WithRegistries(registries ...string) Option {
 	return setting(func(s *settings) error {
 		s.Registries = registries
@@ -303,7 +285,6 @@ func WithRetag(registry, tag string, skipDev bool) PublishOption {
 	})
 }
 
-// WithScan submits the published images to the scanning service.
 func WithScan(req *ScanRequest) PublishOption {
 	return publishSetting(func(s *settings) error {
 		if req == nil {
@@ -314,7 +295,6 @@ func WithScan(req *ScanRequest) PublishOption {
 	})
 }
 
-// WithRecord records the digest refs a publish produces.
 func WithRecord(rec RefRecorder) PublishOption {
 	return publishSetting(func(s *settings) error {
 		if rec == nil {
@@ -338,7 +318,6 @@ func WithResume(published []string, force bool) PublishOption {
 	})
 }
 
-// retag is the source a publish moves images from.
 type retag struct {
 	registry string
 	tag      string
@@ -351,7 +330,6 @@ type resume struct {
 	force     bool
 }
 
-// defaults fills in anything the options left unset.
 func (s settings) defaults() settings {
 	return s
 }
@@ -384,7 +362,6 @@ func (c Image) validate() error {
 	return nil
 }
 
-// env returns the environment every variant's target receives.
 func (c Image) env() []string {
 	env := append(os.Environ(),
 		utils.Env(utils.EnvVersion, c.Version),
@@ -399,30 +376,37 @@ func (c Image) env() []string {
 	return env
 }
 
-// runUnits runs every unit concurrently, collecting failures rather than
-// stopping at the first: one component failing should not hide the rest.
 func (s settings) runUnits(units []unit) error {
-	// errgroup would report only the first failure, and one component failing
-	// should not hide the rest, so every error is collected.
-	var (
-		wg   sync.WaitGroup
-		mu   sync.Mutex
-		errs = make([]error, 0, len(units))
-	)
-	for _, u := range units {
-		wg.Go(func() {
-			if err := s.runUnit(u); err != nil {
-				mu.Lock()
-				defer mu.Unlock()
-				errs = append(errs, err)
-			}
-		})
-	}
-	wg.Wait()
-	return errors.Join(errs...)
+	_, err := forEachUnit(units, s.runUnitOnly)
+	return err
 }
 
-// runUnit runs one unit's make target, retrying on failure.
+// runUnitOnly adapts runUnit to forEachUnit, which wants a result per unit.
+func (s settings) runUnitOnly(u unit) (unitDone, error) {
+	return unitDone{}, s.runUnit(u)
+}
+
+// forEachUnit runs fn over every unit at once: each shells out to make or
+// reaches a registry, so the work is I/O the machine can overlap. Results keep
+// the units' order. Every error is collected rather than only the first, which
+// is why this is not errgroup: one component failing must not hide the rest.
+
+// unitDone is the result of a unit that produces nothing to collect.
+type unitDone struct{}
+
+func forEachUnit[T any](units []unit, fn func(unit) (T, error)) ([]T, error) {
+	var (
+		wg   sync.WaitGroup
+		out  = make([]T, len(units))
+		errs = make([]error, len(units))
+	)
+	for i, u := range units {
+		wg.Go(func() { out[i], errs[i] = fn(u) })
+	}
+	wg.Wait()
+	return out, errors.Join(errs...)
+}
+
 func (s settings) runUnit(u unit) error {
 	log := s.Logger().WithFields(logrus.Fields{"variant": u.variant, "component": u.dir, "target": u.target})
 	dir := filepath.Join(s.RepoRoot, u.dir)
@@ -462,8 +446,7 @@ type unit struct {
 	env     []string
 }
 
-// units expands the variants into work. A directory shipping more than one kind
-// of image appears once per variant.
+// A directory shipping more than one kind of image appears once per variant.
 func (c Image) units(baseEnv []string) []unit {
 	var out []unit
 	for _, v := range c.Variants {
@@ -481,7 +464,6 @@ func (c Image) units(baseEnv []string) []unit {
 // reports every image a directory ships, whatever the variant.
 const windowsImageSuffix = "-windows"
 
-// imageNames returns the image names a unit publishes.
 func (c Image) imageNames(u unit) ([]string, error) {
 	dir := filepath.Join(c.RepoRoot, u.dir)
 	// RELEASE selects the released image names, set here so they cannot
@@ -517,16 +499,10 @@ func (c Image) tagPrefix(u unit) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
-// unitState reports whether a unit still needs publishing, judged against the
-// refs an earlier run recorded. It reads the record rather than the registry:
-// the record already names what landed, and a local read costs nothing.
-//
-// done is true when every ref the unit publishes is already recorded at the
-// digest the registry currently serves.
-// unitState reports whether a unit still needs publishing, judged against the
-// refs an earlier run recorded. It reads the record rather than the registry:
-// the record already names what landed, and a local read costs nothing.
-func unitState(s settings, u unit) (done bool, err error) {
+// unitState reads the record rather than the registry: the record already names
+// what landed, and a local read costs nothing. done is true when every ref the
+// unit publishes is recorded at the digest the registry currently serves.
+func unitState(s settings, u unit, recorded recordedDigests) (done bool, err error) {
 	if s.resume == nil {
 		return false, nil
 	}
@@ -537,21 +513,6 @@ func unitState(s settings, u unit) (done bool, err error) {
 	tags, err := s.unitTags(u)
 	if err != nil {
 		return false, err
-	}
-
-	// A repo publishes several tags, each at its own digest, and the record
-	// keeps refs rather than tags. So a repo maps to the SET of digests it
-	// recorded, and a tag counts as published when its digest is in that set.
-	recorded := make(map[string]map[string]struct{}, len(s.resume.published))
-	for _, ref := range s.resume.published {
-		repo, digest, ok := strings.Cut(ref, "@")
-		if !ok {
-			continue
-		}
-		if recorded[repo] == nil {
-			recorded[repo] = map[string]struct{}{}
-		}
-		recorded[repo][digest] = struct{}{}
 	}
 
 	for _, reg := range s.Registries {
@@ -585,7 +546,25 @@ func unitState(s settings, u unit) (done bool, err error) {
 	return true, nil
 }
 
-// publishedRefs returns the digest refs a unit put in the registries.
+type recordedDigests map[string]map[string]struct{}
+
+// A repo publishes several tags, each at its own digest, so it maps to a SET of
+// digests: a tag counts as published when its digest is in that set.
+func digestsByRepo(refs []string) recordedDigests {
+	out := make(recordedDigests, len(refs))
+	for _, ref := range refs {
+		repo, digest, ok := strings.Cut(ref, "@")
+		if !ok {
+			continue
+		}
+		if out[repo] == nil {
+			out[repo] = map[string]struct{}{}
+		}
+		out[repo][digest] = struct{}{}
+	}
+	return out
+}
+
 func (c Image) publishedRefs(u unit, resolve DigestResolver) ([]string, error) {
 	names, err := c.imageNames(u)
 	if err != nil {
@@ -638,25 +617,36 @@ func (c Image) unitTags(u unit) ([]string, error) {
 	return tags, nil
 }
 
-// record writes the digest refs the publish produced. A dry run records
-// nothing, so there is no recorder to write to.
+// A dry run records nothing, so there is no recorder to write to.
 func record(s settings, units []unit) error {
 	if s.refs == nil {
 		return nil
 	}
-	for _, u := range units {
-		refs, err := s.publishedRefs(u, s.resolve)
-		if err != nil {
-			return fmt.Errorf("recording published images for %s: %w", u.dir, err)
-		}
-		if err := s.refs.Add(refs...); err != nil {
-			return fmt.Errorf("recording published images for %s: %w", u.dir, err)
+	refs, lookupErr := forEachUnit(units, s.refsFor)
+	// Written even when a lookup failed: a partial publish is exactly the run
+	// whose record decides what a resume still owes. Writing after the lookups
+	// keeps the record in the units' order.
+	errs := []error{lookupErr}
+	for _, got := range refs {
+		if err := s.refs.Add(got...); err != nil {
+			errs = append(errs, fmt.Errorf("recording published images: %w", err))
+			break
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
-// save writes one image to a tar file, fetching it first when it is not local.
+// refsFor names the unit in any failure: the lookups run together, so the error
+// has to say which one it came from.
+func (s settings) refsFor(u unit) ([]string, error) {
+	refs, err := s.publishedRefs(u, s.resolve)
+	if err != nil {
+		return nil, fmt.Errorf("recording published images for %s: %w", u.dir, err)
+	}
+	return refs, nil
+}
+
+// save fetches the image first when it is not already local.
 func save(s settings, image, out string) error {
 	if s.pull {
 		if _, err := s.Runner().Run("docker", []string{"image", "inspect", image}, nil); err != nil {

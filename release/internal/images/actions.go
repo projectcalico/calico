@@ -28,7 +28,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-// Build builds every variant's images.
 func Build(repoRoot, version string, variants []Variant, opts ...BuildOption) error {
 	s, err := newSettings(buildStep, repoRoot, version, variants, opts)
 	if err != nil {
@@ -44,8 +43,7 @@ func Build(repoRoot, version string, variants []Variant, opts ...BuildOption) er
 	return nil
 }
 
-// Archive writes the images every variant ships into tarDir, one tar each, for
-// a release archive to pick up.
+// Archive writes each image to its own tar under tarDir.
 func Archive(repoRoot, version string, variants []Variant, tarDir string, opts ...ArchiveOption) error {
 	s, err := newSettings(archiveStep, repoRoot, version, variants, opts)
 	if err != nil {
@@ -68,19 +66,26 @@ func Archive(repoRoot, version string, variants []Variant, tarDir string, opts .
 	// Images come from the first registry: an archive holds one copy, whichever
 	// registry it is pulled from.
 	reg := s.Registries[0]
-	for _, u := range units {
-		names, err := s.imageNames(u)
-		if err != nil {
-			return s.Errorf("%w", err)
-		}
-		for _, name := range names {
-			image := fmt.Sprintf("%s/%s:%s", reg, name, s.Version)
-			if err := save(s, image, filepath.Join(tarDir, name+".tar")); err != nil {
-				return s.Errorf("%w", err)
-			}
-		}
+	if _, err := forEachUnit(units, func(u unit) (unitDone, error) {
+		return unitDone{}, saveUnit(s, u, reg, tarDir)
+	}); err != nil {
+		return err
 	}
 	s.Logger().Info("Finished archiving container images")
+	return nil
+}
+
+func saveUnit(s settings, u unit, reg, tarDir string) error {
+	names, err := s.imageNames(u)
+	if err != nil {
+		return s.Errorf("%w", err)
+	}
+	for _, name := range names {
+		image := fmt.Sprintf("%s/%s:%s", reg, name, s.Version)
+		if err := save(s, image, filepath.Join(tarDir, name+".tar")); err != nil {
+			return s.Errorf("%w", err)
+		}
+	}
 	return nil
 }
 
@@ -108,9 +113,8 @@ func publishEnv(s settings) []string {
 	return env
 }
 
-// Publish pushes every variant's images to their registries. confirm latches
-// the push: without it the make targets run as a dry run, so it is an argument
-// rather than an option a caller can forget.
+// confirm latches the push: without it the make targets run as a dry run, so it
+// is an argument rather than an option a caller can forget.
 func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve DigestResolver, opts ...PublishOption) error {
 	s, err := newSettings(publishStep, repoRoot, version, variants, opts)
 	if err != nil {
@@ -162,8 +166,7 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 	return nil
 }
 
-// newSettings validates what every step requires and layers the options over
-// it. It is generic so each step passes only the option type it accepts.
+// newSettings is generic so each step accepts only its own option type.
 func newSettings[O any](step, repoRoot, version string, variants []Variant, opts []O) (settings, error) {
 	s := settings{RepoRoot: repoRoot, Version: version, Variants: variants}
 	s.Apply([]command.Option{command.WithName(step)})
@@ -178,7 +181,6 @@ func newSettings[O any](step, repoRoot, version string, variants []Variant, opts
 	return s.defaults(), nil
 }
 
-// applyTo layers one option over the settings.
 func applyTo(opt any, s *settings) error {
 	switch o := opt.(type) {
 	case BuildOption:
@@ -192,19 +194,26 @@ func applyTo(opt any, s *settings) error {
 	}
 }
 
+// unitStateAgainst binds one record, so every unit is judged against the same.
+func (s settings) unitStateAgainst(recorded recordedDigests) func(unit) (bool, error) {
+	return func(u unit) (bool, error) { return unitState(s, u, recorded) }
+}
+
 // pending drops the units an earlier run already published, so a release
 // interrupted partway resumes on what is left.
 func pending(s settings, units []unit) ([]unit, error) {
 	if s.resume == nil {
 		return units, nil
 	}
+	recorded := digestsByRepo(s.resume.published)
+	done, err := forEachUnit(units, s.unitStateAgainst(recorded))
+	if err != nil {
+		return nil, err
+	}
+
 	var out []unit
-	for _, u := range units {
-		done, err := unitState(s, u)
-		if err != nil {
-			return nil, err
-		}
-		if done {
+	for i, u := range units {
+		if done[i] {
 			s.Logger().WithFields(logrus.Fields{"variant": u.variant, "component": u.dir}).
 				Info("Already published, skipping")
 			continue
