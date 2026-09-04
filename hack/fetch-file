@@ -15,8 +15,7 @@ dest=$2
 
 mkdir -p "$(dirname "$dest")"
 
-# Download beside the target and move into place, so an interrupted transfer
-# cannot leave a truncated file that make treats as up to date.
+# A truncated file from an interrupted transfer would look up to date to make.
 tmp="$dest.tmp.$$"
 trap 'rm -f "$tmp"' EXIT
 

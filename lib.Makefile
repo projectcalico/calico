@@ -408,9 +408,11 @@ DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL) 
 	--build-arg GIT_VERSION=$(GIT_VERSION) \
 	--build-arg UBI_IMAGE=$(UBI_IMAGE)
 
-# Fail a clone that needs credentials instead of blocking on git's terminal
-# prompt, which hangs a CI job until the pipeline timeout.
+# A clone that needs credentials fails instead of hanging on the terminal prompt.
 export GIT_TERMINAL_PROMPT ?= 0
+
+fetch_file = $(REPO_ROOT)/hack/fetch-file $(1) $(2)
+fetch_repo = $(REPO_ROOT)/hack/fetch-repo $(1) $(2) $(3)
 
 DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
@@ -711,17 +713,6 @@ commit-and-push-pr:
 # GitHub API helpers
 #   Helper macros and targets to help with communicating with the github API
 ###############################################################################
-# Download a file. $(1) is the URL, $(2) the destination path.
-define fetch_file
-	$(REPO_ROOT)/hack/fetch-file $(1) $(2)
-endef
-
-# Check out a pinned revision. $(1) is the repo URL, $(2) the revision,
-# $(3) the destination directory.
-define fetch_repo
-	$(REPO_ROOT)/hack/fetch-repo $(1) $(2) $(3)
-endef
-
 GIT_COMMIT_MESSAGE?="Automatic Pin Updates"
 GIT_COMMIT_TITLE?="Semaphore Auto Pin Update"
 GIT_PR_BRANCH_BASE?=$(SEMAPHORE_GIT_BRANCH)
@@ -1482,7 +1473,7 @@ check-dirty:
 bin/yq:
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
-	curl -sSf -L --retry 5 -o $(TMP)/yq4.tar.gz https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz
+	$(call fetch_file,https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz,$(TMP)/yq4.tar.gz)
 	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
 	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
 
@@ -1501,7 +1492,7 @@ bin/crane: $(REPO_ROOT)/bin/crane
 $(REPO_ROOT)/bin/crane:
 	$(info ::: Downloading crane from $(CRANE_URL))
 	@mkdir -p $(REPO_ROOT)/bin
-	@curl -sSfL --retry 5 --retry-all-errors -o /tmp/calico-crane.tar.gz $(CRANE_URL)
+	@$(call fetch_file,$(CRANE_URL),/tmp/calico-crane.tar.gz)
 	@tar xz -C $(REPO_ROOT)/bin -f /tmp/calico-crane.tar.gz crane
 	@rm -f /tmp/calico-crane.tar.gz
 

@@ -344,7 +344,6 @@ release-publish-images: operator-release-prereqs release-check-image-exists var-
 release-github: hack/bin/release var-require-all-VERSION-GITHUB_TOKEN
 	hack/bin/release github
 
-GITHUB_CLI_VERSION?=2.62.0
 hack/bin/gh:
 	mkdir -p hack/bin
 	$(call fetch_file,https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz,hack/bin/gh.tgz)
@@ -386,7 +385,7 @@ create-release-branch: hack/bin/release var-require-all-CALICO_REF var-require-o
 	hack/bin/release branch cut
 
 $(HACK_BIN)/gotestsum: $(HACK_BIN)
-	@$(call fetch_file,https://github.com/gotestyourself/gotestsum/releases/download/$(GOTESTSUM_VERSION)/gotestsum_$(GOTESTSUM_VERSION)_$(NATIVE_OS)_$(NATIVE_ARCH).tar.gz,$(HACK_BIN)/gotestsum.tar.gz)
+	@$(call fetch_file,https://github.com/gotestyourself/gotestsum/releases/download/$(GOTESTSUM_VERSION)/gotestsum_$(GOTESTSUM_VERSION:v%=%)_$(NATIVE_OS)_$(NATIVE_ARCH).tar.gz,$(HACK_BIN)/gotestsum.tar.gz)
 	@tar -zxvf $(HACK_BIN)/gotestsum.tar.gz -C $(HACK_BIN) gotestsum
 	@chmod +x $@
 	@rm $(HACK_BIN)/gotestsum.tar.gz
@@ -406,7 +405,7 @@ operator-sdk: $(OPERATOR_SDK_BARE)
 $(OPERATOR_SDK):
 	$(info ░▒▓ Downloading operator-sdk to $(OPERATOR_SDK))
 	@mkdir -p hack/bin
-	@curl -fsSL -o $@ $(OPERATOR_SDK_URL)
+	@$(call fetch_file,$(OPERATOR_SDK_URL),$@)
 	@chmod +x $@
 
 $(OPERATOR_SDK_BARE): $(OPERATOR_SDK)
@@ -530,7 +529,9 @@ KUSTOMIZE = $(HACK_BIN)/kustomize
 kustomize: $(KUSTOMIZE)
 $(KUSTOMIZE): $(HACK_BIN)
 	$(info ░▒▓ Downloading kustomize $(KUSTOMIZE_VERSION) to $(KUSTOMIZE))
-	@curl -fsSL $(KUSTOMIZE_DOWNLOAD_URL) | tar -C $(HACK_BIN) --extract --gzip kustomize
+	@$(call fetch_file,$(KUSTOMIZE_DOWNLOAD_URL),$(HACK_BIN)/kustomize.tar.gz)
+	@tar -C $(HACK_BIN) --extract --gzip -f $(HACK_BIN)/kustomize.tar.gz kustomize
+	@rm $(HACK_BIN)/kustomize.tar.gz
 	@chmod a+x $(KUSTOMIZE)
 
 

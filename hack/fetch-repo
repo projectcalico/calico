@@ -7,8 +7,7 @@
 # resolves only when the revision is itself a tag.
 set -euo pipefail
 
-# Inherited from a make recipe these point at the calling repo, and every git
-# command below would act on it instead of $dest.
+# Inherited from a make recipe, these point at the calling repo, not $dest.
 unset GIT_DIR GIT_WORK_TREE
 
 if [ $# -ne 3 ]; then
@@ -38,22 +37,19 @@ git config http.version HTTP/1.1
 # Every run: a directory left by an earlier build may have a stale origin.
 git remote add origin "$repo" 2>/dev/null || git remote set-url origin "$repo"
 
-# Retry: a throttled or flaky fetch is a transient failure, not a missing ref.
-retry() {
-	local n=1
-	until "$@"; do
-		if [ $n -ge 3 ]; then
-			return 1
-		fi
-		echo "$0: $* failed, retrying in $((n * 5))s..." >&2
-		sleep $((n * 5))
-		n=$((n + 1))
-	done
-}
-
 # A private ref, so a tag, a branch and a SHA all resolve the same way.
 target=refs/fetched/$rev
 if ! git rev-parse -q --verify "$target^{commit}" >/dev/null; then
-	retry git fetch -q --depth 1 origin "$rev:$target"
+	# GitHub's throttle asks for about a minute and git ignores Retry-After, so
+	# the waits must outlast it.
+	n=1
+	until git fetch -q --depth 1 origin "$rev:$target"; do
+		if [ $n -ge 3 ]; then
+			exit 1
+		fi
+		echo "$0: fetch failed, retrying in $((n * 30))s..." >&2
+		sleep $((n * 30))
+		n=$((n + 1))
+	done
 fi
 git checkout -q --detach "$target"

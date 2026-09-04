@@ -7,7 +7,7 @@ applyTo:
 # Fetching from remote repos in build files
 
 CI runners share a source IP, so anything the build pulls from GitHub is
-subject to throttling that a laptop never sees. Two wrappers centralise the
+subject to throttling that a single developer machine does not hit. Two wrappers centralise the
 handling — use them instead of calling `curl` or `git clone` directly.
 
 ## Downloading a file
@@ -25,10 +25,10 @@ Creates the destination directory.
 	$(call fetch_repo,$(THING_REPO),$(THING_SHA),thing)
 ```
 
-Fetches the revision in one network round-trip, sets the remote URL every run
-so a directory left by an earlier build cannot fetch from a stale origin, and
-disables the git credential prompt on CI — a throttled anonymous clone
-otherwise blocks on that prompt until the job times out.
+Fetches the revision in one network round-trip. Every run resets the remote
+URL, so a directory left by an earlier build cannot fetch from a stale origin.
+The git credential prompt is disabled: a throttled anonymous clone otherwise
+blocks on it until the job times out.
 
 Re-running does no network I/O once the revision is present. Pin a tag or a
 full commit SHA; a short SHA is rejected, and a branch name freezes at the
@@ -47,7 +47,7 @@ more than one Makefile.
 
 Neither wrapper sends one, and a download recipe should not add one. Release,
 archive and raw URLs are CDN-served and are not rate limited by identity
-today, so a token buys nothing, and a stale one makes
+today, so a token does not raise the limit, and a stale one makes
 `raw.githubusercontent.com` return 404 instead of the file.
 
 That balance is what makes the wrappers token-free, not a rule against auth.

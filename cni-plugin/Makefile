@@ -17,9 +17,6 @@ include ../lib.Makefile
 ## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 
-CNI_ARTIFACTS_URL=https://github.com/projectcalico/containernetworking-plugins/releases/download
-FLANNEL_ARTIFACTS_URL=https://github.com/projectcalico/flannel-cni-plugin/releases/download
-
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
 
