@@ -248,6 +248,32 @@ blocks:
         - name: Check images availability
           commands:
             - make check-images-availability
+  - name: "Check third-party dependency patches"
+    # Each component's dep-patches/ are derived from its dep-pins.txt, so
+    # regenerating them must be a no-op.
+    #
+    # metadata.mk is in the trigger because `go mod tidy`'s output depends on the
+    # Go toolchain: bumping GO_VERSION can leave every checked-in patch stale.
+    #
+    # Not a Prerequisites dependency -- it fetches three upstream trees and tidies
+    # each, so it gates the PR on its own rather than the component builds.
+    run:
+      when: >-
+        true or
+        change_in(['/Makefile', '/lib.Makefile', '/metadata.mk', '/hack/thirdparty', '/istio', '/third_party/envoy-gateway', '/third_party/envoy-ratelimit'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+    execution_time_limit:
+      minutes: 30
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      jobs:
+        - name: "Check dependency patches match their pins"
+          commands:
+            - make check-thirdparty-dep-patches
+            - make check-dirty
   - name: Check SemaphoreCI files
     run:
       when: >-

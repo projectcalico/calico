@@ -140,6 +140,23 @@ $(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./
 	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps combined $(patsubst %/,%,$(dir $@))"; \
 	} > $@
 
+# The pin file is what onboards a component: one without it is left out,
+# because the generator treats an absent pin file as "no pins" and would delete
+# the patch.
+THIRDPARTY_DEP_PIN_FILES=$(wildcard third_party/*/dep-pins.txt istio/dep-pins.txt)
+
+.PHONY: regen-thirdparty-dep-patches
+regen-thirdparty-dep-patches:
+	@for pins in $(THIRDPARTY_DEP_PIN_FILES); do \
+		$(MAKE) -C $$(dirname $$pins) regen-dep-patches || exit 1; \
+	done
+
+.PHONY: check-thirdparty-dep-patches
+check-thirdparty-dep-patches:
+	@for pins in $(THIRDPARTY_DEP_PIN_FILES); do \
+		$(MAKE) -C $$(dirname $$pins) check-dep-patches || exit 1; \
+	done
+
 # bin/send-perf-results is the tool that pushes hack/perf JSON docs to the Lens
 # Elasticsearch cluster (see hack/perf/README.md). Built statically so CI jobs
 # that produce perf artifacts on the host (e.g. the nftables dataplane benchmark)
