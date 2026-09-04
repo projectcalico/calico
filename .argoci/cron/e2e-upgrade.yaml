@@ -112,10 +112,10 @@ steps:
       - name: PROVISIONER
         value: aws-openshift
     matrix:
-      - name: 4-19-20-calicoiptables-operator
+      - name: 4-22-11-calicoiptables-operator
         env:
           - name: OPENSHIFT_VERSION
-            value: 4.19.20
+            value: 4.22.11
           - name: DATAPLANE
             value: CalicoIptables
           - name: INSTALLER
