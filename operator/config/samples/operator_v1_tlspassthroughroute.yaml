@@ -1,0 +1,10 @@
+apiVersion: operator.tigera.io/v1
+kind: TLSPassthroughRoute
+metadata:
+  name: tlspassthroughroute-sample
+  namespace: tigera-manager
+spec:
+  target: UpstreamTunnel
+  destination: some-service.some-namespace.svc.cluster.local:443
+  sniMatch:
+    serverName: some-service.example.com

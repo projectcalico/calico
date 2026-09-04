@@ -1,3 +1,15 @@
+# This is the base ClusterServiceVersion for the OpenShift operator bundle. Every
+# static field of the shipped CSV belongs here: `operator-sdk generate bundle`
+# reads this file and overlays the generated deployment, RBAC and CRD data onto
+# it. Only values that cannot be known until build time (image digests, version,
+# replaces, createdAt, architecture labels) are applied afterwards by
+# hack/gen-bundle/update-bundle.sh.
+#
+# IMPORTANT: metadata.name must be "<package>.v<semver>", where <package> matches
+# the --package argument of `operator-sdk generate bundle` (tigera-operator).
+# operator-sdk silently discards a base whose name does not parse that way and
+# substitutes a placeholder CSV instead, so a mismatch here loses every value
+# below without any error.
 apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
@@ -5,16 +17,27 @@ metadata:
     alm-examples: '[]'
     capabilities: Seamless Upgrades
     categories: Logging & Tracing, Monitoring, Networking, Security
+    certified: "true"
     description: An operator which manages the lifecycle of a Calico or Calico Enterprise installation on Kubernetes or OpenShift.
     marketplace.openshift.io/action-text: Install-time Instructions
-    marketplace.openshift.io/remote-workflow: https://docs.projectcalico.org/getting-started/openshift/installation
-    operators.operatorframework.io/builder: operator-sdk-v1.1.0
+    marketplace.openshift.io/remote-workflow: https://docs.tigera.io/calico/latest/getting-started/kubernetes/openshift/installation
     operators.operatorframework.io/internal-objects: '["blockaffinities.crd.projectcalico.org","clusterinformations.crd.projectcalico.org","ipamblocks.crd.projectcalico.org","ipamconfigs.crd.projectcalico.org","ipamhandles.crd.projectcalico.org"]'
-    operators.operatorframework.io/project_layout: go.kubebuilder.io/v2
     repository: https://github.com/tigera/operator
     support: Tigera
-    certified: "true"
-  name: operator
+    # Feature annotations required by the Red Hat certification pipeline. See
+    # https://docs.openshift.com/container-platform/latest/operators/operator_sdk/osdk-generating-csvs.html
+    features.operators.openshift.io/cni: "true"
+    features.operators.openshift.io/cnf: "false"
+    features.operators.openshift.io/csi: "false"
+    features.operators.openshift.io/disconnected: "false"
+    features.operators.openshift.io/fips-compliant: "false"
+    features.operators.openshift.io/proxy-aware: "false"
+    features.operators.openshift.io/tls-profiles: "false"
+    features.operators.openshift.io/token-auth-aws: "false"
+    features.operators.openshift.io/token-auth-azure: "false"
+    features.operators.openshift.io/token-auth-gcp: "false"
+    features.operators.openshift.io/valid-subscription: No subscription required
+  name: tigera-operator.v0.0.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -34,6 +57,11 @@ spec:
         displayName: BlockAffinity
         kind: BlockAffinity
         name: blockaffinities.crd.projectcalico.org
+        version: v1
+      - description: CalicoNodeStatus requests and reports the current status of the BGP sessions, routes and agents running on a Calico node.
+        displayName: CalicoNodeStatus
+        kind: CalicoNodeStatus
+        name: caliconodestatuses.crd.projectcalico.org
         version: v1
       - description: ClusterInformation contains the cluster specific information.
         displayName: ClusterInformation
@@ -60,6 +88,11 @@ spec:
         kind: HostEndpoint
         name: hostendpoints.crd.projectcalico.org
         version: v1
+      - description: ImageSet specifies image digests for the images that the operator deploys. Its name must be in the format `<variant>-<release>`, e.g. `calico-v3.30.0`.
+        displayName: ImageSet
+        kind: ImageSet
+        name: imagesets.operator.tigera.io
+        version: v1
       - description: Installation configures an installation of Calico or Calico Enterprise. At most one instance of this resource is supported. It must be named "default". The Installation API installs core networking and network policy components, and provides general install-time configuration.
         displayName: Installation
         kind: Installation
@@ -84,6 +117,11 @@ spec:
         displayName: IPPool
         kind: IPPool
         name: ippools.crd.projectcalico.org
+        version: v1
+      - description: IPReservation reserves IP addresses and CIDRs so that Calico IPAM will not assign them to workloads.
+        displayName: IPReservation
+        kind: IPReservation
+        name: ipreservations.crd.projectcalico.org
         version: v1
       - description: KubeControllersConfiguration represents configuration options for the Calico Kubernetes controllers.
         displayName: KubeControllersConfiguration
@@ -142,4 +180,10 @@ spec:
   maturity: stable
   provider:
     name: Tigera
+    url: https://tigera.io/
+  # relatedImages is required for a certified bundle. update-bundle.sh replaces
+  # this entry with the digest-pinned operator image at build time.
+  relatedImages:
+    - name: tigera-operator
+      image: quay.io/tigera/operator
   version: 0.0.0
