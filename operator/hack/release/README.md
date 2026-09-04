@@ -118,11 +118,7 @@ However, some additonal flags are used to provide more information on the Calico
 
       ```sh
       make release HASHRELEASE=true VERSION=vA.B.C-0.dev-XXX-gYYYYYYYYYYYY-vX.Y.Z-0.dev-N-gSHAAAAAAAAAA \
-        --calico-version vX.Y.Z-0.dev-N-gSHAAAAAAAAAA --calico-dir path/to/local/calico-repo
-
-      # alternatively, using versions file
-      # make release HASHRELEASE=true VERSION=vA.B.C-0.dev-XXX-gYYYYYYYYYYYY-vX.Y.Z-0.dev-N-gSHAAAAAAAAAA \
-      #   --calico-versions path/to/calico-versions.yaml
+        --calico-version vX.Y.Z-0.dev-N-gSHAAAAAAAAAA
       ```
 
 1. Publish the hashrelease operator image to the container registry.
@@ -135,16 +131,16 @@ However, some additonal flags are used to provide more information on the Calico
 
 ### release branch
 
-This command creates a new release branch for the operator.
-It updates the calico version config on the release branch, regenerates files,
-and commits the changes. It then switches back to master, creates an empty commit tagged
+This command creates a new release branch for the operator, committing any generated-file
+changes it finds. It then switches back to master, creates an empty commit tagged
 with `vX.Y.0-0.dev` (so that `git describe --tags` produces sensible versions for subsequent
 master commits), and pushes the release branch, master, and tag to the remote.
 
-`--calico-ref` is required. It specifies the git ref (branch or tag) to use for the Calico version config.
+The branch needs no version pinning: the operator resolves the Calico version it deploys
+from the build.
 
 ```sh
-release branch --stream <vX.Y> --calico-ref <git-ref>
+release branch --stream <vX.Y>
 ```
 
 If the `--local` flag is specified, the branch and tag are created locally without pushing to the remote.
@@ -152,28 +148,27 @@ If the `--local` flag is specified, the branch and tag are created locally witho
 | Flag                      | Env var                    | Description                                   |
 | ------------------------- | -------------------------- | --------------------------------------------- |
 | `--stream`                | `RELEASE_STREAM`/ `STREAM` | Release stream (e.g., `v1.43`). Required.     |
-| `--calico-ref`            | `CALICO_REF`               | Calico git ref (branch or tag). Required.     |
 | `--release-branch-prefix` | `RELEASE_BRANCH_PREFIX`    | Branch name prefix (default: `release`).      |
 | `--local`                 | `LOCAL`                    | Skip pushing to remote.                       |
 
 There is also a Makefile target:
 
 ```sh
-make create-release-branch RELEASE_STREAM=vX.Y CALICO_REF=<ref>
+make create-release-branch RELEASE_STREAM=vX.Y
 ```
 
 #### Examples
 
-1. To create a release branch for operator v1.42 with Calico v3.32
+1. To create a release branch for operator v1.42
 
     ```sh
-    release branch --stream v1.42 --calico-ref release-v3.32
+    release branch --stream v1.42
     ```
 
 1. To perform the same action as above but only locally without pushing to the remote
 
     ```sh
-    release branch --stream v1.42 --calico-ref release-v3.32 --local
+    release branch --stream v1.42 --local
     ```
 
 ### release build
@@ -186,12 +181,11 @@ To build the operator image, use the following command:
 release build --version <operator version>
 ```
 
-For hashrelease, use the `--hashrelease` flag and provide either the Calico version or versions file.
-CRDs come from the working tree. Pass `--calico-dir` to read them from another checkout instead.
+For hashrelease, use the `--hashrelease` flag and give the Calico version the operator should
+deploy. A release build takes it from the git tag instead.
 
 ```sh
-release build --version <operator version> --hashrelease \
-  [--calico-version <calico version> | --calico-versions <path to calico version file>] [--calico-dir <path to local calico repo>]
+release build --version <operator version> --hashrelease --calico-version <calico version>
 ```
 
 #### Examples
@@ -204,19 +198,10 @@ release build --version <operator version> --hashrelease \
 
 1. To build hashrelease operator image for Calico v3.30
 
-   1. Using Calico versions file
-
-         ```sh
-         release build --hashrelease --version v1.36.0-0.dev-259-g25c811f78fbd-v3.30.0-0.dev-338-gca80474016a5 \
-          --calico-versions path/to/calico-versions.yaml
-         ```
-
-   1. Specifying version directly
-
-       ```sh
-       release build --hashrelease --version v1.36.0-0.dev-259-g25c811f78fbd-v3.30.0-0.dev-338-gca80474016a5 \
-        --calico-version v3.30.0-0.dev-338-gca80474016a5 --calico-dir path/to/local/calico-repo
-       ```
+    ```sh
+    release build --hashrelease --version v1.36.0-0.dev-259-g25c811f78fbd-v3.30.0-0.dev-338-gca80474016a5 \
+     --calico-version v3.30.0-0.dev-338-gca80474016a5
+    ```
 
 ### release publish
 
@@ -270,26 +255,24 @@ are moved to the new milestone.
 To prepare for a new release, use the following command:
 
 ```sh
-release prep --version <new operator version> [--calico-version <calico version>]
+release prep --version <new operator version>
 ```
-
-If `--calico-version` is omitted, the version already in `config/calico_versions.yml` is used, and must be a released version.
 
 If the `--local` flag is specified, none of the remote changes will be made i.e.
 no branch in the remote repo and no pull request will be created. Also milestones will not be modified on GitHub.
 
 #### Examples
 
-1. To prepare for a new release `v1.36.0` with Calico version `v3.30.0`
+1. To prepare for a new release `v1.36.0`
 
     ```sh
-    release prep --version v1.36.0 --calico-version v3.30.0
+    release prep --version v1.36.0
     ```
 
-1. To prepare for a new release `v1.36.0` with Calico version `v3.30.0` using local changes only
+1. To prepare for a new release `v1.36.0` using local changes only
 
     ```sh
-    release prep --version v1.36.0 --calico-version v3.30.0 --local
+    release prep --version v1.36.0 --local
     ```
 
 ### release notes
@@ -303,8 +286,8 @@ release notes --version <operator version>
 
 The generated releases notes are saved in a markdown file named `<operator version>-release-notes.md`.
 
-The release notes includes the Calico and Calico Enterprise versions included in the operator version.
-By default, this is gotten from the versions files corresponding to the product in `config/` directory
+The release notes includes the Calico Enterprise version included in the operator version.
+By default, this is gotten from the versions file in the `config/` directory
 in the commit with the tag matching the operator version.
 
 To get the versions file from the local working directory instead of the tagged commit, use the `--local` flag.
@@ -352,12 +335,11 @@ By default, the GitHub release is not created in draft mode. To create a draft r
 
 This command creates a new operator version based on a previous operator version.
 The base operator version must reference either a tag or commit hash in this repository.
-The new operator version will be built from the current codebase
-with updates made to the image list based on the changes passed in.
+The new operator version is built from the current codebase with the version config
+taken from the base version.
 
 ```sh
-release from --base-version <previous operator version> --version <version to release> \
-  --except-calico <image>:<image version>
+release from --base-version <previous operator version> --version <version to release>
 ```
 
 > [!IMPORTANT]
@@ -368,28 +350,26 @@ release from --base-version <previous operator version> --version <version to re
 
 #### Examples
 
-1. To create a new operator with an updated `typha` for Calico to a custom registry locally
+1. To create a new operator to a custom registry locally
 
     ```sh
-    release from --base-version v1.36.0-1.dev-259-g25c811f78fbd-v3.30.0-0.dev-338-gca80474016a5 --version v1.36.0-mod-typha \
-    --except-calico typha:v3.30.0-0.dev-353-ge0bc56c0d646 --registry quay.io --image my-namespace/tigera-operator
+    release from --base-version v1.36.0-1.dev-259-g25c811f78fbd-v3.30.0-0.dev-338-gca80474016a5 --version v1.36.0-mod \
+    --registry quay.io --image my-namespace/tigera-operator
     ```
 
-1. To create a new operator with an updated `typha` for Calico to a custom registry
+1. To create a new operator to a custom registry and publish it
 
     ```sh
-    release from --base-version v1.36.0-1.dev-259-g25c811f78fbd-v3.30.0-0.dev-338-gca80474016a5 --version v1.36.0-mod-typha \
-    --except-calico typha:v3.30.0-0.dev-353-ge0bc56c0d646 --registry quay.io --image my-namespace/tigera-operator --publish
+    release from --base-version v1.36.0-1.dev-259-g25c811f78fbd-v3.30.0-0.dev-338-gca80474016a5 --version v1.36.0-mod \
+    --registry quay.io --image my-namespace/tigera-operator --publish
     ```
 
-1. To create a new operator release `v1.36.3` that has almost all the same images as `v1.36.2`
-    with the exception of the `typha` component using `v3.30.1`.
+1. To create a new operator release `v1.36.3` from `v1.36.2`
 
     > [!WARNING]
     > This assumes that user has push access to [`tigera/operator`](https://github.com/tigera/operator)
     > and [`quay.io/tigera/operator`](https://quay.io/repository/tigera/operator)
 
     ```sh
-    release from --base-version v1.36.2 --version v1.36.3 \
-      --except-calico typha:v3.30.1 --publish
+    release from --base-version v1.36.2 --version v1.36.3 --publish
     ```

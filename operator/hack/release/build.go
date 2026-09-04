@@ -32,20 +32,6 @@ import (
 	"github.com/projectcalico/calico/operator/hack/release/internal/versions"
 )
 
-// Build context keys
-const (
-	calicoBuildCtxKey contextKey = "calico-build-type"
-)
-
-// Build types
-const (
-	versionsBuild buildType = "versions-file"
-	versionBuild  buildType = "version"
-)
-
-// type of build being performed. Either using the Calico version or its corresponding versions file.
-type buildType string
-
 // Command to build release artifacts.
 var buildCommand = &cli.Command{
 	Name:  "build",
@@ -58,8 +44,6 @@ var buildCommand = &cli.Command{
 		calicoVersionFlag,
 		calicoRegistryFlag,
 		calicoImagePathFlag,
-		calicoVersionsConfigFlag,
-		calicoDirFlag,
 		hashreleaseFlag,
 		skipValidationFlag,
 		versionCheckFlag,
@@ -80,16 +64,6 @@ var buildBefore = cli.BeforeFunc(func(ctx context.Context, c *cli.Command) (cont
 	buildCleanupFns = nil
 
 	var err error
-
-	// Determine the Calico build type
-	if ver := c.String(calicoVersionsConfigFlag.Name); ver != "" {
-		ctx = context.WithValue(ctx, calicoBuildCtxKey, versionsBuild)
-		logrus.Debug("Calico build using versions file selected")
-	}
-	if ver := c.String(calicoVersionFlag.Name); ver != "" {
-		ctx = context.WithValue(ctx, calicoBuildCtxKey, versionBuild)
-		logrus.Debug("Calico build using specific version selected")
-	}
 
 	// Run version validations. This is a mandatory check.
 	ctx, err = checkVersion(ctx, c)
@@ -114,10 +88,10 @@ var buildBefore = cli.BeforeFunc(func(ctx context.Context, c *cli.Command) (cont
 		return ctx, nil
 	}
 
-	// For hashrelease builds, ensure the Calico version or versions file is specified. CRDs come from
-	// the working tree unless --calico-dir points somewhere else.
-	if _, ok := ctx.Value(calicoBuildCtxKey).(buildType); !ok {
-		return ctx, fmt.Errorf("for hashrelease builds, the Calico version or versions file must be specified")
+	// For hashrelease builds, the Calico version the operator deploys has to be spelled out:
+	// the build's own version names the operator image, not the components it installs.
+	if c.String(calicoVersionFlag.Name) == "" {
+		return ctx, fmt.Errorf("for hashrelease builds, the Calico version must be specified")
 	}
 
 	return ctx, nil
@@ -171,9 +145,11 @@ var buildAction = func(ctx context.Context, c *cli.Command) (string, map[string]
 			}
 			return nil
 		})
-		if err := setupHashreleaseBuild(ctx, c, repoRootDir); err != nil {
+		hashreleaseEnv, err := setupHashreleaseBuild(c, repoRootDir)
+		if err != nil {
 			return version, nil, fmt.Errorf("preparing hashrelease build environment: %w", err)
 		}
+		buildEnv = append(buildEnv, hashreleaseEnv...)
 	} else {
 		buildLog = buildLog.WithField("release", true)
 		buildEnv = append(buildEnv, "RELEASE=true")
@@ -259,53 +235,29 @@ func assertOperatorImageVersion(registry, image, expectedVersion string) error {
 	return nil
 }
 
-// setupHashreleaseBuild modifies component image config and versions for hashrelease builds.
-// It registers a cleanup function to reset git state after the build completes.
-var setupHashreleaseBuild = func(ctx context.Context, c *cli.Command, repoRootDir string) error {
+// setupHashreleaseBuild edits the operator's own image config for hashrelease builds and
+// returns the environment that stamps the Calico references into the built operator.
+var setupHashreleaseBuild = func(c *cli.Command, repoRootDir string) ([]string, error) {
 	image := c.String(imageFlag.Name)
 	if image != defaultImage {
 		imageParts := strings.SplitN(c.String(imageFlag.Name), "/", 2)
 		if err := versions.ModifyComponentImageConfig(repoRootDir, versions.ComponentImageConfigRelPath, versions.OperatorImagePathConfigKey, addTrailingSlash(imageParts[0])); err != nil {
-			return fmt.Errorf("updating Operator image path: %w", err)
+			return nil, fmt.Errorf("updating Operator image path: %w", err)
 		}
 	}
 	registry := c.String(registryFlag.Name)
 	if registry != "" && registry != defaultRegistry {
 		if err := versions.ModifyComponentImageConfig(repoRootDir, versions.ComponentImageConfigRelPath, versions.OperatorRegistryConfigKey, addTrailingSlash(registry)); err != nil {
-			return fmt.Errorf("updating Operator registry: %w", err)
-		}
-	}
-	if registry := c.String(calicoRegistryFlag.Name); registry != "" {
-		if err := versions.ModifyComponentImageConfig(repoRootDir, versions.ComponentImageConfigRelPath, versions.CalicoRegistryConfigKey, addTrailingSlash(registry)); err != nil {
-			return fmt.Errorf("updating Calico registry: %w", err)
-		}
-	}
-	if imagePath := c.String(calicoImagePathFlag.Name); imagePath != "" {
-		if err := versions.ModifyComponentImageConfig(repoRootDir, versions.ComponentImageConfigRelPath, versions.CalicoImagePathConfigKey, imagePath); err != nil {
-			return fmt.Errorf("updating Calico image path: %w", err)
+			return nil, fmt.Errorf("updating Operator registry: %w", err)
 		}
 	}
 
-	// Update versions and CRDs
-	genEnv := os.Environ()
-	genMakeTargets := []string{}
-	if dir := c.String(calicoDirFlag.Name); dir != "" {
-		genEnv = append(genEnv, fmt.Sprintf("CALICO_CRDS_DIR=%s", dir))
+	env := []string{fmt.Sprintf("CALICO_VERSION=%s", c.String(calicoVersionFlag.Name))}
+	if registry := c.String(calicoRegistryFlag.Name); registry != "" {
+		env = append(env, fmt.Sprintf("CALICO_REGISTRY=%s", addTrailingSlash(registry)))
 	}
-	if bt, ok := ctx.Value(calicoBuildCtxKey).(buildType); ok {
-		genMakeTargets = append(genMakeTargets, versions.MakeTargetGenVersionsCalico)
-		switch bt {
-		case versionBuild:
-			if err := versions.UpdateCalicoConfigVersion(repoRootDir, c.String(calicoVersionFlag.Name)); err != nil {
-				return err
-			}
-		case versionsBuild:
-			genEnv = append(genEnv, fmt.Sprintf("OS_VERSIONS=%s", c.String(calicoVersionsConfigFlag.Name)))
-		}
+	if imagePath := c.String(calicoImagePathFlag.Name); imagePath != "" {
+		env = append(env, fmt.Sprintf("CALICO_IMAGE_PATH=%s", imagePath))
 	}
-	if out, err := command.MakeInDir(repoRootDir, strings.Join(genMakeTargets, " "), genEnv...); err != nil {
-		logrus.Error(out)
-		return fmt.Errorf("generating versions: %w", err)
-	}
-	return nil
+	return env, nil
 }
