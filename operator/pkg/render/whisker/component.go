@@ -17,6 +17,7 @@ package whisker
 import (
 	_ "embed"
 	"fmt"
+	"maps"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
@@ -30,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/components"
 	"github.com/projectcalico/calico/operator/pkg/render"
+	"github.com/projectcalico/calico/operator/pkg/render/common/authentication"
 	rcomp "github.com/projectcalico/calico/operator/pkg/render/common/components"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
@@ -96,10 +98,55 @@ type Configuration struct {
 	ClusterType           string
 	ClusterDomain         string
 
+	// BackendOnly deploys whisker-backend alone, for a variant that serves the UI
+	// from another component and wires the backend to its own flow source: no UI
+	// container, nginx config, UI Service or UI key pair, and no Goldmane wiring.
+	// The controller sets it from RenderData.
+	BackendOnly bool
+
+	// Disabled deploys nothing and removes whatever an earlier configuration
+	// deployed, whichever shape it had. The key pairs are nil in this mode; the
+	// controller removes those itself. Set from RenderData.
+	Disabled bool
+
+	// KeyValidatorConfig lets whisker-backend verify the user tokens its caller
+	// forwards. Only its environment and annotations apply: the backend fetches
+	// the provider's keys over the network, trusting the CA in the bundle, and
+	// never reads the files a browser-facing server would mount. Set from
+	// RenderData; nil when the caller forwards no tokens.
+	KeyValidatorConfig authentication.KeyValidatorConfig
+
 	// IngressGatewayNamespace, when non-empty, is the namespace of the CIG
 	// Envoy proxy that fronts Whisker. The NetworkPolicy gains a scoped
 	// ingress rule from those proxy pods; Whisker is deny-all otherwise.
 	IngressGatewayNamespace string
+}
+
+// RenderData is what a variant's extension hands the whisker controller through
+// render.Inputs.Extension. It lives in render so the controller can read it
+// generically. Absent means the core path: whisker serves its own UI and reads
+// flows from Goldmane.
+type RenderData struct {
+	// BackendOnly deploys whisker-backend alone. The variant serves the UI from
+	// another component and wires the backend to its own flow source through its
+	// modifier, so Goldmane is neither required nor trusted.
+	BackendOnly bool
+
+	// Disabled deploys nothing here and removes what an earlier reconcile
+	// deployed. A variant sets it where another cluster serves these flow logs,
+	// or where it does not support whisker at all.
+	Disabled bool
+
+	// KeyValidatorConfig lets whisker-backend verify the user tokens its caller
+	// forwards. Nil when the caller forwards none.
+	KeyValidatorConfig authentication.KeyValidatorConfig
+}
+
+// RenderDataFromInputs returns the RenderData a controller extension stashed in
+// the render inputs, and whether it was present.
+func RenderDataFromInputs(ri render.Inputs) (RenderData, bool) {
+	data, ok := ri.Extension.(RenderData)
+	return data, ok
 }
 
 type Component struct {
@@ -109,16 +156,27 @@ type Component struct {
 	calicoImage  string
 }
 
+// Config returns the configuration the component renders from, for a variant's
+// modifier.
+func (c *Component) Config() *Configuration {
+	return c.cfg
+}
+
 func (c *Component) ResolveImages(is *operatorv1.ImageSet) error {
+	if c.cfg.Disabled {
+		return nil
+	}
 	reg := c.cfg.Installation.Registry
 	path := c.cfg.Installation.ImagePath
 	prefix := c.cfg.Installation.ImagePrefix
 
 	var err error
 
-	c.whiskerImage, err = components.GetReference(components.ComponentCalicoWhisker, reg, path, prefix, is)
-	if err != nil {
-		return err
+	if !c.cfg.BackendOnly {
+		c.whiskerImage, err = components.GetReference(components.ComponentCalicoWhisker, reg, path, prefix, is)
+		if err != nil {
+			return err
+		}
 	}
 	c.calicoImage, err = components.ReferenceFor(components.ImageKeyCalico, c.cfg.Installation, is)
 	return err
@@ -129,24 +187,49 @@ func (c *Component) SupportedOSType() rmeta.OSType {
 }
 
 func (c *Component) Objects() ([]client.Object, []client.Object) {
+	if c.cfg.Disabled {
+		return nil, c.everything()
+	}
+
 	deployment := c.deployment()
 	if overrides := c.cfg.Whisker.Spec.WhiskerDeployment; overrides != nil {
 		rcomp.ApplyDeploymentOverrides(deployment, overrides)
 	}
 
-	toCreate := []client.Object{
-		c.serviceAccount(),
-		c.nginxConfigMap(),
-		deployment,
-		c.whiskerService(),
-		c.networkPolicy(),
+	toCreate := []client.Object{c.serviceAccount()}
+	toDelete := c.deprecatedObjects()
+
+	// The nginx config and Service front the UI. Without the UI they are removed:
+	// the Whisker CR that owns them still exists, so GC would not.
+	if c.cfg.BackendOnly {
+		toCreate = append(toCreate, deployment, c.networkPolicy())
+		toDelete = append(toDelete, c.nginxConfigMap(), c.whiskerService())
+	} else {
+		toCreate = append(toCreate, c.nginxConfigMap(), deployment, c.whiskerService(), c.networkPolicy())
 	}
 
 	toCreate = append(toCreate, secret.ToRuntimeObjects(secret.CopyToNamespace(WhiskerNamespace, c.cfg.PullSecrets...)...)...)
 
-	toDelete := c.deprecatedObjects()
-
 	return toCreate, toDelete
+}
+
+// everything is what any configuration of whisker may have deployed, named for
+// deletion. The pull secret copies are not here: other components in the
+// namespace share them.
+func (c *Component) everything() []client.Object {
+	return append(c.deprecatedObjects(),
+		c.serviceAccount(),
+		&appsv1.Deployment{
+			TypeMeta:   metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"},
+			ObjectMeta: metav1.ObjectMeta{Name: WhiskerDeploymentName, Namespace: WhiskerNamespace},
+		},
+		c.nginxConfigMap(),
+		c.whiskerService(),
+		&v3.NetworkPolicy{
+			TypeMeta:   metav1.TypeMeta{Kind: "NetworkPolicy", APIVersion: "projectcalico.org/v3"},
+			ObjectMeta: metav1.ObjectMeta{Name: WhiskerPolicyName, Namespace: WhiskerNamespace},
+		},
+	)
 }
 
 func (c *Component) Ready() bool {
@@ -199,19 +282,29 @@ func (c *Component) whiskerService() *corev1.Service {
 }
 
 func (c *Component) whiskerBackendContainer() corev1.Container {
+	env := []corev1.EnvVar{
+		{Name: "LOG_LEVEL", Value: "INFO"},
+		{Name: "PORT", Value: "3002"},
+	}
+	if !c.cfg.BackendOnly {
+		env = append(env, corev1.EnvVar{Name: "GOLDMANE_HOST", Value: fmt.Sprintf("goldmane.%s.svc.%s:7443", GoldmaneNamespace, c.cfg.ClusterDomain)})
+	}
+	env = append(env,
+		corev1.EnvVar{Name: "TLS_CERT_PATH", Value: c.cfg.WhiskerBackendKeyPair.VolumeMountCertificateFilePath()},
+		corev1.EnvVar{Name: "TLS_KEY_PATH", Value: c.cfg.WhiskerBackendKeyPair.VolumeMountKeyFilePath()},
+		corev1.EnvVar{Name: "SERVER_TLS_CERT_PATH", Value: c.cfg.WhiskerBackendKeyPair.VolumeMountCertificateFilePath()},
+		corev1.EnvVar{Name: "SERVER_TLS_KEY_PATH", Value: c.cfg.WhiskerBackendKeyPair.VolumeMountKeyFilePath()},
+	)
+
+	if c.cfg.KeyValidatorConfig != nil {
+		env = append(env, c.cfg.KeyValidatorConfig.RequiredEnv("")...)
+	}
+
 	return corev1.Container{
-		Name:    WhiskerBackendContainerName,
-		Image:   c.calicoImage,
-		Command: []string{components.CalicoBinaryPath, "component", "whisker-backend"},
-		Env: []corev1.EnvVar{
-			{Name: "LOG_LEVEL", Value: "INFO"},
-			{Name: "PORT", Value: "3002"},
-			{Name: "GOLDMANE_HOST", Value: fmt.Sprintf("goldmane.%s.svc.%s:7443", GoldmaneNamespace, c.cfg.ClusterDomain)},
-			{Name: "TLS_CERT_PATH", Value: c.cfg.WhiskerBackendKeyPair.VolumeMountCertificateFilePath()},
-			{Name: "TLS_KEY_PATH", Value: c.cfg.WhiskerBackendKeyPair.VolumeMountKeyFilePath()},
-			{Name: "SERVER_TLS_CERT_PATH", Value: c.cfg.WhiskerBackendKeyPair.VolumeMountCertificateFilePath()},
-			{Name: "SERVER_TLS_KEY_PATH", Value: c.cfg.WhiskerBackendKeyPair.VolumeMountKeyFilePath()},
-		},
+		Name:            WhiskerBackendContainerName,
+		Image:           c.calicoImage,
+		Command:         []string{components.CalicoBinaryPath, "component", "whisker-backend"},
+		Env:             env,
 		SecurityContext: securitycontext.NewNonRootContext(),
 		VolumeMounts: append(
 			c.cfg.TrustedCertBundle.VolumeMounts(c.SupportedOSType()),
@@ -225,35 +318,35 @@ func (c *Component) deployment() *appsv1.Deployment {
 		tolerations = append(tolerations, rmeta.TolerateGKEARM64NoSchedule)
 	}
 
-	ctrs := []corev1.Container{c.whiskerContainer(), c.whiskerBackendContainer()}
+	ctrs := []corev1.Container{c.whiskerBackendContainer()}
 
-	volumes := []corev1.Volume{
-		// Add the trusted cert bundle volume to the pod.
-		c.cfg.TrustedCertBundle.Volume(),
-
-		// Add the whisker TLS key pair volume (used by nginx for HTTPS).
-		c.cfg.WhiskerKeyPair.Volume(),
-
-		// Add the whisker backend key pair volume to the pod.
-		c.cfg.WhiskerBackendKeyPair.Volume(),
-
-		// Volume for nginx config from config map.
-		{
-			Name: configVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{Name: configMapName},
-				},
-			},
-		},
+	// The trusted cert bundle, then what each container serves from, in the order
+	// the pod mounts them.
+	volumes := []corev1.Volume{c.cfg.TrustedCertBundle.Volume()}
+	if !c.cfg.BackendOnly {
+		ctrs = append([]corev1.Container{c.whiskerContainer()}, ctrs...)
+		// The whisker TLS key pair, used by nginx for HTTPS.
+		volumes = append(volumes, c.cfg.WhiskerKeyPair.Volume())
+	}
+	volumes = append(volumes, c.cfg.WhiskerBackendKeyPair.Volume())
+	if !c.cfg.BackendOnly {
+		volumes = append(volumes, c.nginxConfigVolume())
 	}
 
-	// Both key pairs are served at process startup (nginx and the backend), so
-	// rotate the pod when either changes. The trusted bundle is only used by a
-	// client that picks up changes without a restart.
+	// Key pairs are served at process startup, so rotate the pod when one
+	// changes. Whisker's own Goldmane client reloads the trusted bundle as it
+	// changes; another flow source's client may hold it for the life of the
+	// process, so the backend-only pod is rolled when the bundle changes too.
 	annotations := map[string]string{
-		c.cfg.WhiskerKeyPair.HashAnnotationKey():        c.cfg.WhiskerKeyPair.HashAnnotationValue(),
 		c.cfg.WhiskerBackendKeyPair.HashAnnotationKey(): c.cfg.WhiskerBackendKeyPair.HashAnnotationValue(),
+	}
+	if c.cfg.BackendOnly {
+		maps.Copy(annotations, c.cfg.TrustedCertBundle.HashAnnotations())
+	} else {
+		annotations[c.cfg.WhiskerKeyPair.HashAnnotationKey()] = c.cfg.WhiskerKeyPair.HashAnnotationValue()
+	}
+	if c.cfg.KeyValidatorConfig != nil {
+		maps.Copy(annotations, c.cfg.KeyValidatorConfig.RequiredAnnotations())
 	}
 
 	return &appsv1.Deployment{
@@ -286,15 +379,16 @@ func (c *Component) deployment() *appsv1.Deployment {
 }
 
 func (c *Component) networkPolicy() *v3.NetworkPolicy {
-	egressRules := []v3.Rule{
-		{
+	var egressRules []v3.Rule
+	if !c.cfg.BackendOnly {
+		egressRules = append(egressRules, v3.Rule{
 			Action:   v3.Allow,
 			Protocol: &networkpolicy.TCPProtocol,
 			Destination: v3.EntityRule{
 				Selector: networkpolicy.KubernetesAppSelector(GoldmaneDeploymentName),
 				Ports:    networkpolicy.Ports(GoldmaneServicePort),
 			},
-		},
+		})
 	}
 	egressRules = networkpolicy.AppendDNSEgressRules(egressRules, c.cfg.OpenShift)
 
@@ -343,6 +437,17 @@ func (c *Component) nginxConfigMap() *corev1.ConfigMap {
 		},
 		Data: map[string]string{
 			"default.conf": config,
+		},
+	}
+}
+
+func (c *Component) nginxConfigVolume() corev1.Volume {
+	return corev1.Volume{
+		Name: configVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{Name: configMapName},
+			},
 		},
 	}
 }

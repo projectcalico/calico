@@ -15,6 +15,8 @@
 package whisker_test
 
 import (
+	"reflect"
+
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -24,9 +26,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/components"
+	"github.com/projectcalico/calico/operator/pkg/dns"
+	"github.com/projectcalico/calico/operator/pkg/render"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontext"
@@ -41,6 +46,11 @@ var (
 	defaultTrustedCertBundle = certificatemanagement.CreateTrustedBundle(nil)
 	numExpectedObjects       = 5
 	numDeprecatedObjects     = 1
+
+	// Backend only: ServiceAccount, Deployment and NetworkPolicy. The nginx
+	// ConfigMap and UI Service join the deprecated objects for deletion.
+	numBackendOnlyObjects        = 3
+	numBackendOnlyDeletedObjects = numDeprecatedObjects + 2
 
 	// calicoImageRef resolves the combined calico/calico image exactly as the
 	// renderer does, so the expected image tracks the pinned ComponentCalico
@@ -71,7 +81,186 @@ var _ = Describe("ComponentRendering", func() {
 			},
 			numExpectedObjects, numDeprecatedObjects,
 		),
+		Entry("Should return only the backend objects when BackendOnly is set",
+			backendOnlyConfiguration(),
+			numBackendOnlyObjects, numBackendOnlyDeletedObjects,
+		),
 	)
+
+	Context("backend only", func() {
+		It("deploys the backend container alone, with no UI or Goldmane wiring", func() {
+			component := whisker.Whisker(backendOnlyConfiguration())
+			objsToCreate, objsToDelete := component.Objects()
+
+			deployment, err := rtest.GetResourceOfType[*appsv1.Deployment](objsToCreate, whisker.WhiskerDeploymentName, whisker.WhiskerNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(deployment.Spec.Template.Spec.Containers).To(HaveLen(1))
+			backend := deployment.Spec.Template.Spec.Containers[0]
+			Expect(backend.Name).To(Equal(whisker.WhiskerBackendContainerName))
+			for _, e := range backend.Env {
+				Expect(e.Name).NotTo(Equal("GOLDMANE_HOST"))
+			}
+			Expect(deployment.Spec.Template.Spec.Volumes).To(ConsistOf(
+				defaultTrustedCertBundle.Volume(),
+				defaultTLSKeyPair.Volume(),
+			))
+			Expect(deployment.Spec.Template.Annotations).To(Equal(map[string]string{
+				defaultTLSKeyPair.HashAnnotationKey(): defaultTLSKeyPair.HashAnnotationValue(),
+			}))
+
+			// The UI's ConfigMap and Service are removed rather than left to GC,
+			// since the Whisker CR that owns them still exists.
+			_, err = rtest.GetResourceOfType[*corev1.ConfigMap](objsToDelete, "whisker-nginx-config", whisker.WhiskerNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+			_, err = rtest.GetResourceOfType[*corev1.Service](objsToDelete, whisker.WhiskerName, whisker.WhiskerNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			np, err := rtest.GetResourceOfType[*v3.NetworkPolicy](objsToCreate, whisker.WhiskerPolicyName, whisker.WhiskerNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+			for _, rule := range np.Spec.Egress {
+				Expect(rule.Destination.Selector).NotTo(Equal(networkpolicy.KubernetesAppSelector(whisker.GoldmaneDeploymentName)),
+					"the variant wires the backend to its own flow source")
+			}
+		})
+
+		It("resolves images from an ImageSet that does not carry the UI image", func() {
+			is := &operatorv1.ImageSet{Spec: operatorv1.ImageSetSpec{Images: []operatorv1.Image{
+				{Image: "calico/calico", Digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"},
+			}}}
+
+			Expect(whisker.Whisker(backendOnlyConfiguration()).ResolveImages(is)).To(Succeed())
+
+			full := backendOnlyConfiguration()
+			full.BackendOnly = false
+			full.WhiskerKeyPair = defaultWhiskerKeyPair
+			Expect(whisker.Whisker(full).ResolveImages(is)).To(MatchError(ContainSubstring("whisker")),
+				"the full deployment still needs the UI image")
+		})
+
+		It("wires token verification into the backend when a key validator is configured", func() {
+			authn := &operatorv1.Authentication{Spec: operatorv1.AuthenticationSpec{
+				ManagerDomain: "https://127.0.0.1",
+				OIDC:          &operatorv1.AuthenticationOIDC{IssuerURL: "https://accounts.google.com", UsernameClaim: "email"},
+			}}
+			validator := render.NewDexKeyValidatorConfig(authn, dns.DefaultClusterDomain)
+			cfg := backendOnlyConfiguration()
+			cfg.KeyValidatorConfig = validator
+
+			objsToCreate, _ := whisker.Whisker(cfg).Objects()
+
+			deployment, err := rtest.GetResourceOfType[*appsv1.Deployment](objsToCreate, whisker.WhiskerDeploymentName, whisker.WhiskerNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+			backend := deployment.Spec.Template.Spec.Containers[0]
+			Expect(validator.RequiredEnv("")).NotTo(BeEmpty())
+			for _, e := range validator.RequiredEnv("") {
+				Expect(backend.Env).To(ContainElement(e))
+			}
+			for k, v := range validator.RequiredAnnotations() {
+				Expect(deployment.Spec.Template.Annotations).To(HaveKeyWithValue(k, v))
+			}
+
+			// The backend fetches the provider's keys over the network. The files a
+			// browser-facing server mounts are not rendered, so a ConfigMap another
+			// component owns is never fought over.
+			Expect(deployment.Spec.Template.Spec.Volumes).To(ConsistOf(
+				defaultTrustedCertBundle.Volume(),
+				defaultTLSKeyPair.Volume(),
+			))
+			Expect(backend.VolumeMounts).To(HaveLen(len(defaultTrustedCertBundle.VolumeMounts(rmeta.OSTypeLinux)) + 1))
+			for _, o := range objsToCreate {
+				_, isSecret := o.(*corev1.Secret)
+				_, isConfigMap := o.(*corev1.ConfigMap)
+				Expect(isSecret || isConfigMap).To(BeFalse(), "no key validator files rendered: %T %s", o, o.GetName())
+			}
+		})
+
+		It("rolls the backend when the trusted bundle changes", func() {
+			// A flow source's client may hold the bundle for the life of the
+			// process, so a CA rotation must restart the pod.
+			objsToCreate, _ := whisker.Whisker(backendOnlyConfiguration()).Objects()
+			deployment, err := rtest.GetResourceOfType[*appsv1.Deployment](objsToCreate, whisker.WhiskerDeploymentName, whisker.WhiskerNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+			for k, v := range defaultTrustedCertBundle.HashAnnotations() {
+				Expect(deployment.Spec.Template.Annotations).To(HaveKeyWithValue(k, v))
+			}
+
+			// Whisker's own Goldmane client reloads the bundle, so the full
+			// deployment is left alone.
+			full := backendOnlyConfiguration()
+			full.BackendOnly = false
+			full.WhiskerKeyPair = defaultWhiskerKeyPair
+			objsToCreate, _ = whisker.Whisker(full).Objects()
+			deployment, err = rtest.GetResourceOfType[*appsv1.Deployment](objsToCreate, whisker.WhiskerDeploymentName, whisker.WhiskerNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+			for k := range defaultTrustedCertBundle.HashAnnotations() {
+				Expect(deployment.Spec.Template.Annotations).NotTo(HaveKey(k))
+			}
+		})
+
+		It("keeps the Goldmane egress rule when the UI is deployed", func() {
+			cfg := backendOnlyConfiguration()
+			cfg.BackendOnly = false
+			cfg.WhiskerKeyPair = defaultWhiskerKeyPair
+			objsToCreate, _ := whisker.Whisker(cfg).Objects()
+
+			np, err := rtest.GetResourceOfType[*v3.NetworkPolicy](objsToCreate, whisker.WhiskerPolicyName, whisker.WhiskerNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(np.Spec.Egress[0].Destination.Selector).To(Equal(networkpolicy.KubernetesAppSelector(whisker.GoldmaneDeploymentName)))
+			Expect(np.Spec.Egress[0].Destination.Ports).To(Equal(networkpolicy.Ports(whisker.GoldmaneServicePort)))
+		})
+	})
+
+	Context("disabled", func() {
+		It("creates nothing and removes whatever any configuration deployed", func() {
+			cfg := backendOnlyConfiguration()
+			cfg.BackendOnly = false
+			cfg.Disabled = true
+			// The controller issues no key pairs in this mode.
+			cfg.WhiskerBackendKeyPair = nil
+
+			objsToCreate, objsToDelete := whisker.Whisker(cfg).Objects()
+			Expect(objsToCreate).To(BeEmpty())
+
+			// Both shapes whisker can take are named, so a cluster that changed
+			// shape before being disabled is cleaned up too.
+			for _, want := range []struct {
+				name string
+				obj  client.Object
+			}{
+				{whisker.WhiskerServiceAccountName, &corev1.ServiceAccount{}},
+				{whisker.WhiskerDeploymentName, &appsv1.Deployment{}},
+				{"whisker-nginx-config", &corev1.ConfigMap{}},
+				{whisker.WhiskerName, &corev1.Service{}},
+				{whisker.WhiskerPolicyName, &v3.NetworkPolicy{}},
+			} {
+				found := false
+				for _, o := range objsToDelete {
+					if o.GetName() == want.name && reflect.TypeOf(o) == reflect.TypeOf(want.obj) {
+						found = true
+					}
+				}
+				Expect(found).To(BeTrue(), "%T %s should be deleted", want.obj, want.name)
+			}
+
+			// Pull secret copies are shared with other components and stay.
+			for _, o := range objsToDelete {
+				if sec, ok := o.(*corev1.Secret); ok {
+					Expect(sec.Name).NotTo(Equal("pull-secret"))
+				}
+			}
+		})
+
+		It("resolves no images, so an ImageSet without the UI image is fine", func() {
+			cfg := backendOnlyConfiguration()
+			cfg.BackendOnly = false
+			cfg.Disabled = true
+			is := &operatorv1.ImageSet{Spec: operatorv1.ImageSetSpec{Images: []operatorv1.Image{
+				{Image: "calico/calico", Digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"},
+			}}}
+			Expect(whisker.Whisker(cfg).ResolveImages(is)).To(Succeed())
+		})
+
+	})
 
 	DescribeTable("Whisker Deployment", func(cfg *whisker.Configuration, expected *appsv1.Deployment) {
 		component := whisker.Whisker(cfg)
@@ -428,4 +617,20 @@ func GetOverriddenWhiskerDeployment(overrides *operatorv1.WhiskerDeployment) (*a
 
 	objsToCreate, _ := component.Objects()
 	return rtest.GetResourceOfType[*appsv1.Deployment](objsToCreate, whisker.WhiskerName, whisker.WhiskerNamespace)
+}
+
+// backendOnlyConfiguration is the configuration a variant that serves the UI
+// elsewhere renders from: no UI key pair, BackendOnly set.
+func backendOnlyConfiguration() *whisker.Configuration {
+	return &whisker.Configuration{
+		Installation: &operatorv1.InstallationSpec{
+			KubernetesProvider: operatorv1.ProviderGKE,
+			Variant:            operatorv1.Calico,
+		},
+		TrustedCertBundle:     defaultTrustedCertBundle,
+		WhiskerBackendKeyPair: defaultTLSKeyPair,
+		Whisker:               &operatorv1.Whisker{Spec: operatorv1.WhiskerSpec{Notifications: ptr.To(operatorv1.Enabled)}},
+		ClusterDomain:         "cluster.domain",
+		BackendOnly:           true,
+	}
 }
