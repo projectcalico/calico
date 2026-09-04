@@ -15,6 +15,7 @@
 package cilanes
 
 import (
+	"os"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -171,4 +172,115 @@ func TestSelectionArgs(t *testing.T) {
 
 	_, err = Lane{Name: "empty"}.SelectionArgs("/repo")
 	Expect(err).To(HaveOccurred())
+}
+
+const blocksFixture = `
+- name: E2E tests (KinD)
+  task:
+    jobs:
+      - name: Conformance
+        commands:
+          - .semaphore/run-and-monitor e2e-test.log make e2e-test
+      - name: Felix routing
+        env_vars:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/kind/felix-routing.yaml
+        commands:
+          - .semaphore/run-and-monitor e2e-test-felix.log make e2e-test
+      - name: ClusterNetworkPolicy
+        env_vars:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/kind/felix-routing.yaml
+        commands:
+          - make e2e-test-clusternetworkpolicy
+      - name: BPF
+        env_vars:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/kind/felix-routing.yaml
+        commands:
+          - make e2e-test-bpf
+- name: KubeVirt live migration (KIND)
+  task:
+    env_vars:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/kind/kubevirt.yaml
+    jobs:
+      - name: KubeVirt live migration (KIND)
+        commands:
+          - make kind-up
+          - make e2e-run KUBECONFIG=kubeconfig
+- name: Felix
+  task:
+    jobs:
+      - name: Felix UT
+        commands:
+          - make -C felix ut
+- name: E2E tests on GCP kubeadm
+  task:
+    env_vars:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables.yaml
+    jobs:
+      - name: gcp-kubeadm
+        commands:
+          - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+`
+
+func TestParseSemaphoreBlocks(t *testing.T) {
+	RegisterTestingT(t)
+
+	lanes, err := parseSemaphoreBlocks("blocks/20-e2e.yml", []byte(blocksFixture))
+	Expect(err).NotTo(HaveOccurred())
+
+	byName := map[string]Lane{}
+	for _, l := range lanes {
+		byName[l.Name] = l
+	}
+
+	// No config in the environment, so the target's Makefile default applies.
+	Expect(byName["E2E tests (KinD) / Conformance"].Config).To(Equal("e2e/config/kind/conformance.yaml"))
+	Expect(byName["E2E tests (KinD) / Conformance"].RunsE2EBinary()).To(BeTrue())
+
+	// A config in the environment beats that default.
+	Expect(byName["E2E tests (KinD) / Felix routing"].Config).To(Equal("e2e/config/kind/felix-routing.yaml"))
+
+	// e2e-test-bpf hardcodes its config, so the environment's is ignored.
+	Expect(byName["E2E tests (KinD) / BPF"].Config).To(Equal("e2e/config/kind/bpf.yaml"))
+
+	// The ClusterNetworkPolicy job runs a different binary that takes no config,
+	// so it is not a lane even though it sets one.
+	Expect(byName).NotTo(HaveKey("E2E tests (KinD) / ClusterNetworkPolicy"))
+
+	// A block whose job runs the suite through e2e-run keeps the environment's.
+	kubevirt := byName["KubeVirt live migration (KIND) / KubeVirt live migration (KIND)"]
+	Expect(kubevirt.Config).To(Equal("e2e/config/kind/kubevirt.yaml"))
+
+	// Component blocks declare no e2e lane.
+	Expect(byName).NotTo(HaveKey("Felix / Felix UT"))
+
+	// A provisioned lane in the same directory still reads its config from the
+	// environment.
+	Expect(byName["E2E tests on GCP kubeadm / gcp-kubeadm"].Config).To(Equal("e2e/config/iptables/xtables.yaml"))
+}
+
+// kindTargets duplicates what the Makefile does with E2E_TEST_CONFIG, so a
+// change to either has to be a change to both.
+func TestKindTargetsMatchTheMakefile(t *testing.T) {
+	RegisterTestingT(t)
+
+	makefile, err := os.ReadFile("../../../Makefile")
+	Expect(err).NotTo(HaveOccurred())
+	text := string(makefile)
+
+	for target, want := range kindTargets {
+		Expect(text).To(ContainSubstring("\n"+target+":"), "target %s is gone from the Makefile", target)
+		if want.fixed != "" {
+			Expect(text).To(ContainSubstring("E2E_TEST_CONFIG=$(REPO_ROOT)/"+want.fixed),
+				"target %s no longer hardcodes %s", target, want.fixed)
+		}
+		if want.fallback != "" {
+			Expect(text).To(ContainSubstring("E2E_TEST_CONFIG ?= "+want.fallback),
+				"the Makefile default is no longer %s", want.fallback)
+		}
+	}
 }
