@@ -431,21 +431,6 @@ $(OPERATOR_SDK_BARE): $(OPERATOR_SDK)
 ## Generating code after API changes.
 gen-files: manifests generate
 
-EE_VERSIONS?=config/enterprise_versions.yml
-
-.PHONY: gen-versions gen-versions-enterprise
-
-gen-versions: gen-versions-enterprise
-
-gen-versions-enterprise: $(BINDIR)/gen-versions
-	$(BINDIR)/gen-versions -ee-versions=$(EE_VERSIONS) > pkg/components/enterprise.go
-
-$(BINDIR)/gen-versions: $(shell find ./hack/gen-versions -type f)
-	mkdir -p $(BINDIR)
-	$(DOCKER_GO_BUILD) \
-	sh -c '$(GIT_CONFIG_SSH) \
-	go build -buildvcs=false -o $(BINDIR)/gen-versions ./hack/gen-versions'
-
 .PHONY: prepull-image
 prepull-image:
 	@echo Pulling operator image...

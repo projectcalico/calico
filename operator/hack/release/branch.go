@@ -29,7 +29,6 @@ import (
 
 	"github.com/projectcalico/calico/operator/hack/release/internal/command"
 	"github.com/projectcalico/calico/operator/hack/release/internal/middleware"
-	"github.com/projectcalico/calico/operator/hack/release/internal/versions"
 )
 
 // Context keys for branch/prep commands
@@ -48,7 +47,6 @@ var (
 	defaultBaseBranch = "master"
 
 	defaultChangedFiles = []string{
-		versions.EnterpriseConfigPath,
 		"pkg/components",
 		"pkg/crds",
 		"pkg/admission",
