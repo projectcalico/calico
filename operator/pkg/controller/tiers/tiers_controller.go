@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -114,11 +114,9 @@ func (r *ReconcileTiers) Reconcile(ctx context.Context, request reconcile.Reques
 		return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
 	}
 
-	if r.opts.Cloud {
-		if err := r.cloudPatchTier(ctx); err != nil {
-			r.status.SetDegraded(operatorv1.ResourcePatchError, "Error patching tier", err, reqLogger)
-			return reconcile.Result{}, nil
-		}
+	if err := r.opts.Extensions.Tiers().Reconcile(ctx, r.client); err != nil {
+		r.status.SetDegraded(operatorv1.ResourcePatchError, "Error patching tier", err, reqLogger)
+		return reconcile.Result{}, nil
 	}
 
 	tiersConfig, reconcileResult := r.prepareTiersConfig(ctx, reqLogger)

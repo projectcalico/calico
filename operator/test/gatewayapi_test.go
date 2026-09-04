@@ -43,8 +43,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	"github.com/projectcalico/calico/operator/pkg/dns"
-	"github.com/projectcalico/calico/operator/pkg/enterprise"
-	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
 )
 
 var _ = Describe("GatewayAPI tests", func() {
@@ -64,12 +62,11 @@ var _ = Describe("GatewayAPI tests", func() {
 			Scheme: mgr.GetScheme(),
 		}).SetupWithManager(mgr, options.ControllerOptions{
 			DetectedProvider: operator.ProviderNone,
-			Variant:          operator.CalicoEnterprise,
-			Extensions:       enterprise.New(operator.CalicoEnterprise, eoptions.Options{}),
+			Variant:          testVariant,
+			Extensions:       testExtensions,
 			ManageCRDs:       ManageCRDsDisable,
 			ShutdownContext:  shutdownContext,
 			K8sClientset:     clientset,
-			MultiTenant:      SingleTenant,
 		})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -84,7 +81,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		cleanupResources(c)
 
 		By("Verifying CRDs are installed")
-		verifyCRDsExist(c, operator.CalicoEnterprise)
+		verifyCRDsExist(c, operator.Calico)
 
 		By("Creating the tigera-operator namespace, if it doesn't exist")
 		ns := &corev1.Namespace{
@@ -182,11 +179,11 @@ var _ = Describe("GatewayAPI tests", func() {
 		instance := &operator.Installation{
 			TypeMeta:   metav1.TypeMeta{Kind: "Installation", APIVersion: "operator.tigera.io/v1"},
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Spec:       operator.InstallationSpec{Variant: operator.CalicoEnterprise},
+			Spec:       operator.InstallationSpec{Variant: testVariant},
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
-		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Variant = operator.Calico
 		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
@@ -228,11 +225,11 @@ var _ = Describe("GatewayAPI tests", func() {
 		instance := &operator.Installation{
 			TypeMeta:   metav1.TypeMeta{Kind: "Installation", APIVersion: "operator.tigera.io/v1"},
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Spec:       operator.InstallationSpec{Variant: operator.CalicoEnterprise},
+			Spec:       operator.InstallationSpec{Variant: testVariant},
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
-		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Variant = operator.Calico
 		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
@@ -332,11 +329,11 @@ var _ = Describe("GatewayAPI tests", func() {
 		instance := &operator.Installation{
 			TypeMeta:   metav1.TypeMeta{Kind: "Installation", APIVersion: "operator.tigera.io/v1"},
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Spec:       operator.InstallationSpec{Registry: "myregistry.io/", Variant: operator.CalicoEnterprise},
+			Spec:       operator.InstallationSpec{Registry: "myregistry.io/", Variant: testVariant},
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
-		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Variant = operator.Calico
 		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
@@ -385,11 +382,11 @@ var _ = Describe("GatewayAPI tests", func() {
 		instance := &operator.Installation{
 			TypeMeta:   metav1.TypeMeta{Kind: "Installation", APIVersion: "operator.tigera.io/v1"},
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Spec:       operator.InstallationSpec{Registry: "myregistry.io/", Variant: operator.CalicoEnterprise},
+			Spec:       operator.InstallationSpec{Registry: "myregistry.io/", Variant: testVariant},
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
-		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Variant = operator.Calico
 		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
@@ -444,11 +441,11 @@ var _ = Describe("GatewayAPI tests", func() {
 		instance := &operator.Installation{
 			TypeMeta:   metav1.TypeMeta{Kind: "Installation", APIVersion: "operator.tigera.io/v1"},
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Spec:       operator.InstallationSpec{Registry: "myregistry.io/", Variant: operator.CalicoEnterprise},
+			Spec:       operator.InstallationSpec{Registry: "myregistry.io/", Variant: testVariant},
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
-		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Variant = operator.Calico
 		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
@@ -504,11 +501,11 @@ var _ = Describe("GatewayAPI tests", func() {
 		instance := &operator.Installation{
 			TypeMeta:   metav1.TypeMeta{Kind: "Installation", APIVersion: "operator.tigera.io/v1"},
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Spec:       operator.InstallationSpec{Registry: "myregistry.io/", Variant: operator.CalicoEnterprise},
+			Spec:       operator.InstallationSpec{Registry: "myregistry.io/", Variant: testVariant},
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
-		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Variant = operator.Calico
 		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
