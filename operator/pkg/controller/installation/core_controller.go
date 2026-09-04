@@ -29,7 +29,7 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/stringsutil"
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -1080,6 +1080,12 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
+	// Provide the extension a chance to default any fields it needs.
+	if err := r.ext.DefaultFelixConfiguration(ctx, r.client, &defaulted.Spec); err != nil {
+		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error defaulting FelixConfiguration for the variant", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+
 	// Set any non-default BGPConfiguration values that we need.
 	_, err = utils.PatchBGPConfiguration(ctx, r.client, func(bgpConfig *v3.BGPConfiguration) (bool, error) {
 		// Configure cluster routing mode.
@@ -1706,14 +1712,6 @@ func (r *ReconcileInstallation) setDefaultsOnFelixConfiguration(ctx context.Cont
 		updated = true
 	}
 
-	// Variant-specific FelixConfiguration defaults (e.g. the Enterprise
-	// provider-specific dnsTrustedServers) are owned by the variant extension.
-	extUpdated, err := r.ext.DefaultFelixConfiguration(&install.Spec, fc)
-	if err != nil {
-		return updated, err
-	}
-	updated = updated || extUpdated
-
 	// If BPF is enabled, but not set on FelixConfiguration, do so here. This could happen when an older
 	// version of operator is replaced by the new one. Older versions of the operator used an
 	// environment variable to enable BPF, but we no longer do so. In order to prevent disruption
@@ -1723,7 +1721,7 @@ func (r *ReconcileInstallation) setDefaultsOnFelixConfiguration(ctx context.Cont
 	// If calico-node daemonset exists, we need to check the ENV VAR and set FelixConfiguration accordingly.
 	// Otherwise, this is a fresh install in eBPF mode, set the felix config.
 	ds := &appsv1.DaemonSet{}
-	err = r.client.Get(ctx, types.NamespacedName{Namespace: common.CalicoNamespace, Name: common.NodeDaemonSetName}, ds)
+	err := r.client.Get(ctx, types.NamespacedName{Namespace: common.CalicoNamespace, Name: common.NodeDaemonSetName}, ds)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			reqLogger.Error(err, "An error occurred when getting the Daemonset resource")
