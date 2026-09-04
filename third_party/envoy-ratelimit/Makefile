@@ -25,6 +25,7 @@ ENVOY_RATELIMIT_DOWNLOADED=.envoy-ratelimit.downloaded
 .PHONY: init-source
 init-source: $(ENVOY_RATELIMIT_DOWNLOADED)
 $(ENVOY_RATELIMIT_DOWNLOADED):
+	rm -rf envoy-ratelimit .envoy-ratelimit.downloaded
 	$(call fetch_repo,$(ENVOY_RATELIMIT_REPO),$(ENVOY_RATELIMIT_VERSION),envoy-ratelimit)
 # 	Apply patches for the specified Envoy Ratelimit version if patches directory exists.
 # 	This code checks for the presence of a patches directory corresponding to ENVOY_RATELIMIT_VERSION.

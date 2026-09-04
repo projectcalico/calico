@@ -6,9 +6,9 @@ applyTo:
 
 # Fetching from remote repos in build files
 
-CI runners share a source IP, so anything the build pulls from GitHub is
-subject to throttling that a single developer machine does not hit. Two wrappers centralise the
-handling — use them instead of calling `curl` or `git clone` directly.
+CI runners share a source IP, so GitHub throttles the build in ways a laptop
+never sees. Two wrappers centralise the handling — use them instead of calling
+`curl` or `git clone` directly.
 
 ## Downloading a file
 
@@ -16,8 +16,8 @@ handling — use them instead of calling `curl` or `git clone` directly.
 	$(call fetch_file,https://github.com/org/repo/releases/download/$(VERSION)/foo.tgz,/tmp/foo.tgz)
 ```
 
-Forces HTTP/1.1, which GitHub throttles less than HTTP/2, and retries.
-Creates the destination directory.
+Forces HTTP/1.1, which GitHub throttles less than HTTP/2, retries, and creates
+the destination directory.
 
 ## Checking out a pinned revision
 
@@ -25,40 +25,29 @@ Creates the destination directory.
 	$(call fetch_repo,$(THING_REPO),$(THING_SHA),thing)
 ```
 
-Fetches the revision in one network round-trip. Every run resets the remote
-URL, so a directory left by an earlier build cannot fetch from a stale origin.
-The git credential prompt is disabled: a throttled anonymous clone otherwise
-blocks on it until the job times out.
+Fetches the revision in one round-trip and resets the remote URL every run, so
+a directory left by an earlier build cannot fetch from a stale origin. Re-runs
+do no network I/O. Disables the credential prompt, which a throttled clone
+would otherwise block on until the job times out.
 
-Re-running does no network I/O once the revision is present. Pin a tag or a
-full commit SHA; a short SHA is rejected, and a branch name freezes at the
-first commit fetched.
+Pin a tag or a full SHA — a short SHA is rejected, and a branch name freezes at
+the first commit fetched. Only that commit arrives, so `git describe` works
+only when the revision is itself a tag, and merge-base does not work at all.
 
-Only the pinned commit is fetched: no history and no other tags. `git describe`
-resolves only when the revision is itself a tag, and a merge-base against the
-checkout does not work.
-
-## Keep the repo URL in a variable
-
-Name it `<THING>_REPO` next to the version pin. Some repos are fetched from
-more than one Makefile.
+Name the URL `<THING>_REPO` next to the version pin; some repos are fetched
+from more than one Makefile.
 
 ## Auth tokens
 
-Neither wrapper sends one, and a download recipe should not add one. Release,
-archive and raw URLs are CDN-served and are not rate limited by identity
-today, so a token does not raise the limit, and a stale one makes
-`raw.githubusercontent.com` return 404 instead of the file.
+`fetch_repo` sends `GITHUB_TOKEN` when the environment has one — GitHub gives
+authenticated git traffic higher limits. Unset, it stays anonymous.
 
-That balance is what makes the wrappers token-free, not a rule against auth.
-If GitHub starts rate limiting these downloads by source IP, authenticating
-becomes the fix — change it in the wrappers so every call site moves at once.
-The REST API does rate limit by identity, and the GitHub API helpers in
-`lib.Makefile` pass their own token for it.
+`fetch_file` does not, deliberately: those URLs are CDN-served and not limited
+by identity, and a stale token makes `raw.githubusercontent.com` return 404
+instead of the file.
 
 ## Secrets on a recipe line
 
-Make echoes each unprefixed recipe before running it, so a token expanded by
-make into `--header "Authorization: Bearer ..."` lands in the build log. Keep
-credential handling inside the wrapper scripts, where the shell expands it at
-run time.
+Make echoes each unprefixed recipe, so a token expanded by make into
+`--header "Authorization: Bearer ..."` lands in the build log. Keep credential
+handling inside the wrapper scripts, where the shell expands it at run time.
