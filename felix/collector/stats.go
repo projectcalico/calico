@@ -428,6 +428,12 @@ func (d *Data) setDirtyFlag() {
 	d.dirty = true
 }
 
+// ClearDirtyFlag clears the top-level dirty flag, leaving the connection counters alone. Use it for
+// non-connection data, which has no connection stats to reset; use ClearConnDirtyFlag otherwise.
+func (d *Data) ClearDirtyFlag() {
+	d.dirty = false
+}
+
 func (d *Data) ClearConnDirtyFlag() {
 	d.dirty = false
 	d.conntrackPktsCtr.ResetDelta()

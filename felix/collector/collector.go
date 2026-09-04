@@ -97,6 +97,11 @@ var (
 	dataplaneStatsUpdateLastErrorReportTime time.Time
 	dataplaneStatsUpdateErrorsInLastMinute  uint32
 
+	counterFlowsExpiredWithoutVerdict = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "felix_collector_flows_expired_without_verdict",
+		Help: "Number of flows that expired before a policy verdict was seen, so their packet and byte counts were discarded.",
+	})
+
 	// epStats cache prometheus metrics
 	gaugeEpStatsCacheSizeLength = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "felix_collector_epstats",
@@ -127,6 +132,7 @@ func init() {
 	prometheus.MustRegister(gaugeEpStatsCacheSizeLength)
 	prometheus.MustRegister(histogramDataplaneStatsUpdate)
 	prometheus.MustRegister(gaugeDataplaneStatsUpdateErrorsPerMinute)
+	prometheus.MustRegister(counterFlowsExpiredWithoutVerdict)
 	prometheus.MustRegister(counterPolicyEvalBatches)
 	prometheus.MustRegister(counterPolicyEvalFlows)
 	prometheus.MustRegister(histogramPolicyEvalSweepDuration)
@@ -751,19 +757,30 @@ func (c *collector) sendMetrics(data *Data, expired bool) {
 			// reporting Original IP metric updates and want to send a corresponding expiration metric update.
 			// When they are correlated with regular metric updates and connection metrics, we don't need to
 			// send this.
+			reported := false
 			if data.EgressRuleTrace.FoundVerdict() {
 				c.LogMetrics(data.MetricUpdateEgressConn(ut))
+				reported = true
 			}
 			if data.IngressRuleTrace.FoundVerdict() {
 				c.LogMetrics(data.MetricUpdateIngressConn(ut))
+				reported = true
 			}
 
-			// Clear the connection dirty flag once the stats have been reported. Note that we also clear the
-			// rule trace stats here too since any data stored in them has been superceded by the connection
-			// stats.
-			data.ClearConnDirtyFlag()
-			data.EgressRuleTrace.ClearDirtyFlag()
-			data.IngressRuleTrace.ClearDirtyFlag()
+			if reported {
+				// Clear the connection dirty flag once the stats have been reported. Note that we also clear the
+				// rule trace stats here too since any data stored in them has been superceded by the connection
+				// stats.
+				data.ClearConnDirtyFlag()
+				data.EgressRuleTrace.ClearDirtyFlag()
+				data.IngressRuleTrace.ClearDirtyFlag()
+			} else if expired {
+				// Neither direction has a verdict and the entry is on its way out, so these counts are
+				// lost. NFLOG is lossy under load, so make that visible rather than silent.
+				counterFlowsExpiredWithoutVerdict.Inc()
+			}
+			// With no verdict and the flow still alive, keep the deltas and the dirty flag so that the
+			// counts are reported in full once a verdict arrives.
 		}
 	} else {
 		// Report rule trace stats.
@@ -774,6 +791,14 @@ func (c *collector) sendMetrics(data *Data, expired bool) {
 		if (expired || data.IngressRuleTrace.IsDirty()) && data.IngressRuleTrace.FoundVerdict() {
 			c.LogMetrics(data.MetricUpdateIngressNoConn(ut))
 			data.IngressRuleTrace.ClearDirtyFlag()
+		}
+
+		// Both rule traces have been reported, so there is nothing left to report. Only
+		// ClearConnDirtyFlag used to clear the top-level flag, and that belongs to the connection
+		// branch above, so NFLOG-only entries (all denied traffic) stayed dirty for their whole life
+		// and checkEpStats redid the whole report path for them on every tick.
+		if !data.EgressRuleTrace.IsDirty() && !data.IngressRuleTrace.IsDirty() {
+			data.ClearDirtyFlag()
 		}
 
 		// We do not need to clear the connection stats here. Connection stats are fully reset if the Data moves
