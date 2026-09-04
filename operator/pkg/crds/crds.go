@@ -42,6 +42,20 @@ const k8sPolicyPrefix = "policy.networking.k8s.io_"
 var (
 	//go:embed operator/*
 	operatorCRDFiles embed.FS
+	//go:embed calico_operator_crds.txt
+	calicoOperatorCRDList string
+
+	// calicoOperatorCRDs are the operator CRDs a Calico install ships. A build
+	// serving another variant generates more of them into the same directory.
+	calicoOperatorCRDs = func() map[string]bool {
+		names := map[string]bool{}
+		for _, line := range strings.Split(calicoOperatorCRDList, "\n") {
+			if name := strings.TrimSpace(line); name != "" && !strings.HasPrefix(name, "#") {
+				names[name] = true
+			}
+		}
+		return names
+	}()
 
 	// variantCRDs holds the CRDs a variant installs beyond the operator's own,
 	// which are not built from this repo.
@@ -118,14 +132,17 @@ func getK8sPolicyCRDSource() map[string][]byte {
 	})
 }
 
-// getOperatorCRDSource returns the operator's own CRDs.
-func getOperatorCRDSource() map[string][]byte {
+// getOperatorCRDSource returns the operator's own CRDs, trimmed to the set a
+// Calico install ships.
+func getOperatorCRDSource(variant opv1.ProductVariant) map[string][]byte {
 	files, err := fs.Sub(operatorCRDFiles, "operator")
 	if err != nil {
 		panic(fmt.Sprintf("Failed to read Operator CRDs: %v", err))
 	}
 
-	return ReadCRDs(files, "Operator")
+	return readCRDs(files, "Operator", func(name string) bool {
+		return variant != opv1.Calico || calicoOperatorCRDs[name]
+	})
 }
 
 func convertYamlsToCRDs(yamls ...map[string][]byte) []*apiextenv1.CustomResourceDefinition {
@@ -150,7 +167,7 @@ func GetCRDs(variant opv1.ProductVariant, v3 bool) []*apiextenv1.CustomResourceD
 	defer lock.Unlock()
 
 	if len(crdCache[variant]) == 0 {
-		yamls := []map[string][]byte{getOperatorCRDSource()}
+		yamls := []map[string][]byte{getOperatorCRDSource(variant)}
 		if variant == opv1.Calico {
 			yamls = append(yamls, getCalicoCRDSource(v3), getK8sPolicyCRDSource())
 		}
