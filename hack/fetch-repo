@@ -1,43 +1,40 @@
 #!/usr/bin/env bash
 # Check out a pinned revision. Use instead of git clone in build files.
 #
-#   hack/fetch-repo <repo-url> <revision> <dest> [--with-history]
+#   hack/fetch-repo <repo-url> <revision> <dest>
 #
-# Fetches only the pinned commit, leaving no tags, so `git describe` and
-# merge-base do not work against the result. Pass --with-history when the
-# build reads git state: that keeps every commit but still skips file
-# contents until checkout, so it costs round-trips rather than a full clone.
+# Fetches only that commit, with no history and no other tags, so `git describe`
+# resolves only when the revision is itself a tag.
 set -euo pipefail
 
 # Inherited from a make recipe these point at the calling repo, and every git
 # command below would act on it instead of $dest.
 unset GIT_DIR GIT_WORK_TREE
 
-if [ $# -lt 3 ] || [ $# -gt 4 ]; then
-	echo "usage: $0 <repo-url> <revision> <dest> [--with-history]" >&2
+if [ $# -ne 3 ]; then
+	echo "usage: $0 <repo-url> <revision> <dest>" >&2
 	exit 1
 fi
 
 repo=$1
 rev=$2
 dest=$3
-with_history=${4:-}
 
-if [ -n "$with_history" ] && [ "$with_history" != "--with-history" ]; then
-	echo "$0: unknown option: $with_history" >&2
+# git fetches a commit by its full id only.
+if printf '%s' "$rev" | grep -qE '^[0-9a-f]{7,39}$'; then
+	echo "$0: revision must be a tag, branch or full 40-char SHA: $rev" >&2
 	exit 1
 fi
 
-# Callers outside make get the same default lib.Makefile sets, so a throttled
-# fetch fails instead of blocking on git's credential prompt.
+# A throttled fetch fails instead of blocking on git's credential prompt.
 export GIT_TERMINAL_PROMPT=${GIT_TERMINAL_PROMPT:-0}
-# GitHub throttles HTTP/2 harder than HTTP/1.1.
-export GIT_HTTP_VERSION=HTTP/1.1
 
 mkdir -p "$dest"
 cd "$dest"
 
 git init -q .
+# GitHub throttles HTTP/2 harder than HTTP/1.1.
+git config http.version HTTP/1.1
 # Every run: a directory left by an earlier build may have a stale origin.
 git remote add origin "$repo" 2>/dev/null || git remote set-url origin "$repo"
 
@@ -48,27 +45,15 @@ retry() {
 		if [ $n -ge 3 ]; then
 			return 1
 		fi
-		echo "$0: $1 failed, retrying in $((n * 5))s..." >&2
+		echo "$0: $* failed, retrying in $((n * 5))s..." >&2
 		sleep $((n * 5))
 		n=$((n + 1))
 	done
 }
 
-if ! git cat-file -e "${rev}^{commit}" 2>/dev/null; then
-	if [ -n "$with_history" ]; then
-		retry git fetch -q --filter=blob:none origin
-	elif printf '%s' "$rev" | grep -qE '^[0-9a-f]{40}$'; then
-		retry git fetch -q --depth 1 origin "$rev"
-	else
-		# ls-remote separates "no such ref" (exit 2) from a transport failure,
-		# so a throttled lookup does not silently downgrade to a full fetch.
-		if retry git ls-remote --exit-code origin "$rev" >/dev/null; then
-			retry git fetch -q --depth 1 origin "$rev:refs/fetched/$rev"
-		else
-			retry git fetch -q --filter=blob:none origin
-		fi
-	fi
+# A private ref, so a tag, a branch and a SHA all resolve the same way.
+target=refs/fetched/$rev
+if ! git rev-parse -q --verify "$target^{commit}" >/dev/null; then
+	retry git fetch -q --depth 1 origin "$rev:$target"
 fi
-
-git checkout -q --detach "$rev" 2>/dev/null ||
-	git checkout -q --detach "refs/fetched/$rev"
+git checkout -q --detach "$target"

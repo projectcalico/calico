@@ -25,23 +25,18 @@ Creates the destination directory.
 	$(call fetch_repo,$(THING_REPO),$(THING_SHA),thing)
 ```
 
-Fetches the revision in one network round-trip when it can, sets the remote
-URL every run so a directory left by an earlier build cannot fetch from a
-stale origin, and disables the git credential prompt on CI — a throttled
-anonymous clone otherwise blocks on that prompt until the job times out.
+Fetches the revision in one network round-trip, sets the remote URL every run
+so a directory left by an earlier build cannot fetch from a stale origin, and
+disables the git credential prompt on CI — a throttled anonymous clone
+otherwise blocks on that prompt until the job times out.
 
-Re-running does no network I/O once the revision is present.
+Re-running does no network I/O once the revision is present. Pin a tag or a
+full commit SHA; a short SHA is rejected, and a branch name freezes at the
+first commit fetched.
 
-By default it fetches only the pinned commit, leaving no tags — fine for a
-repo the build only takes files from. If something runs `git describe` or a
-merge-base against the checkout, pass `--with-history`:
-
-```make
-	$(call fetch_repo,$(THING_REPO),$(THING_SHA),thing,--with-history)
-```
-
-That keeps every commit but still skips file contents until checkout, so it
-costs round-trips rather than a full clone.
+Only the pinned commit is fetched: no history and no other tags. `git describe`
+resolves only when the revision is itself a tag, and a merge-base against the
+checkout does not work.
 
 ## Keep the repo URL in a variable
 

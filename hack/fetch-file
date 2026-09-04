@@ -20,7 +20,7 @@ mkdir -p "$(dirname "$dest")"
 tmp="$dest.tmp.$$"
 trap 'rm -f "$tmp"' EXIT
 
-# Use HTTP/1.1 to avoid issues with some servers that throttle HTTP/2 more aggressively.
+# GitHub throttles HTTP/2 harder than HTTP/1.1.
 curl --fail --silent --show-error --location \
   --http1.1 \
   --retry 5 --retry-all-errors \

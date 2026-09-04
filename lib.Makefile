@@ -717,10 +717,9 @@ define fetch_file
 endef
 
 # Check out a pinned revision. $(1) is the repo URL, $(2) the revision,
-# $(3) the destination directory. Pass --with-history as $(4) if the build
-# reads git state from the checkout.
+# $(3) the destination directory.
 define fetch_repo
-	$(REPO_ROOT)/hack/fetch-repo $(1) $(2) $(3) $(4)
+	$(REPO_ROOT)/hack/fetch-repo $(1) $(2) $(3)
 endef
 
 GIT_COMMIT_MESSAGE?="Automatic Pin Updates"

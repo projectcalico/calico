@@ -385,9 +385,8 @@ release-prep: hack/bin/release hack/bin/gh var-require-all-VERSION
 create-release-branch: hack/bin/release var-require-all-CALICO_REF var-require-one-of-STREAM-RELEASE_STREAM
 	hack/bin/release branch cut
 
-GOTESTSUM_VERSION?=1.13.0
 $(HACK_BIN)/gotestsum: $(HACK_BIN)
-	@$(call fetch_file,https://github.com/gotestyourself/gotestsum/releases/download/v$(GOTESTSUM_VERSION)/gotestsum_$(GOTESTSUM_VERSION)_$(NATIVE_OS)_$(NATIVE_ARCH).tar.gz,$(HACK_BIN)/gotestsum.tar.gz)
+	@$(call fetch_file,https://github.com/gotestyourself/gotestsum/releases/download/$(GOTESTSUM_VERSION)/gotestsum_$(GOTESTSUM_VERSION)_$(NATIVE_OS)_$(NATIVE_ARCH).tar.gz,$(HACK_BIN)/gotestsum.tar.gz)
 	@tar -zxvf $(HACK_BIN)/gotestsum.tar.gz -C $(HACK_BIN) gotestsum
 	@chmod +x $@
 	@rm $(HACK_BIN)/gotestsum.tar.gz
