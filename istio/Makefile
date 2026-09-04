@@ -46,38 +46,33 @@ init-ztunnel-source: $(ZTUNNEL_DOWNLOADED)
 # race on creating the shared stamp files.
 init-sources: $(ISTIO_DOWNLOADED) $(ZTUNNEL_DOWNLOADED)
 
-# 	patches/ holds functional changes to the istio tree, dep-patches/ holds the
-# 	go.mod/go.sum dependency pins derived from $(DEP_PINS), and
-# 	ztunnel-patches/ (applied below) holds functional changes to the separate
-# 	ztunnel tree. -F0 disables patch's default fuzz, so a stale patch fails
-# 	instead of landing somewhere approximate.
+# 	patches/         - functional changes to the istio tree; hand-written.
+# 	dep-patches/     - go.mod/go.sum pins derived from $(DEP_PINS).
+# 	ztunnel-patches/ - functional changes to the separate ztunnel tree.
 #
-# 	The functional and derived patches are applied by separate targets so the
-# 	generator can start from a tree carrying the former but not the latter --
-# 	including when the checked-in derived patch no longer applies, which is
-# 	exactly when it needs regenerating. The tree is removed before extraction
-# 	so a re-extraction cannot leave files, or a stale generator baseline,
-# 	behind from an older tag.
+# 	-F0 drops patch's default fuzz, so a stale patch fails instead of landing
+# 	somewhere approximate. Functional and derived patches are applied by
+# 	separate targets so the generator can start from a tree with the former but
+# 	not the latter. Trees are removed before extraction so a re-extraction
+# 	cannot mix in files, or a stale baseline, from an older tag.
 $(ISTIO_FETCHED):
 	rm -rf istio && mkdir -p istio
 	curl -sSfL --retry 5 --retry-all-errors -o /tmp/calico-istio.tar.gz https://github.com/istio/istio/archive/refs/tags/$(ISTIO_VERSION).tar.gz
 	tar xz --strip-components=1 -C istio -f /tmp/calico-istio.tar.gz
 	rm -f /tmp/calico-istio.tar.gz
 	patch -d istio -p1 -F0 < patches/0001-feat-cni-DSCP-magic-mark-support-for-transparent-net.patch
-# 	Record what the generator diffs against, while the tree still holds
-# 	upstream's go.mod and go.sum.
+# 	Record what the generator diffs against, before any dependency patch lands.
 	../hack/thirdparty/init-dep-baseline.sh istio
 	touch $@
 
 $(ISTIO_DOWNLOADED): $(ISTIO_FETCHED)
-# 	Reset the derived files to the baseline recorded at fetch time, so
-# 	re-applying is idempotent across incremental builds.
+# 	Reset to the fetch-time baseline so re-applying is idempotent.
 	cd istio && git checkout -- go.mod go.sum
 	patch -d istio -p1 -F0 < $(DEP_PATCH)
 	touch $@
 
-# 	Rebuild $(DEP_PATCH) from $(DEP_PINS). Runs in the pinned Go toolchain
-# 	because go mod tidy's output depends on the Go version.
+# 	Rebuild $(DEP_PATCH) from $(DEP_PINS), in the pinned Go toolchain --
+# 	go mod tidy's output depends on the Go version.
 .PHONY: regen-dep-patches
 regen-dep-patches: $(ISTIO_FETCHED)
 	$(DOCKER_GO_BUILD) ../hack/thirdparty/regen-dep-patch.sh istio $(DEP_PINS) $(DEP_PATCH)

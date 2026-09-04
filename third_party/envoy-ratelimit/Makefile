@@ -25,22 +25,18 @@ ENVOY_RATELIMIT_DOWNLOADED=.envoy-ratelimit.downloaded
 DEP_PINS=dep-pins.txt
 DEP_PATCH=dep-patches/0001-CVE-dependency-fixes.patch
 
-# 	Patches live in two directories:
-# 	  patches/     - functional changes to upstream source. Written and
-# 	                 reviewed by hand; only ever verified to still apply.
-# 	  dep-patches/ - dependency pins for CVE remediation, touching go.mod and
-# 	                 go.sum only. Derived from $(DEP_PINS), so these are
-# 	                 regenerated rather than edited.
-# 	-F0 disables patch's default fuzz factor: a patch whose context no longer
-# 	matches must fail rather than land somewhere approximate.
+# 	patches/     - functional changes to upstream source; hand-written, only
+# 	               ever verified to still apply.
+# 	dep-patches/ - go.mod/go.sum dependency pins derived from $(DEP_PINS);
+# 	               regenerated, not edited.
 #
-# 	The two are applied by separate targets so the generator can start from a
-# 	tree carrying the functional patches but not the derived ones -- including
-# 	when the checked-in derived patch no longer applies, which is exactly when
-# 	it needs regenerating.
+# 	-F0 drops patch's default fuzz, so a stale patch fails instead of landing
+# 	somewhere approximate. Applied by separate targets so the generator can
+# 	start from a tree with the functional patches but not the derived ones --
+# 	the state it needs when the derived patch no longer applies.
 
-# 	Upstream at the pinned ref, with the functional patches applied. There are
-# 	none here today, so patches/ does not exist and the -f guard skips it.
+# 	Upstream at the pinned ref with the functional patches applied -- none
+# 	today, so patches/ does not exist and the -f guard skips it.
 $(ENVOY_RATELIMIT_FETCHED):
 	git clone -n https://github.com/envoyproxy/ratelimit.git envoy-ratelimit
 	cd envoy-ratelimit && git checkout $(ENVOY_RATELIMIT_VERSION)
@@ -49,16 +45,15 @@ $(ENVOY_RATELIMIT_FETCHED):
 			patch -d envoy-ratelimit -p1 -F0 < "$$patch" || exit 1; \
 		fi; \
 	done
-# 	Record what the generator diffs against, while the tree still holds
-# 	upstream's go.mod and go.sum. No-op for a tree fetched with git clone.
+# 	Record what the generator diffs against, before any dependency patch
+# 	lands. No-op for a cloned tree.
 	../../hack/thirdparty/init-dep-baseline.sh envoy-ratelimit
 	touch $@
 
 .PHONY: init-source
 init-source: $(ENVOY_RATELIMIT_DOWNLOADED)
 $(ENVOY_RATELIMIT_DOWNLOADED): $(ENVOY_RATELIMIT_FETCHED)
-# 	Reset the derived files to the pinned ref first, so re-applying is
-# 	idempotent across incremental builds.
+# 	Reset to the pinned ref so re-applying is idempotent.
 	cd envoy-ratelimit && git checkout -- go.mod go.sum
 	for patch in dep-patches/*.patch; do \
 		if [ -f "$$patch" ]; then \
@@ -67,15 +62,13 @@ $(ENVOY_RATELIMIT_DOWNLOADED): $(ENVOY_RATELIMIT_FETCHED)
 	done
 	touch $@
 
-# 	Rebuild $(DEP_PATCH) from $(DEP_PINS). Runs in the pinned Go toolchain
-# 	because go mod tidy's output depends on the Go version.
+# 	Rebuild $(DEP_PATCH) from $(DEP_PINS), in the pinned Go toolchain --
+# 	go mod tidy's output depends on the Go version.
 .PHONY: regen-dep-patches
 regen-dep-patches: $(ENVOY_RATELIMIT_FETCHED)
 	$(DOCKER_GO_BUILD) ../../hack/thirdparty/regen-dep-patch.sh envoy-ratelimit $(DEP_PINS) $(DEP_PATCH)
 
-# 	Fail if the checked-in patch is not what the pins produce. Catches a
-# 	hand-edited patch, a pin that moved without regeneration, and an upstream
-# 	ref bump that leaves the patch stale.
+# 	Fail if the checked-in patch is not what the pins produce.
 .PHONY: check-dep-patches
 check-dep-patches: regen-dep-patches
 	@git diff --exit-code -- $(DEP_PATCH) || { \

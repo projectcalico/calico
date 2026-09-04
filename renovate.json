@@ -104,7 +104,7 @@
       "enabled": true
     },
     {
-      "description": "Bundled third-party images: off by default, so a newly added release branch never picks them up implicitly. Must carry no matchUpdateTypes: enabled is resolved before lookup, and an update-type gate would stop this and the rule below from ever applying",
+      "description": "Bundled third-party images: off by default, so a new release branch never picks them up implicitly. No matchUpdateTypes here or in the rule below: enabled is resolved before lookup, so an update-type gate stops the rule ever applying",
       "matchDepNames": ["envoyproxy/gateway", "quay.io/tigera/envoybinary", "https://github.com/envoyproxy/ratelimit", "istio/istio"],
       "enabled": false
     },
@@ -126,7 +126,7 @@
       "enabled": true
     },
     {
-      "description": "envoy-ratelimit is pinned to a commit, so its updates arrive as digests rather than versions -- exempt it from the global digest block. Patch-only still holds for the other three",
+      "description": "envoy-ratelimit is commit-pinned, so its updates arrive as digests -- exempt it from the global digest block",
       "matchDepNames": ["https://github.com/envoyproxy/ratelimit"],
       "matchBaseBranches": ["master"],
       "matchUpdateTypes": ["digest"],
@@ -148,7 +148,7 @@
       }
     },
     {
-      "description": "Bundled third-party images: group into a single PR and rebuild the derived dependency patches on the branch. Sets no enabled/updateType keys -- doing so here, after the minor/major block above, would undo it",
+      "description": "Bundled third-party images: one PR, and rebuild the derived dependency patches on the branch. Sets no enabled key -- after the block above, that would undo it",
       "matchDepNames": ["envoyproxy/gateway", "quay.io/tigera/envoybinary", "https://github.com/envoyproxy/ratelimit", "istio/istio"],
       "matchBaseBranches": ["master"],
       "groupName": "third-party-images",

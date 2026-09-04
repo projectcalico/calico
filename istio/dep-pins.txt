@@ -1,16 +1,11 @@
 # Dependency pins applied on top of the pinned istio/istio tag (ISTIO_VERSION)
 # to remediate CVEs in the bundled images.
 #
-# Each entry is the minimum version this image requires. `go mod tidy` settles
-# whatever else has to move, so a module that only changes as a consequence of
-# a pin does not belong here -- recording it would turn an incidental bump into
-# a permanent floor that nobody can tell apart from a deliberate one. The
-# prometheus pin, for example, also advances cloud.google.com/go/auth, gax-go,
-# google.golang.org/api and enterprise-certificate-proxy in go.sum, and the
-# x/net pin pulls the rest of the golang.org/x family along in go.mod. None of
-# those are pinned.
+# Each entry is a minimum version. `go mod tidy` settles the rest, so modules
+# that move only as a consequence -- the other golang.org/x modules, and
+# prometheus' transitive deps in go.sum -- are not listed.
 #
-# github.com/moby/spdystream v0.5.1 clears GO-2026-4958 / CVE-2026-35469: a
+# github.com/moby/spdystream v0.5.1 clears GO-2026-4958 / CVE-2026-35469, a
 # memory DoS in the SPDY frame parser.
 #
 # github.com/prometheus/prometheus v0.311.3 clears CVE-2026-42154 /
@@ -18,14 +13,9 @@
 # and CVE-2026-42151 / GHSA-wg65-39gg-5wfj, an Azure AD OAuth secret stored in
 # plaintext.
 #
-# golang.org/x/net v0.56.0 sits deliberately above its CVE floor. The fix for
-# CVE-2026-33814, the HTTP/2 SETTINGS loop, landed in v0.53.0 and istio
-# 1.29.4 already ships at or above that; v0.56.0 is pinned to match the version
-# calico's own modules use, so the bundled tree does not diverge.
-#
-# This patch was once much larger. As of 1.29.4 upstream ships the otel, envoy
-# go-control-plane, k8s.io and genproto bumps an earlier revision carried, at
-# equal or higher versions, so they are no longer pinned here.
+# golang.org/x/net v0.56.0 sits above its CVE floor: CVE-2026-33814 was fixed
+# in v0.53.0, which the pinned tag already ships. Pinned higher to match
+# calico's own modules.
 github.com/moby/spdystream v0.5.1
 github.com/prometheus/prometheus v0.311.3
 golang.org/x/net v0.56.0
