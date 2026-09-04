@@ -18,7 +18,7 @@
       commands:
         # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
         - docker system prune -af
-        - .semaphore/load-cached-images
+        - .semaphore/load-cached-images calico node whisker
     jobs:
       - name: "E2E tests: Conformance (cluster routing: BIRD)"
         commands:
