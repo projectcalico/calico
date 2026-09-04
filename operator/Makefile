@@ -81,14 +81,13 @@ else
   GIT_VERSION?=$(shell git describe --tags --dirty --always --abbrev=12)
 endif
 
-# The Calico version, registry and image path the built operator deploys. Every
-# Calico component is built from this repository, so the version is this build's.
-# A dev build overrides all three to point at images it just pushed; see
-# hack/test/kind/infra/build-operator.sh.
-CALICO_VERSION    ?= $(GIT_VERSION)
+# The tag, registry and image path the built operator resolves Calico images at. A build
+# that names no tag gets the one cd publishes for this branch; the release tooling passes
+# the tag it publishes at, and the kind rig passes what it just pushed.
+CALICO_IMAGE_TAG  ?= $(BRANCH_IMAGE_TAG)
 CALICO_REGISTRY   ?=
 CALICO_IMAGE_PATH ?=
-CALICO_LDFLAGS = -X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(CALICO_VERSION) \
+CALICO_LDFLAGS = -X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(CALICO_IMAGE_TAG) \
                  -X $(PACKAGE_NAME)/pkg/components.calicoRegistry=$(CALICO_REGISTRY) \
                  -X $(PACKAGE_NAME)/pkg/components.calicoImagePath=$(CALICO_IMAGE_PATH)
 
@@ -220,7 +219,7 @@ run-fvs: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 # The tag the FV suite's in-process operator resolves for the components below, and
 # loads them into kind under. Stamped into the test binary the same way a real build
 # stamps the operator.
-FV_IMAGE_TAG ?= master
+FV_IMAGE_TAG ?= $(CALICO_IMAGE_TAG)
 FV_LDFLAGS    = -ldflags "-X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(FV_IMAGE_TAG)"
 FV_IMAGES     = calico/calico calico/node calico/whisker
 
@@ -325,8 +324,18 @@ release-notes: hack/bin/release var-require-all-VERSION-GITHUB_TOKEN
 	REPO=$(REPO) hack/bin/release notes
 
 ## Build a release from start to finish.
-release: clean hack/bin/release
+release: clean hack/bin/release check-release-image-tags
 	hack/bin/release build
+
+# The tag is compiled in, so a release that fell through to the branch default would ship
+# an operator naming the images this branch publishes for development.
+.PHONY: check-release-image-tags
+check-release-image-tags:
+	@if [ "$(CALICO_IMAGE_TAG)" = "$(BRANCH_IMAGE_TAG)" ]; then \
+		echo "A release must name the tag it publishes at, not the branch default $(BRANCH_IMAGE_TAG)."; \
+		echo "Set CALICO_IMAGE_TAG, or build through the release tooling."; \
+		exit 1; \
+	fi
 
 ## Produces a clean build of release artifacts at the specified version.
 release-build: operator-release-prereqs var-require-all-VERSION-GIT_VERSION
