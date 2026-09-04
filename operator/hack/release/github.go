@@ -30,9 +30,6 @@ import (
 	"github.com/blang/semver/v4"
 	"github.com/google/go-github/v53/github"
 	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/operator/hack/release/internal/command"
-	"github.com/projectcalico/calico/operator/hack/release/internal/versions"
 )
 
 //go:embed templates/release-notes.md.gotmpl
@@ -78,7 +75,6 @@ type ReleaseNoteData struct {
 	Enhancements []ReleaseNoteItem
 	BugFixes     []ReleaseNoteItem
 	OtherChanges []ReleaseNoteItem
-	Versions     map[string]string // Calico and Enterprise versions
 }
 
 // GithubRelease represents a GitHub-hosted release of the operator.
@@ -301,20 +297,6 @@ func (r *GithubRelease) collectReleaseNotes(ctx context.Context, local bool) (*R
 	data := &ReleaseNoteData{
 		Date: time.Now().Format("02 Jan 2006"), // assume today's date for the release.
 	}
-	dir, err := command.GitDir()
-	if err != nil {
-		return data, fmt.Errorf("getting git directory: %s", err)
-	}
-	var vers versions.Versions
-	if local {
-		vers, err = versions.ConfigVersions(dir)
-	} else {
-		vers, err = versions.GitRefConfigVersions(r.Version)
-	}
-	if err != nil {
-		return data, fmt.Errorf("retrieving release versions: %s", err)
-	}
-	data.Versions = vers.ToMap()
 	log := logrus.WithField("org", r.Org).WithField("repo", r.Repo).WithField("version", r.Version)
 	issues, err := r.releaseNoteIssues(ctx)
 	if err != nil {

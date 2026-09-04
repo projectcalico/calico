@@ -21,7 +21,6 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/projectcalico/calico/operator/hack/release/internal/command"
 	"github.com/projectcalico/calico/operator/hack/release/internal/middleware"
 )
 
@@ -62,11 +61,7 @@ var publicBefore = cli.BeforeFunc(func(ctx context.Context, c *cli.Command) (con
 })
 
 var publicAction = cli.ActionFunc(func(ctx context.Context, c *cli.Command) error {
-	repoRootDir, err := command.GitDir()
-	if err != nil {
-		return fmt.Errorf("getting repo root dir: %w", err)
-	}
-	isPrerelease, err := isPrereleaseVersion(repoRootDir)
+	isPrerelease, err := isPrereleaseVersion(c.String(versionFlag.Name))
 	if err != nil {
 		return fmt.Errorf("determining if this is a prerelease: %w", err)
 	}
