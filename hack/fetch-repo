@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Check out a pinned revision. Use instead of git clone in build files.
+#
+#   hack/fetch-repo <repo-url> <revision> <dest>
+#
+# Fetches only that commit, with no history and no other tags, so `git describe`
+# resolves only when the revision is itself a tag.
+set -euo pipefail
+
+# Inherited from a make recipe these point at the calling repo, and every git
+# command below would act on it instead of $dest.
+unset GIT_DIR GIT_WORK_TREE
+
+if [ $# -ne 3 ]; then
+	echo "usage: $0 <repo-url> <revision> <dest>" >&2
+	exit 1
+fi
+
+repo=$1
+rev=$2
+dest=$3
+
+# git fetches a commit by its full id only.
+if printf '%s' "$rev" | grep -qE '^[0-9a-f]{7,39}$'; then
+	echo "$0: revision must be a tag, branch or full 40-char SHA: $rev" >&2
+	exit 1
+fi
+
+# A throttled fetch fails instead of blocking on git's credential prompt.
+export GIT_TERMINAL_PROMPT=${GIT_TERMINAL_PROMPT:-0}
+
+mkdir -p "$dest"
+cd "$dest"
+
+git init -q .
+# GitHub throttles HTTP/2 harder than HTTP/1.1.
+git config http.version HTTP/1.1
+# Every run: a directory left by an earlier build may have a stale origin.
+git remote add origin "$repo" 2>/dev/null || git remote set-url origin "$repo"
+
+# Retry: a throttled or flaky fetch is a transient failure, not a missing ref.
+retry() {
+	local n=1
+	until "$@"; do
+		if [ $n -ge 3 ]; then
+			return 1
+		fi
+		echo "$0: $* failed, retrying in $((n * 5))s..." >&2
+		sleep $((n * 5))
+		n=$((n + 1))
+	done
+}
+
+# A private ref, so a tag, a branch and a SHA all resolve the same way.
+target=refs/fetched/$rev
+if ! git rev-parse -q --verify "$target^{commit}" >/dev/null; then
+	retry git fetch -q --depth 1 origin "$rev:$target"
+fi
+git checkout -q --detach "$target"

@@ -22,17 +22,14 @@ CN_FILES := host-local portmap loopback tuning
 CONTAINERNETWORKING_PLUGINS_CLONED = .containernetworking-plugins-$(CNI_VERSION).cloned
 FLANNEL_CNI_PLUGIN_CLONED          = .flannel-cni-plugin-$(FLANNEL_VERSION).cloned
 
-# CNI_VERSION is a commit SHA (the fork has no release tag at the toolchain we
-# build with), so clone then check it out rather than passing it to --branch.
 $(CONTAINERNETWORKING_PLUGINS_CLONED):
 	rm -rf containernetworking-plugins .containernetworking-plugins-*.cloned
-	git clone https://github.com/projectcalico/containernetworking-plugins.git
-	git -C containernetworking-plugins checkout $(CNI_VERSION)
+	$(call fetch_repo,$(CONTAINERNETWORKING_PLUGINS_REPO),$(CNI_VERSION),containernetworking-plugins)
 	touch $@
 
 $(FLANNEL_CNI_PLUGIN_CLONED):
 	rm -rf flannel-cni-plugin .flannel-cni-plugin-*.cloned
-	git clone --single-branch --branch $(FLANNEL_VERSION) https://github.com/projectcalico/flannel-cni-plugin.git
+	$(call fetch_repo,$(FLANNEL_CNI_PLUGIN_REPO),$(FLANNEL_VERSION),flannel-cni-plugin)
 	touch $@
 
 ##############################################################################
