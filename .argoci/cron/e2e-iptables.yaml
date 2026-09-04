@@ -730,7 +730,7 @@ steps:
       - name: CNI_PLUGIN
         value: Calico
       - name: E2E_TEST_CONFIG
-        value: e2e/config/wireguard.yaml
+        value: e2e/config/iptables/eks-xtables-encap-wireguard-aws.yaml
       - name: ENABLE_WIREGUARD
         value: "true"
       - name: INSTALLER
