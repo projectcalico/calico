@@ -2244,6 +2244,21 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 					Comment: []string{"From ", dataplanedefs.BPFOutDev, " device, mark verified, accept."},
 				},
 			)
+
+			// A flow that pre-dates BPF and is forwarded between two host interfaces
+			// matches none of the accepts above, so a DROP policy on FORWARD would kill
+			// it. Linux conntrack vetted it, which is the same signal INPUT trusts.
+			// Must stay after the to-workload jumps so that workload destinations keep
+			// going through the dispatch chain.
+			fwdRules = append(fwdRules,
+				generictables.Rule{
+					Match: d.newMatch().
+						MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask).
+						ConntrackState("ESTABLISHED,RELATED"),
+					Action:  d.actions.Allow(),
+					Comment: []string{"Accept forwarded packets from flows that pre-date BPF."},
+				},
+			)
 		}
 
 		t.InsertOrAppendRules("INPUT", inputRules)
