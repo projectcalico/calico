@@ -30,8 +30,12 @@ include ../lib.Makefile
 ###############################################################################
 # Source Download and Patching
 ###############################################################################
+ISTIO_FETCHED = .istio.fetched
 ISTIO_DOWNLOADED = .istio.downloaded
 ZTUNNEL_DOWNLOADED = .ztunnel.downloaded
+
+DEP_PINS = dep-pins.txt
+DEP_PATCH = dep-patches/0003-Update-deps-for-CVE-fixes.patch
 
 .PHONY: init-istio-source init-ztunnel-source init-sources
 init-istio-source: $(ISTIO_DOWNLOADED)
@@ -42,21 +46,57 @@ init-ztunnel-source: $(ZTUNNEL_DOWNLOADED)
 # race on creating the shared stamp files.
 init-sources: $(ISTIO_DOWNLOADED) $(ZTUNNEL_DOWNLOADED)
 
-$(ISTIO_DOWNLOADED):
-	mkdir -p istio
+# 	patches/ holds functional changes to the istio tree, dep-patches/ holds the
+# 	go.mod/go.sum dependency pins derived from $(DEP_PINS), and
+# 	ztunnel-patches/ (applied below) holds functional changes to the separate
+# 	ztunnel tree. -F0 disables patch's default fuzz, so a stale patch fails
+# 	instead of landing somewhere approximate.
+#
+# 	The functional and derived patches are applied by separate targets so the
+# 	generator can start from a tree carrying the former but not the latter --
+# 	including when the checked-in derived patch no longer applies, which is
+# 	exactly when it needs regenerating. The tree is removed before extraction
+# 	so a re-extraction cannot leave files, or a stale generator baseline,
+# 	behind from an older tag.
+$(ISTIO_FETCHED):
+	rm -rf istio && mkdir -p istio
 	curl -sSfL --retry 5 --retry-all-errors -o /tmp/calico-istio.tar.gz https://github.com/istio/istio/archive/refs/tags/$(ISTIO_VERSION).tar.gz
 	tar xz --strip-components=1 -C istio -f /tmp/calico-istio.tar.gz
 	rm -f /tmp/calico-istio.tar.gz
-	patch -d istio -p1 < patches/0001-feat-cni-DSCP-magic-mark-support-for-transparent-net.patch
-	patch -d istio -p1 < patches/0003-Update-deps-for-CVE-fixes.patch
+	patch -d istio -p1 -F0 < patches/0001-feat-cni-DSCP-magic-mark-support-for-transparent-net.patch
+# 	Record what the generator diffs against, while the tree still holds
+# 	upstream's go.mod and go.sum.
+	../hack/thirdparty/init-dep-baseline.sh istio
 	touch $@
 
+$(ISTIO_DOWNLOADED): $(ISTIO_FETCHED)
+# 	Reset the derived files to the baseline recorded at fetch time, so
+# 	re-applying is idempotent across incremental builds.
+	cd istio && git checkout -- go.mod go.sum
+	patch -d istio -p1 -F0 < $(DEP_PATCH)
+	touch $@
+
+# 	Rebuild $(DEP_PATCH) from $(DEP_PINS). Runs in the pinned Go toolchain
+# 	because go mod tidy's output depends on the Go version.
+.PHONY: regen-dep-patches
+regen-dep-patches: $(ISTIO_FETCHED)
+	$(DOCKER_GO_BUILD) ../hack/thirdparty/regen-dep-patch.sh istio $(DEP_PINS) $(DEP_PATCH)
+
+# 	Fail if the checked-in patch is not what the pins produce.
+.PHONY: check-dep-patches
+check-dep-patches: regen-dep-patches
+	@git diff --exit-code -- $(DEP_PATCH) || { \
+		echo "ERROR: $(DEP_PATCH) is not what $(DEP_PINS) produces."; \
+		echo "Run 'make -C istio regen-dep-patches' and commit the result."; \
+		exit 1; \
+	}
+
 $(ZTUNNEL_DOWNLOADED):
-	mkdir -p ztunnel
+	rm -rf ztunnel && mkdir -p ztunnel
 	curl -sSfL --retry 5 --retry-all-errors -o /tmp/calico-ztunnel.tar.gz https://github.com/istio/ztunnel/archive/refs/tags/$(ISTIO_VERSION).tar.gz
 	tar xz --strip-components=1 -C ztunnel -f /tmp/calico-ztunnel.tar.gz
 	rm -f /tmp/calico-ztunnel.tar.gz
-	patch -d ztunnel -p1 < patches/0002-transparent-policies.patch
+	patch -d ztunnel -p1 -F0 < ztunnel-patches/0002-transparent-policies.patch
 	touch $@
 
 ###############################################################################
@@ -167,7 +207,7 @@ $(ISTIO_ZTUNNEL_IMAGE_CREATED): Dockerfile.ztunnel bin/ztunnel-$(ARCH)
 .PHONY: clean
 clean:
 	rm -fr bin/ istio/ ztunnel/
-	rm -f $(ISTIO_DOWNLOADED) $(ZTUNNEL_DOWNLOADED)
+	rm -f $(ISTIO_FETCHED) $(ISTIO_DOWNLOADED) $(ZTUNNEL_DOWNLOADED)
 	rm -f $(ISTIO_CNI_IMAGE_CREATED) $(ISTIO_PILOT_IMAGE_CREATED) $(ISTIO_PROXYV2_IMAGE_CREATED) $(ISTIO_ZTUNNEL_IMAGE_CREATED)
 	rm -f .release-*
 	-docker image rm -f $$(docker images $(ISTIO_CNI_IMAGE) -a -q)

@@ -1,0 +1,11 @@
+# Dependency pins applied on top of the pinned envoyproxy/ratelimit commit
+# (ENVOY_RATELIMIT_VERSION) to remediate CVEs in the bundled image.
+#
+# Each entry is the minimum version this image requires. `go mod tidy` settles
+# whatever else has to move, so a module that only changes as a consequence of
+# a pin does not belong here -- recording it would turn an incidental bump into
+# a permanent floor that nobody can tell apart from a deliberate one.
+#
+# CVE-2026-33814: HTTP/2 SETTINGS infinite loop, fixed in golang.org/x/net
+# v0.53.0. Pinned above the fix to match the version calico's own modules use.
+golang.org/x/net v0.56.0
