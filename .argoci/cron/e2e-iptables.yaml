@@ -30,10 +30,10 @@ steps:
       - name: PROVISIONER
         value: aws-openshift
     matrix:
-      - name: 4-20-35
+      - name: 5-0-0-rc-0
         env:
           - name: OPENSHIFT_VERSION
-            value: 4.20.35
+            value: 5.0.0-rc.0
       - name: 4-21-30
         env:
           - name: OPENSHIFT_VERSION
