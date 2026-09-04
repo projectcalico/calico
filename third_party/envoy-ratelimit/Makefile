@@ -78,7 +78,7 @@ ci: image
 
 cd: image-all cd-common
 
-.PHONY: release-build
+.PHONY: release-build release-publish
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
@@ -87,7 +87,9 @@ release-build: .release-$(VERSION).created
 	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
 	touch $@
 
-release-publish: release-prereqs .release-$(VERSION).published
-.release-$(VERSION).published:
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	touch $@
+release-publish: release-prereqs bin/crane
+	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
+		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \
+	else \
+		$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM); \
+	fi

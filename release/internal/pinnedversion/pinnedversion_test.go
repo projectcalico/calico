@@ -16,6 +16,7 @@ package pinnedversion
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	approvals "github.com/approvals/go-approval-tests"
@@ -99,6 +100,32 @@ func TestImageComponents(t *testing.T) {
 			t.Errorf("expected components to be same, but they differ: %s", diff)
 		}
 	})
+}
+
+func TestGeneratePinnedVersionFileCreatesDir(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "tmp")
+	rootDir, err := command.GitDir()
+	if err != nil {
+		t.Fatalf("failed to get git root dir: %v", err)
+	}
+	p := &CalicoPinnedVersions{
+		Dir:                 dir,
+		RootDir:             rootDir,
+		ReleaseBranchPrefix: "release",
+		OperatorCfg: OperatorConfig{
+			Image:    "tigera/operator",
+			Registry: "docker.io",
+		},
+		releaseName:   "test-release",
+		productBranch: "release-v3.31",
+		versionData:   version.NewHashreleaseVersions(version.New("v3.31.0")),
+	}
+	if err := generatePinnedVersionFile(p); err != nil {
+		t.Fatalf("failed to generate pinned version file: %v", err)
+	}
+	if _, err := os.Stat(PinnedVersionFilePath(dir)); err != nil {
+		t.Fatalf("pinned version file not created: %v", err)
+	}
 }
 
 func TestGeneratePinnedVersionFile(t *testing.T) {

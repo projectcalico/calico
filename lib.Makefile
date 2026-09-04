@@ -408,7 +408,8 @@ DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL) 
 	--build-arg GIT_VERSION=$(GIT_VERSION) \
 	--build-arg UBI_IMAGE=$(UBI_IMAGE)
 
-# A clone that needs credentials fails instead of hanging on the terminal prompt.
+# Fail a clone that needs credentials instead of blocking on git's terminal
+# prompt, which hangs a CI job until the pipeline timeout.
 export GIT_TERMINAL_PROMPT ?= 0
 
 fetch_file = $(REPO_ROOT)/hack/fetch-file $(1) $(2)
@@ -1489,12 +1490,15 @@ CRANE_URL = https://github.com/google/go-containerregistry/releases/download/$(C
 
 .PHONY: bin/crane
 bin/crane: $(REPO_ROOT)/bin/crane
+# Moved into place last: a half-extracted binary looks complete to make.
 $(REPO_ROOT)/bin/crane:
 	$(info ::: Downloading crane from $(CRANE_URL))
 	@mkdir -p $(REPO_ROOT)/bin
-	@$(call fetch_file,$(CRANE_URL),/tmp/calico-crane.tar.gz)
-	@tar xz -C $(REPO_ROOT)/bin -f /tmp/calico-crane.tar.gz crane
-	@rm -f /tmp/calico-crane.tar.gz
+	@tmp=$$(mktemp -d $(REPO_ROOT)/bin/.crane.XXXXXX) && trap 'rm -rf "$$tmp"' EXIT && \
+		$(call fetch_file,$(CRANE_URL),"$$tmp/crane.tar.gz") && \
+		tar xz -C "$$tmp" -f "$$tmp/crane.tar.gz" crane && \
+		chmod +x "$$tmp/crane" && \
+		mv "$$tmp/crane" "$@"
 
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.
