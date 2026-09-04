@@ -17,10 +17,11 @@ package tiers
 import (
 	"context"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/stretchr/testify/mock"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,7 +34,9 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
+	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
 )
 
 var _ = Describe("tier controller tests", func() {
@@ -94,19 +97,6 @@ var _ = Describe("tier controller tests", func() {
 				},
 			})).NotTo(HaveOccurred())
 
-		Expect(c.Create(
-			ctx,
-			&v3.LicenseKey{
-				ObjectMeta: metav1.ObjectMeta{Name: "default"},
-				Status: v3.LicenseKeyStatus{
-					Features: []string{
-						common.TiersFeature,
-						common.EgressAccessControlFeature,
-					},
-				},
-			},
-		)).NotTo(HaveOccurred())
-
 		Expect(c.Create(ctx, &operatorv1.APIServer{
 			ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
 			Status:     operatorv1.APIServerStatus{State: operatorv1.TigeraStatusReady},
@@ -153,54 +143,26 @@ var _ = Describe("tier controller tests", func() {
 		mockStatus.AssertExpectations(GinkgoT())
 	})
 
-	It("should not require license", func() {
-		Expect(c.Delete(ctx, &v3.LicenseKey{ObjectMeta: metav1.ObjectMeta{Name: "default"}})).ToNot(HaveOccurred())
-		mockStatus = &status.MockStatus{}
-		r = ReconcileTiers{
-			client:             c,
-			scheme:             scheme,
-			status:             mockStatus,
-			tierWatchReady:     readyFlag,
-			policyWatchesReady: readyFlag,
-			opts: options.ControllerOptions{
-				DetectedProvider: operatorv1.ProviderNone,
-			},
-		}
-		mockStatus.On("OnCRFound")
-		mockStatus.On("ReadyToMonitor")
-		mockStatus.On("ClearDegraded")
-		_, err := r.Reconcile(ctx, reconcile.Request{})
-		Expect(err).ShouldNot(HaveOccurred())
-		mockStatus.AssertExpectations(GinkgoT())
+	It("allows DNS access to the namespaces the variant contributes", func() {
+		r.opts.Extensions = extensions.New(extensions.Set{Tiers: dnsClientNamespaces{"tigera-manager", "tigera-prometheus"}})
+
+		cfg, res := r.prepareTiersConfig(ctx, logr.Discard())
+		Expect(res).To(BeNil())
+		Expect(cfg.CalicoNamespaces).To(Equal([]string{common.CalicoNamespace, "tigera-manager", "tigera-prometheus"}))
 	})
 
-	It("should not require license with tiers feature", func() {
-		license := &v3.LicenseKey{
-			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Status: v3.LicenseKeyStatus{
-				Features: []string{
-					common.EgressAccessControlFeature,
-				},
-			},
-		}
-		Expect(c.Delete(ctx, &v3.LicenseKey{ObjectMeta: license.ObjectMeta}))
-		Expect(c.Create(ctx, license)).ToNot(HaveOccurred())
-		mockStatus = &status.MockStatus{}
-		r = ReconcileTiers{
-			client:             c,
-			scheme:             scheme,
-			status:             mockStatus,
-			tierWatchReady:     readyFlag,
-			policyWatchesReady: readyFlag,
-			opts: options.ControllerOptions{
-				DetectedProvider: operatorv1.ProviderNone,
-			},
-		}
-		mockStatus.On("OnCRFound")
-		mockStatus.On("ReadyToMonitor")
-		mockStatus.On("ClearDegraded")
-		_, err := r.Reconcile(ctx, reconcile.Request{})
-		Expect(err).ShouldNot(HaveOccurred())
-		mockStatus.AssertExpectations(GinkgoT())
+	It("allows DNS access to the core namespace alone when the variant contributes none", func() {
+		cfg, res := r.prepareTiersConfig(ctx, logr.Discard())
+		Expect(res).To(BeNil())
+		Expect(cfg.CalicoNamespaces).To(Equal([]string{common.CalicoNamespace}))
 	})
 })
+
+// dnsClientNamespaces is a variant that contributes namespaces and nothing else.
+type dnsClientNamespaces []string
+
+func (dnsClientNamespaces) Watches(ctrlruntime.Controller) error { return nil }
+
+func (n dnsClientNamespaces) DNSClientNamespaces(context.Context, client.Client) ([]string, error) {
+	return n, nil
+}

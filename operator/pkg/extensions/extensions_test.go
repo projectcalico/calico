@@ -110,6 +110,12 @@ var _ = Describe("the zero value Extensions", func() {
 		Expect(e.Startup().MultiTenant()).To(BeFalse())
 		Expect(e.Startup().Cloud()).To(BeFalse())
 	})
+
+	It("contributes no controllers", func() {
+		var e extensions.Extensions
+
+		Expect(e.Startup().Controllers()).To(BeEmpty())
+	})
 })
 
 var _ = Describe("the base Whisker validation", func() {
