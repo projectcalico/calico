@@ -249,8 +249,8 @@ blocks:
           commands:
             - make check-images-availability
   - name: "Check third-party dependency patches"
-    # Each component's dep-patches/ are derived from its dep-pins.txt, so
-    # regenerating them must be a no-op.
+    # Each component's patches/02-auto-gen-patches/ is derived from its
+    # dep-pins.txt, so regenerating it must be a no-op.
     #
     # metadata.mk is in the trigger because `go mod tidy`'s output depends on the
     # Go toolchain: bumping GO_VERSION can leave every checked-in patch stale.

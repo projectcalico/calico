@@ -154,7 +154,7 @@
       "groupName": "third-party-images",
       "postUpgradeTasks": {
         "commands": ["make regen-thirdparty-dep-patches"],
-        "fileFilters": ["**/dep-patches/*.patch"],
+        "fileFilters": ["**/patches/02-auto-gen-patches/*.patch"],
         "executionMode": "branch"
       }
     }

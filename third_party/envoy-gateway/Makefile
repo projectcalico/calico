@@ -24,24 +24,25 @@ ENVOY_GATEWAY_DOWNLOADED=.envoy-gateway.downloaded
 
 DEP_PINS=dep-pins.txt
 
-# 	patches/     - functional changes to upstream source; hand-written, only
-# 	               ever verified to still apply.
-# 	dep-patches/ - go.mod/go.sum dependency pins derived from $(DEP_PINS);
-# 	               regenerated, not edited.
+# 	patches/ holds one directory per class, applied in name order:
+# 	  01-custom-patches/   - hand-written; only ever verified to still apply.
+# 	  02-auto-gen-patches/ - derived from $(DEP_PINS); regenerated as a whole
+# 	                         directory, not edited.
 #
-# 	-F0 drops patch's default fuzz, so a stale patch fails instead of landing
-# 	somewhere approximate. Applied by separate targets so the generator can
-# 	start from a tree with the functional patches but not the derived ones --
-# 	the state it needs when the derived patch no longer applies.
+# 	Order matters: the baseline is taken after 01, so 02 is a delta on top of
+# 	it. They are applied by separate targets so the generator can start from a
+# 	tree with 01 but not 02 -- the state it needs when 02 no longer applies.
+# 	-F0 drops patch's default fuzz: a stale patch fails rather than landing
+# 	somewhere approximate.
 
-# 	Upstream at the pinned tag with the functional patches applied. Removed
-# 	first so a re-extraction cannot mix in files, or a stale baseline, from an
-# 	older tag.
+# 	Upstream at the pinned tag with the custom patches applied. Removed first
+# 	so a re-extraction cannot mix in files, or a stale baseline, from an older
+# 	tag.
 $(ENVOY_GATEWAY_FETCHED):
 	rm -rf envoy-gateway && mkdir -p envoy-gateway
 	curl -sSfL --retry 5 -o /tmp/envoy-gateway.tar.gz https://github.com/envoyproxy/gateway/archive/refs/tags/$(ENVOY_GATEWAY_VERSION).tar.gz
 	tar xz --strip-components 1 -C envoy-gateway -f /tmp/envoy-gateway.tar.gz && rm -f /tmp/envoy-gateway.tar.gz
-	for patch in patches/*.patch; do \
+	for patch in patches/01-custom-patches/*.patch; do \
 		if [ -f "$$patch" ]; then \
 			patch -d envoy-gateway -p1 -F0 < "$$patch" || exit 1; \
 		fi; \
@@ -56,24 +57,24 @@ init-source: $(ENVOY_GATEWAY_DOWNLOADED)
 $(ENVOY_GATEWAY_DOWNLOADED): $(ENVOY_GATEWAY_FETCHED)
 # 	Reset to the fetch-time baseline so re-applying is idempotent.
 	cd envoy-gateway && git checkout -- go.mod go.sum
-	for patch in dep-patches/*.patch; do \
+	for patch in patches/02-auto-gen-patches/*.patch; do \
 		if [ -f "$$patch" ]; then \
 			patch -d envoy-gateway -p1 -F0 < "$$patch" || exit 1; \
 		fi; \
 	done
 	touch $@
 
-# 	Rebuild dep-patches/ from $(DEP_PINS), in the pinned Go toolchain --
+# 	Rebuild patches/02-auto-gen-patches/ from $(DEP_PINS), in the pinned Go toolchain --
 # 	go mod tidy's output depends on the Go version.
 .PHONY: regen-dep-patches
 regen-dep-patches: $(ENVOY_GATEWAY_FETCHED)
-	$(DOCKER_GO_BUILD) ../../hack/thirdparty/regen-dep-patch.sh envoy-gateway $(DEP_PINS) dep-patches/0001-CVE-dependency-fixes.patch
+	$(DOCKER_GO_BUILD) ../../hack/thirdparty/regen-dep-patch.sh envoy-gateway $(DEP_PINS) patches/02-auto-gen-patches/0001-cve-dependency-fixes.patch
 
 # 	Fail if the checked-in patch is not what the pins produce.
 .PHONY: check-dep-patches
 check-dep-patches: regen-dep-patches
-	@git diff --exit-code -- dep-patches || { \
-		echo "ERROR: dep-patches/ is not what $(DEP_PINS) produces."; \
+	@git diff --exit-code -- patches/02-auto-gen-patches || { \
+		echo "ERROR: patches/02-auto-gen-patches/ is not what $(DEP_PINS) produces."; \
 		echo "Run 'make -C third_party/envoy-gateway regen-dep-patches' and commit the result."; \
 		exit 1; \
 	}

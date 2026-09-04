@@ -45,21 +45,29 @@ init-ztunnel-source: $(ZTUNNEL_DOWNLOADED)
 # race on creating the shared stamp files.
 init-sources: $(ISTIO_DOWNLOADED) $(ZTUNNEL_DOWNLOADED)
 
-# 	patches/         - functional changes to the istio tree; hand-written.
-# 	dep-patches/     - go.mod/go.sum pins derived from $(DEP_PINS).
-# 	ztunnel-patches/ - functional changes to the separate ztunnel tree.
+# 	Each tree has its own patch root holding one directory per class, applied
+# 	in name order:
+# 	  patches/01-custom-patches/   - hand-written changes to the istio tree.
+# 	  patches/02-auto-gen-patches/ - derived from $(DEP_PINS); regenerated as a
+# 	                                 whole directory, not edited.
+# 	  ztunnel-patches/01-custom-patches/ - the same, for the ztunnel tree.
 #
-# 	-F0 drops patch's default fuzz, so a stale patch fails instead of landing
-# 	somewhere approximate. Functional and derived patches are applied by
-# 	separate targets so the generator can start from a tree with the former but
-# 	not the latter. Trees are removed before extraction so a re-extraction
-# 	cannot mix in files, or a stale baseline, from an older tag.
+# 	Order matters: the baseline is taken after 01, so 02 is a delta on top of
+# 	it. They are applied by separate targets so the generator can start from a
+# 	tree with 01 but not 02. Trees are removed before extraction so a
+# 	re-extraction cannot mix in files, or a stale baseline, from an older tag.
+# 	-F0 drops patch's default fuzz: a stale patch fails rather than landing
+# 	somewhere approximate.
 $(ISTIO_FETCHED):
 	rm -rf istio && mkdir -p istio
 	curl -sSfL --retry 5 --retry-all-errors -o /tmp/calico-istio.tar.gz https://github.com/istio/istio/archive/refs/tags/$(ISTIO_VERSION).tar.gz
 	tar xz --strip-components=1 -C istio -f /tmp/calico-istio.tar.gz
 	rm -f /tmp/calico-istio.tar.gz
-	patch -d istio -p1 -F0 < patches/0001-feat-cni-DSCP-magic-mark-support-for-transparent-net.patch
+	for patch in patches/01-custom-patches/*.patch; do \
+		if [ -f "$$patch" ]; then \
+			patch -d istio -p1 -F0 < "$$patch" || exit 1; \
+		fi; \
+	done
 # 	Record what the generator diffs against, before any dependency patch lands.
 	../hack/thirdparty/init-dep-baseline.sh istio
 	touch $@
@@ -67,24 +75,24 @@ $(ISTIO_FETCHED):
 $(ISTIO_DOWNLOADED): $(ISTIO_FETCHED)
 # 	Reset to the fetch-time baseline so re-applying is idempotent.
 	cd istio && git checkout -- go.mod go.sum
-	for patch in dep-patches/*.patch; do \
+	for patch in patches/02-auto-gen-patches/*.patch; do \
 		if [ -f "$$patch" ]; then \
 			patch -d istio -p1 -F0 < "$$patch" || exit 1; \
 		fi; \
 	done
 	touch $@
 
-# 	Rebuild dep-patches/ from $(DEP_PINS), in the pinned Go toolchain --
+# 	Rebuild patches/02-auto-gen-patches/ from $(DEP_PINS), in the pinned Go toolchain --
 # 	go mod tidy's output depends on the Go version.
 .PHONY: regen-dep-patches
 regen-dep-patches: $(ISTIO_FETCHED)
-	$(DOCKER_GO_BUILD) ../hack/thirdparty/regen-dep-patch.sh istio $(DEP_PINS) dep-patches/0003-Update-deps-for-CVE-fixes.patch
+	$(DOCKER_GO_BUILD) ../hack/thirdparty/regen-dep-patch.sh istio $(DEP_PINS) patches/02-auto-gen-patches/0001-cve-dependency-fixes.patch
 
 # 	Fail if the checked-in patch is not what the pins produce.
 .PHONY: check-dep-patches
 check-dep-patches: regen-dep-patches
-	@git diff --exit-code -- dep-patches || { \
-		echo "ERROR: dep-patches/ is not what $(DEP_PINS) produces."; \
+	@git diff --exit-code -- patches/02-auto-gen-patches || { \
+		echo "ERROR: patches/02-auto-gen-patches/ is not what $(DEP_PINS) produces."; \
 		echo "Run 'make -C istio regen-dep-patches' and commit the result."; \
 		exit 1; \
 	}
@@ -94,7 +102,11 @@ $(ZTUNNEL_DOWNLOADED):
 	curl -sSfL --retry 5 --retry-all-errors -o /tmp/calico-ztunnel.tar.gz https://github.com/istio/ztunnel/archive/refs/tags/$(ISTIO_VERSION).tar.gz
 	tar xz --strip-components=1 -C ztunnel -f /tmp/calico-ztunnel.tar.gz
 	rm -f /tmp/calico-ztunnel.tar.gz
-	patch -d ztunnel -p1 -F0 < ztunnel-patches/0002-transparent-policies.patch
+	for patch in ztunnel-patches/01-custom-patches/*.patch; do \
+		if [ -f "$$patch" ]; then \
+			patch -d ztunnel -p1 -F0 < "$$patch" || exit 1; \
+		fi; \
+	done
 	touch $@
 
 ###############################################################################

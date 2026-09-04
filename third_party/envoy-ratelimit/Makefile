@@ -24,22 +24,23 @@ ENVOY_RATELIMIT_DOWNLOADED=.envoy-ratelimit.downloaded
 
 DEP_PINS=dep-pins.txt
 
-# 	patches/     - functional changes to upstream source; hand-written, only
-# 	               ever verified to still apply.
-# 	dep-patches/ - go.mod/go.sum dependency pins derived from $(DEP_PINS);
-# 	               regenerated, not edited.
+# 	patches/ holds one directory per class, applied in name order:
+# 	  01-custom-patches/   - hand-written; only ever verified to still apply.
+# 	  02-auto-gen-patches/ - derived from $(DEP_PINS); regenerated as a whole
+# 	                         directory, not edited.
 #
-# 	-F0 drops patch's default fuzz, so a stale patch fails instead of landing
-# 	somewhere approximate. Applied by separate targets so the generator can
-# 	start from a tree with the functional patches but not the derived ones --
-# 	the state it needs when the derived patch no longer applies.
+# 	Order matters: the baseline is taken after 01, so 02 is a delta on top of
+# 	it. They are applied by separate targets so the generator can start from a
+# 	tree with 01 but not 02 -- the state it needs when 02 no longer applies.
+# 	-F0 drops patch's default fuzz: a stale patch fails rather than landing
+# 	somewhere approximate.
 
-# 	Upstream at the pinned ref with the functional patches applied -- none
-# 	today, so patches/ does not exist and the -f guard skips it.
+# 	Upstream at the pinned ref with class 01 applied -- there is none today,
+# 	so 01-custom-patches/ does not exist and the -f guard skips it.
 $(ENVOY_RATELIMIT_FETCHED):
 	git clone -n https://github.com/envoyproxy/ratelimit.git envoy-ratelimit
 	cd envoy-ratelimit && git checkout $(ENVOY_RATELIMIT_VERSION)
-	for patch in patches/*.patch; do \
+	for patch in patches/01-custom-patches/*.patch; do \
 		if [ -f "$$patch" ]; then \
 			patch -d envoy-ratelimit -p1 -F0 < "$$patch" || exit 1; \
 		fi; \
@@ -54,24 +55,24 @@ init-source: $(ENVOY_RATELIMIT_DOWNLOADED)
 $(ENVOY_RATELIMIT_DOWNLOADED): $(ENVOY_RATELIMIT_FETCHED)
 # 	Reset to the pinned ref so re-applying is idempotent.
 	cd envoy-ratelimit && git checkout -- go.mod go.sum
-	for patch in dep-patches/*.patch; do \
+	for patch in patches/02-auto-gen-patches/*.patch; do \
 		if [ -f "$$patch" ]; then \
 			patch -d envoy-ratelimit -p1 -F0 < "$$patch" || exit 1; \
 		fi; \
 	done
 	touch $@
 
-# 	Rebuild dep-patches/ from $(DEP_PINS), in the pinned Go toolchain --
+# 	Rebuild patches/02-auto-gen-patches/ from $(DEP_PINS), in the pinned Go toolchain --
 # 	go mod tidy's output depends on the Go version.
 .PHONY: regen-dep-patches
 regen-dep-patches: $(ENVOY_RATELIMIT_FETCHED)
-	$(DOCKER_GO_BUILD) ../../hack/thirdparty/regen-dep-patch.sh envoy-ratelimit $(DEP_PINS) dep-patches/0001-CVE-dependency-fixes.patch
+	$(DOCKER_GO_BUILD) ../../hack/thirdparty/regen-dep-patch.sh envoy-ratelimit $(DEP_PINS) patches/02-auto-gen-patches/0001-cve-dependency-fixes.patch
 
 # 	Fail if the checked-in patch is not what the pins produce.
 .PHONY: check-dep-patches
 check-dep-patches: regen-dep-patches
-	@git diff --exit-code -- dep-patches || { \
-		echo "ERROR: dep-patches/ is not what $(DEP_PINS) produces."; \
+	@git diff --exit-code -- patches/02-auto-gen-patches || { \
+		echo "ERROR: patches/02-auto-gen-patches/ is not what $(DEP_PINS) produces."; \
 		echo "Run 'make -C third_party/envoy-ratelimit regen-dep-patches' and commit the result."; \
 		exit 1; \
 	}
