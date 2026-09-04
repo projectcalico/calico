@@ -34,23 +34,25 @@ var (
 	imagesDigestResolver images.DigestResolver = registry.ResolveDigest
 )
 
-func imagesCommand(cfg *Config) *cli.Command {
-	return &cli.Command{
-		Name:  "images",
-		Usage: "Build and publish container images",
-		Commands: []*cli.Command{
-			imagesBuildCommand(cfg),
-			imagesPublishCommand(cfg),
-		},
+var imagesSubCommands = func(cfg *Config) []*cli.Command {
+	return []*cli.Command{
+		imagesBuildCommand(cfg),
+		imagesPublishCommand(cfg),
 	}
 }
 
-func imagesBuildCommand(cfg *Config) *cli.Command {
+func imagesCommand(cfg *Config) *cli.Command {
 	return &cli.Command{
-		Name:  "build",
-		Usage: "Build container images",
-		Flags: []cli.Flag{registryFlag, archFlag, imageReleaseDirsFlag},
-		Action: func(_ context.Context, c *cli.Command) error {
+		Name:     "images",
+		Usage:    "Build and publish container images",
+		Commands: imagesSubCommands(cfg),
+	}
+}
+
+var (
+	imagesBuildFlags  = []cli.Flag{registryFlag, archFlag, imageReleaseDirsFlag}
+	imagesBuildAction = func(cfg *Config) func(ctx context.Context, c *cli.Command) error {
+		return func(ctx context.Context, c *cli.Command) error {
 			configureLogging("images-build.log")
 			ver, _, err := version.VersionsFromManifests(cfg.RepoRootDir)
 			if err != nil {
@@ -64,19 +66,26 @@ func imagesBuildCommand(cfg *Config) *cli.Command {
 				images.WithArches(c.StringSlice(archFlag.Name)...),
 				images.WithLogsDir(cfg.LogsDir),
 			)
-		},
+		}
+	}
+)
+
+func imagesBuildCommand(cfg *Config) *cli.Command {
+	return &cli.Command{
+		Name:   "build",
+		Usage:  "Build container images",
+		Flags:  imagesBuildFlags,
+		Action: imagesBuildAction(cfg),
 	}
 }
 
-func imagesPublishCommand(cfg *Config) *cli.Command {
-	return &cli.Command{
-		Name:  "publish",
-		Usage: "Publish container images to their registries",
-		Flags: append([]cli.Flag{
-			registryFlag, archFlag, localFlag, imageReleaseDirsFlag,
-			fromRegistryFlag, fromTagFlag, skipDevImageRetagFlag, forceFlag,
-		}, imageScanFlags...),
-		Action: func(_ context.Context, c *cli.Command) error {
+var (
+	imagesPublishFlags = append([]cli.Flag{
+		registryFlag, archFlag, localFlag, imageReleaseDirsFlag,
+		fromRegistryFlag, fromTagFlag, skipDevImageRetagFlag, forceFlag,
+	}, imageScanFlags...)
+	imagesPublishAction = func(cfg *Config) func(ctx context.Context, c *cli.Command) error {
+		return func(_ context.Context, c *cli.Command) error {
 			configureLogging("images-publish.log")
 			ver, _, err := version.VersionsFromManifests(cfg.RepoRootDir)
 			if err != nil {
@@ -132,14 +141,22 @@ func imagesPublishCommand(cfg *Config) *cli.Command {
 				images.NarrowVariants(images.PublishVariants, dirs),
 				!c.Bool(localFlag.Name), imagesDigestResolver, opts...,
 			)
-		},
+		}
+	}
+)
+
+func imagesPublishCommand(cfg *Config) *cli.Command {
+	return &cli.Command{
+		Name:   "publish",
+		Usage:  "Publish container images to their registries",
+		Flags:  imagesPublishFlags,
+		Action: imagesPublishAction(cfg),
 	}
 }
 
-// scanRequest is the scan submission for a standalone publish, or nil when
-// scanning is off. Such a publish is always a release; a hashrelease is scanned
-// by the flow that built it. The image list runs make in every release
-// directory, so it is resolved only when a scan is wanted.
+// A standalone publish is always a release; a hashrelease is scanned by the
+// flow that built it. The image list runs make in every release directory, so
+// it is resolved only when a scan is wanted.
 func scanRequest(c *cli.Command, cfg *Config, dirs []string, stream, productCode string) (*images.ScanRequest, error) {
 	if !c.Bool(imageScanFlag.Name) {
 		return nil, nil
