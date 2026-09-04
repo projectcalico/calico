@@ -158,7 +158,9 @@ $(LIBBPF_FILE_CREATED):
 	fi
 	rm -rf $(LIBBPF_DIR) .libbpf-*
 	@n=1; until env -u GIT_DIR -u GIT_WORK_TREE GIT_TERMINAL_PROMPT=0 \
-	    git -c http.version=HTTP/1.1 clone --depth 1 --branch $(LIBBPF_VERSION) $(LIBBPF_REPO); do \
+	    git -c http.version=HTTP/1.1 \
+	    $${GITHUB_TOKEN:+-c credential.https://github.com.helper='!f() { echo username=x-access-token; echo "password=$$GITHUB_TOKEN"; }; f'} \
+	    clone --depth 1 --branch $(LIBBPF_VERSION) $(LIBBPF_REPO); do \
 		if [ $$n -ge 3 ]; then exit 1; fi; \
 		echo "libbpf clone failed, retrying in $$((n * 30))s..." >&2; \
 		rm -rf $(LIBBPF_DIR); \

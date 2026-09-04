@@ -34,6 +34,14 @@ cd "$dest"
 git init -q .
 # GitHub throttles HTTP/2 harder than HTTP/1.1.
 git config http.version HTTP/1.1
+# GitHub raises its limits and relaxes abuse prevention for authenticated
+# traffic, so send GITHUB_TOKEN when there is one. The helper reads it at call
+# time, keeping it out of argv and off disk; unset, the fetch stays anonymous.
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+	# shellcheck disable=SC2016  # git expands $GITHUB_TOKEN, not this shell
+	git config credential."https://github.com".helper \
+		'!f() { echo username=x-access-token; echo "password=$GITHUB_TOKEN"; }; f'
+fi
 # Every run: a directory left by an earlier build may have a stale origin.
 git remote add origin "$repo" 2>/dev/null || git remote set-url origin "$repo"
 

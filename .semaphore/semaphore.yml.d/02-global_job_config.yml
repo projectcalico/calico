@@ -2,6 +2,9 @@ global_job_config:
   secrets:
     - name: docker-hub
     - name: google-service-account-for-gce
+    # GitHub raises its limits and relaxes abuse prevention for authenticated
+    # traffic, so clones from the shared runner IPs are less likely to throttle.
+    - name: marvin-github-token
   env_vars:
     - name: GOOGLE_PROJECT
       value: unique-caldron-775
@@ -13,6 +16,7 @@ global_job_config:
       value: when-trimmed
   prologue:
     commands:
+      - export GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN}
       - export CALICO_DIR_NAME=${SEMAPHORE_GIT_DIR}
       - export GCS_CACHE_DIR=gs://$GCS_BUILD_CACHE_BUCKET/cache/${CALICO_DIR_NAME}
       - export GCS_WORKFLOW_DIR=gs://$GCS_BUILD_CACHE_BUCKET/workflow/${SEMAPHORE_WORKFLOW_ID}
