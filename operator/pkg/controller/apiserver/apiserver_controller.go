@@ -391,7 +391,6 @@ func (r *ReconcileAPIServer) Reconcile(ctx context.Context, request reconcile.Re
 		PullSecrets:                  pullSecrets,
 		OpenShift:                    r.opts.DetectedProvider.IsOpenShift(),
 		TrustedBundle:                trustedBundle,
-		MultiTenant:                  r.opts.MultiTenant,
 		KubernetesVersion:            r.opts.KubernetesVersion,
 		ClusterDomain:                r.opts.ClusterDomain,
 		RequiresAggregationServer:    !r.opts.UseV3CRDs,

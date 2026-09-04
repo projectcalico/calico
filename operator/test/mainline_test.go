@@ -56,9 +56,6 @@ const (
 
 	WhiskerCRDExists    = true
 	WhiskerCRDNotExists = false
-
-	MultiTenant  = true
-	SingleTenant = false
 )
 
 var _ = Describe("Mainline component function tests", func() {
@@ -69,7 +66,7 @@ var _ = Describe("Mainline component function tests", func() {
 	var operatorDone chan struct{}
 
 	BeforeEach(func() {
-		c, shutdownContext, cancel, mgr = setupManager(ManageCRDsDisable, SingleTenant, operator.Calico)
+		c, shutdownContext, cancel, mgr = setupManager(ManageCRDsDisable, operator.Calico)
 
 		By("Cleaning up resources before the test")
 		cleanupResources(c)
@@ -230,13 +227,6 @@ var _ = Describe("Mainline component function tests", func() {
 	})
 })
 
-var _ = Describe("Mainline component function tests - multi-tenant", func() {
-	It("should set up all controllers correctly in multi-tenant mode", func() {
-		_, _, cancel, _ := setupManager(ManageCRDsDisable, MultiTenant, operator.Calico)
-		cancel()
-	})
-})
-
 func getTigeraStatus(client client.Client, name string) (*operator.TigeraStatus, error) {
 	ts := &operator.TigeraStatus{ObjectMeta: metav1.ObjectMeta{Name: name}}
 	err := client.Get(context.TODO(), types.NamespacedName{Name: name}, ts)
@@ -328,7 +318,7 @@ func setupManagerNoControllers() (client.Client, *kubernetes.Clientset, manager.
 	return mgr.GetClient(), clientset, mgr
 }
 
-func setupManager(manageCRDs bool, multiTenant bool, variant operator.ProductVariant) (client.Client, context.Context, context.CancelFunc, manager.Manager) {
+func setupManager(manageCRDs bool, variant operator.ProductVariant) (client.Client, context.Context, context.CancelFunc, manager.Manager) {
 	client, clientset, mgr := setupManagerNoControllers()
 
 	// Setup all Controllers
@@ -339,7 +329,6 @@ func setupManager(manageCRDs bool, multiTenant bool, variant operator.ProductVar
 		ManageCRDs:       manageCRDs,
 		ShutdownContext:  ctx,
 		K8sClientset:     clientset,
-		MultiTenant:      multiTenant,
 	})
 	Expect(err).NotTo(HaveOccurred())
 

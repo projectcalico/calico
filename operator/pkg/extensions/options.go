@@ -45,29 +45,6 @@ type ControllerOptions struct {
 	// Kubernetes clientset used by controllers to create watchers and informers.
 	K8sClientset *kubernetes.Clientset
 
-	// Whether or not the operator is running in multi-tenant mode.
-	// When true, this means some CRDs are installed as namespace scoped
-	// instead of cluster scoped.
-	MultiTenant bool
-
-	// Whether or not the operator is running in a management cluster configured to
-	// use external elasticsearch. When set, the operator will not install Elasticsearch
-	// and instead will configure the cluster to use an external Elasticsearch.
-	ElasticExternal bool
-
-	// Cloud indicates the operator is running in a Calico Cloud management cluster. When set,
-	// controllers activate cloud-specific behavior (cloud render decorations, cloud config maps,
-	// etc.). When false the operator behaves as a regular Calico/Calico Enterprise install.
-	Cloud bool
-
-	// ESMigration is enabled in the last phase of an ES migration, when we need to keep both an
-	// LSS configuration and internal elasticsearch running. Only meaningful when Cloud is set.
-	ESMigration bool
-
-	// UseSingleIndex is enabled in the last phase of an index migration for a single tenant cluster,
-	// during which the operator reconfigures log storage to use the single-index names.
-	UseSingleIndex bool
-
 	// Whether or not to use crd.projectcalico.org/v1 or projectcalico.org/v3 for Calico CRDs.
 	UseV3CRDs bool
 

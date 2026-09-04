@@ -20,6 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -36,20 +37,12 @@ func (s startupStub) VerifyAPIsExist(kubernetes.Interface) error {
 	return nil
 }
 
-func (s startupStub) VerifyClusterState(context.Context, kubernetes.Interface, bool, bool) error {
+func (s startupStub) VerifyClusterState(context.Context, kubernetes.Interface, *corev1.ConfigMap) error {
 	return nil
 }
 
 func (s startupStub) ProtectedNamespaces() []string {
 	return nil
-}
-
-func (s startupStub) MultiTenant() bool {
-	return false
-}
-
-func (s startupStub) Cloud() bool {
-	return false
 }
 
 func (s startupStub) Controllers() []extensions.Controller {

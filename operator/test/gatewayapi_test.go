@@ -67,7 +67,6 @@ var _ = Describe("GatewayAPI tests", func() {
 			ManageCRDs:       ManageCRDsDisable,
 			ShutdownContext:  shutdownContext,
 			K8sClientset:     clientset,
-			MultiTenant:      SingleTenant,
 		})
 		Expect(err).NotTo(HaveOccurred())
 

@@ -16,6 +16,7 @@ package tiers
 
 import (
 	"context"
+	"errors"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
@@ -151,6 +152,26 @@ var _ = Describe("tier controller tests", func() {
 		Expect(cfg.CalicoNamespaces).To(Equal([]string{common.CalicoNamespace, "tigera-manager", "tigera-prometheus"}))
 	})
 
+	It("runs the extension's own tier work before rendering", func() {
+		ext := &recordingTiers{}
+		r.opts.Extensions = extensions.New(extensions.Set{Tiers: ext})
+		mockStatus.On("ReadyToMonitor")
+		mockStatus.On("ClearDegraded")
+
+		_, err := r.Reconcile(ctx, reconcile.Request{})
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(ext.called).To(BeTrue())
+	})
+
+	It("degrades when the extension's tier work fails", func() {
+		r.opts.Extensions = extensions.New(extensions.Set{Tiers: &recordingTiers{err: errors.New("patch failed")}})
+		mockStatus.On("SetDegraded", operatorv1.ResourcePatchError, "Error patching tier", mock.Anything, mock.Anything).Return()
+
+		_, err := r.Reconcile(ctx, reconcile.Request{})
+		Expect(err).ShouldNot(HaveOccurred())
+		mockStatus.AssertExpectations(GinkgoT())
+	})
+
 	It("allows DNS access to the core namespace alone when the variant contributes none", func() {
 		cfg, res := r.prepareTiersConfig(ctx, logr.Discard())
 		Expect(res).To(BeNil())
@@ -165,4 +186,23 @@ func (dnsClientNamespaces) Watches(ctrlruntime.Controller) error { return nil }
 
 func (n dnsClientNamespaces) DNSClientNamespaces(context.Context, client.Client) ([]string, error) {
 	return n, nil
+}
+
+func (dnsClientNamespaces) Reconcile(context.Context, client.Client) error { return nil }
+
+// recordingTiers is a variant that only reports whether its tier work ran.
+type recordingTiers struct {
+	called bool
+	err    error
+}
+
+func (recordingTiers) Watches(ctrlruntime.Controller) error { return nil }
+
+func (recordingTiers) DNSClientNamespaces(context.Context, client.Client) ([]string, error) {
+	return nil, nil
+}
+
+func (t *recordingTiers) Reconcile(context.Context, client.Client) error {
+	t.called = true
+	return t.err
 }

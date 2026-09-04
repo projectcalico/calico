@@ -441,8 +441,6 @@ admission policy installation; once an Installation exists it is the authority o
 		setupLog.Error(err, "Failed to build the variant's extensions")
 		os.Exit(1)
 	}
-	setupLog.WithValues("tenancy", extensionRegistry.Startup().MultiTenant()).Info("Checking tenancy mode")
-
 	// The variant's controllers can't register without their APIs. Exiting lets the kubelet
 	// retry us once the CRDs are installed.
 	if err := extensionRegistry.Startup().VerifyAPIsExist(cs); err != nil {
@@ -535,17 +533,9 @@ admission policy installation; once an Installation exists it is the authority o
 		}
 	}
 
-	elasticIsMigrating := false
-	useSingleIndex := false
-	useExternalElastic := discovery.UseExternalElastic(bootConfig)
-
-	if extensionRegistry.Startup().Cloud() {
-		elasticIsMigrating = discovery.ElasticIsMigrating(bootConfig)
-		useSingleIndex = discovery.UseSingleIndex(bootConfig)
-		if err := extensionRegistry.Startup().VerifyClusterState(ctx, cs, elasticIsMigrating, useExternalElastic); err != nil {
-			setupLog.Error(err, "Cluster state verification failed")
-			os.Exit(1)
-		}
+	if err := extensionRegistry.Startup().VerifyClusterState(ctx, cs, bootConfig); err != nil {
+		setupLog.Error(err, "Cluster state verification failed")
+		os.Exit(1)
 	}
 
 	// Start a watch on our bootstrap configmap so we can restart if it changes.
@@ -568,11 +558,6 @@ admission policy installation; once an Installation exists it is the authority o
 		ManageCRDs:        manageCRDs,
 		ShutdownContext:   ctx,
 		K8sClientset:      clientset,
-		MultiTenant:       extensionRegistry.Startup().MultiTenant(),
-		ElasticExternal:   useExternalElastic,
-		Cloud:             extensionRegistry.Startup().Cloud(),
-		ESMigration:       elasticIsMigrating,
-		UseSingleIndex:    useSingleIndex,
 		UseV3CRDs:         v3CRDs,
 		APIDiscovery:      apiDiscovery,
 		Extensions:        extensionRegistry,

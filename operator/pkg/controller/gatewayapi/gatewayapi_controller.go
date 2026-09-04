@@ -78,7 +78,6 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		clusterDomain:       opts.ClusterDomain,
 		variant:             opts.Variant,
 		ext:                 opts.Extensions.GatewayAPI(),
-		multiTenant:         opts.MultiTenant,
 		newComponentHandler: utils.NewComponentHandler,
 	}
 	r.status.Run(opts.ShutdownContext)
@@ -183,7 +182,6 @@ type ReconcileGatewayAPI struct {
 	clusterDomain       string
 	variant             operatorv1.ProductVariant
 	ext                 extensions.GatewayAPIExtension
-	multiTenant         bool
 	newComponentHandler func(log logr.Logger, client client.Client, scheme *runtime.Scheme, cr metav1.Object, opts ...utils.ComponentHandlerOption) utils.ComponentHandler
 	watchEnvoyProxy     func(namespacedName operatorv1.NamespacedName) error
 	watchEnvoyGateway   func(namespacedName operatorv1.NamespacedName) error
