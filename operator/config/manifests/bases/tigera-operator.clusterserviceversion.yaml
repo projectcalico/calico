@@ -3,7 +3,7 @@
 # reads this file and overlays the generated deployment, RBAC and CRD data onto
 # it. Only values that cannot be known until build time (image digests, version,
 # replaces, createdAt, architecture labels) are applied afterwards by
-# hack/gen-bundle/update-bundle.sh.
+# hack/gen-bundle/update.go.
 #
 # IMPORTANT: metadata.name must be "<package>.v<semver>", where <package> matches
 # the --package argument of `operator-sdk generate bundle` (tigera-operator).
@@ -181,8 +181,8 @@ spec:
   provider:
     name: Tigera
     url: https://tigera.io/
-  # relatedImages is required for a certified bundle. update-bundle.sh replaces
-  # this entry with the digest-pinned operator image at build time.
+  # relatedImages is required for a certified bundle. gen-bundle replaces this
+  # entry with the digest-pinned operator image at build time.
   relatedImages:
     - name: tigera-operator
       image: quay.io/tigera/operator

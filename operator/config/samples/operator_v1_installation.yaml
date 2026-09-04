@@ -1,5 +1,5 @@
 # This sample is also the Installation entry in the OpenShift bundle's
-# alm-examples annotation (see hack/gen-bundle/get-manifests.sh), so it has to
+# alm-examples annotation (see hack/gen-bundle/manifests.go), so it has to
 # stay valid as an OpenShift install-time example.
 apiVersion: operator.tigera.io/v1
 kind: Installation

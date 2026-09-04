@@ -1,5 +1,5 @@
 # This sample is also the ImageSet entry in the OpenShift bundle's alm-examples
-# annotation (see hack/gen-bundle/get-manifests.sh).
+# annotation (see hack/gen-bundle/manifests.go).
 #
 # The name must be "<variant>-<release>", where <release> matches the version of
 # the variant that the operator is built to deploy. Digests must be full sha256
