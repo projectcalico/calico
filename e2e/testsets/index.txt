@@ -233,3 +233,8 @@
 .semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / v3.28 regression test | vpp/vpp-encap-extnode | 126
 .semaphore/end-to-end/pipelines/windows.yml | Calico Windows / azr-aks, 2022, stable-1, iptables, no encap, azure CNI | windows/aks-xtables-nobgp | 8
 .semaphore/end-to-end/pipelines/windows.yml | Calico Windows / azr-aso, 2022, stable, nftables, vxlan | windows/xtables-encap | 8
+.semaphore/semaphore.yml.d/blocks/20-e2e-gcp.yml | E2E tests on GCP kubeadm (local binary) / gcp-kubeadm - e2e local binary | gcp/bpf | 124
+.semaphore/semaphore.yml.d/blocks/20-e2e.yml | E2E tests (KinD) / E2E tests: Conformance (cluster routing: BIRD) | kind/conformance | 77
+.semaphore/semaphore.yml.d/blocks/20-e2e.yml | E2E tests (KinD) / E2E tests: Conformance (cluster routing: Felix) | kind/felix-routing | 78
+.semaphore/semaphore.yml.d/blocks/20-e2e.yml | E2E tests (KinD) / E2E tests: sig-calico (dataplane: BPF) | kind/bpf | 124
+.semaphore/semaphore.yml.d/blocks/20-kubevirt-live-migration.yml | KubeVirt live migration (KIND) / KubeVirt live migration (KIND) | kind/kubevirt | 11

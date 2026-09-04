@@ -232,9 +232,9 @@ push-chart: bin/helm
 ###############################################################################
 E2E_PROCS ?= 4
 E2E_TIMEOUT ?= 90m
-# Local-development default only. CI never reaches it: run_tests.sh always passes
-# E2E_TEST_CONFIG on make's command line, and a command-line assignment overrides
-# ?= even when its value is empty.
+# The conformance kind lane relies on this default. The provisioned lanes never
+# reach it: run_tests.sh always passes E2E_TEST_CONFIG on make's command line,
+# and a command-line assignment overrides ?= even when its value is empty.
 E2E_TEST_CONFIG ?= e2e/config/kind/conformance.yaml
 E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
