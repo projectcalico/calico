@@ -64,9 +64,6 @@ promotions:
     pipeline_file: license-scanning/fossa-scan.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
-  # Auto-fires (unlike the component pushes above) because the e2e lanes pull
-  # these images by branch tag at test time, so a merge that changes one and does
-  # not publish it leaves every lane running the previous build.
   - name: Push E2E images
     pipeline_file: push-images/e2e-test.yml
     auto_promote:
