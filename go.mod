@@ -1,6 +1,6 @@
 module github.com/projectcalico/calico
 
-go 1.25.14
+go 1.26.0
 
 require (
 	cloud.google.com/go/storage v1.57.1
@@ -351,7 +351,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
-	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93 // indirect
 	golang.org/x/term v0.45.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect
