@@ -5582,8 +5582,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// entry, not in the rule.
 				//
 				// Pinned to one matrix point to keep the cost down.  Neither DSR nor the
-				// tunnel affects the pod-to-ClusterIP path.
-				if testOpts.dsr && testOpts.tunnel == "none" {
+				// tunnel affects the pod-to-ClusterIP path.  The addresses and the rules
+				// below are v4, hence the explicit IPv6 exclusion.
+				if testOpts.dsr && !testOpts.ipv6 && testOpts.tunnel == "none" {
 					const (
 						migrationSvcIP   = "10.101.0.99"
 						migrationSvcPort = 8090
@@ -5618,19 +5619,15 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						kubeProxyMarker = "kube-proxy"
 						dumpRulesCmd = []string{"nft", "list", "ruleset"}
 					}
-					dumpRules := func(felix *infrastructure.Felix) func() string {
-						return func() string {
-							out, _ := felix.ExecOutput(dumpRulesCmd...)
-							return out
-						}
-					}
-
 					verifySvcConnectivityWhileEnablingBPF := func(client, backend *workload.Workload) {
 						By("Creating the service")
+						// Must agree with the DNAT target below, which uses the same port.
+						backendPort, err := strconv.Atoi(backend.Ports)
+						Expect(err).NotTo(HaveOccurred())
 						testSvc := k8sService("migration-svc", migrationSvcIP, backend,
-							migrationSvcPort, 8055, 0, testOpts.protocol)
+							migrationSvcPort, backendPort, 0, testOpts.protocol)
 						k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
-						_, err := k8sClient.CoreV1().Services(testSvc.Namespace).Create(
+						_, err = k8sClient.CoreV1().Services(testSvc.Namespace).Create(
 							context.Background(), testSvc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
 						Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(1),
@@ -5640,7 +5637,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						installKubeProxyService(tc.Felixes[0], backend)
 						// Also proves the dump command works, so that the check for
 						// their removal below cannot pass vacuously.
-						Expect(dumpRules(tc.Felixes[0])()).To(ContainSubstring(kubeProxyMarker))
+						Expect(tc.Felixes[0].ExecOutputFn(dumpRulesCmd...)()).
+							To(ContainSubstring(kubeProxyMarker))
 
 						By("Starting persistent connection via the service")
 						pc = client.StartPersistentConnection(migrationSvcIP, migrationSvcPort,
@@ -5652,7 +5650,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						By("having initial connectivity", expectPongs)
 						By("enabling BPF mode", enableBPF) // Waits for BPF programs to be installed
 						By("removing the kube-proxy rules", func() {
-							Eventually(dumpRules(tc.Felixes[0]), "30s", "1s").
+							Eventually(tc.Felixes[0].ExecOutputFn(dumpRulesCmd...), "30s", "1s").
 								ShouldNot(ContainSubstring(kubeProxyMarker))
 						})
 						By("still having connectivity on the existing connection", expectPongs)
