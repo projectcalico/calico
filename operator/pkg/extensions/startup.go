@@ -17,6 +17,7 @@ package extensions
 import (
 	"context"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -29,18 +30,16 @@ type StartupExtension interface {
 	VerifyAPIsExist(cs kubernetes.Interface) error
 
 	// VerifyClusterState rejects a cluster whose existing state contradicts the
-	// configuration the operator was given.
-	VerifyClusterState(ctx context.Context, cs kubernetes.Interface, migrating, external bool) error
+	// bootstrap configuration the operator was given.
+	VerifyClusterState(ctx context.Context, cs kubernetes.Interface, bootConfig *corev1.ConfigMap) error
 
 	// ProtectedNamespaces are the namespaces the variant manages. The operator must
 	// not run in one of them.
 	ProtectedNamespaces() []string
 
-	// MultiTenant reports whether the cluster runs the variant in multi-tenant mode.
-	MultiTenant() bool
-
-	// Cloud reports whether this binary was built for the variant's hosted product.
-	Cloud() bool
+	// Controllers are the reconcilers the variant adds to the core set. They are added
+	// after the core controllers, so a variant can watch resources those own.
+	Controllers() []Controller
 }
 
 // noopStartup runs the core operator's behavior unchanged.
@@ -50,7 +49,7 @@ func (noopStartup) VerifyAPIsExist(kubernetes.Interface) error {
 	return nil
 }
 
-func (noopStartup) VerifyClusterState(context.Context, kubernetes.Interface, bool, bool) error {
+func (noopStartup) VerifyClusterState(context.Context, kubernetes.Interface, *corev1.ConfigMap) error {
 	return nil
 }
 
@@ -58,10 +57,6 @@ func (noopStartup) ProtectedNamespaces() []string {
 	return nil
 }
 
-func (noopStartup) MultiTenant() bool {
-	return false
-}
-
-func (noopStartup) Cloud() bool {
-	return false
+func (noopStartup) Controllers() []Controller {
+	return nil
 }
