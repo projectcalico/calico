@@ -893,6 +893,13 @@ func TestBuildE2EBinariesStaging(t *testing.T) {
 			wantStaged:  1,
 		},
 		{
+			// A narrower arch set must not ship the wider set's leftovers.
+			name:        "an arch dropped from the set is not left staged",
+			produced:    []string{"e2e-linux-amd64.test"},
+			preexisting: []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"},
+			wantStaged:  1,
+		},
+		{
 			name:    "a build that produced nothing errors",
 			wantErr: true,
 		},

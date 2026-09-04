@@ -1315,6 +1315,13 @@ func (r *CalicoManager) buildE2EBinaries() error {
 		return fmt.Errorf("failed to build e2e binaries: %w", err)
 	}
 
+	// Clear the staging directory so it describes this build alone. The output
+	// directory survives between runs, so anything left there — an arch dropped
+	// from the set, or a previous run's wider set — would otherwise ship in the
+	// archive and upload to S3 alongside the current binaries.
+	if err := r.clearStagedE2EBinaries(); err != nil {
+		return err
+	}
 	// Hard-link the built binaries into the output directory to avoid
 	// duplicating ~1 GB of cross-compiled test binaries on disk.
 	e2eOutputDir := r.e2eBinariesDir()
@@ -1332,11 +1339,6 @@ func (r *CalicoManager) buildE2EBinaries() error {
 			continue
 		}
 		dst := filepath.Join(e2eOutputDir, entry.Name())
-		// Replace a leftover link from an earlier build of the same version;
-		// os.Link fails outright on an existing destination.
-		if err := os.Remove(dst); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("replacing e2e binary %s: %w", entry.Name(), err)
-		}
 		if err := os.Link(filepath.Join(binDir, entry.Name()), dst); err != nil {
 			return fmt.Errorf("linking e2e binary %s: %w", entry.Name(), err)
 		}
