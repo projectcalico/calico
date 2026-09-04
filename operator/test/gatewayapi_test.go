@@ -183,7 +183,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
-		instance.Status.Variant = operator.Calico
+		instance.Status.Variant = testVariant
 		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
@@ -207,6 +207,10 @@ var _ = Describe("GatewayAPI tests", func() {
 	})
 
 	It("provisions and cleans up per-namespace resources for namespaced-class Gateways", func() {
+		if !testVariant.IsEnterprise() {
+			Skip("the per-gateway WAF and L7 log objects come from the Enterprise gateway extension")
+		}
+
 		const testNs = "gw-fv-test-ns"
 
 		By("Creating the user Gateway namespace")
@@ -229,7 +233,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
-		instance.Status.Variant = operator.Calico
+		instance.Status.Variant = testVariant
 		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
@@ -333,7 +337,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
-		instance.Status.Variant = operator.Calico
+		instance.Status.Variant = testVariant
 		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
@@ -386,7 +390,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
-		instance.Status.Variant = operator.Calico
+		instance.Status.Variant = testVariant
 		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
@@ -437,6 +441,10 @@ var _ = Describe("GatewayAPI tests", func() {
 	})
 
 	It("creates EnvoyProxy with owning gateway env vars in l7-log-collector", func() {
+		if !testVariant.IsEnterprise() {
+			Skip("the per-gateway WAF and L7 log objects come from the Enterprise gateway extension")
+		}
+
 		By("Creating Installation")
 		instance := &operator.Installation{
 			TypeMeta:   metav1.TypeMeta{Kind: "Installation", APIVersion: "operator.tigera.io/v1"},
@@ -445,7 +453,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
-		instance.Status.Variant = operator.Calico
+		instance.Status.Variant = testVariant
 		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
@@ -505,7 +513,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		}
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
-		instance.Status.Variant = operator.Calico
+		instance.Status.Variant = testVariant
 		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
