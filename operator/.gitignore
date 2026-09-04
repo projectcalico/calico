@@ -9,6 +9,10 @@ vendor/
 build/_output
 build/_test
 hack/bin
+# OCP bundle output from 'make bundle'. operator-sdk writes bundle.Dockerfile
+# here before update-bundle.sh moves it under bundle/.
+/bundle/
+/bundle.Dockerfile
 hack/release/_output/
 operator-sdk*
 *-release-notes.md

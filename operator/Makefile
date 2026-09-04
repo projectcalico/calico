@@ -542,7 +542,7 @@ $(KUSTOMIZE): $(HACK_BIN)
 # release-vX.YY
 CHANNEL ?= $(shell git branch --show-current)
 BUNDLE_CHANNEL = --channels=$(if \
-		 $(findstring release-v1,$(CHANNEL)),$(CHANNEL),\
+		 $(findstring release-v,$(CHANNEL)),$(CHANNEL),\
 		 $(error Channel for bundle should be a release branch of the format 'release-vX.YY', not '$(CHANNEL)'))
 
 # We only specify one channel so we don't need to set a
@@ -561,15 +561,13 @@ BUNDLE_DEPLOY_DIR ?= $(BUNDLE_BASE_DIR)/deploy
 ## Create an operator bundle image.
 # E.g., make bundle VERSION=1.13.1 PREV_VERSION=1.13.0 CHANNELS=release-v1.13 DEFAULT_CHANNEL=release-v1.13
 .PHONY: bundle
-bundle: bundle-generate bundle-crd-clean update-bundle bundle-validate bundle-image
+bundle: bundle-generate update-bundle bundle-validate bundle-image
 
-.PHONY: bundle-crd-clean
-bundle-crd-clean:
-	git checkout -- pkg/crds/operator
-
+# Validate against the full Operator Framework suite, not just the required
+# checks, since this bundle is built to be certified.
 .PHONY: bundle-validate
 bundle-validate: $(OPERATOR_SDK_BARE)
-	$(OPERATOR_SDK_BARE) bundle validate bundle/$(VERSION)
+	$(OPERATOR_SDK_BARE) bundle validate bundle/$(VERSION) --select-optional suite=operatorframework
 
 .PHONY: bundle-manifests
 bundle-manifests:
@@ -582,11 +580,18 @@ endif
 	$(eval EXTRA_DOCKER_ARGS += -e BUNDLE_CRD_DIR=$(BUNDLE_CRD_DIR) -e BUNDLE_DEPLOY_DIR=$(BUNDLE_DEPLOY_DIR))
 	$(DOCKER_GO_BUILD) "hack/gen-bundle/get-manifests.sh"
 
+# Generate the bundle from the staged manifests. The static half of the CSV comes
+# from --kustomize-dir; note that operator-sdk only picks that base up if its
+# metadata.name is "tigera-operator.v<semver>", matching --package.
+#
+# This uses the CRDs committed under pkg/crds/operator rather than regenerating
+# them, which 'make gen-files' and the CI dirty-check already keep current.
 .PHONY: bundle-generate
-bundle-generate: manifests $(KUSTOMIZE) $(OPERATOR_SDK_BARE) bundle-manifests
+bundle-generate: $(OPERATOR_SDK_BARE) bundle-manifests
 	$(OPERATOR_SDK_BARE) generate bundle \
 		--crds-dir $(BUNDLE_CRD_DIR) \
 		--deploy-dir $(BUNDLE_DEPLOY_DIR) \
+		--kustomize-dir config/manifests \
 		--version $(VERSION) \
 		--verbose \
 		--manifests \
@@ -594,14 +599,14 @@ bundle-generate: manifests $(KUSTOMIZE) $(OPERATOR_SDK_BARE) bundle-manifests
 		--metadata \
 		$(BUNDLE_METADATA_OPTS)
 
-# Update a generated bundle so that it can be certified.
+# Apply the build-time values to a generated bundle so that it can be certified.
 .PHONY: update-bundle
 update-bundle: $(OPERATOR_SDK_BARE) get-digest
-	$(eval EXTRA_DOCKER_ARGS += -e OPERATOR_IMAGE_INSPECT="$(OPERATOR_IMAGE_INSPECT)" -e OPERATOR_MANIFEST_INSPECT="$(OPERATOR_MANIFEST_INSPECT)" -e VERSION=$(VERSION) -e PREV_VERSION=$(PREV_VERSION))
+	$(eval EXTRA_DOCKER_ARGS += -e OPERATOR_IMAGE_INSPECT="$(OPERATOR_IMAGE_INSPECT)" -e OPERATOR_MANIFEST_INSPECT="$(OPERATOR_MANIFEST_INSPECT)" -e VERSION=$(VERSION) -e PREV_VERSION=$(PREV_VERSION) -e BUNDLE_BASE_DIR=$(BUNDLE_BASE_DIR))
 	$(DOCKER_GO_BUILD) hack/gen-bundle/update-bundle.sh
 
 # Build the bundle image.
-.PHONY: bundle-build
+.PHONY: bundle-image
 bundle-image:
 ifndef VERSION
 	$(error VERSION is undefined - run using make $@ VERSION=X.Y.Z)

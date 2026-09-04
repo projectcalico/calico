@@ -1,7 +1,9 @@
 #!/bin/bash
 #
-# This script downloads Calico and operator manifests that are used to generate
-# ClusterServiceVersions.
+# This script stages the Calico and operator manifests that
+# `operator-sdk generate bundle` reads to build a ClusterServiceVersion.
+#
+# This script should not be run directly. See the bundle target in the Makefile.
 set -eu
 
 if [[ -z "${BUNDLE_CRD_DIR}" ]]; then
@@ -13,8 +15,11 @@ if [[ -z "${BUNDLE_DEPLOY_DIR}" ]]; then
     exit 1
 fi
 
-mkdir -p ${BUNDLE_CRD_DIR} || true
-mkdir -p ${BUNDLE_DEPLOY_DIR} || true
+# Start from empty staging directories. Leftovers from an earlier run would
+# otherwise be picked up by operator-sdk and end up in the bundle - for example
+# a CRD that has since been dropped from CALICO_RESOURCES below.
+rm -rf "${BUNDLE_CRD_DIR}" "${BUNDLE_DEPLOY_DIR}"
+mkdir -p "${BUNDLE_CRD_DIR}" "${BUNDLE_DEPLOY_DIR}"
 
 echo "Building bundle from ${BUNDLE_DEPLOY_DIR}"
 
@@ -41,17 +46,24 @@ function downloadOperatorManifests() {
     # accounts. The resulting permissions is set to the CSV's
     # spec.install.clusterPermissions field.
     curl -fsSL ${CALICO_BASE_URL}/manifests/ocp/02-rolebinding-tigera-operator.yaml --output ${BUNDLE_DEPLOY_DIR}/rolebinding-tigera-operator.yaml
+}
 
-    # Download the installation CR so that the alm-examples annotation is generated.
-    curl -fsSL ${CALICO_BASE_URL}/manifests/ocp/03-cr-installation.yaml --output ${BUNDLE_DEPLOY_DIR}/cr-installation.yaml
+# Stage the sample CRs that become the CSV's alm-examples annotation, which is
+# what OperatorHub offers users as a starting point in its "Create instance"
+# forms. Only kinds whose CRD the bundle ships belong here - an example for a
+# kind the CSV does not own is dropped, and every owned CRD without an example
+# is reported by 'operator-sdk bundle validate'.
+function copySampleCRs() {
+    cp config/samples/operator_v1_installation.yaml ${BUNDLE_DEPLOY_DIR}/
+    cp config/samples/operator_v1_imageset.yaml ${BUNDLE_DEPLOY_DIR}/
 }
 
 # Copy over and update the v1beta1 operator crds required for Calico.
 function generateOperatorCRDs() {
     # Copy the crds we need to the bundle.
-    cp config/crd/bases/operator.tigera.io_installations.yaml ${BUNDLE_CRD_DIR}/
-    cp config/crd/bases/operator.tigera.io_tigerastatuses.yaml ${BUNDLE_CRD_DIR}/
-    cp config/crd/bases/operator.tigera.io_imagesets.yaml ${BUNDLE_CRD_DIR}/
+    cp pkg/crds/operator/operator.tigera.io_installations.yaml ${BUNDLE_CRD_DIR}/
+    cp pkg/crds/operator/operator.tigera.io_tigerastatuses.yaml ${BUNDLE_CRD_DIR}/
+    cp pkg/crds/operator/operator.tigera.io_imagesets.yaml ${BUNDLE_CRD_DIR}/
 
     # Clean up the crds.
     for f in `find ${BUNDLE_CRD_DIR}/ -name 'operator.tigera.io*'`; do
@@ -61,8 +73,12 @@ function generateOperatorCRDs() {
     done
 }
 
-function downloadCalicoCRDs() {
-    CALICO_RESOURCES="
+# The Calico CRDs the bundle ships. Keep this list, the owned CRDs in
+# config/manifests/bases/tigera-operator.clusterserviceversion.yaml, and the
+# internal-objects annotation in that same file in sync: a CRD listed here but
+# not described there generates a bundle-validation warning, and a CRD described
+# there but not listed here is advertised by the CSV without being installed.
+CALICO_RESOURCES="
 bgpconfigurations
 bgppeers
 blockaffinities
@@ -82,6 +98,7 @@ networkpolicies
 networksets
 "
 
+function downloadCalicoCRDs() {
     # Download the Calico CRDs into CRD dir.
     for resource in $CALICO_RESOURCES; do
         echo "  [curl] Downloading libcalico-go CRD ${resource}"
@@ -90,5 +107,6 @@ networksets
 }
 
 downloadOperatorManifests
+copySampleCRs
 generateOperatorCRDs
 downloadCalicoCRDs

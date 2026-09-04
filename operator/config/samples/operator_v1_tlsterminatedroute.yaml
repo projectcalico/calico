@@ -1,0 +1,13 @@
+apiVersion: operator.tigera.io/v1
+kind: TLSTerminatedRoute
+metadata:
+  name: tlsterminatedroute-sample
+  namespace: tigera-manager
+spec:
+  target: UI
+  destination: https://some-service.some-namespace.svc.cluster.local:443
+  pathMatch:
+    path: /some-path
+  caBundle:
+    name: some-service-ca
+    key: ca.crt

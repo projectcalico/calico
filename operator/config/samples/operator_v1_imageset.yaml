@@ -1,16 +1,22 @@
+# This sample is also the ImageSet entry in the OpenShift bundle's alm-examples
+# annotation (see hack/gen-bundle/get-manifests.sh).
+#
+# The name must be "<variant>-<release>", where <release> matches the version of
+# the variant that the operator is built to deploy. Digests must be full sha256
+# digests; the ones below are placeholders.
 apiVersion: operator.tigera.io/v1
 kind: ImageSet
 metadata:
-  name: calico-v3.4.0
+  name: calico-v3.30.0
 spec:
   images:
-  - image: "calico/node"
-    digest: "sha256:0deadbeef1234567890"
-  - image: "calico/cni"
-    digest: "sha256:0deadbeef1234567890"
-  - image: "calico/typha"
-    digest: "sha256:0deadbeef1234567890"
-  - image: "calico/kube-controllers"
-    digest: "sha256:0deadbeef1234567890"
-  - image: "tigera/operator"
-    digest: "sha256:0deadbeef1234567890"
+    - image: calico/node
+      digest: sha256:caba5b4d0e3bcf9b0d4b1b0b3b1a4a6a2c9e6f0f5d3d2c1b0a9f8e7d6c5b4a39
+    - image: calico/cni
+      digest: sha256:1f2e3d4c5b6a798877665544332211ffeeddccbbaa99887766554433221100ff
+    - image: calico/typha
+      digest: sha256:3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b
+    - image: calico/kube-controllers
+      digest: sha256:9a8b7c6d5e4f30211f2e3d4c5b6a79880011223344556677889900aabbccddee
+    - image: tigera/operator
+      digest: sha256:0011223344556677889900aabbccddeeff102030405060708090a0b0c0d0e0f1
