@@ -331,9 +331,10 @@ release: clean hack/bin/release check-release-image-tags
 # an operator naming the images this branch publishes for development.
 .PHONY: check-release-image-tags
 check-release-image-tags:
-	@if [ "$(CALICO_IMAGE_TAG)" = "$(BRANCH_IMAGE_TAG)" ]; then \
+	@if [ "$(ALLOW_BRANCH_IMAGE_TAGS)" = "true" ]; then exit 0; fi; \
+	if [ "$(CALICO_IMAGE_TAG)" = "$(BRANCH_IMAGE_TAG)" ]; then \
 		echo "A release must name the tag it publishes at, not the branch default $(BRANCH_IMAGE_TAG)."; \
-		echo "Set CALICO_IMAGE_TAG, or build through the release tooling."; \
+		echo "Set it, build through the release tooling, or pass ALLOW_BRANCH_IMAGE_TAGS=true."; \
 		exit 1; \
 	fi
 
