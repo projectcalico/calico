@@ -515,9 +515,10 @@ var (
 			helmIndexFlag(envHelmIndexLegacy, envBuildHelmIndex, envReleaseHelmIndex),
 			tarballFlag,
 			windowsArchiveFlag(envBuildWindowsArchive, envReleaseWindowsArchive),
+			e2eBinariesFlag,
 		}
 		if hashrelease {
-			f = append(f, e2eBinariesFlag, releaseNotesFlag)
+			f = append(f, releaseNotesFlag)
 		}
 		return f
 	}
@@ -531,6 +532,7 @@ var (
 		}
 		return append(f,
 			helmIndexFlag(envHelmIndexLegacy, envPublishHelmIndex, envReleaseHelmIndex),
+			e2eBinariesFlag,
 			gitRefFlag,
 			githubReleaseFlag)
 	}
@@ -610,7 +612,7 @@ var (
 	e2eBinariesFlag = &cli.BoolWithInverseFlag{
 		Name:     "e2e-binaries",
 		Category: stepControlCategory,
-		Usage:    "Build multi-arch e2e test binaries",
+		Usage:    "Include multi-arch e2e test binaries",
 		Sources:  cli.EnvVars(envBuildE2EBinaries, envReleaseE2EBinaries),
 		Value:    true,
 	}
