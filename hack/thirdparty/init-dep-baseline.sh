@@ -13,17 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Give an extracted upstream tree a git baseline for go.mod and go.sum, for the
-# dependency-patch generator to diff against.
+# Make an upstream tree's git HEAD hold the go.mod and go.sum the
+# dependency-patch generator should diff against.
 #
 #   init-dep-baseline.sh <upstream-tree>
 #
-# Call it from the fetch target, right after extraction: the baseline must
-# record upstream's files. Created later it captures an already-patched tree,
-# every pin then reads as satisfied, and the generator deletes the patch.
+# Call it from the fetch target, after the custom patches and before any
+# generated one. The baseline has to be the post-custom state: a custom patch
+# may itself pin a dependency, and the generated patch is the delta on top of
+# it. Called later it captures an already-generated tree, every pin then reads
+# as satisfied, and the generator deletes the patch.
 #
-# No-op for cloned trees, which already have one. The repo it creates lives
-# inside the extracted tree, so `make clean` removes it too.
+# An extracted tree gets a throwaway repo; a cloned one already has HEAD, and
+# only needs a commit if a custom patch moved either file. Either repo lives
+# inside the tree, so `make clean` removes it too.
 
 set -e -u -o pipefail
 
@@ -31,12 +34,17 @@ set -e -u -o pipefail
 TREE=$1
 
 [ -d "$TREE" ] || { echo "error: no upstream tree at $TREE" >&2; exit 1; }
-[ -d "$TREE/.git" ] && exit 0
+
+[ -d "$TREE/.git" ] || git -C "$TREE" -c init.defaultBranch=main init -q
+
+if git -C "$TREE" rev-parse -q --verify HEAD >/dev/null 2>&1 &&
+	git -C "$TREE" diff --quiet HEAD -- go.mod go.sum; then
+	exit 0
+fi
 
 # Identity is passed inline because CI has no global git config, and -f guards
 # against an upstream .gitignore excluding either file.
-git -C "$TREE" -c init.defaultBranch=main init -q
 git -C "$TREE" add -f go.mod go.sum
 git -C "$TREE" -c user.email=noreply@tigera.io -c user.name=Tigera \
-	commit -q -m "Baseline: go.mod and go.sum as extracted from upstream"
+	commit -q -m "Baseline: go.mod and go.sum with the custom patches applied"
 echo "recorded a go.mod/go.sum baseline for $TREE"
