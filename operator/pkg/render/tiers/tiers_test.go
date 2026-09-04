@@ -17,14 +17,11 @@ package tiers_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/projectcalico/calico/operator/pkg/common"
-	"github.com/projectcalico/calico/operator/pkg/render"
 	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
-	"github.com/projectcalico/calico/operator/pkg/render/logstorage/eck"
-	"github.com/projectcalico/calico/operator/pkg/render/logstorage/kibana"
 	"github.com/projectcalico/calico/operator/pkg/render/testutils"
 	"github.com/projectcalico/calico/operator/pkg/render/tiers"
 )
@@ -65,19 +62,9 @@ var _ = Describe("Tiers rendering tests", func() {
 	BeforeEach(func() {
 		// Establish default config for test cases to override.
 		cfg = &tiers.Config{
-			OpenShift:      false,
-			DNSEgressCIDRs: getDNSEgressCIDRs(testutils.IPV4),
-			CalicoNamespaces: []string{
-				common.CalicoNamespace,
-				render.DexNamespace,
-				render.ElasticsearchNamespace,
-				render.IntrusionDetectionNamespace,
-				kibana.Namespace,
-				eck.OperatorNamespace,
-				render.PacketCaptureNamespace,
-				common.TigeraPrometheusNamespace,
-				"tigera-skraper",
-			},
+			OpenShift:        false,
+			DNSEgressCIDRs:   getDNSEgressCIDRs(testutils.IPV4),
+			CalicoNamespaces: []string{common.CalicoNamespace},
 		}
 	})
 
@@ -164,5 +151,28 @@ var _ = Describe("Tiers rendering tests", func() {
 			Entry("for DualStack", testutils.DualStack),
 			Entry("for when ipMode is not provided", nil),
 		)
+	})
+
+	Context("the namespaces allowed to reach cluster DNS", func() {
+		selectorFor := func(namespaces ...string) string {
+			cfg.CalicoNamespaces = namespaces
+			resources, _ := tiers.Tiers(cfg).Objects()
+			policy := testutils.GetCalicoSystemPolicyFromResources(
+				types.NamespacedName{Name: "calico-system.cluster-dns", Namespace: "kube-system"}, resources)
+			return policy.Spec.Ingress[0].Source.Selector
+		}
+
+		It("selects the one namespace the core operator runs in", func() {
+			Expect(selectorFor(common.CalicoNamespace)).To(Equal("projectcalico.org/namespace in {'calico-system'}"))
+		})
+
+		It("selects every namespace a variant contributes", func() {
+			Expect(selectorFor(common.CalicoNamespace, "tigera-manager", "tigera-prometheus")).To(
+				Equal("projectcalico.org/namespace in {'calico-system','tigera-manager','tigera-prometheus'}"))
+		})
+
+		It("selects nothing when no namespace is given", func() {
+			Expect(selectorFor()).To(Equal("projectcalico.org/namespace in {}"))
+		})
 	})
 })

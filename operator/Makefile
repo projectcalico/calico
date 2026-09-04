@@ -610,19 +610,13 @@ endif
 
 
 .PHONY: test-crds
-test-crds: test-enterprise-crds test-calico-crds
+test-crds: test-calico-crds
 
 # TODO: Improve this testing by comparing the individual source files
 # with the yaml printed out, this will need to be a yaml diff since the
 # fields won't necessarily be in the same order or indentation.
 test-calico-crds: $(BINDIR)/$(BINARY_NAME)-$(ARCH)
 	$(BINDIR)/$(BINARY_NAME)-$(ARCH) --print-calico-crds all >/dev/null 2>&1
-
-# TODO: Improve this testing by comparing the individual source files
-# with the yaml printed out, this will need to be a yaml diff since the
-# fields won't necessarily be in the same order or indentation.
-test-enterprise-crds: $(BINDIR)/$(BINARY_NAME)-$(ARCH)
-	$(BINDIR)/$(BINARY_NAME)-$(ARCH) --print-enterprise-crds all >/dev/null 2>&1
 
 #####################################
 #####################################
@@ -650,40 +644,18 @@ export imageset_header
 
 ifeq ($(OLD_STYLE_PRINT_IMAGE),true)
 calico_img_filter=list | grep -e /calico/ -e tigera/operator
-enterprise_img_filter=list | grep -v -e calico
 else
 calico_img_filter=listcalico
-enterprise_img_filter=listenterprise
 endif
 
 # This gen-imageset target only creates an ImageSet for the built-in registries and cannot be used
 # to generate an ImageSet for an alternate registry.
 # The operator used needs to be one that all images it references have been pushed to the registry,
 # this even includes the operator which references a version of itself.
-.PHONY: gen-imageset gen-enterprise-imageset gen-calico-imageset
-gen-imageset: gen-enterprise-imageset gen-calico-imageset $(BUILD_DIR)
-	@cat $(BUILD_DIR)/imageset-enterprise.yaml > $(BUILD_DIR)/imageset.yaml
-	@echo "---" >> $(BUILD_DIR)/imageset.yaml
-	@cat $(BUILD_DIR)/imageset-calico.yaml >> $(BUILD_DIR)/imageset.yaml
+.PHONY: gen-imageset gen-calico-imageset
+gen-imageset: gen-calico-imageset $(BUILD_DIR)
+	@cat $(BUILD_DIR)/imageset-calico.yaml > $(BUILD_DIR)/imageset.yaml
 	@echo Imageset written to file $(BUILD_DIR)/imageset.yaml
-
-.PHONY: gen-enterprise-imageset
-gen-enterprise-imageset: $(BUILD_DIR)
-	$(eval IMAGESET_VER = $(shell docker run $(OPERATOR_IMAGE) --version 2>/dev/null | \
-		grep "Enterprise:" | sed -e 's/Enterprise://'))
-	@echo Enterprise version: $(IMAGESET_VER)
-	@echo "$$imageset_header" > $(BUILD_DIR)/imageset-enterprise.yaml
-	@echo "  name: enterprise-$(IMAGESET_VER)" >> $(BUILD_DIR)/imageset-enterprise.yaml
-	@echo "spec:" >> $(BUILD_DIR)/imageset-enterprise.yaml
-	@echo "  images:" >> $(BUILD_DIR)/imageset-enterprise.yaml
-	@docker run $(OPERATOR_IMAGE) --print-images=$(enterprise_img_filter) | \
-	  grep -v "Failed to read" | \
-	while read -r line; do \
-	  echo "Adding digest for $${line}"; \
-	  digest=$$($(CRANE) digest $${line}$(double_quote)); \
-	  echo "  - image: \"$$(echo $${line} | sed -e 's|^.*/\([^/]*/[^/]*\):.*$$|\1|')\"" >> $(BUILD_DIR)/imageset-enterprise.yaml; \
-	  echo "    digest: $${digest}" >> $(BUILD_DIR)/imageset-enterprise.yaml; \
-	done
 
 .PHONY: gen-calico-imageset
 gen-calico-imageset: $(BUILD_DIR)
