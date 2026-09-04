@@ -1966,9 +1966,13 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 					It("should write /proc/sys entries", func() {
 						if ipVersion == 6 {
+							// checkState asserts the state exactly, so the absence of
+							// proxy_ndp here is the guard against it being re-added by
+							// symmetry with proxy_arp: it does nothing for us and is
+							// not the IPv6 equivalent.  See
+							// felix/design/neighbour-discovery.md.
 							mockProcSys.checkState(map[string]string{
 								"/proc/sys/net/ipv6/conf/cali12345-ab/accept_ra":  "0",
-								"/proc/sys/net/ipv6/conf/cali12345-ab/proxy_ndp":  "1",
 								"/proc/sys/net/ipv6/conf/cali12345-ab/forwarding": "1",
 							})
 						} else {
