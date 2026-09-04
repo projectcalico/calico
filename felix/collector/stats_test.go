@@ -379,3 +379,47 @@ var _ = Describe("Rule Trace", func() {
 	})
 
 })
+
+var _ = Describe("Conntrack counters", func() {
+	var data *collector.Data
+
+	BeforeEach(func() {
+		var src, dst [16]byte
+		copy(src[:], net.ParseIP("127.0.0.1").To16())
+		copy(dst[:], net.ParseIP("127.1.1.1").To16())
+		data = collector.NewData(*tuple.New(src, dst, 6, 12345, 80), nil, nil)
+
+		data.SetConntrackCounters(10, 1000)
+		data.SetConntrackCountersReverse(20, 2000)
+
+		// Data starts out dirty and holding deltas from the sets above; clear both so the
+		// assertions below only see the effect of the update under test.
+		data.ClearConnDirtyFlag()
+	})
+
+	// The byte counter must be updated even when the packet count happens to be unchanged.
+	Describe("a bytes-only update", func() {
+		It("should be recorded in the forward direction", func() {
+			data.SetConntrackCounters(10, 1500)
+			bytesCtr := data.ConntrackBytesCounter()
+			Expect(bytesCtr.Absolute()).To(Equal(1500))
+			Expect(bytesCtr.Delta()).To(Equal(500))
+			Expect(data.IsDirty()).To(BeTrue())
+		})
+		It("should be recorded in the reverse direction", func() {
+			data.SetConntrackCountersReverse(20, 2500)
+			bytesCtr := data.ConntrackBytesCounterReverse()
+			Expect(bytesCtr.Absolute()).To(Equal(2500))
+			Expect(bytesCtr.Delta()).To(Equal(500))
+			Expect(data.IsDirty()).To(BeTrue())
+		})
+	})
+
+	Describe("an unchanged update", func() {
+		It("should leave the data clean", func() {
+			data.SetConntrackCounters(10, 1000)
+			data.SetConntrackCountersReverse(20, 2000)
+			Expect(data.IsDirty()).To(BeFalse())
+		})
+	})
+})
