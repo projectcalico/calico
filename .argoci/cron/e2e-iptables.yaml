@@ -30,18 +30,18 @@ steps:
       - name: PROVISIONER
         value: aws-openshift
     matrix:
-      - name: 4-18-29
+      - name: 5-0-0-rc-0
         env:
           - name: OPENSHIFT_VERSION
-            value: 4.18.29
-      - name: 4-19-20
+            value: 5.0.0-rc.0
+      - name: 4-21-30
         env:
           - name: OPENSHIFT_VERSION
-            value: 4.19.20
-      - name: 4-20-6
+            value: 4.21.30
+      - name: 4-22-11
         env:
           - name: OPENSHIFT_VERSION
-            value: 4.20.6
+            value: 4.22.11
     commands: |
       .argoci/scripts/body_standard.sh
   - name: arm64-smoke-tests-aks-arm64
