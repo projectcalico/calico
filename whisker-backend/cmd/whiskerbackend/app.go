@@ -22,6 +22,7 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/compression"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/server"
 	gorillaadpt "github.com/projectcalico/calico/lib/httpmachinery/pkg/server/adaptors/gorilla"
 	"github.com/projectcalico/calico/lib/logrusr"
@@ -68,6 +69,10 @@ func Run(ctx context.Context, cfg *config.Config, options ...Option) {
 
 	opts := []server.Option{
 		server.WithAddr(cfg.HostAddr()),
+		// A page of flows is large and highly repetitive, so it compresses by
+		// orders of magnitude. Browsers offer zstd or gzip; a client that offers
+		// neither is served the response unchanged.
+		server.WithMiddleware(compression.NewResponseCompressor()),
 	}
 
 	if cfg.ServerTLSCertPath == "" || cfg.ServerTLSKeyPath == "" {
