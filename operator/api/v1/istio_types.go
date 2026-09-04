@@ -15,7 +15,7 @@
 package v1
 
 import (
-	"github.com/tigera/api/pkg/lib/numorstring"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -159,6 +159,14 @@ type IstioSpec struct {
 	// +kubebuilder:validation:Pattern=`^.*`
 	DSCPMark *numorstring.DSCP `json:"dscpMark,omitempty"`
 }
+
+// +kubebuilder:validation:Enum=Enabled;Disabled
+type LogCollectionStatusType string
+
+const (
+	L7LogCollectionDisabled LogCollectionStatusType = "Disabled"
+	L7LogCollectionEnabled  LogCollectionStatusType = "Enabled"
+)
 
 // IstioStatus defines the observed state of Istio
 type IstioStatus struct {
