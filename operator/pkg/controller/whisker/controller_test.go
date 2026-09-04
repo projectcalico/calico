@@ -16,6 +16,7 @@ package whisker
 
 import (
 	"context"
+	"strings"
 
 	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
@@ -39,6 +40,7 @@ import (
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/apis"
 	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/controller"
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
@@ -48,6 +50,7 @@ import (
 	rgateway "github.com/projectcalico/calico/operator/pkg/render/gateway"
 	"github.com/projectcalico/calico/operator/pkg/render/whisker"
 	"github.com/projectcalico/calico/operator/pkg/tls"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 var _ = Describe("whisker controller tests", func() {
@@ -174,6 +177,144 @@ var _ = Describe("whisker controller tests", func() {
 				Expect(secret.Data).To(HaveKey("tls.crt"))
 				Expect(secret.Data).To(HaveKey("tls.key"))
 			}
+		})
+	})
+
+	Context("variant extension", func() {
+		var reconciler Reconciler
+		reconcileOnce := func() (reconcile.Result, error) {
+			return reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default", Namespace: "calico-system"}})
+		}
+		getDeployment := func() (*appsv1.Deployment, error) {
+			d := &appsv1.Deployment{}
+			return d, cli.Get(ctx, types.NamespacedName{Name: whisker.WhiskerDeploymentName, Namespace: whisker.WhiskerNamespace}, d)
+		}
+
+		BeforeEach(func() {
+			Expect(cli.Create(ctx, installation)).To(BeNil())
+			mockStatus.On("RemoveDeployments", mock.Anything).Return().Maybe()
+			reconciler = Reconciler{
+				cli:      cli,
+				scheme:   scheme,
+				provider: operatorv1.ProviderNone,
+				status:   mockStatus,
+				ext:      extensions.Extensions{}.Whisker(),
+			}
+		})
+
+		// exists reports whether obj, identified by its name and namespace, is in the cluster.
+		exists := func(obj client.Object) bool {
+			err := cli.Get(ctx, client.ObjectKeyFromObject(obj), obj)
+			Expect(client.IgnoreNotFound(err)).NotTo(HaveOccurred())
+			return err == nil
+		}
+
+		It("deploys the backend alone, without Goldmane, when the extension asks for it", func() {
+			reconciler.ext = backendOnly{reconciler.ext}
+			Expect(cli.Delete(ctx, &operatorv1.Goldmane{ObjectMeta: metav1.ObjectMeta{Name: "default"}})).NotTo(HaveOccurred())
+
+			_, err := reconcileOnce()
+			Expect(err).ShouldNot(HaveOccurred())
+
+			d, err := getDeployment()
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(d.Spec.Template.Spec.Containers).To(HaveLen(1))
+			Expect(d.Spec.Template.Spec.Containers[0].Name).To(Equal(whisker.WhiskerBackendContainerName))
+
+			// The backend still gets its key pair; the UI's is never issued.
+			Expect(exists(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: whisker.WhiskerBackendKeyPairSecret, Namespace: common.OperatorNamespace()}})).To(BeTrue())
+			Expect(exists(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: whisker.WhiskerKeyPairSecret, Namespace: common.OperatorNamespace()}})).To(BeFalse())
+		})
+
+		It("removes the UI key pair a full deployment issued once the backend runs alone", func() {
+			// A cluster that ran the UI first has the pair in both namespaces, and
+			// the Whisker CR still owns the copy, so garbage collection leaves it.
+			_, err := reconcileOnce()
+			Expect(err).ShouldNot(HaveOccurred())
+			uiTruth := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: whisker.WhiskerKeyPairSecret, Namespace: common.OperatorNamespace()}}
+			uiCopy := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: whisker.WhiskerKeyPairSecret, Namespace: whisker.WhiskerNamespace}}
+			Expect(exists(uiTruth)).To(BeTrue())
+			Expect(exists(uiCopy)).To(BeTrue())
+
+			reconciler.ext = backendOnly{reconciler.ext}
+			_, err = reconcileOnce()
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(exists(uiCopy)).To(BeFalse())
+			Expect(exists(uiTruth)).To(BeFalse(), "an operator-issued pair is removed from the truth namespace too")
+		})
+
+		It("keeps a user-provided UI key pair when the backend runs alone", func() {
+			// A pair the operator's CA did not issue is how the operator tells a
+			// user's secret apart. It is theirs, so only the copy goes.
+			userCA, err := tls.MakeCA("user-ca")
+			Expect(err).NotTo(HaveOccurred())
+			userCert, userKey, err := userCA.Config.GetPEMBytes()
+			Expect(err).NotTo(HaveOccurred())
+			byo := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: whisker.WhiskerKeyPairSecret, Namespace: common.OperatorNamespace()},
+				Data:       map[string][]byte{"tls.crt": userCert, "tls.key": userKey},
+			}
+			Expect(cli.Create(ctx, byo)).NotTo(HaveOccurred())
+
+			reconciler.ext = backendOnly{reconciler.ext}
+			_, err = reconcileOnce()
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(exists(byo)).To(BeTrue())
+		})
+
+		It("manages the key pairs the extension returns", func() {
+			reconciler.ext = extraKeyPair{reconciler.ext}
+
+			_, err := reconcileOnce()
+			Expect(err).ShouldNot(HaveOccurred())
+
+			secret := &corev1.Secret{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: extraKeyPairSecret, Namespace: common.OperatorNamespace()}, secret)).ShouldNot(HaveOccurred())
+			Expect(secret.Data).To(HaveKey("tls.crt"))
+		})
+
+		It("tears down a full deployment when the extension disables whisker", func() {
+			// The cluster ran whisker's UI and backend, then a variant decided
+			// nothing should run here. Everything that ran has to go, key pairs
+			// included, and the status must not degrade over it.
+			_, err := reconcileOnce()
+			Expect(err).ShouldNot(HaveOccurred())
+			leftovers := []client.Object{
+				&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: whisker.WhiskerDeploymentName, Namespace: whisker.WhiskerNamespace}},
+				&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: whisker.WhiskerName, Namespace: whisker.WhiskerNamespace}},
+				&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "whisker-nginx-config", Namespace: whisker.WhiskerNamespace}},
+				&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: whisker.WhiskerServiceAccountName, Namespace: whisker.WhiskerNamespace}},
+				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: whisker.WhiskerKeyPairSecret, Namespace: whisker.WhiskerNamespace}},
+				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: whisker.WhiskerBackendKeyPairSecret, Namespace: whisker.WhiskerNamespace}},
+				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: whisker.WhiskerKeyPairSecret, Namespace: common.OperatorNamespace()}},
+				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: whisker.WhiskerBackendKeyPairSecret, Namespace: common.OperatorNamespace()}},
+			}
+			for _, o := range leftovers {
+				Expect(exists(o)).To(BeTrue(), "%T %s should exist after a full reconcile", o, o.GetName())
+			}
+
+			reconciler.ext = disabled{reconciler.ext}
+			_, err = reconcileOnce()
+			Expect(err).ShouldNot(HaveOccurred())
+
+			for _, o := range leftovers {
+				Expect(exists(o)).To(BeFalse(), "%T %s should be removed once whisker is disabled", o, o.GetName())
+			}
+			mockStatus.AssertCalled(GinkgoT(), "ReadyToMonitor")
+			mockStatus.AssertNotCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceNotReady, mock.Anything, mock.Anything, mock.Anything)
+		})
+
+		It("degrades and waits when the extension is not ready", func() {
+			reconciler.ext = notReady{reconciler.ext}
+
+			result, err := reconcileOnce()
+			Expect(err).ShouldNot(HaveOccurred(), "a watch triggers the retry, not an error")
+			Expect(result.RequeueAfter).To(BeZero())
+			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceNotReady,
+				mock.MatchedBy(func(msg string) bool { return strings.Contains(msg, "flow source") }), mock.Anything, mock.Anything)
+
+			_, err = getDeployment()
+			Expect(err).Should(HaveOccurred(), "nothing is deployed until the extension is ready")
 		})
 	})
 
@@ -418,4 +559,51 @@ type trimIngressGateway struct {
 func (trimIngressGateway) ValidateAndDefault(cr *operatorv1.Whisker, _ status.StatusManager) error {
 	cr.Spec.IngressGateway = nil
 	return nil
+}
+
+// backendOnly stands in for a variant that serves the UI from another component
+// and wires the backend to its own flow source.
+type backendOnly struct {
+	extensions.WhiskerExtension
+}
+
+func (backendOnly) ExtendInputs(_ context.Context, ci controller.Inputs) (controller.Inputs, []certificatemanagement.KeyPairInterface, error) {
+	ci.RenderInputs.Extension = whisker.RenderData{BackendOnly: true}
+	return ci, nil, nil
+}
+
+const extraKeyPairSecret = "whisker-extra-key-pair"
+
+// extraKeyPair stands in for a variant that issues a key pair of its own for the
+// controller to manage.
+type extraKeyPair struct {
+	extensions.WhiskerExtension
+}
+
+func (extraKeyPair) ExtendInputs(_ context.Context, ci controller.Inputs) (controller.Inputs, []certificatemanagement.KeyPairInterface, error) {
+	kp, err := ci.CertificateManager.GetOrCreateKeyPair(ci.Client, extraKeyPairSecret, common.OperatorNamespace(), []string{extraKeyPairSecret})
+	if err != nil {
+		return ci, nil, err
+	}
+	return ci, []certificatemanagement.KeyPairInterface{kp}, nil
+}
+
+// notReady stands in for a variant whose flow source is not yet serving.
+type notReady struct {
+	extensions.WhiskerExtension
+}
+
+func (notReady) ExtendInputs(_ context.Context, ci controller.Inputs) (controller.Inputs, []certificatemanagement.KeyPairInterface, error) {
+	return ci, nil, extensions.NotReadyf("the flow source is not available yet")
+}
+
+// disabled stands in for a variant that deploys nothing on this cluster, such as
+// one whose flow logs another cluster serves.
+type disabled struct {
+	extensions.WhiskerExtension
+}
+
+func (disabled) ExtendInputs(_ context.Context, ci controller.Inputs) (controller.Inputs, []certificatemanagement.KeyPairInterface, error) {
+	ci.RenderInputs.Extension = whisker.RenderData{Disabled: true}
+	return ci, nil, nil
 }

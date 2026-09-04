@@ -20,11 +20,12 @@ import (
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
+	ctrl "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -32,6 +33,7 @@ import (
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/controller"
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
@@ -61,7 +63,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	statusManager := status.New(mgr.GetClient(), "whisker", opts.KubernetesVersion)
 	reconciler := newReconciler(mgr.GetClient(), mgr.GetScheme(), statusManager, opts.DetectedProvider, opts)
 
-	c, err := ctrlruntime.NewController(controllerName, mgr, controller.Options{Reconciler: reconciler})
+	c, err := ctrlruntime.NewController(controllerName, mgr, ctrl.Options{Reconciler: reconciler})
 	if err != nil {
 		return fmt.Errorf("failed to create %s: %w", controllerName, err)
 	}
@@ -115,6 +117,10 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 
 	if err = uigateway.AddWatches(c, opts.K8sClientset, log, whisker.GatewayResourcePrefix, whisker.GatewayTLSSecretName); err != nil {
 		return fmt.Errorf("%s failed to add gateway watches: %w", controllerName, err)
+	}
+
+	if err = reconciler.ext.Watches(c); err != nil {
+		return fmt.Errorf("%s failed to set up extension watches: %w", controllerName, err)
 	}
 
 	// Perform periodic reconciliation. This acts as a backstop to catch reconcile issues,
@@ -214,14 +220,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, nil
 	}
 
-	if goldmaneCR, err := utils.GetIfExists[operatorv1.Goldmane](ctx, utils.DefaultInstanceKey, r.cli); err != nil {
-		r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying for Goldmane CR", err, reqLogger)
-		return reconcile.Result{}, err
-	} else if goldmaneCR == nil {
-		r.status.SetDegraded(operatorv1.ResourceNotFound, "Goldmane CR not present; Goldmane is pre requisite for Whisker", err, reqLogger)
-		return reconcile.Result{}, nil
-	}
-
 	pullSecrets, err := utils.GetInstallationPullSecrets(installationSpec, r.cli)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error retrieving pull secrets", err, reqLogger)
@@ -234,31 +232,102 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, err
 	}
 
-	whiskerCertificateNames := dns.GetServiceDNSNames(whisker.WhiskerName, whisker.WhiskerNamespace, r.clusterDomain)
-	whiskerCertificateNames = append(whiskerCertificateNames, "localhost")
-	whiskerKeyPair, err := certificateManager.GetOrCreateKeyPair(r.cli, whisker.WhiskerKeyPairSecret, whisker.WhiskerNamespace, whiskerCertificateNames)
-	if err != nil {
-		r.status.SetDegraded(operatorv1.ResourceCreateError, "Error creating whisker TLS certificate", err, reqLogger)
-		return reconcile.Result{}, err
-	}
-
-	whiskerBackendCertificateNames := dns.GetServiceDNSNames("whisker-backend", whisker.WhiskerNamespace, r.clusterDomain)
-	whiskerBackendCertificateNames = append(whiskerBackendCertificateNames, "localhost", "127.0.0.1")
-	backendKeyPair, err := certificateManager.GetOrCreateKeyPair(r.cli, whisker.WhiskerBackendKeyPairSecret, whisker.WhiskerNamespace, whiskerBackendCertificateNames)
-	if err != nil {
-		r.status.SetDegraded(operatorv1.ResourceCreateError, "Error creating whisker-backend TLS certificate", err, reqLogger)
-		return reconcile.Result{}, err
-	}
-
-	trustedBundle, err := certificateManager.CreateNamedTrustedBundleFromSecrets(
-		whisker.WhiskerDeploymentName,
-		r.cli,
-		common.OperatorNamespace(),
-		false,
-		goldmane.GoldmaneKeyPairSecret,
-	)
+	trustedBundle, err := certificateManager.CreateNamedTrustedBundleFromSecrets(whisker.WhiskerDeploymentName, r.cli, common.OperatorNamespace(), false)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Unable to create the trusted bundle", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+
+	// Run the variant extension. A variant that deploys whisker-backend alone
+	// reports it here, trusting the certificates of the flow source its modifier
+	// wires in. For the core operator this is a no-op.
+	ci := controller.Inputs{
+		RenderInputs: render.Inputs{
+			Installation:  installationSpec,
+			ClusterDomain: r.clusterDomain,
+			TrustedBundle: trustedBundle,
+		},
+		Client:             r.cli,
+		CertificateManager: certificateManager,
+	}
+	ci, extraKeyPairs, err := r.ext.ExtendInputs(ctx, ci)
+	if err != nil {
+		if reason, ok := extensions.DegradedReason(err); ok {
+			r.status.SetDegraded(reason, err.Error(), nil, reqLogger)
+			if reason == operatorv1.ResourceNotReady {
+				// The controller watches what the extension is waiting on, so let the
+				// watch trigger the next reconcile.
+				return reconcile.Result{}, nil
+			}
+			return reconcile.Result{}, err
+		}
+		r.status.SetDegraded(operatorv1.ResourceCreateError, "Error preparing the whisker extension", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+	trustedBundle = ci.RenderInputs.TrustedBundle
+	data, _ := whisker.RenderDataFromInputs(ci.RenderInputs)
+
+	// Whisker reads flows from Goldmane, and serves its UI over a key pair of its
+	// own, unless the variant deploys the backend alone or nothing at all. A
+	// disabled whisker still runs the rest of the reconcile: that is what removes
+	// whatever an earlier configuration deployed.
+	var whiskerKeyPair certificatemanagement.KeyPairInterface
+	if !data.BackendOnly && !data.Disabled {
+		if goldmaneCR, err := utils.GetIfExists[operatorv1.Goldmane](ctx, utils.DefaultInstanceKey, r.cli); err != nil {
+			r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying for Goldmane CR", err, reqLogger)
+			return reconcile.Result{}, err
+		} else if goldmaneCR == nil {
+			r.status.SetDegraded(operatorv1.ResourceNotFound, "Goldmane CR not present; Goldmane is pre requisite for Whisker", err, reqLogger)
+			return reconcile.Result{}, nil
+		}
+
+		goldmaneCertificate, err := certificateManager.GetCertificate(r.cli, goldmane.GoldmaneKeyPairSecret, common.OperatorNamespace())
+		if err != nil {
+			r.status.SetDegraded(operatorv1.ResourceReadError, fmt.Sprintf("Failed to retrieve %s", goldmane.GoldmaneKeyPairSecret), err, reqLogger)
+			return reconcile.Result{}, err
+		}
+		trustedBundle.AddCertificates(goldmaneCertificate)
+
+		whiskerCertificateNames := dns.GetServiceDNSNames(whisker.WhiskerName, whisker.WhiskerNamespace, r.clusterDomain)
+		whiskerCertificateNames = append(whiskerCertificateNames, "localhost")
+		whiskerKeyPair, err = certificateManager.GetOrCreateKeyPair(r.cli, whisker.WhiskerKeyPairSecret, whisker.WhiskerNamespace, whiskerCertificateNames)
+		if err != nil {
+			r.status.SetDegraded(operatorv1.ResourceCreateError, "Error creating whisker TLS certificate", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+	}
+
+	var backendKeyPair certificatemanagement.KeyPairInterface
+	if !data.Disabled {
+		whiskerBackendCertificateNames := dns.GetServiceDNSNames("whisker-backend", whisker.WhiskerNamespace, r.clusterDomain)
+		whiskerBackendCertificateNames = append(whiskerBackendCertificateNames, "localhost", "127.0.0.1")
+		backendKeyPair, err = certificateManager.GetOrCreateKeyPair(r.cli, whisker.WhiskerBackendKeyPairSecret, whisker.WhiskerNamespace, whiskerBackendCertificateNames)
+		if err != nil {
+			r.status.SetDegraded(operatorv1.ResourceCreateError, "Error creating whisker-backend TLS certificate", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+	}
+
+	// Key pairs an earlier configuration issued and this one does not use. The
+	// component removes its own objects; the key pairs are the controller's,
+	// because only it can tell an issued pair from one the user provided.
+	var stale []client.Object
+	if data.BackendOnly || data.Disabled {
+		objs, err := staleKeyPair(r.cli, certificateManager, whisker.WhiskerKeyPairSecret)
+		if err != nil {
+			r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading the whisker key pair", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+		stale = append(stale, objs...)
+	}
+	if data.Disabled {
+		objs, err := staleKeyPair(r.cli, certificateManager, whisker.WhiskerBackendKeyPairSecret)
+		if err != nil {
+			r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading the whisker-backend key pair", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+		stale = append(stale, objs...)
+		stale = append(stale, trustedBundle.ConfigMap(whisker.WhiskerNamespace))
 	}
 
 	preDefaultPatchFrom := client.MergeFrom(whiskerCR.DeepCopy())
@@ -286,12 +355,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, err
 	}
 
-	ri := render.Inputs{
-		Installation:  installationSpec,
-		ClusterDomain: r.clusterDomain,
-		TrustedBundle: trustedBundle,
-	}
-	ch := utils.NewComponentHandler(log, r.cli, r.scheme, whiskerCR, utils.WithExtension(r.ext, ri))
+	ch := utils.NewComponentHandler(log, r.cli, r.scheme, whiskerCR, utils.WithExtension(r.ext, ci.RenderInputs))
 	cfg := &whisker.Configuration{
 		PullSecrets:           pullSecrets,
 		OpenShift:             r.provider.IsOpenShift(),
@@ -301,6 +365,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		WhiskerBackendKeyPair: backendKeyPair,
 		Whisker:               renderCR,
 		ClusterDomain:         r.clusterDomain,
+		BackendOnly:           data.BackendOnly,
+		Disabled:              data.Disabled,
+		KeyValidatorConfig:    data.KeyValidatorConfig,
 	}
 
 	clusterInfo := &v3.ClusterInformation{}
@@ -353,23 +420,33 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		}
 	}
 
-	keyPairOptions := []rcertificatemanagement.KeyPairOption{
-		rcertificatemanagement.NewKeyPairOption(whiskerKeyPair, true, true),
-		rcertificatemanagement.NewKeyPairOption(backendKeyPair, true, true),
-	}
-	if gatewayTLSKeyPair != nil {
-		keyPairOptions = append(keyPairOptions, rcertificatemanagement.NewKeyPairOption(gatewayTLSKeyPair, true, false))
-	}
+	var components []render.Component
+	if !data.Disabled {
+		keyPairOptions := []rcertificatemanagement.KeyPairOption{
+			rcertificatemanagement.NewKeyPairOption(backendKeyPair, true, true),
+		}
+		if whiskerKeyPair != nil {
+			keyPairOptions = append(keyPairOptions, rcertificatemanagement.NewKeyPairOption(whiskerKeyPair, true, true))
+		}
+		for _, kp := range extraKeyPairs {
+			keyPairOptions = append(keyPairOptions, rcertificatemanagement.NewKeyPairOption(kp, true, true))
+		}
+		if gatewayTLSKeyPair != nil {
+			keyPairOptions = append(keyPairOptions, rcertificatemanagement.NewKeyPairOption(gatewayTLSKeyPair, true, false))
+		}
 
-	certComponent := rcertificatemanagement.CertificateManagement(&rcertificatemanagement.Config{
-		Namespace:       goldmane.GoldmaneNamespace,
-		TruthNamespace:  common.OperatorNamespace(),
-		ServiceAccounts: []string{whisker.WhiskerServiceAccountName},
-		KeyPairOptions:  keyPairOptions,
-		TrustedBundle:   trustedBundle,
-	})
-
-	components := []render.Component{certComponent, whisker.Whisker(cfg)}
+		components = append(components, rcertificatemanagement.CertificateManagement(&rcertificatemanagement.Config{
+			Namespace:       goldmane.GoldmaneNamespace,
+			TruthNamespace:  common.OperatorNamespace(),
+			ServiceAccounts: []string{whisker.WhiskerServiceAccountName},
+			KeyPairOptions:  keyPairOptions,
+			TrustedBundle:   trustedBundle,
+		}))
+	}
+	components = append(components, whisker.Whisker(cfg))
+	if len(stale) > 0 {
+		components = append(components, render.NewDeletionPassthrough(stale...))
+	}
 	components = append(components, gatewayComponents...)
 	if err = imageset.ApplyImageSet(ctx, r.cli, r.variant, components...); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error with images from ImageSet", err, reqLogger)
@@ -407,4 +484,22 @@ func (r *Reconciler) maintainFinalizer(ctx context.Context, whiskerCr client.Obj
 	// These objects require graceful termination before the CNI plugin is torn down.
 	whiskerDeployment := &v1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: common.CalicoNamespace, Name: whisker.WhiskerDeploymentName}}
 	return utils.MaintainInstallationFinalizer(ctx, r.cli, whiskerCr, render.WhiskerFinalizer, whiskerDeployment)
+}
+
+// staleKeyPair names what an issued key pair leaves behind once whisker stops
+// using it: its copy in whisker's namespace, and the truth-namespace secret when
+// the operator issued it. A secret the user provided is theirs and stays.
+func staleKeyPair(cli client.Client, cm certificatemanager.CertificateManager, name string) ([]client.Object, error) {
+	objs := []client.Object{&corev1.Secret{
+		TypeMeta:   metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"},
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: whisker.WhiskerNamespace},
+	}}
+	kp, err := cm.GetKeyPair(cli, name, common.OperatorNamespace(), nil)
+	if err != nil {
+		return nil, err
+	}
+	if kp != nil && !kp.BYO() && !kp.UseCertificateManagement() {
+		objs = append(objs, kp.Secret(common.OperatorNamespace()))
+	}
+	return objs, nil
 }
