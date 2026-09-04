@@ -13,22 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Give an extracted upstream tree a git baseline for go.mod and go.sum, so the
-# dependency-patch generator has something to diff against.
+# Give an extracted upstream tree a git baseline for go.mod and go.sum, for the
+# dependency-patch generator to diff against.
 #
 #   init-dep-baseline.sh <upstream-tree>
 #
-# Call this from a component's fetch target, immediately after extraction and
-# before any dependency patch is applied. That timing is the whole point: the
-# baseline has to record the files as upstream ships them. Creating it later --
-# lazily, on first regeneration -- captures whatever the tree happens to hold,
-# and if a dependency patch is already applied every pin then reads as
-# satisfied and the generator deletes the patch.
+# Call it from the fetch target, right after extraction: the baseline must
+# record upstream's files. Created later it captures an already-patched tree,
+# every pin then reads as satisfied, and the generator deletes the patch.
 #
-# Components fetched with git clone already have a baseline, so this is a no-op
-# for them. The repo it creates lives inside the extracted tree, which the
-# calico repo gitignores and `make clean` removes wholesale, so it cannot
-# outlive the tree it describes.
+# No-op for cloned trees, which already have one. The repo it creates lives
+# inside the extracted tree, so `make clean` removes it too.
 
 set -e -u -o pipefail
 

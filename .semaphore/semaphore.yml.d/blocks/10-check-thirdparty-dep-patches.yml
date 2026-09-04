@@ -1,16 +1,12 @@
 - name: "Check third-party dependency patches"
-  # The dep-patches/ under each bundled third-party component are derived from
-  # that component's dep-pins.txt, so regenerating them must be a no-op. This
-  # catches a hand-edited patch, a pin moved without regenerating, and an
-  # upstream version bump that leaves the patch stale.
+  # Each component's dep-patches/ are derived from its dep-pins.txt, so
+  # regenerating them must be a no-op.
   #
-  # metadata.mk is in the trigger for a non-obvious reason: `go mod tidy`'s
-  # output depends on the Go toolchain, so bumping GO_VERSION can change the
-  # generated go.sum and leave every checked-in patch stale.
+  # metadata.mk is in the trigger because `go mod tidy`'s output depends on the
+  # Go toolchain: bumping GO_VERSION can leave every checked-in patch stale.
   #
-  # Deliberately not a dependency of Prerequisites: it fetches three upstream
-  # trees and runs `go mod tidy` on each, so gating the component builds behind
-  # it would serialise them for no benefit. It gates the PR on its own.
+  # Not a Prerequisites dependency -- it fetches three upstream trees and tidies
+  # each, so it gates the PR on its own rather than the component builds.
   run:
     when: >-
       ${FORCE_RUN} or

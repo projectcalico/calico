@@ -17,30 +17,17 @@
 #
 #   regen-dep-patch.sh <upstream-tree> <pin-file> <output-patch>
 #
-# go.mod and go.sum are reset to the pinned upstream ref first, so this is
-# idempotent: the output depends only on the pin file and the ref, never on what
-# the tree happened to contain. Functional patches are left applied -- they
-# touch source only, and the emitted diff is scoped to go.mod and go.sum.
+# go.mod and go.sum are reset to the upstream ref first, so the output depends
+# only on the pin file and the ref. Functional patches stay applied; they touch
+# source only. Cloned trees carry the ref to reset to; extracted ones are given
+# a baseline by init-dep-baseline.sh at fetch time.
 #
-# Components fetched with git clone carry the ref to reset to. Components
-# extracted from a tarball are given one by init-dep-baseline.sh at fetch time.
+# Run inside $(DOCKER_GO_BUILD): go mod tidy's output depends on the Go version.
 #
-# Run inside $(DOCKER_GO_BUILD) so the Go toolchain is the pinned one. Running
-# it with a different Go can produce a different go.sum, which the drift check
-# will then report on every unrelated PR.
-#
-# A pin is a floor, never a ceiling: if the ref already satisfies a pin, the
-# pin is reported as satisfied and left out of the patch rather than pinning
-# the module back down. If every pin is satisfied the patch is removed
-# entirely, which is the correct end state for a component that upstream has
-# caught up with.
-#
-# The pin file owns the output: a missing or empty pin file means the component
-# declares no dependency pins, so the derived patch is removed and the script
-# succeeds. That is what lets an aggregate regeneration run over components
-# that have not been onboarded yet -- but it also means a component whose
-# dependency patch is still maintained by hand must not be passed to this
-# script, or the patch will be deleted.
+# Pins are floors. A pin the ref already satisfies is skipped rather than
+# pinning the module back down, and if every pin is satisfied the patch is
+# removed -- as it is when the pin file is missing or empty. So a component
+# whose patch is still hand-maintained must not be passed here.
 
 set -e -u -o pipefail
 
@@ -53,9 +40,8 @@ TREE=$1
 PIN_FILE=$2
 OUT=$3
 
-# Deterministic identity for the emitted patch. These are placeholders, not
-# provenance: the patch is applied with patch(1), which ignores them, and a
-# real author or date would make the output differ on every regeneration.
+# Placeholders, not provenance: patch(1) ignores them, and real values would
+# change the output on every run.
 PATCH_SHA=0000000000000000000000000000000000000000
 PATCH_AUTHOR="Tigera <noreply@tigera.io>"
 PATCH_DATE="Thu, 1 Jan 1970 00:00:00 +0000"
@@ -71,8 +57,7 @@ drop_output() {
 	fi
 }
 
-# Pins are "<module> <version>" lines; everything else is rationale that gets
-# copied into the patch header verbatim.
+# Pin lines are "<module> <version>"; comments become the patch header.
 if [ -f "$PIN_FILE" ]; then
 	mapfile -t pin_lines < <(grep -vE '^[[:space:]]*(#|$)' "$PIN_FILE" || true)
 else
@@ -88,18 +73,16 @@ if [ ${#pin_lines[@]} -eq 0 ]; then
 	exit 0
 fi
 
-# The baseline must have been recorded at fetch time, when the tree still held
-# upstream's files. Creating one here would capture whatever the tree holds
-# now, and if a dependency patch is already applied every pin would read as
-# satisfied and this would delete the patch it was asked to rebuild.
+# Must have been recorded at fetch time. One created here would capture an
+# already-patched tree, every pin would read as satisfied, and this would
+# delete the patch it was asked to rebuild.
 [ -d "$TREE/.git" ] || {
 	echo "error: $TREE has no baseline to diff against." >&2
 	echo "       It is recorded by the component's fetch target; run 'make clean' and retry." >&2
 	exit 1
 }
 
-# Reset the derived files to the pinned ref, discarding any previously applied
-# dependency patch.
+# Discard any previously applied dependency patch.
 git -C "$TREE" checkout -- go.mod go.sum
 
 # selected_version <module> -- the version the module graph currently resolves
@@ -108,9 +91,8 @@ selected_version() {
 	(cd "$TREE" && go list -m -f '{{.Version}}' "$1" 2>/dev/null) || true
 }
 
-# is_at_least <candidate> <floor> -- true when candidate >= floor. sort -V is
-# enough for the release versions used as pins; it does not implement semver
-# prerelease ordering, so avoid prerelease pins.
+# is_at_least <candidate> <floor>. sort -V does not implement semver prerelease
+# ordering, so avoid prerelease pins.
 is_at_least() {
 	[ "$1" = "$2" ] && return 0
 	[ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" = "$1" ]
@@ -138,10 +120,8 @@ if [ ${#targets[@]} -gt 0 ]; then
 fi
 (cd "$TREE" && go mod tidy)
 
-# Confirm each pin actually took. A pin whose module is absent afterwards was
-# tidied away as unused, which means it was never reachable and the pin is
-# misleading; a pin that resolved lower than asked means something in the graph
-# is holding it down.
+# A module absent after tidy was never reachable, so the pin is misleading; one
+# below its pin means something in the graph is holding it down.
 status=0
 for line in "${pin_lines[@]}"; do
 	read -r module version _ <<<"$line"
@@ -156,8 +136,7 @@ done
 [ $status -eq 0 ] || exit $status
 
 # core.abbrev is pinned because git scales index-line abbreviation with the
-# size of the object database, which would otherwise make the output depend on
-# how the upstream tree was fetched.
+# object count, which would make the output depend on how the tree was fetched.
 diff=$(git -C "$TREE" -c core.abbrev=7 diff -- go.mod go.sum)
 
 if [ -z "$diff" ]; then

@@ -1,23 +1,21 @@
 # Dependency pins applied on top of the pinned envoyproxy/gateway release
 # (ENVOY_GATEWAY_VERSION) to remediate CVEs in the bundled image.
 #
-# Each entry is the minimum version this image requires. `go mod tidy` settles
-# whatever else has to move, so a module that only changes as a consequence of
-# a pin does not belong here -- recording it would turn an incidental bump into
-# a permanent floor that nobody can tell apart from a deliberate one. Bumping
-# x/text, for example, also advances x/mod and x/tools because its go.mod
-# requires them, and neither is pinned.
+# Each entry is a minimum version. `go mod tidy` settles the rest, so modules
+# that move only as a consequence -- x/mod and x/tools, pulled in by x/text --
+# are not listed.
 #
-# golang.org/x/net v0.56.0 clears GO-2026-5942: a panic parsing an invalid SVCB
-# or HTTPS DNS record in x/net/dns/dnsmessage. Envoy Gateway v1.8.2 still ships
-# v0.55.0. The earlier CVE-2026-33814, fixed in v0.53.0, is already in the
-# v1.8.2 baseline.
+# golang.org/x/net v0.56.0 clears GO-2026-5942, a panic parsing an invalid SVCB
+# or HTTPS DNS record in x/net/dns/dnsmessage. The pinned release still ships
+# v0.55.0.
 #
-# golang.org/x/text v0.39.0 clears CVE-2026-56852 / GO-2026-5970: an infinite
-# loop in norm.Iter on invalid UTF-8, reachable from the gateway-api schema
-# validation path.
+# golang.org/x/text v0.39.0 clears CVE-2026-56852 / GO-2026-5970, an infinite
+# loop in norm.Iter on invalid UTF-8, reachable from gateway-api schema
+# validation.
+#
+# github.com/docker/cli v29.6.0 was advanced by an earlier revision of this
+# patch and the pinned release now satisfies it, so it produces no hunk. Kept
+# declared so a regression re-emits it.
 golang.org/x/net v0.56.0
 golang.org/x/text v0.39.0
-# github.com/docker/cli was advanced by an earlier revision of this patch;
-# v1.8.2 already ships a safe version, so it produces no hunk today.
 github.com/docker/cli v29.6.0
