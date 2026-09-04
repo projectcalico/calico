@@ -19,7 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/tigera/api/pkg/lib/numorstring"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 )
@@ -71,18 +71,11 @@ var _ = Describe("egress destination rules", func() {
 			Expect(r.Ports).To(BeEmpty())
 		})
 
-		It("falls back to the domain for an external hostname", func() {
+		It("constrains only the port for an external hostname, which Calico policy cannot match", func() {
 			r := networkpolicy.EntityRuleForHostPort("otlp.example.com", "cluster.local", port(443))
-			Expect(r.Domains).To(Equal([]string{"otlp.example.com"}))
 			Expect(r.Ports).To(Equal([]numorstring.Port{port(443)}))
-		})
-
-		It("never returns a rule that constrains only the port", func() {
-			for _, host := range []string{"otlp.example.com", "10.1.2.3", "lgtm.otel-demo.svc"} {
-				r := networkpolicy.EntityRuleForHostPort(host, "cluster.local", port(443))
-				Expect(r.Services != nil || len(r.Nets) > 0 || len(r.Domains) > 0).To(BeTrue(),
-					"rule for %q constrains only the port", host)
-			}
+			Expect(r.Services).To(BeNil())
+			Expect(r.Nets).To(BeEmpty())
 		})
 	})
 
@@ -90,7 +83,6 @@ var _ = Describe("egress destination rules", func() {
 		It("takes the port from the URL when it carries one", func() {
 			r, err := networkpolicy.EntityRuleForURL("https://otlp.example.com:4317", "cluster.local")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(r.Domains).To(Equal([]string{"otlp.example.com"}))
 			Expect(r.Ports).To(Equal([]numorstring.Port{port(4317)}))
 		})
 
