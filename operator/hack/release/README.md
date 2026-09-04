@@ -118,7 +118,7 @@ However, some additonal flags are used to provide more information on the Calico
 
       ```sh
       make release HASHRELEASE=true VERSION=vA.B.C-0.dev-XXX-gYYYYYYYYYYYY-vX.Y.Z-0.dev-N-gSHAAAAAAAAAA \
-        --calico-version vX.Y.Z-0.dev-N-gSHAAAAAAAAAA
+        --calico-image-tag vX.Y.Z-0.dev-N-gSHAAAAAAAAAA
       ```
 
 1. Publish the hashrelease operator image to the container registry.
@@ -185,7 +185,7 @@ For hashrelease, use the `--hashrelease` flag and give the Calico version the op
 deploy. A release build takes it from the git tag instead.
 
 ```sh
-release build --version <operator version> --hashrelease --calico-version <calico version>
+release build --version <operator version> --hashrelease --calico-image-tag <calico image tag>
 ```
 
 #### Examples
@@ -200,7 +200,7 @@ release build --version <operator version> --hashrelease --calico-version <calic
 
     ```sh
     release build --hashrelease --version v1.36.0-0.dev-259-g25c811f78fbd-v3.30.0-0.dev-338-gca80474016a5 \
-     --calico-version v3.30.0-0.dev-338-gca80474016a5
+     --calico-image-tag v3.30.0-0.dev-338-gca80474016a5
     ```
 
 ### release publish

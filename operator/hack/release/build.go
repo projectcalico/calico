@@ -41,7 +41,7 @@ var buildCommand = &cli.Command{
 		imageFlag,
 		archFlag,
 		registryFlag,
-		calicoVersionFlag,
+		calicoImageTagFlag,
 		calicoRegistryFlag,
 		calicoImagePathFlag,
 		hashreleaseFlag,
@@ -88,10 +88,10 @@ var buildBefore = cli.BeforeFunc(func(ctx context.Context, c *cli.Command) (cont
 		return ctx, nil
 	}
 
-	// For hashrelease builds, the Calico version the operator deploys has to be spelled out:
-	// the build's own version names the operator image, not the components it installs.
-	if c.String(calicoVersionFlag.Name) == "" {
-		return ctx, fmt.Errorf("for hashrelease builds, the Calico version must be specified")
+	// For hashrelease builds, the tag the operator resolves Calico images at has to be
+	// spelled out: the build's own version names the operator image, not the components.
+	if c.String(calicoImageTagFlag.Name) == "" {
+		return ctx, fmt.Errorf("for hashrelease builds, the Calico image tag must be specified")
 	}
 
 	return ctx, nil
@@ -152,7 +152,9 @@ var buildAction = func(ctx context.Context, c *cli.Command) (string, map[string]
 		buildEnv = append(buildEnv, hashreleaseEnv...)
 	} else {
 		buildLog = buildLog.WithField("release", true)
-		buildEnv = append(buildEnv, "RELEASE=true")
+		// A release publishes every Calico image at the release version, so the operator
+		// resolves them there rather than at the branch tag a dev build defaults to.
+		buildEnv = append(buildEnv, "RELEASE=true", fmt.Sprintf("CALICO_IMAGE_TAG=%s", version))
 		if setup.IsCloud {
 			// Cloud releases carry a -cloud suffix, so VERSION (vX.Y.Z-cloud) differs from the git
 			// tag (vX.Y.Z). Pass GIT_VERSION=VERSION so the Makefile's VERSION==GIT_VERSION guard
@@ -252,7 +254,7 @@ var setupHashreleaseBuild = func(c *cli.Command, repoRootDir string) ([]string, 
 		}
 	}
 
-	env := []string{fmt.Sprintf("CALICO_VERSION=%s", c.String(calicoVersionFlag.Name))}
+	env := []string{fmt.Sprintf("CALICO_IMAGE_TAG=%s", c.String(calicoImageTagFlag.Name))}
 	if registry := c.String(calicoRegistryFlag.Name); registry != "" {
 		env = append(env, fmt.Sprintf("CALICO_REGISTRY=%s", addTrailingSlash(registry)))
 	}

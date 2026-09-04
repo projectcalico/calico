@@ -216,14 +216,14 @@ var localFlag = &cli.BoolFlag{
 // Calico related flags.
 var (
 	calicoFlagCategory = "Calico Options"
-	calicoVersionFlag  = &cli.StringFlag{
-		Name:     "calico-version",
+	calicoImageTagFlag = &cli.StringFlag{
+		Name:     "calico-image-tag",
 		Category: calicoFlagCategory,
-		Usage:    "The Calico version the operator deploys (ONLY for hashreleases). A release build takes it from the git tag.",
-		Sources:  cli.EnvVars("CALICO_VERSION"),
+		Usage:    "The tag the operator resolves Calico images at (ONLY for hashreleases). A release build uses the release version.",
+		Sources:  cli.EnvVars("CALICO_IMAGE_TAG"),
 		Action: func(ctx context.Context, c *cli.Command, s string) error {
 			if s != "" && !c.Bool(hashreleaseFlag.Name) {
-				return fmt.Errorf("calico-version can only be set for hashreleases")
+				return fmt.Errorf("calico-image-tag can only be set for hashreleases")
 			}
 			return nil
 		},
