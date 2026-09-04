@@ -614,6 +614,43 @@ blocks:
             - docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
             - zstd -3 --rm /tmp/operator-image.tar
             - gcloud storage cp /tmp/operator-image.tar.zst "${GCS_WORKFLOW_DIR}/operator-image.tar.zst"
+  - name: "Build: third-party images"
+    # The four upstream images the kind lanes need. Every build fetches source
+    # over the public internet, so one producer saves six consumer jobs ~5
+    # minutes of build time and four network fetches each.
+    run:
+      when: "true"
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      jobs:
+        - name: "Build and cache envoy-gateway image"
+          commands:
+            - make -C third_party/envoy-gateway image
+            - docker save calico/envoy-gateway:latest-amd64 -o /tmp/envoy-gateway-image.tar
+            - zstd -3 --rm /tmp/envoy-gateway-image.tar
+            - gcloud storage cp /tmp/envoy-gateway-image.tar.zst "${GCS_WORKFLOW_DIR}/envoy-gateway-image.tar.zst"
+        - name: "Build and cache envoy-proxy image"
+          commands:
+            - make -C third_party/envoy-proxy image
+            - docker save calico/envoy-proxy:latest-amd64 -o /tmp/envoy-proxy-image.tar
+            - zstd -3 --rm /tmp/envoy-proxy-image.tar
+            - gcloud storage cp /tmp/envoy-proxy-image.tar.zst "${GCS_WORKFLOW_DIR}/envoy-proxy-image.tar.zst"
+        - name: "Build and cache envoy-ratelimit image"
+          commands:
+            - make -C third_party/envoy-ratelimit image
+            - docker save calico/envoy-ratelimit:latest-amd64 -o /tmp/envoy-ratelimit-image.tar
+            - zstd -3 --rm /tmp/envoy-ratelimit-image.tar
+            - gcloud storage cp /tmp/envoy-ratelimit-image.tar.zst "${GCS_WORKFLOW_DIR}/envoy-ratelimit-image.tar.zst"
+        - name: "Build and cache third-party-cni-plugins image"
+          commands:
+            - make -C third_party/cni-plugins image
+            - docker save calico/third-party-cni-plugins:latest-amd64 -o /tmp/third-party-cni-plugins-image.tar
+            - zstd -3 --rm /tmp/third-party-cni-plugins-image.tar
+            - gcloud storage cp /tmp/third-party-cni-plugins-image.tar.zst "${GCS_WORKFLOW_DIR}/third-party-cni-plugins-image.tar.zst"
   - name: Prerequisites
     skip:
       # Always skip, this is a dummy job used to group prerequisite checks.
@@ -964,6 +1001,7 @@ blocks:
       - "Build: node image"
       - "Build: whisker image"
       - "Build: operator image"
+      - "Build: third-party images"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
@@ -1403,18 +1441,29 @@ blocks:
             - export NUM_FV_BATCHES=16
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
   - name: "E2E tests: Gateway API Conformance"
+    # The trigger is spelled as a CHANGE_IN macro because the "Build: *"
+    # producers derive their own triggers from their dependents, and only that
+    # form can be merged into the superset.
     run:
-      when: >-
-        true or change_in(['/e2e/cmd/gateway', '/hack/test/kind/gateway-setup.sh', '/third_party/envoy-gateway', '/third_party/envoy-proxy', '/third_party/envoy-ratelimit'],
-        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+      when: "true"
     execution_time_limit:
       minutes: 60
     dependencies:
       - Prerequisites
+      - "Build: calico image"
+      - "Build: node image"
+      - "Build: whisker image"
+      - "Build: operator image"
+      - "Build: third-party images"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "node"
+          value: "calico"
+      prologue:
+        commands:
+          # Free /var/lib/docker space for the cached image tarballs.
+          - docker system prune -af
+          - .semaphore/load-cached-images
       jobs:
         - name: "Gateway API: Conformance Tests"
           commands:
@@ -1557,6 +1606,7 @@ blocks:
       - "Build: calico image"
       - "Build: node image"
       - "Build: operator image"
+      - "Build: third-party images"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
