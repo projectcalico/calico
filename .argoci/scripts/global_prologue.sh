@@ -108,6 +108,13 @@ export GOOGLE_ZONE=${GOOGLE_ZONE:-$(gcloud compute zones list --project "${GOOGL
 export GOOGLE_NETWORK=${GOOGLE_NETWORK:-semaphore-autotest}
 export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
 
+# banzai-core defaults these to the tigera-dev developer account, which the CI
+# IAM user cannot reach: kops 403s on its state store and the OpenShift
+# installer finds no matching Route53 zone.
+export KOPS_STATE_STORE_NAME=${KOPS_STATE_STORE_NAME:-kops-tigera-dev-ci}
+export KOPS_AWS_DNS_ZONE=${KOPS_AWS_DNS_ZONE:-kops.ci.aws.eng.tigera.net}
+export OPENSHIFT_BASE_DOMAIN=${OPENSHIFT_BASE_DOMAIN:-openshift.ci.aws.eng.tigera.net}
+
 # RELEASE_STREAM: release-vX.Y -> vX.Y, else master. BRANCH is passed by the
 # workflow (from the cron's `branch` parameter).
 # Branch comes from the ArgoCI handler (CI_GIT_CLONED_BRANCH); fall back to
