@@ -27,7 +27,6 @@ import (
 	"github.com/projectcalico/calico/operator/hack/release/internal/command"
 	"github.com/projectcalico/calico/operator/hack/release/internal/middleware"
 	"github.com/projectcalico/calico/operator/hack/release/internal/setup"
-	"github.com/projectcalico/calico/operator/hack/release/internal/versions"
 )
 
 // Command to release from a previous version.
@@ -37,7 +36,6 @@ var releaseFromCommand = &cli.Command{
 	Flags: []cli.Flag{
 		baseOperatorFlag,
 		versionFlag,
-		exceptCalicoFlag,
 		publishFlag,
 		archFlag,
 		registryFlag,
@@ -89,29 +87,6 @@ var releaseFromAction = cli.ActionFunc(func(ctx context.Context, c *cli.Command)
 	repoRootDir, err := command.GitDir()
 	if err != nil {
 		return fmt.Errorf("getting git root directory: %s", err)
-	}
-
-	// fetch config from the base version of the operator
-	baseVersion := c.String(baseOperatorFlag.Name)
-	gitRef, err := extractGitRef(baseVersion)
-	if err != nil {
-		return fmt.Errorf("extracting git ref from %q: %s", baseVersion, err)
-	}
-	if err := versions.ReplaceConfigVersions(repoRootDir, gitRef); err != nil {
-		return fmt.Errorf("replacing config versions with content from git ref %q: %s", gitRef, err)
-	}
-
-	// Apply new version overrides
-	if calicoOverrides := c.StringSlice(exceptCalicoFlag.Name); len(calicoOverrides) > 0 {
-		cmpts := make(map[string]string)
-		for _, override := range calicoOverrides {
-			parts := strings.Split(override, ":")
-			cmpts[parts[0]] = parts[1]
-		}
-		logrus.WithField("components", cmpts).Debug("Applying Calico version overrides")
-		if err := versions.UpdateCalicoComponents(repoRootDir, cmpts); err != nil {
-			return fmt.Errorf("overriding calico config: %s", err)
-		}
 	}
 
 	// Build either a new release or a new hashrelease operator

@@ -23,7 +23,6 @@ import (
 	"github.com/Masterminds/semver/v3"
 
 	"github.com/projectcalico/calico/operator/hack/release/internal/setup"
-	"github.com/projectcalico/calico/operator/hack/release/internal/versions"
 )
 
 // defaultRegistry and defaultImage are the publish defaults for the active build variant. They are
@@ -62,10 +61,6 @@ func contextString(ctx context.Context, key contextKey) (string, error) {
 	return v, nil
 }
 
-type (
-	CalicoVersion = versions.CalicoVersion
-)
-
 func addRepoInfoToCtx(ctx context.Context, repo string) (context.Context, error) {
 	if ctx.Value(githubOrgCtxKey) != nil && ctx.Value(githubRepoCtxKey) != nil {
 		return ctx, nil
@@ -88,28 +83,12 @@ func isEnterpriseReleaseVersionFormat(version string) (bool, error) {
 	return releaseRegex.MatchString(version), nil
 }
 
-func isPrereleaseVersion(rootDir string) (bool, error) {
-	enterpriseVer, err := versions.EnterpriseConfigVersions(rootDir)
+// isPrereleaseVersion reports whether the operator version carries a semver prerelease
+// component, which is what marks the GitHub release as a prerelease.
+func isPrereleaseVersion(version string) (bool, error) {
+	ver, err := semver.NewVersion(version)
 	if err != nil {
-		return false, fmt.Errorf("retrieving Enterprise version: %s", err)
-	}
-	return isPrereleaseEnterpriseVersion(enterpriseVer.Title)
-}
-
-// Check if the Enterprise version is a prerelease version.
-// First, it has to be in the release format, otherwise it returns false.
-// Then it converts to semver and returns true if there is a prerelease component.
-func isPrereleaseEnterpriseVersion(enterpriseVer string) (bool, error) {
-	release, err := isEnterpriseReleaseVersionFormat(enterpriseVer)
-	if err != nil {
-		return false, fmt.Errorf("checking Enterprise version format: %s", err)
-	}
-	if !release {
-		return false, nil
-	}
-	ver, err := semver.NewVersion(enterpriseVer)
-	if err != nil {
-		return false, fmt.Errorf("parsing Enterprise version (%s): %s", enterpriseVer, err)
+		return false, fmt.Errorf("parsing version (%s): %s", version, err)
 	}
 	return ver.Prerelease() != "", nil
 }

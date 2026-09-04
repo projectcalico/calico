@@ -47,6 +47,31 @@ tag() {
     echo "Tagged $(echo $CALICO_IMAGES | wc -w) images as ${DEV_IMAGE_PREFIX}/*:${DEV_IMAGE_TAG}"
 }
 
+# Build the operator image if its inputs (tag, registry, source) have changed
+# since the last run.
+operator() {
+    mkdir -p "$STAMP_DIR"
+    # Untracked files under operator/ are invisible here, so a brand-new source
+    # file wants an explicit rebuild.
+    operator_hash=$( { git -C "$REPO_ROOT" rev-parse HEAD:operator
+                       git -C "$REPO_ROOT" diff HEAD -- operator; } | md5sum | cut -d' ' -f1)
+    cur_inputs="${DEV_IMAGE_TAG}:${DEV_IMAGE_REGISTRY}:${DEV_IMAGE_PATH}:${operator_hash}"
+    stamp="${STAMP_DIR}/operator.inputs"
+    prev_inputs=$(cat "$stamp" 2>/dev/null || echo "")
+
+    if [ "$cur_inputs" = "$prev_inputs" ]; then
+        echo "Operator unchanged (inputs match)"
+    else
+        echo "Building operator (inputs changed)..."
+        cd "$KIND_INFRA_DIR"
+        DEV_IMAGE_TAG="$DEV_IMAGE_TAG" \
+            DEV_IMAGE_REGISTRY="$DEV_IMAGE_REGISTRY" \
+            DEV_IMAGE_PATH="$DEV_IMAGE_PATH" \
+            ./build-operator.sh
+        echo "$cur_inputs" > "$stamp"
+    fi
+}
+
 # Push dev-tagged images to the remote registry. Skips images whose
 # docker image ID hasn't changed since the last push.
 push() {

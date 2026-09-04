@@ -16,13 +16,9 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io/fs"
-	"os"
 	"regexp"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/urfave/cli/v3"
@@ -203,16 +199,6 @@ var (
 	}
 )
 
-func validateOverrides(ctx context.Context, c *cli.Command, values []string) error {
-	for _, value := range values {
-		parts := strings.Split(value, ":")
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid override %q, must be in the format <image>:<version>", value)
-		}
-	}
-	return nil
-}
-
 var publishFlag = &cli.BoolFlag{
 	Name:    "publish",
 	Usage:   "Publish the new operator",
@@ -227,72 +213,20 @@ var localFlag = &cli.BoolFlag{
 	Value:   false,
 }
 
-// Flag Action to check value is a valid directory.
-func dirFlagCheck(_ context.Context, _ *cli.Command, path string) error {
-	if path == "" {
-		return nil
-	}
-	// Check if the directory exists
-	info, err := os.Stat(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("directory %q does not exist", path)
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("%q is not a directory", path)
-	}
-	return nil
-}
-
-// Flag Action to check value is a valid file.
-func fileFlagCheck(_ context.Context, _ *cli.Command, path string) error {
-	if path == "" {
-		return nil
-	}
-	// Check if the file exists
-	info, err := os.Stat(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("file %q does not exist", path)
-	}
-	if info.IsDir() {
-		return fmt.Errorf("%q is a directory, expected a file", path)
-	}
-	return nil
-}
-
 // Calico related flags.
 var (
 	calicoFlagCategory = "Calico Options"
-	calicoVersionFlag  = &cli.StringFlag{
-		Name:     "calico-version",
+	calicoImageTagFlag = &cli.StringFlag{
+		Name:     "calico-image-tag",
 		Category: calicoFlagCategory,
-		Usage:    "The Calico version to use for the release",
-		Sources:  cli.EnvVars("CALICO_VERSION"),
+		Usage:    "The tag the operator resolves Calico images at (ONLY for hashreleases). A release build uses the release version.",
+		Sources:  cli.EnvVars("CALICO_IMAGE_TAG"),
 		Action: func(ctx context.Context, c *cli.Command, s string) error {
-			if c.Bool(hashreleaseFlag.Name) {
-				// No need to validate Calico version for hashrelease
-				return nil
-			}
-			if valid, err := setup.IsValidCalicoReleaseVersion(s); err != nil {
-				return fmt.Errorf("error validating Calico version format: %w", err)
-			} else if !valid {
-				return fmt.Errorf("version %q is not a valid Calico release version", s)
+			if s != "" && !c.Bool(hashreleaseFlag.Name) {
+				return fmt.Errorf("calico-image-tag can only be set for hashreleases")
 			}
 			return nil
 		},
-	}
-	calicoRefFlag = &cli.StringFlag{
-		Name:     "calico-ref",
-		Category: calicoFlagCategory,
-		Usage:    "The Calico git ref (branch or tag) to use for version config (e.g. release-vX.Y)",
-		Sources:  cli.EnvVars("CALICO_REF"),
-	}
-	exceptCalicoFlag = &cli.StringSliceFlag{
-		Name:     "except-calico",
-		Category: calicoFlagCategory,
-		Usage:    "Calico image and version to update where the image name adheres with config/calico_versions.yaml file. Can be specified multiple times.",
-		Sources:  cli.EnvVars("OS_IMAGES_VERSIONS"),
-		Required: true,
-		Action:   validateOverrides,
 	}
 	calicoRegistryFlag = &cli.StringFlag{
 		Name:     "calico-registry",
@@ -317,28 +251,6 @@ var (
 			}
 			return nil
 		},
-	}
-	calicoVersionsConfigFlag = &cli.StringFlag{
-		Name:     "calico-versions",
-		Category: calicoFlagCategory,
-		Usage:    "The path to the Calico versions config file.",
-		Sources:  cli.EnvVars("CALICO_VERSIONS"),
-		Action: func(ctx context.Context, c *cli.Command, s string) error {
-			if s != "" && !c.Bool(hashreleaseFlag.Name) {
-				return fmt.Errorf("calico-versions can only be set for hashreleases")
-			}
-			if s != "" && c.String(calicoVersionFlag.Name) != "" {
-				return fmt.Errorf("calico-versions and calico-version cannot both be set")
-			}
-			return fileFlagCheck(ctx, c, s)
-		},
-	}
-	calicoDirFlag = &cli.StringFlag{
-		Name:     "calico-dir",
-		Category: calicoFlagCategory,
-		Usage:    "The directory containing the Calico CRDs to bundle with the operator (development and testing purposes only)",
-		Sources:  cli.EnvVars("CALICO_DIR"),
-		Action:   dirFlagCheck,
 	}
 )
 
