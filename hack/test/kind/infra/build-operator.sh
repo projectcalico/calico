@@ -19,22 +19,11 @@ OPERATOR_DIR=$(cd "${INFRA_DIR}/../../../../operator" && pwd)
 
 pushd "${OPERATOR_DIR}"
 
-make build/_output/bin/gen-versions
+make dev-image \
+    CALICO_IMAGE_TAG="${DEV_IMAGE_TAG}" \
+    CALICO_REGISTRY="${DEV_IMAGE_REGISTRY}" \
+    CALICO_IMAGE_PATH="${DEV_IMAGE_PATH}"
 
-# The build needs a component list pointing at the dev images, which is the
-# same file the repo keeps generated from config/calico_versions.yml. Put the
-# committed one back once the image is built.
-COMPONENTS="${OPERATOR_DIR}/pkg/components/calico.go"
-trap 'git -C "${OPERATOR_DIR}" checkout -- pkg/components/calico.go' EXIT INT TERM
-
-VERSIONS_FILE=$(mktemp /tmp/calico_versions_XXXXXX.yml)
-sed -e "s/test-build/${DEV_IMAGE_TAG}/g" \
-    -e "/version:/a\\    registry: ${DEV_IMAGE_REGISTRY}/\n    imagePath: ${DEV_IMAGE_PATH}" \
-    "${INFRA_DIR}/calico_versions.yml" > "${VERSIONS_FILE}"
-build/_output/bin/gen-versions -os-versions="${VERSIONS_FILE}" > "${COMPONENTS}"
-rm -f "${VERSIONS_FILE}"
-
-make image
 # Strip docker.io/ since Docker Hub doesn't use it.
 if [ "${DEV_IMAGE_REGISTRY}" = "docker.io" ]; then
   OPERATOR_REF="${DEV_IMAGE_PATH}/operator:${DEV_IMAGE_TAG}"

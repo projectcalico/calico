@@ -33,10 +33,9 @@ import (
 	"github.com/google/go-github/v53/github"
 
 	"github.com/projectcalico/calico/operator/hack/release/internal/command"
-	"github.com/projectcalico/calico/operator/hack/release/internal/versions"
 )
 
-func fakeOperatorRepo(t testing.TB, calicoVer, enterpriseVer string) string {
+func fakeOperatorRepo(t testing.TB) string {
 	t.Helper()
 	td := t.TempDir()
 
@@ -45,20 +44,6 @@ func fakeOperatorRepo(t testing.TB, calicoVer, enterpriseVer string) string {
 		t.Fatalf("failed to init dir (%s) as git repo: %v", td, err)
 	}
 
-	if err := os.MkdirAll(filepath.Join(td, filepath.Dir(versions.CalicoConfigPath)), 0o755); err != nil {
-		t.Fatalf("failed to create config dir: %v", err)
-	}
-
-	// Create calico version file
-	calicoContent := fmt.Sprintf("title: %s\n", calicoVer)
-	if err := os.WriteFile(filepath.Join(td, versions.CalicoConfigPath), []byte(calicoContent), 0o644); err != nil {
-		t.Fatalf("failed to write calico version file: %v", err)
-	}
-	// Create enterprise version file
-	enterpriseContent := fmt.Sprintf("title: %s\n", enterpriseVer)
-	if err := os.WriteFile(filepath.Join(td, versions.EnterpriseConfigPath), []byte(enterpriseContent), 0o644); err != nil {
-		t.Fatalf("failed to write enterprise version file: %v", err)
-	}
 	return td
 }
 
@@ -85,7 +70,7 @@ func TestGenerateReleaseNotes(t *testing.T) {
 	repo := "operator"
 
 	// Create fake operator repo with version files and make it the cwd so gitDir() can find it.
-	td := fakeOperatorRepo(t, "v3.30.5", "v3.21.4")
+	td := fakeOperatorRepo(t)
 	origWd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("failed to get cwd: %v", err)
@@ -137,11 +122,6 @@ func TestGenerateReleaseNotes(t *testing.T) {
 		return dateRegex.ReplaceAllString(s, "DD MMM YYYY")
 	})
 	want := `27 Nov 2026
-
-#### Included Calico versions
-
-Calico version: v3.30.5
-Calico Enterprise version: v3.21.4
 
 #### Other changes
 
@@ -598,7 +578,7 @@ func TestCollectReleaseNotes(t *testing.T) {
 	repo := "somerepo"
 
 	// Create fake operator repo with version files and make it the cwd so gitDir() can find it.
-	td := fakeOperatorRepo(t, "v3.25.0", "v3.20.0")
+	td := fakeOperatorRepo(t)
 	origWd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("failed to get cwd: %v", err)
@@ -679,10 +659,6 @@ func TestCollectReleaseNotes(t *testing.T) {
 
 	want := &ReleaseNoteData{
 		Date: time.Now().Format("02 Jan 2006"),
-		Versions: map[string]string{
-			"Calico":            "v3.25.0",
-			"Calico Enterprise": "v3.20.0",
-		},
 		BugFixes: []ReleaseNoteItem{
 			{
 				ID:     100,

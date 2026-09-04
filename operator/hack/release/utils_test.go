@@ -129,7 +129,7 @@ func TestAddTrailingSlash(t *testing.T) {
 	}
 }
 
-func TestIsPrereleaseEnterpriseVersion(t *testing.T) {
+func TestIsPrereleaseVersion(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
@@ -137,43 +137,26 @@ func TestIsPrereleaseEnterpriseVersion(t *testing.T) {
 		want    bool
 	}{
 		{
-			version: "master",
+			version: "v1.44.0",
 			want:    false,
 		},
 		{
-			version: "release-v3.25",
-			want:    false,
-		},
-		{
-			version: "release-calient-v3.25",
-			want:    false,
-		},
-		{
-			version: "v3.25.0",
-			want:    false,
-		},
-		{
-			version: "v3.25.0-rc1",
-			want:    false,
-		},
-		{
-			version: "v3.25.0-1.0",
+			version: "v1.44.0-rc1",
 			want:    true,
 		},
 		{
-			version: "v3.25.0-2.0",
+			version: "v1.44.0-0.dev-12-gabcdef123456",
 			want:    true,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.version, func(t *testing.T) {
-			// t.Parallel()
-			got, err := isPrereleaseEnterpriseVersion(tc.version)
+			got, err := isPrereleaseVersion(tc.version)
 			if err != nil {
-				t.Fatalf("isPrereleaseEnterpriseVersion(%q) unexpected error: %v", tc.version, err)
+				t.Fatalf("isPrereleaseVersion(%q) unexpected error: %v", tc.version, err)
 			}
 			if got != tc.want {
-				t.Fatalf("isPrereleaseEnterpriseVersion(%q) = %v, want %v", tc.version, got, tc.want)
+				t.Fatalf("isPrereleaseVersion(%q) = %v, want %v", tc.version, got, tc.want)
 			}
 		})
 	}

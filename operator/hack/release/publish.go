@@ -202,7 +202,7 @@ func publishGithubRelease(ctx context.Context, c *cli.Command, repoRootDir strin
 		return nil
 	}
 	version := c.String(versionFlag.Name)
-	isPrerelease, err := isPrereleaseVersion(repoRootDir)
+	isPrerelease, err := isPrereleaseVersion(version)
 	if err != nil {
 		return fmt.Errorf("determining if this is a prerelease: %w", err)
 	}

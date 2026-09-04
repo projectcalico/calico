@@ -17,14 +17,12 @@ package validate
 import (
 	"flag"
 	"fmt"
-	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/blang/semver/v4"
 
 	"github.com/projectcalico/calico/operator/hack/release/internal/command"
-	"github.com/projectcalico/calico/operator/hack/release/internal/versions"
 )
 
 const defaultBaseBranch = "master"
@@ -63,27 +61,6 @@ func checkGitBranchExists(t *testing.T, remote, branch string) {
 	t.Logf("branch %s exists in remote %s", branch, remote)
 }
 
-func calicoConfigVersions(t *testing.T, ref string) *versions.CalicoVersion {
-	t.Helper()
-	v, err := versions.GitRefConfigCalicoVersion(ref)
-	if err != nil {
-		t.Fatalf("failed to get Calico config versions: %v", err)
-	}
-	if v.Title == "" {
-		t.Fatalf("no version title found in %s", versions.CalicoConfigPath)
-	}
-	return v
-}
-
-// fetchReleaseBranch fetches the release branch ref so git show works.
-func fetchReleaseBranch(t *testing.T, branch string) string {
-	t.Helper()
-	if _, err := command.Git("fetch", *remote, branch); err != nil {
-		t.Fatalf("failed to fetch %s: %v", branch, err)
-	}
-	return fmt.Sprintf("%s/%s", *remote, branch)
-}
-
 // --- Test functions ---
 
 func TestBranchCutReleaseBranchInRemote(t *testing.T) {
@@ -91,45 +68,6 @@ func TestBranchCutReleaseBranchInRemote(t *testing.T) {
 	branch := releaseBranchName(stream)
 
 	checkGitBranchExists(t, *remote, branch)
-}
-
-func TestBranchCutCalico(t *testing.T) {
-	stream := requireStream(t)
-	branch := releaseBranchName(stream)
-	ref := fetchReleaseBranch(t, branch)
-
-	cv := calicoConfigVersions(t, ref)
-	if cv.Title == defaultBaseBranch {
-		t.Fatalf("calico version is still %s on release branch", defaultBaseBranch)
-	}
-
-	// Check that the version in the config file matches the VERSION_TAG in Makefile.
-	content, err := command.GitShowFile(fmt.Sprintf("%s/%s", *remote, branch), "Makefile")
-	if err != nil {
-		t.Fatalf("git show Makefile failed: %v", err)
-	}
-	versionTag, err := extractMakefileVar(content, "VERSION_TAG")
-	if err != nil {
-		t.Fatalf("extracting VERSION_TAG from Makefile: %v", err)
-	}
-	if versionTag != cv.Title {
-		t.Fatalf("calico version in config file (%s) does not match VERSION_TAG in Makefile (%s)", cv.Title, versionTag)
-	}
-}
-
-// extractMakefileVar returns the value assigned to name on the first matching
-// top-level assignment in content. Recognizes `=`, `:=`, `::=`, and `?=`.
-func extractMakefileVar(content, name string) (string, error) {
-	pattern := fmt.Sprintf(`(?m)^%s\s*(?:::?|\?)?=\s*(.*?)\s*$`, regexp.QuoteMeta(name))
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return "", fmt.Errorf("compiling regex for %s: %w", name, err)
-	}
-	m := re.FindStringSubmatch(content)
-	if m == nil {
-		return "", fmt.Errorf("%s assignment not found", name)
-	}
-	return m[1], nil
 }
 
 func TestBranchCutNextDevRelease(t *testing.T) {
