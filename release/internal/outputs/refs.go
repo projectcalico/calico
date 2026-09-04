@@ -23,7 +23,6 @@ import (
 	"sync"
 )
 
-// refsFileName is the file each step appends its published digest refs to.
 const refsFileName = "published.refs"
 
 // RefsWriter records published digest refs, one per line, as
@@ -41,8 +40,7 @@ type RefsWriter struct {
 	path string
 }
 
-// NewRefsWriter opens a step's refs file, creating its directory. The file is
-// never truncated.
+// The refs file is never truncated.
 func NewRefsWriter(baseDir, step, version string) (*RefsWriter, error) {
 	dir := filepath.Join(baseDir, step, version)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -51,8 +49,7 @@ func NewRefsWriter(baseDir, step, version string) (*RefsWriter, error) {
 	return &RefsWriter{path: filepath.Join(dir, refsFileName)}, nil
 }
 
-// Add appends refs, one per line. Callers are serialised because components
-// publish in parallel.
+// Callers are serialised because components publish in parallel.
 func (w *RefsWriter) Add(refs ...string) error {
 	if len(refs) == 0 {
 		return nil
@@ -82,8 +79,8 @@ func (w *RefsWriter) Add(refs ...string) error {
 	return f.Close()
 }
 
-// ReadRefs returns a step's recorded refs in publish order, without duplicates.
-// A missing file reports no refs and no error.
+// ReadRefs returns a step's refs in publish order, without duplicates. A
+// missing file reports no refs and no error.
 func ReadRefs(baseDir, step, version string) ([]string, error) {
 	f, err := os.Open(filepath.Join(baseDir, step, version, refsFileName))
 	if err != nil {

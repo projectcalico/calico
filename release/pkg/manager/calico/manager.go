@@ -151,7 +151,6 @@ type CalicoManager struct {
 	// directories. Empty means all of them.
 	imageReleaseDirs []string
 
-	// resolveDigest reports a published tag's digest. Defaults to the registry.
 	resolveDigest images.DigestResolver
 
 	// outputDir is the directory to which we should write release artifacts, and from
@@ -1162,8 +1161,7 @@ func (r *CalicoManager) resetManifests() {
 	}
 }
 
-// uploadDir is where release artifacts are written and published from. It is
-// validated before any step runs; see publishPrereqs.
+// Validated before any step runs; see publishPrereqs.
 func (r *CalicoManager) uploadDir() string {
 	return r.outputDir
 }
@@ -1521,9 +1519,8 @@ func (r *CalicoManager) digestResolver() images.DigestResolver {
 	return registry.ResolveDigest
 }
 
-// scanRequest is the image scan submission for this release, or nil when
-// scanning is off. The images come from the pinned components, so a
-// hashrelease scans what it pinned.
+// The images come from the pinned components, so a hashrelease scans what it
+// pinned.
 func (r *CalicoManager) scanRequest() *images.ScanRequest {
 	if !r.imageScanning {
 		return nil
@@ -1680,8 +1677,6 @@ func (r *CalicoManager) determineBranch() (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
-// archiveContainerImages writes the images this release ships into dir, one tar
-// each, for inclusion in the release archive.
 func (r *CalicoManager) archiveContainerImages(dir string) error {
 	// A hashrelease that did not build its own images has to fetch them.
 	pull := r.isHashRelease && !r.images

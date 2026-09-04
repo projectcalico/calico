@@ -40,12 +40,11 @@ const (
 	EnvSkipDevImageRetag = "SKIP_DEV_IMAGE_RETAG"
 )
 
-// Env renders one NAME=value pair for a command's environment.
 func Env(name string, value any) string {
 	return fmt.Sprintf("%s=%v", name, value)
 }
 
-// EnvTrue renders a boolean flag the Makefiles test for presence of.
+// EnvTrue renders a flag the Makefiles test for presence of.
 func EnvTrue(name string) string {
 	return Env(name, true)
 }

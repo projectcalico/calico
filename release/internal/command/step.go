@@ -24,16 +24,14 @@ import (
 // One retry: pushes fail on network flakes often enough to save a run.
 const MaxRetries = 1
 
-// Step holds what every release step needs: a runner, where to run, and the
-// step's own name. Embedding keeps them unexported, so a zero-value config
-// still runs real commands.
+// Step holds what every release step needs. Embedding keeps these unexported,
+// so a zero-value config still runs real commands.
 type Step struct {
 	runner CommandRunner
 
 	// dir is where commands run. Empty runs them in the current directory.
 	dir string
 
-	// name identifies the step in logs, errors and log paths.
 	name string
 
 	// logsDir is where per-invocation logs are written. Empty captures the
@@ -41,37 +39,27 @@ type Step struct {
 	logsDir string
 }
 
-// Option overrides a default on a step.
 type Option func(*Step)
 
-// WithRunner substitutes the runner commands are driven through.
 func WithRunner(r CommandRunner) Option {
 	return func(s *Step) { s.runner = r }
 }
 
-// WithName identifies the step in its logs, errors and log paths.
 func WithName(name string) Option {
 	return func(s *Step) { s.name = name }
 }
 
-// WithLogsDir writes each invocation's output to a file under dir.
 func WithLogsDir(dir string) Option {
 	return func(s *Step) { s.logsDir = dir }
 }
 
-// WithDir sets the directory commands run in.
-func WithDir(dir string) Option {
-	return func(s *Step) { s.dir = dir }
-}
-
-// Apply layers the options over the step.
 func (s *Step) Apply(opts []Option) {
 	for _, opt := range opts {
 		opt(s)
 	}
 }
 
-// Runner returns the runner to drive commands through, defaulting to real ones.
+// Runner defaults to running real commands.
 func (s Step) Runner() CommandRunner {
 	if s.runner == nil {
 		return &RealCommandRunner{}
@@ -87,25 +75,19 @@ func (s Step) Run(name string, args, env []string, logPath string) (string, erro
 	return s.Runner().RunInDirToFile(s.dir, name, args, env, logPath)
 }
 
-// Name is the step's own name, as it appears in logs and errors.
-func (s Step) Name() string {
-	return s.name
-}
-
 // Logger tags every line with the step, so a release running several steps
 // produces output a reader can tell apart.
 func (s Step) Logger() *logrus.Entry {
 	return logrus.WithField("step", s.name)
 }
 
-// Errorf prefixes an error with the step that produced it.
 func (s Step) Errorf(format string, args ...any) error {
 	return fmt.Errorf("%s: %w", s.name, fmt.Errorf(format, args...))
 }
 
-// LogPath is where one invocation's output goes, named by slug. Steps sharing
-// a name write to the same directory, so the slug is what keeps them apart.
-// An empty logs dir captures the output in memory instead.
+// LogPath names one invocation's output by slug: steps sharing a name write to
+// the same directory, so the slug is what keeps them apart. An empty logs dir
+// captures the output in memory instead.
 func (s Step) LogPath(slug string) string {
 	if s.logsDir == "" {
 		return ""
