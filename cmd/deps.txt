@@ -532,6 +532,7 @@ local:libcalico-go/lib/names
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net
 local:libcalico-go/lib/netlinkutils
+local:libcalico-go/lib/nodestatus
 local:libcalico-go/lib/options
 local:libcalico-go/lib/packedmap
 local:libcalico-go/lib/prometheus

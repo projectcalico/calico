@@ -12023,6 +12023,18 @@ rules:
       - watch
       - list
       - get
+  # The node controller keeps the NetworkUnavailable condition, and optionally the
+  # network-ready taint, in step with calico-node pod readiness.
+  - apiGroups: [""]
+    resources:
+      - nodes/status
+    verbs:
+      - patch
+  - apiGroups: [""]
+    resources:
+      - nodes
+    verbs:
+      - update
   # Pods are watched to check for existence as part of IPAM controller.
   - apiGroups: [""]
     resources:
@@ -12250,6 +12262,12 @@ rules:
       - configmaps
     verbs:
       - get
+  - apiGroups: [""]
+    resources:
+      - nodes
+    verbs:
+      # Needed for clearing the network-ready taint once Calico is up.
+      - update
   - apiGroups: [""]
     resources:
       - nodes/status
