@@ -1123,19 +1123,25 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 		return false
 	}
 
-	// The pod exists - check if it is still on the original node.
-	// TODO: Do we need this check?
-	if p.Spec.NodeName != "" && a.knode != "" && p.Spec.NodeName != a.knode {
-		// If the pod has been rescheduled to a new node, we can treat the old allocation as
-		// gone and clean it up.
-		fields := log.Fields{"old": a.knode, "new": p.Spec.NodeName}
-		logc.WithFields(fields).Info("Pod rescheduled on new node. Allocation no longer valid")
-		return false
-	}
+	// A pod.Spec.NodeName that differs from the allocation's recorded node is not proof the pod
+	// moved: the CNI plugin can mis-stamp attrs["node"] at ADD time (e.g. a stale on-disk identity
+	// surviving a node re-image - https://github.com/projectcalico/calico/issues/12257) while the
+	// pod itself is placed correctly and its IP keeps working. Once the pod has reported an IP,
+	// that IP - matched against the pod's WorkloadEndpoint(s) below - is stronger evidence than
+	// this comparison and takes precedence. Before any IP has been reported there's no IP evidence
+	// to consult, so a node mismatch is still used as a fast leak signal there: this protects the
+	// "pod recreated on a new node before receiving an IP" migration case from sitting as
+	// "assumed valid" far longer than necessary.
+	nodeMismatch := p.Spec.NodeName != "" && a.knode != "" && p.Spec.NodeName != a.knode
+	nodeFields := log.Fields{"old": a.knode, "new": p.Spec.NodeName}
 
 	// Check to see if the pod actually has the IP in question. Gate based on the presence of the
 	// status field, which is populated by kubelet.
 	if p.Status.PodIP == "" || len(p.Status.PodIPs) == 0 {
+		if nodeMismatch {
+			logc.WithFields(nodeFields).Info("Pod rescheduled on new node before reporting an IP. Allocation no longer valid")
+			return false
+		}
 		// The pod hasn't received an IP yet.
 		log.Debugf("Pod IP has not yet been reported, consider allocation valid")
 		return true
@@ -1177,13 +1183,23 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 			}
 
 			if allocIP.Equal(ip) {
-				// Found a match.
-				logc.Debugf("Pod has matching IP, allocation is valid")
+				// Found a match. The pod is provably still using this IP - a node mismatch at this
+				// point means the allocation's node attribute is stale, not that the pod moved.
+				if nodeMismatch {
+					logc.WithFields(nodeFields).Info("Pod has matching IP despite node mismatch; treating allocation as valid (stale node attribute, not a leak)")
+				} else {
+					logc.Debugf("Pod has matching IP, allocation is valid")
+				}
 				return true
 			}
 		}
 	}
 
+	// No IP match. If the node also mismatches, log it as corroborating evidence only - the IP
+	// mismatch, not the node mismatch, is what makes this invalid.
+	if nodeMismatch {
+		logc.WithFields(nodeFields).Info("Allocated IP no longer in-use by pod; pod has also been rescheduled to a new node")
+	}
 	logc.Debugf("Allocated IP no longer in-use by pod")
 	return false
 }
