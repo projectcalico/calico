@@ -907,3 +907,254 @@ func TestBuildE2EBinariesUsesARCHES(t *testing.T) {
 			"e2e build-all should not set VALIDARCHES (lib.Makefile ignores it): %s", e)
 	}
 }
+
+// The e2e binaries ship inside the release archive and are published to S3 for
+// individual download; they are deliberately not flat GitHub release assets.
+func TestBuildReleaseTarIncludesE2EBinaries(t *testing.T) {
+	tests := []struct {
+		name        string
+		e2eBinaries bool
+		binaries    bool
+		staged      bool
+		wantInTar   bool
+	}{
+		{name: "staged binaries are added to bin/e2e", e2eBinaries: true, binaries: true, staged: true, wantInTar: true},
+		{name: "nothing staged adds nothing", e2eBinaries: true, binaries: true, staged: false},
+		{name: "disabled adds nothing", e2eBinaries: false, binaries: true, staged: true},
+		// The two flags are independent, so --no-binaries must not drop them.
+		{name: "included even without the other binaries", e2eBinaries: true, binaries: false, staged: true, wantInTar: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			outputDir := filepath.Join(t.TempDir(), "upload")
+			require.NoError(t, os.MkdirAll(outputDir, 0o755))
+			if tt.staged {
+				e2eDir := filepath.Join(outputDir, "files", "e2e")
+				require.NoError(t, os.MkdirAll(e2eDir, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(e2eDir, "e2e-linux-amd64.test"), []byte("x"), 0o755))
+			}
+
+			f := newFakeRunner()
+			f.on("cp", "", nil)
+			f.on("tar", "", nil)
+
+			r := &CalicoManager{
+				runner:        f,
+				tarball:       true,
+				binaries:      tt.binaries,
+				e2eBinaries:   tt.e2eBinaries,
+				calicoVersion: "v3.30.0",
+				outputDir:     outputDir,
+				repoRoot:      t.TempDir(),
+			}
+			require.NoError(t, r.buildReleaseTar())
+
+			var copiedE2E bool
+			for _, c := range f.calls {
+				if strings.HasPrefix(c, "cp ") && strings.Contains(c, filepath.Join("bin", "e2e")) {
+					copiedE2E = true
+				}
+			}
+			require.Equal(t, tt.wantInTar, copiedE2E, "calls: %v", f.calls)
+		})
+	}
+}
+
+func TestPublishE2EBinaries(t *testing.T) {
+	const bucket = "example-bucket"
+
+	tests := []struct {
+		name        string
+		e2eBinaries bool
+		staged      []string
+		bucket      string
+		wantS3      bool
+		wantDest    string
+	}{
+		{
+			name:        "staged binaries go to <version>/files/e2e/",
+			e2eBinaries: true,
+			staged:      []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"},
+			bucket:      bucket,
+			wantS3:      true,
+			wantDest:    "s3://" + bucket + "/v3.30.0/files/e2e/",
+		},
+		{
+			name:        "nothing staged is a no-op",
+			e2eBinaries: true,
+			bucket:      bucket,
+		},
+		{
+			name:   "the flag off skips staged binaries",
+			staged: []string{"e2e-linux-amd64.test"},
+			bucket: bucket,
+		},
+		{
+			// Best-effort step: an incomplete upload target must not fail a
+			// release that is otherwise done.
+			name:        "no bucket warns rather than failing",
+			e2eBinaries: true,
+			staged:      []string{"e2e-linux-amd64.test"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			outputDir := t.TempDir()
+			e2eDir := filepath.Join(outputDir, "files", "e2e")
+			require.NoError(t, os.MkdirAll(e2eDir, 0o755))
+			for _, name := range tt.staged {
+				require.NoError(t, os.WriteFile(filepath.Join(e2eDir, name), []byte(name), 0o755))
+			}
+
+			f := newFakeRunner()
+			f.on("aws", "", nil)
+
+			r := &CalicoManager{
+				runner:        f,
+				e2eBinaries:   tt.e2eBinaries,
+				calicoVersion: "v3.30.0",
+				s3Bucket:      tt.bucket,
+				outputDir:     outputDir,
+			}
+			require.NoError(t, r.publishE2EBinaries())
+			require.Equal(t, tt.wantS3, f.ran("aws"), "calls: %v", f.calls)
+			if tt.wantS3 {
+				var dest string
+				for _, c := range f.calls {
+					if strings.HasPrefix(c, "aws") {
+						dest = c
+					}
+				}
+				require.Contains(t, dest, tt.wantDest)
+			}
+		})
+	}
+}
+
+// A --no-e2e-binaries build must not leave an earlier run's binaries in the
+// output directory, which survives between runs.
+func TestClearStagedE2EBinaries(t *testing.T) {
+	outputDir := t.TempDir()
+	r := &CalicoManager{outputDir: outputDir}
+	e2eDir := filepath.Join(outputDir, "files", "e2e")
+	require.NoError(t, os.MkdirAll(e2eDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(e2eDir, "e2e-linux-amd64.test"), []byte("stale"), 0o755))
+
+	require.NoError(t, r.clearStagedE2EBinaries())
+
+	staged, err := r.stagedE2EBinaries()
+	require.NoError(t, err)
+	require.Empty(t, staged)
+
+	// Idempotent: a build that never staged anything must not error.
+	require.NoError(t, r.clearStagedE2EBinaries())
+}
+
+// clearStagedE2EBinaries removes a directory, so pin its blast radius: only
+// files/e2e/ goes, never a sibling artifact or the upload directory itself.
+func TestClearStagedE2EBinariesScope(t *testing.T) {
+	outputDir := t.TempDir()
+	r := &CalicoManager{outputDir: outputDir}
+
+	keep := map[string]string{
+		"release-v3.30.0.tgz":            filepath.Join(outputDir, "release-v3.30.0.tgz"),
+		"files/other/thing.txt":          filepath.Join(outputDir, "files", "other", "thing.txt"),
+		"manifests/tigera-operator.yaml": filepath.Join(outputDir, "manifests", "tigera-operator.yaml"),
+	}
+	for _, path := range keep {
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+		require.NoError(t, os.WriteFile(path, []byte("keep"), 0o644))
+	}
+	require.NoError(t, os.MkdirAll(r.e2eBinariesDir(), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(r.e2eBinariesDir(), "e2e-linux-amd64.test"), []byte("go"), 0o755))
+
+	require.NoError(t, r.clearStagedE2EBinaries())
+
+	require.NoDirExists(t, r.e2eBinariesDir())
+	for name, path := range keep {
+		require.FileExists(t, path, "%s must survive", name)
+	}
+	require.DirExists(t, outputDir)
+}
+
+// The zero-output guard and the relink-on-rerun fix both used to live in the
+// collect step; they moved here when that step went away, so keep them covered.
+func TestBuildE2EBinariesStaging(t *testing.T) {
+	tests := []struct {
+		name        string
+		produced    []string
+		preexisting []string
+		wantErr     bool
+		wantStaged  int
+	}{
+		{
+			name:       "produced binaries are staged",
+			produced:   []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"},
+			wantStaged: 2,
+		},
+		{
+			name:        "a rerun relinks over the previous build",
+			produced:    []string{"e2e-linux-amd64.test"},
+			preexisting: []string{"e2e-linux-amd64.test"},
+			wantStaged:  1,
+		},
+		{
+			// A narrower arch set must not ship the wider set's leftovers.
+			name:        "an arch dropped from the set is not left staged",
+			produced:    []string{"e2e-linux-amd64.test"},
+			preexisting: []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"},
+			wantStaged:  1,
+		},
+		{
+			name:    "a build that produced nothing errors",
+			wantErr: true,
+		},
+		{
+			name:     "only unrelated output errors",
+			produced: []string{"README"},
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repoRoot, outputDir := t.TempDir(), t.TempDir()
+			buildOut := filepath.Join(repoRoot, "e2e", "bin", "k8s")
+			require.NoError(t, os.MkdirAll(buildOut, 0o755))
+			for _, name := range tt.produced {
+				require.NoError(t, os.WriteFile(filepath.Join(buildOut, name), []byte(name), 0o755))
+			}
+
+			r := &CalicoManager{
+				runner:        newFakeRunner().on("make", "", nil),
+				repoRoot:      repoRoot,
+				outputDir:     outputDir,
+				calicoVersion: "v3.30.0",
+				architectures: []string{"amd64", "arm64"},
+			}
+			for _, name := range tt.preexisting {
+				require.NoError(t, os.MkdirAll(r.e2eBinariesDir(), 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(r.e2eBinariesDir(), name), []byte("stale"), 0o755))
+			}
+
+			err := r.buildE2EBinaries()
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			staged, err := r.stagedE2EBinaries()
+			require.NoError(t, err)
+			require.Len(t, staged, tt.wantStaged)
+			// A rerun must land the new build, not leave the stale file behind.
+			for _, name := range tt.produced {
+				content, err := os.ReadFile(filepath.Join(r.e2eBinariesDir(), name))
+				require.NoError(t, err)
+				require.Equal(t, name, string(content))
+			}
+		})
+	}
+}
