@@ -328,7 +328,19 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 	// the state map as well as the ServicePort values.
 	svcRef := s.svcMapToIPPortProtoMap(state.SvcMap)
 
-	inconsistent := false
+	// A service's ID indexes its own block of the backend map, so two distinct
+	// services must never share one - their backends would overwrite each other
+	// on every sync. Felix is not the only writer of these maps: they are pinned
+	// and outlive calico-node, and the ebpf-bootstrap init container programs the
+	// API server service into them before Felix starts. Adopting IDs therefore
+	// takes two passes, so that a duplicate is known before any ID is taken over.
+	type dpFrontend struct {
+		skey svcKey
+		val  nat.FrontendValue
+	}
+	frontends := make([]dpFrontend, 0, len(svcRef))
+	idOwner := make(map[uint32]k8sp.ServicePortName, len(svcRef))
+	duplicateIDs := make(map[uint32]struct{})
 
 	// Walk the frontend bpf map that was read into memory and match it against the
 	// references build from the state
@@ -347,20 +359,53 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 		}
 
 		id := svcv.ID()
-		count := int(svcv.Count())
-		s.prevSvcMap[*svckey] = svcInfo{
-			id:         id,
-			count:      count,
-			localCount: int(svcv.LocalCount()),
-			svc:        state.SvcMap[svckey.sname].(Service),
-		}
 
 		if id >= s.nextSvcID {
 			s.nextSvcID = id + 1
 		}
 
+		// A service shares its ID with all of its own derived (NodePort,
+		// ExternalIP, LoadBalancer) frontends, so only a clash between two
+		// different services is a conflict.
+		if owner, ok := idOwner[id]; ok && owner != svckey.sname {
+			log.WithFields(log.Fields{
+				"id":       id,
+				"service":  svckey.sname,
+				"conflict": owner,
+			}).Warn("Two services share one NAT service ID in the BPF maps, " +
+				"reprogramming both with new IDs.")
+			duplicateIDs[id] = struct{}{}
+		} else {
+			idOwner[id] = svckey.sname
+		}
+
+		frontends = append(frontends, dpFrontend{skey: *svckey, val: svcv})
+	})
+
+	inconsistent := false
+
+	for _, fe := range frontends {
+		svckey := fe.skey
+		id := fe.val.ID()
+
+		if _, dup := duplicateIDs[id]; dup {
+			// Leaving the service out of prevSvcMap makes applySvc give it a
+			// fresh ID and rewrite its frontends and backends. Nothing read
+			// through a duplicated ID is carried over: the backends found there
+			// may well belong to the other service.
+			continue
+		}
+
+		count := int(fe.val.Count())
+		s.prevSvcMap[svckey] = svcInfo{
+			id:         id,
+			count:      count,
+			localCount: int(fe.val.LocalCount()),
+			svc:        state.SvcMap[svckey.sname].(Service),
+		}
+
 		if svckey.extra != "" {
-			return
+			continue
 		}
 
 		if count > 0 {
@@ -378,7 +423,7 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 				NewEndpointInfo(ep.Addr().String(), int(ep.Port())),
 			)
 		}
-	})
+	}
 
 	if inconsistent {
 		return fmt.Errorf("found inconsistencies in existing BPF maps, will rewrite maps from scratch")
