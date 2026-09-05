@@ -1,0 +1,30 @@
+#!/bin/bash
+#
+# Put a prebuilt file into a staging copy.
+#
+# Usage: install-staged-file <source> <dest-path-in-stage> <stagedir> [version]
+#
+# Called as a component's staging hook, so the last two arguments are the ones
+# the Makefile appends to every hook; the first two come from the component
+# table.  Felix uses it to install the calico-felix binary that mk/felix-el8.mk
+# builds, in place of whatever the component's own bin/ holds.
+
+set -eu -o pipefail
+
+if [ $# -lt 3 ]; then
+    echo >&2 "usage: $(basename "$0") <source> <dest-path-in-stage> <stagedir> [version]"
+    exit 1
+fi
+
+source_file=$1
+dest_rel=$2
+stagedir=$3
+
+if [ ! -f "${source_file}" ]; then
+    echo >&2 "[error] ${source_file} does not exist; did the prepare step run?"
+    exit 1
+fi
+
+dest=${stagedir}/${dest_rel}
+mkdir -p "$(dirname "${dest}")"
+install -m 755 "${source_file}" "${dest}"
