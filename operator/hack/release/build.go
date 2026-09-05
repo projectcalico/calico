@@ -152,9 +152,7 @@ var buildAction = func(ctx context.Context, c *cli.Command) (string, map[string]
 		buildEnv = append(buildEnv, hashreleaseEnv...)
 	} else {
 		buildLog = buildLog.WithField("release", true)
-		// A release publishes every Calico image at the release version, so the operator
-		// resolves them there rather than at the branch tag a dev build defaults to.
-		buildEnv = append(buildEnv, "RELEASE=true", fmt.Sprintf("CALICO_VERSION=%s", version))
+		buildEnv = append(buildEnv, "RELEASE=true")
 		if setup.IsCloud {
 			// Cloud releases carry a -cloud suffix, so VERSION (vX.Y.Z-cloud) differs from the git
 			// tag (vX.Y.Z). Pass GIT_VERSION=VERSION so the Makefile's VERSION==GIT_VERSION guard

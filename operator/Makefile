@@ -82,9 +82,14 @@ else
 endif
 
 # The version, registry and image path the built operator resolves Calico images at. A
-# build that names no version gets the tag cd publishes for this branch; the release
-# tooling passes the version it publishes at, and the kind rig what it just pushed.
+# release is built at the Calico release tag, so git describe names the version every
+# image was published at. Anything else resolves the tag cd publishes for this branch,
+# unless the caller names one; the kind rig passes what it just pushed.
+ifeq ($(RELEASE),true)
+CALICO_VERSION    ?= $(GIT_VERSION)
+else
 CALICO_VERSION    ?= $(BRANCH_IMAGE_TAG)
+endif
 CALICO_REGISTRY   ?=
 CALICO_IMAGE_PATH ?=
 CALICO_LDFLAGS = -X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(CALICO_VERSION) \
