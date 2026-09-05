@@ -1,6 +1,6 @@
 module github.com/projectcalico/calico
 
-go 1.25.13
+go 1.26.0
 
 require (
 	cloud.google.com/go/storage v1.50.0
@@ -89,7 +89,7 @@ require (
 	go.etcd.io/etcd/client/v2 v2.305.22
 	go.etcd.io/etcd/client/v3 v3.6.4
 	go.yaml.in/yaml/v3 v3.0.4
-	golang.org/x/crypto v0.55.0
+	golang.org/x/crypto v0.56.0
 	golang.org/x/mod v0.40.0
 	golang.org/x/net v0.58.0
 	golang.org/x/oauth2 v0.36.0
