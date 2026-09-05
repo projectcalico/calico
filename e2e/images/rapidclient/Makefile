@@ -5,7 +5,10 @@ PACKAGE_NAME=github.com/projectcalico/calico/e2e/images/rapidclient
 include ../../../lib.Makefile
 
 QUAY_REGISTRY ?= quay.io/tigeradev
-TAG_NAME ?= $(shell git branch --show-current)
+
+# BRANCH_NAME is what CI exports; the git fallback is for local builds, where a
+# detached HEAD yields an empty string and publish stops rather than pushing ":".
+TAG_NAME ?= $(or $(BRANCH_NAME),$(shell git branch --show-current))
 
 # Architectures the published manifest list must cover. arm64 is required: the
 # packet-size server runs on arm64 clusters (e.g. azr-aks ARM), and an amd64-only
@@ -48,7 +51,7 @@ image: bin/rapidclient-$(ARCH)
 		-f Dockerfile -t $(IMAGE):$(TAG_NAME) .
 
 # publish builds all architectures into a single manifest list and pushes it.
-publish: $(addprefix bin/rapidclient-,$(ARCHES))
+publish: var-require-all-TAG_NAME $(addprefix bin/rapidclient-,$(ARCHES))
 	docker buildx build --platform=$(shell echo $(ARCHES) | sed 's/ /,/g; s,[^,]*,linux/&,g') \
 		--push --pull -f Dockerfile -t $(IMAGE):$(TAG_NAME) .
 	# Guard against silently regressing to a single-arch image (the original bug):
