@@ -1,0 +1,22 @@
+# Step names share one flat namespace across every module, which is what lets
+# `depends:` cross files unqualified — prefix them by component to avoid a
+# collision, which is a hard error.
+#
+# Nothing here depends on the pre-flight checks: a dropped dependency cascades,
+# so depending on a gated check would drop this too.
+version: condensed-module
+
+defaults:
+  # Enough for lint plus tests across every submodule.
+  timeout: 30m
+
+steps:
+  - name: lib-ci
+    commands: |
+      cd lib
+      make ci
+    epilogue: |
+      # Runs in the parent shell, so it inherits neither the `cd` above nor
+      # anything the commands exported.
+      cd "${CI_HOME}/${CI_GIT_DIR}/lib"
+      artifact push job report --destination test-results || true

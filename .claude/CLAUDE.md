@@ -79,6 +79,27 @@ with Helm - its rendered output in `manifests/` is the only contract. See
 
 ## Code Conventions
 
+### Comments
+
+Comments are short, standalone tips for someone seeing the code for the first
+time. Explain **why**, never what.
+
+- Never restate what the code already says, and never narrate its steps as a
+  list ("does X, then Y, then Z").
+- Give only the non-obvious insight: intent, a constraint, or a gotcha. If there
+  isn't one, write no comment.
+- If the name makes it obvious, leave it out.
+- Never reference other parts of the codebase by name, or the discussion that
+  produced the change.
+- Describe the system as it is, not what changed. "X was removed", "this is now
+  the default" and "used to be Y" are changelog — that belongs in git history. A
+  reader who never knew Y does not need correcting. The one exception is a wrong
+  belief still reachable from the current source, where naming the trap helps.
+
+This applies to every language in the repo, and to YAML and Makefiles too. Go
+doc comments still start with the identifier, per gofmt convention — keep that
+line short and put the insight underneath.
+
 ### Formatting
 
 A repo-scoped PostToolUse hook (`.claude/settings.json`) runs

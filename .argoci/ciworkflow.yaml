@@ -1,0 +1,63 @@
+# One workflow rather than one per component: `depends:` and the artifact
+# namespace are both workflow-scoped, so producers and consumers must share one.
+# A workflow that doesn't run posts no commit status, so a gated one could never
+# be a required check.
+#
+# Argo workflow objects live in etcd (~1.5MB). Gated-out steps never reach the
+# object, but a change matching every module fires everything — measure before
+# adding many more:
+#   argoci-expand -o yaml -changed metadata.mk .argoci/ciworkflow.yaml | wc -c
+version: condensed
+generateName: calico-
+
+# Bounds the DAG itself, catching a hang outside any step's own deadline.
+timeout: 4h
+
+globalPrologue: |
+  # Unauthenticated pulls of the build image are rate-limited.
+  echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+
+  # Module downloads happen in the nested build container, which inherits only
+  # the vars spliced in here — so the proxy is unused without this.
+  export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+
+defaults:
+  # medium is the only spot jobSize. Preemption fails the run outright, with no
+  # retry, so anything long or flaky wants `large`.
+  jobSize: medium
+
+  # An unset timeout means run-forever. A module overrides this when its work
+  # justifies more.
+  timeout: 1h
+
+  # Modules merge collections with these rather than replacing them.
+  services:
+    # Nested `docker run` bind-mounts are resolved by the daemon, not this
+    # container, so they only work under the paths the two share.
+    - docker
+    - goproxy
+  secretBundles:
+    - docker-hub
+
+includes:
+  # Each module is gated on its own file as well as its component, so editing a
+  # module retests what it builds. Match the path exactly — a bare `^\.argoci/`
+  # would fire every component on any CI edit.
+  - path: .argoci/modules/lib.yaml
+    changes:
+      in:
+        - ^lib/
+        - ^\.argoci/modules/lib\.yaml$
+
+  - path: .argoci/modules/api.yaml
+    changes:
+      in:
+        - ^api/
+        - ^test/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/api\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
