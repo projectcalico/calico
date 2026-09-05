@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"strings"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -30,51 +29,6 @@ import (
 )
 
 const gkeNodeLabelPrefix = "cloud.google.com/gke-"
-
-// EnterpriseAPIsExist reports whether the cluster serves the Calico Enterprise APIs.
-func EnterpriseAPIsExist(clientset kubernetes.Interface) (bool, error) {
-	resources, err := clientset.Discovery().ServerResourcesForGroupVersion("operator.tigera.io/v1")
-	if err != nil {
-		return false, err
-	}
-	for _, r := range resources.APIResources {
-		switch r.Kind {
-		case "LogCollector":
-			fallthrough
-		case "LogStorage":
-			fallthrough
-		case "Compliance":
-			fallthrough
-		case "IntrusionDetection":
-			fallthrough
-		case "ApplicationLayer":
-			fallthrough
-		case "Monitor":
-			fallthrough
-		case "ManagementCluster":
-			fallthrough
-		case "EgressGateway":
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func MultiTenant(ctx context.Context, c kubernetes.Interface) (bool, error) {
-	resources, err := c.Discovery().ServerResourcesForGroupVersion("operator.tigera.io/v1")
-	if err != nil {
-		return false, err
-	}
-	for _, res := range resources.APIResources {
-		if strings.EqualFold(res.Kind, "Manager") {
-			// If the Manager is namespaced, it means we're operating in multi-tenant mode.
-			return res.Namespaced, nil
-		}
-	}
-
-	// Default to single-tenant.
-	return false, nil
-}
 
 func AutoDiscoverProvider(ctx context.Context, clientset kubernetes.Interface) (operatorv1.Provider, error) {
 	// First, try to determine the platform based on the present API groups.
@@ -275,50 +229,4 @@ func isKind(ctx context.Context, c kubernetes.Interface) (bool, error) {
 		}
 	}
 	return false, nil
-}
-
-// UseExternalElastic returns true if this cluster is configured to use an external elasticsearch cluster,
-// and false otherwise.
-func UseExternalElastic(config *corev1.ConfigMap) bool {
-	if config == nil {
-		return false
-	}
-
-	// Load the operator bootstrap configuration from its configmap.
-	if val, ok := config.Data["ELASTIC_EXTERNAL"]; ok && val != "" {
-		if strings.ToLower(val) == "true" {
-			return true
-		}
-	}
-	return false
-}
-
-func ElasticIsMigrating(config *corev1.ConfigMap) bool {
-	if config == nil {
-		return false
-	}
-
-	// Load the operator bootstrap configuration from its configmap.
-	if val, ok := config.Data["ELASTIC_MIGRATION"]; ok && val != "" {
-		if strings.ToLower(val) == "true" {
-			return true
-		}
-	}
-	return false
-}
-
-// UseSingleIndex returns true if this single tenant management cluster is in the last phase of a migration to single-index
-// storage, during which the operator must reconfigure Linseed to use the single-index names.
-func UseSingleIndex(config *corev1.ConfigMap) bool {
-	if config == nil {
-		return false
-	}
-
-	// Load the operator bootstrap configuration from its configmap.
-	if val, ok := config.Data["USE_SINGLE_INDEX"]; ok && val != "" {
-		if strings.ToLower(val) == "true" {
-			return true
-		}
-	}
-	return false
 }

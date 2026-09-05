@@ -161,38 +161,10 @@ var _ = Describe("Common components render tests", func() {
 		Entry("CalicoNodeWindowsDaemonSet", &v1.CalicoNodeWindowsDaemonSet{}, false),
 		Entry("CalicoWindowsUpgradeDaemonSet", &v1.CalicoWindowsUpgradeDaemonSet{}, false),
 		Entry("CSINodeDriverDaemonSet", &v1.CSINodeDriverDaemonSet{}, false),
-		Entry("DashboardsJob", &v1.DashboardsJob{}, false),
-		Entry("DexDeployment", &v1.DexDeployment{}, false),
-		Entry("ECKOperatorStatefulSet", &v1.ECKOperatorStatefulSet{}, false),
-		// EgressGateway operates as a top-level CR and also as its own customization
-		// structure, so it does have fields other than those covered by the override
-		// machinery.
-		Entry("EgressGateway", &v1.EgressGateway{}, false,
-			"TypeMeta",
-			"ObjectMeta",
-			"Spec.Replicas",
-			"Spec.IPPools",
-			"Spec.ExternalNetworks",
-			"Spec.LogSeverity",
-			"Spec.EgressGatewayFailureDetection",
-			"Spec.AWS",
-			"Status",
-		),
-		Entry("EKSLogForwarderDeployment", &v1.EKSLogForwarderDeployment{}, false),
-		Entry("ElasticsearchMetricsDeployment", &v1.ElasticsearchMetricsDeployment{}, false),
-		Entry("ESGatewayDeployment", &v1.ESGatewayDeployment{}, false),
-		Entry("FluentBitDaemonSet", &v1.FluentBitDaemonSet{}, false),
 		Entry("GatewayCertgenJob", &v1.GatewayCertgenJob{}, false),
 		Entry("GatewayControllerDeployment", &v1.GatewayControllerDeployment{}, false),
 		Entry("GatewayDeployment", &v1.GatewayDeployment{}, false),
 		Entry("GuardianDeployment", &v1.GuardianDeployment{}, false),
-		Entry("IntrusionDetectionControllerDeployment", &v1.IntrusionDetectionControllerDeployment{}, false),
-		Entry("Kibana", &v1.Kibana{}, false),
-		Entry("L7LogCollectorDaemonSet", &v1.L7LogCollectorDaemonSet{}, false),
-		Entry("LinseedDeployment", &v1.LinseedDeployment{}, false),
-		Entry("ManagerDeployment", &v1.ManagerDeployment{}, false),
-		Entry("PacketCaptureAPIDeployment", &v1.PacketCaptureAPIDeployment{}, false),
-		Entry("PolicyRecommendationDeployment", &v1.PolicyRecommendationDeployment{}, false),
 		Entry("TyphaDeployment", &v1.TyphaDeployment{}, false),
 
 		// This last entry checks that the code above really does identify when a
@@ -1242,11 +1214,11 @@ var _ = Describe("Common components render tests", func() {
 		}
 
 		// Apply overrides using deprecated names.
-		overrides := &v1.ManagerDeployment{
-			Spec: &v1.ManagerDeploymentSpec{
-				Template: &v1.ManagerDeploymentPodTemplateSpec{
-					Spec: &v1.ManagerDeploymentPodSpec{
-						Containers: []v1.ManagerDeploymentContainer{
+		overrides := &v1.APIServerDeployment{
+			Spec: &v1.APIServerDeploymentSpec{
+				Template: &v1.APIServerDeploymentPodTemplateSpec{
+					Spec: &v1.APIServerDeploymentPodSpec{
+						Containers: []v1.APIServerDeploymentContainer{
 							{Name: "tigera-manager", Resources: &overrideResources},
 							{Name: "tigera-voltron", Resources: &overrideResources},
 							{Name: "tigera-es-proxy", Resources: &overrideResources},
@@ -1277,11 +1249,11 @@ var _ = Describe("Common components render tests", func() {
 			}
 
 			period := int32(30)
-			overrides := &v1.ManagerDeployment{
-				Spec: &v1.ManagerDeploymentSpec{
-					Template: &v1.ManagerDeploymentPodTemplateSpec{
-						Spec: &v1.ManagerDeploymentPodSpec{
-							Containers: []v1.ManagerDeploymentContainer{
+			overrides := &v1.APIServerDeployment{
+				Spec: &v1.APIServerDeploymentSpec{
+					Template: &v1.APIServerDeploymentPodTemplateSpec{
+						Spec: &v1.APIServerDeploymentPodSpec{
+							Containers: []v1.APIServerDeploymentContainer{
 								{
 									Name:           "calico-manager",
 									ReadinessProbe: &v1.ProbeOverride{PeriodSeconds: &period},
@@ -1315,11 +1287,11 @@ var _ = Describe("Common components render tests", func() {
 			overrideResources := corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("500m")},
 			}
-			overrides := &v1.ManagerDeployment{
-				Spec: &v1.ManagerDeploymentSpec{
-					Template: &v1.ManagerDeploymentPodTemplateSpec{
-						Spec: &v1.ManagerDeploymentPodSpec{
-							Containers: []v1.ManagerDeploymentContainer{
+			overrides := &v1.APIServerDeployment{
+				Spec: &v1.APIServerDeploymentSpec{
+					Template: &v1.APIServerDeploymentPodTemplateSpec{
+						Spec: &v1.APIServerDeploymentPodSpec{
+							Containers: []v1.APIServerDeploymentContainer{
 								{
 									Name:           "calico-manager",
 									ReadinessProbe: &v1.ProbeOverride{PeriodSeconds: &period},
@@ -1385,8 +1357,8 @@ var _ = Describe("Common components render tests", func() {
 			d.Spec.Template.Spec.Containers = []corev1.Container{
 				{Name: "calico-manager", Image: "test-image"},
 			}
-			overrides := &v1.ManagerDeployment{
-				Spec: &v1.ManagerDeploymentSpec{},
+			overrides := &v1.APIServerDeployment{
+				Spec: &v1.APIServerDeploymentSpec{},
 			}
 			ApplyDeploymentOverrides(&d, overrides)
 			Expect(d.Annotations).NotTo(HaveKey(CustomOverridesAnnotation))
@@ -1566,3 +1538,63 @@ func defaultedDeployment() appsv1.Deployment {
 	ds.Spec.Template.Spec.InitContainers = addContainer(ds.Spec.Template.Spec.InitContainers)
 	return ds
 }
+
+var _ = Describe("Overrides for a resource the core operator does not name", func() {
+	// egwMetadata stands in for an override type that spells its pod template
+	// metadata as its own type rather than as operator.Metadata.
+	type egwMetadata struct {
+		Labels      map[string]string
+		Annotations map[string]string
+	}
+	type egwTemplate struct{ Metadata *egwMetadata }
+	type egwSpec struct{ Template *egwTemplate }
+	type egwOverride struct{ Spec *egwSpec }
+
+	It("reads pod template metadata off an override type of its own", func() {
+		o := &egwOverride{Spec: &egwSpec{Template: &egwTemplate{Metadata: &egwMetadata{
+			Labels:      map[string]string{"l": "1"},
+			Annotations: map[string]string{"a": "2"},
+		}}}}
+		md := GetPodTemplateMetadata(o)
+		Expect(md).NotTo(BeNil())
+		Expect(md.Labels).To(HaveKeyWithValue("l", "1"))
+		Expect(md.Annotations).To(HaveKeyWithValue("a", "2"))
+	})
+
+	It("still reads an override type that uses operator.Metadata", func() {
+		o := &v1.CalicoNodeDaemonSet{
+			Spec: &v1.CalicoNodeDaemonSetSpec{
+				Template: &v1.CalicoNodeDaemonSetPodTemplateSpec{
+					Metadata: &v1.Metadata{Labels: map[string]string{"l": "1"}},
+				},
+			},
+		}
+		Expect(GetPodTemplateMetadata(o).Labels).To(HaveKeyWithValue("l", "1"))
+	})
+
+	It("returns nil when the override sets no pod template metadata", func() {
+		Expect(GetPodTemplateMetadata(&egwOverride{Spec: &egwSpec{Template: &egwTemplate{}}})).To(BeNil())
+	})
+
+	It("applies overrides to a bare pod template spec", func() {
+		spec := &corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c"}}},
+		}
+		ApplyPodTemplateSpecOverrides(spec, &v1.CalicoNodeDaemonSet{
+			Spec: &v1.CalicoNodeDaemonSetSpec{
+				Template: &v1.CalicoNodeDaemonSetPodTemplateSpec{
+					Spec: &v1.CalicoNodeDaemonSetPodSpec{
+						NodeSelector: map[string]string{"n": "1"},
+					},
+				},
+			},
+		})
+		Expect(spec.Spec.NodeSelector).To(HaveKeyWithValue("n", "1"))
+	})
+
+	It("leaves the pod template spec alone for a nil override", func() {
+		spec := &corev1.PodTemplateSpec{Spec: corev1.PodSpec{Hostname: "unchanged"}}
+		ApplyPodTemplateSpecOverrides(spec, nil)
+		Expect(spec.Spec.Hostname).To(Equal("unchanged"))
+	})
+})

@@ -19,9 +19,7 @@ import (
 	"reflect"
 	"strings"
 
-	kbv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/kibana/v1"
 	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -96,16 +94,27 @@ func GetMinReadySeconds(overrides any) *int32 {
 	return value.Interface().(*int32)
 }
 
+// GetPodTemplateMetadata reads the labels and annotations by field rather than by
+// type, since not every override type spells its pod template metadata as
+// operator.Metadata.
 func GetPodTemplateMetadata(overrides any) *operator.Metadata {
 	value := getField(overrides, "Spec", "Template", "Metadata")
 	if !value.IsValid() || value.IsNil() {
 		return nil
 	}
-	// SPECIAL CASE: EgressGateway uses a different type for its metadata.
-	if v, egressGatewayCase := value.Interface().(*operator.EgressGatewayMetadata); egressGatewayCase {
-		return &operator.Metadata{Labels: v.Labels, Annotations: v.Annotations}
+	if md, ok := value.Interface().(*operator.Metadata); ok {
+		return md
 	}
-	return value.Interface().(*operator.Metadata)
+
+	md := &operator.Metadata{}
+	elem := value.Elem()
+	if labels := elem.FieldByName("Labels"); labels.IsValid() {
+		md.Labels, _ = labels.Interface().(map[string]string)
+	}
+	if annotations := elem.FieldByName("Annotations"); annotations.IsValid() {
+		md.Annotations, _ = annotations.Interface().(map[string]string)
+	}
+	return md
 }
 
 func GetTerminationGracePeriodSeconds(overrides any) *int64 {
@@ -396,7 +405,7 @@ func applyReplicatedPodResourceOverrides(r *replicatedPodResource, overrides any
 	// `Resources` or non-nil `Ports`, those attributes replace those for the corresponding container in
 	// `r.podTemplateSpec.Spec.InitContainers`.
 	if initContainers := GetInitContainers(overrides); initContainers != nil {
-		mergeContainers(r.podTemplateSpec.Spec.InitContainers, initContainers)
+		MergeContainers(r.podTemplateSpec.Spec.InitContainers, initContainers)
 	}
 
 	// If `overrides` has a Spec.Template.Spec.Containers field, and it includes containers with
@@ -644,51 +653,21 @@ func ApplyPodTemplateOverrides(podtemplate *corev1.PodTemplate, overrides any) {
 	podtemplate.Template = *r.podTemplateSpec
 }
 
-// ApplyKibanaOverrides applies the overrides to the given Kibana.
-// Note: overrides must not be nil pointer.
-func ApplyKibanaOverrides(k *kbv1.Kibana, overrides any) {
+// ApplyPodTemplateSpecOverrides applies the overrides to a bare pod template spec,
+// for a resource whose pod template is not wrapped in one of the kinds above.
+func ApplyPodTemplateSpecOverrides(spec *corev1.PodTemplateSpec, overrides any) {
 	// Catch if caller passes in an explicit nil.
-	if overrides == nil {
+	if overrides == nil || spec == nil {
 		return
 	}
-
-	// Pull out the data we'll override from the DaemonSet.
-	r := &replicatedPodResource{
-		podTemplateSpec: &k.Spec.PodTemplate,
-	}
-	// Apply the overrides.
+	r := &replicatedPodResource{podTemplateSpec: spec}
 	applyReplicatedPodResourceOverrides(r, overrides)
-
-	// Set the possibly new fields back onto the kibana.
-	k.Spec.PodTemplate = *r.podTemplateSpec
+	*spec = *r.podTemplateSpec
 }
 
-// ApplyPrometheusOverrides applies the overrides to the given Prometheus.
-// Note: overrides must not be nil pointer.
-func ApplyPrometheusOverrides(prom *monitoringv1.Prometheus, overrides *operator.Prometheus) {
-	// Catch if caller passes in an explicit nil.
-	if overrides == nil {
-		return
-	}
-
-	prometheusFields := &prom.Spec.CommonPrometheusFields
-
-	// Override additional or operator generated containers.
-	if containers := overrides.GetContainers(); containers != nil {
-		mergeContainers(prometheusFields.Containers, containers)
-	}
-
-	// Define resources requests and limits for prometheus Pods.
-	if resources := overrides.GetPrometheusResource(); resources != nil {
-		prometheusFields.Resources = *resources
-	}
-
-	prom.Spec.CommonPrometheusFields = *prometheusFields
-}
-
-// mergeContainers copies the ResourceRequirements from the provided containers
+// MergeContainers copies the ResourceRequirements from the provided containers
 // to the current corev1.Containers.
-func mergeContainers(current []corev1.Container, provided []corev1.Container) {
+func MergeContainers(current []corev1.Container, provided []corev1.Container) {
 	providedMap := make(map[string]corev1.Container)
 	for _, c := range provided {
 		providedMap[c.Name] = c

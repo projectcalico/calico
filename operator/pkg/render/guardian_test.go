@@ -17,7 +17,7 @@ package render_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -95,11 +95,6 @@ var _ = Describe("Guardian OSS rendering tests", func() {
 			Expect(policy.Spec.Types).To(ConsistOf(v3.PolicyTypeIngress, v3.PolicyTypeEgress))
 			Expect(policy.Spec.Egress).NotTo(BeEmpty())
 			Expect(policy.Spec.Egress[len(policy.Spec.Egress)-1].Action).To(Equal(v3.Pass))
-
-			// OSS can't express domain-based egress rules.
-			for _, rule := range policy.Spec.Egress {
-				Expect(rule.Destination.Domains).To(BeEmpty())
-			}
 		})
 	})
 })

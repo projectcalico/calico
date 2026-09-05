@@ -21,8 +21,8 @@ import (
 	netattachv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	configv1 "github.com/openshift/api/config/v1"
 	ocsv1 "github.com/openshift/api/security/v1"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -92,6 +92,20 @@ func init() {
 	AddToSchemes = append(AddToSchemes, netattachv1.AddToScheme)
 }
 
+var (
+	// extraV3Types are always in the projectcalico.org/v3 API group, and extraTypes
+	// follow the backing API group like the core types do.
+	extraV3Types []runtime.Object
+	extraTypes   []runtime.Object
+)
+
+// RegisterTypes adds API types beyond the operator's own. Call it before the
+// operator starts.
+func RegisterTypes(alwaysV3, variable []runtime.Object) {
+	extraV3Types = append(extraV3Types, alwaysV3...)
+	extraTypes = append(extraTypes, variable...)
+}
+
 func calicoSchemeBuilder(useV3 bool) func(*runtime.Scheme) error {
 	// We need to register the correct API groups based on the backing API group in use. This
 	// is a bit tricky, because some types are always in the same group, while others vary based on
@@ -99,35 +113,21 @@ func calicoSchemeBuilder(useV3 bool) func(*runtime.Scheme) error {
 	return func(scheme *runtime.Scheme) error {
 		// Handle types that are always in the projectcalico.org/v3 API group.
 		v3Types := []runtime.Object{
-			&v3.DeepPacketInspection{},
-			&v3.DeepPacketInspectionList{},
 			&v3.GlobalNetworkPolicy{},
 			&v3.GlobalNetworkPolicyList{},
-			&v3.GlobalReportType{},
-			&v3.GlobalReportTypeList{},
-			&v3.GlobalAlert{},
-			&v3.GlobalAlertList{},
-			&v3.GlobalAlertTemplate{},
-			&v3.GlobalAlertTemplateList{},
 			&v3.HostEndpoint{},
 			&v3.HostEndpointList{},
 			&v3.IPAMConfiguration{},
 			&v3.IPAMConfigurationList{},
-			&v3.LicenseKey{},
-			&v3.LicenseKeyList{},
 			&v3.NetworkPolicy{},
 			&v3.NetworkPolicyList{},
 			&v3.NetworkSet{},
 			&v3.NetworkSetList{},
-			&v3.PolicyRecommendationScope{},
-			&v3.PolicyRecommendationScopeList{},
 			&v3.Tier{},
 			&v3.TierList{},
-			&v3.UISettings{},
-			&v3.UISettingsGroup{},
-			&v3.UISettingsGroupList{},
-			&v3.UISettingsList{},
 		}
+
+		v3Types = append(v3Types, extraV3Types...)
 
 		// Handle types that are always in the crd.projectcalico.org/v1 API group.
 		v1Types := []runtime.Object{}
@@ -138,8 +138,6 @@ func calicoSchemeBuilder(useV3 bool) func(*runtime.Scheme) error {
 			&v3.BGPConfigurationList{},
 			&v3.ClusterInformation{},
 			&v3.ClusterInformationList{},
-			&v3.ExternalNetwork{},
-			&v3.ExternalNetworkList{},
 			&v3.FelixConfiguration{},
 			&v3.FelixConfigurationList{},
 			&v3.IPPool{},
@@ -147,6 +145,7 @@ func calicoSchemeBuilder(useV3 bool) func(*runtime.Scheme) error {
 			&v3.KubeControllersConfiguration{},
 			&v3.KubeControllersConfigurationList{},
 		}
+		variableTypes = append(variableTypes, extraTypes...)
 		if useV3 {
 			log.Info("Registering Calico CRD types with projectcalico.org/v3 API group")
 			v3Types = append(v3Types, variableTypes...)

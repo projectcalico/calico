@@ -23,7 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	apps "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -47,9 +47,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"github.com/projectcalico/calico/operator/pkg/crds"
-	"github.com/projectcalico/calico/operator/pkg/enterprise"
-	entcontroller "github.com/projectcalico/calico/operator/pkg/enterprise/controller"
-	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
 	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
@@ -59,9 +56,6 @@ const (
 
 	WhiskerCRDExists    = true
 	WhiskerCRDNotExists = false
-
-	MultiTenant  = true
-	SingleTenant = false
 )
 
 var _ = Describe("Mainline component function tests", func() {
@@ -72,13 +66,13 @@ var _ = Describe("Mainline component function tests", func() {
 	var operatorDone chan struct{}
 
 	BeforeEach(func() {
-		c, shutdownContext, cancel, mgr = setupManager(ManageCRDsDisable, SingleTenant, operator.Calico)
+		c, shutdownContext, cancel, mgr = setupManager(ManageCRDsDisable, operator.Calico)
 
 		By("Cleaning up resources before the test")
 		cleanupResources(c)
 
 		By("Verifying CRDs are installed")
-		verifyCRDsExist(c, operator.CalicoEnterprise)
+		verifyCRDsExist(c, operator.Calico)
 
 		By("Creating the tigera-operator namespace, if it doesn't exist")
 		ns := &corev1.Namespace{
@@ -233,13 +227,6 @@ var _ = Describe("Mainline component function tests", func() {
 	})
 })
 
-var _ = Describe("Mainline component function tests - multi-tenant", func() {
-	It("should set up all controllers correctly in multi-tenant mode", func() {
-		_, _, cancel, _ := setupManager(ManageCRDsDisable, MultiTenant, operator.CalicoEnterprise)
-		cancel()
-	})
-})
-
 func getTigeraStatus(client client.Client, name string) (*operator.TigeraStatus, error) {
 	ts := &operator.TigeraStatus{ObjectMeta: metav1.ObjectMeta{Name: name}}
 	err := client.Get(context.TODO(), types.NamespacedName{Name: name}, ts)
@@ -331,7 +318,7 @@ func setupManagerNoControllers() (client.Client, *kubernetes.Clientset, manager.
 	return mgr.GetClient(), clientset, mgr
 }
 
-func setupManager(manageCRDs bool, multiTenant bool, variant operator.ProductVariant) (client.Client, context.Context, context.CancelFunc, manager.Manager) {
+func setupManager(manageCRDs bool, variant operator.ProductVariant) (client.Client, context.Context, context.CancelFunc, manager.Manager) {
 	client, clientset, mgr := setupManagerNoControllers()
 
 	// Setup all Controllers
@@ -339,12 +326,9 @@ func setupManager(manageCRDs bool, multiTenant bool, variant operator.ProductVar
 	err := controller.AddToManager(mgr, options.ControllerOptions{
 		DetectedProvider: operator.ProviderNone,
 		Variant:          variant,
-		Extensions:       enterprise.New(variant, eoptions.Options{}),
-		Controllers:      entcontroller.Controllers(variant),
 		ManageCRDs:       manageCRDs,
 		ShutdownContext:  ctx,
 		K8sClientset:     clientset,
-		MultiTenant:      multiTenant,
 	})
 	Expect(err).NotTo(HaveOccurred())
 
@@ -555,7 +539,7 @@ func verifyCRDsExist(c client.Client, variant operator.ProductVariant) {
 		crdNames = append(crdNames, fmt.Sprintf("%s.%s", x.Spec.Names.Plural, x.Spec.Group))
 	}
 
-	// Eventually all the Enterprise CRDs should be available
+	// Eventually all the CRDs should be available
 	EventuallyWithOffset(1, func() error {
 		for _, n := range crdNames {
 			crd := &apiextensionsv1.CustomResourceDefinition{

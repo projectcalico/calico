@@ -39,21 +39,10 @@ PACKAGE_NAME = github.com/projectcalico/calico/operator
 # These sit above metadata.mk, whose Calico defaults would otherwise win, and use
 # ?= for the registry so a hashrelease can send the image somewhere else (see
 # hack/release/README.md).
-CLOUD_LDFLAGS =
-ifeq ($(VARIANT),cloud)
-# Calico Cloud variant: operator-cloud on GCR, amd64 only.
-BUILD_IMAGES    = tigera-tesla/operator-cloud
-DEV_REGISTRIES ?= gcr.io
-ARCHES          = amd64
-BINARY_NAME    ?= operator-cloud
-# Bake cloud mode into the operator binary so it cannot be disabled at runtime.
-CLOUD_LDFLAGS = -X $(PACKAGE_NAME)/version.BuildVariant=cloud
-else
 BUILD_IMAGES    = tigera/operator
 DEV_REGISTRIES ?= quay.io
 ARCHES          = amd64 arm64 ppc64le s390x
 BINARY_NAME    ?= operator
-endif
 
 include ../metadata.mk
 
@@ -128,7 +117,7 @@ $(BINDIR)/$(BINARY_NAME)-$(ARCH): $(SRC_FILES) $(ENVOY_GATEWAY_CHART) $(ISTIO_CH
 	mkdir -p $(BINDIR)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
-	go build -buildvcs=false -v -o $(BINDIR)/$(BINARY_NAME)-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) $(CLOUD_LDFLAGS) -s -w" ./cmd/'
+	go build -buildvcs=false -v -o $(BINDIR)/$(BINARY_NAME)-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) -s -w" ./cmd/'
 
 OPERATOR_IMAGE_NAME = $(firstword $(BUILD_IMAGES))
 IMAGE_BUILD_MARKER  = operator_container-$(ARCH).created
@@ -301,11 +290,6 @@ release-tag: var-require-all-RELEASE_TAG-GITHUB_TOKEN
 	$(MAKE) release VERSION=$(RELEASE_TAG)
 	REPO=$(REPO) $(MAKE) release-publish VERSION=$(RELEASE_TAG)
 
-# Calico Cloud releases reuse release-tag with VARIANT=cloud, e.g.
-# `make release-tag VARIANT=cloud RELEASE_TAG=vX.Y.Z-cloud`. The release tool applies cloud
-# behavior (GCR/operator-cloud image, vX.Y.Z-cloud version format, no GitHub release) at runtime
-# based on VARIANT. Cloud tags are the regular operator version with a -cloud suffix.
-
 ## Generate release notes for the specified VERSION.
 release-notes: hack/bin/release var-require-all-VERSION-GITHUB_TOKEN
 	REPO=$(REPO) hack/bin/release notes
@@ -357,11 +341,6 @@ hack/bin/release: $(shell find ./hack/release -type f)
 	$(DOCKER_GO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
 	go build -buildvcs=false -o hack/bin/release ./hack/release'
-
-# Calico Cloud releases use the same release binary and targets with VARIANT=cloud, e.g.
-# `make release VARIANT=cloud` / `make release-tag VARIANT=cloud`. The release tool activates its
-# cloud behavior (GCR/operator-cloud image, vX.Y.Z-cloud version format, no GitHub release) at
-# runtime when VARIANT=cloud; no separate binary or build tag is required.
 
 hack/release/ut:
 	mkdir -p report/release
@@ -610,19 +589,13 @@ endif
 
 
 .PHONY: test-crds
-test-crds: test-enterprise-crds test-calico-crds
+test-crds: test-calico-crds
 
 # TODO: Improve this testing by comparing the individual source files
 # with the yaml printed out, this will need to be a yaml diff since the
 # fields won't necessarily be in the same order or indentation.
 test-calico-crds: $(BINDIR)/$(BINARY_NAME)-$(ARCH)
 	$(BINDIR)/$(BINARY_NAME)-$(ARCH) --print-calico-crds all >/dev/null 2>&1
-
-# TODO: Improve this testing by comparing the individual source files
-# with the yaml printed out, this will need to be a yaml diff since the
-# fields won't necessarily be in the same order or indentation.
-test-enterprise-crds: $(BINDIR)/$(BINARY_NAME)-$(ARCH)
-	$(BINDIR)/$(BINARY_NAME)-$(ARCH) --print-enterprise-crds all >/dev/null 2>&1
 
 #####################################
 #####################################
@@ -650,40 +623,18 @@ export imageset_header
 
 ifeq ($(OLD_STYLE_PRINT_IMAGE),true)
 calico_img_filter=list | grep -e /calico/ -e tigera/operator
-enterprise_img_filter=list | grep -v -e calico
 else
 calico_img_filter=listcalico
-enterprise_img_filter=listenterprise
 endif
 
 # This gen-imageset target only creates an ImageSet for the built-in registries and cannot be used
 # to generate an ImageSet for an alternate registry.
 # The operator used needs to be one that all images it references have been pushed to the registry,
 # this even includes the operator which references a version of itself.
-.PHONY: gen-imageset gen-enterprise-imageset gen-calico-imageset
-gen-imageset: gen-enterprise-imageset gen-calico-imageset $(BUILD_DIR)
-	@cat $(BUILD_DIR)/imageset-enterprise.yaml > $(BUILD_DIR)/imageset.yaml
-	@echo "---" >> $(BUILD_DIR)/imageset.yaml
-	@cat $(BUILD_DIR)/imageset-calico.yaml >> $(BUILD_DIR)/imageset.yaml
+.PHONY: gen-imageset gen-calico-imageset
+gen-imageset: gen-calico-imageset $(BUILD_DIR)
+	@cat $(BUILD_DIR)/imageset-calico.yaml > $(BUILD_DIR)/imageset.yaml
 	@echo Imageset written to file $(BUILD_DIR)/imageset.yaml
-
-.PHONY: gen-enterprise-imageset
-gen-enterprise-imageset: $(BUILD_DIR)
-	$(eval IMAGESET_VER = $(shell docker run $(OPERATOR_IMAGE) --version 2>/dev/null | \
-		grep "Enterprise:" | sed -e 's/Enterprise://'))
-	@echo Enterprise version: $(IMAGESET_VER)
-	@echo "$$imageset_header" > $(BUILD_DIR)/imageset-enterprise.yaml
-	@echo "  name: enterprise-$(IMAGESET_VER)" >> $(BUILD_DIR)/imageset-enterprise.yaml
-	@echo "spec:" >> $(BUILD_DIR)/imageset-enterprise.yaml
-	@echo "  images:" >> $(BUILD_DIR)/imageset-enterprise.yaml
-	@docker run $(OPERATOR_IMAGE) --print-images=$(enterprise_img_filter) | \
-	  grep -v "Failed to read" | \
-	while read -r line; do \
-	  echo "Adding digest for $${line}"; \
-	  digest=$$($(CRANE) digest $${line}$(double_quote)); \
-	  echo "  - image: \"$$(echo $${line} | sed -e 's|^.*/\([^/]*/[^/]*\):.*$$|\1|')\"" >> $(BUILD_DIR)/imageset-enterprise.yaml; \
-	  echo "    digest: $${digest}" >> $(BUILD_DIR)/imageset-enterprise.yaml; \
-	done
 
 .PHONY: gen-calico-imageset
 gen-calico-imageset: $(BUILD_DIR)
