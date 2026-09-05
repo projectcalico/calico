@@ -344,10 +344,9 @@ release-publish-images: operator-release-prereqs release-check-image-exists var-
 release-github: hack/bin/release var-require-all-VERSION-GITHUB_TOKEN
 	hack/bin/release github
 
-GITHUB_CLI_VERSION?=2.62.0
 hack/bin/gh:
 	mkdir -p hack/bin
-	curl -sSL -o hack/bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
+	$(call fetch_file,https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz,hack/bin/gh.tgz)
 	tar -zxvf hack/bin/gh.tgz -C hack/bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
 	chmod +x $@
 	rm hack/bin/gh.tgz
@@ -385,9 +384,8 @@ release-prep: hack/bin/release hack/bin/gh var-require-all-VERSION
 create-release-branch: hack/bin/release var-require-all-CALICO_REF var-require-one-of-STREAM-RELEASE_STREAM
 	hack/bin/release branch cut
 
-GOTESTSUM_VERSION?=1.13.0
 $(HACK_BIN)/gotestsum: $(HACK_BIN)
-	@curl -sSL -o $(HACK_BIN)/gotestsum.tar.gz https://github.com/gotestyourself/gotestsum/releases/download/v$(GOTESTSUM_VERSION)/gotestsum_$(GOTESTSUM_VERSION)_$(NATIVE_OS)_$(NATIVE_ARCH).tar.gz
+	@$(call fetch_file,https://github.com/gotestyourself/gotestsum/releases/download/$(GOTESTSUM_VERSION)/gotestsum_$(GOTESTSUM_VERSION:v%=%)_$(NATIVE_OS)_$(NATIVE_ARCH).tar.gz,$(HACK_BIN)/gotestsum.tar.gz)
 	@tar -zxvf $(HACK_BIN)/gotestsum.tar.gz -C $(HACK_BIN) gotestsum
 	@chmod +x $@
 	@rm $(HACK_BIN)/gotestsum.tar.gz
@@ -407,7 +405,7 @@ operator-sdk: $(OPERATOR_SDK_BARE)
 $(OPERATOR_SDK):
 	$(info ░▒▓ Downloading operator-sdk to $(OPERATOR_SDK))
 	@mkdir -p hack/bin
-	@curl -fsSL -o $@ $(OPERATOR_SDK_URL)
+	@$(call fetch_file,$(OPERATOR_SDK_URL),$@)
 	@chmod +x $@
 
 $(OPERATOR_SDK_BARE): $(OPERATOR_SDK)
@@ -531,7 +529,9 @@ KUSTOMIZE = $(HACK_BIN)/kustomize
 kustomize: $(KUSTOMIZE)
 $(KUSTOMIZE): $(HACK_BIN)
 	$(info ░▒▓ Downloading kustomize $(KUSTOMIZE_VERSION) to $(KUSTOMIZE))
-	@curl -fsSL $(KUSTOMIZE_DOWNLOAD_URL) | tar -C $(HACK_BIN) --extract --gzip kustomize
+	@$(call fetch_file,$(KUSTOMIZE_DOWNLOAD_URL),$(HACK_BIN)/kustomize.tar.gz)
+	@tar -C $(HACK_BIN) --extract --gzip -f $(HACK_BIN)/kustomize.tar.gz kustomize
+	@rm $(HACK_BIN)/kustomize.tar.gz
 	@chmod a+x $(KUSTOMIZE)
 
 

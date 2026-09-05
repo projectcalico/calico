@@ -74,6 +74,8 @@ WINDOWS_VERSIONS ?= ltsc2019 ltsc2022
 # bump it to pick up upstream changes.
 CNI_VERSION=9ffe547cb3b66f80dd32a00fc69a6d0082b55321
 FLANNEL_VERSION=v1.2.0-flannel2-go1.22.7
+CONTAINERNETWORKING_PLUGINS_REPO=https://github.com/projectcalico/containernetworking-plugins.git
+FLANNEL_CNI_PLUGIN_REPO=https://github.com/projectcalico/flannel-cni-plugin.git
 
 # The libbpf version to use
 LIBBPF_VERSION=v1.6.2

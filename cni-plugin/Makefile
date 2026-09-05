@@ -17,12 +17,6 @@ include ../lib.Makefile
 ## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 
-# fail if unable to download
-CURL=curl -C - -sSf
-
-CNI_ARTIFACTS_URL=https://github.com/projectcalico/containernetworking-plugins/releases/download
-FLANNEL_ARTIFACTS_URL=https://github.com/projectcalico/flannel-cni-plugin/releases/download
-
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
 
@@ -102,7 +96,7 @@ FLANNEL_CNI_PLUGIN_CLONED=.flannel-cni-plugin-$(FLANNEL_VERSION).cloned
 $(FLANNEL_CNI_PLUGIN_CLONED):
 	rm -rf flannel-cni-plugin .flannel-cni-plugin-*.cloned
 	-rm -rf $(WINDOWS_BIN)/flannel.exe
-	git clone --single-branch --branch $(FLANNEL_VERSION) https://github.com/projectcalico/flannel-cni-plugin.git
+	$(call fetch_repo,$(FLANNEL_CNI_PLUGIN_REPO),$(FLANNEL_VERSION),flannel-cni-plugin)
 	touch $@
 
 $(WINDOWS_BIN)/flannel.exe: $(FLANNEL_CNI_PLUGIN_CLONED)
