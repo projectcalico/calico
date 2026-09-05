@@ -157,6 +157,8 @@ var _ = infrastructure.DatastoreDescribe(
 			felixes[0].Exec("ip", "route", "add", birdStrayCIDR, "via", felixes[1].IP,
 				"dev", dataplanedefs.IPIPIfaceName, "onlink", "proto", birdRouteProto)
 
+			// Nothing asserts the route landed first: Felix's resync can remove it before a
+			// check could read it back, and Exec fails the test if the add does.
 			Eventually(tunl0Routes, "30s", "500ms").ShouldNot(ContainSubstring(birdStrayCIDR),
 				"Felix did not remove BIRD's stale route")
 		})
