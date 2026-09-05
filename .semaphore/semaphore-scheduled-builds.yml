@@ -1013,7 +1013,7 @@ blocks:
           - docker system prune -af
           - .semaphore/load-cached-images calico node whisker
       jobs:
-        - name: "E2E tests: Conformance (cluster routing: BIRD)"
+        - name: "E2E tests: Conformance (cluster routing: BIRD, Helm 4)"
           commands:
             - .semaphore/run-and-monitor e2e-test.log make e2e-test
           env_vars:
@@ -1022,6 +1022,10 @@ blocks:
             # routing mechanism.
             - name: EXTRA_VALUES_FILES
               value: "hack/test/kind/infra/values-bird-routing.yaml"
+            # One lane installs the chart with Helm 4 so that both major versions are
+            # covered by an install that has to bring the dataplane up.
+            - name: HELM_MAJOR
+              value: "4"
         - name: "E2E tests: Conformance (cluster routing: Felix)"
           commands:
             - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
@@ -1509,6 +1513,35 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+  - name: "Helm"
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+      - "Build: calico image"
+      - "Build: node image"
+      - "Build: whisker image"
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      prologue:
+        commands:
+          # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
+          - docker system prune -af
+          - .semaphore/load-cached-images
+      jobs:
+        - name: "Helm: upgrade a Helm 3 release with Helm 4"
+          commands:
+            - .semaphore/run-and-monitor helm-upgrade-test.log make helm-upgrade-test
+      epilogue:
+        on_fail:
+          commands:
+            - .semaphore/collect-kind-diags
   - name: Istio
     run:
       when: "true"

@@ -21,7 +21,7 @@
         - docker system prune -af
         - .semaphore/load-cached-images calico node whisker
     jobs:
-      - name: "E2E tests: Conformance (cluster routing: BIRD)"
+      - name: "E2E tests: Conformance (cluster routing: BIRD, Helm 4)"
         commands:
           - .semaphore/run-and-monitor e2e-test.log make e2e-test
         env_vars:
@@ -30,6 +30,10 @@
           # routing mechanism.
           - name: EXTRA_VALUES_FILES
             value: "hack/test/kind/infra/values-bird-routing.yaml"
+          # One lane installs the chart with Helm 4 so that both major versions are
+          # covered by an install that has to bring the dataplane up.
+          - name: HELM_MAJOR
+            value: "4"
       - name: "E2E tests: Conformance (cluster routing: Felix)"
         commands:
           - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
