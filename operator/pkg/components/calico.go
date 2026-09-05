@@ -12,117 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Components defined here are required to be kept in sync with
-// config/calico_versions.yml
-
 package components
 
+// Every Calico component is built from this repository at one version, so all three
+// are stamped at link time; see CALICO_LDFLAGS in operator/Makefile. Only a dev build
+// stamps the registry and image path.
 var (
-	CalicoRelease string = "master"
+	// CalicoRelease is the Calico version this operator deploys.
+	CalicoRelease   = "unknown"
+	calicoRegistry  = ""
+	calicoImagePath = ""
+)
 
-	ComponentCalicoCNIPlugins = Component{
-		Version:   "master",
-		Image:     "third-party-cni-plugins",
-		Registry:  "",
-		imagePath: "",
+func calicoComponent(image string) Component {
+	return Component{
+		Version:   CalicoRelease,
+		Image:     image,
+		Registry:  calicoRegistry,
+		imagePath: calicoImagePath,
 		variant:   calicoVariant,
 	}
+}
 
-	ComponentCalicoCNIWindows = Component{
-		Version:   "master",
-		Image:     "cni-windows",
-		Registry:  "",
-		imagePath: "",
-		variant:   calicoVariant,
-	}
-
-	ComponentCalicoNode = Component{
-		Version:   "master",
-		Image:     "node",
-		Registry:  "",
-		imagePath: "",
-		variant:   calicoVariant,
-	}
-
-	ComponentCalicoNodeWindows = Component{
-		Version:   "master",
-		Image:     "node-windows",
-		Registry:  "",
-		imagePath: "",
-		variant:   calicoVariant,
-	}
-
-	ComponentCalicoWhisker = Component{
-		Version:   "master",
-		Image:     "whisker",
-		Registry:  "",
-		imagePath: "",
-		variant:   calicoVariant,
-	}
-
-	ComponentCalicoEnvoyGateway = Component{
-		Version:   "master",
-		Image:     "envoy-gateway",
-		Registry:  "",
-		imagePath: "",
-		variant:   calicoVariant,
-	}
-
-	ComponentCalicoEnvoyProxy = Component{
-		Version:   "master",
-		Image:     "envoy-proxy",
-		Registry:  "",
-		imagePath: "",
-		variant:   calicoVariant,
-	}
-
-	ComponentCalicoEnvoyRatelimit = Component{
-		Version:   "master",
-		Image:     "envoy-ratelimit",
-		Registry:  "",
-		imagePath: "",
-		variant:   calicoVariant,
-	}
-
-	ComponentCalicoIstioPilot = Component{
-		Version:   "master",
-		Image:     "istio-pilot",
-		Registry:  "",
-		imagePath: "",
-		variant:   calicoVariant,
-	}
-
-	ComponentCalicoIstioInstallCNI = Component{
-		Version:   "master",
-		Image:     "istio-install-cni",
-		Registry:  "",
-		imagePath: "",
-		variant:   calicoVariant,
-	}
-
-	ComponentCalicoIstioZTunnel = Component{
-		Version:   "master",
-		Image:     "istio-ztunnel",
-		Registry:  "",
-		imagePath: "",
-		variant:   calicoVariant,
-	}
-
-	ComponentCalicoIstioProxyv2 = Component{
-		Version:   "master",
-		Image:     "istio-proxyv2",
-		Registry:  "",
-		imagePath: "",
-		variant:   calicoVariant,
-	}
-
-	ComponentCalico = Component{
-		Version:   "master",
-		Image:     "calico",
-		Registry:  "",
-		imagePath: "",
-		variant:   calicoVariant,
-	}
+var (
+	ComponentCalicoCNIPlugins      = calicoComponent("third-party-cni-plugins")
+	ComponentCalicoCNIWindows      = calicoComponent("cni-windows")
+	ComponentCalicoNode            = calicoComponent("node")
+	ComponentCalicoNodeWindows     = calicoComponent("node-windows")
+	ComponentCalicoWhisker         = calicoComponent("whisker")
+	ComponentCalicoEnvoyGateway    = calicoComponent("envoy-gateway")
+	ComponentCalicoEnvoyProxy      = calicoComponent("envoy-proxy")
+	ComponentCalicoEnvoyRatelimit  = calicoComponent("envoy-ratelimit")
+	ComponentCalicoIstioPilot      = calicoComponent("istio-pilot")
+	ComponentCalicoIstioInstallCNI = calicoComponent("istio-install-cni")
+	ComponentCalicoIstioZTunnel    = calicoComponent("istio-ztunnel")
+	ComponentCalicoIstioProxyv2    = calicoComponent("istio-proxyv2")
+	ComponentCalico                = calicoComponent("calico")
 
 	CalicoImages = []Component{
 		ComponentCalicoCNIPlugins,

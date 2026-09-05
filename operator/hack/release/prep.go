@@ -24,24 +24,17 @@ import (
 
 	"github.com/projectcalico/calico/operator/hack/release/internal/command"
 	"github.com/projectcalico/calico/operator/hack/release/internal/middleware"
-	"github.com/projectcalico/calico/operator/hack/release/internal/setup"
-	"github.com/projectcalico/calico/operator/hack/release/internal/versions"
 )
 
 // Command to prepare repo for a new release.
 var prepCommand = &cli.Command{
 	Name:  "prep",
 	Usage: "Prepare for a new release",
-	Description: `This involves updating version configuration files, creating a new git branch with the changes,
-pushing the branch to remote, and creating a PR against the release branch.
-
-Calico CRDs come from the working tree. Set the environment variable "CALICO_CRDS_DIR" to take them
-from another checkout instead.`,
+	Description: `This involves creating a new git branch, pushing it to remote, and creating a PR
+against the release branch.`,
 	Flags: []cli.Flag{
 		versionFlag,
 		releaseBranchPrefixFlag,
-		calicoVersionFlag,
-		calicoDirFlag,
 		skipValidationFlag,
 		skipMilestoneFlag,
 		skipBranchCheckFlag,
@@ -54,31 +47,8 @@ from another checkout instead.`,
 	After:  branchCutAfter,
 }
 
-// validatePrepRefs checks the required refs for release prep:
-//   - if calico version is not provided, check that the version in calico_versions.yml is a released version
-//   - check that the base branch is a release branch (if not skipped)
+// validatePrepRefs checks that the base branch is a release branch (if not skipped).
 var validatePrepRefs = func(ctx context.Context, c *cli.Command) (context.Context, error) {
-	// If Calico is not passed in, check the version in calico_versions.yml is a released version.
-	// An operator release must always include a released Calico version.
-	calicoVersion := c.String(calicoVersionFlag.Name)
-	if calicoVersion != "" {
-		return ctx, nil
-	}
-	dir, err := command.GitDir()
-	if err != nil {
-		return ctx, fmt.Errorf("error getting git directory: %w", err)
-	}
-	versions, err := versions.CalicoConfigVersions(dir)
-	if err != nil {
-		return ctx, fmt.Errorf("error retrieving Calico version: %w", err)
-	}
-	calicoVersion = versions.Title
-	if valid, err := setup.IsValidCalicoReleaseVersion(calicoVersion); err != nil {
-		return ctx, fmt.Errorf("error validating Calico version format: %w", err)
-	} else if !valid {
-		return ctx, fmt.Errorf("every release must contain a released Calico version, but found %s", calicoVersion)
-	}
-
 	// check operator base branch is a release branch unless skipped
 	if c.Bool(skipBranchCheckFlag.Name) {
 		logrus.Warnf("Skipping branch validation as requested.")
@@ -116,9 +86,6 @@ var prepContextValuesFunc = func(ctx context.Context, c *cli.Command) (context.C
 	version := c.String(versionFlag.Name)
 	ctx = context.WithValue(ctx, versionCtxKey, version)
 	ctx = context.WithValue(ctx, branchNameCtxKey, fmt.Sprintf("build-%s", version))
-	if calicoVer := c.String(calicoVersionFlag.Name); calicoVer != "" {
-		ctx = context.WithValue(ctx, calicoConfigVersionCtxKey, calicoVer)
-	}
 	return ctx, nil
 }
 
