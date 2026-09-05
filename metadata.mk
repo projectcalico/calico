@@ -93,3 +93,4 @@ LIBNFTNL_SHA256=37fea5d6b5c9b08de7920d298de3cdc942e7ae64b1a3e8b880b2d390ae67ad95
 
 # quay.io expiry time for hashrelease/dev images
 QUAY_EXPIRE_DAYS=90
+
