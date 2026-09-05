@@ -86,6 +86,23 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
 
 ### 4.a Prepare the release branch
 
+> [!NOTE]
+> This step is automated. The [Release prep workflow](../.github/workflows/release-prep.yml)
+> runs on every push to a `release-vX.Y` branch, including PR merges: it rebuilds `build-vX.Y.Z` from the release
+> branch, runs `make release-prep`, force-pushes the branch, and creates or updates the release PR
+> with the generated release notes in its body.
+>
+> Because the branch is rebuilt and force-pushed on every run, hand edits to it are lost. Fix
+> release notes at their source instead: edit the ```` ```release-note ```` block in the
+> description of the PR that the note came from, then re-run the workflow to regenerate. See
+> [Release notes](#release-notes).
+>
+> If a note genuinely cannot be expressed in the source PR, add the `release-prep-hold` label to
+> the release PR first - the workflow then leaves that PR and its branch alone, and you own the
+> branch from that point on.
+>
+> The steps below are the manual equivalent, for when the workflow is held or unavailable.
+
 1. Checkout the release branch `release-vX.Y` and pull the latest changes.
 
    ```sh
@@ -102,7 +119,20 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
    runs `make generate`, generates release notes, and commits the changes.
    The version is auto-detected from git state.
 
-1. Review the generated release notes in `release-notes/<VERSION>-release-notes.md` for accuracy and format appropriately. Amend the commit if changes are needed.
+1. Review the generated release notes in `release-notes/<VERSION>-release-notes.md` for accuracy.
+
+   `release-notes/<VERSION>-release-notes.md` is a generated file. Do not edit it directly if it
+   can be avoided: every run of `make release-prep` overwrites it from the milestone, so direct
+   edits are lost the next time anyone prepares the release.
+
+   To correct a note, edit the ```` ```release-note ```` block in the description of the PR the
+   note came from, then re-run `make release-prep` (or the Release prep workflow) to regenerate.
+   A PR whose note is wrong, missing, or reads as `TBD` is fixed the same way. See
+   [Release notes](#release-notes) for the full rules.
+
+   Editing the file by hand is a last resort - for wording that has no source PR, such as the
+   summary of major enhancements at the top of a minor release. Amend the commit if you do, and
+   make sure the Release prep workflow is held (see the note above) so it does not overwrite you.
 
 1. Get the PR reviewed and ensure it passes CI before moving to the next step.
 
@@ -215,9 +245,23 @@ Release notes for a Calico release contain notable changes across Calico reposit
 
    A file called `release-notes/<VERSION>-release-notes.md` will be created with the raw release note content.
 
-3. Edit the generated file.
+3. Correct any notes that need it, in the PR they came from.
 
-   The release notes should be edited to highlight a few major enhancements and their value to the user. Bug fixes and other changes should be summarized in a bulleted list at the end of the release notes. Any breaking changes, limitations or incompatible changes in behavior should be explicitly noted.
+   `release-notes/<VERSION>-release-notes.md` is generated from the milestone and is overwritten
+   on every run of `make release-prep`, so edits made directly to it do not survive. Reword the
+   ```` ```release-note ```` block in the source PR description instead - a PR that is already
+   merged can still have its description edited - then run `make release-notes` again. The same
+   applies to a note that is missing, in the wrong milestone, or still says `TBD`.
+
+   Only content with no source PR belongs in the file itself: the highlights of a few major
+   enhancements and their value to the user, and any explicit callout of breaking changes,
+   limitations, or incompatible changes in behavior. Bug fixes and other changes should be
+   summarized in a bulleted list at the end of the release notes, which the generator produces
+   from the per-PR notes.
+
+   If you do hand-edit the file, hold the Release prep workflow first (see
+   [4.a](#4a-prepare-the-release-branch)) so that the next merge into the release branch does not
+   regenerate over your changes.
 
    Consistent release note formatting is important. Here are some examples for reference:
 
