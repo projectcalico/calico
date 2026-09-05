@@ -30,10 +30,13 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 )
 
+// protocolMapL4 maps IP protocol numbers to the lower-case names Felix uses when
+// rendering IP_AND_PORT IP set members ("<IP>,<protocol>:<port>").
 var protocolMapL4 = map[int32]string{
-	1:  "icmp",
-	6:  "tcp",
-	17: "udp",
+	1:   "icmp",
+	6:   "tcp",
+	17:  "udp",
+	132: "sctp",
 }
 
 type namespaceMatch struct {
@@ -548,20 +551,20 @@ func matchIPSetsNotAny(ids []string, ipsSetFunc func(string) policystore.IPSet, 
 // matchDstPort checks if the destination port is within the port ranges and named port sets. It
 // also checks if the destination port is not within the not port ranges and named port sets.
 func matchDstPort(r *proto.Rule, req *requestCache) bool {
-	return matchPort("dst", r.GetDstPorts(), r.GetDstNamedPortIpSetIds(), req.getIPSet, req.GetDestPort()) &&
-		matchNotPort("dst", r.GetNotDstPorts(), r.GetNotDstNamedPortIpSetIds(), req.getIPSet, req.GetDestPort())
+	return matchPort("dst", r.GetDstPorts(), r.GetDstNamedPortIpSetIds(), req.getIPSet, req.GetDestPort(), req.getDstIPProtoPortStr) &&
+		matchNotPort("dst", r.GetNotDstPorts(), r.GetNotDstNamedPortIpSetIds(), req.getIPSet, req.GetDestPort(), req.getDstIPProtoPortStr)
 }
 
 // matchSrcPort checks if the source port is within the port ranges and named port sets. It also
 // checks if the source port is not within the not port ranges and named port sets.
 func matchSrcPort(r *proto.Rule, req *requestCache) bool {
-	return matchPort("src", r.GetSrcPorts(), r.GetSrcNamedPortIpSetIds(), req.getIPSet, req.GetSourcePort()) &&
-		matchNotPort("src", r.GetNotSrcPorts(), r.GetNotSrcNamedPortIpSetIds(), req.getIPSet, req.GetSourcePort())
+	return matchPort("src", r.GetSrcPorts(), r.GetSrcNamedPortIpSetIds(), req.getIPSet, req.GetSourcePort(), req.getSrcIPProtoPortStr) &&
+		matchNotPort("src", r.GetNotSrcPorts(), r.GetNotSrcNamedPortIpSetIds(), req.getIPSet, req.GetSourcePort(), req.getSrcIPProtoPortStr)
 }
 
 // matchPort checks if the port is within the port ranges and named port sets. It returns true if
 // the port matches, false otherwise.
-func matchPort(dir string, ranges []*proto.PortRange, namedPortSets []string, ipsSetFunc func(string) policystore.IPSet, port int) bool {
+func matchPort(dir string, ranges []*proto.PortRange, namedPortSets []string, ipsSetFunc func(string) policystore.IPSet, port int, ipProtoPortFunc func() string) bool {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.WithFields(log.Fields{
 			"ranges":        ranges,
@@ -579,18 +582,12 @@ func matchPort(dir string, ranges []*proto.PortRange, namedPortSets []string, ip
 			return true
 		}
 	}
-	for _, id := range namedPortSets {
-		portStr := fmt.Sprintf("%d", port)
-		if s := ipsSetFunc(id); s != nil && s.Contains(portStr) {
-			return true
-		}
-	}
-	return false
+	return matchNamedPortSetsAny(namedPortSets, ipsSetFunc, ipProtoPortFunc)
 }
 
 // matchNotPort checks if the port is not within the port ranges and named port sets. It returns
 // true if the port matches, false otherwise.
-func matchNotPort(dir string, ranges []*proto.PortRange, namedPortSets []string, ipsSetFunc func(string) policystore.IPSet, port int) bool {
+func matchNotPort(dir string, ranges []*proto.PortRange, namedPortSets []string, ipsSetFunc func(string) policystore.IPSet, port int, ipProtoPortFunc func() string) bool {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.WithFields(log.Fields{
 			"ranges":        ranges,
@@ -608,13 +605,28 @@ func matchNotPort(dir string, ranges []*proto.PortRange, namedPortSets []string,
 			return false
 		}
 	}
+	return !matchNamedPortSetsAny(namedPortSets, ipsSetFunc, ipProtoPortFunc)
+}
+
+// matchNamedPortSetsAny returns true if the flow's endpoint is a member of any of the named port
+// IP sets.
+//
+// A named port resolves, in the calc graph, to an IP set of type IP_AND_PORT whose members are
+// "<IP>,<protocol>:<port>" — one entry per (endpoint IP, resolved port number) pair for the
+// endpoints matched by the rule's selector. So the membership test has to use the whole
+// IP/protocol/port tuple for the direction the rule applies to, not the port number alone. The
+// tuple is built lazily because most rules carry no named port reference at all.
+func matchNamedPortSetsAny(namedPortSets []string, ipsSetFunc func(string) policystore.IPSet, ipProtoPortFunc func() string) bool {
+	if len(namedPortSets) == 0 {
+		return false
+	}
+	member := ipProtoPortFunc()
 	for _, id := range namedPortSets {
-		portStr := fmt.Sprintf("%d", port)
-		if s := ipsSetFunc(id); s != nil && s.Contains(portStr) {
-			return false
+		if s := ipsSetFunc(id); s != nil && s.Contains(member) {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 // matchDstNet checks if the destination IP is within the CIDRs and not in the not CIDRs.
