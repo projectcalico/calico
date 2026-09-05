@@ -779,11 +779,19 @@ func printModules(pkg string) {
 	// For ease, do the full cross product. Only takes ~100ms.
 	var mods []string
 	for _, mod := range modules {
+		// Imports still use the original module path, so match on that, but report the
+		// replacement, since that's the code we actually build against.
+		importPath := mod.Path
 		if mod.Replace != nil {
+			if mod.Replace.Version == "" {
+				// Replaced by a local directory; its files are already inputs in their own right.
+				continue
+			}
 			mod = *mod.Replace
 		}
+
 		for _, pkg := range packageDeps {
-			if strings.HasPrefix(pkg, mod.Path) {
+			if strings.HasPrefix(pkg, importPath) {
 				if mod.Version != "" {
 					mods = append(mods, mod.Path+" "+mod.Version)
 				} else {
