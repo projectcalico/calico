@@ -281,7 +281,7 @@ foss-checks:
 # Not `test`, which lib.Makefile defines as `ut fv st`. The FV block runs the
 # kind suite on its own. amd64 only here; the "Operator: multi-arch build"
 # block covers the other arches.
-ci: clean format-check validate-gen-versions static-checks image fmt vet ut gen-files fix-changed dirty-check test-crds
+ci: clean format-check validate-gen-versions static-checks image fmt vet ut hack/gen-bundle/ut gen-files fix-changed dirty-check test-crds
 
 # This repository is public and the Enterprise CRDs come from one that is not,
 # so only the core half is checked here. The Enterprise generated files are
@@ -436,34 +436,6 @@ $(BINDIR)/gen-versions: $(shell find ./hack/gen-versions -type f)
 	sh -c '$(GIT_CONFIG_SSH) \
 	go build -buildvcs=false -o $(BINDIR)/gen-versions ./hack/gen-versions'
 
-.PHONY: prepull-image
-prepull-image:
-	@echo Pulling operator image...
-	docker pull $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):v$(VERSION)
-
-# Get the digest for the image. This target runs docker commands on the host since the
-# build container doesn't have docker-in-docker. 'docker inspect' returns output like the example
-# below. RepoDigests may have more than one entry so we need to filter.
-# [
-#     {
-#         "Id": "sha256:34a1114040c03830da0a8d57f8d999deba26d8e31bda353aed201a375f68870b",
-#         "RepoTags": [
-#             "quay.io/tigera/operator:v1.3.1",
-#             "..."
-#         ],
-#         "RepoDigests": [
-#             "quay.io/tigera/operator@sha256:5e1d551b5a711592472f4a3cc4645698d5f826da4253f0d47cfa5d5b641a2e1a",
-#             "..."
-#         ],
-#         ...
-#     }
-# ]
-.PHONY: get-digest
-get-digest: prepull-image
-	@echo Getting operator image digest...
-	$(eval OPERATOR_IMAGE_INSPECT=$(shell sh -c "docker image inspect $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):v$(VERSION) | base64 -w 0"))
-	$(eval OPERATOR_MANIFEST_INSPECT=$(shell sh -c "docker manifest inspect $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):v$(VERSION) | base64 -w 0"))
-
 #####################################
 #####################################
 # Image URL to use all building/pushing image targets
@@ -542,7 +514,7 @@ $(KUSTOMIZE): $(HACK_BIN)
 # release-vX.YY
 CHANNEL ?= $(shell git branch --show-current)
 BUNDLE_CHANNEL = --channels=$(if \
-		 $(findstring release-v1,$(CHANNEL)),$(CHANNEL),\
+		 $(findstring release-v,$(CHANNEL)),$(CHANNEL),\
 		 $(error Channel for bundle should be a release branch of the format 'release-vX.YY', not '$(CHANNEL)'))
 
 # We only specify one channel so we don't need to set a
@@ -561,32 +533,38 @@ BUNDLE_DEPLOY_DIR ?= $(BUNDLE_BASE_DIR)/deploy
 ## Create an operator bundle image.
 # E.g., make bundle VERSION=1.13.1 PREV_VERSION=1.13.0 CHANNELS=release-v1.13 DEFAULT_CHANNEL=release-v1.13
 .PHONY: bundle
-bundle: bundle-generate bundle-crd-clean update-bundle bundle-validate bundle-image
+bundle: bundle-generate update-bundle bundle-validate bundle-image
 
-.PHONY: bundle-crd-clean
-bundle-crd-clean:
-	git checkout -- pkg/crds/operator
-
+# Validate against the full Operator Framework suite, not just the required
+# checks, since this bundle is built to be certified.
 .PHONY: bundle-validate
 bundle-validate: $(OPERATOR_SDK_BARE)
-	$(OPERATOR_SDK_BARE) bundle validate bundle/$(VERSION)
+	$(OPERATOR_SDK_BARE) bundle validate bundle/$(VERSION) --select-optional suite=operatorframework
 
 .PHONY: bundle-manifests
-bundle-manifests:
+bundle-manifests: $(BINDIR)/gen-bundle
 ifndef VERSION
 	$(error VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
 endif
 ifndef PREV_VERSION
 	$(error PREV_VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
 endif
-	$(eval EXTRA_DOCKER_ARGS += -e BUNDLE_CRD_DIR=$(BUNDLE_CRD_DIR) -e BUNDLE_DEPLOY_DIR=$(BUNDLE_DEPLOY_DIR))
-	$(DOCKER_GO_BUILD) "hack/gen-bundle/get-manifests.sh"
+	$(BINDIR)/gen-bundle get-manifests \
+		--crd-dir $(BUNDLE_CRD_DIR) \
+		--deploy-dir $(BUNDLE_DEPLOY_DIR)
 
+# Generate the bundle from the staged manifests. The static half of the CSV comes
+# from --kustomize-dir; note that operator-sdk only picks that base up if its
+# metadata.name is "tigera-operator.v<semver>", matching --package.
+#
+# This uses the CRDs committed under pkg/crds/operator rather than regenerating
+# them, which 'make gen-files' and the CI dirty-check already keep current.
 .PHONY: bundle-generate
-bundle-generate: manifests $(KUSTOMIZE) $(OPERATOR_SDK_BARE) bundle-manifests
+bundle-generate: $(OPERATOR_SDK_BARE) bundle-manifests
 	$(OPERATOR_SDK_BARE) generate bundle \
 		--crds-dir $(BUNDLE_CRD_DIR) \
 		--deploy-dir $(BUNDLE_DEPLOY_DIR) \
+		--kustomize-dir config/manifests \
 		--version $(VERSION) \
 		--verbose \
 		--manifests \
@@ -594,14 +572,31 @@ bundle-generate: manifests $(KUSTOMIZE) $(OPERATOR_SDK_BARE) bundle-manifests
 		--metadata \
 		$(BUNDLE_METADATA_OPTS)
 
-# Update a generated bundle so that it can be certified.
+# Apply the build-time values to a generated bundle so that it can be certified.
+# gen-bundle pulls and inspects the operator image itself, which is why it runs
+# on the host: the build container has no docker-in-docker.
 .PHONY: update-bundle
-update-bundle: $(OPERATOR_SDK_BARE) get-digest
-	$(eval EXTRA_DOCKER_ARGS += -e OPERATOR_IMAGE_INSPECT="$(OPERATOR_IMAGE_INSPECT)" -e OPERATOR_MANIFEST_INSPECT="$(OPERATOR_MANIFEST_INSPECT)" -e VERSION=$(VERSION) -e PREV_VERSION=$(PREV_VERSION))
-	$(DOCKER_GO_BUILD) hack/gen-bundle/update-bundle.sh
+update-bundle: $(BINDIR)/gen-bundle
+	$(BINDIR)/gen-bundle update-bundle \
+		--version $(VERSION) \
+		--prev-version $(PREV_VERSION) \
+		--image $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME)
+
+$(BINDIR)/gen-bundle: $(shell find ./hack/gen-bundle -type f)
+	mkdir -p $(BINDIR)
+	$(DOCKER_GO_BUILD) \
+	sh -c '$(GIT_CONFIG_SSH) \
+	go build -buildvcs=false -o $(BINDIR)/gen-bundle ./hack/gen-bundle'
+
+.PHONY: hack/gen-bundle/ut
+hack/gen-bundle/ut:
+	mkdir -p report/gen-bundle
+	$(DOCKER_GO_BUILD) \
+	sh -c '$(GIT_CONFIG_SSH) \
+	gotestsum --format=testname --junitfile report/gen-bundle/ut.xml $(PACKAGE_NAME)/hack/gen-bundle/...'
 
 # Build the bundle image.
-.PHONY: bundle-build
+.PHONY: bundle-image
 bundle-image:
 ifndef VERSION
 	$(error VERSION is undefined - run using make $@ VERSION=X.Y.Z)
