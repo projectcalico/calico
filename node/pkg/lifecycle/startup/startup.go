@@ -24,6 +24,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -48,6 +50,7 @@ import (
 	"github.com/projectcalico/calico/node/pkg/health"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/autodetection"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/autodetection/ipv4"
+	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/ipclaim"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
@@ -60,6 +63,16 @@ const (
 	DEFAULT_IPV6_POOL_NAME       = "default-ipv6-ippool"
 
 	DEFAULT_MONITOR_IP_POLL_INTERVAL = 60 * time.Second
+
+	// ipClaimLeaseTimeout is the Kubernetes API request timeout used only for
+	// the IP-claim Lease client built in checkConflictingNodes -- deliberately
+	// its own value rather than the 2s timeout used elsewhere in this file for
+	// cheap ConfigMap/Node gets. A mass scale-up or fleet reboot, the exact
+	// scenario the Lease-based claim exists to survive, is also when apiserver
+	// latency is most likely to be degraded; a too-tight timeout there misreads
+	// ordinary slowness as a real IP conflict and crash-loops nodes that should
+	// just retry (see also ipclaim.ClaimNodeIPLease's own bounded retry).
+	ipClaimLeaseTimeout = 10 * time.Second
 
 	// KubeadmConfigConfigMap is defined in k8s.io/kubernetes, which we can't import due to versioning issues.
 	KubeadmConfigConfigMap = "kubeadm-config"
@@ -408,10 +421,34 @@ func configureAndCheckIPAddressSubnetsErr(ctx context.Context, cli client.Interf
 		return checkConflicts, nil
 	}
 
-	// If we report an IP change (v4 or v6) we should verify there are no
-	// conflicts between Nodes.
-	if checkConflicts && os.Getenv("DISABLE_NODE_IP_CHECK") != "true" {
-		v4conflict, v6conflict, err := checkConflictingNodes(ctx, cli, node)
+	// checkConflictingNodes' Lease-based claim path (see its own doc comment)
+	// runs unconditionally on every call only until it has succeeded once in
+	// this process -- tracked by leaseBackfilled -- so that a node whose
+	// detected address is unchanged from a prior run still backfills a Lease
+	// for it at least once after this image rolls out, letting the whole
+	// fleet converge to full Lease coverage within one DaemonSet roll instead
+	// of never. This function is called both at node startup and, via
+	// MonitorIPAddressSubnetsWithContext, from a periodic goroutine (default
+	// every 60s) that runs for the lifetime of the process and treats any
+	// error it gets back as fatal to the whole calico-node process, not just
+	// this check -- so once the one-time backfill has succeeded, repeating
+	// the Lease claim on every tick forever (and turning any transient
+	// apiserver hiccup into a process-killing error) is not something we
+	// want; checkConflictingNodes reverts to gating on addressChanged after
+	// that first success, the same as before this behavior was introduced.
+	//
+	// checkConflicts is passed through as checkConflictingNodes'
+	// addressChanged argument both for that post-backfill gating and because
+	// checkConflictingNodes isn't only the Lease path -- it falls back to
+	// checkConflictingNodesByList, the original full Node List scan, when the
+	// legacy-scan override is set or the datastore isn't Kubernetes. That
+	// scan is exactly the O(n) per-node / O(n^2) fleet-wide apiserver load
+	// this patch exists to eliminate, and unlike the Lease claim it is not a
+	// cheap no-op to repeat on an unchanged address, so the fallback scan
+	// only ever runs on an address change. DISABLE_NODE_IP_CHECK remains the
+	// intentional opt-out for skipping this check entirely.
+	if os.Getenv("DISABLE_NODE_IP_CHECK") != "true" {
+		v4conflict, v6conflict, err := checkConflictingNodes(ctx, cli.Nodes(), node, k8sNode, checkConflicts)
 		if err != nil {
 			// If we've auto-detected a new IP address for an existing node that now conflicts, clear the old IP address(es)
 			// from the node in the datastore. This frees the address in case it needs to be used for another node.
@@ -1140,19 +1177,174 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 	}
 }
 
+// newIPClaimClientset builds the Kubernetes clientset checkConflictingNodes
+// uses to claim/release the IP-claim Lease. A package variable rather than a
+// direct call, so tests can substitute a fake clientset instead of requiring
+// real in-cluster/kubeconfig credentials -- the same seam pattern
+// claimRetryAttempts/claimRetryBackoff use in the ipclaim package.
+var newIPClaimClientset = func() (kubernetes.Interface, error) {
+	kubeConfig, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+	if err != nil {
+		return nil, fmt.Errorf("no in-cluster/kubeconfig credentials available: %w", err)
+	}
+	kubeConfig.Timeout = ipClaimLeaseTimeout
+	clientset, err := kubernetes.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build Kubernetes clientset: %w", err)
+	}
+	return clientset, nil
+}
+
+// ipClaimClientsetMu guards ipClaimClientset, memoizing the clientset
+// newIPClaimClientset builds so parsing kubeconfig/in-cluster credentials and
+// TLS certificates happens once per process instead of on every
+// checkConflictingNodes call -- this compounds with the Lease-claim path now
+// running on every startup (see configureAndCheckIPAddressSubnetsErr), so
+// without memoization a stable, unchanging address would still rebuild a
+// whole clientset on every backfill attempt.
+//
+// A mutex-guarded "built successfully yet" check, not sync.Once: sync.Once.Do
+// runs its function exactly once per process regardless of whether it errors,
+// which would permanently cache a transient build failure (e.g. credentials
+// not yet available at boot) and hand every later call -- including from the
+// periodic monitor-addresses goroutine, which Fatals the process on any
+// returned error -- the same cached error forever, with no chance to ever
+// succeed and close the leaseBackfilled gate. Only a successful build is
+// memoized; a failed build is retried on the next call.
+//
+// Package-level, not local to getIPClaimClientset, so a test can reset it
+// between subtests: each subtest substitutes newIPClaimClientset with its own
+// fake and expects its own call count, which a cached value surviving from a
+// prior subtest would break.
+var (
+	ipClaimClientsetMu sync.Mutex
+	ipClaimClientset   kubernetes.Interface
+)
+
+// getIPClaimClientset returns the memoized Kubernetes clientset for the IP
+// claim Lease, building it via newIPClaimClientset on first use and on every
+// subsequent call until a build succeeds. Once a build succeeds, the result
+// is cached for the rest of the process and newIPClaimClientset is never
+// called again.
+func getIPClaimClientset() (kubernetes.Interface, error) {
+	ipClaimClientsetMu.Lock()
+	defer ipClaimClientsetMu.Unlock()
+	if ipClaimClientset != nil {
+		return ipClaimClientset, nil
+	}
+	clientset, err := newIPClaimClientset()
+	if err != nil {
+		return nil, err
+	}
+	ipClaimClientset = clientset
+	return ipClaimClientset, nil
+}
+
+// leaseBackfilled tracks whether checkConflictingNodes' Lease-based claim
+// path has completed a claim successfully at least once in this process. It
+// is set only on success (not merely attempted), so a real failure keeps
+// retrying on every subsequent call until it eventually succeeds once. See
+// configureAndCheckIPAddressSubnetsErr for why this one-time-success gate
+// exists: it lets a stable node backfill its Lease once per process without
+// re-running the claim on every periodic-monitor tick forever afterward.
+var leaseBackfilled atomic.Bool
+
+// releaseStaleIPClaimLeases attempts to release the IP-claim Leases for a
+// node's previous IPv4/IPv6 addresses -- releaseIPv4/releaseIPv6 as computed
+// by checkConflictingNodes' diagnostic prior-address comparison. It is the
+// single shared implementation of that release attempt, called from every
+// return path in checkConflictingNodes that has a stale address to release:
+// the main Lease-claim path and all three of its legacy-scan fallback
+// branches (ForceLegacyScan, a LoadClientConfig error, and a non-Kubernetes
+// datastore type).
+//
+// This is best-effort and never fails the caller. Building the clientset can
+// fail here too -- most notably from the fallback branches, which are
+// explicitly choosing not to depend on Kubernetes-Lease functionality being
+// available (a LoadClientConfig error or a non-Kubernetes Calico datastore
+// says nothing about whether the underlying Kubernetes cluster's own API is
+// reachable, so it's still worth trying, but a failure to reach it must not
+// block the legacy-scan conflict check those branches exist to run). A
+// clientset build failure is logged as a warning and treated as a no-op,
+// exactly like an individual ReleaseNodeIPLease failure below.
+// ReleaseNodeIPLease itself is safe to call unconditionally: it re-reads the
+// Lease and only deletes it if this node is still its HolderIdentity,
+// deleting with a UID+ResourceVersion precondition tied to that exact read,
+// so it can never take down a different node's live claim.
+func releaseStaleIPClaimLeases(ctx context.Context, nodeName string, releaseIPv4, releaseIPv6 net.IP) {
+	if releaseIPv4 == nil && releaseIPv6 == nil {
+		return
+	}
+	clientset, err := getIPClaimClientset()
+	if err != nil {
+		log.WithError(err).Warnf("Failed to build Kubernetes clientset to release stale IP claim lease(s) for %q; they will not be retried this run", nodeName)
+		return
+	}
+	if releaseIPv4 != nil {
+		if rerr := ipclaim.ReleaseNodeIPLease(ctx, clientset, nodeName, releaseIPv4); rerr != nil {
+			log.WithError(rerr).Warnf("Failed to release the stale IP claim lease for our previous IPv4 address %s; it will not be retried this run", releaseIPv4)
+		}
+	}
+	if releaseIPv6 != nil {
+		if rerr := ipclaim.ReleaseNodeIPLease(ctx, clientset, nodeName, releaseIPv6); rerr != nil {
+			log.WithError(rerr).Warnf("Failed to release the stale IP claim lease for our previous IPv6 address %s; it will not be retried this run", releaseIPv6)
+		}
+	}
+}
+
 // checkConflictingNodes checks whether any other nodes have been configured
 // with the same IP addresses.
-func checkConflictingNodes(ctx context.Context, client client.Interface, node *internalapi.Node) (v4conflict, v6conflict bool, retErr error) {
-	// Get the full set of nodes.
-	var nodes []internalapi.Node
-	if nodeList, err := client.Nodes().List(ctx, options.ListOptions{}); err != nil {
-		log.WithError(err).Errorf("Unable to query node configuration")
-		retErr = err
-		return
-	} else {
-		nodes = nodeList.Items
-	}
-
+// checkConflictingNodes claims our detected IP addresses and reports a
+// conflict if another node already holds them.
+//
+// This claims via a Kubernetes Lease named after the IP rather than listing
+// every Calico Node and scanning client-side. Lease creation is atomic at the
+// API server (an etcd CreateRevision==0 guard), so two nodes racing to claim
+// the same IP never both succeed -- the loser gets AlreadyExists, which is
+// treated as a real conflict. The previous implementation ran a full Node
+// List on every node whose detected IP changed; under a mass scale-up or
+// reboot that is O(n) apiserver load times n nodes doing it concurrently,
+// i.e. O(n^2), and was a confirmed contributor to Calico control-plane
+// overload at scale.
+//
+// The Lease path needs a Kubernetes API to claim against, so it only applies
+// when running under the Kubernetes datastore driver -- the actual resolved
+// Calico datastore type (apiconfig.LoadClientConfig), not merely "were
+// in-cluster/kubeconfig credentials loadable". A calico-node DaemonSet
+// running with DATASTORE_TYPE=etcdv3 still has a normal in-cluster
+// ServiceAccount mounted, so that alone would build a kubeconfig
+// successfully and can't tell KDD and etcd apart. On an etcd-backed
+// deployment there is no Kubernetes-datastore API to claim a Lease against,
+// and checkConflictingNodesByList (the original scan) is used instead.
+//
+// nodes takes the narrow client.NodeInterface rather than the full
+// client.Interface -- this is the only part of the Calico client this
+// function (and checkConflictingNodesByList) ever uses, and it's what makes
+// the gating/wiring logic here unit-testable with a hand-written fake: the
+// full client.Interface pulls in dozens of unrelated resource-client
+// methods that a fake would otherwise have to implement for no reason.
+//
+// addressChanged is the caller's checkConflicts value -- whether
+// configureIPsAndSubnets detected our address changed since the last
+// startup. The Lease-based claim above runs regardless of addressChanged
+// only until it has succeeded once in this process -- see leaseBackfilled --
+// after which it, too, only runs when addressChanged is true, the same as
+// checkConflictingNodesByList always has. Before that first success it's a
+// cheap, idempotent no-op when we already hold the Lease, and needs to run
+// on every call so an already-stable node backfills its Lease; after that
+// first success, repeating it on every call forever (including from the
+// periodic monitor goroutine, which treats any error as fatal to the whole
+// process) is unnecessary load and unnecessary fragility for no benefit. The
+// checkConflictingNodesByList fallback branches are different regardless --
+// that's the original O(n) full Node List scan, not a cheap no-op, so each
+// of those branches only ever runs it when addressChanged is true, same as
+// the pre-Lease behavior. When addressChanged is false and a fallback branch
+// would otherwise have run the scan, it's skipped and (false, false, nil) is
+// returned instead. When addressChanged is true and a fallback branch does
+// run the scan, it first calls releaseStaleIPClaimLeases so a stale Lease
+// from a previous address is still attempted, exactly as the main Lease-claim
+// path does below -- see releaseStaleIPClaimLeases and its callers.
+func checkConflictingNodes(ctx context.Context, nodes client.NodeInterface, node *internalapi.Node, k8sNode *v1.Node, addressChanged bool) (v4conflict, v6conflict bool, retErr error) {
 	ourIPv4, _, err := cnet.ParseCIDROrIP(node.Spec.BGP.IPv4Address)
 	if err != nil && node.Spec.BGP.IPv4Address != "" {
 		log.WithError(err).Errorf("Error parsing IPv4 CIDR '%s' for node '%s'", node.Spec.BGP.IPv4Address, node.Name)
@@ -1166,11 +1358,200 @@ func checkConflictingNodes(ctx context.Context, client client.Interface, node *i
 		return
 	}
 
-	for _, theirNode := range nodes {
-		if theirNode.Spec.BGP == nil {
-			// Skip nodes that don't have BGP configured.  We know
-			// that this node does have BGP since we only perform
-			// this check after configuring BGP.
+	// Diagnostic only, and cheap: a single targeted Get on our own prior
+	// record (not the full-cluster List the conflict check itself used to
+	// do) to warn if our IP changed since last time, which could indicate
+	// two nodes sharing a name. Not an error condition on its own when
+	// addressChanged is false, since nothing new is being committed this run
+	// in that case. A NotFound here is expected for a brand-new node with no
+	// prior record and isn't worth a warning; any other error is logged so a
+	// Forbidden/RBAC-denied or otherwise unexpected failure doesn't disappear
+	// silently.
+	//
+	// When addressChanged is true, though, this Get is the only source of
+	// truth for what the prior address was: it's what releaseIPv4/releaseIPv6
+	// below are computed from. If it fails here with anything other than
+	// ErrorResourceDoesNotExist and we pressed on anyway, the caller would go
+	// on to claim and persist the new address this run with nothing marking
+	// that the prior-address diagnostic never actually ran -- and once the
+	// node record is overwritten with the new address, that prior address is
+	// gone for good and its Lease can never be identified and released again.
+	// So in that case this is treated as fatal: return the error, let the
+	// caller propagate it without persisting anything, and let the whole
+	// check retry (next startup, or after the process is restarted) once the
+	// Get can succeed and the true prior address is still derivable.
+	//
+	// This also gives us the previous address(es), if any, so that once
+	// we've handled the new address below we can release the stale Lease for
+	// the old one -- see ipclaim.ReleaseNodeIPLease. The Node object itself
+	// hasn't been deleted here (it's the same node, just a new or now-absent
+	// address), so the old Lease's OwnerReference-based GC never fires on its
+	// own. A prior address is released not only when it changed to a
+	// different address, but also when it disappeared entirely (e.g. the
+	// interface that provided it went away): either way the old Lease is no
+	// longer backed by a live address on this node and would otherwise leak
+	// until the Node object itself is deleted.
+	//
+	// Whether that release happens below is independent of whether the new
+	// address's own claim conflicts with another node: releaseIPv4/releaseIPv6
+	// are computed purely from this node's own prior-vs-current address, and
+	// gating the release on the new address's claim result would leave the
+	// old Lease orphaned whenever the new address genuinely conflicts. That
+	// matters because a persistent conflict on an autodetected address makes
+	// the caller clear this node's own stored BGP address and the process
+	// then restarts; on the next run there is no prior address left to diff
+	// against, so the release could never be computed again and the old
+	// Lease would never be freed. ReleaseNodeIPLease is safe to call
+	// unconditionally here: it re-reads the Lease and only deletes it if this
+	// node is still its HolderIdentity, deleting with a UID+ResourceVersion
+	// precondition tied to that exact read, so it can never take down a
+	// different node's live claim.
+	//
+	// This release attempt is genuinely unconditional across every return
+	// path below that has a stale address to release, not merely the main
+	// Lease-claim path: each of the three legacy-scan fallback branches
+	// (ForceLegacyScan, a LoadClientConfig error, and a non-Kubernetes
+	// datastore type) also calls releaseStaleIPClaimLeases before falling
+	// back to checkConflictingNodesByList, since those branches choosing not
+	// to use the Lease-based claim for the new address says nothing about
+	// whether a stale Lease from a previous address still needs cleaning up.
+	// See releaseStaleIPClaimLeases.
+	var releaseIPv4, releaseIPv6 net.IP
+	prior, gerr := nodes.Get(ctx, node.Name, options.GetOptions{})
+	if gerr != nil {
+		if _, ok := gerr.(cerrors.ErrorResourceDoesNotExist); !ok {
+			if addressChanged {
+				log.WithError(gerr).Errorf("Failed to read our own prior node record %q for the IP-change diagnostic; refusing to claim and persist the new address this run so the prior address isn't lost", node.Name)
+				retErr = gerr
+				return
+			}
+			log.WithError(gerr).Warnf("Failed to read our own prior node record %q for the IP-change diagnostic; skipping stale IP claim lease release detection this run", node.Name)
+		}
+	} else if prior.Spec.BGP != nil {
+		if priorIPv4, _, perr := cnet.ParseCIDROrIP(prior.Spec.BGP.IPv4Address); perr == nil &&
+			priorIPv4.IP != nil && (ourIPv4.IP == nil || !priorIPv4.Equal(ourIPv4.IP)) {
+			if ourIPv4.IP != nil {
+				fields := log.Fields{"node": node.Name, "original": priorIPv4.String(), "updated": ourIPv4.String()}
+				log.WithFields(fields).Warnf("IPv4 address has changed. This could happen if there are multiple nodes with the same name.")
+			} else {
+				log.WithFields(log.Fields{"node": node.Name, "original": priorIPv4.String()}).Warnf("IPv4 address is no longer detected; releasing its IP claim lease.")
+			}
+			releaseIPv4 = priorIPv4.IP
+		}
+		if priorIPv6, _, perr := cnet.ParseCIDROrIP(prior.Spec.BGP.IPv6Address); perr == nil &&
+			priorIPv6.IP != nil && (ourIPv6.IP == nil || !priorIPv6.Equal(ourIPv6.IP)) {
+			if ourIPv6.IP != nil {
+				fields := log.Fields{"node": node.Name, "original": priorIPv6.String(), "updated": ourIPv6.String()}
+				log.WithFields(fields).Warnf("IPv6 address has changed. This could happen if there are multiple nodes with the same name.")
+			} else {
+				log.WithFields(log.Fields{"node": node.Name, "original": priorIPv6.String()}).Warnf("IPv6 address is no longer detected; releasing its IP claim lease.")
+			}
+			releaseIPv6 = priorIPv6.IP
+		}
+	}
+
+	// See ipclaim.ForceLegacyScanEnvVar: a rollout safety valve so operators
+	// can revert to the pre-Lease behavior without a full patch rollback or
+	// image rebuild if the Lease-based claim misbehaves in production.
+	// Independent of DISABLE_NODE_IP_CHECK, which skips the conflict check
+	// entirely; this instead forces a specific implementation of the check to
+	// still run.
+	if ipclaim.ForceLegacyScan() {
+		if !addressChanged {
+			return false, false, nil
+		}
+		log.Infof("%s is set; using the legacy full-list IP conflict scan instead of the Lease-based claim", ipclaim.ForceLegacyScanEnvVar)
+		releaseStaleIPClaimLeases(ctx, node.Name, releaseIPv4, releaseIPv6)
+		return checkConflictingNodesByList(ctx, nodes, node, ourIPv4, ourIPv6)
+	}
+
+	cfg, cerr := apiconfig.LoadClientConfig("")
+	if cerr != nil {
+		if !addressChanged {
+			return false, false, nil
+		}
+		log.WithError(cerr).Error("Failed to determine the Calico datastore type; using the legacy full-list IP conflict scan")
+		releaseStaleIPClaimLeases(ctx, node.Name, releaseIPv4, releaseIPv6)
+		return checkConflictingNodesByList(ctx, nodes, node, ourIPv4, ourIPv6)
+	}
+	if cfg.Spec.DatastoreType != apiconfig.Kubernetes {
+		if !addressChanged {
+			return false, false, nil
+		}
+		releaseStaleIPClaimLeases(ctx, node.Name, releaseIPv4, releaseIPv6)
+		return checkConflictingNodesByList(ctx, nodes, node, ourIPv4, ourIPv6)
+	}
+
+	// The one-time backfill gate: once the Lease-based claim has succeeded
+	// once in this process, treat it the same as the legacy-scan fallback
+	// branches above and only run it again when the address actually
+	// changed. See leaseBackfilled and this function's addressChanged
+	// doc paragraph.
+	if !addressChanged && leaseBackfilled.Load() {
+		return false, false, nil
+	}
+
+	clientset, err := getIPClaimClientset()
+	if err != nil {
+		log.WithError(err).Error("Failed to build Kubernetes clientset for IP claim lease")
+		retErr = err
+		return
+	}
+
+	if ourIPv4.IP != nil {
+		conflict, holder, err := ipclaim.ClaimNodeIPLease(ctx, clientset, k8sNode, node.Name, ourIPv4.IP)
+		if err != nil {
+			retErr = err
+			return
+		}
+		if conflict {
+			log.Warnf("Calico node '%s' is already using the IPv4 address %s.", holder, ourIPv4.String())
+			v4conflict = true
+			retErr = fmt.Errorf("IPv4 address conflict")
+		}
+	}
+
+	if ourIPv6.IP != nil {
+		conflict, holder, err := ipclaim.ClaimNodeIPLease(ctx, clientset, k8sNode, node.Name, ourIPv6.IP)
+		if err != nil {
+			retErr = err
+			return
+		}
+		if conflict {
+			log.Warnf("Calico node '%s' is already using the IPv6 address %s.", holder, ourIPv6.String())
+			v6conflict = true
+			retErr = fmt.Errorf("IPv6 address conflict")
+		}
+	}
+
+	releaseStaleIPClaimLeases(ctx, node.Name, releaseIPv4, releaseIPv6)
+
+	if retErr == nil {
+		leaseBackfilled.Store(true)
+	}
+	return
+}
+
+// checkConflictingNodesByList is the pre-Lease conflict-detection strategy:
+// list every Calico Node and scan client-side for an IP match. Kept as the
+// fallback for etcd-backed deployments, where there is no Kubernetes API to
+// claim a Lease against; see checkConflictingNodes.
+func checkConflictingNodesByList(ctx context.Context, nodes client.NodeInterface, node *internalapi.Node, ourIPv4, ourIPv6 *cnet.IP) (v4conflict, v6conflict bool, retErr error) {
+	var allNodes []internalapi.Node
+	if nodeList, err := nodes.List(ctx, options.ListOptions{}); err != nil {
+		log.WithError(err).Errorf("Unable to query node configuration")
+		retErr = err
+		return
+	} else {
+		allNodes = nodeList.Items
+	}
+
+	for _, theirNode := range allNodes {
+		if theirNode.Spec.BGP == nil || theirNode.Name == node.Name {
+			// Skip nodes that don't have BGP configured (we know this node
+			// does, since we only perform this check after configuring BGP),
+			// and skip ourselves -- checkConflictingNodes already handled the
+			// "did our own IP change" diagnostic via a targeted Get.
 			continue
 		}
 
@@ -1186,22 +1567,6 @@ func checkConflictingNodes(ctx context.Context, client client.Interface, node *i
 			log.WithError(err).Errorf("Error parsing IPv6 CIDR '%s' for node '%s'", theirNode.Spec.BGP.IPv6Address, theirNode.Name)
 			retErr = err
 			return
-		}
-
-		// If this is our node (based on the name), check if the IP
-		// addresses have changed.  If so warn the user as it could be
-		// an indication of multiple nodes using the same name.  This
-		// is not an error condition as the IPs could actually change.
-		if theirNode.Name == node.Name {
-			if theirIPv4.IP != nil && ourIPv4.IP != nil && !theirIPv4.Equal(ourIPv4.IP) {
-				fields := log.Fields{"node": theirNode.Name, "original": theirIPv4.String(), "updated": ourIPv4.String()}
-				log.WithFields(fields).Warnf("IPv4 address has changed. This could happen if there are multiple nodes with the same name.")
-			}
-			if theirIPv6.IP != nil && ourIPv6.IP != nil && !theirIPv6.Equal(ourIPv6.IP) {
-				fields := log.Fields{"node": theirNode.Name, "original": theirIPv6.String(), "updated": ourIPv6.String()}
-				log.WithFields(fields).Warnf("IPv6 address has changed. This could happen if there are multiple nodes with the same name.")
-			}
-			continue
 		}
 
 		// Check that other nodes aren't using the same IP addresses.
