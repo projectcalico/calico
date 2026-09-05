@@ -92,11 +92,8 @@ var _ = Describe("Static", func() {
 	}
 
 	for _, trueOrFalse := range []bool{true, false} {
-		var denyAction generictables.Action
-		denyAction = iptables.DropAction{}
 		denyActionString := "DROP"
 		if trueOrFalse {
-			denyAction = iptables.RejectAction{}
 			denyActionString = "REJECT"
 		}
 
@@ -152,8 +149,10 @@ var _ = Describe("Static", func() {
 								Action: iptables.AcceptAction{},
 							},
 							{
+								// Note: raw table RPF check always uses DROP, not denyAction,
+								// because REJECT is not a valid target in the raw table.
 								Match:  iptables.Match().MarkSingleBitSet(0x40).RPFCheckFailed(),
-								Action: denyAction,
+								Action: iptables.DropAction{},
 							},
 							{
 								Match:  iptables.Match().MarkClear(0x40),
@@ -181,8 +180,10 @@ var _ = Describe("Static", func() {
 								Action: iptables.JumpAction{Target: ChainRpfSkip},
 							},
 							{
+								// Note: raw table RPF check always uses DROP, not denyAction,
+								// because REJECT is not a valid target in the raw table.
 								Match:  iptables.Match().MarkSingleBitSet(0x40).RPFCheckFailed(),
-								Action: denyAction,
+								Action: iptables.DropAction{},
 							},
 							{
 								Match:  iptables.Match().MarkClear(0x40),
@@ -551,8 +552,10 @@ var _ = Describe("Static", func() {
 							Action: iptables.JumpAction{Target: ChainRpfSkip},
 						},
 						{
+							// Note: raw table RPF check always uses DROP, not denyAction,
+							// because REJECT is not a valid target in the raw table.
 							Match:  iptables.Match().MarkSingleBitSet(0x40).RPFCheckFailed(),
-							Action: denyAction,
+							Action: iptables.DropAction{},
 						},
 						{
 							Match:  iptables.Match().MarkClear(0x40),
@@ -579,8 +582,10 @@ var _ = Describe("Static", func() {
 							Action: iptables.JumpAction{Target: ChainRpfSkip},
 						},
 						{
+							// Note: raw table RPF check always uses DROP, not denyAction,
+							// because REJECT is not a valid target in the raw table.
 							Match:  iptables.Match().MarkSingleBitSet(0x40).RPFCheckFailed(),
-							Action: denyAction,
+							Action: iptables.DropAction{},
 						},
 						{
 							Match:  iptables.Match().MarkClear(0x40),
@@ -1127,7 +1132,9 @@ var _ = Describe("Static", func() {
 						Action: iptables.JumpAction{Target: ChainRpfSkip},
 					})
 
-					chain.Rules = append(chain.Rules, rr.RPFilter(4, markFromWorkload, markFromWorkload, rr.OpenStackSpecialCasesEnabled, rr.IptablesFilterDenyAction())...)
+					// Note: RPFilter in the raw table always uses Drop, not IptablesFilterDenyAction,
+					// because REJECT is not a valid target in the raw table.
+					chain.Rules = append(chain.Rules, rr.RPFilter(4, markFromWorkload, markFromWorkload, rr.OpenStackSpecialCasesEnabled, rr.Drop())...)
 					chain.Rules = append(chain.Rules, generictables.Rule{
 						Match:  iptables.Match().MarkClear(markFromWorkload),
 						Action: iptables.JumpAction{Target: ChainDispatchFromHostEndpoint},
@@ -1275,7 +1282,7 @@ var _ = Describe("Static", func() {
 						Action: iptables.JumpAction{Target: ChainRpfSkip},
 					})
 
-					chain.Rules = append(chain.Rules, rr.RPFilter(6, markFromWorkload, markFromWorkload, rr.OpenStackSpecialCasesEnabled, rr.IptablesFilterDenyAction())...)
+					chain.Rules = append(chain.Rules, rr.RPFilter(6, markFromWorkload, markFromWorkload, rr.OpenStackSpecialCasesEnabled, rr.Drop())...)
 					chain.Rules = append(chain.Rules, generictables.Rule{
 						Match:  iptables.Match().MarkClear(markFromWorkload),
 						Action: iptables.JumpAction{Target: ChainDispatchFromHostEndpoint},
