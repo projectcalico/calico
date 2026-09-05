@@ -148,6 +148,11 @@ func ConvertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
 		StartTime: fl.StartTime.Unix(),
 		EndTime:   fl.StartTime.Unix(),
 
+		// SourceIPs and DestIPs carry the bounded sets of IP addresses accumulated by the flow log
+		// aggregator. These are populated even when the aggregation level zeroes the per-flow tuple.
+		SourceIps: fl.SourceIPs,
+		DestIps:   fl.DestIPs,
+
 		PacketsIn:               int64(fl.PacketsIn),
 		PacketsOut:              int64(fl.PacketsOut),
 		BytesIn:                 int64(fl.BytesIn),
@@ -176,6 +181,8 @@ func ConvertGoldmaneToFlowlog(gl *proto.Flow) flowlog.FlowLog {
 
 	fl.SrcLabels = ensureFlowLogLabels(gl.SourceLabels)
 	fl.DstLabels = ensureFlowLogLabels(gl.DestLabels)
+	fl.SourceIPs = gl.SourceIps
+	fl.DestIPs = gl.DestIps
 	fl.FlowEnforcedPolicySet = toFlowPolicySet(gl.Key.Policies.EnforcedPolicies)
 	fl.FlowPendingPolicySet = toFlowPolicySet(gl.Key.Policies.PendingPolicies)
 

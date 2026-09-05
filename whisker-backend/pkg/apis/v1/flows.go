@@ -257,9 +257,11 @@ type FlowResponse struct {
 	SourceName      string      `json:"source_name"`
 	SourceNamespace string      `json:"source_namespace"`
 	SourceLabels    string      `json:"source_labels"`
+	SourceIPs       []string    `json:"source_ips,omitempty"`
 	DestName        string      `json:"dest_name"`
 	DestNamespace   string      `json:"dest_namespace"`
 	DestLabels      string      `json:"dest_labels"`
+	DestIPs         []string    `json:"dest_ips,omitempty"`
 	Protocol        string      `json:"protocol"`
 	DestPort        int64       `json:"dest_port"`
 	Reporter        Reporter    `json:"reporter"`
