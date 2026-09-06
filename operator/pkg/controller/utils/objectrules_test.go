@@ -28,6 +28,10 @@ import (
 
 // fakeExtension claims *v1.ConfigMap, standing in for a kind only an extension knows.
 type fakeExtension struct {
+	// mergeReturnsDesired makes MergeState hand back the desired object, as the ECK and
+	// UISettings rules do, rather than the current one.
+	mergeReturnsDesired bool
+
 	podSpec    v1.PodSpec
 	containers []v1.Container
 	selector   map[string]string
@@ -42,6 +46,9 @@ func (r *fakeExtension) owns(obj client.Object) bool {
 func (r *fakeExtension) MergeState(desired client.Object, current runtime.Object) (client.Object, bool) {
 	if !r.owns(desired) {
 		return nil, false
+	}
+	if r.mergeReturnsDesired {
+		return desired, true
 	}
 	return current.(client.Object), true
 }
@@ -104,6 +111,21 @@ var _ = Describe("component handler extension", func() {
 		desired := &v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "owned"}, Data: map[string]string{"a": "desired"}}
 		current := &v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "owned"}, Data: map[string]string{"a": "current"}}
 		Expect(mergeState(desired, current).(*v1.ConfigMap).Data).To(HaveKeyWithValue("a", "current"))
+	})
+
+	It("merges the shared metadata into a kind the extension claims", func() {
+		rules.mergeReturnsDesired = true
+		desired := &v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "owned"}}
+		current := &v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+			Name:            "owned",
+			ResourceVersion: "7",
+			Labels:          map[string]string{"kept": "yes"},
+		}}
+
+		merged := mergeState(desired, current)
+
+		Expect(merged.GetResourceVersion()).To(Equal("7"))
+		Expect(merged.GetLabels()).To(HaveKeyWithValue("kept", "yes"))
 	})
 
 	It("leaves a kind the extension does not claim to the core merge", func() {
