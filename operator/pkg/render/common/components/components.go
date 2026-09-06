@@ -106,13 +106,22 @@ func GetPodTemplateMetadata(overrides any) *operator.Metadata {
 		return md
 	}
 
-	md := &operator.Metadata{}
-	elem := value.Elem()
-	if labels := elem.FieldByName("Labels"); labels.IsValid() {
-		md.Labels, _ = labels.Interface().(map[string]string)
+	if value.Kind() != reflect.Pointer {
+		panic(fmt.Sprintf("pod template metadata is %T, not a pointer", value.Interface()))
 	}
-	if annotations := elem.FieldByName("Annotations"); annotations.IsValid() {
-		md.Annotations, _ = annotations.Interface().(map[string]string)
+
+	elem := value.Elem()
+	labels, annotations := elem.FieldByName("Labels"), elem.FieldByName("Annotations")
+	if !labels.IsValid() && !annotations.IsValid() {
+		panic(fmt.Sprintf("pod template metadata %T has neither Labels nor Annotations", value.Interface()))
+	}
+
+	md := &operator.Metadata{}
+	if labels.IsValid() {
+		md.Labels = labels.Interface().(map[string]string)
+	}
+	if annotations.IsValid() {
+		md.Annotations = annotations.Interface().(map[string]string)
 	}
 	return md
 }
