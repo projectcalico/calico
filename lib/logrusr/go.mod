@@ -1,6 +1,6 @@
 module github.com/projectcalico/calico/lib/logrusr
 
-go 1.27.0
+go 1.27.1
 
 require (
 	github.com/projectcalico/calico/lib/std v0.0.0-00010101000000-000000000000
