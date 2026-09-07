@@ -163,9 +163,7 @@ func (r *requestCache) GetProtocol() int {
 	if !r.protocolResolved {
 		r.protocol = r.Flow.GetProtocol()
 		r.protocolResolved = true
-		// Checked as int32 because that is how matchL4Protocol sees it, so the
-		// warning and the rejection cannot disagree.
-		if !validL4Protocol(int32(r.protocol)) {
+		if !validL4Protocol(r.protocol) {
 			// Warn here rather than in matchL4Protocol: an out-of-range protocol
 			// rejects every rule, so the check runs once per rule and even a
 			// suppressed rate-limited log takes the logger's lock.
@@ -179,7 +177,7 @@ func (r *requestCache) GetProtocol() int {
 // IP+port set matching, memoized across the request.
 func (r *requestCache) getDstIPProtoPortStr() string {
 	if r.dstIPProtoPort == "" {
-		protocolStr := protocolMapL4[int32(r.GetProtocol())]
+		protocolStr := protocolMapL4[r.GetProtocol()]
 		r.dstIPProtoPort = fmt.Sprintf("%s,%s:%d", r.getDstIPStr(), protocolStr, r.GetDestPort())
 	}
 	return r.dstIPProtoPort

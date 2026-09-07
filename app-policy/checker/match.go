@@ -31,7 +31,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 )
 
-var protocolMapL4 = map[int32]string{
+var protocolMapL4 = map[int]string{
 	1:  "icmp",
 	6:  "tcp",
 	17: "udp",
@@ -104,7 +104,7 @@ func match(policyNamespace string, rule *proto.Rule, req *requestCache) bool {
 	// The HTTP criteria go last because matchRequest normalises the request path,
 	// and because it panics on a malformed one: leaving it last confines that to
 	// requests that a rule otherwise matches.
-	return matchL4Protocol(rule, int32(req.GetProtocol())) &&
+	return matchL4Protocol(rule, req.GetProtocol()) &&
 		matchSrcPort(rule, req) &&
 		matchDstPort(rule, req) &&
 		matchSrcNet(rule, req) &&
@@ -706,7 +706,7 @@ func matchNotNet(dir string, nets []string, ip net.IP) bool {
 	return true
 }
 
-var stringToProto = map[string]int32{
+var stringToProto = map[string]int{
 	"icmp":    1,
 	"icmpv6":  58,
 	"tcp":     6,
@@ -717,13 +717,13 @@ var stringToProto = map[string]int32{
 
 // validL4Protocol reports whether the flow's protocol is one the data plane could
 // have observed. Protocol is an 8-bit field, and 0 is unassigned.
-func validL4Protocol(protocol int32) bool {
+func validL4Protocol(protocol int) bool {
 	return protocol >= 1 && protocol <= 255
 }
 
 // matchL4Protocol checks if the L4 protocol matches the rule. It returns true if the protocol
 // matches, false otherwise. requestCache.GetProtocol warns about an out-of-range protocol.
-func matchL4Protocol(rule *proto.Rule, protocol int32) bool {
+func matchL4Protocol(rule *proto.Rule, protocol int) bool {
 	if !validL4Protocol(protocol) {
 		return false
 	}
@@ -735,13 +735,13 @@ func matchL4Protocol(rule *proto.Rule, protocol int32) bool {
 		}).Debug("Matching L4 protocol")
 	}
 
-	checkStringInRuleProtocol := func(p *proto.Protocol, pNumber int32, defaultResult bool) bool {
+	checkStringInRuleProtocol := func(p *proto.Protocol, pNumber int, defaultResult bool) bool {
 		if p == nil {
 			return defaultResult
 		}
 
 		// Check if given protocol matches what is specified in rule.
-		var protoNumber int32
+		var protoNumber int
 		if name := p.GetName(); name != "" {
 			var ok bool
 			protoNumber, ok = stringToProto[strings.ToLower(name)]
@@ -749,7 +749,8 @@ func matchL4Protocol(rule *proto.Rule, protocol int32) bool {
 				return false
 			}
 		} else {
-			protoNumber = p.GetNumber()
+			// Widening the rule's protobuf int32, so no value is lost.
+			protoNumber = int(p.GetNumber())
 		}
 		return protoNumber == pNumber
 	}

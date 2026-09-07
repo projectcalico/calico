@@ -16,6 +16,7 @@ package checker
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 
@@ -1341,7 +1342,7 @@ func TestMatchPort(t *testing.T) {
 func TestMatchUnsupportedL4Protocol(t *testing.T) {
 	RegisterTestingT(t)
 
-	for _, protocol := range []int{0, -1, 256, 1 << 20} {
+	for _, protocol := range []int{0, -1, 256, 1 << 20, math.MaxInt} {
 		t.Run(fmt.Sprintf("protocol %d", protocol), func(t *testing.T) {
 			fl := &mocks.Flow{}
 			fl.On("GetProtocol").Return(protocol)
