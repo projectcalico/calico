@@ -1598,3 +1598,46 @@ var _ = Describe("Overrides for a resource the core operator does not name", fun
 		Expect(spec.Spec.Hostname).To(Equal("unchanged"))
 	})
 })
+
+var _ = Describe("GetPodTemplateMetadata", func() {
+	// foreignMetadata stands in for an override type that spells its pod template
+	// metadata as something other than v1.Metadata, as a variant's types do.
+	type foreignMetadata struct {
+		Labels      map[string]string
+		Annotations map[string]string
+	}
+	type spec struct {
+		Template struct{ Metadata *foreignMetadata }
+	}
+	type overrides struct{ Spec spec }
+
+	type unknownMetadata struct{ Something string }
+	type unknownSpec struct {
+		Template struct{ Metadata *unknownMetadata }
+	}
+	type unknownOverrides struct{ Spec unknownSpec }
+
+	It("reads a metadata type it does not compile against", func() {
+		o := &overrides{}
+		o.Spec.Template.Metadata = &foreignMetadata{
+			Labels:      map[string]string{"a": "1"},
+			Annotations: map[string]string{"b": "2"},
+		}
+
+		md := GetPodTemplateMetadata(o)
+
+		Expect(md.Labels).To(HaveKeyWithValue("a", "1"))
+		Expect(md.Annotations).To(HaveKeyWithValue("b", "2"))
+	})
+
+	It("panics on a metadata type carrying neither labels nor annotations", func() {
+		o := &unknownOverrides{}
+		o.Spec.Template.Metadata = &unknownMetadata{}
+
+		Expect(func() { GetPodTemplateMetadata(o) }).To(PanicWith(ContainSubstring("neither Labels nor Annotations")))
+	})
+
+	It("reports nothing when the override sets no metadata", func() {
+		Expect(GetPodTemplateMetadata(&overrides{})).To(BeNil())
+	})
+})
