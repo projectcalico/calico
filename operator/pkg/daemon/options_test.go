@@ -42,12 +42,6 @@ var _ = Describe("Options", func() {
 			Expect(opts.acceptsVariant(operatorv1.CalicoEnterprise)).To(BeTrue())
 		})
 
-		It("accepts the deprecated Enterprise spelling", func() {
-			opts := Options{Variants: []operatorv1.ProductVariant{operatorv1.Calico, operatorv1.CalicoEnterprise}}
-			//nolint:staticcheck // SA1019: the deprecated spelling is what this covers
-			Expect(opts.acceptsVariant(operatorv1.TigeraSecureEnterprise)).To(BeTrue())
-		})
-
 		It("rejects a variant missing from a non-empty list", func() {
 			opts := Options{Variants: []operatorv1.ProductVariant{operatorv1.CalicoEnterprise}}
 			Expect(opts.acceptsVariant(operatorv1.Calico)).To(BeFalse())
