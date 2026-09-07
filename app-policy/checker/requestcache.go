@@ -58,7 +58,7 @@ type requestCache struct {
 	// Memoized L4 protocol. The Envoy adapter derives it from an enum name via a
 	// lowercase and a map lookup, and match() asks for it once per rule. Protocol 0
 	// is a value the data plane can send, so resolution needs its own flag.
-	protocol         int32
+	protocol         int
 	protocolResolved bool
 }
 
@@ -157,12 +157,15 @@ func (r *requestCache) getDstIPStr() string {
 	return r.dstIPStr
 }
 
-// getProtocol returns the flow's L4 protocol, memoized across the request.
-func (r *requestCache) getProtocol() int32 {
+// GetProtocol shadows the embedded Flow's method to memoize the protocol across the
+// request. Callers need not know: it returns what the Flow would have returned.
+func (r *requestCache) GetProtocol() int {
 	if !r.protocolResolved {
-		r.protocol = int32(r.GetProtocol())
+		r.protocol = r.Flow.GetProtocol()
 		r.protocolResolved = true
-		if !validL4Protocol(r.protocol) {
+		// Checked as int32 because that is how matchL4Protocol sees it, so the
+		// warning and the rejection cannot disagree.
+		if !validL4Protocol(int32(r.protocol)) {
 			// Warn here rather than in matchL4Protocol: an out-of-range protocol
 			// rejects every rule, so the check runs once per rule and even a
 			// suppressed rate-limited log takes the logger's lock.
@@ -176,7 +179,7 @@ func (r *requestCache) getProtocol() int32 {
 // IP+port set matching, memoized across the request.
 func (r *requestCache) getDstIPProtoPortStr() string {
 	if r.dstIPProtoPort == "" {
-		protocolStr := protocolMapL4[r.getProtocol()]
+		protocolStr := protocolMapL4[int32(r.GetProtocol())]
 		r.dstIPProtoPort = fmt.Sprintf("%s,%s:%d", r.getDstIPStr(), protocolStr, r.GetDestPort())
 	}
 	return r.dstIPProtoPort

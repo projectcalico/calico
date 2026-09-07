@@ -84,7 +84,7 @@ func match(policyNamespace string, rule *proto.Rule, req *requestCache) bool {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.WithFields(log.Fields{
 			"rule":       rule,
-			"Protocol":   req.getProtocol(),
+			"Protocol":   req.GetProtocol(),
 			"SourceIP":   req.GetSourceIP(),
 			"DestIP":     req.GetDestIP(),
 			"SourcePort": req.GetSourcePort(),
@@ -104,7 +104,7 @@ func match(policyNamespace string, rule *proto.Rule, req *requestCache) bool {
 	// The HTTP criteria go last because matchRequest normalises the request path,
 	// and because it panics on a malformed one: leaving it last confines that to
 	// requests that a rule otherwise matches.
-	return matchL4Protocol(rule, req.getProtocol()) &&
+	return matchL4Protocol(rule, int32(req.GetProtocol())) &&
 		matchSrcPort(rule, req) &&
 		matchDstPort(rule, req) &&
 		matchSrcNet(rule, req) &&
@@ -722,7 +722,7 @@ func validL4Protocol(protocol int32) bool {
 }
 
 // matchL4Protocol checks if the L4 protocol matches the rule. It returns true if the protocol
-// matches, false otherwise. requestCache.getProtocol warns about an out-of-range protocol.
+// matches, false otherwise. requestCache.GetProtocol warns about an out-of-range protocol.
 func matchL4Protocol(rule *proto.Rule, protocol int32) bool {
 	if !validL4Protocol(protocol) {
 		return false
