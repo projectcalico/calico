@@ -63,7 +63,8 @@ func (o Options) acceptsVariant(v operatortigeraiov1.ProductVariant) bool {
 		return v == operatortigeraiov1.Calico
 	}
 	for _, accepted := range o.Variants {
-		if v == accepted {
+		// Enterprise has two spellings, so match on the product rather than the constant.
+		if v == accepted || (accepted.IsEnterprise() && v.IsEnterprise()) {
 			return true
 		}
 	}

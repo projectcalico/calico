@@ -28,6 +28,10 @@ import (
 
 // fakeExtension claims *v1.ConfigMap, standing in for a kind only an extension knows.
 type fakeExtension struct {
+	// mergeReturnsDesired makes MergeState hand back the desired object, as the ECK and
+	// UISettings rules do, rather than the current one.
+	mergeReturnsDesired bool
+
 	podSpec    v1.PodSpec
 	containers []v1.Container
 	selector   map[string]string
@@ -42,6 +46,9 @@ func (r *fakeExtension) owns(obj client.Object) bool {
 func (r *fakeExtension) MergeState(desired client.Object, current runtime.Object) (client.Object, bool) {
 	if !r.owns(desired) {
 		return nil, false
+	}
+	if r.mergeReturnsDesired {
+		return desired, true
 	}
 	return current.(client.Object), true
 }
@@ -82,12 +89,19 @@ func (r *fakeExtension) SetStandardSelectorAndLabels(obj client.Object) bool {
 
 var _ = Describe("component handler extension", func() {
 	var (
-		rules   *fakeExtension
-		owned   = &v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "owned"}}
-		unowned = &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "unowned"}}
+		rules *fakeExtension
+		owned *v1.ConfigMap
+		// unowned is a kind the core handles itself, unclaimed one it passes to the
+		// extension, which declines it.
+		unowned   *appsv1.Deployment
+		unclaimed *v1.Secret
 	)
 
 	BeforeEach(func() {
+		owned = &v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "owned"}}
+		unowned = &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "unowned"}}
+		unclaimed = &v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "unclaimed"}}
+
 		rules = &fakeExtension{}
 		RegisterComponentHandlerExtension(rules)
 		DeferCleanup(func() { RegisterComponentHandlerExtension(nil) })
@@ -104,6 +118,21 @@ var _ = Describe("component handler extension", func() {
 		desired := &v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "owned"}, Data: map[string]string{"a": "desired"}}
 		current := &v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "owned"}, Data: map[string]string{"a": "current"}}
 		Expect(mergeState(desired, current).(*v1.ConfigMap).Data).To(HaveKeyWithValue("a", "current"))
+	})
+
+	It("merges the shared metadata into a kind the extension claims", func() {
+		rules.mergeReturnsDesired = true
+		desired := &v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "owned"}}
+		current := &v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+			Name:            "owned",
+			ResourceVersion: "7",
+			Labels:          map[string]string{"kept": "yes"},
+		}}
+
+		merged := mergeState(desired, current)
+
+		Expect(merged.GetResourceVersion()).To(Equal("7"))
+		Expect(merged.GetLabels()).To(HaveKeyWithValue("kept", "yes"))
 	})
 
 	It("leaves a kind the extension does not claim to the core merge", func() {
@@ -143,9 +172,20 @@ var _ = Describe("component handler extension", func() {
 		Expect(rules.labelled).To(BeTrue())
 	})
 
-	It("leaves a kind the extension does not own alone", func() {
-		ensureOSSchedulingRestrictions(unowned, rmeta.OSTypeLinux)
+	It("leaves a kind the extension declines alone", func() {
+		ensureOSSchedulingRestrictions(unclaimed, rmeta.OSTypeLinux)
+		setStandardSelectorAndLabels(unclaimed, nil, false)
+		modifyPodSpec(unclaimed, func(s *v1.PodSpec) { s.Hostname = "set" })
+
 		Expect(rules.selector).To(BeNil())
 		Expect(rules.labelled).To(BeFalse())
+		Expect(rules.podSpec.Hostname).To(BeEmpty())
+	})
+
+	It("never consults the extension for a kind the core handles", func() {
+		setStandardSelectorAndLabels(unowned, nil, false)
+
+		Expect(rules.labelled).To(BeFalse())
+		Expect(unowned.Spec.Selector).ToNot(BeNil())
 	})
 })
