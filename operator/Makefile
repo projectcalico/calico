@@ -37,8 +37,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/operator
 
 # The image, registry and arches the ci/cd common targets in lib.Makefile read.
 # These sit above metadata.mk, whose Calico defaults would otherwise win, and use
-# ?= for the registry so a hashrelease can send the image somewhere else (see
-# hack/release/README.md).
+# ?= for the registry so a hashrelease can send the image somewhere else.
 BUILD_IMAGES    = tigera/operator
 DEV_REGISTRIES ?= quay.io
 ARCHES          = amd64 arm64 ppc64le s390x
@@ -132,7 +131,7 @@ $(BINDIR)/$(BINARY_NAME)-$(ARCH): $(SRC_FILES) $(ENVOY_GATEWAY_CHART) $(ISTIO_CH
 	mkdir -p $(BINDIR)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
-	go build -buildvcs=false -v -o $(BINDIR)/$(BINARY_NAME)-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) $(CALICO_LDFLAGS) $(CLOUD_LDFLAGS) -s -w" ./cmd/'
+	go build -buildvcs=false -v -o $(BINDIR)/$(BINARY_NAME)-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) $(CALICO_LDFLAGS) -s -w" ./cmd/'
 
 OPERATOR_IMAGE_NAME = $(firstword $(BUILD_IMAGES))
 IMAGE_BUILD_MARKER  = operator_container-$(ARCH).created
@@ -303,18 +302,12 @@ cd: image-all cd-common
 ###############################################################################
 # Release
 ###############################################################################
-## Create a release for the specified RELEASE_TAG.
-release-tag: var-require-all-RELEASE_TAG-GITHUB_TOKEN
-	$(MAKE) release VERSION=$(RELEASE_TAG)
-	REPO=$(REPO) $(MAKE) release-publish VERSION=$(RELEASE_TAG)
-
-## Generate release notes for the specified VERSION.
-release-notes: hack/bin/release var-require-all-VERSION-GITHUB_TOKEN
-	REPO=$(REPO) hack/bin/release notes
-
-## Build a release from start to finish.
-release: clean hack/bin/release check-release-image-tags
-	hack/bin/release build
+# The component versions the operator deploys are baked into its binary, so a release is a
+# rebuild rather than a retag of an image built for a different set of them.
+## Build and tag the release images for the specified VERSION.
+release-build: var-require-all-VERSION check-release-image-tags
+	$(MAKE) clean image-all RELEASE=true
+	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 
 # The tag is compiled in, so a release that fell through to the branch default would ship
 # an operator naming the images this branch publishes for development.
@@ -327,17 +320,6 @@ check-release-image-tags:
 		exit 1; \
 	fi
 
-## Produces a clean build of release artifacts at the specified version.
-release-build: operator-release-prereqs var-require-all-VERSION-GIT_VERSION
-# Check that the correct code is checked out.
-ifneq ($(VERSION), $(GIT_VERSION))
-	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
-endif
-	$(MAKE) image-all
-	$(MAKE) tag-images-all IMAGETAG=$(VERSION)
-	# Generate the `latest` images.
-	$(MAKE) tag-images-all IMAGETAG=latest
-
 release-check-image-exists: operator-release-prereqs
 	@echo "Checking if $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):$(VERSION) exists already"; \
 	if docker manifest inspect $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):$(VERSION) >/dev/null; \
@@ -347,37 +329,13 @@ release-check-image-exists: operator-release-prereqs
 		echo "Image tag check passed; image does not already exist"; \
 	fi
 
-release-publish: hack/bin/release
-	hack/bin/release publish
-
 release-publish-images: operator-release-prereqs release-check-image-exists var-require-all-VERSION
 	# Push images.
 	$(MAKE) push-all push-manifests push-non-manifests IMAGETAG=$(VERSION)
 
-release-github: hack/bin/release var-require-all-VERSION-GITHUB_TOKEN
-	hack/bin/release github
-
-hack/bin/gh:
-	mkdir -p hack/bin
-	$(call fetch_file,https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz,hack/bin/gh.tgz)
-	tar -zxvf hack/bin/gh.tgz -C hack/bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
-	chmod +x $@
-	rm hack/bin/gh.tgz
-
-hack/bin/release: $(shell find ./hack/release -type f)
-	mkdir -p hack/bin
-	$(DOCKER_GO_BUILD) \
-	sh -c '$(GIT_CONFIG_SSH) \
-	go build -buildvcs=false -o hack/bin/release ./hack/release'
-
-hack/release/ut:
-	mkdir -p report/release
-	$(DOCKER_GO_BUILD) \
-	sh -c '$(GIT_CONFIG_SSH) \
-	gotestsum --format=testname --junitfile report/release/ut.xml $$(go list $(PACKAGE_NAME)/hack/release/... | grep -v /hack/release/validate)'
-
-release-from: hack/bin/release var-require-all-VERSION-OPERATOR_BASE_VERSION
-	hack/bin/release from
+# The operator ships as part of a Calico release, so publishing it is the image push.
+.PHONY: release-publish
+release-publish: release-publish-images
 
 # operator-release-prereqs checks the environment on top of lib.Makefile's own
 # release-prereqs, which the release targets below also depend on.
@@ -385,21 +343,6 @@ operator-release-prereqs: release-prereqs
 ifdef LOCAL_BUILD
 	$(error LOCAL_BUILD must not be set for a release)
 endif
-
-release-prep: hack/bin/release hack/bin/gh var-require-all-VERSION
-	@REPO=$(REPO) hack/bin/release prep
-
-create-release-branch: hack/bin/release var-require-all-CALICO_REF var-require-one-of-STREAM-RELEASE_STREAM
-	hack/bin/release branch cut
-
-$(HACK_BIN)/gotestsum: $(HACK_BIN)
-	@$(call fetch_file,https://github.com/gotestyourself/gotestsum/releases/download/$(GOTESTSUM_VERSION)/gotestsum_$(GOTESTSUM_VERSION:v%=%)_$(NATIVE_OS)_$(NATIVE_ARCH).tar.gz,$(HACK_BIN)/gotestsum.tar.gz)
-	@tar -zxvf $(HACK_BIN)/gotestsum.tar.gz -C $(HACK_BIN) gotestsum
-	@chmod +x $@
-	@rm $(HACK_BIN)/gotestsum.tar.gz
-
-branch-validate: hack/bin/release $(HACK_BIN)/gotestsum var-require-one-of-STREAM-RELEASE_STREAM
-	PATH=$$PATH:$(CURDIR)/$(HACK_BIN) hack/bin/release branch validate
 
 ###############################################################################
 # Utilities
