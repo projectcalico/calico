@@ -19,7 +19,6 @@ import (
 	"strings"
 
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
-	log "github.com/sirupsen/logrus"
 )
 
 // CheckRequestToFlowAdapter adapts CheckRequest to the l4 and l7 flow interfaces for use in the
@@ -69,7 +68,7 @@ func (a *CheckRequestToFlowAdapter) GetProtocol() int {
 	if p, ok := protocolMap[strings.ToLower(protocol)]; ok {
 		return p
 	}
-	log.Warnf("unsupported protocol: %s, defaulting to TCP", protocol)
+	rlogBadProtocolName.Warnf("unsupported protocol: %s, defaulting to TCP", protocol)
 	return 6
 }
 
