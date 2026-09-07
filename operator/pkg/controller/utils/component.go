@@ -656,13 +656,6 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 	// adjusting the caller's copy.
 	desired = desired.DeepCopyObject().(client.Object)
 
-	// Provide an opportunity for extensions to handle their own types.
-	if extensionObjectRules != nil {
-		if merged, ok := extensionObjectRules.MergeState(desired, current); ok {
-			return merged
-		}
-	}
-
 	currentMeta := current.(metav1.ObjectMetaAccessor).GetObjectMeta()
 	desiredMeta := desired.(metav1.ObjectMetaAccessor).GetObjectMeta()
 
@@ -817,6 +810,13 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 		}
 		return dt
 	default:
+		// Provide an opportunity for extensions to handle their own types.
+		if extensionObjectRules != nil {
+			if merged, ok := extensionObjectRules.MergeState(desired, current); ok {
+				return merged
+			}
+		}
+
 		// Default to just using the desired state, with an updated RV.
 		return desired
 	}

@@ -35,9 +35,13 @@ var _ = Describe("RegisterTypes", func() {
 		v3GV = schema.GroupVersion{Group: "projectcalico.org", Version: "v3"}
 	)
 
-	AfterEach(func() {
-		extraV3Types = nil
-		extraTypes = nil
+	// A build can register its own types from an init, so put back what was there
+	// rather than clearing the lists.
+	BeforeEach(func() {
+		v3Snapshot, snapshot := extraV3Types, extraTypes
+		DeferCleanup(func() {
+			extraV3Types, extraTypes = v3Snapshot, snapshot
+		})
 	})
 
 	// The core types stand in for a variant's, since this package cannot name one.
