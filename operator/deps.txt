@@ -1,7 +1,7 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.27.0
+go 1.27.1
 al.essio.dev/pkg/shellescape v1.5.1
 dario.cat/mergo v1.0.2
 github.com/BurntSushi/toml v1.6.0
