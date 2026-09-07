@@ -54,6 +54,12 @@ type requestCache struct {
 	// Memoized identity, indexed by flowSide. Resolving it parses a SPIFFE ID and copies
 	// two label maps, and the match functions ask for it once per rule.
 	identities [numFlowSides]identity
+
+	// Memoized L4 protocol. The Envoy adapter derives it from an enum name via a
+	// lowercase and a map lookup, and match() asks for it once per rule. Protocol 0
+	// is a value the data plane can send, so resolution needs its own flag.
+	protocol         int32
+	protocolResolved bool
 }
 
 // flowSide identifies which end of the flow an identity belongs to.
@@ -151,11 +157,26 @@ func (r *requestCache) getDstIPStr() string {
 	return r.dstIPStr
 }
 
+// getProtocol returns the flow's L4 protocol, memoized across the request.
+func (r *requestCache) getProtocol() int32 {
+	if !r.protocolResolved {
+		r.protocol = int32(r.GetProtocol())
+		r.protocolResolved = true
+		if !validL4Protocol(r.protocol) {
+			// Warn here rather than in matchL4Protocol: an out-of-range protocol
+			// rejects every rule, so the check runs once per rule and even a
+			// suppressed rate-limited log takes the logger's lock.
+			rlogBadProtocol.Warnf("Unsupported L4 protocol: %d", r.protocol)
+		}
+	}
+	return r.protocol
+}
+
 // getDstIPProtoPortStr returns the destination "<IP>,<protocol>:<port>" key used for
 // IP+port set matching, memoized across the request.
 func (r *requestCache) getDstIPProtoPortStr() string {
 	if r.dstIPProtoPort == "" {
-		protocolStr := protocolMapL4[int32(r.GetProtocol())]
+		protocolStr := protocolMapL4[r.getProtocol()]
 		r.dstIPProtoPort = fmt.Sprintf("%s,%s:%d", r.getDstIPStr(), protocolStr, r.GetDestPort())
 	}
 	return r.dstIPProtoPort

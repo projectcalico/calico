@@ -80,9 +80,12 @@ var (
 	rlogIPSetMissing = newEvalPathLogger()
 	rlogBadPrincipal = newEvalPathLogger()
 	rlogBadProtocol  = newEvalPathLogger()
-	rlogBadCIDR      = newEvalPathLogger()
-	rlogBadSelector  = newEvalPathLogger()
-	rlogBadRulePath  = newEvalPathLogger()
+	// The adapter warns when Envoy names a protocol it cannot map. requestCache memoizes
+	// the resolved protocol, so this fires once per request rather than once per rule.
+	rlogBadProtocolName = newEvalPathLogger()
+	rlogBadCIDR         = newEvalPathLogger()
+	rlogBadSelector     = newEvalPathLogger()
+	rlogBadRulePath     = newEvalPathLogger()
 )
 
 // newEvalPathLogger returns a logger that admits a short burst and then one line per interval,

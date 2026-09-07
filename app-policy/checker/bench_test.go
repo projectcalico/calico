@@ -351,14 +351,17 @@ func withBenchLogging(level log.Level) (*ipsetMissCounter, func()) {
 // emitted line's "logsSkipped" field carries the count this benchmark reports directly.
 func withUnthrottledEvalPathLogs() func() {
 	saved := []**logrusr.RateLimitedLogger{
-		&rlogIPSetMissing, &rlogBadPrincipal, &rlogBadProtocol,
+		&rlogIPSetMissing, &rlogBadPrincipal, &rlogBadProtocol, &rlogBadProtocolName,
 		&rlogBadCIDR, &rlogBadSelector, &rlogBadRulePath,
 	}
 	originals := make([]*logrusr.RateLimitedLogger, len(saved))
 	for i, l := range saved {
 		originals[i] = *l
-		// A negative interval puts the next-log deadline in the past on every call.
-		*l = logrusr.NewRateLimitedLogger(logrusr.OptInterval(-time.Nanosecond))
+		// A negative interval puts the next-log deadline in the past on every call. The
+		// burst keeps the limiter off the WithFields path it takes to report a skip count,
+		// which would otherwise allocate on every line the benchmark measures.
+		*l = logrusr.NewRateLimitedLogger(
+			logrusr.OptInterval(-time.Nanosecond), logrusr.OptBurst(1))
 	}
 	return func() {
 		for i, l := range saved {

@@ -84,7 +84,7 @@ func match(policyNamespace string, rule *proto.Rule, req *requestCache) bool {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.WithFields(log.Fields{
 			"rule":       rule,
-			"Protocol":   req.GetProtocol(),
+			"Protocol":   req.getProtocol(),
 			"SourceIP":   req.GetSourceIP(),
 			"DestIP":     req.GetDestIP(),
 			"SourcePort": req.GetSourcePort(),
@@ -104,7 +104,7 @@ func match(policyNamespace string, rule *proto.Rule, req *requestCache) bool {
 	// The HTTP criteria go last because matchRequest normalises the request path,
 	// and because it panics on a malformed one: leaving it last confines that to
 	// requests that a rule otherwise matches.
-	return matchL4Protocol(rule, int32(req.GetProtocol())) &&
+	return matchL4Protocol(rule, req.getProtocol()) &&
 		matchSrcPort(rule, req) &&
 		matchDstPort(rule, req) &&
 		matchSrcNet(rule, req) &&
@@ -715,12 +715,16 @@ var stringToProto = map[string]int32{
 	"sctp":    132,
 }
 
+// validL4Protocol reports whether the flow's protocol is one the data plane could
+// have observed. Protocol is an 8-bit field, and 0 is unassigned.
+func validL4Protocol(protocol int32) bool {
+	return protocol >= 1 && protocol <= 255
+}
+
 // matchL4Protocol checks if the L4 protocol matches the rule. It returns true if the protocol
-// matches, false otherwise.
+// matches, false otherwise. requestCache.getProtocol warns about an out-of-range protocol.
 func matchL4Protocol(rule *proto.Rule, protocol int32) bool {
-	// Protocol is a 8-bit field.
-	if protocol > 255 || protocol < 1 {
-		rlogBadProtocol.Warnf("Unsupported L4 protocol: %d", protocol)
+	if !validL4Protocol(protocol) {
 		return false
 	}
 	if log.IsLevelEnabled(log.DebugLevel) {
