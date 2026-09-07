@@ -12,257 +12,88 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Components defined here are required to be kept in sync with
-// config/enterprise_versions.yml
-
 package components
 
+// Every version here is stamped at link time; see ENTERPRISE_LDFLAGS in operator/Makefile.
+// Only a dev build stamps the registry and image path.
 var (
-	EnterpriseRelease string = "master"
+	// EnterpriseRelease is the Enterprise version this operator deploys.
+	EnterpriseRelease   = "unknown"
+	enterpriseRegistry  = ""
+	enterpriseImagePath = ""
 
-	ComponentTigeraCalico = Component{
-		Version:   "master",
-		Image:     "calico",
-		Registry:  "",
-		imagePath: "",
+	// enterpriseCalicoRelease is the version of the combined tigera/calico image, which
+	// carries most of the Enterprise control plane and so gets patched on its own.
+	enterpriseCalicoRelease = "unknown"
+
+	// The upstream versions of the third-party software our own images are built from.
+	// ECK and Prometheus Operator validate a workload against the version we declare for
+	// it, so these describe image contents rather than naming a tag.
+	elasticVersion      = "unknown"
+	kibanaVersion       = "unknown"
+	prometheusVersion   = "unknown"
+	alertmanagerVersion = "unknown"
+)
+
+func enterpriseComponent(image string) Component {
+	return enterpriseComponentAt(image, EnterpriseRelease)
+}
+
+func enterpriseComponentAt(image, version string) Component {
+	return Component{
+		Version:   version,
+		Image:     image,
+		Registry:  enterpriseRegistry,
+		imagePath: enterpriseImagePath,
 		variant:   enterpriseVariant,
 	}
+}
 
-	ComponentDeepPacketInspection = Component{
-		Version:   "master",
-		Image:     "deep-packet-inspection",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentEckElasticsearch = Component{
-		Version: "8.19.17",
+// enterpriseVersionOnly is for the components the operator names a version for without
+// deploying an image of its own.
+func enterpriseVersionOnly(version string) Component {
+	return Component{
+		Version: version,
 		variant: enterpriseVariant,
 	}
+}
 
-	ComponentEckKibana = Component{
-		Version: "8.19.17",
-		variant: enterpriseVariant,
-	}
+var (
+	ComponentEckElasticsearch   = enterpriseVersionOnly(elasticVersion)
+	ComponentEckKibana          = enterpriseVersionOnly(kibanaVersion)
+	ComponentCoreOSPrometheus   = enterpriseVersionOnly(prometheusVersion)
+	ComponentCoreOSAlertmanager = enterpriseVersionOnly(alertmanagerVersion)
+)
 
-	ComponentElasticTseeInstaller = Component{
-		Version:   "master",
-		Image:     "intrusion-detection-job-installer",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentElasticsearch = Component{
-		Version:   "master",
-		Image:     "elasticsearch",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentECKElasticsearchOperator = Component{
-		Version: "3.5.0",
-		variant: enterpriseVariant,
-	}
-
-	ComponentElasticsearchOperator = Component{
-		Version:   "master",
-		Image:     "eck-operator",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentFluentBit = Component{
-		Version:   "master",
-		Image:     "fluent-bit",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentFluentBitWindows = Component{
-		Version:   "master",
-		Image:     "fluent-bit-windows",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentIntrusionDetectionController = Component{
-		Version:   "master",
-		Image:     "intrusion-detection-controller",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentKibana = Component{
-		Version:   "master",
-		Image:     "kibana",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentManager = Component{
-		Version:   "master",
-		Image:     "manager",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentDex = Component{
-		Version:   "master",
-		Image:     "dex",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentEgressGateway = Component{
-		Version:   "master",
-		Image:     "egress-gateway",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentGatewayL7Collector = Component{
-		Version:  "master",
-		Image:    "gateway-l7-collector",
-		Registry: "",
-		variant:  enterpriseVariant,
-	}
-
-	ComponentEnvoyProxy = Component{
-		Version:   "master",
-		Image:     "envoy",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentDikastes = Component{
-		Version:   "master",
-		Image:     "dikastes",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentCoreOSPrometheus = Component{
-		Version: "v3.13.2",
-		variant: enterpriseVariant,
-	}
-
-	ComponentPrometheus = Component{
-		Version:   "master",
-		Image:     "prometheus",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentCoreOSAlertmanager = Component{
-		Version: "v0.32.1",
-		variant: enterpriseVariant,
-	}
-
-	ComponentPrometheusAlertmanager = Component{
-		Version:   "master",
-		Image:     "alertmanager",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentTigeraNode = Component{
-		Version:   "master",
-		Image:     "node",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentTigeraNodeWindows = Component{
-		Version:   "master",
-		Image:     "node-windows",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentTigeraCNIWindows = Component{
-		Version:   "master",
-		Image:     "cni-windows",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentTigeraCNIPlugins = Component{
-		Version:   "master",
-		Image:     "third-party-cni-plugins",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentGatewayAPIEnvoyGateway = Component{
-		Version:   "master",
-		Image:     "envoy-gateway",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentGatewayAPIEnvoyProxy = Component{
-		Version:   "master",
-		Image:     "envoy-proxy",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentGatewayAPIEnvoyRatelimit = Component{
-		Version:   "master",
-		Image:     "envoy-ratelimit",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
-	ComponentIstioPilot = Component{
-		Version:  "master",
-		Image:    "istio-pilot",
-		Registry: "",
-		variant:  enterpriseVariant,
-	}
-
-	ComponentIstioInstallCNI = Component{
-		Version:  "master",
-		Image:    "istio-install-cni",
-		Registry: "",
-		variant:  enterpriseVariant,
-	}
-
-	ComponentIstioZTunnel = Component{
-		Version:  "master",
-		Image:    "istio-ztunnel",
-		Registry: "",
-		variant:  enterpriseVariant,
-	}
-
-	ComponentIstioProxyv2 = Component{
-		Version:  "master",
-		Image:    "istio-proxyv2",
-		Registry: "",
-		variant:  enterpriseVariant,
-	}
+var (
+	ComponentTigeraCalico                 = enterpriseComponentAt("calico", enterpriseCalicoRelease)
+	ComponentDeepPacketInspection         = enterpriseComponent("deep-packet-inspection")
+	ComponentElasticTseeInstaller         = enterpriseComponent("intrusion-detection-job-installer")
+	ComponentElasticsearch                = enterpriseComponent("elasticsearch")
+	ComponentElasticsearchOperator        = enterpriseComponent("eck-operator")
+	ComponentFluentBit                    = enterpriseComponent("fluent-bit")
+	ComponentFluentBitWindows             = enterpriseComponent("fluent-bit-windows")
+	ComponentIntrusionDetectionController = enterpriseComponent("intrusion-detection-controller")
+	ComponentKibana                       = enterpriseComponent("kibana")
+	ComponentManager                      = enterpriseComponent("manager")
+	ComponentDex                          = enterpriseComponent("dex")
+	ComponentEgressGateway                = enterpriseComponent("egress-gateway")
+	ComponentGatewayL7Collector           = enterpriseComponent("gateway-l7-collector")
+	ComponentEnvoyProxy                   = enterpriseComponent("envoy")
+	ComponentDikastes                     = enterpriseComponent("dikastes")
+	ComponentPrometheus                   = enterpriseComponent("prometheus")
+	ComponentPrometheusAlertmanager       = enterpriseComponent("alertmanager")
+	ComponentTigeraNode                   = enterpriseComponent("node")
+	ComponentTigeraNodeWindows            = enterpriseComponent("node-windows")
+	ComponentTigeraCNIWindows             = enterpriseComponent("cni-windows")
+	ComponentTigeraCNIPlugins             = enterpriseComponent("third-party-cni-plugins")
+	ComponentGatewayAPIEnvoyGateway       = enterpriseComponent("envoy-gateway")
+	ComponentGatewayAPIEnvoyProxy         = enterpriseComponent("envoy-proxy")
+	ComponentGatewayAPIEnvoyRatelimit     = enterpriseComponent("envoy-ratelimit")
+	ComponentIstioPilot                   = enterpriseComponent("istio-pilot")
+	ComponentIstioInstallCNI              = enterpriseComponent("istio-install-cni")
+	ComponentIstioZTunnel                 = enterpriseComponent("istio-ztunnel")
+	ComponentIstioProxyv2                 = enterpriseComponent("istio-proxyv2")
 
 	// Only components that correspond directly to images should be included in this list,
 	// Components that are only for providing a version should be left out of this list.

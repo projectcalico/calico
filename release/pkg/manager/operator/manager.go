@@ -131,7 +131,7 @@ func (o *OperatorManager) Build() error {
 		}
 	}
 	logrus.WithFields(logFields).Info("Building operator")
-	out, err := o.make("release", env)
+	out, err := o.make("release-build", env)
 	if err != nil {
 		logrus.Error(out)
 		return fmt.Errorf("failed to build operator: %w", err)
@@ -150,6 +150,8 @@ func (o *OperatorManager) env() ([]string, logrus.Fields) {
 		fmt.Sprintf("REGISTRY=%s", o.registry),
 		fmt.Sprintf("IMAGE_NAME=%s", o.image),
 		fmt.Sprintf("VERSION=%s", o.version),
+		// The other components' release targets all build with this set.
+		"RELEASE=true",
 	)
 	if o.isHashRelease {
 		logFields["hashrelease"] = "true"
@@ -246,42 +248,6 @@ func (o *OperatorManager) Publish() error {
 		return fmt.Errorf("failed to publish operator: %w", err)
 	}
 	logrus.WithFields(logFields).Infof("Published operator: %s", out)
-	return nil
-}
-
-func (o *OperatorManager) PreReleasePublicValidation() error {
-	if !o.publish || !o.validate {
-		return nil
-	}
-	var errStack error
-	if o.dir == "" {
-		errStack = errors.Join(errStack, fmt.Errorf("no repository root specified"))
-	}
-	if o.version == "" {
-		errStack = errors.Join(errStack, fmt.Errorf("no version specified"))
-	}
-	return errStack
-}
-
-// ReleasePublic publishes the current draft release of the operator to make it publicly available.
-// It determines the latest release version, compares it with the current version, and marks the release as the latest if applicable.
-func (o *OperatorManager) ReleasePublic() error {
-	if !o.publish {
-		logrus.Warn("Skipping releasing operator to public")
-		return nil
-	}
-	if err := o.PreReleasePublicValidation(); err != nil {
-		return err
-	}
-	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", o.version))
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		env = append(env, "DEBUG=true")
-	}
-	out, err := o.make("release-public", env)
-	if err != nil {
-		logrus.Error(out)
-		return fmt.Errorf("failed to release operator: %w", err)
-	}
 	return nil
 }
 
