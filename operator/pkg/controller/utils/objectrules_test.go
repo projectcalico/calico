@@ -89,12 +89,19 @@ func (r *fakeExtension) SetStandardSelectorAndLabels(obj client.Object) bool {
 
 var _ = Describe("component handler extension", func() {
 	var (
-		rules   *fakeExtension
-		owned   = &v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "owned"}}
-		unowned = &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "unowned"}}
+		rules *fakeExtension
+		owned *v1.ConfigMap
+		// unowned is a kind the core handles itself, unclaimed one it passes to the
+		// extension, which declines it.
+		unowned   *appsv1.Deployment
+		unclaimed *v1.Secret
 	)
 
 	BeforeEach(func() {
+		owned = &v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "owned"}}
+		unowned = &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "unowned"}}
+		unclaimed = &v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "unclaimed"}}
+
 		rules = &fakeExtension{}
 		RegisterComponentHandlerExtension(rules)
 		DeferCleanup(func() { RegisterComponentHandlerExtension(nil) })
@@ -165,9 +172,20 @@ var _ = Describe("component handler extension", func() {
 		Expect(rules.labelled).To(BeTrue())
 	})
 
-	It("leaves a kind the extension does not own alone", func() {
-		ensureOSSchedulingRestrictions(unowned, rmeta.OSTypeLinux)
+	It("leaves a kind the extension declines alone", func() {
+		ensureOSSchedulingRestrictions(unclaimed, rmeta.OSTypeLinux)
+		setStandardSelectorAndLabels(unclaimed, nil, false)
+		modifyPodSpec(unclaimed, func(s *v1.PodSpec) { s.Hostname = "set" })
+
 		Expect(rules.selector).To(BeNil())
 		Expect(rules.labelled).To(BeFalse())
+		Expect(rules.podSpec.Hostname).To(BeEmpty())
+	})
+
+	It("never consults the extension for a kind the core handles", func() {
+		setStandardSelectorAndLabels(unowned, nil, false)
+
+		Expect(rules.labelled).To(BeFalse())
+		Expect(unowned.Spec.Selector).ToNot(BeNil())
 	})
 })
