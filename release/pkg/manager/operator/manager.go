@@ -36,6 +36,10 @@ const (
 var (
 	defaultProductEnvPrefix = "CALICO"
 	defaultProductRegistry  = registry.DefaultCalicoRegistries[0]
+
+	// productVersionVar is the operator make variable carrying the version its component
+	// images are published at.
+	productVersionVar = "CALICO_VERSION"
 )
 
 type OperatorManager struct {
@@ -51,12 +55,9 @@ type OperatorManager struct {
 	// calicoDir is the absolute path to the root directory of the calico repository
 	calicoDir string
 
-	// calicoVersion is the version of calico to use for the operator. This is only used for hashreleases.
+	// calicoVersion is the version the Calico components the built operator deploys are
+	// published at.
 	calicoVersion string
-
-	// pinnedComponentsFile is the path to the file containing the pinned components for the operator.
-	// This is used for hashreleases and supersedes using calicoVersion.
-	pinnedComponentsFile string
 
 	// image is the name of the operator image (e.g. tigera/operator)
 	image string
@@ -117,21 +118,14 @@ func (o *OperatorManager) Build() error {
 	logFields[fmt.Sprintf("%s_image_path", strings.ToLower(defaultProductEnvPrefix))] = i
 	env = append(env, fmt.Sprintf("%s_REGISTRY=%s", defaultProductEnvPrefix, r))
 	env = append(env, fmt.Sprintf("%s_IMAGE_PATH=%s", defaultProductEnvPrefix, i))
-	if o.isHashRelease {
-		if o.pinnedComponentsFile != "" {
-			env = append(env, fmt.Sprintf("%s_VERSIONS=%s", defaultProductEnvPrefix, o.pinnedComponentsFile))
-			logFields["pinned_components_file"] = o.pinnedComponentsFile
-		} else if o.calicoVersion != "" {
-			env = append(env, fmt.Sprintf("%s_VERSION=%s", defaultProductEnvPrefix, o.calicoVersion))
-			logFields["calico_version"] = o.calicoVersion
-		}
-		if o.calicoDir != "" {
-			env = append(env, fmt.Sprintf("%s_DIR=%s", defaultProductEnvPrefix, o.calicoDir))
-			logFields["calico_dir"] = o.calicoDir
-		}
+	// The image tags the built operator deploys are baked into its binary, so they have
+	// to reach the build whether or not this is a hashrelease.
+	if o.calicoVersion != "" {
+		env = append(env, fmt.Sprintf("%s=%s", productVersionVar, o.calicoVersion))
+		logFields["product_version"] = o.calicoVersion
 	}
 	logrus.WithFields(logFields).Info("Building operator")
-	out, err := o.make("release", env)
+	out, err := o.make("release-build", env)
 	if err != nil {
 		logrus.Error(out)
 		return fmt.Errorf("failed to build operator: %w", err)
@@ -150,6 +144,8 @@ func (o *OperatorManager) env() ([]string, logrus.Fields) {
 		fmt.Sprintf("REGISTRY=%s", o.registry),
 		fmt.Sprintf("IMAGE_NAME=%s", o.image),
 		fmt.Sprintf("VERSION=%s", o.version),
+		// The other components' release targets all build with this set.
+		"RELEASE=true",
 	)
 	if o.isHashRelease {
 		logFields["hashrelease"] = "true"
@@ -202,8 +198,8 @@ func (o *OperatorManager) PreBuildValidation() error {
 		errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them"))
 	}
 	if o.isHashRelease {
-		if o.calicoVersion == "" && o.pinnedComponentsFile == "" {
-			errStack = errors.Join(errStack, errors.New("hashrelease requires either a calico version or the pinned components file to be specified"))
+		if o.calicoVersion == "" {
+			errStack = errors.Join(errStack, errors.New("hashrelease requires the product version to be specified"))
 		}
 		if o.calicoDir == "" {
 			errStack = errors.Join(errStack, errors.New("hashrelease requires the calico directory to be specified"))
@@ -246,42 +242,6 @@ func (o *OperatorManager) Publish() error {
 		return fmt.Errorf("failed to publish operator: %w", err)
 	}
 	logrus.WithFields(logFields).Infof("Published operator: %s", out)
-	return nil
-}
-
-func (o *OperatorManager) PreReleasePublicValidation() error {
-	if !o.publish || !o.validate {
-		return nil
-	}
-	var errStack error
-	if o.dir == "" {
-		errStack = errors.Join(errStack, fmt.Errorf("no repository root specified"))
-	}
-	if o.version == "" {
-		errStack = errors.Join(errStack, fmt.Errorf("no version specified"))
-	}
-	return errStack
-}
-
-// ReleasePublic publishes the current draft release of the operator to make it publicly available.
-// It determines the latest release version, compares it with the current version, and marks the release as the latest if applicable.
-func (o *OperatorManager) ReleasePublic() error {
-	if !o.publish {
-		logrus.Warn("Skipping releasing operator to public")
-		return nil
-	}
-	if err := o.PreReleasePublicValidation(); err != nil {
-		return err
-	}
-	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", o.version))
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		env = append(env, "DEBUG=true")
-	}
-	out, err := o.make("release-public", env)
-	if err != nil {
-		logrus.Error(out)
-		return fmt.Errorf("failed to release operator: %w", err)
-	}
 	return nil
 }
 

@@ -701,12 +701,6 @@ blocks:
         '/operator/cmd/*.go',
         '/operator/config',
         '/operator/deploy/crds',
-        '/operator/hack/gen-versions/*.go',
-        '/operator/hack/release/*.go',
-        '/operator/hack/release/internal/command/*.go',
-        '/operator/hack/release/internal/middleware/*.go',
-        '/operator/hack/release/internal/setup/*.go',
-        '/operator/hack/release/internal/versions/*.go',
         '/operator/internal/controller/*.go',
         '/operator/pkg/active/*.go',
         '/operator/pkg/admission/*.go',
@@ -1543,12 +1537,6 @@ blocks:
         '/operator/cmd/*.go',
         '/operator/config',
         '/operator/deploy/crds',
-        '/operator/hack/gen-versions/*.go',
-        '/operator/hack/release/*.go',
-        '/operator/hack/release/internal/command/*.go',
-        '/operator/hack/release/internal/middleware/*.go',
-        '/operator/hack/release/internal/setup/*.go',
-        '/operator/hack/release/internal/versions/*.go',
         '/operator/internal/controller/*.go',
         '/operator/pkg/active/*.go',
         '/operator/pkg/admission/*.go',
@@ -1757,7 +1745,18 @@ blocks:
   - name: "Build: operator image"
     # The operator image bakes in the references it will install
     # (localhost:5000/calico/<name>:test-build), so this producer builds it
-    # through the same `make kind-operator-image` its consumers run.
+    # through the same `make kind-operator-image` its consumers run and every
+    # kind lane can share the one tarball.
+    #
+    # hack/dev-build.sh gates the rebuild on a record of the inputs the image was
+    # built from, not on a marker file, so that stamp ships alongside the
+    # tarball for load-cached-images to restore. Upload it first: a tarball
+    # without its stamp would fail the consumer's untolerated gcloud cp.
+    #
+    # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)") list this
+    # block in their `dependencies:`, so CHANGE_IN_WITH_DEPENDENTS() folds their
+    # triggers into the arg below — this block's own inputs, the operator's Go
+    # closure plus everything else under operator/.
     run:
       when: >-
         change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
@@ -1894,7 +1893,6 @@ blocks:
         '/guardian/pkg/tunnel/*.go',
         '/hack/test/certs/',
         '/hack/test/kind',
-        '/hack/test/kind/infra/calico_versions.yml',
         '/key-cert-provisioner/pkg/cfg/*.go',
         '/key-cert-provisioner/pkg/k8s/*.go',
         '/key-cert-provisioner/pkg/keycert/*.go',
@@ -2021,12 +2019,6 @@ blocks:
         '/operator/cmd/*.go',
         '/operator/config',
         '/operator/deploy/crds',
-        '/operator/hack/gen-versions/*.go',
-        '/operator/hack/release/*.go',
-        '/operator/hack/release/internal/command/*.go',
-        '/operator/hack/release/internal/middleware/*.go',
-        '/operator/hack/release/internal/setup/*.go',
-        '/operator/hack/release/internal/versions/*.go',
         '/operator/internal/controller/*.go',
         '/operator/pkg/active/*.go',
         '/operator/pkg/admission/*.go',
@@ -3918,12 +3910,6 @@ blocks:
         '/operator/cmd/*.go',
         '/operator/config',
         '/operator/deploy/crds',
-        '/operator/hack/gen-versions/*.go',
-        '/operator/hack/release/*.go',
-        '/operator/hack/release/internal/command/*.go',
-        '/operator/hack/release/internal/middleware/*.go',
-        '/operator/hack/release/internal/setup/*.go',
-        '/operator/hack/release/internal/versions/*.go',
         '/operator/internal/controller/*.go',
         '/operator/pkg/active/*.go',
         '/operator/pkg/admission/*.go',
@@ -5575,12 +5561,6 @@ blocks:
         '/operator/cmd/*.go',
         '/operator/config',
         '/operator/deploy/crds',
-        '/operator/hack/gen-versions/*.go',
-        '/operator/hack/release/*.go',
-        '/operator/hack/release/internal/command/*.go',
-        '/operator/hack/release/internal/middleware/*.go',
-        '/operator/hack/release/internal/setup/*.go',
-        '/operator/hack/release/internal/versions/*.go',
         '/operator/internal/controller/*.go',
         '/operator/pkg/active/*.go',
         '/operator/pkg/admission/*.go',
