@@ -128,6 +128,24 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
 				}
+				// The operator carries the versions of the images it deploys in its binary, so a
+				// release rebuilds it rather than retagging the one a hashrelease published.
+				operatorOpts := []operator.Option{
+					operator.WithVersion(operatorVer.FormattedString()),
+					operator.WithCalicoDirectory(cfg.RepoRootDir),
+					operator.WithCalicoVersion(ver.FormattedString()),
+					operator.WithArchitectures(c.StringSlice(archFlag.Name)),
+					operator.WithValidate(c.Bool(validationFlag.Name)),
+				}
+				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
+					operatorOpts = append(operatorOpts, operator.WithProductRegistry(reg[0]))
+				}
+				if c.Bool(operatorFlagName) {
+					if err := operator.NewManager(operatorOpts...).Build(); err != nil {
+						return err
+					}
+				}
+
 				r := calico.NewManager(opts...)
 				return r.Build()
 			},
@@ -177,6 +195,19 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 				if v := c.String(s3BucketFlag.Name); v != "" {
 					opts = append(opts, calico.WithS3Bucket(v))
 				}
+				if c.Bool(operatorFlagName) {
+					o := operator.NewManager(
+						operator.WithCalicoDirectory(cfg.RepoRootDir),
+						operator.WithVersion(operatorVer.FormattedString()),
+					)
+					if err := o.PrePublishValidation(); err != nil {
+						return err
+					}
+					if err := o.Publish(); err != nil {
+						return err
+					}
+				}
+
 				r := calico.NewManager(opts...)
 				return r.PublishRelease()
 			},
@@ -215,15 +246,7 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 			}
 			m := calico.NewManager(opts...)
-			if err := m.ReleasePublic(); err != nil {
-				return err
-			}
-			opOpts := []operator.Option{
-				operator.WithVersion(operatorVer.FormattedString()),
-				operator.WithCalicoDirectory(cfg.RepoRootDir),
-			}
-			o := operator.NewManager(opOpts...)
-			return o.ReleasePublic()
+			return m.ReleasePublic()
 		},
 	}
 }
@@ -289,6 +312,7 @@ func releaseBuildFlags() []cli.Flag {
 		registryFlag,
 		archFlag,
 		imageReleaseDirsFlag)
+	f = append(f, operatorBuildCommandFlags...)
 	f = append(f,
 		branchCheckFlag,
 		validationFlag,
@@ -299,6 +323,7 @@ func releaseBuildFlags() []cli.Flag {
 // releasePublishFlags returns the flags for release publish command.
 func releasePublishFlags() []cli.Flag {
 	f := append(slices.Clone(productFlags), publishStepFlags(false)...)
+	f = append(f, operatorPublishCommandFlags...)
 	f = append(f,
 		registryFlag,
 		imageReleaseDirsFlag,

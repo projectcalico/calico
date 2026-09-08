@@ -40,8 +40,8 @@ func TestImageComponents(t *testing.T) {
 		RootDir:             rootDir,
 		ReleaseBranchPrefix: "release",
 		OperatorCfg: OperatorConfig{
-			Image:    "tigera/operator",
-			Registry: "docker.io",
+			Image:    "operator",
+			Registry: "docker.io/calico",
 		},
 		releaseName:   "test-release",
 		productBranch: "release-v3.31",
@@ -90,7 +90,7 @@ func TestImageComponents(t *testing.T) {
 	})
 	t.Run("with operator", func(t *testing.T) {
 		expectedComponents := map[string]registry.Component{
-			"tigera/operator": {Version: "v3.31.0", Image: "tigera/operator", Registry: "docker.io"},
+			"operator": {Version: "v3.31.0", Image: "operator", Registry: "docker.io/calico"},
 		}
 		for k, v := range commonComponents {
 			expectedComponents[k] = v
@@ -113,8 +113,8 @@ func TestGeneratePinnedVersionFileCreatesDir(t *testing.T) {
 		RootDir:             rootDir,
 		ReleaseBranchPrefix: "release",
 		OperatorCfg: OperatorConfig{
-			Image:    "tigera/operator",
-			Registry: "docker.io",
+			Image:    "operator",
+			Registry: "docker.io/calico",
 		},
 		releaseName:   "test-release",
 		productBranch: "release-v3.31",
@@ -139,8 +139,8 @@ func TestGeneratePinnedVersionFile(t *testing.T) {
 		RootDir:             rootDir,
 		ReleaseBranchPrefix: "release",
 		OperatorCfg: OperatorConfig{
-			Image:    "tigera/operator",
-			Registry: "docker.io",
+			Image:    "operator",
+			Registry: "docker.io/calico",
 		},
 		releaseName:   "test-release",
 		productBranch: "release-v3.31",

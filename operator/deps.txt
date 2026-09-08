@@ -10,7 +10,6 @@ github.com/Masterminds/goutils v1.1.1
 github.com/Masterminds/semver/v3 v3.5.0
 github.com/Masterminds/sprig/v3 v3.3.0
 github.com/Masterminds/squirrel v1.5.4
-github.com/ProtonMail/go-crypto v1.0.0
 github.com/armon/go-radix v1.0.0
 github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 github.com/aws/aws-sdk-go-v2 v1.42.1
@@ -34,13 +33,9 @@ github.com/cespare/xxhash/v2 v2.3.0
 github.com/chai2010/gettext-go v1.0.3
 github.com/clipperhouse/uax29/v2 v2.7.0
 github.com/cloudflare/cfssl v1.6.5
-github.com/cloudflare/circl v1.6.3
 github.com/containernetworking/cni v1.3.0
 github.com/cyphar/filepath-securejoin v0.7.0
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
-github.com/docker/cli v29.6.2+incompatible
-github.com/docker/docker v26.1.5+incompatible
-github.com/docker/docker-credential-helpers v0.9.8
 github.com/elastic/cloud-on-k8s/v2 v2.0.0-20250129010100-648f902d9807
 github.com/elastic/go-sysinfo v1.13.1
 github.com/elastic/go-ucfg v0.8.8
@@ -75,9 +70,6 @@ github.com/gobwas/glob v0.2.3
 github.com/google/btree v1.1.3
 github.com/google/gnostic-models v0.7.1
 github.com/google/go-cmp v0.7.0
-github.com/google/go-containerregistry v0.21.7
-github.com/google/go-github/v53 v53.2.0
-github.com/google/go-querystring v1.1.0
 github.com/google/uuid v1.6.0
 github.com/gosuri/uitable v0.0.4
 github.com/hashicorp/errwrap v1.1.0
@@ -89,7 +81,6 @@ github.com/jmoiron/sqlx v1.4.0
 github.com/joeshaw/multierror v0.0.0-20140124173710-69b34d4ec901
 github.com/json-iterator/go v1.1.12
 github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
-github.com/klauspost/compress v1.20.0
 github.com/lann/builder v0.0.0-20180802200727-47ae307949d0
 github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0
 github.com/lib/pq v1.12.3
@@ -127,15 +118,11 @@ github.com/russross/blackfriday v1.6.0
 github.com/russross/blackfriday/v2 v2.1.0
 github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 github.com/shopspring/decimal v1.4.0
-github.com/sirupsen/logrus v1.9.4
-github.com/snowzach/rotatefilehook v0.0.0-20220211133110-53752135082d
 github.com/spf13/cast v1.10.0
 github.com/spf13/cobra v1.10.2
 github.com/spf13/pflag v1.0.10
 github.com/stretchr/objx v0.5.3
 github.com/stretchr/testify v1.11.1
-github.com/urfave/cli v1.22.16
-github.com/urfave/cli/v3 v3.10.0
 github.com/x448/float16 v0.8.4
 github.com/xlab/treeprint v1.2.0
 go.elastic.co/apm/module/apmzap/v2 v2.6.2
@@ -159,8 +146,6 @@ gomodules.xyz/jsonpatch/v2 v2.5.0
 google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 gopkg.in/evanphx/json-patch.v4 v4.13.0
 gopkg.in/inf.v0 v0.9.1
-gopkg.in/natefinch/lumberjack.v2 v2.2.1
-gopkg.in/yaml.v2 v2.4.0
 gopkg.in/yaml.v3 v3.0.1
 helm.sh/helm/v3 v3.21.3
 howett.net/plist v1.0.1
@@ -196,12 +181,6 @@ local:api/pkg/lib/numorstring
 local:libcalico-go/config/crd
 local:operator/api/v1
 local:operator/cmd
-local:operator/hack/gen-versions
-local:operator/hack/release
-local:operator/hack/release/internal/command
-local:operator/hack/release/internal/middleware
-local:operator/hack/release/internal/setup
-local:operator/hack/release/internal/versions
 local:operator/internal/controller
 local:operator/pkg/active
 local:operator/pkg/admission
