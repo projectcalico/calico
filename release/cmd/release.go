@@ -195,8 +195,6 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 				if v := c.String(s3BucketFlag.Name); v != "" {
 					opts = append(opts, calico.WithS3Bucket(v))
 				}
-				// The operator image is published first, since the release validates that
-				// every image it names exists.
 				if c.Bool(operatorFlagName) {
 					o := operator.NewManager(
 						operator.WithCalicoDirectory(cfg.RepoRootDir),
