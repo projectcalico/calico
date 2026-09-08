@@ -55,6 +55,11 @@ const (
 // bundle must not carry.
 var metricsAnnotation = regexp.MustCompile(`operators\.operatorframework\.io\.metrics`)
 
+// openShiftVersionsAnnotation matches the supported-versions annotation that
+// updateAnnotations writes, so that an existing one is replaced rather than
+// duplicated.
+var openShiftVersionsAnnotation = regexp.MustCompile(`^\s*com\.redhat\.openshift\.versions\s*:`)
+
 // bundleCopy matches the COPY directives that point at the pre-rearrange bundle
 // layout, which are replaced with ones pointing at the versioned directories.
 var bundleCopy = regexp.MustCompile(`^COPY bundle/(manifests|metadata)`)
@@ -280,9 +285,12 @@ func updateDockerfile(version string) error {
 
 func updateAnnotations(path string) error {
 	err := editLines(path, func(lines []string) []string {
-		// Remove unneeded labels and empty lines.
+		// Remove unneeded labels and empty lines. Any openshift.versions already
+		// there goes too, so that re-running against the same file - or an
+		// operator-sdk that starts emitting the key itself - leaves one copy of it
+		// rather than a duplicate key.
 		lines = filterLines(lines, func(line string) bool {
-			return line == "" || metricsAnnotation.MatchString(line)
+			return line == "" || metricsAnnotation.MatchString(line) || openShiftVersionsAnnotation.MatchString(line)
 		})
 		// Add required com.redhat.openshift.versions.
 		return append(lines, fmt.Sprintf("  com.redhat.openshift.versions: %s", openShiftVersions))
@@ -313,7 +321,9 @@ func updateAnnotations(path string) error {
 //	]
 //
 // RepoDigests may have more than one entry, so we filter for the repository the
-// bundle is being built from.
+// bundle is being built from. The match is on the whole repository up to the
+// '@', since a prefix match would also accept a repository the bundle is not
+// being built from, e.g. quay.io/tigera/operator-foo for quay.io/tigera/operator.
 func parseImageInspect(content, repository string) (image, error) {
 	var inspected []struct {
 		Created     string   `json:"Created"`
@@ -326,7 +336,7 @@ func parseImageInspect(content, repository string) (image, error) {
 		return image{}, fmt.Errorf("image inspect output is empty")
 	}
 	for _, digest := range inspected[0].RepoDigests {
-		if strings.Contains(digest, repository) {
+		if repo, _, found := strings.Cut(digest, "@"); found && repo == repository {
 			return image{digest: digest, created: inspected[0].Created}, nil
 		}
 	}

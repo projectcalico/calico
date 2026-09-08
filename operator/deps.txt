@@ -118,11 +118,14 @@ github.com/russross/blackfriday v1.6.0
 github.com/russross/blackfriday/v2 v2.1.0
 github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 github.com/shopspring/decimal v1.4.0
+github.com/sirupsen/logrus v1.9.4
 github.com/spf13/cast v1.10.0
 github.com/spf13/cobra v1.10.2
 github.com/spf13/pflag v1.0.10
 github.com/stretchr/objx v0.5.3
 github.com/stretchr/testify v1.11.1
+github.com/urfave/cli v1.22.16
+github.com/urfave/cli/v3 v3.10.0
 github.com/x448/float16 v0.8.4
 github.com/xlab/treeprint v1.2.0
 go.elastic.co/apm/module/apmzap/v2 v2.6.2
@@ -181,6 +184,7 @@ local:api/pkg/lib/numorstring
 local:libcalico-go/config/crd
 local:operator/api/v1
 local:operator/cmd
+local:operator/hack/gen-bundle
 local:operator/internal/controller
 local:operator/pkg/active
 local:operator/pkg/admission

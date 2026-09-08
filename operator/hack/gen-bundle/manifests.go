@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
@@ -30,6 +31,10 @@ import (
 // calicoBaseURL is the base path for the Calico repository, used to download
 // the manifests and CRDs that the bundle ships.
 const calicoBaseURL = "https://raw.githubusercontent.com/projectcalico/calico"
+
+// downloadClient bounds each download, so that a connection that stalls fails
+// the bundle build rather than hanging the release workflow.
+var downloadClient = &http.Client{Timeout: 2 * time.Minute}
 
 // calicoResources are the Calico CRDs the bundle ships. Keep this list, the
 // owned CRDs in config/manifests/bases/tigera-operator.clusterserviceversion.yaml,
@@ -185,7 +190,7 @@ func download(ctx context.Context, url, dst string) error {
 	if err != nil {
 		return fmt.Errorf("building request for %s: %w", url, err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := downloadClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("downloading %s: %w", url, err)
 	}

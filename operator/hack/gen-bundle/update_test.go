@@ -29,6 +29,7 @@ const imageInspectOutput = `[
     "RepoTags": ["quay.io/tigera/operator:v1.42.6"],
     "RepoDigests": [
       "some.other.registry/tigera/operator@sha256:aaa",
+      "quay.io/tigera/operator-foo@sha256:ccc",
       "quay.io/tigera/operator@sha256:bbb"
     ]
   }
@@ -73,6 +74,10 @@ func TestParseImageInspectErrors(t *testing.T) {
 		{
 			name:    "no operator digest",
 			content: `[{"Created": "2026-01-02T03:04:05Z", "RepoDigests": ["docker.io/library/busybox@sha256:aaa"]}]`,
+		},
+		{
+			name:    "only a repository the operator repository is a prefix of",
+			content: `[{"Created": "2026-01-02T03:04:05Z", "RepoDigests": ["quay.io/tigera/operator-foo@sha256:aaa"]}]`,
 		},
 	}
 
@@ -179,28 +184,46 @@ COPY 1.42.6/metadata /metadata/
 	}
 }
 
+// TestUpdateAnnotations also covers a supported-versions annotation that is
+// already there, which must be replaced rather than duplicated - a duplicate
+// key would make the metadata invalid YAML.
 func TestUpdateAnnotations(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "annotations.yaml")
-	writeFile(t, path, `annotations:
+	cases := map[string]string{
+		"adds the annotation": `annotations:
   # Core bundle annotations.
   operators.operatorframework.io.bundle.package.v1: tigera-operator
 
   operators.operatorframework.io.metrics.builder: operator-sdk-v1.42.2
-`)
-
-	if err := updateAnnotations(path); err != nil {
-		t.Fatalf("updateAnnotations: %v", err)
+`,
+		"replaces an existing annotation": `annotations:
+  # Core bundle annotations.
+  operators.operatorframework.io.bundle.package.v1: tigera-operator
+  com.redhat.openshift.versions: v4.10-v4.12
+`,
 	}
 
-	want := `annotations:
+	const want = `annotations:
   # Core bundle annotations.
   operators.operatorframework.io.bundle.package.v1: tigera-operator
   com.redhat.openshift.versions: v4.16-v4.18
 `
-	if got := readFile(t, path); got != want {
-		t.Errorf("annotations are\n%s\nwant\n%s", got, want)
+
+	for name, content := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			path := filepath.Join(t.TempDir(), "annotations.yaml")
+			writeFile(t, path, content)
+
+			if err := updateAnnotations(path); err != nil {
+				t.Fatalf("updateAnnotations: %v", err)
+			}
+			if got := readFile(t, path); got != want {
+				t.Errorf("annotations are\n%s\nwant\n%s", got, want)
+			}
+		})
 	}
 }
 

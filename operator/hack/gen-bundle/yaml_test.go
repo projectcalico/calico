@@ -122,6 +122,8 @@ func TestDocumentSetErrors(t *testing.T) {
 		{name: "key of a sequence", path: []any{"spec", "relatedImages", "name"}},
 		{name: "index past the end", path: []any{"spec", "relatedImages", 2, "name"}},
 		{name: "sequence index last", path: []any{"spec", "relatedImages", 0}},
+		{name: "overwrite a mapping", path: []any{"spec"}},
+		{name: "overwrite a sequence", path: []any{"spec", "relatedImages"}},
 	}
 
 	for _, tc := range cases {

@@ -82,6 +82,13 @@ func (d *document) set(value string, path ...any) error {
 		return fmt.Errorf("%s: not a mapping", pathString(path[:len(path)-1]))
 	}
 	if node := mapValue(parent, key); node != nil {
+		// Only a scalar can be rewritten in place. A mapping or a sequence here
+		// means the path no longer points at the field it was written for, and
+		// overwriting it would leave a node whose kind and value disagree, so say
+		// so rather than corrupt the document.
+		if node.Kind != yaml.ScalarNode {
+			return fmt.Errorf("%s: not a scalar", pathString(path))
+		}
 		node.Tag = "!!str"
 		node.Value = value
 		return nil
