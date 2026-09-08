@@ -1,0 +1,27 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# pipeline.yaml - selection shared by every nftables lane.
+#
+# base.yaml already scopes the suite to sig-calico plus networking
+# conformance and drops the labels no lane can satisfy (ExternalNode,
+# Feature:KubeVirt). This file adds what is true of the nftables lanes as a
+# group; each lane file then adds only what its own cluster shape rules out.
+
+extends: ../base.yaml
+
+exclude:
+  labels:
+    - label: sig-calico-enterprise
+      reason: "Enterprise-only specs; this is the open-source pipeline"
+
+  namePatterns:
+    - pattern: "DataPath"
+      reason: "directory-based test name, not a Ginkgo label"
+
+    # Not the whole Feature:Istio label: the OpenShift platform-config spec in
+    # that label passes here, only the ambient-mode ones need Istio installed.
+    - pattern: "Istio Ambient Mode"
+      reason: "no Istio on these lanes; these specs wait for TigeraStatus 'istio' to go Available and so fail instead of skipping"
+
+    - pattern: "WireGuard"
+      reason: "WireGuard specs are not part of the nftables selection"

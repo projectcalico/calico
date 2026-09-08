@@ -1,0 +1,14 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# native-v3-crds-gcp.yaml - gcp-kubeadm, v3 CRD mode (no aggregated API
+# server), Felix-owned cluster routes.
+
+extends: pipeline.yaml
+
+exclude:
+  labels:
+    - label: RequiresCalicoAPIServer
+      reason: "USE_API_SERVER=false, so tier RBAC is only enforced on write and the read-path specs cannot pass"
+
+    - label: RequiresBGPMesh
+      reason: "CLUSTER_ROUTING_MODE=Felix, so BGP full mesh is not the sole routing mechanism"
