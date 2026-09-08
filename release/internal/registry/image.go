@@ -25,7 +25,9 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 )
 
-const TigeraOperatorImage = "tigera/operator"
+// OperatorImage is the operator's image path. The operator ships as a Calico
+// component image, so it sits under the same path as the rest of them.
+const OperatorImage = "calico/operator"
 
 // ResolveDigest returns the manifest digest of image, authenticating with the
 // ambient Docker credentials. exists is false with a nil error when the tag is

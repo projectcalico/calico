@@ -103,7 +103,7 @@ var _ = Describe("test GetReference", func() {
 			Entry("a calico image correctly", ComponentCalicoNode, "calico/prefix-node"),
 			Entry("a tigera image correctly", ComponentTigeraNode, "tigera/prefix-node"),
 			Entry("an ECK image correctly", ComponentElasticsearchOperator, "tigera/prefix-eck-operator"),
-			Entry("an operator init image correctly", ComponentOperatorInit, "tigera/prefix-operator"),
+			Entry("an operator init image correctly", ComponentOperatorInit, "calico/prefix-operator"),
 		)
 	})
 
@@ -152,7 +152,7 @@ var _ = Describe("test GetReference", func() {
 							{Image: "calico/node", Digest: "sha256:caliconodehash"},
 							{Image: "tigera/node", Digest: "sha256:tigeranodehash"},
 							{Image: "tigera/eck-operator", Digest: "sha256:eckeckoperatorhash"},
-							{Image: "tigera/operator", Digest: "sha256:tigeraoperatorhash"},
+							{Image: "calico/operator", Digest: "sha256:tigeraoperatorhash"},
 						},
 					},
 				}

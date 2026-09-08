@@ -94,4 +94,4 @@ load_image whisker "calico/whisker" "whisker-image.tar.zst" "${REPO_ROOT}/whiske
 # here: its producer block builds it via `make kind-operator-image`, which
 # bakes in the kind component refs. On a miss the kind lanes' own targets
 # build it.
-load_image ""      "tigera/operator" "operator-image.tar.zst" "${REPO_ROOT}/operator/.image.created-${ARCH}"
+load_image ""      "calico/operator" "operator-image.tar.zst" "${REPO_ROOT}/operator/.image.created-${ARCH}"
