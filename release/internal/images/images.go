@@ -392,6 +392,18 @@ func (s settings) runUnits(units []unit) error {
 	return err
 }
 
+// Components share build trees, so a clean during the fan-out would delete
+// what another unit is building. The root target cleans every component.
+func (s settings) clean() error {
+	s.Logger().Info("Cleaning before build")
+	out, err := s.Run("make", []string{"-C", s.RepoRoot, "clean"}, s.env(), s.LogPath("clean"))
+	if err != nil {
+		s.Logger().Error(out)
+		return s.Errorf("clean: %w", err)
+	}
+	return nil
+}
+
 // runUnitOnly adapts runUnit to forEachUnit, which wants a result per unit.
 func (s settings) runUnitOnly(u unit) (unitDone, error) {
 	return unitDone{}, s.runUnit(u)

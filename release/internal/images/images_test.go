@@ -283,6 +283,7 @@ func TestLogPaths(t *testing.T) {
 		}
 		slices.Sort(got)
 		want := []string{
+			"/logs/images-build/clean.log",
 			"/logs/images-build/cmd-calico.log",
 			"/logs/images-build/node-windows.log",
 			"/logs/images-build/node.log",
@@ -291,6 +292,32 @@ func TestLogPaths(t *testing.T) {
 			t.Errorf("log paths\n got %v\nwant %v", got, want)
 		}
 	})
+}
+
+// Components share build trees, so a clean must never land mid-build.
+func TestBuildCleansBeforeAnyUnitRuns(t *testing.T) {
+	f := &fakeRunner{}
+	if err := Build(testRepoRoot, testVersion, ossVariants(), buildOpts(f)...); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	var cleans, builds int
+	for _, c := range f.calls {
+		if slices.Contains(c.args, "clean") {
+			if builds > 0 {
+				t.Errorf("clean %v ran after a build started", c.args)
+			}
+			cleans++
+			continue
+		}
+		builds++
+	}
+	if cleans == 0 {
+		t.Error("no clean ran before the build")
+	}
+	if builds == 0 {
+		t.Error("no unit was built")
+	}
 }
 
 // Scoping the release dirs must scope the work.

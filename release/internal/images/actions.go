@@ -34,6 +34,10 @@ func Build(repoRoot, version string, variants []Variant, opts ...BuildOption) er
 		return err
 	}
 
+	if err := s.clean(); err != nil {
+		return err
+	}
+
 	units := s.units(s.env())
 	s.Logger().WithField("images", len(units)).Info("Building container images")
 	if err := s.runUnits(units); err != nil {
