@@ -21,7 +21,7 @@ import (
 )
 
 // Image keys name the images a variant supplies its own build of. The key is the
-// image's own name, so it selects an entry from CalicoImages or EnterpriseImages.
+// image's own name, so it selects an entry from the variant's image list.
 const (
 	ImageKeyCalico     = "calico"
 	ImageKeyNode       = "node"

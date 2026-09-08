@@ -61,11 +61,7 @@ func variantPrefix(v operator.ProductVariant) string {
 }
 
 func getSetName(v operator.ProductVariant) string {
-	variantVersion := components.CalicoRelease
-	if v.IsEnterprise() {
-		variantVersion = components.EnterpriseRelease
-	}
-	return fmt.Sprintf("%s-%s", variantPrefix(v), variantVersion)
+	return fmt.Sprintf("%s-%s", variantPrefix(v), components.CalicoRelease)
 }
 
 // GetImageSet finds the ImageSet for specified variant.
@@ -152,18 +148,6 @@ func ValidateImageSet(is *operator.ImageSet) error {
 				valid = true
 				break
 			}
-		}
-		if valid {
-			continue
-		}
-		for _, x := range components.EnterpriseImages {
-			if img.Image == fmt.Sprintf("%s%s", components.TigeraImagePath, x.Image) {
-				valid = true
-				break
-			}
-		}
-		if valid {
-			continue
 		}
 		if !valid {
 			unknownImages = append(unknownImages, img.Image)
