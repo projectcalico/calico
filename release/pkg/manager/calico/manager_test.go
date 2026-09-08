@@ -28,6 +28,7 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/images"
+	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 // fakeResult is the canned response for a matched command.
@@ -773,6 +774,22 @@ func TestPublishContainerImagesBranchTag(t *testing.T) {
 			if tt.wantBranchTag {
 				if got := f.envFor("make -C /repo/cmd/calico retag-build-images-with-registries"); !slices.Contains(got, "IMAGETAG="+tt.wantTag) {
 					t.Errorf("branch tag env = %v, want IMAGETAG=%s", got, tt.wantTag)
+				}
+			}
+
+			// The operator carries the branch tag too, published to its own registries.
+			opTarget := "make -C /repo/operator retag-build-images-with-registries"
+			if got := f.ran(opTarget); got != tt.wantBranchTag {
+				t.Errorf("operator branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
+			}
+			if tt.wantBranchTag {
+				env := f.envFor(opTarget)
+				if !slices.Contains(env, "IMAGETAG="+tt.wantTag) {
+					t.Errorf("operator branch tag env = %v, want IMAGETAG=%s", env, tt.wantTag)
+				}
+				want := "DEV_REGISTRIES=" + strings.Join(operator.DefaultRegistries, " ")
+				if !slices.Contains(env, want) {
+					t.Errorf("operator branch tag env = %v, want %s", env, want)
 				}
 			}
 		})
