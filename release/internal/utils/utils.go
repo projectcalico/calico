@@ -123,6 +123,10 @@ var (
 	// apiserver, dikastes, webhooks, typha, goldmane, guardian,
 	// whisker-backend, key-cert-provisioner, CSI, flexvol, Linux CNI) live
 	// under cmd/calico and are not listed here.
+	// OperatorDir is the operator's component directory. It publishes to registries of
+	// its own, so it is named apart from the list rather than added to it.
+	OperatorDir = "operator"
+
 	ImageReleaseDirs = []string{
 		"cmd/calico",
 		"istio",

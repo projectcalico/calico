@@ -14,12 +14,6 @@
 
 package operator
 
-import (
-	"fmt"
-
-	"github.com/projectcalico/calico/release/internal/utils"
-)
-
 type Option func(*OperatorManager) error
 
 func WithOperatorDirectory(root string) Option {
@@ -50,13 +44,6 @@ func WithValidate(validate bool) Option {
 	}
 }
 
-func WithPublish(publish bool) Option {
-	return func(o *OperatorManager) error {
-		o.publish = publish
-		return nil
-	}
-}
-
 func WithArchitectures(architectures []string) Option {
 	return func(o *OperatorManager) error {
 		o.architectures = architectures
@@ -79,8 +66,23 @@ func WithVersion(version string) Option {
 }
 
 func WithRegistry(registry string) Option {
+	return WithRegistries([]string{registry})
+}
+
+func WithRegistries(registries []string) Option {
 	return func(o *OperatorManager) error {
-		o.registry = registry
+		// An unset flag reaches here as an empty string, which would otherwise leave the
+		// image published nowhere.
+		var named []string
+		for _, r := range registries {
+			if r != "" {
+				named = append(named, r)
+			}
+		}
+		if len(named) == 0 {
+			return nil
+		}
+		o.registries = named
 		return nil
 	}
 }
@@ -95,20 +97,6 @@ func WithProductRegistry(registry string) Option {
 func WithImage(image string) Option {
 	return func(o *OperatorManager) error {
 		o.image = image
-		return nil
-	}
-}
-
-func WithPinnedComponents(filePath string) Option {
-	return func(o *OperatorManager) error {
-		exists, err := utils.FileExists(filePath)
-		if err != nil {
-			return fmt.Errorf("check pinned components file exists: %w", err)
-		}
-		if !exists {
-			return fmt.Errorf("pinned components file does not exist at path: %s", filePath)
-		}
-		o.pinnedComponentsFile = filePath
 		return nil
 	}
 }

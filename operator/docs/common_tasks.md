@@ -69,11 +69,11 @@ These are the steps:
    ```bash
    make image
    ```
-   The output will show you the docker tag that was just created. (For example: `Successfully tagged tigera/operator:latest-amd64`.)
+   The output will show you the docker tag that was just created. (For example: `Successfully tagged operator:latest-amd64`.)
 3. Re-tag the image and push it to a registry of your choice.
    ```
-   export IMAGE=myregistry.com/user/tigera/operator:my-tag
-   docker tag tigera/operator:latest $IMAGE
+   export IMAGE=myregistry.com/user/operator:my-tag
+   docker tag operator:latest $IMAGE
    docker push $IMAGE
    ```
 4. Change your deployment to use the image.
