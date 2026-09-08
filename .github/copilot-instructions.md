@@ -80,7 +80,9 @@ To run a single test:
 - Temporarily change the `It()` block in the file to `FIt()` to "focus" the test.
 - Run the test in iptables mode:
   `make -C felix fv GINKGO_ARGS="-ginkgo.v"`
-- Run the test in eBPF mode with iptables (only tests marked BPF-SAFE should be run in this mode):
+- Run the test in eBPF mode with iptables (in CI, only tests whose name contains
+  `_BPF-SAFE_` or `_BPF_` run in this mode; name a new BPF-mode test accordingly or
+  CI will never run it):
   `make -C felix fv-bpf GINKGO_ARGS="-ginkgo.v"`
 - Run the test in nftables mode:
   `make -C felix fv(-bpf) GINKGO_ARGS="-ginkgo.v" FELIX_FV_NFTABLES=Enabled`
