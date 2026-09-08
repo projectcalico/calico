@@ -144,7 +144,6 @@ func (o *OperatorManager) env() ([]string, logrus.Fields) {
 		fmt.Sprintf("REGISTRY=%s", o.registry),
 		fmt.Sprintf("IMAGE_NAME=%s", o.image),
 		fmt.Sprintf("VERSION=%s", o.version),
-		// The other components' release targets all build with this set.
 		"RELEASE=true",
 	)
 	if o.isHashRelease {
