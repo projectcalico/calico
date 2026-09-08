@@ -21,18 +21,17 @@ import (
 	operator "github.com/projectcalico/calico/operator/api/v1"
 )
 
+// otherVariantNode stands in for the node image a variant supplies instead of this
+// build's own, which is declared outside this repo.
+var otherVariantNode = Component{Image: ImageKeyNode, Version: "v9.9.9"}
+
 var _ = Describe("ImageFor", func() {
-	// The generated component lists are the source of truth, so a key that stops naming
-	// an entry in either list would make ImageFor error at render time.
-	It("names an entry in both lists, resolving to a different image in each", func() {
+	// The component list is the source of truth, so a key that stops naming an entry
+	// in it would make ImageFor error at render time.
+	It("names an entry in the list this build ships", func() {
 		for _, key := range ImageKeys {
-			cal, calOK := byImage(CalicoImages)[key]
-			Expect(calOK).To(BeTrue(), "Calico image for %q", key)
-
-			ent, entOK := byImage(EnterpriseImages)[key]
-			Expect(entOK).To(BeTrue(), "Enterprise image for %q", key)
-
-			Expect(cal).NotTo(Equal(ent), "%q is the same image for both variants, so it needs no key", key)
+			_, ok := byImage(CalicoImages)[key]
+			Expect(ok).To(BeTrue(), "image for %q", key)
 		}
 	})
 
@@ -43,15 +42,15 @@ var _ = Describe("ImageFor", func() {
 	})
 
 	It("resolves what the variant registered", func() {
-		DeferCleanup(UseImages(EnterpriseImages))
+		DeferCleanup(UseImages([]Component{otherVariantNode}))
 
 		img, err := ImageFor(ImageKeyNode)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(img).To(Equal(ComponentTigeraNode))
+		Expect(img).To(Equal(otherVariantNode))
 	})
 
 	It("errors on an image the running variant does not supply", func() {
-		DeferCleanup(UseImages(EnterpriseImages))
+		DeferCleanup(UseImages([]Component{otherVariantNode}))
 
 		_, err := ImageFor("whisker")
 		Expect(err).To(HaveOccurred())

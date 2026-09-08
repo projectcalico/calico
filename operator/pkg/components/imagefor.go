@@ -16,12 +16,13 @@ package components
 
 import (
 	"fmt"
+	"path"
 
 	operator "github.com/projectcalico/calico/operator/api/v1"
 )
 
 // Image keys name the images a variant supplies its own build of. The key is the
-// image's own name, so it selects an entry from CalicoImages or EnterpriseImages.
+// image's own name, so it selects an entry from CalicoImages or the registered build.
 const (
 	ImageKeyCalico     = "calico"
 	ImageKeyNode       = "node"
@@ -99,6 +100,25 @@ func VariantRelease() string {
 		return variantRelease
 	}
 	return CalicoRelease
+}
+
+// KnownImage reports whether name is an image this build ships, spelled the way an
+// ImageSet lists it. The image path is part of the name, so a variant's images are
+// only known once it registers.
+func KnownImage(name string) bool {
+	for _, c := range CalicoImages {
+		if name == path.Join(CalicoImagePath, c.Image) {
+			return true
+		}
+	}
+
+	for _, c := range variantImages {
+		_, imagePath := getDefaults(c)
+		if name == path.Join(imagePath, c.Image) {
+			return true
+		}
+	}
+	return false
 }
 
 // stamped gives the build's registry and image path to the components that name no

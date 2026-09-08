@@ -28,10 +28,7 @@ type variant struct {
 	imagePath string
 }
 
-var (
-	calicoVariant     = &variant{registry: CalicoRegistry, imagePath: CalicoImagePath}
-	enterpriseVariant = &variant{registry: TigeraRegistry, imagePath: TigeraImagePath}
-)
+var calicoVariant = &variant{registry: CalicoRegistry, imagePath: CalicoImagePath}
 
 type Component struct {
 	// Image is the image name for this component (e.g., node, cni)
