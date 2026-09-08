@@ -68,20 +68,23 @@ func WithVersion(version string) Option {
 // WithRegistry names the one registry the image is published to, which is what a
 // hashrelease sending it somewhere other than the release registries needs.
 func WithRegistry(registry string) Option {
-	return func(o *OperatorManager) error {
-		o.registry = registry
-		o.registries = []string{registry}
-		return nil
-	}
+	return WithRegistries([]string{registry})
 }
 
 func WithRegistries(registries []string) Option {
 	return func(o *OperatorManager) error {
-		if len(registries) == 0 {
+		// An unset flag reaches here as an empty string, which would otherwise leave the
+		// image published nowhere.
+		var named []string
+		for _, r := range registries {
+			if r != "" {
+				named = append(named, r)
+			}
+		}
+		if len(named) == 0 {
 			return nil
 		}
-		o.registry = registries[0]
-		o.registries = registries
+		o.registries = named
 		return nil
 	}
 }

@@ -28,9 +28,14 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-const (
-	DefaultImage    = registry.OperatorImage
-	DefaultRegistry = registry.DefaultCalicoRegistry
+const DefaultImage = registry.OperatorImage
+
+var (
+	// DefaultRegistries are the registries the operator image publishes to.
+	DefaultRegistries = registry.DefaultOperatorRegistries
+
+	// DefaultRegistry names the image, for the callers that want the one registry.
+	DefaultRegistry = DefaultRegistries[0]
 )
 
 var (
@@ -62,10 +67,8 @@ type OperatorManager struct {
 	// image is the name of the operator image (e.g. calico/operator)
 	image string
 
-	// registry is the registry the operator image is named in (e.g. quay.io/calico)
-	registry string
-
-	// registries are every registry the image is published to.
+	// registries are the registries the image is published to. The first names the
+	// image in the pinned version file and the release output.
 	registries []string
 
 	// productRegistry is the registry to use for product images (e.g. quay.io/calico)
@@ -85,8 +88,7 @@ type OperatorManager struct {
 func NewManager(opts ...Option) *OperatorManager {
 	o := &OperatorManager{
 		runner:     &command.RealCommandRunner{},
-		registry:   DefaultRegistry,
-		registries: registry.DefaultOperatorRegistries,
+		registries: DefaultRegistries,
 		image:      DefaultImage,
 		validate:   true,
 	}
@@ -134,25 +136,32 @@ func (o *OperatorManager) Build() error {
 	return nil
 }
 
+// Registry is the registry naming the image, which is the first it publishes to.
+func (o *OperatorManager) Registry() string {
+	if len(o.registries) == 0 {
+		return ""
+	}
+	return o.registries[0]
+}
+
 func (o *OperatorManager) env() ([]string, logrus.Fields) {
 	logFields := logrus.Fields{
-		"registry": o.registry,
-		"image":    o.image,
-		"version":  o.version,
+		"registries": o.registries,
+		"image":      o.image,
+		"version":    o.version,
 	}
 	env := append(os.Environ(),
-		fmt.Sprintf("REGISTRY=%s", o.registry),
+		fmt.Sprintf("REGISTRY=%s", o.Registry()),
 		fmt.Sprintf("IMAGE_NAME=%s", o.image),
 		fmt.Sprintf("VERSION=%s", o.version),
-		"RELEASE=true",
+		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(o.registries, " ")),
 	)
-	if len(o.registries) > 0 {
-		env = append(env, fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(o.registries, " ")))
-		logFields["registries"] = o.registries
-	}
 	if o.isHashRelease {
 		logFields["hashrelease"] = "true"
-		env = append(env, "HASHRELEASE=true")
+	} else {
+		// A hashrelease is not a release, and release-build sets this on the sub-makes
+		// that need it anyway.
+		env = append(env, "RELEASE=true")
 	}
 	if len(o.architectures) > 0 {
 		archs := strings.Join(o.architectures, ",")
@@ -219,7 +228,7 @@ func (o *OperatorManager) PrePublishValidation() error {
 	if o.image == "" {
 		errStack = errors.Join(errStack, fmt.Errorf("no operator image specified"))
 	}
-	if o.registry == "" {
+	if len(o.registries) == 0 {
 		errStack = errors.Join(errStack, fmt.Errorf("no operator registry specified"))
 	}
 	if o.version == "" {

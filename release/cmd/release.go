@@ -140,8 +140,10 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					operatorOpts = append(operatorOpts, operator.WithProductRegistry(reg[0]))
 				}
-				if err := operator.NewManager(operatorOpts...).Build(); err != nil {
-					return err
+				if c.Bool(operatorFlagName) {
+					if err := operator.NewManager(operatorOpts...).Build(); err != nil {
+						return err
+					}
 				}
 
 				r := calico.NewManager(opts...)
@@ -297,6 +299,7 @@ func releaseBuildFlags() []cli.Flag {
 		registryFlag,
 		archFlag,
 		imageReleaseDirsFlag)
+	f = append(f, operatorBuildCommandFlags...)
 	f = append(f,
 		branchCheckFlag,
 		validationFlag,
