@@ -69,12 +69,10 @@ else
 endif
 
 # The version, registry and image path the built operator resolves Calico images at. A
-# release publishes every image at one version, which is the VERSION it passes here.
-# Anything else resolves the tag cd publishes for this branch, unless the caller names
-# one; the kind rig passes what it just pushed.
-ifeq ($(RELEASE),true)
-CALICO_VERSION    ?= $(VERSION)
-else
+# release names it, since an operator-only release carries its own tag while still
+# deploying the components of the release it patches. Anything else resolves the tag cd
+# publishes for this branch; the kind rig passes what it just pushed.
+ifneq ($(RELEASE),true)
 CALICO_VERSION    ?= $(BRANCH_IMAGE_TAG)
 endif
 CALICO_REGISTRY   ?=
@@ -308,11 +306,16 @@ release-build: var-require-all-VERSION check-release-image-tags
 	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 
-# The tag is compiled in, so a release that fell through to the branch default would ship
-# an operator naming the images this branch publishes for development.
+# The tag is compiled in, so a release that guessed it would ship an operator naming
+# images that were never published.
 .PHONY: check-release-image-tags
 check-release-image-tags:
-	@if [ "$(ALLOW_BRANCH_IMAGE_TAGS)" = "true" ]; then exit 0; fi; \
+	@if [ -z "$(CALICO_VERSION)" ]; then \
+		echo "A release must set CALICO_VERSION to the version its component images are published at."; \
+		echo "For an operator-only release that is the release being patched, not VERSION."; \
+		exit 1; \
+	fi; \
+	if [ "$(ALLOW_BRANCH_IMAGE_TAGS)" = "true" ]; then exit 0; fi; \
 	if [ "$(CALICO_VERSION)" = "$(BRANCH_IMAGE_TAG)" ]; then \
 		echo "A release must name the tag it publishes at, not the branch default $(BRANCH_IMAGE_TAG)."; \
 		echo "Set CALICO_VERSION, build through the release tooling, or pass ALLOW_BRANCH_IMAGE_TAGS=true."; \
