@@ -96,14 +96,34 @@ func initBPFNetwork(serviceAddr, endpointAddrs string) (*bpfmap.Maps, error) {
 		return nil, err
 	}
 
-	id := uint32(0)
+	// The NAT maps are pinned and outlive calico-node, so Felix may already have
+	// programmed these services with IDs of its own choosing. Each family gets
+	// the ID that its service already holds there, or one that no other service
+	// uses. Claiming an ID blindly makes two services share a block of the
+	// backend map and overwrite each other - see projectcalico/calico#13279.
+	idIPv4, idIPv6 := uint32(0), uint32(0)
+	if bpfMaps.V4 != nil {
+		idIPv4, err = natServiceID(bpfMaps.V4.FrontendMap, servicesIPPort, true, bpfnat.NewNATKeyIntf)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to pick an IPv4 NAT service ID.")
+			return nil, err
+		}
+	}
+	if bpfMaps.V6 != nil {
+		idIPv6, err = natServiceID(bpfMaps.V6.FrontendMap, servicesIPPort, false, bpfnat.NewNATKeyV6Intf)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to pick an IPv6 NAT service ID.")
+			return nil, err
+		}
+	}
+
 	countIPv4, countIPv6 := 0, 0
 	for _, endpoint := range endpointsIPPort {
 		if endpoint.IsIPv4 {
-			err = updateBackendMap(bpfMaps.V4.BackendMap, bpfnat.NewNATBackendKey, bpfnat.NewNATBackendValueIntf, endpoint, id, uint32(countIPv4))
+			err = updateBackendMap(bpfMaps.V4.BackendMap, bpfnat.NewNATBackendKey, bpfnat.NewNATBackendValueIntf, endpoint, idIPv4, uint32(countIPv4))
 			countIPv4++
 		} else {
-			err = updateBackendMap(bpfMaps.V6.BackendMap, bpfnat.NewNATBackendKeyV6, bpfnat.NewNATBackendValueV6Intf, endpoint, id, uint32(countIPv6))
+			err = updateBackendMap(bpfMaps.V6.BackendMap, bpfnat.NewNATBackendKeyV6, bpfnat.NewNATBackendValueV6Intf, endpoint, idIPv6, uint32(countIPv6))
 			countIPv6++
 		}
 		if err != nil {
@@ -114,9 +134,9 @@ func initBPFNetwork(serviceAddr, endpointAddrs string) (*bpfmap.Maps, error) {
 
 	for _, service := range servicesIPPort {
 		if service.IsIPv4 {
-			err = updateFrontendMap(bpfMaps.V4.FrontendMap, bpfnat.NewNATKeyIntf, bpfnat.NewNATValue, service, id, uint32(countIPv4))
+			err = updateFrontendMap(bpfMaps.V4.FrontendMap, bpfnat.NewNATKeyIntf, bpfnat.NewNATValue, service, idIPv4, uint32(countIPv4))
 		} else {
-			err = updateFrontendMap(bpfMaps.V6.FrontendMap, bpfnat.NewNATKeyV6Intf, bpfnat.NewNATValueV6, service, id, uint32(countIPv6))
+			err = updateFrontendMap(bpfMaps.V6.FrontendMap, bpfnat.NewNATKeyV6Intf, bpfnat.NewNATValueV6, service, idIPv6, uint32(countIPv6))
 		}
 		if err != nil {
 			logrus.WithError(err).Error("Failed to add IP set entry in the frontend map.")
@@ -148,6 +168,55 @@ func updateFrontendMap(frontendMap maps.Map, newNATKeyFn func(net.IP, uint16, ui
 		newNATKeyFn(service.IP, service.Port, uint8(layers.IPProtocolTCP)).AsBytes(),
 		newNATValueFn(id, count, 0, 0).AsBytes(),
 	)
+}
+
+// natServiceID picks the NAT service ID to program the given services of one IP
+// family with. An ID already recorded in the frontend map for one of them is
+// reused, so that repeated runs keep writing into the same block of the backend
+// map. Otherwise it is the lowest ID that no frontend entry uses, because a
+// service ID is what indexes that block: were it shared with another service,
+// the two would overwrite each other's backends on every Felix sync.
+func natServiceID(frontendMap maps.Map, services []IPPort, ipv4 bool,
+	newNATKeyFn func(net.IP, uint16, uint8) bpfnat.FrontendKeyInterface,
+) (uint32, error) {
+	keys := make(map[string]struct{}, len(services))
+	for _, service := range services {
+		if service.IsIPv4 != ipv4 {
+			continue
+		}
+		keys[string(newNATKeyFn(service.IP, service.Port, uint8(layers.IPProtocolTCP)).AsBytes())] = struct{}{}
+	}
+
+	var ours uint32
+	var foundOurs bool
+	inUse := make(map[uint32]struct{})
+
+	err := frontendMap.Iter(func(k, v []byte) maps.IteratorAction {
+		id := bpfnat.FrontendValueFromBytes(v).ID()
+		inUse[id] = struct{}{}
+
+		if _, ok := keys[string(k)]; ok && !foundOurs {
+			ours, foundOurs = id, true
+		}
+
+		return maps.IterNone
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to read the NAT frontend map: %w", err)
+	}
+
+	if foundOurs {
+		logrus.Infof("Reusing NAT service ID %d already programmed for the Kubernetes service.", ours)
+		return ours, nil
+	}
+
+	id := uint32(0)
+	for {
+		if _, taken := inUse[id]; !taken {
+			return id, nil
+		}
+		id++
+	}
 }
 
 // parseIPPort parses a string in the format "IP:Port" (IPv4 or IPv6).
