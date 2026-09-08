@@ -49,22 +49,72 @@ var ImageKeys = []string{
 	ImageKeyIstioPilot, ImageKeyIstioInstallCNI, ImageKeyIstioZTunnel, ImageKeyIstioProxyv2,
 }
 
-// variantImages is the image set this process runs, registered by the variant as it
-// builds its extensions. Nil means the images this build ships.
-var variantImages map[string]Component
-
-// RegisterVariantImages declares the images the running variant supplies. The process
-// restarts when the variant changes, so only one variant ever registers.
-func RegisterVariantImages(imgs []Component) {
-	variantImages = byImage(imgs)
+// VariantBuild is what a variant supplies about the images it ships.
+type VariantBuild struct {
+	Images    []Component
+	Release   string
+	Registry  string
+	ImagePath string
 }
 
-// UseImages registers imgs and returns a function restoring what was there, for tests
+var (
+	// variantImages is the image set this process runs, registered by the variant as
+	// it builds its extensions. Nil means the images this build ships.
+	variantImages map[string]Component
+
+	// variantRelease is the release those images are tagged at.
+	variantRelease string
+)
+
+// RegisterVariant declares the images the running variant supplies and where they
+// resolve. The process restarts when the variant changes, so only one ever registers.
+func RegisterVariant(b VariantBuild) {
+	variantImages = byImage(b.stamped())
+	variantRelease = b.Release
+}
+
+// RegisterVariantImages declares images that already carry their own defaults.
+func RegisterVariantImages(imgs []Component) {
+	RegisterVariant(VariantBuild{Images: imgs})
+}
+
+// UseVariant registers b and returns a function restoring what was there, for tests
 // that render one variant while the suite covers both.
+func UseVariant(b VariantBuild) func() {
+	prevImages, prevRelease := variantImages, variantRelease
+	RegisterVariant(b)
+	return func() {
+		variantImages, variantRelease = prevImages, prevRelease
+	}
+}
+
+// UseImages is UseVariant for images that carry their own defaults.
 func UseImages(imgs []Component) func() {
-	prev := variantImages
-	variantImages = byImage(imgs)
-	return func() { variantImages = prev }
+	return UseVariant(VariantBuild{Images: imgs})
+}
+
+// VariantRelease is the release the running variant's images are tagged at.
+func VariantRelease() string {
+	if variantRelease != "" {
+		return variantRelease
+	}
+	return CalicoRelease
+}
+
+// stamped returns the images carrying the build's defaults, which a variant declaring
+// its components outside this package cannot set on them.
+func (b VariantBuild) stamped() []Component {
+	if b.Registry == "" && b.ImagePath == "" {
+		return b.Images
+	}
+
+	d := &variantDefaults{registry: b.Registry, imagePath: b.ImagePath}
+	out := make([]Component, len(b.Images))
+	for i, c := range b.Images {
+		c.defaults = d
+		out[i] = c
+	}
+	return out
 }
 
 func byImage(imgs []Component) map[string]Component {

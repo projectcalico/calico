@@ -17,6 +17,8 @@ package components
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	operator "github.com/projectcalico/calico/operator/api/v1"
 )
 
 var _ = Describe("ImageFor", func() {
@@ -53,5 +55,79 @@ var _ = Describe("ImageFor", func() {
 
 		_, err := ImageFor("whisker")
 		Expect(err).To(HaveOccurred())
+	})
+})
+
+var _ = Describe("RegisterVariant", func() {
+	// A variant whose components are declared outside this package cannot name a
+	// variant on them, so it supplies the defaults they resolve against instead.
+	thing := Component{Image: "thing", Version: "v1.0.0"}
+
+	build := VariantBuild{
+		Images:    []Component{thing},
+		Release:   "v9.9.9",
+		Registry:  "example.com/",
+		ImagePath: "myvariant/",
+	}
+
+	It("resolves registered images against the registered registry and image path", func() {
+		DeferCleanup(UseVariant(build))
+
+		img, err := ImageFor("thing")
+		Expect(err).NotTo(HaveOccurred())
+
+		ref, err := GetReference(img, "", "", "", nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ref).To(Equal("example.com/myvariant/thing:v1.0.0"))
+	})
+
+	// The image path is also the key an ImageSet lists images under, so a wrong one
+	// stops digests resolving rather than just changing the registry.
+	It("looks an ImageSet digest up under the registered image path", func() {
+		DeferCleanup(UseVariant(build))
+
+		img, err := ImageFor("thing")
+		Expect(err).NotTo(HaveOccurred())
+
+		is := &operator.ImageSet{Spec: operator.ImageSetSpec{Images: []operator.Image{
+			{Image: "myvariant/thing", Digest: "sha256:cafe"},
+		}}}
+		ref, err := GetReference(img, "", "", "", is)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ref).To(Equal("example.com/myvariant/thing@sha256:cafe"))
+	})
+
+	It("lets the installation override the registered defaults", func() {
+		DeferCleanup(UseVariant(build))
+
+		img, err := ImageFor("thing")
+		Expect(err).NotTo(HaveOccurred())
+
+		ref, err := GetReference(img, "registry.io/", "custom/", "", nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ref).To(Equal("registry.io/custom/thing:v1.0.0"))
+	})
+
+	It("reports the registered release, and the Calico one when nothing registered", func() {
+		Expect(VariantRelease()).To(Equal(CalicoRelease))
+
+		restore := UseVariant(build)
+		Expect(VariantRelease()).To(Equal("v9.9.9"))
+
+		restore()
+		Expect(VariantRelease()).To(Equal(CalicoRelease))
+	})
+
+	// Components declared in this package name a variant, so registering them must
+	// leave their own defaults alone.
+	It("leaves images that carry their own defaults resolving against those", func() {
+		DeferCleanup(UseImages(CalicoImages))
+
+		img, err := ImageFor(ImageKeyNode)
+		Expect(err).NotTo(HaveOccurred())
+
+		ref, err := GetReference(img, "", "", "", nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ref).To(HavePrefix(CalicoRegistry + CalicoImagePath))
 	})
 })

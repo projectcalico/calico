@@ -50,6 +50,16 @@ type Component struct {
 	// variant is specify which product variant this component belongs to.
 	// It is used when determining default registry and image path.
 	variant variant
+
+	// defaults is set by RegisterVariant, for components declared outside this
+	// package which cannot name a variant.
+	defaults *variantDefaults
+}
+
+// variantDefaults is the registry and image path a variant's components resolve against.
+type variantDefaults struct {
+	registry  string
+	imagePath string
 }
 
 const UseDefault = "UseDefault"
@@ -58,6 +68,10 @@ const UseDefault = "UseDefault"
 // This is used when no registry is explicitly defined by the component
 // and user does not explicitly specify a registry or imagePath.
 func getDefaults(c Component) (registry string, imagePath string) {
+	if c.defaults != nil {
+		return c.defaults.registry, c.defaults.imagePath
+	}
+
 	switch c.variant {
 	// If the component is a Calico component (variant: calico), use the Calico defaults.
 	case calicoVariant:
