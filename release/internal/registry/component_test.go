@@ -45,8 +45,8 @@ func TestComponentString(t *testing.T) {
 			name: "with registry - Tigera operator",
 			component: Component{
 				Version:  "1.2.3",
-				Image:    "calico/operator",
-				Registry: "quay.io",
+				Image:    "operator",
+				Registry: "quay.io/calico",
 			},
 			expected: "quay.io/calico/operator:1.2.3",
 		},

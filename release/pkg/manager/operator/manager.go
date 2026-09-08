@@ -60,7 +60,7 @@ type OperatorManager struct {
 	// published at.
 	calicoVersion string
 
-	// image is the name of the operator image (e.g. calico/operator)
+	// image is the name of the operator image (e.g. operator)
 	image string
 
 	// registries are the registries the image is published to. The first names the
