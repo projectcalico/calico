@@ -723,7 +723,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 
 	struct calico_ct_leg *src_to_dst, *dst_to_src;
 
-	struct calico_ct_value *tracking_v;
+	/* The RST timestamp is connection-level state and lives on the tracking
+	 * entry: the reverse entry for a NAT_FWD hit, the looked-up entry otherwise.
+	 */
+	struct calico_ct_value *tracking_v = v;
+
 	switch (v->type) {
 	case CALI_CT_TYPE_NAT_FWD:
 		// This is a forward NAT entry; since we do the bookkeeping on the
@@ -987,15 +991,15 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		if (tcp_header->rst) {
 			CALI_CT_DEBUG("RST seen, marking CT entry.");
 			src_to_dst->rst_seen = 1;
-			v->rst_seen = now;
-		} else if (v->rst_seen) {
-			if (now - v->rst_seen > 2 * 60 * 1000000000ull || now - v->rst_seen > (1ull << 63)) {
+			tracking_v->rst_seen = now;
+		} else if (tracking_v->rst_seen) {
+			if (now - tracking_v->rst_seen > 2 * 60 * 1000000000ull || now - tracking_v->rst_seen > (1ull << 63)) {
 				/* It's been a looong time (2m) since we saw the RST, we still see
 				 * traffic, we must have seen traffic between now and rst_seen,
 				 * otherwise the entry would have been GCed, the connection is
 				 * likely established and the RST was spurious.
 				 */
-				v->rst_seen = 0;
+				tracking_v->rst_seen = 0;
 			}
 		}
 		ct_tcp_entry_update(ctx, tcp_header, src_to_dst, dst_to_src);
