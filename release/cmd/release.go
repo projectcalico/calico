@@ -195,6 +195,21 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 				if v := c.String(s3BucketFlag.Name); v != "" {
 					opts = append(opts, calico.WithS3Bucket(v))
 				}
+				// The operator image is published first, since the release validates that
+				// every image it names exists.
+				if c.Bool(operatorFlagName) {
+					o := operator.NewManager(
+						operator.WithCalicoDirectory(cfg.RepoRootDir),
+						operator.WithVersion(operatorVer.FormattedString()),
+					)
+					if err := o.PrePublishValidation(); err != nil {
+						return err
+					}
+					if err := o.Publish(); err != nil {
+						return err
+					}
+				}
+
 				r := calico.NewManager(opts...)
 				return r.PublishRelease()
 			},
@@ -310,6 +325,7 @@ func releaseBuildFlags() []cli.Flag {
 // releasePublishFlags returns the flags for release publish command.
 func releasePublishFlags() []cli.Flag {
 	f := append(slices.Clone(productFlags), publishStepFlags(false)...)
+	f = append(f, operatorPublishCommandFlags...)
 	f = append(f,
 		registryFlag,
 		imageReleaseDirsFlag,
