@@ -13,7 +13,7 @@ if [[ -z "${VERSION}" ]]; then
 	exit 1
 fi
 
-# OPERATOR_IMAGE_INSPECT is the base64-encoded output from "docker image inspect quay.io/tigera/operator:v${VERSION}"
+# OPERATOR_IMAGE_INSPECT is the base64-encoded output from "docker image inspect quay.io/calico/operator:v${VERSION}"
 if [[ -z "${OPERATOR_IMAGE_INSPECT}" ]]; then
 	echo OPERATOR_IMAGE_INSPECT is undefined
 	exit 1
@@ -26,7 +26,7 @@ if [[ -z "${PREV_VERSION}" ]]; then
 fi
 
 OPERATOR_IMAGE_INSPECT=$(echo $OPERATOR_IMAGE_INSPECT | base64 -d)
-OPERATOR_IMAGE_DIGEST=$(echo $OPERATOR_IMAGE_INSPECT | jq -r '.[0].RepoDigests[] | select(. | contains("quay.io/tigera/operator"))')
+OPERATOR_IMAGE_DIGEST=$(echo $OPERATOR_IMAGE_INSPECT | jq -r '.[0].RepoDigests[] | select(. | contains("quay.io/calico/operator"))')
 OPERATOR_MANIFEST_INSPECT=$(echo $OPERATOR_MANIFEST_INSPECT | base64 -d )
 
 CSV=bundle/${VERSION}/manifests/tigera-operator.clusterserviceversion.yaml
