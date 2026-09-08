@@ -1588,19 +1588,21 @@ func (r *CalicoManager) publishBranchTag() error {
 
 	// The operator publishes to its own registries, so it takes a pass of its own.
 	if err := images.Publish(
-		r.repoRoot, tag,
+		r.repoRoot, branch,
 		[]images.Variant{{
 			Name:        images.StandardVariant,
-			Target:      "retag-build-images-with-registries push-images-to-registries push-manifests",
+			Target:      branchTagTarget,
 			ReleaseDirs: []string{utils.OperatorDir},
 		}},
-		true, r.digestResolver(),
+		!r.dryRun, r.digestResolver(),
 		images.WithRunner(r.runner),
 		images.WithRegistries(operator.DefaultRegistries...),
 		images.WithArches(r.architectures...),
 		images.WithLogsDir(r.logsDir),
+		images.WithStepName("images-publish-branch-operator"),
+		images.WithRetag(operator.DefaultRegistries[0], r.calicoVersion, true),
 	); err != nil {
-		return fmt.Errorf("publish branch %s tag operator image: %w", tag, err)
+		return fmt.Errorf("publish branch %s tag operator image: %w", branch, err)
 	}
 	return nil
 }
