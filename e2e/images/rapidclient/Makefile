@@ -50,10 +50,19 @@ image: bin/rapidclient-$(ARCH)
 	docker buildx build --load --platform=linux/$(ARCH) --pull \
 		-f Dockerfile -t $(IMAGE):$(TAG_NAME) .
 
-# publish builds all architectures into a single manifest list and pushes it.
-publish: var-require-all-TAG_NAME $(addprefix bin/rapidclient-,$(ARCHES))
-	docker buildx build --platform=$(shell echo $(ARCHES) | sed 's/ /,/g; s,[^,]*,linux/&,g') \
-		--push --pull -f Dockerfile -t $(IMAGE):$(TAG_NAME) .
+# Build and push one arch, tagged $(TAG_NAME)-<arch>. Single-platform builds so the
+# default docker driver can run them; multi-platform needs the docker-container
+# driver, which the CI agent lacks.
+push-image-%: bin/rapidclient-%
+	docker buildx build --load --platform=linux/$* --pull \
+		-f Dockerfile -t $(IMAGE):$(TAG_NAME)-$* .
+	docker push $(IMAGE):$(TAG_NAME)-$*
+
+# publish assembles the per-arch tags into one manifest list, the same shape as
+# lib.Makefile's push-manifests.
+publish: var-require-all-TAG_NAME $(addprefix push-image-,$(ARCHES))
+	docker buildx imagetools create -t $(IMAGE):$(TAG_NAME) \
+		$(addprefix $(IMAGE):$(TAG_NAME)-,$(ARCHES))
 	# Guard against silently regressing to a single-arch image (the original bug):
 	# the published tag must be a manifest list covering every arch in ARCHES.
 	@for a in $(ARCHES); do \
