@@ -90,7 +90,10 @@ func saveUnit(s settings, u unit, reg, tarDir string) error {
 }
 
 func publishEnv(s settings) []string {
-	env := append(s.env(), utils.EnvTrue(utils.EnvRelease))
+	env := append(s.env(),
+		utils.EnvTrue(utils.EnvRelease),
+		utils.Env(utils.EnvReleaseTag, s.Version),
+	)
 	if s.confirm {
 		env = append(env, utils.EnvTrue(utils.EnvConfirm))
 	} else {
@@ -104,7 +107,6 @@ func publishEnv(s settings) []string {
 			utils.Env(utils.EnvDevTag, s.retag.tag),
 			utils.Env(utils.EnvDevRegistries, s.retag.registry),
 			utils.Env(utils.EnvReleaseRegistries, strings.Join(s.Registries, " ")),
-			utils.Env(utils.EnvReleaseTag, s.Version),
 		)
 		if s.retag.skipDev {
 			env = append(env, utils.EnvTrue(utils.EnvSkipDevImageRetag))
@@ -140,6 +142,7 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 	}
 	if len(units) == 0 {
 		s.Logger().Info("Every image is already published")
+		sendImagesToISS(s)
 		return nil
 	}
 	s.Logger().WithField("images", len(units)).Info("Publishing container images")
@@ -155,15 +158,20 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 	}
 	s.Logger().Info("Finished publishing container images")
 
+	sendImagesToISS(s)
+	return nil
+}
+
+// A scan failure must not fail the release: the images are already published.
+func sendImagesToISS(s settings) {
 	if s.scan == nil {
-		return nil
+		return
 	}
 	s.Logger().Info("Sending images to ISS")
 	scanner := imagescanner.New(s.scan.Config)
 	if err := scanner.Scan(s.scan.ProductCode, s.scan.Images, s.scan.Stream, s.scan.Release, s.scan.OutputDir); err != nil {
 		s.Logger().WithError(err).Error("Failed to scan images")
 	}
-	return nil
 }
 
 // newSettings is generic so each step accepts only its own option type.
