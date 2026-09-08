@@ -62,14 +62,28 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			}
 		}
 
-		It("should receive DataplaneInSync message from the dataplane", func() {
+		// startFelixAndWaitForInSync triggers Felix's delayed start and waits for
+		// the status file reporter to report itself in-sync.
+		//
+		// Every test in here starts Felix from inside its own body, so the wait
+		// has to cover the whole of start-up: connecting to the datastore, the
+		// first dataplane apply and the initial status file reconcile.
+		// WaitForReady already allows for that, including the longer time BPF
+		// mode needs to load its programs at start-up. Without it the
+		// assertions have to fund start-up out of their own deadlines, which
+		// times out on a loaded CI runner (CORE-13626).
+		startFelixAndWaitForInSync := func() {
 			tc.Felixes[0].TriggerDelayedStart()
+			tc.Felixes[0].WaitForReady()
 			Eventually(dataplaneInSyncReceivedC, "10s").Should(BeClosed(), "receipt of DataplaneInSync message not seen in logs")
+		}
+
+		It("should receive DataplaneInSync message from the dataplane", func() {
+			startFelixAndWaitForInSync()
 		})
 
 		It("should create endpoint-status files in a directory named endpoint-status with the specified directory prefix", func() {
-			tc.Felixes[0].TriggerDelayedStart()
-			Eventually(dataplaneInSyncReceivedC, "10s").Should(BeClosed(), "receipt of DataplaneInSync message not seen in logs")
+			startFelixAndWaitForInSync()
 			var filenames [2]string
 			var statCmds [2]func() error
 			for i := range dummyWorkloads {
@@ -103,8 +117,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			tc.Felixes[0].Exec("touch", name)
 
 			By("Waiting for Felix's status file reporter to come in-sync")
-			tc.Felixes[0].TriggerDelayedStart()
-			Eventually(dataplaneInSyncReceivedC, "10s").Should(BeClosed(), "receipt of DataplaneInSync message not seen in logs")
+			startFelixAndWaitForInSync()
 
 			By("checking if the stale file has been cleaned up")
 			fileExists := func() bool {
@@ -112,7 +125,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 				_, err := tc.Felixes[0].ExecOutput("stat", name)
 				return err == nil
 			}
-			Eventually(fileExists).Should(BeFalse(), "Stale file was not cleaned up by Felix")
+			Eventually(fileExists, "10s").Should(BeFalse(), "Stale file was not cleaned up by Felix")
 		})
 
 		It("should re-use pre-existing files after a restart", func() {
@@ -136,8 +149,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			tc.Felixes[0].Exec("touch", filename)
 
 			By("waiting for Felix's status file reporter to become in-sync")
-			tc.Felixes[0].TriggerDelayedStart()
-			Eventually(dataplaneInSyncReceivedC, "10s").Should(BeClosed(), "receipt of DataplaneInSync message not seen in logs")
+			startFelixAndWaitForInSync()
 
 			output, err := tc.Felixes[0].ExecOutput("cat", expectedFilename)
 			Expect(err).NotTo(HaveOccurred(), "stat call failed while trying to create a file")
