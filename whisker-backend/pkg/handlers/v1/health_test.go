@@ -16,10 +16,12 @@ package v1_test
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/testutil"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 	hdlrv1 "github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
 )
@@ -31,6 +33,11 @@ func TestHealth(t *testing.T) {
 
 	rsp := hdlr.Health(sc.apiCtx, struct{}{})
 	Expect(rsp.Status()).To(Equal(http.StatusOK))
+
+	recorder := httptest.NewRecorder()
+	Expect(rsp.ResponseWriter().WriteResponse(sc.apiCtx, http.StatusOK, recorder)).ShouldNot(HaveOccurred())
+	body := testutil.MustUnmarshal[whiskerv1.HealthStatusResponse](t, recorder.Body.Bytes())
+	Expect(*body).To(Equal(whiskerv1.HealthStatusResponse{Status: "ok"}))
 }
 
 func TestHealthAPIs(t *testing.T) {
