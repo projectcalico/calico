@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	DefaultImage    = registry.TigeraOperatorImage
-	DefaultRegistry = "quay.io"
+	DefaultImage    = registry.OperatorImage
+	DefaultRegistry = registry.DefaultCalicoRegistry
 )
 
 var (
@@ -59,11 +59,14 @@ type OperatorManager struct {
 	// published at.
 	calicoVersion string
 
-	// image is the name of the operator image (e.g. tigera/operator)
+	// image is the name of the operator image (e.g. calico/operator)
 	image string
 
-	// registry is the registry to use for operator (e.g. quay.io)
+	// registry is the registry the operator image is named in (e.g. quay.io/calico)
 	registry string
+
+	// registries are every registry the image is published to.
+	registries []string
 
 	// productRegistry is the registry to use for product images (e.g. quay.io/calico)
 	productRegistry string
@@ -81,10 +84,11 @@ type OperatorManager struct {
 
 func NewManager(opts ...Option) *OperatorManager {
 	o := &OperatorManager{
-		runner:   &command.RealCommandRunner{},
-		registry: DefaultRegistry,
-		image:    DefaultImage,
-		validate: true,
+		runner:     &command.RealCommandRunner{},
+		registry:   DefaultRegistry,
+		registries: registry.DefaultOperatorRegistries,
+		image:      DefaultImage,
+		validate:   true,
 	}
 	for _, opt := range opts {
 		if err := opt(o); err != nil {
@@ -142,6 +146,10 @@ func (o *OperatorManager) env() ([]string, logrus.Fields) {
 		fmt.Sprintf("VERSION=%s", o.version),
 		"RELEASE=true",
 	)
+	if len(o.registries) > 0 {
+		env = append(env, fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(o.registries, " ")))
+		logFields["registries"] = o.registries
+	}
 	if o.isHashRelease {
 		logFields["hashrelease"] = "true"
 		env = append(env, "HASHRELEASE=true")

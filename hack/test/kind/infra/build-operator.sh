@@ -30,6 +30,6 @@ if [ "${DEV_IMAGE_REGISTRY}" = "docker.io" ]; then
 else
   OPERATOR_REF="${DEV_IMAGE_REGISTRY}/${DEV_IMAGE_PATH}/operator:${DEV_IMAGE_TAG}"
 fi
-docker tag tigera/operator:latest "${OPERATOR_REF}"
+docker tag operator:latest "${OPERATOR_REF}"
 
 popd

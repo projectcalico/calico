@@ -35,11 +35,10 @@ $(HACK_BIN):
 
 PACKAGE_NAME = github.com/projectcalico/calico/operator
 
-# The image, registry and arches the ci/cd common targets in lib.Makefile read.
-# These sit above metadata.mk, whose Calico defaults would otherwise win, and use
-# ?= for the registry so a hashrelease can send the image somewhere else.
-BUILD_IMAGES    = tigera/operator
-DEV_REGISTRIES ?= quay.io
+# The image and arches the ci/cd common targets in lib.Makefile read. The operator
+# publishes alongside the other Calico component images, so the registries come from
+# metadata.mk rather than an override here.
+BUILD_IMAGES    = operator
 ARCHES          = amd64 arm64 ppc64le s390x
 BINARY_NAME    ?= operator
 
@@ -70,11 +69,11 @@ else
 endif
 
 # The version, registry and image path the built operator resolves Calico images at. A
-# release is built at the Calico release tag, so git describe names the version every
-# image was published at. Anything else resolves the tag cd publishes for this branch,
-# unless the caller names one; the kind rig passes what it just pushed.
+# release publishes every image at one version, which is the VERSION it passes here.
+# Anything else resolves the tag cd publishes for this branch, unless the caller names
+# one; the kind rig passes what it just pushed.
 ifeq ($(RELEASE),true)
-CALICO_VERSION    ?= $(GIT_VERSION)
+CALICO_VERSION    ?= $(VERSION)
 else
 CALICO_VERSION    ?= $(BRANCH_IMAGE_TAG)
 endif
@@ -320,22 +319,16 @@ check-release-image-tags:
 		exit 1; \
 	fi
 
-release-check-image-exists: operator-release-prereqs
-	@echo "Checking if $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):$(VERSION) exists already"; \
-	if docker manifest inspect $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):$(VERSION) >/dev/null; \
-		then echo "Image $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):$(VERSION) already exists"; \
-		exit 1; \
-	else \
-		echo "Image tag check passed; image does not already exist"; \
-	fi
-
-release-publish-images: operator-release-prereqs release-check-image-exists var-require-all-VERSION
-	# Push images.
-	$(MAKE) push-all push-manifests push-non-manifests IMAGETAG=$(VERSION)
-
 # The operator ships as part of a Calico release, so publishing it is the image push.
+# A release run that resumes after a failure re-enters this, so an image already at
+# this version is skipped rather than treated as an error.
 .PHONY: release-publish
-release-publish: release-publish-images
+release-publish: operator-release-prereqs var-require-all-VERSION bin/crane
+	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
+		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \
+	else \
+		$(MAKE) push-all push-manifests push-non-manifests IMAGETAG=$(VERSION); \
+	fi
 
 # operator-release-prereqs checks the environment on top of lib.Makefile's own
 # release-prereqs, which the release targets below also depend on.
@@ -378,11 +371,11 @@ prepull-image:
 #     {
 #         "Id": "sha256:34a1114040c03830da0a8d57f8d999deba26d8e31bda353aed201a375f68870b",
 #         "RepoTags": [
-#             "quay.io/tigera/operator:v1.3.1",
+#             "quay.io/calico/operator:v3.32.0",
 #             "..."
 #         ],
 #         "RepoDigests": [
-#             "quay.io/tigera/operator@sha256:5e1d551b5a711592472f4a3cc4645698d5f826da4253f0d47cfa5d5b641a2e1a",
+#             "quay.io/calico/operator@sha256:5e1d551b5a711592472f4a3cc4645698d5f826da4253f0d47cfa5d5b641a2e1a",
 #             "..."
 #         ],
 #         ...
@@ -580,7 +573,7 @@ endef
 export imageset_header
 
 ifeq ($(OLD_STYLE_PRINT_IMAGE),true)
-calico_img_filter=list | grep -e /calico/ -e tigera/operator
+calico_img_filter=list | grep -e /calico/
 else
 calico_img_filter=listcalico
 endif

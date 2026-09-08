@@ -56,7 +56,7 @@ func TestImagesPublished(t *testing.T) {
 		}
 	})
 
-	t.Run("Tigera Operator", func(t *testing.T) {
+	t.Run("Operator", func(t *testing.T) {
 		t.Parallel()
 
 		checkVersion(t, operatorVersion)
