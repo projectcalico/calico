@@ -476,6 +476,8 @@ var (
 	}
 )
 
+// Parsed values land on these objects, so a reused flag carries state.
+
 // Hashrelease specific flags.
 var (
 	hashreleaseFlag = &cli.BoolFlag{
