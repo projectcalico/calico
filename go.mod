@@ -19,7 +19,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.307.0
 	github.com/aws/smithy-go v1.27.3
 	github.com/bits-and-blooms/bitset v1.24.5
-	github.com/blang/semver/v4 v4.0.0
 	github.com/buger/jsonparser v1.2.0
 	github.com/cloudflare/cfssl v1.6.5
 	github.com/container-storage-interface/spec v1.12.1-0.20260720052920-cd9e7ad1ae09
@@ -120,7 +119,6 @@ require (
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 	gopkg.in/go-playground/validator.v9 v9.31.0
 	gopkg.in/ini.v1 v1.67.3
-	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v3 v3.21.3
 	k8s.io/api v0.37.0
@@ -210,6 +208,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.37.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.44.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/boombuler/barcode v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -418,6 +417,7 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	howett.net/plist v1.0.1 // indirect
 	k8s.io/cli-runtime v0.37.0 // indirect
 	k8s.io/cloud-provider v0.37.0 // indirect
