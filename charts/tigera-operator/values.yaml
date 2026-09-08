@@ -164,7 +164,7 @@ dnsConfig: {}
 
 # Image and registry configuration for the tigera/operator pod.
 tigeraOperator:
-  image: tigera/operator
+  image: calico/operator
   version: master
   registry: quay.io
 calicoctl:

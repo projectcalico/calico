@@ -14,12 +14,6 @@
 
 package operator
 
-import (
-	"fmt"
-
-	"github.com/projectcalico/calico/release/internal/utils"
-)
-
 type Option func(*OperatorManager) error
 
 func WithOperatorDirectory(root string) Option {
@@ -50,13 +44,6 @@ func WithValidate(validate bool) Option {
 	}
 }
 
-func WithPublish(publish bool) Option {
-	return func(o *OperatorManager) error {
-		o.publish = publish
-		return nil
-	}
-}
-
 func WithArchitectures(architectures []string) Option {
 	return func(o *OperatorManager) error {
 		o.architectures = architectures
@@ -78,9 +65,23 @@ func WithVersion(version string) Option {
 	}
 }
 
+// WithRegistry names the one registry the image is published to, which is what a
+// hashrelease sending it somewhere other than the release registries needs.
 func WithRegistry(registry string) Option {
 	return func(o *OperatorManager) error {
 		o.registry = registry
+		o.registries = []string{registry}
+		return nil
+	}
+}
+
+func WithRegistries(registries []string) Option {
+	return func(o *OperatorManager) error {
+		if len(registries) == 0 {
+			return nil
+		}
+		o.registry = registries[0]
+		o.registries = registries
 		return nil
 	}
 }
@@ -95,20 +96,6 @@ func WithProductRegistry(registry string) Option {
 func WithImage(image string) Option {
 	return func(o *OperatorManager) error {
 		o.image = image
-		return nil
-	}
-}
-
-func WithPinnedComponents(filePath string) Option {
-	return func(o *OperatorManager) error {
-		exists, err := utils.FileExists(filePath)
-		if err != nil {
-			return fmt.Errorf("check pinned components file exists: %w", err)
-		}
-		if !exists {
-			return fmt.Errorf("pinned components file does not exist at path: %s", filePath)
-		}
-		o.pinnedComponentsFile = filePath
 		return nil
 	}
 }

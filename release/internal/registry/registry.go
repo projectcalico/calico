@@ -25,6 +25,10 @@ var DefaultCalicoRegistries = []string{
 	"us.gcr.io/projectcalico-org",
 }
 
+// DefaultOperatorRegistries are the registries the operator image publishes to. It
+// ships alongside the other Calico component images, but is not mirrored to GCR.
+var DefaultOperatorRegistries = []string{DefaultCalicoRegistry, "docker.io/calico"}
+
 var DefaultHelmRegistries = []string{
 	"quay.io/calico/charts",
 }
