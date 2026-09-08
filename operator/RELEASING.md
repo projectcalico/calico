@@ -108,4 +108,4 @@ Once the PR from [the previous step](#preparing-for-the-release) is merged, foll
 
 (TODO: We need to be able to detect new CRDs and do this automatically)
 
-If the release includes new Calico CRDs, add the new CRDs to `hack/gen-bundle/get-manifests.sh` and `config/manifests/bases/tigera-operator.clusterserviceversion.yaml`.
+If the release includes new Calico CRDs, add the new CRDs to `hack/gen-bundle/manifests.go` and `config/manifests/bases/tigera-operator.clusterserviceversion.yaml`.

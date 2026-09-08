@@ -1,4 +1,14 @@
+# This sample is also the Installation entry in the OpenShift bundle's
+# alm-examples annotation (see hack/gen-bundle/manifests.go), so it has to
+# stay valid as an OpenShift install-time example.
 apiVersion: operator.tigera.io/v1
 kind: Installation
 metadata:
   name: default
+spec:
+  variant: Calico
+  # Configures Calico networking using the eBPF dataplane. To use iptables
+  # instead, set linuxDataplane to "Iptables" and set deployKubeProxy to true in
+  # the cluster-network-operator.yaml file.
+  calicoNetwork:
+    linuxDataplane: BPF
