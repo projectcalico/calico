@@ -116,7 +116,7 @@ func fakeRepo(t *testing.T, version string) string {
 		}
 	}
 	write(filepath.Join("ocp", "02-tigera-operator.yaml"), "          image: quay.io/calico/calico:"+version+"\n")
-	write("tigera-operator.yaml", "          image: quay.io/tigera/operator:"+version+"\n")
+	write("tigera-operator.yaml", "          image: quay.io/calico/operator:"+version+"\n")
 	return root
 }
 

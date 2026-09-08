@@ -62,7 +62,7 @@ type PinnedVersions[T version.Versions] interface {
 
 type OperatorConfig struct {
 	Registry string
-	Image    string // i.e tigera/operator
+	Image    string // i.e calico/operator
 }
 
 // PinnedVersion represents an entry in pinned version file.
