@@ -115,15 +115,11 @@ commit have passed, and press the `Publish official release` manual promotion bu
 
 Wait for this job to complete before moving on to the next step.
 
-### 4.c Build and publish the operator
-
-Follow the release instructions in [`operator/RELEASING.md`](../operator/RELEASING.md).
-
-### 4.d Publish the release on Github
+### 4.c Publish the release on Github
 
 Go to the [Calico release page](https://github.com/projectcalico/calico/releases) and publish the draft release.
 
-### 4.e Update the docs with the new version
+### 4.d Update the docs with the new version
 
 1. Merge the PR branch created in step 4.a - `build-vX.Y.Z` and delete the branch from the repository.
 
