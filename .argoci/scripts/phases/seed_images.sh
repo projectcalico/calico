@@ -45,8 +45,9 @@ _seed_images_main() {
     return 0
   fi
 
-  # Infra nodes are schedulable on some platforms, so seed them too.
-  mapfile -t _node_ips < <(jq -r '.node_connect_commands.value[]?, .infra_node_connect_commands.value[]?' "${_tf_out}" \
+  # The kubeadm CRCs untaint the control plane, and infra nodes are schedulable,
+  # so seed both alongside the workers.
+  mapfile -t _node_ips < <(jq -r '.master_connect_command.value?, .node_connect_commands.value[]?, .infra_node_connect_commands.value[]?' "${_tf_out}" \
                              | grep -oE '@[0-9.]+' | cut -d@ -f2 | sort -u)
   if [[ ${#_node_ips[@]} -eq 0 ]]; then
     echo "[WARN] seed_images: no node IPs parsed from ${_tf_out}, skipping"
