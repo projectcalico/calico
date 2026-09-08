@@ -50,7 +50,7 @@ func imagesCommand(cfg *Config) *cli.Command {
 }
 
 var (
-	imagesBuildFlags  = []cli.Flag{registryFlag, archFlag, imageReleaseDirsFlag}
+	imagesBuildFlags  = []cli.Flag{registryFlag, archFlag, imageReleaseDirsFlag, hashreleaseFlag}
 	imagesBuildAction = func(cfg *Config) func(ctx context.Context, c *cli.Command) error {
 		return func(ctx context.Context, c *cli.Command) error {
 			configureLogging("images-build.log")
@@ -81,13 +81,13 @@ func imagesBuildCommand(cfg *Config) *cli.Command {
 
 var (
 	imagesPublishFlags = append([]cli.Flag{
-		registryFlag, archFlag, localFlag, imageReleaseDirsFlag,
+		registryFlag, archFlag, localFlag, imageReleaseDirsFlag, hashreleaseFlag,
 		fromRegistryFlag, fromTagFlag, skipDevImageRetagFlag, forceFlag,
 	}, imageScanFlags...)
 	imagesPublishAction = func(cfg *Config) func(ctx context.Context, c *cli.Command) error {
 		return func(_ context.Context, c *cli.Command) error {
 			configureLogging("images-publish.log")
-			ver, _, err := version.VersionsFromManifests(cfg.RepoRootDir)
+			ver, err := releaseVersion(cfg, c)
 			if err != nil {
 				return err
 			}
@@ -97,7 +97,7 @@ var (
 			if len(scanDirs) == 0 {
 				scanDirs = utils.ImageDiscoveryDirs()
 			}
-			scan, err := scanRequest(c, cfg, scanDirs, ver.Stream(), utils.CalicoProductCode)
+			scan, err := scanRequest(c, cfg, scanDirs, ver.PrimaryStream(), utils.CalicoProductCode)
 			if err != nil {
 				return err
 			}

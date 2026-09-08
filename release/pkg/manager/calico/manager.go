@@ -56,6 +56,8 @@ var (
 	helmIndexFileName = "index.yaml"
 
 	s3ACLPublicRead = []string{"--acl", "public-read"}
+
+	branchTagTarget = "retag-build-images-with-registries push-images-to-registries push-manifests"
 )
 
 func NewManager(opts ...Option) *CalicoManager {
@@ -75,6 +77,7 @@ func NewManager(opts ...Option) *CalicoManager {
 		helmCharts:       true,
 		helmIndex:        true,
 		e2eBinaries:      true,
+		dryRun:           false,
 		gitRef:           true,
 		githubRelease:    true,
 		imageRegistries:  defaultRegistries,
@@ -166,6 +169,7 @@ type CalicoManager struct {
 	// after a run, and the directory can be uploaded as a CI artifact.
 	logsDir string
 
+	dryRun        bool
 	gitRef        bool
 	githubRelease bool
 	awsProfile    string
@@ -230,6 +234,10 @@ type CalicoManager struct {
 	helmCharts     bool
 	helmIndex      bool
 	e2eBinaries    bool
+
+	retagImages  bool
+	fromRegistry string
+	fromTag      string
 }
 
 func releaseImages(images []string, version, registry, operatorImage, operatorVersion, operatorRegistry string) []string {
@@ -1475,13 +1483,13 @@ func (r *CalicoManager) publishContainerImages() error {
 	}
 	refs, err := outputs.NewRefsWriter(r.outputDir, "images-publish", r.calicoVersion)
 	if err != nil {
-		return err
+		return fmt.Errorf("image publish refs writer: %w", err)
 	}
 	// An earlier run of this version records what it published, so a resume
 	// skips the units already done.
 	published, err := outputs.ReadRefs(r.outputDir, "images-publish", r.calicoVersion)
 	if err != nil {
-		return err
+		return fmt.Errorf("read published image refs: %w", err)
 	}
 	opts := []images.PublishOption{
 		images.WithRunner(r.runner),
@@ -1496,18 +1504,17 @@ func (r *CalicoManager) publishContainerImages() error {
 	if len(published) > 0 {
 		opts = append(opts, images.WithResume(published, false))
 	}
+	if r.retagImages {
+		opts = append(opts, images.WithRetag(r.fromRegistry, r.fromTag, !r.gitRef))
+	}
 	if err := images.Publish(
 		r.repoRoot, r.calicoVersion,
 		images.NarrowVariants(images.PublishVariants, r.imageReleaseDirs),
-		true, r.digestResolver(), opts...,
+		!r.dryRun, r.digestResolver(), opts...,
 	); err != nil {
 		return fmt.Errorf("publish images: %w", err)
 	}
-
-	if r.isHashRelease {
-		return r.publishBranchTag()
-	}
-	return nil
+	return r.publishBranchTag()
 }
 
 // digestResolver reports a published tag's digest, defaulting to the registry.
@@ -1525,42 +1532,58 @@ func (r *CalicoManager) scanRequest() *images.ScanRequest {
 	if !r.imageScanning {
 		return nil
 	}
+	ver := version.Version(r.calicoVersion)
 	return &images.ScanRequest{
 		Config:      r.imageScanningConfig,
 		ProductCode: r.productCode,
 		Images:      slices.Collect(maps.Values(r.componentImages())),
-		Stream:      r.hashrelease.Stream,
+		Stream:      ver.PrimaryStream(),
 		Release:     !r.isHashRelease,
 		OutputDir:   r.tmpDir,
 	}
+}
+
+var releaseBranch = func(r *CalicoManager) (string, error) {
+	if r.releaseBranchPrefix == "" {
+		return "", fmt.Errorf("release branch prefix is not set")
+	}
+	ver := version.Version(r.calicoVersion)
+	return fmt.Sprintf("%s-%s", r.releaseBranchPrefix, ver.Stream()), nil
 }
 
 // publishBranchTag moves the branch-named tag (e.g. release-v3.33) onto the
 // images just published, so the branch always has a pullable tag between
 // official releases.
 func (r *CalicoManager) publishBranchTag() error {
-	if r.releaseBranchPrefix == "" {
-		return fmt.Errorf("release branch prefix is not set, cannot derive the branch tag")
+	branch, err := releaseBranch(r)
+	if err != nil {
+		return fmt.Errorf("release branch: %w", err)
 	}
-	ver := version.Version(r.calicoVersion)
-	tag := fmt.Sprintf("%s-%s", r.releaseBranchPrefix, ver.Stream())
-
+	if branch == "" {
+		return nil
+	}
+	registry, err := r.getRegistryFromManifests()
+	if err != nil {
+		return fmt.Errorf("get registry from manifests: %w", err)
+	}
 	// The arch images must carry the branch tag before the manifest can list
 	// them as its children.
 	if err := images.Publish(
-		r.repoRoot, tag,
+		r.repoRoot, branch,
 		images.NarrowVariants([]images.Variant{{
 			Name:        images.StandardVariant,
-			Target:      "retag-build-images-with-registries push-images-to-registries push-manifests",
+			Target:      branchTagTarget,
 			ReleaseDirs: images.VariantDirs(images.PublishVariants),
 		}}, r.imageReleaseDirs),
-		true, r.digestResolver(),
+		!r.dryRun, r.digestResolver(),
 		images.WithRunner(r.runner),
-		images.WithRegistries(r.imageRegistries...),
+		images.WithRegistries(registry),
 		images.WithArches(r.architectures...),
 		images.WithLogsDir(r.logsDir),
+		images.WithStepName("images-publish-branch"),
+		images.WithRetag(r.imageRegistries[0], r.calicoVersion, true),
 	); err != nil {
-		return fmt.Errorf("publish branch %s tag images: %w", tag, err)
+		return fmt.Errorf("publish branch %s tag images: %w", branch, err)
 	}
 	return nil
 }

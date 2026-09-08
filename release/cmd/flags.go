@@ -478,6 +478,12 @@ var (
 
 // Hashrelease specific flags.
 var (
+	hashreleaseFlag = &cli.BoolFlag{
+		Name:     "hashrelease",
+		Category: stepControlCategory,
+		Usage:    "Indicates that the release is a hashrelease",
+		Sources:  cli.EnvVars("HASHRELEASE"),
+	}
 
 	// Hashrelease server configuration flags.
 	hashreleaseServerFlags = []cli.Flag{hashreleaseServerBucketFlag}
