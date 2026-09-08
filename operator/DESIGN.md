@@ -40,6 +40,13 @@ API design principles and the Go/kubebuilder coding conventions for `api/v1` CRD
 - **Core code is variant-blind.** Controllers and render packages outside `pkg/enterprise` must not name a variant, in code or in comments. Behavior a single variant needs registers through `pkg/extensions`.
 - **A controller only one variant runs lives in `pkg/enterprise/controller`, and its render code in `pkg/enterprise/render`.** Both mirror the core tree they came from. The controller is contributed through the controller list on `ControllerOptions` rather than named by `AddToManager`, so it carries no variant check of its own.
 
+## Component Versions and Publishing
+
+- **The versions the operator deploys are build inputs, not source.** `CALICO_VERSION`, `CALICO_REGISTRY` and `CALICO_IMAGE_PATH` are stamped into `pkg/components` at link time. Nothing in the tree records the tag a build resolves, so a component list must never grow a version literal alongside its image names.
+- **The operator ships as a Calico component image.** It publishes as `calico/operator` to the same registries as the rest, on the Calico version stream, and a Calico release builds it rather than retagging one built for a different set of component versions.
+- **A release names the version it deploys.** The operator's own tag and the versions it resolves are separate inputs. An operator-only release carries its own tag while still deploying the components of the release it patches, so a release that leaves `CALICO_VERSION` unset is refused rather than defaulted.
+- **A build that names no version resolves the branch tag.** Development and release-branch builds fall back to the tag CI publishes for the branch, so an operator built from a checkout deploys images that exist.
+
 ## Security
 
 - **Component-to-component communication must be authenticated and encrypted.** Use mTLS or TLS + token-based authentication for all internal communication between operator-managed components.

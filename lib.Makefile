@@ -262,6 +262,11 @@ BUILD_ID:=$(shell git rev-parse HEAD || uuidgen | sed 's/-//g')
 GIT_DESCRIPTION=$(shell git describe --tags --dirty --always --abbrev=12 || echo '<unknown>')
 endif
 
+# cd-common publishes every image at BRANCH_NAME, so that is the tag a build which names
+# no version of its own can pull. CI exports it; fall back to the checked-out branch, or
+# for a PR to its base, which is what SEMAPHORE_GIT_BRANCH holds.
+BRANCH_IMAGE_TAG ?= $(if $(BRANCH_NAME),$(BRANCH_NAME),$(if $(SEMAPHORE_GIT_BRANCH),$(SEMAPHORE_GIT_BRANCH),$(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)))
+
 # Calculate a timestamp for any build artifacts.
 ifneq ($(OS),Windows_NT)
 DATE:=$(shell date -u +'%FT%T%z')
@@ -1811,7 +1816,7 @@ $(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH): \
 # rebuild even though the recorded image still exists.
 $(REPO_ROOT)/operator/.image.created-$(ARCH): \
     $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/operator/.image.created-$(ARCH) $(DEV_OPERATOR_IMAGE)) \
-    $(call local-deps-go-files,operator) $(KIND_INFRA_DIR)/calico_versions.yml
+    $(call local-deps-go-files,operator)
 	rm -f $@
 	DEV_IMAGE_TAG=$(DEV_IMAGE_TAG) \
 	  DEV_IMAGE_REGISTRY=$(DEV_IMAGE_REGISTRY) \
