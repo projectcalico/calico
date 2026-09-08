@@ -1,0 +1,16 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# eks-aws-cni.yaml - aws-eks with the Amazon VPC CNI, so neither Calico
+# networking nor Calico IPAM is in play.
+
+extends: pipeline.yaml
+
+exclude:
+  labels:
+    # RequiresBGP is deliberately left in: the route-reflector specs under that
+    # label pass on this lane, so excluding it would drop real coverage.
+    - label: RequiresBGPMesh
+      reason: "AmazonVPC handles routing; there is no BGP mesh"
+
+    - label: Feature:IPAM
+      reason: "AmazonVPC supplies the addresses, so the cluster does not use Calico IPAM"

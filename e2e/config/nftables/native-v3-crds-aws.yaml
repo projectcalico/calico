@@ -1,0 +1,11 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# native-v3-crds-aws.yaml - aws-kubeadm, v3 CRD mode (no aggregated API
+# server). BGP mesh is intact here, unlike the GCP variant.
+
+extends: pipeline.yaml
+
+exclude:
+  labels:
+    - label: RequiresCalicoAPIServer
+      reason: "USE_API_SERVER=false, so tier RBAC is only enforced on write and the read-path specs cannot pass"

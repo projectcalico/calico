@@ -1,0 +1,10 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# arm64-wg.yaml - gcp-kubeadm on arm64 with WireGuard enabled.
+
+extends: pipeline.yaml
+
+exclude:
+  labels:
+    - label: RequiresBGPMesh
+      reason: "Felix owns the cluster routes here (VXLAN CrossSubnet), so BGP full mesh is not the sole routing mechanism"
