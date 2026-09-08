@@ -45,10 +45,10 @@ func TestComponentString(t *testing.T) {
 			name: "with registry - Tigera operator",
 			component: Component{
 				Version:  "1.2.3",
-				Image:    "tigera/operator",
-				Registry: "quay.io",
+				Image:    "operator",
+				Registry: "quay.io/calico",
 			},
-			expected: "quay.io/tigera/operator:1.2.3",
+			expected: "quay.io/calico/operator:1.2.3",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

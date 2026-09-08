@@ -314,7 +314,7 @@ var (
 		Category: operatorCategory,
 		Usage:    "The registry to use for Tigera operator release",
 		Sources:  cli.EnvVars("OPERATOR_REGISTRY"),
-		Value:    operator.DefaultRegistry,
+		Value:    operator.DefaultRegistries[0],
 	}
 	operatorImageFlag = &cli.StringFlag{
 		Name:     "operator-image",
