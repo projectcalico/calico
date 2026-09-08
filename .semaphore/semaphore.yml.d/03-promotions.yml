@@ -66,6 +66,8 @@ promotions:
       when: "branch =~ 'master|release-.*'"
   - name: Push E2E images
     pipeline_file: push-images/e2e-test.yml
+    auto_promote:
+      when: "branch =~ 'master|release-.*' and change_in('/e2e/images/', {pipeline_file: 'ignore', default_branch: 'master', exclude: ['/**/README.md', '/**/DESIGN.md']})"
   - name: Push istio images
     pipeline_file: push-images/istio.yml
   # Auto-fires (unlike the component pushes above) because this is a build-time
