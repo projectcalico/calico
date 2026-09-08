@@ -55,6 +55,10 @@ const (
 
 	ChainConnStateLog = ChainNamePrefix + "log-conn"
 
+	// ChainFlowOffload holds the nftables flow-offload rule and the exclusions
+	// that keep ineligible endpoints off the fast path.
+	ChainFlowOffload = ChainNamePrefix + "flow-offload"
+
 	ChainNATPrerouting  = ChainNamePrefix + "PREROUTING"
 	ChainNATPostrouting = ChainNamePrefix + "POSTROUTING"
 	ChainNATOutput      = ChainNamePrefix + "OUTPUT"
@@ -252,6 +256,9 @@ var (
 
 type RuleRenderer interface {
 	StaticFilterTableChains(ipVersion uint8) []*generictables.Chain
+	// FlowOffloadChain renders the flow-offload chain. Only meaningful under
+	// nftables flowtable offload; the caller checks that.
+	FlowOffloadChain(ipVersion uint8) *generictables.Chain
 	StaticNATTableChains(ipVersion uint8) []*generictables.Chain
 	StaticNATPostroutingChains(ipVersion uint8) []*generictables.Chain
 	StaticRawTableChains(ipVersion uint8) []*generictables.Chain
