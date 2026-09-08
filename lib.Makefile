@@ -1677,6 +1677,10 @@ KIND_CONFIG ?= $(KIND_DIR)/kind.config
 KIND_NAME = $(basename $(notdir $(KIND_CONFIG)))
 KIND_KUBECONFIG?=$(KIND_DIR)/$(KIND_NAME)-kubeconfig.yaml
 
+# The external node runs docker-in-docker. Pinned so a new upstream tag cannot
+# change the lane under us. See external-node.sh.
+EXTERNAL_NODE_IMAGE?=docker:$(DOCKER_DIND_VERSION)-dind
+
 .PHONY: kind-registry-up kind-registry-destroy
 ## Start the local kind image registry (idempotent). Persists across cluster recreates.
 kind-registry-up:

@@ -39,7 +39,7 @@ NAME="${EXTERNAL_NODE_NAME:-kind-external-node}"
 NETWORK="${KIND_NETWORK:-kind}"
 # docker-in-docker: provides an sshd-able base plus a Docker daemon for tests
 # that launch client/server containers on the external node.
-IMAGE="${EXTERNAL_NODE_IMAGE:-docker:28-dind}"
+IMAGE="${EXTERNAL_NODE_IMAGE:-docker:28.5.2-dind}"
 KEY="${KIND_DIR}/external-node-key"
 IP_FILE="${KIND_DIR}/external-node-ip"
 
@@ -64,7 +64,15 @@ up() {
 		return 1
 	fi
 
-	docker exec "$NAME" apk add --no-cache openssh sudo iproute2 curl bash >/dev/null
+	# Alpine's CDN fails often enough to matter, and one blip here takes the lane down.
+	for attempt in 1 2 3; do
+		docker exec "$NAME" apk add --no-cache openssh sudo iproute2 curl bash >/dev/null && break
+		if [[ $attempt == 3 ]]; then
+			log "ERROR: apk add failed after 3 attempts"
+			return 1
+		fi
+		sleep 5
+	done
 	# Create the ubuntu user for the framework to SSH in as, and harden sshd to
 	# key-only auth. NOTE: alpine's `adduser -D` leaves the account locked (! in
 	# /etc/shadow), which silently blocks public-key auth; unlock it with a random
