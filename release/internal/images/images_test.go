@@ -15,6 +15,7 @@
 package images
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"slices"
@@ -728,6 +729,32 @@ func TestPublishSkipsAlreadyPublishedUnits(t *testing.T) {
 		if slices.Contains(c.args, "release-publish") {
 			t.Errorf("republished an already-published unit: %v", c.args)
 		}
+	}
+}
+
+// A lookup that fails reaches no verdict, so the unit is published rather than
+// aborting a resume that a flaky registry would otherwise stop.
+func TestPublishOnUnresolvableDigest(t *testing.T) {
+	f := &imageNameRunner{images: "whisker"}
+	resolve := func(string) (string, bool, error) {
+		return "", false, errors.New("unauthorized")
+	}
+	// Recording resolves the digests it just pushed and is a separate concern,
+	// so this drives the resume decision alone.
+	err := Publish(testRepoRoot, testVersion, oneStandardVariant("whisker"), true, resolve,
+		WithRunner(f), WithRegistries("quay.io/calico"),
+		WithResume([]string{"quay.io/calico/whisker@sha256:aaa"}, false))
+	if err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	var published bool
+	for _, c := range f.calls {
+		if slices.Contains(c.args, "release-publish") {
+			published = true
+		}
+	}
+	if !published {
+		t.Errorf("a failed lookup skipped the unit instead of publishing it: %v", f.calls)
 	}
 }
 
