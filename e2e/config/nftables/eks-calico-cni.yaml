@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# eks-calico-cni.yaml - aws-eks with Calico CNI, installed by helmerator.
+
+extends: pipeline.yaml
+
+exclude:
+  labels:
+    # RequiresBGP is deliberately left in: the route-reflector specs under that
+    # label pass on this lane, so excluding it would drop real coverage.
+    - label: RequiresBGPMesh
+      reason: "EKS routes through the VPC; there is no BGP mesh"
+
+  namePatterns:
+    - group: "EKS control plane cannot reach the Calico pod network"
+      patterns:
+        - "both.pod.and.service.Proxy\\b"
+        - "proxy.through.a.service.and.a.pod"
+        - "replica.with.a.public.image"
+        - "DNS.for.ExternalName.services"
+        - "DNS.for.pods.for.Hostname"
+        - "DNS.for.pods.for.Subdomain"
+        - "DNS.for.services"
+        - "DNS.for.the.cluster"
+        - "DNS.qualified.names.for.services"
