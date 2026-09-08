@@ -30,13 +30,9 @@ import (
 
 const DefaultImage = registry.OperatorImage
 
-var (
-	// DefaultRegistries are the registries the operator image publishes to.
-	DefaultRegistries = registry.DefaultOperatorRegistries
-
-	// DefaultRegistry names the image, for the callers that want the one registry.
-	DefaultRegistry = DefaultRegistries[0]
-)
+// DefaultRegistries are the registries the operator image publishes to. The first
+// names the image.
+var DefaultRegistries = registry.DefaultOperatorRegistries
 
 var (
 	defaultProductEnvPrefix = "CALICO"

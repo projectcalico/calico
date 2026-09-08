@@ -19,8 +19,8 @@ import "testing"
 // A blank operator-registry flag must not leave the image published nowhere.
 func TestBlankRegistryKeepsDefaults(t *testing.T) {
 	o := NewManager(WithRegistry(""), WithValidate(false))
-	if got := o.Registry(); got != DefaultRegistry {
-		t.Fatalf("Registry() = %q, want %q", got, DefaultRegistry)
+	if got := o.Registry(); got != DefaultRegistries[0] {
+		t.Fatalf("Registry() = %q, want %q", got, DefaultRegistries[0])
 	}
 	if len(o.registries) != len(DefaultRegistries) {
 		t.Fatalf("registries = %v, want %v", o.registries, DefaultRegistries)
