@@ -26,8 +26,7 @@ import (
 type variant string
 
 const (
-	calicoVariant     variant = "calico"
-	enterpriseVariant variant = "tigera"
+	calicoVariant variant = "calico"
 )
 
 type Component struct {
@@ -63,10 +62,6 @@ func getDefaults(c Component) (registry string, imagePath string) {
 	case calicoVariant:
 		registry = CalicoRegistry
 		imagePath = CalicoImagePath
-	// If the component is an Enterprise component (variant: enterprise), use the Enterprise defaults.
-	case enterpriseVariant:
-		registry = TigeraRegistry
-		imagePath = TigeraImagePath
 	// Otherwise it is assumed to be an operator component which does not specify a variant.
 	default:
 		registry = OperatorRegistry
