@@ -6,7 +6,7 @@
   tigera-operator:
     version: v3.31.0
     image: operator
-    registry: docker.io
+    registry: docker.io/calico
   components:
     api:
       version: v3.31.0

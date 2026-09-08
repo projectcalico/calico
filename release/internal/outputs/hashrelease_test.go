@@ -38,7 +38,7 @@ func TestPublishedHashrelease(t *testing.T) {
 			Stream:         "master",
 			ProductVersion: "v3.32.0-0.dev-527-g92e0cd84e375",
 			Operator: registry.Component{
-				Registry: "quay.io",
+				Registry: "quay.io/calico",
 				Image:    "operator",
 				Version:  "v1.42.0-0.dev-16-g3a924017cc9f",
 			},
@@ -70,7 +70,7 @@ func TestPublishedHashrelease(t *testing.T) {
 				Stream:         "master",
 				ProductVersion: "v3.32.0-0.dev-527-g92e0cd84e375",
 				Operator: registry.Component{
-					Registry: "quay.io",
+					Registry: "quay.io/calico",
 					Image:    "operator",
 					Version:  "v1.42.0-0.dev-16-g3a924017cc9f",
 				},
