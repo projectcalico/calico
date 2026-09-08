@@ -264,6 +264,17 @@ func WithLogsDir(dir string) Option {
 	})
 }
 
+// WithStepName overrides the step name, use when default is not sufficient.
+func WithStepName(name string) Option {
+	return setting(func(s *settings) error {
+		if name == "" {
+			return fmt.Errorf("no step name given")
+		}
+		s.Apply([]command.Option{command.WithName(name)})
+		return nil
+	})
+}
+
 // WithPull sets whether an archive may fetch an image that is not already
 // local, which a release that did not build its own images needs.
 func WithPull(pull bool) ArchiveOption {
@@ -526,7 +537,10 @@ func unitState(s settings, u unit, recorded recordedDigests) (done bool, err err
 				image := fmt.Sprintf("%s:%s", repo, tag)
 				got, exists, err := s.resolve(image)
 				if err != nil {
-					return false, fmt.Errorf("resolving %s: %w", image, err)
+					// A failed lookup says nothing about what is published.
+					s.Logger().WithError(err).WithField("image", image).
+						Warn("Could not resolve digest, will publish")
+					return false, nil
 				}
 				if !exists {
 					return false, nil
