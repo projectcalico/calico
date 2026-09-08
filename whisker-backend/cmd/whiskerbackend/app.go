@@ -76,7 +76,8 @@ func Run(ctx context.Context, cfg *config.Config, options ...Option) {
 	opts = append(opts, server.WithTLSFiles(cfg.ServerTLSCertPath, cfg.ServerTLSKeyPath))
 
 	flowsAPI := v1.NewFlows(backend, flowsOpts...)
-	endpoints := withMiddleware(flowsAPI.APIs(), endpointMiddleware...)
+	healthAPI := v1.NewHealth()
+	endpoints := withMiddleware(append(flowsAPI.APIs(), healthAPI.APIs()...), endpointMiddleware...)
 
 	srv, err := server.NewHTTPServer(
 		gorillaadpt.NewRouter(),
