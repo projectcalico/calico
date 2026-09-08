@@ -142,6 +142,7 @@ local:calicoctl/calicoctl/util
 local:calicoctl/calicoctl/util/yaml
 local:calicoctl/tests/fv/helper
 local:crypto/pkg/tls
+local:felix/ip
 local:kube-controllers/pkg/cache
 local:kube-controllers/pkg/config
 local:kube-controllers/pkg/controllers/controller
