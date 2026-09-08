@@ -116,6 +116,25 @@ func AllReleaseCharts() []string {
 
 var once sync.Once
 
+// build directories
+const (
+	FelixDir                 = "felix"
+	CmdCalicoDir             = "cmd/calico"
+	IstioDir                 = "istio"
+	NodeDir                  = "node"
+	CNIPluginDir             = "cni-plugin"
+	ThirdPartyCNIDir         = "third_party/cni-plugins"
+	ThirdPartyEnvoyGateway   = "third_party/envoy-gateway"
+	ThirdPartyEnvoyProxy     = "third_party/envoy-proxy"
+	ThirdPartyEnvoyRatelimit = "third_party/envoy-ratelimit"
+	WhiskerDir               = "whisker"
+
+	NFTablesDir = "hack/rpms/nftables"
+	// OperatorDir is the operator's component directory. It publishes to registries of
+	// its own, so it is named apart from the list rather than added to it.
+	OperatorDir = "operator"
+)
+
 var (
 	// ImageReleaseDirs enumerates the component directories whose Makefiles
 	// publish standalone images via release-build/release-publish.
@@ -123,19 +142,15 @@ var (
 	// apiserver, dikastes, webhooks, typha, goldmane, guardian,
 	// whisker-backend, key-cert-provisioner, CSI, flexvol, Linux CNI) live
 	// under cmd/calico and are not listed here.
-	// OperatorDir is the operator's component directory. It publishes to registries of
-	// its own, so it is named apart from the list rather than added to it.
-	OperatorDir = "operator"
-
 	ImageReleaseDirs = []string{
-		"cmd/calico",
-		"istio",
-		"node",
-		"third_party/cni-plugins",
-		"third_party/envoy-gateway",
-		"third_party/envoy-proxy",
-		"third_party/envoy-ratelimit",
-		"whisker",
+		CmdCalicoDir,
+		IstioDir,
+		NodeDir,
+		ThirdPartyCNIDir,
+		ThirdPartyEnvoyGateway,
+		ThirdPartyEnvoyProxy,
+		ThirdPartyEnvoyRatelimit,
+		WhiskerDir,
 	}
 
 	// WindowsReleaseDirs enumerates component directories that ship a
@@ -144,8 +159,8 @@ var (
 	// Windows image — their Linux counterparts are bundled into the
 	// combined calico image.
 	WindowsReleaseDirs = []string{
-		"cni-plugin",
-		"node",
+		CNIPluginDir,
+		NodeDir,
 	}
 
 	releaseImages    = []string{}

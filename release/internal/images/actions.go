@@ -28,6 +28,12 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
+// build targets
+const (
+	buildBPF = "build-bpf"
+	image    = "image"
+)
+
 func Build(repoRoot, version string, variants []Variant, opts ...BuildOption) error {
 	s, err := newSettings(buildStep, repoRoot, version, variants, opts)
 	if err != nil {
@@ -37,10 +43,13 @@ func Build(repoRoot, version string, variants []Variant, opts ...BuildOption) er
 	if err := s.clean(); err != nil {
 		return err
 	}
+	if err := s.prelude(); err != nil {
+		return err
+	}
 
 	units := s.units(s.env())
 	s.Logger().WithField("images", len(units)).Info("Building container images")
-	if err := s.runUnits(units); err != nil {
+	if err := s.runBuildUnits(units); err != nil {
 		return err
 	}
 	s.Logger().Info("Finished building container images")
