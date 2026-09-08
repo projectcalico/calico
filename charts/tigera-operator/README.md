@@ -200,7 +200,7 @@ containerSecurityContext: {}
 
 # Configuration for the tigera operator images to deploy.
 tigeraOperator:
-  image: tigera/operator
+  image: calico/operator
   registry: quay.io
 calicoctl:
   image: quay.io/calico/calico
