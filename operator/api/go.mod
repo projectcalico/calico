@@ -1,6 +1,6 @@
 module github.com/projectcalico/calico/operator/api
 
-go 1.27.0
+go 1.27.1
 
 require (
 	github.com/envoyproxy/gateway v1.7.4
