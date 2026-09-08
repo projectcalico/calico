@@ -616,14 +616,17 @@ func imageManager(t *testing.T, f *fakeRunner, logsDir string) *CalicoManager {
 		base := path.Base(dir)
 		f.on(fmt.Sprintf("make -C /repo/%s -s build-images", dir), base+" "+base+"-windows", nil)
 	}
+	// The branch tag is published into the registry the manifests name.
+	f.on(`grep -Po image:\K(.*) calicoctl.yaml`, "quay.io/calico/ctl:v3.30.0", nil)
 	return &CalicoManager{
-		runner:          f,
-		repoRoot:        "/repo",
-		calicoVersion:   "v3.30.0",
-		imageRegistries: []string{"quay.io/tigera"},
-		images:          true,
-		logsDir:         logsDir,
-		outputDir:       t.TempDir(),
+		runner:              f,
+		repoRoot:            "/repo",
+		calicoVersion:       "v3.30.0",
+		imageRegistries:     []string{"quay.io/tigera"},
+		images:              true,
+		logsDir:             logsDir,
+		outputDir:           t.TempDir(),
+		releaseBranchPrefix: "release",
 		resolveDigest: func(string) (string, bool, error) {
 			return "sha256:aaa", true, nil
 		},
@@ -662,6 +665,8 @@ func TestImageStepsWriteLogFiles(t *testing.T) {
 			"/logs/images-build/node.log",
 		}},
 		{"publish", (*CalicoManager).publishContainerImages, []string{
+			// The branch tag is a second publish, so it logs under its own step.
+			"/logs/images-publish-branch/node.log",
 			"/logs/images-publish/node-windows.log",
 			"/logs/images-publish/node.log",
 		}},
@@ -712,12 +717,13 @@ func TestPublishContainerImagesBranchTag(t *testing.T) {
 			wantTag:       "release-v3.33-1",
 		},
 		{
-			name:          "official release does not move the branch tag",
+			name:          "an official release moves it too",
 			version:       "v3.33.0",
 			images:        true,
 			isHashRelease: false,
 			wantPublish:   true,
-			wantBranchTag: false,
+			wantBranchTag: true,
+			wantTag:       "release-v3.33",
 		},
 		{
 			// An unset prefix would silently tag images "-v3.33".
@@ -767,11 +773,11 @@ func TestPublishContainerImagesBranchTag(t *testing.T) {
 			if got := f.ran("make -C /repo/cmd/calico release-publish"); got != tt.wantPublish {
 				t.Errorf("release-publish ran = %v, want %v (calls: %v)", got, tt.wantPublish, f.calls)
 			}
-			if got := f.ran("make -C /repo/cmd/calico retag-build-images-with-registries"); got != tt.wantBranchTag {
+			if got := f.ran("make -C /repo/cmd/calico " + branchTagTarget); got != tt.wantBranchTag {
 				t.Errorf("branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
 			}
 			if tt.wantBranchTag {
-				if got := f.envFor("make -C /repo/cmd/calico retag-build-images-with-registries"); !slices.Contains(got, "IMAGETAG="+tt.wantTag) {
+				if got := f.envFor("make -C /repo/cmd/calico " + branchTagTarget); !slices.Contains(got, "IMAGETAG="+tt.wantTag) {
 					t.Errorf("branch tag env = %v, want IMAGETAG=%s", got, tt.wantTag)
 				}
 			}
