@@ -74,9 +74,6 @@ type OperatorManager struct {
 	// validate indicates if we should run validation
 	validate bool
 
-	// publish indicates if we should push the branch changes to the remote repository
-	publish bool
-
 	// architectures is the list of architectures for which we should build images.
 	// If empty, we build for all.
 	architectures []string
@@ -88,7 +85,6 @@ func NewManager(opts ...Option) *OperatorManager {
 		registry: DefaultRegistry,
 		image:    DefaultImage,
 		validate: true,
-		publish:  true,
 	}
 	for _, opt := range opts {
 		if err := opt(o); err != nil {
@@ -208,9 +204,6 @@ func (o *OperatorManager) PreBuildValidation() error {
 }
 
 func (o *OperatorManager) PrePublishValidation() error {
-	if !o.publish {
-		return nil
-	}
 	if o.dir == "" {
 		return fmt.Errorf("no repository root specified")
 	}
@@ -228,11 +221,6 @@ func (o *OperatorManager) PrePublishValidation() error {
 }
 
 func (o *OperatorManager) Publish() error {
-	if !o.publish {
-		logrus.Warn("Skipping publishing operator")
-		return nil
-	}
-
 	env, logFields := o.env()
 	logrus.WithFields(logFields).Info("Publishing operator")
 	out, err := o.make("release-publish", env)

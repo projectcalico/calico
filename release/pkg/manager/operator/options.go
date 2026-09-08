@@ -44,13 +44,6 @@ func WithValidate(validate bool) Option {
 	}
 }
 
-func WithPublish(publish bool) Option {
-	return func(o *OperatorManager) error {
-		o.publish = publish
-		return nil
-	}
-}
-
 func WithArchitectures(architectures []string) Option {
 	return func(o *OperatorManager) error {
 		o.architectures = architectures
