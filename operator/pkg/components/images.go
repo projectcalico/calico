@@ -29,5 +29,5 @@ const (
 const (
 	CalicoImagePath   = "calico/"
 	TigeraImagePath   = "tigera/"
-	OperatorImagePath = "tigera/"
+	OperatorImagePath = "calico/"
 )
