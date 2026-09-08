@@ -1,7 +1,7 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.27.0
+go 1.27.1
 github.com/fxamacker/cbor/v2 v2.9.2
 github.com/go-logr/logr v1.4.4
 github.com/jinzhu/copier v0.4.0
