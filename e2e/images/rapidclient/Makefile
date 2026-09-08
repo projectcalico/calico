@@ -50,9 +50,22 @@ image: bin/rapidclient-$(ARCH)
 	docker buildx build --load --platform=linux/$(ARCH) --pull \
 		-f Dockerfile -t $(IMAGE):$(TAG_NAME) .
 
+BUILDX_BUILDER ?= rapidclient-builder
+
+# A multi-platform build needs the docker-container driver; the default docker
+# driver refuses it, which is what the CI agent starts with.
+.PHONY: setup-multiarch-builder clean-multiarch-builder
+clean-multiarch-builder:
+	-docker buildx rm $(BUILDX_BUILDER)
+
+setup-multiarch-builder: clean-multiarch-builder
+	docker buildx create --name=$(BUILDX_BUILDER) --driver=docker-container
+	docker buildx inspect --bootstrap $(BUILDX_BUILDER)
+
 # publish builds all architectures into a single manifest list and pushes it.
-publish: var-require-all-TAG_NAME $(addprefix bin/rapidclient-,$(ARCHES))
-	docker buildx build --platform=$(shell echo $(ARCHES) | sed 's/ /,/g; s,[^,]*,linux/&,g') \
+publish: var-require-all-TAG_NAME setup-multiarch-builder $(addprefix bin/rapidclient-,$(ARCHES))
+	docker buildx build --builder=$(BUILDX_BUILDER) \
+		--platform=$(shell echo $(ARCHES) | sed 's/ /,/g; s,[^,]*,linux/&,g') \
 		--push --pull -f Dockerfile -t $(IMAGE):$(TAG_NAME) .
 	# Guard against silently regressing to a single-arch image (the original bug):
 	# the published tag must be a manifest list covering every arch in ARCHES.
