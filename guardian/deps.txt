@@ -1,7 +1,7 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.27.0
+go 1.27.1
 github.com/clipperhouse/uax29/v2 v2.6.0
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 github.com/fxamacker/cbor/v2 v2.9.1
