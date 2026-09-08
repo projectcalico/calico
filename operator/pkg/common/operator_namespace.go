@@ -16,39 +16,41 @@ package common
 
 import (
 	"os"
+	"sync"
 
 	"github.com/cloudflare/cfssl/log"
 	"k8s.io/apimachinery/pkg/types"
 )
 
-var namespace = ""
+var (
+	namespace = ""
 
-func init() {
-	v, ok := os.LookupEnv("OPERATOR_NAMESPACE")
-	if ok {
-		namespace = v
-		return
-	}
-	body, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
-	if err != nil {
-		log.Errorf("Failed to read namespace file: %v", err)
-	} else {
-		namespace = string(body)
-		return
-	}
+	// namespaceOnce ensures that namespace is initialized only once.
+	namespaceOnce sync.Once
+)
 
-	namespace = "tigera-operator"
+// OperatorNamespace returns the namespace the operator is running in: OPERATOR_NAMESPACE if
+// set, else the service account's namespace file, else the default "tigera-operator".
+// Resolved on the first call.
+func OperatorNamespace() string {
+	namespaceOnce.Do(func() {
+		namespace = getNamespace()
+	})
+	return namespace
 }
 
-// OperatorNamespace returns the namespace the operator is running in.
-// The value returned is based on the following priority (these are evaluated at startup):
-//
-//	If the OPERATOR_NAMESPACE environment variable is non-empty then that is return.
-//	If the file /var/run/secrets/kubernetes.io/serviceaccount/namespace is non-empty
-//	then the contents is returned.
-//	The default "tigera-operator" is returned.
-func OperatorNamespace() string {
-	return namespace
+func getNamespace() string {
+	if v, ok := os.LookupEnv("OPERATOR_NAMESPACE"); ok {
+		return v
+	}
+
+	body, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	if err != nil {
+		// Absent outside a cluster, where the default is the right answer anyway.
+		log.Infof("Failed to read namespace file, using default: %v", err)
+		return "tigera-operator"
+	}
+	return string(body)
 }
 
 // OperatorName returns the name of the operator deployment.
