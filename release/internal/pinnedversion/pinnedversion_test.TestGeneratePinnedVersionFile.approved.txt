@@ -5,8 +5,8 @@
   full_hash: v3.31.0
   tigera-operator:
     version: v3.31.0
-    image: tigera/operator
-    registry: docker.io
+    image: operator
+    registry: docker.io/calico
   components:
     api:
       version: v3.31.0

@@ -83,7 +83,7 @@ func NewManager(opts ...Option) *CalicoManager {
 		imageRegistries:  defaultRegistries,
 		helmRegistries:   registry.DefaultHelmRegistries,
 		helmRepoURL:      utils.CalicoHelmRepoURL,
-		operatorRegistry: operator.DefaultRegistry,
+		operatorRegistry: operator.DefaultRegistries[0],
 		operatorImage:    operator.DefaultImage,
 	}
 
