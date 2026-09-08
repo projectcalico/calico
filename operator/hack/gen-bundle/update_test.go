@@ -273,6 +273,7 @@ spec:
 			prevVersion: noPreviousVersion,
 			absent:      "replaces:",
 			want: []string{
+				"capabilities: Basic Install",
 				"containerImage: quay.io/tigera/operator@sha256:bbb",
 				`createdAt: "2026-01-02T03:04:05Z"`,
 				"olm.skipRange: <1.42.6",
@@ -292,7 +293,7 @@ spec:
 			path := filepath.Join(t.TempDir(), csvName)
 			writeFile(t, path, doc)
 
-			if err := updateCSV(path, "1.42.6", tc.prevVersion, img); err != nil {
+			if err := updateCSV(path, "1.42.6", tc.prevVersion, "Basic Install", img); err != nil {
 				t.Fatalf("updateCSV: %v", err)
 			}
 
@@ -305,8 +306,40 @@ spec:
 			}
 			// Empty permissions fail CSV validation, so they are always dropped.
 			assertNotContains(t, content, "permissions:")
+			// The capability level is the certification claim, so whatever the
+			// base carried is replaced rather than merged with.
+			assertNotContains(t, content, "Seamless Upgrades")
 		})
 	}
+}
+
+// TestUpdateCSVWithoutADeployment checks that a CSV whose deployment spec is
+// missing fails the build rather than having one fabricated for it.
+func TestUpdateCSVWithoutADeployment(t *testing.T) {
+	t.Parallel()
+
+	const doc = `metadata:
+  name: tigera-operator.v0.0.0
+spec:
+  displayName: Tigera Operator
+  install:
+    spec:
+      deployments:
+  version: 1.42.6
+`
+
+	path := filepath.Join(t.TempDir(), csvName)
+	writeFile(t, path, doc)
+
+	err := updateCSV(path, "1.42.6", noPreviousVersion, "Basic Install", image{
+		digest:        "quay.io/tigera/operator@sha256:bbb",
+		created:       "2026-01-02T03:04:05Z",
+		architectures: []string{"amd64"},
+	})
+	if err == nil {
+		t.Fatalf("updateCSV succeeded, want an error")
+	}
+	assertNotContains(t, readFile(t, path), "containers:")
 }
 
 func encode(content string) string {

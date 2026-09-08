@@ -70,8 +70,9 @@ var updateBundleCommand = &cli.Command{
 	Description: "Everything static lives in config/manifests/bases/" + csvName + ", which operator-sdk reads as the base\n" +
 		"for the generated CSV. Only values that cannot be known until build time belong here: image digests, the version,\n" +
 		"what it replaces, the build timestamp, and the architectures the image was built for. If you find yourself adding\n" +
-		"a constant, put it in the base instead.",
-	Flags: []cli.Flag{versionFlag, prevVersionFlag, imageFlag, imageInspectFlag, manifestInspectFlag},
+		"a constant, put it in the base instead. The capability level is the exception: it is the claim we are certified\n" +
+		"against, so it is set here, behind --capabilities, rather than being editable in the base.",
+	Flags: []cli.Flag{versionFlag, prevVersionFlag, capabilitiesFlag, imageFlag, imageInspectFlag, manifestInspectFlag},
 	Action: func(ctx context.Context, c *cli.Command) error {
 		version := c.String(versionFlag.Name)
 		repository := c.String(imageFlag.Name)
@@ -80,7 +81,7 @@ var updateBundleCommand = &cli.Command{
 		if err != nil {
 			return err
 		}
-		return updateBundle(version, c.String(prevVersionFlag.Name), inspected)
+		return updateBundle(version, c.String(prevVersionFlag.Name), c.String(capabilitiesFlag.Name), inspected)
 	},
 }
 
@@ -149,12 +150,12 @@ func docker(ctx context.Context, args ...string) (string, error) {
 	return stdout.String(), nil
 }
 
-func updateBundle(version, prevVersion string, img image) error {
+func updateBundle(version, prevVersion, capabilities string, img image) error {
 	versionDir := filepath.Join(bundleDir, version)
 	if err := rearrangeBundle(versionDir); err != nil {
 		return err
 	}
-	if err := updateCSV(filepath.Join(versionDir, "manifests", csvName), version, prevVersion, img); err != nil {
+	if err := updateCSV(filepath.Join(versionDir, "manifests", csvName), version, prevVersion, capabilities, img); err != nil {
 		return err
 	}
 	if err := updateDockerfile(version); err != nil {
@@ -187,15 +188,18 @@ type csvUpdate struct {
 	value string
 }
 
-func updateCSV(path, version, prevVersion string, img image) error {
+func updateCSV(path, version, prevVersion, capabilities string, img image) error {
 	csv, err := loadDocument(path)
 	if err != nil {
 		return err
 	}
 
 	// Record the digest-pinned operator image and the time it was built, and set
-	// the CSV to ignore previous versions when updating.
+	// the CSV to ignore previous versions when updating. The capability level is
+	// forced rather than taken from the base so that every bundle we publish
+	// makes the same claim unless --capabilities says otherwise.
 	updates := []csvUpdate{
+		{[]any{"metadata", "annotations", "capabilities"}, capabilities},
 		{[]any{"metadata", "annotations", "containerImage"}, img.digest},
 		{[]any{"metadata", "annotations", "createdAt"}, img.created},
 		{[]any{"metadata", "annotations", "olm.skipRange"}, "<" + version},
@@ -218,10 +222,10 @@ func updateCSV(path, version, prevVersion string, img image) error {
 		updates = append(updates, csvUpdate{[]any{"spec", "replaces"}, "tigera-operator.v" + prevVersion})
 	}
 
-	// Pin the operator image by digest, both in the deployment spec embedded in
-	// the CSV and in the 'relatedImages' list that a certified bundle must carry.
+	// Pin the operator image by digest in the 'relatedImages' list that a
+	// certified bundle must carry. Neither the base nor operator-sdk writes the
+	// list, so this creates it.
 	updates = append(updates,
-		csvUpdate{[]any{"spec", "install", "spec", "deployments", 0, "spec", "template", "spec", "containers", 0, "image"}, img.digest},
 		csvUpdate{[]any{"spec", "relatedImages", 0, "name"}, "tigera-operator"},
 		csvUpdate{[]any{"spec", "relatedImages", 0, "image"}, img.digest},
 	)
@@ -231,6 +235,17 @@ func updateCSV(path, version, prevVersion string, img image) error {
 		if err := csv.set(u.value, u.path...); err != nil {
 			return fmt.Errorf("updating %s: %w", path, err)
 		}
+	}
+
+	// Pin the same digest in the deployment spec that operator-sdk embedded in
+	// the CSV from the staged deploy directory. That path is generated rather
+	// than ours to create, so it has to be there already: filling it in would
+	// write a deployment with no name, no selector and no container name, which
+	// looks like a bundle right up until it is installed.
+	deploymentImage := []any{"spec", "install", "spec", "deployments", 0, "spec", "template", "spec", "containers", 0, "image"}
+	logrus.Debugf("Setting %s = %q", pathString(deploymentImage), img.digest)
+	if err := csv.mustSet(img.digest, deploymentImage...); err != nil {
+		return fmt.Errorf("updating %s: %w", path, err)
 	}
 
 	// Delete empty permissions (we only set clusterPermissions) otherwise the

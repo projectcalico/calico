@@ -100,6 +100,16 @@ var (
 		Required:  true,
 		Validator: nonEmpty("prev-version"),
 	}
+	// The capabilities level is the claim the bundle is certified against, so it
+	// is only raised deliberately - hence the flag rather than a value in the CSV
+	// base, which would be easy to change without noticing what it asserts.
+	capabilitiesFlag = &cli.StringFlag{
+		Name:      "capabilities",
+		Usage:     "The Operator Capability Level the bundle claims, e.g. 'Basic Install' or 'Seamless Upgrades'",
+		Sources:   cli.EnvVars("BUNDLE_CAPABILITIES"),
+		Value:     "Basic Install",
+		Validator: nonEmpty("capabilities"),
+	}
 )
 
 // Image flags. update-bundle pulls and inspects the operator image itself; the

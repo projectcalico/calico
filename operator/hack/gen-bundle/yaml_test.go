@@ -104,6 +104,89 @@ spec:
 	}
 }
 
+// TestDocumentMustSet covers the difference from set: a path that is not
+// already there is an error rather than something to create.
+func TestDocumentMustSet(t *testing.T) {
+	t.Parallel()
+
+	const doc = `metadata:
+  annotations:
+    createdAt: "2020-01-01T00:00:00Z"
+spec:
+  install:
+    spec:
+      deployments:
+        - spec:
+            template:
+              spec:
+                containers:
+                  - name: tigera-operator
+                    image: quay.io/tigera/operator:v1.0.0
+`
+
+	deploymentImage := []any{"spec", "install", "spec", "deployments", 0, "spec", "template", "spec", "containers", 0, "image"}
+
+	t.Run("overwrites a path that is there", func(t *testing.T) {
+		t.Parallel()
+
+		d := writeDocument(t, doc)
+		if err := d.mustSet("quay.io/tigera/operator@sha256:abc", deploymentImage...); err != nil {
+			t.Fatalf("mustSet: %v", err)
+		}
+		if err := d.save(); err != nil {
+			t.Fatalf("save: %v", err)
+		}
+		assertContains(t, readFile(t, d.path), "image: quay.io/tigera/operator@sha256:abc")
+	})
+
+	cases := []struct {
+		name string
+		doc  string
+		path []any
+	}{
+		{
+			name: "a missing leaf key",
+			doc:  doc,
+			path: []any{"metadata", "annotations", "olm.skipRange"},
+		},
+		{
+			name: "a missing mapping along the path",
+			doc:  doc,
+			path: []any{"metadata", "labels", "operatorframework.io/arch.arm64"},
+		},
+		{
+			name: "a missing sequence along the path",
+			doc:  doc,
+			path: []any{"spec", "relatedImages", 0, "name"},
+		},
+		{
+			name: "a null collection along the path",
+			doc: `spec:
+  install:
+    spec:
+      deployments:
+`,
+			path: deploymentImage,
+		},
+		{
+			name: "a collection along the path that is not there",
+			doc:  "spec:\n  install: {}\n",
+			path: deploymentImage,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			d := writeDocument(t, tc.doc)
+			if err := d.mustSet("value", tc.path...); err == nil {
+				t.Fatalf("mustSet(%v) succeeded, want an error", tc.path)
+			}
+		})
+	}
+}
+
 func TestDocumentSetErrors(t *testing.T) {
 	t.Parallel()
 

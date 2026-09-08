@@ -1,13 +1,18 @@
 # This sample is also the ImageSet entry in the OpenShift bundle's alm-examples
-# annotation (see hack/gen-bundle/manifests.go).
+# annotation (see hack/gen-bundle/manifests.go), so OperatorHub offers it as a
+# "Create instance" form. It is deliberately inert: the name below matches no
+# variant the operator looks for, and the digests are placeholders.
 #
-# The name must be "<variant>-<release>", where <release> matches the version of
-# the variant that the operator is built to deploy. Digests must be full sha256
-# digests; the ones below are placeholders.
+# A real ImageSet is named "<variant>-<release>", where <variant> is "calico" or
+# "enterprise" and <release> is the version of that variant the operator
+# deploys - e.g. calico-v3.30.0. Do not name this sample that way: the operator
+# would then either adopt these placeholder digests or, for any other name
+# starting with the variant prefix, degrade the Installation because no ImageSet
+# with the expected name exists.
 apiVersion: operator.tigera.io/v1
 kind: ImageSet
 metadata:
-  name: calico-v3.30.0
+  name: example-v1.23.4
 spec:
   images:
     - image: calico/node

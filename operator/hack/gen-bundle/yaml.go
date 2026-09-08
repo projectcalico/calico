@@ -63,10 +63,22 @@ func (d *document) save() error {
 }
 
 // set writes a string at the given path, where each path element is either a
-// mapping key or a sequence index. Missing mappings along the path are created;
-// a missing sequence index is an error, since we have no way to know what else
-// the element should hold.
+// mapping key or a sequence index. Missing mappings along the path are created,
+// as is a sequence index one past the end; any other missing sequence index is
+// an error, since we have no way to know what else the element should hold.
 func (d *document) set(value string, path ...any) error {
+	return d.setValue(value, true, path)
+}
+
+// mustSet writes a string at a path that has to be there already. Use it for
+// the fields operator-sdk generates rather than ones we add: creating one of
+// those would mean the CSV is not the shape the path was written for, and
+// silently filling it in writes a plausible-looking document that is wrong.
+func (d *document) mustSet(value string, path ...any) error {
+	return d.setValue(value, false, path)
+}
+
+func (d *document) setValue(value string, create bool, path []any) error {
 	if len(path) == 0 {
 		return fmt.Errorf("no path given")
 	}
@@ -74,9 +86,12 @@ func (d *document) set(value string, path ...any) error {
 	if !ok {
 		return fmt.Errorf("%s: last path element must be a mapping key", pathString(path))
 	}
-	parent, err := d.lookup(path[:len(path)-1], true)
+	parent, err := d.lookup(path[:len(path)-1], create)
 	if err != nil {
 		return err
+	}
+	if parent == nil {
+		return fmt.Errorf("%s: not there", pathString(path[:len(path)-1]))
 	}
 	if parent.Kind != yaml.MappingNode {
 		return fmt.Errorf("%s: not a mapping", pathString(path[:len(path)-1]))
@@ -92,6 +107,9 @@ func (d *document) set(value string, path ...any) error {
 		node.Tag = "!!str"
 		node.Value = value
 		return nil
+	}
+	if !create {
+		return fmt.Errorf("%s: not there", pathString(path))
 	}
 	parent.Content = append(parent.Content,
 		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key},

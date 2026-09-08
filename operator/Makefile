@@ -484,9 +484,9 @@ ifndef PREV_VERSION
 	$(error PREV_VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
 endif
 	$(BINDIR)/gen-bundle get-manifests \
-		--crd-dir $(BUNDLE_CRD_DIR) \
-		--deploy-dir $(BUNDLE_DEPLOY_DIR) \
-		--calico-version $(BUNDLE_CALICO_VERSION)
+		--crd-dir "$(BUNDLE_CRD_DIR)" \
+		--deploy-dir "$(BUNDLE_DEPLOY_DIR)" \
+		--calico-version "$(BUNDLE_CALICO_VERSION)"
 
 # Generate the bundle from the staged manifests. The static half of the CSV comes
 # from --kustomize-dir; note that operator-sdk only picks that base up if its
@@ -512,10 +512,16 @@ bundle-generate: $(OPERATOR_SDK_BARE) bundle-manifests
 # on the host: the build container has no docker-in-docker.
 .PHONY: update-bundle
 update-bundle: $(BINDIR)/gen-bundle
+ifndef VERSION
+	$(error VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
+endif
+ifndef PREV_VERSION
+	$(error PREV_VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
+endif
 	$(BINDIR)/gen-bundle update-bundle \
-		--version $(VERSION) \
-		--prev-version $(PREV_VERSION) \
-		--image $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME)
+		--version "$(VERSION)" \
+		--prev-version "$(PREV_VERSION)" \
+		--image "$(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME)"
 
 $(BINDIR)/gen-bundle: $(shell find ./hack/gen-bundle -type f)
 	mkdir -p $(BINDIR)

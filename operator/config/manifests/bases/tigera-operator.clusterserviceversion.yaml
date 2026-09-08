@@ -15,7 +15,9 @@ kind: ClusterServiceVersion
 metadata:
   annotations:
     alm-examples: '[]'
-    capabilities: Seamless Upgrades
+    # capabilities is deliberately not set here: hack/gen-bundle/update.go writes
+    # it, defaulting to "Basic Install", so that raising the level we are
+    # certified against is an explicit --capabilities/BUNDLE_CAPABILITIES choice.
     categories: Logging & Tracing, Monitoring, Networking, Security
     certified: "true"
     description: An operator which manages the lifecycle of a Calico or Calico Enterprise installation on Kubernetes or OpenShift.
