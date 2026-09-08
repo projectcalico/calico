@@ -43,7 +43,14 @@ func TestWorkloadImagesAreSeeded(t *testing.T) {
 		t.Fatalf("read %s: %v", seedScript, err)
 	}
 
-	for name, ref := range declaredImages(t) {
+	declared := declaredImages(t)
+	for name := range notSeeded {
+		if _, ok := declared[name]; !ok {
+			t.Errorf("notSeeded lists %s, which images.go does not declare; drop the entry or correct the name", name)
+		}
+	}
+
+	for name, ref := range declared {
 		if reason, skip := notSeeded[name]; skip {
 			if strings.Contains(string(script), ref) {
 				t.Errorf("%s is listed in the seed script but recorded as not seeded (%s)", name, reason)
@@ -57,9 +64,9 @@ func TestWorkloadImagesAreSeeded(t *testing.T) {
 	}
 }
 
-// declaredImages returns the image reference declared by each string constant in
-// images.go, keyed by constant name. Constants defined as another constant (the
-// EchoServer alias) have no literal and are left out.
+// declaredImages returns the string literal bound by each top-level constant and
+// variable in images.go, keyed by name. Every one counts as an image reference;
+// anything else has to go in notSeeded.
 func declaredImages(t *testing.T) map[string]string {
 	t.Helper()
 
@@ -71,7 +78,7 @@ func declaredImages(t *testing.T) map[string]string {
 	refs := map[string]string{}
 	for _, decl := range file.Decls {
 		gen, ok := decl.(*ast.GenDecl)
-		if !ok || gen.Tok != token.CONST {
+		if !ok || (gen.Tok != token.CONST && gen.Tok != token.VAR) {
 			continue
 		}
 		for _, spec := range gen.Specs {
@@ -79,19 +86,21 @@ func declaredImages(t *testing.T) map[string]string {
 			if !ok || len(value.Names) != 1 || len(value.Values) != 1 {
 				continue
 			}
+
+			// An alias for another name (EchoServer) has no literal to check.
 			lit, ok := value.Values[0].(*ast.BasicLit)
 			if !ok || lit.Kind != token.STRING {
 				continue
 			}
 			ref, err := strconv.Unquote(lit.Value)
-			if err != nil || !strings.Contains(ref, "/") {
+			if err != nil {
 				continue
 			}
 			refs[value.Names[0].Name] = ref
 		}
 	}
 	if len(refs) == 0 {
-		t.Fatal("no image constants found in images.go")
+		t.Fatal("no image references found in images.go")
 	}
 	return refs
 }
