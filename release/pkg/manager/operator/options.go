@@ -65,8 +65,6 @@ func WithVersion(version string) Option {
 	}
 }
 
-// WithRegistry names the one registry the image is published to, which is what a
-// hashrelease sending it somewhere other than the release registries needs.
 func WithRegistry(registry string) Option {
 	return WithRegistries([]string{registry})
 }

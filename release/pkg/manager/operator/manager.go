@@ -30,8 +30,6 @@ import (
 
 const DefaultImage = registry.OperatorImage
 
-// DefaultRegistries are the registries the operator image publishes to. The first
-// names the image.
 var DefaultRegistries = registry.DefaultOperatorRegistries
 
 var (
@@ -132,7 +130,6 @@ func (o *OperatorManager) Build() error {
 	return nil
 }
 
-// Registry is the registry naming the image, which is the first it publishes to.
 func (o *OperatorManager) Registry() string {
 	if len(o.registries) == 0 {
 		return ""
@@ -155,8 +152,6 @@ func (o *OperatorManager) env() ([]string, logrus.Fields) {
 	if o.isHashRelease {
 		logFields["hashrelease"] = "true"
 	} else {
-		// A hashrelease is not a release, and release-build sets this on the sub-makes
-		// that need it anyway.
 		env = append(env, "RELEASE=true")
 	}
 	if len(o.architectures) > 0 {
