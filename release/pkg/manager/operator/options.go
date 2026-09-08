@@ -14,12 +14,6 @@
 
 package operator
 
-import (
-	"fmt"
-
-	"github.com/projectcalico/calico/release/internal/utils"
-)
-
 type Option func(*OperatorManager) error
 
 func WithOperatorDirectory(root string) Option {
@@ -95,20 +89,6 @@ func WithProductRegistry(registry string) Option {
 func WithImage(image string) Option {
 	return func(o *OperatorManager) error {
 		o.image = image
-		return nil
-	}
-}
-
-func WithPinnedComponents(filePath string) Option {
-	return func(o *OperatorManager) error {
-		exists, err := utils.FileExists(filePath)
-		if err != nil {
-			return fmt.Errorf("check pinned components file exists: %w", err)
-		}
-		if !exists {
-			return fmt.Errorf("pinned components file does not exist at path: %s", filePath)
-		}
-		o.pinnedComponentsFile = filePath
 		return nil
 	}
 }
