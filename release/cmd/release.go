@@ -230,8 +230,6 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 				calico.WithRepoName(c.String(repoFlag.Name)),
 				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 			}
-			// The operator ships inside the Calico release rather than carrying a GitHub
-			// release of its own, so there is nothing separate to make public.
 			m := calico.NewManager(opts...)
 			return m.ReleasePublic()
 		},
