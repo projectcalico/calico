@@ -542,14 +542,8 @@ func (d *LinuxDataplane) configureSysctls(hostVethName string, hasIPv4, hasIPv6 
 		}
 
 		// Note: deliberately no proxy_ndp counterpart to the proxy_arp set in the
-		// IPv4 section above.  Despite the name it is not the IPv6 equivalent: it
-		// does no route-based proxying, and the kernel answers a Neighbor
-		// Solicitation only for addresses with an explicit NUD_PROXY neighbour
-		// entry, which Calico does not program.  IPv6 needs no proxying anyway,
-		// because the link-local address auto-provisioned on this interface (see
-		// disable_ipv6 above) is what the pod's default route points at, so we
-		// answer NDP for it as our own address.  IPv4 has no automatic link-local
-		// provisioning, hence the dummy 169.254.1.1 gateway and its proxy ARP.
+		// IPv4 section above.  IPv6 needs no proxying because we use 
+		// the IPv6 link-local address as the workload's gateway.
 		// See felix/design/neighbour-discovery.md.
 
 		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
