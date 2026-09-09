@@ -21,14 +21,14 @@ import (
 	operator "github.com/projectcalico/calico/operator/api/v1"
 )
 
-// variant is used to differentiate between components across product variants.
-// Components that are shared across variants (e.g. operator) do not specify a variant.
-type variant string
+// variant is where a product variant's images resolve, the defaults its components
+// fall back to when the installation names no registry or image path of its own.
+type variant struct {
+	registry  string
+	imagePath string
+}
 
-const (
-	calicoVariant     variant = "calico"
-	enterpriseVariant variant = "tigera"
-)
+var calicoVariant = &variant{registry: CalicoRegistry, imagePath: CalicoImagePath}
 
 type Component struct {
 	// Image is the image name for this component (e.g., node, cni)
@@ -47,32 +47,20 @@ type Component struct {
 	// as part of a developer workflow to deploy custom dev images on an individual basis.
 	Registry string
 
-	// variant is specify which product variant this component belongs to.
-	// It is used when determining default registry and image path.
-	variant variant
+	// variant is which product variant this component belongs to. Nil for the
+	// components shared across variants, which take the operator's own defaults.
+	variant *variant
 }
 
 const UseDefault = "UseDefault"
 
-// getDefaults returns the default registry and imagePath for a given component.
-// This is used when no registry is explicitly defined by the component
-// and user does not explicitly specify a registry or imagePath.
+// getDefaults returns the registry and imagePath a component resolves against when the
+// installation names neither.
 func getDefaults(c Component) (registry string, imagePath string) {
-	switch c.variant {
-	// If the component is a Calico component (variant: calico), use the Calico defaults.
-	case calicoVariant:
-		registry = CalicoRegistry
-		imagePath = CalicoImagePath
-	// If the component is an Enterprise component (variant: enterprise), use the Enterprise defaults.
-	case enterpriseVariant:
-		registry = TigeraRegistry
-		imagePath = TigeraImagePath
-	// Otherwise it is assumed to be an operator component which does not specify a variant.
-	default:
-		registry = OperatorRegistry
-		imagePath = OperatorImagePath
+	if c.variant == nil {
+		return OperatorRegistry, OperatorImagePath
 	}
-	return
+	return c.variant.registry, c.variant.imagePath
 }
 
 // GetReference returns the fully qualified image to use, including registry and version.
