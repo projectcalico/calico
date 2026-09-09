@@ -1686,3 +1686,69 @@ func (c shimClient) StagedKubernetesNetworkPolicies() client.StagedKubernetesNet
 func (c shimClient) StagedNetworkPolicies() client.StagedNetworkPolicyInterface {
 	panic("not implemented")
 }
+
+// nodeNotFoundClient embeds the interface so only the one call the reconcile makes
+// before it bails needs implementing.
+type nodeNotFoundClient struct {
+	client.Interface
+}
+
+func (nodeNotFoundClient) Nodes() client.NodeInterface { return nodeNotFoundNodes{} }
+
+type nodeNotFoundNodes struct {
+	client.NodeInterface
+}
+
+func (nodeNotFoundNodes) Get(_ context.Context, name string, _ options.GetOptions) (*internalapi.Node, error) {
+	return nil, cerrors.ErrorResourceDoesNotExist{Identifier: name}
+}
+
+type datastoreDownClient struct {
+	client.Interface
+}
+
+func (datastoreDownClient) Nodes() client.NodeInterface { return datastoreDownNodes{} }
+
+type datastoreDownNodes struct {
+	client.NodeInterface
+}
+
+func (datastoreDownNodes) Get(_ context.Context, _ string, _ options.GetOptions) (*internalapi.Node, error) {
+	return nil, errors.New("datastore is down")
+}
+
+var _ = Describe("reconciler run loop", func() {
+	var r reconciler
+	var ctx context.Context
+	var cancel context.CancelFunc
+	var done chan error
+
+	BeforeEach(func() {
+		ctx, cancel = context.WithCancel(context.Background())
+		done = make(chan error, 1)
+		r = reconciler{nodename: "node1", ch: make(chan struct{}, 1)}
+	})
+
+	AfterEach(func() { cancel() })
+
+	// A deleted-and-re-registered node is briefly absent. Exiting here takes every
+	// other node service down with it, including the one that repairs the node.
+	It("keeps running when the node is momentarily absent", func() {
+		r.client = nodeNotFoundClient{}
+		go func() { done <- r.run(ctx) }()
+
+		r.ch <- struct{}{}
+		Consistently(done, "500ms").ShouldNot(Receive(), "a missing node must not stop the loop")
+
+		cancel()
+		Eventually(done, "5s").Should(Receive(BeNil()))
+	})
+
+	It("still reports any other reconcile failure", func() {
+		r.client = datastoreDownClient{}
+		go func() { done <- r.run(ctx) }()
+
+		r.ch <- struct{}{}
+		Eventually(done, "5s").Should(Receive(MatchError(ContainSubstring("datastore is down"))))
+	})
+})
