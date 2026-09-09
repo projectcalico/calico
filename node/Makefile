@@ -417,10 +417,10 @@ cd: image-all cd-common
 ###############################################################################
 # Release
 ###############################################################################
-## Produces a clean build of release artifacts at the specified version.
+## Produces release artifacts at the specified version. Clean first for a fresh build.
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
+	$(MAKE) image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	# Generate the `latest` node images.
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest

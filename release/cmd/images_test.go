@@ -176,13 +176,16 @@ func TestImagesPublishLatchesConfirm(t *testing.T) {
 	}
 }
 
-// felix is built but never published, and a build must not latch either
-// publish flag.
-func TestImagesBuildRunsFelixAndDoesNotPublish(t *testing.T) {
+// felix ships binaries and no image, so the image build leaves it alone. A
+// build must also not latch either publish flag.
+func TestImagesBuildSkipsFelixAndDoesNotPublish(t *testing.T) {
 	r := runImages(t, fakeRepo(t, "v3.30.0"), "build", "--registry", "quay.io/calico")
 
-	if !r.ran("felix", "release-build") {
-		t.Errorf("build did not run felix, ran: %v", r.args)
+	if r.ran("felix") {
+		t.Errorf("image build reached felix, ran: %v", r.args)
+	}
+	if !r.ran("node", "release-build") {
+		t.Fatalf("no image build ran at all, ran: %v", r.args)
 	}
 	for _, env := range r.envs {
 		for _, latch := range []string{"CONFIRM=true", "DRYRUN=true", "RELEASE=true"} {
@@ -239,13 +242,29 @@ func TestImagesNarrowedKeepsEveryVariant(t *testing.T) {
 	}
 }
 
-// felix is build-only: accepted for a build, absent from a publish.
-func TestImagesNarrowedToBuildOnlyDir(t *testing.T) {
-	r := runImages(t, fakeRepo(t, "v3.30.0"),
-		"build", "--registry", "quay.io/calico", "--image-release-dir", "felix")
+// felix is not an image directory, so narrowing a build to it is a mistake
+// worth reporting rather than a build that quietly does nothing.
+func TestImagesRejectsFelixAsAnImageDir(t *testing.T) {
+	prev := imagesRunner
+	r := &recordingRunner{}
+	imagesRunner = r
+	t.Cleanup(func() { imagesRunner = prev })
 
-	if len(r.args) != 1 || !r.ran("felix", "release-build") {
-		t.Fatalf("expected a single felix build, ran: %v", r.args)
+	root := fakeRepo(t, "v3.30.0")
+	cfg := &Config{
+		RepoRootDir: root,
+		TmpDir:      filepath.Join(root, "tmp"),
+		OutputDir:   filepath.Join(root, "_output"),
+		LogsDir:     filepath.Join(root, "_logs"),
+	}
+	cmd := imagesCommand(cfg)
+	err := cmd.Run(context.Background(),
+		[]string{"images", "build", "--registry", "quay.io/calico", "--image-release-dir", "felix"})
+	if err == nil {
+		t.Fatal("expected felix to be rejected as an image release dir")
+	}
+	if len(r.args) != 0 {
+		t.Errorf("ran make anyway: %v", r.args)
 	}
 }
 
