@@ -19,19 +19,9 @@ import (
 
 	cli "github.com/urfave/cli/v3"
 
-	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/images"
-	"github.com/projectcalico/calico/release/internal/outputs"
-	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
-)
-
-// imagesRunner drives make; imagesDigestResolver looks up a published digest.
-// Tests replace both.
-var (
-	imagesRunner         command.CommandRunner = &command.RealCommandRunner{}
-	imagesDigestResolver steps.DigestResolver = registry.ResolveDigest
 )
 
 var imagesSubCommands = func(cfg *Config) []*cli.Command {
@@ -61,7 +51,7 @@ var (
 			return images.Build(
 				cfg.RepoRootDir, ver.FormattedString(),
 				images.NarrowVariants(images.BuildVariants, c.StringSlice(imageReleaseDirsFlag.Name)),
-				images.WithRunner(imagesRunner),
+				images.WithRunner(commandRunner),
 				images.WithRegistries(c.StringSlice(registryFlag.Name)...),
 				images.WithArches(c.StringSlice(archFlag.Name)...),
 				images.WithLogsDir(cfg.LogsDir),
@@ -101,23 +91,16 @@ var (
 			if err != nil {
 				return err
 			}
-			// An earlier run of this version records what it published, so a
-			// resume skips the units already done.
-			published, err := outputs.ReadRefs(cfg.OutputDir, "images-publish", ver.FormattedString())
+			published, w, err := publishRecord(cfg, imagesPublishStep, ver.FormattedString(), !c.Bool(localFlag.Name))
 			if err != nil {
 				return err
 			}
-
 			var refs steps.RefRecorder
-			if !c.Bool(localFlag.Name) {
-				w, err := outputs.NewRefsWriter(cfg.OutputDir, "images-publish", ver.FormattedString())
-				if err != nil {
-					return err
-				}
+			if w != nil {
 				refs = w
 			}
 			opts := []images.PublishOption{
-				images.WithRunner(imagesRunner),
+				images.WithRunner(commandRunner),
 				images.WithRegistries(c.StringSlice(registryFlag.Name)...),
 				images.WithArches(c.StringSlice(archFlag.Name)...),
 				images.WithLogsDir(cfg.LogsDir),
@@ -139,11 +122,13 @@ var (
 			return images.Publish(
 				cfg.RepoRootDir, ver.FormattedString(),
 				images.NarrowVariants(images.PublishVariants, dirs),
-				!c.Bool(localFlag.Name), imagesDigestResolver, opts...,
+				!c.Bool(localFlag.Name), registryDigestResolver, opts...,
 			)
 		}
 	}
 )
+
+const imagesPublishStep = "images-publish"
 
 func imagesPublishCommand(cfg *Config) *cli.Command {
 	return &cli.Command{
