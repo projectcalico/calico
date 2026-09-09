@@ -118,6 +118,29 @@ func (d *document) setValue(value string, create bool, path []any) error {
 	return nil
 }
 
+// find returns the index of the element of the sequence at path whose value for
+// key is value. The sequence has to be there already: this is for picking a
+// named element out of something operator-sdk generated, where assuming a
+// position is the mistake it exists to avoid.
+func (d *document) find(path []any, key, value string) (int, error) {
+	node, err := d.lookup(path, false)
+	if err != nil {
+		return 0, err
+	}
+	if node == nil {
+		return 0, fmt.Errorf("%s: not there", pathString(path))
+	}
+	if node.Kind != yaml.SequenceNode {
+		return 0, fmt.Errorf("%s: not a sequence", pathString(path))
+	}
+	for i, element := range node.Content {
+		if found := mapValue(element, key); found != nil && found.Value == value {
+			return i, nil
+		}
+	}
+	return 0, fmt.Errorf("%s: no element whose %s is %q", pathString(path), key, value)
+}
+
 // delete removes a mapping key. Deleting a key that is not there is not an error.
 func (d *document) delete(path ...any) error {
 	if len(path) == 0 {

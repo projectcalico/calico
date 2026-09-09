@@ -531,10 +531,12 @@ $(BINDIR)/gen-bundle: $(shell find ./hack/gen-bundle -type f)
 
 .PHONY: hack/gen-bundle/ut
 hack/gen-bundle/ut:
-	mkdir -p report/gen-bundle
+	mkdir -p report
+	# Flat, like report/operator_ut.xml: the Semaphore epilogue publishes
+	# ./report/*.xml, so a report in a subdirectory is never collected.
 	$(DOCKER_GO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
-	gotestsum --format=testname --junitfile report/gen-bundle/ut.xml $(PACKAGE_NAME)/hack/gen-bundle/...'
+	gotestsum --format=testname --junitfile report/gen_bundle_ut.xml $(PACKAGE_NAME)/hack/gen-bundle/...'
 
 # Build the bundle image.
 .PHONY: bundle-image

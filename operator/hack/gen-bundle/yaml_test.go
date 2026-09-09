@@ -187,6 +187,56 @@ spec:
 	}
 }
 
+func TestDocumentFind(t *testing.T) {
+	t.Parallel()
+
+	const doc = `spec:
+  containers:
+    - name: sidecar
+      image: quay.io/tigera/sidecar
+    - name: tigera-operator
+      image: quay.io/tigera/operator
+`
+
+	containers := []any{"spec", "containers"}
+
+	t.Run("finds an element by name", func(t *testing.T) {
+		t.Parallel()
+
+		d := writeDocument(t, doc)
+		i, err := d.find(containers, "name", "tigera-operator")
+		if err != nil {
+			t.Fatalf("find: %v", err)
+		}
+		if i != 1 {
+			t.Errorf("index is %d, want 1", i)
+		}
+	})
+
+	cases := []struct {
+		name  string
+		doc   string
+		path  []any
+		value string
+	}{
+		{name: "no element with that name", doc: doc, path: containers, value: "typha"},
+		{name: "the sequence is not there", doc: doc, path: []any{"spec", "volumes"}, value: "var-lib"},
+		{name: "the sequence is null", doc: "spec:\n  containers:\n", path: containers, value: "tigera-operator"},
+		{name: "not a sequence", doc: "spec:\n  containers: {}\n", path: containers, value: "tigera-operator"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			d := writeDocument(t, tc.doc)
+			if _, err := d.find(tc.path, "name", tc.value); err == nil {
+				t.Fatalf("find(%v, %q) succeeded, want an error", tc.path, tc.value)
+			}
+		})
+	}
+}
+
 func TestDocumentSetErrors(t *testing.T) {
 	t.Parallel()
 

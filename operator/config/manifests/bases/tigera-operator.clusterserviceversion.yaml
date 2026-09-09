@@ -183,9 +183,7 @@ spec:
   provider:
     name: Tigera
     url: https://tigera.io/
-  # relatedImages is required for a certified bundle. gen-bundle replaces this
-  # entry with the digest-pinned operator image at build time.
-  relatedImages:
-    - name: tigera-operator
-      image: quay.io/tigera/operator
+  # relatedImages is required for a certified bundle, but it cannot be set here:
+  # operator-sdk does not carry the list over from this base. gen-bundle writes
+  # it, so an image that has to be listed goes in hack/gen-bundle/update.go.
   version: 0.0.0

@@ -241,10 +241,15 @@ spec:
   install:
     spec:
       deployments:
-        - spec:
+        - name: tigera-operator
+          spec:
             template:
               spec:
                 containers:
+                  # Ordered ahead of the operator so that the digest landing on
+                  # the right container is not down to the position.
+                  - name: sidecar
+                    image: quay.io/tigera/sidecar:v0.0.0
                   - name: tigera-operator
                     image: quay.io/tigera/operator:v0.0.0
       permissions:
@@ -282,6 +287,9 @@ spec:
 				"displayName: Tigera Operator v1.42",
 				"image: quay.io/tigera/operator@sha256:bbb",
 				"- name: tigera-operator\n      image: quay.io/tigera/operator@sha256:bbb",
+				// The sidecar keeps its own image.
+				"- name: sidecar\n                    image: quay.io/tigera/sidecar:v0.0.0",
+				"- name: tigera-operator\n                    image: quay.io/tigera/operator@sha256:bbb",
 			},
 		},
 	}
@@ -313,33 +321,76 @@ spec:
 	}
 }
 
-// TestUpdateCSVWithoutADeployment checks that a CSV whose deployment spec is
-// missing fails the build rather than having one fabricated for it.
-func TestUpdateCSVWithoutADeployment(t *testing.T) {
+// TestUpdateCSVWithoutTheOperator checks that a CSV that does not hold the
+// operator deployment where we expect it fails the build, rather than having
+// one fabricated for it or the digest pinned onto something else.
+func TestUpdateCSVWithoutTheOperator(t *testing.T) {
 	t.Parallel()
 
-	const doc = `metadata:
-  name: tigera-operator.v0.0.0
-spec:
-  displayName: Tigera Operator
+	cases := []struct {
+		name string
+		doc  string
+	}{
+		{
+			name: "no deployments",
+			doc: `spec:
   install:
     spec:
       deployments:
-  version: 1.42.6
-`
-
-	path := filepath.Join(t.TempDir(), csvName)
-	writeFile(t, path, doc)
-
-	err := updateCSV(path, "1.42.6", noPreviousVersion, "Basic Install", image{
-		digest:        "quay.io/tigera/operator@sha256:bbb",
-		created:       "2026-01-02T03:04:05Z",
-		architectures: []string{"amd64"},
-	})
-	if err == nil {
-		t.Fatalf("updateCSV succeeded, want an error")
+`,
+		},
+		{
+			name: "no operator deployment",
+			doc: `spec:
+  install:
+    spec:
+      deployments:
+        - name: something-else
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: tigera-operator
+                    image: quay.io/tigera/operator:v0.0.0
+`,
+		},
+		{
+			name: "no operator container",
+			doc: `spec:
+  install:
+    spec:
+      deployments:
+        - name: tigera-operator
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: sidecar
+                    image: quay.io/tigera/sidecar:v0.0.0
+`,
+		},
 	}
-	assertNotContains(t, readFile(t, path), "containers:")
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := filepath.Join(t.TempDir(), csvName)
+			writeFile(t, path, tc.doc)
+
+			err := updateCSV(path, "1.42.6", noPreviousVersion, "Basic Install", image{
+				digest:        "quay.io/tigera/operator@sha256:bbb",
+				created:       "2026-01-02T03:04:05Z",
+				architectures: []string{"amd64"},
+			})
+			if err == nil {
+				t.Fatalf("updateCSV succeeded, want an error")
+			}
+			// The file is only written once every update has been applied, so a
+			// failure leaves it as it was.
+			assertNotContains(t, readFile(t, path), "sha256:bbb")
+		})
+	}
 }
 
 func encode(content string) string {

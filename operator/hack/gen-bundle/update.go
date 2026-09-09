@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -41,6 +42,10 @@ const (
 
 	// csvName is the name of the ClusterServiceVersion within a bundle.
 	csvName = "tigera-operator.clusterserviceversion.yaml"
+
+	// operatorName is what the operator's Deployment, its container and its
+	// relatedImages entry are all called.
+	operatorName = "tigera-operator"
 
 	// openShiftVersions is the range of OpenShift versions the bundle supports.
 	// Specify min version.
@@ -226,7 +231,7 @@ func updateCSV(path, version, prevVersion, capabilities string, img image) error
 	// certified bundle must carry. Neither the base nor operator-sdk writes the
 	// list, so this creates it.
 	updates = append(updates,
-		csvUpdate{[]any{"spec", "relatedImages", 0, "name"}, "tigera-operator"},
+		csvUpdate{[]any{"spec", "relatedImages", 0, "name"}, operatorName},
 		csvUpdate{[]any{"spec", "relatedImages", 0, "image"}, img.digest},
 	)
 
@@ -238,13 +243,13 @@ func updateCSV(path, version, prevVersion, capabilities string, img image) error
 	}
 
 	// Pin the same digest in the deployment spec that operator-sdk embedded in
-	// the CSV from the staged deploy directory. That path is generated rather
-	// than ours to create, so it has to be there already: filling it in would
-	// write a deployment with no name, no selector and no container name, which
-	// looks like a bundle right up until it is installed.
-	deploymentImage := []any{"spec", "install", "spec", "deployments", 0, "spec", "template", "spec", "containers", 0, "image"}
-	logrus.Debugf("Setting %s = %q", pathString(deploymentImage), img.digest)
-	if err := csv.mustSet(img.digest, deploymentImage...); err != nil {
+	// the CSV from the staged deploy directory. That whole path is generated
+	// rather than ours to create, so nothing along it is filled in: a missing
+	// deployment would otherwise be written as one with no name and no selector,
+	// and pinning the digest onto whichever container happens to come first
+	// would install the wrong image. Both are found by name instead, and either
+	// being absent fails the build.
+	if err := pinOperatorImage(csv, img.digest); err != nil {
 		return fmt.Errorf("updating %s: %w", path, err)
 	}
 
@@ -256,6 +261,26 @@ func updateCSV(path, version, prevVersion, capabilities string, img image) error
 
 	logrus.Infof("Updated %s", path)
 	return csv.save()
+}
+
+// pinOperatorImage rewrites the operator container's image in the deployment
+// that the CSV installs.
+func pinOperatorImage(csv *document, digest string) error {
+	deployments := []any{"spec", "install", "spec", "deployments"}
+	deployment, err := csv.find(deployments, "name", operatorName)
+	if err != nil {
+		return err
+	}
+
+	containers := append(slices.Clone(deployments), deployment, "spec", "template", "spec", "containers")
+	container, err := csv.find(containers, "name", operatorName)
+	if err != nil {
+		return err
+	}
+
+	imagePath := append(slices.Clone(containers), container, "image")
+	logrus.Debugf("Setting %s = %q", pathString(imagePath), digest)
+	return csv.mustSet(digest, imagePath...)
 }
 
 // releaseStream returns the X.Y stream that an X.Y.Z version belongs to.

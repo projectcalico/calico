@@ -152,19 +152,12 @@ func copySampleCRs(deployDir string) error {
 	return nil
 }
 
-// copyOperatorCRDs copies over and cleans up the operator CRDs required for Calico.
+// copyOperatorCRDs copies over the operator CRDs required for Calico. They are
+// shipped as committed: 'make gen-files' writes one document per file with no
+// separators, which is what operator-sdk expects.
 func copyOperatorCRDs(crdDir string) error {
 	for _, crd := range operatorCRDs {
-		dst := filepath.Join(crdDir, crd)
-		if err := copyFile(filepath.Join(operatorCRDDir, crd), dst); err != nil {
-			return err
-		}
-		// Remove empty lines and the three dashes that separate directives.
-		if err := editLines(dst, func(lines []string) []string {
-			return filterLines(lines, func(line string) bool {
-				return line == "" || line == "---"
-			})
-		}); err != nil {
+		if err := copyFile(filepath.Join(operatorCRDDir, crd), filepath.Join(crdDir, crd)); err != nil {
 			return err
 		}
 	}
