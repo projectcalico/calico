@@ -392,6 +392,123 @@ func (s settings) runUnits(units []unit) error {
 	return err
 }
 
+// A directory's units build in one tree, so they run one at a time. Publish
+// shares only a registry and stays on runUnits.
+func (s settings) runBuildUnits(units []unit) error {
+	var (
+		mu    sync.Mutex
+		locks = map[string]*sync.Mutex{}
+	)
+	dirLock := func(dir string) *sync.Mutex {
+		mu.Lock()
+		defer mu.Unlock()
+		if locks[dir] == nil {
+			locks[dir] = &sync.Mutex{}
+		}
+		return locks[dir]
+	}
+
+	_, err := forEachUnit(units, func(u unit) (unitDone, error) {
+		l := dirLock(u.dir)
+		l.Lock()
+		defer l.Unlock()
+		return unitDone{}, s.runUnit(u)
+	})
+	return err
+}
+
+// Components share build trees, so a clean during the fan-out would delete
+// what another unit is building. The root target cleans every component.
+func (s settings) clean() error {
+	s.Logger().Info("Cleaning before build")
+	out, err := s.Run("make", []string{"-C", s.RepoRoot, "clean"}, s.env(), s.LogPath("clean"))
+	if err != nil {
+		s.Logger().Error(out)
+		return s.Errorf("clean: %w", err)
+	}
+	return nil
+}
+
+// preludeSteps is work more than one component's build writes. Building it
+// once up front leaves each of those builds a cache hit instead of a race.
+var preludeSteps = []preludeStep{
+	// build-bpf depends on libbpf, so it covers both.
+	{dir: utils.FelixDir, target: buildBPF, neededBy: []string{utils.FelixDir, utils.NodeDir}},
+	{dir: utils.NFTablesDir, target: image, neededBy: []string{utils.IstioDir, utils.NodeDir}},
+}
+
+type preludeStep struct {
+	dir    string
+	target string
+
+	// neededBy is every release directory whose build writes this output.
+	neededBy []string
+}
+
+// prelude builds the shared work before the units fan out, once per named
+// architecture because each step's make target takes a single ARCH.
+func (s settings) prelude() error {
+	steps := narrowPrelude(preludeSteps, VariantDirs(s.Variants))
+	if len(steps) == 0 {
+		return nil
+	}
+	// No arch named leaves ARCH unset, so each component applies its own
+	// default rather than one chosen here.
+	arches := s.Arches
+	if len(arches) == 0 {
+		arches = []string{""}
+	}
+	for _, step := range steps {
+		for _, arch := range arches {
+			if err := s.runPrelude(step, arch); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s settings) runPrelude(step preludeStep, arch string) error {
+	log := s.Logger().WithFields(logrus.Fields{"component": step.dir, "target": step.target})
+	slug := "prelude-" + preludeSlug(step.dir)
+	args := []string{"-C", filepath.Join(s.RepoRoot, step.dir), step.target}
+	if arch != "" {
+		log = log.WithField("arch", arch)
+		slug += "-" + arch
+		args = append(args, "ARCH="+arch)
+	}
+	log.Info("Building shared work before the image builds")
+
+	out, err := s.Run("make", args, s.env(), s.LogPath(slug))
+	if err != nil {
+		log.Error(out)
+		return s.Errorf("prelude %s in %s: %w", step.target, step.dir, err)
+	}
+	return nil
+}
+
+func preludeSlug(dir string) string {
+	return strings.ReplaceAll(filepath.Clean(dir), string(filepath.Separator), "-")
+}
+
+// A step is only worth building up front while two of its directories still
+// build it; a lone writer races nobody.
+func narrowPrelude(steps []preludeStep, dirs []string) []preludeStep {
+	var out []preludeStep
+	for _, step := range steps {
+		writers := 0
+		for _, dir := range step.neededBy {
+			if slices.Contains(dirs, dir) {
+				writers++
+			}
+		}
+		if writers > 1 {
+			out = append(out, step)
+		}
+	}
+	return out
+}
+
 // runUnitOnly adapts runUnit to forEachUnit, which wants a result per unit.
 func (s settings) runUnitOnly(u unit) (unitDone, error) {
 	return unitDone{}, s.runUnit(u)

@@ -244,8 +244,11 @@ func TestImagesNarrowedToBuildOnlyDir(t *testing.T) {
 	r := runImages(t, fakeRepo(t, "v3.30.0"),
 		"build", "--registry", "quay.io/calico", "--image-release-dir", "felix")
 
-	if len(r.args) != 1 || !r.ran("felix", "release-build") {
-		t.Fatalf("expected a single felix build, ran: %v", r.args)
+	if !r.ran("felix", "release-build") {
+		t.Fatalf("expected a felix build, ran: %v", r.args)
+	}
+	if !r.ran("clean") {
+		t.Fatalf("expected a clean before the build, ran: %v", r.args)
 	}
 }
 
