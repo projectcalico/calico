@@ -1652,10 +1652,9 @@ func configureProcSysForInterface(name string, ipVersion int, rpFilter string, w
 		//   it is on or off subnet.
 		//
 		// - For containers, we install explicit routes into the containers network
-		//   namespace and we use a link-local address for the gateway.  Turing on proxy ARP
-		//   means that we don't need to assign the link local address explicitly to each
-		//   host side of the veth, which is one fewer thing to maintain and one fewer
-		//   thing we may clash over.
+		//   namespace and we use a link-local address for the gateway.  ARP and proxy ARP
+		//   are needed for that link-local address in the same way as for the gateway and
+		//   subnet IPs in the OpenStack case.
 		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
 		if err != nil {
 			return err
