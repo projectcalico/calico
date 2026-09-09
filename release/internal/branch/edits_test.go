@@ -31,10 +31,10 @@ func writeFile(t *testing.T, root, rel, content string) {
 
 func TestApplyEdits(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, root, "metadata.mk", "OPERATOR_BRANCH ?= master\n")
+	writeFile(t, root, "metadata.mk", "MANAGER_BRANCH ?= master\n")
 
 	edits := []Edit{
-		{File: "metadata.mk", Pattern: `^OPERATOR_BRANCH.*`, Replacement: "OPERATOR_BRANCH ?= release-v1.40"},
+		{File: "metadata.mk", Pattern: `^MANAGER_BRANCH.*`, Replacement: "MANAGER_BRANCH ?= release-v1.40"},
 		{File: "gone/absent.sh", Pattern: `x`, Replacement: "y"}, // missing file -> skipped
 	}
 
@@ -44,7 +44,7 @@ func TestApplyEdits(t *testing.T) {
 	require.Contains(t, skipped[0], "gone/absent.sh")
 
 	got, _ := os.ReadFile(filepath.Join(root, "metadata.mk"))
-	require.Equal(t, "OPERATOR_BRANCH ?= release-v1.40\n", string(got))
+	require.Equal(t, "MANAGER_BRANCH ?= release-v1.40\n", string(got))
 
 	// Second run: unchanged on disk, but still staged so a resume commits an
 	// edit a prior run left uncommitted.
@@ -52,7 +52,7 @@ func TestApplyEdits(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"metadata.mk"}, written)
 	got2, _ := os.ReadFile(filepath.Join(root, "metadata.mk"))
-	require.Equal(t, "OPERATOR_BRANCH ?= release-v1.40\n", string(got2))
+	require.Equal(t, "MANAGER_BRANCH ?= release-v1.40\n", string(got2))
 
 	// required + missing -> error
 	_, _, err = ApplyEdits(root, []Edit{{File: "nope", Pattern: "a", Replacement: "b", Required: true}})

@@ -41,14 +41,11 @@ func TestParseMetadata(t *testing.T) {
 		t.Fatalf("parseMetadata: %v", err)
 	}
 	cases := map[string]string{
-		KeyOrganization:         "testorg",
-		KeyGitRepo:              "testrepo",
-		KeyGitRemote:            "testremote",
-		KeyReleaseBranchPrefix:  "testprefix",
-		KeyDevTagSuffix:         "testsuffix",
-		KeyOperatorBranch:       "test-operator-branch",
-		KeyOperatorOrganization: "testopsorg",
-		KeyOperatorGitRepo:      "testopsrepo",
+		KeyOrganization:        "testorg",
+		KeyGitRepo:             "testrepo",
+		KeyGitRemote:           "testremote",
+		KeyReleaseBranchPrefix: "testprefix",
+		KeyDevTagSuffix:        "testsuffix",
 	}
 	for k, want := range cases {
 		if got := m[k]; got != want {
@@ -75,14 +72,11 @@ func TestParseMetadataIgnoresPreExistingVars(t *testing.T) {
 func TestAccessorsWithInjectedValues(t *testing.T) {
 	t.Cleanup(resetValues)
 	setValues(map[string]string{
-		KeyOrganization:         "o",
-		KeyGitRepo:              "r",
-		KeyGitRemote:            "rem",
-		KeyReleaseBranchPrefix:  "rp",
-		KeyDevTagSuffix:         "ds",
-		KeyOperatorBranch:       "ob",
-		KeyOperatorOrganization: "oo",
-		KeyOperatorGitRepo:      "orepo",
+		KeyOrganization:        "o",
+		KeyGitRepo:             "r",
+		KeyGitRemote:           "rem",
+		KeyReleaseBranchPrefix: "rp",
+		KeyDevTagSuffix:        "ds",
 	})
 	if got := Organization(); got != "o" {
 		t.Errorf("Organization: got %q, want %q", got, "o")
@@ -98,15 +92,6 @@ func TestAccessorsWithInjectedValues(t *testing.T) {
 	}
 	if got := DevTagSuffix(); got != "ds" {
 		t.Errorf("DevTagSuffix: got %q, want %q", got, "ds")
-	}
-	if got := OperatorBranch(); got != "ob" {
-		t.Errorf("OperatorBranch: got %q, want %q", got, "ob")
-	}
-	if got := OperatorOrganization(); got != "oo" {
-		t.Errorf("OperatorOrganization: got %q, want %q", got, "oo")
-	}
-	if got := OperatorRepo(); got != "orepo" {
-		t.Errorf("OperatorRepo: got %q, want %q", got, "orepo")
 	}
 }
 

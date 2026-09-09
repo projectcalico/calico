@@ -85,7 +85,7 @@ bin/calico-node:
 	chmod +x $@
 
 bin/etcdctl:
-	curl -sSfL --retry 5 -o /tmp/etcd.tar.gz https://github.com/coreos/etcd/releases/download/$(ETCD_VERSION)/etcd-$(ETCD_VERSION)-linux-$(ARCH).tar.gz
+	$(call fetch_file,https://github.com/coreos/etcd/releases/download/$(ETCD_VERSION)/etcd-$(ETCD_VERSION)-linux-$(ARCH).tar.gz,/tmp/etcd.tar.gz)
 	tar -xz -C bin --strip-components=1 -f /tmp/etcd.tar.gz etcd-$(ETCD_VERSION)-linux-$(ARCH)/etcdctl && rm -f /tmp/etcd.tar.gz
 
 bin/calicoctl:

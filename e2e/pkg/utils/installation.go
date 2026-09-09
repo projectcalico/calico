@@ -17,9 +17,10 @@ package utils
 import (
 	"context"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 // GetInstallation returns the operator Installation resource if available.

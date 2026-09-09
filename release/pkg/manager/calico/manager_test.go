@@ -16,13 +16,19 @@ package calico
 
 import (
 	"fmt"
+	"os"
+	"path"
+	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/images"
+	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 // fakeResult is the canned response for a matched command.
@@ -34,6 +40,8 @@ type fakeResult struct {
 // fakeRunner is a command.CommandRunner that returns canned output per command
 // and records every invocation so tests can assert what was (and was not) run.
 type fakeRunner struct {
+	mu sync.Mutex
+
 	// responses maps a command key ("name arg1 arg2 ...") to its canned result.
 	// A key that is a prefix of the invoked command also matches (longest-prefix
 	// wins), so tests can match on a stable command head without spelling out
@@ -43,8 +51,9 @@ type fakeRunner struct {
 	// calls records every command invoked, as "name arg1 arg2 ...".
 	calls []string
 
-	// envs records the env passed alongside each recorded call, by index.
-	envs [][]string
+	// Parallel to calls, so a test can assert what a step passed to make.
+	envs     [][]string
+	logPaths []string
 }
 
 func newFakeRunner() *fakeRunner {
@@ -58,13 +67,17 @@ func (f *fakeRunner) on(key, stdout string, err error) *fakeRunner {
 }
 
 func (f *fakeRunner) record(name string, args []string) (string, error) {
-	return f.recordEnv(name, args, nil)
+	return f.recordFull(name, args, nil, "")
 }
 
-func (f *fakeRunner) recordEnv(name string, args, env []string) (string, error) {
+// Image steps run their units concurrently, so recording has to be locked.
+func (f *fakeRunner) recordFull(name string, args, env []string, logPath string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	cmd := strings.TrimSpace(name + " " + strings.Join(args, " "))
 	f.calls = append(f.calls, cmd)
-	f.envs = append(f.envs, env)
+	f.envs = append(f.envs, slices.Clone(env))
+	f.logPaths = append(f.logPaths, logPath)
 	if res, ok := f.responses[cmd]; ok {
 		return res.stdout, res.err
 	}
@@ -82,7 +95,7 @@ func (f *fakeRunner) recordEnv(name string, args, env []string) (string, error) 
 }
 
 func (f *fakeRunner) Run(name string, args, env []string) (string, error) {
-	return f.recordEnv(name, args, env)
+	return f.recordFull(name, args, env, "")
 }
 
 func (f *fakeRunner) RunNoCapture(name string, args, env []string) error {
@@ -91,7 +104,7 @@ func (f *fakeRunner) RunNoCapture(name string, args, env []string) error {
 }
 
 func (f *fakeRunner) RunInDir(dir, name string, args, env []string) (string, error) {
-	return f.recordEnv(name, args, env)
+	return f.recordFull(name, args, env, "")
 }
 
 func (f *fakeRunner) RunInDirNoCapture(dir, name string, args, env []string) error {
@@ -100,7 +113,7 @@ func (f *fakeRunner) RunInDirNoCapture(dir, name string, args, env []string) err
 }
 
 func (f *fakeRunner) RunInDirToFile(dir, name string, args, env []string, logPath string) (string, error) {
-	return f.recordEnv(name, args, env)
+	return f.recordFull(name, args, env, logPath)
 }
 
 // ran reports whether any recorded call starts with the given command prefix.
@@ -561,6 +574,119 @@ func TestRequireOnMainBranch(t *testing.T) {
 		"a resume must be allowed when the derived branch exists")
 }
 
+// envForDir returns the environment of the first recorded make call in a
+// component directory.
+func (f *fakeRunner) envForDir(dir string) []string {
+	for i, c := range f.calls {
+		if strings.Contains(c, dir) {
+			return f.envs[i]
+		}
+	}
+	return nil
+}
+
+// logPathsForDir returns the log paths of every recorded make call in a
+// component directory.
+func (f *fakeRunner) logPathsForDir(dir string) []string {
+	var out []string
+	for i, c := range f.calls {
+		// Only unit targets are logged to a file.
+		if strings.Contains(c, dir) && f.logPaths[i] != "" {
+			out = append(out, f.logPaths[i])
+		}
+	}
+	return out
+}
+
+// unitCalls returns the calls that ran a unit's make target, ignoring the
+// image-name queries.
+func unitCalls(f *fakeRunner, target string) []string {
+	var out []string
+	for _, c := range f.calls {
+		if strings.Contains(c, " "+target) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func imageManager(t *testing.T, f *fakeRunner, logsDir string) *CalicoManager {
+	t.Helper()
+	// A publish asks each directory for its image names before recording refs.
+	for _, dir := range images.VariantDirs(images.PublishVariants) {
+		base := path.Base(dir)
+		f.on(fmt.Sprintf("make -C /repo/%s -s build-images", dir), base+" "+base+"-windows", nil)
+	}
+	// The branch tag is published into the registry the manifests name.
+	f.on(`grep -Po image:\K(.*) calicoctl.yaml`, "quay.io/calico/ctl:v3.30.0", nil)
+	return &CalicoManager{
+		runner:              f,
+		repoRoot:            "/repo",
+		calicoVersion:       "v3.30.0",
+		imageRegistries:     []string{"quay.io/tigera"},
+		images:              true,
+		logsDir:             logsDir,
+		outputDir:           t.TempDir(),
+		releaseBranchPrefix: "release",
+		resolveDigest: func(string) (string, bool, error) {
+			return "sha256:aaa", true, nil
+		},
+	}
+}
+
+// A publish must latch CONFIRM; DRYRUN pushes nothing and still reports
+// success.
+func TestPublishContainerImagesConfirms(t *testing.T) {
+	f := newFakeRunner()
+	if err := imageManager(t, f, "").publishContainerImages(); err != nil {
+		t.Fatalf("publishContainerImages: %v", err)
+	}
+	if !f.ran("make -C /repo/cmd/calico release-publish") {
+		t.Errorf("publish did not run release-publish in cmd/calico, calls: %v", f.calls)
+	}
+	env := f.envForDir("/repo/cmd/calico ")
+	if !slices.Contains(env, "CONFIRM=true") {
+		t.Error("publish env missing CONFIRM=true")
+	}
+	if slices.Contains(env, "DRYRUN=true") {
+		t.Error("publish env should not carry DRYRUN=true")
+	}
+}
+
+// Each image unit gets its own log file; concurrent units would otherwise
+// interleave into one stream.
+func TestImageStepsWriteLogFiles(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		run  func(*CalicoManager) error
+		want []string
+	}{
+		{"build", (*CalicoManager).buildContainerImages, []string{
+			"/logs/images-build/node-windows.log",
+			"/logs/images-build/node.log",
+		}},
+		{"publish", (*CalicoManager).publishContainerImages, []string{
+			// The branch tag is a second publish, so it logs under its own step.
+			"/logs/images-publish-branch/node.log",
+			"/logs/images-publish/node-windows.log",
+			"/logs/images-publish/node.log",
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeRunner()
+			if err := tc.run(imageManager(t, f, "/logs")); err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			// node ships both variants, so its two units must not share a file.
+			got := f.logPathsForDir("/repo/node ")
+			slices.Sort(got)
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("node log paths\n got %v\nwant %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestPublishContainerImagesBranchTag(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -592,12 +718,13 @@ func TestPublishContainerImagesBranchTag(t *testing.T) {
 			wantTag:       "release-v3.33-1",
 		},
 		{
-			name:          "official release does not move the branch tag",
+			name:          "an official release moves it too",
 			version:       "v3.33.0",
 			images:        true,
 			isHashRelease: false,
 			wantPublish:   true,
-			wantBranchTag: false,
+			wantBranchTag: true,
+			wantTag:       "release-v3.33",
 		},
 		{
 			// An unset prefix would silently tag images "-v3.33".
@@ -627,13 +754,11 @@ func TestPublishContainerImagesBranchTag(t *testing.T) {
 			if prefix == "" && !tt.wantErr {
 				prefix = "release"
 			}
-			r := &CalicoManager{
-				runner:              f,
-				images:              tt.images,
-				isHashRelease:       tt.isHashRelease,
-				calicoVersion:       tt.version,
-				releaseBranchPrefix: prefix,
-			}
+			r := imageManager(t, f, "")
+			r.images = tt.images
+			r.isHashRelease = tt.isHashRelease
+			r.calicoVersion = tt.version
+			r.releaseBranchPrefix = prefix
 
 			err := r.publishContainerImages()
 			if tt.wantErr {
@@ -646,20 +771,162 @@ func TestPublishContainerImagesBranchTag(t *testing.T) {
 				t.Fatalf("publishContainerImages() unexpected error: %v", err)
 			}
 
-			if got := f.ran("make -C cmd/calico release-publish"); got != tt.wantPublish {
+			if got := f.ran("make -C /repo/cmd/calico release-publish"); got != tt.wantPublish {
 				t.Errorf("release-publish ran = %v, want %v (calls: %v)", got, tt.wantPublish, f.calls)
 			}
-			if got := f.ran("make -C cmd/calico retag-build-images-with-registries"); got != tt.wantBranchTag {
+			if got := f.ran("make -C /repo/cmd/calico " + branchTagTarget); got != tt.wantBranchTag {
 				t.Errorf("branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
 			}
 			if tt.wantBranchTag {
-				if got := f.envFor("make -C cmd/calico retag-build-images-with-registries"); !slices.Contains(got, "IMAGETAG="+tt.wantTag) {
+				if got := f.envFor("make -C /repo/cmd/calico " + branchTagTarget); !slices.Contains(got, "IMAGETAG="+tt.wantTag) {
 					t.Errorf("branch tag env = %v, want IMAGETAG=%s", got, tt.wantTag)
 				}
-				if got, want := f.count("make -C"), 2*len(imageReleaseDirs)+len(windowsReleaseDirs); got != want {
-					t.Errorf("make invocations = %d, want %d (calls: %v)", got, want, f.calls)
+			}
+
+			// The operator carries the branch tag too, published to its own registries.
+			opTarget := "make -C /repo/operator retag-build-images-with-registries"
+			if got := f.ran(opTarget); got != tt.wantBranchTag {
+				t.Errorf("operator branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
+			}
+			if tt.wantBranchTag {
+				env := f.envFor(opTarget)
+				if !slices.Contains(env, "IMAGETAG="+tt.wantTag) {
+					t.Errorf("operator branch tag env = %v, want IMAGETAG=%s", env, tt.wantTag)
+				}
+				want := "DEV_REGISTRIES=" + strings.Join(operator.DefaultRegistries, " ")
+				if !slices.Contains(env, want) {
+					t.Errorf("operator branch tag env = %v, want %s", env, want)
 				}
 			}
 		})
+	}
+}
+
+// Narrowing must scope the manager's image steps the same way the CLI does.
+func TestImageStepsNarrowedToReleaseDirs(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		run    func(*CalicoManager) error
+		target string
+	}{
+		{"build", (*CalicoManager).buildContainerImages, "release-build"},
+		{"publish", (*CalicoManager).publishContainerImages, "release-publish"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeRunner()
+			m := imageManager(t, f, "")
+			m.imageReleaseDirs = []string{"whisker"}
+			if err := tc.run(m); err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			units := unitCalls(f, tc.target)
+			if len(units) != 1 {
+				t.Fatalf("expected one unit for whisker, ran: %v", units)
+			}
+			if !f.ran("make -C /repo/whisker " + tc.target) {
+				t.Errorf("did not run %s in whisker, ran: %v", tc.target, f.calls)
+			}
+		})
+	}
+}
+
+// An empty list leaves every directory in play.
+func TestImageStepsUnnarrowedByDefault(t *testing.T) {
+	f := newFakeRunner()
+	if err := imageManager(t, f, "").publishContainerImages(); err != nil {
+		t.Fatalf("publishContainerImages: %v", err)
+	}
+	want := len(images.VariantDirs([]images.Variant{images.PublishVariants[0]}))
+	if got := len(unitCalls(f, "release-publish")); got != want {
+		t.Errorf("published %d dirs, want every one of %d: %v", got, want, f.calls)
+	}
+}
+
+// The output directory is where the release writes its artifacts, so an unset
+// one is an error whatever validation is set to.
+func TestOutputDirRequiredEvenWithoutValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		run  func(*CalicoManager) error
+	}{
+		{"build", (*CalicoManager).Build},
+		{"publish prereqs", (*CalicoManager).publishPrereqs},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &CalicoManager{
+				runner:        newFakeRunner(),
+				repoRoot:      "/repo",
+				calicoVersion: "v3.30.0",
+				validate:      false,
+			}
+			err := tc.run(m)
+			if err == nil {
+				t.Fatal("expected an error when no output directory is set")
+			}
+			if !strings.Contains(err.Error(), "output directory") {
+				t.Errorf("error should name the output directory, got %q", err)
+			}
+		})
+	}
+}
+
+// TestE2EArchitectures covers the supported-arch intersection: an empty set
+// means "all" (the tooling-wide convention), the four-arch default drops
+// ppc64le/s390x, a narrowed build keeps only its supported arches, and an
+// unsupported-only set yields none.
+func TestE2EArchitectures(t *testing.T) {
+	tests := []struct {
+		name       string
+		configured []string
+		want       []string
+	}{
+		{"empty means all supported", nil, []string{"amd64", "arm64"}},
+		{"default four arches drop ppc64le/s390x", []string{"amd64", "arm64", "ppc64le", "s390x"}, []string{"amd64", "arm64"}},
+		{"narrowed build keeps only its supported arch", []string{"arm64"}, []string{"arm64"}},
+		{"unsupported-only yields none", []string{"ppc64le", "s390x"}, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, e2eArchitectures(tt.configured))
+		})
+	}
+}
+
+// TestBuildE2EBinariesUsesARCHES asserts the e2e build is restricted through
+// ARCHES, not VALIDARCHES (lib.Makefile assigns VALIDARCHES with `=`, so passing
+// it via the environment is a no-op).
+func TestBuildE2EBinariesUsesARCHES(t *testing.T) {
+	repoRoot := t.TempDir()
+	// Stage a built e2e binary so the post-build hard-link step succeeds.
+	e2eBinDir := filepath.Join(repoRoot, "e2e", "bin", "k8s")
+	require.NoError(t, os.MkdirAll(e2eBinDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(e2eBinDir, "e2e-linux-amd64.test"), []byte("x"), 0o644))
+
+	f := newFakeRunner()
+	r := &CalicoManager{
+		runner:        f,
+		repoRoot:      repoRoot,
+		outputDir:     t.TempDir(),
+		calicoVersion: "v3.34.0-0.dev-1-gabcdef123456",
+		architectures: []string{"amd64", "arm64", "ppc64le", "s390x"},
+	}
+
+	require.NoError(t, r.buildE2EBinaries())
+
+	makePrefix := "make -C " + filepath.Join(repoRoot, "e2e") + " build-all"
+	env := f.envFor(makePrefix)
+	require.NotNil(t, env, "e2e build-all was not run (calls: %v)", f.calls)
+	// Only inspect the arch env vars: env also carries os.Environ(), which can
+	// hold secrets that must not be printed on failure.
+	var archEnv []string
+	for _, e := range env {
+		if strings.HasPrefix(e, "ARCHES=") || strings.HasPrefix(e, "VALIDARCHES=") {
+			archEnv = append(archEnv, e)
+		}
+	}
+	require.Contains(t, archEnv, "ARCHES=amd64 arm64")
+	for _, e := range archEnv {
+		require.False(t, strings.HasPrefix(e, "VALIDARCHES="),
+			"e2e build-all should not set VALIDARCHES (lib.Makefile ignores it): %s", e)
 	}
 }

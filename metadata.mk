@@ -74,6 +74,8 @@ WINDOWS_VERSIONS ?= ltsc2019 ltsc2022
 # bump it to pick up upstream changes.
 CNI_VERSION=9ffe547cb3b66f80dd32a00fc69a6d0082b55321
 FLANNEL_VERSION=v1.2.0-flannel2-go1.22.7
+CONTAINERNETWORKING_PLUGINS_REPO=https://github.com/projectcalico/containernetworking-plugins.git
+FLANNEL_CNI_PLUGIN_REPO=https://github.com/projectcalico/flannel-cni-plugin.git
 
 # The libbpf version to use
 LIBBPF_VERSION=v1.6.2
@@ -89,10 +91,6 @@ NFTABLES_SHA256=6358830f3a64f31e39b0ad421d7dadcd240b72343ded48d8ef13b8faf204865a
 LIBNFTNL_VER=1.2.8
 LIBNFTNL_SHA256=37fea5d6b5c9b08de7920d298de3cdc942e7ae64b1a3e8b880b2d390ae67ad95
 
-# The operator branch corresponding to this branch.
-OPERATOR_BRANCH       ?= master
-OPERATOR_ORGANIZATION ?= tigera
-OPERATOR_GIT_REPO     ?= operator
-
 # quay.io expiry time for hashrelease/dev images
 QUAY_EXPIRE_DAYS=90
+

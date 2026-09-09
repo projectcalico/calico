@@ -664,6 +664,8 @@ blocks:
           env_vars:
             - name: CNI_PLUGIN
               value: AmazonVPC
+            - name: E2E_TEST_CONFIG
+              value: e2e/config/wireguard.yaml
 
         - name: kdd (Calico CNI)
           execution_time_limit:
@@ -685,6 +687,8 @@ blocks:
             # - [It] "DNS should provide DNS for services"
             # - [It] "DNS should provide DNS for the cluster"
             # See details: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
+            - name: E2E_TEST_CONFIG
+              value: e2e/config/iptables/eks-xtables-encap-wireguard-aws.yaml
       env_vars:
         - name: AWS_K8S_CNI_VERSION
           value: "NA"
@@ -698,8 +702,6 @@ blocks:
           value: "true"
         - name: ENABLE_WIREGUARD
           value: "true"
-        - name: E2E_TEST_CONFIG
-          value: e2e/config/wireguard.yaml
 
   # This is the old every-other-week tests
   - name: Distro support

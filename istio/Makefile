@@ -44,7 +44,7 @@ init-sources: $(ISTIO_DOWNLOADED) $(ZTUNNEL_DOWNLOADED)
 
 $(ISTIO_DOWNLOADED):
 	mkdir -p istio
-	curl -sSfL --retry 5 --retry-all-errors -o /tmp/calico-istio.tar.gz https://github.com/istio/istio/archive/refs/tags/$(ISTIO_VERSION).tar.gz
+	$(call fetch_file,https://github.com/istio/istio/archive/refs/tags/$(ISTIO_VERSION).tar.gz,/tmp/calico-istio.tar.gz)
 	tar xz --strip-components=1 -C istio -f /tmp/calico-istio.tar.gz
 	rm -f /tmp/calico-istio.tar.gz
 	patch -d istio -p1 < patches/0001-feat-cni-DSCP-magic-mark-support-for-transparent-net.patch
@@ -53,7 +53,7 @@ $(ISTIO_DOWNLOADED):
 
 $(ZTUNNEL_DOWNLOADED):
 	mkdir -p ztunnel
-	curl -sSfL --retry 5 --retry-all-errors -o /tmp/calico-ztunnel.tar.gz https://github.com/istio/ztunnel/archive/refs/tags/$(ISTIO_VERSION).tar.gz
+	$(call fetch_file,https://github.com/istio/ztunnel/archive/refs/tags/$(ISTIO_VERSION).tar.gz,/tmp/calico-ztunnel.tar.gz)
 	tar xz --strip-components=1 -C ztunnel -f /tmp/calico-ztunnel.tar.gz
 	rm -f /tmp/calico-ztunnel.tar.gz
 	patch -d ztunnel -p1 < patches/0002-transparent-policies.patch
@@ -187,7 +187,7 @@ cd: image-all cd-common
 ###############################################################################
 # Release
 ###############################################################################
-.PHONY: release-build
+.PHONY: release-build release-publish
 release-build: .release-$(VERSION).created
 
 .release-$(VERSION).created:
@@ -197,8 +197,9 @@ release-build: .release-$(VERSION).created
 	touch $@
 
 .PHONY: release-publish
-release-publish: release-prereqs .release-$(VERSION).published
-
-.release-$(VERSION).published:
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	touch $@
+release-publish: release-prereqs bin/crane
+	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
+		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \
+	else \
+		$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM); \
+	fi

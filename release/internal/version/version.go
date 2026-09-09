@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,25 +37,25 @@ type Versions interface {
 	ReleaseBranch(releaseBranchPrefix string) string
 }
 
-func NewHashreleaseVersions(calico Version, operator string) *HashreleaseVersions {
+func NewHashreleaseVersions(calico Version) *HashreleaseVersions {
 	return &HashreleaseVersions{
-		calico:   calico,
-		operator: operator,
+		calico: calico,
 	}
 }
 
 // HashreleaseVersions implements the Versions interface for a hashrelease.
 type HashreleaseVersions struct {
-	calico   Version
-	operator string
+	calico Version
 }
 
 func (v *HashreleaseVersions) ProductVersion() string {
 	return v.calico.FormattedString()
 }
 
+// OperatorVersion returns the operator's version. The operator ships on
+// Calico's version stream, so this is the same as the product version.
 func (v *HashreleaseVersions) OperatorVersion() string {
-	return fmt.Sprintf("%s-%s", v.operator, v.ProductVersion())
+	return v.ProductVersion()
 }
 
 func (v *HashreleaseVersions) HelmChartVersion() string {
@@ -63,7 +63,7 @@ func (v *HashreleaseVersions) HelmChartVersion() string {
 }
 
 func (v *HashreleaseVersions) Hash() string {
-	return fmt.Sprintf("%s-%s", v.calico.FormattedString(), v.operator)
+	return v.calico.FormattedString()
 }
 
 func (v *HashreleaseVersions) ReleaseBranch(releaseBranchPrefix string) string {

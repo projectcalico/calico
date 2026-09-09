@@ -53,6 +53,8 @@ Once you've agreed on a design for your bugfix or new feature, development again
 If your contribution is intended for an older release, the change will need to be cherry-picked into the appropriate release branch after it has been reviewed
 and merged into master.
 
+When picking changes to a release branch, you must cherry-pick the change to all release branches semantically after the target release as well. This ensures that if a user upgrades their cluster, they do not "lose" features that existed in a prior release.
+
 To create the cherry-pick PR, use `hack/cherry-pick-pull`:
 ```
 <ENV_SETTINGS> ./hack/cherry-pick-pull origin/release-vX.YY <PR_NUMBER>

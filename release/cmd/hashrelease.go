@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,13 +72,6 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					return err
 				}
 
-				// Clone the operator repository.
-				operatorDir := filepath.Join(cfg.TmpDir, c.String(operatorRepoFlag.Name))
-				err := operator.Clone(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name), operatorDir)
-				if err != nil {
-					return fmt.Errorf("failed to clone operator repository: %v", err)
-				}
-
 				// Create the pinned config.
 				pinned := pinnedversion.CalicoPinnedVersions{
 					Dir:                 cfg.TmpDir,
@@ -87,8 +80,6 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					OperatorCfg: pinnedversion.OperatorConfig{
 						Image:    c.String(operatorImageFlag.Name),
 						Registry: c.String(operatorRegistryFlag.Name),
-						Branch:   c.String(operatorBranchFlag.Name),
-						Dir:      operatorDir,
 					},
 				}
 				data, err := pinned.GenerateFile()
@@ -115,14 +106,11 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 
 				// Build the operator
 				operatorOpts := []operator.Option{
-					operator.WithOperatorDirectory(operatorDir),
-					operator.WithReleaseBranchPrefix(c.String(operatorReleaseBranchPrefixFlag.Name)),
 					operator.IsHashRelease(),
 					operator.WithImage(pinned.OperatorCfg.Image),
 					operator.WithRegistry(pinned.OperatorCfg.Registry),
 					operator.WithArchitectures(c.StringSlice(archFlag.Name)),
 					operator.WithValidate(c.Bool(validationFlag.Name)),
-					operator.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
 					operator.WithVersion(data.OperatorVersion()),
 					operator.WithCalicoDirectory(cfg.RepoRootDir),
 					operator.WithCalicoVersion(data.ProductVersion()),
@@ -153,7 +141,6 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithVersion(data.ProductVersion()),
 					calico.WithOperator(c.String(operatorRegistryFlag.Name), c.String(operatorImageFlag.Name), data.OperatorVersion()),
-					calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
 					calico.WithOutputDir(hashrel.Source),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithLogsDir(filepath.Join(cfg.LogsDir, data.ProductVersion())),
@@ -240,7 +227,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				// Push the operator hashrelease first before validaion
 				// This is because validation checks all images exists and sends to Image Scan Service
 				o := operator.NewManager(
-					operator.WithOperatorDirectory(filepath.Join(cfg.TmpDir, c.String(operatorRepoFlag.Name))),
+					operator.WithCalicoDirectory(cfg.RepoRootDir),
 					operator.IsHashRelease(),
 					operator.WithImage(hashrel.Operator.Image),
 					operator.WithRegistry(hashrel.Operator.Registry),

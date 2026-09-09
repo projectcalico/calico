@@ -52,7 +52,7 @@
 .argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-aks-w-azure-cni | wireguard | 1
 .argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-aks-with-calico-cni | wireguard | 1
 .argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-eks-kdd-aws-cni | wireguard | 1
-.argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-eks-kdd-calico-cni | wireguard | 1
+.argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-eks-kdd-calico-cni | iptables/eks-xtables-encap-wireguard-aws | 189
 .argoci/cron/e2e-iptables.yaml | ipvs | iptables/xtables-v3crd | 224
 .argoci/cron/e2e-iptables.yaml | k8s-beta-runs | iptables/xtables-manifest | 218
 .argoci/cron/e2e-iptables.yaml | k8s-distros | iptables/xtables | 228
@@ -166,7 +166,7 @@
 .semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (AKS w/ Azure CNI) / kdd | wireguard | 1
 .semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (AKS with Calico CNI) / kdd | wireguard | 1
 .semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (EKS) / kdd (AWS CNI) | wireguard | 1
-.semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (EKS) / kdd (Calico CNI) | wireguard | 1
+.semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (EKS) / kdd (Calico CNI) | iptables/eks-xtables-encap-wireguard-aws | 189
 .semaphore/end-to-end/pipelines/iptables.yml | IPVS / ipvs | iptables/xtables-v3crd | 224
 .semaphore/end-to-end/pipelines/iptables.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 9
 .semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration | iptables/xtables-manifest | 218
@@ -233,3 +233,8 @@
 .semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / v3.28 regression test | vpp/vpp-encap-extnode | 126
 .semaphore/end-to-end/pipelines/windows.yml | Calico Windows / azr-aks, 2022, stable-1, iptables, no encap, azure CNI | windows/aks-xtables-nobgp | 8
 .semaphore/end-to-end/pipelines/windows.yml | Calico Windows / azr-aso, 2022, stable, nftables, vxlan | windows/xtables-encap | 8
+.semaphore/semaphore.yml.d/blocks/20-e2e-gcp.yml | E2E tests on GCP kubeadm (local binary) / gcp-kubeadm - e2e local binary | gcp/bpf | 124
+.semaphore/semaphore.yml.d/blocks/20-e2e.yml | E2E tests (KinD) / E2E tests: Conformance (cluster routing: BIRD) | kind/conformance | 77
+.semaphore/semaphore.yml.d/blocks/20-e2e.yml | E2E tests (KinD) / E2E tests: Conformance (cluster routing: Felix) | kind/felix-routing | 78
+.semaphore/semaphore.yml.d/blocks/20-e2e.yml | E2E tests (KinD) / E2E tests: sig-calico (dataplane: BPF) | kind/bpf | 124
+.semaphore/semaphore.yml.d/blocks/20-kubevirt-live-migration.yml | KubeVirt live migration (KIND) / KubeVirt live migration (KIND) | kind/kubevirt | 11

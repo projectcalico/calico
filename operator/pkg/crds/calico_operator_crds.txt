@@ -1,0 +1,11 @@
+# The operator CRDs a Calico install ships. Read here by crds.go and by
+# manifests/generate.sh, which folds them into the CRD bundles.
+operator.tigera.io_apiservers.yaml
+operator.tigera.io_gatewayapis.yaml
+operator.tigera.io_goldmanes.yaml
+operator.tigera.io_imagesets.yaml
+operator.tigera.io_installations.yaml
+operator.tigera.io_istios.yaml
+operator.tigera.io_managementclusterconnections.yaml
+operator.tigera.io_tigerastatuses.yaml
+operator.tigera.io_whiskers.yaml

@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,12 +13,6 @@
 // limitations under the License.
 
 package operator
-
-import (
-	"fmt"
-
-	"github.com/projectcalico/calico/release/internal/utils"
-)
 
 type Option func(*OperatorManager) error
 
@@ -43,30 +37,9 @@ func WithCalicoVersion(version string) Option {
 	}
 }
 
-func WithReleaseBranchPrefix(prefix string) Option {
-	return func(o *OperatorManager) error {
-		o.releaseBranchPrefix = prefix
-		return nil
-	}
-}
-
 func WithValidate(validate bool) Option {
 	return func(o *OperatorManager) error {
 		o.validate = validate
-		return nil
-	}
-}
-
-func WithReleaseBranchValidation(validate bool) Option {
-	return func(o *OperatorManager) error {
-		o.validateBranch = validate
-		return nil
-	}
-}
-
-func WithPublish(publish bool) Option {
-	return func(o *OperatorManager) error {
-		o.publish = publish
 		return nil
 	}
 }
@@ -93,8 +66,23 @@ func WithVersion(version string) Option {
 }
 
 func WithRegistry(registry string) Option {
+	return WithRegistries([]string{registry})
+}
+
+func WithRegistries(registries []string) Option {
 	return func(o *OperatorManager) error {
-		o.registry = registry
+		// An unset flag reaches here as an empty string, which would otherwise leave the
+		// image published nowhere.
+		var named []string
+		for _, r := range registries {
+			if r != "" {
+				named = append(named, r)
+			}
+		}
+		if len(named) == 0 {
+			return nil
+		}
+		o.registries = named
 		return nil
 	}
 }
@@ -109,20 +97,6 @@ func WithProductRegistry(registry string) Option {
 func WithImage(image string) Option {
 	return func(o *OperatorManager) error {
 		o.image = image
-		return nil
-	}
-}
-
-func WithPinnedComponents(filePath string) Option {
-	return func(o *OperatorManager) error {
-		exists, err := utils.FileExists(filePath)
-		if err != nil {
-			return fmt.Errorf("check pinned components file exists: %w", err)
-		}
-		if !exists {
-			return fmt.Errorf("pinned components file does not exist at path: %s", filePath)
-		}
-		o.pinnedComponentsFile = filePath
 		return nil
 	}
 }

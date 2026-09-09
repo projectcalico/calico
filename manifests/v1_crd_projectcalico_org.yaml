@@ -1,6 +1,6 @@
 # crd.projectcalico.org/v1 and operator.tigera.io/v1 APIs
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_apiservers.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_apiservers.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2995,7 +2995,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_gatewayapis.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_gatewayapis.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -8765,7 +8765,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_goldmanes.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_goldmanes.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -10357,7 +10357,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_imagesets.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_imagesets.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -10437,7 +10437,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_installations.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_installations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -19980,7 +19980,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_istios.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_istios.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -23438,7 +23438,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_managementclusterconnections.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_managementclusterconnections.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -23858,7 +23858,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_tigerastatuses.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_tigerastatuses.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -23991,7 +23991,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_whiskers.yaml
+# Source: operator/pkg/crds/operator/operator.tigera.io_whiskers.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:

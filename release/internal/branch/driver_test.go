@@ -123,13 +123,13 @@ func TestCutBranchStepIdempotent(t *testing.T) {
 // update-derived calls PrepareDerived; plan mode does not.
 func TestUpdateDerivedRunsPrepareBranch(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, root, "metadata.mk", "OPERATOR_BRANCH ?= master\n")
+	writeFile(t, root, "metadata.mk", "MANAGER_BRANCH ?= master\n")
 
 	var events []string
 	p := &CutPlan{Derived: utils.ReleaseBranchPrefix() + "-v3.33"}
 	prepare := func(derived string) ([]string, error) {
 		written, _, err := ApplyEdits(root, []Edit{
-			{File: "metadata.mk", Pattern: `^OPERATOR_BRANCH.*`, Replacement: "OPERATOR_BRANCH ?= release-vX"},
+			{File: "metadata.mk", Pattern: `^MANAGER_BRANCH.*`, Replacement: "MANAGER_BRANCH ?= release-vX"},
 		})
 		require.NoError(t, err)
 		events = append(events, "prepare:"+derived)
@@ -142,7 +142,7 @@ func TestUpdateDerivedRunsPrepareBranch(t *testing.T) {
 	step := findStep(t, planD.steps(planG, p), "update-derived")
 	require.NoError(t, planD.runSteps([]Step{step}))
 	require.Empty(t, events)
-	require.Equal(t, "OPERATOR_BRANCH ?= master\n", readFile(t, root, "metadata.mk"))
+	require.Equal(t, "MANAGER_BRANCH ?= master\n", readFile(t, root, "metadata.mk"))
 
 	// apply mode: the hook runs and its edit lands.
 	applyD, applyG := stepDriver(root, (&fakeRunner{}).fn(), false, nil)
@@ -150,7 +150,7 @@ func TestUpdateDerivedRunsPrepareBranch(t *testing.T) {
 	step = findStep(t, applyD.steps(applyG, p), "update-derived")
 	require.NoError(t, applyD.runSteps([]Step{step}))
 	require.Equal(t, []string{"prepare:" + utils.ReleaseBranchPrefix() + "-v3.33"}, events)
-	require.Equal(t, "OPERATOR_BRANCH ?= release-vX\n", readFile(t, root, "metadata.mk"))
+	require.Equal(t, "MANAGER_BRANCH ?= release-vX\n", readFile(t, root, "metadata.mk"))
 }
 
 // push-refs Done reports not-done when the remote ref sha differs,
@@ -205,7 +205,7 @@ func initGitRepo(t *testing.T) string {
 	run("config", "user.email", "test@example.com")
 	run("config", "user.name", "test")
 	run("config", "commit.gpgsign", "false")
-	writeFile(t, root, "metadata.mk", "OPERATOR_BRANCH ?= master\n")
+	writeFile(t, root, "metadata.mk", "MANAGER_BRANCH ?= master\n")
 	run("add", ".")
 	run("commit", "-q", "-m", "initial")
 	return root
@@ -247,7 +247,7 @@ func TestFlowLandsEditOnNewBranch(t *testing.T) {
 	}
 	prepare := func(string) ([]string, error) {
 		written, _, err := ApplyEdits(root, []Edit{
-			{File: "metadata.mk", Pattern: `^OPERATOR_BRANCH.*`, Replacement: "OPERATOR_BRANCH ?= " + utils.ReleaseBranchPrefix() + "-v3.33"},
+			{File: "metadata.mk", Pattern: `^MANAGER_BRANCH.*`, Replacement: "MANAGER_BRANCH ?= " + utils.ReleaseBranchPrefix() + "-v3.33"},
 		})
 		return written, err
 	}
@@ -268,7 +268,7 @@ func TestFlowLandsEditOnNewBranch(t *testing.T) {
 	// The edited file content on the new branch reflects the edit.
 	content, err := command.GitInDir(root, "show", utils.ReleaseBranchPrefix()+"-v3.33:metadata.mk")
 	require.NoError(t, err)
-	require.Contains(t, content, "OPERATOR_BRANCH ?= "+utils.ReleaseBranchPrefix()+"-v3.33")
+	require.Contains(t, content, "MANAGER_BRANCH ?= "+utils.ReleaseBranchPrefix()+"-v3.33")
 
 	// The head is the edits commit, not an empty "Begin development" commit.
 	subject := gitHeadSubject(t, root, utils.ReleaseBranchPrefix()+"-v3.33")
@@ -294,7 +294,7 @@ func TestTagDerivedMovesStaleLocalTag(t *testing.T) {
 	d, g := stepDriver(root, nil, false, nil)
 	d.PrepareDerived = func(string) ([]string, error) {
 		written, _, err := ApplyEdits(root, []Edit{
-			{File: "metadata.mk", Pattern: `^OPERATOR_BRANCH.*`, Replacement: "OPERATOR_BRANCH ?= " + utils.ReleaseBranchPrefix() + "-v3.33"},
+			{File: "metadata.mk", Pattern: `^MANAGER_BRANCH.*`, Replacement: "MANAGER_BRANCH ?= " + utils.ReleaseBranchPrefix() + "-v3.33"},
 		})
 		return written, err
 	}
@@ -374,7 +374,7 @@ func TestUpdateDerivedCommitsHookReturnedFiles(t *testing.T) {
 	d, g := stepDriver(root, nil, false, nil)
 	d.PrepareDerived = func(string) ([]string, error) {
 		written, _, err := ApplyEdits(root, []Edit{
-			{File: "metadata.mk", Pattern: `^OPERATOR_BRANCH.*`, Replacement: "OPERATOR_BRANCH ?= " + utils.ReleaseBranchPrefix() + "-v3.33"},
+			{File: "metadata.mk", Pattern: `^MANAGER_BRANCH.*`, Replacement: "MANAGER_BRANCH ?= " + utils.ReleaseBranchPrefix() + "-v3.33"},
 		})
 		require.NoError(t, err)
 		writeFile(t, root, "hook-file.txt", "written by the hook\n")
@@ -393,7 +393,7 @@ func TestUpdateDerivedCommitsHookReturnedFiles(t *testing.T) {
 	// The hook's edit landed in the same commit.
 	meta, err := command.GitInDir(root, "show", utils.ReleaseBranchPrefix()+"-v3.33:metadata.mk")
 	require.NoError(t, err)
-	require.Contains(t, meta, "OPERATOR_BRANCH ?= "+utils.ReleaseBranchPrefix()+"-v3.33")
+	require.Contains(t, meta, "MANAGER_BRANCH ?= "+utils.ReleaseBranchPrefix()+"-v3.33")
 }
 
 // srcBumpRepo makes a temp repo whose metadata.mk carries CALICO_VERSION v3.33.0.
@@ -408,7 +408,7 @@ func srcBumpRepo(t *testing.T) string {
 	run("config", "user.email", "test@example.com")
 	run("config", "user.name", "test")
 	run("config", "commit.gpgsign", "false")
-	writeFile(t, root, "metadata.mk", "OPERATOR_BRANCH ?= master\nMANAGER_BRANCH ?= master\nCALICO_VERSION=v3.33.0\n")
+	writeFile(t, root, "metadata.mk", "MANAGER_BRANCH ?= master\nCALICO_VERSION=v3.33.0\n")
 	run("add", ".")
 	run("commit", "-q", "-m", "initial")
 	return root
@@ -698,7 +698,7 @@ func TestValidateFreshCutNoValidate(t *testing.T) {
 	initGitRemote(t, root)
 	_, err := command.GitInDir(root, "branch", "--set-upstream-to=origin/master", "master")
 	require.NoError(t, err)
-	writeFile(t, root, "metadata.mk", "OPERATOR_BRANCH ?= dirty\n")
+	writeFile(t, root, "metadata.mk", "MANAGER_BRANCH ?= dirty\n")
 	d := newTestDriver(t, Driver{RepoRoot: root, Validate: false})
 	p := &CutPlan{Derived: utils.ReleaseBranchPrefix() + "-v3.33", Source: "master"}
 	require.NoError(t, d.validateFreshCut(gitIn(root), p))
@@ -714,7 +714,7 @@ func TestValidateFreshCutDirtyTree(t *testing.T) {
 	_, err := command.GitInDir(root, "branch", "--set-upstream-to=origin/master", "master")
 	require.NoError(t, err)
 	// Make the tracked tree dirty.
-	writeFile(t, root, "metadata.mk", "OPERATOR_BRANCH ?= dirty\n")
+	writeFile(t, root, "metadata.mk", "MANAGER_BRANCH ?= dirty\n")
 
 	g := gitIn(root)
 	p := &CutPlan{Derived: utils.ReleaseBranchPrefix() + "-v3.33", Source: "master"}
@@ -778,7 +778,7 @@ func TestUpdateDerivedResetsWhenSourceAdvanced(t *testing.T) {
 	p := &CutPlan{Derived: derived, Source: "master"}
 	prepare := func(string) ([]string, error) {
 		written, _, err := ApplyEdits(root, []Edit{
-			{File: "metadata.mk", Pattern: `^OPERATOR_BRANCH.*`, Replacement: "OPERATOR_BRANCH ?= " + derived},
+			{File: "metadata.mk", Pattern: `^MANAGER_BRANCH.*`, Replacement: "MANAGER_BRANCH ?= " + derived},
 		})
 		return written, err
 	}
@@ -807,5 +807,5 @@ func TestUpdateDerivedResetsWhenSourceAdvanced(t *testing.T) {
 	require.Contains(t, content, "added after the cut", "derived must pick up the advanced source commit")
 	meta, err := command.GitInDir(root, "show", derived+":metadata.mk")
 	require.NoError(t, err)
-	require.Contains(t, meta, "OPERATOR_BRANCH ?= "+derived, "the edit must be re-applied after the reset")
+	require.Contains(t, meta, "MANAGER_BRANCH ?= "+derived, "the edit must be re-applied after the reset")
 }
