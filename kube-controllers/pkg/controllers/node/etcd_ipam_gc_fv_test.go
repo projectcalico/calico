@@ -29,7 +29,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
-	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
@@ -98,10 +97,9 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 
 		dataFeed := utils.NewDataFeed(c, utils.Etcdv3)
 
-		cfg := config.NodeControllerConfig{
-			DeleteNodes:            true,
-			AutoHostEndpointConfig: &config.AutoHostEndpointConfig{},
-			LeakGracePeriod:        &metav1.Duration{Duration: 15 * time.Minute},
+		cfg := api.NodeControllerConfig{
+			HostEndpoint:    &api.AutoHostEndpointConfig{},
+			LeakGracePeriod: &metav1.Duration{Duration: 15 * time.Minute},
 		}
 
 		ctrl := node.NewNodeController(
@@ -109,6 +107,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 			k8sClient,
 			c,
 			cfg,
+			true,
 			nodeInformer, podInformer,
 			dataFeed,
 			nil,
