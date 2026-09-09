@@ -150,7 +150,6 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     ${proxy_env[@]+"${proxy_env[@]}"} \
     -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
     -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
-    -v "$(pwd)"/.go-mod-cache:/go/pkg/mod:rw \
     -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
     -w /go/src/github.com/projectcalico/calico \
     "${RUN_IMAGE}" \
