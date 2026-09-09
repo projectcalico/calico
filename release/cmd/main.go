@@ -75,6 +75,7 @@ func Commands(cfg *Config) []*cli.Command {
 		releaseCommand(cfg),
 		branchCommand(cfg),
 		imagesCommand(cfg),
+		chartsCommand(cfg),
 	}
 }
 
