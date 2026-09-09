@@ -11,6 +11,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"go.yaml.in/yaml/v3"
 
+	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
@@ -126,7 +127,10 @@ func TestImagesInMetadata(t *testing.T) {
 }
 
 func getMetadataImages() ([]string, error) {
-	metadataURL := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s", githubOrg, githubRepo, releaseVersion, metadataFileName)
+	metadataURL, err := github.DownloadURL(githubOrg, githubRepo, releaseVersion, metadataFileName)
+	if err != nil {
+		return nil, fmt.Errorf("metadata url: %v", err)
+	}
 
 	// Fetch the metadata
 	resp, err := http.Get(metadataURL)

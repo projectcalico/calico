@@ -26,6 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.yaml.in/yaml/v3"
 
+	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/registry"
@@ -141,10 +142,7 @@ func (p *Pin) ComponentVersion(component string) string {
 // HelmChartVersion returns the chart version: the product version, suffixed
 // with ChartVersion when the charts rev separately from the product.
 func (p *Pin) HelmChartVersion() string {
-	if p.ChartVersion == "" {
-		return p.ProductVersion
-	}
-	return fmt.Sprintf("%s-%s", p.ProductVersion, p.ChartVersion)
+	return charts.Version(p.ProductVersion, p.ChartVersion)
 }
 
 // ReleaseBranch returns the release branch for the pinned product version.
