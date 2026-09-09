@@ -32,7 +32,9 @@ load_image() {
     local component=$1
     local name=$2
     local s3_path=$3
-    local marker=$4
+    shift 3
+    local markers=("$@")
+    local marker
 
     if ! "${REPO_ROOT}/.semaphore/s3-cmd" cp "${S3_WORKFLOW_DIR}/${s3_path}" "/tmp/${s3_path}" 2>/dev/null; then
         if have_credentials || ! was_requested "$component"; then
@@ -40,7 +42,7 @@ load_image() {
             return
         fi
         echo "No cached ${name} image (credential-less build); building it from source."
-        build_image "$component" "$marker"
+        build_image "$component" "${markers[@]}"
         return
     fi
 
@@ -50,10 +52,10 @@ load_image() {
     docker load -i "${tar_path}"
     rm -f "${tar_path}"
 
-    if [ -n "$marker" ]; then
+    for marker in "${markers[@]}"; do
         mkdir -p "$(dirname "$marker")"
         touch "$marker"
-    fi
+    done
 }
 
 # True when the S3 credentials are present. Mirrors .semaphore/s3-cmd, which
@@ -74,7 +76,7 @@ was_requested() {
 # lib.Makefile, the same rule the producer block builds it with.
 build_image() {
     local component=$1
-    local marker=$2
+    shift
 
     # node's Dockerfile takes the patched nftables RPMs from a local image. Its
     # build would produce that image from scratch (~20 min); pulling the
@@ -83,7 +85,7 @@ build_image() {
         "${REPO_ROOT}/.semaphore/scripts/load-nft-rpms.sh" "$ARCH"
     fi
 
-    make -C "${REPO_ROOT}" "$marker" ARCH="$ARCH"
+    make -C "${REPO_ROOT}" "$@" ARCH="$ARCH"
 }
 
 load_image calico  "calico/calico"  "calico-image.tar.zst"  "${REPO_ROOT}/cmd/calico/.image.created-${ARCH}"
@@ -95,3 +97,12 @@ load_image whisker "calico/whisker" "whisker-image.tar.zst" "${REPO_ROOT}/whiske
 # bakes in the kind component refs. On a miss the kind lanes' own targets
 # build it.
 load_image ""      "calico/operator" "operator-image.tar.zst" "${REPO_ROOT}/operator/.image.created-${ARCH}"
+
+# The third-party images ship as one tarball because no kind lane wants a
+# subset. Like the operator they are never built from source here; a miss leaves
+# that to the lane's own `make image`.
+load_image ""      "third-party"     "third-party-images.tar.zst" \
+    "${REPO_ROOT}/third_party/envoy-gateway/.envoy-gateway.created-${ARCH}" \
+    "${REPO_ROOT}/third_party/envoy-proxy/.envoy-proxy.created-${ARCH}" \
+    "${REPO_ROOT}/third_party/envoy-ratelimit/.envoy-ratelimit.created-${ARCH}" \
+    "${REPO_ROOT}/third_party/cni-plugins/.cni-plugins.created-${ARCH}"
