@@ -45,7 +45,7 @@ var (
 	// calicoImageRef resolves the combined calico/calico image exactly as the
 	// renderer does, so the expected image tracks whatever version this build
 	// stamps into ComponentCalico rather than a hardcoded tag.
-	calicoImageRef, _ = components.GetReference(components.CombinedCalicoImage(&operatorv1.InstallationSpec{Variant: operatorv1.Calico}), "", "", "", nil)
+	calicoImageRef, _ = components.GetReference(components.ComponentCalico, "", "", "", nil)
 	// whiskerImageRef resolves the whisker image the same way the renderer does.
 	whiskerImageRef, _ = components.GetReference(components.ComponentCalicoWhisker, "", "", "", nil)
 )
