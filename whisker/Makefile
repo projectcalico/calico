@@ -67,7 +67,7 @@ ut: image-nginx-test
 
 .PHONY: clean
 clean:
-	rm -rf bin dist node_modules *.created *.published
+	rm -rf bin dist node_modules *.created *.published .release-*
 
 ###############################################################################
 # Release

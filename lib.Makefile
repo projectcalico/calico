@@ -2043,7 +2043,7 @@ DOCKER_MANIFEST = echo [DRY RUN] $(DOCKER_MANIFEST_CMD)
 endif
 
 # Named per component so concurrent builds do not remove each other's builder.
-WINDOWS_BUILDER = $(if $(notdir $(CURDIR)),calico-windows-builder-$(notdir $(CURDIR)),calico-windows-builder)
+WINDOWS_BUILDER = calico-windows-builder-$(notdir $(CURDIR))
 
 # Clean up the docker builder used to create Windows image tarballs.
 .PHONY: clean-windows-builder

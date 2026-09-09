@@ -394,39 +394,63 @@ func (s settings) runUnits(units []unit) error {
 
 // A directory's units build in one tree, so they run one at a time. Publish
 // shares only a registry and stays on runUnits.
-func (s settings) runBuildUnits(units []unit) error {
-	var (
-		mu    sync.Mutex
-		locks = map[string]*sync.Mutex{}
-	)
-	dirLock := func(dir string) *sync.Mutex {
-		mu.Lock()
-		defer mu.Unlock()
-		if locks[dir] == nil {
-			locks[dir] = &sync.Mutex{}
-		}
-		return locks[dir]
-	}
-
+func (s settings) runBuildUnits(units []unit, g *dirGate) error {
 	_, err := forEachUnit(units, func(u unit) (unitDone, error) {
-		l := dirLock(u.dir)
-		l.Lock()
-		defer l.Unlock()
+		defer g.hold(u.dir)()
 		return unitDone{}, s.runUnit(u)
 	})
 	return err
 }
 
-// Components share build trees, so a clean during the fan-out would delete
-// what another unit is building. The root target cleans every component.
-func (s settings) clean() error {
-	s.Logger().Info("Cleaning before build")
-	out, err := s.Run("make", []string{"-C", s.RepoRoot, "clean"}, s.env(), s.LogPath("clean"))
-	if err != nil {
-		s.Logger().Error(out)
-		return s.Errorf("clean: %w", err)
+// dirGate keeps two make invocations out of one directory at a time. Cleans and
+// builds share it: node's clean reaches into felix's tree.
+type dirGate struct {
+	mu    sync.Mutex
+	locks map[string]*sync.Mutex
+}
+
+func newDirGate() *dirGate { return &dirGate{locks: map[string]*sync.Mutex{}} }
+
+func (g *dirGate) hold(dir string) func() {
+	g.mu.Lock()
+	if g.locks[dir] == nil {
+		g.locks[dir] = &sync.Mutex{}
 	}
-	return nil
+	l := g.locks[dir]
+	g.mu.Unlock()
+
+	l.Lock()
+	return l.Unlock
+}
+
+// clean runs each build directory's own clean, never the root target: that one
+// also cleans release/, whose _output and tmp this run is using.
+//
+// node's clean reaches into felix's tree, so the cleans take the same
+// per-directory lock the builds do.
+func (s settings) clean(g *dirGate) error {
+	dirs := VariantDirs(s.Variants)
+	s.Logger().WithField("components", len(dirs)).Info("Cleaning before build")
+
+	var errs []error
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, dir := range dirs {
+		wg.Go(func() {
+			if err := s.cleanDir(dir, g); err != nil {
+				mu.Lock()
+				errs = append(errs, err)
+				mu.Unlock()
+			}
+		})
+	}
+	wg.Wait()
+	return errors.Join(errs...)
+}
+
+func (s settings) cleanDir(dir string, g *dirGate) error {
+	defer g.hold(dir)()
+	return s.runUnit(unit{variant: cleanVariant, dir: dir, target: "clean", env: s.env()})
 }
 
 // preludeSteps is work more than one component's build writes. Building it
@@ -434,7 +458,6 @@ func (s settings) clean() error {
 var preludeSteps = []preludeStep{
 	// build-bpf depends on libbpf, so it covers both.
 	{dir: utils.FelixDir, target: buildBPF, neededBy: []string{utils.FelixDir, utils.NodeDir}},
-	{dir: utils.NFTablesDir, target: image, neededBy: []string{utils.IstioDir, utils.NodeDir}},
 }
 
 type preludeStep struct {
@@ -468,27 +491,15 @@ func (s settings) prelude() error {
 	return nil
 }
 
+// A prelude step runs as a unit so it gets the same retry and log naming.
 func (s settings) runPrelude(step preludeStep, arch string) error {
-	log := s.Logger().WithFields(logrus.Fields{"component": step.dir, "target": step.target})
-	slug := "prelude-" + preludeSlug(step.dir)
-	args := []string{"-C", filepath.Join(s.RepoRoot, step.dir), step.target}
+	variant := preludeVariant
+	target := step.target
 	if arch != "" {
-		log = log.WithField("arch", arch)
-		slug += "-" + arch
-		args = append(args, "ARCH="+arch)
+		variant += "-" + arch
+		target += " ARCH=" + arch
 	}
-	log.Info("Building shared work before the image builds")
-
-	out, err := s.Run("make", args, s.env(), s.LogPath(slug))
-	if err != nil {
-		log.Error(out)
-		return s.Errorf("prelude %s in %s: %w", step.target, step.dir, err)
-	}
-	return nil
-}
-
-func preludeSlug(dir string) string {
-	return strings.ReplaceAll(filepath.Clean(dir), string(filepath.Separator), "-")
+	return s.runUnit(unit{variant: variant, dir: step.dir, target: target, env: s.env()})
 }
 
 // A step is only worth building up front while two of its directories still

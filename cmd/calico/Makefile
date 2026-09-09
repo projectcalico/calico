@@ -40,7 +40,7 @@ IMAGE_TAG = latest
 
 .PHONY: clean
 clean:
-	rm -rf bin .image.created-*
+	rm -rf bin .image.created-* .release-*
 	-docker image rm -f $$(docker images $(CALICO_IMAGE) -a -q) 2>/dev/null
 
 .PHONY: ut

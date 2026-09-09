@@ -662,6 +662,7 @@ func TestImageStepsWriteLogFiles(t *testing.T) {
 		want []string
 	}{
 		{"build", (*CalicoManager).buildContainerImages, []string{
+			"/logs/images-build/node-clean.log",
 			"/logs/images-build/node-windows.log",
 			"/logs/images-build/node.log",
 		}},

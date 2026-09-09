@@ -118,16 +118,16 @@ var once sync.Once
 
 // build directories
 const (
-	FelixDir                 = "felix"
-	CmdCalicoDir             = "cmd/calico"
-	IstioDir                 = "istio"
-	NodeDir                  = "node"
-	CNIPluginDir             = "cni-plugin"
-	ThirdPartyCNIDir         = "third_party/cni-plugins"
-	ThirdPartyEnvoyGateway   = "third_party/envoy-gateway"
-	ThirdPartyEnvoyProxy     = "third_party/envoy-proxy"
-	ThirdPartyEnvoyRatelimit = "third_party/envoy-ratelimit"
-	WhiskerDir               = "whisker"
+	FelixDir                    = "felix"
+	CmdCalicoDir                = "cmd/calico"
+	IstioDir                    = "istio"
+	NodeDir                     = "node"
+	CNIPluginDir                = "cni-plugin"
+	ThirdPartyCNIDir            = "third_party/cni-plugins"
+	ThirdPartyEnvoyGatewayDir   = "third_party/envoy-gateway"
+	ThirdPartyEnvoyProxyDir     = "third_party/envoy-proxy"
+	ThirdPartyEnvoyRatelimitDir = "third_party/envoy-ratelimit"
+	WhiskerDir                  = "whisker"
 
 	NFTablesDir = "hack/rpms/nftables"
 	// OperatorDir is the operator's component directory. It publishes to registries of
@@ -147,9 +147,9 @@ var (
 		IstioDir,
 		NodeDir,
 		ThirdPartyCNIDir,
-		ThirdPartyEnvoyGateway,
-		ThirdPartyEnvoyProxy,
-		ThirdPartyEnvoyRatelimit,
+		ThirdPartyEnvoyGatewayDir,
+		ThirdPartyEnvoyProxyDir,
+		ThirdPartyEnvoyRatelimitDir,
 		WhiskerDir,
 	}
 

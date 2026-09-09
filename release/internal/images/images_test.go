@@ -286,8 +286,9 @@ func TestLogPaths(t *testing.T) {
 		}
 		slices.Sort(got)
 		want := []string{
-			"/logs/images-build/clean.log",
+			"/logs/images-build/cmd-calico-clean.log",
 			"/logs/images-build/cmd-calico.log",
+			"/logs/images-build/node-clean.log",
 			"/logs/images-build/node-windows.log",
 			"/logs/images-build/node.log",
 		}
@@ -423,13 +424,14 @@ func TestBuildStillRunsIndependentDirsTogether(t *testing.T) {
 
 // A step whose log path collided with another's would lose its output.
 func TestPreludeLogPathsAreDistinct(t *testing.T) {
+	s := settings{}
 	seen := map[string]string{}
 	for _, step := range preludeSteps {
-		slug := preludeSlug(step.dir)
-		if other, dup := seen[slug]; dup {
-			t.Errorf("%s and %s share the log name %s", other, step.dir, slug)
+		p := s.logPath(unit{variant: preludeVariant, dir: step.dir})
+		if other, dup := seen[p]; dup {
+			t.Errorf("%s and %s share the log name %s", other, step.dir, p)
 		}
-		seen[slug] = step.dir
+		seen[p] = step.dir
 	}
 }
 
@@ -501,6 +503,42 @@ func TestNarrowPrelude(t *testing.T) {
 				t.Errorf("narrowPrelude(%v)\n got %v\nwant %v", tc.dirs, got, tc.want)
 			}
 		})
+	}
+}
+
+// The tool's own _output and tmp live under release/, and it is mid-run.
+func TestBuildNeverCleansTheReleaseDir(t *testing.T) {
+	f := &fakeRunner{}
+	if err := Build(testRepoRoot, testVersion, ossVariants(), buildOpts(f)...); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	for _, c := range f.calls {
+		if !slices.Contains(c.args, "clean") {
+			continue
+		}
+		if dir := c.args[1]; dir == testRepoRoot || strings.HasSuffix(dir, "/release") {
+			t.Errorf("clean reached %s, which holds the running tool's output", dir)
+		}
+	}
+}
+
+// Each build directory cleans its own tree, so nothing cleans a component
+// this run is not rebuilding.
+func TestCleanCoversExactlyTheBuildDirs(t *testing.T) {
+	f := &fakeRunner{}
+	variants := NarrowVariants(BuildVariants, []string{"whisker"})
+	if err := Build(testRepoRoot, testVersion, variants, buildOpts(f)...); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var cleaned []string
+	for _, c := range f.calls {
+		if slices.Contains(c.args, "clean") {
+			cleaned = append(cleaned, c.args[1])
+		}
+	}
+	want := []string{filepath.Join(testRepoRoot, "whisker")}
+	if !slices.Equal(cleaned, want) {
+		t.Errorf("cleaned %v, want %v", cleaned, want)
 	}
 }
 
