@@ -114,27 +114,55 @@ func basicAuthHeader(user, password string) string {
 	return r.Header.Get("Authorization")
 }
 
+// firstEnv returns the first of names that is set to a non-empty value.
+// It lets the CI-provenance fields below be filled from whichever CI system
+// is running us, without the caller caring which.
+func firstEnv(names ...string) string {
+	for _, n := range names {
+		if v := os.Getenv(n); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 // ciMetadata gathers the fields the tool injects into every doc whose
 // producer hasn't already set them.
+//
+// Provenance comes from whichever CI system is running us: Semaphore exports
+// SEMAPHORE_*, ArgoCI exports CI_GIT_*.  Reading both means a test moved
+// between them keeps landing complete documents, rather than silently
+// recording blank git_commit/git_branch and an env of "dev" -- which would be
+// indistinguishable from a developer's laptop run and would pollute the trend
+// data (see hack/perf/README.md).
+//
+// env defaults to "dev", becomes "ci" when a recognised CI run ID is present,
+// and can be set explicitly with PERF_ENV.  Scheduled runs should set
+// PERF_ENV so their results can be told apart from per-PR ones -- they may
+// use different machine types, so their timings are not comparable.
 func ciMetadata() map[string]any {
-	sha := os.Getenv("SEMAPHORE_GIT_SHA")
+	sha := firstEnv("SEMAPHORE_GIT_SHA", "CI_GIT_SHA")
 	codeVer := sha
 	if len(codeVer) > 12 {
 		codeVer = codeVer[:12]
 	}
+	runID := firstEnv("SEMAPHORE_JOB_ID", "CI_JOB_ID", "CI_WORKFLOW_NAME")
 	env := "dev"
-	if os.Getenv("SEMAPHORE_JOB_ID") != "" {
+	if runID != "" {
 		env = "ci"
+	}
+	if e := os.Getenv("PERF_ENV"); e != "" {
+		env = e
 	}
 	m := map[string]any{
 		fieldTimestamp:   time.Now().UTC().Format(time.RFC3339),
 		fieldGitCommit:   sha,
-		fieldGitBranch:   os.Getenv("SEMAPHORE_GIT_BRANCH"),
+		fieldGitBranch:   firstEnv("SEMAPHORE_GIT_BRANCH", "CI_GIT_BRANCH"),
 		fieldCodeVersion: codeVer,
-		fieldCIRunID:     os.Getenv("SEMAPHORE_JOB_ID"),
+		fieldCIRunID:     runID,
 		fieldEnv:         env,
 	}
-	if pr := os.Getenv("SEMAPHORE_GIT_PR_NUMBER"); pr != "" {
+	if pr := firstEnv("SEMAPHORE_GIT_PR_NUMBER", "CI_GIT_PR_NUMBER"); pr != "" {
 		m[fieldPRNumber] = pr
 	}
 	return m
