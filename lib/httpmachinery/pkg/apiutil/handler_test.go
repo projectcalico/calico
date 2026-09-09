@@ -39,7 +39,7 @@ func TestJSONListResponse(t *testing.T) {
 
 	hdlr := apiutil.NewJSONListOrEventStreamHandler(func(ctx apicontext.Context, params Request) apiutil.ListOrStreamResponse[Response] {
 		Expect(params.ReqField).To(Equal("value"))
-		return apiutil.NewListOrStreamResponse[Response]().SetStatus(http.StatusOK).SendList(apiutil.ListMeta{TotalPages: 20}, []Response{
+		return apiutil.NewListOrStreamResponse[Response]().SetStatus(http.StatusOK).SendList(apiutil.ListMeta{TotalPages: 20, TotalResults: 40}, []Response{
 			{RespField: "foo"},
 			{RespField: "bar"},
 		})
@@ -57,7 +57,8 @@ func TestJSONListResponse(t *testing.T) {
 	hdlr.ServeHTTP(apiutil.NewNOOPRouterConfig(), w, r)
 
 	type ListMetadata struct {
-		TotalPages int `json:"totalPages"`
+		TotalPages   int `json:"totalPages"`
+		TotalResults int `json:"totalResults"`
 	}
 
 	type ListResponse struct {
@@ -71,7 +72,8 @@ func TestJSONListResponse(t *testing.T) {
 			{RespField: "bar"},
 		},
 		Total: ListMetadata{
-			TotalPages: 20,
+			TotalPages:   20,
+			TotalResults: 40,
 		},
 	}))
 }
