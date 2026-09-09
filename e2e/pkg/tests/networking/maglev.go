@@ -587,7 +587,7 @@ func (m *MaglevTests) sendRequestsAndGatherStats(extNode *externalnode.Client, u
 
 	// The external node runs this image via plain `docker run`, so docker pulls it
 	// unless load_images.sh already loaded it there.
-	rapidClient := images.RapidClientImage()
+	rapidClient := images.RapidClient
 
 	for i := range totalRequests {
 		// Use external node to run rapidclient with netexec endpoint to get hostname

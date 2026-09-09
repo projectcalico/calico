@@ -64,18 +64,13 @@ const (
 
 	// CalicoBIRD: Calico BIRD 1.x. Keep in sync with BIRD_VERSION in metadata.mk.
 	CalicoBIRD = "calico/bird:v0.3.3-211-g9111ec3c"
+
+	// RapidClient is the multi-mode rapidclient helper: client mode for Maglev,
+	// MODE=server for the packet-size dataplane server (see
+	// e2e/images/rapidclient/DESIGN.md). Keep the tag in sync with the root
+	// Makefile and load_images.sh.
+	RapidClient = "quay.io/tigeradev/rapidclient:latest"
 )
-
-// rapidClientImage is the multi-mode rapidclient helper: client mode for Maglev,
-// MODE=server for the packet-size dataplane server (see
-// e2e/images/rapidclient/DESIGN.md). Keep the tag in sync with the root Makefile
-// and load_images.sh.
-const rapidClientImage = "quay.io/tigeradev/rapidclient:latest"
-
-// RapidClientImage returns the rapidclient image reference.
-func RapidClientImage() string {
-	return rapidClientImage
-}
 
 // Get client image and powershell command based on windows OS version
 func WindowsClientImage() string {

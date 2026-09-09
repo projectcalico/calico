@@ -92,7 +92,7 @@ func generatePacketLengths(mtu int) (getLengths, postLengths, udpLengths []int) 
 // server.
 func withPacketSizeServer(pod *v1.Pod) {
 	for i := range pod.Spec.Containers {
-		pod.Spec.Containers[i].Image = images.RapidClientImage()
+		pod.Spec.Containers[i].Image = images.RapidClient
 		pod.Spec.Containers[i].Args = nil
 
 		// The rapidclient image is multi-mode; MODE=server selects the HTTP/UDP

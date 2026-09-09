@@ -31,10 +31,10 @@ const seedScript = "../../../../.argoci/scripts/phases/seed_images.sh"
 // notSeeded holds the images the seed script deliberately leaves out, with the
 // reason. Anything else declared in images.go has to be in the script.
 var notSeeded = map[string]string{
-	"Porter":           "runs on Windows nodes, which the seed script does not reach",
-	"KubeVirtUbuntu":   "a containerDisk, pulled only by the KubeVirt lane",
-	"CalicoBIRD":       "run through docker on the external node, not as a pod",
-	"rapidClientImage": "pulled from quay, and side-loaded from source by phases/load_images.sh on the PR lane",
+	"Porter":         "runs on Windows nodes, which the seed script does not reach",
+	"KubeVirtUbuntu": "a containerDisk, pulled only by the KubeVirt lane",
+	"CalicoBIRD":     "run through docker on the external node, not as a pod",
+	"RapidClient":    "pulled from quay, and side-loaded from source by phases/load_images.sh on the PR lane",
 }
 
 func TestWorkloadImagesAreSeeded(t *testing.T) {
@@ -65,13 +65,13 @@ func TestWorkloadImagesAreSeeded(t *testing.T) {
 }
 
 func TestRapidClientImageIsConsistent(t *testing.T) {
-	ref, ok := declaredImages(t)["rapidClientImage"]
+	ref, ok := declaredImages(t)["RapidClient"]
 	if !ok {
-		t.Fatal("images.go no longer declares rapidClientImage")
+		t.Fatal("images.go no longer declares RapidClient")
 	}
 	repo, tag, ok := strings.Cut(ref, ":")
 	if !ok {
-		t.Fatalf("rapidClientImage %q has no tag", ref)
+		t.Fatalf("RapidClient %q has no tag", ref)
 	}
 
 	// The side-loaded copy is only used when every one of these names the same

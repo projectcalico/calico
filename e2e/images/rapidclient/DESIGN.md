@@ -34,10 +34,9 @@ Motivations:
 - Altering `Packet Size Verification` test logic or assertions. `server` mode is
   a like-for-like replacement of the flask server.
 - Altering the maglev client invocation. The `docker run … -url … -port …` call
-  in `maglev.go` is unchanged except for its image ref (now via
-  `RapidClientImage()`).
-- Digest-pinning the published image. CI runs against a per-lane tag loaded onto
-  the nodes (see *Image delivery to test nodes*); pinning the published `:latest`
+  in `maglev.go` is unchanged except for its image ref (now `images.RapidClient`).
+- Digest-pinning the published image. The PR lanes load their own build over the
+  same tag (see *Image delivery to test nodes*); pinning the published `:latest`
   to an immutable digest is separate future hardening.
 - Deleting `tigera/k8s-e2e/images/flask`. This binary stops *referencing* the
   flask image; retiring it there is a follow-up.
@@ -101,12 +100,7 @@ CI trigger are unchanged.
 Both consumers use the same image, so a single reference serves both:
 
 ```go
-const rapidClientImage = "quay.io/tigeradev/rapidclient:latest"
-
-// RapidClientImage returns the rapidclient image reference.
-func RapidClientImage() string {
-    return rapidClientImage
-}
+RapidClient = "quay.io/tigeradev/rapidclient:latest"
 ```
 
 Consumers:
@@ -273,7 +267,7 @@ drift apart.
 
 ## Rollout & follow-ups
 
-- The multi-mode binary, multi-arch publish, `RapidClientImage()` switch, and the
+- The multi-mode binary, multi-arch publish, `images.RapidClient` switch, and the
   per-lane image loads land together so the packet-size suite runs against the
   PR-built server atomically, without a registry push.
 - **Follow-up — retire the flask image.** Once packet-size is green on arm64, drop

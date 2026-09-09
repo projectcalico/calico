@@ -113,7 +113,7 @@ Response: {"output":"backend-pod-5\n"}
 
 ## How the e2e tests get this image
 
-The tests reference the image via `images.RapidClientImage()`
+The tests reference the image via `images.RapidClient`
 (`e2e/pkg/utils/images/images.go`), which is a single pinned reference:
 `quay.io/tigeradev/rapidclient:latest`. Pods use `ImagePullPolicy: IfNotPresent`,
 so a copy already on the node wins over a pull.
