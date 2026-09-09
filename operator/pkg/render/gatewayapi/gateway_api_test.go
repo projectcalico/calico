@@ -407,11 +407,9 @@ var _ = Describe("Gateway API rendering tests", func() {
 	})
 
 	It("honours gateway controller customizations", func() {
-		DeferCleanup(components.UseImages(components.EnterpriseImages))
-
 		installation := &operatorv1.InstallationSpec{
 			Registry: "myregistry.io/",
-			Variant:  operatorv1.CalicoEnterprise,
+			Variant:  operatorv1.Calico,
 		}
 		threeReplicas := int32(3)
 		topologySpreadConstraints := []corev1.TopologySpreadConstraint{{
@@ -458,9 +456,9 @@ var _ = Describe("Gateway API rendering tests", func() {
 		Expect(gatewayCompErr).NotTo(HaveOccurred())
 
 		Expect(gatewayComp.ResolveImages(nil)).NotTo(HaveOccurred())
-		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyGatewayImage).To(Equal("myregistry.io/tigera/envoy-gateway:" + components.ComponentGatewayAPIEnvoyGateway.Version))
-		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyRatelimitImage).To(Equal("myregistry.io/tigera/envoy-ratelimit:" + components.ComponentGatewayAPIEnvoyRatelimit.Version))
-		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyProxyImage).To(Equal("myregistry.io/tigera/envoy-proxy:" + components.ComponentGatewayAPIEnvoyProxy.Version))
+		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyGatewayImage).To(Equal("myregistry.io/calico/envoy-gateway:" + components.ComponentCalicoEnvoyGateway.Version))
+		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyRatelimitImage).To(Equal("myregistry.io/calico/envoy-ratelimit:" + components.ComponentCalicoEnvoyRatelimit.Version))
+		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyProxyImage).To(Equal("myregistry.io/calico/envoy-proxy:" + components.ComponentCalicoEnvoyProxy.Version))
 
 		objsToCreate, objsToDelete := gatewayComp.Objects()
 		expectLegacyCleanup(objsToDelete, false)
@@ -479,18 +477,16 @@ var _ = Describe("Gateway API rendering tests", func() {
 		Expect(gatewayConfig.Provider.Kubernetes.RateLimitDeployment).NotTo(BeNil())
 		Expect(gatewayConfig.Provider.Kubernetes.RateLimitDeployment.Name).NotTo(BeNil())
 		Expect(*gatewayConfig.Provider.Kubernetes.RateLimitDeployment.Name).To(Equal(customName))
-		Expect(*gatewayConfig.Provider.Kubernetes.ShutdownManager.Image).To(Equal("myregistry.io/tigera/envoy-gateway:" + components.ComponentGatewayAPIEnvoyGateway.Version))
+		Expect(*gatewayConfig.Provider.Kubernetes.ShutdownManager.Image).To(Equal("myregistry.io/calico/envoy-gateway:" + components.ComponentCalicoEnvoyGateway.Version))
 		Expect(gatewayConfig.ExtensionAPIs).NotTo(BeNil())
 		Expect(gatewayConfig.ExtensionAPIs.EnableBackend).To(BeTrue())
 		Expect(gatewayConfig.ExtensionAPIs.EnableEnvoyPatchPolicy).To(BeTrue())
 	})
 
 	It("honours GatewayClass and EnvoyProxy customizations", func() {
-		DeferCleanup(components.UseImages(components.EnterpriseImages))
-
 		installation := &operatorv1.InstallationSpec{
 			Registry: "myregistry.io/",
-			Variant:  operatorv1.CalicoEnterprise,
+			Variant:  operatorv1.Calico,
 		}
 		twoReplicas := int32(2)
 		topologySpreadConstraints := []corev1.TopologySpreadConstraint{{
@@ -661,9 +657,9 @@ var _ = Describe("Gateway API rendering tests", func() {
 		Expect(gatewayCompErr).NotTo(HaveOccurred())
 
 		Expect(gatewayComp.ResolveImages(nil)).NotTo(HaveOccurred())
-		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyGatewayImage).To(Equal("myregistry.io/tigera/envoy-gateway:" + components.ComponentGatewayAPIEnvoyGateway.Version))
-		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyRatelimitImage).To(Equal("myregistry.io/tigera/envoy-ratelimit:" + components.ComponentGatewayAPIEnvoyRatelimit.Version))
-		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyProxyImage).To(Equal("myregistry.io/tigera/envoy-proxy:" + components.ComponentGatewayAPIEnvoyProxy.Version))
+		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyGatewayImage).To(Equal("myregistry.io/calico/envoy-gateway:" + components.ComponentCalicoEnvoyGateway.Version))
+		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyRatelimitImage).To(Equal("myregistry.io/calico/envoy-ratelimit:" + components.ComponentCalicoEnvoyRatelimit.Version))
+		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyProxyImage).To(Equal("myregistry.io/calico/envoy-proxy:" + components.ComponentCalicoEnvoyProxy.Version))
 
 		objsToCreate, objsToDelete := gatewayComp.Objects()
 		expectLegacyCleanup(objsToDelete, false)
