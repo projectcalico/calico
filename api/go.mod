@@ -1,6 +1,6 @@
 module github.com/projectcalico/api
 
-go 1.25.13
+go 1.25.14
 
 require (
 	github.com/jinzhu/copier v0.4.0
