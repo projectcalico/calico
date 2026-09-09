@@ -27,6 +27,7 @@ type Set struct {
 	Goldmane          GoldmaneExtension
 	Whisker           WhiskerExtension
 	GatewayAPI        GatewayAPIExtension
+	UIGateway         UIGatewayExtension
 
 	// Startup is the variant's hook into operator startup rather than into a controller.
 	Startup StartupExtension
@@ -112,6 +113,13 @@ func (e Extensions) GatewayAPI() GatewayAPIExtension {
 		return noopGatewayAPI{}
 	}
 	return e.set.GatewayAPI
+}
+
+func (e Extensions) UIGateway() UIGatewayExtension {
+	if e.set.UIGateway == nil {
+		return noopUIGateway{}
+	}
+	return e.set.UIGateway
 }
 
 func (e Extensions) Startup() StartupExtension {

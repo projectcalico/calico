@@ -49,6 +49,12 @@ const (
 	// once no labeled Gateway from any component remains, so components that
 	// share a namespace never delete it out from under each other.
 	GatewayNamespaceLabel = "operator.tigera.io/gateway-namespace"
+
+	// RBACFinalizer holds a gateway access Role and RoleBinding until the
+	// gateway resources they authorize deleting are gone, so teardown cannot
+	// strip the operator's own write grant first and orphan them. The
+	// uigateway helper removes it once those resources no longer exist.
+	RBACFinalizer = "operator.tigera.io/gateway-rbac-finalizer"
 )
 
 // Configuration holds everything the shared gateway component needs to render
@@ -162,6 +168,16 @@ func GatewayName(prefix string) string { return prefix + "-gateway" }
 // RouteName is the HTTPRoute object name for a component's resource prefix.
 func RouteName(prefix string) string { return prefix + "-route" }
 
+// BackendName is the Envoy Gateway Backend object name for a component's resource prefix.
+func BackendName(prefix string) string { return prefix + "-backend" }
+
+// ReferenceGrantName is the ReferenceGrant object name for a component's resource prefix.
+func ReferenceGrantName(prefix string) string { return prefix + "-allow-gateway" }
+
+// ListenerName is the Gateway's HTTPS listener name for a component's resource
+// prefix. The HTTPRoute's parentRef sectionName must match it to attach.
+func ListenerName(prefix string) string { return prefix + "-https" }
+
 // gatewayAccess grants the operator the write permissions needed in the gateway namespace; the
 // cluster-wide ClusterRole keeps the reads.
 func (c *gatewayComponent) gatewayAccess() (*rbacv1.Role, *rbacv1.RoleBinding) {
@@ -194,33 +210,35 @@ func (c *gatewayComponent) backendAccess() (*rbacv1.Role, *rbacv1.RoleBinding) {
 // own ServiceAccount, the identity that renders the gateway resources.
 func (c *gatewayComponent) access(name, namespace string, rules []rbacv1.PolicyRule) (*rbacv1.Role, *rbacv1.RoleBinding) {
 	return &rbacv1.Role{
-		TypeMeta: metav1.TypeMeta{Kind: "Role", APIVersion: "rbac.authorization.k8s.io/v1"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels:    map[string]string{GatewayLabel: c.cfg.ResourcePrefix},
-		},
-		Rules: rules,
-	}, &rbacv1.RoleBinding{
-		TypeMeta: metav1.TypeMeta{Kind: "RoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels:    map[string]string{GatewayLabel: c.cfg.ResourcePrefix},
-		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: "rbac.authorization.k8s.io",
-			Kind:     "Role",
-			Name:     name,
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:      "ServiceAccount",
-				Name:      common.OperatorServiceAccount(),
-				Namespace: common.OperatorNamespace(),
+			TypeMeta: metav1.TypeMeta{Kind: "Role", APIVersion: "rbac.authorization.k8s.io/v1"},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       name,
+				Namespace:  namespace,
+				Labels:     map[string]string{GatewayLabel: c.cfg.ResourcePrefix},
+				Finalizers: []string{RBACFinalizer},
 			},
-		},
-	}
+			Rules: rules,
+		}, &rbacv1.RoleBinding{
+			TypeMeta: metav1.TypeMeta{Kind: "RoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       name,
+				Namespace:  namespace,
+				Labels:     map[string]string{GatewayLabel: c.cfg.ResourcePrefix},
+				Finalizers: []string{RBACFinalizer},
+			},
+			RoleRef: rbacv1.RoleRef{
+				APIGroup: "rbac.authorization.k8s.io",
+				Kind:     "Role",
+				Name:     name,
+			},
+			Subjects: []rbacv1.Subject{
+				{
+					Kind:      "ServiceAccount",
+					Name:      common.OperatorServiceAccount(),
+					Namespace: common.OperatorNamespace(),
+				},
+			},
+		}
 }
 
 func (c *gatewayComponent) tlsSecret() *corev1.Secret {
@@ -230,7 +248,7 @@ func (c *gatewayComponent) tlsSecret() *corev1.Secret {
 }
 
 func (c *gatewayComponent) gateway() *gapi.Gateway {
-	listenerName := gapi.SectionName(c.cfg.ResourcePrefix + "-https")
+	listenerName := gapi.SectionName(ListenerName(c.cfg.ResourcePrefix))
 	hostname := gapi.Hostname(c.cfg.Hostname)
 	tlsSecretName := c.cfg.TLSKeyPair.GetName()
 
@@ -272,8 +290,8 @@ func (c *gatewayComponent) gateway() *gapi.Gateway {
 
 func (c *gatewayComponent) httpRoute() *gapi.HTTPRoute {
 	gatewayName := gapi.ObjectName(GatewayName(c.cfg.ResourcePrefix))
-	sectionName := gapi.SectionName(c.cfg.ResourcePrefix + "-https")
-	backendName := gapi.ObjectName(c.cfg.ResourcePrefix + "-backend")
+	sectionName := gapi.SectionName(ListenerName(c.cfg.ResourcePrefix))
+	backendName := gapi.ObjectName(BackendName(c.cfg.ResourcePrefix))
 	backendNS := gapi.Namespace(c.cfg.BackendNamespace)
 	group := gapi.Group(EnvoyGatewayGroup)
 
@@ -325,7 +343,7 @@ func (c *gatewayComponent) backend() *envoyapi.Backend {
 	return &envoyapi.Backend{
 		TypeMeta: metav1.TypeMeta{Kind: BackendKind, APIVersion: "gateway.envoyproxy.io/v1alpha1"},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      c.cfg.ResourcePrefix + "-backend",
+			Name:      BackendName(c.cfg.ResourcePrefix),
 			Namespace: c.cfg.BackendNamespace,
 		},
 		Spec: envoyapi.BackendSpec{
@@ -356,12 +374,12 @@ func (c *gatewayComponent) backend() *envoyapi.Backend {
 // and CRDManagementPreferExisting leaves it alone). v1beta1 is still the
 // storage version as of Gateway API v1.6.
 func (c *gatewayComponent) referenceGrant() *gapiv1b1.ReferenceGrant {
-	backendName := gapi.ObjectName(c.cfg.ResourcePrefix + "-backend")
+	backendName := gapi.ObjectName(BackendName(c.cfg.ResourcePrefix))
 
 	return &gapiv1b1.ReferenceGrant{
 		TypeMeta: metav1.TypeMeta{Kind: "ReferenceGrant", APIVersion: "gateway.networking.k8s.io/v1beta1"},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      c.cfg.ResourcePrefix + "-allow-gateway",
+			Name:      ReferenceGrantName(c.cfg.ResourcePrefix),
 			Namespace: c.cfg.BackendNamespace,
 		},
 		Spec: gapiv1b1.ReferenceGrantSpec{
@@ -506,11 +524,11 @@ func (c *gatewayDeletionComponent) Objects() (objsToCreate, objsToDelete []clien
 		objs = append(objs,
 			&envoyapi.Backend{
 				TypeMeta:   metav1.TypeMeta{Kind: BackendKind, APIVersion: "gateway.envoyproxy.io/v1alpha1"},
-				ObjectMeta: metav1.ObjectMeta{Name: prefix + "-backend", Namespace: bkNS},
+				ObjectMeta: metav1.ObjectMeta{Name: BackendName(prefix), Namespace: bkNS},
 			},
 			&gapiv1b1.ReferenceGrant{
 				TypeMeta:   metav1.TypeMeta{Kind: "ReferenceGrant", APIVersion: "gateway.networking.k8s.io/v1beta1"},
-				ObjectMeta: metav1.ObjectMeta{Name: prefix + "-allow-gateway", Namespace: bkNS},
+				ObjectMeta: metav1.ObjectMeta{Name: ReferenceGrantName(prefix), Namespace: bkNS},
 			},
 		)
 	}
@@ -536,8 +554,10 @@ func (c *gatewayDeletionComponent) Objects() (objsToCreate, objsToDelete []clien
 		ObjectMeta: metav1.ObjectMeta{Name: GatewayName(prefix), Namespace: staleNS},
 	})
 
-	// The grants go after the resources they permit deleting. The backend grant
-	// is dropped only by the backend namespace's own component.
+	// The grants carry RBACFinalizer, so these deletes only mark them; they
+	// hold the operator's write access until the uigateway helper clears the
+	// finalizer once the resources above are gone. The backend grant is
+	// dropped only by the backend namespace's own component.
 	objs = append(objs, c.roleBinding(staleNS, gatewayAccessSuffix), c.role(staleNS, gatewayAccessSuffix))
 	if staleNS == bkNS && c.cfg.TargetNamespace == "" {
 		objs = append(objs, c.roleBinding(bkNS, backendAccessSuffix), c.role(bkNS, backendAccessSuffix))
