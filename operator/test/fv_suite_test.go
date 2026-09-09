@@ -26,7 +26,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/components"
 )
 
-// A spec that builds the Enterprise extensions registers the Enterprise images for the
+// A spec that builds a variant's extensions registers that variant's images for the
 // whole process, so every spec starts from the images this build ships.
 var _ = ginkgo.BeforeEach(func() {
 	ginkgo.DeferCleanup(components.UseBuild(components.Build{}))

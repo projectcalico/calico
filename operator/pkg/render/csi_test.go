@@ -296,7 +296,7 @@ var _ = Describe("CSI rendering tests", func() {
 		})
 	})
 
-	It("should use private images when Variant = Calico", func() {
+	It("should run both containers from the combined calico image", func() {
 		comp := render.CSI(&cfg)
 		Expect(comp.ResolveImages(nil)).To(BeNil())
 		createObjs, _ := comp.Objects()
