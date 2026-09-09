@@ -17,9 +17,9 @@ limitations under the License.
 # Neighbour discovery — proxy ARP and proxy NDP
 
 How Felix makes workload IPs resolvable by ARP and NDP: the
-workload-facing `proxy_arp` / `proxy_ndp` sysctls, the fabric-facing
-userspace proxy-neighbour responder, why the IPv4 and IPv6 stories are
-deeply asymmetric, and how each interacts with VM live migration.
+workload-facing `proxy_arp` sysctl, the fabric-facing userspace
+proxy-neighbour responder, why the IPv4 and IPv6 stories are deeply
+asymmetric, and how each interacts with VM live migration.
 
 The dataplane architecture these managers sit in — the manager/driver
 split, the `OnUpdate` / `CompleteDeferredWork` contract, dual-stack
@@ -31,13 +31,13 @@ sub-designs is listed in [`felix/DESIGN.md`](../DESIGN.md).
 Calico answers neighbour-discovery requests in two unrelated places,
 for two unrelated reasons. Keep them apart:
 
-| | Workload-facing | Fabric-facing |
-|---|---|---|
-| What | `proxy_arp` / `proxy_ndp` sysctls, per workload interface | userspace raw-socket listener on host NICs |
-| Code | `endpoint_mgr.go` → `configureInterface` | `proxy_neigh_mgr.go` (the "proxy neighbour manager", PNM) |
-| Answers requests from | the local workload | the fabric outside the node |
-| Answers for | whatever the host has a route to (the kernel decides) | pod and LoadBalancer IPs that fall inside a host NIC's subnet |
-| Why | let the guest/pod reach everything without per-workload subnet plumbing | make an IP drawn from a host-NIC subnet reachable without extra BGP |
+|                       | Workload-facing                                                         | Fabric-facing                                                       |
+|-----------------------|-------------------------------------------------------------------------|---------------------------------------------------------------------|
+| What                  | `proxy_arp` sysctl, per workload interface                              | userspace raw-socket listener on host NICs                          |
+| Code                  | `endpoint_mgr.go` → `configureInterface`                                | `proxy_neigh_mgr.go` (the "proxy neighbour manager", PNM)           |
+| Answers requests from | the local workload                                                      | the fabric outside the node                                         |
+| Answers for           | whatever the host has a route to (the kernel decides)                   | pod and LoadBalancer IPs that fall inside a host NIC's subnet       |
+| Why                   | let the guest/pod reach everything without per-workload subnet plumbing | make an IP drawn from a host-NIC subnet reachable without extra BGP |
 
 The fabric-facing responder does **not** replace the sysctls, and the
 two are not alternative implementations of one feature. A change to one
