@@ -1090,10 +1090,16 @@ var _ = Describe("NetworkUnavailable condition", func() {
 	})
 
 	It("should set the NetworkUnavailable condition to false", func() {
+		// Cancelling up front would now be read as a shutdown, so let the
+		// readiness wait time out instead and cancel once it has done its work.
 		done, cancel := context.WithCancel(ctx)
-		cancel() // Immediately cancel, we don't need to run indefinitely.
-		err := ManageNodeCondition(done, 10*time.Second)
-		Expect(err).NotTo(HaveOccurred(), "ManageNodeCondition failed")
+		defer cancel()
+		errCh := make(chan error, 1)
+		go func() { errCh <- ManageNodeCondition(done, 2*time.Second) }()
+		DeferCleanup(func() {
+			cancel()
+			Eventually(errCh, "10s").Should(Receive(BeNil()), "ManageNodeCondition failed")
+		})
 
 		// Query the k8s node object and check the condition.
 		var k8sNode *v1.Node
@@ -1105,12 +1111,21 @@ var _ = Describe("NetworkUnavailable condition", func() {
 		Expect(k8sNode).NotTo(BeNil(), "k8s node %s was nil", nodeName)
 
 		var condition *v1.NodeCondition
-		for i := range k8sNode.Status.Conditions {
-			if k8sNode.Status.Conditions[i].Type == v1.NodeNetworkUnavailable {
-				condition = &k8sNode.Status.Conditions[i]
-				break
+		Eventually(func() *v1.NodeCondition {
+			n, err := cs.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+			if err != nil {
+				return nil
 			}
-		}
+			for i := range n.Status.Conditions {
+				if n.Status.Conditions[i].Type == v1.NodeNetworkUnavailable {
+					return &n.Status.Conditions[i]
+				}
+			}
+			return nil
+		}, "30s", "1s").Should(Satisfy(func(c *v1.NodeCondition) bool {
+			condition = c
+			return c != nil
+		}), "k8s node %s did not have a NetworkUnavailable condition", nodeName)
 		Expect(condition).NotTo(BeNil(), "k8s node %s did not have a NetworkUnavailable condition", nodeName)
 		Expect(condition.Status).To(Equal(v1.ConditionFalse), "k8s node %s NetworkUnavailable condition was not False", nodeName)
 	})

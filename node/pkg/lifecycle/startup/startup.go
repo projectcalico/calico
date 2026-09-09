@@ -252,6 +252,11 @@ func Run(opts ...RunOpt) {
 // waits for Felix and BIRD to be ready before setting the NetworkUnavailable condition to false.
 func ManageNodeCondition(done context.Context, timeout time.Duration) error {
 	if err := waitForReady(done, timeout); err != nil {
+		if done.Err() != nil {
+			// Shutting down. Marking the network available now would clear the
+			// shutdown timestamp the preStop hook just wrote.
+			return nil
+		}
 		log.WithError(err).Error("Calico failed to become ready, continuing anyway")
 	}
 	if err := MarkNetworkAvailable(); err != nil {
@@ -471,6 +476,11 @@ func MonitorIPAddressSubnetsWithContext(ctx context.Context) error {
 			var err error
 			k8sNode, err = clientset.CoreV1().Nodes().Get(ctx, k8sNodeName, metav1.GetOptions{})
 			if err != nil {
+				if kerrors.IsNotFound(err) {
+					// Absent while kubelet re-registers it; re-check on the next tick.
+					log.WithField("node", k8sNodeName).Warn("Node not in the datastore, retrying")
+					continue
+				}
 				return fmt.Errorf("failed to read Node from datastore: %w", err)
 			}
 		}

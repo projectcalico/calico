@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	gnet "net"
+	"sync/atomic"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -36,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 )
 
 func setTunnelAddressForNode(tunnelType string, n *internalapi.Node, addr string) {
@@ -1726,7 +1728,8 @@ var _ = Describe("reconciler run loop", func() {
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
 		done = make(chan error, 1)
-		r = reconciler{nodename: "node1", ch: make(chan struct{}, 1)}
+		// Unbuffered, as in production: OnUpdates drops triggers sent mid-reconcile.
+		r = reconciler{nodename: "node1", ch: make(chan struct{})}
 	})
 
 	AfterEach(func() { cancel() })
@@ -1744,6 +1747,21 @@ var _ = Describe("reconciler run loop", func() {
 		Eventually(done, "5s").Should(Receive(BeNil()))
 	})
 
+	// OnUpdates drops a trigger that lands mid-reconcile, so the loop has to
+	// re-check on its own or it waits for an update that never comes.
+	It("retries a missing node without needing another trigger", func() {
+		c := &countingNotFoundClient{}
+		r.client = c
+		go func() { done <- r.run(ctx) }()
+
+		r.ch <- struct{}{}
+		Eventually(c.calls, "20s", "500ms").Should(BeNumerically(">=", 2),
+			"the loop must re-check without a second trigger")
+
+		cancel()
+		Eventually(done, "5s").Should(Receive(BeNil()))
+	})
+
 	It("still reports any other reconcile failure", func() {
 		r.client = datastoreDownClient{}
 		go func() { done <- r.run(ctx) }()
@@ -1752,3 +1770,42 @@ var _ = Describe("reconciler run loop", func() {
 		Eventually(done, "5s").Should(Receive(MatchError(ContainSubstring("datastore is down"))))
 	})
 })
+
+// countingNotFoundClient always reports the node missing and counts the lookups.
+type countingNotFoundClient struct {
+	client.Interface
+	n atomic.Int64
+}
+
+func (c *countingNotFoundClient) calls() int64 { return c.n.Load() }
+
+func (c *countingNotFoundClient) Nodes() client.NodeInterface { return countingNotFoundNodes{c} }
+
+type countingNotFoundNodes struct {
+	owner *countingNotFoundClient
+}
+
+func (n countingNotFoundNodes) Create(context.Context, *internalapi.Node, options.SetOptions) (*internalapi.Node, error) {
+	panic("not used")
+}
+
+func (n countingNotFoundNodes) Update(context.Context, *internalapi.Node, options.SetOptions) (*internalapi.Node, error) {
+	panic("not used")
+}
+
+func (n countingNotFoundNodes) Delete(context.Context, string, options.DeleteOptions) (*internalapi.Node, error) {
+	panic("not used")
+}
+
+func (n countingNotFoundNodes) List(context.Context, options.ListOptions) (*internalapi.NodeList, error) {
+	panic("not used")
+}
+
+func (n countingNotFoundNodes) Watch(context.Context, options.ListOptions) (watch.Interface, error) {
+	panic("not used")
+}
+
+func (n countingNotFoundNodes) Get(_ context.Context, name string, _ options.GetOptions) (*internalapi.Node, error) {
+	n.owner.n.Add(1)
+	return nil, cerrors.ErrorResourceDoesNotExist{Identifier: name}
+}
