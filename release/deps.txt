@@ -87,6 +87,7 @@ local:release/internal/outputs
 local:release/internal/pinnedversion
 local:release/internal/registry
 local:release/internal/slack
+local:release/internal/steps
 local:release/internal/utils
 local:release/internal/version
 local:release/pkg/manager/calico
