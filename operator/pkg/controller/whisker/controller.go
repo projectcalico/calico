@@ -142,6 +142,7 @@ func newReconciler(
 		clusterDomain: opts.ClusterDomain,
 		variant:       opts.Variant,
 		ext:           opts.Extensions.Whisker(),
+		gwExt:         opts.Extensions.UIGateway(),
 	}
 	c.status.Run(opts.ShutdownContext)
 	return c
@@ -158,6 +159,7 @@ type Reconciler struct {
 	clusterDomain string
 	variant       operatorv1.ProductVariant
 	ext           extensions.WhiskerExtension
+	gwExt         extensions.UIGatewayExtension
 }
 
 // Reconcile reads that state of the cluster for a Whisker object and makes changes based on the
@@ -177,7 +179,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 
 		// Gateway objects are garbage-collected with the CR, but a namespace the
 		// operator created for them has no owner reference and must be torn down here.
-		gwHelper := uigateway.NewHelper(r.cli, uigateway.Config{
+		gwHelper := uigateway.NewHelper(r.cli, r.gwExt, uigateway.Config{
 			ResourcePrefix:   whisker.GatewayResourcePrefix,
 			TLSSecretName:    whisker.GatewayTLSSecretName,
 			BackendNamespace: whisker.WhiskerNamespace,
@@ -313,7 +315,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		cfg.ClusterID = clusterInfo.Spec.ClusterGUID
 	}
 
-	gwHelper := uigateway.NewHelper(r.cli, uigateway.Config{
+	gwHelper := uigateway.NewHelper(r.cli, r.gwExt, uigateway.Config{
 		ResourcePrefix:               whisker.GatewayResourcePrefix,
 		TLSSecretName:                whisker.GatewayTLSSecretName,
 		BackendNamespace:             whisker.WhiskerNamespace,
