@@ -40,7 +40,7 @@ IMAGE_TAG = latest
 
 .PHONY: clean
 clean:
-	rm -rf bin .image.created-*
+	rm -rf bin .image.created-* .release-*
 	-docker image rm -f $$(docker images $(CALICO_IMAGE) -a -q) 2>/dev/null
 
 .PHONY: ut
@@ -101,11 +101,11 @@ cd: image-all cd-common
 ###############################################################################
 # Release
 ###############################################################################
-## Produces a clean build of the combined calico image at the specified version.
+## Produces the combined calico image at the specified version. Clean first for a fresh build.
 .PHONY: release-build release-publish
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
+	$(MAKE) image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
 	touch $@

@@ -42,6 +42,7 @@ clean:
 	$(MAKE) -C confd clean
 	$(MAKE) -C felix clean
 	$(MAKE) -C cmd/calico clean
+	$(MAKE) -C istio clean
 	$(MAKE) -C kube-controllers clean
 	$(MAKE) -C libcalico-go clean
 	$(MAKE) -C node clean
@@ -53,6 +54,7 @@ clean:
 	$(MAKE) -C third_party/envoy-gateway clean
 	$(MAKE) -C third_party/envoy-proxy clean
 	$(MAKE) -C third_party/envoy-ratelimit clean
+	$(MAKE) -C whisker clean
 	rm -rf ./bin .stamp.*
 
 check-go-mod:
