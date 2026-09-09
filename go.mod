@@ -1,6 +1,6 @@
 module github.com/projectcalico/calico
 
-go 1.25.13
+go 1.25.14
 
 require (
 	cloud.google.com/go/storage v1.50.0
