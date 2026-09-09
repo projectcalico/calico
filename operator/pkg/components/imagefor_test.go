@@ -117,11 +117,18 @@ var _ = Describe("RegisterBuild", func() {
 	})
 
 	// A downstream declaring its components outside this package is the only caller,
-	// so this is where a forgotten variant is still cheap to find.
-	It("rejects an image that names no variant", func() {
-		orphan := Component{Image: "thing", Version: "v1.0.0"}
+	// so this is where a bad declaration is still cheap to find.
+	DescribeTable("rejects an image it cannot resolve",
+		func(c Component) {
+			// A registration that wrongly succeeds would leak into the specs after this
+			// one, hiding which of them the guard actually covers.
+			DeferCleanup(UseBuild(Build{}))
 
-		Expect(func() { RegisterBuild(Build{Images: []Component{orphan}}) }).To(Panic())
-		Expect(BuildRelease()).To(Equal(CalicoRelease))
-	})
+			Expect(func() { RegisterBuild(Build{Images: []Component{c}}) }).To(Panic())
+			Expect(BuildRelease()).To(Equal(CalicoRelease))
+		},
+		Entry("one naming no variant", Component{Image: "thing", Version: "v1.0.0"}),
+		Entry("one with no name, which every other one would key over",
+			Component{Version: "v1.0.0", Variant: otherVariant}),
+	)
 })
