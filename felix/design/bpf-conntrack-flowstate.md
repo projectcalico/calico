@@ -159,7 +159,10 @@ hint self-describing rather than assumed:
   routing truth) with this flag ("can the recorded device perform it?"
   — cached per-flow). The bit is written only by whoever has authority
   over the device: the program attached to it for an ingress record, or
-  the validator for a leg it pinned.
+  the validator for a leg it pinned. An attached program reads the
+  device's nature from its own `IFACE_ENCAPS` global; the compiled
+  object cannot say, since wireguard and a plain L3-classified NIC
+  share the `l3` object.
 - **`PINNED`** — the ifindex is a resolved egress for the opposite
   direction, not this direction's ingress record. Bookkeeping for
   userspace cleanup; the dataplane keeps reconciling the leg like any

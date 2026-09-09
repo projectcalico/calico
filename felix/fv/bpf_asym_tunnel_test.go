@@ -116,6 +116,14 @@ func describeBPFAsymTunnelTests() bool {
 			ensureBPFProgramsAttached(felix1, "eth20")
 		})
 
+		AfterEach(func() {
+			w0.Stop()
+			w1.Stop()
+			extRouter.Stop()
+			tc.Stop()
+			infra.Stop()
+		})
+
 		It("should keep symmetric overlay traffic flowing through the tunnel", func() {
 			// Guards the conntrack fast path: for symmetric flows the
 			// recorded ingress device is the tunnel itself and replies
