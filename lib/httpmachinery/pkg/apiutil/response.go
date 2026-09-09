@@ -49,6 +49,8 @@ type List[E any] struct {
 
 type ListMeta struct {
 	TotalPages int `json:"totalPages"`
+	// TotalResults is the number of items across all pages.
+	TotalResults int `json:"totalResults"`
 }
 
 // ListResponse implements the ResponseWriter and writes the response as a list with a total number of items that would
