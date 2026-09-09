@@ -23,7 +23,10 @@ import (
 	"sync"
 	"testing"
 
+	cli "github.com/urfave/cli/v3"
+
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -370,5 +373,58 @@ func TestImagesPublishScansEveryImageDir(t *testing.T) {
 		if !slices.Contains(dirs, want) {
 			t.Errorf("scan dirs omit %s", want)
 		}
+	}
+}
+
+// The scanner files results under release/<stream> or hashrelease/<stream>.
+// A hashrelease scanned as a release lands in the wrong bucket, so the flag
+// and the field must stay opposed.
+func TestScanRequestSeparatesHashreleases(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		args        []string
+		wantRelease bool
+	}{
+		{name: "release", args: nil, wantRelease: true},
+		{name: "hashrelease", args: []string{"--hashrelease"}, wantRelease: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			original := releaseImageList
+			releaseImageList = func(string, ...string) ([]string, error) {
+				return []string{"node"}, nil
+			}
+			defer func() { releaseImageList = original }()
+
+			var got *images.ScanRequest
+			// Fresh flags: the package-level slices keep parsed state between
+			// tests, and an earlier --no-image-scan would conflict here.
+			cmd := &cli.Command{
+				Flags: []cli.Flag{
+					hashreleaseFlag,
+					&cli.BoolFlag{Name: imageScanFlag.Name},
+					&cli.StringFlag{Name: imageScannerAPIFlag.Name},
+					&cli.StringFlag{Name: imageScannerTokenFlag.Name},
+				},
+				Action: func(_ context.Context, c *cli.Command) error {
+					var err error
+					got, err = scanRequest(c, &Config{}, []string{"node"}, "v3.30", "calico")
+					return err
+				},
+			}
+			args := append([]string{
+				"images", "--image-scan",
+				"--image-scanner-api", "https://scanner.example",
+				"--image-scanner-token", "t",
+			}, tc.args...)
+			if err := cmd.Run(context.Background(), args); err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			if got == nil {
+				t.Fatal("no scan request built")
+			}
+			if got.Release != tc.wantRelease {
+				t.Errorf("Release=%v, want %v", got.Release, tc.wantRelease)
+			}
+		})
 	}
 }
