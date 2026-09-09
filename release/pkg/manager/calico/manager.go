@@ -37,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
@@ -158,7 +159,7 @@ type CalicoManager struct {
 	// directories. Empty means all of them.
 	imageReleaseDirs []string
 
-	resolveDigest images.DigestResolver
+	resolveDigest steps.DigestResolver
 
 	// outputDir is the directory to which we should write release artifacts, and from
 	// which we should read them for publishing.
@@ -1524,7 +1525,7 @@ func (r *CalicoManager) publishContainerImages() error {
 
 // digestResolver reports a published tag's digest, defaulting to the registry.
 // Tests substitute one so they never reach the network.
-func (r *CalicoManager) digestResolver() images.DigestResolver {
+func (r *CalicoManager) digestResolver() steps.DigestResolver {
 	if r.resolveDigest != nil {
 		return r.resolveDigest
 	}

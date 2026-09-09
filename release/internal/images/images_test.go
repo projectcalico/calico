@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/steps"
 )
 
 // fakeRunner records every make invocation and can fail a component a set number
@@ -466,13 +467,13 @@ func (r *imageNameRunner) RunInDir(_, _ string, args, env []string) (string, err
 // alwaysResolves answers every image with the same digest. Suitable for asking
 // whether anything was recorded, but NOT for anything comparing digests: it
 // cannot tell a repo's tags apart. Use resolvesPerTag for that.
-func alwaysResolves(digest string) DigestResolver {
+func alwaysResolves(digest string) steps.DigestResolver {
 	return func(string) (string, bool, error) { return digest, true, nil }
 }
 
 // resolvesPerTag gives each tag its own digest, as a registry does, so a repo
 // carrying a manifest list and its arch tags holds several distinct digests.
-func resolvesPerTag() DigestResolver {
+func resolvesPerTag() steps.DigestResolver {
 	return func(image string) (string, bool, error) {
 		_, tag, _ := strings.Cut(image, ":")
 		return "sha256:" + strings.Repeat(fmt.Sprintf("%x", len(tag))[:1], 64), true, nil
@@ -480,7 +481,7 @@ func resolvesPerTag() DigestResolver {
 }
 
 // recordingOpts are the options a publish needs to record what it pushed.
-func recordingOpts(f *imageNameRunner, rec RefRecorder, extra ...PublishOption) []PublishOption {
+func recordingOpts(f *imageNameRunner, rec steps.RefRecorder, extra ...PublishOption) []PublishOption {
 	return append([]PublishOption{
 		WithRunner(f),
 		WithRegistries("quay.io/calico"),
