@@ -30,6 +30,6 @@ func init() {
 func TestIPSets(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../report/felix_ipsets_suite.xml"
+	testutils.RegisterJUnitReporter("felix_ipsets_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/ipsets", suiteConfig, reporterConfig)
 }

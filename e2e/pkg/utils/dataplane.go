@@ -20,11 +20,12 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
-	operatorv1 "github.com/tigera/operator/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
+
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 // CalicoDataplane is the Calico dataplane mode running on the cluster.
@@ -82,12 +83,10 @@ func DetectCalicoDataplane(cli ctrlclient.Client) CalicoDataplane {
 	defer cancel()
 
 	// Prefer the Installation CR (operator-managed clusters).
-	installation := &operatorv1.Installation{}
-	if err := cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, installation); err == nil &&
-		installation.Spec.CalicoNetwork != nil &&
-		installation.Spec.CalicoNetwork.LinuxDataplane != nil {
+	config := InstallationConfig(cli)
+	if config != nil && config.CalicoNetwork != nil && config.CalicoNetwork.LinuxDataplane != nil {
 		var dp CalicoDataplane
-		switch *installation.Spec.CalicoNetwork.LinuxDataplane {
+		switch *config.CalicoNetwork.LinuxDataplane {
 		case operatorv1.LinuxDataplaneBPF:
 			dp = DataplaneBPF
 		case operatorv1.LinuxDataplaneVPP:

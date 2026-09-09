@@ -23,7 +23,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/collector/types/metric"
-	logutil "github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/rules"
 )
 
@@ -118,10 +117,14 @@ func (a *Aggregator) FeedUpdate(mu *metric.Update) error {
 	// staged denies to be aggregated at the aggregation-level-for-denied even when the final verdict is still allow.
 	switch {
 	case a.handledAction == rules.RuleActionDeny && !mu.HasDenyRule:
-		logutil.Tracef(a.displayDebugTraceLogs, "Update %v not handled for deny-aggregator - no deny rules found", *mu)
+		if a.displayDebugTraceLogs {
+			log.Tracef("Update %v not handled for deny-aggregator - no deny rules found", *mu)
+		}
 		return nil
 	case a.handledAction == rules.RuleActionAllow && mu.HasDenyRule:
-		logutil.Tracef(a.displayDebugTraceLogs, "Update %v not handled for allow-aggregator - deny rules found", *mu)
+		if a.displayDebugTraceLogs {
+			log.Tracef("Update %v not handled for allow-aggregator - deny rules found", *mu)
+		}
 		return nil
 	}
 
@@ -134,11 +137,15 @@ func (a *Aggregator) FeedUpdate(mu *metric.Update) error {
 	defer a.flMutex.Unlock()
 	defer a.reportFlowLogStoreMetrics()
 
-	logutil.Tracef(a.displayDebugTraceLogs, "Flow Log Aggregator got Metric Update: %+v", *mu)
+	if a.displayDebugTraceLogs {
+		log.Tracef("Flow Log Aggregator got Metric Update: %+v", *mu)
+	}
 
 	fl, ok := a.flowStore[flowMeta]
 	if !ok {
-		logutil.Tracef(a.displayDebugTraceLogs, "flowMeta %+v not found, creating new flowspec for metric update %+v", flowMeta, *mu)
+		if a.displayDebugTraceLogs {
+			log.Tracef("flowMeta %+v not found, creating new flowspec for metric update %+v", flowMeta, *mu)
+		}
 		spec := NewFlowSpec(mu, a.displayDebugTraceLogs)
 
 		newEntry := &flowEntry{
@@ -149,7 +156,9 @@ func (a *Aggregator) FeedUpdate(mu *metric.Update) error {
 
 		a.flowStore[flowMeta] = newEntry
 	} else {
-		logutil.Tracef(a.displayDebugTraceLogs, "flowMeta %+v found, aggregating flowspec with metric update %+v", flowMeta, *mu)
+		if a.displayDebugTraceLogs {
+			log.Tracef("flowMeta %+v found, aggregating flowspec with metric update %+v", flowMeta, *mu)
+		}
 		fl.spec.AggregateMetricUpdate(mu)
 		fl.shouldExport = true
 		a.flowStore[flowMeta] = fl
@@ -206,7 +215,9 @@ func (a *Aggregator) calibrateFlowStore(flowMeta FlowMeta, newLevel AggregationK
 	// discontinue tracking the stats associated with the
 	// flow meta if no more associated 5-tuples exist.
 	if remainingActiveFlowsCount == 0 {
-		logutil.Tracef(a.displayDebugTraceLogs, "Deleting %v", flowMeta)
+		if a.displayDebugTraceLogs {
+			log.Tracef("Deleting %v", flowMeta)
+		}
 		delete(a.flowStore, flowMeta)
 
 		return
@@ -221,7 +232,9 @@ func (a *Aggregator) calibrateFlowStore(flowMeta FlowMeta, newLevel AggregationK
 		entry.shouldExport = false
 	}
 
-	logutil.Tracef(a.displayDebugTraceLogs, "Resetting %v", flowMeta)
+	if a.displayDebugTraceLogs {
+		log.Tracef("Resetting %v", flowMeta)
+	}
 	// reset flow stats for the next interval
 	entry.spec.Reset()
 	a.flowStore[flowMeta] = &flowEntry{

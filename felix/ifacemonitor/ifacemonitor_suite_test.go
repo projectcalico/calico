@@ -30,6 +30,6 @@ func init() {
 func TestIfacemonitor(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../report/felix_ifacemonitor_suite.xml"
+	testutils.RegisterJUnitReporter("felix_ifacemonitor_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/ifacemonitor", suiteConfig, reporterConfig)
 }

@@ -88,7 +88,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		rt = proxy.NewRTCache()
 
-		s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil, maglevLUTSize)
+		s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil, maglevLUTSize, 0)
 
 		ep := proxy.NewEndpointInfo("10.1.0.1", 5555, proxy.EndpointInfoOptIsReady(true))
 		state = proxy.DPSyncerState{
@@ -512,7 +512,7 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("resyncing after creating a new syncer with the same result", makestep(func() {
-			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil, maglevLUTSize)
+			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil, maglevLUTSize, 0)
 			checkAfterResync()
 		}))
 
@@ -520,7 +520,7 @@ var _ = Describe("BPF Syncer", func() {
 			svcs.m[nat.NewNATKey(net.IPv4(5, 5, 5, 5), 1111, 6)] = nat.NewNATValue(0xdeadbeef, 2, 2, 0)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 0)] = nat.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 666)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 1)] = nat.NewNATBackendValue(net.IPv4(7, 7, 7, 7), 777)
-			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil, maglevLUTSize)
+			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil, maglevLUTSize, 0)
 			checkAfterResync()
 		}))
 
@@ -668,7 +668,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting non-local eps for a NodePort - no route", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, mgEps, aff, rt, nil, maglevLUTSize)
+			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, mgEps, aff, rt, nil, maglevLUTSize, 0)
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
@@ -821,7 +821,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting only non-local eps for a NodePort - multiple nodes & pods/node", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, mgEps, aff, rt, nil, maglevLUTSize)
+			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, mgEps, aff, rt, nil, maglevLUTSize, 0)
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
@@ -901,7 +901,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("restarting Syncer to check if NodePortRemotes are picked up correctly", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, mgEps, aff, rt, nil, maglevLUTSize)
+			s, _ = proxy.NewSyncer(4, append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, mgEps, aff, rt, nil, maglevLUTSize, 0)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1275,7 +1275,7 @@ var _ = Describe("BPF Syncer", func() {
 			mgEps = newMockMaglevMap()
 			aff = newMockAffinityMap()
 			rt = proxy.NewRTCache()
-			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil, maglevLUTSize)
+			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil, maglevLUTSize, 0)
 		})
 
 		type testCase struct {
@@ -1443,7 +1443,7 @@ var _ = Describe("BPF Syncer API server NAT preservation", func() {
 		mgEps = newMockMaglevMap()
 		aff = newMockAffinityMap()
 		rt = proxy.NewRTCache()
-		s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil, maglevLUTSize)
+		s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil, maglevLUTSize, 0)
 	})
 
 	It("retains the API server backend across a transient loss of endpoints", func() {
@@ -1469,6 +1469,187 @@ var _ = Describe("BPF Syncer API server NAT preservation", func() {
 		Expect(s.Apply(state(true))).NotTo(HaveOccurred())
 		expectAPIServerBackend()
 	})
+})
+
+// A NAT service ID indexes the service's own block of the backend map, so two
+// services sharing one overwrite each other's backends on every sync. Felix is
+// not the only writer of these maps - they are pinned and outlive calico-node,
+// and in bootstrap mode the ebpf-bootstrap init container programs the API
+// server service into them before Felix starts (node/pkg/nodeinit) - so the
+// syncer must not adopt a duplicated ID from the dataplane. Adopting one makes
+// the conflict permanent: it is re-adopted on every restart.
+// See projectcalico/calico#13279.
+var _ = Describe("BPF Syncer NAT service ID conflicts", func() {
+	var (
+		svcs  *mockNATMap
+		eps   *mockNATBackendMap
+		mgEps *mockMaglevMap
+		aff   *mockAffinityMap
+		rt    *proxy.RTCache
+		s     *proxy.Syncer
+	)
+
+	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1)}
+
+	apiSvcKey := k8sp.ServicePortName{
+		NamespacedName: types.NamespacedName{Namespace: "default", Name: "kubernetes"},
+	}
+	otherSvcKey := k8sp.ServicePortName{
+		NamespacedName: types.NamespacedName{Namespace: "test", Name: "other"},
+	}
+
+	apiClusterIP := net.IPv4(10, 49, 0, 1)
+	otherClusterIP := net.IPv4(10, 49, 0, 2)
+	apiServerIP := net.IPv4(10, 0, 1, 20)
+	otherBackendIP := net.IPv4(172, 30, 26, 146)
+	const (
+		apiPort       = 443
+		apiTgtPort    = 6443
+		otherPort     = 6789
+		otherNodePort = 30789
+	)
+
+	tcp := proxy.ProtoV1ToIntPanic(v1.ProtocolTCP)
+	apiFrontKey := nat.NewNATKey(apiClusterIP, apiPort, tcp)
+	otherFrontKey := nat.NewNATKey(otherClusterIP, otherPort, tcp)
+	apiBackend := nat.NewNATBackendValue(apiServerIP, apiTgtPort)
+	otherBackend := nat.NewNATBackendValue(otherBackendIP, otherPort)
+
+	// state is the two services as the k8s informers see them, each with one
+	// ready endpoint. otherOpts customises the second service.
+	state := func(otherOpts ...proxy.K8sServicePortOption) proxy.DPSyncerState {
+		other := svc(otherClusterIP.String(), otherPort)
+		other.opts = append(other.opts, otherOpts...)
+
+		return proxy.DPSyncerState{
+			SvcMap: k8sp.ServicePortMap{
+				apiSvcKey:   svc(apiClusterIP.String(), apiPort).build(),
+				otherSvcKey: other.build(),
+			},
+			EpsMap: k8sp.EndpointsMap{
+				apiSvcKey:   {ep(apiServerIP.String(), apiTgtPort).build()},
+				otherSvcKey: {ep(otherBackendIP.String(), otherPort).build()},
+			},
+		}
+	}
+
+	// expectBackends asserts that each frontend resolves to its own service's
+	// backend, which requires the two to hold different service IDs.
+	expectBackends := func() {
+		apiFront, ok := svcs.m[apiFrontKey]
+		ExpectWithOffset(1, ok).To(BeTrue(), "API server NAT frontend missing")
+		otherFront, ok := svcs.m[otherFrontKey]
+		ExpectWithOffset(1, ok).To(BeTrue(), "other service NAT frontend missing")
+
+		ExpectWithOffset(1, apiFront.ID()).NotTo(Equal(otherFront.ID()),
+			"two services must not share a NAT service ID")
+
+		ExpectWithOffset(1, apiFront.Count()).To(Equal(uint32(1)))
+		ExpectWithOffset(1, eps.m[nat.NewNATBackendKey(apiFront.ID(), 0)]).To(Equal(apiBackend))
+		ExpectWithOffset(1, otherFront.Count()).To(Equal(uint32(1)))
+		ExpectWithOffset(1, eps.m[nat.NewNATBackendKey(otherFront.ID(), 0)]).To(Equal(otherBackend))
+	}
+
+	newSyncer := func() *proxy.Syncer {
+		syncer, err := proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil, maglevLUTSize, 0)
+		Expect(err).NotTo(HaveOccurred())
+		return syncer
+	}
+
+	BeforeEach(func() {
+		svcs = newMockNATMap()
+		eps = newMockNATBackendMap()
+		mgEps = newMockMaglevMap()
+		aff = newMockAffinityMap()
+		rt = proxy.NewRTCache()
+		s = newSyncer()
+	})
+
+	It("reprograms both services when the dataplane has them sharing an ID", func() {
+		By("seeding the maps as a bootstrap write over an ID another service owns")
+		// Both frontends point at the same ID, so only one backend can live at
+		// (id, 0) and one of the services already resolves to the other's.
+		const shared = uint32(0)
+		Expect(svcs.Update(apiFrontKey.AsBytes(),
+			nat.NewNATValue(shared, 1, 0, 0).AsBytes())).NotTo(HaveOccurred())
+		Expect(svcs.Update(otherFrontKey.AsBytes(),
+			nat.NewNATValue(shared, 1, 0, 0).AsBytes())).NotTo(HaveOccurred())
+		Expect(eps.Update(nat.NewNATBackendKey(shared, 0).AsBytes(),
+			apiBackend.AsBytes())).NotTo(HaveOccurred())
+
+		By("syncing: neither service may keep the shared ID")
+		Expect(s.Apply(state())).NotTo(HaveOccurred())
+		expectBackends()
+
+		By("syncing again: the IDs are now clean and must be stable")
+		ids := []uint32{svcs.m[apiFrontKey].ID(), svcs.m[otherFrontKey].ID()}
+		Expect(s.Apply(state())).NotTo(HaveOccurred())
+		expectBackends()
+		Expect([]uint32{svcs.m[apiFrontKey].ID(), svcs.m[otherFrontKey].ID()}).To(Equal(ids))
+	})
+
+	It("reprograms both services when their shared ID holds uneven backend counts", func() {
+		// The blocks differ in length, so only ordinal 0 is contested and the
+		// API server keeps its own backends at 1 and 2 - the shape in #13279.
+		apiIPs := []net.IP{apiServerIP, net.IPv4(10, 0, 1, 21), net.IPv4(10, 0, 1, 22)}
+
+		unevenState := state()
+		unevenState.EpsMap[apiSvcKey] = []k8sp.Endpoint{
+			ep(apiIPs[0].String(), apiTgtPort).build(),
+			ep(apiIPs[1].String(), apiTgtPort).build(),
+			ep(apiIPs[2].String(), apiTgtPort).build(),
+		}
+
+		By("seeding a shared ID whose ordinal 0 holds the other service's backend")
+		const shared = uint32(0)
+		Expect(svcs.Update(apiFrontKey.AsBytes(),
+			nat.NewNATValue(shared, 3, 0, 0).AsBytes())).NotTo(HaveOccurred())
+		Expect(svcs.Update(otherFrontKey.AsBytes(),
+			nat.NewNATValue(shared, 1, 0, 0).AsBytes())).NotTo(HaveOccurred())
+		Expect(eps.Update(nat.NewNATBackendKey(shared, 0).AsBytes(),
+			otherBackend.AsBytes())).NotTo(HaveOccurred())
+		for i, ip := range apiIPs[1:] {
+			Expect(eps.Update(nat.NewNATBackendKey(shared, uint32(i+1)).AsBytes(),
+				nat.NewNATBackendValue(ip, apiTgtPort).AsBytes())).NotTo(HaveOccurred())
+		}
+
+		By("syncing: each service gets a block of its own, whole")
+		Expect(s.Apply(unevenState)).NotTo(HaveOccurred())
+
+		apiFront := svcs.m[apiFrontKey]
+		otherFront := svcs.m[otherFrontKey]
+		Expect(apiFront.ID()).NotTo(Equal(otherFront.ID()),
+			"two services must not share a NAT service ID")
+
+		Expect(apiFront.Count()).To(Equal(uint32(3)))
+		for i, ip := range apiIPs {
+			Expect(eps.m[nat.NewNATBackendKey(apiFront.ID(), uint32(i))]).
+				To(Equal(nat.NewNATBackendValue(ip, apiTgtPort)))
+		}
+		Expect(otherFront.Count()).To(Equal(uint32(1)))
+		Expect(eps.m[nat.NewNATBackendKey(otherFront.ID(), 0)]).To(Equal(otherBackend))
+	})
+
+	It("keeps the IDs of a service that shares one with its own NodePort", func() {
+		By("programming a service that also has a NodePort")
+		npState := state(proxy.K8sSvcWithNodePort(otherNodePort))
+		Expect(s.Apply(npState)).NotTo(HaveOccurred())
+		expectBackends()
+
+		npFrontKey := nat.NewNATKey(nodeIPs[0], otherNodePort, tcp)
+		Expect(svcs.m).To(HaveKey(npFrontKey))
+		Expect(svcs.m[npFrontKey].ID()).To(Equal(svcs.m[otherFrontKey].ID()),
+			"a NodePort frontend shares the ID of the service it is derived from")
+
+		By("restarting the syncer: a service and its own derived frontends are no conflict")
+		ids := []uint32{svcs.m[apiFrontKey].ID(), svcs.m[otherFrontKey].ID()}
+		s = newSyncer()
+		Expect(s.Apply(npState)).NotTo(HaveOccurred())
+		expectBackends()
+		Expect([]uint32{svcs.m[apiFrontKey].ID(), svcs.m[otherFrontKey].ID()}).To(Equal(ids),
+			"IDs must be adopted from the dataplane, not reassigned")
+	})
+
 })
 
 type mockNATMap struct {

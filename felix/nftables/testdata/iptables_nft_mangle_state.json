@@ -1,0 +1,130 @@
+{
+  "chains": [
+    {
+      "name": "PREROUTING",
+      "base": true
+    },
+    {
+      "name": "INPUT",
+      "base": true
+    },
+    {
+      "name": "FORWARD",
+      "base": true
+    },
+    {
+      "name": "OUTPUT",
+      "base": true
+    },
+    {
+      "name": "POSTROUTING",
+      "base": true
+    },
+    {
+      "name": "cali-POSTROUTING"
+    },
+    {
+      "name": "cali-PREROUTING"
+    },
+    {
+      "name": "cali-from-host-endpoint"
+    },
+    {
+      "name": "cali-to-host-endpoint"
+    },
+    {
+      "name": "nixos-fw-rpfilter"
+    },
+    {
+      "name": "KUBE-IPTABLES-HINT"
+    },
+    {
+      "name": "KUBE-KUBELET-CANARY"
+    }
+  ],
+  "rules": [
+    {
+      "chain": "PREROUTING",
+      "handle": 10,
+      "comment": "cali:6gwbT8clXdHdC1b1",
+      "jumpTarget": "cali-PREROUTING"
+    },
+    {
+      "chain": "PREROUTING",
+      "handle": 71
+    },
+    {
+      "chain": "PREROUTING",
+      "handle": 72,
+      "jumpTarget": "nixos-fw-rpfilter"
+    },
+    {
+      "chain": "OUTPUT",
+      "handle": 73
+    },
+    {
+      "chain": "POSTROUTING",
+      "handle": 11,
+      "comment": "cali:O3lYWMrLQYEMJtB5",
+      "jumpTarget": "cali-POSTROUTING"
+    },
+    {
+      "chain": "cali-POSTROUTING",
+      "handle": 12,
+      "comment": "cali:NX-7roTexQ3fGRfU"
+    },
+    {
+      "chain": "cali-POSTROUTING",
+      "handle": 13,
+      "comment": "cali:JkYr4aB8O4_N8NBS"
+    },
+    {
+      "chain": "cali-POSTROUTING",
+      "handle": 14,
+      "comment": "cali:nO0nbHA3Or7V6l7t",
+      "jumpTarget": "cali-to-host-endpoint"
+    },
+    {
+      "chain": "cali-POSTROUTING",
+      "handle": 15,
+      "comment": "cali:mgxNjIoKySH7TEGH"
+    },
+    {
+      "chain": "cali-PREROUTING",
+      "handle": 16,
+      "comment": "cali:6BJqBjBC7crtA-7-"
+    },
+    {
+      "chain": "cali-PREROUTING",
+      "handle": 17,
+      "comment": "cali:KX7AGNd6rMcDUai6"
+    },
+    {
+      "chain": "cali-PREROUTING",
+      "handle": 18,
+      "comment": "cali:wNH7KsA3ILKJBsY9",
+      "jumpTarget": "cali-from-host-endpoint"
+    },
+    {
+      "chain": "cali-PREROUTING",
+      "handle": 19,
+      "comment": "cali:Cg96MgVuoPm7UMRo"
+    },
+    {
+      "chain": "nixos-fw-rpfilter",
+      "handle": 67
+    },
+    {
+      "chain": "nixos-fw-rpfilter",
+      "handle": 68
+    },
+    {
+      "chain": "nixos-fw-rpfilter",
+      "handle": 69
+    },
+    {
+      "chain": "nixos-fw-rpfilter",
+      "handle": 70
+    }
+  ]
+}

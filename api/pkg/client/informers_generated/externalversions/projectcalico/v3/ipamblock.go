@@ -20,11 +20,39 @@ import (
 )
 
 // IPAMBlockInformer provides access to a shared informer and lister for
-// IPAMBlocks.
+// IPAMBlocks. Prefer using the type-safe variant (see [TypedIPAMBlockInformer]).
 type IPAMBlockInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.IPAMBlockLister
 }
+
+// TypedIPAMBlockInformer provides access to a shared informer and lister for
+// IPAMBlocks, including the type-safe TypedInformer variant.
+// It is a superset of IPAMBlockInformer.
+type TypedIPAMBlockInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() IPAMBlockIndexInformer
+	Lister() projectcalicov3.IPAMBlockLister
+}
+
+// IPAMBlockIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type IPAMBlockIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.IPAMBlock]
+
+// IPAMBlockHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for IPAMBlock.
+type IPAMBlockHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.IPAMBlock]
+
+// IPAMBlockDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for IPAMBlock.
+type IPAMBlockDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.IPAMBlock]
+
+// IPAMBlockFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for IPAMBlock.
+type IPAMBlockFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.IPAMBlock]
+
+// IPAMBlockIndexers is a specialization of [cache.TypedIndexers] for IPAMBlock.
+type IPAMBlockIndexers = cache.TypedIndexers[*apisprojectcalicov3.IPAMBlock]
+
+// DeletedIPAMBlock is a specialization of [cache.DeletedObject] for IPAMBlock.
+type DeletedIPAMBlock = cache.DeletedObject[*apisprojectcalicov3.IPAMBlock]
 
 type iPAMBlockInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,25 +62,49 @@ type iPAMBlockInformer struct {
 // NewIPAMBlockInformer constructs a new informer for IPAMBlock type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedIPAMBlockInformer]).
 func NewIPAMBlockInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewIPAMBlockInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedIPAMBlockInformer constructs a new informer for IPAMBlock type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedIPAMBlockInformer(client clientset.Interface, resyncPeriod time.Duration, indexers IPAMBlockIndexers) IPAMBlockIndexInformer {
+	return NewTypedIPAMBlockInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredIPAMBlockInformer constructs a new informer for IPAMBlock type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredIPAMBlockInformer]).
 func NewFilteredIPAMBlockInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewIPAMBlockInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedIPAMBlockInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredIPAMBlockInformer constructs a new informer for IPAMBlock type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredIPAMBlockInformer(client clientset.Interface, resyncPeriod time.Duration, indexers IPAMBlockIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) IPAMBlockIndexInformer {
+	return NewTypedIPAMBlockInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewIPAMBlockInformerWithOptions constructs a new informer for IPAMBlock type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedIPAMBlockInformerWithOptions]).
 func NewIPAMBlockInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedIPAMBlockInformerWithOptions(client, options)
+}
+
+// NewTypedIPAMBlockInformerWithOptions constructs a new informer for IPAMBlock type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedIPAMBlockInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) IPAMBlockIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "ipamblocks"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPAMBlock](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -85,17 +137,57 @@ func NewIPAMBlockInformerWithOptions(client clientset.Interface, options interna
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *iPAMBlockInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewIPAMBlockInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedIPAMBlockInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *iPAMBlockInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.IPAMBlock{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *iPAMBlockInformer) TypedInformer() IPAMBlockIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPAMBlock](f.factory.InformerFor(&apisprojectcalicov3.IPAMBlock{}, f.defaultInformer))
 }
 
 func (f *iPAMBlockInformer) Lister() projectcalicov3.IPAMBlockLister {
 	return projectcalicov3.NewIPAMBlockLister(f.Informer().GetIndexer())
+}
+
+// ToTypedIPAMBlockInformer converts an untyped informer into a TypedIPAMBlockInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *IPAMBlock. If that is not the case, calling type-safe methods of the returned
+// TypedIPAMBlockInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedIPAMBlockInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedIPAMBlockInformer(informer IPAMBlockInformer) TypedIPAMBlockInformer {
+	if informer, ok := informer.(TypedIPAMBlockInformer); ok {
+		return informer
+	}
+	return &iPAMBlockTypedInformerAdapter{informer}
+}
+
+type iPAMBlockTypedInformerAdapter struct {
+	IPAMBlockInformer
+}
+
+func (a *iPAMBlockTypedInformerAdapter) TypedInformer() IPAMBlockIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPAMBlock](a.Informer())
+}
+
+// ToIPAMBlockIndexInformer converts an untyped informer into a IPAMBlockIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *IPAMBlock. If that is not the case, calling type-safe methods of the returned
+// IPAMBlockIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a IPAMBlockIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToIPAMBlockIndexInformer(informer cache.SharedIndexInformer) IPAMBlockIndexInformer {
+	if informer, ok := informer.(IPAMBlockIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPAMBlock](informer)
 }

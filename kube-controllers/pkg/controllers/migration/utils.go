@@ -16,10 +16,12 @@ package migration
 
 import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
 )
 
 // hasFinalizer returns true if the DatastoreMigration CR has the migration finalizer.
-func hasFinalizer(dm *DatastoreMigration) bool {
+func hasFinalizer(dm *migrationv1.DatastoreMigration) bool {
 	for _, f := range dm.Finalizers {
 		if f == finalizerName {
 			return true

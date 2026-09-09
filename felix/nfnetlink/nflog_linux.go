@@ -28,7 +28,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/nfnetlink/nfnl"
 	"github.com/projectcalico/calico/felix/nfnetlink/pkt"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 const (
@@ -92,7 +92,7 @@ func init() {
 }
 
 var (
-	rll = logutils.NewRateLimitedLogger(logutils.OptInterval(time.Minute))
+	rll = logrusr.NewRateLimitedLogger(logrusr.OptInterval(time.Minute))
 )
 
 func NflogSubscribe(groupNum int, bufSize int, ch chan<- map[NflogPacketTuple]*NflogPacketAggregate, done <-chan struct{}, includeConnTrack bool) error {

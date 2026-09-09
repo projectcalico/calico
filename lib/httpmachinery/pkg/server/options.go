@@ -19,6 +19,8 @@ import (
 	"crypto/x509"
 	"net/http"
 	"os"
+
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 )
 
 // Option is a common format for New() options
@@ -27,6 +29,16 @@ type Option func(*httpServer) error
 func WithInternalServer(internalSrv *http.Server) Option {
 	return func(srv *httpServer) error {
 		srv.srv = internalSrv
+		return nil
+	}
+}
+
+// WithMiddleware wraps every endpoint the server registers, outside any
+// middleware an endpoint declares for itself. Use it for concerns that belong
+// to the whole server, such as response compression.
+func WithMiddleware(middleware ...apiutil.MiddlewareFunc) Option {
+	return func(srv *httpServer) error {
+		srv.middleware = append(srv.middleware, middleware...)
 		return nil
 	}
 }

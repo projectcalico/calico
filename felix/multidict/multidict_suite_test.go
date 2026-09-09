@@ -30,6 +30,6 @@ func init() {
 func TestMultidict(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../report/felix_multidict_suite.xml"
+	testutils.RegisterJUnitReporter("felix_multidict_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/multidict", suiteConfig, reporterConfig)
 }

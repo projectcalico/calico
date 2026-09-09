@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,11 +18,13 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/defaults"
+	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
@@ -106,12 +108,11 @@ var (
 		Sources:  cli.NewValueSourceChain(cli.EnvVar("DEV_TAG_SUFFIX"), defaults.MK(defaults.KeyDevTagSuffix)),
 		Value:    utils.DefaultDevTagSuffix,
 	}
-	baseBranchFlag = &cli.StringFlag{
-		Name:     "base-branch",
+	mainBranchFlag = &cli.StringFlag{
+		Name:     "main-branch",
 		Category: gitCategory,
-		Aliases:  []string{"base", "main-branch"},
-		Usage:    "The base branch to cut the release branch from",
-		Sources:  cli.EnvVars("RELEASE_BRANCH_BASE"),
+		Usage:    "The main/default branch for the repo",
+		Sources:  cli.EnvVars("MAIN_BRANCH"),
 		Value:    utils.DefaultBranch,
 		Action: func(_ context.Context, c *cli.Command, str string) error {
 			if str != utils.DefaultBranch {
@@ -129,6 +130,36 @@ var (
 		Usage:   "Run all actions locally without remote changes",
 		Sources: cli.EnvVars("LOCAL"),
 		Value:   false,
+	}
+	planFlag = &cli.BoolFlag{
+		Name:     "plan",
+		Category: stepControlCategory,
+		Sources:  cli.EnvVars("PLAN"),
+		Usage:    "Print what each step would do without acting.",
+	}
+	skipFlagName = "skip"
+	skipFlag     = func(validSteps []string) *cli.StringSliceFlag {
+		return &cli.StringSliceFlag{
+			Name:     skipFlagName,
+			Category: stepControlCategory,
+			Sources:  cli.EnvVars("SKIP_STEPS"),
+			Usage:    "Step names to skip. Valid: " + strings.Join(validSteps, ", "),
+			Action: func(_ context.Context, _ *cli.Command, vals []string) error {
+				if validSteps == nil { // no validations to run
+					return nil
+				}
+				unknown := []string{}
+				for _, v := range vals {
+					if !slices.Contains(validSteps, v) {
+						unknown = append(unknown, v)
+					}
+				}
+				if len(unknown) > 0 {
+					return fmt.Errorf("unknown --skip steps %q; valid steps: %s", unknown, strings.Join(validSteps, ", "))
+				}
+				return nil
+			},
+		}
 	}
 )
 
@@ -198,6 +229,57 @@ var (
 			return nil
 		},
 	}
+
+	// fromRegistryFlag and fromTagFlag publish by retagging images that are
+	// already published, instead of pushing a fresh build.
+	fromRegistryFlag = &cli.StringFlag{
+		Name:     "from-registry",
+		Category: containerImageCategory,
+		Usage:    "Publish by retagging the images already in this registry.",
+		Sources:  cli.EnvVars("FROM_REGISTRY"),
+	}
+	fromTagFlag = &cli.StringFlag{
+		Name:     "from-tag",
+		Category: containerImageCategory,
+		Usage:    "The tag to retag from. Required with --from-registry.",
+		Sources:  cli.EnvVars("FROM_TAG"),
+	}
+	skipDevImageRetagFlag = &cli.BoolFlag{
+		Name:     "skip-dev-image-retag",
+		Category: containerImageCategory,
+		Usage:    "Leave the dev tag in place when retagging.",
+		Sources:  cli.EnvVars("SKIP_DEV_IMAGE_RETAG"),
+	}
+
+	forceFlag = &cli.BoolFlag{
+		Name:     "force",
+		Category: containerImageCategory,
+		Usage:    "Republish images whose published digest differs from the record.",
+		Sources:  cli.EnvVars("FORCE"),
+	}
+
+	// imageReleaseDirsFlag limits a run to some of the directories that ship
+	// images.
+	imageReleaseDirsFlag = &cli.StringSliceFlag{
+		Name:     "image-release-dir",
+		Category: containerImageCategory,
+		Usage:    "Limit image building and publishing to these directories. Repeat for multiple directories.",
+		Sources:  cli.EnvVars("IMAGE_RELEASE_DIRS"),
+		Action: func(_ context.Context, c *cli.Command, dirs []string) error {
+			// Build and publish cover different directories; accept either.
+			valid := append(images.VariantDirs(images.BuildVariants), images.VariantDirs(images.PublishVariants)...)
+			var invalid []string
+			for _, dir := range dirs {
+				if !slices.Contains(valid, dir) {
+					invalid = append(invalid, dir)
+				}
+			}
+			if len(invalid) > 0 {
+				return fmt.Errorf("invalid image release dirs specified: %s", strings.Join(invalid, ", "))
+			}
+			return nil
+		},
+	}
 )
 
 var (
@@ -217,60 +299,22 @@ var (
 
 // Operator flags are flags used to interact with Tigera operator repository
 var (
-	// operatorGitFlags resolve the operator's org/repo/branch. Required on any
-	// command that calls calico.WithOperatorGit or operator.Clone.
-	operatorGitFlags = []cli.Flag{operatorOrgFlag, operatorRepoFlag, operatorBranchFlag}
-
-	operatorBuildCommandFlags = append(slices.Clone(operatorGitFlags),
-		operatorReleaseBranchPrefixFlag,
+	operatorBuildCommandFlags = []cli.Flag{
 		operatorRegistryFlag, operatorImageFlag,
 		operatorFlag(envBuildOperator, envReleaseOperator),
-	)
+	}
 
-	operatorPublishCommandFlags = append(slices.Clone(operatorGitFlags),
+	operatorPublishCommandFlags = []cli.Flag{
 		operatorFlag(envPublishOperator, envReleaseOperator),
-	)
+	}
 
-	// Operator git flags
-	operatorOrgFlagName = "operator-org"
-	operatorOrgFlag     = &cli.StringFlag{
-		Name:     operatorOrgFlagName,
-		Category: operatorCategory,
-		Usage:    "The GitHub organization to use for Tigera operator release",
-		Sources:  cli.NewValueSourceChain(cli.EnvVar("OPERATOR_ORGANIZATION"), defaults.MK(defaults.KeyOperatorOrganization)),
-		Value:    operator.DefaultOrg,
-	}
-	operatorRepoFlagName = "operator-repo"
-	operatorRepoFlag     = &cli.StringFlag{
-		Name:     operatorRepoFlagName,
-		Category: operatorCategory,
-		Usage:    "The GitHub repository to use for Tigera operator release",
-		Sources:  cli.NewValueSourceChain(cli.EnvVar("OPERATOR_GIT_REPO"), defaults.MK(defaults.KeyOperatorGitRepo)),
-		Value:    operator.DefaultRepoName,
-	}
-	// Branch/Tag management flags
-	operatorBranchFlagName = "operator-branch"
-	operatorBranchFlag     = &cli.StringFlag{
-		Name:     operatorBranchFlagName,
-		Category: operatorCategory,
-		Usage:    "The branch to use for Tigera operator release",
-		Sources:  cli.NewValueSourceChain(cli.EnvVar("OPERATOR_BRANCH"), defaults.MK(defaults.KeyOperatorBranch)),
-		Value:    operator.DefaultBranch,
-	}
-	operatorReleaseBranchPrefixFlag = &cli.StringFlag{
-		Name:     "operator-release-branch-prefix",
-		Category: operatorCategory,
-		Usage:    "The stardard prefix used to denote Tigera operator release branches",
-		Sources:  cli.EnvVars("OPERATOR_RELEASE_BRANCH_PREFIX"),
-		Value:    operator.DefaultReleaseBranchPrefix,
-	}
 	// Container image flags
 	operatorRegistryFlag = &cli.StringFlag{
 		Name:     "operator-registry",
 		Category: operatorCategory,
 		Usage:    "The registry to use for Tigera operator release",
 		Sources:  cli.EnvVars("OPERATOR_REGISTRY"),
-		Value:    operator.DefaultRegistry,
+		Value:    operator.DefaultRegistries[0],
 	}
 	operatorImageFlag = &cli.StringFlag{
 		Name:     "operator-image",
@@ -434,6 +478,12 @@ var (
 
 // Hashrelease specific flags.
 var (
+	hashreleaseFlag = &cli.BoolFlag{
+		Name:     "hashrelease",
+		Category: stepControlCategory,
+		Usage:    "Indicates that the release is a hashrelease",
+		Sources:  cli.EnvVars("HASHRELEASE"),
+	}
 
 	// Hashrelease server configuration flags.
 	hashreleaseServerFlags = []cli.Flag{hashreleaseServerBucketFlag}

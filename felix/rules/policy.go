@@ -25,7 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
-	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -620,14 +620,68 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 
 	if pRule.Action == "log" {
 		// This rule should log (and possibly do something else too).
+		rateLimited := len(r.LogActionRateLimit) != 0
 		logMatch := r.NewMatch()
-		if len(r.LogActionRateLimit) != 0 {
+		if rateLimited {
 			logMatch = logMatch.Limit(r.LogActionRateLimit, uint16(r.LogActionRateLimitBurst))
 		}
+		// CONNMARK has no effect on untracked packets, so connection transition
+		// logging is skipped for untracked policies.
+		logConnTransitions := r.LogConnectionTransitions && !untracked
+
+		if logConnTransitions && rateLimited {
+			// Both the LOG and the "no response seen yet" connmark bit (which triggers
+			// the follow-up log when the first response arrives, see ChainConnStateLog)
+			// must be driven by a single rate-limit decision, so that a connection gets
+			// a response log if and only if its initial log was emitted.  Since a rule
+			// can only carry one action, we make that decision once, record it in the
+			// packet mark, and let both actions match on it:
+			//
+			//     -j MARK --set-mark 0/bit                 (clear any stale value)
+			//     <match> -m limit ... -j MARK --set-mark bit/bit
+			//     -m mark --mark bit/bit -j LOG
+			//     -m mark --mark bit/bit -j CONNMARK --set-mark bit/bit
+			//
+			// The first rule is load-bearing: an earlier Log rule in this chain (or a
+			// user's own restore-mark rule) may have left the bit set, which would
+			// otherwise produce a log that the rate limiter had rejected.  We reuse
+			// MarkConnStateLog as the scratch bit - it is a connmark bit everywhere
+			// else, so it is free here, and this is why it must be reserved from the
+			// packet mark space.  The scratch marks can't be used: the rule's own match
+			// may depend on them (see matchBlockBuilder).
+			logDecisionMatch := r.NewMatch().MarkSingleBitSet(r.MarkConnStateLog)
+			return []generictables.Rule{
+				{
+					Match:  r.NewMatch(),
+					Action: r.ClearMark(r.MarkConnStateLog),
+				},
+				{
+					Match:  r.CombineMatches(logMatch, match),
+					Action: r.SetMark(r.MarkConnStateLog),
+				},
+				{
+					Match:  logDecisionMatch,
+					Action: r.Log(r.generateLogPrefix(id, tier)),
+				},
+				{
+					Match:  logDecisionMatch,
+					Action: r.SetConnmark(r.MarkConnStateLog, r.MarkConnStateLog),
+				},
+			}
+		}
+
 		rules = append(rules, generictables.Rule{
 			Match:  logMatch,
 			Action: r.Log(r.generateLogPrefix(id, tier)),
 		})
+		if logConnTransitions {
+			// No rate limit configured, so there is no decision to share: the LOG and
+			// the connmark bit both fire whenever the rule matches.
+			rules = append(rules, generictables.Rule{
+				Match:  r.NewMatch(),
+				Action: r.SetConnmark(r.MarkConnStateLog, r.MarkConnStateLog),
+			})
+		}
 	}
 
 	nflogGroup := NFLOGOutboundGroup
@@ -1025,7 +1079,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 func PolicyChainName(prefix PolicyChainNamePrefix, polID *types.PolicyID, nft bool) string {
 	maxLen := iptables.MaxChainNameLength
 	if nft {
-		maxLen = nftables.MaxChainNameLength
+		maxLen = nftrender.MaxChainNameLength
 	}
 	return hash.GetLengthLimitedID(
 		string(prefix),
@@ -1037,7 +1091,7 @@ func PolicyChainName(prefix PolicyChainNamePrefix, polID *types.PolicyID, nft bo
 func ProfileChainName(prefix ProfileChainNamePrefix, profID *types.ProfileID, nft bool) string {
 	maxLen := iptables.MaxChainNameLength
 	if nft {
-		maxLen = nftables.MaxChainNameLength
+		maxLen = nftrender.MaxChainNameLength
 	}
 	return hash.GetLengthLimitedID(
 		string(prefix),

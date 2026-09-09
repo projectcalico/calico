@@ -28,8 +28,11 @@
           # not a per-PR gate.
           - sudo env NFT_BENCH_PERF_ARTIFACTS_DIR="$(pwd)/artifacts/perf" felix/bin/nft.test -test.run='^$' -test.bench=. -test.benchmem -test.benchtime=6x
           # Publish to Lens. send-perf-results no-ops if the creds are unset.
+          # Take the user name from the secret alongside the token, rather than
+          # hardcoding it, so that rotating the Lens credential to a different
+          # account does not silently break publishing.
           - export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
-          - export ELASTICSEARCH_USER=elastic
+          - export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
           - export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
           - ./bin/send-perf-results --dir artifacts/perf
     epilogue:

@@ -24,10 +24,10 @@ import (
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 // ipipManager takes care of the configuration of the IPIP tunnel device, and programming IPIP routes by using
@@ -51,7 +51,7 @@ type ipipManager struct {
 
 	// Log context
 	logCtx     *logrus.Entry
-	opRecorder logutils.OpRecorder
+	opRecorder logrusr.OpRecorder
 }
 
 func newIPIPManager(
@@ -60,7 +60,7 @@ func newIPIPManager(
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder logrusr.OpRecorder,
 ) *ipipManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
 	return newIPIPManagerWithShims(
@@ -80,7 +80,7 @@ func newIPIPManagerWithShims(
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
 ) *ipipManager {
 	if ipVersion != 4 {
@@ -144,21 +144,22 @@ func (m *ipipManager) OnUpdate(protoBufMsg any) {
 		delete(m.activeHostnameToIP, msg.Hostname)
 		m.maybeUpdateRoutes()
 	default:
-		if m.dpConfig.ProgramClusterRoutes {
+		if m.dpConfig.ProgramIPIPClusterRoutes {
 			m.routeMgr.OnUpdate(msg)
 		}
 	}
 }
 
 func (m *ipipManager) maybeUpdateRoutes() {
-	// Only update routes if only Felix is responsible for programming IPIP routes.
-	if m.dpConfig.ProgramClusterRoutes {
+	// Only update routes if Felix, rather than confd and BIRD, is responsible for programming the
+	// IPIP cluster routes.
+	if m.dpConfig.ProgramIPIPClusterRoutes {
 		m.routeMgr.triggerRouteUpdate()
 	}
 }
 
 func (m *ipipManager) CompleteDeferredWork() error {
-	if m.dpConfig.ProgramClusterRoutes {
+	if m.dpConfig.ProgramIPIPClusterRoutes {
 		return m.routeMgr.CompleteDeferredWork()
 	}
 	return nil

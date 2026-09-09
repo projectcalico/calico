@@ -22,11 +22,11 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 func init() {
-	logutils.ConfigureFormatter("test")
+	logrusr.ConfigureFormatter("test")
 }
 
 func TestBpfJSONCmd_CollectsJSONWithTextFallback(t *testing.T) {
@@ -114,6 +114,27 @@ func TestDiagsCmdsForPod_Previous(t *testing.T) {
 		ContainSubstring("kubectl logs --previous"),
 		ContainSubstring("-c install-cni"),
 	)))
+}
+
+// The bridge dumps are the only source of per-port VLAN membership and FDB
+// state in the bundle, so they must be collected on every node regardless of
+// dataplane.
+func TestCalicoNodeDiagsCmds_Bridge(t *testing.T) {
+	RegisterTestingT(t)
+
+	for _, bpfEnabled := range []bool{false, true} {
+		cmds := calicoNodeDiagsCmds("/node-dir", "nodeA", "calico-system", "calico-node-xyz", bpfEnabled)
+		strs := cmdStrs(cmds)
+		for _, want := range []string{
+			"bridge -d link show",
+			"bridge vlan show",
+			"bridge fdb show",
+			"ip -d link show",
+		} {
+			Expect(strs).To(ContainElement(HaveSuffix(want)),
+				"bpfEnabled=%v: missing %q", bpfEnabled, want)
+		}
+	}
 }
 
 func filterStrs(strs []string, substr string) []string {

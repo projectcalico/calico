@@ -20,9 +20,12 @@ import (
 	"context"
 	"math/bits"
 	"net"
+	"os"
 	"os/exec"
 	"runtime/debug"
+	"runtime/pprof"
 	"strings"
+	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
@@ -48,10 +51,10 @@ import (
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/markbits"
 	"github.com/projectcalico/calico/felix/nfnetlink"
 	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/wireguard"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
@@ -146,6 +149,33 @@ func StartDataplaneDriver(
 				}).Panic("Not enough mark bits available.")
 		}
 
+		// The connection transition log bit is mainly a connmark bit, so that it persists
+		// for the lifetime of the connection: a policy Log rule sets it, and the first
+		// response packet tests and clears it.  It must be reserved from the packet-mark
+		// space for two reasons.  Firstly, the policy Log rules also use it as a scratch
+		// packet mark, to drive the LOG and the connmark-setting rule from a single
+		// rate-limit decision (see CombineMatchAndActionsForProtoRule).  Secondly, a
+		// user's own "-j CONNMARK --save-mark" rule copies the whole packet mark over the
+		// connmark and may exist unconditionally in their ruleset; taking the bit from
+		// the space the operator has ceded to Calico keeps such a rule from corrupting
+		// it.  Only allocate it when the feature is enabled so we don't shrink the
+		// endpoint mark block otherwise.
+		var markConnStateLog uint32
+		logConnectionTransitions := configParams.LogConnectionTransitions == string(apiv3.LogConnectionTransitionsFirstResponseAfterLog)
+		if logConnectionTransitions && configParams.BPFEnabled {
+			log.Warn("LogConnectionTransitions is not supported in eBPF mode, ignoring it.")
+			logConnectionTransitions = false
+		}
+		if logConnectionTransitions {
+			log.Info("Connection transition logging enabled, allocating a mark bit")
+			var err error
+			markConnStateLog, err = markBitsManager.NextSingleBitMark()
+			if err != nil {
+				log.WithError(err).WithField("MarkMask", allowedMarkBits).Panic(
+					"Failed to allocate a mark bit for connection transition logging, not enough mark bits available.")
+			}
+		}
+
 		// Mark bits for endpoint mark. Currently Felix takes the rest bits from mask available for use.
 		markEndpointMark, allocated := markBitsManager.NextBlockBitsMark(markBitsManager.AvailableMarkBitCount())
 		if kubeIPVSSupportEnabled {
@@ -168,6 +198,7 @@ func StartDataplaneDriver(
 				"scratch1Mark":        markScratch1,
 				"endpointMark":        markEndpointMark,
 				"endpointMarkNonCali": markEndpointNonCaliEndpoint,
+				"connStateLogMark":    markConnStateLog,
 			}).Info("Calculated iptables mark bits")
 
 		// Create a routing table manager. There are certain components that should take specific indices in the range
@@ -230,6 +261,7 @@ func StartDataplaneDriver(
 			RulesConfig: rules.Config{
 				FlowLogsEnabled:          configParams.FlowLogsEnabled(),
 				NFTablesMode:             configParams.NFTablesMode,
+				NFTablesEnabled:          configParams.NFTablesEnabled,
 				NFTablesFlowTableOffload: configParams.NFTablesFlowTableOffload != string(apiv3.NFTablesFlowTableOffloadDisabled),
 				WorkloadIfacePrefixes:    configParams.InterfacePrefixes(),
 
@@ -289,6 +321,10 @@ func StartDataplaneDriver(
 				LogActionRateLimit:      configParams.LogActionRateLimit,
 				LogActionRateLimitBurst: configParams.LogActionRateLimitBurst,
 
+				LogConnectionTransitions:       logConnectionTransitions,
+				LogConnectionTransitionsPrefix: configParams.LogConnectionTransitionsPrefix,
+				MarkConnStateLog:               markConnStateLog,
+
 				EndpointToHostAction: configParams.DefaultEndpointToHostAction,
 				FilterAllowAction:    configParams.FilterAllowAction(),
 				MangleAllowAction:    configParams.MangleAllowAction(),
@@ -305,7 +341,7 @@ func StartDataplaneDriver(
 				NATOutgoingExclusions:              configParams.NATOutgoingExclusions,
 				BPFEnabled:                         configParams.BPFEnabled,
 				BPFOverlayIPOnDevice:               configParams.BPFOverlayHostSourceIP == string(apiv3.BPFOverlayHostSourceIPTunnelAddress),
-				BPFForceTrackPacketsFromIfaces:     replaceWildcards(configParams.NFTablesMode == "Enabled", configParams.BPFForceTrackPacketsFromIfaces),
+				BPFForceTrackPacketsFromIfaces:     replaceWildcards(configParams.NFTablesEnabled, configParams.BPFForceTrackPacketsFromIfaces),
 				ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
 				IstioAmbientModeEnabled:            configParams.IsIstioAmbientModeEnabled(),
 				IstioDSCPMark:                      configParams.IstioDSCPMark.ToUint8(),
@@ -341,8 +377,9 @@ func StartDataplaneDriver(
 			DeviceRouteSourceAddressIPv6:   configParams.DeviceRouteSourceAddressIPv6,
 			DeviceRouteProtocol:            netlink.RouteProtocol(configParams.DeviceRouteProtocol),
 			RemoveExternalRoutes:           configParams.RemoveExternalRoutes,
-			ProgramClusterRoutes:           configParams.ProgramClusterRoutesEnabled(),
-			NoEncapEnabled:                 configParams.Encapsulation.NoEncapEnabled,
+			ProgramIPIPClusterRoutes:       configParams.ProgramIPIPClusterRoutes(),
+			ProgramNoEncapClusterRoutes:    configParams.ProgramNoEncapClusterRoutes(),
+			NoEncapNeeded:                  configParams.Encapsulation.NoEncapNeeded,
 			IPForwarding:                   configParams.IPForwarding,
 			IPSetsRefreshInterval:          configParams.IpsetsRefreshInterval,
 			IptablesPostWriteCheckInterval: configParams.IptablesPostWriteCheckIntervalSecs,
@@ -366,10 +403,24 @@ func StartDataplaneDriver(
 				// a good time to force a GC and return any RAM that we can.
 				debug.FreeOSMemory()
 
-				if configParams.DebugMemoryProfilePath == "" {
+				fileName := configParams.DebugMemoryProfilePath
+				if fileName == "" {
 					return
 				}
-				logutils.DumpHeapMemoryProfile(configParams.DebugMemoryProfilePath)
+				fileName = renderProfileFileName(fileName)
+				logCxt := log.WithField("file", fileName)
+				logCxt.Info("Writing memory profile...")
+				f, err := os.Create(fileName)
+				if err != nil {
+					logCxt.WithError(err).Error("Could not create memory profile file")
+					return
+				}
+				defer f.Close()
+				if err := pprof.WriteHeapProfile(f); err != nil {
+					logCxt.WithError(err).Error("Could not write memory profile")
+					return
+				}
+				logCxt.Info("Finished writing memory profile")
 			},
 			HealthAggregator:                   healthAggregator,
 			WatchdogTimeout:                    configParams.DataplaneWatchdogTimeout,
@@ -480,6 +531,18 @@ func StartDataplaneDriver(
 	}
 }
 
+// NFTablesEnabled resolves the configured NFTablesMode, including Auto, to the dataplane
+// this host will use. Callers must resolve it before anything reads the dataplane-specific
+// config, since Auto depends on runtime detection.
+func NFTablesEnabled(configParams *config.Config) bool {
+	detectKubeProxyNftables := nftables.KubeProxyNftablesEnabledFn(nil)
+	nftEnabled, err := nftables.Enabled(configParams.NFTablesMode, detectKubeProxyNftables, nil)
+	if err != nil {
+		log.WithError(err).Panic("Unable to determine whether to use the nftables dataplane, shutting down")
+	}
+	return nftEnabled
+}
+
 func SupportsBPF() error {
 	return bpf.SupportsBPFDataplane()
 }
@@ -517,7 +580,17 @@ func replaceWildcards(nftEnabled bool, s []string) []string {
 func replaceWildcard(nftEnabled bool, s string) string {
 	// Need to replace the "+" wildcard with "*" for nftables.
 	if nftEnabled && strings.HasSuffix(s, iptables.Wildcard) {
-		return s[:len(s)-1] + nftables.Wildcard
+		return s[:len(s)-1] + nftrender.Wildcard
 	}
 	return s
+}
+
+// renderProfileFileName expands the "<timestamp>" placeholder in the
+// profile file name using the current time.
+func renderProfileFileName(template string) string {
+	if strings.Contains(template, "<timestamp>") {
+		timestamp := time.Now().Format("2006-01-02-15:04:05")
+		return strings.Replace(template, "<timestamp>", timestamp, 1)
+	}
+	return template
 }

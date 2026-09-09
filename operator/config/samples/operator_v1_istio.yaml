@@ -1,0 +1,8 @@
+apiVersion: operator.tigera.io/v1
+kind: Istio
+metadata:
+  labels:
+    app.kubernetes.io/name: operator
+    app.kubernetes.io/managed-by: kustomize
+  name: default
+spec: {}

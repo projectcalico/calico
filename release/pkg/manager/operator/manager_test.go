@@ -14,7 +14,16 @@
 
 package operator
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestOperatorDirIsInTree(t *testing.T) {
+	m := NewManager(WithCalicoDirectory("/some/calico"))
+	require.Equal(t, "/some/calico/operator", m.dir)
+}
 
 func TestProductRegistryParts(t *testing.T) {
 	for _, tc := range []struct {

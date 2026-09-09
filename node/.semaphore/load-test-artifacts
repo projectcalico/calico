@@ -26,6 +26,7 @@ REPO_ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 # lib.Makefile write, so hack/image-exists can re-find them in the daemon.
 # Item format: "<tarball-prefix>:<marker-dir>:<image-ref>".
 loaded_any=0
+calico_image=
 for item in \
     calico-image:cmd/calico:calico:latest-${ARCH} \
     node-image:node:node:latest-${ARCH} \
@@ -36,7 +37,15 @@ for item in \
   image_ref="${rest#*:}"
   if [ -f "/tmp/${tarball}" ]; then
     echo "Loading cached ${tarball}..."
-    zstd -dc "/tmp/${tarball}" | docker load
+    # The tarballs carry the registry-prefixed tag, not the ref the stamp records.
+    loaded=$(zstd -dc "/tmp/${tarball}" | docker load | sed -n 's/^Loaded image: //p' | head -1)
+    if [ -z "${loaded}" ]; then
+      echo "ERROR: ${tarball} loaded no image; ${image_ref} would be built from source."
+      exit 1
+    fi
+    if [ "${loaded}" != "${image_ref}" ]; then
+      docker tag "${loaded}" "${image_ref}"
+    fi
     mkdir -p "${REPO_ROOT}/${marker_dir}"
     # Write the image ref so hack/image-exists treats the stamp as
     # backed by a concrete image (not just a touched empty file), and
@@ -44,8 +53,24 @@ for item in \
     echo "${image_ref}" > "${REPO_ROOT}/${marker_dir}/.image.created-${ARCH}"
     rm -f "/tmp/${tarball}"
     loaded_any=1
+    if [ "${marker_dir}" = cmd/calico ]; then
+      calico_image="${image_ref}"
+    fi
+  else
+    echo "WARNING: /tmp/${tarball} missing; ${image_ref} will be built from source."
   fi
 done
+
+# The k8st suite mounts cmd/calico/bin/calico-$ARCH, which only the image build
+# we just skipped would have produced. Take it out of the image instead.
+if [ -n "${calico_image}" ]; then
+  calico_bin="${REPO_ROOT}/cmd/calico/bin/calico-${ARCH}"
+  mkdir -p "$(dirname "${calico_bin}")"
+  ctr=$(docker create "${calico_image}")
+  docker cp "${ctr}:/usr/bin/calico" "${calico_bin}"
+  docker rm -f "${ctr}" > /dev/null
+  chmod +x "${calico_bin}"
+fi
 
 # Stub LIBBPF_MARKER so kind-build-images doesn't drag the cached node/cmd/calico
 # image stamps back out-of-date by rebuilding libbpf.a (whose freshly-built mtime

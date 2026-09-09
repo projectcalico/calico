@@ -1,15 +1,15 @@
 {{- if .Values.includeCRDs -}}
 {{- if .Values.useV3CRDs -}}
-{{ range $path, $_ := .Files.Glob "crds-v3/*" }}
+{{ range $path, $_ := .Files.Glob "crds-v3/*.yaml" }}
 {{ $.Files.Get $path }}
 ---
 {{- end -}}
-{{ range $path, $_ := .Files.Glob "crds/policy.networking*" }}
+{{ range $path, $_ := .Files.Glob "crds/policy.networking*.yaml" }}
 {{ $.Files.Get $path }}
 ---
 {{- end -}}
 {{- else -}}
-{{ range $path, $_ := .Files.Glob "crds/*" }}
+{{ range $path, $_ := .Files.Glob "crds/*.yaml" }}
 {{ $.Files.Get $path }}
 ---
 {{- end -}}

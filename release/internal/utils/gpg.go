@@ -18,7 +18,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 
@@ -40,8 +42,7 @@ func GetGPGPubKey(gpgKeyID string) (string, error) {
 
 // SignRPMFiles takes a GPG key ID, which must have already been
 // imported into the RPM database, and uses it to sign a list of
-// RPM files. We use --rpmv4 here to ensure that, even on newer
-// RPM versions, we're using backwards-compatible RPM signatures.
+// RPM files.
 func SignRPMFiles(gpgKeyID string, rpmFiles []string) error {
 	if len(rpmFiles) == 0 {
 		return fmt.Errorf("list of RPM files to sign is empty")
@@ -57,18 +58,53 @@ func SignRPMFiles(gpgKeyID string, rpmFiles []string) error {
 		return fmt.Errorf("no regular RPM files to sign in the provided list")
 	}
 	logrus.Infof("Signing RPM files with GPG key %s", gpgKeyID)
-	cmdArgs := []string{
-		"-D", fmt.Sprintf("%%_openpgp_sign_id %s", gpgKeyID),
-		"--resign",
-		"--rpmv4",
-	}
-	cmdArgs = append(cmdArgs, filteredRpmFiles...)
+	cmdArgs := signArgs(gpgKeyID, filteredRpmFiles)
 	logrus.Debugf("Running rpmsign with args %s", strings.Join(cmdArgs, " "))
 	if _, err := command.Run("rpmsign", cmdArgs); err != nil {
 		return fmt.Errorf("unable to sign RPM files: %w", err)
 	}
 	return nil
 }
+
+// signArgs builds the rpmsign arguments for signing the given files. rpm 4 and
+// rpm 6 disagree on all three of the naming, the signing binary and the
+// signature format, so the arguments accommodate both rather than assuming one.
+func signArgs(gpgKeyID string, rpmFiles []string) []string {
+	// The macro naming the signing key was renamed: rpm 4 reads %_gpg_name, rpm 6
+	// reads %_openpgp_sign_id, and each ignores the other's. Define both.
+	args := []string{
+		"-D", fmt.Sprintf("%%_gpg_name %s", gpgKeyID),
+		"-D", fmt.Sprintf("%%_openpgp_sign_id %s", gpgKeyID),
+	}
+	// rpm 4 shells out to %__gpg, which Debian and Ubuntu build as /usr/bin/gpg2 —
+	// a path their gnupg package does not install, so signing fails to exec it.
+	if gpgPath, err := exec.LookPath("gpg"); err == nil {
+		args = append(args, "-D", fmt.Sprintf("%%__gpg %s", gpgPath))
+	}
+	args = append(args, "--resign")
+	// --rpmv4 keeps signatures backwards compatible on rpm 6, which otherwise
+	// writes v6 header signatures. Only rpm 6 has the option; 4.17 and 4.20 reject
+	// it outright and write v4 signatures anyway.
+	if rpmsignSupportsRPMV4() {
+		args = append(args, "--rpmv4")
+	}
+	return append(args, rpmFiles...)
+}
+
+// rpmsignSupportsRPMV4 reports whether the installed rpmsign accepts --rpmv4. It
+// asks rpmsign rather than comparing versions, so a version that gains or loses
+// the option needs no change here. Held in a var so tests can replace it, and
+// resolved once because it cannot change while the release runs.
+var rpmsignSupportsRPMV4 = sync.OnceValue(func() bool {
+	out, err := command.Run("rpmsign", []string{"--help"})
+	if err != nil {
+		// Signing itself reports a usable error if rpmsign is missing or broken;
+		// here, assume the option is absent rather than fail the help probe.
+		logrus.WithError(err).Debug("Could not ask rpmsign for its options, assuming --rpmv4 is unsupported")
+		return false
+	}
+	return strings.Contains(out, "--rpmv4")
+})
 
 // CheckRPMSig takes an RPM filename/path and runs rpmkeys --checksig
 // on it to ensure that the signature and package digest are correct.

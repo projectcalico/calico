@@ -1,0 +1,22 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# iptables pipeline: test selection scope.
+#
+# Full Calico suite, upstream networking conformance, and the
+# upstream NetworkPolicy suite -- the one place upstream directly exercises what
+# we implement.
+#
+# Abstract parent -- no cell points at this file directly. The sibling
+# configs extend it and subtract what their cluster shape cannot run.
+
+extends: ../base.yaml
+
+include:
+  - sig-calico
+  - Conformance && sig-network
+  - Feature:NetworkPolicy
+
+exclude:
+  labels:
+    - label: Feature:KubeVirt
+      reason: "needs a KubeVirt install; only the kubevirt lanes carry it"

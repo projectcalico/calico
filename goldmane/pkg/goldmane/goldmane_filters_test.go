@@ -761,7 +761,7 @@ func TestFilter(t *testing.T) {
 				}
 
 				// Send it to goldmane.
-				gm.Receive(types.ProtoToFlow(fl))
+				gm.Receive(types.ProtoToFlow(fl), "")
 			}
 
 			// Query for flows using the query from the testcase.

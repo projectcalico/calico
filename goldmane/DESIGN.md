@@ -27,8 +27,9 @@ single TLS-enabled port (default `443`, typically accessed via
 Kubernetes Service on port `7443`):
 
 - **`FlowCollector`** — receives streaming flow updates from Felix
-  on each node (`Connect` RPC, bidirectional streaming).
-  Deduplicates flows on reconnection.
+  on each node (`Connect` RPC, bidirectional streaming). Tags each
+  flow with the reporting node, taken from the peer IP, which
+  survives a reconnect.
 - **`Flows`** — serves flow queries to consumers (Whisker UI,
   debugging tools). Supports `List` (paginated), `Stream` (live
   updates), and `FilterHints` (autocomplete-style filter
@@ -52,7 +53,7 @@ Kubernetes Service on port `7443`):
 | `pkg/emitter/` | Pushes aggregated flows to an upstream HTTP endpoint via a rate-limited workqueue |
 | `pkg/stream/` | Stream management for live flow subscriptions |
 | `pkg/types/` | Internal flow types (minified from proto) and filter logic |
-| `pkg/internal/` | Flow cache (deduplication) and file-watching utilities |
+| `pkg/internal/` | Flow cache (the client's replay cache) and file-watching utilities |
 | `proto/` | Protobuf definitions and generated code |
 | `fv/` | Functional verification tests (vanilla `go test`, not Ginkgo) |
 
@@ -75,6 +76,13 @@ Felix (per-node) --gRPC--> FlowCollector --> Goldmane main loop --> BucketRing
   history (242 buckets).
 - **`DiachronicFlow`** — tracks a single flow key's statistics
   across all time buckets.
+- **Emission claims** — each bucket records which flows every node
+  has already reported into it, keyed by flow, start and end time,
+  and node. A client replays up to five minutes of flows whenever
+  its connection resets, and the stats accumulate, so a claim is
+  what stops the replay counting twice. Rollover expires the
+  claims once a bucket sits further back than a client can
+  replay.
 - **Rollover** — every `AggregationWindow` (15 s), the main loop
   advances the ring. On rollover, old buckets are emitted to the
   sink (if configured) and streams receive updates.
@@ -139,6 +147,8 @@ is a contract change for dashboards and alerting; record it here.
   into the aggregator.
 - `goldmane_aggr_dropped_flows_total` — flows dropped due to
   full buffer.
+- `goldmane_aggr_duplicate_flows_total` — flows skipped because
+  the reporting node had already sent them into that bucket.
 - `goldmane_aggr_num_unique_flows` — current number of unique
   flow keys.
 - `goldmane_aggr_flow_index_buffer_size` — current ingestion
@@ -179,12 +189,5 @@ is a contract change for dashboards and alerting; record it here.
 
 ## Cross-cutting review notes
 
-- **Keep this document in sync with the code.** A change to the
-  gRPC services, core components, key concepts, config surface,
-  or Prometheus metrics must update the relevant section in the
-  same PR. Exemptions: (a) a bug fix that restores behaviour
-  this doc already describes, (b) a mechanical refactor with no
-  observable change, (c) comment / log-message edits, (d)
-  dependency bumps. If in doubt, update the doc.
 - Operational recipes (build, test, debug) do not belong here —
   they live in [`goldmane/CLAUDE.md`](./CLAUDE.md).

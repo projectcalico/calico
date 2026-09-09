@@ -60,13 +60,13 @@ func newTestMonitor(convergenceTime time.Duration) *liveMigrationMonitor {
 	m.newGARPHandle = func(ifaceName string) (garpHandle, error) {
 		return newFakeGARPHandle(), nil
 	}
-	m.listener = &fakeLiveMigrationListener{}
+	m.registerListener(&fakeLiveMigrationListener{})
 	return m
 }
 
 // testListener returns the fake listener from a test monitor.
 func testListener(m *liveMigrationMonitor) *fakeLiveMigrationListener {
-	return m.listener.(*fakeLiveMigrationListener)
+	return m.listeners[0].(*fakeLiveMigrationListener)
 }
 
 // drainUpdates resolves the current batch and returns the updates delivered to
@@ -286,6 +286,25 @@ func TestMonitorOnUpdate(t *testing.T) {
 		m := newTestMonitor(testConvergenceTime)
 		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 		g.Expect(m.ifaceNames[wepID1]).To(Equal("cali" + wepID1.EndpointId))
+	})
+}
+
+func TestMonitorMultipleListeners(t *testing.T) {
+	t.Run("state changes are forwarded to every registered listener", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		// In production the monitor has one listener per IP version; a second
+		// listener here stands in for the IPv6 endpoint manager.
+		second := &fakeLiveMigrationListener{}
+		m.registerListener(second)
+
+		m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
+		g.Expect(m.ResolveUpdateBatch()).NotTo(HaveOccurred())
+
+		expected := []liveMigrationStateUpdate{{ID: wepID1, State: liveMigrationStateTarget}}
+		g.Expect(testListener(m).drain()).To(Equal(expected))
+		g.Expect(second.drain()).To(Equal(expected))
 	})
 }
 

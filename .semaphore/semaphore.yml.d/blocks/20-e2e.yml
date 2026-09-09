@@ -1,11 +1,12 @@
 - name: "E2E tests (KinD)"
   run:
-    when: "${CHANGE_IN(e2e,node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend,cmd/calico)}"
+    when: "${CHANGE_IN(e2e,node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend,cmd/calico,operator)}"
   dependencies:
     - Prerequisites
     - "Build: calico image"
     - "Build: node image"
     - "Build: whisker image"
+    - "Build: operator image"
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
@@ -18,11 +19,17 @@
       commands:
         # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
         - docker system prune -af
-        - .semaphore/load-cached-images
+        - .semaphore/load-cached-images calico node whisker
     jobs:
       - name: "E2E tests: Conformance (cluster routing: BIRD)"
         commands:
           - .semaphore/run-and-monitor e2e-test.log make e2e-test
+        env_vars:
+          # Pin the mode: leaving it unset now means Felix owns the IPIP routes,
+          # and this lane's Feature:BGPPeer tests require BGP to be the sole
+          # routing mechanism.
+          - name: EXTRA_VALUES_FILES
+            value: "hack/test/kind/infra/values-bird-routing.yaml"
       - name: "E2E tests: Conformance (cluster routing: Felix)"
         commands:
           - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
@@ -32,7 +39,7 @@
           - name: KIND_CALICO_API_GROUP
             value: "crd.projectcalico.org/v1"
           - name: E2E_TEST_CONFIG
-            value: "e2e/config/kind-felix-routing.yaml"
+            value: "e2e/config/kind/felix-routing.yaml"
       - name: "E2E tests: ClusterNetworkPolicy (cluster routing: Felix)"
         commands:
           - .semaphore/run-and-monitor e2e-test-cnp.log make e2e-test-clusternetworkpolicy
@@ -42,7 +49,7 @@
           - name: KIND_CALICO_API_GROUP
             value: "projectcalico.org/v3"
           - name: E2E_TEST_CONFIG
-            value: "e2e/config/kind-felix-routing.yaml"
+            value: "e2e/config/kind/felix-routing.yaml"
       - name: "E2E tests: sig-calico (dataplane: BPF)"
         commands:
           - .semaphore/run-and-monitor e2e-test-bpf.log make e2e-test-bpf

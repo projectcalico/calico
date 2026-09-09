@@ -97,8 +97,6 @@ var (
 	IPv6PortFormat                = regexp.MustCompile(`^\[[0-9a-fA-F:.]+\]:(\d+)$`)
 	reasonString                  = "Reason: "
 	poolUnstictCIDR               = "IP pool CIDR is not strictly masked"
-	overlapsV4LinkLocal           = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
-	overlapsV6LinkLocal           = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
 	protocolPortsMsg              = "rules that specify ports must set protocol to TCP or UDP or SCTP"
 	protocolSingleOrRangePortsMsg = "rules with numeric port or port range must set protocol to TCP or UDP or SCTP"
 	globalSelectorOnly            = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
@@ -989,56 +987,10 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 		return
 	}
 
-	// Normalize the CIDR before persisting.
-	pool.CIDR = cidr.String()
-
-	// Default the blockSize
-	if pool.BlockSize == 0 {
-		if ipAddr.Version() == 4 {
-			pool.BlockSize = 26
-		} else {
-			pool.BlockSize = 122
-		}
-	}
-
-	// The Calico IPAM places restrictions on the minimum IP pool size.  If
-	// the ippool is enabled, check that the pool is at least the minimum size.
-	if !pool.Disabled {
-		ones, _ := cidr.Mask.Size()
-		log.Debugf("Pool CIDR: %s, mask: %d, blockSize: %d", cidr.String(), ones, pool.BlockSize)
-		if ones > pool.BlockSize {
-			structLevel.ReportError(reflect.ValueOf(pool.CIDR),
-				"IPpool.CIDR", "", reason("IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size."), "")
-		}
-	}
-
-	// The Calico CIDR should be strictly masked
-	log.Debugf("IPPool CIDR: %s, Masked IP: %d", pool.CIDR, cidr.IP)
+	// Not left to CEL: callers normalize spec.cidr before the CEL rules run.
 	if cidr.IP.String() != ipAddr.String() {
 		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
 			"IPpool.CIDR", "", reason(poolUnstictCIDR), "")
-	}
-
-	// IPv4 link local subnet.
-	ipv4LinkLocalNet := net.IPNet{
-		IP:   net.ParseIP("169.254.0.0"),
-		Mask: net.CIDRMask(16, 32),
-	}
-	// IPv6 link local subnet.
-	ipv6LinkLocalNet := net.IPNet{
-		IP:   net.ParseIP("fe80::"),
-		Mask: net.CIDRMask(10, 128),
-	}
-
-	// IP Pool CIDR cannot overlap with IPv4 or IPv6 link local address range.
-	if cidr.Version() == 4 && cidr.IsNetOverlap(ipv4LinkLocalNet) {
-		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
-			"IPpool.CIDR", "", reason(overlapsV4LinkLocal), "")
-	}
-
-	if cidr.Version() == 6 && cidr.IsNetOverlap(ipv6LinkLocalNet) {
-		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
-			"IPpool.CIDR", "", reason(overlapsV6LinkLocal), "")
 	}
 
 	// Allowed use must be one of the enums.

@@ -63,15 +63,21 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var canTestMarks bool
 
 func init() {
-	logutils.ConfigureEarlyLogging()
+	logrusr.ConfigureEarlyLoggingFromEnv("felix")
 	log.SetLevel(log.DebugLevel)
+
+	// These tests use port 666 as an arbitrary NAT backend port and expect
+	// gopacket to leave the UDP payload opaque. gopacket v1.6.1 started
+	// dissecting port 666 as AGUE, which leaves the packet with no
+	// application layer.
+	layers.RegisterUDPPortLayerType(666, gopacket.LayerTypePayload)
 
 	fd := environment.NewFeatureDetector(make(map[string]string))
 	if ok, err := fd.KernelIsAtLeast("5.9.0"); err == nil && ok {
@@ -364,10 +370,6 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	err = os.Mkdir(bpfFsDir, os.ModePerm)
 	Expect(err).NotTo(HaveOccurred())
 	defer os.RemoveAll(bpfFsDir)
-
-	err = os.Mkdir(bpfFsDir+"_v6", os.ModePerm)
-	Expect(err).NotTo(HaveOccurred())
-	defer os.RemoveAll(bpfFsDir + "v6")
 
 	obj := "../../bpf-gpl/bin/test_xdp_debug"
 	if !topts.xdp {

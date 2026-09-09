@@ -47,3 +47,5 @@ done
 if [ $FAILED = "true" ]; then
     exit 1
 fi
+
+echo "OK"

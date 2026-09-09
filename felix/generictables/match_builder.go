@@ -26,6 +26,8 @@ type MatchCriteria interface {
 	MarkSingleBitSet(mark uint32) MatchCriteria
 	MarkMatchesWithMask(mark, mask uint32) MatchCriteria
 	NotMarkMatchesWithMask(mark, mask uint32) MatchCriteria
+	ConnMarkMatchesWithMask(mark, mask uint32) MatchCriteria
+	TCPFlagsSet(flags string) MatchCriteria
 	InInterface(ifaceMatch string) MatchCriteria
 	OutInterface(ifaceMatch string) MatchCriteria
 	RPFCheckFailed() MatchCriteria

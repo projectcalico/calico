@@ -20,11 +20,39 @@ import (
 )
 
 // IPAMConfigurationInformer provides access to a shared informer and lister for
-// IPAMConfigurations.
+// IPAMConfigurations. Prefer using the type-safe variant (see [TypedIPAMConfigurationInformer]).
 type IPAMConfigurationInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.IPAMConfigurationLister
 }
+
+// TypedIPAMConfigurationInformer provides access to a shared informer and lister for
+// IPAMConfigurations, including the type-safe TypedInformer variant.
+// It is a superset of IPAMConfigurationInformer.
+type TypedIPAMConfigurationInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() IPAMConfigurationIndexInformer
+	Lister() projectcalicov3.IPAMConfigurationLister
+}
+
+// IPAMConfigurationIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type IPAMConfigurationIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.IPAMConfiguration]
+
+// IPAMConfigurationHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for IPAMConfiguration.
+type IPAMConfigurationHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.IPAMConfiguration]
+
+// IPAMConfigurationDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for IPAMConfiguration.
+type IPAMConfigurationDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.IPAMConfiguration]
+
+// IPAMConfigurationFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for IPAMConfiguration.
+type IPAMConfigurationFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.IPAMConfiguration]
+
+// IPAMConfigurationIndexers is a specialization of [cache.TypedIndexers] for IPAMConfiguration.
+type IPAMConfigurationIndexers = cache.TypedIndexers[*apisprojectcalicov3.IPAMConfiguration]
+
+// DeletedIPAMConfiguration is a specialization of [cache.DeletedObject] for IPAMConfiguration.
+type DeletedIPAMConfiguration = cache.DeletedObject[*apisprojectcalicov3.IPAMConfiguration]
 
 type iPAMConfigurationInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,25 +62,49 @@ type iPAMConfigurationInformer struct {
 // NewIPAMConfigurationInformer constructs a new informer for IPAMConfiguration type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedIPAMConfigurationInformer]).
 func NewIPAMConfigurationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewIPAMConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedIPAMConfigurationInformer constructs a new informer for IPAMConfiguration type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedIPAMConfigurationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers IPAMConfigurationIndexers) IPAMConfigurationIndexInformer {
+	return NewTypedIPAMConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredIPAMConfigurationInformer constructs a new informer for IPAMConfiguration type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredIPAMConfigurationInformer]).
 func NewFilteredIPAMConfigurationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewIPAMConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedIPAMConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredIPAMConfigurationInformer constructs a new informer for IPAMConfiguration type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredIPAMConfigurationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers IPAMConfigurationIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) IPAMConfigurationIndexInformer {
+	return NewTypedIPAMConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewIPAMConfigurationInformerWithOptions constructs a new informer for IPAMConfiguration type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedIPAMConfigurationInformerWithOptions]).
 func NewIPAMConfigurationInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedIPAMConfigurationInformerWithOptions(client, options)
+}
+
+// NewTypedIPAMConfigurationInformerWithOptions constructs a new informer for IPAMConfiguration type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedIPAMConfigurationInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) IPAMConfigurationIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "ipamconfigurations"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPAMConfiguration](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -85,17 +137,57 @@ func NewIPAMConfigurationInformerWithOptions(client clientset.Interface, options
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *iPAMConfigurationInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewIPAMConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedIPAMConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *iPAMConfigurationInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.IPAMConfiguration{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *iPAMConfigurationInformer) TypedInformer() IPAMConfigurationIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPAMConfiguration](f.factory.InformerFor(&apisprojectcalicov3.IPAMConfiguration{}, f.defaultInformer))
 }
 
 func (f *iPAMConfigurationInformer) Lister() projectcalicov3.IPAMConfigurationLister {
 	return projectcalicov3.NewIPAMConfigurationLister(f.Informer().GetIndexer())
+}
+
+// ToTypedIPAMConfigurationInformer converts an untyped informer into a TypedIPAMConfigurationInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *IPAMConfiguration. If that is not the case, calling type-safe methods of the returned
+// TypedIPAMConfigurationInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedIPAMConfigurationInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedIPAMConfigurationInformer(informer IPAMConfigurationInformer) TypedIPAMConfigurationInformer {
+	if informer, ok := informer.(TypedIPAMConfigurationInformer); ok {
+		return informer
+	}
+	return &iPAMConfigurationTypedInformerAdapter{informer}
+}
+
+type iPAMConfigurationTypedInformerAdapter struct {
+	IPAMConfigurationInformer
+}
+
+func (a *iPAMConfigurationTypedInformerAdapter) TypedInformer() IPAMConfigurationIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPAMConfiguration](a.Informer())
+}
+
+// ToIPAMConfigurationIndexInformer converts an untyped informer into a IPAMConfigurationIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *IPAMConfiguration. If that is not the case, calling type-safe methods of the returned
+// IPAMConfigurationIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a IPAMConfigurationIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToIPAMConfigurationIndexInformer(informer cache.SharedIndexInformer) IPAMConfigurationIndexInformer {
+	if informer, ok := informer.(IPAMConfigurationIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPAMConfiguration](informer)
 }

@@ -411,9 +411,6 @@ func (r *routeCmd) run(op string) error {
 		if err != nil {
 			return err
 		}
-		if val == nil {
-			return errors.New("failed to construct route value")
-		}
 		if err := r.mapObj.Update(key.AsBytes(), val.AsBytes()); err != nil {
 			return fmt.Errorf("failed to update routes map: %w", err)
 		}

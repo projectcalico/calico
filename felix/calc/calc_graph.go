@@ -419,8 +419,12 @@ func NewCalculationGraph(
 	hostIPPassthru.RegisterWith(allUpdDispatcher)
 	cg.hostIPPassthru = hostIPPassthru
 
+	// Encapsulation.NoEncapNeeded already accounts for ProgramClusterRoutes, but
+	// Encapsulation.IPIPEnabled does not, so gate that one explicitly: if BIRD programs the IPIP
+	// cluster routes then Felix has no use for the L3 route resolver on their account.
 	if conf.BPFEnabled || conf.Encapsulation.VXLANEnabled || conf.Encapsulation.VXLANEnabledV6 ||
-		conf.WireguardEnabled || conf.WireguardEnabledV6 || conf.ProgramClusterRoutesEnabled() {
+		conf.WireguardEnabled || conf.WireguardEnabledV6 || conf.Encapsulation.NoEncapNeeded ||
+		(conf.Encapsulation.IPIPEnabled && conf.ProgramIPIPClusterRoutes()) {
 		// Calculate simple node-ownership routes.
 		//        ...
 		//     Dispatcher (all updates)

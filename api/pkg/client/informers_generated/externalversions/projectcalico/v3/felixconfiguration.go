@@ -20,11 +20,39 @@ import (
 )
 
 // FelixConfigurationInformer provides access to a shared informer and lister for
-// FelixConfigurations.
+// FelixConfigurations. Prefer using the type-safe variant (see [TypedFelixConfigurationInformer]).
 type FelixConfigurationInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.FelixConfigurationLister
 }
+
+// TypedFelixConfigurationInformer provides access to a shared informer and lister for
+// FelixConfigurations, including the type-safe TypedInformer variant.
+// It is a superset of FelixConfigurationInformer.
+type TypedFelixConfigurationInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() FelixConfigurationIndexInformer
+	Lister() projectcalicov3.FelixConfigurationLister
+}
+
+// FelixConfigurationIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type FelixConfigurationIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.FelixConfiguration]
+
+// FelixConfigurationHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for FelixConfiguration.
+type FelixConfigurationHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.FelixConfiguration]
+
+// FelixConfigurationDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for FelixConfiguration.
+type FelixConfigurationDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.FelixConfiguration]
+
+// FelixConfigurationFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for FelixConfiguration.
+type FelixConfigurationFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.FelixConfiguration]
+
+// FelixConfigurationIndexers is a specialization of [cache.TypedIndexers] for FelixConfiguration.
+type FelixConfigurationIndexers = cache.TypedIndexers[*apisprojectcalicov3.FelixConfiguration]
+
+// DeletedFelixConfiguration is a specialization of [cache.DeletedObject] for FelixConfiguration.
+type DeletedFelixConfiguration = cache.DeletedObject[*apisprojectcalicov3.FelixConfiguration]
 
 type felixConfigurationInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,25 +62,49 @@ type felixConfigurationInformer struct {
 // NewFelixConfigurationInformer constructs a new informer for FelixConfiguration type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFelixConfigurationInformer]).
 func NewFelixConfigurationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewFelixConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedFelixConfigurationInformer constructs a new informer for FelixConfiguration type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFelixConfigurationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers FelixConfigurationIndexers) FelixConfigurationIndexInformer {
+	return NewTypedFelixConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredFelixConfigurationInformer constructs a new informer for FelixConfiguration type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredFelixConfigurationInformer]).
 func NewFilteredFelixConfigurationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewFelixConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedFelixConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredFelixConfigurationInformer constructs a new informer for FelixConfiguration type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredFelixConfigurationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers FelixConfigurationIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) FelixConfigurationIndexInformer {
+	return NewTypedFelixConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewFelixConfigurationInformerWithOptions constructs a new informer for FelixConfiguration type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFelixConfigurationInformerWithOptions]).
 func NewFelixConfigurationInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedFelixConfigurationInformerWithOptions(client, options)
+}
+
+// NewTypedFelixConfigurationInformerWithOptions constructs a new informer for FelixConfiguration type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFelixConfigurationInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) FelixConfigurationIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "felixconfigurations"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.FelixConfiguration](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -85,17 +137,57 @@ func NewFelixConfigurationInformerWithOptions(client clientset.Interface, option
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *felixConfigurationInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFelixConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedFelixConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *felixConfigurationInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.FelixConfiguration{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *felixConfigurationInformer) TypedInformer() FelixConfigurationIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.FelixConfiguration](f.factory.InformerFor(&apisprojectcalicov3.FelixConfiguration{}, f.defaultInformer))
 }
 
 func (f *felixConfigurationInformer) Lister() projectcalicov3.FelixConfigurationLister {
 	return projectcalicov3.NewFelixConfigurationLister(f.Informer().GetIndexer())
+}
+
+// ToTypedFelixConfigurationInformer converts an untyped informer into a TypedFelixConfigurationInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *FelixConfiguration. If that is not the case, calling type-safe methods of the returned
+// TypedFelixConfigurationInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedFelixConfigurationInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedFelixConfigurationInformer(informer FelixConfigurationInformer) TypedFelixConfigurationInformer {
+	if informer, ok := informer.(TypedFelixConfigurationInformer); ok {
+		return informer
+	}
+	return &felixConfigurationTypedInformerAdapter{informer}
+}
+
+type felixConfigurationTypedInformerAdapter struct {
+	FelixConfigurationInformer
+}
+
+func (a *felixConfigurationTypedInformerAdapter) TypedInformer() FelixConfigurationIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.FelixConfiguration](a.Informer())
+}
+
+// ToFelixConfigurationIndexInformer converts an untyped informer into a FelixConfigurationIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *FelixConfiguration. If that is not the case, calling type-safe methods of the returned
+// FelixConfigurationIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a FelixConfigurationIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToFelixConfigurationIndexInformer(informer cache.SharedIndexInformer) FelixConfigurationIndexInformer {
+	if informer, ok := informer.(FelixConfigurationIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.FelixConfiguration](informer)
 }

@@ -24,14 +24,7 @@ connection.
   [`felix/DESIGN.md`](../felix/DESIGN.md) §1 under the data
   flow / lifecycle sections.
 
-## Keep this doc in sync with the code
-
-A PR that changes how Typha works — its fan-out behaviour, the
-datastore-side connection shape, the Felix-facing protocol, or
-any documented invariant — must update this file in the same PR.
-Exemptions: bug fix restoring documented behaviour, mechanical
-refactor with no observable change, comment / log-message edits,
-dependency bumps. If in doubt, update.
+## Gaps
 
 This doc is currently a stub. Sections to flesh out as the
 content grows: fan-out architecture and connection management,

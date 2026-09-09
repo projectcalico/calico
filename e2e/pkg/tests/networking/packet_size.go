@@ -161,9 +161,7 @@ var _ = describe.CalicoDescribe(
 			ct.AddServer(server)
 
 			if clientType == pktClientExt {
-				extClient := externalnode.NewClient()
-				Expect(extClient).NotTo(BeNil(),
-					"external node tests require EXT_IP, EXT_KEY, EXT_USER to be configured")
+				extClient := externalnode.MustNewClient()
 				ct.Deploy()
 				DeferCleanup(ct.Stop)
 

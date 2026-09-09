@@ -91,6 +91,12 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		return nil, err
 	}
 
+	return NewKubeClientForConfig(config, cs, group, ca.K8sUsePodCIDR)
+}
+
+// NewKubeClientForConfig builds a backend client from an existing rest.Config
+// and clientset.
+func NewKubeClientForConfig(config *rest.Config, cs kubernetes.Interface, group resources.BackingAPIGroup, usePodCIDR bool) (api.Client, error) {
 	crdRestClient, err := restClient(*config, group)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build CRD client: %v", err)
@@ -110,7 +116,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		ClientSet:                  cs,
 		RESTClient:                 crdRestClient,
 		Group:                      group,
-		UsePodCIDR:                 ca.K8sUsePodCIDR,
+		UsePodCIDR:                 usePodCIDR,
 		ClusterNetworkPolicyClient: cnpClient,
 		VMIMClientFactory: func(namespace string) resources.VMIMClient {
 			return kvClient.VirtualMachineInstanceMigrations(namespace)

@@ -1072,13 +1072,17 @@ func (t *memberDeduplicator) Remove(set string, cidr ip.CIDR) (ip.CIDR, []ip.CID
 	v6 := strings.Contains(cidr.String(), ":")
 	trie := t.getTrie(set, v6)
 
-	// If this node has children that are masked by this CIDR, we need to
-	// advertise them against as part of this deletion.
+	// Capture the descendants this CIDR was masking before we delete it; they may need re-advertising.
 	t.buf = t.buf[:0]
 	masked := trie.ClosestDescendants(t.buf, cidr)
 
-	// Remove from the trie.
 	trie.Delete(cidr)
+
+	// A broader ancestor still covering this CIDR means it was never programmed as its own interval
+	// element (Add suppressed it), and that same ancestor still masks the descendants. Emit nothing.
+	if trie.Covers(cidr) {
+		return nil, nil
+	}
 
 	return cidr, masked
 }

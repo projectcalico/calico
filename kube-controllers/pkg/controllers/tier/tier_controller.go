@@ -107,12 +107,16 @@ func NewController(
 			c.queue.Add(tier.Name)
 		},
 		DeleteFunc: func(obj any) {
-			tier, ok := obj.(*v3.Tier)
-			if !ok {
-				logrus.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in tier delete handler")
+			// Only the name is needed, so use the deletion-handling key func:
+			// it unwraps the cache.DeletedFinalStateUnknown tombstone the
+			// informer may deliver, including one that carries only a key.
+			// Tiers are cluster-scoped, so the key is the name.
+			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+			if err != nil {
+				logrus.WithError(err).Error("Unexpected object in tier delete handler")
 				return
 			}
-			c.queue.Add(tier.Name)
+			c.queue.Add(key)
 		},
 	}
 	if _, err := tierInformer.AddEventHandler(tierHandlers); err != nil {

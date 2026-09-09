@@ -14,7 +14,11 @@
 
 package migration
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"github.com/prometheus/client_golang/prometheus"
+
+	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
+)
 
 var (
 	migrationResourcesTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -74,23 +78,23 @@ func init() {
 }
 
 // setPhaseMetric sets the migration phase gauge, clearing all other phases.
-func setPhaseMetric(phase DatastoreMigrationPhase) {
+func setPhaseMetric(phase migrationv1.DatastoreMigrationPhase) {
 	for _, p := range []string{"pending", "migrating", "waiting_for_conflict_resolution", "converged", "complete", "failed"} {
 		migrationPhase.WithLabelValues(p).Set(0)
 	}
 	var label string
 	switch phase {
-	case DatastoreMigrationPhasePending, "":
+	case migrationv1.DatastoreMigrationPhasePending, "":
 		label = "pending"
-	case DatastoreMigrationPhaseMigrating:
+	case migrationv1.DatastoreMigrationPhaseMigrating:
 		label = "migrating"
-	case DatastoreMigrationPhaseWaitingForConflictResolution:
+	case migrationv1.DatastoreMigrationPhaseWaitingForConflictResolution:
 		label = "waiting_for_conflict_resolution"
-	case DatastoreMigrationPhaseConverged:
+	case migrationv1.DatastoreMigrationPhaseConverged:
 		label = "converged"
-	case DatastoreMigrationPhaseComplete:
+	case migrationv1.DatastoreMigrationPhaseComplete:
 		label = "complete"
-	case DatastoreMigrationPhaseFailed:
+	case migrationv1.DatastoreMigrationPhaseFailed:
 		label = "failed"
 	default:
 		return

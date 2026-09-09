@@ -70,7 +70,13 @@ openapi-gen \
 	"${PACKAGE_NAME}/pkg/lib/numorstring" 2>&1 | tee /tmp/openapi-gen.log
 grep "API rule violation" /tmp/openapi-gen.log | grep "projectcalico" > /tmp/openapi-violations.log || true
 if [ -s /tmp/openapi-violations.log ]; then
-	grep -v -F -f "${REPO_ROOT}/hack/openapi-violations-known.list" /tmp/openapi-violations.log > /tmp/openapi-new-violations.log || true
+	# Strip comments and blank lines before using the known list as a pattern
+	# file. A blank line makes grep -F match everything, which silently disables
+	# the gate.
+	KNOWN_VIOLATIONS=$(mktemp)
+	grep -v -e '^#' -e '^[[:space:]]*$' "${REPO_ROOT}/hack/openapi-violations-known.list" > "${KNOWN_VIOLATIONS}" || true
+	grep -v -x -F -f "${KNOWN_VIOLATIONS}" /tmp/openapi-violations.log > /tmp/openapi-new-violations.log || true
+	rm -f "${KNOWN_VIOLATIONS}"
 	if [ -s /tmp/openapi-new-violations.log ]; then
 		echo "ERROR: openapi-gen reported new API rule violations in Calico types:"
 		cat /tmp/openapi-new-violations.log

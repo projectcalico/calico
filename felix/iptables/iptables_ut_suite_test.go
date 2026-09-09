@@ -30,6 +30,6 @@ func init() {
 func TestIptablesUT(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../report/felix_iptables_suite.xml"
+	testutils.RegisterJUnitReporter("felix_iptables_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/iptables", suiteConfig, reporterConfig)
 }

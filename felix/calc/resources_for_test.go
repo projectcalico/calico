@@ -774,6 +774,43 @@ var (
 	}
 )
 
+// netSetOverlap* model a NetworkSet whose CIDRs nest inside one another, exercising the
+// overlap-suppression dedup (CORE-13009). The a=="b" label matches all() (allSelectorId) but not
+// b=="b" (bEqBSelectorId), so the CIDRs land only in the all() IP set.
+var (
+	netSetOverlapKey = model.NetworkSetKey{Name: "netset-overlap"}
+
+	netSetOverlapAncestor = model.NetworkSet{
+		Nets: []net.IPNet{
+			mustParseNet("10.65.0.0/16"),
+		},
+		Labels: uniquelabels.Make(map[string]string{
+			"a": "b",
+		}),
+	}
+
+	netSetOverlapNested = model.NetworkSet{
+		Nets: []net.IPNet{
+			mustParseNet("10.65.0.0/16"), // ancestor
+			mustParseNet("10.65.1.0/24"), // nested under ancestor
+			mustParseNet("10.65.1.5/32"), // nested under both
+		},
+		Labels: uniquelabels.Make(map[string]string{
+			"a": "b",
+		}),
+	}
+
+	netSetOverlapMiddleRemoved = model.NetworkSet{
+		Nets: []net.IPNet{
+			mustParseNet("10.65.0.0/16"), // ancestor still present
+			mustParseNet("10.65.1.5/32"), // leaf still present, middle /24 gone
+		},
+		Labels: uniquelabels.Make(map[string]string{
+			"a": "b",
+		}),
+	}
+)
+
 var (
 	netSet3Key = model.NetworkSetKey{Name: "netset-3"}
 	netSet3    = model.NetworkSet{

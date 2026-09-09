@@ -25,6 +25,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,7 +66,7 @@ func TestWireguardBGPRouteSuppression(t *testing.T) {
 
 	// With every node running WireGuard, each node's BIRD rejects kernel routes
 	// to its peers' blocks and lets Felix route them over wireguard.cali.
-	t.Cleanup(setWireguardEnabled(ctx, g, cli, true))
+	t.Cleanup(setWireguardEnabled(t, ctx, g, cli, true))
 
 	// The peer filter only targets no-encap BGP routes; VXLAN and IPIP routes
 	// are already suppressed by their own tunnel-route filters.
@@ -123,9 +124,9 @@ func TestWireguardBGPRouteSuppression(t *testing.T) {
 	utils.AssertNoRouteWithProto(t, clientNode, serverBlock.String(), utils.RouteProtoBIRD)
 }
 
-// setWireguardEnabled flips WireguardEnabled on the default FelixConfiguration
-// and returns an idempotent restore function.
-func setWireguardEnabled(ctx context.Context, g *WithT, cli ctrlclient.Client, enabled bool) func() {
+// setWireguardEnabled flips WireguardEnabled on the default FelixConfiguration and
+// returns an idempotent restore. The restore blocks until Felix has applied it.
+func setWireguardEnabled(t testing.TB, ctx context.Context, g *WithT, cli ctrlclient.Client, enabled bool) func() {
 	cfg := &v3.FelixConfiguration{}
 	g.Expect(cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, cfg)).
 		To(Succeed(), "fetching default FelixConfiguration")
@@ -157,7 +158,28 @@ func setWireguardEnabled(ctx context.Context, g *WithT, cli ctrlclient.Client, e
 			cur.Spec.WireguardEnabled = original
 			return cli.Update(rctx, cur)
 		}, "20s", "1s").Should(Succeed(), "restoring original WireguardEnabled")
+		if original == nil || !*original {
+			nodes, _, _ := utils.NodeInfo(t)
+			for _, n := range nodes[1:] {
+				waitForNoWireguardDevice(t, g, n)
+			}
+		}
 	}
+}
+
+// waitForNoWireguardDevice waits for wireguard.cali to go away on nodeName.
+func waitForNoWireguardDevice(t testing.TB, g *WithT, nodeName string) {
+	t.Helper()
+	g.Eventually(func() error {
+		present, err := wireguardDevicePresent(t, nodeName)
+		if err != nil {
+			return err
+		}
+		if present {
+			return fmt.Errorf("wireguard.cali still present on %s", nodeName)
+		}
+		return nil
+	}, "120s", "2s").Should(Succeed(), "WireGuard was not torn down on node %s", nodeName)
 }
 
 // waitForWireguardDevice waits for wireguard.cali to appear in the calico-node
@@ -166,9 +188,25 @@ func setWireguardEnabled(ctx context.Context, g *WithT, cli ctrlclient.Client, e
 func waitForWireguardDevice(t testing.TB, g *WithT, nodeName string) {
 	t.Helper()
 	g.Eventually(func() error {
-		_, err := utils.ExecInCalicoNode(t, nodeName, "ip link show wireguard.cali",
-			utils.RunOptions{AllowFail: true, SuppressErrLog: true})
-		return err
+		present, err := wireguardDevicePresent(t, nodeName)
+		if err != nil {
+			return err
+		}
+		if !present {
+			return fmt.Errorf("wireguard.cali not present on %s", nodeName)
+		}
+		return nil
 	}, "120s", "2s").Should(Succeed(),
 		"wireguard.cali never appeared on node %s - is the wireguard kernel module available?", nodeName)
+}
+
+// wireguardDevicePresent reports whether wireguard.cali exists on nodeName. Listing
+// every link keeps a missing device distinguishable from a failed exec.
+func wireguardDevicePresent(t testing.TB, nodeName string) (bool, error) {
+	t.Helper()
+	out, err := utils.ExecInCalicoNode(t, nodeName, "ip -brief link show", utils.RunOptions{SuppressErrLog: true})
+	if err != nil {
+		return false, fmt.Errorf("listing links on %s: %w", nodeName, err)
+	}
+	return strings.Contains(out, "wireguard.cali"), nil
 }

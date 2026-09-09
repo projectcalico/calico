@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,14 +19,15 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	. "github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
-	"github.com/projectcalico/calico/felix/logutils"
-	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/rules/rulesdefs"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var _ = Describe("Table with an empty dataplane (nft)", func() {
@@ -48,16 +49,16 @@ var _ = Describe("Table with an empty dataplane (legacy)", func() {
 		table := NewTable(
 			"filter",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			TableOptions{
-				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+				HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
 				NewCmdOverride:        dataplane.NewCmd,
 				SleepOverride:         dataplane.Sleep,
 				NowOverride:           dataplane.Now,
 				BackendMode:           "legacy",
 				LookPathOverride:      testutils.LookPathAll,
-				OpRecorder:            logutils.NewSummarizer("test loop"),
+				OpRecorder:            logrusr.NewSummarizer("test loop"),
 			},
 		)
 
@@ -85,16 +86,16 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 		table = NewTable(
 			"filter",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			TableOptions{
-				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+				HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
 				NewCmdOverride:        dataplane.NewCmd,
 				SleepOverride:         dataplane.Sleep,
 				NowOverride:           dataplane.Now,
 				BackendMode:           dataplaneMode,
 				LookPathOverride:      testutils.LookPathNoLegacy,
-				OpRecorder:            logutils.NewSummarizer("test loop"),
+				OpRecorder:            logrusr.NewSummarizer("test loop"),
 			},
 		)
 	})
@@ -169,16 +170,16 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			NewTable(
 				"filter",
 				4,
-				rules.RuleHashPrefix,
+				rulesdefs.RuleHashPrefix,
 				featureDetector,
 				TableOptions{
-					HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+					HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
 					NewCmdOverride:        dataplane.NewCmd,
 					SleepOverride:         dataplane.Sleep,
 					InsertMode:            "unknown",
 					BackendMode:           dataplaneMode,
 					LookPathOverride:      testutils.LookPathAll,
-					OpRecorder:            logutils.NewSummarizer("test loop"),
+					OpRecorder:            logrusr.NewSummarizer("test loop"),
 				},
 			)
 		}).To(Panic())
@@ -1204,13 +1205,13 @@ func describePostUpdateCheckTests(enableRefresh bool, dataplaneMode string) {
 			"OUTPUT":  {},
 		}, dataplaneMode)
 		options := TableOptions{
-			HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+			HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
 			NewCmdOverride:        dataplane.NewCmd,
 			SleepOverride:         dataplane.Sleep,
 			NowOverride:           dataplane.Now,
 			BackendMode:           dataplaneMode,
 			LookPathOverride:      testutils.LookPathNoLegacy,
-			OpRecorder:            logutils.NewSummarizer("test loop"),
+			OpRecorder:            logrusr.NewSummarizer("test loop"),
 		}
 		if enableRefresh {
 			options.RefreshInterval = 30 * time.Second
@@ -1221,7 +1222,7 @@ func describePostUpdateCheckTests(enableRefresh bool, dataplaneMode string) {
 		table = NewTable(
 			"filter",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			options,
 		)
@@ -1477,17 +1478,17 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 		table = NewTable(
 			"filter",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			TableOptions{
-				HistoricChainPrefixes:    rules.AllHistoricChainNamePrefixes,
+				HistoricChainPrefixes:    rulesdefs.AllHistoricChainNamePrefixes,
 				ExtraCleanupRegexPattern: "sneaky-rule",
 				NewCmdOverride:           dataplane.NewCmd,
 				SleepOverride:            dataplane.Sleep,
 				InsertMode:               insertMode,
 				BackendMode:              dataplaneMode,
 				LookPathOverride:         testutils.LookPathNoLegacy,
-				OpRecorder:               logutils.NewSummarizer("test loop"),
+				OpRecorder:               logrusr.NewSummarizer("test loop"),
 			},
 		)
 	})
@@ -1898,16 +1899,16 @@ func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 		table = NewTable(
 			"filter",
 			6,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			TableOptions{
-				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+				HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
 				NewCmdOverride:        dataplane.NewCmd,
 				SleepOverride:         dataplane.Sleep,
 				NowOverride:           dataplane.Now,
 				BackendMode:           dataplaneMode,
 				LookPathOverride:      testutils.LookPathNoLegacy,
-				OpRecorder:            logutils.NewSummarizer("test loop"),
+				OpRecorder:            logrusr.NewSummarizer("test loop"),
 			},
 		)
 		table.InsertOrAppendRules("FORWARD", []generictables.Rule{
@@ -1965,16 +1966,16 @@ func describeInsertEarlyRules(dataplaneMode string) {
 		table = NewTable(
 			"filter",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			TableOptions{
-				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+				HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
 				NewCmdOverride:        dataplane.NewCmd,
 				SleepOverride:         dataplane.Sleep,
 				NowOverride:           dataplane.Now,
 				BackendMode:           dataplaneMode,
 				LookPathOverride:      testutils.LookPathNoLegacy,
-				OpRecorder:            logutils.NewSummarizer("test loop"),
+				OpRecorder:            logrusr.NewSummarizer("test loop"),
 			},
 		)
 	})
@@ -1992,9 +1993,9 @@ func describeInsertEarlyRules(dataplaneMode string) {
 
 		Expect(dataplane.Chains).To(Equal(map[string][]string{
 			"FORWARD": {
-				"-m comment --comment \"" + rules.RuleHashPrefix + hashes[0] +
+				"-m comment --comment \"" + rulesdefs.RuleHashPrefix + hashes[0] +
 					"\" -m comment --comment \"my rule\" --jump DROP",
-				"-m comment --comment \"" + rules.RuleHashPrefix + hashes[1] +
+				"-m comment --comment \"" + rulesdefs.RuleHashPrefix + hashes[1] +
 					"\" -m comment --comment \"my other rule\" --jump ACCEPT",
 				"-m comment --comment \"some rule\"",
 			},
@@ -2012,9 +2013,9 @@ func describeInsertEarlyRules(dataplaneMode string) {
 		// Init chains
 		dataplane.Chains = map[string][]string{
 			"FORWARD": {
-				"-m comment --comment \"" + rules.RuleHashPrefix + hashes[0] +
+				"-m comment --comment \"" + rulesdefs.RuleHashPrefix + hashes[0] +
 					"\" -m comment --comment \"my rule\" --jump DROP",
-				"-m comment --comment \"" + rules.RuleHashPrefix + hashes[1] +
+				"-m comment --comment \"" + rulesdefs.RuleHashPrefix + hashes[1] +
 					"\" -m comment --comment \"my other rule\" --jump ACCEPT",
 				"-m comment --comment \"some rule\"",
 			},
@@ -2025,3 +2026,133 @@ func describeInsertEarlyRules(dataplaneMode string) {
 		Expect(res).To(HaveLen(2))
 	})
 }
+
+var _ = Describe("Table in cleanup-only mode", func() {
+	var dataplane *testutils.MockDataplane
+	var table *Table
+
+	newTableWithRefresh := func(cleanupOnly bool, refreshInterval time.Duration) *Table {
+		featureDetector := environment.NewFeatureDetector(nil)
+		featureDetector.NewCmd = dataplane.NewCmd
+		featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
+		return NewTable("filter", 4, rulesdefs.RuleHashPrefix, featureDetector, TableOptions{
+			HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
+			RefreshInterval:       refreshInterval,
+			CleanupOnly:           cleanupOnly,
+			NewCmdOverride:        dataplane.NewCmd,
+			SleepOverride:         dataplane.Sleep,
+			NowOverride:           dataplane.Now,
+			LookPathOverride:      testutils.LookPathAll,
+			OpRecorder:            logrusr.NewSummarizer("test loop"),
+		})
+	}
+
+	newTable := func(cleanupOnly bool) *Table {
+		return newTableWithRefresh(cleanupOnly, 30*time.Second)
+	}
+
+	BeforeEach(func() {
+		dataplane = testutils.NewMockDataplane("filter", map[string][]string{
+			"FORWARD": {},
+		}, "legacy")
+	})
+
+	// A cleanup-only table names a backend that may have no kernel support, so an unreadable
+	// dataplane means there is nothing of ours there, not that Felix should die.
+	It("reschedules instead of panicking when the backend can't be read", func() {
+		dataplane.FailAllSaves = true
+		table = newTable(true)
+
+		var delay time.Duration
+		Expect(func() { delay = table.Apply() }).NotTo(Panic())
+		Expect(delay).To(Equal(30 * time.Second))
+	})
+
+	It("doesn't retry an unreadable backend until the next refresh", func() {
+		dataplane.FailAllSaves = true
+		table = newTable(true)
+		table.Apply()
+
+		saves := len(dataplane.CmdNames)
+		table.Apply()
+		Expect(dataplane.CmdNames).To(HaveLen(saves), "retried before the refresh interval was up")
+
+		dataplane.AdvanceTimeBy(31 * time.Second)
+		table.Apply()
+		Expect(len(dataplane.CmdNames)).To(BeNumerically(">", saves))
+	})
+
+	// Zero disables the periodic refresh, but a zero reschedule means the dataplane loop never
+	// comes back to us, so cleanup would stop for good on an idle node.
+	It("still reschedules with the refresh interval disabled", func() {
+		dataplane.FailAllSaves = true
+		table = newTableWithRefresh(true, 0)
+
+		// Matches defaultCleanupRetryInterval, which this external test package can't see.
+		const retryInterval = 180 * time.Second
+		Expect(table.Apply()).To(Equal(retryInterval))
+
+		saves := len(dataplane.CmdNames)
+		table.Apply()
+		Expect(dataplane.CmdNames).To(HaveLen(saves), "retried before the retry interval was up")
+
+		dataplane.AdvanceTimeBy(retryInterval + time.Second)
+		table.Apply()
+		Expect(len(dataplane.CmdNames)).To(BeNumerically(">", saves))
+	})
+
+	It("panics when a table it programs can't be read", func() {
+		dataplane.FailAllSaves = true
+		table = newTable(false)
+
+		Expect(func() { table.Apply() }).To(Panic())
+	})
+
+	// A cleanup-only table shares ip_version and table with the table Felix programs, so anything
+	// it publishes lands on the real table's series.
+	It("leaves the shared metrics alone", func() {
+		chainsGauge := func() (float64, bool) {
+			families, err := prometheus.DefaultGatherer.Gather()
+			Expect(err).NotTo(HaveOccurred())
+			for _, family := range families {
+				if family.GetName() != "felix_iptables_chains" {
+					continue
+				}
+				for _, metric := range family.GetMetric() {
+					labels := map[string]string{}
+					for _, l := range metric.GetLabel() {
+						labels[l.GetName()] = l.GetValue()
+					}
+					if labels["ip_version"] == "4" && labels["table"] == "filter" {
+						return metric.GetGauge().GetValue(), true
+					}
+				}
+			}
+			return 0, false
+		}
+
+		before, foundBefore := chainsGauge()
+
+		dataplane.Chains = map[string][]string{
+			"FORWARD":      {},
+			"cali-FORWARD": {},
+		}
+		table = newTable(true)
+		table.Apply()
+
+		after, foundAfter := chainsGauge()
+		Expect(foundAfter).To(Equal(foundBefore))
+		Expect(after).To(Equal(before))
+	})
+
+	It("still cleans up once the backend can be read", func() {
+		dataplane.Chains = map[string][]string{
+			"FORWARD":      {},
+			"cali-FORWARD": {},
+		}
+		table = newTable(true)
+		table.Apply()
+
+		Expect(dataplane.Chains).NotTo(HaveKey("cali-FORWARD"))
+	})
+})

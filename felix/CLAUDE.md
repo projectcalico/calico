@@ -76,6 +76,8 @@ make fv-bpf GINKGO_FOCUS="TestName"
 
 `fv/bpf_*_test.go` tests carry a matrix prefix (e.g. `"ipv4 udp, ct=true, log=debug, tunnel=none, dsr=false"`) which `GINKGO_FOCUS` can regex-match to slice the matrix when triaging. The matrix axes, the `_BPF-SAFE_` convention for shared FV tests, and the harness conventions for `bpf/ut/` are documented in [`design/bpf-tests.md`](./design/bpf-tests.md).
 
+**Name a new FV test that needs BPF mode `_BPF-SAFE_`, or `_BPF_ _BPF-SAFE_` if it targets the BPF dataplane.** CI's BPF jobs focus on `BPF-SAFE|_BPF_`, so either marker is enough to get the test run; a test with neither marker runs in no BPF job.
+
 ### Nftables Functional Tests
 
 ```bash
@@ -103,3 +105,7 @@ Felix parameters are declared in `config/config_params.go` with types and valida
 ## Design and review criteria
 
 Architecture, invariants, and review criteria live in the design index [`felix/DESIGN.md`](./DESIGN.md) and the per-topic sub-designs under [`felix/design/`](./design/). Path-scoped Copilot rules that reference each sub-design live under [`.github/instructions/`](../.github/instructions/). Do not look here for dataplane invariants, calc-graph internals, or rule-generation rules — look in the matching sub-design.
+
+## AI-assisted contribution policy
+
+Contributions written with AI assistance follow [`AI_POLICY.md`](../AI_POLICY.md): disclose the assistance in the PR description, no AI co-author trailers, and leave the change in a state the human author can explain themselves.

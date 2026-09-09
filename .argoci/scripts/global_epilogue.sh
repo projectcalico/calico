@@ -2,7 +2,7 @@
 # global_epilogue.sh - ArgoCI e2e epilogue for OSS Calico.
 #
 # Ported from .semaphore/end-to-end/scripts/global_epilogue.sh, adapted for
-# ArgoCI: artifacts go to GCS via gsutil (no Semaphore `artifact`/`cache`/
+# ArgoCI: artifacts via the bundled `artifact` shim (no Semaphore `cache`/
 # `test-results` CLIs), diags/destroy via bz. Best-effort throughout (|| true)
 # so teardown always runs. Sourced by the e2e-test template.
 set -o pipefail
@@ -18,18 +18,21 @@ cd "${BZ_HOME}" 2>/dev/null || echo "[WARN] could not cd to BZ_HOME=${BZ_HOME}"
 # every failure to 0 and skipped the diags capture below. Read the handler's
 # variable, falling back to CI_EXIT_CODE then 0.
 CI_EXIT_CODE=${CI_STEP_EXIT_CODE:-${CI_EXIT_CODE:-0}}
-ARTIFACT_DEST="gs://${GS_BUCKET}/${ARGO_WORKFLOW_NAME:-local}/${HOSTNAME:-pod}"
+
+# The viewer lists artifacts under CI_ARTIFACT_STEP_STORAGE, which is where
+# `artifact push job` publishes.
+echo "[INFO] publishing artifacts to ${CI_ARTIFACT_STEP_STORAGE}"
 
 # Capture diags on failure (or always for cert runs).
 if [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
   echo "[INFO] capturing diags"
   bz diags |& tee "${BZ_LOGS_DIR}/diagnostic.log" || true
-  gsutil cp "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" "${ARTIFACT_DEST}/diags.tgz" || true
+  artifact push job "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" -d diags.tgz -f || true
 
   # Per-test diags, where the suite collects them (openstack-e2e does, into
   # ${REPORT_DIR}/diags/) — distinct from the bz cluster diags above.
   if [[ -d "${REPORT_DIR}/diags" ]]; then
-    gsutil -m cp -r "${REPORT_DIR}/diags" "${ARTIFACT_DEST}/" || true
+    artifact push job "${REPORT_DIR}/diags" -f || true
   fi
 fi
 
@@ -43,9 +46,9 @@ fi
 
 # Publish JUnit + logs.
 if [[ -f "${REPORT_DIR}/junit.xml" ]]; then
-  gsutil cp "${REPORT_DIR}/junit.xml" "${ARTIFACT_DEST}/junit.xml" || true
+  artifact push job "${REPORT_DIR}/junit.xml" -f || true
 fi
-gsutil -m cp -r "${BZ_LOGS_DIR}/." "${ARTIFACT_DEST}/logs/" || true
+artifact push job "${BZ_LOGS_DIR}" -d logs -f || true
 
 # Upload results to Lens (best-effort; token from banzai-secrets).
 if [[ -n "${GITHUB_ACCESS_TOKEN:-}" ]]; then

@@ -1,7 +1,22 @@
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package client
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -9,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/kubernetes/test/e2e/framework/kubectl"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -41,22 +55,7 @@ func (c *calicoctlExecClient) Create(ctx context.Context, obj client.Object, opt
 		return c.base.Create(ctx, obj, opts...)
 	}
 
-	// calicoctl requires typemeta to be set for create operations, so set it here.
-	kind, err := c.kindFromObject(obj)
-	if err != nil {
-		return err
-	}
-	obj.GetObjectKind().SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "projectcalico.org",
-		Version: "v3",
-		Kind:    kind,
-	})
-
-	// Create the stdin input for the calicoctl command.
-	serializer := json.NewSerializer(json.DefaultMetaFactory, c.scheme, c.scheme, false)
-
-	w := &strings.Builder{}
-	err = serializer.Encode(obj, w)
+	data, err := c.encode(obj)
 	if err != nil {
 		return err
 	}
@@ -65,11 +64,11 @@ func (c *calicoctlExecClient) Create(ctx context.Context, obj client.Object, opt
 	cmd := []string{"exec", "-i", c.name, "--", "calicoctl", "create", "-f", "-"}
 
 	logrus.WithFields(logrus.Fields{
-		"data": w.String(),
+		"data": data,
 	}).Info("Executing calicoctl create command")
 
 	// Execute the command in the specified pod.
-	_, err = kubectl.RunKubectlInput(c.namespace, w.String(), cmd...)
+	_, err = kubectl.RunKubectlInput(c.namespace, data, cmd...)
 	if err != nil {
 		return err
 	}
@@ -116,11 +115,8 @@ func (c *calicoctlExecClient) Update(ctx context.Context, obj client.Object, opt
 		return c.base.Update(ctx, obj, opts...)
 	}
 
-	// Create the stdin input for the calicoctl command.
-	serializer := json.NewSerializer(json.DefaultMetaFactory, c.scheme, c.scheme, false)
-
-	w := &strings.Builder{}
-	if err := serializer.Encode(obj, w); err != nil {
+	data, err := c.encode(obj)
+	if err != nil {
 		return err
 	}
 
@@ -128,7 +124,7 @@ func (c *calicoctlExecClient) Update(ctx context.Context, obj client.Object, opt
 	cmd := []string{"exec", "-i", c.name, "--", "calicoctl", "apply", "-f", "-"}
 
 	// Execute the command in the specified pod.
-	_, err := kubectl.RunKubectlInput(c.namespace, w.String(), cmd...)
+	_, err = kubectl.RunKubectlInput(c.namespace, data, cmd...)
 	if err != nil {
 		return err
 	}
@@ -222,6 +218,42 @@ func (c *calicoctlExecClient) kindFromObject(obj runtime.Object) (string, error)
 
 	// If the kind is a list, return the kind without "List" suffix.
 	return strings.TrimSuffix(kinds[0].Kind, "List"), nil
+}
+
+// datastoreOwnedMetadata are the metadata fields calicoctl will not accept on a
+// create or an apply.
+var datastoreOwnedMetadata = []string{"creationTimestamp", "generation", "managedFields", "resourceVersion", "selfLink", "uid"}
+
+// encode renders obj as JSON for calicoctl's stdin. The datastore owns the status and
+// parts of the metadata, and calicoctl rejects the whole object if they are present.
+func (c *calicoctlExecClient) encode(obj client.Object) (string, error) {
+	// calicoctl requires typemeta to be set, so set it here.
+	kind, err := c.kindFromObject(obj)
+	if err != nil {
+		return "", err
+	}
+	obj.GetObjectKind().SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "projectcalico.org",
+		Version: "v3",
+		Kind:    kind,
+	})
+
+	u, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	if err != nil {
+		return "", err
+	}
+	delete(u, "status")
+	if metadata, ok := u["metadata"].(map[string]any); ok {
+		for _, field := range datastoreOwnedMetadata {
+			delete(metadata, field)
+		}
+	}
+
+	data, err := json.Marshal(u)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 func (c *calicoctlExecClient) isV3Request(obj runtime.Object) (bool, error) {

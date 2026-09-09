@@ -20,7 +20,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v3"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -81,7 +81,7 @@ func main() {
 	}
 	logrus.SetLevel(level)
 
-	logutils.ConfigureFormatter("deps")
+	logrusr.ConfigureFormatter("deps")
 
 	args := flag.Args()
 	if len(args) == 0 {
@@ -150,6 +150,24 @@ var nonGoDeps = map[string][]string{
 	// Whisker is not a go project so we list the whole thing.
 	"whisker": {
 		"/whisker",
+	},
+
+	// The generated CRD YAML has no .go files, so it's invisible to the
+	// dir-scan that builds secondary-package inclusions, but validation_fv_test.go
+	// reads it directly.
+	"kube-controllers": {
+		"/kube-controllers/pkg/apis/migration/v1/crd",
+	},
+
+	// The YAML the operator embeds and installs is invisible to the dir-scan:
+	// its own CRDs, the Calico CRDs it pulls from libcalico-go, the whisker
+	// config it renders, and the deploy-time manifests.
+	"operator": {
+		"/libcalico-go/config/crd",
+		"/operator/config",
+		"/operator/deploy/crds",
+		"/operator/pkg/crds",
+		"/operator/pkg/render/whisker",
 	},
 }
 
@@ -761,11 +779,19 @@ func printModules(pkg string) {
 	// For ease, do the full cross product. Only takes ~100ms.
 	var mods []string
 	for _, mod := range modules {
+		// Imports still use the original module path, so match on that, but report the
+		// replacement, since that's the code we actually build against.
+		importPath := mod.Path
 		if mod.Replace != nil {
+			if mod.Replace.Version == "" {
+				// Replaced by a local directory; its files are already inputs in their own right.
+				continue
+			}
 			mod = *mod.Replace
 		}
+
 		for _, pkg := range packageDeps {
-			if strings.HasPrefix(pkg, mod.Path) {
+			if strings.HasPrefix(pkg, importPath) {
 				if mod.Version != "" {
 					mods = append(mods, mod.Path+" "+mod.Version)
 				} else {

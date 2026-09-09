@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package pinnedversion
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	approvals "github.com/approvals/go-approval-tests"
@@ -39,13 +40,12 @@ func TestImageComponents(t *testing.T) {
 		RootDir:             rootDir,
 		ReleaseBranchPrefix: "release",
 		OperatorCfg: OperatorConfig{
-			Image:    "tigera/operator",
-			Registry: "docker.io",
-			Branch:   "release-v1.40",
+			Image:    "operator",
+			Registry: "docker.io/calico",
 		},
 		releaseName:   "test-release",
 		productBranch: "release-v3.31",
-		versionData:   version.NewHashreleaseVersions(version.New("v3.31.0"), "v1.40.0"),
+		versionData:   version.NewHashreleaseVersions(version.New("v3.31.0")),
 	}
 	if err := generatePinnedVersionFile(c); err != nil {
 		t.Fatalf("failed to generate pinned version file: %v", err)
@@ -90,7 +90,7 @@ func TestImageComponents(t *testing.T) {
 	})
 	t.Run("with operator", func(t *testing.T) {
 		expectedComponents := map[string]registry.Component{
-			"tigera/operator": {Version: "v1.40.0-v3.31.0", Image: "tigera/operator", Registry: "docker.io"},
+			"operator": {Version: "v3.31.0", Image: "operator", Registry: "docker.io/calico"},
 		}
 		for k, v := range commonComponents {
 			expectedComponents[k] = v
@@ -100,6 +100,32 @@ func TestImageComponents(t *testing.T) {
 			t.Errorf("expected components to be same, but they differ: %s", diff)
 		}
 	})
+}
+
+func TestGeneratePinnedVersionFileCreatesDir(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "tmp")
+	rootDir, err := command.GitDir()
+	if err != nil {
+		t.Fatalf("failed to get git root dir: %v", err)
+	}
+	p := &CalicoPinnedVersions{
+		Dir:                 dir,
+		RootDir:             rootDir,
+		ReleaseBranchPrefix: "release",
+		OperatorCfg: OperatorConfig{
+			Image:    "operator",
+			Registry: "docker.io/calico",
+		},
+		releaseName:   "test-release",
+		productBranch: "release-v3.31",
+		versionData:   version.NewHashreleaseVersions(version.New("v3.31.0")),
+	}
+	if err := generatePinnedVersionFile(p); err != nil {
+		t.Fatalf("failed to generate pinned version file: %v", err)
+	}
+	if _, err := os.Stat(PinnedVersionFilePath(dir)); err != nil {
+		t.Fatalf("pinned version file not created: %v", err)
+	}
 }
 
 func TestGeneratePinnedVersionFile(t *testing.T) {
@@ -113,13 +139,12 @@ func TestGeneratePinnedVersionFile(t *testing.T) {
 		RootDir:             rootDir,
 		ReleaseBranchPrefix: "release",
 		OperatorCfg: OperatorConfig{
-			Image:    "tigera/operator",
-			Registry: "docker.io",
-			Branch:   "release-v1.40",
+			Image:    "operator",
+			Registry: "docker.io/calico",
 		},
 		releaseName:   "test-release",
 		productBranch: "release-v3.31",
-		versionData:   version.NewHashreleaseVersions(version.New("v3.31.0"), "v1.40.0"),
+		versionData:   version.NewHashreleaseVersions(version.New("v3.31.0")),
 	}
 	if err := generatePinnedVersionFile(p); err != nil {
 		t.Fatalf("failed to generate pinned version file: %v", err)

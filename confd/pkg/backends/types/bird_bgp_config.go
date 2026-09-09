@@ -31,8 +31,10 @@ type BirdBGPConfig struct {
 	ListenPort       string
 	DirectInterfaces string // Complete interface pattern string for protocol direct
 
+	ExternalIPs                       []string
 	LoadBalancerIPs                   []string
 	BGPExportFilterForDisabledIPPools []string
+	IBGPExportFilterForTunnelRoutes   []string
 	BGPExportFilterForEnabledIPPools  []string
 	KernelFilterForIPPools            []string
 	SetMetricForBGPRoutes             []string

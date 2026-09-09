@@ -15,7 +15,12 @@
 package networking
 
 import (
+	"context"
+	"fmt"
+	"io"
+	"strconv"
 	"time"
+
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/ginkgo/v2"
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -25,6 +30,8 @@ import (
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
+	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
+	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	"github.com/projectcalico/calico/e2e/pkg/utils/iperfcheck"
 )
 
@@ -231,6 +238,99 @@ var _ = describe.CalicoDescribe(
 			egressResult := measureWithRateRetry(tester, clientPeer, server, maxRate, udpOpts...)
 			logrus.Infof("Egress packet-rate-limited throughput (bps): %.0f", egressResult.AverageRate)
 			Expect(egressResult.AverageRate).To(BeNumerically("<=", maxRate), "egress packet rate limit not effective")
+		})
+
+		// Verifies that the qos.projectcalico.org/ingressMaxConnections annotation
+		// caps concurrent TCP connections to a workload, and that closing one frees
+		// a slot. Egress uses the same counter and is covered by the FV suite.
+		It("should limit concurrent connections with QoS annotations", func() {
+			const (
+				connLimitPort = 8080
+				maxConns      = 3
+			)
+
+			By("Getting cluster node names")
+			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, true)
+			nodeNames := nodesInfo.GetNames()
+			serverNode := nodeNames[0]
+			clientNode := nodeNames[1]
+
+			checker := conncheck.NewConnectionTester(f)
+			defer checker.Stop()
+
+			// socat rather than netcat: netshoot's OpenBSD `nc -k` accepts
+			// connections sequentially, and this test needs several held at once.
+			listenAddr := fmt.Sprintf("TCP-LISTEN:%d,fork,reuseaddr", connLimitPort)
+			server := conncheck.NewServer("qos-connlimit-server", f.Namespace,
+				conncheck.WithPorts(connLimitPort),
+				conncheck.WithAutoCreateService(false),
+				conncheck.WithServerPodCustomizer(conncheck.WithNodeName(serverNode)),
+				conncheck.WithServerPodCustomizer(func(pod *corev1.Pod) {
+					if pod.Annotations == nil {
+						pod.Annotations = map[string]string{}
+					}
+					pod.Annotations["qos.projectcalico.org/ingressMaxConnections"] = strconv.Itoa(maxConns)
+					ctr := &pod.Spec.Containers[0]
+					ctr.Image = images.Netshoot
+					ctr.Command = []string{"socat"}
+					ctr.Args = []string{listenAddr, "EXEC:sleep 3600"}
+					ctr.ReadinessProbe = nil
+				}),
+			)
+
+			client := conncheck.NewClient("qos-connlimit-client", f.Namespace,
+				conncheck.WithClientCustomizer(conncheck.WithNodeName(clientNode)),
+				conncheck.WithClientCustomizer(func(pod *corev1.Pod) {
+					pod.Spec.Containers[0].Image = images.Netshoot
+				}),
+			)
+
+			checker.AddServer(server)
+			checker.AddClient(client)
+
+			By("Deploying the connlimit server and client pods")
+			checker.Deploy()
+
+			serverIP := server.Pod().Status.PodIP
+			Expect(serverIP).NotTo(BeEmpty(), "server pod has no IP after becoming ready")
+
+			probeTarget := conncheck.NewTCPConnectTarget(serverIP, connLimitPort)
+
+			By("Verifying the server is reachable")
+			checker.ExpectSuccess(client, probeTarget)
+			checker.Execute()
+
+			// Each holder bridges to a sleep so neither end closes the socket; it
+			// stays ESTABLISHED, occupying a slot until stop() is called.
+			By(fmt.Sprintf("Holding %d concurrent connections open", maxConns))
+			connectAddr := fmt.Sprintf("TCP:%s:%d", serverIP, connLimitPort)
+			var holders []func() error
+			defer func() {
+				for _, stop := range holders {
+					_ = stop()
+				}
+			}()
+			for i := range maxConns {
+				stop, err := client.ExecStream(
+					context.Background(),
+					[]string{"socat", connectAddr, "EXEC:sleep 3600"},
+					io.Discard,
+				)
+				Expect(err).NotTo(HaveOccurred(), "failed to open held connection %d", i)
+				holders = append(holders, stop)
+			}
+
+			By("Verifying the (N+1)th connection is refused")
+			checker.ResetExpectations()
+			checker.ExpectFailure(client, probeTarget)
+			checker.Execute()
+
+			By("Freeing one connection and verifying a new one is admitted")
+			Expect(holders[len(holders)-1]()).To(Succeed(), "failed to stop a held connection")
+			holders = holders[:len(holders)-1]
+			checker.ResetExpectations()
+			checker.ExpectSuccess(client, probeTarget)
+			checker.Execute()
 		})
 	})
 

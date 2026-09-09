@@ -19,7 +19,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/pod2daemon/csidriver/driver"
 )
 
@@ -34,7 +34,7 @@ type Config struct {
 // applies any overrides from cfg, and blocks serving gRPC.
 func Run(cfg Config) {
 	logrus.SetOutput(os.Stdout)
-	logutils.ConfigureFormatter("csi-driver")
+	logrusr.ConfigureFormatter("csi-driver")
 	logrus.SetLevel(logrus.WarnLevel)
 
 	driverCfg, err := driver.RetrieveConfig()

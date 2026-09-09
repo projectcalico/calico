@@ -1207,16 +1207,16 @@ func (fc *fakeConverter) Process(kvp *model.KVPair) ([]*model.KVPair, error) {
 	if kvp.Value == nil {
 		// This is a delete.
 		return []*model.KVPair{
-				{
-					Key: l1Key1,
-				},
-				{
-					Key: l1Key2,
-				},
-			}, cerrors.ErrorParsingDatastoreEntry{
-				RawKey:   "zzzzz",
-				RawValue: "xxxxx",
-			}
+			{
+				Key: l1Key1,
+			},
+			{
+				Key: l1Key2,
+			},
+		}, cerrors.ErrorParsingDatastoreEntry{
+			RawKey:   "zzzzz",
+			RawValue: "xxxxx",
+		}
 	}
 
 	// This is an add.
@@ -1235,11 +1235,11 @@ func (fc *fakeConverter) Process(kvp *model.KVPair) ([]*model.KVPair, error) {
 		return nil, errors.New("Fake error that we should handle gracefully")
 	case 4: // Fourth contains event and error, event will be sent and parse error will be stored.
 		return []*model.KVPair{
-				fakeConverterKVP4,
-			}, cerrors.ErrorParsingDatastoreEntry{
-				RawKey:   "abcdef",
-				RawValue: "aabbccdd",
-			}
+			fakeConverterKVP4,
+		}, cerrors.ErrorParsingDatastoreEntry{
+			RawKey:   "abcdef",
+			RawValue: "aabbccdd",
+		}
 	case 5: // Fifth contains an update.
 		return []*model.KVPair{
 			fakeConverterKVP5,

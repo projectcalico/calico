@@ -31,7 +31,8 @@ import (
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -88,7 +89,7 @@ type IPSets struct {
 
 	gaugeNumSets prometheus.Gauge
 
-	opReporter logutils.OpRecorder
+	opReporter logrusr.OpRecorder
 
 	sleep func(time.Duration)
 
@@ -103,7 +104,7 @@ type IPSets struct {
 	nft knftables.Interface
 }
 
-func NewIPSets(ipVersionConfig *ipsets.IPVersionConfig, nft knftables.Interface, recorder logutils.OpRecorder) *IPSets {
+func NewIPSets(ipVersionConfig *ipsets.IPVersionConfig, nft knftables.Interface, recorder logrusr.OpRecorder) *IPSets {
 	return NewIPSetsWithShims(
 		ipVersionConfig,
 		time.Sleep,
@@ -113,7 +114,7 @@ func NewIPSets(ipVersionConfig *ipsets.IPVersionConfig, nft knftables.Interface,
 }
 
 // NewIPSetsWithShims is an internal test constructor.
-func NewIPSetsWithShims(ipVersionConfig *ipsets.IPVersionConfig, sleep func(time.Duration), nft knftables.Interface, recorder logutils.OpRecorder) *IPSets {
+func NewIPSetsWithShims(ipVersionConfig *ipsets.IPVersionConfig, sleep func(time.Duration), nft knftables.Interface, recorder logrusr.OpRecorder) *IPSets {
 	familyStr := string(ipVersionConfig.Family)
 	return &IPSets{
 		IPVersionConfig:      ipVersionConfig,
@@ -226,7 +227,7 @@ func (s *IPSets) RemoveIPSet(setID string) {
 // nameForMainIPSet takes the given set ID and returns the name of the IP set as seen in nftables. This
 // helper should be used to sanitize any set IDs, ensuring they are a consistent format.
 func (s *IPSets) nameForMainIPSet(setID string) string {
-	return LegalizeSetName(s.IPVersionConfig.NameForMainIPSet(setID))
+	return nftrender.LegalizeSetName(s.IPVersionConfig.NameForMainIPSet(setID))
 }
 
 // AddMembers adds the given members to the IP set.  Filters out members that are of the incorrect
@@ -560,10 +561,6 @@ func (s *IPSets) tryResync() error {
 	}
 
 	return nil
-}
-
-func LegalizeSetName(setName string) string {
-	return strings.ReplaceAll(setName, ":", "-")
 }
 
 func (s *IPSets) NFTablesSet(name string) *knftables.Set {

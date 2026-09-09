@@ -18,12 +18,12 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 func HookLogrusForGinkgo() {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("test")
+	logrusr.ConfigureFormatter("test")
 	logrus.SetOutput(ginkgo.GinkgoWriter)
 	logrus.SetLevel(logrus.DebugLevel)
 }
