@@ -98,30 +98,23 @@ CI trigger are unchanged.
 
 ### One image, two modes (`images.go`)
 
-Both consumers use the same image, so a single env-aware helper composes the ref
-and reports whether the image was loaded onto the nodes (see *Image delivery*):
+Both consumers use the same image, so a single reference serves both:
 
 ```go
-const rapidClientRepo = "quay.io/tigeradev/rapidclient"
+const rapidClientImage = "quay.io/tigeradev/rapidclient:latest"
 
-// RapidClientImage returns the image ref and whether it was pre-loaded onto the
-// test nodes (RAPIDCLIENT_TAG set by a CI lane) rather than pulled from quay.
-func RapidClientImage() (ref string, preloaded bool) {
-    if tag := os.Getenv("RAPIDCLIENT_TAG"); tag != "" {
-        return rapidClientRepo + ":" + tag, true
-    }
-    return rapidClientRepo + ":latest", false
+// RapidClientImage returns the rapidclient image reference.
+func RapidClientImage() string {
+    return rapidClientImage
 }
 ```
 
 Consumers:
 
 - `packet_size.go` — `withPacketSizeServer` sets the server pod's image, clears
-  `Args`, adds `MODE=server`, and sets the readiness path to `/length/1`. When
-  `preloaded`, it sets `ImagePullPolicy: Never` so a missing/failed load fails
-  loudly instead of masking with a stale published image. `PORT` is left unset,
-  so the server defaults to 5000 (matching the base conncheck server pod's
-  container port).
+  `Args`, adds `MODE=server`, and sets the readiness path to `/length/1`. `PORT`
+  is left unset, so the server defaults to 5000 (matching the base conncheck
+  server pod's container port).
 - `maglev.go` — runs `client` mode on the external node via
   `sudo docker run … -url … -port …`. `MODE` is unset, so it defaults to `client`
   and the flags parse as before; only the image ref changes.
@@ -220,30 +213,30 @@ job (authenticated via the `quay-tigeradev-hashrelease` secret), triggered by th
 
 ### Image delivery to test nodes
 
-Fork PR builds have no registry push credential, so the image built *from the PR
-under test* cannot be pushed to quay for nodes to pull; a `:latest` reference
-would silently run the previously-published image. Each CI lane that exercises the
-image therefore builds it from PR source and loads it directly onto its nodes,
-pinning the exact tag via `RAPIDCLIENT_TAG` (pods use `ImagePullPolicy: Never`).
+Pods use `ImagePullPolicy: IfNotPresent`, so the image is pulled from quay unless
+it is already on the node. Fork PR builds have no registry push credential, so a
+lane that wants to exercise the image *as built from the PR under test* builds it
+locally under the same `:latest` tag and loads it onto its nodes, where
+`IfNotPresent` uses it as-is.
 
 - **gcp-kubeadm** (`.semaphore/end-to-end/scripts/phases/load_images.sh`): builds
-  `rapidclient:pr-<N>`, `docker save`s it once, `ctr -n k8s.io images import`s it
-  onto every worker node's containerd and `docker load`s it onto the external
-  node, then exports `RAPIDCLIENT_TAG` (forwarded into the e2e container via
-  `K8S_E2E_DOCKER_EXTRA_FLAGS`). Runs only when `RUN_LOCAL_TESTS` and
-  `PROVISIONER=gcp-kubeadm` (it depends on the CRC terraform outputs + SSH key);
-  otherwise it no-ops.
+  the image, `docker save`s it once, `ctr -n k8s.io images import`s it onto every
+  cluster and infra node's containerd, and `docker load`s it onto the external
+  node. Runs only when `RUN_LOCAL_TESTS` and `PROVISIONER=gcp-kubeadm` (it depends
+  on the CRC terraform outputs + SSH key); otherwise it no-ops. A failed import
+  aborts the job, so the PR's build is never silently swapped for the published
+  one.
 - **kind** (`e2e-test-bpf`, the sig-calico BPF lane that runs packet-size): builds
-  `rapidclient:kind-e2e`, `kind load docker-image`s it into the kind nodes, and
-  `docker load`s it into the external node's inner docker daemon (a `dind`
-  container). `RAPIDCLIENT_TAG=kind-e2e` is exported by the root `Makefile` so the
-  ginkgo process inherits it. The non-BPF `e2e-test` lane (`kind/conformance.yaml` focus
-  `Conformance && sig-calico`) does not run packet-size, and the CNP lane uses a
-  separate test binary, so only `e2e-test-bpf` is wired.
+  the image, `kind load docker-image`s it into the kind nodes, and `docker load`s
+  it into the external node's inner docker daemon (a `dind` container). The non-BPF
+  `e2e-test` lane (`kind/conformance.yaml` focus `Conformance && sig-calico`) does
+  not run packet-size, and the CNP lane uses a separate test binary, so only
+  `e2e-test-bpf` is wired.
 
-When `RAPIDCLIENT_TAG` is unset — other providers, scheduled hashrelease runs,
-local dev — `RapidClientImage()` reports `preloaded=false` and the published
-`:latest` is used with the default pull policy.
+Every other lane — other providers, scheduled hashrelease runs, local dev — pulls
+the published image. The tag is named in three places (`images.go`, the root
+`Makefile`, and `load_images.sh`); `TestRapidClientImageIsConsistent` fails if they
+drift apart.
 
 ## Edge cases & failure modes
 
@@ -263,8 +256,9 @@ local dev — `RapidClientImage()` reports `preloaded=false` and the published
   dropped `-p=`/`--port=` override is by design.
 - **Manifest-list regression** is caught by the post-publish guard asserting the
   tag covers every arch in `ARCHES`.
-- **Missing node load with `RAPIDCLIENT_TAG` set** surfaces immediately as
-  `ErrImageNeverPull` (pods use `PullNever`) rather than a silent stale pull.
+- **Missing node load on a PR lane** aborts the job in `load_images.sh` under
+  `set -eo pipefail`, rather than letting the pods fall back to the published
+  image and test the wrong build.
 
 ## Testing
 
