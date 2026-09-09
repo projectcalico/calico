@@ -1770,6 +1770,10 @@ KIND_IMAGE_MARKERS = \
 # paths). Point both image markers at the compiled libbpf.a so Make
 # builds it exactly once, serially, before the parallel image builds
 # start.
+#
+# Order-only, because a libbpf.a compiled during this job is newer than a
+# marker restored from the CI image cache, and a normal prereq would rebuild
+# the image the cache just supplied.
 LIBBPF_MARKER = $(REPO_ROOT)/felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
 
 $(LIBBPF_MARKER):
@@ -1786,7 +1790,8 @@ MISSING-IMAGE:
 
 $(REPO_ROOT)/node/.image.created-$(ARCH): \
     $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/node/.image.created-$(ARCH)) \
-    $(LIBBPF_MARKER) $(call local-deps-go-files,node) $(call local-deps-go-files,cmd)
+    $(call local-deps-go-files,node) $(call local-deps-go-files,cmd) \
+    | $(LIBBPF_MARKER)
 	rm -f $@
 	$(MAKE) -C $(REPO_ROOT)/node image
 	echo "node:latest-$(ARCH)" > $@
@@ -1799,7 +1804,8 @@ $(REPO_ROOT)/whisker/.image.created-$(ARCH): \
 
 $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH): \
     $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)) \
-    $(LIBBPF_MARKER) $(call local-deps-go-files,cmd)
+    $(call local-deps-go-files,cmd) \
+    | $(LIBBPF_MARKER)
 	rm -f $@
 	$(MAKE) -C $(REPO_ROOT)/cmd/calico image
 	echo "calico:latest-$(ARCH)" > $@
