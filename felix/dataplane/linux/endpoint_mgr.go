@@ -1070,6 +1070,17 @@ func (m *endpointManager) updateWorkloadEndpointChains(
 // updateWorkloadARPChains programs ARP proxy suppression chains for a workload.
 // These drop ARP replies from the host that contain the workload's own IP as the
 // ARP source, preventing the host's proxy ARP from confusing the workload.
+//
+// This matters during VM live migration: the same workload IP then exists on two
+// nodes, and a node that isn't running the VM holds a route for that IP pointing
+// off-box.  Kernel proxy ARP is route-based, so it would answer the VM's own
+// request for its own address with the host's MAC, poisoning the guest's
+// neighbour table.
+//
+// There is deliberately no IPv6 counterpart: proxy_ndp answers only for explicit
+// NUD_PROXY neighbour entries, which Calico never programs, so there is nothing
+// to suppress (the nil arpTable on the IPv6 endpoint manager is intentional).
+// See felix/design/neighbour-discovery.md.
 func (m *endpointManager) updateWorkloadARPChains(
 	id types.WorkloadEndpointID,
 	workload *proto.WorkloadEndpoint,
@@ -1663,15 +1674,21 @@ func configureProcSysForInterface(name string, ipVersion int, rpFilter string, w
 			return err
 		}
 	} else {
-		// Enable proxy NDP, similarly to proxy ARP, described above.
-		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name), "1")
-		if err != nil {
-			return err
-		}
+		// Note: deliberately no proxy_ndp counterpart to the proxy_arp above.
+		// Despite the name, proxy_ndp is not the IPv6 equivalent: it does no
+		// route-based proxying, and the kernel answers a Neighbor Solicitation
+		// only for addresses with an explicit NUD_PROXY neighbour entry, which
+		// Calico does not program.  IPv6 needs no proxying anyway, because Linux
+		// auto-provisions a link-local address on this (host) side of every
+		// workload interface, so the workload routes via a real address of ours
+		// and we answer NDP for it as our own.  IPv4 has no such automatic
+		// provisioning, hence the dummy 169.254.1.1 gateway and proxy ARP above.
+		// See felix/design/neighbour-discovery.md.
+
 		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
 		// be forwarded in both directions we need this flag to be set on the fabric-facing
 		// interface too (or for the global default to be set).
-		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/forwarding", name), "1")
+		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/forwarding", name), "1")
 		if err != nil {
 			return err
 		}
