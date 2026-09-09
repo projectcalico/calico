@@ -42,7 +42,7 @@ var _ = Describe("ImageFor", func() {
 	})
 
 	It("resolves what the variant registered", func() {
-		DeferCleanup(UseImages([]Component{otherVariantNode}))
+		DeferCleanup(UseVariant(VariantBuild{Images: []Component{otherVariantNode}}))
 
 		img, err := ImageFor(ImageKeyNode)
 		Expect(err).NotTo(HaveOccurred())
@@ -50,7 +50,7 @@ var _ = Describe("ImageFor", func() {
 	})
 
 	It("errors on an image the running variant does not supply", func() {
-		DeferCleanup(UseImages([]Component{otherVariantNode}))
+		DeferCleanup(UseVariant(VariantBuild{Images: []Component{otherVariantNode}}))
 
 		_, err := ImageFor("whisker")
 		Expect(err).To(HaveOccurred())
@@ -58,18 +58,14 @@ var _ = Describe("ImageFor", func() {
 })
 
 var _ = Describe("RegisterVariant", func() {
-	// A variant whose components are declared outside this package cannot name a
-	// variant on them, so it supplies the defaults they resolve against instead.
-	thing := Component{Image: "thing", Version: "v1.0.0"}
+	// A variant declares its components outside this package, naming the registry and
+	// image path they resolve against.
+	myVariant := &Variant{Registry: "example.com/", ImagePath: "myvariant/"}
+	thing := Component{Image: "thing", Version: "v1.0.0", Variant: myVariant}
 
-	build := VariantBuild{
-		Images:    []Component{thing},
-		Release:   "v9.9.9",
-		Registry:  "example.com/",
-		ImagePath: "myvariant/",
-	}
+	build := VariantBuild{Images: []Component{thing}, Release: "v9.9.9"}
 
-	It("resolves registered images against the registered registry and image path", func() {
+	It("resolves registered images against the variant they name", func() {
 		DeferCleanup(UseVariant(build))
 
 		img, err := ImageFor("thing")
@@ -82,7 +78,7 @@ var _ = Describe("RegisterVariant", func() {
 
 	// The image path is also the key an ImageSet lists images under, so a wrong one
 	// stops digests resolving rather than just changing the registry.
-	It("looks an ImageSet digest up under the registered image path", func() {
+	It("looks an ImageSet digest up under the variant's image path", func() {
 		DeferCleanup(UseVariant(build))
 
 		img, err := ImageFor("thing")
@@ -96,7 +92,7 @@ var _ = Describe("RegisterVariant", func() {
 		Expect(ref).To(Equal("example.com/myvariant/thing@sha256:cafe"))
 	})
 
-	It("lets the installation override the registered defaults", func() {
+	It("lets the installation override the variant's defaults", func() {
 		DeferCleanup(UseVariant(build))
 
 		img, err := ImageFor("thing")
@@ -116,22 +112,5 @@ var _ = Describe("RegisterVariant", func() {
 
 		restore()
 		Expect(VariantRelease()).To(Equal(CalicoRelease))
-	})
-
-	// Components declared in this package already name a variant, so a build that
-	// carries a registry of its own must leave theirs alone.
-	It("leaves images that name a variant resolving against that variant", func() {
-		DeferCleanup(UseVariant(VariantBuild{
-			Images:    []Component{thing, ComponentCalicoNode},
-			Registry:  "example.com/",
-			ImagePath: "myvariant/",
-		}))
-
-		img, err := ImageFor(ImageKeyNode)
-		Expect(err).NotTo(HaveOccurred())
-
-		ref, err := GetReference(img, "", "", "", nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(ref).To(HavePrefix(CalicoRegistry + CalicoImagePath))
 	})
 })

@@ -21,14 +21,14 @@ import (
 	operator "github.com/projectcalico/calico/operator/api/v1"
 )
 
-// variant is where a product variant's images resolve, the defaults its components
+// Variant is where a product variant's images resolve, the defaults its components
 // fall back to when the installation names no registry or image path of its own.
-type variant struct {
-	registry  string
-	imagePath string
+type Variant struct {
+	Registry  string
+	ImagePath string
 }
 
-var calicoVariant = &variant{registry: CalicoRegistry, imagePath: CalicoImagePath}
+var calicoVariant = &Variant{Registry: CalicoRegistry, ImagePath: CalicoImagePath}
 
 type Component struct {
 	// Image is the image name for this component (e.g., node, cni)
@@ -37,19 +37,19 @@ type Component struct {
 	// Version is the image version for this component (e.g., v3.8.1)
 	Version string
 
-	// imagePath is only used for developer workflows. For production builds, the imagePath
+	// ImagePath is only used for developer workflows. For production builds, the imagePath
 	// is always determined from user configuration. This field can be overridden
 	// as part of a developer workflow to deploy custom dev images on an individual basis.
-	imagePath string
+	ImagePath string
 
 	// Registry is only used for developer workflows. For production builds, the registry
 	// is always determined from user configuration. This field can be overridden
 	// as part of a developer workflow to deploy custom dev images on an individual basis.
 	Registry string
 
-	// variant is which product variant this component belongs to. Nil for the
+	// Variant is which product variant this component belongs to. Nil for the
 	// components shared across variants, which take the operator's own defaults.
-	variant *variant
+	Variant *Variant
 }
 
 const UseDefault = "UseDefault"
@@ -57,10 +57,10 @@ const UseDefault = "UseDefault"
 // getDefaults returns the registry and imagePath a component resolves against when the
 // installation names neither.
 func getDefaults(c Component) (registry string, imagePath string) {
-	if c.variant == nil {
+	if c.Variant == nil {
 		return OperatorRegistry, OperatorImagePath
 	}
-	return c.variant.registry, c.variant.imagePath
+	return c.Variant.Registry, c.Variant.ImagePath
 }
 
 // GetReference returns the fully qualified image to use, including registry and version.
@@ -90,8 +90,8 @@ func GetReference(c Component, registry, imagePath, imagePrefix string, is *oper
 		// If the component asks for an explicit imagePath, and the user
 		// did not provide a custom imagePath, use the one specified by
 		// the component.
-		if c.imagePath != "" {
-			imagePath = c.imagePath
+		if c.ImagePath != "" {
+			imagePath = c.ImagePath
 		}
 	}
 

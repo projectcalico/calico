@@ -137,7 +137,7 @@ var _ = Describe("test GetReference", func() {
 
 	Context("component with development imagePath", func() {
 		customCalicoComponent := ComponentCalicoNode
-		customCalicoComponent.imagePath = "customcalico/"
+		customCalicoComponent.ImagePath = "customcalico/"
 		DescribeTable("should render",
 			func(c Component, registry, imagePath string) {
 				Expect(GetReference(c, "", "", "", nil)).To(Equal(fmt.Sprintf("%s%s%s:%s", registry, imagePath, c.Image, c.Version)))

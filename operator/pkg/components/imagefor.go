@@ -52,31 +52,24 @@ var ImageKeys = []string{
 
 // VariantBuild is what a variant supplies about the images it ships.
 type VariantBuild struct {
-	Images    []Component
-	Release   string
-	Registry  string
-	ImagePath string
+	Images  []Component
+	Release string
 }
 
 var (
-	// variantImages is the image set this process runs, registered by the variant as
-	// it builds its extensions. Nil means the images this build ships.
+	// variantImages is the image set this process runs, registered by the variant at
+	// startup. Nil means the images this build ships.
 	variantImages map[string]Component
 
 	// variantRelease is the release those images are tagged at.
 	variantRelease string
 )
 
-// RegisterVariant declares the images the running variant supplies and where they
-// resolve. The process restarts when the variant changes, so only one ever registers.
+// RegisterVariant declares the images the running variant supplies. The process
+// restarts when the variant changes, so only one ever registers.
 func RegisterVariant(b VariantBuild) {
-	variantImages = byImage(b.stamped())
+	variantImages = byImage(b.Images)
 	variantRelease = b.Release
-}
-
-// RegisterVariantImages declares images that already carry their own defaults.
-func RegisterVariantImages(imgs []Component) {
-	RegisterVariant(VariantBuild{Images: imgs})
 }
 
 // UseVariant registers b and returns a function restoring what was there, for tests
@@ -87,11 +80,6 @@ func UseVariant(b VariantBuild) func() {
 	return func() {
 		variantImages, variantRelease = prevImages, prevRelease
 	}
-}
-
-// UseImages is UseVariant for images that carry their own defaults.
-func UseImages(imgs []Component) func() {
-	return UseVariant(VariantBuild{Images: imgs})
 }
 
 // VariantRelease is the release the running variant's images are tagged at.
@@ -119,24 +107,6 @@ func KnownImage(name string) bool {
 		}
 	}
 	return false
-}
-
-// stamped gives the build's registry and image path to the components that name no
-// variant of their own, which a variant declaring them elsewhere cannot set.
-func (b VariantBuild) stamped() []Component {
-	if b.Registry == "" && b.ImagePath == "" {
-		return b.Images
-	}
-
-	v := &variant{registry: b.Registry, imagePath: b.ImagePath}
-	out := make([]Component, len(b.Images))
-	for i, c := range b.Images {
-		if c.variant == nil {
-			c.variant = v
-		}
-		out[i] = c
-	}
-	return out
 }
 
 func byImage(imgs []Component) map[string]Component {
