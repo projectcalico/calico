@@ -370,6 +370,14 @@ var _ = Describe("Cluster route priority", func() {
 		Entry("VXLAN tunnel", routetable.RouteClassVXLANTunnel, dataplanedefs.VXLANIfaceNameV4, "10.0.1.0/26"),
 		Entry("IPIP tunnel", routetable.RouteClassIPIPTunnel, dataplanedefs.IPIPIfaceName, "10.0.2.0/26"),
 		Entry("no-encap", routetable.RouteClassNoEncap, "eth0", "10.0.3.0/26"),
-		Entry("blackhole", routetable.RouteClassBlackholeVXLAN, routetable.InterfaceNone, "10.0.4.0/26"),
 	)
+
+	// BIRD emits its blackholes from the static protocol, which confd does not give a krt_metric,
+	// so Felix has to leave them at metric 0 to share a route key with BIRD's.
+	It("should leave the blackhole routes at the default priority", func() {
+		targets := rt.targetsForClass(routetable.RouteClassBlackholeVXLAN, routetable.InterfaceNone)
+		Expect(targets).To(HaveLen(1))
+		Expect(targets[0].CIDR.String()).To(Equal("10.0.4.0/26"))
+		Expect(targets[0].Priority).To(BeZero())
+	})
 })
