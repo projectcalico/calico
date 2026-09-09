@@ -46,12 +46,14 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/jump"
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/qos"
 	"github.com/projectcalico/calico/felix/bpf/state"
 	"github.com/projectcalico/calico/felix/bpf/tc"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/environment"
@@ -790,6 +792,61 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		// present, not-managed device's entry just because it is not one we
 		// actively manage.
 		checkIfState(exitIdx, exitDev, ifstate.FlgNotManaged)
+	})
+
+	It("only claims encapsulation for devices that encapsulate", func() {
+		// The endpoint type cannot answer this on its own: wireguard and a
+		// plain L3-classified NIC both compile as EpTypeL3Device, so a program
+		// on either has CALI_F_TUNNEL set. The conntrack forwarding hint needs
+		// the narrower question - does this device encapsulate for an
+		// encap-flagged route - which is what IfaceEncaps carries.
+		// An IPIP device joins the same collapse wherever the kernel makes it
+		// L3 (the usual case on a modern kernel).
+		ipipEpType := tcdefs.EpTypeIPIP
+		if bpfEpMgr.features.IPIPDeviceIsL3 {
+			ipipEpType = tcdefs.EpTypeL3Device
+		}
+
+		for _, tc := range []struct {
+			ifaceType IfaceType
+			epType    tcdefs.EndpointType
+			encaps    bool
+		}{
+			{IfaceTypeVXLAN, tcdefs.EpTypeHost, true},
+			{IfaceTypeIPIP, ipipEpType, true},
+			{IfaceTypeWireguard, tcdefs.EpTypeL3Device, true},
+			{IfaceTypeL3, tcdefs.EpTypeL3Device, false},
+			{IfaceTypeData, tcdefs.EpTypeHost, false},
+			{IfaceTypeBond, tcdefs.EpTypeHost, false},
+			{IfaceTypeNetkit, tcdefs.EpTypeHost, false},
+		} {
+			const dev = "encapdev0"
+			bpfEpMgr.ifacesLock.Lock()
+			bpfEpMgr.nameToIface[dev] = bpfInterface{
+				info: bpfInterfaceInfo{ifaceType: tc.ifaceType},
+			}
+			bpfEpMgr.ifacesLock.Unlock()
+
+			Expect(bpfEpMgr.getEndpointType(dev)).To(Equal(tc.epType),
+				"endpoint type for %v", tc.ifaceType)
+			Expect(bpfEpMgr.ifaceEncaps(dev)).To(Equal(tc.encaps),
+				"encapsulation claim for %v", tc.ifaceType)
+			ap := bpfEpMgr.calculateTCAttachPoint(dev)
+			Expect(ap.IfaceEncaps).To(Equal(tc.encaps),
+				"attach point carries the claim for %v", tc.ifaceType)
+			// ...and all the way into the program's globals, which is what
+			// IFACE_ENCAPS reads.
+			Expect(ap.Configure().Flags&libbpf.GlobalsIfaceEncaps != 0).To(Equal(tc.encaps),
+				"globals carry the claim for %v", tc.ifaceType)
+		}
+
+		// A workload never carries the claim, whatever its link type.
+		bpfEpMgr.ifacesLock.Lock()
+		bpfEpMgr.nameToIface["cali12345"] = bpfInterface{
+			info: bpfInterfaceInfo{ifaceType: IfaceTypeWireguard},
+		}
+		bpfEpMgr.ifacesLock.Unlock()
+		Expect(bpfEpMgr.ifaceEncaps("cali12345")).To(BeFalse())
 	})
 
 	Context("with lookup cache", func() {

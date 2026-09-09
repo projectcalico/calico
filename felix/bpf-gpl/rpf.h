@@ -53,7 +53,11 @@ static CALI_BPF_INLINE int wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_rt
         return RPF_RES_STRICT;
 }
 
-static CALI_BPF_INLINE int hep_rpf_check(struct cali_tc_ctx *ctx)
+/* rev_ifindex, when not NULL, receives the device routing would use to reach
+ * this packet's source, i.e. where the opposite direction of the flow belongs.
+ * It is only set when the lookup succeeds; callers must initialise it.
+ */
+static CALI_BPF_INLINE int hep_rpf_check(struct cali_tc_ctx *ctx, __u32 *rev_ifindex)
 {
 	int ret = RPF_RES_FAIL;
 	bool strict;
@@ -98,6 +102,9 @@ static CALI_BPF_INLINE int hep_rpf_check(struct cali_tc_ctx *ctx)
 		case BPF_FIB_LKUP_RET_SUCCESS:
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
 		case BPF_FIB_LKUP_RET_FRAG_NEEDED:
+			if (rev_ifindex) {
+				*rev_ifindex = fib_params.ifindex;
+			}
 			if (strict) {
 				if (ctx->skb->ingress_ifindex == fib_params.ifindex) {
 					ret = RPF_RES_STRICT;
