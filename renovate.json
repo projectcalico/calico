@@ -11,7 +11,14 @@
   "prConcurrentLimit": 20,
   "addLabels": ["docs-not-required", "release-note-not-required", "dependencies", "merge-when-ready", "delete-branch", "skip-bot-cherry-pick"],
   "gomod": {
-    "managerFilePatterns": ["/^go\\.mod$/"]
+    "managerFilePatterns": [
+      "/^go\\.mod$/",
+      "/^lib\\/std\\/go\\.mod$/",
+      "/^lib\\/logrusr\\/go\\.mod$/",
+      "/^lib\\/datastructures\\/go\\.mod$/",
+      "/^lib\\/httpmachinery\\/go\\.mod$/",
+      "/^lib\\/kind\\/go\\.mod$/"
+    ]
   },
   "vulnerabilityAlerts": {
     "enabled": true
@@ -27,7 +34,7 @@
     },
     {
       "customType": "regex",
-      "managerFilePatterns": ["/^go\\.mod$/", "/^api\\/go\\.mod$/", "/^operator\\/api\\/go\\.mod$/", "/^lib\\/std\\/go\\.mod$/", "/^lib\\/httpmachinery\\/go\\.mod$/", "/^lib\\/datastructures\\/go\\.mod$/", "/^lib\\/logrusr\\/go\\.mod$/"],
+      "managerFilePatterns": ["/^go\\.mod$/", "/^api\\/go\\.mod$/", "/^operator\\/api\\/go\\.mod$/", "/^lib\\/std\\/go\\.mod$/", "/^lib\\/httpmachinery\\/go\\.mod$/", "/^lib\\/datastructures\\/go\\.mod$/", "/^lib\\/logrusr\\/go\\.mod$/", "/^lib\\/kind\\/go\\.mod$/"],
       "matchStrings": ["\\ngo (?<currentValue>\\d+\\.\\d+\\.\\d+)"],
       "depNameTemplate": "golang",
       "datasourceTemplate": "golang-version"
