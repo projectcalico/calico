@@ -255,12 +255,20 @@ Every PR needs one docs label (`docs-pr-required`, `docs-completed`, or `docs-no
 
 ## Documentation map
 
-Calico's docs are split by purpose. Architecture lives in
-`DESIGN.md` files; operational guidance (build, test, debug)
-lives in `CLAUDE.md` / `AGENTS.md`; path-scoped review rules
-live under `.github/instructions/*.instructions.md`. Do not look
+Calico's docs are split by purpose. Vocabulary lives in
+`CONTEXT.md`; architecture lives in `DESIGN.md` files;
+operational guidance (build, test, debug) lives in
+`CLAUDE.md` / `AGENTS.md`; path-scoped review rules live
+under `.github/instructions/*.instructions.md`. Do not look
 for architecture in `CLAUDE.md`.
 
+- [`CONTEXT.md`](../CONTEXT.md) at the repo root: the glossary.
+  It gives the canonical word for each Calico concept and lists
+  the synonyms to avoid; use the canonical one in code,
+  comments, commit messages and PR descriptions. When a change
+  introduces a concept the glossary does not name, add the entry
+  in the same PR: one or two sentences, no implementation
+  detail.
 - `<component>/DESIGN.md` — architecture, invariants, embedded
   per-section review notes. Read before writing or reviewing a
   change in that component.
