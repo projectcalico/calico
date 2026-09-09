@@ -340,28 +340,40 @@ var _ = describe.CalicoDescribe(
 			By("Verifying connectivity with no HEP")
 			checkConnection(ct, clientPod, target, baseline)
 
-			// Create a GNP allowing kubectl exec to port 10250 on the HEP node.
-			// This must exist before the HEP to avoid breaking kubectl exec.
+			// Allow the kubelet exec path before the HEP lands. On managed clusters the
+			// apiserver tunnels through an agent pod here, so this node also dials other
+			// nodes' kubelets.
+			kubeletPorts := []numorstring.Port{numorstring.SinglePort(10250)}
 			kubeletPolicy := &v3.GlobalNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: utils.GenerateRandomName("hep-kubelet")},
 				Spec: v3.GlobalNetworkPolicySpec{
 					Order:          ptr.To(800.0),
 					Selector:       `hep == "node0"`,
-					ApplyOnForward: false,
-					Ingress: []v3.Rule{{
-						Action:   v3.Allow,
-						Protocol: protocolTCP(),
-						Destination: v3.EntityRule{
-							Ports: []numorstring.Port{numorstring.SinglePort(10250)},
+					ApplyOnForward: applyOnForward,
+					Ingress: []v3.Rule{
+						{
+							Action:      v3.Allow,
+							Protocol:    protocolTCP(),
+							Destination: v3.EntityRule{Ports: kubeletPorts},
 						},
-					}},
-					Egress: []v3.Rule{{
-						Action:   v3.Allow,
-						Protocol: protocolTCP(),
-						Source: v3.EntityRule{
-							Ports: []numorstring.Port{numorstring.SinglePort(10250)},
+						{
+							Action:   v3.Allow,
+							Protocol: protocolTCP(),
+							Source:   v3.EntityRule{Ports: kubeletPorts},
 						},
-					}},
+					},
+					Egress: []v3.Rule{
+						{
+							Action:   v3.Allow,
+							Protocol: protocolTCP(),
+							Source:   v3.EntityRule{Ports: kubeletPorts},
+						},
+						{
+							Action:      v3.Allow,
+							Protocol:    protocolTCP(),
+							Destination: v3.EntityRule{Ports: kubeletPorts},
+						},
+					},
 				},
 			}
 			createCtx, createCancel := context.WithTimeout(context.Background(), 30*time.Second)
