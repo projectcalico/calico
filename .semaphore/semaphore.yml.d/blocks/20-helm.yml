@@ -1,0 +1,29 @@
+- name: "Helm"
+  run:
+    when: "${CHANGE_IN(node,typha,apiserver,cni-plugin,pod2daemon,kube-controllers,non-go:/charts/,non-go:/hack/test/kind/)}"
+  dependencies:
+    - Prerequisites
+    - "Build: calico image"
+    - "Build: node image"
+    - "Build: whisker image"
+  task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "calico"
+    agent:
+      machine:
+        type: f1-standard-4
+        os_image: ubuntu2204
+    prologue:
+      commands:
+        # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
+        - docker system prune -af
+        - .semaphore/load-cached-images
+    jobs:
+      - name: "Helm: upgrade a Helm 3 release with Helm 4"
+        commands:
+          - .semaphore/run-and-monitor helm-upgrade-test.log make helm-upgrade-test
+    epilogue:
+      on_fail:
+        commands:
+          - .semaphore/collect-kind-diags
