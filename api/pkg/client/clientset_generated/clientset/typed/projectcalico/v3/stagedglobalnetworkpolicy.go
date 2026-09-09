@@ -26,6 +26,8 @@ type StagedGlobalNetworkPoliciesGetter interface {
 type StagedGlobalNetworkPolicyInterface interface {
 	Create(ctx context.Context, stagedGlobalNetworkPolicy *projectcalicov3.StagedGlobalNetworkPolicy, opts v1.CreateOptions) (*projectcalicov3.StagedGlobalNetworkPolicy, error)
 	Update(ctx context.Context, stagedGlobalNetworkPolicy *projectcalicov3.StagedGlobalNetworkPolicy, opts v1.UpdateOptions) (*projectcalicov3.StagedGlobalNetworkPolicy, error)
+	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+	UpdateStatus(ctx context.Context, stagedGlobalNetworkPolicy *projectcalicov3.StagedGlobalNetworkPolicy, opts v1.UpdateOptions) (*projectcalicov3.StagedGlobalNetworkPolicy, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
 	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.StagedGlobalNetworkPolicy, error)
@@ -33,6 +35,8 @@ type StagedGlobalNetworkPolicyInterface interface {
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.StagedGlobalNetworkPolicy, err error)
 	Apply(ctx context.Context, stagedGlobalNetworkPolicy *applyconfigurationgeneratedprojectcalicov3.StagedGlobalNetworkPolicyApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.StagedGlobalNetworkPolicy, err error)
+	// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+	ApplyStatus(ctx context.Context, stagedGlobalNetworkPolicy *applyconfigurationgeneratedprojectcalicov3.StagedGlobalNetworkPolicyApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.StagedGlobalNetworkPolicy, err error)
 	StagedGlobalNetworkPolicyExpansion
 }
 

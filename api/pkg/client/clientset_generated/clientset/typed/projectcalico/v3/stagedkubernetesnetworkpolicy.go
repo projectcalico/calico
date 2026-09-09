@@ -26,6 +26,8 @@ type StagedKubernetesNetworkPoliciesGetter interface {
 type StagedKubernetesNetworkPolicyInterface interface {
 	Create(ctx context.Context, stagedKubernetesNetworkPolicy *projectcalicov3.StagedKubernetesNetworkPolicy, opts v1.CreateOptions) (*projectcalicov3.StagedKubernetesNetworkPolicy, error)
 	Update(ctx context.Context, stagedKubernetesNetworkPolicy *projectcalicov3.StagedKubernetesNetworkPolicy, opts v1.UpdateOptions) (*projectcalicov3.StagedKubernetesNetworkPolicy, error)
+	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+	UpdateStatus(ctx context.Context, stagedKubernetesNetworkPolicy *projectcalicov3.StagedKubernetesNetworkPolicy, opts v1.UpdateOptions) (*projectcalicov3.StagedKubernetesNetworkPolicy, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
 	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.StagedKubernetesNetworkPolicy, error)
@@ -33,6 +35,8 @@ type StagedKubernetesNetworkPolicyInterface interface {
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.StagedKubernetesNetworkPolicy, err error)
 	Apply(ctx context.Context, stagedKubernetesNetworkPolicy *applyconfigurationgeneratedprojectcalicov3.StagedKubernetesNetworkPolicyApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.StagedKubernetesNetworkPolicy, err error)
+	// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+	ApplyStatus(ctx context.Context, stagedKubernetesNetworkPolicy *applyconfigurationgeneratedprojectcalicov3.StagedKubernetesNetworkPolicyApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.StagedKubernetesNetworkPolicy, err error)
 	StagedKubernetesNetworkPolicyExpansion
 }
 
