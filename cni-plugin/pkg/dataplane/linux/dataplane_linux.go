@@ -542,7 +542,7 @@ func (d *LinuxDataplane) configureSysctls(hostVethName string, hasIPv4, hasIPv6 
 		}
 
 		// Note: deliberately no proxy_ndp counterpart to the proxy_arp set in the
-		// IPv4 section above.  IPv6 needs no proxying because we use 
+		// IPv4 section above.  IPv6 needs no proxying because we use
 		// the IPv6 link-local address as the workload's gateway.
 		// See felix/design/neighbour-discovery.md.
 
