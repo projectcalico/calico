@@ -645,10 +645,11 @@ blocks:
     # tarball for load-cached-images to restore. Upload it first: a tarball
     # without its stamp would fail the consumer's untolerated gcloud cp.
     #
-    # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)") list this
-    # block in their `dependencies:`, so CHANGE_IN_WITH_DEPENDENTS() folds their
-    # triggers into the arg below — this block's own inputs, the operator's Go
-    # closure plus everything else under operator/.
+    # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)", "E2E tests:
+    # Gateway API Conformance") list this block in their `dependencies:`, so
+    # CHANGE_IN_WITH_DEPENDENTS() folds their triggers into the arg below — this
+    # block's own inputs, the operator's Go closure plus everything else under
+    # operator/.
     run:
       when: "true"
     dependencies: []
@@ -667,6 +668,39 @@ blocks:
             - docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
             - zstd -3 --rm /tmp/operator-image.tar
             - .semaphore/s3-cmd cp /tmp/operator-image.tar.zst "${S3_WORKFLOW_DIR}/operator-image.tar.zst"
+  - name: "Build: third-party images"
+    # The envoy images and the third-party CNI plugins fetch upstream sources and
+    # compile them, which every kind lane repeats today. They ship as one tarball
+    # because no lane wants a subset of them.
+    #
+    # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)", "E2E tests:
+    # Gateway API Conformance") list this block in their `dependencies:`, so
+    # CHANGE_IN_WITH_DEPENDENTS() folds their triggers into the arg below, which
+    # is this block's own input: everything under third_party/.
+    run:
+      when: "true"
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      jobs:
+        - name: "Build and cache third-party images"
+          commands:
+            - make -C third_party/envoy-gateway image
+            - make -C third_party/envoy-proxy image
+            - make -C third_party/envoy-ratelimit image
+            - make -C third_party/cni-plugins image
+            - >-
+              docker save
+              calico/envoy-gateway:latest-amd64
+              calico/envoy-proxy:latest-amd64
+              calico/envoy-ratelimit:latest-amd64
+              calico/third-party-cni-plugins:latest-amd64
+              -o /tmp/third-party-images.tar
+            - zstd -3 --rm /tmp/third-party-images.tar
+            - .semaphore/s3-cmd cp /tmp/third-party-images.tar.zst "${S3_WORKFLOW_DIR}/third-party-images.tar.zst"
   - name: Prerequisites
     skip:
       # Always skip, this is a dummy job used to group prerequisite checks.
@@ -1017,6 +1051,7 @@ blocks:
       - "Build: node image"
       - "Build: whisker image"
       - "Build: operator image"
+      - "Build: third-party images"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
@@ -1442,17 +1477,28 @@ blocks:
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
   - name: "E2E tests: Gateway API Conformance"
     run:
-      when: >-
-        true or change_in(['/e2e/cmd/gateway', '/hack/test/kind/gateway-setup.sh', '/third_party/envoy-gateway', '/third_party/envoy-proxy', '/third_party/envoy-ratelimit'],
-        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+      when: "true"
     execution_time_limit:
       minutes: 60
     dependencies:
       - Prerequisites
+      - "Build: calico image"
+      - "Build: node image"
+      - "Build: whisker image"
+      - "Build: operator image"
+      - "Build: third-party images"
     task:
       env_vars:
+        # "calico" is the only group any block stores; the e2e runner this lane
+        # builds is calico Go code, so it is the one worth restoring.
         - name: BUILD_CACHE_GROUP
-          value: "node"
+          value: "calico"
+      prologue:
+        commands:
+          # Match the other kind lanes: free the /var/lib/docker space the
+          # pre-loaded images hold before loading the ones this lane needs.
+          - docker system prune -af
+          - .semaphore/load-cached-images calico node whisker
       jobs:
         - name: "Gateway API: Conformance Tests"
           commands:
@@ -1592,6 +1638,7 @@ blocks:
       - "Build: calico image"
       - "Build: node image"
       - "Build: operator image"
+      - "Build: third-party images"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
