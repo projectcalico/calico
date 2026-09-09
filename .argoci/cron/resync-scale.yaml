@@ -45,7 +45,7 @@ steps:
       diskSize: 200GB
       runAsNonRoot: true
     secretBundles:
-      - {name: banzai-secrets, keys: [{name: LENS_ELASTICSEARCH_TOKEN}]}
+      - {name: banzai-secrets, keys: [{name: LENS_ELASTICSEARCH_TOKEN}, {name: LENS_ELASTICSEARCH_USER}]}
 
     # The JSON the benchmark writes is its whole output, and it is written on
     # the machine.  `outputs:` collects from the pod, so pull it back first --
