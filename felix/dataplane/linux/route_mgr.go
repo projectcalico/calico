@@ -185,7 +185,7 @@ func (m *routeManager) OnUpdate(protoBufMsg any) {
 		m.deleteRoute(msg.Dst)
 
 		// Process remote IPAM blocks.
-		if isType(msg, proto.RouteType_REMOTE_WORKLOAD) && msg.IpPoolType == m.ippoolType {
+		if isRemoteWorkload(msg) && msg.IpPoolType == m.ippoolType {
 			m.logCtx.WithField("msg", msg).Debug("Route manager received route update")
 			m.routesByDest[msg.Dst] = msg
 			m.routesDirty = true
@@ -261,6 +261,12 @@ func (m *routeManager) vxlanEnabled() bool {
 
 func isType(msg *proto.RouteUpdate, t proto.RouteType) bool {
 	return msg.Types&t == t
+}
+
+// A borrowed IP is flagged both local and remote; LocalWorkload is the calc
+// graph's tie-break and wins.
+func isRemoteWorkload(msg *proto.RouteUpdate) bool {
+	return isType(msg, proto.RouteType_REMOTE_WORKLOAD) && !msg.LocalWorkload
 }
 
 func (m *routeManager) routeIsLocalBlock(msg *proto.RouteUpdate) bool {
