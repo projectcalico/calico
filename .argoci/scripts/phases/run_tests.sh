@@ -106,11 +106,19 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     fi
   fi
 
+  # The go-build entrypoint useradds LOCAL_USER_ID and su-execs to that account,
+  # which cannot work when the runner is already root. RUN_AS_ROOT skips it.
+  run_as_root_env=()
+  if [[ "$(id -u)" -eq 0 ]]; then
+    run_as_root_env=(-e RUN_AS_ROOT=true)
+  fi
+
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
   e2e_rc=0
   docker run --rm --init --net=host \
     -e LOCAL_USER_ID="$(id -u)" \
+    "${run_as_root_env[@]}" \
     -e GOCACHE=/go-cache \
     -e GOPATH=/go \
     -e KUBECONFIG=/kubeconfig \
