@@ -50,11 +50,10 @@ const (
 
 var (
 	BuildVariants = []Variant{
-		// felix ships an image that is built but never published on its own
 		{
 			Name:        StandardVariant,
 			Target:      "release-build",
-			ReleaseDirs: append(slices.Clone(utils.ImageReleaseDirs), "felix"),
+			ReleaseDirs: slices.Clone(utils.ImageReleaseDirs),
 		},
 		{
 			Name:        windowsVariant,

@@ -1300,11 +1300,12 @@ func (r *CalicoManager) buildBinaries() error {
 		logrus.Info("Skipping building binaries")
 		return nil
 	}
-	// calicoctl needs to build unconditionally; everything else is produced
-	// as part of its image release-build target.
-	m := map[string]string{"calicoctl": "build-all"}
-	if !r.images {
-		m["felix"] = "release-build"
+
+	// calicoctl and felix ship binaries and no image, so nothing in the image
+	// step produces them.
+	m := map[string]string{
+		"calicoctl": "build-all",
+		"felix":     "release-build",
 	}
 	env := append(os.Environ(),
 		fmt.Sprintf("VERSION=%s", r.calicoVersion),
