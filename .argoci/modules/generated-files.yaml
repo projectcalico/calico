@@ -5,15 +5,18 @@ version: condensed-module
 defaults:
   # Minutes of CPU-bound work, well short of the hour the default would allow.
   timeout: 20m
-  services:
-    - docker
+
+  # Walking the import graph is just Go, so it runs in the build image directly
+  # and needs no daemon or second pull.
+  image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
 
 steps:
   - name: check-generated-deps
+    # The image ships the Go toolchain under /go, which the default emptyDir
+    # over that path hides — as `command not found`, minutes in.
+    workspaceVolumes: none
     commands: |
-      # The recipes shell out to a nested container: unauthenticated pulls are
-      # rate-limited, and it inherits only what is spliced in explicitly.
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
-      make gen-deps-files
+      # Emptying the wrappers runs each recipe here instead of in a nested
+      # container; the tools they call are already on PATH.
+      make gen-deps-files DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
       make check-dirty

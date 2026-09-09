@@ -44,6 +44,7 @@ components:
       - ^api/pkg/openapi/[^/]*\.go$
       - ^apiserver/
       - ^crypto/pkg/tls/[^/]*\.go$
+      - ^felix/ip/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
@@ -89,6 +90,7 @@ components:
       - ^(?:[^/]+/)*\.gitignore$
       - ^api/(?:[^/]+/)*[^/]*_test\.go$
       - ^crypto/(?:[^/]+/)*[^/]*_test\.go$
+      - ^felix/(?:[^/]+/)*[^/]*_test\.go$
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
       - ^libcalico-go/(?:[^/]+/)*[^/]*_test\.go$
   app-policy:
@@ -101,7 +103,6 @@ components:
       - ^felix/bpf/tc/defs/[^/]*\.go$
       - ^felix/calc/[^/]*\.go$
       - ^felix/config/[^/]*\.go$
-      - ^felix/dataplane/ipsets/[^/]*\.go$
       - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
       - ^felix/deltatracker/[^/]*\.go$
       - ^felix/dispatcher/[^/]*\.go$
@@ -120,10 +121,9 @@ components:
       - ^felix/markbits/[^/]*\.go$
       - ^felix/multidict/[^/]*\.go$
       - ^felix/netlinkshim/[^/]*\.go$
-      - ^felix/nftables/[^/]*\.go$
+      - ^felix/nftables/nftrender/[^/]*\.go$
       - ^felix/proto/[^/]*\.go$
       - ^felix/rules/[^/]*\.go$
-      - ^felix/rules/rulesdefs/[^/]*\.go$
       - ^felix/serviceindex/[^/]*\.go$
       - ^felix/stringutils/[^/]*\.go$
       - ^felix/types/[^/]*\.go$
@@ -195,6 +195,7 @@ components:
       - ^api/pkg/lib/numorstring/[^/]*\.go$
       - ^calicoctl/
       - ^crypto/pkg/tls/[^/]*\.go$
+      - ^felix/ip/[^/]*\.go$
       - ^hack/test/certs/
       - ^kube-controllers/pkg/cache/[^/]*\.go$
       - ^kube-controllers/pkg/config/[^/]*\.go$
@@ -251,6 +252,7 @@ components:
       - ^(?:[^/]+/)*\.gitignore$
       - ^api/(?:[^/]+/)*[^/]*_test\.go$
       - ^crypto/(?:[^/]+/)*[^/]*_test\.go$
+      - ^felix/(?:[^/]+/)*[^/]*_test\.go$
       - ^kube-controllers/(?:[^/]+/)*[^/]*_test\.go$
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
       - ^libcalico-go/(?:[^/]+/)*[^/]*_test\.go$
@@ -449,6 +451,7 @@ components:
       - ^felix/nfnetlink/nfnl/[^/]*\.go$
       - ^felix/nfnetlink/pkt/[^/]*\.go$
       - ^felix/nftables/[^/]*\.go$
+      - ^felix/nftables/nftrender/[^/]*\.go$
       - ^felix/policysync/[^/]*\.go$
       - ^felix/proto/[^/]*\.go$
       - ^felix/proto/protoconv/[^/]*\.go$
@@ -555,6 +558,7 @@ components:
       - ^libcalico-go/lib/errors/[^/]*\.go$
       - ^libcalico-go/lib/hash/[^/]*\.go$
       - ^libcalico-go/lib/health/[^/]*\.go$
+      - ^libcalico-go/lib/informerutil/[^/]*\.go$
       - ^libcalico-go/lib/ipam/vmipam/[^/]*\.go$
       - ^libcalico-go/lib/kubevirt/[^/]*\.go$
       - ^libcalico-go/lib/metricsserver/[^/]*\.go$
@@ -663,6 +667,7 @@ components:
       - ^api/pkg/lib/numorstring/[^/]*\.go$
       - ^cni-plugin/
       - ^crypto/pkg/tls/[^/]*\.go$
+      - ^felix/ip/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
@@ -713,6 +718,7 @@ components:
       - ^(?:[^/]+/)*\.gitignore$
       - ^api/(?:[^/]+/)*[^/]*_test\.go$
       - ^crypto/(?:[^/]+/)*[^/]*_test\.go$
+      - ^felix/(?:[^/]+/)*[^/]*_test\.go$
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
       - ^libcalico-go/(?:[^/]+/)*[^/]*_test\.go$
       - ^node/(?:[^/]+/)*[^/]*_test\.go$
@@ -724,6 +730,7 @@ components:
       - ^api/pkg/lib/numorstring/[^/]*\.go$
       - ^confd/
       - ^crypto/pkg/tls/[^/]*\.go$
+      - ^felix/ip/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
@@ -780,6 +787,7 @@ components:
       - ^(?:[^/]+/)*\.gitignore$
       - ^api/(?:[^/]+/)*[^/]*_test\.go$
       - ^crypto/(?:[^/]+/)*[^/]*_test\.go$
+      - ^felix/(?:[^/]+/)*[^/]*_test\.go$
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
       - ^libcalico-go/(?:[^/]+/)*[^/]*_test\.go$
       - ^pkg/(?:[^/]+/)*[^/]*_test\.go$
@@ -868,6 +876,7 @@ components:
       - ^libcalico-go/lib/watch/[^/]*\.go$
       - ^libcalico-go/lib/winutils/[^/]*\.go$
       - ^metadata\.mk$
+      - ^operator/api/v1/[^/]*\.go$
       - ^whisker-backend/pkg/apis/v1/[^/]*\.go$
     exclude:
       - ^(?:[^/]+/)*AUTHORS[^/]*$
@@ -884,6 +893,7 @@ components:
       - ^goldmane/(?:[^/]+/)*[^/]*_test\.go$
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
       - ^libcalico-go/(?:[^/]+/)*[^/]*_test\.go$
+      - ^operator/(?:[^/]+/)*[^/]*_test\.go$
       - ^whisker-backend/(?:[^/]+/)*[^/]*_test\.go$
   felix:
     in:
@@ -1067,6 +1077,7 @@ components:
       - ^api/pkg/defaults/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
       - ^crypto/pkg/tls/[^/]*\.go$
+      - ^felix/ip/[^/]*\.go$
       - ^hack/
       - ^lib/logrusr/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
@@ -1112,6 +1123,7 @@ components:
       - ^(?:[^/]+/)*\.gitignore$
       - ^api/(?:[^/]+/)*[^/]*_test\.go$
       - ^crypto/(?:[^/]+/)*[^/]*_test\.go$
+      - ^felix/(?:[^/]+/)*[^/]*_test\.go$
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
       - ^libcalico-go/(?:[^/]+/)*[^/]*_test\.go$
   key-cert-provisioner:
@@ -1148,7 +1160,6 @@ components:
       - ^felix/bpf/tc/defs/[^/]*\.go$
       - ^felix/calc/[^/]*\.go$
       - ^felix/config/[^/]*\.go$
-      - ^felix/dataplane/ipsets/[^/]*\.go$
       - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
       - ^felix/deltatracker/[^/]*\.go$
       - ^felix/dispatcher/[^/]*\.go$
@@ -1171,10 +1182,9 @@ components:
       - ^felix/markbits/[^/]*\.go$
       - ^felix/multidict/[^/]*\.go$
       - ^felix/netlinkshim/[^/]*\.go$
-      - ^felix/nftables/[^/]*\.go$
+      - ^felix/nftables/nftrender/[^/]*\.go$
       - ^felix/proto/[^/]*\.go$
       - ^felix/rules/[^/]*\.go$
-      - ^felix/rules/rulesdefs/[^/]*\.go$
       - ^felix/serviceindex/[^/]*\.go$
       - ^felix/stringutils/[^/]*\.go$
       - ^felix/types/[^/]*\.go$
@@ -1209,6 +1219,7 @@ components:
       - ^libcalico-go/lib/errors/[^/]*\.go$
       - ^libcalico-go/lib/hash/[^/]*\.go$
       - ^libcalico-go/lib/health/[^/]*\.go$
+      - ^libcalico-go/lib/informerutil/[^/]*\.go$
       - ^libcalico-go/lib/ipam/[^/]*\.go$
       - ^libcalico-go/lib/kubevirt/[^/]*\.go$
       - ^libcalico-go/lib/names/[^/]*\.go$
@@ -1258,6 +1269,7 @@ components:
       - ^api/pkg/defaults/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
       - ^crypto/pkg/tls/[^/]*\.go$
+      - ^felix/ip/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
@@ -1277,6 +1289,7 @@ components:
       - ^(?:[^/]+/)*\.gitignore$
       - ^api/(?:[^/]+/)*[^/]*_test\.go$
       - ^crypto/(?:[^/]+/)*[^/]*_test\.go$
+      - ^felix/(?:[^/]+/)*[^/]*_test\.go$
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
   node:
     in:
@@ -1399,6 +1412,7 @@ components:
       - ^felix/nfnetlink/nfnl/[^/]*\.go$
       - ^felix/nfnetlink/pkt/[^/]*\.go$
       - ^felix/nftables/[^/]*\.go$
+      - ^felix/nftables/nftrender/[^/]*\.go$
       - ^felix/policysync/[^/]*\.go$
       - ^felix/proto/[^/]*\.go$
       - ^felix/proto/protoconv/[^/]*\.go$
@@ -1515,6 +1529,29 @@ components:
       - ^pkg/(?:[^/]+/)*[^/]*_test\.go$
       - ^pod2daemon/(?:[^/]+/)*[^/]*_test\.go$
       - ^typha/(?:[^/]+/)*[^/]*_test\.go$
+  operator:
+    in:
+      - ^api/admission/[^/]*\.go$
+      - ^api/config/crd/[^/]*\.go$
+      - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
+      - ^api/pkg/lib/numorstring/[^/]*\.go$
+      - ^hack/test/certs/
+      - ^lib\.Makefile$
+      - ^libcalico-go/config/crd/
+      - ^libcalico-go/config/crd/[^/]*\.go$
+      - ^metadata\.mk$
+      - ^operator/
+    exclude:
+      - ^(?:[^/]+/)*AUTHORS[^/]*$
+      - ^(?:[^/]+/)*CONTRIBUTING[^/]*$
+      - ^(?:[^/]+/)*DEVELOPER_GUIDE[^/]*$
+      - ^(?:[^/]+/)*LICENSE[^/]*$
+      - ^(?:[^/]+/)*README[^/]*$
+      - ^(?:[^/]+/)*SECURITY\.md$
+      - ^(?:[^/]+/)*[^/]*\.md$
+      - ^(?:[^/]+/)*\.gitignore$
+      - ^api/(?:[^/]+/)*[^/]*_test\.go$
+      - ^libcalico-go/(?:[^/]+/)*[^/]*_test\.go$
   pod2daemon:
     in:
       - ^hack/test/certs/
@@ -1630,6 +1667,7 @@ components:
       - ^api/pkg/defaults/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
       - ^crypto/pkg/tls/[^/]*\.go$
+      - ^felix/ip/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
@@ -1693,6 +1731,7 @@ components:
       - ^(?:[^/]+/)*\.gitignore$
       - ^api/(?:[^/]+/)*[^/]*_test\.go$
       - ^crypto/(?:[^/]+/)*[^/]*_test\.go$
+      - ^felix/(?:[^/]+/)*[^/]*_test\.go$
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
       - ^libcalico-go/(?:[^/]+/)*[^/]*_test\.go$
       - ^pkg/(?:[^/]+/)*[^/]*_test\.go$
