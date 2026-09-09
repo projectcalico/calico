@@ -62,13 +62,18 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			}
 		}
 
-		It("should receive DataplaneInSync message from the dataplane", func() {
+		startFelixAndWaitForInSync := func() {
 			tc.Felixes[0].TriggerDelayedStart()
+			tc.Felixes[0].WaitForReady()
 			Eventually(dataplaneInSyncReceivedC, "10s").Should(BeClosed(), "receipt of DataplaneInSync message not seen in logs")
+		}
+
+		It("should receive DataplaneInSync message from the dataplane", func() {
+			startFelixAndWaitForInSync()
 		})
 
 		It("should create endpoint-status files in a directory named endpoint-status with the specified directory prefix", func() {
-			tc.Felixes[0].TriggerDelayedStart()
+			startFelixAndWaitForInSync()
 			var filenames [2]string
 			var statCmds [2]func() error
 			for i := range dummyWorkloads {
@@ -102,8 +107,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			tc.Felixes[0].Exec("touch", name)
 
 			By("Waiting for Felix's status file reporter to come in-sync")
-			tc.Felixes[0].TriggerDelayedStart()
-			Eventually(dataplaneInSyncReceivedC, "10s").Should(BeClosed(), "receipt of DataplaneInSync message not seen in logs")
+			startFelixAndWaitForInSync()
 
 			By("checking if the stale file has been cleaned up")
 			fileExists := func() bool {
@@ -111,7 +115,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 				_, err := tc.Felixes[0].ExecOutput("stat", name)
 				return err == nil
 			}
-			Eventually(fileExists).Should(BeFalse(), "Stale file was not cleaned up by Felix")
+			Eventually(fileExists, "10s", "500ms").Should(BeFalse(), "Stale file was not cleaned up by Felix")
 		})
 
 		It("should re-use pre-existing files after a restart", func() {
@@ -132,11 +136,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			By("creating a file with the determined name before Felix starts")
 			expectedFilename := filepath.Join("/tmp/endpoint-status", filename)
 			tc.Felixes[0].Exec("mkdir", "/tmp/endpoint-status")
-			tc.Felixes[0].Exec("touch", filename)
+			tc.Felixes[0].Exec("touch", expectedFilename)
 
 			By("waiting for Felix's status file reporter to become in-sync")
-			tc.Felixes[0].TriggerDelayedStart()
-			Eventually(dataplaneInSyncReceivedC, "10s").Should(BeClosed(), "receipt of DataplaneInSync message not seen in logs")
+			startFelixAndWaitForInSync()
 
 			output, err := tc.Felixes[0].ExecOutput("cat", expectedFilename)
 			Expect(err).NotTo(HaveOccurred(), "stat call failed while trying to create a file")
