@@ -106,7 +106,7 @@ steps:
 
       # Publish to the same Lens index as the per-PR Semaphore runs.
       export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
-      export ELASTICSEARCH_USER=elastic
+      export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
       export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
       export PERF_ENV=weekly
 
