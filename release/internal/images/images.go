@@ -23,12 +23,12 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -145,14 +145,6 @@ func NarrowVariants(variants []Variant, dirs []string) []Variant {
 	return out
 }
 
-type RefRecorder interface {
-	Add(refs ...string) error
-}
-
-// DigestResolver reports the manifest digest of a tag. exists is false with a
-// nil error when the tag is absent; auth and network failures return an error.
-type DigestResolver func(image string) (digest string, exists bool, err error)
-
 // Image is what every step needs to name the images a release ships.
 type Image struct {
 	RepoRoot   string
@@ -161,7 +153,7 @@ type Image struct {
 	Arches     []string
 	Variants   []Variant
 
-	command.Step
+	steps.Step
 }
 
 // settings is what the options write into. Nothing outside the package builds
@@ -173,18 +165,16 @@ type settings struct {
 	// confirm latches the push. Without it the make targets run as a dry run.
 	confirm bool
 
-	dir string
-
 	// pull fetches an image that is not already local, which a release that
 	// did not build its own images needs.
 	pull bool
 
 	retag *retag
 	scan  *ScanRequest
-	refs  RefRecorder
+	refs  steps.RefRecorder
 
 	// resolve reports a published tag's digest. Defaults to the registry.
-	resolve DigestResolver
+	resolve steps.DigestResolver
 
 	// resume is the record an earlier run left, and how to check it.
 	resume *resume
@@ -232,7 +222,7 @@ func (f publishSetting) applyPublish(s *settings) error { return f(s) }
 
 func WithRunner(r command.CommandRunner) Option {
 	return setting(func(s *settings) error {
-		s.Apply([]command.Option{command.WithRunner(r)})
+		s.Apply([]steps.Option{steps.WithRunner(r)})
 		return nil
 	})
 }
@@ -258,7 +248,7 @@ func WithArches(arches ...string) Option {
 // the output captured in memory.
 func WithLogsDir(dir string) Option {
 	return setting(func(s *settings) error {
-		s.Apply([]command.Option{command.WithLogsDir(dir)})
+		s.Apply([]steps.Option{steps.WithLogsDir(dir)})
 		return nil
 	})
 }
@@ -269,7 +259,7 @@ func WithStepName(name string) Option {
 		if name == "" {
 			return fmt.Errorf("no step name given")
 		}
-		s.Apply([]command.Option{command.WithName(name)})
+		s.Apply([]steps.Option{steps.WithName(name)})
 		return nil
 	})
 }
@@ -305,7 +295,7 @@ func WithScan(req *ScanRequest) PublishOption {
 	})
 }
 
-func WithRecord(rec RefRecorder) PublishOption {
+func WithRecord(rec steps.RefRecorder) PublishOption {
 	return publishSetting(func(s *settings) error {
 		if rec == nil {
 			return fmt.Errorf("no recorder given")
@@ -387,7 +377,7 @@ func (c Image) env() []string {
 }
 
 func (s settings) runUnits(units []unit) error {
-	_, err := forEachUnit(units, s.runUnitOnly)
+	_, err := steps.Go(units, s.runUnitOnly)
 	return err
 }
 
@@ -404,19 +394,6 @@ func (s settings) runUnitOnly(u unit) (unitDone, error) {
 // unitDone is the result of a unit that produces nothing to collect.
 type unitDone struct{}
 
-func forEachUnit[T any](units []unit, fn func(unit) (T, error)) ([]T, error) {
-	var (
-		wg   sync.WaitGroup
-		out  = make([]T, len(units))
-		errs = make([]error, len(units))
-	)
-	for i, u := range units {
-		wg.Go(func() { out[i], errs[i] = fn(u) })
-	}
-	wg.Wait()
-	return out, errors.Join(errs...)
-}
-
 func (s settings) runUnit(u unit) error {
 	log := s.Logger().WithFields(logrus.Fields{"variant": u.variant, "component": u.dir, "target": u.target})
 	dir := filepath.Join(s.RepoRoot, u.dir)
@@ -428,7 +405,7 @@ func (s settings) runUnit(u unit) error {
 			log.Debug(out)
 			return nil
 		}
-		if attempt < command.MaxRetries {
+		if attempt < steps.MaxRetries {
 			log.WithError(err).WithField("attempt", attempt).Warn("Image step failed, retrying")
 			continue
 		}
@@ -512,7 +489,7 @@ func (c Image) tagPrefix(u unit) (string, error) {
 // unitState reads the record rather than the registry: the record already names
 // what landed, and a local read costs nothing. done is true when every ref the
 // unit publishes is recorded at the digest the registry currently serves.
-func unitState(s settings, u unit, recorded recordedDigests) (done bool, err error) {
+func unitState(s settings, u unit, recorded steps.RecordedDigests) (done bool, err error) {
 	if s.resume == nil {
 		return false, nil
 	}
@@ -559,26 +536,7 @@ func unitState(s settings, u unit, recorded recordedDigests) (done bool, err err
 	return true, nil
 }
 
-type recordedDigests map[string]map[string]struct{}
-
-// A repo publishes several tags, each at its own digest, so it maps to a SET of
-// digests: a tag counts as published when its digest is in that set.
-func digestsByRepo(refs []string) recordedDigests {
-	out := make(recordedDigests, len(refs))
-	for _, ref := range refs {
-		repo, digest, ok := strings.Cut(ref, "@")
-		if !ok {
-			continue
-		}
-		if out[repo] == nil {
-			out[repo] = map[string]struct{}{}
-		}
-		out[repo][digest] = struct{}{}
-	}
-	return out
-}
-
-func (c Image) publishedRefs(u unit, resolve DigestResolver) ([]string, error) {
+func (c Image) publishedRefs(u unit, resolve steps.DigestResolver) ([]string, error) {
 	names, err := c.imageNames(u)
 	if err != nil {
 		return nil, err
@@ -635,7 +593,7 @@ func record(s settings, units []unit) error {
 	if s.refs == nil {
 		return nil
 	}
-	refs, lookupErr := forEachUnit(units, s.refsFor)
+	refs, lookupErr := steps.Go(units, s.refsFor)
 	// Written even when a lookup failed: a partial publish is exactly the run
 	// whose record decides what a resume still owes. Writing after the lookups
 	// keeps the record in the units' order.
