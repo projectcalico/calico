@@ -112,16 +112,21 @@ var _ = Describe("RegisterVariant", func() {
 		Expect(VariantRelease()).To(Equal(CalicoRelease))
 
 		restore := UseVariant(build)
+		DeferCleanup(restore)
 		Expect(VariantRelease()).To(Equal("v9.9.9"))
 
 		restore()
 		Expect(VariantRelease()).To(Equal(CalicoRelease))
 	})
 
-	// Components declared in this package name a variant, so registering them must
-	// leave their own defaults alone.
-	It("leaves images that carry their own defaults resolving against those", func() {
-		DeferCleanup(UseImages(CalicoImages))
+	// Components declared in this package already name a variant, so a build that
+	// carries a registry of its own must leave theirs alone.
+	It("leaves images that name a variant resolving against that variant", func() {
+		DeferCleanup(UseVariant(VariantBuild{
+			Images:    []Component{thing, ComponentCalicoNode},
+			Registry:  "example.com/",
+			ImagePath: "myvariant/",
+		}))
 
 		img, err := ImageFor(ImageKeyNode)
 		Expect(err).NotTo(HaveOccurred())

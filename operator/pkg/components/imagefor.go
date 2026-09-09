@@ -101,17 +101,19 @@ func VariantRelease() string {
 	return CalicoRelease
 }
 
-// stamped returns the images carrying the build's defaults, which a variant declaring
-// its components outside this package cannot set on them.
+// stamped gives the build's registry and image path to the components that name no
+// variant of their own, which a variant declaring them elsewhere cannot set.
 func (b VariantBuild) stamped() []Component {
 	if b.Registry == "" && b.ImagePath == "" {
 		return b.Images
 	}
 
-	d := &variantDefaults{registry: b.Registry, imagePath: b.ImagePath}
+	v := &variant{registry: b.Registry, imagePath: b.ImagePath}
 	out := make([]Component, len(b.Images))
 	for i, c := range b.Images {
-		c.defaults = d
+		if c.variant == nil {
+			c.variant = v
+		}
 		out[i] = c
 	}
 	return out
