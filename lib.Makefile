@@ -2127,7 +2127,7 @@ windows-sub-image-%: var-require-all-GIT_VERSION-WINDOWS_IMAGE-WINDOWS_DIST-WIND
 		--build-arg=WINDOWS_VERSION=$* \
 		-f Dockerfile.windows .
 
-.PHONY: image-windows release-windows release-windows-with-tag
+.PHONY: image-windows release-windows release-windows-with-tag retag-windows-image-with-registries
 image-windows: setup-windows-builder var-require-all-WINDOWS_VERSIONS
 	for version in $(WINDOWS_VERSIONS); do \
 		$(MAKE) windows-sub-image-$${version}; \
@@ -2154,6 +2154,14 @@ release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAG
 		done; \
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
 		$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $${manifest_image} $${all_images} || true; \
+	done;
+
+# retag-windows-image-with-registries copies the Windows image from DEV_TAG to
+# IMAGETAG in each registry. Windows images are single-arch manifests built by
+# buildx, so they have no local per-arch images to retag.
+retag-windows-image-with-registries: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE-DEV_TAG-IMAGETAG bin/crane
+	for registry in $(DEV_REGISTRIES); do \
+		$(CRANE) cp $${registry}/$(WINDOWS_IMAGE):$(DEV_TAG) $${registry}/$(WINDOWS_IMAGE):$(IMAGETAG); \
 	done;
 
 release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE var-require-one-of-VERSION-BRANCH_NAME bin/crane
