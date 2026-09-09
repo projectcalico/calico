@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -30,7 +31,7 @@ import (
 // Tests replace both.
 var (
 	imagesRunner         command.CommandRunner = &command.RealCommandRunner{}
-	imagesDigestResolver images.DigestResolver = registry.ResolveDigest
+	imagesDigestResolver steps.DigestResolver  = registry.ResolveDigest
 )
 
 var imagesSubCommands = func(cfg *Config) []*cli.Command {
@@ -107,7 +108,7 @@ var (
 				return err
 			}
 
-			var refs images.RefRecorder
+			var refs steps.RefRecorder
 			if !c.Bool(localFlag.Name) {
 				w, err := outputs.NewRefsWriter(cfg.OutputDir, "images-publish", ver.FormattedString())
 				if err != nil {
