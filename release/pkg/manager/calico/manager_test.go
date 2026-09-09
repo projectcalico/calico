@@ -610,6 +610,27 @@ func unitCalls(f *fakeRunner, target string) []string {
 	return out
 }
 
+// felix builds no image, so the binary step is the only thing that produces
+// felix/bin/calico-bpf for the release tarball.
+func TestBuildBinariesBuildsFelixWhateverTheImagesFlagIs(t *testing.T) {
+	for _, images := range []bool{true, false} {
+		t.Run(fmt.Sprintf("images=%t", images), func(t *testing.T) {
+			f := newFakeRunner()
+			m := imageManager(t, f, "")
+			m.images = images
+			m.binaries = true
+			if err := m.buildBinaries(); err != nil {
+				t.Fatalf("buildBinaries: %v", err)
+			}
+			for _, want := range []string{"make -C /repo/felix release-build", "make -C /repo/calicoctl build-all"} {
+				if !f.ran(want) {
+					t.Errorf("did not run %q, ran: %v", want, f.calls)
+				}
+			}
+		})
+	}
+}
+
 func imageManager(t *testing.T, f *fakeRunner, logsDir string) *CalicoManager {
 	t.Helper()
 	// A publish asks each directory for its image names before recording refs.
