@@ -1,5 +1,6 @@
 # This script is adapated from https://raw.githubusercontent.com/microsoft/Windows-Containers/Main/helpful_tools/Install-ContainerdRuntime/install-containerd-runtime.ps1
 # Reference: https://learn.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=containerd
+# Tigera modifications Copyright (c) 2026 Tigera, Inc. All rights reserved.
 
 
 ############################################################
@@ -102,64 +103,7 @@ $global:RebootRequired = $false
 
 $global:ErrorFile = "$pwd\install-container-runtime.err"
 
-$global:BootstrapTask = "ContainerBootstrap"
-
 $global:HyperVImage = "NanoServer"
-
-function
-Restart-And-Run()
-{
-    Test-Admin
-
-    Write-Output "Restart is required; restarting now..."
-
-    $argList = $script:MyInvocation.Line.replace($script:MyInvocation.InvocationName, "")
-
-    #
-    # Update .\ to the invocation directory for the bootstrap
-    #
-    $scriptPath = $script:MyInvocation.MyCommand.Path
-
-    $argList = $argList -replace "\.\\", "$pwd\"
-
-    if ((Split-Path -Parent -Path $scriptPath) -ne $pwd)
-    {
-        $sourceScriptPath = $scriptPath
-        $scriptPath = "$pwd\$($script:MyInvocation.MyCommand.Name)"
-
-        Copy-Item $sourceScriptPath $scriptPath
-    }
-
-    Write-Output "Creating scheduled task action ($scriptPath $argList)..."
-    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoExit $scriptPath $argList"
-
-    Write-Output "Creating scheduled task trigger..."
-    $trigger = New-ScheduledTaskTrigger -AtLogOn
-
-    Write-Output "Registering script to re-run at next user logon..."
-    Register-ScheduledTask -TaskName $global:BootstrapTask -Action $action -Trigger $trigger -RunLevel Highest | Out-Null
-
-    try
-    {
-        if ($Force)
-        {
-            Restart-Computer -Force
-        }
-        else
-        {
-            Restart-Computer
-        }
-    }
-    catch
-    {
-        Write-Error $_
-
-        Write-Output "Please restart your computer manually to continue script execution."
-    }
-
-    exit
-}
-
 
 function
 Install-Feature
@@ -292,21 +236,13 @@ Install-ContainerDHost
 
     if ($global:RebootRequired)
     {
-        if ($NoRestart)
-        {
-            Write-Warning "A reboot is required; stopping script execution"
-            exit
-        }
-
-        Restart-And-Run
-    }
-
-    #
-    # Unregister the bootstrap task, if it was previously created
-    #
-    if ($null -ne (Get-ScheduledTask -TaskName $global:BootstrapTask -ErrorAction SilentlyContinue))
-    {
-        Unregister-ScheduledTask -TaskName $global:BootstrapTask -Confirm:$false
+        # The caller (install-kubeadm.sh) reboots the node via
+        # enable-containers-with-reboot.ps1 and waits for that reboot to
+        # complete before running this script, so a pending reboot here means
+        # that wait went wrong.  This script used to reboot and re-run itself
+        # via an at-logon scheduled task, but nothing ever logs on to a
+        # headless CI node, so that path silently left containerd uninstalled.
+        throw "A reboot is still pending; expected enable-containers-with-reboot.ps1 to have completed it before this script runs."
     }
 
     #
@@ -742,4 +678,7 @@ try
 catch
 {
     Write-Error $_
+    # Make the failure visible to the calling shell; without this the script
+    # exits 0 and the caller carries on without containerd.
+    exit 1
 }
