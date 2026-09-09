@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,9 @@
 package checker
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -29,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	ftypes "github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -40,9 +43,60 @@ var (
 	INTERNAL          = int32(code.Code_INTERNAL)
 	UNKNOWN           = int32(code.Code_UNKNOWN)
 
-	rlog1 = logutils.NewRateLimitedLogger()
-	rlog2 = logutils.NewRateLimitedLogger()
+	rlogBadDstAddr = logutils.NewRateLimitedLogger()
+	rlogBadSrcAddr = logutils.NewRateLimitedLogger()
+	// A missing policy is one log line per evaluation, and Felix's collector re-evaluates every
+	// flow in both directions on every sweep, so a policy that stays missing would log per flow
+	// per sweep.
+	rlogMissingPolicy = logutils.NewRateLimitedLogger()
 )
+
+// PolicyScope selects which of an endpoint's policies take part in an evaluation.
+type PolicyScope int
+
+const (
+	// EnforcedOnly ignores staged policies, giving the verdict that is actually enforced.
+	// A tier whose policies are all staged is skipped entirely, end-of-tier action included,
+	// exactly as if the tier were not attached to the endpoint at all.
+	EnforcedOnly PolicyScope = iota
+	// StagedAsEnforced evaluates staged policies as though they had been promoted to enforced,
+	// giving the "pending" verdict: what would happen if the staged policies went live now.
+	StagedAsEnforced
+)
+
+// Every log site on the per-request evaluation path needs its own rate limiter.
+//
+// A rule set that applies tens of thousands of rules to one endpoint turns any per-rule log
+// into a storm: the conditions below are all "shouldn't happen, but does" — a dangling IP set
+// reference while the store catches up, a malformed CIDR or selector that got past validation,
+// a flow that is not IP at all — and each one repeats for every rule in the set, on every
+// request. Rate limiting is per logger instance, so sharing one across sites would let the
+// noisiest message starve the rest; sites that report the same condition do share one.
+//
+// These sites must not use the WithField/WithError builders: those allocate a fields map, a
+// logrus.Entry and a wrapper *before* the rate limiter gets to drop the message, which is the
+// per-rule allocation this path has been optimised to avoid. Pass the value to Warnf instead.
+var (
+	rlogIPSetMissing = newEvalPathLogger()
+	rlogBadPrincipal = newEvalPathLogger()
+	rlogBadProtocol  = newEvalPathLogger()
+	// The adapter warns when Envoy names a protocol it cannot map. requestCache memoizes
+	// the resolved protocol, so this fires once per request rather than once per rule.
+	rlogBadProtocolName = newEvalPathLogger()
+	rlogBadCIDR         = newEvalPathLogger()
+	rlogBadSelector     = newEvalPathLogger()
+	rlogBadRulePath     = newEvalPathLogger()
+)
+
+// newEvalPathLogger returns a logger that admits a short burst and then one line per interval,
+// so a storm leaves a few concrete examples plus a "logsSkipped" count rather than filling the
+// log. Tests that need every line replace these vars; see withUnthrottledEvalPathLogs.
+func newEvalPathLogger() *logutils.RateLimitedLogger {
+	return logutils.NewRateLimitedLogger(
+		logutils.OptInterval(30*time.Second),
+		logutils.OptBurst(10),
+	)
+}
 
 // Action is an enumeration of actions a policy rule can take if it is matched.
 type Action int
@@ -61,10 +115,21 @@ const (
 	unknownIndex = -2
 )
 
-// Evaluate evaluates the flow against the policy store and returns the trace of rules.
-func Evaluate(dir rules.RuleDir, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, flow Flow) []*calc.RuleID {
-	_, trace := checkTiers(store, ep, dir, flow)
-	return trace
+// Evaluate evaluates the flow against the policy store and returns the trace of rules. The scope
+// decides whether staged policies take part: pass StagedAsEnforced for the pending trace, or
+// EnforcedOnly for the trace the dataplane enforces.
+//
+// It returns an error if the evaluation could not be completed, in which case the trace is nil and
+// the caller should hold on to whatever trace it already had: an empty trace would say the flow has
+// no policy, which is a stronger claim than "we could not work it out".
+func Evaluate(scope PolicyScope, dir rules.RuleDir, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, flow Flow) ([]*calc.RuleID, error) {
+	s, trace := checkTiers(scope, store, ep, dir, flow)
+	if s.Code == INTERNAL || s.Code == INVALID_ARGUMENT {
+		// The evaluation stopped part way through, so the trace stops short of a verdict. Drop it
+		// and report why it stopped.
+		return nil, fmt.Errorf("%s: %s", code.Code(s.Code), s.Message)
+	}
+	return trace, nil
 }
 
 // LookupEndpointKeysFromSrcDst looks up the source and destination endpoint keys for the given
@@ -76,14 +141,14 @@ func LookupEndpointKeysFromSrcDst(store *policystore.PolicyStore, src, dst strin
 
 	// Map the destination
 	if destinationIp, err := ip.ParseCIDROrIP(dst); err != nil {
-		rlog1.WithError(err).Errorf("cannot process destination addr %s", dst)
+		rlogBadDstAddr.Errorf("cannot process destination addr %s: %v", dst, err)
 	} else {
 		log.Debugf("lookup endpoint for destination %s", destinationIp.String())
 		destination = ipToEndpointKeys(store, destinationIp.Addr())
 	}
 	// Map the source
 	if sourceIp, err := ip.ParseCIDROrIP(src); err != nil {
-		rlog2.WithError(err).Errorf("cannot process source addr %s", src)
+		rlogBadSrcAddr.Errorf("cannot process source addr %s: %v", src, err)
 	} else {
 		log.Debugf("lookup endpoint for source %s", sourceIp.String())
 		source = ipToEndpointKeys(store, sourceIp.Addr())
@@ -99,16 +164,16 @@ func ipToEndpointKeys(store *policystore.PolicyStore, addr ip.Addr) []proto.Work
 
 // checkStore applies the tiered policy plus any config based corrections and returns OK if the
 // check passes or PERMISSION_DENIED if the check fails.
-func checkStore(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, req Flow) (s status.Status) {
+func checkStore(scope PolicyScope, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, req Flow) (s status.Status) {
 	// Check using the configured policy
-	s, _ = checkTiers(store, ep, dir, req)
+	s, _ = checkTiers(scope, store, ep, dir, req)
 	return
 }
 
 // checkTiers applies the tiered policy in the given store and returns OK if the check passes, or PERMISSION_DENIED if
 // the check fails. Note, if no policy matches, the default is PERMISSION_DENIED. It returns the trace of rules that
 // were evaluated.
-func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, flow Flow) (s status.Status, trace []*calc.RuleID) {
+func checkTiers(scope PolicyScope, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, flow Flow) (s status.Status, trace []*calc.RuleID) {
 	s = status.Status{Code: PERMISSION_DENIED}
 	if ep == nil {
 		return
@@ -127,12 +192,35 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 		var (
 			ruleIndex               int
 			tierDefaultActionRuleID *calc.RuleID
+			// Policies of this tier that are in scope for this evaluation. A tier with none of
+			// them contributes nothing at all, end-of-tier action included.
+			policiesInScope int
 		)
 
 		action := NO_MATCH
 	Policy:
 		for i, pID := range policies {
-			policy := store.PolicyByID[ftypes.ProtoToPolicyID(pID)]
+			if scope == EnforcedOnly && model.KindIsStaged(pID.Kind) {
+				log.Debugf("Staged policy, not enforced, skipping (ordinal=%d, Id=%+v)", i, pID)
+				continue Policy
+			}
+			policiesInScope++
+
+			policyID := ftypes.ProtoToPolicyID(pID)
+			policy := store.PolicyByID[policyID]
+			if policy == nil {
+				// The endpoint's tier names this policy but the store does not have it, so we cannot
+				// know its verdict. We should never get here: a policy is sent before the endpoints
+				// that reference it. Fail closed rather than apply the rest of the tier to a request
+				// this policy may govern.
+				rlogMissingPolicy.Errorf("Policy named in tier is missing from the store, failing evaluation (ordinal=%d, policy=%s, tier=%s)",
+					i, policyID.ID(), tier.GetName())
+				s.Code = INTERNAL
+				s.Message = fmt.Sprintf("policy %s of tier %s is missing from the policy store",
+					policyID.ID(), tier.GetName())
+				return
+			}
+
 			action, ruleIndex = checkPolicy(policy, dir, request)
 			log.Debugf("Policy checked (ordinal=%d, Id=%+v, action=%v)", i, pID, action)
 			switch action {
@@ -157,11 +245,12 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 			case LOG:
 				log.Debug("policy should never return LOG action")
 				s.Code = INVALID_ARGUMENT
+				s.Message = fmt.Sprintf("policy %s returned a LOG action", policyID.ID())
 				return
 			}
 		}
 		// Done evaluating policies in the tier. If no policy rules have matched, apply tier's default action.
-		if action == NO_MATCH {
+		if policiesInScope > 0 && action == NO_MATCH {
 			log.Debugf("No policy matched. Tier default action %v applies.", tier.DefaultAction)
 			trace = append(trace, tierDefaultActionRuleID)
 			// If the default action is anything beside Pass, then apply tier default deny action.
@@ -288,7 +377,7 @@ func handlePanic(s *status.Status) {
 	if r := recover(); r != nil {
 		if v, ok := r.(*InvalidDataFromDataPlane); ok {
 			log.Debug("InvalidFromDataPlane: ", v.string)
-			*s = status.Status{Code: INVALID_ARGUMENT}
+			*s = status.Status{Code: INVALID_ARGUMENT, Message: v.string}
 		} else {
 			panic(r)
 		}
