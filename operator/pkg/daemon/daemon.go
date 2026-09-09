@@ -435,6 +435,8 @@ admission policy installation; once an Installation exists it is the authority o
 		setupLog.Error(err, "Failed to build the variant's extensions")
 		os.Exit(1)
 	}
+	components.RegisterBuild(extensionRegistry.Startup().Images())
+
 	// The variant's controllers can't register without their APIs. Exiting lets the kubelet
 	// retry us once the CRDs are installed.
 	if err := extensionRegistry.Startup().VerifyAPIsExist(cs); err != nil {
