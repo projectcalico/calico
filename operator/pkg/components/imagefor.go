@@ -57,35 +57,35 @@ type Build struct {
 }
 
 var (
-	// variantImages is the image set this process runs, registered by the variant at
+	// buildImages is the image set this process runs, registered by the variant at
 	// startup. Nil means the images this build ships.
-	variantImages map[string]Component
+	buildImages map[string]Component
 
-	// variantRelease is the release those images are tagged at.
-	variantRelease string
+	// buildRelease is the release those images are tagged at.
+	buildRelease string
 )
 
-// RegisterVariant declares the images the running variant supplies. The process
+// RegisterBuild declares the images the running variant supplies. The process
 // restarts when the variant changes, so only one ever registers.
-func RegisterVariant(b Build) {
-	variantImages = byImage(b.Images)
-	variantRelease = b.Release
+func RegisterBuild(b Build) {
+	buildImages = byImage(b.Images)
+	buildRelease = b.Release
 }
 
-// UseVariant registers b and returns a function restoring what was there, for tests
+// UseBuild registers b and returns a function restoring what was there, for tests
 // that render one variant while the suite covers both.
-func UseVariant(b Build) func() {
-	prevImages, prevRelease := variantImages, variantRelease
-	RegisterVariant(b)
+func UseBuild(b Build) func() {
+	prevImages, prevRelease := buildImages, buildRelease
+	RegisterBuild(b)
 	return func() {
-		variantImages, variantRelease = prevImages, prevRelease
+		buildImages, buildRelease = prevImages, prevRelease
 	}
 }
 
-// VariantRelease is the release the running variant's images are tagged at.
-func VariantRelease() string {
-	if variantRelease != "" {
-		return variantRelease
+// BuildRelease is the release the running variant's images are tagged at.
+func BuildRelease() string {
+	if buildRelease != "" {
+		return buildRelease
 	}
 	return CalicoRelease
 }
@@ -100,7 +100,7 @@ func KnownImage(name string) bool {
 		}
 	}
 
-	for _, c := range variantImages {
+	for _, c := range buildImages {
 		_, imagePath := getDefaults(c)
 		if name == path.Join(imagePath, c.Image) {
 			return true
@@ -126,7 +126,7 @@ var calicoImages = byImage(CalicoImages)
 // ImageFor returns the image the running variant supplies for key. A miss is an error
 // rather than a fallback to another image, which would ship the wrong one silently.
 func ImageFor(key string) (Component, error) {
-	imgs := variantImages
+	imgs := buildImages
 	if imgs == nil {
 		imgs = calicoImages
 	}

@@ -56,7 +56,7 @@ var _ = Describe("imageset tests", func() {
 		DescribeTable("", func(v operator.ProductVariant) {
 			nm := fmt.Sprintf("calico-%s", components.CalicoRelease)
 			if v.IsEnterprise() {
-				nm = fmt.Sprintf("enterprise-%s", components.VariantRelease())
+				nm = fmt.Sprintf("enterprise-%s", components.BuildRelease())
 			}
 			c := fake.NewClientBuilder().WithScheme(kscheme.Scheme).WithObjects(
 				&operator.ImageSet{
@@ -113,10 +113,10 @@ var _ = Describe("imageset tests", func() {
 	Context("Test imageset variant handling", func() {
 		DescribeTable("", func(v operator.ProductVariant) {
 			isName := fmt.Sprintf("calico-%s", components.CalicoRelease)
-			nonVariantISName := fmt.Sprintf("enterprise-%s", components.VariantRelease())
+			nonVariantISName := fmt.Sprintf("enterprise-%s", components.BuildRelease())
 			isNameWrongVer := "calico-wrong"
 			if v.IsEnterprise() {
-				isName = fmt.Sprintf("enterprise-%s", components.VariantRelease())
+				isName = fmt.Sprintf("enterprise-%s", components.BuildRelease())
 				nonVariantISName = fmt.Sprintf("calico-%s", components.CalicoRelease)
 				isNameWrongVer = "enterprise-wrong"
 			}

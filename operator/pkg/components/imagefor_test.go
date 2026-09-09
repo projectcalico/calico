@@ -42,7 +42,7 @@ var _ = Describe("ImageFor", func() {
 	})
 
 	It("resolves what the variant registered", func() {
-		DeferCleanup(UseVariant(Build{Images: []Component{otherVariantNode}}))
+		DeferCleanup(UseBuild(Build{Images: []Component{otherVariantNode}}))
 
 		img, err := ImageFor(ImageKeyNode)
 		Expect(err).NotTo(HaveOccurred())
@@ -50,14 +50,14 @@ var _ = Describe("ImageFor", func() {
 	})
 
 	It("errors on an image the running variant does not supply", func() {
-		DeferCleanup(UseVariant(Build{Images: []Component{otherVariantNode}}))
+		DeferCleanup(UseBuild(Build{Images: []Component{otherVariantNode}}))
 
 		_, err := ImageFor("whisker")
 		Expect(err).To(HaveOccurred())
 	})
 })
 
-var _ = Describe("RegisterVariant", func() {
+var _ = Describe("RegisterBuild", func() {
 	// A variant declares its components outside this package, naming the registry and
 	// image path they resolve against.
 	myVariant := &Variant{Registry: "example.com/", ImagePath: "myvariant/"}
@@ -66,7 +66,7 @@ var _ = Describe("RegisterVariant", func() {
 	build := Build{Images: []Component{thing}, Release: "v9.9.9"}
 
 	It("resolves registered images against the variant they name", func() {
-		DeferCleanup(UseVariant(build))
+		DeferCleanup(UseBuild(build))
 
 		img, err := ImageFor("thing")
 		Expect(err).NotTo(HaveOccurred())
@@ -79,7 +79,7 @@ var _ = Describe("RegisterVariant", func() {
 	// The image path is also the key an ImageSet lists images under, so a wrong one
 	// stops digests resolving rather than just changing the registry.
 	It("looks an ImageSet digest up under the variant's image path", func() {
-		DeferCleanup(UseVariant(build))
+		DeferCleanup(UseBuild(build))
 
 		img, err := ImageFor("thing")
 		Expect(err).NotTo(HaveOccurred())
@@ -93,7 +93,7 @@ var _ = Describe("RegisterVariant", func() {
 	})
 
 	It("lets the installation override the variant's defaults", func() {
-		DeferCleanup(UseVariant(build))
+		DeferCleanup(UseBuild(build))
 
 		img, err := ImageFor("thing")
 		Expect(err).NotTo(HaveOccurred())
@@ -104,13 +104,13 @@ var _ = Describe("RegisterVariant", func() {
 	})
 
 	It("reports the registered release, and the Calico one when nothing registered", func() {
-		Expect(VariantRelease()).To(Equal(CalicoRelease))
+		Expect(BuildRelease()).To(Equal(CalicoRelease))
 
-		restore := UseVariant(build)
+		restore := UseBuild(build)
 		DeferCleanup(restore)
-		Expect(VariantRelease()).To(Equal("v9.9.9"))
+		Expect(BuildRelease()).To(Equal("v9.9.9"))
 
 		restore()
-		Expect(VariantRelease()).To(Equal(CalicoRelease))
+		Expect(BuildRelease()).To(Equal(CalicoRelease))
 	})
 })

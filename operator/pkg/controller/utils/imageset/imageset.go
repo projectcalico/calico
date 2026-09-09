@@ -63,7 +63,7 @@ func variantPrefix(v operator.ProductVariant) string {
 func getSetName(v operator.ProductVariant) string {
 	variantVersion := components.CalicoRelease
 	if v.IsEnterprise() {
-		variantVersion = components.VariantRelease()
+		variantVersion = components.BuildRelease()
 	}
 	return fmt.Sprintf("%s-%s", variantPrefix(v), variantVersion)
 }
