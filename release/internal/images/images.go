@@ -43,9 +43,9 @@ const (
 const (
 	StandardVariant = "standard"
 
-	// windowsVariant is named apart from the rest and published without
+	// WindowsVariant is named apart from the rest and published without
 	// per-architecture tags.
-	windowsVariant = "windows"
+	WindowsVariant = "windows"
 )
 
 var (
@@ -56,7 +56,7 @@ var (
 			ReleaseDirs: slices.Clone(utils.ImageReleaseDirs),
 		},
 		{
-			Name:        windowsVariant,
+			Name:        WindowsVariant,
 			Target:      "image-windows",
 			ReleaseDirs: slices.Clone(utils.WindowsReleaseDirs),
 		},
@@ -68,7 +68,7 @@ var (
 			ReleaseDirs: slices.Clone(utils.ImageReleaseDirs),
 		},
 		{
-			Name:        windowsVariant,
+			Name:        WindowsVariant,
 			Target:      "release-windows",
 			ReleaseDirs: slices.Clone(utils.WindowsReleaseDirs),
 		},
@@ -484,7 +484,7 @@ func (c Image) imageNames(u unit) ([]string, error) {
 		return nil, fmt.Errorf("reading images in %s: %w", u.dir, err)
 	}
 
-	wantWindows := u.variant == windowsVariant
+	wantWindows := u.variant == WindowsVariant
 	var names []string
 	for name := range strings.FieldsSeq(out) {
 		if strings.HasSuffix(name, windowsImageSuffix) == wantWindows {
@@ -620,7 +620,7 @@ func (c Image) unitTags(u unit) ([]string, error) {
 	if prefix != "" {
 		prefix += "-"
 	}
-	if u.variant == windowsVariant {
+	if u.variant == WindowsVariant {
 		return []string{prefix + c.Version}, nil
 	}
 	tags := []string{prefix + c.Version}

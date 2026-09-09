@@ -521,7 +521,7 @@ func TestPublishRecordsWindowsIndexOnly(t *testing.T) {
 	f := &imageNameRunner{images: "node node-windows"}
 	rec := &fakeRecorder{}
 	err := Publish(testRepoRoot, testVersion,
-		[]Variant{{Name: windowsVariant, Target: "release-windows", ReleaseDirs: []string{"node"}}},
+		[]Variant{{Name: WindowsVariant, Target: "release-windows", ReleaseDirs: []string{"node"}}},
 		true, alwaysResolves("sha256:bbb"), recordingOpts(f, rec)...)
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
@@ -660,7 +660,7 @@ func TestArchiveSavesEveryVariantsImages(t *testing.T) {
 	dir := t.TempDir()
 	err := Archive(testRepoRoot, testVersion, []Variant{
 		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
-		{Name: windowsVariant, Target: "release-windows", ReleaseDirs: []string{"node"}},
+		{Name: WindowsVariant, Target: "release-windows", ReleaseDirs: []string{"node"}},
 	}, dir, archiveOpts(f)...)
 	if err != nil {
 		t.Fatalf("Archive: %v", err)

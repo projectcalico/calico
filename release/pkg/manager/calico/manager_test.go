@@ -688,6 +688,7 @@ func TestImageStepsWriteLogFiles(t *testing.T) {
 		}},
 		{"publish", (*CalicoManager).publishContainerImages, []string{
 			// The branch tag is a second publish, so it logs under its own step.
+			"/logs/images-publish-branch/node-windows.log",
 			"/logs/images-publish-branch/node.log",
 			"/logs/images-publish/node-windows.log",
 			"/logs/images-publish/node.log",
@@ -820,6 +821,27 @@ func TestPublishContainerImagesBranchTag(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// cni-plugin ships only a Windows image, so the standard branch tag target
+// there retags arch images that were never built.
+func TestPublishBranchTagSplitsWindowsFromStandard(t *testing.T) {
+	f := newFakeRunner()
+	if err := imageManager(t, f, "").publishContainerImages(); err != nil {
+		t.Fatalf("publishContainerImages: %v", err)
+	}
+	if got := "make -C /repo/cni-plugin " + branchTagTarget; f.ran(got) {
+		t.Errorf("branch tag ran %q, which has no arch images to retag (calls: %v)", got, f.calls)
+	}
+	want := "make -C /repo/cni-plugin " + windowsBranchTagTarget
+	if !f.ran(want) {
+		t.Errorf("did not run %q, ran: %v", want, f.calls)
+	}
+
+	// The copy is registry side, so it needs the tag it copies from.
+	if env := f.envFor(want); !slices.Contains(env, "DEV_TAG=v3.30.0") {
+		t.Errorf("windows branch tag env = %v, want DEV_TAG=v3.30.0", env)
 	}
 }
 
