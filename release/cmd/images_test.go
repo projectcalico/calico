@@ -85,6 +85,22 @@ func (r *recordingRunner) envFor(want ...string) []string {
 	return nil
 }
 
+// buildVar returns the value the image build passed for a make variable, and
+// whether the build ran at all.
+func (r *recordingRunner) buildVar(name string) (string, bool) {
+	for _, args := range r.args {
+		if !slices.Contains(args, "release-images") {
+			continue
+		}
+		for _, a := range args {
+			if v, ok := strings.CutPrefix(a, name+"="); ok {
+				return v, true
+			}
+		}
+	}
+	return "", false
+}
+
 // ran reports whether any recorded call's args contain every one of want.
 func (r *recordingRunner) ran(want ...string) bool {
 	return slices.ContainsFunc(r.args, func(args []string) bool {
@@ -181,8 +197,15 @@ func TestImagesPublishLatchesConfirm(t *testing.T) {
 func TestImagesBuildRunsFelixAndDoesNotPublish(t *testing.T) {
 	r := runImages(t, fakeRepo(t, "v3.30.0"), "build", "--registry", "quay.io/calico")
 
-	if !r.ran("felix", "release-build") {
-		t.Errorf("build did not run felix, ran: %v", r.args)
+	dirs, ok := r.buildVar("RELEASE_IMAGE_DIRS")
+	if !ok {
+		t.Fatalf("no image build ran: %v", r.args)
+	}
+	if !slices.Contains(strings.Fields(dirs), "felix") {
+		t.Errorf("build did not include felix, dirs: %q", dirs)
+	}
+	if r.ran("release-publish") {
+		t.Errorf("build ran a publish, ran: %v", r.args)
 	}
 	for _, env := range r.envs {
 		for _, latch := range []string{"CONFIRM=true", "DRYRUN=true", "RELEASE=true"} {
@@ -193,19 +216,18 @@ func TestImagesBuildRunsFelixAndDoesNotPublish(t *testing.T) {
 	}
 }
 
-// Each unit logs to its own file under the image step's directory.
+// The build logs under the image step's directory, and hands make that same
+// directory for the per-component logs.
 func TestImagesLogPaths(t *testing.T) {
 	root := fakeRepo(t, "v3.30.0")
 	r := runImages(t, root, "build", "--registry", "quay.io/calico")
 
-	want := map[string]string{
-		"node.log":         filepath.Join(root, "_logs", "images-build", "node.log"),
-		"node-windows.log": filepath.Join(root, "_logs", "images-build", "node-windows.log"),
+	logsDir := filepath.Join(root, "_logs", "images-build")
+	if got, ok := r.buildVar("RELEASE_LOGS_DIR"); !ok || got != logsDir {
+		t.Errorf("build passed RELEASE_LOGS_DIR %q, want %q", got, logsDir)
 	}
-	for name, path := range want {
-		if !slices.Contains(r.logPaths, path) {
-			t.Errorf("no unit logged to %s (%s), got %v", name, path, r.logPaths)
-		}
+	if want := filepath.Join(logsDir, "release-images.log"); !slices.Contains(r.logPaths, want) {
+		t.Errorf("build did not log to %s, got %v", want, r.logPaths)
 	}
 }
 
@@ -244,8 +266,14 @@ func TestImagesNarrowedToBuildOnlyDir(t *testing.T) {
 	r := runImages(t, fakeRepo(t, "v3.30.0"),
 		"build", "--registry", "quay.io/calico", "--image-release-dir", "felix")
 
-	if len(r.args) != 1 || !r.ran("felix", "release-build") {
-		t.Fatalf("expected a single felix build, ran: %v", r.args)
+	if len(r.args) != 1 {
+		t.Fatalf("expected a single make invocation, ran: %v", r.args)
+	}
+	if got, _ := r.buildVar("RELEASE_IMAGE_DIRS"); got != "felix" {
+		t.Errorf("build dirs %q, want felix", got)
+	}
+	if got, _ := r.buildVar("RELEASE_WINDOWS_IMAGE_DIRS"); got != "" {
+		t.Errorf("windows build dirs %q, want none", got)
 	}
 }
 

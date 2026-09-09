@@ -103,6 +103,15 @@ func ossVariants() []Variant {
 	}
 }
 
+// ossBuildVariants mirrors the OSS build shape: the targets here are the ones
+// the root Makefile runs, which a build checks its variants against.
+func ossBuildVariants() []Variant {
+	return []Variant{
+		{Name: StandardVariant, Target: "release-build", ReleaseDirs: []string{"cmd/calico", "node"}},
+		{Name: windowsVariant, Target: "image-windows", ReleaseDirs: []string{"node"}},
+	}
+}
+
 // sharedTargetVariants covers the other way a target tells variants apart: one
 // target for all of them, with environment selecting which image is published.
 func sharedTargetVariants() []Variant {
@@ -259,7 +268,7 @@ func TestPublishConfirmLatch(t *testing.T) {
 func TestLogPaths(t *testing.T) {
 	t.Run("no logs dir captures in memory", func(t *testing.T) {
 		f := &fakeRunner{}
-		if err := Build(testRepoRoot, testVersion, ossVariants(), buildOpts(f)...); err != nil {
+		if err := Build(testRepoRoot, testVersion, ossBuildVariants(), buildOpts(f)...); err != nil {
 			t.Fatalf("Build: %v", err)
 		}
 		for _, c := range f.calls {
@@ -271,26 +280,98 @@ func TestLogPaths(t *testing.T) {
 
 	// A component shipping two image kinds must not have one log overwrite the
 	// other, so the variant is part of the file name.
-	t.Run("each variant logs to its own file", func(t *testing.T) {
+	t.Run("each publish unit logs to its own file", func(t *testing.T) {
 		f := &fakeRunner{}
-		err := Build(testRepoRoot, testVersion, ossVariants(), buildOpts(f, WithLogsDir("/logs"))...)
-		if err != nil {
-			t.Fatalf("Build: %v", err)
+		if err := publish(f, ossVariants(), WithLogsDir("/logs")); err != nil {
+			t.Fatalf("Publish: %v", err)
 		}
 		var got []string
 		for _, c := range f.calls {
-			got = append(got, c.logPath)
+			if c.logPath != "" {
+				got = append(got, c.logPath)
+			}
 		}
 		slices.Sort(got)
 		want := []string{
-			"/logs/images-build/cmd-calico.log",
-			"/logs/images-build/node-windows.log",
-			"/logs/images-build/node.log",
+			"/logs/images-publish/cmd-calico.log",
+			"/logs/images-publish/node-windows.log",
+			"/logs/images-publish/node.log",
 		}
 		if !slices.Equal(got, want) {
 			t.Errorf("log paths\n got %v\nwant %v", got, want)
 		}
 	})
+
+	// The build is one make at the repo root, so it keeps one log of its own
+	// and hands make the directory for the per-component ones.
+	t.Run("the build logs once and names the directory for make", func(t *testing.T) {
+		f := &fakeRunner{}
+		if err := Build(testRepoRoot, testVersion, ossBuildVariants(), buildOpts(f, WithLogsDir("/logs"))...); err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+		if len(f.calls) != 1 {
+			t.Fatalf("expected one make call, got %v", f.calls)
+		}
+		if got, want := f.calls[0].logPath, "/logs/images-build/release-images.log"; got != want {
+			t.Errorf("log path %q, want %q", got, want)
+		}
+		if !slices.Contains(f.calls[0].args, "RELEASE_LOGS_DIR=/logs/images-build") {
+			t.Errorf("build did not hand make the logs directory: %v", f.calls[0].args)
+		}
+	})
+}
+
+// The build hands make one directory list per variant, so a narrowed build
+// cannot fall back to the root Makefile's own defaults.
+func TestBuildPassesVariantDirsToMake(t *testing.T) {
+	f := &fakeRunner{}
+	if err := Build(testRepoRoot, testVersion, NarrowVariants(ossBuildVariants(), []string{"node"}), buildOpts(f)...); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if len(f.calls) != 1 {
+		t.Fatalf("expected one make call, got %v", f.calls)
+	}
+	for _, want := range []string{"release-images", "RELEASE_IMAGE_DIRS=node", "RELEASE_WINDOWS_IMAGE_DIRS=node"} {
+		if !slices.Contains(f.calls[0].args, want) {
+			t.Errorf("missing %s in %v", want, f.calls[0].args)
+		}
+	}
+}
+
+// An unset variable leaves the Makefile's default in place, which builds every
+// component, so a variant narrowed away has to be passed empty.
+func TestBuildPassesAnAbsentVariantEmpty(t *testing.T) {
+	f := &fakeRunner{}
+	variants := []Variant{{Name: StandardVariant, Target: "release-build", ReleaseDirs: []string{"whisker"}}}
+	if err := Build(testRepoRoot, testVersion, variants, buildOpts(f)...); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if !slices.Contains(f.calls[0].args, "RELEASE_WINDOWS_IMAGE_DIRS=") {
+		t.Errorf("windows variable not passed empty: %v", f.calls[0].args)
+	}
+}
+
+// One make for the whole build can honour only what the root Makefile already
+// expresses, and each of these would otherwise be wrong in silence.
+func TestBuildRejectsWhatTheMakefileCannotExpress(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		variant Variant
+	}{
+		{"a variant with no make variable builds every component", Variant{Name: "alt", Target: "release-build", ReleaseDirs: []string{"node"}}},
+		{"a target the Makefile does not run", Variant{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}}},
+		{"an environment one make cannot scope to one variant", Variant{Name: StandardVariant, Target: "release-build", Env: []string{"ALT=true"}, ReleaseDirs: []string{"node"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeRunner{}
+			if err := Build(testRepoRoot, testVersion, []Variant{tc.variant}, buildOpts(f)...); err == nil {
+				t.Error("expected an error")
+			}
+			if len(f.calls) != 0 {
+				t.Errorf("ran make anyway: %v", f.calls)
+			}
+		})
+	}
 }
 
 // Scoping the release dirs must scope the work.

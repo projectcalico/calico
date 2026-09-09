@@ -2042,15 +2042,22 @@ else
 DOCKER_MANIFEST = echo [DRY RUN] $(DOCKER_MANIFEST_CMD)
 endif
 
+# Named per component and per version so that two components' Windows builds,
+# or two checkouts on one docker host, do not remove each other's builder.
+WINDOWS_BUILDER = calico-windows-builder-$(notdir $(CURDIR))-$(GIT_VERSION)
+
 # Clean up the docker builder used to create Windows image tarballs.
 .PHONY: clean-windows-builder
 clean-windows-builder:
+	-docker buildx rm $(WINDOWS_BUILDER)
+	# Drain the shared builder that earlier releases created with --use, which
+	# leaves it selected for every docker build on the host.
 	-docker buildx rm calico-windows-builder
 
 # Set up the docker builder used to create Windows image tarballs.
 .PHONY: setup-windows-builder
 setup-windows-builder: clean-windows-builder
-	docker buildx create --name=calico-windows-builder --use --platform windows/amd64
+	docker buildx create --name=$(WINDOWS_BUILDER) --platform windows/amd64
 
 # FIXME: Use WINDOWS_HPC_VERSION and image instead of nanoserver and WINDOWS_VERSIONS when containerd v1.6 is EOL'd
 # .PHONY: image-windows release-windows
@@ -2113,6 +2120,7 @@ windows-sub-image-%: var-require-all-GIT_VERSION-WINDOWS_IMAGE-WINDOWS_DIST-WIND
 	# ensure dir for windows image tars exits
 	-mkdir -p $(WINDOWS_DIST)
 	docker buildx build \
+		--builder $(WINDOWS_BUILDER) \
 		--platform windows/amd64 \
 		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-$*.tar \
 		$(DOCKER_PULL) \

@@ -653,37 +653,41 @@ func TestPublishContainerImagesConfirms(t *testing.T) {
 	}
 }
 
-// Each image unit gets its own log file; concurrent units would otherwise
+// Each publish unit gets its own log file; concurrent units would otherwise
 // interleave into one stream.
-func TestImageStepsWriteLogFiles(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		run  func(*CalicoManager) error
-		want []string
-	}{
-		{"build", (*CalicoManager).buildContainerImages, []string{
-			"/logs/images-build/node-windows.log",
-			"/logs/images-build/node.log",
-		}},
-		{"publish", (*CalicoManager).publishContainerImages, []string{
-			// The branch tag is a second publish, so it logs under its own step.
-			"/logs/images-publish-branch/node.log",
-			"/logs/images-publish/node-windows.log",
-			"/logs/images-publish/node.log",
-		}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeRunner()
-			if err := tc.run(imageManager(t, f, "/logs")); err != nil {
-				t.Fatalf("%s: %v", tc.name, err)
-			}
-			// node ships both variants, so its two units must not share a file.
-			got := f.logPathsForDir("/repo/node ")
-			slices.Sort(got)
-			if !slices.Equal(got, tc.want) {
-				t.Errorf("node log paths\n got %v\nwant %v", got, tc.want)
-			}
-		})
+func TestPublishStepWritesAUnitLogFile(t *testing.T) {
+	f := newFakeRunner()
+	if err := imageManager(t, f, "/logs").publishContainerImages(); err != nil {
+		t.Fatalf("publishContainerImages: %v", err)
+	}
+
+	// node ships both variants, so its two units must not share a file.
+	got := f.logPathsForDir("/repo/node ")
+	slices.Sort(got)
+	want := []string{
+		// The branch tag is a second publish, so it logs under its own step.
+		"/logs/images-publish-branch/node.log",
+		"/logs/images-publish/node-windows.log",
+		"/logs/images-publish/node.log",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("node log paths\n got %v\nwant %v", got, want)
+	}
+}
+
+// The build is one make at the repo root, so it keeps one log of its own and
+// hands make the directory the per-component logs go in.
+func TestBuildStepWritesOneLogFile(t *testing.T) {
+	f := newFakeRunner()
+	if err := imageManager(t, f, "/logs").buildContainerImages(); err != nil {
+		t.Fatalf("buildContainerImages: %v", err)
+	}
+	got := f.logPathsForDir("release-images")
+	if want := []string{"/logs/images-build/release-images.log"}; !slices.Equal(got, want) {
+		t.Errorf("build log paths\n got %v\nwant %v", got, want)
+	}
+	if !f.ran("make -C /repo release-images -j") {
+		t.Errorf("build was not one make at the repo root, ran: %v", f.calls)
 	}
 }
 
@@ -802,31 +806,34 @@ func TestPublishContainerImagesBranchTag(t *testing.T) {
 	}
 }
 
-// Narrowing must scope the manager's image steps the same way the CLI does.
-func TestImageStepsNarrowedToReleaseDirs(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		run    func(*CalicoManager) error
-		target string
-	}{
-		{"build", (*CalicoManager).buildContainerImages, "release-build"},
-		{"publish", (*CalicoManager).publishContainerImages, "release-publish"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newFakeRunner()
-			m := imageManager(t, f, "")
-			m.imageReleaseDirs = []string{"whisker"}
-			if err := tc.run(m); err != nil {
-				t.Fatalf("%s: %v", tc.name, err)
-			}
-			units := unitCalls(f, tc.target)
-			if len(units) != 1 {
-				t.Fatalf("expected one unit for whisker, ran: %v", units)
-			}
-			if !f.ran("make -C /repo/whisker " + tc.target) {
-				t.Errorf("did not run %s in whisker, ran: %v", tc.target, f.calls)
-			}
-		})
+// Narrowing must scope the manager's publish the same way the CLI does.
+func TestPublishStepNarrowedToReleaseDirs(t *testing.T) {
+	f := newFakeRunner()
+	m := imageManager(t, f, "")
+	m.imageReleaseDirs = []string{"whisker"}
+	if err := m.publishContainerImages(); err != nil {
+		t.Fatalf("publishContainerImages: %v", err)
+	}
+	units := unitCalls(f, "release-publish")
+	if len(units) != 1 {
+		t.Fatalf("expected one unit for whisker, ran: %v", units)
+	}
+	if !f.ran("make -C /repo/whisker release-publish") {
+		t.Errorf("did not publish whisker, ran: %v", f.calls)
+	}
+}
+
+// The build narrows through the directory lists it hands make, so an unset
+// variable would leave the root Makefile building every component.
+func TestBuildStepNarrowedToReleaseDirs(t *testing.T) {
+	f := newFakeRunner()
+	m := imageManager(t, f, "")
+	m.imageReleaseDirs = []string{"whisker"}
+	if err := m.buildContainerImages(); err != nil {
+		t.Fatalf("buildContainerImages: %v", err)
+	}
+	if !f.ran("make -C /repo release-images -j RELEASE_IMAGE_DIRS=whisker RELEASE_WINDOWS_IMAGE_DIRS=") {
+		t.Errorf("build was not narrowed to whisker, ran: %v", f.calls)
 	}
 }
 

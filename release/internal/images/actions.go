@@ -34,9 +34,8 @@ func Build(repoRoot, version string, variants []Variant, opts ...BuildOption) er
 		return err
 	}
 
-	units := s.units(s.env())
-	s.Logger().WithField("images", len(units)).Info("Building container images")
-	if err := s.runUnits(units); err != nil {
+	s.Logger().WithField("components", len(VariantDirs(variants))).Info("Building container images")
+	if err := s.runBuild(); err != nil {
 		return err
 	}
 	s.Logger().Info("Finished building container images")

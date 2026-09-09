@@ -89,8 +89,17 @@ func (s Step) Errorf(format string, args ...any) error {
 // the same directory, so the slug is what keeps them apart. An empty logs dir
 // captures the output in memory instead.
 func (s Step) LogPath(slug string) string {
+	if dir := s.LogDir(); dir != "" {
+		return filepath.Join(dir, slug+".log")
+	}
+	return ""
+}
+
+// LogDir is the directory LogPath writes into, for a step that hands the naming
+// to something else. Empty when the output is captured in memory.
+func (s Step) LogDir() string {
 	if s.logsDir == "" {
 		return ""
 	}
-	return filepath.Join(s.logsDir, s.name, slug+".log")
+	return filepath.Join(s.logsDir, s.name)
 }

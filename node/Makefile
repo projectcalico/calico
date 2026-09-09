@@ -162,7 +162,7 @@ clean: clean-windows
 	rm -rf dist
 	rm -rf bin
 	# We build these as part of the node build, so clean them as part of the clean.
-	make -C ../felix clean
+	$(MAKE) -C ../felix clean
 	# Delete images that we built in this repo
 	-docker image rm -f $$(docker images $(NODE_IMAGE) -a -q)
 	-docker image rm -f $$(docker images $(NODE_IMAGE) -a -q)
@@ -185,15 +185,11 @@ clean-windows: clean-windows-builder
 build: $(NODE_CONTAINER_MARKER) $(TOOLS_MOUNTNS_BINARY)
 
 $(LIBBPF_A): $(shell find ../felix/bpf-gpl/libbpf -type f -name '*.[ch]')
-	make -C ../felix libbpf ARCH=$(ARCH)
+	$(MAKE) -C ../felix libbpf ARCH=$(ARCH)
 
 filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell find ../felix/bpf-apache -type f)
 	rm -rf filesystem/usr/lib/calico/bpf/ && mkdir -p filesystem/usr/lib/calico/bpf/
-	# Clean stale build artifacts that may reference headers from a previous
-	# build environment (e.g., Docker container with different clang version).
-	make -C ../felix/bpf-gpl clean
-	make -C ../felix/bpf-apache clean
-	make -C ../felix build-bpf ARCH=$(ARCH)
+	$(MAKE) -C ../felix build-bpf ARCH=$(ARCH)
 	cp -r ../felix/bpf-gpl/bin/* $@
 	cp -r ../felix/bpf-apache/bin/* $@
 
@@ -221,7 +217,7 @@ $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES)
 	cp $(CMD_CALICO_BINDIR)/calico-cgo-$(ARCH) $@
 
 LIBBPF_FILE_CREATED:
-	make -C ../felix clone-libbpf
+	$(MAKE) -C ../felix clone-libbpf
 
 $(WINDOWS_BINARY): $(SRC_FILES)
 	$(call build_windows_binary, ../cmd/calico-windows, $@)
@@ -324,7 +320,7 @@ CHARTS=../bin/tigera-operator-$(GIT_VERSION).tgz \
 
 dist/calicoctl:
 	mkdir -p dist
-	make -C ../calicoctl build
+	$(MAKE) -C ../calicoctl build
 	cp ../calicoctl/bin/calicoctl-linux-$(ARCH) $@
 
 # Create images for containers used in the tests
@@ -346,11 +342,11 @@ test_image: .calico_test.created
 
 chart: $(CHARTS)
 ../bin/tigera-operator-$(GIT_VERSION).tgz:
-	make -C ../ bin/tigera-operator-$(GIT_VERSION).tgz
+	$(MAKE) -C ../ bin/tigera-operator-$(GIT_VERSION).tgz
 ../bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz:
-	make -C ../ bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
+	$(MAKE) -C ../ bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
 ../bin/projectcalico.org.v3-$(GIT_VERSION).tgz:
-	make -C ../ bin/projectcalico.org.v3-$(GIT_VERSION).tgz
+	$(MAKE) -C ../ bin/projectcalico.org.v3-$(GIT_VERSION).tgz
 
 .PHONY: k8s-test
 ## Run the k8s tests
@@ -417,10 +413,10 @@ cd: image-all cd-common
 ###############################################################################
 # Release
 ###############################################################################
-## Produces a clean build of release artifacts at the specified version.
+## Produces release artifacts at the specified version. Clean first for a fresh build.
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
+	$(MAKE) image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	# Generate the `latest` node images.
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest

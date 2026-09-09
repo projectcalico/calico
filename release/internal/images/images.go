@@ -387,6 +387,73 @@ func (c Image) env() []string {
 	return env
 }
 
+// buildVariantVar is what the root Makefile knows about one build variant: the
+// variable carrying its directories, and the target it runs in each of them.
+type buildVariantVar struct {
+	variant string
+	makeVar string
+	target  string
+}
+
+// Every variable is passed on every build, empty included: an unset one leaves
+// the root Makefile's own default in place, which builds every component.
+var buildVariantVars = []buildVariantVar{
+	{variant: StandardVariant, makeVar: "RELEASE_IMAGE_DIRS", target: "release-build"},
+	{variant: windowsVariant, makeVar: "RELEASE_WINDOWS_IMAGE_DIRS", target: "image-windows"},
+}
+
+// runBuild hands the whole build to one make at the repo root. Components share
+// build trees, and make holds the order: see RELEASE_IMAGE_NEEDS_* there.
+func (s settings) runBuild() error {
+	dirArgs, err := s.buildDirsArgs()
+	if err != nil {
+		return s.Errorf("%w", err)
+	}
+	args := append([]string{"-C", s.RepoRoot, "release-images", "-j"}, dirArgs...)
+	if dir := s.LogDir(); dir != "" {
+		args = append(args, "RELEASE_LOGS_DIR="+dir)
+	}
+
+	out, err := s.Run("make", args, s.env(), s.LogPath("release-images"))
+	if err != nil {
+		// Surface the captured output; the failure cause is usually only in there.
+		s.Logger().Error(out)
+		return s.Errorf("building images: %w", err)
+	}
+	s.Logger().Debug(out)
+	return nil
+}
+
+// buildDirsArgs turns the variants into the make variables that scope the
+// build, rejecting anything the root Makefile cannot express.
+func (s settings) buildDirsArgs() ([]string, error) {
+	byVariant := map[string][]Variant{}
+	for _, v := range s.Variants {
+		byVariant[v.Name] = append(byVariant[v.Name], v)
+	}
+	args := make([]string, 0, len(buildVariantVars))
+	for _, b := range buildVariantVars {
+		var dirs []string
+		for _, v := range byVariant[b.variant] {
+			if v.Target != b.target {
+				return nil, fmt.Errorf("the %s image variant builds %q, but the root Makefile runs %q", v.Name, v.Target, b.target)
+			}
+
+			// One make covers every variant, so it can carry only one environment.
+			if len(v.Env) > 0 {
+				return nil, fmt.Errorf("the %s image variant sets its own environment, which a build cannot apply", v.Name)
+			}
+			dirs = append(dirs, v.ReleaseDirs...)
+		}
+		args = append(args, b.makeVar+"="+strings.Join(dirs, " "))
+		delete(byVariant, b.variant)
+	}
+	if len(byVariant) > 0 {
+		return nil, fmt.Errorf("no make variable for image variants %v", slices.Sorted(maps.Keys(byVariant)))
+	}
+	return args, nil
+}
+
 func (s settings) runUnits(units []unit) error {
 	_, err := forEachUnit(units, s.runUnitOnly)
 	return err

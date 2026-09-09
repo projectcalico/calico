@@ -42,6 +42,7 @@ clean:
 	$(MAKE) -C confd clean
 	$(MAKE) -C felix clean
 	$(MAKE) -C cmd/calico clean
+	$(MAKE) -C istio clean
 	$(MAKE) -C kube-controllers clean
 	$(MAKE) -C libcalico-go clean
 	$(MAKE) -C node clean
@@ -53,6 +54,7 @@ clean:
 	$(MAKE) -C third_party/envoy-gateway clean
 	$(MAKE) -C third_party/envoy-proxy clean
 	$(MAKE) -C third_party/envoy-ratelimit clean
+	$(MAKE) -C whisker clean
 	rm -rf ./bin .stamp.*
 
 check-go-mod:
@@ -174,6 +176,65 @@ $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz: bin/helm $(shell f
 	--destination $(CHART_DESTINATION)/ \
 	--version $(GIT_VERSION) \
 	--app-version $(GIT_VERSION)
+
+###############################################################################
+# Release images
+#
+# One make process builds every component's release images so that components
+# sharing a build tree are ordered rather than run at once: node's build writes
+# felix's BPF programs and cmd/calico's cgo binary.
+#
+#   make -j release-images
+#
+# The release tool passes the directory lists and RELEASE_LOGS_DIR, and creates
+# the logs directory. The defaults here are for running the build by hand.
+###############################################################################
+
+# Components whose release build reaches into another component's tree. This is
+# the ordering the concurrent build depends on, so a new cross-component
+# recursion belongs here as well as in the component's own Makefile.
+RELEASE_IMAGE_NEEDS_node := felix cmd/calico
+
+RELEASE_IMAGE_DIRS ?= cmd/calico felix istio node \
+	third_party/cni-plugins third_party/envoy-gateway third_party/envoy-proxy \
+	third_party/envoy-ratelimit whisker
+RELEASE_WINDOWS_IMAGE_DIRS ?= cni-plugin node
+
+# A prerequisite only applies while the component it names is also being built:
+# a build narrowed to one component races nobody, and builds its own deps.
+release_image_needs = $(addprefix release-image-,$(filter $(RELEASE_IMAGE_DIRS),$(RELEASE_IMAGE_NEEDS_$(1))))
+
+ifdef RELEASE_LOGS_DIR
+release_image_log = >$(RELEASE_LOGS_DIR)/$(subst /,-,$(1))$(2).log 2>&1
+
+$(RELEASE_LOGS_DIR):
+	mkdir -p $@
+endif
+
+# -j1 so this level parallelizes while each component still builds its
+# architectures in sequence, the way it does when run on its own.
+release_image_make = $(MAKE) -j1 -C $(1) $(2) $(call release_image_log,$(1),$(3))
+
+define release_image_rule
+release-image-$(1): $$(call release_image_needs,$(1)) | $$(RELEASE_LOGS_DIR)
+	$$(call release_image_make,$(1),release-build)
+endef
+$(foreach dir,$(RELEASE_IMAGE_DIRS),$(eval $(call release_image_rule,$(dir))))
+
+# A component's Windows image writes the same tree as its Linux one.
+define release_windows_image_rule
+release-windows-image-$(1): $$(addprefix release-image-,$$(filter $$(RELEASE_IMAGE_DIRS),$(1))) \
+                            $$(call release_image_needs,$(1)) | $$(RELEASE_LOGS_DIR)
+	$$(call release_image_make,$(1),image-windows,-windows)
+endef
+$(foreach dir,$(RELEASE_WINDOWS_IMAGE_DIRS),$(eval $(call release_windows_image_rule,$(dir))))
+
+RELEASE_IMAGE_TARGETS = $(addprefix release-image-,$(RELEASE_IMAGE_DIRS)) \
+	$(addprefix release-windows-image-,$(RELEASE_WINDOWS_IMAGE_DIRS))
+
+.PHONY: release-images $(RELEASE_IMAGE_TARGETS)
+## Build every component's release images. Run with -j.
+release-images: $(RELEASE_IMAGE_TARGETS)
 
 ###############################################################################
 # Build & push workflow — build all images, tag with a custom tag, and
