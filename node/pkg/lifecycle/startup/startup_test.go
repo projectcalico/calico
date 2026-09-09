@@ -1512,3 +1512,31 @@ var _ = Describe("UT for IP and IP6", func() {
 		Entry("get the original ip(v6)", "1:2:3:4::1111", 6, "1:2:3:4::1111"),
 	)
 })
+
+var _ = Describe("waitForReady", func() {
+	// The health check errors immediately when no components are enabled, so the
+	// loop spins without touching the network.
+	It("returns as soon as the context is cancelled, not at the timeout", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		done := make(chan error, 1)
+		go func() { done <- waitForReady(ctx, time.Hour) }()
+
+		// Let it get inside the retry sleep, then cancel.
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+
+		select {
+		case err := <-done:
+			Expect(err).To(MatchError(context.Canceled))
+		case <-time.After(10 * time.Second):
+			Fail("waitForReady ignored the cancelled context")
+		}
+	})
+
+	It("still reports a timeout when the context stays live", func() {
+		err := waitForReady(context.Background(), 50*time.Millisecond)
+		Expect(err).To(MatchError(ContainSubstring("timed out waiting for Calico to become ready")))
+	})
+})

@@ -16,6 +16,7 @@ package allocateip
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	gnet "net"
@@ -128,6 +129,13 @@ func (r reconciler) run(ctx context.Context) error {
 				if ctx.Err() != nil {
 					// Shutting down, so don't report the cancellation as a failure.
 					return nil
+				}
+				var notFound cerrors.ErrorResourceDoesNotExist
+				if errors.As(err, &notFound) {
+					// The node is momentarily absent while kubelet re-registers it. The
+					// syncer triggers us again once it returns.
+					log.WithError(err).Warn("Node not in the datastore, waiting for it to return")
+					continue
 				}
 				return fmt.Errorf("failed to reconcile tunnel address: %w", err)
 			}
