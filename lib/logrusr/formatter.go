@@ -42,12 +42,18 @@ import (
 
 // Packages whose frames we skip when reporting a log line's caller.
 // logrus's own getCaller only skips itself, which means wrapper types in
-// this package (RateLimitedLogger, the log.Logger adapter, Summarizer)
-// and in lib/std/log (the slog-shaped facade) would otherwise be reported
-// as the caller instead of the user code.
+// this package (RateLimitedLogger, the slog.Handler adapter, Summarizer),
+// slog's own Logger shim, and the package-level helpers in lib/std/log
+// would otherwise be reported as the caller instead of the user code.
+//
+// slog captures the call site itself in Record.PC, which would be exact
+// and cheaper than this walk, but we can't use it: logrus's Entry.Dup
+// drops Caller before hooks fire, so a pre-stamped frame never survives
+// to the formatter.
 const (
 	logrusPackage  = "github.com/sirupsen/logrus."
 	logrusrPackage = "github.com/projectcalico/calico/lib/logrusr."
+	slogPackage    = "log/slog."
 	stdlogPackage  = "github.com/projectcalico/calico/lib/std/log."
 	maxCallerDepth = 32
 )
@@ -60,13 +66,23 @@ const (
 	// FileNameUnknown is the string used in logs if the filename/line number
 	// cannot be determined.
 	FileNameUnknown = "<nil>"
+
+	// fieldCallerPC carries a log call site's program counter from the
+	// slog handler in this package to the caller-stamping hook below.
+	// slog already captures the call site in Record.PC, so resolving that
+	// one PC is far cheaper than walking the stack to find the first
+	// non-logging frame — but logrus's Entry.Dup drops Caller before
+	// hooks fire, so the PC has to travel in Data, which Dup does copy.
+	// callerHook consumes and removes it; Format skips it either way so
+	// it never reaches the output.
+	fieldCallerPC = "__caller_pc__"
 )
 
 // We don't call logrus.SetReportCaller: logrus's own caller detection
 // only skips its own frames, so wrapper types in this package
-// (RateLimitedLogger, the log.Logger adapter, Summarizer) and the
-// slog-shaped facade in lib/std/log would be reported as the caller
-// instead of the user code.  ConfigureFormatter installs a caller-
+// (RateLimitedLogger, the slog.Handler adapter, Summarizer), slog's
+// Logger shim and the helpers in lib/std/log would be reported as the
+// caller instead of the user code.  ConfigureFormatter installs a caller-
 // stamping hook that walks the stack once per log line, skipping
 // those wrapper packages, and memoises the result on entry.Caller so
 // downstream hooks and Format() are O(1).
@@ -89,8 +105,8 @@ func ConfigureFormatter(componentName string) {
 	installCallerHookOnce()
 }
 
-// callerHook stamps entry.Caller with the first non-logrus / non-logrusr
-// / non-lib-std-log frame it finds on the stack.  logrus dups the entry
+// callerHook stamps entry.Caller with the first frame on the stack that
+// belongs to none of the logging packages above.  logrus dups the entry
 // once before firing any hooks, so we can safely mutate it here without
 // racing other goroutines that may be re-using the original entry.
 //
@@ -105,16 +121,60 @@ func (callerHook) Fire(entry *log.Entry) error {
 	if entry.Caller != nil {
 		return nil
 	}
+	if file, line, ok := callerFromPC(entry); ok {
+		entry.Caller = &runtime.Frame{File: file, Line: line}
+		return nil
+	}
 	file, line := lookupCaller()
 	entry.Caller = &runtime.Frame{File: file, Line: line}
 	return nil
+}
+
+// callerFromPC resolves the call site that the slog handler recorded on
+// the entry, if there is one, and removes it from the entry's fields.
+func callerFromPC(entry *log.Entry) (string, int, bool) {
+	pc, ok := entry.Data[fieldCallerPC].(uintptr)
+	if !ok {
+		return "", 0, false
+	}
+	delete(entry.Data, fieldCallerPC)
+	return resolvePC(pc)
+}
+
+// callerCache memoises the file and line for a call-site PC.  The set of
+// PCs is bounded by the number of log statements in the binary and each
+// one recurs for the life of the process, so resolving a PC once turns
+// caller attribution into a map load — runtime.CallersFrames both costs
+// more than the lookup and allocates.
+var callerCache sync.Map // uintptr -> fileLine
+
+type fileLine struct {
+	file string
+	line int
+}
+
+func resolvePC(pc uintptr) (string, int, bool) {
+	if v, ok := callerCache.Load(pc); ok {
+		fl := v.(fileLine)
+		return fl.file, fl.line, true
+	}
+	// CallersFrames rather than FuncForPC: it reports the innermost
+	// inlined frame, so a log call inlined into its caller is still
+	// attributed to the line that wrote it.
+	frame, _ := runtime.CallersFrames([]uintptr{pc}).Next()
+	if frame.File == "" {
+		return "", 0, false
+	}
+	fl := fileLine{file: path.Base(frame.File), line: frame.Line}
+	callerCache.Store(pc, fl)
+	return fl.file, fl.line, true
 }
 
 var callerHookInstalled sync.Once
 
 func installCallerHookOnce() {
 	callerHookInstalled.Do(func() {
-		log.AddHook(callerHook{})
+		InstallCallerHook(log.StandardLogger())
 	})
 }
 
@@ -123,8 +183,24 @@ func installCallerHookOnce() {
 // standard logger.  Use this for logrus.Logger instances that don't
 // share the standard logger's hook chain (e.g. per-test loggers or
 // stand-alone loggers wired into custom destinations).
+//
+// Installing twice on one logger is a no-op: ConfigureFormatter and
+// logrusr.New both install it, and they are routinely pointed at the
+// same logger.
 func InstallCallerHook(logger *log.Logger) {
+	if hasCallerHook(logger) {
+		return
+	}
 	logger.AddHook(callerHook{})
+}
+
+func hasCallerHook(logger *log.Logger) bool {
+	for _, h := range logger.Hooks[log.InfoLevel] {
+		if _, ok := h.(callerHook); ok {
+			return true
+		}
+	}
+	return false
 }
 
 // ConfigureEarlyLoggingFromEnv installs the Calico logrus formatter, sets
@@ -343,6 +419,9 @@ func GetFileInfo(entry *log.Entry) (string, int) {
 	if entry.Caller != nil {
 		return path.Base(entry.Caller.File), entry.Caller.Line
 	}
+	if file, line, ok := callerFromPC(entry); ok {
+		return file, line
+	}
 	return lookupCaller()
 }
 
@@ -365,6 +444,7 @@ func lookupCaller() (string, int) {
 		fn := frame.Function
 		if !strings.HasPrefix(fn, logrusPackage) &&
 			!strings.HasPrefix(fn, logrusrPackage) &&
+			!strings.HasPrefix(fn, slogPackage) &&
 			!strings.HasPrefix(fn, stdlogPackage) {
 			return path.Base(frame.File), frame.Line
 		}
@@ -401,7 +481,7 @@ func appendKVsAndNewLine(b *bytes.Buffer, data log.Fields) {
 	sort.Strings(keys)
 
 	for _, key := range keys {
-		if key == FieldForceFlush {
+		if key == FieldForceFlush || key == fieldCallerPC {
 			continue
 		}
 		var value = data[key]

@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package log defines an slog-shaped Logger interface that callers depend
-// on instead of taking a direct dependency on a concrete logging backend.
-// A backend (e.g. lib/logrus) is registered at process start via
-// SetDefaultLogger; until then, package-level calls drop on the floor
-// via the no-op default.
+// Package log re-exports slog's Logger as the logging type callers depend
+// on, so no caller takes a direct dependency on a concrete logging
+// backend. A backend is plugged in as an slog.Handler — see lib/logrusr
+// for the logrus one — and registered at process start via
+// SetDefaultLogger; until then, package-level calls drop on the floor via
+// the discarding default.
+//
+// Logger is an alias, not a distinct type, so a *slog.Logger from anywhere
+// satisfies it and callers can hand ours to any slog-shaped API.
 package log
 
 import (
@@ -24,6 +28,14 @@ import (
 	"log/slog"
 	"sync/atomic"
 )
+
+// Logger is slog's logger. Variadic args follow slog's convention:
+// alternating string keys and values, with Attr permitted as a single
+// arg; odd dangling args and non-string keys are filed under "!BADKEY".
+//
+// Backends implement slog.Handler rather than this type — slog.Logger is
+// a concrete shim over Handler, and Handler is the pluggable half.
+type Logger = *slog.Logger
 
 // Level is the severity of a log line, re-exported from slog so callers
 // don't need to import slog directly.
@@ -37,69 +49,43 @@ const (
 	LevelError = slog.LevelError
 )
 
-// Attr is a structured key/value pair, compatible with slog.Attr. Use it
-// when you want typed attributes; otherwise pass key/value pairs to With
-// / Info / ... directly.
+// Attr is a structured key/value pair, re-exported from slog. Use it when
+// you want typed attributes; otherwise pass key/value pairs to With /
+// Info / ... directly.
 type Attr = slog.Attr
 
 // defaultLogger holds the Logger backing the package-level helpers. It is
 // loaded atomically so SetDefaultLogger can swap it under concurrent
 // readers — including any log calls that fire from init() scope before
 // the backend has finished registering.
-var defaultLogger atomic.Pointer[loggerHolder]
-
-// loggerHolder wraps Logger so atomic.Pointer can store an interface value.
-type loggerHolder struct{ Logger }
+var defaultLogger atomic.Pointer[slog.Logger]
 
 func init() {
-	defaultLogger.Store(&loggerHolder{Logger: &noOpLogger{}})
+	defaultLogger.Store(discard())
 }
 
-// Logger is the slog-shaped logging interface. Variadic args follow slog's
-// convention: alternating string keys and values, with Attr permitted as
-// a single arg. Implementations should treat odd dangling args / non-string
-// keys as slog does (filed under "!BADKEY").
-type Logger interface {
-	Debug(msg string, args ...any)
-	Info(msg string, args ...any)
-	Warn(msg string, args ...any)
-	Error(msg string, args ...any)
-
-	// With returns a derived Logger that carries the given attributes on
-	// every emitted line. The parent is not mutated.
-	With(args ...any) Logger
-
-	// Enabled reports whether a log line at the given level would be
-	// emitted by this Logger. Callers use it to skip expensive argument
-	// preparation for log lines that would be dropped.
-	Enabled(ctx context.Context, level Level) bool
+// discard returns a Logger that drops everything. slog.DiscardHandler
+// reports Enabled false at every level, so callers gating on Enabled skip
+// their argument preparation too.
+func discard() Logger {
+	return slog.New(slog.DiscardHandler)
 }
-
-type noOpLogger struct{}
-
-func (n *noOpLogger) Debug(msg string, args ...any) {}
-func (n *noOpLogger) Info(msg string, args ...any)  {}
-func (n *noOpLogger) Warn(msg string, args ...any)  {}
-func (n *noOpLogger) Error(msg string, args ...any) {}
-
-func (n *noOpLogger) With(args ...any) Logger { return n }
-
-func (n *noOpLogger) Enabled(ctx context.Context, level Level) bool { return false }
 
 // SetDefaultLogger installs the Logger that backs the package-level
 // helpers (Info, Warn, Error, With, Enabled). Safe to call concurrently
 // with logging calls — readers observe either the previous or the new
-// Logger, never a torn value.
+// Logger, never a torn value. A nil Logger restores the discarding
+// default rather than panicking at the first log call.
 func SetDefaultLogger(log Logger) {
 	if log == nil {
-		log = &noOpLogger{}
+		log = discard()
 	}
-	defaultLogger.Store(&loggerHolder{Logger: log})
+	defaultLogger.Store(log)
 }
 
 // Default returns the Logger backing the package-level helpers.
 func Default() Logger {
-	return defaultLogger.Load().Logger
+	return defaultLogger.Load()
 }
 
 func Debug(msg string, args ...any) {
@@ -109,9 +95,11 @@ func Debug(msg string, args ...any) {
 func Info(msg string, args ...any) {
 	Default().Info(msg, args...)
 }
+
 func Warn(msg string, args ...any) {
 	Default().Warn(msg, args...)
 }
+
 func Error(msg string, args ...any) {
 	Default().Error(msg, args...)
 }
