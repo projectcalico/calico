@@ -136,7 +136,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			By("creating a file with the determined name before Felix starts")
 			expectedFilename := filepath.Join("/tmp/endpoint-status", filename)
 			tc.Felixes[0].Exec("mkdir", "/tmp/endpoint-status")
-			tc.Felixes[0].Exec("touch", filename)
+			tc.Felixes[0].Exec("touch", expectedFilename)
 
 			By("waiting for Felix's status file reporter to become in-sync")
 			startFelixAndWaitForInSync()
