@@ -17,13 +17,13 @@ timeout: 4h
 # the live import graph, so a gate cannot fall behind what it gates.
 dependencies: .argoci/depstree.yaml
 
+# The Makefiles address the tree by its GOPATH location, which is a path inside
+# the build image rather than anywhere the checkout can land. A step running the
+# build image directly has to put the tree there itself; one shelling out to a
+# nested container gets the same path from the bind mount, and ignores this.
 globalPrologue: |
-  # Unauthenticated pulls of the build image are rate-limited.
-  echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-
-  # Module downloads happen in the nested build container, which inherits only
-  # the vars spliced in here — so the proxy is unused without this.
-  export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+  mkdir -p /go/src/github.com/projectcalico
+  ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
 
 defaults:
   # medium is the only spot jobSize. Preemption fails the run outright, with no
@@ -34,11 +34,10 @@ defaults:
   # justifies more.
   timeout: 1h
 
-  # Modules merge collections with these rather than replacing them.
+  # Modules merge collections with these rather than replacing them, and the
+  # merge is a union — a step cannot drop what it inherits. So `docker` is
+  # declared by the modules that shell out to a nested container, not here.
   services:
-    # Nested `docker run` bind-mounts are resolved by the daemon, not this
-    # container, so they only work under the paths the two share.
-    - docker
     - goproxy
   secretBundles:
     - docker-hub

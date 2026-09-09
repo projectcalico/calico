@@ -5,9 +5,15 @@ version: condensed-module
 defaults:
   # Minutes of CPU-bound work, well short of the hour the default would allow.
   timeout: 20m
+  services:
+    - docker
 
 steps:
   - name: check-generated-deps
     commands: |
+      # The recipes shell out to a nested container: unauthenticated pulls are
+      # rate-limited, and it inherits only what is spliced in explicitly.
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       make gen-deps-files
       make check-dirty

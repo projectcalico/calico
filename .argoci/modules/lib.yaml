@@ -10,11 +10,21 @@ defaults:
   # Enough for lint plus tests across every submodule.
   timeout: 30m
 
+  # Nothing here builds an image or needs a cluster, so the work runs in the
+  # build image directly and needs no daemon or second pull.
+  image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
+
 steps:
   - name: lib-ci
+    # The image ships ginkgo, gotestsum and the codegen tools under /go/bin,
+    # which the default emptyDir over /go hides — as `command not found`,
+    # minutes in.
+    workspaceVolumes: none
     commands: |
       cd lib
-      make ci
+      # Emptying the wrappers runs each recipe here instead of in a nested
+      # container; the tools they call are already on PATH.
+      make ci DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
     epilogue: |
       # Runs in the parent shell, so it inherits neither the `cd` above nor
       # anything the commands exported.
