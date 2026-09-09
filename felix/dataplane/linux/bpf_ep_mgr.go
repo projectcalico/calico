@@ -3672,6 +3672,23 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 	return tcdefs.EpTypeHost
 }
 
+// ifaceEncaps reports whether the device encapsulates traffic for encap-flagged
+// routes. The endpoint type cannot answer this: wireguard and a plain
+// L3-classified NIC both compile as EpTypeL3Device.
+func (m *bpfEndpointManager) ifaceEncaps(ifaceName string) bool {
+	if m.isWorkloadIface(ifaceName) {
+		return false
+	}
+	m.ifacesLock.Lock()
+	ifaceType := m.nameToIface[ifaceName].info.ifaceType
+	m.ifacesLock.Unlock()
+	switch ifaceType {
+	case IfaceTypeVXLAN, IfaceTypeIPIP, IfaceTypeWireguard:
+		return true
+	}
+	return false
+}
+
 func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.AttachPoint {
 	ap := &tc.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
@@ -3682,6 +3699,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	}
 
 	ap.Type = m.getEndpointType(ifaceName)
+	ap.IfaceEncaps = m.ifaceEncaps(ifaceName)
 
 	if ap.Type == tcdefs.EpTypeLO && m.hostNetworkedNATMode == hostNetworkedNATUDPOnly {
 		ap.UDPOnly = true

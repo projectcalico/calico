@@ -341,6 +341,76 @@ func TestCtLegPinValidator(t *testing.T) {
 	})
 }
 
+// TestCtLegPinIfaceEncaps pins the provenance side of the tunnel claim: it is
+// the attach point's own IFACE_ENCAPS global that decides, not the program's
+// compile flags. CALI_F_TUNNEL cannot: it is true for every EpTypeL3Device
+// program, so a MAC-less NIC or a TUN device would claim to be a valid egress
+// for an encap destination and permanently exempt the leg from the validator
+// and the consumer's guard.
+func TestCtLegPinIfaceEncaps(t *testing.T) {
+	RegisterTestingT(t)
+
+	extIP := net.IPv4(3, 3, 3, 3)
+	srcPort := uint16(udpDefault.SrcPort)
+	dstPort := uint16(udpDefault.DstPort)
+	pkt := ctPinUDPPacket(extIP, srcIP)
+
+	// srcIP (1.1.1.1) < extIP (3.3.3.3), so B2A is the client->workload leg
+	// the from-host program records its ingress on.
+	key := ctv4.NewKey(17, srcIP, dstPort, extIP, srcPort)
+
+	for _, tc := range []struct {
+		name   string
+		encaps bool
+	}{
+		{"a device that does not encapsulate", false},
+		{"an encapsulating device", true},
+	} {
+		opts := []testOption{}
+		if tc.encaps {
+			opts = append(opts, withIfaceEncaps())
+		}
+
+		t.Run("creation claims the kind of "+tc.name, func(t *testing.T) {
+			f := setupCtPinFixture(t, "ENC1")
+			resetCTMap(f.ctMap)
+
+			runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+				_, err := bpfrun(pkt)
+				Expect(err).NotTo(HaveOccurred())
+
+				leg := f.leg(t, key, true)
+				Expect(leg.Ifindex).To(Equal(uint32(ctPinWlIfindex)),
+					"the ingress record is this program's own device")
+				Expect(leg.Tunnel).To(Equal(tc.encaps))
+			}, opts...)
+		})
+
+		t.Run("refresh reconciles a stale claim against "+tc.name, func(t *testing.T) {
+			f := setupCtPinFixture(t, "ENC2")
+			// The leg already names the arrival device, so the packet
+			// confirms the ingress record and ct_leg_refresh_kind runs. Its
+			// claim is the opposite of the truth in both directions.
+			wlLeg := ctv4.Leg{SynSeen: true, AckSeen: true, Approved: true,
+				Workload: true, Ifindex: ctPinWlIfindex}
+			hostLeg := ctv4.Leg{SynSeen: true, AckSeen: true, Approved: true,
+				Ifindex: ctPinWlIfindex, Tunnel: !tc.encaps, Checked: true}
+			val := ctv4.NewValueNormal(0, 0, wlLeg, hostLeg)
+			Expect(f.ctMap.Update(key.AsBytes(), val.AsBytes())).NotTo(HaveOccurred())
+
+			runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+				_, err := bpfrun(pkt)
+				Expect(err).NotTo(HaveOccurred())
+
+				leg := f.leg(t, key, true)
+				Expect(leg.Tunnel).To(Equal(tc.encaps))
+				Expect(leg.Checked).To(BeFalse(),
+					"a changed kind claim voids whatever validation stamped it")
+			}, opts...)
+		})
+	}
+}
+
 // TestCtLegPinReconcileArms exercises what each RPF arm of the
 // ingress-mismatch block does to a pinned leg, through the from-host program.
 // The packet arrives from an external client (extIP) toward the local

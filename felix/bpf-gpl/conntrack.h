@@ -219,7 +219,7 @@ create:
 		 */
 		src_to_dst->ifindex = ctx->globals->data.host_ifindex ?
 			ctx->globals->data.host_ifindex : ctx->skb->ifindex;
-		if (CALI_F_TUNNEL) {
+		if (IFACE_ENCAPS) {
 			src_to_dst->bits_word |= CALI_CT_LEG_TUNNEL;
 		}
 	} else {
@@ -665,7 +665,7 @@ static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_valu
 }
 
 /* Refresh the leg's claims from this program's own provenance. Called only
- * when the packet confirms the recorded ingress, so CALI_F_TUNNEL is
+ * when the packet confirms the recorded ingress, so IFACE_ENCAPS is
  * authoritative for the recorded device - and the leg is proven an honest
  * ingress record, so a stale PINNED is dropped (nothing else can clear it
  * once the leg stops mismatching). A wrong kind claim voids whatever
@@ -673,9 +673,10 @@ static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_valu
  * Reads first and writes only on change - the healthy-flow caller pays no
  * atomic.
  */
-static CALI_BPF_INLINE void ct_leg_refresh_kind(struct calico_ct_leg *leg)
+static CALI_BPF_INLINE void ct_leg_refresh_kind(struct cali_tc_ctx *ctx,
+					       struct calico_ct_leg *leg)
 {
-	__u32 want = CALI_F_TUNNEL ? CALI_CT_LEG_TUNNEL : 0;
+	__u32 want = IFACE_ENCAPS ? CALI_CT_LEG_TUNNEL : 0;
 	__u32 bits = leg->bits_word;
 
 	if ((bits & CALI_CT_LEG_TUNNEL) != want) {
@@ -1336,7 +1337,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 					 * tunnel-to-tunnel store, when it is true for
 					 * both values.
 					 */
-					__u32 want = CALI_F_TUNNEL ? CALI_CT_LEG_TUNNEL : 0;
+					__u32 want = IFACE_ENCAPS ? CALI_CT_LEG_TUNNEL : 0;
 					__u32 stale = src_to_dst->bits_word &
 						(CALI_CT_LEG_TUNNEL | CALI_CT_LEG_PINNED |
 						 CALI_CT_LEG_CHECKED) & ~want;
@@ -1401,7 +1402,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		 * provenance.
 		 */
 		if (!related && src_to_dst->ifindex == ifindex) {
-			ct_leg_refresh_kind(src_to_dst);
+			ct_leg_refresh_kind(ctx, src_to_dst);
 		}
 		/* The opposite leg's ifindex is that direction's ingress record,
 		 * handed to this direction as an egress hint. That only holds

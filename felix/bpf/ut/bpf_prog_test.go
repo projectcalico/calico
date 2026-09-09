@@ -936,6 +936,10 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.Flags |= libbpf.GlobalsRedirectPeer
 				}
 
+				if topts.ifaceEncaps {
+					globals.Flags |= libbpf.GlobalsIfaceEncaps
+				}
+
 				if topts.rpfEnabled {
 					globals.Flags |= libbpf.GlobalsRPFOptionEnabled
 				}
@@ -1332,9 +1336,18 @@ type testOpts struct {
 	rpfEnabled                    bool
 	rpfStrict                     bool
 	ingressIfindex                uint32
+	ifaceEncaps                   bool
 }
 
 type testOption func(opts *testOpts)
+
+// withIfaceEncaps marks the program's device as one that encapsulates for
+// encap-flagged routes, which is what the conntrack leg's tunnel claim records.
+func withIfaceEncaps() testOption {
+	return func(o *testOpts) {
+		o.ifaceEncaps = true
+	}
+}
 
 func withRPFEnabled() testOption {
 	return func(o *testOpts) {

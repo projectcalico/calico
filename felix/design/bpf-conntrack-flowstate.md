@@ -159,7 +159,10 @@ hint self-describing rather than assumed:
   routing truth) with this flag ("can the recorded device perform it?"
   — cached per-flow). The bit is written only by whoever has authority
   over the device: the program attached to it for an ingress record, or
-  the validator for a leg it pinned.
+  the validator for a leg it pinned. An attached program reads the
+  device's nature from its own `IFACE_ENCAPS` global, not from
+  `CALI_F_TUNNEL`: that compile flag is true for every `EpTypeL3Device`
+  program, so a MAC-less NIC or a TUN device would claim to encapsulate.
 - **`PINNED`** — the ifindex is a resolved egress for the opposite
   direction, not this direction's ingress record. Bookkeeping for
   userspace cleanup; the dataplane keeps reconciling the leg like any
