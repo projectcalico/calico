@@ -50,8 +50,8 @@ var ImageKeys = []string{
 	ImageKeyIstioPilot, ImageKeyIstioInstallCNI, ImageKeyIstioZTunnel, ImageKeyIstioProxyv2,
 }
 
-// VariantBuild is what a variant supplies about the images it ships.
-type VariantBuild struct {
+// Build is what a variant supplies about the images it ships.
+type Build struct {
 	Images  []Component
 	Release string
 }
@@ -67,14 +67,14 @@ var (
 
 // RegisterVariant declares the images the running variant supplies. The process
 // restarts when the variant changes, so only one ever registers.
-func RegisterVariant(b VariantBuild) {
+func RegisterVariant(b Build) {
 	variantImages = byImage(b.Images)
 	variantRelease = b.Release
 }
 
 // UseVariant registers b and returns a function restoring what was there, for tests
 // that render one variant while the suite covers both.
-func UseVariant(b VariantBuild) func() {
+func UseVariant(b Build) func() {
 	prevImages, prevRelease := variantImages, variantRelease
 	RegisterVariant(b)
 	return func() {

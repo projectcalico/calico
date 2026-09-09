@@ -42,7 +42,7 @@ var _ = Describe("ImageFor", func() {
 	})
 
 	It("resolves what the variant registered", func() {
-		DeferCleanup(UseVariant(VariantBuild{Images: []Component{otherVariantNode}}))
+		DeferCleanup(UseVariant(Build{Images: []Component{otherVariantNode}}))
 
 		img, err := ImageFor(ImageKeyNode)
 		Expect(err).NotTo(HaveOccurred())
@@ -50,7 +50,7 @@ var _ = Describe("ImageFor", func() {
 	})
 
 	It("errors on an image the running variant does not supply", func() {
-		DeferCleanup(UseVariant(VariantBuild{Images: []Component{otherVariantNode}}))
+		DeferCleanup(UseVariant(Build{Images: []Component{otherVariantNode}}))
 
 		_, err := ImageFor("whisker")
 		Expect(err).To(HaveOccurred())
@@ -63,7 +63,7 @@ var _ = Describe("RegisterVariant", func() {
 	myVariant := &Variant{Registry: "example.com/", ImagePath: "myvariant/"}
 	thing := Component{Image: "thing", Version: "v1.0.0", Variant: myVariant}
 
-	build := VariantBuild{Images: []Component{thing}, Release: "v9.9.9"}
+	build := Build{Images: []Component{thing}, Release: "v9.9.9"}
 
 	It("resolves registered images against the variant they name", func() {
 		DeferCleanup(UseVariant(build))
