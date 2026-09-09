@@ -28,7 +28,10 @@ type Variant struct {
 	ImagePath string
 }
 
-var calicoVariant = &Variant{Registry: CalicoRegistry, ImagePath: CalicoImagePath}
+var (
+	calicoVariant   = Variant{Registry: CalicoRegistry, ImagePath: CalicoImagePath}
+	operatorVariant = Variant{Registry: OperatorRegistry, ImagePath: OperatorImagePath}
+)
 
 type Component struct {
 	// Image is the image name for this component (e.g., node, cni)
@@ -47,9 +50,9 @@ type Component struct {
 	// as part of a developer workflow to deploy custom dev images on an individual basis.
 	Registry string
 
-	// Variant is which product variant this component belongs to. Nil for the
-	// components shared across variants, which take the operator's own defaults.
-	Variant *Variant
+	// Variant is which product variant this component belongs to. Every component
+	// names one, so the zero value means a declaration that forgot to.
+	Variant Variant
 }
 
 const UseDefault = "UseDefault"
@@ -57,9 +60,6 @@ const UseDefault = "UseDefault"
 // getDefaults returns the registry and imagePath a component resolves against when the
 // installation names neither.
 func getDefaults(c Component) (registry string, imagePath string) {
-	if c.Variant == nil {
-		return OperatorRegistry, OperatorImagePath
-	}
 	return c.Variant.Registry, c.Variant.ImagePath
 }
 

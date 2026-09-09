@@ -65,9 +65,16 @@ var (
 	buildRelease string
 )
 
-// RegisterBuild declares the images the running variant supplies. The process
-// restarts when the variant changes, so only one ever registers.
+// RegisterBuild declares the images the running variant supplies, and panics on an
+// image naming no variant, which would resolve to an empty registry. Only one variant
+// registers, since the process restarts when it changes.
 func RegisterBuild(b Build) {
+	for _, c := range b.Images {
+		if c.Variant == (Variant{}) {
+			panic(fmt.Sprintf("component %q names no variant", c.Image))
+		}
+	}
+
 	buildImages = byImage(b.Images)
 	buildRelease = b.Release
 }

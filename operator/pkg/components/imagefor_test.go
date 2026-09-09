@@ -21,9 +21,12 @@ import (
 	operator "github.com/projectcalico/calico/operator/api/v1"
 )
 
+// otherVariant is the variant a downstream build declares outside this repo.
+var otherVariant = Variant{Registry: "example.com/", ImagePath: "myvariant/"}
+
 // otherVariantNode stands in for the node image a variant supplies instead of this
-// build's own, which is declared outside this repo.
-var otherVariantNode = Component{Image: ImageKeyNode, Version: "v9.9.9"}
+// build's own.
+var otherVariantNode = Component{Image: ImageKeyNode, Version: "v9.9.9", Variant: otherVariant}
 
 var _ = Describe("ImageFor", func() {
 	// The component list is the source of truth, so a key that stops naming an entry
@@ -60,8 +63,7 @@ var _ = Describe("ImageFor", func() {
 var _ = Describe("RegisterBuild", func() {
 	// A variant declares its components outside this package, naming the registry and
 	// image path they resolve against.
-	myVariant := &Variant{Registry: "example.com/", ImagePath: "myvariant/"}
-	thing := Component{Image: "thing", Version: "v1.0.0", Variant: myVariant}
+	thing := Component{Image: "thing", Version: "v1.0.0", Variant: otherVariant}
 
 	build := Build{Images: []Component{thing}, Release: "v9.9.9"}
 
@@ -111,6 +113,15 @@ var _ = Describe("RegisterBuild", func() {
 		Expect(BuildRelease()).To(Equal("v9.9.9"))
 
 		restore()
+		Expect(BuildRelease()).To(Equal(CalicoRelease))
+	})
+
+	// A downstream declaring its components outside this package is the only caller,
+	// so this is where a forgotten variant is still cheap to find.
+	It("rejects an image that names no variant", func() {
+		orphan := Component{Image: "thing", Version: "v1.0.0"}
+
+		Expect(func() { RegisterBuild(Build{Images: []Component{orphan}}) }).To(Panic())
 		Expect(BuildRelease()).To(Equal(CalicoRelease))
 	})
 })
