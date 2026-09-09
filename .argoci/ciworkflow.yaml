@@ -13,6 +13,10 @@ generateName: calico-
 # Bounds the DAG itself, catching a hang outside any step's own deadline.
 timeout: 4h
 
+# Where the component names in each `dependsOn:` below come from. Generated from
+# the live import graph, so a gate cannot fall behind what it gates.
+dependencies: .argoci/depstree.yaml
+
 globalPrologue: |
   # Unauthenticated pulls of the build image are rate-limited.
   echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
@@ -40,6 +44,21 @@ defaults:
     - docker-hub
 
 includes:
+  # Mirrors what the generator reads, so the check runs exactly when its output
+  # could have changed. The generated file is listed too, since a hand-edit is
+  # the other way it stops matching the import graph.
+  - path: .argoci/modules/generated-files.yaml
+    changes:
+      in:
+        - ^.*\.go$
+        - ^go\.mod$
+        - ^go\.sum$
+        - ^Makefile$
+        - ^hack/list-go-sources\.sh$
+        - ^hack/cmd/deps/
+        - ^\.argoci/depstree\.yaml$
+        - ^\.argoci/modules/generated-files\.yaml$
+
   # Each module is gated on its own file as well as its component, so editing a
   # module retests what it builds. Match the path exactly — a bare `^\.argoci/`
   # would fire every component on any CI edit.

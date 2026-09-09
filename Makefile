@@ -83,6 +83,11 @@ check-mockery-config:
 check-ginkgo-v2:
 	./hack/check-ginkgo-v2.sh
 
+# Exported rather than passed, so the composed value is make's to expand.
+check-argoci-image: export GO_BUILD_VER := $(GO_BUILD_VER)
+check-argoci-image:
+	./hack/check-argoci-image.sh
+
 check-ocp-no-crds:
 	@echo "Checking for files in manifests/ocp with CustomResourceDefinitions"
 	@CRD_FILES_IN_OCP_DIR=$$(grep "^kind: CustomResourceDefinition" manifests/ocp/* -l || true); if [ ! -z "$$CRD_FILES_IN_OCP_DIR" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$$CRD_FILES_IN_OCP_DIR"; exit 1; fi
@@ -129,11 +134,17 @@ gen-semaphore-yaml: operator-charts
 
 GO_DIRS=$(shell ./hack/list-go-sources.sh dirs)
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
+DEPS_SOURCES=go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./hack/list-go-sources.sh hack/cmd/deps/*
+
+# Derived from the same import graph as deps.txt, so it belongs to the same
+# regenerate-and-diff check rather than one of its own.
+ARGOCI_DEPS_FILE=.argoci/depstree.yaml
 
 gen-deps-files: operator-charts
 	$(MAKE) -j$$(nproc) $(DEP_FILES)
+	$(MAKE) $(ARGOCI_DEPS_FILE)
 
-$(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./hack/list-go-sources.sh hack/cmd/deps/*
+$(DEP_FILES): $(DEPS_SOURCES)
 	@{ \
 	  echo "!!! GENERATED FILE, DO NOT EDIT !!!" && \
 	  echo "Run 'make gen-deps-files' to regenerate." && \
@@ -141,6 +152,15 @@ $(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./
 	  grep '^go' go.mod && \
 	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps combined $(patsubst %/,%,$(dir $@))"; \
 	} > $@
+
+# All components in one invocation, since each is a whole-repo `go list` pass and
+# the tool already fans them out across cores.
+#
+# Via a temporary, because a truncated file here is an empty component list —
+# which gates nothing, and says nothing.
+$(ARGOCI_DEPS_FILE): $(DEPS_SOURCES)
+	@$(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps gen-argoci-deps $(GO_DIRS)" > $@.tmp \
+	  && mv $@.tmp $@ || { rm -f $@.tmp; exit 1; }
 
 # bin/send-perf-results is the tool that pushes hack/perf JSON docs to the Lens
 # Elasticsearch cluster (see hack/perf/README.md). Built statically so CI jobs

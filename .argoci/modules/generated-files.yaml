@@ -1,0 +1,13 @@
+# Other gates trust the dependency files to decide what to re-test, and a stale
+# one under-fires in silence — nothing else would ever report it.
+version: condensed-module
+
+defaults:
+  # Minutes of CPU-bound work, well short of the hour the default would allow.
+  timeout: 20m
+
+steps:
+  - name: check-generated-deps
+    commands: |
+      make gen-deps-files
+      make check-dirty
