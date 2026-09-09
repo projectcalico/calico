@@ -29,7 +29,7 @@ import (
 // A spec that builds the Enterprise extensions registers the Enterprise images for the
 // whole process, so every spec starts from the images this build ships.
 var _ = ginkgo.BeforeEach(func() {
-	ginkgo.DeferCleanup(components.UseImages(nil))
+	ginkgo.DeferCleanup(components.UseVariant(components.VariantBuild{}))
 })
 
 func TestFeatureVerification(t *testing.T) {

@@ -29,8 +29,8 @@ func calicoComponent(image string) Component {
 		Version:   CalicoRelease,
 		Image:     image,
 		Registry:  calicoRegistry,
-		imagePath: calicoImagePath,
-		variant:   calicoVariant,
+		ImagePath: calicoImagePath,
+		Variant:   calicoVariant,
 	}
 }
 
