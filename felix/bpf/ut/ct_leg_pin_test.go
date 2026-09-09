@@ -478,10 +478,9 @@ func TestCtLegPinReconcileArms(t *testing.T) {
 
 	t.Run("loose arm leaves a tun_ip flow's egress record alone", func(t *testing.T) {
 		f := setupCtPinFixture(t, "ARM6")
-		// Same routing as the re-pin case: without the tun_ip gate the loose
-		// arm would rewrite this leg to the tunnel device and pin it,
-		// breaking the {tun_ip, ifindex} ARP-map key of the return-encap
-		// fast path.
+		// Same routing as the re-pin case. The tun_ip gate blocks the pin -
+		// the ifindex is half the {tun_ip, ifindex} ARP-map key - not the
+		// discard.
 		f.kernelRoute(t, extCIDR, f.tunl)
 		key := ctv4.NewKey(17, srcIP, dstPort, extIP, srcPort)
 		wlLeg := ctv4.Leg{SynSeen: true, AckSeen: true, Approved: true,
@@ -496,8 +495,8 @@ func TestCtLegPinReconcileArms(t *testing.T) {
 			Expect(err).NotTo(HaveOccurred())
 
 			leg := f.leg(t, key, true)
-			Expect(leg.Ifindex).To(Equal(uint32(f.phys.Attrs().Index)),
-				"the ARP-path egress record must survive")
+			Expect(leg.Ifindex).To(Equal(uint32(0)),
+				"a contradicted record is discarded, not pinned to the FIB answer")
 			Expect(leg.Pinned).To(BeFalse())
 			Expect(leg.Tunnel).To(BeFalse())
 			Expect(leg.Checked).To(BeFalse())

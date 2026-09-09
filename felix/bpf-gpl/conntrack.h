@@ -728,9 +728,8 @@ static CALI_BPF_INLINE void ct_leg_validate_fwd(struct cali_tc_ctx *ctx,
 		.ifindex = ctx->globals->data.host_ifindex ?
 			ctx->globals->data.host_ifindex : ctx->skb->ifindex,
 		.l4_protocol = ctx->state->ip_proto,
-		/* Same (post-NAT) ports as the consumer's fallback lookup, so a
-		 * ports-hashing multipath policy cannot make the two resolve
-		 * different nexthops and ping-pong the pin.
+		/* Match hep_rpf_check's ports, the other writer of this leg, or
+		 * multipath hashing would ping-pong the pin.
 		 */
 		.sport = bpf_htons(ctx->state->sport),
 		.dport = bpf_htons(dport),
@@ -1353,16 +1352,16 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 				break;
 			case RPF_RES_DISABLED:
 			case RPF_RES_LOOSE:
-				if (!related && ip_void(result.tun_ip)) {
+				if (!related) {
 					/* rev_ifindex is the device that reaches the
 					 * packet's source - exactly the egress hint this
 					 * leg owes the opposite direction. Record it
 					 * rather than discard it; PINNED, because it is
 					 * no longer an ingress record.
 					 *
-					 * tun_ip flows are excluded as in the validator:
-					 * the leg's ifindex is half the {tun_ip, ifindex}
-					 * ARP-map key and must not be rewritten.
+					 * Not pinned for a tun_ip flow: the ifindex is
+					 * half the {tun_ip, ifindex} ARP-map key. Such a
+					 * leg still discards.
 					 *
 					 * An unchanged pin writes nothing - clearing
 					 * claims here would void the reply side's kind
@@ -1371,7 +1370,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 					 * cleared before the ifindex store; the new
 					 * device's kind is the reply side's to stamp.
 					 */
-					if (rev_ifindex != CT_INVALID_IFINDEX) {
+					if (rev_ifindex != CT_INVALID_IFINDEX &&
+							ip_void(result.tun_ip)) {
 						if (src_to_dst->ifindex != rev_ifindex) {
 							CALI_CT_DEBUG("Packet from unexpected ingress dev %d "
 									"- pinning egress %d", ifindex, rev_ifindex);
@@ -1448,12 +1448,9 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		 * may use it to directly forward the packet to the same interface where
 		 * packets in the opposite direction are coming from.
 		 *
-		 * The flags are read before the ifindex (volatile, so the compiler
-		 * keeps the order): writers store ifindex-then-claim, so this can
-		 * at worst pair a fresh tunnel ifindex with a stale "no tunnel",
-		 * which fails safe. The opposite order could pair a stale physical
-		 * ifindex with a fresh TUNNEL claim and put a raw frame on that
-		 * device.
+		 * Flags before ifindex (volatile keeps the order): safe against a
+		 * claim being added, not one removed - a reader can then pair
+		 * TUNNEL with a physical ifindex.
 		 */
 		result.fwd_flags = ((*(volatile __u32 *)&dst_to_src->bits_word) &
 				CALI_CT_LEG_TUNNEL) ? CT_FWD_FLAG_TUNNEL : 0;

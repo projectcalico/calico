@@ -267,7 +267,7 @@ skip_redir_ifindex:
 			if ((rc = try_redirect_to_peer(ctx)) == TC_ACT_REDIRECT) {
 				goto skip_fib;
 			}
-		} else if ((cali_rt_is_tunneled(dest_rt) && !cali_rt_is_same_subnet(dest_rt))) {
+		} else if (cali_rt_needs_tunnel_egress(dest_rt)) {
 			struct bpf_tunnel_key key = {
 				.tunnel_id = OVERLAY_TUNNEL_ID,
 			};
