@@ -31,10 +31,10 @@ const seedScript = "../../../../.argoci/scripts/phases/seed_images.sh"
 // notSeeded holds the images the seed script deliberately leaves out, with the
 // reason. Anything else declared in images.go has to be in the script.
 var notSeeded = map[string]string{
-	"Porter":          "runs on Windows nodes, which the seed script does not reach",
-	"KubeVirtUbuntu":  "a containerDisk, pulled only by the KubeVirt lane",
-	"CalicoBIRD":      "run through docker on the external node, not as a pod",
-	"rapidClientRepo": "built from source and side-loaded by phases/load_images.sh",
+	"Porter":         "runs on Windows nodes, which the seed script does not reach",
+	"KubeVirtUbuntu": "a containerDisk, pulled only by the KubeVirt lane",
+	"CalicoBIRD":     "run through docker on the external node, not as a pod",
+	"RapidClient":    "pulled from quay, and side-loaded from source by phases/load_images.sh on the PR lane",
 }
 
 func TestWorkloadImagesAreSeeded(t *testing.T) {
@@ -60,6 +60,41 @@ func TestWorkloadImagesAreSeeded(t *testing.T) {
 		if !strings.Contains(string(script), ref) {
 			t.Errorf("%s (%s) is not in %s; add it there, or record why it is exempt in notSeeded",
 				name, ref, seedScript)
+		}
+	}
+}
+
+func TestRapidClientImageIsConsistent(t *testing.T) {
+	ref, ok := declaredImages(t)["RapidClient"]
+	if !ok {
+		t.Fatal("images.go no longer declares RapidClient")
+	}
+	repo, tag, ok := strings.Cut(ref, ":")
+	if !ok {
+		t.Fatalf("RapidClient %q has no tag", ref)
+	}
+
+	// The side-loaded copy is only used when every one of these names the same
+	// reference the pods ask for.
+	want := map[string][]string{
+		"../../../../Makefile": {
+			"RAPIDCLIENT_IMAGE := " + repo,
+			"RAPIDCLIENT_TAG := " + tag,
+		},
+		"../../../../.semaphore/end-to-end/scripts/phases/load_images.sh": {
+			`_img="` + ref + `"`,
+			`TAG_NAME="` + tag + `"`,
+		},
+	}
+	for path, refs := range want {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		for _, expected := range refs {
+			if !strings.Contains(string(content), expected) {
+				t.Errorf("%s does not contain %q, so its copy of the image no longer matches %s", path, expected, ref)
+			}
 		}
 	}
 }
