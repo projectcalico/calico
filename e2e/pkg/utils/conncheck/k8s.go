@@ -43,11 +43,8 @@ func (s *PodServer) create(ctx context.Context, f *framework.Framework) (*v1.Pod
 	if windows.ClusterIsWindows() {
 		image = images.Porter
 		nodeselector["kubernetes.io/os"] = "windows"
-	} else if s.echoServer {
-		image = images.EchoServer
-		nodeselector["kubernetes.io/os"] = "linux"
 	} else {
-		image = images.TestWebserver
+		image = images.EchoServer
 		nodeselector["kubernetes.io/os"] = "linux"
 	}
 	for _, port := range s.ports {
@@ -63,15 +60,13 @@ func (s *PodServer) create(ctx context.Context, f *framework.Framework) (*v1.Pod
 					Value: "value-not-used",
 				},
 			}
-		} else if s.echoServer {
-			args = []string{"netexec", fmt.Sprintf("--http-port=%d", port)}
 		} else {
-			args = []string{fmt.Sprintf("--port=%d", port)}
+			args = []string{"netexec", fmt.Sprintf("--http-port=%d", port)}
 		}
 
-		probePath := "/"
-		if s.echoServer {
-			probePath = "/clientip"
+		probePath := "/clientip"
+		if windows.ClusterIsWindows() {
+			probePath = "/"
 		}
 
 		container := v1.Container{
