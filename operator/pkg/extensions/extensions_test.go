@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/components"
 	"github.com/projectcalico/calico/operator/pkg/controller"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/extensions/extensionstest"
@@ -108,6 +109,17 @@ var _ = Describe("the zero value Extensions", func() {
 		var e extensions.Extensions
 
 		Expect(e.Startup().Controllers()).To(BeEmpty())
+	})
+
+	// Registering an empty build leaves ImageFor on the images this build ships, which
+	// is what an operator running no variant has to resolve.
+	It("supplies no images of its own, leaving the build's own", func() {
+		var e extensions.Extensions
+
+		Expect(e.Startup().Images()).To(Equal(components.Build{}))
+
+		DeferCleanup(components.UseBuild(e.Startup().Images()))
+		Expect(components.ImageFor(components.ImageKeyNode)).To(Equal(components.ComponentCalicoNode))
 	})
 })
 
