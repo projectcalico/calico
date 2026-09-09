@@ -258,3 +258,118 @@ var _ = Describe("Route manager", func() {
 		})
 	})
 })
+
+// Felix used to leave Priority unset on every cluster route, so they landed at metric 0 - which
+// outranks every value the API allows, and differs from the metric 1024 BIRD writes for the same
+// prefixes.  See CORE-13567.
+var _ = Describe("Cluster route priority", func() {
+	const normalPriority = 1024
+
+	var rt *mockRouteTable
+
+	BeforeEach(func() {
+		rt = &mockRouteTable{currentRoutes: map[string][]routetable.Target{}}
+
+		dataplane := mocknetlink.New()
+		_, err := dataplane.NewMockNetlink()
+		Expect(err).NotTo(HaveOccurred())
+		eth0 := dataplane.AddIface(2, "eth0", true, true)
+		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
+		dataplane.ResetDeltas()
+
+		dpConfig := Config{
+			Hostname:                    "node1",
+			MaxIPSetSize:                5,
+			ProgramIPIPClusterRoutes:    true,
+			ProgramNoEncapClusterRoutes: true,
+			IPv4NormalRoutePriority:     normalPriority,
+		}
+
+		vxlanMgr := newVXLANManagerWithShims(
+			dpsets.NewMockIPSets(),
+			rt,
+			&mockVXLANFDB{},
+			dataplanedefs.VXLANIfaceNameV4,
+			4,
+			1400,
+			dpConfig,
+			logrusr.NewSummarizer("test"),
+			dataplane,
+		)
+		ipipMgr := newIPIPManagerWithShims(
+			rt,
+			dataplanedefs.IPIPIfaceName,
+			4,
+			1400,
+			dpConfig,
+			logrusr.NewSummarizer("test"),
+			dataplane,
+		)
+		noEncapMgr := newNoEncapManagerWithSims(
+			rt,
+			4,
+			dpConfig,
+			logrusr.NewSummarizer("test"),
+			dataplane,
+		)
+		managers := []Manager{vxlanMgr, ipipMgr, noEncapMgr}
+
+		// Teach each manager how to reach node2, so it can resolve a next hop for a remote route.
+		vxlanMgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+			Node: "node1", Mac: "00:0a:74:9d:68:16", Ipv4Addr: "10.0.0.0", ParentDeviceIp: "172.0.0.2",
+		})
+		vxlanMgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+			Node: "node2", Mac: "00:0a:95:9d:68:16", Ipv4Addr: "10.0.80.0", ParentDeviceIp: "172.0.0.3",
+		})
+		for _, m := range managers {
+			m.OnUpdate(&proto.HostMetadataUpdate{Hostname: "node1", Ipv4Addr: "172.0.0.2"})
+			m.OnUpdate(&proto.HostMetadataUpdate{Hostname: "node2", Ipv4Addr: "172.0.0.3"})
+		}
+		vxlanMgr.routeMgr.OnParentDeviceUpdate("eth0")
+		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
+		noEncapMgr.routeMgr.OnParentDeviceUpdate("eth0")
+
+		remoteBlock := func(poolType proto.IPPoolType, dst string, sameSubnet bool) *proto.RouteUpdate {
+			return &proto.RouteUpdate{
+				Types:       proto.RouteType_REMOTE_WORKLOAD,
+				IpPoolType:  poolType,
+				Dst:         dst,
+				DstNodeName: "node2",
+				DstNodeIp:   "172.0.0.3",
+				SameSubnet:  sameSubnet,
+			}
+		}
+		localBlock := func(poolType proto.IPPoolType, dst string) *proto.RouteUpdate {
+			return &proto.RouteUpdate{
+				Types:       proto.RouteType_LOCAL_WORKLOAD,
+				IpPoolType:  poolType,
+				Dst:         dst,
+				DstNodeName: "node1",
+			}
+		}
+
+		for _, m := range managers {
+			m.OnUpdate(remoteBlock(proto.IPPoolType_VXLAN, "10.0.1.0/26", false))
+			m.OnUpdate(remoteBlock(proto.IPPoolType_IPIP, "10.0.2.0/26", false))
+			m.OnUpdate(remoteBlock(proto.IPPoolType_NO_ENCAP, "10.0.3.0/26", true))
+			m.OnUpdate(localBlock(proto.IPPoolType_VXLAN, "10.0.4.0/26"))
+		}
+		for _, m := range managers {
+			Expect(m.CompleteDeferredWork()).To(Succeed())
+		}
+	})
+
+	// Table-driven so a class that programs nothing fails loudly rather than passing vacuously.
+	DescribeTable("should give the route the normal priority, matching BIRD",
+		func(class routetable.RouteClass, iface string, cidr string) {
+			targets := rt.targetsForClass(class, iface)
+			Expect(targets).To(HaveLen(1), "expected exactly one route in this class")
+			Expect(targets[0].CIDR.String()).To(Equal(cidr))
+			Expect(targets[0].Priority).To(Equal(normalPriority))
+		},
+		Entry("VXLAN tunnel", routetable.RouteClassVXLANTunnel, dataplanedefs.VXLANIfaceNameV4, "10.0.1.0/26"),
+		Entry("IPIP tunnel", routetable.RouteClassIPIPTunnel, dataplanedefs.IPIPIfaceName, "10.0.2.0/26"),
+		Entry("no-encap", routetable.RouteClassNoEncap, "eth0", "10.0.3.0/26"),
+		Entry("blackhole", routetable.RouteClassBlackholeVXLAN, routetable.InterfaceNone, "10.0.4.0/26"),
+	)
+})

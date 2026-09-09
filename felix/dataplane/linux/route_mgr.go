@@ -68,6 +68,9 @@ type routeManager struct {
 	dpConfig      Config
 	routeProtocol netlink.RouteProtocol
 
+	// routePriority is the metric to give the routes this manager programs.
+	routePriority int
+
 	// Log context
 	logCtx     *logrus.Entry
 	opRecorder logrusr.OpRecorder
@@ -108,12 +111,22 @@ func newRouteManager(
 		dpConfig:             dpConfig,
 		nlHandle:             nlHandle,
 		routeProtocol:        calculateRouteProtocol(dpConfig),
+		routePriority:        normalRoutePriority(dpConfig, ipVersion),
 		opRecorder:           opRecorder,
 		logCtx: logrus.WithFields(logrus.Fields{
 			"ipVersion":    ipVersion,
 			"tunnelDevice": tunnelDevice,
 		}),
 	}
+}
+
+// normalRoutePriority is the metric Felix gives a cluster route. BIRD writes the same value, so a
+// route keeps its priority whichever component owns it.
+func normalRoutePriority(dpConfig Config, ipVersion uint8) int {
+	if ipVersion == 6 {
+		return dpConfig.IPv6NormalRoutePriority
+	}
+	return dpConfig.IPv4NormalRoutePriority
 }
 
 // ipamBlockDropRouteClass returns the route class to use for the blackhole "drop" routes programmed
@@ -407,7 +420,7 @@ func (m *routeManager) updateRoutes() {
 	m.logCtx.WithField("routes", tunnelRoutes).Debug("Route manager setting tunneled routes")
 	m.routeTable.SetRoutes(m.routeClassTunnel, m.tunnelDevice, tunnelRoutes)
 
-	bhRoutes := blackholeRoutes(m.localIPAMBlocks, m.routeProtocol)
+	bhRoutes := blackholeRoutes(m.localIPAMBlocks, m.routeProtocol, m.routePriority)
 	m.logCtx.WithField("routes", bhRoutes).Debug("Route manager setting blackhole routes")
 	m.routeTable.SetRoutes(m.routeClassBlackhole, routetable.InterfaceNone, bhRoutes)
 
@@ -426,7 +439,11 @@ func (m *routeManager) setTunnelRouteFunc(fn func(ip.CIDR, *proto.RouteUpdate) *
 	m.tunnelRouteFn = fn
 }
 
-func blackholeRoutes(localIPAMBlocks map[string]*proto.RouteUpdate, proto netlink.RouteProtocol) []routetable.Target {
+func blackholeRoutes(
+	localIPAMBlocks map[string]*proto.RouteUpdate,
+	proto netlink.RouteProtocol,
+	priority int,
+) []routetable.Target {
 	var rtt []routetable.Target
 	for dst := range localIPAMBlocks {
 		cidr, err := ip.CIDRFromString(dst)
@@ -439,7 +456,8 @@ func blackholeRoutes(localIPAMBlocks map[string]*proto.RouteUpdate, proto netlin
 		rtt = append(rtt, routetable.Target{
 			Type: routetable.TargetTypeBlackhole,
 			RouteKey: routetable.RouteKey{
-				CIDR: cidr,
+				CIDR:     cidr,
+				Priority: priority,
 			},
 			Protocol: proto,
 		})
@@ -460,7 +478,8 @@ func (m *routeManager) noEncapRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routeta
 	noEncapRoute := routetable.Target{
 		Type: routetable.TargetTypeNoEncap,
 		RouteKey: routetable.RouteKey{
-			CIDR: cidr,
+			CIDR:     cidr,
+			Priority: m.routePriority,
 		},
 		GW:       ip.FromString(r.DstNodeIp),
 		Protocol: m.routeProtocol,
