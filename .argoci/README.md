@@ -67,11 +67,11 @@ instead of listing their paths:
 dependencies: .argoci/depstree.yaml
 
 includes:
-  - path: .argoci/modules/api.yaml
+  - path: .argoci/modules/20-api.yaml
     changes:
       dependsOn: [api]
       in:
-        - ^\.argoci/modules/api\.yaml$
+        - ^\.argoci/modules/20-api\.yaml$
 ```
 
 Declared in the workflow rather than in `config.yaml` so that a reader of a gate

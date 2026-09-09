@@ -43,39 +43,59 @@ defaults:
     - docker-hub
 
 includes:
-  # Mirrors what the generator reads, so the check runs exactly when its output
-  # could have changed. The generated file is listed too, since a hand-edit is
-  # the other way it stops matching the import graph.
-  - path: .argoci/modules/generated-files.yaml
-    changes:
-      in:
-        - ^.*\.go$
-        - ^go\.mod$
-        - ^go\.sum$
-        - ^Makefile$
-        - ^hack/list-go-sources\.sh$
-        - ^hack/cmd/deps/
-        - ^\.argoci/depstree\.yaml$
-        - ^\.argoci/modules/generated-files\.yaml$
+  # Ungated: each check inside carries its own, as its Semaphore block does.
+  - path: .argoci/modules/10-prerequisites.yaml
 
   # Each module is gated on its own file as well as its component, so editing a
   # module retests what it builds. Match the path exactly — a bare `^\.argoci/`
   # would fire every component on any CI edit.
-  - path: .argoci/modules/lib.yaml
+  - path: .argoci/modules/20-lib.yaml
     changes:
       in:
         - ^lib/
-        - ^\.argoci/modules/lib\.yaml$
+        - ^\.argoci/modules/20-lib\.yaml$
 
-  - path: .argoci/modules/api.yaml
+  - path: .argoci/modules/20-api.yaml
     changes:
       in:
         - ^api/
         - ^test/
         - ^metadata\.mk$
         - ^lib\.Makefile$
-        - ^\.argoci/modules/api\.yaml$
+        - ^\.argoci/modules/20-api\.yaml$
       exclude:
         - (^|/)\.gitignore$
         - (^|/)README\.md$
         - (^|/)LICENSE$
+
+  # Leaf components: one `make ci` each, so the gate is the component in the
+  # generated table plus the module's own file.
+  - path: .argoci/modules/20-calicoctl.yaml
+    changes:
+      dependsOn: [calicoctl]
+      in: ['^\.argoci/modules/20-calicoctl\.yaml$']
+
+  - path: .argoci/modules/20-confd.yaml
+    changes:
+      dependsOn: [confd]
+      in: ['^\.argoci/modules/20-confd\.yaml$']
+
+  - path: .argoci/modules/20-pod2daemon.yaml
+    changes:
+      dependsOn: [pod2daemon]
+      in: ['^\.argoci/modules/20-pod2daemon\.yaml$']
+
+  - path: .argoci/modules/20-app-policy.yaml
+    changes:
+      dependsOn: [app-policy]
+      in: ['^\.argoci/modules/20-app-policy\.yaml$']
+
+  - path: .argoci/modules/20-goldmane.yaml
+    changes:
+      dependsOn: [goldmane]
+      in: ['^\.argoci/modules/20-goldmane\.yaml$']
+
+  - path: .argoci/modules/20-guardian.yaml
+    changes:
+      dependsOn: [guardian]
+      in: ['^\.argoci/modules/20-guardian\.yaml$']
