@@ -189,9 +189,12 @@ A hint is repaired at two points, both while the entry is held:
    and pinned instead of discarded. A re-run with an unchanged answer
    writes nothing; a changed answer re-pins.
 
-Neither writer touches a `tun_ip` flow's leg: that hint is half of the
-`{tun_ip, ifindex}` ARP-map key of the return-encap fast path, an
-egress record that must not be rewritten.
+Neither writer *names a device on* a `tun_ip` flow's leg: that hint is
+half of the `{tun_ip, ifindex}` ARP-map key of the return-encap fast
+path, so route inference must not write it. The loose arm still
+discards a record the packet contradicts, as it did before pins
+existed — the consumer then resolves by FIB rather than redirecting to
+a device the flow has moved off.
 
 Stale state heals from packets. A route move re-pins via the loose arm
 (a pin naming a departed device would otherwise blackhole —
