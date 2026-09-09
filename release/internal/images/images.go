@@ -392,6 +392,134 @@ func (s settings) runUnits(units []unit) error {
 	return err
 }
 
+// A directory's units build in one tree, so they run one at a time. Publish
+// shares only a registry and stays on runUnits.
+func (s settings) runBuildUnits(units []unit, g *dirGate) error {
+	_, err := forEachUnit(units, func(u unit) (unitDone, error) {
+		defer g.hold(u.dir)()
+		return unitDone{}, s.runUnit(u)
+	})
+	return err
+}
+
+// dirGate keeps two make invocations out of one directory at a time. Cleans and
+// builds share it: node's clean reaches into felix's tree.
+type dirGate struct {
+	mu    sync.Mutex
+	locks map[string]*sync.Mutex
+}
+
+func newDirGate() *dirGate { return &dirGate{locks: map[string]*sync.Mutex{}} }
+
+func (g *dirGate) hold(dir string) func() {
+	g.mu.Lock()
+	if g.locks[dir] == nil {
+		g.locks[dir] = &sync.Mutex{}
+	}
+	l := g.locks[dir]
+	g.mu.Unlock()
+
+	l.Lock()
+	return l.Unlock
+}
+
+// clean runs each build directory's own clean, never the root target: that one
+// also cleans release/, whose _output and tmp this run is using.
+//
+// node's clean reaches into felix's tree, so the cleans take the same
+// per-directory lock the builds do.
+func (s settings) clean(g *dirGate) error {
+	dirs := VariantDirs(s.Variants)
+	s.Logger().WithField("components", len(dirs)).Info("Cleaning before build")
+
+	var errs []error
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, dir := range dirs {
+		wg.Go(func() {
+			if err := s.cleanDir(dir, g); err != nil {
+				mu.Lock()
+				errs = append(errs, err)
+				mu.Unlock()
+			}
+		})
+	}
+	wg.Wait()
+	return errors.Join(errs...)
+}
+
+func (s settings) cleanDir(dir string, g *dirGate) error {
+	defer g.hold(dir)()
+	return s.runUnit(unit{variant: cleanVariant, dir: dir, target: "clean", env: s.env()})
+}
+
+// preludeSteps is work more than one component's build writes. Building it
+// once up front leaves each of those builds a cache hit instead of a race.
+var preludeSteps = []preludeStep{
+	// build-bpf depends on libbpf, so it covers both.
+	{dir: utils.FelixDir, target: buildBPF, neededBy: []string{utils.FelixDir, utils.NodeDir}},
+}
+
+type preludeStep struct {
+	dir    string
+	target string
+
+	// neededBy is every release directory whose build writes this output.
+	neededBy []string
+}
+
+// prelude builds the shared work before the units fan out, once per named
+// architecture because each step's make target takes a single ARCH.
+func (s settings) prelude() error {
+	steps := narrowPrelude(preludeSteps, VariantDirs(s.Variants))
+	if len(steps) == 0 {
+		return nil
+	}
+	// No arch named leaves ARCH unset, so each component applies its own
+	// default rather than one chosen here.
+	arches := s.Arches
+	if len(arches) == 0 {
+		arches = []string{""}
+	}
+	for _, step := range steps {
+		for _, arch := range arches {
+			if err := s.runPrelude(step, arch); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// A prelude step runs as a unit so it gets the same retry and log naming.
+func (s settings) runPrelude(step preludeStep, arch string) error {
+	variant := preludeVariant
+	target := step.target
+	if arch != "" {
+		variant += "-" + arch
+		target += " ARCH=" + arch
+	}
+	return s.runUnit(unit{variant: variant, dir: step.dir, target: target, env: s.env()})
+}
+
+// A step is only worth building up front while two of its directories still
+// build it; a lone writer races nobody.
+func narrowPrelude(steps []preludeStep, dirs []string) []preludeStep {
+	var out []preludeStep
+	for _, step := range steps {
+		writers := 0
+		for _, dir := range step.neededBy {
+			if slices.Contains(dirs, dir) {
+				writers++
+			}
+		}
+		if writers > 1 {
+			out = append(out, step)
+		}
+	}
+	return out
+}
+
 // runUnitOnly adapts runUnit to forEachUnit, which wants a result per unit.
 func (s settings) runUnitOnly(u unit) (unitDone, error) {
 	return unitDone{}, s.runUnit(u)

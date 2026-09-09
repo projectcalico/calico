@@ -17,11 +17,14 @@ package images
 import (
 	"errors"
 	"fmt"
+	"os/exec"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/projectcalico/calico/release/internal/command"
 )
@@ -283,7 +286,9 @@ func TestLogPaths(t *testing.T) {
 		}
 		slices.Sort(got)
 		want := []string{
+			"/logs/images-build/cmd-calico-clean.log",
 			"/logs/images-build/cmd-calico.log",
+			"/logs/images-build/node-clean.log",
 			"/logs/images-build/node-windows.log",
 			"/logs/images-build/node.log",
 		}
@@ -291,6 +296,276 @@ func TestLogPaths(t *testing.T) {
 			t.Errorf("log paths\n got %v\nwant %v", got, want)
 		}
 	})
+}
+
+// overlapRunner reports which calls were in flight at once, which the order
+// fakeRunner records cannot show.
+type overlapRunner struct {
+	mu       sync.Mutex
+	inFlight map[string]bool
+	// sawTogether is every pair of directories that overlapped.
+	sawTogether map[string]bool
+	// afterBuild counts prelude or clean calls that ran once a unit had started,
+	// prelude those that built shared work before the fan-out.
+	afterBuild   int
+	prelude      int
+	buildRunning bool
+}
+
+func newOverlapRunner() *overlapRunner {
+	return &overlapRunner{inFlight: map[string]bool{}, sawTogether: map[string]bool{}}
+}
+
+func (o *overlapRunner) RunInDirToFile(_, _ string, args, env []string, _ string) (string, error) {
+	return o.record(args)
+}
+
+func (o *overlapRunner) RunInDir(_, _ string, args, env []string) (string, error) {
+	return o.record(args)
+}
+
+func (o *overlapRunner) Run(_ string, args, _ []string) (string, error) { return o.record(args) }
+
+func (o *overlapRunner) record(args []string) (string, error) {
+	dir, shared := dirOf(args), isShared(args)
+
+	o.mu.Lock()
+	if shared {
+		if o.buildRunning {
+			o.afterBuild++
+		} else if !slices.Contains(args, "clean") {
+			o.prelude++
+		}
+	}
+	if !shared {
+		o.buildRunning = true
+	}
+	for other := range o.inFlight {
+		o.sawTogether[pairKey(dir, other)] = true
+	}
+	o.inFlight[dir] = true
+	o.mu.Unlock()
+
+	// Give a concurrent unit a chance to observe this one in flight.
+	time.Sleep(time.Millisecond)
+
+	o.mu.Lock()
+	delete(o.inFlight, dir)
+	o.mu.Unlock()
+	return "ok", nil
+}
+
+func (o *overlapRunner) overlapped(a, b string) bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.sawTogether[pairKey(a, b)]
+}
+
+func (o *overlapRunner) RunNoCapture(string, []string, []string) error              { return nil }
+func (o *overlapRunner) RunInDirNoCapture(string, string, []string, []string) error { return nil }
+
+// A unit is identified by its directory and variant, so a directory's two
+// image kinds are told apart.
+func dirOf(args []string) string {
+	dir := filepath.Base(args[1])
+	if slices.Contains(args, "release-windows") || slices.Contains(args, "image-windows") {
+		return dir + "-windows"
+	}
+	return dir
+}
+
+// clean and the prelude are the sequential work that must precede every unit.
+func isShared(args []string) bool {
+	if slices.Contains(args, "clean") {
+		return true
+	}
+	for _, step := range preludeSteps {
+		if slices.Contains(args, step.target) {
+			return true
+		}
+	}
+	return false
+}
+
+func pairKey(a, b string) string {
+	if a > b {
+		a, b = b, a
+	}
+	return a + "|" + b
+}
+
+// A directory's units write one tree, so its image kinds run one at a time.
+func TestBuildSerialisesUnitsInOneDirectory(t *testing.T) {
+	o := newOverlapRunner()
+	if err := Build(testRepoRoot, testVersion, ossVariants(), buildOpts(o)...); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if o.overlapped("node", "node-windows") {
+		t.Error("node's standard and windows units overlapped")
+	}
+}
+
+// Serialising a directory must not serialise the whole build.
+func TestBuildStillRunsIndependentDirsTogether(t *testing.T) {
+	o := newOverlapRunner()
+	variants := []Variant{{
+		Name:        "standard",
+		Target:      "release-build",
+		ReleaseDirs: []string{"whisker", "third_party/envoy-proxy", "third_party/envoy-gateway"},
+	}}
+	if err := Build(testRepoRoot, testVersion, variants, buildOpts(o)...); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if !o.overlapped("whisker", "envoy-proxy") && !o.overlapped("whisker", "envoy-gateway") &&
+		!o.overlapped("envoy-proxy", "envoy-gateway") {
+		t.Error("independent directories were serialised")
+	}
+}
+
+// A step whose log path collided with another's would lose its output.
+func TestPreludeLogPathsAreDistinct(t *testing.T) {
+	s := settings{}
+	seen := map[string]string{}
+	for _, step := range preludeSteps {
+		p := s.logPath(unit{variant: preludeVariant, dir: step.dir})
+		if other, dup := seen[p]; dup {
+			t.Errorf("%s and %s share the log name %s", other, step.dir, p)
+		}
+		seen[p] = step.dir
+	}
+}
+
+// The shared work has to be finished before any unit can reach it.
+func TestPreludeCompletesBeforeAnyUnitRuns(t *testing.T) {
+	if len(preludeSteps) == 0 {
+		t.Skip("no prelude steps in this repo")
+	}
+	// Every writer of the first step, so narrowPrelude keeps it.
+	o := newOverlapRunner()
+	variants := []Variant{{
+		Name:        "standard",
+		Target:      "release-build",
+		ReleaseDirs: slices.Clone(preludeSteps[0].neededBy),
+	}}
+	if err := Build(testRepoRoot, testVersion, variants, buildOpts(o)...); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if o.prelude == 0 {
+		t.Fatal("no prelude step ran before the fan-out")
+	}
+	if o.afterBuild > 0 {
+		t.Errorf("%d shared steps ran after a unit had started", o.afterBuild)
+	}
+}
+
+// The prelude only removes a race while its targets still resolve. A rename
+// would otherwise leave it silently building nothing.
+func TestPreludeTargetsResolve(t *testing.T) {
+	repoRoot, err := command.GitDir()
+	if err != nil {
+		t.Fatalf("repo root: %v", err)
+	}
+	for _, step := range preludeSteps {
+		t.Run(step.dir+"/"+step.target, func(t *testing.T) {
+			cmd := exec.Command("make", "-n", step.target)
+			cmd.Dir = filepath.Join(repoRoot, step.dir)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Errorf("make -n %s in %s: %v\n%s", step.target, step.dir, err, out)
+			}
+		})
+	}
+}
+
+// A step is only worth building up front while two directories still build it.
+// The steps are a fixture: the production table differs between repos.
+func TestNarrowPrelude(t *testing.T) {
+	steps := []preludeStep{
+		{dir: "shared-a", target: "build-a", neededBy: []string{"one", "two"}},
+		{dir: "shared-b", target: "build-b", neededBy: []string{"two", "three"}},
+	}
+	for _, tc := range []struct {
+		name string
+		dirs []string
+		want []string
+	}{
+		{"every writer present keeps every step", []string{"one", "two", "three"}, []string{"shared-a", "shared-b"}},
+		{"a lone writer races nobody", []string{"two"}, nil},
+		{"one step's writers survive", []string{"one", "two"}, []string{"shared-a"}},
+		{"the other step's writers survive", []string{"two", "three"}, []string{"shared-b"}},
+		{"a dir needing none of it", []string{"unrelated"}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []string
+			for _, step := range narrowPrelude(steps, tc.dirs) {
+				got = append(got, step.dir)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("narrowPrelude(%v)\n got %v\nwant %v", tc.dirs, got, tc.want)
+			}
+		})
+	}
+}
+
+// The tool's own _output and tmp live under release/, and it is mid-run.
+func TestBuildNeverCleansTheReleaseDir(t *testing.T) {
+	f := &fakeRunner{}
+	if err := Build(testRepoRoot, testVersion, ossVariants(), buildOpts(f)...); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	for _, c := range f.calls {
+		if !slices.Contains(c.args, "clean") {
+			continue
+		}
+		if dir := c.args[1]; dir == testRepoRoot || strings.HasSuffix(dir, "/release") {
+			t.Errorf("clean reached %s, which holds the running tool's output", dir)
+		}
+	}
+}
+
+// Each build directory cleans its own tree, so nothing cleans a component
+// this run is not rebuilding.
+func TestCleanCoversExactlyTheBuildDirs(t *testing.T) {
+	f := &fakeRunner{}
+	variants := NarrowVariants(BuildVariants, []string{"whisker"})
+	if err := Build(testRepoRoot, testVersion, variants, buildOpts(f)...); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var cleaned []string
+	for _, c := range f.calls {
+		if slices.Contains(c.args, "clean") {
+			cleaned = append(cleaned, c.args[1])
+		}
+	}
+	want := []string{filepath.Join(testRepoRoot, "whisker")}
+	if !slices.Equal(cleaned, want) {
+		t.Errorf("cleaned %v, want %v", cleaned, want)
+	}
+}
+
+// Components share build trees, so a clean must never land mid-build.
+func TestBuildCleansBeforeAnyUnitRuns(t *testing.T) {
+	f := &fakeRunner{}
+	if err := Build(testRepoRoot, testVersion, ossVariants(), buildOpts(f)...); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	var cleans, builds int
+	for _, c := range f.calls {
+		if slices.Contains(c.args, "clean") {
+			if builds > 0 {
+				t.Errorf("clean %v ran after a build started", c.args)
+			}
+			cleans++
+			continue
+		}
+		builds++
+	}
+	if cleans == 0 {
+		t.Error("no clean ran before the build")
+	}
+	if builds == 0 {
+		t.Error("no unit was built")
+	}
 }
 
 // Scoping the release dirs must scope the work.

@@ -28,15 +28,32 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
+const (
+	// build targets
+	buildBPF = "build-bpf"
+
+	// These name the prelude's and the clean's log files apart from a unit's.
+	preludeVariant = "prelude"
+	cleanVariant   = "clean"
+)
+
 func Build(repoRoot, version string, variants []Variant, opts ...BuildOption) error {
 	s, err := newSettings(buildStep, repoRoot, version, variants, opts)
 	if err != nil {
 		return err
 	}
 
+	gate := newDirGate()
+	if err := s.clean(gate); err != nil {
+		return err
+	}
+	if err := s.prelude(); err != nil {
+		return err
+	}
+
 	units := s.units(s.env())
 	s.Logger().WithField("images", len(units)).Info("Building container images")
-	if err := s.runUnits(units); err != nil {
+	if err := s.runBuildUnits(units, gate); err != nil {
 		return err
 	}
 	s.Logger().Info("Finished building container images")

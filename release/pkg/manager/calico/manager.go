@@ -1304,7 +1304,8 @@ func (r *CalicoManager) buildBinaries() error {
 	// as part of its image release-build target.
 	m := map[string]string{"calicoctl": "build-all"}
 	if !r.images {
-		m["felix"] = "release-build"
+		// The image build cleans felix itself; without it nothing else does.
+		m["felix"] = "clean release-build"
 	}
 	env := append(os.Environ(),
 		fmt.Sprintf("VERSION=%s", r.calicoVersion),
