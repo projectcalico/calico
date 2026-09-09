@@ -21,6 +21,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -75,17 +76,19 @@ func ReformatHashrelease(pin *pinnedversion.Pin, hashreleaseOutputDir string) er
 	if err := os.MkdirAll(chartsDir, 0o755); err != nil {
 		return err
 	}
-	for _, chart := range utils.AllReleaseCharts() {
-		chartTarball := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("%s-%s.tgz", chart, pin.HelmChartVersion()))
-		chartTarballDst := filepath.Join(chartsDir, fmt.Sprintf("%s.tgz", chart))
+	for _, chart := range charts.All() {
+		versioned := charts.FileName(chart, pin.HelmChartVersion())
+		unversioned := charts.FileName(chart, "")
+		chartTarball := filepath.Join(hashreleaseOutputDir, versioned)
+		chartTarballDst := filepath.Join(chartsDir, unversioned)
 		if err := copyIfExists(chartTarball, chartTarballDst); err != nil {
 			return err
 		}
 	}
 
 	// Keep copy of the Tigera operator chart without version in name in root dir
-	operatorTarball := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, pin.HelmChartVersion()))
-	operatorTarballDst := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("%s.tgz", utils.TigeraOperatorChart))
+	operatorTarball := filepath.Join(hashreleaseOutputDir, charts.FileName(charts.TigeraOperatorChart, pin.HelmChartVersion()))
+	operatorTarballDst := filepath.Join(hashreleaseOutputDir, charts.FileName(charts.TigeraOperatorChart, ""))
 	if err := copyIfExists(operatorTarball, operatorTarballDst); err != nil {
 		return err
 	}

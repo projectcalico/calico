@@ -253,8 +253,8 @@ var (
 
 	forceFlag = &cli.BoolFlag{
 		Name:     "force",
-		Category: containerImageCategory,
-		Usage:    "Republish images whose published digest differs from the record.",
+		Category: stepControlCategory,
+		Usage:    "Republish artifacts whose published digest differs from the record.",
 		Sources:  cli.EnvVars("FORCE"),
 	}
 

@@ -23,8 +23,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -55,7 +55,7 @@ func Archive(repoRoot, version string, variants []Variant, tarDir string, opts .
 	if len(s.Registries) == 0 {
 		return s.Errorf("no registry to archive images from")
 	}
-	s.dir = tarDir
+	s.Apply([]steps.Option{steps.WithDir(tarDir)})
 
 	units := s.units(s.env())
 	s.Logger().WithField("images", len(units)).Info("Archiving container images")
@@ -66,7 +66,7 @@ func Archive(repoRoot, version string, variants []Variant, tarDir string, opts .
 	// Images come from the first registry: an archive holds one copy, whichever
 	// registry it is pulled from.
 	reg := s.Registries[0]
-	if _, err := forEachUnit(units, func(u unit) (unitDone, error) {
+	if _, err := steps.Go(units, func(u unit) (unitDone, error) {
 		return unitDone{}, saveUnit(s, u, reg, tarDir)
 	}); err != nil {
 		return err
@@ -117,7 +117,7 @@ func publishEnv(s settings) []string {
 
 // confirm latches the push: without it the make targets run as a dry run, so it
 // is an argument rather than an option a caller can forget.
-func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve DigestResolver, opts ...PublishOption) error {
+func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve steps.DigestResolver, opts ...PublishOption) error {
 	s, err := newSettings(publishStep, repoRoot, version, variants, opts)
 	if err != nil {
 		return err
@@ -177,7 +177,7 @@ func sendImagesToISS(s settings) {
 // newSettings is generic so each step accepts only its own option type.
 func newSettings[O any](step, repoRoot, version string, variants []Variant, opts []O) (settings, error) {
 	s := settings{RepoRoot: repoRoot, Version: version, Variants: variants}
-	s.Apply([]command.Option{command.WithName(step)})
+	s.Apply([]steps.Option{steps.WithName(step)})
 	if err := s.validate(); err != nil {
 		return s, s.Errorf("%w", err)
 	}
@@ -203,7 +203,7 @@ func applyTo(opt any, s *settings) error {
 }
 
 // unitStateAgainst binds one record, so every unit is judged against the same.
-func (s settings) unitStateAgainst(recorded recordedDigests) func(unit) (bool, error) {
+func (s settings) unitStateAgainst(recorded steps.RecordedDigests) func(unit) (bool, error) {
 	return func(u unit) (bool, error) { return unitState(s, u, recorded) }
 }
 
@@ -213,8 +213,8 @@ func pending(s settings, units []unit) ([]unit, error) {
 	if s.resume == nil {
 		return units, nil
 	}
-	recorded := digestsByRepo(s.resume.published)
-	done, err := forEachUnit(units, s.unitStateAgainst(recorded))
+	recorded := steps.DigestsByRepo(s.resume.published)
+	done, err := steps.Go(units, s.unitStateAgainst(recorded))
 	if err != nil {
 		return nil, err
 	}
