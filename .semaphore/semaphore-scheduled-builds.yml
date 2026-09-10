@@ -621,10 +621,12 @@ blocks:
     # Whisker is a TypeScript/React frontend that won't consolidate into the
     # calico binary — it ships as its own image indefinitely. No Go build cache
     # to populate; only produces the image tarball for consumer blocks.
+    #
+    # Consumers ("E2E tests (KinD)", "Operator FV") list this block in their
+    # `dependencies:`, so CHANGE_IN_WITH_DEPENDENTS() folds their triggers into the
+    # arg below.
     run:
-      when: >-
-        true or
-        change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+      when: "true"
     dependencies: []
     task:
       jobs:
@@ -1862,6 +1864,8 @@ blocks:
     dependencies:
       - Prerequisites
       - "Build: calico image"
+      - "Build: node image"
+      - "Build: whisker image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
