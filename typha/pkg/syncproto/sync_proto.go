@@ -241,21 +241,31 @@ var AllSyncerTypes = [NumSyncerTypes]SyncerType{
 type CompressionAlgorithm string
 
 const (
+	// CompressionNone is the zero value: the stream carries plain bytes.
+	// It is a peer of the real algorithms everywhere an algorithm is
+	// chosen, advertised or looked up, so that the uncompressed case needs
+	// no special handling.
+	CompressionNone   CompressionAlgorithm = ""
 	CompressionSnappy CompressionAlgorithm = "snappy"
 	CompressionZstd   CompressionAlgorithm = "zstd"
+
+	NumCompressionAlgorithms = 2
 )
 
-// AllCompressionAlgorithms lists all supported compression algorithms.
-var AllCompressionAlgorithms = []CompressionAlgorithm{
+// AllCompressionAlgorithms contains each of the compression algorithms a
+// stream can be encoded with, in no particular order.  It excludes
+// CompressionNone, which is not something a peer advertises support for.  We
+// use an array rather than a slice so that it is copied, not aliased, when a
+// caller takes it.
+var AllCompressionAlgorithms = [NumCompressionAlgorithms]CompressionAlgorithm{
 	CompressionSnappy,
 	CompressionZstd,
 }
 
 // MetricLabelValue returns the value used for the "compression" label on
-// Prometheus metrics: the algorithm name, or "none" for the zero value
-// (uncompressed).
+// Prometheus metrics: the algorithm name, or "none" for CompressionNone.
 func (a CompressionAlgorithm) MetricLabelValue() string {
-	if a == "" {
+	if a == CompressionNone {
 		return "none"
 	}
 	return string(a)

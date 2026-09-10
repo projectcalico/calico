@@ -137,7 +137,7 @@ func NewStreamCompressor(algorithm CompressionAlgorithm, w io.Writer) (Compresso
 			return nil, err
 		}
 		return &streamCompressor{c: zw, bw: bw}, nil
-	case "":
+	case CompressionNone:
 		return nopCompressor{bw}, nil
 	default:
 		return nil, fmt.Errorf("unknown compression algorithm: %q", algorithm)
@@ -161,7 +161,7 @@ func NewSnapshotCompressor(algorithm CompressionAlgorithm, w io.Writer) (Compres
 			zstd.WithEncoderLevel(zstd.SpeedFastest),
 			zstd.WithWindowSize(snapshotZstdWindowSize),
 		)
-	case "":
+	case CompressionNone:
 		return passthroughCompressor{w}, nil
 	default:
 		return nil, fmt.Errorf("unknown compression algorithm: %q", algorithm)
@@ -188,7 +188,7 @@ func NewDecompressor(algorithm CompressionAlgorithm, r io.Reader) (Decompressor,
 			zstd.WithDecoderConcurrency(1),
 			zstd.WithDecoderMaxWindow(maxZstdWindowSize),
 		)
-	case "":
+	case CompressionNone:
 		return nopCloserDecompressor{r}, nil
 	default:
 		return nil, fmt.Errorf("unknown compression algorithm: %q", algorithm)

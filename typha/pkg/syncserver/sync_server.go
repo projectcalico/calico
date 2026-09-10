@@ -80,11 +80,12 @@ var (
 			"snapshot.",
 	}, []string{"syncer"})
 
-	// allCompressionMetricAlgorithms lists every algorithm value used for the
-	// "compression" metric label, including "" (reported as "none") for
-	// uncompressed connections.
+	// allCompressionMetricAlgorithms lists every algorithm value used for
+	// the "compression" metric label, including CompressionNone (reported
+	// as "none") for uncompressed connections.
 	allCompressionMetricAlgorithms = append(
-		[]syncproto.CompressionAlgorithm{""}, syncproto.AllCompressionAlgorithms...)
+		[]syncproto.CompressionAlgorithm{syncproto.CompressionNone},
+		syncproto.AllCompressionAlgorithms[:]...)
 )
 
 func init() {
@@ -878,7 +879,7 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 	var binSnapCache snapshotCache
 	if h.clientSupportsDecoderRestart {
 		binSnapCache = h.allSnapshotters[h.chosenCompression][h.syncerType]
-		if h.chosenCompression != "" && binSnapCache == nil {
+		if h.chosenCompression != syncproto.CompressionNone && binSnapCache == nil {
 			// Shouldn't happen: the server creates a snapshot cache for
 			// every algorithm it can choose, for every syncer type that
 			// passes the handshake.
@@ -1118,7 +1119,7 @@ func (h *connection) doHandshake() error {
 		}
 	}
 	h.clientSupportsDecoderRestart = hello.SupportsDecoderRestart
-	if h.chosenCompression != "" && !hello.SupportsDecoderRestart {
+	if h.chosenCompression != syncproto.CompressionNone && !hello.SupportsDecoderRestart {
 		h.logCxt.Warning("Client signalled compression but no support for decoder restart")
 		h.chosenCompression = ""
 	}

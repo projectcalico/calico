@@ -131,6 +131,7 @@ local:libcalico-go/lib/errors
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net
 local:libcalico-go/lib/readlogger
+local:libcalico-go/lib/set
 local:libcalico-go/lib/winutils
 local:pkg/buildinfo
 local:typha/cmd/typha-client

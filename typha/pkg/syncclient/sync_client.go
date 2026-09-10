@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,6 +35,7 @@ import (
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/readlogger"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 	"github.com/projectcalico/calico/typha/pkg/tlsutils"
@@ -179,13 +181,15 @@ type SyncerClient struct {
 	decompressor syncproto.Decompressor
 
 	// advertisedCompressionAlgs is the set of compression algorithms we
-	// offered in our hello message.  A MsgDecoderRestart naming any other
-	// algorithm is a protocol violation and drops the connection.  Only
-	// touched by the loop goroutine.
-	advertisedCompressionAlgs map[syncproto.CompressionAlgorithm]bool
+	// offered in our hello message, plus syncproto.CompressionNone, which
+	// the server may always fall back to.  A MsgDecoderRestart naming any
+	// other algorithm is a protocol violation and drops the connection.
+	// Only touched by the loop goroutine.
+	advertisedCompressionAlgs set.Set[syncproto.CompressionAlgorithm]
 
 	// negotiatedCompression holds the syncproto.CompressionAlgorithm the
-	// server selected for the current connection ("" if uncompressed).
+	// server selected for the current connection (CompressionNone if
+	// uncompressed).
 	negotiatedCompression atomic.Value
 
 	callbacks api.SyncerCallbacks
@@ -458,7 +462,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 
 	// Always start with basic gob encoding for the handshake.  We may upgrade to a compressed version below.
 	s.encoder = gob.NewEncoder(s.connection)
-	if err := s.swapDecompressor(""); err != nil {
+	if err := s.swapDecompressor(syncproto.CompressionNone); err != nil {
 		logCxt.WithError(err).Error("Failed to create decoder")
 		return
 	}
@@ -469,16 +473,16 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 	}
 	compAlgs := s.options.PreferredCompressionAlgorithmOrder
 	if compAlgs == nil {
-		compAlgs = syncproto.AllCompressionAlgorithms
+		compAlgs = slices.Clone(syncproto.AllCompressionAlgorithms[:])
 	}
 	if s.options.DisableDecoderRestart {
 		// Compression requires decoder restart.
 		compAlgs = nil
 	}
-	s.advertisedCompressionAlgs = make(map[syncproto.CompressionAlgorithm]bool, len(compAlgs))
-	for _, alg := range compAlgs {
-		s.advertisedCompressionAlgs[alg] = true
-	}
+	// An uncompressed stream needs no support from us, so it is always in
+	// the set, whatever we advertise.
+	s.advertisedCompressionAlgs = set.From(compAlgs...)
+	s.advertisedCompressionAlgs.Add(syncproto.CompressionNone)
 	err := s.sendMessageToServer(cxt, logCxt, "send hello to server",
 		syncproto.MsgClientHello{
 			Hostname:                       s.myHostname,
@@ -597,10 +601,10 @@ func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, ms
 		"msg":         msg,
 		"compression": msg.CompressionAlgorithm,
 	}).Info("Server asked us to restart our decoder")
-	// The server must pick from the algorithms we advertised (or none).
-	// Anything else is a protocol violation; don't decode with an algorithm
-	// we never offered.
-	if msg.CompressionAlgorithm != "" && !s.advertisedCompressionAlgs[msg.CompressionAlgorithm] {
+	// The server must pick from the algorithms we advertised.  Anything
+	// else is a protocol violation; don't decode with an algorithm we never
+	// offered.
+	if !s.advertisedCompressionAlgs.Contains(msg.CompressionAlgorithm) {
 		logCxt.WithField("compression", msg.CompressionAlgorithm).Error(
 			"Server selected a compression algorithm that we didn't advertise.")
 		return fmt.Errorf("server selected compression algorithm %q, which we didn't advertise",

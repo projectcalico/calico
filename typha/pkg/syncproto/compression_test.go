@@ -40,7 +40,7 @@ import (
 //	stream 1 (cached binary snapshot) -> embedded restart
 //	stream 2 (per-connection delta stream, flushed mid-stream) -> EOF
 func TestCompressionRestartBoundaries(t *testing.T) {
-	for _, alg := range append([]CompressionAlgorithm{""}, AllCompressionAlgorithms...) {
+	for _, alg := range append([]CompressionAlgorithm{CompressionNone}, AllCompressionAlgorithms[:]...) {
 		t.Run(string(alg), func(t *testing.T) {
 			RegisterTestingT(t)
 
@@ -65,7 +65,7 @@ func TestCompressionRestartBoundaries(t *testing.T) {
 			}()
 
 			// Stream 0: handshake phase, always uncompressed.
-			hostnames, err := readTestStream("", pr, true)
+			hostnames, err := readTestStream(CompressionNone, pr, true)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(hostnames).To(Equal(expectedHostnames(0)))
 			acks <- struct{}{}
@@ -129,7 +129,7 @@ func writeTestStreams(w *io.PipeWriter, alg CompressionAlgorithm, acks chan stru
 	}
 
 	// Stream 0: uncompressed handshake phase.
-	c, err := NewStreamCompressor("", w)
+	c, err := NewStreamCompressor(CompressionNone, w)
 	if err != nil {
 		return err
 	}
@@ -211,7 +211,7 @@ func TestCompressionBlockAlignedBoundary(t *testing.T) {
 		blockSize - 1, blockSize, blockSize + 1, 2 * blockSize,
 		blockSize - len(tail), 2*blockSize - len(tail),
 	}
-	for _, alg := range append([]CompressionAlgorithm{""}, AllCompressionAlgorithms...) {
+	for _, alg := range append([]CompressionAlgorithm{CompressionNone}, AllCompressionAlgorithms[:]...) {
 		for name, newCompressor := range constructors {
 			for _, bulkLen := range bulkLens {
 				t.Run(fmt.Sprintf("%s/%s/%d", alg, name, bulkLen), func(t *testing.T) {
