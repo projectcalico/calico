@@ -213,10 +213,12 @@ FV_LDFLAGS = -ldflags "-X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(KIND_TE
 	-X $(PACKAGE_NAME)/pkg/components.calicoRegistry=$(KIND_IMAGE_REGISTRY) \
 	-X $(PACKAGE_NAME)/pkg/components.calicoImagePath=$(KIND_IMAGE_PATH)"
 
-# The components the FV installs. FV_IMAGE_DIR_<name> overrides where an image is
-# built when that is not a directory named for it.
-FV_IMAGES = calico node whisker
-FV_IMAGE_DIR_calico = cmd/calico
+# Every component the FV's operator installs has to be in the registry, including the
+# cni-plugins init container, or calico-node never leaves Init. FV_MARKER_<name> names
+# the build marker for an image that does not use <name>/.image.created-<arch>.
+FV_IMAGES = calico node whisker third-party-cni-plugins
+FV_MARKER_calico                  = cmd/calico/.image.created-$(ARCH)
+FV_MARKER_third-party-cni-plugins = third_party/cni-plugins/.cni-plugins.created-$(ARCH)
 
 .PHONY: push-fv-images
 push-fv-images: kind-registry-up $(addprefix push-fv-image-,$(FV_IMAGES))
@@ -225,7 +227,7 @@ push-fv-images: kind-registry-up $(addprefix push-fv-image-,$(FV_IMAGES))
 # FV runs, and build one for a local run that has none.
 push-fv-image-%:
 	@docker image inspect calico/$*:latest-$(ARCH) >/dev/null 2>&1 || \
-		$(MAKE) $(REPO_ROOT)/$(or $(FV_IMAGE_DIR_$*),$*)/.image.created-$(ARCH)
+		$(MAKE) $(REPO_ROOT)/$(or $(FV_MARKER_$*),$*/.image.created-$(ARCH))
 	docker tag calico/$*:latest-$(ARCH) $(KIND_IMAGE_REGISTRY)/$(KIND_IMAGE_PATH)/$*:$(KIND_TEST_BUILD_TAG)
 	docker push $(KIND_IMAGE_REGISTRY)/$(KIND_IMAGE_PATH)/$*:$(KIND_TEST_BUILD_TAG)
 
