@@ -1335,6 +1335,139 @@ func TestQoSConnLimitEgressSpuriousRSTSlotRestoredByRecount(t *testing.T) {
 		"recount did not restore the slot of a live connection after a spurious RST")
 }
 
+// TestQoSConnLimitEgressForgedRSTAdmitsExtraConnection reproduces CORE-13478
+// Failure.1. A forged RST frees a slot the pod spends before any recount.
+func TestQoSConnLimitEgressForgedRSTAdmitsExtraConnection(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "HWfrg"
+	defer func() { bpfIfaceName = "" }()
+
+	const (
+		// ifIndex must match the BPF UT's default skb ifindex so the
+		// workload RPF check (route iface vs skb iface) passes.
+		ifIndex               = 1
+		maxConnections        = 3
+		dstPort        uint16 = 8055
+		// A source port for the control SYN, which must be refused.
+		refusedPort uint16 = 12420
+	)
+
+	// Paired by index: forging an RST on victimPorts[i] pays for extraPorts[i].
+	victimPorts := []uint16{12401, 12402, 12403}
+	extraPorts := []uint16{12411, 12412, 12413}
+
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+
+	ctMap := conntrack.Map()
+	Expect(ctMap.EnsureExists()).NotTo(HaveOccurred())
+	defer resetCTMap(ctMap)
+	resetCTMap(ctMap)
+
+	defer resetQoSMap(qosConnMap)
+	resetQoSMap(qosConnMap)
+
+	qosKey := qos.NewKey(uint32(ifIndex), 0 /* egress */, qos.IPFamilyV4)
+	Expect(qosConnMap.Update(qosKey.AsBytes(),
+		qos.NewConnValue(maxConnections, uint32(len(victimPorts))).AsBytes())).
+		NotTo(HaveOccurred())
+
+	readQoSCount := func() uint32 {
+		b, err := qosConnMap.Get(qosKey.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return qos.ConnValueFromBytes(b).CurrentCount()
+	}
+
+	ctKeyFor := func(srcPort uint16) ctv4.Key {
+		return ctv4.NewKey(6, srcIP, srcPort, dstIP, dstPort)
+	}
+
+	ctEntryExists := func(srcPort uint16) bool {
+		_, err := ctMap.Get(ctKeyFor(srcPort).AsBytes())
+		return err == nil
+	}
+
+	readCTVal := func(srcPort uint16) ctv4.ValueInterface {
+		b, err := ctMap.Get(ctKeyFor(srcPort).AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return ctv4.ValueFromBytes(b)
+	}
+
+	// Approved on both legs, or calico_ct_lookup returns CALI_CT_INVALID and
+	// drops the non-SYN packets below.
+	for _, srcPort := range victimPorts {
+		legA := ctv4.Leg{SynSeen: true, AckSeen: true, Approved: true, Opener: true, Ifindex: ifIndex}
+		legB := ctv4.Leg{SynSeen: true, AckSeen: true, Approved: true}
+		v := ctv4.NewValueNormal(time.Duration(0), ctv4.FlagConnLimitOut, legA, legB)
+		Expect(ctMap.Update(ctKeyFor(srcPort).AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
+	}
+
+	sendFromWorkload := func(pkt []byte) {
+		skbMark = 0
+		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pkt)
+			Expect(err).NotTo(HaveOccurred())
+			// Guard only: on egress the reject path also returns
+			// TC_ACT_REDIRECT, so the CT entry is the discriminator.
+			Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
+		}, withEgressQoSConnLimit())
+	}
+
+	synFor := func(srcPort uint16) []byte {
+		_, _, _, _, pkt, err := testPacketTCPV4WithPayload(dstIP, srcPort, dstPort, true /* syn */, nil)
+		Expect(err).NotTo(HaveOccurred())
+		return pkt
+	}
+
+	// Control: the limit refuses a SYN before the attack starts.
+	Expect(readQoSCount()).To(Equal(uint32(maxConnections)))
+	sendFromWorkload(synFor(refusedPort))
+	Expect(ctEntryExists(refusedPort)).To(BeFalse(),
+		"a SYN at the limit must be rejected and leave no CT entry")
+	Expect(readQoSCount()).To(Equal(uint32(maxConnections)))
+
+	ip := *ipv4Default
+	ip.DstIP = dstIP
+
+	admitted := 0
+	for i, victim := range victimPorts {
+		rstPkt, dataPkt := spuriousRSTThenTrafficPackets(&ip, victim, dstPort)
+
+		sendFromWorkload(rstPkt)
+		Expect(readCTVal(victim).RSTSeen()).NotTo(BeZero(),
+			"RST never reached the conntrack path; this round would be vacuous")
+		t.Logf("round %d: count after forged RST: %d/%d", i+1, readQoSCount(), maxConnections)
+
+		sendFromWorkload(synFor(extraPorts[i]))
+		if ctEntryExists(extraPorts[i]) {
+			admitted++
+		}
+
+		// The RST'd connection is still live, so that RST was no genuine
+		// close.
+		sendFromWorkload(dataPkt)
+		Expect(readCTVal(victim).Data().RSTSeen()).To(BeFalse(),
+			"per-leg rst_seen should have been cleared by the continued traffic")
+	}
+
+	for _, srcPort := range victimPorts {
+		Expect(ctEntryExists(srcPort)).To(BeTrue(),
+			"a connection the pod forged an RST for is no longer tracked")
+	}
+
+	t.Logf("CORE-13478: %d admissions bought with %d forged RSTs, limit %d, count %d",
+		admitted, len(victimPorts), maxConnections, readQoSCount())
+
+	Expect(admitted).To(BeZero(),
+		"forged RSTs bought admissions the egress limit should have refused")
+}
+
 // TestQoSConnLimitSpuriousRSTReleasesStaleDecClaim verifies that once
 // calico_ct_lookup concludes an RST was spurious, it also releases the
 // CONNLIMIT_DEC claim that RST caused, so the connection's genuine close still
