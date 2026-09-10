@@ -118,5 +118,40 @@ var fakeRepo = func(t *testing.T, version string) string {
 	}
 	write(filepath.Join("ocp", "02-tigera-operator.yaml"), "          image: quay.io/calico/calico:"+version+"\n")
 	write("tigera-operator.yaml", "          image: quay.io/calico/operator:"+version+"\n")
+	writeChartValues(t, root)
 	return root
+}
+
+// The values a release rewrites before packaging. Each chart carries the keys
+// its edits target, so a fixture missing one fails the way the real tree would.
+var fakeChartValues = map[string]string{
+	"tigera-operator": `tigeraOperator:
+  image: calico/operator
+  version: master
+  registry: quay.io
+calicoctl:
+  image: quay.io/calico/calico
+  tag: master
+`,
+	"calico": `version: master
+calico:
+  registry: quay.io/calico
+node:
+  registry: quay.io/calico
+flannelMigration:
+  registry: quay.io/calico
+`,
+}
+
+func writeChartValues(t *testing.T, root string) {
+	t.Helper()
+	for chart, values := range fakeChartValues {
+		dir := filepath.Join(root, "charts", chart)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "values.yaml"), []byte(values), 0o644); err != nil {
+			t.Fatalf("write values: %v", err)
+		}
+	}
 }

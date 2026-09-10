@@ -19,28 +19,33 @@ package charts
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"slices"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/steps"
+	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/yamledit"
 )
 
 // The name becomes the log directory, so it is qualified: a bare "build"
 // would collide with another group's.
 const (
-	buildStep   = "charts-build"
-	publishStep = "charts-publish"
+	buildStep = "charts-build"
+
+	// PublishStep names the step, and so the record a resume reads back.
+	PublishStep = "charts-publish"
 )
 
 const (
-	// chartsDirName holds a release's packaged charts.
-	chartsDirName = "charts"
+	chartsDirName  = "charts"
+	indexFileName  = "index.yaml"
+	valuesFileName = "values.yaml"
 
-	// One invocation: a chart may be packaged into another as a sub-chart.
+	// Make target for building the chart.
 	chartTarget = "chart"
-
-	indexFileName = "index.yaml"
 
 	// The repository's own helm, so every run uses the same version.
 	helmBinary = "./bin/helm"
@@ -49,12 +54,28 @@ const (
 // The charts a release ships, and where the product serves them from.
 const (
 	TigeraOperatorChart      = "tigera-operator"
+	CalicoChart              = "calico"
 	ProjectCalicoV1CRDsChart = "crd.projectcalico.org.v1"
 	ProjectCalicoV3CRDsChart = "projectcalico.org.v3"
+
+	// docsURL is the base URL for the docs site
+	docsURL = "https://docs.tigera.io"
 )
 
-var RepoURL = func() string {
-	return "https://docs.tigera.io/calico/charts"
+var RepoURL = func() (string, error) {
+	url, err := url.JoinPath(docsURL, "calico", chartsDirName)
+	if err != nil {
+		return "", fmt.Errorf("charts repo URL: %w", err)
+	}
+	return url, nil
+}
+
+var ChartsURL = func(c Chart) (string, error) {
+	url, err := github.DownloadURL(utils.Organization(), utils.Repo(), c.ProductVersion)
+	if err != nil {
+		return "", fmt.Errorf("charts download URL: %w", err)
+	}
+	return url, nil
 }
 
 // All is the set a release ships. It is a var so a product shipping a
@@ -123,14 +144,18 @@ func FileName(chart, chartVersion string) string {
 	return fmt.Sprintf("%s.tgz", name)
 }
 
-// Dir is where a release's charts or their index sit under outputDir. The
-// version keeps one release's charts apart from another's.
-func Dir(outputDir, version string) string {
-	name := chartsDirName
-	if version != "" {
-		name += "-" + version
+// Dir is where a release's charts or their index sit under outputDir.
+func Dir(outputDir string) string {
+	return filepath.Join(outputDir, chartsDirName)
+}
+
+// versionedDir keeps one release's charts apart from another's, for a directory
+// shared between releases rather than nested under one.
+func versionedDir(outputDir, version string) (string, error) {
+	if version == "" {
+		return "", fmt.Errorf("no version specified")
 	}
-	return filepath.Join(outputDir, name)
+	return fmt.Sprintf("%s-%s", Dir(outputDir), version), nil
 }
 
 // settings is what a verb runs with. A field belongs here only when a verb
@@ -307,19 +332,29 @@ func WithResume(published []string, force bool) PublishOption {
 	})
 }
 
-// ValueEditsFor points the operator and product charts at the versions a
-// release pins.
-var ValueEditsFor = func(productVersion, operatorVersion string) []ValueEdit {
+func operatorChartEdits(productVersion, productRegistry, operatorImage, operatorVersion, operatorRegistry string) []ValueEdit {
 	return []ValueEdit{
-		{Chart: operatorChartName, Key: "version", Value: operatorVersion},
-		{Chart: operatorChartName, Key: "tag", Value: productVersion},
-		{Chart: productChartName, Key: "version", Value: productVersion},
+		{Chart: TigeraOperatorChart, Edit: yamledit.Edit{Key: "tigeraOperator.image", To: operatorImage}},
+		{Chart: TigeraOperatorChart, Edit: yamledit.Edit{Key: "tigeraOperator.version", To: operatorVersion}},
+		{Chart: TigeraOperatorChart, Edit: yamledit.Edit{Key: "tigeraOperator.registry", To: operatorRegistry}},
+		{Chart: TigeraOperatorChart, Edit: yamledit.Edit{Key: "calicoctl.image", To: fmt.Sprintf("%s/calico", productRegistry)}},
+		{Chart: TigeraOperatorChart, Edit: yamledit.Edit{Key: "calicoctl.tag", To: productVersion}},
 	}
 }
 
-// The charts whose values a release rewrites. productChartName renders the
-// manifests rather than shipping, so it is not in the released set.
-const (
-	operatorChartName = "tigera-operator"
-	productChartName  = "calico"
-)
+func calicoChartEdits(productVersion, productRegistry string) []ValueEdit {
+	return []ValueEdit{
+		{Chart: CalicoChart, Edit: yamledit.Edit{Key: "version", To: productVersion}},
+		{Chart: CalicoChart, Edit: yamledit.Edit{Key: "calico.registry", To: productRegistry}},
+		{Chart: CalicoChart, Edit: yamledit.Edit{Key: "node.registry", To: productRegistry}},
+		{Chart: CalicoChart, Edit: yamledit.Edit{Key: "flannelMigration.registry", To: productRegistry}},
+	}
+}
+
+// ValueEditsFor points the operator and product charts at the versions a
+// release pins.
+var ValueEditsFor = func(productVersion, productRegistry, operatorImage, operatorVersion, operatorRegistry string) []ValueEdit {
+	return append(slices.Clone(calicoChartEdits(productVersion, productRegistry)),
+		operatorChartEdits(productVersion, productRegistry, operatorImage, operatorVersion, operatorRegistry)...,
+	)
+}

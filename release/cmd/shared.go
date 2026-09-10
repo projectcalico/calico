@@ -20,6 +20,7 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -137,6 +138,19 @@ func slackConfig(c *cli.Command) *slack.Config {
 }
 
 type pinned func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error)
+
+// oncePin memoizes a pin source so several callers in one command share it.
+func oncePin(pin pinned) pinned {
+	var (
+		once sync.Once
+		p    *pinnedversion.Pin
+		err  error
+	)
+	return func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
+		once.Do(func() { p, err = pin(cfg, c) })
+		return p, err
+	}
+}
 
 var (
 	loadPin pinned = func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {

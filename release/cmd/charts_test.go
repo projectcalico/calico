@@ -45,7 +45,7 @@ var (
 	// Where a build leaves the packaged charts. A product that writes them
 	// somewhere other than a per-version directory replaces this.
 	chartsCLIChartDir = func(cfg *Config) string {
-		return filepath.Join(cfg.OutputDir, chartsCLITestVersion)
+		return charts.Dir(filepath.Join(cfg.OutputDir, chartsCLITestVersion))
 	}
 
 	// The make target that packages every chart.
@@ -56,14 +56,21 @@ var (
 	chartsCLIDigest   = "sha256:aaa"
 
 	// The repository whose index a build merges with.
-	chartsCLIRepoURL = charts.RepoURL()
+	chartsCLIRepoURL = func(t *testing.T) string {
+		t.Helper()
+		u, err := charts.RepoURL()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u
+	}
 
 	// A product serving charts from the repository it indexes replaces this:
 	// there the two URLs coincide.
 	chartsCLICheckDownloadURL = func(t *testing.T, url string) {
 		t.Helper()
-		if url == chartsCLIRepoURL {
-			t.Errorf("expected the download url to differ from the repository url %q", chartsCLIRepoURL)
+		if repo := chartsCLIRepoURL(t); url == repo {
+			t.Errorf("expected the download url to differ from the repository url %q", repo)
 		}
 		if !strings.Contains(url, chartsCLITestVersion) {
 			t.Errorf("expected the download url to name the release, got %q", url)
@@ -168,13 +175,11 @@ func TestChartsBuildBuildsTheIndexByDefault(t *testing.T) {
 	if !r.ran("--merge") {
 		t.Error("expected the published index to be merged rather than replaced")
 	}
-	if !r.ran(chartsCLIRepoURL) {
-		t.Errorf("expected the index at %q to be downloaded", chartsCLIRepoURL)
+	if repo := chartsCLIRepoURL(t); !r.ran(repo) {
+		t.Errorf("expected the index at %q to be downloaded", repo)
 	}
-	// The index is kept out of the chart directory.
-	// The finished index lands where the caller asked, whatever directory
-	// helm was pointed at to build it.
-	indexDir := chartsIndexDir(cfg, chartsCLIChartVersion)
+	// The index sits with the charts, so a sweep of the output takes both.
+	indexDir := chartsCLIChartDir(cfg)
 	if _, err := os.Stat(filepath.Join(indexDir, "index.yaml")); err != nil {
 		t.Errorf("expected the index in %q: %v", indexDir, err)
 	}
@@ -229,7 +234,7 @@ func TestChartsPublishLocalPushesNothing(t *testing.T) {
 func TestChartsPublishLocalRecordsNothing(t *testing.T) {
 	_, cfg := runCharts(t, "publish", "--local", "--helm-registry", chartsCLIRegistry)
 
-	refs, err := outputs.ReadRefs(cfg.OutputDir, chartsPublishStep, chartsCLIChartVersion)
+	refs, err := outputs.ReadRefs(cfg.OutputDir, charts.PublishStep, chartsCLIChartVersion)
 	if err != nil {
 		t.Fatalf("reading refs: %v", err)
 	}
@@ -241,7 +246,7 @@ func TestChartsPublishLocalRecordsNothing(t *testing.T) {
 func TestChartsPublishRecordsWhatItPushed(t *testing.T) {
 	_, cfg := runCharts(t, "publish", "--helm-registry", chartsCLIRegistry)
 
-	refs, err := outputs.ReadRefs(cfg.OutputDir, chartsPublishStep, chartsCLITestVersion)
+	refs, err := outputs.ReadRefs(cfg.OutputDir, charts.PublishStep, chartsCLIChartVersion)
 	if err != nil {
 		t.Fatalf("reading refs: %v", err)
 	}
@@ -336,10 +341,15 @@ func TestChartsBuildForAHashrelease(t *testing.T) {
 	prevBuild, prevPublish := pinForBuild, pinForPublish
 	pinForBuild = func(*Config, *cli.Command) (*pinnedversion.Pin, error) {
 		return &pinnedversion.Pin{
-			ProductVersion: pinned,
-			Hash:           "abc123",
-			ReleaseName:    "gentle-otter",
-			Operator:       registry.Component{Version: "v1.40.0-1-gdef"},
+			ProductVersion:  pinned,
+			ProductRegistry: chartsCLIRegistry,
+			Hash:            "abc123",
+			ReleaseName:     "gentle-otter",
+			Operator: registry.Component{
+				Version:  "v1.40.0-1-gdef",
+				Image:    "tigera/operator",
+				Registry: chartsCLIRegistry,
+			},
 		}, nil
 	}
 	pinForPublish = func(*Config, *cli.Command) (*pinnedversion.Pin, error) {
@@ -351,14 +361,18 @@ func TestChartsBuildForAHashrelease(t *testing.T) {
 	prevVer, prevDir := chartsCLIChartVersion, chartsCLIChartDir
 	chartsCLIChartVersion = pinned
 	chartsCLIChartDir = func(cfg *Config) string {
-		return filepath.Join(baseHashreleaseOutputDir(cfg.RepoRootDir), "abc123")
+		return charts.Dir(filepath.Join(baseHashreleaseOutputDir(cfg.RepoRootDir), "abc123"))
 	}
 	t.Cleanup(func() { chartsCLIChartVersion, chartsCLIChartDir = prevVer, prevDir })
 
-	r, _ := runCharts(t, "build", "--hashrelease")
+	r, cfg := runCharts(t, "build", "--hashrelease")
 
-	if !r.ran("-i", pinned) {
-		t.Error("expected the chart values rewritten to the pinned version")
+	values, err := os.ReadFile(filepath.Join(cfg.RepoRootDir, "charts", charts.TigeraOperatorChart, "values.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(values), pinned) {
+		t.Errorf("expected the chart values rewritten to %s, got %q", pinned, values)
 	}
 	if !r.ran("--url", "gentle-otter") {
 		t.Error("expected the index to point at the hashrelease")
@@ -394,7 +408,7 @@ func TestHashreleaseChartDirMatchesTheHashreleaseFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pinnedChart: %v", err)
 	}
-	want := pin.Hashrelease(baseHashreleaseOutputDir(root), false).Source
+	want := charts.Dir(pin.Hashrelease(baseHashreleaseOutputDir(root), false).Source)
 	if chart.BaseDir != want {
 		t.Errorf("BaseDir = %q, want %q", chart.BaseDir, want)
 	}
@@ -426,7 +440,7 @@ func TestChartsFollowTheResolvedChartVersion(t *testing.T) {
 
 	runChartsIn(t, cfg, "publish", "--helm-registry", chartsCLIRegistry)
 	// A missing record reads as empty rather than an error, so count the refs.
-	refs, err := outputs.ReadRefs(cfg.OutputDir, chartsPublishStep, resolved)
+	refs, err := outputs.ReadRefs(cfg.OutputDir, charts.PublishStep, resolved)
 	if err != nil {
 		t.Fatalf("reading refs: %v", err)
 	}

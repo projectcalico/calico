@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/projectcalico/calico/release/internal/steps"
+	"github.com/projectcalico/calico/release/internal/yamledit"
 )
 
 // fakeRunner records every invocation and can fail a command a set number of
@@ -212,11 +213,13 @@ func TestBuildRestoresTreeAfterModifyingValues(t *testing.T) {
 	writeCharts(t, c, c.Names...)
 	f := &fakeRunner{}
 
-	if err := Build(c, WithRunner(f), WithModifiedValues([]ValueEdit{{Chart: "chart-one", Key: "version", Value: "v3.30.0"}})); err != nil {
+	path := writeChartValues(t, c.RepoRoot, "chart-one", "version: master\n")
+
+	if err := Build(c, WithRunner(f), WithModifiedValues([]ValueEdit{{Chart: "chart-one", Edit: yamledit.Edit{Key: "version", To: "v3.30.0"}}})); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if len(f.callsTo("sed")) != 1 {
-		t.Error("expected the values to be modified")
+	if got, _ := os.ReadFile(path); string(got) != "version: v3.30.0\n" {
+		t.Errorf("values not modified, got %q", got)
 	}
 	if len(f.callsTo("git")) != 1 {
 		t.Error("expected the chart tree to be restored after the build")
@@ -227,7 +230,7 @@ func TestBuildRestoresTreeWhenBuildFails(t *testing.T) {
 	c := testChart(t)
 	f := &fakeRunner{failures: map[string]int{"make": 1}}
 
-	if err := Build(c, WithRunner(f), WithModifiedValues([]ValueEdit{{Chart: "chart-one", Key: "version", Value: "v3.30.0"}})); err == nil {
+	if err := Build(c, WithRunner(f), WithModifiedValues([]ValueEdit{{Chart: "chart-one", Edit: yamledit.Edit{Key: "version", To: "v3.30.0"}}})); err == nil {
 		t.Fatal("expected the build to fail")
 	}
 	if len(f.callsTo("git")) != 1 {
@@ -510,7 +513,7 @@ func TestPublishLogsPerChartAndRegistry(t *testing.T) {
 		t.Fatalf("Publish: %v", err)
 	}
 	// A chart goes to several registries, so the slug carries both.
-	want := filepath.Join(logs, publishStep, "chart-one-quay.test-charts.log")
+	want := filepath.Join(logs, PublishStep, "chart-one-quay.test-charts.log")
 	if !slices.ContainsFunc(f.callsTo(helmBinary), func(c call) bool { return c.logPath == want }) {
 		t.Errorf("expected a per-chart log at %q", want)
 	}
@@ -658,15 +661,23 @@ func TestFileName(t *testing.T) {
 }
 
 func TestDir(t *testing.T) {
-	for _, tc := range []struct{ name, outDir, version, want string }{
-		{"no version", "out", "", "out/charts"},
-		{"with version", "out", "v3.30.0", "out/charts-v3.30.0"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := Dir(tc.outDir, tc.version); got != tc.want {
-				t.Errorf("Dir = %q, want %q", got, tc.want)
-			}
-		})
+	if got, want := Dir("out"), "out/charts"; got != want {
+		t.Errorf("Dir = %q, want %q", got, want)
+	}
+}
+
+// The version is what keeps one release's charts apart from another's in a
+// shared directory, so an empty one is a caller mistake rather than a default.
+func TestVersionedDir(t *testing.T) {
+	got, err := versionedDir("out", "v3.30.0")
+	if err != nil {
+		t.Fatalf("versionedDir: %v", err)
+	}
+	if want := "out/charts-v3.30.0"; got != want {
+		t.Errorf("versionedDir = %q, want %q", got, want)
+	}
+	if _, err := versionedDir("out", ""); err == nil {
+		t.Error("expected an empty version to be rejected")
 	}
 }
 
@@ -724,9 +735,10 @@ func TestPublishRecordsPartialRefsWhenALookupFails(t *testing.T) {
 // A modify that fails partway has already written some edits.
 func TestBuildRestoresTreeWhenModifyingValuesFails(t *testing.T) {
 	c := testChart(t)
-	f := &fakeRunner{failures: map[string]int{"sed": 1}}
+	f := &fakeRunner{}
+	// No values file to edit, so the modify fails before the build runs.
 
-	if err := Build(c, WithRunner(f), WithModifiedValues([]ValueEdit{{Chart: "chart-one", Key: "version", Value: "v3.30.0"}})); err == nil {
+	if err := Build(c, WithRunner(f), WithModifiedValues([]ValueEdit{{Chart: "chart-one", Edit: yamledit.Edit{Key: "version", To: "v3.30.0"}}})); err == nil {
 		t.Fatal("expected the build to fail")
 	}
 	if len(f.callsTo("git")) != 1 {
@@ -770,13 +782,15 @@ func TestBuildModifiesValuesWhenAsked(t *testing.T) {
 	writeCharts(t, c, c.Names...)
 	f := &fakeRunner{}
 
+	path := writeChartValues(t, c.RepoRoot, "chart-one", "version: master\n")
+
 	if err := Build(c, WithRunner(f), WithModifiedValues([]ValueEdit{
-		{Chart: "chart-one", Key: "version", Value: "v3.30.0"},
+		{Chart: "chart-one", Edit: yamledit.Edit{Key: "version", To: "v3.30.0"}},
 	})); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if got := len(f.callsTo("sed")); got != 1 {
-		t.Errorf("expected the values rewritten, got %d sed calls", got)
+	if got, _ := os.ReadFile(path); string(got) != "version: v3.30.0\n" {
+		t.Errorf("values not rewritten, got %q", got)
 	}
 	if got := len(f.callsTo("git")); got != 1 {
 		t.Errorf("expected the tree restored, got %d git calls", got)
@@ -822,7 +836,11 @@ func TestBuildIndexDropsStaleCharts(t *testing.T) {
 	writeCharts(t, c, c.Names...)
 	tmp := t.TempDir()
 
-	stale := filepath.Join(Dir(tmp, c.Version()), "gone-"+c.Version()+".tgz")
+	staging, err := versionedDir(tmp, c.Version())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := filepath.Join(staging, "gone-"+c.Version()+".tgz")
 	if err := os.MkdirAll(filepath.Dir(stale), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -875,40 +893,49 @@ func TestBuildWithAChartVersionSuffix(t *testing.T) {
 // An edit naming From replaces that value rather than the whole line: a file
 // with two lines under one key needs the old value to tell them apart, and a
 // bare swap has no key at all.
-func TestModifyValuesEditShapes(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		edit ValueEdit
-		want string
-	}{
-		{
-			"by key",
-			ValueEdit{Chart: "chart-one", Key: "version", Value: "v3.30.0"},
-			"s~version: .*~version: v3.30.0~g",
-		},
-		{
-			"by old value under a key",
-			ValueEdit{Chart: "chart-one", Key: "image", From: "quay.io/calico/node", Value: "gcr.io/x/node"},
-			"s~image: quay.io/calico/node~image: gcr.io/x/node~g",
-		},
-		{
-			"bare swap",
-			ValueEdit{Chart: "chart-one", From: "quay.io/calico", Value: "gcr.io/x"},
-			"s~quay.io/calico~gcr.io/x~g",
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := &fakeRunner{}
-			if err := ModifyValues(Values{RepoRoot: t.TempDir(), Edits: []ValueEdit{tc.edit}}, WithRunner(f)); err != nil {
-				t.Fatalf("ModifyValues: %v", err)
-			}
-			seds := f.callsTo("sed")
-			if len(seds) != 1 {
-				t.Fatalf("expected one sed, got %d", len(seds))
-			}
-			if !slices.Contains(seds[0].args, tc.want) {
-				t.Errorf("expression = %v, want %q", seds[0].args, tc.want)
-			}
-		})
+func TestModifyValues(t *testing.T) {
+	root := t.TempDir()
+	path := writeChartValues(t, root, "chart-one", "version: master\nimage: quay.io/calico/node # keep\n")
+
+	err := ModifyValues(Values{RepoRoot: root, Edits: []ValueEdit{
+		{Chart: "chart-one", Edit: yamledit.Edit{Key: "version", To: "v3.30.0"}},
+	}}, WithRunner(&fakeRunner{}))
+	if err != nil {
+		t.Fatalf("ModifyValues: %v", err)
 	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "version: v3.30.0\nimage: quay.io/calico/node # keep\n"
+	if string(got) != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// A key the chart no longer has would otherwise ship an unstamped chart.
+func TestModifyValuesFailsWhenAKeyIsMissing(t *testing.T) {
+	root := t.TempDir()
+	writeChartValues(t, root, "chart-one", "version: master\n")
+
+	err := ModifyValues(Values{RepoRoot: root, Edits: []ValueEdit{
+		{Chart: "chart-one", Edit: yamledit.Edit{Key: "renamed", To: "v3.30.0"}},
+	}}, WithRunner(&fakeRunner{}))
+	if err == nil {
+		t.Fatal("expected a missing key to fail")
+	}
+}
+
+func writeChartValues(t *testing.T, root, chart, content string) string {
+	t.Helper()
+	dir := filepath.Join(root, chartsDirName, chart)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, valuesFileName)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

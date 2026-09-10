@@ -99,7 +99,11 @@ func TestHelmIndex(t *testing.T) {
 
 	checkVersion(t, releaseVersion)
 
-	indexURL, err := url.JoinPath(charts.RepoURL(), "index.yaml")
+	repoURL, err := charts.RepoURL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexURL, err := url.JoinPath(repoURL, "index.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

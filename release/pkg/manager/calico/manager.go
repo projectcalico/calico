@@ -33,7 +33,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
@@ -89,7 +88,6 @@ func NewManager(opts ...Option) *CalicoManager {
 		githubRelease:    true,
 		imageRegistries:  defaultRegistries,
 		helmRegistries:   registry.DefaultHelmRegistries,
-		helmRepoURL:      charts.RepoURL(),
 		operatorRegistry: operator.DefaultRegistries[0],
 		operatorImage:    operator.DefaultImage,
 	}
@@ -151,6 +149,9 @@ type CalicoManager struct {
 
 	// calicoVersion is the version of calico to release.
 	calicoVersion string
+
+	// chartVersion is the version of the helm chart to build.
+	chartVersion string
 
 	// operator variables
 	operatorImage    string
@@ -253,11 +254,6 @@ func releaseImages(images []string, version, registry, operatorImage, operatorVe
 		imgList = append(imgList, fmt.Sprintf("%s/%s:%s", registry, img, version))
 	}
 	return imgList
-}
-
-func (r *CalicoManager) helmChartVersion() string {
-	c := r.chart()
-	return c.Version()
 }
 
 func (r *CalicoManager) PreBuildValidation() error {
@@ -416,7 +412,7 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 		Version:          r.calicoVersion,
 		OperatorVersion:  r.operatorVersion,
 		Images:           releaseImages(imgs, r.calicoVersion, registry, r.operatorImage, r.operatorVersion, r.operatorRegistry),
-		HelmChartVersion: r.helmChartVersion(),
+		HelmChartVersion: r.chart().Version(),
 	}
 
 	// Render it as yaml and write it to a file.
@@ -605,18 +601,29 @@ func (r *CalicoManager) BuildHelm() error {
 		logrus.Info("Skipping building helm chart and index")
 		return nil
 	}
+	chart := r.chart()
 	opts := []charts.BuildOption{charts.WithRunner(r.runner)}
 	if r.helmIndex {
-		chartURL, err := r.chartURL()
-		if err != nil {
-			return err
+		var chartsURL, repoURL string
+		var err error
+		if r.isHashRelease {
+			chartsURL = r.hashrelease.URL()
+		} else {
+			chartsURL, err = charts.ChartsURL(chart)
+			if err != nil {
+				return fmt.Errorf("charts URL: %w", err)
+			}
 		}
-		opts = append(opts, charts.WithIndex(r.helmRepoURL, chartURL, r.chartIndexDir(), r.tmpDir))
+		repoURL, err = r.helmRepo()
+		if err != nil {
+			return fmt.Errorf("helm repo URL: %w", err)
+		}
+		opts = append(opts, charts.WithIndex(repoURL, chartsURL, r.chartIndexDir(), r.tmpDir))
 	}
 	if r.isHashRelease {
-		opts = append(opts, charts.WithModifiedValues(charts.ValueEditsFor(r.calicoVersion, r.operatorVersion)))
+		opts = append(opts, charts.WithModifiedValues(charts.ValueEditsFor(r.calicoVersion, r.imageRegistries[0], r.operatorImage, r.operatorVersion, r.operatorRegistry)))
 	}
-	return charts.Build(r.chart(), opts...)
+	return charts.Build(chart, opts...)
 }
 
 // chart identifies this release's charts to the charts package.
@@ -624,8 +631,9 @@ func (r *CalicoManager) chart() charts.Chart {
 	return charts.Chart{
 		RepoRoot:       r.repoRoot,
 		ProductVersion: r.calicoVersion,
+		ChartVersion:   r.chartVersion,
 		Names:          charts.All(),
-		BaseDir:        r.uploadDir(),
+		BaseDir:        charts.Dir(r.uploadDir()),
 	}
 }
 
@@ -633,27 +641,21 @@ func (r *CalicoManager) chart() charts.Chart {
 func (r *CalicoManager) modifyHelmChartsValues() error {
 	return charts.ModifyValues(charts.Values{
 		RepoRoot: r.repoRoot,
-		Edits:    charts.ValueEditsFor(r.calicoVersion, r.operatorVersion),
+		Edits:    charts.ValueEditsFor(r.calicoVersion, r.imageRegistries[0], r.operatorImage, r.operatorVersion, r.operatorRegistry),
 	}, charts.WithRunner(r.runner))
 }
 
-// chartURL is where the built index sends clients to download the charts.
-func (r *CalicoManager) chartURL() (string, error) {
-	if r.isHashRelease {
-		return r.hashrelease.URL(), nil
+// helmRepo is the repository whose index a build merges with.
+func (r *CalicoManager) helmRepo() (string, error) {
+	if r.helmRepoURL != "" {
+		return r.helmRepoURL, nil
 	}
-	return github.DownloadURL(r.githubOrg, r.repo, r.calicoVersion)
+	return charts.RepoURL()
 }
 
 // chartIndexDir is where the built index lands.
 func (r *CalicoManager) chartIndexDir() string {
-	var ver string
-	outDir := r.uploadDir()
-	if !r.isHashRelease {
-		outDir = filepath.Dir(outDir)
-		ver = r.helmChartVersion()
-	}
-	return charts.Dir(outDir, ver)
+	return charts.Dir(r.uploadDir())
 }
 
 func (r *CalicoManager) buildOCPBundle() error {
@@ -1560,8 +1562,27 @@ func (r *CalicoManager) publishHelmCharts() error {
 		logrus.Info("Skipping publishing helm charts")
 		return nil
 	}
-	// The manager reaches this only on a real publish run.
-	return charts.Publish(r.chart(), r.helmRegistries, !r.dryRun, charts.WithRunner(r.runner))
+	chart := r.chart()
+	refs, err := outputs.NewRefsWriter(r.outputDir, charts.PublishStep, chart.Version())
+	if err != nil {
+		return fmt.Errorf("chart publish refs writer: %w", err)
+	}
+	// An earlier run of this version records what it published, so a resume
+	// skips the charts already done.
+	published, err := outputs.ReadRefs(r.outputDir, charts.PublishStep, chart.Version())
+	if err != nil {
+		return fmt.Errorf("read published chart refs: %w", err)
+	}
+	opts := []charts.PublishOption{
+		charts.WithRunner(r.runner),
+		charts.WithLogsDir(r.logsDir),
+		charts.WithResolver(r.digestResolver()),
+		charts.WithRecord(refs),
+	}
+	if len(published) > 0 {
+		opts = append(opts, charts.WithResume(published, false))
+	}
+	return charts.Publish(chart, r.helmRegistries, !r.dryRun, opts...)
 }
 
 func (r *CalicoManager) updateHelmChartIndex() error {

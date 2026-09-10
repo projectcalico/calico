@@ -43,7 +43,7 @@ func TestOperatorPrintedImagesInExpectedList(t *testing.T) {
 	}
 
 	// Parse the output and check that every calico image is in our expected list.
-	calicoPrefix := registry.DefaultCalicoRegistry + "/"
+	calicoPrefix := registry.DefaultProductRegistry + "/"
 	var missing []string
 	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
 		line = strings.TrimSpace(line)

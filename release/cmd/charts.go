@@ -17,16 +17,12 @@ package main
 import (
 	"context"
 	"path/filepath"
-	"sync"
 
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/charts"
-	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
-	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -41,13 +37,14 @@ func chartsCommand(cfg *Config) *cli.Command {
 	}
 }
 
-var chartsBuildFlags = []cli.Flag{helmIndexFlag(envBuildHelmIndex), hashreleaseFlag, releaseBranchPrefixFlag}
+var chartsBuildFlags = []cli.Flag{
+	registryFlag, operatorRegistryFlag, operatorImageFlag,
+	helmIndexFlag(envBuildHelmIndex), hashreleaseFlag, releaseBranchPrefixFlag,
+}
 
 var chartsBuildAction = func(cfg *Config) func(context.Context, *cli.Command) error {
 	return func(_ context.Context, c *cli.Command) error {
 		configureLogging("charts-build.log")
-		// Both the chart identity and its options need the pin; generating it
-		// twice would write the pinned-versions file twice.
 		pin := oncePin(pinForBuild)
 		chart, err := pinnedChart(cfg, c, pin)
 		if err != nil {
@@ -91,7 +88,7 @@ var chartsPublishAction = func(cfg *Config) func(context.Context, *cli.Command) 
 			charts.WithLogsDir(cfg.LogsDir),
 			charts.WithResolver(registryDigestResolver),
 		}
-		published, w, err := publishRecord(cfg, chartsPublishStep, chart.Version(), confirm)
+		published, w, err := publishRecord(cfg, charts.PublishStep, chart.Version(), confirm)
 		if err != nil {
 			return err
 		}
@@ -112,21 +109,6 @@ func chartsPublishCommand(cfg *Config) *cli.Command {
 	}
 }
 
-const chartsPublishStep = "charts-publish"
-
-// oncePin memoizes a pin source so several callers in one command share it.
-func oncePin(pin pinned) pinned {
-	var (
-		once sync.Once
-		p    *pinnedversion.Pin
-		err  error
-	)
-	return func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
-		once.Do(func() { p, err = pin(cfg, c) })
-		return p, err
-	}
-}
-
 var pinnedChart = func(cfg *Config, c *cli.Command, pin pinned) (*charts.Chart, error) {
 	if c.Bool(hashreleaseFlag.Name) {
 		p, err := pin(cfg, c)
@@ -138,7 +120,7 @@ var pinnedChart = func(cfg *Config, c *cli.Command, pin pinned) (*charts.Chart, 
 			ProductVersion: p.ProductVersion,
 			ChartVersion:   p.ChartVersion,
 			Names:          charts.All(),
-			BaseDir:        p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false).Source,
+			BaseDir:        charts.Dir(p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false).Source),
 		}, nil
 	}
 	ver, _, err := version.VersionsFromManifests(cfg.RepoRootDir)
@@ -149,15 +131,15 @@ var pinnedChart = func(cfg *Config, c *cli.Command, pin pinned) (*charts.Chart, 
 		RepoRoot:       cfg.RepoRootDir,
 		ProductVersion: ver.FormattedString(),
 		Names:          charts.All(),
-		BaseDir:        filepath.Join(cfg.OutputDir, ver.FormattedString()),
+		BaseDir:        charts.Dir(filepath.Join(cfg.OutputDir, ver.FormattedString())),
 	}, nil
 }
 
 // chartsBuildOptions are the settings a build needs beyond the charts
 // themselves. A hashrelease pins its own versions and serves its own charts.
-func chartsBuildOptions(cfg *Config, c *cli.Command, chart charts.Chart, pin pinned, withIndex bool) ([]charts.BuildOption, error) {
+var chartsBuildOptions = func(cfg *Config, c *cli.Command, chart charts.Chart, pin pinned, withIndex bool) ([]charts.BuildOption, error) {
 	var opts []charts.BuildOption
-	chartURL, err := releaseURL(chart.ProductVersion)
+	chartURL, err := charts.ChartsURL(chart)
 	if err != nil {
 		return nil, err
 	}
@@ -166,24 +148,15 @@ func chartsBuildOptions(cfg *Config, c *cli.Command, chart charts.Chart, pin pin
 		if err != nil {
 			return nil, err
 		}
-		opts = append(opts, charts.WithModifiedValues(charts.ValueEditsFor(p.ProductVersion, p.Operator.Version)))
-		chartURL = hashreleaseURL(p.ReleaseName)
+		opts = append(opts, charts.WithModifiedValues(charts.ValueEditsFor(p.ProductVersion, p.ProductRegistry, p.Operator.Image, p.Operator.Version, p.Operator.Registry)))
+		chartURL = hashreleaseserver.HashreleaseURL(p.ReleaseName)
 	}
 	if withIndex {
-		opts = append(opts, charts.WithIndex(charts.RepoURL(), chartURL,
-			chartsIndexDir(cfg, chart.Version()), cfg.TmpDir))
+		repoURL, err := charts.RepoURL()
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, charts.WithIndex(repoURL, chartURL, chart.BaseDir, cfg.TmpDir))
 	}
 	return opts, nil
-}
-
-func hashreleaseURL(name string) string {
-	return hashreleaseserver.HashreleaseURL(name)
-}
-
-func releaseURL(ver string) (string, error) {
-	return github.DownloadURL(utils.Organization(), utils.Repo(), ver)
-}
-
-var chartsIndexDir = func(cfg *Config, ver string) string {
-	return charts.Dir(cfg.OutputDir, ver)
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/yamledit"
 )
 
 // Build packages every chart the release ships.
@@ -70,7 +71,7 @@ func Build(chart Chart, opts ...BuildOption) error {
 
 // Publish pushes every built chart to every registry. confirm latches the push.
 func Publish(chart Chart, registries []string, confirm bool, opts ...PublishOption) error {
-	s, err := newSettings(publishStep, chart, opts)
+	s, err := newSettings(PublishStep, chart, opts)
 	if err != nil {
 		return err
 	}
@@ -174,13 +175,10 @@ func (s settings) verify() error {
 }
 
 func (s settings) resetTree() {
-	if _, err := s.Runner().RunInDir(s.RepoRoot, "git", []string{"checkout", chartsTreePath}, nil); err != nil {
+	if _, err := s.Runner().RunInDir(s.RepoRoot, "git", []string{"checkout", chartsDirName}, nil); err != nil {
 		s.Logger().WithError(err).Error("Failed to reset changes to charts")
 	}
 }
-
-// chartsTreePath is the tree whose values a build rewrites and a reset restores.
-const chartsTreePath = "charts/"
 
 // The index directory holds only this release's charts, so the entries it adds
 // are what was just built.
@@ -191,7 +189,10 @@ func (s settings) buildIndex() error {
 	}
 	// helm indexes a whole directory, so the staging dir must hold this
 	// release's charts and nothing else.
-	staging := Dir(s.tmpDir, s.Version())
+	staging, err := versionedDir(s.tmpDir, s.Version())
+	if err != nil {
+		return s.Errorf("creating versioned staging dir: %w", err)
+	}
 	if err := os.RemoveAll(staging); err != nil {
 		return s.Errorf("clearing helm index staging dir: %w", err)
 	}
@@ -410,26 +411,7 @@ func (u unit) slug() string {
 
 type ValueEdit struct {
 	Chart string
-	Key   string
-
-	// From is the value being replaced. Set it when the key alone does not
-	// identify the line: a chart may repeat a key, and a bare swap has no key.
-	From string
-
-	Value string
-}
-
-// expr is the sed expression the edit applies. The delimiter is ~ because
-// values carry registries, which contain /.
-func (e ValueEdit) expr() string {
-	from := ".*"
-	if e.From != "" {
-		from = e.From
-	}
-	if e.Key == "" {
-		return fmt.Sprintf("s~%s~%s~g", from, e.Value)
-	}
-	return fmt.Sprintf("s~%s: %s~%s: %s~g", e.Key, from, e.Key, e.Value)
+	yamledit.Edit
 }
 
 // Edits are supplied by the caller: products stamp different charts.
@@ -451,16 +433,21 @@ func ModifyValues(v Values, opts ...Option) error {
 	if err != nil {
 		return err
 	}
+	byChart := map[string][]yamledit.Edit{}
+	var order []string
 	for _, e := range v.Edits {
-		// A keyless edit must name what it replaces, or it would match anything.
-		if e.Chart == "" || e.Value == "" || (e.Key == "" && e.From == "") {
-			return s.Errorf("incomplete chart value edit: %+v", e)
+		if e.Chart == "" {
+			return s.Errorf("chart value edit with no chart: %+v", e)
 		}
-		expr := e.expr()
-		path := filepath.Join(v.RepoRoot, chartsTreePath, e.Chart, "values.yaml")
-		if out, err := s.Runner().Run("sed", []string{"-i", expr, path}, nil); err != nil {
-			s.Logger().Error(out)
-			return s.Errorf("updating %s in %s: %w", e.Key, path, err)
+		if _, seen := byChart[e.Chart]; !seen {
+			order = append(order, e.Chart)
+		}
+		byChart[e.Chart] = append(byChart[e.Chart], e.Edit)
+	}
+	for _, chart := range order {
+		path := filepath.Join(v.RepoRoot, chartsDirName, chart, valuesFileName)
+		if err := yamledit.ApplyToFile(path, byChart[chart]...); err != nil {
+			return s.Errorf("%w", err)
 		}
 	}
 	return nil
