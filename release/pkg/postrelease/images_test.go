@@ -102,7 +102,7 @@ func TestImagesInMetadata(t *testing.T) {
 
 	var expectedImages []string
 	for image := range strings.SplitSeq(images, " ") {
-		registry := registry.DefaultCalicoRegistry
+		registry := registry.DefaultProductRegistry
 		if registry != "" {
 			registry += "/"
 		}
