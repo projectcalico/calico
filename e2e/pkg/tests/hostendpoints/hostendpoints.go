@@ -359,7 +359,7 @@ var _ = describe.CalicoDescribe(
 				checker.Execute()
 			})
 
-			It("should deny connections from specified source addresses in a doNotTrack deny policy (DoS mitigation)", describe.WithExternalNode(), func() {
+			It("should deny connections from specified source addresses in a doNotTrack deny policy (DoS mitigation)", describe.RequiresExternalNode(), func() {
 				extClient := externalnode.MustNewClient()
 
 				// Wrap the external node as a conncheck Client so the probes

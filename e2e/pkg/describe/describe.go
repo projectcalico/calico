@@ -194,12 +194,8 @@ func RequiresAWS() any {
 	return framework.WithLabel("RequiresAWS")
 }
 
-// WithExternalNode marks tests that require an external node outside of the base cluster,
-// and additional configuration passed to the e2e code in order to run commands on that node.
-func WithExternalNode() any {
-	return framework.WithLabel("ExternalNode")
-}
-
+// RequiresExternalNode marks tests that need a node outside the cluster, reachable
+// over ssh with the EXT_* configuration the e2e code uses to run commands on it.
 func RequiresExternalNode() any {
 	return framework.WithLabel("RequiresExternalNode")
 }
