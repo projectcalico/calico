@@ -26,8 +26,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/images"
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
@@ -974,6 +976,26 @@ func TestBuildE2EBinariesUsesARCHES(t *testing.T) {
 	}
 }
 
+func TestChartsAndIndexShareADirectory(t *testing.T) {
+	out := t.TempDir()
+	for _, tt := range []struct {
+		name        string
+		hashrelease bool
+	}{
+		{name: "release"},
+		{name: "hashrelease", hashrelease: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := filepath.Join(out, "release", "v3.30.0")
+			r := &CalicoManager{outputDir: dir, calicoVersion: "v3.30.0", isHashRelease: tt.hashrelease}
+			want := filepath.Join(dir, "charts")
+			if got := r.chart().BaseDir; got != want {
+				t.Errorf("chart().BaseDir = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 func TestAssertOperatorImageVersion(t *testing.T) {
 	const version = "v1.42.0"
 	for _, tt := range []struct {
@@ -1002,5 +1024,42 @@ func TestAssertOperatorImageVersion(t *testing.T) {
 			require.Len(t, f.calls, 1)
 			require.Contains(t, f.calls[0], "quay.io/tigera/operator:"+version)
 		})
+	}
+}
+
+// A release publish records what it pushed, so an interrupted run resumes on
+// what is left rather than re-pushing.
+func TestPublishHelmChartsRecordsWhatItPushed(t *testing.T) {
+	out := t.TempDir()
+	f := newFakeRunner()
+	r := &CalicoManager{
+		runner:         f,
+		repoRoot:       "/repo",
+		calicoVersion:  "v3.30.0",
+		outputDir:      filepath.Join(out, "release", "v3.30.0"),
+		helmCharts:     true,
+		helmRegistries: []string{"quay.test/charts"},
+		resolveDigest:  func(string) (string, bool, error) { return "sha256:aaa", true, nil },
+	}
+	for _, name := range charts.All() {
+		path := filepath.Join(r.chart().BaseDir, charts.FileName(name, "v3.30.0"))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("chart"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := r.publishHelmCharts(); err != nil {
+		t.Fatalf("publishHelmCharts: %v", err)
+	}
+
+	refs, err := outputs.ReadRefs(r.outputDir, charts.PublishStep, "v3.30.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refs) != len(charts.All()) {
+		t.Errorf("recorded %d refs, want %d", len(refs), len(charts.All()))
 	}
 }
