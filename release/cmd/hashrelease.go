@@ -39,11 +39,19 @@ import (
 
 // parts for generating the pinned version
 var (
+	productRegistry = func(c *cli.Command) string {
+		reg := c.StringSlice(registryFlag.Name)
+		if len(reg) == 0 {
+			return registry.DefaultProductRegistry
+		}
+		return reg[0]
+	}
 	pinConfig = func(cfg *Config, c *cli.Command) pinnedversion.Config {
 		return pinnedversion.Config{
 			Dir:                 cfg.TmpDir,
 			RootDir:             cfg.RepoRootDir,
 			ReleaseBranchPrefix: c.String(releaseBranchPrefixFlag.Name),
+			Registry:            productRegistry(c),
 			Operator: registry.Component{
 				Image:    c.String(operatorImageFlag.Name),
 				Registry: c.String(operatorRegistryFlag.Name),
