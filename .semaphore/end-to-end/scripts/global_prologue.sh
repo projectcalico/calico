@@ -165,6 +165,11 @@ chmod +x "${BZ_GLOBAL_BIN}/bz"
 mkdir -p "$HOME/.docker"
 cp ~/secrets/docker_cfg.json "$HOME/.docker/config.json"
 
+# The gcr credentials in docker_cfg.json are short-lived, so a job that runs long
+# enough can no longer pull by the time the epilogue runs. The helper mints a
+# token per pull and merges into the config copied above.
+gcloud auth configure-docker --quiet
+
 mkdir -p "${BZ_LOGS_DIR}"
 
 cd "$HOME" || exit
