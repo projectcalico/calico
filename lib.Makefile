@@ -1842,10 +1842,13 @@ $(REPO_ROOT)/third_party/cni-plugins/.cni-plugins.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/third_party/cni-plugins image
 
 # The registry/path/tag every kind lane bakes into its images.
-# hack/test/kind/infra/values.yaml pins the same triple.
+# hack/test/kind/infra/values.yaml pins the same triple, and the operator FV
+# stamps it into the test binary.
+KIND_IMAGE_REGISTRY = localhost:5000
+KIND_IMAGE_PATH     = calico
 KIND_DEV_IMAGE_ARGS = \
-	    DEV_IMAGE_REGISTRY=localhost:5000 \
-	    DEV_IMAGE_PATH=calico \
+	    DEV_IMAGE_REGISTRY=$(KIND_IMAGE_REGISTRY) \
+	    DEV_IMAGE_PATH=$(KIND_IMAGE_PATH) \
 	    DEV_IMAGE_TAG=$(KIND_TEST_BUILD_TAG)
 
 ## Build all component images and push them to the local kind registry.
