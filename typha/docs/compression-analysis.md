@@ -29,19 +29,24 @@ versus snappy's **4.65:1**.
 
 | Operation | Snappy | Zstd | Ratio |
 |---|---|---|---|
-| **Compression** | 2,130 MB/s | 328 MB/s | Snappy ~6.5x faster |
-| **Decompression** | 1,175 MB/s | 374 MB/s | Snappy ~3.1x faster |
+| **Compression** | 2,121 MB/s | 358 MB/s | Snappy ~5.9x faster |
+| **Decompression** | 1,956 MB/s | 480 MB/s | Snappy ~4.1x faster |
 
-Measured with klauspost/compress v1.19.0 on an Intel Core i7-11850H @ 2.50GHz,
+Measured with klauspost/compress v1.20.0 on an Intel Core i7-11850H @ 2.50GHz,
 using `go test -bench -benchtime=2s -count=6` summarized by `benchstat`
-(variation within ±7% for all benchmarks).
+(variation within ±6% for all benchmarks). The benchmarks compress and
+decompress through `syncproto`'s `Compressor` and `Decompressor`, so they use
+the same settings as the server and the client.
 
 ### Allocations (per operation, 1,000-pod snapshot)
 
 | Operation | Snappy | Zstd |
 |---|---|---|
-| **Compression** | 292 KB / 7 allocs | 9,359 KB / 100 allocs |
-| **Decompression** | 1,160 KB / 26 allocs | 6,925 KB / 87 allocs |
+| **Compression** | 292 KB / 9 allocs | 9,360 KB / 100 allocs |
+| **Decompression** | 632 KB / 7 allocs | 5,788 KB / 29 allocs |
+
+The decompression rows leave out the output buffer, which the benchmark
+allocates once and reuses.
 
 Zstd uses more memory per operation due to its larger internal state (encoder
 tables, entropy buffers). This is acceptable because snapshots are compressed
@@ -69,8 +74,8 @@ for Typha because:
   Felix clients. A 52% smaller snapshot means ~52% less data on the wire,
   which directly translates to faster client bootstrap time in large clusters.
 
-- **Decompression speed is plenty fast.** At ~374 MB/s, zstd decompresses a
-  10K-pod snapshot (~561 KB compressed -> 5.4 MB raw) in under 20 ms. This is
+- **Decompression speed is plenty fast.** At ~480 MB/s, zstd decompresses a
+  10K-pod snapshot (~561 KB compressed -> 5.4 MB raw) in about 12 ms. This is
   negligible compared to network RTT.
 
 ## Real-World Impact
@@ -88,7 +93,9 @@ simultaneously during a rolling restart, this translates to:
 We also compared klauspost's pure-Go zstd against the cgo binding for the
 reference C library (`github.com/DataDog/zstd` v1.5.7, bundled libzstd),
 using the same 1,000-pod snapshot data on the same machine. The two produce
-interchangeable output: each decodes the other's streams.
+interchangeable output: each decodes the other's streams. This table was
+measured with klauspost/compress v1.19.0; the current pure-Go figures are in
+the throughput table above.
 
 | Metric | Pure Go (SpeedFastest) | Cgo libzstd (level 1) |
 |---|---|---|
@@ -108,7 +115,7 @@ Cgo libzstd wins the microbenchmark clearly. We chose the pure-Go
 implementation anyway:
 
 - **Compression is not the bottleneck.** Snapshots are compressed at most
-  once per second per (syncer, algorithm) and served from cache: ~18 ms
+  once per second per (syncer, algorithm) and served from cache: ~16 ms
   pure-Go vs ~6 ms cgo for a 10K-pod snapshot. Clients decompress one
   snapshot per connection. Both are noise next to network transfer, so the
   3x speed advantage buys nothing in practice.
