@@ -893,6 +893,20 @@ func (r *CalicoManager) assertImageVersions() error {
 			return fmt.Errorf("unknown image: %s, update assertion to include validating image", img)
 		}
 	}
+	return r.assertOperatorImageVersion()
+}
+
+// assertOperatorImageVersion checks the operator image reports the version it was published at.
+// The operator publishes to registries of its own, so it is absent from the release images.
+func (r *CalicoManager) assertOperatorImageVersion() error {
+	img := fmt.Sprintf("%s/%s:%s", r.operatorRegistry, r.operatorImage, r.operatorVersion)
+	out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, img}, nil)
+	if err != nil {
+		return fmt.Errorf("failed to get version from operator image %s: %w", img, err)
+	}
+	if !strings.Contains(out, r.operatorVersion) {
+		return fmt.Errorf("version does not match for image %s", img)
+	}
 	return nil
 }
 

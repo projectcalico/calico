@@ -8,7 +8,6 @@ globalPrologue: |
   export ARGO_WORKFLOW_NAME="{{workflow.name}}"
   export ARGO_WORKFLOW_UID="{{workflow.uid}}"
   export BGP_STATUS="${BGP_STATUS:-Enabled}"
-  export CI_ARTIFACT_STEP_STORAGE="gs://vpp-results/${ARGO_WORKFLOW_NAME:-local}/${HOSTNAME:-pod}"
   export CNI_PLUGIN="${CNI_PLUGIN:-Calico}"
   export DATAPLANE="${DATAPLANE:-CalicoVPP}"
   export ENABLE_CLOUD_PROVIDER="${ENABLE_CLOUD_PROVIDER:-false}"
@@ -25,6 +24,14 @@ globalPrologue: |
   export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
   export VPP_VERSION="${VPP_VERSION:-master}"
   source .argoci/scripts/global_prologue.sh
+  # After the prologue, so PROVISIONER has its default; the builder runs under
+  # `set -u` and a step relying on that default would otherwise die unbound.
+  # Only the epilogue reads this, so the ordering costs nothing. Assign-then-
+  # export: with `export X="$(...)"` the status is export's, so a broken builder
+  # would go unnoticed and simply publish nothing.
+  VPP_RESULTS_PREFIX="$(.argoci/scripts/vpp_metadata.sh)" ||
+    { echo "[WARN] vpp_metadata.sh failed; not publishing a vpp copy"; VPP_RESULTS_PREFIX=""; }
+  export VPP_RESULTS_PREFIX
 globalEpilogue: |
   source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
 defaults:

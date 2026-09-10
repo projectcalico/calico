@@ -17,9 +17,11 @@ package main
 import (
 	"context"
 
+	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/images"
+	"github.com/projectcalico/calico/release/internal/operatorimages"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -28,6 +30,7 @@ var imagesSubCommands = func(cfg *Config) []*cli.Command {
 	return []*cli.Command{
 		imagesBuildCommand(cfg),
 		imagesPublishCommand(cfg),
+		imagesCheckOperatorCommand(cfg),
 	}
 }
 
@@ -141,6 +144,33 @@ func imagesPublishCommand(cfg *Config) *cli.Command {
 
 // releaseImageList runs make in every release directory, so a test replaces it.
 var releaseImageList = utils.BuildReleaseImageList
+
+var imagesCheckOperatorAction = func(cfg *Config) func(ctx context.Context, c *cli.Command) error {
+	return func(_ context.Context, _ *cli.Command) error {
+		configureLogging("images-check-operator.log")
+
+		// The operator publishes to registries of its own, so it is named apart from the
+		// release directories rather than discovered with them.
+		dirs := append(utils.ImageDiscoveryDirs(), utils.OperatorDir)
+		built, err := releaseImageList(cfg.RepoRootDir, dirs...)
+		if err != nil {
+			return err
+		}
+		if err := operatorimages.Check(built); err != nil {
+			return err
+		}
+		logrus.WithField("images", len(built)).Info("The operator deploys every image built here")
+		return nil
+	}
+}
+
+func imagesCheckOperatorCommand(cfg *Config) *cli.Command {
+	return &cli.Command{
+		Name:   "check-operator",
+		Usage:  "Check that the operator deploys every image this repo builds",
+		Action: imagesCheckOperatorAction(cfg),
+	}
+}
 
 // scanRequest builds the scan request. Release decides which bucket the
 // scanner files results under, so a hashrelease is not a release.

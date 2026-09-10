@@ -982,3 +982,34 @@ func TestChartIndexDirMatchesUpload(t *testing.T) {
 		t.Errorf("chartIndexDir() = %q, want %q", got, want)
 	}
 }
+
+func TestAssertOperatorImageVersion(t *testing.T) {
+	const version = "v1.42.0"
+	for _, tt := range []struct {
+		name    string
+		label   string
+		wantErr bool
+	}{
+		{name: "image reports the published version", label: version},
+		{name: "image reports another version", label: "v1.41.0", wantErr: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeRunner().on("docker inspect", tt.label, nil)
+			r := &CalicoManager{
+				runner:           f,
+				operatorRegistry: "quay.io/tigera",
+				operatorImage:    "operator",
+				operatorVersion:  version,
+			}
+
+			err := r.assertOperatorImageVersion()
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Len(t, f.calls, 1)
+			require.Contains(t, f.calls[0], "quay.io/tigera/operator:"+version)
+		})
+	}
+}
