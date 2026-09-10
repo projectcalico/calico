@@ -16,11 +16,9 @@ package main
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 
 	cli "github.com/urfave/cli/v3"
@@ -30,107 +28,14 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-// recordingRunner runs nothing and records what it was asked to run. Units run
-// concurrently, so recording is locked.
-type recordingRunner struct {
-	mu       sync.Mutex
-	args     [][]string
-	envs     [][]string
-	logPaths []string
-}
-
-func (r *recordingRunner) record(args, env []string, logPath string) (string, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.args = append(r.args, slices.Clone(args))
-	r.envs = append(r.envs, slices.Clone(env))
-	r.logPaths = append(r.logPaths, logPath)
-	return "", nil
-}
-
-func (r *recordingRunner) Run(_ string, args, env []string) (string, error) {
-	return r.record(args, env, "")
-}
-
-func (r *recordingRunner) RunNoCapture(_ string, args, env []string) error {
-	_, err := r.record(args, env, "")
-	return err
-}
-
-func (r *recordingRunner) RunInDir(_, _ string, args, env []string) (string, error) {
-	if slices.Contains(args, "build-images") {
-		// The publish asks each directory for its image names before recording.
-		if _, err := r.record(args, env, ""); err != nil {
-			return "", err
-		}
-		return "calico calico-windows", nil
-	}
-	return r.record(args, env, "")
-}
-
-func (r *recordingRunner) RunInDirNoCapture(_, _ string, args, env []string) error {
-	_, err := r.record(args, env, "")
-	return err
-}
-
-func (r *recordingRunner) RunInDirToFile(_, _ string, args, env []string, logPath string) (string, error) {
-	return r.record(args, env, logPath)
-}
-
-// envFor returns the environment of the first recorded make call whose args
-// contain every one of want.
-func (r *recordingRunner) envFor(want ...string) []string {
-	for i, args := range r.args {
-		if containsAll(args, want) {
-			return r.envs[i]
-		}
-	}
-	return nil
-}
-
-// ran reports whether any recorded call's args contain every one of want.
-func (r *recordingRunner) ran(want ...string) bool {
-	return slices.ContainsFunc(r.args, func(args []string) bool {
-		return containsAll(args, want)
-	})
-}
-
-func containsAll(args, want []string) bool {
-	for _, w := range want {
-		if !slices.ContainsFunc(args, func(a string) bool { return strings.Contains(a, w) }) {
-			return false
-		}
-	}
-	return true
-}
-
-// fakeRepo writes the two manifests VersionsFromManifests reads, so the image
-// commands can resolve a version without a checkout.
-func fakeRepo(t *testing.T, version string) string {
-	t.Helper()
-	root := t.TempDir()
-	manifests := filepath.Join(root, "manifests", "ocp")
-	if err := os.MkdirAll(manifests, 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	write := func(path, content string) {
-		if err := os.WriteFile(filepath.Join(root, "manifests", path), []byte(content), 0o644); err != nil {
-			t.Fatalf("write %s: %v", path, err)
-		}
-	}
-	write(filepath.Join("ocp", "02-tigera-operator.yaml"), "          image: quay.io/calico/calico:"+version+"\n")
-	write("tigera-operator.yaml", "          image: quay.io/calico/operator:"+version+"\n")
-	return root
-}
-
 // runImages drives the real images command with a recording runner.
 func runImages(t *testing.T, root string, args ...string) *recordingRunner {
 	t.Helper()
 	r := &recordingRunner{}
-	prev, prevResolve := imagesRunner, imagesDigestResolver
-	imagesRunner = r
-	imagesDigestResolver = func(string) (string, bool, error) { return "sha256:aaa", true, nil }
-	t.Cleanup(func() { imagesRunner, imagesDigestResolver = prev, prevResolve })
+	prev, prevResolve := commandRunner, registryDigestResolver
+	commandRunner = r
+	registryDigestResolver = func(string) (string, bool, error) { return "sha256:aaa", true, nil }
+	t.Cleanup(func() { commandRunner, registryDigestResolver = prev, prevResolve })
 
 	cfg := &Config{
 		RepoRootDir: root,
@@ -248,10 +153,10 @@ func TestImagesNarrowedKeepsEveryVariant(t *testing.T) {
 // felix is not an image directory, so narrowing a build to it is a mistake
 // worth reporting rather than a build that quietly does nothing.
 func TestImagesRejectsFelixAsAnImageDir(t *testing.T) {
-	prev := imagesRunner
+	prev := commandRunner
 	r := &recordingRunner{}
-	imagesRunner = r
-	t.Cleanup(func() { imagesRunner = prev })
+	commandRunner = r
+	t.Cleanup(func() { commandRunner = prev })
 
 	root := fakeRepo(t, "v3.30.0")
 	cfg := &Config{
@@ -274,9 +179,9 @@ func TestImagesRejectsFelixAsAnImageDir(t *testing.T) {
 // An unknown directory must be rejected: narrowing silently drops what it does
 // not recognise.
 func TestImagesRejectsUnknownReleaseDir(t *testing.T) {
-	prev := imagesRunner
-	imagesRunner = &recordingRunner{}
-	t.Cleanup(func() { imagesRunner = prev })
+	prev := commandRunner
+	commandRunner = &recordingRunner{}
+	t.Cleanup(func() { commandRunner = prev })
 
 	root := fakeRepo(t, "v3.30.0")
 	cfg := &Config{
@@ -337,9 +242,9 @@ func TestImagesPublishSkipDevImageRetag(t *testing.T) {
 // The two retag flags are meaningless apart, so one without the other is an
 // error rather than a silent fresh push.
 func TestImagesPublishRejectsHalfConfiguredRetag(t *testing.T) {
-	prev := imagesRunner
-	imagesRunner = &recordingRunner{}
-	t.Cleanup(func() { imagesRunner = prev })
+	prev := commandRunner
+	commandRunner = &recordingRunner{}
+	t.Cleanup(func() { commandRunner = prev })
 
 	root := fakeRepo(t, "v3.30.0")
 	cfg := &Config{

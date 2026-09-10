@@ -20,6 +20,7 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -29,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
@@ -41,6 +43,9 @@ var (
 	// releaseOutputPath is the directory where all outputs are stored
 	// relative to the repo root
 	releaseOutputPath = []string{utils.ReleaseFolderName, "_output"}
+
+	commandRunner          command.CommandRunner = &command.RealCommandRunner{}
+	registryDigestResolver                       = registry.ResolveDigest
 )
 
 func logPrettifier(f *runtime.Frame) (string, string) {
@@ -134,6 +139,19 @@ func slackConfig(c *cli.Command) *slack.Config {
 
 type pinned func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error)
 
+// oncePin memoizes a pin source so several callers in one command share it.
+func oncePin(pin pinned) pinned {
+	var (
+		once sync.Once
+		p    *pinnedversion.Pin
+		err  error
+	)
+	return func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
+		once.Do(func() { p, err = pin(cfg, c) })
+		return p, err
+	}
+}
+
 var (
 	loadPin pinned = func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
 		pin, err := pinnedversion.Load(localPinLoader(pinConfig(cfg, c)))
@@ -168,4 +186,19 @@ var releaseVersion = func(cfg *Config, c *cli.Command) (*version.Version, error)
 		return nil, fmt.Errorf("version from manifest: %w", err)
 	}
 	return &ver, nil
+}
+
+func publishRecord(cfg *Config, step, version string, confirm bool) ([]string, *outputs.RefsWriter, error) {
+	published, err := outputs.ReadRefs(cfg.OutputDir, step, version)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !confirm {
+		return published, nil, nil
+	}
+	w, err := outputs.NewRefsWriter(cfg.OutputDir, step, version)
+	if err != nil {
+		return nil, nil, err
+	}
+	return published, w, nil
 }

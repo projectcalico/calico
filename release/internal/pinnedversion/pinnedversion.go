@@ -65,6 +65,7 @@ type PinnedVersion struct {
 	Branch         string                        `yaml:"branch,omitempty"`
 	Hash           string                        `yaml:"full_hash,omitempty"`
 	TigeraOperator registry.Component            `yaml:"tigera-operator"`
+	Registry       string                        `yaml:"registry,omitempty"`
 	Components     map[string]registry.Component `yaml:"components"`
 }
 
@@ -75,14 +76,15 @@ func (p *PinnedVersion) pin() *Pin {
 		branch = branchFromNote(p.Note)
 	}
 	return &Pin{
-		ReleaseName:    p.ReleaseName,
-		Hash:           p.Hash,
-		Note:           p.Note,
-		ProductVersion: p.Title,
-		ChartVersion:   p.HelmRelease,
-		Operator:       p.TigeraOperator,
-		Components:     p.Components,
-		branch:         branch,
+		ReleaseName:     p.ReleaseName,
+		Hash:            p.Hash,
+		Note:            p.Note,
+		ProductVersion:  p.Title,
+		ChartVersion:    p.HelmRelease,
+		Operator:        p.TigeraOperator,
+		ProductRegistry: cmp.Or(p.Registry, registry.DefaultProductRegistry),
+		Components:      p.Components,
+		branch:          branch,
 	}
 }
 
@@ -116,6 +118,7 @@ func pinnedFrom(p *Pin) PinnedVersion {
 			Registry: p.Operator.Registry,
 			Version:  p.Operator.Version,
 		},
+		Registry:   p.ProductRegistry,
 		Components: p.Components,
 	}
 }

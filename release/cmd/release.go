@@ -37,7 +37,7 @@ import (
 
 func releaseOutputDir(repoRootDir, version string) string {
 	baseOutputDir := filepath.Join(append([]string{repoRootDir}, releaseOutputPath...)...)
-	return filepath.Join(baseOutputDir, "upload", version)
+	return filepath.Join(baseOutputDir, "release", version)
 }
 
 // The release command suite is used to build and publish official releases.
@@ -50,7 +50,7 @@ func releaseCommand(cfg *Config) *cli.Command {
 	}
 }
 
-func releaseSubCommands(cfg *Config) []*cli.Command {
+var releaseSubCommands = func(cfg *Config) []*cli.Command {
 	return []*cli.Command{
 		// Prepare for a release.
 		releasePrepCommand(cfg),

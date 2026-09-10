@@ -119,9 +119,11 @@ local:operator/pkg/components
 local:operator/version
 local:release/cmd
 local:release/internal/branch
+local:release/internal/charts
 local:release/internal/ci
 local:release/internal/command
 local:release/internal/defaults
+local:release/internal/github
 local:release/internal/hashreleaseserver
 local:release/internal/images
 local:release/internal/imagescanner
@@ -130,6 +132,7 @@ local:release/internal/outputs
 local:release/internal/pinnedversion
 local:release/internal/registry
 local:release/internal/slack
+local:release/internal/steps
 local:release/internal/utils
 local:release/internal/version
 local:release/pkg/manager/calico
