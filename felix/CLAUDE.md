@@ -49,6 +49,12 @@ make build-bpf
 
 Run `make clean` first if you hit stale object issues. Use `make -C felix build` to verify both BPF C and Go code compile together.
 
+Every header in `bpf-gpl/` must be self-contained (include what it uses, so include order never matters). After adding or changing includes, run the check, which compiles each header on its own under every build variant:
+
+```bash
+make check-bpf-headers
+```
+
 #### BPF Unit Tests
 
 BPF unit tests run the BPF dataplane programs in a privileged container:

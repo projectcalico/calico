@@ -5,6 +5,8 @@
 #ifndef __CALI_BPF_PROFILING_H__
 #define __CALI_BPF_PROFILING_H__
 
+#include "bpf.h"
+
 struct prof_key {
 	__u32 ifindex;
 	__u32 kind;

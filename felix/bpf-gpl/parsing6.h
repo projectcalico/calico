@@ -5,8 +5,17 @@
 #ifndef __CALI_PARSING6_H__
 #define __CALI_PARSING6_H__
 
+#include <linux/if_ether.h>
+#include <linux/in.h>
+
 #include "bpf.h"
 #include "counters.h"
+#include "ip_addr.h"
+#include "log.h"
+#include "parsing_types.h"
+#include "reasons.h"
+#include "skb.h"
+#include "types.h"
 
 static CALI_BPF_INLINE int parse_packet_ip_v6(struct cali_tc_ctx *ctx) {
 	__u16 protocol = 0;

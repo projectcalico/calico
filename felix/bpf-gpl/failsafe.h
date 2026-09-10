@@ -6,7 +6,7 @@
 #define __CALI_BPF_FAILSAFE_H__
 
 #include "bpf.h"
-#include "types.h"
+#include "ip_addr.h"
 
 struct failsafe_key {
 	__u32 prefixlen;

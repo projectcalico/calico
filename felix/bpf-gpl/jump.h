@@ -5,6 +5,9 @@
 #ifndef __CALI_BPF_JUMP_H__
 #define __CALI_BPF_JUMP_H__
 
+#include "bpf.h"
+#include "globals.h"
+#include "log.h"
 #include "types.h"
 
 #define STATE_SIZE 512

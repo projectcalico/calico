@@ -6,6 +6,7 @@
 #define __CALI_NAT_TYPES_H__
 
 #include "bpf.h"
+#include "ip_addr.h"
 
 typedef enum calico_nat_lookup_result {
 	NAT_LOOKUP_ALLOW,
@@ -118,6 +119,12 @@ struct vxlanhdr {
 	__be32 flags;
 	__be32 vni;
 };
+
+#ifndef CALI_VXLAN_VNI
+#define CALI_VXLAN_VNI 0xca11c0
+#endif
+
+#define vxlan_udp_csum_ok(udp) ((udp)->check == 0)
 
 struct cali_maglev_key {
 	__u32 sid;

@@ -5,23 +5,27 @@
 #ifndef __CALI_BPF_H__
 #define __CALI_BPF_H__
 
-#include <linux/types.h>
-#include <linux/bpf.h>
-#include <bpf_helpers.h>   /* For bpf_xxx helper functions. */
-#include <bpf_endian.h>    /* For bpf_ntohX etc. */
-#include <bpf_core_read.h>
-#include <stddef.h>
-#include <linux/ip.h>
+/* stdbool.h and stddef.h have no deps so they are safe to include; stdint.h
+ * pulls in parts of the std lib that aren't compatible with BPF. */
 #include <stdbool.h>
+#include <stddef.h>
 
-/* CALI_BPF_INLINE must be defined before we include any of our headers. They
- * assume it exists!
+#include <linux/bpf.h>
+#include <linux/ip.h>
+#include <linux/pkt_cls.h>
+#include <linux/types.h>
+
+#include <bpf_core_read.h>
+#include <bpf_endian.h>    /* For bpf_ntohX etc. */
+#include <bpf_helpers.h>   /* For bpf_xxx helper functions. */
+
+#include "bpf_inline.h"
+
+/* bpf.h is the root of the BPF include graph: every other header includes it.
+ * Only globals.h and ip_addr.h sit below it, because userspace
+ * (felix/bpf/libbpf) shares them.  Every header includes what it uses, so
+ * include order never matters; ./check-headers enforces that.
  */
-#define CALI_BPF_INLINE inline __attribute__((always_inline))
-
-#define __unused __attribute__((unused))
-
-#include "globals.h"
 
 #define BPF_REDIR_EGRESS 0
 #define BPF_REDIR_INGRESS 1
@@ -294,6 +298,9 @@ static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
 #define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && !CALI_F_IPIP && (ip)->ttl <= 1)
 #endif
 
+/* Accessors for the configured globals (see globals.h).  Programs that are
+ * not configured by Felix (XDP, cgroup) see constant placeholder values.
+ */
 #if CALI_F_XDP
 
 extern const volatile struct cali_xdp_preamble_globals __globals;

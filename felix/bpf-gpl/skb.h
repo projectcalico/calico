@@ -6,13 +6,16 @@
 #define __SKB_H__
 
 #include <linux/if_ether.h>
+#include <linux/in.h>
 #include <linux/ip.h>
-#include <linux/udp.h>
+#include <linux/ipv6.h>
 #include <linux/tcp.h>
+#include <linux/udp.h>
 
 #include "bpf.h"
-#include "types.h"
+#include "globals.h"
 #include "log.h"
+#include "types.h"
 
 /* skb_start_ptr is equivalent to (void*)((__u64)skb->data); the read is done
  * in a way that is acceptable to the verifier and it is done as a volatile read
@@ -171,6 +174,26 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 	ctx->ip_header =  ctx->data_start + skb_iphdr_offset(ctx);
 
 	return 0;
+}
+
+/* bpf_load_bytes copies len bytes of packet data at offset into buf, using the
+ * loader helper appropriate to the program type.
+ */
+static CALI_BPF_INLINE int bpf_load_bytes(struct cali_tc_ctx *ctx, __u32 offset, void *buf, __u32 len)
+{
+	int ret;
+
+#if CALI_F_XDP
+	if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_xdp_load_bytes)) {
+		ret = bpf_xdp_load_bytes(ctx->xdp, offset, buf, len);
+	} else {
+		return -22 /* EINVAL */;
+	}
+#else /* CALI_F_XDP */
+	ret = bpf_skb_load_bytes(ctx->skb, offset, buf, len);
+#endif /* CALI_F_XDP */
+
+	return ret;
 }
 
 #define skb_ptr_after(skb, ptr) ((void *)((ptr) + 1))

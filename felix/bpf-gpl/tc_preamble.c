@@ -2,16 +2,13 @@
 // Copyright (c) 2023 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-// stdbool.h has no deps so it's OK to include; stdint.h pulls in parts
-// of the std lib that aren't compatible with BPF.
-#include <stdbool.h>
 #include <linux/if_ether.h>
 
 #include "bpf.h"
-#include "types.h"
 #include "globals.h"
 #include "jump.h"
 #include "log.h"
+#include "types.h"
 
 const volatile struct cali_tc_preamble_globals __globals;
 

@@ -2,34 +2,31 @@
 // Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
+/* Log prefix for this program.  log.h only defines CALI_LOG if it is not
+ * already set, so this must come before any include. */
+#define CALI_LOG(fmt, ...) bpf_log("%s-X: " fmt, ctx->xdp_globals->iface_name, ## __VA_ARGS__)
+
 #include <linux/if_ether.h>
+#include <linux/in.h>
 #include <linux/ip.h>
 #include <linux/ipv6.h>
-#include <linux/in.h>
-#include <linux/icmp.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
 
-// stdbool.h has no deps so it's OK to include; stdint.h pulls in parts
-// of the std lib that aren't compatible with BPF.
-#include <stdbool.h>
-
 #include "bpf.h"
-
-#define CALI_LOG(fmt, ...) bpf_log("%s-X: " fmt, ctx->xdp_globals->iface_name, ## __VA_ARGS__)
-
-#include "log.h"
-#include "types.h"
 #include "counters.h"
-#include "skb.h"
-#include "routes.h"
-#include "reasons.h"
-#include "parsing.h"
 #include "failsafe.h"
-#include "jump.h"
-#include "policy.h"
-#include "metadata.h"
 #include "globals.h"
+#include "jump.h"
+#include "log.h"
+#include "metadata.h"
+#include "parsing.h"
+#include "parsing_types.h"
+#include "policy.h"
+#include "reasons.h"
+#include "routes.h"
+#include "skb.h"
+#include "types.h"
 
 /* calico_xdp is the main function used in all of the xdp programs */
 SEC("xdp")

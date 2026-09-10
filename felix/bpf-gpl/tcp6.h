@@ -6,11 +6,17 @@
 #define __CALI_TCP6_H__
 
 #include <linux/if_ether.h>
-#include <linux/ip.h>
+#include <linux/in.h>
+#include <linux/ipv6.h>
+#include <linux/tcp.h>
 
 #include "bpf.h"
+#include "counters.h"
+#include "ip_addr.h"
 #include "log.h"
+#include "reasons.h"
 #include "skb.h"
+#include "types.h"
 
 static CALI_BPF_INLINE int tcp_v6_rst(struct cali_tc_ctx *ctx) {
 	if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {

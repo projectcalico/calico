@@ -6,11 +6,10 @@
 #define __CALI_EVETNS_H__
 
 #include "bpf.h"
-#include "types.h"
-#include "ringbuf.h"
-#include "jump.h"
 #include "events_type.h"
 #include "log.h"
+#include "ringbuf.h"
+#include "types.h"
 
 static CALI_BPF_INLINE void event_flow_log(struct cali_tc_ctx *ctx)
 {

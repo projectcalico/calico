@@ -6,9 +6,6 @@
 #define __CALI_CT_CLEAN_H__
 
 #include "bpf.h"
-#include "types.h"
-#include "counters.h"
-#include "conntrack.h"
 #include "conntrack_types.h"
 
 #ifdef IPVER6

@@ -6,9 +6,16 @@
 #define __CONNECT_H__
 
 #include <linux/bpf.h>
+#include <linux/in.h>
 
 #include "bpf.h"
+#include "ctlb.h"
+#include "ip_addr.h"
+#include "log.h"
 #include "nat_lookup.h"
+#include "nat_types.h"
+#include "sendrecv.h"
+#include "sock_type.h"
 
 static CALI_BPF_INLINE int do_nat_common(struct bpf_sock_addr *ctx, __u8 proto, ipv46_addr_t *dst, bool connect)
 {
@@ -86,7 +93,7 @@ out:
 	return err;
 }
 
-static CALI_BPF_INLINE int connect(struct bpf_sock_addr *ctx, ipv46_addr_t *dst)
+static CALI_BPF_INLINE int do_connect(struct bpf_sock_addr *ctx, ipv46_addr_t *dst)
 {
 	int ret = 1; /* OK value */
 
