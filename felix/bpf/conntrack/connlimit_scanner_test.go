@@ -15,6 +15,7 @@
 package conntrack
 
 import (
+	"encoding/binary"
 	"net"
 	"testing"
 	"time"
@@ -488,6 +489,77 @@ func TestConnLimitScannerBothPodsLimited(t *testing.T) {
 	ingressKey := connlimitKey{ifindex: 10, direction: 1}
 	if scanner.counts[ingressKey] != 1 {
 		t.Errorf("expected ingress count 1 for pod B, got %v", scanner.counts)
+	}
+}
+
+// makeRSTClosedValue builds the shape an RST-closed connection presents once a
+// straggler has cleared the per-leg RST bits.
+func makeRSTClosedValue(flags uint32, rstSeen, lastSeen time.Duration) Value {
+	v := NewValueNormal(lastSeen, flags,
+		established(true),  // A is opener
+		established(false), // B is responder
+	)
+	binary.LittleEndian.PutUint64(v[ctv4.VoRSTSeen:ctv4.VoRSTSeen+8], uint64(rstSeen))
+	return v
+}
+
+// TestConnLimitScannerSkipsRSTClosedConnection reproduces CORE-13478
+// Failure.7. One packet crossing an RST close hides it from the recount.
+func TestConnLimitScannerSkipsRSTClosedConnection(t *testing.T) {
+	podIP := "10.65.0.2"
+	remoteIP := "10.65.1.3"
+
+	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
+		counts: make(map[connlimitKey]uint32),
+		podInfo: map[string]ConnLimitPodInfo{
+			string(net.ParseIP(podIP).To4()): podInfo(9, true, false),
+		},
+	}
+
+	// A straggler 5ms after the RST is in-flight data, not continued use.
+	rstAt := 10 * time.Second
+	key := makeKey(remoteIP, podIP, 54321, 8080)
+	val := makeRSTClosedValue(ctv4.FlagConnLimitIn, rstAt, rstAt+5*time.Millisecond)
+
+	verdict, _ := scanner.Check(key, val, nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
+
+	if n := scanner.counts[connlimitKey{ifindex: 9, direction: 1}]; n != 0 {
+		t.Errorf("recount counted an RST-closed connection (got %d); under churn "+
+			"this inflates the counter and refuses legitimate clients", n)
+	}
+}
+
+// TestConnLimitScannerCountsLiveConnectionLongAfterRST pins the other side of
+// the predicate: continued use keeps a connection counted.
+func TestConnLimitScannerCountsLiveConnectionLongAfterRST(t *testing.T) {
+	podIP := "10.65.0.2"
+	remoteIP := "10.65.1.3"
+
+	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
+		counts: make(map[connlimitKey]uint32),
+		podInfo: map[string]ConnLimitPodInfo{
+			string(net.ParseIP(podIP).To4()): podInfo(9, true, false),
+		},
+	}
+
+	// Traffic 30s after the RST: the connection demonstrably continued.
+	rstAt := 10 * time.Second
+	key := makeKey(remoteIP, podIP, 54321, 8080)
+	val := makeRSTClosedValue(ctv4.FlagConnLimitIn, rstAt, rstAt+30*time.Second)
+
+	verdict, _ := scanner.Check(key, val, nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
+
+	if n := scanner.counts[connlimitKey{ifindex: 9, direction: 1}]; n != 1 {
+		t.Errorf("live connection was excluded from the recount after a spurious "+
+			"RST: expected ingress count 1 for ifindex 9, got counts: %v", scanner.counts)
 	}
 }
 
