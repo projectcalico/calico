@@ -5284,9 +5284,11 @@ type RouteUpdate struct {
 	// The name of the node holding this destination, if this route targets a calico node.
 	DstNodeName string `protobuf:"bytes,4,opt,name=dst_node_name,json=dstNodeName,proto3" json:"dst_node_name,omitempty"`
 	// IP of the node holding this destination.
-	DstNodeIp     string      `protobuf:"bytes,5,opt,name=dst_node_ip,json=dstNodeIp,proto3" json:"dst_node_ip,omitempty"`
-	SameSubnet    bool        `protobuf:"varint,7,opt,name=same_subnet,json=sameSubnet,proto3" json:"same_subnet,omitempty"`
-	NatOutgoing   bool        `protobuf:"varint,8,opt,name=nat_outgoing,json=natOutgoing,proto3" json:"nat_outgoing,omitempty"`
+	DstNodeIp   string `protobuf:"bytes,5,opt,name=dst_node_ip,json=dstNodeIp,proto3" json:"dst_node_ip,omitempty"`
+	SameSubnet  bool   `protobuf:"varint,7,opt,name=same_subnet,json=sameSubnet,proto3" json:"same_subnet,omitempty"`
+	NatOutgoing bool   `protobuf:"varint,8,opt,name=nat_outgoing,json=natOutgoing,proto3" json:"nat_outgoing,omitempty"`
+	// Set when a live local WEP holds this IP. Decides locality when types has
+	// both LOCAL_WORKLOAD and REMOTE_WORKLOAD, as a borrowed IP does.
 	LocalWorkload bool        `protobuf:"varint,9,opt,name=local_workload,json=localWorkload,proto3" json:"local_workload,omitempty"`
 	TunnelType    *TunnelType `protobuf:"bytes,10,opt,name=tunnel_type,json=tunnelType,proto3" json:"tunnel_type,omitempty"`
 	Borrowed      bool        `protobuf:"varint,11,opt,name=borrowed,proto3" json:"borrowed,omitempty"`
