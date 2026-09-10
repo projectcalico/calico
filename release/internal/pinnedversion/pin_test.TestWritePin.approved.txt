@@ -1,0 +1,17 @@
+- title: v3.31.0
+  manifest_url: https://test-release.hashrelease.tools.tigera.net
+  release_name: test-release
+  note: test-release - generated at [Date1] using release-v3.31 release branch
+  branch: release-v3.31
+  full_hash: v3.31.0
+  tigera-operator:
+    version: v3.31.0
+    image: operator
+    registry: quay.io/calico
+  components:
+    node:
+      version: v3.31.0
+    third-party:
+      version: v1.2.3
+      image: vendor/third-party
+      registry: quay.io

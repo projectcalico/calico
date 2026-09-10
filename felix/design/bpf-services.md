@@ -424,6 +424,35 @@ per-packet forwarding does not revisit the affinity map. The affinity
 map's `last_used` is updated opportunistically on new-flow backend
 resolution; flow-lifetime fast-path packets are not affected.
 
+### Enforced affinity for unconnected UDP
+
+An *unconnected* UDP socket has no connect() for the CTLB to hook, so
+every `sendmsg` runs backend selection afresh. Without affinity,
+consecutive datagrams from one socket would land on different backends.
+The CTLB therefore enforces affinity for unconnected UDP on **every** UDP
+service, whether or not it asks for `sessionAffinity: ClientIP`
+(`connect.h`, passing `CTLB_UDP_NOT_SEEN_TIMEO` as
+`affinity_always_timeo` to `calico_nat_lookup`). The timeout is the
+`UDPTimeout` BPF conntrack timeout, and the entry's timestamp is
+refreshed on each use, so the affinity lasts as long as the socket keeps
+sending.
+
+These entries live in the same affinity map as the `sessionAffinity`
+ones. When both apply — a UDP service that also sets
+`sessionAffinity: ClientIP` — `calico_nat_lookup` uses whichever timeout
+is **longer**. Using the shorter one would break the promise the other
+made; in particular, honouring the CTLB's timeout over a service's
+3-hour `sessionAffinity` would re-pick a backend after a few idle
+seconds, which is not the stickiness the user asked for.
+
+A caveat on granularity: the CTLB looks the entry up with `client_ip` set
+to `VOID_IP`, because the source IP is not known at connect/sendmsg time.
+So there is one CTLB affinity entry per (service, port), shared by every
+workload on the node, rather than one per client IP. That is a known
+limitation (see the `XXX` comment in `connect.h`), independent of the
+timeout: within a burst of traffic the entry is refreshed on each use, so
+node-local clients coalesce onto one backend at any timeout value.
+
 ### Applicability
 
 - Works for both the TC path and the CTLB path: CTLB's connect-time
@@ -450,6 +479,19 @@ resolution; flow-lifetime fast-path packets are not affected.
 - An affinity entry that points at a backend that no longer exists
   must be treated as a miss, not as a drop. A change that tightens
   the "is backend still valid" check must preserve that.
+- The BPF programs never delete affinity entries; the syncer's
+  `cleanupSticky()` is the only reclaim path, and it runs on every
+  sync. Its notion of which frontends may hold entries, and for how
+  long, must therefore cover **every** writer — including the CTLB's
+  enforced UDP affinity, which has no `sessionAffinity` on the service
+  to key off. An entry the syncer does not recognise is deleted on the
+  next sync, which silently un-pins a live client. There are two
+  frontend writers — `writeSvc()` and, for a `LoadBalancer` or
+  `ExternalIP` frontend with `loadBalancerSourceRanges`,
+  `writeLBSrcRangeSvcNATKeys()` — and both must register the frontend
+  with `registerStickyFrontend()`. The BPF programs key affinity
+  entries on the destination alone, so all of a service's source-range
+  frontends share the affinity key of its zero-source-range frontend.
 
 
 
@@ -504,6 +546,40 @@ the BPF program ever runs.
 - Maglev LUT — see Maglev load balancer.
 - Reverse-SNAT map (`cali_v4_srmsg` / `cali_v6_srmsg`) — used by
   the CTLB's `recvmsg` hook to undo destination rewrites.
+
+### Service IDs, and the second writer of these maps
+
+A service ID indexes the service's own block of the backend map, so
+**no two services may hold the same ID** — their backends would sit at
+the same `(id, ordinal)` keys and overwrite each other on every sync,
+leaving one frontend NATing to the other's backends. A service does
+share its ID with all of its *own* derived (NodePort, ExternalIP,
+LoadBalancer) frontends; that is how `applyDerived` points them at one
+block of backends.
+
+IDs are handed out by `newSvcID` and, on restart, re-adopted from the
+maps by `startupBuildPrev`, which pairs each frontend entry with the
+service that must have written it. Re-adoption keeps a restart from
+disrupting traffic, but it means Felix trusts the maps — and Felix is
+not their only writer:
+
+- the maps are pinned, so they outlive both Felix and calico-node;
+- with `bpfNetworkBootstrap` enabled the `ebpf-bootstrap` init
+  container programs the API server service into them on every
+  calico-node start, before Felix runs (`node/pkg/nodeinit`).
+
+So `startupBuildPrev` must **not** adopt an ID it finds shared by two
+different services: adopting it makes the conflict permanent, since
+`applySvc` keeps an unchanged service's ID forever and every later
+restart re-adopts it. Both services are instead left out of
+`prevSvcMap`, which gives each a fresh ID and rewrites its frontends
+and backends; nothing read through a duplicated ID is carried over,
+because those backends may belong to the other service.
+
+The bootstrap writer holds up the other end of the invariant: it
+reuses the ID already recorded for the service it is programming, and
+otherwise picks one no frontend entry uses, rather than assuming an ID
+is free.
 
 ### Semantics it enforces
 
@@ -565,6 +641,11 @@ correct; a later update with real ready endpoints overwrites it.
   be wrong: a normal service legitimately scaling to zero must clear
   its backends so clients get a connection refusal rather than NAT
   to a dead backend.
+- Anything that writes a service ID — in Felix or in the bootstrap
+  init container — must keep IDs unique across services (above). A
+  change to either writer needs to hold up its end: Felix does not
+  adopt duplicated IDs from the maps, and the bootstrap does not claim
+  an ID that is already in use.
 
 
 
@@ -652,17 +733,9 @@ issue.
 
 ---
 
-## Keep this doc in sync with the code
+## Cross-cutting rules
 
-A change to how the BPF dataplane works in the area this file
-covers must update the relevant section in the same PR — new
-mechanism, new flag, new map field, new config knob, or any
-change to the packet path. Exemptions: (a) bug fix restoring
-documented behaviour, (b) mechanical refactor with no observable
-change, (c) comment / log-message edits, (d) dependency bumps.
-If in doubt, update.
-
-Cross-cutting rules that apply to **every** BPF change (map
-versioning, mark discipline, sub-program registration, kernel-
-version sensitivity) live in
+Rules that apply to **every** BPF change (map versioning, mark
+discipline, sub-program registration, kernel-version sensitivity)
+live in
 [`bpf-overview.md` → Cross-cutting review notes](./bpf-overview.md).

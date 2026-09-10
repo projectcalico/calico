@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -208,15 +208,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		extClient.Exec("ip", "route", "add", ep2_1.IP, "via", tc.Felixes[0].IP)
 
 		// Configure external client to only accept ipv4 packets with 0x14 DSCP value.
-		extClient.Exec("iptables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x14", "-j", "DROP")
+		extClient.Exec(v4IPTables(), "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x14", "-j", "DROP")
 
 		extClient.Exec("ip", "-6", "route", "add", ep1_2.IP6, "via", tc.Felixes[1].IPv6)
 		extClient.Exec("ip", "-6", "route", "add", ep2_2.IP6, "via", tc.Felixes[1].IPv6)
 
 		// Configure external client to only accept ipv6 packets with 0x28 DSCP value. ICMPv6 needs to be allowed
 		// regardless for neighbor discovery.
-		extClient.Exec("ip6tables", "-A", "INPUT", "-p", "ipv6-icmp", "-j", "ACCEPT")
-		extClient.Exec("ip6tables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x28", "-j", "DROP")
+		extClient.Exec(v6IPTables(), "-A", "INPUT", "-p", "ipv6-icmp", "-j", "ACCEPT")
+		extClient.Exec(v6IPTables(), "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x28", "-j", "DROP")
 
 		if !BPFMode() {
 			verifyQoSPolicies(tc.Felixes[0], nil, nil)
@@ -466,15 +466,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		extClient.Exec("ip", "route", "add", ep2_1.IP, "via", tc.Felixes[0].IP)
 
 		// Configure external client to only accept ipv4 packets with AF11(0x0A) DSCP value.
-		extClient.Exec("iptables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x0a", "-j", "DROP")
+		extClient.Exec(v4IPTables(), "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x0a", "-j", "DROP")
 
 		extClient.Exec("ip", "-6", "route", "add", ep1_2.IP6, "via", tc.Felixes[1].IPv6)
 		extClient.Exec("ip", "-6", "route", "add", ep2_2.IP6, "via", tc.Felixes[1].IPv6)
 
 		// Configure external client to only accept ipv6 packets with EF(0x2E) DSCP value. ICMPv6 needs to be allowed
 		// regardless for neighbor discovery.
-		extClient.Exec("ip6tables", "-A", "INPUT", "-p", "ipv6-icmp", "-j", "ACCEPT")
-		extClient.Exec("ip6tables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x2e", "-j", "DROP")
+		extClient.Exec(v6IPTables(), "-A", "INPUT", "-p", "ipv6-icmp", "-j", "ACCEPT")
+		extClient.Exec(v6IPTables(), "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x2e", "-j", "DROP")
 
 		if !BPFMode() {
 			verifyQoSPolicies(tc.Felixes[0], nil, nil)
@@ -555,4 +555,20 @@ func verifyQoSPoliciesWithIPFamily(felix *infrastructure.Felix, ipv6 bool, value
 		Should(BeTrue())
 	ConsistentlyWithOffset(2, assertRules, 3*time.Second, 100*time.Millisecond).
 		Should(BeTrue())
+}
+
+// v4IPTables returns the iptables binary for the external client, which has no /lib/modules and so
+// can only use the backend whose kernel modules Felix has already loaded on the host.
+func v4IPTables() string {
+	if NFTMode() {
+		return "iptables-nft"
+	}
+	return "iptables-legacy"
+}
+
+func v6IPTables() string {
+	if NFTMode() {
+		return "ip6tables-nft"
+	}
+	return "ip6tables-legacy"
 }

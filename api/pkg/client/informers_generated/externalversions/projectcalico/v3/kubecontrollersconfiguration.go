@@ -20,11 +20,39 @@ import (
 )
 
 // KubeControllersConfigurationInformer provides access to a shared informer and lister for
-// KubeControllersConfigurations.
+// KubeControllersConfigurations. Prefer using the type-safe variant (see [TypedKubeControllersConfigurationInformer]).
 type KubeControllersConfigurationInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.KubeControllersConfigurationLister
 }
+
+// TypedKubeControllersConfigurationInformer provides access to a shared informer and lister for
+// KubeControllersConfigurations, including the type-safe TypedInformer variant.
+// It is a superset of KubeControllersConfigurationInformer.
+type TypedKubeControllersConfigurationInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() KubeControllersConfigurationIndexInformer
+	Lister() projectcalicov3.KubeControllersConfigurationLister
+}
+
+// KubeControllersConfigurationIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type KubeControllersConfigurationIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.KubeControllersConfiguration]
+
+// KubeControllersConfigurationHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for KubeControllersConfiguration.
+type KubeControllersConfigurationHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.KubeControllersConfiguration]
+
+// KubeControllersConfigurationDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for KubeControllersConfiguration.
+type KubeControllersConfigurationDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.KubeControllersConfiguration]
+
+// KubeControllersConfigurationFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for KubeControllersConfiguration.
+type KubeControllersConfigurationFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.KubeControllersConfiguration]
+
+// KubeControllersConfigurationIndexers is a specialization of [cache.TypedIndexers] for KubeControllersConfiguration.
+type KubeControllersConfigurationIndexers = cache.TypedIndexers[*apisprojectcalicov3.KubeControllersConfiguration]
+
+// DeletedKubeControllersConfiguration is a specialization of [cache.DeletedObject] for KubeControllersConfiguration.
+type DeletedKubeControllersConfiguration = cache.DeletedObject[*apisprojectcalicov3.KubeControllersConfiguration]
 
 type kubeControllersConfigurationInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,25 +62,49 @@ type kubeControllersConfigurationInformer struct {
 // NewKubeControllersConfigurationInformer constructs a new informer for KubeControllersConfiguration type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedKubeControllersConfigurationInformer]).
 func NewKubeControllersConfigurationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewKubeControllersConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedKubeControllersConfigurationInformer constructs a new informer for KubeControllersConfiguration type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedKubeControllersConfigurationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers KubeControllersConfigurationIndexers) KubeControllersConfigurationIndexInformer {
+	return NewTypedKubeControllersConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredKubeControllersConfigurationInformer constructs a new informer for KubeControllersConfiguration type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredKubeControllersConfigurationInformer]).
 func NewFilteredKubeControllersConfigurationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewKubeControllersConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedKubeControllersConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredKubeControllersConfigurationInformer constructs a new informer for KubeControllersConfiguration type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredKubeControllersConfigurationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers KubeControllersConfigurationIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) KubeControllersConfigurationIndexInformer {
+	return NewTypedKubeControllersConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewKubeControllersConfigurationInformerWithOptions constructs a new informer for KubeControllersConfiguration type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedKubeControllersConfigurationInformerWithOptions]).
 func NewKubeControllersConfigurationInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedKubeControllersConfigurationInformerWithOptions(client, options)
+}
+
+// NewTypedKubeControllersConfigurationInformerWithOptions constructs a new informer for KubeControllersConfiguration type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedKubeControllersConfigurationInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) KubeControllersConfigurationIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "kubecontrollersconfigurations"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.KubeControllersConfiguration](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -85,17 +137,57 @@ func NewKubeControllersConfigurationInformerWithOptions(client clientset.Interfa
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *kubeControllersConfigurationInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewKubeControllersConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedKubeControllersConfigurationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *kubeControllersConfigurationInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.KubeControllersConfiguration{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *kubeControllersConfigurationInformer) TypedInformer() KubeControllersConfigurationIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.KubeControllersConfiguration](f.factory.InformerFor(&apisprojectcalicov3.KubeControllersConfiguration{}, f.defaultInformer))
 }
 
 func (f *kubeControllersConfigurationInformer) Lister() projectcalicov3.KubeControllersConfigurationLister {
 	return projectcalicov3.NewKubeControllersConfigurationLister(f.Informer().GetIndexer())
+}
+
+// ToTypedKubeControllersConfigurationInformer converts an untyped informer into a TypedKubeControllersConfigurationInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *KubeControllersConfiguration. If that is not the case, calling type-safe methods of the returned
+// TypedKubeControllersConfigurationInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedKubeControllersConfigurationInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedKubeControllersConfigurationInformer(informer KubeControllersConfigurationInformer) TypedKubeControllersConfigurationInformer {
+	if informer, ok := informer.(TypedKubeControllersConfigurationInformer); ok {
+		return informer
+	}
+	return &kubeControllersConfigurationTypedInformerAdapter{informer}
+}
+
+type kubeControllersConfigurationTypedInformerAdapter struct {
+	KubeControllersConfigurationInformer
+}
+
+func (a *kubeControllersConfigurationTypedInformerAdapter) TypedInformer() KubeControllersConfigurationIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.KubeControllersConfiguration](a.Informer())
+}
+
+// ToKubeControllersConfigurationIndexInformer converts an untyped informer into a KubeControllersConfigurationIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *KubeControllersConfiguration. If that is not the case, calling type-safe methods of the returned
+// KubeControllersConfigurationIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a KubeControllersConfigurationIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToKubeControllersConfigurationIndexInformer(informer cache.SharedIndexInformer) KubeControllersConfigurationIndexInformer {
+	if informer, ok := informer.(KubeControllersConfigurationIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.KubeControllersConfiguration](informer)
 }

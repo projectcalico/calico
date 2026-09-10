@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,11 @@ package allocateip
 import (
 	"context"
 	"fmt"
+	"maps"
 	gnet "net"
 	"os"
 	"reflect"
+	"time"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -47,6 +49,10 @@ import (
 //
 // It will assign an address if there are any available, and remove any tunnel addresses
 // that are configured and should no longer be.
+
+// reconcileTimeout bounds a single reconcile, including the IPAM allocation and the
+// node update it makes.
+const reconcileTimeout = 2 * time.Minute
 
 // Run runs the tunnel IP allocator. In oneshot mode it reconciles once and
 // returns. In daemon mode it watches for IP pool and node configuration
@@ -83,7 +89,7 @@ func run(
 	}
 
 	if oneshot {
-		return reconcileTunnelAddrs(nodename, c, felixEnvConfig)
+		return reconcileTunnelAddrs(ctx, nodename, c, felixEnvConfig)
 	}
 
 	// Daemon mode: create a long-running reconciler.
@@ -118,7 +124,11 @@ func (r reconciler) run(ctx context.Context) error {
 	for {
 		select {
 		case <-r.ch:
-			if err := reconcileTunnelAddrs(r.nodename, r.client, r.felixEnvConfig); err != nil {
+			if err := reconcileTunnelAddrs(ctx, r.nodename, r.client, r.felixEnvConfig); err != nil {
+				if ctx.Err() != nil {
+					// Shutting down, so don't report the cancellation as a failure.
+					return nil
+				}
 				return fmt.Errorf("failed to reconcile tunnel address: %w", err)
 			}
 		case <-ctx.Done():
@@ -183,10 +193,10 @@ func (r *reconciler) OnUpdates(updates []bapi.Update) {
 			}
 			log.Debugf("Updated Node resource: %s", key)
 
-			// Track both IPv4 and IPv6 WireGuard public keys
-			data = wireguardData{
+			data = nodeData{
 				publicKey:   v.Status.WireguardPublicKey,
 				publicKeyV6: v.Status.WireguardPublicKeyV6,
+				labels:      maps.Clone(v.Labels),
 			}
 
 		default:
@@ -220,9 +230,13 @@ func (r *reconciler) OnUpdates(updates []bapi.Update) {
 
 // reconcileTunnelAddrs performs a single shot update of the tunnel IP allocations.
 func reconcileTunnelAddrs(
-	nodename string, c client.Interface, felixEnvConfig *felixconfig.Config,
+	parentCtx context.Context, nodename string, c client.Interface, felixEnvConfig *felixconfig.Config,
 ) (retErr error) {
-	ctx := context.Background()
+	// Bound the reconcile so that a wedged datastore connection surfaces as an error
+	// instead of blocking the caller indefinitely.
+	ctx, cancel := context.WithTimeout(parentCtx, reconcileTimeout)
+	defer cancel()
+
 	// Get node resource for given nodename.
 	node, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
 	if err != nil {
@@ -240,11 +254,15 @@ func reconcileTunnelAddrs(
 
 	defer func() {
 		if retErr != nil {
+			// An expired ctx is one of the reasons we are here, so release on our own.
+			releaseCtx, releaseCancel := context.WithTimeout(context.WithoutCancel(parentCtx), reconcileTimeout)
+			defer releaseCancel()
+
 			for attrType, ip := range assignIP {
 				if ip != "" {
 					logCtx := getLogger(attrType)
 					handle, _ := generateHandleAndAttributes(nodename, attrType)
-					if err = c.IPAM().ReleaseByHandle(ctx, handle); err != nil {
+					if err = c.IPAM().ReleaseByHandle(releaseCtx, handle); err != nil {
 						logCtx.WithError(err).WithField("IP", ip).Error("Error releasing IP address on failure")
 					}
 				}
@@ -800,8 +818,10 @@ func loadFelixEnvConfig() *felixconfig.Config {
 	return configParams
 }
 
-// Home for wireguard public keys in the cache.
-type wireguardData struct {
+// The subset of the node in the cache. Labels are included because IP pool node
+// selectors are evaluated against them.
+type nodeData struct {
 	publicKey   string
 	publicKeyV6 string
+	labels      map[string]string
 }

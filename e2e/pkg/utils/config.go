@@ -24,17 +24,16 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/kubernetes/test/e2e/framework"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 )
 
-// configRetry backs off long enough to ride out a calico-apiserver pod that's
-// briefly rolling or unreachable, which is where the transient errors that
-// retriableAPIError covers come from.
+// Two minutes of fixed interval outlasts a calico-apiserver restart. No Cap:
+// wait.Backoff zeroes Steps once Duration*Factor exceeds it.
 var configRetry = wait.Backoff{
-	Steps:    8,
-	Duration: 100 * time.Millisecond,
-	Factor:   2.0,
-	Jitter:   0.1,
-	Cap:      10 * time.Second,
+	Steps:    30,
+	Duration: 4 * time.Second,
+	Factor:   1.0,
 }
 
 // ConfigureWithCleanup fetches an object by key, applies a mutation, and
@@ -102,15 +101,8 @@ func ConfigureWithCleanup[T ctrlclient.Object](cli ctrlclient.Client, key ctrlcl
 	}, nil
 }
 
-// retriableAPIError reports whether err is worth retrying against the
-// aggregated projectcalico.org/v3 API server. Besides 409 Conflict, the
-// aggregation layer intermittently drops a request mid-flight when the backing
-// calico-apiserver pod is rolling. That surfaces as ServiceUnavailable
-// ("unexpected EOF") or a 500 InternalError, and clears on retry.
+// retriableAPIError adds 409 Conflict, which is only safe because every retry
+// loop here re-reads the object first.
 func retriableAPIError(err error) bool {
-	return apierrors.IsConflict(err) ||
-		apierrors.IsServiceUnavailable(err) ||
-		apierrors.IsInternalError(err) ||
-		apierrors.IsTimeout(err) ||
-		apierrors.IsTooManyRequests(err)
+	return apierrors.IsConflict(err) || client.RetriableAPIError(err)
 }

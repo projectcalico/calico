@@ -20,11 +20,39 @@ import (
 )
 
 // ClusterInformationInformer provides access to a shared informer and lister for
-// ClusterInformations.
+// ClusterInformations. Prefer using the type-safe variant (see [TypedClusterInformationInformer]).
 type ClusterInformationInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.ClusterInformationLister
 }
+
+// TypedClusterInformationInformer provides access to a shared informer and lister for
+// ClusterInformations, including the type-safe TypedInformer variant.
+// It is a superset of ClusterInformationInformer.
+type TypedClusterInformationInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() ClusterInformationIndexInformer
+	Lister() projectcalicov3.ClusterInformationLister
+}
+
+// ClusterInformationIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type ClusterInformationIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.ClusterInformation]
+
+// ClusterInformationHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for ClusterInformation.
+type ClusterInformationHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.ClusterInformation]
+
+// ClusterInformationDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for ClusterInformation.
+type ClusterInformationDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.ClusterInformation]
+
+// ClusterInformationFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for ClusterInformation.
+type ClusterInformationFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.ClusterInformation]
+
+// ClusterInformationIndexers is a specialization of [cache.TypedIndexers] for ClusterInformation.
+type ClusterInformationIndexers = cache.TypedIndexers[*apisprojectcalicov3.ClusterInformation]
+
+// DeletedClusterInformation is a specialization of [cache.DeletedObject] for ClusterInformation.
+type DeletedClusterInformation = cache.DeletedObject[*apisprojectcalicov3.ClusterInformation]
 
 type clusterInformationInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,25 +62,49 @@ type clusterInformationInformer struct {
 // NewClusterInformationInformer constructs a new informer for ClusterInformation type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedClusterInformationInformer]).
 func NewClusterInformationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewClusterInformationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedClusterInformationInformer constructs a new informer for ClusterInformation type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedClusterInformationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers ClusterInformationIndexers) ClusterInformationIndexInformer {
+	return NewTypedClusterInformationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredClusterInformationInformer constructs a new informer for ClusterInformation type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredClusterInformationInformer]).
 func NewFilteredClusterInformationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewClusterInformationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedClusterInformationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredClusterInformationInformer constructs a new informer for ClusterInformation type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredClusterInformationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers ClusterInformationIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) ClusterInformationIndexInformer {
+	return NewTypedClusterInformationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewClusterInformationInformerWithOptions constructs a new informer for ClusterInformation type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedClusterInformationInformerWithOptions]).
 func NewClusterInformationInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedClusterInformationInformerWithOptions(client, options)
+}
+
+// NewTypedClusterInformationInformerWithOptions constructs a new informer for ClusterInformation type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedClusterInformationInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) ClusterInformationIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "clusterinformations"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.ClusterInformation](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -85,17 +137,57 @@ func NewClusterInformationInformerWithOptions(client clientset.Interface, option
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *clusterInformationInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewClusterInformationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedClusterInformationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *clusterInformationInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.ClusterInformation{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *clusterInformationInformer) TypedInformer() ClusterInformationIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.ClusterInformation](f.factory.InformerFor(&apisprojectcalicov3.ClusterInformation{}, f.defaultInformer))
 }
 
 func (f *clusterInformationInformer) Lister() projectcalicov3.ClusterInformationLister {
 	return projectcalicov3.NewClusterInformationLister(f.Informer().GetIndexer())
+}
+
+// ToTypedClusterInformationInformer converts an untyped informer into a TypedClusterInformationInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *ClusterInformation. If that is not the case, calling type-safe methods of the returned
+// TypedClusterInformationInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedClusterInformationInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedClusterInformationInformer(informer ClusterInformationInformer) TypedClusterInformationInformer {
+	if informer, ok := informer.(TypedClusterInformationInformer); ok {
+		return informer
+	}
+	return &clusterInformationTypedInformerAdapter{informer}
+}
+
+type clusterInformationTypedInformerAdapter struct {
+	ClusterInformationInformer
+}
+
+func (a *clusterInformationTypedInformerAdapter) TypedInformer() ClusterInformationIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.ClusterInformation](a.Informer())
+}
+
+// ToClusterInformationIndexInformer converts an untyped informer into a ClusterInformationIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *ClusterInformation. If that is not the case, calling type-safe methods of the returned
+// ClusterInformationIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a ClusterInformationIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToClusterInformationIndexInformer(informer cache.SharedIndexInformer) ClusterInformationIndexInformer {
+	if informer, ok := informer.(ClusterInformationIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.ClusterInformation](informer)
 }

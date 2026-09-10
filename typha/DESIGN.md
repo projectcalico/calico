@@ -64,14 +64,7 @@ uncompressed).
   what a misbehaving peer can make the other side do. The server never
   decompresses client data, and it caps each inbound message at 1MiB.
 
-## Keep this doc in sync with the code
-
-A PR that changes how Typha works — its fan-out behaviour, the
-datastore-side connection shape, the Felix-facing protocol, or
-any documented invariant — must update this file in the same PR.
-Exemptions: bug fix restoring documented behaviour, mechanical
-refactor with no observable change, comment / log-message edits,
-dependency bumps. If in doubt, update.
+## Gaps
 
 This doc is currently a stub apart from the compression section.
 Sections to flesh out as the content grows: fan-out architecture

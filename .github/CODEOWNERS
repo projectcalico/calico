@@ -16,3 +16,6 @@ app-policy/                   @projectcalico/ingress-maintainers
 .argoci/                     @projectcalico/e2e-maintainers
 .semaphore/end-to-end/        @projectcalico/e2e-maintainers
 e2e/                          @projectcalico/e2e-maintainers
+
+# Operator
+operator/                     @projectcalico/operator-maintainers

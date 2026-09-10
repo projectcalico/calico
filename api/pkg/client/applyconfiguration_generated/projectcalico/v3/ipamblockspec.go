@@ -36,6 +36,7 @@ type IPAMBlockSpecApplyConfiguration struct {
 	// When releasing an IP, passing the sequence number associated with the allocation allows us
 	// to protect against a race condition and ensure the IP hasn't been released and re-allocated
 	// since the release request.
+	//
 	SequenceNumber *uint64 `json:"sequenceNumber,omitempty"`
 	// Map of allocated ordinal within the block to sequence number of the block at
 	// the time of allocation. Kubernetes does not allow numerical keys for maps, so

@@ -24,19 +24,94 @@ import (
 // It defines which tests to include and exclude using Ginkgo v2 labels and
 // test name patterns.
 type Config struct {
-	// Extends is an optional path to a parent config file (relative to this
-	// file's directory). The parent's include and exclude lists are inherited
-	// and appended to by this config.
-	Extends string `yaml:"extends,omitempty"`
+	// Extends names parent config files (relative to this file's directory)
+	// whose include and exclude lists this config inherits. Parents are merged
+	// left-to-right and this config's own entries are appended last, so a lane
+	// can compose a pipeline's scope with a shared platform exclusion list.
+	Extends ExtendsList `yaml:"extends,omitempty"`
 
-	// Include is a list of label expressions. Tests matching ANY of these
-	// expressions are selected to run. When a parent config is extended,
-	// include entries are appended (OR'd together).
-	Include []IncludeEntry `yaml:"include,omitempty"`
+	// Include selects which tests run, by label expression and, where a lane
+	// needs a spec the labels cannot reach, by test name pattern. When a parent
+	// config is extended, include entries are appended (OR'd together).
+	Include IncludeList `yaml:"include,omitempty"`
 
 	// Exclude defines labels and name patterns to exclude from the selected
 	// tests. When a parent config is extended, exclude entries are appended.
 	Exclude Exclude `yaml:"exclude,omitempty"`
+
+	// Enable cancels a label exclusion this config inherits, for a lane whose
+	// cluster does provide what the label needs. Each entry must match a label
+	// an ancestor excludes.
+	Enable []EnableLabel `yaml:"enable,omitempty"`
+}
+
+// ExtendsList is the parent list for a config. It accepts a bare string for the
+// single-parent case and a sequence for composition:
+//
+//	extends: pipeline.yaml
+//	extends: [pipeline.yaml, ../platform/eks.yaml]
+type ExtendsList []string
+
+// UnmarshalYAML implements custom unmarshaling for ExtendsList to support both
+// the bare string and sequence forms.
+func (e *ExtendsList) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		*e = ExtendsList{value.Value}
+		return nil
+	}
+
+	var parents []string
+	if err := value.Decode(&parents); err != nil {
+		return fmt.Errorf("invalid extends (want a path or a list of paths): %w", err)
+	}
+	for i, p := range parents {
+		if p == "" {
+			return fmt.Errorf("extends[%d] is empty (line %d)", i, value.Line)
+		}
+	}
+	*e = parents
+	return nil
+}
+
+// IncludeList is the include section of a config. It accepts a bare sequence
+// of label expressions for the common case, and a mapping when a config also
+// needs name patterns:
+//
+//	include:
+//	  - Conformance && sig-network
+//
+//	include:
+//	  labels:
+//	    - Conformance && sig-network
+//	  namePatterns:
+//	    - pattern: "should serve a basic endpoint from pods"
+//	      reason: "smoke check before the dataplane exists"
+type IncludeList struct {
+	// Labels is a list of label expressions. Tests matching ANY of these
+	// expressions are selected to run.
+	Labels []IncludeEntry `yaml:"labels,omitempty"`
+
+	// NamePatterns is a list of test name regex patterns to select via
+	// --ginkgo.focus, for specs no label expression can reach. Mutually
+	// exclusive with Labels: ginkgo ANDs the focus regex with the label
+	// filter, so a config setting both is rejected at load.
+	NamePatterns []NamePatternEntry `yaml:"namePatterns,omitempty"`
+}
+
+// UnmarshalYAML implements custom unmarshaling for IncludeList to support both
+// the bare sequence and mapping forms.
+func (l *IncludeList) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.SequenceNode {
+		return value.Decode(&l.Labels)
+	}
+
+	type raw IncludeList
+	var r raw
+	if err := value.Decode(&r); err != nil {
+		return fmt.Errorf("invalid include (want a list of labels or a mapping): %w", err)
+	}
+	*l = IncludeList(r)
+	return nil
 }
 
 // IncludeEntry is a label expression to include in the test selection. It
@@ -71,6 +146,15 @@ func (e *IncludeEntry) UnmarshalYAML(value *yaml.Node) error {
 	}
 	*e = IncludeEntry(r)
 	return nil
+}
+
+// EnableLabel is an inherited label exclusion to cancel.
+type EnableLabel struct {
+	// Label is the Ginkgo label to re-include (e.g., "Feature:Wireguard").
+	Label string `yaml:"label"`
+
+	// Reason documents what this lane provides that the label needs. Required.
+	Reason string `yaml:"reason"`
 }
 
 // Exclude defines what to exclude from the test selection.

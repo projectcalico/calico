@@ -2387,7 +2387,7 @@ class InvalidData(TestBase):
                                 'node': 'node1',
                                 'peerIP': '192.168.0.250',
                                 'scope': 'node'}
-                   }, 'cannot unmarshal number into Go struct field BGPPeerSpec.spec.asNumber of type string'),
+                   }, 'cannot unmarshal number into Go value of type string'),
                    ("bgpPeer-invalidIP", {
                        'apiVersion': API_VERSION,
                        'kind': 'BGPPeer',
@@ -2615,8 +2615,7 @@ class InvalidData(TestBase):
                        'spec': {
                            'ipipMode': 'Always',
                            'cidr': "10.0.250.0/32"}  # no mask
-                   }, "IPPool.Spec.CIDR = '10.0.250.0/32' "
-                      "(IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.)"),
+                   }, "field spec (IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.)"),
                    ("pool-invalidNet4", {
                        'apiVersion': API_VERSION,
                        'kind': 'IPPool',
@@ -2644,16 +2643,14 @@ class InvalidData(TestBase):
                            'cidr': "::/128",
                        }
                        # nothing
-                   }, "IPPool.Spec.CIDR = '::/128' "
-                      "(IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.)"),
+                   }, "field spec (IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.)"),
                    ("pool-invalidNet7", {
                        'apiVersion': API_VERSION,
                        'kind': 'IPPool',
                        'metadata': {'name': 'invalid-net-7'},
                        'spec': {
                            'cidr': "192.168.0.0/27"}  # invalid mask
-                   }, "IPPool.Spec.CIDR = '192.168.0.0/27' "
-                      "(IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.)"),
+                   }, "field spec (IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.)"),
                    ("pool-invalidNet8", {
                        'apiVersion': API_VERSION,
                        'kind': 'IPPool',
@@ -2669,7 +2666,7 @@ class InvalidData(TestBase):
                        'metadata': {'name': 'invalid-ipip-1'},
                        'spec': {'disabled': 'True',  # disabled value must be a bool
                                 'cidr': "10.0.1.0/24"}
-                   }, "cannot unmarshal string into Go struct field IPPoolSpec.spec.disabled of type bool"),
+                   }, "cannot unmarshal string into Go struct field .spec.disabled of type bool"),
                    ("pool-invalidIpIp2", {
                        'apiVersion': API_VERSION,
                        'kind': 'IPPool',
@@ -2677,7 +2674,7 @@ class InvalidData(TestBase):
                        'spec': {
                            'disabled': 'Maybe',
                            'cidr': "10.0.1.0/24"}
-                   }, "cannot unmarshal string into Go struct field IPPoolSpec.spec.disabled of type bool"),
+                   }, "cannot unmarshal string into Go struct field .spec.disabled of type bool"),
                    ("profile-ICMPtype", {
                        'apiVersion': API_VERSION,
                        'kind': 'Profile',

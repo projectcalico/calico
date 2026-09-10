@@ -34,7 +34,7 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 cp -r "${CHART_DIR}" "${WORK_DIR}/tigera-operator"
 
 # Patch chart values with the custom operator image coordinates.
-sed -i "s|image: tigera/operator|image: ${IMAGE_PATH}/operator|" "${WORK_DIR}/tigera-operator/values.yaml"
+sed -i "s|image: calico/operator|image: ${IMAGE_PATH}/operator|" "${WORK_DIR}/tigera-operator/values.yaml"
 sed -i "s|version: master|version: ${TAG}|" "${WORK_DIR}/tigera-operator/values.yaml"
 sed -i "s|registry: quay.io|registry: ${REGISTRY}|" "${WORK_DIR}/tigera-operator/values.yaml"
 

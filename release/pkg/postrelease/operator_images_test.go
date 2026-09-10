@@ -19,7 +19,7 @@ func TestOperatorPrintedImagesInExpectedList(t *testing.T) {
 	checkVersion(t, operatorVersion)
 	checkImages(t, images)
 
-	fqOperatorImage := fmt.Sprintf("%s/%s:%s", operator.DefaultRegistry, operator.DefaultImage, operatorVersion)
+	fqOperatorImage := fmt.Sprintf("%s/%s:%s", operator.DefaultRegistries[0], operator.DefaultImage, operatorVersion)
 
 	// Pull the operator image.
 	t.Logf("Pulling operator image %s", fqOperatorImage)

@@ -22,8 +22,6 @@ global_job_config:
     - name: marvin-github-ssh-private-key
     - name: banzai-secrets
   env_vars:
-    - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev)
     - name: DATAPLANE
       value: "CalicoBPF"
     - name: INSTALLER
@@ -64,11 +62,13 @@ blocks:
               value: "stable-1"
             - name: ENABLE_WIREGUARD
               value: "true"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/bpf.yaml"
           matrix:
             - env_var: CLUSTER_IMAGE
               values: ["ubuntu-2204-lts-arm64", "rocky-linux-9-arm64"]
 
-        - name: AKS - ARM64
+        - name: AKS - ARM64 w/ AKS-CNI
           execution_time_limit:
             hours: 4
           commands:
@@ -76,8 +76,6 @@ blocks:
           matrix:
             - env_var: K8S_VERSION
               values: ["stable-1"]
-            - env_var: AZ_NETWORK_PLUGIN
-              values: ["azure", "none"]
             - env_var: CLUSTER_MODE
               values: [""]
           env_vars:
@@ -85,20 +83,41 @@ blocks:
               value: azr-aks
             - name: AZ_VM_SIZE
               value: "Standard_D4plds_v5"
+            - name: AZ_NETWORK_PLUGIN
+              value: "azure"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/aks-bpf-nobgp.yaml"
+
+        - name: AKS - ARM64 w/ Calico-CNI
+          execution_time_limit:
+            hours: 4
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: K8S_VERSION
+              values: ["stable-1"]
+            - env_var: CLUSTER_MODE
+              values: [""]
+          env_vars:
+            - name: PROVISIONER
+              value: azr-aks
+            - name: AZ_VM_SIZE
+              value: "Standard_D4plds_v5"
+            - name: AZ_NETWORK_PLUGIN
+              value: "none"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/aks-bpf.yaml"
 
   # these are from the old bpf file
   - name: BPF run matrix
     dependencies: []
     task:
       jobs:
-        - name: AWS encap
+        - name: AWS encap, VXLAN
           execution_time_limit:
             hours: 7
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: USE_VXLAN
-              values: ["true", "false"]
           env_vars:
             - name: PROVISIONER
               value: "aws-kubeadm"
@@ -108,6 +127,29 @@ blocks:
               value: "false"
             - name: K8S_VERSION
               value: "stable-3"
+            - name: USE_VXLAN
+              value: "true"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/bpf-encap-v3crd-extnode-aws.yaml"
+
+        - name: AWS encap, no VXLAN
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: PROVISIONER
+              value: "aws-kubeadm"
+            - name: IPAM_TEST_POOL_SUBNET
+              value: "10.0.0.0/29"
+            - name: USE_API_SERVER
+              value: "false"
+            - name: K8S_VERSION
+              value: "stable-3"
+            - name: USE_VXLAN
+              value: "false"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/bpf-v3crd-extnode-aws.yaml"
 
         - name: AWS single subnet, dual IP-family
           execution_time_limit:
@@ -118,10 +160,15 @@ blocks:
             - env_var: ENABLE_WIREGUARD
               values: ["true", "false"]
           env_vars:
-            # Skip/Focus are the same as the BPF-run block,
-            # but we *don't* skip Maglev for this environment.
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
+            # This run picks its tests with a config rather than a focus/skip
+            # pair: e2e/config/bpf-aws-single-subnet.yaml holds the same
+            # selection the focus/skip used to give, Maglev tests included.
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf-aws-single-subnet.yaml"
+            # Maglev needs DSR, and this is the one run whose cluster otherwise
+            # suits it: BPF, an external node, one subnet, no encapsulation.
+            - name: ENABLE_BPF_DSR
+              value: "true"
             - name: IP_FAMILY
               value: dual
             - name: VPC_SUBNETS
@@ -147,6 +194,8 @@ blocks:
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/bpf-aws.yaml"
             - name: ENABLE_EXTERNAL_NODE
               value: "false"  # No code for external nodes on Talos yet
             - name: VPC_SUBNETS
@@ -168,6 +217,8 @@ blocks:
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/bpf-v3crd-extnode.yaml"
             - name: PROVISIONER
               value: "gcp-kubeadm"
             - name: ENABLE_BPF_DSR
@@ -181,14 +232,11 @@ blocks:
             - name: USE_API_SERVER
               value: "false"
 
-        - name: GCP BPF DP encap w/ NodeLocal DNSCache
+        - name: GCP BPF DP encap w/ NodeLocal DNSCache, VXLAN
           execution_time_limit:
             hours: 7
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: USE_VXLAN
-              values: ["true", "false"]
           env_vars:
             - name: PROVISIONER
               value: "gcp-kubeadm"
@@ -196,6 +244,27 @@ blocks:
               value: "ubuntu-2204-lts"
             - name: ENABLE_NODE_LOCAL_DNS_CACHE
               value: "true"
+            - name: USE_VXLAN
+              value: "true"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/bpf-encap-extnode.yaml"
+
+        - name: GCP BPF DP encap w/ NodeLocal DNSCache, no VXLAN
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: PROVISIONER
+              value: "gcp-kubeadm"
+            - name: CLUSTER_IMAGE
+              value: "ubuntu-2204-lts"
+            - name: ENABLE_NODE_LOCAL_DNS_CACHE
+              value: "true"
+            - name: USE_VXLAN
+              value: "false"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/bpf-extnode.yaml"
 
         - name: AKS w/ AKS-CNI
           execution_time_limit:
@@ -211,10 +280,8 @@ blocks:
               value: "operator"
             - name: ENABLE_EXTERNAL_NODE # No code in banzai-core yet for external nodes on Azure
               value: "false"
-              # External node is false, so we should skip external node tests: "outside.the.cluster|external.to.nodeport"
-              # This uses AKS-CNI, so Strict Affinity test does not apply: "StrictAffinity"
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/aks-bpf-nobgp.yaml"
 
         - name: AKS w/ Calico-CNI
           execution_time_limit:
@@ -234,10 +301,8 @@ blocks:
               value: AKS
             - name: ENABLE_EXTERNAL_NODE # No code in banzai-core yet for external nodes on Azure
               value: "false"
-              # External node is false, so we should skip external node tests: "outside.the.cluster|external.to.nodeport"
-              # This uses AKS-CNI, so Strict Affinity test does not apply: "StrictAffinity"
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/aks-bpf.yaml"
 
         - name: BPF + AKS w AKS CNI + Overlay
           execution_time_limit:
@@ -259,10 +324,8 @@ blocks:
               value: "azr-aks"
             - name: AZ_CREATE_MODE
               value: AKS
-              # External node is false, so we should skip external node tests: "ExternalNode|outside.the.cluster|external.to.nodeport"
-              # This uses AKS-CNI, so Strict Affinity and MTU tests do not apply: "MTU|StrictAffinity"
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/aks-bpf-encap-nobgp.yaml"
 
         - name: aws-kops RHEL8.2
           execution_time_limit:
@@ -278,10 +341,8 @@ blocks:
               value: "ami-02f147dfb8be58a10" # This is the Hourly image.  For Access image, use "ami-03cda30b7a23bda26"
             - name: USE_VENDORED_CNI
               value: "false"
-            # The skip "EndpointSlice\|Services\sshould" is needed to skip Endpoint slice tests which are only possible in k8s 1.21+
-            # The skip "Ingress.API|IngressClass.API" is needed to skip Ingress tests which are only possible in k8s 1.21+
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|Feature:SCTP|Feature:Maglev)
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/kops-bpf-extnode-aws.yaml"
 
         - name: aws-lb-bpf
           execution_time_limit:
@@ -300,24 +361,10 @@ blocks:
               value: "172.16.0.0/16"
             - name: IPAM_TEST_POOL_SUBNET
               value: "10.0.0.0/29"
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(Dataplane:LB)
             - name: BGP_STATUS
               value: Enabled
-            # Skipping these upstream k8s tests since they are failing because of limitations of Calico CNI on EKS:
-            # - [IT] "Proxy version v1 A set of valid responses are returned for both pod and service Proxy"
-            # - [IT] "Proxy version v1 should proxy through a service and a pod"
-            # - [IT] "ReplicaSet should serve a basic image on each replica with a public image"
-            # - [IT] "ReplicationController should serve a basic image on each replica with a public image"
-            # - [It] "DNS should provide DNS for ExternalName services"
-            # - [It] "DNS should provide DNS for pods for Hostname"
-            # - [It] "DNS should provide DNS for pods for Subdomain"
-            # - [It] "DNS should provide DNS for services"
-            # - [It] "DNS should provide DNS for the cluster"
-            # - [It] "DNS should resolve DNS of partial qualified names for services"
-            # See details: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/eks-bpf-encap-extnode-aws.yaml"
 
         - name: aws-lb-iptables
           execution_time_limit:
@@ -336,26 +383,12 @@ blocks:
               value: "172.16.0.0/16"
             - name: IPAM_TEST_POOL_SUBNET
               value: "10.0.0.0/29"
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(Dataplane:LB)
             - name: DATAPLANE
               value: "CalicoIptables"
             - name: BGP_STATUS
               value: Enabled
-            # Skipping these upstream k8s tests since they are failing because of limitations of Calico CNI on EKS:
-            # - [IT] "Proxy version v1 A set of valid responses are returned for both pod and service Proxy"
-            # - [IT] "Proxy version v1 should proxy through a service and a pod"
-            # - [IT] "ReplicaSet should serve a basic image on each replica with a public image"
-            # - [IT] "ReplicationController should serve a basic image on each replica with a public image"
-            # - [It] "DNS should provide DNS for ExternalName services"
-            # - [It] "DNS should provide DNS for pods for Hostname"
-            # - [It] "DNS should provide DNS for pods for Subdomain"
-            # - [It] "DNS should provide DNS for services"
-            # - [It] "DNS should provide DNS for the cluster"
-            # - [It] "DNS should resolve DNS of partial qualified names for services"
-            # See details: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/eks-xtables-encap-extnode-aws.yaml"
 
         - name: EKS w/ aws CNI
           execution_time_limit:
@@ -366,6 +399,8 @@ blocks:
             - env_var: EKS_CNI
               values: ["aws"]
           env_vars:
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/bpf-nobgp-extnode-aws.yaml"
             - name: PROVISIONER
               value: "aws-eks"
             - name: INSTALLER
@@ -394,41 +429,33 @@ blocks:
               value: "172.16.0.0/16"
             - name: IPAM_TEST_POOL_SUBNET
               value: "10.0.0.0/29"
-            # See https://tigera.atlassian.net/browse/CORE-6725 for the extra skips.
-            # Skipping these upstream k8s tests since they are failing because of limitations of Calico CNI on EKS:
-            # - [IT] "Proxy version v1 A set of valid responses are returned for both pod and service Proxy"
-            # - [IT] "Proxy version v1 should proxy through a service and a pod"
-            # - [IT] "ReplicaSet should serve a basic image on each replica with a public image"
-            # - [IT] "ReplicationController should serve a basic image on each replica with a public image"
-            # - [It] "DNS should provide DNS for ExternalName services"
-            # - [It] "DNS should provide DNS for pods for Hostname"
-            # - [It] "DNS should provide DNS for pods for Subdomain"
-            # - [It] "DNS should provide DNS for services"
-            # - [It] "DNS should provide DNS for the cluster"
-            # - [It] "DNS should resolve DNS of partial qualified names for services"
-            # See details: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/eks-bpf-encap-extnode-aws.yaml"
 
-        - name: bpf-eks-aws-cni-lb
-          execution_time_limit:
-            hours: 7
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: EKS_CNI
-              values: ["aws"]
-          env_vars:
-            - name: PROVISIONER
-              value: "aws-eks"
-            - name: INSTALLER
-              value: "operator"
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(Dataplane:LB) --ginkgo.skip=(Feature:Maglev)
-            - name: NUM_ADDON_PODS
-              value: "45" # there are 3 nodes, each with 3 ENIs and each ENI can have 12 IPs.
+        # PAUSED (2026-08-06): this job focused Dataplane:LB, which has no specs in the in-repo
+        # e2e suite (describe.WithDataplane(LB) is unused). Pointed at the new suite it
+        # selects nothing and still passes, so it is paused rather than converted.
+        # Uncomment when load-balancer specs land in e2e/pkg/tests, or delete this block.
+        # Discussion: projectcalico/calico#13452.
+        # - name: bpf-eks-aws-cni-lb
+        #   execution_time_limit:
+        #     hours: 7
+        #   commands:
+        #     - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+        #   matrix:
+        #     - env_var: EKS_CNI
+        #       values: ["aws"]
+        #   env_vars:
+        #     - name: PROVISIONER
+        #       value: "aws-eks"
+        #     - name: INSTALLER
+        #       value: "operator"
+        #     - name: K8S_E2E_FLAGS
+        #       value: --ginkgo.focus=(Dataplane:LB) --ginkgo.skip=(Feature:Maglev)
+        #     - name: NUM_ADDON_PODS
+        #       value: "45" # there are 3 nodes, each with 3 ENIs and each ENI can have 12 IPs.
 
-        - name: aws-kubeadm dual stack
+        - name: aws-kubeadm dual stack, BPF
           execution_time_limit:
             hours: 7
           commands:
@@ -437,17 +464,13 @@ blocks:
             - env_var: IP_FAMILY
               values:
                 - dual
-            - env_var: DATAPLANE
-              values:
-                - CalicoBPF
-                - CalicoIptables
           env_vars:
             - name: PROVISIONER
               value: "aws-kubeadm"
             - name: INSTALLER
               value: "operator"
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|Feature:Maglev|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server|sig-calico-enterprise)
+            - name: DATAPLANE
+              value: "CalicoBPF"
             - name: K8S_E2E_DOCKER_EXTRA_FLAGS
               value: --env IP_FAMILY
             - name: NAT_OUTGOING_V6
@@ -462,17 +485,48 @@ blocks:
               value: "fd00:10:244::/64"
             - name: IPV4_POD_CIDR
               value: "192.168.0.0/16"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/bpf-encap-extnode-aws.yaml"
 
-        - name: Kops w/ calico CNI IPv6
+        - name: aws-kubeadm dual stack, iptables
           execution_time_limit:
             hours: 7
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
-            - env_var: DATAPLANE
+            - env_var: IP_FAMILY
               values:
-                - CalicoBPF
-                - CalicoIptables
+                - dual
+          env_vars:
+            - name: PROVISIONER
+              value: "aws-kubeadm"
+            - name: INSTALLER
+              value: "operator"
+            - name: DATAPLANE
+              value: "CalicoIptables"
+            - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+              value: --env IP_FAMILY
+            - name: NAT_OUTGOING_V6
+              value: "Enabled"
+            - name: NAT_OUTGOING
+              value: "Enabled"
+            - name: ENCAPSULATION_TYPE_V6
+              value: "VXLAN"
+            - name: ENCAPSULATION_TYPE
+              value: "VXLAN"
+            - name: IPV6_POD_CIDR
+              value: "fd00:10:244::/64"
+            - name: IPV4_POD_CIDR
+              value: "192.168.0.0/16"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/xtables-encap-extnode-aws.yaml"
+
+        - name: Kops w/ calico CNI IPv6, BPF
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
             - env_var: IP_FAMILY
               values:
                 - ipv6
@@ -481,10 +535,8 @@ blocks:
               value: "aws-kops"
             - name: INSTALLER
               value: "operator"
-            # See https://tigera.atlassian.net/browse/CORE-6725 for the extra skips.
-            # Hopefully we'll fix the DataPath ones soon.
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server|Feature:Maglev)
+            - name: DATAPLANE
+              value: "CalicoBPF"
             - name: K8S_VERSION
               value: "stable-1"
             - name: NAT_OUTGOING_V6
@@ -501,17 +553,50 @@ blocks:
               value: "Calico"
             - name: USE_VENDORED_CNI
               value: "false"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/kops-bpf-encap-nobgp-extnode-aws.yaml"
 
-        - name: Kops w/ calico CNI IPv4
+        - name: Kops w/ calico CNI IPv6, iptables
           execution_time_limit:
             hours: 7
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
-            - env_var: DATAPLANE
+            - env_var: IP_FAMILY
               values:
-                - CalicoBPF
-                - CalicoIptables
+                - ipv6
+          env_vars:
+            - name: PROVISIONER
+              value: "aws-kops"
+            - name: INSTALLER
+              value: "operator"
+            - name: DATAPLANE
+              value: "CalicoIptables"
+            - name: K8S_VERSION
+              value: "stable-1"
+            - name: NAT_OUTGOING_V6
+              value: "Enabled"
+            - name: ENCAPSULATION_TYPE_V6
+              value: "VXLAN"
+            - name: BGP_STATUS
+              value: "Disabled"
+            - name: IPV6_POD_CIDR
+              value: "fd00:10:244::/64"
+            - name: IPV4_POD_CIDR
+              value: ""
+            - name: CNI_PLUGIN
+              value: "Calico"
+            - name: USE_VENDORED_CNI
+              value: "false"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/kops-xtables-encap-nobgp-extnode-aws.yaml"
+
+        - name: Kops w/ calico CNI IPv4, BPF
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
             - env_var: IP_FAMILY
               values: [ipv4]
           env_vars:
@@ -519,10 +604,8 @@ blocks:
               value: "aws-kops"
             - name: INSTALLER
               value: "operator"
-            # See https://tigera.atlassian.net/browse/CORE-6725 for the extra skips.
-            # Hopefully we'll fix the DataPath ones soon.
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|Feature:Maglev|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server)
+            - name: DATAPLANE
+              value: "CalicoBPF"
             - name: NAT_OUTGOING
               value: "Enabled"
             - name: ENCAPSULATION_TYPE
@@ -533,6 +616,36 @@ blocks:
               value: "Calico"
             - name: USE_VENDORED_CNI
               value: "false"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/kops-bpf-encap-nobgp-extnode-aws.yaml"
+
+        - name: Kops w/ calico CNI IPv4, iptables
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: IP_FAMILY
+              values: [ipv4]
+          env_vars:
+            - name: PROVISIONER
+              value: "aws-kops"
+            - name: INSTALLER
+              value: "operator"
+            - name: DATAPLANE
+              value: "CalicoIptables"
+            - name: NAT_OUTGOING
+              value: "Enabled"
+            - name: ENCAPSULATION_TYPE
+              value: "VXLAN"
+            - name: BGP_STATUS
+              value: "Disabled"
+            - name: CNI_PLUGIN
+              value: "Calico"
+            - name: USE_VENDORED_CNI
+              value: "false"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/kops-xtables-encap-nobgp-extnode-aws.yaml"
 
       env_vars:
         - name: ENABLE_EXTERNAL_NODE
@@ -541,8 +654,6 @@ blocks:
           value: --env EKS_CNI
         - name: CLUSTER_NODES
           value: "3"
-        - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
 
   - name: BPF mini-scale runs
     dependencies: []
@@ -583,8 +694,8 @@ blocks:
               value: '["172.16.101.0/24"]' # single subnet because no encapsulation is being used
             - name: NETWORK_MTU
               value: "9001"
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/bpf-extnode-aws.yaml"
 
         - name: aws-iptables - 9k MTU
           execution_time_limit:
@@ -602,8 +713,8 @@ blocks:
               value: "9001"
             - name: DATAPLANE
               value: "CalicoIptables"
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|Feature:SCTP|Feature:Maglev)
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/xtables-extnode-aws.yaml"
 
       env_vars:
         - name: CLUSTER_NODES
@@ -620,26 +731,31 @@ blocks:
         - name: ENABLE_EXTERNAL_NODE
           value: "true"
 
-  - name: BPF mode switch
-    dependencies: []
-    task:
-      jobs:
-        - name: gcp-bpf - mode switch
-          execution_time_limit:
-            hours: 1
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          env_vars:
-            - name: PROVISIONER
-              value: "gcp-kubeadm"
-            - name: ENABLE_EXTERNAL_NODE
-              value: "true"
-            - name: INSTALLER
-              value: "operator"
-            - name: DATAPLANE
-              value: "CalicoIptables"
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(Dataplane:BPF.*ModeSwitch.*external-node-to-nodePort) --ginkgo.skip=(Feature:Maglev)
+  # PAUSED (2026-08-06): this job focused a BPF ModeSwitch spec, which has no match in the
+  # in-repo e2e suite. Pointed at the new suite it selects nothing and still
+  # passes, so it is paused rather than converted. Uncomment when a mode-switch
+  # spec lands in e2e/pkg/tests, or delete this block.
+  # Discussion: projectcalico/calico#13452.
+  # - name: BPF mode switch
+  #   dependencies: []
+  #   task:
+  #     jobs:
+  #       - name: gcp-bpf - mode switch
+  #         execution_time_limit:
+  #           hours: 1
+  #         commands:
+  #           - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+  #         env_vars:
+  #           - name: PROVISIONER
+  #             value: "gcp-kubeadm"
+  #           - name: ENABLE_EXTERNAL_NODE
+  #             value: "true"
+  #           - name: INSTALLER
+  #             value: "operator"
+  #           - name: DATAPLANE
+  #             value: "CalicoIptables"
+  #           - name: K8S_E2E_FLAGS
+  #             value: --ginkgo.focus=(Dataplane:BPF.*ModeSwitch.*external-node-to-nodePort) --ginkgo.skip=(Feature:Maglev)
 
   - name: Wireguard
     dependencies: []
@@ -665,10 +781,8 @@ blocks:
               value: "azr-aks"
             - name: AZ_CREATE_MODE
               value: AKS
-              # External node is false, so we should skip external node tests: "ExternalNode|outside.the.cluster|external.to.nodeport"
-              # This uses AKS-CNI, so Strict Affinity and MTU tests do not apply: "MTU|StrictAffinity"
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf/aks-bpf-encap-nobgp.yaml"
 
   # this is from the old every-week file
   - name: usage reporting with bpf
@@ -719,7 +833,7 @@ blocks:
         - name: NUM_KUBEVIRT_VMS
           value: "2"
         - name: E2E_TEST_CONFIG
-          value: "e2e/config/gcp-kubevirt.yaml"
+          value: "e2e/config/gcp/kubevirt.yaml"
 
 promotions:
   - name: Cleanup jobs

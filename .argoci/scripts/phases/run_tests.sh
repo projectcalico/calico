@@ -5,7 +5,7 @@
 #   - TEST_TYPE == k8s-e2e → run the monorepo e2e binary via `make e2e-run`.
 #     The binary is acquired first: built from local source when RUN_LOCAL_TESTS
 #     is set (per-PR CI), otherwise downloaded from the hashrelease (scheduled
-#     CI). E2E_TEST_CONFIG selects specs and may be empty (default config).
+#     CI). E2E_TEST_CONFIG names the YAML config that selects the specs.
 #   - Else (non-e2e test types: benchmarks, certification, etc.) → `bz tests`.
 #
 # Required env:
@@ -31,7 +31,7 @@ if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
 elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
   # Scheduled CI: download the pre-built e2e binary from the hashrelease.
   echo "[INFO] downloading e2e binary from hashrelease..."
-  HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.docs.eng.tigera.net/${RELEASE_STREAM}.txt")
+  HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${RELEASE_STREAM}.txt")
   echo "[INFO] hashrelease URL: ${HASHREL_URL}"
   ARCH=$(uname -m); [[ "$ARCH" == "x86_64" ]] && ARCH=amd64; [[ "$ARCH" == "aarch64" ]] && ARCH=arm64
   mkdir -p "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s"
@@ -44,9 +44,15 @@ fi
 # E2E_BINARY is a set/unset sentinel (its value is not used here -- make
 # e2e-run locates the binary itself). Take the structured path whenever a
 # k8s-e2e binary was acquired above; non-e2e test types fall through to bz
-# tests below. E2E_TEST_CONFIG may be empty (selects the default config).
+# tests below.
 if [[ -n "${E2E_BINARY:-}" ]]; then
   echo "[INFO] starting e2e tests..."
+
+  if [[ -z "${E2E_TEST_CONFIG:-}" ]]; then
+    echo "[ERROR] E2E_TEST_CONFIG is not set; refusing to run the whole suite"
+    exit 1
+  fi
+
   pushd "${CI_HOME}/${CI_GIT_DIR}" || exit
 
   # Pick a runtime image. The local-build path already pulled
@@ -94,11 +100,19 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     fi
   fi
 
+  # The go-build entrypoint useradds LOCAL_USER_ID and su-execs to that account,
+  # which cannot work when the runner is already root. RUN_AS_ROOT skips it.
+  run_as_root_env=()
+  if [[ "$(id -u)" -eq 0 ]]; then
+    run_as_root_env=(-e RUN_AS_ROOT=true)
+  fi
+
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
   e2e_rc=0
   docker run --rm --init --net=host \
     -e LOCAL_USER_ID="$(id -u)" \
+    "${run_as_root_env[@]}" \
     -e GOCACHE=/go-cache \
     -e GOPATH=/go \
     -e KUBECONFIG=/kubeconfig \
@@ -130,6 +144,6 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   exit ${e2e_rc}
 else
   # Non-e2e test types (benchmarks, certification, etc.) -- defer to bz.
-  echo "[INFO] starting bz testing (K8S_E2E_FLAGS=${K8S_E2E_FLAGS:-<none>})..."
+  echo "[INFO] starting bz testing..."
   bz tests ${VERBOSE} |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz")
 fi

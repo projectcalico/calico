@@ -187,9 +187,20 @@ podAnnotations: {}
 # Custom labels for the tigera/operator pod itself
 podLabels: {}
 
+# Security context applied to all containers in the tigera-operator deployment.
+# By default no security context is set; override to harden the operator pod.
+# Example hardened config:
+#   containerSecurityContext:
+#     allowPrivilegeEscalation: false
+#     runAsNonRoot: true
+#     runAsUser: 10000
+#     runAsGroup: 10000
+#     readOnlyRootFilesystem: true
+containerSecurityContext: {}
+
 # Configuration for the tigera operator images to deploy.
 tigeraOperator:
-  image: tigera/operator
+  image: calico/operator
   registry: quay.io
 calicoctl:
   image: quay.io/calico/calico

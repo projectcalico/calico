@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -55,6 +56,37 @@ type Checker struct {
 	CheckSNAT        bool
 	RetriesDisabled  bool
 	StaggerStartBy   time.Duration
+
+	// UniqueSourcePorts gives every expectation its own source port on each
+	// CheckConnectivity call, so that no two connections a checker makes ever
+	// share a 5-tuple.
+	//
+	// Tests that count flows per round of checking need this.  A connection the
+	// destination denies establishes nothing, so it leaves no TIME_WAIT socket
+	// holding its ephemeral port, and the kernel starts its port search for the
+	// next connect() to that same destination from the same offset - which makes
+	// the port just released a likely pick.  A repeat on the same port shares a
+	// 5-tuple with the first attempt, matches the conntrack entry it left behind,
+	// and is reported as one flow rather than two.
+	//
+	// Ports are assigned once per call, ahead of any retry, so a retried attempt
+	// keeps its port and folds into the flow it is retrying instead of counting as
+	// a new one.  ResetExpectations() does not clear this flag, so a checker that
+	// is reset and re-populated carries on assigning ports.
+	//
+	// Two things opt a single connection out of all this:
+	//
+	//   - An expectation pinned with ExpectWithSrcPort keeps its port, and so keeps
+	//     repeating its 5-tuple, which is the behaviour this option exists to
+	//     avoid.  Pin a port only where the test needs that exact port.  A pinned
+	//     port inside the range assigned here is rejected, since the two could
+	//     otherwise hand one port to two different connections.
+	//   - A connection source that supplies its own source port overrides the
+	//     assigned one, because it appends its option after the checker's and the
+	//     last one wins.  workload.Port does that, so a w.Port(n) used as the
+	//     source rather than the destination would take n.  No test does that
+	//     today, and the check above does not catch it.
+	UniqueSourcePorts bool
 
 	// OnFail, if set, will be called instead of ginkgo.Fail().  (Useful for testing the checker itself.)
 	OnFail func(msg string)
@@ -344,6 +376,11 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 		c.init()
 	}
 
+	// After the init hook, so that expectations it adds are covered too.
+	if c.UniqueSourcePorts {
+		c.assignSourcePorts()
+	}
+
 	for {
 		checkStartTime := time.Now()
 		isARetry := completedAttempts > 0
@@ -417,6 +454,43 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 		c.OnFail(message)
 	} else {
 		ginkgo.Fail(message, callerSkip)
+	}
+}
+
+// Source ports for UniqueSourcePorts are drawn from a window clear of every port
+// the harness itself uses - a workload with a side service redirects its own
+// outgoing traffic to 15001 - and clear of the ports individual tests pin by
+// hand.  It ends where BPF source port NAT begins, and so is also below the
+// ephemeral range, meaning an assigned port collides neither with one the kernel
+// hands out nor with one the dataplane rewrites.
+const (
+	uniqueSrcPortFirst = 17000
+	uniqueSrcPortLast  = 20000
+)
+
+// nextUniqueSrcPort counts the source ports handed out to every checker in the
+// process, so that connections made by different checkers cannot collide either.
+// It wraps within the window, which only repeats a port after the whole window
+// has been used - long after any conntrack entry for the earlier connection has
+// gone.
+var nextUniqueSrcPort atomic.Uint32
+
+// assignSourcePorts gives each expectation its own source port, replacing any
+// port assigned by an earlier call but leaving one the caller set alone.
+func (c *Checker) assignSourcePorts() {
+	for i := range c.expectations {
+		e := &c.expectations[i]
+		if e.srcPort != 0 && !e.srcPortAuto {
+			// Pinned by the caller.  Leave it, but it must not sit in the range we
+			// allocate from, or one of the ports below could duplicate it.
+			Expect(e.srcPort < uniqueSrcPortFirst || e.srcPort >= uniqueSrcPortLast).To(BeTrue(),
+				"ExpectWithSrcPort(%d) is inside the range UniqueSourcePorts assigns from (%d-%d); "+
+					"pick a port outside it", e.srcPort, uniqueSrcPortFirst, uniqueSrcPortLast-1)
+			continue
+		}
+		n := nextUniqueSrcPort.Add(1) - 1
+		e.srcPort = uniqueSrcPortFirst + uint16(n%(uniqueSrcPortLast-uniqueSrcPortFirst))
+		e.srcPortAuto = true
 	}
 }
 
@@ -607,6 +681,9 @@ type Expectation struct {
 	clientMTUEnd   int
 
 	srcPort uint16
+	// srcPortAuto records that srcPort was assigned by UniqueSourcePorts rather
+	// than by the caller, and so may be replaced on the next call.
+	srcPortAuto bool
 
 	ErrorStr string
 

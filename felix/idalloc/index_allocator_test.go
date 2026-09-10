@@ -105,5 +105,11 @@ var _ = Describe("IndexAllocator", func() {
 			_, err = r.GrabIndex()
 			Expect(err).To(HaveOccurred())
 		})
+
+		It("should not reorder the caller's slice", func() {
+			ranges := []IndexRange{{Min: 1, Max: 250}, {Min: 1000, Max: 1500}}
+			NewIndexAllocator(ranges, nil)
+			Expect(ranges).To(Equal([]IndexRange{{Min: 1, Max: 250}, {Min: 1000, Max: 1500}}))
+		})
 	})
 })

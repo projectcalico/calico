@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Ic. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import (
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/informerutil"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -88,9 +89,12 @@ func (c *nodeLabelController) OnKubernetesNodeUpdate(objOld any, objNew any) {
 }
 
 func (c *nodeLabelController) OnKubernetesNodeDelete(obj any) {
-	if n, ok := obj.(*v1.Node); ok {
-		c.k8sNodeUpdate <- n
+	n, err := informerutil.DeletedObject[*v1.Node](obj)
+	if err != nil {
+		logrus.WithError(err).Warn("Skipping node delete event")
+		return
 	}
+	c.k8sNodeUpdate <- n
 }
 
 func (c *nodeLabelController) Start(stopCh chan struct{}) {

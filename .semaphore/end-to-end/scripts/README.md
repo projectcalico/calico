@@ -65,7 +65,7 @@ The first two paths run the binary via `make e2e-run` inside
 
 ```bash
 KUBECONFIG=/path/to/kubeconfig \
-  E2E_TEST_CONFIG=e2e/config/gcp-bpf.yaml \
+  E2E_TEST_CONFIG=e2e/config/gcp/bpf.yaml \
   make e2e-run
 ```
 

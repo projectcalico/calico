@@ -58,6 +58,7 @@ func New(
 
 type StaticItems struct {
 	KubernetesVersion string
+	NFTablesEnabled   bool
 }
 
 type UsageReporter struct {
@@ -98,8 +99,7 @@ func (u *UsageReporter) PeriodicallyReportUsage(ctx context.Context) {
 	doReport := func() {
 		alpEnabled := (config["PolicySyncPathPrefix"] != "")
 		bpfEnabled := (config["BPFEnabled"] == "true")
-		nftEnabled := (config["NFTablesMode"] == "Enabled")
-		u.reportUsage(config["ClusterGUID"], config["ClusterType"], config["CalicoVersion"], alpEnabled, bpfEnabled, nftEnabled, stats)
+		u.reportUsage(config["ClusterGUID"], config["ClusterType"], config["CalicoVersion"], alpEnabled, bpfEnabled, u.staticItems.NFTablesEnabled, stats)
 	}
 
 	var ticker *jitter.Ticker

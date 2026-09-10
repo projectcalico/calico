@@ -17,7 +17,7 @@ ut-validation: setup-envtest
 		gotestsum --junitfile test/report/ut-validation.xml -- -count=1 -v ./test/validation/...
 
 .PHONY: ut-validation-min-k8s
-## Run CRD validation tests against the minimum supported K8s version (1.31).
+## Run CRD validation tests against the minimum supported K8s version (1.32).
 ut-validation-min-k8s: setup-envtest-min
 	mkdir -p report
 	$(DOCKER_RUN) \

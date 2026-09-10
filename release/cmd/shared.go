@@ -26,9 +26,12 @@ import (
 	"github.com/snowzach/rotatefilehook"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/outputs"
+	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/version"
 )
 
 var (
@@ -127,4 +130,42 @@ func slackConfig(c *cli.Command) *slack.Config {
 		Token:   c.String(slackTokenFlag.Name),
 		Channel: c.String(slackChannelFlag.Name),
 	}
+}
+
+type pinned func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error)
+
+var (
+	loadPin pinned = func(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
+		pin, err := pinnedversion.Load(localPinLoader(pinConfig(cfg, c)))
+		if err != nil {
+			return nil, fmt.Errorf("load pin: %w", err)
+		}
+		return pin, nil
+	}
+	pinForBuild        = loadPin
+	builtPin    pinned = func(cfg *Config, _ *cli.Command) (*pinnedversion.Pin, error) {
+		pin, err := pinnedversion.Load(pinnedversion.FileLoader{Dir: cfg.TmpDir, RootDir: cfg.RepoRootDir})
+		if err != nil {
+			return nil, fmt.Errorf("load built pin: %w", err)
+		}
+		return pin, nil
+	}
+	pinForPublish = builtPin
+)
+
+// releaseVersion is the version being released. A hashrelease is versioned from git.
+var releaseVersion = func(cfg *Config, c *cli.Command) (*version.Version, error) {
+	if c.Bool(hashreleaseFlag.Name) {
+		v, err := command.GitVersion(cfg.RepoRootDir, true)
+		if err != nil {
+			return nil, fmt.Errorf("git version: %w", err)
+		}
+		ver := version.New(v)
+		return &ver, nil
+	}
+	ver, _, err := version.VersionsFromManifests(cfg.RepoRootDir)
+	if err != nil {
+		return nil, fmt.Errorf("version from manifest: %w", err)
+	}
+	return &ver, nil
 }

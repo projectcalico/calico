@@ -325,6 +325,34 @@ function prepare_windows_configuration() {
   echo "Windows configuration files prepared"
 }
 
+function get_boot_time() {
+  local windows_connect_command="$1"
+  ${windows_connect_command} "(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToFileTimeUtc()" 2>/dev/null | tr -d '\r' || true
+}
+
+# Wait until the node reports a boot time different from the one captured
+# before the reboot was triggered.  A plain SSH probe is not enough: Windows
+# can take tens of seconds to sever connections after Restart-Computer, so a
+# probe can reconnect to the still-shutting-down node and the next setup step
+# then runs mid-shutdown.
+function wait_for_reboot() {
+  local windows_connect_command="$1"
+  local pre_boot_time="$2"
+
+  echo "Waiting for node to reboot (boot time before reboot: ${pre_boot_time})..."
+  for _ in $(seq 1 60); do
+    local boot_time
+    boot_time=$(get_boot_time "$windows_connect_command")
+    if [[ -n "${boot_time}" && "${boot_time}" != "${pre_boot_time}" ]]; then
+      echo "Node is back up with new boot time ${boot_time}."
+      return 0
+    fi
+    sleep 10
+  done
+  echo "Node did not come back with a new boot time within 10 minutes"
+  return 1
+}
+
 function prepare_windows_node() {
   local windows_eip="$1"
   local node_index="$2"  # Optional, for display purposes
@@ -350,16 +378,31 @@ function prepare_windows_node() {
   echo "Copying Windows files to node..."
   scp -r -i "${SSH_KEY_FILE}" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ./windows/* "aso@${windows_eip}:c:\\k\\"
 
-  # Enable containers feature (requires reboot)
+  # Enable containers feature (usually requires a reboot).  Capture the boot
+  # time first so wait_for_reboot can prove the reboot completed.
   echo "Enabling Windows Containers feature..."
-  ${windows_connect_command} "c:\\k\\enable-containers-with-reboot.ps1 -Force"
+  local pre_boot_time
+  pre_boot_time=$(get_boot_time "$windows_connect_command")
+  if [[ -z "${pre_boot_time}" ]]; then
+    echo "ERROR: failed to read boot time from Windows node ${display_name}"
+    return 1
+  fi
 
-  # Wait for node to come back online after reboot
-  sleep 10
-  echo "Waiting for node to be ready after reboot..."
-  retry_command 60 "${windows_connect_command} Write-Host 'Node is ready'"
+  local enable_output
+  enable_output=$(${windows_connect_command} "c:\\k\\enable-containers-with-reboot.ps1 -Force" || true)
+  echo "${enable_output}"
 
-  # Install containerd
+  if [[ "${enable_output}" == *"Restart computer"* ]]; then
+    if ! wait_for_reboot "$windows_connect_command" "$pre_boot_time"; then
+      echo "ERROR: Windows node ${display_name} did not reboot after enabling the Containers feature"
+      return 1
+    fi
+  else
+    echo "Containers feature did not require a reboot."
+  fi
+
+  # Install containerd.  The Containers-feature reboot has already completed,
+  # so this must not need another reboot; the script fails if one is pending.
   echo "Installing containerd..."
   if ! ${windows_connect_command} "c:\\k\\install-containerd.ps1 -ContainerDVersion ${CONTAINERD_VERSION} -Force"; then
     echo "ERROR: Failed to install containerd on Windows node ${display_name}"
@@ -367,10 +410,13 @@ function prepare_windows_node() {
     return 1
   fi
 
-  # Wait for node to come back online after reboot
-  sleep 10
-  echo "Waiting for node to be ready after reboot..."
-  retry_command 60 "${windows_connect_command} Write-Host 'Node is ready'"
+  # Fail fast here, rather than much later in PrepareNode.ps1, if containerd
+  # didn't come up.
+  echo "Verifying containerd service..."
+  if ! ${windows_connect_command} "if (-not (Get-Service containerd -ErrorAction SilentlyContinue)) { exit 1 }"; then
+    echo "ERROR: containerd service is not present on Windows node ${display_name}"
+    return 1
+  fi
 
   echo "Windows node ${display_name} prepared successfully"
   echo

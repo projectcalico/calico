@@ -102,13 +102,6 @@ func (m *noEncapManager) OnUpdate(protoBufMsg any) {
 		} else {
 			addrStr = msg.Ipv6Addr
 		}
-		if addrStr == "" {
-			m.logCtx.WithFields(logrus.Fields{
-				"hostname":  msg.Hostname,
-				"ipVersion": m.ipVersion,
-			}).Debug("Ignoring HostMetadataUpdate with no address for this IP version")
-			return
-		}
 		m.routesNeedUpdate(addrStr)
 	case *proto.HostMetadataRemove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")

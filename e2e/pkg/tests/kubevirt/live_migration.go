@@ -24,7 +24,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	"k8s.io/kubernetes/test/e2e/framework"
 	kubevirtv1 "kubevirt.io/api/core/v1"
@@ -41,8 +40,9 @@ import (
 
 // KubeVirt live migration e2e tests validate Calico's seamless migration support for
 // KubeVirt VMs. The tests cover:
-//   - Zero-downtime TCP connectivity through iBGP and eBGP during migration (Tests 1-2)
-//   - Kubernetes NetworkPolicy enforcement survives migration (Test 3)
+//   - Zero-downtime TCP connectivity through iBGP during migration (Test 1)
+//   - Target-node BIRD route preference during migration (Test 2)
+//   - Zero-downtime TCP connectivity from an eBGP external client (Test 3)
 //
 // Prerequisites:
 //   - KubeVirt installed with live migration support
@@ -69,7 +69,7 @@ var _ = describe.CalicoDescribe(
 			utils.RequireNodeCount(f, 2)
 
 			var err error
-			cli, err = e2eclient.NewAPIClient(f.ClientConfig())
+			cli, err = e2eclient.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred(), "failed to build controller-runtime client")
 		})
 
@@ -171,6 +171,44 @@ var _ = describe.CalicoDescribe(
 				"seamless live migration must not drop any TCP segments")
 		})
 
+		// Test 2: target-node route preference. On the node receiving a
+		// migrated VM, BIRD must prefer the VM's local veth route (raised to
+		// preference 150 while Felix's route elevation is active) over the
+		// stale /32 still advertised by the migration source, and clients
+		// must see only a brief cutover disruption — not the ~9s black-hole
+		// that lasts until the source's veth teardown. Shared choreography in
+		// live_migration_target_route.go; MockVirt runs an ICMP variant.
+		It("should prefer the local workload route on the migration target node", func() {
+			if isMockVirtDeployed(f) {
+				Fail("This test requires real KubeVirt with QEMU-backed VMs for TCP connectivity; MockVirt does not run a guest OS")
+			}
+			utils.RequireNodeCount(f, 3)
+			ctx, cancel := context.WithTimeout(context.Background(), targetRouteMigrationTimeout)
+			defer cancel()
+
+			runTargetRouteMigrationTest(ctx, f, cli, targetRouteTestParams{
+				vmName:    "e2e-target-route",
+				cloudInit: tcpServerCloudInit,
+				preflight: func(ctx context.Context, client conncheck.Client, tester conncheck.ConnectionTester, vmIP string) {
+					tester.WithTimeout(2 * time.Minute)
+					tester.ExpectSuccess(client, conncheck.NewTCPConnectTarget(vmIP, 9999))
+					tester.Execute()
+					tester.ResetExpectations()
+				},
+				startProbe: func(ctx context.Context, client conncheck.Client, vmIP string) continuityProbe {
+					name := "tcp-stream-" + client.Name()
+					cp := conncheck.StartStream(ctx, name,
+						conncheck.NewPodSource(f, client),
+						conncheck.WithStreamCommand("nc", vmIP, "9999"))
+					return continuityProbe{name: name, cp: cp, filter: func(l string) bool {
+						return strings.HasPrefix(l, "seq=")
+					}}
+				},
+				contestGuardHard:   true,
+				requireZeroSeqGaps: true,
+			})
+		})
+
 		// Test 3: same as Test 2 but the client runs on an external TOR over eBGP.
 		// Validates that elevated krt_metric on the target node propagates via eBGP to
 		// flip the TOR's kernel next-hop without dropping the TCP stream, and that
@@ -181,31 +219,26 @@ var _ = describe.CalicoDescribe(
 				if isMockVirtDeployed(f) {
 					Fail("This test requires real KubeVirt with QEMU-backed VMs for TCP connectivity; MockVirt does not run a guest OS")
 				}
-				tor := externalnode.NewClient()
-				if tor == nil {
-					// The RequiresExternalNode label gates whether this test runs at
-					// all; once selected, missing credentials are a real failure
-					// rather than a self-skip.
-					Fail("External node not configured (set EXT_IP, EXT_KEY, EXT_USER)")
-				}
+				tor := externalnode.MustNewClient()
 
 				ctx, cancel := context.WithTimeout(context.Background(), eBGPDoubleMigrationTimeout)
 				defer cancel()
 				ns := f.Namespace.Name
 
-				// Precondition: natOutgoing must be false on the IPPool backing VM
+				// Precondition: natOutgoing must be false on the IPv4 pools backing VM
 				// workloads. If true, natOutgoing rewrites the VM's source IP to the
 				// node's IP at egress NAT and breaks the TOR's reverse-path matching
 				// after migration. The pipeline that runs this test is expected to
-				// configure the IPPool with natOutgoing=false at provisioning time;
-				// we only verify here so the failure mode is obvious.
-				const vmIPPoolName = "default-ipv4-ippool"
-				By(fmt.Sprintf("Verifying natOutgoing=false on IPPool %s", vmIPPoolName))
-				pool := &v3.IPPool{}
-				Expect(cli.Get(ctx, ctrlclient.ObjectKey{Name: vmIPPoolName}, pool)).
-					To(Succeed(), "IPPool %q must exist", vmIPPoolName)
-				Expect(pool.Spec.NATOutgoing).To(BeFalse(),
-					"IPPool %q must have natOutgoing=false (set by cluster provisioning)", vmIPPoolName)
+				// configure the pool with natOutgoing=false at provisioning time; we
+				// only verify here so the failure mode is obvious.
+				By("Verifying natOutgoing=false on the cluster's IPv4 IP pools")
+				pools, err := utils.IPPoolsForFamily(ctx, cli, false)
+				Expect(err).NotTo(HaveOccurred(), "list IP pools")
+				Expect(pools).NotTo(BeEmpty(), "cluster has no IPv4 IP pool for VM workloads")
+				for _, pool := range pools {
+					Expect(pool.Spec.NATOutgoing).To(BeFalse(),
+						"IPPool %q must have natOutgoing=false (set by cluster provisioning)", pool.Name)
+				}
 
 				By("Setting up eBGP peering between TOR and cluster nodes")
 				torPeer := setupKubeVirtEBGPPeering(f, tor)

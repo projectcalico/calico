@@ -1387,7 +1387,9 @@ func TestAttachNetkit(t *testing.T) {
 		},
 		BPFExtToServiceConnmark: 0,
 		BPFPolicyDebugEnabled:   true,
-		BPFAttachType:           v3.BPFAttachOptionTCX, // Global default is TCX; netkit is auto-detected per device.
+		// Netkit attachment is what this test is about, and naming a single
+		// mechanism instead opts the node out of it.
+		BPFAttachType: v3.BPFAttachOptionNetkit,
 	}
 
 	bpfEpMgr, err := newBPFTestEpMgr(

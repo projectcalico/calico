@@ -107,14 +107,18 @@ func parseRequestParams[RequestParams any](ctx apicontext.Context, cfg RouterCon
 	return params
 }
 
-func writeJSONResponse(w http.ResponseWriter, src any) {
+// writeJSONResponse writes src as the JSON body of a response with the given
+// status. It owns the status write because the content type has to be set
+// first: once WriteHeader has run, net/http ignores later header changes and
+// labels the response by sniffing the body instead.
+func writeJSONResponse(w http.ResponseWriter, status int, src any) {
 	w.Header().Set(header.ContentType, header.ApplicationJSON)
+	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(src); err != nil {
 		log.Error("Failed to encode response.", "error", err)
 	}
 }
 
 func writeJSONError(w http.ResponseWriter, status int, message string) {
-	w.WriteHeader(status)
-	writeJSONResponse(w, ErrorResponse{Error: message})
+	writeJSONResponse(w, status, ErrorResponse{Error: message})
 }

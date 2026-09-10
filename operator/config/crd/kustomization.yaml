@@ -1,0 +1,44 @@
+# This kustomization.yaml is not intended to be run by itself,
+# since it depends on service name and namespace that are out of this kustomize package.
+# It should be run by config/default
+resources:
+- ../../pkg/crds/operator/operator.tigera.io_apiservers.yaml
+- ../../pkg/crds/operator/operator.tigera.io_applicationlayers.yaml
+- ../../pkg/crds/operator/operator.tigera.io_authentications.yaml
+- ../../pkg/crds/operator/operator.tigera.io_egressgateways.yaml
+- ../../pkg/crds/operator/operator.tigera.io_gatewayapis.yaml
+- ../../pkg/crds/operator/operator.tigera.io_imagesets.yaml
+- ../../pkg/crds/operator/operator.tigera.io_installations.yaml
+- ../../pkg/crds/operator/operator.tigera.io_intrusiondetections.yaml
+- ../../pkg/crds/operator/operator.tigera.io_istios.yaml
+- ../../pkg/crds/operator/operator.tigera.io_logcollectors.yaml
+- ../../pkg/crds/operator/operator.tigera.io_logstorages.yaml
+- ../../pkg/crds/operator/operator.tigera.io_managementclusterconnections.yaml
+- ../../pkg/crds/operator/operator.tigera.io_managementclusters.yaml
+- ../../pkg/crds/operator/operator.tigera.io_managers.yaml
+- ../../pkg/crds/operator/operator.tigera.io_monitors.yaml
+- ../../pkg/crds/operator/operator.tigera.io_nonclusterhosts.yaml
+- ../../pkg/crds/operator/operator.tigera.io_packetcaptureapis.yaml
+- ../../pkg/crds/operator/operator.tigera.io_policyrecommendations.yaml
+- ../../pkg/crds/operator/operator.tigera.io_tenants.yaml
+- ../../pkg/crds/operator/operator.tigera.io_tigerastatuses.yaml
+- ../../pkg/crds/operator/operator.tigera.io_tlspassthroughroutes.yaml
+- ../../pkg/crds/operator/operator.tigera.io_tlsterminatedroutes.yaml
+
+#+kubebuilder:scaffold:crdkustomizeresource
+
+patches:
+# [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix.
+# patches here are for enabling the conversion webhook for each CRD
+#+kubebuilder:scaffold:crdkustomizewebhookpatch
+
+# [CERTMANAGER] To enable cert-manager, uncomment all the sections with [CERTMANAGER] prefix.
+# patches here are for enabling the CA injection for each CRD
+#- path: patches/cainjection_in_foos.yaml
+#+kubebuilder:scaffold:crdkustomizecainjectionpatch
+
+# [WEBHOOK] To enable webhook, uncomment the following section
+# the following config is for teaching kustomize how to do kustomization for CRDs.
+
+#configurations:
+#- kustomizeconfig.yaml

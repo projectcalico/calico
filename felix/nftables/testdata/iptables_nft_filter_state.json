@@ -1,0 +1,455 @@
+{
+  "chains": [
+    {
+      "name": "INPUT",
+      "base": true
+    },
+    {
+      "name": "FORWARD",
+      "base": true
+    },
+    {
+      "name": "OUTPUT",
+      "base": true
+    },
+    {
+      "name": "cali-FORWARD"
+    },
+    {
+      "name": "cali-INPUT"
+    },
+    {
+      "name": "cali-OUTPUT"
+    },
+    {
+      "name": "cali-cidr-block"
+    },
+    {
+      "name": "cali-from-hep-forward"
+    },
+    {
+      "name": "cali-from-host-endpoint"
+    },
+    {
+      "name": "cali-from-wl-dispatch"
+    },
+    {
+      "name": "cali-to-hep-forward"
+    },
+    {
+      "name": "cali-to-host-endpoint"
+    },
+    {
+      "name": "cali-to-wl-dispatch"
+    },
+    {
+      "name": "cali-wl-to-host"
+    },
+    {
+      "name": "nixos-fw-accept"
+    },
+    {
+      "name": "nixos-fw-refuse"
+    },
+    {
+      "name": "nixos-fw-log-refuse"
+    },
+    {
+      "name": "nixos-fw"
+    },
+    {
+      "name": "KUBE-FIREWALL"
+    },
+    {
+      "name": "KUBE-KUBELET-CANARY"
+    },
+    {
+      "name": "ts-forward"
+    },
+    {
+      "name": "ts-input"
+    }
+  ],
+  "rules": [
+    {
+      "chain": "INPUT",
+      "handle": 15,
+      "comment": "cali:Cz_u1IQiXIMmKD4c",
+      "jumpTarget": "cali-INPUT"
+    },
+    {
+      "chain": "INPUT",
+      "handle": 374,
+      "jumpTarget": "ts-input"
+    },
+    {
+      "chain": "INPUT",
+      "handle": 375,
+      "jumpTarget": "KUBE-FIREWALL"
+    },
+    {
+      "chain": "INPUT",
+      "handle": 376,
+      "jumpTarget": "nixos-fw"
+    },
+    {
+      "chain": "FORWARD",
+      "handle": 16,
+      "comment": "cali:wUHhoiAYhphO9Mso",
+      "jumpTarget": "cali-FORWARD"
+    },
+    {
+      "chain": "FORWARD",
+      "handle": 17,
+      "comment": "cali:S93hcgKJrXEqnTfs"
+    },
+    {
+      "chain": "FORWARD",
+      "handle": 18,
+      "comment": "cali:mp77cMpurHhyjLrM"
+    },
+    {
+      "chain": "FORWARD",
+      "handle": 379,
+      "jumpTarget": "ts-forward"
+    },
+    {
+      "chain": "OUTPUT",
+      "handle": 19,
+      "comment": "cali:tVnHkvAo15HuiPy0",
+      "jumpTarget": "cali-OUTPUT"
+    },
+    {
+      "chain": "OUTPUT",
+      "handle": 378,
+      "jumpTarget": "KUBE-FIREWALL"
+    },
+    {
+      "chain": "cali-FORWARD",
+      "handle": 20,
+      "comment": "cali:W_vvds1Nw3n9QE2f"
+    },
+    {
+      "chain": "cali-FORWARD",
+      "handle": 21,
+      "comment": "cali:ZfgmjuiLaA8Pg0kp",
+      "jumpTarget": "cali-from-hep-forward"
+    },
+    {
+      "chain": "cali-FORWARD",
+      "handle": 22,
+      "comment": "cali:tAzwBLPaV-j53OOZ",
+      "jumpTarget": "cali-from-wl-dispatch"
+    },
+    {
+      "chain": "cali-FORWARD",
+      "handle": 23,
+      "comment": "cali:4Z0Pf0byo05NFe-P",
+      "jumpTarget": "cali-to-wl-dispatch"
+    },
+    {
+      "chain": "cali-FORWARD",
+      "handle": 24,
+      "comment": "cali:hQ7Oc16wmUtLuneJ",
+      "jumpTarget": "cali-to-hep-forward"
+    },
+    {
+      "chain": "cali-FORWARD",
+      "handle": 25,
+      "comment": "cali:rnKNH2WxGcRQcIlD",
+      "jumpTarget": "cali-cidr-block"
+    },
+    {
+      "chain": "cali-INPUT",
+      "handle": 26,
+      "comment": "cali:EDCNTTxYfggApx8C"
+    },
+    {
+      "chain": "cali-INPUT",
+      "handle": 27,
+      "comment": "cali:H03xYXARh4e8pwd4",
+      "jumpTarget": "cali-wl-to-host"
+    },
+    {
+      "chain": "cali-INPUT",
+      "handle": 28,
+      "comment": "cali:MN6K3isIWBigb1Va"
+    },
+    {
+      "chain": "cali-INPUT",
+      "handle": 29,
+      "comment": "cali:aKDQAoV0P_FFAIwV"
+    },
+    {
+      "chain": "cali-INPUT",
+      "handle": 30,
+      "comment": "cali:vIx3xkWzuvLW9fr4",
+      "jumpTarget": "cali-from-host-endpoint"
+    },
+    {
+      "chain": "cali-INPUT",
+      "handle": 31,
+      "comment": "cali:5W9XghKma9wuz47x"
+    },
+    {
+      "chain": "cali-OUTPUT",
+      "handle": 32,
+      "comment": "cali:Mq1_rAdXXH3YkrzW"
+    },
+    {
+      "chain": "cali-OUTPUT",
+      "handle": 33,
+      "comment": "cali:69FkRTJDvD5Vu6Vl"
+    },
+    {
+      "chain": "cali-OUTPUT",
+      "handle": 34,
+      "comment": "cali:6T0hFtymUtXMOfEV"
+    },
+    {
+      "chain": "cali-OUTPUT",
+      "handle": 35,
+      "comment": "cali:IpTGXsDHURPUaLjJ",
+      "jumpTarget": "cali-to-host-endpoint"
+    },
+    {
+      "chain": "cali-OUTPUT",
+      "handle": 36,
+      "comment": "cali:wgnULo2gucg1umsA"
+    },
+    {
+      "chain": "cali-from-wl-dispatch",
+      "handle": 37,
+      "comment": "cali:zTj6P0TIgYvgz-md"
+    },
+    {
+      "chain": "cali-to-wl-dispatch",
+      "handle": 38,
+      "comment": "cali:7KNphB1nNHw80nIO"
+    },
+    {
+      "chain": "cali-wl-to-host",
+      "handle": 39,
+      "comment": "cali:Ee9Sbo10IpVujdIY",
+      "jumpTarget": "cali-from-wl-dispatch"
+    },
+    {
+      "chain": "cali-wl-to-host",
+      "handle": 40,
+      "comment": "cali:nSZbcOoG1xPONxb8"
+    },
+    {
+      "chain": "nixos-fw-accept",
+      "handle": 339
+    },
+    {
+      "chain": "nixos-fw-refuse",
+      "handle": 340
+    },
+    {
+      "chain": "nixos-fw-log-refuse",
+      "handle": 341,
+      "jumpTarget": "nixos-fw-refuse"
+    },
+    {
+      "chain": "nixos-fw-log-refuse",
+      "handle": 342,
+      "jumpTarget": "nixos-fw-refuse"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 343,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 344,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 345,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 346,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 347,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 348,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 349,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 350,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 351,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 352,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 353,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 354,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 355,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 356,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 357,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 358,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 359,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 360,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 361,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 362,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 363,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 364,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 365,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 366,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 367,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 368,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 369,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 370,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 371,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 372,
+      "jumpTarget": "nixos-fw-accept"
+    },
+    {
+      "chain": "nixos-fw",
+      "handle": 373,
+      "jumpTarget": "nixos-fw-log-refuse"
+    },
+    {
+      "chain": "KUBE-FIREWALL",
+      "handle": 377
+    },
+    {
+      "chain": "ts-forward",
+      "handle": 380
+    },
+    {
+      "chain": "ts-forward",
+      "handle": 381
+    },
+    {
+      "chain": "ts-forward",
+      "handle": 382
+    },
+    {
+      "chain": "ts-forward",
+      "handle": 383
+    },
+    {
+      "chain": "ts-input",
+      "handle": 384
+    },
+    {
+      "chain": "ts-input",
+      "handle": 385
+    },
+    {
+      "chain": "ts-input",
+      "handle": 386
+    },
+    {
+      "chain": "ts-input",
+      "handle": 387
+    },
+    {
+      "chain": "ts-input",
+      "handle": 388
+    }
+  ]
+}

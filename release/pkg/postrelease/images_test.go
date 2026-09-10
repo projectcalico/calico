@@ -56,12 +56,12 @@ func TestImagesPublished(t *testing.T) {
 		}
 	})
 
-	t.Run("Tigera Operator", func(t *testing.T) {
+	t.Run("Operator", func(t *testing.T) {
 		t.Parallel()
 
 		checkVersion(t, operatorVersion)
 
-		fqOperatorImage := fmt.Sprintf("%s/%s:%s", operator.DefaultRegistry, operator.DefaultImage, operatorVersion)
+		fqOperatorImage := fmt.Sprintf("%s/%s:%s", operator.DefaultRegistries[0], operator.DefaultImage, operatorVersion)
 		if ok, err := registry.CheckImage(fqOperatorImage); err != nil {
 			t.Fatalf("failed to check image %s: %v", fqOperatorImage, err)
 		} else if !ok {
@@ -111,7 +111,7 @@ func TestImagesInMetadata(t *testing.T) {
 	if len(expectedImages) == 0 {
 		t.Fatal("no images provided")
 	}
-	expectedImages = append(expectedImages, fmt.Sprintf("%s/%s:%s", operator.DefaultRegistry, operator.DefaultImage, operatorVersion))
+	expectedImages = append(expectedImages, fmt.Sprintf("%s/%s:%s", operator.DefaultRegistries[0], operator.DefaultImage, operatorVersion))
 	t.Logf("expected images: %v", expectedImages)
 
 	metadataImages, err := getMetadataImages()

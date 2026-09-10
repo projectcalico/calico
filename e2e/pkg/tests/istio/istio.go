@@ -25,7 +25,6 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/sirupsen/logrus"
-	operatorv1 "github.com/tigera/operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 const (
@@ -61,6 +61,10 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("Istio"),
 	describe.WithCategory(describe.Networking),
+	// Creates the operator.tigera.io Istio CR and waits for its TigeraStatus, so it
+	// needs an operator to reconcile it -- on a manifest install it would block
+	// until istioEnableTimeout instead of skipping.
+	describe.RequiresOperator(),
 	"Istio Ambient Mode",
 	func() {
 		f := utils.NewDefaultFramework("istio-ambient")

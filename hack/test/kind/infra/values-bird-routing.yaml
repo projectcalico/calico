@@ -1,0 +1,14 @@
+# Overlay for values.yaml. Layered on top via a second `helm -f` flag by the CI
+# jobs whose tests require confd and BIRD to own the cluster routes. Keep this
+# file minimal - add only the fields that need to differ from the base
+# values.yaml.
+#
+# This has to be set explicitly. Leaving clusterRoutingMode unset means the
+# operator writes neither programClusterRoutes field, so Calico's own defaults
+# apply - and from v3.33 those give Felix the routes for IPIP IP Pools, which
+# the base values.yaml gets by default (the operator defaults an IPv4 Calico-CNI
+# pool to IPIP). Jobs that assume BGP is the sole routing mechanism must pin the
+# mode rather than rely on the default.
+installation:
+  calicoNetwork:
+    clusterRoutingMode: "BIRD"

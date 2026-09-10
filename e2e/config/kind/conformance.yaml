@@ -1,0 +1,19 @@
+# kind/conformance.yaml - test selection for local kind cluster e2e runs.
+#
+# Used by `make e2e-run-test`. Runs Conformance tests from sig-calico and
+# sig-network, plus BGP tests.
+
+extends: ../base.yaml
+
+include:
+  - Conformance && sig-calico
+  - Conformance && sig-network
+  - Feature:BGPPeer
+
+exclude:
+  labels:
+    - label: ExternalNode
+      reason: "requires a non-cluster node with EXT_IP/EXT_KEY/EXT_USER configured"
+
+    - label: RequiresCalicoAPIServer
+      reason: "kind clusters use v3 CRD mode without the aggregated Calico API server"

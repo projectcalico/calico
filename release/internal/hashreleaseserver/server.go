@@ -34,7 +34,7 @@ import (
 const (
 
 	// BaseDomain is the base URL of the hashrelease
-	BaseDomain = "docs.eng.tigera.net"
+	BaseDomain = "hashrelease.tools.tigera.net"
 
 	releaseLibFileName = "all-releases"
 )
@@ -57,8 +57,14 @@ type Hashrelease struct {
 	// ProductVersion is the product version in the hashrelease
 	ProductVersion string `yaml:"version"`
 
+	// ChartVersion qualifies the chart version when the charts rev with the product version.
+	ChartVersion string `yaml:"chartVersion,omitempty"`
+
 	// Operator is the operator for the hashrelease
 	Operator registry.Component `yaml:"operator"`
+
+	// Components are the pinned components in the hashrelease.
+	Components map[string]registry.Component `yaml:"components,omitempty"`
 
 	// Source is the source of hashrelease content on the local filesystem
 	Source string `yaml:"source,omitempty"`
@@ -66,6 +72,7 @@ type Hashrelease struct {
 	// Latest is if the hashrelease is the latest for the stream
 	Latest bool `yaml:"latest,omitempty"`
 
+	// ImageScanResultURL is the URL to the image scan result for this hashrelease
 	ImageScanResultURL string `yaml:"iss_url,omitempty"`
 
 	// UploadExcludes are regex patterns (matched against the source-relative
@@ -74,7 +81,11 @@ type Hashrelease struct {
 }
 
 func (h *Hashrelease) URL() string {
-	return fmt.Sprintf("https://%s.%s", h.Name, BaseDomain)
+	return HashreleaseURL(h.Name)
+}
+
+func HashreleaseURL(hashreleaseName string) string {
+	return fmt.Sprintf("https://%s.%s", hashreleaseName, BaseDomain)
 }
 
 // PublishHashrelease publishes the hashrelease in 3 parts

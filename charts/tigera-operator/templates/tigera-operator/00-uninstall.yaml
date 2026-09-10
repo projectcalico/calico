@@ -4,7 +4,7 @@ metadata:
   name: tigera-operator-uninstall
   namespace: {{.Release.Namespace}}
   labels:
-    helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}"
     {{- include "tigera-operator.labels" (dict "context" .) | nindent 4 }}
   annotations:
     # Mark this Job as a pre-deletion hook. This will only be executed as part
@@ -18,7 +18,7 @@ spec:
     metadata:
       name: "{{ .Release.Name }}"
       labels:
-        helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+        helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}"
     spec:
       {{- with .Values.nodeSelector }}
       nodeSelector:

@@ -93,6 +93,7 @@ class CalicoctlOutput:
 
         # Copy and clean the decoded data to allow it to be comparable.
         cleaned = clean_calico_data(self.decoded)
+        drop_unasserted_status(cleaned, data)
 
         print(self.decoded)
         assert cleaned == data, \
@@ -322,6 +323,30 @@ def clean_calico_data(data, extra_keys_to_remove=None):
 
     clean_elem(new, extra_keys_to_remove)
     return new
+
+
+def drop_unasserted_status(actual, expected):
+    """
+    Remove server-populated status from actual wherever expected doesn't assert
+    one, so a test comparing against the document it submitted doesn't have to
+    spell out status it never set.
+
+    Args:
+        actual: The cleaned data returned by calicoctl. Modified in place.
+        expected: The data the test is comparing against.
+    """
+    if isinstance(expected, list) and isinstance(actual, list):
+        for a, e in zip(actual, expected):
+            drop_unasserted_status(a, e)
+        return
+
+    if not isinstance(expected, dict) or not isinstance(actual, dict):
+        return
+
+    if 'status' in actual and 'status' not in expected:
+        del (actual['status'])
+    if 'items' in actual and 'items' in expected:
+        drop_unasserted_status(actual['items'], expected['items'])
 
 
 def add_tier_label(data):

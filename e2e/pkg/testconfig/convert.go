@@ -26,6 +26,9 @@ type GinkgoFlags struct {
 
 	// SkipPatterns is the list of regex patterns for --ginkgo.skip.
 	SkipPatterns []string
+
+	// FocusPatterns is the list of regex patterns for --ginkgo.focus.
+	FocusPatterns []string
 }
 
 // SkipString returns the combined skip patterns as a single regex string
@@ -35,6 +38,15 @@ func (f *GinkgoFlags) SkipString() string {
 		return ""
 	}
 	return "(" + strings.Join(f.SkipPatterns, "|") + ")"
+}
+
+// FocusString returns the combined focus patterns as a single regex string
+// suitable for --ginkgo.focus, or empty string if there are no patterns.
+func (f *GinkgoFlags) FocusString() string {
+	if len(f.FocusPatterns) == 0 {
+		return ""
+	}
+	return "(" + strings.Join(f.FocusPatterns, "|") + ")"
 }
 
 // ToFlags converts a resolved Config into GinkgoFlags.
@@ -51,13 +63,17 @@ func ToFlags(cfg *Config) (*GinkgoFlags, error) {
 		flags.SkipPatterns = append(flags.SkipPatterns, entry.AllPatterns()...)
 	}
 
+	for _, entry := range cfg.Include.NamePatterns {
+		flags.FocusPatterns = append(flags.FocusPatterns, entry.AllPatterns()...)
+	}
+
 	return flags, nil
 }
 
 // buildLabelFilter constructs the --ginkgo.label-filter expression from the
 // config's include and exclude labels.
 func buildLabelFilter(cfg *Config) (string, error) {
-	if len(cfg.Include) == 0 && len(cfg.Exclude.Labels) == 0 {
+	if len(cfg.Include.Labels) == 0 && len(cfg.Exclude.Labels) == 0 {
 		return "", nil
 	}
 
@@ -66,9 +82,9 @@ func buildLabelFilter(cfg *Config) (string, error) {
 	// Build the include expression: (expr1 || expr2 || ...)
 	// Each entry is wrapped in parens to preserve precedence when entries
 	// contain && or || operators internally.
-	if len(cfg.Include) > 0 {
+	if len(cfg.Include.Labels) > 0 {
 		var includeExprs []string
-		for _, entry := range cfg.Include {
+		for _, entry := range cfg.Include.Labels {
 			includeExprs = append(includeExprs, "("+entry.Label+")")
 		}
 

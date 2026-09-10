@@ -31,8 +31,8 @@ import (
 )
 
 const (
-	// migratedByAnnotation is set on v3 resources created during migration so
-	// the abort path can distinguish them from pre-existing v3 resources.
+	// migratedByAnnotation holds the UID of the DatastoreMigration CR that
+	// created the v3 resource.
 	migratedByAnnotation = "migration.projectcalico.org/migrated-by"
 
 	// defaultWorkerCount is the number of concurrent workers for creating v3
@@ -113,8 +113,9 @@ type migrationWorkResult struct {
 
 // MigrateResourceType runs the migration for a single resource type using the
 // given migrator. It lists and converts resources sequentially, then fans out
-// create/check operations to a bounded worker pool for concurrency.
-func MigrateResourceType(ctx context.Context, m migrators.ResourceMigrator) (*MigrationResult, error) {
+// create/check operations to a bounded worker pool, stamping migrationID onto
+// every resource it creates.
+func MigrateResourceType(ctx context.Context, m migrators.ResourceMigrator, migrationID string) (*MigrationResult, error) {
 	logCtx := logrus.WithField("kind", m.Kind())
 	logCtx.Info("Starting migration for resource type")
 
@@ -174,7 +175,7 @@ func MigrateResourceType(ctx context.Context, m migrators.ResourceMigrator) (*Mi
 		go func() {
 			defer wg.Done()
 			for item := range workCh {
-				resultCh <- migrateOneResource(ctx, m, item)
+				resultCh <- migrateOneResource(ctx, m, item, migrationID)
 			}
 		}()
 	}
@@ -237,7 +238,7 @@ func DetectConflicts(ctx context.Context, ms []migrators.ResourceMigrator) ([]Co
 // migrateOneResource handles the create/check/conflict logic for a single
 // resource. It is called concurrently from the worker pool. Transient API
 // errors are retried with exponential backoff.
-func migrateOneResource(ctx context.Context, m migrators.ResourceMigrator, item migrationWorkItem) migrationWorkResult {
+func migrateOneResource(ctx context.Context, m migrators.ResourceMigrator, item migrationWorkItem, migrationID string) migrationWorkResult {
 	v3Obj := item.v3Obj
 
 	// Check if a v3 resource already exists (with retry).
@@ -272,13 +273,12 @@ func migrateOneResource(ctx context.Context, m migrators.ResourceMigrator, item 
 		return migrationWorkResult{conflict: ci}
 	}
 
-	// Stamp the migration annotation so the abort path can distinguish
-	// resources created by migration from pre-existing v3 resources.
+	// Stamp the owning migration's UID so its abort path can find this resource.
 	annotations := v3Obj.GetAnnotations()
 	if annotations == nil {
 		annotations = make(map[string]string)
 	}
-	annotations[migratedByAnnotation] = "v1-to-v3"
+	annotations[migratedByAnnotation] = migrationID
 	v3Obj.SetAnnotations(annotations)
 
 	// Create the v3 resource (with retry). CreateV3 populates the object

@@ -63,7 +63,7 @@ var _ = Describe("UsageReporter with mocked URL and short interval", func() {
 		configUpdateC = make(chan map[string]string)
 
 		// Create a usage reporter and override its base URL and initial interval.
-		u = New(StaticItems{KubernetesVersion: "v1.23.2"}, 500*time.Millisecond, 1*time.Second, statsUpdateC, configUpdateC)
+		u = New(StaticItems{KubernetesVersion: "v1.23.2", NFTablesEnabled: true}, 500*time.Millisecond, 1*time.Second, statsUpdateC, configUpdateC)
 		port := tcpListener.Addr().(*net.TCPAddr).Port
 		u.BaseURL = fmt.Sprintf("http://localhost:%d/UsageCheck/calicoVersionCheck?", port)
 
@@ -129,7 +129,7 @@ var _ = Describe("UsageReporter with mocked URL and short interval", func() {
 				q := url.Query()
 				Expect(q).To(HaveLen(expectedNumberOfURLParams), "unexpected number of URL parameters")
 				Expect(q.Get("guid")).To(Equal("someguid"))
-				Expect(q.Get("type")).To(Equal("openstack,k8s,kdd"))
+				Expect(q.Get("type")).To(Equal("openstack,k8s,kdd,nft"))
 				Expect(q.Get("cal_ver")).To(Equal("v2.6.3"))
 				Expect(q.Get("k8s_ver")).To(Equal("v1.23.2"))
 				Expect(q.Get("alp")).To(Equal("false"))
@@ -176,7 +176,6 @@ var _ = Describe("UsageReporter with mocked URL and short interval", func() {
 						"CalicoVersion":        "v3.0.0",
 						"PolicySyncPathPrefix": "/var/run/nodeagent",
 						"BPFEnabled":           "true",
-						"NFTablesMode":         "Enabled",
 					}
 				})
 

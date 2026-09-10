@@ -476,6 +476,79 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	)
 
 	DescribeTable(
+		"Log rules should set the connmark bit when connection transition logging is enabled",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigConnState := rrConfigNormal
+			rrConfigConnState.FlowLogsEnabled = false
+			rrConfigConnState.LogConnectionTransitions = true
+			rrConfigConnState.MarkConnStateLog = 0x100000
+			renderer := NewRenderer(rrConfigConnState, false)
+			logRule := in
+			logRule.Action = "log"
+			rules := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
+			// With no rate limit configured there is no decision to share, so this is
+			// the LOG rule followed by a rule that sets the "no response seen yet"
+			// connmark bit.
+			Expect(len(rules)).To(Equal(2))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "calico-packet"}))
+			Expect(rules[1].Match.Render()).To(Equal(expMatch))
+			Expect(rules[1].Action).To(Equal(iptables.SetConnMarkAction{Mark: 0x100000, Mask: 0x100000}))
+
+			// Untracked rules must not attempt to set a connmark (no conntrack entry).
+			rules = renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, true)
+			Expect(len(rules)).To(Equal(1))
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "calico-packet"}))
+		},
+		ruleTestData,
+	)
+
+	DescribeTable(
+		"Log rules should drive the LOG and the connmark bit from one rate limit decision",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigConnState := rrConfigNormal
+			rrConfigConnState.FlowLogsEnabled = false
+			rrConfigConnState.LogConnectionTransitions = true
+			rrConfigConnState.MarkConnStateLog = 0x100000
+			rrConfigConnState.LogActionRateLimit = "50/minute"
+			renderer := NewRenderer(rrConfigConnState, false)
+			logRule := in
+			logRule.Action = "log"
+			rules := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
+			Expect(len(rules)).To(Equal(4))
+
+			// Clear any stale value of the bit left by an earlier Log rule.
+			Expect(rules[0].Match.Render()).To(Equal(""))
+			Expect(rules[0].Action).To(Equal(iptables.ClearMarkAction{Mark: 0x100000}))
+
+			// Take the rate limit decision once, recording it in the packet mark.
+			Expect(rules[1].Match.Render()).To(ContainSubstring(expMatch))
+			Expect(rules[1].Match.Render()).To(ContainSubstring("-m limit --limit 50/minute"))
+			Expect(rules[1].Action).To(Equal(iptables.SetMarkAction{Mark: 0x100000}))
+
+			// Both the LOG and the connmark bit hang off that one decision, so a
+			// connection gets a follow-up response log iff its initial log was emitted.
+			decisionMatch := "-m mark --mark 0x100000/0x100000"
+			Expect(rules[2].Match.Render()).To(Equal(decisionMatch))
+			Expect(rules[2].Action).To(Equal(iptables.LogAction{Prefix: "calico-packet"}))
+			Expect(rules[3].Match.Render()).To(Equal(decisionMatch))
+			Expect(rules[3].Action).To(Equal(iptables.SetConnMarkAction{Mark: 0x100000, Mask: 0x100000}))
+
+			// Untracked rules have no conntrack entry, so they keep the plain
+			// rate-limited LOG.
+			rules = renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, true)
+			Expect(len(rules)).To(Equal(1))
+			Expect(rules[0].Match.Render()).To(ContainSubstring("-m limit --limit 50/minute"))
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "calico-packet"}))
+		},
+		ruleTestData,
+	)
+
+	DescribeTable(
 		"Deny (DROP) rules should be correctly rendered",
 		func(ipVer int, in *proto.Rule, expMatch string) {
 			rrConfigNormal.FlowLogsEnabled = false

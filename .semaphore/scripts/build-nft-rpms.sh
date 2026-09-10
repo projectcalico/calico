@@ -16,9 +16,11 @@ if [ -z "$BUILD_LOG" ]; then
   exit 1
 fi
 
+S3_CMD="$(dirname "$0")/../s3-cmd"
+
 NFT_RPMS_TAG=$(make --no-print-directory -C hack/rpms/nftables print-tag)
 NFT_RPMS_IMAGE="calico/nftables-rpms:${NFT_RPMS_TAG}-${ARCH}"
-CACHE_PATH="${GCS_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst"
+CACHE_PATH="${S3_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst"
 
 # Use a subshell to capture all output to the log file while still printing to stdout.
 {
@@ -39,5 +41,5 @@ CACHE_PATH="${GCS_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst"
   echo "Saving and uploading image tarball..."
   docker save "$NFT_RPMS_IMAGE" -o /tmp/nft-rpms.tar
   zstd -3 --rm /tmp/nft-rpms.tar
-  gcloud storage cp /tmp/nft-rpms.tar.zst "$CACHE_PATH"
+  "$S3_CMD" cp /tmp/nft-rpms.tar.zst "$CACHE_PATH"
 } 2>&1 | tee "$BUILD_LOG"

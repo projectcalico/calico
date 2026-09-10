@@ -262,6 +262,11 @@ BUILD_ID:=$(shell git rev-parse HEAD || uuidgen | sed 's/-//g')
 GIT_DESCRIPTION=$(shell git describe --tags --dirty --always --abbrev=12 || echo '<unknown>')
 endif
 
+# cd-common publishes every image at BRANCH_NAME, so that is the tag a build which names
+# no version of its own can pull. CI exports it; fall back to the checked-out branch, or
+# for a PR to its base, which is what SEMAPHORE_GIT_BRANCH holds.
+BRANCH_IMAGE_TAG ?= $(if $(BRANCH_NAME),$(BRANCH_NAME),$(if $(SEMAPHORE_GIT_BRANCH),$(SEMAPHORE_GIT_BRANCH),$(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)))
+
 # Calculate a timestamp for any build artifacts.
 ifneq ($(OS),Windows_NT)
 DATE:=$(shell date -u +'%FT%T%z')
@@ -408,6 +413,13 @@ DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL) 
 	--build-arg GIT_VERSION=$(GIT_VERSION) \
 	--build-arg UBI_IMAGE=$(UBI_IMAGE)
 
+# Fail a clone that needs credentials instead of blocking on git's terminal
+# prompt, which hangs a CI job until the pipeline timeout.
+export GIT_TERMINAL_PROMPT ?= 0
+
+fetch_file = $(REPO_ROOT)/hack/fetch-file $(1) $(2)
+fetch_repo = $(REPO_ROOT)/hack/fetch-repo $(1) $(2) $(3)
+
 DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--init \
@@ -415,6 +427,7 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 		$(DOCKER_GIT_WORKTREE_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
+		-e GIT_TERMINAL_PROMPT=$(GIT_TERMINAL_PROMPT) \
 		$(GOARCH_FLAGS) \
 		-e GOPATH=/go \
 		-e OS=$(BUILDOS) \
@@ -582,47 +595,6 @@ define update_replace_pin
 		fi'
 endef
 
-# Get the latest release tag from projectcalico/go-build.
-GO_BUILD_REPO=https://github.com/projectcalico/go-build.git
-define get_go_build_version
-	$(shell git ls-remote --tags --refs --sort=-version:refname $(GO_BUILD_REPO) | head -n 1 | awk -F '/' '{print $$NF}')
-endef
-
-# update_go_build_pin updates the GO_BUILD_VER in metadata.mk or Makefile.
-# for annotated git tags, we need to remove the trailing `^{}`.
-# for the obsoleted vx.y go-build version, we need to remove the leading `v` for bash string comparison to work properly.
-define update_go_build_pin
-	$(eval new_ver := $(subst ^{},,$(call get_go_build_version)))
-	$(eval old_ver := $(shell grep -E "^GO_BUILD_VER" $(1) | cut -d'=' -f2 | xargs | sed 's/^v//'))
-
-	@echo "current GO_BUILD_VER=$(old_ver)"
-	@echo "latest GO_BUILD_VER=$(new_ver)"
-
-	bash -c '\
-		if [[ "$(new_ver)" > "$(old_ver)" ]]; then \
-			sed -i "s/^GO_BUILD_VER[[:space:]]*=.*/GO_BUILD_VER=$(new_ver)/" $(1); \
-			echo "GO_BUILD_VER is updated to $(new_ver)"; \
-		else \
-			echo "no need to update GO_BUILD_VER"; \
-		fi'
-endef
-
-# update_calico_base_pin updates the CALICO_BASE_VER in metadata.mk.
-define update_calico_base_pin
-	$(eval new_ver := $(shell curl -s "https://hub.docker.com/v2/repositories/calico/base/tags/?page_size=100" | jq -r '.results[].name' | grep -E "^ubi9-[0-9]+$$" | sort -r | head -n 1))
-	$(eval old_ver := $(shell grep -E "^CALICO_BASE_VER" $(1) | cut -d'=' -f2 | xargs))
-
-	@echo "current CALICO_BASE_VER=$(old_ver)"
-	@echo "latest CALICO_BASE_VER=$(new_ver)"
-
-	bash -c '\
-		if [[ "$(new_ver)" > "$(old_ver)" ]]; then \
-			sed -i "s/^CALICO_BASE_VER[[:space:]]*=.*/CALICO_BASE_VER=$(new_ver)/" $(1); \
-			echo "CALICO_BASE_VER is updated to $(new_ver)"; \
-		else \
-			echo "no need to update CALICO_BASE_VER"; \
-		fi'
-endef
 
 API_BRANCH?=$(PIN_BRANCH)
 API_REPO?=github.com/projectcalico/calico/api
@@ -679,11 +651,6 @@ update-cni-plugin-pin:
 replace-cni-pin:
 	$(call update_replace_pin,github.com/projectcalico/calico/cni-plugin,$(CNI_REPO),$(CNI_BRANCH))
 
-update-go-build-pin:
-	$(call update_go_build_pin,$(GIT_GO_BUILD_UPDATE_COMMIT_FILE))
-
-update-calico-base-pin:
-	$(call update_calico_base_pin,$(GIT_GO_BUILD_UPDATE_COMMIT_FILE))
 
 git-status:
 	git status --porcelain
@@ -758,7 +725,6 @@ GIT_PR_BRANCH_BASE?=$(SEMAPHORE_GIT_BRANCH)
 PIN_UPDATE_BRANCH?=semaphore-auto-pin-updates-$(GIT_PR_BRANCH_BASE)
 GIT_PR_BRANCH_HEAD?=$(PIN_UPDATE_BRANCH)
 GIT_PIN_UPDATE_COMMIT_FILES?=go.mod go.sum
-GIT_GO_BUILD_UPDATE_COMMIT_FILE?=metadata.mk
 GIT_PIN_UPDATE_COMMIT_EXTRA_FILES?=$(GIT_COMMIT_EXTRA_FILES)
 GIT_COMMIT_FILES?=$(GIT_PIN_UPDATE_COMMIT_FILES) $(GIT_PIN_UPDATE_COMMIT_EXTRA_FILES)
 
@@ -1335,6 +1301,11 @@ var-require-one-of-%:
 build-images: var-require-all-BUILD_IMAGES
 	@echo $(sort $(BUILD_IMAGES) $(WINDOWS_IMAGE))
 
+# image-tag-prefix echoes the prefix this component's published tags carry, which
+# a variant selects through its own environment. Empty for an unprefixed build.
+image-tag-prefix:
+	@echo $(IMAGETAG_PREFIX)
+
 # sem-cut-release triggers the cut-release pipeline (or test-cut-release if CONFIRM is not specified) in semaphore to
 # cut the release. The pipeline is triggered for the current commit, and the branch it's triggered on is calculated
 # from the RELEASE_VERSION, CNX, and OS variables given.
@@ -1513,7 +1484,7 @@ check-dirty:
 bin/yq:
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
-	curl -sSf -L --retry 5 -o $(TMP)/yq4.tar.gz https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz
+	$(call fetch_file,https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz,$(TMP)/yq4.tar.gz)
 	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
 	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
 
@@ -1529,10 +1500,15 @@ CRANE_URL = https://github.com/google/go-containerregistry/releases/download/$(C
 
 .PHONY: bin/crane
 bin/crane: $(REPO_ROOT)/bin/crane
+# Moved into place last: a half-extracted binary looks complete to make.
 $(REPO_ROOT)/bin/crane:
 	$(info ::: Downloading crane from $(CRANE_URL))
 	@mkdir -p $(REPO_ROOT)/bin
-	@curl -sSfL --retry 5 $(CRANE_URL) | tar xz -C $(REPO_ROOT)/bin crane
+	@tmp=$$(mktemp -d $(REPO_ROOT)/bin/.crane.XXXXXX) && trap 'rm -rf "$$tmp"' EXIT && \
+		$(call fetch_file,$(CRANE_URL),"$$tmp/crane.tar.gz") && \
+		tar xz -C "$$tmp" -f "$$tmp/crane.tar.gz" crane && \
+		chmod +x "$$tmp/crane" && \
+		mv "$$tmp/crane" "$@"
 
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.
@@ -1617,6 +1593,11 @@ stop-k8s-controller-manager:
 # Common functions for create a local kind cluster.
 ###############################################################################
 KIND_DIR := $(REPO_ROOT)/hack/test/kind
+
+# The operator CRDs a Calico install ships, named by the list the operator and the
+# manifest generator both read.
+CALICO_OPERATOR_CRDS = $(addprefix -f $(REPO_ROOT)/operator/pkg/crds/operator/,\
+	$(shell grep -v '^\#' $(REPO_ROOT)/operator/pkg/crds/calico_operator_crds.txt 2>/dev/null))
 KIND ?= $(KIND_DIR)/kind
 KUBECTL ?= $(KIND_DIR)/kubectl
 
@@ -1657,7 +1638,7 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND) kind-registry-up
 
 	# Wait for controller manager to be running and healthy, then create Calico CRDs.
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
-	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/charts/crd.projectcalico.org.v1/templates/; do echo "Waiting for operator CRDs to be created"; sleep 2; done
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create $(CALICO_OPERATOR_CRDS); do echo "Waiting for operator CRDs to be created"; sleep 2; done
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/$(CALICO_CRD_PATH); do echo "Waiting for calico CRDs to be created"; sleep 2; done
 
 	# These may have already been created, depending on where we're getting our CRDs from. So use apply.
@@ -1731,6 +1712,21 @@ helm: bin/helm
 bin/helm: bin/.helm-updated-$(HELM_VERSION)
 
 ###############################################################################
+# Dev image build variables. Used by the root Makefile's image and push
+# targets, and by the operator image marker below.
+###############################################################################
+DEV_IMAGE_PATH ?= calico
+DEV_IMAGE_TAG ?= $(GIT_VERSION)
+DEV_IMAGE_REGISTRY ?= docker.io
+DEV_STAMP_DIR := $(REPO_ROOT)/.dev-stamps
+
+# Map calico/<name>:test-build → $(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH)/<name>:$(DEV_IMAGE_TAG)
+# filter-registry strips "docker.io/" since Docker Hub doesn't use it in image refs.
+DEV_IMAGE_PREFIX = $(if $(filter docker.io,$(DEV_IMAGE_REGISTRY)),$(DEV_IMAGE_PATH),$(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH))
+DEV_CALICO_IMAGES = $(foreach img,$(KIND_CALICO_IMAGES),$(DEV_IMAGE_PREFIX)/$(subst calico/,,$(firstword $(subst :, ,$(img)))):$(DEV_IMAGE_TAG))
+DEV_OPERATOR_IMAGE = $(DEV_IMAGE_PREFIX)/operator:$(DEV_IMAGE_TAG)
+
+###############################################################################
 # Common functions for setting up a kind cluster with Calico for testing.
 ###############################################################################
 KIND_INFRA_DIR := $(REPO_ROOT)/hack/test/kind/infra
@@ -1759,6 +1755,7 @@ KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
 	$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH) \
 	$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH) \
+	$(REPO_ROOT)/operator/.image.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-gateway/.envoy-gateway.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-proxy/.envoy-proxy.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH) \
@@ -1814,6 +1811,19 @@ $(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH): \
 	$(MAKE) -C $(REPO_ROOT)/key-cert-provisioner image
 	echo "test-signer:latest-$(ARCH)" > $@
 
+# The operator bakes the component refs it installs into the image, so
+# image-exists gets the expected ref: a changed DEV_IMAGE_* triple must
+# rebuild even though the recorded image still exists.
+$(REPO_ROOT)/operator/.image.created-$(ARCH): \
+    $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/operator/.image.created-$(ARCH) $(DEV_OPERATOR_IMAGE)) \
+    $(call local-deps-go-files,operator)
+	rm -f $@
+	DEV_IMAGE_TAG=$(DEV_IMAGE_TAG) \
+	  DEV_IMAGE_REGISTRY=$(DEV_IMAGE_REGISTRY) \
+	  DEV_IMAGE_PATH=$(DEV_IMAGE_PATH) \
+	  $(KIND_INFRA_DIR)/build-operator.sh
+	echo "$(DEV_OPERATOR_IMAGE)" > $@
+
 # Envoy components: the third_party/envoy-* sub-makes use their own marker
 # names (.envoy-<comp>.created-$(ARCH)). The sub-make handles fetching
 # upstream sources and building the image as calico/envoy-<comp>:latest-$(ARCH).
@@ -1831,6 +1841,13 @@ $(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH):
 $(REPO_ROOT)/third_party/cni-plugins/.cni-plugins.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/third_party/cni-plugins image
 
+# The registry/path/tag every kind lane bakes into its images.
+# hack/test/kind/infra/values.yaml pins the same triple.
+KIND_DEV_IMAGE_ARGS = \
+	    DEV_IMAGE_REGISTRY=localhost:5000 \
+	    DEV_IMAGE_PATH=calico \
+	    DEV_IMAGE_TAG=$(KIND_TEST_BUILD_TAG)
+
 ## Build all component images and push them to the local kind registry.
 # This invokes the same `make push` pipeline used by the release flow, with
 # kind-flavored DEV_IMAGE_REGISTRY/PATH/TAG so images land at
@@ -1840,10 +1857,14 @@ $(REPO_ROOT)/third_party/cni-plugins/.cni-plugins.created-$(ARCH):
 # inside the kind nodes mirrors localhost:5000 to http://kind-registry:5000.
 .PHONY: kind-build-images
 kind-build-images: kind-registry-up
-	$(MAKE) -C $(REPO_ROOT) push \
-	    DEV_IMAGE_REGISTRY=localhost:5000 \
-	    DEV_IMAGE_PATH=calico \
-	    DEV_IMAGE_TAG=$(KIND_TEST_BUILD_TAG)
+	$(MAKE) -C $(REPO_ROOT) push $(KIND_DEV_IMAGE_ARGS)
+
+## Build only the operator image, with the kind component references baked in.
+# CI's "Build: operator image" block runs this and caches the result so the
+# kind lanes load it instead of compiling the operator per job.
+.PHONY: kind-operator-image
+kind-operator-image:
+	$(MAKE) -C $(REPO_ROOT) operator-image $(KIND_DEV_IMAGE_ARGS)
 
 # Create a kind cluster and deploy Calico on it via Helm. Assumes images are
 # already built and tagged as test-build in the local Docker daemon. If a
@@ -1885,23 +1906,16 @@ kind-reload:
 ###############################################################################
 ENVTEST_DIR := $(REPO_ROOT)/hack/test/envtest
 ENVTEST_CONTAINER_DIR := /go/src/github.com/projectcalico/calico/hack/test/envtest
-# Pick the envtest k8s version and how to fetch its binaries from K8S_VERSION.
-# setup-envtest only publishes assets for RELEASED minors:
-#   - stable: setup-envtest with a major.minor.x wildcard (latest patch).
-#   - -beta/-rc pre-release: no upstream assets yet, so assemble the bundle from
-#     the release binaries (kube-apiserver+kubectl from dl.k8s.io, etcd from
-#     ETCD_VERSION). Self-reverts to setup-envtest once the minor GAs.
-# -alpha is intentionally excluded (too unstable to pin); it fails loudly instead.
-# Skip on Windows: envtest is Linux-only; bash sed/cut would error there.
+# Derive major.minor from K8S_VERSION (e.g. v1.34.3 -> 1.34.x) for setup-envtest.
+# Envtest publishes binaries per minor version, not per patch, so we use a wildcard.
+# Skip on Windows: envtest is Linux-only test infra; bash sed/cut would error otherwise.
 ifneq ($(OS),Windows_NT)
-ifneq ($(or $(findstring -beta,$(K8S_VERSION)),$(findstring -rc,$(K8S_VERSION))),)
-ENVTEST_K8S_VERSION ?= $(K8S_VERSION:v%=%)
-ENVTEST_K8S_PRERELEASE := true
-else
 ENVTEST_K8S_VERSION ?= $(shell echo $(K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
 endif
-endif
-ENVTEST_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-$(ENVTEST_K8S_VERSION)
+# Key the marker off the full K8S_VERSION rather than the minor wildcard. The
+# fallback below stores its assets under k8s/<full version>-<os>-<arch>, so a
+# bump inside one minor (rc to GA, say) has to force a fresh setup.
+ENVTEST_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-$(K8S_VERSION:v%=%)
 
 ## Download envtest binaries (kube-apiserver, etcd, kubectl) for use by tests that use controller-runtime envtest.
 .PHONY: setup-envtest
@@ -1910,14 +1924,24 @@ $(ENVTEST_ASSETS_MARKER):
 	@echo "Setting up envtest binaries for Kubernetes $(ENVTEST_K8S_VERSION)..."
 	mkdir -p $(ENVTEST_DIR)
 	rm -f $(ENVTEST_DIR)/.envtest-*
-ifeq ($(ENVTEST_K8S_PRERELEASE),true)
-	# No upstream kubebuilder-tools release exists for a pre-release k8s, so build
-	# the bundle in the same layout the consumers glob: k8s/<ver>-<os>-<arch>/.
-	# Each downloaded binary is sha256-verified against its published checksum
-	# (dl.k8s.io <bin>.sha256 for the k8s binaries; the etcd release SHA256SUMS).
+	# Prefer the bundle controller-tools publishes. It only exists for minors it
+	# has already cut an envtest release for, which trails the Kubernetes release
+	# by anywhere from hours to a fortnight, and it never covers most
+	# pre-releases. Assemble the same layout from the release binaries when it is
+	# missing, so a Kubernetes bump is never blocked waiting on that release; the
+	# published bundle takes over again on the next clean setup once it lands.
+	# -alpha is excluded either way: too unstable to pin, so it fails loudly.
 	$(DOCKER_GO_BUILD) sh -c 'set -e; \
+		case "$(K8S_VERSION)" in \
+			*-alpha*) echo "K8S_VERSION $(K8S_VERSION) is an alpha; envtest does not pin to alphas." >&2; exit 1;; \
+		esac; \
+		if go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
+			use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_K8S_VERSION); then \
+			exit 0; \
+		fi; \
+		echo "No published envtest bundle for $(ENVTEST_K8S_VERSION); assembling one from the $(K8S_VERSION) release binaries."; \
 		base=https://dl.k8s.io/release/$(K8S_VERSION)/bin/$(BUILDOS)/$(BUILDARCH); \
-		d=$(ENVTEST_CONTAINER_DIR)/k8s/$(ENVTEST_K8S_VERSION)-$(BUILDOS)-$(BUILDARCH); \
+		d=$(ENVTEST_CONTAINER_DIR)/k8s/$(K8S_VERSION:v%=%)-$(BUILDOS)-$(BUILDARCH); \
 		mkdir -p $$d; \
 		for b in kube-apiserver kubectl; do \
 			curl -fsSL --retry 5 -o $$d/$$b $$base/$$b; \
@@ -1933,15 +1957,11 @@ ifeq ($(ENVTEST_K8S_PRERELEASE),true)
 		tar -xzf /tmp/$$etcd_tgz -C /tmp; \
 		mv /tmp/etcd-$(ETCD_VERSION)-$(BUILDOS)-$(BUILDARCH)/etcd $$d/etcd; \
 		chmod +x $$d/kube-apiserver $$d/kubectl $$d/etcd'
-else
-	$(DOCKER_GO_BUILD) sh -c \
-		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
-		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_K8S_VERSION)'
-endif
 	touch $@
 
-# Minimum supported Kubernetes version for CEL IP/CIDR library (available in 1.31+).
-MIN_K8S_VERSION ?= v1.31.0
+# Minimum supported Kubernetes version. 1.32 is the first release that estimates
+# the cost of the CEL IP/CIDR library well enough for our CRD rules to install.
+MIN_K8S_VERSION ?= v1.32.0
 ifneq ($(OS),Windows_NT)
 ENVTEST_MIN_K8S_VERSION ?= $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
 # Major.minor prefix for globbing the downloaded envtest directory (e.g. "1.29").
@@ -1959,20 +1979,6 @@ $(ENVTEST_MIN_ASSETS_MARKER):
 		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
 		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_MIN_K8S_VERSION)'
 	touch $@
-
-###############################################################################
-# Dev image build variables. Targets that use these are in the root Makefile.
-###############################################################################
-DEV_IMAGE_PATH ?= calico
-DEV_IMAGE_TAG ?= $(GIT_VERSION)
-DEV_IMAGE_REGISTRY ?= docker.io
-DEV_STAMP_DIR := $(REPO_ROOT)/.dev-stamps
-
-# Map calico/<name>:test-build → $(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH)/<name>:$(DEV_IMAGE_TAG)
-# filter-registry strips "docker.io/" since Docker Hub doesn't use it in image refs.
-DEV_IMAGE_PREFIX = $(if $(filter docker.io,$(DEV_IMAGE_REGISTRY)),$(DEV_IMAGE_PATH),$(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH))
-DEV_CALICO_IMAGES = $(foreach img,$(KIND_CALICO_IMAGES),$(DEV_IMAGE_PREFIX)/$(subst calico/,,$(firstword $(subst :, ,$(img)))):$(DEV_IMAGE_TAG))
-DEV_OPERATOR_IMAGE = $(DEV_IMAGE_PREFIX)/operator:$(DEV_IMAGE_TAG)
 
 ###############################################################################
 # Common functions for launching a local etcd instance.
@@ -2036,15 +2042,20 @@ else
 DOCKER_MANIFEST = echo [DRY RUN] $(DOCKER_MANIFEST_CMD)
 endif
 
+# Named per component so two components' Windows builds do not remove each other's.
+WINDOWS_BUILDER = calico-windows-builder-$(notdir $(CURDIR))
+
 # Clean up the docker builder used to create Windows image tarballs.
 .PHONY: clean-windows-builder
 clean-windows-builder:
+	-docker buildx rm $(WINDOWS_BUILDER)
+	# Drain the shared builder earlier releases left selected on the host with --use.
 	-docker buildx rm calico-windows-builder
 
 # Set up the docker builder used to create Windows image tarballs.
 .PHONY: setup-windows-builder
 setup-windows-builder: clean-windows-builder
-	docker buildx create --name=calico-windows-builder --use --platform windows/amd64
+	docker buildx create --name=$(WINDOWS_BUILDER) --platform windows/amd64
 
 # FIXME: Use WINDOWS_HPC_VERSION and image instead of nanoserver and WINDOWS_VERSIONS when containerd v1.6 is EOL'd
 # .PHONY: image-windows release-windows
@@ -2107,6 +2118,7 @@ windows-sub-image-%: var-require-all-GIT_VERSION-WINDOWS_IMAGE-WINDOWS_DIST-WIND
 	# ensure dir for windows image tars exits
 	-mkdir -p $(WINDOWS_DIST)
 	docker buildx build \
+		--builder $(WINDOWS_BUILDER) \
 		--platform windows/amd64 \
 		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-$*.tar \
 		$(DOCKER_PULL) \
@@ -2115,7 +2127,7 @@ windows-sub-image-%: var-require-all-GIT_VERSION-WINDOWS_IMAGE-WINDOWS_DIST-WIND
 		--build-arg=WINDOWS_VERSION=$* \
 		-f Dockerfile.windows .
 
-.PHONY: image-windows release-windows release-windows-with-tag
+.PHONY: image-windows release-windows release-windows-with-tag retag-windows-image-with-registries
 image-windows: setup-windows-builder var-require-all-WINDOWS_VERSIONS
 	for version in $(WINDOWS_VERSIONS); do \
 		$(MAKE) windows-sub-image-$${version}; \
@@ -2142,6 +2154,14 @@ release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAG
 		done; \
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
 		$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $${manifest_image} $${all_images} || true; \
+	done;
+
+# retag-windows-image-with-registries copies the Windows image from DEV_TAG to
+# IMAGETAG in each registry. Windows images are single-arch manifests built by
+# buildx, so they have no local per-arch images to retag.
+retag-windows-image-with-registries: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE-DEV_TAG-IMAGETAG bin/crane
+	for registry in $(DEV_REGISTRIES); do \
+		$(CRANE) cp $${registry}/$(WINDOWS_IMAGE):$(DEV_TAG) $${registry}/$(WINDOWS_IMAGE):$(IMAGETAG); \
 	done;
 
 release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE var-require-one-of-VERSION-BRANCH_NAME bin/crane

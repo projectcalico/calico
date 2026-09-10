@@ -18,9 +18,24 @@ global_job_config:
   secrets:
     - name: docker-hub
     - name: google-service-account-for-gce
+    # GitHub raises its limits and relaxes abuse prevention for authenticated
+    # traffic, so clones from the shared runner IPs are less likely to throttle.
+    - name: marvin-github-token
+    # Provides the S3 object-storage credentials consumed by .semaphore/s3-cmd
+    # and the cache restore/store steps below: CALICO_S3_ACCESS_KEY,
+    # CALICO_S3_SECRET_KEY and (optionally, for a non-AWS endpoint)
+    # CALICO_S3_HOST / CALICO_S3_HOST_BUCKET.
+    - name: go-build-cache-hetzner-s3-parameters
+    - name: go-build-cache-hetzner-s3-credentials
   env_vars:
     - name: GOOGLE_PROJECT
       value: unique-caldron-775
+    # GCS bucket used *only* for the FV test artifacts that the GCP test VMs
+    # pull (fv-artifacts/) and the FV failure logs they push (failed-fv-logs/).
+    # Those objects live in Google Cloud so the in-cloud test VMs fetch them
+    # without cross-cloud egress; everything else (build cache, per-workflow
+    # build images) stays on the S3 bucket below. Accessed via `gcloud storage`
+    # with the google-service-account-for-gce secret — not via s3cmd.
     - name: GCS_BUILD_CACHE_BUCKET
       value: calico-transient-build-artifacts-europe-west3
     - name: BUILDKIT_PROGRESS
@@ -29,8 +44,13 @@ global_job_config:
       value: when-trimmed
   prologue:
     commands:
+      - export GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN}
       - export CALICO_DIR_NAME=${SEMAPHORE_GIT_DIR}
-      - export GCS_CACHE_DIR=gs://$GCS_BUILD_CACHE_BUCKET/cache/${CALICO_DIR_NAME}
+      - export S3_CACHE_DIR=s3://$CALICO_S3_BUCKET/$CALICO_S3_KEY_PREFIX/cache/${CALICO_DIR_NAME}
+      - export S3_WORKFLOW_DIR=s3://$CALICO_S3_BUCKET/$CALICO_S3_KEY_PREFIX/workflow/${SEMAPHORE_WORKFLOW_ID}
+      # The FV test artifacts the GCP VMs exchange live in GCS (see
+      # GCS_BUILD_CACHE_BUCKET above); the per-workflow build images keep the
+      # parallel S3 layout under S3_WORKFLOW_DIR.
       - export GCS_WORKFLOW_DIR=gs://$GCS_BUILD_CACHE_BUCKET/workflow/${SEMAPHORE_WORKFLOW_ID}
       - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
       - |-
@@ -38,19 +58,35 @@ global_job_config:
           echo "Non-x86_64 build: $(uname -m) / $ARCH";
           export BUILD_CACHE_GROUP=$BUILD_CACHE_GROUP-$(uname -m)-$ARCH;
         fi
+      # gcloud auth is required for the gcloud compute (test VM) calls in the
+      # Felix/Node FV blocks and for the FV artifact exchange with GCS
+      # (GCS_WORKFLOW_DIR). The build cache and per-workflow build images go
+      # through s3cmd instead.
       - gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" || true
       - gcloud config set project ${GOOGLE_PROJECT} || true
+      - sudo apt-get install -y zstd s3cmd || true
+      # Write the s3cmd config from the env so the cache restore/store steps in
+      # this prologue can run before the working copy (and the .semaphore/s3-cmd
+      # wrapper) has been checked out.
+      - |-
+        cat >"$HOME/.s3cfg" <<S3CFG
+        [default]
+        access_key = ${CALICO_S3_ACCESS_KEY}
+        secret_key = ${CALICO_S3_SECRET_KEY}
+        ${CALICO_S3_HOST:+host_base = ${CALICO_S3_HOST}}
+        ${CALICO_S3_HOST:+host_bucket = ${CALICO_S3_HOST_BUCKET:-%(bucket)s.${CALICO_S3_HOST}}}
+        S3CFG
+      - chmod 600 "$HOME/.s3cfg"
       # Try to restore the working copy from the cache, if available. Then,
       # for PRs, also try to restore the build cache.  (We skip this on branch
       # builds to ensure branches build cleanly.)
-      - sudo apt-get install -y zstd || true
       - restored_wc_cache=false
       - |-
         if [[ -n "${SEMAPHORE_GIT_BRANCH}" && -z "$SKIP_CACHE_RESTORE" ]]; then
           echo "Looking for cached working copy for branch ${SEMAPHORE_GIT_BRANCH}"
-          gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+          s3_branch_cache_dir="${S3_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
           # On master, use Semaphore's free built-in cache; other branches still
-          # use GCS. (For PRs, SEMAPHORE_GIT_BRANCH is the base branch, so PRs
+          # use S3. (For PRs, SEMAPHORE_GIT_BRANCH is the base branch, so PRs
           # targeting master restore master's Semaphore cache.) Note: `cache
           # restore` exits 0 even on a miss, so we test for the restored file.
           if [[ "${SEMAPHORE_GIT_BRANCH}" == "master" ]]; then use_sem_cache=true; else use_sem_cache=false; fi
@@ -58,7 +94,7 @@ global_job_config:
           if ${use_sem_cache}; then
             cache restore "working-copy-${SEMAPHORE_GIT_BRANCH}" || true
           else
-            gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.zstd" /tmp/working-copy.tar.zstd || true
+            s3cmd get --force "$s3_branch_cache_dir/working-copy.tar.zstd" /tmp/working-copy.tar.zstd || true
           fi
           if [[ -f /tmp/working-copy.tar.zstd ]]; then
             echo "Restoring cache for branch ${SEMAPHORE_GIT_BRANCH}"
@@ -69,7 +105,7 @@ global_job_config:
               if ${use_sem_cache}; then
                 cache restore "build-cache-${SEMAPHORE_GIT_BRANCH}-${BUILD_CACHE_GROUP}" || true
               else
-                gcloud storage cp "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd" /tmp/build-cache.tar.zstd || true
+                s3cmd get --force "$s3_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd" /tmp/build-cache.tar.zstd || true
               fi
               if [[ -f /tmp/build-cache.tar.zstd ]]; then
                 echo "Found build cache for group ${BUILD_CACHE_GROUP}"
@@ -112,12 +148,12 @@ global_job_config:
         fi
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       # Ensure calico/go-build is present, cheaply. Pull from Docker Hub first
-      # (free egress) and only fall back to the GCS cache — populated by the
+      # (free egress) and only fall back to the S3 cache — populated by the
       # "Pull: go-build image" prerequisite job — if the pull fails. This keeps
-      # GCS egress near zero in the common case while keeping GCS as a robustness
-      # fallback for the occasional Docker Hub pull failure (which we still see
-      # even with an authenticated session). Skipped on non-x86_64 / cross-compile
-      # agents since the cache is amd64-only.
+      # object-storage egress near zero in the common case while keeping S3 as a
+      # robustness fallback for the occasional Docker Hub pull failure (which we
+      # still see even with an authenticated session). Skipped on non-x86_64 /
+      # cross-compile agents since the cache is amd64-only.
       - |-
         if [[ $(uname -m) == "x86_64" && -z "$ARCH" ]]; then
           GO_BUILD_VER=$(make --no-print-directory -f metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
@@ -126,15 +162,15 @@ global_job_config:
             if docker pull "$image"; then
               echo "Pulled ${image} from Docker Hub"
             else
-              echo "Docker Hub pull failed for ${image}, falling back to GCS cache"
-              cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
-              if gcloud storage cp "$cache_path" /tmp/go-build.tar.zst 2>/dev/null; then
-                echo "Loading ${image} from GCS cache"
+              echo "Docker Hub pull failed for ${image}, falling back to S3 cache"
+              cache_path="s3://${CALICO_S3_BUCKET}/${CALICO_S3_KEY_PREFIX}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
+              if s3cmd get --force "$cache_path" /tmp/go-build.tar.zst 2>/dev/null; then
+                echo "Loading ${image} from S3 cache"
                 zstd -d --rm -o /tmp/go-build.tar /tmp/go-build.tar.zst
                 docker load -i /tmp/go-build.tar
                 rm -f /tmp/go-build.tar
               else
-                echo "No GCS fallback for ${image}; later docker use will retry the pull"
+                echo "No S3 fallback for ${image}; later docker use will retry the pull"
               fi
             fi
           fi
@@ -153,8 +189,11 @@ global_job_config:
             cache delete "$key" || true
             cache store "$key" /tmp/build-cache.tar.zstd
           else
-            gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-            gcloud storage cp /tmp/build-cache.tar.zstd "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd"
+            # We have cd'd to $HOME; the working copy (with the s3-cmd wrapper)
+            # lives at ./${CALICO_DIR_NAME}. Going through the wrapper rather than
+            # bare s3cmd applies the CALICO_S3_EXPIRY_DAYS default expiry.
+            s3_branch_cache_dir="${S3_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+            "${CALICO_DIR_NAME}/.semaphore/s3-cmd" cp /tmp/build-cache.tar.zstd "$s3_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd"
           fi
         fi
       - cd "$CALICO_DIR"
@@ -215,6 +254,8 @@ promotions:
     pipeline_file: push-images/whisker.yml
   - name: Push Envoy images
     pipeline_file: push-images/envoy.yml
+  - name: Push operator images
+    pipeline_file: push-images/operator.yml
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
     auto_promote:
@@ -225,6 +266,9 @@ promotions:
       when: "branch =~ 'master|release-.*'"
   - name: Push E2E images
     pipeline_file: push-images/e2e-test.yml
+    auto_promote:
+      when: >-
+        branch =~ 'master|release-.*' and change_in('/e2e/images/', {pipeline_file: 'ignore', default_branch: 'master', exclude: ['/**/README.md', '/**/DESIGN.md']})
   - name: Push istio images
     pipeline_file: push-images/istio.yml
   # Auto-fires (unlike the component pushes above) because this is a build-time
@@ -347,7 +391,7 @@ blocks:
     run:
       when: >-
         false or
-        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/controllers/migration', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/apis/migration', '/operator/api', '/operator/pkg/crds', '/operator/pkg/admission', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       jobs:
@@ -359,6 +403,7 @@ blocks:
             - make -C felix gen-files
             - make -C goldmane gen-files
             - make -C kube-controllers gen-files
+            - make -C operator gen-files
             - make gen-manifests
             - make fix-changed
             - make check-ocp-no-crds
@@ -398,14 +443,17 @@ blocks:
     # Publishing to Docker Hub happens in a separate post-build promotion
     # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
     #
-    # Consumers (untolerated gcloud cp): "Build: node image" (10-prerequisites.yml),
-    # "Node: multi-arch build" (20-node.yml), "Istio" (20-istio.yml) — every block
-    # that lists this one in its `dependencies:`. If a consumer fires but this
-    # producer is skipped, the consumer hard-fails on
-    # `gcloud storage cp: URL matched no objects` (Semaphore treats a skipped
-    # dependency as passed). To prevent that, this block's trigger must be a
-    # superset of the union of all consumer triggers. That superset is derived
-    # automatically by the CHANGE_IN_WITH_DEPENDENTS() macro: it merges the arg
+    # Consumers: "Build: node image" (10-prerequisites.yml), "Node: multi-arch
+    # build" (20-node.yml), "Istio" (20-istio.yml) — every block that lists this
+    # one in its `dependencies:`. They all go through
+    # .semaphore/scripts/load-nft-rpms.sh, which falls back to a Docker Hub pull
+    # when the tarball is missing; that covers a credential-less (read-only)
+    # build, but only for a tag that has already been published. If a consumer
+    # fires on an unpublished tag while this producer is skipped (Semaphore treats
+    # a skipped dependency as passed), the consumer still hard-fails. To prevent
+    # that, this block's trigger must be a superset of the union of all consumer
+    # triggers. That superset is derived automatically by the
+    # CHANGE_IN_WITH_DEPENDENTS() macro: it merges the arg
     # below (this block's own intrinsic trigger — the RPM build inputs) with the
     # resolved trigger of every block that depends on it. DO NOT hand-maintain a
     # list of consumer paths here; just keep the producer in the consumers'
@@ -423,7 +471,10 @@ blocks:
         '/.semaphore/semaphore.yml.d/blocks/20-istio.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-kubevirt-live-migration.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-node.yml',
+        '/.semaphore/vms/',
         '/Makefile',
+        '/api/admission/*.go',
+        '/api/config/crd/*.go',
         '/api/pkg/apis/projectcalico/v3/*.go',
         '/api/pkg/client/applyconfiguration_generated/internal/*.go',
         '/api/pkg/client/applyconfiguration_generated/projectcalico/v3/*.go',
@@ -555,6 +606,8 @@ blocks:
         '/key-cert-provisioner/pkg/tls/*.go',
         '/kube-controllers/cmd/check-status/*.go',
         '/kube-controllers/cmd/kube-controllers/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/crd',
         '/kube-controllers/pkg/cache/*.go',
         '/kube-controllers/pkg/config/*.go',
         '/kube-controllers/pkg/controllers/controller/*.go',
@@ -590,6 +643,8 @@ blocks:
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
         '/libcalico-go/config/*.go',
+        '/libcalico-go/config/crd',
+        '/libcalico-go/config/crd/*.go',
         '/libcalico-go/lib/apiconfig/*.go',
         '/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/*.go',
         '/libcalico-go/lib/apis/internalapi/*.go',
@@ -618,6 +673,7 @@ blocks:
         '/libcalico-go/lib/errors/*.go',
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
+        '/libcalico-go/lib/informerutil/*.go',
         '/libcalico-go/lib/ipam/*.go',
         '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
@@ -638,13 +694,94 @@ blocks:
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
         '/libcalico-go/lib/testutils/stacktrace/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
         '/metadata.mk',
         '/node/**',
+        '/operator/api/v1/*.go',
+        '/operator/cmd/*.go',
+        '/operator/config',
+        '/operator/deploy/crds',
+        '/operator/internal/controller/*.go',
+        '/operator/pkg/active/*.go',
+        '/operator/pkg/admission/*.go',
+        '/operator/pkg/apigroup/*.go',
+        '/operator/pkg/apis/*.go',
+        '/operator/pkg/awssgsetup/*.go',
+        '/operator/pkg/common/*.go',
+        '/operator/pkg/common/discovery/*.go',
+        '/operator/pkg/common/k8svalidation/*.go',
+        '/operator/pkg/common/k8svalidation/helper/*.go',
+        '/operator/pkg/common/k8svalidation/v1helper/*.go',
+        '/operator/pkg/common/validation/*.go',
+        '/operator/pkg/common/validation/apiserver/*.go',
+        '/operator/pkg/common/validation/calico-node/*.go',
+        '/operator/pkg/common/validation/csi-node-driver/*.go',
+        '/operator/pkg/common/validation/kube-controllers/*.go',
+        '/operator/pkg/common/validation/typha/*.go',
+        '/operator/pkg/common/validation/webhooks/*.go',
+        '/operator/pkg/components/*.go',
+        '/operator/pkg/controller/*.go',
+        '/operator/pkg/controller/apiserver/*.go',
+        '/operator/pkg/controller/certificatemanager/*.go',
+        '/operator/pkg/controller/clusterconnection/*.go',
+        '/operator/pkg/controller/csr/*.go',
+        '/operator/pkg/controller/gatewayapi/*.go',
+        '/operator/pkg/controller/goldmane/*.go',
+        '/operator/pkg/controller/installation/*.go',
+        '/operator/pkg/controller/ippool/*.go',
+        '/operator/pkg/controller/istio/*.go',
+        '/operator/pkg/controller/k8sapi/*.go',
+        '/operator/pkg/controller/kubeproxy/*.go',
+        '/operator/pkg/controller/metrics/*.go',
+        '/operator/pkg/controller/migration/*.go',
+        '/operator/pkg/controller/migration/cni/*.go',
+        '/operator/pkg/controller/migration/convert/*.go',
+        '/operator/pkg/controller/migration/datastoremigration/*.go',
+        '/operator/pkg/controller/options/*.go',
+        '/operator/pkg/controller/podiprecovery/*.go',
+        '/operator/pkg/controller/secrets/*.go',
+        '/operator/pkg/controller/status/*.go',
+        '/operator/pkg/controller/tiers/*.go',
+        '/operator/pkg/controller/typhaautoscaler/*.go',
+        '/operator/pkg/controller/utils/*.go',
+        '/operator/pkg/controller/utils/imageset/*.go',
+        '/operator/pkg/controller/whisker/*.go',
+        '/operator/pkg/crds',
+        '/operator/pkg/crds/*.go',
+        '/operator/pkg/ctrlruntime/*.go',
+        '/operator/pkg/daemon/*.go',
+        '/operator/pkg/dns/*.go',
+        '/operator/pkg/extensions/*.go',
+        '/operator/pkg/render/*.go',
+        '/operator/pkg/render/certificatemanagement/*.go',
+        '/operator/pkg/render/common/components/*.go',
+        '/operator/pkg/render/common/configmap/*.go',
+        '/operator/pkg/render/common/meta/*.go',
+        '/operator/pkg/render/common/networkpolicy/*.go',
+        '/operator/pkg/render/common/podaffinity/*.go',
+        '/operator/pkg/render/common/rbacmanagement/*.go',
+        '/operator/pkg/render/common/resourcequota/*.go',
+        '/operator/pkg/render/common/secret/*.go',
+        '/operator/pkg/render/common/securitycontext/*.go',
+        '/operator/pkg/render/common/securitycontextconstraints/*.go',
+        '/operator/pkg/render/common/selector/*.go',
+        '/operator/pkg/render/gateway/*.go',
+        '/operator/pkg/render/gatewayapi/*.go',
+        '/operator/pkg/render/goldmane/*.go',
+        '/operator/pkg/render/istio/*.go',
+        '/operator/pkg/render/kubecontrollers/*.go',
+        '/operator/pkg/render/tiers/*.go',
+        '/operator/pkg/render/webhooks/*.go',
+        '/operator/pkg/render/whisker',
+        '/operator/pkg/render/whisker/*.go',
+        '/operator/pkg/tls/*.go',
+        '/operator/pkg/tls/certificatemanagement/*.go',
+        '/operator/pkg/tls/certkeyusage/*.go',
+        '/operator/pkg/uigateway/*.go',
+        '/operator/version/*.go',
         '/pkg/buildinfo/*.go',
         '/pkg/cmdwrapper/*.go',
         '/pod2daemon/binder/*.go',
@@ -674,6 +811,7 @@ blocks:
         '/typha/pkg/syncproto/*.go',
         '/typha/pkg/syncserver/*.go',
         '/typha/pkg/tlsutils/*.go',
+        '/typha/pkg/validator/v1/*.go',
         '/webhooks/pkg/clusterinfo/*.go',
         '/webhooks/pkg/rbac/*.go',
         '/webhooks/pkg/utils/*.go',
@@ -713,6 +851,9 @@ blocks:
         'node/**/*Dockerfile*',
         'node/Makefile',
         'node/deps.txt',
+        'operator/**/*Dockerfile*',
+        'operator/Makefile',
+        'operator/deps.txt',
         'pod2daemon/**/*Dockerfile*',
         'pod2daemon/Makefile',
         'pod2daemon/deps.txt',
@@ -790,13 +931,13 @@ blocks:
               fi
   - name: "Build: calico image"
     # Build and cache the calico image so that downstream CI blocks can load it
-    # from GCS instead of rebuilding per component. This block is the sole
+    # from S3 instead of rebuilding per component. This block is the sole
     # producer for the "calico" build-cache group — every Go component block on
     # master restores the module + build cache populated here.
     #
     # This producer must run whenever any of its consumers run: the Felix
     # Build/UT/FV and Windows FV blocks (and others) trigger and then do an
-    # untolerated gcloud cp of calico-cgo/calico-race/libbpf (or load the cached
+    # untolerated s3-cmd cp of calico-cgo/calico-race/libbpf (or load the cached
     # calico image), so a skipped producer leaves the artifacts unuploaded and the
     # consumer hard-fails (Semaphore treats a skipped dependency as passed). The
     # CHANGE_IN_WITH_DEPENDENTS() macro guarantees the superset automatically: it
@@ -819,9 +960,13 @@ blocks:
         '/.semaphore/semaphore.yml.d/blocks/20-felix.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-kube-controllers.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-kubevirt-live-migration.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-node.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-operator.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-typha.yml',
         '/.semaphore/vms/',
         '/Makefile',
+        '/api/admission/*.go',
+        '/api/config/crd/*.go',
         '/api/pkg/apis/projectcalico/v3/*.go',
         '/api/pkg/client/applyconfiguration_generated/internal/*.go',
         '/api/pkg/client/applyconfiguration_generated/projectcalico/v3/*.go',
@@ -952,6 +1097,8 @@ blocks:
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
         '/libcalico-go/config/*.go',
+        '/libcalico-go/config/crd',
+        '/libcalico-go/config/crd/*.go',
         '/libcalico-go/lib/apiconfig/*.go',
         '/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/*.go',
         '/libcalico-go/lib/apis/internalapi/*.go',
@@ -980,6 +1127,7 @@ blocks:
         '/libcalico-go/lib/errors/*.go',
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
+        '/libcalico-go/lib/informerutil/*.go',
         '/libcalico-go/lib/ipam/*.go',
         '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
@@ -1001,34 +1149,13 @@ blocks:
         '/libcalico-go/lib/set/*.go',
         '/libcalico-go/lib/testutils/*.go',
         '/libcalico-go/lib/testutils/stacktrace/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
         '/metadata.mk',
-        '/node/cmd/calico-ipam/*.go',
-        '/node/cmd/calico-node/bpf/*.go',
-        '/node/cmd/calico/*.go',
-        '/node/cmd/mountns/*.go',
-        '/node/pkg/allocateip/*.go',
-        '/node/pkg/calicoclient/*.go',
-        '/node/pkg/cni/*.go',
-        '/node/pkg/flowlogs/*.go',
-        '/node/pkg/health/*.go',
-        '/node/pkg/health/bird/*.go',
-        '/node/pkg/hostpathinit/*.go',
-        '/node/pkg/lifecycle/shutdown/*.go',
-        '/node/pkg/lifecycle/startup/*.go',
-        '/node/pkg/lifecycle/startup/autodetection/*.go',
-        '/node/pkg/lifecycle/startup/autodetection/ipv4/*.go',
-        '/node/pkg/lifecycle/utils/*.go',
-        '/node/pkg/node/*.go',
-        '/node/pkg/nodeinit/*.go',
-        '/node/pkg/nodeservices/*.go',
-        '/node/pkg/status/*.go',
-        '/node/pkg/status/populators/*.go',
-        '/node/windows-packaging/tests/*.go',
+        '/node/**',
+        '/operator/**',
         '/pkg/buildinfo/*.go',
         '/pkg/cmdwrapper/*.go',
         '/pod2daemon/binder/*.go',
@@ -1085,6 +1212,9 @@ blocks:
         'node/**/*Dockerfile*',
         'node/Makefile',
         'node/deps.txt',
+        'operator/**/*Dockerfile*',
+        'operator/Makefile',
+        'operator/deps.txt',
         'pod2daemon/**/*Dockerfile*',
         'pod2daemon/Makefile',
         'pod2daemon/deps.txt',
@@ -1127,13 +1257,13 @@ blocks:
             - make -C cmd/calico build-cgo build-race
             - docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
             - zstd -3 --rm /tmp/calico-image.tar
-            - gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/calico-image.tar.zst"
+            - .semaphore/s3-cmd cp /tmp/calico-image.tar.zst "${S3_WORKFLOW_DIR}/calico-image.tar.zst"
             # Upload the cgo + race binaries so Felix FV can consume them
             # directly instead of rebuilding. Felix Build downloads these into
             # cmd/calico/bin/ so the working-copy tarball carries them through
             # to the test VMs.
-            - gcloud storage cp cmd/calico/bin/calico-cgo-amd64 "${GCS_WORKFLOW_DIR}/calico-cgo-amd64"
-            - gcloud storage cp cmd/calico/bin/calico-race-amd64 "${GCS_WORKFLOW_DIR}/calico-race-amd64"
+            - .semaphore/s3-cmd cp cmd/calico/bin/calico-cgo-amd64 "${S3_WORKFLOW_DIR}/calico-cgo-amd64"
+            - .semaphore/s3-cmd cp cmd/calico/bin/calico-race-amd64 "${S3_WORKFLOW_DIR}/calico-race-amd64"
             # Upload the libbpf clone + compiled static lib. `make -C
             # cmd/calico build-cgo` above transitively built it via the Felix
             # CGO dependency chain; the test-or-build below keeps this a
@@ -1150,7 +1280,7 @@ blocks:
             - test -d felix/bpf-gpl/libbpf || (echo "ERROR libbpf clone missing at felix/bpf-gpl/libbpf" >&2; exit 1)
             - test -f "felix/bpf-gpl/.libbpf-${LIBBPF_VERSION}" || (echo "ERROR libbpf version marker felix/bpf-gpl/.libbpf-${LIBBPF_VERSION} missing" >&2; exit 1)
             - tar --use-compress-program="zstd -3" -cf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
-            - gcloud storage cp /tmp/libbpf-amd64.tar.zst "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst"
+            - .semaphore/s3-cmd cp /tmp/libbpf-amd64.tar.zst "${S3_WORKFLOW_DIR}/libbpf-amd64.tar.zst"
   - name: "Build: node image"
     # Builds the node image on top of the combined calico binary. calico/node is
     # still the canonical DaemonSet image for OSS users, so it continues to ship
@@ -1158,9 +1288,9 @@ blocks:
     # "calico" build cache populated by "Build: calico image" — only the Docker
     # stage assembly (copying binaries onto the base image) runs here, not the Go
     # compile. Kept in prerequisites (rather than 20-node.yml) so consumer blocks
-    # can depend on the shared producer→GCS→consumer upload pattern.
+    # can depend on the shared producer→S3→consumer upload pattern.
     # Like "Build: calico image", this producer must run whenever any consumer
-    # that downloads its GCS artifact runs (E2E KinD, Windows FV, KubeVirt). The
+    # that downloads its S3 artifact runs (E2E KinD, Windows FV, KubeVirt). The
     # CHANGE_IN_WITH_DEPENDENTS() macro derives that superset automatically from
     # the consumers' `dependencies:`, so the felix / process/testing / stacktrace /
     # 20-felix.yml consumer-mirror paths are no longer hand-maintained here. The
@@ -1178,7 +1308,11 @@ blocks:
         '/.semaphore/semaphore.yml.d/blocks/20-e2e.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-felix.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-kubevirt-live-migration.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-node.yml',
+        '/.semaphore/vms/',
         '/Makefile',
+        '/api/admission/*.go',
+        '/api/config/crd/*.go',
         '/api/pkg/apis/projectcalico/v3/*.go',
         '/api/pkg/client/applyconfiguration_generated/internal/*.go',
         '/api/pkg/client/applyconfiguration_generated/projectcalico/v3/*.go',
@@ -1308,6 +1442,8 @@ blocks:
         '/key-cert-provisioner/pkg/tls/*.go',
         '/kube-controllers/cmd/check-status/*.go',
         '/kube-controllers/cmd/kube-controllers/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/crd',
         '/kube-controllers/pkg/cache/*.go',
         '/kube-controllers/pkg/config/*.go',
         '/kube-controllers/pkg/controllers/controller/*.go',
@@ -1343,6 +1479,8 @@ blocks:
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
         '/libcalico-go/config/*.go',
+        '/libcalico-go/config/crd',
+        '/libcalico-go/config/crd/*.go',
         '/libcalico-go/lib/apiconfig/*.go',
         '/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/*.go',
         '/libcalico-go/lib/apis/internalapi/*.go',
@@ -1371,6 +1509,7 @@ blocks:
         '/libcalico-go/lib/errors/*.go',
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
+        '/libcalico-go/lib/informerutil/*.go',
         '/libcalico-go/lib/ipam/*.go',
         '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
@@ -1391,35 +1530,94 @@ blocks:
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
         '/libcalico-go/lib/testutils/stacktrace/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
         '/metadata.mk',
-        '/node/',
-        '/node/cmd/calico-ipam/*.go',
-        '/node/cmd/calico-node/bpf/*.go',
-        '/node/cmd/calico/*.go',
-        '/node/cmd/mountns/*.go',
-        '/node/pkg/allocateip/*.go',
-        '/node/pkg/calicoclient/*.go',
-        '/node/pkg/cni/*.go',
-        '/node/pkg/flowlogs/*.go',
-        '/node/pkg/health/*.go',
-        '/node/pkg/health/bird/*.go',
-        '/node/pkg/hostpathinit/*.go',
-        '/node/pkg/lifecycle/shutdown/*.go',
-        '/node/pkg/lifecycle/startup/*.go',
-        '/node/pkg/lifecycle/startup/autodetection/*.go',
-        '/node/pkg/lifecycle/startup/autodetection/ipv4/*.go',
-        '/node/pkg/lifecycle/utils/*.go',
-        '/node/pkg/node/*.go',
-        '/node/pkg/nodeinit/*.go',
-        '/node/pkg/nodeservices/*.go',
-        '/node/pkg/status/*.go',
-        '/node/pkg/status/populators/*.go',
-        '/node/windows-packaging/tests/*.go',
+        '/node/**',
+        '/operator/api/v1/*.go',
+        '/operator/cmd/*.go',
+        '/operator/config',
+        '/operator/deploy/crds',
+        '/operator/internal/controller/*.go',
+        '/operator/pkg/active/*.go',
+        '/operator/pkg/admission/*.go',
+        '/operator/pkg/apigroup/*.go',
+        '/operator/pkg/apis/*.go',
+        '/operator/pkg/awssgsetup/*.go',
+        '/operator/pkg/common/*.go',
+        '/operator/pkg/common/discovery/*.go',
+        '/operator/pkg/common/k8svalidation/*.go',
+        '/operator/pkg/common/k8svalidation/helper/*.go',
+        '/operator/pkg/common/k8svalidation/v1helper/*.go',
+        '/operator/pkg/common/validation/*.go',
+        '/operator/pkg/common/validation/apiserver/*.go',
+        '/operator/pkg/common/validation/calico-node/*.go',
+        '/operator/pkg/common/validation/csi-node-driver/*.go',
+        '/operator/pkg/common/validation/kube-controllers/*.go',
+        '/operator/pkg/common/validation/typha/*.go',
+        '/operator/pkg/common/validation/webhooks/*.go',
+        '/operator/pkg/components/*.go',
+        '/operator/pkg/controller/*.go',
+        '/operator/pkg/controller/apiserver/*.go',
+        '/operator/pkg/controller/certificatemanager/*.go',
+        '/operator/pkg/controller/clusterconnection/*.go',
+        '/operator/pkg/controller/csr/*.go',
+        '/operator/pkg/controller/gatewayapi/*.go',
+        '/operator/pkg/controller/goldmane/*.go',
+        '/operator/pkg/controller/installation/*.go',
+        '/operator/pkg/controller/ippool/*.go',
+        '/operator/pkg/controller/istio/*.go',
+        '/operator/pkg/controller/k8sapi/*.go',
+        '/operator/pkg/controller/kubeproxy/*.go',
+        '/operator/pkg/controller/metrics/*.go',
+        '/operator/pkg/controller/migration/*.go',
+        '/operator/pkg/controller/migration/cni/*.go',
+        '/operator/pkg/controller/migration/convert/*.go',
+        '/operator/pkg/controller/migration/datastoremigration/*.go',
+        '/operator/pkg/controller/options/*.go',
+        '/operator/pkg/controller/podiprecovery/*.go',
+        '/operator/pkg/controller/secrets/*.go',
+        '/operator/pkg/controller/status/*.go',
+        '/operator/pkg/controller/tiers/*.go',
+        '/operator/pkg/controller/typhaautoscaler/*.go',
+        '/operator/pkg/controller/utils/*.go',
+        '/operator/pkg/controller/utils/imageset/*.go',
+        '/operator/pkg/controller/whisker/*.go',
+        '/operator/pkg/crds',
+        '/operator/pkg/crds/*.go',
+        '/operator/pkg/ctrlruntime/*.go',
+        '/operator/pkg/daemon/*.go',
+        '/operator/pkg/dns/*.go',
+        '/operator/pkg/extensions/*.go',
+        '/operator/pkg/render/*.go',
+        '/operator/pkg/render/certificatemanagement/*.go',
+        '/operator/pkg/render/common/components/*.go',
+        '/operator/pkg/render/common/configmap/*.go',
+        '/operator/pkg/render/common/meta/*.go',
+        '/operator/pkg/render/common/networkpolicy/*.go',
+        '/operator/pkg/render/common/podaffinity/*.go',
+        '/operator/pkg/render/common/rbacmanagement/*.go',
+        '/operator/pkg/render/common/resourcequota/*.go',
+        '/operator/pkg/render/common/secret/*.go',
+        '/operator/pkg/render/common/securitycontext/*.go',
+        '/operator/pkg/render/common/securitycontextconstraints/*.go',
+        '/operator/pkg/render/common/selector/*.go',
+        '/operator/pkg/render/gateway/*.go',
+        '/operator/pkg/render/gatewayapi/*.go',
+        '/operator/pkg/render/goldmane/*.go',
+        '/operator/pkg/render/istio/*.go',
+        '/operator/pkg/render/kubecontrollers/*.go',
+        '/operator/pkg/render/tiers/*.go',
+        '/operator/pkg/render/webhooks/*.go',
+        '/operator/pkg/render/whisker',
+        '/operator/pkg/render/whisker/*.go',
+        '/operator/pkg/tls/*.go',
+        '/operator/pkg/tls/certificatemanagement/*.go',
+        '/operator/pkg/tls/certkeyusage/*.go',
+        '/operator/pkg/uigateway/*.go',
+        '/operator/version/*.go',
         '/pkg/buildinfo/*.go',
         '/pkg/cmdwrapper/*.go',
         '/pod2daemon/binder/*.go',
@@ -1449,6 +1647,7 @@ blocks:
         '/typha/pkg/syncproto/*.go',
         '/typha/pkg/syncserver/*.go',
         '/typha/pkg/tlsutils/*.go',
+        '/typha/pkg/validator/v1/*.go',
         '/webhooks/pkg/clusterinfo/*.go',
         '/webhooks/pkg/rbac/*.go',
         '/webhooks/pkg/utils/*.go',
@@ -1488,6 +1687,9 @@ blocks:
         'node/**/*Dockerfile*',
         'node/Makefile',
         'node/deps.txt',
+        'operator/**/*Dockerfile*',
+        'operator/Makefile',
+        'operator/deps.txt',
         'pod2daemon/**/*Dockerfile*',
         'pod2daemon/Makefile',
         'pod2daemon/deps.txt',
@@ -1521,14 +1723,11 @@ blocks:
             # Load the patched nftables RPMs producer image (built/cached by
             # "Build: nftables RPMs") so the node Dockerfile's FROM ${NFT_RPMS_IMAGE}
             # resolves locally without re-pulling from Docker Hub.
-            - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
-            - zstd -d --rm /tmp/nft-rpms.tar.zst
-            - docker load -i /tmp/nft-rpms.tar
-            - rm -f /tmp/nft-rpms.tar
+            - .semaphore/scripts/load-nft-rpms.sh amd64
             - make -C node image
             - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
             - zstd -3 --rm /tmp/node-image.tar
-            - gcloud storage cp /tmp/node-image.tar.zst "${GCS_WORKFLOW_DIR}/node-image.tar.zst"
+            - .semaphore/s3-cmd cp /tmp/node-image.tar.zst "${S3_WORKFLOW_DIR}/node-image.tar.zst"
   - name: "Build: whisker image"
     # Whisker is a TypeScript/React frontend that won't consolidate into the
     # calico binary — it ships as its own image indefinitely. No Go build cache
@@ -1545,7 +1744,467 @@ blocks:
             - make -C whisker image
             - docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
             - zstd -3 --rm /tmp/whisker-image.tar
-            - gcloud storage cp /tmp/whisker-image.tar.zst "${GCS_WORKFLOW_DIR}/whisker-image.tar.zst"
+            - .semaphore/s3-cmd cp /tmp/whisker-image.tar.zst "${S3_WORKFLOW_DIR}/whisker-image.tar.zst"
+  - name: "Build: operator image"
+    # The operator image bakes in the references it will install
+    # (localhost:5000/calico/<name>:test-build), so this producer builds it
+    # through the same `make kind-operator-image` its consumers run and every
+    # kind lane can share the one tarball.
+    #
+    # hack/dev-build.sh gates the rebuild on a record of the inputs the image was
+    # built from, not on a marker file, so that stamp ships alongside the
+    # tarball for load-cached-images to restore. Upload it first: a tarball
+    # without its stamp would fail the consumer's untolerated gcloud cp.
+    #
+    # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)") list this
+    # block in their `dependencies:`, so CHANGE_IN_WITH_DEPENDENTS() folds their
+    # triggers into the arg below — this block's own inputs, the operator's Go
+    # closure plus everything else under operator/.
+    run:
+      when: >-
+        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
+        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
+        '/.semaphore/semaphore.yml.d/03-promotions.yml',
+        '/.semaphore/semaphore.yml.d/09-blocks.yml',
+        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
+        '/.semaphore/semaphore.yml.d/blocks/10-prerequisites.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-e2e.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-kubevirt-live-migration.yml',
+        '/Makefile',
+        '/api/admission/*.go',
+        '/api/config/crd/*.go',
+        '/api/pkg/apis/projectcalico/v3/*.go',
+        '/api/pkg/client/applyconfiguration_generated/internal/*.go',
+        '/api/pkg/client/applyconfiguration_generated/projectcalico/v3/*.go',
+        '/api/pkg/client/clientset_generated/clientset/*.go',
+        '/api/pkg/client/clientset_generated/clientset/scheme/*.go',
+        '/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3/*.go',
+        '/api/pkg/client/informers_generated/externalversions/*.go',
+        '/api/pkg/client/informers_generated/externalversions/internalinterfaces/*.go',
+        '/api/pkg/client/informers_generated/externalversions/projectcalico/*.go',
+        '/api/pkg/client/informers_generated/externalversions/projectcalico/v3/*.go',
+        '/api/pkg/client/listers_generated/projectcalico/v3/*.go',
+        '/api/pkg/defaults/*.go',
+        '/api/pkg/lib/numorstring/*.go',
+        '/api/pkg/openapi/*.go',
+        '/apiserver/cmd/apiserver/server/*.go',
+        '/apiserver/pkg/apiserver/*.go',
+        '/apiserver/pkg/printers/projectcalico/*.go',
+        '/apiserver/pkg/rbac/*.go',
+        '/apiserver/pkg/registry/projectcalico/authorizer/*.go',
+        '/apiserver/pkg/registry/projectcalico/bgpconfiguration/*.go',
+        '/apiserver/pkg/registry/projectcalico/bgpfilter/*.go',
+        '/apiserver/pkg/registry/projectcalico/bgppeer/*.go',
+        '/apiserver/pkg/registry/projectcalico/blockaffinity/*.go',
+        '/apiserver/pkg/registry/projectcalico/caliconodestatus/*.go',
+        '/apiserver/pkg/registry/projectcalico/clusterinformation/*.go',
+        '/apiserver/pkg/registry/projectcalico/felixconfig/*.go',
+        '/apiserver/pkg/registry/projectcalico/globalnetworkset/*.go',
+        '/apiserver/pkg/registry/projectcalico/globalpolicy/*.go',
+        '/apiserver/pkg/registry/projectcalico/hostendpoint/*.go',
+        '/apiserver/pkg/registry/projectcalico/ipamconfig/*.go',
+        '/apiserver/pkg/registry/projectcalico/ippool/*.go',
+        '/apiserver/pkg/registry/projectcalico/ipreservation/*.go',
+        '/apiserver/pkg/registry/projectcalico/kubecontrollersconfig/*.go',
+        '/apiserver/pkg/registry/projectcalico/networkpolicy/*.go',
+        '/apiserver/pkg/registry/projectcalico/networkset/*.go',
+        '/apiserver/pkg/registry/projectcalico/profile/*.go',
+        '/apiserver/pkg/registry/projectcalico/rest/*.go',
+        '/apiserver/pkg/registry/projectcalico/server/*.go',
+        '/apiserver/pkg/registry/projectcalico/stagedglobalnetworkpolicy/*.go',
+        '/apiserver/pkg/registry/projectcalico/stagedkubernetesnetworkpolicy/*.go',
+        '/apiserver/pkg/registry/projectcalico/stagednetworkpolicy/*.go',
+        '/apiserver/pkg/registry/projectcalico/tier/*.go',
+        '/apiserver/pkg/registry/projectcalico/util/*.go',
+        '/apiserver/pkg/storage/calico/*.go',
+        '/apiserver/pkg/storage/etcd/*.go',
+        '/app-policy/checker/*.go',
+        '/app-policy/health/*.go',
+        '/app-policy/pkg/dikastes/*.go',
+        '/app-policy/pkg/healthz/*.go',
+        '/app-policy/policystore/*.go',
+        '/app-policy/proto/*.go',
+        '/app-policy/syncher/*.go',
+        '/app-policy/types/*.go',
+        '/app-policy/uds/*.go',
+        '/calicoctl/calicoctl/*.go',
+        '/calicoctl/calicoctl/commands/*.go',
+        '/calicoctl/calicoctl/commands/argutils/*.go',
+        '/calicoctl/calicoctl/commands/clientmgr/*.go',
+        '/calicoctl/calicoctl/commands/cluster/*.go',
+        '/calicoctl/calicoctl/commands/common/*.go',
+        '/calicoctl/calicoctl/commands/constants/*.go',
+        '/calicoctl/calicoctl/commands/datastore/migrate/*.go',
+        '/calicoctl/calicoctl/commands/file/*.go',
+        '/calicoctl/calicoctl/commands/ipam/*.go',
+        '/calicoctl/calicoctl/commands/node/*.go',
+        '/calicoctl/calicoctl/resourcemgr/*.go',
+        '/calicoctl/calicoctl/util/*.go',
+        '/calicoctl/calicoctl/util/yaml/*.go',
+        '/calicoctl/tests/fv/helper/*.go',
+        '/cmd/calico/*.go',
+        '/cni-plugin/cmd/calico/*.go',
+        '/cni-plugin/internal/pkg/azure/*.go',
+        '/cni-plugin/internal/pkg/utils/*.go',
+        '/cni-plugin/internal/pkg/utils/cri/*.go',
+        '/cni-plugin/pkg/dataplane/*.go',
+        '/cni-plugin/pkg/dataplane/grpc/*.go',
+        '/cni-plugin/pkg/dataplane/grpc/proto/*.go',
+        '/cni-plugin/pkg/dataplane/linux/*.go',
+        '/cni-plugin/pkg/install/*.go',
+        '/cni-plugin/pkg/ipamplugin/*.go',
+        '/cni-plugin/pkg/k8s/*.go',
+        '/cni-plugin/pkg/plugin/*.go',
+        '/cni-plugin/pkg/types/*.go',
+        '/cni-plugin/pkg/upgrade/*.go',
+        '/cni-plugin/pkg/wait/*.go',
+        '/cni-plugin/tests/*.go',
+        '/confd/*.go',
+        '/confd/etc',
+        '/confd/pkg/backends/*.go',
+        '/confd/pkg/backends/calico/*.go',
+        '/confd/pkg/backends/types/*.go',
+        '/confd/pkg/config/*.go',
+        '/confd/pkg/resource/template/*.go',
+        '/confd/pkg/run/*.go',
+        '/crypto/pkg/tls/*.go',
+        '/e2e/**',
+        '/felix/**',
+        '/goldmane/cmd/flowgen/*.go',
+        '/goldmane/cmd/goldmane/*.go',
+        '/goldmane/cmd/health/*.go',
+        '/goldmane/cmd/stream/*.go',
+        '/goldmane/pkg/client/*.go',
+        '/goldmane/pkg/daemon/*.go',
+        '/goldmane/pkg/emitter/*.go',
+        '/goldmane/pkg/flowgen/*.go',
+        '/goldmane/pkg/goldmane/*.go',
+        '/goldmane/pkg/internal/flowcache/*.go',
+        '/goldmane/pkg/internal/utils/*.go',
+        '/goldmane/pkg/server/*.go',
+        '/goldmane/pkg/storage/*.go',
+        '/goldmane/pkg/stream/*.go',
+        '/goldmane/pkg/types/*.go',
+        '/goldmane/proto/*.go',
+        '/guardian/cmd/guardian/*.go',
+        '/guardian/pkg/asyncutil/*.go',
+        '/guardian/pkg/config/*.go',
+        '/guardian/pkg/conn/*.go',
+        '/guardian/pkg/cryptoutils/*.go',
+        '/guardian/pkg/daemon/*.go',
+        '/guardian/pkg/server/*.go',
+        '/guardian/pkg/tunnel/*.go',
+        '/hack/test/certs/',
+        '/hack/test/kind',
+        '/key-cert-provisioner/pkg/cfg/*.go',
+        '/key-cert-provisioner/pkg/k8s/*.go',
+        '/key-cert-provisioner/pkg/keycert/*.go',
+        '/key-cert-provisioner/pkg/tls/*.go',
+        '/kube-controllers/cmd/check-status/*.go',
+        '/kube-controllers/cmd/kube-controllers/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/crd',
+        '/kube-controllers/pkg/cache/*.go',
+        '/kube-controllers/pkg/config/*.go',
+        '/kube-controllers/pkg/controllers/controller/*.go',
+        '/kube-controllers/pkg/controllers/flannelmigration/*.go',
+        '/kube-controllers/pkg/controllers/ippool/*.go',
+        '/kube-controllers/pkg/controllers/loadbalancer/*.go',
+        '/kube-controllers/pkg/controllers/migration/*.go',
+        '/kube-controllers/pkg/controllers/migration/migrators/*.go',
+        '/kube-controllers/pkg/controllers/namespace/*.go',
+        '/kube-controllers/pkg/controllers/networkpolicy/*.go',
+        '/kube-controllers/pkg/controllers/node/*.go',
+        '/kube-controllers/pkg/controllers/pod/*.go',
+        '/kube-controllers/pkg/controllers/serviceaccount/*.go',
+        '/kube-controllers/pkg/controllers/tier/*.go',
+        '/kube-controllers/pkg/controllers/utils/*.go',
+        '/kube-controllers/pkg/converter/*.go',
+        '/kube-controllers/pkg/discovery/*.go',
+        '/kube-controllers/pkg/kubecontrollers/*.go',
+        '/kube-controllers/pkg/status/*.go',
+        '/lib.Makefile',
+        '/lib/datastructures/hashring/*.go',
+        '/lib/httpmachinery/pkg/apiutil/*.go',
+        '/lib/httpmachinery/pkg/codec/*.go',
+        '/lib/httpmachinery/pkg/context/*.go',
+        '/lib/httpmachinery/pkg/header/*.go',
+        '/lib/httpmachinery/pkg/server/*.go',
+        '/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go',
+        '/lib/logrusr/*.go',
+        '/lib/std/chanutil/*.go',
+        '/lib/std/cryptoutils/*.go',
+        '/lib/std/log/*.go',
+        '/lib/std/time/*.go',
+        '/lib/std/uniquelabels/*.go',
+        '/lib/std/uniquestr/*.go',
+        '/libcalico-go/config/*.go',
+        '/libcalico-go/config/crd',
+        '/libcalico-go/config/crd/*.go',
+        '/libcalico-go/lib/apiconfig/*.go',
+        '/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/*.go',
+        '/libcalico-go/lib/apis/internalapi/*.go',
+        '/libcalico-go/lib/apis/v1/*.go',
+        '/libcalico-go/lib/apis/v1/unversioned/*.go',
+        '/libcalico-go/lib/backend/*.go',
+        '/libcalico-go/lib/backend/api/*.go',
+        '/libcalico-go/lib/backend/encap/*.go',
+        '/libcalico-go/lib/backend/etcdv3/*.go',
+        '/libcalico-go/lib/backend/k8s/*.go',
+        '/libcalico-go/lib/backend/k8s/conversion/*.go',
+        '/libcalico-go/lib/backend/k8s/resources/*.go',
+        '/libcalico-go/lib/backend/model/*.go',
+        '/libcalico-go/lib/backend/syncersv1/bgpsyncer/*.go',
+        '/libcalico-go/lib/backend/syncersv1/dedupebuffer/*.go',
+        '/libcalico-go/lib/backend/syncersv1/felixsyncer/*.go',
+        '/libcalico-go/lib/backend/syncersv1/nodestatussyncer/*.go',
+        '/libcalico-go/lib/backend/syncersv1/tunnelipsyncer/*.go',
+        '/libcalico-go/lib/backend/syncersv1/updateprocessors/*.go',
+        '/libcalico-go/lib/backend/watchersyncer/*.go',
+        '/libcalico-go/lib/clientv3/*.go',
+        '/libcalico-go/lib/consistenthash/*.go',
+        '/libcalico-go/lib/debugserver/*.go',
+        '/libcalico-go/lib/dispatcher/*.go',
+        '/libcalico-go/lib/epstatusfile/*.go',
+        '/libcalico-go/lib/errors/*.go',
+        '/libcalico-go/lib/hash/*.go',
+        '/libcalico-go/lib/health/*.go',
+        '/libcalico-go/lib/informerutil/*.go',
+        '/libcalico-go/lib/ipam/*.go',
+        '/libcalico-go/lib/ipam/vmipam/*.go',
+        '/libcalico-go/lib/kubevirt/*.go',
+        '/libcalico-go/lib/metricsserver/*.go',
+        '/libcalico-go/lib/multireadbuf/*.go',
+        '/libcalico-go/lib/names/*.go',
+        '/libcalico-go/lib/namespace/*.go',
+        '/libcalico-go/lib/net/*.go',
+        '/libcalico-go/lib/netlinkutils/*.go',
+        '/libcalico-go/lib/options/*.go',
+        '/libcalico-go/lib/packedmap/*.go',
+        '/libcalico-go/lib/prometheus/*.go',
+        '/libcalico-go/lib/readlogger/*.go',
+        '/libcalico-go/lib/resources/*.go',
+        '/libcalico-go/lib/scope/*.go',
+        '/libcalico-go/lib/selector/*.go',
+        '/libcalico-go/lib/selector/parser/*.go',
+        '/libcalico-go/lib/selector/tokenizer/*.go',
+        '/libcalico-go/lib/set/*.go',
+        '/libcalico-go/lib/testutils/stacktrace/*.go',
+        '/libcalico-go/lib/validator/v3/*.go',
+        '/libcalico-go/lib/watch/*.go',
+        '/libcalico-go/lib/winutils/*.go',
+        '/libcalico-go/lib/writelogger/*.go',
+        '/metadata.mk',
+        '/node/cmd/calico-ipam/*.go',
+        '/node/cmd/calico-node/bpf/*.go',
+        '/node/cmd/calico/*.go',
+        '/node/cmd/mountns/*.go',
+        '/node/pkg/allocateip/*.go',
+        '/node/pkg/calicoclient/*.go',
+        '/node/pkg/cni/*.go',
+        '/node/pkg/flowlogs/*.go',
+        '/node/pkg/health/*.go',
+        '/node/pkg/health/bird/*.go',
+        '/node/pkg/hostpathinit/*.go',
+        '/node/pkg/lifecycle/shutdown/*.go',
+        '/node/pkg/lifecycle/startup/*.go',
+        '/node/pkg/lifecycle/startup/autodetection/*.go',
+        '/node/pkg/lifecycle/startup/autodetection/ipv4/*.go',
+        '/node/pkg/lifecycle/utils/*.go',
+        '/node/pkg/node/*.go',
+        '/node/pkg/nodeinit/*.go',
+        '/node/pkg/nodeservices/*.go',
+        '/node/pkg/status/*.go',
+        '/node/pkg/status/populators/*.go',
+        '/node/windows-packaging/tests/*.go',
+        '/operator/',
+        '/operator/api/v1/*.go',
+        '/operator/cmd/*.go',
+        '/operator/config',
+        '/operator/deploy/crds',
+        '/operator/internal/controller/*.go',
+        '/operator/pkg/active/*.go',
+        '/operator/pkg/admission/*.go',
+        '/operator/pkg/apigroup/*.go',
+        '/operator/pkg/apis/*.go',
+        '/operator/pkg/awssgsetup/*.go',
+        '/operator/pkg/common/*.go',
+        '/operator/pkg/common/discovery/*.go',
+        '/operator/pkg/common/k8svalidation/*.go',
+        '/operator/pkg/common/k8svalidation/helper/*.go',
+        '/operator/pkg/common/k8svalidation/v1helper/*.go',
+        '/operator/pkg/common/validation/*.go',
+        '/operator/pkg/common/validation/apiserver/*.go',
+        '/operator/pkg/common/validation/calico-node/*.go',
+        '/operator/pkg/common/validation/csi-node-driver/*.go',
+        '/operator/pkg/common/validation/kube-controllers/*.go',
+        '/operator/pkg/common/validation/typha/*.go',
+        '/operator/pkg/common/validation/webhooks/*.go',
+        '/operator/pkg/components/*.go',
+        '/operator/pkg/controller/*.go',
+        '/operator/pkg/controller/apiserver/*.go',
+        '/operator/pkg/controller/certificatemanager/*.go',
+        '/operator/pkg/controller/clusterconnection/*.go',
+        '/operator/pkg/controller/csr/*.go',
+        '/operator/pkg/controller/gatewayapi/*.go',
+        '/operator/pkg/controller/goldmane/*.go',
+        '/operator/pkg/controller/installation/*.go',
+        '/operator/pkg/controller/ippool/*.go',
+        '/operator/pkg/controller/istio/*.go',
+        '/operator/pkg/controller/k8sapi/*.go',
+        '/operator/pkg/controller/kubeproxy/*.go',
+        '/operator/pkg/controller/metrics/*.go',
+        '/operator/pkg/controller/migration/*.go',
+        '/operator/pkg/controller/migration/cni/*.go',
+        '/operator/pkg/controller/migration/convert/*.go',
+        '/operator/pkg/controller/migration/datastoremigration/*.go',
+        '/operator/pkg/controller/options/*.go',
+        '/operator/pkg/controller/podiprecovery/*.go',
+        '/operator/pkg/controller/secrets/*.go',
+        '/operator/pkg/controller/status/*.go',
+        '/operator/pkg/controller/tiers/*.go',
+        '/operator/pkg/controller/typhaautoscaler/*.go',
+        '/operator/pkg/controller/utils/*.go',
+        '/operator/pkg/controller/utils/imageset/*.go',
+        '/operator/pkg/controller/whisker/*.go',
+        '/operator/pkg/crds',
+        '/operator/pkg/crds/*.go',
+        '/operator/pkg/ctrlruntime/*.go',
+        '/operator/pkg/daemon/*.go',
+        '/operator/pkg/dns/*.go',
+        '/operator/pkg/extensions/*.go',
+        '/operator/pkg/render/*.go',
+        '/operator/pkg/render/certificatemanagement/*.go',
+        '/operator/pkg/render/common/components/*.go',
+        '/operator/pkg/render/common/configmap/*.go',
+        '/operator/pkg/render/common/meta/*.go',
+        '/operator/pkg/render/common/networkpolicy/*.go',
+        '/operator/pkg/render/common/podaffinity/*.go',
+        '/operator/pkg/render/common/rbacmanagement/*.go',
+        '/operator/pkg/render/common/resourcequota/*.go',
+        '/operator/pkg/render/common/secret/*.go',
+        '/operator/pkg/render/common/securitycontext/*.go',
+        '/operator/pkg/render/common/securitycontextconstraints/*.go',
+        '/operator/pkg/render/common/selector/*.go',
+        '/operator/pkg/render/gateway/*.go',
+        '/operator/pkg/render/gatewayapi/*.go',
+        '/operator/pkg/render/goldmane/*.go',
+        '/operator/pkg/render/istio/*.go',
+        '/operator/pkg/render/kubecontrollers/*.go',
+        '/operator/pkg/render/tiers/*.go',
+        '/operator/pkg/render/webhooks/*.go',
+        '/operator/pkg/render/whisker',
+        '/operator/pkg/render/whisker/*.go',
+        '/operator/pkg/tls/*.go',
+        '/operator/pkg/tls/certificatemanagement/*.go',
+        '/operator/pkg/tls/certkeyusage/*.go',
+        '/operator/pkg/uigateway/*.go',
+        '/operator/version/*.go',
+        '/pkg/buildinfo/*.go',
+        '/pkg/cmdwrapper/*.go',
+        '/pod2daemon/binder/*.go',
+        '/pod2daemon/csidriver/driver/*.go',
+        '/pod2daemon/flexvol/creds/*.go',
+        '/pod2daemon/nodeagent/*.go',
+        '/pod2daemon/pkg/csi/*.go',
+        '/pod2daemon/pkg/flexvol/*.go',
+        '/pod2daemon/proto/*.go',
+        '/pod2daemon/workloadapi/*.go',
+        '/typha/cmd/typha-client/*.go',
+        '/typha/cmd/typha/*.go',
+        '/typha/pkg/calc/*.go',
+        '/typha/pkg/config/*.go',
+        '/typha/pkg/daemon/*.go',
+        '/typha/pkg/discovery/*.go',
+        '/typha/pkg/jitter/*.go',
+        '/typha/pkg/k8s/*.go',
+        '/typha/pkg/logging/*.go',
+        '/typha/pkg/promutils/*.go',
+        '/typha/pkg/snapcache/*.go',
+        '/typha/pkg/syncclient/*.go',
+        '/typha/pkg/syncclientutils/*.go',
+        '/typha/pkg/syncproto/*.go',
+        '/typha/pkg/syncserver/*.go',
+        '/typha/pkg/tlsutils/*.go',
+        '/typha/pkg/validator/v1/*.go',
+        '/webhooks/pkg/clusterinfo/*.go',
+        '/webhooks/pkg/rbac/*.go',
+        '/webhooks/pkg/utils/*.go',
+        '/webhooks/pkg/webhook/*.go',
+        '/whisker',
+        '/whisker-backend/cmd/whiskerbackend/*.go',
+        '/whisker-backend/pkg/apis/v1/*.go',
+        '/whisker-backend/pkg/config/*.go',
+        '/whisker-backend/pkg/handlers/v1/*.go',
+        'apiserver/**/*Dockerfile*',
+        'apiserver/Makefile',
+        'apiserver/deps.txt',
+        'calicoctl/**/*Dockerfile*',
+        'calicoctl/Makefile',
+        'calicoctl/deps.txt',
+        'cmd/calico/**/*Dockerfile*',
+        'cmd/calico/Makefile',
+        'cmd/calico/deps.txt',
+        'cni-plugin/**/*Dockerfile*',
+        'cni-plugin/Makefile',
+        'cni-plugin/deps.txt',
+        'confd/**/*Dockerfile*',
+        'confd/Makefile',
+        'confd/deps.txt',
+        'e2e/**/*Dockerfile*',
+        'e2e/Makefile',
+        'e2e/deps.txt',
+        'goldmane/**/*Dockerfile*',
+        'goldmane/Makefile',
+        'goldmane/deps.txt',
+        'kube-controllers/**/*Dockerfile*',
+        'kube-controllers/Makefile',
+        'kube-controllers/deps.txt',
+        'libcalico-go/**/*Dockerfile*',
+        'libcalico-go/Makefile',
+        'libcalico-go/deps.txt',
+        'node/**/*Dockerfile*',
+        'node/Makefile',
+        'node/deps.txt',
+        'operator/**/*Dockerfile*',
+        'operator/Makefile',
+        'operator/deps.txt',
+        'pod2daemon/**/*Dockerfile*',
+        'pod2daemon/Makefile',
+        'pod2daemon/deps.txt',
+        'typha/**/*Dockerfile*',
+        'typha/Makefile',
+        'typha/deps.txt',
+        'whisker-backend/**/*Dockerfile*',
+        'whisker-backend/Makefile',
+        'whisker-backend/deps.txt',
+        'whisker/**/*Dockerfile*',
+        'whisker/Makefile',
+        'whisker/deps.txt'],
+        {pipeline_file: 'ignore', exclude: ['/**/*.md',
+        '/**/.gitignore',
+        '/**/AUTHORS*',
+        '/**/CONTRIBUTING*',
+        '/**/DEVELOPER_GUIDE*',
+        '/**/LICENSE*',
+        '/**/README*',
+        '/**/SECURITY.md']})
+    dependencies: []
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      jobs:
+        - name: "Build and cache operator image"
+          commands:
+            - make kind-operator-image
+            - docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
+            - zstd -3 --rm /tmp/operator-image.tar
+            - .semaphore/s3-cmd cp /tmp/operator-image.tar.zst "${S3_WORKFLOW_DIR}/operator-image.tar.zst"
   - name: Prerequisites
     skip:
       # Always skip, this is a dummy job used to group prerequisite checks.
@@ -1610,6 +2269,7 @@ blocks:
         '/api/pkg/openapi/*.go',
         '/apiserver/**',
         '/crypto/pkg/tls/*.go',
+        '/felix/ip/*.go',
         '/hack/test/certs/',
         '/lib.Makefile',
         '/lib/logrusr/*.go',
@@ -1654,6 +2314,7 @@ blocks:
         '/**/SECURITY.md',
         '/api/**/*_test.go',
         '/crypto/**/*_test.go',
+        '/felix/**/*_test.go',
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go']})
     execution_time_limit:
@@ -1692,7 +2353,6 @@ blocks:
         '/felix/bpf/tc/defs/*.go',
         '/felix/calc/*.go',
         '/felix/config/*.go',
-        '/felix/dataplane/ipsets/*.go',
         '/felix/dataplane/linux/dataplanedefs/*.go',
         '/felix/deltatracker/*.go',
         '/felix/dispatcher/*.go',
@@ -1711,7 +2371,7 @@ blocks:
         '/felix/markbits/*.go',
         '/felix/multidict/*.go',
         '/felix/netlinkshim/*.go',
-        '/felix/nftables/*.go',
+        '/felix/nftables/nftrender/*.go',
         '/felix/proto/*.go',
         '/felix/rules/*.go',
         '/felix/serviceindex/*.go',
@@ -1756,12 +2416,12 @@ blocks:
         '/libcalico-go/lib/selector/parser/*.go',
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/metadata.mk',
-        '/node/pkg/lifecycle/utils/*.go'],
+        '/node/pkg/lifecycle/utils/*.go',
+        '/typha/pkg/validator/v1/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
         '/**/AUTHORS*',
@@ -1775,7 +2435,8 @@ blocks:
         '/felix/**/*_test.go',
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
-        '/node/**/*_test.go']})
+        '/node/**/*_test.go',
+        '/typha/**/*_test.go']})
     dependencies:
       - Prerequisites
     task:
@@ -1807,6 +2468,7 @@ blocks:
         '/api/pkg/lib/numorstring/*.go',
         '/calicoctl/**',
         '/crypto/pkg/tls/*.go',
+        '/felix/ip/*.go',
         '/hack/test/certs/',
         '/kube-controllers/pkg/cache/*.go',
         '/kube-controllers/pkg/config/*.go',
@@ -1825,8 +2487,6 @@ blocks:
         '/libcalico-go/lib/apiconfig/*.go',
         '/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/*.go',
         '/libcalico-go/lib/apis/internalapi/*.go',
-        '/libcalico-go/lib/apis/v1/*.go',
-        '/libcalico-go/lib/apis/v1/unversioned/*.go',
         '/libcalico-go/lib/backend/*.go',
         '/libcalico-go/lib/backend/api/*.go',
         '/libcalico-go/lib/backend/encap/*.go',
@@ -1845,12 +2505,10 @@ blocks:
         '/libcalico-go/lib/net/*.go',
         '/libcalico-go/lib/options/*.go',
         '/libcalico-go/lib/resources/*.go',
-        '/libcalico-go/lib/scope/*.go',
         '/libcalico-go/lib/selector/*.go',
         '/libcalico-go/lib/selector/parser/*.go',
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
@@ -1866,6 +2524,7 @@ blocks:
         '/**/SECURITY.md',
         '/api/**/*_test.go',
         '/crypto/**/*_test.go',
+        '/felix/**/*_test.go',
         '/kube-controllers/**/*_test.go',
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
@@ -2073,6 +2732,7 @@ blocks:
         '/felix/nfnetlink/nfnl/*.go',
         '/felix/nfnetlink/pkt/*.go',
         '/felix/nftables/*.go',
+        '/felix/nftables/nftrender/*.go',
         '/felix/policysync/*.go',
         '/felix/proto/*.go',
         '/felix/proto/protoconv/*.go',
@@ -2080,6 +2740,7 @@ blocks:
         '/felix/routetable/*.go',
         '/felix/routetable/ownershippol/*.go',
         '/felix/rules/*.go',
+        '/felix/rules/rulesdefs/*.go',
         '/felix/serviceindex/*.go',
         '/felix/statusrep/*.go',
         '/felix/stringutils/*.go',
@@ -2114,6 +2775,7 @@ blocks:
         '/key-cert-provisioner/pkg/k8s/*.go',
         '/key-cert-provisioner/pkg/keycert/*.go',
         '/key-cert-provisioner/pkg/tls/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/*.go',
         '/kube-controllers/pkg/cache/*.go',
         '/kube-controllers/pkg/config/*.go',
         '/kube-controllers/pkg/controllers/controller/*.go',
@@ -2177,6 +2839,7 @@ blocks:
         '/libcalico-go/lib/errors/*.go',
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
+        '/libcalico-go/lib/informerutil/*.go',
         '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
         '/libcalico-go/lib/metricsserver/*.go',
@@ -2195,7 +2858,6 @@ blocks:
         '/libcalico-go/lib/selector/parser/*.go',
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
@@ -2241,6 +2903,7 @@ blocks:
         '/typha/pkg/syncproto/*.go',
         '/typha/pkg/syncserver/*.go',
         '/typha/pkg/tlsutils/*.go',
+        '/typha/pkg/validator/v1/*.go',
         '/webhooks/pkg/clusterinfo/*.go',
         '/webhooks/pkg/rbac/*.go',
         '/webhooks/pkg/utils/*.go',
@@ -2304,6 +2967,7 @@ blocks:
         '/api/pkg/lib/numorstring/*.go',
         '/cni-plugin/**',
         '/crypto/pkg/tls/*.go',
+        '/felix/ip/*.go',
         '/hack/test/certs/',
         '/lib.Makefile',
         '/lib/logrusr/*.go',
@@ -2353,6 +3017,7 @@ blocks:
         '/**/SECURITY.md',
         '/api/**/*_test.go',
         '/crypto/**/*_test.go',
+        '/felix/**/*_test.go',
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
         '/node/**/*_test.go',
@@ -2366,7 +3031,7 @@ blocks:
           value: "calico"
       prologue:
         commands:
-          - .semaphore/load-cached-images
+          - .semaphore/load-cached-images calico
           - cd cni-plugin
       jobs:
         - name: "CNI Plugin: CI"
@@ -2391,6 +3056,7 @@ blocks:
         '/api/pkg/lib/numorstring/*.go',
         '/cni-plugin/**',
         '/crypto/pkg/tls/*.go',
+        '/felix/ip/*.go',
         '/hack/test/certs/',
         '/lib.Makefile',
         '/lib/logrusr/*.go',
@@ -2443,6 +3109,7 @@ blocks:
         '/**/SECURITY.md',
         '/api/**/*_test.go',
         '/crypto/**/*_test.go',
+        '/felix/**/*_test.go',
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
         '/node/**/*_test.go',
@@ -2511,6 +3178,7 @@ blocks:
         '/api/pkg/lib/numorstring/*.go',
         '/confd/**',
         '/crypto/pkg/tls/*.go',
+        '/felix/ip/*.go',
         '/hack/test/certs/',
         '/lib.Makefile',
         '/lib/logrusr/*.go',
@@ -2566,6 +3234,7 @@ blocks:
         '/**/SECURITY.md',
         '/api/**/*_test.go',
         '/crypto/**/*_test.go',
+        '/felix/**/*_test.go',
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
         '/pkg/**/*_test.go',
@@ -2622,9 +3291,9 @@ blocks:
         - name: RUN_LOCAL_TESTS
           value: "true"
         - name: E2E_TEST_CONFIG
-          # Test selection is driven by the config file; see gcp-bpf.yaml for the
+          # Test selection is driven by the config file; see gcp/bpf.yaml for the
           # include/exclude rationale.
-          value: "e2e/config/gcp-bpf.yaml"
+          value: "e2e/config/gcp/bpf.yaml"
         - name: USE_API_SERVER
           value: "false"
         - name: ENABLE_EXTERNAL_NODE
@@ -2659,6 +3328,221 @@ blocks:
         - name: "E2E images: rapidclient CI"
           commands:
             - .semaphore/run-and-monitor rapidclient-ci.log make -C e2e/images/rapidclient ci
+  - name: E2E test set drift
+    run:
+      when: >-
+        change_in(['/.argoci/cron/',
+        '/.semaphore/end-to-end/pipelines/',
+        '/.semaphore/semaphore.yml.d/01-preamble.yml',
+        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
+        '/.semaphore/semaphore.yml.d/03-promotions.yml',
+        '/.semaphore/semaphore.yml.d/09-blocks.yml',
+        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-e2e-test-sets.yml',
+        '/Makefile',
+        '/api/pkg/apis/projectcalico/v3/*.go',
+        '/api/pkg/defaults/*.go',
+        '/api/pkg/lib/numorstring/*.go',
+        '/crypto/pkg/tls/*.go',
+        '/e2e/**',
+        '/felix/bpf/*.go',
+        '/felix/bpf/asm/*.go',
+        '/felix/bpf/bpfdefs/*.go',
+        '/felix/bpf/hook/*.go',
+        '/felix/bpf/jump/*.go',
+        '/felix/bpf/libbpf/*.go',
+        '/felix/bpf/maps/*.go',
+        '/felix/bpf/nat/*.go',
+        '/felix/bpf/tc/defs/*.go',
+        '/felix/bpf/utils/*.go',
+        '/felix/dataplane/linux/dataplanedefs/*.go',
+        '/felix/environment/*.go',
+        '/felix/ip/*.go',
+        '/felix/iptables/cmdshim/*.go',
+        '/felix/labelindex/ipsetmember/*.go',
+        '/felix/netlinkshim/*.go',
+        '/felix/proto/*.go',
+        '/felix/types/*.go',
+        '/goldmane/proto/*.go',
+        '/hack/test/certs/',
+        '/lib.Makefile',
+        '/lib/httpmachinery/pkg/apiutil/*.go',
+        '/lib/httpmachinery/pkg/codec/*.go',
+        '/lib/httpmachinery/pkg/context/*.go',
+        '/lib/httpmachinery/pkg/header/*.go',
+        '/lib/std/log/*.go',
+        '/lib/std/time/*.go',
+        '/lib/std/uniquelabels/*.go',
+        '/lib/std/uniquestr/*.go',
+        '/libcalico-go/lib/apiconfig/*.go',
+        '/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/*.go',
+        '/libcalico-go/lib/apis/internalapi/*.go',
+        '/libcalico-go/lib/backend/*.go',
+        '/libcalico-go/lib/backend/api/*.go',
+        '/libcalico-go/lib/backend/encap/*.go',
+        '/libcalico-go/lib/backend/etcdv3/*.go',
+        '/libcalico-go/lib/backend/k8s/*.go',
+        '/libcalico-go/lib/backend/k8s/conversion/*.go',
+        '/libcalico-go/lib/backend/k8s/resources/*.go',
+        '/libcalico-go/lib/backend/model/*.go',
+        '/libcalico-go/lib/clientv3/*.go',
+        '/libcalico-go/lib/errors/*.go',
+        '/libcalico-go/lib/hash/*.go',
+        '/libcalico-go/lib/ipam/*.go',
+        '/libcalico-go/lib/ipam/vmipam/*.go',
+        '/libcalico-go/lib/names/*.go',
+        '/libcalico-go/lib/namespace/*.go',
+        '/libcalico-go/lib/net/*.go',
+        '/libcalico-go/lib/options/*.go',
+        '/libcalico-go/lib/resources/*.go',
+        '/libcalico-go/lib/selector/*.go',
+        '/libcalico-go/lib/selector/parser/*.go',
+        '/libcalico-go/lib/selector/tokenizer/*.go',
+        '/libcalico-go/lib/set/*.go',
+        '/libcalico-go/lib/validator/v3/*.go',
+        '/libcalico-go/lib/watch/*.go',
+        '/libcalico-go/lib/winutils/*.go',
+        '/metadata.mk',
+        '/operator/api/v1/*.go',
+        '/whisker-backend/pkg/apis/v1/*.go'],
+        {pipeline_file: 'ignore', exclude: ['/**/*.md',
+        '/**/.gitignore',
+        '/**/AUTHORS*',
+        '/**/CONTRIBUTING*',
+        '/**/DEVELOPER_GUIDE*',
+        '/**/LICENSE*',
+        '/**/README*',
+        '/**/SECURITY.md',
+        '/api/**/*_test.go',
+        '/crypto/**/*_test.go',
+        '/felix/**/*_test.go',
+        '/goldmane/**/*_test.go',
+        '/lib/**/*_test.go',
+        '/libcalico-go/**/*_test.go',
+        '/operator/**/*_test.go',
+        '/whisker-backend/**/*_test.go']})
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: calico
+      jobs:
+        - name: "E2E test set drift: check-test-set"
+          commands:
+            - .semaphore/run-and-monitor e2e-check-test-set.log make -C e2e check-test-set
+  - name: "E2E unit tests"
+    run:
+      when: >-
+        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
+        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
+        '/.semaphore/semaphore.yml.d/03-promotions.yml',
+        '/.semaphore/semaphore.yml.d/09-blocks.yml',
+        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-e2e-ut.yml',
+        '/Makefile',
+        '/api/pkg/apis/projectcalico/v3/*.go',
+        '/api/pkg/defaults/*.go',
+        '/api/pkg/lib/numorstring/*.go',
+        '/crypto/pkg/tls/*.go',
+        '/e2e/**',
+        '/felix/bpf/*.go',
+        '/felix/bpf/asm/*.go',
+        '/felix/bpf/bpfdefs/*.go',
+        '/felix/bpf/hook/*.go',
+        '/felix/bpf/jump/*.go',
+        '/felix/bpf/libbpf/*.go',
+        '/felix/bpf/maps/*.go',
+        '/felix/bpf/nat/*.go',
+        '/felix/bpf/tc/defs/*.go',
+        '/felix/bpf/utils/*.go',
+        '/felix/dataplane/linux/dataplanedefs/*.go',
+        '/felix/environment/*.go',
+        '/felix/ip/*.go',
+        '/felix/iptables/cmdshim/*.go',
+        '/felix/labelindex/ipsetmember/*.go',
+        '/felix/netlinkshim/*.go',
+        '/felix/proto/*.go',
+        '/felix/types/*.go',
+        '/goldmane/proto/*.go',
+        '/hack/test/certs/',
+        '/lib.Makefile',
+        '/lib/httpmachinery/pkg/apiutil/*.go',
+        '/lib/httpmachinery/pkg/codec/*.go',
+        '/lib/httpmachinery/pkg/context/*.go',
+        '/lib/httpmachinery/pkg/header/*.go',
+        '/lib/std/log/*.go',
+        '/lib/std/time/*.go',
+        '/lib/std/uniquelabels/*.go',
+        '/lib/std/uniquestr/*.go',
+        '/libcalico-go/lib/apiconfig/*.go',
+        '/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/*.go',
+        '/libcalico-go/lib/apis/internalapi/*.go',
+        '/libcalico-go/lib/backend/*.go',
+        '/libcalico-go/lib/backend/api/*.go',
+        '/libcalico-go/lib/backend/encap/*.go',
+        '/libcalico-go/lib/backend/etcdv3/*.go',
+        '/libcalico-go/lib/backend/k8s/*.go',
+        '/libcalico-go/lib/backend/k8s/conversion/*.go',
+        '/libcalico-go/lib/backend/k8s/resources/*.go',
+        '/libcalico-go/lib/backend/model/*.go',
+        '/libcalico-go/lib/clientv3/*.go',
+        '/libcalico-go/lib/errors/*.go',
+        '/libcalico-go/lib/hash/*.go',
+        '/libcalico-go/lib/ipam/*.go',
+        '/libcalico-go/lib/ipam/vmipam/*.go',
+        '/libcalico-go/lib/names/*.go',
+        '/libcalico-go/lib/namespace/*.go',
+        '/libcalico-go/lib/net/*.go',
+        '/libcalico-go/lib/options/*.go',
+        '/libcalico-go/lib/resources/*.go',
+        '/libcalico-go/lib/selector/*.go',
+        '/libcalico-go/lib/selector/parser/*.go',
+        '/libcalico-go/lib/selector/tokenizer/*.go',
+        '/libcalico-go/lib/set/*.go',
+        '/libcalico-go/lib/validator/v3/*.go',
+        '/libcalico-go/lib/watch/*.go',
+        '/libcalico-go/lib/winutils/*.go',
+        '/metadata.mk',
+        '/operator/api/v1/*.go',
+        '/whisker-backend/pkg/apis/v1/*.go'],
+        {pipeline_file: 'ignore', exclude: ['/**/*.md',
+        '/**/.gitignore',
+        '/**/AUTHORS*',
+        '/**/CONTRIBUTING*',
+        '/**/DEVELOPER_GUIDE*',
+        '/**/LICENSE*',
+        '/**/README*',
+        '/**/SECURITY.md',
+        '/api/**/*_test.go',
+        '/crypto/**/*_test.go',
+        '/felix/**/*_test.go',
+        '/goldmane/**/*_test.go',
+        '/lib/**/*_test.go',
+        '/libcalico-go/**/*_test.go',
+        '/operator/**/*_test.go',
+        '/whisker-backend/**/*_test.go']})
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      prologue:
+        commands:
+          - cd e2e
+      jobs:
+        - name: "E2E unit tests: CI"
+          commands:
+            - ../.semaphore/run-and-monitor make-ci.log make ci
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: E2E script & pipeline validations
     run:
       when: >-
@@ -2683,6 +3567,8 @@ blocks:
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-e2e.yml',
         '/Makefile',
+        '/api/admission/*.go',
+        '/api/config/crd/*.go',
         '/api/pkg/apis/projectcalico/v3/*.go',
         '/api/pkg/client/applyconfiguration_generated/internal/*.go',
         '/api/pkg/client/applyconfiguration_generated/projectcalico/v3/*.go',
@@ -2869,6 +3755,7 @@ blocks:
         '/felix/nfnetlink/nfnl/*.go',
         '/felix/nfnetlink/pkt/*.go',
         '/felix/nftables/*.go',
+        '/felix/nftables/nftrender/*.go',
         '/felix/policysync/*.go',
         '/felix/proto/*.go',
         '/felix/proto/protoconv/*.go',
@@ -2876,6 +3763,7 @@ blocks:
         '/felix/routetable/*.go',
         '/felix/routetable/ownershippol/*.go',
         '/felix/rules/*.go',
+        '/felix/rules/rulesdefs/*.go',
         '/felix/serviceindex/*.go',
         '/felix/statusrep/*.go',
         '/felix/stringutils/*.go',
@@ -2917,6 +3805,8 @@ blocks:
         '/key-cert-provisioner/pkg/tls/*.go',
         '/kube-controllers/cmd/check-status/*.go',
         '/kube-controllers/cmd/kube-controllers/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/crd',
         '/kube-controllers/pkg/cache/*.go',
         '/kube-controllers/pkg/config/*.go',
         '/kube-controllers/pkg/controllers/controller/*.go',
@@ -2952,6 +3842,8 @@ blocks:
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
         '/libcalico-go/config/*.go',
+        '/libcalico-go/config/crd',
+        '/libcalico-go/config/crd/*.go',
         '/libcalico-go/lib/apiconfig/*.go',
         '/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/*.go',
         '/libcalico-go/lib/apis/internalapi/*.go',
@@ -2980,6 +3872,7 @@ blocks:
         '/libcalico-go/lib/errors/*.go',
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
+        '/libcalico-go/lib/informerutil/*.go',
         '/libcalico-go/lib/ipam/*.go',
         '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
@@ -2999,7 +3892,6 @@ blocks:
         '/libcalico-go/lib/selector/parser/*.go',
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
@@ -3027,6 +3919,88 @@ blocks:
         '/node/pkg/status/*.go',
         '/node/pkg/status/populators/*.go',
         '/node/windows-packaging/tests/*.go',
+        '/operator/api/v1/*.go',
+        '/operator/cmd/*.go',
+        '/operator/config',
+        '/operator/deploy/crds',
+        '/operator/internal/controller/*.go',
+        '/operator/pkg/active/*.go',
+        '/operator/pkg/admission/*.go',
+        '/operator/pkg/apigroup/*.go',
+        '/operator/pkg/apis/*.go',
+        '/operator/pkg/awssgsetup/*.go',
+        '/operator/pkg/common/*.go',
+        '/operator/pkg/common/discovery/*.go',
+        '/operator/pkg/common/k8svalidation/*.go',
+        '/operator/pkg/common/k8svalidation/helper/*.go',
+        '/operator/pkg/common/k8svalidation/v1helper/*.go',
+        '/operator/pkg/common/validation/*.go',
+        '/operator/pkg/common/validation/apiserver/*.go',
+        '/operator/pkg/common/validation/calico-node/*.go',
+        '/operator/pkg/common/validation/csi-node-driver/*.go',
+        '/operator/pkg/common/validation/kube-controllers/*.go',
+        '/operator/pkg/common/validation/typha/*.go',
+        '/operator/pkg/common/validation/webhooks/*.go',
+        '/operator/pkg/components/*.go',
+        '/operator/pkg/controller/*.go',
+        '/operator/pkg/controller/apiserver/*.go',
+        '/operator/pkg/controller/certificatemanager/*.go',
+        '/operator/pkg/controller/clusterconnection/*.go',
+        '/operator/pkg/controller/csr/*.go',
+        '/operator/pkg/controller/gatewayapi/*.go',
+        '/operator/pkg/controller/goldmane/*.go',
+        '/operator/pkg/controller/installation/*.go',
+        '/operator/pkg/controller/ippool/*.go',
+        '/operator/pkg/controller/istio/*.go',
+        '/operator/pkg/controller/k8sapi/*.go',
+        '/operator/pkg/controller/kubeproxy/*.go',
+        '/operator/pkg/controller/metrics/*.go',
+        '/operator/pkg/controller/migration/*.go',
+        '/operator/pkg/controller/migration/cni/*.go',
+        '/operator/pkg/controller/migration/convert/*.go',
+        '/operator/pkg/controller/migration/datastoremigration/*.go',
+        '/operator/pkg/controller/options/*.go',
+        '/operator/pkg/controller/podiprecovery/*.go',
+        '/operator/pkg/controller/secrets/*.go',
+        '/operator/pkg/controller/status/*.go',
+        '/operator/pkg/controller/tiers/*.go',
+        '/operator/pkg/controller/typhaautoscaler/*.go',
+        '/operator/pkg/controller/utils/*.go',
+        '/operator/pkg/controller/utils/imageset/*.go',
+        '/operator/pkg/controller/whisker/*.go',
+        '/operator/pkg/crds',
+        '/operator/pkg/crds/*.go',
+        '/operator/pkg/ctrlruntime/*.go',
+        '/operator/pkg/daemon/*.go',
+        '/operator/pkg/dns/*.go',
+        '/operator/pkg/extensions/*.go',
+        '/operator/pkg/render/*.go',
+        '/operator/pkg/render/certificatemanagement/*.go',
+        '/operator/pkg/render/common/components/*.go',
+        '/operator/pkg/render/common/configmap/*.go',
+        '/operator/pkg/render/common/meta/*.go',
+        '/operator/pkg/render/common/networkpolicy/*.go',
+        '/operator/pkg/render/common/podaffinity/*.go',
+        '/operator/pkg/render/common/rbacmanagement/*.go',
+        '/operator/pkg/render/common/resourcequota/*.go',
+        '/operator/pkg/render/common/secret/*.go',
+        '/operator/pkg/render/common/securitycontext/*.go',
+        '/operator/pkg/render/common/securitycontextconstraints/*.go',
+        '/operator/pkg/render/common/selector/*.go',
+        '/operator/pkg/render/gateway/*.go',
+        '/operator/pkg/render/gatewayapi/*.go',
+        '/operator/pkg/render/goldmane/*.go',
+        '/operator/pkg/render/istio/*.go',
+        '/operator/pkg/render/kubecontrollers/*.go',
+        '/operator/pkg/render/tiers/*.go',
+        '/operator/pkg/render/webhooks/*.go',
+        '/operator/pkg/render/whisker',
+        '/operator/pkg/render/whisker/*.go',
+        '/operator/pkg/tls/*.go',
+        '/operator/pkg/tls/certificatemanagement/*.go',
+        '/operator/pkg/tls/certkeyusage/*.go',
+        '/operator/pkg/uigateway/*.go',
+        '/operator/version/*.go',
         '/pkg/buildinfo/*.go',
         '/pkg/cmdwrapper/*.go',
         '/pod2daemon/binder/*.go',
@@ -3053,6 +4027,7 @@ blocks:
         '/typha/pkg/syncproto/*.go',
         '/typha/pkg/syncserver/*.go',
         '/typha/pkg/tlsutils/*.go',
+        '/typha/pkg/validator/v1/*.go',
         '/webhooks/pkg/clusterinfo/*.go',
         '/webhooks/pkg/rbac/*.go',
         '/webhooks/pkg/utils/*.go',
@@ -3083,6 +4058,9 @@ blocks:
         'node/**/*Dockerfile*',
         'node/Makefile',
         'node/deps.txt',
+        'operator/**/*Dockerfile*',
+        'operator/Makefile',
+        'operator/deps.txt',
         'pod2daemon/**/*Dockerfile*',
         'pod2daemon/Makefile',
         'pod2daemon/deps.txt',
@@ -3119,6 +4097,7 @@ blocks:
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
         '/node/**/*_test.go',
+        '/operator/**/*_test.go',
         '/pkg/**/*_test.go',
         '/pod2daemon/**/*_test.go',
         '/typha/**/*_test.go',
@@ -3129,6 +4108,7 @@ blocks:
       - "Build: calico image"
       - "Build: node image"
       - "Build: whisker image"
+      - "Build: operator image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
@@ -3141,11 +4121,17 @@ blocks:
         commands:
           # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
           - docker system prune -af
-          - .semaphore/load-cached-images
+          - .semaphore/load-cached-images calico node whisker
       jobs:
         - name: "E2E tests: Conformance (cluster routing: BIRD)"
           commands:
             - .semaphore/run-and-monitor e2e-test.log make e2e-test
+          env_vars:
+            # Pin the mode: leaving it unset now means Felix owns the IPIP routes,
+            # and this lane's Feature:BGPPeer tests require BGP to be the sole
+            # routing mechanism.
+            - name: EXTRA_VALUES_FILES
+              value: "hack/test/kind/infra/values-bird-routing.yaml"
         - name: "E2E tests: Conformance (cluster routing: Felix)"
           commands:
             - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
@@ -3155,7 +4141,7 @@ blocks:
             - name: KIND_CALICO_API_GROUP
               value: "crd.projectcalico.org/v1"
             - name: E2E_TEST_CONFIG
-              value: "e2e/config/kind-felix-routing.yaml"
+              value: "e2e/config/kind/felix-routing.yaml"
         - name: "E2E tests: ClusterNetworkPolicy (cluster routing: Felix)"
           commands:
             - .semaphore/run-and-monitor e2e-test-cnp.log make e2e-test-clusternetworkpolicy
@@ -3165,7 +4151,7 @@ blocks:
             - name: KIND_CALICO_API_GROUP
               value: "projectcalico.org/v3"
             - name: E2E_TEST_CONFIG
-              value: "e2e/config/kind-felix-routing.yaml"
+              value: "e2e/config/kind/felix-routing.yaml"
         - name: "E2E tests: sig-calico (dataplane: BPF)"
           commands:
             - .semaphore/run-and-monitor e2e-test-bpf.log make e2e-test-bpf
@@ -3339,7 +4325,6 @@ blocks:
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
         '/libcalico-go/lib/testutils/stacktrace/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
@@ -3354,6 +4339,7 @@ blocks:
         '/typha/pkg/syncclient/*.go',
         '/typha/pkg/syncproto/*.go',
         '/typha/pkg/tlsutils/*.go',
+        '/typha/pkg/validator/v1/*.go',
         'felix/**/*Dockerfile*',
         'felix/Makefile',
         'felix/deps.txt',
@@ -3376,28 +4362,19 @@ blocks:
         - name: BUILD_CACHE_GROUP
           value: "calico"
         # Fail loud if `make` tries to clone libbpf — the prologue restores
-        # the pre-built tarball from GCS, and a re-clone would negate the
+        # the pre-built tarball from S3, and a re-clone would negate the
         # cache and re-expose the github.com/libbpf HTTP 500 flake.
         - name: NO_LIBBPF_CLONE
           value: "true"
       prologue:
         commands:
           # Load the pre-built calico image (touches the marker so the nested
-          # `make -C cmd/calico image` invocation inside fv-prereqs is a no-op)
-          # and pull the cgo + race binaries into place so build-calico-cgo /
-          # build-calico-race skip their rebuilds.
-          - .semaphore/load-cached-images
-          - mkdir -p cmd/calico/bin
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
-          - chmod +x cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64
-          # Extract the pre-built libbpf (clone + compiled amd64/libbpf.a)
-          # produced by "Build: calico image". Verify the compiled static
-          # lib landed so a broken tarball fails fast rather than triggering
-          # the NO_LIBBPF_CLONE guard mid-build.
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst" /tmp/libbpf-amd64.tar.zst
-          - tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
-          - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || (echo "ERROR libbpf tarball missing compiled libbpf.a" >&2; exit 1)
+          # `make -C cmd/calico image` invocation inside fv-prereqs is a no-op),
+          # then put the cgo + race binaries and the pre-built libbpf in place so
+          # build-calico-cgo / build-calico-race and the libbpf clone are all
+          # skipped.
+          - .semaphore/load-cached-images calico
+          - .semaphore/scripts/load-felix-prereqs.sh
           - cd felix
           - gcloud config set project unique-caldron-775
           - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
@@ -3525,7 +4502,6 @@ blocks:
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
         '/libcalico-go/lib/testutils/stacktrace/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
@@ -3540,6 +4516,7 @@ blocks:
         '/typha/pkg/syncclient/*.go',
         '/typha/pkg/syncproto/*.go',
         '/typha/pkg/tlsutils/*.go',
+        '/typha/pkg/validator/v1/*.go',
         'typha/**/*Dockerfile*',
         'typha/Makefile',
         'typha/deps.txt'],
@@ -3573,17 +4550,11 @@ blocks:
           value: "true"
       prologue:
         commands:
-          - .semaphore/load-cached-images
-          - mkdir -p cmd/calico/bin
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
-          - chmod +x cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst" /tmp/libbpf-amd64.tar.zst
-          - tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
-          - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || (echo "ERROR libbpf tarball missing compiled libbpf.a" >&2; exit 1)
-          - cd felix
           - gcloud config set project unique-caldron-775
           - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
+          - .semaphore/load-cached-images calico
+          - .semaphore/scripts/load-felix-prereqs.sh
+          - cd felix
       secrets:
         - name: google-service-account-for-gce
         - name: gemini-api-key
@@ -3695,7 +4666,6 @@ blocks:
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
         '/libcalico-go/lib/testutils/stacktrace/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
@@ -3710,6 +4680,7 @@ blocks:
         '/typha/pkg/syncclient/*.go',
         '/typha/pkg/syncproto/*.go',
         '/typha/pkg/tlsutils/*.go',
+        '/typha/pkg/validator/v1/*.go',
         'felix/**/*Dockerfile*',
         'felix/Makefile',
         'felix/deps.txt'],
@@ -3812,7 +4783,6 @@ blocks:
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
         '/libcalico-go/lib/testutils/stacktrace/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
@@ -3826,7 +4796,8 @@ blocks:
         '/typha/pkg/discovery/*.go',
         '/typha/pkg/syncclient/*.go',
         '/typha/pkg/syncproto/*.go',
-        '/typha/pkg/tlsutils/*.go'],
+        '/typha/pkg/tlsutils/*.go',
+        '/typha/pkg/validator/v1/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
         '/**/AUTHORS*',
@@ -3856,9 +4827,9 @@ blocks:
         - name: private-repo
       prologue:
         commands:
-          # Load the locally-built calico + node images from the GCS cache so the
+          # Load the locally-built calico + node images from the S3 cache so the
           # local-build install uses images from the commit under test.
-          - .semaphore/load-cached-images
+          - .semaphore/load-cached-images calico node
           - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
           - export REPORT_DIR=/home/semaphore/report
           - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
@@ -3977,7 +4948,6 @@ blocks:
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
         '/libcalico-go/lib/testutils/stacktrace/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
@@ -3992,6 +4962,7 @@ blocks:
         '/typha/pkg/syncclient/*.go',
         '/typha/pkg/syncproto/*.go',
         '/typha/pkg/tlsutils/*.go',
+        '/typha/pkg/validator/v1/*.go',
         'typha/**/*Dockerfile*',
         'typha/Makefile',
         'typha/deps.txt'],
@@ -4085,8 +5056,9 @@ blocks:
           env_vars:
             - name: FELIX_TEST_GROUP
               value: "bpf-26.04-nft-no-fv-with-ut"
-            - name: FELIX_FV_BPFATTACHTYPE
-              value: "tc"
+            # No FELIX_FV_BPFATTACHTYPE: this job covers netkit attachment, which
+            # the default attach type selects for netkit workload devices. Naming
+            # a single mechanism here would opt the node out of netkit entirely.
             - name: JOB_TIMEOUT_MINUTES
               value: "60"
             - name: FELIX_FV_NETKIT
@@ -4137,7 +5109,7 @@ blocks:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
             - 'artifact push job ./report/ --destination semaphore/gateway-conformance-reports || true'
-            # Permanent copy in GCS for upstream submission and historical
+            # Permanent copy in S3 for upstream submission and historical
             # comparison. Semaphore's job artifacts are GC'd after ~30 days,
             # which isn't long enough for "go fish out the v3.30 report next
             # year". PRs are skipped — their Semaphore artifact is plenty,
@@ -4146,9 +5118,9 @@ blocks:
               if [[ -z "${SEMAPHORE_GIT_PR_NUMBER}" && -d ./report ]]; then
                 ref="${SEMAPHORE_GIT_TAG_NAME:-${SEMAPHORE_GIT_BRANCH}}"
                 sha="${SEMAPHORE_GIT_SHA:0:12}"
-                dst="gs://${GCS_BUILD_CACHE_BUCKET}/gateway-conformance/${ref}/${sha}/"
+                dst="s3://${CALICO_S3_BUCKET}/${CALICO_S3_KEY_PREFIX}/gateway-conformance/${ref}/${sha}/"
                 echo "Publishing conformance report to ${dst}"
-                gcloud storage cp ./report/* "${dst}" || true
+                .semaphore/s3-cmd cp ./report/* "${dst}" || true
               fi
   - name: Goldmane
     run:
@@ -4308,10 +5280,7 @@ blocks:
           commands:
             # Load the amd64 patched nftables RPMs producer image so the
             # install-cni Dockerfile's FROM ${NFT_RPMS_IMAGE} resolves locally.
-            - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
-            - zstd -d --rm /tmp/nft-rpms.tar.zst
-            - docker load -i /tmp/nft-rpms.tar
-            - rm -f /tmp/nft-rpms.tar
+            - ../.semaphore/scripts/load-nft-rpms.sh amd64
             # Include the istio ztunnel build in the amd64 CI job.
             - ../.semaphore/run-and-monitor ci.log make ci
         - name: "Istio: build arm64"
@@ -4350,7 +5319,6 @@ blocks:
         '/felix/bpf/tc/defs/*.go',
         '/felix/calc/*.go',
         '/felix/config/*.go',
-        '/felix/dataplane/ipsets/*.go',
         '/felix/dataplane/linux/dataplanedefs/*.go',
         '/felix/deltatracker/*.go',
         '/felix/dispatcher/*.go',
@@ -4373,7 +5341,7 @@ blocks:
         '/felix/markbits/*.go',
         '/felix/multidict/*.go',
         '/felix/netlinkshim/*.go',
-        '/felix/nftables/*.go',
+        '/felix/nftables/nftrender/*.go',
         '/felix/proto/*.go',
         '/felix/rules/*.go',
         '/felix/serviceindex/*.go',
@@ -4410,6 +5378,7 @@ blocks:
         '/libcalico-go/lib/errors/*.go',
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
+        '/libcalico-go/lib/informerutil/*.go',
         '/libcalico-go/lib/ipam/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
         '/libcalico-go/lib/names/*.go',
@@ -4426,7 +5395,6 @@ blocks:
         '/libcalico-go/lib/set/*.go',
         '/libcalico-go/lib/testutils/*.go',
         '/libcalico-go/lib/testutils/stacktrace/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
@@ -4435,7 +5403,8 @@ blocks:
         '/pkg/buildinfo/*.go',
         '/pkg/cmdwrapper/*.go',
         '/typha/pkg/config/*.go',
-        '/typha/pkg/logging/*.go'],
+        '/typha/pkg/logging/*.go',
+        '/typha/pkg/validator/v1/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
         '/**/AUTHORS*',
@@ -4461,7 +5430,7 @@ blocks:
           value: "calico"
       prologue:
         commands:
-          - .semaphore/load-cached-images
+          - .semaphore/load-cached-images calico
           - cd kube-controllers
       jobs:
         - name: "kube-controllers: CI"
@@ -4488,6 +5457,8 @@ blocks:
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-kubevirt-live-migration.yml',
         '/Makefile',
+        '/api/admission/*.go',
+        '/api/config/crd/*.go',
         '/api/pkg/apis/projectcalico/v3/*.go',
         '/api/pkg/defaults/*.go',
         '/api/pkg/lib/numorstring/*.go',
@@ -4518,9 +5489,11 @@ blocks:
         '/confd/pkg/resource/template/*.go',
         '/confd/pkg/run/*.go',
         '/crypto/pkg/tls/*.go',
+        '/e2e/cmd/gen-test-set/*.go',
         '/e2e/cmd/k8s/*.go',
         '/e2e/images/rapidclient/*.go',
         '/e2e/pkg/',
+        '/e2e/pkg/cilanes/*.go',
         '/felix/**',
         '/goldmane/pkg/client/*.go',
         '/goldmane/pkg/goldmane/*.go',
@@ -4541,6 +5514,8 @@ blocks:
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
         '/libcalico-go/config/*.go',
+        '/libcalico-go/config/crd',
+        '/libcalico-go/config/crd/*.go',
         '/libcalico-go/lib/apiconfig/*.go',
         '/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/*.go',
         '/libcalico-go/lib/apis/internalapi/*.go',
@@ -4586,7 +5561,6 @@ blocks:
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
         '/libcalico-go/lib/testutils/stacktrace/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
@@ -4596,6 +5570,88 @@ blocks:
         '/node/cmd/mountns/*.go',
         '/node/pkg/lifecycle/utils/*.go',
         '/node/windows-packaging/tests/*.go',
+        '/operator/api/v1/*.go',
+        '/operator/cmd/*.go',
+        '/operator/config',
+        '/operator/deploy/crds',
+        '/operator/internal/controller/*.go',
+        '/operator/pkg/active/*.go',
+        '/operator/pkg/admission/*.go',
+        '/operator/pkg/apigroup/*.go',
+        '/operator/pkg/apis/*.go',
+        '/operator/pkg/awssgsetup/*.go',
+        '/operator/pkg/common/*.go',
+        '/operator/pkg/common/discovery/*.go',
+        '/operator/pkg/common/k8svalidation/*.go',
+        '/operator/pkg/common/k8svalidation/helper/*.go',
+        '/operator/pkg/common/k8svalidation/v1helper/*.go',
+        '/operator/pkg/common/validation/*.go',
+        '/operator/pkg/common/validation/apiserver/*.go',
+        '/operator/pkg/common/validation/calico-node/*.go',
+        '/operator/pkg/common/validation/csi-node-driver/*.go',
+        '/operator/pkg/common/validation/kube-controllers/*.go',
+        '/operator/pkg/common/validation/typha/*.go',
+        '/operator/pkg/common/validation/webhooks/*.go',
+        '/operator/pkg/components/*.go',
+        '/operator/pkg/controller/*.go',
+        '/operator/pkg/controller/apiserver/*.go',
+        '/operator/pkg/controller/certificatemanager/*.go',
+        '/operator/pkg/controller/clusterconnection/*.go',
+        '/operator/pkg/controller/csr/*.go',
+        '/operator/pkg/controller/gatewayapi/*.go',
+        '/operator/pkg/controller/goldmane/*.go',
+        '/operator/pkg/controller/installation/*.go',
+        '/operator/pkg/controller/ippool/*.go',
+        '/operator/pkg/controller/istio/*.go',
+        '/operator/pkg/controller/k8sapi/*.go',
+        '/operator/pkg/controller/kubeproxy/*.go',
+        '/operator/pkg/controller/metrics/*.go',
+        '/operator/pkg/controller/migration/*.go',
+        '/operator/pkg/controller/migration/cni/*.go',
+        '/operator/pkg/controller/migration/convert/*.go',
+        '/operator/pkg/controller/migration/datastoremigration/*.go',
+        '/operator/pkg/controller/options/*.go',
+        '/operator/pkg/controller/podiprecovery/*.go',
+        '/operator/pkg/controller/secrets/*.go',
+        '/operator/pkg/controller/status/*.go',
+        '/operator/pkg/controller/tiers/*.go',
+        '/operator/pkg/controller/typhaautoscaler/*.go',
+        '/operator/pkg/controller/utils/*.go',
+        '/operator/pkg/controller/utils/imageset/*.go',
+        '/operator/pkg/controller/whisker/*.go',
+        '/operator/pkg/crds',
+        '/operator/pkg/crds/*.go',
+        '/operator/pkg/ctrlruntime/*.go',
+        '/operator/pkg/daemon/*.go',
+        '/operator/pkg/dns/*.go',
+        '/operator/pkg/extensions/*.go',
+        '/operator/pkg/render/*.go',
+        '/operator/pkg/render/certificatemanagement/*.go',
+        '/operator/pkg/render/common/components/*.go',
+        '/operator/pkg/render/common/configmap/*.go',
+        '/operator/pkg/render/common/meta/*.go',
+        '/operator/pkg/render/common/networkpolicy/*.go',
+        '/operator/pkg/render/common/podaffinity/*.go',
+        '/operator/pkg/render/common/rbacmanagement/*.go',
+        '/operator/pkg/render/common/resourcequota/*.go',
+        '/operator/pkg/render/common/secret/*.go',
+        '/operator/pkg/render/common/securitycontext/*.go',
+        '/operator/pkg/render/common/securitycontextconstraints/*.go',
+        '/operator/pkg/render/common/selector/*.go',
+        '/operator/pkg/render/gateway/*.go',
+        '/operator/pkg/render/gatewayapi/*.go',
+        '/operator/pkg/render/goldmane/*.go',
+        '/operator/pkg/render/istio/*.go',
+        '/operator/pkg/render/kubecontrollers/*.go',
+        '/operator/pkg/render/tiers/*.go',
+        '/operator/pkg/render/webhooks/*.go',
+        '/operator/pkg/render/whisker',
+        '/operator/pkg/render/whisker/*.go',
+        '/operator/pkg/tls/*.go',
+        '/operator/pkg/tls/certificatemanagement/*.go',
+        '/operator/pkg/tls/certkeyusage/*.go',
+        '/operator/pkg/uigateway/*.go',
+        '/operator/version/*.go',
         '/pkg/buildinfo/*.go',
         '/pod2daemon/binder/*.go',
         '/typha/pkg/discovery/*.go',
@@ -4603,6 +5659,7 @@ blocks:
         '/typha/pkg/syncclientutils/*.go',
         '/typha/pkg/syncproto/*.go',
         '/typha/pkg/tlsutils/*.go',
+        '/typha/pkg/validator/v1/*.go',
         'cni-plugin/**/*Dockerfile*',
         'cni-plugin/Makefile',
         'cni-plugin/deps.txt',
@@ -4617,7 +5674,10 @@ blocks:
         'libcalico-go/deps.txt',
         'node/**/*Dockerfile*',
         'node/Makefile',
-        'node/deps.txt'],
+        'node/deps.txt',
+        'operator/**/*Dockerfile*',
+        'operator/Makefile',
+        'operator/deps.txt'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
         '/**/AUTHORS*',
@@ -4636,6 +5696,7 @@ blocks:
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
         '/node/**/*_test.go',
+        '/operator/**/*_test.go',
         '/pkg/**/*_test.go',
         '/pod2daemon/**/*_test.go',
         '/typha/**/*_test.go']})
@@ -4643,12 +5704,19 @@ blocks:
       - Prerequisites
       - "Build: calico image"
       - "Build: node image"
+      - "Build: operator image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
           value: "calico"
         - name: E2E_TEST_CONFIG
-          value: "e2e/config/kind-kubevirt.yaml"
+          value: "e2e/config/kind/kubevirt.yaml"
+        # Live migration's route-priority propagation is built on confd and BIRD
+        # programming the cluster routes, and IPIP is not going to gain support
+        # for Felix-programmed live migration. Pin the mode rather than rely on
+        # the default, which from v3.33 gives Felix the IPIP routes.
+        - name: EXTRA_VALUES_FILES
+          value: "hack/test/kind/infra/values-bird-routing.yaml"
       agent:
         machine:
           type: f1-standard-4
@@ -4656,7 +5724,7 @@ blocks:
       prologue:
         commands:
           - docker system prune -af
-          - .semaphore/load-cached-images
+          - .semaphore/load-cached-images calico node
       jobs:
         - name: "KubeVirt live migration (KIND)"
           commands:
@@ -4719,6 +5787,7 @@ blocks:
         '/api/pkg/defaults/*.go',
         '/api/pkg/lib/numorstring/*.go',
         '/crypto/pkg/tls/*.go',
+        '/felix/ip/*.go',
         '/hack/test/certs/',
         '/lib.Makefile',
         '/lib/logrusr/*.go',
@@ -4737,6 +5806,7 @@ blocks:
         '/**/SECURITY.md',
         '/api/**/*_test.go',
         '/crypto/**/*_test.go',
+        '/felix/**/*_test.go',
         '/lib/**/*_test.go']})
     dependencies:
       - Prerequisites
@@ -4893,6 +5963,7 @@ blocks:
         '/felix/nfnetlink/nfnl/*.go',
         '/felix/nfnetlink/pkt/*.go',
         '/felix/nftables/*.go',
+        '/felix/nftables/nftrender/*.go',
         '/felix/policysync/*.go',
         '/felix/proto/*.go',
         '/felix/proto/protoconv/*.go',
@@ -4900,6 +5971,7 @@ blocks:
         '/felix/routetable/*.go',
         '/felix/routetable/ownershippol/*.go',
         '/felix/rules/*.go',
+        '/felix/rules/rulesdefs/*.go',
         '/felix/serviceindex/*.go',
         '/felix/statusrep/*.go',
         '/felix/stringutils/*.go',
@@ -4974,7 +6046,6 @@ blocks:
         '/libcalico-go/lib/selector/parser/*.go',
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
@@ -4986,7 +6057,8 @@ blocks:
         '/typha/pkg/syncclient/*.go',
         '/typha/pkg/syncclientutils/*.go',
         '/typha/pkg/syncproto/*.go',
-        '/typha/pkg/tlsutils/*.go'],
+        '/typha/pkg/tlsutils/*.go',
+        '/typha/pkg/validator/v1/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
         '/**/AUTHORS*',
@@ -5170,6 +6242,7 @@ blocks:
         '/felix/nfnetlink/nfnl/*.go',
         '/felix/nfnetlink/pkt/*.go',
         '/felix/nftables/*.go',
+        '/felix/nftables/nftrender/*.go',
         '/felix/policysync/*.go',
         '/felix/proto/*.go',
         '/felix/proto/protoconv/*.go',
@@ -5177,6 +6250,7 @@ blocks:
         '/felix/routetable/*.go',
         '/felix/routetable/ownershippol/*.go',
         '/felix/rules/*.go',
+        '/felix/rules/rulesdefs/*.go',
         '/felix/serviceindex/*.go',
         '/felix/statusrep/*.go',
         '/felix/stringutils/*.go',
@@ -5251,7 +6325,6 @@ blocks:
         '/libcalico-go/lib/selector/parser/*.go',
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
@@ -5263,7 +6336,8 @@ blocks:
         '/typha/pkg/syncclient/*.go',
         '/typha/pkg/syncclientutils/*.go',
         '/typha/pkg/syncproto/*.go',
-        '/typha/pkg/tlsutils/*.go'],
+        '/typha/pkg/tlsutils/*.go',
+        '/typha/pkg/validator/v1/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
         '/**/AUTHORS*',
@@ -5303,10 +6377,7 @@ blocks:
             # Load the per-arch patched nftables RPMs producer image (built/cached
             # by "Build: nftables RPMs") so Dockerfile's FROM ${NFT_RPMS_IMAGE}
             # resolves locally without re-pulling from Docker Hub.
-            - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst" /tmp/nft-rpms.tar.zst
-            - zstd -d --rm /tmp/nft-rpms.tar.zst
-            - docker load -i /tmp/nft-rpms.tar
-            - rm -f /tmp/nft-rpms.tar
+            - ../.semaphore/scripts/load-nft-rpms.sh "${ARCH}"
             - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
         - name: "Node: build Windows archive"
           commands:
@@ -5511,6 +6582,7 @@ blocks:
         '/felix/nfnetlink/nfnl/*.go',
         '/felix/nfnetlink/pkt/*.go',
         '/felix/nftables/*.go',
+        '/felix/nftables/nftrender/*.go',
         '/felix/policysync/*.go',
         '/felix/proto/*.go',
         '/felix/proto/protoconv/*.go',
@@ -5518,6 +6590,7 @@ blocks:
         '/felix/routetable/*.go',
         '/felix/routetable/ownershippol/*.go',
         '/felix/rules/*.go',
+        '/felix/rules/rulesdefs/*.go',
         '/felix/serviceindex/*.go',
         '/felix/statusrep/*.go',
         '/felix/stringutils/*.go',
@@ -5559,6 +6632,8 @@ blocks:
         '/key-cert-provisioner/pkg/tls/*.go',
         '/kube-controllers/cmd/check-status/*.go',
         '/kube-controllers/cmd/kube-controllers/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/crd',
         '/kube-controllers/pkg/cache/*.go',
         '/kube-controllers/pkg/config/*.go',
         '/kube-controllers/pkg/controllers/controller/*.go',
@@ -5622,6 +6697,7 @@ blocks:
         '/libcalico-go/lib/errors/*.go',
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
+        '/libcalico-go/lib/informerutil/*.go',
         '/libcalico-go/lib/ipam/*.go',
         '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
@@ -5641,7 +6717,6 @@ blocks:
         '/libcalico-go/lib/selector/parser/*.go',
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
@@ -5674,6 +6749,7 @@ blocks:
         '/typha/pkg/syncproto/*.go',
         '/typha/pkg/syncserver/*.go',
         '/typha/pkg/tlsutils/*.go',
+        '/typha/pkg/validator/v1/*.go',
         '/webhooks/pkg/clusterinfo/*.go',
         '/webhooks/pkg/rbac/*.go',
         '/webhooks/pkg/utils/*.go',
@@ -5743,6 +6819,11 @@ blocks:
         '/whisker-backend/**/*_test.go']})
     dependencies:
       - "Prerequisites"
+      # cache-test-artifacts ships these images to the test VMs. Without the
+      # dependency the VMs build from source instead, which fails on the VM.
+      - "Build: calico image"
+      - "Build: node image"
+      - "Build: whisker image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
@@ -5753,7 +6834,8 @@ blocks:
           value: "kind-cluster-tests"
       prologue:
         commands:
-          # Set up access to GCP buckets.
+          # Authenticate gcloud for the test-VM (gcloud compute) calls in
+          # .semaphore/vms; object storage is handled separately via s3cmd.
           - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
           - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
           - gcloud config set project unique-caldron-775
@@ -5784,6 +6866,153 @@ blocks:
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
+  - name: Operator
+    run:
+      when: >-
+        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
+        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
+        '/.semaphore/semaphore.yml.d/03-promotions.yml',
+        '/.semaphore/semaphore.yml.d/09-blocks.yml',
+        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-operator.yml',
+        '/api/admission/*.go',
+        '/api/config/crd/*.go',
+        '/api/pkg/apis/projectcalico/v3/*.go',
+        '/api/pkg/lib/numorstring/*.go',
+        '/hack/test/certs/',
+        '/lib.Makefile',
+        '/libcalico-go/config/crd',
+        '/libcalico-go/config/crd/*.go',
+        '/metadata.mk',
+        '/operator/**'],
+        {pipeline_file: 'ignore', exclude: ['/**/*.md',
+        '/**/.gitignore',
+        '/**/AUTHORS*',
+        '/**/CONTRIBUTING*',
+        '/**/DEVELOPER_GUIDE*',
+        '/**/LICENSE*',
+        '/**/README*',
+        '/**/SECURITY.md',
+        '/api/**/*_test.go',
+        '/libcalico-go/**/*_test.go']})
+    dependencies:
+      - Prerequisites
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      prologue:
+        commands:
+          - .semaphore/load-cached-images
+          - cd operator
+      jobs:
+        - name: "Operator: static checks and unit tests"
+          commands:
+            - export TEST_SUITE_PREFIX="operator"
+            - ../.semaphore/run-and-monitor make-ci.log make ci
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --ignore-missing ./report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Operator" || true'
+  - name: "Operator: multi-arch build"
+    # The operator has no cgo and no build constraints, so cross-compiling the
+    # binary is the whole of the per-arch coverage. `make cd` and the release
+    # build assemble the images.
+    run:
+      when: >-
+        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
+        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
+        '/.semaphore/semaphore.yml.d/03-promotions.yml',
+        '/.semaphore/semaphore.yml.d/09-blocks.yml',
+        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-operator.yml',
+        '/api/admission/*.go',
+        '/api/config/crd/*.go',
+        '/api/pkg/apis/projectcalico/v3/*.go',
+        '/api/pkg/lib/numorstring/*.go',
+        '/hack/test/certs/',
+        '/lib.Makefile',
+        '/libcalico-go/config/crd',
+        '/libcalico-go/config/crd/*.go',
+        '/metadata.mk',
+        '/operator/**'],
+        {pipeline_file: 'ignore', exclude: ['/**/*.md',
+        '/**/.gitignore',
+        '/**/AUTHORS*',
+        '/**/CONTRIBUTING*',
+        '/**/DEVELOPER_GUIDE*',
+        '/**/LICENSE*',
+        '/**/README*',
+        '/**/SECURITY.md',
+        '/api/**/*_test.go',
+        '/libcalico-go/**/*_test.go']})
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd operator
+      jobs:
+        - name: "Operator: build multi-arch binaries"
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+  - name: "Operator FV"
+    run:
+      when: >-
+        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
+        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
+        '/.semaphore/semaphore.yml.d/03-promotions.yml',
+        '/.semaphore/semaphore.yml.d/09-blocks.yml',
+        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-operator.yml',
+        '/api/admission/*.go',
+        '/api/config/crd/*.go',
+        '/api/pkg/apis/projectcalico/v3/*.go',
+        '/api/pkg/lib/numorstring/*.go',
+        '/hack/test/certs/',
+        '/lib.Makefile',
+        '/libcalico-go/config/crd',
+        '/libcalico-go/config/crd/*.go',
+        '/metadata.mk',
+        '/operator/**'],
+        {pipeline_file: 'ignore', exclude: ['/**/*.md',
+        '/**/.gitignore',
+        '/**/AUTHORS*',
+        '/**/CONTRIBUTING*',
+        '/**/DEVELOPER_GUIDE*',
+        '/**/LICENSE*',
+        '/**/README*',
+        '/**/SECURITY.md',
+        '/api/**/*_test.go',
+        '/libcalico-go/**/*_test.go']})
+    dependencies:
+      - Prerequisites
+      - "Build: calico image"
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      prologue:
+        commands:
+          - .semaphore/load-cached-images
+          - cd operator
+      jobs:
+        - name: "Operator: FV on kind"
+          execution_time_limit:
+            minutes: 60
+          commands:
+            - export TEST_SUITE_PREFIX="operator-fv"
+            - ../.semaphore/run-and-monitor make-fv.log make fv
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --ignore-missing ./report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Operator FV" || true'
   - name: pod2daemon
     run:
       when: >-
@@ -5879,6 +7108,7 @@ blocks:
         '/api/pkg/defaults/*.go',
         '/api/pkg/lib/numorstring/*.go',
         '/crypto/pkg/tls/*.go',
+        '/felix/ip/*.go',
         '/hack/test/certs/',
         '/lib.Makefile',
         '/lib/logrusr/*.go',
@@ -5924,7 +7154,6 @@ blocks:
         '/libcalico-go/lib/selector/parser/*.go',
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
-        '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
@@ -5942,6 +7171,7 @@ blocks:
         '/**/SECURITY.md',
         '/api/**/*_test.go',
         '/crypto/**/*_test.go',
+        '/felix/**/*_test.go',
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
         '/pkg/**/*_test.go']})
@@ -5954,7 +7184,7 @@ blocks:
           value: "calico"
       prologue:
         commands:
-          - .semaphore/load-cached-images
+          - .semaphore/load-cached-images calico
           - cd typha
       jobs:
         - name: "Typha: UT and FV tests"
@@ -6215,9 +7445,12 @@ blocks:
             - ../.semaphore/run-and-monitor tox.log bash -c 'make tox-caracal && make tox-fv-caracal'
         - name: "OpenStack: Mainline ST (DevStack + Tempest) on Caracal"
           commands:
-            # Env vars needed for saving performance results.
+            # Env vars needed for saving performance results.  Take the user name
+            # from the secret alongside the token, rather than hardcoding it, so
+            # that rotating the Lens credential to a different account does not
+            # silently break publishing.
             - export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
-            - export ELASTICSEARCH_USER=elastic
+            - export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
             - export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
             # For some reason python3-wrapt is pre-installed on a Semaphore ubuntu2004 node, but with
             # a version (1.11.2) that is different from the version that OpenStack needs (1.13.3), and
@@ -6250,6 +7483,7 @@ blocks:
         '/.semaphore/semaphore.yml.d/09-blocks.yml',
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/45-nft-bench.yml',
+        '/api/pkg/apis/projectcalico/v3/*.go',
         '/api/pkg/lib/numorstring/*.go',
         '/felix/dataplane/ipsets/*.go',
         '/felix/dataplane/linux/dataplanedefs/*.go',
@@ -6263,6 +7497,7 @@ blocks:
         '/felix/netlinkshim/*.go',
         '/felix/nftables/**',
         '/felix/proto/*.go',
+        '/felix/rules/rulesdefs/*.go',
         '/hack/perf/',
         '/hack/test/certs/',
         '/lib.Makefile',
@@ -6311,8 +7546,11 @@ blocks:
             # not a per-PR gate.
             - sudo env NFT_BENCH_PERF_ARTIFACTS_DIR="$(pwd)/artifacts/perf" felix/bin/nft.test -test.run='^$' -test.bench=. -test.benchmem -test.benchtime=6x
             # Publish to Lens. send-perf-results no-ops if the creds are unset.
+            # Take the user name from the secret alongside the token, rather than
+            # hardcoding it, so that rotating the Lens credential to a different
+            # account does not silently break publishing.
             - export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
-            - export ELASTICSEARCH_USER=elastic
+            - export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
             - export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
             - ./bin/send-perf-results --dir artifacts/perf
       epilogue:
@@ -6456,8 +7694,17 @@ after_pipeline:
               failed) result=fail ;;
               *) echo "pipeline result '${SEMAPHORE_PIPELINE_RESULT}' — not recorded"; exit 0 ;;
             esac
-            msg=$(printf 'repo: calico\nbranch: %s\nworkflow_id: %s\nresult: %s\npipeline: %s' \
-              "$SEMAPHORE_GIT_BRANCH" "$SEMAPHORE_WORKFLOW_ID" "$result" "${SEMAPHORE_PIPELINE_NAME:-calico}")
+            # pipeline_id, not just workflow_id: a partial re-run of failed
+            # blocks runs under the SAME workflow id, so the workflow alone
+            # cannot say which run this is. This task runs inside the pipeline
+            # that just finished — the re-run itself — so it is the one place
+            # that knows, and passing it on is what lets the monitor tell a
+            # re-run apart from a repeated delivery of the same run.
+            msg=$(printf 'repo: calico\nbranch: %s\nworkflow_id: %s\npipeline_id: %s\nresult: %s\npipeline: %s' \
+              "$SEMAPHORE_GIT_BRANCH" "$SEMAPHORE_WORKFLOW_ID" "$SEMAPHORE_PIPELINE_ID" "$result" "${SEMAPHORE_PIPELINE_NAME:-calico}")
+            # Echo the payload: it is the only record of what the agent was
+            # told, and it is where an unset variable shows up as an empty field.
+            echo "branch-monitor: sending"; echo "$msg"
             req=$(jq -n --arg t "$msg" '{jsonrpc:"2.0",id:"1",method:"message/stream",params:{message:{role:"user",kind:"message",messageId:"1",parts:[{kind:"text",text:$t}]}}}')
             # We only need the trigger to land: the agent records the run and posts
             # to Slack itself, and its task runs to completion server-side even if

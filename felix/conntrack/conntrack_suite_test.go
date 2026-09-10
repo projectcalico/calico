@@ -30,6 +30,6 @@ func init() {
 func TestConntrack(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../report/felix_conntrack_suite.xml"
+	testutils.RegisterJUnitReporter("felix_conntrack_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/conntrack", suiteConfig, reporterConfig)
 }

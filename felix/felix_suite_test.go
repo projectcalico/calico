@@ -16,6 +16,6 @@ func init() {
 func TestFelix(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "./report/felix_suite.xml"
+	testutils.RegisterJUnitReporter("felix_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix", suiteConfig, reporterConfig)
 }

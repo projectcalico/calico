@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -175,7 +175,15 @@ func (sw *secretWatcher) OnUpdate(oldObj, newObj any) {
 
 func (sw *secretWatcher) OnDelete(obj any) {
 	log.Debug("Secret deleted")
-	sw.deleteSecret(obj.(*v1.Secret))
+	// Delete events can carry a cache.DeletedFinalStateUnknown tombstone
+	// instead of the secret; DeletionHandlingObjectToName reads the name from
+	// either, including a tombstone that carries only a key.
+	name, err := cache.DeletionHandlingObjectToName(obj)
+	if err != nil {
+		log.WithError(err).Warn("Skipping secret delete event")
+		return
+	}
+	sw.deleteSecret(name.Name)
 	sw.client.recheckPeerConfig("secret deleted")
 }
 
@@ -187,8 +195,13 @@ func (sw *secretWatcher) updateSecret(secret *v1.Secret) {
 	}
 }
 
-func (sw *secretWatcher) deleteSecret(secret *v1.Secret) {
+// deleteSecret drops the secret's cached value but keeps its watch. The watch
+// owns a goroutine that only SweepStale may stop, and the secret may be
+// recreated while a BGP peer still references it.
+func (sw *secretWatcher) deleteSecret(name string) {
 	sw.mutex.Lock()
 	defer sw.mutex.Unlock()
-	delete(sw.watches, secret.Name)
+	if w, ok := sw.watches[name]; ok {
+		w.secret = nil
+	}
 }

@@ -89,6 +89,8 @@ if ($global:RebootRequired)
         exit
     }
 
+    # install-kubeadm.sh matches this marker to decide whether to wait for the
+    # node's boot time to change; keep the two in sync.
     Write-Output "Restart computer ..."
 
     try

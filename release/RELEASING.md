@@ -15,9 +15,8 @@
   - [4. Performing a release](#4-performing-a-release)
     - [4.a Prepare the release branch](#4a-prepare-the-release-branch)
     - [4.b Build and publish the repository in Semaphore](#4b-build-and-publish-the-repository-in-semaphore)
-    - [4.c Build and publish tigera/operator](#4c-build-and-publish-tigeraoperator)
-    - [4.d Publish the release on Github](#4d-publish-the-release-on-github)
-    - [4.e Update the docs with the new version](#4e-update-the-docs-with-the-new-version)
+    - [4.c Publish the release on Github](#4c-publish-the-release-on-github)
+    - [4.d Update the docs with the new version](#4d-update-the-docs-with-the-new-version)
   - [5. Post-release](#5-post-release)
     - [Update milestones](#update-milestones)
     - [Post-release verification](#post-release-verification)
@@ -115,19 +114,11 @@ commit have passed, and press the `Publish official release` manual promotion bu
 
 Wait for this job to complete before moving on to the next step.
 
-### 4.c Build and publish tigera/operator
-
-Follow the tigera/operator release instructions in the Operator version (vA.B.C) corresponding to the release
-
-```txt
-https://github.com/tigera/operator/blob/release-vA.B/RELEASING.md
-```
-
-### 4.d Publish the release on Github
+### 4.c Publish the release on Github
 
 Go to the [Calico release page](https://github.com/projectcalico/calico/releases) and publish the draft release.
 
-### 4.e Update the docs with the new version
+### 4.d Update the docs with the new version
 
 1. Merge the PR branch created in step 4.a - `build-vX.Y.Z` and delete the branch from the repository.
 

@@ -22,6 +22,8 @@ import (
 
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+
+	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
 )
 
 // phaseGate blocks the controller's status updates at specified phase transitions,
@@ -31,21 +33,21 @@ import (
 // that phase.
 type phaseGate struct {
 	mu    sync.Mutex
-	gates map[DatastoreMigrationPhase]chan struct{}
+	gates map[migrationv1.DatastoreMigrationPhase]chan struct{}
 
 	// reached is closed when the controller first attempts a status update
 	// for a given phase. Tests wait on this to know the controller has
 	// arrived at a phase before inspecting state.
-	reached map[DatastoreMigrationPhase]chan struct{}
+	reached map[migrationv1.DatastoreMigrationPhase]chan struct{}
 }
 
 // newPhaseGate creates a gate that blocks the controller at each of the
 // specified phases. Call waitForPhase to block until the controller reaches
 // a phase, then release to let it continue.
-func newPhaseGate(phases ...DatastoreMigrationPhase) *phaseGate {
+func newPhaseGate(phases ...migrationv1.DatastoreMigrationPhase) *phaseGate {
 	pg := &phaseGate{
-		gates:   make(map[DatastoreMigrationPhase]chan struct{}),
-		reached: make(map[DatastoreMigrationPhase]chan struct{}),
+		gates:   make(map[migrationv1.DatastoreMigrationPhase]chan struct{}),
+		reached: make(map[migrationv1.DatastoreMigrationPhase]chan struct{}),
 	}
 	for _, p := range phases {
 		pg.gates[p] = make(chan struct{})
@@ -57,7 +59,7 @@ func newPhaseGate(phases ...DatastoreMigrationPhase) *phaseGate {
 // intercept should be called from the SubResourceUpdate interceptor. It blocks
 // if the object is a DatastoreMigration transitioning to a gated phase.
 func (pg *phaseGate) intercept(obj rtclient.Object) {
-	dm, ok := obj.(*DatastoreMigration)
+	dm, ok := obj.(*migrationv1.DatastoreMigration)
 	if !ok {
 		return
 	}
@@ -84,7 +86,7 @@ func (pg *phaseGate) intercept(obj rtclient.Object) {
 
 // waitForPhase blocks until the controller has reached the given phase (i.e.,
 // attempted a status update with that phase).
-func (pg *phaseGate) waitForPhase(phase DatastoreMigrationPhase, timeout time.Duration) error {
+func (pg *phaseGate) waitForPhase(phase migrationv1.DatastoreMigrationPhase, timeout time.Duration) error {
 	pg.mu.Lock()
 	ch, ok := pg.reached[phase]
 	pg.mu.Unlock()
@@ -100,7 +102,7 @@ func (pg *phaseGate) waitForPhase(phase DatastoreMigrationPhase, timeout time.Du
 }
 
 // release allows the controller to proceed past the given phase.
-func (pg *phaseGate) release(phase DatastoreMigrationPhase) {
+func (pg *phaseGate) release(phase migrationv1.DatastoreMigrationPhase) {
 	pg.mu.Lock()
 	defer pg.mu.Unlock()
 	if ch, ok := pg.gates[phase]; ok {

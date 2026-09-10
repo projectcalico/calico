@@ -1,0 +1,20 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# KOPS platform gaps: upstream conformance specs that fail here for
+# environmental reasons, plus any Calico labels the platform rules out.
+#
+# Composition-only: carries no include scope. Reference it alongside a
+# pipeline config, e.g. `extends: [pipeline.yaml, ../platform/kops.yaml]`.
+
+exclude:
+  labels:
+    - label: Feature:HostPorts
+      reason: "hostPort is not reachable through kops' node security groups"
+  namePatterns:
+    - group: "kops clusters do not expose the API server to the pod network"
+      patterns:
+        - 'v1.should.proxy.through.a.service'
+        - 'DNS.should.resolve'
+        - 'DNS.should.provide'
+        - 'IPAM.StrictAffinity'
+        - 'EndpointSlices.pointing.to.API.Server'

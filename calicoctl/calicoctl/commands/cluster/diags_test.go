@@ -116,6 +116,27 @@ func TestDiagsCmdsForPod_Previous(t *testing.T) {
 	)))
 }
 
+// The bridge dumps are the only source of per-port VLAN membership and FDB
+// state in the bundle, so they must be collected on every node regardless of
+// dataplane.
+func TestCalicoNodeDiagsCmds_Bridge(t *testing.T) {
+	RegisterTestingT(t)
+
+	for _, bpfEnabled := range []bool{false, true} {
+		cmds := calicoNodeDiagsCmds("/node-dir", "nodeA", "calico-system", "calico-node-xyz", bpfEnabled)
+		strs := cmdStrs(cmds)
+		for _, want := range []string{
+			"bridge -d link show",
+			"bridge vlan show",
+			"bridge fdb show",
+			"ip -d link show",
+		} {
+			Expect(strs).To(ContainElement(HaveSuffix(want)),
+				"bpfEnabled=%v: missing %q", bpfEnabled, want)
+		}
+	}
+}
+
 func filterStrs(strs []string, substr string) []string {
 	var out []string
 	for _, s := range strs {
