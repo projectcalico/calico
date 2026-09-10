@@ -15,12 +15,38 @@
 package validation_test
 
 import (
+	"context"
 	"testing"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// These three were defaulted on write by libcalico-go, which the native CRD path
+// does not run. The values match Felix's own built-in defaults.
+func TestFelixConfiguration_SchemaDefaults(t *testing.T) {
+	name := uniqueName("felixconfig-defaults")
+	mustCreate(t, &v3.FelixConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec:       v3.FelixConfigurationSpec{},
+	})
+
+	got := &v3.FelixConfiguration{}
+	if err := testClient.Get(context.Background(), client.ObjectKey{Name: name}, got); err != nil {
+		t.Fatalf("failed to get config: %v", err)
+	}
+
+	if got.Spec.FloatingIPs == nil || *got.Spec.FloatingIPs != v3.FloatingIPsDisabled {
+		t.Errorf("expected spec.floatingIPs=%q, got %v", v3.FloatingIPsDisabled, got.Spec.FloatingIPs)
+	}
+	if got.Spec.BPFConnectTimeLoadBalancing == nil || *got.Spec.BPFConnectTimeLoadBalancing != v3.BPFConnectTimeLBTCP {
+		t.Errorf("expected spec.bpfConnectTimeLoadBalancing=%q, got %v", v3.BPFConnectTimeLBTCP, got.Spec.BPFConnectTimeLoadBalancing)
+	}
+	if got.Spec.BPFHostNetworkedNATWithoutCTLB == nil || *got.Spec.BPFHostNetworkedNATWithoutCTLB != v3.BPFHostNetworkedNATEnabled {
+		t.Errorf("expected spec.bpfHostNetworkedNATWithoutCTLB=%q, got %v", v3.BPFHostNetworkedNATEnabled, got.Spec.BPFHostNetworkedNATWithoutCTLB)
+	}
+}
 
 func TestFelixConfiguration_Validation(t *testing.T) {
 	tests := []struct {

@@ -1,0 +1,38 @@
+# This MutatingAdmissionPolicy defaults spec.blockSize to 26 for IPv4 pools and 122
+# for IPv6. A static CRD default cannot express it, because the value depends on the
+# CIDR family.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "ippool.policy.projectcalico.org"
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE"]
+        resources:
+          - ippools
+  failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
+  variables:
+    # Mutation runs before schema validation, so a missing or malformed CIDR has to
+    # be tolerated here and left for the validator to reject.
+    - name: cidrUsable
+      expression: |
+        has(object.spec.cidr) && isCIDR(object.spec.cidr)
+    - name: blockSizeUnset
+      expression: |
+        !has(object.spec.blockSize) || object.spec.blockSize == 0
+    - name: blockSize
+      expression: |
+        variables.cidrUsable && cidr(object.spec.cidr).ip().family() == 6 ? 122 : 26
+  mutations:
+    # CREATE only: blockSize is immutable, so defaulting it on update would either
+    # backfill existing pools silently or collide with the immutability rule.
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          variables.cidrUsable && variables.blockSizeUnset ?
+            [JSONPatch{op: "add", path: "/spec/blockSize", value: variables.blockSize}] :
+            []

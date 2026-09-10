@@ -1,0 +1,14 @@
+# This MutatingAdmissionPolicyBinding binds the IP pool blockSize defaulting to IP pools.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: set-ippool-blocksize-binding
+spec:
+  policyName: ippool.policy.projectcalico.org
+  matchResources:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE"]
+        resources:
+          - ippools
