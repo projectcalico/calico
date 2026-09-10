@@ -973,3 +973,12 @@ func TestBuildE2EBinariesUsesARCHES(t *testing.T) {
 			"e2e build-all should not set VALIDARCHES (lib.Makefile ignores it): %s", e)
 	}
 }
+
+func TestChartIndexDirMatchesUpload(t *testing.T) {
+	out := t.TempDir()
+	r := &CalicoManager{outputDir: filepath.Join(out, "upload", "v3.30.0"), calicoVersion: "v3.30.0"}
+	want := filepath.Join(out, "upload", "charts-v3.30.0")
+	if got := r.chartIndexDir(); got != want {
+		t.Errorf("chartIndexDir() = %q, want %q", got, want)
+	}
+}
