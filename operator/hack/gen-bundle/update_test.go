@@ -26,7 +26,7 @@ const imageInspectOutput = `[
   {
     "Id": "sha256:0123",
     "Created": "2026-01-02T03:04:05.678901234Z",
-    "RepoTags": ["quay.io/tigera/operator:v1.42.6"],
+    "RepoTags": ["quay.io/tigera/operator:v3.34.0"],
     "RepoDigests": [
       "some.other.registry/tigera/operator@sha256:aaa",
       "quay.io/tigera/operator-foo@sha256:ccc",
@@ -115,7 +115,7 @@ func TestParseArchitectures(t *testing.T) {
 func TestInspectImageOverrides(t *testing.T) {
 	t.Parallel()
 
-	img, err := inspectImage(t.Context(), "quay.io/tigera/operator", "quay.io/tigera/operator:v1.42.6",
+	img, err := inspectImage(t.Context(), "quay.io/tigera/operator", "quay.io/tigera/operator:v3.34.0",
 		imageInspectOutput, manifestInspectOutput)
 	if err != nil {
 		t.Fatalf("inspectImage: %v", err)
@@ -132,9 +132,9 @@ func TestReleaseStream(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]string{
-		"1.42.6": "1.42",
-		"1.42":   "1",
-		"1":      "1",
+		"3.34.0": "3.34",
+		"3.34":   "3",
+		"3":      "3",
 	}
 	for version, want := range cases {
 		if got := releaseStream(version); got != want {
@@ -162,7 +162,7 @@ COPY bundle/metadata /metadata/
 		t.Fatalf("creating %s: %v", bundleDir, err)
 	}
 
-	if err := updateDockerfile("1.42.6"); err != nil {
+	if err := updateDockerfile("3.34.0"); err != nil {
 		t.Fatalf("updateDockerfile: %v", err)
 	}
 
@@ -176,10 +176,10 @@ LABEL operators.operatorframework.io.bundle.package.v1=tigera-operator
 LABEL com.redhat.openshift.versions="v4.16-v4.18"
 LABEL com.redhat.delivery.backport=true
 LABEL com.redhat.delivery.operator.bundle=true
-COPY 1.42.6/manifests /manifests/
-COPY 1.42.6/metadata /metadata/
+COPY 3.34.0/manifests /manifests/
+COPY 3.34.0/metadata /metadata/
 `
-	if got := readFile(t, filepath.Join(bundleDir, "bundle-v1.42.6.Dockerfile")); got != want {
+	if got := readFile(t, filepath.Join(bundleDir, "bundle-v3.34.0.Dockerfile")); got != want {
 		t.Errorf("Dockerfile is\n%s\nwant\n%s", got, want)
 	}
 }
@@ -252,9 +252,8 @@ spec:
                     image: quay.io/tigera/sidecar:v0.0.0
                   - name: tigera-operator
                     image: quay.io/tigera/operator:v0.0.0
-      permissions:
-        - serviceAccountName: tigera-operator
-  version: 1.42.6
+      permissions: []
+  version: 3.34.0
 `
 	img := image{
 		digest:        "quay.io/tigera/operator@sha256:bbb",
@@ -270,8 +269,8 @@ spec:
 	}{
 		{
 			name:        "replaces the previous version",
-			prevVersion: "1.42.5",
-			want:        []string{"replaces: tigera-operator.v1.42.5"},
+			prevVersion: "3.33.0",
+			want:        []string{"replaces: tigera-operator.v3.33.0"},
 		},
 		{
 			name:        "replaces nothing",
@@ -281,10 +280,10 @@ spec:
 				"capabilities: Basic Install",
 				"containerImage: quay.io/tigera/operator@sha256:bbb",
 				`createdAt: "2026-01-02T03:04:05Z"`,
-				"olm.skipRange: <1.42.6",
+				"olm.skipRange: <3.34.0",
 				"operatorframework.io/arch.amd64: supported",
 				"operatorframework.io/arch.arm64: supported",
-				"displayName: Tigera Operator v1.42",
+				"displayName: Tigera Operator v3.34",
 				"image: quay.io/tigera/operator@sha256:bbb",
 				"- name: tigera-operator\n      image: quay.io/tigera/operator@sha256:bbb",
 				// The sidecar keeps its own image.
@@ -301,7 +300,7 @@ spec:
 			path := filepath.Join(t.TempDir(), csvName)
 			writeFile(t, path, doc)
 
-			if err := updateCSV(path, "1.42.6", tc.prevVersion, "Basic Install", img); err != nil {
+			if err := updateCSV(path, "3.34.0", tc.prevVersion, "Basic Install", img); err != nil {
 				t.Fatalf("updateCSV: %v", err)
 			}
 
@@ -318,6 +317,48 @@ spec:
 			// base carried is replaced rather than merged with.
 			assertNotContains(t, content, "Seamless Upgrades")
 		})
+	}
+}
+
+// TestUpdateCSVWithNamespacedPermissions checks that permissions we did not
+// expect fail the build rather than being dropped with the key. Only
+// cluster-scoped RBAC is staged, so a namespaced Role that reaches the deploy
+// directory would otherwise be advertised nowhere in the CSV.
+func TestUpdateCSVWithNamespacedPermissions(t *testing.T) {
+	t.Parallel()
+
+	const doc = `spec:
+  install:
+    spec:
+      deployments:
+        - name: tigera-operator
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: tigera-operator
+                    image: quay.io/tigera/operator:v0.0.0
+      permissions:
+        - serviceAccountName: tigera-operator
+          rules:
+            - apiGroups: [""]
+              resources: ["secrets"]
+              verbs: ["get"]
+`
+
+	path := filepath.Join(t.TempDir(), csvName)
+	writeFile(t, path, doc)
+
+	err := updateCSV(path, "3.34.0", noPreviousVersion, "Basic Install", image{
+		digest:        "quay.io/tigera/operator@sha256:bbb",
+		created:       "2026-01-02T03:04:05Z",
+		architectures: []string{"amd64"},
+	})
+	if err == nil {
+		t.Fatal("updateCSV succeeded, want an error naming the permissions it did not expect")
+	}
+	if !strings.Contains(err.Error(), "spec.install.spec.permissions") {
+		t.Errorf("error is %q, want it to name spec.install.spec.permissions", err)
 	}
 }
 
@@ -378,7 +419,7 @@ func TestUpdateCSVWithoutTheOperator(t *testing.T) {
 			path := filepath.Join(t.TempDir(), csvName)
 			writeFile(t, path, tc.doc)
 
-			err := updateCSV(path, "1.42.6", noPreviousVersion, "Basic Install", image{
+			err := updateCSV(path, "3.34.0", noPreviousVersion, "Basic Install", image{
 				digest:        "quay.io/tigera/operator@sha256:bbb",
 				created:       "2026-01-02T03:04:05Z",
 				architectures: []string{"amd64"},

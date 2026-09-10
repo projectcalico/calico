@@ -1,5 +1,5 @@
 apiVersion: operator.tigera.io/v1
-kind: TLSPassthroughRoute
+kind: TLSPassThroughRoute
 metadata:
   name: tlspassthroughroute-sample
   namespace: tigera-manager

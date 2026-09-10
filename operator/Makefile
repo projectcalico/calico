@@ -460,7 +460,7 @@ BUNDLE_CRD_DIR ?= $(BUNDLE_BASE_DIR)/crds
 BUNDLE_DEPLOY_DIR ?= $(BUNDLE_BASE_DIR)/deploy
 
 ## Create an operator bundle image.
-# E.g., make bundle VERSION=1.13.1 PREV_VERSION=1.13.0 CHANNELS=release-v1.13 DEFAULT_CHANNEL=release-v1.13
+# E.g., make bundle VERSION=3.34.0 PREV_VERSION=3.33.0 CHANNEL=release-v3.34 DEFAULT_CHANNEL=release-v3.34
 .PHONY: bundle
 bundle: bundle-generate update-bundle bundle-validate bundle-image
 
@@ -469,11 +469,6 @@ bundle: bundle-generate update-bundle bundle-validate bundle-image
 .PHONY: bundle-validate
 bundle-validate: $(OPERATOR_SDK_BARE)
 	$(OPERATOR_SDK_BARE) bundle validate bundle/$(VERSION) --select-optional suite=operatorframework
-
-# The Calico release the bundle's manifests come from. GIT_VERSION cannot serve
-# here: the bundle fetches manifests by git ref, and a describe of an untagged
-# commit is not one.
-BUNDLE_CALICO_VERSION ?= $(shell git describe --tags --abbrev=0)
 
 .PHONY: bundle-manifests
 bundle-manifests: $(BINDIR)/gen-bundle
@@ -484,9 +479,9 @@ ifndef PREV_VERSION
 	$(error PREV_VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
 endif
 	$(BINDIR)/gen-bundle get-manifests \
+		--repo-root "$(REPO_ROOT)" \
 		--crd-dir "$(BUNDLE_CRD_DIR)" \
-		--deploy-dir "$(BUNDLE_DEPLOY_DIR)" \
-		--calico-version "$(BUNDLE_CALICO_VERSION)"
+		--deploy-dir "$(BUNDLE_DEPLOY_DIR)"
 
 # Generate the bundle from the staged manifests. The static half of the CSV comes
 # from --kustomize-dir; note that operator-sdk only picks that base up if its

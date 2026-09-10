@@ -59,9 +59,9 @@ spec:
 		{
 			name:  "adds a key to an existing mapping",
 			path:  []any{"metadata", "annotations", "olm.skipRange"},
-			value: "<1.42.6",
+			value: "<3.34.0",
 			want: `    createdAt: "2020-01-01T00:00:00Z"
-    olm.skipRange: <1.42.6
+    olm.skipRange: <3.34.0
 `,
 		},
 		{
@@ -343,7 +343,7 @@ spec:
 `
 
 	d := writeDocument(t, doc)
-	if err := d.set("Tigera Operator v1.42", "spec", "displayName"); err != nil {
+	if err := d.set("Tigera Operator v3.34", "spec", "displayName"); err != nil {
 		t.Fatalf("set: %v", err)
 	}
 	if err := d.save(); err != nil {
@@ -352,7 +352,7 @@ spec:
 
 	want := `# A leading comment.
 spec:
-  displayName: Tigera Operator v1.42
+  displayName: Tigera Operator v3.34
   description: |-
     A literal block
     over two lines.

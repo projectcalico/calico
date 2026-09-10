@@ -141,6 +141,23 @@ func (d *document) find(path []any, key, value string) (int, error) {
 	return 0, fmt.Errorf("%s: no element whose %s is %q", pathString(path), key, value)
 }
 
+// isEmpty reports whether the node at path holds nothing: either the key is
+// missing, or its value is null or a collection with no elements.
+func (d *document) isEmpty(path ...any) (bool, error) {
+	node, err := d.lookup(path, false)
+	if err != nil {
+		return false, err
+	}
+	switch {
+	case node == nil, node.Tag == "!!null":
+		return true, nil
+	case node.Kind == yaml.SequenceNode, node.Kind == yaml.MappingNode:
+		return len(node.Content) == 0, nil
+	default:
+		return node.Value == "", nil
+	}
+}
+
 // delete removes a mapping key. Deleting a key that is not there is not an error.
 func (d *document) delete(path ...any) error {
 	if len(path) == 0 {

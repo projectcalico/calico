@@ -17,24 +17,34 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
 
-// calicoBaseURL is the base path for the Calico repository, used to download
-// the manifests and CRDs that the bundle ships.
-const calicoBaseURL = "https://raw.githubusercontent.com/projectcalico/calico"
+// The manifests and Calico CRDs the bundle ships were downloaded from the
+// Calico repository back when the operator was a repository of its own. They are
+// read from the working tree now that the operator builds out of Calico, so a
+// bundle carries the manifests it was built alongside rather than whatever a
+// pinned release published. Every path below is relative to the repository root
+// that --repo-root names, so none of them depend on the directory gen-bundle
+// happens to be run from.
+const (
+	// ocpManifestDir holds the OpenShift manifests. They are generated from
+	// charts/ by 'make gen-manifests' at the repository root and committed.
+	ocpManifestDir = "manifests"
 
-// downloadClient bounds each download, so that a connection that stalls fails
-// the bundle build rather than hanging the release workflow.
-var downloadClient = &http.Client{Timeout: 2 * time.Minute}
+	// calicoCRDDir holds the Calico CRDs, the same directory the operator embeds
+	// them from at runtime - see the libcalico-go/config/crd import in pkg/crds.
+	calicoCRDDir = "libcalico-go/config/crd"
+
+	// operatorCRDDir holds the committed operator CRDs. 'make gen-files' and the
+	// CI dirty-check keep them current, so the bundle ships them as they are.
+	operatorCRDDir = "operator/pkg/crds/operator"
+)
 
 // calicoResources are the Calico CRDs the bundle ships. Keep this list, the
 // owned CRDs in config/manifests/bases/tigera-operator.clusterserviceversion.yaml,
@@ -74,26 +84,25 @@ var operatorCRDs = []string{
 // offers users as a starting point in its "Create instance" forms. Only kinds
 // whose CRD the bundle ships belong here - an example for a kind the CSV does
 // not own is dropped, and every owned CRD without an example is reported by
-// 'operator-sdk bundle validate'.
+// 'operator-sdk bundle validate'. Each entry is the canonical copy of that
+// example: the Installation one is the OpenShift install-time CR itself, so
+// that what OperatorHub offers and what the OpenShift install instructions
+// tell users to apply cannot drift apart.
 var sampleCRs = []string{
-	"config/samples/operator_v1_installation.yaml",
-	"config/samples/operator_v1_imageset.yaml",
+	ocpManifestDir + "/ocp/03-cr-installation.yaml",
+	"operator/config/samples/operator_v1_imageset.yaml",
 }
-
-// operatorCRDDir holds the committed operator CRDs. 'make gen-files' and the
-// CI dirty-check keep them current, so the bundle ships them as they are.
-const operatorCRDDir = "pkg/crds/operator"
 
 var getManifestsCommand = &cli.Command{
 	Name:  "get-manifests",
 	Usage: "Stage the Calico and operator manifests that 'operator-sdk generate bundle' reads to build a ClusterServiceVersion",
-	Flags: []cli.Flag{crdDirFlag, deployDirFlag, calicoVersionFlag},
-	Action: func(ctx context.Context, c *cli.Command) error {
-		return getManifests(ctx, c.String(crdDirFlag.Name), c.String(deployDirFlag.Name), c.String(calicoVersionFlag.Name))
+	Flags: []cli.Flag{repoRootFlag, crdDirFlag, deployDirFlag},
+	Action: func(_ context.Context, c *cli.Command) error {
+		return getManifests(c.String(repoRootFlag.Name), c.String(crdDirFlag.Name), c.String(deployDirFlag.Name))
 	},
 }
 
-func getManifests(ctx context.Context, crdDir, deployDir, calicoVersion string) error {
+func getManifests(repoRoot, crdDir, deployDir string) error {
 	// Start from empty staging directories. Leftovers from an earlier run would
 	// otherwise be picked up by operator-sdk and end up in the bundle - for
 	// example a CRD that has since been dropped from calicoResources.
@@ -106,46 +115,45 @@ func getManifests(ctx context.Context, crdDir, deployDir, calicoVersion string) 
 		}
 	}
 
-	logrus.Infof("Building bundle from %s", deployDir)
+	logrus.Infof("Building bundle from %s, with the manifests in %s", deployDir, repoRoot)
 
-	baseURL := fmt.Sprintf("%s/%s", calicoBaseURL, calicoVersion)
-
-	if err := downloadOperatorManifests(ctx, baseURL, deployDir); err != nil {
+	if err := copyOperatorManifests(repoRoot, deployDir); err != nil {
 		return err
 	}
-	if err := copySampleCRs(deployDir); err != nil {
+	if err := copySampleCRs(repoRoot, deployDir); err != nil {
 		return err
 	}
-	if err := copyOperatorCRDs(crdDir); err != nil {
+	if err := copyOperatorCRDs(repoRoot, crdDir); err != nil {
 		return err
 	}
-	return downloadCalicoCRDs(ctx, baseURL, crdDir)
+	return copyCalicoCRDs(repoRoot, crdDir)
 }
 
-// downloadOperatorManifests downloads the operator manifests. For CSV generation
-// we use a version of the operator deployment manifest that doesn't include an
-// init container and volumes for creating install-time resources.
-func downloadOperatorManifests(ctx context.Context, baseURL, deployDir string) error {
+// copyOperatorManifests stages the OpenShift manifests that the CSV's install
+// spec is built from. For CSV generation we use a version of the operator
+// deployment manifest that doesn't include an init container and volumes for
+// creating install-time resources.
+func copyOperatorManifests(repoRoot, deployDir string) error {
 	manifests := []struct{ path, name string }{
-		{"manifests/ocp-tigera-operator-no-resource-loading.yaml", "operator.yaml"},
-		{"manifests/ocp/02-role-tigera-operator.yaml", "role.yaml"},
+		{"ocp-tigera-operator-no-resource-loading.yaml", "operator.yaml"},
+		{"ocp/02-role-tigera-operator.yaml", "role.yaml"},
 		// The binding is required unlike in earlier bundle generation. The
 		// 'operator-sdk generate bundle' command combines clusterroles bound to
 		// service accounts. The resulting permissions is set to the CSV's
 		// spec.install.clusterPermissions field.
-		{"manifests/ocp/02-rolebinding-tigera-operator.yaml", "rolebinding-tigera-operator.yaml"},
+		{"ocp/02-rolebinding-tigera-operator.yaml", "rolebinding-tigera-operator.yaml"},
 	}
 	for _, m := range manifests {
-		if err := download(ctx, baseURL+"/"+m.path, filepath.Join(deployDir, m.name)); err != nil {
+		if err := copyFile(filepath.Join(repoRoot, ocpManifestDir, m.path), filepath.Join(deployDir, m.name)); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func copySampleCRs(deployDir string) error {
+func copySampleCRs(repoRoot, deployDir string) error {
 	for _, sample := range sampleCRs {
-		if err := copyFile(sample, filepath.Join(deployDir, filepath.Base(sample))); err != nil {
+		if err := copyFile(filepath.Join(repoRoot, sample), filepath.Join(deployDir, filepath.Base(sample))); err != nil {
 			return err
 		}
 	}
@@ -155,50 +163,22 @@ func copySampleCRs(deployDir string) error {
 // copyOperatorCRDs copies over the operator CRDs required for Calico. They are
 // shipped as committed: 'make gen-files' writes one document per file with no
 // separators, which is what operator-sdk expects.
-func copyOperatorCRDs(crdDir string) error {
+func copyOperatorCRDs(repoRoot, crdDir string) error {
 	for _, crd := range operatorCRDs {
-		if err := copyFile(filepath.Join(operatorCRDDir, crd), filepath.Join(crdDir, crd)); err != nil {
+		if err := copyFile(filepath.Join(repoRoot, operatorCRDDir, crd), filepath.Join(crdDir, crd)); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func downloadCalicoCRDs(ctx context.Context, baseURL, crdDir string) error {
+func copyCalicoCRDs(repoRoot, crdDir string) error {
 	for _, resource := range calicoResources {
-		logrus.Infof("Downloading libcalico-go CRD %s", resource)
+		logrus.Infof("Copying libcalico-go CRD %s", resource)
 		name := fmt.Sprintf("crd.projectcalico.org_%s.yaml", resource)
-		url := fmt.Sprintf("%s/libcalico-go/config/crd/%s", baseURL, name)
-		if err := download(ctx, url, filepath.Join(crdDir, name)); err != nil {
+		if err := copyFile(filepath.Join(repoRoot, calicoCRDDir, name), filepath.Join(crdDir, name)); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func download(ctx context.Context, url, dst string) error {
-	logrus.Debugf("Downloading %s to %s", url, dst)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return fmt.Errorf("building request for %s: %w", url, err)
-	}
-	resp, err := downloadClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("downloading %s: %w", url, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("downloading %s: %s", url, resp.Status)
-	}
-
-	f, err := os.Create(dst)
-	if err != nil {
-		return fmt.Errorf("creating %s: %w", dst, err)
-	}
-	defer f.Close()
-	if _, err := io.Copy(f, resp.Body); err != nil {
-		return fmt.Errorf("writing %s: %w", dst, err)
 	}
 	return nil
 }

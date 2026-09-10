@@ -56,6 +56,18 @@ var debugFlag = &cli.BoolFlag{
 	Sources: cli.EnvVars("DEBUG"),
 }
 
+// repoRootFlag anchors the manifests and CRDs that the bundle ships, so that
+// staging them does not depend on where gen-bundle was run from. The Makefile
+// passes the root that git reported; the default covers running it by hand from
+// the operator directory.
+var repoRootFlag = &cli.StringFlag{
+	Name:      "repo-root",
+	Usage:     "Root of the Calico repository to stage the manifests and CRDs from",
+	Sources:   cli.EnvVars("REPO_ROOT"),
+	Value:     "..",
+	Validator: nonEmpty("repo-root"),
+}
+
 // Staging directory flags. These name the directories that
 // 'operator-sdk generate bundle' is pointed at.
 var (
@@ -72,15 +84,6 @@ var (
 		Sources:   cli.EnvVars("BUNDLE_DEPLOY_DIR"),
 		Required:  true,
 		Validator: nonEmpty("deploy-dir"),
-	}
-	// The manifests come from the Calico release this operator is built from; the
-	// Makefile resolves it from the most recent reachable tag.
-	calicoVersionFlag = &cli.StringFlag{
-		Name:      "calico-version",
-		Usage:     "The Calico git ref to download the bundle's manifests and CRDs from",
-		Sources:   cli.EnvVars("CALICO_VERSION"),
-		Required:  true,
-		Validator: nonEmpty("calico-version"),
 	}
 )
 
@@ -113,8 +116,8 @@ var (
 )
 
 // Image flags. update-bundle pulls and inspects the operator image itself; the
-// inspection overrides are there for a caller that has already run the docker
-// commands, or for testing without a registry.
+// inspection overrides bypass the pull, for running it by hand against an image
+// that is not in a registry we can reach.
 var (
 	imageFlag = &cli.StringFlag{
 		Name:      "image",

@@ -101,8 +101,9 @@ type image struct {
 }
 
 // inspectImage asks docker about the operator image the bundle is being built
-// for. The two inspections can be passed in instead, which is what CI does when
-// it has already run the docker commands elsewhere.
+// for. The two inspections can be passed in instead, which is how the tests run
+// without a registry, and how the command can be run by hand against an image
+// docker cannot pull.
 func inspectImage(ctx context.Context, repository, ref, imageInspect, manifestInspect string) (image, error) {
 	// Both inspections read the image as the registry holds it, so pull it first
 	// unless everything we need was passed in.
@@ -219,7 +220,7 @@ func updateCSV(path, version, prevVersion, capabilities string, img image) error
 	}
 
 	// The display name carries the release stream so that the channels are
-	// distinguishable in OperatorHub, e.g. "Tigera Operator v1.42" for 1.42.6.
+	// distinguishable in OperatorHub, e.g. "Tigera Operator v3.34" for 3.34.0.
 	updates = append(updates, csvUpdate{[]any{"spec", "displayName"}, "Tigera Operator v" + releaseStream(version)})
 
 	// Set the previous version of the operator that this version replaces.
@@ -253,9 +254,20 @@ func updateCSV(path, version, prevVersion, capabilities string, img image) error
 		return fmt.Errorf("updating %s: %w", path, err)
 	}
 
-	// Delete empty permissions (we only set clusterPermissions) otherwise the
-	// CSV validation fails.
-	if err := csv.delete("spec", "install", "spec", "permissions"); err != nil {
+	// Drop the permissions if operator-sdk left an empty one behind, since CSV
+	// validation fails on that. Only cluster-scoped RBAC is staged, so anything
+	// in there means a namespaced Role reached the deploy directory: its rules
+	// belong in the CSV rather than being dropped along with the key, so say so
+	// instead of shipping an operator that cannot do what the Role granted.
+	permissions := []any{"spec", "install", "spec", "permissions"}
+	empty, err := csv.isEmpty(permissions...)
+	if err != nil {
+		return fmt.Errorf("updating %s: %w", path, err)
+	}
+	if !empty {
+		return fmt.Errorf("updating %s: %s is not empty, but the bundle stages only cluster-scoped RBAC", path, pathString(permissions))
+	}
+	if err := csv.delete(permissions...); err != nil {
 		return fmt.Errorf("updating %s: %w", path, err)
 	}
 
