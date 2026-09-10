@@ -97,8 +97,12 @@ On each invocation, in order:
 "Lens is observability, not a critical path": the tool only returns non-zero
 in genuinely unrecoverable cases.  Missing credentials, unreachable ES,
 malformed JSON, mapping conflicts -- all log a warning and continue.  A
-`--require-creds` flag flips the missing-creds case to a hard failure, for
-places that want a strict gate on the publish step.
+`--require-publication` flag flips that default for a caller whose whole
+purpose is publishing: absent credentials, a document that failed to send, and
+finding nothing to send at all all become hard failures.
+Index-template PUTs stay warnings even then -- a stale template costs new
+fields their mapping, which is a Kibana inconvenience rather than data loss.
+The weekly OpenStack resync scale run is the one caller that sets it.
 
 ### When does the PUT have effect?
 

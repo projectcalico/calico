@@ -327,13 +327,31 @@ fi
 EOF
 
 # Publish perf measurements to Lens.  No-op unless ELASTICSEARCH_URL +
-# credentials are wired in via Semaphore secrets; see hack/perf/README.md.
-(
-  cd ${CALICO_REPO_DIR} && \
-  go run ./hack/perf/cmd/send-perf-results \
-     --dir artifacts/perf \
-     --templates hack/perf/index-templates
-) || true
+# credentials are wired in via the CI system's secrets; see hack/perf/README.md.
+if ${SCALE_ONLY:-false}; then
+    # For the scheduled run, publishing is the deliverable rather than a
+    # by-product, so the publish step is a gate: --require-publication makes
+    # both a missing credential and a failed send exit non-zero, and there is no
+    # `|| true` here to swallow it.  Otherwise a run that measured everything
+    # and published nothing would still go green, leaving a hole in the trend
+    # that nobody notices until the dashboard is next read.
+    (
+      cd ${CALICO_REPO_DIR} && \
+      go run ./hack/perf/cmd/send-perf-results \
+         --dir artifacts/perf \
+         --templates hack/perf/index-templates \
+         --require-publication
+    )
+else
+    # Elsewhere Lens stays observability rather than a critical path: a per-PR
+    # run must not fail because the trend store was briefly unreachable.
+    (
+      cd ${CALICO_REPO_DIR} && \
+      go run ./hack/perf/cmd/send-perf-results \
+         --dir artifacts/perf \
+         --templates hack/perf/index-templates
+    ) || true
+fi
 
 # Run Tempest tests
 if ! ${SCALE_ONLY:-false}; then
