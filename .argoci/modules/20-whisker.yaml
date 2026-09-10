@@ -1,0 +1,42 @@
+# Whisker is a TypeScript frontend rather than a Go component, so it has no
+# import graph to gate on and names its paths directly.
+#
+# `make ci` builds an nginx test image, and the cross-architecture builds are
+# images too, so both steps need the daemon.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  services:
+    - docker
+
+steps:
+  - name: whisker-ci
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd whisker
+      make ci
+
+  # Cross-architecture builds, from an amd64 runner. Nothing consumes the
+  # result, so a failure here means the image stopped building, not that a
+  # test regressed.
+  - name: whisker-image
+    matrix:
+      - name: arm64
+        env:
+          - name: ARCH
+            value: arm64
+      - name: ppc64le
+        env:
+          - name: ARCH
+            value: ppc64le
+      - name: s390x
+        env:
+          - name: ARCH
+            value: s390x
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd whisker
+      make build ARCH=$ARCH

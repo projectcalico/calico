@@ -1,0 +1,37 @@
+# `make ci` in libcalico-go/, run once per backing API version — the same suite
+# reads through two different datastore shapes, and only running both catches a
+# change that works through one.
+#
+# The FVs stand up etcd, CoreDNS and a kind cluster inside the docker sidecar,
+# and the recipes shell out to a nested build container besides: unauthenticated
+# pulls are rate-limited, and it inherits only what is spliced in explicitly.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: libcalico-go-ci
+    matrix:
+      - name: crd-v1
+      - name: v3
+        env:
+          - name: CALICO_API_GROUP
+            value: projectcalico.org/v3
+          - name: GINKGO_SKIP
+            value: etcdv3 backend
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd libcalico-go
+      make ci
+    epilogue: |
+      # Runs in the parent shell, so it inherits neither the `cd` above nor
+      # anything the commands exported. Matrix env vars it does see.
+      cd "${CI_HOME}/${CI_GIT_DIR}/libcalico-go"
+      # A skipped spec still reports as a case, so the v3 run would otherwise
+      # publish every etcdv3 spec it deliberately did not execute.
+      python3 ../hack/strip-skipped-tests.py ./report/*.xml 2>/dev/null || true
+      artifact push job report --destination test-results || true

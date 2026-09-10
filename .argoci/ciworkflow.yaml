@@ -104,3 +104,47 @@ includes:
     changes:
       dependsOn: [guardian]
       in: ['^\.argoci/modules/20-guardian\.yaml$']
+
+  - path: .argoci/modules/20-libcalico-go.yaml
+    changes:
+      dependsOn: [libcalico-go]
+      in: ['^\.argoci/modules/20-libcalico-go\.yaml$']
+
+  - path: .argoci/modules/20-apiserver.yaml
+    changes:
+      dependsOn: [apiserver]
+      in: ['^\.argoci/modules/20-apiserver\.yaml$']
+
+  - path: .argoci/modules/20-whisker-backend.yaml
+    changes:
+      dependsOn: [whisker-backend]
+      in: ['^\.argoci/modules/20-whisker-backend\.yaml$']
+
+  # Its own package plus the two whose types it validates, matching the three
+  # its Semaphore block names.
+  - path: .argoci/modules/20-webhooks.yaml
+    changes:
+      dependsOn: [webhooks, api, apiserver]
+      in: ['^\.argoci/modules/20-webhooks\.yaml$']
+
+  # The hack tree plus the two components its tools are built against. `hack`
+  # alone would under-fire: it resolves to the packages hack/ imports, not to
+  # every change in api/ or libcalico-go/ that its Semaphore block lists.
+  - path: .argoci/modules/20-tools.yaml
+    changes:
+      dependsOn: [hack, api, libcalico-go]
+      in: ['^\.argoci/modules/20-tools\.yaml$']
+
+  # Not a Go package, so there is no generated entry to name — the paths are
+  # the ones its Semaphore block lists.
+  - path: .argoci/modules/20-whisker.yaml
+    changes:
+      in:
+        - ^whisker/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/20-whisker\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
