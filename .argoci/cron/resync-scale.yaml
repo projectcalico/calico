@@ -114,9 +114,22 @@ steps:
       export CI_GIT_SHA="$(git -C "${CALICO_REPO_DIR}" rev-parse HEAD)"
       export CI_JOB_ID="$(basename "${CI_ARTIFACT_STORAGE}")"
 
+      # TEMPORARY -- REVERT BEFORE MERGE.  Verifies that the publish gate added
+      # in f01d55c3de actually fires in CI, which no run has yet exercised: the
+      # three full runs on this branch all predate it.  A bogus Elasticsearch
+      # user reproduces resync-scale-13670-pr-gbhnp, where every POST returned
+      # HTTP 401 and the run went green anyway.  Expected outcome now is a red
+      # step logging "published 0 of 4 documents, 4 failed".  Overrides the
+      # export above, so the real value is never used.
+      export ELASTICSEARCH_USER=not-a-valid-lens-user
+
       # The headline ladder.  Keep the smaller rungs: they are what tell us
       # whether scaling is still linear, which is the point of trending this.
-      export RESYNC_SCALES=100,1000,3000,10000
+      #
+      # TEMPORARY -- REVERT BEFORE MERGE.  One small rung, so the run reaches
+      # the publish step in minutes rather than an hour.  DevStack setup is the
+      # floor on how quick this can be.
+      export RESYNC_SCALES=100
 
       # Skip the QoS responsiveness and resync concurrency tests, and Tempest
       # (off by default).  All are covered by per-PR CI; this run has a time
