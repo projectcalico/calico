@@ -26,6 +26,11 @@ globalPrologue: |
   ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
 
 defaults:
+  # Carries the host-level tooling the steps shell out to and nothing else — a
+  # quarter of the pull of a general-purpose runner, which every step pays.
+  # A step doing its work in-process names the build image instead.
+  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2
+
   # medium is the only spot jobSize. Preemption fails the run outright, with no
   # retry, so anything long or flaky wants `large`.
   jobSize: medium

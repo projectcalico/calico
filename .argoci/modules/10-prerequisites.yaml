@@ -12,9 +12,6 @@ version: condensed-module
 defaults:
   timeout: 1h
 
-  # Semaphore's implicit runner. The steps that need no daemon override it.
-  image: gcr.io/tigera-cc-dev/ci-base/ubuntu-cloud-providers:v0.106
-
 steps:
   # Generated from the live Go import graph, so a stale copy under-fires every
   # other gate in the file and nothing else would report it.
@@ -71,7 +68,8 @@ steps:
       # Generated from the same import graph as deps.txt, so it goes stale here too.
       make gen-semaphore-yaml
       make go-vet
-      make fix-changed
+      # A merge has no PR to diff against, so it reformats everything.
+      if [ -n "$CI_GIT_PR_NUMBER" ]; then make fix-changed; else make fix-all; fi
       make check-dirty
 
   - name: check-python
