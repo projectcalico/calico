@@ -16,10 +16,12 @@ package allocateip
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	gnet "net"
 	"os"
 	"reflect"
+	"time"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -47,6 +49,14 @@ import (
 //
 // It will assign an address if there are any available, and remove any tunnel addresses
 // that are configured and should no longer be.
+
+// nodeRetryInterval is how long to wait before re-checking for a node that is
+// absent, e.g. while kubelet re-registers it.
+const nodeRetryInterval = 5 * time.Second
+
+// errNodeNotInDatastore marks the node lookup specifically, so a missing node
+// elsewhere in the reconcile is still reported as a failure.
+var errNodeNotInDatastore = errors.New("node not in the datastore")
 
 // Run runs the tunnel IP allocator. In oneshot mode it reconciles once and
 // returns. In daemon mode it watches for IP pool and node configuration
@@ -115,14 +125,26 @@ func run(
 }
 
 func (r reconciler) run(ctx context.Context) error {
+	// Set while waiting for a node to come back; OnUpdates drops triggers that
+	// arrive mid-reconcile, so the retry cannot rely on one arriving.
+	var retry <-chan time.Time
 	for {
 		select {
 		case <-r.ch:
-			if err := reconcileTunnelAddrs(r.nodename, r.client, r.felixEnvConfig); err != nil {
-				return fmt.Errorf("failed to reconcile tunnel address: %w", err)
-			}
+		case <-retry:
 		case <-ctx.Done():
 			return nil
+		}
+		retry = nil
+
+		if err := reconcileTunnelAddrs(r.nodename, r.client, r.felixEnvConfig); err != nil {
+			if errors.Is(err, errNodeNotInDatastore) {
+				// The node is momentarily absent while kubelet re-registers it.
+				log.WithError(err).Warn("Node not in the datastore, retrying")
+				retry = time.After(nodeRetryInterval)
+				continue
+			}
+			return fmt.Errorf("failed to reconcile tunnel address: %w", err)
 		}
 	}
 }
@@ -226,6 +248,10 @@ func reconcileTunnelAddrs(
 	// Get node resource for given nodename.
 	node, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
 	if err != nil {
+		var notFound cerrors.ErrorResourceDoesNotExist
+		if errors.As(err, &notFound) {
+			return fmt.Errorf("%w: %s", errNodeNotInDatastore, nodename)
+		}
 		return fmt.Errorf("failed to fetch node resource '%s': %w", nodename, err)
 	}
 
