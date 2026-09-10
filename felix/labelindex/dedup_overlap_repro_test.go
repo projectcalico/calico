@@ -103,3 +103,134 @@ func TestOverlapSuppressorRemoveMiddleCoveredByAncestor(t *testing.T) {
 	Expect(rem).To(BeNil(), "middle CIDR was suppressed by the ancestor, so its removal must not be emitted")
 	Expect(adds).To(BeEmpty(), "the ancestor still covers the leaf, so nothing is re-exposed")
 }
+
+// programmedSet tracks the net set of emitted (dataplane-programmed) CIDRs as Add/Remove results are
+// applied, so a test can assert what the dataplane would hold after a sequence of operations. Add
+// returns (cidrToProgram, cidrsToWithdraw); Remove returns (cidrToWithdraw, cidrsToReadvertise).
+type programmedSet map[string]bool
+
+func (p programmedSet) applyAdd(add ip.CIDR, withdraw []ip.CIDR) {
+	if add != nil {
+		p[add.String()] = true
+	}
+	for _, w := range withdraw {
+		delete(p, w.String())
+	}
+}
+
+func (p programmedSet) applyRemove(withdraw ip.CIDR, readvertise []ip.CIDR) {
+	if withdraw != nil {
+		delete(p, withdraw.String())
+	}
+	for _, r := range readvertise {
+		p[r.String()] = true
+	}
+}
+
+// TestOverlapSuppressorRemoveAncestorFirstLeavesNoStale exercises (a): when the ancestor is removed
+// before the descendants it masks, Remove re-advertises those descendants (ClosestDescendants) even
+// though they are themselves about to be removed. The transient re-advertise must be cleaned up so
+// that removing every CIDR leaves no stale member behind.
+func TestOverlapSuppressorRemoveAncestorFirstLeavesNoStale(t *testing.T) {
+	RegisterTestingT(t)
+
+	type step struct {
+		op   string // "add" or "remove"
+		cidr string
+	}
+	tests := []struct {
+		name  string
+		steps []step
+	}{
+		{
+			name: "two levels, ancestor removed before descendant",
+			steps: []step{
+				{"add", "10.0.0.0/16"},
+				{"add", "10.0.1.0/24"}, // suppressed by the ancestor
+				{"remove", "10.0.0.0/16"}, // re-advertises 10.0.1.0/24
+				{"remove", "10.0.1.0/24"}, // the transient re-advertise must be removed
+			},
+		},
+		{
+			name: "three levels, removed top-down",
+			steps: []step{
+				{"add", "10.0.0.0/16"},
+				{"add", "10.0.1.0/24"},
+				{"add", "10.0.1.5/32"},
+				{"remove", "10.0.0.0/16"},
+				{"remove", "10.0.1.0/24"},
+				{"remove", "10.0.1.5/32"},
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			RegisterTestingT(t)
+
+			s := labelindex.NewMemberOverlapSuppressor()
+			prog := programmedSet{}
+			readvertised := false
+			for _, st := range tc.steps {
+				cidr := ip.MustParseCIDROrIP(st.cidr)
+				switch st.op {
+				case "add":
+					add, withdraw := s.Add(dedupTestSet, cidr)
+					prog.applyAdd(add, withdraw)
+				case "remove":
+					withdraw, readd := s.Remove(dedupTestSet, cidr)
+					if len(readd) > 0 {
+						readvertised = true
+					}
+					prog.applyRemove(withdraw, readd)
+				}
+			}
+			Expect(readvertised).To(BeTrue(),
+				"removing an ancestor before its descendants must transiently re-advertise the masked descendant")
+			Expect(prog).To(BeEmpty(),
+				"after removing every CIDR, the transient re-advertise must leave no stale member")
+		})
+	}
+}
+
+// TestOverlapSuppressorIPv6 exercises (d): the suppressor discriminates address family by a string
+// check for ":" in the CIDR, keeping v4 and v6 in separate tries. IPv6 CIDRs must nest and suppress
+// exactly like IPv4, and a v4 entry must never mask a v6 entry (or vice versa) in the same set.
+func TestOverlapSuppressorIPv6(t *testing.T) {
+	RegisterTestingT(t)
+
+	t.Run("IPv6 nesting is suppressed and re-exposed like IPv4", func(t *testing.T) {
+		RegisterTestingT(t)
+
+		s := labelindex.NewMemberOverlapSuppressor()
+		broad := ip.MustParseCIDROrIP("fd00::/16")
+		nested := ip.MustParseCIDROrIP("fd00:1::/32")
+
+		add, withdraw := s.Add(dedupTestSet, broad)
+		Expect(add).To(Equal(broad), "broad IPv6 CIDR should be programmed")
+		Expect(withdraw).To(BeEmpty())
+
+		add, withdraw = s.Add(dedupTestSet, nested)
+		Expect(add).To(BeNil(), "nested IPv6 CIDR is covered by the ancestor, so must be suppressed")
+		Expect(withdraw).To(BeEmpty())
+
+		rem, readd := s.Remove(dedupTestSet, broad)
+		Expect(rem).To(Equal(broad), "IPv6 ancestor was programmed, so its removal must be emitted")
+		Expect(readd).To(ConsistOf(nested), "removing the IPv6 ancestor must re-expose its descendant")
+	})
+
+	t.Run("v4 and v6 entries in one set do not mask each other", func(t *testing.T) {
+		RegisterTestingT(t)
+
+		s := labelindex.NewMemberOverlapSuppressor()
+		v4 := ip.MustParseCIDROrIP("0.0.0.0/0")
+		v6 := ip.MustParseCIDROrIP("::/0")
+
+		add, _ := s.Add(dedupTestSet, v4)
+		Expect(add).To(Equal(v4), "IPv4 default route must be programmed")
+
+		add, withdraw := s.Add(dedupTestSet, v6)
+		Expect(add).To(Equal(v6),
+			"IPv6 default route lives in a separate trie (':' discriminates family), so it must not be suppressed by the IPv4 entry")
+		Expect(withdraw).To(BeEmpty(), "adding the IPv6 entry must not withdraw the IPv4 entry")
+	})
+}
