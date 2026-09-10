@@ -165,6 +165,11 @@ chmod +x "${BZ_GLOBAL_BIN}/bz"
 mkdir -p "$HOME/.docker"
 cp ~/secrets/docker_cfg.json "$HOME/.docker/config.json"
 
+# gcr.io is Artifact-Registry-backed; the static token in docker_cfg.json is
+# short-lived, so a long job can no longer pull by the time the epilogue runs.
+# The helper mints a token per pull (must follow the docker_cfg copy above).
+gcloud auth --quiet configure-docker gcr.io || echo "[WARN] gcloud configure-docker failed"
+
 mkdir -p "${BZ_LOGS_DIR}"
 
 cd "$HOME" || exit
