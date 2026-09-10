@@ -200,10 +200,6 @@ func WithExternalNode() any {
 	return framework.WithLabel("ExternalNode")
 }
 
-func RequiresExternalNode() any {
-	return framework.WithLabel("RequiresExternalNode")
-}
-
 // RequiresAzureIPAM marks tests that require a cluster with Azure IPAM.
 func RequiresAzureIPAM() any {
 	return framework.WithLabel("AzureIPAM")
