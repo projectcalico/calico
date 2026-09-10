@@ -77,9 +77,13 @@ func TestCompressionRestartBoundaries(t *testing.T) {
 			acks <- struct{}{}
 
 			// Stream 2: delta stream, runs until the sender closes the
-			// connection.
+			// connection.  Reading past the end of a stream reports a clean
+			// EOF for algorithms with no terminator, and a truncated stream
+			// for zstd, whose frame is deliberately left open.  The protocol
+			// never reads that far: a stream's last message says it has
+			// ended.
 			hostnames, err = readTestStream(alg, pr, false)
-			Expect(err).To(MatchError(io.EOF))
+			Expect(err).To(MatchError(expectedEndOfStreamErr(alg)))
 			Expect(hostnames).To(Equal(expectedHostnames(2)))
 
 			Expect(<-writerErr).NotTo(HaveOccurred())
@@ -88,6 +92,15 @@ func TestCompressionRestartBoundaries(t *testing.T) {
 }
 
 const msgsPerStream = 3
+
+// expectedEndOfStreamErr is what a Decompressor reports when the connection
+// closes after the last data of an alg stream.
+func expectedEndOfStreamErr(alg CompressionAlgorithm) error {
+	if alg == CompressionZstd {
+		return io.ErrUnexpectedEOF
+	}
+	return io.EOF
+}
 
 func testHostname(stream, i int) string {
 	return fmt.Sprintf("stream-%d-msg-%d", stream, i)
@@ -101,10 +114,9 @@ func expectedHostnames(stream int) []string {
 	return hostnames
 }
 
-// writeTestStreams plays the sender's side: each stream ends with a flush,
-// then the restart message, then Close on its Compressor -- the sequence
-// that keeps the restart message in the stream's final block -- and the
-// next stream starts only after the receiver ACKs.
+// writeTestStreams plays the sender's side: each stream ends with the
+// restart message followed by Close on its Compressor, and the next stream
+// starts only after the receiver ACKs.
 func writeTestStreams(w *io.PipeWriter, alg CompressionAlgorithm, acks chan struct{}) error {
 	writeMsgs := func(enc *gob.Encoder, stream int) error {
 		for i := 0; i < msgsPerStream; i++ {
@@ -123,9 +135,10 @@ func writeTestStreams(w *io.PipeWriter, alg CompressionAlgorithm, acks chan stru
 		CompressionAlgorithm: alg,
 	}}
 	endStream := func(c Compressor, enc *gob.Encoder) error {
-		return CloseWithFinalMessage(c, func() error {
-			return enc.Encode(restartMsg)
-		})
+		if err := enc.Encode(restartMsg); err != nil {
+			return err
+		}
+		return c.Close()
 	}
 
 	// Stream 0: uncompressed handshake phase.
@@ -187,15 +200,15 @@ func writeTestStreams(w *io.PipeWriter, alg CompressionAlgorithm, acks chan stru
 	return w.Close()
 }
 
-// TestCompressionBlockAlignedBoundary pins the restart-boundary contract at
-// stream sizes that are exact multiples of zstd's 128KiB block size.  At
-// those sizes, closing a zstd stream with no pending data emits an *empty*
-// final block whose bytes a synchronous decoder never consumes -- they would
-// be stranded at the boundary and corrupt the next stream.  The sender-side
-// discipline (flush, then write the stream's final message, then close)
-// keeps the final block non-empty, which this test verifies byte-for-byte:
-// stream A's decoded length is exact, and stream B decodes cleanly from the
-// very next byte.
+// TestCompressionBlockAlignedBoundary pins the Close contract at stream
+// sizes that are exact multiples of zstd's 128KiB block size.  Those sizes
+// are where a stream terminator would do damage: zstd's terminator is a
+// block with the last-block flag, and when nothing is pending it is empty,
+// which the synchronous decoder skips -- it would read on into the next
+// stream.  The test drives each way a caller can reach the end of a stream,
+// including a Flush that leaves Close with nothing to write, and checks
+// byte-for-byte that stream A decodes to exactly its own data and stream B
+// decodes cleanly from the very next byte.
 func TestCompressionBlockAlignedBoundary(t *testing.T) {
 	const blockSize = 128 * 1024
 	tail := []byte("final message of the stream")
@@ -203,64 +216,119 @@ func TestCompressionBlockAlignedBoundary(t *testing.T) {
 		"stream":   NewStreamCompressor,
 		"snapshot": NewSnapshotCompressor,
 	}
-	// The dangerous sizes: the stream's data ends exactly on a block
-	// boundary, either at the flush before the final message (bulk aligned)
-	// or -- the case the flush exists to prevent -- at the end of the final
-	// message itself (bulk+tail aligned).
+	// How the sender reaches the end of stream A.  "write-flush-then-close"
+	// is the case that used to strand bytes: Close finds nothing pending.
+	endings := map[string]func(c Compressor) error{
+		"write-then-close": func(c Compressor) error {
+			_, err := c.Write(tail)
+			return err
+		},
+		"flush-write-then-close": func(c Compressor) error {
+			if err := c.Flush(); err != nil {
+				return err
+			}
+			_, err := c.Write(tail)
+			return err
+		},
+		"write-flush-then-close": func(c Compressor) error {
+			if _, err := c.Write(tail); err != nil {
+				return err
+			}
+			return c.Flush()
+		},
+	}
+	// Sizes where the stream's data ends exactly on a block boundary,
+	// either before the tail or after it.
 	bulkLens := []int{
 		blockSize - 1, blockSize, blockSize + 1, 2 * blockSize,
 		blockSize - len(tail), 2*blockSize - len(tail),
 	}
 	for _, alg := range append([]CompressionAlgorithm{CompressionNone}, AllCompressionAlgorithms[:]...) {
 		for name, newCompressor := range constructors {
-			for _, bulkLen := range bulkLens {
-				t.Run(fmt.Sprintf("%s/%s/%d", alg, name, bulkLen), func(t *testing.T) {
-					RegisterTestingT(t)
+			for endName, endStream := range endings {
+				for _, bulkLen := range bulkLens {
+					t.Run(fmt.Sprintf("%s/%s/%s/%d", alg, name, endName, bulkLen), func(t *testing.T) {
+						RegisterTestingT(t)
 
-					bulk := make([]byte, bulkLen)
-					for i := range bulk {
-						bulk[i] = byte(i)
-					}
+						bulk := make([]byte, bulkLen)
+						for i := range bulk {
+							bulk[i] = byte(i)
+						}
 
-					// Stream A ends via CloseWithFinalMessage; stream B
-					// follows it on the same "connection".
-					var conn bytes.Buffer
-					c, err := newCompressor(alg, &conn)
-					Expect(err).NotTo(HaveOccurred())
-					_, err = c.Write(bulk)
-					Expect(err).NotTo(HaveOccurred())
-					err = CloseWithFinalMessage(c, func() error {
-						_, err := c.Write(tail)
-						return err
+						// Stream B follows stream A on the same
+						// "connection", with no gap.
+						var conn bytes.Buffer
+						c, err := newCompressor(alg, &conn)
+						Expect(err).NotTo(HaveOccurred())
+						_, err = c.Write(bulk)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(endStream(c)).To(Succeed())
+						Expect(c.Close()).To(Succeed())
+
+						// A closed Compressor takes no more data.
+						_, err = c.Write([]byte("after close"))
+						Expect(err).To(MatchError(ErrCompressorClosed))
+
+						c, err = NewStreamCompressor(alg, &conn)
+						Expect(err).NotTo(HaveOccurred())
+						_, err = c.Write([]byte("next stream"))
+						Expect(err).NotTo(HaveOccurred())
+						Expect(c.Close()).To(Succeed())
+
+						// Hide the buffer's type: zstd's Reset has a fast
+						// path for in-memory readers that bypasses
+						// streaming decode.
+						r := struct{ io.Reader }{&conn}
+						d, err := NewDecompressor(alg, r)
+						Expect(err).NotTo(HaveOccurred())
+						got := make([]byte, len(bulk)+len(tail))
+						_, err = io.ReadFull(d, got)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(got[:len(bulk)]).To(Equal(bulk))
+						Expect(got[len(bulk):]).To(Equal(tail))
+						d.Close()
+
+						d, err = NewDecompressor(alg, r)
+						Expect(err).NotTo(HaveOccurred())
+						next := make([]byte, len("next stream"))
+						_, err = io.ReadFull(d, next)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(string(next)).To(Equal("next stream"))
+						d.Close()
 					})
-					Expect(err).To(Succeed())
-
-					c, err = NewStreamCompressor(alg, &conn)
-					Expect(err).NotTo(HaveOccurred())
-					_, err = c.Write([]byte("next stream"))
-					Expect(err).NotTo(HaveOccurred())
-					Expect(c.Close()).To(Succeed())
-
-					// Hide the buffer's type: zstd's Reset has a fast path
-					// for in-memory readers that bypasses streaming decode.
-					r := struct{ io.Reader }{&conn}
-					d, err := NewDecompressor(alg, r)
-					Expect(err).NotTo(HaveOccurred())
-					got := make([]byte, len(bulk)+len(tail))
-					_, err = io.ReadFull(d, got)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(got[:len(bulk)]).To(Equal(bulk))
-					Expect(got[len(bulk):]).To(Equal(tail))
-					d.Close()
-
-					d, err = NewDecompressor(alg, r)
-					Expect(err).NotTo(HaveOccurred())
-					next, err := io.ReadAll(d)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(string(next)).To(Equal("next stream"))
-					d.Close()
-				})
+				}
 			}
+		}
+	}
+}
+
+// TestCompressionCloseIdempotent verifies that closing an already-closed
+// Compressor succeeds and writes nothing more.  Typha's connection teardown
+// closes the writer unconditionally, and the protocol may have closed it
+// already at a restart boundary.
+func TestCompressionCloseIdempotent(t *testing.T) {
+	constructors := map[string]func(CompressionAlgorithm, io.Writer) (Compressor, error){
+		"stream":   NewStreamCompressor,
+		"snapshot": NewSnapshotCompressor,
+	}
+	for _, alg := range append([]CompressionAlgorithm{CompressionNone}, AllCompressionAlgorithms[:]...) {
+		for name, newCompressor := range constructors {
+			t.Run(fmt.Sprintf("%s/%s", alg, name), func(t *testing.T) {
+				RegisterTestingT(t)
+
+				var buf bytes.Buffer
+				c, err := newCompressor(alg, &buf)
+				Expect(err).NotTo(HaveOccurred())
+				_, err = c.Write([]byte("some data"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(c.Close()).To(Succeed())
+				closedLen := buf.Len()
+
+				Expect(c.Close()).To(Succeed())
+				Expect(buf.Len()).To(Equal(closedLen))
+				Expect(c.Flush()).To(MatchError(ErrCompressorClosed))
+				Expect(buf.Len()).To(Equal(closedLen))
+			})
 		}
 	}
 }

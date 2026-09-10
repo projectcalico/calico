@@ -242,16 +242,16 @@ func (s *SnapshotCache) writeDataToSnapshot(snap *snapshot) {
 		s.logCtx.WithError(err).Panic("Failed to serialise datastore snapshot.")
 	}
 
-	// End the snapshot stream with a trailing MsgDecoderRestart;
-	// CloseWithFinalMessage keeps that message in the stream's final block so
-	// that the client's synchronous decompressor consumes the whole stream
-	// when it decodes the message.
-	err = syncproto.CloseWithFinalMessage(w, func() error {
-		return writeMsg(syncproto.MsgDecoderRestart{
-			Message:              "End of compressed snapshot.",
-			CompressionAlgorithm: s.compressionAlgorithm,
-		})
+	// End the snapshot stream with a trailing MsgDecoderRestart, then close
+	// it.  Closing ends the stream on that message, so a client decoding it
+	// has consumed the whole snapshot and nothing beyond it.
+	err = writeMsg(syncproto.MsgDecoderRestart{
+		Message:              "End of compressed snapshot.",
+		CompressionAlgorithm: s.compressionAlgorithm,
 	})
+	if err == nil {
+		err = w.Close()
+	}
 	if err != nil {
 		// Shouldn't happen because we're serialising to an in-memory buffer.
 		s.logCtx.WithError(err).Panic("Failed to finish datastore snapshot.")

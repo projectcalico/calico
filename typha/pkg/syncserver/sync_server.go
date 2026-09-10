@@ -1158,25 +1158,22 @@ func (h *connection) bindCompressionMetrics() {
 
 // sendDecoderRestartAndWaitForAck signals the client to restart its decoder
 // (possibly with compression enabled) and waits for the ACK.  The restart
-// message is the last message in the old encoding: after sending it, we
-// close the old writer so that the old stream -- including any compression
-// stream terminator -- is fully on the wire.  The client relies on that to
-// discard its decompressor at the boundary without losing bytes.  The caller
-// starts the new encoding after this returns: either a cached binary
-// snapshot written directly to the connection, or a new encoder from
-// restartEncoder.
+// message is the last message in the old encoding: we write it, then close
+// the old writer, which puts the whole old stream on the wire and ends it
+// exactly there.  The client relies on that to discard its decompressor at
+// the boundary without losing bytes.  The caller starts the new encoding
+// after this returns: either a cached binary snapshot written directly to
+// the connection, or a new encoder from restartEncoder.
 func (h *connection) sendDecoderRestartAndWaitForAck(message string) error {
-	// CloseWithFinalMessage terminates the old encoding's stream with the
-	// restart message as its final data, writing everything -- stream
-	// terminator included -- through to the connection.  Nothing else writes
-	// during this phase of the protocol, and we write nothing more until the
-	// ACK arrives.
-	err := syncproto.CloseWithFinalMessage(h.writer, func() error {
-		return h.sendMsgWithoutFlush(syncproto.MsgDecoderRestart{
-			Message:              message,
-			CompressionAlgorithm: h.chosenCompression,
-		})
+	// Nothing else writes during this phase of the protocol, and we write
+	// nothing more until the ACK arrives.
+	err := h.sendMsgWithoutFlush(syncproto.MsgDecoderRestart{
+		Message:              message,
+		CompressionAlgorithm: h.chosenCompression,
 	})
+	if err == nil {
+		err = h.writer.Close()
+	}
 	if err != nil {
 		log.WithError(err).Warning("Failed to send DecoderRestart to client")
 		return err
@@ -1211,7 +1208,7 @@ func (h *connection) waitForAckAndRestartEncoder() error {
 // restartEncoder creates a fresh encoder for the connection, writing through
 // a compression writer chosen during the handshake (a pass-through before
 // the handshake or if no compression was negotiated).  Each encoding is a
-// self-contained stream: the previous one, if any, was terminated by
+// self-contained stream: the previous one, if any, was closed by
 // sendDecoderRestartAndWaitForAck.
 func (h *connection) restartEncoder() error {
 	w, err := syncproto.NewStreamCompressor(h.chosenCompression, h.connW)

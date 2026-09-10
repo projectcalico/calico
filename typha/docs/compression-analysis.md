@@ -120,11 +120,13 @@ implementation anyway:
 - **Runtime behavior.** Cgo calls pin OS threads and add per-call overhead,
   which works against the per-connection delta path (many connections,
   small frequently-flushed writes).
-- **Decoder correctness gaps in the cgo wrapper.** The DataDog wrapper's
-  decoder skips checksums, omits some error checks, and mishandles
-  concatenated streams. Our protocol depends on concatenated frames: the
-  client's reused decoder reads the cached snapshot frame and the
-  per-connection delta frames back to back on one connection.
+- **The cgo wrapper's streaming reader reads ahead.** It fills a
+  fixed-size input buffer from the connection, so it can take bytes that
+  belong to the next stream. Our protocol needs a decoder that consumes
+  exactly one stream's bytes and can then be discarded: the cached snapshot
+  frame and the per-connection delta frame sit back to back on one
+  connection, separated only by the restart message. klauspost's
+  synchronous mode gives that guarantee; the wrapper offers no equivalent.
 
 The cgo comparison benchmark is not checked in because it would add the cgo
 dependency to the module; it is a ~150-line test that reuses

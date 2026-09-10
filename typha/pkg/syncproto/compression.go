@@ -16,6 +16,7 @@ package syncproto
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 
@@ -23,30 +24,9 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
-// The sync protocol switches the server-to-client encoding mid-connection:
-// MsgDecoderRestart marks a hard boundary between an old stream and a new
-// one.  Both sides rely on these invariants at every boundary:
-//
-//   - Sender: the restart message is the last data written to the old
-//     Compressor, via CloseWithFinalMessage: flush, write the message, then
-//     Close with no flush in between.  Close pushes every remaining byte --
-//     including any stream terminator -- through to the connection, and the
-//     sender sends nothing more until the client ACKs.  The next bytes on
-//     the wire begin a brand-new stream from a brand-new Compressor.  The
-//     flush-before-the-final-message step pins the message (much smaller
-//     than a compression block) inside the stream's final block; without
-//     it, a stream whose data ends exactly on a block boundary would end in
-//     an *empty* final block, which zstd's synchronous decoder never
-//     consumes -- those bytes would be stranded on the wire and corrupt the
-//     next stream.
-//   - Receiver: because the old stream was terminated right after the restart
-//     message, decoding that message means the Decompressor has consumed
-//     exactly the old stream's bytes from the connection.  The receiver
-//     discards it and creates a fresh Decompressor for the new stream.
-//
-// The implementations returned by the constructors below guarantee the
-// properties each side needs, for every algorithm (including "none").  The
-// server and client must access compression only through these interfaces.
+// ErrCompressorClosed is returned by Write and Flush on a closed
+// Compressor.
+var ErrCompressorClosed = errors.New("compressor is closed")
 
 // zstd window sizes.  The decoder allocates a history buffer as large as the
 // window declared in the incoming frame header, so the cap bounds the memory
@@ -66,31 +46,46 @@ const (
 	maxZstdWindowSize = 16 << 20
 )
 
-// Compressor is a compressing (or pass-through) writer with synchronous
-// flush and close semantics, suitable for the sender's side of a restart
-// boundary.
+// Compressor is a compressing (or pass-through) writer that a sender can end
+// at an exact point in its output, so that a receiver reading the other end
+// stops at the same point.  The sync protocol needs that because it switches
+// the server-to-client encoding mid-connection: MsgDecoderRestart is the last
+// message of the old stream, and the bytes straight after it on the wire
+// belong to a new stream with a new encoding.
 type Compressor interface {
 	io.Writer
 
-	// Flush compresses all data accepted by Write so far and writes it
-	// through to the underlying writer.  It does not end the compressed
-	// stream.
+	// Flush compresses everything written so far and writes it through to
+	// the underlying writer.  The stream stays open.
 	Flush() error
 
-	// Close ends the compressed stream and writes it, including any stream
-	// terminator, through to the underlying writer.  The Compressor must not
-	// touch the underlying writer after Close returns.  To end a stream that
-	// a Decompressor must consume exactly, close it via
-	// CloseWithFinalMessage rather than calling Close directly.
+	// Close ends the stream: it writes everything written so far through to
+	// the underlying writer, then releases the Compressor's resources.
+	// Afterwards:
+	//
+	//   - a Decompressor on the other end can read every byte written to
+	//     the Compressor, and consumes exactly the bytes the Compressor
+	//     produced -- no more;
+	//   - the Compressor rejects further writes and can be discarded;
+	//   - the underlying writer is free for whatever comes next, including
+	//     a stream from a different Compressor.
+	//
+	// A receiver that reads on past the end of the stream, instead of
+	// stopping on the last message, may get a truncated-stream error rather
+	// than a clean EOF.  The sync protocol never does: the last message of
+	// a stream tells the receiver the stream has ended.
+	//
+	// Close is idempotent, so a teardown path can close a Compressor that
+	// the protocol has already ended.
 	Close() error
 }
 
 // Decompressor is a decompressing (or pass-through) reader that is safe to
-// discard at a restart boundary.  Implementations must be synchronous: Read
-// consumes from the underlying reader only the bytes needed to produce the
-// data it returns, with no read-ahead past the end of a compressed stream.
-// In particular, the Read that returns the final bytes of a terminated
-// stream also consumes the stream's terminator.
+// discard once it has returned the last data its Compressor wrote.
+// Implementations are synchronous: a Read consumes from the underlying
+// reader only the bytes needed to produce the data that Read returns, and
+// never reads past the end of the data the Compressor wrote before its
+// Close.
 type Decompressor interface {
 	io.Reader
 
@@ -99,30 +94,16 @@ type Decompressor interface {
 	Close()
 }
 
-// CloseWithFinalMessage ends a compressed stream with a final message: it
-// flushes the Compressor, calls encodeMsg to write the message, then closes
-// the Compressor.  This is the only safe way to end a stream that a
-// Decompressor must consume exactly: the flush pins the message inside the
-// stream's final block (see the package comment above).
-func CloseWithFinalMessage(c Compressor, encodeMsg func() error) error {
-	if err := c.Flush(); err != nil {
-		return err
-	}
-	if err := encodeMsg(); err != nil {
-		return err
-	}
-	return c.Close()
-}
-
 // NewStreamCompressor returns a Compressor that writes a stream of small,
 // frequently flushed messages to w, buffering output so that each Flush
-// costs at most one write to w.  Pass algorithm "" for a pass-through
-// (uncompressed) stream.
+// costs at most one write to w.
 func NewStreamCompressor(algorithm CompressionAlgorithm, w io.Writer) (Compressor, error) {
+	// The buffered writer batches the compressor's output; Flush and Close
+	// push it through to w.
 	bw := bufio.NewWriter(w)
 	switch algorithm {
 	case CompressionSnappy:
-		return &streamCompressor{c: snappy.NewBufferedWriter(bw), bw: bw}, nil
+		return &snappyCompressor{w: snappy.NewBufferedWriter(bw), bw: bw}, nil
 	case CompressionZstd:
 		// Bound per-connection resource usage: one encoder goroutine and a
 		// small window.  The library defaults (GOMAXPROCS goroutines and an
@@ -132,13 +113,14 @@ func NewStreamCompressor(algorithm CompressionAlgorithm, w io.Writer) (Compresso
 			zstd.WithEncoderLevel(zstd.SpeedFastest),
 			zstd.WithEncoderConcurrency(1),
 			zstd.WithWindowSize(streamZstdWindowSize),
+			zstd.WithEncoderCRC(false),
 		)
 		if err != nil {
 			return nil, err
 		}
-		return &streamCompressor{c: zw, bw: bw}, nil
+		return &zstdCompressor{w: zw, bw: bw}, nil
 	case CompressionNone:
-		return nopCompressor{bw}, nil
+		return &nopCompressor{w: bw, bw: bw}, nil
 	default:
 		return nil, fmt.Errorf("unknown compression algorithm: %q", algorithm)
 	}
@@ -148,29 +130,32 @@ func NewStreamCompressor(algorithm CompressionAlgorithm, w io.Writer) (Compresso
 // in an in-memory buffer.  Unlike NewStreamCompressor, it favours
 // compression speed and ratio over per-connection memory bounds (snapshots
 // are compressed once and shared by many connections), and it does not
-// buffer output.  Pass algorithm "" for a pass-through (uncompressed)
-// snapshot.
+// buffer output.
 func NewSnapshotCompressor(algorithm CompressionAlgorithm, w io.Writer) (Compressor, error) {
 	switch algorithm {
 	case CompressionSnappy:
-		return snappy.NewBufferedWriter(w), nil
+		return &snappyCompressor{w: snappy.NewBufferedWriter(w)}, nil
 	case CompressionZstd:
 		// Pin the window size rather than relying on the level's default,
 		// which could drift past maxZstdWindowSize on a library upgrade.
-		return zstd.NewWriter(w,
+		zw, err := zstd.NewWriter(w,
 			zstd.WithEncoderLevel(zstd.SpeedFastest),
 			zstd.WithWindowSize(snapshotZstdWindowSize),
+			zstd.WithEncoderCRC(false),
 		)
+		if err != nil {
+			return nil, err
+		}
+		return &zstdCompressor{w: zw}, nil
 	case CompressionNone:
-		return passthroughCompressor{w}, nil
+		return &nopCompressor{w: w}, nil
 	default:
 		return nil, fmt.Errorf("unknown compression algorithm: %q", algorithm)
 	}
 }
 
 // NewDecompressor returns a Decompressor that reads an algorithm-compressed
-// stream from r.  Pass algorithm "" for a pass-through (uncompressed)
-// stream.
+// stream from r.
 func NewDecompressor(algorithm CompressionAlgorithm, r io.Reader) (Decompressor, error) {
 	switch algorithm {
 	case CompressionSnappy:
@@ -178,12 +163,12 @@ func NewDecompressor(algorithm CompressionAlgorithm, r io.Reader) (Decompressor,
 		// time, only when it needs one to satisfy a Read.
 		return nopCloserDecompressor{snappy.NewReader(r)}, nil
 	case CompressionZstd:
-		// WithDecoderConcurrency(1) selects the synchronous decode path: no
-		// background goroutine, blocks are read with exact-size reads, and a
-		// frame's trailing checksum is consumed by the same Read call that
-		// returns the frame's final bytes.  The default asynchronous mode
-		// reads ahead and would steal bytes from the next stream at a
-		// restart boundary.
+		// WithDecoderConcurrency(1) selects the synchronous decode path.  It
+		// reads blocks with exact-size reads, and once a Read has any data
+		// to return it stops rather than fetching the next block, so it
+		// never reads past the block the Compressor's Close ended on.  The
+		// default asynchronous mode reads ahead and would steal bytes from
+		// the next stream.
 		return zstd.NewReader(r,
 			zstd.WithDecoderConcurrency(1),
 			zstd.WithDecoderMaxWindow(maxZstdWindowSize),
@@ -195,42 +180,143 @@ func NewDecompressor(algorithm CompressionAlgorithm, r io.Reader) (Decompressor,
 	}
 }
 
-// streamCompressor pairs a compression writer with the buffered writer
-// beneath it so that Flush and Close write through to the destination.
-type streamCompressor struct {
-	// c is the compression writer; it writes compressed bytes to bw, which
-	// batches them into writes on the destination.
-	c  Compressor
+// snappyCompressor writes a snappy stream.  A snappy stream has no
+// terminator, so ending one is just a flush.
+type snappyCompressor struct {
+	w *snappy.Writer
+	// bw is the buffered writer between w and the destination, or nil if
+	// the destination is written directly.
 	bw *bufio.Writer
 }
 
-func (s *streamCompressor) Write(p []byte) (int, error) {
-	return s.c.Write(p)
+func (c *snappyCompressor) Write(p []byte) (int, error) {
+	if c.w == nil {
+		return 0, ErrCompressorClosed
+	}
+	return c.w.Write(p)
 }
 
-func (s *streamCompressor) Flush() error {
-	if err := s.c.Flush(); err != nil {
+func (c *snappyCompressor) Flush() error {
+	if c.w == nil {
+		return ErrCompressorClosed
+	}
+	if err := c.w.Flush(); err != nil {
 		return err
 	}
-	return s.bw.Flush()
+	return flushBuffer(c.bw)
 }
 
-func (s *streamCompressor) Close() error {
-	if err := s.c.Close(); err != nil {
+func (c *snappyCompressor) Close() error {
+	if c.w == nil {
+		return nil
+	}
+	err := c.w.Close()
+	c.w = nil
+	if err != nil {
 		return err
 	}
-	return s.bw.Flush()
+	return flushBuffer(c.bw)
+}
+
+// zstdCompressor writes a zstd stream.
+type zstdCompressor struct {
+	w *zstd.Encoder
+	// bw is the buffered writer between w and the destination, or nil if
+	// the destination is written directly.
+	bw *bufio.Writer
+}
+
+func (c *zstdCompressor) Write(p []byte) (int, error) {
+	if c.w == nil {
+		return 0, ErrCompressorClosed
+	}
+	return c.w.Write(p)
+}
+
+func (c *zstdCompressor) Flush() error {
+	if c.w == nil {
+		return ErrCompressorClosed
+	}
+	if err := c.w.Flush(); err != nil {
+		return err
+	}
+	return flushBuffer(c.bw)
+}
+
+// Close flushes the frame's data and abandons the frame without terminating
+// it, which is what keeps the boundary exactly at the last byte written.
+//
+// A zstd frame ends with a block carrying the last-block flag, and the
+// encoder emits that block only from its own Close.  When everything written
+// has already been flushed, the block is empty.  The synchronous decoder
+// skips empty blocks -- it loops until a block yields data -- so it would
+// read straight on into whatever follows the frame, which at a restart
+// boundary is the next stream.  Flushing and dropping the encoder avoids
+// that: the last thing on the wire is a block that carries data, and the
+// decoder stops as soon as it has returned it.
+//
+// The unterminated frame costs the stream its trailing checksum, which is
+// why the encoders are built with WithEncoderCRC(false): a checksum that is
+// never written would only make both sides hash every block for nothing.
+// No decoder outside this connection ever sees the frame, the connection is
+// already integrity-checked by TLS or TCP, and the restart protocol stops
+// the peer reading further: it discards this stream's Decompressor as soon
+// as it decodes the final message.
+func (c *zstdCompressor) Close() error {
+	if c.w == nil {
+		return nil
+	}
+	err := c.w.Flush()
+	// Reset(nil) releases the encoder's buffers and detaches it from the
+	// writer.  Flush has already waited for the encoder's goroutines, so
+	// there is nothing left in flight.
+	c.w.Reset(nil)
+	c.w = nil
+	if err != nil {
+		return err
+	}
+	return flushBuffer(c.bw)
 }
 
 // nopCompressor is the pass-through Compressor used when no compression is
-// negotiated.  Its "stream" has no terminator, so Close only flushes.
+// negotiated.  Its "stream" is the plain bytes, so Flush and Close only have
+// to push the buffered writer through.
 type nopCompressor struct {
+	w io.Writer
+	// bw is the buffered writer, or nil if the destination is written
+	// directly.  When set, it is also w.
 	bw *bufio.Writer
 }
 
-func (n nopCompressor) Write(p []byte) (int, error) { return n.bw.Write(p) }
-func (n nopCompressor) Flush() error                { return n.bw.Flush() }
-func (n nopCompressor) Close() error                { return n.bw.Flush() }
+func (c *nopCompressor) Write(p []byte) (int, error) {
+	if c.w == nil {
+		return 0, ErrCompressorClosed
+	}
+	return c.w.Write(p)
+}
+
+func (c *nopCompressor) Flush() error {
+	if c.w == nil {
+		return ErrCompressorClosed
+	}
+	return flushBuffer(c.bw)
+}
+
+func (c *nopCompressor) Close() error {
+	if c.w == nil {
+		return nil
+	}
+	err := flushBuffer(c.bw)
+	c.w = nil
+	return err
+}
+
+func flushBuffer(bw *bufio.Writer) error {
+	if bw == nil {
+		return nil
+	}
+	return bw.Flush()
+}
 
 // nopCloserDecompressor adapts a reader with no resources to release.
 type nopCloserDecompressor struct {
@@ -238,12 +324,3 @@ type nopCloserDecompressor struct {
 }
 
 func (nopCloserDecompressor) Close() {}
-
-// passthroughCompressor is the pass-through Compressor for uncompressed
-// snapshots; it has no buffering and its stream has no terminator.
-type passthroughCompressor struct {
-	io.Writer
-}
-
-func (passthroughCompressor) Flush() error { return nil }
-func (passthroughCompressor) Close() error { return nil }

@@ -611,9 +611,9 @@ func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, ms
 			msg.CompressionAlgorithm)
 	}
 	// The restart message is the last data in the old stream and the server
-	// terminated the stream right after it, so the old decompressor has
-	// consumed exactly the old stream's bytes from the connection.  Discard
-	// it and start a fresh one for the new stream; syncproto.Decompressor
+	// closed the stream right after it, so the old decompressor has consumed
+	// exactly the old stream's bytes from the connection.  Discard it and
+	// start a fresh one for the new stream; syncproto.Decompressor
 	// guarantees no read-ahead across the boundary.
 	if err := s.swapDecompressor(msg.CompressionAlgorithm); err != nil {
 		logCxt.WithError(err).Error("Failed to restart decoder")

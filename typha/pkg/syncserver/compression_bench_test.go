@@ -25,9 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/snappy"
-	"github.com/klauspost/compress/zstd"
-
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -164,25 +161,31 @@ func compressWithSnapshotCompressor(alg syncproto.CompressionAlgorithm, data []b
 	return buf.Bytes()
 }
 
-// decompressSnappy decompresses snappy data.
-func decompressSnappy(compressed []byte) []byte {
-	r := snappy.NewReader(bytes.NewReader(compressed))
-	data, err := io.ReadAll(r)
-	if err != nil {
-		panic(err)
-	}
-	return data
+// decompressSnappy decompresses snappy data with Typha's client settings.
+func decompressSnappy(compressed []byte, rawLen int) []byte {
+	return decompressWithDecompressor(syncproto.CompressionSnappy, compressed, rawLen)
 }
 
-// decompressZstd decompresses zstd data.
-func decompressZstd(compressed []byte) []byte {
-	r, err := zstd.NewReader(bytes.NewReader(compressed))
+// decompressZstd decompresses zstd data with Typha's client settings.
+func decompressZstd(compressed []byte, rawLen int) []byte {
+	return decompressWithDecompressor(syncproto.CompressionZstd, compressed, rawLen)
+}
+
+// decompressWithDecompressor decompresses through the same Decompressor the
+// client uses, so the numbers reflect production settings.  It reads exactly
+// rawLen bytes rather than reading to EOF: a Compressor ends its stream on
+// its last byte rather than writing a terminator, so reading past the end
+// reports a truncated stream.
+func decompressWithDecompressor(alg syncproto.CompressionAlgorithm, compressed []byte, rawLen int) []byte {
+	// Hide the reader's concrete type: zstd has a fast path for in-memory
+	// readers that bypasses the streaming decode used in production.
+	r, err := syncproto.NewDecompressor(alg, struct{ io.Reader }{bytes.NewReader(compressed)})
 	if err != nil {
 		panic(err)
 	}
 	defer r.Close()
-	data, err := io.ReadAll(r)
-	if err != nil {
+	data := make([]byte, rawLen)
+	if _, err := io.ReadFull(r, data); err != nil {
 		panic(err)
 	}
 	return data
@@ -242,11 +245,11 @@ func TestCompressionComparison(t *testing.T) {
 
 			// Decompress to measure decompression speed.
 			start = time.Now()
-			decompressSnappy(snappyData)
+			decompressSnappy(snappyData, rawSize)
 			snappyDecompressTime := time.Since(start)
 
 			start = time.Now()
-			decompressZstd(zstdData)
+			decompressZstd(zstdData, rawSize)
 			zstdDecompressTime := time.Since(start)
 
 			t.Logf("Scenario: %s", tc.name)
@@ -311,7 +314,7 @@ func BenchmarkSnappyDecompress(b *testing.B) {
 	b.SetBytes(int64(len(rawData)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		decompressSnappy(compressed)
+		decompressSnappy(compressed, len(rawData))
 	}
 }
 
@@ -327,7 +330,7 @@ func BenchmarkZstdDecompress(b *testing.B) {
 	b.SetBytes(int64(len(rawData)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		decompressZstd(compressed)
+		decompressZstd(compressed, len(rawData))
 	}
 }
 
@@ -345,8 +348,8 @@ func TestCompressionRoundTrip(t *testing.T) {
 	snappyCompressed := compressSnappy(rawData)
 	zstdCompressed := compressZstd(rawData)
 
-	snappyDecompressed := decompressSnappy(snappyCompressed)
-	zstdDecompressed := decompressZstd(zstdCompressed)
+	snappyDecompressed := decompressSnappy(snappyCompressed, len(rawData))
+	zstdDecompressed := decompressZstd(zstdCompressed, len(rawData))
 
 	if !bytes.Equal(rawData, snappyDecompressed) {
 		t.Fatal("Snappy round-trip mismatch")
