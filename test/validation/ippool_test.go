@@ -445,6 +445,24 @@ func TestIPPool_CIDRImmutability(t *testing.T) {
 	expectUpdateFails(t, got, "CIDR cannot be changed")
 }
 
+func TestIPPool_BlockSizeImmutability(t *testing.T) {
+	pool := &v3.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+		Spec: v3.IPPoolSpec{
+			CIDR:      nextPoolCIDR(),
+			BlockSize: 26,
+		},
+	}
+	mustCreate(t, pool)
+
+	got := &v3.IPPool{}
+	if err := testClient.Get(context.Background(), client.ObjectKeyFromObject(pool), got); err != nil {
+		t.Fatalf("failed to get ippool: %v", err)
+	}
+	got.Spec.BlockSize = 24
+	expectUpdateFails(t, got, "Block size cannot be changed")
+}
+
 func TestIPPool_Defaults(t *testing.T) {
 	pool := &v3.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool-dflt")},

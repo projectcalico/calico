@@ -192,3 +192,53 @@ func TestIPPool_BlockSizeDefaulting(t *testing.T) {
 		}
 	})
 }
+
+// blockSize is immutable, so a write that omits it must not be able to clear it.
+func TestIPPool_BlockSizeSurvivesUpdateThatOmitsIt(t *testing.T) {
+	if !admissionPoliciesEnabled {
+		t.Skip("MutatingAdmissionPolicy not supported on this K8s version")
+	}
+
+	name := uniqueName("ippool-omit")
+	cidr := nextPoolCIDR()
+	mustCreate(t, &v3.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec:       v3.IPPoolSpec{CIDR: cidr},
+	})
+
+	created := &v3.IPPool{}
+	if err := testClient.Get(context.Background(), client.ObjectKey{Name: name}, created); err != nil {
+		t.Fatalf("failed to get pool: %v", err)
+	}
+	if created.Spec.BlockSize != 26 {
+		t.Fatalf("precondition: expected blockSize=26, got %d", created.Spec.BlockSize)
+	}
+
+	// Update through an unstructured object with no blockSize, the way a GitOps
+	// apply of a manifest that never mentioned it would.
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "projectcalico.org/v3",
+			"kind":       "IPPool",
+			"metadata": map[string]interface{}{
+				"name":            name,
+				"resourceVersion": created.ResourceVersion,
+			},
+			"spec": map[string]interface{}{
+				"cidr":        cidr,
+				"natOutgoing": true,
+			},
+		},
+	}
+	if err := testClient.Update(context.Background(), obj); err != nil {
+		t.Fatalf("update failed: %v", err)
+	}
+
+	got := &v3.IPPool{}
+	if err := testClient.Get(context.Background(), client.ObjectKey{Name: name}, got); err != nil {
+		t.Fatalf("failed to get pool after update: %v", err)
+	}
+	if got.Spec.BlockSize != 26 {
+		t.Fatalf("expected blockSize to survive the update as 26, got %d", got.Spec.BlockSize)
+	}
+}
