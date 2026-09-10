@@ -37,6 +37,12 @@ if [[ -f "${GOOGLE_APPLICATION_CREDENTIALS}" ]]; then
 else
   echo "[WARN] GOOGLE_APPLICATION_CREDENTIALS missing: ${GOOGLE_APPLICATION_CREDENTIALS}"
 fi
+# gcr.io is Artifact-Registry-backed; the static token in docker_cfg.json is
+# short-lived, so a long job can no longer pull by the time the epilogue runs.
+# The helper mints a token per pull (must follow the docker_cfg.json secret
+# above, which it rewrites, and the service-account activation).
+gcloud auth --quiet configure-docker gcr.io || echo "[WARN] gcloud configure-docker failed"
+
 # Azure SP login for azr-* (bz's azure path needs an active az session).
 # Creds via banzai-secrets: AZ_SP_ID/AZ_SP_PASSWORD/AZ_TENANT_ID/AZ_SUBSCRIPTION_ID.
 if [[ "${PROVISIONER:-}" == azr-* ]]; then
