@@ -730,8 +730,10 @@ var _ = infrastructure.DatastoreDescribe(
 						pcs[len(pcs)-1] = nil
 
 						if BPFMode() {
+							// No fast-path decrement: the slot returns after
+							// TCPResetSeen, a purge scan, then a recount.
 							By("Waiting for BPF connlimit counter to reflect closed connection")
-							Eventually(getBPFCurrentCount(0, 0, "ingress"), "5s", "1s").Should(BeNumerically("<", uint32(numConnections)))
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), "60s", "2s").Should(BeNumerically("<", uint32(numConnections)))
 						}
 
 						By("Re-filling the connection slot after RST close")
@@ -741,7 +743,7 @@ var _ = infrastructure.DatastoreDescribe(
 								pcs[len(pcs)-1] = pc
 							}
 							return err
-						}, "10s", "1s").ShouldNot(HaveOccurred())
+						}, "60s", "2s").ShouldNot(HaveOccurred())
 						logrus.Infof("Connection after RST close succeeded as expected")
 
 						// Test graceful FIN close path: stop a regular connection
@@ -1031,6 +1033,62 @@ var _ = infrastructure.DatastoreDescribe(
 							"forged RSTs bought connections the egress limit should have refused")
 					})
 
+					// CORE-13478 Failure.7: a packet crossing an RST close cleared
+					// the per-leg bits, hiding the close from the reap.
+					It("should not inflate the ingress connlimit counter under RST-close churn", func() {
+						// An RST-closed entry holds its slot for TCPResetSeen, so
+						// the limit must clear the ~10 in flight at this rate.
+						const (
+							numConnections = 20
+							churnCycles    = 30
+						)
+
+						By("Setting connection limit for ingress on workload 0")
+						w[0].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+							IngressMaxConnections: int64(numConnections),
+						}
+						w[0].UpdateInInfra(infra)
+						defer func() {
+							w[0].WorkloadEndpoint.Spec.QoSControls = nil
+							w[0].UpdateInInfra(infra)
+						}()
+
+						if BPFMode() {
+							By("Waiting for the ingress limit to appear in the QoS map")
+							Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").
+								Should(Equal(uint32(numConnections)))
+						}
+
+						// MonitorConnectivity keeps the server streaming, so the
+						// RST has in-flight traffic to cross.
+						By("Churning RST closes from workload 1")
+						for i := range churnCycles {
+							pc, err := w[1].StartPersistentConnectionMayFail(w[0].IP, 8055,
+								workload.PersistentConnectionOpts{
+									SendRST:             true,
+									MonitorConnectivity: true,
+								})
+							Expect(err).NotTo(HaveOccurred(),
+								"connection %d of the churn was refused; the counter has already inflated", i)
+							Eventually(pc.PongCount, "10s").Should(BeNumerically(">", 0))
+							pc.Stop()
+						}
+
+						if BPFMode() {
+							logrus.Infof("CORE-13478: ingress current_count after %d RST closes: %d",
+								churnCycles, getBPFCurrentCount(0, 0, "ingress")())
+
+							By("Waiting for the counter to drain back below the limit")
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), "60s", "2s").
+								Should(BeNumerically("<", uint32(numConnections)))
+						}
+
+						By("Confirming a legitimate client is still admitted")
+						Eventually(func() bool {
+							return w[1].CanConnectTo(w[0].IP, "8055", "tcp").HasConnectivity()
+						}, "60s", "2s").Should(BeTrue())
+					})
+
 					if BPFMode() {
 						It("should decrement ingress connlimit counter when client process is SIGKILLed", func() {
 							const numConnections = 3
@@ -1062,10 +1120,9 @@ var _ = infrastructure.DatastoreDescribe(
 
 							By("SIGKILLing all test-connection client processes on workload 1's container")
 							// Kernel cleans up sockets on process death and is
-							// expected to emit a FIN (or RST) on each one. The
-							// BPF fast-path should then decrement the counter
-							// for each closed connection, with no help from the
-							// userspace scanner.
+							// expected to emit a FIN (or RST) on each one. A FIN
+							// exchange decrements on the fast path; an RST waits
+							// for the entry purge and the next recount.
 							err := w[1].C.ExecMayFail("pkill", "-9", "-f", "test-connection")
 							Expect(err).NotTo(HaveOccurred())
 							// Mark our local handles as dead so the deferred
@@ -1074,7 +1131,7 @@ var _ = infrastructure.DatastoreDescribe(
 								pcs[i] = nil
 							}
 
-							By("Waiting for ingress counter to drop to 0 via BPF fast-path")
+							By("Waiting for ingress counter to drop to 0")
 							Eventually(getBPFCurrentCount(0, 0, "ingress"), "90s", "1s").Should(Equal(uint32(0)))
 
 							By("Removing limits from workload 0")
@@ -1127,7 +1184,7 @@ var _ = infrastructure.DatastoreDescribe(
 								pcs[i] = nil
 							}
 
-							By("Waiting for ingress counter to drop to 0 via BPF fast-path")
+							By("Waiting for ingress counter to drop to 0")
 							Eventually(getBPFCurrentCount(0, 0, "ingress"), "90s", "1s").Should(Equal(uint32(0)))
 
 							By("Tearing down the workload netns (final cleanup)")

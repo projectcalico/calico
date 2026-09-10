@@ -409,7 +409,8 @@ func (leg Leg) AsBytes() []byte {
 
 	binary.LittleEndian.PutUint64(bytes[0:8], leg.Bytes)
 	binary.LittleEndian.PutUint32(bytes[8:12], leg.Packets)
-	binary.LittleEndian.PutUint32(bytes[legExtra+0:legExtra+4], leg.Seqno)
+	// Network byte order, matching C and readConntrackLeg below.
+	binary.BigEndian.PutUint32(bytes[legExtra+0:legExtra+4], leg.Seqno)
 	binary.LittleEndian.PutUint32(bytes[legExtra+4:legExtra+8], bits)
 	binary.LittleEndian.PutUint32(bytes[legExtra+8:legExtra+12], leg.Ifindex)
 

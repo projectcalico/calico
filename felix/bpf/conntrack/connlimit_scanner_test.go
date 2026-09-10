@@ -22,6 +22,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	ctv4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/qos"
 )
@@ -313,7 +314,9 @@ func TestConnLimitScannerSkipsFINSeen(t *testing.T) {
 	}
 }
 
-func TestConnLimitScannerSkipsRSTSeen(t *testing.T) {
+// TestConnLimitScannerCountsRSTSeenConnection pins the absence of an RST skip:
+// a pod emits RSTs at will and must not hide behind one.
+func TestConnLimitScannerCountsRSTSeenConnection(t *testing.T) {
 	podIP := "10.65.0.2"
 	remoteIP := "10.65.1.3"
 
@@ -332,8 +335,9 @@ func TestConnLimitScannerSkipsRSTSeen(t *testing.T) {
 	if verdict != ScanVerdictOK {
 		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
 	}
-	if len(scanner.counts) != 0 {
-		t.Errorf("expected no counts for RST connection, got %v", scanner.counts)
+	if n := scanner.counts[connlimitKey{ifindex: 9, direction: 1}]; n != 1 {
+		t.Errorf("an RST let a live connection hide from the recount: "+
+			"expected ingress count 1 for ifindex 9, got counts: %v", scanner.counts)
 	}
 }
 
@@ -503,33 +507,25 @@ func makeRSTClosedValue(flags uint32, rstSeen, lastSeen time.Duration) Value {
 	return v
 }
 
-// TestConnLimitScannerSkipsRSTClosedConnection reproduces CORE-13478
-// Failure.7. One packet crossing an RST close hides it from the recount.
-func TestConnLimitScannerSkipsRSTClosedConnection(t *testing.T) {
-	podIP := "10.65.0.2"
-	remoteIP := "10.65.1.3"
+// TestEntryDoneReapsRSTClosedConnection covers CORE-13478 Failure.7. A
+// straggler crossing an RST close must not buy the entry a longer life.
+func TestEntryDoneReapsRSTClosedConnection(t *testing.T) {
+	to := timeouts.DefaultTimeouts()
 
-	scanner := &ConnLimitScanner{
-		family: qos.IPFamilyV4,
-		counts: make(map[connlimitKey]uint32),
-		podInfo: map[string]ConnLimitPodInfo{
-			string(net.ParseIP(podIP).To4()): podInfo(9, true, false),
-		},
-	}
-
-	// A straggler 5ms after the RST is in-flight data, not continued use.
+	// Per-leg RST bits already cleared by a straggler 5ms after the close;
+	// only the connection-level timestamp survives.
 	rstAt := 10 * time.Second
-	key := makeKey(remoteIP, podIP, 54321, 8080)
 	val := makeRSTClosedValue(ctv4.FlagConnLimitIn, rstAt, rstAt+5*time.Millisecond)
+	lastSeen := val.LastSeen()
 
-	verdict, _ := scanner.Check(key, val, nil)
-	if verdict != ScanVerdictOK {
-		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	reason, done := entryDone(to, lastSeen+int64(to.TCPResetSeen)+1, ProtoTCP, val, false)
+	if !done {
+		t.Errorf("RST-closed entry outlived TCPResetSeen; under churn this "+
+			"inflates the counter and refuses legitimate clients (reason %q)", reason)
 	}
 
-	if n := scanner.counts[connlimitKey{ifindex: 9, direction: 1}]; n != 0 {
-		t.Errorf("recount counted an RST-closed connection (got %d); under churn "+
-			"this inflates the counter and refuses legitimate clients", n)
+	if _, done := entryDone(to, lastSeen+int64(to.TCPResetSeen)-1, ProtoTCP, val, false); done {
+		t.Error("RST-closed entry was reaped before TCPResetSeen")
 	}
 }
 
