@@ -13,8 +13,7 @@
 // limitations under the License.
 
 // Package cilanes resolves the test selection of every e2e lane under
-// .argoci/cron, .semaphore/end-to-end/pipelines and
-// .semaphore/semaphore.yml.d/blocks.
+// .argoci/cron and .semaphore/semaphore.yml.d/blocks.
 package cilanes
 
 import (
@@ -29,9 +28,12 @@ import (
 )
 
 const (
-	argoDir      = ".argoci/cron"
-	semaphoreDir = ".semaphore/end-to-end/pipelines"
-	blocksDir    = ".semaphore/semaphore.yml.d/blocks"
+	argoDir   = ".argoci/cron"
+	blocksDir = ".semaphore/semaphore.yml.d/blocks"
+
+	// The per-PR lane is one workflow file rather than a directory of them, so
+	// it needs naming separately, but the format is the same as a cron's.
+	argoPRFile = ".argoci/ciworkflow.yaml"
 
 	// The end-to-end body scripts drive a provisioned cluster and take their
 	// selection from the environment.
@@ -108,15 +110,14 @@ func (l Lane) SelectionArgs(repoRoot string) ([]string, error) {
 	return []string{"--calico.test-config=" + abs}, nil
 }
 
-// Load resolves every lane declared under .argoci/cron,
-// .semaphore/end-to-end/pipelines and .semaphore/semaphore.yml.d/blocks, sorted
-// by source then name.
+// Load resolves every lane declared under .argoci/cron and
+// .semaphore/semaphore.yml.d/blocks, plus the per-PR .argoci/ciworkflow.yaml,
+// sorted by source then name.
 func Load(repoRoot string) ([]Lane, error) {
 	var lanes []Lane
 	for dir, parse := range map[string]func(string, []byte) ([]Lane, error){
-		argoDir:      parseArgo,
-		semaphoreDir: parseSemaphore,
-		blocksDir:    parseSemaphoreBlocks,
+		argoDir:   parseArgo,
+		blocksDir: parseSemaphoreBlocks,
 	} {
 		entries, err := os.ReadDir(filepath.Join(repoRoot, dir))
 		if err != nil {
@@ -139,6 +140,16 @@ func Load(repoRoot string) ([]Lane, error) {
 			lanes = append(lanes, found...)
 		}
 	}
+	prData, err := os.ReadFile(filepath.Join(repoRoot, argoPRFile))
+	if err != nil {
+		return nil, err
+	}
+	prLanes, err := parseArgo(argoPRFile, prData)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", argoPRFile, err)
+	}
+	lanes = append(lanes, prLanes...)
+
 	if len(lanes) == 0 {
 		return nil, fmt.Errorf("no CI lanes found under %s: wrong repo root?", repoRoot)
 	}
@@ -306,39 +317,24 @@ type semBlock struct {
 	} `yaml:"task"`
 }
 
-type semPipeline struct {
-	GlobalJobConfig struct {
-		EnvVars []envVar `yaml:"env_vars"`
-	} `yaml:"global_job_config"`
-	Blocks []semBlock `yaml:"blocks"`
-}
-
-func parseSemaphore(source string, data []byte) ([]Lane, error) {
-	var p semPipeline
-	if err := yaml.Unmarshal(data, &p); err != nil {
-		return nil, err
-	}
-	return blockLanes(source, p.Blocks, env{}.apply(p.GlobalJobConfig.EnvVars), false)
-}
-
-// parseSemaphoreBlocks reads the per-component block files, which are a bare
-// sequence of blocks rather than a pipeline and carry no global_job_config.
-// Most declare no e2e lane at all, so unlike a pipeline they are filtered.
+// parseSemaphoreBlocks reads the per-component block files, a bare sequence of
+// blocks with no global_job_config. Most declare no e2e lane at all, so blocks
+// that do not run the suite are dropped rather than treated as lanes.
 func parseSemaphoreBlocks(source string, data []byte) ([]Lane, error) {
 	var blocks []semBlock
 	if err := yaml.Unmarshal(data, &blocks); err != nil {
 		return nil, err
 	}
-	return blockLanes(source, blocks, env{}, true)
+	return blockLanes(source, blocks)
 }
 
 // blockLanes resolves the lanes in a sequence of Semaphore blocks. A kind job
 // invokes make itself, so its target names the config; a provisioned job gets
 // one from run_tests.sh in the environment.
-func blockLanes(source string, blocks []semBlock, global env, filter bool) ([]Lane, error) {
+func blockLanes(source string, blocks []semBlock) ([]Lane, error) {
 	var lanes []Lane
 	for _, block := range blocks {
-		blockEnv := global.apply(block.Task.EnvVars)
+		blockEnv := env{}.apply(block.Task.EnvVars)
 		for _, job := range block.Task.Jobs {
 			base := blockEnv.apply(job.EnvVars)
 			name := block.Name + " / " + job.Name
@@ -352,7 +348,7 @@ func blockLanes(source string, blocks []semBlock, global env, filter bool) ([]La
 			if target, ok := e2eMakeTarget(commands); ok {
 				base = base.clone()
 				base[envConfig] = kindConfig(target, base[envConfig])
-			} else if filter && !strings.Contains(commands, provisionedSuiteScript) {
+			} else if !strings.Contains(commands, provisionedSuiteScript) {
 				continue
 			}
 			lanes = append(lanes, base.lanes(source, name, commands)...)
