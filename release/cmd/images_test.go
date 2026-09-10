@@ -428,3 +428,27 @@ func TestScanRequestSeparatesHashreleases(t *testing.T) {
 		})
 	}
 }
+
+// The operator directory is named apart from the release directories, so the check has to
+// ask for it explicitly or the operator's own image goes unexamined.
+func TestImagesCheckOperatorCoversTheOperatorDir(t *testing.T) {
+	// The action opens a log file in the working directory.
+	t.Chdir(t.TempDir())
+
+	original := releaseImageList
+	var gotDirs []string
+	releaseImageList = func(_ string, dirs ...string) ([]string, error) {
+		gotDirs = dirs
+		return []string{"node", "operator"}, nil
+	}
+	defer func() { releaseImageList = original }()
+
+	if err := imagesCheckOperatorAction(&Config{})(context.Background(), &cli.Command{}); err != nil {
+		t.Fatalf("check-operator: %v", err)
+	}
+	for _, want := range append(utils.ImageDiscoveryDirs(), utils.OperatorDir) {
+		if !slices.Contains(gotDirs, want) {
+			t.Errorf("check dirs omit %s", want)
+		}
+	}
+}
