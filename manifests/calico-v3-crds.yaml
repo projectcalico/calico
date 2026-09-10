@@ -13381,6 +13381,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - component
+            - webhooks
             - webhook
             - --tls-cert-file=/certs/tls.crt
             - --tls-private-key-file=/certs/tls.key

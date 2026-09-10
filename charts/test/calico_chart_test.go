@@ -44,6 +44,35 @@ func TestCalicoNodeRunsHostWritingInitContainersAsRoot(t *testing.T) {
 	}
 }
 
+func TestCalicoWebhooksKeepsTheServerUnprivileged(t *testing.T) {
+	g := NewWithT(t)
+
+	var deployment appsv1.Deployment
+	renderCalicoResource(t, "templates/calico-webhooks.yaml", "Deployment", "calico-webhooks", &deployment)
+
+	container := containerByName(t, deployment.Spec.Template.Spec.Containers, "calico-webhooks")
+	g.Expect(container.SecurityContext.RunAsUser).To(Equal(ptr.To[int64](10001)))
+	g.Expect(container.SecurityContext.RunAsNonRoot).To(Equal(ptr.To(true)))
+}
+
+// The TLS flags live on the nested webhook command, so "component webhook" alone reaches
+// the parent group and the server exits with "unknown flag: --tls-cert-file".
+func TestCalicoWebhooksInvokesTheNestedWebhookCommand(t *testing.T) {
+	g := NewWithT(t)
+
+	var deployment appsv1.Deployment
+	renderCalicoResource(t, "templates/calico-webhooks.yaml", "Deployment", "calico-webhooks", &deployment)
+
+	container := containerByName(t, deployment.Spec.Template.Spec.Containers, "calico-webhooks")
+	g.Expect(container.Args).To(Equal([]string{
+		"component",
+		"webhooks",
+		"webhook",
+		"--tls-cert-file=/certs/tls.crt",
+		"--tls-private-key-file=/certs/tls.key",
+	}))
+}
+
 func renderCalicoResource(t *testing.T, templatePath, kind, name string, into any) {
 	t.Helper()
 	g := NewWithT(t)
