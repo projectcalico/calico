@@ -2134,6 +2134,7 @@ spec:
                     [Default: unset - means logs are emitted when BPFLogLevel id debug and BPFLogFilters not set.]
                   type: string
                 bpfConnectTimeLoadBalancing:
+                  default: TCP
                   description: |-
                     BPFConnectTimeLoadBalancing when in BPF mode, controls whether Felix installs the connect-time load
                     balancer. The connect-time load balancer is required for the host to be able to reach Kubernetes services
@@ -2333,6 +2334,7 @@ spec:
                     workloads and services. [Default: true - bypass Linux conntrack]
                   type: boolean
                 bpfHostNetworkedNATWithoutCTLB:
+                  default: Enabled
                   description: |-
                     BPFHostNetworkedNATWithoutCTLB when in BPF mode, controls whether Felix does a NAT without CTLB. This along with BPFConnectTimeLoadBalancing
                     determines the CTLB behavior. [Default: Enabled]
@@ -2722,6 +2724,7 @@ spec:
                   pattern: ^([a-zA-Z0-9-_]+=([^=]+),)*([a-zA-Z0-9-_]+=([^=]+))?$
                   type: string
                 floatingIPs:
+                  default: Disabled
                   description: |-
                     FloatingIPs configures whether or not Felix will program non-OpenStack floating IP addresses.  (OpenStack-derived
                     floating IPs are always programmed, regardless of this setting.)
@@ -5444,6 +5447,9 @@ spec:
               description: IPPoolSpec contains the specification for an IPPool resource.
               properties:
                 allowedUses:
+                  default:
+                    - Workload
+                    - Tunnel
                   description: |-
                     AllowedUses controls what the IP pool will be used for. If not specified or empty, defaults to
                     ["Tunnel", "Workload"] for back-compatibility. Valid values: "Tunnel", "Workload", "LoadBalancer".
@@ -5507,6 +5513,7 @@ spec:
                     from this pool.
                   type: boolean
                 ipipMode:
+                  default: Never
                   description: |-
                     Contains configuration for IPIP tunneling for this pool.
                     For IPv6 pools, IPIP tunneling must be disabled.
@@ -5534,6 +5541,7 @@ spec:
                   maxLength: 1024
                   type: string
                 vxlanMode:
+                  default: Never
                   description: Contains configuration for VXLAN tunneling for this pool.
                   enum:
                     - Never
@@ -5995,6 +6003,7 @@ spec:
                     - Panic
                   type: string
                 prometheusMetricsPort:
+                  default: 9094
                   description: |-
                     PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. Set to 0 to disable. [Default: 9094]
                     Valid values are: 0-65535.
@@ -6235,6 +6244,7 @@ spec:
                         - Panic
                       type: string
                     prometheusMetricsPort:
+                      default: 9094
                       description: |-
                         PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. Set to 0 to disable. [Default: 9094]
                         Valid values are: 0-65535.
