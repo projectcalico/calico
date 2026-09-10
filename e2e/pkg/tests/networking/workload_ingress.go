@@ -618,7 +618,7 @@ var _ = describe.CalicoDescribe(
 		}
 
 		// External node scenarios run from a machine outside the cluster via SSH.
-		framework.Context("external node", describe.WithExternalNode(), func() {
+		framework.Context("external node", describe.RequiresExternalNode(), func() {
 			for _, scenario := range ingressScenarioTable {
 				s := scenario // capture loop variable
 				if s.srcNode != "external" {

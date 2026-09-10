@@ -11,7 +11,7 @@
 # One deliberate departure from that filter: it also picked up tests needing
 # things this cluster hasn't got, which could only ever fail here. Those are
 # excluded by label below. Requirements the cluster does meet are left in, so
-# tests labelled RequiresAWS, RequiresBGPMesh, NoEncap, ExternalNode,
+# tests labelled RequiresAWS, RequiresBGPMesh, NoEncap, RequiresExternalNode,
 # RequiresGoldmane and RequiresCalicoAPIServer all still run.
 
 extends: base.yaml

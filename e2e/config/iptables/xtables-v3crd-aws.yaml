@@ -16,7 +16,7 @@ exclude:
   labels:
     - label: Dataplane:BPF
       reason: "not a BPF dataplane; maglev needs BPF and only self-skips on a missing external node, so it would fail rather than skip"
-    - label: ExternalNode
+    - label: RequiresExternalNode
       reason: "no external node on this lane (needs EXT_IP/EXT_KEY/EXT_USER)"
     - label: RequiresCalicoAPIServer
       reason: "v3 CRD mode (USE_API_SERVER=false): no aggregated Calico API server, so read-path tier RBAC is not enforced"

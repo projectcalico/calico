@@ -15,7 +15,7 @@ include:
 
 exclude:
   labels:
-    - label: ExternalNode
+    - label: RequiresExternalNode
       reason: "requires a non-cluster node with EXT_IP/EXT_KEY/EXT_USER configured"
 
     - label: Feature:BGPPeer

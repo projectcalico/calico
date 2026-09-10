@@ -271,7 +271,7 @@ e2e-test:
 	$(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
 
 ## Create a kind cluster with the BPF dataplane plus an external node, and run
-## the sig-calico BPF e2e tests (including the ExternalNode specs).
+## the sig-calico BPF e2e tests (including the RequiresExternalNode specs).
 ## Uses kind-bpf.config (kube-proxy in iptables mode - eBPF does not support
 ## ipvs kube-proxy) while keeping the cluster named "kind" so values.yaml's
 ## control-plane nodeSelector still matches.
@@ -303,7 +303,7 @@ kind-load-rapidclient:
 	$(KIND) load docker-image $(RAPIDCLIENT_IMAGE):$(RAPIDCLIENT_TAG) --name $(KIND_NAME)
 
 ## Load the (already-built) rapidclient image into the external node's inner docker
-## daemon, for the ExternalNode packet-size spec and maglev's `docker run`. The node
+## daemon, for the RequiresExternalNode packet-size spec and maglev's `docker run`. The node
 ## is a dind container, so we `docker exec` its dockerd directly as root (no sudo /
 ## ssh, unlike the gcp external node in load_images.sh). Run after kind-load-rapidclient
 ## (builds the host image) and external-node.sh up (creates the container).

@@ -9,7 +9,7 @@ extends: [pipeline.yaml, ../platform/eks.yaml]
 
 exclude:
   labels:
-    - label: ExternalNode
+    - label: RequiresExternalNode
       reason: "no external node on this lane (needs EXT_IP/EXT_KEY/EXT_USER)"
     - label: NoEncap
       reason: "cluster uses encapsulation; these specs require unencapsulated routing"

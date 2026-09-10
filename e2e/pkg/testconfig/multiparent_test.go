@@ -65,7 +65,7 @@ func TestExtendsListFoldsInOrder(t *testing.T) {
 	child := write(t, dir, "lane.yaml", `extends: [pipeline.yaml, platform/eks.yaml]
 exclude:
   labels:
-    - label: ExternalNode
+    - label: RequiresExternalNode
       reason: "no external node"
 `)
 
@@ -77,7 +77,7 @@ exclude:
 	if err != nil {
 		t.Fatalf("to flags: %v", err)
 	}
-	if want := "(sig-calico) && !Slow && !ExternalNode"; flags.LabelFilter != want {
+	if want := "(sig-calico) && !Slow && !RequiresExternalNode"; flags.LabelFilter != want {
 		t.Errorf("label filter = %q, want %q", flags.LabelFilter, want)
 	}
 	if want := "(DNS.for.services)"; flags.SkipString() != want {

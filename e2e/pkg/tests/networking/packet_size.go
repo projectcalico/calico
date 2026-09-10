@@ -199,7 +199,7 @@ var _ = describe.CalicoDescribe(
 			// External-client entry is gated by the ExternalNode label so pipelines
 			// without EXT_IP/EXT_KEY/EXT_USER configured filter it out rather than
 			// failing hard.
-			framework.Context("external client", describe.WithExternalNode(), func() {
+			framework.Context("external client", describe.RequiresExternalNode(), func() {
 				DescribeTable("using UDP and TCP",
 					runPacketTest,
 					Entry("external to nodeport", pktClientExt, pktTargetNodePort, false),

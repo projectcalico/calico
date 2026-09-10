@@ -58,7 +58,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("Maglev"),
 	describe.WithCategory(describe.Networking),
-	describe.WithExternalNode(),
+	describe.RequiresExternalNode(),
 	describe.WithDataplane(describe.BPF),
 	describe.WithSerial(),
 	describe.RequiresAWS(),

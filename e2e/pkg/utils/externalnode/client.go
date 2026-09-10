@@ -60,7 +60,7 @@ func NewClient() *Client {
 func MustNewClient() *Client {
 	client := NewClient()
 	if client == nil {
-		framework.Failf("No external node is configured, so the lane should exclude the ExternalNode label")
+		framework.Failf("No external node is configured, so the lane should exclude the RequiresExternalNode label")
 	}
 	return client
 }

@@ -36,7 +36,7 @@
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC staged policies should deny staged policy creation by a user without tier GET access [Conformance]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC tier isolation should restrict a user to only their permitted tier [Conformance]
 [sig-calico] [Team:CORE] [Feature:BGPPeer] [RequiresBGP] [Category:Networking] BGP password should enforce BGP password authentication [Serial]
-[sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes external client [ExternalNode] using UDP and TCP external to nodeport
+[sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes external client [RequiresExternalNode] using UDP and TCP external to nodeport
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes using UDP and TCP host to nodeport, different nodes
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes using UDP and TCP host to pod, different nodes
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes using UDP and TCP host to service, different nodes
@@ -65,8 +65,8 @@
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Egress Datapath NodePort access scenario-0N10: pod0 -> node1 NodePort -> pod0
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Egress Datapath NodePort access scenario-0N11: pod0 -> node1 NodePort -> pod1 (hairpin)
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Egress Datapath NodePort access scenario-0N12: pod0 -> node1 NodePort -> pod2 (pod on other node)
-[sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Ingress Datapath external node [ExternalNode] scenario-14: external hostNet=false -> node0NodePort
-[sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Ingress Datapath external node [ExternalNode] scenario-15: external hostNet=false -> svcNodePort
+[sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Ingress Datapath external node [RequiresExternalNode] scenario-14: external hostNet=false -> node0NodePort
+[sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Ingress Datapath external node [RequiresExternalNode] scenario-15: external hostNet=false -> svcNodePort
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Ingress Datapath scenario-10: node1 hostNet=true -> node1NodePort
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Ingress Datapath scenario-11: node0 hostNet=false -> node1NodePort
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Ingress Datapath scenario-12: node0 hostNet=true -> node1NodePort
