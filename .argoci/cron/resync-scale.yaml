@@ -110,6 +110,10 @@ steps:
       export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
       export PERF_ENV=weekly
 
+      # Populate CI vars that the weekly run infrastructure does not populate.
+      export CI_GIT_SHA="$(git -C "${CALICO_REPO_DIR}" rev-parse HEAD)"
+      export CI_JOB_ID="$(basename "${CI_ARTIFACT_STORAGE}")"
+
       # The headline ladder.  Keep the smaller rungs: they are what tell us
       # whether scaling is still linear, which is the point of trending this.
       export RESYNC_SCALES=100,1000,3000,10000

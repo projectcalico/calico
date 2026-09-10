@@ -187,7 +187,7 @@ already supplied a value (producer wins):
 - **`pr_number`** -- from `SEMAPHORE_GIT_PR_NUMBER` or `CI_GIT_PR_NUMBER`, if
   set.
 - **`env`** -- `ci` if any of those run IDs is set, else `dev`; override with
-  `PERF_ENV`.  Filter dashboards to `env: ci` to keep dev runs out of trend
+  `PERF_ENV`.  Filter dashboards to `env != dev` to keep dev runs out of trend
   data.
 
   Each CI system's own variables are read, so a test that moves between them

@@ -162,7 +162,7 @@ func ciMetadata() map[string]any {
 		fieldCIRunID:     runID,
 		fieldEnv:         env,
 	}
-	if pr := firstEnv("SEMAPHORE_GIT_PR_NUMBER", "CI_GIT_PR_NUMBER"); pr != "" {
+	if pr := firstEnv("SEMAPHORE_GIT_PR_NUMBER", "CI_GIT_PR_NUMBER"); pr != "" && pr != "none" {
 		m[fieldPRNumber] = pr
 	}
 	return m
