@@ -135,6 +135,7 @@ local:release/internal/slack
 local:release/internal/steps
 local:release/internal/utils
 local:release/internal/version
+local:release/internal/yamledit
 local:release/pkg/manager/calico
 local:release/pkg/manager/operator
 local:release/pkg/tasks
