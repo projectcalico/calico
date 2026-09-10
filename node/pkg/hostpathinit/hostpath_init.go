@@ -45,10 +45,13 @@ func Run() {
 		log.Panic("Unable to create directory /var/lib/calico/")
 	}
 
-	// Change ownership of /var/lib/calico/ to our non-root user
-	err = os.Chown("/var/lib/calico/", uid, 0)
+	// Change ownership of /var/lib/calico to our non-root user.
+	// Lchown so a symlink at this path is not followed. No trailing slash:
+	// a trailing '/' would force the kernel to dereference any symlink at
+	// this path to verify the target is a directory, defeating Lchown.
+	err = os.Lchown("/var/lib/calico", uid, 0)
 	if err != nil {
-		log.Panic("Unable to chown /var/lib/calico/")
+		log.Panic("Unable to chown /var/lib/calico")
 	}
 
 	// Create the calico directory in /var/run/
@@ -57,10 +60,11 @@ func Run() {
 		log.Panic("Unable to create directory /var/run/calico/")
 	}
 
-	// Change ownership of /var/run/calico/ to our non-root user
-	err = os.Chown("/var/run/calico/", uid, 0)
+	// Change ownership of /var/run/calico to our non-root user.
+	// Lchown without trailing slash, same reason as /var/lib/calico above.
+	err = os.Lchown("/var/run/calico", uid, 0)
 	if err != nil {
-		log.Panic("Unable to chown /var/run/calico/")
+		log.Panic("Unable to chown /var/run/calico")
 	}
 
 	// Create the calico directory in /var/log/ and the cni log directory in /var/log/calico/
@@ -69,22 +73,24 @@ func Run() {
 		log.Panic("Unable to create directory /var/log/calico/cni")
 	}
 
-	// Change ownership of /var/log/calico/ to  our non-root user
-	err = os.Chown("/var/log/calico/", uid, 0)
+	// Change ownership of /var/log/calico to our non-root user.
+	// Lchown without trailing slash, same reason as /var/lib/calico above.
+	err = os.Lchown("/var/log/calico", uid, 0)
 	if err != nil {
-		log.Panic("Unable to chown /var/log/calico/")
+		log.Panic("Unable to chown /var/log/calico")
 	}
 
 	// Change ownership of the cni log directory and all files in the cni log directory.
 	// There will likely be files here since logs might have been created
 	// separately by the CNI plugin.
+	// Use Lchown so a symlink planted under /var/log/calico/cni is not followed.
 	err = filepath.Walk("/var/log/calico/cni", func(path string, info fs.FileInfo, walkErr error) error {
 		// There was an error related to the path. Directory will not be explored so skip
 		if walkErr != nil && path != "/var/log/calico/cni" {
 			return nil
 		}
 
-		err := os.Chown(path, uid, 0)
+		err := os.Lchown(path, uid, 0)
 		if err != nil {
 			return fmt.Errorf("unable to chown %s: %s", path, err)
 		}
