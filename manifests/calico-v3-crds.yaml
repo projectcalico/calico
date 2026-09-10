@@ -13490,7 +13490,7 @@ spec:
     resourceRules:
       - apiGroups: ["projectcalico.org"]
         apiVersions: ["v3"]
-        operations: ["CREATE"]
+        operations: ["CREATE", "UPDATE"]
         resources:
           - ippools
   failurePolicy: Fail
@@ -13508,8 +13508,8 @@ spec:
       expression: |
         variables.cidrUsable && cidr(object.spec.cidr).ip().family() == 6 ? 122 : 26
   mutations:
-    # CREATE only: blockSize is immutable, so defaulting it on update would either
-    # backfill existing pools silently or collide with the immutability rule.
+    # Also on update: blockSize is immutable, but its transition rule cannot fire
+    # when the field is absent, so a write that omits it would otherwise clear it.
     - patchType: "JSONPatch"
       jsonPatch:
         expression: |
@@ -13634,7 +13634,7 @@ spec:
     resourceRules:
       - apiGroups: ["projectcalico.org"]
         apiVersions: ["v3"]
-        operations: ["CREATE"]
+        operations: ["CREATE", "UPDATE"]
         resources:
           - ippools
 ---

@@ -9,6 +9,6 @@ spec:
     resourceRules:
       - apiGroups: ["projectcalico.org"]
         apiVersions: ["v3"]
-        operations: ["CREATE"]
+        operations: ["CREATE", "UPDATE"]
         resources:
           - ippools
