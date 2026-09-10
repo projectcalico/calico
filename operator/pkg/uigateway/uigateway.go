@@ -328,8 +328,6 @@ func (h *Helper) clearRBACFinalizers(ctx context.Context) error {
 		grant.SetFinalizers(slices.DeleteFunc(grant.GetFinalizers(), func(f string) bool {
 			return f == rgateway.RBACFinalizer
 		}))
-		// Update, not Patch: the operator's ClusterRole grants update on
-		// roles and rolebindings but not patch.
 		if err := h.cli.Update(ctx, grant); err != nil && !errors.IsNotFound(err) {
 			return err
 		}
