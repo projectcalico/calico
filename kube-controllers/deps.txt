@@ -232,6 +232,7 @@ local:libcalico-go/lib/kubevirt
 local:libcalico-go/lib/names
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net
+local:libcalico-go/lib/nodestatus
 local:libcalico-go/lib/options
 local:libcalico-go/lib/resources
 local:libcalico-go/lib/selector
