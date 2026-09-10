@@ -1,6 +1,6 @@
 module github.com/projectcalico/calico/lib/kind
 
-go 1.27.0
+go 1.27.1
 
 require (
 	github.com/google/go-containerregistry v0.21.6
