@@ -618,7 +618,7 @@ func (r *CalicoManager) BuildHelm() error {
 		if err != nil {
 			return fmt.Errorf("helm repo URL: %w", err)
 		}
-		opts = append(opts, charts.WithIndex(repoURL, chartsURL, r.chartIndexDir(), r.tmpDir))
+		opts = append(opts, charts.WithIndex(repoURL, chartsURL, chart.BaseDir, r.tmpDir))
 	}
 	if r.isHashRelease {
 		opts = append(opts, charts.WithModifiedValues(charts.ValueEditsFor(r.calicoVersion, r.imageRegistries[0], r.operatorImage, r.operatorVersion, r.operatorRegistry)))
@@ -651,11 +651,6 @@ func (r *CalicoManager) helmRepo() (string, error) {
 		return r.helmRepoURL, nil
 	}
 	return charts.RepoURL()
-}
-
-// chartIndexDir is where the built index lands.
-func (r *CalicoManager) chartIndexDir() string {
-	return charts.Dir(r.uploadDir())
 }
 
 func (r *CalicoManager) buildOCPBundle() error {
@@ -1594,7 +1589,7 @@ func (r *CalicoManager) updateHelmChartIndex() error {
 		logrus.Info("Skipping updating helm index")
 		return nil
 	}
-	if err := r.s3Cp(filepath.Join(r.chartIndexDir(), helmIndexFileName), fmt.Sprintf("s3://%s/charts/", r.s3Bucket), s3ACLPublicRead...); err != nil {
+	if err := r.s3Cp(filepath.Join(r.chart().BaseDir, helmIndexFileName), fmt.Sprintf("s3://%s/charts/", r.s3Bucket), s3ACLPublicRead...); err != nil {
 		return fmt.Errorf("update helm index: %w", err)
 	}
 	return nil
