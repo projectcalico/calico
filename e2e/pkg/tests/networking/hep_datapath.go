@@ -393,9 +393,9 @@ var _ = describe.CalicoDescribe(
 			}
 
 			if applyOnForward {
-				// On AKS and EKS the apiserver tunnels through an agent pod, so the HEP
-				// node dials other nodes' kubelets and that traffic is forwarded.
-				// Must land before the first AOF policy, which default-denies it.
+				// On managed Kubernetes, Konnectivity carries control-plane to node
+				// connections, so the HEP node dials other nodes' kubelets over forwarded
+				// traffic. Must land before the first AOF policy, which default-denies it.
 				kubeletForwardPolicy := hepBuildKubeletGNP(utils.GenerateRandomName("hep-kubelet-aof"), true)
 				fwdCtx, fwdCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer fwdCancel()
