@@ -845,12 +845,19 @@ REPO_REL_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else
 
 .PHONY: fix-changed go-fmt-changed goimports-changed
 # Format changed files only.
+#
+# The branch probe needs a remote for the upstream repo, which a clone of a fork
+# does not have. Where CI hands us the range outright, skip it: the script
+# prefers the range anyway, so the probe would only fail noisily.
 fix-changed go-fmt-changed goimports-changed:
 	if [ "$(SKIP_FIX_CHANGED)" != "true" ]; then \
-	  parent_branch=`release_prefix=$(RELEASE_BRANCH_PREFIX)-v git_repo_slug=$(GIT_REPO_SLUG) $(REPO_REL_DIR)/hack/find-parent-release-branch.sh`; \
+	  if [ -z "$(CI_GIT_COMMIT_RANGE)" ]; then \
+	    parent_branch=`release_prefix=$(RELEASE_BRANCH_PREFIX)-v git_repo_slug=$(GIT_REPO_SLUG) $(REPO_REL_DIR)/hack/find-parent-release-branch.sh`; \
+	  fi; \
 	  $(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
 	                -e git_repo_slug=$(GIT_REPO_SLUG) \
 	                -e parent_branch=$$parent_branch \
+	                -e CI_GIT_COMMIT_RANGE=$(CI_GIT_COMMIT_RANGE) \
 	                $(CALICO_BUILD) $(REPO_REL_DIR)/hack/format-changed-files.sh; \
 	fi
 

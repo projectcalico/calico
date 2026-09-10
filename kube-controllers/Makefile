@@ -57,9 +57,12 @@ gen-files:
 ###############################################################################
 # Tests
 ###############################################################################
-ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
+# Two CI systems run this in parallel and spell these differently, so both
+# spellings are accepted until one of them goes away.
+ifneq ($(filter pull-request PR,$(SEMAPHORE_GIT_REF_TYPE) $(CI_GIT_REF_TYPE)),)
 # Determine the tests to run using the test spider tool, which emits a list of impacted packages.
-SPIDER_OUTPUT:=$(shell $(DOCKER_GO_BUILD) sh -c 'go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir kube-controllers/')
+SPIDER_COMMIT_RANGE:=$(or $(CI_GIT_COMMIT_RANGE),$(SEMAPHORE_GIT_COMMIT_RANGE))
+SPIDER_OUTPUT:=$(shell $(DOCKER_GO_BUILD) sh -c 'go run ../hack/test/spider -commit-range=$(SPIDER_COMMIT_RANGE) -filter-dir kube-controllers/')
 ifeq ($(filter __SPIDER_OK__,$(SPIDER_OUTPUT)),)
 $(error test spider did not complete - refusing to run zero tests. See its output above)
 endif
