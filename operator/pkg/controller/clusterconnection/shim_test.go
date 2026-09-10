@@ -18,8 +18,6 @@
 package clusterconnection
 
 import (
-	"context"
-
 	"golang.org/x/net/http/httpproxy"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,10 +38,15 @@ func NewReconcilerWithShims(
 	clusterInfoWatchReady *utils.ReadyFlag,
 	opts options.ControllerOptions,
 ) reconcile.Reconciler {
-	if opts.ShutdownContext == nil {
-		opts.ShutdownContext = context.Background()
-	}
-	return newReconciler(cli, schema, status, provider, tierWatchReady, clusterInfoWatchReady, opts)
+	return NewReconciler(ReconcilerOptions{
+		Client:                cli,
+		Scheme:                schema,
+		Status:                status,
+		Provider:              provider,
+		TierWatchReady:        tierWatchReady,
+		ClusterInfoWatchReady: clusterInfoWatchReady,
+		Options:               opts,
+	})
 }
 
 // ResolvedPodProxies exposes what the reconciler read off the Guardian pods.
