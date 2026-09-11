@@ -2,25 +2,9 @@
 // Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#include <linux/types.h>
-#include <linux/bpf.h>
-#include <linux/pkt_cls.h>
-#include <linux/ip.h>
-#include <linux/tcp.h>
-#include <linux/in.h>
-#include <linux/udp.h>
-#include <linux/if_ether.h>
-#include <iproute2/bpf_elf.h>
-
-// stdbool.h has no deps so it's OK to include; stdint.h pulls in parts
-// of the std lib that aren't compatible with BPF.
-#include <stdbool.h>
-
-
-#include "bpf.h"
-
+/* Log prefix for this program.  log.h only defines CALI_LOG if it is not
+ * already set, so this must come before any include. */
 #define CALI_IFACE_LOG(fmt, ...) bpf_log("%s" fmt, ctx->globals->data.iface_name, ## __VA_ARGS__)
-
 #define CALI_LOG(fmt, ...) do { \
 	if (((CALI_COMPILE_FLAGS) & CALI_TC_HOST_EP) && ((CALI_COMPILE_FLAGS) & CALI_TC_INGRESS)) { \
 		CALI_IFACE_LOG("-I: " fmt, ## __VA_ARGS__);	\
@@ -33,38 +17,51 @@
 	}							\
 } while (0)
 
-#include "types.h"
-#include "counters.h"
-#include "skb.h"
-#include "policy.h"
+#include <linux/icmp.h>
+#include <linux/icmpv6.h>
+#include <linux/if_ether.h>
+#include <linux/in.h>
+#include <linux/ip.h>
+#include <linux/ipv6.h>
+#include <linux/tcp.h>
+#include <linux/udp.h>
+
+#include "arp.h"
+#include "cali_bpf.h"
 #include "conntrack.h"
+#include "conntrack_types.h"
+#include "counters.h"
+#include "events.h"
+#include "failsafe.h"
+#include "fib.h"
+#include "globals.h"
+#include "icmp.h"
+#include "ip_addr.h"
+#include "jump.h"
+#include "log.h"
+#include "maglev.h"
+#include "metadata.h"
 #include "nat.h"
 #include "nat_lookup.h"
-#include "routes.h"
-#include "jump.h"
-#include "reasons.h"
-#include "icmp.h"
-#include "arp.h"
-#include "sendrecv.h"
-#include "events.h"
-#include "fib.h"
-#include "rpf.h"
+#include "nat_types.h"
 #include "parsing.h"
-#include "failsafe.h"
-#include "metadata.h"
-#include "bpf_helpers.h"
-#include "rule_counters.h"
+#include "parsing_types.h"
+#include "policy.h"
 #include "qos.h"
-#include "maglev.h"
-
-#ifndef IPVER6
+#include "reasons.h"
+#include "routes.h"
+#include "rpf.h"
+#include "rule_counters.h"
+#include "sendrecv.h"
+#include "skb.h"
+#include "tc.h"
+#include "types.h"
+#ifdef IPVER6
+#include "tcp6.h"
+#else
 #include "ip_v4_fragment.h"
 #include "tcp4.h"
-#else
-#include "tcp6.h"
 #endif
-
-#include "tc.h"
 
 #define HAS_HOST_CONFLICT_PROG CALI_F_TO_HEP
 

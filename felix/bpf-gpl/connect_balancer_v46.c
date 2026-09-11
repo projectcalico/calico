@@ -2,27 +2,20 @@
 // Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#include <linux/bpf.h>
-
-// socket_type.h contains the definition of SOCK_XXX constants that we need
-// but it's supposed to be imported via socket.h, which we can't import due
-// to lack of std lib support for BPF.  Bypass its check for now.
-#define _SYS_SOCKET_H
-#include <bits/socket_type.h>
-
-#include <stdbool.h>
-
-#include "bpf.h"
-#include "globals.h"
-#include "ctlb.h"
-#include "ctlb_map.h"
-
+/* Log prefix for this program.  log.h only defines CALI_LOG if it is not
+ * already set, so this must come before any include. */
 #define CALI_LOG(fmt, ...) bpf_log("CTLB-V46--------: " fmt, ## __VA_ARGS__)
 
-#include "log.h"
+#include <linux/bpf.h>
 
-#include "sendrecv.h"
+#include "cali_bpf.h"
 #include "connect.h"
+#include "ctlb.h"
+#include "ctlb_map.h"
+#include "globals.h"
+#include "log.h"
+#include "sendrecv.h"
+#include "sock_type.h"
 
 static CALI_BPF_INLINE bool is_ipv4_as_ipv6(__u32 *addr) {
 	return addr[0] == 0 && addr[1] == 0 && addr[2] == bpf_htonl(0x0000ffff);
@@ -46,7 +39,7 @@ int calico_connect_v46(struct bpf_sock_addr *ctx)
 v4:
 	ipv4 = ctx->user_ip6[3];
 
- 	if ((ret = connect(ctx, &ipv4)) != 1) {
+ 	if ((ret = do_connect(ctx, &ipv4)) != 1) {
 		goto out;
 	}
 

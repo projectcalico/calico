@@ -5,11 +5,16 @@
 #ifndef __CALI_RPF_H__
 #define __CALI_RPF_H__
 
-#include "bpf.h"
-#include "types.h"
-#include "skb.h"
-#include "routes.h"
+#include <linux/in.h>
+
 #include "allowsources.h"
+#include "cali_bpf.h"
+#include "conntrack_types.h"
+#include "globals.h"
+#include "ip_addr.h"
+#include "log.h"
+#include "routes.h"
+#include "types.h"
 
 #define RPF_RES_FAIL		0
 #define RPF_RES_STRICT		1

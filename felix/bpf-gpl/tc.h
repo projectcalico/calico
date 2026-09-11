@@ -2,9 +2,10 @@
 // Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#ifndef __CALI_BPF_TC_H__
-#define __CALI_BPF_TC_H__
+#ifndef __CALI_TC_H__
+#define __CALI_TC_H__
 
+#include "cali_bpf.h"
 #include "types.h"
 
 static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb);
@@ -16,4 +17,4 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 
 int parse_packet(struct __sk_buff *skb, struct cali_tc_ctx *ctx);
 
-#endif /* __CALI_BPF_TC_H__ */
+#endif /* __CALI_TC_H__ */

@@ -1,5 +1,4 @@
-
-/* 
+/*
  * Copyright (C) 2006. Bob Jenkins (bob_jenkins@burtleburtle.net)
  *
  * https://burtleburtle.net/bob/hash/
@@ -21,8 +20,10 @@
  * -Alex
 */
 
+#ifndef __CALI_JENKINS_HASH_H__
+#define __CALI_JENKINS_HASH_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 
 #define hashsize(n) ((__u32)1<<(n))
 #define rot(x,k) (((x)<<(k)) | ((x)>>(32-(k))))
@@ -161,3 +162,5 @@ static CALI_BPF_INLINE __u32 hashword(
 	/*------------------------------------------------------ report the result */
 	return c;
 }
+
+#endif /* __CALI_JENKINS_HASH_H__ */

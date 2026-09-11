@@ -5,19 +5,18 @@
 #ifndef __CALI_PARSING_H__
 #define __CALI_PARSING_H__
 
+#include <linux/in.h>
+
+#include "cali_bpf.h"
 #include "counters.h"
+#include "globals.h"
+#include "log.h"
+#include "nat_types.h"
+#include "parsing_types.h"
+#include "reasons.h"
 #include "routes.h"
 #include "skb.h"
 #include "types.h"
-
-#define PARSING_OK 0
-#define PARSING_OK_V6 1
-#define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2
-#define PARSING_FRAG_STORED 3
-#define PARSING_ERROR -1
-
-static CALI_BPF_INLINE int bpf_load_bytes(struct cali_tc_ctx *ctx, __u32 offset, void *buf, __u32 len);
-
 #ifdef IPVER6
 #include "parsing6.h"
 #else
@@ -45,23 +44,6 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr(struct cali_tc_ctx *ctx)
 	return tc_state_fill_from_iphdr_v4(ctx);
 }
 #endif
-
-static CALI_BPF_INLINE int bpf_load_bytes(struct cali_tc_ctx *ctx, __u32 offset, void *buf, __u32 len)
-{
-	int ret;
-
-#if CALI_F_XDP
-	if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_xdp_load_bytes)) {
-		ret = bpf_xdp_load_bytes(ctx->xdp, offset, buf, len);
-	} else {
-		return -22 /* EINVAL */;
-	}
-#else /* CALI_F_XDP */
-	ret = bpf_skb_load_bytes(ctx->skb, offset, buf, len);
-#endif /* CALI_F_XDP */
-
-	return ret;
-}
 
 /* Continue parsing packet based on the IP protocol and fill in relevant fields
  * in the state (struct cali_tc_state). */

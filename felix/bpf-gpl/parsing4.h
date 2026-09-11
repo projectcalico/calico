@@ -5,8 +5,15 @@
 #ifndef __CALI_PARSING4_H__
 #define __CALI_PARSING4_H__
 
-#include "bpf.h"
+#include <linux/if_ether.h>
+
+#include "cali_bpf.h"
 #include "counters.h"
+#include "log.h"
+#include "parsing_types.h"
+#include "reasons.h"
+#include "skb.h"
+#include "types.h"
 
 static CALI_BPF_INLINE int parse_packet_ip_v4(struct cali_tc_ctx *ctx)
 {

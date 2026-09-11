@@ -262,7 +262,7 @@ where an error is actually needed.
 
 ### Cases
 
-- **TTL exceeded.** `ip_ttl_exceeded` in `bpf.h` tests for TTL==1
+- **TTL exceeded.** `ip_ttl_exceeded` in `cali_bpf.h` tests for TTL==1
   (IPv4) / hop-limit==1 (IPv6) on a host-egress path. If that
   holds and the packet would have been forwarded, the program
   generates an ICMP Time Exceeded and drops the packet instead.

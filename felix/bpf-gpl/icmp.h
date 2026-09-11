@@ -5,6 +5,9 @@
 #ifndef __CALI_ICMP_H__
 #define __CALI_ICMP_H__
 
+#include "cali_bpf.h"
+#include "types.h"
+
 #ifdef IPVER6
 #include "icmp6.h"
 

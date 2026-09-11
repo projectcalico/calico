@@ -10,13 +10,11 @@
  * before Felix replaces the policy program with its generated version.
  */
 
-#include <stdbool.h>
-
-#include "bpf.h"
-#include "log.h"
-#include "types.h"
+#include "cali_bpf.h"
 #include "jump.h"
+#include "log.h"
 #include "policy.h"
+#include "types.h"
 
 /* If we want to just compile the code without defining any policies and to
  * avoid compiling out code paths that are not reachable if traffic is denied,

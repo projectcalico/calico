@@ -5,10 +5,14 @@
 #ifndef __CALI_QOS_H__
 #define __CALI_QOS_H__
 
-#include "bpf.h"
-#include "skb.h"
+#include "cali_bpf.h"
 #include "counters.h"
+#include "globals.h"
 #include "ifstate.h"
+#include "log.h"
+#include "reasons.h"
+#include "skb.h"
+#include "types.h"
 
 struct calico_qos_key {
 	__u32 ifindex;
