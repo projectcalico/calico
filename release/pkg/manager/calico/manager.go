@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
@@ -669,13 +670,17 @@ func (r *CalicoManager) publishToHashreleaseServer() error {
 		logrus.Info("Skipping publishing to hashrelease server")
 		return nil
 	}
-	logrus.WithFields(logrus.Fields{
-		"version": r.calicoVersion,
-		"name":    r.hashrelease.Name,
-		"note":    r.hashrelease.Note,
-	}).Info("Publishing hashrelease")
 
-	return hashreleaseserver.Publish(r.productCode, &r.hashrelease, &r.hashreleaseConfig)
+	return distribution.Publish([]distribution.Upload{{
+		Source: r.uploadDir(),
+		Handler: distribution.HashreleaseServer{
+			Release:     &r.hashrelease,
+			Config:      &r.hashreleaseConfig,
+			ProductCode: r.productCode,
+			DryRun:      r.dryRun,
+			Runner:      r.runner,
+		},
+	}}, !r.dryRun, distribution.WithRunner(r.runner))
 }
 
 func (r *CalicoManager) PublishRelease() error {

@@ -27,6 +27,7 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/github"
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/steps"
 )
 
@@ -44,9 +45,10 @@ const (
 var publicRead = []string{"--acl", "public-read"}
 
 var (
-	_ Destination = S3{}
-	_ Destination = GCS{}
-	_ Destination = GithubRelease{}
+	_ Handler = S3{}
+	_ Handler = GCS{}
+	_ Handler = GithubRelease{}
+	_ Handler = HashreleaseServer{}
 )
 
 type S3 struct {
@@ -253,23 +255,27 @@ func (d GithubRelease) Publish(ctx context.Context, src string) error {
 }
 
 func (d GithubRelease) makeLatest(ctx context.Context) (bool, error) {
-	latest, err := d.Releases.LatestTag(ctx)
+	latestTag, err := d.Releases.LatestTag(ctx)
 	if err != nil {
 		return false, fmt.Errorf("get latest tag: %w", err)
 	}
-	curr, err := d.semver(latest)
-	if err != nil {
-		return false, fmt.Errorf("parse current tag: %w", err)
+	// Nothing published yet, so this release is the latest by default.
+	if latestTag == "" {
+		return true, nil
 	}
-	new, err := d.semver(d.Tag)
+	latest, err := d.semver(latestTag)
 	if err != nil {
-		return false, fmt.Errorf("parse latest tag: %w", err)
+		return false, fmt.Errorf("parse latest tag %q: %w", latestTag, err)
 	}
-	return new.GreaterThan(curr), nil
+	this, err := d.semver(d.Tag)
+	if err != nil {
+		return false, fmt.Errorf("parse release tag %q: %w", d.Tag, err)
+	}
+	return this.GreaterThan(latest), nil
 }
 
 func (d GithubRelease) semver(tag string) (*semver.Version, error) {
-	return semver.NewVersion(strings.Trim(tag, "v"))
+	return semver.NewVersion(strings.TrimPrefix(tag, "v"))
 }
 
 func (d GithubRelease) upload(ctx context.Context, releaseID int64, path string) error {
@@ -323,4 +329,37 @@ func isDir(path string) (bool, error) {
 		return false, err
 	}
 	return info.IsDir(), nil
+}
+
+// Hashrelease uploads the whole output tree, then records the hashrelease in
+// the server's library.
+type HashreleaseServer struct {
+	Release *hashreleaseserver.Hashrelease
+
+	Config *hashreleaseserver.Config
+
+	ProductCode string
+
+	DryRun bool
+
+	Runner command.CommandRunner
+}
+
+func (d HashreleaseServer) Name() string { return fmt.Sprintf("%s hashrelease", d.Release.Name) }
+
+func (d HashreleaseServer) Publish(ctx context.Context, src string) error {
+	bucket := GCS{
+		URI:    d.Release.BucketURI(d.Config),
+		Sync:   true,
+		DryRun: d.DryRun,
+		Runner: d.Runner,
+	}
+	if err := bucket.Publish(ctx, src); err != nil {
+		return err
+	}
+	if d.DryRun {
+		logrus.WithField("hashrelease", d.Release.Name).Info("Dry run, not recording hashrelease")
+		return nil
+	}
+	return hashreleaseserver.Record(d.ProductCode, d.Release, d.Config)
 }

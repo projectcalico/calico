@@ -35,7 +35,7 @@ const (
 	SumsFileName     = "SHA256SUMS"
 )
 
-type Destination interface {
+type Handler interface {
 	Name() string
 
 	Publish(ctx context.Context, src string) error
@@ -44,7 +44,7 @@ type Destination interface {
 type Upload struct {
 	Source string
 
-	Dest Destination
+	Handler Handler
 
 	AllowMissing bool
 }
@@ -54,44 +54,45 @@ func (u Upload) validate() error {
 	if u.Source == "" {
 		errs = append(errs, fmt.Errorf("upload with no source"))
 	}
-	if u.Dest == nil {
+	if u.Handler == nil {
 		errs = append(errs, fmt.Errorf("upload of %s has no destination", u.Source))
 	}
 	return errors.Join(errs...)
 }
 
-type Release struct {
-	Version string
+// Metadata is what metadata.yaml records about a release.
+type Metadata struct {
+	Version string `json:"version"`
 
-	OperatorVersion string
+	OperatorVersion string `json:"operator_version" yaml:"operatorVersion"`
 
-	// Images are supplied rather than derived: image identity has two sources,
-	// the component Makefiles and the pinned-versions file, and only the
-	// caller knows which applies.
-	Images []string
+	// Supplied, not derived: a release and a hashrelease name images from
+	// different sources.
+	Images []string `json:"images"`
 
-	ChartVersion string
-
-	Registry string
+	ChartVersion string `json:"helm_chart_version" yaml:"helmChartVersion"`
 }
 
-func (r Release) validate() error {
+func (m Metadata) validate() error {
 	var errs []error
-	if r.Version == "" {
+	if m.Version == "" {
 		errs = append(errs, fmt.Errorf("no version specified"))
 	}
-	if r.OperatorVersion == "" {
+	if m.OperatorVersion == "" {
 		errs = append(errs, fmt.Errorf("no operator version specified"))
+	}
+	if len(m.Images) == 0 {
+		errs = append(errs, fmt.Errorf("no images specified"))
 	}
 	return errors.Join(errs...)
 }
 
 type settings struct {
-	Release
-
 	uploads []Upload
 
 	confirm bool
+
+	refs steps.RefRecorder
 
 	steps.Step
 }
@@ -144,6 +145,18 @@ func WithLogsDir(dir string) Option {
 func WithDir(dir string) Option {
 	return setting(func(s *settings) error {
 		s.Apply([]steps.Option{steps.WithDir(dir)})
+		return nil
+	})
+}
+
+// WithRecord writes a ref per completed upload, so a later step reads what
+// was published rather than what was planned.
+func WithRecord(rec steps.RefRecorder) PublishOption {
+	return publishSetting(func(s *settings) error {
+		if rec == nil {
+			return fmt.Errorf("no recorder to record published artifacts")
+		}
+		s.refs = rec
 		return nil
 	})
 }

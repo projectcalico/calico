@@ -21,6 +21,10 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	ghapi "github.com/google/go-github/v53/github"
+
+	gh "github.com/projectcalico/calico/release/internal/github"
 )
 
 // fakeRunner records the command a destination built, so a test asserts on
@@ -194,4 +198,57 @@ func TestDestinationNames(t *testing.T) {
 	if got := (GithubRelease{Tag: "v3.30.0"}).Name(); !strings.Contains(got, "v3.30.0") {
 		t.Errorf("github name = %q, want the tag in it", got)
 	}
+}
+
+// LatestTag returns an empty string when a repository has no published
+// release. Parsing that as a version fails, so a first release could never
+// be published.
+func TestGithubReleaseMakeLatest(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		published string
+		tag       string
+		want      bool
+	}{
+		{name: "first release in an empty repository", tag: "v3.30.0", want: true},
+		{name: "newer than what is published", published: "v3.29.0", tag: "v3.30.0", want: true},
+		{name: "a patch for an older stream", published: "v3.30.0", tag: "v3.29.2"},
+		// Trimming a "v" from both ends would corrupt this into 3.30.0-de.
+		{name: "a tag ending in v", published: "v3.29.0", tag: "v3.30.0-dev", want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rels := githubReleasesWithLatest(t, tc.published)
+			got, err := GithubRelease{Releases: rels, Tag: tc.tag}.makeLatest(context.Background())
+			if err != nil {
+				t.Fatalf("makeLatest: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("makeLatest() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// A destination holds a real *github.Releases, so the fake goes in at the
+// service seam rather than the destination.
+func githubReleasesWithLatest(t *testing.T, tag string) *gh.Releases {
+	t.Helper()
+	svc := &fakeReleaseService{}
+	if tag != "" {
+		svc.published = []*ghapi.RepositoryRelease{{TagName: ghapi.String(tag)}}
+	}
+	rels, err := gh.NewReleases(gh.Repo{Org: "projectcalico", Name: "calico"}, svc)
+	if err != nil {
+		t.Fatalf("NewReleases: %v", err)
+	}
+	return rels
+}
+
+type fakeReleaseService struct {
+	gh.ReleaseService
+	published []*ghapi.RepositoryRelease
+}
+
+func (f *fakeReleaseService) ListReleases(context.Context, string, string, *ghapi.ListOptions) ([]*ghapi.RepositoryRelease, *ghapi.Response, error) {
+	return f.published, nil, nil
 }
