@@ -213,7 +213,7 @@ lane that wants to exercise the image *as built from the PR under test* builds i
 locally under the same `:latest` tag and loads it onto its nodes, where
 `IfNotPresent` uses it as-is.
 
-- **gcp-kubeadm** (`.semaphore/end-to-end/scripts/phases/load_images.sh`): builds
+- **gcp-kubeadm** (`.argoci/scripts/phases/load_images.sh`): builds
   the image, `docker save`s it once, `ctr -n k8s.io images import`s it onto every
   cluster and infra node's containerd, and `docker load`s it onto the external
   node. Runs only when `RUN_LOCAL_TESTS` and `PROVISIONER=gcp-kubeadm` (it depends

@@ -119,7 +119,7 @@ The tests reference the image via `images.RapidClient`
 so a copy already on the node wins over a pull.
 
 - **PR CI on gcp-kubeadm and the kind BPF lane:** PR builds have no registry push
-  credential, so `.semaphore/end-to-end/scripts/phases/load_images.sh` (and
+  credential, so `.argoci/scripts/phases/load_images.sh` (and
   `make kind-load-rapidclient`) build this image from the PR source under the same
   tag and load it onto the nodes. The pods then run your build.
 - **Everything else** (other providers, scheduled runs, local dev): the published

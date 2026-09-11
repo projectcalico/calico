@@ -5,29 +5,34 @@ migrated off Semaphore's scheduled e2e builds.
 
 ## Contents
 
-- `scripts/` — the e2e lifecycle, ported from `.semaphore/end-to-end/scripts/`
-  and adapted for ArgoCI (secrets via `createLocalSecret`, `CI_*` vars,
+- `scripts/` — the e2e lifecycle, originally ported from the Semaphore e2e
+  scripts (since deleted) and adapted for ArgoCI (secrets via
+  `createLocalSecret`, `CI_*` vars,
   `RELEASE_STREAM` from the checked-out branch, GCS artifacts; `bz` + cloud
   CLIs come from the runner image). `global_prologue.sh` → `body_standard.sh`
   (dispatches to `phases/*`) → `global_epilogue.sh`.
-- `cron/*.yaml` — one condensed ArgoCI workflow per e2e suite, mirroring the
-  corresponding `.semaphore/end-to-end/pipelines/*.yml` (same jobs, same
-  schedule). `cc-argoci-handler` expands each into a full CronWorkflow (checkout,
+- `cron/*.yaml` — one condensed ArgoCI workflow per e2e suite, each carrying the
+  jobs and schedule of the Semaphore pipeline it replaced.
+  `cc-argoci-handler` expands each into a full CronWorkflow (checkout,
   secret loading, node placement, dind, exit handler, notifications, labels,
   metrics), picked up automatically on merge to the default branch. The one
   exception to the mirroring is `cron/e2e-openstack.yaml` (the weekly
   Calico-for-OpenStack e2e tests), which is new here rather than migrated
   from one of this repo's Semaphore pipelines.
 
+- `ciworkflow.yaml` + `config.yaml` — the per-PR lane: a gcp-kubeadm run that
+  tests the binary built from the PR, rather than the published hashrelease
+  images the crons test. `config.yaml` decides when it fires.
+
 These crons and scripts are maintained **by hand** going forward: edit the
 YAML (or the scripts) directly to change a suite's jobs, env, or schedule.
 
 ## Layout is flat (no `end-to-end/` subdir)
 
-Unlike `.semaphore/end-to-end/`, e2e lives at the top of `.argoci/`. ArgoCI's
-handler separates workflows by **file role**, not directory: scheduled e2e is
-`cron/*.yaml`; per-PR/build CI — when the rest of repo CI moves to ArgoCI — is
-`ciworkflow.yaml` + `config.yaml`, which coexist here without a subdir. The
+Semaphore kept e2e under its own `end-to-end/` subdir; here it lives at the top
+of `.argoci/`. ArgoCI's handler separates workflows by **file role**, not
+directory: scheduled e2e is `cron/*.yaml`, per-PR CI is `ciworkflow.yaml` +
+`config.yaml`, and the two coexist here without a subdir. The
 handler also reads crons from a fixed `.argoci/cron/` path, so nesting would
 require a handler change for no gain. Scope ownership with path-specific
 `CODEOWNERS` entries (e.g. `.argoci/cron/`) rather than directories.
