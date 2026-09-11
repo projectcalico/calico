@@ -38,8 +38,10 @@ if [ "$#" -eq 0 ]; then
   echo "Packages with tests: $test_pkgs"
 fi
 
+# Run with the race detector enabled to catch data races in the UTs. The race
+# detector requires atomic coverage mode (it rejects -covermode=count).
 set -x
-ginkgo -cover -covermode=count -coverpkg=${go_dirs} -keep-going -r "$@"
+ginkgo --race -cover -covermode=atomic -coverpkg=${go_dirs} -keep-going -r "$@"
 set +x
 
 gocovmerge $(find . -name 'coverprofile.out') > combined.coverprofile
