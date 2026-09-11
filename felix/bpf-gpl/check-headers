@@ -10,6 +10,9 @@
 # something first.
 #
 # Usage: ./check-headers <compiler> [cflags...]
+#
+# The (header, variant) pairs are compiled in parallel: this script lists them
+# and xargs re-invokes it with --one for each pair.
 
 set -u
 
@@ -17,9 +20,6 @@ if [ $# -lt 1 ]; then
   echo "usage: $0 <compiler> [cflags...]" >&2
   exit 2
 fi
-
-tmpdir=$(mktemp -d)
-trap 'rm -rf "${tmpdir}"' EXIT
 
 common="-DCALI_DROP_WORKLOAD_TO_HOST=false -DCALI_FIB_LOOKUP_ENABLED=true"
 declare -A variants=(
@@ -48,35 +48,39 @@ declare -A only=(
   [nat6.h]="$tc6" [icmp6.h]="$tc6" [parsing6.h]="$tc6 xdp6" [tcp6.h]="$tc6"
 )
 
-fail=0
-for h in *.h; do
-  for v in "${!variants[@]}"; do
-    if [ -n "${only[$h]:-}" ] && ! [[ " ${only[$h]} " == *" $v "* ]]; then
-      continue
-    fi
-    src="${tmpdir}/${h%.h}_${v}.c"
-    echo "#include \"$h\"" > "${src}"
-    if ! out=$("$@" -I . ${common} ${variants[$v]} -c "${src}" -o "${tmpdir}/out.o" 2>&1); then
-      fail=1
-      echo "FAIL: $h is not self-contained under variant $v:"
-      echo "${out}" | grep -E 'error:' | head -5 | sed 's/^/    /'
-    fi
-  done
-done
-
-# Headers shared with userspace (felix/bpf/libbpf) must also compile with the
-# host compiler, without the BPF helper definitions.
-for h in globals.h ip_addr.h bpf_inline.h; do
-  src="${tmpdir}/${h%.h}_userspace.c"
+# --one <header> <variant> <compiler> [cflags...]: compile a single pair.
+if [ "$1" = "--one" ]; then
+  h=$2; v=$3; shift 3
+  src=$(mktemp --suffix=.c)
+  trap 'rm -f "${src}" "${src%.c}.o"' EXIT
   echo "#include \"$h\"" > "${src}"
-  if ! out=$("${HOST_CC:-cc}" -Wall -Werror -I . -I ./libbpf/include/uapi -c "${src}" -o "${tmpdir}/out.o" 2>&1); then
-    fail=1
+  if [ "$v" = "userspace" ]; then
+    out=$("${HOST_CC:-cc}" -Wall -Werror -I . -I ./libbpf/include/uapi -c "${src}" -o "${src%.c}.o" 2>&1) && exit 0
     echo "FAIL: $h does not compile for userspace:"
-    echo "${out}" | grep -E 'error:' | head -5 | sed 's/^/    /'
+  else
+    out=$("$@" -I . ${common} ${variants[$v]} -c "${src}" -o "${src%.c}.o" 2>&1) && exit 0
+    echo "FAIL: $h is not self-contained under variant $v:"
   fi
-done
-
-if [ "${fail}" = 0 ]; then
-  echo "All headers are self-contained."
+  echo "${out}" | grep -E 'error:' | head -5 | sed 's/^/    /'
+  exit 1
 fi
-exit ${fail}
+
+{
+  for h in *.h; do
+    for v in "${!variants[@]}"; do
+      if [ -n "${only[$h]:-}" ] && ! [[ " ${only[$h]} " == *" $v "* ]]; then
+        continue
+      fi
+      echo "$h $v"
+    done
+  done
+  # Headers shared with userspace (felix/bpf/libbpf) must also compile with the
+  # host compiler, without the BPF helper definitions.
+  for h in globals.h ip_addr.h bpf_inline.h; do
+    echo "$h userspace"
+  done
+} | xargs -P "$(nproc)" -I{} bash -c 'exec "$0" --one {} "$@"' "$0" "$@"
+if [ "${PIPESTATUS[1]}" != 0 ]; then
+  exit 1
+fi
+echo "All headers are self-contained."

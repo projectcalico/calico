@@ -146,6 +146,7 @@ map-objs: $(MAP_OBJS)
 
 # Check that every header compiles on its own under each build variant it is
 # meant for, i.e. that no header relies on its includer's include order.
+.PHONY: check-headers
 check-headers:
 	./check-headers $(CC) $(CFLAGS)
 
