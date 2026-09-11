@@ -5,14 +5,11 @@
 #ifndef __CALI_SOCK_TYPE_H__
 #define __CALI_SOCK_TYPE_H__
 
-/* SOCK_STREAM/SOCK_DGRAM for the cgroup socket programs.  They live in
- * bits/socket_type.h, which refuses to be included except via sys/socket.h,
- * and sys/socket.h needs libc types that BPF builds lack.  Pretend
- * sys/socket.h is already included.
+/* Socket types for the cgroup socket programs.  The libc definitions live in
+ * sys/socket.h, which BPF builds cannot include, so define the (ABI-fixed)
+ * values here.
  */
-#ifndef _SYS_SOCKET_H
-#define _SYS_SOCKET_H
-#endif
-#include <bits/socket_type.h>
+#define SOCK_STREAM 1
+#define SOCK_DGRAM  2
 
 #endif /* __CALI_SOCK_TYPE_H__ */

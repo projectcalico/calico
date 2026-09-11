@@ -21,8 +21,10 @@
 
 #include "bpf_inline.h"
 
+#define __unused __attribute__((unused))
+
 /* bpf.h is the root of the BPF include graph: every other header includes it.
- * Only globals.h and ip_addr.h sit below it, because userspace
+ * Only bpf_inline.h, globals.h and ip_addr.h sit below it, because userspace
  * (felix/bpf/libbpf) shares them.  Every header includes what it uses, so
  * include order never matters; ./check-headers enforces that.
  */

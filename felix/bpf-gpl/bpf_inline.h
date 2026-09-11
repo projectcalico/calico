@@ -10,6 +10,4 @@
  */
 #define CALI_BPF_INLINE inline __attribute__((always_inline))
 
-#define __unused __attribute__((unused))
-
 #endif /* __CALI_BPF_INLINE_H__ */

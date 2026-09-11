@@ -52,7 +52,7 @@ namespace:
 - `bpfout.cali` (C-side identifier: `natout_idx`)
 
 See `felix/dataplane/linux/dataplanedefs/dataplane_defs.go` for the
-Go-side constants, and `felix/bpf-gpl/bpf.h` for the
+Go-side constants, and `felix/bpf-gpl/globals.h` / `bpf.h` for the
 C-side configurables. (The reference design document refers to these
 as `bpfnatin`/`bpfnatout`; the implementation names are slightly
 different.)

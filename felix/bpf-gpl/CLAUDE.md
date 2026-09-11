@@ -65,9 +65,6 @@ that is not self-contained.
   `globals.h` and `ip_addr.h` sit below it: userspace (`felix/bpf/libbpf`)
   includes them via cgo, so they must not pull in `bpf.h` or the BPF helpers.
   `check-headers` compiles them with the host compiler to keep that true.
-- **The cgroup (`connect_balancer*.c`) programs must not include `types.h`.**
-  Its kernel headers need `sys/socket.h`, which those programs have to
-  suppress; see `sock_type.h` and the guarded include in `nat_lookup.h`.
 - **A header that defines a map must be listed in `IP_MAP_HEADERS`,
   `COMMON_MAP_HEADERS` or `XDP_MAP_HEADERS` in the `Makefile`.** Felix creates
   maps by looking them up by name in the generated map-stub objects; a map

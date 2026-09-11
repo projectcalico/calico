@@ -49,6 +49,10 @@ GENERATED_DOCS_FILES=docs/config-params.json docs/config-params.md
 FV_SRC_FILES:=$(shell find fv -type f -name '*.go' -print)
 EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/calico/pod2daemon:rw
 
+# Extra static-checks prerequisites; must be set before the include because
+# lib.Makefile's static-checks rule expands it when it is parsed.
+LOCAL_CHECKS = check-bpf-headers
+
 ###############################################################################
 # Download and include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -210,9 +214,6 @@ build-bpf: $(LIBBPF_A) $(PROD_BPF_PROGS) $(BPF_GPL_UT_O_FILES)
 .PHONY: check-bpf-headers
 check-bpf-headers: $(LIBBPF_FILE_CREATED)
 	$(DOCKER_GO_BUILD) make -C bpf-gpl ARCH=$(ARCH) check-headers
-
-# Run as part of static-checks (see lib.Makefile).
-LOCAL_CHECKS := check-bpf-headers
 
 $(PROD_BPF_PROGS) &: $(BPF_APACHE_O_FILES) $(BPF_GPL_O_FILES)
 	rm -rf bin/bpf

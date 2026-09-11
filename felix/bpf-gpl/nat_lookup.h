@@ -13,8 +13,7 @@
 #include "nat_types.h"
 #include "routes.h"
 #if !(CALI_F_XDP) && !(CALI_F_CGROUP)
-/* The cgroup programs must not pull in types.h: its kernel headers need
- * sys/socket.h, which connect_balancer.c has to suppress. */
+/* Only the skb-based programs pass a cali_tc_ctx (see below). */
 #include "types.h"
 #endif
 
