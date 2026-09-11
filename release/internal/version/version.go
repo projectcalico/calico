@@ -28,48 +28,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-// Versions is the interface that provides version data for a hashrelease or release.
-type Versions interface {
-	Hash() string
-	ProductVersion() string
-	OperatorVersion() string
-	HelmChartVersion() string
-	ReleaseBranch(releaseBranchPrefix string) string
-}
-
-func NewHashreleaseVersions(calico Version) *HashreleaseVersions {
-	return &HashreleaseVersions{
-		calico: calico,
-	}
-}
-
-// HashreleaseVersions implements the Versions interface for a hashrelease.
-type HashreleaseVersions struct {
-	calico Version
-}
-
-func (v *HashreleaseVersions) ProductVersion() string {
-	return v.calico.FormattedString()
-}
-
-// OperatorVersion returns the operator's version. The operator ships on
-// Calico's version stream, so this is the same as the product version.
-func (v *HashreleaseVersions) OperatorVersion() string {
-	return v.ProductVersion()
-}
-
-func (v *HashreleaseVersions) HelmChartVersion() string {
-	return v.calico.FormattedString()
-}
-
-func (v *HashreleaseVersions) Hash() string {
-	return v.calico.FormattedString()
-}
-
-func (v *HashreleaseVersions) ReleaseBranch(releaseBranchPrefix string) string {
-	return fmt.Sprintf("%s-%s", releaseBranchPrefix, v.calico.Stream())
-}
-
 // Version represents a version, and contains methods for working with versions.
 type Version string
 

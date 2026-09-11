@@ -15,14 +15,84 @@
 package operator
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
+// envRecorder is a command.CommandRunner that records the environment each
+// command was given, so a test can assert what reached make.
+type envRecorder struct {
+	envs [][]string
+}
+
+func (e *envRecorder) Run(_ string, _ []string, env []string) (string, error) {
+	e.envs = append(e.envs, env)
+	return "", nil
+}
+
+func (e *envRecorder) RunNoCapture(_ string, _ []string, env []string) error {
+	e.envs = append(e.envs, env)
+	return nil
+}
+
+func (e *envRecorder) RunInDir(_, _ string, _ []string, env []string) (string, error) {
+	e.envs = append(e.envs, env)
+	return "", nil
+}
+
+func (e *envRecorder) RunInDirNoCapture(_, _ string, _ []string, env []string) error {
+	e.envs = append(e.envs, env)
+	return nil
+}
+
+func (e *envRecorder) RunInDirToFile(_, _ string, _ []string, env []string, _ string) (string, error) {
+	e.envs = append(e.envs, env)
+	return "", nil
+}
+
 func TestOperatorDirIsInTree(t *testing.T) {
 	m := NewManager(WithCalicoDirectory("/some/calico"))
 	require.Equal(t, "/some/calico/operator", m.dir)
+}
+
+// A publish without CONFIRM echoes its pushes and exits 0, so the release passes
+// having published nothing.
+func TestPublishLatchesThePush(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		opts    []Option
+		wantEnv string
+		notEnv  string
+	}{
+		{
+			name:    "confirms by default",
+			wantEnv: "CONFIRM=true",
+			notEnv:  "DRYRUN=true",
+		},
+		{
+			name:    "dry run",
+			opts:    []Option{IsDryRun()},
+			wantEnv: "DRYRUN=true",
+			notEnv:  "CONFIRM=true",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &envRecorder{}
+			opts := append([]Option{
+				WithCalicoDirectory("/some/calico"),
+				WithVersion("v3.34.0-test"),
+			}, tc.opts...)
+			m := NewManager(opts...)
+			m.runner = r
+
+			require.NoError(t, m.Publish())
+			require.Len(t, r.envs, 1)
+			require.True(t, slices.Contains(r.envs[0], tc.wantEnv), "expected %s in publish env", tc.wantEnv)
+			require.False(t, slices.Contains(r.envs[0], tc.notEnv), "did not expect %s in publish env", tc.notEnv)
+		})
+	}
 }
 
 func TestProductRegistryParts(t *testing.T) {

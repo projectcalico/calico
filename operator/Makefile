@@ -200,33 +200,36 @@ ut: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	gotestsum --format testname --junitfile report/operator_ut.xml -- $(UT_DIR)/... $(GO_TEST_ARGS) $(GINKGO_FOCUS_ARG)'
 
 ## Run the functional tests against a local kind cluster.
-fv: kind-cluster-create deploy-crds load-container-images run-fvs kind-cluster-destroy
+fv: kind-cluster-create deploy-crds push-fv-images run-fvs kind-cluster-destroy
 run-fvs: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	-mkdir -p .go-pkg-cache report
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 	gotestsum --format testname --junitfile report/operator_fv.xml -- $(FV_DIR)/... $(GO_TEST_ARGS) -timeout $(FV_TEST_TIMEOUT) $(FV_LDFLAGS) $(GINKGO_FOCUS_ARG)'
 
-# The tag the FV suite's in-process operator resolves for the components below, and
-# loads them into kind under. Stamped into the test binary the same way a real build
-# stamps the operator.
-FV_IMAGE_TAG ?= $(CALICO_VERSION)
-FV_LDFLAGS    = -ldflags "-X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(FV_IMAGE_TAG)"
-FV_IMAGES     = calico/calico calico/node calico/whisker
+# The FV's in-process operator resolves its components here, stamped into the test
+# binary the same way a real build stamps the operator. kind-cluster-create points the
+# cluster's nodes at the same registry.
+FV_LDFLAGS = -ldflags "-X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(KIND_TEST_BUILD_TAG) \
+	-X $(PACKAGE_NAME)/pkg/components.calicoRegistry=$(KIND_IMAGE_REGISTRY) \
+	-X $(PACKAGE_NAME)/pkg/components.calicoImagePath=$(KIND_IMAGE_PATH)"
 
-# Prefer the images built from this commit, which CI restores from its cache before
-# the FV runs, and fall back to a pull for a local run that has none.
-load-container-images: $(KIND)
-	@for image in $(FV_IMAGES); do \
-		if docker image inspect $$image:latest-$(ARCH) >/dev/null 2>&1; then \
-			docker tag $$image:latest-$(ARCH) $$image:$(FV_IMAGE_TAG); \
-		else \
-			docker pull $$image:$(FV_IMAGE_TAG); \
-		fi; \
-		$(KIND) load docker-image --name $(KIND_NAME) $$image:$(FV_IMAGE_TAG); \
-	done
-	# Restart the Calico containers so they launch with the newly loaded code.
-	# TODO: We should be able to do this without restarting everything in kube-system.
-	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n kube-system --all
+# Every component the FV's operator installs has to be in the registry, including the
+# cni-plugins init container, or calico-node never leaves Init. FV_MARKER_<name> names
+# the build marker for an image that does not use <name>/.image.created-<arch>.
+FV_IMAGES = calico node whisker third-party-cni-plugins
+FV_MARKER_calico                  = cmd/calico/.image.created-$(ARCH)
+FV_MARKER_third-party-cni-plugins = third_party/cni-plugins/.cni-plugins.created-$(ARCH)
+
+.PHONY: push-fv-images
+push-fv-images: kind-registry-up $(addprefix push-fv-image-,$(FV_IMAGES))
+
+# Prefer the image built from this commit, which CI restores from its cache before the
+# FV runs, and build one for a local run that has none.
+push-fv-image-%:
+	@docker image inspect calico/$*:latest-$(ARCH) >/dev/null 2>&1 || \
+		$(MAKE) $(REPO_ROOT)/$(or $(FV_MARKER_$*),$*/.image.created-$(ARCH))
+	docker tag calico/$*:latest-$(ARCH) $(KIND_IMAGE_REGISTRY)/$(KIND_IMAGE_PATH)/$*:$(KIND_TEST_BUILD_TAG)
+	docker push $(KIND_IMAGE_REGISTRY)/$(KIND_IMAGE_PATH)/$*:$(KIND_TEST_BUILD_TAG)
 
 ## Deploy the CRDs the FVs need on top of the ones kind-cluster-create installs:
 ## every operator CRD, including the Enterprise-only kinds, plus prometheus.
@@ -330,7 +333,7 @@ release-publish: operator-release-prereqs var-require-all-VERSION bin/crane
 	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
 		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \
 	else \
-		$(MAKE) push-all push-manifests push-non-manifests IMAGETAG=$(VERSION); \
+		$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM); \
 	fi
 
 # operator-release-prereqs checks the environment on top of lib.Makefile's own

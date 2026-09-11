@@ -38,8 +38,8 @@ type Extensions struct {
 	set Set
 }
 
-// New returns the extensions the operator runs with. A variant builds this once at
-// startup; see pkg/enterprise.
+// New returns the extensions the operator runs with. A variant's Builder calls it
+// once, after the resolved variant is known.
 func New(s Set) Extensions {
 	return Extensions{set: s}
 }

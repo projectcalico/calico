@@ -27,5 +27,6 @@
 // same typed config the core operator rendered it from, returning a component whose
 // objects the variant has adjusted. Decorate does the wrapping.
 //
-// A variant builds the whole set in one place at startup - see pkg/enterprise.
+// A variant's Builder assembles the whole set in one place, once the operator has
+// resolved which variant it runs as.
 package extensions

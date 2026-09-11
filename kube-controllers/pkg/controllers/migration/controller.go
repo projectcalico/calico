@@ -39,6 +39,7 @@ import (
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	apiregv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	apiregv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/typed/apiregistration/v1"
@@ -78,6 +79,10 @@ const (
 
 	// apiServiceName is the name of the aggregated APIService for v3.projectcalico.org.
 	apiServiceName = "v3.projectcalico.org"
+
+	// automanagedLabel marks an APIService that kube-aggregator's autoregister
+	// controller owns and will re-create for as long as its CRDs are installed.
+	automanagedLabel = "kube-aggregator.kubernetes.io/automanaged"
 
 	// clusterInfoName is the well-known name of the ClusterInformation resource.
 	clusterInfoName = "default"
@@ -593,7 +598,7 @@ func (m *migrationController) runPendingPrechecks(logCtx *logrus.Entry, dm *migr
 		} else {
 			return false, fmt.Errorf("checking APIService: %w", err)
 		}
-	} else if apiSvc.Labels != nil && apiSvc.Labels["kube-aggregator.kubernetes.io/automanaged"] == "true" {
+	} else if isAutomanagedAPIService(apiSvc) {
 		logCtx.Info("APIService v3.projectcalico.org is CRD-backed (v3 CRDs already installed)")
 	}
 
@@ -1160,7 +1165,7 @@ func (m *migrationController) saveAndDeleteAPIService(logCtx *logrus.Entry, dm *
 
 	// Check if it's already a CRD-backed (automanaged) APIService. If so,
 	// the aggregated one was already deleted and K8s auto-created this one.
-	if apiSvc.Labels != nil && apiSvc.Labels["kube-aggregator.kubernetes.io/automanaged"] == "true" {
+	if isAutomanagedAPIService(apiSvc) {
 		logCtx.Debug("APIService is already CRD-backed, nothing to save/delete")
 		return nil
 	}
@@ -1202,24 +1207,15 @@ func (m *migrationController) saveAndDeleteAPIService(logCtx *logrus.Entry, dm *
 	return nil
 }
 
-// restoreAPIService recreates the aggregated APIService from the saved annotation.
+// restoreAPIService puts the saved aggregated APIService spec back on
+// v3.projectcalico.org.
 func (m *migrationController) restoreAPIService(logCtx *logrus.Entry, dm *migrationv1.DatastoreMigration) error {
-	// Check if an aggregated APIService already exists (e.g., operator recreated it).
 	existing, err := m.apiregClient.APIServices().Get(m.ctx, apiServiceName, metav1.GetOptions{})
-	if err == nil {
-		if existing.Labels == nil || existing.Labels["kube-aggregator.kubernetes.io/automanaged"] != "true" {
-			logCtx.Info("Aggregated APIService already exists, skipping restore")
-			return nil
-		}
-		// The existing one is automanaged (CRD-backed). Delete it so we can
-		// recreate the aggregated one.
-		logCtx.Info("Deleting automanaged APIService to restore aggregated one")
-		if err := m.apiregClient.APIServices().Delete(m.ctx, apiServiceName, metav1.DeleteOptions{}); err != nil {
-			if !kerrors.IsNotFound(err) {
-				return fmt.Errorf("deleting automanaged APIService: %w", err)
-			}
-		}
-	} else if !kerrors.IsNotFound(err) {
+	switch {
+	case err == nil && !isAutomanagedAPIService(existing):
+		logCtx.Info("Aggregated APIService already exists, skipping restore")
+		return nil
+	case err != nil && !kerrors.IsNotFound(err):
 		return fmt.Errorf("checking existing APIService: %w", err)
 	}
 
@@ -1232,21 +1228,43 @@ func (m *migrationController) restoreAPIService(logCtx *logrus.Entry, dm *migrat
 		return nil
 	}
 
-	apiSvc := &apiregv1.APIService{}
-	if err := json.Unmarshal([]byte(savedData), apiSvc); err != nil {
+	saved := &apiregv1.APIService{}
+	if err := json.Unmarshal([]byte(savedData), saved); err != nil {
 		return fmt.Errorf("deserializing saved APIService: %w", err)
 	}
 
-	_, err = m.apiregClient.APIServices().Create(m.ctx, apiSvc, metav1.CreateOptions{})
-	if err != nil {
-		if kerrors.IsAlreadyExists(err) {
-			logCtx.Info("APIService already recreated (possibly by operator)")
-			return nil
-		}
-		return fmt.Errorf("creating restored APIService: %w", err)
+	// Overwrite the automanaged APIService in place rather than deleting and
+	// re-creating it. Autoregister re-creates a deleted automanaged APIService
+	// while the v3 CRDs are installed, but leaves one without the label alone.
+	racing := func(err error) bool {
+		return kerrors.IsConflict(err) || kerrors.IsAlreadyExists(err)
 	}
+	if err := retry.OnError(retry.DefaultRetry, racing, func() error {
+		current, err := m.apiregClient.APIServices().Get(m.ctx, apiServiceName, metav1.GetOptions{})
+		if err != nil {
+			if !kerrors.IsNotFound(err) {
+				return err
+			}
+			_, err = m.apiregClient.APIServices().Create(m.ctx, saved, metav1.CreateOptions{})
+			return err
+		}
+
+		current.Spec = saved.Spec
+		delete(current.Labels, automanagedLabel)
+		_, err = m.apiregClient.APIServices().Update(m.ctx, current, metav1.UpdateOptions{})
+		return err
+	}); err != nil {
+		return fmt.Errorf("restoring aggregated APIService: %w", err)
+	}
+
 	logCtx.Info("Restored aggregated APIService v3.projectcalico.org")
 	return nil
+}
+
+// isAutomanagedAPIService reports whether kube-aggregator's autoregister
+// controller owns this APIService, meaning it is backed by CRDs.
+func isAutomanagedAPIService(apiSvc *apiregv1.APIService) bool {
+	return apiSvc.Labels[automanagedLabel] == "true"
 }
 
 // lockV1Datastore sets DatastoreReady=false on the v1 ClusterInformation, so

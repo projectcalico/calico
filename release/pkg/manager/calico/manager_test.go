@@ -26,8 +26,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/images"
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
@@ -610,6 +612,27 @@ func unitCalls(f *fakeRunner, target string) []string {
 	return out
 }
 
+// felix builds no image, so the binary step is the only thing that produces
+// felix/bin/calico-bpf for the release tarball.
+func TestBuildBinariesBuildsFelixWhateverTheImagesFlagIs(t *testing.T) {
+	for _, images := range []bool{true, false} {
+		t.Run(fmt.Sprintf("images=%t", images), func(t *testing.T) {
+			f := newFakeRunner()
+			m := imageManager(t, f, "")
+			m.images = images
+			m.binaries = true
+			if err := m.buildBinaries(); err != nil {
+				t.Fatalf("buildBinaries: %v", err)
+			}
+			for _, want := range []string{"make -C /repo/felix release-build", "make -C /repo/calicoctl build-all"} {
+				if !f.ran(want) {
+					t.Errorf("did not run %q, ran: %v", want, f.calls)
+				}
+			}
+		})
+	}
+}
+
 func imageManager(t *testing.T, f *fakeRunner, logsDir string) *CalicoManager {
 	t.Helper()
 	// A publish asks each directory for its image names before recording refs.
@@ -667,6 +690,7 @@ func TestImageStepsWriteLogFiles(t *testing.T) {
 		}},
 		{"publish", (*CalicoManager).publishContainerImages, []string{
 			// The branch tag is a second publish, so it logs under its own step.
+			"/logs/images-publish-branch/node-windows.log",
 			"/logs/images-publish-branch/node.log",
 			"/logs/images-publish/node-windows.log",
 			"/logs/images-publish/node.log",
@@ -802,6 +826,27 @@ func TestPublishContainerImagesBranchTag(t *testing.T) {
 	}
 }
 
+// cni-plugin ships only a Windows image, so the standard branch tag target
+// there retags arch images that were never built.
+func TestPublishBranchTagSplitsWindowsFromStandard(t *testing.T) {
+	f := newFakeRunner()
+	if err := imageManager(t, f, "").publishContainerImages(); err != nil {
+		t.Fatalf("publishContainerImages: %v", err)
+	}
+	if got := "make -C /repo/cni-plugin " + branchTagTarget; f.ran(got) {
+		t.Errorf("branch tag ran %q, which has no arch images to retag (calls: %v)", got, f.calls)
+	}
+	want := "make -C /repo/cni-plugin " + windowsBranchTagTarget
+	if !f.ran(want) {
+		t.Errorf("did not run %q, ran: %v", want, f.calls)
+	}
+
+	// The copy is registry side, so it needs the tag it copies from.
+	if env := f.envFor(want); !slices.Contains(env, "DEV_TAG=v3.30.0") {
+		t.Errorf("windows branch tag env = %v, want DEV_TAG=v3.30.0", env)
+	}
+}
+
 // Narrowing must scope the manager's image steps the same way the CLI does.
 func TestImageStepsNarrowedToReleaseDirs(t *testing.T) {
 	for _, tc := range []struct {
@@ -928,5 +973,93 @@ func TestBuildE2EBinariesUsesARCHES(t *testing.T) {
 	for _, e := range archEnv {
 		require.False(t, strings.HasPrefix(e, "VALIDARCHES="),
 			"e2e build-all should not set VALIDARCHES (lib.Makefile ignores it): %s", e)
+	}
+}
+
+func TestChartsAndIndexShareADirectory(t *testing.T) {
+	out := t.TempDir()
+	for _, tt := range []struct {
+		name        string
+		hashrelease bool
+	}{
+		{name: "release"},
+		{name: "hashrelease", hashrelease: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := filepath.Join(out, "release", "v3.30.0")
+			r := &CalicoManager{outputDir: dir, calicoVersion: "v3.30.0", isHashRelease: tt.hashrelease}
+			want := filepath.Join(dir, "charts")
+			if got := r.chart().BaseDir; got != want {
+				t.Errorf("chart().BaseDir = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestAssertOperatorImageVersion(t *testing.T) {
+	const version = "v1.42.0"
+	for _, tt := range []struct {
+		name    string
+		label   string
+		wantErr bool
+	}{
+		{name: "image reports the published version", label: version},
+		{name: "image reports another version", label: "v1.41.0", wantErr: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeRunner().on("docker inspect", tt.label, nil)
+			r := &CalicoManager{
+				runner:           f,
+				operatorRegistry: "quay.io/tigera",
+				operatorImage:    "operator",
+				operatorVersion:  version,
+			}
+
+			err := r.assertOperatorImageVersion()
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Len(t, f.calls, 1)
+			require.Contains(t, f.calls[0], "quay.io/tigera/operator:"+version)
+		})
+	}
+}
+
+// A release publish records what it pushed, so an interrupted run resumes on
+// what is left rather than re-pushing.
+func TestPublishHelmChartsRecordsWhatItPushed(t *testing.T) {
+	out := t.TempDir()
+	f := newFakeRunner()
+	r := &CalicoManager{
+		runner:         f,
+		repoRoot:       "/repo",
+		calicoVersion:  "v3.30.0",
+		outputDir:      filepath.Join(out, "release", "v3.30.0"),
+		helmCharts:     true,
+		helmRegistries: []string{"quay.test/charts"},
+		resolveDigest:  func(string) (string, bool, error) { return "sha256:aaa", true, nil },
+	}
+	for _, name := range charts.All() {
+		path := filepath.Join(r.chart().BaseDir, charts.FileName(name, "v3.30.0"))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("chart"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := r.publishHelmCharts(); err != nil {
+		t.Fatalf("publishHelmCharts: %v", err)
+	}
+
+	refs, err := outputs.ReadRefs(r.outputDir, charts.PublishStep, "v3.30.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refs) != len(charts.All()) {
+		t.Errorf("recorded %d refs, want %d", len(refs), len(charts.All()))
 	}
 }

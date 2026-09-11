@@ -17,27 +17,20 @@ package main
 import (
 	"context"
 
+	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
-	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/images"
-	"github.com/projectcalico/calico/release/internal/outputs"
-	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/operatorimages"
+	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
-	"github.com/projectcalico/calico/release/internal/version"
-)
-
-// imagesRunner drives make; imagesDigestResolver looks up a published digest.
-// Tests replace both.
-var (
-	imagesRunner         command.CommandRunner = &command.RealCommandRunner{}
-	imagesDigestResolver images.DigestResolver = registry.ResolveDigest
 )
 
 var imagesSubCommands = func(cfg *Config) []*cli.Command {
 	return []*cli.Command{
 		imagesBuildCommand(cfg),
 		imagesPublishCommand(cfg),
+		imagesCheckOperatorCommand(cfg),
 	}
 }
 
@@ -54,14 +47,14 @@ var (
 	imagesBuildAction = func(cfg *Config) func(ctx context.Context, c *cli.Command) error {
 		return func(ctx context.Context, c *cli.Command) error {
 			configureLogging("images-build.log")
-			ver, _, err := version.VersionsFromManifests(cfg.RepoRootDir)
+			ver, err := releaseVersion(cfg, c)
 			if err != nil {
 				return err
 			}
 			return images.Build(
 				cfg.RepoRootDir, ver.FormattedString(),
 				images.NarrowVariants(images.BuildVariants, c.StringSlice(imageReleaseDirsFlag.Name)),
-				images.WithRunner(imagesRunner),
+				images.WithRunner(commandRunner),
 				images.WithRegistries(c.StringSlice(registryFlag.Name)...),
 				images.WithArches(c.StringSlice(archFlag.Name)...),
 				images.WithLogsDir(cfg.LogsDir),
@@ -101,23 +94,16 @@ var (
 			if err != nil {
 				return err
 			}
-			// An earlier run of this version records what it published, so a
-			// resume skips the units already done.
-			published, err := outputs.ReadRefs(cfg.OutputDir, "images-publish", ver.FormattedString())
+			published, w, err := publishRecord(cfg, imagesPublishStep, ver.FormattedString(), !c.Bool(localFlag.Name))
 			if err != nil {
 				return err
 			}
-
-			var refs images.RefRecorder
-			if !c.Bool(localFlag.Name) {
-				w, err := outputs.NewRefsWriter(cfg.OutputDir, "images-publish", ver.FormattedString())
-				if err != nil {
-					return err
-				}
+			var refs steps.RefRecorder
+			if w != nil {
 				refs = w
 			}
 			opts := []images.PublishOption{
-				images.WithRunner(imagesRunner),
+				images.WithRunner(commandRunner),
 				images.WithRegistries(c.StringSlice(registryFlag.Name)...),
 				images.WithArches(c.StringSlice(archFlag.Name)...),
 				images.WithLogsDir(cfg.LogsDir),
@@ -139,11 +125,13 @@ var (
 			return images.Publish(
 				cfg.RepoRootDir, ver.FormattedString(),
 				images.NarrowVariants(images.PublishVariants, dirs),
-				!c.Bool(localFlag.Name), imagesDigestResolver, opts...,
+				!c.Bool(localFlag.Name), registryDigestResolver, opts...,
 			)
 		}
 	}
 )
+
+const imagesPublishStep = "images-publish"
 
 func imagesPublishCommand(cfg *Config) *cli.Command {
 	return &cli.Command{
@@ -154,14 +142,43 @@ func imagesPublishCommand(cfg *Config) *cli.Command {
 	}
 }
 
-// A standalone publish is always a release; a hashrelease is scanned by the
-// flow that built it. The image list runs make in every release directory, so
-// it is resolved only when a scan is wanted.
+// releaseImageList runs make in every release directory, so a test replaces it.
+var releaseImageList = utils.BuildReleaseImageList
+
+var imagesCheckOperatorAction = func(cfg *Config) func(ctx context.Context, c *cli.Command) error {
+	return func(_ context.Context, _ *cli.Command) error {
+		configureLogging("images-check-operator.log")
+
+		// The operator publishes to registries of its own, so it is named apart from the
+		// release directories rather than discovered with them.
+		dirs := append(utils.ImageDiscoveryDirs(), utils.OperatorDir)
+		built, err := releaseImageList(cfg.RepoRootDir, dirs...)
+		if err != nil {
+			return err
+		}
+		if err := operatorimages.Check(built); err != nil {
+			return err
+		}
+		logrus.WithField("images", len(built)).Info("The operator deploys every image built here")
+		return nil
+	}
+}
+
+func imagesCheckOperatorCommand(cfg *Config) *cli.Command {
+	return &cli.Command{
+		Name:   "check-operator",
+		Usage:  "Check that the operator deploys every image this repo builds",
+		Action: imagesCheckOperatorAction(cfg),
+	}
+}
+
+// scanRequest builds the scan request. Release decides which bucket the
+// scanner files results under, so a hashrelease is not a release.
 func scanRequest(c *cli.Command, cfg *Config, dirs []string, stream, productCode string) (*images.ScanRequest, error) {
 	if !c.Bool(imageScanFlag.Name) {
 		return nil, nil
 	}
-	imgs, err := utils.BuildReleaseImageList(cfg.RepoRootDir, dirs...)
+	imgs, err := releaseImageList(cfg.RepoRootDir, dirs...)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +187,7 @@ func scanRequest(c *cli.Command, cfg *Config, dirs []string, stream, productCode
 		ProductCode: productCode,
 		Images:      imgs,
 		Stream:      stream,
-		Release:     true,
+		Release:     !c.Bool(hashreleaseFlag.Name),
 		OutputDir:   cfg.TmpDir,
 	}, nil
 }

@@ -25,6 +25,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/components"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 )
 
@@ -47,6 +48,10 @@ func (s startupStub) ProtectedNamespaces() []string {
 
 func (s startupStub) Controllers() []extensions.Controller {
 	return s.controllers
+}
+
+func (s startupStub) Images() components.Build {
+	return components.Build{}
 }
 
 func optionsWith(controllers ...extensions.Controller) extensions.ControllerOptions {

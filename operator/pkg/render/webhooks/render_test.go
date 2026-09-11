@@ -132,35 +132,6 @@ var _ = Describe("Webhooks rendering tests", func() {
 		))
 	})
 
-	It("should render all resources for Enterprise with the correct image", func() {
-		DeferCleanup(components.UseImages(components.EnterpriseImages))
-
-		installation.Variant = operatorv1.CalicoEnterprise
-		component := webhooks.Component(cfg)
-		Expect(component.ResolveImages(nil)).NotTo(HaveOccurred())
-		resources, _ := component.Objects()
-
-		expectedResources := []client.Object{
-			&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: webhooks.WebhooksName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "ServiceAccount", APIVersion: "v1"}},
-			&v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: webhooks.WebhooksPolicyName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "NetworkPolicy", APIVersion: "projectcalico.org/v3"}},
-			&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: webhooks.WebhooksName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"}},
-			&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: webhooks.WebhooksName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "Service", APIVersion: "v1"}},
-			&admissionregistrationv1.ValidatingWebhookConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "api.projectcalico.org"}, TypeMeta: metav1.TypeMeta{Kind: "ValidatingWebhookConfiguration", APIVersion: "admissionregistration.k8s.io/v1"}},
-			&rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: webhooks.WebhooksName}, TypeMeta: metav1.TypeMeta{Kind: "ClusterRole", APIVersion: "rbac.authorization.k8s.io/v1"}},
-			&rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: webhooks.WebhooksName}, TypeMeta: metav1.TypeMeta{Kind: "ClusterRoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"}},
-		}
-		rtest.ExpectResources(resources, expectedResources)
-
-		// Verify Enterprise uses the Tigera webhooks image.
-		dep := rtest.GetResource(resources, webhooks.WebhooksName, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
-		Expect(dep.Spec.Template.Spec.Containers).To(HaveLen(1))
-		Expect(dep.Spec.Template.Spec.Containers[0].Image).To(Equal(
-			fmt.Sprintf("test-registry.com/%s%s:%s",
-				components.TigeraImagePath,
-				components.ComponentTigeraCalico.Image,
-				components.ComponentTigeraCalico.Version)))
-	})
-
 	It("should not include UISettingsGroup rule for Calico", func() {
 		component := webhooks.Component(cfg)
 		Expect(component.ResolveImages(nil)).NotTo(HaveOccurred())

@@ -13,13 +13,12 @@
 // limitations under the License.
 package components
 
-// Default registries for Calico and Tigera.
+// Default registry for Calico.
 const (
 	CalicoRegistry = "quay.io/"
-	TigeraRegistry = "gcr.io/unique-caldron-775/cnx/"
 
 	// The operator publishes alongside the Calico component images. It keeps its own
-	// name because Enterprise points TigeraRegistry at a test repo while its operator
+	// name because a variant may point its registry at a test repo while the operator
 	// image still goes to quay.
 	OperatorRegistry = CalicoRegistry
 )
@@ -27,6 +26,5 @@ const (
 // Default image paths for components.
 const (
 	CalicoImagePath   = "calico/"
-	TigeraImagePath   = "tigera/"
 	OperatorImagePath = CalicoImagePath
 )

@@ -1754,7 +1754,6 @@ KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/node/.image.created-$(ARCH) \
 	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
 	$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH) \
-	$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH) \
 	$(REPO_ROOT)/operator/.image.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-gateway/.envoy-gateway.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-proxy/.envoy-proxy.created-$(ARCH) \
@@ -1770,6 +1769,10 @@ KIND_IMAGE_MARKERS = \
 # paths). Point both image markers at the compiled libbpf.a so Make
 # builds it exactly once, serially, before the parallel image builds
 # start.
+#
+# Order-only, because a libbpf.a compiled during this job is newer than a
+# marker restored from the CI image cache, and a normal prereq would rebuild
+# the image the cache just supplied.
 LIBBPF_MARKER = $(REPO_ROOT)/felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
 
 $(LIBBPF_MARKER):
@@ -1786,7 +1789,8 @@ MISSING-IMAGE:
 
 $(REPO_ROOT)/node/.image.created-$(ARCH): \
     $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/node/.image.created-$(ARCH)) \
-    $(LIBBPF_MARKER) $(call local-deps-go-files,node) $(call local-deps-go-files,cmd)
+    $(call local-deps-go-files,node) $(call local-deps-go-files,cmd) \
+    | $(LIBBPF_MARKER)
 	rm -f $@
 	$(MAKE) -C $(REPO_ROOT)/node image
 	echo "node:latest-$(ARCH)" > $@
@@ -1799,17 +1803,11 @@ $(REPO_ROOT)/whisker/.image.created-$(ARCH): \
 
 $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH): \
     $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)) \
-    $(LIBBPF_MARKER) $(call local-deps-go-files,cmd)
+    $(call local-deps-go-files,cmd) \
+    | $(LIBBPF_MARKER)
 	rm -f $@
 	$(MAKE) -C $(REPO_ROOT)/cmd/calico image
 	echo "calico:latest-$(ARCH)" > $@
-
-$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH): \
-    $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH)) \
-    $(call local-deps-go-files,key-cert-provisioner)
-	rm -f $@
-	$(MAKE) -C $(REPO_ROOT)/key-cert-provisioner image
-	echo "test-signer:latest-$(ARCH)" > $@
 
 # The operator bakes the component refs it installs into the image, so
 # image-exists gets the expected ref: a changed DEV_IMAGE_* triple must
@@ -1842,10 +1840,13 @@ $(REPO_ROOT)/third_party/cni-plugins/.cni-plugins.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/third_party/cni-plugins image
 
 # The registry/path/tag every kind lane bakes into its images.
-# hack/test/kind/infra/values.yaml pins the same triple.
+# hack/test/kind/infra/values.yaml pins the same triple, and the operator FV
+# stamps it into the test binary.
+KIND_IMAGE_REGISTRY = localhost:5000
+KIND_IMAGE_PATH     = calico
 KIND_DEV_IMAGE_ARGS = \
-	    DEV_IMAGE_REGISTRY=localhost:5000 \
-	    DEV_IMAGE_PATH=calico \
+	    DEV_IMAGE_REGISTRY=$(KIND_IMAGE_REGISTRY) \
+	    DEV_IMAGE_PATH=$(KIND_IMAGE_PATH) \
 	    DEV_IMAGE_TAG=$(KIND_TEST_BUILD_TAG)
 
 ## Build all component images and push them to the local kind registry.
@@ -2042,15 +2043,20 @@ else
 DOCKER_MANIFEST = echo [DRY RUN] $(DOCKER_MANIFEST_CMD)
 endif
 
+# Named per component so two components' Windows builds do not remove each other's.
+WINDOWS_BUILDER = calico-windows-builder-$(notdir $(CURDIR))
+
 # Clean up the docker builder used to create Windows image tarballs.
 .PHONY: clean-windows-builder
 clean-windows-builder:
+	-docker buildx rm $(WINDOWS_BUILDER)
+	# Drain the shared builder earlier releases left selected on the host with --use.
 	-docker buildx rm calico-windows-builder
 
 # Set up the docker builder used to create Windows image tarballs.
 .PHONY: setup-windows-builder
 setup-windows-builder: clean-windows-builder
-	docker buildx create --name=calico-windows-builder --use --platform windows/amd64
+	docker buildx create --name=$(WINDOWS_BUILDER) --platform windows/amd64
 
 # FIXME: Use WINDOWS_HPC_VERSION and image instead of nanoserver and WINDOWS_VERSIONS when containerd v1.6 is EOL'd
 # .PHONY: image-windows release-windows
@@ -2113,6 +2119,7 @@ windows-sub-image-%: var-require-all-GIT_VERSION-WINDOWS_IMAGE-WINDOWS_DIST-WIND
 	# ensure dir for windows image tars exits
 	-mkdir -p $(WINDOWS_DIST)
 	docker buildx build \
+		--builder $(WINDOWS_BUILDER) \
 		--platform windows/amd64 \
 		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-$*.tar \
 		$(DOCKER_PULL) \
@@ -2121,7 +2128,7 @@ windows-sub-image-%: var-require-all-GIT_VERSION-WINDOWS_IMAGE-WINDOWS_DIST-WIND
 		--build-arg=WINDOWS_VERSION=$* \
 		-f Dockerfile.windows .
 
-.PHONY: image-windows release-windows release-windows-with-tag
+.PHONY: image-windows release-windows release-windows-with-tag retag-windows-image-with-registries
 image-windows: setup-windows-builder var-require-all-WINDOWS_VERSIONS
 	for version in $(WINDOWS_VERSIONS); do \
 		$(MAKE) windows-sub-image-$${version}; \
@@ -2148,6 +2155,14 @@ release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAG
 		done; \
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
 		$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $${manifest_image} $${all_images} || true; \
+	done;
+
+# retag-windows-image-with-registries copies the Windows image from DEV_TAG to
+# IMAGETAG in each registry. Windows images are single-arch manifests built by
+# buildx, so they have no local per-arch images to retag.
+retag-windows-image-with-registries: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE-DEV_TAG-IMAGETAG bin/crane
+	for registry in $(DEV_REGISTRIES); do \
+		$(CRANE) cp $${registry}/$(WINDOWS_IMAGE):$(DEV_TAG) $${registry}/$(WINDOWS_IMAGE):$(IMAGETAG); \
 	done;
 
 release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE var-require-one-of-VERSION-BRANCH_NAME bin/crane

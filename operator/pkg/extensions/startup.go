@@ -19,6 +19,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/projectcalico/calico/operator/pkg/components"
 )
 
 // StartupExtension is the variant's hook into the operator's startup, before any
@@ -40,6 +42,11 @@ type StartupExtension interface {
 	// Controllers are the reconcilers the variant adds to the core set. They are added
 	// after the core controllers, so a variant can watch resources those own.
 	Controllers() []Controller
+
+	// Images are the images the variant supplies for the variant it resolved as. The
+	// daemon registers them before any controller renders, so a build serving several
+	// variants ships the images the Installation asked for.
+	Images() components.Build
 }
 
 // noopStartup runs the core operator's behavior unchanged.
@@ -59,4 +66,8 @@ func (noopStartup) ProtectedNamespaces() []string {
 
 func (noopStartup) Controllers() []Controller {
 	return nil
+}
+
+func (noopStartup) Images() components.Build {
+	return components.Build{}
 }

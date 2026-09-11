@@ -118,15 +118,15 @@ var _ = Describe("kube-controllers rendering tests", func() {
 	})
 
 	It("runs the image the variant supplied over its own calico image", func() {
-		instance.Variant = operatorv1.CalicoEnterprise
-		cloud := components.CalicoCloudImage()
-		cfg.Image = &cloud
+		supplied := components.ComponentCalico
+		supplied.Version = "v9.9.9-supplied"
+		cfg.Image = &supplied
 
 		component := kubecontrollers.NewCalicoKubeControllers(&cfg)
 		Expect(component.ResolveImages(nil)).To(BeNil())
 		resources, _ := component.Objects()
 		dp := rtest.GetResource(resources, kubecontrollers.KubeController, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
-		Expect(dp.Spec.Template.Spec.Containers[0].Image).To(Equal("test-reg/tigera/calico:" + components.CalicoCloudImage().Version))
+		Expect(dp.Spec.Template.Spec.Containers[0].Image).To(Equal("test-reg/calico/calico:" + supplied.Version))
 	})
 
 	It("should include kubevirt.io RBAC rules in calico-kube-controllers ClusterRole", func() {
@@ -253,74 +253,6 @@ var _ = Describe("kube-controllers rendering tests", func() {
 		for i, expectedRes := range expectedResources {
 			rtest.ExpectResourceTypeAndObjectMetadata(resources[i], expectedRes.name, expectedRes.ns, expectedRes.group, expectedRes.version, expectedRes.kind)
 		}
-	})
-
-	It("should render all calico-kube-controllers resources for a default configuration using CalicoEnterprise", func() {
-		DeferCleanup(components.UseImages(components.EnterpriseImages))
-
-		expectedResources := []struct {
-			name    string
-			ns      string
-			group   string
-			version string
-			kind    string
-		}{
-			{name: kubecontrollers.KubeControllerServiceAccount, ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
-			{name: kubecontrollers.KubeControllerRole, ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
-			{name: kubecontrollers.KubeControllerRoleBinding, ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
-			{name: kubecontrollers.KubeController, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "Deployment"},
-			{name: kubecontrollers.KubeControllerMetrics, ns: common.CalicoNamespace, group: "", version: "v1", kind: "Service"},
-		}
-
-		// The metrics serving TLS (TLS_KEY_PATH/TLS_CRT_PATH/CLIENT_COMMON_NAME env,
-		// the keypair volume + mount) is layered on by the enterprise modifier, so
-		// the base render here carries only the trusted bundle.
-		expectedEnv := []corev1.EnvVar{
-			{Name: "CA_CRT_PATH", Value: "/etc/pki/tls/certs/tigera-ca-bundle.crt"},
-		}
-		expectedVolumeMounts := []corev1.VolumeMount{
-			{Name: "tigera-ca-bundle", MountPath: "/etc/pki/tls/certs", ReadOnly: true},
-		}
-		expectedVolume := []corev1.Volume{
-			{
-				Name: "tigera-ca-bundle",
-				VolumeSource: corev1.VolumeSource{
-					ConfigMap: &corev1.ConfigMapVolumeSource{
-						LocalObjectReference: corev1.LocalObjectReference{Name: "tigera-ca-bundle"},
-					},
-				},
-			},
-		}
-
-		// Override configuration to match expected Enterprise config.
-		instance.Variant = operatorv1.CalicoEnterprise
-		cfg.MetricsPort = 9094
-
-		component := kubecontrollers.NewCalicoKubeControllers(&cfg)
-		Expect(component.ResolveImages(nil)).To(BeNil())
-		resources, _ := component.Objects()
-		Expect(len(resources)).To(Equal(len(expectedResources)))
-
-		// Should render the correct resources.
-		i := 0
-		for _, expectedRes := range expectedResources {
-			rtest.ExpectResourceTypeAndObjectMetadata(resources[i], expectedRes.name, expectedRes.ns, expectedRes.group, expectedRes.version, expectedRes.kind)
-			i++
-		}
-
-		// The Deployment should have the correct configuration.
-		dp := rtest.GetResource(resources, kubecontrollers.KubeController, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
-
-		envs := dp.Spec.Template.Spec.Containers[0].Env
-		Expect(envs).To(ContainElements(expectedEnv))
-
-		Expect(len(dp.Spec.Template.Spec.Containers[0].VolumeMounts)).To(Equal(1))
-		Expect(dp.Spec.Template.Spec.Containers[0].VolumeMounts).To(ContainElements(expectedVolumeMounts))
-
-		Expect(len(dp.Spec.Template.Spec.Volumes)).To(Equal(1))
-		Expect(dp.Spec.Template.Spec.Volumes).To(ContainElements(expectedVolume))
-
-		Expect(dp.Spec.Template.Spec.Containers[0].Image).To(Equal("test-reg/tigera/calico:" + components.ComponentTigeraCalico.Version))
 	})
 
 	It("should include a ControlPlaneNodeSelector when specified", func() {

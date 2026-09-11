@@ -74,6 +74,10 @@ type OperatorManager struct {
 	// validate indicates if we should run validation
 	validate bool
 
+	// dryRun leaves the publish latch open, so the make targets echo the pushes
+	// and exit 0 rather than publishing.
+	dryRun bool
+
 	// architectures is the list of architectures for which we should build images.
 	// If empty, we build for all.
 	architectures []string
@@ -230,6 +234,13 @@ func (o *OperatorManager) PrePublishValidation() error {
 
 func (o *OperatorManager) Publish() error {
 	env, logFields := o.env()
+	if o.dryRun {
+		env = append(env, utils.EnvTrue(utils.EnvDryRun))
+	} else {
+		env = append(env, utils.EnvTrue(utils.EnvConfirm))
+	}
+	logFields["dry_run"] = o.dryRun
+
 	logrus.WithFields(logFields).Info("Publishing operator")
 	out, err := o.make("release-publish", env)
 	if err != nil {

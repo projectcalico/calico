@@ -50,6 +50,8 @@
   dependencies:
     - Prerequisites
     - "Build: calico image"
+    - "Build: node image"
+    - "Build: whisker image"
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP

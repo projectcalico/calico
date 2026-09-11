@@ -44,6 +44,13 @@ func WithValidate(validate bool) Option {
 	}
 }
 
+func IsDryRun() Option {
+	return func(o *OperatorManager) error {
+		o.dryRun = true
+		return nil
+	}
+}
+
 func WithArchitectures(architectures []string) Option {
 	return func(o *OperatorManager) error {
 		o.architectures = architectures

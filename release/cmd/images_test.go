@@ -16,118 +16,26 @@ package main
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 
+	cli "github.com/urfave/cli/v3"
+
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
-
-// recordingRunner runs nothing and records what it was asked to run. Units run
-// concurrently, so recording is locked.
-type recordingRunner struct {
-	mu       sync.Mutex
-	args     [][]string
-	envs     [][]string
-	logPaths []string
-}
-
-func (r *recordingRunner) record(args, env []string, logPath string) (string, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.args = append(r.args, slices.Clone(args))
-	r.envs = append(r.envs, slices.Clone(env))
-	r.logPaths = append(r.logPaths, logPath)
-	return "", nil
-}
-
-func (r *recordingRunner) Run(_ string, args, env []string) (string, error) {
-	return r.record(args, env, "")
-}
-
-func (r *recordingRunner) RunNoCapture(_ string, args, env []string) error {
-	_, err := r.record(args, env, "")
-	return err
-}
-
-func (r *recordingRunner) RunInDir(_, _ string, args, env []string) (string, error) {
-	if slices.Contains(args, "build-images") {
-		// The publish asks each directory for its image names before recording.
-		if _, err := r.record(args, env, ""); err != nil {
-			return "", err
-		}
-		return "calico calico-windows", nil
-	}
-	return r.record(args, env, "")
-}
-
-func (r *recordingRunner) RunInDirNoCapture(_, _ string, args, env []string) error {
-	_, err := r.record(args, env, "")
-	return err
-}
-
-func (r *recordingRunner) RunInDirToFile(_, _ string, args, env []string, logPath string) (string, error) {
-	return r.record(args, env, logPath)
-}
-
-// envFor returns the environment of the first recorded make call whose args
-// contain every one of want.
-func (r *recordingRunner) envFor(want ...string) []string {
-	for i, args := range r.args {
-		if containsAll(args, want) {
-			return r.envs[i]
-		}
-	}
-	return nil
-}
-
-// ran reports whether any recorded call's args contain every one of want.
-func (r *recordingRunner) ran(want ...string) bool {
-	return slices.ContainsFunc(r.args, func(args []string) bool {
-		return containsAll(args, want)
-	})
-}
-
-func containsAll(args, want []string) bool {
-	for _, w := range want {
-		if !slices.ContainsFunc(args, func(a string) bool { return strings.Contains(a, w) }) {
-			return false
-		}
-	}
-	return true
-}
-
-// fakeRepo writes the two manifests VersionsFromManifests reads, so the image
-// commands can resolve a version without a checkout.
-func fakeRepo(t *testing.T, version string) string {
-	t.Helper()
-	root := t.TempDir()
-	manifests := filepath.Join(root, "manifests", "ocp")
-	if err := os.MkdirAll(manifests, 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	write := func(path, content string) {
-		if err := os.WriteFile(filepath.Join(root, "manifests", path), []byte(content), 0o644); err != nil {
-			t.Fatalf("write %s: %v", path, err)
-		}
-	}
-	write(filepath.Join("ocp", "02-tigera-operator.yaml"), "          image: quay.io/calico/calico:"+version+"\n")
-	write("tigera-operator.yaml", "          image: quay.io/calico/operator:"+version+"\n")
-	return root
-}
 
 // runImages drives the real images command with a recording runner.
 func runImages(t *testing.T, root string, args ...string) *recordingRunner {
 	t.Helper()
 	r := &recordingRunner{}
-	prev, prevResolve := imagesRunner, imagesDigestResolver
-	imagesRunner = r
-	imagesDigestResolver = func(string) (string, bool, error) { return "sha256:aaa", true, nil }
-	t.Cleanup(func() { imagesRunner, imagesDigestResolver = prev, prevResolve })
+	prev, prevResolve := commandRunner, registryDigestResolver
+	commandRunner = r
+	registryDigestResolver = func(string) (string, bool, error) { return "sha256:aaa", true, nil }
+	t.Cleanup(func() { commandRunner, registryDigestResolver = prev, prevResolve })
 
 	cfg := &Config{
 		RepoRootDir: root,
@@ -176,13 +84,16 @@ func TestImagesPublishLatchesConfirm(t *testing.T) {
 	}
 }
 
-// felix is built but never published, and a build must not latch either
-// publish flag.
-func TestImagesBuildRunsFelixAndDoesNotPublish(t *testing.T) {
+// felix ships binaries and no image, so the image build leaves it alone. A
+// build must also not latch either publish flag.
+func TestImagesBuildSkipsFelixAndDoesNotPublish(t *testing.T) {
 	r := runImages(t, fakeRepo(t, "v3.30.0"), "build", "--registry", "quay.io/calico")
 
-	if !r.ran("felix", "release-build") {
-		t.Errorf("build did not run felix, ran: %v", r.args)
+	if r.ran("felix") {
+		t.Errorf("image build reached felix, ran: %v", r.args)
+	}
+	if !r.ran("node", "release-build") {
+		t.Fatalf("no image build ran at all, ran: %v", r.args)
 	}
 	for _, env := range r.envs {
 		for _, latch := range []string{"CONFIRM=true", "DRYRUN=true", "RELEASE=true"} {
@@ -239,22 +150,38 @@ func TestImagesNarrowedKeepsEveryVariant(t *testing.T) {
 	}
 }
 
-// felix is build-only: accepted for a build, absent from a publish.
-func TestImagesNarrowedToBuildOnlyDir(t *testing.T) {
-	r := runImages(t, fakeRepo(t, "v3.30.0"),
-		"build", "--registry", "quay.io/calico", "--image-release-dir", "felix")
+// felix is not an image directory, so narrowing a build to it is a mistake
+// worth reporting rather than a build that quietly does nothing.
+func TestImagesRejectsFelixAsAnImageDir(t *testing.T) {
+	prev := commandRunner
+	r := &recordingRunner{}
+	commandRunner = r
+	t.Cleanup(func() { commandRunner = prev })
 
-	if len(r.args) != 1 || !r.ran("felix", "release-build") {
-		t.Fatalf("expected a single felix build, ran: %v", r.args)
+	root := fakeRepo(t, "v3.30.0")
+	cfg := &Config{
+		RepoRootDir: root,
+		TmpDir:      filepath.Join(root, "tmp"),
+		OutputDir:   filepath.Join(root, "_output"),
+		LogsDir:     filepath.Join(root, "_logs"),
+	}
+	cmd := imagesCommand(cfg)
+	err := cmd.Run(context.Background(),
+		[]string{"images", "build", "--registry", "quay.io/calico", "--image-release-dir", "felix"})
+	if err == nil {
+		t.Fatal("expected felix to be rejected as an image release dir")
+	}
+	if len(r.args) != 0 {
+		t.Errorf("ran make anyway: %v", r.args)
 	}
 }
 
 // An unknown directory must be rejected: narrowing silently drops what it does
 // not recognise.
 func TestImagesRejectsUnknownReleaseDir(t *testing.T) {
-	prev := imagesRunner
-	imagesRunner = &recordingRunner{}
-	t.Cleanup(func() { imagesRunner = prev })
+	prev := commandRunner
+	commandRunner = &recordingRunner{}
+	t.Cleanup(func() { commandRunner = prev })
 
 	root := fakeRepo(t, "v3.30.0")
 	cfg := &Config{
@@ -315,9 +242,9 @@ func TestImagesPublishSkipDevImageRetag(t *testing.T) {
 // The two retag flags are meaningless apart, so one without the other is an
 // error rather than a silent fresh push.
 func TestImagesPublishRejectsHalfConfiguredRetag(t *testing.T) {
-	prev := imagesRunner
-	imagesRunner = &recordingRunner{}
-	t.Cleanup(func() { imagesRunner = prev })
+	prev := commandRunner
+	commandRunner = &recordingRunner{}
+	t.Cleanup(func() { commandRunner = prev })
 
 	root := fakeRepo(t, "v3.30.0")
 	cfg := &Config{
@@ -350,6 +277,83 @@ func TestImagesPublishScansEveryImageDir(t *testing.T) {
 	for _, want := range utils.ImageReleaseDirs {
 		if !slices.Contains(dirs, want) {
 			t.Errorf("scan dirs omit %s", want)
+		}
+	}
+}
+
+// The scanner files results under release/<stream> or hashrelease/<stream>.
+// A hashrelease scanned as a release lands in the wrong bucket, so the flag
+// and the field must stay opposed.
+func TestScanRequestSeparatesHashreleases(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		args        []string
+		wantRelease bool
+	}{
+		{name: "release", args: nil, wantRelease: true},
+		{name: "hashrelease", args: []string{"--hashrelease"}, wantRelease: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			original := releaseImageList
+			releaseImageList = func(string, ...string) ([]string, error) {
+				return []string{"node"}, nil
+			}
+			defer func() { releaseImageList = original }()
+
+			var got *images.ScanRequest
+			// Fresh flags: the package-level slices keep parsed state between
+			// tests, and an earlier --no-image-scan would conflict here.
+			cmd := &cli.Command{
+				Flags: []cli.Flag{
+					hashreleaseFlag,
+					&cli.BoolFlag{Name: imageScanFlag.Name},
+					&cli.StringFlag{Name: imageScannerAPIFlag.Name},
+					&cli.StringFlag{Name: imageScannerTokenFlag.Name},
+				},
+				Action: func(_ context.Context, c *cli.Command) error {
+					var err error
+					got, err = scanRequest(c, &Config{}, []string{"node"}, "v3.30", "calico")
+					return err
+				},
+			}
+			args := append([]string{
+				"images", "--image-scan",
+				"--image-scanner-api", "https://scanner.example",
+				"--image-scanner-token", "t",
+			}, tc.args...)
+			if err := cmd.Run(context.Background(), args); err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			if got == nil {
+				t.Fatal("no scan request built")
+			}
+			if got.Release != tc.wantRelease {
+				t.Errorf("Release=%v, want %v", got.Release, tc.wantRelease)
+			}
+		})
+	}
+}
+
+// The operator directory is named apart from the release directories, so the check has to
+// ask for it explicitly or the operator's own image goes unexamined.
+func TestImagesCheckOperatorCoversTheOperatorDir(t *testing.T) {
+	// The action opens a log file in the working directory.
+	t.Chdir(t.TempDir())
+
+	original := releaseImageList
+	var gotDirs []string
+	releaseImageList = func(_ string, dirs ...string) ([]string, error) {
+		gotDirs = dirs
+		return []string{"node", "operator"}, nil
+	}
+	defer func() { releaseImageList = original }()
+
+	if err := imagesCheckOperatorAction(&Config{})(context.Background(), &cli.Command{}); err != nil {
+		t.Fatalf("check-operator: %v", err)
+	}
+	for _, want := range append(utils.ImageDiscoveryDirs(), utils.OperatorDir) {
+		if !slices.Contains(gotDirs, want) {
+			t.Errorf("check dirs omit %s", want)
 		}
 	}
 }

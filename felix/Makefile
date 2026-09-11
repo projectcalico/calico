@@ -561,10 +561,10 @@ cd: cd-common
 ###############################################################################
 # Release
 ###############################################################################
-## Produces a clean build of release artifacts at the specified version.
+## Produces release artifacts at the specified version. Clean first for a fresh build.
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
-	$(MAKE) clean build bin/calico-bpf
+	$(MAKE) build bin/calico-bpf
 	touch $@
 
 ###############################################################################
