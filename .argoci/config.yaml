@@ -1,9 +1,18 @@
+# ArgoCI config. Scheduled e2e suites are CronWorkflows in .argoci/cron/*.yaml,
+# registered on merge to the default branch; the per-PR workflow below composes
+# every lane, e2e included, from .argoci/modules/.
 version: v2
 
-# Gating lives at each include inside the workflow, not here, so this entry
-# always runs and its status reports on every PR — which is what lets it be a
-# required check.
+# Fork PRs from non-writers have CI withheld everywhere, and that is not
+# configurable. Without this the withholding is silent, so on a repo whose PRs
+# are mostly community forks the gate would look like it had simply vanished;
+# with it, a maintainer gets a per-commit checkbox to release the run.
+requireApproval: true
+
 workflows:
+  # Gating lives at each include inside the workflow, not here, so this entry
+  # always runs and its status reports on every PR — which is what lets it be a
+  # required check.
   - name: calico
     workflowFile: .argoci/ciworkflow.yaml
     runWhen:

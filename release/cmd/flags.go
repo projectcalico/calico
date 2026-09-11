@@ -161,6 +161,12 @@ var (
 			},
 		}
 	}
+	forceFlag = &cli.BoolFlag{
+		Name:     "force",
+		Category: stepControlCategory,
+		Usage:    "Republish artifacts whose published digest differs from the record.",
+		Sources:  cli.EnvVars("FORCE"),
+	}
 )
 
 // Development flags are flags used to control development behavior of the release process
@@ -249,13 +255,6 @@ var (
 		Category: containerImageCategory,
 		Usage:    "Leave the dev tag in place when retagging.",
 		Sources:  cli.EnvVars("SKIP_DEV_IMAGE_RETAG"),
-	}
-
-	forceFlag = &cli.BoolFlag{
-		Name:     "force",
-		Category: containerImageCategory,
-		Usage:    "Republish images whose published digest differs from the record.",
-		Sources:  cli.EnvVars("FORCE"),
 	}
 
 	// imageReleaseDirsFlag limits a run to some of the directories that ship

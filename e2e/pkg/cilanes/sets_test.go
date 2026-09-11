@@ -67,7 +67,7 @@ func TestResolveSets(t *testing.T) {
 func TestFlannelMigrationPreConfig(t *testing.T) {
 	RegisterTestingT(t)
 
-	path := filepath.Join(repoRoot, ".semaphore/end-to-end/scripts", flannelMigrationScript)
+	path := filepath.Join(repoRoot, ".argoci/scripts", flannelMigrationScript)
 	script, err := os.ReadFile(path)
 	Expect(err).NotTo(HaveOccurred())
 

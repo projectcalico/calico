@@ -38,6 +38,11 @@ const (
 	EnvReleaseRegistries = "RELEASE_REGISTRIES"
 	EnvImageOnly         = "IMAGE_ONLY"
 	EnvSkipDevImageRetag = "SKIP_DEV_IMAGE_RETAG"
+
+	EnvGitVersion = "GIT_VERSION"
+
+	EnvChartDestination = "CHART_DESTINATION"
+	EnvTZ               = "TZ" // EnvTZ fixes the timezone helm stamps index entries with.
 )
 
 func Env(name string, value any) string {

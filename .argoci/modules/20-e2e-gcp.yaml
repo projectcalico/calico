@@ -1,0 +1,62 @@
+# The one e2e lane with no cron counterpart: the cron suites test published
+# hashrelease images, this one tests the binary built from the PR.
+#
+# The cluster is provisioned externally rather than by the step, so this runs in
+# a pod like the cron suites do.
+version: condensed-module
+
+defaults:
+  timeout: 3h
+  secretBundles:
+    - banzai-secrets
+
+steps:
+  - name: e2e-gcp-kubeadm-local-binary
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: TEST_TYPE
+        value: k8s-e2e
+      - name: PRODUCT
+        value: calico
+      # Names the Semaphore pipeline this lane replaces. Lens slices its history
+      # by this key, so it stays put even though the file is gone.
+      - name: FUNCTIONAL_AREA
+        value: e2e-gcp.yml
+      - name: PROVISIONER
+        value: gcp-kubeadm
+      - name: K8S_VERSION
+        value: stable
+      - name: INSTALLER
+        value: operator
+      - name: DATAPLANE
+        value: CalicoBPF
+      # Selection rationale lives in the config file itself.
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/gcp/bpf.yaml
+      # Builds the e2e binary and the rapidclient image from PR source rather
+      # than pulling the published ones.
+      - name: RUN_LOCAL_TESTS
+        value: "true"
+      - name: USE_PRIVATE_REGISTRY
+        value: "true"
+      - name: PRIVATE_REGISTRY
+        value: "quay.io/"
+      - name: USE_API_SERVER
+        value: "false"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      # Resolved by the controller, so they have to arrive as env rather than be
+      # derived in the commands.
+      - name: ARGO_WORKFLOW_NAME
+        value: "{{workflow.name}}"
+      - name: ARGO_WORKFLOW_UID
+        value: "{{workflow.uid}}"
+    # A module cannot set globalPrologue, so the e2e environment is sourced
+    # here, into the shell that then runs the body.
+    commands: |
+      source .argoci/scripts/global_prologue.sh
+      .argoci/scripts/body_standard.sh
+    epilogue: |
+      source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"

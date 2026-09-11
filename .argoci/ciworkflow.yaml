@@ -167,7 +167,6 @@ includes:
       in:
         - ^e2e/config/
         - ^\.argoci/cron/
-        - ^\.semaphore/end-to-end/pipelines/
         - ^\.argoci/modules/20-e2e-test-sets\.yaml$
 
   - path: .argoci/modules/20-e2e-validation.yaml
@@ -175,7 +174,7 @@ includes:
       in:
         - ^\.argoci/cron/
         - ^\.argoci/scripts/
-        - ^\.semaphore/end-to-end/scripts/test_scripts/e2e-validation\.sh$
+        - ^\.argoci/scripts/test_scripts/
         - ^\.argoci/modules/20-e2e-validation\.yaml$
 
   - path: .argoci/modules/30-key-cert-provisioner.yaml
@@ -309,3 +308,13 @@ includes:
         - ^metadata\.mk$
         - ^lib\.Makefile$
         - ^\.argoci/modules/40-openstack\.yaml$
+
+  - path: .argoci/modules/20-e2e-gcp.yaml
+    changes:
+      dependsOn: [e2e]
+      in:
+        - ^\.argoci/scripts/
+        - ^\.argoci/modules/20-e2e-gcp\.yaml$
+      exclude:
+        - (^|/)README\.md$
+        - (^|/)DESIGN\.md$
