@@ -16,18 +16,22 @@ package checker
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"strings"
 	"testing"
+	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/app-policy/checker/mocks"
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	libnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -1351,4 +1355,57 @@ func TestMatchUnsupportedL4Protocol(t *testing.T) {
 			Expect(match("testns", &proto.Rule{}, req)).To(BeFalse())
 		})
 	}
+}
+
+// Repeated failures on the evaluation path are rate limited: one line, then a count of what
+// was suppressed. Without this a single malformed CIDR logs once per rule, for every request.
+// The other eval-path loggers in check.go share this limiter's configuration.
+func TestEvalPathWarningsAreRateLimited(t *testing.T) {
+	RegisterTestingT(t)
+
+	logger := logrus.StandardLogger()
+	oldLevel, oldOut := logger.GetLevel(), logger.Out
+	counter := &entryCounter{}
+	hooks := make(logrus.LevelHooks)
+	hooks.Add(counter)
+	oldHooks := logger.ReplaceHooks(hooks)
+	savedLogger := rlogBadCIDR
+	defer func() {
+		logger.SetLevel(oldLevel)
+		logger.SetOutput(oldOut)
+		logger.ReplaceHooks(oldHooks)
+		rlogBadCIDR = savedLogger
+	}()
+	logger.SetLevel(logrus.WarnLevel)
+	logger.SetOutput(io.Discard)
+	// A long interval with no burst allowance: the first message is written, the rest are
+	// counted.
+	rlogBadCIDR = logutils.NewRateLimitedLogger(logutils.OptInterval(time.Hour))
+
+	ip := libnet.ParseIP("192.168.5.6")
+	for range 100 {
+		Expect(matchNet("test", []string{"192.168.0.0.0/16"}, ip.Network().IP)).To(BeFalse())
+	}
+
+	Expect(counter.entries).To(HaveLen(1), "expected one emitted warning for 100 bad CIDRs")
+	Expect(counter.entries[0].Message).To(ContainSubstring("192.168.0.0.0/16"))
+	Expect(counter.entries[0].Data).NotTo(HaveKey("logsSkipped"))
+
+	// The suppressed count surfaces on the next line that is allowed through, so the storm is
+	// still visible in the log.
+	rlogBadCIDR.Force().Warnf("unable to parse CIDR %s", "192.168.0.0.0/16")
+	Expect(counter.entries).To(HaveLen(2))
+	Expect(counter.entries[1].Data).To(HaveKeyWithValue("logsSkipped", 99))
+}
+
+// entryCounter collects the log entries written during a test.
+type entryCounter struct {
+	entries []*logrus.Entry
+}
+
+func (c *entryCounter) Levels() []logrus.Level { return logrus.AllLevels }
+
+func (c *entryCounter) Fire(e *logrus.Entry) error {
+	c.entries = append(c.entries, e)
+	return nil
 }
