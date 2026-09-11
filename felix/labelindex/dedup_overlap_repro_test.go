@@ -146,7 +146,7 @@ func TestOverlapSuppressorRemoveAncestorFirstLeavesNoStale(t *testing.T) {
 			name: "two levels, ancestor removed before descendant",
 			steps: []step{
 				{"add", "10.0.0.0/16"},
-				{"add", "10.0.1.0/24"}, // suppressed by the ancestor
+				{"add", "10.0.1.0/24"},    // suppressed by the ancestor
 				{"remove", "10.0.0.0/16"}, // re-advertises 10.0.1.0/24
 				{"remove", "10.0.1.0/24"}, // the transient re-advertise must be removed
 			},
