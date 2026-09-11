@@ -887,6 +887,9 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
+	// The mode we last applied.  Read before the status write below overwrites it.
+	appliedClusterRoutingMode := clusterRoutingModeFromStatus(instance)
+
 	// Publish the effective config before anything below can return early, since every other
 	// controller reads it instead of the spec and stalls until it lands.
 	computed := defaulted.Spec.DeepCopy()
@@ -1068,7 +1071,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		}
 
 		// Configure cluster routing mode.
-		u3, err := setClusterRoutingOnFelixConfiguration(defaulted, fc, reqLogger)
+		u3, err := setClusterRoutingOnFelixConfiguration(defaulted, appliedClusterRoutingMode, fc, reqLogger)
 		if err != nil {
 			return false, err
 		}
@@ -1089,7 +1092,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	// Set any non-default BGPConfiguration values that we need.
 	_, err = utils.PatchBGPConfiguration(ctx, r.client, func(bgpConfig *v3.BGPConfiguration) (bool, error) {
 		// Configure cluster routing mode.
-		u, err := setClusterRoutingOnBGPConfiguration(defaulted, bgpConfig, reqLogger)
+		u, err := setClusterRoutingOnBGPConfiguration(defaulted, appliedClusterRoutingMode, bgpConfig, reqLogger)
 		if err != nil {
 			return false, err
 		}
@@ -1780,15 +1783,34 @@ func allNodesRunTargetVersion(install *operatorv1.Installation, needNsMigration,
 	return install.Status.Variant == install.Spec.Variant && install.Status.CalicoVersion == targetVersion
 }
 
+// clearClusterRoutes takes back a value we wrote, so Calico's defaults decide again.  One we never
+// wrote is the user's.
+func clearClusterRoutes(
+	applied *operatorv1.ClusterRoutingMode,
+	programClusterRoutes **string,
+	resource string,
+	reqLogger logr.Logger,
+) bool {
+	if applied == nil || *programClusterRoutes == nil {
+		return false
+	}
+
+	reqLogger.Info("Clearing programClusterRoutes, clusterRoutingMode is no longer set",
+		"resource", resource, "was", **programClusterRoutes)
+	*programClusterRoutes = nil
+	return true
+}
+
 // setClusterRoutingOnFelixConfiguration sets programClusterRoutes in the FelixConfiguration resource
 // based on the value of clusterRoutingMode in the install config.
 func setClusterRoutingOnFelixConfiguration(
 	install *operatorv1.Installation,
+	applied *operatorv1.ClusterRoutingMode,
 	fc *v3.FelixConfiguration,
 	reqLogger logr.Logger,
 ) (bool, error) {
 	if install.Spec.CalicoNetwork == nil || install.Spec.CalicoNetwork.ClusterRoutingMode == nil {
-		return false, nil
+		return clearClusterRoutes(applied, &fc.Spec.ProgramClusterRoutes, "FelixConfiguration", reqLogger), nil
 	}
 
 	updated := false
@@ -1807,11 +1829,12 @@ func setClusterRoutingOnFelixConfiguration(
 // based on the value of clusterRoutingMode in the install config.
 func setClusterRoutingOnBGPConfiguration(
 	install *operatorv1.Installation,
+	applied *operatorv1.ClusterRoutingMode,
 	bgpConfig *v3.BGPConfiguration,
 	reqLogger logr.Logger,
 ) (bool, error) {
 	if install.Spec.CalicoNetwork == nil || install.Spec.CalicoNetwork.ClusterRoutingMode == nil {
-		return false, nil
+		return clearClusterRoutes(applied, &bgpConfig.Spec.ProgramClusterRoutes, "BGPConfiguration", reqLogger), nil
 	}
 
 	updated := false
@@ -1885,6 +1908,15 @@ func clusterRoutingMode(install *operatorv1.Installation) operatorv1.ClusterRout
 		return operatorv1.ClusterRoutingModeFelixIPIPOnly
 	}
 	return *install.Spec.CalicoNetwork.ClusterRoutingMode
+}
+
+// clusterRoutingModeFromStatus returns the mode we last applied: our only record that
+// programClusterRoutes is ours, not the user's.
+func clusterRoutingModeFromStatus(install *operatorv1.Installation) *operatorv1.ClusterRoutingMode {
+	if install.Status.Computed == nil || install.Status.Computed.CalicoNetwork == nil {
+		return nil
+	}
+	return install.Status.Computed.CalicoNetwork.ClusterRoutingMode
 }
 
 // setBPFUpdatesOnFelixConfiguration will take the passed in fc and update any BPF properties needed
