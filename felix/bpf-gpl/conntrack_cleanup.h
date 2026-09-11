@@ -2,13 +2,10 @@
 // Copyright (c) 2024 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#ifndef __CALI_CT_CLEAN_H__
-#define __CALI_CT_CLEAN_H__
+#ifndef __CALI_CONNTRACK_CLEANUP_H__
+#define __CALI_CONNTRACK_CLEANUP_H__
 
 #include "bpf.h"
-#include "types.h"
-#include "counters.h"
-#include "conntrack.h"
 #include "conntrack_types.h"
 
 #ifdef IPVER6
@@ -41,4 +38,4 @@ CALI_MAP_NAMED(CCQ_MAP, cali_ccq, 2,
 		BPF_F_NO_PREALLOC
 );
 
-#endif // __CALI_CT_CLEAN_H__
+#endif /* __CALI_CONNTRACK_CLEANUP_H__ */

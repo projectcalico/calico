@@ -5,12 +5,20 @@
 #ifndef __CALI_NAT_H__
 #define __CALI_NAT_H__
 
-#ifndef CALI_VXLAN_VNI
-#define CALI_VXLAN_VNI 0xca11c0
-#endif
+#include <linux/if_ether.h>
+#include <linux/in.h>
 
-#define vxlan_udp_csum_ok(udp) ((udp)->check == 0)
-
+#include "arp.h"
+#include "bpf.h"
+#include "counters.h"
+#include "globals.h"
+#include "ip_addr.h"
+#include "log.h"
+#include "nat_types.h"
+#include "reasons.h"
+#include "routes.h"
+#include "skb.h"
+#include "types.h"
 #ifdef IPVER6
 #include "nat6.h"
 #else

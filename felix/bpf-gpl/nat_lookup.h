@@ -5,14 +5,18 @@
 #ifndef __CALI_NAT_LOOKUP_H__
 #define __CALI_NAT_LOOKUP_H__
 
-#include <stddef.h>
-
-#include <linux/if_ether.h>
-#include <linux/udp.h>
+#include <linux/in.h>
 
 #include "bpf.h"
-#include "routes.h"
+#include "ip_addr.h"
+#include "log.h"
 #include "nat_types.h"
+#include "routes.h"
+#if !(CALI_F_XDP) && !(CALI_F_CGROUP)
+/* The cgroup programs must not pull in types.h: its kernel headers need
+ * sys/socket.h, which connect_balancer.c has to suppress. */
+#include "types.h"
+#endif
 
 static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *ip_src,
 								 ipv46_addr_t *ip_dst,

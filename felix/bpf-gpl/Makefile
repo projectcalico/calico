@@ -79,7 +79,7 @@ UT_OBJS+=ut/tcp_rst_v6.o
 
 XDP_MAP_HEADERS := jump.h
 COMMON_MAP_HEADERS := counters.h ifstate.h ringbuf.h profiling.h rule_counters.h qos.h ctlb_map.h $(XDP_MAP_HEADERS)
-IP_MAP_HEADERS := arp.h conntrack_cleanup.h conntrack_types.h failsafe.h nat_types.h policy.h routes.h sendrecv.h
+IP_MAP_HEADERS := allowsources.h arp.h conntrack_cleanup.h conntrack_types.h failsafe.h nat_types.h policy.h routes.h sendrecv.h
 IPV4_MAP_HEADERS := $(IP_MAP_HEADERS) ip_v4_fragment.h
 IPV6_MAP_HEADERS := $(IP_MAP_HEADERS)
 
@@ -143,6 +143,12 @@ C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_v46.c connect_ba
 all: $(OBJS)
 ut-objs: $(UT_OBJS)
 map-objs: $(MAP_OBJS)
+
+# Check that every header compiles on its own under each build variant it is
+# meant for, i.e. that no header relies on its includer's include order.
+.PHONY: check-headers
+check-headers:
+	./check-headers $(CC) $(CFLAGS)
 
 libbpf: $(LIBBPF_FILE_CREATED)
 # A plain clone, not hack/fetch-repo: this directory ships as the GPL source
