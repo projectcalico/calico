@@ -148,7 +148,7 @@ func BenchmarkEvaluateBaselinePolicyScale(b *testing.B) {
 	})
 }
 
-// benchRun is one variant: the store to evaluate against, and how the logging the
+// benchRun is one variant: the store to evaluate against, and how the logging that the
 // evaluation provokes is set up.
 type benchRun struct {
 	params baselinePolicyScaleParams

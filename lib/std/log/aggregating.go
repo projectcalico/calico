@@ -16,11 +16,14 @@ package log
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 const (
@@ -58,7 +61,14 @@ const (
 // The options are optional; see the Opt* functions for the defaults. A given condition is reported
 // at one severity, so the level is set here rather than per call - use OptLevel to report at
 // anything other than Warn.
+//
+// The emitted line also carries the counters totalEvents, unnamedEvents and maxNamed, so field must
+// not be one of those: NewAggregatingLogger panics if it is, since an aggregator is built during
+// package initialisation and a collision is a programming error best caught there.
 func NewAggregatingLogger(msg, field string, opts ...AggregatingLoggerOpt) *AggregatingLogger {
+	if isReservedField(field) {
+		panic(fmt.Sprintf("log: AggregatingLogger field %q is reserved for the line's own counters", field))
+	}
 	a := &AggregatingLogger{
 		msg:       msg,
 		field:     field,
@@ -84,7 +94,11 @@ func OptLevel(l Level) AggregatingLoggerOpt {
 	}
 }
 
-// OptInterval sets the minimum gap between two emitted lines. Defaults to five minutes.
+// OptInterval sets the length of an aggregation window, and so how often at most a line is
+// written. Defaults to five minutes. Windows are measured from their scheduled closes rather than
+// from when a close actually ran, so a timer that fires late does not shift the windows after it -
+// which also means the line a late close writes and the next line can be less than one interval
+// apart.
 func OptInterval(d time.Duration) AggregatingLoggerOpt {
 	return func(a *AggregatingLogger) {
 		a.interval = d
@@ -281,8 +295,49 @@ type aggregateWindow struct {
 // []string writes it as a Go slice literal, which is the difference between reading a hundred IP set
 // IDs and reading a hundred IP set IDs wrapped in quotes, commas and a type name. A structured
 // backend still sees a list of strings.
+//
+// The text formatter behind the logrus backend writes a Stringer's output verbatim, so the list has
+// to be unambiguous on its own. A value that could be misread - one that is empty or contains a
+// comma, a bracket, a quote, a backslash, whitespace or anything unprintable - is written as a Go
+// quoted string; every other value is written as it is. IP set IDs and SPIFFE IDs never need
+// quoting; an arbitrary string a peer presented as its principal might.
 type AggregatedValues []string
 
 func (v AggregatedValues) String() string {
-	return "[" + strings.Join(v, ",") + "]"
+	var b strings.Builder
+	b.WriteByte('[')
+	for i, s := range v {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		if needsQuoting(s) {
+			b.WriteString(strconv.Quote(s))
+		} else {
+			b.WriteString(s)
+		}
+	}
+	b.WriteByte(']')
+	return b.String()
+}
+
+// needsQuoting reports whether s could be misread inside a bracketed comma-separated list.
+func needsQuoting(s string) bool {
+	if s == "" {
+		return true
+	}
+	for _, r := range s {
+		switch {
+		case r == ',', r == '[', r == ']', r == '"', r == '\\':
+			return true
+		case unicode.IsSpace(r), !unicode.IsPrint(r):
+			return true
+		}
+	}
+	return false
+}
+
+// isReservedField reports whether name is one of the counters every emitted line carries, which the
+// list of values therefore cannot also be written under.
+func isReservedField(name string) bool {
+	return name == fieldTotalEvents || name == fieldUnnamedEvents || name == fieldMaxNamed
 }

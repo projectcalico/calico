@@ -64,19 +64,22 @@ const (
 	StagedAsEnforced
 )
 
-// Every log site on the per-request evaluation path needs its own rate limiter.
+// Every log site on the per-request evaluation path is either rate limited, through one of the
+// loggers below, or aggregated; none writes a line per occurrence.
 //
 // A rule set that applies tens of thousands of rules to one endpoint turns any per-rule log
 // into a storm: the conditions below are all "shouldn't happen, but does" — a malformed CIDR
 // or selector that got past validation, a flow that is not IP at all — and each one repeats
 // for every rule in the set, on every request. Rate limiting is per logger instance, so
 // sharing one across sites would let the noisiest message starve the rest; sites that report
-// the same condition do share one. The sites that key on a value that varies aggregate instead;
-// see missingIPSets and unparseablePrincipals in requestcache.go.
+// the same condition do share one. The two sites whose condition keys on a value that varies - a
+// missing IP set, an unparseable principal - aggregate instead, so that one line names every value
+// seen; see missingIPSets and unparseablePrincipals in requestcache.go.
 //
-// These sites must not use the WithField/WithError builders: those allocate a fields map, a
-// logrus.Entry and a wrapper *before* the rate limiter gets to drop the message, which is the
-// per-rule allocation this path has been optimised to avoid. Pass the value to Warnf instead.
+// The rate-limited sites must not use the WithField/WithError builders: those allocate a fields
+// map, a logrus.Entry and a wrapper *before* the rate limiter gets to drop the message, which is
+// the per-rule allocation this path has been optimised to avoid. Pass the value to Warnf instead.
+// The aggregated sites pass the value to Record, which costs a map lookup.
 var (
 	rlogBadProtocol = newEvalPathLogger()
 	// The adapter warns when Envoy names a protocol it cannot map. requestCache memoizes

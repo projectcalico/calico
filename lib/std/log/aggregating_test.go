@@ -460,6 +460,48 @@ func TestAggregatingLoggerRecordSchedulesTheWindowClose(t *testing.T) {
 	mustLoggedArgs(t, capture.last(), "values", AggregatedValues{"v:second"}, fieldTotalEvents, 1)
 }
 
+// TestAggregatedValuesRenderAsAList pins the text form the logrus backend's formatter writes: a
+// bracketed comma-separated list, not a Go slice literal, in which a value that could be misread
+// is quoted and every other value is written as it is. That formatter writes a Stringer verbatim,
+// so this is the only place the list can be made unambiguous - and the principal site feeds it
+// whatever string a peer presented.
+func TestAggregatedValuesRenderAsAList(t *testing.T) {
+	for _, tc := range []struct {
+		values AggregatedValues
+		want   string
+	}{
+		{AggregatedValues{"s:a", "s:b"}, "[s:a,s:b]"},
+		{AggregatedValues{"spiffe://cluster.local/ns/a/sa/b"}, "[spiffe://cluster.local/ns/a/sa/b]"},
+		// Two values that would otherwise read as one, and one that would read as two.
+		{AggregatedValues{"a", "b", "a,b"}, `[a,b,"a,b"]`},
+		{AggregatedValues{"has space", "tab\there"}, `["has space","tab\there"]`},
+		{AggregatedValues{"line\nbreak"}, `["line\nbreak"]`},
+		{AggregatedValues{`q"uote`, `back\slash`, "[bracketed]"}, `["q\"uote","back\\slash","[bracketed]"]`},
+		{AggregatedValues{""}, `[""]`},
+		{AggregatedValues{}, "[]"},
+	} {
+		if got := tc.values.String(); got != tc.want {
+			t.Errorf("%q rendered as %s, expected %s", []string(tc.values), got, tc.want)
+		}
+	}
+}
+
+// TestAggregatingLoggerRejectsReservedFields pins a constructor contract: the list of values cannot
+// be written under the name of one of the counters the same line carries, or one would silently
+// overwrite the other.
+func TestAggregatingLoggerRejectsReservedFields(t *testing.T) {
+	for _, field := range []string{fieldTotalEvents, fieldUnnamedEvents, fieldMaxNamed} {
+		t.Run(field, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("NewAggregatingLogger accepted the reserved field %q", field)
+				}
+			}()
+			NewAggregatingLogger("condition", field)
+		})
+	}
+}
+
 // captureLogger is a Logger that records what it was asked to write, so a test can assert on it.
 type captureLogger struct {
 	mu    sync.Mutex
