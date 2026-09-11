@@ -557,7 +557,8 @@ const (
 	envPublishGitRef        = "PUBLISH_GIT_REF"
 	envReleaseGitRef        = "RELEASE_GIT_REF"
 	envPublishGithubRelease = "PUBLISH_GITHUB_RELEASE"
-	envReleaseGithubRelease = "RELEASE_GITHUB"
+	envReleaseGithub        = "RELEASE_GITHUB"
+	envReleaseGithubRelease = "RELEASE_GITHUB_RELEASE"
 	envDraftGithubRelease   = "PUBLISH_GITHUB_RELEASE_DRAFT"
 	envReleaseGithubDraft   = "RELEASE_GITHUB_DRAFT"
 )
@@ -729,7 +730,7 @@ var (
 		Name:     "github-release",
 		Category: stepControlCategory,
 		Usage:    "Publish the GitHub release",
-		Sources:  cli.EnvVars(envPublishGithubRelease, envReleaseGithubRelease),
+		Sources:  cli.EnvVars(envPublishGithubRelease, envReleaseGithub, envReleaseGithubRelease),
 		Value:    true,
 		Action: func(_ context.Context, c *cli.Command, b bool) error {
 			if b && c.String(githubTokenFlag.Name) == "" {

@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
@@ -35,6 +34,9 @@ import (
 const (
 	gcloudCmd = "gcloud"
 	awsCmd    = "aws"
+
+	s3Cmd      = "s3"
+	storageCmd = "storage"
 
 	cpVerb    = "cp"
 	syncVerb  = "sync"
@@ -59,6 +61,32 @@ var (
 	_ validator = HashreleaseServer{}
 )
 
+// paths is what cloud bucket handlers need to know.
+type paths struct {
+	src  string
+	dest string
+	dir  bool
+}
+
+func newPaths(src, dest string) (paths, error) {
+	dir, err := utils.DirExists(src)
+	if err != nil {
+		return paths{}, fmt.Errorf("reading %s: %w", src, err)
+	}
+	return paths{src: src, dest: dest, dir: dir}, nil
+}
+
+func (p paths) run(r command.CommandRunner, name string, args []string) error {
+	if r == nil {
+		r = &command.RealCommandRunner{}
+	}
+	logrus.WithField("args", args).Debugf("Running %s command", name)
+	if _, err := r.Run(name, args, nil); err != nil {
+		return fmt.Errorf("copying to %s: %w", p.dest, err)
+	}
+	return nil
+}
+
 type S3 struct {
 	URI string
 
@@ -76,20 +104,30 @@ type S3 struct {
 func (d S3) Name() string { return d.URI }
 
 func (d S3) Publish(_ context.Context, src string) error {
-	args := []string{"s3"}
+	p, err := newPaths(src, d.URI)
+	if err != nil {
+		return err
+	}
+	// A destination without the slash names one object rather than a prefix,
+	// so a directory upload would collapse into a single file.
+	if p.dir {
+		p.src, p.dest = addTrailingSlash(p.src), addTrailingSlash(p.dest)
+	}
+
+	args := []string{s3Cmd}
 	if d.Profile != "" {
 		args = append(args, "--profile", d.Profile)
 	}
-	verFn := d.cpArgs
 	if d.Sync {
-		verFn = d.syncArgs
+		// sync descends on its own, and the CLI rejects --recursive with it.
+		args = append(args, syncVerb)
+	} else {
+		args = append(args, cpVerb)
+		if p.dir {
+			args = append(args, recursiveFlag)
+		}
 	}
-	verbArgs, err := verFn(src)
-	if err != nil {
-		return fmt.Errorf("action verb: %w", err)
-	}
-	args = append(args, verbArgs...)
-	args = append(args, src, d.URI)
+	args = append(args, p.src, p.dest)
 	if !d.Private {
 		args = append(args, publicRead...)
 	}
@@ -99,45 +137,22 @@ func (d S3) Publish(_ context.Context, src string) error {
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		args = append(args, "--debug")
 	}
-	logrus.WithField("args", args).Debug("Running aws command")
-	if _, err := d.runner().Run(awsCmd, args, nil); err != nil {
-		return fmt.Errorf("publish to %s:%w", d.Name(), err)
+	err = p.run(d.Runner, awsCmd, args)
+	if err != nil {
+		return fmt.Errorf("%s %s: %w", awsCmd, s3Cmd, err)
 	}
 	return nil
 }
 
-func (d S3) cpArgs(src string) ([]string, error) {
-	if d.Sync {
-		return d.syncArgs(src)
-	}
-	args := []string{cpVerb}
-	dir, err := utils.DirExists(src)
-	if err != nil {
-		return args, fmt.Errorf("isDir(%s): %w", src, err)
-	}
-	if dir {
-		args = append(args, recursiveFlag)
-	}
-	return args, nil
-}
-
-func (d S3) syncArgs(src string) ([]string, error) {
-	if !d.Sync {
-		return d.cpArgs(src)
-	}
-	// sync descends on its own, and the CLI rejects --recursive alongside it.
-	return []string{syncVerb}, nil
-}
-
-func (d S3) runner() command.CommandRunner {
-	if d.Runner == nil {
-		return &command.RealCommandRunner{}
-	}
-	return d.Runner
-}
-
 func (d S3) Validate(u Upload) error {
 	return validSource(u)
+}
+
+func addTrailingSlash(s string) string {
+	if !strings.HasSuffix(s, "/") {
+		return s + "/"
+	}
+	return s
 }
 
 type GCS struct {
@@ -153,66 +168,33 @@ type GCS struct {
 func (d GCS) Name() string { return d.URI }
 
 func (d GCS) Publish(_ context.Context, src string) error {
-	verbFn := d.cpArgs
-	if d.Sync {
-		verbFn = d.rsyncArgs
-	}
-	verbArgs, err := verbFn(src)
+	p, err := newPaths(src, d.URI)
 	if err != nil {
-		return fmt.Errorf("action verb: %w", err)
-	}
-	args := append(slices.Clone(verbArgs), src, d.URI)
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		args = append(args, "--verbosity=debug")
-	}
-	// gcloud storage has no dry-run flag, so the run has to be skipped.
-	if d.DryRun {
-		logrus.WithField("args", args).Info("Dry run, not uploading")
-		return nil
+		return err
 	}
 
-	if _, err := d.runner().Run(gcloudCmd, args, nil); err != nil {
-		logrus.WithField("args", args).Debug("Running gcloud command")
-		return fmt.Errorf("publishing to %s: %w", d.URI, err)
+	// cp has no dry run of its own, so a preview uses rsync for both.
+	args := []string{storageCmd, cpVerb}
+	switch {
+	case d.Sync:
+		args = []string{storageCmd, rsyncVerb, recursiveFlag, "--delete-unmatched-destination-objects"}
+	case d.DryRun:
+		args = []string{storageCmd, rsyncVerb, recursiveFlag}
+	case p.dir:
+		args = append(args, recursiveFlag)
 	}
-	return nil
-}
-
-func (d GCS) cpArgs(src string) ([]string, error) {
-	if d.Sync {
-		return d.rsyncArgs(src)
-	}
-	args := []string{cpVerb}
-	if d.DryRun {
-		args = []string{rsyncVerb}
-	}
-	dir, err := utils.DirExists(src)
-	if err != nil {
-		return nil, err
-	}
-	if dir || d.DryRun {
-		args = append(args, "--recursive")
-	}
-	return args, nil
-}
-
-func (d GCS) rsyncArgs(src string) ([]string, error) {
-	if !d.Sync {
-		return d.cpArgs(src)
-	}
-	args := []string{rsyncVerb, "--recursive", "--delete-unmatched-destination-objects"}
-
 	if d.DryRun {
 		args = append(args, "--dry-run")
 	}
-	return args, nil
-}
-
-func (d GCS) runner() command.CommandRunner {
-	if d.Runner == nil {
-		return &command.RealCommandRunner{}
+	args = append(args, p.src, p.dest)
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		args = append(args, "--verbosity=debug")
 	}
-	return d.Runner
+	err = p.run(d.Runner, gcloudCmd, args)
+	if err != nil {
+		return fmt.Errorf("%s %s: %w", gcloudCmd, storageCmd, err)
+	}
+	return nil
 }
 
 func (d GCS) Validate(u Upload) error {

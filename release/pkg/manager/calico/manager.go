@@ -56,8 +56,6 @@ var (
 
 	metadataFileName = "metadata.yaml"
 
-	helmIndexFileName = "index.yaml"
-
 	branchTagTarget = "retag-build-images-with-registries push-images-to-registries push-manifests"
 
 	// Windows images are published as a single manifest, so their branch tag
@@ -1230,7 +1228,12 @@ func (r *CalicoManager) publishGitTag() error {
 		return fmt.Errorf("remote tag %s already exists at %s but local tag is %s", r.calicoVersion, remoteSHA, localSHA)
 	}
 
-	if _, err := r.git("push", r.remote, r.calicoVersion); err != nil {
+	args := []string{"push", r.remote, r.calicoVersion}
+
+	if r.dryRun {
+		args = append(args, "--dry-run")
+	}
+	if _, err := r.git(args...); err != nil {
 		return fmt.Errorf("failed to push git tag: %w", err)
 	}
 	return nil
@@ -1494,12 +1497,16 @@ func (r *CalicoManager) helmIndexUpload() distribution.Upload {
 		Source: charts.IndexFilePath(r.chart().BaseDir),
 		Skip:   !r.helmCharts || !r.helmIndex,
 		Handler: distribution.S3{
-			URI:     fmt.Sprintf("s3://%s/charts", r.s3Bucket),
+			URI:     r.s3URI("charts"),
 			Profile: r.awsProfile,
 			DryRun:  r.dryRun,
 			Runner:  r.runner,
 		},
 	}
+}
+
+func (r *CalicoManager) s3URI(path ...string) string {
+	return fmt.Sprintf("s3://%s/%s/", r.s3Bucket, strings.Join(path, "/"))
 }
 
 func (r *CalicoManager) assertReleaseNotesPresent(ver string) error {
@@ -1596,29 +1603,6 @@ func (r *CalicoManager) makeInDirectoryWithOutput(dir, target string, env ...str
 func (r *CalicoManager) makeInDirectoryIgnoreOutput(dir, target string, env ...string) error {
 	_, err := r.makeInDirectoryWithOutput(dir, target, env...)
 	return err
-}
-
-func (r *CalicoManager) s3Cp(src, dest string, additionalFlags ...string) error {
-	args := []string{
-		"s3", "cp",
-		src, dest,
-	}
-	if r.awsProfile != "" {
-		args = append(args, "--profile", r.awsProfile)
-	}
-	if strings.HasSuffix(src, "/") {
-		args = append(args, "--recursive")
-	}
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		args = append(args, "--debug")
-	}
-	if len(additionalFlags) > 0 {
-		args = append(args, additionalFlags...)
-	}
-	if _, err := r.runner.Run("aws", args, nil); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (r *CalicoManager) releaseBranchPrereqs() error {

@@ -162,7 +162,9 @@ func TestPublishSendsEachSourceToItsDestination(t *testing.T) {
 	}
 }
 
-func TestPublishDryRunSendsNothing(t *testing.T) {
+// A dry run still runs every step, so it exercises everything a real run
+// does except the remote write — which each handler suppresses itself.
+func TestPublishDryRunStillRunsTheSteps(t *testing.T) {
 	dir := dirWith(t, "release.tgz")
 	d := &fakeDest{name: "github"}
 	rec := &fakeRecorder{}
@@ -170,10 +172,11 @@ func TestPublishDryRunSendsNothing(t *testing.T) {
 	if err := Publish([]Upload{{Source: dir, Handler: d}}, false, WithRecord(rec)); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
-	if got := d.got(); len(got) != 0 {
-		t.Errorf("expected nothing published, got %v", got)
+	if got := d.got(); len(got) != 1 {
+		t.Errorf("expected the handler run, got %v", got)
 	}
-	// Recording a dry run would name artifacts that were never sent.
+	// Nothing reached a remote, so a record would name artifacts that are
+	// not there.
 	if len(rec.refs) != 0 {
 		t.Errorf("expected nothing recorded, got %v", rec.refs)
 	}
@@ -325,5 +328,44 @@ func TestUploadLabel(t *testing.T) {
 				t.Errorf("label() = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// A record is what a resume reads to decide what is already done, so an
+// upload that failed or was never reached must not appear in it.
+func TestPublishRecordsOnlyWhatPublished(t *testing.T) {
+	dir := dirWith(t, "release.tgz")
+	rec := &fakeRecorder{}
+
+	err := Publish([]Upload{
+		{Source: dir, Handler: &fakeDest{name: "first"}},
+		{Source: dir, Handler: &fakeDest{name: "fails", err: errors.New("denied")}},
+		{Source: dir, Handler: &fakeDest{name: "never reached"}},
+	}, true, WithRecord(rec))
+	if err == nil {
+		t.Fatal("expected the failure reported")
+	}
+	if !slices.Contains(rec.refs, "first") {
+		t.Errorf("expected the published upload recorded, got %v", rec.refs)
+	}
+	for _, unwanted := range []string{"fails", "never reached"} {
+		if slices.Contains(rec.refs, unwanted) {
+			t.Errorf("recorded %q, which did not publish: %v", unwanted, rec.refs)
+		}
+	}
+}
+
+// A skipped upload never runs, so it has nothing for a handler's rules to
+// object to.
+func TestPublishSkipsValidationOfASkippedUpload(t *testing.T) {
+	d := &fakeDest{name: "s3://bucket/rpms/"}
+	if err := Publish([]Upload{
+		{Handler: S3{URI: "s3://bucket/rpms/"}, Skip: true},
+		{Source: dirWith(t, "x"), Handler: d},
+	}, true); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if got := d.got(); len(got) != 1 {
+		t.Errorf("expected the unskipped upload to run, got %v", got)
 	}
 }

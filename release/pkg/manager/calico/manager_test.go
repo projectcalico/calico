@@ -1071,3 +1071,36 @@ func TestHelmIndexUploadAllowsAMissingIndex(t *testing.T) {
 		})
 	}
 }
+
+// aws s3 cp to a key with no trailing slash writes an object named for the
+// prefix rather than a file inside it, so the index silently stops updating.
+func TestHelmIndexUploadTargetsTheChartsPrefix(t *testing.T) {
+	r := &CalicoManager{helmCharts: true, helmIndex: true, s3Bucket: "bucket", outputDir: t.TempDir()}
+	got, ok := r.helmIndexUpload().Handler.(distribution.S3)
+	if !ok {
+		t.Fatalf("handler is %T, want distribution.S3", r.helmIndexUpload().Handler)
+	}
+	if want := "s3://bucket/charts/"; got.URI != want {
+		t.Errorf("URI = %q, want %q", got.URI, want)
+	}
+}
+
+func TestPublishGitTagPreviewsThePushOnADryRun(t *testing.T) {
+	f := newFakeRunner()
+	f.on("git ls-remote --tags origin refs/tags/v3.30.0", "", nil)
+
+	r := &CalicoManager{
+		runner:        f,
+		gitRef:        true,
+		dryRun:        true,
+		calicoVersion: "v3.30.0",
+		remote:        "origin",
+		repoRoot:      t.TempDir(),
+	}
+	if err := r.publishGitTag(); err != nil {
+		t.Fatalf("publishGitTag() = %v, want nil", err)
+	}
+	if !f.ran("git push origin v3.30.0 --dry-run") {
+		t.Errorf("expected a previewed push, got %v", f.calls)
+	}
+}

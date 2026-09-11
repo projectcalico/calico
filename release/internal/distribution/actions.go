@@ -112,6 +112,9 @@ func Publish(pipeline []Upload, confirm bool, opts ...PublishOption) error {
 	}
 	var errs []error
 	for _, u := range pipeline {
+		if u.Skip {
+			continue
+		}
 		if err := u.validate(); err != nil {
 			errs = append(errs, err)
 		}
@@ -125,21 +128,12 @@ func Publish(pipeline []Upload, confirm bool, opts ...PublishOption) error {
 		s.refs = nil
 	}
 
-	if !confirm {
-		for _, u := range s.pipeline {
-			s.Logger().WithFields(map[string]any{
-				"upload": u.label(), "source": u.Source, "destination": u.dest(),
-			}).Info("Dry run, not publishing")
-		}
-		return nil
-	}
-
 	s.Logger().WithField("uploads", len(s.pipeline)).Info("Publishing artifacts")
-	pubErr := s.push(s.pipeline)
+	published, pubErr := s.push(s.pipeline)
 
 	// Record before reporting a failure: a partial publish is the run whose
 	// record decides what is already done.
-	if err := s.record(s.pipeline); err != nil {
+	if err := s.record(published); err != nil {
 		return errors.Join(pubErr, err)
 	}
 	if pubErr != nil {
@@ -150,13 +144,17 @@ func Publish(pipeline []Upload, confirm bool, opts ...PublishOption) error {
 }
 
 // Ordered, and stops at the first failure as a later upload may depend on an earlier one.
-func (s settings) push(uploads []Upload) error {
+// Returns what published, so a record never names an upload that failed or
+// was never reached.
+func (s settings) push(uploads []Upload) ([]Upload, error) {
+	var done []Upload
 	for _, u := range uploads {
 		if err := s.publishOne(u); err != nil {
-			return err
+			return done, err
 		}
+		done = append(done, u)
 	}
-	return nil
+	return done, nil
 }
 
 func (s settings) publishOne(u Upload) error {
