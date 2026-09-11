@@ -13,6 +13,6 @@ defaults:
 steps:
   - name: e2e-validation
     jobSize: small
-    requests: {cpu: 1000m, memory: 512Mi}
+    requests: {cpu: 1000m, memory: 768Mi}
     commands: |
       ./.semaphore/end-to-end/scripts/test_scripts/e2e-validation.sh .argoci/cron .argoci/scripts
