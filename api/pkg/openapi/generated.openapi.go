@@ -6052,6 +6052,13 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref commo
 							Format:      "int32",
 						},
 					},
+					"debugProfileHost": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DebugProfileHost is the host IP or hostname to bind the profiling port to. Set to \"0.0.0.0\" for all interfaces to make profiles reachable from off-host. The profiling endpoints are unauthenticated and expose heap dumps, goroutine stacks and CPU profiles, so prefer the default and use kubectl port-forward for remote access. Only used if DebugProfilePort is set. [Default: localhost]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"controllers"},
 			},
