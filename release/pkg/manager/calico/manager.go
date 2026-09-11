@@ -27,7 +27,6 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"go.yaml.in/yaml/v3"
 
 	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/charts"
@@ -53,8 +52,6 @@ var (
 	defaultOrg    = utils.ProjectCalicoOrg
 	defaultRepo   = utils.CalicoRepoName
 	defaultBranch = utils.DefaultBranch
-
-	metadataFileName = "metadata.yaml"
 
 	branchTagTarget = "retag-build-images-with-registries push-images-to-registries push-manifests"
 
@@ -246,14 +243,6 @@ type CalicoManager struct {
 	fromTag      string
 }
 
-func releaseImages(images []string, version, registry, operatorImage, operatorVersion, operatorRegistry string) []string {
-	imgList := []string{fmt.Sprintf("%s/%s:%s", operatorRegistry, operatorImage, operatorVersion)}
-	for _, img := range images {
-		imgList = append(imgList, fmt.Sprintf("%s/%s:%s", registry, img, version))
-	}
-	return imgList
-}
-
 func (r *CalicoManager) PreBuildValidation() error {
 	var errStack error
 	if r.calicoVersion == "" {
@@ -385,15 +374,8 @@ func (r *CalicoManager) Build() error {
 	return r.collectArtifacts()
 }
 
-type metadata struct {
-	Version          string   `json:"version"`
-	OperatorVersion  string   `json:"operator_version" yaml:"operatorVersion"`
-	Images           []string `json:"images"`
-	HelmChartVersion string   `json:"helm_chart_version" yaml:"helmChartVersion"`
-}
-
 func (r *CalicoManager) BuildMetadata(dir string) error {
-	registry, err := r.getRegistryFromManifests()
+	reg, err := r.getRegistryFromManifests()
 	if err != nil {
 		return fmt.Errorf("failed to get registry from manifests: %w", err)
 	}
@@ -402,26 +384,19 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to determine release images: %w", err)
 	}
-
-	m := metadata{
-		Version:          r.calicoVersion,
-		OperatorVersion:  r.operatorVersion,
-		Images:           releaseImages(imgs, r.calicoVersion, registry, r.operatorImage, r.operatorVersion, r.operatorRegistry),
-		HelmChartVersion: r.chart().Version(),
+	components := []distribution.Component{
+		{Registry: r.operatorRegistry, Image: r.operatorImage, Version: r.operatorVersion},
+	}
+	for _, img := range imgs {
+		components = append(components, distribution.Component{Registry: reg, Image: img, Version: r.calicoVersion})
 	}
 
-	// Render it as yaml and write it to a file.
-	bs, err := yaml.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("failed to marshal metadata: %s", err)
-	}
-
-	err = os.WriteFile(filepath.Join(dir, metadataFileName), []byte(bs), 0o644)
-	if err != nil {
-		return fmt.Errorf("failed to write metadata file: %s", err)
-	}
-
-	return nil
+	return distribution.BuildMetadata(distribution.Metadata{
+		Version:         r.calicoVersion,
+		OperatorVersion: r.operatorVersion,
+		Images:          components,
+		ChartVersion:    r.chart().Version(),
+	}, dir, distribution.WithRunner(r.runner))
 }
 
 func (r *CalicoManager) getRegistryFromManifests() (string, error) {

@@ -20,7 +20,10 @@ import (
 	"errors"
 	"fmt"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 )
 
@@ -46,23 +49,18 @@ type Upload struct {
 
 	Handler Handler
 
-	// Name is what is being sent, for a log a reader can follow. Two uploads
-	// to one bucket are otherwise told apart only by their paths.
 	Name string
 
-	// Skip when the step that produces Source did not run. A source that is
-	// missing without this is an error.
+	//  when the step that produces Source did not run.
 	Skip bool
 }
 
-// validator is a handler that has its own rules about the upload it is given.
-// A handler that finds its own content does not implement it.
+// A handler that finds its own content does not implement this.
 type validator interface {
 	Validate(u Upload) error
 }
 
-// Falls back to the destination, so a log line reads even when a caller
-// names nothing.
+// Falls back to the destination, so a log line reads without a Name.
 func (u Upload) label() string {
 	if u.Name != "" {
 		return u.Name
@@ -84,39 +82,55 @@ func (u Upload) validate() error {
 	return nil
 }
 
-// Metadata is what metadata.yaml records about a release.
+// A product embeds Release and adds its own fields; the whole value is written.
+type Attester interface {
+	Attest() ([]byte, error)
+}
+
+// A product asserts the same in its own file.
+var _ Attester = Metadata{}
+
+type Component struct {
+	registry.Component `json:",inline" yaml:",inline"`
+}
+
+// Rendered as the reference rather than its parts: consumers read this file
+// for something to pull.
+func (c Component) MarshalYAML() (any, error) {
+	return c.String(), nil
+}
+
 type Metadata struct {
 	Version string `json:"version"`
 
 	OperatorVersion string `json:"operator_version" yaml:"operatorVersion"`
 
-	// Supplied, not derived: a release and a hashrelease name images from
-	// different sources.
-	Images []string `json:"images"`
+	Images []Component `json:"images"`
 
 	ChartVersion string `json:"helm_chart_version" yaml:"helmChartVersion"`
 }
 
-func (m Metadata) validate() error {
+func (r Metadata) Attest() ([]byte, error) {
 	var errs []error
-	if m.Version == "" {
+	if r.Version == "" {
 		errs = append(errs, fmt.Errorf("no version specified"))
 	}
-	if m.OperatorVersion == "" {
+	if r.OperatorVersion == "" {
 		errs = append(errs, fmt.Errorf("no operator version specified"))
 	}
-	if len(m.Images) == 0 {
+	if len(r.Images) == 0 {
 		errs = append(errs, fmt.Errorf("no images specified"))
 	}
-	return errors.Join(errs...)
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
+	}
+	return yaml.Marshal(r)
 }
 
 type settings struct {
 	pipeline []Upload
 
 	confirm bool
-
-	refs steps.RefRecorder
 
 	steps.Step
 }
@@ -169,18 +183,6 @@ func WithLogsDir(dir string) Option {
 func WithDir(dir string) Option {
 	return setting(func(s *settings) error {
 		s.Apply([]steps.Option{steps.WithDir(dir)})
-		return nil
-	})
-}
-
-// WithRecord writes a ref per completed upload, so a later step reads what
-// was published rather than what was planned.
-func WithRecord(rec steps.RefRecorder) PublishOption {
-	return publishSetting(func(s *settings) error {
-		if rec == nil {
-			return fmt.Errorf("no recorder to record published artifacts")
-		}
-		s.refs = rec
 		return nil
 	})
 }

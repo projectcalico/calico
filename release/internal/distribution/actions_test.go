@@ -24,6 +24,10 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"gopkg.in/yaml.v3"
+
+	"github.com/projectcalico/calico/release/internal/registry"
 )
 
 type fakeDest struct {
@@ -49,16 +53,6 @@ func (d *fakeDest) got() []string {
 	return slices.Clone(d.srcs)
 }
 
-type fakeRecorder struct {
-	refs []string
-	err  error
-}
-
-func (r *fakeRecorder) Add(refs ...string) error {
-	r.refs = append(r.refs, refs...)
-	return r.err
-}
-
 func dirWith(t *testing.T, names ...string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -79,7 +73,7 @@ func TestBuildMetadata(t *testing.T) {
 	m := Metadata{
 		Version:         "v3.30.0",
 		OperatorVersion: "v1.38.0",
-		Images:          []string{"calico/node:v3.30.0"},
+		Images:          []Component{{registry.Component{Registry: "quay.io", Image: "calico/node", Version: "v3.30.0"}}},
 		ChartVersion:    "v3.30.0",
 	}
 	if err := BuildMetadata(m, dir); err != nil {
@@ -104,8 +98,8 @@ func TestBuildMetadataRejectsIncompleteInput(t *testing.T) {
 		m    Metadata
 		want string
 	}{
-		{"no version", Metadata{OperatorVersion: "v1", Images: []string{"i"}}, "version"},
-		{"no operator version", Metadata{Version: "v1", Images: []string{"i"}}, "operator version"},
+		{"no version", Metadata{OperatorVersion: "v1", Images: []Component{{}}}, "version"},
+		{"no operator version", Metadata{Version: "v1", Images: []Component{{}}}, "operator version"},
 		{"no images", Metadata{Version: "v1", OperatorVersion: "v1"}, "images"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -167,18 +161,12 @@ func TestPublishSendsEachSourceToItsDestination(t *testing.T) {
 func TestPublishDryRunStillRunsTheSteps(t *testing.T) {
 	dir := dirWith(t, "release.tgz")
 	d := &fakeDest{name: "github"}
-	rec := &fakeRecorder{}
 
-	if err := Publish([]Upload{{Source: dir, Handler: d}}, false, WithRecord(rec)); err != nil {
+	if err := Publish([]Upload{{Source: dir, Handler: d}}, false); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	if got := d.got(); len(got) != 1 {
 		t.Errorf("expected the handler run, got %v", got)
-	}
-	// Nothing reached a remote, so a record would name artifacts that are
-	// not there.
-	if len(rec.refs) != 0 {
-		t.Errorf("expected nothing recorded, got %v", rec.refs)
 	}
 }
 
@@ -229,22 +217,6 @@ func TestPublishStopsAtTheFirstFailure(t *testing.T) {
 	}
 	if got := after.got(); len(got) != 0 {
 		t.Errorf("expected nothing published after the failure, got %v", got)
-	}
-}
-
-func TestPublishRecordsWhatSucceededDespiteAFailure(t *testing.T) {
-	dir := dirWith(t, "release.tgz")
-	rec := &fakeRecorder{}
-
-	err := Publish([]Upload{
-		{Source: dir, Handler: &fakeDest{name: "github"}},
-		{Source: dir, Handler: &fakeDest{name: "s3://bad/", err: errors.New("denied")}},
-	}, true, WithRecord(rec))
-	if err == nil {
-		t.Fatal("expected the failure reported")
-	}
-	if !slices.Contains(rec.refs, "github") {
-		t.Errorf("expected the publish recorded, got %v", rec.refs)
 	}
 }
 
@@ -331,30 +303,6 @@ func TestUploadLabel(t *testing.T) {
 	}
 }
 
-// A record is what a resume reads to decide what is already done, so an
-// upload that failed or was never reached must not appear in it.
-func TestPublishRecordsOnlyWhatPublished(t *testing.T) {
-	dir := dirWith(t, "release.tgz")
-	rec := &fakeRecorder{}
-
-	err := Publish([]Upload{
-		{Source: dir, Handler: &fakeDest{name: "first"}},
-		{Source: dir, Handler: &fakeDest{name: "fails", err: errors.New("denied")}},
-		{Source: dir, Handler: &fakeDest{name: "never reached"}},
-	}, true, WithRecord(rec))
-	if err == nil {
-		t.Fatal("expected the failure reported")
-	}
-	if !slices.Contains(rec.refs, "first") {
-		t.Errorf("expected the published upload recorded, got %v", rec.refs)
-	}
-	for _, unwanted := range []string{"fails", "never reached"} {
-		if slices.Contains(rec.refs, unwanted) {
-			t.Errorf("recorded %q, which did not publish: %v", unwanted, rec.refs)
-		}
-	}
-}
-
 // A skipped upload never runs, so it has nothing for a handler's rules to
 // object to.
 func TestPublishSkipsValidationOfASkippedUpload(t *testing.T) {
@@ -367,5 +315,77 @@ func TestPublishSkipsValidationOfASkippedUpload(t *testing.T) {
 	}
 	if got := d.got(); len(got) != 1 {
 		t.Errorf("expected the unskipped upload to run, got %v", got)
+	}
+}
+
+// A product embeds Release for the shared fields and the checks, and writes
+// its own Attest so its own fields are marshalled too. Inheriting the
+// embedded one would silently drop them.
+func TestBuildMetadataWritesAProductsOwnFields(t *testing.T) {
+	dir := t.TempDir()
+	rel := productRelease{
+		Metadata: Metadata{
+			Version:         "v3.30.0",
+			OperatorVersion: "v1.38.0",
+			Images:          []Component{{registry.Component{Registry: "example.test", Image: "node", Version: "v3.30.0"}}},
+			ChartVersion:    "v3.30.0",
+		},
+		Upstream: "v3.30.0",
+	}
+	if err := BuildMetadata(rel, dir); err != nil {
+		t.Fatalf("BuildMetadata: %v", err)
+	}
+
+	bs, err := os.ReadFile(filepath.Join(dir, MetadataFileName))
+	if err != nil {
+		t.Fatalf("reading metadata: %v", err)
+	}
+	for _, want := range []string{"version: v3.30.0", "upstreamVersion: v3.30.0"} {
+		if !strings.Contains(string(bs), want) {
+			t.Errorf("expected %q in:\n%s", want, bs)
+		}
+	}
+}
+
+type productRelease struct {
+	Metadata  `yaml:",inline"`
+	Upstream string `yaml:"upstreamVersion"`
+}
+
+func (p productRelease) Attest() ([]byte, error) {
+	if _, err := p.Metadata.Attest(); err != nil {
+		return nil, err
+	}
+	return yaml.Marshal(p)
+}
+
+// The published file lists images as references, not as their parts: the one
+// consumer decodes them as strings and pulls what it finds.
+func TestBuildMetadataRendersImagesAsReferences(t *testing.T) {
+	dir := t.TempDir()
+	err := BuildMetadata(Metadata{
+		Version:         "v3.30.0",
+		OperatorVersion: "v1.38.0",
+		ChartVersion:    "v3.30.0",
+		Images: []Component{
+			{registry.Component{Registry: "quay.io", Image: "calico/node", Version: "v3.30.0"}},
+		},
+	}, dir)
+	if err != nil {
+		t.Fatalf("BuildMetadata: %v", err)
+	}
+
+	var got struct {
+		Images []string `yaml:"images"`
+	}
+	bs, err := os.ReadFile(filepath.Join(dir, MetadataFileName))
+	if err != nil {
+		t.Fatalf("reading metadata: %v", err)
+	}
+	if err := yaml.Unmarshal(bs, &got); err != nil {
+		t.Fatalf("decoding images as strings: %v", err)
+	}
+	if len(got.Images) != 1 || got.Images[0] != "quay.io/calico/node:v3.30.0" {
+		t.Errorf("images = %v, want [quay.io/calico/node:v3.30.0]", got.Images)
 	}
 }

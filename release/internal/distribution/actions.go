@@ -22,7 +22,6 @@ import (
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v3"
 
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -30,21 +29,21 @@ import (
 
 const filePerms = 0o644
 
-func BuildMetadata(m Metadata, dir string, opts ...MetadataOption) error {
+func BuildMetadata(a Attester, dir string, opts ...MetadataOption) error {
 	s, err := newSettings(metadataStep, opts)
 	if err != nil {
 		return err
 	}
-	if err := m.validate(); err != nil {
-		return s.Errorf("%w", err)
+	if a == nil {
+		return s.Errorf("no release to describe")
 	}
 	if dir == "" {
 		return s.Errorf("no directory to write metadata to")
 	}
 
-	bs, err := yaml.Marshal(m)
+	bs, err := a.Attest()
 	if err != nil {
-		return s.Errorf("marshalling metadata: %w", err)
+		return s.Errorf("%w", err)
 	}
 	path := filepath.Join(dir, MetadataFileName)
 	if err := os.WriteFile(path, bs, filePerms); err != nil {
@@ -123,21 +122,10 @@ func Publish(pipeline []Upload, confirm bool, opts ...PublishOption) error {
 		return s.Errorf("%w", err)
 	}
 	s.pipeline, s.confirm = pipeline, confirm
-	if !confirm {
-		// A dry run sends nothing, so a record would name unpublished artifacts.
-		s.refs = nil
-	}
 
 	s.Logger().WithField("uploads", len(s.pipeline)).Info("Publishing artifacts")
-	published, pubErr := s.push(s.pipeline)
-
-	// Record before reporting a failure: a partial publish is the run whose
-	// record decides what is already done.
-	if err := s.record(published); err != nil {
-		return errors.Join(pubErr, err)
-	}
-	if pubErr != nil {
-		return pubErr
+	if _, err := s.push(s.pipeline); err != nil {
+		return err
 	}
 	s.Logger().Info("Finished publishing artifacts")
 	return nil
@@ -190,20 +178,6 @@ func (s settings) publishOne(u Upload) error {
 		}
 		return s.Errorf("publishing %s to %s: %w", u.label(), u.dest(), err)
 	}
-}
-
-func (s settings) record(uploads []Upload) error {
-	if s.refs == nil {
-		return nil
-	}
-	refs := make([]string, 0, len(uploads))
-	for _, u := range uploads {
-		refs = append(refs, u.dest())
-	}
-	if err := s.refs.Add(refs...); err != nil {
-		return s.Errorf("recording published artifacts: %w", err)
-	}
-	return nil
 }
 
 func newSettings[O any](step string, opts []O) (settings, error) {
