@@ -14,18 +14,15 @@ steps:
     # works; changing it puts a step in the trend that is not a code change.
     vm:
       machineType: e2-standard-2
-    # Installs docker on the machine rather than starting a sidecar the machine
-    # could not reach.
     services:
       - docker
-    # A bundle loaded whole cannot cross to a VM, so the keys are named.
     secretBundles:
       - name: banzai-secrets
         keys:
           - name: LENS_ELASTICSEARCH_USER
           - name: LENS_ELASTICSEARCH_TOKEN
     commands: |
-      sudo apt-get update -y && sudo apt-get install -y nftables
+      sudo apt-get update -y && sudo apt-get install -y nftables make
       make -C felix bin/nft.test
       make bin/send-perf-results
       mkdir -p artifacts/perf
