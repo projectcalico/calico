@@ -2,11 +2,11 @@
 // Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#ifndef __CALI_CTLB_MAPS_H__
-#define __CALI_CTLB_MAPS_H__
+#ifndef __CALI_CTLB_MAP_H__
+#define __CALI_CTLB_MAP_H__
 
 #include <linux/bpf.h>
-#include <stdbool.h>
+
 #include "bpf.h"
 
 struct {

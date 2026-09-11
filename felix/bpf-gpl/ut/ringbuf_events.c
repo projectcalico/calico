@@ -2,13 +2,17 @@
 // Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#include "ut.h"
-#include "bpf.h"
-#include "ringbuf.h"
-#include "skb.h"
-
 #include <linux/ip.h>
 #include <linux/udp.h>
+
+#include "ut.h"
+
+#include "bpf.h"
+#include "events_type.h"
+#include "log.h"
+#include "ringbuf.h"
+#include "skb.h"
+#include "types.h"
 
 struct tuple {
 	struct event_header hdr;
