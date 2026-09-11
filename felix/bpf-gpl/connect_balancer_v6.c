@@ -2,26 +2,19 @@
 // Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#include <linux/bpf.h>
-
-// socket_type.h contains the definition of SOCK_XXX constants that we need
-// but it's supposed to be imported via socket.h, which we can't import due
-// to lack of std lib support for BPF.  Bypass its check for now.
-#define _SYS_SOCKET_H
-#include <bits/socket_type.h>
-
-#include <stdbool.h>
-
-#include "bpf.h"
-#include "globals.h"
-#include "ctlb.h"
-
+/* Log prefix for this program.  log.h only defines CALI_LOG if it is not
+ * already set, so this must come before any include. */
 #define CALI_LOG(fmt, ...) bpf_log("CTLB-V6---------: " fmt, ## __VA_ARGS__)
 
-#include "log.h"
+#include <linux/bpf.h>
 
-#include "sendrecv.h"
+#include "bpf.h"
 #include "connect.h"
+#include "ctlb.h"
+#include "globals.h"
+#include "log.h"
+#include "sendrecv.h"
+#include "sock_type.h"
 
 #undef debug_ip
 
@@ -36,7 +29,7 @@ int calico_connect_v6(struct bpf_sock_addr *ctx)
 	ipv46_addr_t dst = {};
 	be32_4_ip_to_ipv6_addr_t(&dst, ctx->user_ip6);
 
-	int ret = connect(ctx, &dst);
+	int ret = do_connect(ctx, &dst);
 	ipv6_addr_t_to_be32_4_ip(ctx->user_ip6, &dst);
 
 	return ret;

@@ -5,7 +5,12 @@
 #ifndef __CALI_MAGLEV_H__
 #define __CALI_MAGLEV_H__
 
+#include "bpf.h"
+#include "ip_addr.h"
 #include "jenkins_hash.h"
+#include "log.h"
+#include "nat_types.h"
+#include "types.h"
 
 static CALI_BPF_INLINE struct calico_nat_dest* maglev_select_backend(struct cali_tc_ctx *ctx)
 {
