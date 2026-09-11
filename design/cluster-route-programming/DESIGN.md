@@ -123,6 +123,7 @@ enum needs a matching `tigera/operator` PR and the `needs-operator-pr` label.
 | `felix/dataplane/driver.go`              | Copies the two booleans into the dataplane `Config`.                                                                                                                                                                                                              |
 | `felix/dataplane/linux/int_dataplane.go` | `ProgramIPIPClusterRoutes` / `ProgramNoEncapClusterRoutes`; the no-encap managers are only created when Felix owns no-encap.                                                                                                                                      |
 | `felix/dataplane/linux/ipip_mgr.go`      | The IPIP manager always runs (it owns `tunl0`), but only feeds its route manager when Felix owns IPIP cluster routes.                                                                                                                                             |
+| `felix/dataplane/linux/route_mgr.go`      | `normalRoutePriority()` gives the routes to workloads on other nodes the same metric BIRD writes, so such a route keeps its priority whichever component owns it.  The local-block blackholes stay at metric 0, which is where BIRD's static protocol puts its own.  |
 
 The asymmetry between IPIP and no-encap in Felix is deliberate and worth
 restating: `noEncapManager` exists *only* to program cluster routes, so it is
@@ -344,11 +345,14 @@ The scope of the reject is deliberate on one axis and a proxy on the other:
   any such filter must exclude only the remote ones.
 
 **KubeVirt live migration.**  Route-priority propagation for live migration was
-designed and tested for confd/BIRD-programmed routes.  Whether the elevated
-priority is programmed correctly when *Felix* programs the remote routes has not
-been verified.  For IPIP this is out of scope by decision (no new-feature work
-on IPIP); for no-encap and VXLAN it is the blocker that must be cleared before
-the no-encap default can move.
+designed and tested for confd/BIRD-programmed routes.  Felix now gives its
+routes to workloads on other nodes the *normal* priority, matching BIRD, so a
+local workload route at the elevated priority outranks them as it should; before
+that they were programmed at metric 0, which outranks every priority the API
+accepts.  Whether the *elevated* priority is propagated correctly when Felix
+programs the remote routes is still unverified.  For IPIP this is out of scope
+by decision (no new-feature work on IPIP); for no-encap and VXLAN it is the
+blocker that must be cleared before the no-encap default can move.
 
 **Dual ToR.**  In the dual-ToR topology, no-encap pod-to-pod routes inherit
 their "dual-ness" from the node-to-node routes that BGP computes, so BIRD must

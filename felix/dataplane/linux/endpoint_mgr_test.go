@@ -751,6 +751,12 @@ func (t *mockRouteTable) cidrsForClass(routeClass routetable.RouteClass, ifaceNa
 	return cidrs
 }
 
+// targetsForClass returns the routes the given class currently has programmed on
+// the given interface.
+func (t *mockRouteTable) targetsForClass(routeClass routetable.RouteClass, ifaceName string) []routetable.Target {
+	return t.currentRoutesByClass[routeClass][ifaceName]
+}
+
 func (t *mockRouteTable) RouteRemove(routeClass routetable.RouteClass, ifaceName string, routeKey routetable.RouteKey) {
 }
 
