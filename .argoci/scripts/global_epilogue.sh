@@ -23,6 +23,35 @@ CI_EXIT_CODE=${CI_STEP_EXIT_CODE:-${CI_EXIT_CODE:-0}}
 # `artifact push job` publishes.
 echo "[INFO] publishing artifacts to ${CI_ARTIFACT_STEP_STORAGE}"
 
+# e2e-vpp additionally keeps its own copy, laid out the way the CalicoVPP
+# maintainers' tooling expects (date/stream/provisioner/manifest/flags/time).
+# Only .argoci/cron/e2e-vpp.yaml sets the prefix, and only for scheduled runs,
+# so an empty or malformed value just means "no copy".
+# Run twice: once before `bz destroy` so the logs survive a destroy that hangs,
+# and again after so the prefix ends up holding whatever destroy left behind —
+# which is what the Semaphore layout contained.
+publish_vpp_logs() {
+  case "${VPP_RESULTS_PREFIX:-}" in gs://*) ;; *) return 0 ;; esac
+  # Guard on the directory: were BZ_LOGS_DIR empty the source would be "/.",
+  # which is readable, recurses, and succeeds.
+  if [[ -d "${BZ_LOGS_DIR:-}" ]]; then
+    gsutil -m cp -r "${BZ_LOGS_DIR}/." "${VPP_RESULTS_PREFIX}/logs/" || true
+  fi
+}
+
+publish_vpp_copy() {
+  case "${VPP_RESULTS_PREFIX:-}" in gs://*) ;; *) return 0 ;; esac
+  echo "[INFO] publishing vpp copy to ${VPP_RESULTS_PREFIX}"
+  if [[ -f "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" ]]; then
+    gsutil cp "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" \
+              "${VPP_RESULTS_PREFIX}/${DIAGS_ARCHIVE_FILENAME}" || true
+  fi
+  if [[ -f "${REPORT_DIR}/junit.xml" ]]; then
+    gsutil cp "${REPORT_DIR}/junit.xml" "${VPP_RESULTS_PREFIX}/junit.xml" || true
+  fi
+  publish_vpp_logs
+}
+
 # Capture diags on failure (or always for cert runs).
 if [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
   echo "[INFO] capturing diags"
@@ -49,6 +78,7 @@ if [[ -f "${REPORT_DIR}/junit.xml" ]]; then
   artifact push job "${REPORT_DIR}/junit.xml" -f || true
 fi
 artifact push job "${BZ_LOGS_DIR}" -d logs -f || true
+publish_vpp_copy
 
 # Upload results to Lens (best-effort; token from banzai-secrets).
 if [[ -n "${GITHUB_ACCESS_TOKEN:-}" ]]; then
@@ -62,5 +92,12 @@ fi
 # Tear the cluster down.
 echo "[INFO] destroying cluster ${CLUSTER_NAME}"
 bz destroy |& tee "${BZ_LOGS_DIR}/destroy.log" || true
+
+# destroy.log only exists now, after the logs push above. Pushing it separately
+# rather than moving that push keeps logs for runs where destroy hangs.
+if [[ -f "${BZ_LOGS_DIR}/destroy.log" ]]; then
+  artifact push job "${BZ_LOGS_DIR}/destroy.log" -d logs/destroy.log -f || true
+fi
+publish_vpp_logs
 
 echo "[INFO] exiting global_epilogue (CI_EXIT_CODE=${CI_EXIT_CODE})"

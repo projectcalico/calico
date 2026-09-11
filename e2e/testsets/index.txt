@@ -119,6 +119,7 @@
 .argoci/cron/e2e-vpp.yaml | vpp-openshift | vpp/vpp-encap-extnode-aws | 126
 .argoci/cron/e2e-windows.yaml | calico-windows-azr-aks-2022-stable-1-iptables-no-encap-azure-cni | windows/aks-xtables-nobgp | 8
 .argoci/cron/e2e-windows.yaml | calico-windows-azr-aso-2022-stable-nftables-vxlan | windows/xtables-encap | 8
+.argoci/cron/resync-scale.yaml | resync-scale | (no tests) | -
 .semaphore/semaphore.yml.d/blocks/20-e2e.yml | E2E tests (KinD) / E2E tests: Conformance (cluster routing: BIRD) | kind/conformance | 77
 .semaphore/semaphore.yml.d/blocks/20-e2e.yml | E2E tests (KinD) / E2E tests: Conformance (cluster routing: Felix) | kind/felix-routing | 78
 .semaphore/semaphore.yml.d/blocks/20-e2e.yml | E2E tests (KinD) / E2E tests: sig-calico (dataplane: BPF) | kind/bpf | 124

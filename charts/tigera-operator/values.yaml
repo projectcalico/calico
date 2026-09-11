@@ -91,6 +91,10 @@ goldmane:
 whisker:
   enabled: true
 
+# Deprecated: prefer applying FelixConfiguration (and other Calico resources)
+# yourself after installing the CRDs and before installing this chart. See the
+# chart README "Installing" section. This field remains for a deprecation window
+# so existing values files keep working; it may be removed in a future release.
 defaultFelixConfiguration:
   enabled: false
 
