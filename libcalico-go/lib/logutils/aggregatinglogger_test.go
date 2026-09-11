@@ -488,11 +488,67 @@ func TestAggregatingLoggerRecordSchedulesTheWindowClose(t *testing.T) {
 }
 
 // TestAggregatedValuesRenderAsAList pins the text form the formatters in this package write: a
-// bracketed comma-separated list, not a Go slice literal.
+// bracketed comma-separated list, not a Go slice literal, in which a value that could be misread
+// is quoted and every other value is written as it is. The formatters write a Stringer verbatim,
+// so this is the only place the list can be made unambiguous - and the principal site feeds it
+// whatever string a peer presented.
 func TestAggregatedValuesRenderAsAList(t *testing.T) {
-	got := AggregatedValues{"s:a", "s:b"}.String()
-	if got != "[s:a,s:b]" {
-		t.Errorf("rendered %q, expected %q", got, "[s:a,s:b]")
+	for _, tc := range []struct {
+		values AggregatedValues
+		want   string
+	}{
+		{AggregatedValues{"s:a", "s:b"}, "[s:a,s:b]"},
+		{AggregatedValues{"spiffe://cluster.local/ns/a/sa/b"}, "[spiffe://cluster.local/ns/a/sa/b]"},
+		// Two values that would otherwise read as one, and one that would read as two.
+		{AggregatedValues{"a", "b", "a,b"}, `[a,b,"a,b"]`},
+		{AggregatedValues{"has space", "tab\there"}, `["has space","tab\there"]`},
+		{AggregatedValues{"line\nbreak"}, `["line\nbreak"]`},
+		{AggregatedValues{`q"uote`, `back\slash`, "[bracketed]"}, `["q\"uote","back\\slash","[bracketed]"]`},
+		{AggregatedValues{""}, `[""]`},
+		{AggregatedValues{}, "[]"},
+	} {
+		if got := tc.values.String(); got != tc.want {
+			t.Errorf("%q rendered as %s, expected %s", []string(tc.values), got, tc.want)
+		}
+	}
+}
+
+// TestAggregatingLoggerClampsLevelsAboveError pins the contract OptAggregationLevel documents: a
+// level more severe than Error is written at Error. logrus panics on a line written at Panic, and
+// this logger writes from a timer goroutine, where that panic would take the process down.
+func TestAggregatingLoggerClampsLevelsAboveError(t *testing.T) {
+	for _, level := range []logrus.Level{logrus.PanicLevel, logrus.FatalLevel} {
+		t.Run(level.String(), func(t *testing.T) {
+			capture := newCaptureLogger(logrus.DebugLevel)
+			capture.ExitFunc = func(int) { t.Fatal("the logger exited the process") }
+			a := NewAggregatingLogger("condition", "values",
+				OptAggregationLevel(level), OptAggregationLogger(capture.Logger))
+
+			a.Record("v:one") // Must neither panic nor exit.
+
+			if n := capture.count(); n != 1 {
+				t.Fatalf("wrote %d lines, expected 1", n)
+			}
+			if got := capture.last().Level; got != logrus.ErrorLevel {
+				t.Errorf("wrote at %v, expected Error", got)
+			}
+		})
+	}
+}
+
+// TestAggregatingLoggerRejectsReservedFields pins the other constructor contract: the list of values
+// cannot be written under the name of one of the counters the same line carries, or one would
+// silently overwrite the other.
+func TestAggregatingLoggerRejectsReservedFields(t *testing.T) {
+	for _, field := range []string{fieldTotalEvents, fieldUnnamedEvents, fieldMaxNamed} {
+		t.Run(field, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("NewAggregatingLogger accepted the reserved field %q", field)
+				}
+			}()
+			NewAggregatingLogger("condition", field)
+		})
 	}
 }
 

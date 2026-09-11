@@ -15,11 +15,14 @@
 package logutils
 
 import (
+	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/sirupsen/logrus"
 )
@@ -60,7 +63,14 @@ const (
 // The options are optional; see the OptAggregation* functions for the defaults. A given condition
 // is reported at one severity, so the level is set here rather than per call - use
 // OptAggregationLevel to report at anything other than Warn.
+//
+// The emitted line also carries the counters totalEvents, unnamedEvents and maxNamed, so field must
+// not be one of those: NewAggregatingLogger panics if it is, since an aggregator is built during
+// package initialisation and a collision is a programming error best caught there.
 func NewAggregatingLogger(msg, field string, opts ...AggregatingLoggerOpt) *AggregatingLogger {
+	if isReservedField(field) {
+		panic(fmt.Sprintf("logutils: AggregatingLogger field %q is reserved for the line's own counters", field))
+	}
 	a := &AggregatingLogger{
 		msg:       msg,
 		field:     field,
@@ -81,16 +91,22 @@ func NewAggregatingLogger(msg, field string, opts ...AggregatingLoggerOpt) *Aggr
 type AggregatingLoggerOpt func(*AggregatingLogger)
 
 // OptAggregationLevel sets the level the aggregated line is written at, and so also the level below
-// which Record does nothing at all. Defaults to logrus.WarnLevel. Meant for the levels between
-// Debug and Error: a line written at Fatal or Panic through this logger neither exits nor panics
-// the way a direct logrus call would.
+// which Record does nothing at all. Defaults to logrus.WarnLevel. An aggregated line is a report of
+// something that keeps happening, never a reason to stop the process, so a level more severe than
+// Error is written at Error: logrus panics on a line written at Panic and a direct Fatal call exits,
+// and neither belongs on the timer goroutine that closes a window.
 func OptAggregationLevel(l logrus.Level) AggregatingLoggerOpt {
 	return func(a *AggregatingLogger) {
-		a.level = l
+		// logrus orders its levels from most severe: Panic is 0, Fatal 1, Error 2.
+		a.level = max(l, logrus.ErrorLevel)
 	}
 }
 
-// OptAggregationInterval sets the minimum gap between two emitted lines. Defaults to five minutes.
+// OptAggregationInterval sets the length of an aggregation window, and so how often at most a line
+// is written. Defaults to five minutes. Windows are measured from their scheduled closes rather
+// than from when a close actually ran, so a timer that fires late does not shift the windows after
+// it - which also means the line a late close writes and the next line can be less than one
+// interval apart.
 func OptAggregationInterval(d time.Duration) AggregatingLoggerOpt {
 	return func(a *AggregatingLogger) {
 		a.interval = d
@@ -277,8 +293,49 @@ type aggregateWindow struct {
 // written as a Go slice literal, which is the difference between reading a hundred IP set IDs and
 // reading a hundred IP set IDs wrapped in quotes, commas and a type name. A structured formatter
 // still sees a list of strings.
+//
+// The text formatters in this package write a Stringer's output verbatim, so the list has to be
+// unambiguous on its own. A value that could be misread - one that is empty or contains a comma, a
+// bracket, a quote, a backslash, whitespace or anything unprintable - is written as a Go quoted
+// string; every other value is written as it is. IP set IDs and SPIFFE IDs never need quoting; an
+// arbitrary string a peer presented as its principal might.
 type AggregatedValues []string
 
 func (v AggregatedValues) String() string {
-	return "[" + strings.Join(v, ",") + "]"
+	var b strings.Builder
+	b.WriteByte('[')
+	for i, s := range v {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		if needsQuoting(s) {
+			b.WriteString(strconv.Quote(s))
+		} else {
+			b.WriteString(s)
+		}
+	}
+	b.WriteByte(']')
+	return b.String()
+}
+
+// needsQuoting reports whether s could be misread inside a bracketed comma-separated list.
+func needsQuoting(s string) bool {
+	if s == "" {
+		return true
+	}
+	for _, r := range s {
+		switch {
+		case r == ',', r == '[', r == ']', r == '"', r == '\\':
+			return true
+		case unicode.IsSpace(r), !unicode.IsPrint(r):
+			return true
+		}
+	}
+	return false
+}
+
+// isReservedField reports whether name is one of the counters every emitted line carries, which the
+// list of values therefore cannot also be written under.
+func isReservedField(name string) bool {
+	return name == fieldTotalEvents || name == fieldUnnamedEvents || name == fieldMaxNamed
 }

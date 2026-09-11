@@ -147,7 +147,7 @@ func BenchmarkEvaluateBaselinePolicyScale(b *testing.B) {
 	})
 }
 
-// benchRun is one variant: the store to evaluate against, and how the logging the
+// benchRun is one variant: the store to evaluate against, and how the logging that the
 // evaluation provokes is set up.
 type benchRun struct {
 	params baselinePolicyScaleParams
@@ -215,6 +215,9 @@ func benchEvaluateBaselinePolicyScale(b *testing.B, run benchRun) {
 		b.Fatalf("expected %d missing IP set lookups per Evaluate, got %d",
 			expectedMisses, counter.count.Load())
 	}
+	// The counter has done its job. Take the hook out before timing, so that its dispatch is not
+	// charged to the lines the loop below writes.
+	logger.ReplaceHooks(oldHooks)
 
 	// The timed loop runs the real logger, at the production interval — unless this is the
 	// variant measuring what that interval saves.
