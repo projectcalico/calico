@@ -159,6 +159,19 @@ var _ = describe.CalicoDescribe(
 
 		// Verifies that Calico's QoS packet rate annotations limit actual throughput.
 		It("should limit packet rate with QoS annotations", func() {
+			const (
+				// The packet rate the annotations below impose.
+				packetRateLimit = 100
+				// The datagram payload size iperf3 sends.  The baseline gate
+				// below reads iperf3's packet counters directly and so needs no
+				// conversion, but the throttled measurements are compared as bit
+				// rates; this is what turns the packet rate limit into one.
+				packetLengthBytes = 1000
+				// How far above the limit the unthrottled baseline has to reach
+				// for a throttled measurement to be distinguishable from it.
+				baselineHeadroom = 10
+			)
+
 			By("Getting cluster node names")
 			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, true)
 			nodeNames := nodesInfo.GetNames()
@@ -176,18 +189,29 @@ var _ = describe.CalicoDescribe(
 			By("Deploying iperf3 server and client pods")
 			tester.Deploy()
 
-			// Measure baseline UDP throughput to ensure the cluster can handle the test traffic.
-			By("Running iperf3 to measure baseline UDP throughput")
+			// Measure the unthrottled packet rate, so the throttled measurements
+			// below have something to be meaningfully lower than.
+			By("Running iperf3 to measure the baseline UDP packet rate")
 			baseline, err := tester.MeasureBandwidth(
 				clientPeer, server,
 				iperfcheck.WithUDP(),
-				iperfcheck.WithPacketLength(1000),
+				iperfcheck.WithPacketLength(packetLengthBytes),
 				iperfcheck.WithTargetBandwidth("100M"),
 				iperfcheck.WithRetries(5, 5*time.Second),
 			)
 			Expect(err).NotTo(HaveOccurred(), "failed to measure baseline UDP throughput")
-			logrus.Infof("Baseline UDP throughput (bps): %.0f", baseline.AverageRate)
-			Expect(baseline.AverageRate).To(BeNumerically(">=", 100_000_000.0*0.8), "baseline UDP throughput too low for packet rate test")
+			logrus.Infof("Baseline UDP packet rate (pps): %.0f, loss: %.1f%%",
+				baseline.DeliveredPacketsPerSecond, baseline.LostPercent)
+
+			// Gate on what this test actually needs -- headroom over the limit --
+			// rather than on an absolute throughput figure.  iperf3 UDP does not
+			// back off, so a node that cannot absorb the offered load simply drops
+			// datagrams; judging the environment on delivered bits then fails runs
+			// that had ample headroom to exercise the QoS limit.
+			minBaseline := float64(packetRateLimit * baselineHeadroom)
+			Expect(baseline.DeliveredPacketsPerSecond).To(BeNumerically(">=", minBaseline),
+				"baseline packet rate leaves too little headroom over the %d pps limit under test (%.1f%% of the offered datagrams were lost)",
+				packetRateLimit, baseline.LostPercent)
 
 			// --- Ingress packet rate limit ---
 			By("Replacing server with ingressPacketRate=100 annotation")
@@ -196,24 +220,25 @@ var _ = describe.CalicoDescribe(
 				iperfcheck.WithNodeName(serverNode),
 				iperfcheck.WithPeerCustomizer(func(pod *corev1.Pod) {
 					pod.Annotations = map[string]string{
-						"qos.projectcalico.org/ingressPacketRate": "100",
+						"qos.projectcalico.org/ingressPacketRate": strconv.Itoa(packetRateLimit),
 					}
 				}))
 			tester.AddPeer(server)
 			tester.Deploy()
 
 			// 1000 bytes * 8 bits * 100 pps = 800kbps; allow 20% margin -> 960kbps
-			maxRate := 1000.0 * 8 * 100 * 1.2
+			maxRate := float64(packetLengthBytes) * 8 * packetRateLimit * 1.2
 			udpOpts := []iperfcheck.MeasureOption{
 				iperfcheck.WithUDP(),
-				iperfcheck.WithPacketLength(1000),
+				iperfcheck.WithPacketLength(packetLengthBytes),
 				iperfcheck.WithTargetBandwidth("100M"),
 				iperfcheck.WithRetries(5, 5*time.Second),
 			}
 
 			By("Running iperf3 to measure ingress-packet-rate-limited throughput")
 			ingressResult := measureWithRateRetry(tester, clientPeer, server, maxRate, udpOpts...)
-			logrus.Infof("Ingress packet-rate-limited throughput (bps): %.0f", ingressResult.AverageRate)
+			logrus.Infof("Ingress packet-rate-limited throughput (bps): %.0f, delivered %.0f pps",
+				ingressResult.AverageRate, ingressResult.DeliveredPacketsPerSecond)
 			Expect(ingressResult.AverageRate).To(BeNumerically("<=", maxRate), "ingress packet rate limit not effective")
 
 			// --- Egress packet rate limit ---
@@ -228,7 +253,7 @@ var _ = describe.CalicoDescribe(
 				iperfcheck.WithNodeName(clientNode),
 				iperfcheck.WithPeerCustomizer(func(pod *corev1.Pod) {
 					pod.Annotations = map[string]string{
-						"qos.projectcalico.org/egressPacketRate": "100",
+						"qos.projectcalico.org/egressPacketRate": strconv.Itoa(packetRateLimit),
 					}
 				}))
 			tester.AddPeer(clientPeer)
@@ -236,7 +261,8 @@ var _ = describe.CalicoDescribe(
 
 			By("Running iperf3 to measure egress-packet-rate-limited throughput")
 			egressResult := measureWithRateRetry(tester, clientPeer, server, maxRate, udpOpts...)
-			logrus.Infof("Egress packet-rate-limited throughput (bps): %.0f", egressResult.AverageRate)
+			logrus.Infof("Egress packet-rate-limited throughput (bps): %.0f, delivered %.0f pps",
+				egressResult.AverageRate, egressResult.DeliveredPacketsPerSecond)
 			Expect(egressResult.AverageRate).To(BeNumerically("<=", maxRate), "egress packet rate limit not effective")
 		})
 

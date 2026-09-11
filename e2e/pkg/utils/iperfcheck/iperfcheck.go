@@ -115,6 +115,13 @@ type Result struct {
 	AverageRate float64
 	// PeakRate is the throughput of the first interval in bits/sec.
 	PeakRate float64
+	// DeliveredPacketsPerSecond is the rate at which datagrams actually
+	// arrived, i.e. those the sender emitted less those lost in transit.  UDP
+	// only; zero for TCP, which reports no packet counts.
+	DeliveredPacketsPerSecond float64
+	// LostPercent is the proportion of datagrams that never arrived, as
+	// reported by iperf3.  UDP only; zero for TCP.
+	LostPercent float64
 }
 
 // IperfTester manages iperf3 peers and executes bandwidth measurements.
@@ -461,14 +468,22 @@ type iperf3Result struct {
 		} `json:"sum"`
 	} `json:"intervals"`
 	End struct {
-		SumReceived struct {
-			BitsPerSecond float64 `json:"bits_per_second"`
-		} `json:"sum_received"`
+		SumReceived iperf3Sum `json:"sum_received"`
 		// Sum is used by UDP results (iperf3 reports under "sum" rather than "sum_received" for UDP).
-		Sum struct {
-			BitsPerSecond float64 `json:"bits_per_second"`
-		} `json:"sum"`
+		Sum iperf3Sum `json:"sum"`
 	} `json:"end"`
+}
+
+// iperf3Sum is one of iperf3's summary blocks.  The packet fields are present
+// for UDP only; TCP runs leave them zero.
+type iperf3Sum struct {
+	BitsPerSecond float64 `json:"bits_per_second"`
+	Seconds       float64 `json:"seconds"`
+	// Packets counts every datagram the sender emitted, not the number that
+	// arrived -- LostPackets has to be subtracted to get that.
+	Packets     int     `json:"packets"`
+	LostPackets int     `json:"lost_packets"`
+	LostPercent float64 `json:"lost_percent"`
 }
 
 // parseIperf3JSON parses iperf3 JSON output and returns a Result.
@@ -478,19 +493,28 @@ func parseIperf3JSON(output string) (*Result, error) {
 		return nil, fmt.Errorf("failed to parse iperf3 JSON: %w", err)
 	}
 
-	avgRate := raw.End.SumReceived.BitsPerSecond
-	if avgRate == 0 {
+	sum := raw.End.SumReceived
+	if sum.BitsPerSecond == 0 {
 		// UDP results report under "sum" rather than "sum_received".
-		avgRate = raw.End.Sum.BitsPerSecond
+		sum = raw.End.Sum
 	}
 
 	result := &Result{
-		AverageRate: avgRate,
+		AverageRate: sum.BitsPerSecond,
+		LostPercent: sum.LostPercent,
+	}
+	if sum.Seconds > 0 && sum.Packets > 0 {
+		result.DeliveredPacketsPerSecond = float64(sum.Packets-sum.LostPackets) / sum.Seconds
 	}
 	if len(raw.Intervals) > 0 {
 		result.PeakRate = raw.Intervals[0].Sum.BitsPerSecond
 	}
 
-	logrus.Infof("iperf3 result: rate=%.0f bps, peakRate=%.0f bps", result.AverageRate, result.PeakRate)
+	if result.DeliveredPacketsPerSecond > 0 {
+		logrus.Infof("iperf3 result: rate=%.0f bps, peakRate=%.0f bps, delivered=%.0f pps, loss=%.1f%%",
+			result.AverageRate, result.PeakRate, result.DeliveredPacketsPerSecond, result.LostPercent)
+	} else {
+		logrus.Infof("iperf3 result: rate=%.0f bps, peakRate=%.0f bps", result.AverageRate, result.PeakRate)
+	}
 	return result, nil
 }
