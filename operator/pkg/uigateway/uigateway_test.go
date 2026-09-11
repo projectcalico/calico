@@ -21,6 +21,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -79,7 +81,7 @@ var _ = Describe("UnhealthyReason", func() {
 		scheme := runtime.NewScheme()
 		Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
 		cli := ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(objs...).Build()
-		h = uigateway.NewHelper(cli, uigateway.Config{ResourcePrefix: "calico-manager"})
+		h = uigateway.NewHelper(cli, nil, uigateway.Config{ResourcePrefix: "calico-manager"})
 	}
 
 	BeforeEach(func() {
@@ -174,7 +176,7 @@ var _ = Describe("Cleanup helpers", func() {
 			TLSSecretName:    prefix + "-gateway-tls",
 			BackendNamespace: backendNS,
 		}
-		h = uigateway.NewHelper(cli, cfg)
+		h = uigateway.NewHelper(cli, nil, cfg)
 	}
 
 	// deletionNamespaces collects, per object type, the namespaces the given
@@ -223,7 +225,7 @@ var _ = Describe("Cleanup helpers", func() {
 
 		It("returns empty, not an error, when the Gateway kind is not served", func() {
 			build()
-			h = uigateway.NewHelper(noGatewayKindClient{cli}, cfg)
+			h = uigateway.NewHelper(noGatewayKindClient{cli}, nil, cfg)
 			namespaces, err := h.Namespaces(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(namespaces).To(BeEmpty())
@@ -255,6 +257,90 @@ var _ = Describe("Cleanup helpers", func() {
 		})
 	})
 
+	Describe("UIGateway extension", func() {
+		It("feeds the extension's proxy objects into the backend namespace's teardown", func() {
+			build(labeledGateway(prefix+"-gateway", backendNS))
+			ext := &fakeUIGatewayExt{objs: []client.Object{
+				&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "waf-http-filter", Namespace: backendNS}},
+			}}
+			h = uigateway.NewHelper(cli, ext, cfg)
+
+			components, err := h.Teardown(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ext.seenPrefix).To(Equal(prefix))
+
+			var deleted []string
+			for _, c := range components {
+				_, toDelete := c.Objects()
+				for _, obj := range toDelete {
+					if sa, ok := obj.(*corev1.ServiceAccount); ok {
+						deleted = append(deleted, sa.Namespace+"/"+sa.Name)
+					}
+				}
+			}
+			Expect(deleted).To(ConsistOf(backendNS+"/waf-http-filter"),
+				"only the backend namespace's component deletes the extension objects")
+		})
+	})
+
+	Describe("access grant finalizers", func() {
+		accessName := prefix + "-ingressgateway-access"
+
+		accessGrant := func(ns string) (*rbacv1.Role, *rbacv1.RoleBinding) {
+			objMeta := func() metav1.ObjectMeta {
+				return metav1.ObjectMeta{
+					Name:       accessName,
+					Namespace:  ns,
+					Labels:     map[string]string{rgateway.GatewayLabel: prefix},
+					Finalizers: []string{rgateway.RBACFinalizer},
+				}
+			}
+			return &rbacv1.Role{ObjectMeta: objMeta()}, &rbacv1.RoleBinding{ObjectMeta: objMeta()}
+		}
+
+		It("completes a marked grant's deletion once the gateway resources are gone", func() {
+			role, binding := accessGrant("ns-a")
+			build(role, binding)
+			Expect(cli.Delete(ctx, role)).To(Succeed())
+			Expect(cli.Delete(ctx, binding)).To(Succeed())
+
+			_, err := h.Teardown(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(kerrors.IsNotFound(cli.Get(ctx, types.NamespacedName{Name: accessName, Namespace: "ns-a"}, &rbacv1.Role{}))).To(BeTrue(),
+				"the finalizer should be cleared so the pending delete finishes")
+			Expect(kerrors.IsNotFound(cli.Get(ctx, types.NamespacedName{Name: accessName, Namespace: "ns-a"}, &rbacv1.RoleBinding{}))).To(BeTrue())
+		})
+
+		It("holds a marked grant while its Gateway remains", func() {
+			role, binding := accessGrant("ns-a")
+			build(role, binding, labeledGateway(rgateway.GatewayName(prefix), "ns-a"))
+			Expect(cli.Delete(ctx, role)).To(Succeed())
+			Expect(cli.Delete(ctx, binding)).To(Succeed())
+
+			_, err := h.Teardown(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			got := &rbacv1.Role{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: accessName, Namespace: "ns-a"}, got)).To(Succeed())
+			Expect(got.Finalizers).To(ContainElement(rgateway.RBACFinalizer),
+				"the grant must keep the operator's write access until the Gateway is gone")
+		})
+
+		It("leaves a grant that is not marked for deletion alone", func() {
+			role, binding := accessGrant("ns-a")
+			build(role, binding)
+
+			_, err := h.Teardown(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			got := &rbacv1.Role{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: accessName, Namespace: "ns-a"}, got)).To(Succeed())
+			Expect(got.DeletionTimestamp.IsZero()).To(BeTrue())
+			Expect(got.Finalizers).To(ContainElement(rgateway.RBACFinalizer))
+		})
+	})
+
 	Describe("Teardown", func() {
 		It("tears down every labeled Gateway's namespace plus the backend namespace", func() {
 			build(labeledGateway(prefix+"-gateway", "ns-a"))
@@ -281,7 +367,7 @@ var _ = Describe("Cleanup helpers", func() {
 
 		It("returns nothing when the gateway CRDs are absent", func() {
 			build()
-			h = uigateway.NewHelper(noGatewayKindClient{cli}, cfg)
+			h = uigateway.NewHelper(noGatewayKindClient{cli}, nil, cfg)
 			components, err := h.Teardown(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(components).To(BeEmpty())
@@ -382,7 +468,7 @@ var _ = Describe("Cleanup helpers", func() {
 			build(gatewayAPI("tigera-gateway-class"))
 			cfgOCP := cfg
 			cfgOCP.Provider = operatorv1.ProviderOpenShift
-			h = uigateway.NewHelper(cli, cfgOCP)
+			h = uigateway.NewHelper(cli, nil, cfgOCP)
 			components, err := h.Components(ctx, spec("ns-a"), keyPair())
 			Expect(err).NotTo(HaveOccurred())
 
@@ -397,7 +483,7 @@ var _ = Describe("Cleanup helpers", func() {
 			build(gatewayAPI("tigera-gateway-class"))
 			cfgAKS := cfg
 			cfgAKS.Provider = operatorv1.ProviderAKS
-			h = uigateway.NewHelper(cli, cfgAKS)
+			h = uigateway.NewHelper(cli, nil, cfgAKS)
 			components, err := h.Components(ctx, spec("ns-a"), keyPair())
 			Expect(err).NotTo(HaveOccurred())
 
@@ -494,4 +580,15 @@ func (c noGatewayKindClient) List(ctx context.Context, list client.ObjectList, o
 		return &apimeta.NoKindMatchError{GroupKind: schema.GroupKind{Group: "gateway.networking.k8s.io", Kind: "Gateway"}}
 	}
 	return c.Client.List(ctx, list, opts...)
+}
+
+// fakeUIGatewayExt supplies fixed proxy objects and records the prefix asked for.
+type fakeUIGatewayExt struct {
+	objs       []client.Object
+	seenPrefix string
+}
+
+func (f *fakeUIGatewayExt) ProxyObjects(resourcePrefix, _ string) []client.Object {
+	f.seenPrefix = resourcePrefix
+	return f.objs
 }
