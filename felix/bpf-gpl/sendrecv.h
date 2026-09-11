@@ -5,6 +5,9 @@
 #ifndef __SENDRECV_H__
 #define __SENDRECV_H__
 
+#include "bpf.h"
+#include "ip_addr.h"
+
 struct sendrec_key {
 	__u64 cookie;
 	ipv46_addr_t ip;

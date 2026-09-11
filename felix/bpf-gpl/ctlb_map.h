@@ -6,7 +6,7 @@
 #define __CALI_CTLB_MAPS_H__
 
 #include <linux/bpf.h>
-#include <stdbool.h>
+
 #include "bpf.h"
 
 struct {

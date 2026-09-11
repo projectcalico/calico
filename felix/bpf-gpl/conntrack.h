@@ -5,13 +5,28 @@
 #ifndef __CALI_CONNTRACK_H__
 #define __CALI_CONNTRACK_H__
 
+#include <linux/icmp.h>
 #include <linux/in.h>
-#include "nat.h"
+#include <linux/ip.h>
+#include <linux/ipv6.h>
+#include <linux/tcp.h>
+#include <linux/udp.h>
+
+#include "allowsources.h"
 #include "bpf.h"
+#include "conntrack_types.h"
+#include "counters.h"
+#include "globals.h"
 #include "icmp.h"
-#include "types.h"
-#include "rpf.h"
+#include "ip_addr.h"
+#include "log.h"
+#include "nat.h"
 #include "qos.h"
+#include "reasons.h"
+#include "routes.h"
+#include "rpf.h"
+#include "skb.h"
+#include "types.h"
 
 #ifdef IPVER6
 #define IPPROTO_ICMP_46	IPPROTO_ICMPV6

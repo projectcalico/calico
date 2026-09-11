@@ -5,11 +5,27 @@
 #ifndef __CALI_FIB_CO_RE_H__
 #define __CALI_FIB_CO_RE_H__
 
+#include <linux/if_ether.h>
+#include <linux/if_packet.h>
+#include <linux/in.h>
+
+#include "arp.h"
+#include "bpf.h"
+#include "conntrack.h"
+#include "conntrack_types.h"
+#include "counters.h"
+#include "fib_common.h"
+#include "globals.h"
+#include "ip_addr.h"
+#include "log.h"
 #include "profiling.h"
+#include "reasons.h"
+#include "routes.h"
+#include "skb.h"
+#include "types.h"
 #ifndef IPVER6
 #include "ip_v4_fragment.h"
 #endif
-#include <linux/if_packet.h>
 
 static CALI_BPF_INLINE int make_room_for_l2_header(struct cali_tc_ctx *ctx)
 {

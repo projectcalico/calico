@@ -5,24 +5,27 @@
 #ifndef __CALI_BPF_TYPES_H__
 #define __CALI_BPF_TYPES_H__
 
-#include <linux/types.h>
 #include <linux/bpf.h>
-#include <linux/pkt_cls.h>
-#ifdef IPVER6
-#include <linux/ipv6.h>
-#include <linux/icmpv6.h>
-#else
-#include <linux/ip.h>
-#include <linux/icmp.h>
-#endif
-#include <linux/tcp.h>
+#include <linux/if_ether.h>
 #include <linux/in.h>
+#include <linux/pkt_cls.h>
+#include <linux/tcp.h>
+#include <linux/types.h>
 #include <linux/udp.h>
+#ifdef IPVER6
+#include <linux/icmpv6.h>
+#include <linux/ipv6.h>
+#else
+#include <linux/icmp.h>
+#include <linux/ip.h>
+#endif
+
 #include "bpf.h"
-#include "arp.h"
 #include "conntrack_types.h"
-#include "nat_types.h"
 #include "events_type.h"
+#include "globals.h"
+#include "ip_addr.h"
+#include "nat_types.h"
 #include "reasons.h"
 
 #define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))

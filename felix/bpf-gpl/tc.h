@@ -5,6 +5,7 @@
 #ifndef __CALI_BPF_TC_H__
 #define __CALI_BPF_TC_H__
 
+#include "bpf.h"
 #include "types.h"
 
 static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb);
