@@ -19,6 +19,7 @@ package collector
 import (
 	"fmt"
 	net2 "net"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -687,10 +688,7 @@ var _ = Describe("NFLOG Datasource", func() {
 
 				// Verify that RuleHits are not processed.  The RuleHits are applied after the
 				// epStats entry is inserted, so keep checking rather than sampling immediately.
-				Consistently(func() [2]int {
-					data := c.epStatsSnapshot()[*t]
-					return [2]int{len(data.IngressRuleTrace.Path()), len(data.EgressRuleTrace.Path())}
-				}, "500ms", "100ms").Should(Equal([2]int{0, 0}),
+				Consistently(pathLengthsOfData(c, *t), "500ms", "100ms").Should(Equal(pathLengths{0, 0}),
 					"Ingress/EgressRuleTrace Paths should stay empty when source endpoint is marked for deletion")
 			})
 		})
@@ -723,10 +721,7 @@ var _ = Describe("NFLOG Datasource", func() {
 
 				// Verify that RuleHits are not processed.  The RuleHits are applied after the
 				// epStats entry is inserted, so keep checking rather than sampling immediately.
-				Consistently(func() [2]int {
-					data := c.epStatsSnapshot()[*t]
-					return [2]int{len(data.IngressRuleTrace.Path()), len(data.EgressRuleTrace.Path())}
-				}, "500ms", "100ms").Should(Equal([2]int{0, 0}),
+				Consistently(pathLengthsOfData(c, *t), "500ms", "100ms").Should(Equal(pathLengths{0, 0}),
 					"Ingress/EgressRuleTrace Paths should stay empty when destination endpoint is marked for deletion")
 			})
 		})
@@ -759,10 +754,7 @@ var _ = Describe("NFLOG Datasource", func() {
 
 				// Verify that RuleHits are not processed.  The RuleHits are applied after the
 				// epStats entry is inserted, so keep checking rather than sampling immediately.
-				Consistently(func() [2]int {
-					data := c.epStatsSnapshot()[*t]
-					return [2]int{len(data.IngressRuleTrace.Path()), len(data.EgressRuleTrace.Path())}
-				}, "500ms", "100ms").Should(Equal([2]int{0, 0}),
+				Consistently(pathLengthsOfData(c, *t), "500ms", "100ms").Should(Equal(pathLengths{0, 0}),
 					"Ingress/EgressRuleTrace Paths should stay empty when remote source endpoint is marked for deletion")
 			})
 		})
@@ -792,9 +784,9 @@ var _ = Describe("NFLOG Datasource", func() {
 				Eventually(c.epStatsSnapshot).Should(HaveKey(*t))
 
 				// Verify that RuleHits were processed (Path should NOT be empty)
-				Eventually(func() int {
-					return len(c.epStatsSnapshot()[*t].IngressRuleTrace.Path())
-				}, "500ms", "50ms").Should(BeNumerically(">", 0), "IngressRuleTrace Path should NOT be empty when endpoints are active")
+				Eventually(pathLengthsOfData(c, *t), "500ms", "50ms").Should(
+					HaveField("Ingress", BeNumerically(">", 0)),
+					"IngressRuleTrace Path should NOT be empty when endpoints are active")
 			})
 		})
 	})
@@ -1096,6 +1088,24 @@ func countersOfCtEntry(e nfnetlink.CtEntry) ctCounters {
 		Bytes:          *counter.New(e.OriginalCounters.Bytes),
 		PacketsReverse: *counter.New(e.ReplyCounters.Packets),
 		BytesReverse:   *counter.New(e.ReplyCounters.Bytes),
+	}
+}
+
+// pathLengths is the ingress/egress rule-trace path lengths of one epStats entry.
+type pathLengths struct {
+	Ingress, Egress int
+}
+
+// pathLengthsOfData returns an Eventually/Consistently poll function for the
+// rule-trace path lengths of tuple t, or {-1, -1} if the entry is missing from
+// epStats (rather than nil-panicking mid-poll).
+func pathLengthsOfData(c *collector, t tuple.Tuple) func() pathLengths {
+	return func() pathLengths {
+		data := c.epStatsSnapshot()[t]
+		if data == nil {
+			return pathLengths{-1, -1}
+		}
+		return pathLengths{len(data.IngressRuleTrace.Path()), len(data.EgressRuleTrace.Path())}
 	}
 }
 
@@ -1674,7 +1684,7 @@ var _ = Describe("Conntrack Datasource", func() {
 	})
 
 	Describe("Test data race", func() {
-		It("getDataAndUpdateEndpoints does not cause a data race contention with deleteDataFromEpStats after deleteDataFromEpStats removes it from epstats", func() {
+		It("getDataAndUpdateEndpoints succeeds for a fresh tuple immediately after another entry is deleted from epStats", func() {
 			existingTuple := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
 			newTuple := tuple.New(localIp1, localIp2, proto_tcp, srcPort, dstPort)
 
@@ -1979,12 +1989,20 @@ func (mr *mockReporter) Start() error {
 // collector goroutine Ginkgo cannot attribute the panic to the running spec.
 // Capture the values fn observes and assert on them after runOnLoop returns.
 func (c *collector) runOnLoop(fn func()) {
+	GinkgoHelper()
 	done := make(chan struct{})
-	c.thunkC <- func() {
+	thunk := func() {
 		defer close(done)
 		fn()
 	}
-	<-done
+	select {
+	case c.thunkC <- thunk:
+		<-done
+	case <-c.stopC:
+		// Without this case a send to a stopped (or never started) collector
+		// would block forever and the suite would hang with no clue why.
+		Fail("runOnLoop called on a collector that is not running")
+	}
 }
 
 // epStatsSnapshot returns a clone of epStats, taken on the collector's goroutine,
@@ -2024,6 +2042,52 @@ func (t *RuleTrace) clone() RuleTrace {
 	clone.path = slices.Clone(t.path)
 	clone.rulesToReport = slices.Clone(t.rulesToReport)
 	return clone
+}
+
+// TestCloneCoversAllFields fails when a field holding a reference is added to
+// Data, or to a struct nested in it, without teaching the clone helpers above
+// about it. On failure: deep-copy the field in clone(), or list it in handled
+// with a note saying why sharing it with the collector goroutine is safe.
+func TestCloneCoversAllFields(t *testing.T) {
+	// Field name -> why the clone helpers are already correct for it.
+	handled := map[string]string{
+		"Data.SrcEp":                 "shared: EndpointData is immutable once published",
+		"Data.DstEp":                 "shared: EndpointData is immutable once published",
+		"Data.IngressPendingRuleIDs": "deep-copied by (*Data).clone",
+		"Data.EgressPendingRuleIDs":  "deep-copied by (*Data).clone",
+		"RuleTrace.path":             "deep-copied by (*RuleTrace).clone",
+		"RuleTrace.rulesToReport":    "deep-copied by (*RuleTrace).clone",
+		"RuleTrace.pathArray":        "shared: elements are RuleIDs, immutable once published",
+	}
+
+	var holdsRef func(ty reflect.Type) bool
+	holdsRef = func(ty reflect.Type) bool {
+		switch ty.Kind() {
+		case reflect.Slice, reflect.Map, reflect.Pointer, reflect.Interface,
+			reflect.Chan, reflect.Func, reflect.UnsafePointer:
+			return true
+		case reflect.Array:
+			return holdsRef(ty.Elem())
+		default:
+			return false
+		}
+	}
+
+	var check func(ty reflect.Type)
+	check = func(ty reflect.Type) {
+		for i := 0; i < ty.NumField(); i++ {
+			f := ty.Field(i)
+			name := ty.Name() + "." + f.Name
+			switch {
+			case handled[name] != "":
+			case holdsRef(f.Type):
+				t.Errorf("%s holds a reference (%s) that clone() does not know about", name, f.Type)
+			case f.Type.Kind() == reflect.Struct:
+				check(f.Type)
+			}
+		}
+	}
+	check(reflect.TypeOf(Data{}))
 }
 
 func (mr *mockReporter) Report(u any) error {

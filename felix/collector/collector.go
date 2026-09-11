@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gavv/monotime"
@@ -180,12 +181,15 @@ type collector struct {
 	recalcSnapshot []*Data
 	// recalcSweepStart is when the current snapshot was taken, for the sweep-duration histogram.
 	recalcSweepStart time.Time
+	// recalcInterval is the period of the policy re-evaluation sweep ticker.
+	recalcInterval time.Duration
 	// policyEvalMinInterval is the minimum time between re-evaluations of one flow. Half the
 	// ticker interval.
 	policyEvalMinInterval time.Duration
 
 	// stopC signals the stats collection goroutine to return; closed by Stop().
-	stopC chan struct{}
+	stopC    chan struct{}
+	stopOnce sync.Once
 
 	// thunkC lets a caller run a closure on the collector's own goroutine. The
 	// collector goroutine owns epStats (and the Data values within it) with no
@@ -207,6 +211,7 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 		ds:                    make(chan *proto.DataplaneStats, 1000),
 		displayDebugTraceLogs: cfg.DisplayDebugTraceLogs,
 		policyStoreManager:    cfg.PolicyStoreManager,
+		recalcInterval:        recalcInterval,
 		policyEvalMinInterval: recalcInterval / 2,
 		stopC:                 make(chan struct{}),
 		thunkC:                make(chan func()),
@@ -251,7 +256,7 @@ func (c *collector) Start() error {
 	// Only run the re-evaluation sweep when pending policies are enabled; leaving the ticker nil
 	// masks the sweep out of the main loop entirely.
 	if apiv3.FlowLogsPolicyEvaluationModeType(c.config.PolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
-		c.tickerPolicyEval = jitter.NewTicker(c.config.FlowLogsFlushInterval*8/10, c.config.FlowLogsFlushInterval/10)
+		c.tickerPolicyEval = jitter.NewTicker(c.recalcInterval, c.config.FlowLogsFlushInterval/10)
 	}
 	go c.startStatsCollectionAndReporting()
 
@@ -389,11 +394,11 @@ func (c *collector) policyEvalTickChan() <-chan time.Time {
 	return c.tickerPolicyEval.Channel()
 }
 
-// Stop signals the stats collection goroutine started by Start to return. It
-// must be called at most once. It does not stop the info readers or metric
-// reporters; those have their own lifecycles.
+// Stop signals the stats collection goroutine started by Start to return. It is
+// idempotent. It does not stop the info readers or metric reporters; those have
+// their own lifecycles.
 func (c *collector) Stop() {
-	close(c.stopC)
+	c.stopOnce.Do(func() { close(c.stopC) })
 }
 
 // loopProcessingDataplaneInfoUpdates processes the dataplane info updates. The dataplaneInfoReader
