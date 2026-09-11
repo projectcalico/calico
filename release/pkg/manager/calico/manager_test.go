@@ -28,6 +28,7 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
@@ -344,81 +345,25 @@ func TestPublishGitTag(t *testing.T) {
 	}
 }
 
-func TestPublishGithubRelease(t *testing.T) {
-	const (
-		ver  = "v3.30.0"
-		org  = "projectcalico"
-		repo = "calico"
-	)
-	repoFlag := fmt.Sprintf("--repo %s/%s", org, repo)
-	notFound := fmt.Errorf("release not found")
-
-	tests := []struct {
-		name          string
-		githubRelease bool
-		viewOut       string
-		viewErr       error
-		wantGhr       bool
-		wantErr       bool
-	}{
-		{
-			name:          "skip flag disabled does nothing",
-			githubRelease: false,
-		},
-		{
-			name:          "no release runs ghr",
-			githubRelease: true,
-			viewOut:       "release not found",
-			viewErr:       notFound,
-			wantGhr:       true,
-		},
-		{
-			name:          "draft release runs ghr",
-			githubRelease: true,
-			viewOut:       `{"isDraft":true}`,
-			wantGhr:       true,
-		},
-		{
-			name:          "published release errors without running ghr",
-			githubRelease: true,
-			viewOut:       `{"isDraft":false}`,
-			wantGhr:       false,
-			wantErr:       true,
-		},
+func TestPublishGithubReleaseSkipped(t *testing.T) {
+	f := newFakeRunner()
+	r := &CalicoManager{
+		runner:        f,
+		githubRelease: false,
+		calicoVersion: "v3.30.0",
+		githubOrg:     "projectcalico",
+		repo:          "calico",
+		outputDir:     t.TempDir(),
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			f := newFakeRunner()
-			f.on(fmt.Sprintf("./bin/gh release view %s %s --json isDraft", ver, repoFlag), tt.viewOut, tt.viewErr)
-			f.on("./bin/ghr", "", nil)
-
-			r := &CalicoManager{
-				runner:        f,
-				githubRelease: tt.githubRelease,
-				calicoVersion: ver,
-				githubOrg:     org,
-				repo:          repo,
-				outputDir:     t.TempDir(),
-			}
-			err := r.publishGithubRelease()
-
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("publishGithubRelease() = nil, want error")
-				}
-				if f.ran("./bin/ghr") {
-					t.Errorf("ghr was invoked for a published release (calls: %v)", f.calls)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("publishGithubRelease() unexpected error: %v", err)
-			}
-			if got := f.ran("./bin/ghr"); got != tt.wantGhr {
-				t.Errorf("ghr issued = %v, want %v (calls: %v)", got, tt.wantGhr, f.calls)
-			}
-		})
+	uploads, err := r.githubReleaseUpload()
+	if err != nil {
+		t.Fatalf("githubReleaseUpload() = %v, want nil", err)
+	}
+	if uploads != nil {
+		t.Errorf("expected no upload with the flag off, got %+v", uploads)
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("expected nothing run with the flag off, got %v", f.calls)
 	}
 }
 
@@ -1061,5 +1006,101 @@ func TestPublishHelmChartsRecordsWhatItPushed(t *testing.T) {
 	}
 	if len(refs) != len(charts.All()) {
 		t.Errorf("recorded %d refs, want %d", len(refs), len(charts.All()))
+	}
+}
+
+// The flag decides whether a release goes public, so a wrong default either
+// strands every release in draft or publishes one nobody approved.
+func TestGithubReleaseDraftFlag(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		draft bool
+	}{
+		{name: "drafts when asked", draft: true},
+		{name: "publishes when the draft flag is off"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GITHUB_TOKEN", "test-token")
+			r := &CalicoManager{
+				githubRelease: true,
+				draftRelease:  tc.draft,
+				calicoVersion: "v3.30.0",
+				githubOrg:     "projectcalico",
+				repo:          "calico",
+				outputDir:     t.TempDir(),
+			}
+			upload, err := r.githubReleaseUpload()
+			if err != nil {
+				t.Fatalf("githubReleaseUpload() = %v", err)
+			}
+			got, ok := upload.Handler.(distribution.GithubRelease)
+			if !ok {
+				t.Fatalf("handler is %T, want distribution.GithubRelease", upload.Handler)
+			}
+			if got.Draft != tc.draft {
+				t.Errorf("Draft = %v, want %v", got.Draft, tc.draft)
+			}
+		})
+	}
+}
+
+// The index is only written when both steps ran, so the upload has to say it
+// may be absent rather than failing a release that did not build one.
+func TestHelmIndexUploadAllowsAMissingIndex(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		helmCharts bool
+		helmIndex  bool
+		wantAllow  bool
+	}{
+		{name: "both steps ran", helmCharts: true, helmIndex: true},
+		{name: "charts disabled", helmIndex: true, wantAllow: true},
+		{name: "index disabled", helmCharts: true, wantAllow: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &CalicoManager{
+				helmCharts:    tc.helmCharts,
+				helmIndex:     tc.helmIndex,
+				calicoVersion: "v3.30.0",
+				s3Bucket:      "bucket",
+				outputDir:     t.TempDir(),
+			}
+			if got := r.helmIndexUpload().Skip; got != tc.wantAllow {
+				t.Errorf("Skip = %v, want %v", got, tc.wantAllow)
+			}
+		})
+	}
+}
+
+// aws s3 cp to a key with no trailing slash writes an object named for the
+// prefix rather than a file inside it, so the index silently stops updating.
+func TestHelmIndexUploadTargetsTheChartsPrefix(t *testing.T) {
+	r := &CalicoManager{helmCharts: true, helmIndex: true, s3Bucket: "bucket", outputDir: t.TempDir()}
+	got, ok := r.helmIndexUpload().Handler.(distribution.S3)
+	if !ok {
+		t.Fatalf("handler is %T, want distribution.S3", r.helmIndexUpload().Handler)
+	}
+	if want := "s3://bucket/charts/"; got.URI != want {
+		t.Errorf("URI = %q, want %q", got.URI, want)
+	}
+}
+
+func TestPublishGitTagPreviewsThePushOnADryRun(t *testing.T) {
+	f := newFakeRunner()
+	f.on("git ls-remote --tags origin refs/tags/v3.30.0", "", nil)
+
+	r := &CalicoManager{
+		runner:        f,
+		gitRef:        true,
+		dryRun:        true,
+		calicoVersion: "v3.30.0",
+		remote:        "origin",
+		repoRoot:      t.TempDir(),
+	}
+	if err := r.publishGitTag(); err != nil {
+		t.Fatalf("publishGitTag() = %v, want nil", err)
+	}
+	if !f.ran("git push origin v3.30.0 --dry-run") {
+		t.Errorf("expected a previewed push, got %v", f.calls)
 	}
 }

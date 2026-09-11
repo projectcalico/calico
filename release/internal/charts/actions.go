@@ -226,7 +226,7 @@ func (s settings) buildIndex() error {
 	if err := os.MkdirAll(s.indexDir, utils.DirPerms); err != nil {
 		return s.Errorf("creating helm index dir: %w", err)
 	}
-	if err := utils.CopyFile(filepath.Join(staging, indexFileName), filepath.Join(s.indexDir, indexFileName)); err != nil {
+	if err := utils.CopyFile(IndexFilePath(staging), IndexFilePath(s.indexDir)); err != nil {
 		return s.Errorf("writing the helm index: %w", err)
 	}
 	return nil
@@ -237,7 +237,7 @@ func (s settings) downloadIndex() (string, error) {
 	if err != nil {
 		return "", s.Errorf("constructing helm index url: %w", err)
 	}
-	dest := filepath.Join(s.tmpDir, indexFileName)
+	dest := IndexFilePath(s.tmpDir)
 	if err := os.MkdirAll(filepath.Dir(dest), utils.DirPerms); err != nil {
 		return "", s.Errorf("creating dir for downloaded helm index: %w", err)
 	}

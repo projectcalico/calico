@@ -1,0 +1,348 @@
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package distribution
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+
+	ghapi "github.com/google/go-github/v53/github"
+
+	gh "github.com/projectcalico/calico/release/internal/github"
+)
+
+// fakeRunner records the command a destination built, so a test asserts on
+// the arguments rather than on a bucket.
+type fakeRunner struct {
+	name string
+	args []string
+	err  error
+}
+
+func (f *fakeRunner) Run(name string, args, _ []string) (string, error) {
+	f.name, f.args = name, args
+	return "", f.err
+}
+
+func (f *fakeRunner) RunInDir(_, name string, args, env []string) (string, error) {
+	return f.Run(name, args, env)
+}
+
+func (f *fakeRunner) RunInDirToFile(_, name string, args, env []string, _ string) (string, error) {
+	return f.Run(name, args, env)
+}
+
+func (f *fakeRunner) RunInDirNoCapture(_, name string, args, env []string) error {
+	_, err := f.Run(name, args, env)
+	return err
+}
+
+func (f *fakeRunner) RunNoCapture(name string, args, env []string) error {
+	_, err := f.Run(name, args, env)
+	return err
+}
+
+// The destination stats the source to pick its verb, so a test needs a real
+// path rather than a plausible string.
+func srcPath(t *testing.T, dir bool) string {
+	t.Helper()
+	if dir {
+		return t.TempDir()
+	}
+	path := filepath.Join(t.TempDir(), "artifact.tgz")
+	if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+		t.Fatalf("writing fixture: %v", err)
+	}
+	return path
+}
+
+func (f *fakeRunner) has(flag string) bool { return slices.Contains(f.args, flag) }
+
+func (f *fakeRunner) valueAfter(flag string) string {
+	if i := slices.Index(f.args, flag); i >= 0 && i+1 < len(f.args) {
+		return f.args[i+1]
+	}
+	return ""
+}
+
+// An artifact users download must be readable, so the ACL is the default and
+// a private upload is what has to be asked for. Getting this the wrong way
+// round uploads successfully and leaves the object unreadable.
+func TestS3PublicReadIsTheDefault(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		private bool
+		wantACL bool
+	}{
+		{name: "public by default", wantACL: true},
+		{name: "private when asked", private: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeRunner{}
+			d := S3{URI: "s3://bucket/charts/", Private: tc.private, Runner: f}
+			if err := d.Publish(context.Background(), srcPath(t, true)); err != nil {
+				t.Fatalf("Publish: %v", err)
+			}
+			if got := f.has("--acl"); got != tc.wantACL {
+				t.Errorf("--acl present = %v, want %v (args %v)", got, tc.wantACL, f.args)
+			}
+			if tc.wantACL && f.valueAfter("--acl") != "public-read" {
+				t.Errorf("--acl = %q, want public-read", f.valueAfter("--acl"))
+			}
+		})
+	}
+}
+
+func TestS3Verb(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		sync     bool
+		dir      bool
+		wantVerb string
+		wantRec  bool
+	}{
+		{name: "copies a file", wantVerb: "cp"},
+		{name: "copies a directory recursively", dir: true, wantVerb: "cp", wantRec: true},
+		// sync descends on its own, and rejects --recursive.
+		{name: "syncs a tree", sync: true, dir: true, wantVerb: "sync"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeRunner{}
+			d := S3{URI: "s3://bucket/x/", Sync: tc.sync, Runner: f}
+			if err := d.Publish(context.Background(), srcPath(t, tc.dir)); err != nil {
+				t.Fatalf("Publish: %v", err)
+			}
+			if f.name != "aws" {
+				t.Errorf("ran %q, want aws", f.name)
+			}
+			if !f.has(tc.wantVerb) {
+				t.Errorf("verb = %v, want %s", f.args, tc.wantVerb)
+			}
+			if got := f.has("--recursive"); got != tc.wantRec {
+				t.Errorf("--recursive = %v, want %v (args %v)", got, tc.wantRec, f.args)
+			}
+		})
+	}
+}
+
+func TestS3ProfileOnlyWhenSet(t *testing.T) {
+	f := &fakeRunner{}
+	if err := (S3{URI: "s3://b/x/", Runner: f}).Publish(context.Background(), srcPath(t, false)); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if f.has("--profile") {
+		t.Errorf("expected no --profile when unset, got %v", f.args)
+	}
+
+	f = &fakeRunner{}
+	if err := (S3{URI: "s3://b/x/", Profile: "release", Runner: f}).Publish(context.Background(), srcPath(t, false)); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if f.valueAfter("--profile") != "release" {
+		t.Errorf("--profile = %q, want release", f.valueAfter("--profile"))
+	}
+}
+
+func TestGCSSyncDeletesWhatTheSourceDropped(t *testing.T) {
+	f := &fakeRunner{}
+	d := GCS{URI: "gs://bucket/hash", Sync: true, Runner: f}
+	if err := d.Publish(context.Background(), srcPath(t, true)); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if f.name != "gcloud" {
+		t.Errorf("ran %q, want gcloud", f.name)
+	}
+	// gcloud's uploads live under a "storage" subcommand; without it the
+	// argv is not a valid command at all.
+	if len(f.args) < 2 || f.args[0] != "storage" || f.args[1] != "rsync" {
+		t.Errorf("args = %v, want them to start with storage rsync", f.args)
+	}
+	for _, want := range []string{"--recursive", "--delete-unmatched-destination-objects"} {
+		if !f.has(want) {
+			t.Errorf("expected %s in %v", want, f.args)
+		}
+	}
+}
+
+// A dry run reports what would change rather than doing nothing: rsync
+// --dry-run lists the writes, and the deletions the sync would make.
+func TestGCSDryRunPreviewsWithRsync(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		sync bool
+		dir  bool
+	}{
+		// A single file has no rsync preview, so it reports instead.
+		{name: "a tree that would be copied", dir: true},
+		{name: "a tree that would be synced", sync: true, dir: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeRunner{}
+			d := GCS{URI: "gs://bucket/x", Sync: tc.sync, DryRun: true, Runner: f}
+			if err := d.Publish(context.Background(), srcPath(t, tc.dir)); err != nil {
+				t.Fatalf("Publish: %v", err)
+			}
+			// cp has no dry run of its own, so both paths preview with rsync.
+			if !f.has(rsyncVerb) || !f.has("--dry-run") {
+				t.Errorf("args = %v, want an rsync --dry-run preview", f.args)
+			}
+		})
+	}
+}
+
+func TestDestinationNames(t *testing.T) {
+	if got := (S3{URI: "s3://b/k/"}).Name(); got != "s3://b/k/" {
+		t.Errorf("S3 name = %q", got)
+	}
+	if got := (GCS{URI: "gs://b/k"}).Name(); got != "gs://b/k" {
+		t.Errorf("GCS name = %q", got)
+	}
+	if got := (GithubRelease{Tag: "v3.30.0"}).Name(); !strings.Contains(got, "v3.30.0") {
+		t.Errorf("github name = %q, want the tag in it", got)
+	}
+}
+
+// LatestTag returns an empty string when a repository has no published
+// release. Parsing that as a version fails, so a first release could never
+// be published.
+func TestGithubReleaseMakeLatest(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		published string
+		tag       string
+		want      bool
+	}{
+		{name: "first release in an empty repository", tag: "v3.30.0", want: true},
+		{name: "newer than what is published", published: "v3.29.0", tag: "v3.30.0", want: true},
+		{name: "a patch for an older stream", published: "v3.30.0", tag: "v3.29.2"},
+		// Trimming a "v" from both ends would corrupt this into 3.30.0-de.
+		{name: "a tag ending in v", published: "v3.29.0", tag: "v3.30.0-dev", want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rels := githubReleasesWithLatest(t, tc.published)
+			got, err := GithubRelease{Releases: rels, Tag: tc.tag}.makeLatest(context.Background())
+			if err != nil {
+				t.Fatalf("makeLatest: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("makeLatest() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// A destination holds a real *github.Releases, so the fake goes in at the
+// service seam rather than the destination.
+func githubReleasesWithLatest(t *testing.T, tag string) *gh.Releases {
+	t.Helper()
+	svc := &fakeReleaseService{}
+	if tag != "" {
+		svc.latest = &ghapi.RepositoryRelease{TagName: ghapi.String(tag)}
+	}
+	rels, err := gh.NewReleases(gh.Repo{Org: "projectcalico", Name: "calico"}, svc)
+	if err != nil {
+		t.Fatalf("NewReleases: %v", err)
+	}
+	return rels
+}
+
+type fakeReleaseService struct {
+	gh.ReleaseService
+	latest *ghapi.RepositoryRelease
+}
+
+func (f *fakeReleaseService) GetLatestRelease(context.Context, string, string) (*ghapi.RepositoryRelease, *ghapi.Response, error) {
+	if f.latest == nil {
+		return nil, &ghapi.Response{Response: &http.Response{StatusCode: http.StatusNotFound}}, errors.New("not found")
+	}
+	return f.latest, nil, nil
+}
+
+// Every gcloud invocation is a "storage" subcommand, whichever verb it uses.
+func TestGCSAlwaysUsesTheStorageSubcommand(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		sync bool
+		dir  bool
+	}{
+		{name: "copying a file"},
+		{name: "copying a directory", dir: true},
+		{name: "syncing a tree", sync: true, dir: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeRunner{}
+			d := GCS{URI: "gs://bucket/x", Sync: tc.sync, Runner: f}
+			if err := d.Publish(context.Background(), srcPath(t, tc.dir)); err != nil {
+				t.Fatalf("Publish: %v", err)
+			}
+			if len(f.args) == 0 || f.args[0] != "storage" {
+				t.Errorf("args = %v, want the storage subcommand first", f.args)
+			}
+		})
+	}
+}
+
+// The two CLIs disagree about the trailing slash: aws needs one on the
+// destination or a directory upload collapses into a single object, while
+// gcloud takes bare paths. Sharing the rule would break one of them.
+func TestTrailingSlashIsPerCLI(t *testing.T) {
+	dir := srcPath(t, true)
+
+	f := &fakeRunner{}
+	if err := (S3{URI: "s3://bucket/charts", Runner: f}).Publish(context.Background(), dir); err != nil {
+		t.Fatalf("S3 Publish: %v", err)
+	}
+	if !f.has("s3://bucket/charts/") {
+		t.Errorf("aws args = %v, want the destination to carry a trailing slash", f.args)
+	}
+
+	f = &fakeRunner{}
+	if err := (GCS{URI: "gs://bucket/hash", Runner: f}).Publish(context.Background(), dir); err != nil {
+		t.Fatalf("GCS Publish: %v", err)
+	}
+	if !f.has("gs://bucket/hash") {
+		t.Errorf("gcloud args = %v, want the destination left alone", f.args)
+	}
+}
+
+// The error has to name where the upload was going. A handler that reads its
+// destination from the wrong place still runs, and only the message is blank.
+func TestPublishErrorNamesTheDestination(t *testing.T) {
+	dir := srcPath(t, true)
+	for _, tc := range []struct {
+		name string
+		h    Handler
+		want string
+	}{
+		{"s3", S3{URI: "s3://bucket/charts/", Runner: &fakeRunner{err: errors.New("denied")}}, "s3://bucket/charts/"},
+		{"gcs", GCS{URI: "gs://bucket/hash", Runner: &fakeRunner{err: errors.New("denied")}}, "gs://bucket/hash"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.h.Publish(context.Background(), dir)
+			if err == nil {
+				t.Fatal("expected the failure reported")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %q, want it to name %s", err, tc.want)
+			}
+		})
+	}
+}
