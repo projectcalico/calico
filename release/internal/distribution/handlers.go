@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/steps"
+	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 const (
@@ -110,7 +111,7 @@ func (d S3) cpArgs(src string) ([]string, error) {
 		return d.syncArgs(src)
 	}
 	args := []string{cpVerb}
-	dir, err := isDir(src)
+	dir, err := utils.DirExists(src)
 	if err != nil {
 		return args, fmt.Errorf("isDir(%s): %w", src, err)
 	}
@@ -185,7 +186,7 @@ func (d GCS) cpArgs(src string) ([]string, error) {
 	if d.DryRun {
 		args = []string{rsyncVerb}
 	}
-	dir, err := isDir(src)
+	dir, err := utils.DirExists(src)
 	if err != nil {
 		return nil, err
 	}
@@ -340,14 +341,6 @@ func topLevelFiles(dir string) ([]string, error) {
 		out = append(out, filepath.Join(dir, e.Name()))
 	}
 	return out, nil
-}
-
-func isDir(path string) (bool, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false, err
-	}
-	return info.IsDir(), nil
 }
 
 // Hashrelease uploads the whole output tree, then records the hashrelease in

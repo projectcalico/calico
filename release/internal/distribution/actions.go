@@ -21,9 +21,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 
 	"github.com/projectcalico/calico/release/internal/steps"
+	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 const filePerms = 0o644
@@ -125,8 +127,9 @@ func Publish(pipeline []Upload, confirm bool, opts ...PublishOption) error {
 
 	if !confirm {
 		for _, u := range s.pipeline {
-			s.Logger().WithFields(map[string]any{"source": u.Source, "destination": u.Handler.Name()}).
-				Info("Dry run, not publishing")
+			s.Logger().WithFields(map[string]any{
+				"upload": u.label(), "source": u.Source, "destination": u.dest(),
+			}).Info("Dry run, not publishing")
 		}
 		return nil
 	}
@@ -146,8 +149,7 @@ func Publish(pipeline []Upload, confirm bool, opts ...PublishOption) error {
 	return nil
 }
 
-// Ordered, and stops at the first failure: a later upload may depend on an
-// earlier one having landed.
+// Ordered, and stops at the first failure as a later upload may depend on an earlier one.
 func (s settings) push(uploads []Upload) error {
 	for _, u := range uploads {
 		if err := s.publishOne(u); err != nil {
@@ -158,20 +160,23 @@ func (s settings) push(uploads []Upload) error {
 }
 
 func (s settings) publishOne(u Upload) error {
-	log := s.Logger().WithFields(map[string]any{"source": u.Source, "destination": u.Handler.Name()})
+	log := s.Logger().WithFields(logrus.Fields{
+		"upload": u.label(), "source": u.Source, "destination": u.dest(),
+	})
 
-	// Checked here rather than up front: an earlier upload in the list may be
-	// what creates this one's source.
+	if u.Skip {
+		log.Info("Skipping upload")
+		return nil
+	}
+	// Checked here rather than up front: an earlier upload in the list may
+	// be what creates this source.
 	if u.Source != "" {
-		switch _, err := os.Stat(u.Source); {
-		case err == nil:
-		case !errors.Is(err, os.ErrNotExist):
-			return s.Errorf("reading %s: %w", u.Source, err)
-		case u.AllowMissing:
-			log.Warn("Source does not exist, skipping")
-			return nil
-		default:
-			return s.Errorf("%s is not built, and %s requires it", u.Source, u.Handler.Name())
+		exists, err := utils.PathExists(u.Source)
+		if err != nil {
+			return s.Errorf("reading %s source (%s): %w", u.label(), u.Source, err)
+		}
+		if !exists {
+			return s.Errorf("%s source (%s) does not exist", u.label(), u.Source)
 		}
 	}
 
@@ -185,7 +190,7 @@ func (s settings) publishOne(u Upload) error {
 			log.WithError(err).WithField("attempt", attempt).Warn("Publish failed, retrying")
 			continue
 		}
-		return s.Errorf("publishing %s to %s: %w", u.Source, u.Handler.Name(), err)
+		return s.Errorf("publishing %s to %s: %w", u.label(), u.dest(), err)
 	}
 }
 
@@ -195,7 +200,7 @@ func (s settings) record(uploads []Upload) error {
 	}
 	refs := make([]string, 0, len(uploads))
 	for _, u := range uploads {
-		refs = append(refs, u.Handler.Name())
+		refs = append(refs, u.dest())
 	}
 	if err := s.refs.Add(refs...); err != nil {
 		return s.Errorf("recording published artifacts: %w", err)

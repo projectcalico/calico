@@ -181,18 +181,18 @@ func TestPublishDryRunSendsNothing(t *testing.T) {
 
 func TestPublishMissingSource(t *testing.T) {
 	for _, tc := range []struct {
-		name         string
-		allowMissing bool
-		wantErr      string
+		name    string
+		skip    bool
+		wantErr string
 	}{
-		{name: "fails by default", wantErr: "not built"},
-		{name: "skips when allowed", allowMissing: true},
+		{name: "fails by default", wantErr: "does not exist"},
+		{name: "skips when allowed", skip: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := &fakeDest{name: "s3://bucket/files/"}
 			absent := filepath.Join(t.TempDir(), "never-built")
 
-			err := Publish([]Upload{{Source: absent, Handler: d, AllowMissing: tc.allowMissing}}, true)
+			err := Publish([]Upload{{Source: absent, Handler: d, Skip: tc.skip}}, true)
 
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
@@ -306,4 +306,24 @@ func (d *flakyDest) Publish(context.Context, string) error {
 		return fmt.Errorf("transient failure %d", d.calls)
 	}
 	return nil
+}
+
+// A log reader tells two uploads to one bucket apart by name, so an upload
+// with none falls back to its destination rather than logging nothing.
+func TestUploadLabel(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		up   Upload
+		want string
+	}{
+		{"names itself", Upload{Name: "chart index", Handler: S3{URI: "s3://b/charts/"}}, "chart index"},
+		{"falls back to the destination", Upload{Handler: S3{URI: "s3://b/charts/"}}, "s3://b/charts/"},
+		{"a preparer falls back to its kind", Upload{Handler: Preparer{Kind: "metadata"}}, "metadata"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.up.label(); got != tc.want {
+				t.Errorf("label() = %q, want %q", got, tc.want)
+			}
+		})
+	}
 }

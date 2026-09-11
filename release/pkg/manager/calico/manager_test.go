@@ -1022,12 +1022,12 @@ func TestGithubReleaseDraftFlag(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("GITHUB_TOKEN", "test-token")
 			r := &CalicoManager{
-				githubRelease:  true,
+				githubRelease: true,
 				draftRelease:  tc.draft,
-				calicoVersion:  "v3.30.0",
-				githubOrg:      "projectcalico",
-				repo:           "calico",
-				outputDir:      t.TempDir(),
+				calicoVersion: "v3.30.0",
+				githubOrg:     "projectcalico",
+				repo:          "calico",
+				outputDir:     t.TempDir(),
 			}
 			upload, err := r.githubReleaseUpload()
 			if err != nil {
@@ -1039,6 +1039,34 @@ func TestGithubReleaseDraftFlag(t *testing.T) {
 			}
 			if got.Draft != tc.draft {
 				t.Errorf("Draft = %v, want %v", got.Draft, tc.draft)
+			}
+		})
+	}
+}
+
+// The index is only written when both steps ran, so the upload has to say it
+// may be absent rather than failing a release that did not build one.
+func TestHelmIndexUploadAllowsAMissingIndex(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		helmCharts bool
+		helmIndex  bool
+		wantAllow  bool
+	}{
+		{name: "both steps ran", helmCharts: true, helmIndex: true},
+		{name: "charts disabled", helmIndex: true, wantAllow: true},
+		{name: "index disabled", helmCharts: true, wantAllow: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &CalicoManager{
+				helmCharts:    tc.helmCharts,
+				helmIndex:     tc.helmIndex,
+				calicoVersion: "v3.30.0",
+				s3Bucket:      "bucket",
+				outputDir:     t.TempDir(),
+			}
+			if got := r.helmIndexUpload().Skip; got != tc.wantAllow {
+				t.Errorf("Skip = %v, want %v", got, tc.wantAllow)
 			}
 		})
 	}

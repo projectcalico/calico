@@ -58,8 +58,6 @@ var (
 
 	helmIndexFileName = "index.yaml"
 
-	s3ACLPublicRead = []string{"--acl", "public-read"}
-
 	branchTagTarget = "retag-build-images-with-registries push-images-to-registries push-manifests"
 
 	// Windows images are published as a single manifest, so their branch tag
@@ -670,6 +668,7 @@ func (r *CalicoManager) hashreleaseUpload() []distribution.Upload {
 	}
 
 	return []distribution.Upload{{
+		Name:   "hashrelease",
 		Source: r.uploadDir(),
 		Handler: distribution.HashreleaseServer{
 			Release:     &r.hashrelease,
@@ -1311,6 +1310,7 @@ Additional links:
 	}
 
 	return &distribution.Upload{
+		Name:   "github release",
 		Source: r.uploadDir(),
 		Handler: distribution.GithubRelease{
 			Releases: releases,
@@ -1490,7 +1490,9 @@ func (r *CalicoManager) publishHelmCharts() error {
 
 func (r *CalicoManager) helmIndexUpload() distribution.Upload {
 	return distribution.Upload{
-		Source: filepath.Join(r.chart().BaseDir, helmIndexFileName),
+		Name:   "chart index",
+		Source: charts.IndexFilePath(r.chart().BaseDir),
+		Skip:   !r.helmCharts || !r.helmIndex,
 		Handler: distribution.S3{
 			URI:     fmt.Sprintf("s3://%s/charts", r.s3Bucket),
 			Profile: r.awsProfile,

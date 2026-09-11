@@ -46,13 +46,32 @@ type Upload struct {
 
 	Handler Handler
 
-	AllowMissing bool
+	// Name is what is being sent, for a log a reader can follow. Two uploads
+	// to one bucket are otherwise told apart only by their paths.
+	Name string
+
+	// Skip when the step that produces Source did not run. A source that is
+	// missing without this is an error.
+	Skip bool
 }
 
 // validator is a handler that has its own rules about the upload it is given.
 // A handler that finds its own content does not implement it.
 type validator interface {
 	Validate(u Upload) error
+}
+
+// Falls back to the destination, so a log line reads even when a caller
+// names nothing.
+func (u Upload) label() string {
+	if u.Name != "" {
+		return u.Name
+	}
+	return u.Handler.Name()
+}
+
+func (u Upload) dest() string {
+	return u.Handler.Name()
 }
 
 func (u Upload) validate() error {
