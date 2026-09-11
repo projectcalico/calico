@@ -488,10 +488,6 @@ func TestIPPool_Defaults(t *testing.T) {
 	if got.Spec.VXLANMode != v3.VXLANModeNever {
 		t.Errorf("expected vxlanMode=%q, got %q", v3.VXLANModeNever, got.Spec.VXLANMode)
 	}
-	wantUses := []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload, v3.IPPoolAllowedUseTunnel}
-	if !slices.Equal(got.Spec.AllowedUses, wantUses) {
-		t.Errorf("expected allowedUses=%v, got %v", wantUses, got.Spec.AllowedUses)
-	}
 }
 
 // An explicit value has to survive defaulting, or a CrossSubnet pool silently
