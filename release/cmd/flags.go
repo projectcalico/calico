@@ -557,7 +557,9 @@ const (
 	envPublishGitRef        = "PUBLISH_GIT_REF"
 	envReleaseGitRef        = "RELEASE_GIT_REF"
 	envPublishGithubRelease = "PUBLISH_GITHUB_RELEASE"
-	envReleaseGithubRelease = "RELEASE_GITHUB_RELEASE"
+	envReleaseGithubRelease = "RELEASE_GITHUB"
+	envDraftGithubRelease   = "PUBLISH_GITHUB_RELEASE_DRAFT"
+	envReleaseGithubDraft   = "RELEASE_GITHUB_DRAFT"
 )
 
 var (
@@ -589,7 +591,8 @@ var (
 		return append(f,
 			helmIndexFlag(envHelmIndexLegacy, envPublishHelmIndex, envReleaseHelmIndex),
 			gitRefFlag,
-			githubReleaseFlag)
+			githubReleaseFlag,
+			draftGithubReleaseFlag)
 	}
 
 	imagesFlag = func(value bool, envVars ...string) *cli.BoolWithInverseFlag {
@@ -713,6 +716,13 @@ var (
 		Category: stepControlCategory,
 		Usage:    "Push the git ref(s) to the remote",
 		Sources:  cli.EnvVars(envPublishGitRefLegacy, envPublishGitRef, envReleaseGitRef),
+		Value:    true,
+	}
+	draftGithubReleaseFlag = &cli.BoolWithInverseFlag{
+		Name:     "draft-github-release",
+		Category: stepControlCategory,
+		Usage:    "Publish GitHub Release in drafts mode",
+		Sources:  cli.EnvVars(envDraftGithubRelease, envReleaseGithubDraft),
 		Value:    true,
 	}
 	githubReleaseFlag = &cli.BoolWithInverseFlag{

@@ -28,6 +28,7 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
@@ -1005,5 +1006,40 @@ func TestPublishHelmChartsRecordsWhatItPushed(t *testing.T) {
 	}
 	if len(refs) != len(charts.All()) {
 		t.Errorf("recorded %d refs, want %d", len(refs), len(charts.All()))
+	}
+}
+
+// The flag decides whether a release goes public, so a wrong default either
+// strands every release in draft or publishes one nobody approved.
+func TestGithubReleaseDraftFlag(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		draft bool
+	}{
+		{name: "drafts when asked", draft: true},
+		{name: "publishes when the draft flag is off"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GITHUB_TOKEN", "test-token")
+			r := &CalicoManager{
+				githubRelease:  true,
+				draftRelease:  tc.draft,
+				calicoVersion:  "v3.30.0",
+				githubOrg:      "projectcalico",
+				repo:           "calico",
+				outputDir:      t.TempDir(),
+			}
+			upload, err := r.githubReleaseUpload()
+			if err != nil {
+				t.Fatalf("githubReleaseUpload() = %v", err)
+			}
+			got, ok := upload.Handler.(distribution.GithubRelease)
+			if !ok {
+				t.Fatalf("handler is %T, want distribution.GithubRelease", upload.Handler)
+			}
+			if got.Draft != tc.draft {
+				t.Errorf("Draft = %v, want %v", got.Draft, tc.draft)
+			}
+		})
 	}
 }

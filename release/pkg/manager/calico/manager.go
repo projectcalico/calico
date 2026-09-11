@@ -181,6 +181,7 @@ type CalicoManager struct {
 	dryRun        bool
 	gitRef        bool
 	githubRelease bool
+	draftRelease  bool
 	awsProfile    string
 	s3Bucket      string
 	githubToken   string
@@ -700,7 +701,7 @@ func (r *CalicoManager) PublishRelease() error {
 		uploads = append(uploads, r.hashreleaseUpload()...)
 		return distribution.Publish(uploads, !r.dryRun, distribution.WithRunner(r.runner))
 	}
-	uploads = append(uploads, r.githubTagUpload(),  r.helmIndexUpload())
+	uploads = append(uploads, r.githubTagUpload(), r.helmIndexUpload())
 	github, err := r.githubReleaseUpload()
 	if err != nil {
 		return err
@@ -714,33 +715,6 @@ func (r *CalicoManager) PublishRelease() error {
 
 func (r *CalicoManager) buildMetadata() error {
 	return r.BuildMetadata(r.uploadDir())
-}
-
-func (r *CalicoManager) ReleasePublic() error {
-	// Get the latest version
-	args := []string{
-		"release", "list", "--repo", fmt.Sprintf("%s/%s", r.githubOrg, r.repo),
-		"--exclude-drafts", "--exclude-prereleases", "--json 'name,isLatest'",
-		"--jq '.[] | select(.isLatest) | .name'",
-	}
-	out, err := r.runner.RunInDir(r.repoRoot, "./bin/gh", args, nil)
-	if err != nil {
-		return fmt.Errorf("failed to get latest release: %s", err)
-	}
-	args = []string{
-		"release", "edit", r.calicoVersion, "--draft=false",
-		"--repo", fmt.Sprintf("%s/%s", r.githubOrg, r.repo),
-	}
-	latest := version.New(strings.TrimSpace(out))
-	current := version.New(r.calicoVersion)
-	if current.Semver().GreaterThan(latest.Semver()) {
-		args = append(args, "--latest")
-	}
-	_, err = r.runner.RunInDir(r.repoRoot, "./bin/gh", args, nil)
-	if err != nil {
-		return fmt.Errorf("failed to publish %s draft release: %s", r.calicoVersion, err)
-	}
-	return nil
 }
 
 // Check general prerequisites for cutting and publishing a release.
@@ -1342,7 +1316,7 @@ Additional links:
 			Releases: releases,
 			Tag:      r.calicoVersion,
 			Body:     releaseNote,
-			Draft:    true,
+			Draft:    r.draftRelease,
 			DryRun:   r.dryRun,
 		},
 	}, nil
