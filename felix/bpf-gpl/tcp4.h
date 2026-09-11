@@ -10,7 +10,7 @@
 #include <linux/ip.h>
 #include <linux/tcp.h>
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "counters.h"
 #include "log.h"
 #include "reasons.h"

@@ -7,7 +7,7 @@
 
 #include <linux/if_ether.h>
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "counters.h"
 #include "log.h"
 #include "parsing_types.h"

@@ -4,7 +4,7 @@
 
 #include <linux/if_ether.h>
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "globals.h"
 #include "jump.h"
 #include "log.h"

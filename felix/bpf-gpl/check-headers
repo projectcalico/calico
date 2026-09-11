@@ -6,7 +6,8 @@
 
 # Checks that every header:
 #
-# - has an include guard named __CALI_<FILENAME>_H__, so guards are unique
+# - has an include guard named __CALI_<FILENAME>_H__ (any cali_ prefix on the
+#   file name dropped), so guards are unique
 #   and cannot silently hide one header behind another; and
 # - is self-contained: a translation unit that includes only that header must
 #   compile under each build variant the header is meant for.  A failure means
@@ -79,7 +80,8 @@ fi
 
 fail=0
 for h in *.h ut/*.h; do
-  guard="__CALI_$(basename "${h%.h}" | tr '[:lower:]' '[:upper:]')_H__"
+  name=$(basename "${h%.h}"); name=${name#cali_}
+  guard="__CALI_$(echo "${name}" | tr '[:lower:]' '[:upper:]')_H__"
   if ! grep -qx "#ifndef ${guard}" "$h" || ! grep -qx "#define ${guard}" "$h"; then
     echo "FAIL: $h must have include guard: #ifndef ${guard} / #define ${guard}"
     fail=1

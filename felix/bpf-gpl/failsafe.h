@@ -5,7 +5,7 @@
 #ifndef __CALI_FAILSAFE_H__
 #define __CALI_FAILSAFE_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "ip_addr.h"
 
 struct failsafe_key {

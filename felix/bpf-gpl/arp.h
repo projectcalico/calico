@@ -5,7 +5,7 @@
 #ifndef __CALI_ARP_H__
 #define __CALI_ARP_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "ip_addr.h"
 
 struct arp_key {

@@ -13,7 +13,7 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "counters.h"
 #include "failsafe.h"
 #include "globals.h"

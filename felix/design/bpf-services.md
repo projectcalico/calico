@@ -264,7 +264,7 @@ flow — return packets must still match the CT entry.
   layout need to respect both.
 - A change to DSR gating must still compile-time-assert
   `CALI_F_DSR` only with `CALI_F_FROM_WEP` or `CALI_F_HEP`
-  (see the `COMPILE_TIME_ASSERT` in `felix/bpf-gpl/bpf.h`). DSR
+  (see the `COMPILE_TIME_ASSERT` in `felix/bpf-gpl/cali_bpf.h`). DSR
   makes no sense on WEP ingress.
 
 
@@ -323,7 +323,7 @@ destination and then tail-calls into policy as any other caller
 would.
 
 Only HEP-ingress programs on the main interface need Maglev; the
-macro `HAS_MAGLEV` in `felix/bpf-gpl/bpf.h` expands to
+macro `HAS_MAGLEV` in `felix/bpf-gpl/cali_bpf.h` expands to
 `(CALI_F_FROM_HEP && CALI_F_MAIN)`, and `GetApplicableSubProgs` in
 `hook/map.go` only loads the Maglev sub-program for attach types
 where this is true.

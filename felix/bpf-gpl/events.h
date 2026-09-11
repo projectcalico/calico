@@ -5,7 +5,7 @@
 #ifndef __CALI_EVENTS_H__
 #define __CALI_EVENTS_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "events_type.h"
 #include "log.h"
 #include "ringbuf.h"

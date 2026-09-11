@@ -5,7 +5,7 @@
 #ifndef __CALI_PROFILING_H__
 #define __CALI_PROFILING_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 
 struct prof_key {
 	__u32 ifindex;

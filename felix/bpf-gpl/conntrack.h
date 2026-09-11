@@ -13,7 +13,7 @@
 #include <linux/udp.h>
 
 #include "allowsources.h"
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "conntrack_types.h"
 #include "counters.h"
 #include "globals.h"

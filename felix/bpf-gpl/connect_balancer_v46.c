@@ -8,7 +8,7 @@
 
 #include <linux/bpf.h>
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "connect.h"
 #include "ctlb.h"
 #include "ctlb_map.h"

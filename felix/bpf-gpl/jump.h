@@ -5,7 +5,7 @@
 #ifndef __CALI_JUMP_H__
 #define __CALI_JUMP_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "globals.h"
 #include "log.h"
 #include "types.h"

@@ -7,7 +7,7 @@
 
 #include <linux/tcp.h>
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "ip_addr.h"
 
 // Connection tracking.

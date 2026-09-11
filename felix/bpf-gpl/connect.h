@@ -8,7 +8,7 @@
 #include <linux/bpf.h>
 #include <linux/in.h>
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "ctlb.h"
 #include "ip_addr.h"
 #include "log.h"

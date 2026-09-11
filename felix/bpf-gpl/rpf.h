@@ -8,7 +8,7 @@
 #include <linux/in.h>
 
 #include "allowsources.h"
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "conntrack_types.h"
 #include "globals.h"
 #include "ip_addr.h"

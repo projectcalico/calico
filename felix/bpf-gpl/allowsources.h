@@ -5,7 +5,7 @@
 #ifndef __CALI_ALLOWSOURCES_H__
 #define __CALI_ALLOWSOURCES_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "ip_addr.h"
 
 #define IPV4_ADDR_BITS 32

@@ -10,7 +10,7 @@
  * before Felix replaces the policy program with its generated version.
  */
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "jump.h"
 #include "log.h"
 #include "policy.h"

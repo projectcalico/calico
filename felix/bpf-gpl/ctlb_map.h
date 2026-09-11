@@ -7,7 +7,7 @@
 
 #include <linux/bpf.h>
 
-#include "bpf.h"
+#include "cali_bpf.h"
 
 struct {
 	__uint(type, BPF_MAP_TYPE_PROG_ARRAY);

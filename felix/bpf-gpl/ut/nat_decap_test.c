@@ -4,7 +4,7 @@
 
 #include "ut.h"
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "nat.h"
 
 static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)

@@ -5,7 +5,7 @@
 #ifndef __CALI_FIB_COMMON_H__
 #define __CALI_FIB_COMMON_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "conntrack_types.h"
 #include "ifstate.h"
 #include "log.h"

@@ -8,7 +8,7 @@
 #include <linux/ip.h>
 #include <time.h> /* CLOCK_MONOTONIC */
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "globals.h"
 #include "ip_addr.h"
 #include "log.h"

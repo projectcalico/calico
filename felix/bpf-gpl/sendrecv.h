@@ -5,7 +5,7 @@
 #ifndef __CALI_SENDRECV_H__
 #define __CALI_SENDRECV_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "ip_addr.h"
 
 struct sendrec_key {

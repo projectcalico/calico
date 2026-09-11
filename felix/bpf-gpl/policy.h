@@ -5,7 +5,7 @@
 #ifndef __CALI_POLICY_H__
 #define __CALI_POLICY_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "ip_addr.h"
 
 // Base of range for reserved IP set IDs for Calico Enterprise.

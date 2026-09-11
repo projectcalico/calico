@@ -90,7 +90,7 @@ MAP_CFLAGS := $(subst -emit-llvm,,$(CFLAGS))
 
 # Generate _map_stub.c
 define generate_stub
-	echo '#include "bpf.h"' > $@; \
+	echo '#include "cali_bpf.h"' > $@; \
 	for header in $^; do \
 		echo "#include \"$${header}\"" >> $@; \
 	done; \
@@ -259,7 +259,7 @@ conntrack_cleanup_v6.d: conntrack_cleanup.c
 
 # LLVM 21 added TrapUnreachable=true to the BPF backend (llvm/llvm-project#131731).
 # This causes llc to emit a trap instruction (call to __bpf_trap kfunc) after
-# every __builtin_unreachable().  Our bpf_exit() helper (bpf.h) uses inline asm
+# every __builtin_unreachable().  Our bpf_exit() helper (cali_bpf.h) uses inline asm
 # to emit a BPF "exit" instruction followed by __builtin_unreachable() to tell
 # the compiler the path is dead.  With TrapUnreachable, llc inserts a trap
 # instruction after the exit; the kernel BPF verifier sees it as unreachable

@@ -9,7 +9,7 @@
 #include <linux/in.h>
 
 #include "arp.h"
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "counters.h"
 #include "globals.h"
 #include "ip_addr.h"

@@ -27,7 +27,7 @@
 #include <linux/udp.h>
 
 #include "arp.h"
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "conntrack.h"
 #include "conntrack_types.h"
 #include "counters.h"

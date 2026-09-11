@@ -23,7 +23,8 @@
 
 #define __unused __attribute__((unused))
 
-/* bpf.h is the root of the BPF include graph: every other header includes it.
+/* cali_bpf.h is the root of the BPF include graph: every other header includes
+ * it.  It is not called bpf.h so that it can never be confused with libbpf's.
  * Only bpf_inline.h, globals.h and ip_addr.h sit below it, because userspace
  * (felix/bpf/libbpf) shares them.  Every header includes what it uses, so
  * include order never matters; ./check-headers enforces that.

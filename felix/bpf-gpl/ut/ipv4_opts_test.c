@@ -4,7 +4,7 @@
 
 #include "ut.h"
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "counters.h"
 #include "globals.h"
 #include "jump.h"

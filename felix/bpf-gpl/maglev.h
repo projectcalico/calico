@@ -5,7 +5,7 @@
 #ifndef __CALI_MAGLEV_H__
 #define __CALI_MAGLEV_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "ip_addr.h"
 #include "jenkins_hash.h"
 #include "log.h"

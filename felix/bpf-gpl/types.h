@@ -20,7 +20,7 @@
 #include <linux/ip.h>
 #endif
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "conntrack_types.h"
 #include "events_type.h"
 #include "globals.h"

@@ -5,7 +5,7 @@
 #ifndef __CALI_CONNTRACK_CLEANUP_H__
 #define __CALI_CONNTRACK_CLEANUP_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "conntrack_types.h"
 
 #ifdef IPVER6

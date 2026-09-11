@@ -5,7 +5,7 @@
 #ifndef __CALI_QOS_H__
 #define __CALI_QOS_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "counters.h"
 #include "globals.h"
 #include "ifstate.h"

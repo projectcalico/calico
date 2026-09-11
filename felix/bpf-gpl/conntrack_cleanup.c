@@ -6,7 +6,7 @@
  * already set, so this must come before any include. */
 #define CALI_LOG(fmt, ...) bpf_log("CT-CLEANER------: " fmt, ## __VA_ARGS__)
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "conntrack.h"
 #include "conntrack_cleanup.h"
 #include "conntrack_types.h"

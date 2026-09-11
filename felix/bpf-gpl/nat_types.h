@@ -5,7 +5,7 @@
 #ifndef __CALI_NAT_TYPES_H__
 #define __CALI_NAT_TYPES_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "ip_addr.h"
 
 typedef enum calico_nat_lookup_result {

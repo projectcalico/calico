@@ -5,7 +5,7 @@
 #ifndef __CALI_IFSTATE_H__
 #define __CALI_IFSTATE_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 
 struct ifstate_val {
 	__u32 flags;

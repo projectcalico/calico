@@ -8,7 +8,7 @@
 #include <linux/if_ether.h>
 #include <linux/in.h>
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "counters.h"
 #include "ip_addr.h"
 #include "log.h"

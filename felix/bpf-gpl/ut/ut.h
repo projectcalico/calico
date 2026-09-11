@@ -5,7 +5,7 @@
 #ifndef __CALI_UT_H__
 #define __CALI_UT_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "globals.h"
 
 /* Harness for the mini-UT programs: each test file includes this header and

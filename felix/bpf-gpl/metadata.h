@@ -5,7 +5,7 @@
 #ifndef __CALI_METADATA_H__
 #define __CALI_METADATA_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "log.h"
 #include "skb.h"
 #include "types.h"

@@ -7,7 +7,7 @@
 
 #include <linux/in.h>
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "ip_addr.h"
 #include "log.h"
 #include "nat_types.h"

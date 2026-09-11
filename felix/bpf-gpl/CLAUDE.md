@@ -39,8 +39,9 @@ that is not self-contained.
 - **Every header is self-contained.** Include what you use, so that include
   order never matters and no header relies on its includer.
 - **Guard every header** with `#ifndef __CALI_<FILENAME>_H__` /
-  `#define __CALI_<FILENAME>_H__` (e.g. `nat_types.h` → `__CALI_NAT_TYPES_H__`).
-  The name is derived from the file name so guards are unique by construction.
+  `#define __CALI_<FILENAME>_H__` (e.g. `nat_types.h` → `__CALI_NAT_TYPES_H__`;
+  a `cali_` file prefix is dropped, so `cali_bpf.h` → `__CALI_BPF_H__`). The name
+  is derived from the file name so guards are unique by construction.
 - **Order includes** as system headers (`<linux/...>`, `<std...>`), a blank
   line, then project headers, each group sorted alphabetically. Where a header
   picks its IPv4 or IPv6 twin, that `#ifdef IPVER6` block comes last:
@@ -49,7 +50,7 @@ that is not self-contained.
   #include <linux/if_ether.h>
   #include <linux/in.h>
 
-  #include "bpf.h"
+  #include "cali_bpf.h"
   #include "log.h"
   #include "nat_types.h"
   #ifdef IPVER6
@@ -61,9 +62,10 @@ that is not self-contained.
 
 - **`.c` files define `CALI_LOG` before any include.** `log.h` only defines
   it when unset, so the override must come first.
-- **`bpf.h` is the root of the include graph.** Only `bpf_inline.h`,
-  `globals.h` and `ip_addr.h` sit below it: userspace (`felix/bpf/libbpf`)
-  includes them via cgo, so they must not pull in `bpf.h` or the BPF helpers.
+- **`cali_bpf.h` is the root of the include graph.** (It is not named `bpf.h`
+  so it can never be confused with libbpf's.) Only `bpf_inline.h`, `globals.h`
+  and `ip_addr.h` sit below it: userspace (`felix/bpf/libbpf`) includes them via
+  cgo, so they must not pull in `cali_bpf.h` or the BPF helpers.
   `check-headers` compiles them with the host compiler to keep that true.
 - **A header that defines a map must be listed in `IP_MAP_HEADERS`,
   `COMMON_MAP_HEADERS` or `XDP_MAP_HEADERS` in the `Makefile`.** Felix creates

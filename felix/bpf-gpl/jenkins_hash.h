@@ -23,7 +23,7 @@
 #ifndef __CALI_JENKINS_HASH_H__
 #define __CALI_JENKINS_HASH_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 
 #define hashsize(n) ((__u32)1<<(n))
 #define rot(x,k) (((x)<<(k)) | ((x)>>(32-(k))))
