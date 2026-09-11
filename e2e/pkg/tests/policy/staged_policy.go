@@ -42,6 +42,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithCategory(describe.Policy),
 	describe.WithFeature("Flow-Logs"),
 	describe.RequiresGoldmane(),
+	describe.WithNoTierPrefix(),
 	"staged network policy",
 	func() {
 		var (
