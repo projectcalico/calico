@@ -1,0 +1,17 @@
+# A single `make ci` for the mock node test tool.
+#
+# Its recipes build and run images, so this one needs the daemon.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: mock-node-ci
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd test-tools/mocknode
+      make ci

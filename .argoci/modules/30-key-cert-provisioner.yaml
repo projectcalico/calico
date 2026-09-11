@@ -1,0 +1,24 @@
+# A single `make ci` in key-cert-provisioner/, gated on what that component is
+# built from.
+#
+# One recipe splices its own flags into a nested `docker run`, so this block
+# cannot yet drop the daemon the way the pure-Go ones do.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: key-cert-provisioner-ci
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd key-cert-provisioner
+      make ci
+    epilogue: |
+      # Runs in the parent shell, so it inherits neither the `cd` above nor
+      # anything the commands exported.
+      cd "${CI_HOME}/${CI_GIT_DIR}/key-cert-provisioner"
+      artifact push job report --destination test-results || true

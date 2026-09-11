@@ -1,0 +1,20 @@
+# The unit tests for the combined calico binary. Its image build lives in the
+# producer blocks, not here.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  # Nothing here builds an image or needs a cluster, so the work runs in the
+  # build image directly.
+  image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
+
+steps:
+  - name: cmd-calico-ut
+    # The image ships gotestsum under /go/bin, which the default emptyDir over
+    # /go hides — as `command not found`, minutes in.
+    workspaceVolumes: none
+    commands: |
+      cd cmd/calico
+      # Emptying the wrappers runs each recipe here instead of in a nested
+      # container; the tools they call are already on PATH.
+      make ut DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=

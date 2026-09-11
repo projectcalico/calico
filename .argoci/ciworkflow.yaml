@@ -141,3 +141,45 @@ includes:
         - (^|/)\.gitignore$
         - (^|/)README\.md$
         - (^|/)LICENSE$
+
+  - path: .argoci/modules/20-cmd-calico.yaml
+    changes:
+      dependsOn: [cmd]
+      in: ['^\.argoci/modules/20-cmd-calico\.yaml$']
+
+  - path: .argoci/modules/20-e2e-ut.yaml
+    changes:
+      dependsOn: [e2e]
+      in: ['^\.argoci/modules/20-e2e-ut\.yaml$']
+
+  - path: .argoci/modules/20-e2e-test-sets.yaml
+    changes:
+      dependsOn: [e2e]
+      in:
+        - ^e2e/config/
+        - ^\.argoci/cron/
+        - ^\.semaphore/end-to-end/pipelines/
+        - ^\.argoci/modules/20-e2e-test-sets\.yaml$
+
+  - path: .argoci/modules/20-e2e-validation.yaml
+    changes:
+      in:
+        - ^\.argoci/cron/
+        - ^\.argoci/scripts/
+        - ^\.semaphore/end-to-end/scripts/test_scripts/e2e-validation\.sh$
+        - ^\.argoci/modules/20-e2e-validation\.yaml$
+
+  - path: .argoci/modules/30-key-cert-provisioner.yaml
+    changes:
+      dependsOn: [key-cert-provisioner]
+      in: ['^\.argoci/modules/30-key-cert-provisioner\.yaml$']
+
+  - path: .argoci/modules/60-mock-node.yaml
+    changes:
+      dependsOn: [test-tools]
+      in: ['^\.argoci/modules/60-mock-node\.yaml$']
+
+  - path: .argoci/modules/90-release.yaml
+    changes:
+      dependsOn: [release]
+      in: ['^\.argoci/modules/90-release\.yaml$']

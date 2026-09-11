@@ -1,0 +1,18 @@
+# Catches a test set that the suites reference but the config no longer defines,
+# or the reverse — a drift that otherwise only shows up when a nightly e2e run
+# fails hours later.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  # Nothing here builds an image or needs a cluster, so the work runs in the
+  # build image directly.
+  image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
+
+steps:
+  - name: e2e-test-set-drift
+    workspaceVolumes: none
+    commands: |
+      # Emptying the wrappers runs each recipe here instead of in a nested
+      # container; the tools they call are already on PATH.
+      make -C e2e check-test-set DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=

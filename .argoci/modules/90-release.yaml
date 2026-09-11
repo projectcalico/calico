@@ -1,0 +1,35 @@
+# The release tooling's own CI, plus a build whose binary the release promotion
+# consumes.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  # Nothing here builds an image or needs a cluster, so the work runs in the
+  # build image directly.
+  image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
+
+steps:
+  - name: release-ci
+    # The image ships gotestsum under /go/bin, which the default emptyDir over
+    # /go hides — as `command not found`, minutes in.
+    workspaceVolumes: none
+    commands: |
+      cd release
+      # Emptying the wrappers runs each recipe here instead of in a nested
+      # container; the tools they call are already on PATH.
+      make ci DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
+    epilogue: |
+      # Runs in the parent shell, so it inherits neither the `cd` above nor
+      # anything the commands exported.
+      cd "${CI_HOME}/${CI_GIT_DIR}/release"
+      artifact push job report --destination test-results || true
+
+  - name: release-build
+    workspaceVolumes: none
+    commands: |
+      cd release
+      make build DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
+      # Cache rather than workflow storage: the promotion that consumes this is
+      # a separate run with its own artifact namespace, and the commit is what
+      # ties the two together.
+      artifact cache store "release-${CI_GIT_SHA}" bin

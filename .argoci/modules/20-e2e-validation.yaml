@@ -1,0 +1,16 @@
+# Parses every e2e workflow and shellchecks every script it dispatches to, so a
+# typo in one surfaces here rather than hours into a nightly run.
+#
+# The script is shared with the Semaphore block of the same name, which passes
+# nothing and so keeps checking its own tree.
+version: condensed-module
+
+defaults:
+  timeout: 5m
+  # It fetches yq and shellcheck itself and runs neither a build nor a
+  # container, so the host-level image is all it needs.
+
+steps:
+  - name: e2e-validation
+    commands: |
+      ./.semaphore/end-to-end/scripts/test_scripts/e2e-validation.sh .argoci/cron .argoci/scripts
