@@ -2,8 +2,8 @@
 // Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#ifndef __CONNECT_H__
-#define __CONNECT_H__
+#ifndef __CALI_CONNECT_H__
+#define __CALI_CONNECT_H__
 
 #include <linux/bpf.h>
 #include <linux/in.h>
@@ -132,4 +132,4 @@ out:
 	return ret;
 }
 
-#endif /* __CONNECT_H__ */
+#endif /* __CALI_CONNECT_H__ */

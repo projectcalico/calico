@@ -2,8 +2,8 @@
 // Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#ifndef __CALI_EVETNS_H__
-#define __CALI_EVETNS_H__
+#ifndef __CALI_EVENTS_H__
+#define __CALI_EVENTS_H__
 
 #include "bpf.h"
 #include "events_type.h"
@@ -30,4 +30,4 @@ static CALI_BPF_INLINE void event_flow_log(struct cali_tc_ctx *ctx)
 	}
 }
 
-#endif /* __CALI_EVETNS_H__ */
+#endif /* __CALI_EVENTS_H__ */

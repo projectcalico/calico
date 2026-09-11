@@ -2,8 +2,8 @@
 // Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#ifndef __SKB_H__
-#define __SKB_H__
+#ifndef __CALI_SKB_H__
+#define __CALI_SKB_H__
 
 #include <linux/if_ether.h>
 #include <linux/in.h>
@@ -278,4 +278,4 @@ static CALI_BPF_INLINE void skb_log(struct cali_tc_ctx *ctx, bool accepted)
 	}
 }
 
-#endif /* __SKB_H__ */
+#endif /* __CALI_SKB_H__ */

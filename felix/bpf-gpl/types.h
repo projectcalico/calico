@@ -2,8 +2,8 @@
 // Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#ifndef __CALI_BPF_TYPES_H__
-#define __CALI_BPF_TYPES_H__
+#ifndef __CALI_TYPES_H__
+#define __CALI_TYPES_H__
 
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
@@ -327,4 +327,4 @@ static CALI_BPF_INLINE int l4_hdr_len(struct cali_tc_ctx *ctx)
 #define IP_SET(var, val) ((var) = (val))
 
 
-#endif /* __CALI_BPF_TYPES_H__ */
+#endif /* __CALI_TYPES_H__ */

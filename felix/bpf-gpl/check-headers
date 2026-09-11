@@ -4,10 +4,13 @@
 # Copyright (c) 2026 Tigera, Inc. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-# Checks that every header is self-contained: a translation unit that includes
-# only that header must compile under each build variant the header is meant
-# for.  A failure means the header relies on its includer having included
-# something first.
+# Checks that every header:
+#
+# - has an include guard named __CALI_<FILENAME>_H__, so guards are unique
+#   and cannot silently hide one header behind another; and
+# - is self-contained: a translation unit that includes only that header must
+#   compile under each build variant the header is meant for.  A failure means
+#   the header relies on its includer having included something first.
 #
 # Usage: ./check-headers <compiler> [cflags...]
 #
@@ -62,6 +65,18 @@ if [ "$1" = "--one" ]; then
     echo "FAIL: $h is not self-contained under variant $v:"
   fi
   echo "${out}" | grep -E 'error:' | head -5 | sed 's/^/    /'
+  exit 1
+fi
+
+fail=0
+for h in *.h ut/*.h; do
+  guard="__CALI_$(basename "${h%.h}" | tr '[:lower:]' '[:upper:]')_H__"
+  if ! grep -qx "#ifndef ${guard}" "$h" || ! grep -qx "#define ${guard}" "$h"; then
+    echo "FAIL: $h must have include guard: #ifndef ${guard} / #define ${guard}"
+    fail=1
+  fi
+done
+if [ "${fail}" != 0 ]; then
   exit 1
 fi
 

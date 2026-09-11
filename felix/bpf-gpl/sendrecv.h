@@ -2,8 +2,8 @@
 // Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#ifndef __SENDRECV_H__
-#define __SENDRECV_H__
+#ifndef __CALI_SENDRECV_H__
+#define __CALI_SENDRECV_H__
 
 #include "bpf.h"
 #include "ip_addr.h"
@@ -62,4 +62,4 @@ static CALI_BPF_INLINE __u32 host_to_ctx_port(__u16 port)
 	return bpf_htonl(((__u32)port) << 16);
 }
 
-#endif /* __SENDRECV_H__ */
+#endif /* __CALI_SENDRECV_H__ */

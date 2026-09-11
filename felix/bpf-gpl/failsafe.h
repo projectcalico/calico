@@ -2,8 +2,8 @@
 // Copyright (c) 2021 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#ifndef __CALI_BPF_FAILSAFE_H__
-#define __CALI_BPF_FAILSAFE_H__
+#ifndef __CALI_FAILSAFE_H__
+#define __CALI_FAILSAFE_H__
 
 #include "bpf.h"
 #include "ip_addr.h"
@@ -67,4 +67,4 @@ static CALI_BPF_INLINE bool is_failsafe_out(__u8 ip_proto, __u16 dport, ipv46_ad
 	return false;
 }
 
-#endif /* __CALI_BPF_FAILSAFE_H__ */
+#endif /* __CALI_FAILSAFE_H__ */
