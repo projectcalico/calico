@@ -24,27 +24,28 @@ package checker
 //	go test ./app-policy/checker/ -run '^$' -bench BenchmarkEvaluateBaselinePolicyScale \
 //	    -benchmem -benchtime 100x -cpu 1
 //
-// The MissingSets variant deletes some referenced IP sets from the store, which makes
-// each evaluation log "IPSet not found" warnings — the signature seen in production
-// logs when the policy store is out of sync. The warnings/op metric ties the two
-// together: if production logs show those warnings spaced T apart, the implied
-// per-evaluation wall time is T x warnings/op, which can be compared against the
-// measured ns/op to judge whether a node is evaluation-bound or pacing on something
-// else. Note that the benchmark discards log output, so a real deployment pays the
-// log write on top of the formatting cost measured here.
+// The MissingSets variants delete some referenced IP sets from the store, so every
+// evaluation looks up sets that are not there — the condition behind the "IPSet not
+// found" logs seen in production when the policy store is out of sync. Those lookups
+// are aggregated into one line per interval, so the variants measure what that leaves
+// on the hot path: MissingSets pays the aggregator's per-lookup bookkeeping, LogsOff
+// has the level gate closed so it pays nothing at all, and Unaggregated writes a line
+// per lookup, as this call site did before it was aggregated. The misses/op metric is
+// the number of missing-set lookups one evaluation makes, checked against the analytic
+// count before the timed loop. Note that the benchmark discards log output, so a real
+// deployment pays the log write on top of the formatting cost measured here.
 
 import (
 	"fmt"
 	"io"
 	"math/rand"
 	"net"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/calc"
@@ -52,6 +53,7 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/lib/logrusr"
+	log "github.com/projectcalico/calico/lib/std/log"
 )
 
 // baselinePolicyScaleParams describes a policy store dominated by "baseline" policies:
@@ -107,35 +109,74 @@ const (
 var benchTraceSink []*calc.RuleID
 
 func BenchmarkEvaluateBaselinePolicyScale(b *testing.B) {
+	missingSetsParams := func() baselinePolicyScaleParams {
+		p := defaultBaselinePolicyScaleParams()
+		p.numMissingIPSets = 8
+		return p
+	}
+
 	b.Run("AllSetsPresent", func(b *testing.B) {
-		benchEvaluateBaselinePolicyScale(b, defaultBaselinePolicyScaleParams(), log.WarnLevel, false)
+		benchEvaluateBaselinePolicyScale(b, benchRun{
+			params: defaultBaselinePolicyScaleParams(), logLevel: logrus.WarnLevel,
+		})
 	})
 	b.Run("MissingSets", func(b *testing.B) {
-		p := defaultBaselinePolicyScaleParams()
-		p.numMissingIPSets = 8
-		benchEvaluateBaselinePolicyScale(b, p, log.WarnLevel, false)
+		benchEvaluateBaselinePolicyScale(b, benchRun{
+			params: missingSetsParams(), logLevel: logrus.WarnLevel,
+		})
 	})
-	// As MissingSets but with warnings disabled, to isolate the cost of formatting the
-	// "IPSet not found" warnings.
+	// As MissingSets but with warnings disabled, so the aggregator drops each miss at its
+	// level gate: what separates this from MissingSets is the aggregator's bookkeeping.
 	b.Run("MissingSetsLogsOff", func(b *testing.B) {
-		p := defaultBaselinePolicyScaleParams()
-		p.numMissingIPSets = 8
-		benchEvaluateBaselinePolicyScale(b, p, log.ErrorLevel, false)
+		benchEvaluateBaselinePolicyScale(b, benchRun{
+			params: missingSetsParams(), logLevel: logrus.ErrorLevel,
+		})
+	})
+	// As MissingSets but writing a line per miss, which is what this call site did before
+	// it was aggregated: what separates this from MissingSets is what aggregation saves.
+	b.Run("MissingSetsUnaggregated", func(b *testing.B) {
+		benchEvaluateBaselinePolicyScale(b, benchRun{
+			params: missingSetsParams(), logLevel: logrus.WarnLevel, unaggregated: true,
+		})
 	})
 	// Fixed per-Evaluate overhead: the first rule of the first policy matches, so the
 	// walk short-circuits immediately.
 	b.Run("MatchEarly", func(b *testing.B) {
-		benchEvaluateBaselinePolicyScale(b, defaultBaselinePolicyScaleParams(), log.WarnLevel, true)
+		benchEvaluateBaselinePolicyScale(b, benchRun{
+			params: defaultBaselinePolicyScaleParams(), logLevel: logrus.WarnLevel, matchEarly: true,
+		})
 	})
 }
 
-func benchEvaluateBaselinePolicyScale(b *testing.B, p baselinePolicyScaleParams, level log.Level, matchEarly bool) {
-	logger := log.StandardLogger()
-	counter, restoreLogging := withBenchLogging(level)
-	defer restoreLogging()
+// benchRun is one variant: the store to evaluate against, and how the logging the
+// evaluation provokes is set up.
+type benchRun struct {
+	params baselinePolicyScaleParams
 
-	store, ep, expectedWarns := buildBaselinePolicyStore(p)
-	if matchEarly {
+	// Level the log backend is set to. The missing-set line is reported at Warn, so
+	// anything above that closes its level gate.
+	logLevel logrus.Level
+
+	// unaggregated makes the missing-set logger write one line per occurrence rather than
+	// one per interval, reproducing what this call site cost before it was aggregated.
+	unaggregated bool
+
+	matchEarly bool
+}
+
+func benchEvaluateBaselinePolicyScale(b *testing.B, run benchRun) {
+	p := run.params
+
+	logger := logrus.StandardLogger()
+	restoreLogging := withBenchLogging(run.logLevel)
+	oldMissingIPSets := missingIPSets
+	defer func() {
+		restoreLogging()
+		missingIPSets = oldMissingIPSets
+	}()
+
+	store, ep, expectedMisses := buildBaselinePolicyStore(p)
+	if run.matchEarly {
 		addMatchEarlyPolicy(store, ep)
 	}
 	flow := &MockFlow{
@@ -146,10 +187,18 @@ func benchEvaluateBaselinePolicyScale(b *testing.B, p baselinePolicyScaleParams,
 		Protocol:   6, // TCP
 	}
 
-	// Pre-flight outside the timed loop: prove the walk is the intended one and that
-	// the warning count matches the analytic count, so that warnings/op is exact.
-	trace, _ := Evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow)
-	if matchEarly {
+	// Pre-flight outside the timed loop: prove the walk is the intended one and that the
+	// number of missing-set lookups matches the analytic count, so misses/op is exact.
+	// Counting them means seeing every one, so for this single evaluation the aggregator
+	// is given a zero interval, which writes a line per occurrence.
+	counter := &ipsetMissCounter{Logger: log.Default()}
+	missingIPSets = newMissingIPSetsLogger(counter)
+
+	trace, err := Evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow)
+	if err != nil {
+		b.Fatalf("pre-flight Evaluate failed: %v", err)
+	}
+	if run.matchEarly {
 		if len(trace) != 1 || trace[0].Action != rules.RuleActionAllow || trace[0].Index != 0 {
 			b.Fatalf("expected an immediate allow from the match-early policy, got %v", trace)
 		}
@@ -158,11 +207,17 @@ func benchEvaluateBaselinePolicyScale(b *testing.B, p baselinePolicyScaleParams,
 			b.Fatalf("expected a full walk ending in the tier default deny, got %v", trace)
 		}
 	}
-	if logger.IsLevelEnabled(log.WarnLevel) && counter.count.Load() != int64(expectedWarns) {
-		b.Fatalf("expected %d 'IPSet not found' warnings per Evaluate, got %d",
-			expectedWarns, counter.count.Load())
+	if logger.IsLevelEnabled(logrus.WarnLevel) && counter.count.Load() != int64(expectedMisses) {
+		b.Fatalf("expected %d missing IP set lookups per Evaluate, got %d",
+			expectedMisses, counter.count.Load())
 	}
-	counter.count.Store(0)
+
+	// The timed loop runs the real logger, at the production interval — unless this is the
+	// variant measuring what that interval saves.
+	missingIPSets = oldMissingIPSets
+	if run.unaggregated {
+		missingIPSets = newMissingIPSetsLogger(nil)
+	}
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -170,18 +225,29 @@ func benchEvaluateBaselinePolicyScale(b *testing.B, p baselinePolicyScaleParams,
 		benchTraceSink, _ = Evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow)
 	}
 	b.StopTimer()
-	b.ReportMetric(float64(counter.count.Load())/float64(b.N), "warnings/op")
+	b.ReportMetric(float64(expectedMisses), "misses/op")
 	rulesWalked := p.numPolicies * p.rulesPerPolicy
-	if matchEarly {
+	if run.matchEarly {
 		rulesWalked = 1
 	}
 	b.ReportMetric(float64(rulesWalked), "rules/op")
 }
 
+// newMissingIPSetsLogger builds a stand-in for the checker's missing-IP-set logger that
+// writes a line per occurrence rather than one per interval, to the given Logger or to
+// the registered default when it is nil.
+func newMissingIPSetsLogger(target log.Logger) *log.AggregatingLogger {
+	opts := []log.AggregatingLoggerOpt{log.OptInterval(0)}
+	if target != nil {
+		opts = append(opts, log.OptLogger(target))
+	}
+	return log.NewAggregatingLogger("IPSet not found", "ipsets", opts...)
+}
+
 // buildBaselinePolicyStore builds a policy store at the given scale, plus an endpoint
 // whose single "perimeter" tier applies every policy. It returns the number of rule
-// references to deleted (missing) IP sets, which is exactly the number of "IPSet not
-// found" warnings one Evaluate of a non-matching flow emits.
+// references to deleted (missing) IP sets, which is exactly the number of missing-set
+// lookups one Evaluate of a non-matching flow makes.
 func buildBaselinePolicyStore(p baselinePolicyScaleParams) (*policystore.PolicyStore, *proto.WorkloadEndpoint, int) {
 	rng := rand.New(rand.NewSource(p.seed))
 	store := policystore.NewPolicyStore()
@@ -231,14 +297,14 @@ func buildBaselinePolicyStore(p baselinePolicyScaleParams) (*policystore.PolicyS
 	rng.Shuffle(len(referencedIDs), func(a, b int) {
 		referencedIDs[a], referencedIDs[b] = referencedIDs[b], referencedIDs[a]
 	})
-	expectedWarns := 0
+	expectedMisses := 0
 	for _, id := range referencedIDs[:p.numMissingIPSets] {
 		delete(store.IPSetByID, id)
-		expectedWarns += refCount[id]
+		expectedMisses += refCount[id]
 	}
 
 	ep := &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{tier}}
-	return store, ep, expectedWarns
+	return store, ep, expectedMisses
 }
 
 // makeScaleIPSets populates the store with NET-type IP sets (the dominant type in the
@@ -305,53 +371,54 @@ func addMatchEarlyPolicy(store *policystore.PolicyStore, ep *proto.WorkloadEndpo
 	ep.Tiers[0].IngressPolicies = append([]*proto.PolicyID{policyID}, ep.Tiers[0].IngressPolicies...)
 }
 
-// ipsetMissCounter is a logrus hook that counts "IPSet not found" warnings, so the
-// benchmark can report warnings per evaluation.
+// ipsetMissCounter counts the "IPSet not found" lines written through it and passes
+// everything on to the Logger it wraps, so the benchmark can count missing-set lookups
+// while they still cost what they cost in production. Embedding the Logger is also what
+// keeps the level gate honest: Enabled comes from the wrapped backend.
 type ipsetMissCounter struct {
+	log.Logger
 	count atomic.Int64
 }
 
-func (c *ipsetMissCounter) Levels() []log.Level { return []log.Level{log.WarnLevel} }
-
-func (c *ipsetMissCounter) Fire(e *log.Entry) error {
-	// The message carries the set ID, so match on the prefix.
-	if strings.HasPrefix(e.Message, "IPSet not found") {
+func (c *ipsetMissCounter) Warn(msg string, args ...any) {
+	if msg == "IPSet not found" {
 		c.count.Add(1)
 	}
-	return nil
+	c.Logger.Warn(msg, args...)
 }
 
 // withBenchLogging sets the log level, discards output so the terminal is not part of the
-// measurement, installs the "IPSet not found" counter, and unthrottles the evaluation path's
-// rate-limited loggers. It returns the counter and a function restoring everything.
-func withBenchLogging(level log.Level) (*ipsetMissCounter, func()) {
-	logger := log.StandardLogger()
+// measurement, registers the logrus backend behind the lib/std/log facade, and unthrottles the
+// evaluation path's rate-limited loggers. It returns a function restoring all of it.
+//
+// The facade discards everything until a backend is registered, so without that the benchmark
+// would measure a path no deployment runs, and the miss count would come out at zero.
+func withBenchLogging(level logrus.Level) func() {
+	logger := logrus.StandardLogger()
 	oldLevel, oldOut := logger.GetLevel(), logger.Out
-	counter := &ipsetMissCounter{}
-	hooks := make(log.LevelHooks)
-	hooks.Add(counter)
-	oldHooks := logger.ReplaceHooks(hooks)
+	oldDefault := log.Default()
 	restoreLoggers := withUnthrottledEvalPathLogs()
 
 	logger.SetLevel(level)
 	// The formatting cost stays in the measurement; a real deployment pays the write too.
 	logger.SetOutput(io.Discard)
+	log.SetDefaultLogger(logrusr.New(logger))
 
-	return counter, func() {
+	return func() {
 		logger.SetLevel(oldLevel)
 		logger.SetOutput(oldOut)
-		logger.ReplaceHooks(oldHooks)
+		log.SetDefaultLogger(oldDefault)
 		restoreLoggers()
 	}
 }
 
 // withUnthrottledEvalPathLogs replaces the evaluation path's rate-limited loggers with ones
-// that never suppress, and returns a function restoring them. The warnings/op metric counts
-// every occurrence, which is the point of it — production gets the throttled loggers, and the
+// that never suppress, and returns a function restoring them. The benchmark counts every
+// occurrence, which is the point of it — production gets the throttled loggers, and the
 // emitted line's "logsSkipped" field carries the count this benchmark reports directly.
 func withUnthrottledEvalPathLogs() func() {
 	saved := []**logrusr.RateLimitedLogger{
-		&rlogIPSetMissing, &rlogBadPrincipal, &rlogBadProtocol, &rlogBadProtocolName,
+		&rlogBadProtocol, &rlogBadProtocolName,
 		&rlogBadCIDR, &rlogBadSelector, &rlogBadRulePath,
 	}
 	originals := make([]*logrusr.RateLimitedLogger, len(saved))
