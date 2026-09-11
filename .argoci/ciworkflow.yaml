@@ -282,3 +282,30 @@ includes:
         - ^felix/nftables/
         - ^hack/perf/
         - ^\.argoci/modules/45-nft-bench\.yaml$
+
+  - path: .argoci/modules/20-gateway-conformance.yaml
+    changes:
+      in:
+        - ^e2e/cmd/gateway/
+        - ^hack/test/kind/gateway-setup\.sh$
+        - ^third_party/envoy-gateway/
+        - ^third_party/envoy-proxy/
+        - ^third_party/envoy-ratelimit/
+        - ^\.argoci/modules/20-gateway-conformance\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
+
+  - path: .argoci/modules/20-felix.yaml
+    changes:
+      dependsOn: [felix]
+      in: ['^\.argoci/modules/20-felix\.yaml$']
+
+  - path: .argoci/modules/40-openstack.yaml
+    changes:
+      in:
+        - ^networking-calico/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/40-openstack\.yaml$

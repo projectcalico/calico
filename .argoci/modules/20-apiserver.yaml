@@ -11,6 +11,7 @@ defaults:
 
 steps:
   - name: apiserver-ci
+    requests: {cpu: 3000m, memory: 2Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
