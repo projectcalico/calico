@@ -291,7 +291,9 @@ UT_PACKAGES_TO_SKIP?=fv,k8sfv,bpf/ut
 .PHONY: ut
 ut combined.coverprofile: $(SRC_FILES) $(LIBBPF_A) $(BPF_APACHE_O_FILES)
 	@echo Running Go UTs.
-	$(DOCKER_RUN) $(CALICO_BUILD) ./utils/run-coverage -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	# run-coverage runs ginkgo with the race detector enabled, which requires
+	# CGO, so use the CGO build container.
+	$(DOCKER_GO_BUILD_CGO) ./utils/run-coverage -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 ###############################################################################
 # FV Tests
