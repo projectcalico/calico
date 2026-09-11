@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # global_prologue.sh - ArgoCI e2e prologue for OSS Calico.
 #
-# Ported from .semaphore/end-to-end/scripts/global_prologue.sh and adapted for
-# ArgoCI (see .argoci/DESIGN.md):
+# Ported from the Semaphore equivalent (since deleted) and adapted for
+# ArgoCI:
 #   - secrets are materialised from mounted k8s Secrets via the platform
 #     `createLocalSecret` helper (not Semaphore's ~/secrets copy);
 #   - no `checkout`/`cache`, no gcloud/aws/az/bz install — the ArgoCI base
