@@ -1,21 +1,23 @@
 # A single `make ci` in webhooks/, gated on what that component is built from.
-#
-# The recipes shell out to a nested build container: unauthenticated pulls are
-# rate-limited, and it inherits only what is spliced in explicitly.
 version: condensed-module
 
 defaults:
   timeout: 1h
-  services:
-    - docker
+  # Nothing here builds an image or needs a cluster, so the work runs in the
+  # build image directly. A step shelling out to a nested container pulls this
+  # same image a second time inside the daemon, on top of its own.
+  image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
 
 steps:
   - name: webhooks-ci
+    # The image ships golangci-lint and gotestsum, which the default emptyDir
+    # over /go hides — as `command not found`, minutes in.
+    workspaceVolumes: none
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       cd webhooks
-      make ci
+      # Emptying the wrappers runs each recipe here instead of in a nested
+      # container; the tools they call are already on PATH.
+      make ci DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
     epilogue: |
       # Runs in the parent shell, so it inherits neither the `cd` above nor
       # anything the commands exported.
