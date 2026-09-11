@@ -1119,6 +1119,10 @@ func TestMatchNamedPorts(t *testing.T) {
 	httpSet := policystore.NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
 	httpSet.AddString("10.0.0.1,tcp:8080")
 	store.IPSetByID["http"] = httpSet
+	// The same endpoint declaring a named port "diameter" on sctp/3868.
+	diameterSet := policystore.NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
+	diameterSet.AddString("10.0.0.1,sctp:3868")
+	store.IPSetByID["diameter"] = diameterSet
 
 	testCases := []struct {
 		title    string
@@ -1219,6 +1223,26 @@ func TestMatchNamedPorts(t *testing.T) {
 			dstPort:  9090,
 			protocol: 6,
 			match:    true,
+		},
+		{
+			title:    "dst named port on sctp matches an sctp flow",
+			rule:     &proto.Rule{DstNamedPortIpSetIds: []string{"diameter"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.1",
+			dstPort:  3868,
+			protocol: 132,
+			match:    true,
+		},
+		{
+			title:    "dst named port on sctp does not match tcp to the same port",
+			rule:     &proto.Rule{DstNamedPortIpSetIds: []string{"diameter"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.1",
+			dstPort:  3868,
+			protocol: 6,
+			match:    false,
 		},
 	}
 
@@ -1330,6 +1354,26 @@ func TestMatchDstIPPortSetIds(t *testing.T) {
 			proto:    6,
 			expected: false,
 		},
+		{
+			title: "match IP in sctp set",
+			rule: &proto.Rule{
+				DstIpPortSetIds: []string{"setSCTP"},
+			},
+			destIP:   "192.168.1.8",
+			destPort: 3868,
+			proto:    132,
+			expected: true,
+		},
+		{
+			title: "no match IP in sctp set with tcp",
+			rule: &proto.Rule{
+				DstIpPortSetIds: []string{"setSCTP"},
+			},
+			destIP:   "192.168.1.8",
+			destPort: 3868,
+			proto:    6,
+			expected: false,
+		},
 	}
 
 	store := policystore.NewPolicyStore()
@@ -1345,7 +1389,10 @@ func TestMatchDstIPPortSetIds(t *testing.T) {
 	store.IPSetByID["set80"] = set80
 	store.IPSetByID["set443"] = set443
 	store.IPSetByID["setMulti"] = setMulti
+	setSCTP := policystore.NewIPSet(proto.IPSetUpdate_IP)
+	setSCTP.AddString("192.168.1.8,sctp:3868")
 	store.IPSetByID["setProto"] = setProto
+	store.IPSetByID["setSCTP"] = setSCTP
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
