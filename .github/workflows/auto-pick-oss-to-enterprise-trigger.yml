@@ -1,0 +1,22 @@
+# Stage 1 of the auto-pick (security split). Fires when a PR merges to master,
+# with ZERO permissions and NO secrets. Its only purpose is to complete so the
+# trusted stage 2 (auto-pick-oss-to-enterprise.yml) runs from the default
+# branch via workflow_run, where the privileged tokens and the Claude agent
+# live. Runs on `pull_request` (not pull_request_target), so a fork PR's
+# trigger run gets only a read-only token and no secrets.
+name: Auto-pick OSS PR into Enterprise (trigger)
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [master]
+
+permissions: {}
+
+jobs:
+  trigger:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - run: echo "Merged master PR -- firing the auto-pick worker via workflow_run."
