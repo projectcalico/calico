@@ -903,10 +903,12 @@ type FelixConfigurationSpec struct {
 	// balancer. The connect-time load balancer is required for the host to be able to reach Kubernetes services
 	// and it improves the performance of pod-to-service connections.When set to TCP, connect time load balancing
 	// is available only for services with TCP ports. [Default: TCP]
+	// +kubebuilder:default=TCP
 	BPFConnectTimeLoadBalancing *BPFConnectTimeLBType `json:"bpfConnectTimeLoadBalancing,omitempty" validate:"omitempty,oneof=TCP Enabled Disabled"`
 
 	// BPFHostNetworkedNATWithoutCTLB when in BPF mode, controls whether Felix does a NAT without CTLB. This along with BPFConnectTimeLoadBalancing
 	// determines the CTLB behavior. [Default: Enabled]
+	// +kubebuilder:default=Enabled
 	BPFHostNetworkedNATWithoutCTLB *BPFHostNetworkedNATType `json:"bpfHostNetworkedNATWithoutCTLB,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 
 	// BPFExternalServiceMode in BPF mode, controls how connections from outside the cluster to services (node ports
@@ -1215,6 +1217,7 @@ type FelixConfigurationSpec struct {
 	// floating IPs are always programmed, regardless of this setting.)
 	//
 	// +optional
+	// +kubebuilder:default=Disabled
 	FloatingIPs *FloatingIPType `json:"floatingIPs,omitempty" validate:"omitempty"`
 
 	// LocalSubnetL2Reachability controls whether Felix automatically responds to
