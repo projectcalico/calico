@@ -2,17 +2,20 @@
 // Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#ifndef __SKB_H__
-#define __SKB_H__
+#ifndef __CALI_SKB_H__
+#define __CALI_SKB_H__
 
 #include <linux/if_ether.h>
+#include <linux/in.h>
 #include <linux/ip.h>
-#include <linux/udp.h>
+#include <linux/ipv6.h>
 #include <linux/tcp.h>
+#include <linux/udp.h>
 
 #include "bpf.h"
-#include "types.h"
+#include "globals.h"
 #include "log.h"
+#include "types.h"
 
 /* skb_start_ptr is equivalent to (void*)((__u64)skb->data); the read is done
  * in a way that is acceptable to the verifier and it is done as a volatile read
@@ -173,6 +176,26 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 	return 0;
 }
 
+/* bpf_load_bytes copies len bytes of packet data at offset into buf, using the
+ * loader helper appropriate to the program type.
+ */
+static CALI_BPF_INLINE int bpf_load_bytes(struct cali_tc_ctx *ctx, __u32 offset, void *buf, __u32 len)
+{
+	int ret;
+
+#if CALI_F_XDP
+	if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_xdp_load_bytes)) {
+		ret = bpf_xdp_load_bytes(ctx->xdp, offset, buf, len);
+	} else {
+		return -22 /* EINVAL */;
+	}
+#else /* CALI_F_XDP */
+	ret = bpf_skb_load_bytes(ctx->skb, offset, buf, len);
+#endif /* CALI_F_XDP */
+
+	return ret;
+}
+
 #define skb_ptr_after(skb, ptr) ((void *)((ptr) + 1))
 #define skb_seen(skb) (((skb)->mark & CALI_SKB_MARK_SEEN_MASK) == CALI_SKB_MARK_SEEN)
 
@@ -255,4 +278,4 @@ static CALI_BPF_INLINE void skb_log(struct cali_tc_ctx *ctx, bool accepted)
 	}
 }
 
-#endif /* __SKB_H__ */
+#endif /* __CALI_SKB_H__ */

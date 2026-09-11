@@ -161,7 +161,7 @@ runs:
 >   WireGuard, or no encap. It carries external traffic that has
 >   hit a NodePort on a node whose selected backend is on a
 >   different node. It uses a fixed VNI of **`0xca11c0`**
->   (`CALI_VXLAN_VNI` in `felix/bpf-gpl/nat.h`) — reserving that
+>   (`CALI_VXLAN_VNI` in `felix/bpf-gpl/nat_types.h`) — reserving that
 >   value so receivers can tell NodePort-forwarding packets from
 >   overlay packets on the same device.
 > - **Pod-to-pod overlay VXLAN** is what pod→pod traffic uses when

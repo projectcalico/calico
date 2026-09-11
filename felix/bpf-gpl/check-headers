@@ -1,0 +1,101 @@
+#!/bin/bash
+
+# Project Calico BPF dataplane build scripts.
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+
+# Checks that every header:
+#
+# - has an include guard named __CALI_<FILENAME>_H__, so guards are unique
+#   and cannot silently hide one header behind another; and
+# - is self-contained: a translation unit that includes only that header must
+#   compile under each build variant the header is meant for.  A failure means
+#   the header relies on its includer having included something first.
+#
+# Usage: ./check-headers <compiler> [cflags...]
+#
+# The (header, variant) pairs are compiled in parallel: this script lists them
+# and xargs re-invokes it with --one for each pair.
+
+set -u
+
+if [ $# -lt 1 ]; then
+  echo "usage: $0 <compiler> [cflags...]" >&2
+  exit 2
+fi
+
+common="-DCALI_DROP_WORKLOAD_TO_HOST=false -DCALI_FIB_LOOKUP_ENABLED=true"
+declare -A variants=(
+  [tc4]="-DBPF_CORE_SUPPORTED -DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG -DCALI_COMPILE_FLAGS=0"
+  [tc6]="-DBPF_CORE_SUPPORTED -DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG -DCALI_COMPILE_FLAGS=0 -DIPVER6"
+  [tc4legacy]="-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_OFF -DCALI_COMPILE_FLAGS=0"
+  [tc4hep]="-DBPF_CORE_SUPPORTED -DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG -DCALI_COMPILE_FLAGS=3"
+  [xdp]="-DBPF_CORE_SUPPORTED -DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG -DCALI_COMPILE_FLAGS=64"
+  [xdp6]="-DBPF_CORE_SUPPORTED -DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG -DCALI_COMPILE_FLAGS=64 -DIPVER6"
+  [cgroup]="-DBPF_CORE_SUPPORTED -DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG -DCALI_COMPILE_FLAGS=8"
+  [ctclean]="-DBPF_CORE_SUPPORTED -DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG -DCALI_COMPILE_FLAGS=512"
+  [preamble]="-DBPF_CORE_SUPPORTED -DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG -DCALI_COMPILE_FLAGS=2048"
+  [ut]="-DBPF_CORE_SUPPORTED -DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG -DCALI_COMPILE_FLAGS=0 -DUNITTEST"
+)
+
+# Which variants a header is meant for.  Headers not listed must compile under
+# every variant.  "tc" headers use the skb-based context (not XDP, not cgroup).
+tc="tc4 tc6 tc4legacy tc4hep ctclean preamble ut"
+tc4="tc4 tc4legacy tc4hep ctclean preamble ut"
+tc6="tc6"
+declare -A only=(
+  [ctlb.h]="cgroup" [connect.h]="cgroup"
+  [conntrack.h]="$tc" [fib.h]="$tc" [fib_co_re.h]="$tc" [fib_common.h]="$tc" [maglev.h]="$tc"
+  [nat.h]="$tc" [icmp.h]="$tc" [qos.h]="$tc" [rpf.h]="$tc" [events.h]="$tc" [tc.h]="$tc"
+  [nat4.h]="$tc4" [icmp4.h]="$tc4" [parsing4.h]="$tc4 xdp" [tcp4.h]="$tc4" [ip_v4_fragment.h]="$tc4"
+  [nat6.h]="$tc6" [icmp6.h]="$tc6" [parsing6.h]="$tc6 xdp6" [tcp6.h]="$tc6"
+)
+
+# --one <header> <variant> <compiler> [cflags...]: compile a single pair.
+if [ "$1" = "--one" ]; then
+  h=$2; v=$3; shift 3
+  src=$(mktemp --suffix=.c)
+  trap 'rm -f "${src}" "${src%.c}.o"' EXIT
+  echo "#include \"$h\"" > "${src}"
+  if [ "$v" = "userspace" ]; then
+    out=$("${HOST_CC:-cc}" -Wall -Werror -I . -I ./libbpf/include/uapi -c "${src}" -o "${src%.c}.o" 2>&1) && exit 0
+    echo "FAIL: $h does not compile for userspace:"
+  else
+    out=$("$@" -I . ${common} ${variants[$v]} -c "${src}" -o "${src%.c}.o" 2>&1) && exit 0
+    echo "FAIL: $h is not self-contained under variant $v:"
+  fi
+  echo "${out}" | grep -E 'error:' | head -5 | sed 's/^/    /'
+  exit 1
+fi
+
+fail=0
+for h in *.h ut/*.h; do
+  guard="__CALI_$(basename "${h%.h}" | tr '[:lower:]' '[:upper:]')_H__"
+  if ! grep -qx "#ifndef ${guard}" "$h" || ! grep -qx "#define ${guard}" "$h"; then
+    echo "FAIL: $h must have include guard: #ifndef ${guard} / #define ${guard}"
+    fail=1
+  fi
+done
+if [ "${fail}" != 0 ]; then
+  exit 1
+fi
+
+{
+  for h in *.h; do
+    for v in "${!variants[@]}"; do
+      if [ -n "${only[$h]:-}" ] && ! [[ " ${only[$h]} " == *" $v "* ]]; then
+        continue
+      fi
+      echo "$h $v"
+    done
+  done
+  # Headers shared with userspace (felix/bpf/libbpf) must also compile with the
+  # host compiler, without the BPF helper definitions.
+  for h in globals.h ip_addr.h bpf_inline.h; do
+    echo "$h userspace"
+  done
+} | xargs -P "$(nproc)" -I{} bash -c 'exec "$0" --one {} "$@"' "$0" "$@"
+if [ "${PIPESTATUS[1]}" != 0 ]; then
+  exit 1
+fi
+echo "All headers are self-contained."

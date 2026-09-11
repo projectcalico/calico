@@ -1,8 +1,8 @@
 #ifndef __CALI_ALLOWSOURCES_H__
 #define __CALI_ALLOWSOURCES_H__
 
-#include <linux/in.h>
 #include "bpf.h"
+#include "ip_addr.h"
 
 #define IPV4_ADDR_BITS 32
 #define IPV6_ADDR_BITS 128
@@ -40,4 +40,4 @@ static CALI_BPF_INLINE bool cali_allowsource_lookup(ipv46_addr_t *addr, __u32 if
     return cali_sprefix_lookup_elem(&k);
 }
 
-# endif /* __CALI_ALLOWSOURCES_H__ */
+#endif /* __CALI_ALLOWSOURCES_H__ */

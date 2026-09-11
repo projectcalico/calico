@@ -5,9 +5,11 @@
 #ifndef __CALI_IP_V4_FRAGMENT_H__
 #define __CALI_IP_V4_FRAGMENT_H__
 
-#include <time.h>
+#include <linux/ip.h>
+#include <time.h> /* CLOCK_MONOTONIC */
 
 #include "bpf.h"
+#include "globals.h"
 #include "ip_addr.h"
 #include "log.h"
 #include "parsing.h"

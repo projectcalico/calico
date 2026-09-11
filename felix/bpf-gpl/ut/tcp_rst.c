@@ -3,15 +3,20 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #include "ut.h"
+
 #include "bpf.h"
-#include "nat.h"
-#ifndef IPVER6
-#include "tcp4.h"
-#else
-#include "tcp6.h"
-#endif
-#include "parsing.h"
+#include "globals.h"
 #include "jump.h"
+#include "log.h"
+#include "nat.h"
+#include "parsing.h"
+#include "parsing_types.h"
+#include "types.h"
+#ifdef IPVER6
+#include "tcp6.h"
+#else
+#include "tcp4.h"
+#endif
 
 const volatile struct cali_tc_preamble_globals __globals;
 

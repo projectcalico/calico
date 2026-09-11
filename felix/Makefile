@@ -205,6 +205,15 @@ PROD_BPF_PROGS=$(PROD_BPF_APACHE_PROGS) $(PROD_BPF_GPL_PROGS)
 .PHONY: build-bpf clean-bpf
 build-bpf: $(LIBBPF_A) $(PROD_BPF_PROGS) $(BPF_GPL_UT_O_FILES)
 
+# Checks that every bpf-gpl header compiles on its own, i.e. that no header
+# relies on its includer's include order.
+.PHONY: check-bpf-headers
+check-bpf-headers: $(LIBBPF_FILE_CREATED)
+	$(DOCKER_GO_BUILD) make -C bpf-gpl ARCH=$(ARCH) check-headers
+
+# Run as part of static-checks (see lib.Makefile).
+LOCAL_CHECKS := check-bpf-headers
+
 $(PROD_BPF_PROGS) &: $(BPF_APACHE_O_FILES) $(BPF_GPL_O_FILES)
 	rm -rf bin/bpf
 	mkdir -p bin/bpf
