@@ -1,6 +1,64 @@
 # projectcalico.org/v3 and operator.tigera.io/v1 APIs
 ---
 # Source: projectcalico.org.v3/templates/admission-policies.yaml
+# This MutatingAdmissionPolicy carries the two IP pool defaults a static CRD default
+# cannot express: blockSize depends on the CIDR family, and allowedUses depends on
+# whether a namespaceSelector is set.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "ippool.policy.projectcalico.org"
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - ippools
+  failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
+  variables:
+    # Mutation runs before schema validation, so a missing or malformed CIDR has to
+    # be tolerated here and left for the validator to reject.
+    - name: cidrUsable
+      expression: |
+        has(object.spec.cidr) && isCIDR(object.spec.cidr)
+    - name: blockSizeUnset
+      expression: |
+        !has(object.spec.blockSize) || object.spec.blockSize == 0
+    - name: blockSize
+      expression: |
+        variables.cidrUsable && cidr(object.spec.cidr).ip().family() == 6 ? 122 : 26
+    - name: allowedUsesUnset
+      expression: |
+        !has(object.spec.allowedUses) || size(object.spec.allowedUses) == 0
+    # A pool that names a namespace is a workload pool, and Tunnel is rejected
+    # alongside a namespaceSelector, so the back-compatible pair is wrong there.
+    - name: namespaceScoped
+      expression: |
+        has(object.spec.namespaceSelector) && size(object.spec.namespaceSelector) != 0
+  mutations:
+    # Also on update: blockSize is immutable, but its transition rule cannot fire
+    # when the field is absent, so a write that omits it would otherwise clear it.
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          variables.cidrUsable && variables.blockSizeUnset ?
+            [JSONPatch{op: "add", path: "/spec/blockSize", value: variables.blockSize}] :
+            []
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          variables.allowedUsesUnset ?
+            [JSONPatch{
+              op: "add",
+              path: "/spec/allowedUses",
+              value: variables.namespaceScoped ? ["Workload"] : ["Workload", "Tunnel"],
+            }] :
+            []
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
 # This MutatingAdmissionPolicy defaults the types/policyTypes field on Calico policy resources.
 apiVersion: admissionregistration.k8s.io/v1beta1
 kind: MutatingAdmissionPolicy
@@ -104,6 +162,22 @@ spec:
               JSONPatch{op: "add", path: "/metadata/labels", value: {}},
               JSONPatch{op: "add", path: "/metadata/labels/projectcalico.org~1tier", value: variables.tierValue}
             ]
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# This MutatingAdmissionPolicyBinding binds the IP pool defaulting policy to IP pools.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: set-ippool-defaults-binding
+spec:
+  policyName: ippool.policy.projectcalico.org
+  matchResources:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - ippools
 ---
 # Source: projectcalico.org.v3/templates/admission-policies.yaml
 # This MutatingAdmissionPolicyBinding binds the policy types defaulting mutation to the relevant resources.
@@ -27923,6 +27997,7 @@ spec:
                     [Default: unset - means logs are emitted when BPFLogLevel id debug and BPFLogFilters not set.]
                   type: string
                 bpfConnectTimeLoadBalancing:
+                  default: TCP
                   description: |-
                     BPFConnectTimeLoadBalancing when in BPF mode, controls whether Felix installs the connect-time load
                     balancer. The connect-time load balancer is required for the host to be able to reach Kubernetes services
@@ -28122,6 +28197,7 @@ spec:
                     workloads and services. [Default: true - bypass Linux conntrack]
                   type: boolean
                 bpfHostNetworkedNATWithoutCTLB:
+                  default: Enabled
                   description: |-
                     BPFHostNetworkedNATWithoutCTLB when in BPF mode, controls whether Felix does a NAT without CTLB. This along with BPFConnectTimeLoadBalancing
                     determines the CTLB behavior. [Default: Enabled]
@@ -28511,6 +28587,7 @@ spec:
                   pattern: ^([a-zA-Z0-9-_]+=([^=]+),)*([a-zA-Z0-9-_]+=([^=]+))?$
                   type: string
                 floatingIPs:
+                  default: Disabled
                   description: |-
                     FloatingIPs configures whether or not Felix will program non-OpenStack floating IP addresses.  (OpenStack-derived
                     floating IPs are always programmed, regardless of this setting.)
@@ -31445,6 +31522,7 @@ spec:
                     from this pool.
                   type: boolean
                 ipipMode:
+                  default: Never
                   description: |-
                     Contains configuration for IPIP tunneling for this pool.
                     For IPv6 pools, IPIP tunneling must be disabled.
@@ -31472,6 +31550,7 @@ spec:
                   maxLength: 1024
                   type: string
                 vxlanMode:
+                  default: Never
                   description: Contains configuration for VXLAN tunneling for this pool.
                   enum:
                     - Never
@@ -31948,6 +32027,7 @@ spec:
                     - Panic
                   type: string
                 prometheusMetricsPort:
+                  default: 9094
                   description: |-
                     PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. Set to 0 to disable. [Default: 9094]
                     Valid values are: 0-65535.
@@ -32188,6 +32268,7 @@ spec:
                         - Panic
                       type: string
                     prometheusMetricsPort:
+                      default: 9094
                       description: |-
                         PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. Set to 0 to disable. [Default: 9094]
                         Valid values are: 0-65535.

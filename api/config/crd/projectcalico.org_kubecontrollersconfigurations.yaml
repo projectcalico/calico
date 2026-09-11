@@ -250,6 +250,7 @@ spec:
                     - Panic
                   type: string
                 prometheusMetricsPort:
+                  default: 9094
                   description: |-
                     PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. Set to 0 to disable. [Default: 9094]
                     Valid values are: 0-65535.
@@ -490,6 +491,7 @@ spec:
                         - Panic
                       type: string
                     prometheusMetricsPort:
+                      default: 9094
                       description: |-
                         PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. Set to 0 to disable. [Default: 9094]
                         Valid values are: 0-65535.
