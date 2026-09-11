@@ -510,7 +510,7 @@ func parseIperf3JSON(output string) (*Result, error) {
 		result.PeakRate = raw.Intervals[0].Sum.BitsPerSecond
 	}
 
-	if result.DeliveredPacketsPerSecond > 0 {
+if result.DeliveredPacketsPerSecond > 0 || result.LostPercent > 0 {
 		logrus.Infof("iperf3 result: rate=%.0f bps, peakRate=%.0f bps, delivered=%.0f pps, loss=%.1f%%",
 			result.AverageRate, result.PeakRate, result.DeliveredPacketsPerSecond, result.LostPercent)
 	} else {
