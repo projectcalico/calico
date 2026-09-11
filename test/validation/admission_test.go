@@ -16,6 +16,7 @@ package validation_test
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -240,5 +241,55 @@ func TestIPPool_BlockSizeSurvivesUpdateThatOmitsIt(t *testing.T) {
 	}
 	if got.Spec.BlockSize != 26 {
 		t.Fatalf("expected blockSize to survive the update as 26, got %d", got.Spec.BlockSize)
+	}
+}
+
+// A pool that names a namespace must not pick up Tunnel, which the schema rejects
+// alongside a namespaceSelector.
+func TestIPPool_AllowedUsesDefaulting(t *testing.T) {
+	if !admissionPoliciesEnabled {
+		t.Skip("MutatingAdmissionPolicy not supported on this K8s version")
+	}
+
+	for _, tc := range []struct {
+		name              string
+		namespaceSelector string
+		allowedUses       []v3.IPPoolAllowedUse
+		want              []v3.IPPoolAllowedUse
+	}{
+		{
+			name: "omitted defaults to Workload and Tunnel",
+			want: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload, v3.IPPoolAllowedUseTunnel},
+		},
+		{
+			name:              "namespaced pool defaults to Workload only",
+			namespaceSelector: "has(ns-label)",
+			want:              []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload},
+		},
+		{
+			name:        "explicit value is preserved",
+			allowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload},
+			want:        []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			name := uniqueName("ippool-uses")
+			mustCreate(t, &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: name},
+				Spec: v3.IPPoolSpec{
+					CIDR:              nextPoolCIDR(),
+					NamespaceSelector: tc.namespaceSelector,
+					AllowedUses:       tc.allowedUses,
+				},
+			})
+
+			got := &v3.IPPool{}
+			if err := testClient.Get(context.Background(), client.ObjectKey{Name: name}, got); err != nil {
+				t.Fatalf("failed to get pool: %v", err)
+			}
+			if !slices.Equal(got.Spec.AllowedUses, tc.want) {
+				t.Fatalf("expected spec.allowedUses=%v, got %v", tc.want, got.Spec.AllowedUses)
+			}
+		})
 	}
 }

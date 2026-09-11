@@ -63,9 +63,6 @@ spec:
               description: IPPoolSpec contains the specification for an IPPool resource.
               properties:
                 allowedUses:
-                  default:
-                    - Workload
-                    - Tunnel
                   description: |-
                     AllowedUses controls what the IP pool will be used for. If not specified or empty, defaults to
                     ["Tunnel", "Workload"] for back-compatibility. Valid values: "Tunnel", "Workload", "LoadBalancer".
