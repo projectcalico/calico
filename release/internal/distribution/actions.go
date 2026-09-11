@@ -101,7 +101,7 @@ func sumCandidates(dir string) ([]string, error) {
 	return names, nil
 }
 
-func Publish(pipeline []Upload, confirm bool, opts ...PublishOption) error {
+func Publish(pipeline []Upload, opts ...PublishOption) error {
 	s, err := newSettings(artifactsStep, opts)
 	if err != nil {
 		return err
@@ -121,7 +121,7 @@ func Publish(pipeline []Upload, confirm bool, opts ...PublishOption) error {
 	if err := errors.Join(errs...); err != nil {
 		return s.Errorf("%w", err)
 	}
-	s.pipeline, s.confirm = pipeline, confirm
+	s.pipeline = pipeline
 
 	s.Logger().WithField("uploads", len(s.pipeline)).Info("Publishing artifacts")
 	if _, err := s.push(s.pipeline); err != nil {

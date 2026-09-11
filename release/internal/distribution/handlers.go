@@ -173,13 +173,18 @@ func (d GCS) Publish(_ context.Context, src string) error {
 		return err
 	}
 
-	// cp has no dry run of its own, so a preview uses rsync for both.
 	args := []string{storageCmd, cpVerb}
 	switch {
 	case d.Sync:
 		args = []string{storageCmd, rsyncVerb, recursiveFlag, "--delete-unmatched-destination-objects"}
-	case d.DryRun:
+	case d.DryRun && p.dir:
 		args = []string{storageCmd, rsyncVerb, recursiveFlag}
+	case d.DryRun:
+		logrus.WithFields(logrus.Fields{
+			"cmd":  gcloudCmd,
+			"args": append(args, p.src, p.dest),
+		}).Info("Dry run, not copying")
+		return nil
 	case p.dir:
 		args = append(args, recursiveFlag)
 	}

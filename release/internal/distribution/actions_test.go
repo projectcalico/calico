@@ -144,7 +144,7 @@ func TestPublishSendsEachSourceToItsDestination(t *testing.T) {
 	err := Publish([]Upload{
 		{Source: dir, Handler: gh},
 		{Source: filepath.Join(dir, "charts"), Handler: s3},
-	}, true)
+	})
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestPublishDryRunStillRunsTheSteps(t *testing.T) {
 	dir := dirWith(t, "release.tgz")
 	d := &fakeDest{name: "github"}
 
-	if err := Publish([]Upload{{Source: dir, Handler: d}}, false); err != nil {
+	if err := Publish([]Upload{{Source: dir, Handler: d}}); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	if got := d.got(); len(got) != 1 {
@@ -183,7 +183,7 @@ func TestPublishMissingSource(t *testing.T) {
 			d := &fakeDest{name: "s3://bucket/files/"}
 			absent := filepath.Join(t.TempDir(), "never-built")
 
-			err := Publish([]Upload{{Source: absent, Handler: d, Skip: tc.skip}}, true)
+			err := Publish([]Upload{{Source: absent, Handler: d, Skip: tc.skip}})
 
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
@@ -211,7 +211,7 @@ func TestPublishStopsAtTheFirstFailure(t *testing.T) {
 	err := Publish([]Upload{
 		{Source: dir, Handler: bad},
 		{Source: dir, Handler: after},
-	}, true)
+	})
 	if err == nil || !strings.Contains(err.Error(), "s3://bad/") {
 		t.Fatalf("expected the failure reported, got %v", err)
 	}
@@ -222,7 +222,7 @@ func TestPublishStopsAtTheFirstFailure(t *testing.T) {
 
 // A handler with its own rules rejects a bad upload before anything is sent.
 func TestPublishRejectsASourcelessUploadToADestinationThatNeedsOne(t *testing.T) {
-	err := Publish([]Upload{{Handler: S3{URI: "s3://bucket/charts/"}}}, true)
+	err := Publish([]Upload{{Handler: S3{URI: "s3://bucket/charts/"}}})
 	if err == nil || !strings.Contains(err.Error(), "no source") {
 		t.Errorf("expected a missing source to be rejected, got %v", err)
 	}
@@ -231,7 +231,7 @@ func TestPublishRejectsASourcelessUploadToADestinationThatNeedsOne(t *testing.T)
 // A handler that finds its own content takes no source, so it runs.
 func TestPublishSourcelessHandlerRuns(t *testing.T) {
 	d := &fakeDest{name: "images"}
-	if err := Publish([]Upload{{Handler: d}}, true); err != nil {
+	if err := Publish([]Upload{{Handler: d}}); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	if got := d.got(); len(got) != 1 || got[0] != "" {
@@ -249,7 +249,7 @@ func TestPublishRejectsIncompleteUploads(t *testing.T) {
 		{"no destination", []Upload{{Source: "/tmp"}}, "no destination"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := Publish(tc.uploads, true); err == nil || !strings.Contains(err.Error(), tc.want) {
+			if err := Publish(tc.uploads); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("expected an error containing %q, got %v", tc.want, err)
 			}
 		})
@@ -260,7 +260,7 @@ func TestPublishRetriesBeforeGivingUp(t *testing.T) {
 	dir := dirWith(t, "release.tgz")
 	d := &flakyDest{failures: 1}
 
-	if err := Publish([]Upload{{Source: dir, Handler: d}}, true); err != nil {
+	if err := Publish([]Upload{{Source: dir, Handler: d}}); err != nil {
 		t.Fatalf("expected the retry to succeed, got %v", err)
 	}
 	if d.calls != 2 {
@@ -310,7 +310,7 @@ func TestPublishSkipsValidationOfASkippedUpload(t *testing.T) {
 	if err := Publish([]Upload{
 		{Handler: S3{URI: "s3://bucket/rpms/"}, Skip: true},
 		{Source: dirWith(t, "x"), Handler: d},
-	}, true); err != nil {
+	}); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	if got := d.got(); len(got) != 1 {
@@ -348,7 +348,7 @@ func TestBuildMetadataWritesAProductsOwnFields(t *testing.T) {
 }
 
 type productRelease struct {
-	Metadata  `yaml:",inline"`
+	Metadata `yaml:",inline"`
 	Upstream string `yaml:"upstreamVersion"`
 }
 

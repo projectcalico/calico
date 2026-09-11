@@ -130,8 +130,6 @@ func (r Metadata) Attest() ([]byte, error) {
 type settings struct {
 	pipeline []Upload
 
-	confirm bool
-
 	steps.Step
 }
 

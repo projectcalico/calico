@@ -58,6 +58,7 @@ type ReleaseService interface {
 	CreateRelease(ctx context.Context, owner, repo string, release *github.RepositoryRelease) (*github.RepositoryRelease, *github.Response, error)
 	EditRelease(ctx context.Context, owner, repo string, id int64, release *github.RepositoryRelease) (*github.RepositoryRelease, *github.Response, error)
 	ListReleases(ctx context.Context, owner, repo string, opts *github.ListOptions) ([]*github.RepositoryRelease, *github.Response, error)
+	GetLatestRelease(ctx context.Context, owner, repo string) (*github.RepositoryRelease, *github.Response, error)
 	ListReleaseAssets(ctx context.Context, owner, repo string, id int64, opts *github.ListOptions) ([]*github.ReleaseAsset, *github.Response, error)
 	DeleteReleaseAsset(ctx context.Context, owner, repo string, id int64) (*github.Response, error)
 	UploadReleaseAsset(ctx context.Context, owner, repo string, id int64, opts *github.UploadOptions, file *os.File) (*github.ReleaseAsset, *github.Response, error)
@@ -212,7 +213,9 @@ func (r *Releases) forTag(ctx context.Context, tag string) (*github.RepositoryRe
 // Publish takes a draft live. It marks the release latest only when its
 // version is the newest published one, which the caller decides.
 func (r *Releases) Publish(ctx context.Context, tag string, latest bool) error {
-	rel, found, err := r.Get(ctx, tag)
+	// forTag rather than Get: what is being published is a draft, and a draft
+	// carries no git tag for the by-tag endpoint to find.
+	rel, found, err := r.forTag(ctx, tag)
 	if err != nil {
 		return err
 	}
@@ -230,25 +233,16 @@ func (r *Releases) Publish(ctx context.Context, tag string, latest bool) error {
 	return nil
 }
 
-// LatestTag is the tag of the newest published release, empty when the
-// repository has none. Drafts and prereleases do not count.
+// LatestTag is the tag GitHub serves as the latest release
 func (r *Releases) LatestTag(ctx context.Context) (string, error) {
-	opts := &github.ListOptions{PerPage: pageSize}
-	for {
-		page, resp, err := r.svc.ListReleases(ctx, r.repo.Org, r.repo.Name, opts)
-		if err != nil {
-			return "", fmt.Errorf("listing %s releases: %w", r.repo, err)
-		}
-		for _, rel := range page {
-			if !rel.GetDraft() && !rel.GetPrerelease() {
-				return rel.GetTagName(), nil
-			}
-		}
-		if resp == nil || resp.NextPage == 0 {
+	rel, resp, err := r.svc.GetLatestRelease(ctx, r.repo.Org, r.repo.Name)
+	if err != nil {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			return "", nil
 		}
-		opts.Page = resp.NextPage
+		return "", fmt.Errorf("%s latest release: %w", r.repo, err)
 	}
+	return rel.GetTagName(), nil
 }
 
 const pageSize = 100

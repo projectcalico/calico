@@ -17,6 +17,7 @@ package distribution
 import (
 	"context"
 	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -189,7 +190,8 @@ func TestGCSDryRunPreviewsWithRsync(t *testing.T) {
 		sync bool
 		dir  bool
 	}{
-		{name: "a file that would be copied"},
+		// A single file has no rsync preview, so it reports instead.
+		{name: "a tree that would be copied", dir: true},
 		{name: "a tree that would be synced", sync: true, dir: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -253,7 +255,7 @@ func githubReleasesWithLatest(t *testing.T, tag string) *gh.Releases {
 	t.Helper()
 	svc := &fakeReleaseService{}
 	if tag != "" {
-		svc.published = []*ghapi.RepositoryRelease{{TagName: ghapi.String(tag)}}
+		svc.latest = &ghapi.RepositoryRelease{TagName: ghapi.String(tag)}
 	}
 	rels, err := gh.NewReleases(gh.Repo{Org: "projectcalico", Name: "calico"}, svc)
 	if err != nil {
@@ -264,11 +266,14 @@ func githubReleasesWithLatest(t *testing.T, tag string) *gh.Releases {
 
 type fakeReleaseService struct {
 	gh.ReleaseService
-	published []*ghapi.RepositoryRelease
+	latest *ghapi.RepositoryRelease
 }
 
-func (f *fakeReleaseService) ListReleases(context.Context, string, string, *ghapi.ListOptions) ([]*ghapi.RepositoryRelease, *ghapi.Response, error) {
-	return f.published, nil, nil
+func (f *fakeReleaseService) GetLatestRelease(context.Context, string, string) (*ghapi.RepositoryRelease, *ghapi.Response, error) {
+	if f.latest == nil {
+		return nil, &ghapi.Response{Response: &http.Response{StatusCode: http.StatusNotFound}}, errors.New("not found")
+	}
+	return f.latest, nil, nil
 }
 
 // Every gcloud invocation is a "storage" subcommand, whichever verb it uses.

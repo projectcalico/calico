@@ -45,6 +45,11 @@ import (
 )
 
 // Global configuration for releases.
+const (
+	chartsDir    = "charts"
+	manifestsDir = "manifests"
+)
+
 var (
 	// Default defaultRegistries to which all release images are pushed.
 	defaultRegistries = registry.DefaultCalicoRegistries
@@ -401,7 +406,7 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 
 func (r *CalicoManager) getRegistryFromManifests() (string, error) {
 	args := []string{"-Po", `image:\K(.*)`, "calicoctl.yaml"}
-	out, err := r.runner.RunInDir(filepath.Join(r.repoRoot, "manifests"), "grep", args, nil)
+	out, err := r.runner.RunInDir(filepath.Join(r.repoRoot, manifestsDir), "grep", args, nil)
 	if err != nil {
 		return "", fmt.Errorf("error getting registry from calicoctl.yaml manifest: %w", err)
 	}
@@ -662,7 +667,7 @@ func (r *CalicoManager) PublishRelease() error {
 	// the github release references the tag.
 	uploads := []distribution.Upload{
 		{Handler: distribution.Publisher{Kind: "images", Action: r.publishContainerImages}},
-		{Handler: distribution.Publisher{Kind: "charts", Action: r.publishHelmCharts}},
+		{Handler: distribution.Publisher{Kind: chartsDir, Action: r.publishHelmCharts}},
 	}
 	uploads = append(uploads,
 		distribution.Upload{Handler: distribution.Preparer{Kind: "metadata", Action: r.buildMetadata}},
@@ -671,7 +676,7 @@ func (r *CalicoManager) PublishRelease() error {
 
 	if r.isHashRelease {
 		uploads = append(uploads, r.hashreleaseUpload()...)
-		return distribution.Publish(uploads, !r.dryRun, distribution.WithRunner(r.runner))
+		return distribution.Publish(uploads, distribution.WithRunner(r.runner))
 	}
 	uploads = append(uploads, r.githubTagUpload(), r.helmIndexUpload())
 	github, err := r.githubReleaseUpload()
@@ -682,7 +687,7 @@ func (r *CalicoManager) PublishRelease() error {
 	if github != nil {
 		uploads = append(uploads, *github)
 	}
-	return distribution.Publish(uploads, !r.dryRun, distribution.WithRunner(r.runner))
+	return distribution.Publish(uploads, distribution.WithRunner(r.runner))
 }
 
 func (r *CalicoManager) buildMetadata() error {
@@ -943,7 +948,7 @@ func (r *CalicoManager) collectManifests() error {
 	if r.isHashRelease {
 		uploadDir := r.uploadDir()
 		// Hashrelease include manifests in a different way, instead of just in the release tarball.
-		if _, err := r.runner.Run("cp", []string{"-r", filepath.Join(r.repoRoot, "manifests"), uploadDir}, nil); err != nil {
+		if _, err := r.runner.Run("cp", []string{"-r", filepath.Join(r.repoRoot, manifestsDir), uploadDir}, nil); err != nil {
 			logrus.WithError(err).Error("Failed to copy manifests to output directory")
 			return fmt.Errorf("failed to copy manifests: %w", err)
 		}
@@ -1005,7 +1010,7 @@ func (r *CalicoManager) resetManifests() {
 	if !r.manifests {
 		return
 	}
-	if _, err := r.runner.RunInDir(r.repoRoot, "git", []string{"checkout", "manifests", "test-tools/mocknode/mock-node.yaml"}, nil); err != nil {
+	if _, err := r.runner.RunInDir(r.repoRoot, "git", []string{"checkout", manifestsDir, "test-tools/mocknode/mock-node.yaml"}, nil); err != nil {
 		logrus.WithError(err).Error("Failed to reset manifests")
 	}
 }
@@ -1064,7 +1069,7 @@ func (r *CalicoManager) buildReleaseTar() error {
 
 	// Add in manifests directory generated from the docs.
 	if r.manifests {
-		if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"-al", "manifests", releaseBase}, nil); err != nil {
+		if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"-al", manifestsDir, releaseBase}, nil); err != nil {
 			return fmt.Errorf("failed to copy manifests: %w", err)
 		}
 	}
@@ -1472,7 +1477,7 @@ func (r *CalicoManager) helmIndexUpload() distribution.Upload {
 		Source: charts.IndexFilePath(r.chart().BaseDir),
 		Skip:   !r.helmCharts || !r.helmIndex,
 		Handler: distribution.S3{
-			URI:     r.s3URI("charts"),
+			URI:     r.s3URI(chartsDir),
 			Profile: r.awsProfile,
 			DryRun:  r.dryRun,
 			Runner:  r.runner,
@@ -1509,7 +1514,7 @@ func (r *CalicoManager) assertManifestVersions(ver string) error {
 
 	for _, m := range manifests {
 		args := []string{"-Po", `image:\K(.*)`, m}
-		out, err := r.runner.RunInDir(filepath.Join(r.repoRoot, "manifests"), "grep", args, nil)
+		out, err := r.runner.RunInDir(filepath.Join(r.repoRoot, manifestsDir), "grep", args, nil)
 		if err != nil {
 			return fmt.Errorf("failed to get images from manifest %s: %w", m, err)
 		}
@@ -1595,8 +1600,8 @@ func (r *CalicoManager) releaseBranchPrereqs() error {
 // branchChangedPaths are the trees the prepareDerived hook rewrites; it reports
 // them so the branch flow stages them into the cut commit.
 var branchChangedPaths = []string{
-	"charts",
-	"manifests",
+	chartsDir,
+	manifestsDir,
 	".semaphore",
 	"test-tools/mocknode",
 }
@@ -1793,8 +1798,8 @@ func (r *CalicoManager) updateAndCommitPrep() error {
 	}
 
 	if _, err := r.git("add",
-		filepath.Join(r.repoRoot, "charts"),
-		filepath.Join(r.repoRoot, "manifests"),
+		filepath.Join(r.repoRoot, chartsDir),
+		filepath.Join(r.repoRoot, manifestsDir),
 		filepath.Join(r.repoRoot, outputs.ReleaseNotesDir),
 	); err != nil {
 		return fmt.Errorf("failed to stage files: %w", err)

@@ -62,6 +62,15 @@ func (f *fakeReleases) EditRelease(_ context.Context, _, _ string, _ int64, rel 
 	return rel, nil, nil
 }
 
+func (f *fakeReleases) GetLatestRelease(_ context.Context, _, _ string) (*github.RepositoryRelease, *github.Response, error) {
+	for _, rel := range f.listed {
+		if !rel.GetDraft() && !rel.GetPrerelease() {
+			return rel, nil, nil
+		}
+	}
+	return nil, &github.Response{Response: &http.Response{StatusCode: http.StatusNotFound}}, errors.New("not found")
+}
+
 func (f *fakeReleases) ListReleases(_ context.Context, _, _ string, _ *github.ListOptions) ([]*github.RepositoryRelease, *github.Response, error) {
 	return f.listed, nil, nil
 }
@@ -246,9 +255,8 @@ func TestPublishAbsentReleaseFails(t *testing.T) {
 	}
 }
 
-// Drafts and prereleases are skipped: the latest tag decides whether the
-// release being published supersedes what users currently get.
-func TestLatestTagSkipsDraftsAndPrereleases(t *testing.T) {
+// GitHub serves the latest release itself, so ours is whatever it reports.
+func TestLatestTagIsWhatGithubServes(t *testing.T) {
 	f := &fakeReleases{listed: []*github.RepositoryRelease{
 		{TagName: github.String("v3.31.0-rc1"), Prerelease: github.Bool(true)},
 		{TagName: github.String("v3.30.1"), Draft: github.Bool(true)},
@@ -334,5 +342,22 @@ func TestClientBuildFailureRepeats(t *testing.T) {
 	t.Setenv("GITHUB_TOKEN", "t")
 	if c, err := githubClient(); err != nil || c == nil {
 		t.Errorf("expected a client once the token is set, got (%v, %v)", c != nil, err)
+	}
+}
+
+// Publishing takes a draft live, and a draft is the one thing the by-tag
+// endpoint cannot see. Looking it up that way strands every release.
+func TestPublishFindsADraftTheTagLookupCannotSee(t *testing.T) {
+	f := &fakeReleases{}
+	f.draft("v3.30.0", &github.RepositoryRelease{ID: github.Int64(9), Draft: github.Bool(true)})
+
+	if err := testReleases(t, f).Publish(context.Background(), "v3.30.0", false); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if f.edited == nil {
+		t.Fatal("expected the draft edited")
+	}
+	if f.edited.GetDraft() {
+		t.Error("expected the release undrafted")
 	}
 }
