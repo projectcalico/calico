@@ -31,8 +31,8 @@ defaults:
   # A step doing its work in-process names the build image instead.
   image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2
 
-  # medium is the only spot jobSize. Preemption fails the run outright, with no
-  # retry, so anything long or flaky wants `large`.
+  # A request rather than a limit, so it decides what a step is scheduled
+  # alongside and never caps it.
   jobSize: medium
 
   # An unset timeout means run-forever. A module overrides this when its work
@@ -183,3 +183,66 @@ includes:
     changes:
       dependsOn: [release]
       in: ['^\.argoci/modules/90-release\.yaml$']
+
+  # Vendored upstream trees. `third_party` is one generated entry covering all
+  # four, where each Semaphore block names just its own directory — so these
+  # keep the narrower literal paths.
+  - path: .argoci/modules/20-envoy-gateway.yaml
+    changes:
+      in:
+        - ^third_party/envoy-gateway/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/20-envoy-gateway\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
+
+  - path: .argoci/modules/20-envoy-proxy.yaml
+    changes:
+      in:
+        - ^third_party/envoy-proxy/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/20-envoy-proxy\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
+
+  - path: .argoci/modules/20-envoy-ratelimit.yaml
+    changes:
+      in:
+        - ^third_party/envoy-ratelimit/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/20-envoy-ratelimit\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
+
+  - path: .argoci/modules/20-third-party-cni-plugins.yaml
+    changes:
+      in:
+        - ^third_party/cni-plugins/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/20-third-party-cni-plugins\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
+
+  - path: .argoci/modules/20-e2e-images.yaml
+    changes:
+      in:
+        - ^e2e/images/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/20-e2e-images\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$

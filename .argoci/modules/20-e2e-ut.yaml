@@ -1,22 +1,22 @@
 # The e2e suite's own unit tests — not the e2e runs themselves, which are crons.
+#
+# Building the test binary splices its own `-e` flags into a nested
+# `docker run`, which emptying the wrappers would leave behind as a bare
+# command.
 version: condensed-module
 
 defaults:
   timeout: 30m
-  # Nothing here builds an image or needs a cluster, so the work runs in the
-  # build image directly.
-  image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
+  services:
+    - docker
 
 steps:
   - name: e2e-ut
-    # The image ships gotestsum under /go/bin, which the default emptyDir over
-    # /go hides — as `command not found`, minutes in.
-    workspaceVolumes: none
     commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       cd e2e
-      # Emptying the wrappers runs each recipe here instead of in a nested
-      # container; the tools they call are already on PATH.
-      make ci DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
+      make ci
     epilogue: |
       # Runs in the parent shell, so it inherits neither the `cd` above nor
       # anything the commands exported.
