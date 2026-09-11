@@ -1,0 +1,39 @@
+# The operator's own CI, plus a cross-architecture build of its binary.
+#
+# Both shell out to a nested build container: unauthenticated pulls are
+# rate-limited, and it inherits only what is spliced in explicitly.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: operator-ci
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd operator
+      make ci
+    epilogue: |
+      # Runs in the parent shell, so it inherits neither the `cd` above nor
+      # anything the commands exported.
+      cd "${CI_HOME}/${CI_GIT_DIR}/operator"
+      artifact push job report --destination test-results || true
+
+  # No cgo and no build constraints, so cross-compiling the binary is the whole
+  # of the per-architecture coverage — the images are assembled at release.
+  - name: operator-build
+    matrix:
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd operator
+      make build ARCH=$ARCH

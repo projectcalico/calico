@@ -1,0 +1,46 @@
+# Trend tracking rather than a per-PR gate: the numbers only mean anything
+# compared with the ones before them.
+#
+# The benchmark programs a real nftables table, so it needs a kernel of its own
+# and root on the machine holding it. The binaries are still built in the build
+# image — only running them needs the machine.
+version: condensed-module
+
+steps:
+  - name: nft-bench
+    runOn: vm
+    timeout: 30m
+    # Two vCPUs, matching what this has always been measured on. Any fixed size
+    # works; changing it puts a step in the trend that is not a code change.
+    vm:
+      machineType: e2-standard-2
+    # Installs docker on the machine rather than starting a sidecar the machine
+    # could not reach.
+    services:
+      - docker
+    # A bundle loaded whole cannot cross to a VM, so the keys are named.
+    secretBundles:
+      - name: banzai-secrets
+        keys:
+          - name: LENS_ELASTICSEARCH_USER
+          - name: LENS_ELASTICSEARCH_TOKEN
+    commands: |
+      sudo apt-get update -y && sudo apt-get install -y nftables
+      make -C felix bin/nft.test
+      make bin/send-perf-results
+      mkdir -p artifacts/perf
+      # A few iterations is enough for a stable steady-state number.
+      sudo env NFT_BENCH_PERF_ARTIFACTS_DIR="$(pwd)/artifacts/perf" \
+        felix/bin/nft.test -test.run='^$' -test.bench=. -test.benchmem -test.benchtime=6x
+      # Taken from the secret alongside the token, so rotating the credential to
+      # a different account does not silently stop publishing.
+      export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
+      export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
+      export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
+      # No-ops if the credentials are unset.
+      ./bin/send-perf-results --dir artifacts/perf
+    epilogue: |
+      # Runs in the pod, which is only an SSH session — the results are on the
+      # machine, and it is still up until this returns.
+      copyFromVirtualMachine artifacts/perf artifacts/perf || true
+      artifact push job artifacts/perf || true

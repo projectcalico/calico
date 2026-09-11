@@ -11,6 +11,7 @@ defaults:
 
 steps:
   - name: whisker-backend-ci
+    requests: {cpu: 4400m, memory: 2Gi}
     # The image ships golangci-lint and gotestsum, which the default emptyDir
     # over /go hides — as `command not found`, minutes in.
     workspaceVolumes: none

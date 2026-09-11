@@ -35,6 +35,15 @@ defaults:
   # alongside and never caps it.
   jobSize: medium
 
+  # Roughly what a step of this shape sustains, not what it peaks at — nothing
+  # is capped, so the spikes are covered either way. A heavier step says so.
+  requests: {cpu: 1500m, memory: 2Gi}
+
+  # Go otherwise sizes itself from the request, capping parallelism at what a
+  # step is scheduled with rather than what it can reach.
+  env:
+    - {name: GOMAXPROCS, value: "3"}
+
   # An unset timeout means run-forever. A module overrides this when its work
   # justifies more.
   timeout: 1h
@@ -246,3 +255,30 @@ includes:
         - (^|/)\.gitignore$
         - (^|/)README\.md$
         - (^|/)LICENSE$
+
+  - path: .argoci/modules/10-check-images.yaml
+    changes:
+      in:
+        - ^charts/
+        - ^manifests/
+        - ^\.argoci/modules/10-check-images\.yaml$
+
+  - path: .argoci/modules/20-operator.yaml
+    changes:
+      dependsOn: [operator]
+      in: ['^\.argoci/modules/20-operator\.yaml$']
+
+  - path: .argoci/modules/20-node.yaml
+    changes:
+      dependsOn: [node]
+      in: ['^\.argoci/modules/20-node\.yaml$']
+
+  # The nftables dataplane and the publisher it feeds. Narrower than the
+  # generated `felix` entry, which would run the benchmark for any change in
+  # felix's import closure.
+  - path: .argoci/modules/45-nft-bench.yaml
+    changes:
+      in:
+        - ^felix/nftables/
+        - ^hack/perf/
+        - ^\.argoci/modules/45-nft-bench\.yaml$

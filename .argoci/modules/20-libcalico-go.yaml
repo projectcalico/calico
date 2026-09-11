@@ -14,6 +14,9 @@ defaults:
 
 steps:
   - name: libcalico-go-ci
+    # A whole kind control plane shares this pod, so the apiserver the
+    # syncer races against is competing for the same cores it is.
+    requests: {cpu: 3500m, memory: 2Gi}
     matrix:
       - name: crd-v1
       - name: v3

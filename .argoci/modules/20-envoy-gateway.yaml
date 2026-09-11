@@ -21,6 +21,7 @@ steps:
   # Cross-compiles only, so it runs in the build image directly rather than
   # paying for a daemon and a second pull.
   - name: envoy-gateway-build
+    requests: {cpu: 4100m, memory: 4Gi}
     image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
     workspaceVolumes: none
     matrix:

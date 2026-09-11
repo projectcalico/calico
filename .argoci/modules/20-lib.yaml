@@ -16,6 +16,7 @@ defaults:
 
 steps:
   - name: lib-ci
+    requests: {cpu: 3700m, memory: 2Gi}
     # The image ships ginkgo, gotestsum and the codegen tools under /go/bin,
     # which the default emptyDir over /go hides — as `command not found`,
     # minutes in.

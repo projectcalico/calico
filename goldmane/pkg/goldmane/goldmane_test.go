@@ -37,7 +37,7 @@ import (
 )
 
 var (
-	waitTimeout = 5 * time.Second
+	waitTimeout = 6 * time.Second
 	retryTime   = 25 * time.Millisecond
 )
 
