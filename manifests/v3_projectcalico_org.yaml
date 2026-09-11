@@ -1,9 +1,9 @@
 # projectcalico.org/v3 and operator.tigera.io/v1 APIs
 ---
 # Source: projectcalico.org.v3/templates/admission-policies.yaml
-# This MutatingAdmissionPolicy defaults spec.blockSize to 26 for IPv4 pools and 122
-# for IPv6. A static CRD default cannot express it, because the value depends on the
-# CIDR family.
+# This MutatingAdmissionPolicy carries the two IP pool defaults a static CRD default
+# cannot express: blockSize depends on the CIDR family, and allowedUses depends on
+# whether a namespaceSelector is set.
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicy
 metadata:
@@ -30,6 +30,14 @@ spec:
     - name: blockSize
       expression: |
         variables.cidrUsable && cidr(object.spec.cidr).ip().family() == 6 ? 122 : 26
+    - name: allowedUsesUnset
+      expression: |
+        !has(object.spec.allowedUses) || size(object.spec.allowedUses) == 0
+    # A pool that names a namespace is a workload pool, and Tunnel is rejected
+    # alongside a namespaceSelector, so the back-compatible pair is wrong there.
+    - name: namespaceScoped
+      expression: |
+        has(object.spec.namespaceSelector) && size(object.spec.namespaceSelector) != 0
   mutations:
     # Also on update: blockSize is immutable, but its transition rule cannot fire
     # when the field is absent, so a write that omits it would otherwise clear it.
@@ -38,6 +46,16 @@ spec:
         expression: |
           variables.cidrUsable && variables.blockSizeUnset ?
             [JSONPatch{op: "add", path: "/spec/blockSize", value: variables.blockSize}] :
+            []
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          variables.allowedUsesUnset ?
+            [JSONPatch{
+              op: "add",
+              path: "/spec/allowedUses",
+              value: variables.namespaceScoped ? ["Workload"] : ["Workload", "Tunnel"],
+            }] :
             []
 ---
 # Source: projectcalico.org.v3/templates/admission-policies.yaml
@@ -146,11 +164,11 @@ spec:
             ]
 ---
 # Source: projectcalico.org.v3/templates/admission-policies.yaml
-# This MutatingAdmissionPolicyBinding binds the IP pool blockSize defaulting to IP pools.
+# This MutatingAdmissionPolicyBinding binds the IP pool defaulting policy to IP pools.
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicyBinding
 metadata:
-  name: set-ippool-blocksize-binding
+  name: set-ippool-defaults-binding
 spec:
   policyName: ippool.policy.projectcalico.org
   matchResources:
@@ -31441,9 +31459,6 @@ spec:
               description: IPPoolSpec contains the specification for an IPPool resource.
               properties:
                 allowedUses:
-                  default:
-                    - Workload
-                    - Tunnel
                   description: |-
                     AllowedUses controls what the IP pool will be used for. If not specified or empty, defaults to
                     ["Tunnel", "Workload"] for back-compatibility. Valid values: "Tunnel", "Workload", "LoadBalancer".
