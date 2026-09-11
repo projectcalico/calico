@@ -49,6 +49,13 @@ var (
 	_ Handler = GCS{}
 	_ Handler = GithubRelease{}
 	_ Handler = HashreleaseServer{}
+	_ Handler = Preparer{}
+	_ Handler = Publisher{}
+
+	_ validator = S3{}
+	_ validator = GCS{}
+	_ validator = GithubRelease{}
+	_ validator = HashreleaseServer{}
 )
 
 type S3 struct {
@@ -128,6 +135,10 @@ func (d S3) runner() command.CommandRunner {
 	return d.Runner
 }
 
+func (d S3) Validate(u Upload) error {
+	return validSource(u)
+}
+
 type GCS struct {
 	URI string
 
@@ -201,6 +212,10 @@ func (d GCS) runner() command.CommandRunner {
 		return &command.RealCommandRunner{}
 	}
 	return d.Runner
+}
+
+func (d GCS) Validate(u Upload) error {
+	return validSource(u)
 }
 
 type GithubRelease struct {
@@ -308,6 +323,10 @@ func (d GithubRelease) log() *logrus.Entry {
 	return d.Log
 }
 
+func (d GithubRelease) Validate(u Upload) error {
+	return validSource(u)
+}
+
 func topLevelFiles(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -362,4 +381,28 @@ func (d HashreleaseServer) Publish(ctx context.Context, src string) error {
 		return nil
 	}
 	return hashreleaseserver.Record(d.ProductCode, d.Release, d.Config)
+}
+
+func (d HashreleaseServer) Validate(u Upload) error {
+	return validSource(u)
+}
+
+// Publisher adapts a group's own publish to the Handler interface,
+type Publisher = Preparer
+
+type Preparer struct {
+	Kind string
+
+	Action func() error
+}
+
+func (d Preparer) Name() string { return d.Kind }
+
+func (d Preparer) Publish(context.Context, string) error { return d.Action() }
+
+func validSource(u Upload) error {
+	if u.Source == "" {
+		return fmt.Errorf("upload to %s has no source", u.Handler.Name())
+	}
+	return nil
 }

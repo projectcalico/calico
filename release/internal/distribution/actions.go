@@ -100,16 +100,16 @@ func sumCandidates(dir string) ([]string, error) {
 	return names, nil
 }
 
-func Publish(uploads []Upload, confirm bool, opts ...PublishOption) error {
+func Publish(pipeline []Upload, confirm bool, opts ...PublishOption) error {
 	s, err := newSettings(artifactsStep, opts)
 	if err != nil {
 		return err
 	}
-	if len(uploads) == 0 {
+	if len(pipeline) == 0 {
 		return s.Errorf("no uploads to publish")
 	}
 	var errs []error
-	for _, u := range uploads {
+	for _, u := range pipeline {
 		if err := u.validate(); err != nil {
 			errs = append(errs, err)
 		}
@@ -117,34 +117,26 @@ func Publish(uploads []Upload, confirm bool, opts ...PublishOption) error {
 	if err := errors.Join(errs...); err != nil {
 		return s.Errorf("%w", err)
 	}
-	s.uploads, s.confirm = uploads, confirm
+	s.pipeline, s.confirm = pipeline, confirm
 	if !confirm {
 		// A dry run sends nothing, so a record would name unpublished artifacts.
 		s.refs = nil
 	}
 
-	pending, err := s.present()
-	if err != nil {
-		return err
-	}
-	if len(pending) == 0 {
-		s.Logger().Info("Nothing to publish")
-		return nil
-	}
 	if !confirm {
-		for _, u := range pending {
+		for _, u := range s.pipeline {
 			s.Logger().WithFields(map[string]any{"source": u.Source, "destination": u.Handler.Name()}).
 				Info("Dry run, not publishing")
 		}
 		return nil
 	}
 
-	s.Logger().WithField("uploads", len(pending)).Info("Publishing artifacts")
-	pubErr := s.push(pending)
+	s.Logger().WithField("uploads", len(s.pipeline)).Info("Publishing artifacts")
+	pubErr := s.push(s.pipeline)
 
 	// Record before reporting a failure: a partial publish is the run whose
 	// record decides what is already done.
-	if err := s.record(pending); err != nil {
+	if err := s.record(s.pipeline); err != nil {
 		return errors.Join(pubErr, err)
 	}
 	if pubErr != nil {
@@ -154,37 +146,35 @@ func Publish(uploads []Upload, confirm bool, opts ...PublishOption) error {
 	return nil
 }
 
-func (s settings) present() ([]Upload, error) {
-	var (
-		out  []Upload
-		errs []error
-	)
-	for _, u := range s.uploads {
-		switch _, err := os.Stat(u.Source); {
-		case err == nil:
-			out = append(out, u)
-		case !errors.Is(err, os.ErrNotExist):
-			errs = append(errs, s.Errorf("reading %s: %w", u.Source, err))
-		case u.AllowMissing:
-			s.Logger().WithFields(map[string]any{"source": u.Source, "destination": u.Handler.Name()}).
-				Warn("Source does not exist, skipping")
-		default:
-			errs = append(errs, s.Errorf("%s is not built, and %s requires it", u.Source, u.Handler.Name()))
+// Ordered, and stops at the first failure: a later upload may depend on an
+// earlier one having landed.
+func (s settings) push(uploads []Upload) error {
+	for _, u := range uploads {
+		if err := s.publishOne(u); err != nil {
+			return err
 		}
 	}
-	return out, errors.Join(errs...)
-}
-
-// Collected, not stopped at: a rerun needs every outstanding failure.
-func (s settings) push(uploads []Upload) error {
-	_, err := steps.Go(uploads, func(u Upload) (struct{}, error) {
-		return struct{}{}, s.publishOne(u)
-	})
-	return err
+	return nil
 }
 
 func (s settings) publishOne(u Upload) error {
 	log := s.Logger().WithFields(map[string]any{"source": u.Source, "destination": u.Handler.Name()})
+
+	// Checked here rather than up front: an earlier upload in the list may be
+	// what creates this one's source.
+	if u.Source != "" {
+		switch _, err := os.Stat(u.Source); {
+		case err == nil:
+		case !errors.Is(err, os.ErrNotExist):
+			return s.Errorf("reading %s: %w", u.Source, err)
+		case u.AllowMissing:
+			log.Warn("Source does not exist, skipping")
+			return nil
+		default:
+			return s.Errorf("%s is not built, and %s requires it", u.Source, u.Handler.Name())
+		}
+	}
+
 	for attempt := 0; ; attempt++ {
 		err := u.Handler.Publish(context.Background(), u.Source)
 		if err == nil {

@@ -344,81 +344,25 @@ func TestPublishGitTag(t *testing.T) {
 	}
 }
 
-func TestPublishGithubRelease(t *testing.T) {
-	const (
-		ver  = "v3.30.0"
-		org  = "projectcalico"
-		repo = "calico"
-	)
-	repoFlag := fmt.Sprintf("--repo %s/%s", org, repo)
-	notFound := fmt.Errorf("release not found")
-
-	tests := []struct {
-		name          string
-		githubRelease bool
-		viewOut       string
-		viewErr       error
-		wantGhr       bool
-		wantErr       bool
-	}{
-		{
-			name:          "skip flag disabled does nothing",
-			githubRelease: false,
-		},
-		{
-			name:          "no release runs ghr",
-			githubRelease: true,
-			viewOut:       "release not found",
-			viewErr:       notFound,
-			wantGhr:       true,
-		},
-		{
-			name:          "draft release runs ghr",
-			githubRelease: true,
-			viewOut:       `{"isDraft":true}`,
-			wantGhr:       true,
-		},
-		{
-			name:          "published release errors without running ghr",
-			githubRelease: true,
-			viewOut:       `{"isDraft":false}`,
-			wantGhr:       false,
-			wantErr:       true,
-		},
+func TestPublishGithubReleaseSkipped(t *testing.T) {
+	f := newFakeRunner()
+	r := &CalicoManager{
+		runner:        f,
+		githubRelease: false,
+		calicoVersion: "v3.30.0",
+		githubOrg:     "projectcalico",
+		repo:          "calico",
+		outputDir:     t.TempDir(),
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			f := newFakeRunner()
-			f.on(fmt.Sprintf("./bin/gh release view %s %s --json isDraft", ver, repoFlag), tt.viewOut, tt.viewErr)
-			f.on("./bin/ghr", "", nil)
-
-			r := &CalicoManager{
-				runner:        f,
-				githubRelease: tt.githubRelease,
-				calicoVersion: ver,
-				githubOrg:     org,
-				repo:          repo,
-				outputDir:     t.TempDir(),
-			}
-			err := r.publishGithubRelease()
-
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("publishGithubRelease() = nil, want error")
-				}
-				if f.ran("./bin/ghr") {
-					t.Errorf("ghr was invoked for a published release (calls: %v)", f.calls)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("publishGithubRelease() unexpected error: %v", err)
-			}
-			if got := f.ran("./bin/ghr"); got != tt.wantGhr {
-				t.Errorf("ghr issued = %v, want %v (calls: %v)", got, tt.wantGhr, f.calls)
-			}
-		})
+	uploads, err := r.githubReleaseUpload()
+	if err != nil {
+		t.Fatalf("githubReleaseUpload() = %v, want nil", err)
+	}
+	if uploads != nil {
+		t.Errorf("expected no upload with the flag off, got %+v", uploads)
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("expected nothing run with the flag off, got %v", f.calls)
 	}
 }
 

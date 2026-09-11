@@ -49,15 +49,20 @@ type Upload struct {
 	AllowMissing bool
 }
 
+// validator is a handler that has its own rules about the upload it is given.
+// A handler that finds its own content does not implement it.
+type validator interface {
+	Validate(u Upload) error
+}
+
 func (u Upload) validate() error {
-	var errs []error
-	if u.Source == "" {
-		errs = append(errs, fmt.Errorf("upload with no source"))
-	}
 	if u.Handler == nil {
-		errs = append(errs, fmt.Errorf("upload of %s has no destination", u.Source))
+		return fmt.Errorf("upload of %s has no destination", u.Source)
 	}
-	return errors.Join(errs...)
+	if v, ok := u.Handler.(validator); ok {
+		return v.Validate(u)
+	}
+	return nil
 }
 
 // Metadata is what metadata.yaml records about a release.
@@ -88,7 +93,7 @@ func (m Metadata) validate() error {
 }
 
 type settings struct {
-	uploads []Upload
+	pipeline []Upload
 
 	confirm bool
 

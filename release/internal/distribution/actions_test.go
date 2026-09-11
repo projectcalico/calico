@@ -210,27 +210,22 @@ func TestPublishMissingSource(t *testing.T) {
 	}
 }
 
-func TestPublishCollectsEveryFailure(t *testing.T) {
+// A later upload can depend on an earlier one, so a failure stops the list
+// rather than publishing against a broken step.
+func TestPublishStopsAtTheFirstFailure(t *testing.T) {
 	dir := dirWith(t, "release.tgz")
 	bad := &fakeDest{name: "s3://bad/", err: errors.New("access denied")}
-	worse := &fakeDest{name: "gs://worse/", err: errors.New("no such bucket")}
-	good := &fakeDest{name: "github"}
+	after := &fakeDest{name: "github"}
 
 	err := Publish([]Upload{
 		{Source: dir, Handler: bad},
-		{Source: dir, Handler: worse},
-		{Source: dir, Handler: good},
+		{Source: dir, Handler: after},
 	}, true)
-	if err == nil {
-		t.Fatal("expected the failures reported")
+	if err == nil || !strings.Contains(err.Error(), "s3://bad/") {
+		t.Fatalf("expected the failure reported, got %v", err)
 	}
-	for _, want := range []string{"s3://bad/", "gs://worse/"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("expected %s named in %v", want, err)
-		}
-	}
-	if got := good.got(); len(got) != 1 {
-		t.Errorf("expected the working destination still published, got %v", got)
+	if got := after.got(); len(got) != 0 {
+		t.Errorf("expected nothing published after the failure, got %v", got)
 	}
 }
 
@@ -250,6 +245,25 @@ func TestPublishRecordsWhatSucceededDespiteAFailure(t *testing.T) {
 	}
 }
 
+// A handler with its own rules rejects a bad upload before anything is sent.
+func TestPublishRejectsASourcelessUploadToADestinationThatNeedsOne(t *testing.T) {
+	err := Publish([]Upload{{Handler: S3{URI: "s3://bucket/charts/"}}}, true)
+	if err == nil || !strings.Contains(err.Error(), "no source") {
+		t.Errorf("expected a missing source to be rejected, got %v", err)
+	}
+}
+
+// A handler that finds its own content takes no source, so it runs.
+func TestPublishSourcelessHandlerRuns(t *testing.T) {
+	d := &fakeDest{name: "images"}
+	if err := Publish([]Upload{{Handler: d}}, true); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if got := d.got(); len(got) != 1 || got[0] != "" {
+		t.Errorf("expected one call with an empty source, got %v", got)
+	}
+}
+
 func TestPublishRejectsIncompleteUploads(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -257,7 +271,6 @@ func TestPublishRejectsIncompleteUploads(t *testing.T) {
 		want    string
 	}{
 		{"none", nil, "no uploads"},
-		{"no source", []Upload{{Handler: &fakeDest{name: "x"}}}, "no source"},
 		{"no destination", []Upload{{Source: "/tmp"}}, "no destination"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
