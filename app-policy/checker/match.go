@@ -31,7 +31,10 @@ import (
 )
 
 // protocolMapL4 maps an L4 protocol number to the name Felix uses in IP+port IP set
-// members. A named port can be declared on tcp, udp or sctp.
+// members. A named port can be declared on tcp, udp or sctp, and Felix emits members
+// for all three. Envoy's ext_authz adapter only ever reports tcp or udp, but the key is
+// built from whatever the Flow reports, so a Flow carrying 132 gets "sctp" here rather
+// than an empty protocol field that no member can equal.
 var protocolMapL4 = map[int]string{
 	1:   "icmp",
 	6:   "tcp",
