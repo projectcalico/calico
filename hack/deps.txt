@@ -121,6 +121,7 @@ local:felix/types
 local:hack/cmd/calico-selector
 local:hack/cmd/coalesce-imports
 local:hack/cmd/deps
+local:hack/cmd/flowgen
 local:hack/cmd/format-go-file
 local:hack/cmd/gomodder
 local:hack/cmd/ipam-hammer
