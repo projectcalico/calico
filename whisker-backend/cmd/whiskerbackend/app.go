@@ -56,10 +56,11 @@ func Run(ctx context.Context, cfg *config.Config) {
 	opts = append(opts, server.WithTLSFiles(cfg.ServerTLSCertPath, cfg.ServerTLSKeyPath))
 
 	flowsAPI := v1.NewFlows(gmCli)
+	healthAPI := v1.NewHealth()
 
 	srv, err := server.NewHTTPServer(
 		gorillaadpt.NewRouter(),
-		flowsAPI.APIs(),
+		append(flowsAPI.APIs(), healthAPI.APIs()...),
 		opts...,
 	)
 	if err != nil {

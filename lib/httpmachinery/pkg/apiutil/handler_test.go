@@ -76,6 +76,54 @@ func TestJSONListResponse(t *testing.T) {
 	}))
 }
 
+func TestJSONObjectResponse(t *testing.T) {
+	setupTest(t)
+
+	type Response struct {
+		RespField string `json:"rspField"`
+	}
+
+	hdlr := apiutil.NewJSONHandler(func(ctx apicontext.Context, params struct{}) apiutil.ObjectResponse[Response] {
+		return apiutil.NewObjectResponse[Response]().SetStatus(http.StatusOK).SetBody(Response{RespField: "foo"})
+	})
+
+	w := httptest.NewRecorder()
+
+	r, err := http.NewRequest(http.MethodGet, "foobar", nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	hdlr.ServeHTTP(apiutil.NewNOOPRouterConfig(), w, r)
+
+	Expect(w.Code).To(Equal(http.StatusOK))
+	Expect(testutil.MustUnmarshal[Response](t, w.Body.Bytes())).To(Equal(&Response{RespField: "foo"}))
+}
+
+func TestJSONObjectErrorResponse(t *testing.T) {
+	setupTest(t)
+
+	type Response struct {
+		RespField string `json:"rspField"`
+	}
+
+	hdlr := apiutil.NewJSONHandler(func(ctx apicontext.Context, params struct{}) apiutil.ObjectResponse[Response] {
+		return apiutil.NewObjectResponse[Response]().
+			SetStatus(http.StatusInternalServerError).
+			SetError("Internal Server Error")
+	})
+
+	w := httptest.NewRecorder()
+
+	r, err := http.NewRequest(http.MethodGet, "foobar", nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	hdlr.ServeHTTP(apiutil.NewNOOPRouterConfig(), w, r)
+
+	Expect(w.Code).To(Equal(http.StatusInternalServerError))
+	Expect(testutil.MustUnmarshal[apiutil.ErrorResponse](t, w.Body.Bytes())).To(Equal(&apiutil.ErrorResponse{
+		Error: "Internal Server Error",
+	}))
+}
+
 func TestJSONStreamResponse(t *testing.T) {
 	setupTest(t)
 
