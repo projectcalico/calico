@@ -88,6 +88,10 @@ var All = func() []string {
 	}
 }
 
+func IndexFilePath(baseDir string) string {
+	return filepath.Join(baseDir, indexFileName)
+}
+
 // Version qualifies the product version when the charts rev separately from
 // it. An empty suffix means the charts share the product version.
 func Version(productVersion, suffix string) string {

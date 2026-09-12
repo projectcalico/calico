@@ -15,7 +15,6 @@
 package calico
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -28,11 +27,13 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"go.yaml.in/yaml/v3"
+	"gopkg.in/yaml.v3"
 
 	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/distribution"
+	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
@@ -41,10 +42,19 @@ import (
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
+	"github.com/projectcalico/calico/release/internal/yamledit"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 // Global configuration for releases.
+const (
+	chartsDir    = "charts"
+	manifestsDir = "manifests"
+	metadataKey  = "metadata"
+)
+
+const calicoctlManifest = "calicoctl.yaml"
+
 var (
 	// Default defaultRegistries to which all release images are pushed.
 	defaultRegistries = registry.DefaultCalicoRegistries
@@ -52,12 +62,6 @@ var (
 	defaultOrg    = utils.ProjectCalicoOrg
 	defaultRepo   = utils.CalicoRepoName
 	defaultBranch = utils.DefaultBranch
-
-	metadataFileName = "metadata.yaml"
-
-	helmIndexFileName = "index.yaml"
-
-	s3ACLPublicRead = []string{"--acl", "public-read"}
 
 	branchTagTarget = "retag-build-images-with-registries push-images-to-registries push-manifests"
 
@@ -180,6 +184,7 @@ type CalicoManager struct {
 	dryRun        bool
 	gitRef        bool
 	githubRelease bool
+	draftRelease  bool
 	awsProfile    string
 	s3Bucket      string
 	githubToken   string
@@ -246,14 +251,6 @@ type CalicoManager struct {
 	retagImages  bool
 	fromRegistry string
 	fromTag      string
-}
-
-func releaseImages(images []string, version, registry, operatorImage, operatorVersion, operatorRegistry string) []string {
-	imgList := []string{fmt.Sprintf("%s/%s:%s", operatorRegistry, operatorImage, operatorVersion)}
-	for _, img := range images {
-		imgList = append(imgList, fmt.Sprintf("%s/%s:%s", registry, img, version))
-	}
-	return imgList
 }
 
 func (r *CalicoManager) PreBuildValidation() error {
@@ -384,21 +381,40 @@ func (r *CalicoManager) Build() error {
 		return err
 	}
 
-	if err = r.collectGithubArtifacts(); err != nil {
-		return err
-	}
-	return nil
+	return r.collectArtifacts()
 }
 
+var _ distribution.Attester = metadata{}
+
 type metadata struct {
-	Version          string   `json:"version"`
-	OperatorVersion  string   `json:"operator_version" yaml:"operatorVersion"`
-	Images           []string `json:"images"`
-	HelmChartVersion string   `json:"helm_chart_version" yaml:"helmChartVersion"`
+	Version string `json:"version"`
+
+	OperatorVersion string `json:"operator_version" yaml:"operatorVersion"`
+
+	Images []distribution.Component `json:"images"`
+
+	ChartVersion string `json:"helm_chart_version" yaml:"helmChartVersion"`
+}
+
+func (r metadata) Attest() ([]byte, error) {
+	var errs []error
+	if r.Version == "" {
+		errs = append(errs, fmt.Errorf("no version specified"))
+	}
+	if r.OperatorVersion == "" {
+		errs = append(errs, fmt.Errorf("no operator version specified"))
+	}
+	if len(r.Images) == 0 {
+		errs = append(errs, fmt.Errorf("no images specified"))
+	}
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
+	}
+	return yaml.Marshal(r)
 }
 
 func (r *CalicoManager) BuildMetadata(dir string) error {
-	registry, err := r.getRegistryFromManifests()
+	reg, err := r.getRegistryFromManifests()
 	if err != nil {
 		return fmt.Errorf("failed to get registry from manifests: %w", err)
 	}
@@ -407,42 +423,46 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to determine release images: %w", err)
 	}
-
-	m := metadata{
-		Version:          r.calicoVersion,
-		OperatorVersion:  r.operatorVersion,
-		Images:           releaseImages(imgs, r.calicoVersion, registry, r.operatorImage, r.operatorVersion, r.operatorRegistry),
-		HelmChartVersion: r.chart().Version(),
+	components := []distribution.Component{
+		{Registry: r.operatorRegistry, Image: r.operatorImage, Version: r.operatorVersion},
+	}
+	for _, img := range imgs {
+		components = append(components, distribution.Component{Registry: reg, Image: img, Version: r.calicoVersion})
 	}
 
-	// Render it as yaml and write it to a file.
-	bs, err := yaml.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("failed to marshal metadata: %s", err)
-	}
-
-	err = os.WriteFile(filepath.Join(dir, metadataFileName), []byte(bs), 0o644)
-	if err != nil {
-		return fmt.Errorf("failed to write metadata file: %s", err)
-	}
-
-	return nil
+	return distribution.BuildMetadata(metadata{
+		Version:         r.calicoVersion,
+		OperatorVersion: r.operatorVersion,
+		Images:          components,
+		ChartVersion:    r.chart().Version(),
+	}, dir, distribution.WithRunner(r.runner))
 }
 
+// Fetch the registry from the calicoctl manifest file.
+// For hashrelease, it looks in the hashrelease source directory.
 func (r *CalicoManager) getRegistryFromManifests() (string, error) {
-	args := []string{"-Po", `image:\K(.*)`, "calicoctl.yaml"}
-	out, err := r.runner.RunInDir(filepath.Join(r.repoRoot, "manifests"), "grep", args, nil)
+	dir := filepath.Join(r.repoRoot, manifestsDir)
+	if r.isHashRelease {
+		dir = filepath.Join(r.hashrelease.Source, manifestsDir)
+	}
+	key := "spec.containers.image"
+	path := filepath.Join(dir, calicoctlManifest)
+	imgs, err := yamledit.Read(path, key)
 	if err != nil {
-		return "", fmt.Errorf("error getting registry from calicoctl.yaml manifest: %w", err)
+		return "", err
 	}
-	imgs := strings.SplitSeq(out, "\n")
-	for i := range imgs {
-		parts := strings.Split(i, "/")
-		if len(parts) > 1 {
-			return strings.Join(parts[:len(parts)-1], "/"), nil
+	for _, img := range imgs {
+		if !strings.Contains(img, "calico") {
+			continue
 		}
+		// registry/image:tag, so everything before the last slash.
+		// A registry may carry a path of its own e.g. example/path/to/image:tag
+		if i := strings.LastIndex(img, "/"); i > 0 {
+			return img[:i], nil
+		}
+		return "", nil
 	}
-	return "", fmt.Errorf("failed to find registry from manifests")
+	return "", fmt.Errorf("no registry found in %s using key(%s)", path, key)
 }
 
 func (r *CalicoManager) PreHashreleaseValidate() error {
@@ -664,85 +684,54 @@ func (r *CalicoManager) buildOCPBundle() error {
 	return nil
 }
 
-func (r *CalicoManager) publishToHashreleaseServer() error {
+func (r *CalicoManager) hashreleaseUpload() []distribution.Upload {
 	if !r.publishHashrelease {
 		logrus.Info("Skipping publishing to hashrelease server")
 		return nil
 	}
-	logrus.WithFields(logrus.Fields{
-		"version": r.calicoVersion,
-		"name":    r.hashrelease.Name,
-		"note":    r.hashrelease.Note,
-	}).Info("Publishing hashrelease")
 
-	return hashreleaseserver.Publish(r.productCode, &r.hashrelease, &r.hashreleaseConfig)
+	return []distribution.Upload{{
+		Name:   "hashrelease",
+		Source: r.uploadDir(),
+		Handler: distribution.HashreleaseServer{
+			Release:     &r.hashrelease,
+			Config:      &r.hashreleaseConfig,
+			ProductCode: r.productCode,
+			DryRun:      r.dryRun,
+			Runner:      r.runner,
+		},
+	}}
 }
 
 func (r *CalicoManager) PublishRelease() error {
-	// Check that the environment has the necessary prereqs.
 	if err := r.publishPrereqs(); err != nil {
 		return err
 	}
 
-	// Publish container images.
-	if err := r.publishContainerImages(); err != nil {
-		return err
+	// The registries go first: metadata records the digests they produce
+	uploads := []distribution.Upload{
+		{Handler: distribution.Publisher{Kind: "images", Action: r.publishContainerImages}},
+		{Handler: distribution.Publisher{Kind: chartsDir, Action: r.publishHelmCharts}},
 	}
-
-	// Publish helm charts.
-	if err := r.publishHelmCharts(); err != nil {
-		return fmt.Errorf("failed to publish helm charts: %s", err)
-	}
+	uploads = append(uploads,
+		distribution.Upload{Handler: distribution.Preparer{Kind: metadataKey, Action: r.buildMetadata}},
+	)
 
 	if r.isHashRelease {
-		if err := r.publishToHashreleaseServer(); err != nil {
-			return fmt.Errorf("failed to publish hashrelease: %s", err)
-		}
-	} else {
-		// Publish the git tag.
-		if err := r.publishGitTag(); err != nil {
-			return fmt.Errorf("failed to publish git tag: %s", err)
-		}
-
-		// Publish the release to github.
-		if err := r.publishGithubRelease(); err != nil {
-			return fmt.Errorf("failed to publish github release: %s", err)
-		}
-
-		// Update helm chart index
-		if err := r.updateHelmChartIndex(); err != nil {
-			return fmt.Errorf("update helm chart index: %s", err)
-		}
+		uploads = append(uploads, r.hashreleaseUpload()...)
+		return distribution.Publish(uploads, distribution.WithRunner(r.runner))
 	}
-
-	return nil
+	uploads = append(uploads, r.helmIndexUpload(), r.githubTagUpload())
+	github := r.githubReleaseUpload()
+	// nil when the github release is disabled.
+	if github != nil {
+		uploads = append(uploads, *github)
+	}
+	return distribution.Publish(uploads, distribution.WithRunner(r.runner))
 }
 
-func (r *CalicoManager) ReleasePublic() error {
-	// Get the latest version
-	args := []string{
-		"release", "list", "--repo", fmt.Sprintf("%s/%s", r.githubOrg, r.repo),
-		"--exclude-drafts", "--exclude-prereleases", "--json 'name,isLatest'",
-		"--jq '.[] | select(.isLatest) | .name'",
-	}
-	out, err := r.runner.RunInDir(r.repoRoot, "./bin/gh", args, nil)
-	if err != nil {
-		return fmt.Errorf("failed to get latest release: %s", err)
-	}
-	args = []string{
-		"release", "edit", r.calicoVersion, "--draft=false",
-		"--repo", fmt.Sprintf("%s/%s", r.githubOrg, r.repo),
-	}
-	latest := version.New(strings.TrimSpace(out))
-	current := version.New(r.calicoVersion)
-	if current.Semver().GreaterThan(latest.Semver()) {
-		args = append(args, "--latest")
-	}
-	_, err = r.runner.RunInDir(r.repoRoot, "./bin/gh", args, nil)
-	if err != nil {
-		return fmt.Errorf("failed to publish %s draft release: %s", r.calicoVersion, err)
-	}
-	return nil
+func (r *CalicoManager) buildMetadata() error {
+	return r.BuildMetadata(r.uploadDir())
 }
 
 // Check general prerequisites for cutting and publishing a release.
@@ -954,28 +943,9 @@ func (r *CalicoManager) publishPrereqs() error {
 	return r.assertImageVersions()
 }
 
-// Collect artifacts to be included on each release to GitHub.
-// It builds the metadata file.
-// It assumes that all other artifacts already been built, and simply wraps them up.
-//   - release-vX.Y.Z.tgz: contains images, manifests, and binaries.
-//   - ocp-vX.Y.Z.tgz: contains the OCP bundle.
-//   - tigera-operator-vX.Y.Z.tgz: contains the helm v3 chart.
-//   - calico-windows-vX.Y.Z.zip: Calico for Windows zip archive for non-HPC installation.
-//   - calicoctl/bin: All calicoctl binaries.
-//
-// For hashreleases, include the manifests directly.
-//
-// Finally it generates checksums for each artifact that is uploaded to the release.
-func (r *CalicoManager) collectGithubArtifacts() error {
-	// Artifacts will be moved here.
-	uploadDir := r.uploadDir()
-
-	// Add in a release metadata file.
-	err := r.BuildMetadata(uploadDir)
-	if err != nil {
-		return fmt.Errorf("failed to build release metadata file: %s", err)
-	}
-
+// gathers everything a release publishes into the upload directory.
+// TODO: remove, each step should handle putting its artifacts in the correct location.
+func (r *CalicoManager) collectArtifacts() error {
 	if err := r.collectBinaries(); err != nil {
 		return err
 	}
@@ -985,33 +955,7 @@ func (r *CalicoManager) collectGithubArtifacts() error {
 	if err := r.collectWindowsArchive(); err != nil {
 		return err
 	}
-	if err := r.collectOCPBundle(); err != nil {
-		return err
-	}
-
-	// Generate a SHA256SUMS file containing the checksums for each artifact
-	// that we attach to the release. These can be confirmed by end users via the following command:
-	// sha256sum -c --ignore-missing SHA256SUMS
-	files, err := os.ReadDir(uploadDir)
-	if err != nil {
-		return fmt.Errorf("failed to read upload directory: %w", err)
-	}
-	sha256args := []string{}
-	for _, f := range files {
-		if !f.IsDir() {
-			sha256args = append(sha256args, f.Name())
-		}
-	}
-	output, err := r.runner.RunInDir(uploadDir, "sha256sum", sha256args, nil)
-	if err != nil {
-		return fmt.Errorf("failed to generate sha256sums: %w", err)
-	}
-	err = os.WriteFile(fmt.Sprintf("%s/SHA256SUMS", uploadDir), []byte(output), 0o644)
-	if err != nil {
-		return fmt.Errorf("failed to write SHA256SUMS file: %w", err)
-	}
-
-	return nil
+	return r.collectOCPBundle()
 }
 
 func (r *CalicoManager) collectBinaries() error {
@@ -1039,7 +983,7 @@ func (r *CalicoManager) collectManifests() error {
 	if r.isHashRelease {
 		uploadDir := r.uploadDir()
 		// Hashrelease include manifests in a different way, instead of just in the release tarball.
-		if _, err := r.runner.Run("cp", []string{"-r", filepath.Join(r.repoRoot, "manifests"), uploadDir}, nil); err != nil {
+		if _, err := r.runner.Run("cp", []string{"-r", filepath.Join(r.repoRoot, manifestsDir), uploadDir}, nil); err != nil {
 			logrus.WithError(err).Error("Failed to copy manifests to output directory")
 			return fmt.Errorf("failed to copy manifests: %w", err)
 		}
@@ -1101,7 +1045,7 @@ func (r *CalicoManager) resetManifests() {
 	if !r.manifests {
 		return
 	}
-	if _, err := r.runner.RunInDir(r.repoRoot, "git", []string{"checkout", "manifests", "test-tools/mocknode/mock-node.yaml"}, nil); err != nil {
+	if _, err := r.runner.RunInDir(r.repoRoot, "git", []string{"checkout", manifestsDir, "test-tools/mocknode/mock-node.yaml"}, nil); err != nil {
 		logrus.WithError(err).Error("Failed to reset manifests")
 	}
 }
@@ -1160,7 +1104,7 @@ func (r *CalicoManager) buildReleaseTar() error {
 
 	// Add in manifests directory generated from the docs.
 	if r.manifests {
-		if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"-al", "manifests", releaseBase}, nil); err != nil {
+		if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"-al", manifestsDir, releaseBase}, nil); err != nil {
 			return fmt.Errorf("failed to copy manifests: %w", err)
 		}
 	}
@@ -1299,7 +1243,12 @@ func (r *CalicoManager) publishGitTag() error {
 		return fmt.Errorf("remote tag %s already exists at %s but local tag is %s", r.calicoVersion, remoteSHA, localSHA)
 	}
 
-	if _, err := r.git("push", r.remote, r.calicoVersion); err != nil {
+	args := []string{"push", r.remote, r.calicoVersion}
+
+	if r.dryRun {
+		args = append(args, "--dry-run")
+	}
+	if _, err := r.git(args...); err != nil {
 		return fmt.Errorf("failed to push git tag: %w", err)
 	}
 	return nil
@@ -1329,7 +1278,11 @@ func remoteTagCommit(lsRemoteOutput, ver string) string {
 	return tagObjSHA
 }
 
-func (r *CalicoManager) publishGithubRelease() error {
+func (r *CalicoManager) githubTagUpload() distribution.Upload {
+	return distribution.Upload{Handler: distribution.Preparer{Kind: "git tag", Action: r.publishGitTag}}
+}
+
+func (r *CalicoManager) githubReleaseUpload() *distribution.Upload {
 	if !r.githubRelease {
 		logrus.Info("Skipping github release")
 		return nil
@@ -1369,49 +1322,17 @@ Additional links:
 	replacer := strings.NewReplacer(formatters...)
 	releaseNote := replacer.Replace(releaseNoteTemplate)
 
-	// if a release is already published, stop instead.
-	if published, err := r.publishedReleaseExists(); err != nil {
-		return fmt.Errorf("publishing github release: %w", err)
-	} else if published {
-		return fmt.Errorf("github release %s is already published; refusing to modify it", r.calicoVersion)
+	return &distribution.Upload{
+		Name:   "github release",
+		Source: r.uploadDir(),
+		Handler: distribution.GithubRelease{
+			Repo:   github.Repo{Org: r.githubOrg, Name: r.repo},
+			Tag:    r.calicoVersion,
+			Body:   releaseNote,
+			Draft:  r.draftRelease,
+			DryRun: r.dryRun,
+		},
 	}
-
-	args := []string{
-		"-username", r.githubOrg,
-		"-repository", r.repo,
-		"-name", r.calicoVersion,
-		"-body", releaseNote,
-		"-draft",
-		r.calicoVersion,
-		r.uploadDir(),
-	}
-	_, err := r.runner.RunInDir(r.repoRoot, "./bin/ghr", args, nil)
-	if err != nil {
-		return fmt.Errorf("failed to publish github release: %w", err)
-	}
-	return nil
-}
-
-// publishedReleaseExists reports whether a non-draft GitHub release exists for the tag.
-func (r *CalicoManager) publishedReleaseExists() (bool, error) {
-	out, err := r.runner.RunInDir(r.repoRoot, "./bin/gh", []string{
-		"release", "view", r.calicoVersion,
-		"--repo", fmt.Sprintf("%s/%s", r.githubOrg, r.repo),
-		"--json", "isDraft",
-	}, nil)
-	if err != nil {
-		if strings.Contains(out, "release not found") || strings.Contains(err.Error(), "release not found") {
-			return false, nil
-		}
-		return false, fmt.Errorf("query github release: %w", err)
-	}
-	var rel struct {
-		IsDraft bool `json:"isDraft"`
-	}
-	if err := json.Unmarshal([]byte(out), &rel); err != nil {
-		return false, fmt.Errorf("parse github release: %w", err)
-	}
-	return !rel.IsDraft, nil
 }
 
 func (r *CalicoManager) publishContainerImages() error {
@@ -1580,19 +1501,22 @@ func (r *CalicoManager) publishHelmCharts() error {
 	return charts.Publish(chart, r.helmRegistries, !r.dryRun, opts...)
 }
 
-func (r *CalicoManager) updateHelmChartIndex() error {
-	if !r.helmCharts {
-		logrus.Info("Skipping updating helm index (charts disabled)")
-		return nil
+func (r *CalicoManager) helmIndexUpload() distribution.Upload {
+	return distribution.Upload{
+		Name:   "chart index",
+		Source: charts.IndexFilePath(r.chart().BaseDir),
+		Skip:   !r.helmCharts || !r.helmIndex,
+		Handler: distribution.S3{
+			URI:     r.s3URI(chartsDir),
+			Profile: r.awsProfile,
+			DryRun:  r.dryRun,
+			Runner:  r.runner,
+		},
 	}
-	if !r.helmIndex {
-		logrus.Info("Skipping updating helm index")
-		return nil
-	}
-	if err := r.s3Cp(filepath.Join(r.chart().BaseDir, helmIndexFileName), fmt.Sprintf("s3://%s/charts/", r.s3Bucket), s3ACLPublicRead...); err != nil {
-		return fmt.Errorf("update helm index: %w", err)
-	}
-	return nil
+}
+
+func (r *CalicoManager) s3URI(path ...string) string {
+	return fmt.Sprintf("s3://%s/%s/", r.s3Bucket, strings.Join(path, "/"))
 }
 
 func (r *CalicoManager) assertReleaseNotesPresent(ver string) error {
@@ -1620,7 +1544,7 @@ func (r *CalicoManager) assertManifestVersions(ver string) error {
 
 	for _, m := range manifests {
 		args := []string{"-Po", `image:\K(.*)`, m}
-		out, err := r.runner.RunInDir(filepath.Join(r.repoRoot, "manifests"), "grep", args, nil)
+		out, err := r.runner.RunInDir(filepath.Join(r.repoRoot, manifestsDir), "grep", args, nil)
 		if err != nil {
 			return fmt.Errorf("failed to get images from manifest %s: %w", m, err)
 		}
@@ -1691,29 +1615,6 @@ func (r *CalicoManager) makeInDirectoryIgnoreOutput(dir, target string, env ...s
 	return err
 }
 
-func (r *CalicoManager) s3Cp(src, dest string, additionalFlags ...string) error {
-	args := []string{
-		"s3", "cp",
-		src, dest,
-	}
-	if r.awsProfile != "" {
-		args = append(args, "--profile", r.awsProfile)
-	}
-	if strings.HasSuffix(src, "/") {
-		args = append(args, "--recursive")
-	}
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		args = append(args, "--debug")
-	}
-	if len(additionalFlags) > 0 {
-		args = append(args, additionalFlags...)
-	}
-	if _, err := r.runner.Run("aws", args, nil); err != nil {
-		return err
-	}
-	return nil
-}
-
 func (r *CalicoManager) releaseBranchPrereqs() error {
 	// cutOptions is required for the branch cut flow
 	if r.cutOptions == nil {
@@ -1729,8 +1630,8 @@ func (r *CalicoManager) releaseBranchPrereqs() error {
 // branchChangedPaths are the trees the prepareDerived hook rewrites; it reports
 // them so the branch flow stages them into the cut commit.
 var branchChangedPaths = []string{
-	"charts",
-	"manifests",
+	chartsDir,
+	manifestsDir,
 	".semaphore",
 	"test-tools/mocknode",
 }
@@ -1927,8 +1828,8 @@ func (r *CalicoManager) updateAndCommitPrep() error {
 	}
 
 	if _, err := r.git("add",
-		filepath.Join(r.repoRoot, "charts"),
-		filepath.Join(r.repoRoot, "manifests"),
+		filepath.Join(r.repoRoot, chartsDir),
+		filepath.Join(r.repoRoot, manifestsDir),
 		filepath.Join(r.repoRoot, outputs.ReleaseNotesDir),
 	); err != nil {
 		return fmt.Errorf("failed to stage files: %w", err)

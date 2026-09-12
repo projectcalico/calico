@@ -95,6 +95,9 @@ func ApplyToFile(path string, edits ...Edit) error {
 }
 
 func (e Edit) spans(src []byte) ([]span, error) {
+	if e.Key == "" {
+		return nil, fmt.Errorf("no key to read")
+	}
 	var docs []*yaml.Node
 	dec := yaml.NewDecoder(bytes.NewReader(src))
 	for {
@@ -202,4 +205,22 @@ func lineSpan(src []byte, line int) (span, bool) {
 		end = start + i
 	}
 	return span{start, end}, true
+}
+
+// Read returns the value at each place key matches, in file order, matching
+// the same way an Edit does.
+func Read(path, key string) ([]string, error) {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", path, err)
+	}
+	spans, err := Edit{Key: key}.spans(src)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", path, err)
+	}
+	out := make([]string, 0, len(spans))
+	for _, s := range spans {
+		out = append(out, string(src[s.start:s.end]))
+	}
+	return out, nil
 }
