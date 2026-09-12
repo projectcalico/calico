@@ -163,7 +163,7 @@ func benchEvaluateEgressAllowList(b *testing.B, caseFor egressCaseFunc) {
 
 	// Pre-flight outside the timed loop: prove the walk is the one the case intends, so that
 	// a fixture change cannot silently turn a full walk into an early exit.
-	trace, err := Evaluate(EnforcedOnly, rules.RuleDirEgress, store, ep, c.flow)
+	trace, err := Evaluate(EnforcedOnly, rules.RuleDirEgress, store, ep, c.flow, nil)
 	if err != nil {
 		b.Fatalf("evaluation failed: %v", err)
 	}
@@ -178,7 +178,7 @@ func benchEvaluateEgressAllowList(b *testing.B, caseFor egressCaseFunc) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		benchTraceSink, _ = Evaluate(EnforcedOnly, rules.RuleDirEgress, store, ep, c.flow)
+		benchTraceSink, _ = Evaluate(EnforcedOnly, rules.RuleDirEgress, store, ep, c.flow, benchTraceSink[:0])
 	}
 	b.StopTimer()
 	b.ReportMetric(float64(c.rulesWalked), "rules/op")
