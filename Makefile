@@ -454,9 +454,6 @@ release: release/bin/release
 release-publish: release/bin/release bin/gh bin/ghr bin/helm
 	@release/bin/release release publish
 
-release-public: bin/gh release/bin/release
-	@release/bin/release release public
-
 # Create a release branch.
 create-release-branch: release/bin/release
 	@release/bin/release branch cut
