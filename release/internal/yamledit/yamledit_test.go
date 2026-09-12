@@ -17,6 +17,7 @@ package yamledit
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -284,5 +285,46 @@ func TestApplyAcrossDocuments(t *testing.T) {
 	}
 	if want := "tag: X\n---\ntag: X\n"; string(got) != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestRead(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doc.yaml")
+	src := `apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calicoctl
+---
+kind: Pod
+spec:
+  containers:
+    - name: one
+      image: quay.io/calico/calico:master
+    - name: two
+      image: docker.io/calico/node:master
+`
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatalf("writing fixture: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		key  string
+		want []string
+	}{
+		{"a full path across documents", "spec.containers.image", []string{"quay.io/calico/calico:master", "docker.io/calico/node:master"}},
+		{"a bare key at any depth", "name", []string{"calicoctl", "one", "two"}},
+		{"no match", "spec.missing", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Read(path, tc.key)
+			if err != nil {
+				t.Fatalf("Read: %v", err)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("Read(%q) = %v, want %v", tc.key, got, tc.want)
+			}
+		})
 	}
 }
