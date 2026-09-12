@@ -36,18 +36,31 @@ func TestPendingRuleTraceKeptWhenEvaluationFails(t *testing.T) {
 	evaluated := []*calc.RuleID{calc.NewRuleID(
 		v3.KindGlobalNetworkPolicy, "default", "policy1", "", 0, rules.RuleDirIngress, rules.RuleActionAllow)}
 
-	// Control: with the endpoint's policy in the store, the trace is worked out and recorded.
-	var ruleIDs []*calc.RuleID
+	// Control: with the endpoint's policy in the store, the trace is worked out.
+	flow := TupleAsFlow(flowTuple1)
+	var trace []*calc.RuleID
+	var ok bool
 	c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
-		c.evaluatePendingRuleTrace(rules.RuleDirIngress, ps, localEd1, TupleAsFlow(flowTuple1), &ruleIDs)
+		trace, ok = c.computePendingTrace(rules.RuleDirIngress, ps, localEd1, &flow)
 	})
-	Expect(ruleIDs).To(Equal(evaluated))
+	Expect(ok).To(BeTrue())
+	Expect(trace).To(Equal(evaluated))
 
 	c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
 		// The endpoint's tier still names policy1, but its rules are no longer in the store, so the
 		// evaluation fails part way through.
 		delete(ps.PolicyByID, types.PolicyID{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy})
-		c.evaluatePendingRuleTrace(rules.RuleDirIngress, ps, localEd1, TupleAsFlow(flowTuple1), &ruleIDs)
+		trace, ok = c.computePendingTrace(rules.RuleDirIngress, ps, localEd1, &flow)
 	})
-	Expect(ruleIDs).To(Equal(evaluated), "the trace from the last successful evaluation should stand")
+	Expect(ok).To(BeFalse(), "a failed evaluation says so instead of returning a trace")
+	Expect(trace).To(BeNil())
+
+	// And applying that failure to a flow leaves the trace from the last successful evaluation.
+	data := NewData(flowTuple1, nil, localEd1)
+	data.IngressPendingRuleIDs = evaluated
+	c.epStats[flowTuple1] = data
+	c.applyPolicyEvalResult(policyEvalResult{
+		policyEvalRequest: policyEvalRequest{data: data, tuple: flowTuple1, dstEp: localEd1, seq: data.evalSeq, reason: policyEvalRecalc},
+	})
+	Expect(data.IngressPendingRuleIDs).To(Equal(evaluated), "the trace from the last successful evaluation should stand")
 }

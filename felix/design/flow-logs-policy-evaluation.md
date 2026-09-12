@@ -204,12 +204,13 @@ Measured on the composite set, egress, with the sampler's model: 1.0 ms
 per evaluation uncached; 0.31 ms at a 50% repeat rate (62% hits);
 0.08 ms at 90% (92% hits).
 
-## Off-main-loop evaluation (planned)
+## Off-main-loop evaluation
 
 The engine speed-ups get the miss-all case from milliseconds to hundreds
 of microseconds; they do not get it to the tens of microseconds the
 initial path can afford, and they do nothing for the sweep budget. The
-evaluation has to leave the main goroutine.
+evaluation has to leave the main goroutine. `felix/collector/policyeval.go`
+implements what follows, behind `FlowLogsPolicyEvaluationWorkers`.
 
 **Shape.**
 
@@ -222,10 +223,12 @@ evaluation has to leave the main goroutine.
    store's read lock, look up the proto endpoint and call the engine —
    the same call the main loop makes today — and send a *result* (the
    request plus the trace or error) back on a results channel.
-3. The main loop drains the results channel in its `select` and applies
-   each one: only if the `Data` is still the current entry for its tuple
-   and its sequence number is the flow's latest. Stale results are
-   counted and dropped.
+3. The main loop drains the results channel in its `select`, in batches,
+   and applies each one: only if the `Data` is still the current entry
+   for its tuple, its sequence number is the flow's latest, and the
+   endpoints have not moved since the request. Stale results are counted
+   and dropped. A cached trace is shared with other callers, so the
+   apply copies it into the `Data`, as the inline path always did.
 
 `epStats` and `Data` stay single-owner; workers never see a `Data`
 field, only the request's copies. `Data` gains a sequence counter and an
@@ -247,24 +250,41 @@ consumers can tell "no staged policy applies" from "not evaluated yet".
 This is PMREQ-954's open Key Question 2 and needs product agreement
 before implementation.
 
-**Shedding.** The request channel is bounded (`backlog gauge`). Initial
-requests are never dropped: if the channel is full the main loop
-evaluates inline, as today, and counts it. Recalc requests are dropped
-when the backlog is above a threshold and counted in
-`felix_collector_policy_eval_deferred_total`; the flow keeps its last
-trace and the next sweep tries again. So under overload the collector
-degrades to today's behaviour for new flows and to slower refresh for
-old ones, never to wrong verdicts and never to unbounded memory.
+**Shedding.** New flows and sweeps use separate bounded queues and the
+workers serve new flows first: a new flow's first export is waiting on
+its verdict, a live flow already has one. A new flow whose queue is full
+is evaluated on the main loop as before and counted
+(`..._inline_total`); it is never dropped. A sweep whose queue is full
+pauses: the flow goes back on the snapshot, the main loop masks the
+batch trigger until a result arrives, and counts the pause
+(`..._deferred_total`). Nothing is dropped and no sweep floods the
+workers; under overload the collector degrades to today's behaviour for
+new flows and to a slower sweep for old ones, never to wrong verdicts
+and never to unbounded memory. A flow with an evaluation already in
+flight is not re-queued by a sweep; that evaluation is at least as
+fresh.
 
-**Metrics.** Per-evaluation latency histogram (labelled `initial` /
-`recalc`), backlog gauge, deferred counter, stale-result counter, worker
-utilisation, plus the existing batch, flow and sweep-duration metrics.
+**Metrics.** `felix_collector_policy_eval_latency_seconds{reason}`
+(request to apply), `..._backlog{queue}`, `..._inline_total`,
+`..._deferred_total`, `..._stale_results_total`, `..._workers`, plus the
+existing batch, flow and sweep-duration metrics.
 
 **Configuration.** `FlowLogsPolicyEvaluationWorkers` (0 = evaluate on
-the main goroutine, exactly today's path; default derived from
-available CPUs) and `FlowLogsPolicyEvaluationBacklog`. Config-file /
-environment-variable parameters first; `FelixConfiguration` fields on
-master once the design has settled.
+the main goroutine, exactly the previous path, and the default until
+the node-level validation has run; then a default derived from
+available CPUs) and `FlowLogsPolicyEvaluationBacklog` (4096 per queue).
+Config-file / environment-variable parameters first; `FelixConfiguration`
+fields on master once the design has settled.
+
+**Measured** (`BenchmarkCollectorPolicyEval`, composite set, one
+laptop with 12 hardware threads, 10 workers): the main loop's cost per
+new flow drops from 1.2–1.6 ms to 1–1.6 µs whichever engine is behind
+it. Throughput becomes worker-bound: with the interpreted engine 4,700
+new egress flows/s with no cache hits and 9,900 at a 50% repeat rate;
+with the compiled engine (#13267) 14,200 and 27,000; ingress higher in
+every case. An uncached sweep runs at 3,400 (interpreted) or 18,900
+(compiled) live flows/s, and a sweep over an unchanged store is served
+from the cache at hundreds of thousands per second.
 
 **Enterprise.** The Enterprise collector has a second evaluation call
 site (`OnNewConnection` mode). It goes through the same request/result

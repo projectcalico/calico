@@ -52,6 +52,8 @@ func New(
 			PolicyEvaluationMode:      configParams.FlowLogsPolicyEvaluationMode,
 			FlowLogsFlushInterval:     configParams.FlowLogsFlushInterval,
 			PolicyEvaluationCacheSize: configParams.FlowLogsPolicyEvaluationCacheSize,
+			PolicyEvaluationWorkers:   configParams.FlowLogsPolicyEvaluationWorkers,
+			PolicyEvaluationBacklog:   configParams.FlowLogsPolicyEvaluationBacklog,
 			IsBPFDataplane:            configParams.BPFEnabled,
 			DisplayDebugTraceLogs:     configParams.FlowLogsCollectorDebugTrace,
 			BPFConntrackTimeouts:      bpfconntrack.GetTimeouts(configParams.BPFConntrackTimeouts),

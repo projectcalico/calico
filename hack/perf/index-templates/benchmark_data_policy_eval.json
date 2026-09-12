@@ -17,6 +17,7 @@
         "ok":                {"type": "boolean"},
         "error":             {"type": "keyword"},
         "iterations":        {"type": "integer"},
+        "workers":           {"type": "integer"},
 
         "scale_rules":       {"type": "integer"},
         "scale_ipsets":      {"type": "integer"},
@@ -26,6 +27,7 @@
         "wall_ns_per_op":    {"type": "double"},
         "ns_per_flow":       {"type": "double"},
         "flows_per_s":       {"type": "double"},
+        "throughput":        {"type": "double"},
         "hit_ratio":         {"type": "double"},
         "bytes_per_op":      {"type": "double"},
         "allocs_per_op":     {"type": "double"}

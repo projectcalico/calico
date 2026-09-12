@@ -48,6 +48,9 @@ func Start(b *testing.B) *Recorder {
 	return r
 }
 
+// Started returns when the measurement began.
+func (r *Recorder) Started() time.Time { return r.startWall }
+
 // Finish computes the per-op wall time, bytes and allocations since Start, merges them with the
 // caller's scenario fields, and, when dir is not empty, writes the document. It returns the
 // document either way. A failure to write is logged through the benchmark and not fatal: the
