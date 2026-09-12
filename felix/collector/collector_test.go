@@ -4171,13 +4171,19 @@ func TestBPFAgeTimeout(t *testing.T) {
 	shortTimeouts := timeouts
 	shortTimeouts.TCPResetSeen = time.Second
 
+	// The default TCPResetSeen is itself below the floor, so selection has to
+	// be tested with a value above it.
+	longTimeouts := timeouts
+	longTimeouts.TCPResetSeen = 60 * time.Second
+
 	for _, tc := range []struct {
 		name     string
 		timeouts bpfconntrack.Timeouts
 		proto    int
 		want     time.Duration
 	}{
-		{"TCP uses the reset timeout", timeouts, proto_tcp, timeouts.TCPResetSeen},
+		{"TCP uses the reset timeout", longTimeouts, proto_tcp, longTimeouts.TCPResetSeen},
+		{"the default TCP reset timeout is floored", timeouts, proto_tcp, floor},
 		{"UDP uses the UDP timeout", timeouts, proto_udp, timeouts.UDPTimeout},
 		{"unknown protocols use the generic timeout", timeouts, 47 /* GRE */, timeouts.GenericTimeout},
 		{"ICMP is floored", timeouts, proto_icmp, floor},
