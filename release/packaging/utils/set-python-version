@@ -1,0 +1,32 @@
+#!/bin/bash
+#
+# Stamp the real version into a staging copy's setup.py.
+#
+# Usage: set-python-version <stagedir> <version>
+#
+# networking-calico carries version="0.0.0" in setup.py and gets its version
+# from the packaging build.  This runs against the staging copy, so the working
+# tree keeps its placeholder and there is nothing to revert afterwards.
+
+set -eu -o pipefail
+
+if [ $# -ne 2 ]; then
+    echo >&2 "usage: $(basename "$0") <stagedir> <version>"
+    exit 1
+fi
+
+stagedir=$1
+version=$2
+setup_py=${stagedir}/setup.py
+
+if [ ! -f "${setup_py}" ]; then
+    echo >&2 "[error] ${setup_py} does not exist"
+    exit 1
+fi
+
+if ! grep -q 'version="0.0.0"' "${setup_py}"; then
+    echo >&2 "[error] ${setup_py} has no version=\"0.0.0\" placeholder to replace"
+    exit 1
+fi
+
+sed -i "s/version=\"0.0.0\"/version=\"${version}\"/" "${setup_py}"

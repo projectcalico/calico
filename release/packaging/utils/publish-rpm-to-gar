@@ -1,0 +1,46 @@
+#!/bin/bash
+#
+# Upload one RPM to a Google Artifact Registry yum repository, unless it is
+# already there.
+#
+# Usage: publish-rpm-to-gar <rpm-file> <repo>
+#
+# GAR rejects a repeat upload of the same package and version, so this checks
+# first.  GCLOUD_PROJECT and GAR_LOCATION override where the repo lives.
+
+set -eu -o pipefail
+
+if [ $# -ne 2 ]; then
+    echo >&2 "usage: $(basename "$0") <rpm-file> <repo>"
+    exit 1
+fi
+
+rpmfile=$1
+repo=$2
+project=${GCLOUD_PROJECT:-tigera-wp-tcp-redirect}
+location=${GAR_LOCATION:-us-west1}
+
+# Ask the RPM for its own name and version rather than parsing the file name.
+# The epoch and release are part of the version GAR uses, and GAR reads an
+# unset epoch as 0.
+name=$(rpm -qp --queryformat '%{NAME}' "${rpmfile}")
+version=$(rpm -qp --queryformat '%{EPOCH}:%{VERSION}-%{RELEASE}' "${rpmfile}" | sed -e 's/(none)/0/')
+
+existing=$(gcloud artifacts files list \
+    --repository="${repo}" \
+    --project="${project}" \
+    --location="${location}" \
+    --package="${name}" \
+    --version="${version}" \
+    --format=json --quiet | jq length)
+
+if [ "${existing}" != 0 ]; then
+    echo "  Skipping  $(basename "${rpmfile}") (already uploaded)"
+    exit 0
+fi
+
+echo "  Uploading $(basename "${rpmfile}")"
+gcloud --quiet --no-user-output-enabled artifacts yum upload "${repo}" \
+    --location="${location}" \
+    --project="${project}" \
+    --source="${rpmfile}"

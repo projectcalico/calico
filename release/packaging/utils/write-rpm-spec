@@ -1,0 +1,51 @@
+#!/bin/bash
+#
+# Render rpm/<pkg>.spec from rpm/<pkg>.spec.in in a staging copy.
+#
+# Usage: write-rpm-spec <stagedir> <version> <release> <message>
+#
+# Sets Version: and Release:, and adds a %changelog stanza.  Components that
+# ship a ready-made .spec with a pinned version - etcd3gw, dnsmasq - have no
+# .spec.in, and for those this is a no-op.
+#
+# RPM_PACKAGER overrides the changelog author.
+
+set -eu -o pipefail
+
+if [ $# -ne 4 ]; then
+    echo >&2 "usage: $(basename "$0") <stagedir> <version> <release> <message>"
+    exit 1
+fi
+
+stagedir=$1
+version=$2
+release=$3
+message=$4
+packager=${RPM_PACKAGER:-Marvin <marvin@tigera.io>}
+
+shopt -s nullglob
+spec_ins=("${stagedir}"/rpm/*.spec.in)
+if [ ${#spec_ins[@]} -eq 0 ]; then
+    exit 0
+fi
+if [ ${#spec_ins[@]} -gt 1 ]; then
+    echo >&2 "[error] more than one .spec.in in ${stagedir}/rpm: ${spec_ins[*]}"
+    exit 1
+fi
+
+spec_in=${spec_ins[0]}
+spec=${spec_in%.in}
+
+cp -f "${spec_in}" "${spec}"
+sed -i "s/^Version:.*\$/Version:        ${version}/" "${spec}"
+sed -i "s/^Release:.*\$/Release:        ${release}%{?dist}/" "${spec}"
+
+# Insert a stanza directly after the %changelog line.
+stanza=$(mktemp)
+trap 'rm -f "${stanza}"' EXIT
+{
+    echo "* $(date '+%a %b %d %Y') ${packager} ${version}-${release}"
+    echo "  - ${message}"
+    echo
+} > "${stanza}"
+sed -i "/^%changelog/ r ${stanza}" "${spec}"
