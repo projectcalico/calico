@@ -26,6 +26,10 @@ import (
 // Staged policies are stored like any other. Whether they count towards a verdict is up to the
 // evaluation, which takes a checker.PolicyScope; see checker.Evaluate.
 func (store *PolicyStore) ProcessUpdate(subscriptionType string, update *proto.ToDataplane) {
+	// Every update but InSync can change a verdict; see Generation.
+	if _, inSync := update.Payload.(*proto.ToDataplane_InSync); !inSync {
+		store.Generation++
+	}
 	// TODO: maybe coalesce-ing updater fits here
 	switch payload := update.Payload.(type) {
 	case *proto.ToDataplane_InSync:
