@@ -1,0 +1,35 @@
+# Whisker is a TypeScript frontend rather than a Go component, so it has no
+# import graph to gate on and names its paths directly.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  services:
+    - docker
+
+steps:
+  - name: whisker-ci
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd whisker
+      make ci
+
+  # amd64 is already covered, since the step above builds the image on its way
+  # to the nginx smoke test. arm64 is the other architecture whisker supports.
+  - name: whisker-image
+    # The Dockerfile installs nginx with dnf, which an amd64 runner would have
+    # to emulate. Native instead — at the cost of waiting for a node, since the
+    # arm pools sit at zero.
+    runOn: arm
+    timeout: 1h
+    matrix:
+      - name: arm64
+        env:
+          - name: ARCH
+            value: arm64
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd whisker
+      make image ARCH=$ARCH

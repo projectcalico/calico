@@ -1,0 +1,171 @@
+# The pre-flight checks. Each step is one Semaphore block, gating itself rather
+# than the include, so they stay as independent as they are there.
+#
+# Nothing depends on these: a dropped dependency cascades, so making a component
+# wait on a check would drop the component whenever the check gated out. Branch
+# protection is what makes them blocking.
+#
+# Most still shell out to a nested build container. A step that says nothing
+# about `image` or `services` runs natively in the build image.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+
+steps:
+  # Generated from the live Go import graph, so a stale copy under-fires every
+  # other gate in the file and nothing else would report it.
+  - name: check-semaphore-files
+    requests: {cpu: 3000m, memory: 2Gi}
+    image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
+    workspaceVolumes: none
+    changes:
+      in:
+        - ^\.semaphore/
+        - ^hack/
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      make gen-semaphore-yaml DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
+      make check-dirty
+
+  - name: check-yaml
+
+    jobSize: small
+
+    requests: {cpu: 1000m, memory: 768Mi}
+    services: [docker]
+    changes:
+      in:
+        - ^.*\.ya?ml$
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      make yaml-lint
+
+  # `fix-changed` splices its own flags into the nested `docker run`, so this
+  # block cannot yet drop the daemon the way the two above it do.
+  - name: check-go
+    services: [docker]
+    changes:
+      in:
+        - ^go\.mod$
+        - ^go\.sum$
+        - ^.*\.go$
+        - ^.*deps\.txt$
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/depstree\.yaml$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make check-ginkgo-v2
+      make check-go-mod
+      make verify-go-mods
+      make gen-deps-files
+      # Generated from the same import graph as deps.txt, so it goes stale here too.
+      make gen-semaphore-yaml
+      make go-vet
+      # A merge has no PR to diff against, so it reformats everything.
+      if [ -n "$CI_GIT_PR_NUMBER" ]; then make fix-changed; else make fix-all; fi
+      make check-dirty
+
+  - name: check-python
+
+    jobSize: small
+
+    requests: {cpu: 1200m, memory: 1Gi}
+    services: [docker]
+    changes:
+      in:
+        - ^networking-calico/
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      make -C networking-calico fmtpy
+      make -C networking-calico flake8
+      make check-dirty
+
+  # Grep-speed checks, so one step rather than three.
+  - name: check-language-dockerfiles
+    jobSize: small
+    requests: {cpu: 700m, memory: 768Mi}
+    image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
+    workspaceVolumes: none
+    changes:
+      in:
+        - ^.*$
+      # Everything is in scope except vendored C and the dot-directories that
+      # hold no source. Listed rather than matched as `^\.`, which would also
+      # swallow this file and stop an edit to it retesting anything.
+      exclude:
+        - ^libbpf/
+        - ^\.git
+        - ^\.claude/
+        - ^\.go-pkg-cache/
+    commands: |
+      make check-language
+      make check-dockerfiles
+      make check-mockery-config
+
+  - name: check-protobufs
+    services: [docker]
+    changes:
+      in:
+        - ^.*\.pb\.go$
+        - ^.*\.proto$
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make protobuf fix-changed
+      make check-dirty
+
+  - name: check-manifests
+    services: [docker]
+    changes:
+      in:
+        - ^api/
+        - ^manifests/
+        - ^charts/
+        - ^libcalico-go/lib/apis/
+        - ^libcalico-go/config/
+        - ^libcalico-go/Makefile$
+        - ^felix/config/
+        - ^felix/docs/
+        - ^felix/Makefile$
+        - ^goldmane/
+        - ^kube-controllers/pkg/apis/migration/
+        - ^operator/api/
+        - ^operator/pkg/crds/
+        - ^operator/pkg/admission/
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make -C lib gen-files
+      make -C api gen-files
+      make -C libcalico-go gen-files
+      make -C felix gen-files
+      make -C goldmane gen-files
+      make -C kube-controllers gen-files
+      make -C operator gen-files
+      make gen-manifests
+      make fix-changed
+      make check-ocp-no-crds
+      make check-dirty

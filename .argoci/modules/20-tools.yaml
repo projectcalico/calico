@@ -1,0 +1,18 @@
+# A single `make ci` in hack/, covering the in-repo tooling.
+#
+# The recipes shell out to a nested build container: unauthenticated pulls are
+# rate-limited, and it inherits only what is spliced in explicitly.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: tools-ci
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd hack
+      make ci

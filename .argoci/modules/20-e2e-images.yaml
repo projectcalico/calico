@@ -1,0 +1,21 @@
+# The helper images the e2e suites install into a test cluster. Only rapidclient
+# has CI of its own today.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  # Nothing here builds an image or needs a cluster, so the work runs in the
+  # build image directly.
+  image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
+
+steps:
+  - name: e2e-images-rapidclient-ci
+    jobSize: small
+    requests: {cpu: 1200m, memory: 768Mi}
+    # The image ships gotestsum under /go/bin, which the default emptyDir over
+    # /go hides — as `command not found`, minutes in.
+    workspaceVolumes: none
+    commands: |
+      # Emptying the wrappers runs each recipe here instead of in a nested
+      # container; the tools they call are already on PATH.
+      make -C e2e/images/rapidclient ci DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=

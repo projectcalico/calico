@@ -1,0 +1,27 @@
+# A single `make ci` in whisker-backend/, gated on what that component is built
+# from.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  # Nothing here builds an image or needs a cluster, so the work runs in the
+  # build image directly. A step shelling out to a nested container pulls this
+  # same image a second time inside the daemon, on top of its own.
+  image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
+
+steps:
+  - name: whisker-backend-ci
+    requests: {cpu: 4400m, memory: 2Gi}
+    # The image ships golangci-lint and gotestsum, which the default emptyDir
+    # over /go hides — as `command not found`, minutes in.
+    workspaceVolumes: none
+    commands: |
+      cd whisker-backend
+      # Emptying the wrappers runs each recipe here instead of in a nested
+      # container; the tools they call are already on PATH.
+      make ci DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
+    epilogue: |
+      # Runs in the parent shell, so it inherits neither the `cd` above nor
+      # anything the commands exported.
+      cd "${CI_HOME}/${CI_GIT_DIR}/whisker-backend"
+      artifact push job report --destination test-results || true

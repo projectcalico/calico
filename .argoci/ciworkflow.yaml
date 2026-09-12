@@ -1,56 +1,320 @@
-# Condensed ArgoCI per-PR workflow; cc-argoci-handler expands it at runtime.
-# Ports the Semaphore "E2E tests on GCP kubeadm (local binary)" block, which was
-# the only e2e lane with no .argoci/cron counterpart — the cron suites test
-# published hashrelease images, this one tests the binary built from the PR.
+# One workflow rather than one per component: `depends:` and the artifact
+# namespace are both workflow-scoped, so producers and consumers must share one.
+# A workflow that doesn't run posts no commit status, so a gated one could never
+# be a required check.
+#
+# Argo workflow objects live in etcd (~1.5MB). Gated-out steps never reach the
+# object, but a change matching every module fires everything — measure before
+# adding many more:
+#   argoci-expand -o yaml -changed metadata.mk .argoci/ciworkflow.yaml | wc -c
 version: condensed
-generateName: e2e-pr-gcp-
-timeout: 3h
+generateName: calico-
+
+# Bounds the DAG itself, catching a hang outside any step's own deadline.
+timeout: 4h
+
+# Where the component names in each `dependsOn:` below come from. Generated from
+# the live import graph, so a gate cannot fall behind what it gates.
+dependencies: .argoci/depstree.yaml
+
+# The Makefiles address the tree by its GOPATH location, which is a path inside
+# the build image rather than anywhere the checkout can land. A step running the
+# build image directly has to put the tree there itself; one shelling out to a
+# nested container gets the same path from the bind mount, and ignores this.
 globalPrologue: |
-  cd "${CI_HOME}/${CI_GIT_DIR}"
-  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
-  export ARGO_WORKFLOW_UID="{{workflow.uid}}"
-  source .argoci/scripts/global_prologue.sh
-globalEpilogue: |
-  source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
+  mkdir -p /go/src/github.com/projectcalico
+  ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
+
 defaults:
+  # Carries the host-level tooling the steps shell out to and nothing else — a
+  # quarter of the pull of a general-purpose runner, which every step pays.
+  # A step doing its work in-process names the build image instead.
+  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2
+
+  # A request rather than a limit, so it decides what a step is scheduled
+  # alongside and never caps it.
+  jobSize: medium
+
+  # Roughly what a step of this shape sustains, not what it peaks at — nothing
+  # is capped, so the spikes are covered either way. A heavier step says so.
+  requests: {cpu: 1500m, memory: 2Gi}
+
+  # Go otherwise sizes itself from the request, capping parallelism at what a
+  # step is scheduled with rather than what it can reach.
+  env:
+    - {name: GOMAXPROCS, value: "3"}
+
+  # An unset timeout means run-forever. A module overrides this when its work
+  # justifies more.
+  timeout: 1h
+
+  # Modules merge collections with these rather than replacing them, and the
+  # merge is a union — a step cannot drop what it inherits. So `docker` is
+  # declared by the modules that shell out to a nested container, not here.
+  services:
+    - goproxy
   secretBundles:
-    - banzai-secrets
-steps:
-  - name: gcp-kubeadm-e2e-local-binary
-    services:
-      - docker
-      - http-cache-proxy
-    env:
-      - name: TEST_TYPE
-        value: k8s-e2e
-      - name: PRODUCT
-        value: calico
-      # Names the Semaphore pipeline this lane replaces. Lens slices its history
-      # by this key, so it stays put even though the file is gone.
-      - name: FUNCTIONAL_AREA
-        value: e2e-gcp.yml
-      - name: PROVISIONER
-        value: gcp-kubeadm
-      - name: K8S_VERSION
-        value: stable
-      - name: INSTALLER
-        value: operator
-      - name: DATAPLANE
-        value: CalicoBPF
-      # Selection rationale lives in the config file itself.
-      - name: E2E_TEST_CONFIG
-        value: e2e/config/gcp/bpf.yaml
-      # Builds the e2e binary and the rapidclient image from PR source rather
-      # than pulling the published ones.
-      - name: RUN_LOCAL_TESTS
-        value: "true"
-      - name: USE_PRIVATE_REGISTRY
-        value: "true"
-      - name: PRIVATE_REGISTRY
-        value: "quay.io/"
-      - name: USE_API_SERVER
-        value: "false"
-      - name: ENABLE_EXTERNAL_NODE
-        value: "true"
-    commands: |
-      .argoci/scripts/body_standard.sh
+    - docker-hub
+
+includes:
+  # Ungated: each check inside carries its own, as its Semaphore block does.
+  - path: .argoci/modules/10-prerequisites.yaml
+
+  # Each module is gated on its own file as well as its component, so editing a
+  # module retests what it builds. Match the path exactly — a bare `^\.argoci/`
+  # would fire every component on any CI edit.
+  - path: .argoci/modules/20-lib.yaml
+    changes:
+      in:
+        - ^lib/
+        - ^\.argoci/modules/20-lib\.yaml$
+
+  - path: .argoci/modules/20-api.yaml
+    changes:
+      in:
+        - ^api/
+        - ^test/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/20-api\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
+
+  # Leaf components: one `make ci` each, so the gate is the component in the
+  # generated table plus the module's own file.
+  - path: .argoci/modules/20-calicoctl.yaml
+    changes:
+      dependsOn: [calicoctl]
+      in: ['^\.argoci/modules/20-calicoctl\.yaml$']
+
+  - path: .argoci/modules/20-confd.yaml
+    changes:
+      dependsOn: [confd]
+      in: ['^\.argoci/modules/20-confd\.yaml$']
+
+  - path: .argoci/modules/20-pod2daemon.yaml
+    changes:
+      dependsOn: [pod2daemon]
+      in: ['^\.argoci/modules/20-pod2daemon\.yaml$']
+
+  - path: .argoci/modules/20-app-policy.yaml
+    changes:
+      dependsOn: [app-policy]
+      in: ['^\.argoci/modules/20-app-policy\.yaml$']
+
+  - path: .argoci/modules/20-goldmane.yaml
+    changes:
+      dependsOn: [goldmane]
+      in: ['^\.argoci/modules/20-goldmane\.yaml$']
+
+  - path: .argoci/modules/20-guardian.yaml
+    changes:
+      dependsOn: [guardian]
+      in: ['^\.argoci/modules/20-guardian\.yaml$']
+
+  - path: .argoci/modules/20-libcalico-go.yaml
+    changes:
+      dependsOn: [libcalico-go]
+      in: ['^\.argoci/modules/20-libcalico-go\.yaml$']
+
+  - path: .argoci/modules/20-apiserver.yaml
+    changes:
+      dependsOn: [apiserver]
+      in: ['^\.argoci/modules/20-apiserver\.yaml$']
+
+  - path: .argoci/modules/20-whisker-backend.yaml
+    changes:
+      dependsOn: [whisker-backend]
+      in: ['^\.argoci/modules/20-whisker-backend\.yaml$']
+
+  - path: .argoci/modules/20-webhooks.yaml
+    changes:
+      dependsOn: [webhooks, api, apiserver]
+      in: ['^\.argoci/modules/20-webhooks\.yaml$']
+
+  - path: .argoci/modules/20-tools.yaml
+    changes:
+      dependsOn: [hack, api, libcalico-go]
+      in: ['^\.argoci/modules/20-tools\.yaml$']
+
+  - path: .argoci/modules/20-whisker.yaml
+    changes:
+      in:
+        - ^whisker/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/20-whisker\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
+
+  - path: .argoci/modules/20-cmd-calico.yaml
+    changes:
+      dependsOn: [cmd]
+      in: ['^\.argoci/modules/20-cmd-calico\.yaml$']
+
+  - path: .argoci/modules/20-e2e-ut.yaml
+    changes:
+      dependsOn: [e2e]
+      in: ['^\.argoci/modules/20-e2e-ut\.yaml$']
+
+  - path: .argoci/modules/20-e2e-test-sets.yaml
+    changes:
+      dependsOn: [e2e]
+      in:
+        - ^e2e/config/
+        - ^\.argoci/cron/
+        - ^\.argoci/modules/20-e2e-test-sets\.yaml$
+
+  - path: .argoci/modules/20-e2e-validation.yaml
+    changes:
+      in:
+        - ^\.argoci/cron/
+        - ^\.argoci/scripts/
+        - ^\.argoci/scripts/test_scripts/
+        - ^\.argoci/modules/20-e2e-validation\.yaml$
+
+  - path: .argoci/modules/30-key-cert-provisioner.yaml
+    changes:
+      dependsOn: [key-cert-provisioner]
+      in: ['^\.argoci/modules/30-key-cert-provisioner\.yaml$']
+
+  - path: .argoci/modules/60-mock-node.yaml
+    changes:
+      dependsOn: [test-tools]
+      in: ['^\.argoci/modules/60-mock-node\.yaml$']
+
+  - path: .argoci/modules/90-release.yaml
+    changes:
+      dependsOn: [release]
+      in: ['^\.argoci/modules/90-release\.yaml$']
+
+  # Vendored upstream trees. `third_party` is one generated entry covering all
+  # four, where each Semaphore block names just its own directory — so these
+  # keep the narrower literal paths.
+  - path: .argoci/modules/20-envoy-gateway.yaml
+    changes:
+      in:
+        - ^third_party/envoy-gateway/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/20-envoy-gateway\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
+
+  - path: .argoci/modules/20-envoy-proxy.yaml
+    changes:
+      in:
+        - ^third_party/envoy-proxy/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/20-envoy-proxy\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
+
+  - path: .argoci/modules/20-envoy-ratelimit.yaml
+    changes:
+      in:
+        - ^third_party/envoy-ratelimit/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/20-envoy-ratelimit\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
+
+  - path: .argoci/modules/20-third-party-cni-plugins.yaml
+    changes:
+      in:
+        - ^third_party/cni-plugins/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/20-third-party-cni-plugins\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
+
+  - path: .argoci/modules/20-e2e-images.yaml
+    changes:
+      in:
+        - ^e2e/images/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/20-e2e-images\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
+
+  - path: .argoci/modules/10-check-images.yaml
+    changes:
+      in:
+        - ^charts/
+        - ^manifests/
+        - ^\.argoci/modules/10-check-images\.yaml$
+
+  - path: .argoci/modules/20-operator.yaml
+    changes:
+      dependsOn: [operator]
+      in: ['^\.argoci/modules/20-operator\.yaml$']
+
+  - path: .argoci/modules/20-node.yaml
+    changes:
+      dependsOn: [node]
+      in: ['^\.argoci/modules/20-node\.yaml$']
+
+  # The nftables dataplane and the publisher it feeds. Narrower than the
+  # generated `felix` entry, which would run the benchmark for any change in
+  # felix's import closure.
+  - path: .argoci/modules/45-nft-bench.yaml
+    changes:
+      in:
+        - ^felix/nftables/
+        - ^hack/perf/
+        - ^\.argoci/modules/45-nft-bench\.yaml$
+
+  - path: .argoci/modules/20-gateway-conformance.yaml
+    changes:
+      in:
+        - ^e2e/cmd/gateway/
+        - ^hack/test/kind/gateway-setup\.sh$
+        - ^third_party/envoy-gateway/
+        - ^third_party/envoy-proxy/
+        - ^third_party/envoy-ratelimit/
+        - ^\.argoci/modules/20-gateway-conformance\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
+
+  - path: .argoci/modules/20-felix.yaml
+    changes:
+      dependsOn: [felix]
+      in: ['^\.argoci/modules/20-felix\.yaml$']
+
+  - path: .argoci/modules/40-openstack.yaml
+    changes:
+      in:
+        - ^networking-calico/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/40-openstack\.yaml$
+
+  - path: .argoci/modules/20-e2e-gcp.yaml
+    changes:
+      dependsOn: [e2e]
+      in:
+        - ^\.argoci/scripts/
+        - ^\.argoci/modules/20-e2e-gcp\.yaml$
+      exclude:
+        - (^|/)README\.md$
+        - (^|/)DESIGN\.md$

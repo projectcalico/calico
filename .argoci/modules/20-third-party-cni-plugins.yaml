@@ -1,0 +1,32 @@
+# The upstream CNI plugins image: its own CI, plus a cross-architecture build.
+#
+# Both recipes splice their own flags into a nested `docker run`, so neither can
+# drop the daemon the way the envoy modules' build steps do.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  services:
+    - docker
+
+steps:
+  - name: third-party-cni-plugins-ci
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd third_party/cni-plugins
+      make ci
+
+  - name: third-party-cni-plugins-build
+    matrix:
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd third_party/cni-plugins
+      make build ARCH=$ARCH
