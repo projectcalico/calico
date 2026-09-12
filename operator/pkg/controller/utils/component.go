@@ -26,6 +26,7 @@ import (
 
 	"github.com/go-logr/logr"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	admissionregv1 "k8s.io/api/admissionregistration/v1"
 	apps "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -795,6 +796,27 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 			dsa.ImagePullSecrets = csa.ImagePullSecrets
 		}
 		return dsa
+	case *admissionregv1.MutatingWebhookConfiguration:
+		// Some MutatingWebhookConfigurations (e.g. the bundled Envoy Gateway
+		// topology injector) are rendered from an upstream chart that never
+		// sets clientConfig.caBundle — a separate, externally-owned job
+		// populates it post-install. Preserve that value across reconciles
+		// instead of wiping it back to empty, which otherwise reopens a
+		// window where TLS verification of the webhook fails.
+		cmwc := current.(*admissionregv1.MutatingWebhookConfiguration)
+		dmwc := desired.(*admissionregv1.MutatingWebhookConfiguration)
+		currentByName := make(map[string][]byte, len(cmwc.Webhooks))
+		for _, wh := range cmwc.Webhooks {
+			currentByName[wh.Name] = wh.ClientConfig.CABundle
+		}
+		for i, wh := range dmwc.Webhooks {
+			if len(wh.ClientConfig.CABundle) == 0 {
+				if cur, ok := currentByName[wh.Name]; ok {
+					dmwc.Webhooks[i].ClientConfig.CABundle = cur
+				}
+			}
+		}
+		return dmwc
 	case *v3.NetworkPolicy:
 		cnp := current.(*v3.NetworkPolicy)
 		dnp := desired.(*v3.NetworkPolicy)
