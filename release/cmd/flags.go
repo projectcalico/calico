@@ -24,6 +24,7 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/defaults"
+	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
@@ -462,7 +463,7 @@ var (
 	githubTokenFlag = &cli.StringFlag{
 		Name:    "github-token",
 		Usage:   "The GitHub token to use when interacting with the GitHub API",
-		Sources: cli.EnvVars("GITHUB_TOKEN", "GH_TOKEN"),
+		Sources: cli.EnvVars(github.TokenEnvVars...),
 		Action: func(_ context.Context, c *cli.Command, s string) error {
 			if s == "" {
 				if c.Bool(ciFlag.Name) {
@@ -557,7 +558,10 @@ const (
 	envPublishGitRef        = "PUBLISH_GIT_REF"
 	envReleaseGitRef        = "RELEASE_GIT_REF"
 	envPublishGithubRelease = "PUBLISH_GITHUB_RELEASE"
+	envReleaseGithub        = "RELEASE_GITHUB"
 	envReleaseGithubRelease = "RELEASE_GITHUB_RELEASE"
+	envDraftGithubRelease   = "PUBLISH_GITHUB_RELEASE_DRAFT"
+	envReleaseGithubDraft   = "RELEASE_GITHUB_DRAFT"
 )
 
 var (
@@ -589,7 +593,8 @@ var (
 		return append(f,
 			helmIndexFlag(envHelmIndexLegacy, envPublishHelmIndex, envReleaseHelmIndex),
 			gitRefFlag,
-			githubReleaseFlag)
+			githubReleaseFlag,
+			draftGithubReleaseFlag)
 	}
 
 	imagesFlag = func(value bool, envVars ...string) *cli.BoolWithInverseFlag {
@@ -715,11 +720,18 @@ var (
 		Sources:  cli.EnvVars(envPublishGitRefLegacy, envPublishGitRef, envReleaseGitRef),
 		Value:    true,
 	}
+	draftGithubReleaseFlag = &cli.BoolWithInverseFlag{
+		Name:     "draft-github-release",
+		Category: stepControlCategory,
+		Usage:    "Publish GitHub Release in drafts mode",
+		Sources:  cli.EnvVars(envDraftGithubRelease, envReleaseGithubDraft),
+		Value:    true,
+	}
 	githubReleaseFlag = &cli.BoolWithInverseFlag{
 		Name:     "github-release",
 		Category: stepControlCategory,
 		Usage:    "Publish the GitHub release",
-		Sources:  cli.EnvVars(envPublishGithubRelease, envReleaseGithubRelease),
+		Sources:  cli.EnvVars(envPublishGithubRelease, envReleaseGithub, envReleaseGithubRelease),
 		Value:    true,
 		Action: func(_ context.Context, c *cli.Command, b bool) error {
 			if b && c.String(githubTokenFlag.Name) == "" {

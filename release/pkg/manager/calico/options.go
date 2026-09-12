@@ -132,6 +132,14 @@ func WithGithubRelease(enabled bool) Option {
 	}
 }
 
+// WithDraftRelease determines whether the GitHub release is published in draft mode.
+func WithDraftRelease(draft bool) Option {
+	return func(r *CalicoManager) error {
+		r.draftRelease = draft
+		return nil
+	}
+}
+
 func WithWindowsArchive(enabled bool) Option {
 	return func(r *CalicoManager) error {
 		r.windowsArchive = enabled
