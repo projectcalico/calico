@@ -30,19 +30,22 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
-// Standalone tests for BPFOverlayHostSourceIP=TunnelAddress — verifies that overlay connectivity
-// works when the tunnel device is assigned an IP address (the legacy behaviour).  The primary
-// scenario is host-networked traffic to/from remote tunneled workloads, which is where
-// HOST_TUNNEL_IP and the SNAT conflict resolution logic come into play.
-var _ = describeBPFOverlayTunnelAddrTests("ipip")
-var _ = describeBPFOverlayTunnelAddrTests("vxlan")
+// Standalone tests for BPFOverlayHostSourceIP.  In TunnelAddress mode the tunnel device is
+// assigned an IP and host-networked traffic to a remote workload is SNATed to it (the legacy
+// behaviour, exercising HOST_TUNNEL_IP and the SNAT conflict resolution).  In HostAddress mode
+// the tunnel device has no IP, so the inner source is the node IP and the workload's reply must
+// be re-encapsulated back to the node rather than leaking un-encapsulated with a pod-CIDR source.
+var _ = describeBPFOverlayTests("ipip", "TunnelAddress")
+var _ = describeBPFOverlayTests("vxlan", "TunnelAddress")
+var _ = describeBPFOverlayTests("ipip", "HostAddress")
+var _ = describeBPFOverlayTests("vxlan", "HostAddress")
 
-func describeBPFOverlayTunnelAddrTests(tunnel string) bool {
+func describeBPFOverlayTests(tunnel, hostSourceIP string) bool {
 	if !BPFMode() {
 		return true
 	}
 
-	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF overlay host source IP tunnel address (%s)", tunnel)
+	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF overlay host source IP %s (%s)", hostSourceIP, tunnel)
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 		const numNodes = 2
 		var (
@@ -81,7 +84,7 @@ func describeBPFOverlayTunnelAddrTests(tunnel string) bool {
 			options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBEnabled)
 			options.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATDisabled)
 			options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "ACCEPT"
-			options.ExtraEnvVars["FELIX_BPFOverlayHostSourceIP"] = "TunnelAddress"
+			options.ExtraEnvVars["FELIX_BPFOverlayHostSourceIP"] = hostSourceIP
 
 			cc = &Checker{}
 			cc.Protocol = "tcp"
@@ -157,6 +160,9 @@ func describeBPFOverlayTunnelAddrTests(tunnel string) bool {
 		})
 
 		It("should use the host IP, not the tunnel IP, as the overlay underlay source", func() {
+			if hostSourceIP != "TunnelAddress" {
+				Skip("tunnel-IP-as-source check only applies to TunnelAddress mode")
+			}
 			// The outer (underlay) source of encapsulated host-networked traffic must be
 			// the node's own IP.  The overlay tunnel-device IP is not underlay-routable; a
 			// fabric that checks source addresses (e.g. GCP) drops packets carrying it.
@@ -199,6 +205,53 @@ func describeBPFOverlayTunnelAddrTests(tunnel string) bool {
 				fmt.Sprintf("overlay outer source should be the node IP %s", tc.Felixes[0].IP))
 			Consistently(fromTunnel.MatchCountFn("pkt"), "2s", "100ms").Should(BeZero(),
 				fmt.Sprintf("overlay outer source must never be the tunnel IP %s", tunnelAddr))
+		})
+
+		It("should re-encapsulate a workload's reply to a host-networked client", func() {
+			if hostSourceIP != "HostAddress" {
+				Skip("reply re-encap check only applies to HostAddress mode")
+			}
+			// In HostAddress mode the tunnel device has no IP, so a host-networked client's
+			// encapsulated request carries the node IP as its inner source.  The workload's
+			// reply therefore targets a bare node IP, which has no overlay route: without
+			// re-encapsulation it leaves the node un-encapsulated with a pod-CIDR source,
+			// which a source-checking fabric (e.g. GCP) drops.  Connectivity still succeeds on
+			// a permissive FV underlay, so assert on the wire: the reply must leave the
+			// workload's node encapsulated (outer source = that node IP) and must never appear
+			// with the pod IP as its outer source.  Selection uses tcpdump's own source-host
+			// filter, not text parsing.
+			var encap []string
+			switch tunnel {
+			case "vxlan":
+				encap = []string{"udp", "and", "port", "4789"}
+			case "ipip":
+				encap = []string{"ip", "proto", "4"}
+			}
+
+			// Any captured packet line contains " > "; the tcpdump banner does not.
+			pkt := regexp.MustCompile(" > ")
+			podNode := tc.Felixes[1]
+
+			// The reply leaves the workload's node encapsulated, outer source = that node (correct).
+			encapReply := podNode.AttachTCPDump("eth0")
+			encapReply.SetLogEnabled(true)
+			encapReply.AddMatcher("pkt", pkt)
+			encapReply.Start(infra, append(append([]string{"-n"}, encap...), "and", "src", "host", podNode.IP)...)
+
+			// The reply leaves the node un-encapsulated with the pod IP as its outer source (the bug).
+			bareReply := podNode.AttachTCPDump("eth0")
+			bareReply.SetLogEnabled(true)
+			bareReply.AddMatcher("pkt", pkt)
+			bareReply.Start(infra, "-n", "src", "host", w[1].IP)
+
+			// Host-networked client on nodeA -> workload on nodeB; its reply is the flow under test.
+			cc.ExpectSome(hostW[0], w[1])
+			cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
+
+			Eventually(encapReply.MatchCountFn("pkt"), "5s", "100ms").Should(BeNumerically(">", 0),
+				fmt.Sprintf("workload reply should leave node %s encapsulated", podNode.IP))
+			Consistently(bareReply.MatchCountFn("pkt"), "2s", "100ms").Should(BeZero(),
+				fmt.Sprintf("workload reply must never leave the node un-encapsulated with pod source %s", w[1].IP))
 		})
 	})
 }
