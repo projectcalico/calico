@@ -25,7 +25,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/app-policy/checker"
 	"github.com/projectcalico/calico/app-policy/policystore"
 	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/calc"
@@ -115,6 +114,27 @@ var (
 	},
 		[]string{"reason"})
 
+	// verdictCacheStats is shared by the caches of every policy store the collector's manager
+	// creates, so the counters survive a resync. One collector per process, so package-level.
+	verdictCacheStats = &policystore.VerdictCacheStats{}
+
+	counterPolicyEvalCacheHits = prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name: "felix_collector_policy_eval_cache_hits_total",
+		Help: "Total number of pending policy evaluations answered from the verdict cache.",
+	}, func() float64 { return float64(verdictCacheStats.Hits.Load()) })
+	counterPolicyEvalCacheMisses = prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name: "felix_collector_policy_eval_cache_misses_total",
+		Help: "Total number of pending policy evaluations that missed the verdict cache and walked the policy set.",
+	}, func() float64 { return float64(verdictCacheStats.Misses.Load()) })
+	counterPolicyEvalCacheResets = prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name: "felix_collector_policy_eval_cache_resets_total",
+		Help: "Total number of times the verdict cache was emptied because policy, IP set or endpoint state changed.",
+	}, func() float64 { return float64(verdictCacheStats.Resets.Load()) })
+	counterPolicyEvalCacheEvictions = prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name: "felix_collector_policy_eval_cache_evictions_total",
+		Help: "Total number of times the verdict cache was emptied because it reached its capacity.",
+	}, func() float64 { return float64(verdictCacheStats.Evictions.Load()) })
+
 	histogramPolicyEvalSweepDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name: "felix_collector_policy_eval_sweep_duration_seconds",
 		Help: "Wall-clock time to drain one policy re-evaluation snapshot across all its batches.",
@@ -130,6 +150,10 @@ func init() {
 	prometheus.MustRegister(counterPolicyEvalBatches)
 	prometheus.MustRegister(counterPolicyEvalFlows)
 	prometheus.MustRegister(histogramPolicyEvalSweepDuration)
+	prometheus.MustRegister(counterPolicyEvalCacheHits)
+	prometheus.MustRegister(counterPolicyEvalCacheMisses)
+	prometheus.MustRegister(counterPolicyEvalCacheResets)
+	prometheus.MustRegister(counterPolicyEvalCacheEvictions)
 }
 
 type Config struct {
@@ -140,6 +164,14 @@ type Config struct {
 	EnableServices        bool
 	PolicyEvaluationMode  string
 	FlowLogsFlushInterval time.Duration
+	// PolicyEvaluationCacheSize is the capacity of the verdict cache in front of the pending-policy
+	// evaluation; 0 disables it. Only used when the collector creates its own PolicyStoreManager.
+	PolicyEvaluationCacheSize int
+	// PolicyEvaluationWorkers is the number of goroutines evaluating pending policy off the main
+	// loop; 0 evaluates inline. PolicyEvaluationBacklog is the capacity of each of their queues.
+	// See policyeval.go.
+	PolicyEvaluationWorkers int
+	PolicyEvaluationBacklog int
 
 	IsBPFDataplane bool
 
@@ -183,6 +215,11 @@ type collector struct {
 	// policyEvalMinInterval is the minimum time between re-evaluations of one flow. Half the
 	// ticker interval.
 	policyEvalMinInterval time.Duration
+
+	// evalPool evaluates pending policy off the main loop; nil when evaluation is inline.
+	// recalcStalled is set when a sweep found the recalc queue full and is waiting for a result.
+	evalPool      *policyEvalPool
+	recalcStalled bool
 }
 
 // newCollector instantiates a new collector. The StartDataplaneStatsCollector function is the only public
@@ -202,7 +239,12 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 	}
 
 	if c.policyStoreManager == nil {
-		c.policyStoreManager = policystore.NewPolicyStoreManager()
+		var opts []policystore.PolicyStoreManagerOption
+		if cfg.PolicyEvaluationCacheSize > 0 {
+			log.Infof("Pending policy verdict cache enabled, capacity %d", cfg.PolicyEvaluationCacheSize)
+			opts = append(opts, policystore.WithVerdictCache(cfg.PolicyEvaluationCacheSize, verdictCacheStats))
+		}
+		c.policyStoreManager = policystore.NewPolicyStoreManagerWithOpts(opts...)
 	}
 
 	// Only run the re-evaluation sweep when pending policies are enabled; leaving the ticker nil
@@ -210,6 +252,11 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 	if apiv3.FlowLogsPolicyEvaluationModeType(cfg.PolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
 		log.Infof("Pending policies enabled, initiating pending policy evaluation ticker")
 		c.tickerPolicyEval = jitter.NewTicker(recalcInterval, cfg.FlowLogsFlushInterval/10)
+		if cfg.PolicyEvaluationWorkers > 0 {
+			log.Infof("Pending policy evaluation off the main loop: %d workers, backlog %d", cfg.PolicyEvaluationWorkers, cfg.PolicyEvaluationBacklog)
+			c.evalPool = newPolicyEvalPool(max(cfg.PolicyEvaluationBacklog, 1))
+			c.evalPool.start(c, cfg.PolicyEvaluationWorkers)
+		}
 	} else {
 		log.Infof("Pending policies disabled")
 	}
@@ -311,6 +358,7 @@ func (c *collector) startStatsCollectionAndReporting() {
 
 	policyEvalTickC := c.policyEvalTickChan()
 	var batchTriggerC <-chan struct{}
+	evalResultsC := c.policyEvalResultsChan()
 
 	// When a collector is started, we respond to the following events:
 	// 1. StatUpdates for incoming datasources (chan c.mux).
@@ -342,6 +390,16 @@ func (c *collector) startStatsCollectionAndReporting() {
 			if c.processRecalcBatch(policyEvalBatchDuration) {
 				batchTriggerC = nil
 				policyEvalTickC = c.policyEvalTickChan()
+			} else if c.recalcStalled {
+				// The recalc queue is full: wait for a result to free a slot rather than spinning.
+				batchTriggerC = nil
+			}
+		case res := <-evalResultsC:
+			c.applyPolicyEvalResult(res)
+			c.drainPolicyEvalResults()
+			if c.recalcStalled {
+				c.recalcStalled = false
+				batchTriggerC = batchReady
 			}
 		}
 	}
@@ -409,7 +467,7 @@ func (c *collector) getDataAndUpdateEndpoints(t tuple.Tuple, expired bool, packe
 		c.updateEpStatsCache(t, data)
 
 		// Perform an initial evaluation of pending rule traces.
-		c.evaluatePendingRuleTraceForLocalEp(data, policyEvalInitial)
+		c.requestPolicyEval(data, policyEvalInitial)
 	} else if data.Reported {
 		if !data.UnreportedPacketInfo && !packetinfo {
 			// Data has been reported.  If the request has not come from a packet info update (e.g. nflog) and we do not
@@ -1003,7 +1061,13 @@ func (c *collector) processRecalcBatch(budget time.Duration) bool {
 			continue
 		}
 
-		c.evaluatePendingRuleTraceForLocalEp(data, policyEvalRecalc)
+		if !c.requestPolicyEval(data, policyEvalRecalc) {
+			// The recalc queue is full. Put the flow back and pause the sweep; the main loop
+			// resumes it when a result frees a slot.
+			c.recalcSnapshot = append(c.recalcSnapshot, data)
+			c.recalcStalled = true
+			break
+		}
 
 		// Checked after the evaluation, so every batch evaluates at least one flow.
 		if monotime.Now() >= deadline {
@@ -1026,53 +1090,6 @@ func (c *collector) popFlowForRecalc() *Data {
 	c.recalcSnapshot[i] = nil
 	c.recalcSnapshot = c.recalcSnapshot[:i]
 	return data
-}
-
-func (c *collector) evaluatePendingRuleTraceForLocalEp(data *Data, reason policyEvalReason) {
-	flow := TupleAsFlow(data.Tuple)
-
-	srcEp, dstEp := c.findEndpointBestMatch(data.Tuple)
-
-	// Endpoints changed mid-flight; leave lastPolicyEvalAt unset so the next sweep retries.
-	if endpointChanged(data.SrcEp, srcEp) || endpointChanged(data.DstEp, dstEp) {
-		return
-	}
-
-	data.lastPolicyEvalAt = monotime.Now()
-	counterPolicyEvalFlows.WithLabelValues(string(reason)).Inc()
-	c.policyStoreManager.DoWithReadLock(func(ps *policystore.PolicyStore) {
-		// Evaluate ingress if destination is local workload endpoint
-		if data.DstEp != nil && !data.DstEp.IsHostEndpoint() && data.DstEp.IsLocal() {
-			c.evaluatePendingRuleTrace(rules.RuleDirIngress, ps, data.DstEp, flow, &data.IngressPendingRuleIDs)
-		}
-
-		// Evaluate egress if source is local workload endpoint
-		if data.SrcEp != nil && !data.SrcEp.IsHostEndpoint() && data.SrcEp.IsLocal() {
-			c.evaluatePendingRuleTrace(rules.RuleDirEgress, ps, data.SrcEp, flow, &data.EgressPendingRuleIDs)
-		}
-	})
-}
-
-// evaluatePendingRuleTrace evaluates the pending rule trace for the given direction and endpoint,
-// and updates the ruleIDs if they are different.
-func (c *collector) evaluatePendingRuleTrace(direction rules.RuleDir, store *policystore.PolicyStore, ep calc.EndpointData, flow TupleAsFlow, ruleIDs *[]*calc.RuleID) {
-	// Get the proto.WorkloadEndpoint, needed for the evaluation, from the policy store.
-	if protoEp := c.lookupProtoWorkloadEndpoint(store, ep.Key()); protoEp != nil {
-		trace, err := checker.Evaluate(checker.StagedAsEnforced, direction, store, protoEp, &flow)
-		if err != nil {
-			// Keep the trace we worked out last time: reporting no pending policy at all would be a
-			// stronger claim than we are in a position to make. The checker logs the reason, rate
-			// limited, so this one stays at trace level.
-			log.WithError(err).Tracef("Pending %s evaluation failed, tuple: %v", direction, flow)
-			return
-		}
-		if !equal(*ruleIDs, trace) {
-			*ruleIDs = append([]*calc.RuleID(nil), trace...)
-			log.Tracef("Updated pending %s, tuple: %v, rule trace: %v", direction, flow, ruleIDs)
-		}
-	} else {
-		log.WithField("endpoint", ep.Key()).Trace("The endpoint is not yet tracked by the PolicyStore")
-	}
 }
 
 // lookupProtoWorkloadEndpoint returns the proto.WorkloadEndpoint from the policy store. Must be
