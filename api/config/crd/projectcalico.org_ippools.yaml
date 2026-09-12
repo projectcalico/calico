@@ -126,6 +126,7 @@ spec:
                     from this pool.
                   type: boolean
                 ipipMode:
+                  default: Never
                   description: |-
                     Contains configuration for IPIP tunneling for this pool.
                     For IPv6 pools, IPIP tunneling must be disabled.
@@ -153,6 +154,7 @@ spec:
                   maxLength: 1024
                   type: string
                 vxlanMode:
+                  default: Never
                   description: Contains configuration for VXLAN tunneling for this pool.
                   enum:
                     - Never

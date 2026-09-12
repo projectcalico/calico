@@ -17,6 +17,7 @@ package validation_test
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -444,6 +445,24 @@ func TestIPPool_CIDRImmutability(t *testing.T) {
 	expectUpdateFails(t, got, "CIDR cannot be changed")
 }
 
+func TestIPPool_BlockSizeImmutability(t *testing.T) {
+	pool := &v3.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+		Spec: v3.IPPoolSpec{
+			CIDR:      nextPoolCIDR(),
+			BlockSize: 26,
+		},
+	}
+	mustCreate(t, pool)
+
+	got := &v3.IPPool{}
+	if err := testClient.Get(context.Background(), client.ObjectKeyFromObject(pool), got); err != nil {
+		t.Fatalf("failed to get ippool: %v", err)
+	}
+	got.Spec.BlockSize = 24
+	expectUpdateFails(t, got, "Block size cannot be changed")
+}
+
 func TestIPPool_Defaults(t *testing.T) {
 	pool := &v3.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool-dflt")},
@@ -462,5 +481,38 @@ func TestIPPool_Defaults(t *testing.T) {
 	}
 	if *got.Spec.AssignmentMode != v3.Automatic {
 		t.Fatalf("expected assignmentMode=Automatic, got %q", *got.Spec.AssignmentMode)
+	}
+	if got.Spec.IPIPMode != v3.IPIPModeNever {
+		t.Errorf("expected ipipMode=%q, got %q", v3.IPIPModeNever, got.Spec.IPIPMode)
+	}
+	if got.Spec.VXLANMode != v3.VXLANModeNever {
+		t.Errorf("expected vxlanMode=%q, got %q", v3.VXLANModeNever, got.Spec.VXLANMode)
+	}
+}
+
+// An explicit value has to survive defaulting, or a CrossSubnet pool silently
+// becomes a Never pool.
+func TestIPPool_DefaultsPreserveExplicitValues(t *testing.T) {
+	name := uniqueName("ippool-explicit")
+	mustCreate(t, &v3.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec: v3.IPPoolSpec{
+			CIDR:        nextPoolCIDR(),
+			VXLANMode:   v3.VXLANModeCrossSubnet,
+			AllowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload},
+		},
+	})
+
+	got := &v3.IPPool{}
+	if err := testClient.Get(context.Background(), client.ObjectKey{Name: name}, got); err != nil {
+		t.Fatalf("failed to get pool: %v", err)
+	}
+
+	if got.Spec.VXLANMode != v3.VXLANModeCrossSubnet {
+		t.Errorf("expected spec.vxlanMode=%q, got %q", v3.VXLANModeCrossSubnet, got.Spec.VXLANMode)
+	}
+	wantUses := []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload}
+	if !slices.Equal(got.Spec.AllowedUses, wantUses) {
+		t.Errorf("expected spec.allowedUses=%v, got %v", wantUses, got.Spec.AllowedUses)
 	}
 }
