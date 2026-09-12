@@ -15,6 +15,7 @@
 package policystore
 
 import (
+	"net"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -144,6 +145,20 @@ func TestIPNet(t *testing.T) {
 	uut.AddString("192.168.8.0/24")
 	Expect(uut.Contains(addr192_168_8_1)).To(BeTrue())
 	Expect(uut.Contains(addr192_168_20_1)).To(BeFalse())
+}
+
+func TestIPNetContainsIP(t *testing.T) {
+	RegisterTestingT(t)
+
+	uut := NewIPSet(proto.IPSetUpdate_NET)
+	uut.AddString("192.168.8.0/24")
+	uut.AddString("fd5f::/64")
+
+	addrSet := uut.(IPAddrSet)
+	Expect(addrSet.ContainsIP(net.ParseIP("192.168.8.1"))).To(BeTrue())
+	Expect(addrSet.ContainsIP(net.ParseIP("192.168.9.1"))).To(BeFalse())
+	Expect(addrSet.ContainsIP(net.ParseIP("fd5f::1"))).To(BeTrue())
+	Expect(addrSet.ContainsIP(net.ParseIP("fd5e::1"))).To(BeFalse())
 }
 
 func TestIPNetAddIP(t *testing.T) {
