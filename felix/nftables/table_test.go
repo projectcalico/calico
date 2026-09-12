@@ -1422,6 +1422,54 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { cali1234, eth0, vxlan.calico }"))
 	})
 
+	// NF-5: as pods churn, the endpoint manager pushes a changing workload-interface set via
+	// SetWorkloadInterfaces. The flowtable device list must track that desired set - dropping an
+	// interface that leaves it (distinct from the kernel-prune path) and picking up new ones - while
+	// the overlay device stays put.
+	It("tracks workload-interface churn in the flowtable device set", func() {
+		var ff *fakeNFT
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			ff = NewFake(fam, name)
+			return ff, nil
+		}
+		tbl := nftables.NewTable(
+			"calico", 4, rulesdefs.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
+				ListInterfacesOverride: func() ([]string, error) {
+					// All candidate veths exist in the kernel, so removals here come from the desired
+					// set changing rather than from a device disappearing.
+					return []string{"cali1234", "cali5678", "cali9abc", "vxlan.calico", "lo"}, nil
+				},
+			},
+			true,
+		)
+		tbl.SetOverlayDevices([]string{"vxlan.calico"})
+
+		// knftables' fake ignores a re-"add flowtable" for an existing flowtable (real nft treats it
+		// as create-or-update), so Dump() is stuck at the first write. Assert on what we asked nft to
+		// do across the transactions instead.
+
+		// Two workload interfaces up.
+		tbl.SetWorkloadInterfaces([]string{"cali1234", "cali5678"})
+		Expect(tbl.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(flowtableDevicesProgrammed(ff)).To(ContainElement("devices = { cali1234, cali5678, vxlan.calico }"))
+
+		// Churn: cali1234 leaves the set, cali9abc joins. The newly programmed device line must drop
+		// cali1234 and pick up cali9abc.
+		tbl.SetWorkloadInterfaces([]string{"cali5678", "cali9abc"})
+		Expect(tbl.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(flowtableDevicesProgrammed(ff)).To(ContainElement("devices = { cali5678, cali9abc, vxlan.calico }"))
+
+		// All workloads gone: only the overlay device remains in the programmed list.
+		tbl.SetWorkloadInterfaces(nil)
+		Expect(tbl.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(flowtableDevicesProgrammed(ff)).To(ContainElement("devices = { vxlan.calico }"))
+	})
+
 	// A full resync must re-assert the flowtable even with no devices, otherwise the always-present
 	// FORWARD rule would reference a flowtable that the resync failed to recreate.
 	It("should re-assert the flowtable on a resync with no devices", func() {
