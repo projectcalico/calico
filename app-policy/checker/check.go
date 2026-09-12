@@ -123,6 +123,23 @@ const (
 // the caller should hold on to whatever trace it already had: an empty trace would say the flow has
 // no policy, which is a stronger claim than "we could not work it out".
 func Evaluate(scope PolicyScope, dir rules.RuleDir, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, flow Flow) ([]*calc.RuleID, error) {
+	if store != nil && store.Verdicts != nil {
+		if key, ok := verdictKey(store, scope, dir, ep, flow); ok {
+			if cached, hit := store.Verdicts.Lookup(store.Generation, key); hit {
+				return cached.([]*calc.RuleID), nil
+			}
+			trace, err := evaluate(scope, dir, store, ep, flow)
+			if err == nil {
+				store.Verdicts.Store(store.Generation, key, trace)
+			}
+			return trace, err
+		}
+	}
+	return evaluate(scope, dir, store, ep, flow)
+}
+
+// evaluate walks the policies; Evaluate is the cache in front of it.
+func evaluate(scope PolicyScope, dir rules.RuleDir, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, flow Flow) ([]*calc.RuleID, error) {
 	s, trace := checkTiers(scope, store, ep, dir, flow)
 	if s.Code == INTERNAL || s.Code == INVALID_ARGUMENT {
 		// The evaluation stopped part way through, so the trace stops short of a verdict. Drop it

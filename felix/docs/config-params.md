@@ -2969,6 +2969,21 @@ Configures local unix socket for reporting flow data from each node.
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
 | Default value (YAML) | `Disabled` |
 
+### `FlowLogsPolicyEvaluationCacheSize` (config file / env var only)
+
+The number of pending-policy verdicts the flow log
+collector remembers, keyed on a flow's addresses, protocol and destination port (and its
+source port only where a policy rule matches on source ports), so that a flow repeating an
+earlier flow's endpoints is answered without walking the policy set. The cache is emptied
+whenever policy, IP set or endpoint state changes. Set to 0 to disable it.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_FlowLogsPolicyEvaluationCacheSize` |
+| Encoding (env var/config file) | Integer: [0,2<sup>63</sup>-1] |
+| Default value (above encoding) | `65536` |
+| Notes | Config file / env var only. | 
+
 ### `FlowLogsPolicyEvaluationMode` (config file) / `flowLogsPolicyEvaluationMode` (YAML)
 
 Continuous - Felix evaluates active flows on a regular basis to determine the rule
