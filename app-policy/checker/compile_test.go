@@ -83,11 +83,16 @@ func TestCompiledPolicyEquivalence(t *testing.T) {
 	addIPSet(store, "ipset-hit", "10.0.0.1")
 	netSet := policystore.NewIPSet(proto.IPSetUpdate_NET)
 	netSet.AddString("10.0.0.0/24")
+	netSet.AddString("fd00::/64")
 	store.IPSetByID["netset-hit"] = netSet
-	// A named port set holds "<IP>,<protocol>:<port>" members: the first flow's source leg.
+	// Named port sets hold "<IP>,<protocol>:<port>" members: the first flow's source leg,
+	// and its destination leg.
 	namedPortSet := policystore.NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
 	namedPortSet.AddString("10.0.0.1,tcp:1234")
 	store.IPSetByID["portset-src"] = namedPortSet
+	namedPortSetDst := policystore.NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
+	namedPortSetDst.AddString("192.168.1.1,tcp:80")
+	store.IPSetByID["namedport-dst"] = namedPortSetDst
 	ipPortSet := policystore.NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
 	ipPortSet.AddString("192.168.1.1,tcp:80")
 	store.IPSetByID["ipportset-hit"] = ipPortSet
@@ -145,7 +150,25 @@ func TestCompiledPolicyEquivalence(t *testing.T) {
 			DestPort:   80,
 			Protocol:   6,
 		},
+		// ICMP: no ports, so every port criterion sees 0, and the IP+port keys
+		// carry "icmp:0".
+		&MockFlow{
+			SourceIP: net.ParseIP("10.0.0.1"),
+			DestIP:   net.ParseIP("192.168.1.1"),
+			Protocol: 1,
+		},
+		// IPv6, inside the NET set's v6 prefix: the parsed-IP fast path's v6 branch.
+		&MockFlow{
+			SourceIP:   net.ParseIP("fd00::1"),
+			DestIP:     net.ParseIP("fd00::2"),
+			SourcePort: 1234,
+			DestPort:   80,
+			Protocol:   6,
+		},
 	}
+
+	tcp := &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}}
+	udp := &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}}
 
 	ruleVariants := []*proto.Rule{
 		{}, // Empty rule: matches everything.
@@ -214,6 +237,41 @@ func TestCompiledPolicyEquivalence(t *testing.T) {
 		// Combined criteria, mirroring the baseline-policy benchmark's rule shape.
 		{SrcIpSetIds: []string{"ipset-missing"}, SrcPorts: []*proto.PortRange{{First: 65001, Last: 65001}}},
 		{DstIpSetIds: []string{"netset-hit"}, DstPorts: []*proto.PortRange{{First: 80, Last: 80}}},
+		// Named port sets are keyed on the leg's "<IP>,<protocol>:<port>", so a set
+		// holding the destination leg never matches on the source leg.
+		{DstNamedPortIpSetIds: []string{"namedport-dst"}},
+		{NotDstNamedPortIpSetIds: []string{"namedport-dst"}},
+		{SrcNamedPortIpSetIds: []string{"namedport-dst"}},
+		// Ranges and named sets on one leg: either side may match; a negated named
+		// set excludes even when the negated ranges do not.
+		{DstPorts: []*proto.PortRange{{First: 65001, Last: 65001}}, DstNamedPortIpSetIds: []string{"namedport-dst"}},
+		{NotDstPorts: []*proto.PortRange{{First: 65001, Last: 65001}}, NotDstNamedPortIpSetIds: []string{"namedport-dst"}},
+		{SrcPorts: []*proto.PortRange{{First: 1, Last: 1023}}, SrcNamedPortIpSetIds: []string{"portset-src"}},
+		// Port ranges: several ranges, wide negations, a range excluding what the
+		// positive ranges admit, and port 0 (the ICMP flow).
+		{DstPorts: []*proto.PortRange{{First: 1, Last: 79}, {First: 81, Last: 65535}}},
+		{NotDstPorts: []*proto.PortRange{{First: 1, Last: 1023}}},
+		{SrcPorts: []*proto.PortRange{{First: 1000, Last: 2000}}, NotSrcPorts: []*proto.PortRange{{First: 1234, Last: 1234}}},
+		{DstPorts: []*proto.PortRange{{First: 0, Last: 0}}},
+		// Protocol with ports: the protocol is checked first, so a rule on the wrong
+		// protocol is rejected before its ports are consulted.
+		{Protocol: udp, DstPorts: []*proto.PortRange{{First: 80, Last: 80}}},
+		{Protocol: tcp, NotDstPorts: []*proto.PortRange{{First: 80, Last: 80}}},
+		{Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "icmp"}}},
+		{Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 1}}, DstPorts: []*proto.PortRange{{First: 0, Last: 0}}},
+		{NotProtocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "ICMP"}}}, // Names are case-insensitive.
+		// Protocol with HTTP criteria: a rule on the wrong protocol never reaches them.
+		{Protocol: udp, HttpMatch: &proto.HTTPMatch{Methods: []string{"POST"}}},
+		{Protocol: tcp, HttpMatch: &proto.HTTPMatch{Methods: []string{"GET"}}},
+		// Every criterion class at once.
+		{
+			Protocol:               tcp,
+			DstPorts:               []*proto.PortRange{{First: 80, Last: 80}},
+			DstNet:                 []string{"192.168.0.0/16", "10.0.0.0/8"},
+			SrcIpSetIds:            []string{"netset-hit"},
+			SrcServiceAccountMatch: &proto.ServiceAccountMatch{Names: []string{"sa-src"}},
+			HttpMatch:              &proto.HTTPMatch{Methods: []string{"GET"}},
+		},
 	}
 
 	actions := []string{"allow", "deny", "pass", "log"}

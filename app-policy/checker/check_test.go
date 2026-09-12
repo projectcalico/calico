@@ -1164,7 +1164,10 @@ func TestCheckTiersPolicyScope(t *testing.T) {
 					InboundRules: []*proto.Rule{{Action: "allow"}},
 				}
 
-				st := checkStore(scope.PolicyScope, store, store.Endpoint, rules.RuleDirIngress,
+				// Both engines: the scope is applied by the tier walk they share, and the
+				// endpoint is in the store, so the compiled pass takes the compiled-endpoint
+				// path with the staged policies skipped out of its precomputed slots.
+				st := checkStoreBothEngines(scope.PolicyScope, store, store.Endpoint, rules.RuleDirIngress,
 					&MockFlow{Protocol: 6, DestPort: 80})
 				Expect(st.Code).To(Equal(scope.want), "scope %v", scope.PolicyScope)
 			}
@@ -1198,7 +1201,7 @@ func TestCheckStoreReportsWhichPolicyIsMissing(t *testing.T) {
 	store := policystore.NewPolicyStore()
 	store.Endpoint = &proto.WorkloadEndpoint{Tiers: tierInfos(policyIDs(missing))}
 
-	st := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress,
+	st := checkStoreBothEngines(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress,
 		&MockFlow{Protocol: 6, DestPort: 80})
 	Expect(st.Code).To(Equal(INTERNAL))
 	Expect(st.Message).To(Equal("policy np/ns1/policy1 of tier tier1 is missing from the policy store"))
@@ -1247,19 +1250,24 @@ func TestEvaluateRecordsStagedPolicyInPendingTraceOnly(t *testing.T) {
 	ep := &proto.WorkloadEndpoint{Tiers: tierInfos(policyIDs(stagedDeny), policyIDs(enforcedAllow))}
 	flow := &MockFlow{Protocol: 6, DestPort: 80}
 
-	pending, err := Evaluate(StagedAsEnforced, rules.RuleDirIngress, store, ep, flow, nil)
-	Expect(err).ToNot(HaveOccurred())
-	Expect(pending).To(Equal([]*calc.RuleID{
-		calc.NewRuleID(v3.KindStagedGlobalNetworkPolicy, "tier1", "staged-deny", "",
-			0, rules.RuleDirIngress, rules.RuleActionDeny),
-	}))
+	for _, compiled := range []bool{false, true} {
+		if compiled {
+			compileStoreForTest(store)
+		}
+		pending, err := Evaluate(StagedAsEnforced, rules.RuleDirIngress, store, ep, flow, nil)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(pending).To(Equal([]*calc.RuleID{
+			calc.NewRuleID(v3.KindStagedGlobalNetworkPolicy, "tier1", "staged-deny", "",
+				0, rules.RuleDirIngress, rules.RuleActionDeny),
+		}), "compiled=%v", compiled)
 
-	enforced, err := Evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow, nil)
-	Expect(err).ToNot(HaveOccurred())
-	Expect(enforced).To(Equal([]*calc.RuleID{
-		calc.NewRuleID(v3.KindGlobalNetworkPolicy, "tier2", "allow", "",
-			0, rules.RuleDirIngress, rules.RuleActionAllow),
-	}))
+		enforced, err := Evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow, nil)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(enforced).To(Equal([]*calc.RuleID{
+			calc.NewRuleID(v3.KindGlobalNetworkPolicy, "tier2", "allow", "",
+				0, rules.RuleDirIngress, rules.RuleActionAllow),
+		}), "compiled=%v", compiled)
+	}
 }
 
 // A rule whose HTTP criteria would reject a malformed request path no longer decides the
@@ -1300,13 +1308,15 @@ func TestMalformedHTTPPathOnlyFailsRulesThatReachIt(t *testing.T) {
 	store.PolicyByID[types.ProtoToPolicyID(udpWithPaths)] = &proto.Policy{
 		InboundRules: []*proto.Rule{httpRule("UDP")},
 	}
-	Expect(checkStore(EnforcedOnly, store, ep, rules.RuleDirIngress, flow).Code).To(Equal(OK))
+	// Both engines: the compiled rule's matchers are emitted in the same order, so the
+	// protocol matcher rejects before the HTTP matcher can panic.
+	Expect(checkStoreBothEngines(EnforcedOnly, store, ep, rules.RuleDirIngress, flow).Code).To(Equal(OK))
 
 	// The same rule on TCP does reach them, and the malformed path still fails the request.
 	store.PolicyByID[types.ProtoToPolicyID(udpWithPaths)] = &proto.Policy{
 		InboundRules: []*proto.Rule{httpRule("TCP")},
 	}
-	st := checkStore(EnforcedOnly, store, ep, rules.RuleDirIngress, flow)
+	st := checkStoreBothEngines(EnforcedOnly, store, ep, rules.RuleDirIngress, flow)
 	Expect(st.Code).To(Equal(INVALID_ARGUMENT))
 	Expect(st.Message).To(ContainSubstring(badPath))
 }

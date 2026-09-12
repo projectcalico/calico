@@ -97,16 +97,30 @@ var egressPortsPerRule = []struct {
 func BenchmarkEvaluateEgressAllowList(b *testing.B) {
 	// A flow on a port few rules share: rejected on the port comparison nearly everywhere.
 	b.Run("TailPort", func(b *testing.B) {
-		benchEvaluateEgressAllowList(b, egressTailPortFlow)
+		benchEvaluateEgressAllowList(b, egressTailPortFlow, false)
 	})
 	// A flow on the most popular port: ~18% of rules share it and go on to the address check.
 	b.Run("PopularPort", func(b *testing.B) {
-		benchEvaluateEgressAllowList(b, egressPopularPortFlow)
+		benchEvaluateEgressAllowList(b, egressPopularPortFlow, false)
 	})
 	// No rule matches, so the walk covers the whole tier and ends in the tier default deny.
 	// Ordering cannot reduce the scan depth here, only the cost of each rejected rule.
 	b.Run("Denied", func(b *testing.B) {
-		benchEvaluateEgressAllowList(b, egressDeniedFlow)
+		benchEvaluateEgressAllowList(b, egressDeniedFlow, false)
+	})
+}
+
+// BenchmarkEvaluateEgressAllowListCompiled is BenchmarkEvaluateEgressAllowList with the store's
+// policies compiled, as when a PolicyCompiler is configured.
+func BenchmarkEvaluateEgressAllowListCompiled(b *testing.B) {
+	b.Run("TailPort", func(b *testing.B) {
+		benchEvaluateEgressAllowList(b, egressTailPortFlow, true)
+	})
+	b.Run("PopularPort", func(b *testing.B) {
+		benchEvaluateEgressAllowList(b, egressPopularPortFlow, true)
+	})
+	b.Run("Denied", func(b *testing.B) {
+		benchEvaluateEgressAllowList(b, egressDeniedFlow, true)
 	})
 }
 
@@ -154,11 +168,14 @@ func egressFlow(destIP string, destPort int32) *MockFlow {
 	}
 }
 
-func benchEvaluateEgressAllowList(b *testing.B, caseFor egressCaseFunc) {
+func benchEvaluateEgressAllowList(b *testing.B, caseFor egressCaseFunc, compiled bool) {
 	_, restoreLogging := withBenchLogging(log.WarnLevel)
 	defer restoreLogging()
 
 	store, ep, target := buildEgressAllowListStore()
+	if compiled {
+		compileStoreForTest(store)
+	}
 	c := caseFor(target)
 
 	// Pre-flight outside the timed loop: prove the walk is the one the case intends, so that
@@ -251,7 +268,10 @@ func buildEgressAllowListStore() (*policystore.PolicyStore, *proto.WorkloadEndpo
 		tier.EgressPolicies = append(tier.EgressPolicies, policyID)
 	}
 
+	// The endpoint goes into the store, as dikastes' per-pod store holds it: evaluation resolves
+	// an endpoint's compiled form by identity.
 	ep := &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{tier}}
+	store.Endpoint = ep
 	return store, ep, target
 }
 
