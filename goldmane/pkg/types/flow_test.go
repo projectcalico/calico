@@ -70,6 +70,8 @@ func TestTranslation(t *testing.T) {
 				EndTime:                 1234567891,
 				SourceLabels:            []string{"source-label-1", "source-label-2"},
 				DestLabels:              []string{"dest-label-1", "dest-label-2"},
+				SourceIps:               []string{"10.0.0.1", "10.0.0.2"},
+				DestIps:                 []string{"192.168.0.1", "192.168.0.2"},
 				PacketsIn:               123,
 				PacketsOut:              456,
 				BytesIn:                 789,

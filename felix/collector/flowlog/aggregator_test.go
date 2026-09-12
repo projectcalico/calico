@@ -812,4 +812,67 @@ var _ = Describe("Flow log aggregator tests", func() {
 			Expect(flowLog.BytesOut).Should(Equal(33))
 		})
 	})
+
+	Context("Flow log aggregator source/destination IP collection", func() {
+		It("preserves distinct source and destination IPs even when the aggregated tuple is zeroed", func() {
+			// FlowPrefixName (the default aggregation level) zeroes the FlowMeta tuple so that
+			// connections from many source IPs collapse into a single flow log. The IP sets must
+			// still be collected from the underlying connection tuples and surfaced on the FlowLog.
+			ca := NewAggregator()
+
+			// First connection: src 10.0.0.1 -> dst 20.0.0.1 (tuple1).
+			Expect(ca.FeedUpdate(&muNoConn1Rule1AllowUpdateWithEndpointMeta)).NotTo(HaveOccurred())
+
+			// Second connection: same endpoints/key, but a different source IP and port.
+			muCopy := muNoConn1Rule1AllowUpdateWithEndpointMeta
+			tupleCopy := tuple1
+			tupleCopy.L4Src = 44123
+			tupleCopy.Src = utils.IpStrTo16Byte("10.0.0.3")
+			muCopy.Tuple = tupleCopy
+			Expect(ca.FeedUpdate(&muCopy)).NotTo(HaveOccurred())
+
+			messages := ca.GetAndCalibrate()
+			// Both updates aggregate into a single flow log at FlowPrefixName level.
+			Expect(len(messages)).Should(Equal(1))
+			flowLog := messages[0]
+
+			// The aggregated tuple is zeroed (IPs are not part of the aggregation key)...
+			Expect(flowLog.Tuple.Src).Should(Equal(EmptyIP))
+			Expect(flowLog.Tuple.Dst).Should(Equal(EmptyIP))
+
+			// ...but the distinct source / destination IPs are preserved as bounded, sorted sets.
+			Expect(flowLog.SourceIPs).Should(Equal([]string{"10.0.0.1", "10.0.0.3"}))
+			Expect(flowLog.DestIPs).Should(Equal([]string{"20.0.0.1"}))
+		})
+
+		It("collects and renders IPv6 source and destination IPs", func() {
+			// IPs are stored as a 16-byte array (net.IP.To16 covers both families) and rendered with
+			// net.IP.String, so IPv6 connections must surface as canonical IPv6 strings.
+			ca := NewAggregator()
+
+			// First connection: IPv6 src 2001:db8::1 -> dst 2001:db8:1::1.
+			muV6 := muNoConn1Rule1AllowUpdateWithEndpointMeta
+			tupleV6 := tuple1
+			tupleV6.Src = utils.IpStrTo16Byte("2001:db8::1")
+			tupleV6.Dst = utils.IpStrTo16Byte("2001:db8:1::1")
+			muV6.Tuple = tupleV6
+			Expect(ca.FeedUpdate(&muV6)).NotTo(HaveOccurred())
+
+			// Second connection: same key, a different IPv6 source IP and port.
+			muV6Copy := muNoConn1Rule1AllowUpdateWithEndpointMeta
+			tupleV6Copy := tupleV6
+			tupleV6Copy.L4Src = 44123
+			tupleV6Copy.Src = utils.IpStrTo16Byte("2001:db8::3")
+			muV6Copy.Tuple = tupleV6Copy
+			Expect(ca.FeedUpdate(&muV6Copy)).NotTo(HaveOccurred())
+
+			messages := ca.GetAndCalibrate()
+			Expect(len(messages)).Should(Equal(1))
+			flowLog := messages[0]
+
+			// The distinct IPv6 addresses are preserved and rendered in canonical form.
+			Expect(flowLog.SourceIPs).Should(Equal([]string{"2001:db8::1", "2001:db8::3"}))
+			Expect(flowLog.DestIPs).Should(Equal([]string{"2001:db8:1::1"}))
+		})
+	})
 })

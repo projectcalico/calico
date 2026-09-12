@@ -47,6 +47,8 @@ func TestListFlows(t *testing.T) {
 		[]*proto.FlowResult{
 			{
 				Flow: &proto.Flow{
+					SourceIps: []string{"10.0.0.1", "10.0.0.2"},
+					DestIps:   []string{"192.168.0.1"},
 					Key: &proto.FlowKey{
 						SourceNamespace: "default",
 						SourceName:      "test-pod",
@@ -100,6 +102,8 @@ func TestListFlows(t *testing.T) {
 					EndTime:         zerotime,
 					SourceNamespace: "default",
 					SourceName:      "test-pod",
+					SourceIPs:       []string{"10.0.0.1", "10.0.0.2"},
+					DestIPs:         []string{"192.168.0.1"},
 					Policies: whiskerv1.PolicyTrace{
 						Enforced: []*whiskerv1.PolicyHit{
 							{

@@ -15,6 +15,7 @@
 package storage_test
 
 import (
+	"net"
 	"testing"
 	"unique"
 
@@ -103,4 +104,79 @@ func TestDiachronicFlow(t *testing.T) {
 	df.Rollover(401)
 	af = df.Aggregate(0, 400)
 	require.Nil(t, af)
+}
+
+// TestDiachronicFlow_IPSets verifies that source / destination IP sets are unioned and
+// deduplicated as flows are added to a window and aggregated across windows.
+func TestDiachronicFlow_IPSets(t *testing.T) {
+	defer setupTest(t)()
+
+	k := types.NewFlowKey(
+		&types.FlowKeySource{},
+		&types.FlowKeyDestination{},
+		&types.FlowKeyMeta{},
+		&proto.PolicyTrace{},
+	)
+	df := storage.NewDiachronicFlow(k, 0)
+
+	// Two flows in the same window, with overlapping source IPs and distinct dest IPs.
+	df.AddFlow(&types.Flow{
+		Key:          k,
+		SourceLabels: unique.Make(""),
+		DestLabels:   unique.Make(""),
+		SourceIps:    []string{"10.0.0.1", "10.0.0.2"},
+		DestIps:      []string{"192.168.0.1"},
+	}, 0, 1)
+	df.AddFlow(&types.Flow{
+		Key:          k,
+		SourceLabels: unique.Make(""),
+		DestLabels:   unique.Make(""),
+		SourceIps:    []string{"10.0.0.2", "10.0.0.3"},
+		DestIps:      []string{"192.168.0.2"},
+	}, 0, 1)
+
+	af := df.Aggregate(0, 1)
+	require.Equal(t, []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"}, af.SourceIps, "source IPs should be unioned and deduplicated")
+	require.Equal(t, []string{"192.168.0.1", "192.168.0.2"}, af.DestIps, "dest IPs should be unioned")
+
+	// A flow in a different window contributes additional IPs that must merge on aggregation.
+	df.AddFlow(&types.Flow{
+		Key:          k,
+		SourceLabels: unique.Make(""),
+		DestLabels:   unique.Make(""),
+		SourceIps:    []string{"10.0.0.4"},
+		DestIps:      []string{"192.168.0.1"},
+	}, 1, 2)
+
+	af = df.Aggregate(0, 2)
+	require.Equal(t, []string{"10.0.0.1", "10.0.0.2", "10.0.0.3", "10.0.0.4"}, af.SourceIps)
+	require.Equal(t, []string{"192.168.0.1", "192.168.0.2"}, af.DestIps)
+}
+
+// TestDiachronicFlow_IPSetCap verifies the per-flow IP set is capped at MaxIPsPerFlow.
+func TestDiachronicFlow_IPSetCap(t *testing.T) {
+	defer setupTest(t)()
+
+	k := types.NewFlowKey(
+		&types.FlowKeySource{},
+		&types.FlowKeyDestination{},
+		&types.FlowKeyMeta{},
+		&proto.PolicyTrace{},
+	)
+	df := storage.NewDiachronicFlow(k, 0)
+
+	// Add far more distinct source IPs than the cap allows.
+	manyIPs := make([]string, storage.MaxIPsPerFlow*2)
+	for i := range manyIPs {
+		manyIPs[i] = net.IP{10, byte(i >> 16), byte(i >> 8), byte(i)}.String()
+	}
+	df.AddFlow(&types.Flow{
+		Key:          k,
+		SourceLabels: unique.Make(""),
+		DestLabels:   unique.Make(""),
+		SourceIps:    manyIPs,
+	}, 0, 1)
+
+	af := df.Aggregate(0, 1)
+	require.Len(t, af.SourceIps, storage.MaxIPsPerFlow, "source IP set should be truncated to the cap")
 }
