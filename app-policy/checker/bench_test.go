@@ -125,6 +125,47 @@ func BenchmarkEvaluateComposite(b *testing.B) {
 	}
 }
 
+// BenchmarkEvaluateVerdictCache measures Evaluate with the verdict cache in front of it, on the
+// sampler's flow model: new flows aimed uniformly at the walk, a tenth missing every rule, and a
+// fraction repeating an earlier flow on a new source port, which is what the collector sees. The
+// sampler's allocation of each flow is inside the timed loop, so allocs/op includes one for it.
+func BenchmarkEvaluateVerdictCache(b *testing.B) {
+	_, restoreLogging := withBenchLogging(log.WarnLevel)
+	defer restoreLogging()
+
+	fx := policyscale.Build(policyscale.Composite())
+	ep := fx.Endpoint()
+	for _, c := range []struct {
+		name   string
+		cache  bool
+		repeat float64
+	}{
+		{"Uncached/Repeat50", false, 0.5},
+		{"Cached/Repeat0", true, 0},
+		{"Cached/Repeat50", true, 0.5},
+		{"Cached/Repeat90", true, 0.9},
+	} {
+		b.Run(c.name, func(b *testing.B) {
+			store := fx.NewStore()
+			stats := &policystore.VerdictCacheStats{}
+			if c.cache {
+				store.Verdicts = policystore.NewVerdictCache(1<<16, stats)
+			}
+			s := fx.NewSampler(1, policyscale.FlowModel{Direction: policyscale.Egress, MissFraction: 0.1, RepeatFraction: c.repeat})
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				benchTraceSink, _ = Evaluate(StagedAsEnforced, rules.RuleDirEgress, store, ep, s.Next())
+			}
+			b.StopTimer()
+			if c.cache {
+				total := stats.Hits.Load() + stats.Misses.Load()
+				b.ReportMetric(float64(stats.Hits.Load())/float64(max(total, 1)), "hit-ratio")
+			}
+		})
+	}
+}
+
 func benchEvaluateBaselinePolicyScale(b *testing.B, spec policyscale.Spec, level log.Level, matchEarly bool) {
 	logger := log.StandardLogger()
 	counter, restoreLogging := withBenchLogging(level)

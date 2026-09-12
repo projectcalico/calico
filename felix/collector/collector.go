@@ -115,6 +115,27 @@ var (
 	},
 		[]string{"reason"})
 
+	// verdictCacheStats is shared by the caches of every policy store the collector's manager
+	// creates, so the counters survive a resync. One collector per process, so package-level.
+	verdictCacheStats = &policystore.VerdictCacheStats{}
+
+	counterPolicyEvalCacheHits = prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name: "felix_collector_policy_eval_cache_hits_total",
+		Help: "Total number of pending policy evaluations answered from the verdict cache.",
+	}, func() float64 { return float64(verdictCacheStats.Hits.Load()) })
+	counterPolicyEvalCacheMisses = prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name: "felix_collector_policy_eval_cache_misses_total",
+		Help: "Total number of pending policy evaluations that missed the verdict cache and walked the policy set.",
+	}, func() float64 { return float64(verdictCacheStats.Misses.Load()) })
+	counterPolicyEvalCacheResets = prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name: "felix_collector_policy_eval_cache_resets_total",
+		Help: "Total number of times the verdict cache was emptied because policy, IP set or endpoint state changed.",
+	}, func() float64 { return float64(verdictCacheStats.Resets.Load()) })
+	counterPolicyEvalCacheEvictions = prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name: "felix_collector_policy_eval_cache_evictions_total",
+		Help: "Total number of times the verdict cache was emptied because it reached its capacity.",
+	}, func() float64 { return float64(verdictCacheStats.Evictions.Load()) })
+
 	histogramPolicyEvalSweepDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name: "felix_collector_policy_eval_sweep_duration_seconds",
 		Help: "Wall-clock time to drain one policy re-evaluation snapshot across all its batches.",
@@ -130,6 +151,10 @@ func init() {
 	prometheus.MustRegister(counterPolicyEvalBatches)
 	prometheus.MustRegister(counterPolicyEvalFlows)
 	prometheus.MustRegister(histogramPolicyEvalSweepDuration)
+	prometheus.MustRegister(counterPolicyEvalCacheHits)
+	prometheus.MustRegister(counterPolicyEvalCacheMisses)
+	prometheus.MustRegister(counterPolicyEvalCacheResets)
+	prometheus.MustRegister(counterPolicyEvalCacheEvictions)
 }
 
 type Config struct {
@@ -140,6 +165,9 @@ type Config struct {
 	EnableServices        bool
 	PolicyEvaluationMode  string
 	FlowLogsFlushInterval time.Duration
+	// PolicyEvaluationCacheSize is the capacity of the verdict cache in front of the pending-policy
+	// evaluation; 0 disables it. Only used when the collector creates its own PolicyStoreManager.
+	PolicyEvaluationCacheSize int
 
 	IsBPFDataplane bool
 
@@ -202,7 +230,12 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 	}
 
 	if c.policyStoreManager == nil {
-		c.policyStoreManager = policystore.NewPolicyStoreManager()
+		var opts []policystore.PolicyStoreManagerOption
+		if cfg.PolicyEvaluationCacheSize > 0 {
+			log.Infof("Pending policy verdict cache enabled, capacity %d", cfg.PolicyEvaluationCacheSize)
+			opts = append(opts, policystore.WithVerdictCache(cfg.PolicyEvaluationCacheSize, verdictCacheStats))
+		}
+		c.policyStoreManager = policystore.NewPolicyStoreManagerWithOpts(opts...)
 	}
 
 	// Only run the re-evaluation sweep when pending policies are enabled; leaving the ticker nil
