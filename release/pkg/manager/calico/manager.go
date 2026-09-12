@@ -441,12 +441,16 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 // Fetch the registry from the calicoctl manifest file.
 // For hashrelease, it looks in the hashrelease source directory.
 func (r *CalicoManager) getRegistryFromManifests() (string, error) {
-	dir := filepath.Join(r.repoRoot, manifestsDir)
-	if r.isHashRelease {
-		dir = filepath.Join(r.hashrelease.Source, manifestsDir)
-	}
 	key := "spec.containers.image"
-	path := filepath.Join(dir, calicoctlManifest)
+	path := filepath.Join(r.repoRoot, manifestsDir, calicoctlManifest)
+	if r.isHashRelease {
+		p := filepath.Join(r.hashrelease.Source, manifestsDir, calicoctlManifest)
+		if _, err := os.Stat(p); err != nil {
+			// if the file does not exist, fall back to the default image registry.
+			return r.imageRegistries[0], nil
+		}
+		path = p
+	}
 	imgs, err := yamledit.Read(path, key)
 	if err != nil {
 		return "", err
@@ -707,7 +711,10 @@ func (r *CalicoManager) PublishRelease() error {
 	if err := r.publishPrereqs(); err != nil {
 		return err
 	}
+	return distribution.Publish(r.uploads(), distribution.WithRunner(r.runner))
+}
 
+func (r *CalicoManager) uploads() []distribution.Upload {
 	// The registries go first: metadata records the digests they produce
 	uploads := []distribution.Upload{
 		{Handler: distribution.Publisher{Kind: "images", Action: r.publishContainerImages}},
@@ -718,16 +725,17 @@ func (r *CalicoManager) PublishRelease() error {
 	)
 
 	if r.isHashRelease {
-		uploads = append(uploads, r.hashreleaseUpload()...)
-		return distribution.Publish(uploads, distribution.WithRunner(r.runner))
+		return append(uploads, r.hashreleaseUpload()...)
 	}
-	uploads = append(uploads, r.helmIndexUpload(), r.githubTagUpload())
+	uploads = append(uploads, r.githubTagUpload())
 	github := r.githubReleaseUpload()
 	// nil when the github release is disabled.
 	if github != nil {
 		uploads = append(uploads, *github)
 	}
-	return distribution.Publish(uploads, distribution.WithRunner(r.runner))
+	// Last: the index it writes points at the github release's download URLs,
+	// which 404 until that release exists.
+	return append(uploads, r.helmIndexUpload())
 }
 
 func (r *CalicoManager) buildMetadata() error {

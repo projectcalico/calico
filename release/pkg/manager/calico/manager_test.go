@@ -1172,3 +1172,42 @@ func assertRegistry(t *testing.T, m *CalicoManager, want string) {
 		t.Errorf("registry = %q, want %q", got, want)
 	}
 }
+
+// The chart index lists download URLs served by the github release, so
+// publishing it first advertises links that 404 until the release is live.
+func TestChartIndexPublishesAfterTheGithubRelease(t *testing.T) {
+	r := &CalicoManager{
+		githubRelease: true,
+		helmCharts:    true,
+		helmIndex:     true,
+		calicoVersion: "v3.30.0",
+		githubOrg:     "projectcalico",
+		repo:          "calico",
+		s3Bucket:      "bucket",
+		outputDir:     t.TempDir(),
+	}
+	var names []string
+	for _, u := range r.uploads() {
+		names = append(names, u.Name)
+	}
+	index := slices.Index(names, "chart index")
+	release := slices.Index(names, "github release")
+	if index < 0 || release < 0 {
+		t.Fatalf("expected both uploads, got %v", names)
+	}
+	if index < release {
+		t.Errorf("chart index publishes before the github release: %v", names)
+	}
+}
+
+// A hashrelease built with --no-manifests never writes a manifest copy, so the
+// registry has to come from the flags rather than failing the publish.
+func TestGetRegistryFromManifestsFallsBackWhenAbsent(t *testing.T) {
+	m := &CalicoManager{
+		repoRoot:        t.TempDir(),
+		isHashRelease:   true,
+		hashrelease:     hashreleaseserver.Hashrelease{Source: t.TempDir()},
+		imageRegistries: []string{"gcr.io/unique-caldron-775/cnx"},
+	}
+	assertRegistry(t, m, "gcr.io/unique-caldron-775/cnx")
+}

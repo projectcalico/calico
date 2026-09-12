@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
@@ -241,10 +242,10 @@ func (d GithubRelease) Publish(ctx context.Context, src string) error {
 		d.log().WithField("files", files).Infof("Dry run, not creating %s", d.Name())
 		return nil
 	}
-	if err := d.sha256Sums(src, files); err != nil {
+	files, err = d.sha256Sums(src, files)
+	if err != nil {
 		return fmt.Errorf("checksums: %w", err)
 	}
-	files = append(files, filepath.Join(src, SumsFileName))
 	gh, err := d.github()
 	if err != nil {
 		return fmt.Errorf("github client: %w", err)
@@ -339,13 +340,19 @@ func (d GithubRelease) Validate(u Upload) error {
 }
 
 // Create a SHA256 checksum file for all files and write it to the specified directory.
-func (d GithubRelease) sha256Sums(dir string, files []string, opts ...SumsOption) error {
-	s, err := newSettings(sumsStep, opts)
+// Returns the release assets: the files checksummed, plus the sums file.
+func (d GithubRelease) sha256Sums(dir string, files []string) ([]string, error) {
+	s, err := newSettings[SumsOption](sumsStep, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	path := filepath.Join(dir, SumsFileName)
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return nil, s.Errorf("removing %s: %w", path, err)
+	}
+	files = slices.DeleteFunc(files, func(f string) bool { return f == path })
 	if len(files) == 0 {
-		return s.Errorf("no files to checksum")
+		return nil, s.Errorf("no files to checksum")
 	}
 	// names are relative to dir so the file verifies wherever the assets land.
 	names := make([]string, len(files))
@@ -355,14 +362,13 @@ func (d GithubRelease) sha256Sums(dir string, files []string, opts ...SumsOption
 	out, err := s.Runner().RunInDir(dir, "sha256sum", names, nil)
 	if err != nil {
 		s.Logger().Error(out)
-		return s.Errorf("checksumming files: %w", err)
+		return nil, s.Errorf("checksumming files: %w", err)
 	}
-	path := filepath.Join(dir, SumsFileName)
 	if err := os.WriteFile(path, []byte(out), filePerms); err != nil {
-		return s.Errorf("writing %s: %w", path, err)
+		return nil, s.Errorf("writing %s: %w", path, err)
 	}
 	s.Logger().WithField("files", len(files)).Info("Wrote checksums")
-	return nil
+	return append(files, path), nil
 }
 
 func topLevelFiles(dir string) ([]string, error) {

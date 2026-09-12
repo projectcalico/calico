@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	ghapi "github.com/google/go-github/v53/github"
@@ -267,6 +268,33 @@ func githubReleasesWithLatest(t *testing.T, tag string) *gh.Releases {
 type fakeReleaseService struct {
 	gh.ReleaseService
 	latest *ghapi.RepositoryRelease
+	draft  *ghapi.RepositoryRelease
+
+	mu       sync.Mutex
+	uploaded []string
+}
+
+func (f *fakeReleaseService) GetReleaseByTag(context.Context, string, string, string) (*ghapi.RepositoryRelease, *ghapi.Response, error) {
+	return nil, &ghapi.Response{Response: &http.Response{StatusCode: http.StatusNotFound}}, errors.New("not found")
+}
+
+func (f *fakeReleaseService) ListReleases(context.Context, string, string, *ghapi.ListOptions) ([]*ghapi.RepositoryRelease, *ghapi.Response, error) {
+	return nil, &ghapi.Response{}, nil
+}
+
+func (f *fakeReleaseService) CreateRelease(_ context.Context, _, _ string, r *ghapi.RepositoryRelease) (*ghapi.RepositoryRelease, *ghapi.Response, error) {
+	return f.draft, nil, nil
+}
+
+func (f *fakeReleaseService) ListReleaseAssets(context.Context, string, string, int64, *ghapi.ListOptions) ([]*ghapi.ReleaseAsset, *ghapi.Response, error) {
+	return nil, &ghapi.Response{}, nil
+}
+
+func (f *fakeReleaseService) UploadReleaseAsset(_ context.Context, _, _ string, _ int64, opts *ghapi.UploadOptions, _ *os.File) (*ghapi.ReleaseAsset, *ghapi.Response, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.uploaded = append(f.uploaded, opts.Name)
+	return nil, nil, nil
 }
 
 func (f *fakeReleaseService) GetLatestRelease(context.Context, string, string) (*ghapi.RepositoryRelease, *ghapi.Response, error) {
@@ -363,7 +391,7 @@ func TestSHA256SumsWritesNamesRelativeToTheDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("topLevelFiles: %v", err)
 	}
-	if err := (GithubRelease{}).sha256Sums(dir, files); err != nil {
+	if _, err := (GithubRelease{}).sha256Sums(dir, files); err != nil {
 		t.Fatalf("sha256Sums: %v", err)
 	}
 	bs, err := os.ReadFile(filepath.Join(dir, SumsFileName))
@@ -381,5 +409,48 @@ func TestSHA256SumsWritesNamesRelativeToTheDirectory(t *testing.T) {
 	}
 	if strings.Contains(got, "charts") {
 		t.Errorf("a directory was checksummed:\n%s", got)
+	}
+}
+
+// A release is re-run after a failure, so a second pass must not checksum the
+// sums file from the first, nor hand the same asset to the uploader twice.
+func TestPublishIsIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"release.tgz", "metadata.yaml"} {
+		if err := os.WriteFile(filepath.Join(dir, n), []byte(n), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var first string
+	for run := range 2 {
+		svc := &fakeReleaseService{draft: &ghapi.RepositoryRelease{ID: ghapi.Int64(1), Draft: ghapi.Bool(true)}}
+		rels, err := gh.NewReleases(gh.Repo{Org: "projectcalico", Name: "calico"}, svc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		d := GithubRelease{releases: rels, Tag: "v3.30.0", Draft: true}
+		if err := d.Publish(context.Background(), dir); err != nil {
+			t.Fatalf("run %d: Publish: %v", run, err)
+		}
+		slices.Sort(svc.uploaded)
+		if got := slices.Compact(slices.Clone(svc.uploaded)); len(got) != len(svc.uploaded) {
+			t.Errorf("run %d: an asset was uploaded twice: %v", run, svc.uploaded)
+		}
+		want := []string{SumsFileName, "metadata.yaml", "release.tgz"}
+		if !slices.Equal(svc.uploaded, want) {
+			t.Errorf("run %d: uploaded %v, want %v", run, svc.uploaded, want)
+		}
+		bs, err := os.ReadFile(filepath.Join(dir, SumsFileName))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(bs), SumsFileName) {
+			t.Errorf("run %d: the sums file checksums itself:\n%s", run, bs)
+		}
+		if run == 0 {
+			first = string(bs)
+		} else if string(bs) != first {
+			t.Errorf("a second run changed the sums file:\nfirst:\n%s\nsecond:\n%s", first, bs)
+		}
 	}
 }
