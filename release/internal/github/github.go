@@ -19,7 +19,7 @@ import "net/url"
 
 const baseURL = "https://github.com"
 
-var tokenEnvVars = []string{"GITHUB_TOKEN", "GH_TOKEN"}
+var TokenEnvVars = []string{"GITHUB_TOKEN", "GH_TOKEN"}
 
 // DownloadURL is where a release's artifacts are downloaded from.
 func DownloadURL(org, repo, version string, file ...string) (string, error) {

@@ -238,7 +238,7 @@ func TestGithubReleaseMakeLatest(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rels := githubReleasesWithLatest(t, tc.published)
-			got, err := GithubRelease{Releases: rels, Tag: tc.tag}.makeLatest(context.Background())
+			got, err := GithubRelease{releases: rels, Tag: tc.tag}.makeLatest(context.Background())
 			if err != nil {
 				t.Fatalf("makeLatest: %v", err)
 			}
@@ -344,5 +344,42 @@ func TestPublishErrorNamesTheDestination(t *testing.T) {
 				t.Errorf("error = %q, want it to name %s", err, tc.want)
 			}
 		})
+	}
+}
+
+// A sums file holding absolute paths verifies nowhere but the machine that
+// built it, so the names must stay relative to the release directory.
+func TestSHA256SumsWritesNamesRelativeToTheDirectory(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "charts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"release.tgz", "metadata.yaml", "charts/index.yaml"} {
+		if err := os.WriteFile(filepath.Join(dir, n), []byte(n), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files, err := topLevelFiles(dir)
+	if err != nil {
+		t.Fatalf("topLevelFiles: %v", err)
+	}
+	if err := (GithubRelease{}).sha256Sums(dir, files); err != nil {
+		t.Fatalf("sha256Sums: %v", err)
+	}
+	bs, err := os.ReadFile(filepath.Join(dir, SumsFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(bs)
+	for _, want := range []string{"  release.tgz", "  metadata.yaml"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected %q, got:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, dir) {
+		t.Errorf("an absolute path was written:\n%s", got)
+	}
+	if strings.Contains(got, "charts") {
+		t.Errorf("a directory was checksummed:\n%s", got)
 	}
 }

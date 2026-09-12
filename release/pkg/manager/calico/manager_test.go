@@ -356,12 +356,9 @@ func TestPublishGithubReleaseSkipped(t *testing.T) {
 		repo:          "calico",
 		outputDir:     t.TempDir(),
 	}
-	uploads, err := r.githubReleaseUpload()
-	if err != nil {
-		t.Fatalf("githubReleaseUpload() = %v, want nil", err)
-	}
-	if uploads != nil {
-		t.Errorf("expected no upload with the flag off, got %+v", uploads)
+	upload := r.githubReleaseUpload()
+	if upload != nil {
+		t.Errorf("expected no upload with the flag off, got %+v", upload)
 	}
 	if len(f.calls) != 0 {
 		t.Errorf("expected nothing run with the flag off, got %v", f.calls)
@@ -1044,7 +1041,6 @@ func TestGithubReleaseDraftFlag(t *testing.T) {
 		{name: "publishes when the draft flag is off"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("GITHUB_TOKEN", "test-token")
 			r := &CalicoManager{
 				githubRelease: true,
 				draftRelease:  tc.draft,
@@ -1053,10 +1049,7 @@ func TestGithubReleaseDraftFlag(t *testing.T) {
 				repo:          "calico",
 				outputDir:     t.TempDir(),
 			}
-			upload, err := r.githubReleaseUpload()
-			if err != nil {
-				t.Fatalf("githubReleaseUpload() = %v", err)
-			}
+			upload := r.githubReleaseUpload()
 			got, ok := upload.Handler.(distribution.GithubRelease)
 			if !ok {
 				t.Fatalf("handler is %T, want distribution.GithubRelease", upload.Handler)

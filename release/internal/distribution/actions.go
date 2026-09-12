@@ -53,54 +53,6 @@ func BuildMetadata(a Attester, dir string, opts ...MetadataOption) error {
 	return nil
 }
 
-// Must be the last write into dir: a later write lands unchecksummed.
-func SHA256Sums(dir string, opts ...SumsOption) error {
-	s, err := newSettings(sumsStep, opts)
-	if err != nil {
-		return err
-	}
-	if dir == "" {
-		return s.Errorf("no directory to checksum")
-	}
-
-	names, err := sumCandidates(dir)
-	if err != nil {
-		return s.Errorf("%w", err)
-	}
-	if len(names) == 0 {
-		return s.Errorf("no files to checksum in %s", dir)
-	}
-
-	out, err := s.Runner().RunInDir(dir, "sha256sum", names, nil)
-	if err != nil {
-		s.Logger().Error(out)
-		return s.Errorf("checksumming %s: %w", dir, err)
-	}
-	path := filepath.Join(dir, SumsFileName)
-	if err := os.WriteFile(path, []byte(out), filePerms); err != nil {
-		return s.Errorf("writing %s: %w", path, err)
-	}
-	s.Logger().WithField("files", len(names)).Info("Wrote checksums")
-	return nil
-}
-
-// Only the top level is attached anywhere, so a nested checksum could never
-// be verified.
-func sumCandidates(dir string) ([]string, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", dir, err)
-	}
-	var names []string
-	for _, e := range entries {
-		if e.IsDir() || e.Name() == SumsFileName {
-			continue
-		}
-		names = append(names, e.Name())
-	}
-	return names, nil
-}
-
 func Publish(pipeline []Upload, opts ...PublishOption) error {
 	s, err := newSettings(artifactsStep, opts)
 	if err != nil {
@@ -132,8 +84,7 @@ func Publish(pipeline []Upload, opts ...PublishOption) error {
 }
 
 // Ordered, and stops at the first failure as a later upload may depend on an earlier one.
-// Returns what published, so a record never names an upload that failed or
-// was never reached.
+// Returns what published, so a record never names an upload that failed or was never reached.
 func (s settings) push(uploads []Upload) ([]Upload, error) {
 	var done []Upload
 	for _, u := range uploads {

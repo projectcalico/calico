@@ -24,6 +24,7 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/defaults"
+	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
@@ -462,7 +463,7 @@ var (
 	githubTokenFlag = &cli.StringFlag{
 		Name:    "github-token",
 		Usage:   "The GitHub token to use when interacting with the GitHub API",
-		Sources: cli.EnvVars("GITHUB_TOKEN", "GH_TOKEN"),
+		Sources: cli.EnvVars(github.TokenEnvVars...),
 		Action: func(_ context.Context, c *cli.Command, s string) error {
 			if s == "" {
 				if c.Bool(ciFlag.Name) {

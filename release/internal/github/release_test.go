@@ -281,7 +281,7 @@ func TestLatestTagNoReleases(t *testing.T) {
 // The real client is only built when no service is injected, so this is where
 // a missing token has to be caught.
 func TestNewReleasesWithoutServiceNeedsAToken(t *testing.T) {
-	for _, name := range tokenEnvVars {
+	for _, name := range TokenEnvVars {
 		t.Setenv(name, "")
 	}
 	if _, err := NewReleases(Repo{Org: "projectcalico", Name: "calico"}, nil); err == nil ||
@@ -326,7 +326,7 @@ func TestCreateDraftRefusesAPublishedReleaseFoundByListing(t *testing.T) {
 // A failed token lookup must keep failing with the same message, rather than
 // handing back a client that panics at the first call.
 func TestClientBuildFailureRepeats(t *testing.T) {
-	for _, key := range tokenEnvVars {
+	for _, key := range TokenEnvVars {
 		t.Setenv(key, "")
 	}
 	for range 2 {

@@ -207,8 +207,7 @@ func (d GCS) Validate(u Upload) error {
 }
 
 type GithubRelease struct {
-	Releases *github.Releases
-
+	Repo  github.Repo
 	Tag   string
 	Title string
 	Body  string
@@ -217,9 +216,18 @@ type GithubRelease struct {
 	DryRun bool
 
 	Log *logrus.Entry
+
+	releases *github.Releases
 }
 
 func (d GithubRelease) Name() string { return fmt.Sprintf("%s github release", d.Tag) }
+
+func (d GithubRelease) github() (*github.Releases, error) {
+	if d.releases != nil {
+		return d.releases, nil
+	}
+	return github.NewReleases(d.Repo, nil)
+}
 
 func (d GithubRelease) Publish(ctx context.Context, src string) error {
 	files, err := topLevelFiles(src)
@@ -233,8 +241,15 @@ func (d GithubRelease) Publish(ctx context.Context, src string) error {
 		d.log().WithField("files", files).Infof("Dry run, not creating %s", d.Name())
 		return nil
 	}
-
-	rel, err := d.Releases.CreateDraft(ctx, d.Tag, d.releaseName(), d.Body)
+	if err := d.sha256Sums(src, files); err != nil {
+		return fmt.Errorf("checksums: %w", err)
+	}
+	files = append(files, filepath.Join(src, SumsFileName))
+	gh, err := d.github()
+	if err != nil {
+		return fmt.Errorf("github client: %w", err)
+	}
+	rel, err := gh.CreateDraft(ctx, d.Tag, d.releaseName(), d.Body)
 	if err != nil {
 		return fmt.Errorf("create draft: %w", err)
 	}
@@ -254,11 +269,15 @@ func (d GithubRelease) Publish(ctx context.Context, src string) error {
 	if err != nil {
 		return fmt.Errorf("make latest: %w", err)
 	}
-	return d.Releases.Publish(ctx, d.Tag, latest)
+	return gh.Publish(ctx, d.Tag, latest)
 }
 
 func (d GithubRelease) makeLatest(ctx context.Context) (bool, error) {
-	latestTag, err := d.Releases.LatestTag(ctx)
+	gh, err := d.github()
+	if err != nil {
+		return false, fmt.Errorf("github client: %w", err)
+	}
+	latestTag, err := gh.LatestTag(ctx)
 	if err != nil {
 		return false, fmt.Errorf("get latest tag: %w", err)
 	}
@@ -283,8 +302,12 @@ func (d GithubRelease) semver(tag string) (*semver.Version, error) {
 
 func (d GithubRelease) upload(ctx context.Context, releaseID int64, path string) error {
 	log := d.log().WithField("asset", filepath.Base(path))
+	gh, err := d.github()
+	if err != nil {
+		return fmt.Errorf("github client: %w", err)
+	}
 	for attempt := 0; ; attempt++ {
-		err := d.Releases.UploadAsset(ctx, releaseID, path)
+		err := gh.UploadAsset(ctx, releaseID, path)
 		if err == nil {
 			log.Debug("Attached release asset")
 			return nil
@@ -313,6 +336,33 @@ func (d GithubRelease) log() *logrus.Entry {
 
 func (d GithubRelease) Validate(u Upload) error {
 	return validSource(u)
+}
+
+// Create a SHA256 checksum file for all files and write it to the specified directory.
+func (d GithubRelease) sha256Sums(dir string, files []string, opts ...SumsOption) error {
+	s, err := newSettings(sumsStep, opts)
+	if err != nil {
+		return err
+	}
+	if len(files) == 0 {
+		return s.Errorf("no files to checksum")
+	}
+	// names are relative to dir so the file verifies wherever the assets land.
+	names := make([]string, len(files))
+	for i, f := range files {
+		names[i] = filepath.Base(f)
+	}
+	out, err := s.Runner().RunInDir(dir, "sha256sum", names, nil)
+	if err != nil {
+		s.Logger().Error(out)
+		return s.Errorf("checksumming files: %w", err)
+	}
+	path := filepath.Join(dir, SumsFileName)
+	if err := os.WriteFile(path, []byte(out), filePerms); err != nil {
+		return s.Errorf("writing %s: %w", path, err)
+	}
+	s.Logger().WithField("files", len(files)).Info("Wrote checksums")
+	return nil
 }
 
 func topLevelFiles(dir string) ([]string, error) {

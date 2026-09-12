@@ -79,12 +79,12 @@ func NewReleases(repo Repo, svc ReleaseService) (*Releases, error) {
 }
 
 func githubToken() (string, error) {
-	for _, key := range tokenEnvVars {
+	for _, key := range TokenEnvVars {
 		if v := os.Getenv(key); v != "" {
 			return v, nil
 		}
 	}
-	return "", fmt.Errorf("not found. checked environment variables %s", strings.Join(tokenEnvVars, " or "))
+	return "", fmt.Errorf("not found. checked environment variables %s", strings.Join(TokenEnvVars, " or "))
 }
 
 func githubClient() (*github.Client, error) {
@@ -186,8 +186,7 @@ func (r *Releases) assets(ctx context.Context, releaseID int64) ([]*github.Relea
 	}
 }
 
-// A draft has no git tag, so the by-tag endpoint 404s and only a listing
-// finds it.
+// find either a draft or a published release for the given tag
 func (r *Releases) forTag(ctx context.Context, tag string) (*github.RepositoryRelease, bool, error) {
 	if rel, found, err := r.Get(ctx, tag); err != nil || found {
 		return rel, found, err
@@ -213,8 +212,6 @@ func (r *Releases) forTag(ctx context.Context, tag string) (*github.RepositoryRe
 // Publish takes a draft live. It marks the release latest only when its
 // version is the newest published one, which the caller decides.
 func (r *Releases) Publish(ctx context.Context, tag string, latest bool) error {
-	// forTag rather than Get: what is being published is a draft, and a draft
-	// carries no git tag for the by-tag endpoint to find.
 	rel, found, err := r.forTag(ctx, tag)
 	if err != nil {
 		return err

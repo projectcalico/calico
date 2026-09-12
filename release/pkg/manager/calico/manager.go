@@ -48,11 +48,12 @@ import (
 
 // Global configuration for releases.
 const (
-	calicoctlManifest = "calicoctl.yaml"
-
 	chartsDir    = "charts"
 	manifestsDir = "manifests"
+	metadataKey  = "metadata"
 )
+
+const calicoctlManifest = "calicoctl.yaml"
 
 var (
 	// Default defaultRegistries to which all release images are pushed.
@@ -707,26 +708,21 @@ func (r *CalicoManager) PublishRelease() error {
 		return err
 	}
 
-	// The registries go first: metadata records the digests they produce, and
-	// the github release references the tag.
+	// The registries go first: metadata records the digests they produce
 	uploads := []distribution.Upload{
 		{Handler: distribution.Publisher{Kind: "images", Action: r.publishContainerImages}},
 		{Handler: distribution.Publisher{Kind: chartsDir, Action: r.publishHelmCharts}},
 	}
 	uploads = append(uploads,
-		distribution.Upload{Handler: distribution.Preparer{Kind: "metadata", Action: r.buildMetadata}},
-		distribution.Upload{Handler: distribution.Preparer{Kind: "checksums", Action: r.writeChecksums}},
+		distribution.Upload{Handler: distribution.Preparer{Kind: metadataKey, Action: r.buildMetadata}},
 	)
 
 	if r.isHashRelease {
 		uploads = append(uploads, r.hashreleaseUpload()...)
 		return distribution.Publish(uploads, distribution.WithRunner(r.runner))
 	}
-	uploads = append(uploads, r.githubTagUpload(), r.helmIndexUpload())
-	github, err := r.githubReleaseUpload()
-	if err != nil {
-		return err
-	}
+	uploads = append(uploads, r.helmIndexUpload(), r.githubTagUpload())
+	github := r.githubReleaseUpload()
 	// nil when the github release is disabled.
 	if github != nil {
 		uploads = append(uploads, *github)
@@ -947,8 +943,8 @@ func (r *CalicoManager) publishPrereqs() error {
 	return r.assertImageVersions()
 }
 
-// collectArtifacts gathers everything a release publishes into the upload
-// directory.
+// gathers everything a release publishes into the upload directory.
+// TODO: remove, each step should handle putting its artifacts in the correct location.
 func (r *CalicoManager) collectArtifacts() error {
 	if err := r.collectBinaries(); err != nil {
 		return err
@@ -960,11 +956,6 @@ func (r *CalicoManager) collectArtifacts() error {
 		return err
 	}
 	return r.collectOCPBundle()
-}
-
-// Users verify a download with: sha256sum -c --ignore-missing SHA256SUMS
-func (r *CalicoManager) writeChecksums() error {
-	return distribution.SHA256Sums(r.uploadDir(), distribution.WithRunner(r.runner))
 }
 
 func (r *CalicoManager) collectBinaries() error {
@@ -1291,10 +1282,10 @@ func (r *CalicoManager) githubTagUpload() distribution.Upload {
 	return distribution.Upload{Handler: distribution.Preparer{Kind: "git tag", Action: r.publishGitTag}}
 }
 
-func (r *CalicoManager) githubReleaseUpload() (*distribution.Upload, error) {
+func (r *CalicoManager) githubReleaseUpload() *distribution.Upload {
 	if !r.githubRelease {
 		logrus.Info("Skipping github release")
-		return nil, nil
+		return nil
 	}
 
 	releaseNoteTemplate := `
@@ -1331,22 +1322,17 @@ Additional links:
 	replacer := strings.NewReplacer(formatters...)
 	releaseNote := replacer.Replace(releaseNoteTemplate)
 
-	releases, err := github.NewReleases(github.Repo{Org: r.githubOrg, Name: r.repo}, nil)
-	if err != nil {
-		return nil, fmt.Errorf("github releases: %w", err)
-	}
-
 	return &distribution.Upload{
 		Name:   "github release",
 		Source: r.uploadDir(),
 		Handler: distribution.GithubRelease{
-			Releases: releases,
-			Tag:      r.calicoVersion,
-			Body:     releaseNote,
-			Draft:    r.draftRelease,
-			DryRun:   r.dryRun,
+			Repo:   github.Repo{Org: r.githubOrg, Name: r.repo},
+			Tag:    r.calicoVersion,
+			Body:   releaseNote,
+			Draft:  r.draftRelease,
+			DryRun: r.dryRun,
 		},
-	}, nil
+	}
 }
 
 func (r *CalicoManager) publishContainerImages() error {

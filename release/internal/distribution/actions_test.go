@@ -64,32 +64,6 @@ func dirWith(t *testing.T, names ...string) string {
 	return dir
 }
 
-func TestSHA256SumsSkipsDirectoriesAndItself(t *testing.T) {
-	dir := dirWith(t, "release.tgz", "metadata.yaml", "charts/index.yaml")
-	if err := os.WriteFile(filepath.Join(dir, SumsFileName), []byte("stale"), 0o644); err != nil {
-		t.Fatalf("seeding a stale sums file: %v", err)
-	}
-
-	if err := SHA256Sums(dir); err != nil {
-		t.Fatalf("SHA256Sums: %v", err)
-	}
-	bs, err := os.ReadFile(filepath.Join(dir, SumsFileName))
-	if err != nil {
-		t.Fatalf("reading sums: %v", err)
-	}
-	got := string(bs)
-	for _, want := range []string{"release.tgz", "metadata.yaml"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("expected %s checksummed, got:\n%s", want, got)
-		}
-	}
-	for _, unwanted := range []string{"charts", SumsFileName} {
-		if strings.Contains(got, unwanted) {
-			t.Errorf("expected %s left out, got:\n%s", unwanted, got)
-		}
-	}
-}
-
 func TestPublishSendsEachSourceToItsDestination(t *testing.T) {
 	dir := dirWith(t, "release.tgz", "charts/index.yaml")
 	gh := &fakeDest{name: "github"}
