@@ -24,10 +24,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"gopkg.in/yaml.v3"
-
-	"github.com/projectcalico/calico/release/internal/registry"
 )
 
 type fakeDest struct {
@@ -66,48 +62,6 @@ func dirWith(t *testing.T, names ...string) string {
 		}
 	}
 	return dir
-}
-
-func TestBuildMetadata(t *testing.T) {
-	dir := t.TempDir()
-	m := Metadata{
-		Version:         "v3.30.0",
-		OperatorVersion: "v1.38.0",
-		Images:          []Component{{registry.Component{Registry: "quay.io", Image: "calico/node", Version: "v3.30.0"}}},
-		ChartVersion:    "v3.30.0",
-	}
-	if err := BuildMetadata(m, dir); err != nil {
-		t.Fatalf("BuildMetadata: %v", err)
-	}
-
-	bs, err := os.ReadFile(filepath.Join(dir, MetadataFileName))
-	if err != nil {
-		t.Fatalf("reading metadata: %v", err)
-	}
-	// Pinned to literal keys: a round-trip would pass through a rename.
-	for _, want := range []string{"version: v3.30.0", "operatorVersion: v1.38.0", "helmChartVersion: v3.30.0"} {
-		if !strings.Contains(string(bs), want) {
-			t.Errorf("expected %q in:\n%s", want, bs)
-		}
-	}
-}
-
-func TestBuildMetadataRejectsIncompleteInput(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		m    Metadata
-		want string
-	}{
-		{"no version", Metadata{OperatorVersion: "v1", Images: []Component{{}}}, "version"},
-		{"no operator version", Metadata{Version: "v1", Images: []Component{{}}}, "operator version"},
-		{"no images", Metadata{Version: "v1", OperatorVersion: "v1"}, "images"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if err := BuildMetadata(tc.m, t.TempDir()); err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Errorf("expected an error naming %q, got %v", tc.want, err)
-			}
-		})
-	}
 }
 
 func TestSHA256SumsSkipsDirectoriesAndItself(t *testing.T) {
@@ -318,74 +272,44 @@ func TestPublishSkipsValidationOfASkippedUpload(t *testing.T) {
 	}
 }
 
-// A product embeds Release for the shared fields and the checks, and writes
-// its own Attest so its own fields are marshalled too. Inheriting the
-// embedded one would silently drop them.
-func TestBuildMetadataWritesAProductsOwnFields(t *testing.T) {
+// attestation is a product's record: it validates itself and marshals itself,
+// and the verb writes whatever bytes it hands back.
+type attestation struct {
+	body []byte
+	err  error
+}
+
+func (a attestation) Attest() ([]byte, error) { return a.body, a.err }
+
+func TestBuildMetadata(t *testing.T) {
 	dir := t.TempDir()
-	rel := productRelease{
-		Metadata: Metadata{
-			Version:         "v3.30.0",
-			OperatorVersion: "v1.38.0",
-			Images:          []Component{{registry.Component{Registry: "example.test", Image: "node", Version: "v3.30.0"}}},
-			ChartVersion:    "v3.30.0",
-		},
-		Upstream: "v3.30.0",
-	}
-	if err := BuildMetadata(rel, dir); err != nil {
+	if err := BuildMetadata(attestation{body: []byte("version: v3.30.0\n")}, dir); err != nil {
 		t.Fatalf("BuildMetadata: %v", err)
 	}
-
-	bs, err := os.ReadFile(filepath.Join(dir, MetadataFileName))
+	got, err := os.ReadFile(filepath.Join(dir, MetadataFileName))
 	if err != nil {
 		t.Fatalf("reading metadata: %v", err)
 	}
-	for _, want := range []string{"version: v3.30.0", "upstreamVersion: v3.30.0"} {
-		if !strings.Contains(string(bs), want) {
-			t.Errorf("expected %q in:\n%s", want, bs)
-		}
+	if string(got) != "version: v3.30.0\n" {
+		t.Errorf("wrote %q, want the bytes the record produced", got)
 	}
 }
 
-type productRelease struct {
-	Metadata `yaml:",inline"`
-	Upstream string `yaml:"upstreamVersion"`
-}
-
-func (p productRelease) Attest() ([]byte, error) {
-	if _, err := p.Metadata.Attest(); err != nil {
-		return nil, err
-	}
-	return yaml.Marshal(p)
-}
-
-// The published file lists images as references, not as their parts: the one
-// consumer decodes them as strings and pulls what it finds.
-func TestBuildMetadataRendersImagesAsReferences(t *testing.T) {
+// A record that cannot vouch for itself is not written at all, rather than
+// leaving a half-filled file for a consumer to read.
+func TestBuildMetadataWritesNothingWhenTheRecordFails(t *testing.T) {
 	dir := t.TempDir()
-	err := BuildMetadata(Metadata{
-		Version:         "v3.30.0",
-		OperatorVersion: "v1.38.0",
-		ChartVersion:    "v3.30.0",
-		Images: []Component{
-			{registry.Component{Registry: "quay.io", Image: "calico/node", Version: "v3.30.0"}},
-		},
-	}, dir)
-	if err != nil {
-		t.Fatalf("BuildMetadata: %v", err)
+	err := BuildMetadata(attestation{err: errors.New("no version specified")}, dir)
+	if err == nil || !strings.Contains(err.Error(), "no version specified") {
+		t.Fatalf("expected the record's own error, got %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(dir, MetadataFileName)); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("expected no file written, got %v", err)
+	}
+}
 
-	var got struct {
-		Images []string `yaml:"images"`
-	}
-	bs, err := os.ReadFile(filepath.Join(dir, MetadataFileName))
-	if err != nil {
-		t.Fatalf("reading metadata: %v", err)
-	}
-	if err := yaml.Unmarshal(bs, &got); err != nil {
-		t.Fatalf("decoding images as strings: %v", err)
-	}
-	if len(got.Images) != 1 || got.Images[0] != "quay.io/calico/node:v3.30.0" {
-		t.Errorf("images = %v, want [quay.io/calico/node:v3.30.0]", got.Images)
+func TestBuildMetadataNeedsADirectory(t *testing.T) {
+	if err := BuildMetadata(attestation{body: []byte("x")}, ""); err == nil {
+		t.Error("expected an error with no directory to write to")
 	}
 }

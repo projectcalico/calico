@@ -17,10 +17,7 @@ package distribution
 
 import (
 	"context"
-	"errors"
 	"fmt"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/registry"
@@ -87,9 +84,6 @@ type Attester interface {
 	Attest() ([]byte, error)
 }
 
-// A product asserts the same in its own file.
-var _ Attester = Metadata{}
-
 type Component struct {
 	registry.Component `json:",inline" yaml:",inline"`
 }
@@ -98,33 +92,6 @@ type Component struct {
 // for something to pull.
 func (c Component) MarshalYAML() (any, error) {
 	return c.String(), nil
-}
-
-type Metadata struct {
-	Version string `json:"version"`
-
-	OperatorVersion string `json:"operator_version" yaml:"operatorVersion"`
-
-	Images []Component `json:"images"`
-
-	ChartVersion string `json:"helm_chart_version" yaml:"helmChartVersion"`
-}
-
-func (r Metadata) Attest() ([]byte, error) {
-	var errs []error
-	if r.Version == "" {
-		errs = append(errs, fmt.Errorf("no version specified"))
-	}
-	if r.OperatorVersion == "" {
-		errs = append(errs, fmt.Errorf("no operator version specified"))
-	}
-	if len(r.Images) == 0 {
-		errs = append(errs, fmt.Errorf("no images specified"))
-	}
-	if err := errors.Join(errs...); err != nil {
-		return nil, err
-	}
-	return yaml.Marshal(r)
 }
 
 type settings struct {

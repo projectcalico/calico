@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v3"
 
 	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/charts"
@@ -41,11 +42,14 @@ import (
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
+	"github.com/projectcalico/calico/release/internal/yamledit"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 // Global configuration for releases.
 const (
+	calicoctlManifest = "calicoctl.yaml"
+
 	chartsDir    = "charts"
 	manifestsDir = "manifests"
 )
@@ -379,6 +383,35 @@ func (r *CalicoManager) Build() error {
 	return r.collectArtifacts()
 }
 
+var _ distribution.Attester = metadata{}
+
+type metadata struct {
+	Version string `json:"version"`
+
+	OperatorVersion string `json:"operator_version" yaml:"operatorVersion"`
+
+	Images []distribution.Component `json:"images"`
+
+	ChartVersion string `json:"helm_chart_version" yaml:"helmChartVersion"`
+}
+
+func (r metadata) Attest() ([]byte, error) {
+	var errs []error
+	if r.Version == "" {
+		errs = append(errs, fmt.Errorf("no version specified"))
+	}
+	if r.OperatorVersion == "" {
+		errs = append(errs, fmt.Errorf("no operator version specified"))
+	}
+	if len(r.Images) == 0 {
+		errs = append(errs, fmt.Errorf("no images specified"))
+	}
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
+	}
+	return yaml.Marshal(r)
+}
+
 func (r *CalicoManager) BuildMetadata(dir string) error {
 	reg, err := r.getRegistryFromManifests()
 	if err != nil {
@@ -396,7 +429,7 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 		components = append(components, distribution.Component{Registry: reg, Image: img, Version: r.calicoVersion})
 	}
 
-	return distribution.BuildMetadata(distribution.Metadata{
+	return distribution.BuildMetadata(metadata{
 		Version:         r.calicoVersion,
 		OperatorVersion: r.operatorVersion,
 		Images:          components,
@@ -404,20 +437,31 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 	}, dir, distribution.WithRunner(r.runner))
 }
 
+// Fetch the registry from the calicoctl manifest file.
+// For hashrelease, it looks in the hashrelease source directory.
 func (r *CalicoManager) getRegistryFromManifests() (string, error) {
-	args := []string{"-Po", `image:\K(.*)`, "calicoctl.yaml"}
-	out, err := r.runner.RunInDir(filepath.Join(r.repoRoot, manifestsDir), "grep", args, nil)
+	dir := filepath.Join(r.repoRoot, manifestsDir)
+	if r.isHashRelease {
+		dir = filepath.Join(r.hashrelease.Source, manifestsDir)
+	}
+	key := "spec.containers.image"
+	path := filepath.Join(dir, calicoctlManifest)
+	imgs, err := yamledit.Read(path, key)
 	if err != nil {
-		return "", fmt.Errorf("error getting registry from calicoctl.yaml manifest: %w", err)
+		return "", err
 	}
-	imgs := strings.SplitSeq(out, "\n")
-	for i := range imgs {
-		parts := strings.Split(i, "/")
-		if len(parts) > 1 {
-			return strings.Join(parts[:len(parts)-1], "/"), nil
+	for _, img := range imgs {
+		if !strings.Contains(img, "calico") {
+			continue
 		}
+		// registry/image:tag, so everything before the last slash.
+		// A registry may carry a path of its own e.g. example/path/to/image:tag
+		if i := strings.LastIndex(img, "/"); i > 0 {
+			return img[:i], nil
+		}
+		return "", nil
 	}
-	return "", fmt.Errorf("failed to find registry from manifests")
+	return "", fmt.Errorf("no registry found in %s using key(%s)", path, key)
 }
 
 func (r *CalicoManager) PreHashreleaseValidate() error {
