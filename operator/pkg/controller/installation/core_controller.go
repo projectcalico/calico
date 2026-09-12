@@ -265,24 +265,60 @@ func newReconciler(mgr manager.Manager, opts options.ControllerOptions) (*Reconc
 	// Create a Typha autoscaler.
 	typhaScaler := typhaautoscaler.New(mgr.GetClient(), common.TyphaDeploymentName, typhaautoscaler.NodeReplicaCounter, statusManager)
 
-	r := &ReconcileInstallation{
-		config:              mgr.GetConfig(),
-		client:              mgr.GetClient(),
-		scheme:              mgr.GetScheme(),
-		watches:             make(map[runtime.Object]struct{}),
-		status:              statusManager,
-		typhaAutoscaler:     typhaScaler,
-		namespaceMigration:  nm,
-		tierWatchReady:      &utils.ReadyFlag{},
-		migrationWatchReady: &utils.ReadyFlag{},
-		newComponentHandler: utils.NewComponentHandler,
-		opts:                opts,
-		ext:                 opts.Extensions.Installation(),
-	}
+	r := NewReconciler(ReconcilerOptions{
+		Config:             mgr.GetConfig(),
+		Client:             mgr.GetClient(),
+		Scheme:             mgr.GetScheme(),
+		Status:             statusManager,
+		TyphaAutoscaler:    typhaScaler,
+		NamespaceMigration: nm,
+		Options:            opts,
+	})
 	r.status.Run(opts.ShutdownContext)
 	r.typhaAutoscaler.Start(opts.ShutdownContext)
 
 	return r, nil
+}
+
+// ReconcilerOptions is what the Installation reconciler needs to run.
+type ReconcilerOptions struct {
+	Config              *rest.Config
+	Client              client.Client
+	Scheme              *runtime.Scheme
+	Status              status.StatusManager
+	TyphaAutoscaler     *typhaautoscaler.Autoscaler
+	NamespaceMigration  migration.NamespaceMigration
+	TierWatchReady      *utils.ReadyFlag
+	MigrationWatchReady *utils.ReadyFlag
+	Options             options.ControllerOptions
+}
+
+// NewReconciler returns an Installation reconciler a caller can drive without a manager.
+func NewReconciler(o ReconcilerOptions) *ReconcileInstallation {
+	tierWatchReady := o.TierWatchReady
+	if tierWatchReady == nil {
+		tierWatchReady = &utils.ReadyFlag{}
+	}
+
+	migrationWatchReady := o.MigrationWatchReady
+	if migrationWatchReady == nil {
+		migrationWatchReady = &utils.ReadyFlag{}
+	}
+
+	return &ReconcileInstallation{
+		config:              o.Config,
+		client:              o.Client,
+		scheme:              o.Scheme,
+		watches:             make(map[runtime.Object]struct{}),
+		status:              o.Status,
+		typhaAutoscaler:     o.TyphaAutoscaler,
+		namespaceMigration:  o.NamespaceMigration,
+		tierWatchReady:      tierWatchReady,
+		migrationWatchReady: migrationWatchReady,
+		newComponentHandler: utils.NewComponentHandler,
+		opts:                o.Options,
+		ext:                 o.Options.Extensions.Installation(),
+	}
 }
 
 // secondaryResources returns a list of the secondary resources that this controller
