@@ -33,6 +33,7 @@ package collector
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -46,11 +47,17 @@ import (
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/collector/utils"
 	ftypes "github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/hack/perf/perfdoc"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 const (
+	// Set POLICY_EVAL_PERF_ARTIFACTS_DIR to have each case write a hack/perf document under it,
+	// for the Lens trend store; CI does, through make bench-policy-eval.
+	perfArtifactsEnvVar = "POLICY_EVAL_PERF_ARTIFACTS_DIR"
+	perfFamily          = "benchmark_data_policy_eval"
+
 	// benchLocalIP is the local workload's address: outside every generated CIDR and IP set, so no
 	// rule matches on it and the walk depends only on the remote address and the ports.
 	benchLocalIP = "172.16.0.1"
@@ -72,17 +79,19 @@ func BenchmarkCollectorPolicyEval(b *testing.B) {
 		{"Cached", 1 << 16},
 	} {
 		for _, dir := range []policyscale.Direction{policyscale.Egress, policyscale.Ingress} {
-			b.Run(fmt.Sprintf("NewFlow/%s/%s", dirTitle(dir), cache.name), func(b *testing.B) {
+			name := fmt.Sprintf("NewFlow/%s/%s", dirTitle(dir), cache.name)
+			b.Run(name, func(b *testing.B) {
 				pb := newPolicyEvalBench(fx, cache.size)
 				defer pb.close()
 				infos := pb.uniqueFlows(fx, dir, b.N, 1)
 				b.ReportAllocs()
+				rec := perfdoc.Start(b)
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
 					pb.c.handleCtInfo(infos[i])
 				}
 				b.StopTimer()
-				pb.report(b, 1)
+				pb.report(b, rec, name, dir, 1)
 			})
 		}
 		b.Run("Sweep/"+cache.name, func(b *testing.B) {
@@ -95,6 +104,7 @@ func BenchmarkCollectorPolicyEval(b *testing.B) {
 				b.Fatalf("expected %d live flows, got %d", benchSweepFlows, got)
 			}
 			b.ReportAllocs()
+			rec := perfdoc.Start(b)
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				pb.c.snapshotFlowsForRecalc()
@@ -102,7 +112,7 @@ func BenchmarkCollectorPolicyEval(b *testing.B) {
 				}
 			}
 			b.StopTimer()
-			pb.report(b, benchSweepFlows)
+			pb.report(b, rec, "Sweep/"+cache.name, policyscale.Egress, benchSweepFlows)
 		})
 	}
 }
@@ -112,6 +122,7 @@ func BenchmarkCollectorPolicyEval(b *testing.B) {
 // and no reporters. Its methods are called directly and the main loop is not running, so each
 // measurement is exactly the work the loop would do.
 type policyEvalBench struct {
+	fx    *policyscale.Fixture
 	c     *collector
 	stats *policystore.VerdictCacheStats
 	local [16]byte
@@ -157,7 +168,7 @@ func newPolicyEvalBench(fx *policyscale.Fixture, cacheSize int) *policyEvalBench
 		PolicyEvaluationMode:  string(apiv3.FlowLogsPolicyEvaluationModeContinuous),
 		PolicyStoreManager:    psm,
 	}).(*collector)
-	return &policyEvalBench{c: c, stats: stats, local: local}
+	return &policyEvalBench{fx: fx, c: c, stats: stats, local: local}
 }
 
 func (pb *policyEvalBench) close() {
@@ -199,15 +210,30 @@ func (pb *policyEvalBench) uniqueFlows(fx *policyscale.Fixture, dir policyscale.
 }
 
 // report converts the timed loop into the KPIs: nanoseconds of main-loop time per flow and the
-// flow rate one goroutine could sustain at that cost, plus the cache hit ratio when caching.
-func (pb *policyEvalBench) report(b *testing.B, flowsPerOp int) {
+// flow rate one goroutine could sustain at that cost, plus the cache hit ratio when caching; and
+// writes the hack/perf document when POLICY_EVAL_PERF_ARTIFACTS_DIR is set.
+func (pb *policyEvalBench) report(b *testing.B, rec *perfdoc.Recorder, name string, dir policyscale.Direction, flowsPerOp int) {
 	nsPerFlow := float64(b.Elapsed().Nanoseconds()) / float64(b.N) / float64(flowsPerOp)
 	b.ReportMetric(nsPerFlow, "ns/flow")
 	b.ReportMetric(1e9/nsPerFlow, "flows/s")
+	fields := map[string]any{
+		"test_name":        "policy_eval_collector",
+		"case":             name,
+		"direction":        dir.String(),
+		"cached":           pb.stats != nil,
+		"ns_per_flow":      nsPerFlow,
+		"flows_per_s":      1e9 / nsPerFlow,
+		"scale_live_flows": len(pb.c.epStats),
+		"scale_rules":      pb.fx.Rules(dir),
+		"scale_ipsets":     pb.fx.IPSets(),
+	}
 	if pb.stats != nil {
 		total := pb.stats.Hits.Load() + pb.stats.Misses.Load()
-		b.ReportMetric(float64(pb.stats.Hits.Load())/float64(max(total, 1)), "hit-ratio")
+		ratio := float64(pb.stats.Hits.Load()) / float64(max(total, 1))
+		b.ReportMetric(ratio, "hit-ratio")
+		fields["hit_ratio"] = ratio
 	}
+	rec.Finish(perfdoc.Dir(perfArtifactsEnvVar), perfFamily, "collector_"+strings.ReplaceAll(name, "/", "_"), fields)
 }
 
 func dirTitle(d policyscale.Direction) string {

@@ -52,7 +52,15 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/hack/perf/perfdoc"
 	"github.com/projectcalico/calico/lib/logrusr"
+)
+
+// Set POLICY_EVAL_PERF_ARTIFACTS_DIR to have each benchmark case write a hack/perf document
+// under it, for the Lens trend store; CI does, through make bench-policy-eval.
+const (
+	perfArtifactsEnvVar = "POLICY_EVAL_PERF_ARTIFACTS_DIR"
+	perfFamily          = "benchmark_data_policy_eval"
 )
 
 // benchTraceSink prevents the compiler from eliminating the Evaluate call.
@@ -114,6 +122,7 @@ func BenchmarkEvaluateComposite(b *testing.B) {
 				b.Fatalf("expected %v at index %d, got %v", c.final, c.index, trace)
 			}
 			b.ReportAllocs()
+			rec := perfdoc.Start(b)
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				benchTraceSink, _ = Evaluate(StagedAsEnforced, c.dir, store, ep, c.flow)
@@ -121,6 +130,14 @@ func BenchmarkEvaluateComposite(b *testing.B) {
 			b.StopTimer()
 			b.ReportMetric(float64(c.walk), "rules/op")
 			b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N)/float64(c.walk), "ns/rule")
+			rec.Finish(perfdoc.Dir(perfArtifactsEnvVar), perfFamily, "engine_"+c.name, map[string]any{
+				"test_name":    "policy_eval_engine",
+				"case":         c.name,
+				"direction":    dirString(c.dir),
+				"cached":       false,
+				"scale_rules":  c.walk,
+				"scale_ipsets": fx.IPSets(),
+			})
 		})
 	}
 }
@@ -153,17 +170,37 @@ func BenchmarkEvaluateVerdictCache(b *testing.B) {
 			}
 			s := fx.NewSampler(1, policyscale.FlowModel{Direction: policyscale.Egress, MissFraction: 0.1, RepeatFraction: c.repeat})
 			b.ReportAllocs()
+			rec := perfdoc.Start(b)
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				benchTraceSink, _ = Evaluate(StagedAsEnforced, rules.RuleDirEgress, store, ep, s.Next())
 			}
 			b.StopTimer()
+			fields := map[string]any{
+				"test_name":       "policy_eval_engine_cache",
+				"case":            c.name,
+				"direction":       "egress",
+				"cached":          c.cache,
+				"repeat_fraction": c.repeat,
+				"scale_rules":     fx.Rules(policyscale.Egress),
+				"scale_ipsets":    fx.IPSets(),
+			}
 			if c.cache {
 				total := stats.Hits.Load() + stats.Misses.Load()
-				b.ReportMetric(float64(stats.Hits.Load())/float64(max(total, 1)), "hit-ratio")
+				ratio := float64(stats.Hits.Load()) / float64(max(total, 1))
+				b.ReportMetric(ratio, "hit-ratio")
+				fields["hit_ratio"] = ratio
 			}
+			rec.Finish(perfdoc.Dir(perfArtifactsEnvVar), perfFamily, "engine_cache_"+strings.ReplaceAll(c.name, "/", "_"), fields)
 		})
 	}
+}
+
+func dirString(dir rules.RuleDir) string {
+	if dir == rules.RuleDirEgress {
+		return "egress"
+	}
+	return "ingress"
 }
 
 func benchEvaluateBaselinePolicyScale(b *testing.B, spec policyscale.Spec, level log.Level, matchEarly bool) {

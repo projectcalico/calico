@@ -636,6 +636,14 @@ ut-bpf-no-prereqs:
 		../../bin/bpf_ut.test -test.v=test2json -test.run "$(FOCUS)" |& \
 		gotestsum --format $(GOTESTSUM_FORMAT) --junitfile ../../report/felix_bpf_ut.xml --raw-command -- go tool test2json -t -p $(PACKAGE_NAME)/bpf/ut'
 
+## Run the pending-policy evaluation collector benchmark (K2 in
+## design/flow-logs-policy-evaluation.md) in a container. Each case writes a hack/perf
+## doc under ../artifacts/perf for send-perf-results.
+.PHONY: bench-policy-eval
+bench-policy-eval:
+	mkdir -p ../artifacts/perf
+	$(DOCKER_RUN) -e POLICY_EVAL_PERF_ARTIFACTS_DIR=/go/src/$(PACKAGE_NAME)/../artifacts/perf $(CALICO_BUILD) sh -c "cd /go/src/$(PACKAGE_NAME) && go test ./collector/ -run '^$$' -bench BenchmarkCollectorPolicyEval -benchmem -benchtime 20x -cpu 1"
+
 .PHONY: bench-bpf
 bench-bpf:  $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 	$(DOCKER_RUN) \
