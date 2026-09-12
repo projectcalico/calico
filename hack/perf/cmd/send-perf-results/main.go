@@ -48,7 +48,7 @@ func main() {
 	dir := flag.String("dir", "artifacts/perf", "Directory to scan for per-family subdirectories of JSON docs.")
 	tmplDir := flag.String("templates", "hack/perf/index-templates", "Directory containing one <family>.json template per index family.")
 	dryRun := flag.Bool("dry-run", false, "Parse and augment but do not POST.  Prints each doc to stdout.")
-	requireCreds := flag.Bool("require-creds", false, "Exit non-zero if Elasticsearch credentials are not configured.")
+	requirePublication := flag.Bool("require-publication", false, "Exit non-zero unless every document found was published.")
 	flag.Parse()
 
 	esURL := os.Getenv("ELASTICSEARCH_URL")
@@ -57,10 +57,10 @@ func main() {
 		// "Lens is observability, not a critical path" -- see
 		// hack/perf/README.md.  Missing creds in a local dev run is normal;
 		// in CI it usually means the pipeline secret wasn't attached, which
-		// a --require-creds caller can turn into a hard failure.
+		// a --require-publication caller can turn into a hard failure.
 		msg := "ELASTICSEARCH_URL or credentials unset; skipping send"
-		if *requireCreds {
-			log.Fatalf("%s (--require-creds set)", msg)
+		if *requirePublication {
+			log.Fatalf("%s (--require-publication set)", msg)
 		}
 		log.Printf("%s", msg)
 		if *dryRun {
@@ -84,9 +84,29 @@ func main() {
 		}
 	}
 
-	if err := walkAndSend(client, esURL, auth, *dir, metadata, *dryRun); err != nil {
-		// Observability failures should not propagate into CI (see README).
+	sent, failed, err := walkAndSend(client, esURL, auth, *dir, metadata, *dryRun)
+	if err != nil {
+		// Observability failures should not propagate into CI (see README) --
+		// except for a caller that exists to publish, where a green run that
+		// published nothing is the worse outcome.  Same reasoning as the
+		// missing-credentials case above, and the same flag governs both.
+		if *requirePublication {
+			log.Fatalf("send failed: %v (--require-publication set)", err)
+		}
 		log.Printf("warning: walkAndSend returned an error: %v", err)
+		return
+	}
+	// The counts, not the returned error, are what catch the likely failures
+	// here: a rejected credential fails each POST separately and walkAndSend
+	// logs those as warnings, so it still returns nil.  Having nothing to send
+	// is equally wrong for a caller whose output is the documents.
+	if *requirePublication {
+		switch {
+		case sent == 0 && failed == 0:
+			log.Fatalf("found no documents to publish under %s (--require-publication set)", *dir)
+		case failed > 0:
+			log.Fatalf("published %d of %d documents, %d failed (--require-publication set)", sent, sent+failed, failed)
+		}
 	}
 }
 
@@ -114,27 +134,55 @@ func basicAuthHeader(user, password string) string {
 	return r.Header.Get("Authorization")
 }
 
+// firstEnv returns the first of names that is set to a non-empty value.
+// It lets the CI-provenance fields below be filled from whichever CI system
+// is running us, without the caller caring which.
+func firstEnv(names ...string) string {
+	for _, n := range names {
+		if v := os.Getenv(n); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 // ciMetadata gathers the fields the tool injects into every doc whose
 // producer hasn't already set them.
+//
+// Provenance comes from whichever CI system is running us: Semaphore exports
+// SEMAPHORE_*, ArgoCI exports CI_GIT_*.  Reading both means a test moved
+// between them keeps landing complete documents, rather than silently
+// recording blank git_commit/git_branch and an env of "dev" -- which would be
+// indistinguishable from a developer's laptop run and would pollute the trend
+// data (see hack/perf/README.md).
+//
+// env defaults to "dev", becomes "ci" when a recognised CI run ID is present,
+// and can be set explicitly with PERF_ENV.  Scheduled runs should set
+// PERF_ENV so their results can be told apart from per-PR ones -- they may
+// use different machine types, so their timings are not comparable.
 func ciMetadata() map[string]any {
-	sha := os.Getenv("SEMAPHORE_GIT_SHA")
+	sha := firstEnv("SEMAPHORE_GIT_SHA", "CI_GIT_SHA")
 	codeVer := sha
 	if len(codeVer) > 12 {
 		codeVer = codeVer[:12]
 	}
+	runID := firstEnv("SEMAPHORE_JOB_ID", "CI_JOB_ID", "CI_WORKFLOW_NAME")
 	env := "dev"
-	if os.Getenv("SEMAPHORE_JOB_ID") != "" {
+	if runID != "" {
 		env = "ci"
+	}
+	if e := os.Getenv("PERF_ENV"); e != "" {
+		env = e
 	}
 	m := map[string]any{
 		fieldTimestamp:   time.Now().UTC().Format(time.RFC3339),
 		fieldGitCommit:   sha,
-		fieldGitBranch:   os.Getenv("SEMAPHORE_GIT_BRANCH"),
+		fieldGitBranch:   firstEnv("SEMAPHORE_GIT_BRANCH", "CI_GIT_BRANCH"),
 		fieldCodeVersion: codeVer,
-		fieldCIRunID:     os.Getenv("SEMAPHORE_JOB_ID"),
+		fieldCIRunID:     runID,
 		fieldEnv:         env,
 	}
-	if pr := os.Getenv("SEMAPHORE_GIT_PR_NUMBER"); pr != "" {
+	if pr := firstEnv("SEMAPHORE_GIT_PR_NUMBER", "CI_GIT_PR_NUMBER"); pr != "" && pr != "none" {
 		m[fieldPRNumber] = pr
 	}
 	return m
@@ -175,16 +223,19 @@ func applyTemplates(client *http.Client, esURL, auth, tmplDir string) error {
 }
 
 // walkAndSend processes every <dir>/<family>/*.json file, augmenting and
-// POSTing to <family>_<UTC year>.
-func walkAndSend(client *http.Client, esURL, auth, dir string, metadata map[string]any, dryRun bool) error {
+// POSTing to <family>_<UTC year>.  It returns the totals across all families
+// as well as an error: everything short of "the directory could not be read"
+// is a warning here, so a caller gating on the outcome has to read the counts.
+func walkAndSend(client *http.Client, esURL, auth, dir string, metadata map[string]any, dryRun bool) (int, int, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			log.Printf("perf-results directory %s does not exist; nothing to send", dir)
-			return nil
+			return 0, 0, nil
 		}
-		return fmt.Errorf("read dir %s: %w", dir, err)
+		return 0, 0, fmt.Errorf("read dir %s: %w", dir, err)
 	}
+	totalSent, totalFailed := 0, 0
 	year := time.Now().UTC().Format("2006")
 	for _, e := range entries {
 		if !e.IsDir() {
@@ -196,13 +247,19 @@ func walkAndSend(client *http.Client, esURL, auth, dir string, metadata map[stri
 		}
 		family := e.Name()
 		familyDir := filepath.Join(dir, family)
-		sent, failed, err := sendFamily(client, esURL, auth, familyDir, family, year, metadata, dryRun)
-		if err != nil {
-			log.Printf("warning: family %s: %v", family, err)
+		sent, failed, ferr := sendFamily(client, esURL, auth, familyDir, family, year, metadata, dryRun)
+		if ferr != nil {
+			log.Printf("warning: family %s: %v", family, ferr)
+			// A family that could not be walked published nothing, and has no
+			// per-document failures to show for it.  Count one so the totals
+			// cannot report a clean run.
+			failed++
 		}
 		log.Printf("family %s: sent %d, failed %d", family, sent, failed)
+		totalSent += sent
+		totalFailed += failed
 	}
-	return nil
+	return totalSent, totalFailed, nil
 }
 
 // sendFamily handles one <family> subdirectory: walks all *.json under it,

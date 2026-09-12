@@ -15,6 +15,7 @@
 package pinnedversion
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"maps"
@@ -26,6 +27,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.yaml.in/yaml/v3"
 
+	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/registry"
@@ -78,6 +80,9 @@ type Config struct {
 	// ReleaseBranchPrefix prefixes the release branch, e.g. "release".
 	ReleaseBranchPrefix string
 
+	// ProductRegistry is the regiostry for the product images.
+	Registry string
+
 	// Operator overrides the operator's image and registry.
 	Operator registry.Component
 
@@ -120,6 +125,9 @@ type Pin struct {
 	// ProductVersion is the product version in the hashrelease.
 	ProductVersion string
 
+	// ProductRegistry is the registry for the product images in the hashrelease.
+	ProductRegistry string
+
 	// ChartVersion qualifies the chart version when the charts rev with the product version.
 	ChartVersion string
 
@@ -141,10 +149,7 @@ func (p *Pin) ComponentVersion(component string) string {
 // HelmChartVersion returns the chart version: the product version, suffixed
 // with ChartVersion when the charts rev separately from the product.
 func (p *Pin) HelmChartVersion() string {
-	if p.ChartVersion == "" {
-		return p.ProductVersion
-	}
-	return fmt.Sprintf("%s-%s", p.ProductVersion, p.ChartVersion)
+	return charts.Version(p.ProductVersion, p.ChartVersion)
 }
 
 // ReleaseBranch returns the release branch for the pinned product version.
@@ -354,7 +359,6 @@ func (l LocalLoader) source() (*Pin, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	components, err := productComponents(l.Config, productVer)
 	if err != nil {
 		return nil, err
@@ -367,14 +371,15 @@ func (l LocalLoader) source() (*Pin, error) {
 
 	name := releaseName(branch, productVer)
 	return &Pin{
-		ReleaseName:    name,
-		Hash:           hash(productVer, repos),
-		Note:           hashreleaseNote(name, branch, l.Config.Repos),
-		ProductVersion: productVer,
-		ChartVersion:   l.Config.ChartVersion,
-		Operator:       operatorComponent(l.Config, productVer),
-		Components:     components,
-		branch:         branch,
+		ReleaseName:     name,
+		Hash:            hash(productVer, repos),
+		Note:            hashreleaseNote(name, branch, l.Config.Repos),
+		ProductVersion:  productVer,
+		ChartVersion:    l.Config.ChartVersion,
+		ProductRegistry: cmp.Or(l.Config.Registry, registry.DefaultProductRegistry),
+		Operator:        operatorComponent(l.Config, productVer),
+		Components:      components,
+		branch:          branch,
 	}, nil
 }
 

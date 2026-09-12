@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package command
+package steps
 
 import (
 	"fmt"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/release/internal/command"
 )
 
 // One retry: pushes fail on network flakes often enough to save a run.
@@ -27,7 +29,7 @@ const MaxRetries = 1
 // Step holds what every release step needs. Embedding keeps these unexported,
 // so a zero-value config still runs real commands.
 type Step struct {
-	runner CommandRunner
+	runner command.CommandRunner
 
 	// dir is where commands run. Empty runs them in the current directory.
 	dir string
@@ -41,8 +43,12 @@ type Step struct {
 
 type Option func(*Step)
 
-func WithRunner(r CommandRunner) Option {
+func WithRunner(r command.CommandRunner) Option {
 	return func(s *Step) { s.runner = r }
+}
+
+func WithDir(dir string) Option {
+	return func(s *Step) { s.dir = dir }
 }
 
 func WithName(name string) Option {
@@ -60,9 +66,9 @@ func (s *Step) Apply(opts []Option) {
 }
 
 // Runner defaults to running real commands.
-func (s Step) Runner() CommandRunner {
+func (s Step) Runner() command.CommandRunner {
 	if s.runner == nil {
-		return &RealCommandRunner{}
+		return &command.RealCommandRunner{}
 	}
 	return s.runner
 }
