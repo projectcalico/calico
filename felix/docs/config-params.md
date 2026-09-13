@@ -2969,6 +2969,34 @@ Configures local unix socket for reporting flow data from each node.
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
 | Default value (YAML) | `Disabled` |
 
+### `FlowLogsPolicyEvaluationBacklog` (config file / env var only)
+
+How many pending-policy evaluation requests may wait for a
+worker, per queue. A new flow whose queue is full is evaluated on the main loop rather than
+dropped; a re-evaluation sweep whose queue is full pauses until a result comes back.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_FlowLogsPolicyEvaluationBacklog` |
+| Encoding (env var/config file) | Integer: [1,2<sup>63</sup>-1] |
+| Default value (above encoding) | `4096` |
+| Notes | Config file / env var only. | 
+
+### `FlowLogsPolicyEvaluationCacheSize` (config file / env var only)
+
+The number of pending-policy verdicts the flow log
+collector remembers, keyed on a flow's addresses, protocol and destination port (and its
+source port only where a policy rule matches on source ports), so that a flow repeating an
+earlier flow's endpoints is answered without walking the policy set. The cache is emptied
+whenever policy, IP set or endpoint state changes. Set to 0 to disable it.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_FlowLogsPolicyEvaluationCacheSize` |
+| Encoding (env var/config file) | Integer: [0,2<sup>63</sup>-1] |
+| Default value (above encoding) | `65536` |
+| Notes | Config file / env var only. | 
+
 ### `FlowLogsPolicyEvaluationMode` (config file) / `flowLogsPolicyEvaluationMode` (YAML)
 
 Continuous - Felix evaluates active flows on a regular basis to determine the rule
@@ -2984,6 +3012,21 @@ None - Felix stops evaluating pending traces.
 | `FelixConfiguration` field | `flowLogsPolicyEvaluationMode` (YAML) `FlowLogsPolicyEvaluationMode` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Continuous"</code>, <code>"None"</code>. |
 | Default value (YAML) | `Continuous` |
+
+### `FlowLogsPolicyEvaluationWorkers` (config file / env var only)
+
+The number of goroutines that evaluate pending policy for
+the flow log collector's flows off its main loop. 0 evaluates on the main loop, as before.
+On a node with a very large policy set, set it to the number of cores the collector may
+spend on evaluation; each new flow then costs the main loop microseconds rather than the
+full policy walk.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_FlowLogsPolicyEvaluationWorkers` |
+| Encoding (env var/config file) | Integer: [0,2<sup>63</sup>-1] |
+| Default value (above encoding) | `0` |
+| Notes | Config file / env var only. | 
 
 ## <a id="aws-integration">AWS integration
 

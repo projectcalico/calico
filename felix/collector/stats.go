@@ -366,6 +366,11 @@ type Data struct {
 	// lastPolicyEvalAt is the monotime of this flow's last pending-rule-trace evaluation, used
 	// to skip flows a sweep re-reaches too soon. Zero means never evaluated.
 	lastPolicyEvalAt time.Duration
+	// evalSeq numbers this flow's pending-policy evaluation requests; a result whose sequence
+	// number is not the latest is stale. evalInFlight is set while a request is queued or being
+	// evaluated off the main loop. Main loop only, like every other field.
+	evalSeq      uint64
+	evalInFlight bool
 
 	Reported             bool
 	UnreportedPacketInfo bool

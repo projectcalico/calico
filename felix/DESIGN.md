@@ -276,6 +276,7 @@ large enough to bloat AI-tool context.
 | [calc-graph](./design/calc-graph.md) | `felix/calc/**`, `felix/labelindex/**`, `felix/dispatcher/**` | ✅ exists |
 | [neighbour-discovery](./design/neighbour-discovery.md) | `felix/dataplane/linux/proxy_neigh_mgr.go`; the proxy-ARP sysctl and live-migration ARP-suppression parts of `felix/dataplane/linux/endpoint_mgr.go` (that file's manager architecture is [dataplane](./design/dataplane.md)'s). Depends on, and is invalidated by changes to, `cni-plugin/pkg/dataplane/linux/dataplane_linux.go` and `networking-calico/networking_calico/agent/linux/dhcp.py` | ✅ exists |
 | route-sync (deep netlink design only) | `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` — *architecture covered by [dataplane.md](./design/dataplane.md); this row reserved for the deeper netlink-level resync design* | *not yet written* |
+| [flow-logs-policy-evaluation](./design/flow-logs-policy-evaluation.md) | the pending-policy evaluation paths in `felix/collector/collector.go` (`evaluatePendingRuleTrace*`, `snapshotFlowsForRecalc`, `processRecalcBatch`), `app-policy/checker/**`, `app-policy/policystore/**`, `app-policy/policyscale/**`; the collector as a whole stays with flow-logs-collector | ✅ exists |
 | flow-logs-collector | `felix/collector/**` | *not yet written* |
 | config-engine | `felix/config/**` | *not yet written* |
 | windows-dataplane | `felix/dataplane/windows/**` | *not yet written* |

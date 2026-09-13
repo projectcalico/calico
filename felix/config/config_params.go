@@ -449,6 +449,22 @@ type Config struct {
 	FlowLogsGoldmaneServer       string        `config:"string;"`
 	FlowLogsLocalReporter        string        `config:"oneof(Enabled,Disabled);Disabled"`
 	FlowLogsPolicyEvaluationMode string        `config:"oneof(None,Continuous);Continuous"`
+	// FlowLogsPolicyEvaluationCacheSize: the number of pending-policy verdicts the flow log
+	// collector remembers, keyed on a flow's addresses, protocol and destination port (and its
+	// source port only where a policy rule matches on source ports), so that a flow repeating an
+	// earlier flow's endpoints is answered without walking the policy set. The cache is emptied
+	// whenever policy, IP set or endpoint state changes. Set to 0 to disable it.
+	FlowLogsPolicyEvaluationCacheSize int `config:"int(0:);65536;local"`
+	// FlowLogsPolicyEvaluationWorkers: the number of goroutines that evaluate pending policy for
+	// the flow log collector's flows off its main loop. 0 evaluates on the main loop, as before.
+	// On a node with a very large policy set, set it to the number of cores the collector may
+	// spend on evaluation; each new flow then costs the main loop microseconds rather than the
+	// full policy walk.
+	FlowLogsPolicyEvaluationWorkers int `config:"int(0:);0;local"`
+	// FlowLogsPolicyEvaluationBacklog: how many pending-policy evaluation requests may wait for a
+	// worker, per queue. A new flow whose queue is full is evaluated on the main loop rather than
+	// dropped; a re-evaluation sweep whose queue is full pauses until a result comes back.
+	FlowLogsPolicyEvaluationBacklog int `config:"int(1:);4096;local"`
 
 	KubeNodePortRanges    []numorstring.Port `config:"portrange-list;30000:32767"`
 	NATPortRange          numorstring.Port   `config:"portrange;"`
