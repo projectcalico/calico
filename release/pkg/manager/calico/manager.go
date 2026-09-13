@@ -979,32 +979,19 @@ func (r *CalicoManager) collectManifests() error {
 }
 
 func (r *CalicoManager) buildWindowsArchive() error {
-	if !r.isHashRelease {
-		// Real releases call "make release-build", but hashreleases don't.
-		// Instead, we build some of the targets directly.
-		// TODO: align the release nd hashrelease build processes to avoid these separate code paths.
-		return nil
-	}
 	if !r.windowsArchive {
 		logrus.Info("Skipping building windows archive")
 		return nil
 	}
-	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", r.calicoVersion))
-	targets := []string{"release-windows-archive", "dist/install-calico-windows.ps1"}
-	for _, target := range targets {
-		if err := r.makeInDirectoryIgnoreOutput(filepath.Join(r.repoRoot, "node"), target, env...); err != nil {
-			return fmt.Errorf("error building target %s: %s", target, err)
-		}
-	}
-
-	uploadDir := r.uploadDir()
-	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", r.calicoVersion), uploadDir}, nil); err != nil {
-		return fmt.Errorf("failed to copy windows zip archive: %w", err)
-	}
-	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"node/dist/install-calico-windows.ps1", uploadDir}, nil); err != nil {
-		return fmt.Errorf("failed to copy windows install script: %w", err)
-	}
-	return nil
+	return archives.BuildWindows(
+		archives.Archive{
+			RepoRoot:  r.repoRoot,
+			Version:   r.calicoVersion,
+			OutputDir: r.uploadDir(),
+		},
+		archives.WithRunner(r.runner),
+		archives.WithLogsDir(r.logsDir),
+	)
 }
 
 func (r *CalicoManager) collectOCPBundle() error {
@@ -1071,6 +1058,7 @@ func (r *CalicoManager) buildReleaseTar() error {
 	}
 	return archives.Build(
 		archives.Archive{
+			RepoRoot:        r.repoRoot,
 			Version:         r.calicoVersion,
 			OperatorVersion: r.operatorVersion,
 			OutputDir:       r.uploadDir(),

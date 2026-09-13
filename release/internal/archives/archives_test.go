@@ -52,6 +52,11 @@ var testArchive = func(outputDir string, sources ...Contributor) Archive {
 	return Archive{Version: testVersion, OutputDir: outputDir, Sources: sources}
 }
 
+// A valid archive for the verb that builds rather than stages.
+var testWindowsArchive = func(repoRoot, outputDir string) Archive {
+	return Archive{Version: testVersion, RepoRoot: repoRoot, OutputDir: outputDir}
+}
+
 // Writes the files it is given, so a test states what reaches the archive
 // without a real source tree.
 type testContent struct {
@@ -253,15 +258,24 @@ func TestBuildValidates(t *testing.T) {
 	outputDir := testOutputDir(t)
 	content := []Contributor{testContent{name: "manifests", to: manifestsDir, files: []string{"calico.yaml"}}}
 
-	for name, a := range map[string]Archive{
-		"no version":      {OutputDir: outputDir, Sources: content},
-		"no output dir":   {Version: testVersion, Sources: content},
-		"no sources":      {Version: testVersion, OutputDir: outputDir},
-		"nil contributor": {Version: testVersion, OutputDir: outputDir, Sources: []Contributor{nil}},
+	// The message is asserted, not just that it failed: an archive with nothing
+	// to stage fails anyway, so "an error" would pass with no validation at all.
+	for name, tc := range map[string]struct {
+		archive Archive
+		want    string
+	}{
+		"no version":      {Archive{OutputDir: outputDir, Sources: content}, "no version"},
+		"no output dir":   {Archive{Version: testVersion, Sources: content}, "no output directory"},
+		"no sources":      {Archive{Version: testVersion, OutputDir: outputDir}, "no content specified"},
+		"nil contributor": {Archive{Version: testVersion, OutputDir: outputDir, Sources: []Contributor{nil}}, "nothing to contribute"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if err := Build(a); err == nil {
-				t.Errorf("Build() = nil, want an error for %s", name)
+			err := Build(tc.archive)
+			if err == nil {
+				t.Fatalf("Build() = nil, want an error for %s", name)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("Build() = %q, want it to mention %q", err, tc.want)
 			}
 		})
 	}
@@ -359,4 +373,150 @@ func stagedFiles(t *testing.T, dir string) []string {
 	}
 	slices.Sort(got)
 	return got
+}
+
+// A runner that records what it ran and creates the files make would produce.
+type windowsRunner struct {
+	calls []string
+	dist  string
+	made  []string
+}
+
+func (w *windowsRunner) Run(name string, args, env []string) (string, error) {
+	return w.RunInDir("", name, args, env)
+}
+
+func (w *windowsRunner) RunInDir(_, name string, args, _ []string) (string, error) {
+	w.calls = append(w.calls, name+" "+strings.Join(args, " "))
+	for _, f := range w.made {
+		path := filepath.Join(w.dist, f)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return "", err
+		}
+		if err := os.WriteFile(path, []byte(f), 0o644); err != nil {
+			return "", err
+		}
+	}
+	return "", nil
+}
+
+func (w *windowsRunner) RunInDirToFile(dir, name string, args, env []string, _ string) (string, error) {
+	return w.RunInDir(dir, name, args, env)
+}
+
+func (w *windowsRunner) RunInDirNoCapture(dir, name string, args, env []string) error {
+	_, err := w.RunInDir(dir, name, args, env)
+	return err
+}
+
+func (w *windowsRunner) RunNoCapture(name string, args, env []string) error {
+	return w.RunInDirNoCapture("", name, args, env)
+}
+
+func windowsFixture(t *testing.T) (Archive, *windowsRunner) {
+	t.Helper()
+	root := t.TempDir()
+	w := testWindowsArchive(root, testOutputDir(t))
+	return w, &windowsRunner{
+		dist: filepath.Join(root, windowsComponent, windowsDistDir),
+		made: []string{WindowsFileName(testVersion), windowsScript},
+	}
+}
+
+func TestBuildWindowsPlacesBothFilesInTheOutputDir(t *testing.T) {
+	w, runner := windowsFixture(t)
+	if err := BuildWindows(w, WithRunner(runner)); err != nil {
+		t.Fatalf("BuildWindows() = %v", err)
+	}
+	for _, name := range []string{WindowsFileName(testVersion), windowsScript} {
+		if _, err := os.Stat(filepath.Join(w.OutputDir, name)); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+func TestBuildWindowsRunsBothTargets(t *testing.T) {
+	w, runner := windowsFixture(t)
+	if err := BuildWindows(w, WithRunner(runner)); err != nil {
+		t.Fatalf("BuildWindows() = %v", err)
+	}
+	for _, target := range []string{windowsArchiveTarget, windowsScriptTarget} {
+		var ran bool
+		for _, c := range runner.calls {
+			if strings.Contains(c, target) {
+				ran = true
+			}
+		}
+		if !ran {
+			t.Errorf("did not run %q, ran: %v", target, runner.calls)
+		}
+	}
+}
+
+// The install script is a file target with no prerequisites, so make skips it
+// when one exists: a stale script must be cleared or the old version survives.
+func TestBuildWindowsClearsAStaleInstallScript(t *testing.T) {
+	w, runner := windowsFixture(t)
+	stale := filepath.Join(w.RepoRoot, windowsComponent, windowsScriptTarget)
+	if err := os.MkdirAll(filepath.Dir(stale), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stale, []byte("stale"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// The runner only writes the archive, so anything left is the stale file.
+	runner.made = []string{WindowsFileName(testVersion)}
+
+	if err := BuildWindows(w, WithRunner(runner)); err == nil {
+		t.Error("BuildWindows() = nil, want an error when the script was not rebuilt")
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Error("the stale install script survived")
+	}
+}
+
+// An option that only implements WindowsOption must still reach the verb.
+// WithRunner and WithLogsDir satisfy both interfaces, so they would pass even
+// if applyTo had no Windows arm.
+type windowsOnlyOption func(*settings) error
+
+func (f windowsOnlyOption) applyWindows(s *settings) error { return f(s) }
+
+func TestWindowsOnlyOptionsAreApplied(t *testing.T) {
+	var applied bool
+	opt := windowsOnlyOption(func(*settings) error {
+		applied = true
+		return nil
+	})
+	w, runner := windowsFixture(t)
+	if err := BuildWindows(w, WithRunner(runner), opt); err != nil {
+		t.Fatalf("BuildWindows() = %v", err)
+	}
+	if !applied {
+		t.Error("a Windows-only option was not applied")
+	}
+}
+
+func TestBuildWindowsValidates(t *testing.T) {
+	out := testOutputDir(t)
+	// The message is asserted, not just that it failed: without a repo root the
+	// build fails anyway, so "an error" would pass with no validation at all.
+	for name, tc := range map[string]struct {
+		archive Archive
+		want    string
+	}{
+		"no repo root":  {Archive{Version: testVersion, OutputDir: out}, "no repository root"},
+		"no version":    {Archive{RepoRoot: t.TempDir(), OutputDir: out}, "no version"},
+		"no output dir": {Archive{RepoRoot: t.TempDir(), Version: testVersion}, "no output directory"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := BuildWindows(tc.archive)
+			if err == nil {
+				t.Fatalf("BuildWindows() = nil, want an error for %s", name)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("BuildWindows() = %q, want it to mention %q", err, tc.want)
+			}
+		})
+	}
 }

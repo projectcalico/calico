@@ -26,14 +26,27 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-const buildStep = "archives-build"
+const (
+	buildStep   = "archives-build"
+	windowsStep = "archives-build-windows"
+)
 
 const (
 	filePrefix = "release"
+
+	windowsComponent = "node"
+	windowsDistDir   = "dist"
+	windowsScript    = "install-calico-windows.ps1"
+
+	// Make targets that produce the Windows archive and its install script.
+	windowsArchiveTarget = "release-windows-archive"
+	windowsScriptTarget  = windowsDistDir + "/" + windowsScript
 )
 
-// A var so a product naming its archive differently can replace it. Takes the
-// whole Archive because a name may be built from more than the version.
+var WindowsFileName = func(version string) string {
+	return fmt.Sprintf("calico-windows-%s.zip", version)
+}
+
 var FileName = func(a Archive) string {
 	return fmt.Sprintf("%s-%s", filePrefix, a.Version)
 }
@@ -46,17 +59,7 @@ func Path(a Archive) string {
 	return filepath.Join(a.OutputDir, withExtension(FileName(a)))
 }
 
-type Archive struct {
-	Version string
-
-	OperatorVersion string
-
-	OutputDir string
-
-	Sources []Contributor
-}
-
-func (a Archive) validate() error {
+var validate = func(a Archive) error {
 	var errs []error
 	if a.Version == "" {
 		errs = append(errs, fmt.Errorf("no version specified"))
@@ -64,6 +67,11 @@ func (a Archive) validate() error {
 	if a.OutputDir == "" {
 		errs = append(errs, fmt.Errorf("no output directory specified"))
 	}
+	return errors.Join(errs...)
+}
+
+var validateSources = func(a Archive) error {
+	errs := []error{validate(a)}
 	if len(a.Sources) == 0 {
 		errs = append(errs, fmt.Errorf("no content specified"))
 	}
@@ -73,6 +81,26 @@ func (a Archive) validate() error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+var validateWindows = func(a Archive) error {
+	errs := []error{validate(a)}
+	if a.RepoRoot == "" {
+		errs = append(errs, fmt.Errorf("no repository root specified"))
+	}
+	return errors.Join(errs...)
+}
+
+type Archive struct {
+	Version string
+
+	OperatorVersion string
+
+	RepoRoot string
+
+	OutputDir string
+
+	Sources []Contributor
 }
 
 func (a Archive) stagingDir() string {
@@ -131,11 +159,18 @@ type settings struct {
 	steps.Step
 }
 
+// The Windows files a release publishes beside the tarball.
+func (a Archive) windowsFiles() []string {
+	return []string{WindowsFileName(a.Version), windowsScript}
+}
+
 type (
-	BuildOption interface{ applyBuild(*settings) error }
+	BuildOption   interface{ applyBuild(*settings) error }
+	WindowsOption interface{ applyWindows(*settings) error }
 
 	Option interface {
 		applyBuild(*settings) error
+		applyWindows(*settings) error
 	}
 )
 
@@ -146,7 +181,8 @@ var (
 
 type setting func(*settings) error
 
-func (f setting) applyBuild(s *settings) error { return f(s) }
+func (f setting) applyBuild(s *settings) error   { return f(s) }
+func (f setting) applyWindows(s *settings) error { return f(s) }
 
 type buildSetting func(*settings) error
 
