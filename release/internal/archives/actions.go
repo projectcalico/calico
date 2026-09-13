@@ -38,7 +38,7 @@ func beforeBuild(a Archive) (cleanupFn func() error, err error) {
 }
 
 func Build(a Archive, opts ...BuildOption) error {
-	s, err := newSettings(buildStep, a, opts)
+	s, err := newSettings(buildStep, a, validateSources, opts)
 	if err != nil {
 		return err
 	}
@@ -87,10 +87,46 @@ func (s settings) tar(staging string) error {
 	return nil
 }
 
-func newSettings[O any](step string, a Archive, opts []O) (settings, error) {
+// BuildWindows builds the Windows archive and its install script into the
+// output directory, beside the release tarball rather than inside it.
+func BuildWindows(a Archive, opts ...WindowsOption) error {
+	s, err := newSettings(windowsStep, a, validateWindows, opts)
+	if err != nil {
+		return err
+	}
+
+	env := append(os.Environ(), utils.Env(utils.EnvVersion, s.Version))
+	dir := filepath.Join(s.RepoRoot, windowsComponent)
+	// The install script is a file target with no prerequisites, so make skips
+	// it when one is already there and the stale version's script survives.
+	if err := os.Remove(filepath.Join(dir, windowsScriptTarget)); err != nil && !os.IsNotExist(err) {
+		return s.Errorf("clearing stale %s: %w", windowsScriptTarget, err)
+	}
+	for _, target := range []string{windowsArchiveTarget, windowsScriptTarget} {
+		args := append([]string{"-C", dir}, target)
+		if out, err := s.Run("make", args, env, s.LogPath(target)); err != nil {
+			s.Logger().Error(out)
+			return s.Errorf("building %s: %w", target, err)
+		}
+	}
+
+	if err := os.MkdirAll(s.OutputDir, utils.DirPerms); err != nil {
+		return s.Errorf("creating %s: %w", s.OutputDir, err)
+	}
+	for _, name := range s.windowsFiles() {
+		src := filepath.Join(dir, windowsDistDir, name)
+		if err := utils.LinkOrCopyFile(src, filepath.Join(s.OutputDir, name)); err != nil {
+			return s.Errorf("collecting %s: %w", name, err)
+		}
+	}
+	s.Logger().WithField("dir", s.OutputDir).Info("Built Windows archive")
+	return nil
+}
+
+func newSettings[O any](step string, a Archive, validate func(a Archive) error, opts []O) (settings, error) {
 	s := settings{Archive: a}
 	s.Apply([]steps.Option{steps.WithName(step)})
-	if err := s.validate(); err != nil {
+	if err := validate(a); err != nil {
 		return s, s.Errorf("%w", err)
 	}
 	for _, opt := range opts {
@@ -105,6 +141,8 @@ func applyTo(opt any, s *settings) error {
 	switch o := opt.(type) {
 	case BuildOption:
 		return o.applyBuild(s)
+	case WindowsOption:
+		return o.applyWindows(s)
 	default:
 		return fmt.Errorf("unknown option type %T", opt)
 	}
