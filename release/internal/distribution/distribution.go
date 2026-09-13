@@ -30,7 +30,6 @@ const (
 	metadataStep     = "distribution-metadata"
 	sumsStep         = "distribution-sha256sums"
 	artifactsStep    = "distribution-publish-artifacts"
-	hashreleaseStep  = "distribution-publish-hashrelease"
 	MetadataFileName = "metadata.yaml"
 	SumsFileName     = "SHA256SUMS"
 )

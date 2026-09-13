@@ -209,6 +209,17 @@ func TestGCSDryRunPreviewsWithRsync(t *testing.T) {
 	}
 }
 
+func TestGCSDryRunReportsASingleFileInsteadOfCopyingIt(t *testing.T) {
+	f := &fakeRunner{}
+	d := GCS{URI: "gs://bucket/archive.zip", DryRun: true, Runner: f}
+	if err := d.Publish(context.Background(), srcPath(t, false)); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if f.name != "" || f.args != nil {
+		t.Errorf("ran %q %v, want a dry run to copy nothing", f.name, f.args)
+	}
+}
+
 func TestDestinationNames(t *testing.T) {
 	if got := (S3{URI: "s3://b/k/"}).Name(); got != "s3://b/k/" {
 		t.Errorf("S3 name = %q", got)
