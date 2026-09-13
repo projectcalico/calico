@@ -565,6 +565,15 @@ func TestBuildBinariesBuildsFelixWhateverTheImagesFlagIs(t *testing.T) {
 			m, root := imageManager(t, f, "")
 			m.images = images
 			m.binaries = true
+			// buildBinaries collects what it built, and the fake runner does
+			// not produce files.
+			bin := filepath.Join(root, calicoctlComponent, binDir)
+			if err := os.MkdirAll(bin, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(bin, "calicoctl-linux-amd64"), []byte("x"), 0o644); err != nil {
+				t.Fatal(err)
+			}
 			if err := m.buildBinaries(); err != nil {
 				t.Fatalf("buildBinaries: %v", err)
 			}
@@ -1029,6 +1038,8 @@ func TestBuildE2EBinariesUsesARCHES(t *testing.T) {
 		outputDir:     t.TempDir(),
 		calicoVersion: "v3.34.0-0.dev-1-gabcdef123456",
 		architectures: []string{"amd64", "arm64", "ppc64le", "s390x"},
+		isHashRelease: true,
+		e2eBinaries:   true,
 	}
 
 	require.NoError(t, r.buildE2EBinaries())
