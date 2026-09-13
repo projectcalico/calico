@@ -180,6 +180,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
 					calico.WithGitRef(c.Bool(gitRefFlag.Name)),
 					calico.WithGithubRelease(c.Bool(githubReleaseFlag.Name)),
+					calico.WithDraftRelease(c.Bool(draftGithubReleaseFlag.Name)),
 					calico.WithValidation(c.Bool(validationFlag.Name)),
 					calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
 				}
@@ -213,41 +214,8 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 			},
 		},
 
-		// Publish a release to the public.
-		releasePublicSubCommands(cfg),
-
 		// Post-release validation.
 		releaseValidationSubCommand(cfg),
-	}
-}
-
-func releasePublicSubCommands(cfg *Config) *cli.Command {
-	flags := []cli.Flag{
-		orgFlag,
-		repoFlag,
-		repoRemoteFlag,
-	}
-	return &cli.Command{
-		Name:  "public",
-		Usage: "Make a published release available to the public",
-		Flags: flags,
-		Action: func(_ context.Context, c *cli.Command) error {
-			configureLogging("release-public.log")
-			ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
-			if err != nil {
-				return err
-			}
-			opts := []calico.Option{
-				calico.WithRepoRoot(cfg.RepoRootDir),
-				calico.WithVersion(ver.FormattedString()),
-				calico.WithOperatorVersion(operatorVer.FormattedString()),
-				calico.WithGithubOrg(c.String(orgFlag.Name)),
-				calico.WithRepoName(c.String(repoFlag.Name)),
-				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
-			}
-			m := calico.NewManager(opts...)
-			return m.ReleasePublic()
-		},
 	}
 }
 
