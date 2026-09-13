@@ -42,18 +42,46 @@ type PolicyStore struct {
 	Endpoints          map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 	ServiceAccountByID map[types.ServiceAccountID]*proto.ServiceAccountUpdate
 	NamespaceByID      map[types.NamespaceID]*proto.NamespaceUpdate
+
+	// Compiled forms of PolicyByID/ProfileByID, maintained as updates are
+	// applied when a PolicyCompiler is configured (see compiler.go). An empty
+	// or absent slot means the policy must be evaluated by interpreting the
+	// uncompiled policy.
+	CompiledPolicyByID  map[types.PolicyID]*PolicySlot
+	CompiledProfileByID map[types.ProfileID]*PolicySlot
+
+	// Compiled forms of the endpoints' tier/profile structure, keyed by the
+	// identity of the endpoint object they were built from — evaluation only
+	// ever has the endpoint pointer to hand, and a stale copy of a
+	// since-replaced endpoint must miss rather than match.
+	CompiledEndpoints map[*proto.WorkloadEndpoint]CompiledEndpoint
+
+	compiler PolicyCompiler
+	// Reverse index from IP set ID to the policies/profiles whose compiled
+	// form references it, used to recompile them when the set's object is
+	// replaced.
+	ipSetPolicyRefs  map[string]map[types.PolicyID]struct{}
+	ipSetProfileRefs map[string]map[types.ProfileID]struct{}
 }
 
 func NewPolicyStore() *PolicyStore {
+	return NewPolicyStoreWithCompiler(nil)
+}
+
+func NewPolicyStoreWithCompiler(compiler PolicyCompiler) *PolicyStore {
 	return &PolicyStore{
-		IPToIndexes:        apptypes.NewIPToEndpointsIndex(),
-		Endpoints:          make(map[types.WorkloadEndpointID]*proto.WorkloadEndpoint),
-		RWMutex:            sync.RWMutex{},
-		IPSetByID:          make(map[string]IPSet),
-		ProfileByID:        make(map[types.ProfileID]*proto.Profile),
-		PolicyByID:         make(map[types.PolicyID]*proto.Policy),
-		ServiceAccountByID: make(map[types.ServiceAccountID]*proto.ServiceAccountUpdate),
-		NamespaceByID:      make(map[types.NamespaceID]*proto.NamespaceUpdate),
+		IPToIndexes:         apptypes.NewIPToEndpointsIndex(),
+		Endpoints:           make(map[types.WorkloadEndpointID]*proto.WorkloadEndpoint),
+		RWMutex:             sync.RWMutex{},
+		IPSetByID:           make(map[string]IPSet),
+		ProfileByID:         make(map[types.ProfileID]*proto.Profile),
+		PolicyByID:          make(map[types.PolicyID]*proto.Policy),
+		ServiceAccountByID:  make(map[types.ServiceAccountID]*proto.ServiceAccountUpdate),
+		NamespaceByID:       make(map[types.NamespaceID]*proto.NamespaceUpdate),
+		CompiledPolicyByID:  make(map[types.PolicyID]*PolicySlot),
+		CompiledProfileByID: make(map[types.ProfileID]*PolicySlot),
+		CompiledEndpoints:   make(map[*proto.WorkloadEndpoint]CompiledEndpoint),
+		compiler:            compiler,
 	}
 }
 
@@ -61,6 +89,7 @@ type policyStoreManager struct {
 	current, pending *PolicyStore
 	mu               sync.RWMutex
 	toActive         bool
+	compiler         PolicyCompiler
 }
 
 type PolicyStoreManager interface {
@@ -81,18 +110,26 @@ type PolicyStoreManager interface {
 
 type PolicyStoreManagerOption func(*policyStoreManager)
 
+// WithPolicyCompiler configures the manager to create every store (including
+// the fresh pending store built on reconnect) with the given compiler, so
+// policies are compiled as updates are applied. A nil compiler is a no-op.
+func WithPolicyCompiler(compiler PolicyCompiler) PolicyStoreManagerOption {
+	return func(m *policyStoreManager) {
+		m.compiler = compiler
+	}
+}
+
 func NewPolicyStoreManager() PolicyStoreManager {
 	return NewPolicyStoreManagerWithOpts()
 }
 
 func NewPolicyStoreManagerWithOpts(opts ...PolicyStoreManagerOption) *policyStoreManager {
-	psm := &policyStoreManager{
-		current: NewPolicyStore(),
-		pending: NewPolicyStore(),
-	}
+	psm := &policyStoreManager{}
 	for _, o := range opts {
 		o(psm)
 	}
+	psm.current = NewPolicyStoreWithCompiler(psm.compiler)
+	psm.pending = NewPolicyStoreWithCompiler(psm.compiler)
 	return psm
 }
 
@@ -140,7 +177,7 @@ func (m *policyStoreManager) OnReconnecting() {
 	defer m.mu.Unlock()
 
 	// create store
-	m.pending = NewPolicyStore()
+	m.pending = NewPolicyStoreWithCompiler(m.compiler)
 	log.Tracef("storeManager OnReconnecting() created new pending store %p", m.pending)
 
 	// route next writes to pending

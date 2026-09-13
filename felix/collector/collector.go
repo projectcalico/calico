@@ -183,6 +183,11 @@ type collector struct {
 	// policyEvalMinInterval is the minimum time between re-evaluations of one flow. Half the
 	// ticker interval.
 	policyEvalMinInterval time.Duration
+	// pendingTraceScratch is the buffer policy evaluation appends each rule
+	// trace to, reused across flows so that an unchanged trace — the common
+	// case — costs neither an allocation nor a copy. Only touched from the
+	// stats collection goroutine.
+	pendingTraceScratch []*calc.RuleID
 }
 
 // newCollector instantiates a new collector. The StartDataplaneStatsCollector function is the only public
@@ -202,7 +207,9 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 	}
 
 	if c.policyStoreManager == nil {
-		c.policyStoreManager = policystore.NewPolicyStoreManager()
+		c.policyStoreManager = policystore.NewPolicyStoreManagerWithOpts(
+			policystore.WithPolicyCompiler(checker.NewPolicyCompiler()),
+		)
 	}
 
 	// Only run the re-evaluation sweep when pending policies are enabled; leaving the ticker nil
@@ -1058,7 +1065,7 @@ func (c *collector) evaluatePendingRuleTraceForLocalEp(data *Data, reason policy
 func (c *collector) evaluatePendingRuleTrace(direction rules.RuleDir, store *policystore.PolicyStore, ep calc.EndpointData, flow TupleAsFlow, ruleIDs *[]*calc.RuleID) {
 	// Get the proto.WorkloadEndpoint, needed for the evaluation, from the policy store.
 	if protoEp := c.lookupProtoWorkloadEndpoint(store, ep.Key()); protoEp != nil {
-		trace, err := checker.Evaluate(checker.StagedAsEnforced, direction, store, protoEp, &flow)
+		trace, err := checker.Evaluate(checker.StagedAsEnforced, direction, store, protoEp, &flow, c.pendingTraceScratch[:0])
 		if err != nil {
 			// Keep the trace we worked out last time: reporting no pending policy at all would be a
 			// stronger claim than we are in a position to make. The checker logs the reason, rate
@@ -1066,7 +1073,11 @@ func (c *collector) evaluatePendingRuleTrace(direction rules.RuleDir, store *pol
 			log.WithError(err).Tracef("Pending %s evaluation failed, tuple: %v", direction, flow)
 			return
 		}
+		c.pendingTraceScratch = trace
 		if !equal(*ruleIDs, trace) {
+			// Copy rather than hand over the scratch buffer: the Data's slice is
+			// passed on to the metric reporters, so its backing array must not
+			// be written to again.
 			*ruleIDs = append([]*calc.RuleID(nil), trace...)
 			log.Tracef("Updated pending %s, tuple: %v, rule trace: %v", direction, flow, ruleIDs)
 		}
