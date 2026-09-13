@@ -45,7 +45,7 @@ func BuildMetadata(a Attester, dir string, opts ...MetadataOption) error {
 	if err != nil {
 		return s.Errorf("%w", err)
 	}
-	path := filepath.Join(dir, MetadataFileName)
+	path := filepath.Join(dir, metadataFileName)
 	if err := os.WriteFile(path, bs, filePerms); err != nil {
 		return s.Errorf("writing %s: %w", path, err)
 	}

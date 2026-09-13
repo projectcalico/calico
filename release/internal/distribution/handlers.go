@@ -181,9 +181,11 @@ func (d GCS) Publish(_ context.Context, src string) error {
 	case d.DryRun && p.dir:
 		args = []string{storageCmd, rsyncVerb, recursiveFlag}
 	case d.DryRun:
+		// cp has no dry-run of its own and rsync cannot take a file, so a
+		// single file is reported rather than previewed.
 		logrus.WithFields(logrus.Fields{
 			"cmd":  gcloudCmd,
-			"args": append(args, p.src, p.dest),
+			"args": append(slices.Clone(args), p.src, p.dest),
 		}).Info("Dry run, not copying")
 		return nil
 	case p.dir:
@@ -346,7 +348,7 @@ func (d GithubRelease) sha256Sums(dir string, files []string) ([]string, error) 
 	if err != nil {
 		return nil, err
 	}
-	path := filepath.Join(dir, SumsFileName)
+	path := filepath.Join(dir, sumsFileName)
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return nil, s.Errorf("removing %s: %w", path, err)
 	}

@@ -260,7 +260,7 @@ func TestBuildMetadata(t *testing.T) {
 	if err := BuildMetadata(attestation{body: []byte("version: v3.30.0\n")}, dir); err != nil {
 		t.Fatalf("BuildMetadata: %v", err)
 	}
-	got, err := os.ReadFile(filepath.Join(dir, MetadataFileName))
+	got, err := os.ReadFile(filepath.Join(dir, metadataFileName))
 	if err != nil {
 		t.Fatalf("reading metadata: %v", err)
 	}
@@ -277,7 +277,7 @@ func TestBuildMetadataWritesNothingWhenTheRecordFails(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "no version specified") {
 		t.Fatalf("expected the record's own error, got %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, MetadataFileName)); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(filepath.Join(dir, metadataFileName)); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("expected no file written, got %v", err)
 	}
 }

@@ -209,6 +209,17 @@ func TestGCSDryRunPreviewsWithRsync(t *testing.T) {
 	}
 }
 
+func TestGCSDryRunReportsASingleFileInsteadOfCopyingIt(t *testing.T) {
+	f := &fakeRunner{}
+	d := GCS{URI: "gs://bucket/archive.zip", DryRun: true, Runner: f}
+	if err := d.Publish(context.Background(), srcPath(t, false)); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if f.name != "" || f.args != nil {
+		t.Errorf("ran %q %v, want a dry run to copy nothing", f.name, f.args)
+	}
+}
+
 func TestDestinationNames(t *testing.T) {
 	if got := (S3{URI: "s3://b/k/"}).Name(); got != "s3://b/k/" {
 		t.Errorf("S3 name = %q", got)
@@ -394,7 +405,7 @@ func TestSHA256SumsWritesNamesRelativeToTheDirectory(t *testing.T) {
 	if _, err := (GithubRelease{}).sha256Sums(dir, files); err != nil {
 		t.Fatalf("sha256Sums: %v", err)
 	}
-	bs, err := os.ReadFile(filepath.Join(dir, SumsFileName))
+	bs, err := os.ReadFile(filepath.Join(dir, sumsFileName))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -436,15 +447,15 @@ func TestPublishIsIdempotent(t *testing.T) {
 		if got := slices.Compact(slices.Clone(svc.uploaded)); len(got) != len(svc.uploaded) {
 			t.Errorf("run %d: an asset was uploaded twice: %v", run, svc.uploaded)
 		}
-		want := []string{SumsFileName, "metadata.yaml", "release.tgz"}
+		want := []string{sumsFileName, "metadata.yaml", "release.tgz"}
 		if !slices.Equal(svc.uploaded, want) {
 			t.Errorf("run %d: uploaded %v, want %v", run, svc.uploaded, want)
 		}
-		bs, err := os.ReadFile(filepath.Join(dir, SumsFileName))
+		bs, err := os.ReadFile(filepath.Join(dir, sumsFileName))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(string(bs), SumsFileName) {
+		if strings.Contains(string(bs), sumsFileName) {
 			t.Errorf("run %d: the sums file checksums itself:\n%s", run, bs)
 		}
 		if run == 0 {
