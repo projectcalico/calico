@@ -27,7 +27,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/charts"
@@ -722,6 +722,9 @@ func (r *CalicoManager) uploads() []distribution.Upload {
 	}
 	uploads = append(uploads,
 		distribution.Upload{Handler: distribution.Preparer{Kind: metadataKey, Action: r.buildMetadata}},
+		// After metadata, so the sums cover it. Both destinations ship the
+		// same directory, so neither can own this.
+		distribution.Upload{Handler: distribution.Preparer{Kind: "checksums", Action: r.writeChecksums}},
 	)
 
 	if r.isHashRelease {
@@ -740,6 +743,11 @@ func (r *CalicoManager) uploads() []distribution.Upload {
 
 func (r *CalicoManager) buildMetadata() error {
 	return r.BuildMetadata(r.uploadDir())
+}
+
+// Users verify a download with: sha256sum -c --ignore-missing SHA256SUMS
+func (r *CalicoManager) writeChecksums() error {
+	return distribution.SHA256Sums(r.uploadDir())
 }
 
 // Check general prerequisites for cutting and publishing a release.

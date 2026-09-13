@@ -244,10 +244,13 @@ func (d GithubRelease) Publish(ctx context.Context, src string) error {
 		d.log().WithField("files", files).Infof("Dry run, not creating %s", d.Name())
 		return nil
 	}
-	files, err = d.sha256Sums(src, files)
-	if err != nil {
-		return fmt.Errorf("checksums: %w", err)
+	// Written by an earlier step, and excluded from the listing so a re-run
+	// does not checksum it into itself.
+	sums := filepath.Join(src, sumsFileName)
+	if _, err := os.Stat(sums); err != nil {
+		return fmt.Errorf("%s: %w", sumsFileName, err)
 	}
+	files = append(files, sums)
 	gh, err := d.github()
 	if err != nil {
 		return fmt.Errorf("github client: %w", err)
@@ -343,8 +346,23 @@ func (d GithubRelease) Validate(u Upload) error {
 
 // Create a SHA256 checksum file for all files and write it to the specified directory.
 // Returns the release assets: the files checksummed, plus the sums file.
-func (d GithubRelease) sha256Sums(dir string, files []string) ([]string, error) {
-	s, err := newSettings[SumsOption](sumsStep, nil)
+// SHA256Sums writes a checksum file covering everything at the top level of
+// dir, and returns dir's files plus that file. Any existing sums file is
+// replaced rather than checksummed into itself.
+func SHA256Sums(dir string) error {
+	files, err := topLevelFiles(dir)
+	if err != nil {
+		return err
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("no files to checksum in %s", dir)
+	}
+	_, err = sha256Sums(dir, files)
+	return err
+}
+
+func sha256Sums(dir string, files []string) ([]string, error) {
+	s, err := newSettings[Option](sumsStep, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +370,6 @@ func (d GithubRelease) sha256Sums(dir string, files []string) ([]string, error) 
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return nil, s.Errorf("removing %s: %w", path, err)
 	}
-	files = slices.DeleteFunc(files, func(f string) bool { return f == path })
 	if len(files) == 0 {
 		return nil, s.Errorf("no files to checksum")
 	}
@@ -380,7 +397,9 @@ func topLevelFiles(dir string) ([]string, error) {
 	}
 	var out []string
 	for _, e := range entries {
-		if e.IsDir() {
+		// The sums file is not a release artifact in its own right: it must
+		// never be checksummed into itself, and its caller adds it back.
+		if e.IsDir() || e.Name() == sumsFileName {
 			continue
 		}
 		out = append(out, filepath.Join(dir, e.Name()))

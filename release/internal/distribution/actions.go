@@ -148,8 +148,6 @@ func applyTo(opt any, s *settings) error {
 		return o.applyPublish(s)
 	case MetadataOption:
 		return o.applyMetadata(s)
-	case SumsOption:
-		return o.applySums(s)
 	default:
 		return fmt.Errorf("unknown option type %T", opt)
 	}

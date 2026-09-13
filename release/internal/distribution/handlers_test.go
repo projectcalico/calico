@@ -402,7 +402,7 @@ func TestSHA256SumsWritesNamesRelativeToTheDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("topLevelFiles: %v", err)
 	}
-	if _, err := (GithubRelease{}).sha256Sums(dir, files); err != nil {
+	if _, err := sha256Sums(dir, files); err != nil {
 		t.Fatalf("sha256Sums: %v", err)
 	}
 	bs, err := os.ReadFile(filepath.Join(dir, sumsFileName))
@@ -434,6 +434,9 @@ func TestPublishIsIdempotent(t *testing.T) {
 	}
 	var first string
 	for run := range 2 {
+		if err := SHA256Sums(dir); err != nil {
+			t.Fatalf("run %d: SHA256Sums: %v", run, err)
+		}
 		svc := &fakeReleaseService{draft: &ghapi.RepositoryRelease{ID: ghapi.Int64(1), Draft: ghapi.Bool(true)}}
 		rels, err := gh.NewReleases(gh.Repo{Org: "projectcalico", Name: "calico"}, svc)
 		if err != nil {

@@ -103,12 +103,10 @@ type settings struct {
 // setting that belongs to one verb be rejected at compile time by the others.
 type (
 	MetadataOption interface{ applyMetadata(*settings) error }
-	SumsOption     interface{ applySums(*settings) error }
 	PublishOption  interface{ applyPublish(*settings) error }
 
 	Option interface {
 		applyMetadata(*settings) error
-		applySums(*settings) error
 		applyPublish(*settings) error
 	}
 )
@@ -123,7 +121,6 @@ var (
 type setting func(*settings) error
 
 func (f setting) applyMetadata(s *settings) error { return f(s) }
-func (f setting) applySums(s *settings) error     { return f(s) }
 func (f setting) applyPublish(s *settings) error  { return f(s) }
 
 type publishSetting func(*settings) error

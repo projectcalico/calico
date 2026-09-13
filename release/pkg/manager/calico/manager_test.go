@@ -1211,3 +1211,37 @@ func TestGetRegistryFromManifestsFallsBackWhenAbsent(t *testing.T) {
 	}
 	assertRegistry(t, m, "gcr.io/unique-caldron-775/cnx")
 }
+
+// Checksums ship with every release, not just the github one, so the step
+// that writes them has to run on the hashrelease path too.
+func TestChecksumsAreWrittenOnBothPaths(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		hashrelease bool
+	}{
+		{name: "release"},
+		{name: "hashrelease", hashrelease: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &CalicoManager{
+				isHashRelease:      tc.hashrelease,
+				publishHashrelease: tc.hashrelease,
+				githubRelease:      true,
+				helmCharts:         true,
+				helmIndex:          true,
+				calicoVersion:      "v3.30.0",
+				githubOrg:          "projectcalico",
+				repo:               "calico",
+				s3Bucket:           "bucket",
+				outputDir:          t.TempDir(),
+			}
+			var kinds []string
+			for _, u := range r.uploads() {
+				kinds = append(kinds, u.Handler.Name())
+			}
+			if !slices.Contains(kinds, "checksums") {
+				t.Errorf("no checksums step in the pipeline: %v", kinds)
+			}
+		})
+	}
+}
