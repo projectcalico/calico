@@ -16,6 +16,7 @@ package calico
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -564,6 +565,15 @@ func TestBuildBinariesBuildsFelixWhateverTheImagesFlagIs(t *testing.T) {
 			m, root := imageManager(t, f, "")
 			m.images = images
 			m.binaries = true
+			// buildBinaries collects what it built, and the fake runner does
+			// not produce files.
+			bin := filepath.Join(root, calicoctlComponent, binDir)
+			if err := os.MkdirAll(bin, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(bin, "calicoctl-linux-amd64"), []byte("x"), 0o644); err != nil {
+				t.Fatal(err)
+			}
 			if err := m.buildBinaries(); err != nil {
 				t.Fatalf("buildBinaries: %v", err)
 			}
@@ -571,6 +581,120 @@ func TestBuildBinariesBuildsFelixWhateverTheImagesFlagIs(t *testing.T) {
 				if !f.ran(want) {
 					t.Errorf("did not run %q, ran: %v", want, f.calls)
 				}
+			}
+		})
+	}
+}
+
+// felix/bin is build output: only calico-bpf ships, and the bpf/ subdirectory
+// must not reach the archive by matching on a base name.
+func TestFelixContentShipsOnlyTheBPFTool(t *testing.T) {
+	root := t.TempDir()
+	bin := filepath.Join(root, felixComponent, binDir)
+	for _, name := range []string{"calico-felix", felixBPFBinary, "bpf/" + felixBPFBinary} {
+		path := filepath.Join(bin, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	m := &CalicoManager{repoRoot: root, binaries: true}
+	dest := t.TempDir()
+	for _, c := range m.archiveSources() {
+		if !strings.HasPrefix(c.Name(), felixComponent) {
+			continue
+		}
+		if err := c.Contribute(dest); err != nil {
+			t.Fatalf("Contribute: %v", err)
+		}
+	}
+
+	var got []string
+	if err := filepath.WalkDir(dest, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(dest, path)
+		got = append(got, rel)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	slices.Sort(got)
+	if want := []string{filepath.Join(binDir, felixBPFBinary)}; !slices.Equal(got, want) {
+		t.Errorf("staged %v, want %v", got, want)
+	}
+}
+
+// A hashrelease archive reads manifests from the output dir, which is only
+// populated by collectManifests. buildManifests must run it before the tarball
+// is built, or the archive fails on a missing directory.
+func TestHashreleaseManifestsAreCollectedBeforeTheArchiveReadsThem(t *testing.T) {
+	root := t.TempDir()
+	out := filepath.Join(t.TempDir(), "upload")
+	if err := os.MkdirAll(filepath.Join(root, manifestsDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	f := newFakeRunner()
+	m := &CalicoManager{
+		repoRoot:        root,
+		outputDir:       out,
+		manifests:       true,
+		isHashRelease:   true,
+		runner:          f,
+		imageRegistries: defaultRegistries,
+	}
+	m.hashrelease.Source = out
+	if err := m.buildManifests(); err != nil {
+		t.Fatalf("buildManifests: %v", err)
+	}
+
+	// The archive reads the collected copy, so the copy has to happen while
+	// building the manifests rather than in a later pass.
+	gen := slices.IndexFunc(f.calls, func(c string) bool { return strings.Contains(c, "gen-manifests") })
+	copied := slices.IndexFunc(f.calls, func(c string) bool {
+		return strings.Contains(c, filepath.Join(out, manifestsDir)) ||
+			strings.HasSuffix(c, out)
+	})
+	if gen < 0 || copied < 0 {
+		t.Fatalf("expected a manifest build and a copy, ran: %v", f.calls)
+	}
+	if copied < gen {
+		t.Errorf("manifests were copied before they were generated, ran: %v", f.calls)
+	}
+}
+
+func TestArchiveSourcesIsGatedPerSource(t *testing.T) {
+	for name, tc := range map[string]struct {
+		images, binaries, manifests bool
+		want                        []string
+	}{
+		"all":            {true, true, true, []string{"images", "calicoctl binary", "felix calico-bpf binary", "manifests"}},
+		"none":           {false, false, false, nil},
+		"only images":    {true, false, false, []string{"images"}},
+		"no images":      {false, true, true, []string{"calicoctl binary", "felix calico-bpf binary", "manifests"}},
+		"only binaries":  {false, true, false, []string{"calicoctl binary", "felix calico-bpf binary"}},
+		"no binaries":    {true, false, true, []string{"images", "manifests"}},
+		"only manifests": {false, false, true, []string{"manifests"}},
+		"no manifests":   {true, true, false, []string{"images", "calicoctl binary", "felix calico-bpf binary"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := &CalicoManager{
+				repoRoot:      t.TempDir(),
+				archiveImages: tc.images,
+				binaries:      tc.binaries,
+				manifests:     tc.manifests,
+			}
+			var got []string
+			for _, c := range m.archiveSources() {
+				got = append(got, c.Name())
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("archiveSources() = %v, want %v", got, tc.want)
 			}
 		})
 	}
@@ -920,6 +1044,8 @@ func TestBuildE2EBinariesUsesARCHES(t *testing.T) {
 		outputDir:     t.TempDir(),
 		calicoVersion: "v3.34.0-0.dev-1-gabcdef123456",
 		architectures: []string{"amd64", "arm64", "ppc64le", "s390x"},
+		isHashRelease: true,
+		e2eBinaries:   true,
 	}
 
 	require.NoError(t, r.buildE2EBinaries())
