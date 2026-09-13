@@ -29,6 +29,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.yaml.in/yaml/v3"
 
+	"github.com/projectcalico/calico/release/internal/archives"
 	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/command"
@@ -48,12 +49,19 @@ import (
 
 // Global configuration for releases.
 const (
+	binDir       = "bin"
 	chartsDir    = "charts"
 	manifestsDir = "manifests"
 	metadataKey  = "metadata"
 )
 
-const calicoctlManifest = "calicoctl.yaml"
+const (
+	calicoctlManifest = "calicoctl.yaml"
+
+	calicoctlComponent = "calicoctl"
+	felixComponent     = "felix"
+	felixBPFBinary     = "calico-bpf"
+)
 
 var (
 	// Default defaultRegistries to which all release images are pushed.
@@ -965,9 +973,6 @@ func (r *CalicoManager) collectArtifacts() error {
 	if err := r.collectBinaries(); err != nil {
 		return err
 	}
-	if err := r.collectManifests(); err != nil {
-		return err
-	}
 	if err := r.collectWindowsArchive(); err != nil {
 		return err
 	}
@@ -1035,8 +1040,7 @@ func (r *CalicoManager) collectOCPBundle() error {
 // buildManifests regenerates manifests for pinned calico/operator versions and
 // builds the manifest-derived OCP bundle. Intended for the hashrelease path;
 // regular releases build the OCP bundle directly from the checked-in manifests
-// via buildOCPBundle. The caller must defer resetManifests so downstream
-// consumers (collectManifests, buildReleaseTar) still see the pinned manifests.
+// via buildOCPBundle.
 func (r *CalicoManager) buildManifests() error {
 	if !r.manifests {
 		logrus.Info("Skipping regenerating manifests")
@@ -1054,7 +1058,10 @@ func (r *CalicoManager) buildManifests() error {
 		logrus.WithError(err).Error("Failed to make manifests")
 		return fmt.Errorf("failed to generate manifests: %w", err)
 	}
-	return r.buildOCPBundle()
+	if err := r.buildOCPBundle(); err != nil {
+		return fmt.Errorf("build OCP bundle: %w", err)
+	}
+	return r.collectManifests()
 }
 
 func (r *CalicoManager) resetManifests() {
@@ -1071,8 +1078,6 @@ func (r *CalicoManager) uploadDir() string {
 	return r.outputDir
 }
 
-// Builds the complete release tar for upload to github.
-// - release-vX.Y.Z.tgz: contains images, manifests, and binaries.
 // TODO: We should produce a tar per architecture that we ship.
 // TODO: We should produce windows tars
 func (r *CalicoManager) buildReleaseTar() error {
@@ -1080,55 +1085,57 @@ func (r *CalicoManager) buildReleaseTar() error {
 		logrus.Info("Skipping building release tarball")
 		return nil
 	}
-	baseReleaseOutputDir := filepath.Dir(r.uploadDir())
-	releaseBase := filepath.Join(baseReleaseOutputDir, fmt.Sprintf("release-%s", r.calicoVersion))
-	releaseTarFilePath := filepath.Join(r.uploadDir(), fmt.Sprintf("release-%s.tgz", r.calicoVersion))
-	// Drop the staging tree once tar has consumed it.
-	defer func() {
-		if err := os.RemoveAll(releaseBase); err != nil {
-			logrus.WithError(err).Warnf("failed to remove release staging dir %s", releaseBase)
-		}
-	}()
+	return archives.Build(
+		archives.Archive{
+			Version:         r.calicoVersion,
+			OperatorVersion: r.operatorVersion,
+			OutputDir:       r.uploadDir(),
+			Sources:         r.archiveSources(),
+		},
+		archives.WithRunner(r.runner),
+		archives.WithLogsDir(r.logsDir),
+	)
+}
 
+func (r *CalicoManager) archiveSources() []archives.Contributor {
+	var sources []archives.Contributor
 	if r.archiveImages {
-		if err := r.archiveContainerImages(filepath.Join(releaseBase, "images")); err != nil {
-			return err
-		}
+		sources = append(sources, images.Archive(r.repoRoot, r.calicoVersion, r.imageReleaseDirs,
+			images.WithRunner(r.runner),
+			images.WithRegistries(r.imageRegistries...),
+			images.WithArches(r.architectures...),
+			images.WithPull(r.isHashRelease && !r.images)))
 	}
-
-	// Add in release binaries that we ship.
 	if r.binaries {
-		binDir := filepath.Join(releaseBase, "bin")
-		if err := os.MkdirAll(binDir, os.ModePerm); err != nil {
-			return fmt.Errorf("failed to create images dir: %s", err)
-		}
-
-		binaries := map[string]string{
-			// Calicoctl binaries.
-			"calicoctl/bin/": filepath.Join(binDir, "calicoctl"),
-
-			// Felix binaries.
-			"felix/bin/calico-bpf": binDir,
-		}
-		// -al (archive + hard-link) keeps staging disk usage flat and preserves symlinks
-		for src, dst := range binaries {
-			if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"-al", src, dst}, nil); err != nil {
-				return fmt.Errorf("failed to copy %s to %s: %w", src, dst, err)
-			}
-		}
+		sources = append(sources,
+			archives.DirSource{
+				Label: fmt.Sprintf("%s binary", calicoctlComponent),
+				To:    filepath.Join(binDir, calicoctlComponent),
+				From:  filepath.Join(r.repoRoot, calicoctlComponent, binDir),
+			},
+			archives.DirSource{
+				Label: fmt.Sprintf("%s %s binary", felixComponent, felixBPFBinary),
+				To:    binDir,
+				From:  filepath.Join(r.repoRoot, felixComponent, binDir),
+				Filter: func(_, _, relPath string) bool {
+					// Felix's bin/ holds build output; only the BPF tool ships.
+					return relPath == felixBPFBinary
+				},
+			},
+		)
 	}
-
-	// Add in manifests directory generated from the docs.
 	if r.manifests {
-		if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"-al", manifestsDir, releaseBase}, nil); err != nil {
-			return fmt.Errorf("failed to copy manifests: %w", err)
+		root := r.repoRoot
+		if r.isHashRelease {
+			root = r.hashrelease.Source
 		}
+		sources = append(sources, archives.DirSource{
+			Label: "manifests",
+			To:    manifestsDir,
+			From:  filepath.Join(root, manifestsDir),
+		})
 	}
-
-	if _, err := r.runner.RunInDir(r.repoRoot, "tar", []string{"-czvf", releaseTarFilePath, "-C", baseReleaseOutputDir, fmt.Sprintf("release-%s", r.calicoVersion)}, nil); err != nil {
-		return fmt.Errorf("failed to create release tar: %w", err)
-	}
-	return nil
+	return sources
 }
 
 // e2eSupportedArches are the arches e2e runners consume; ppc64le/s390x have no
@@ -1591,28 +1598,6 @@ func (r *CalicoManager) determineBranch() (string, error) {
 		return "", fmt.Errorf("not on a branch")
 	}
 	return strings.TrimSpace(out), nil
-}
-
-func (r *CalicoManager) archiveContainerImages(dir string) error {
-	// A hashrelease that did not build its own images has to fetch them.
-	pull := r.isHashRelease && !r.images
-	opts := []images.ArchiveOption{
-		images.WithRunner(r.runner),
-		images.WithRegistries(r.imageRegistries...),
-		images.WithArches(r.architectures...),
-		images.WithPull(pull),
-	}
-	// Standard images only: the release tarball ships what a user deploys, and
-	// the Windows images have an archive of their own.
-	err := images.Archive(
-		r.repoRoot, r.calicoVersion,
-		images.NarrowVariants(images.StandardVariants(images.PublishVariants), r.imageReleaseDirs),
-		dir, opts...,
-	)
-	if err != nil {
-		return fmt.Errorf("archive images: %w", err)
-	}
-	return nil
 }
 
 func (r *CalicoManager) git(args ...string) (string, error) {
