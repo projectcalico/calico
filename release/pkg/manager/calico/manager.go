@@ -292,8 +292,6 @@ func (r *CalicoManager) PreBuildValidation() error {
 }
 
 func (r *CalicoManager) Build() error {
-	ver := r.calicoVersion
-
 	var err error
 	if r.outputDir == "" {
 		return fmt.Errorf("no output directory specified")
@@ -325,7 +323,7 @@ func (r *CalicoManager) Build() error {
 		defer func() {
 			if err != nil {
 				logrus.WithError(err).Warn("Failed to release, cleaning up tag")
-				if err := r.DeleteTag(ver); err != nil {
+				if err := r.DeleteTag(r.calicoVersion); err != nil {
 					logrus.WithError(err).Error("Failed to clean up tag")
 				}
 			}
@@ -346,42 +344,12 @@ func (r *CalicoManager) Build() error {
 		return err
 	}
 
-	if r.isHashRelease {
-		// Regenerate manifests and build the manifest-derived OCP bundle. The defer resets
-		// manifests after downstream consumers (e.g. collectManifests, buildReleaseTar) have
-		// seen the regenerated, pinned manifests.
-		defer r.resetManifests()
-		if err = r.buildManifests(); err != nil {
-			return err
-		}
+	if err = r.buildManifests(); err != nil {
+		return err
+	}
 
-		// Real releases call "make release-build", but hashreleases don't.
-		// Instead, we build some of the targets directly. In the future, we should instead align the release
-		// and hashrelease build processes to avoid these separate code paths.
-		if r.windowsArchive {
-			env := append(os.Environ(), fmt.Sprintf("VERSION=%s", ver))
-			targets := []string{"release-windows-archive", "dist/install-calico-windows.ps1"}
-			for _, target := range targets {
-				if err = r.makeInDirectoryIgnoreOutput(filepath.Join(r.repoRoot, "node"), target, env...); err != nil {
-					return fmt.Errorf("error building target %s: %s", target, err)
-				}
-			}
-		} else {
-			logrus.Info("Skipping building windows archive")
-		}
-
-		// Build multi-arch e2e test binaries and copy them into the output directory.
-		if r.e2eBinaries {
-			if err = r.buildE2EBinaries(); err != nil {
-				return err
-			}
-		} else {
-			logrus.Info("Skipping building e2e test binaries")
-		}
-	} else {
-		if err = r.buildOCPBundle(); err != nil {
-			return err
-		}
+	if err = r.buildWindowsArchive(); err != nil {
+		return err
 	}
 
 	// Build and add in the complete release tarball.
@@ -389,7 +357,7 @@ func (r *CalicoManager) Build() error {
 		return err
 	}
 
-	return r.collectArtifacts()
+	return nil
 }
 
 var _ distribution.Attester = metadata{}
@@ -693,7 +661,7 @@ func (r *CalicoManager) buildOCPBundle() error {
 	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "bin/ocp.tgz"); err != nil {
 		return fmt.Errorf("failed to build OCP bundle: %w", err)
 	}
-	return nil
+	return r.collectOCPBundle()
 }
 
 func (r *CalicoManager) hashreleaseUpload() []distribution.Upload {
@@ -967,18 +935,6 @@ func (r *CalicoManager) publishPrereqs() error {
 	return r.assertImageVersions()
 }
 
-// gathers everything a release publishes into the upload directory.
-// TODO: remove, each step should handle putting its artifacts in the correct location.
-func (r *CalicoManager) collectArtifacts() error {
-	if err := r.collectBinaries(); err != nil {
-		return err
-	}
-	if err := r.collectWindowsArchive(); err != nil {
-		return err
-	}
-	return r.collectOCPBundle()
-}
-
 func (r *CalicoManager) collectBinaries() error {
 	if !r.binaries {
 		return nil
@@ -998,24 +954,49 @@ func (r *CalicoManager) collectBinaries() error {
 }
 
 func (r *CalicoManager) collectManifests() error {
+	if !r.isHashRelease {
+		// Hashrelease include manifests in a different way, instead of just in the release tarball.
+		return nil
+	}
 	if !r.manifests {
 		return nil
 	}
-	if r.isHashRelease {
-		uploadDir := r.uploadDir()
-		// Hashrelease include manifests in a different way, instead of just in the release tarball.
-		if _, err := r.runner.Run("cp", []string{"-r", filepath.Join(r.repoRoot, manifestsDir), uploadDir}, nil); err != nil {
-			logrus.WithError(err).Error("Failed to copy manifests to output directory")
-			return fmt.Errorf("failed to copy manifests: %w", err)
-		}
+	uploadDir := r.uploadDir()
+	manifestsSrc := filepath.Join(r.repoRoot, manifestsDir) + "/"
+	manifestsDest := filepath.Join(uploadDir, manifestsDir) + "/"
+	if err := os.MkdirAll(manifestsDest, utils.DirPerms); err != nil {
+		return fmt.Errorf("create manifests directory %s: %w", manifestsDest, err)
+	}
+	rsyncArgs := []string{"-av", "--delete", "--exclude=generate.sh", "--exclude=README.md", "--exclude=.gitattributes"}
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		rsyncArgs = append(rsyncArgs, "--verbose", "--progress")
+	}
+	if _, err := r.runner.Run("rsync", append(rsyncArgs, manifestsSrc, manifestsDest), nil); err != nil {
+		logrus.WithError(err).Error("Failed to copy manifests to output directory")
+		return fmt.Errorf("failed to copy manifests to output directory: %w", err)
 	}
 	return nil
 }
 
-func (r *CalicoManager) collectWindowsArchive() error {
-	if !r.windowsArchive {
+func (r *CalicoManager) buildWindowsArchive() error {
+	if !r.isHashRelease {
+		// Real releases call "make release-build", but hashreleases don't.
+		// Instead, we build some of the targets directly.
+		// TODO: align the release nd hashrelease build processes to avoid these separate code paths.
 		return nil
 	}
+	if !r.windowsArchive {
+		logrus.Info("Skipping building windows archive")
+		return nil
+	}
+	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", r.calicoVersion))
+	targets := []string{"release-windows-archive", "dist/install-calico-windows.ps1"}
+	for _, target := range targets {
+		if err := r.makeInDirectoryIgnoreOutput(filepath.Join(r.repoRoot, "node"), target, env...); err != nil {
+			return fmt.Errorf("error building target %s: %s", target, err)
+		}
+	}
+
 	uploadDir := r.uploadDir()
 	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", r.calicoVersion), uploadDir}, nil); err != nil {
 		return fmt.Errorf("failed to copy windows zip archive: %w", err)
@@ -1038,14 +1019,17 @@ func (r *CalicoManager) collectOCPBundle() error {
 }
 
 // buildManifests regenerates manifests for pinned calico/operator versions and
-// builds the manifest-derived OCP bundle. Intended for the hashrelease path;
-// regular releases build the OCP bundle directly from the checked-in manifests
-// via buildOCPBundle.
+// builds the manifest-derived OCP bundle.
 func (r *CalicoManager) buildManifests() error {
+	if !r.isHashRelease {
+		// regular releases build the OCP bundle directly from the checked-in manifests
+		return r.buildOCPBundle()
+	}
 	if !r.manifests {
 		logrus.Info("Skipping regenerating manifests")
 		return nil
 	}
+	defer r.resetManifests()
 	env := os.Environ()
 	env = append(env, fmt.Sprintf("PRODUCT_VERSION=%s", r.calicoVersion))
 	env = append(env, fmt.Sprintf("OPERATOR_VERSION=%s", r.operatorVersion))
@@ -1159,6 +1143,14 @@ func e2eArchitectures(configured []string) []string {
 }
 
 func (r *CalicoManager) buildE2EBinaries() error {
+	if !r.isHashRelease {
+		// e2e binaries are only built for hashreleases.
+		return nil
+	}
+	if !r.e2eBinaries {
+		logrus.Info("Skipping building e2e test binaries")
+		return nil
+	}
 	arches := e2eArchitectures(r.architectures)
 	if len(arches) == 0 {
 		logrus.Warnf("e2e binaries requested but none of %v is a supported e2e arch (amd64/arm64); skipping", r.architectures)
@@ -1202,9 +1194,10 @@ func (r *CalicoManager) buildE2EBinaries() error {
 func (r *CalicoManager) buildBinaries() error {
 	if !r.binaries {
 		logrus.Info("Skipping building binaries")
-		return nil
+		// e2e binaries are gated differently from main binaries
+		// TODO: align this gating with the main binaries gating
+		return r.buildE2EBinaries()
 	}
-
 	// calicoctl and felix ship binaries and no image, so nothing in the image
 	// step produces them.
 	m := map[string]string{
@@ -1221,7 +1214,10 @@ func (r *CalicoManager) buildBinaries() error {
 			return fmt.Errorf("failed to build %s: %w", dir, err)
 		}
 	}
-	return nil
+	if err := r.collectBinaries(); err != nil {
+		return err
+	}
+	return r.buildE2EBinaries()
 }
 
 func (r *CalicoManager) buildContainerImages() error {
