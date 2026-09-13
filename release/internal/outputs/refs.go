@@ -40,9 +40,14 @@ type RefsWriter struct {
 	path string
 }
 
+// RecordsDir is where a step's refs live: beside the upload directory.
+func RecordsDir(uploadDir, step, version string) string {
+	return filepath.Join(filepath.Dir(uploadDir), "records", step, version)
+}
+
 // The refs file is never truncated.
-func NewRefsWriter(baseDir, step, version string) (*RefsWriter, error) {
-	dir := filepath.Join(baseDir, step, version)
+func NewRefsWriter(uploadDir, step, version string) (*RefsWriter, error) {
+	dir := RecordsDir(uploadDir, step, version)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("creating refs dir: %w", err)
 	}
@@ -81,8 +86,8 @@ func (w *RefsWriter) Add(refs ...string) error {
 
 // ReadRefs returns a step's refs in publish order, without duplicates. A
 // missing file reports no refs and no error.
-func ReadRefs(baseDir, step, version string) ([]string, error) {
-	f, err := os.Open(filepath.Join(baseDir, step, version, refsFileName))
+func ReadRefs(uploadDir, step, version string) ([]string, error) {
+	f, err := os.Open(filepath.Join(RecordsDir(uploadDir, step, version), refsFileName))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
