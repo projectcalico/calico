@@ -200,7 +200,7 @@ ut: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	gotestsum --format testname --junitfile report/operator_ut.xml -- $(UT_DIR)/... $(GO_TEST_ARGS) $(GINKGO_FOCUS_ARG)'
 
 ## Run the functional tests against a local kind cluster.
-fv: kind-cluster-create deploy-crds push-fv-images run-fvs kind-cluster-destroy
+fv: kind-cluster-create deploy-crds deploy-operator-rbac push-fv-images run-fvs kind-cluster-destroy
 run-fvs: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	-mkdir -p .go-pkg-cache report
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
@@ -245,6 +245,21 @@ deploy-crds: $(KUBECTL)
 
 create-tigera-operator-namespace: $(KUBECTL)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create ns tigera-operator
+
+## Apply the operator's ServiceAccount and RBAC, rendered from the chart that ships
+## them, so the FV's operator is bound by the same rules a real install grants it.
+OPERATOR_RBAC_TEMPLATES = \
+	02-serviceaccount-tigera-operator.yaml \
+	02-role-tigera-operator.yaml \
+	02-role-tigera-operator-secrets.yaml \
+	02-rolebinding-tigera-operator.yaml \
+	02-rolebinding-tigera-operator-secrets.yaml
+
+deploy-operator-rbac: $(KUBECTL) $(HELM_BUILDARCH_BINARY) create-tigera-operator-namespace
+	@export KUBECONFIG=$(KIND_KUBECONFIG) && \
+		$(HELM_BUILDARCH_BINARY) template ../charts/tigera-operator --namespace tigera-operator \
+			$(addprefix --show-only templates/tigera-operator/,$(OPERATOR_RBAC_TEMPLATES)) \
+		| $(KUBECTL) apply -f -
 
 ###############################################################################
 # Static checks
