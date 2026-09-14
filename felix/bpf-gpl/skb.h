@@ -255,4 +255,27 @@ static CALI_BPF_INLINE void skb_log(struct cali_tc_ctx *ctx, bool accepted)
 	}
 }
 
+/* tcp_seq_space returns the sequence numbers this segment consumes: its payload
+ * plus one for each of SYN and FIN. */
+static CALI_BPF_INLINE __u32 tcp_seq_space(struct cali_tc_ctx *ctx, struct tcphdr *tcp_header)
+{
+	/* The IP header, not skb->len: the latter can include Ethernet padding
+	 * on a small frame, which would over-advance snd_nxt. */
+	int hdrs = ctx->ipheader_len + tcp_header->doff * 4;
+
+#ifdef IPVER6
+	/* state->ip_size is payload_len, which excludes the base header that
+	 * ipheader_len counts. */
+	hdrs -= IP_SIZE;
+#endif
+
+	int payload = (int)bpf_ntohs(ctx->state->ip_size) - hdrs;
+
+	if (payload < 0) {
+		payload = 0;
+	}
+
+	return (__u32)payload + (tcp_header->syn ? 1 : 0) + (tcp_header->fin ? 1 : 0);
+}
+
 #endif /* __SKB_H__ */

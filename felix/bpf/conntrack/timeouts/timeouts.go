@@ -53,10 +53,12 @@ func DefaultTimeouts() Timeouts {
 		TCPSynSent:          20 * time.Second,
 		TCPEstablished:      time.Hour,
 		TCPFinsSeen:         30 * time.Second,
-		TCPResetSeen:        40 * time.Second,
-		UDPTimeout:          60 * time.Second,
-		GenericTimeout:      600 * time.Second,
-		ICMPTimeout:         5 * time.Second,
+		// Matches nf_conntrack_tcp_timeout_close, which is what the
+		// iptables/nftables connlimit rule effectively holds a slot for.
+		TCPResetSeen:   10 * time.Second,
+		UDPTimeout:     60 * time.Second,
+		GenericTimeout: 600 * time.Second,
+		ICMPTimeout:    5 * time.Second,
 	}
 }
 

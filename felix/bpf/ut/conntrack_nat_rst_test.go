@@ -114,11 +114,18 @@ func setupNATRSTFixture(t *testing.T, revRSTSeen uint64) natRSTFixture {
 // natRSTPacket builds a packet on the pre-DNAT tuple, i.e. one that hits the
 // forward entry, with the given TCP flags.
 func natRSTPacket(rst bool) []byte {
+	// Seq 0 matches the fixture's unset leg seqno, so ct_rst_in_sequence()
+	// accepts it.
+	return natRSTPacketSeq(rst, 0)
+}
+
+func natRSTPacketSeq(rst bool, seq uint32) []byte {
 	ip := *ipv4Default
 	ip.DstIP = natRSTSvcIP
 	_, _, _, _, pkt, err := testPacketV4(nil, &ip, &layers.TCP{
 		RST:        rst,
 		ACK:        true,
+		Seq:        seq,
 		SrcPort:    layers.TCPPort(natRSTSrcPort),
 		DstPort:    layers.TCPPort(natRSTSvcPort),
 		DataOffset: 5,
@@ -182,30 +189,37 @@ func TestCTNatRSTHandling(t *testing.T) {
 			"the forward entry is a stub — state written there is never read")
 	})
 
-	t.Run("a flow closed by an RST expires without waiting out the established timeout",
-		func(t *testing.T) {
-			RegisterTestingT(t)
-			f := setupNATRSTFixture(t, 0)
+	t.Run("a flow closed by an RST expires at TCPResetSeen", func(t *testing.T) {
+		RegisterTestingT(t)
+		f := setupNATRSTFixture(t, 0)
 
-			runPkt(t, f, natRSTPacket(true /* rst */))
+		runPkt(t, f, natRSTPacket(true /* rst */))
 
-			rev := f.revEntry()
-			to := timeouts.DefaultTimeouts()
+		rev := f.revEntry()
+		to := timeouts.DefaultTimeouts()
 
-			// Three minutes after the RST, with no traffic since.
-			reason, expired := conntrack.EntryExpired(to,
-				rev.LastSeen()+int64(3*time.Minute), 6 /* TCP */, rev)
-			Expect(expired).To(BeTrue(),
-				"flow survived to the established timeout (%s); reason=%q",
-				to.TCPEstablished, reason)
+		// The two-minute spurious-RST window is gone, because
+		// ct_rst_in_sequence() keeps a spurious RST off the entry.
+		reason, expired := conntrack.EntryExpired(to,
+			rev.LastSeen()+int64(to.TCPResetSeen)+1, 6 /* TCP */, rev)
+		Expect(expired).To(BeTrue(),
+			"flow survived TCPResetSeen (%s); reason=%q", to.TCPResetSeen, reason)
 
-			// One minute in it is still inside the spurious-RST window: the
-			// RST may yet turn out to have been bogus, so the flow has to stay.
-			reason, expired = conntrack.EntryExpired(to,
-				rev.LastSeen()+int64(time.Minute), 6, rev)
-			Expect(expired).To(BeFalse(),
-				"flow expired inside the 2-minute spurious-RST window; reason=%q", reason)
-		})
+		reason, expired = conntrack.EntryExpired(to,
+			rev.LastSeen()+int64(to.TCPResetSeen)-1, 6, rev)
+		Expect(expired).To(BeFalse(),
+			"flow expired before TCPResetSeen; reason=%q", reason)
+	})
+
+	t.Run("an out-of-sequence RST is not recorded", func(t *testing.T) {
+		RegisterTestingT(t)
+		f := setupNATRSTFixture(t, 0)
+
+		runPkt(t, f, natRSTPacketSeq(true /* rst */, 12345))
+
+		Expect(f.revEntry().RSTSeen()).To(BeZero(),
+			"an RST the peer's stack would discard closed the flow anyway")
+	})
 
 	t.Run("a spurious RST is retracted once traffic continues", func(t *testing.T) {
 		RegisterTestingT(t)

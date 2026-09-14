@@ -199,7 +199,7 @@ type Config struct {
 	BPFLogLevel                        string            `config:"oneof(off,info,debug);off;non-zero"`
 	BPFConntrackLogLevel               string            `config:"oneof(off,debug);off;non-zero"`
 	BPFConntrackCleanupMode            string            `config:"oneof(Auto,Userspace,BPFProgram);Auto"`
-	BPFConntrackTimeouts               map[string]string `config:"keyvaluelist;CreationGracePeriod=10s,TCPSynSent=20s,TCPEstablished=1h,TCPFinsSeen=Auto,TCPResetSeen=40s,UDPTimeout=60s,GenericTimeout=10m,ICMPTimeout=5s"`
+	BPFConntrackTimeouts               map[string]string `config:"keyvaluelist;CreationGracePeriod=10s,TCPSynSent=20s,TCPEstablished=1h,TCPFinsSeen=Auto,TCPResetSeen=10s,UDPTimeout=60s,GenericTimeout=10m,ICMPTimeout=5s"`
 	BPFIPFragTimeout                   time.Duration     `config:"seconds;0"`
 	BPFLogFilters                      map[string]string `config:"keyvaluelist;;"`
 	BPFCTLBLogFilter                   string            `config:"oneof(all);;"`
