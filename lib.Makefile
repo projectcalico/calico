@@ -420,7 +420,36 @@ export GIT_TERMINAL_PROMPT ?= 0
 fetch_file = $(REPO_ROOT)/hack/fetch-file $(1) $(2)
 fetch_repo = $(REPO_ROOT)/hack/fetch-repo $(1) $(2) $(3)
 
-DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
+# Set the default go cache path if we can't find one automatically
+DEFAULT_GO_CACHE_PATH := $(REPO_ROOT)/.go-pkg-cache
+
+# Detect what path to use as the user's go cache path.
+# 
+# Setting LOCAL_GO_PKG_CACHE in your environment overrides this
+# unconditionally; setting GOCACHE overrides it if the value
+# you provide passes the sanity checks below.
+
+# Set the path (outside of containers) to mount as the go cache path
+GOENV_GOCACHE := $(strip $(shell go env GOCACHE 2>/dev/null))
+# If the result is empty, skip it
+ifneq ($(GOENV_GOCACHE),)
+# If the result is 'off', skip that
+ifneq ($(GOENV_GOCACHE),off)
+# If the result isn't an absolute path, or if it
+# doesn't start with ./ or ../, then skip it
+ifneq ($(filter /% ./% ../%,$(GOENV_GOCACHE)),)
+LOCAL_GO_PKG_CACHE ?= $(GOENV_GOCACHE)
+else
+LOCAL_GO_PKG_CACHE ?= $(DEFAULT_GO_CACHE_PATH)
+endif # filter
+else
+LOCAL_GO_PKG_CACHE ?= $(DEFAULT_GO_CACHE_PATH)
+endif # off
+else
+LOCAL_GO_PKG_CACHE ?= $(DEFAULT_GO_CACHE_PATH)
+endif # blank
+
+DOCKER_RUN_PRIV_NET := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--init \
 		$(EXTRA_DOCKER_ARGS) \
@@ -435,7 +464,7 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		-e "GOFLAGS=$(GOFLAGS)" \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
-		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
+		-v $(LOCAL_GO_PKG_CACHE):/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
 DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
@@ -477,7 +506,7 @@ endif
 CONTROLLER_TOOLS_VERSION := $(shell sed -n 's/^VERSION="\(v[0-9][0-9.]*\)".*/\1/p' $(REPO_ROOT)/hack/cmd/calico-controller-gen/build.sh | head -1)
 CONTROLLER_TOOLS_VERSION := $(or $(CONTROLLER_TOOLS_VERSION),v0.18.0)
 
-# The binary is built into the shared .go-pkg-cache (mounted as /go-cache in
+# The binary is built into the shared Go build cache (mounted as /go-cache in
 # every component container, including api/'s isolated mount). It is stamped
 # with the go-build image version, the controller-tools version, and a hash of
 # all patches: bumping the image (which may carry a new controller-gen), the
@@ -486,9 +515,9 @@ CONTROLLER_TOOLS_VERSION := $(or $(CONTROLLER_TOOLS_VERSION),v0.18.0)
 CALICO_CONTROLLER_GEN_HASH := $(shell cat $(REPO_ROOT)/hack/cmd/calico-controller-gen/*.patch 2>/dev/null | sha256sum | cut -c1-12)
 CALICO_CONTROLLER_GEN_STAMP := $(GO_BUILD_VER)-$(CONTROLLER_TOOLS_VERSION)-$(CALICO_CONTROLLER_GEN_HASH)
 # Two views of the same file: the host path Make uses as a build target, and
-# the in-container path (/go-cache is the bind-mount of .go-pkg-cache) used to
+# the in-container path (/go-cache is the bind-mount of LOCAL_GO_PKG_CACHE) used to
 # invoke it from inside the build containers.
-CALICO_CONTROLLER_GEN_BIN := $(REPO_ROOT)/.go-pkg-cache/bin/calico-controller-gen-$(CALICO_CONTROLLER_GEN_STAMP)
+CALICO_CONTROLLER_GEN_BIN := $(LOCAL_GO_PKG_CACHE)/bin/calico-controller-gen-$(CALICO_CONTROLLER_GEN_STAMP)
 CALICO_CONTROLLER_GEN     := /go-cache/bin/calico-controller-gen-$(CALICO_CONTROLLER_GEN_STAMP)
 
 # Real file target (not .PHONY): Make skips it entirely — no container spin-up —
