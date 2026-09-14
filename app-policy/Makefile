@@ -60,6 +60,17 @@ ut: protobuf
 	$(DOCKER_RUN) $(CALICO_BUILD) /bin/bash -c "cd /go/src/$(PACKAGE_NAME) && gotestsum --junitfile report/app_policy_ut.xml -- -v -race ./..."
 
 ###############################################################################
+# Benchmarks
+###############################################################################
+## Run the pending-policy evaluation engine benchmarks (K1 in
+## felix/design/flow-logs-policy-evaluation.md) in a container. Each case writes a
+## hack/perf doc under ../artifacts/perf for send-perf-results.
+.PHONY: bench-policy-eval
+bench-policy-eval:
+	mkdir -p ../artifacts/perf
+	$(DOCKER_RUN) -e POLICY_EVAL_PERF_ARTIFACTS_DIR=/go/src/$(PACKAGE_NAME)/../artifacts/perf $(CALICO_BUILD) sh -c "cd /go/src/$(PACKAGE_NAME) && go test ./checker/ -run '^$$' -bench 'BenchmarkEvaluate(Composite|VerdictCache)' -benchmem -benchtime 20x -cpu 1"
+
+###############################################################################
 # CI
 ###############################################################################
 

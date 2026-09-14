@@ -1,0 +1,37 @@
+- name: "Policy evaluation benchmark"
+  run:
+    when: "${CHANGE_IN(app-policy,felix/collector,non-go:/hack/perf/)}"
+  dependencies:
+    - Prerequisites
+  task:
+    agent:
+      machine:
+        type: f1-standard-2
+        os_image: ubuntu2204
+    secrets:
+      - name: banzai-secrets
+    jobs:
+      - name: "Policy evaluation benchmark"
+        execution_time_limit:
+          minutes: 30
+        commands:
+          # The engine (K1) and collector (K2) benchmarks of the pending-policy
+          # evaluation on the policyscale reference set, see
+          # felix/design/flow-logs-policy-evaluation.md. Both run in go-build;
+          # the make targets set POLICY_EVAL_PERF_ARTIFACTS_DIR so each case
+          # writes a hack/perf doc. Twenty iterations per case is enough for a
+          # stable steady-state number; this is trend tracking, not a per-PR
+          # gate.
+          - mkdir -p artifacts/perf
+          - make -C app-policy bench-policy-eval
+          - make -C felix bench-policy-eval
+          - make bin/send-perf-results
+          # Publish to Lens. send-perf-results no-ops if the creds are unset.
+          - export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
+          - export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
+          - export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
+          - ./bin/send-perf-results --dir artifacts/perf
+    epilogue:
+      always:
+        commands:
+          - artifact push job artifacts/perf || true
