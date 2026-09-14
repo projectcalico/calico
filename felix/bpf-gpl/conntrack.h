@@ -1448,9 +1448,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		 * may use it to directly forward the packet to the same interface where
 		 * packets in the opposite direction are coming from.
 		 *
-		 * Flags before ifindex (volatile keeps the order): safe against a
-		 * claim being added, not one removed - a reader can then pair
-		 * TUNNEL with a physical ifindex.
+		 * Flags before ifindex is compiler-only order; a weakly-ordered CPU
+		 * can still pair TUNNEL with a stale ifindex for one packet.
 		 */
 		result.fwd_flags = ((*(volatile __u32 *)&dst_to_src->bits_word) &
 				CALI_CT_LEG_TUNNEL) ? CT_FWD_FLAG_TUNNEL : 0;
