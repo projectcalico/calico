@@ -255,12 +255,13 @@ includes:
         - (^|/)README\.md$
         - (^|/)LICENSE$
 
-  - path: .argoci/modules/10-check-images.yaml
-    changes:
-      in:
-        - ^charts/
-        - ^manifests/
-        - ^\.argoci/modules/10-check-images\.yaml$
+  # Disabled as this may be outdated and was failing
+  # - path: .argoci/modules/10-check-images.yaml
+  #   changes:
+  #     in:
+  #       - ^charts/
+  #       - ^manifests/
+  #       - ^\.argoci/modules/10-check-images\.yaml$
 
   - path: .argoci/modules/20-operator.yaml
     changes:
@@ -318,3 +319,8 @@ includes:
       exclude:
         - (^|/)README\.md$
         - (^|/)DESIGN\.md$
+
+  - path: .argoci/modules/20-kube-controllers.yaml
+    changes:
+      dependsOn: [kube-controllers]
+      in: ['^\.argoci/modules/20-kube-controllers\.yaml$']

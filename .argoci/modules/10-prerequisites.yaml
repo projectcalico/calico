@@ -169,3 +169,22 @@ steps:
       make fix-changed
       make check-ocp-no-crds
       make check-dirty
+
+  # The generated half of the gate carries what the consumers are gated on:
+  # gated out while one of them runs, this would drop it.
+  - name: build-calico-image
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 3500m, memory: 4Gi}
+    changes:
+      dependsOn: [cmd, dependents-of-build-calico-image]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make -C cmd/calico image
+      # Built for their GOCACHE fingerprints, which the FVs downstream reuse.
+      make -C cmd/calico build-cgo build-race
+      docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
+      zstd -3 --rm /tmp/calico-image.tar
+      artifact push workflow /tmp/calico-image.tar.zst

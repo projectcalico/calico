@@ -28,6 +28,17 @@ if [ ${#REQUESTED[@]} -eq 0 ]; then
     REQUESTED=(calico node whisker)
 fi
 
+# ArgoCI keys storage on the run, so producer and consumer share a namespace
+# without one being named here.
+fetch_tarball() {
+    local name=$1
+    if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
+        ( cd /tmp && artifact pull workflow "${name}" ) 2>/dev/null
+        return
+    fi
+    "${REPO_ROOT}/.semaphore/s3-cmd" cp "${S3_WORKFLOW_DIR}/${name}" "/tmp/${name}" 2>/dev/null
+}
+
 load_image() {
     local component=$1
     local name=$2
@@ -36,7 +47,7 @@ load_image() {
     local markers=("$@")
     local marker
 
-    if ! "${REPO_ROOT}/.semaphore/s3-cmd" cp "${S3_WORKFLOW_DIR}/${s3_path}" "/tmp/${s3_path}" 2>/dev/null; then
+    if ! fetch_tarball "${s3_path}"; then
         if have_credentials || ! was_requested "$component"; then
             echo "No cached ${name} image found; leaving Make to build it if a target needs it."
             return
