@@ -35,6 +35,13 @@ type ResourceOptions struct {
 	// TierOrder is the order of the generated tier(s); consecutive tiers count up from it.
 	// Default 100.
 	TierOrder float64
+	// Staged renders the policies as StagedGlobalNetworkPolicy instead of GlobalNetworkPolicy.
+	// Felix sends staged policies to the collector's policy store, so they are evaluated for the
+	// pending verdict exactly as enforced ones are, but a tier whose policies are all staged
+	// programs no enforcement rules and ends in pass rather than drop. That is what makes the
+	// reference set safe to apply to a live cluster: the endpoint it selects keeps working while
+	// the collector does the full evaluation the benchmarks measure.
+	Staged bool
 }
 
 const (
@@ -62,6 +69,9 @@ func (o *ResourceOptions) defaults() {
 // selectors pick it. Sets marked missing are rendered too: on a cluster nothing is ever "not
 // found", and leaving them out would change the verdicts.
 //
+// With Staged set the policies are rendered as StagedGlobalNetworkPolicy instead, which is what a
+// cluster run wants; see ResourceOptions.Staged.
+//
 // Two departures from the proto the engine sees, both forced by the v3 API: a rule with ports
 // carries protocol TCP, since ports require a protocol (every generated flow is TCP, so verdicts
 // are unchanged), and policy names carry the tier prefix.
@@ -83,29 +93,48 @@ func (fx *Fixture) Resources(opts ResourceOptions) []runtime.Object {
 		policyOrder := float64(0)
 		for dir, policies := range t.policies {
 			for _, p := range policies {
-				gnp := &v3.GlobalNetworkPolicy{
-					TypeMeta:   metav1.TypeMeta{Kind: v3.KindGlobalNetworkPolicy, APIVersion: apiVersion},
-					ObjectMeta: metav1.ObjectMeta{Name: t.name + "." + p.name},
-				}
+				name := t.name + "." + p.name
 				order := policyOrder
 				policyOrder++
-				gnp.Spec = v3.GlobalNetworkPolicySpec{
-					Tier:     t.name,
-					Order:    &order,
-					Selector: opts.Selector,
-				}
 				rules := make([]v3.Rule, len(p.rules))
 				for i, r := range p.rules {
 					rules[i] = r.resource(opts.SetLabelKey)
 				}
+				var types []v3.PolicyType
+				var ingress, egress []v3.Rule
 				if Direction(dir) == Egress {
-					gnp.Spec.Types = []v3.PolicyType{v3.PolicyTypeEgress}
-					gnp.Spec.Egress = rules
+					types, egress = []v3.PolicyType{v3.PolicyTypeEgress}, rules
 				} else {
-					gnp.Spec.Types = []v3.PolicyType{v3.PolicyTypeIngress}
-					gnp.Spec.Ingress = rules
+					types, ingress = []v3.PolicyType{v3.PolicyTypeIngress}, rules
 				}
-				out = append(out, gnp)
+				if opts.Staged {
+					out = append(out, &v3.StagedGlobalNetworkPolicy{
+						TypeMeta:   metav1.TypeMeta{Kind: v3.KindStagedGlobalNetworkPolicy, APIVersion: apiVersion},
+						ObjectMeta: metav1.ObjectMeta{Name: name},
+						Spec: v3.StagedGlobalNetworkPolicySpec{
+							StagedAction: v3.StagedActionSet,
+							Tier:         t.name,
+							Order:        &order,
+							Selector:     opts.Selector,
+							Types:        types,
+							Ingress:      ingress,
+							Egress:       egress,
+						},
+					})
+					continue
+				}
+				out = append(out, &v3.GlobalNetworkPolicy{
+					TypeMeta:   metav1.TypeMeta{Kind: v3.KindGlobalNetworkPolicy, APIVersion: apiVersion},
+					ObjectMeta: metav1.ObjectMeta{Name: name},
+					Spec: v3.GlobalNetworkPolicySpec{
+						Tier:     t.name,
+						Order:    &order,
+						Selector: opts.Selector,
+						Types:    types,
+						Ingress:  ingress,
+						Egress:   egress,
+					},
+				})
 			}
 		}
 	}
