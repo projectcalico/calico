@@ -1517,7 +1517,7 @@ bin/yq:
 	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
 	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
 
-# This setup is used to download and install the `crane` binary into $(REPOROOT)/bin/crane.
+# This setup is used to download and install the `crane` binary into $(REPO_ROOT)/bin/crane.
 # Normalize architecture for go-containerregistry filenames
 CRANE_ARCH = $(subst amd64,x86_64,$(BUILDARCH))
 ifeq ($(OS),Windows_NT)
