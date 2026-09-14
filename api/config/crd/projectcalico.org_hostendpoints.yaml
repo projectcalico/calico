@@ -112,6 +112,15 @@ spec:
                       - port
                       - protocol
                     type: object
+                    x-kubernetes-validations:
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "type(self.protocol) == int ? self.protocol >= 1 && self.protocol
+                          <= 255 : self.protocol in ['TCP', 'UDP', 'ICMP', 'ICMPv6',
+                          'SCTP', 'UDPLite']"
                   type: array
                   x-kubernetes-list-type: atomic
                 profiles:

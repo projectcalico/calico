@@ -82,6 +82,7 @@ type BGPPeerSpec struct {
 	// with ListenPort set in BGPConfiguration, then we use that port to peer.
 	// +optional
 	// +kubebuilder:validation:MaxLength=64
+	// +kubebuilder:validation:XValidation:rule="self == '' || isIP(self) || (self.startsWith('[') && self.contains(']:') && isIP(self.substring(1, self.lastIndexOf(']:'))) && self.substring(self.lastIndexOf(']:') + 2).matches('^[0-9]{1,5}$') && int(self.substring(self.lastIndexOf(']:') + 2)) >= 1 && int(self.substring(self.lastIndexOf(']:') + 2)) <= 65535) || (self.matches('^[0-9.]+:[0-9]{1,5}$') && isIP(self.split(':')[0]) && int(self.split(':')[1]) >= 1 && int(self.split(':')[1]) <= 65535)",message="peerIP must be an IP address, optionally with a port as <IPv4>:<port> or [<IPv6>]:<port>",reason=FieldValueInvalid
 	PeerIP string `json:"peerIP,omitempty" validate:"omitempty,IP:port"`
 
 	// The AS Number of the peer.
