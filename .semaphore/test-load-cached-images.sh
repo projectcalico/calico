@@ -29,13 +29,23 @@ stub_dir="$work/bin"
 stub_log="$work/calls.log"
 mkdir -p "$stub_dir"
 
-for tool in make docker zstd tar; do
+for tool in docker zstd tar; do
   cat >"$stub_dir/$tool" <<STUB
 #!/usr/bin/env bash
 echo "$tool \$*" >>"\$STUB_LOG"
 exit 0
 STUB
 done
+
+# The make stub also records whether NO_LIBBPF_CLONE reached it: the image
+# marker rules pull in the libbpf marker, whose recipe hard-fails when the
+# guard is set, so the build-from-source fallback has to drop it.
+cat >"$stub_dir/make" <<'STUB'
+#!/usr/bin/env bash
+echo "make $*" >>"$STUB_LOG"
+echo "make-env NO_LIBBPF_CLONE=${NO_LIBBPF_CLONE:-<unset>}" >>"$STUB_LOG"
+exit 0
+STUB
 
 cat >"$stub_dir/curl" <<'STUB'
 #!/usr/bin/env bash
@@ -92,6 +102,14 @@ check "read-only miss skips node" test "$(grep -c 'node/.image.created' "$stub_l
 check "read-only miss skips whisker" test "$(grep -c 'whisker/.image.created' "$stub_log")" = 0
 check "read-only miss skips third-party" test "$(grep -c 'third_party/' "$stub_log")" = 0
 check "read-only miss says so" grep -q "credential-less build" <<<"$out"
+
+# 1b. The Felix Build/UT blocks export NO_LIBBPF_CLONE; the image marker rules
+#     depend on the libbpf marker, so the fallback build must drop the guard or
+#     it aborts before building anything.
+out=$(CURL_FAIL=1 NO_LIBBPF_CLONE=true run "$repo_root/.semaphore/load-cached-images" calico 2>&1)
+rc=$?
+check "read-only miss with libbpf guard RC=0" [ "$rc" = 0 ]
+check "read-only miss drops the libbpf guard" grep -q "^make-env NO_LIBBPF_CLONE=<unset>$" "$stub_log"
 
 # 2. A requested node image goes through load-nft-rpms.sh before building, so
 #    the node build does not produce the RPMs image from scratch.
