@@ -726,6 +726,8 @@ type FelixConfigurationSpec struct {
 
 	// DebugPort if set, enables Felix's debug HTTP port, which allows memory and CPU profiles
 	// to be retrieved.  The debug port is not secure, it should not be exposed to the internet.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
 	DebugPort *int `json:"debugPort,omitempty" validate:"omitempty,gte=0,lte=65535"`
 
 	// This parameter can be used to limit the host interfaces on which Calico will apply SNAT to traffic leaving a
@@ -925,6 +927,8 @@ type FelixConfigurationSpec struct {
 	// BPFExtToServiceConnmark in BPF mode, controls a 32bit mark that is set on connections from an
 	// external client to a local service. This mark allows us to control how packets of that
 	// connection are routed within the host and how is routing interpreted by RPF check. [Default: 0]
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=4294967295
 	BPFExtToServiceConnmark *int `json:"bpfExtToServiceConnmark,omitempty" validate:"omitempty,gte=0,lte=4294967295"`
 
 	// BPFKubeProxyIptablesCleanupEnabled, if enabled in BPF mode, Felix will proactively clean up the upstream
@@ -941,6 +945,8 @@ type FelixConfigurationSpec struct {
 	// BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
 	// The health check server is used by external load balancers to determine if this node should receive traffic.
 	// Set to 0 to disable the health check server.  [Default: 10256]
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
 	BPFKubeProxyHealthzPort *int `json:"bpfKubeProxyHealthzPort,omitempty" validate:"omitempty,gte=0,lte=65535" confignamev1:"BPFKubeProxyHealthzPort"`
 
 	// BPFPSNATPorts sets the range from which we randomly pick a port if there is a source port
@@ -1125,19 +1131,27 @@ type FelixConfigurationSpec struct {
 
 	// Route Priority value for a normal priority Calico-programmed IPv4 route.  Note, higher
 	// values mean lower priority. [Default: 1024]
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=2147483646
 	IPv4NormalRoutePriority *int `json:"ipv4NormalRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
 	// Route Priority value for an elevated priority Calico-programmed IPv4 route.  Note, higher
 	// values mean lower priority.  Elevated priority is used during VM live migration, and for
 	// optimal behaviour IPv4ElevatedRoutePriority must be less than IPv4NormalRoutePriority
 	// [Default: 512]
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=2147483646
 	IPv4ElevatedRoutePriority *int `json:"ipv4ElevatedRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
 	// Route Priority value for a normal priority Calico-programmed IPv6 route.  Note, higher
 	// values mean lower priority. [Default: 1024]
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=2147483646
 	IPv6NormalRoutePriority *int `json:"ipv6NormalRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
 	// Route Priority value for an elevated priority Calico-programmed IPv6 route.  Note, higher
 	// values mean lower priority.  Elevated priority is used during VM live migration, and for
 	// optimal behaviour IPv6ElevatedRoutePriority must be less than IPv6NormalRoutePriority
 	// [Default: 512]
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=2147483646
 	IPv6ElevatedRoutePriority *int `json:"ipv6ElevatedRoutePriority,omitempty" validate:"omitempty,gte=1,lte=2147483646"`
 	// LiveMigrationRouteConvergenceTime is the time to keep elevated route priority after a
 	// VM live migration completes.  This allows routes to converge across the cluster before
@@ -1159,12 +1173,18 @@ type FelixConfigurationSpec struct {
 	// Workaround: Make sure your Linux kernel [includes this patch](https://github.com/torvalds/linux/commit/56364c910691f6d10ba88c964c9041b9ab777bd6) to unwedge NAPI.
 	WireguardThreadingEnabled *bool `json:"wireguardThreadingEnabled,omitempty"`
 	// WireguardListeningPort controls the listening port used by IPv4 Wireguard. [Default: 51820]
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
 	WireguardListeningPort *int `json:"wireguardListeningPort,omitempty" validate:"omitempty,gt=0,lte=65535"`
 
 	// WireguardListeningPortV6 controls the listening port used by IPv6 Wireguard. [Default: 51821]
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
 	WireguardListeningPortV6 *int `json:"wireguardListeningPortV6,omitempty" validate:"omitempty,gt=0,lte=65535"`
 
 	// WireguardRoutingRulePriority controls the priority value to use for the Wireguard routing rule. [Default: 99]
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=32765
 	WireguardRoutingRulePriority *int `json:"wireguardRoutingRulePriority,omitempty" validate:"omitempty,gt=0,lt=32766"`
 
 	// WireguardInterfaceName specifies the name to use for the IPv4 Wireguard interface. [Default: wireguard.cali]
@@ -1283,6 +1303,8 @@ type FelixConfigurationSpec struct {
 	//
 	// [Default: 100]
 	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=3000
 	BPFMaglevMaxEndpointsPerService *int `json:"bpfMaglevMaxEndpointsPerService,omitempty" validate:"omitempty,gt=0,lte=3000"`
 
 	// BPFMaglevMaxServices is the maximum number of expected Maglev-enabled
@@ -1290,6 +1312,8 @@ type FelixConfigurationSpec struct {
 	//
 	// [Default: 100]
 	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=3000
 	BPFMaglevMaxServices *int `json:"bpfMaglevMaxServices,omitempty" validate:"omitempty,gt=0,lte=3000"`
 }
 
