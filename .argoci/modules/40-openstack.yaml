@@ -22,8 +22,11 @@ steps:
   # system packages as it goes — so it gets one of its own.
   - name: openstack-devstack
     runOn: vm
+    # Installing the whole control plane and then exercising it does not fit the
+    # hour the other lanes get.
+    timeout: 2h
     vm:
-      machineType: e2-standard-2
+      machineType: e2-standard-8
     secretBundles:
       - name: banzai-secrets
         keys:
