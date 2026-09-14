@@ -1199,12 +1199,20 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(isLeafIface(eth10Iface)).To(BeTrue())
 			Expect(isLeafIface(eth20Iface)).To(BeTrue())
 
-			// Delete the bond, which is neither root not leaf.
+			// Delete the bond, which is neither root not leaf. Its parent VLAN
+			// bond0.100 survives as an empty root (its own StateNotPresent update
+			// removes it later); eth10/eth20 are promoted to their own trees.
 			genIfaceUpdate("bond0", ifacemonitor.StateNotPresent, 10)()
-			Expect(len(bpfEpMgr.hostIfaceTrees)).To(Equal(3))
+			Expect(len(bpfEpMgr.hostIfaceTrees)).To(Equal(4))
 			Expect(bpfEpMgr.hostIfaceTrees).To(HaveKey(3))
+			Expect(bpfEpMgr.hostIfaceTrees).To(HaveKey(11))
 			Expect(bpfEpMgr.hostIfaceTrees).To(HaveKey(20))
 			Expect(bpfEpMgr.hostIfaceTrees).To(HaveKey(30))
+			Expect(bpfEpMgr.hostIfaceTrees.findIfaceByIndex(10)).To(BeNil())
+			bondVlanIface = bpfEpMgr.hostIfaceTrees.findIfaceByIndex(11)
+			Expect(bondVlanIface).NotTo(BeNil())
+			Expect(isRootIface(bondVlanIface)).To(BeTrue())
+			Expect(isLeafIface(bondVlanIface)).To(BeTrue())
 			eth10Iface = bpfEpMgr.hostIfaceTrees.findIfaceByIndex(20)
 			eth20Iface = bpfEpMgr.hostIfaceTrees.findIfaceByIndex(30)
 			Expect(eth10Iface).NotTo(BeNil())
@@ -1254,6 +1262,16 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			bondIface := bondVlanIface.children[10]
 			Expect(bondIface.children).To(HaveKey(20))
 			Expect(bondIface.children).To(HaveKey(30))
+
+			// Follow-up: deleting the bridged VLAN (a middle node with children)
+			// must leave br0 in the forest as an empty root, not remove it.
+			genIfaceUpdate("bond0.100", ifacemonitor.StateNotPresent, 11)()
+			Expect(bpfEpMgr.hostIfaceTrees).To(HaveKey(12))
+			br0Iface = bpfEpMgr.hostIfaceTrees.findIfaceByIndex(12)
+			Expect(isRootIface(br0Iface)).To(BeTrue())
+			Expect(isLeafIface(br0Iface)).To(BeTrue())
+			Expect(bpfEpMgr.hostIfaceTrees.findIfaceByIndex(11)).To(BeNil())
+			Expect(bpfEpMgr.hostIfaceTrees.getPhyDevices("bond0")).To(ConsistOf("eth10", "eth20"))
 		})
 
 		It("does not have host-* policy on the workload interface", func() {

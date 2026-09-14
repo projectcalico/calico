@@ -5702,32 +5702,24 @@ func (trees bpfIfaceTrees) addIface(link netlink.Link) {
 }
 
 func (trees bpfIfaceTrees) deleteIface(name string) {
-	// Interface not in the tree.
 	node := trees.findIfaceByName(name)
 	if node == nil {
 		return
 	}
 
-	// Interface is a root interface.
-	if node.parentIface == nil {
-		for _, child := range node.children {
-			child.parentIface = nil
-			trees[child.index] = child
-		}
-		delete(trees, node.index)
+	// Unlink the node from wherever it sits: its parent's children map (a child
+	// or middle node) or the top-level root map. A middle node must NOT delete
+	// its parent — the parent (e.g. a bridge) still exists.
+	if node.parentIface != nil {
+		delete(node.parentIface.children, node.index)
 	} else {
-		// Interface is not a root and not a leaf. Add each child node
-		// as a separate tree and delete this tree.
-		if len(node.children) > 0 {
-			for _, child := range node.children {
-				child.parentIface = nil
-				trees[child.index] = child
-			}
-			delete(trees, node.parentIface.index)
-		} else {
-			// Interface is a leaf.
-			delete(node.parentIface.children, node.index)
-		}
+		delete(trees, node.index)
+	}
+
+	// Promote each child to the root of its own surviving tree.
+	for _, child := range node.children {
+		child.parentIface = nil
+		trees[child.index] = child
 	}
 }
 
