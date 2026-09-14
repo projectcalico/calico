@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2025 Tigera, Inc. All rights reserved.
+# Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -42,11 +42,11 @@ CALICO_VERSION="${PRODUCT_VERSION:-$defaultCalicoVersion}"
 echo "Using REGISTRY: $REGISTRY"
 echo "Using CALICO_VERSION: $CALICO_VERSION"
 
-# A branch-prefixed version is a moving tag that only exists once a hashrelease
-# has published from that branch, so a miss is expected rather than a failure.
+# A branch-named version is a moving tag that exists only where a publish job
+# has pushed it, so a miss is expected rather than a failure.
 RELEASE_BRANCH_PREFIX="${RELEASE_BRANCH_PREFIX:-release}"
 BRANCH_TAG=0
-if [[ "$CALICO_VERSION" == "${RELEASE_BRANCH_PREFIX}-"* ]]; then
+if [[ "$CALICO_VERSION" == "${RELEASE_BRANCH_PREFIX}-"* || "$CALICO_VERSION" == "master" ]]; then
   BRANCH_TAG=1
   echo "⚠️  $CALICO_VERSION is a branch tag; missing images tagged with it will warn, not fail."
 fi
@@ -139,7 +139,7 @@ done <<< "$manifest_images"
 #########################################
 if [ "${#WARNED_IMAGES[@]}" -gt 0 ]; then
   echo ""
-  echo "⚠️  Not yet published under the $CALICO_VERSION branch tag (a hashrelease from this branch publishes it):"
+  echo "⚠️  Not published under the $CALICO_VERSION branch tag (the Push * promotions write it):"
   for img in "${WARNED_IMAGES[@]}"; do
     echo "   ⚠️  $img"
   done
@@ -153,7 +153,7 @@ if [ "$FAILED" -eq 1 ]; then
   done
   exit 1
 elif [ "${#WARNED_IMAGES[@]}" -gt 0 ]; then
-  echo "✅ All images from manifests are available. The images listed above are tagged with the branch name, which a hashrelease publishes from this branch; they will be available after the next hashrelease."
+  echo "✅ All images from manifests are available. The images listed above carry a branch tag, which only a Push * promotion writes, so they may lag the branch or be absent."
 else
   echo "✅ All images from manifests are available!"
 fi
