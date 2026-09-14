@@ -19,6 +19,7 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -168,6 +169,53 @@ func TestFelixConfiguration_Validation(t *testing.T) {
 			} else {
 				expectCreateSucceeds(t, tt.obj)
 			}
+		})
+	}
+}
+
+// The bounds come from the libcalico-go struct tags, which only the calicoctl
+// path enforced before they reached the schema.
+func TestFelixConfiguration_NumericBounds(t *testing.T) {
+	bounded := []struct {
+		field string
+		min   int64
+		max   int64
+	}{
+		{field: "debugPort", min: 0, max: 65535},
+		{field: "bpfExtToServiceConnmark", min: 0, max: 4294967295},
+		{field: "bpfKubeProxyHealthzPort", min: 0, max: 65535},
+		{field: "ipv4NormalRoutePriority", min: 1, max: 2147483646},
+		{field: "ipv4ElevatedRoutePriority", min: 1, max: 2147483646},
+		{field: "ipv6NormalRoutePriority", min: 1, max: 2147483646},
+		{field: "ipv6ElevatedRoutePriority", min: 1, max: 2147483646},
+		{field: "wireguardListeningPort", min: 1, max: 65535},
+		{field: "wireguardListeningPortV6", min: 1, max: 65535},
+		{field: "wireguardRoutingRulePriority", min: 1, max: 32765},
+		{field: "bpfMaglevMaxEndpointsPerService", min: 1, max: 3000},
+		{field: "bpfMaglevMaxServices", min: 1, max: 3000},
+	}
+
+	newConfig := func(field string, value int64) *unstructured.Unstructured {
+		return &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "projectcalico.org/v3",
+				"kind":       "FelixConfiguration",
+				"metadata":   map[string]interface{}{"name": uniqueName("felixconfig")},
+				"spec":       map[string]interface{}{field: value},
+			},
+		}
+	}
+
+	for _, b := range bounded {
+		t.Run(b.field+" below minimum", func(t *testing.T) {
+			expectCreateFails(t, newConfig(b.field, b.min-1), b.field)
+		})
+		t.Run(b.field+" above maximum", func(t *testing.T) {
+			expectCreateFails(t, newConfig(b.field, b.max+1), b.field)
+		})
+		t.Run(b.field+" at the bounds", func(t *testing.T) {
+			expectCreateSucceeds(t, newConfig(b.field, b.min))
+			expectCreateSucceeds(t, newConfig(b.field, b.max))
 		})
 	}
 }
