@@ -489,10 +489,12 @@ CONTROLLER_TOOLS_VERSION := $(or $(CONTROLLER_TOOLS_VERSION),v0.18.0)
 # The binary is built into the shared Go build cache (mounted as /go-cache in
 # every component container, including api/'s isolated mount). It is stamped
 # with the go-build image version, the controller-tools version, and a hash of
-# all patches: bumping the image (which may carry a new controller-gen), the
-# pinned version, or a patch yields a new path and triggers a rebuild — and a
-# rebuild re-runs the image-vs-pin check in build.sh.
-CALICO_CONTROLLER_GEN_HASH := $(shell cat $(REPO_ROOT)/hack/cmd/calico-controller-gen/*.patch 2>/dev/null | sha256sum | cut -c1-12)
+# build.sh and the patches: bumping the image (which may carry a new
+# controller-gen), the pinned version, or editing either file yields a new path
+# and triggers a rebuild — and a rebuild re-runs the image-vs-pin check in
+# build.sh. build.sh is hashed because checkouts sharing the cache share the
+# output file, which defeats Make's prerequisite check.
+CALICO_CONTROLLER_GEN_HASH := $(shell cat $(REPO_ROOT)/hack/cmd/calico-controller-gen/build.sh $(REPO_ROOT)/hack/cmd/calico-controller-gen/*.patch 2>/dev/null | sha256sum | cut -c1-12)
 CALICO_CONTROLLER_GEN_STAMP := $(GO_BUILD_VER)-$(CONTROLLER_TOOLS_VERSION)-$(CALICO_CONTROLLER_GEN_HASH)
 # Two views of the same file: the host path Make uses as a build target, and
 # the in-container path (/go-cache is the bind-mount of LOCAL_GO_PKG_CACHE) used to
