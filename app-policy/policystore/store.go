@@ -42,6 +42,16 @@ type PolicyStore struct {
 	Endpoints          map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 	ServiceAccountByID map[types.ServiceAccountID]*proto.ServiceAccountUpdate
 	NamespaceByID      map[types.NamespaceID]*proto.NamespaceUpdate
+
+	// Generation counts the updates ProcessUpdate has applied to the store. State derived from the
+	// store's contents (the verdict cache) records the generation it was derived at and is discarded
+	// when the generation moves on. Code that mutates the store other than through ProcessUpdate
+	// must increment it.
+	Generation uint64
+	// Verdicts caches evaluation results for this store's contents; nil when caching is off. Set
+	// through WithVerdictCache on the manager that creates the store, so that a cache never outlives
+	// the store it was filled from.
+	Verdicts *VerdictCache
 }
 
 func NewPolicyStore() *PolicyStore {
@@ -61,6 +71,8 @@ type policyStoreManager struct {
 	current, pending *PolicyStore
 	mu               sync.RWMutex
 	toActive         bool
+	// newStore creates the stores the manager hands out: at construction and on every reconnect.
+	newStore func() *PolicyStore
 }
 
 type PolicyStoreManager interface {
@@ -86,14 +98,25 @@ func NewPolicyStoreManager() PolicyStoreManager {
 }
 
 func NewPolicyStoreManagerWithOpts(opts ...PolicyStoreManagerOption) *policyStoreManager {
-	psm := &policyStoreManager{
-		current: NewPolicyStore(),
-		pending: NewPolicyStore(),
-	}
+	psm := &policyStoreManager{newStore: NewPolicyStore}
 	for _, o := range opts {
 		o(psm)
 	}
+	psm.current = psm.newStore()
+	psm.pending = psm.newStore()
 	return psm
+}
+
+// WithVerdictCache gives every store the manager creates a verdict cache of the given capacity,
+// reporting into the shared counters. See VerdictCache for what it caches and when it is emptied.
+func WithVerdictCache(capacity int, stats *VerdictCacheStats) PolicyStoreManagerOption {
+	return func(m *policyStoreManager) {
+		m.newStore = func() *PolicyStore {
+			s := NewPolicyStore()
+			s.Verdicts = NewVerdictCache(capacity, stats)
+			return s
+		}
+	}
 }
 
 func (m *policyStoreManager) DoWithReadLock(cb func(*PolicyStore)) {
@@ -140,7 +163,7 @@ func (m *policyStoreManager) OnReconnecting() {
 	defer m.mu.Unlock()
 
 	// create store
-	m.pending = NewPolicyStore()
+	m.pending = m.newStore()
 	log.Tracef("storeManager OnReconnecting() created new pending store %p", m.pending)
 
 	// route next writes to pending
