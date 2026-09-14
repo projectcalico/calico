@@ -18,7 +18,11 @@
 //
 //	go run ./hack/cmd/policyscale -preset composite > composite.yaml
 //	kubectl label pod flowgen-target policyscale.projectcalico.org/target=true
-//	kubectl apply -f composite.yaml
+//	kubectl apply --server-side -f composite.yaml
+//
+// The policies are staged by default, so they are evaluated for the pending verdict without
+// being enforced; -staged=false renders enforced policies, which will deny the selected
+// endpoint's non-matching traffic.
 //
 //	go run ./hack/cmd/policyscale -preset composite -flows 1000 -direction egress
 package main
@@ -37,6 +41,7 @@ func main() {
 		preset    = flag.String("preset", "composite", "policy set to render: baseline, egress or composite")
 		seed      = flag.Int64("seed", policyscale.DefaultSeed, "generator seed")
 		selector  = flag.String("selector", "policyscale.projectcalico.org/target == 'true'", "endpoint selector the policies apply to")
+		staged    = flag.Bool("staged", true, "render StagedGlobalNetworkPolicy rather than GlobalNetworkPolicy; staged policies are evaluated for the pending verdict but program no enforcement rules, so the set is safe to apply to a live cluster")
 		out       = flag.String("out", "-", "output file, - for stdout")
 		flows     = flag.Int("flows", 0, "instead of resources, print this many flows with their expected verdicts")
 		direction = flag.String("direction", "egress", "direction of the printed flows: ingress or egress")
@@ -91,7 +96,7 @@ func main() {
 		return
 	}
 
-	if err := fx.WriteYAML(bw, policyscale.ResourceOptions{Selector: *selector}); err != nil {
+	if err := fx.WriteYAML(bw, policyscale.ResourceOptions{Selector: *selector, Staged: *staged}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
