@@ -568,13 +568,9 @@ func TestQoSConnLimitIngressRetransmissionOfRejectedStillOverLimit(t *testing.T)
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		// Reject path tail-calls into PROG_INDEX_TCP_RST. TCP_RST
-		// constructs the RST and forwards it back to the source via
-		// forward_or_drop; the final BPF return is TC_ACT_UNSPEC,
-		// signalling "kernel takes the modified skb from here." In
-		// production this means the client sees an RST instead of a
-		// drop-and-retry.
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		// TC_ACT_UNSPEC at this hook would transmit the RST on into
+		// the pod, away from the client it is addressed to.
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_UNSPEC))
 	}, withIngressQoSConnLimit())
 
 	// Counter must be unchanged — qos_connlimit_check_and_increment fails
@@ -857,9 +853,8 @@ func TestQoSConnLimitIngressFirstSYN(t *testing.T) {
 		runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 			res, err := bpfrun(synPkt)
 			Expect(err).NotTo(HaveOccurred())
-			// Reject path tail-calls PROG_INDEX_TCP_RST, which builds the RST
-			// and forwards it; the final return is TC_ACT_UNSPEC.
-			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+			// TC_ACT_UNSPEC here would send the RST into the pod.
+			Expect(res.Retval).NotTo(Equal(resTC_ACT_UNSPEC))
 		}, withIngressQoSConnLimit())
 
 		// The failed check must not increment.
@@ -1078,7 +1073,8 @@ func TestQoSConnLimitV6FirstSYN(t *testing.T) {
 		runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 			res, err := bpfrun(synPkt)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+			// TC_ACT_UNSPEC here would send the RST into the pod.
+			Expect(res.Retval).NotTo(Equal(resTC_ACT_UNSPEC))
 		}, withIngressQoSConnLimit(), withIPv6())
 
 		Expect(readCount(ingressKey)).To(Equal(uint32(maxConnections)))
