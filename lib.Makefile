@@ -420,11 +420,8 @@ export GIT_TERMINAL_PROMPT ?= 0
 fetch_file = $(REPO_ROOT)/hack/fetch-file $(1) $(2)
 fetch_repo = $(REPO_ROOT)/hack/fetch-repo $(1) $(2) $(3)
 
-# Set the repository root
-REPOROOT := $(shell git rev-parse --show-toplevel)
-
 # Set the default go cache path if we can't find one automatically
-DEFAULT_GO_CACHE_PATH := $(REPOROOT)/.go-pkg-cache
+DEFAULT_GO_CACHE_PATH := $(REPO_ROOT)/.go-pkg-cache
 
 # Detect what path to use as the user's go cache path.
 # 
@@ -509,7 +506,7 @@ endif
 CONTROLLER_TOOLS_VERSION := $(shell sed -n 's/^VERSION="\(v[0-9][0-9.]*\)".*/\1/p' $(REPO_ROOT)/hack/cmd/calico-controller-gen/build.sh | head -1)
 CONTROLLER_TOOLS_VERSION := $(or $(CONTROLLER_TOOLS_VERSION),v0.18.0)
 
-# The binary is built into the shared .go-pkg-cache (mounted as /go-cache in
+# The binary is built into the shared Go build cache (mounted as /go-cache in
 # every component container, including api/'s isolated mount). It is stamped
 # with the go-build image version, the controller-tools version, and a hash of
 # all patches: bumping the image (which may carry a new controller-gen), the
@@ -518,9 +515,9 @@ CONTROLLER_TOOLS_VERSION := $(or $(CONTROLLER_TOOLS_VERSION),v0.18.0)
 CALICO_CONTROLLER_GEN_HASH := $(shell cat $(REPO_ROOT)/hack/cmd/calico-controller-gen/*.patch 2>/dev/null | sha256sum | cut -c1-12)
 CALICO_CONTROLLER_GEN_STAMP := $(GO_BUILD_VER)-$(CONTROLLER_TOOLS_VERSION)-$(CALICO_CONTROLLER_GEN_HASH)
 # Two views of the same file: the host path Make uses as a build target, and
-# the in-container path (/go-cache is the bind-mount of .go-pkg-cache) used to
+# the in-container path (/go-cache is the bind-mount of LOCAL_GO_PKG_CACHE) used to
 # invoke it from inside the build containers.
-CALICO_CONTROLLER_GEN_BIN := $(REPO_ROOT)/.go-pkg-cache/bin/calico-controller-gen-$(CALICO_CONTROLLER_GEN_STAMP)
+CALICO_CONTROLLER_GEN_BIN := $(LOCAL_GO_PKG_CACHE)/bin/calico-controller-gen-$(CALICO_CONTROLLER_GEN_STAMP)
 CALICO_CONTROLLER_GEN     := /go-cache/bin/calico-controller-gen-$(CALICO_CONTROLLER_GEN_STAMP)
 
 # Real file target (not .PHONY): Make skips it entirely — no container spin-up —
