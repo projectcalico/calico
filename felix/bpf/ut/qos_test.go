@@ -868,6 +868,83 @@ func TestQoSConnLimitIngressFirstSYN(t *testing.T) {
 	})
 }
 
+// Covers CORE-13478 Failure.4: a host-origin SYN skips policy, so the ingress
+// limit never sees it.
+func TestQoSConnLimitIngressHostOriginatedSYNSkipsCheck(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "HWhos"
+	defer func() { bpfIfaceName = "" }()
+
+	const (
+		ifIndex               = 1
+		maxConnections        = 3
+		srcPort        uint16 = 23461 // the node itself
+		dstPort        uint16 = 8055  // workload listening port
+	)
+
+	// A local-host source route is what tc.c tests before skipping policy.
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalHost, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+
+	ctMap := conntrack.Map()
+	Expect(ctMap.EnsureExists()).NotTo(HaveOccurred())
+	defer resetCTMap(ctMap)
+
+	k := ctv4.NewKey(6, srcIP, srcPort, dstIP, dstPort)
+	qosKey := qos.NewKey(uint32(ifIndex), 1 /* ingress */, qos.IPFamilyV4)
+
+	readQoSCount := func() uint32 {
+		b, err := qosConnMap.Get(qosKey.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return qos.ConnValueFromBytes(b).CurrentCount()
+	}
+
+	readCTFlags := func() uint32 {
+		b, err := ctMap.Get(k.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return ctv4.ValueFromBytes(b).Flags()
+	}
+
+	// No CT entry: this is the first SYN of a new host-origin connection, and
+	// the program creates the entry itself.
+	resetCTMap(ctMap)
+	resetQoSMap(qosConnMap)
+	defer resetQoSMap(qosConnMap)
+
+	// Already at the limit, so a policed SYN would be rejected here.
+	Expect(qosConnMap.Update(qosKey.AsBytes(),
+		qos.NewConnValue(maxConnections, maxConnections).AsBytes())).NotTo(HaveOccurred())
+
+	_, _, _, _, synPkt, err := testPacketTCPV4WithPayload(dstIP, srcPort, dstPort, true /* syn */, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	t.Run("at the limit: host-origin SYN is admitted", func(t *testing.T) {
+		RegisterTestingT(t)
+
+		// tc.c only skips policy for a packet no other program has seen.
+		skbMark = 0
+		runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(synPkt)
+			Expect(err).NotTo(HaveOccurred())
+			// Admitted despite being at the limit: no TCP_RST tail call.
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		}, withIngressQoSConnLimit(), withFromHost())
+
+		Expect(readQoSCount()).To(Equal(uint32(maxConnections)), "host-origin SYN was counted")
+
+		// Neither flag proves the block was skipped rather than run. The
+		// recount must make the same distinction.
+		Expect(readCTFlags() & ctv4.FlagConnLimitIn).To(Equal(uint32(0)))
+		Expect(readCTFlags() & ctv4.FlagConnLimitInRej).To(Equal(uint32(0)))
+	})
+}
+
 // TestQoSConnLimitEgressFirstSYN covers the plain first-SYN admission decision
 // at from-wep, both outcomes.
 //
