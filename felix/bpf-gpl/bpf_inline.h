@@ -5,7 +5,7 @@
 #ifndef __CALI_BPF_INLINE_H__
 #define __CALI_BPF_INLINE_H__
 
-/* Kept apart from bpf.h so that the headers shared with userspace (globals.h,
+/* Kept apart from cali_bpf.h so that the headers shared with userspace (globals.h,
  * ip_addr.h) can use it without pulling in the BPF helper definitions.
  */
 #define CALI_BPF_INLINE inline __attribute__((always_inline))
