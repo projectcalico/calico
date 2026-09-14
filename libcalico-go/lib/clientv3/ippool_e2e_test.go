@@ -369,7 +369,9 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			}
 			outKVP, outError := bc.Create(ctx, kvp)
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outKVP.Value).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name3, spec3))
+
+			// The CRD schema defaults the encapsulations, so they come back set.
+			Expect(outKVP.Value).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name3, spec3_1))
 
 			// Verify Get() on the IPPool sets the encapsulations to "Never"
 			res, outError = c.IPPools().Get(ctx, name3, options.GetOptions{})
