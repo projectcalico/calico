@@ -59,7 +59,8 @@ mkdir -p "$(dirname "$OUT")"
 
 SRC=$(mktemp -d)
 TARBALL=$(mktemp)
-trap 'rm -rf "$SRC" "$TARBALL"' EXIT
+TMP_OUT="$OUT.tmp.$$"
+trap 'rm -rf "$SRC" "$TARBALL" "$TMP_OUT"' EXIT
 
 echo "Fetching controller-tools $VERSION ..."
 curl -fL --retry 5 --retry-all-errors --silent --show-error -o "$TARBALL" \
@@ -74,8 +75,12 @@ done
 echo "Building $OUT ..."
 # GOFLAGS is reset so a parent -mod=vendor/-mod=mod does not leak into this
 # standalone module build. The tarball ships its own go.mod/go.sum.
-(cd "$SRC" && CGO_ENABLED=0 GOFLAGS= go build -o "$OUT" -v -buildvcs=false \
+(cd "$SRC" && CGO_ENABLED=0 GOFLAGS= go build -o "$TMP_OUT" -v -buildvcs=false \
     -ldflags "-X sigs.k8s.io/controller-tools/pkg/version.version=${VERSION} -s -w" \
     ./cmd/controller-gen)
+
+# Renamed rather than built in place: concurrent builds share $OUT, and writing
+# it directly truncates a binary another container may be executing.
+mv -f "$TMP_OUT" "$OUT"
 
 echo "Built calico-controller-gen ($VERSION) at $OUT"
