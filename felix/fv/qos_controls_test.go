@@ -1735,6 +1735,131 @@ var _ = infrastructure.DatastoreDescribe(
 						w[2].UpdateInInfra(infra)
 					})
 				})
+
+				// CORE-13478 Failure.4. The to-wep check skips host traffic,
+				// but the userspace recount charges it to the pod anyway.
+				Context("With connection limits, host-origin traffic (felix-0 -> w[0])", func() {
+					if !BPFMode() {
+						return
+					}
+
+					// startHostConns opens n connections from the node's own
+					// namespace, where NamespacePath is empty.
+					startHostConns := func(n int) []*connectivity.PersistentConnection {
+						pcs := make([]*connectivity.PersistentConnection, n)
+						for i := range pcs {
+							pcs[i] = &connectivity.PersistentConnection{
+								Name:                fmt.Sprintf("host-pc-%d", i),
+								RuntimeName:         tc.Felixes[0].Name,
+								Runtime:             tc.Felixes[0],
+								Protocol:            "tcp",
+								IP:                  w[0].IP,
+								Port:                8055,
+								MonitorConnectivity: true,
+							}
+							Expect(pcs[i].Start()).NotTo(HaveOccurred())
+						}
+						for _, pc := range pcs {
+							Eventually(pc.PongCount, "10s", "200ms").Should(BeNumerically(">", 0),
+								"host-origin connection never came up")
+						}
+						return pcs
+					}
+
+					stopAll := func(pcs []*connectivity.PersistentConnection) {
+						for i := range pcs {
+							if pcs[i] != nil {
+								pcs[i].Stop()
+								pcs[i] = nil
+							}
+						}
+					}
+
+					It("should not let host-origin connections drive the ingress count above the limit", func() {
+						const maxConnections = 2
+
+						By("Setting ingress connlimit on w[0]")
+						w[0].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+							IngressMaxConnections: int64(maxConnections),
+						}
+						w[0].UpdateInInfra(infra)
+						Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").
+							Should(Equal(uint32(maxConnections)))
+
+						By("Opening three host-origin connections, one more than the limit")
+						pcs := startHostConns(maxConnections + 1)
+						defer stopAll(pcs)
+
+						// Admission is the exemption working as designed; log it
+						// rather than pin it.
+						logrus.Infof("CORE-13478: %d host-origin connections admitted against limit %d",
+							len(pcs), maxConnections)
+
+						// IterationEnd never clamps, so the recount can write a
+						// count above the configured maximum.
+						By("The recount must not charge them to the pod's ingress limit")
+						Consistently(getBPFCurrentCount(0, 0, "ingress"), "25s", "2s").
+							Should(BeNumerically("<=", uint32(maxConnections)),
+								"host-origin connections consumed the pod's ingress quota")
+					})
+
+					It("should not lock out a pod client while host-origin connections are held", func() {
+						const maxConnections = 2
+
+						By("Setting ingress connlimit on w[0]")
+						w[0].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+							IngressMaxConnections: int64(maxConnections),
+						}
+						w[0].UpdateInInfra(infra)
+						Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").
+							Should(Equal(uint32(maxConnections)))
+
+						By("Filling the limit with host-origin connections")
+						pcs := startHostConns(maxConnections)
+						defer stopAll(pcs)
+
+						defer func() {
+							logrus.Infof("CORE-13478: ingress count with %d host-origin connections held: %d",
+								len(pcs), getBPFCurrentCount(0, 0, "ingress")())
+						}()
+
+						By("A pod client must still be admitted")
+						Consistently(func() bool {
+							return w[1].CanConnectTo(w[0].IP, "8055", "tcp").HasConnectivity()
+						}, "25s", "5s").Should(BeTrue(),
+							"host-origin traffic locked out a pod-network client")
+					})
+
+					It("should drain the ingress count after host-origin connections close", func() {
+						const (
+							maxConnections = 25
+							numConnections = 20
+						)
+
+						By("Setting a limit high enough that nothing is rejected")
+						w[0].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+							IngressMaxConnections: int64(maxConnections),
+						}
+						w[0].UpdateInInfra(infra)
+						Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").
+							Should(Equal(uint32(maxConnections)))
+
+						By("Opening then closing twenty host-origin connections")
+						pcs := startHostConns(numConnections)
+						Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").
+							Should(Equal(uint32(numConnections)))
+						stopAll(pcs)
+
+						// QOS-15 reported ~60s pinned. That was the old
+						// connLimitScannerRunEveryN = 3 downsampling.
+						By("Measuring how long the count takes to drain")
+						start := time.Now()
+						Eventually(getBPFCurrentCount(0, 0, "ingress"), "90s", "1s").
+							Should(BeZero(), "ingress count never drained after the connections closed")
+						logrus.Infof("CORE-13478: ingress count drained %d -> 0 in %v",
+							numConnections, time.Since(start))
+					})
+				})
 			})
 		}
 	})
