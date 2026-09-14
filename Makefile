@@ -110,6 +110,7 @@ generate:
 	# Before the manifests, which take the operator's CRDs from its own tree.
 	$(MAKE) -C operator gen-files
 	$(MAKE) gen-manifests
+	$(MAKE) -C e2e gen-test-set
 	$(MAKE) fix-changed
 
 gen-manifests: bin/helm bin/yq
