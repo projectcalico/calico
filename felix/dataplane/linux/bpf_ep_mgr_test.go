@@ -224,6 +224,10 @@ func (m *mockDataplane) getIfaceLink(name string) (netlink.Link, error) {
 	return link, err
 }
 
+func (m *mockDataplane) getIfaceLinkByIndex(index int) (netlink.Link, error) {
+	return m.netlinkShim.LinkByIndex(index)
+}
+
 func (m *mockDataplane) netkitPinned(name string) bool {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -275,6 +279,29 @@ func (m *mockDataplane) createBondSlaves(name string, index, masterIndex int) er
 		LinkType:  "device",
 	}
 	return m.netlinkShim.LinkAdd(&slv)
+}
+
+func (m *mockDataplane) createBridgePorts(name string, index, masterIndex int) error {
+	attr := netlink.NewLinkAttrs()
+	attr.Name = name
+	attr.Index = index
+	attr.MasterIndex = masterIndex
+	iface := netlink.GenericLink{
+		LinkAttrs: attr,
+		LinkType:  "device",
+	}
+	return m.netlinkShim.LinkAdd(&iface)
+}
+
+func (m *mockDataplane) setLinkMaster(name string, masterIndex int) error {
+	link := &netlink.GenericLink{LinkAttrs: netlink.LinkAttrs{Name: name}}
+	master := &netlink.GenericLink{LinkAttrs: netlink.LinkAttrs{Index: masterIndex}}
+	return m.netlinkShim.LinkSetMaster(link, master)
+}
+
+func (m *mockDataplane) clearLinkMaster(name string) error {
+	link := &netlink.GenericLink{LinkAttrs: netlink.LinkAttrs{Name: name}}
+	return m.netlinkShim.LinkSetNoMaster(link)
 }
 
 func (m *mockDataplane) getRules(key string) *polprog.Rules {
@@ -858,8 +885,44 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(dp.natDevicesConfigured).To(BeTrue())
 		})
 
+		It("should attach/detach programs when ifaces are added/deleted to bridge", func() {
+			dataIfacePattern = "^eth|bond*|br*"
+			newBpfEpMgr(false)
+			genUntracked("default", "untracked1")()
+			newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
+			newHEP.UntrackedTiers = []*proto.TierInfo{{
+				Name:            "default",
+				IngressPolicies: []*proto.PolicyID{{Name: "untracked1", Kind: v3.KindGlobalNetworkPolicy}},
+			}}
+			err := dp.createIface("br0", 10, "bridge")
+			Expect(err).NotTo(HaveOccurred())
+			err = dp.createBridgePorts("eth10", 20, 10)
+			Expect(err).NotTo(HaveOccurred())
+			err = dp.createBridgePorts("eth20", 30, 10)
+			Expect(err).NotTo(HaveOccurred())
+			genHEPUpdate("br0", newHEP)()
+			genIfaceUpdate("br0", ifacemonitor.StateUp, 10)()
+			Expect(len(bpfEpMgr.hostIfaceTrees)).To(Equal(1))
+			Expect(dp.programAttached("br0:ingress")).To(BeTrue())
+			Expect(dp.programAttached("br0:egress")).To(BeTrue())
+			Expect(dp.programAttached("br0:xdp")).To(BeTrue())
+
+			genIfaceUpdate("eth10", ifacemonitor.StateUp, 20)()
+			Expect(dp.programAttached("eth10:ingress")).To(BeFalse())
+			Expect(dp.programAttached("eth10:egress")).To(BeFalse())
+			Expect(dp.programAttached("eth10:xdp")).To(BeTrue())
+
+			genIfaceUpdate("eth20", ifacemonitor.StateUp, 30)()
+			Expect(dp.programAttached("eth20:ingress")).To(BeFalse())
+			Expect(dp.programAttached("eth20:egress")).To(BeFalse())
+			Expect(dp.programAttached("eth20:xdp")).To(BeTrue())
+			Expect(dp.programAttached("br0:ingress")).To(BeTrue())
+			Expect(dp.programAttached("br0:egress")).To(BeTrue())
+			Expect(dp.programAttached("br0:xdp")).To(BeFalse())
+		})
+
 		It("should attach/detach programs when ifaces are added/deleted", func() {
-			dataIfacePattern = "^eth|bond*"
+			dataIfacePattern = "^eth|bond*|br*"
 			newBpfEpMgr(false)
 			genUntracked("default", "untracked1")()
 			newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
@@ -897,6 +960,64 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 			genHEPUpdate("bond0.100", newHEP)()
 			genIfaceUpdate("bond0.100", ifacemonitor.StateUp, 11)()
+			Expect(dp.programAttached("bond0.100:ingress")).To(BeTrue())
+			Expect(dp.programAttached("bond0.100:egress")).To(BeTrue())
+			Expect(dp.programAttached("bond0.100:xdp")).To(BeFalse())
+			Expect(dp.programAttached("bond0:ingress")).To(BeFalse())
+			Expect(dp.programAttached("bond0:egress")).To(BeFalse())
+			Expect(dp.programAttached("bond0:xdp")).To(BeFalse())
+			Expect(dp.programAttached("eth20:ingress")).To(BeFalse())
+			Expect(dp.programAttached("eth20:egress")).To(BeFalse())
+			Expect(dp.programAttached("eth20:xdp")).To(BeTrue())
+			Expect(dp.programAttached("eth10:ingress")).To(BeFalse())
+			Expect(dp.programAttached("eth10:egress")).To(BeFalse())
+			Expect(dp.programAttached("eth10:xdp")).To(BeTrue())
+			Expect(len(bpfEpMgr.hostIfaceTrees)).To(Equal(1))
+			bondVlanIface := bpfEpMgr.hostIfaceTrees.findIfaceByIndex(11)
+			Expect(isLeafIface(bondVlanIface)).To(BeFalse())
+
+			err = dp.createIface("br0", 12, "bridge")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dp.setLinkMaster("bond0.100", 12)).To(Succeed())
+			genHEPUpdate("br0", newHEP)()
+			genIfaceUpdate("br0", ifacemonitor.StateUp, 12)()
+			Expect(len(bpfEpMgr.hostIfaceTrees)).To(Equal(2))
+			genIfaceUpdate("bond0.100", ifacemonitor.StateUp, 11)()
+			Expect(len(bpfEpMgr.hostIfaceTrees)).To(Equal(1))
+			Expect(dp.programAttached("br0:ingress")).To(BeTrue())
+			Expect(dp.programAttached("br0:egress")).To(BeTrue())
+			Expect(dp.programAttached("br0:xdp")).To(BeFalse())
+			Expect(dp.programAttached("bond0.100:ingress")).To(BeFalse())
+			Expect(dp.programAttached("bond0.100:egress")).To(BeFalse())
+			Expect(dp.programAttached("bond0.100:xdp")).To(BeFalse())
+			Expect(dp.programAttached("bond0:ingress")).To(BeFalse())
+			Expect(dp.programAttached("bond0:egress")).To(BeFalse())
+			Expect(dp.programAttached("bond0:xdp")).To(BeFalse())
+			Expect(dp.programAttached("eth20:ingress")).To(BeFalse())
+			Expect(dp.programAttached("eth20:egress")).To(BeFalse())
+			Expect(dp.programAttached("eth20:xdp")).To(BeTrue())
+			Expect(dp.programAttached("eth10:ingress")).To(BeFalse())
+			Expect(dp.programAttached("eth10:egress")).To(BeFalse())
+			Expect(dp.programAttached("eth10:xdp")).To(BeTrue())
+
+			Expect(dp.clearLinkMaster("bond0.100")).To(Succeed())
+			genIfaceUpdate("bond0.100", ifacemonitor.StateUp, 11)()
+			genIfaceUpdate("br0", ifacemonitor.StateUp, 12)()
+			genHEPUpdate("bond0.100", newHEP)()
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(bpfEpMgr.hostIfaceTrees)).To(Equal(2))
+			bridgeIface := bpfEpMgr.hostIfaceTrees.findIfaceByIndex(12)
+			Expect(isLeafIface(bridgeIface)).To(BeTrue())
+			Expect(isRootIface(bridgeIface)).To(BeTrue())
+			bondVlanIface = bpfEpMgr.hostIfaceTrees.findIfaceByIndex(11)
+			Expect(isLeafIface(bondVlanIface)).To(BeFalse())
+			Expect(isRootIface(bondVlanIface)).To(BeTrue())
+			Expect(bondVlanIface.parentIface).To(BeNil())
+			Expect(bondVlanIface.children[10]).NotTo(BeNil())
+			Expect(dp.programAttached("br0:ingress")).To(BeTrue())
+			Expect(dp.programAttached("br0:egress")).To(BeTrue())
+			Expect(dp.programAttached("br0:xdp")).To(BeFalse())
 			Expect(dp.programAttached("bond0.100:ingress")).To(BeTrue())
 			Expect(dp.programAttached("bond0.100:egress")).To(BeTrue())
 			Expect(dp.programAttached("bond0.100:xdp")).To(BeFalse())
