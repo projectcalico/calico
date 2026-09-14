@@ -449,6 +449,12 @@ type Config struct {
 	FlowLogsGoldmaneServer       string        `config:"string;"`
 	FlowLogsLocalReporter        string        `config:"oneof(Enabled,Disabled);Disabled"`
 	FlowLogsPolicyEvaluationMode string        `config:"oneof(None,Continuous);Continuous"`
+	// FlowLogsPolicyEvaluationCacheSize: the number of pending-policy verdicts the flow log
+	// collector remembers, keyed on a flow's addresses, protocol and destination port (and its
+	// source port only where a policy rule matches on source ports), so that a flow repeating an
+	// earlier flow's endpoints is answered without walking the policy set. The cache is emptied
+	// whenever policy, IP set or endpoint state changes. Set to 0 to disable it.
+	FlowLogsPolicyEvaluationCacheSize int `config:"int(0:);65536;local"`
 
 	KubeNodePortRanges    []numorstring.Port `config:"portrange-list;30000:32767"`
 	NATPortRange          numorstring.Port   `config:"portrange;"`
