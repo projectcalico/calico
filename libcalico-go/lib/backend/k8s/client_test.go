@@ -2696,11 +2696,15 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "myfelixconfig",
 				},
+				// The fields the CRD schema defaults are spelled out, so the
+				// round trip compares equal.
 				Spec: apiv3.FelixConfigurationSpec{
-					InterfacePrefix:          "xali-",
-					FloatingIPs:              ptr.To(apiv3.FloatingIPsEnabled),
-					NFTablesMode:             ptr.To(apiv3.NFTablesModeAuto),
-					NFTablesFlowTableOffload: ptr.To(apiv3.NFTablesFlowTableOffloadAll),
+					InterfacePrefix:                "xali-",
+					FloatingIPs:                    ptr.To(apiv3.FloatingIPsEnabled),
+					NFTablesMode:                   ptr.To(apiv3.NFTablesModeAuto),
+					NFTablesFlowTableOffload:       ptr.To(apiv3.NFTablesFlowTableOffloadAll),
+					BPFConnectTimeLoadBalancing:    ptr.To(apiv3.BPFConnectTimeLBTCP),
+					BPFHostNetworkedNATWithoutCTLB: ptr.To(apiv3.BPFHostNetworkedNATEnabled),
 				},
 			},
 		}
