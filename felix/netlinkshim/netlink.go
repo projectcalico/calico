@@ -27,8 +27,8 @@ type Interface interface {
 	SetSocketTimeout(to time.Duration) error
 	SetStrictCheck(b bool) error
 	LinkList() ([]netlink.Link, error)
+	LinkByIndex(index int) (netlink.Link, error)
 	LinkByName(name string) (netlink.Link, error)
-	LinkByIndex(id int) (netlink.Link, error)
 	LinkAdd(link netlink.Link) error
 	LinkDel(link netlink.Link) error
 	LinkSetMTU(link netlink.Link, mtu int) error
@@ -89,12 +89,12 @@ func (r *RealNetlink) LinkList() ([]netlink.Link, error) {
 	}
 }
 
-func (r *RealNetlink) LinkByName(name string) (netlink.Link, error) {
-	return r.nlHandle.LinkByName(name)
+func (r *RealNetlink) LinkByIndex(index int) (netlink.Link, error) {
+	return r.nlHandle.LinkByIndex(index)
 }
 
-func (r *RealNetlink) LinkByIndex(id int) (netlink.Link, error) {
-	return r.nlHandle.LinkByIndex(id)
+func (r *RealNetlink) LinkByName(name string) (netlink.Link, error) {
+	return r.nlHandle.LinkByName(name)
 }
 
 func (r *RealNetlink) LinkAdd(link netlink.Link) error {
@@ -111,6 +111,14 @@ func (r *RealNetlink) LinkSetMTU(link netlink.Link, mtu int) error {
 
 func (r *RealNetlink) LinkSetUp(link netlink.Link) error {
 	return r.nlHandle.LinkSetUp(link)
+}
+
+func (r *RealNetlink) LinkSetMaster(link netlink.Link, master netlink.Link) error {
+	return r.nlHandle.LinkSetMaster(link, master)
+}
+
+func (r *RealNetlink) LinkSetNoMaster(link netlink.Link) error {
+	return r.nlHandle.LinkSetNoMaster(link)
 }
 
 func (r *RealNetlink) RouteListFiltered(family int, filter *netlink.Route, filterMask uint64) ([]netlink.Route, error) {
@@ -217,12 +225,4 @@ func (r *RealNetlink) NeighSet(a *netlink.Neigh) error {
 
 func (r *RealNetlink) NeighDel(a *netlink.Neigh) error {
 	return r.nlHandle.NeighDel(a)
-}
-
-func (r *RealNetlink) LinkSetMaster(link netlink.Link, master netlink.Link) error {
-	return r.nlHandle.LinkSetMaster(link, master)
-}
-
-func (r *RealNetlink) LinkSetNoMaster(link netlink.Link) error {
-	return r.nlHandle.LinkSetNoMaster(link)
 }
