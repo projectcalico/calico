@@ -289,6 +289,63 @@ func TestResourcesValidateAndRoundTrip(t *testing.T) {
 	}
 }
 
+// Staged rendering is what a cluster run applies: the same policies, evaluated for the pending
+// verdict but programming no enforcement rules.
+func TestStagedResources(t *testing.T) {
+	fx := Build(Composite())
+	objs := fx.Resources(ResourceOptions{Staged: true})
+	if got := countKind(objs, v3.KindStagedGlobalNetworkPolicy); got != 294+301 {
+		t.Errorf("staged policies: %d, want %d", got, 294+301)
+	}
+	if got := countKind(objs, v3.KindGlobalNetworkPolicy); got != 0 {
+		t.Errorf("enforced policies rendered alongside staged: %d", got)
+	}
+	// Tiers and sets are the same either way.
+	if got := countKind(objs, v3.KindTier); got != 1 {
+		t.Errorf("tiers: %d", got)
+	}
+	if got := countKind(objs, v3.KindGlobalNetworkSet); got != 3709+3862 {
+		t.Errorf("sets: %d", got)
+	}
+	staged := 0
+	for _, o := range objs {
+		p, ok := o.(*v3.StagedGlobalNetworkPolicy)
+		if !ok {
+			continue
+		}
+		staged++
+		if p.Spec.StagedAction != v3.StagedActionSet {
+			t.Fatalf("%s: stagedAction %q, want Set", p.Name, p.Spec.StagedAction)
+		}
+		if len(p.Spec.Ingress)+len(p.Spec.Egress) == 0 {
+			t.Fatalf("%s: no rules", p.Name)
+		}
+		if err := validator.Validate(p); err != nil {
+			t.Fatalf("%s: %v", p.Name, err)
+		}
+		if staged >= 4 {
+			break
+		}
+	}
+
+	// The enforced and staged renderings differ only in kind and stagedAction.
+	enforced := fx.Resources(ResourceOptions{})
+	if len(enforced) != len(objs) {
+		t.Fatalf("object counts differ: %d enforced, %d staged", len(enforced), len(objs))
+	}
+	for i := range objs {
+		e, eok := enforced[i].(*v3.GlobalNetworkPolicy)
+		s, sok := objs[i].(*v3.StagedGlobalNetworkPolicy)
+		if !eok || !sok {
+			continue
+		}
+		if e.Name != s.Name || e.Spec.Tier != s.Spec.Tier || e.Spec.Selector != s.Spec.Selector ||
+			len(e.Spec.Ingress) != len(s.Spec.Ingress) || len(e.Spec.Egress) != len(s.Spec.Egress) {
+			t.Fatalf("%s: staged rendering differs beyond kind", e.Name)
+		}
+	}
+}
+
 func render(t *testing.T, fx *Fixture, opts ...ResourceOptions) []byte {
 	t.Helper()
 	var o ResourceOptions
