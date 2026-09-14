@@ -20,14 +20,20 @@ import (
 	"regexp"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	log "github.com/projectcalico/calico/lib/std/log"
 )
 
 const SPIFFEIDPattern = "^spiffe://[^/]+/ns/([^/]+)/sa/([^/]+)$"
+
+// Levels the two aggregated conditions report at. Named so the tests build their stand-in
+// loggers from the same values rather than restating them, which would let the two drift.
+const (
+	missingIPSetsLevel         = log.LevelWarn
+	unparseablePrincipalsLevel = log.LevelError
+)
 
 var (
 	protocolMap = map[string]int{
@@ -38,6 +44,20 @@ var (
 
 	spiffeIdRegExp     *regexp.Regexp
 	spiffeIdRegExpOnce = sync.Once{}
+
+	// A principal we cannot parse would otherwise log once for every flow it sources. Aggregating on
+	// the principal loses nothing: parseSpiffeID's only failure names the principal and the pattern
+	// it did not match, and that pattern is a constant.
+	unparseablePrincipals = log.NewAggregatingLogger("failed to parse principal", "principals",
+		log.OptLevel(unparseablePrincipalsLevel))
+
+	// A missing IP set is looked up once per rule that references it, for every flow the policy
+	// applies to, so one bad reference logs at flow rate. Aggregate rather than plain rate-limit so
+	// that the one line per window names every set that went missing, not just whichever one
+	// happened to trip the timer - with several missing at once that is the difference between
+	// seeing one stale reference and seeing that a whole sync is behind.
+	missingIPSets = log.NewAggregatingLogger("IPSet not found", "ipsets",
+		log.OptLevel(missingIPSetsLevel))
 )
 
 type requestCache struct {
@@ -203,7 +223,7 @@ func ipProtoPortKey(ipStr string, protocol, port int) string {
 func (r *requestCache) getIPSet(id string) policystore.IPSet {
 	s, ok := r.store.IPSetByID[id]
 	if !ok {
-		rlogIPSetMissing.Warnf("IPSet not found: %s", id)
+		missingIPSets.Record(id)
 		return nil
 	}
 	return s
@@ -226,7 +246,7 @@ func (r *requestCache) initNamespace(name string) *namespace {
 func (r *requestCache) initPeer(principal string, labels map[string]string) *peer {
 	peer, err := parseSpiffeID(principal)
 	if err != nil {
-		rlogBadPrincipal.Errorf("failed to parse principal: %v", err)
+		unparseablePrincipals.Record(principal)
 		return nil
 	}
 	peer.Labels = make(map[string]string)
