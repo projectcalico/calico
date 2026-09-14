@@ -5,7 +5,6 @@
 #ifndef __CALI_IP_ADDR_H__
 #define __CALI_IP_ADDR_H__
 
-#include <linux/in6.h>
 #include <linux/types.h>
 #include <stdbool.h>
 
@@ -21,6 +20,10 @@ typedef struct {
 typedef __be32 ipv4_addr_t;
 
 #ifdef IPVER6
+
+/* Only the v6 branch uses struct in6_addr; keep it off the userspace-shared
+ * path, where glibc's netinet/in.h clashes with it. */
+#include <linux/in6.h>
 
 static CALI_BPF_INLINE bool ipv6_addr_t_eq(ipv6_addr_t x, ipv6_addr_t y)
 {
