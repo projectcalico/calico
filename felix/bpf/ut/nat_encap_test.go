@@ -87,6 +87,10 @@ func checkVxlan(pktR gopacket.Packet) gopacket.Packet {
 	ipType := layers.LayerTypeIPv4
 	ethType := layers.EthernetTypeIPv4
 
+	// The outer UDP length must cover the whole datagram, or a truncated inner
+	// packet reaches the remote node.
+	var expUDPLen uint16
+
 	ipv4L := pktR.Layer(layers.LayerTypeIPv4)
 	if ipv4L != nil {
 		ipv4R := ipv4L.(*layers.IPv4)
@@ -96,11 +100,16 @@ func checkVxlan(pktR gopacket.Packet) gopacket.Packet {
 		err := ipv4R.SerializeTo(iptmp, gopacket.SerializeOptions{ComputeChecksums: true}) // recompute csum
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ipv4CSum).To(Equal(ipv4R.Checksum))
+
+		expUDPLen = ipv4R.Length - uint16(ipv4R.IHL)*4
 	} else {
 		ipv6L := pktR.Layer(layers.LayerTypeIPv6)
 		Expect(ipv6L).NotTo(BeNil())
 		ipType = layers.LayerTypeIPv6
 		ethType = layers.EthernetTypeIPv6
+
+		// payload_len excludes the base header, so it is the UDP length exactly.
+		expUDPLen = ipv6L.(*layers.IPv6).Length
 	}
 
 	udpL := pktR.Layer(layers.LayerTypeUDP)
@@ -108,6 +117,7 @@ func checkVxlan(pktR gopacket.Packet) gopacket.Packet {
 	udpR := udpL.(*layers.UDP)
 	Expect(udpR.DstPort).To(Equal(layers.UDPPort(testVxlanPort)))
 	Expect(udpR.Checksum).To(Equal(uint16(0)))
+	Expect(udpR.Length).To(Equal(expUDPLen))
 
 	payloadL := pktR.ApplicationLayer()
 	Expect(payloadL).NotTo(BeNil())
