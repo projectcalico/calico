@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
 
@@ -1735,6 +1736,155 @@ func spuriousRSTThenTrafficPackets(ip *layers.IPv4, srcPort, dstPort uint16) (rs
 	Expect(err).NotTo(HaveOccurred())
 
 	return rstPkt, dataPkt
+}
+
+// TestQoSConnLimitIngressRejectRSTIsAddressedAndSent covers CORE-13478
+// Failure.2.
+
+// The RST is addressed to the client, so TC_ACT_UNSPEC here sends it into the
+// pod instead.
+func TestQoSConnLimitIngressRejectRSTIsAddressedAndSent(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "HWinR"
+	defer func() { bpfIfaceName = "" }()
+
+	const (
+		ifIndex               = 1
+		maxConnections        = 1
+		srcPort        uint16 = 23457 // remote client
+		dstPort        uint16 = 8055  // workload listening port
+	)
+
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+
+	ctMap := conntrack.Map()
+	Expect(ctMap.EnsureExists()).NotTo(HaveOccurred())
+	defer resetCTMap(ctMap)
+	resetCTMap(ctMap)
+
+	// A SYN already rejected once, so the check re-runs and rejects again.
+	legA := ctv4.Leg{SynSeen: true, Opener: true}
+	legB := ctv4.Leg{Ifindex: ifIndex}
+	k := ctv4.NewKey(6, srcIP, srcPort, dstIP, dstPort)
+	v := ctv4.NewValueNormal(time.Duration(0), ctv4.FlagConnLimitInRej, legA, legB)
+	Expect(ctMap.Update(k.AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
+
+	defer resetQoSMap(qosConnMap)
+	resetQoSMap(qosConnMap)
+	qosKey := qos.NewKey(uint32(ifIndex), 1 /* ingress */, qos.IPFamilyV4)
+	Expect(qosConnMap.Update(qosKey.AsBytes(),
+		qos.NewConnValue(maxConnections, maxConnections).AsBytes())).NotTo(HaveOccurred())
+
+	// A bare SYN, as a real client sends: no payload, so the RST must
+	// acknowledge exactly ISN+1.
+	_, ipv4, tcpSyn, _, synPkt, err := testPacketTCPV4WithPayload(dstIP, srcPort, dstPort,
+		true /* syn */, []byte{})
+	Expect(err).NotTo(HaveOccurred())
+
+	skbMark = tcdefs.MarkSeen
+	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(synPkt)
+		Expect(err).NotTo(HaveOccurred())
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+
+		ipL := pktR.Layer(layers.LayerTypeIPv4)
+		Expect(ipL).NotTo(BeNil(), "no IPv4 layer in the emitted packet")
+		ipR := ipL.(*layers.IPv4)
+		Expect(ipR.SrcIP).To(Equal(ipv4.DstIP), "RST source should be the pod")
+		Expect(ipR.DstIP).To(Equal(ipv4.SrcIP), "RST destination should be the client")
+
+		tcpL := pktR.Layer(layers.LayerTypeTCP)
+		Expect(tcpL).NotTo(BeNil(), "no TCP layer in the emitted packet")
+		tcpR := tcpL.(*layers.TCP)
+		Expect(tcpR.RST).To(BeTrue(), "the reject path emitted no RST")
+		Expect(tcpR.SrcPort).To(Equal(tcpSyn.DstPort))
+		Expect(tcpR.DstPort).To(Equal(tcpSyn.SrcPort))
+
+		// A SYN-SENT client only accepts an RST that acknowledges its SYN.
+		Expect(tcpR.ACK).To(BeTrue(), "RST to a SYN must carry ACK")
+		Expect(tcpR.Ack).To(Equal(tcpSyn.Seq+1), "RST must acknowledge the SYN")
+
+		t.Logf("CORE-13478: to-wep returned %s for an RST addressed to %v",
+			res.RetvalStr(), ipR.DstIP)
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_UNSPEC),
+			"the RST is addressed to the client but nothing redirects it, so it "+
+				"is transmitted on out of the veth into the pod")
+	}, withIngressQoSConnLimit())
+}
+
+// TestQoSConnLimitEgressRejectRSTSurvivesReturnTrip covers CORE-13478
+// Failure.2: the rejection RST must reach the pod that sent the SYN.
+
+// The redirect puts it back through the pod's own to-wep program, which a
+// single-program test cannot see.
+func TestQoSConnLimitEgressRejectRSTSurvivesReturnTrip(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "HWrtn"
+	defer func() { bpfIfaceName = "" }()
+
+	const (
+		ifIndex               = 1
+		maxConnections        = 1
+		srcPort        uint16 = 12451
+		dstPort        uint16 = 8055
+	)
+
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+
+	ctMap := conntrack.Map()
+	Expect(ctMap.EnsureExists()).NotTo(HaveOccurred())
+	defer resetCTMap(ctMap)
+	resetCTMap(ctMap)
+
+	defer resetQoSMap(qosConnMap)
+	resetQoSMap(qosConnMap)
+	qosKey := qos.NewKey(uint32(ifIndex), 0 /* egress */, qos.IPFamilyV4)
+	Expect(qosConnMap.Update(qosKey.AsBytes(),
+		qos.NewConnValue(maxConnections, maxConnections).AsBytes())).NotTo(HaveOccurred())
+
+	_, _, _, _, synPkt, err := testPacketTCPV4WithPayload(dstIP, srcPort, dstPort, true /* syn */, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Hop 1: the SYN is over the limit, so from-wep builds an RST for the pod.
+	var rstPkt []byte
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(synPkt)
+		Expect(err).NotTo(HaveOccurred())
+		rstPkt = res.dataOut
+	}, withEgressQoSConnLimit())
+
+	pktR := gopacket.NewPacket(rstPkt, layers.LayerTypeEthernet, gopacket.Default)
+	tcpL := pktR.Layer(layers.LayerTypeTCP)
+	Expect(tcpL).NotTo(BeNil(), "from-wep emitted no TCP packet")
+	Expect(tcpL.(*layers.TCP).RST).To(BeTrue(), "from-wep did not emit an RST")
+
+	// Hop 2: the redirect puts that RST on the pod's veth, carrying whatever
+	// mark hop 1 left on it.
+	t.Logf("CORE-13478: mark after hop 1 = %#x", skbMark)
+	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(rstPkt)
+		Expect(err).NotTo(HaveOccurred())
+		t.Logf("CORE-13478: to-wep returned %s for the rejection RST", res.RetvalStr())
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT),
+			"the pod's own to-wep program dropped the rejection RST, so the "+
+				"client never sees it")
+	})
 }
 
 // forgedRSTPacket builds an RST carrying an explicit sequence number.
