@@ -425,9 +425,15 @@ GOENV_GOCACHE := $(strip $(shell go env GOCACHE 2>/dev/null))
 
 # Mount source for the Go build cache, first match wins:
 #   1. LOCAL_GO_PKG_CACHE from the environment
-#   2. GOCACHE, when the Go tools resolve it to a real path
+#   2. GOCACHE, when the Go tools resolve it to an absolute path (it is either
+#      that or the literal "off"; a relative path would make docker -v fail)
 #   3. the repo-local .go-pkg-cache
-LOCAL_GO_PKG_CACHE ?= $(or $(filter /% ./% ../%,$(GOENV_GOCACHE)),$(DEFAULT_GO_CACHE_PATH))
+#
+# override, not ?=: `LOCAL_GO_PKG_CACHE= make ...` to opt out leaves the
+# variable defined-but-empty, which ?= keeps, yielding `docker run -v :/go-cache`.
+ifeq ($(strip $(LOCAL_GO_PKG_CACHE)),)
+override LOCAL_GO_PKG_CACHE := $(or $(filter /%,$(GOENV_GOCACHE)),$(DEFAULT_GO_CACHE_PATH))
+endif
 
 DOCKER_RUN_PRIV_NET := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 	docker run --rm \
@@ -503,15 +509,24 @@ CALICO_CONTROLLER_GEN_BIN := $(LOCAL_GO_PKG_CACHE)/bin/calico-controller-gen-$(C
 CALICO_CONTROLLER_GEN     := /go-cache/bin/calico-controller-gen-$(CALICO_CONTROLLER_GEN_STAMP)
 
 # Real file target (not .PHONY): Make skips it entirely — no container spin-up —
-# when the binary already exists and build.sh is unchanged. Patch edits and
-# version-pin bumps both land in the filename above (via the hash and the
-# pinned version), so they yield a new target and trigger a rebuild. The recipe
+# when the binary already exists. Patch edits and version-pin bumps both land in
+# the filename above (via the hash and the pinned version), so they yield a new
+# target and trigger a rebuild. build.sh is an order-only prerequisite for that
+# reason: its contents are already in the stamp, and comparing mtimes instead
+# would rebuild whenever a fresh checkout gave build.sh a timestamp newer than a
+# valid binary another checkout left in the shared cache. The recipe
 # needs the repo root mounted (for build.sh and the patches), so components in
 # their own module (api/) reach it via:
 #   $(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
-$(CALICO_CONTROLLER_GEN_BIN): hack/cmd/calico-controller-gen/build.sh
+$(CALICO_CONTROLLER_GEN_BIN): | hack/cmd/calico-controller-gen/build.sh
 	$(DOCKER_GO_BUILD) sh -c \
 		'./hack/cmd/calico-controller-gen/build.sh $(CALICO_CONTROLLER_GEN)'
+	@# `go clean -cache` only empties the cache's hex subdirectories, so stamps
+	@# from superseded image/version/patch combinations would accumulate here
+	@# forever. Drop the ones untouched for a month; a checkout still pinned to
+	@# such a stamp just rebuilds it.
+	@find $(dir $(CALICO_CONTROLLER_GEN_BIN)) -maxdepth 1 -type f \
+		-name 'calico-controller-gen-*' -mtime +30 -delete 2>/dev/null || true
 
 DOCKER_RUST_BUILD := mkdir -p bin && \
 	docker run --rm \
