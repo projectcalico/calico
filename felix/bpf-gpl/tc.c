@@ -567,7 +567,7 @@ syn_force_policy:
 
 			ctx->state->ip_proto != IPPROTO_ICMPV6 &&
 #endif
-			(hep_rpf_check(ctx) == RPF_RES_FAIL)) {
+			(hep_rpf_check(ctx, NULL) == RPF_RES_FAIL)) {
 			goto deny;
 		}
 	}

@@ -380,6 +380,9 @@ type Leg struct {
 	Approved bool
 	Opener   bool
 	Workload bool
+	Tunnel   bool
+	Pinned   bool
+	Checked  bool
 	Ifindex  uint32
 }
 
@@ -406,6 +409,9 @@ func (leg Leg) AsBytes() []byte {
 	setBit(&bits, 4, leg.Approved)
 	setBit(&bits, 5, leg.Opener)
 	setBit(&bits, 6, leg.Workload)
+	setBit(&bits, 7, leg.Tunnel)
+	setBit(&bits, 8, leg.Pinned)
+	setBit(&bits, 9, leg.Checked)
 
 	binary.LittleEndian.PutUint64(bytes[0:8], leg.Bytes)
 	binary.LittleEndian.PutUint32(bytes[8:12], leg.Packets)
@@ -439,6 +445,15 @@ func (leg Leg) Flags() uint32 {
 	if leg.Workload {
 		flags |= 1 << 6
 	}
+	if leg.Tunnel {
+		flags |= 1 << 7
+	}
+	if leg.Pinned {
+		flags |= 1 << 8
+	}
+	if leg.Checked {
+		flags |= 1 << 9
+	}
 	return flags
 }
 
@@ -459,6 +474,9 @@ func readConntrackLeg(b []byte) Leg {
 		Approved: bitSet(bits, 4),
 		Opener:   bitSet(bits, 5),
 		Workload: bitSet(bits, 6),
+		Tunnel:   bitSet(bits, 7),
+		Pinned:   bitSet(bits, 8),
+		Checked:  bitSet(bits, 9),
 		Ifindex:  binary.LittleEndian.Uint32(b[legExtra+8 : legExtra+12]),
 	}
 }
