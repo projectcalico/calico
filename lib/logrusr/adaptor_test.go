@@ -70,8 +70,11 @@ func TestSlogAttrSupported(t *testing.T) {
 func TestDanglingKeyGetsBadKey(t *testing.T) {
 	l, buf := newAdapter(t, logrus.DebugLevel)
 	// "user" has no following value — slog's convention is to file the
-	// dangling key under "!BADKEY".
-	l.Info("oops", "user")
+	// dangling key under "!BADKEY". Built as a slice so that go vet's slog
+	// analyser, which now flags malformed pairs at the call site, doesn't
+	// reject the deliberately-bad call.
+	args := []any{"user"}
+	l.Info("oops", args...)
 
 	if !strings.Contains(buf.String(), "!BADKEY=user") {
 		t.Errorf("expected !BADKEY=user in: %s", buf.String())
@@ -81,8 +84,9 @@ func TestDanglingKeyGetsBadKey(t *testing.T) {
 func TestNonStringKeyGetsBadKey(t *testing.T) {
 	l, buf := newAdapter(t, logrus.DebugLevel)
 	// First positional arg is an int, not a string or slog.Attr — file
-	// under !BADKEY.
-	l.Info("oops", 42)
+	// under !BADKEY. Built as a slice to get past go vet, as above.
+	args := []any{42}
+	l.Info("oops", args...)
 
 	if !strings.Contains(buf.String(), "!BADKEY=42") {
 		t.Errorf("expected !BADKEY=42 in: %s", buf.String())
