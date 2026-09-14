@@ -26,21 +26,37 @@
 set -e
 set -x
 
-# Resolve the s3-cmd wrapper before we cd out of the component directory.
-S3_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.semaphore/s3-cmd"
+# Resolve the repo root (and the helpers under it) before we cd out of the
+# component directory — below we cd to the repo's *parent* to tar it up.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+S3_CMD="${REPO_ROOT}/.semaphore/s3-cmd"
+LOAD_CACHED_IMAGES="${REPO_ROOT}/.semaphore/load-cached-images"
 
 cd ../..
 
 # Fetch pre-built images from the S3 workflow cache if available, and re-upload
 # them into the GCS fv-artifacts directory for the test VM.
 # These were built by the "Build: *" blocks in the Prerequisites stage.
-for img in calico-image.tar.zst node-image.tar.zst whisker-image.tar.zst; do
-  if "$S3_CMD" cp "${S3_WORKFLOW_DIR}/${img}" "/tmp/${img}" 2>/dev/null; then
-    echo "Found pre-built ${img}, including in artifacts."
-    gcloud storage cp "/tmp/${img}" "${GCS_WORKFLOW_DIR}/node/fv-artifacts/${img}"
+#
+# A build without S3 credentials runs read-only (see .semaphore/s3-cmd), so
+# those blocks had nowhere to publish their tarballs. On a miss, fall back to
+# load-cached-images, which builds the image from source in that case (and, with
+# credentials, leaves a genuine miss alone), then save it out of the daemon.
+# load-test-artifacts on the VM falls back to building from source, which the
+# VM cannot do, so a `docker save` failing here — no cached copy and no local
+# image — is the right loud failure.
+for img in calico node whisker; do
+  tarball="${img}-image.tar.zst"
+  if "$S3_CMD" cp "${S3_WORKFLOW_DIR}/${tarball}" "/tmp/${tarball}" 2>/dev/null; then
+    echo "Found pre-built ${tarball}, including in artifacts."
   else
-    echo "WARNING: ${img} not in ${S3_WORKFLOW_DIR}; the test VMs will build it from source."
+    echo "No ${tarball} in the S3 workflow cache; building and saving it locally"
+    # load-cached-images resolves the repo from its working directory.
+    (cd "${REPO_ROOT}" && "$LOAD_CACHED_IMAGES" "${img}")
+    docker save "calico/${img}:latest-amd64" -o "/tmp/${img}-image.tar"
+    zstd -3 --rm "/tmp/${img}-image.tar"
   fi
+  gcloud storage cp "/tmp/${tarball}" "${GCS_WORKFLOW_DIR}/node/fv-artifacts/${tarball}"
 done
 
 tar -czf /tmp/working-copy.tgz \
