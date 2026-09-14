@@ -1033,6 +1033,118 @@ var _ = infrastructure.DatastoreDescribe(
 							"forged RSTs bought connections the egress limit should have refused")
 					})
 
+					// CORE-13478 Failure.2: the rejection RST must reach the
+					// client, which must then fail fast rather than retry.
+					describeRejectionRST := func(name string, limitedIdx, clientIdx int,
+						setLimit func(int), felixIdx, wlIdx int, hook string) {
+						It(name, func() {
+							const numConnections = 2
+
+							// Indexed here, not captured as arguments: the
+							// workloads only exist once BeforeEach has run.
+							limited, client := w[limitedIdx], w[clientIdx]
+
+							By("Setting the connection limit")
+							setLimit(numConnections)
+							defer setLimit(0)
+
+							if BPFMode() {
+								Eventually(getBPFMaxConnections(felixIdx, wlIdx, hook), "10s", "1s").
+									Should(Equal(uint32(numConnections)))
+							}
+
+							By("Filling the limit")
+							pcs := make([]*connectivity.PersistentConnection, numConnections)
+							for i := range pcs {
+								pcs[i] = client.StartPersistentConnection(w[0].IP, 8055,
+									workload.PersistentConnectionOpts{MonitorConnectivity: true})
+							}
+							defer func() {
+								for _, pc := range pcs {
+									if pc != nil {
+										pc.Stop()
+									}
+								}
+							}()
+							for _, pc := range pcs {
+								Eventually(pc.PongCount, "10s").Should(BeNumerically(">", 0))
+							}
+
+							// The RST claims to come from the server in both
+							// directions, so one pattern serves both.
+							rstPattern := regexp.MustCompile(
+								fmt.Sprintf(`%s\.8055 > %s\.\d+: Flags \[R`, w[0].IP, client.IP))
+
+							By("Capturing inside the client's namespace")
+							clientDump := client.AttachTCPDump()
+							clientDump.SetLogEnabled(true)
+							clientDump.AddMatcher("RST", rstPattern)
+							clientDump.Start(infra, "tcp", "port", "8055")
+							defer clientDump.Stop()
+
+							By("Capturing on the limited workload's own namespace")
+							serverDump := limited.AttachTCPDump()
+							serverDump.SetLogEnabled(true)
+							serverDump.AddMatcher("RST", rstPattern)
+							serverDump.Start(infra, "tcp", "port", "8055")
+							defer serverDump.Stop()
+
+							// Counts are logged once tcpdump has settled, so a
+							// failure still reports what was on the wire.
+							defer func() {
+								logrus.Infof("CORE-13478: RSTs seen — client=%d limited-workload=%d",
+									clientDump.MatchCount("RST"), serverDump.MatchCount("RST"))
+							}()
+
+							By("Attempting one more connection, which must be refused")
+							Expect(client.CanConnectTo(w[0].IP, "8055", "tcp").HasConnectivity()).
+								To(BeFalse(), "the limit did not refuse the connection")
+
+							By("The client must have seen the rejection RST")
+							Eventually(clientDump.MatchCountFn("RST"), "10s", "200ms").
+								Should(BeNumerically(">", 0),
+									"the rejection RST never reached the client, so it retries until "+
+										"tcp_syn_retries expires")
+
+							// CanConnectTo returns nil on failure, discarding the
+							// error; only the Checker path keeps it.
+							By("The client must fail fast, not time out")
+							cc := &connectivity.Checker{}
+							cc.Expect(connectivity.None, client, w[0],
+								connectivity.ExpectWithPorts(8055),
+								connectivity.ExpectNoneWithError("connection refused"))
+							cc.CheckConnectivity()
+						})
+					}
+
+					describeRejectionRST(
+						"should deliver the ingress connlimit rejection RST to the client",
+						0, 1,
+						func(n int) {
+							if n == 0 {
+								w[0].WorkloadEndpoint.Spec.QoSControls = nil
+							} else {
+								w[0].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+									IngressMaxConnections: int64(n),
+								}
+							}
+							w[0].UpdateInInfra(infra)
+						}, 0, 0, "ingress")
+
+					describeRejectionRST(
+						"should deliver the egress connlimit rejection RST to the client",
+						1, 1,
+						func(n int) {
+							if n == 0 {
+								w[1].WorkloadEndpoint.Spec.QoSControls = nil
+							} else {
+								w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+									EgressMaxConnections: int64(n),
+								}
+							}
+							w[1].UpdateInInfra(infra)
+						}, 1, 1, "egress")
+
 					// CORE-13478 Failure.7: a packet crossing an RST close cleared
 					// the per-leg bits, hiding the close from the reap.
 					// CORE-13478 Failure.7 is NOT fixed: an RST is forgeable, so it
