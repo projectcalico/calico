@@ -7738,8 +7738,6 @@ blocks:
           commands:
             - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
   - name: "Operator FV"
-    # The FV applies the operator's RBAC from the chart, so a change to the chart's
-    # rules has to run it.
     run:
       when: >-
         change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
