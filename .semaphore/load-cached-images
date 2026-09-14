@@ -83,7 +83,13 @@ build_image() {
         "${REPO_ROOT}/.semaphore/scripts/load-nft-rpms.sh" "$ARCH"
     fi
 
-    make -C "${REPO_ROOT}" "$marker" ARCH="$ARCH"
+    # The calico and node image markers depend on LIBBPF_MARKER (lib.Makefile),
+    # whose recipe runs `make -C felix libbpf`. The Felix Build/UT blocks export
+    # NO_LIBBPF_CLONE so that a cold build fails loudly instead of silently
+    # re-cloning; here the clone is the intended fallback (there is no cached
+    # tarball to restore), so drop the guard — same reasoning as
+    # scripts/load-felix-prereqs.sh.
+    env -u NO_LIBBPF_CLONE make -C "${REPO_ROOT}" "$marker" ARCH="$ARCH"
 }
 
 load_image calico  "calico/calico"  "calico-image.tar.zst"  "${REPO_ROOT}/cmd/calico/.image.created-${ARCH}"
