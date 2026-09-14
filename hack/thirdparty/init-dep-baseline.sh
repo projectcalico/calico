@@ -42,9 +42,9 @@ if git -C "$TREE" rev-parse -q --verify HEAD >/dev/null 2>&1 &&
 	exit 0
 fi
 
-# Identity is passed inline because CI has no global git config, and -f guards
-# against an upstream .gitignore excluding either file.
+# CI has no git config, and a developer's global one must not reach this
+# throwaway repo. -f in case upstream gitignores either file.
 git -C "$TREE" add -f go.mod go.sum
-git -C "$TREE" -c user.email=noreply@tigera.io -c user.name=Tigera \
-	commit -q -m "Baseline: go.mod and go.sum with the custom patches applied"
+git -C "$TREE" -c user.email=noreply@tigera.io -c user.name=Tigera -c commit.gpgsign=false \
+	commit -q --no-verify -m "Baseline: go.mod and go.sum with the custom patches applied"
 echo "recorded a go.mod/go.sum baseline for $TREE"

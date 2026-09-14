@@ -36,16 +36,11 @@ DEP_PINS=dep-pins.txt
 # 	-F0 drops patch's default fuzz: a stale patch fails rather than landing
 # 	somewhere approximate.
 
-# 	Upstream at the pinned ref with class 01 applied -- there is none today,
-# 	so 01-custom-patches/ does not exist and the -f guard skips it.
+# 	Upstream at the pinned ref. No custom patches today, so there is no class 01
+# 	loop here; copy one from envoy-gateway if that changes.
 $(ENVOY_RATELIMIT_FETCHED):
 	rm -rf envoy-ratelimit .envoy-ratelimit.fetched .envoy-ratelimit.downloaded
 	$(call fetch_repo,$(ENVOY_RATELIMIT_REPO),$(ENVOY_RATELIMIT_VERSION),envoy-ratelimit)
-	for patch in patches/01-custom-patches/*.patch; do \
-		if [ -f "$$patch" ]; then \
-			patch -d envoy-ratelimit -p1 -F0 < "$$patch" || exit 1; \
-		fi; \
-	done
 # 	Record what the generator diffs against, before any dependency patch
 # 	lands. No-op for a cloned tree.
 	../../hack/thirdparty/init-dep-baseline.sh envoy-ratelimit
@@ -72,7 +67,10 @@ regen-dep-patches: $(ENVOY_RATELIMIT_FETCHED)
 # 	Fail if the checked-in patch is not what the pins produce.
 .PHONY: check-dep-patches
 check-dep-patches: regen-dep-patches
-	@git diff --exit-code -- patches/02-auto-gen-patches || { \
+	@changed=$$(git status --porcelain -- patches/02-auto-gen-patches); \
+	[ -z "$$changed" ] || { \
+		git --no-pager diff -- patches/02-auto-gen-patches; \
+		echo "$$changed"; \
 		echo "ERROR: patches/02-auto-gen-patches/ is not what $(DEP_PINS) produces."; \
 		echo "Run 'make -C third_party/envoy-ratelimit regen-dep-patches' and commit the result."; \
 		exit 1; \

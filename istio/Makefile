@@ -63,11 +63,12 @@ $(ISTIO_FETCHED):
 	$(call fetch_file,https://github.com/istio/istio/archive/refs/tags/$(ISTIO_VERSION).tar.gz,/tmp/calico-istio.tar.gz)
 	tar xz --strip-components=1 -C istio -f /tmp/calico-istio.tar.gz
 	rm -f /tmp/calico-istio.tar.gz
+	found=; \
 	for patch in patches/01-custom-patches/*.patch; do \
-		if [ -f "$$patch" ]; then \
-			patch -d istio -p1 -F0 < "$$patch" || exit 1; \
-		fi; \
-	done
+		[ -f "$$patch" ] || continue; found=1; \
+		patch -d istio -p1 -F0 < "$$patch" || exit 1; \
+	done; \
+	[ -n "$$found" ] || { echo "error: no patches in patches/01-custom-patches/" >&2; exit 1; }
 # 	Record what the generator diffs against, before any dependency patch lands.
 	../hack/thirdparty/init-dep-baseline.sh istio
 	touch $@
@@ -91,7 +92,10 @@ regen-dep-patches: $(ISTIO_FETCHED)
 # 	Fail if the checked-in patch is not what the pins produce.
 .PHONY: check-dep-patches
 check-dep-patches: regen-dep-patches
-	@git diff --exit-code -- patches/02-auto-gen-patches || { \
+	@changed=$$(git status --porcelain -- patches/02-auto-gen-patches); \
+	[ -z "$$changed" ] || { \
+		git --no-pager diff -- patches/02-auto-gen-patches; \
+		echo "$$changed"; \
 		echo "ERROR: patches/02-auto-gen-patches/ is not what $(DEP_PINS) produces."; \
 		echo "Run 'make -C istio regen-dep-patches' and commit the result."; \
 		exit 1; \
@@ -102,11 +106,12 @@ $(ZTUNNEL_DOWNLOADED):
 	$(call fetch_file,https://github.com/istio/ztunnel/archive/refs/tags/$(ISTIO_VERSION).tar.gz,/tmp/calico-ztunnel.tar.gz)
 	tar xz --strip-components=1 -C ztunnel -f /tmp/calico-ztunnel.tar.gz
 	rm -f /tmp/calico-ztunnel.tar.gz
+	found=; \
 	for patch in ztunnel-patches/01-custom-patches/*.patch; do \
-		if [ -f "$$patch" ]; then \
-			patch -d ztunnel -p1 -F0 < "$$patch" || exit 1; \
-		fi; \
-	done
+		[ -f "$$patch" ] || continue; found=1; \
+		patch -d ztunnel -p1 -F0 < "$$patch" || exit 1; \
+	done; \
+	[ -n "$$found" ] || { echo "error: no patches in ztunnel-patches/01-custom-patches/" >&2; exit 1; }
 	touch $@
 
 ###############################################################################

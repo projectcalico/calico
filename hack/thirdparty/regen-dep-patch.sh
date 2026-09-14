@@ -57,7 +57,8 @@ drop_output() {
 	fi
 }
 
-# Pin lines are "<module> <version>"; comments become the patch header.
+# "<module> <version>" with an optional trailing # comment. The comment block
+# and the pins both go into the patch header.
 if [ -f "$PIN_FILE" ]; then
 	mapfile -t pin_lines < <(grep -vE '^[[:space:]]*(#|$)' "$PIN_FILE" || true)
 else
@@ -100,7 +101,7 @@ is_at_least() {
 
 targets=()
 for line in "${pin_lines[@]}"; do
-	read -r module version extra <<<"$line"
+	read -r module version extra <<<"${line%%#*}"
 	if [ -z "${version:-}" ] || [ -n "${extra:-}" ]; then
 		echo "error: $PIN_FILE: expected '<module> <version>', got: $line" >&2
 		exit 1
@@ -124,7 +125,7 @@ fi
 # below its pin means something in the graph is holding it down.
 status=0
 for line in "${pin_lines[@]}"; do
-	read -r module version _ <<<"$line"
+	read -r module version _ <<<"${line%%#*}"
 	resulting=$(selected_version "$module")
 	if [ -z "$resulting" ]; then
 		echo "warning: $module is not in the module graph after tidy; the pin has no effect" >&2
@@ -151,8 +152,10 @@ mkdir -p "$(dirname "$OUT")"
 	echo "Date: $PATCH_DATE"
 	echo "Subject: [PATCH] $PATCH_SUBJECT"
 	echo
-	# Rationale, copied from the pin file with the comment markers stripped.
+	# The pin file's leading comment block, then the pins themselves.
 	sed -n 's/^#[[:space:]]\?//p' "$PIN_FILE"
+	echo
+	printf '  %s\n' "${pin_lines[@]}"
 	echo
 	echo "Generated from $(basename "$PIN_FILE") by hack/thirdparty/regen-dep-patch.sh."
 	echo "Do not edit by hand: run 'make regen-dep-patches' in this component after"
