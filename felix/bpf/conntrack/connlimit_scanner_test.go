@@ -121,8 +121,17 @@ func TestConnLimitScannerCheckNoPodsIsNoOp(t *testing.T) {
 }
 
 // established creates a Leg with SYN+ACK seen (3-way handshake complete).
-func established(opener bool) Leg {
-	return Leg{SynSeen: true, AckSeen: true, Opener: opener}
+// podIfIndex is the limited pod's veth. remoteIfIndex is the data interface an
+// off-node peer arrives on.
+const (
+	podIfIndex    uint32 = 9
+	remoteIfIndex uint32 = 2
+)
+
+// established builds one leg of an established connection. A zero ifindex marks
+// a host-originated leg.
+func established(opener bool, ifindex uint32) Leg {
+	return Leg{SynSeen: true, AckSeen: true, Opener: opener, Ifindex: ifindex}
 }
 
 // makeKey creates a TCP CT key for the given IPs and ports.
@@ -139,8 +148,8 @@ func makeKeyV6(ipA, ipB string, portA, portB uint16) KeyV6 {
 // shared between families, so only the value constructor differs.
 func makeEstablishedValueV6() ValueV6 {
 	return NewValueV6Normal(time.Duration(0), 0,
-		established(true),  // A is opener
-		established(false), // B is responder
+		established(true, remoteIfIndex), // A is opener
+		established(false, podIfIndex),   // B is responder
 	)
 }
 
@@ -148,23 +157,23 @@ func makeEstablishedValueV6() ValueV6 {
 // legA is the opener (egress initiator).
 func makeEstablishedValue() Value {
 	return NewValueNormal(time.Duration(0), 0,
-		established(true),  // A is opener
-		established(false), // B is responder
+		established(true, remoteIfIndex), // A is opener
+		established(false, podIfIndex),   // B is responder
 	)
 }
 
 // makeEstablishedValueWithFIN creates an established value with a FIN on one leg.
 func makeEstablishedValueWithFIN() Value {
-	legA := established(true)
+	legA := established(true, remoteIfIndex)
 	legA.FinSeen = true
-	return NewValueNormal(time.Duration(0), 0, legA, established(false))
+	return NewValueNormal(time.Duration(0), 0, legA, established(false, podIfIndex))
 }
 
 // makeEstablishedValueWithRST creates an established value with RST seen.
 func makeEstablishedValueWithRST() Value {
-	legA := established(true)
+	legA := established(true, remoteIfIndex)
 	legA.RstSeen = true
-	return NewValueNormal(time.Duration(0), 0, legA, established(false))
+	return NewValueNormal(time.Duration(0), 0, legA, established(false, podIfIndex))
 }
 
 // makeSYNOnlyValue creates a value where only SYN was seen (not established).
@@ -435,6 +444,87 @@ func TestConnLimitScannerSkipsUnlimitedPods(t *testing.T) {
 	}
 }
 
+// limitedPodScanner returns a scanner where podIP holds an ingress limit.
+func limitedPodScanner(podIP string) *ConnLimitScanner {
+	return &ConnLimitScanner{
+		family: qos.IPFamilyV4,
+		counts: make(map[connlimitKey]uint32),
+		podInfo: map[string]ConnLimitPodInfo{
+			string(net.ParseIP(podIP).To4()): podInfo(podIfIndex, true, false),
+		},
+	}
+}
+
+// podResponder builds the limited pod's leg, which carries its veth ifindex.
+func podResponder() Leg {
+	leg := established(false, podIfIndex)
+	leg.Workload = true
+	return leg
+}
+
+// Covers CORE-13478 Failure.4: host traffic skips the to-wep check, so the
+// recount must not charge it.
+func TestConnLimitScannerSkipsHostOriginatedConnection(t *testing.T) {
+	podIP := "10.65.0.2"
+	hostIP := "172.17.0.5"
+
+	scanner := limitedPodScanner(podIP)
+
+	// to-wep creates the entry, so the opener leg gets neither an ifindex nor
+	// the workload bit.
+	val := NewValueNormal(time.Duration(0), 0, established(true, 0), podResponder())
+
+	verdict, _ := scanner.Check(makeKey(hostIP, podIP, 54321, 8080), val, nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
+	if len(scanner.counts) != 0 {
+		t.Errorf("expected no counts for host-origin connection, got %v", scanner.counts)
+	}
+}
+
+// A CT RPF failure zeroes a pod leg's ifindex, so a zero ifindex alone cannot
+// mean host origin.
+func TestConnLimitScannerCountsPodOriginWithInvalidatedIfindex(t *testing.T) {
+	podIP := "10.65.0.2"
+	peerIP := "10.65.0.7"
+
+	scanner := limitedPodScanner(podIP)
+
+	opener := established(true, 0)
+	opener.Workload = true
+	val := NewValueNormal(time.Duration(0), 0, opener, podResponder())
+
+	verdict, _ := scanner.Check(makeKey(peerIP, podIP, 54321, 8080), val, nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
+	expected := connlimitKey{ifindex: podIfIndex, direction: 1}
+	if scanner.counts[expected] != 1 {
+		t.Errorf("expected ingress count 1 for RPF-invalidated pod, got %v", scanner.counts)
+	}
+}
+
+// An off-node pod arrives on the data interface, so its leg carries that
+// ifindex and no workload bit.
+func TestConnLimitScannerCountsRemoteWorkloadOrigin(t *testing.T) {
+	podIP := "10.65.0.2"
+	remoteIP := "10.65.1.3"
+
+	scanner := limitedPodScanner(podIP)
+
+	val := NewValueNormal(time.Duration(0), 0, established(true, remoteIfIndex), podResponder())
+
+	verdict, _ := scanner.Check(makeKey(remoteIP, podIP, 54321, 8080), val, nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
+	expected := connlimitKey{ifindex: podIfIndex, direction: 1}
+	if scanner.counts[expected] != 1 {
+		t.Errorf("expected ingress count 1 for remote pod, got %v", scanner.counts)
+	}
+}
+
 func TestConnLimitScannerMultipleConnections(t *testing.T) {
 	podIP := "10.65.0.2"
 
@@ -500,8 +590,8 @@ func TestConnLimitScannerBothPodsLimited(t *testing.T) {
 // dataplane clears the per-leg bits on the RST itself, leaving only the stamp.
 func makeRSTClosedValue(flags uint32, rstSeen, lastSeen time.Duration) Value {
 	v := NewValueNormal(lastSeen, flags,
-		established(true),  // A is opener
-		established(false), // B is responder
+		established(true, remoteIfIndex), // A is opener
+		established(false, podIfIndex),   // B is responder
 	)
 	binary.LittleEndian.PutUint64(v[ctv4.VoRSTSeen:ctv4.VoRSTSeen+8], uint64(rstSeen))
 	return v
@@ -615,8 +705,8 @@ func TestConnLimitScannerRecountsLiveConnectionAfterSpuriousRST(t *testing.T) {
 	// marks have cleared — but CONNLIMIT_DEC is set from the earlier RST.
 	key := makeKey(remoteIP, podIP, 54321, 8080)
 	val := NewValueNormal(time.Duration(0), ctv4.FlagConnLimitIn|ctv4.FlagConnLimitDec,
-		established(true),
-		established(false),
+		established(true, remoteIfIndex),
+		established(false, podIfIndex),
 	)
 
 	verdict, _ := scanner.Check(key, val, nil)
