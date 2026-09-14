@@ -4076,12 +4076,14 @@ blocks:
   - name: E2E test set drift
     run:
       when: >-
-        change_in(['/.argoci/cron/',
+        change_in(['/.argoci/ciworkflow.yaml',
+        '/.argoci/cron/',
         '/.semaphore/semaphore.yml.d/01-preamble.yml',
         '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
         '/.semaphore/semaphore.yml.d/03-promotions.yml',
         '/.semaphore/semaphore.yml.d/09-blocks.yml',
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
+        '/.semaphore/semaphore.yml.d/blocks/',
         '/.semaphore/semaphore.yml.d/blocks/20-e2e-test-sets.yml',
         '/Makefile',
         '/api/pkg/apis/projectcalico/v3/*.go',
