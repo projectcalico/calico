@@ -26984,6 +26984,19 @@ spec:
                     with ListenPort set in BGPConfiguration, then we use that port to peer.
                   maxLength: 64
                   type: string
+                  x-kubernetes-validations:
+                    - message:
+                        peerIP must be an IP address, optionally with a port as
+                        <IPv4>:<port> or [<IPv6>]:<port>
+                      reason: FieldValueInvalid
+                      rule:
+                        self == '' || isIP(self) || (self.startsWith('[') && self.contains(']:')
+                        && isIP(self.substring(1, self.lastIndexOf(']:'))) && self.substring(self.lastIndexOf(']:')
+                        + 2).matches('^[0-9]{1,5}$') && int(self.substring(self.lastIndexOf(']:')
+                        + 2)) >= 1 && int(self.substring(self.lastIndexOf(']:') + 2))
+                        <= 65535) || (self.matches('^[0-9.]+:[0-9]{1,5}$') && isIP(self.split(':')[0])
+                        && int(self.split(':')[1]) >= 1 && int(self.split(':')[1]) <=
+                        65535)
                 peerSelector:
                   description: |-
                     Selector for the remote nodes to peer with.  When this is set, the PeerIP and
@@ -29745,6 +29758,22 @@ spec:
                           (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
                           && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
                           == 6
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP',
+                          'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.notProtocol) || (type(self.notProtocol) == int
+                          ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
+                          in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -30301,6 +30330,22 @@ spec:
                           (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
                           && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
                           == 6
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP',
+                          'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.notProtocol) || (type(self.notProtocol) == int
+                          ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
+                          in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -30492,9 +30537,15 @@ spec:
                     The list of IP networks that belong to this set. Each entry must be in CIDR notation,
                     e.g. "192.168.1.0/24". To include a single IP address, use a /32 (IPv4) or /128 (IPv6) mask.
                   items:
+                    maxLength: 64
                     type: string
+                  maxItems: 8000
                   type: array
                   x-kubernetes-list-type: set
+                  x-kubernetes-validations:
+                    - message: nets entries must be IP addresses or CIDRs
+                      reason: FieldValueInvalid
+                      rule: self.all(n, isCIDR(n) || isIP(n))
               type: object
           type: object
       served: true
@@ -30601,6 +30652,15 @@ spec:
                       - port
                       - protocol
                     type: object
+                    x-kubernetes-validations:
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "type(self.protocol) == int ? self.protocol >= 1 && self.protocol
+                          <= 255 : self.protocol in ['TCP', 'UDP', 'ICMP', 'ICMPv6',
+                          'SCTP', 'UDPLite']"
                   type: array
                   x-kubernetes-list-type: atomic
                 profiles:
@@ -32373,6 +32433,22 @@ spec:
                           (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
                           && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
                           == 6
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP',
+                          'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.notProtocol) || (type(self.notProtocol) == int
+                          ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
+                          in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -32929,6 +33005,22 @@ spec:
                           (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
                           && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
                           == 6
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP',
+                          'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.notProtocol) || (type(self.notProtocol) == int
+                          ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
+                          in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -33081,9 +33173,15 @@ spec:
                     The list of IP networks that belong to this set. Each entry must be in CIDR notation,
                     e.g. "192.168.1.0/24". To include a single IP address, use a /32 (IPv4) or /128 (IPv6) mask.
                   items:
+                    maxLength: 64
                     type: string
+                  maxItems: 8000
                   type: array
                   x-kubernetes-list-type: set
+                  x-kubernetes-validations:
+                    - message: nets entries must be IP addresses or CIDRs
+                      reason: FieldValueInvalid
+                      rule: self.all(n, isCIDR(n) || isIP(n))
               type: object
           type: object
       served: true
@@ -33693,6 +33791,22 @@ spec:
                           (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
                           && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
                           == 6
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP',
+                          'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.notProtocol) || (type(self.notProtocol) == int
+                          ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
+                          in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -34249,6 +34363,22 @@ spec:
                           (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
                           && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
                           == 6
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP',
+                          'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.notProtocol) || (type(self.notProtocol) == int
+                          ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
+                          in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -35523,6 +35653,22 @@ spec:
                           (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
                           && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
                           == 6
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP',
+                          'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.notProtocol) || (type(self.notProtocol) == int
+                          ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
+                          in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -36079,6 +36225,22 @@ spec:
                           (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
                           && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
                           == 6
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP',
+                          'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.notProtocol) || (type(self.notProtocol) == int
+                          ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
+                          in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
