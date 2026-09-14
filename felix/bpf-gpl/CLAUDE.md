@@ -21,7 +21,7 @@ All commands run from `felix/`, in the go-build container:
 
 ```bash
 make build-bpf                                          # every variant: IPv4/IPv6, all hook types
-make check-bpf-headers                                  # include guards + header self-containment (~5s)
+make check-bpf-headers                                  # include guards + header self-containment (~30s)
 make FOCUS="TestPrecompiledBinariesAreLoadable" ut-bpf  # every object passes the local kernel's verifier
 ```
 
@@ -71,6 +71,7 @@ that is not self-contained.
   `COMMON_MAP_HEADERS` or `XDP_MAP_HEADERS` in the `Makefile`.** Felix creates
   maps by looking them up by name in the generated map-stub objects; a map
   missing from the stubs loses its BTF.
-- `check-headers` has a table of which build variants each header is meant for
-  (`only`); a header that is XDP-only, cgroup-only or IPv4/IPv6-only needs an
-  entry there.
+- `check-headers` derives its build variants by running `calculate-flags` over
+  the real object list, so a new program is covered without touching it. A
+  header that is XDP-only, cgroup-only or IPv4/IPv6-only needs an entry in its
+  `only` table; everything else must compile under every variant.
