@@ -149,4 +149,53 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 		Eventually(getBPFNet, "15s", "1s").Should(ContainElements("eth10", "eth20"))
 
 	})
+
+	It("should attach programs to the bridge and not its member ports", func() {
+		By("Creating a bridge with its member ports before Felix starts")
+		// Configure the full bridge topology up-front so Felix builds its
+		// interface tree from the initial netlink resync. This mirrors how a
+		// bridge is deployed in practice (set up at boot, before calico-node
+		// starts) and avoids relying on an interface flap: enslaving an
+		// already-up port to a bridge does not change its oper state, and
+		// Felix's interface monitor only notifies on an up/down transition, so
+		// a runtime enslave of an up port would not be picked up on its own.
+		tc.Felixes[0].Exec("ip", "link", "add", "br10", "type", "dummy")
+		tc.Felixes[0].Exec("ip", "link", "add", "br20", "type", "dummy")
+		tc.Felixes[0].Exec("ip", "link", "add", "br0", "type", "bridge")
+		tc.Felixes[0].Exec("ip", "link", "set", "br10", "master", "br0")
+		tc.Felixes[0].Exec("ip", "link", "set", "br20", "master", "br0")
+		tc.Felixes[0].Exec("ifconfig", "br10", "up")
+		tc.Felixes[0].Exec("ifconfig", "br20", "up")
+		tc.Felixes[0].Exec("ifconfig", "br0", "up")
+
+		By("Starting Felix with a data iface pattern that matches the bridge")
+		felix.TriggerDelayedStart()
+		// "br" is free of shell metacharacters (SetEnv writes it into a sourced
+		// script) and matches the bridge br0 and its br10/br20 members.
+		felix.SetEnv(map[string]string{"FELIX_BPFDataIfacePattern": "br"})
+		felix.Restart()
+
+		getBPFNet := func() []string {
+			out, _ := felix.ExecOutput("bpftool", "-jp", "net")
+			devs := []string{}
+			var output []struct {
+				Tc []struct {
+					Devname string `json:"devname"`
+				} `json:"tc"`
+			}
+			err := json.Unmarshal([]byte(out), &output)
+			if err == nil {
+				for _, tc := range output[0].Tc {
+					devs = append(devs, tc.Devname)
+				}
+			}
+			return devs
+		}
+
+		By("Checking the program is on the bridge, not its member ports")
+		// Felix's resync sees br10/br20 already enslaved to br0, so the tc
+		// program is attached to the bridge and not to the enslaved ports.
+		Eventually(getBPFNet, "15s", "1s").Should(ContainElement("br0"))
+		Eventually(getBPFNet, "15s", "1s").ShouldNot(ContainElements("br10", "br20"))
+	})
 })

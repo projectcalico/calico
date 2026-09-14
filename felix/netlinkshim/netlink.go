@@ -28,10 +28,13 @@ type Interface interface {
 	SetStrictCheck(b bool) error
 	LinkList() ([]netlink.Link, error)
 	LinkByName(name string) (netlink.Link, error)
+	LinkByIndex(id int) (netlink.Link, error)
 	LinkAdd(link netlink.Link) error
 	LinkDel(link netlink.Link) error
 	LinkSetMTU(link netlink.Link, mtu int) error
 	LinkSetUp(link netlink.Link) error
+	LinkSetMaster(link netlink.Link, master netlink.Link) error
+	LinkSetNoMaster(link netlink.Link) error
 	RouteListFiltered(family int, filter *netlink.Route, filterMask uint64) ([]netlink.Route, error)
 	RouteListFilteredIter(family int, filter *netlink.Route, filterMask uint64, f func(netlink.Route) (cont bool)) error
 	RouteAdd(route *netlink.Route) error
@@ -88,6 +91,10 @@ func (r *RealNetlink) LinkList() ([]netlink.Link, error) {
 
 func (r *RealNetlink) LinkByName(name string) (netlink.Link, error) {
 	return r.nlHandle.LinkByName(name)
+}
+
+func (r *RealNetlink) LinkByIndex(id int) (netlink.Link, error) {
+	return r.nlHandle.LinkByIndex(id)
 }
 
 func (r *RealNetlink) LinkAdd(link netlink.Link) error {
@@ -210,4 +217,12 @@ func (r *RealNetlink) NeighSet(a *netlink.Neigh) error {
 
 func (r *RealNetlink) NeighDel(a *netlink.Neigh) error {
 	return r.nlHandle.NeighDel(a)
+}
+
+func (r *RealNetlink) LinkSetMaster(link netlink.Link, master netlink.Link) error {
+	return r.nlHandle.LinkSetMaster(link, master)
+}
+
+func (r *RealNetlink) LinkSetNoMaster(link netlink.Link) error {
+	return r.nlHandle.LinkSetNoMaster(link)
 }
