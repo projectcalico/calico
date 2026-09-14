@@ -420,34 +420,14 @@ export GIT_TERMINAL_PROMPT ?= 0
 fetch_file = $(REPO_ROOT)/hack/fetch-file $(1) $(2)
 fetch_repo = $(REPO_ROOT)/hack/fetch-repo $(1) $(2) $(3)
 
-# Set the default go cache path if we can't find one automatically
 DEFAULT_GO_CACHE_PATH := $(REPO_ROOT)/.go-pkg-cache
-
-# Detect what path to use as the user's go cache path.
-# 
-# Setting LOCAL_GO_PKG_CACHE in your environment overrides this
-# unconditionally; setting GOCACHE overrides it if the value
-# you provide passes the sanity checks below.
-
-# Set the path (outside of containers) to mount as the go cache path
 GOENV_GOCACHE := $(strip $(shell go env GOCACHE 2>/dev/null))
-# If the result is empty, skip it
-ifneq ($(GOENV_GOCACHE),)
-# If the result is 'off', skip that
-ifneq ($(GOENV_GOCACHE),off)
-# If the result isn't an absolute path, or if it
-# doesn't start with ./ or ../, then skip it
-ifneq ($(filter /% ./% ../%,$(GOENV_GOCACHE)),)
-LOCAL_GO_PKG_CACHE ?= $(GOENV_GOCACHE)
-else
-LOCAL_GO_PKG_CACHE ?= $(DEFAULT_GO_CACHE_PATH)
-endif # filter
-else
-LOCAL_GO_PKG_CACHE ?= $(DEFAULT_GO_CACHE_PATH)
-endif # off
-else
-LOCAL_GO_PKG_CACHE ?= $(DEFAULT_GO_CACHE_PATH)
-endif # blank
+
+# Mount source for the Go build cache, first match wins:
+#   1. LOCAL_GO_PKG_CACHE from the environment
+#   2. GOCACHE, when the Go tools resolve it to a real path
+#   3. the repo-local .go-pkg-cache
+LOCAL_GO_PKG_CACHE ?= $(or $(filter /% ./% ../%,$(GOENV_GOCACHE)),$(DEFAULT_GO_CACHE_PATH))
 
 DOCKER_RUN_PRIV_NET := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 	docker run --rm \
