@@ -1625,19 +1625,8 @@ var _ = infrastructure.DatastoreDescribe(
 						By("Waiting for ingress counter to reach the limit")
 						Eventually(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
 
-						// Use CanConnectTo (synchronous one-shot) rather than
-						// StartPersistentConnectionMayFail. The persistent-
-						// connection helper leaves the docker exec'd
-						// test-connection process running on connect failure
-						// (Start() returns an error without recording the runCmd
-						// on the returned pc, so the caller can't clean it up).
-						// Each lingering process has a kernel socket in SYN-SENT
-						// retransmitting for ~tcp_syn_retries (~127s). When a
-						// slot later opens up (close-time decrement), one of those
-						// queued SYN retries races the test's own re-open and
-						// steals the freed slot. CanConnectTo waits for the
-						// underlying test-connection process to exit before
-						// returning, so no zombies are left behind.
+						// StartPersistentConnectionMayFail would leak its
+						// process here: Start() drops the runCmd on the error path.
 						By("Attempting one more connection, expecting failure")
 						Eventually(func() bool {
 							return w[2].CanConnectTo(w[0].IP, "8055", "tcp").HasConnectivity()
