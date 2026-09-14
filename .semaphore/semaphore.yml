@@ -71,7 +71,12 @@ global_job_config:
       - sudo apt-get install -y zstd s3cmd || true
       # Write the s3cmd config from the env so the cache restore/store steps in
       # this prologue can run before the working copy (and the .semaphore/s3-cmd
-      # wrapper) has been checked out.
+      # wrapper) has been checked out. Those steps therefore call bare `s3cmd`
+      # and are credentialed-only: without the secrets the keys here are empty
+      # and the restores below fail, which is tolerated — every one of them
+      # degrades to a fresh `git clone` and a cold build cache rather than
+      # failing the job. Anything running after the checkout should use
+      # .semaphore/s3-cmd, which adds the anonymous read-only path.
       - |-
         cat >"$HOME/.s3cfg" <<S3CFG
         [default]
@@ -168,7 +173,11 @@ global_job_config:
             else
               echo "Docker Hub pull failed for ${image}, falling back to S3 cache"
               cache_path="s3://${CALICO_S3_BUCKET}/${CALICO_S3_KEY_PREFIX}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
-              if s3cmd get --force "$cache_path" /tmp/go-build.tar.zst 2>/dev/null; then
+              # We are past the checkout here, so go through the wrapper rather
+              # than bare s3cmd: it falls back to an anonymous HTTPS read when
+              # the credentials are absent, so credential-less builds (forks)
+              # still get the fallback.
+              if .semaphore/s3-cmd cp "$cache_path" /tmp/go-build.tar.zst 2>/dev/null; then
                 echo "Loading ${image} from S3 cache"
                 zstd -d --rm -o /tmp/go-build.tar /tmp/go-build.tar.zst
                 docker load -i /tmp/go-build.tar
@@ -470,15 +479,20 @@ blocks:
             - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
             - |-
               if [[ "${SEMAPHORE_GIT_BRANCH}" == "master" ]]; then
-                # master uses Semaphore's free cache (other branches use GCS). This
+                # master uses Semaphore's free cache (other branches use S3). This
                 # block only runs on branch builds (its `when: "branch =~ '.*'"`),
                 # so PRs never store here — they only restore, in the prologue.
                 # Cache keys are not overwritten, so delete-then-store to refresh.
                 cache delete "working-copy-${SEMAPHORE_GIT_BRANCH}" || true
                 cache store "working-copy-${SEMAPHORE_GIT_BRANCH}" /tmp/working-copy.tar.zstd
               else
-                gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-                gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+                # Must match the restore path in the global prologue
+                # (02-global_job_config.yml), which reads $S3_CACHE_DIR. We have
+                # cd'd to $HOME, so the wrapper lives at ./${CALICO_DIR_NAME};
+                # going through it rather than bare s3cmd applies the
+                # CALICO_S3_EXPIRY_DAYS default expiry.
+                s3_branch_cache_dir="${S3_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+                "${CALICO_DIR_NAME}/.semaphore/s3-cmd" cp /tmp/working-copy.tar.zstd "$s3_branch_cache_dir/working-copy.tar.zstd"
               fi
   - name: "Build: nftables RPMs"
     # Producer for the patched nftables + libnftnl RPMs that calico/node and the
@@ -872,13 +886,14 @@ blocks:
           commands:
             - .semaphore/scripts/build-nft-rpms.sh "${ARCH}"
   - name: "Pull: go-build image"
-    # Populate the GCS cache of calico/go-build so it can serve as a fallback when
+    # Populate the S3 cache of calico/go-build so it can serve as a fallback when
     # a Docker Hub pull fails (which we still see occasionally even with an
     # authenticated session). Jobs pull from Docker Hub first and only fall back to
-    # this GCS copy on failure (see the global prologue), so this is just an
+    # this S3 copy on failure (see the global prologue), so this is just an
     # insurance upload — uploads are free and the common case is a no-op
-    # `gcloud storage ls` cache hit, keyed by GO_BUILD_VER so the tarball survives
-    # across workflows.
+    # `s3-cmd ls` cache hit, keyed by GO_BUILD_VER so the tarball survives
+    # across workflows. The path here must match the fallback in the global
+    # prologue (02-global_job_config.yml).
     run:
       when: "true"
     dependencies: []
@@ -887,19 +902,20 @@ blocks:
         - name: SKIP_CACHE_RESTORE
           value: "true"
       jobs:
-        - name: "Cache calico/go-build to GCS"
+        - name: "Cache calico/go-build to S3"
           commands:
             - GO_BUILD_VER=$(make --no-print-directory -f metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
-            - cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
+            - cache_path="s3://${CALICO_S3_BUCKET}/${CALICO_S3_KEY_PREFIX}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
             - |-
-              if gcloud storage ls "$cache_path" >/dev/null 2>&1; then
+              if .semaphore/s3-cmd ls "$cache_path" >/dev/null 2>&1; then
                 echo "Cache hit for calico/go-build:${GO_BUILD_VER}"
               else
                 echo "Cache miss for calico/go-build:${GO_BUILD_VER}, pulling and uploading"
                 docker pull "calico/go-build:${GO_BUILD_VER}"
                 docker save "calico/go-build:${GO_BUILD_VER}" -o /tmp/go-build.tar
                 zstd -3 --rm /tmp/go-build.tar
-                gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
+                # A credential-less build skips the upload (see .semaphore/s3-cmd).
+                .semaphore/s3-cmd cp /tmp/go-build.tar.zst "$cache_path"
               fi
   - name: "Build: calico image"
     # Build and cache the calico image so that downstream CI blocks can load it
