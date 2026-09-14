@@ -7,6 +7,9 @@ version: condensed-module
 
 defaults:
   timeout: 3h
+  # The e2e scripts drive `bz` and the cloud CLIs, which the workflow's own
+  # default image does not carry.
+  image: gcr.io/tigera-cc-dev/ci-base/ubuntu-cloud-providers:v0.106
   secretBundles:
     - banzai-secrets
 

@@ -1572,11 +1572,15 @@ components:
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
   release:
     in:
+      - ^api/pkg/lib/numorstring/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib\.Makefile$
       - ^metadata\.mk$
+      - ^operator/api/v1/[^/]*\.go$
+      - ^operator/pkg/components/[^/]*\.go$
+      - ^operator/version/[^/]*\.go$
       - ^release/
     exclude:
       - ^(?:[^/]+/)*AUTHORS[^/]*$
@@ -1587,7 +1591,9 @@ components:
       - ^(?:[^/]+/)*SECURITY\.md$
       - ^(?:[^/]+/)*[^/]*\.md$
       - ^(?:[^/]+/)*\.gitignore$
+      - ^api/(?:[^/]+/)*[^/]*_test\.go$
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
+      - ^operator/(?:[^/]+/)*[^/]*_test\.go$
   test:
     in:
       - ^hack/test/certs/

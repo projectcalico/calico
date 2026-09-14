@@ -31,6 +31,8 @@ steps:
           - name: LENS_ELASTICSEARCH_TOKEN
     commands: |
       sudo apt-get remove -y python3-wrapt || true
+      # Defaults to the path the checkout used to land on.
+      export CALICO_REPO_DIR="${CI_HOME}/${CI_GIT_DIR}"
       cd networking-calico
       # DevStack installs the plugin from a ref, so the commit under test needs
       # to be one rather than a detached head.
