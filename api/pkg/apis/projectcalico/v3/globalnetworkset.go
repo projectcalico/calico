@@ -52,8 +52,8 @@ type GlobalNetworkSetSpec struct {
 	// The list of IP networks that belong to this set. Each entry must be in CIDR notation,
 	// e.g. "192.168.1.0/24". To include a single IP address, use a /32 (IPv4) or /128 (IPv6) mask.
 	// +listType=set
-	// +kubebuilder:validation:items:MaxLength=64
-	// +kubebuilder:validation:MaxItems=8000
+	// +kubebuilder:validation:items:MaxLength=43
+	// +kubebuilder:validation:MaxItems=100000
 	// +kubebuilder:validation:XValidation:rule="self.all(n, isCIDR(n) || isIP(n))",message="nets entries must be IP addresses or CIDRs",reason=FieldValueInvalid
 	Nets []string `json:"nets,omitempty" validate:"omitempty,dive,cidr"`
 }
