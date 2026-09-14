@@ -1215,6 +1215,47 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(isLeafIface(eth20Iface)).To(BeTrue())
 		})
 
+		It("keeps the whole stack when a bridged bond VLAN's update arrives last", func() {
+			dataIfacePattern = "^eth|bond*|br*"
+			newBpfEpMgr(false)
+
+			// Bring up br0, bond0 and its slaves first. The bond VLAN, which is
+			// a member of br0, arrives last already carrying both a ParentIndex
+			// (bond0) and a MasterIndex (br0).
+			Expect(dp.createIface("br0", 12, "bridge")).NotTo(HaveOccurred())
+			Expect(dp.createIface("bond0", 10, "bond")).NotTo(HaveOccurred())
+			Expect(dp.createBondSlaves("eth10", 20, 10)).NotTo(HaveOccurred())
+			Expect(dp.createBondSlaves("eth20", 30, 10)).NotTo(HaveOccurred())
+			genIfaceUpdate("br0", ifacemonitor.StateUp, 12)()
+			genIfaceUpdate("bond0", ifacemonitor.StateUp, 10)()
+			genIfaceUpdate("eth10", ifacemonitor.StateUp, 20)()
+			genIfaceUpdate("eth20", ifacemonitor.StateUp, 30)()
+
+			// Precondition: br0 and bond0 are two separate roots at this point.
+			Expect(len(bpfEpMgr.hostIfaceTrees)).To(Equal(2))
+
+			// bond0.100 is a VLAN on bond0 AND a member of br0.
+			Expect(dp.createVlanIface("bond0.100", 11, 10)).NotTo(HaveOccurred())
+			Expect(dp.setLinkMaster("bond0.100", 12)).NotTo(HaveOccurred())
+			genIfaceUpdate("bond0.100", ifacemonitor.StateUp, 11)()
+
+			// The whole stack must collapse into a single tree rooted at br0,
+			// with the physical NICs still reachable through it.
+			Expect(len(bpfEpMgr.hostIfaceTrees)).To(Equal(1))
+			Expect(bpfEpMgr.hostIfaceTrees).To(HaveKey(12))
+			Expect(bpfEpMgr.hostIfaceTrees.getPhyDevices("br0")).To(ConsistOf("eth10", "eth20"))
+
+			// Validate the chain br0 -> bond0.100 -> bond0 -> {eth0, eth1}.
+			br0Iface := bpfEpMgr.hostIfaceTrees.findIfaceByIndex(12)
+			Expect(isRootIface(br0Iface)).To(BeTrue())
+			Expect(br0Iface.children).To(HaveKey(11))
+			bondVlanIface := br0Iface.children[11]
+			Expect(bondVlanIface.children).To(HaveKey(10))
+			bondIface := bondVlanIface.children[10]
+			Expect(bondIface.children).To(HaveKey(20))
+			Expect(bondIface.children).To(HaveKey(30))
+		})
+
 		It("does not have host-* policy on the workload interface", func() {
 			var eth0I, eth0E, eth0X, caliI, caliE *polprog.Rules
 
