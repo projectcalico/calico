@@ -29,6 +29,10 @@ global_job_config:
   prologue:
     commands:
       - export CALICO_DIR_NAME=${SEMAPHORE_GIT_DIR}
+      # Pin the build cache inside the working copy, which is what the epilogue
+      # tars and restores between runs. Left unset, the agent's own GOCACHE wins
+      # and nothing is persisted.
+      - export LOCAL_GO_PKG_CACHE=$HOME/${CALICO_DIR_NAME}/.go-pkg-cache
       - export GCS_CACHE_DIR=gs://$GCS_BUILD_CACHE_BUCKET/cache/${CALICO_DIR_NAME}
       - export GCS_WORKFLOW_DIR=gs://$GCS_BUILD_CACHE_BUCKET/workflow/${SEMAPHORE_WORKFLOW_ID}
       - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
