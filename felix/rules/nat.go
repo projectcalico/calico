@@ -24,6 +24,7 @@ import (
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/generictables"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 func (r *DefaultRuleRenderer) MakeNatOutgoingRule(protocol string, action generictables.Action, ipVersion uint8) generictables.Rule {
@@ -177,4 +178,27 @@ func (r *DefaultRuleRenderer) BlockedCIDRsToIptablesChains(cidrs []string, ipVer
 		Name:  ChainCIDRBlock,
 		Rules: rules,
 	}}
+}
+
+func (r *DefaultRuleRenderer) LBNoEndpointServicesToIptablesChains(services []*proto.ServiceUpdate, ipVersion uint8) []*generictables.Chain {
+	var rendered []generictables.Rule
+	for _, service := range services {
+		if !strings.EqualFold(service.GetNoEndpointsAction(), "Forward") {
+			continue
+		}
+		for _, vip := range service.GetLoadbalancerIngressIps() {
+			parsed := net.ParseIP(vip)
+			if parsed == nil || (parsed.To4() == nil) != (ipVersion == 6) {
+				continue
+			}
+			for _, port := range service.GetPorts() {
+				rendered = append(rendered, generictables.Rule{
+					Match: r.NewMatch().Protocol(strings.ToLower(port.GetProtocol())).
+						DestNet(vip).DestPorts(uint16(port.GetPort())),
+					Action: r.Allow(),
+				})
+			}
+		}
+	}
+	return []*generictables.Chain{{Name: ChainLBNoEndpoints, Rules: rendered}}
 }
