@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gavv/monotime"
@@ -180,9 +181,22 @@ type collector struct {
 	recalcSnapshot []*Data
 	// recalcSweepStart is when the current snapshot was taken, for the sweep-duration histogram.
 	recalcSweepStart time.Time
+	// recalcInterval is the period of the policy re-evaluation sweep ticker.
+	recalcInterval time.Duration
 	// policyEvalMinInterval is the minimum time between re-evaluations of one flow. Half the
 	// ticker interval.
 	policyEvalMinInterval time.Duration
+
+	// stopC signals the stats collection goroutine to return; closed by Stop().
+	stopC    chan struct{}
+	stopOnce sync.Once
+
+	// thunkC lets a caller run a closure on the collector's own goroutine. The
+	// collector goroutine owns epStats (and the Data values within it) with no
+	// locking, so this is the only race-free way to read or mutate that state
+	// from another goroutine. Only tests currently use it, via the runOnLoop
+	// helper; in production nothing sends to it and the select case is dormant.
+	thunkC chan func()
 }
 
 // newCollector instantiates a new collector. The StartDataplaneStatsCollector function is the only public
@@ -192,24 +206,23 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 	c := &collector{
 		luc:                   lc,
 		epStats:               make(map[tuple.Tuple]*Data),
-		ticker:                jitter.NewTicker(cfg.ExportingInterval, cfg.ExportingInterval/10),
 		config:                cfg,
 		dumpLog:               log.New(),
 		ds:                    make(chan *proto.DataplaneStats, 1000),
 		displayDebugTraceLogs: cfg.DisplayDebugTraceLogs,
 		policyStoreManager:    cfg.PolicyStoreManager,
+		recalcInterval:        recalcInterval,
 		policyEvalMinInterval: recalcInterval / 2,
+		stopC:                 make(chan struct{}),
+		thunkC:                make(chan func()),
 	}
 
 	if c.policyStoreManager == nil {
 		c.policyStoreManager = policystore.NewPolicyStoreManager()
 	}
 
-	// Only run the re-evaluation sweep when pending policies are enabled; leaving the ticker nil
-	// masks the sweep out of the main loop entirely.
 	if apiv3.FlowLogsPolicyEvaluationModeType(cfg.PolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
-		log.Infof("Pending policies enabled, initiating pending policy evaluation ticker")
-		c.tickerPolicyEval = jitter.NewTicker(recalcInterval, cfg.FlowLogsFlushInterval/10)
+		log.Infof("Pending policies enabled")
 	} else {
 		log.Infof("Pending policies disabled")
 	}
@@ -236,6 +249,15 @@ func (c *collector) Start() error {
 		return fmt.Errorf("ConntrackInfoReader failed to start: %w", err)
 	}
 
+	// Create the tickers here rather than in newCollector so their goroutines
+	// share the stats-collection loop's lifecycle: a collector that is never
+	// Started spawns no ticker goroutines, and the loop stops them on exit.
+	c.ticker = jitter.NewTicker(c.config.ExportingInterval, c.config.ExportingInterval/10)
+	// Only run the re-evaluation sweep when pending policies are enabled; leaving the ticker nil
+	// masks the sweep out of the main loop entirely.
+	if apiv3.FlowLogsPolicyEvaluationModeType(c.config.PolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
+		c.tickerPolicyEval = jitter.NewTicker(c.recalcInterval, c.config.FlowLogsFlushInterval/10)
+	}
 	go c.startStatsCollectionAndReporting()
 
 	if apiv3.FlowLogsPolicyEvaluationModeType(c.config.PolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
@@ -290,6 +312,16 @@ func (c *collector) SetConntrackInfoReader(cir types.ConntrackInfoReader) {
 }
 
 func (c *collector) startStatsCollectionAndReporting() {
+	// The tickers are created in Start just before this goroutine is launched.
+	// Stop them on any loop exit so their goroutines don't outlive us. Doing it
+	// here (as the loop returns) rather than in Stop() means we never close a
+	// ticker channel while still selecting on it, which would busy-spin.
+	defer c.ticker.Stop()
+	if c.tickerPolicyEval != nil {
+		// Nil unless pending policies are enabled; see Start.
+		defer c.tickerPolicyEval.Stop()
+	}
+
 	var (
 		pktInfoC <-chan types.PacketInfo
 		ctInfoC  <-chan []types.ConntrackInfo
@@ -343,6 +375,12 @@ func (c *collector) startStatsCollectionAndReporting() {
 				batchTriggerC = nil
 				policyEvalTickC = c.policyEvalTickChan()
 			}
+		case fn := <-c.thunkC:
+			// Run a caller-supplied closure on this goroutine, giving it
+			// race-free access to collector-owned state. See thunkC.
+			fn()
+		case <-c.stopC:
+			return
 		}
 	}
 }
@@ -354,6 +392,13 @@ func (c *collector) policyEvalTickChan() <-chan time.Time {
 		return nil
 	}
 	return c.tickerPolicyEval.Channel()
+}
+
+// Stop signals the stats collection goroutine started by Start to return. It is
+// idempotent. It does not stop the info readers or metric reporters; those have
+// their own lifecycles.
+func (c *collector) Stop() {
+	c.stopOnce.Do(func() { close(c.stopC) })
 }
 
 // loopProcessingDataplaneInfoUpdates processes the dataplane info updates. The dataplaneInfoReader
@@ -597,7 +642,6 @@ func (c *collector) checkEpStats() {
 	minLastRuleUpdatedAt := monotime.Now() - c.config.InitialReportingDelay
 
 	now := monotime.Now()
-	minExpirationAt := now - c.config.AgeTimeout
 
 	// For each entry
 	// - report metrics.  Metrics reported through the ticker processing will wait for the initial reporting delay
@@ -605,33 +649,45 @@ func (c *collector) checkEpStats() {
 	//   the flow is terminated or has changed.
 	// - check age and expire the entry if needed.
 	for _, data := range c.epStats {
+		ageTimeout := c.config.AgeTimeout
 		if c.config.IsBPFDataplane {
-			switch data.Tuple.Proto {
-			case 6 /* TCP */ :
-				// We use reset because likely already cleaned it up as an expired
-				// connection if we haven't seen any update this long.
-				minExpirationAt = now - c.config.BPFConntrackTimeouts.TCPResetSeen
-			case 17 /* UDP */ :
-				minExpirationAt = now - c.config.BPFConntrackTimeouts.UDPTimeout
-			case 1 /* ICMP */, 58 /* ICMPv6 */ :
-				minExpirationAt = now - c.config.BPFConntrackTimeouts.ICMPTimeout
-			default:
-				minExpirationAt = now - c.config.BPFConntrackTimeouts.GenericTimeout
-			}
-			if minExpirationAt < 2*bpfconntrack.ScanPeriod {
-				minExpirationAt = now - 2*bpfconntrack.ScanPeriod
-			}
+			ageTimeout = bpfAgeTimeout(c.config.BPFConntrackTimeouts, data.Tuple.Proto)
 		}
 
 		if data.IsDirty() && (data.Reported || data.RuleUpdatedAt() < minLastRuleUpdatedAt) {
 			c.checkPreDNATTuple(data)
 			c.reportMetrics(data, true)
 		}
-		if data.UpdatedAt() < minExpirationAt {
+		if data.UpdatedAt() < now-ageTimeout {
 			c.expireMetrics(data)
 			c.deleteDataFromEpStats(data)
 		}
 	}
+}
+
+// bpfAgeTimeout returns how long the collector keeps an epStats entry after its last update when
+// running the BPF dataplane, based on the dataplane's conntrack timeout for the entry's protocol.
+//
+// The collector only touches an entry when the BPF conntrack scanner reports it, i.e. once per
+// ScanPeriod, so a timeout shorter than a couple of scan periods would expire flows that are still
+// alive.  Re-creating the entry afterwards re-credits the conntrack counters' absolute values as a
+// fresh delta, so premature expiry over-counts traffic as well as churning flow logs.  Hence the
+// floor.
+func bpfAgeTimeout(timeouts bpfconntrack.Timeouts, proto int) time.Duration {
+	var timeout time.Duration
+	switch proto {
+	case 6 /* TCP */ :
+		// We use reset because likely already cleaned it up as an expired
+		// connection if we haven't seen any update this long.
+		timeout = timeouts.TCPResetSeen
+	case 17 /* UDP */ :
+		timeout = timeouts.UDPTimeout
+	case 1 /* ICMP */, 58 /* ICMPv6 */ :
+		timeout = timeouts.ICMPTimeout
+	default:
+		timeout = timeouts.GenericTimeout
+	}
+	return max(timeout, 2*bpfconntrack.ScanPeriod)
 }
 
 func (c *collector) checkPreDNATTuple(data *Data) {

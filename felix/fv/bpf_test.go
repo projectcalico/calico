@@ -296,10 +296,10 @@ func BPFAttachType() string {
 }
 
 // bpfProgPinDir returns the BPF program pin directory for the current
-// attach mode.  In netkit mode, workload programs are pinned under
-// NetkitPinDir; in TCX mode they use TcxPinDir.
+// attach mode.  Netkit-attached workload programs are pinned under
+// NetkitPinDir; TCX ones use TcxPinDir.
 func bpfProgPinDir() string {
-	if infrastructure.NetkitMode() {
+	if infrastructure.NetkitAttachMode() {
 		return bpfdefs.NetkitPinDir
 	}
 	return bpfdefs.TcxPinDir
@@ -416,8 +416,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.IPIPStrategy = infrastructure.NewDefaultTunnelStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)
 				options.IPIPMode = api.IPIPModeAlways
 				if testOpts.ipv6 {
+					// SimulateBIRDRoutes makes the topology set
+					// FELIX_ProgramClusterRoutes=Disabled for us.
 					options.SimulateBIRDRoutes = true
-					options.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Disabled"
 				}
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
@@ -951,9 +952,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			if testOpts.protocol != "udp" { // No need to run these tests per-protocol.
 				It("should recover if the BPF programs are removed", func() {
-					if infrastructure.NetkitMode() {
-						Skip("Netkit uses bpf_link; removing pins doesn't detach programs")
-					}
+					// Only legacy TC hangs the programs off a qdisc. Netkit- and
+					// TCX-attached workloads are removed by unpinning the link
+					// and have no qdisc to delete.
+					tcAttached := BPFAttachType() == "tc"
+
 					flapInterface := func() {
 						By("Flapping interface")
 						tc.Felixes[0].Exec("ip", "link", "set", "down", w[0].InterfaceName)
@@ -974,7 +977,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ResetExpectations()
 
 						By("handling ingress program removal")
-						if BPFAttachType() == "tc" {
+						if tcAttached {
 							tc.Felixes[0].Exec("tc", "filter", "del", "ingress", "dev", w[0].InterfaceName)
 						} else {
 							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfProgPinDir(), fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
@@ -991,7 +994,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity()
 
 						// Check the program is put back.
-						if BPFAttachType() == "tc" {
+						if tcAttached {
 							Eventually(func() string {
 								out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
 								return out
@@ -1006,7 +1009,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 
 						By("handling egress program removal")
-						if BPFAttachType() == "tc" {
+						if tcAttached {
 							tc.Felixes[0].Exec("tc", "filter", "del", "egress", "dev", w[0].InterfaceName)
 						} else {
 							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfProgPinDir(), fmt.Sprintf("%s_egress", w[0].InterfaceName)))
@@ -1017,7 +1020,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						trigger()
 
 						// Check the program is put back.
-						if BPFAttachType() == "tc" {
+						if tcAttached {
 							Eventually(func() string {
 								out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
 								return out
@@ -1032,7 +1035,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 						cc.CheckConnectivity()
 
-						if BPFAttachType() == "tc" {
+						if tcAttached {
 							By("Handling qdisc removal")
 							tc.Felixes[0].Exec("tc", "qdisc", "delete", "dev", w[0].InterfaceName, "clsact")
 
@@ -3529,66 +3532,76 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								"Service endpoints didn't get created? Is controller-manager happy?")
 						})
 
+						affKV := func() (nat.AffinityKeyInterface, nat.AffinityValueInterface) {
+							if testOpts.ipv6 {
+								aff := dumpAffMapV6(tc.Felixes[0])
+								ExpectWithOffset(1, aff).To(HaveLen(1), "expected exactly one affinity entry")
+
+								// get the only key
+								for k, v := range aff {
+									return k, v
+								}
+							} else {
+								aff := dumpAffMap(tc.Felixes[0])
+								ExpectWithOffset(1, aff).To(HaveLen(1), "expected exactly one affinity entry")
+
+								// get the only key
+								for k, v := range aff {
+									return k, v
+								}
+							}
+
+							Fail("no value in aff map")
+							return nil, nil
+						}
+
+						affLen := func() int {
+							if testOpts.ipv6 {
+								return len(dumpAffMapV6(tc.Felixes[0]))
+							}
+							return len(dumpAffMap(tc.Felixes[0]))
+						}
+
+						family := 4
+						natFEKey := func(ip string, port uint16) nat.FrontendKeyInterface {
+							return nat.NewNATKeyIntf(net.ParseIP(ip), port, numericProto)
+						}
+						if testOpts.ipv6 {
+							family = 6
+							natFEKey = func(ip string, port uint16) nat.FrontendKeyInterface {
+								return nat.NewNATKeyV6Intf(net.ParseIP(ip), port, numericProto)
+							}
+						}
+
+						// waitForSvcProgrammed waits until felix-0 has the service's NAT
+						// frontend and its first backend. Syncing with the NAT tables stops
+						// us creating an extra affinity entry when the CTLB misses but the
+						// regular DNAT hits, the connection fails, and then the CTLB
+						// succeeds.
+						waitForSvcProgrammed := func(ip string, port uint16) {
+							natFtKey := natFEKey(ip, port)
+							EventuallyWithOffset(1, func() bool {
+								m, be, _ := dumpNATMapsAny(family, tc.Felixes[0])
+
+								v, ok := m[natFtKey]
+								if !ok || v.Count() == 0 {
+									return false
+								}
+
+								_, ok = be[nat.NewNATBackendKey(v.ID(), 0)]
+								return ok
+							}, 10*time.Second).Should(BeTrue(), "service was not programmed")
+						}
+
 						// Since the affinity map is shared by cgroup programs on
 						// all nodes, we must be careful to use only client(s) on a
 						// single node for the experiments.
 						It("should have connectivity from a workload to a service with multiple backends", func() {
-							affKV := func() (nat.AffinityKeyInterface, nat.AffinityValueInterface) {
-								if testOpts.ipv6 {
-									aff := dumpAffMapV6(tc.Felixes[0])
-									ExpectWithOffset(1, aff).To(HaveLen(1))
-
-									// get the only key
-									for k, v := range aff {
-										return k, v
-									}
-								} else {
-									aff := dumpAffMap(tc.Felixes[0])
-									ExpectWithOffset(1, aff).To(HaveLen(1))
-
-									// get the only key
-									for k, v := range aff {
-										return k, v
-									}
-								}
-
-								Fail("no value in aff map")
-								return nil, nil
-							}
-
 							ip := testSvc.Spec.ClusterIP
 							port := uint16(testSvc.Spec.Ports[0].Port)
 
 							if setAffinity {
-								// Sync with NAT tables to prevent creating extra entry when
-								// CTLB misses but regular DNAT hits, but connection fails and
-								// then CTLB succeeds.
-								var (
-									family   int
-									natFtKey nat.FrontendKeyInterface
-								)
-
-								if testOpts.ipv6 {
-									natFtKey = nat.NewNATKeyV6Intf(net.ParseIP(ip), port, numericProto)
-									family = 6
-								} else {
-									natFtKey = nat.NewNATKeyIntf(net.ParseIP(ip), port, numericProto)
-									family = 4
-								}
-
-								Eventually(func() bool {
-									m, be, _ := dumpNATMapsAny(family, tc.Felixes[0])
-
-									v, ok := m[natFtKey]
-									if !ok || v.Count() == 0 {
-										return false
-									}
-
-									beKey := nat.NewNATBackendKey(v.ID(), 0)
-
-									_, ok = be[beKey]
-									return ok
-								}, 5*time.Second).Should(BeTrue())
+								waitForSvcProgrammed(ip, port)
 							}
 
 							cc.ExpectSome(w[0][1], TargetIP(ip), port)
@@ -3602,6 +3615,39 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							// This should happen consistently, but that may take quite some time.
 							Expect(val1.Backend()).To(Equal(v2.Backend()))
+
+							// The affinity entry must survive a kube-proxy sync. The
+							// syncer cleans the affinity map on every sync, and it only
+							// knows to keep an entry for a service it expects to have
+							// affinity - which, for unconnected UDP, includes services
+							// without session affinity because the CTLB enforces
+							// affinity for them too.
+							//
+							// Creating an unrelated service forces a sync; once felix
+							// has programmed it, the cleanup has definitely run.
+							By("keeping the affinity across a kube-proxy sync", func() {
+								syncSvcIP := "10.101.0.13"
+								if testOpts.ipv6 {
+									syncSvcIP = "dead:beef::abcd:0:0:13"
+								}
+								syncSvc := k8sService("test-service-sync", syncSvcIP, w[0][0], 80, 8055, 0, testOpts.protocol)
+								_, err := k8sClient.CoreV1().Services(testSvcNamespace).
+									Create(context.Background(), syncSvc, metav1.CreateOptions{})
+								Expect(err).NotTo(HaveOccurred())
+
+								syncSvcKey := natFEKey(syncSvcIP, 80)
+								Eventually(func() bool {
+									m, _, _ := dumpNATMapsAny(family, tc.Felixes[0])
+									_, ok := m[syncSvcKey]
+									return ok
+								}, "10s", "300ms").Should(BeTrue(), "kube-proxy did not sync the extra service")
+
+								Expect(affLen()).To(Equal(1),
+									"the kube-proxy sync deleted the affinity entry")
+								_, v3 := affKV()
+								Expect(v3.Backend()).To(Equal(val1.Backend()),
+									"the kube-proxy sync changed the affinity backend")
+							})
 
 							cc.ResetExpectations()
 
@@ -3681,6 +3727,47 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								Not(Equal(mVal.Backend())),
 							))
 						})
+
+						// The CTLB enforces its own, short, affinity for unconnected UDP on
+						// every UDP service. A service that asks for session affinity has a
+						// much longer timeout of its own, and that is the one the user asked
+						// for, so it must win.
+						if setAffinity && testOpts.protocol == "udp" && testOpts.udpUnConnected && testOpts.connTimeEnabled {
+							It("should keep the affinity for longer than the CTLB's UDP timeout", func() {
+								ip := testSvc.Spec.ClusterIP
+								port := uint16(testSvc.Spec.Ports[0].Port)
+
+								// Shrink the CTLB's timeout so that the test can idle past it in
+								// a few seconds. The service keeps Kubernetes' default session
+								// affinity timeout of 3 hours.
+								By("restarting felix-0 with a 3s UDP conntrack timeout", func() {
+									tc.Felixes[0].SetEnv(map[string]string{"FELIX_BPFCONNTRACKTIMEOUTS": "UDPTimeout=3s"})
+									tc.Felixes[0].Restart()
+									waitForSvcProgrammed(ip, port)
+								})
+
+								// N.B. Client must be on felix-0 to be subject to ctlb!
+								cc.ExpectSome(w[0][1], TargetIP(ip), port)
+								cc.CheckConnectivity()
+								_, first := affKV()
+
+								// Each round idles for longer than the CTLB's UDP timeout. If the
+								// CTLB applied that timeout it would treat the entry as expired
+								// and re-pick at random, so with three backends a run of rounds
+								// all picking the same backend by luck is vanishingly unlikely.
+								for round := range 8 {
+									time.Sleep(4 * time.Second)
+									cc.CheckConnectivity()
+
+									Expect(affLen()).To(Equal(1),
+										fmt.Sprintf("round %d: affinity entry disappeared", round))
+									_, v := affKV()
+									Expect(v.Backend()).To(Equal(first.Backend()),
+										fmt.Sprintf("round %d: affinity backend changed after idling "+
+											"past the CTLB's UDP timeout", round))
+								}
+							})
+						}
 					}
 
 					Context("with affinity", func() {
@@ -5487,6 +5574,178 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				It("should keep a connection up between hosts and local workloads when BPF is enabled", func() {
 					verifyConnectivityWhileEnablingBPF(hostW[0], w[0][0])
 				})
+
+				// Connections through a service must survive the switch too.  kube-proxy
+				// does not run in the FV, so we install the DNAT it would have written,
+				// in the chains Felix deletes on the switch.  The connection has to
+				// outlive that deletion: the DNAT binding lives in the Linux conntrack
+				// entry, not in the rule.
+				//
+				// Pinned to one matrix point to keep the cost down; these flows pre-date
+				// BPF so they never take the DSR or tunnel path.  The addresses below are
+				// v4, hence the explicit IPv6 exclusion.
+				if testOpts.dsr && !testOpts.ipv6 && testOpts.tunnel == "none" {
+					const (
+						migrationSvcIP   = "10.101.0.99"
+						migrationSvcPort = 8090
+					)
+
+					installKubeProxyService := func(felix *infrastructure.Felix, backend *workload.Workload) {
+						target := net.JoinHostPort(backend.IP, backend.Ports)
+						if NFTMode() {
+							felix.Exec("nft", "add", "table", "ip", "kube-proxy")
+							felix.Exec("nft", "add", "chain", "ip", "kube-proxy", "services",
+								"{ type nat hook prerouting priority dstnat ; }")
+							felix.Exec("nft", "add", "rule", "ip", "kube-proxy", "services",
+								"ip", "daddr", migrationSvcIP, "tcp", "dport", fmt.Sprint(migrationSvcPort),
+								"dnat", "to", target)
+							return
+						}
+						felix.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat",
+							"-N", "KUBE-SERVICES")
+						felix.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat",
+							"-A", "KUBE-SERVICES", "-d", migrationSvcIP, "-p", "tcp",
+							"--dport", fmt.Sprint(migrationSvcPort),
+							"-j", "DNAT", "--to-destination", target)
+						felix.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat",
+							"-I", "PREROUTING", "-j", "KUBE-SERVICES")
+					}
+
+					// Marker that Felix's kube-proxy cleanup takes away, and the
+					// command that shows whether it is still there.
+					kubeProxyMarker := "KUBE-SERVICES"
+					dumpRulesCmd := []string{"iptables-save", "-t", "nat"}
+					if NFTMode() {
+						kubeProxyMarker = "kube-proxy"
+						dumpRulesCmd = []string{"nft", "list", "ruleset"}
+					}
+					verifySvcConnectivityWhileEnablingBPF := func(client, backend *workload.Workload) {
+						By("Creating the service")
+						// Must agree with the DNAT target below, which uses the same port.
+						backendPort, err := strconv.Atoi(backend.Ports)
+						Expect(err).NotTo(HaveOccurred())
+						testSvc := k8sService("migration-svc", migrationSvcIP, backend,
+							migrationSvcPort, backendPort, 0, testOpts.protocol)
+						k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+						_, err = k8sClient.CoreV1().Services(testSvc.Namespace).Create(
+							context.Background(), testSvc, metav1.CreateOptions{})
+						Expect(err).NotTo(HaveOccurred())
+						Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(1),
+							"Service endpoints didn't get created? Is controller-manager happy?")
+
+						By("Installing the rules kube-proxy would have written")
+						installKubeProxyService(tc.Felixes[0], backend)
+						// Also proves the dump command works, so that the check for
+						// their removal below cannot pass vacuously.
+						Expect(tc.Felixes[0].ExecOutputFn(dumpRulesCmd...)()).
+							To(ContainSubstring(kubeProxyMarker))
+
+						By("Starting persistent connection via the service")
+						pc = client.StartPersistentConnection(migrationSvcIP, migrationSvcPort,
+							workload.PersistentConnectionOpts{
+								MonitorConnectivity: true,
+								Timeout:             60 * time.Second,
+							})
+
+						By("having initial connectivity", expectPongs)
+						By("enabling BPF mode", enableBPF) // Waits for BPF programs to be installed
+						By("removing the kube-proxy rules", func() {
+							Eventually(tc.Felixes[0].ExecOutputFn(dumpRulesCmd...), "30s", "1s").
+								ShouldNot(ContainSubstring(kubeProxyMarker))
+						})
+						By("still having connectivity on the existing connection", expectPongs)
+
+						By("having connectivity on a new connection via the service", func() {
+							cc.ResetExpectations()
+							cc.Expect(Some, client, TargetIP(migrationSvcIP),
+								ExpectWithPorts(uint16(migrationSvcPort)))
+							cc.CheckConnectivity()
+							cc.ResetExpectations()
+						})
+					}
+
+					It("should keep a connection to a service with a local backend up when BPF is enabled", func() {
+						verifySvcConnectivityWhileEnablingBPF(w[0][1], w[0][0])
+					})
+
+					It("should keep a connection to a service with a remote backend up when BPF is enabled", func() {
+						verifySvcConnectivityWhileEnablingBPF(w[0][1], w[1][0])
+					})
+
+					// External client -> NodePort.  With a backend on another node the
+					// forwarded legs enter and leave on the same host interface, which is
+					// the case that matched none of the BPF-mode FORWARD accepts.
+					verifyNodePortWhileEnablingBPF := func(backend *workload.Workload) {
+						const (
+							npSvcIP  = "10.101.0.98"
+							nodePort = 30333
+						)
+						backendPort, err := strconv.Atoi(backend.Ports)
+						Expect(err).NotTo(HaveOccurred())
+
+						By("Creating the NodePort service")
+						testSvc := k8sService("migration-np", npSvcIP, backend,
+							migrationSvcPort, backendPort, int32(nodePort), testOpts.protocol)
+						k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+						_, err = k8sClient.CoreV1().Services(testSvc.Namespace).Create(
+							context.Background(), testSvc, metav1.CreateOptions{})
+						Expect(err).NotTo(HaveOccurred())
+						Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(1))
+
+						// The masquerade mimics kube-proxy, which SNATs node port traffic so
+						// that replies come back via the ingress node.  Only the iptables run
+						// reproduces the regression: nftables mode sets the FORWARD policy to
+						// ACCEPT (see infrastructure.Felix), so nothing drops the packet there.
+						By("Installing the NodePort rules kube-proxy would have written")
+						f := tc.Felixes[0]
+						target := net.JoinHostPort(backend.IP, backend.Ports)
+						if NFTMode() {
+							f.Exec("nft", "add", "table", "ip", "kube-proxy")
+							f.Exec("nft", "add", "chain", "ip", "kube-proxy", "nodeports",
+								"{ type nat hook prerouting priority dstnat ; }")
+							f.Exec("nft", "add", "rule", "ip", "kube-proxy", "nodeports",
+								"fib", "daddr", "type", "local", "tcp", "dport", fmt.Sprint(nodePort),
+								"dnat", "to", target)
+							f.Exec("nft", "add", "chain", "ip", "kube-proxy", "masq",
+								"{ type nat hook postrouting priority srcnat ; }")
+							f.Exec("nft", "add", "rule", "ip", "kube-proxy", "masq",
+								"ip", "daddr", backend.IP, "tcp", "dport", backend.Ports, "masquerade")
+						} else {
+							f.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat", "-N", "KUBE-SERVICES")
+							f.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat", "-A", "KUBE-SERVICES",
+								"-m", "addrtype", "--dst-type", "LOCAL", "-p", "tcp",
+								"--dport", fmt.Sprint(nodePort), "-j", "DNAT", "--to-destination", target)
+							f.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat",
+								"-I", "PREROUTING", "-j", "KUBE-SERVICES")
+							f.Exec("iptables", "-w", "10", "-W", "100000", "-t", "nat", "-A", "POSTROUTING",
+								"-d", backend.IP, "-p", "tcp", "--dport", backend.Ports, "-j", "MASQUERADE")
+						}
+
+						By("Starting persistent connection from the external client to the node port")
+						pc = &PersistentConnection{
+							Runtime:             externalClient,
+							RuntimeName:         externalClient.Name,
+							IP:                  felixIP(0),
+							Port:                nodePort,
+							Protocol:            testOpts.protocol,
+							MonitorConnectivity: true,
+							Timeout:             60 * time.Second,
+						}
+						Expect(pc.Start()).NotTo(HaveOccurred())
+
+						By("having initial connectivity", expectPongs)
+						By("enabling BPF mode", enableBPF)
+						By("still having connectivity on the existing connection", expectPongs)
+					}
+
+					It("should keep an external nodeport connection with a local backend up when BPF is enabled", func() {
+						verifyNodePortWhileEnablingBPF(w[0][0])
+					})
+
+					It("should keep an external nodeport connection with a remote backend up when BPF is enabled", func() {
+						verifyNodePortWhileEnablingBPF(w[1][0])
+					})
+				}
 			}
 		})
 

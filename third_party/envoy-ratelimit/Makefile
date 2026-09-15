@@ -6,8 +6,9 @@ ENVOY_RATELIMIT_IMAGE ?= envoy-ratelimit
 BUILD_IMAGES ?= $(ENVOY_RATELIMIT_IMAGE)
 
 # For updating this version please see
-# https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
-ENVOY_RATELIMIT_VERSION=ff287602
+# operator/docs/common_tasks.md, "Updating the bundled version of Envoy Gateway".
+ENVOY_RATELIMIT_VERSION=ff287602d8ca0df269a1e7dd393887ab781f64a4
+ENVOY_RATELIMIT_REPO=https://github.com/envoyproxy/ratelimit.git
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -24,8 +25,8 @@ ENVOY_RATELIMIT_DOWNLOADED=.envoy-ratelimit.downloaded
 .PHONY: init-source
 init-source: $(ENVOY_RATELIMIT_DOWNLOADED)
 $(ENVOY_RATELIMIT_DOWNLOADED):
-	git clone -n https://github.com/envoyproxy/ratelimit.git envoy-ratelimit
-	cd envoy-ratelimit && git checkout $(ENVOY_RATELIMIT_VERSION)
+	rm -rf envoy-ratelimit .envoy-ratelimit.downloaded
+	$(call fetch_repo,$(ENVOY_RATELIMIT_REPO),$(ENVOY_RATELIMIT_VERSION),envoy-ratelimit)
 # 	Apply patches for the specified Envoy Ratelimit version if patches directory exists.
 # 	This code checks for the presence of a patches directory corresponding to ENVOY_RATELIMIT_VERSION.
 # 	If the directory exists, it iterates over all .patch files within it.
@@ -77,16 +78,18 @@ ci: image
 
 cd: image-all cd-common
 
-.PHONY: release-build
+.PHONY: release-build release-publish
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
+	$(MAKE) image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
 	# Generate the `latest` images.
 	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
 	touch $@
 
-release-publish: release-prereqs .release-$(VERSION).published
-.release-$(VERSION).published:
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	touch $@
+release-publish: release-prereqs bin/crane
+	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
+		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \
+	else \
+		$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM); \
+	fi

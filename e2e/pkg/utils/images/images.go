@@ -64,41 +64,13 @@ const (
 
 	// CalicoBIRD: Calico BIRD 1.x. Keep in sync with BIRD_VERSION in metadata.mk.
 	CalicoBIRD = "calico/bird:v0.3.3-211-g9111ec3c"
+
+	// RapidClient is the multi-mode rapidclient helper: client mode for Maglev,
+	// MODE=server for the packet-size dataplane server (see
+	// e2e/images/rapidclient/DESIGN.md). Keep the tag in sync with the root
+	// Makefile and load_images.sh.
+	RapidClient = "quay.io/tigeradev/rapidclient:latest"
 )
-
-// rapidClientRepo is the multi-mode rapidclient image (client mode by default;
-// MODE=server runs the packet-size HTTP/UDP dataplane server). Both the Maglev
-// client and the packet-size server use this single image; the mode is selected
-// at pod-creation time. See e2e/images/rapidclient/ (and its DESIGN.md).
-//
-// Client mode (default): a Tigera-built HTTP client that reuses a fixed source
-// port across rapid sequential connections — needed for Maglev tests where the
-// load-balancer hash depends on the source port staying the same (curl, wget and
-// agnhost don't expose source-port control).
-//
-// Server mode (MODE=server): an HTTP/UDP server for tests that need controlled
-// payload sizes (MTU boundary, fragmentation, encap overhead). Endpoints, all on
-// the same port (default 5000): GET /length/<N> returns exactly N bytes; POST
-// /post returns the number of bytes received; UDP echoes received datagrams.
-const rapidClientRepo = "quay.io/tigeradev/rapidclient"
-
-// RapidClientImage returns the rapidclient image reference and whether it was
-// side-loaded onto the e2e nodes.
-//
-// PR CI cannot push images to a registry (fork PRs get no push credential), so on
-// gcp-kubeadm the phases/load_images.sh e2e phase builds rapidclient from the PR
-// source and imports it directly into each node's containerd, then exports
-// RAPIDCLIENT_TAG (e.g. "pr-13105"). When that env is set we return the pinned tag
-// and preloaded=true; callers creating pods MUST then set ImagePullPolicy: Never
-// so a missing/failed load fails loudly instead of silently pulling a stale
-// published image. When it is unset (other providers, local dev) we fall back to
-// the published :latest and default pull behaviour — preserving prior behaviour.
-func RapidClientImage() (ref string, preloaded bool) {
-	if tag := os.Getenv("RAPIDCLIENT_TAG"); tag != "" {
-		return rapidClientRepo + ":" + tag, true
-	}
-	return rapidClientRepo + ":latest", false
-}
 
 // Get client image and powershell command based on windows OS version
 func WindowsClientImage() string {

@@ -17,6 +17,7 @@ type IPAMConfigurationSpecApplyConfiguration struct {
 	StrictAffinity *bool `json:"strictAffinity,omitempty"`
 	// MaxBlocksPerHost, if non-zero, is the max number of blocks that can be
 	// affine to each host.
+	//
 	MaxBlocksPerHost *int32 `json:"maxBlocksPerHost,omitempty"`
 	// Whether or not to auto allocate blocks to hosts.
 	AutoAllocateBlocks *bool `json:"autoAllocateBlocks,omitempty"`

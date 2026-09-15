@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,9 @@ package allocateip
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"maps"
 	gnet "net"
 	"os"
 	"reflect"
@@ -49,15 +51,17 @@ import (
 // It will assign an address if there are any available, and remove any tunnel addresses
 // that are configured and should no longer be.
 
-// defaultResyncInterval is how often the daemon re-reconciles the tunnel addresses
-// even when the syncer has reported no change.
-//
-// The syncer is purely edge-triggered, so any trigger that is missed is missed
-// permanently: the node keeps running with no tunnel address, and every pod on it
-// is unreachable over that overlay until calico/node happens to restart. A single
-// lost Node status write during an apiserver blip is enough to get there. A cheap
-// periodic resync bounds that window instead of leaving it open indefinitely.
-const defaultResyncInterval = 5 * time.Minute
+// reconcileTimeout bounds a single reconcile, including the IPAM allocation and the
+// node update it makes.
+const reconcileTimeout = 2 * time.Minute
+
+// nodeRetryInterval is how long to wait before re-checking for a node that is
+// absent, e.g. while kubelet re-registers it.
+const nodeRetryInterval = 5 * time.Second
+
+// errNodeNotInDatastore marks the node lookup specifically, so a missing node
+// elsewhere in the reconcile is still reported as a failure.
+var errNodeNotInDatastore = errors.New("node not in the datastore")
 
 // Run runs the tunnel IP allocator. In oneshot mode it reconciles once and
 // returns. In daemon mode it watches for IP pool and node configuration
@@ -94,7 +98,7 @@ func run(
 	}
 
 	if oneshot {
-		return reconcileTunnelAddrs(nodename, c, felixEnvConfig)
+		return reconcileTunnelAddrs(ctx, nodename, c, felixEnvConfig)
 	}
 
 	// Daemon mode: create a long-running reconciler.
@@ -105,10 +109,6 @@ func run(
 		ch:             make(chan struct{}),
 		data:           make(map[string]any),
 		felixEnvConfig: felixEnvConfig,
-		resyncInterval: defaultResyncInterval,
-	}
-	r.reconcile = func() error {
-		return reconcileTunnelAddrs(r.nodename, r.client, r.felixEnvConfig)
 	}
 
 	// Either create a typha syncclient or a local syncer depending on configuration. This calls back into the
@@ -130,25 +130,30 @@ func run(
 }
 
 func (r reconciler) run(ctx context.Context) error {
-	resync := time.NewTicker(r.resyncInterval)
-	defer resync.Stop()
-
+	// Set while waiting for a node to come back; OnUpdates drops triggers that
+	// arrive mid-reconcile, so the retry cannot rely on one arriving.
+	var retry <-chan time.Time
 	for {
 		select {
 		case <-r.ch:
-			if err := r.reconcile(); err != nil {
-				return fmt.Errorf("failed to reconcile tunnel address: %w", err)
-			}
-		case <-resync.C:
-			// Periodic resync. Unlike the event-driven path this does NOT return the
-			// error: the resync exists to recover from transient failures, so making
-			// it fatal would turn a blip that the next tick would have healed into a
-			// calico/node restart. The next tick retries.
-			if err := r.reconcile(); err != nil {
-				log.WithError(err).Warn("Failed to reconcile tunnel addresses during periodic resync, will retry")
-			}
+		case <-retry:
 		case <-ctx.Done():
 			return nil
+		}
+		retry = nil
+
+		if err := reconcileTunnelAddrs(ctx, r.nodename, r.client, r.felixEnvConfig); err != nil {
+			if ctx.Err() != nil {
+				// Shutting down, so don't report the cancellation as a failure.
+				return nil
+			}
+			if errors.Is(err, errNodeNotInDatastore) {
+				// The node is momentarily absent while kubelet re-registers it.
+				log.WithError(err).Warn("Node not in the datastore, retrying")
+				retry = time.After(nodeRetryInterval)
+				continue
+			}
+			return fmt.Errorf("failed to reconcile tunnel address: %w", err)
 		}
 	}
 }
@@ -163,13 +168,6 @@ type reconciler struct {
 	data                 map[string]any
 	felixEnvConfig       *felixconfig.Config
 	initialSyncCompleted bool
-
-	// resyncInterval is how often to reconcile even with no syncer activity.
-	resyncInterval time.Duration
-
-	// reconcile performs a single reconciliation. It is a field so that tests can
-	// exercise the run loop's triggering without a datastore.
-	reconcile func() error
 }
 
 // OnStatusUpdated handles the syncer status callback method.
@@ -216,10 +214,10 @@ func (r *reconciler) OnUpdates(updates []bapi.Update) {
 			}
 			log.Debugf("Updated Node resource: %s", key)
 
-			// Track both IPv4 and IPv6 WireGuard public keys
-			data = wireguardData{
+			data = nodeData{
 				publicKey:   v.Status.WireguardPublicKey,
 				publicKeyV6: v.Status.WireguardPublicKeyV6,
+				labels:      maps.Clone(v.Labels),
 			}
 
 		default:
@@ -253,12 +251,20 @@ func (r *reconciler) OnUpdates(updates []bapi.Update) {
 
 // reconcileTunnelAddrs performs a single shot update of the tunnel IP allocations.
 func reconcileTunnelAddrs(
-	nodename string, c client.Interface, felixEnvConfig *felixconfig.Config,
+	parentCtx context.Context, nodename string, c client.Interface, felixEnvConfig *felixconfig.Config,
 ) (retErr error) {
-	ctx := context.Background()
+	// Bound the reconcile so that a wedged datastore connection surfaces as an error
+	// instead of blocking the caller indefinitely.
+	ctx, cancel := context.WithTimeout(parentCtx, reconcileTimeout)
+	defer cancel()
+
 	// Get node resource for given nodename.
 	node, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
 	if err != nil {
+		var notFound cerrors.ErrorResourceDoesNotExist
+		if errors.As(err, &notFound) {
+			return fmt.Errorf("%w: %s", errNodeNotInDatastore, nodename)
+		}
 		return fmt.Errorf("failed to fetch node resource '%s': %w", nodename, err)
 	}
 
@@ -273,11 +279,15 @@ func reconcileTunnelAddrs(
 
 	defer func() {
 		if retErr != nil {
+			// An expired ctx is one of the reasons we are here, so release on our own.
+			releaseCtx, releaseCancel := context.WithTimeout(context.WithoutCancel(parentCtx), reconcileTimeout)
+			defer releaseCancel()
+
 			for attrType, ip := range assignIP {
 				if ip != "" {
 					logCtx := getLogger(attrType)
 					handle, _ := generateHandleAndAttributes(nodename, attrType)
-					if err = c.IPAM().ReleaseByHandle(ctx, handle); err != nil {
+					if err = c.IPAM().ReleaseByHandle(releaseCtx, handle); err != nil {
 						logCtx.WithError(err).WithField("IP", ip).Error("Error releasing IP address on failure")
 					}
 				}
@@ -833,8 +843,10 @@ func loadFelixEnvConfig() *felixconfig.Config {
 	return configParams
 }
 
-// Home for wireguard public keys in the cache.
-type wireguardData struct {
+// The subset of the node in the cache. Labels are included because IP pool node
+// selectors are evaluated against them.
+type nodeData struct {
 	publicKey   string
 	publicKeyV6 string
+	labels      map[string]string
 }

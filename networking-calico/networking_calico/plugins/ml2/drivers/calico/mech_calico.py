@@ -68,7 +68,7 @@ from networking_calico.common import intern_string
 from networking_calico.logutils import logging_exceptions
 from networking_calico.monotonic import monotonic_time
 from networking_calico.plugins.ml2.drivers.calico import qos_driver
-from networking_calico.plugins.ml2.drivers.calico.election import Elector
+from networking_calico.plugins.ml2.drivers.calico.election import Elector, elector_opt
 from networking_calico.plugins.ml2.drivers.calico.endpoints import (
     WorkloadEndpointSyncer,
     _port_is_endpoint_port,
@@ -454,10 +454,22 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         Also validate the configured MySQL driver up front so a bad
         ``[database] connection`` fails the worker at startup rather than
-        on the first port operation.
+        on the first port operation, and surface any deprecated-for-removal
+        options that the operator still has set.
         """
         super(CalicoMechanismDriver, self).initialize()
         _check_mysql_driver()
+
+        # Pass every list that feeds the [calico] group, not just this
+        # module's: election.py registers SHARED_OPTS and elector_opt into the
+        # same group, and this module imports it, so all three are live in the
+        # neutron-server process.  Miss one and a deprecation there would go
+        # unreported.
+        calico_config.read_deprecated_options(
+            cfg.CONF,
+            calico_config.SHARED_OPTS + [elector_opt] + calico_opts,
+        )
+
         if cfg.CONF.calico.fairy_gc_diagnostics:
             # Install once in the parent process before workers are forked.
             # The listeners attach to the SQLAlchemy Pool class; each forked

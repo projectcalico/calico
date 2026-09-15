@@ -157,7 +157,8 @@ clean: clean-windows
 	rm -rf certs *.tar $(NODE_CONTAINER_BIN_DIR)
 	rm -rf $(BUILD_DEPS)
 	rm -rf filesystem/included-source
-	rm -rf $(REPO_ROOT)/hack/test/kind/infra/operator
+	# Left behind by the old kind flow, which cloned the operator instead of building it in tree.
+	rm -rf ../hack/test/kind/infra/operator
 	rm -rf dist
 	rm -rf bin
 	# We build these as part of the node build, so clean them as part of the clean.
@@ -278,7 +279,7 @@ $(BIRD_SOURCE): .bird-source.created
 .bird-source.created:
 	rm -rf filesystem/included-source/bird*
 	mkdir -p filesystem/included-source/
-	curl -sSf -L --retry 5 --retry-all-errors --http1.1 -o $(BIRD_SOURCE) https://github.com/projectcalico/bird/tarball/$(BIRD_VERSION)
+	$(call fetch_file,https://github.com/projectcalico/bird/tarball/$(BIRD_VERSION),$(BIRD_SOURCE))
 	touch $@
 
 # include GPL felix code in the image.
@@ -300,14 +301,6 @@ $(FELIX_GPL_SOURCE): .felix-gpl-source.created
 ###############################################################################
 # FV Tests
 ###############################################################################
-ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
-# Determine the tests to run using the test spider tool, which emits a list of impacted packages.
-WHAT=$(shell $(DOCKER_GO_BUILD) sh -c 'go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir node/')
-else
-# By default, run all tests.
-WHAT=$(shell find . -name "*_test.go" | xargs dirname | sort -u)
-endif
-
 # Packages to exclude from the UT run. tests/k8st holds the Go k8st system
 # tests, which need a live kind cluster (run via kind-k8st-run-test).
 UT_PACKAGES_TO_SKIP?=tests/k8st
@@ -424,10 +417,10 @@ cd: image-all cd-common
 ###############################################################################
 # Release
 ###############################################################################
-## Produces a clean build of release artifacts at the specified version.
+## Produces release artifacts at the specified version. Clean first for a fresh build.
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
+	$(MAKE) image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	# Generate the `latest` node images.
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
@@ -441,15 +434,22 @@ release-windows-archive: release-prereqs
 	$(MAKE) build-windows-archive WINDOWS_ARCHIVE_TAG=$(VERSION)
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs .release-$(VERSION).published
-.release-$(VERSION).published:
-	# Push node images.
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+.PHONY: release-publish release-publish-linux release-publish-windows
+release-publish: release-publish-linux release-publish-windows
 
-	# Push Windows images.
-	$(MAKE) release-windows IMAGETAG=$(VERSION) CONFIRM=$(CONFIRM)
+release-publish-linux: release-prereqs bin/crane
+	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
+		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \
+	else \
+		$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM); \
+	fi
 
-	touch $@
+release-publish-windows: release-prereqs bin/crane
+	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(WINDOWS_IMAGE)" "$(VERSION)"; then \
+		echo "$(WINDOWS_IMAGE):$(VERSION) is already published, skipping"; \
+	else \
+		$(MAKE) release-windows IMAGETAG=$(VERSION) CONFIRM=$(CONFIRM); \
+	fi
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
@@ -484,10 +484,10 @@ $(WINDOWS_ARCHIVE_ROOT)/confd/templates/%: windows-packaging/templates/%
         chmod +w $@
 
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1:
-	curl -sSf -L --retry 5 --retry-all-errors --http1.1 -o $@ $(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1
+	$(call fetch_file,$(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1,$@)
 
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt:
-	curl -sSf -L --retry 5 --retry-all-errors --http1.1 -o $@  $(MICROSOFT_SDN_GITHUB_RAW_URL)/License.txt
+	$(call fetch_file,$(MICROSOFT_SDN_GITHUB_RAW_URL)/License.txt,$@)
 
 ## Download NSSM.
 windows-packaging/nssm.zip:

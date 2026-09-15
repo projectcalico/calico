@@ -1,6 +1,21 @@
-# ArgoCI config: scheduled e2e only. Suites are CronWorkflows in
-# .argoci/cron/*.yaml, registered on merge to the default branch. No per-PR
-# workflow (empty `workflows`, no `ciFile`). Required to onboard the repo —
-# without it the handler treats ArgoCI as not set up and skips cron registration.
+# ArgoCI config. Scheduled e2e suites are CronWorkflows in .argoci/cron/*.yaml,
+# registered on merge to the default branch; the one per-PR workflow below is
+# the ported Semaphore gcp-kubeadm gate (see .argoci/ciworkflow.yaml).
 version: v2
-workflows: []
+# Fork PRs from non-writers have CI withheld everywhere, and that is not
+# configurable. Without this the withholding is silent, so on a repo whose PRs
+# are mostly community forks the gate would look like it had simply vanished;
+# with it, a maintainer gets a per-commit checkbox to release the run.
+requireApproval: true
+workflows:
+  - name: e2e-pr-gcp
+    workflowFile: .argoci/ciworkflow.yaml
+    runWhen:
+      changes:
+        in:
+          - ^e2e\/.*
+          - ^\.argoci\/scripts\/.*
+          - ^\.argoci\/ciworkflow\.yaml$
+        exclude:
+          - ^.*\/README\.md$
+          - ^.*\/DESIGN\.md$

@@ -113,19 +113,18 @@ Response: {"output":"backend-pod-5\n"}
 
 ## How the e2e tests get this image
 
-The tests reference the image via `images.RapidClientImage()`
-(`e2e/pkg/utils/images/images.go`), which is env-driven:
+The tests reference the image via `images.RapidClient`
+(`e2e/pkg/utils/images/images.go`), which is a single pinned reference:
+`quay.io/tigeradev/rapidclient:latest`. Pods use `ImagePullPolicy: IfNotPresent`,
+so a copy already on the node wins over a pull.
 
-- **PR CI on gcp-kubeadm:** PR builds have no registry push credential, so
-  `.semaphore/end-to-end/scripts/phases/load_images.sh` builds this image from the
-  PR source and imports it straight into each node's containerd (and the external
-  node's docker), then exports `RAPIDCLIENT_TAG` (e.g. `pr-13105`). The tests pin
-  that tag with `ImagePullPolicy: Never`.
-- **Everything else** (other providers, scheduled runs, local dev): `RAPIDCLIENT_TAG`
-  is unset and the tests use the published `quay.io/tigeradev/rapidclient:latest`.
-  If you change this image and want a non-gcp-kubeadm run to use your build, publish
-  it (post-merge `push-images/e2e-test.yml` promotion) or set `RAPIDCLIENT_TAG`
-  yourself to a tag the cluster can pull.
+- **PR CI on gcp-kubeadm and the kind BPF lane:** PR builds have no registry push
+  credential, so `.argoci/scripts/phases/load_images.sh` (and
+  `make kind-load-rapidclient`) build this image from the PR source under the same
+  tag and load it onto the nodes. The pods then run your build.
+- **Everything else** (other providers, scheduled runs, local dev): the published
+  image is pulled. If you change this image and want such a run to use your build,
+  publish it through the post-merge `push-images/e2e-test.yml` promotion.
 
 ## Integration with Tests
 

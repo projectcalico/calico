@@ -429,19 +429,10 @@ case matters (it usually does for indexes/refcounts).
 5. **Skipping the FV suite** — so the orderings and teardown paths
    the expanders would catch go untested.
 
-## Keep this document in sync with the code
+## Siblings that move with this doc
 
-The repo-wide doc-update rule
-([`.claude/CLAUDE.md` → Documentation map](../../.claude/CLAUDE.md),
-mirrored in
-[`.github/copilot-instructions.md`](../../.github/copilot-instructions.md))
-applies. For the calc graph, "changes how it works" means: a new node
-or rewiring; a new emitted message type or a change to the
-`EventSequencer` flush order; a change to a label index or other
-refcounting structure; or a change to how the graph treats
-inconsistency, in-sync, or the upstream contract. Update the relevant
-section here, update the node graph in
-[`felix/docs/calc-graph-diagram.md`](../docs/calc-graph-diagram.md) when
-nodes change, and update
-[`dataplane.md` → The dataplane API](./dataplane.md#the-dataplane-api-calc-graph--dataplane-contract)
-if the output contract changes.
+- The hand-maintained node diagram in
+  [`felix/docs/calc-graph-diagram.md`](../docs/calc-graph-diagram.md) —
+  whenever a node is added or rewired.
+- [`dataplane.md` → The dataplane API](./dataplane.md#the-dataplane-api-calc-graph--dataplane-contract)
+  — whenever the output contract changes.

@@ -350,6 +350,12 @@ func (d *MockNetlinkDataplane) GetFeatures() *environment.Features {
 }
 
 func (d *MockNetlinkDataplane) ResetDeltas() {
+	// The route table's conntrack cleanup runs on a background goroutine that
+	// touches deletedConntrackEntries under the mutex (see RemoveConntrackFlows),
+	// so take the lock here too rather than racing the reset against it.
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
 	d.AddedLinks = set.New[string]()
 	d.DeletedLinks = set.New[string]()
 	d.AddedAddrs = set.New[string]()

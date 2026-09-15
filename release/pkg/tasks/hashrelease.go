@@ -21,6 +21,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -49,20 +50,16 @@ func HashreleasePublished(cfg *hashreleaseserver.Config, hash string, ci bool) (
 // - Copy all release Helm charts to charts/<chart>.tgz (without the version in the filename)
 // - Additionally keep an unversioned tigera-operator.tgz at the hashrelease root for compatibility
 // - Copy ocp.tgz to manifests/ocp.tgz
-func ReformatHashrelease(hashreleaseOutputDir, tmpDir string) error {
+func ReformatHashrelease(pin *pinnedversion.Pin, hashreleaseOutputDir string) error {
 	logrus.Info("Modifying hashrelease output to match legacy format")
-	versions, err := pinnedversion.RetrieveVersions(tmpDir)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve pinned versions: %w", err)
-	}
 
 	// Copy the windows zip file to files/windows/calico-windows-<ver>.zip
 	windowsDir := filepath.Join(hashreleaseOutputDir, "files", "windows")
 	if err := os.MkdirAll(windowsDir, 0o755); err != nil {
 		return err
 	}
-	windowsZip := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("calico-windows-%s.zip", versions.ProductVersion()))
-	windowsZipDst := filepath.Join(windowsDir, fmt.Sprintf("calico-windows-%s.zip", versions.ProductVersion()))
+	windowsZip := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("calico-windows-%s.zip", pin.ProductVersion))
+	windowsZipDst := filepath.Join(windowsDir, fmt.Sprintf("calico-windows-%s.zip", pin.ProductVersion))
 	if err := copyIfExists(windowsZip, windowsZipDst); err != nil {
 		return err
 	}
@@ -79,17 +76,19 @@ func ReformatHashrelease(hashreleaseOutputDir, tmpDir string) error {
 	if err := os.MkdirAll(chartsDir, 0o755); err != nil {
 		return err
 	}
-	for _, chart := range utils.AllReleaseCharts() {
-		chartTarball := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("%s-%s.tgz", chart, versions.HelmChartVersion()))
-		chartTarballDst := filepath.Join(chartsDir, fmt.Sprintf("%s.tgz", chart))
+	for _, chart := range charts.All() {
+		versioned := charts.FileName(chart, pin.HelmChartVersion())
+		unversioned := charts.FileName(chart, "")
+		chartTarball := filepath.Join(hashreleaseOutputDir, versioned)
+		chartTarballDst := filepath.Join(chartsDir, unversioned)
 		if err := copyIfExists(chartTarball, chartTarballDst); err != nil {
 			return err
 		}
 	}
 
 	// Keep copy of the Tigera operator chart without version in name in root dir
-	operatorTarball := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, versions.HelmChartVersion()))
-	operatorTarballDst := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("%s.tgz", utils.TigeraOperatorChart))
+	operatorTarball := filepath.Join(hashreleaseOutputDir, charts.FileName(charts.TigeraOperatorChart, pin.HelmChartVersion()))
+	operatorTarballDst := filepath.Join(hashreleaseOutputDir, charts.FileName(charts.TigeraOperatorChart, ""))
 	if err := copyIfExists(operatorTarball, operatorTarballDst); err != nil {
 		return err
 	}

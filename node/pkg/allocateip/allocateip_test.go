@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import (
 	"fmt"
 	gnet "net"
 	"sync/atomic"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -32,11 +31,13 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 )
 
 func setTunnelAddressForNode(tunnelType string, n *internalapi.Node, addr string) {
@@ -280,7 +281,7 @@ var _ = Describe("FV tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Run the allocateip code.
-		err = reconcileTunnelAddrs(nodename, c, felixconfig.New())
+		err = reconcileTunnelAddrs(context.Background(), nodename, c, felixconfig.New())
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the node has the same IP on it.
@@ -324,7 +325,7 @@ var _ = Describe("FV tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Run the allocateip code.
-		err = reconcileTunnelAddrs(nodename, c, felixconfig.New())
+		err = reconcileTunnelAddrs(context.Background(), nodename, c, felixconfig.New())
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the node no longer has the same IP on it.
@@ -368,7 +369,7 @@ var _ = Describe("FV tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Run the allocateip code.
-		err = reconcileTunnelAddrs(nodename, c, felixconfig.New())
+		err = reconcileTunnelAddrs(context.Background(), nodename, c, felixconfig.New())
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the node no longer has the same IP on it.
@@ -415,7 +416,7 @@ var _ = Describe("FV tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Run the allocateip code.
-		err = reconcileTunnelAddrs(nodename, c, felixconfig.New())
+		err = reconcileTunnelAddrs(context.Background(), nodename, c, felixconfig.New())
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the node no longer has the same IP on it.
@@ -1023,59 +1024,52 @@ var _ = Describe("Running as daemon", func() {
 	})
 })
 
-var _ = Describe("Periodic resync", func() {
-	// The syncer feeding the reconciler is purely edge-triggered, so a missed
-	// trigger is missed permanently. These exercise the run loop's own timer, with
-	// no syncer activity at all, so they need no datastore.
+var _ = Describe("Reconciliation triggers", func() {
+	const nodename = "test.node"
 
-	newReconciler := func(interval time.Duration, calls *int32, err error) reconciler {
-		return reconciler{
-			ch:             make(chan struct{}),
-			resyncInterval: interval,
-			reconcile: func() error {
-				atomic.AddInt32(calls, 1)
-				return err
+	var r *reconciler
+
+	nodeUpdate := func(labels map[string]string) bapi.Update {
+		return bapi.Update{
+			KVPair: model.KVPair{
+				Key: model.ResourceKey{
+					Kind: internalapi.KindNode,
+					Name: nodename,
+				},
+				Value: &internalapi.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   nodename,
+						Labels: labels,
+					},
+					Status: internalapi.NodeStatus{
+						WireguardPublicKey: "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY=",
+					},
+				},
 			},
+			UpdateType: bapi.UpdateTypeKVUpdated,
 		}
 	}
 
-	runDaemon := func(r reconciler) (context.CancelFunc, chan struct{}) {
-		ctx, cancel := context.WithCancel(context.Background())
-		completed := make(chan struct{})
-		go func() {
-			defer close(completed)
-			_ = r.run(ctx)
-		}()
-		return cancel, completed
-	}
-
-	It("should reconcile repeatedly when the syncer reports nothing", func() {
-		var calls int32
-		cancel, completed := runDaemon(newReconciler(10*time.Millisecond, &calls, nil))
-		defer cancel()
-
-		Eventually(func() int32 {
-			return atomic.LoadInt32(&calls)
-		}, "5s", "10ms").Should(BeNumerically(">=", 3))
-
-		cancel()
-		Eventually(completed, "5s", "10ms").Should(BeClosed())
+	BeforeEach(func() {
+		r = &reconciler{
+			nodename: nodename,
+			// Buffered so that the triggers can be read back without a run loop.
+			ch:                   make(chan struct{}, 1),
+			data:                 make(map[string]any),
+			initialSyncCompleted: true,
+		}
+		r.OnUpdates([]bapi.Update{nodeUpdate(map[string]string{"rack": "one"})})
+		Expect(r.ch).To(Receive(), "expected the first update to trigger")
 	})
 
-	It("should keep running when a periodic resync fails", func() {
-		// A resync exists to recover from transient failures, so it must not itself
-		// become a new way to kill calico/node. The next tick retries.
-		var calls int32
-		cancel, completed := runDaemon(newReconciler(10*time.Millisecond, &calls, errors.New("transient failure")))
-		defer cancel()
+	It("should trigger a reconcile when only the node labels change", func() {
+		r.OnUpdates([]bapi.Update{nodeUpdate(map[string]string{"rack": "two"})})
+		Expect(r.ch).To(Receive())
+	})
 
-		Eventually(func() int32 {
-			return atomic.LoadInt32(&calls)
-		}, "5s", "10ms").Should(BeNumerically(">=", 3))
-		Expect(completed).NotTo(BeClosed())
-
-		cancel()
-		Eventually(completed, "5s", "10ms").Should(BeClosed())
+	It("should not trigger a reconcile when the node is unchanged", func() {
+		r.OnUpdates([]bapi.Update{nodeUpdate(map[string]string{"rack": "one"})})
+		Expect(r.ch).ToNot(Receive())
 	})
 })
 
@@ -1693,4 +1687,125 @@ func (c shimClient) StagedKubernetesNetworkPolicies() client.StagedKubernetesNet
 
 func (c shimClient) StagedNetworkPolicies() client.StagedNetworkPolicyInterface {
 	panic("not implemented")
+}
+
+// nodeNotFoundClient embeds the interface so only the one call the reconcile makes
+// before it bails needs implementing.
+type nodeNotFoundClient struct {
+	client.Interface
+}
+
+func (nodeNotFoundClient) Nodes() client.NodeInterface { return nodeNotFoundNodes{} }
+
+type nodeNotFoundNodes struct {
+	client.NodeInterface
+}
+
+func (nodeNotFoundNodes) Get(_ context.Context, name string, _ options.GetOptions) (*internalapi.Node, error) {
+	return nil, cerrors.ErrorResourceDoesNotExist{Identifier: name}
+}
+
+type datastoreDownClient struct {
+	client.Interface
+}
+
+func (datastoreDownClient) Nodes() client.NodeInterface { return datastoreDownNodes{} }
+
+type datastoreDownNodes struct {
+	client.NodeInterface
+}
+
+func (datastoreDownNodes) Get(_ context.Context, _ string, _ options.GetOptions) (*internalapi.Node, error) {
+	return nil, errors.New("datastore is down")
+}
+
+var _ = Describe("reconciler run loop", func() {
+	var r reconciler
+	var ctx context.Context
+	var cancel context.CancelFunc
+	var done chan error
+
+	BeforeEach(func() {
+		ctx, cancel = context.WithCancel(context.Background())
+		done = make(chan error, 1)
+		// Unbuffered, as in production: OnUpdates drops triggers sent mid-reconcile.
+		r = reconciler{nodename: "node1", ch: make(chan struct{})}
+	})
+
+	AfterEach(func() { cancel() })
+
+	// A deleted-and-re-registered node is briefly absent. Exiting here takes every
+	// other node service down with it, including the one that repairs the node.
+	It("keeps running when the node is momentarily absent", func() {
+		r.client = nodeNotFoundClient{}
+		go func() { done <- r.run(ctx) }()
+
+		r.ch <- struct{}{}
+		Consistently(done, "500ms").ShouldNot(Receive(), "a missing node must not stop the loop")
+
+		cancel()
+		Eventually(done, "5s").Should(Receive(BeNil()))
+	})
+
+	// OnUpdates drops a trigger that lands mid-reconcile, so the loop has to
+	// re-check on its own or it waits for an update that never comes.
+	It("retries a missing node without needing another trigger", func() {
+		c := &countingNotFoundClient{}
+		r.client = c
+		go func() { done <- r.run(ctx) }()
+
+		r.ch <- struct{}{}
+		Eventually(c.calls, "20s", "500ms").Should(BeNumerically(">=", 2),
+			"the loop must re-check without a second trigger")
+
+		cancel()
+		Eventually(done, "5s").Should(Receive(BeNil()))
+	})
+
+	It("still reports any other reconcile failure", func() {
+		r.client = datastoreDownClient{}
+		go func() { done <- r.run(ctx) }()
+
+		r.ch <- struct{}{}
+		Eventually(done, "5s").Should(Receive(MatchError(ContainSubstring("datastore is down"))))
+	})
+})
+
+// countingNotFoundClient always reports the node missing and counts the lookups.
+type countingNotFoundClient struct {
+	client.Interface
+	n atomic.Int64
+}
+
+func (c *countingNotFoundClient) calls() int64 { return c.n.Load() }
+
+func (c *countingNotFoundClient) Nodes() client.NodeInterface { return countingNotFoundNodes{c} }
+
+type countingNotFoundNodes struct {
+	owner *countingNotFoundClient
+}
+
+func (n countingNotFoundNodes) Create(context.Context, *internalapi.Node, options.SetOptions) (*internalapi.Node, error) {
+	panic("not used")
+}
+
+func (n countingNotFoundNodes) Update(context.Context, *internalapi.Node, options.SetOptions) (*internalapi.Node, error) {
+	panic("not used")
+}
+
+func (n countingNotFoundNodes) Delete(context.Context, string, options.DeleteOptions) (*internalapi.Node, error) {
+	panic("not used")
+}
+
+func (n countingNotFoundNodes) List(context.Context, options.ListOptions) (*internalapi.NodeList, error) {
+	panic("not used")
+}
+
+func (n countingNotFoundNodes) Watch(context.Context, options.ListOptions) (watch.Interface, error) {
+	panic("not used")
+}
+
+func (n countingNotFoundNodes) Get(_ context.Context, name string, _ options.GetOptions) (*internalapi.Node, error) {
+	n.owner.n.Add(1)
+	return nil, cerrors.ErrorResourceDoesNotExist{Identifier: name}
 }

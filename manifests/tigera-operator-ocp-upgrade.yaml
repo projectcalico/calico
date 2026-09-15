@@ -715,15 +715,26 @@ rules:
       - update
     resourceNames:
       - tigera-gateway-api-gateway-helm-certgen
-  # 4. The operator needs to be able to read Gateway resources to determine namespaces to apply
-  # CIG resources to.
+  # 4. Gateway API resources for Whisker UI access through Calico Ingress Gateway.
+  # Reads are cluster-wide for the operator's cache; writes are self-granted per
+  # namespace at runtime.
   - apiGroups:
       - gateway.networking.k8s.io
     resources:
       - gateways
+      - httproutes
+      - referencegrants
     verbs:
-      - list
       - get
+      - list
+      - watch
+  - apiGroups:
+      - gateway.envoyproxy.io
+    resources:
+      - backends
+    verbs:
+      - get
+      - list
       - watch
   # For monitoring KubeVirt live migration.  The operator does not do this itself, but needs to
   # be able to assign this RBAC to Typha and calico-node.
@@ -838,7 +849,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: tigera-operator
-          image: quay.io/tigera/operator:master
+          image: quay.io/calico/operator:master
           imagePullPolicy: IfNotPresent
           command:
             - operator
@@ -880,7 +891,7 @@ spec:
       initContainers:
         # Install CRDs first, so that APIs exist for calicoctl to use.
         - name: bootstrap-crds
-          image: quay.io/tigera/operator:master
+          image: quay.io/calico/operator:master
           command:
             - operator
           args:

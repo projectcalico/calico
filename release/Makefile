@@ -48,6 +48,17 @@ fv st:
 	@true
 
 ###############################################################################
+# Checks
+###############################################################################
+# bin/release tracks only release/ sources, so rebuild it to pick up the operator's
+# component list. Clearing MAKEFLAGS keeps an outer -C's -w directory lines out of
+# the parsed image list.
+.PHONY: check-operator-images
+check-operator-images:
+	@$(MAKE) --no-print-directory --always-make bin/release
+	@MAKEFLAGS= bin/release images check-operator
+
+###############################################################################
 # CI/CD
 ###############################################################################
 .PHONY: ci

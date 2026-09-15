@@ -35,6 +35,11 @@ func (d *FeatureDetector) GetFeatures() *Features {
 	return &Features{}
 }
 
+// BackendBinariesPresent reports whether this host has the binaries for the named backend.
+func BackendBinariesPresent(lookPath func(file string) (string, error), ipVersion uint8, backendMode string) bool {
+	return true
+}
+
 // FindBestBinary tries to find an iptables binary for the specific variant (legacy/nftables mode) and returns the name
 // of the binary.  Falls back on iptables-restore/iptables-save if the specific variant isn't available.
 // Panics if no binary can be found.

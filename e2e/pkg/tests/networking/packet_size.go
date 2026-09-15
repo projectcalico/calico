@@ -89,19 +89,12 @@ func generatePacketLengths(mtu int) (getLengths, postLengths, udpLengths []int) 
 
 // withPacketSizeServer is a conncheck server pod customizer that replaces the
 // default image with the multi-mode rapidclient image run as the packet-size
-// server. See images.RapidClientImage for the endpoints the server exposes and
-// the side-load/pull-policy contract.
+// server.
 func withPacketSizeServer(pod *v1.Pod) {
-	image, preloaded := images.RapidClientImage()
 	for i := range pod.Spec.Containers {
-		pod.Spec.Containers[i].Image = image
+		pod.Spec.Containers[i].Image = images.RapidClient
 		pod.Spec.Containers[i].Args = nil
-		// When the image was side-loaded into the nodes' containerd (PR CI on
-		// gcp-kubeadm), it is not in any registry — pin to the loaded copy and
-		// fail loudly if it is somehow absent rather than pulling a stale one.
-		if preloaded {
-			pod.Spec.Containers[i].ImagePullPolicy = v1.PullNever
-		}
+
 		// The rapidclient image is multi-mode; MODE=server selects the HTTP/UDP
 		// dataplane server.
 		pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env,
@@ -161,9 +154,7 @@ var _ = describe.CalicoDescribe(
 			ct.AddServer(server)
 
 			if clientType == pktClientExt {
-				extClient := externalnode.NewClient()
-				Expect(extClient).NotTo(BeNil(),
-					"external node tests require EXT_IP, EXT_KEY, EXT_USER to be configured")
+				extClient := externalnode.MustNewClient()
 				ct.Deploy()
 				DeferCleanup(ct.Stop)
 
