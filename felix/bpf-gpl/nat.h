@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_NAT_H__
@@ -20,6 +20,22 @@
 #define dnat_should_encap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV && !CALI_F_NAT_IF)
 #define dnat_return_should_encap() (CALI_F_FROM_WEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV && !CALI_F_NAT_IF)
 #define dnat_should_decap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV && !CALI_F_NAT_IF)
+
+static CALI_BPF_INLINE __u16 vxlan_select_src_port(struct cali_tc_ctx *ctx)
+{
+	/* Keep the hash stable for each flow direction. ICMP has no ports, but
+	 * does not require ordering with the related flow.
+	 */
+	__u16 port = STATE->sport ^ STATE->dport;
+
+	if (VXLAN_SRC_PORT_MIN != 0 && VXLAN_SRC_PORT_MAX != 0) {
+		/* Include the upper bound, as the kernel VXLAN device does. */
+		__u16 range = (__u16)(VXLAN_SRC_PORT_MAX - VXLAN_SRC_PORT_MIN) + 1;
+		port = VXLAN_SRC_PORT_MIN + (port % range);
+	}
+
+	return port;
+}
 
 static CALI_BPF_INLINE int is_vxlan_tunnel(struct cali_tc_ctx *ctx, __u16 vxlanport)
 {

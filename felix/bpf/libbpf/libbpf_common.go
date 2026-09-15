@@ -29,6 +29,8 @@ type TcGlobalData struct {
 	ExtToSvcMark    uint32
 	Tmtu            uint16
 	VxlanPort       uint16
+	VxlanSrcPortMin uint16
+	VxlanSrcPortMax uint16
 	PSNatStart      uint16
 	PSNatLen        uint16
 	HostTunnelIPv4  [16]byte
