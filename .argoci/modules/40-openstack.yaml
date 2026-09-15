@@ -33,12 +33,6 @@ steps:
           - name: LENS_ELASTICSEARCH_USER
           - name: LENS_ELASTICSEARCH_TOKEN
     commands: |
-      # TEMPORARY: Tempest imports pkg_resources and cannot find it. Says whether
-      # setuptools is absent or too new to still ship it. Remove once answered.
-      python3 -c 'import setuptools; print("setuptools", setuptools.__version__)' || echo "setuptools: absent"
-      python3 -c 'import pkg_resources; print("pkg_resources: importable")' || echo "pkg_resources: absent"
-      python3 -m virtualenv --version 2>/dev/null || echo "virtualenv: absent"
-
       sudo apt-get remove -y python3-wrapt || true
       # Defaults to the path the checkout used to land on.
       export CALICO_REPO_DIR="${CI_HOME}/${CI_GIT_DIR}"
