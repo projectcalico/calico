@@ -125,6 +125,7 @@ local:release/internal/ci
 local:release/internal/command
 local:release/internal/defaults
 local:release/internal/distribution
+local:release/internal/docs
 local:release/internal/github
 local:release/internal/hashreleaseserver
 local:release/internal/images
