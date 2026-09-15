@@ -226,12 +226,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					//   default via 172.17.0.1 dev eth0
 					//   blackhole 10.65.0.0/26 proto 80
 					//   10.65.0.2 dev cali29f56ea1abf scope link
-					//   10.65.1.0/26 via 172.17.0.6 dev eth0 proto 80 onlink
-					//   10.65.2.0/26 via 172.17.0.5 dev eth0 proto 80 onlink
+					//   10.65.1.0/26 via 172.17.0.6 dev eth0 proto 80 metric 1024 onlink
+					//   10.65.2.0/26 via 172.17.0.5 dev eth0 proto 80 metric 1024 onlink
 					//   172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.7
 					felix := tc.Felixes[0]
 					Eventually(felix.ExecOutputFn("ip", "route", "show"), "10s").Should(ContainSubstring(
-						fmt.Sprintf("10.65.1.0/26 via %s dev eth0 proto 80 onlink", tc.Felixes[1].IP)))
+						fmt.Sprintf("10.65.1.0/26 via %s dev eth0 proto 80 metric 1024 onlink", tc.Felixes[1].IP)))
 
 					// Find the default and subnet routes, we'll need to
 					// recreate those after moving the IP.
@@ -267,7 +267,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					felix.Exec(append([]string{"ip", "r", "add"}, defaultRouteArgs...)...)
 					felix.Exec(append([]string{"ip", "r", "replace"}, subnetArgs...)...)
 
-					expCrossSubRoute := fmt.Sprintf("10.65.1.0/26 via %s dev bond0 proto 80 onlink", tc.Felixes[1].IP)
+					expCrossSubRoute := fmt.Sprintf("10.65.1.0/26 via %s dev bond0 proto 80 metric 1024 onlink", tc.Felixes[1].IP)
 					Eventually(felix.ExecOutputFn("ip", "route", "show"), "60s", "500ms").Should(
 						ContainSubstring(expCrossSubRoute),
 						"Cross-subnet route should move from eth0 to bond0.",

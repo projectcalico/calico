@@ -545,12 +545,26 @@ func legacyIPTablesCleanupTables(
 	return tables
 }
 
+// clusterRouteOwner names the component that programs a class of cluster routes, for logging.
+func clusterRouteOwner(felixProgramsThem bool) string {
+	if felixProgramsThem {
+		return "Felix"
+	}
+	return "BGP"
+}
+
 func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.BPFLogLevel == "info" {
 		config.BPFLogLevel = "off"
 	}
 
 	log.WithField("config", config).Info("Creating internal dataplane driver.")
+
+	// Ownership is otherwise only visible as the absence of a deprecation warning.
+	log.WithFields(log.Fields{
+		"ipipClusterRoutes":    clusterRouteOwner(config.ProgramIPIPClusterRoutes),
+		"noEncapClusterRoutes": clusterRouteOwner(config.ProgramNoEncapClusterRoutes),
+	}).Info("Cluster route ownership resolved.  VXLAN cluster routes are always Felix's.")
 
 	// Resolved at startup, before the dataplane-specific config values were read, so that
 	// those values match the dataplane we program here.

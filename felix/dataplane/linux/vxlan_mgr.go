@@ -269,7 +269,8 @@ func (m *vxlanManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetab
 		// the VTEP because they ARE the VTEP!
 		return &routetable.Target{
 			RouteKey: routetable.RouteKey{
-				CIDR: cidr,
+				CIDR:     cidr,
+				Priority: m.routeMgr.routePriority,
 			},
 			MTU: m.mtu,
 		}
@@ -288,7 +289,8 @@ func (m *vxlanManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetab
 	return &routetable.Target{
 		Type: routetable.TargetTypeVXLAN,
 		RouteKey: routetable.RouteKey{
-			CIDR: cidr,
+			CIDR:     cidr,
+			Priority: m.routeMgr.routePriority,
 		},
 		GW:  ip.FromString(vtepAddr),
 		MTU: m.mtu,

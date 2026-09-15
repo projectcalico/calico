@@ -43,6 +43,11 @@ const (
 
 	// RTPROT_BIRD, which `ip route` renders as "bird".
 	birdRouteProto = "bird"
+
+	// IPv4NormalRoutePriority's default, i.e. the metric both Felix and BIRD give a route to a
+	// workload on another node.  A stand-in for one of BIRD's routes has to carry it to share a
+	// route key with Felix's.
+	birdRouteMetric = "1024"
 )
 
 // ipipBIRDRouteTopology returns topology options for an IPIP-Always cluster, with either Felix or
@@ -137,11 +142,14 @@ var _ = infrastructure.DatastoreDescribe(
 			dest, gw := match[1], match[2]
 
 			// Stand in for the route the old BIRD left behind for the same destination: same
-			// next hop and device, but BIRD's protocol.  Exec fails the test if the kernel
-			// rejects this, which is the only check available: Felix can reclaim the route
-			// within milliseconds, so nothing here can reliably observe it in place first.
+			// next hop, device and metric, but BIRD's protocol.  The metric has to match, or
+			// this is a second route rather than the same one, and Felix has nothing to take
+			// back.  Exec fails the test if the kernel rejects this, which is the only check
+			// available: Felix can reclaim the route within milliseconds, so nothing here can
+			// reliably observe it in place first.
 			felixes[0].Exec("ip", "route", "replace", dest, "via", gw,
-				"dev", dataplanedefs.IPIPIfaceName, "onlink", "proto", birdRouteProto)
+				"dev", dataplanedefs.IPIPIfaceName, "onlink",
+				"metric", birdRouteMetric, "proto", birdRouteProto)
 
 			// Felix owns it, so it takes it back.  It must end up replaced rather than simply
 			// removed: this is a destination the cluster needs a route to.
