@@ -11,6 +11,7 @@ defaults:
 
 steps:
   - name: tools-ci
+    requests: {cpu: 4750m, memory: 2.5Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"

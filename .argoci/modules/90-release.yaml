@@ -8,7 +8,7 @@ defaults:
 
 steps:
   - name: release-ci
-    requests: {cpu: 3800m, memory: 2Gi}
+    requests: {cpu: 4000m, memory: 2Gi}
     # The image ships gotestsum under /go/bin, which the default emptyDir over
     # /go hides — as `command not found`, minutes in.
     workspaceVolumes: none
@@ -27,6 +27,7 @@ steps:
   # `bin/release` splices its own `-e` flags into the nested `docker run`, which
   # emptying the wrappers would leave behind as a bare command.
   - name: release-build
+    requests: {cpu: 3000m, memory: 2.5Gi}
     image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2
     services:
       - docker

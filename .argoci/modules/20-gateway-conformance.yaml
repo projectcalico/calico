@@ -9,6 +9,7 @@ defaults:
 
 steps:
   - name: gateway-conformance
+    requests: {cpu: 5000m, memory: 16Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"

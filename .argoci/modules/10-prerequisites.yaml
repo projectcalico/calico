@@ -16,7 +16,7 @@ steps:
   # Generated from the live Go import graph, so a stale copy under-fires every
   # other gate in the file and nothing else would report it.
   - name: check-semaphore-files
-    requests: {cpu: 3000m, memory: 2Gi}
+    requests: {cpu: 2750m, memory: 1.5Gi}
     image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
     workspaceVolumes: none
     changes:
@@ -35,7 +35,7 @@ steps:
 
     jobSize: small
 
-    requests: {cpu: 1000m, memory: 768Mi}
+    requests: {cpu: 1750m, memory: 768Mi}
     services: [docker]
     changes:
       in:
@@ -51,6 +51,7 @@ steps:
   # `fix-changed` splices its own flags into the nested `docker run`, so this
   # block cannot yet drop the daemon the way the two above it do.
   - name: check-go
+    requests: {cpu: 5750m, memory: 8.5Gi}
     services: [docker]
     changes:
       in:
@@ -81,7 +82,7 @@ steps:
 
     jobSize: small
 
-    requests: {cpu: 1200m, memory: 1Gi}
+    requests: {cpu: 2250m, memory: 1Gi}
     services: [docker]
     changes:
       in:
@@ -98,7 +99,7 @@ steps:
   # Grep-speed checks, so one step rather than three.
   - name: check-language-dockerfiles
     jobSize: small
-    requests: {cpu: 700m, memory: 768Mi}
+    requests: {cpu: 750m, memory: 768Mi}
     image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
     workspaceVolumes: none
     changes:
@@ -118,6 +119,7 @@ steps:
       make check-mockery-config
 
   - name: check-protobufs
+    requests: {cpu: 1500m, memory: 1.5Gi}
     services: [docker]
     changes:
       in:
@@ -134,6 +136,7 @@ steps:
       make check-dirty
 
   - name: check-manifests
+    requests: {cpu: 3250m, memory: 3Gi}
     services: [docker]
     changes:
       in:
@@ -175,7 +178,7 @@ steps:
   - name: build-calico-image
     services: [docker]
     timeout: 1h
-    requests: {cpu: 3500m, memory: 4Gi}
+    requests: {cpu: 5500m, memory: 6.5Gi}
     changes:
       dependsOn: [cmd, dependents-of-build-calico-image]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']

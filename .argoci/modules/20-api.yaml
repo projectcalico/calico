@@ -15,6 +15,7 @@ defaults:
 
 steps:
   - name: api-ci
+    requests: {cpu: 3000m, memory: 3.5Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
@@ -25,6 +26,7 @@ steps:
       artifact push job report --destination test-results || true
 
   - name: api-validation
+    requests: {cpu: 3750m, memory: 3Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
