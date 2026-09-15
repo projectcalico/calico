@@ -149,7 +149,7 @@ log / observability pipeline (Goldmane and friends).
 
 They are distinct from:
 
-- **Debug log filters (Debug log filters)**, which emit per-packet textual
+- **[Debug log filters](#debug-log-filters)**, which emit per-packet textual
   traces for diagnosis. Log filters are off by default; flow
   logs are a feature.
 - **BPF counters**, which produce aggregate counts, not
@@ -191,21 +191,18 @@ counters, timestamps and a verdict code.
 
 ### Why ring buffer, not perf buffer
 
-BPF ring buffer (`BPF_MAP_TYPE_RINGBUF`, kernel 5.8+) is
-preferred over the older per-CPU perf-event buffer for this
-use because it is MPSC (multi-producer, single-consumer), so
-the userspace side does not need to fan in from `nCPU`
-readers, and it has the correct backpressure semantics
-— drops are explicit and countable rather than per-CPU
-reorderings. Calico's minimum kernel (5.10) supports it.
+`BPF_MAP_TYPE_RINGBUF` (kernel 5.8+, so within Calico's 5.10
+minimum) is MPSC, so userspace reads one stream instead of fanning in
+`nCPU` per-CPU buffers, and its backpressure is explicit: drops are
+countable rather than showing up as per-CPU reordering.
 
 ### Fast-path discipline
 
-The emission sites are on the flow-creation path, not on every
-packet of an established flow, so the per-packet fast-path cost
-([bpf-overview.md → Fast-path performance discipline](./bpf-overview.md)) is unaffected when flow logs are on. The `FLOWLOGS_ENABLED`
-branch that guards emission is also a single mark-style load,
-which is acceptable on the fast path.
+Emission sites are on the flow-creation path, never on every packet of
+an established flow, so enabling flow logs does not move the
+per-packet cost ([bpf-overview.md → Fast-path performance discipline](./bpf-overview.md)).
+The `FLOWLOGS_ENABLED` guard is a single mark-style load, which is
+acceptable on the fast path.
 
 ### Review notes
 
@@ -251,11 +248,11 @@ loop), and `felix/bpf-gpl/qos.h` (C).
 ### Two maps: `cali_qos` (packet rate) and `cali_qos_conn` (connlimit)
 
 Packet-rate and connection-limit state live in two separate BPF maps
-that share the same key shape but have disjoint values. Splitting
-them is what allows the userspace `ConnLimitScanner` to write
-`current_count` back without clobbering the BPF dataplane's running
-token-bucket state — see PR #13009 for the lost-update bug the split
-fixes.
+that share the same key shape but have disjoint values. The split is
+what lets the userspace `ConnLimitScanner` write `current_count` back
+without clobbering the dataplane's running token-bucket state:
+userspace cannot read-modify-write under a BPF spinlock, so a value
+holding both would lose one writer's update.
 
 Shared key (`felix/bpf/qos/map.go`):
 
@@ -345,31 +342,19 @@ on connection close.
   carrying any FIN or RST bit so it doesn't double-count a close
   those paths have already accounted for.
 
-  It deliberately does **not** skip entries carrying
-  `CONNLIMIT_DEC`. That flag is cleared only on the spurious-RST
-  path below, and never at all for an entry that no longer sees
-  traffic, so skipping on it excluded a connection from future
-  recounts — and since the recount is the only mechanism that can
-  return a slot, the exclusion was effectively permanent. Because
-  the fast path decrements on any
-  RST, including a spurious one that is out of window and ignored by
-  both peers, and because the per-leg RST bits clear as soon as
-  traffic resumes, that produced live, established entries the
-  scanner would never count again: N spurious RSTs against N live
-  connections parked `current_count` at 0 with all N still up. An
-  established entry with no FIN and no RST is live and is counted,
-  whatever `CONNLIMIT_DEC` says; the FIN/RST skips are what prevent
-  double-counting, since a genuinely closed entry keeps those bits
-  until it is purged.
+  It deliberately does **not** skip on `CONNLIMIT_DEC`: that flag can
+  be claimed for a live connection (the fast path decrements on any
+  RST, validated or not) and does not clear while an entry sees no
+  traffic, so skipping on it would exclude a live connection from
+  every future recount. An established entry with no FIN and no RST
+  is live and is counted, whatever `CONNLIMIT_DEC` says.
 
-This is why the RST decrement stays on the fast path even though an
-RST is weak evidence of a close. Prompt release is a requirement —
-`felix/fv` asserts a genuine RST close frees a slot within 5s, and
-deferring RST closes to the cleanup path makes them wait for
-`TCPResetSeen` (40s). The recount makes the resulting under-count
-self-correcting instead of permanent, which is the property that
-matters: a spurious RST costs one scan cycle, not the connection's
-lifetime.
+The RST decrement stays on the fast path even though an RST is weak
+evidence of a close, because prompt release is a requirement:
+`felix/fv` asserts a genuine RST close frees a slot within 5s, while
+the cleanup path would wait for `TCPResetSeen` (40s). The recount is
+what makes the resulting under-count self-correcting — a spurious RST
+costs one scan cycle, not the connection's lifetime.
 
 Host-originated traffic — including from host-networked pods — is
 exempt from the ingress limit: it takes the `skip_policy` path in
@@ -402,7 +387,8 @@ annotation on a HEP or WEP. The value is carried in BPF globals as
 
 The ECN bits are preserved in both address families. Istio's DSCP
 hook (for L7 mesh identification at connection setup) uses a second
-global, `ISTIO_DSCP`; see Istio ambient mode integration for the integration.
+global, `ISTIO_DSCP`; see
+[Istio ambient mode](#istio-ambient-mode-integration).
 
 ### Review notes for this section
 
@@ -427,33 +413,24 @@ global, `ISTIO_DSCP`; see Istio ambient mode integration for the integration.
   scanner) set it before decrementing. It is what stops the same
   close being counted twice when both paths see one entry.
 - `CONNLIMIT_DEC` is an idempotence latch, **not** a statement that
-  the connection is gone. Do not gate the userspace recount on it,
-  and do not add any other long-lived "already handled" marker that
-  the recount honours. The recount is the only path that can return
-  a slot, so anything it skips unconditionally is leaked for the
-  life of the entry — and the fast path claims the latch on signals
-  a live connection can survive (any RST, unvalidated). Keep the
-  skip conditions to state that clears itself or dies with the
-  entry: the per-leg FIN/RST bits.
-- The latch describes a decrement that is only meaningful while the
-  counter still reflects it, and the recount rebases the counter
-  every ~30s. That is why `calico_ct_lookup` releases the latch at
-  the same point it concludes an RST was spurious — two minutes of
-  continued traffic, where it also clears `v->rst_seen`. Without
-  that release, a connection that survived a spurious RST would find
-  the latch already taken when it genuinely closed, and free its
-  slot at recount speed rather than immediately. Release it with an
-  atomic AND on `type_flags_word`, mirroring the claim: a byte-wide
-  `ct_value_clear_flags()` would race with a concurrent claim on
-  another CPU. Note this re-arms the latch for that entry, so a
-  connection can be decremented once per spurious RST rather than
-  once ever; the recount bounds the resulting under-count either
-  way.
-- When choosing between holding a slot too long and releasing one
-  too early, hold. Over-counting fails closed — a pod is briefly
-  refused a connection it could have had. Under-counting fails open:
-  the limit stops being a limit, and if the under-count is permanent
-  an unauthenticated packet defeats it outright.
+  the connection is gone. The recount is the only path that returns a
+  slot, so anything it skips unconditionally leaks for the life of the
+  entry: do not gate it on the latch, or on any other long-lived
+  "already handled" marker. Keep its skip conditions to state that
+  clears itself or dies with the entry — the per-leg FIN/RST bits.
+- The latch is released where `calico_ct_lookup` concludes an RST was
+  spurious (two minutes of continued traffic, where it also clears
+  `v->rst_seen`), so a connection that survives one still frees its
+  slot immediately when it genuinely closes. Release it with an atomic
+  AND on `type_flags_word`, mirroring the claim — a byte-wide
+  `ct_value_clear_flags()` races with a concurrent claim on another
+  CPU. Releasing re-arms the latch, so a connection can be decremented
+  once per spurious RST rather than once ever; the recount bounds the
+  under-count either way.
+- When choosing between holding a slot too long and releasing one too
+  early, hold. Over-counting fails closed — a pod is briefly refused a
+  connection it could have had. Under-counting fails open: the limit
+  stops being a limit.
 - ep_mgr writes to `cali_qos` / `cali_qos_conn` must skip the
   UpdateWithFlags when the configured fields match the existing
   entry. The dataplane owns the dynamic fields between configuration
@@ -494,7 +471,7 @@ the main program in `tc.c` does:
    a mesh member.
 4. On match, `qos_dscp_set(ctx, ISTIO_DSCP)` rewrites the DSCP
    bits in the IPv4 TOS / IPv6 traffic-class byte — same
-   mechanics as QoS QoS DSCP.
+   mechanics as [QoS DSCP](#dscp).
 
 The `ALL_ISTIO_WEPS_ID` IP set is populated by Felix with every
 mesh WEP in the cluster (local and remote); it lives in the
@@ -527,7 +504,8 @@ a convention shared with Istio ztunnel).
 ### Review notes
 
 - The SYN-only path is load-bearing. A change that moves Istio
-  DSCP marking onto every packet breaks [bpf-overview.md → Fast-path performance discipline](./bpf-overview.md) fast-path discipline.
+  DSCP marking onto every packet breaks the
+  [fast-path discipline](./bpf-overview.md).
   If a future feature genuinely needs per-packet Istio DSCP,
   reuse `CALI_CT_FLAG_SET_DSCP` / `CALI_ST_SET_DSCP` from QoS
   rather than introducing a second per-packet rewrite.
