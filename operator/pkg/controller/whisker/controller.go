@@ -185,6 +185,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 			BackendNamespace: whisker.WhiskerNamespace,
 			Extension:        r.gwExt,
 		})
+		if err := gwHelper.ClearRBACFinalizers(ctx); err != nil {
+			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to clear gateway RBAC finalizers", err, reqLogger)
+			return reconcile.Result{}, err
+		}
 		gwComponents, err := gwHelper.Teardown(ctx)
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to list gateways for cleanup", err, reqLogger)
@@ -330,6 +334,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		Azure:               installationSpec.Azure,
 		Extension:           r.gwExt,
 	})
+	// Clear finalizers on any access grant whose gateway resources are gone,
+	// unconditionally, so a stale grant finishes deleting regardless of whether
+	// the gateway is enabled below.
+	if err := gwHelper.ClearRBACFinalizers(ctx); err != nil {
+		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to clear gateway RBAC finalizers", err, reqLogger)
+		return reconcile.Result{}, err
+	}
 	var gatewayComponents []render.Component
 	var gatewayTLSKeyPair certificatemanagement.KeyPairInterface
 	gatewayEnabled := renderCR.Spec.IngressGateway != nil

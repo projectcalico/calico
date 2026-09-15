@@ -307,7 +307,7 @@ var _ = Describe("Cleanup helpers", func() {
 			Expect(cli.Delete(ctx, role)).To(Succeed())
 			Expect(cli.Delete(ctx, binding)).To(Succeed())
 
-			_, err := h.Teardown(ctx)
+			err := h.ClearRBACFinalizers(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(kerrors.IsNotFound(cli.Get(ctx, types.NamespacedName{Name: accessName, Namespace: "ns-a"}, &rbacv1.Role{}))).To(BeTrue(),
@@ -321,7 +321,7 @@ var _ = Describe("Cleanup helpers", func() {
 			Expect(cli.Delete(ctx, role)).To(Succeed())
 			Expect(cli.Delete(ctx, binding)).To(Succeed())
 
-			_, err := h.Teardown(ctx)
+			err := h.ClearRBACFinalizers(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			got := &rbacv1.Role{}
@@ -334,7 +334,7 @@ var _ = Describe("Cleanup helpers", func() {
 			role, binding := accessGrant("ns-a")
 			build(role, binding)
 
-			_, err := h.Teardown(ctx)
+			err := h.ClearRBACFinalizers(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			got := &rbacv1.Role{}
@@ -343,18 +343,22 @@ var _ = Describe("Cleanup helpers", func() {
 			Expect(got.Finalizers).To(ContainElement(rgateway.RBACFinalizer))
 		})
 
-		It("clears a marked grant's finalizer on the gatewayNamespace-move path", func() {
-			role, binding := accessGrant("ns-a")
-			build(role, binding)
-			Expect(cli.Delete(ctx, role)).To(Succeed())
-			Expect(cli.Delete(ctx, binding)).To(Succeed())
+		It("clears finalizers per namespace, keeping one whose Gateway remains", func() {
+			goneRole, goneBinding := accessGrant("ns-a")
+			heldRole, heldBinding := accessGrant("ns-b")
+			build(goneRole, goneBinding, heldRole, heldBinding, labeledGateway(rgateway.GatewayName(prefix), "ns-b"))
+			for _, o := range []client.Object{goneRole, goneBinding, heldRole, heldBinding} {
+				Expect(cli.Delete(ctx, o)).To(Succeed())
+			}
 
-			_, err := h.StaleComponents(ctx, backendNS)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(h.ClearRBACFinalizers(ctx)).To(Succeed())
 
 			Expect(kerrors.IsNotFound(cli.Get(ctx, types.NamespacedName{Name: accessName, Namespace: "ns-a"}, &rbacv1.Role{}))).To(BeTrue(),
-				"the finalizer should be cleared on the move path so the pending delete finishes")
-			Expect(kerrors.IsNotFound(cli.Get(ctx, types.NamespacedName{Name: accessName, Namespace: "ns-a"}, &rbacv1.RoleBinding{}))).To(BeTrue())
+				"ns-a's grant should clear: its gateway resources are gone")
+			held := &rbacv1.Role{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: accessName, Namespace: "ns-b"}, held)).To(Succeed())
+			Expect(held.Finalizers).To(ContainElement(rgateway.RBACFinalizer),
+				"ns-b's grant must stay while its Gateway remains")
 		})
 	})
 
