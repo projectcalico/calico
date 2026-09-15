@@ -18,3 +18,4 @@ e2e/                          @projectcalico/e2e-maintainers
 
 # Operator
 operator/                     @projectcalico/operator-maintainers
+charts/tigera-operator/       @projectcalico/core-maintainers @projectcalico/operator-maintainers
