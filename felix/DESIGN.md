@@ -221,7 +221,10 @@ fit the dataplane manager/driver architecture and resync doctrine
 covered in [`dataplane.md`](./design/dataplane.md); their deeper
 netlink-level design (resync grace periods, conntrack cleanup on
 IP moves) is reserved for a future `route-sync.md` sub-design.
-`flow-logs-collector.md` is likewise still to be written.
+
+`nfnetlink/` is one of the collector's two event sources in
+iptables/nftables mode; the flow-log pipeline it feeds is covered in
+[`flow-logs-collector.md`](./design/flow-logs-collector.md).
 
 ### Cross-component designs Felix takes part in
 
@@ -276,7 +279,7 @@ large enough to bloat AI-tool context.
 | [calc-graph](./design/calc-graph.md) | `felix/calc/**`, `felix/labelindex/**`, `felix/dispatcher/**` | ✅ exists |
 | [neighbour-discovery](./design/neighbour-discovery.md) | `felix/dataplane/linux/proxy_neigh_mgr.go`; the proxy-ARP sysctl and live-migration ARP-suppression parts of `felix/dataplane/linux/endpoint_mgr.go` (that file's manager architecture is [dataplane](./design/dataplane.md)'s). Depends on, and is invalidated by changes to, `cni-plugin/pkg/dataplane/linux/dataplane_linux.go` and `networking-calico/networking_calico/agent/linux/dhcp.py` | ✅ exists |
 | route-sync (deep netlink design only) | `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` — *architecture covered by [dataplane.md](./design/dataplane.md); this row reserved for the deeper netlink-level resync design* | *not yet written* |
-| flow-logs-collector | `felix/collector/**` | *not yet written* |
+| [flow-logs-collector](./design/flow-logs-collector.md) | `felix/collector/**`, `felix/fv/flowlogs/**`, `felix/fv/flow_logs*_test.go` | ✅ exists |
 | config-engine | `felix/config/**` | *not yet written* |
 | windows-dataplane | `felix/dataplane/windows/**` | *not yet written* |
 
