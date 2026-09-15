@@ -89,9 +89,9 @@ interface. These routes are still needed because:
 
 ### Source-port range
 
-The wire UDP source port of a VXLAN-encapped packet is a hash —
-`STATE->sport ^ STATE->dport` in `tc.c` — chosen so that ECMP/RSS
-hashing spreads multiple inner flows across paths and queues. The
+The wire UDP source port of a VXLAN-encapped packet is a hash,
+`STATE->sport ^ STATE->dport` in `vxlan_select_src_port()` in `nat.h`,
+chosen so that ECMP/RSS hashing spreads multiple inner flows across paths and queues. The
 exact value does not matter: the kernel/peer accepts any value as
 the wire source port, and per-flow stability matters only so that
 return traffic for an inner flow keeps the same outer 5-tuple.
@@ -154,13 +154,11 @@ than pinned to a specific device.
   `bpf_skb_set_tunnel_key` (or equivalent) on a flow-based device;
   the device will not apply anything that does not come in via the
   tunnel key.
-- A new global config field consumed by the encap path (such as
-  `vxlan_src_port_min`/`vxlan_src_port_max`) must be added in the same
-  order in `felix/bpf-gpl/globals.h`,
-  `felix/bpf/libbpf/libbpf_common.go`, and the
-  `bpf_tc_set_globals` cgo signature in
-  `felix/bpf/libbpf/libbpf_api.h`; mismatched ordering silently
-  scrambles all subsequent fields at runtime.
+- Keep the positional arguments to `bpf_tc_set_globals` in
+  `felix/bpf/libbpf/libbpf.go` aligned with its signature in
+  `felix/bpf/libbpf/libbpf_api.h`. The C global-data struct is
+  initialized by field name, so its field order is independent
+  of the Go struct and cgo argument order.
 
 
 

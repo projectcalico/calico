@@ -799,7 +799,7 @@ var _ = Describe("VXLANManager", func() {
 			4,
 			4444,
 			dpConfig,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 		)
 

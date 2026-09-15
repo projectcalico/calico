@@ -1,18 +1,16 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #include "ut.h"
 #include "bpf.h"
+#include "nat.h"
 #include "skb.h"
 
 const volatile struct cali_tc_preamble_globals __globals;
 
-/* calico_unittest_entry takes a UDP packet and returns the VXLAN source
- * port that tc.c would assign to a VXLAN encapsulation of a flow with the
- * same sport/dport. It applies the same hash and (optional) port-range
- * mapping as the encap path in tc.c so the test exercises the
- * VXLAN_SRC_PORT_MIN/MAX globals end-to-end.
+/* Exercise the production source-port selector with packet-derived ports
+ * and the configured TC globals.
  */
 static CALI_BPF_INLINE int calico_unittest_entry(struct __sk_buff *skb)
 {
@@ -38,16 +36,14 @@ static CALI_BPF_INLINE int calico_unittest_entry(struct __sk_buff *skb)
 		return -1;
 	}
 
-	struct udphdr *udp = udp_hdr(ctx);
-	__u16 sport = bpf_ntohs(udp->source);
-	__u16 dport = bpf_ntohs(udp->dest);
-
-	__u16 vxlan_src_port = sport ^ dport;
-
-	if (VXLAN_SRC_PORT_MIN != 0 && VXLAN_SRC_PORT_MAX != 0) {
-		__u16 range = (__u16)(VXLAN_SRC_PORT_MAX - VXLAN_SRC_PORT_MIN) + 1;
-		vxlan_src_port = VXLAN_SRC_PORT_MIN + (vxlan_src_port % range);
+	if (bpf_skb_load_bytes(skb, skb_l4hdr_offset(ctx), ctx->scratch->l4, UDP_SIZE)) {
+		CALI_DEBUG("Failed to load UDP header");
+		return -1;
 	}
 
-	return (int)vxlan_src_port;
+	struct udphdr *udp = udp_hdr(ctx);
+	STATE->sport = bpf_ntohs(udp->source);
+	STATE->dport = bpf_ntohs(udp->dest);
+
+	return vxlan_select_src_port(ctx);
 }
