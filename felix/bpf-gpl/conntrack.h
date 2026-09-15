@@ -124,17 +124,20 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 			}
 			goto create;
 		}
-		struct calico_ct_leg *pkt_leg, *appr_leg;
+		struct calico_ct_leg *pkt_leg, *other_leg, *approval_leg;
 
 		if (srcLTDest) {
 			CALI_DEBUG("CT-ALL update src_to_dst A->B");
 			pkt_leg = &ct_value->a_to_b;
-			appr_leg = CALI_F_TO_HOST ? &ct_value->a_to_b : &ct_value->b_to_a;
+			other_leg = &ct_value->b_to_a;
 		} else  {
 			CALI_DEBUG("CT-ALL update src_to_dst B->A");
 			pkt_leg = &ct_value->b_to_a;
-			appr_leg = CALI_F_TO_HOST ? &ct_value->b_to_a : &ct_value->a_to_b;
+			other_leg = &ct_value->a_to_b;
 		}
+
+		/* Traffic towards the host is approved on the leg it arrives on. */
+		approval_leg = CALI_F_TO_HOST ? pkt_leg : other_leg;
 
 		/* This is a live map entry, shared with the program handling the
 		 * opposite direction - flag writes must go through the atomic
@@ -146,10 +149,10 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 		} else {
 			ct_leg_clear_flags(pkt_leg, CALI_CT_LEG_SYN_SEEN);
 		}
-		ct_leg_set_flags(appr_leg, CALI_CT_LEG_APPROVED |
+		ct_leg_set_flags(approval_leg, CALI_CT_LEG_APPROVED |
 				(CALI_F_WEP ? CALI_CT_LEG_WORKLOAD : 0));
 		if (!CALI_F_WEP) {
-			ct_leg_clear_flags(appr_leg, CALI_CT_LEG_WORKLOAD);
+			ct_leg_clear_flags(approval_leg, CALI_CT_LEG_WORKLOAD);
 		}
 
 		return 0;
