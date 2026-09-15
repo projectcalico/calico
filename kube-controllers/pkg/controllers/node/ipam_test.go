@@ -1327,6 +1327,254 @@ var _ = Describe("IPAM controller UTs", func() {
 		}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
 	})
 
+	It("should NOT clean up a valid IP address when the allocation's recorded node is stale (issue #12257)", func() {
+		// The CNI plugin can stamp the wrong node into an allocation's attrs["node"] at ADD time
+		// (e.g. a stale on-disk CNI config left behind by a previous node identity), even though
+		// the pod itself is placed correctly and genuinely holds the IP it was given. A node
+		// mismatch alone must not be treated as proof the pod was rescheduled.
+
+		// Create the Calico node the allocation is (stale-)recorded against, and its matching k8s node.
+		n := internalapi.Node{}
+		n.Name = "cnode-a"
+		n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: "kname-a", Orchestrator: apiv3.OrchestratorKubernetes}}
+		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		kn := v1.Node{}
+		kn.Name = "kname-a"
+		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		var node *v1.Node
+		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+
+		// Create the second node the pod is actually running on.
+		knB := v1.Node{}
+		knB.Name = "kname-b"
+		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &knB, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+
+		// Create a pod that is actually running on kname-b, with the IP it was really given.
+		pod := v1.Pod{}
+		pod.Name = "test-pod-stale-node"
+		pod.Namespace = "test-namespace"
+		pod.Spec.NodeName = "kname-b"
+		pod.Status.PodIP = "10.0.0.0"
+		pod.Status.PodIPs = []v1.PodIP{{IP: "10.0.0.0"}}
+		pod.Status.Phase = v1.PodRunning
+		_, err = createPod(context.TODO(), cs, &pod)
+		Expect(err).NotTo(HaveOccurred())
+		var gotPod *v1.Pod
+		Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
+
+		// Allocate the IP, but record it against cnode-a - the stale bookkeeping this fix targets.
+		idx := 0
+		handle := "test-handle-stale-node"
+		cidr := net.MustParseCIDR("10.0.0.0/30")
+		aff := "host:cnode-a"
+		key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
+		b := model.AllocationBlock{
+			CIDR:        cidr,
+			Affinity:    &aff,
+			Allocations: []*int{&idx, nil, nil, nil},
+			Unallocated: []int{1, 2, 3},
+			Attributes: []model.AllocationAttribute{
+				{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
+						ipam.AttributeNode:      "cnode-a",
+						ipam.AttributePod:       pod.Name,
+						ipam.AttributeNamespace: pod.Namespace,
+					},
+				},
+			},
+		}
+		kvp := model.KVPair{Key: key, Value: &b}
+		update := bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
+		c.onUpdate(update)
+
+		c.Start(stopChan)
+
+		blockCIDR := kvp.Key.(model.BlockKey).CIDR.String()
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			_, ok := c.allBlocks[blockCIDR]
+			return ok
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		c.onStatusUpdate(bapi.InSync)
+
+		fakeClient := cli.IPAM().(*fakeIPAMClient)
+		// The allocation's recorded node (cnode-a) no longer matches the pod's real node (kname-b),
+		// but the pod is genuinely running with this IP - it must never be released.
+		Consistently(func() bool {
+			return fakeClient.handlesReleased[handle]
+		}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
+	})
+
+	It("should GC an allocation whose recorded node mismatches the pod's node, if the pod has not yet reported an IP", func() {
+		// Guards the other half of the #12257 fix: a pod that has genuinely moved to a new node
+		// and hasn't been given an IP yet must still fast-path the old allocation as leaked,
+		// rather than waiting indefinitely on an IP report that will never match.
+
+		n := internalapi.Node{}
+		n.Name = "cnode-a2"
+		n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: "kname-a2", Orchestrator: apiv3.OrchestratorKubernetes}}
+		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		kn := v1.Node{}
+		kn.Name = "kname-a2"
+		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		var node *v1.Node
+		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+
+		knB := v1.Node{}
+		knB.Name = "kname-b2"
+		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &knB, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+
+		// Create a fresh pod on the new node, with no IP reported yet - simulates the pod having
+		// been deleted and recreated on a different node before kubelet has assigned it an address.
+		pod := v1.Pod{}
+		pod.Name = "test-pod-stale-node-no-ip"
+		pod.Namespace = "test-namespace"
+		pod.Spec.NodeName = "kname-b2"
+		_, err = createPod(context.TODO(), cs, &pod)
+		Expect(err).NotTo(HaveOccurred())
+		var gotPod *v1.Pod
+		Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
+
+		idx := 0
+		handle := "test-handle-stale-node-no-ip"
+		cidr := net.MustParseCIDR("10.0.1.0/30")
+		aff := "host:cnode-a2"
+		key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
+		b := model.AllocationBlock{
+			CIDR:        cidr,
+			Affinity:    &aff,
+			Allocations: []*int{&idx, nil, nil, nil},
+			Unallocated: []int{1, 2, 3},
+			Attributes: []model.AllocationAttribute{
+				{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
+						ipam.AttributeNode:      "cnode-a2",
+						ipam.AttributePod:       pod.Name,
+						ipam.AttributeNamespace: pod.Namespace,
+					},
+				},
+			},
+		}
+		kvp := model.KVPair{Key: key, Value: &b}
+		update := bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
+		c.onUpdate(update)
+
+		c.Start(stopChan)
+
+		blockCIDR := kvp.Key.(model.BlockKey).CIDR.String()
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			_, ok := c.allBlocks[blockCIDR]
+			return ok
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		c.onStatusUpdate(bapi.InSync)
+
+		fakeClient := cli.IPAM().(*fakeIPAMClient)
+		// No IP evidence exists yet, and the node mismatches - the fast-path leak signal should
+		// still fire and release the allocation once the grace period elapses.
+		Eventually(func() bool {
+			return fakeClient.handlesReleased[handle]
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
+	})
+
+	It("should GC an allocation whose recorded node mismatches the pod's node, when the pod has a different IP", func() {
+		// Exercises the fallthrough branch of the #12257 fix: the node mismatch is real
+		// corroborating evidence once the pod's reported IP genuinely doesn't match the
+		// allocation, and the allocation must still be released.
+
+		n := internalapi.Node{}
+		n.Name = "cnode-a3"
+		n.Spec.OrchRefs = []internalapi.OrchRef{{NodeName: "kname-a3", Orchestrator: apiv3.OrchestratorKubernetes}}
+		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		kn := v1.Node{}
+		kn.Name = "kname-a3"
+		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		var node *v1.Node
+		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+
+		knB := v1.Node{}
+		knB.Name = "kname-b3"
+		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &knB, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+
+		// Pod is on the other node, running, but with an IP that doesn't match the allocation -
+		// unlike the "stale node attribute" test, this is a genuine leak.
+		pod := v1.Pod{}
+		pod.Name = "test-pod-stale-node-diff-ip"
+		pod.Namespace = "test-namespace"
+		pod.Spec.NodeName = "kname-b3"
+		pod.Status.PodIP = "10.0.2.5"
+		pod.Status.PodIPs = []v1.PodIP{{IP: "10.0.2.5"}}
+		pod.Status.Phase = v1.PodRunning
+		_, err = createPod(context.TODO(), cs, &pod)
+		Expect(err).NotTo(HaveOccurred())
+		var gotPod *v1.Pod
+		Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
+
+		idx := 0
+		handle := "test-handle-stale-node-diff-ip"
+		cidr := net.MustParseCIDR("10.0.2.0/30")
+		aff := "host:cnode-a3"
+		key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
+		b := model.AllocationBlock{
+			CIDR:        cidr,
+			Affinity:    &aff,
+			Allocations: []*int{&idx, nil, nil, nil},
+			Unallocated: []int{1, 2, 3},
+			Attributes: []model.AllocationAttribute{
+				{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
+						ipam.AttributeNode:      "cnode-a3",
+						ipam.AttributePod:       pod.Name,
+						ipam.AttributeNamespace: pod.Namespace,
+					},
+				},
+			},
+		}
+		kvp := model.KVPair{Key: key, Value: &b}
+		update := bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
+		c.onUpdate(update)
+
+		c.Start(stopChan)
+
+		blockCIDR := kvp.Key.(model.BlockKey).CIDR.String()
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			_, ok := c.allBlocks[blockCIDR]
+			return ok
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		c.onStatusUpdate(bapi.InSync)
+
+		fakeClient := cli.IPAM().(*fakeIPAMClient)
+		// Neither the node nor the IP match - this is a genuine leak, and must still be released.
+		Eventually(func() bool {
+			return fakeClient.handlesReleased[handle]
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
+	})
+
 	It("should handle blocks losing their affinity", func() {
 		// Create Calico and k8s nodes for the test.
 		n := internalapi.Node{}
