@@ -60,20 +60,27 @@ func TestHelmChart(t *testing.T) {
 			t.Run(reg, func(t *testing.T) {
 				t.Parallel()
 
-				dir := t.TempDir()
-				args := []string{
-					"pull", fmt.Sprintf("oci://%s/%s", reg, utils.TigeraOperatorChart),
-					"--version", releaseVersion,
+				for _, chart := range utils.AllReleaseCharts() {
+					t.Run(chart, func(t *testing.T) {
+						t.Parallel()
+						dir := t.TempDir()
+						args := []string{
+							"pull", fmt.Sprintf("oci://%s/%s", reg, chart),
+							"--version", releaseVersion,
+						}
+						out, err := command.RunInDir(dir, "helm", args)
+						if err != nil {
+							t.Fatalf("pull %s %s helm chart from %s: %v\nOutput: %s", utils.TigeraOperatorChart, releaseVersion, reg, err, out)
+						}
+						chart, err := loader.Load(filepath.Join(dir, fmt.Sprintf("%s-%s.tgz", chart, releaseVersion)))
+						if err != nil {
+							t.Fatalf("load helm chart from %s: %v", reg, err)
+						}
+						validateChart(t, chart)
+
+					})
 				}
-				out, err := command.RunInDir(dir, "helm", args)
-				if err != nil {
-					t.Fatalf("pull %s %s helm chart from %s: %v\nOutput: %s", utils.TigeraOperatorChart, releaseVersion, reg, err, out)
-				}
-				chart, err := loader.Load(filepath.Join(dir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, releaseVersion)))
-				if err != nil {
-					t.Fatalf("load helm chart from %s: %v", reg, err)
-				}
-				validateChart(t, chart)
+
 			})
 		}
 	})
