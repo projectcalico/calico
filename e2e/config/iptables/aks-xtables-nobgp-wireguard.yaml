@@ -1,0 +1,13 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# iptables: xtables dataplane, Azure CNI and IPAM, no external node, on AKS,
+# WireGuard on.
+#
+# Selection scope comes from aks-xtables-nobgp.yaml, which three lanes without
+# WireGuard also use.
+
+extends: aks-xtables-nobgp.yaml
+
+enable:
+  - label: Feature:Wireguard
+    reason: "ENABLE_WIREGUARD is set on this lane"

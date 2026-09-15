@@ -24,6 +24,9 @@ func newNodeCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "node",
 		Short: "Calico node management",
+		Long: `Manage a Calico node instance. These commands run directly on the compute host
+where the node is running, and cover starting the node, checking its status,
+and gathering diagnostics.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("'calicoctl node' commands are not available on this OS")
 		},

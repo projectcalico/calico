@@ -16,7 +16,7 @@ import (
 // CalicoNodeStatusApplyConfiguration represents a declarative configuration of the CalicoNodeStatus type for use
 // with apply.
 type CalicoNodeStatusApplyConfiguration struct {
-	v1.TypeMetaApplyConfiguration    `json:",inline"`
+	v1.TypeMetaApplyConfiguration    `json:""`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *CalicoNodeStatusSpecApplyConfiguration   `json:"spec,omitempty"`
 	Status                           *CalicoNodeStatusStatusApplyConfiguration `json:"status,omitempty"`

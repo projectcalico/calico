@@ -53,6 +53,8 @@ Supported, optional environment variables:
 
    -  `felix`: Build Felix packages.
 
+   -  `calicoctl`: Build calicoctl packages.
+
    -  `etcd3gw`: Build etcd3gw packages (RPM only).
 
    -  `dnsmasq`: Build dnsmasq packages.
@@ -100,6 +102,11 @@ The components that we package and host are:
 -  networking-calico - for all platforms.
 
 -  Felix - for all platforms.
+
+-  calicoctl - for all platforms.  This packages the same standalone
+   CLI binary that is also published on the GitHub release page, as a
+   convenience for hosts that are already installing Calico from these
+   repositories.
 
 -  etcd3gw - for CentOS/RHEL 7 only.
 

@@ -298,7 +298,7 @@ type Context_Value_Call struct {
 
 // Value is a helper method to define mock.On call
 //   - key any
-func (_e *Context_Expecter) Value(key interface{}) *Context_Value_Call {
+func (_e *Context_Expecter) Value(key any) *Context_Value_Call {
 	return &Context_Value_Call{Call: _e.mock.On("Value", key)}
 }
 
@@ -315,8 +315,8 @@ func (_c *Context_Value_Call) Run(run func(key any)) *Context_Value_Call {
 	return _c
 }
 
-func (_c *Context_Value_Call) Return(v any) *Context_Value_Call {
-	_c.Call.Return(v)
+func (_c *Context_Value_Call) Return(anyMoqParam any) *Context_Value_Call {
+	_c.Call.Return(anyMoqParam)
 	return _c
 }
 

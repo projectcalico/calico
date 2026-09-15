@@ -1,4 +1,31 @@
-# RapidClient
+# rapidclient
+
+A multi-mode e2e test utility image. The mode is selected by the `MODE`
+environment variable; an unset `MODE` defaults to `client` (the original
+behaviour). See [DESIGN.md](DESIGN.md) for the full contract and rationale.
+
+## Modes
+
+| `MODE` | Purpose |
+|---|---|
+| `client` (default) | HTTP client that forces source-port reuse — for Maglev / load-balancer tests. Configured via flags (below). |
+| `server` | HTTP + UDP "dataplane server" for packet-size tests (ports the former `k8s-e2e-dataplane-server` flask image). Configured via the `PORT` env (default 5000). |
+
+### `server` mode
+
+Listens for TCP HTTP and UDP echo on the same port (`PORT`, default 5000),
+dual-stack:
+
+- `GET /length/{N}` — response body of exactly `N` whitespace-free bytes.
+- `POST /post` — returns the number of bytes received (GET returns help text).
+- `GET /` — static sanity string.
+- UDP — echoes each datagram back verbatim.
+
+```bash
+docker run --rm -e MODE=server -p 5000:5000 quay.io/tigeradev/rapidclient
+```
+
+## `client` mode
 
 A simple HTTP client tool that forces source port reuse by bypassing TIME_WAIT state, designed for testing Maglev consistent hashing and load balancer behavior.
 
@@ -83,6 +110,21 @@ $ ./rapidclient -url "http://10.96.0.1:8080/shell?cmd=hostname" -v
 Status: 200 OK
 Response: {"output":"backend-pod-5\n"}
 ```
+
+## How the e2e tests get this image
+
+The tests reference the image via `images.RapidClient`
+(`e2e/pkg/utils/images/images.go`), which is a single pinned reference:
+`quay.io/tigeradev/rapidclient:latest`. Pods use `ImagePullPolicy: IfNotPresent`,
+so a copy already on the node wins over a pull.
+
+- **PR CI on gcp-kubeadm and the kind BPF lane:** PR builds have no registry push
+  credential, so `.argoci/scripts/phases/load_images.sh` (and
+  `make kind-load-rapidclient`) build this image from the PR source under the same
+  tag and load it onto the nodes. The pods then run your build.
+- **Everything else** (other providers, scheduled runs, local dev): the published
+  image is pulled. If you change this image and want such a run to use your build,
+  publish it through the post-merge `push-images/e2e-test.yml` promotion.
 
 ## Integration with Tests
 

@@ -963,6 +963,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: bpfMapSizeRoute
       type:
         scalar: numeric
+    - name: bpfOverlayHostSourceIP
+      type:
+        scalar: string
     - name: bpfPSNATPorts
       type:
         namedType: com.github.projectcalico.api.pkg.lib.numorstring.Port
@@ -1191,6 +1194,12 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: logActionRateLimitBurst
       type:
         scalar: numeric
+    - name: logConnectionTransitions
+      type:
+        scalar: string
+    - name: logConnectionTransitionsPrefix
+      type:
+        scalar: string
     - name: logDebugFilenameRegex
       type:
         scalar: string
@@ -1237,6 +1246,12 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: string
     - name: nftablesFilterDenyAction
+      type:
+        scalar: string
+    - name: nftablesFlowTableDataIfacePattern
+      type:
+        scalar: string
+    - name: nftablesFlowTableOffload
       type:
         scalar: string
     - name: nftablesMangleAllowAction
@@ -1851,6 +1866,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ControllersConfig
       default: {}
+    - name: debugProfileHost
+      type:
+        scalar: string
     - name: debugProfilePort
       type:
         scalar: numeric
@@ -2353,6 +2371,11 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Template
   map:
     fields:
+    - name: annotations
+      type:
+        map:
+          elementType:
+            scalar: string
     - name: generateName
       type:
         scalar: string

@@ -161,6 +161,30 @@ var _ = Describe("Getting summary information about a block", func() {
 		Expect(block.NumFreeAddresses(cidrSliceFilter([]cnet.IPNet{*wholeBlock}))).To(Equal(0))
 	})
 
+	It("returns no reserved addresses with no reservations", func() {
+		block := makeTestBlock()
+		block.allocate([]int{10, 20}, "tens")
+		Expect(block.NumReservedAddresses(nilAddrFilter{})).To(Equal(0))
+	})
+
+	It("returns reserved addresses with half the block reserved", func() {
+		_, secondHalf, err := cnet.ParseCIDR("100.64.0.128/25")
+		Expect(err).NotTo(HaveOccurred())
+		block := makeTestBlock()
+		block.allocate([]int{10, 20, 210, 220}, "tens")
+		// Counts the reserved addresses whether or not they are allocated, so
+		// the two allocations in the reserved half are still included.
+		Expect(block.NumReservedAddresses(cidrSliceFilter([]cnet.IPNet{*secondHalf}))).To(Equal(128))
+	})
+
+	It("returns reserved addresses with the entire block reserved", func() {
+		_, wholeBlock, err := cnet.ParseCIDR("100.64.0.128/24")
+		Expect(err).NotTo(HaveOccurred())
+		block := makeTestBlock()
+		block.allocate([]int{10, 20, 210, 220}, "tens")
+		Expect(block.NumReservedAddresses(cidrSliceFilter([]cnet.IPNet{*wholeBlock}))).To(Equal(256))
+	})
+
 	It("correctly returns IPs by handle, whether zero, one, or many", func() {
 		block := makeTestBlock()
 		block.allocate([]int{3}, "singleton")

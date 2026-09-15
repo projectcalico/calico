@@ -125,6 +125,126 @@ var _ = infrastructure.DatastoreDescribe("_IPSets_ Tests for IPset rendering", [
 	})
 })
 
+var _ = infrastructure.DatastoreDescribe("_IPSets_ periodic resync repairs dataplane drift",
+	[]apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+		// A short refresh interval so the periodic resync fires promptly; the
+		// assertions below still allow many multiples of it to avoid flakes.
+		const refreshInterval = 5 * time.Second
+		// Two distinctive set sizes so we can pick our sets out of the full
+		// 'ipset list' by member count, including default Calico sets.
+		const setASize = 41
+		const setBSize = 53
+		const bogusMember = "10.123.123.123"
+
+		var (
+			tc    infrastructure.TopologyContainers
+			felix *infrastructure.Felix
+			c     client.Interface
+			infra infrastructure.DatastoreInfra
+			w     *workload.Workload
+		)
+
+		BeforeEach(func() {
+			if NFTMode() || BPFMode() {
+				// The incremental periodic resync being exercised here belongs
+				// to the legacy (iptables) ipsets driver.  nftables has its own
+				// resync path and the BPF dataplane doesn't program these IP
+				// sets.
+				Skip("legacy (iptables) ipsets driver only")
+			}
+			topologyOptions := infrastructure.DefaultTopologyOptions()
+			topologyOptions.FelixLogSeverity = "Info"
+			topologyOptions.EnableIPv6 = false
+			topologyOptions.ExtraEnvVars = map[string]string{
+				"FELIX_IPSETSREFRESHINTERVAL": fmt.Sprintf("%d", int(refreshInterval.Seconds())),
+			}
+			logrus.SetLevel(logrus.InfoLevel)
+			infra = getInfra()
+			tc, c = infrastructure.StartSingleNodeTopology(topologyOptions, infra)
+			felix = tc.Felixes[0]
+			w = workload.Run(felix, "w", "default", "10.65.0.2", "8085", "tcp")
+		})
+
+		AfterEach(func() {
+			if infra == nil {
+				// Skipped before the topology started.
+				return
+			}
+			w.Stop()
+			tc.Stop()
+			infra.Stop()
+		})
+
+		It("should repair externally-modified IP sets on the next periodic resync", func() {
+			// Program two network sets of distinct, identifiable sizes and a
+			// policy that references both and applies to our workload, so both
+			// IP sets get rendered into the dataplane.
+			makeNetSet := func(name string, size int) {
+				ns := api.NewGlobalNetworkSet()
+				ns.Name = name
+				ns.Labels = map[string]string{"netset": name}
+				ns.Spec.Nets = generateIPv4s(size)
+				_, err := c.GlobalNetworkSets().Create(context.TODO(), ns, options.SetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			}
+			makeNetSet("netset-a", setASize)
+			makeNetSet("netset-b", setBSize)
+
+			pol := api.NewGlobalNetworkPolicy()
+			pol.Name = "pol-repair"
+			pol.Spec.Selector = "all()"
+			pol.Spec.Ingress = []api.Rule{
+				{Action: "Allow", Source: api.EntityRule{Selector: "netset == 'netset-a'"}},
+				{Action: "Allow", Source: api.EntityRule{Selector: "netset == 'netset-b'"}},
+			}
+			pol.Spec.Egress = []api.Rule{{Action: "Allow"}}
+			order := 1000.0
+			pol.Spec.Order = &order
+			_, err := c.GlobalNetworkPolicies().Create(context.TODO(), pol, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			w.ConfigureInInfra(infra)
+
+			By("Waiting for both IP sets to be programmed")
+			// Identify our sets by their (unique) member counts.
+			findSetOfSize := func(size int) string {
+				match := ""
+				for name, sz := range felix.IPSetSizes() {
+					if sz != size {
+						continue
+					}
+					if match != "" && match != name {
+						Fail(fmt.Sprintf("multiple IP sets have size %d: %s and %s", size, match, name))
+					}
+					match = name
+				}
+				return match
+			}
+			Eventually(func() string { return findSetOfSize(setASize) }, "60s", "1s").ShouldNot(BeEmpty())
+			Eventually(func() string { return findSetOfSize(setBSize) }, "60s", "1s").ShouldNot(BeEmpty())
+			setA := findSetOfSize(setASize)
+			setB := findSetOfSize(setBSize)
+			Expect(setA).NotTo(Equal(setB))
+
+			By("Corrupting the IP sets behind Felix's back")
+			// Add a bogus member to one set (Felix should remove it) and flush
+			// the other (Felix should re-add its members).  We deliberately do
+			// not destroy a set: an in-use set can't be destroyed, and the
+			// whole-set-missing path is covered by the unit tests.
+			// Exec fails the test if the commands themselves fail; we don't
+			// assert on the corrupted sizes because the refresh timer may
+			// repair them before we could read them back.
+			felix.Exec("ipset", "add", setA, bogusMember)
+			felix.Exec("ipset", "flush", setB)
+
+			By("Waiting for the periodic resync to repair both sets")
+			Eventually(func() map[string]int {
+				sizes := felix.IPSetSizes()
+				return map[string]int{"a": sizes[setA], "b": sizes[setB]}
+			}, "60s", "1s").Should(Equal(map[string]int{"a": setASize, "b": setBSize}))
+		})
+	})
+
 func createNetworkSetPolicies(c client.Interface, numPols, numRulesPerPol int) {
 	By("Creating network sets")
 	sizes := []int{1, 1, 1, 2, 3, 4, 5, 5, 5, 5, 5, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 100, 200, 1000}

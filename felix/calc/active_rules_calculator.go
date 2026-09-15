@@ -89,7 +89,7 @@ type ActiveRulesCalculator struct {
 	endpointKeyToProfileIDs *EndpointKeyToProfileIDMap
 
 	// True if we've got the in-sync message from the datastore.
-	datastoreInSync bool
+	initialSyncCompleted bool
 	// Set containing the names of any profiles that were missing during the resync.  Used to
 	// log out those profiles at the end of the resync.
 	missingProfiles set.Set[string]
@@ -336,8 +336,8 @@ func (arc *ActiveRulesCalculator) updateStats() {
 }
 
 func (arc *ActiveRulesCalculator) OnStatusUpdate(status api.SyncStatus) {
-	if status == api.InSync && !arc.datastoreInSync {
-		arc.datastoreInSync = true
+	if status == api.InSync && !arc.initialSyncCompleted {
+		arc.initialSyncCompleted = true
 		if arc.missingProfiles.Len() > 0 {
 			// Log out any profiles that were missing during the resync.  We defer
 			// this until now because we may hear about profiles or endpoints first.
@@ -453,7 +453,7 @@ func (arc *ActiveRulesCalculator) sendProfileUpdate(profileID string, rules *mod
 	arc.missingProfiles.Discard(key.Name)
 	if active {
 		if !known {
-			if arc.datastoreInSync {
+			if arc.initialSyncCompleted {
 				// We're in sync so we know the profile is missing from the
 				// datastore or it failed validation
 				log.WithField("profileID", profileID).Info(

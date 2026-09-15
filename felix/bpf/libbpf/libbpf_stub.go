@@ -246,6 +246,10 @@ func (t *CTLBGlobalData) Set(m *Map) error {
 	panic("LIBBPF syscall stub")
 }
 
+func (m *Map) SetProgFlags(noTracePrintk bool) error {
+	panic("LIBBPF syscall stub")
+}
+
 func ProgQueryTcx(ifindex int, ingress bool) ([64]uint32, [64]uint32, uint32, error) {
 	panic("LIBBPF syscall stub")
 }

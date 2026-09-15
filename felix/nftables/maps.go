@@ -27,7 +27,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -47,6 +47,10 @@ type MapsDataplane interface {
 	MapUpdates() *MapUpdates
 	FinishMapUpdates(updates *MapUpdates)
 	LoadDataplaneState(ctx context.Context, mapNames []string) error
+
+	// InvalidateMapsCache discards our view of what is programmed, so that everything is
+	// reprogrammed. Used when the whole table is about to be recreated underneath us.
+	InvalidateMapsCache()
 }
 
 var _ MapsDataplane = &Maps{}
@@ -83,7 +87,7 @@ type Maps struct {
 	mapsWithDirtyMembers set.Set[string]
 
 	gaugeNumMaps prometheus.Gauge
-	opReporter   logutils.OpRecorder
+	opReporter   logrusr.OpRecorder
 	sleep        func(time.Duration)
 	logCxt       *logrus.Entry
 
@@ -100,7 +104,7 @@ func NewMaps(
 	nft knftables.Interface,
 	increfChain func(chain string),
 	decrefChain func(chain string),
-	recorder logutils.OpRecorder,
+	recorder logrusr.OpRecorder,
 ) *Maps {
 	return NewMapsWithShims(
 		ipVersionConfig,
@@ -119,7 +123,7 @@ func NewMapsWithShims(
 	nft knftables.Interface,
 	increfChain func(chain string),
 	decrefChain func(chain string),
-	recorder logutils.OpRecorder,
+	recorder logrusr.OpRecorder,
 ) *Maps {
 	familyStr := string(ipVersionConfig.Family)
 	familyLogger := logrus.WithFields(logrus.Fields{"family": ipVersionConfig.Family})
@@ -407,6 +411,15 @@ func (s *Maps) LoadDataplaneState(ctx context.Context, maps []string) error {
 	}
 
 	return nil
+}
+
+func (s *Maps) InvalidateMapsCache() {
+	s.logCxt.Debug("Discarding cached view of programmed maps.")
+	s.mapNameToProgrammedMetadata.Dataplane().DeleteAll()
+	for name, members := range s.mapNameToMembers {
+		members.Dataplane().DeleteAll()
+		s.updateDirtiness(name)
+	}
 }
 
 func (s *Maps) NFTablesMap(name string) *knftables.Map {

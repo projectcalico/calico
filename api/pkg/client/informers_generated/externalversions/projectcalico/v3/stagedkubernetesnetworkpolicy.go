@@ -20,11 +20,39 @@ import (
 )
 
 // StagedKubernetesNetworkPolicyInformer provides access to a shared informer and lister for
-// StagedKubernetesNetworkPolicies.
+// StagedKubernetesNetworkPolicies. Prefer using the type-safe variant (see [TypedStagedKubernetesNetworkPolicyInformer]).
 type StagedKubernetesNetworkPolicyInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.StagedKubernetesNetworkPolicyLister
 }
+
+// TypedStagedKubernetesNetworkPolicyInformer provides access to a shared informer and lister for
+// StagedKubernetesNetworkPolicies, including the type-safe TypedInformer variant.
+// It is a superset of StagedKubernetesNetworkPolicyInformer.
+type TypedStagedKubernetesNetworkPolicyInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() StagedKubernetesNetworkPolicyIndexInformer
+	Lister() projectcalicov3.StagedKubernetesNetworkPolicyLister
+}
+
+// StagedKubernetesNetworkPolicyIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type StagedKubernetesNetworkPolicyIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.StagedKubernetesNetworkPolicy]
+
+// StagedKubernetesNetworkPolicyHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for StagedKubernetesNetworkPolicy.
+type StagedKubernetesNetworkPolicyHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.StagedKubernetesNetworkPolicy]
+
+// StagedKubernetesNetworkPolicyDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for StagedKubernetesNetworkPolicy.
+type StagedKubernetesNetworkPolicyDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.StagedKubernetesNetworkPolicy]
+
+// StagedKubernetesNetworkPolicyFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for StagedKubernetesNetworkPolicy.
+type StagedKubernetesNetworkPolicyFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.StagedKubernetesNetworkPolicy]
+
+// StagedKubernetesNetworkPolicyIndexers is a specialization of [cache.TypedIndexers] for StagedKubernetesNetworkPolicy.
+type StagedKubernetesNetworkPolicyIndexers = cache.TypedIndexers[*apisprojectcalicov3.StagedKubernetesNetworkPolicy]
+
+// DeletedStagedKubernetesNetworkPolicy is a specialization of [cache.DeletedObject] for StagedKubernetesNetworkPolicy.
+type DeletedStagedKubernetesNetworkPolicy = cache.DeletedObject[*apisprojectcalicov3.StagedKubernetesNetworkPolicy]
 
 type stagedKubernetesNetworkPolicyInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -35,25 +63,49 @@ type stagedKubernetesNetworkPolicyInformer struct {
 // NewStagedKubernetesNetworkPolicyInformer constructs a new informer for StagedKubernetesNetworkPolicy type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedStagedKubernetesNetworkPolicyInformer]).
 func NewStagedKubernetesNetworkPolicyInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewStagedKubernetesNetworkPolicyInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedStagedKubernetesNetworkPolicyInformer constructs a new informer for StagedKubernetesNetworkPolicy type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedStagedKubernetesNetworkPolicyInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers StagedKubernetesNetworkPolicyIndexers) StagedKubernetesNetworkPolicyIndexInformer {
+	return NewTypedStagedKubernetesNetworkPolicyInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredStagedKubernetesNetworkPolicyInformer constructs a new informer for StagedKubernetesNetworkPolicy type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredStagedKubernetesNetworkPolicyInformer]).
 func NewFilteredStagedKubernetesNetworkPolicyInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewStagedKubernetesNetworkPolicyInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedStagedKubernetesNetworkPolicyInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredStagedKubernetesNetworkPolicyInformer constructs a new informer for StagedKubernetesNetworkPolicy type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredStagedKubernetesNetworkPolicyInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers StagedKubernetesNetworkPolicyIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) StagedKubernetesNetworkPolicyIndexInformer {
+	return NewTypedStagedKubernetesNetworkPolicyInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewStagedKubernetesNetworkPolicyInformerWithOptions constructs a new informer for StagedKubernetesNetworkPolicy type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedStagedKubernetesNetworkPolicyInformerWithOptions]).
 func NewStagedKubernetesNetworkPolicyInformerWithOptions(client clientset.Interface, namespace string, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedStagedKubernetesNetworkPolicyInformerWithOptions(client, namespace, options)
+}
+
+// NewTypedStagedKubernetesNetworkPolicyInformerWithOptions constructs a new informer for StagedKubernetesNetworkPolicy type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedStagedKubernetesNetworkPolicyInformerWithOptions(client clientset.Interface, namespace string, options internalinterfaces.InformerOptions) StagedKubernetesNetworkPolicyIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "stagedkubernetesnetworkpolicies"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.StagedKubernetesNetworkPolicy](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -86,17 +138,57 @@ func NewStagedKubernetesNetworkPolicyInformerWithOptions(client clientset.Interf
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *stagedKubernetesNetworkPolicyInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewStagedKubernetesNetworkPolicyInformerWithOptions(client, f.namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedStagedKubernetesNetworkPolicyInformerWithOptions(client, f.namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *stagedKubernetesNetworkPolicyInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.StagedKubernetesNetworkPolicy{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *stagedKubernetesNetworkPolicyInformer) TypedInformer() StagedKubernetesNetworkPolicyIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.StagedKubernetesNetworkPolicy](f.factory.InformerFor(&apisprojectcalicov3.StagedKubernetesNetworkPolicy{}, f.defaultInformer))
 }
 
 func (f *stagedKubernetesNetworkPolicyInformer) Lister() projectcalicov3.StagedKubernetesNetworkPolicyLister {
 	return projectcalicov3.NewStagedKubernetesNetworkPolicyLister(f.Informer().GetIndexer())
+}
+
+// ToTypedStagedKubernetesNetworkPolicyInformer converts an untyped informer into a TypedStagedKubernetesNetworkPolicyInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *StagedKubernetesNetworkPolicy. If that is not the case, calling type-safe methods of the returned
+// TypedStagedKubernetesNetworkPolicyInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedStagedKubernetesNetworkPolicyInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedStagedKubernetesNetworkPolicyInformer(informer StagedKubernetesNetworkPolicyInformer) TypedStagedKubernetesNetworkPolicyInformer {
+	if informer, ok := informer.(TypedStagedKubernetesNetworkPolicyInformer); ok {
+		return informer
+	}
+	return &stagedKubernetesNetworkPolicyTypedInformerAdapter{informer}
+}
+
+type stagedKubernetesNetworkPolicyTypedInformerAdapter struct {
+	StagedKubernetesNetworkPolicyInformer
+}
+
+func (a *stagedKubernetesNetworkPolicyTypedInformerAdapter) TypedInformer() StagedKubernetesNetworkPolicyIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.StagedKubernetesNetworkPolicy](a.Informer())
+}
+
+// ToStagedKubernetesNetworkPolicyIndexInformer converts an untyped informer into a StagedKubernetesNetworkPolicyIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *StagedKubernetesNetworkPolicy. If that is not the case, calling type-safe methods of the returned
+// StagedKubernetesNetworkPolicyIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a StagedKubernetesNetworkPolicyIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToStagedKubernetesNetworkPolicyIndexInformer(informer cache.SharedIndexInformer) StagedKubernetesNetworkPolicyIndexInformer {
+	if informer, ok := informer.(StagedKubernetesNetworkPolicyIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.StagedKubernetesNetworkPolicy](informer)
 }

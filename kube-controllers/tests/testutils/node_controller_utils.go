@@ -96,7 +96,7 @@ func ExpectNodeLabels(c client.Interface, labels map[string]string, node string)
 	return nil
 }
 
-func ExpectHostendpoint(c client.Interface, hepName string, expectedLabels map[string]string, expectedIPs, expectedProfiles []string, interfaceName string) error {
+func ExpectHostendpoint(c client.Interface, hepName string, expectedLabels, expectedAnnotations map[string]string, expectedIPs, expectedProfiles []string, interfaceName string) error {
 	hep, err := c.HostEndpoints().Get(context.Background(), hepName, options.GetOptions{})
 	if err != nil {
 		return err
@@ -111,6 +111,12 @@ func ExpectHostendpoint(c client.Interface, hepName string, expectedLabels map[s
 
 	if !reflect.DeepEqual(hep.Labels, expectedLabels) {
 		s := fmt.Sprintf("labels do not match.\n\nExpected: %#v\n  Actual: %#v\n", expectedLabels, hep.Labels)
+		logrus.Warn(s)
+		return errors.New(s)
+	}
+
+	if !reflect.DeepEqual(hep.Annotations, expectedAnnotations) {
+		s := fmt.Sprintf("annotations do not match.\n\nExpected: %#v\n  Actual: %#v\n", expectedAnnotations, hep.Annotations)
 		logrus.Warn(s)
 		return errors.New(s)
 	}

@@ -17,8 +17,10 @@ package node
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
 	"net"
+	"slices"
 	"strings"
 	"time"
 
@@ -62,6 +64,7 @@ var (
 	// Single dimension metrics. Legacy metrics are replaced by multidimensional equivalents above. Retain for
 	// backwards compatibility.
 	poolSizeGauge          *prometheus.GaugeVec
+	poolReservedGauge      *prometheus.GaugeVec
 	legacyAllocationsGauge *prometheus.GaugeVec
 	legacyBlocksGauge      *prometheus.GaugeVec
 	legacyBorrowedGauge    *prometheus.GaugeVec
@@ -97,6 +100,14 @@ func init() {
 		Help: "Total number of addresses in the IP Pool",
 	}, []string{"ippool"})
 	prometheus.MustRegister(poolSizeGauge)
+
+	poolReservedGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "ipam_ippool_reserved",
+		// Careful: the metrics FV asserts on substrings of this output, so naming
+		// another metric here would make its absence checks match this help text.
+		Help: "Number of addresses in the IP Pool that an IPReservation covers, and so cannot be assigned.",
+	}, []string{"ippool"})
+	prometheus.MustRegister(poolReservedGauge)
 
 	// Total IP allocations.
 	legacyAllocationsGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -171,6 +182,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		syncerUpdates: make(chan any, utils.BatchUpdateSize),
 
 		allBlocks:                   make(map[string]model.KVPair),
+		reservations:                make(map[string]*apiv3.IPReservation),
 		allocationsByBlock:          make(map[string]map[string]*allocation),
 		allocationState:             newAllocationState(),
 		handleTracker:               newHandleTracker(),
@@ -221,6 +233,11 @@ type IPAMController struct {
 
 	// Raw block storage, keyed by CIDR.
 	allBlocks map[string]model.KVPair
+
+	// IPReservations, keyed by name.  They make addresses unassignable without
+	// allocating them, so the block state above cannot account for them; only the
+	// reserved-IP metric needs them.
+	reservations map[string]*apiv3.IPReservation
 
 	// allocationState is the primary in-memory representation of IPAM allocations used by the garbage collector.
 	allocationState *allocationState
@@ -326,7 +343,7 @@ func (c *IPAMController) onUpdate(update bapi.Update) {
 	switch update.Key.(type) {
 	case model.ResourceKey:
 		switch update.KVPair.Key.(model.ResourceKey).Kind {
-		case internalapi.KindNode, apiv3.KindIPPool, apiv3.KindClusterInformation:
+		case internalapi.KindNode, apiv3.KindIPPool, apiv3.KindIPReservation, apiv3.KindClusterInformation:
 			c.syncerUpdates <- update.KVPair
 		}
 	case model.BlockKey:
@@ -446,6 +463,9 @@ func (c *IPAMController) handleUpdate(upd any) {
 			case apiv3.KindIPPool:
 				c.handlePoolUpdate(upd)
 				return
+			case apiv3.KindIPReservation:
+				c.handleIPReservationUpdate(upd)
+				return
 			case apiv3.KindClusterInformation:
 				c.handleClusterInformationUpdate(upd)
 				return
@@ -504,6 +524,18 @@ func (c *IPAMController) handlePoolUpdate(kvp model.KVPair) {
 	} else {
 		poolName := kvp.Key.(model.ResourceKey).Name
 		c.onPoolDeleted(poolName)
+	}
+}
+
+// handleIPReservationUpdate wraps up the logic to execute when receiving an
+// IPReservation update.  We track reservations only to report how much of each pool
+// they cover; see updateReservedMetrics.
+func (c *IPAMController) handleIPReservationUpdate(kvp model.KVPair) {
+	name := kvp.Key.(model.ResourceKey).Name
+	if kvp.Value != nil {
+		c.reservations[name] = kvp.Value.(*apiv3.IPReservation)
+	} else {
+		delete(c.reservations, name)
 	}
 }
 
@@ -679,7 +711,7 @@ func (c *IPAMController) onPoolUpdated(pool *apiv3.IPPool) {
 
 func (c *IPAMController) onPoolDeleted(poolName string) {
 	unregisterMetricVectorsForPool(poolName)
-	clearPoolSizeMetric(poolName)
+	clearPoolMetrics(poolName)
 
 	c.poolManager.onPoolDeleted(poolName)
 }
@@ -690,9 +722,9 @@ func (c *IPAMController) updateMetrics() {
 		return
 	}
 
-	// Skip if not InSync yet.
+	// Skip if not currently InSync.
 	if c.syncStatus != bapi.InSync {
-		log.WithField("status", c.syncStatus).Debug("Have not yet received InSync notification, skipping metrics sync.")
+		log.WithField("status", c.syncStatus).Debug("Syncer not currently InSync, skipping metrics sync.")
 		return
 	}
 
@@ -766,7 +798,33 @@ func (c *IPAMController) updateMetrics() {
 	for node, num := range legacyBorrowedIPsByNode {
 		legacyBorrowedGauge.WithLabelValues(node).Set(float64(num))
 	}
+
+	c.updateReservedMetrics()
+
 	log.Debug("IPAM metrics updated")
+}
+
+// updateReservedMetrics publishes how much of each pool an IPReservation covers.
+// Unlike the counts above, this cannot be derived from the blocks we track: a
+// reservation makes addresses unassignable without allocating them, and it can cover
+// pool space that no block has been carved from yet.  The reservations come from the
+// syncer like everything else here, so this needs no datastore reads; the arithmetic
+// is the library's, so this agrees with what `calicoctl ipam show` reports.
+func (c *IPAMController) updateReservedMetrics() {
+	reservations := slices.Collect(maps.Values(c.reservations))
+	for poolName, pool := range c.poolManager.allPools {
+		_, poolCIDR, err := cnet.ParseCIDR(pool.Spec.CIDR)
+		if err != nil {
+			log.WithError(err).Warnf("Unable to parse CIDR for IP Pool %s; skipping its reserved-IP metric", poolName)
+			continue
+		}
+		numReserved, err := ipam.NumReservedIPsInCIDR(*poolCIDR, reservations)
+		if err != nil {
+			log.WithError(err).Warnf("Unable to count reserved IPs in IP Pool %s", poolName)
+			continue
+		}
+		poolReservedGauge.With(prometheus.Labels{"ippool": poolName}).Set(float64(numReserved))
+	}
 }
 
 // releaseUnusedBlocks looks at known empty blocks, and releases their affinity
@@ -1205,9 +1263,9 @@ func (c *IPAMController) syncIPAM() error {
 		return nil
 	}
 
-	// Skip if not InSync yet.
+	// Skip if not currently InSync.
 	if c.syncStatus != bapi.InSync {
-		log.WithField("status", c.syncStatus).Debug("Have not yet received InSync notification, skipping IPAM sync.")
+		log.WithField("status", c.syncStatus).Debug("Syncer not currently InSync, skipping IPAM sync.")
 		return nil
 	}
 
@@ -1374,6 +1432,13 @@ func (c *IPAMController) garbageCollectColdIPs() error {
 			continue
 		}
 		if err := c.client.IPAM().GarbageCollectColdIPs(ctx, ipamConfig, &kvp); err != nil {
+			switch err.(type) {
+			case cerrors.ErrorResourceUpdateConflict, cerrors.ErrorResourceDoesNotExist:
+				// Our cached copy of the block is stale. Don't fail the whole sync;
+				// the syncer will deliver the fresh state and the block will be GC'd on a subsequent sync.
+				log.WithError(err).WithField("block", cidr).Debug("Skipping cold IP GC for stale block")
+				continue
+			}
 			return err
 		}
 	}
@@ -1615,8 +1680,9 @@ func publishPoolSizeMetric(pool *apiv3.IPPool) {
 	poolSizeGauge.With(prometheus.Labels{"ippool": pool.Name}).Set(poolSize)
 }
 
-func clearPoolSizeMetric(poolName string) {
+func clearPoolMetrics(poolName string) {
 	poolSizeGauge.Delete(prometheus.Labels{"ippool": poolName})
+	poolReservedGauge.Delete(prometheus.Labels{"ippool": poolName})
 }
 
 // When we stop tracking a node, clear counters to prevent accumulation of stale metrics.

@@ -1,4 +1,4 @@
-// Copyright (c) 2017 - 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -202,8 +203,16 @@ var _ = Describe("Config", func() {
 						Node: &v3.NodeControllerConfig{
 							ReconcilerPeriod: nil,
 							SyncLabels:       v3.Disabled,
-							HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
-							LeakGracePeriod:  &v1.Duration{Duration: 20 * time.Minute},
+							HostEndpoint: &v3.AutoHostEndpointConfig{
+								AutoCreate:                v3.Enabled,
+								CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
+								Templates: []v3.Template{{
+									GenerateName: "template",
+									Labels:       map[string]string{"template-label": "template-value"},
+									Annotations:  map[string]string{"template.projectcalico.org/annotation": "annotation-value"},
+								}},
+							},
+							LeakGracePeriod: &v1.Duration{Duration: 20 * time.Minute},
 						},
 						Policy: &v3.PolicyControllerConfig{
 							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 30},
@@ -246,6 +255,11 @@ var _ = Describe("Config", func() {
 					AutoHostEndpointConfig: &config.AutoHostEndpointConfig{
 						AutoCreate:                true,
 						CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
+						Templates: []config.AutoHostEndpointTemplate{{
+							GenerateName: "template",
+							Labels:       map[string]string{"template-label": "template-value"},
+							Annotations:  map[string]string{"template.projectcalico.org/annotation": "annotation-value"},
+						}},
 					},
 					DeleteNodes:     true,
 					LeakGracePeriod: &v1.Duration{Duration: 20 * time.Minute},
@@ -684,6 +698,41 @@ var _ = Describe("Config", func() {
 			Expect(runCfg.Controllers.WorkloadEndpoint.ReconcilerPeriod).To(Equal(time.Second * 31))
 			Expect(runCfg.Controllers.Namespace.ReconcilerPeriod).To(Equal(time.Second * 32))
 			Expect(runCfg.Controllers.ServiceAccount.ReconcilerPeriod).To(Equal(time.Second * 33))
+		})
+	})
+
+	Context("with the profiling port enabled", func() {
+		var cfg *config.Config
+
+		BeforeEach(func() {
+			unsetEnv()
+			cfg = new(config.Config)
+			Expect(cfg.Parse()).ToNot(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			unsetEnv()
+		})
+
+		runConfigWithProfileHost := func(host *string) config.RunConfig {
+			kcc := config.NewDefaultKubeControllersConfig().DeepCopy()
+			kcc.Spec.DebugProfilePort = ptr.To(int32(9095))
+			kcc.Spec.DebugProfileHost = host
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ctrl := config.NewRunConfigController(ctx, *cfg, &mockKCC{get: kcc})
+			return <-ctrl.ConfigChan()
+		}
+
+		It("should default the profiling host to localhost when it is not set", func() {
+			runCfg := runConfigWithProfileHost(nil)
+			Expect(runCfg.DebugProfilePort).To(Equal(int32(9095)))
+			Expect(runCfg.DebugProfileHost).To(Equal("localhost"))
+		})
+
+		It("should use the profiling host from the API", func() {
+			Expect(runConfigWithProfileHost(ptr.To("0.0.0.0")).DebugProfileHost).To(Equal("0.0.0.0"))
 		})
 	})
 })

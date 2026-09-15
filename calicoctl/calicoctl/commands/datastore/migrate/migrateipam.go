@@ -77,10 +77,7 @@ type ipamResults struct {
 }
 
 func NewMigrateIPAM(c client.Interface) *migrateIPAM {
-	type accessor interface {
-		Backend() bapi.Client
-	}
-	bc := c.(accessor).Backend()
+	bc := c.(bapi.BackendAccessor).Backend()
 	return &migrateIPAM{
 		client: bc,
 	}

@@ -55,7 +55,9 @@ type AssignIPArgs struct {
 	// If specified, the attributes of reserved IPv4 addresses in the block.
 	HostReservedAttr *HostReservedAttr
 
-	// The intended use for the IP address.  Used to determine the affinityType of the host.
+	// The intended use for the IP address.  Determines the affinityType of the
+	// host and, when non-empty, is enforced against the containing pool's
+	// AllowedUses (the assignment fails if the pool does not allow this use).
 	IntendedUse v3.IPPoolAllowedUse
 
 	// MaxAllocToHandlePerIPVersion specifies the maximum number of IPs per IP version (IPv4/IPv6)
@@ -160,6 +162,11 @@ type GetUtilizationArgs struct {
 }
 
 // BlockUtilization reports IP utilization for a single allocation block.
+//
+// InUse and Reserved overlap: an IP allocated before an IPReservation covered it
+// is counted in both.  Available excludes both, so it is the only field that
+// answers "how many IPs can still be handed out here?" and it cannot be derived
+// by subtracting the other fields from Capacity.
 type BlockUtilization struct {
 	// This block's CIDR.
 	CIDR net.IPNet
@@ -167,17 +174,40 @@ type BlockUtilization struct {
 	// Number of possible IPs in this block.
 	Capacity int
 
-	// Number of available IPs in this block.
+	// Number of allocated IPs in this block, whether or not they are also reserved.
+	InUse int
+
+	// Number of reserved IPs in this block, whether or not they are also allocated.
+	Reserved int
+
+	// Number of IPs in this block that are neither allocated nor reserved.
 	Available int
 }
 
 // PoolUtilization reports IP utilization for a single IP pool.
+//
+// The counts cover the whole pool CIDR, including space that no allocation block
+// has been carved from yet, so Capacity is not the sum of the blocks' capacities.
+// InUse, Reserved and Available have the same meanings (and the same overlap) as
+// in BlockUtilization.
 type PoolUtilization struct {
 	// This pool's name.
 	Name string
 
 	// This pool's CIDR.
 	CIDR net.IPNet
+
+	// Number of possible IPs in this pool.
+	Capacity int
+
+	// Number of allocated IPs in this pool, whether or not they are also reserved.
+	InUse int
+
+	// Number of reserved IPs in this pool, whether or not they are also allocated.
+	Reserved int
+
+	// Number of IPs in this pool that are neither allocated nor reserved.
+	Available int
 
 	// Utilization for each of this pool's blocks.
 	Blocks []BlockUtilization

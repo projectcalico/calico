@@ -208,10 +208,17 @@ func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *discoveryv1.Endpoi
 	var key string
 	var eps []*discoveryv1.EndpointSlice
 	if svc == nil {
-		eps = append(eps, ep)
-		// ep received but svc nil
+		// An EndpointSlice changed but we weren't handed the Service; look it up.
 		if svc, key = rg.getServiceForEndpoints(ep); svc == nil {
 			return
+		}
+		// Advertisement is a per-Service decision: this node should advertise the
+		// route if it has a ready local endpoint in ANY of the Service's
+		// EndpointSlices. Evaluate them all rather than just the slice that
+		// changed - otherwise a not-ready (or removed) endpoint in one slice could
+		// wrongly withdraw a route that another slice still justifies.
+		if eps, _ = rg.getEndpointsForService(svc); len(eps) == 0 {
+			eps = append(eps, ep)
 		}
 	} else if ep == nil {
 		// svc received but ep nil
@@ -524,15 +531,19 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, eps []*discovery
 		if _, ok := svcIPFamilies[epFamily]; !ok {
 			continue
 		}
-		for _, subset := range ep.Endpoints {
-			// not interested in subset.NotReadyAddresses
+		for _, endpoint := range ep.Endpoints {
+			// Skip not-ready endpoints (nil Ready means ready, per the EndpointSlice API)
+			// the dataplane only programs ready endpoints as backends, so advertising for one would black-hole traffic.
+			if endpoint.Conditions.Ready != nil && !*endpoint.Conditions.Ready {
+				continue
+			}
 			if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
-				// For Cluster services, advertise if we have any endpoints
+				// For Cluster services, advertise if we have any ready endpoint.
 				logc.Debugf("Advertising cluster service")
 				return true
 			} else {
-				// For Local services, only advertise if we have local endpoints
-				if subset.NodeName != nil && *subset.NodeName == rg.nodeName {
+				// For Local services, only advertise if we have a ready local endpoint.
+				if endpoint.NodeName != nil && *endpoint.NodeName == rg.nodeName {
 					logc.Debugf("Advertising local service")
 					return true
 				}

@@ -901,19 +901,23 @@ var _ = Describe("Proxy NDP manager (IPv6)", func() {
 			Expect(lla.Addr).To(Equal(ndpTestHWAddr))
 		})
 
-		It("replies to a  Duplicate Address Detection probe (unspecified source) via all-nodes multicast", func() {
-			// A solicitation from :: is Duplicate Address Detection; we can't
-			// unicast back, so the NA goes to ff02::1 with the Solicited flag clear.
-			ndpConns["eth0"].injectNS("::", ownedIP)
+		// A solicitation from :: is Duplicate Address Detection; we can't
+		// unicast back, so the NA goes to ff02::1 with the Solicited flag clear.
+		DescribeTable("replies to a DAD probe (unspecified source) via all-nodes multicast",
+			func(src string) {
+				ndpConns["eth0"].injectNS(src, ownedIP)
 
-			Eventually(func() int { return len(ndpConns["eth0"].getWrites()) }).Should(Equal(1))
-			write := ndpConns["eth0"].getWrites()[0]
-			na, ok := write.msg.(*ndp.NeighborAdvertisement)
-			Expect(ok).To(BeTrue())
-			Expect(na.TargetAddress.String()).To(Equal(ownedIP))
-			Expect(na.Solicited).To(BeFalse())
-			Expect(write.dst.String()).To(Equal("ff02::1"))
-		})
+				Eventually(func() int { return len(ndpConns["eth0"].getWrites()) }).Should(Equal(1))
+				write := ndpConns["eth0"].getWrites()[0]
+				na, ok := write.msg.(*ndp.NeighborAdvertisement)
+				Expect(ok).To(BeTrue())
+				Expect(na.TargetAddress.String()).To(Equal(ownedIP))
+				Expect(na.Solicited).To(BeFalse())
+				Expect(write.dst.String()).To(Equal("ff02::1"))
+			},
+			Entry("bare unspecified source", "::"),
+			Entry("unspecified source with interface zone", "::%eth0"),
+		)
 
 		It("ignores a solicitation for an IP it does not own", func() {
 			ndpConns["eth0"].injectNS("fe80::1234", "fd00::99")

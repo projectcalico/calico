@@ -18,7 +18,7 @@ import (
 //
 // StagedGlobalNetworkPolicy is a staged GlobalNetworkPolicy.
 type StagedGlobalNetworkPolicyApplyConfiguration struct {
-	v1.TypeMetaApplyConfiguration    `json:",inline"`
+	v1.TypeMetaApplyConfiguration    `json:""`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *StagedGlobalNetworkPolicySpecApplyConfiguration `json:"spec,omitempty"`
 }

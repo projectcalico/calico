@@ -25,10 +25,11 @@ type WatchRecord struct {
 // WatchManager ensures that in an even of new Tier being added all watches are canceled and the consumer will reestablish watch receiving events from the newly added tier
 // This is true for all policies - NetworkPolicy, GlobalNetworkPolicy, StagedNetworkPolicy, StagedGlobalNetworkPolicy
 type WatchManager struct {
-	client       api.Client
-	syncer       api.Syncer
-	sync         chan struct{}
-	watchRecords sync.Map
+	client               api.Client
+	syncer               api.Syncer
+	sync                 chan struct{}
+	initialSyncCompleted bool
+	watchRecords         sync.Map
 }
 
 func NewWatchManager(cc api.Client) *WatchManager {
@@ -58,7 +59,8 @@ func (m *WatchManager) WaitForCacheSync(stopCh <-chan struct{}) {
 }
 
 func (m *WatchManager) OnStatusUpdated(status api.SyncStatus) {
-	if status == api.InSync {
+	if status == api.InSync && !m.initialSyncCompleted {
+		m.initialSyncCompleted = true
 		close(m.sync)
 	}
 }

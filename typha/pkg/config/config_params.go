@@ -126,6 +126,7 @@ type Config struct {
 	ServerPingIntervalSecs               time.Duration `config:"seconds;10"`   //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 	ServerPongTimeoutSecs                time.Duration `config:"seconds;60"`   //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 	ServerHandshakeTimeoutSecs           time.Duration `config:"seconds;10"`   //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
+	ServerWriteTimeoutSecs               time.Duration `config:"seconds;120"`  //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 	ServerPort                           int           `config:"int(0,65535);0"`
 	ServerHost                           string        `config:"host-address;"`
 

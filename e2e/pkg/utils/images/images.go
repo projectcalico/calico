@@ -40,12 +40,6 @@ const (
 	// subcommands for common test helpers. Version is pinned; bump deliberately.
 	Agnhost = "registry.k8s.io/e2e-test-images/agnhost:2.47"
 
-	// RapidClient is a Tigera-built HTTP client that reuses a fixed source port
-	// across rapid sequential connections. Needed for Maglev tests where the
-	// load-balancer hash depends on source port staying the same; curl, wget,
-	// and agnhost don't expose source-port control.
-	RapidClient = "quay.io/tigeradev/rapidclient"
-
 	// Iperf3 is a TCP/UDP bandwidth generator, used by iperfcheck for throughput
 	// tests. No upstream K8s test image provides iperf3.
 	Iperf3 = "docker.io/networkstatic/iperf3:latest"
@@ -65,20 +59,17 @@ const (
 	// Use with `netexec --http-port=PORT` args. Hit /clientip for source IP.
 	EchoServer = Agnhost
 
-	// PacketSizeServer is an HTTP/UDP server for tests that need controlled
-	// payload sizes (e.g. MTU boundary, fragmentation, encap overhead).
-	// Endpoints, all on the same port (default 5000):
-	//   - GET /length/<N>: response body is exactly N bytes.
-	//   - POST /post: echoes the request body.
-	//   - UDP: echoes received datagrams (socat-backed, 10KB buffer).
-	// Source: tigera/k8s-e2e/images/flask.
-	PacketSizeServer = "calico/k8s-e2e-dataplane-server:stable"
-
 	// KubeVirtUbuntu: Ubuntu 20.04 containerDisk for KubeVirt VM e2e tests.
 	KubeVirtUbuntu = "mcas/kubevirt-ubuntu-20.04@sha256:35158058769932812d8ec3ba76985b6f3b02ba288e33a22c77445a7b7f8b3e30"
 
 	// CalicoBIRD: Calico BIRD 1.x. Keep in sync with BIRD_VERSION in metadata.mk.
 	CalicoBIRD = "calico/bird:v0.3.3-211-g9111ec3c"
+
+	// RapidClient is the multi-mode rapidclient helper: client mode for Maglev,
+	// MODE=server for the packet-size dataplane server (see
+	// e2e/images/rapidclient/DESIGN.md). Keep the tag in sync with the root
+	// Makefile and load_images.sh.
+	RapidClient = "quay.io/tigeradev/rapidclient:latest"
 )
 
 // Get client image and powershell command based on windows OS version

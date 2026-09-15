@@ -82,36 +82,43 @@ it buffers updates in `pending*` maps/sets and flushes via
 `Flush()` in dependency-safe order, coalescing rapid updates so
 the dataplane only sees the final state.
 
-Full invariants and per-node review notes will live in
-`felix/design/calc-graph.md` when that sub-design is written.
+Full invariants and per-node review notes — the node contract,
+the upstream syncer contract, inter-node ordering, the label
+indexes, the `EventSequencer` flush order, and the calc-graph FV
+testing framework — are in
+[`calc-graph.md`](./design/calc-graph.md).
 
-### Dataplane manager pattern
+### Dataplane: managers and drivers
 
-Every dataplane (BPF, iptables, nftables, Windows) is structured
-around a common **manager pattern**. A manager owns a slice of
-dataplane state (endpoints, policy chains, IP sets, routes, etc.)
-and implements:
+The Linux dataplane is a **single codebase** (`InternalDataplane`,
+`dataplane/linux/`) switched between iptables, nftables and eBPF
+modes; all three share the layering, event loop and
+restart-and-resync doctrine sketched here. Windows
+(`dataplane/windows/`) is a separate dataplane of the same overall
+shape.
 
-```go
-type Manager interface {
-    OnUpdate(protoBufMsg any)
-    CompleteDeferredWork() error
-}
-```
+The dataplane is split into two layers:
 
-Extended interfaces: `ManagerWithRouteTables` (exposes route-table
-syncers), `ManagerWithRouteRules` (exposes routing rules),
-`UpdateBatchResolver` (pre-apply batch resolution).
+- **Managers** (`dataplane/linux/*_mgr.go`) take the calc graph's
+  Calico-internal desired state (local WEPs, abstract policy rules,
+  resolved IP sets) and **convert it into this dataplane's terms** —
+  iptables/nftables rules, IP-set contents and routes; BPF map
+  entries; or Windows HNS policy. This conversion is the manager
+  layer's defining job.
+- **Drivers** (`iptables/`, `nftables/`, `ipsets/`, `routetable/`,
+  `routerule/`, `vxlanfdb/`) **bring actual kernel state into sync
+  with the desired state** — read back what's there, compute a
+  minimal delta, apply it. Some managers reconcile directly; others
+  delegate to a driver and stay declarative.
 
-Event loop (`InternalDataplane.loopKeepingDataplaneInSync` and
-friends):
+Beyond convert and reconcile, the dataplane also **reacts to expected
+kernel changes** (interfaces coming and going, via `ifacemonitor/`),
+**detects unexpected drift** (periodic full resyncs), and **reports
+programming status** back to the datastore and to the CNI plugin.
 
-1. Receive protobuf messages from the calc graph.
-2. Fan out via `OnUpdate()` to each registered manager.
-3. Throttled `apply()` cycle: call `CompleteDeferredWork()` on
-   each manager, then sync route tables and rules.
-
-Managers are registered via `RegisterManager()`. Key managers:
+Each manager implements a two-method `Manager` interface — `OnUpdate`
+to receive desired state cheaply, `CompleteDeferredWork` to program
+the kernel during a throttled `apply()` cycle. Key managers:
 
 | Manager | Handles |
 |---|---|
@@ -128,9 +135,16 @@ Managers are registered via `RegisterManager()`. Key managers:
 | `serviceLoopManager` | Service-loop prevention |
 | `failsafeMgr` | BPF failsafe port programming |
 
-IPv4 and IPv6 each get their own manager instances.
-`dataplane/driver.go` is the factory that constructs and wires
-the dataplane.
+IPv4 and IPv6 each get their own manager instances;
+`dataplane/driver.go` is the factory that constructs and wires the
+dataplane.
+
+The `Manager` contract and extended interfaces, the `apply()`
+ordering, the restart/resync (mark-and-sweep) doctrine, the `*tables`
+Table abstraction, IP sets, and the calc-graph→dataplane proto
+contract are all detailed in [`dataplane.md`](./design/dataplane.md).
+eBPF mode reuses this architecture; its mode-specific managers, maps
+and packet path are in the [`bpf-*` family](./design/bpf-overview.md).
 
 ### Dataplane backends
 
@@ -148,6 +162,19 @@ Felix runs against one dataplane at a time (selected by
 - **Windows** (HNS/HCN) — separate dataplane in
   `dataplane/windows/`.
 
+`NFTablesMode=Auto` resolves by following the detected kube-proxy
+mode: an nftables-mode kube-proxy selects the nftables dataplane.
+That signal is about coexistence — Felix must use the same
+netfilter generation as kube-proxy — not host capability, so it
+must not be replaced by a capability probe on cluster hosts. See
+`nftables.Enabled()`, which the daemon calls at startup and
+records in `Config.NFTablesEnabled`; everything that varies by
+dataplane keys off that resolved bool rather than the
+`NFTablesMode` string, so `Auto` behaves like the mode it
+resolved to. The per-host escape hatch is
+`NFTablesMode=Disabled`/`Enabled` set locally (env var or config
+file), which overrides any datastore-inherited value.
+
 The `iptables` and `nftables` backends share a common rule-
 generation layer in `felix/rules/` and a common table-abstraction
 interface in `felix/generictables/`. Backend-neutral rule
@@ -156,6 +183,24 @@ generation: `dispatch.go` (per-endpoint dispatch chains),
 chain setup), `static.go` (boilerplate filter/NAT/mangle chains),
 `nat.go`. A PR adding policy semantics usually touches
 `felix/rules/` and needs matching changes on both backends.
+
+The nftables backend is two packages.
+`felix/nftables/nftrender/` holds the rule-rendering primitives —
+the match builder, the action types, the naming helpers.
+`felix/nftables/` holds the driver that programs tables, sets and
+maps through `sigs.k8s.io/knftables`.
+
+They are separate because Felix also builds for Windows.
+`felix/rules/` needs the nftables primitives to render rules, so it
+must build everywhere; the driver cannot, because knftables reaches
+Linux-only netlink code. Hence the invariant: **code that builds
+for Windows imports `nftrender`, never `felix/nftables`.** Nothing
+local flags a violation — `go build` and the unit tests are Linux —
+so it surfaces as a cross-compile failure in the "Felix: Build
+Windows binaries" and node Windows-image jobs, reported against
+`github.com/google/nftables` rather than the offending import. The
+iptables backend needs no equivalent split; it shells out to
+`iptables-restore` instead of linking a netlink library.
 
 ### Shared networking subsystems
 
@@ -171,8 +216,23 @@ Used by more than one dataplane:
 | `nfnetlink/` | Conntrack and nflog via netfilter netlink |
 | `netlinkshim/` | Netlink abstraction layer for testing and portability |
 
-These will be covered in sub-designs (`route-sync.md`,
-`flow-logs-collector.md`) as and when those are written.
+The route-sync drivers (`routetable/`, `routerule/`, `vxlanfdb/`)
+fit the dataplane manager/driver architecture and resync doctrine
+covered in [`dataplane.md`](./design/dataplane.md); their deeper
+netlink-level design (resync grace periods, conntrack cleanup on
+IP moves) is reserved for a future `route-sync.md` sub-design.
+`flow-logs-collector.md` is likewise still to be written.
+
+### Cross-component designs Felix takes part in
+
+Some subsystems are split between Felix and another component, so
+their design lives at the repo level rather than under
+`felix/design/`:
+
+| Design | What it covers in Felix |
+|---|---|
+| [`design/cluster-route-programming/DESIGN.md`](../design/cluster-route-programming/DESIGN.md) | Whether Felix or confd/BIRD programs the routes to workloads on other nodes, per encapsulation type. Covers `ipipManager`, `noEncapManager`, `EncapsulationResolver.NoEncapNeeded`, and the `ProgramClusterRoutes` config parameter. |
+| [`design/ipam/DESIGN.md`](../design/ipam/DESIGN.md) | Felix is a read-only consumer of IPAM state (IPAM blocks feed the `L3RouteResolver`). |
 
 ## 2. Sub-design index
 
@@ -212,9 +272,10 @@ large enough to bloat AI-tool context.
 | [bpf-encap-fragments-icmp](./design/bpf-encap-fragments-icmp.md) | `felix/bpf/ipfrags/**`, `felix/bpf-gpl/ip_v4_fragment.h`, `tc_ip_frag.c`, `icmp*.h`, `fib*.h`, `felix/bpf/routes/**`, `felix/dataplane/linux/vxlan_mgr.go` | ✅ exists |
 | [bpf-observability](./design/bpf-observability.md) | `felix/bpf/filter/**`, `events/**`, `ringbuf/**`, `qos/**`, `felix/bpf-gpl/log.h`, `events*.h`, `qos.h`, `ringbuf.h` | ✅ exists |
 | [bpf-tests](./design/bpf-tests.md) | `felix/bpf/ut/**`, `felix/fv/bpf_*_test.go` | ✅ exists |
-| tables-dataplane | `felix/iptables/**`, `felix/nftables/**`, `felix/generictables/**`, non-BPF parts of `felix/rules/**`, non-BPF parts of `felix/dataplane/linux/` | *not yet written* |
-| calc-graph | `felix/calc/**` | *not yet written* |
-| route-sync | `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` | *not yet written* |
+| [dataplane](./design/dataplane.md) | `felix/dataplane/linux/**` (the shared loop/manager/resync architecture, all modes — BPF-specific files here are *also* matched by the `bpf-*` rows, intentionally), `felix/iptables/**`, `felix/nftables/**`, `felix/generictables/**`, `felix/ipsets/**`, `felix/markbits/**`, `felix/rules/**`; also the manager/driver architecture & resync doctrine for `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` | ✅ exists |
+| [calc-graph](./design/calc-graph.md) | `felix/calc/**`, `felix/labelindex/**`, `felix/dispatcher/**` | ✅ exists |
+| [neighbour-discovery](./design/neighbour-discovery.md) | `felix/dataplane/linux/proxy_neigh_mgr.go`; the proxy-ARP sysctl and live-migration ARP-suppression parts of `felix/dataplane/linux/endpoint_mgr.go` (that file's manager architecture is [dataplane](./design/dataplane.md)'s). Depends on, and is invalidated by changes to, `cni-plugin/pkg/dataplane/linux/dataplane_linux.go` and `networking-calico/networking_calico/agent/linux/dhcp.py` | ✅ exists |
+| route-sync (deep netlink design only) | `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` — *architecture covered by [dataplane.md](./design/dataplane.md); this row reserved for the deeper netlink-level resync design* | *not yet written* |
 | flow-logs-collector | `felix/collector/**` | *not yet written* |
 | config-engine | `felix/config/**` | *not yet written* |
 | windows-dataplane | `felix/dataplane/windows/**` | *not yet written* |
@@ -241,18 +302,12 @@ absence as "read the code and ask"; do not assume anything goes.
   per-section review notes describing the invariants a PR must
   respect. At write-time, respect them; at review-time, apply
   them.
-- **Update rule.** A change to how Felix works in a given area
-  must update the relevant file under
-  [`felix/design/`](./design/) in the same PR — typically the
-  sub-design covering the area. This index
-  (`felix/DESIGN.md`) is also updated when the sub-design
-  table, a `applies to` scope, or §1's architecture overview
-  changes. Exemptions: (a) a bug fix that restores behaviour
-  the doc already describes, (b) a mechanical refactor with no
-  observable change, (c) comment or log-message edits, (d)
-  dependency bumps. If in doubt, update. The path-scoped
+- **Update rule.** A warranted edit goes in the sub-design covering
+  the area; this index is edited when the sub-design table, an
+  `applies to` scope, or §1's architecture overview changes. The
+  path-scoped
   [`.github/instructions/*.instructions.md`](../.github/instructions/)
-  files wire this rule into Copilot's automated review.
+  files wire the rule into Copilot's automated review.
 
 ## 4. Adding a new sub-design
 

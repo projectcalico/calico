@@ -48,14 +48,11 @@ const (
 var driverLine = regexp.MustCompile(`^([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$`)
 
 const (
-	KeyOrganization         = "ORGANIZATION"
-	KeyGitRepo              = "GIT_REPO"
-	KeyGitRemote            = "GIT_REMOTE"
-	KeyReleaseBranchPrefix  = "RELEASE_BRANCH_PREFIX"
-	KeyDevTagSuffix         = "DEV_TAG_SUFFIX"
-	KeyOperatorBranch       = "OPERATOR_BRANCH"
-	KeyOperatorOrganization = "OPERATOR_ORGANIZATION"
-	KeyOperatorGitRepo      = "OPERATOR_GIT_REPO"
+	KeyOrganization        = "ORGANIZATION"
+	KeyGitRepo             = "GIT_REPO"
+	KeyGitRemote           = "GIT_REMOTE"
+	KeyReleaseBranchPrefix = "RELEASE_BRANCH_PREFIX"
+	KeyDevTagSuffix        = "DEV_TAG_SUFFIX"
 )
 
 var load = sync.OnceValue(readMetadata)
@@ -126,11 +123,8 @@ func parseDriverOutput(out string) (map[string]string, error) {
 
 func get(key string) string { return load()[key] }
 
-func Organization() string         { return get(KeyOrganization) }
-func Repo() string                 { return get(KeyGitRepo) }
-func Remote() string               { return get(KeyGitRemote) }
-func ReleaseBranchPrefix() string  { return get(KeyReleaseBranchPrefix) }
-func DevTagSuffix() string         { return get(KeyDevTagSuffix) }
-func OperatorBranch() string       { return get(KeyOperatorBranch) }
-func OperatorOrganization() string { return get(KeyOperatorOrganization) }
-func OperatorRepo() string         { return get(KeyOperatorGitRepo) }
+func Organization() string        { return get(KeyOrganization) }
+func Repo() string                { return get(KeyGitRepo) }
+func Remote() string              { return get(KeyGitRemote) }
+func ReleaseBranchPrefix() string { return get(KeyReleaseBranchPrefix) }
+func DevTagSuffix() string        { return get(KeyDevTagSuffix) }

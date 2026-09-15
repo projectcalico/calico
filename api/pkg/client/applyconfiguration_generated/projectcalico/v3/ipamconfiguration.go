@@ -18,7 +18,7 @@ import (
 //
 // IPAMConfiguration contains information about a block for IP address assignment.
 type IPAMConfigurationApplyConfiguration struct {
-	v1.TypeMetaApplyConfiguration    `json:",inline"`
+	v1.TypeMetaApplyConfiguration    `json:""`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *IPAMConfigurationSpecApplyConfiguration `json:"spec,omitempty"`
 }

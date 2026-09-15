@@ -1575,6 +1575,33 @@ class TestPluginEtcd(TestPluginEtcdBase):
             )
         )
 
+    def test_get_vif_details_derives_tap_mac_from_port_mac(self):
+        """tap MAC must match what the VM's ARP cache expects.
+
+        We reproduce older libvirt's implicit derivation (first octet -> 0xfe) so that
+        the tap MAC seen after a live migration to a libvirt >= 9.5.0 destination
+        matches the one the source's libvirt set.
+        """
+        context = mock.MagicMock()
+        context.current = {"mac_address": "fa:16:3e:aa:bb:cc"}
+        details = self.driver.get_vif_details(context, agent=None, segment=None)
+        self.assertEqual(details["mac_address"], "fe:16:3e:aa:bb:cc")
+        # port_filter (and any other keys the base class populated) still
+        # flow through.
+        self.assertTrue(details["port_filter"])
+
+    def test_get_vif_details_falls_back_when_port_mac_missing(self):
+        context = mock.MagicMock()
+        context.current = {}
+        details = self.driver.get_vif_details(context, agent=None, segment=None)
+        self.assertEqual(details["mac_address"], mech_calico.DEFAULT_TAP_MAC)
+
+    def test_get_vif_details_falls_back_on_malformed_port_mac(self):
+        context = mock.MagicMock()
+        context.current = {"mac_address": "not-a-mac"}
+        details = self.driver.get_vif_details(context, agent=None, segment=None)
+        self.assertEqual(details["mac_address"], mech_calico.DEFAULT_TAP_MAC)
+
     def test_neutron_rule_to_etcd_rule_icmp(self):
         # No type/code specified
         self.assertNeutronToEtcd(
@@ -1657,6 +1684,13 @@ class TestPluginEtcd(TestPluginEtcdBase):
             neutron_protocol_spec,
             calico_protocol_spec,
         ) in lib.m_neutron_lib.constants.IP_PROTOCOL_MAP.items():
+            if neutron_protocol_spec in ("icmp", "ipv6-icmp"):
+                # _neutron_rule_to_etcd_rule maps these to Calico's ICMP and
+                # ICMPv6 names before it consults IP_PROTOCOL_MAP, so they do
+                # not follow the name-to-number rule the rest of the map does.
+                # Covered by the ICMP tests above.
+                continue
+
             self.assertNeutronToEtcd(
                 _neutron_rule_from_dict(
                     {
@@ -1684,6 +1718,18 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 },
             )
 
+    # Note on the protocol numbers expected below.  Calico's protocol field
+    # takes either a name or an IANA number, and neutron's IP_PROTOCOL_MAP has
+    # an entry for "tcp", so _neutron_rule_to_etcd_rule maps it to 6 rather
+    # than falling through to its upper-casing default.  These tests used to
+    # expect "TCP", which only looked right because the test lib faked
+    # IP_PROTOCOL_MAP with three entries that did not include "tcp".
+    #
+    # "TCP" would read better in the resulting policy, but emitting the number
+    # is long-standing behaviour that no one has ever complained about, and
+    # changing it would change what we write to etcd.  So we deliberately
+    # leave it alone: this is a deliberate expectation, not an oversight.
+
     def test_sg_rule_ingress_no_remote_ip_prefix(self):
         # SG ingress rule with ports but no remote IP prefix
         self.assertNeutronToEtcd(
@@ -1698,7 +1744,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 "action": "Allow",
                 "destination": {"ports": ["25:34"]},
                 "ipVersion": 4,
-                "protocol": "TCP",
+                "protocol": 6,
             },
         )
 
@@ -1717,7 +1763,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 "action": "Allow",
                 "destination": {"ports": ["25:34"]},
                 "ipVersion": 4,
-                "protocol": "TCP",
+                "protocol": 6,
             },
         )
 
@@ -1736,7 +1782,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 "action": "Allow",
                 "destination": {"ports": ["25:34"]},
                 "ipVersion": 4,
-                "protocol": "TCP",
+                "protocol": 6,
                 "source": {"nets": ["1.2.3.0/24"]},
             },
         )
@@ -1757,7 +1803,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 "action": "Allow",
                 "destination": {"nets": ["1.2.3.0/24"], "ports": ["25:34"]},
                 "ipVersion": 4,
-                "protocol": "TCP",
+                "protocol": 6,
             },
         )
 
@@ -2554,6 +2600,32 @@ class TestLiveMigration(TestPluginEtcdBase):
         # The new LM is NOT in the deletes set.
         self.assertNotIn(self._lm_key(self.DEST_HOST), self.recent_deletes)
 
+    def test_resync_does_not_delete_dest_wep_mid_migration(self):
+        """Resync must not delete the dest WEP of an in-flight migration.
+
+        Regression test for a v3.32 bug (CI-2021): the pre-v3.33 resync's
+        deletion sweep only expected WEP names derived from each port's
+        binding:host_id - still the source host while a migration is in flight
+        - so it reaped the destination WEP and recreated it moments later,
+        making Felix on the destination host tear the endpoint down
+        mid-migration.  The reworked resync computes desired (port, host)
+        slots from binding:profile.migrating_to as well, so it should not
+        delete anything here; this test pins that down, asserting no
+        deletions at all (which also covers the source WEP and LM).
+        """
+        self._do_initial_resync()
+
+        # Start a live migration; this creates the destination WEP and
+        # LiveMigration resource in etcd.
+        self._pre_migrate()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        self._trigger_resync()
+
+        # Nothing should be deleted, even transiently.
+        self.assertEtcdDeletes(set())
+
     def test_resync_no_op_when_lm_already_correct(self):
         """Full resync no-ops when LM and dest WEP already match Neutron."""
         self._do_initial_resync()
@@ -2938,6 +3010,27 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             ],
             mock_calls,
         )
+        self.assertEqual(
+            [mock.call(5, self.driver._retry_port_status_update, ("host", "p1"))],
+            m_spawn.mock_calls,
+        )
+
+    @mock.patch("eventlet.spawn")
+    def test_try_to_update_port_status_fail_sqlalchemy(self, _m_spawn):
+        # As above, but for the non-DBError arm of the handler.  Worth its own
+        # test because that "except sa_exc.SQLAlchemyError" is only evaluated
+        # when something other than a DBError reaches it.
+        self.driver._get_db()
+        self.driver._init_start_endpoint_status_watcher()
+
+        def m_update_port_status(context, port_id, status, host=None):
+            raise lib.SQLAlchemyError()
+
+        self.db.update_port_status = m_update_port_status
+        self.driver._port_status_cache[("host", "p1")] = "up"
+        context = mock.Mock()
+        with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
+            self.driver._try_to_update_port_status(context, ("host", "p1"))
         self.assertEqual(
             [mock.call(5, self.driver._retry_port_status_update, ("host", "p1"))],
             m_spawn.mock_calls,

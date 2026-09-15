@@ -44,18 +44,38 @@ type watcherCache struct {
 	watch                  api.WatchInterface
 	resources              map[string]cacheEntry
 	oldResources           map[string]cacheEntry
-	results                chan<- any
-	hasSynced              bool
+	results                chan<- resultWithID
+	cacheID                int
 	resourceType           ResourceType
 	currentWatchRevision   string
 	errorCountAtCurrentRev int
 	resyncBlockedUntil     time.Time
 	lastSuccessfulConnTime time.Time
 	watchRetryTimeout      time.Duration
+	status                 api.SyncStatus
 
-	// crdInstalled tracks whether or not we've detected that the backing API for this
-	// resource type is installed in the cluster.
+	// The following variables define the state used to determine what SyncStatus to signal.
+	// SyncStatus is signaled when a full resync begins and when the List of a full resync has successfully completed.
+	// When a full resync begins, the variables below determine what the appropriate SyncStatus should be to signal.
+	// When the list of a full resync successfully completes, InSync is signaled.
+	// Once we are InSync, we generally do not signal out of sync unless a full re-sync begins and we are not in any
+	// special cases defined below.
+
+	// crdInstalled tracks whether or not we've detected that the backing API for this resource type is installed in the cluster.
+	// When crdInstalled is false, we treat it as a special case of InSync that we maintain until either the CRD is installed or
+	// we regress further in status (e.g. disconnect from the datastore)
 	crdInstalled bool
+
+	// listTriggeredPolling and watchTriggeredPolling signal whether we are in a polling state, where we poll the datastore
+	// to construct resource updates rather than utilize a watch, as watches can't be created for the resource. We can be
+	// informed that watches are not supported by either the List or Watch command, and these two are tracked separately.
+	// When either of these are true, we treat it as a special case of InSync that we maintain until we are no longer in
+	// a polling state or we regress further in status (e.g. disconnect from the datastore).
+	listTriggeredPolling  bool
+	watchTriggeredPolling bool
+
+	// connected tracks whether we believe we have a working connection to the datastore.
+	connected bool
 }
 
 const (
@@ -83,13 +103,37 @@ type cacheEntry struct {
 	key      model.Key
 }
 
+// resultWithID wraps a value with the ID of the cache that produced it.
+type resultWithID struct {
+	cacheID int
+	value   interface{}
+}
+
+func (wc *watcherCache) sendResult(value interface{}) {
+	if status, ok := value.(api.SyncStatus); ok {
+		if status == wc.status {
+			return
+		}
+		wc.logger.WithFields(logrus.Fields{
+			"from": wc.status,
+			"to":   status,
+		}).Debug("watchercache status transition")
+		wc.status = status
+	}
+	wc.results <- resultWithID{cacheID: wc.cacheID, value: value}
+}
+
 // Create a new watcherCache.
-func newWatcherCache(client api.Client, resourceType ResourceType, results chan<- any, watchTimeout time.Duration) *watcherCache {
+func newWatcherCache(client api.Client, resourceType ResourceType, results chan<- resultWithID, watchTimeout time.Duration, cacheID int) *watcherCache {
 	return &watcherCache{
-		logger:               logrus.WithField("ListRoot", listRootForLog(resourceType.ListInterface)),
+		logger: logrus.WithFields(logrus.Fields{
+			"ListRoot": listRootForLog(resourceType.ListInterface),
+			"cacheID":  cacheID,
+		}),
 		client:               client,
 		resourceType:         resourceType,
 		results:              results,
+		cacheID:              cacheID,
 		resources:            make(map[string]cacheEntry, 0),
 		currentWatchRevision: "0",
 		resyncBlockedUntil:   time.Now(),
@@ -183,6 +227,10 @@ func (wc *watcherCache) loopReadingFromWatcher(ctx context.Context) {
 					wc.errorCountAtCurrentRev++
 					if wc.errorCountAtCurrentRev >= MaxErrorsPerRevision {
 						// Too many errors at the current revision, trigger a full resync.
+						// Note: this is a strategy-change signal (we'll re-List instead of
+						// continuing to retry the Watch), not a connectivity-loss signal.
+						// Disconnection is signalled separately by the watchRetryTimeout-guarded
+						// paths in maybeResyncAndCreateWatcher.
 						eventLogger.Warn("Watch repeatedly failed without making progress, triggering full resync")
 						wc.resetWatchRevisionForFullResync()
 					} else {
@@ -203,6 +251,41 @@ func (wc *watcherCache) markInstalled() {
 		wc.logger.Info("Backing API has been installed")
 		wc.crdInstalled = true
 	}
+}
+
+func (wc *watcherCache) markNotInstalled() {
+	wc.crdInstalled = false
+}
+
+func (wc *watcherCache) markConnected() {
+	wc.connected = true
+	wc.lastSuccessfulConnTime = time.Now()
+}
+
+// markDisconnected records that the cache is no longer believed to have a working
+// datastore connection. It MUST only be called from paths that have first verified
+// that connectivity has been lost for longer than wc.watchRetryTimeout (i.e. that
+// time.Since(wc.lastSuccessfulConnTime) > wc.watchRetryTimeout). Transient bursts
+// of List/Watch errors at the same revision are a strategy-change signal handled
+// by triggering a full resync, not a disconnect signal — calling markDisconnected
+// from those paths causes unnecessary WaitForDatastore regressions for consumers.
+func (wc *watcherCache) markDisconnected() {
+	wc.connected = false
+}
+
+func (wc *watcherCache) markNotPolling() {
+	wc.listTriggeredPolling = false
+	wc.watchTriggeredPolling = false
+}
+
+func (wc *watcherCache) markPollingFromList() {
+	wc.listTriggeredPolling = true
+	wc.watchTriggeredPolling = false
+}
+
+func (wc *watcherCache) markPollingFromWatch() {
+	wc.watchTriggeredPolling = true
+	wc.listTriggeredPolling = false
 }
 
 // maybeResyncAndCreateWatcher loops performing resync processing until it successfully
@@ -242,6 +325,25 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 		if performFullResync {
 			wc.logger.Info("Full resync is required")
 
+			// Snapshot the polling state from the previous iteration before clearing
+			// the flags. The snapshot is what suppresses the regression-emit below —
+			// caches that were in a polling steady state stay sticky-InSync rather
+			// than oscillating to ResyncInProgress on every polling pass. The flags
+			// themselves are re-derived from this iteration's List/Watch outcomes.
+			prevInPolling := wc.listTriggeredPolling || wc.watchTriggeredPolling
+			wc.listTriggeredPolling = false
+			wc.watchTriggeredPolling = false
+
+			// We are performing a full resync, so we should signal a status update, unless we are in a special state where
+			// we maintain InSync status even on full resync (i.e. CRD not installed state or polling state)
+			if wc.crdInstalled && !prevInPolling {
+				if wc.connected {
+					wc.sendResult(api.ResyncInProgress)
+				} else {
+					wc.sendResult(api.WaitForDatastore)
+				}
+			}
+
 			// Notify the converter that we are resyncing.
 			if wc.resourceType.UpdateProcessor != nil {
 				wc.logger.Debug("Trigger converter resync notification")
@@ -256,14 +358,17 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 					// The resource type doesn't exist yet.  This is possible if the CRD backing this API has not been installed.
 					// This is a valid long-term state, so we don't want to keep retrying rapidly.
 					// Consider ourselves in sync, and then sleep for a long time.
-					if !wc.hasSynced {
+					if wc.status != api.InSync {
 						wc.logger.Info("Backing API not installed, marking as in-sync and retrying later.")
-						wc.finishResync()
 					} else {
 						wc.logger.Debug("Backing API still not installed, retrying later.")
 					}
+					wc.finishResync()
+					wc.markNotPolling()
+					wc.markNotInstalled()
+					// Error is a "layer 7" error; so connection is good!
+					wc.markConnected()
 					wc.resyncBlockedUntil = time.Now().Add(MissingAPIRetryTime)
-					wc.crdInstalled = false
 					continue
 				}
 
@@ -278,13 +383,13 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 					wc.logger.Info("Resource too old/new error from server, clearing cached watch revision.")
 					wc.resetWatchRevisionForFullResync()
 					// Error is a "layer 7" error; so connection is good!
-					wc.lastSuccessfulConnTime = time.Now()
+					wc.markConnected()
 				} else if time.Since(wc.lastSuccessfulConnTime) > wc.watchRetryTimeout {
 					// Need to send back an error here for handling. Only callbacks with connection failure handling should actually kick off anything.
 					wc.logger.Warn("Connection to datastore has failed - signaling error to client.")
-					wc.results <- errorSyncBackendError{
-						Err: err,
-					}
+					wc.markDisconnected()
+					wc.markNotPolling()
+					wc.sendResult(errorSyncBackendError{Err: err})
 
 					if wc.resourceType.SendDeletesOnConnFail {
 						// Unable to List, and we need to send deletes on connection failure. Send them now.
@@ -299,8 +404,15 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 				continue
 			}
 			wc.logger.WithField("numKVs", len(l.KVPairs)).Debug("List completed.")
-			wc.lastSuccessfulConnTime = time.Now()
+			wc.markConnected()
 			wc.markInstalled()
+
+			// If the current status is WaitForDatastore, ensure that we transition to
+			// ResyncInProgress. We should never send KV updates when we are in the
+			// WaitForDatastore state.
+			if wc.status == api.WaitForDatastore {
+				wc.sendResult(api.ResyncInProgress)
+			}
 
 			// Once this point is reached, it's important not to drop out if the context is cancelled.
 			// Move the current resources over to the oldResources
@@ -319,13 +431,14 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 			wc.finishResync()
 
 			// Store the current watch revision.  This gets updated on any new add/modified event.
-			wc.logger.Logger.WithField("revision", l.Revision).Debug("List completed.")
+			wc.logger.WithField("revision", l.Revision).Debug("List completed.")
 			if l.Revision == "" || l.Revision == "0" {
 				if len(l.KVPairs) == 0 {
 					// Got a bad revision but there are no items.  This may mean that the datastore
 					// returns an unhelpful "not found" error instead of an empty list.  Revert to a
 					// poll until some items show up.
 					wc.logger.Info("List returned no items and an empty/zero revision, reverting to poll.")
+					wc.markPollingFromList()
 					wc.currentWatchRevision = "0"
 					performFullResync = true
 					wc.resyncBlockedUntil = time.Now().Add(WatchPollInterval)
@@ -354,7 +467,8 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 				wc.logger.Info("Watch has expired, queueing full resync.")
 				wc.resetWatchRevisionForFullResync()
 				// Error is a "layer 7" error; so connection is good!
-				wc.lastSuccessfulConnTime = time.Now()
+				wc.markConnected()
+				wc.markNotPolling()
 				continue
 			}
 
@@ -366,6 +480,8 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 					// The signalling is done as part of the resync machinery so trigger a resync now.
 					wc.logger.WithError(err).Warn("Timed out waiting for connection to be restored, forcing a resync.")
 					wc.resetWatchRevisionForFullResync()
+					wc.markDisconnected()
+					wc.markNotPolling()
 				}
 				wc.logger.WithError(err).Warn("API server refused connection, will retry.")
 				continue
@@ -380,6 +496,7 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 				// let us watch if there are no resources yet). Pause for the watch poll interval.
 				// This loop effectively becomes a poll loop for this resource type.
 				wc.logger.Debug("Watch operation not supported; reverting to poll.")
+				wc.markPollingFromWatch()
 				wc.resyncBlockedUntil = time.Now().Add(WatchPollInterval)
 
 				// Make sure we force a re-list of the resource even if the watch previously succeeded
@@ -393,7 +510,10 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 			wc.logger.WithError(err).WithField("performFullResync", performFullResync).WithField("errorsWithoutProgress", wc.errorCountAtCurrentRev).Warn(
 				"Failed to create watcher; will retry.")
 			if wc.errorCountAtCurrentRev >= MaxErrorsPerRevision {
-				// Hitting repeated errors, try a full resync next time.
+				// Hitting repeated errors at the same revision; try a full resync next
+				// time. This is a strategy-change signal, not a connectivity-loss signal —
+				// disconnection is signalled separately by the watchRetryTimeout-guarded
+				// branches above.
 				performFullResync = true
 			}
 			continue
@@ -437,17 +557,17 @@ func (wc *watcherCache) cleanExistingWatcher() {
 	}
 }
 
-// finishResync handles processing to finish synchronization.
-// If this watcher has never been synced then notify the main watcherSyncer that we've synced.
+// finishResync handles processing to finish synchronization. We notify the main watcherSyncer that we've synced.
 // We may also need to send deleted messages for old resources that were not validated in the
 // resync (i.e. they must have since been deleted).
 func (wc *watcherCache) finishResync() {
-	// If we haven't already sent an InSync event then send a synced notification.  The watcherSyncer will send a Synced
-	// event when it has received synced events from each cache. Once in-sync the cache remains in-sync.
-	if !wc.hasSynced {
-		wc.logger.Info("Sending synced update")
-		wc.results <- api.InSync
-		wc.hasSynced = true
+	// If the current status is WaitForDatastore, ensure that we transition to
+	// ResyncInProgress. We should never send KV updates when we are in the
+	// WaitForDatastore state, and we might send some synthesized deletes below.
+	// We will also transition to InSync below, so we should pass through
+	// ResyncInProgress first.
+	if wc.status == api.WaitForDatastore {
+		wc.sendResult(api.ResyncInProgress)
 	}
 
 	// If the watcher failed at any time, we end up recreating a watcher and storing off
@@ -466,9 +586,13 @@ func (wc *watcherCache) finishResync() {
 				},
 			})
 		}
-		wc.results <- updates
+		wc.sendResult(updates)
 	}
 	wc.oldResources = nil
+
+	// Send a synced notification.  The watcherSyncer will send a Synced event when it has received synced events from
+	// each cache.
+	wc.sendResult(api.InSync)
 }
 
 // handleWatchListEvent handles a watch event converting it if required and passing to
@@ -492,7 +616,7 @@ func (wc *watcherCache) handleWatchListEvent(kvp *model.KVPair) {
 
 	// If we hit a conversion error, log the error and notify the main syncer.
 	if err != nil {
-		wc.results <- err
+		wc.sendResult(err)
 	}
 }
 
@@ -534,10 +658,10 @@ func (wc *watcherCache) handleAddedOrModifiedUpdate(kvp *model.KVPair) {
 		}
 		// Resource is modified, send an update event and store the latest revision.
 		wc.logger.WithField("Key", thisKeyString).Debug("Datastore entry modified, sending syncer update")
-		wc.results <- []api.Update{{
+		wc.sendResult([]api.Update{{
 			UpdateType: api.UpdateTypeKVUpdated,
 			KVPair:     *kvp,
-		}}
+		}})
 		resource.revision = thisRevision
 		wc.resources[thisKeyString] = resource
 		return
@@ -546,10 +670,10 @@ func (wc *watcherCache) handleAddedOrModifiedUpdate(kvp *model.KVPair) {
 	// The resource has not been seen before, so send a new event, and store the
 	// current revision.
 	wc.logger.WithField("Key", thisKeyString).Debug("Cache entry added, sending syncer update")
-	wc.results <- []api.Update{{
+	wc.sendResult([]api.Update{{
 		UpdateType: api.UpdateTypeKVNew,
 		KVPair:     *kvp,
-	}}
+	}})
 	wc.resources[thisKeyString] = cacheEntry{
 		revision: thisRevision,
 		key:      thisKey,
@@ -565,12 +689,12 @@ func (wc *watcherCache) handleDeletedUpdate(key model.Key) {
 	// from the cache.
 	if _, ok := wc.resources[thisKeyString]; ok {
 		wc.logger.WithField("Key", thisKeyString).Debug("Datastore entry deleted, sending syncer update")
-		wc.results <- []api.Update{{
+		wc.sendResult([]api.Update{{
 			UpdateType: api.UpdateTypeKVDeleted,
 			KVPair: model.KVPair{
 				Key: key,
 			},
-		}}
+		}})
 		delete(wc.resources, thisKeyString)
 	}
 }
@@ -590,13 +714,22 @@ func (wc *watcherCache) markAsValid(resourceKey string) {
 }
 
 func (wc *watcherCache) sendDeletionsForAllResources() {
-	for _, value := range wc.resources {
-		wc.results <- []api.Update{{
-			UpdateType: api.UpdateTypeKVDeleted,
-			KVPair: model.KVPair{
-				Key: value.key,
-			},
-		}}
+	if len(wc.resources) > 0 {
+		// We might still be in the WaitForDatastore state — for example, after a sustained
+		// disconnect or at shutdown following a regression. Transition to ResyncInProgress
+		// first so downstream consumers don't receive KV updates while the cache is reporting
+		// WaitForDatastore.
+		if wc.status == api.WaitForDatastore {
+			wc.sendResult(api.ResyncInProgress)
+		}
+		for _, value := range wc.resources {
+			wc.sendResult([]api.Update{{
+				UpdateType: api.UpdateTypeKVDeleted,
+				KVPair: model.KVPair{
+					Key: value.key,
+				},
+			}})
+		}
 	}
 	clear(wc.resources)
 

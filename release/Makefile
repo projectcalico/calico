@@ -27,10 +27,36 @@ bin/release: $(shell find . -name "*.go" -or -name "*.gotmpl") internal/defaults
 
 POSTRELEASE_TEST_PACKAGE		:= $(PACKAGE_NAME)/pkg/postrelease
 UNIT_TEST_PACKAGES	:= $(shell go list ./... | grep -v $(POSTRELEASE_TEST_PACKAGE))
+
+.PHONY: ut fv st
+ifdef TESTS_NO_DOCKER
 ut:
+	@mkdir -p report
+	@gotestsum --junitfile report/unit-tests.xml \
+		-- -coverprofile=report/coverage.out $(UNIT_TEST_PACKAGES)
+else
+ut:
+	$(warning Running unit tests inside docker will skip some tests due to missing binaries.)
+	$(warning Run the tests without Docker to test this functionality as well.)
 	@mkdir -p report
 	@$(DOCKER_GO_BUILD) gotestsum --junitfile report/unit-tests.xml \
 		-- -coverprofile=report/coverage.out $(UNIT_TEST_PACKAGES)
+endif
+
+fv st:
+	$(info *** Release tool does not have $@ tests, skipping)
+	@true
+
+###############################################################################
+# Checks
+###############################################################################
+# bin/release tracks only release/ sources, so rebuild it to pick up the operator's
+# component list. Clearing MAKEFLAGS keeps an outer -C's -w directory lines out of
+# the parsed image list.
+.PHONY: check-operator-images
+check-operator-images:
+	@$(MAKE) --no-print-directory --always-make bin/release
+	@MAKEFLAGS= bin/release images check-operator
 
 ###############################################################################
 # CI/CD

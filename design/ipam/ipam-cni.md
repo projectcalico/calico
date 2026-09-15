@@ -78,7 +78,7 @@ annotations are read as defaults; per-pod annotations override.
 
 | Annotation | What it does |
 |---|---|
-| `cni.projectcalico.org/ipAddrs` | JSON array of IPs. Each IP allocated via `AssignIP` - goes through IPAM, tracked normally. |
+| `cni.projectcalico.org/ipAddrs` | JSON array of IPs. Each IP allocated via `AssignIP` with `IntendedUse: Workload` - goes through IPAM, tracked normally, and the containing pool's `allowedUses` is enforced (an IP from a non-workload pool is rejected). |
 | `cni.projectcalico.org/ipAddrsNoIpam` | JSON array of IPs. **Bypasses IPAM entirely**, no allocation record. Requires `feature_control.ip_addrs_no_ipam=true`. |
 | `cni.projectcalico.org/ipv4pools`, `ipv6pools` | Pool names or CIDRs scoping the allocation. Feeds `utils.ResolvePools` ahead of the conf default. |
 | `cni.projectcalico.org/ipFamilies` | `["IPv4","IPv6"]` - controls which families to assign. |

@@ -48,7 +48,8 @@ gen-files: gen-crds
 
 ## Force a rebuild of custom resource definition yamls
 gen-crds:
-	rm -rf config/crd
+	# Keep embed.go, which lives with the CRDs it embeds.
+	rm -f config/crd/*.yaml
 	# Generate CRDs using the in-repo Calico-patched controller-gen.
 	$(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(CALICO_CONTROLLER_GEN) crd:allowDangerousTypes=true,crdVersions=v1 paths=./lib/apis/... output:crd:dir=config/crd/'
@@ -57,9 +58,9 @@ gen-crds:
 	# Remove the first yaml separator line.
 	$(DOCKER_GO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
 	# Add K8S ClusterNetworkPolicy CRD
-	curl -sSfL --retry 3 $(NETPOL_CNP_CRD_URL)/$(NETPOL_CNP_CRD) -o ./config/crd/$(NETPOL_CNP_CRD)
+	$(call fetch_file,$(NETPOL_CNP_CRD_URL)/$(NETPOL_CNP_CRD),./config/crd/$(NETPOL_CNP_CRD))
 	# Run prettier to fix indentation
-	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
+	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml "/work/config/crd/*.yaml"
 
 ./lib/apis/internalapi/zz_generated.deepcopy.go: $(APIS_SRCS)
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \

@@ -350,6 +350,12 @@ func (d *MockNetlinkDataplane) GetFeatures() *environment.Features {
 }
 
 func (d *MockNetlinkDataplane) ResetDeltas() {
+	// The route table's conntrack cleanup runs on a background goroutine that
+	// touches deletedConntrackEntries under the mutex (see RemoveConntrackFlows),
+	// so take the lock here too rather than racing the reset against it.
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
 	d.AddedLinks = set.New[string]()
 	d.DeletedLinks = set.New[string]()
 	d.AddedAddrs = set.New[string]()
@@ -628,7 +634,9 @@ func (d *MockNetlinkDataplane) AddrList(link netlink.Link, family int) ([]netlin
 		return nil, ErrSimulated
 	}
 	if link, ok := d.NameToLink[link.Attrs().Name]; ok {
-		return link.Addrs, nil
+		// Return a copy, matching the real netlink which allocates a fresh slice per call. This
+		// keeps a caller ranging over the result unaffected by concurrent AddrDel/AddrAdd calls.
+		return append([]netlink.Addr(nil), link.Addrs...), nil
 	}
 	return nil, ErrNotFound
 }

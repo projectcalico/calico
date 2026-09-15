@@ -70,14 +70,14 @@ func init() {
 }
 
 type AsyncCalcGraph struct {
-	CalcGraph        *CalcGraph
-	inputEvents      chan any
-	outputChannels   []chan<- any
-	eventSequencer   *EventSequencer
-	beenInSync       bool
-	needToSendInSync bool
-	syncStatusNow    api.SyncStatus
-	healthAggregator *health.HealthAggregator
+	CalcGraph            *CalcGraph
+	inputEvents          chan any
+	outputChannels       []chan<- any
+	eventSequencer       *EventSequencer
+	initialSyncCompleted bool
+	needToSendInSync     bool
+	syncStatusNow        api.SyncStatus
+	healthAggregator     *health.HealthAggregator
 
 	flushTicks       <-chan time.Time
 	healthTicks      <-chan time.Time
@@ -162,9 +162,9 @@ func (acg *AsyncCalcGraph) loop() {
 					"Pulled status update off channel")
 				acg.syncStatusNow = update
 				acg.CalcGraph.OnStatusUpdated(update)
-				if update == api.InSync && !acg.beenInSync {
+				if update == api.InSync && !acg.initialSyncCompleted {
 					log.Info("First time we've been in sync")
-					acg.beenInSync = true
+					acg.initialSyncCompleted = true
 					acg.needToSendInSync = true
 					acg.dirty = true
 					if acg.flushLeakyBucket == 0 {
