@@ -127,7 +127,7 @@ func (b *allocationBlock) autoAssign(num int, handleID *string, affinityCfg Affi
 		}
 		// This IP is OK to use.  Allocate it.
 		if attrIndexPtr == nil {
-			attrIndex := b.findOrAddAttribute(handleID, attrs)
+			attrIndex := b.findOrAddAttribute(handleID, attrs, nil)
 			attrIndexPtr = &attrIndex
 		}
 		b.Allocations[ordinal] = attrIndexPtr
@@ -175,7 +175,7 @@ func (b *allocationBlock) assign(affinityCheck bool, address cnet.IP, handleID *
 	}
 
 	// Set up attributes.
-	attrIndex := b.findOrAddAttribute(handleID, attrs)
+	attrIndex := b.findOrAddAttribute(handleID, attrs, nil)
 	b.Allocations[ordinal] = &attrIndex
 
 	// Remove from unallocated.
@@ -431,6 +431,121 @@ func (b allocationBlock) attributeRefCounts() map[int]int {
 	return refCounts
 }
 
+// ownershipPreconditions gates an ownership update on what the allocation holds now.
+// A zero value checks nothing.
+type ownershipPreconditions struct {
+	// handle, when non-empty, requires the allocation to sit on it already.
+	handle         string
+	activeOwner    *AttributeOwner
+	alternateOwner *AttributeOwner
+}
+
+// ownershipUpdate is the new tuple. Nil leaves a field unchanged; the clear flags set
+// it to nil.
+type ownershipUpdate struct {
+	handle              *string
+	activeOwner         map[string]string
+	clearActiveOwner    bool
+	alternateOwner      map[string]string
+	clearAlternateOwner bool
+}
+
+// updateAllocationOwnership is the one path that changes who owns an allocated address.
+// Returns the handle that owned it before.
+func (b *allocationBlock) updateAllocationOwnership(ip cnet.IP, pre ownershipPreconditions, update ownershipUpdate) (string, error) {
+	ordinal, err := b.IPToOrdinal(ip)
+	if err != nil {
+		return "", err
+	}
+
+	attrIdx := b.Allocations[ordinal]
+	if attrIdx == nil {
+		return "", cerrors.ErrorResourceDoesNotExist{
+			Identifier: ip.String(),
+			Err:        errors.New("address is not allocated"),
+		}
+	}
+
+	// Copy rather than alias: the entry may be shared, and findOrAddAttribute below can
+	// reallocate b.Attributes.
+	attr := b.Attributes[*attrIdx]
+
+	fromHandle := ""
+	if h := attr.HandleID; h != nil {
+		fromHandle = sanitizeHandle(*h)
+	}
+
+	// Verify every precondition before touching the block.
+	if pre.handle != "" && fromHandle != pre.handle {
+		return "", cerrors.ErrorResourceUpdateConflict{
+			Identifier: ip.String(),
+			Err: cerrors.ErrorBadHandle{
+				Requested: pre.handle,
+				Expected:  fromHandle,
+			},
+		}
+	}
+	if err := verifyExpectedOwner(attr.ActiveOwnerAttrs, pre.activeOwner, ip, "ActiveOwnerAttrs"); err != nil {
+		return "", err
+	}
+	if err := verifyExpectedOwner(attr.AlternateOwnerAttrs, pre.alternateOwner, ip, "AlternateOwnerAttrs"); err != nil {
+		return "", err
+	}
+
+	// Build the new tuple from the current one, so an update names only what it changes.
+	toHandle := fromHandle
+	if update.handle != nil {
+		toHandle = sanitizeHandle(*update.handle)
+	}
+	activeOwner := attr.ActiveOwnerAttrs
+	switch {
+	case update.clearActiveOwner:
+		activeOwner = nil
+	case update.activeOwner != nil:
+		activeOwner = update.activeOwner
+	}
+	alternateOwner := attr.AlternateOwnerAttrs
+	switch {
+	case update.clearAlternateOwner:
+		alternateOwner = nil
+	case update.alternateOwner != nil:
+		alternateOwner = update.alternateOwner
+	}
+
+	oldIdx := *attrIdx
+	newIdx := b.findOrAddAttribute(&toHandle, activeOwner, alternateOwner)
+	if newIdx == oldIdx {
+		// Already what was asked for, so a retry is a no-op rather than a second update.
+		return fromHandle, nil
+	}
+	b.Allocations[ordinal] = &newIdx
+	b.SetSequenceNumberForOrdinal(ordinal)
+
+	// Drops the old attribute if this was the last ordinal referencing it.
+	if b.attributeRefCounts()[oldIdx] == 0 {
+		b.deleteAttributes([]int{oldIdx}, []int{ordinal})
+	}
+
+	return fromHandle, nil
+}
+
+// moveIPToHandle transfers an allocated address to opts.ToHandle, returning the handle
+// that owned it before.
+func (b *allocationBlock) moveIPToHandle(ip cnet.IP, opts MoveOptions) (string, error) {
+	// The alternate owner is left alone; a live-migrating VM's target is recorded there.
+	return b.updateAllocationOwnership(ip,
+		ownershipPreconditions{
+			handle:      opts.ExpectedHandle,
+			activeOwner: opts.ExpectedOwner,
+		},
+		ownershipUpdate{
+			handle:           &opts.ToHandle,
+			activeOwner:      opts.Attrs,
+			clearActiveOwner: opts.Attrs == nil,
+		},
+	)
+}
+
 func (b allocationBlock) attributeIndexesByHandle(handleID string) []int {
 	indexes := []int{}
 	for i, attr := range b.Attributes {
@@ -544,12 +659,14 @@ func (b allocationBlock) allocationAttributesForIP(ip cnet.IP) (*model.Allocatio
 	}, nil
 }
 
-func (b *allocationBlock) findOrAddAttribute(handleID *string, attrs map[string]string) int {
+// findOrAddAttribute returns the index of an entry matching all three fields, adding one
+// if needed.
+func (b *allocationBlock) findOrAddAttribute(handleID *string, attrs, alternateAttrs map[string]string) int {
 	logCtx := log.WithField("attrs", attrs)
 	if handleID != nil {
 		logCtx = log.WithField("handle", *handleID)
 	}
-	attr := model.AllocationAttribute{HandleID: handleID, ActiveOwnerAttrs: attrs}
+	attr := model.AllocationAttribute{HandleID: handleID, ActiveOwnerAttrs: attrs, AlternateOwnerAttrs: alternateAttrs}
 	for idx, existing := range b.Attributes {
 		if reflect.DeepEqual(attr, existing) {
 			log.Debugf("Attribute '%+v' already exists", attr)
@@ -617,48 +734,31 @@ func (b *allocationBlock) setOwnerAttributes(ip cnet.IP, handleID string, update
 	if err != nil {
 		return err
 	}
-
 	attrIndex := b.Allocations[ordinal]
 	if attrIndex == nil {
 		logCtx.Debug("IP is not currently assigned in block")
 		return cerrors.ErrorResourceDoesNotExist{Identifier: ip.String(), Err: errors.New("IP is unassigned")}
 	}
-
-	attr := &b.Attributes[*attrIndex]
-
-	if attr.HandleID == nil || sanitizeHandle(*attr.HandleID) != handleID {
+	if h := b.Attributes[*attrIndex].HandleID; h == nil || sanitizeHandle(*h) != handleID {
 		return fmt.Errorf("IP %s is not assigned to handle %s", ip, handleID)
 	}
 
-	// Verify all preconditions before making any changes.
+	// Only fields the update names are checked, since the rest are left as they are.
+	pre := ownershipPreconditions{}
 	if updates.ActiveOwnerAttrs != nil || updates.ClearActiveOwner {
-		if err := verifyExpectedOwner(attr.ActiveOwnerAttrs, preconditions.expectedActiveOwner(), ip, "ActiveOwnerAttrs"); err != nil {
-			return err
-		}
+		pre.activeOwner = preconditions.expectedActiveOwner()
 	}
 	if updates.AlternateOwnerAttrs != nil || updates.ClearAlternateOwner {
-		if err := verifyExpectedOwner(attr.AlternateOwnerAttrs, preconditions.expectedAlternateOwner(), ip, "AlternateOwnerAttrs"); err != nil {
-			return err
-		}
+		pre.alternateOwner = preconditions.expectedAlternateOwner()
 	}
 
-	// Apply updates now that all preconditions are verified.
-	if updates.ActiveOwnerAttrs != nil || updates.ClearActiveOwner {
-		if updates.ClearActiveOwner {
-			attr.ActiveOwnerAttrs = nil
-		} else {
-			attr.ActiveOwnerAttrs = updates.ActiveOwnerAttrs
-		}
-	}
-	if updates.AlternateOwnerAttrs != nil || updates.ClearAlternateOwner {
-		if updates.ClearAlternateOwner {
-			attr.AlternateOwnerAttrs = nil
-		} else {
-			attr.AlternateOwnerAttrs = updates.AlternateOwnerAttrs
-		}
-	}
-
-	return nil
+	_, err = b.updateAllocationOwnership(ip, pre, ownershipUpdate{
+		activeOwner:         updates.ActiveOwnerAttrs,
+		clearActiveOwner:    updates.ClearActiveOwner,
+		alternateOwner:      updates.AlternateOwnerAttrs,
+		clearAlternateOwner: updates.ClearAlternateOwner,
+	})
+	return err
 }
 
 // verifyExpectedOwner checks that currentAttrs matches expectedOwner. Returns nil if
