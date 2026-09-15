@@ -18,3 +18,6 @@ e2e/                          @projectcalico/e2e-maintainers
 
 # Operator
 operator/                     @projectcalico/operator-maintainers
+
+# The operator ServiceAccount and roles every install runs with ship from this chart.
+charts/tigera-operator/       @projectcalico/core-maintainers @projectcalico/operator-maintainers
