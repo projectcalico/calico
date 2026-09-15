@@ -255,8 +255,9 @@ OPERATOR_RBAC_TEMPLATES = \
 	02-rolebinding-tigera-operator.yaml \
 	02-rolebinding-tigera-operator-secrets.yaml
 
-deploy-operator-rbac: $(KUBECTL) $(HELM_BUILDARCH_BINARY) create-tigera-operator-namespace
+deploy-operator-rbac: $(KUBECTL) $(HELM_BUILDARCH_BINARY)
 	@export KUBECONFIG=$(KIND_KUBECONFIG) && \
+		$(KUBECTL) create ns tigera-operator --dry-run=client -o yaml | $(KUBECTL) apply -f - && \
 		$(HELM_BUILDARCH_BINARY) template ../charts/tigera-operator --namespace tigera-operator \
 			$(addprefix --show-only templates/tigera-operator/,$(OPERATOR_RBAC_TEMPLATES)) \
 		| $(KUBECTL) apply -f -

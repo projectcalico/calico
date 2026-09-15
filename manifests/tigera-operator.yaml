@@ -237,8 +237,10 @@ rules:
   - apiGroups:
       - apps
     resources:
-      # The status manager reads ReplicaSets to find a Deployment's active revision.
+      # The status manager reads ReplicaSets to find a Deployment's active revision,
+      # and ControllerRevisions for a DaemonSet's or StatefulSet's.
       - replicasets
+      - controllerrevisions
     verbs:
       - get
       - list
@@ -388,6 +390,7 @@ rules:
     resources:
       - apiservices
     verbs:
+      - get
       - list
       - watch
       - create
@@ -644,6 +647,7 @@ rules:
       - jobs
     verbs:
       - create
+      - get
       - list
       - watch
   - apiGroups:
