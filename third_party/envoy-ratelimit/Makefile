@@ -37,8 +37,13 @@ DEP_PINS=dep-pins.txt
 # 	somewhere approximate.
 
 # 	Upstream at the pinned ref. No custom patches today, so there is no class 01
-# 	loop here; copy one from envoy-gateway if that changes.
+# 	loop; the check below fails rather than let one be added and never applied.
 $(ENVOY_RATELIMIT_FETCHED):
+	@[ ! -d patches/01-custom-patches ] || { \
+		echo "error: patches/01-custom-patches/ exists but nothing applies it;" >&2; \
+		echo "       copy the class 01 loop from third_party/envoy-gateway/Makefile" >&2; \
+		exit 1; \
+	}
 	rm -rf envoy-ratelimit .envoy-ratelimit.fetched .envoy-ratelimit.downloaded
 	$(call fetch_repo,$(ENVOY_RATELIMIT_REPO),$(ENVOY_RATELIMIT_VERSION),envoy-ratelimit)
 # 	Record what the generator diffs against, before any dependency patch
