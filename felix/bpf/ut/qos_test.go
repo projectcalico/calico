@@ -942,6 +942,10 @@ func TestQoSConnLimitIngressHostOriginatedSYNSkipsCheck(t *testing.T) {
 		// recount must make the same distinction.
 		Expect(readCTFlags() & ctv4.FlagConnLimitIn).To(Equal(uint32(0)))
 		Expect(readCTFlags() & ctv4.FlagConnLimitInRej).To(Equal(uint32(0)))
+
+		// The stamp the recount keys on, so the two cannot drift apart.
+		Expect(readCTFlags()&ctv4.FlagHostOrigin).To(Equal(ctv4.FlagHostOrigin),
+			"host-origin SYN must stamp HOST_ORIGIN")
 	})
 }
 

@@ -462,17 +462,16 @@ func podResponder() Leg {
 	return leg
 }
 
-// Covers CORE-13478 Failure.4: host traffic skips the to-wep check, so the
-// recount must not charge it.
+// Covers CORE-13478 Failure.4: to-wep stamps HOST_ORIGIN when it skips the
+// ingress limit, so the recount must not charge it.
 func TestConnLimitScannerSkipsHostOriginatedConnection(t *testing.T) {
 	podIP := "10.65.0.2"
 	hostIP := "172.17.0.5"
 
 	scanner := limitedPodScanner(podIP)
 
-	// to-wep creates the entry, so the opener leg gets neither an ifindex nor
-	// the workload bit.
-	val := NewValueNormal(time.Duration(0), 0, established(true, 0), podResponder())
+	val := NewValueNormal(time.Duration(0), ctv4.FlagHostOrigin,
+		established(true, 0), podResponder())
 
 	verdict, _ := scanner.Check(makeKey(hostIP, podIP, 54321, 8080), val, nil)
 	if verdict != ScanVerdictOK {
@@ -483,8 +482,8 @@ func TestConnLimitScannerSkipsHostOriginatedConnection(t *testing.T) {
 	}
 }
 
-// A CT RPF failure zeroes a pod leg's ifindex, so a zero ifindex alone cannot
-// mean host origin.
+// An unflagged entry counts even with a zeroed ifindex, which CT RPF failure
+// causes on a pod leg.
 func TestConnLimitScannerCountsPodOriginWithInvalidatedIfindex(t *testing.T) {
 	podIP := "10.65.0.2"
 	peerIP := "10.65.0.7"
@@ -505,8 +504,7 @@ func TestConnLimitScannerCountsPodOriginWithInvalidatedIfindex(t *testing.T) {
 	}
 }
 
-// An off-node pod arrives on the data interface, so its leg carries that
-// ifindex and no workload bit.
+// An unflagged entry from an off-node pod must still count.
 func TestConnLimitScannerCountsRemoteWorkloadOrigin(t *testing.T) {
 	podIP := "10.65.0.2"
 	remoteIP := "10.65.1.3"
