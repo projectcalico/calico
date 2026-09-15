@@ -62,6 +62,8 @@ const (
 	docsURL = "https://docs.tigera.io"
 )
 
+var HelmCharts = []string{TigeraOperatorChart, CalicoChart, ProjectCalicoV1CRDsChart, ProjectCalicoV3CRDsChart}
+
 var RepoURL = func() (string, error) {
 	url, err := url.JoinPath(docsURL, "calico", chartsDirName)
 	if err != nil {
