@@ -179,6 +179,9 @@ enum cali_state_flags {
 	/* CALI_ST_RST_NO_CT is set when the RST rejects a flow that has no CT
 	 * entry, so the destination must not police it. */
 	CALI_ST_RST_NO_CT	  = 0x10000,
+	/* CALI_ST_HOST_ORIGIN is set when a to-workload packet came from the
+	 * host namespace. */
+	CALI_ST_HOST_ORIGIN	  = 0x20000,
 };
 
 struct cali_tc_ctx {
