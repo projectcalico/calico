@@ -42,6 +42,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/rest"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -414,7 +415,8 @@ func updateInstallationWithDefaults(ctx context.Context, client client.Client, i
 	if err != nil {
 		return err
 	}
-	return nil
+
+	return defaultClusterRoutingMode(ctx, client, instance)
 }
 
 // MergeAndFillDefaults merges in configuration from the Kubernetes provider, if applicable, and then
@@ -1899,28 +1901,72 @@ func felixProgramsNoEncapClusterRoutes(install *operatorv1.Installation) bool {
 	return clusterRoutingMode(install) == operatorv1.ClusterRoutingModeFelix
 }
 
-// clusterRoutingMode returns the cluster routing mode in effect: the configured one, or -- when the
-// field is unset, which is the common case -- the mode that Calico's own defaults amount to.  Since
-// Calico v3.33 those defaults give Felix the cluster routes for IPIP IP Pools and leave the
-// unencapsulated ones with BIRD, which is exactly FelixIPIPOnly.
-//
-// Returning the effective mode rather than "" does tie this to the Calico version the operator
-// ships with, which is why it previously returned "".  But every caller has to reach some
-// conclusion about who owns the routes, and "nobody knows, so assume BIRD" is not a neutral answer:
-// it rejects a configuration that works, namely IPIP with BGP disabled on a cluster that has simply
-// taken Calico's default.  The operator is released against a known Calico version, so encoding
-// that version's defaults here is well defined.  Revisit when the no-encap default moves.
-//
-// This is deliberately not used to decide whether to *write* programClusterRoutes into
-// FelixConfiguration and BGPConfiguration.  Those writes stay gated on the field being explicitly
-// set (see setClusterRoutingOnFelixConfiguration and setClusterRoutingOnBGPConfiguration), so that
-// leaving it unset continues to mean "whatever Calico's defaults are" rather than pinning today's
-// defaults into the datastore.
+// clusterRoutingMode returns the cluster routing mode in effect.  defaultClusterRoutingMode fills
+// the field in, so the fallback covers only a cluster left unmanaged by adoptClusterRoutingMode.
 func clusterRoutingMode(install *operatorv1.Installation) operatorv1.ClusterRoutingMode {
 	if install.Spec.CalicoNetwork == nil || install.Spec.CalicoNetwork.ClusterRoutingMode == nil {
 		return operatorv1.ClusterRoutingModeFelixIPIPOnly
 	}
 	return *install.Spec.CalicoNetwork.ClusterRoutingMode
+}
+
+// clusterRoutingModeFromStatus returns the mode the operator last computed for this cluster.
+func clusterRoutingModeFromStatus(install *operatorv1.Installation) *operatorv1.ClusterRoutingMode {
+	if install.Status.Computed == nil || install.Status.Computed.CalicoNetwork == nil {
+		return nil
+	}
+
+	return install.Status.Computed.CalicoNetwork.ClusterRoutingMode
+}
+
+// defaultClusterRoutingMode fills in clusterRoutingMode when the operator has yet to compute one for
+// this cluster.  status.Defaults then holds the answer, so the choice below is made exactly once.
+func defaultClusterRoutingMode(ctx context.Context, c client.Client, install *operatorv1.Installation) error {
+	if install.Spec.CalicoNetwork == nil || install.Spec.CalicoNetwork.ClusterRoutingMode != nil {
+		return nil
+	}
+
+	// A running cluster the operator has never decided for predates this defaulting, so take the
+	// mode it is already running rather than moving its routes.
+	if clusterRoutingModeFromStatus(install) == nil && install.Status.CalicoVersion != "" {
+	    // This is a pre-existing install with no recorded mode. 
+		mode, err := adoptClusterRoutingMode(ctx, c)
+		if err != nil {
+			return err
+		}
+
+		install.Spec.CalicoNetwork.ClusterRoutingMode = mode
+		return nil
+	}
+
+    // A new cluster.
+	install.Spec.CalicoNetwork.ClusterRoutingMode = ptr.To(operatorv1.ClusterRoutingModeFelixIPIPOnly)
+	return nil
+}
+
+// adoptClusterRoutingMode maps the FelixConfiguration a cluster already has onto the mode that
+// reproduces it, or nil for a value no mode expresses, which stays the user's to manage.
+func adoptClusterRoutingMode(ctx context.Context, c client.Client) (*operatorv1.ClusterRoutingMode, error) {
+	fc := &v3.FelixConfiguration{}
+	if err := c.Get(ctx, types.NamespacedName{Name: "default"}, fc); err != nil && !apierrors.IsNotFound(err) {
+		return nil, fmt.Errorf("read FelixConfiguration: %w", err)
+	}
+
+	// Nothing has written the field, so the cluster runs on the Calico default that predates v3.33.
+	if fc.Spec.ProgramClusterRoutes == nil {
+		return ptr.To(operatorv1.ClusterRoutingModeBIRD), nil
+	}
+
+	switch *fc.Spec.ProgramClusterRoutes {
+	case v3.Enabled:
+		return ptr.To(operatorv1.ClusterRoutingModeFelix), nil
+	case v3.EnabledIPIPOnly:
+		return ptr.To(operatorv1.ClusterRoutingModeFelixIPIPOnly), nil
+	case v3.Disabled:
+		return ptr.To(operatorv1.ClusterRoutingModeBIRD), nil
+	}
+
+	return nil, nil
 }
 
 // setBPFUpdatesOnFelixConfiguration will take the passed in fc and update any BPF properties needed
