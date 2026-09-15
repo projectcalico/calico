@@ -388,6 +388,11 @@ func (f *fakeIPAMClient) SetOwnerAttributes(ctx context.Context, ip cnet.IP, han
 	panic("not implemented") // TODO: Implement
 }
 
+// MoveIPToHandle transfers an already-allocated address to a new handle.
+func (f *fakeIPAMClient) MoveIPToHandle(ctx context.Context, ip cnet.IP, opts ipam.MoveOptions) error {
+	panic("not implemented") // TODO: Implement
+}
+
 // IPsByHandle returns a list of all IP addresses that have been
 // assigned using the provided handle.
 func (f *fakeIPAMClient) IPsByHandle(ctx context.Context, handleID string) ([]cnet.IP, error) {

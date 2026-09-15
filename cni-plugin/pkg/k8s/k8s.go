@@ -45,7 +45,6 @@ import (
 	k8sresources "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	libipam "github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -367,17 +366,6 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 			return nil, e
 		}
 
-		// If the endpoint already exists, we need to attempt to release the previous IP addresses here
-		// since the ADD call will fail when it tries to reallocate the same IPs. releaseIPAddrs assumes
-		// that Calico IPAM is in use, which is OK here since only Calico IPAM supports the ipAddrs
-		// annotation.
-		if endpoint != nil {
-			logger.Info("Endpoint already exists and ipAddrs is set. Release any old IPs")
-			if err := releaseIPAddrs(endpoint.Spec.IPNetworks, calicoClient, logger); err != nil {
-				return nil, fmt.Errorf("failed to release ipAddrs: %s", err)
-			}
-		}
-
 		// When ipAddrs annotation is set, we call out to the configured IPAM plugin
 		// requesting the specific IP addresses included in the annotation.
 		result, err = ipAddrsResult(ipAddrs, conf, args, logger)
@@ -675,31 +663,6 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 	}
 
 	logger.Info("Teardown processing complete.")
-	return nil
-}
-
-// releaseIPAddrs calls directly into Calico IPAM to release the specified IP addresses.
-// NOTE: This function assumes Calico IPAM is in use, and calls into it directly rather than calling the IPAM plugin.
-func releaseIPAddrs(ipAddrs []string, calico calicoclient.Interface, logger *logrus.Entry) error {
-	// For each IP, call out to Calico IPAM to release it.
-	for _, ip := range ipAddrs {
-		log := logger.WithField("IP", ip)
-		log.Info("Releasing explicitly requested address")
-		cip, _, err := cnet.ParseCIDR(ip)
-		if err != nil {
-			return err
-		}
-		unallocated, _, err := calico.IPAM().ReleaseIPs(context.Background(), libipam.ReleaseOptions{Address: cip.String()})
-		if err != nil {
-			log.WithError(err).Error("Failed to release explicit IP")
-			return err
-		}
-		if len(unallocated) > 0 {
-			log.Warn("Asked to release address but it doesn't exist.")
-		} else {
-			log.Infof("Released explicit address: %s", ip)
-		}
-	}
 	return nil
 }
 
