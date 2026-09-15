@@ -20,23 +20,66 @@ include ../../lib.Makefile
 ##############################################################################
 # Build
 ##############################################################################
+ENVOY_RATELIMIT_FETCHED=.envoy-ratelimit.fetched
 ENVOY_RATELIMIT_DOWNLOADED=.envoy-ratelimit.downloaded
+
+DEP_PINS=dep-pins.txt
+
+# 	patches/ holds one directory per class, applied in name order:
+# 	  01-custom-patches/   - hand-written; only ever verified to still apply.
+# 	  02-auto-gen-patches/ - derived from $(DEP_PINS); regenerated as a whole
+# 	                         directory, not edited.
+#
+# 	Order matters: the baseline is taken after 01, so 02 is a delta on top of
+# 	it. They are applied by separate targets so the generator can start from a
+# 	tree with 01 but not 02 -- the state it needs when 02 no longer applies.
+# 	-F0 drops patch's default fuzz: a stale patch fails rather than landing
+# 	somewhere approximate.
+
+# 	Upstream at the pinned ref. No custom patches today, so there is no class 01
+# 	loop; the check below fails rather than let one be added and never applied.
+$(ENVOY_RATELIMIT_FETCHED):
+	@[ ! -d patches/01-custom-patches ] || { \
+		echo "error: patches/01-custom-patches/ exists but nothing applies it;" >&2; \
+		echo "       copy the class 01 loop from third_party/envoy-gateway/Makefile" >&2; \
+		exit 1; \
+	}
+	rm -rf envoy-ratelimit .envoy-ratelimit.fetched .envoy-ratelimit.downloaded
+	$(call fetch_repo,$(ENVOY_RATELIMIT_REPO),$(ENVOY_RATELIMIT_VERSION),envoy-ratelimit)
+# 	Record what the generator diffs against, before any dependency patch
+# 	lands. No-op for a cloned tree.
+	../../hack/thirdparty/init-dep-baseline.sh envoy-ratelimit
+	touch $@
 
 .PHONY: init-source
 init-source: $(ENVOY_RATELIMIT_DOWNLOADED)
-$(ENVOY_RATELIMIT_DOWNLOADED):
-	rm -rf envoy-ratelimit .envoy-ratelimit.downloaded
-	$(call fetch_repo,$(ENVOY_RATELIMIT_REPO),$(ENVOY_RATELIMIT_VERSION),envoy-ratelimit)
-# 	Apply patches for the specified Envoy Ratelimit version if patches directory exists.
-# 	This code checks for the presence of a patches directory corresponding to ENVOY_RATELIMIT_VERSION.
-# 	If the directory exists, it iterates over all .patch files within it.
-# 	For each valid patch file, it applies the patch to the envoy-ratelimit directory using patch -p1.
-	for patch in patches/*.patch; do \
+$(ENVOY_RATELIMIT_DOWNLOADED): $(ENVOY_RATELIMIT_FETCHED)
+# 	Reset to the pinned ref so re-applying is idempotent.
+	cd envoy-ratelimit && git checkout -- go.mod go.sum
+	for patch in patches/02-auto-gen-patches/*.patch; do \
 		if [ -f "$$patch" ]; then \
-			patch -d envoy-ratelimit -p1 < "$$patch"; \
+			patch -d envoy-ratelimit -p1 -F0 < "$$patch" || exit 1; \
 		fi; \
-	done; \
+	done
 	touch $@
+
+# 	Rebuild patches/02-auto-gen-patches/ from $(DEP_PINS), in the pinned Go toolchain --
+# 	go mod tidy's output depends on the Go version.
+.PHONY: regen-dep-patches
+regen-dep-patches: $(ENVOY_RATELIMIT_FETCHED)
+	$(DOCKER_GO_BUILD) ../../hack/thirdparty/regen-dep-patch.sh envoy-ratelimit $(DEP_PINS) patches/02-auto-gen-patches/0001-cve-dependency-fixes.patch
+
+# 	Fail if the checked-in patch is not what the pins produce.
+.PHONY: check-dep-patches
+check-dep-patches: regen-dep-patches
+	@changed=$$(git status --porcelain -- patches/02-auto-gen-patches); \
+	[ -z "$$changed" ] || { \
+		git --no-pager diff -- patches/02-auto-gen-patches; \
+		echo "$$changed"; \
+		echo "ERROR: patches/02-auto-gen-patches/ is not what $(DEP_PINS) produces."; \
+		echo "Run 'make -C third_party/envoy-ratelimit regen-dep-patches' and commit the result."; \
+		exit 1; \
+	}
 
 .PHONY: build
 build: bin/envoy-ratelimit-$(ARCH)
