@@ -687,9 +687,9 @@ type CalicoNetworkSpec struct {
 	// In Felix mode, Felix programs the routes for both IPIP and unencapsulated IP Pools.
 	// In FelixIPIPOnly mode, Felix programs the routes for IPIP IP Pools, and confd and BIRD program them
 	// for unencapsulated IP Pools.
-	// If not specified, the operator writes neither FelixConfiguration.programClusterRoutes nor
-	// BGPConfiguration.programClusterRoutes, so Calico's own defaults apply; as of Calico v3.33 those
-	// defaults are equivalent to FelixIPIPOnly.
+	// If not specified, the operator defaults it: a new cluster gets FelixIPIPOnly, and a cluster the
+	// operator has already brought up keeps the mode it is already running. The choice is recorded in
+	// the Installation status, so it is made once.
 	// Note that BIRD programming of IPIP routes, which the BIRD mode selects, is deprecated as of
 	// Calico v3.33 and is intended for removal in v3.35.
 	// +optional

@@ -1289,20 +1289,117 @@ var _ = Describe("Testing core-controller installation", func() {
 			Expect(pullSecret.Kind).To(Equal("Installation"))
 		})
 
-		It("should not patch FelixConfig and BGPConfig when ClusterRouteMode not set", func() {
+		It("should default ClusterRoutingMode to FelixIPIPOnly on a new cluster", func() {
 			cr.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
 			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
 			_, err := r.Reconcile(ctx, reconcile.Request{})
 			Expect(err).ShouldNot(HaveOccurred())
 
 			fc := &v3.FelixConfiguration{}
-			err = c.Get(ctx, types.NamespacedName{Name: "default"}, fc)
-			Expect(err).ShouldNot(HaveOccurred())
-			Expect(fc.Spec.ProgramClusterRoutes).To(BeNil())
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, fc)).ShouldNot(HaveOccurred())
+			Expect(fc.Spec.ProgramClusterRoutes).To(Equal(ptr.To(v3.EnabledIPIPOnly)))
 
 			bgpConfig := &v3.BGPConfiguration{}
-			err = c.Get(ctx, types.NamespacedName{Name: "default"}, bgpConfig)
-			Expect(err).Should(HaveOccurred())
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, bgpConfig)).ShouldNot(HaveOccurred())
+			Expect(bgpConfig.Spec.ProgramClusterRoutes).To(Equal(ptr.To(v3.EnabledNoEncapOnly)))
+
+			// Recorded, so a later change to the default cannot move this cluster.
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, cr)).ShouldNot(HaveOccurred())
+			Expect(cr.Status.Defaults).NotTo(BeNil())
+			Expect(cr.Status.Defaults.CalicoNetwork.ClusterRoutingMode).To(Equal(ptr.To(operator.ClusterRoutingModeFelixIPIPOnly)))
+		})
+
+		It("should default ClusterRoutingMode to BIRD on a cluster that predates the defaulting", func() {
+			cr.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
+			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+
+			// A cluster the operator has already brought up, before it computed any mode.
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, cr)).ShouldNot(HaveOccurred())
+			cr.Status.CalicoVersion = "v3.32.0"
+			Expect(c.Status().Update(ctx, cr)).NotTo(HaveOccurred())
+
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			fc := &v3.FelixConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, fc)).ShouldNot(HaveOccurred())
+			Expect(fc.Spec.ProgramClusterRoutes).To(Equal(ptr.To(v3.Disabled)))
+
+			bgpConfig := &v3.BGPConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, bgpConfig)).ShouldNot(HaveOccurred())
+			Expect(bgpConfig.Spec.ProgramClusterRoutes).To(Equal(ptr.To(v3.Enabled)))
+		})
+
+		It("should adopt the programClusterRoutes an existing cluster already has", func() {
+			Expect(c.Create(ctx, &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       v3.FelixConfigurationSpec{ProgramClusterRoutes: ptr.To(v3.Enabled)},
+			})).NotTo(HaveOccurred())
+
+			cr.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
+			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, cr)).ShouldNot(HaveOccurred())
+			cr.Status.CalicoVersion = "v3.32.0"
+			Expect(c.Status().Update(ctx, cr)).NotTo(HaveOccurred())
+
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			fc := &v3.FelixConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, fc)).ShouldNot(HaveOccurred())
+			Expect(fc.Spec.ProgramClusterRoutes).To(Equal(ptr.To(v3.Enabled)))
+
+			bgpConfig := &v3.BGPConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, bgpConfig)).ShouldNot(HaveOccurred())
+			Expect(bgpConfig.Spec.ProgramClusterRoutes).To(Equal(ptr.To(v3.Disabled)))
+		})
+
+		It("should leave programClusterRoutes alone when no ClusterRoutingMode expresses it", func() {
+			Expect(c.Create(ctx, &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       v3.FelixConfigurationSpec{ProgramClusterRoutes: ptr.To(v3.EnabledNoEncapOnly)},
+			})).NotTo(HaveOccurred())
+
+			cr.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
+			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, cr)).ShouldNot(HaveOccurred())
+			cr.Status.CalicoVersion = "v3.32.0"
+			Expect(c.Status().Update(ctx, cr)).NotTo(HaveOccurred())
+
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			fc := &v3.FelixConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, fc)).ShouldNot(HaveOccurred())
+			Expect(fc.Spec.ProgramClusterRoutes).To(Equal(ptr.To(v3.EnabledNoEncapOnly)))
+
+			bgpConfig := &v3.BGPConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, bgpConfig)).Should(HaveOccurred())
+		})
+
+		It("should return to the default when ClusterRoutingMode is removed", func() {
+			cr.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{ClusterRoutingMode: ptr.To(operator.ClusterRoutingModeBIRD)}
+			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			fc := &v3.FelixConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, fc)).ShouldNot(HaveOccurred())
+			Expect(fc.Spec.ProgramClusterRoutes).To(Equal(ptr.To(v3.Disabled)))
+
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, cr)).ShouldNot(HaveOccurred())
+			cr.Spec.CalicoNetwork.ClusterRoutingMode = nil
+			Expect(c.Update(ctx, cr)).NotTo(HaveOccurred())
+			_, err = r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			fc = &v3.FelixConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, fc)).ShouldNot(HaveOccurred())
+			Expect(fc.Spec.ProgramClusterRoutes).To(Equal(ptr.To(v3.EnabledIPIPOnly)))
+
+			bgpConfig := &v3.BGPConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, bgpConfig)).ShouldNot(HaveOccurred())
+			Expect(bgpConfig.Spec.ProgramClusterRoutes).To(Equal(ptr.To(v3.EnabledNoEncapOnly)))
 		})
 
 		It("should correctly patch FelixConfig and BGPConfig with ClusterRouteMode set to BIRD", func() {
