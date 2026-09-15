@@ -529,6 +529,57 @@ get_ports:
 
 #define seqno_add(seq, add) (bpf_htonl((bpf_ntohl(seq) + add)))
 
+/* tcp_seq_space returns the sequence numbers this segment consumes: its payload
+ * plus one for each of SYN and FIN. */
+static CALI_BPF_INLINE __u32 tcp_seq_space(struct cali_tc_ctx *ctx, struct tcphdr *tcp_header)
+{
+	/* The IP header, not skb->len: the latter can include Ethernet padding
+	 * on a small frame, which would over-advance snd_nxt. */
+	int hdrs = ctx->ipheader_len + tcp_header->doff * 4;
+
+#ifdef IPVER6
+	/* state->ip_size is payload_len, which excludes the base header that
+	 * ipheader_len counts. */
+	hdrs -= IP_SIZE;
+#endif
+
+	int payload = (int)bpf_ntohs(ctx->state->ip_size) - hdrs;
+
+	if (payload < 0) {
+		payload = 0;
+	}
+
+	return (__u32)payload + (tcp_header->syn ? 1 : 0) + (tcp_header->fin ? 1 : 0);
+}
+
+/* ct_seq_advance moves a leg's snd_nxt high-water mark forward, ignoring
+ * retransmits and reordering. */
+static CALI_BPF_INLINE void ct_seq_advance(struct calico_ct_leg *leg, __u32 end)
+{
+	if ((__s32)(end - bpf_ntohl(leg->seqno)) > 0) {
+		leg->seqno = bpf_htonl(end);
+	}
+}
+
+/* ct_rst_in_sequence reports whether an RST sits exactly at its sender's
+ * snd_nxt, which is the only RST the peer's own stack will act on (RFC 5961).
+ *
+ * An RST that fails this is one both peers discard, so the dataplane must
+ * discard it too -- otherwise an off-path packet decides when a connection is
+ * over. Before the handshake completes there is no snd_nxt to check against,
+ * so accept, as we always did.
+ */
+static CALI_BPF_INLINE bool ct_rst_in_sequence(struct calico_ct_leg *src_to_dst,
+					       struct calico_ct_leg *dst_to_src,
+					       struct tcphdr *tcp_header)
+{
+	if (!src_to_dst->ack_seen || !dst_to_src->ack_seen) {
+		return true;
+	}
+
+	return tcp_header->seq == src_to_dst->seqno;
+}
+
 static CALI_BPF_INLINE void ct_tcp_entry_update(struct cali_tc_ctx *ctx,
 						struct tcphdr *tcp_header,
 						struct calico_ct_leg *src_to_dst,
@@ -556,6 +607,10 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct cali_tc_ctx *ctx,
 		if (dst_to_src->syn_seen && seqno_add(dst_to_src->seqno, 1) == tcp_header->ack_seq) {
 			CALI_CT_VERB("ACK seen, marking CT entry.");
 			src_to_dst->ack_seen = 1;
+			/* Both legs are up, so seqno stops meaning ISN and starts
+			 * meaning snd_nxt. Each SYN consumed one sequence number. */
+			src_to_dst->seqno = seqno_add(src_to_dst->seqno, 1);
+			dst_to_src->seqno = seqno_add(dst_to_src->seqno, 1);
 		} else {
 			CALI_CT_VERB("ACK seen but packet's ACK (%u) doesn't "
 					"match other side's SYN (%u).",
@@ -577,6 +632,13 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct cali_tc_ctx *ctx,
 		} else {
 			CALI_CT_VERB("Non-flagged packet and other side has ACKed.");
 		}
+	}
+
+	/* Track this leg's snd_nxt so ct_rst_in_sequence() has something to check
+	 * an RST against. An RST consumes no sequence space, so it never moves it. */
+	if (src_to_dst->ack_seen && dst_to_src->ack_seen && !tcp_header->rst) {
+		ct_seq_advance(src_to_dst,
+			       bpf_ntohl(tcp_header->seq) + tcp_seq_space(ctx, tcp_header));
 	}
 }
 
@@ -1083,7 +1145,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			dst_to_src = src_to_dst;
 			src_to_dst = tmp;
 		}
-		if (tcp_header->rst) {
+		if (tcp_header->rst && !ct_rst_in_sequence(src_to_dst, dst_to_src, tcp_header)) {
+			CALI_CT_DEBUG("RST out of sequence (seq %u, expected %u), ignoring.",
+					bpf_ntohl(tcp_header->seq), bpf_ntohl(src_to_dst->seqno));
+		} else if (tcp_header->rst) {
 			CALI_CT_DEBUG("RST seen, marking CT entry.");
 			src_to_dst->rst_seen = 1;
 			tracking_v->rst_seen = now;
@@ -1095,25 +1160,18 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 				 * likely established and the RST was spurious.
 				 */
 				tracking_v->rst_seen = 0;
-
-				/* The RST also decremented the connlimit counter and
-				 * claimed CONNLIMIT_DEC below. The recount has since
-				 * restored the slot, so that claim is stale: release it,
-				 * or this connection's real close finds the latch taken
-				 * and frees its slot only at recount speed. Atomic AND to
-				 * match the atomic OR that claims it -- a byte-wide RMW
-				 * on flags3 would race with a claim on another CPU.
-				 */
-				__sync_fetch_and_and(&v->type_flags_word, ~(__u32)CALI_CT_FLAG_CONNLIMIT_DEC);
 			}
 		}
 		ct_tcp_entry_update(ctx, tcp_header, src_to_dst, dst_to_src);
 
-		/* Decrement connlimit counter when a TCP connection closes
-		 * (both FINs seen or RST). The helper sets CONNLIMIT_DEC
-		 * before decrementing so concurrent paths bail.
+		/* Decrement connlimit counter when a TCP connection closes. Both
+		 * FINs means both endpoints agreed, which one party cannot forge;
+		 * an RST is one packet from either side, so it releases nothing
+		 * here and the slot comes back when the entry is purged or the
+		 * recount rebases. The helper sets CONNLIMIT_DEC before
+		 * decrementing so concurrent paths bail.
 		 */
-		if ((src_to_dst->fin_seen && dst_to_src->fin_seen) || tcp_header->rst) {
+		if (src_to_dst->fin_seen && dst_to_src->fin_seen) {
 			qos_connlimit_decrement_for_ct(tracking_v);
 		}
 	}

@@ -50,6 +50,8 @@ enum cali_ct_type {
 struct calico_ct_leg {
 	__u64 bytes;
 	__u32 packets;
+	/* This leg's ISN until both legs are established, then its snd_nxt as we
+	 * have observed it. Network byte order; see ct_seq_advance(). */
 	__u32 seqno;
 
 	__u32 syn_seen:1;
