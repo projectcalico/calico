@@ -18,3 +18,6 @@ e2e/                          @projectcalico/e2e-maintainers
 
 # Operator
 operator/                     @projectcalico/operator-maintainers
+
+# The operator RBAC the FV applies lives in this chart.
+charts/tigera-operator/       @projectcalico/core-maintainers @projectcalico/operator-maintainers
