@@ -26,6 +26,24 @@ import (
 	"github.com/google/go-github/v53/github"
 )
 
+// Indicates that GitHub did receive the whole file.
+const assetStateUploaded = "uploaded"
+
+func NewAsset(path string) (Asset, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return Asset{}, fmt.Errorf("sizing %s: %w", path, err)
+	}
+	return Asset{Path: path, Size: info.Size()}, nil
+}
+
+type Asset struct {
+	Path string
+	Size int64
+}
+
+func (a Asset) Name() string { return filepath.Base(a.Path) }
+
 type Repo struct {
 	Org  string
 	Name string
@@ -133,14 +151,59 @@ func (r *Releases) CreateDraft(ctx context.Context, tag, name, body string) (*gi
 	return rel, nil
 }
 
-// UploadAsset attaches one file, replacing an asset of the same name. GitHub
-// rejects a duplicate name, so a re-run has to delete before it uploads.
+func (r *Releases) AssetState(ctx context.Context, releaseID int64, a Asset) (complete bool, err error) {
+	attached, err := r.assets(ctx, releaseID)
+	if err != nil {
+		return false, err
+	}
+	return r.reconcile(ctx, attached, a)
+}
+
+// SyncAssets ensures that the desired assets are attached to a release,
+// returning those still needing an upload.
+func (r *Releases) SyncAssets(ctx context.Context, releaseID int64, want []Asset) ([]Asset, error) {
+	if len(want) == 0 {
+		return nil, nil
+	}
+	attached, err := r.assets(ctx, releaseID)
+	if err != nil {
+		return nil, err
+	}
+	var missing []Asset
+	for _, a := range want {
+		complete, err := r.reconcile(ctx, attached, a)
+		if err != nil {
+			return nil, err
+		}
+		if !complete {
+			missing = append(missing, a)
+		}
+	}
+	return missing, nil
+}
+
+// reconcile checks if the given asset is attached and complete, removing any incomplete uploads.
+func (r *Releases) reconcile(ctx context.Context, attached []*github.ReleaseAsset, a Asset) (bool, error) {
+	for _, got := range attached {
+		if got.GetName() != a.Name() {
+			continue
+		}
+		// Check the size to ensure an upload is not a truncated upload
+		if got.GetState() == assetStateUploaded && int64(got.GetSize()) == a.Size {
+			return true, nil
+		}
+		if _, err := r.svc.DeleteReleaseAsset(ctx, r.repo.Org, r.repo.Name, got.GetID()); err != nil {
+			return false, fmt.Errorf("removing incomplete asset %s: %w", a.Name(), err)
+		}
+		return false, nil
+	}
+	return false, nil
+}
+
+// UploadAsset attaches one file. GitHub rejects a name it already holds, so a
+// re-run clears what it is replacing with DeleteAssets first.
 func (r *Releases) UploadAsset(ctx context.Context, releaseID int64, path string) error {
 	name := filepath.Base(path)
-	if err := r.deleteAsset(ctx, releaseID, name); err != nil {
-		return err
-	}
-
 	f, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("opening %s: %w", path, err)
@@ -150,22 +213,6 @@ func (r *Releases) UploadAsset(ctx context.Context, releaseID int64, path string
 	if _, _, err := r.svc.UploadReleaseAsset(ctx, r.repo.Org, r.repo.Name, releaseID,
 		&github.UploadOptions{Name: name}, f); err != nil {
 		return fmt.Errorf("uploading %s: %w", name, err)
-	}
-	return nil
-}
-
-func (r *Releases) deleteAsset(ctx context.Context, releaseID int64, name string) error {
-	assets, err := r.assets(ctx, releaseID)
-	if err != nil {
-		return err
-	}
-	for _, a := range assets {
-		if a.GetName() != name {
-			continue
-		}
-		if _, err := r.svc.DeleteReleaseAsset(ctx, r.repo.Org, r.repo.Name, a.GetID()); err != nil {
-			return fmt.Errorf("replacing asset %s: %w", name, err)
-		}
 	}
 	return nil
 }

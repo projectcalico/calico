@@ -51,11 +51,29 @@ func DigestsByRepo(refs []string) RecordedDigests {
 // safe to call concurrently. Results come back in the order the items were
 // given, whatever order they finished in.
 func Go[U, T any](items []U, fn func(U) (T, error)) ([]T, error) {
+	return GoLimit(items, 0, fn)
+}
+
+// GoLimit runs fn over every item, at most limit in flight.
+// A limit of zero or less runs everything at once.
+func GoLimit[U, T any](items []U, limit int, fn func(U) (T, error)) ([]T, error) {
 	var wg sync.WaitGroup
 	out := make([]T, len(items))
 	errs := make([]error, len(items))
+	var tokens chan struct{}
+	if limit > 0 {
+		tokens = make(chan struct{}, limit)
+	}
 	for i, item := range items {
-		wg.Go(func() { out[i], errs[i] = fn(item) })
+		if tokens != nil {
+			tokens <- struct{}{}
+		}
+		wg.Go(func() {
+			if tokens != nil {
+				defer func() { <-tokens }()
+			}
+			out[i], errs[i] = fn(item)
+		})
 	}
 	wg.Wait()
 	return out, errors.Join(errs...)

@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -38,6 +39,8 @@ type fakeReleases struct {
 	created  *github.RepositoryRelease
 	edited   *github.RepositoryRelease
 	listed   []*github.RepositoryRelease
+
+	assetLists int
 }
 
 func (f *fakeReleases) GetReleaseByTag(_ context.Context, _, _, tag string) (*github.RepositoryRelease, *github.Response, error) {
@@ -83,6 +86,7 @@ func (f *fakeReleases) draft(tag string, rel *github.RepositoryRelease) {
 }
 
 func (f *fakeReleases) ListReleaseAssets(_ context.Context, _, _ string, _ int64, _ *github.ListOptions) ([]*github.ReleaseAsset, *github.Response, error) {
+	f.assetLists++
 	return f.assets, nil, nil
 }
 
@@ -199,24 +203,145 @@ func TestCreateDraft(t *testing.T) {
 	}
 }
 
-// GitHub rejects a duplicate asset name, so a re-run has to replace rather
-// than add.
-func TestUploadAssetReplacesSameName(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "SHA256SUMS")
+// A re-run must resend only what is missing or arrived incomplete: resending
+// what already landed wastes a large upload, and leaving a truncated asset
+// ships a broken release.
+func TestSyncAssets(t *testing.T) {
+	asset := func(id int64, name, state string, size int) *github.ReleaseAsset {
+		return &github.ReleaseAsset{
+			ID: github.Int64(id), Name: github.String(name),
+			State: github.String(state), Size: github.Int(size),
+		}
+	}
+	for _, tc := range []struct {
+		name        string
+		assets      []*github.ReleaseAsset
+		want        []Asset
+		wantUpload  []string
+		wantDeleted []int64
+		wantLists   int
+	}{
+		{
+			name:       "nothing attached yet",
+			want:       []Asset{{Path: "d/a.tgz", Size: 10}, {Path: "d/b.zip", Size: 20}},
+			wantUpload: []string{"a.tgz", "b.zip"},
+			wantLists:  1,
+		},
+		{
+			name:      "already complete, so nothing to do",
+			assets:    []*github.ReleaseAsset{asset(1, "a.tgz", "uploaded", 10)},
+			want:      []Asset{{Path: "d/a.tgz", Size: 10}},
+			wantLists: 1,
+		},
+		{
+			name:        "truncated, so replaced",
+			assets:      []*github.ReleaseAsset{asset(1, "a.tgz", "uploaded", 3)},
+			want:        []Asset{{Path: "d/a.tgz", Size: 10}},
+			wantUpload:  []string{"a.tgz"},
+			wantDeleted: []int64{1},
+			wantLists:   1,
+		},
+		{
+			name:        "upload never finished, so replaced",
+			assets:      []*github.ReleaseAsset{asset(1, "a.tgz", "starter", 10)},
+			want:        []Asset{{Path: "d/a.tgz", Size: 10}},
+			wantUpload:  []string{"a.tgz"},
+			wantDeleted: []int64{1},
+			wantLists:   1,
+		},
+		{
+			name: "a partial run resends only what is missing",
+			assets: []*github.ReleaseAsset{
+				asset(1, "a.tgz", "uploaded", 10),
+				asset(2, "b.zip", "uploaded", 2),
+			},
+			want:        []Asset{{Path: "d/a.tgz", Size: 10}, {Path: "d/b.zip", Size: 20}, {Path: "d/c.txt", Size: 30}},
+			wantUpload:  []string{"b.zip", "c.txt"},
+			wantDeleted: []int64{2},
+			wantLists:   1,
+		},
+		{
+			name:   "an asset we are not uploading is left alone",
+			assets: []*github.ReleaseAsset{asset(9, "keep.zip", "uploaded", 1)},
+			want:   []Asset{{Path: "d/a.tgz", Size: 10}},
+			// keep.zip is neither deleted nor uploaded.
+			wantUpload: []string{"a.tgz"},
+			wantLists:  1,
+		},
+		{
+			name:   "no files does not even list",
+			assets: []*github.ReleaseAsset{asset(1, "a.tgz", "uploaded", 10)},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeReleases{assets: tc.assets}
+			got, err := testReleases(t, f).SyncAssets(context.Background(), 1, tc.want)
+			if err != nil {
+				t.Fatalf("SyncAssets: %v", err)
+			}
+			var names []string
+			for _, a := range got {
+				names = append(names, a.Name())
+			}
+			if !slices.Equal(names, tc.wantUpload) {
+				t.Errorf("to upload = %v, want %v", names, tc.wantUpload)
+			}
+			slices.Sort(f.deleted)
+			if !slices.Equal(f.deleted, tc.wantDeleted) {
+				t.Errorf("deleted = %v, want %v", f.deleted, tc.wantDeleted)
+			}
+			if f.assetLists != tc.wantLists {
+				t.Errorf("listed %d times, want %d", f.assetLists, tc.wantLists)
+			}
+		})
+	}
+}
+
+// A retry after a lost response must not resend a name GitHub already holds:
+// the upload would be rejected as a duplicate.
+func TestAssetState(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		assets       []*github.ReleaseAsset
+		wantComplete bool
+		wantDeleted  []int64
+	}{
+		{
+			name:         "the upload landed after all",
+			assets:       []*github.ReleaseAsset{{ID: github.Int64(1), Name: github.String("a.tgz"), State: github.String("uploaded"), Size: github.Int(10)}},
+			wantComplete: true,
+		},
+		{
+			name:        "it landed short, so the name is freed",
+			assets:      []*github.ReleaseAsset{{ID: github.Int64(1), Name: github.String("a.tgz"), State: github.String("uploaded"), Size: github.Int(4)}},
+			wantDeleted: []int64{1},
+		},
+		{name: "it did not land at all"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeReleases{assets: tc.assets}
+			complete, err := testReleases(t, f).AssetState(context.Background(), 1, Asset{Path: "d/a.tgz", Size: 10})
+			if err != nil {
+				t.Fatalf("AssetState: %v", err)
+			}
+			if complete != tc.wantComplete {
+				t.Errorf("complete = %v, want %v", complete, tc.wantComplete)
+			}
+			if !slices.Equal(f.deleted, tc.wantDeleted) {
+				t.Errorf("deleted = %v, want %v", f.deleted, tc.wantDeleted)
+			}
+		})
+	}
+}
+
+func TestUploadAssetAttachesTheFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "SHA256SUMS")
 	if err := os.WriteFile(path, []byte("sums"), 0o644); err != nil {
 		t.Fatalf("writing fixture: %v", err)
 	}
-	f := &fakeReleases{assets: []*github.ReleaseAsset{
-		{ID: github.Int64(11), Name: github.String("SHA256SUMS")},
-		{ID: github.Int64(12), Name: github.String("other.tgz")},
-	}}
-
+	f := &fakeReleases{}
 	if err := testReleases(t, f).UploadAsset(context.Background(), 1, path); err != nil {
 		t.Fatalf("UploadAsset: %v", err)
-	}
-	if len(f.deleted) != 1 || f.deleted[0] != 11 {
-		t.Errorf("expected only the same-named asset deleted, got %v", f.deleted)
 	}
 	if len(f.uploaded) != 1 || f.uploaded[0] != "SHA256SUMS" {
 		t.Errorf("uploaded = %v, want [SHA256SUMS]", f.uploaded)
