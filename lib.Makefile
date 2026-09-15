@@ -1996,6 +1996,7 @@ $(ENVTEST_MIN_ASSETS_MARKER):
 .PHONY: run-etcd stop-etcd
 run-etcd:
 	@if ! docker inspect calico-etcd >/dev/null 2>&1; then \
+		$(call retry_docker_cmd,pull $(ETCD_IMAGE),docker pull -q $(ETCD_IMAGE),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY)); \
 		docker run --detach \
 			--net=host \
 			--entrypoint=/usr/local/bin/etcd \

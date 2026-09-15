@@ -93,7 +93,7 @@ istio_charts: $(ISTIO_CHART_FILES)
 
 $(ISTIO_RESOURCES_DIR)/%.tgz:
 	@echo "Downloading Istio chart $* version $(ISTIO_VERSION)..."
-	@curl -fsSL -o $@ $(ISTIO_HELM_REPO)/$*-$(ISTIO_VERSION).tgz
+	@$(call fetch_file,$(ISTIO_HELM_REPO)/$*-$(ISTIO_VERSION).tgz,$@)
 
 # To update the Envoy Gateway version, see "Updating the bundled version of
 # Envoy Gateway" in docs/common_tasks.md.

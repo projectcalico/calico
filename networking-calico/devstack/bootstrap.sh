@@ -368,8 +368,10 @@ if ! ${TEMPEST:-false}; then
 else
     source ../calico/devstack/devstackgaterc
     cd /opt/stack/tempest
+    # Tempest imports pkg_resources, which setuptools dropped in 81, and the
+    # recreate that pinning Tempest forces seeds the venv with something newer.
     tox -eall --notest
-    .tox/tempest/bin/pip install setuptools
+    .tox/tempest/bin/pip install 'setuptools<81'
     tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY
 fi
 EOF
