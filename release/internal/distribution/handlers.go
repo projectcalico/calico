@@ -16,6 +16,7 @@ package distribution
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -260,10 +261,20 @@ func (d GithubRelease) Publish(ctx context.Context, src string) error {
 		return fmt.Errorf("create draft: %w", err)
 	}
 
-	// Collected rather than stopped at: one asset failing must not hide the
-	// rest, and a retry needs to know everything still outstanding.
-	_, err = steps.Go(files, func(path string) (struct{}, error) {
-		return struct{}{}, d.upload(ctx, rel.GetID(), path)
+	assets := make([]github.Asset, len(files))
+	for i, f := range files {
+		if assets[i], err = github.NewAsset(f); err != nil {
+			return err
+		}
+	}
+	missing, err := gh.SyncAssets(ctx, rel.GetID(), assets)
+	if err != nil {
+		return fmt.Errorf("check existing assets: %w", err)
+	}
+	d.log().WithFields(logrus.Fields{"upload": len(missing), "attached": len(files) - len(missing)}).Info("Release assets")
+
+	_, err = steps.GoLimit(missing, steps.MaxConcurrency, func(a github.Asset) (struct{}, error) {
+		return struct{}{}, d.upload(ctx, gh, rel.GetID(), a)
 	})
 	if err != nil {
 		return fmt.Errorf("upload assets: %w", err)
@@ -306,23 +317,28 @@ func (d GithubRelease) semver(tag string) (*semver.Version, error) {
 	return semver.NewVersion(strings.TrimPrefix(tag, "v"))
 }
 
-func (d GithubRelease) upload(ctx context.Context, releaseID int64, path string) error {
-	log := d.log().WithField("asset", filepath.Base(path))
-	gh, err := d.github()
-	if err != nil {
-		return fmt.Errorf("github client: %w", err)
-	}
+func (d GithubRelease) upload(ctx context.Context, gh *github.Releases, releaseID int64, a github.Asset) error {
+	log := d.log().WithField("asset", a.Name())
 	for attempt := 0; ; attempt++ {
-		err := gh.UploadAsset(ctx, releaseID, path)
+		err := gh.UploadAsset(ctx, releaseID, a.Path)
 		if err == nil {
 			log.Debug("Attached release asset")
 			return nil
 		}
-		if attempt < steps.MaxRetries {
-			log.WithError(err).WithField("attempt", attempt).Warn("Asset upload failed, retrying")
-			continue
+		if attempt >= steps.MaxRetries {
+			return fmt.Errorf("upload %s: %w", a.Path, err)
 		}
-		return fmt.Errorf("upload %s: %w", path, err)
+		log.WithError(err).WithField("attempt", attempt).Warn("Asset upload failed, retrying")
+		// The failure may have been a lost response rather than a lost
+		// upload, which would leave the name taken and reject the retry.
+		complete, stateErr := gh.AssetState(ctx, releaseID, a)
+		if stateErr != nil {
+			return fmt.Errorf("upload %s: %w", a.Path, errors.Join(err, stateErr))
+		}
+		if complete {
+			log.Debug("Asset already landed")
+			return nil
+		}
 	}
 }
 
