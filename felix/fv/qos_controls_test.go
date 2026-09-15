@@ -1724,43 +1724,85 @@ var _ = infrastructure.DatastoreDescribe(
 					})
 				})
 
+				// startHostConns opens n connections from the node's own
+				// namespace, where NamespacePath is empty.
+				startHostConns := func(n int) []*connectivity.PersistentConnection {
+					pcs := make([]*connectivity.PersistentConnection, n)
+					for i := range pcs {
+						pcs[i] = &connectivity.PersistentConnection{
+							Name:                fmt.Sprintf("host-pc-%d", i),
+							RuntimeName:         tc.Felixes[0].Name,
+							Runtime:             tc.Felixes[0],
+							Protocol:            "tcp",
+							IP:                  w[0].IP,
+							Port:                8055,
+							MonitorConnectivity: true,
+						}
+						Expect(pcs[i].Start()).NotTo(HaveOccurred())
+					}
+					for _, pc := range pcs {
+						Eventually(pc.PongCount, "10s", "200ms").Should(BeNumerically(">", 0),
+							"host-origin connection never came up")
+					}
+					return pcs
+				}
+
+				stopAll := func(pcs []*connectivity.PersistentConnection) {
+					for i := range pcs {
+						if pcs[i] != nil {
+							pcs[i].Stop()
+							pcs[i] = nil
+						}
+					}
+				}
+
+				// The control for Failure.4: the connlimit rule sits in
+				// cali-tw-<iface>, which host traffic never reaches.
+				Context("With connection limits, host-origin traffic (iptables/nftables, vxlan only)", func() {
+					if BPFMode() {
+						return
+					}
+
+					It("should not let host-origin connections consume the limit", func() {
+						const maxConnections = 2
+
+						By("Setting ingress connlimit on w[0]")
+						w[0].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+							IngressMaxConnections: int64(maxConnections),
+						}
+						w[0].UpdateInInfra(infra)
+
+						By("Waiting for the connlimit rule to be programmed")
+						if NFTMode() {
+							Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(
+								`(?s)chain filter-cali-tw-` + w[0].InterfaceName +
+									` {[^}]*ct count over ` + fmt.Sprintf("%d", maxConnections) +
+									` reject with tcp reset`))
+						} else {
+							Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(
+								`-A cali-tw-` + regexp.QuoteMeta(w[0].InterfaceName) +
+									` .*-m connlimit .*--connlimit-above ` +
+									fmt.Sprintf("%d", maxConnections) +
+									`.*-j REJECT --reject-with tcp-reset`))
+						}
+
+						By("Opening three host-origin connections, one more than the limit")
+						pcs := startHostConns(maxConnections + 1)
+						defer stopAll(pcs)
+
+						By("A pod client must still be admitted")
+						Consistently(func() bool {
+							return w[1].CanConnectTo(w[0].IP, "8055", "tcp").HasConnectivity()
+						}, "15s", "5s").Should(BeTrue(),
+							"host-origin traffic consumed the pod's ingress quota")
+					})
+				})
+
 				// CORE-13478 Failure.4. The to-wep check skips host traffic,
 				// but the userspace recount charges it to the pod anyway.
 				Context("With connection limits, host-origin traffic (felix-0 -> w[0])", func() {
 					if !BPFMode() {
 						return
-					}
-
-					// startHostConns opens n connections from the node's own
-					// namespace, where NamespacePath is empty.
-					startHostConns := func(n int) []*connectivity.PersistentConnection {
-						pcs := make([]*connectivity.PersistentConnection, n)
-						for i := range pcs {
-							pcs[i] = &connectivity.PersistentConnection{
-								Name:                fmt.Sprintf("host-pc-%d", i),
-								RuntimeName:         tc.Felixes[0].Name,
-								Runtime:             tc.Felixes[0],
-								Protocol:            "tcp",
-								IP:                  w[0].IP,
-								Port:                8055,
-								MonitorConnectivity: true,
-							}
-							Expect(pcs[i].Start()).NotTo(HaveOccurred())
-						}
-						for _, pc := range pcs {
-							Eventually(pc.PongCount, "10s", "200ms").Should(BeNumerically(">", 0),
-								"host-origin connection never came up")
-						}
-						return pcs
-					}
-
-					stopAll := func(pcs []*connectivity.PersistentConnection) {
-						for i := range pcs {
-							if pcs[i] != nil {
-								pcs[i].Stop()
-								pcs[i] = nil
-							}
-						}
 					}
 
 					It("should not let host-origin connections drive the ingress count above the limit", func() {
@@ -1818,7 +1860,9 @@ var _ = infrastructure.DatastoreDescribe(
 							"host-origin traffic locked out a pod-network client")
 					})
 
-					It("should drain the ingress count after host-origin connections close", func() {
+					// Pod-origin, not host-origin: host connections are not
+					// counted, so there would be nothing to drain.
+					It("should drain the ingress count after pod connections close", func() {
 						const (
 							maxConnections = 25
 							numConnections = 20
@@ -1832,19 +1876,26 @@ var _ = infrastructure.DatastoreDescribe(
 						Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").
 							Should(Equal(uint32(maxConnections)))
 
-						By("Opening then closing twenty host-origin connections")
-						pcs := startHostConns(numConnections)
+						By("Opening then closing twenty pod connections")
+						pcs := make([]*connectivity.PersistentConnection, numConnections)
+						for i := range pcs {
+							pcs[i] = w[1].StartPersistentConnection(w[0].IP, 8055,
+								workload.PersistentConnectionOpts{})
+						}
 						Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").
 							Should(Equal(uint32(numConnections)))
+
+						// Clock starts before the close: closing 20 connections
+						// outlasts a scan period, which would hide the drain.
+						By("Measuring how long the count takes to drain")
+						start := time.Now()
 						stopAll(pcs)
 
 						// QOS-15 reported ~60s pinned. That was the old
 						// connLimitScannerRunEveryN = 3 downsampling.
-						By("Measuring how long the count takes to drain")
-						start := time.Now()
 						Eventually(getBPFCurrentCount(0, 0, "ingress"), "90s", "1s").
 							Should(BeZero(), "ingress count never drained after the connections closed")
-						logrus.Infof("CORE-13478: ingress count drained %d -> 0 in %v",
+						logrus.Infof("CORE-13478: closed %d connections, ingress count reached 0 in %v (includes close time)",
 							numConnections, time.Since(start))
 					})
 				})
