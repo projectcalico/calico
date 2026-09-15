@@ -54,7 +54,7 @@ var _ = Describe("IPPool FV tests", func() {
 
 		// We need a v3 client as well.
 		var err error
-		clientv3, err = utils.V3Client(mgr.GetConfig())
+		clientv3, err = utils.V3Client(AdminConfig())
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Cleaning up resources before the test")
@@ -103,7 +103,7 @@ var _ = Describe("IPPool FV tests", func() {
 		// Clean up Calico data that might be left behind.
 		By("Cleaning up Node annotations after test")
 		Eventually(func() error {
-			cs := kubernetes.NewForConfigOrDie(mgr.GetConfig())
+			cs := kubernetes.NewForConfigOrDie(AdminConfig())
 			nodes, err := cs.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 			if err != nil {
 				return err
