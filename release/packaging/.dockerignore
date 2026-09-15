@@ -1,0 +1,8 @@
+# This directory is the build context for the images in docker-bake.hcl, and
+# none of the build output or the makefiles belong in it.
+output/
+mk/
+Makefile
+DESIGN.md
+README.md
+rpm/
