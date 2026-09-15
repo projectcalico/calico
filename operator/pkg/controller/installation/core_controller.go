@@ -1929,7 +1929,7 @@ func defaultClusterRoutingMode(ctx context.Context, c client.Client, install *op
 	// A running cluster the operator has never decided for predates this defaulting, so take the
 	// mode it is already running rather than moving its routes.
 	if clusterRoutingModeFromStatus(install) == nil && install.Status.CalicoVersion != "" {
-	  // This is a pre-existing install with no recorded mode. Default to the legacy behavior. 
+	    // This is a pre-existing install with no recorded mode. 
 		mode, err := adoptClusterRoutingMode(ctx, c)
 		if err != nil {
 			return err
