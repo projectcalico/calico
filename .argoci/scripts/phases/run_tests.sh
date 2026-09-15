@@ -86,6 +86,17 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     run_as_root_env=(-e RUN_AS_ROOT=true)
   fi
 
+  # Resolve the Go build cache the way lib.Makefile does, so the host-side
+  # `make -C e2e build` above and this container share one cache rather than
+  # compiling from cold in each: LOCAL_GO_PKG_CACHE, then GOCACHE when the Go
+  # tools resolve it to an absolute path, then the repo-local default.
+  go_cache="${LOCAL_GO_PKG_CACHE:-$(go env GOCACHE 2>/dev/null || true)}"
+  case "${go_cache}" in
+    /*) ;;
+    *) go_cache="$(pwd)/.go-pkg-cache" ;;
+  esac
+  mkdir -p "${go_cache}"
+
   echo "[INFO] starting e2e tests (ginkgo, K8S_E2E_FLAGS=${K8S_E2E_FLAGS:-<none>})..."
   # --junit-report writes report/junit.xml for the epilogue to publish. (v3.32's
   # Semaphore relied on bz for JUnit; the local-binary path emits it directly.)
@@ -122,7 +133,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     "${auth_mount[@]}" \
     "${aws_cred_env[@]}" \
     -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
-    -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
+    -v "${go_cache}":/go-cache:rw \
     -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
     -w /go/src/github.com/projectcalico/calico \
     "${RUN_IMAGE}" \
