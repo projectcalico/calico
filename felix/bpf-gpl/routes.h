@@ -6,7 +6,9 @@
 #define __CALI_ROUTES_H__
 
 #include <linux/in.h>
-#include "bpf.h"
+
+#include "cali_bpf.h"
+#include "ip_addr.h"
 
 // Map: Routes
 

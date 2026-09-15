@@ -5,6 +5,11 @@
 #ifndef __CALI_CONNTRACK_TYPES_H__
 #define __CALI_CONNTRACK_TYPES_H__
 
+#include <linux/tcp.h>
+
+#include "cali_bpf.h"
+#include "ip_addr.h"
+
 // Connection tracking.
 
 struct calico_ct_key {
