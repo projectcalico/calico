@@ -99,6 +99,25 @@ func (r *requestCache) getDstNamespace() *namespace {
 	return nil
 }
 
+// getSrcIPProtoPortStr returns the source "<IP>,<protocol>:<port>" key used for
+// IP+port set matching.
+func (r *requestCache) getSrcIPProtoPortStr() string {
+	return ipProtoPortKey(r.GetSourceIP().String(), r.GetProtocol(), r.GetSourcePort())
+}
+
+// getDstIPProtoPortStr returns the destination "<IP>,<protocol>:<port>" key used for
+// IP+port set matching.
+func (r *requestCache) getDstIPProtoPortStr() string {
+	return ipProtoPortKey(r.GetDestIP().String(), r.GetProtocol(), r.GetDestPort())
+}
+
+// ipProtoPortKey builds the member format Felix uses for IP+port IP sets, e.g.
+// "10.0.0.1,tcp:8080". An unnamed protocol leaves that field empty, which no
+// member can equal, so the lookup just misses.
+func ipProtoPortKey(ipStr string, protocol, port int) string {
+	return fmt.Sprintf("%s,%s:%d", ipStr, protocolMapL4[int32(protocol)], port)
+}
+
 // getIPSet returns the IPSet with the given ID.
 func (r *requestCache) getIPSet(id string) policystore.IPSet {
 	s, ok := r.store.IPSetByID[id]
