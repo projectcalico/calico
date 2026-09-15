@@ -315,7 +315,7 @@ func (leg Leg) AsBytes() []byte {
 	setBit(&bits, 4, leg.Approved)
 	setBit(&bits, 5, leg.Opener)
 
-	binary.LittleEndian.PutUint32(bytes[legExtra+0:legExtra+4], leg.Seqno)
+	binary.BigEndian.PutUint32(bytes[legExtra+0:legExtra+4], leg.Seqno)
 	binary.LittleEndian.PutUint32(bytes[legExtra+4:legExtra+8], bits)
 	binary.LittleEndian.PutUint32(bytes[legExtra+8:legExtra+12], leg.Ifindex)
 
