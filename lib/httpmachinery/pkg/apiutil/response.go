@@ -92,6 +92,50 @@ func (l ListResponse[E]) ResponseWriter() ResponseWriter {
 	return &jsonListResponseWriter[E]{items: l.rsp}
 }
 
+// ObjectResponse implements the ResponseWriter and writes the response as a single json object.
+type ObjectResponse[E any] struct {
+	baseResponse
+	body E
+}
+
+func NewObjectResponse[E any]() ObjectResponse[E] {
+	return ObjectResponse[E]{}
+}
+
+func (o ObjectResponse[E]) SetStatus(status int) ObjectResponse[E] {
+	o.status = status
+	return o
+}
+
+func (o ObjectResponse[E]) SetError(err string) ObjectResponse[E] {
+	o.errMsg = err
+	return o
+}
+
+func (o ObjectResponse[E]) SetBody(body E) ObjectResponse[E] {
+	o.body = body
+	return o
+}
+
+// ResponseWriter returns a ResponseWriter to write the response as a single json object.
+func (o ObjectResponse[E]) ResponseWriter() ResponseWriter {
+	if o.errMsg != "" {
+		return &jsonErrorResponseWriter{o.errMsg}
+	}
+
+	return &jsonObjectResponseWriter[E]{body: o.body}
+}
+
+// jsonObjectResponseWriter is used to write the response as a single json object.
+type jsonObjectResponseWriter[Body any] struct {
+	body Body
+}
+
+func (rs *jsonObjectResponseWriter[Body]) WriteResponse(ctx apicontext.Context, status int, w http.ResponseWriter) error {
+	writeJSONResponse(w, status, rs.body)
+	return nil
+}
+
 // ListOrStreamResponse implements the ResponseWriter and writes the response as either a stream or a list, depending
 // on whether SendStream or SendList was called.
 type ListOrStreamResponse[E any] struct {
