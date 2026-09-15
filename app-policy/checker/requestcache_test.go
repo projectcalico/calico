@@ -443,3 +443,16 @@ func TestUnparseablePrincipalIsMemoized(t *testing.T) {
 	Expect(uut.identities[sourceSide].resolved).To(BeTrue())
 	Expect(matchServiceAccounts(nil, uut.getSrcPeer())).To(BeTrue())
 }
+
+// ipProtoPortKey has to produce exactly the member format Felix emits for an IP+port
+// set, for each protocol a named port can be declared on. A protocol with no name
+// yields an empty field, which no member can equal, so the lookup misses.
+func TestIPProtoPortKey(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(ipProtoPortKey("10.0.0.1", 6, 8080)).To(Equal("10.0.0.1,tcp:8080"))
+	Expect(ipProtoPortKey("10.0.0.1", 17, 53)).To(Equal("10.0.0.1,udp:53"))
+	Expect(ipProtoPortKey("10.0.0.1", 132, 3868)).To(Equal("10.0.0.1,sctp:3868"))
+	Expect(ipProtoPortKey("fd00::1", 6, 8080)).To(Equal("fd00::1,tcp:8080"))
+	Expect(ipProtoPortKey("10.0.0.1", 47, 8080)).To(Equal("10.0.0.1,:8080"))
+}
