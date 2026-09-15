@@ -242,6 +242,17 @@ const (
 	FlagConnLimitDec   uint32 = (1 << 21)
 )
 
+// LegFlag* mirror the CALI_CT_LEG_* masks in felix/bpf-gpl/conntrack_types.h.
+const (
+	LegFlagSynSeen  uint32 = (1 << 0)
+	LegFlagAckSeen  uint32 = (1 << 1)
+	LegFlagFinSeen  uint32 = (1 << 2)
+	LegFlagRstSeen  uint32 = (1 << 3)
+	LegFlagApproved uint32 = (1 << 4)
+	LegFlagOpener   uint32 = (1 << 5)
+	LegFlagWorkload uint32 = (1 << 6)
+)
+
 // FlagNames returns the human-readable names for the set bits in flags.
 func FlagNames(flags uint32) []string {
 	flagTable := []struct {
@@ -385,9 +396,9 @@ type Leg struct {
 
 const legSize int = 24
 
-func setBit(bits *uint32, bit uint8, val bool) {
+func setFlag(flags *uint32, f uint32, val bool) {
 	if val {
-		*bits |= (1 << bit)
+		*flags |= f
 	}
 }
 
@@ -397,20 +408,11 @@ const legExtra = 12
 func (leg Leg) AsBytes() []byte {
 	bytes := make([]byte, legSize)
 
-	bits := uint32(0)
-
-	setBit(&bits, 0, leg.SynSeen)
-	setBit(&bits, 1, leg.AckSeen)
-	setBit(&bits, 2, leg.FinSeen)
-	setBit(&bits, 3, leg.RstSeen)
-	setBit(&bits, 4, leg.Approved)
-	setBit(&bits, 5, leg.Opener)
-	setBit(&bits, 6, leg.Workload)
-
 	binary.LittleEndian.PutUint64(bytes[0:8], leg.Bytes)
 	binary.LittleEndian.PutUint32(bytes[8:12], leg.Packets)
-	binary.LittleEndian.PutUint32(bytes[legExtra+0:legExtra+4], leg.Seqno)
-	binary.LittleEndian.PutUint32(bytes[legExtra+4:legExtra+8], bits)
+	// Seqno holds the raw network-order TCP sequence number, as the dataplane stores it.
+	binary.BigEndian.PutUint32(bytes[legExtra+0:legExtra+4], leg.Seqno)
+	binary.LittleEndian.PutUint32(bytes[legExtra+4:legExtra+8], leg.Flags())
 	binary.LittleEndian.PutUint32(bytes[legExtra+8:legExtra+12], leg.Ifindex)
 
 	return bytes
@@ -418,32 +420,20 @@ func (leg Leg) AsBytes() []byte {
 
 func (leg Leg) Flags() uint32 {
 	var flags uint32
-	if leg.SynSeen {
-		flags |= 1
-	}
-	if leg.AckSeen {
-		flags |= 1 << 1
-	}
-	if leg.FinSeen {
-		flags |= 1 << 2
-	}
-	if leg.RstSeen {
-		flags |= 1 << 3
-	}
-	if leg.Approved {
-		flags |= 1 << 4
-	}
-	if leg.Opener {
-		flags |= 1 << 5
-	}
-	if leg.Workload {
-		flags |= 1 << 6
-	}
+
+	setFlag(&flags, LegFlagSynSeen, leg.SynSeen)
+	setFlag(&flags, LegFlagAckSeen, leg.AckSeen)
+	setFlag(&flags, LegFlagFinSeen, leg.FinSeen)
+	setFlag(&flags, LegFlagRstSeen, leg.RstSeen)
+	setFlag(&flags, LegFlagApproved, leg.Approved)
+	setFlag(&flags, LegFlagOpener, leg.Opener)
+	setFlag(&flags, LegFlagWorkload, leg.Workload)
+
 	return flags
 }
 
-func bitSet(bits uint32, bit uint8) bool {
-	return (bits & (1 << bit)) != 0
+func flagSet(flags, f uint32) bool {
+	return flags&f != 0
 }
 
 func readConntrackLeg(b []byte) Leg {
@@ -452,13 +442,13 @@ func readConntrackLeg(b []byte) Leg {
 		Bytes:    binary.LittleEndian.Uint64(b[0:8]),
 		Packets:  binary.LittleEndian.Uint32(b[8:12]),
 		Seqno:    binary.BigEndian.Uint32(b[legExtra+0 : legExtra+4]),
-		SynSeen:  bitSet(bits, 0),
-		AckSeen:  bitSet(bits, 1),
-		FinSeen:  bitSet(bits, 2),
-		RstSeen:  bitSet(bits, 3),
-		Approved: bitSet(bits, 4),
-		Opener:   bitSet(bits, 5),
-		Workload: bitSet(bits, 6),
+		SynSeen:  flagSet(bits, LegFlagSynSeen),
+		AckSeen:  flagSet(bits, LegFlagAckSeen),
+		FinSeen:  flagSet(bits, LegFlagFinSeen),
+		RstSeen:  flagSet(bits, LegFlagRstSeen),
+		Approved: flagSet(bits, LegFlagApproved),
+		Opener:   flagSet(bits, LegFlagOpener),
+		Workload: flagSet(bits, LegFlagWorkload),
 		Ifindex:  binary.LittleEndian.Uint32(b[legExtra+8 : legExtra+12]),
 	}
 }
