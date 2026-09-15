@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,6 +49,9 @@ type List[E any] struct {
 
 type ListMeta struct {
 	TotalPages int `json:"totalPages"`
+	// TotalResults is the number of items matching the request across every
+	// page. A page count alone cannot give it: the last page is rarely full.
+	TotalResults int `json:"totalResults"`
 }
 
 // ListResponse implements the ResponseWriter and writes the response as a list with a total number of items that would
@@ -90,6 +93,40 @@ func (l ListResponse[E]) ResponseWriter() ResponseWriter {
 	}
 
 	return &jsonListResponseWriter[E]{items: l.rsp}
+}
+
+// ObjectResponse implements the ResponseWriter and writes a single object as
+// JSON. Use it for a route that addresses one resource rather than a list.
+type ObjectResponse[E any] struct {
+	baseResponse
+	obj E
+}
+
+func NewObjectResponse[E any]() ObjectResponse[E] {
+	return ObjectResponse[E]{}
+}
+
+func (o ObjectResponse[E]) SetStatus(status int) ObjectResponse[E] {
+	o.status = status
+	return o
+}
+
+func (o ObjectResponse[E]) SetError(err string) ObjectResponse[E] {
+	o.errMsg = err
+	return o
+}
+
+func (o ObjectResponse[E]) SetObject(obj E) ObjectResponse[E] {
+	o.obj = obj
+	return o
+}
+
+func (o ObjectResponse[E]) ResponseWriter() ResponseWriter {
+	if o.errMsg != "" {
+		return &jsonErrorResponseWriter{o.errMsg}
+	}
+
+	return &jsonObjectResponseWriter[E]{obj: o.obj}
 }
 
 // ListOrStreamResponse implements the ResponseWriter and writes the response as either a stream or a list, depending
@@ -177,6 +214,16 @@ type jsonListResponseWriter[Body any] struct {
 
 func (rs *jsonListResponseWriter[Body]) WriteResponse(ctx apicontext.Context, status int, w http.ResponseWriter) error {
 	writeJSONResponse(w, status, rs.items)
+	return nil
+}
+
+// jsonObjectResponseWriter writes a single object as json.
+type jsonObjectResponseWriter[Body any] struct {
+	obj Body
+}
+
+func (rs *jsonObjectResponseWriter[Body]) WriteResponse(ctx apicontext.Context, status int, w http.ResponseWriter) error {
+	writeJSONResponse(w, status, rs.obj)
 	return nil
 }
 
