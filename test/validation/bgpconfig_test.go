@@ -15,6 +15,7 @@
 package validation_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -23,6 +24,38 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// The complement of the FelixConfiguration default: BIRD takes the unencapsulated cluster routes
+// that Felix leaves alone.
+func TestBGPConfiguration_ProgramClusterRoutesDefault(t *testing.T) {
+	defaulted := uniqueName("bgpconfig-cluster-routes")
+	mustCreate(t, &v3.BGPConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: defaulted},
+		Spec:       v3.BGPConfigurationSpec{},
+	})
+
+	got := &v3.BGPConfiguration{}
+	if err := testClient.Get(context.Background(), client.ObjectKey{Name: defaulted}, got); err != nil {
+		t.Fatalf("failed to get config: %v", err)
+	}
+	if got.Spec.ProgramClusterRoutes == nil || *got.Spec.ProgramClusterRoutes != v3.EnabledNoEncapOnly {
+		t.Errorf("expected spec.programClusterRoutes=%q, got %v", v3.EnabledNoEncapOnly, got.Spec.ProgramClusterRoutes)
+	}
+
+	explicit := uniqueName("bgpconfig-cluster-routes")
+	mustCreate(t, &v3.BGPConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: explicit},
+		Spec:       v3.BGPConfigurationSpec{ProgramClusterRoutes: ptr.To(v3.Enabled)},
+	})
+
+	got = &v3.BGPConfiguration{}
+	if err := testClient.Get(context.Background(), client.ObjectKey{Name: explicit}, got); err != nil {
+		t.Fatalf("failed to get config: %v", err)
+	}
+	if got.Spec.ProgramClusterRoutes == nil || *got.Spec.ProgramClusterRoutes != v3.Enabled {
+		t.Errorf("expected spec.programClusterRoutes=%q, got %v", v3.Enabled, got.Spec.ProgramClusterRoutes)
+	}
+}
 
 func TestBGPConfiguration_Validation(t *testing.T) {
 	dur := metav1.Duration{Duration: 120 * time.Second}
