@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/apis"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	rgateway "github.com/projectcalico/calico/operator/pkg/render/gateway"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
@@ -81,7 +82,7 @@ var _ = Describe("UnhealthyReason", func() {
 		scheme := runtime.NewScheme()
 		Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
 		cli := ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(objs...).Build()
-		h = uigateway.NewHelper(cli, nil, uigateway.Config{ResourcePrefix: "calico-manager"})
+		h = uigateway.NewHelper(cli, uigateway.Config{ResourcePrefix: "calico-manager"})
 	}
 
 	BeforeEach(func() {
@@ -175,8 +176,9 @@ var _ = Describe("Cleanup helpers", func() {
 			ResourcePrefix:   prefix,
 			TLSSecretName:    prefix + "-gateway-tls",
 			BackendNamespace: backendNS,
+			Extension:        extensions.NoopUIGateway{},
 		}
-		h = uigateway.NewHelper(cli, nil, cfg)
+		h = uigateway.NewHelper(cli, cfg)
 	}
 
 	// deletionNamespaces collects, per object type, the namespaces the given
@@ -225,7 +227,7 @@ var _ = Describe("Cleanup helpers", func() {
 
 		It("returns empty, not an error, when the Gateway kind is not served", func() {
 			build()
-			h = uigateway.NewHelper(noGatewayKindClient{cli}, nil, cfg)
+			h = uigateway.NewHelper(noGatewayKindClient{cli}, cfg)
 			namespaces, err := h.Namespaces(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(namespaces).To(BeEmpty())
@@ -263,7 +265,8 @@ var _ = Describe("Cleanup helpers", func() {
 			ext := &fakeUIGatewayExt{objs: []client.Object{
 				&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "waf-http-filter", Namespace: backendNS}},
 			}}
-			h = uigateway.NewHelper(cli, ext, cfg)
+			cfg.Extension = ext
+			h = uigateway.NewHelper(cli, cfg)
 
 			components, err := h.Teardown(ctx)
 			Expect(err).NotTo(HaveOccurred())
@@ -339,6 +342,20 @@ var _ = Describe("Cleanup helpers", func() {
 			Expect(got.DeletionTimestamp.IsZero()).To(BeTrue())
 			Expect(got.Finalizers).To(ContainElement(rgateway.RBACFinalizer))
 		})
+
+		It("clears a marked grant's finalizer on the gatewayNamespace-move path", func() {
+			role, binding := accessGrant("ns-a")
+			build(role, binding)
+			Expect(cli.Delete(ctx, role)).To(Succeed())
+			Expect(cli.Delete(ctx, binding)).To(Succeed())
+
+			_, err := h.StaleComponents(ctx, backendNS)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(kerrors.IsNotFound(cli.Get(ctx, types.NamespacedName{Name: accessName, Namespace: "ns-a"}, &rbacv1.Role{}))).To(BeTrue(),
+				"the finalizer should be cleared on the move path so the pending delete finishes")
+			Expect(kerrors.IsNotFound(cli.Get(ctx, types.NamespacedName{Name: accessName, Namespace: "ns-a"}, &rbacv1.RoleBinding{}))).To(BeTrue())
+		})
 	})
 
 	Describe("Teardown", func() {
@@ -367,7 +384,7 @@ var _ = Describe("Cleanup helpers", func() {
 
 		It("returns nothing when the gateway CRDs are absent", func() {
 			build()
-			h = uigateway.NewHelper(noGatewayKindClient{cli}, nil, cfg)
+			h = uigateway.NewHelper(noGatewayKindClient{cli}, cfg)
 			components, err := h.Teardown(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(components).To(BeEmpty())
@@ -468,7 +485,7 @@ var _ = Describe("Cleanup helpers", func() {
 			build(gatewayAPI("tigera-gateway-class"))
 			cfgOCP := cfg
 			cfgOCP.Provider = operatorv1.ProviderOpenShift
-			h = uigateway.NewHelper(cli, nil, cfgOCP)
+			h = uigateway.NewHelper(cli, cfgOCP)
 			components, err := h.Components(ctx, spec("ns-a"), keyPair())
 			Expect(err).NotTo(HaveOccurred())
 
@@ -483,7 +500,7 @@ var _ = Describe("Cleanup helpers", func() {
 			build(gatewayAPI("tigera-gateway-class"))
 			cfgAKS := cfg
 			cfgAKS.Provider = operatorv1.ProviderAKS
-			h = uigateway.NewHelper(cli, nil, cfgAKS)
+			h = uigateway.NewHelper(cli, cfgAKS)
 			components, err := h.Components(ctx, spec("ns-a"), keyPair())
 			Expect(err).NotTo(HaveOccurred())
 

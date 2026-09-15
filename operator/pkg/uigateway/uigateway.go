@@ -80,27 +80,25 @@ type Config struct {
 	// Azure carries Installation.Azure so the gateway namespace gets the same
 	// Azure-policy labels as other operator-created namespaces on AKS.
 	Azure *operatorv1.Azure
+
+	// Extension supplies the variant's additions beside the proxy; nil adds none.
+	Extension extensions.UIGatewayExtension
 }
 
 // Helper renders and cleans up one UI component's gateway resources.
 type Helper struct {
 	cli client.Client
-	ext extensions.UIGatewayExtension
 	cfg Config
 }
 
-// NewHelper returns the helper for one UI component's gateway. ext supplies
-// the variant's additions beside the proxy; nil adds none.
-func NewHelper(cli client.Client, ext extensions.UIGatewayExtension, cfg Config) *Helper {
-	return &Helper{cli: cli, ext: ext, cfg: cfg}
+// NewHelper returns the helper for one UI component's gateway.
+func NewHelper(cli client.Client, cfg Config) *Helper {
+	return &Helper{cli: cli, cfg: cfg}
 }
 
 // proxyObjects returns the variant's additions beside the proxy.
 func (h *Helper) proxyObjects() []client.Object {
-	if h.ext == nil {
-		return nil
-	}
-	return h.ext.ProxyObjects(h.cfg.ResourcePrefix, h.cfg.BackendNamespace)
+	return h.cfg.Extension.ProxyObjects(h.cfg.ResourcePrefix, h.cfg.BackendNamespace)
 }
 
 // Components renders the component's gateway resources, plus deletion
@@ -286,10 +284,12 @@ func (h *Helper) Teardown(ctx context.Context) ([]render.Component, error) {
 	return components, nil
 }
 
-// clearRBACFinalizers removes RBACFinalizer from every labeled access
-// Role and RoleBinding that is marked for deletion, once the gateway
-// resources it covers are gone. The finalizer keeps the operator's write
-// grant in place until then, so teardown does not depend on delete order.
+// clearRBACFinalizers removes our finalizer from every RBAC resource we own
+// that is marked for deletion and is no longer needed, i.e. once the gateway
+// resources it covers are gone.
+//
+// The finalizer keeps the operator's write grant in place, so teardown does not
+// depend on delete order.
 func (h *Helper) clearRBACFinalizers(ctx context.Context) error {
 	byLabel := client.MatchingLabels{rgateway.GatewayLabel: h.cfg.ResourcePrefix}
 	roles := &rbacv1.RoleList{}
@@ -300,46 +300,47 @@ func (h *Helper) clearRBACFinalizers(ctx context.Context) error {
 	if err := h.cli.List(ctx, bindings, byLabel); err != nil {
 		return err
 	}
-	var grants []client.Object
+	// Group the grants marked for deletion that still carry our finalizer by
+	// namespace, so each namespace's gateway resources are checked once.
+	markedByNamespace := map[string][]client.Object{}
+	mark := func(grant client.Object) {
+		if grant.GetDeletionTimestamp().IsZero() || !slices.Contains(grant.GetFinalizers(), rgateway.RBACFinalizer) {
+			return
+		}
+		markedByNamespace[grant.GetNamespace()] = append(markedByNamespace[grant.GetNamespace()], grant)
+	}
 	for i := range roles.Items {
-		grants = append(grants, &roles.Items[i])
+		mark(&roles.Items[i])
 	}
 	for i := range bindings.Items {
-		grants = append(grants, &bindings.Items[i])
+		mark(&bindings.Items[i])
 	}
 
-	resourcesGone := map[string]bool{}
-	for _, grant := range grants {
-		if grant.GetDeletionTimestamp().IsZero() || !slices.Contains(grant.GetFinalizers(), rgateway.RBACFinalizer) {
-			continue
-		}
-		ns := grant.GetNamespace()
-		gone, checked := resourcesGone[ns]
-		if !checked {
-			var err error
-			if gone, err = h.accessResourcesGone(ctx, ns); err != nil {
-				return err
-			}
-			resourcesGone[ns] = gone
+	for ns, marked := range markedByNamespace {
+		gone, err := h.gatewayResourcesGone(ctx, ns)
+		if err != nil {
+			return err
 		}
 		if !gone {
 			continue
 		}
-		grant.SetFinalizers(slices.DeleteFunc(grant.GetFinalizers(), func(f string) bool {
-			return f == rgateway.RBACFinalizer
-		}))
-		if err := h.cli.Update(ctx, grant); err != nil && !errors.IsNotFound(err) {
-			return err
+		for _, grant := range marked {
+			grant.SetFinalizers(slices.DeleteFunc(grant.GetFinalizers(), func(f string) bool {
+				return f == rgateway.RBACFinalizer
+			}))
+			if err := h.cli.Update(ctx, grant); err != nil && !errors.IsNotFound(err) {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
-// accessResourcesGone reports whether none of the component's gateway
+// gatewayResourcesGone reports whether none of the component's gateway
 // resources remain in the namespace — the point at which an access grant
 // there has nothing left to cover. A kind the cluster does not serve counts
 // as gone.
-func (h *Helper) accessResourcesGone(ctx context.Context, namespace string) (bool, error) {
+func (h *Helper) gatewayResourcesGone(ctx context.Context, namespace string) (bool, error) {
 	prefix := h.cfg.ResourcePrefix
 	for name, obj := range map[string]client.Object{
 		rgateway.GatewayName(prefix):        &gapi.Gateway{},
