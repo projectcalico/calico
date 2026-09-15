@@ -23,6 +23,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/archives"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -44,29 +45,51 @@ func Build(repoRoot, version string, variants []Variant, opts ...BuildOption) er
 }
 
 // Archive writes each image to its own tar under tarDir.
-func Archive(repoRoot, version string, variants []Variant, tarDir string, opts ...ArchiveOption) error {
-	s, err := newSettings(archiveStep, repoRoot, version, variants, opts)
+func Archive(repoRoot, version string, imageDirs []string, opts ...ArchiveOption) archives.Contributor {
+	return archiver{
+		RepoRoot: repoRoot,
+		Version:  version,
+		Variants: NarrowVariants(StandardVariants(PublishVariants), imageDirs),
+		Options:  opts,
+	}
+}
+
+var _ archives.Contributor = archiver{}
+
+type archiver struct {
+	RepoRoot string
+	Version  string
+	Variants []Variant
+	Options  []ArchiveOption
+}
+
+func (a archiver) Name() string {
+	return "images"
+}
+
+func (a archiver) Contribute(dir string) error {
+	s, err := newSettings(archiveStep, a.RepoRoot, a.Version, a.Variants, a.Options)
 	if err != nil {
 		return err
 	}
-	if tarDir == "" {
+	if dir == "" {
 		return s.Errorf("no directory to write images to")
 	}
+	dest := filepath.Join(dir, "images")
 	if len(s.Registries) == 0 {
 		return s.Errorf("no registry to archive images from")
 	}
-
 	units := s.units(s.env())
 	s.Logger().WithField("images", len(units)).Info("Archiving container images")
-	if err := os.MkdirAll(tarDir, os.ModePerm); err != nil {
-		return fmt.Errorf("creating images dir: %w", err)
+	if err := os.MkdirAll(dest, os.ModePerm); err != nil {
+		return fmt.Errorf("creating images dir %s: %w", dest, err)
 	}
 
 	// Images come from the first registry: an archive holds one copy, whichever
 	// registry it is pulled from.
 	reg := s.Registries[0]
 	if _, err := steps.Go(units, func(u unit) (unitDone, error) {
-		return unitDone{}, saveUnit(s, u, reg, tarDir)
+		return unitDone{}, saveUnit(s, u, reg, dest)
 	}); err != nil {
 		return err
 	}
@@ -74,14 +97,14 @@ func Archive(repoRoot, version string, variants []Variant, tarDir string, opts .
 	return nil
 }
 
-func saveUnit(s settings, u unit, reg, tarDir string) error {
+func saveUnit(s settings, u unit, reg, dest string) error {
 	names, err := s.imageNames(u)
 	if err != nil {
 		return s.Errorf("%w", err)
 	}
 	for _, name := range names {
 		image := fmt.Sprintf("%s/%s:%s", reg, name, s.Version)
-		if err := save(s, image, filepath.Join(tarDir, name+".tar")); err != nil {
+		if err := save(s, image, filepath.Join(dest, name+".tar")); err != nil {
 			return s.Errorf("%w", err)
 		}
 	}
