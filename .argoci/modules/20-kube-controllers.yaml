@@ -1,0 +1,26 @@
+# Runs against the calico image built once for the whole workflow.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: kube-controllers-ci
+    depends: [build-calico-image]
+    matrix:
+      - name: crd-v1
+      - name: v3
+        env:
+          - name: CALICO_API_GROUP
+            value: projectcalico.org/v3
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      .semaphore/load-cached-images calico
+      cd kube-controllers
+      make ci-no-prereqs
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}/kube-controllers"
+      artifact push job report --destination test-results || true

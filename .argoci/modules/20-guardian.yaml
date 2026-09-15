@@ -1,0 +1,23 @@
+# A single `make ci` in guardian/, gated on what that component is built from.
+#
+# The recipes shell out to a nested build container: unauthenticated pulls are
+# rate-limited, and it inherits only what is spliced in explicitly.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  services:
+    - docker
+
+steps:
+  - name: guardian-ci
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd guardian
+      make ci
+    epilogue: |
+      # Runs in the parent shell, so it inherits neither the `cd` above nor
+      # anything the commands exported.
+      cd "${CI_HOME}/${CI_GIT_DIR}/guardian"
+      artifact push job report --destination test-results || true

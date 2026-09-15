@@ -1,0 +1,38 @@
+# Third-party envoy-ratelimit: its own CI, plus a cross-architecture build of the
+# binaries it ships.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+
+steps:
+  # Builds an image, so this one needs the daemon and the nested build
+  # container it shells out to. Unauthenticated pulls are rate-limited, and that
+  # container inherits only what is spliced in explicitly.
+  - name: envoy-ratelimit-ci
+    services:
+      - docker
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd third_party/envoy-ratelimit
+      make ci
+
+  # Cross-compiles only, so it runs in the build image directly rather than
+  # paying for a daemon and a second pull.
+  - name: envoy-ratelimit-build
+    requests: {cpu: 1700m, memory: 1Gi}
+    image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
+    workspaceVolumes: none
+    matrix:
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    commands: |
+      cd third_party/envoy-ratelimit
+      # Emptying the wrappers runs each recipe here instead of in a nested
+      # container; the tools they call are already on PATH.
+      make build ARCH=$ARCH DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=

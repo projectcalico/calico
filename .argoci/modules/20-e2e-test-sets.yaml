@@ -1,0 +1,19 @@
+# Catches a test set that the suites reference but the config no longer defines,
+# or the reverse — a drift that otherwise only shows up when a nightly e2e run
+# fails hours later.
+#
+# Answering it means building the test binary, which splices its own `-e`
+# flags into a nested `docker run`.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  services:
+    - docker
+
+steps:
+  - name: e2e-test-set-drift
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make -C e2e check-test-set

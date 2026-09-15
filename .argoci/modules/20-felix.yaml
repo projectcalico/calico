@@ -1,0 +1,16 @@
+# Only the Windows binaries so far — Felix's other jobs wait on the image
+# producers.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: felix-build-windows
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd felix
+      make bin/calico-felix.exe fv/win-fv.exe

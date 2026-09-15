@@ -1,0 +1,28 @@
+# Third-party envoy-proxy: a repackaging of an upstream image, so there is no
+# per-architecture binary to build — only the image.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  services:
+    - docker
+
+steps:
+  - name: envoy-proxy-ci
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd third_party/envoy-proxy
+      make ci
+
+  # amd64 is already covered, since the step above builds the image. arm64 is
+  # the other architecture this component supports.
+  - name: envoy-proxy-image
+    matrix:
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd third_party/envoy-proxy
+      make image ARCH=$ARCH

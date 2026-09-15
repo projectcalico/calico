@@ -37,6 +37,14 @@ exit 0
 STUB
 done
 
+cat >"$stub_dir/artifact" <<'STUB'
+#!/usr/bin/env bash
+echo "artifact $*" >>"$STUB_LOG"
+[[ -n "${ARTIFACT_FAIL:-}" ]] && exit 1
+echo tarball >"${3:-out}"
+exit 0
+STUB
+
 cat >"$stub_dir/curl" <<'STUB'
 #!/usr/bin/env bash
 echo "curl $*" >>"$STUB_LOG"
@@ -126,6 +134,15 @@ rc=$?
 check "credentialed miss RC=0" [ "$rc" = 0 ]
 check "credentialed miss builds nothing" test "$(grep -c '^make ' "$stub_log")" = 0
 check "credentialed miss reports the miss" grep -q "No cached calico/calico image found" <<<"$out"
+
+# 4b. Under ArgoCI the producer has already run, so a miss must not be tolerated.
+: >"$stub_log"
+out=$(CI_ARTIFACT_STORAGE=gs://bucket/run ARTIFACT_FAIL=1 \
+  run "$repo_root/.semaphore/load-cached-images" calico 2>&1)
+rc=$?
+check "argoci miss fails" test "$rc" != 0
+check "argoci miss builds nothing" test "$(grep -c '^make ' "$stub_log")" = 0
+check "argoci miss names what was missing" grep -q "was not there" <<<"$out"
 
 # 5. Felix prereqs, credential-less: libbpf and the cgo/race binaries are built
 #    rather than downloaded, and the libbpf clone guard is dropped for it.

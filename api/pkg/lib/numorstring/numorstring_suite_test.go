@@ -23,6 +23,6 @@ import (
 func TestNumorstring(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../report/numorstring_suite.xml"
+	reporterConfig.JUnitReport = "../../../report/numorstring_suite.xml"
 	ginkgo.RunSpecs(t, "Numorstring Suite", suiteConfig, reporterConfig)
 }

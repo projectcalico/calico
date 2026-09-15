@@ -246,3 +246,30 @@ func TestKindTargetsMatchTheMakefile(t *testing.T) {
 		}
 	}
 }
+
+const moduleFixture = `
+version: condensed-module
+steps:
+  - name: lints-things
+    commands: |
+      make static-checks
+  - name: runs-the-suite
+    env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/gcp/bpf.yaml
+    commands: |
+      .argoci/scripts/body_standard.sh
+`
+
+// A module is mostly build and lint steps. Only the ones selecting specs are
+// lanes; the rest would otherwise default their way into the index.
+func TestParseArgoModuleKeepsOnlyLanesThatSelectSpecs(t *testing.T) {
+	RegisterTestingT(t)
+
+	lanes, err := parseArgoModule("20-e2e-gcp.yaml", []byte(moduleFixture))
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(lanes).To(HaveLen(1))
+	Expect(lanes[0].Name).To(Equal("runs-the-suite"))
+	Expect(lanes[0].Config).To(Equal("e2e/config/gcp/bpf.yaml"))
+}

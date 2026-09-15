@@ -1,0 +1,40 @@
+# The release tooling's own CI, plus a build whose binary the release promotion
+# consumes.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
+
+steps:
+  - name: release-ci
+    requests: {cpu: 3800m, memory: 2Gi}
+    # The image ships gotestsum under /go/bin, which the default emptyDir over
+    # /go hides — as `command not found`, minutes in.
+    workspaceVolumes: none
+    commands: |
+      # A fork carries no tags, and the version the tests parse is derived from
+      # them. Drop this once the build image fetches them at checkout.
+      git fetch --tags --quiet "https://github.com/${CI_GIT_REPO_SLUG}.git" || true
+      cd release
+      make ci DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
+    epilogue: |
+      # Runs in the parent shell, so it inherits neither the `cd` above nor
+      # anything the commands exported.
+      cd "${CI_HOME}/${CI_GIT_DIR}/release"
+      artifact push job report --destination test-results || true
+
+  # `bin/release` splices its own `-e` flags into the nested `docker run`, which
+  # emptying the wrappers would leave behind as a bare command.
+  - name: release-build
+    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2
+    services:
+      - docker
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd release
+      make build
+      # A promotion is a separate run with its own artifact namespace, so the
+      # commit is what ties the two together.
+      artifact cache store "release-${CI_GIT_SHA}" bin

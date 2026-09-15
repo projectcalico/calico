@@ -1,0 +1,18 @@
+# The upstream Gateway API conformance suite, run against Calico with Envoy
+# Gateway on a kind cluster.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: gateway-conformance
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make e2e-test-gateway-conformance
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job ./report/ --destination gateway-conformance-reports || true

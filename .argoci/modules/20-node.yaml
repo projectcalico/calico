@@ -1,0 +1,29 @@
+# Only the checks unique to node/ — its image builds belong to the producer
+# blocks and the multi-arch build.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+
+steps:
+  - name: node-static-checks
+    image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
+    # The image ships the linters under /go/bin, which the default emptyDir over
+    # /go hides — as `command not found`, minutes in.
+    workspaceVolumes: none
+    commands: |
+      make -C node static-checks DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
+
+  - name: node-ut
+    services:
+      - docker
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd node
+      make ut
+    epilogue: |
+      # Runs in the parent shell, so it inherits neither the `cd` above nor
+      # anything the commands exported.
+      cd "${CI_HOME}/${CI_GIT_DIR}/node"
+      artifact push job report --destination test-results || true

@@ -15,6 +15,8 @@
 package main
 
 import (
+	"os"
+	"regexp"
 	"testing"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -359,5 +361,165 @@ func TestCalculateMacroOwnDepsEmpty(t *testing.T) {
 	// Default inclusions/exclusions are still present.
 	if !d.Exclusions.Contains("/**/*.md") {
 		t.Error("expected default exclusions in empty own-spec deps")
+	}
+}
+
+// The glob shapes that carry their own answer: a wildcard or a trailing
+// separator says whether the pattern is a whole path or a prefix, so these need
+// nothing from the filesystem.
+func TestGlobToRegexp(t *testing.T) {
+	for _, tc := range []struct {
+		glob string
+		want string
+	}{
+		{"/node/**", `^node/`},
+		{"/hack/test/certs/", `^hack/test/certs/`},
+		{"/libcalico-go/lib/ipam/*.go", `^libcalico-go/lib/ipam/[^/]*\.go$`},
+		{"/**/*.md", `^(?:[^/]+/)*[^/]*\.md$`},
+		{"/**/.gitignore", `^(?:[^/]+/)*\.gitignore$`},
+		{"/**/README*", `^(?:[^/]+/)*README[^/]*$`},
+		{"/felix/**/*_test.go", `^felix/(?:[^/]+/)*[^/]*_test\.go$`},
+	} {
+		got, err := globToRegexp(tc.glob)
+		if err != nil {
+			t.Errorf("globToRegexp(%q): %v", tc.glob, err)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("globToRegexp(%q) = %q, want %q", tc.glob, got, tc.want)
+		}
+	}
+}
+
+// change_in reads a bare path as a file or a whole directory depending on which
+// it is, so the working tree is what decides.
+func TestGlobToRegexpBarePath(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if err := os.MkdirAll("felix/bpf-gpl", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("Makefile", nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		glob string
+		want string
+	}{
+		{"/felix/bpf-gpl", `^felix/bpf-gpl/`},
+		{"/Makefile", `^Makefile$`},
+		// Absent: both readings, so a path that is added later still triggers.
+		{"/gone/away", `^gone/away(?:/|$)`},
+	} {
+		got, err := globToRegexp(tc.glob)
+		if err != nil {
+			t.Errorf("globToRegexp(%q): %v", tc.glob, err)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("globToRegexp(%q) = %q, want %q", tc.glob, got, tc.want)
+		}
+	}
+}
+
+// What the patterns have to actually do, since a plausible-looking translation
+// can still match the wrong files.
+func TestGlobToRegexpMatching(t *testing.T) {
+	for _, tc := range []struct {
+		glob    string
+		matches []string
+		misses  []string
+	}{
+		{
+			glob:    "/node/**",
+			matches: []string{"node/main.go", "node/pkg/deep/file.go", "node/deps.txt"},
+			// A sibling with the same prefix is the failure an unanchored pattern
+			// would cause, and the reason every pattern here is anchored.
+			misses: []string{"nodeworker/main.go", "third_party/node/x.go", "node"},
+		},
+		{
+			glob:    "/libcalico-go/lib/ipam/*.go",
+			matches: []string{"libcalico-go/lib/ipam/ipam.go"},
+			// One star does not cross a separator: the dependency is that package,
+			// not the tree below it.
+			misses: []string{"libcalico-go/lib/ipam/sub/x.go", "libcalico-go/lib/ipam/README"},
+		},
+		{
+			glob:    "/**/*.md",
+			matches: []string{"README.md", "a/b/c.md"},
+			misses:  []string{"a/b/c.go", "notmd"},
+		},
+		{
+			glob:    "/felix/**/*_test.go",
+			matches: []string{"felix/x_test.go", "felix/fv/deep/x_test.go"},
+			misses:  []string{"felixy/x_test.go", "felix/x.go"},
+		},
+		{
+			glob:    "/metadata.mk",
+			matches: []string{"metadata.mk"},
+			misses:  []string{"sub/metadata.mk", "metadata.mk.bak"},
+		},
+	} {
+		pattern, err := globToRegexp(tc.glob)
+		if err != nil {
+			t.Errorf("globToRegexp(%q): %v", tc.glob, err)
+			continue
+		}
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			t.Errorf("globToRegexp(%q) produced uncompilable %q: %v", tc.glob, pattern, err)
+			continue
+		}
+		for _, path := range tc.matches {
+			if !re.MatchString(path) {
+				t.Errorf("%q (from %q) should match %q", pattern, tc.glob, path)
+			}
+		}
+		for _, path := range tc.misses {
+			if re.MatchString(path) {
+				t.Errorf("%q (from %q) should not match %q", pattern, tc.glob, path)
+			}
+		}
+	}
+}
+
+// A glob this translator cannot express must fail the build rather than become a
+// pattern that matches nothing.
+func TestGlobToRegexpRejects(t *testing.T) {
+	for _, glob := range []string{
+		"",
+		"/",
+		"node/**",     // not repo-rooted
+		"/felix/f?le", // unsupported metacharacter
+		"/felix/[ab]",
+		"/felix/**bpf",
+	} {
+		if got, err := globToRegexp(glob); err == nil {
+			t.Errorf("globToRegexp(%q) = %q, want an error", glob, got)
+		}
+	}
+}
+
+// Regeneration is diffed against the committed file, so the same inputs have to
+// render byte-identically however the set happens to iterate.
+func TestGlobsToRegexpsSortedAndDeduped(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if err := os.Mkdir("felix", 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// "/felix", "/felix/" and "/felix/**" are three spellings of one prefix match.
+	got, err := globsToRegexps(set.From("/node/**", "/felix", "/felix/", "/felix/**", "/api/**"))
+	if err != nil {
+		t.Fatalf("globsToRegexps: %v", err)
+	}
+	want := []string{`^api/`, `^felix/`, `^node/`}
+	if len(got) != len(want) {
+		t.Fatalf("globsToRegexps = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("globsToRegexps = %v, want %v", got, want)
+		}
 	}
 }
