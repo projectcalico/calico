@@ -169,7 +169,7 @@ func protoStr(proto uint8) string {
 		}
 	}
 
-	return "UNKNOWN"
+	return fmt.Sprintf("Proto-%d", proto)
 }
 
 // protoNames holds one canonical name per protocol; aliases live in protoFromString.
