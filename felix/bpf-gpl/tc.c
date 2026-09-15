@@ -1633,6 +1633,11 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	if (CALI_F_FROM_WEP && state->ip_proto == IPPROTO_TCP && EGRESS_CONN_LIMIT_CONFIGURED) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_CONNLIMIT_EGRESS;
 	}
+	/* Not gated on INGRESS_CONN_LIMIT_CONFIGURED: a limit added later must
+	 * still find the connection marked. */
+	if (CALI_F_TO_WEP && (state->flags & CALI_ST_SKIP_POLICY)) {
+		ct_ctx_nat->flags |= CALI_CT_FLAG_HOST_ORIGIN;
+	}
 	if (CALI_F_TO_WEP) {
 		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN)) {
 			/* If the packet wasn't seen, must come from host. There is no
