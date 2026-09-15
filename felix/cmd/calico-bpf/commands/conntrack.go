@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -162,18 +163,38 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 }
 
 func protoStr(proto uint8) string {
-	switch proto {
-	case 6:
-		return "TCP"
-	case 17:
-		return "UDP"
-	case 1:
-		return "ICMP"
-	case 58:
-		return "ICMP6"
+	for name, num := range protoNames {
+		if num == proto {
+			return strings.ToUpper(name)
+		}
 	}
 
 	return "UNKNOWN"
+}
+
+// protoNames holds one canonical name per protocol; aliases live in protoFromString.
+var protoNames = map[string]uint8{
+	"icmp":  conntrack.ProtoICMP,
+	"tcp":   conntrack.ProtoTCP,
+	"udp":   conntrack.ProtoUDP,
+	"icmp6": conntrack.ProtoICMP6,
+	"sctp":  conntrack.ProtoSCTP,
+}
+
+// protoFromString resolves a protocol name or number. The dataplane tracks
+// every IP protocol, so any number is accepted.
+func protoFromString(s string) (uint8, error) {
+	s = strings.ToLower(s)
+	if s == "icmpv6" {
+		s = "icmp6"
+	}
+	if proto, ok := protoNames[s]; ok {
+		return proto, nil
+	}
+	if proto, err := strconv.ParseUint(s, 10, 8); err == nil {
+		return uint8(proto), nil
+	}
+	return 0, fmt.Errorf("unknown protocol %s", s)
 }
 
 func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.ValueInterface) {
@@ -510,9 +531,10 @@ type conntrackRemoveCmd struct {
 	IP1   string `docopt:"<ip1>"`
 	IP2   string `docopt:"<ip2>"`
 
-	proto uint8
-	ip1   net.IP
-	ip2   net.IP
+	proto    uint8
+	anyProto bool
+	ip1      net.IP
+	ip2      net.IP
 
 	conntrackOpts
 }
@@ -521,7 +543,10 @@ func newConntrackRemoveCmd() *cobra.Command {
 	cmd := &conntrackRemoveCmd{
 		Command: &cobra.Command{
 			Use:   "remove <proto> <ip1> <ip2>",
-			Short: "Removes connection tracking",
+			Short: "Removes connection tracking entries between two addresses",
+			Long: "Removes the connection tracking entries between <ip1> and <ip2> in either direction.\n" +
+				"<proto> is a protocol name (tcp, udp, icmp, icmp6, sctp), a decimal protocol\n" +
+				"number, or \"any\" to remove the entries of every protocol.",
 		},
 	}
 
@@ -543,13 +568,10 @@ func (cmd *conntrackRemoveCmd) Args(c *cobra.Command, args []string) error {
 		return err
 	}
 
-	switch proto := strings.ToLower(args[0]); proto {
-	case "udp":
-		cmd.proto = 17
-	case "tcp":
-		cmd.proto = 6
-	default:
-		return fmt.Errorf("unknown protocol %s", proto)
+	if strings.ToLower(args[0]) == "any" {
+		cmd.anyProto = true
+	} else if cmd.proto, err = protoFromString(args[0]); err != nil {
+		return err
 	}
 
 	cmd.ip1 = net.ParseIP(cmd.IP1)
@@ -579,16 +601,17 @@ func (cmd *conntrackRemoveCmd) Run(c *cobra.Command, _ []string) {
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Error("Failed to access ConntrackMap")
 	}
+	keyFromBytes := conntrack.KeyFromBytes
+	if cmd.ipv6 {
+		keyFromBytes = conntrack.KeyV6FromBytes
+	}
+
 	err := ctMap.Iter(func(k, v []byte) maps.IteratorAction {
-		var ctKey conntrack.Key
-		if len(k) != len(ctKey) {
-			log.Panic("Key has unexpected length")
-		}
-		copy(ctKey[:], k[:])
+		ctKey := keyFromBytes(k)
 
 		log.Infof("Examining conntrack key: %v", ctKey)
 
-		if ctKey.Proto() != cmd.proto {
+		if !cmd.anyProto && ctKey.Proto() != cmd.proto {
 			return maps.IterNone
 		}
 
