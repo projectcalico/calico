@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -190,6 +190,49 @@ type ReleaseOptions struct {
 	// highly recommended that both values be set on release requests.
 	Handle         string
 	SequenceNumber *uint64
+}
+
+// MoveOptions specifies a transfer of an allocated address between handles. See
+// Interface.MoveIPToHandle.
+type MoveOptions struct {
+	// ToHandle is the handle that will own the address after the move.
+	ToHandle string
+
+	// Attrs replaces the allocation's attributes as part of the move. A move onto the
+	// handle that already owns the address returns early and leaves the attributes as
+	// they are.
+	Attrs map[string]string
+
+	// ExpectedOwner is required: the move only proceeds if the allocation's current owner
+	// attributes identify this workload.
+	ExpectedOwner *AttributeOwner
+
+	// If provided, the move only proceeds if the allocation currently sits on this handle.
+	ExpectedHandle string
+}
+
+// AttributeOwner is the workload an IP allocation belongs to.
+type AttributeOwner struct {
+	// Namespace is the Kubernetes namespace of the pod.
+	Namespace string
+	// Name is the name of the pod.
+	Name string
+}
+
+// Matches reports whether the given allocation attributes name this owner.
+func (o *AttributeOwner) Matches(attrs map[string]string) bool {
+	if o == nil {
+		return false
+	}
+
+	// The empty owner only matches an allocation carrying no attributes at all.
+	if o.Namespace == "" && o.Name == "" {
+		return len(attrs) == 0
+	}
+
+	pod, podExists := attrs[AttributePod]
+	namespace, nsExists := attrs[AttributeNamespace]
+	return podExists && nsExists && pod == o.Name && namespace == o.Namespace
 }
 
 type AffinityConfig struct {
