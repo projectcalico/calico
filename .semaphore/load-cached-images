@@ -28,12 +28,10 @@ if [ ${#REQUESTED[@]} -eq 0 ]; then
     REQUESTED=(calico node whisker)
 fi
 
-# ArgoCI keys storage on the run, so producer and consumer share a namespace
-# without one being named here.
 fetch_tarball() {
     local name=$1
     if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
-        ( cd /tmp && artifact pull workflow "${name}" ) 2>/dev/null
+        ( cd /tmp && artifact pull workflow "${name}" )
         return
     fi
     "${REPO_ROOT}/.semaphore/s3-cmd" cp "${S3_WORKFLOW_DIR}/${name}" "/tmp/${name}" 2>/dev/null
@@ -48,6 +46,11 @@ load_image() {
     local marker
 
     if ! fetch_tarball "${s3_path}"; then
+        # The producer already ran, so this is a broken contract, not a cold cache.
+        if [ -n "${CI_ARTIFACT_STORAGE:-}" ] && was_requested "$component"; then
+            echo "Expected ${name} from ${CI_ARTIFACT_STORAGE}/${s3_path} and it was not there." >&2
+            return 1
+        fi
         if have_credentials || ! was_requested "$component"; then
             echo "No cached ${name} image found; leaving Make to build it if a target needs it."
             return

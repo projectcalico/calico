@@ -186,5 +186,5 @@ steps:
       # Built for their GOCACHE fingerprints, which the FVs downstream reuse.
       make -C cmd/calico build-cgo build-race
       docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
-      zstd -3 --rm /tmp/calico-image.tar
+      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/calico-image.tar
       artifact push workflow /tmp/calico-image.tar.zst

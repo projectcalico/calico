@@ -368,6 +368,8 @@ if ! ${TEMPEST:-false}; then
 else
     source ../calico/devstack/devstackgaterc
     cd /opt/stack/tempest
+    tox -eall --notest
+    .tox/tempest/bin/pip install setuptools
     tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY
 fi
 EOF
