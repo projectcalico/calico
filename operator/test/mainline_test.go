@@ -114,7 +114,7 @@ var _ = Describe("Mainline component function tests", func() {
 
 		// Clean up Calico data that might be left behind.
 		Eventually(func() error {
-			cs := kubernetes.NewForConfigOrDie(mgr.GetConfig())
+			cs := kubernetes.NewForConfigOrDie(AdminConfig())
 			nodes, err := cs.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 			if err != nil {
 				return err
@@ -283,7 +283,11 @@ func setupManagerNoControllers() (client.Client, *kubernetes.Clientset, manager.
 	cfg, err := config.GetConfig()
 	Expect(err).NotTo(HaveOccurred())
 
-	clientset, err := kubernetes.NewForConfig(cfg)
+	// The operator runs under the RBAC the chart grants it, so a missing rule fails
+	// here rather than in a cluster. The suite keeps admin to set up and tear down.
+	operatorCfg := OperatorConfig(cfg)
+
+	clientset, err := kubernetes.NewForConfig(operatorCfg)
 	Expect(err).NotTo(HaveOccurred())
 
 	v3CRDs, err := apis.UseV3CRDS(cfg)
@@ -296,7 +300,7 @@ func setupManagerNoControllers() (client.Client, *kubernetes.Clientset, manager.
 
 	// Create a manager to use in the tests, providing the scheme we created.
 	skipNameValidation := true
-	mgr, err := manager.New(cfg, manager.Options{
+	mgr, err := manager.New(operatorCfg, manager.Options{
 		Scheme: s,
 		Metrics: server.Options{
 			BindAddress: "0",
@@ -315,7 +319,10 @@ func setupManagerNoControllers() (client.Client, *kubernetes.Clientset, manager.
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	return mgr.GetClient(), clientset, mgr
+	adminClient, err := client.New(cfg, client.Options{Scheme: s})
+	Expect(err).NotTo(HaveOccurred())
+
+	return adminClient, clientset, mgr
 }
 
 func setupManager(manageCRDs bool, variant operator.ProductVariant) (client.Client, context.Context, context.CancelFunc, manager.Manager) {
