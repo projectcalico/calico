@@ -185,6 +185,7 @@ func (m *Map) IsMapInternal() bool {
 }
 
 const (
+	GlobalsIfaceEncaps                   uint32 = 12345
 	GlobalsRPFOptionEnabled              uint32 = 16
 	GlobalsRPFOptionStrict               uint32 = 32
 	GlobalsNoDSRCidrs                    uint32 = 12345
