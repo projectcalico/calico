@@ -50,11 +50,13 @@ const (
 	// share a namespace never delete it out from under each other.
 	GatewayNamespaceLabel = "operator.tigera.io/gateway-namespace"
 
-	// RBACFinalizer holds a gateway access Role and RoleBinding until the
-	// gateway resources they authorize deleting are gone, so teardown cannot
-	// strip the operator's own write grant first and orphan them. The
-	// uigateway helper removes it once those resources no longer exist.
-	RBACFinalizer = "operator.tigera.io/gateway-rbac-finalizer"
+	// RBACFinalizer keeps the RBAC needed by the operator around until the
+	// gateway resources they authorize are gone. This prevents the operator
+	// from removing its own permissions to the resources it manages.
+	//
+	// The uigateway helper removes this finalizer once the gateway resources
+	// authorized by the Role + Binding are fully gone.
+	RBACFinalizer = "operator.tigera.io/gateway-rbac"
 )
 
 // Configuration holds everything the shared gateway component needs to render
@@ -174,9 +176,9 @@ func BackendName(prefix string) string { return prefix + "-backend" }
 // ReferenceGrantName is the ReferenceGrant object name for a component's resource prefix.
 func ReferenceGrantName(prefix string) string { return prefix + "-allow-gateway" }
 
-// ListenerName is the Gateway's HTTPS listener name for a component's resource
+// listenerName is the Gateway's HTTPS listener name for a component's resource
 // prefix. The HTTPRoute's parentRef sectionName must match it to attach.
-func ListenerName(prefix string) string { return prefix + "-https" }
+func listenerName(prefix string) string { return prefix + "-https" }
 
 // gatewayAccess grants the operator the write permissions needed in the gateway namespace; the
 // cluster-wide ClusterRole keeps the reads.
@@ -248,7 +250,7 @@ func (c *gatewayComponent) tlsSecret() *corev1.Secret {
 }
 
 func (c *gatewayComponent) gateway() *gapi.Gateway {
-	listenerName := gapi.SectionName(ListenerName(c.cfg.ResourcePrefix))
+	sectionName := gapi.SectionName(listenerName(c.cfg.ResourcePrefix))
 	hostname := gapi.Hostname(c.cfg.Hostname)
 	tlsSecretName := c.cfg.TLSKeyPair.GetName()
 
@@ -265,7 +267,7 @@ func (c *gatewayComponent) gateway() *gapi.Gateway {
 			GatewayClassName: gapi.ObjectName(c.cfg.GatewayClassName),
 			Listeners: []gapi.Listener{
 				{
-					Name:     listenerName,
+					Name:     sectionName,
 					Protocol: gapi.HTTPSProtocolType,
 					Port:     gapi.PortNumber(443),
 					Hostname: &hostname,
@@ -290,7 +292,7 @@ func (c *gatewayComponent) gateway() *gapi.Gateway {
 
 func (c *gatewayComponent) httpRoute() *gapi.HTTPRoute {
 	gatewayName := gapi.ObjectName(GatewayName(c.cfg.ResourcePrefix))
-	sectionName := gapi.SectionName(ListenerName(c.cfg.ResourcePrefix))
+	sectionName := gapi.SectionName(listenerName(c.cfg.ResourcePrefix))
 	backendName := gapi.ObjectName(BackendName(c.cfg.ResourcePrefix))
 	backendNS := gapi.Namespace(c.cfg.BackendNamespace)
 	group := gapi.Group(EnvoyGatewayGroup)

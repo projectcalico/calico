@@ -117,7 +117,7 @@ func (e Extensions) GatewayAPI() GatewayAPIExtension {
 
 func (e Extensions) UIGateway() UIGatewayExtension {
 	if e.set.UIGateway == nil {
-		return noopUIGateway{}
+		return NoopUIGateway{}
 	}
 	return e.set.UIGateway
 }

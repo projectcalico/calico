@@ -179,10 +179,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 
 		// Gateway objects are garbage-collected with the CR, but a namespace the
 		// operator created for them has no owner reference and must be torn down here.
-		gwHelper := uigateway.NewHelper(r.cli, r.gwExt, uigateway.Config{
+		gwHelper := uigateway.NewHelper(r.cli, uigateway.Config{
 			ResourcePrefix:   whisker.GatewayResourcePrefix,
 			TLSSecretName:    whisker.GatewayTLSSecretName,
 			BackendNamespace: whisker.WhiskerNamespace,
+			Extension:        r.gwExt,
 		})
 		gwComponents, err := gwHelper.Teardown(ctx)
 		if err != nil {
@@ -315,7 +316,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		cfg.ClusterID = clusterInfo.Spec.ClusterGUID
 	}
 
-	gwHelper := uigateway.NewHelper(r.cli, r.gwExt, uigateway.Config{
+	gwHelper := uigateway.NewHelper(r.cli, uigateway.Config{
 		ResourcePrefix:               whisker.GatewayResourcePrefix,
 		TLSSecretName:                whisker.GatewayTLSSecretName,
 		BackendNamespace:             whisker.WhiskerNamespace,
@@ -327,6 +328,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		RouteRequestTimeout: ptr.To("0s"),
 		Provider:            r.provider,
 		Azure:               installationSpec.Azure,
+		Extension:           r.gwExt,
 	})
 	var gatewayComponents []render.Component
 	var gatewayTLSKeyPair certificatemanagement.KeyPairInterface

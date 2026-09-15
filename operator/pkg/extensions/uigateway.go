@@ -27,7 +27,7 @@ type UIGatewayExtension interface {
 	ProxyObjects(resourcePrefix, namespace string) []client.Object
 }
 
-// noopUIGateway runs the core operator's behavior unchanged.
-type noopUIGateway struct{}
+// NoopUIGateway runs the core operator's behavior unchanged.
+type NoopUIGateway struct{}
 
-func (noopUIGateway) ProxyObjects(string, string) []client.Object { return nil }
+func (NoopUIGateway) ProxyObjects(string, string) []client.Object { return nil }
