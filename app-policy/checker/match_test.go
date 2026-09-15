@@ -1108,6 +1108,161 @@ func TestMatchNets(t *testing.T) {
 	}
 }
 
+// TestMatchNamedPorts covers a rule that references a named port. Felix resolves the
+// name against the endpoints that declare it and sends an IP+port set whose members are
+// "<IP>,<protocol>:<port>", so the checker has to look that key up rather than the bare
+// port number. See https://github.com/projectcalico/calico/issues/13174.
+func TestMatchNamedPorts(t *testing.T) {
+	// A workload endpoint at 10.0.0.1 declaring a named port "http" on tcp/8080, as Felix
+	// resolves it into an IP+port set for a rule that says ports: [http].
+	store := policystore.NewPolicyStore()
+	httpSet := policystore.NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
+	httpSet.AddString("10.0.0.1,tcp:8080")
+	store.IPSetByID["http"] = httpSet
+	// The same endpoint declaring a named port "diameter" on sctp/3868.
+	diameterSet := policystore.NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
+	diameterSet.AddString("10.0.0.1,sctp:3868")
+	store.IPSetByID["diameter"] = diameterSet
+
+	testCases := []struct {
+		title    string
+		rule     *proto.Rule
+		srcIP    string
+		srcPort  int
+		dstIP    string
+		dstPort  int
+		protocol int
+		match    bool
+	}{
+		{
+			title:    "dst named port matches the endpoint that declares it",
+			rule:     &proto.Rule{DstNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.1",
+			dstPort:  8080,
+			protocol: 6,
+			match:    true,
+		},
+		{
+			title:    "dst named port does not match another endpoint on the same port",
+			rule:     &proto.Rule{DstNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.2",
+			dstPort:  8080,
+			protocol: 6,
+			match:    false,
+		},
+		{
+			title:    "dst named port does not match a different port on the endpoint",
+			rule:     &proto.Rule{DstNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.1",
+			dstPort:  9090,
+			protocol: 6,
+			match:    false,
+		},
+		{
+			title:    "dst named port does not match a different protocol",
+			rule:     &proto.Rule{DstNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.1",
+			dstPort:  8080,
+			protocol: 17,
+			match:    false,
+		},
+		{
+			title:    "negated dst named port excludes the endpoint that declares it",
+			rule:     &proto.Rule{NotDstNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.1",
+			dstPort:  8080,
+			protocol: 6,
+			match:    false,
+		},
+		{
+			title:    "negated dst named port admits another endpoint on the same port",
+			rule:     &proto.Rule{NotDstNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.2",
+			dstPort:  8080,
+			protocol: 6,
+			match:    true,
+		},
+		{
+			title:    "src named port matches on the source leg",
+			rule:     &proto.Rule{SrcNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.1",
+			srcPort:  8080,
+			dstIP:    "10.0.0.9",
+			dstPort:  33333,
+			protocol: 6,
+			match:    true,
+		},
+		{
+			title:    "src named port does not match the destination leg",
+			rule:     &proto.Rule{SrcNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.1",
+			dstPort:  8080,
+			protocol: 6,
+			match:    false,
+		},
+		{
+			title:    "numeric port is ORed with the named port set",
+			rule:     &proto.Rule{DstPorts: []*proto.PortRange{{First: 9090, Last: 9090}}, DstNamedPortIpSetIds: []string{"http"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.2",
+			dstPort:  9090,
+			protocol: 6,
+			match:    true,
+		},
+		{
+			title:    "dst named port on sctp matches an sctp flow",
+			rule:     &proto.Rule{DstNamedPortIpSetIds: []string{"diameter"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.1",
+			dstPort:  3868,
+			protocol: 132,
+			match:    true,
+		},
+		{
+			title:    "dst named port on sctp does not match tcp to the same port",
+			rule:     &proto.Rule{DstNamedPortIpSetIds: []string{"diameter"}},
+			srcIP:    "10.0.0.9",
+			srcPort:  33333,
+			dstIP:    "10.0.0.1",
+			dstPort:  3868,
+			protocol: 6,
+			match:    false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			RegisterTestingT(t)
+
+			fl := &mocks.Flow{}
+			fl.On("GetSourceIP").Return(libnet.ParseIP(tc.srcIP).IP)
+			fl.On("GetDestIP").Return(libnet.ParseIP(tc.dstIP).IP)
+			fl.On("GetSourcePort").Return(tc.srcPort)
+			fl.On("GetDestPort").Return(tc.dstPort)
+			fl.On("GetProtocol").Return(tc.protocol)
+			req := &requestCache{Flow: fl, store: store}
+
+			Expect(matchSrcPort(tc.rule, req) && matchDstPort(tc.rule, req)).To(Equal(tc.match))
+		})
+	}
+}
+
 func TestMatchDstIPPortSetIds(t *testing.T) {
 	RegisterTestingT(t)
 
@@ -1199,6 +1354,26 @@ func TestMatchDstIPPortSetIds(t *testing.T) {
 			proto:    6,
 			expected: false,
 		},
+		{
+			title: "match IP in sctp set",
+			rule: &proto.Rule{
+				DstIpPortSetIds: []string{"setSCTP"},
+			},
+			destIP:   "192.168.1.8",
+			destPort: 3868,
+			proto:    132,
+			expected: true,
+		},
+		{
+			title: "no match IP in sctp set with tcp",
+			rule: &proto.Rule{
+				DstIpPortSetIds: []string{"setSCTP"},
+			},
+			destIP:   "192.168.1.8",
+			destPort: 3868,
+			proto:    6,
+			expected: false,
+		},
 	}
 
 	store := policystore.NewPolicyStore()
@@ -1214,7 +1389,10 @@ func TestMatchDstIPPortSetIds(t *testing.T) {
 	store.IPSetByID["set80"] = set80
 	store.IPSetByID["set443"] = set443
 	store.IPSetByID["setMulti"] = setMulti
+	setSCTP := policystore.NewIPSet(proto.IPSetUpdate_IP)
+	setSCTP.AddString("192.168.1.8,sctp:3868")
 	store.IPSetByID["setProto"] = setProto
+	store.IPSetByID["setSCTP"] = setSCTP
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
@@ -1309,14 +1487,16 @@ func TestMatchPort(t *testing.T) {
 	}
 
 	store := policystore.NewPolicyStore()
-	namedPortSet := policystore.NewIPSet(proto.IPSetUpdate_IP)
-	namedPortSet.AddString("8080")
+	namedPortSet := policystore.NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
+	namedPortSet.AddString("10.0.0.1,tcp:8080")
 	store.IPSetByID[namedPortSetID] = namedPortSet
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
 			fl := &mocks.Flow{}
 			fl.On("GetDestPort").Return(tc.port)
+			fl.On("GetDestIP").Return(libnet.ParseIP("10.0.0.1").IP)
+			fl.On("GetProtocol").Return(6)
 			req := &requestCache{Flow: fl, store: store}
 			Expect(matchDstPort(tc.rule, req)).To(Equal(tc.expected), "Test case: %s", tc.title)
 
@@ -1330,6 +1510,8 @@ func TestMatchPort(t *testing.T) {
 			}
 			srcFl := &mocks.Flow{}
 			srcFl.On("GetSourcePort").Return(tc.port)
+			srcFl.On("GetSourceIP").Return(libnet.ParseIP("10.0.0.1").IP)
+			srcFl.On("GetProtocol").Return(6)
 			srcReq := &requestCache{Flow: srcFl, store: store}
 			Expect(matchSrcPort(srcRule, srcReq)).To(Equal(tc.expected), "Test case (source): %s", tc.title)
 		})

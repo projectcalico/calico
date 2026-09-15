@@ -49,6 +49,7 @@ type requestCache struct {
 	// allocation when many policies apply to an endpoint.
 	srcIPStr       string
 	dstIPStr       string
+	srcIPProtoPort string
 	dstIPProtoPort string
 
 	// Memoized identity, indexed by flowSide. Resolving it parses a SPIFFE ID and copies
@@ -157,6 +158,15 @@ func (r *requestCache) getDstIPStr() string {
 	return r.dstIPStr
 }
 
+// getSrcIPProtoPortStr returns the source "<IP>,<protocol>:<port>" key used for
+// IP+port set matching, memoized across the request.
+func (r *requestCache) getSrcIPProtoPortStr() string {
+	if r.srcIPProtoPort == "" {
+		r.srcIPProtoPort = ipProtoPortKey(r.getSrcIPStr(), r.GetProtocol(), r.GetSourcePort())
+	}
+	return r.srcIPProtoPort
+}
+
 // GetProtocol shadows the embedded Flow's method to memoize the protocol across the
 // request. Callers need not know: it returns what the Flow would have returned.
 func (r *requestCache) GetProtocol() int {
@@ -177,10 +187,16 @@ func (r *requestCache) GetProtocol() int {
 // IP+port set matching, memoized across the request.
 func (r *requestCache) getDstIPProtoPortStr() string {
 	if r.dstIPProtoPort == "" {
-		protocolStr := protocolMapL4[r.GetProtocol()]
-		r.dstIPProtoPort = fmt.Sprintf("%s,%s:%d", r.getDstIPStr(), protocolStr, r.GetDestPort())
+		r.dstIPProtoPort = ipProtoPortKey(r.getDstIPStr(), r.GetProtocol(), r.GetDestPort())
 	}
 	return r.dstIPProtoPort
+}
+
+// ipProtoPortKey builds the member format Felix uses for IP+port IP sets, e.g.
+// "10.0.0.1,tcp:8080". An unnamed protocol leaves that field empty, which no
+// member can equal, so the lookup just misses.
+func ipProtoPortKey(ipStr string, protocol, port int) string {
+	return fmt.Sprintf("%s,%s:%d", ipStr, protocolMapL4[protocol], port)
 }
 
 // getIPSet returns the IPSet with the given ID.
