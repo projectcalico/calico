@@ -214,12 +214,7 @@ func (h *Helper) Namespaces(ctx context.Context) ([]string, error) {
 
 // StaleComponents returns deletion components for every labeled Gateway
 // outside the desired namespace — leftovers of a gatewayNamespace change.
-// It also clears access finalizers whose resources are gone, so a stale
-// namespace's grant finishes deleting.
 func (h *Helper) StaleComponents(ctx context.Context, desiredNS string) ([]render.Component, error) {
-	if err := h.clearRBACFinalizers(ctx); err != nil {
-		return nil, err
-	}
 	strays, err := h.Namespaces(ctx)
 	if err != nil {
 		return nil, err
@@ -248,14 +243,9 @@ func (h *Helper) StaleComponents(ctx context.Context, desiredNS string) ([]rende
 
 // Teardown returns deletion components for every labeled Gateway namespace,
 // plus the backend namespace, which holds the Backend and ReferenceGrant.
-// It first clears access finalizers whose resources are gone — a grant can
-// outlive its Gateway, so this runs even when no labeled Gateway remains.
-// After that, no labeled Gateway means nothing to do: the Gateway is
-// rendered first, so nothing else can exist without one.
+// No labeled Gateway means nothing to do: the Gateway is rendered first, so
+// nothing else can exist without one.
 func (h *Helper) Teardown(ctx context.Context) ([]render.Component, error) {
-	if err := h.clearRBACFinalizers(ctx); err != nil {
-		return nil, err
-	}
 	namespaces, err := h.Namespaces(ctx)
 	if err != nil {
 		return nil, err
@@ -284,13 +274,14 @@ func (h *Helper) Teardown(ctx context.Context) ([]render.Component, error) {
 	return components, nil
 }
 
-// clearRBACFinalizers removes our finalizer from every RBAC resource we own
+// ClearRBACFinalizers removes our finalizer from every RBAC resource we own
 // that is marked for deletion and is no longer needed, i.e. once the gateway
-// resources it covers are gone.
+// resources it covers are gone. The reconciler calls it once per reconcile,
+// before rendering, so it runs regardless of whether the gateway is enabled.
 //
 // The finalizer keeps the operator's write grant in place, so teardown does not
 // depend on delete order.
-func (h *Helper) clearRBACFinalizers(ctx context.Context) error {
+func (h *Helper) ClearRBACFinalizers(ctx context.Context) error {
 	byLabel := client.MatchingLabels{rgateway.GatewayLabel: h.cfg.ResourcePrefix}
 	roles := &rbacv1.RoleList{}
 	if err := h.cli.List(ctx, roles, byLabel); err != nil {
