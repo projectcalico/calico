@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,6 +65,16 @@ type responseType interface {
 
 // NewJSONListHandler creates a handler that responds strictly with a json list.
 func NewJSONListHandler[RequestParams any, ResponseBody any](f func(apicontext.Context, RequestParams) ListResponse[ResponseBody]) handler {
+	return genericHandler[RequestParams, ResponseBody]{
+		f: func(ctx apicontext.Context, params RequestParams) responseType {
+			return f(ctx, params)
+		},
+	}
+}
+
+// NewJSONObjectHandler creates a handler that responds with a single json
+// object, for a route addressing one resource rather than a list.
+func NewJSONObjectHandler[RequestParams any, ResponseBody any](f func(apicontext.Context, RequestParams) ObjectResponse[ResponseBody]) handler {
 	return genericHandler[RequestParams, ResponseBody]{
 		f: func(ctx apicontext.Context, params RequestParams) responseType {
 			return f(ctx, params)

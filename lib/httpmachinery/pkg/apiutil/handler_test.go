@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -207,6 +207,12 @@ func TestResponseContentType(t *testing.T) {
 	listErr := apiutil.NewJSONListHandler(func(ctx apicontext.Context, params Request) apiutil.ListResponse[Response] {
 		return apiutil.NewListResponse[Response]().SetStatus(http.StatusInternalServerError).SetError("internal server error")
 	})
+	object := apiutil.NewJSONObjectHandler(func(ctx apicontext.Context, params Request) apiutil.ObjectResponse[Response] {
+		return apiutil.NewObjectResponse[Response]().SetStatus(http.StatusOK).SetObject(Response{RespField: "foo"})
+	})
+	objectErr := apiutil.NewJSONObjectHandler(func(ctx apicontext.Context, params Request) apiutil.ObjectResponse[Response] {
+		return apiutil.NewObjectResponse[Response]().SetStatus(http.StatusNotFound).SetError("not found")
+	})
 
 	for _, tc := range []struct {
 		name        string
@@ -217,6 +223,8 @@ func TestResponseContentType(t *testing.T) {
 		{"json list", list.ServeHTTP, "reqField=value", header.ApplicationJSON},
 		{"json error", streamErr.ServeHTTP, "reqField=value", header.ApplicationJSON},
 		{"json list handler error", listErr.ServeHTTP, "reqField=value", header.ApplicationJSON},
+		{"json object", object.ServeHTTP, "reqField=value", header.ApplicationJSON},
+		{"json object handler error", objectErr.ServeHTTP, "reqField=value", header.ApplicationJSON},
 		// A request the handler never sees, answered by the decoder.
 		{"request decoding error", list.ServeHTTP, "page=notanumber", header.ApplicationJSON},
 		{"event stream", stream.ServeHTTP, "reqField=value", header.TextEventStream},
@@ -232,4 +240,59 @@ func TestResponseContentType(t *testing.T) {
 				"the content type must be set before the status is written")
 		})
 	}
+}
+
+func TestJSONObjectResponse(t *testing.T) {
+	setupTest(t)
+
+	type Request struct {
+		ReqField string `urlQuery:"reqField"`
+	}
+	type Response struct {
+		RespField string `json:"rspField"`
+	}
+
+	hdlr := apiutil.NewJSONObjectHandler(func(ctx apicontext.Context, params Request) apiutil.ObjectResponse[Response] {
+		Expect(params.ReqField).To(Equal("value"))
+		return apiutil.NewObjectResponse[Response]().
+			SetStatus(http.StatusOK).
+			SetObject(Response{RespField: "foo"})
+	})
+
+	w := httptest.NewRecorder()
+
+	r, err := http.NewRequest(http.MethodGet, "foobar?reqField=value", nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	hdlr.ServeHTTP(apiutil.NewNOOPRouterConfig(), w, r)
+
+	Expect(w.Code).To(Equal(http.StatusOK))
+	// The object is written at the top level, not wrapped in a list envelope.
+	Expect(testutil.MustUnmarshal[Response](t, w.Body.Bytes())).To(Equal(&Response{RespField: "foo"}))
+}
+
+func TestJSONObjectResponseError(t *testing.T) {
+	setupTest(t)
+
+	type Request struct{}
+	type Response struct {
+		RespField string `json:"rspField"`
+	}
+
+	hdlr := apiutil.NewJSONObjectHandler(func(ctx apicontext.Context, params Request) apiutil.ObjectResponse[Response] {
+		return apiutil.NewObjectResponse[Response]().
+			SetStatus(http.StatusNotFound).
+			SetError("no such resource")
+	})
+
+	w := httptest.NewRecorder()
+
+	r, err := http.NewRequest(http.MethodGet, "foobar", nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	hdlr.ServeHTTP(apiutil.NewNOOPRouterConfig(), w, r)
+
+	Expect(w.Code).To(Equal(http.StatusNotFound))
+	Expect(testutil.MustUnmarshal[apiutil.ErrorResponse](t, w.Body.Bytes())).
+		To(Equal(&apiutil.ErrorResponse{Error: "no such resource"}))
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,7 +42,8 @@ func TestListFlows(t *testing.T) {
 	fsCli := new(climocks.FlowsClient)
 	fsCli.On("List", mock.Anything, mock.Anything).Return(
 		&proto.ListMetadata{
-			TotalPages: 5,
+			TotalPages:   5,
+			TotalResults: 212,
 		},
 		[]*proto.FlowResult{
 			{
@@ -92,7 +93,8 @@ func TestListFlows(t *testing.T) {
 	Expect(flows).Should(
 		Equal(&apiutil.List[whiskerv1.FlowResponse]{
 			Meta: apiutil.ListMeta{
-				TotalPages: 5,
+				TotalPages:   5,
+				TotalResults: 212,
 			},
 			Items: []whiskerv1.FlowResponse{
 				{
@@ -357,7 +359,8 @@ func TestListFilterHints(t *testing.T) {
 	fsCli := new(climocks.FlowsClient)
 	fsCli.On("FilterHints", mock.Anything, mock.Anything).Return(
 		&proto.ListMetadata{
-			TotalPages: 5,
+			TotalPages:   5,
+			TotalResults: 212,
 		},
 		[]*proto.FilterHint{
 			{Value: "foo"},
@@ -376,7 +379,8 @@ func TestListFilterHints(t *testing.T) {
 	Expect(flows).Should(
 		Equal(&apiutil.List[whiskerv1.FlowFilterHintResponse]{
 			Meta: apiutil.ListMeta{
-				TotalPages: 5,
+				TotalPages:   5,
+				TotalResults: 212,
 			},
 			Items: []whiskerv1.FlowFilterHintResponse{
 				{Value: "foo"},
