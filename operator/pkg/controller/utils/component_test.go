@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	ocsv1 "github.com/openshift/api/security/v1"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	admissionregv1 "k8s.io/api/admissionregistration/v1"
 	apps "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -72,6 +73,7 @@ var _ = Describe("Component handler tests", func() {
 		Expect(apps.SchemeBuilder.AddToScheme(scheme)).ShouldNot(HaveOccurred())
 		Expect(batchv1.SchemeBuilder.AddToScheme(scheme)).ShouldNot(HaveOccurred())
 		Expect(rbacv1.SchemeBuilder.AddToScheme(scheme)).ShouldNot(HaveOccurred())
+		Expect(admissionregv1.SchemeBuilder.AddToScheme(scheme)).ShouldNot(HaveOccurred())
 
 		c = ctrlrfake.DefaultFakeClientBuilder(scheme).Build()
 		ctx = context.Background()
@@ -1907,6 +1909,70 @@ var _ = Describe("Component handler tests", func() {
 			Expect(c.Get(ctx, client.ObjectKey{Name: "a", Namespace: "a"}, sa)).NotTo(HaveOccurred())
 			Expect(sa.Secrets).To(HaveLen(1))
 			Expect(sa.ImagePullSecrets).To(HaveLen(1))
+		})
+	})
+	Context("MutatingWebhookConfiguration updates should not clobber an externally-managed caBundle", func() {
+		It("preserves an existing caBundle when the desired object doesn't set one", func() {
+			sideEffectsNone := admissionregv1.SideEffectClassNone
+			mwc := &admissionregv1.MutatingWebhookConfiguration{
+				TypeMeta:   metav1.TypeMeta{},
+				ObjectMeta: metav1.ObjectMeta{Name: "topology-injector"},
+				Webhooks: []admissionregv1.MutatingWebhook{
+					{
+						Name:        "topology.webhook.example.io",
+						SideEffects: &sideEffectsNone,
+						ClientConfig: admissionregv1.WebhookClientConfig{
+							CABundle: []byte("existing-ca-bundle"),
+						},
+						AdmissionReviewVersions: []string{"v1"},
+					},
+				},
+			}
+			Expect(c.Create(ctx, mwc)).NotTo(HaveOccurred())
+
+			// The rendered (desired) object mirrors what the upstream Envoy Gateway chart
+			// produces: no caBundle, since that's populated out-of-band by certgen.
+			desired := mwc.DeepCopy()
+			desired.Webhooks[0].ClientConfig.CABundle = nil
+			fc := &fakeComponent{
+				supportedOSType: rmeta.OSTypeLinux,
+				objs:            []client.Object{desired},
+			}
+
+			Expect(handler.CreateOrUpdateOrDelete(ctx, fc, sm)).NotTo(HaveOccurred())
+			Expect(c.Get(ctx, client.ObjectKey{Name: "topology-injector"}, mwc)).NotTo(HaveOccurred())
+			Expect(mwc.Webhooks[0].ClientConfig.CABundle).To(Equal([]byte("existing-ca-bundle")))
+		})
+		It("does not override a caBundle the desired object explicitly sets", func() {
+			sideEffectsNone := admissionregv1.SideEffectClassNone
+			mwc := &admissionregv1.MutatingWebhookConfiguration{
+				TypeMeta:   metav1.TypeMeta{},
+				ObjectMeta: metav1.ObjectMeta{Name: "topology-injector-owned"},
+				Webhooks: []admissionregv1.MutatingWebhook{
+					{
+						Name:        "owned.webhook.example.io",
+						SideEffects: &sideEffectsNone,
+						ClientConfig: admissionregv1.WebhookClientConfig{
+							CABundle: []byte("stale-ca-bundle"),
+						},
+						AdmissionReviewVersions: []string{"v1"},
+					},
+				},
+			}
+			Expect(c.Create(ctx, mwc)).NotTo(HaveOccurred())
+
+			// Unlike the Envoy Gateway case, this webhook's caBundle is owned and
+			// actively rotated by the operator itself, so the desired object sets it.
+			desired := mwc.DeepCopy()
+			desired.Webhooks[0].ClientConfig.CABundle = []byte("rotated-ca-bundle")
+			fc := &fakeComponent{
+				supportedOSType: rmeta.OSTypeLinux,
+				objs:            []client.Object{desired},
+			}
+
+			Expect(handler.CreateOrUpdateOrDelete(ctx, fc, sm)).NotTo(HaveOccurred())
+			Expect(c.Get(ctx, client.ObjectKey{Name: "topology-injector-owned"}, mwc)).NotTo(HaveOccurred())
+			Expect(mwc.Webhooks[0].ClientConfig.CABundle).To(Equal([]byte("rotated-ca-bundle")))
 		})
 	})
 	Context("volumes and volume mounts", func() {
