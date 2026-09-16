@@ -78,7 +78,7 @@ func Run(ctx context.Context, oneshot bool) error {
 	felixEnvConfig := loadFelixEnvConfig()
 
 	// Load the client config from environment.
-	cfg, c := calicoclient.CreateClient()
+	cfg, c := calicoclient.CreateClient("calico-node-allocate-tunnel-addrs")
 
 	return run(ctx, nodename, cfg, c, felixEnvConfig, oneshot)
 }

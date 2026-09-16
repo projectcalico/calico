@@ -93,6 +93,7 @@ func Main(version string) {
 			logCtxt.Fatal("failed to load api client config")
 		}
 		cfg.Spec.DatastoreType = apiconfig.Kubernetes
+		cfg.Spec.UserAgent = apiconfig.UserAgentFor("calico-cni")
 		calicoClient, err := client.New(*cfg)
 		if err != nil {
 			logCtxt.Fatal("failed to initialize api client")
