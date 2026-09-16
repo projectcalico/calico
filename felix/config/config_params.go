@@ -1009,6 +1009,8 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 		log.Info("Encap disabled, disabling node poll (if KDD is in use).")
 		cfg.Spec.K8sDisableNodePoll = true
 	}
+
+	cfg.Spec.UserAgent = apiconfig.UserAgentFor("calico-node-felix")
 	return *cfg
 }
 

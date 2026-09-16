@@ -3137,7 +3137,8 @@ blocks:
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
-        '/metadata.mk'],
+        '/metadata.mk',
+        '/pkg/buildinfo/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
         '/**/AUTHORS*',
@@ -3150,7 +3151,8 @@ blocks:
         '/crypto/**/*_test.go',
         '/felix/**/*_test.go',
         '/lib/**/*_test.go',
-        '/libcalico-go/**/*_test.go']})
+        '/libcalico-go/**/*_test.go',
+        '/pkg/**/*_test.go']})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -3255,6 +3257,7 @@ blocks:
         '/libcalico-go/lib/winutils/*.go',
         '/metadata.mk',
         '/node/pkg/lifecycle/utils/*.go',
+        '/pkg/buildinfo/*.go',
         '/typha/pkg/validator/v1/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
@@ -3270,6 +3273,7 @@ blocks:
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
         '/node/**/*_test.go',
+        '/pkg/**/*_test.go',
         '/typha/**/*_test.go']})
     dependencies:
       - Prerequisites
@@ -4184,6 +4188,7 @@ blocks:
         '/libcalico-go/lib/winutils/*.go',
         '/metadata.mk',
         '/operator/api/v1/*.go',
+        '/pkg/buildinfo/*.go',
         '/whisker-backend/pkg/apis/v1/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
@@ -4200,6 +4205,7 @@ blocks:
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
         '/operator/**/*_test.go',
+        '/pkg/**/*_test.go',
         '/whisker-backend/**/*_test.go']})
     execution_time_limit:
       minutes: 30
@@ -4287,6 +4293,7 @@ blocks:
         '/libcalico-go/lib/winutils/*.go',
         '/metadata.mk',
         '/operator/api/v1/*.go',
+        '/pkg/buildinfo/*.go',
         '/whisker-backend/pkg/apis/v1/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
@@ -4303,6 +4310,7 @@ blocks:
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
         '/operator/**/*_test.go',
+        '/pkg/**/*_test.go',
         '/whisker-backend/**/*_test.go']})
     execution_time_limit:
       minutes: 30
@@ -6596,7 +6604,8 @@ blocks:
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
         '/libcalico-go/**',
-        '/metadata.mk'],
+        '/metadata.mk',
+        '/pkg/buildinfo/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
         '/**/AUTHORS*',
@@ -6608,7 +6617,8 @@ blocks:
         '/api/**/*_test.go',
         '/crypto/**/*_test.go',
         '/felix/**/*_test.go',
-        '/lib/**/*_test.go']})
+        '/lib/**/*_test.go',
+        '/pkg/**/*_test.go']})
     dependencies:
       - Prerequisites
     task:
