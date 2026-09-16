@@ -39,11 +39,6 @@ defaults:
   # is capped, so the spikes are covered either way. A heavier step says so.
   requests: {cpu: 1500m, memory: 2Gi}
 
-  # Go otherwise sizes itself from the request, capping parallelism at what a
-  # step is scheduled with rather than what it can reach.
-  env:
-    - {name: GOMAXPROCS, value: "3"}
-
   # An unset timeout means run-forever. A module overrides this when its work
   # justifies more.
   timeout: 1h
