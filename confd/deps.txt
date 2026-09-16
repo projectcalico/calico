@@ -120,6 +120,7 @@ local:confd/pkg/config
 local:confd/pkg/resource/template
 local:confd/pkg/run
 local:crypto/pkg/tls
+local:felix/ip
 local:lib/logrusr
 local:lib/std/log
 local:lib/std/uniquelabels
