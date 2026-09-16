@@ -54,7 +54,32 @@ func TestProtoToFlow_BasicFields(t *testing.T) {
 	Expect(resp.BytesIn).To(Equal(int64(4321)))
 	Expect(resp.BytesOut).To(Equal(int64(8765)))
 
-	// Commercial-only fields are not populated from Goldmane, so the entire
+}
+
+// TestProtoToFlow_EndpointTypes checks the endpoint types carried on the Goldmane
+// FlowKey reach the response under Goldmane's own enum names, and that an
+// unreported type stays empty rather than becoming a name of its own.
+func TestProtoToFlow_EndpointTypes(t *testing.T) {
+	RegisterTestingT(t)
+
+	for _, tc := range []struct {
+		name             string
+		source, dest     proto.EndpointType
+		wantSrc, wantDst string
+	}{
+		{"workload and host", proto.EndpointType_WorkloadEndpoint, proto.EndpointType_HostEndpoint, "WorkloadEndpoint", "HostEndpoint"},
+		{"networkset and network", proto.EndpointType_NetworkSet, proto.EndpointType_Network, "NetworkSet", "Network"},
+		{"unspecified stays empty", proto.EndpointType_EndpointTypeUnspecified, proto.EndpointType_EndpointTypeUnspecified, "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			RegisterTestingT(t)
+
+			resp := protoToFlow(&proto.Flow{Key: &proto.FlowKey{SourceType: tc.source, DestType: tc.dest}})
+
+			Expect(resp.SourceType).To(Equal(tc.wantSrc))
+			Expect(resp.DestType).To(Equal(tc.wantDst))
+		})
+	}
 }
 
 func TestProtoToFlow_Service(t *testing.T) {

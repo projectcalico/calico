@@ -24,6 +24,7 @@ import (
 // redacts the parts of an admitted flow the user is not authorized to view.
 type FlowFilter interface {
 	IncludeFlow(flow *whiskerv1.FlowResponse) (bool, error)
+
 	// RedactPolicies obfuscates, in place, the policy hits on an admitted flow
 	// that the user is not authorized to view. Callers must invoke it on every
 	// flow IncludeFlow admits before exposing the flow.
@@ -53,8 +54,8 @@ func filterFlows(flows []whiskerv1.FlowResponse, filter FlowFilter) ([]whiskerv1
 	return result, nil
 }
 
-// FilterFlowsFromUser is a convenience that extracts the user from the context,
-// creates a FlowFilter, and filters the given flows.
+// FilterFlowsFromUser builds the filter for this request and applies it to the
+// given flows. It returns them unchanged when no factory is configured.
 func FilterFlowsFromUser(ctx context.Context, flows []whiskerv1.FlowResponse, factory FlowFilterFactory) ([]whiskerv1.FlowResponse, error) {
 	if factory == nil {
 		return flows, nil

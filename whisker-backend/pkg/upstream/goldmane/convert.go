@@ -149,10 +149,12 @@ func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
 		SourceName:      protoToName(flow.Key.SourceName),
 		SourceNamespace: flow.Key.SourceNamespace,
 		SourceLabels:    strings.Join(flow.SourceLabels, " | "),
+		SourceType:      protoToEndpointType(flow.Key.SourceType),
 
 		DestName:      protoToName(flow.Key.DestName),
 		DestNamespace: flow.Key.DestNamespace,
 		DestLabels:    strings.Join(flow.DestLabels, " | "),
+		DestType:      protoToEndpointType(flow.Key.DestType),
 
 		Protocol:   flow.Key.Proto,
 		DestPort:   flow.Key.DestPort,
@@ -173,13 +175,16 @@ func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
 		}
 	}
 
-	// NOTE: SourceType/DestType are intentionally left unset — the Goldmane proto
-	// flow does not carry endpoint types. These fields are only consumed by the
-	// RBAC FlowFilter, which is currently wired only on the Linseed path. If RBAC
-	// is ever enabled for the Goldmane upstream, the empty types will be treated
-	// as deny-and-skip by auth.rbacFlowFilter (see whisker-backend/pkg/auth/rbac.go).
-
 	return resp
+}
+
+// An unspecified endpoint type stays empty, so a consumer that gates on the type
+// sees "unknown" rather than a type name it would have to special-case.
+func protoToEndpointType(t proto.EndpointType) string {
+	if t == proto.EndpointType_EndpointTypeUnspecified {
+		return ""
+	}
+	return t.String()
 }
 
 // The Goldmane API uses an empty namespace to represent "no namespace", but the UI wants a value.
