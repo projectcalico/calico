@@ -14,6 +14,11 @@
 
 package policyscale
 
+import (
+	"os"
+	"strconv"
+)
+
 // Direction of the rules a policy carries, and of an evaluation.
 type Direction int
 
@@ -168,6 +173,27 @@ func Baseline() Spec {
 func EgressAllowList() Spec {
 	p := DefaultEgress()
 	return Spec{Seed: DefaultSeed, Egress: &p}
+}
+
+// ScaleFromEnv returns spec with its egress dimensions overridden by the POLICYSCALE_POLICIES,
+// POLICYSCALE_RULES_PER_POLICY and POLICYSCALE_IPSETS environment variables where set, so that
+// the benchmarks and the policyscale command can be pointed at a larger set than the presets
+// without a code change. Unset or unparsable variables leave the preset value alone.
+func ScaleFromEnv(spec Spec) Spec {
+	if spec.Egress == nil {
+		return spec
+	}
+	e := *spec.Egress
+	override := func(name string, dst *int) {
+		if v, err := strconv.Atoi(os.Getenv(name)); err == nil && v > 0 {
+			*dst = v
+		}
+	}
+	override("POLICYSCALE_POLICIES", &e.Policies)
+	override("POLICYSCALE_RULES_PER_POLICY", &e.RulesPerPolicy)
+	override("POLICYSCALE_IPSETS", &e.IPSets)
+	spec.Egress = &e
+	return spec
 }
 
 // Composite applies both presets to one endpoint: the baseline set governs its ingress

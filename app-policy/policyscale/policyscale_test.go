@@ -289,6 +289,56 @@ func TestResourcesValidateAndRoundTrip(t *testing.T) {
 	}
 }
 
+// Past the /24 pool the builder hands out /28s; every rule CIDR must still be unique, and the
+// reference presets must not have moved.
+func TestWideCIDRPool(t *testing.T) {
+	ruleNets := func(fx *Fixture) []string {
+		var nets []string
+		for _, o := range fx.Resources(ResourceOptions{}) {
+			gnp, ok := o.(*v3.GlobalNetworkPolicy)
+			if !ok {
+				continue
+			}
+			for _, r := range gnp.Spec.Egress {
+				nets = append(nets, r.Destination.Nets...)
+			}
+		}
+		return nets
+	}
+
+	e := DefaultEgress()
+	e.Policies, e.RulesPerPolicy, e.IPSets = 2000, 20, 500 // 40,000 rules: past the 32,768 /24s
+	fx := Build(Spec{Seed: DefaultSeed, Egress: &e})
+	seen := map[string]bool{}
+	for _, n := range ruleNets(fx) {
+		if !strings.HasSuffix(n, "/28") {
+			t.Fatalf("rule CIDR %s is not a /28", n)
+		}
+		if seen[n] {
+			t.Fatalf("rule CIDR %s handed out twice", n)
+		}
+		seen[n] = true
+	}
+	if len(seen) < 25000 {
+		t.Fatalf("only %d CIDR rules; expected ~30,000 of 40,000", len(seen))
+	}
+	// The target's address must sit inside its own rule's /28.
+	tg := fx.EgressTarget()
+	if tg == nil {
+		t.Fatal("no egress target")
+	}
+	if got := fx.Expect(Egress, NewFlow(SourceIP, DefaultSourcePort, tg.AddrInCIDR, int(tg.TailPort))); len(got) == 0 || got[0].Action != "allow" {
+		t.Fatalf("target flow verdict %v, want allow", got)
+	}
+
+	// The reference preset stays on /24s.
+	for _, n := range ruleNets(Build(EgressAllowList()))[:50] {
+		if !strings.HasSuffix(n, "/24") {
+			t.Fatalf("reference preset CIDR changed to %s", n)
+		}
+	}
+}
+
 // Staged rendering is what a cluster run applies: the same policies, evaluated for the pending
 // verdict but programming no enforcement rules.
 func TestStagedResources(t *testing.T) {
