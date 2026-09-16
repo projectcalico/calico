@@ -3717,7 +3717,9 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	}
 
 	ap.ToHostDrop = (m.epToHostAction == "DROP")
-	ap.DSR = m.dsrEnabled
+	// ProgFilename gives EpTypeHost a DSR variant; an overlay device has no
+	// DSR return path and must not get one.
+	ap.DSR = m.dsrEnabled && !ap.IfaceEncaps
 	ap.DSROptoutCIDRs = m.dsrOptoutCidrs
 	ap.LogLevel, ap.LogFilter = m.apLogFilter(ap, ifaceName)
 	ap.VXLANPort = m.vxlanPort

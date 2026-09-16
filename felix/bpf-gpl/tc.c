@@ -110,6 +110,10 @@ static CALI_BPF_INLINE int state_fill_from_l4(struct cali_tc_ctx *ctx, bool deca
  */
 static CALI_BPF_INLINE bool encap_needs_key(struct __sk_buff *skb)
 {
+	if (!CALI_F_HEP) {
+		return false;
+	}
+
 	struct cali_tc_globals *gl = state_get_globals_tc();
 
 	if (!gl || !(gl->data.flags & CALI_GLOBALS_IFACE_ENCAPS)) {
