@@ -48,7 +48,8 @@ func declaredPayload(owned *v3.FelixConfiguration, policies map[string]ConflictP
 			return nil, fmt.Errorf("unable to read declared field %s: %w", path, err)
 		}
 
-		// A governed path with no value is how a declaration gives the field up.
+		// A governed path with no value is how a declaration gives the field up, which
+		// relies on the field carrying omitempty.
 		if !found {
 			continue
 		}
