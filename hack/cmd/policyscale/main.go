@@ -63,6 +63,7 @@ func main() {
 		os.Exit(2)
 	}
 	spec.Seed = *seed
+	spec = policyscale.ScaleFromEnv(spec)
 	fx := policyscale.Build(spec)
 
 	w := os.Stdout

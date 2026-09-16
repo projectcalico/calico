@@ -216,6 +216,10 @@ func (fx *Fixture) buildEgress(rng *rand.Rand, p EgressParams) {
 	}
 
 	tier := fx.tier(p.Tier, "Deny")
+	// Rule CIDRs are /24s while the set fits the /24 pool, so the reference presets are unchanged;
+	// past that they are /28s from the same range. The wide form is keyed on the rule count, not on
+	// how many CIDRs end up being used, so a fixture's addressing never depends on the RNG.
+	wide := numRules+1 > egressCIDRPool24
 	nextCIDR := 0
 	ruleIdx := 0
 	for i := 0; i < p.Policies; i++ {
@@ -227,7 +231,7 @@ func (fx *Fixture) buildEgress(rng *rand.Rand, p EgressParams) {
 			if rng.Float64() < p.IPSetRuleFraction {
 				r.dstSet = setIDs[rng.Intn(len(setIDs))]
 			} else {
-				r.dstNet = egressCIDR(nextCIDR)
+				r.dstNet = egressCIDR(nextCIDR, wide)
 				nextCIDR++
 			}
 			if ruleIdx == targetRule {
@@ -236,7 +240,7 @@ func (fx *Fixture) buildEgress(rng *rand.Rand, p EgressParams) {
 				// port and the popular port, so flows aimed at it differ only in how many rules
 				// along the way survive the port comparison.
 				r.action = "allow"
-				r.dstNet = egressCIDR(nextCIDR)
+				r.dstNet = egressCIDR(nextCIDR, wide)
 				r.dstSet = ""
 				r.dstPorts = append(r.dstPorts, EgressTailPort, p.PortWeights[0].Port)
 				fx.egressTarget = &EgressTarget{
@@ -244,7 +248,7 @@ func (fx *Fixture) buildEgress(rng *rand.Rand, p EgressParams) {
 					RuleIndex:   j,
 					Ordinal:     ruleIdx,
 					RulesWalked: ruleIdx + 1,
-					AddrInCIDR:  egressAddrInCIDR(nextCIDR),
+					AddrInCIDR:  egressAddrInCIDR(nextCIDR, wide),
 					TailPort:    EgressTailPort,
 					PopularPort: p.PortWeights[0].Port,
 				}
@@ -298,11 +302,22 @@ func makeEgressRulePorts(rng *rand.Rand, p EgressParams) []int32 {
 	return ports
 }
 
-func egressCIDR(n int) netip.Prefix {
+// egressCIDRPool24 is how many /24 rule CIDRs 10.0.0.0/9 holds. A set needing more switches to
+// /28s, which the same range holds 524,288 of; see buildEgress.
+const egressCIDRPool24 = 128 * 256
+
+func egressCIDR(n int, wide bool) netip.Prefix {
+	if wide {
+		// 16 /28s per /24, 256 /24s per /16, 128 /16s in the /9: 524,288 blocks.
+		return netip.MustParsePrefix(fmt.Sprintf("10.%d.%d.%d/28", n>>12&0x7f, n>>4&0xff, (n&0xf)<<4))
+	}
 	return netip.MustParsePrefix(fmt.Sprintf("10.%d.%d.0/24", n>>8&0x7f, n&0xff))
 }
 
-func egressAddrInCIDR(n int) string {
+func egressAddrInCIDR(n int, wide bool) string {
+	if wide {
+		return fmt.Sprintf("10.%d.%d.%d", n>>12&0x7f, n>>4&0xff, (n&0xf)<<4+7)
+	}
 	return fmt.Sprintf("10.%d.%d.7", n>>8&0x7f, n&0xff)
 }
 
