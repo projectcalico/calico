@@ -99,8 +99,6 @@ func printVersion() {
 	log.Info(fmt.Sprintf("Go OS/Arch: %s/%s", goruntime.GOOS, goruntime.GOARCH))
 }
 
-// Run starts the operator and returns only when it is asked to stop. Startup paths
-// that print and exit, and every startup failure, exit the process directly.
 // uncachedObjects lists the types the client reads straight from the apiserver rather than the
 // cache, which strips managedFields.
 func uncachedObjects(extra []client.Object) []client.Object {
@@ -115,6 +113,8 @@ func uncachedObjects(extra []client.Object) []client.Object {
 	}, extra...)
 }
 
+// Run starts the operator and returns only when it is asked to stop. Startup paths
+// that print and exit, and every startup failure, exit the process directly.
 func Run(opts Options) {
 	var enableLeaderElection bool
 	var leaderElectionLeaseDuration time.Duration
