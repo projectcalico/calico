@@ -292,13 +292,12 @@ func (h *Helper) ClearRBACFinalizers(ctx context.Context) error {
 	// name and namespace. A grant's authorized resources live in its own
 	// namespace, and which resources depends on the grant, so the Role and
 	// RoleBinding of one grant share a check while the two grant kinds do not.
-	type grantKey struct{ namespace, name string }
-	markedByGrant := map[grantKey][]client.Object{}
+	markedByGrant := map[types.NamespacedName][]client.Object{}
 	mark := func(grant client.Object) {
 		if grant.GetDeletionTimestamp().IsZero() || !slices.Contains(grant.GetFinalizers(), rgateway.RBACFinalizer) {
 			return
 		}
-		key := grantKey{grant.GetNamespace(), grant.GetName()}
+		key := types.NamespacedName{Namespace: grant.GetNamespace(), Name: grant.GetName()}
 		markedByGrant[key] = append(markedByGrant[key], grant)
 	}
 	for i := range roles.Items {
