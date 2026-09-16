@@ -339,37 +339,20 @@ on connection close.
   purges (LRU eviction, idle TCPEstablished) don't leak slots.
 - **Decrement (safety net)**: a userspace `ConnLimitScanner`
   (`felix/bpf/conntrack/connlimit_scanner.go`) recounts established
-  TCP CT entries every ~30s and overwrites `current_count` in
-  `cali_qos_conn` via `BPF_F_LOCK` batch updates. It corrects any
-  residual drift the fast/cleanup paths missed, and skips entries
-  carrying any FIN or RST bit so it doesn't double-count a close
-  those paths have already accounted for.
+  TCP CT entries once per CT scan and overwrites `current_count` in
+  `cali_qos_conn` via `BPF_F_LOCK` batch updates. It skips a close
+  both endpoints agreed on — either FIN bit — which the fast path has
+  already accounted for, and nothing else.
 
-  It deliberately does **not** skip entries carrying
-  `CONNLIMIT_DEC`. That flag is cleared only on the spurious-RST
-  path below, and never at all for an entry that no longer sees
-  traffic, so skipping on it excluded a connection from future
-  recounts — and since the recount is the only mechanism that can
-  return a slot, the exclusion was effectively permanent. Because
-  the fast path decrements on any
-  RST, including a spurious one that is out of window and ignored by
-  both peers, and because the per-leg RST bits clear as soon as
-  traffic resumes, that produced live, established entries the
-  scanner would never count again: N spurious RSTs against N live
-  connections parked `current_count` at 0 with all N still up. An
-  established entry with no FIN and no RST is live and is counted,
-  whatever `CONNLIMIT_DEC` says; the FIN/RST skips are what prevent
-  double-counting, since a genuinely closed entry keeps those bits
-  until it is purged.
+**An RST releases no slot.** One RST is a single packet from either
+side, so a pod holding only `CAP_NET_RAW` could forge one per
+connection and admit an extra; two FINs cannot be forged by one party.
+An RST-closed connection keeps its slot until its entry is purged at
+`TCPResetSeen` and the next recount rebases.
 
-This is why the RST decrement stays on the fast path even though an
-RST is weak evidence of a close. Prompt release is a requirement —
-`felix/fv` asserts a genuine RST close frees a slot within 5s, and
-deferring RST closes to the cleanup path makes them wait for
-`TCPResetSeen` (40s). The recount makes the resulting under-count
-self-correcting instead of permanent, which is the property that
-matters: a spurious RST costs one scan cycle, not the connection's
-lifetime.
+For the same reason the recount skips no RST state, and no other
+signal a pod can refresh at will: anything it honours is something a
+pod can hide its live connections behind.
 
 Host-originated traffic — including from host-networked pods — is
 exempt from the ingress limit: it takes the `skip_policy` path in
@@ -422,7 +405,7 @@ global, `ISTIO_DSCP`; see Istio ambient mode integration for the integration.
   decision is part of the atomic section. Dropping outside the lock
   allows overshoot.
 - Any change to connlimit decrement paths must preserve the
-  `CONNLIMIT_DEC` idempotence flag — both the fast path (FIN/RST in
+  `CONNLIMIT_DEC` idempotence flag — both the fast path (both FINs in
   `calico_ct_lookup`) and the cleanup path (BPF conntrack cleanup
   scanner) set it before decrementing. It is what stops the same
   close being counted twice when both paths see one entry.
