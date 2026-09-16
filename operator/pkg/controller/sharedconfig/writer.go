@@ -31,9 +31,6 @@ type DeclareBGPConfiguration func(current *v3.BGPConfiguration) (*BGPConfigurati
 
 // Writer persists operator-owned fields on shared Calico configuration resources.
 type Writer interface {
-	// UpdateFelixConfiguration applies updateFn to the default FelixConfiguration and persists the result.
-	UpdateFelixConfiguration(ctx context.Context, updateFn func(fc *v3.FelixConfiguration) (bool, error)) (*v3.FelixConfiguration, error)
-
 	// ApplyFelixConfiguration writes the declared fields and returns the whole resulting object.
 	ApplyFelixConfiguration(ctx context.Context, declare DeclareFelixConfiguration) (*v3.FelixConfiguration, error)
 

@@ -123,36 +123,38 @@ func (w *v3Writer) resolveConflicts(applyErr error, current client.Object, d *de
 		return false, err
 	}
 
-	force := false
-	var undeclared, refused []string
+	var undeclared, refused, deferred, forced []string
 	for _, path := range paths {
 		declared, policy, ok := d.policyFor(path)
 		if !ok {
 			undeclared = append(undeclared, path)
 			continue
 		}
-		// An apply conflicts on ownership, not on value. Taking a field that already holds the
-		// declared value changes nothing, so there is nothing to arbitrate.
-		agree, err := valuesAgree(currentContent, payload.Object, declared)
-		if err != nil {
-			return false, err
-		}
-		if agree {
-			force = true
-			continue
-		}
 		if reclaimable[declared] || reclaimable[path] {
 			// The operator wrote this before it applied, so take the field rather than arbitrate.
-			force = true
+			forced = append(forced, declared)
 			continue
 		}
+
 		switch policy {
 		case ConflictDefer:
+			// Agreeing on the value is not ownership. Taking the field here would delete the
+			// other writer's setting the moment the operator stops declaring it.
 			removePath(payload.Object, declared)
+			deferred = append(deferred, declared)
 		case ConflictOverride:
-			force = true
+			forced = append(forced, declared)
 		default:
-			refused = append(refused, declared)
+			agree, err := valuesAgree(currentContent, payload.Object, declared)
+			if err != nil {
+				return false, err
+			}
+			if agree {
+				// Both writers want the same value, so there is nothing to arbitrate.
+				forced = append(forced, declared)
+			} else {
+				refused = append(refused, declared)
+			}
 		}
 	}
 
@@ -162,7 +164,9 @@ func (w *v3Writer) resolveConflicts(applyErr error, current client.Object, d *de
 	if len(refused) > 0 {
 		return false, &ConflictingFieldsError{Kind: kindOf(current), Paths: refused}
 	}
-	return force, nil
+
+	logResolution(current, d.manager, deferred, nil, forced)
+	return len(forced) > 0, nil
 }
 
 // clearLegacyOwned deletes governed fields the operator's pre-apply field manager still holds and
@@ -190,6 +194,8 @@ func (w *v3Writer) clearLegacyOwned(ctx context.Context, current client.Object, 
 	if err != nil {
 		return fmt.Errorf("unable to render the fields to clear: %w", err)
 	}
+	log.Info("Clearing shared configuration fields the operator no longer declares",
+		"kind", kindOf(current), "manager", d.manager, "fields", string(encoded))
 	target := &unstructured.Unstructured{}
 	target.SetGroupVersionKind(gvk)
 	target.SetName(defaultResourceName)

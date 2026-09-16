@@ -16,7 +16,6 @@ package sharedconfig_test
 
 import (
 	"context"
-	"errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -51,56 +50,6 @@ var _ = Describe("crd.projectcalico.org/v1 writer", func() {
 		w = sharedconfig.NewWriter(c, false)
 	})
 
-	It("should create the default FelixConfiguration when it doesn't exist", func() {
-		_, err := w.UpdateFelixConfiguration(ctx, func(fc *v3.FelixConfiguration) (bool, error) {
-			fc.Spec.HealthPort = ptr.To(9099)
-			return true, nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(getFelixConfig().Spec.HealthPort).To(Equal(ptr.To(9099)))
-	})
-
-	It("should patch an existing FelixConfiguration", func() {
-		Expect(c.Create(ctx, &v3.FelixConfiguration{
-			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-			Spec:       v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)},
-		})).NotTo(HaveOccurred())
-
-		_, err := w.UpdateFelixConfiguration(ctx, func(fc *v3.FelixConfiguration) (bool, error) {
-			fc.Spec.BPFEnabled = ptr.To(true)
-			return true, nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		fc := getFelixConfig()
-		Expect(fc.Spec.BPFEnabled).To(Equal(ptr.To(true)))
-		Expect(fc.Spec.HealthPort).To(Equal(ptr.To(9099)))
-	})
-
-	It("should not write when the update function reports no change", func() {
-		Expect(c.Create(ctx, &v3.FelixConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "default"}})).NotTo(HaveOccurred())
-		before := getFelixConfig().ResourceVersion
-
-		_, err := w.UpdateFelixConfiguration(ctx, func(fc *v3.FelixConfiguration) (bool, error) {
-			fc.Spec.BPFEnabled = ptr.To(true)
-			return false, nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		fc := getFelixConfig()
-		Expect(fc.ResourceVersion).To(Equal(before))
-		Expect(fc.Spec.BPFEnabled).To(BeNil())
-	})
-
-	It("should return the update function's error without writing", func() {
-		_, err := w.UpdateFelixConfiguration(ctx, func(fc *v3.FelixConfiguration) (bool, error) {
-			fc.Spec.BPFEnabled = ptr.To(true)
-			return true, errors.New("user modified bpfEnabled")
-		})
-		Expect(err).To(MatchError("user modified bpfEnabled"))
-		Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, &v3.FelixConfiguration{})).To(HaveOccurred())
-	})
-
 	Context("a declaration that stops declaring a field", func() {
 		declare := func(port *int) sharedconfig.DeclareFelixConfiguration {
 			return func(_ *v3.FelixConfiguration) (*sharedconfig.FelixConfigurationDeclaration, error) {
@@ -133,6 +82,50 @@ var _ = Describe("crd.projectcalico.org/v1 writer", func() {
 			_, err := w.ApplyFelixConfiguration(ctx, declare(nil))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getFelixConfig().Spec.HealthPort).To(Equal(ptr.To(9199)))
+		})
+
+		// libcalico-go stashes the v3 metadata on every v3 write, and RestoreV3Metadata pulls it
+		// back out. The operator's own record has to survive that round trip.
+		Context("with a projectcalico.org/metadata stash present", func() {
+			BeforeEach(func() {
+				Expect(c.Create(ctx, &v3.FelixConfiguration{ObjectMeta: metav1.ObjectMeta{
+					Name:        "default",
+					Annotations: map[string]string{"projectcalico.org/metadata": `{"annotations":{"kubectl.kubernetes.io/last-applied-configuration":"{}"}}`},
+				}})).NotTo(HaveOccurred())
+			})
+
+			It("should read back the record it wrote", func() {
+				_, err := w.ApplyFelixConfiguration(ctx, declare(ptr.To(9099)))
+				Expect(err).NotTo(HaveOccurred())
+
+				var seen map[string]string
+				_, err = w.ApplyFelixConfiguration(ctx, func(current *v3.FelixConfiguration) (*sharedconfig.FelixConfigurationDeclaration, error) {
+					seen = current.Annotations
+					return declare(ptr.To(9099))(current)
+				})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(seen).To(HaveKey("operator.tigera.io/owned-fields"))
+			})
+
+			It("should stop writing once the declared values are in place", func() {
+				_, err := w.ApplyFelixConfiguration(ctx, declare(ptr.To(9099)))
+				Expect(err).NotTo(HaveOccurred())
+				settled := getFelixConfig().ResourceVersion
+
+				for range 2 {
+					_, err = w.ApplyFelixConfiguration(ctx, declare(ptr.To(9099)))
+					Expect(err).NotTo(HaveOccurred())
+				}
+				Expect(getFelixConfig().ResourceVersion).To(Equal(settled))
+			})
+
+			It("should leave the stash alone", func() {
+				for range 3 {
+					_, err := w.ApplyFelixConfiguration(ctx, declare(ptr.To(9099)))
+					Expect(err).NotTo(HaveOccurred())
+				}
+				Expect(getFelixConfig().Annotations).To(HaveKey("projectcalico.org/metadata"))
+			})
 		})
 
 		It("should leave a value someone else changed", func() {

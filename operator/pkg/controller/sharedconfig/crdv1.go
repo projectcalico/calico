@@ -16,16 +16,13 @@ package sharedconfig
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 	"sort"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
@@ -122,6 +119,8 @@ func (w *crdV1Writer) applyDeclared(ctx context.Context, current client.Object, 
 		// The declaration holds nothing to write, so don't create an object carrying only a record.
 		return current, nil
 	}
+
+	logResolution(current, d.manager, deferred, removed, nil)
 	return w.persist(ctx, merged, patchFrom)
 }
 
@@ -141,15 +140,6 @@ func resolveTrackedConflicts(current client.Object, d *declaration, payload *uns
 		if !pathSet(payload.Object, path) {
 			continue
 		}
-		// Writing the value that is already there needs no arbitration, whoever put it there.
-		agree, err := valuesAgree(currentContent, payload.Object, path)
-		if err != nil {
-			return nil, err
-		}
-		if agree {
-			continue
-		}
-
 		changed, err := changedByOther(currentContent, lastWritten, legacyOwned, path)
 		if err != nil {
 			return nil, err
@@ -160,11 +150,20 @@ func resolveTrackedConflicts(current client.Object, d *declaration, payload *uns
 
 		switch d.policies[path] {
 		case ConflictDefer:
+			// Agreeing on the value is not ownership. Recording it here would delete the other
+			// writer's setting the moment the operator stops declaring it.
 			removePath(payload.Object, path)
 			deferred = append(deferred, path)
 		case ConflictOverride:
 		default:
-			refused = append(refused, path)
+			// Writing the value that is already there needs no arbitration, whoever put it there.
+			agree, err := valuesAgree(currentContent, payload.Object, path)
+			if err != nil {
+				return nil, err
+			}
+			if !agree {
+				refused = append(refused, path)
+			}
 		}
 	}
 
@@ -256,42 +255,4 @@ func (w *crdV1Writer) persist(ctx context.Context, obj client.Object, patchFrom 
 		return nil, err
 	}
 	return obj, nil
-}
-
-func (w *crdV1Writer) UpdateFelixConfiguration(ctx context.Context, updateFn func(fc *v3.FelixConfiguration) (bool, error)) (*v3.FelixConfiguration, error) {
-	// Fetch any existing default FelixConfiguration object.
-	fc := &v3.FelixConfiguration{}
-	err := w.client.Get(ctx, types.NamespacedName{Name: "default"}, fc)
-	if err != nil && !errors.IsNotFound(err) {
-		return nil, fmt.Errorf("unable to read FelixConfiguration: %w", err)
-	}
-
-	if err = utils.RestoreV3Metadata(fc); err != nil {
-		return nil, err
-	}
-
-	// Create a base state for the upcoming patch operation, diffing against the restored object so
-	// the patch leaves the v3 metadata stash alone.
-	patchFrom := client.MergeFrom(fc.DeepCopy())
-
-	// Apply desired changes to the FelixConfiguration.
-	updated, err := updateFn(fc)
-	if err != nil {
-		return nil, err
-	}
-	if updated {
-		// Apply the patch.
-		if fc.ResourceVersion == "" {
-			fc.Name = "default"
-			if err := w.client.Create(ctx, fc); err != nil {
-				return nil, err
-			}
-		} else {
-			if err := w.client.Patch(ctx, fc, patchFrom); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	return fc, nil
 }

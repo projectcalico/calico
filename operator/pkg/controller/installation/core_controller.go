@@ -1471,7 +1471,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	r.status.AddDeployments([]types.NamespacedName{{Name: common.KubeControllersDeploymentName, Namespace: common.CalicoNamespace}})
 	certificateManager.AddToStatusManager(r.status, common.CalicoNamespace)
 
-	// Now that calico-node has rolled out, re-check whether eBPF can be enabled within Felix.
+	// Re-check whether eBPF can be enabled within Felix once calico-node has rolled out.
 	_, err = configWriter.ApplyFelixConfiguration(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration))
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating resource", err, reqLogger)

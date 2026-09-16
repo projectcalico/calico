@@ -26,6 +26,7 @@ import (
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller/sharedconfig"
+	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
 const (
@@ -34,11 +35,14 @@ const (
 
 	// bpfFieldManager owns spec.bpfEnabled, which both installation write sites declare.
 	bpfFieldManager = "installation-bpf"
+
+	// openShiftFelixHealthPort avoids the port OpenShift's SDN already holds.
+	openShiftFelixHealthPort = 9199
 )
 
-// declareFelixConfiguration declares the fields defaulted from the Installation spec, always
-// declaring every one so the field set stays stable. A field the spec stops asking for is
-// declared without a value, which clears whatever the operator wrote there.
+// declareFelixConfiguration declares the fields defaulted from the Installation spec. It declares
+// every one every time, so a field the spec stops asking for is declared without a value, which
+// clears whatever the operator wrote there.
 func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) sharedconfig.DeclareFelixConfiguration {
 	return func(current *v3.FelixConfiguration) (*sharedconfig.FelixConfigurationDeclaration, error) {
 		d := &sharedconfig.FelixConfigurationDeclaration{
@@ -156,12 +160,13 @@ func (r *ReconcileInstallation) nodeDaemonSetExists(ctx context.Context) (bool, 
 	return true, nil
 }
 
-// defaultFelixHealthPort is the port the operator defaults Felix's health server to.
+// defaultFelixHealthPort is the port the operator defaults Felix's health server to. It has to
+// match what render falls back to, or calico-node's probe targets a port Felix is not listening on.
 func defaultFelixHealthPort(install *operatorv1.Installation) int {
 	if install.Spec.KubernetesProvider.IsOpenShift() {
-		return 9199
+		return openShiftFelixHealthPort
 	}
-	return 9099
+	return render.DefaultFelixHealthPort
 }
 
 // nftablesMode is the dataplane mode Felix should run in. The operator has always owned it,
@@ -183,13 +188,13 @@ func nftablesMode(install *operatorv1.Installation) v3.NFTablesMode {
 func (r *ReconcileInstallation) declareBPFEnabled(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) sharedconfig.DeclareFelixConfiguration {
 	return func(current *v3.FelixConfiguration) (*sharedconfig.FelixConfigurationDeclaration, error) {
 		enabled, err := r.bpfEnabledValue(ctx, install, current, needNsMigration)
-		if err != nil {
+		if err != nil || enabled == nil {
 			return nil, err
 		}
 		return &sharedconfig.FelixConfigurationDeclaration{
 			Manager: bpfFieldManager,
 			Owned: &v3.FelixConfiguration{
-				Spec: v3.FelixConfigurationSpec{BPFEnabled: &enabled},
+				Spec: v3.FelixConfigurationSpec{BPFEnabled: enabled},
 			},
 			Policies: map[string]sharedconfig.ConflictPolicy{
 				// A user who changed this by hand gets a degraded status, not an override.
@@ -199,30 +204,35 @@ func (r *ReconcileInstallation) declareBPFEnabled(ctx context.Context, install *
 	}
 }
 
-// bpfEnabledValue resolves the dataplane Felix should run. Turning eBPF on waits for the
-// calico-node rollout to mount the BPF volumes.
-func (r *ReconcileInstallation) bpfEnabledValue(ctx context.Context, install *operatorv1.Installation, current *v3.FelixConfiguration, needNsMigration bool) (bool, error) {
-	if !install.Spec.BPFEnabled() {
-		return false, nil
-	}
-
+// bpfEnabledValue resolves the dataplane Felix should run, or nil to leave the field alone.
+// Turning eBPF on waits for the calico-node rollout to mount the BPF volumes.
+func (r *ReconcileInstallation) bpfEnabledValue(ctx context.Context, install *operatorv1.Installation, current *v3.FelixConfiguration, needNsMigration bool) (*bool, error) {
 	ds := &appsv1.DaemonSet{}
 	err := r.client.Get(ctx, types.NamespacedName{Namespace: common.CalicoNamespace, Name: common.NodeDaemonSetName}, ds)
 	if apierrors.IsNotFound(err) {
-		// A fresh install in eBPF mode has no calico-node rollout to wait for.
-		return !needNsMigration, nil
+		if needNsMigration {
+			// calico-node still serves nodes out of kube-system. Claiming the field here either
+			// fights a value the user set or restarts the dataplane mid-migration.
+			return nil, nil
+		}
+
+		// A fresh install has no calico-node rollout to wait for.
+		return ptr.To(install.Spec.BPFEnabled()), nil
 	}
 	if err != nil {
-		return false, err
+		return nil, err
+	}
+	if !install.Spec.BPFEnabled() {
+		return ptr.To(false), nil
 	}
 
 	// Operators before the FelixConfiguration field enabled eBPF through a calico-node env var.
 	envVarEnabled, err := bpfEnabledOnDaemonsetWithEnvVar(ds)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	if envVarEnabled || isRolloutCompleteWithBPFVolumes(ds) {
-		return true, nil
+		return ptr.To(true), nil
 	}
-	return bpfEnabledOnFelixConfig(current), nil
+	return ptr.To(bpfEnabledOnFelixConfig(current)), nil
 }

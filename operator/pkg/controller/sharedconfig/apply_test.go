@@ -241,6 +241,26 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 				Expect(getFelixConfig().Spec.BPFEnabled).To(Equal(ptr.To(true)))
 			})
 
+			It("should take over a field another manager applied when its record says it wrote the value", func() {
+				// A server-side apply owns the field, so no update manager holds it and the
+				// operator's record is the only evidence of who wrote the value.
+				other := &unstructured.Unstructured{Object: map[string]any{
+					"apiVersion": "projectcalico.org/v3",
+					"kind":       "FelixConfiguration",
+					"metadata":   map[string]any{"name": "default"},
+					"spec":       map[string]any{"bpfEnabled": true},
+				}}
+				Expect(c.Apply(ctx, client.ApplyConfigurationFromUnstructured(other), client.FieldOwner("kubectl"))).NotTo(HaveOccurred())
+
+				fc := getFelixConfig()
+				fc.Annotations = map[string]string{render.BPFOperatorAnnotation: "true"}
+				Expect(c.Update(ctx, fc, client.FieldOwner("operator"))).NotTo(HaveOccurred())
+
+				_, err := w.ApplyFelixConfiguration(ctx, declareBPF(sharedconfig.ConflictError))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(getFelixConfig().Spec.BPFEnabled).To(Equal(ptr.To(false)))
+			})
+
 			It("should take over a field its own legacy manager still owns", func() {
 				createAsManager("operator", nil, v3.FelixConfigurationSpec{HealthPort: ptr.To(9098)})
 
@@ -372,6 +392,29 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 			_, err = w.ApplyFelixConfiguration(ctx, declare(sharedconfig.ConflictError, sharedconfig.ConflictDefer))
 			Expect(err).To(BeAssignableToTypeOf(&sharedconfig.ConflictingFieldsError{}))
 			Expect(getFelixConfig().Spec.HealthPort).To(Equal(ptr.To(9100)))
+		})
+
+		It("should keep a deferred field a user set at the declared value out of its record", func() {
+			Expect(c.Create(ctx, &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)},
+			})).NotTo(HaveOccurred())
+
+			_, err := w.ApplyFelixConfiguration(ctx, declare(sharedconfig.ConflictDefer, sharedconfig.ConflictDefer))
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = w.ApplyFelixConfiguration(ctx, func(_ *v3.FelixConfiguration) (*sharedconfig.FelixConfigurationDeclaration, error) {
+				return &sharedconfig.FelixConfigurationDeclaration{
+					Manager: "installation",
+					Owned:   &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{VXLANPort: ptr.To(4789)}},
+					Policies: map[string]sharedconfig.ConflictPolicy{
+						"spec.healthPort": sharedconfig.ConflictDefer,
+						"spec.vxlanPort":  sharedconfig.ConflictDefer,
+					},
+				}, nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(getFelixConfig().Spec.HealthPort).To(Equal(ptr.To(9099)))
 		})
 
 		It("should treat a value it has no record of as someone else's", func() {

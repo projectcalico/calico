@@ -149,6 +149,20 @@ var _ = Describe("FelixConfiguration declarations", func() {
 		Expect(d.Owned.Spec.ProgramClusterRoutes).To(Equal(ptr.To("Enabled")))
 	})
 
+	It("declares nothing while calico-node still serves nodes out of kube-system", func() {
+		bpf := operatorv1.LinuxDataplaneBPF
+		i := install()
+		i.Spec.CalicoNetwork.LinuxDataplane = &bpf
+
+		d, err := r.declareBPFEnabled(context.Background(), i, true)(&v3.FelixConfiguration{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(d).To(BeNil())
+
+		d, err = r.declareBPFEnabled(context.Background(), i, false)(&v3.FelixConfiguration{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(d.Owned.Spec.BPFEnabled).To(Equal(ptr.To(true)))
+	})
+
 	It("declares bpfEnabled under its own manager, refusing to fight over it", func() {
 		d, err := r.declareBPFEnabled(context.Background(), install(), false)(&v3.FelixConfiguration{})
 		Expect(err).NotTo(HaveOccurred())

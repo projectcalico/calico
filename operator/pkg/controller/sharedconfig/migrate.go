@@ -30,12 +30,13 @@ const legacyFieldManager = "operator"
 // reclaimablePaths lists fields a plain update owns that the operator wrote itself.
 // An apply must force ownership across once.
 func reclaimablePaths(obj client.Object, manager string) (map[string]bool, error) {
-	reclaimable, others, err := updateOwnedPaths(obj)
-	if err != nil || len(others) == 0 || appliedBy(obj, manager) {
+	reclaimable, _, err := updateOwnedPaths(obj)
+	if err != nil || appliedBy(obj, manager) {
 		return reclaimable, err
 	}
 
-	// Ownership moves on a plain update too, so fall back to the values the operator recorded.
+	// Ownership also moves on a plain update, and on another manager's apply, so fall back to the
+	// values the operator recorded.
 	lastWritten, err := lastWrittenValues(obj)
 	if err != nil || len(lastWritten) == 0 {
 		return reclaimable, err
@@ -45,7 +46,7 @@ func reclaimablePaths(obj client.Object, manager string) (map[string]bool, error
 		return nil, err
 	}
 	for path := range lastWritten {
-		if !others[path] {
+		if reclaimable[path] {
 			continue
 		}
 		// Legacy ownership is beside the point here: these paths belong to another manager.
