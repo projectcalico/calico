@@ -162,11 +162,20 @@ func makeEstablishedValue() Value {
 	)
 }
 
-// makeEstablishedValueWithFIN creates an established value with a FIN on one leg.
-func makeEstablishedValueWithFIN() Value {
+// makeHalfClosedValue creates an established value with a FIN on one leg only.
+func makeHalfClosedValue() Value {
 	legA := established(true, remoteIfIndex)
 	legA.FinSeen = true
 	return NewValueNormal(time.Duration(0), 0, legA, established(false, podIfIndex))
+}
+
+// makeBothFINsValue creates the close both endpoints agreed on.
+func makeBothFINsValue() Value {
+	legA := established(true, remoteIfIndex)
+	legA.FinSeen = true
+	legB := established(false, podIfIndex)
+	legB.FinSeen = true
+	return NewValueNormal(time.Duration(0), 0, legA, legB)
 }
 
 // makeEstablishedValueWithRST creates an established value with RST seen.
@@ -299,27 +308,63 @@ func TestConnLimitScannerV6WritesBackToItsOwnFamily(t *testing.T) {
 	}
 }
 
-func TestConnLimitScannerSkipsFINSeen(t *testing.T) {
+// A half-closed connection is still live: shutdown(SHUT_WR) must not hide it
+// from the recount (CORE-13478 Failure.6).
+func TestConnLimitScannerCountsHalfClosedConnection(t *testing.T) {
 	podIP := "10.65.0.2"
 	remoteIP := "10.65.1.3"
 
-	scanner := &ConnLimitScanner{
-		family: qos.IPFamilyV4,
-		counts: make(map[connlimitKey]uint32),
-		podInfo: map[string]ConnLimitPodInfo{
-			string(net.ParseIP(podIP).To4()): podInfo(9, true, false),
-		},
-	}
+	scanner := limitedPodScanner(podIP)
 
 	key := makeKey(remoteIP, podIP, 54321, 8080)
-	val := makeEstablishedValueWithFIN()
+	val := makeHalfClosedValue()
 
 	verdict, _ := scanner.Check(key, val, nil)
 	if verdict != ScanVerdictOK {
 		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
 	}
+	expected := connlimitKey{ifindex: podIfIndex, direction: 1}
+	if scanner.counts[expected] != 1 {
+		t.Errorf("one FIN hid a live connection from the recount, so the pod "+
+			"can hold unbounded connections; got %v", scanner.counts)
+	}
+}
+
+// Both FINs is the close the fast path already decremented.
+func TestConnLimitScannerSkipsBothFINsSeen(t *testing.T) {
+	podIP := "10.65.0.2"
+	remoteIP := "10.65.1.3"
+
+	scanner := limitedPodScanner(podIP)
+
+	verdict, _ := scanner.Check(makeKey(remoteIP, podIP, 54321, 8080),
+		makeBothFINsValue(), nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
 	if len(scanner.counts) != 0 {
-		t.Errorf("expected no counts for FIN connection, got %v", scanner.counts)
+		t.Errorf("expected no counts for a both-FIN close, got %v", scanner.counts)
+	}
+}
+
+// On DSR the return leg never reaches this hook, so one FIN is the whole close.
+func TestConnLimitScannerSkipsSingleFINOnDSR(t *testing.T) {
+	podIP := "10.65.0.2"
+	remoteIP := "10.65.1.3"
+
+	scanner := limitedPodScanner(podIP)
+
+	legA := established(true, remoteIfIndex)
+	legA.FinSeen = true
+	val := NewValueNormal(time.Duration(0), ctv4.FlagNATFwdDsr,
+		legA, established(false, podIfIndex))
+
+	verdict, _ := scanner.Check(makeKey(remoteIP, podIP, 54321, 8080), val, nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
+	if len(scanner.counts) != 0 {
+		t.Errorf("expected no counts for a DSR half-close, got %v", scanner.counts)
 	}
 }
 
