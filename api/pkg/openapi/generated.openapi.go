@@ -3762,7 +3762,6 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"bpfLogLevel": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFLogLevel controls the log level of the BPF programs when in BPF dataplane mode.  One of \"Off\", \"Info\", or \"Debug\".  The logs are emitted to the BPF trace pipe, accessible with the command `tc exec bpf debug`. [Default: Off].",
-							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
 						},
