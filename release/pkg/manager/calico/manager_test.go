@@ -668,6 +668,29 @@ func TestHashreleaseManifestsAreCollectedBeforeTheArchiveReadsThem(t *testing.T)
 	}
 }
 
+func TestReleaseNoteNamesTheArtifactsThroughTheirAccessors(t *testing.T) {
+	m := &CalicoManager{
+		calicoVersion: "v3.30.0",
+		githubRelease: true,
+		githubOrg:     "projectcalico",
+		repo:          "calico",
+	}
+	up := m.githubReleaseUpload()
+	if up == nil {
+		t.Fatal("githubReleaseUpload() = nil")
+	}
+	body := up.Handler.(distribution.GithubRelease).Body
+
+	// Stated outright rather than computed from the accessors: the note tells a
+	// user what to download, so it has to match the published asset names that
+	// pkg/postrelease asserts against a real release.
+	for _, want := range []string{"release-v3.30.0.tgz", "calico-windows-v3.30.0.zip"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("release note does not name %q:\n%s", want, body)
+		}
+	}
+}
+
 func TestArchiveSourcesIsGatedPerSource(t *testing.T) {
 	for name, tc := range map[string]struct {
 		images, binaries, manifests bool
