@@ -62,6 +62,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/migration/convert"
 	"github.com/projectcalico/calico/operator/pkg/controller/migration/datastoremigration"
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
+	"github.com/projectcalico/calico/operator/pkg/controller/sharedconfig"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
 	"github.com/projectcalico/calico/operator/pkg/controller/typhaautoscaler"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
@@ -1090,35 +1091,17 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	// Set any non-default FelixConfiguration values that we need.
-	felixConfiguration, err := utils.PatchFelixConfiguration(ctx, r.client, func(fc *v3.FelixConfiguration) (bool, error) {
-		// Configure defaults.
-		u, err := r.setDefaultsOnFelixConfiguration(ctx, defaulted, fc, reqLogger, needsNamespaceMigration)
-		if err != nil {
-			return false, err
-		}
-
-		// Configure nftables mode.
-		u2, err := r.setNftablesMode(ctx, defaulted, fc, reqLogger)
-		if err != nil {
-			return false, err
-		}
-
-		// Configure cluster routing mode.
-		u3, err := setClusterRoutingOnFelixConfiguration(defaulted, fc, reqLogger)
-		if err != nil {
-			return false, err
-		}
-
-		updated := u || u2 || u3
-		return updated, nil
-	})
-	if err != nil {
+	felixWriter := sharedconfig.NewWriter(r.client, r.opts.UseV3CRDs)
+	if _, err := felixWriter.ApplyFelixConfiguration(ctx, r.declareFelixConfiguration(ctx, defaulted, needsNamespaceMigration)); err != nil {
+		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
 		return reconcile.Result{}, err
 	}
 
-	// Provide the extension a chance to default any fields it needs.
-	if err := r.ext.DefaultFelixConfiguration(ctx, r.client, &defaulted.Spec); err != nil {
-		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error defaulting FelixConfiguration for the variant", err, reqLogger)
+	// The return carries both writes, so the render below sees the health port and cgroup path
+	// a user may have kept.
+	felixConfiguration, err := felixWriter.ApplyFelixConfiguration(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration))
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
 		return reconcile.Result{}, err
 	}
 
@@ -1497,10 +1480,8 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	r.status.AddDeployments([]types.NamespacedName{{Name: common.KubeControllersDeploymentName, Namespace: common.CalicoNamespace}})
 	certificateManager.AddToStatusManager(r.status, common.CalicoNamespace)
 
-	// If eBPF is enabled in the operator API, patch FelixConfiguration to enable it within Felix.
-	_, err = utils.PatchFelixConfiguration(ctx, r.client, func(fc *v3.FelixConfiguration) (bool, error) {
-		return r.setBPFUpdatesOnFelixConfiguration(ctx, defaulted, fc, reqLogger)
-	})
+	// Now that calico-node has rolled out, re-check whether eBPF can be enabled within Felix.
+	_, err = felixWriter.ApplyFelixConfiguration(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration))
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating resource", err, reqLogger)
 		return reconcile.Result{}, err
@@ -1631,175 +1612,6 @@ func calicoDirectoryExists() bool {
 	return err == nil
 }
 
-func (r *ReconcileInstallation) setNftablesMode(_ context.Context, install *operatorv1.Installation, fc *v3.FelixConfiguration, reqLogger logr.Logger) (bool, error) {
-	updated := false
-
-	// Set the FelixConfiguration nftables dataplane mode based on the operator configuration. We do this unconditonally because
-	// we don't need to handle upgrades from versions that were previously FelixConfiguration only - nftables mode has always
-	// been controlled by the operator.
-	if install.Spec.CalicoNetwork.LinuxDataplane != nil {
-		nftablesMode := v3.NFTablesModeDisabled
-		if install.Spec.IsNftables() {
-			// The operator is configured to use the nftables dataplane.
-			if install.Spec.BPFEnabled() {
-				// For BPF mode, we always use nftables, as we don't use the upstream kube-proxy and so don't need to
-				// worry about compatibility with its mode of operation.
-				nftablesMode = v3.NFTablesModeEnabled
-			} else {
-				// Otherwise, kube-proxy is running - configure Felix to auto-detect whether it should use nftables or iptables on
-				// a per-node basis, allowing for smoother upgrades.
-				nftablesMode = v3.NFTablesModeAuto
-			}
-		}
-		updated = fc.Spec.NFTablesMode == nil || *fc.Spec.NFTablesMode != nftablesMode
-		fc.Spec.NFTablesMode = &nftablesMode
-	}
-	if updated {
-		reqLogger.Info("Patching nftables mode", "nftablesMode", *fc.Spec.NFTablesMode)
-	}
-	return updated, nil
-}
-
-// setDefaultOnFelixConfiguration will take the passed in fc and add any defaulting needed
-// based on the install config.
-func (r *ReconcileInstallation) setDefaultsOnFelixConfiguration(ctx context.Context, install *operatorv1.Installation, fc *v3.FelixConfiguration, reqLogger logr.Logger, needNsMigration bool) (bool, error) {
-	updated := false
-
-	switch install.Spec.CNI.Type {
-	// If we're using the AWS CNI plugin we need to ensure the route tables that calico-node
-	// uses do not conflict with the ones the AWS CNI plugin uses so default them
-	// in the FelixConfiguration if they are not already set.
-	case operatorv1.PluginAmazonVPC:
-		if fc.Spec.RouteTableRange == nil {
-			updated = true
-			// Defaulting based on that AWS might be using the following:
-			// - The ENI device number + 1
-			//   Currently the max number of ENIs for any host is 15.
-			//   p4d.24xlarge is reported to support 4x15 ENI but it uses 4 cards
-			//   and AWS CNI only uses ENIs on card 0.
-			// - The VLAN table ID + 100 (there is doubt if this is true)
-			fc.Spec.RouteTableRange = &v3.RouteTableRange{
-				Min: 65,
-				Max: 99,
-			}
-		}
-	case operatorv1.PluginGKE:
-		if fc.Spec.RouteTableRange == nil {
-			updated = true
-			// Don't conflict with the GKE CNI plugin's routes.
-			fc.Spec.RouteTableRange = &v3.RouteTableRange{
-				Min: 10,
-				Max: 250,
-			}
-		}
-	}
-
-	// Determine the felix health port to use. Prefer the configuration from FelixConfiguration,
-	// but default to 9099 (or 9199 on OpenShift). We will also write back whatever we select to FelixConfiguration.
-	felixHealthPort := render.DefaultFelixHealthPort
-	if install.Spec.KubernetesProvider.IsOpenShift() {
-		felixHealthPort = 9199
-	}
-	if fc.Spec.HealthPort == nil {
-		fc.Spec.HealthPort = &felixHealthPort
-		updated = true
-	}
-	vxlanVNI := 4096
-	vxlanPort := 4789
-	// MKE uses a vxlanVNI:4096 and vxlanPort:4789 for its docker swarm vxlan.
-	// This results in a conflict with calico's VXLAN and the vxlan.calico interface
-	// gets deleted. To fix this we change the vxlanVNI to 10000 as recommended by
-	// MKE docs (https://docs.mirantis.com/mke/3.7/cli-ref/mke-cli-install.html).
-	if install.Spec.KubernetesProvider == operatorv1.ProviderDockerEE {
-		vxlanVNI = 10000
-		// We are using a flow based VXLAN device for
-		// ebpf dataplane. This requires changing the default VXLAN port to
-		// 8472 to avoid conflict with the host's VXLAN interface.
-		if install.Spec.BPFEnabled() {
-			vxlanPort = 8472
-		}
-	}
-
-	if fc.Spec.VXLANVNI == nil {
-		fc.Spec.VXLANVNI = &vxlanVNI
-		updated = true
-	}
-
-	if fc.Spec.VXLANPort == nil {
-		fc.Spec.VXLANPort = &vxlanPort
-		updated = true
-	}
-
-	if install.Spec.KubernetesProvider == operatorv1.ProviderDockerEE {
-		// Set bpfHostConntrackBypass to false for eBPF dataplane to work with MKE
-		if install.Spec.BPFEnabled() && fc.Spec.BPFHostConntrackBypass == nil {
-			disableBPFHostConntrackBypass(fc)
-			updated = true
-		}
-	}
-
-	// Whether a calico-node DaemonSet is already running decides both what version is out
-	// there and how bpfEnabled has to be derived, below.
-	ds := &appsv1.DaemonSet{}
-	nodeDSExists := true
-	if err := r.client.Get(ctx, types.NamespacedName{Namespace: common.CalicoNamespace, Name: common.NodeDaemonSetName}, ds); err != nil {
-		if !apierrors.IsNotFound(err) {
-			reqLogger.Error(err, "An error occurred when getting the Daemonset resource")
-			return false, err
-		}
-		nodeDSExists = false
-	}
-
-	// When BPF is enabled but the operator is not managing kube-proxy (e.g. on AKS, where
-	// the platform owns the kube-proxy DaemonSet), the platform's kube-proxy keeps the
-	// default healthz port (10256), and Felix's BPF kube-proxy healthz server would fail
-	// to bind. Default the port to 0 (disabled) so calico-node starts cleanly. Users can
-	// still override by setting BPFKubeProxyHealthzPort explicitly on FelixConfiguration.
-	//
-	// 0 is only a valid port for Calico >= v3.32.0 and Enterprise >= v3.23.0-2.0, so hold
-	// the write until every node can accept it.
-	if allNodesRunTargetVersion(install, needNsMigration, nodeDSExists, r.ext.ProductVersion(&install.Spec)) &&
-		install.Spec.BPFEnabled() && !install.Spec.KubeProxyManagementEnabled() && fc.Spec.BPFKubeProxyHealthzPort == nil {
-		disableBPFKubeProxyHealthz(fc)
-		updated = true
-	}
-
-	// If BPF is enabled, but not set on FelixConfiguration, do so here. This could happen when an older
-	// version of operator is replaced by the new one. Older versions of the operator used an
-	// environment variable to enable BPF, but we no longer do so. In order to prevent disruption
-	// when the environment variable is removed by the render code of the new operator, make sure
-	// FelixConfiguration has the correct value set.
-
-	// If calico-node daemonset exists, we need to check the ENV VAR and set FelixConfiguration accordingly.
-	// Otherwise, this is a fresh install in eBPF mode, set the felix config.
-	if !nodeDSExists {
-		if !needNsMigration && install.Spec.BPFEnabled() {
-			err := setBPFEnabledOnFelixConfiguration(fc, true)
-			if err != nil {
-				reqLogger.Error(err, "Unable to enable eBPF data plane with a fresh install")
-				return false, err
-			}
-			updated = true
-		}
-	} else {
-		bpfEnabledOnDaemonsetWithEnvVar, err := bpfEnabledOnDaemonsetWithEnvVar(ds)
-		if err != nil {
-			reqLogger.Error(err, "An error occurred when querying the Daemonset resource")
-			return false, err
-		} else if bpfEnabledOnDaemonsetWithEnvVar && !bpfEnabledOnFelixConfig(fc) {
-			err = setBPFEnabledOnFelixConfiguration(fc, true)
-			if err != nil {
-				reqLogger.Error(err, "Unable to enable eBPF data plane")
-				return false, err
-			} else {
-				updated = true
-			}
-		}
-	}
-
-	return updated, nil
-}
-
 // allNodesRunTargetVersion reports whether every calico-node runs targetVersion. Gate
 // FelixConfiguration writes that older nodes' validators reject on it.
 func allNodesRunTargetVersion(install *operatorv1.Installation, needNsMigration, nodeDSExists bool, targetVersion string) bool {
@@ -1811,32 +1623,10 @@ func allNodesRunTargetVersion(install *operatorv1.Installation, needNsMigration,
 		// Fresh install: nothing is running yet.
 		return true
 	}
+
 	// Written together, and only once the stack was seen available on that version. A status
 	// reporting neither fails this too, which is what we want.
 	return install.Status.Variant == install.Spec.Variant && install.Status.CalicoVersion == targetVersion
-}
-
-// setClusterRoutingOnFelixConfiguration sets programClusterRoutes in the FelixConfiguration resource
-// based on the value of clusterRoutingMode in the install config.
-func setClusterRoutingOnFelixConfiguration(
-	install *operatorv1.Installation,
-	fc *v3.FelixConfiguration,
-	reqLogger logr.Logger,
-) (bool, error) {
-	if install.Spec.CalicoNetwork == nil || install.Spec.CalicoNetwork.ClusterRoutingMode == nil {
-		return false, nil
-	}
-
-	updated := false
-	desiredValue := felixProgramClusterRoutesValue(*install.Spec.CalicoNetwork.ClusterRoutingMode)
-
-	if fc.Spec.ProgramClusterRoutes == nil || *fc.Spec.ProgramClusterRoutes != desiredValue {
-		fc.Spec.ProgramClusterRoutes = &desiredValue
-		updated = true
-		reqLogger.Info("Patching FelixConfiguration", "programClusterRoutes", desiredValue)
-	}
-
-	return updated, nil
 }
 
 // setClusterRoutingOnBGPConfiguration sets programClusterRoutes in the BGPConfiguration resource
@@ -1921,42 +1711,6 @@ func clusterRoutingMode(install *operatorv1.Installation) operatorv1.ClusterRout
 		return operatorv1.ClusterRoutingModeFelixIPIPOnly
 	}
 	return *install.Spec.CalicoNetwork.ClusterRoutingMode
-}
-
-// setBPFUpdatesOnFelixConfiguration will take the passed in fc and update any BPF properties needed
-// based on the install config and the daemonset.
-func (r *ReconcileInstallation) setBPFUpdatesOnFelixConfiguration(ctx context.Context, install *operatorv1.Installation, fc *v3.FelixConfiguration, reqLogger logr.Logger) (bool, error) {
-	updated := false
-
-	bpfEnabledOnInstall := install.Spec.BPFEnabled()
-	if bpfEnabledOnInstall {
-		ds := &appsv1.DaemonSet{}
-		err := r.client.Get(ctx, types.NamespacedName{Namespace: common.CalicoNamespace, Name: common.NodeDaemonSetName}, ds)
-		if err != nil {
-			return false, err
-		}
-		if !bpfEnabledOnFelixConfig(fc) && isRolloutCompleteWithBPFVolumes(ds) {
-			err := setBPFEnabledOnFelixConfiguration(fc, bpfEnabledOnInstall)
-			if err != nil {
-				reqLogger.Error(err, "Unable to enable eBPF data plane")
-				return false, err
-			} else {
-				updated = true
-			}
-		}
-	} else {
-		if fc.Spec.BPFEnabled == nil || *fc.Spec.BPFEnabled {
-			err := setBPFEnabledOnFelixConfiguration(fc, bpfEnabledOnInstall)
-			if err != nil {
-				reqLogger.Error(err, "Unable to disable eBPF data plane")
-				return false, err
-			} else {
-				updated = true
-			}
-		}
-	}
-
-	return updated, nil
 }
 
 // serviceIPsAndPorts extracts the service IPs and ports from the Service and returns them as a slice of k8sapi.ServiceEndpoint.
