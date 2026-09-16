@@ -220,6 +220,7 @@ local:operator/pkg/controller/migration/datastoremigration
 local:operator/pkg/controller/options
 local:operator/pkg/controller/podiprecovery
 local:operator/pkg/controller/secrets
+local:operator/pkg/controller/sharedconfig
 local:operator/pkg/controller/status
 local:operator/pkg/controller/tiers
 local:operator/pkg/controller/typhaautoscaler
