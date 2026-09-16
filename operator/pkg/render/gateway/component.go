@@ -176,6 +176,14 @@ func BackendName(prefix string) string { return prefix + "-backend" }
 // ReferenceGrantName is the ReferenceGrant object name for a component's resource prefix.
 func ReferenceGrantName(prefix string) string { return prefix + "-allow-gateway" }
 
+// GatewayAccessName is the gateway-namespace access grant's name for a resource
+// prefix. This grant authorizes the Gateway and HTTPRoute.
+func GatewayAccessName(prefix string) string { return prefix + gatewayAccessSuffix }
+
+// BackendAccessName is the backend-namespace access grant's name for a resource
+// prefix. This grant authorizes the Backend and ReferenceGrant.
+func BackendAccessName(prefix string) string { return prefix + backendAccessSuffix }
+
 // listenerName is the Gateway's HTTPS listener name for a component's resource
 // prefix. The HTTPRoute's parentRef sectionName must match it to attach.
 func listenerName(prefix string) string { return prefix + "-https" }
@@ -183,7 +191,7 @@ func listenerName(prefix string) string { return prefix + "-https" }
 // gatewayAccess grants the operator the write permissions needed in the gateway namespace; the
 // cluster-wide ClusterRole keeps the reads.
 func (c *gatewayComponent) gatewayAccess() (*rbacv1.Role, *rbacv1.RoleBinding) {
-	return c.access(c.cfg.ResourcePrefix+gatewayAccessSuffix, c.cfg.GatewayNamespace, []rbacv1.PolicyRule{
+	return c.access(GatewayAccessName(c.cfg.ResourcePrefix), c.cfg.GatewayNamespace, []rbacv1.PolicyRule{
 		{
 			APIGroups: []string{gapi.GroupName},
 			Resources: []string{"gateways", "httproutes"},
@@ -194,7 +202,7 @@ func (c *gatewayComponent) gatewayAccess() (*rbacv1.Role, *rbacv1.RoleBinding) {
 
 // backendAccess grants the writes needed where the backing Service lives.
 func (c *gatewayComponent) backendAccess() (*rbacv1.Role, *rbacv1.RoleBinding) {
-	return c.access(c.cfg.ResourcePrefix+backendAccessSuffix, c.cfg.BackendNamespace, []rbacv1.PolicyRule{
+	return c.access(BackendAccessName(c.cfg.ResourcePrefix), c.cfg.BackendNamespace, []rbacv1.PolicyRule{
 		{
 			APIGroups: []string{gapi.GroupName},
 			Resources: []string{"referencegrants"},

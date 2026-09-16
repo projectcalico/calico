@@ -292,13 +292,17 @@ func (h *Helper) ClearRBACFinalizers(ctx context.Context) error {
 		return err
 	}
 	// Group the grants marked for deletion that still carry our finalizer by
-	// namespace, so each namespace's gateway resources are checked once.
-	markedByNamespace := map[string][]client.Object{}
+	// name and namespace. A grant's authorized resources live in its own
+	// namespace, and which resources depends on the grant, so the Role and
+	// RoleBinding of one grant share a check while the two grant kinds do not.
+	type grantKey struct{ namespace, name string }
+	markedByGrant := map[grantKey][]client.Object{}
 	mark := func(grant client.Object) {
 		if grant.GetDeletionTimestamp().IsZero() || !slices.Contains(grant.GetFinalizers(), rgateway.RBACFinalizer) {
 			return
 		}
-		markedByNamespace[grant.GetNamespace()] = append(markedByNamespace[grant.GetNamespace()], grant)
+		key := grantKey{grant.GetNamespace(), grant.GetName()}
+		markedByGrant[key] = append(markedByGrant[key], grant)
 	}
 	for i := range roles.Items {
 		mark(&roles.Items[i])
@@ -307,8 +311,8 @@ func (h *Helper) ClearRBACFinalizers(ctx context.Context) error {
 		mark(&bindings.Items[i])
 	}
 
-	for ns, marked := range markedByNamespace {
-		gone, err := h.gatewayResourcesGone(ctx, ns)
+	for _, marked := range markedByGrant {
+		gone, err := h.gatewayResourcesGone(ctx, marked[0])
 		if err != nil {
 			return err
 		}
@@ -327,19 +331,15 @@ func (h *Helper) ClearRBACFinalizers(ctx context.Context) error {
 	return nil
 }
 
-// gatewayResourcesGone reports whether none of the component's gateway
-// resources remain in the namespace — the point at which an access grant
-// there has nothing left to cover. A kind the cluster does not serve counts
-// as gone.
-func (h *Helper) gatewayResourcesGone(ctx context.Context, namespace string) (bool, error) {
-	prefix := h.cfg.ResourcePrefix
-	for name, obj := range map[string]client.Object{
-		rgateway.GatewayName(prefix):        &gapi.Gateway{},
-		rgateway.RouteName(prefix):          &gapi.HTTPRoute{},
-		rgateway.BackendName(prefix):        &envoyapi.Backend{},
-		rgateway.ReferenceGrantName(prefix): &gapiv1b1.ReferenceGrant{},
-	} {
-		err := h.cli.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, obj)
+// gatewayResourcesGone reports whether the gateway resources an access grant
+// authorizes are gone from the grant's namespace — the point at which the grant
+// has nothing left to cover. Each grant waits only on the resources it
+// authorizes, so a gateway grant does not linger behind a Backend that a
+// co-located backend grant still covers. A kind the cluster does not serve
+// counts as gone.
+func (h *Helper) gatewayResourcesGone(ctx context.Context, grant client.Object) (bool, error) {
+	for name, obj := range h.authorizedResources(grant.GetName()) {
+		err := h.cli.Get(ctx, types.NamespacedName{Name: name, Namespace: grant.GetNamespace()}, obj)
 		if err == nil {
 			return false, nil
 		}
@@ -348,6 +348,27 @@ func (h *Helper) gatewayResourcesGone(ctx context.Context, namespace string) (bo
 		}
 	}
 	return true, nil
+}
+
+// authorizedResources returns the gateway resources an access grant authorizes,
+// keyed by object name. The gateway grant covers the Gateway and HTTPRoute; the
+// backend grant covers the Backend and ReferenceGrant. An unrecognized name
+// authorizes nothing, so its finalizer clears.
+func (h *Helper) authorizedResources(grantName string) map[string]client.Object {
+	prefix := h.cfg.ResourcePrefix
+	switch grantName {
+	case rgateway.GatewayAccessName(prefix):
+		return map[string]client.Object{
+			rgateway.GatewayName(prefix): &gapi.Gateway{},
+			rgateway.RouteName(prefix):   &gapi.HTTPRoute{},
+		}
+	case rgateway.BackendAccessName(prefix):
+		return map[string]client.Object{
+			rgateway.BackendName(prefix):        &envoyapi.Backend{},
+			rgateway.ReferenceGrantName(prefix): &gapiv1b1.ReferenceGrant{},
+		}
+	}
+	return nil
 }
 
 // UnhealthyReason returns why the Gateway or HTTPRoute is not ready, or ""
