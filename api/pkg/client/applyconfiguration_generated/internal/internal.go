@@ -1368,6 +1368,12 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: vxlanPort
       type:
         scalar: numeric
+    - name: vxlanSrcPortMax
+      type:
+        scalar: numeric
+    - name: vxlanSrcPortMin
+      type:
+        scalar: numeric
     - name: vxlanVNI
       type:
         scalar: numeric
