@@ -142,6 +142,7 @@ func newReconciler(
 		clusterDomain: opts.ClusterDomain,
 		variant:       opts.Variant,
 		ext:           opts.Extensions.Whisker(),
+		gwExt:         opts.Extensions.UIGateway(),
 	}
 	c.status.Run(opts.ShutdownContext)
 	return c
@@ -158,6 +159,7 @@ type Reconciler struct {
 	clusterDomain string
 	variant       operatorv1.ProductVariant
 	ext           extensions.WhiskerExtension
+	gwExt         extensions.UIGatewayExtension
 }
 
 // Reconcile reads that state of the cluster for a Whisker object and makes changes based on the
@@ -181,7 +183,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 			ResourcePrefix:   whisker.GatewayResourcePrefix,
 			TLSSecretName:    whisker.GatewayTLSSecretName,
 			BackendNamespace: whisker.WhiskerNamespace,
+			Extension:        r.gwExt,
 		})
+		if err := gwHelper.ClearRBACFinalizers(ctx); err != nil {
+			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to clear gateway RBAC finalizers", err, reqLogger)
+			return reconcile.Result{}, err
+		}
 		gwComponents, err := gwHelper.Teardown(ctx)
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to list gateways for cleanup", err, reqLogger)
@@ -325,7 +332,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		RouteRequestTimeout: ptr.To("0s"),
 		Provider:            r.provider,
 		Azure:               installationSpec.Azure,
+		Extension:           r.gwExt,
 	})
+	// Clear finalizers on any access grant whose gateway resources are gone,
+	// unconditionally, so a stale grant finishes deleting regardless of whether
+	// the gateway is enabled below.
+	if err := gwHelper.ClearRBACFinalizers(ctx); err != nil {
+		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to clear gateway RBAC finalizers", err, reqLogger)
+		return reconcile.Result{}, err
+	}
 	var gatewayComponents []render.Component
 	var gatewayTLSKeyPair certificatemanagement.KeyPairInterface
 	gatewayEnabled := renderCR.Spec.IngressGateway != nil
