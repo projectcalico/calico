@@ -64,7 +64,7 @@ func (w *crdV1Writer) ApplyFelixConfiguration(ctx context.Context, declare Decla
 		return current, nil
 	}
 
-	payload, err := declaredPayload(declaration.Owned)
+	payload, err := declaredPayload(declaration.Owned, declaration.Policies)
 	if err != nil {
 		return nil, err
 	}

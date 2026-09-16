@@ -29,8 +29,9 @@ import (
 // defaultFelixConfigName is the only FelixConfiguration the operator writes.
 const defaultFelixConfigName = "default"
 
-// declaredPayload renders the declared fields as an object carrying no other state.
-func declaredPayload(owned *v3.FelixConfiguration) (*unstructured.Unstructured, error) {
+// declaredPayload renders the governed fields as an object carrying no other state.  It is built
+// from the policy paths rather than the struct, which serializes some fields unconditionally.
+func declaredPayload(owned *v3.FelixConfiguration, policies map[string]ConflictPolicy) (*unstructured.Unstructured, error) {
 	if owned == nil {
 		owned = &v3.FelixConfiguration{}
 	}
@@ -39,8 +40,24 @@ func declaredPayload(owned *v3.FelixConfiguration) (*unstructured.Unstructured, 
 		return nil, fmt.Errorf("unable to render FelixConfiguration fields: %w", err)
 	}
 
-	u := &unstructured.Unstructured{Object: content}
-	unstructured.RemoveNestedField(u.Object, "metadata")
+	declared := map[string]any{}
+	for path := range policies {
+		keys := strings.Split(path, ".")
+		value, found, err := unstructured.NestedFieldCopy(content, keys...)
+		if err != nil {
+			return nil, fmt.Errorf("unable to read declared field %s: %w", path, err)
+		}
+
+		// A governed path with no value is how a declaration gives the field up.
+		if !found {
+			continue
+		}
+		if err := unstructured.SetNestedField(declared, value, keys...); err != nil {
+			return nil, fmt.Errorf("unable to render declared field %s: %w", path, err)
+		}
+	}
+
+	u := &unstructured.Unstructured{Object: declared}
 	u.SetName(defaultFelixConfigName)
 	return u, nil
 }
