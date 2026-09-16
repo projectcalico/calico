@@ -29,6 +29,8 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
+// A field manager owns its declared fields as a set. A write site that declares a field on a
+// different schedule needs its own manager, because dropping a field deletes it.
 const (
 	// installationFieldManager owns the shared config fields defaulted from the Installation.
 	installationFieldManager = "installation"
@@ -48,6 +50,10 @@ func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, i
 		d := &sharedconfig.FelixConfigurationDeclaration{
 			Manager: installationFieldManager,
 			Owned:   &v3.FelixConfiguration{},
+
+			// Defer leaves a user's value alone, Override takes the field back. Fields the
+			// operator only defaults get Defer; modes it has to keep consistent with what it
+			// renders get Override.
 			Policies: map[string]sharedconfig.ConflictPolicy{
 				"spec.routeTableRange":         sharedconfig.ConflictDefer,
 				"spec.healthPort":              sharedconfig.ConflictDefer,
