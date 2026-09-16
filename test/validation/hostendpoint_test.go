@@ -82,15 +82,27 @@ func TestHostEndpoint_Validation(t *testing.T) {
 	}
 }
 
+// A host endpoint port only accepts the protocols that carry ports, which is
+// what libcalico-go checks with Protocol.SupportsPorts.
 func TestHostEndpoint_PortProtocolValidation(t *testing.T) {
+	const wantErr = "protocol must be one of TCP, UDP, SCTP"
+
 	for _, tt := range []struct {
 		name     string
 		protocol numorstring.Protocol
 		wantErr  string
 	}{
 		{name: "TCP", protocol: numorstring.ProtocolFromString("TCP")},
+		{name: "UDP", protocol: numorstring.ProtocolFromString("UDP")},
+		{name: "SCTP", protocol: numorstring.ProtocolFromString("SCTP")},
 		{name: "numeric 6", protocol: numorstring.ProtocolFromInt(6)},
-		{name: "unknown name", protocol: numorstring.ProtocolFromString("NOTAPROTO"), wantErr: "protocol must be a name"},
+		{name: "numeric 17", protocol: numorstring.ProtocolFromInt(17)},
+		{name: "numeric 132", protocol: numorstring.ProtocolFromInt(132)},
+		{name: "ICMP", protocol: numorstring.ProtocolFromString("ICMP"), wantErr: wantErr},
+		{name: "ICMPv6", protocol: numorstring.ProtocolFromString("ICMPv6"), wantErr: wantErr},
+		{name: "UDPLite", protocol: numorstring.ProtocolFromString("UDPLite"), wantErr: wantErr},
+		{name: "numeric 1", protocol: numorstring.ProtocolFromInt(1), wantErr: wantErr},
+		{name: "unknown name", protocol: numorstring.ProtocolFromString("NOTAPROTO"), wantErr: wantErr},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			hep := &v3.HostEndpoint{

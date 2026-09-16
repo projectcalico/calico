@@ -30843,7 +30843,7 @@ spec:
                     The list of IP networks that belong to this set. Each entry must be in CIDR notation,
                     e.g. "192.168.1.0/24". To include a single IP address, use a /32 (IPv4) or /128 (IPv6) mask.
                   items:
-                    maxLength: 43
+                    maxLength: 49
                     type: string
                   maxItems: 100000
                   type: array
@@ -30978,13 +30978,12 @@ spec:
                     type: object
                     x-kubernetes-validations:
                       - message:
-                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
-                          UDPLite) or a number in 1-255
+                          protocol must be one of TCP, UDP, SCTP, or their numbers
+                          6, 17, 132
                         reason: FieldValueInvalid
                         rule:
-                          "type(self.protocol) == int ? self.protocol >= 1 && self.protocol
-                          <= 255 : self.protocol in ['TCP', 'UDP', 'ICMP', 'ICMPv6',
-                          'SCTP', 'UDPLite']"
+                          "type(self.protocol) == int ? self.protocol in [6, 17, 132]
+                          : self.protocol in ['TCP', 'UDP', 'SCTP']"
                   type: array
                   x-kubernetes-list-type: atomic
                 profiles:
@@ -33636,7 +33635,7 @@ spec:
                     The list of IP networks that belong to this set. Each entry must be in CIDR notation,
                     e.g. "192.168.1.0/24". To include a single IP address, use a /32 (IPv4) or /128 (IPv6) mask.
                   items:
-                    maxLength: 43
+                    maxLength: 49
                     type: string
                   maxItems: 100000
                   type: array

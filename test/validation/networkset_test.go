@@ -37,6 +37,8 @@ func TestNetworkSets_NetsValidation(t *testing.T) {
 		{name: "bare IPv4 address", nets: []string{"10.0.0.1"}},
 		{name: "unmasked CIDR", nets: []string{"10.0.0.1/24"}},
 		{name: "mixed entries", nets: []string{"10.0.0.0/24", "fd00::/64", "10.0.0.1"}},
+		// The longest form a valid entry can take, at 49 characters.
+		{name: "IPv6 CIDR with embedded IPv4", nets: []string{"ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255/128"}},
 		{name: "empty list", nets: nil},
 		{name: "prefix length out of range", nets: []string{"10.0.0.0/33"}, wantErr: wantErr},
 		{name: "not an address", nets: []string{"garbage"}, wantErr: wantErr},

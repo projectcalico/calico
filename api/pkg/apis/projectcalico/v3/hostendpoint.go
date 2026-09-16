@@ -97,7 +97,7 @@ type HostEndpointSpec struct {
 	Ports []EndpointPort `json:"ports,omitempty" validate:"dive"`
 }
 
-// +kubebuilder:validation:XValidation:rule="type(self.protocol) == int ? self.protocol >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite']",message="protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP, UDPLite) or a number in 1-255",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="type(self.protocol) == int ? self.protocol in [6, 17, 132] : self.protocol in ['TCP', 'UDP', 'SCTP']",message="protocol must be one of TCP, UDP, SCTP, or their numbers 6, 17, 132",reason=FieldValueInvalid
 type EndpointPort struct {
 	Name     string               `json:"name" validate:"portName"`
 	Protocol numorstring.Protocol `json:"protocol"`
