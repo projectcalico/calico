@@ -57,7 +57,7 @@ static CALI_BPF_INLINE int try_redirect_to_peer(struct cali_tc_ctx *ctx)
 			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX  &&
 			!(ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_REDIR_PEER) &&
 			!is_tcp_syn(ctx)) {
-		if (CALI_F_L3_DEV) {
+		if (CALI_F_L3) {
 			rc = make_room_for_l2_header(ctx);
 			if (rc < 0) {
 				return TC_ACT_UNSPEC;
@@ -386,7 +386,7 @@ try_fib_external:
 				nh_params.nh_family = 2 /* AF_INET */;
 				nh_params.ipv4_nh = state->ip_dst;
 #endif
-				if (CALI_F_L3_DEV) {
+				if (CALI_F_L3) {
 					rc = make_room_for_l2_header(ctx);
 					if (rc < 0) {
 						goto cancel_fib;
@@ -503,7 +503,7 @@ try_fib_external:
 
 			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.", fib_params(ctx)->ifindex);
 
-			if (CALI_F_L3_DEV) {
+			if (CALI_F_L3) {
 				rc = make_room_for_l2_header(ctx);
 				if (rc < 0) {
 					goto cancel_fib;
