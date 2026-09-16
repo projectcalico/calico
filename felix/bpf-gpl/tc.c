@@ -105,6 +105,20 @@ static CALI_BPF_INLINE int state_fill_from_l4(struct cali_tc_ctx *ctx, bool deca
 	return tc_state_fill_from_nexthdr(ctx, decap);
 }
 
+/* True on an encapsulating device whose packet still needs its tunnel key set.
+ * Reads the globals directly: the fast path below has no ctx yet.
+ */
+static CALI_BPF_INLINE bool encap_needs_key(struct __sk_buff *skb)
+{
+	struct cali_tc_globals *gl = state_get_globals_tc();
+
+	if (!gl || !(gl->data.flags & CALI_GLOBALS_IFACE_ENCAPS)) {
+		return false;
+	}
+
+	return !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET);
+}
+
 /* calico_tc_main is the main function used in all of the tc programs.  It is specialised
  * for particular hook at build time based on the CALI_F build flags.
  */
@@ -120,7 +134,7 @@ int calico_tc_main(struct __sk_buff *skb)
 	 * skip all processing. */
 	if (CALI_F_FROM_HOST && skb_mark_equals(skb, CALI_SKB_MARK_BYPASS, CALI_SKB_MARK_BYPASS) &&
 			/* If we are on tunnel and we do not have the key set, we cannot short-circuit */
-			!(CALI_F_TUNNEL &&  !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET))) {
+			!encap_needs_key(skb)) {
 		if  (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
 			/* This generates a bit more richer output for logging */
 			DECLARE_TC_CTX(_ctx,
@@ -243,7 +257,7 @@ int calico_tc_main(struct __sk_buff *skb)
 		goto finalize;
 	}
 
-	if (CALI_F_TUNNEL && CALI_F_TO_HEP
+	if (IFACE_ENCAPS && CALI_F_TO_HEP
 			&& skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS, CALI_SKB_MARK_BYPASS)) {
 		/* In case we are on tunnel device, CALI_SKB_MARK_BYPASS is set we only got
 		 * here because CALI_SKB_MARK_TUNNEL_KEY_SET wasn't set. This happens when

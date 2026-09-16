@@ -25,9 +25,12 @@
 #include "nat4.h"
 #endif
 
-#define dnat_should_encap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV && !CALI_F_NAT_IF)
-#define dnat_return_should_encap() (CALI_F_FROM_WEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV && !CALI_F_NAT_IF)
-#define dnat_should_decap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV && !CALI_F_NAT_IF)
+/* An encapsulating device never adds another layer of its own. */
+#define dnat_on_plain_dev() (!CALI_F_IPIP && !CALI_F_L3_DEV && !CALI_F_NAT_IF && !IFACE_ENCAPS)
+
+#define dnat_should_encap() (CALI_F_FROM_HEP && dnat_on_plain_dev())
+#define dnat_return_should_encap() (CALI_F_FROM_WEP && dnat_on_plain_dev())
+#define dnat_should_decap() (CALI_F_FROM_HEP && dnat_on_plain_dev())
 
 static CALI_BPF_INLINE int is_vxlan_tunnel(struct cali_tc_ctx *ctx, __u16 vxlanport)
 {
