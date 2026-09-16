@@ -702,7 +702,7 @@ spec:
                           MatchOperator and PrefixLength.  CIDR should be in conventional CIDR notation,
                           <prefix>/<length>.
                         format: cidr
-                        maxLength: 43
+                        maxLength: 49
                         type: string
                       communities:
                         description: |-
@@ -1128,7 +1128,7 @@ spec:
                           MatchOperator and PrefixLength.  CIDR should be in conventional CIDR notation,
                           <prefix>/<length>.
                         format: cidr
-                        maxLength: 43
+                        maxLength: 49
                         type: string
                       communities:
                         description: |-
@@ -5793,7 +5793,7 @@ spec:
                 cidr:
                   description: The pool CIDR.
                   format: cidr
-                  maxLength: 48
+                  maxLength: 49
                   type: string
                   x-kubernetes-validations:
                     - message:
