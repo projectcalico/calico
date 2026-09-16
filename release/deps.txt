@@ -130,6 +130,7 @@ local:release/internal/github
 local:release/internal/hashreleaseserver
 local:release/internal/images
 local:release/internal/imagescanner
+local:release/internal/manifests
 local:release/internal/operatorimages
 local:release/internal/outputs
 local:release/internal/pinnedversion
