@@ -220,6 +220,11 @@ and the Go-side reader must agree on units and reference clock.
   (`cali_v4_ct`/`cali_v6_ct` have `Version: 4` at the time of
   writing). The kernel refuses to pin two layouts under the same
   name, and older Felixes reading a newer map will misparse.
+- A flag change on a *live* conntrack entry must be an atomic set
+  or clear, never a read-modify-write: both directions of a flow,
+  and parallel packets on other CPUs, write the same per-leg and
+  per-value flag words. The create path is exempt, as it fills the
+  entry on the stack and publishes it in one update.
 - A new scanner should return the smallest verdict that does the job
   (`ScanVerdictOK` for no-op) and should be idempotent across
   iterations. Scanners may be called once or many times per sweep
