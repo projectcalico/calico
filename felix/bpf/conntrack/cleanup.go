@@ -529,7 +529,9 @@ func entryDone(t timeouts.Timeouts, nowNanos int64, proto uint8, entry ValueInte
 	case ProtoTCP:
 		dsr := entry.IsForwardDSR()
 		data := entry.Data()
-		rstSeen := data.RSTSeen()
+		// Any later packet clears the per-leg bits, so a straggler crossing
+		// a close hid it here (CORE-13478 Failure.7).
+		rstSeen := data.RSTSeen() || entry.RSTSeen() != 0
 		if rstSeen && age > t.TCPResetSeen {
 			return "RST seen", true
 		}
@@ -539,9 +541,8 @@ func entryDone(t timeouts.Timeouts, nowNanos int64, proto uint8, entry ValueInte
 			return "FINs seen", true
 		}
 		if data.Established() || dsr {
-			if entry.RSTSeen() != 0 && age > 2*60*time.Second {
-				return "no traffic on conn with RST with residual traffic for too long", true
-			}
+			// The two-minute residual-RST rule is subsumed by the RST
+			// check above, which now sees the same state.
 			if age > t.TCPEstablished {
 				return "no traffic on established flow for too long", true
 			}
