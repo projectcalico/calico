@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/images"
+	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
@@ -635,7 +636,7 @@ func TestFelixContentShipsOnlyTheBPFTool(t *testing.T) {
 func TestHashreleaseManifestsAreCollectedBeforeTheArchiveReadsThem(t *testing.T) {
 	root := t.TempDir()
 	out := filepath.Join(t.TempDir(), "upload")
-	if err := os.MkdirAll(filepath.Join(root, manifestsDir), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, manifests.DirName), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -647,6 +648,9 @@ func TestHashreleaseManifestsAreCollectedBeforeTheArchiveReadsThem(t *testing.T)
 		isHashRelease:   true,
 		runner:          f,
 		imageRegistries: defaultRegistries,
+		calicoVersion:   "v3.30.0",
+		operatorVersion: "v1.40.0",
+		operatorImage:   "tigera/operator",
 	}
 	m.hashrelease.Source = out
 	if err := m.buildManifests(); err != nil {
@@ -657,7 +661,7 @@ func TestHashreleaseManifestsAreCollectedBeforeTheArchiveReadsThem(t *testing.T)
 	// building the manifests rather than in a later pass.
 	gen := slices.IndexFunc(f.calls, func(c string) bool { return strings.Contains(c, "gen-manifests") })
 	copied := slices.IndexFunc(f.calls, func(c string) bool {
-		return strings.Contains(c, filepath.Join(out, manifestsDir)) ||
+		return strings.Contains(c, filepath.Join(out, manifests.DirName)) ||
 			strings.HasSuffix(c, out)
 	})
 	if gen < 0 || copied < 0 {
@@ -728,12 +732,12 @@ func TestArchiveSourcesIsGatedPerSource(t *testing.T) {
 func manifestRepo(t *testing.T, image string) string {
 	t.Helper()
 	root := t.TempDir()
-	dir := filepath.Join(root, manifestsDir)
+	dir := filepath.Join(root, manifests.DirName)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("creating manifests dir: %v", err)
 	}
 	doc := fmt.Sprintf("kind: Pod\nspec:\n  containers:\n    - name: calicoctl\n      image: %s\n", image)
-	if err := os.WriteFile(filepath.Join(dir, calicoctlManifest), []byte(doc), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, manifests.RegistryFile), []byte(doc), 0o644); err != nil {
 		t.Fatalf("writing manifest: %v", err)
 	}
 	return root
