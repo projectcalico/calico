@@ -813,8 +813,10 @@ components:
       - ^api/(?:[^/]+/)*[^/]*_test\.go$
   dependents-of-build-calico-image:
     in:
+      - ^\.argoci/modules/20-cni-plugin\.yaml$
       - ^\.argoci/modules/20-gateway-conformance\.yaml$
       - ^\.argoci/modules/20-kube-controllers\.yaml$
+      - ^\.argoci/modules/20-typha\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/client/applyconfiguration_generated/internal/[^/]*\.go$
       - ^api/pkg/client/applyconfiguration_generated/projectcalico/v3/[^/]*\.go$
@@ -828,6 +830,7 @@ components:
       - ^api/pkg/client/listers_generated/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/defaults/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
+      - ^cni-plugin/
       - ^crypto/pkg/tls/[^/]*\.go$
       - ^e2e/cmd/gateway/
       - ^felix/bpf/tc/defs/[^/]*\.go$
@@ -885,6 +888,11 @@ components:
       - ^libcalico-go/lib/backend/k8s/conversion/[^/]*\.go$
       - ^libcalico-go/lib/backend/k8s/resources/[^/]*\.go$
       - ^libcalico-go/lib/backend/model/[^/]*\.go$
+      - ^libcalico-go/lib/backend/syncersv1/bgpsyncer/[^/]*\.go$
+      - ^libcalico-go/lib/backend/syncersv1/dedupebuffer/[^/]*\.go$
+      - ^libcalico-go/lib/backend/syncersv1/felixsyncer/[^/]*\.go$
+      - ^libcalico-go/lib/backend/syncersv1/nodestatussyncer/[^/]*\.go$
+      - ^libcalico-go/lib/backend/syncersv1/tunnelipsyncer/[^/]*\.go$
       - ^libcalico-go/lib/backend/syncersv1/updateprocessors/[^/]*\.go$
       - ^libcalico-go/lib/backend/watchersyncer/[^/]*\.go$
       - ^libcalico-go/lib/clientv3/[^/]*\.go$
@@ -895,13 +903,18 @@ components:
       - ^libcalico-go/lib/health/[^/]*\.go$
       - ^libcalico-go/lib/informerutil/[^/]*\.go$
       - ^libcalico-go/lib/ipam/[^/]*\.go$
+      - ^libcalico-go/lib/ipam/vmipam/[^/]*\.go$
       - ^libcalico-go/lib/kubevirt/[^/]*\.go$
+      - ^libcalico-go/lib/metricsserver/[^/]*\.go$
+      - ^libcalico-go/lib/multireadbuf/[^/]*\.go$
       - ^libcalico-go/lib/names/[^/]*\.go$
       - ^libcalico-go/lib/namespace/[^/]*\.go$
       - ^libcalico-go/lib/net/[^/]*\.go$
+      - ^libcalico-go/lib/netlinkutils/[^/]*\.go$
       - ^libcalico-go/lib/options/[^/]*\.go$
       - ^libcalico-go/lib/packedmap/[^/]*\.go$
       - ^libcalico-go/lib/prometheus/[^/]*\.go$
+      - ^libcalico-go/lib/readlogger/[^/]*\.go$
       - ^libcalico-go/lib/resources/[^/]*\.go$
       - ^libcalico-go/lib/scope/[^/]*\.go$
       - ^libcalico-go/lib/selector/[^/]*\.go$
@@ -913,13 +926,16 @@ components:
       - ^libcalico-go/lib/validator/v3/[^/]*\.go$
       - ^libcalico-go/lib/watch/[^/]*\.go$
       - ^libcalico-go/lib/winutils/[^/]*\.go$
+      - ^libcalico-go/lib/writelogger/[^/]*\.go$
       - ^metadata\.mk$
+      - ^node/pkg/cni/[^/]*\.go$
       - ^node/pkg/lifecycle/utils/[^/]*\.go$
       - ^pkg/buildinfo/[^/]*\.go$
       - ^pkg/cmdwrapper/[^/]*\.go$
       - ^third_party/envoy-gateway/
       - ^third_party/envoy-proxy/
       - ^third_party/envoy-ratelimit/
+      - ^typha/
       - ^typha/pkg/config/[^/]*\.go$
       - ^typha/pkg/logging/[^/]*\.go$
       - ^typha/pkg/validator/v1/[^/]*\.go$
@@ -928,6 +944,7 @@ components:
       - ^Makefile$
       - ^\.argoci/modules/10-prerequisites\.yaml$
       - ^\.argoci/modules/20-gateway-conformance\.yaml$
+      - ^\.argoci/modules/20-istio\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/defaults/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
@@ -1076,6 +1093,7 @@ components:
       - ^hack/test/certs/
       - ^hack/test/kind/
       - ^hack/test/kind/gateway-setup\.sh$
+      - ^istio/
       - ^lib/datastructures/hashring/[^/]*\.go$
       - ^lib/logrusr/[^/]*\.go$
       - ^lib/std/chanutil/[^/]*\.go$

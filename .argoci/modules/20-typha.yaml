@@ -1,0 +1,43 @@
+# Typha's own tests, plus a second pass against a UBI-minimal base to catch what
+# only that base image breaks.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: typha-ci
+    requests: {cpu: 4000m, memory: 6Gi}
+    depends: [build-calico-image]
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      .argoci/scripts/load-cached-images calico
+      cd typha
+      make ci-no-prereqs
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job typha/report --destination test-results || true
+      artifact push job felix/report --destination test-results-felix || true
+
+  # Waits on the producer without loading what it cached: `clean` would discard
+  # that image anyway, but there is no sense building a second base off a commit
+  # whose first one just failed.
+  - name: typha-fv-ubi
+    requests: {cpu: 5500m, memory: 6.5Gi}
+    depends: [build-calico-image]
+    env:
+      - name: USE_UBI_AS_CALICO_BASE
+        value: "1"
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make -C cmd/calico clean image
+      cd typha
+      make fv-no-prereqs
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job typha/report --destination test-results-ubi || true
+      artifact push job felix/report --destination test-results-ubi-felix || true

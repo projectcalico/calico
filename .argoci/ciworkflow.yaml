@@ -319,3 +319,30 @@ includes:
     changes:
       dependsOn: [kube-controllers]
       in: ['^\.argoci/modules/20-kube-controllers\.yaml$']
+
+  - path: .argoci/modules/20-typha.yaml
+    changes:
+      dependsOn: [typha]
+      in: ['^\.argoci/modules/20-typha\.yaml$']
+
+  - path: .argoci/modules/20-cni-plugin.yaml
+    changes:
+      dependsOn: [cni-plugin]
+      in: ['^\.argoci/modules/20-cni-plugin\.yaml$']
+
+  # No generated component: the tree holds Dockerfiles and a Makefile, and the
+  # sources they build come from upstream.
+  - path: .argoci/modules/20-istio.yaml
+    changes:
+      in:
+        - ^istio/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/20-istio\.yaml$
+
+  - path: .argoci/modules/10-check-operator-images.yaml
+    changes:
+      dependsOn: [release]
+      in:
+        - (^|/)Makefile$
+        - ^\.argoci/modules/10-check-operator-images\.yaml$

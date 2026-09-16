@@ -1,0 +1,26 @@
+# Runs against the calico image built once for the whole workflow.
+#
+# The Windows FV lane is not here: it drives Azure VMs rather than containers, so
+# it has nothing in common with this beyond the component name.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: cni-plugin-ci
+    requests: {cpu: 4000m, memory: 5Gi}
+    depends: [build-calico-image]
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      .argoci/scripts/load-cached-images calico
+      cd cni-plugin
+      make ci-no-prereqs
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}/cni-plugin"
+      # Skipped specs are reported as failures otherwise.
+      python3 ../hack/strip-skipped-tests.py ./report/*.xml 2>/dev/null || true
+      artifact push job report --destination test-results || true
