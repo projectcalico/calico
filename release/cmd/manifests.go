@@ -27,11 +27,15 @@ import (
 
 func manifestsCommand(cfg *Config) *cli.Command {
 	return &cli.Command{
-		Name:  "manifests",
-		Usage: "Build the manifests",
-		Commands: []*cli.Command{
-			manifestsBuildCommand(cfg),
-		},
+		Name:     "manifests",
+		Usage:    "Build the manifests",
+		Commands: manifestsSubcommands(cfg),
+	}
+}
+
+var manifestsSubcommands = func(cfg *Config) []*cli.Command {
+	return []*cli.Command{
+		manifestsBuildCommand(cfg),
 	}
 }
 
