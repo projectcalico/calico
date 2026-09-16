@@ -978,17 +978,23 @@ func (r *CalicoManager) collectManifests() error {
 	return nil
 }
 
+func (r *CalicoManager) archive() archives.Archive {
+	return archives.Archive{
+		RepoRoot:        r.repoRoot,
+		Version:         r.calicoVersion,
+		OperatorVersion: r.operatorVersion,
+		OutputDir:       r.uploadDir(),
+		Sources:         r.archiveSources(),
+	}
+}
+
 func (r *CalicoManager) buildWindowsArchive() error {
 	if !r.windowsArchive {
 		logrus.Info("Skipping building windows archive")
 		return nil
 	}
 	return archives.BuildWindows(
-		archives.Archive{
-			RepoRoot:  r.repoRoot,
-			Version:   r.calicoVersion,
-			OutputDir: r.uploadDir(),
-		},
+		r.archive(),
 		archives.WithRunner(r.runner),
 		archives.WithLogsDir(r.logsDir),
 	)
@@ -1057,13 +1063,7 @@ func (r *CalicoManager) buildReleaseTar() error {
 		return nil
 	}
 	return archives.Build(
-		archives.Archive{
-			RepoRoot:        r.repoRoot,
-			Version:         r.calicoVersion,
-			OperatorVersion: r.operatorVersion,
-			OutputDir:       r.uploadDir(),
-			Sources:         r.archiveSources(),
-		},
+		r.archive(),
 		archives.WithRunner(r.runner),
 		archives.WithLogsDir(r.logsDir),
 	)
@@ -1157,7 +1157,7 @@ func (r *CalicoManager) buildE2EBinaries() error {
 
 	// Hard-link the built binaries into the hashrelease output directory
 	// to avoid duplicating ~1 GB of cross-compiled test binaries on disk.
-	e2eOutputDir := filepath.Join(r.uploadDir(), "files", "e2e")
+	e2eOutputDir := filepath.Join(r.uploadDir(), outputs.FilesDirName, "e2e")
 	if err := os.MkdirAll(e2eOutputDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create e2e output dir: %w", err)
 	}
@@ -1320,8 +1320,8 @@ Additional links:
 		"{version}", r.calicoVersion,
 		"{branch}", fmt.Sprintf("release-v%d.%d", sv.Major(), sv.Minor()),
 		"{release_stream}", fmt.Sprintf("v%d.%d", sv.Major(), sv.Minor()),
-		"{release_tar}", fmt.Sprintf("`release-%s.tgz`", r.calicoVersion),
-		"{calico_windows_zip}", fmt.Sprintf("`calico-windows-%s.zip`", r.calicoVersion),
+		"{release_tar}", fmt.Sprintf("`%s`", archives.ArchiveFileName(r.archive())),
+		"{calico_windows_zip}", fmt.Sprintf("`%s`", archives.WindowsFileName(r.calicoVersion)),
 		"{helm_chart}", fmt.Sprintf("`%s-%s.tgz`", charts.TigeraOperatorChart, r.calicoVersion),
 		"{helm_v1_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", charts.ProjectCalicoV1CRDsChart, r.calicoVersion),
 		"{helm_v3_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", charts.ProjectCalicoV3CRDsChart, r.calicoVersion),
