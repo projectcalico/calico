@@ -106,10 +106,12 @@ type IPPoolSpec struct {
 	CIDR string `json:"cidr" validate:"net"`
 
 	// Contains configuration for VXLAN tunneling for this pool.
+	// +kubebuilder:default=Never
 	VXLANMode VXLANMode `json:"vxlanMode,omitempty"`
 
 	// Contains configuration for IPIP tunneling for this pool.
 	// For IPv6 pools, IPIP tunneling must be disabled.
+	// +kubebuilder:default=Never
 	IPIPMode IPIPMode `json:"ipipMode,omitempty"`
 
 	// When natOutgoing is true, packets sent from Calico networked containers in
