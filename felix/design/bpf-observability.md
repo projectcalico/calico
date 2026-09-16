@@ -162,7 +162,7 @@ should not assume changes propagate to the other.
 ### Enablement
 
 Flow logs are gated globally by the `FLOWLOGS_ENABLED` flag
-(`felix/bpf-gpl/bpf.h` / `globals.h`, bit
+(`felix/bpf-gpl/cali_bpf.h` / `globals.h`, bit
 `CALI_GLOBALS_FLOWLOGS_ENABLED`). Set per-attach-type through
 the `FlowLogsEnabled` field on the AttachPoint. When the flag
 is off, the emission paths in the BPF programs are compiled to

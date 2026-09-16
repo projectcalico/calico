@@ -32,22 +32,8 @@ A test's ID is the concatenation of all its nested `Context`/`Describe` headings
 
 ### BPF-Specific Tests
 
-#### Where the BPF code lives
-
-- `bpf-gpl/` — eBPF programs, GPL v2.0/Apache dual licensed for Linux kernel compatibility.
-- `bpf-apache/` — Apache-licensed BPF code.
-- `make clone-libbpf` — run before your first BPF build; fetches libbpf.
-- BPF tooling versions (`LIBBPF_VERSION`, `BPFTOOL_IMAGE`) are pinned in [`metadata.mk`](../metadata.mk).
-
-#### Building BPF Programs
-
-After modifying C code in `bpf-gpl/`, verify it compiles for all targets (IPv4, IPv6, all hook types):
-
-```bash
-make build-bpf
-```
-
-Run `make clean` first if you hit stale object issues. Use `make -C felix build` to verify both BPF C and Go code compile together.
+The BPF C programs live in `bpf-gpl/`; building them, checking headers and the
+include conventions are covered in [`bpf-gpl/CLAUDE.md`](./bpf-gpl/CLAUDE.md).
 
 #### BPF Unit Tests
 

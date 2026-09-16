@@ -5,13 +5,21 @@
 #ifndef __CALI_ICMP4_H__
 #define __CALI_ICMP4_H__
 
-#include <linux/if_ether.h>
-#include <linux/ip.h>
 #include <linux/icmp.h>
+#include <linux/if_ether.h>
+#include <linux/in.h>
+#include <linux/ip.h>
+#include <linux/tcp.h>
+#include <linux/udp.h>
 
-#include "bpf.h"
+#include "cali_bpf.h"
+#include "counters.h"
+#include "globals.h"
 #include "log.h"
+#include "reasons.h"
+#include "routes.h"
 #include "skb.h"
+#include "types.h"
 
 static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 					__u8 type, __u8 code, __be32 un)

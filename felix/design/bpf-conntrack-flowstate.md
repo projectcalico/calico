@@ -269,7 +269,7 @@ unambiguously a mid-flow packet. BPF and `*tables` cooperate to let
 it through:
 
 - On host ingress, a BPF program that sees a mid-flow TCP miss sets
-  `CALI_SKB_MARK_FALLTHROUGH` on the packet (`bpf.h` enum
+  `CALI_SKB_MARK_FALLTHROUGH` on the packet (`cali_bpf.h` enum
   `calico_skb_mark`) and returns `TC_ACT_UNSPEC`, letting the packet
   continue into netfilter.
 - Felix installs a rule
@@ -381,7 +381,7 @@ comment: "Mark traffic towards the host - it is TRACKed"
 
 The mark is `tcdefs.MarkSeenSkipFIB`, which equals
 `CALI_SKB_MARK_SKIP_FIB` on the BPF side
-(see `felix/bpf-gpl/bpf.h` `enum calico_skb_mark`). Because this
+(see `felix/bpf-gpl/cali_bpf.h` `enum calico_skb_mark`). Because this
 happens in raw-PREROUTING, it runs _before_ any DNAT chain, so the
 destination is still the host IP at match time.
 

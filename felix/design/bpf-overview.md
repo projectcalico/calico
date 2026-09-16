@@ -175,7 +175,7 @@ it forwards directly and the host stack never sees the packet.
 ### Marks: the out-of-band channel between BPF and netfilter
 
 BPF and `*tables` communicate via the top bits of the skb mark. The
-full table is in `felix/bpf-gpl/bpf.h` (`enum calico_skb_mark`); the
+full table is in `felix/bpf-gpl/cali_bpf.h` (`enum calico_skb_mark`); the
 marks a reviewer encounters most often are:
 
 | Mark                          | Set by            | Meaning                                                            |
@@ -275,7 +275,7 @@ packet" condition); if it could and isn't, that's a red flag.
   already in cache; reading and writing them is negligible.
 - **Gate optional work on compile-time flags.** When a feature is
   off for this attach type, a `CALI_F_*` / `HAS_*` guard in
-  `bpf.h` eliminates the code at verification time. A runtime
+  `cali_bpf.h` eliminates the code at verification time. A runtime
   global flag costs a load per packet — cheap but not free.
 - **Own a sub-program for slow work.** When a feature does need
   real computation (Maglev hashing, fragment reassembly, ICMP

@@ -5,6 +5,9 @@
 #ifndef __CALI_GLOBALS_H__
 #define __CALI_GLOBALS_H__
 
+#include <linux/types.h>
+#include <stdbool.h>
+
 #include "ip_addr.h"
 
 #define DECLARE_TC_GLOBAL_DATA(name, ip_t) \
