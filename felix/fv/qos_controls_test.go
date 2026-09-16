@@ -730,8 +730,10 @@ var _ = infrastructure.DatastoreDescribe(
 						pcs[len(pcs)-1] = nil
 
 						if BPFMode() {
+							// No fast-path decrement: the slot returns after
+							// TCPResetSeen, a purge scan, then a recount.
 							By("Waiting for BPF connlimit counter to reflect closed connection")
-							Eventually(getBPFCurrentCount(0, 0, "ingress"), "5s", "1s").Should(BeNumerically("<", uint32(numConnections)))
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), "60s", "2s").Should(BeNumerically("<", uint32(numConnections)))
 						}
 
 						By("Re-filling the connection slot after RST close")
@@ -741,7 +743,7 @@ var _ = infrastructure.DatastoreDescribe(
 								pcs[len(pcs)-1] = pc
 							}
 							return err
-						}, "10s", "1s").ShouldNot(HaveOccurred())
+						}, "60s", "2s").ShouldNot(HaveOccurred())
 						logrus.Infof("Connection after RST close succeeded as expected")
 
 						// Test graceful FIN close path: stop a regular connection
@@ -899,6 +901,194 @@ var _ = infrastructure.DatastoreDescribe(
 						}
 					})
 
+					// CORE-13478 Failure.1: a workload forges RSTs for its own live
+					// connections, freeing slots it should not get.
+					It("should not let a workload forge RSTs to exceed its egress connlimit", func() {
+						const (
+							numConnections = 3
+							basePort       = 15100
+							extraBasePort  = 15200
+						)
+
+						By("Setting connection limit for egress on workload 1")
+						w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+							EgressMaxConnections: int64(numConnections),
+						}
+						w[1].UpdateInInfra(infra)
+						defer func() {
+							w[1].WorkloadEndpoint.Spec.QoSControls = nil
+							w[1].UpdateInInfra(infra)
+						}()
+
+						By("Waiting for the egress limit to be programmed")
+						if BPFMode() {
+							Eventually(getBPFMaxConnections(1, 1, "egress"), "10s", "1s").Should(Equal(uint32(numConnections)))
+						} else if NFTMode() {
+							Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {[^}]*ct count over ` + fmt.Sprintf("%d", numConnections) + ` reject with tcp reset`))
+						} else {
+							Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + `.*-j REJECT --reject-with tcp-reset`))
+						}
+
+						pcs := make([]*connectivity.PersistentConnection, 0, 2*numConnections)
+						defer func() {
+							for _, pc := range pcs {
+								if pc != nil {
+									pc.Stop()
+								}
+							}
+						}()
+
+						By("Filling the egress slots with pinned-source-port connections")
+						srcPorts := make([]int, numConnections)
+						for i := range srcPorts {
+							srcPorts[i] = basePort + i
+							pcs = append(pcs, w[1].StartPersistentConnection(w[0].IP, 8055,
+								workload.PersistentConnectionOpts{
+									SourcePort:          srcPorts[i],
+									MonitorConnectivity: true,
+								}))
+						}
+						for _, pc := range pcs {
+							Eventually(pc.PongCount, "10s").Should(BeNumerically(">", 0))
+						}
+
+						// See the same-node ingress test for why this is
+						// CanConnectTo and not StartPersistentConnectionMayFail.
+						By("Confirming the limit refuses another connection")
+						Eventually(func() bool {
+							return w[1].CanConnectTo(w[0].IP, "8055", "tcp").HasConnectivity()
+						}, "10s", "1s").Should(BeFalse())
+
+						pongsBefore := make([]int, len(pcs))
+						for i, pc := range pcs {
+							pongsBefore[i] = pc.PongCount()
+						}
+
+						// pktgen is the CAP_NET_RAW primitive: a raw socket with
+						// IP_HDRINCL, run inside the workload's own netns.
+						By("Forging an out-of-window RST for each live connection")
+						for _, sp := range srcPorts {
+							out, err := w[1].RunCmd("pktgen", w[1].IP, w[0].IP, "tcp",
+								"--port-src", fmt.Sprintf("%d", sp),
+								"--port-dst", "8055",
+								"--tcp-rst", "--tcp-seq-no=123456")
+							Expect(err).NotTo(HaveOccurred(), out)
+						}
+
+						// Out of window, so both peers discard it and the
+						// connection stays up.
+						By("Confirming every connection survived the forged RST")
+						for i, pc := range pcs {
+							Eventually(pc.PongCount, "30s").Should(BeNumerically(">", pongsBefore[i]),
+								"connection died, so the RST was not spurious and this proves nothing")
+						}
+
+						if BPFMode() {
+							logrus.Infof("CORE-13478: egress current_count after %d forged RSTs: %d",
+								numConnections, getBPFCurrentCount(1, 1, "egress")())
+						}
+
+						By("Measuring how many extra connections the forged RSTs bought")
+						extra := 0
+						for i := range numConnections {
+							pc, err := w[1].StartPersistentConnectionMayFail(w[0].IP, 8055,
+								workload.PersistentConnectionOpts{
+									SourcePort:          extraBasePort + i,
+									MonitorConnectivity: true,
+									Timeout:             5 * time.Second,
+								})
+							if err != nil {
+								break
+							}
+							pcs = append(pcs, pc)
+							extra++
+						}
+						logrus.Infof("CORE-13478: %d extra connections admitted over a limit of %d",
+							extra, numConnections)
+
+						if BPFMode() {
+							logrus.Infof("CORE-13478: egress current_count with %d live connections: %d",
+								numConnections+extra, getBPFCurrentCount(1, 1, "egress")())
+						}
+
+						// Observation, not a regression assertion: it only has
+						// anything to say while the bypass works.
+						if BPFMode() && extra > 0 {
+							By("Waiting for the recount to rebase the counter onto the truth")
+							Eventually(getBPFCurrentCount(1, 1, "egress"), "60s", "5s").
+								Should(Equal(uint32(numConnections + extra)))
+
+							By("Confirming the recount left every excess connection established")
+							pongsAfterRecount := make([]int, len(pcs))
+							for i, pc := range pcs {
+								pongsAfterRecount[i] = pc.PongCount()
+							}
+							for i, pc := range pcs {
+								Eventually(pc.PongCount, "15s").Should(BeNumerically(">", pongsAfterRecount[i]),
+									"the recount tore a connection down")
+							}
+						}
+
+						Expect(extra).To(BeZero(),
+							"forged RSTs bought connections the egress limit should have refused")
+					})
+
+					// CORE-13478 Failure.7: a packet crossing an RST close cleared
+					// the per-leg bits, hiding the close from the reap.
+					It("should not inflate the ingress connlimit counter under RST-close churn", func() {
+						// An RST-closed entry holds its slot for TCPResetSeen, so
+						// the limit must clear the ~10 in flight at this rate.
+						const (
+							numConnections = 20
+							churnCycles    = 30
+						)
+
+						By("Setting connection limit for ingress on workload 0")
+						w[0].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+							IngressMaxConnections: int64(numConnections),
+						}
+						w[0].UpdateInInfra(infra)
+						defer func() {
+							w[0].WorkloadEndpoint.Spec.QoSControls = nil
+							w[0].UpdateInInfra(infra)
+						}()
+
+						if BPFMode() {
+							By("Waiting for the ingress limit to appear in the QoS map")
+							Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").
+								Should(Equal(uint32(numConnections)))
+						}
+
+						// MonitorConnectivity keeps the server streaming, so the
+						// RST has in-flight traffic to cross.
+						By("Churning RST closes from workload 1")
+						for i := range churnCycles {
+							pc, err := w[1].StartPersistentConnectionMayFail(w[0].IP, 8055,
+								workload.PersistentConnectionOpts{
+									SendRST:             true,
+									MonitorConnectivity: true,
+								})
+							Expect(err).NotTo(HaveOccurred(),
+								"connection %d of the churn was refused; the counter has already inflated", i)
+							Eventually(pc.PongCount, "10s").Should(BeNumerically(">", 0))
+							pc.Stop()
+						}
+
+						if BPFMode() {
+							logrus.Infof("CORE-13478: ingress current_count after %d RST closes: %d",
+								churnCycles, getBPFCurrentCount(0, 0, "ingress")())
+
+							By("Waiting for the counter to drain back below the limit")
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), "60s", "2s").
+								Should(BeNumerically("<", uint32(numConnections)))
+						}
+
+						By("Confirming a legitimate client is still admitted")
+						Eventually(func() bool {
+							return w[1].CanConnectTo(w[0].IP, "8055", "tcp").HasConnectivity()
+						}, "60s", "2s").Should(BeTrue())
+					})
+
 					if BPFMode() {
 						It("should decrement ingress connlimit counter when client process is SIGKILLed", func() {
 							const numConnections = 3
@@ -930,10 +1120,9 @@ var _ = infrastructure.DatastoreDescribe(
 
 							By("SIGKILLing all test-connection client processes on workload 1's container")
 							// Kernel cleans up sockets on process death and is
-							// expected to emit a FIN (or RST) on each one. The
-							// BPF fast-path should then decrement the counter
-							// for each closed connection, with no help from the
-							// userspace scanner.
+							// expected to emit a FIN (or RST) on each one. A FIN
+							// exchange decrements on the fast path; an RST waits
+							// for the entry purge and the next recount.
 							err := w[1].C.ExecMayFail("pkill", "-9", "-f", "test-connection")
 							Expect(err).NotTo(HaveOccurred())
 							// Mark our local handles as dead so the deferred
@@ -942,7 +1131,7 @@ var _ = infrastructure.DatastoreDescribe(
 								pcs[i] = nil
 							}
 
-							By("Waiting for ingress counter to drop to 0 via BPF fast-path")
+							By("Waiting for ingress counter to drop to 0")
 							Eventually(getBPFCurrentCount(0, 0, "ingress"), "90s", "1s").Should(Equal(uint32(0)))
 
 							By("Removing limits from workload 0")
@@ -995,7 +1184,7 @@ var _ = infrastructure.DatastoreDescribe(
 								pcs[i] = nil
 							}
 
-							By("Waiting for ingress counter to drop to 0 via BPF fast-path")
+							By("Waiting for ingress counter to drop to 0")
 							Eventually(getBPFCurrentCount(0, 0, "ingress"), "90s", "1s").Should(Equal(uint32(0)))
 
 							By("Tearing down the workload netns (final cleanup)")
