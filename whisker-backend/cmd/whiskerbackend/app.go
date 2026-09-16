@@ -97,12 +97,9 @@ func Run(ctx context.Context, cfg *config.Config, options ...Option) {
 	}
 }
 
-// newGoldmaneBackend builds the Goldmane flow backend: the only upstream in OSS
-// builds and the fallback for enterprise ones.
-// withMiddleware appends the given middleware (auth + cluster-ID on the
-// enterprise path) to every endpoint, after any the endpoint declares for
-// itself. Applying it to the whole list means an endpoint added later cannot be
-// served unauthenticated by accident.
+// withMiddleware appends the given middleware to every endpoint, after any the
+// endpoint declares for itself. Applying it to the whole list means an endpoint
+// added later cannot be served unauthenticated by accident.
 func withMiddleware(endpoints []apiutil.Endpoint, middleware ...apiutil.Middleware) []apiutil.Endpoint {
 	for i := range endpoints {
 		endpoints[i].Middleware = append(endpoints[i].Middleware, middleware...)

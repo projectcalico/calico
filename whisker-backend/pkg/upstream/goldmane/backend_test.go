@@ -164,6 +164,46 @@ func TestBackendStreamParameterConversion(t *testing.T) {
 	Expect(req.String()).To(Equal(expected.String()))
 }
 
+// TestBackendFilterHintsParameterConversion verifies that FilterHints translates
+// the hint type, pagination and filters into the expected proto.FilterHintsRequest
+// before handing it to the underlying Goldmane client.
+func TestBackendFilterHintsParameterConversion(t *testing.T) {
+	RegisterTestingT(t)
+
+	ft := whiskerv1.FilterType(proto.FilterType_FilterTypeDestName)
+	params := whiskerv1.FlowFilterHintsRequest{
+		Pagination: whiskerv1.Pagination{Page: 3, PageSize: 25},
+		Type:       &ft,
+		Filters: whiskerv1.Filters{
+			SourceNamespaces: []whiskerv1.FilterMatch[string]{{V: "src-ns"}},
+			DestNames:        []whiskerv1.FilterMatch[string]{{V: "dst-name"}},
+			Actions:          whiskerv1.Actions{whiskerv1.Action(proto.Action_Allow)},
+		},
+	}
+
+	expected := &proto.FilterHintsRequest{
+		Type:     proto.FilterType_FilterTypeDestName,
+		Page:     3,
+		PageSize: 25,
+		Filter: &proto.Filter{
+			SourceNamespaces: []*proto.StringMatch{{Value: "src-ns"}},
+			DestNames:        []*proto.StringMatch{{Value: "dst-name"}},
+			Actions:          []proto.Action{proto.Action_Allow},
+		},
+	}
+
+	var req *proto.FilterHintsRequest
+	cli := new(climocks.FlowsClient)
+	cli.On("FilterHints", mock.Anything, mock.MatchedBy(func(arg *proto.FilterHintsRequest) bool {
+		req = arg
+		return true
+	})).Return(nil, nil, context.Canceled).Once()
+
+	_, _, err := NewBackend(cli).FilterHints(context.Background(), params, nil)
+	Expect(err).To(HaveOccurred())
+	Expect(req.String()).To(Equal(expected.String()))
+}
+
 func TestBackendFilterHints_RejectsFlowFilter(t *testing.T) {
 	RegisterTestingT(t)
 

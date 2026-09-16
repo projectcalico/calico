@@ -84,12 +84,11 @@ func (b *Backend) Stream(ctx context.Context, params whiskerv1.ListFlowsParams) 
 
 // FilterHints delegates to Goldmane's own FilterHints API, which returns hint
 // values directly rather than source flows, so a flow-level filter predicate
-// cannot be applied here. Rather than silently returning unfiltered hints, an
-// error is returned if one is ever supplied — the RBAC flow filter is only
-// wired for the (enterprise) Linseed upstream today, so includeFlow is nil in
-// practice.
+// cannot be applied here.
 func (b *Backend) FilterHints(ctx context.Context, params whiskerv1.FlowFilterHintsRequest, includeFlow whiskerv1.FlowFilterFunc) (apiutil.ListMeta, []whiskerv1.FlowFilterHintResponse, error) {
 	if includeFlow != nil {
+		// Goldmane doesn't support filter functions, so error explicitly rather
+		// than silently returning unfiltered hints.
 		return apiutil.ListMeta{}, nil, fmt.Errorf("the Goldmane upstream does not support flow filtering for filter hints")
 	}
 
