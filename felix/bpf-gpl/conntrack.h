@@ -1134,12 +1134,15 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 		ct_tcp_entry_update(ctx, tcp_header, src_to_dst, dst_to_src);
 
-		/* Decrement connlimit counter when a TCP connection closes
-		 * (both FINs seen or RST). The helper sets CONNLIMIT_DEC
-		 * before decrementing so concurrent paths bail.
+		/* Decrement connlimit counter when a TCP connection closes. Both
+		 * FINs means both endpoints agreed, which one party cannot forge;
+		 * an RST is one packet from either side, so it releases nothing
+		 * here and the slot comes back when the entry is purged or the
+		 * recount rebases. The helper sets CONNLIMIT_DEC before
+		 * decrementing so concurrent paths bail.
 		 */
-		if ((ct_leg_flag(src_to_dst, CALI_CT_LEG_FIN_SEEN) &&
-				ct_leg_flag(dst_to_src, CALI_CT_LEG_FIN_SEEN)) || tcp_header->rst) {
+		if (ct_leg_flag(src_to_dst, CALI_CT_LEG_FIN_SEEN) &&
+				ct_leg_flag(dst_to_src, CALI_CT_LEG_FIN_SEEN)) {
 			qos_connlimit_decrement_for_ct(tracking_v);
 		}
 	}
