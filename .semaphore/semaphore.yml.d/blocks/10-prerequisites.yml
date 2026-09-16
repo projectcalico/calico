@@ -116,6 +116,9 @@
           - make fix-changed
           - make check-ocp-no-crds
           - make check-dirty
+      - name: Check helm charts
+        commands:
+          - make test-charts
 - name: Store working copy
   run:
     when: "branch =~ '.*'"
