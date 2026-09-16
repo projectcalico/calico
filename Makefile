@@ -87,6 +87,11 @@ check-ocp-no-crds:
 	@echo "Checking for files in manifests/ocp with CustomResourceDefinitions"
 	@CRD_FILES_IN_OCP_DIR=$$(grep "^kind: CustomResourceDefinition" manifests/ocp/* -l || true); if [ ! -z "$$CRD_FILES_IN_OCP_DIR" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$$CRD_FILES_IN_OCP_DIR"; exit 1; fi
 
+.PHONY: test-charts
+## Render the helm charts and assert on the resulting Kubernetes objects.
+test-charts: bin/helm
+	$(DOCKER_GO_BUILD) sh -c 'PATH=$$PWD/bin::$$PATH go test -count=1 ./charts/test/...'
+	
 yaml-lint:
 	@docker run --rm $$(tty -s && echo "-it" || echo) -v $(PWD):/data cytopia/yamllint:latest .
 
