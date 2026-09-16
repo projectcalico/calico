@@ -78,6 +78,11 @@ type KubeControllersConfiguration struct {
 	// For details on why this is needed see 'Node and Installation finalizer' in the core_controller.
 	Terminating bool
 
+	// MigrationActive host-networks the deployment for the duration of a
+	// DatastoreMigration. The migration locks the datastore, which stops CNI, so a
+	// pod-networked replacement could never be scheduled to finish the job.
+	MigrationActive bool
+
 	// Secrets - provided by the caller. Used to generate secrets in the destination
 	// namespace to be returned by the rendered. Expected that the calling code
 	// take care to pass the same secret on each reconcile where possible.
@@ -525,6 +530,11 @@ func (c *kubeControllersComponent) controllersDeployment() *appsv1.Deployment {
 		InitContainers:     initContainers,
 		Containers:         []corev1.Container{container},
 		Volumes:            c.kubeControllersVolumes(),
+	}
+
+	if c.cfg.MigrationActive {
+		podSpec.HostNetwork = true
+		podSpec.DNSPolicy = corev1.DNSClusterFirstWithHostNet
 	}
 
 	var replicas int32 = 1
