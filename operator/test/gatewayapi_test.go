@@ -78,10 +78,10 @@ var _ = Describe("GatewayAPI tests", func() {
 			ObjectMeta: metav1.ObjectMeta{Name: "calico-system"},
 		})
 		cleanupGatewayResources(c)
-		cleanupResources(c)
+		CleanupResources(c)
 
 		By("Verifying CRDs are installed")
-		verifyCRDsExist(c, operator.Calico)
+		VerifyCRDsExist(c, operator.Calico)
 
 		By("Creating the tigera-operator namespace, if it doesn't exist")
 		ns := &corev1.Namespace{
@@ -145,7 +145,7 @@ var _ = Describe("GatewayAPI tests", func() {
 			TypeMeta:   metav1.TypeMeta{Kind: "Namespace", APIVersion: "v1"},
 			ObjectMeta: metav1.ObjectMeta{Name: "calico-system"},
 		})
-		cleanupResources(c)
+		CleanupResources(c)
 
 		// Clean up Calico data that might be left behind.
 		Eventually(func() error {

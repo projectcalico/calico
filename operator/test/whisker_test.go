@@ -47,10 +47,10 @@ var _ = Describe("Tests for Whisker installation", func() {
 		c, shutdownContext, cancel, mgr = setupManager(ManageCRDsEnable, operator.Calico)
 
 		By("Cleaning up resources before the test")
-		cleanupResources(c)
+		CleanupResources(c)
 
 		By("Verifying CRDs are installed")
-		verifyCRDsExist(c, operator.Calico)
+		VerifyCRDsExist(c, operator.Calico)
 
 		By("Creating the tigera-operator namespace, if it doesn't exist")
 		ns := &corev1.Namespace{
@@ -86,7 +86,7 @@ var _ = Describe("Tests for Whisker installation", func() {
 		}()
 
 		By("Cleaning up resources after the test")
-		cleanupResources(c)
+		CleanupResources(c)
 
 		// Clean up Calico data that might be left behind.
 		Eventually(func() error {
@@ -116,7 +116,7 @@ var _ = Describe("Tests for Whisker installation", func() {
 	})
 
 	It("Should install whisker", func() {
-		operatorDone = createInstallation(c, mgr, shutdownContext, nil)
+		operatorDone = CreateInstallation(c, mgr, shutdownContext, nil)
 		verifyCalicoHasDeployed(c)
 
 		By("Creating a Whisker and Goldmane resource")
