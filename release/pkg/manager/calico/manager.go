@@ -30,6 +30,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/projectcalico/calico/release/internal/archives"
+	"github.com/projectcalico/calico/release/internal/binaries"
 	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/command"
@@ -55,13 +56,7 @@ const (
 	metadataKey  = "metadata"
 )
 
-const (
-	calicoctlManifest = "calicoctl.yaml"
-
-	calicoctlComponent = "calicoctl"
-	felixComponent     = "felix"
-	felixBPFBinary     = "calico-bpf"
-)
+const calicoctlManifest = "calicoctl.yaml"
 
 var (
 	// Default defaultRegistries to which all release images are pushed.
@@ -935,24 +930,6 @@ func (r *CalicoManager) publishPrereqs() error {
 	return r.assertImageVersions()
 }
 
-func (r *CalicoManager) collectBinaries() error {
-	if !r.binaries {
-		return nil
-	}
-	uploadDir := r.uploadDir()
-	// We attach calicoctl binaries directly to the release as well.
-	files, err := os.ReadDir(filepath.Join(r.repoRoot, "calicoctl", "bin"))
-	if err != nil {
-		return fmt.Errorf("failed to read calicoctl binaries: %w", err)
-	}
-	for _, b := range files {
-		if _, err := r.runner.Run("cp", []string{filepath.Join(r.repoRoot, "calicoctl", "bin", b.Name()), uploadDir}, nil); err != nil {
-			return fmt.Errorf("failed to copy calicoctl binary %s: %w", b.Name(), err)
-		}
-	}
-	return nil
-}
-
 func (r *CalicoManager) collectManifests() error {
 	if !r.isHashRelease {
 		// Hashrelease include manifests in a different way, instead of just in the release tarball.
@@ -1079,22 +1056,7 @@ func (r *CalicoManager) archiveSources() []archives.Contributor {
 			images.WithPull(r.isHashRelease && !r.images)))
 	}
 	if r.binaries {
-		sources = append(sources,
-			archives.DirSource{
-				Label: fmt.Sprintf("%s binary", calicoctlComponent),
-				To:    filepath.Join(binDir, calicoctlComponent),
-				From:  filepath.Join(r.repoRoot, calicoctlComponent, binDir),
-			},
-			archives.DirSource{
-				Label: fmt.Sprintf("%s %s binary", felixComponent, felixBPFBinary),
-				To:    binDir,
-				From:  filepath.Join(r.repoRoot, felixComponent, binDir),
-				Filter: func(_, _, relPath string) bool {
-					// Felix's bin/ holds build output; only the BPF tool ships.
-					return relPath == felixBPFBinary
-				},
-			},
-		)
+		sources = append(sources, binaries.Archive(r.repoRoot)...)
 	}
 	if r.manifests {
 		root := r.repoRoot
@@ -1110,102 +1072,26 @@ func (r *CalicoManager) archiveSources() []archives.Contributor {
 	return sources
 }
 
-// e2eSupportedArches are the arches e2e runners consume; ppc64le/s390x have no
-// e2e runners and only cost build time and disk.
-var e2eSupportedArches = []string{"amd64", "arm64"}
-
-// e2eArchitectures returns the e2e-supported subset of the configured arches.
-// An empty configured set means "all arches" (the tooling-wide convention) and
-// resolves to all supported e2e arches.
-func e2eArchitectures(configured []string) []string {
-	if len(configured) == 0 {
-		return slices.Clone(e2eSupportedArches)
+func (r *CalicoManager) buildBinaries() error {
+	var builders []binaries.Builder
+	if r.binaries {
+		builders = append(builders, binaries.Release(r.uploadDir())...)
 	}
-	var arches []string
-	for _, arch := range configured {
-		if slices.Contains(e2eSupportedArches, arch) {
-			arches = append(arches, arch)
-		}
+	if r.e2eBinaries && r.isHashRelease {
+		builders = append(builders, binaries.E2E(r.architectures, binaries.E2EDir(r.uploadDir())))
 	}
-	return arches
-}
-
-func (r *CalicoManager) buildE2EBinaries() error {
-	if !r.isHashRelease {
-		// e2e binaries are only built for hashreleases.
+	if len(builders) == 0 {
+		logrus.Info("Skip building binaries")
 		return nil
 	}
-	if !r.e2eBinaries {
-		logrus.Info("Skipping building e2e test binaries")
-		return nil
-	}
-	arches := e2eArchitectures(r.architectures)
-	if len(arches) == 0 {
-		logrus.Warnf("e2e binaries requested but none of %v is a supported e2e arch (amd64/arm64); skipping", r.architectures)
-		return nil
-	}
-	logrus.Info("Building multi-arch e2e test binaries")
-	e2eDir := filepath.Join(r.repoRoot, "e2e")
-	// Restrict the build via ARCHES, not VALIDARCHES: lib.Makefile assigns
-	// VALIDARCHES with `=`, so it ignores the env.
-	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", r.calicoVersion), "ARCHES="+strings.Join(arches, " "))
-	out, err := r.makeInDirectoryWithOutput(e2eDir, "build-all", env...)
-	if err != nil {
-		logrus.Error(out)
-		return fmt.Errorf("failed to build e2e binaries: %w", err)
-	}
-
-	// Hard-link the built binaries into the hashrelease output directory
-	// to avoid duplicating ~1 GB of cross-compiled test binaries on disk.
-	e2eOutputDir := filepath.Join(r.uploadDir(), outputs.FilesDirName, "e2e")
-	if err := os.MkdirAll(e2eOutputDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create e2e output dir: %w", err)
-	}
-	entries, err := os.ReadDir(filepath.Join(e2eDir, "bin", "k8s"))
-	if err != nil {
-		return fmt.Errorf("reading e2e bin directory: %w", err)
-	}
-	for _, entry := range entries {
-		if !strings.HasPrefix(entry.Name(), "e2e-linux-") {
-			continue
-		}
-		src := filepath.Join(e2eDir, "bin", "k8s", entry.Name())
-		dst := filepath.Join(e2eOutputDir, entry.Name())
-		if err := os.Link(src, dst); err != nil {
-			return fmt.Errorf("linking e2e binary %s: %w", entry.Name(), err)
-		}
-		logrus.Infof("Staged e2e binary: %s", entry.Name())
+	if err := binaries.Build(r.repoRoot, r.calicoVersion,
+		builders,
+		binaries.WithRunner(r.runner),
+		binaries.WithLogsDir(r.logsDir),
+	); err != nil {
+		return fmt.Errorf("build binaries: %w", err)
 	}
 	return nil
-}
-
-func (r *CalicoManager) buildBinaries() error {
-	if !r.binaries {
-		logrus.Info("Skipping building binaries")
-		// e2e binaries are gated differently from main binaries
-		// TODO: align this gating with the main binaries gating
-		return r.buildE2EBinaries()
-	}
-	// calicoctl and felix ship binaries and no image, so nothing in the image
-	// step produces them.
-	m := map[string]string{
-		"calicoctl": "build-all",
-		"felix":     "release-build",
-	}
-	env := append(os.Environ(),
-		fmt.Sprintf("VERSION=%s", r.calicoVersion),
-	)
-	for dir, target := range m {
-		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), target, env...)
-		if err != nil {
-			logrus.Error(out)
-			return fmt.Errorf("failed to build %s: %w", dir, err)
-		}
-	}
-	if err := r.collectBinaries(); err != nil {
-		return err
-	}
-	return r.buildE2EBinaries()
 }
 
 func (r *CalicoManager) buildContainerImages() error {
