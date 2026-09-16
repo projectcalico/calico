@@ -155,7 +155,7 @@
   # Consumers: "Build: node image" (10-prerequisites.yml), "Node: multi-arch
   # build" (20-node.yml), "Istio" (20-istio.yml) — every block that lists this
   # one in its `dependencies:`. They all go through
-  # .semaphore/scripts/load-nft-rpms.sh, which falls back to a Docker Hub pull
+  # .argoci/scripts/load-nft-rpms.sh, which falls back to a Docker Hub pull
   # when the tarball is missing; that covers a credential-less (read-only)
   # build, but only for a tag that has already been published. If a consumer
   # fires on an unpublished tag while this producer is skipped (Semaphore treats
@@ -193,7 +193,7 @@
               - ppc64le
               - s390x
         commands:
-          - .semaphore/scripts/build-nft-rpms.sh "${ARCH}"
+          - .argoci/scripts/build-nft-rpms.sh "${ARCH}"
 
 - name: "Pull: go-build image"
   # Populate the GCS cache of calico/go-build so it can serve as a fallback when
@@ -322,7 +322,7 @@
           # Load the patched nftables RPMs producer image (built/cached by
           # "Build: nftables RPMs") so the node Dockerfile's FROM ${NFT_RPMS_IMAGE}
           # resolves locally without re-pulling from Docker Hub.
-          - .semaphore/scripts/load-nft-rpms.sh amd64
+          - .argoci/scripts/load-nft-rpms.sh amd64
           - make -C node image
           - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
           - zstd -3 --rm /tmp/node-image.tar

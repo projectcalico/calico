@@ -3,14 +3,14 @@
 # build-from-source fallback that keeps a credential-less (read-only) build
 # going when the workflow cache is empty.
 # Not run in CI; run manually:
-#   .semaphore/test-load-cached-images.sh
+#   .argoci/scripts/test-load-cached-images.sh
 #
 # make, docker, zstd, tar, curl and s3cmd are stubbed on PATH, so nothing is
 # built, loaded or fetched: the stubs record their argv to $stub_log. The real
 # s3-cmd runs on top of them — its anonymous-read path uses curl, its
 # credentialed path s3cmd — and CURL_FAIL / S3CMD_FAIL simulate an empty cache.
 set -u
-cd "$(dirname "$0")/.." || exit 1
+cd "$(dirname "$0")/../.." || exit 1
 repo_root="$PWD"
 fails=0
 
@@ -92,7 +92,7 @@ done
 
 # 1. Credential-less build, empty cache: only the requested components are
 #    built from source, through their .image.created marker rules.
-out=$(CURL_FAIL=1 run "$repo_root/.semaphore/load-cached-images" calico 2>&1)
+out=$(CURL_FAIL=1 run "$repo_root/.argoci/scripts/load-cached-images" calico 2>&1)
 rc=$?
 check "read-only miss RC=0" [ "$rc" = 0 ]
 check "read-only miss builds calico" grep -q "^make -C ${repo_root} ${repo_root}/cmd/calico/.image.created-amd64" "$stub_log"
@@ -103,12 +103,12 @@ check "read-only miss says so" grep -q "credential-less build" <<<"$out"
 
 # 2. A requested node image goes through load-nft-rpms.sh before building, so
 #    the node build does not produce the RPMs image from scratch.
-CURL_FAIL=1 run "$repo_root/.semaphore/load-cached-images" node >/dev/null 2>&1
+CURL_FAIL=1 run "$repo_root/.argoci/scripts/load-cached-images" node >/dev/null 2>&1
 check "node build loads nft-rpms first" grep -q "^docker image inspect calico/nftables-rpms" "$stub_log"
 check "node build runs marker rule" grep -q "node/.image.created-amd64" "$stub_log"
 
 # 3. Cache hit: load the tarball and do not build anything.
-out=$(run "$repo_root/.semaphore/load-cached-images" calico 2>&1)
+out=$(run "$repo_root/.argoci/scripts/load-cached-images" calico 2>&1)
 rc=$?
 check "cache hit RC=0" [ "$rc" = 0 ]
 check "cache hit loads image" grep -q "^docker load " "$stub_log"
@@ -118,7 +118,7 @@ check "cache hit builds nothing" test "$(grep -c '^make ' "$stub_log")" = 0
 #     hit has to touch every one or the lane rebuilds that component. An earlier
 #     case already touched them, so clear them first.
 rm -f "${tp_markers[@]}"
-run "$repo_root/.semaphore/load-cached-images" calico >/dev/null 2>&1
+run "$repo_root/.argoci/scripts/load-cached-images" calico >/dev/null 2>&1
 tp_missing=0
 for marker in "${tp_markers[@]}"; do
   [ -f "$marker" ] || tp_missing=$((tp_missing + 1))
@@ -129,7 +129,7 @@ check "cache hit touches every third-party marker" test "$tp_missing" = 0
 # 4. With credentials, a miss is tolerated and nothing is built — unchanged
 #    behaviour, since the producer block simply may not have run.
 out=$(CALICO_S3_ACCESS_KEY=AKID CALICO_S3_SECRET_KEY=SECRET S3CMD_FAIL=1 \
-  run "$repo_root/.semaphore/load-cached-images" calico 2>&1)
+  run "$repo_root/.argoci/scripts/load-cached-images" calico 2>&1)
 rc=$?
 check "credentialed miss RC=0" [ "$rc" = 0 ]
 check "credentialed miss builds nothing" test "$(grep -c '^make ' "$stub_log")" = 0
@@ -138,7 +138,7 @@ check "credentialed miss reports the miss" grep -q "No cached calico/calico imag
 # 4b. Under ArgoCI the producer has already run, so a miss must not be tolerated.
 : >"$stub_log"
 out=$(CI_ARTIFACT_STORAGE=gs://bucket/run ARTIFACT_FAIL=1 \
-  run "$repo_root/.semaphore/load-cached-images" calico 2>&1)
+  run "$repo_root/.argoci/scripts/load-cached-images" calico 2>&1)
 rc=$?
 check "argoci miss fails" test "$rc" != 0
 check "argoci miss builds nothing" test "$(grep -c '^make ' "$stub_log")" = 0

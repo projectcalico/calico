@@ -19,7 +19,7 @@ steps:
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
-      .semaphore/load-cached-images calico
+      .argoci/scripts/load-cached-images calico
       cd kube-controllers
       make ci-no-prereqs
     epilogue: |

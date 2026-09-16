@@ -191,3 +191,112 @@ steps:
       docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
       zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/calico-image.tar
       artifact push workflow /tmp/calico-image.tar.zst
+
+  # The tag is a hash of the specs and patches, so an unchanged recipe is a pull
+  # rather than the ~20 minutes an emulated build takes. Only amd64 is cached:
+  # nothing here consumes another arch yet.
+  - name: build-nft-rpms
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 3000m, memory: 4Gi}
+    changes:
+      dependsOn: [dependents-of-build-nft-rpms]
+      in:
+        - '^hack/rpms/nftables/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      mkdir -p logs
+      export BUILD_LOG="logs/build-nft-rpms-amd64.log"
+      .argoci/scripts/build-nft-rpms.sh amd64
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job logs --destination logs || true
+
+  # Still the DaemonSet image OSS users install, so it ships alongside the
+  # combined one.
+  - name: build-node-image
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 4000m, memory: 5Gi}
+    depends: [build-nft-rpms]
+    changes:
+      dependsOn: [node, dependents-of-build-node-image]
+      in:
+        - '^node/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
+      # does not go back to the registry for it.
+      .argoci/scripts/load-nft-rpms.sh amd64
+      make -C node image
+      docker save calico/node:latest-amd64 -o /tmp/node-image.tar
+      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/node-image.tar
+      artifact push workflow /tmp/node-image.tar.zst
+
+  # A TypeScript frontend that will not fold into the combined binary, so it has
+  # no Go closure to derive a gate from — hence the literal path.
+  - name: build-whisker-image
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 2500m, memory: 3Gi}
+    changes:
+      dependsOn: [dependents-of-build-whisker-image]
+      in:
+        - '^whisker/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make -C whisker image
+      docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
+      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/whisker-image.tar
+      artifact push workflow /tmp/whisker-image.tar.zst
+
+  # Built through the same target its consumers run, so the refs it bakes in
+  # (localhost:5000/calico/<name>:test-build) are the ones they install.
+  - name: build-operator-image
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 3500m, memory: 4Gi}
+    changes:
+      dependsOn: [operator, dependents-of-build-operator-image]
+      in:
+        - '^operator/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make kind-operator-image
+      docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
+      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/operator-image.tar
+      artifact push workflow /tmp/operator-image.tar.zst
+
+  # One tarball because no lane wants a subset, and each of these fetches and
+  # compiles upstream sources that every kind lane would otherwise repeat.
+  - name: build-third-party-images
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 4000m, memory: 5Gi}
+    changes:
+      dependsOn: [third_party, dependents-of-build-third-party-images]
+      in:
+        - '^third_party/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make -C third_party/envoy-gateway image
+      make -C third_party/envoy-proxy image
+      make -C third_party/envoy-ratelimit image
+      make -C third_party/cni-plugins image
+      docker save \
+        calico/envoy-gateway:latest-amd64 \
+        calico/envoy-proxy:latest-amd64 \
+        calico/envoy-ratelimit:latest-amd64 \
+        calico/third-party-cni-plugins:latest-amd64 \
+        -o /tmp/third-party-images.tar
+      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/third-party-images.tar
+      artifact push workflow /tmp/third-party-images.tar.zst

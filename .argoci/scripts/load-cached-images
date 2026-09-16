@@ -96,7 +96,7 @@ build_image() {
     # build would produce that image from scratch (~20 min); pulling the
     # published one first is much cheaper when it exists.
     if [ "$component" = node ]; then
-        "${REPO_ROOT}/.semaphore/scripts/load-nft-rpms.sh" "$ARCH"
+        "${REPO_ROOT}/.argoci/scripts/load-nft-rpms.sh" "$ARCH"
     fi
 
     make -C "${REPO_ROOT}" "$@" ARCH="$ARCH"
