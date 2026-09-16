@@ -347,10 +347,10 @@ func TestAssertVersions(t *testing.T) {
 				wantErr: "expected " + operatorVersion,
 			},
 			{
-				// prometheus-operator contains "operator" but carries the
-				// product version, so a name-substring match would fail it.
+				// An image whose name ends in the operator's carries the
+				// product version, so a substring match would fail it.
 				name:   "operator-adjacent image at the product version",
-				images: []string{testRegistry + "/prometheus-" + operatorImage + ":" + productVersion},
+				images: []string{testRegistry + "/metrics-" + operatorImage + ":" + productVersion},
 			},
 		} {
 			t.Run(tc.name, func(t *testing.T) {

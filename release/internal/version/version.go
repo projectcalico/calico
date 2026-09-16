@@ -224,8 +224,7 @@ func DetermineOperatorVersion(repoRoot string) (Version, error) {
 	return versionFromManifest(repoRoot, "tigera-operator.yaml", "operator")
 }
 
-// productImage identifies the product's image in a manifest, so its tag can be
-// read back as the version.
+// used to determine the version in manifests.
 var productImage = "calico/calico"
 
 // VersionsFromManifests returns the versions of the product and operator from manifests.
