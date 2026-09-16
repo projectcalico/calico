@@ -370,8 +370,12 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			outKVP, outError := bc.Create(ctx, kvp)
 			Expect(outError).NotTo(HaveOccurred())
 
-			// The CRD schema defaults the encapsulations, so they come back set.
-			Expect(outKVP.Value).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name3, spec3_1))
+			// Only KDD has a CRD schema to default the encapsulations, so etcdv3 stores them empty.
+			storedSpec := spec3
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				storedSpec = spec3_1
+			}
+			Expect(outKVP.Value).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name3, storedSpec))
 
 			// Verify Get() on the IPPool sets the encapsulations to "Never"
 			res, outError = c.IPPools().Get(ctx, name3, options.GetOptions{})
