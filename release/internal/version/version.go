@@ -25,7 +25,9 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/yamledit"
 )
 
 // Version represents a version, and contains methods for working with versions.
@@ -222,9 +224,13 @@ func DetermineOperatorVersion(repoRoot string) (Version, error) {
 	return versionFromManifest(repoRoot, "tigera-operator.yaml", "operator")
 }
 
+// productImage identifies the product's image in a manifest, so its tag can be
+// read back as the version.
+var productImage = "calico/calico"
+
 // VersionsFromManifests returns the versions of the product and operator from manifests.
 func VersionsFromManifests(repoRoot string) (Version, Version, error) {
-	productVersion, err := versionFromManifest(repoRoot, "ocp/02-tigera-operator.yaml", "calico/calico")
+	productVersion, err := versionFromManifest(repoRoot, "ocp/02-tigera-operator.yaml", productImage)
 	if err != nil {
 		return "", "", err
 	}
@@ -258,15 +264,12 @@ func DeterminePublishStream(branch string, version string) string {
 
 // versionFromManifest returns the version of the image matching the given match string from the given manifest.
 func versionFromManifest(repoRoot, manifest, imgMatch string) (Version, error) {
-	runner := &command.RealCommandRunner{}
-	args := []string{"-Po", `image:\K(.*)`, manifest}
-	out, err := runner.RunInDir(filepath.Join(repoRoot, "manifests"), "grep", args, nil)
+	imgs, err := yamledit.Read(filepath.Join(manifests.Dir(repoRoot), manifest), "image")
 	if err != nil {
-		return "", fmt.Errorf("failed to grep for image in manifest %s: %s", manifest, err)
+		return "", fmt.Errorf("read %s image from manifest %s: %w", imgMatch, manifest, err)
 	}
 
-	imgs := strings.SplitSeq(out, "\n")
-	for i := range imgs {
+	for _, i := range imgs {
 		if strings.Contains(i, imgMatch) {
 			splits := strings.SplitAfter(i, ":")
 			ver := splits[len(splits)-1]
@@ -278,5 +281,5 @@ func versionFromManifest(repoRoot, manifest, imgMatch string) (Version, error) {
 			return New(ver), nil
 		}
 	}
-	return "", fmt.Errorf("image for %s not found in manifest %s", imgMatch, manifest)
+	return "", fmt.Errorf("no images matching %s in manifest %s", imgMatch, manifest)
 }

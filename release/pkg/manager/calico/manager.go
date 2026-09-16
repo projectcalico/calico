@@ -38,26 +38,23 @@ import (
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
-	"github.com/projectcalico/calico/release/internal/yamledit"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 // Global configuration for releases.
 const (
-	binDir       = "bin"
-	chartsDir    = "charts"
-	manifestsDir = "manifests"
-	metadataKey  = "metadata"
+	binDir      = "bin"
+	chartsDir   = "charts"
+	metadataKey = "metadata"
 )
 
 const (
-	calicoctlManifest = "calicoctl.yaml"
-
 	calicoctlComponent = "calicoctl"
 	felixComponent     = "felix"
 	felixBPFBinary     = "calico-bpf"
@@ -399,9 +396,7 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to determine release images: %w", err)
 	}
-	components := []distribution.Component{
-		{Registry: r.operatorRegistry, Image: r.operatorImage, Version: r.operatorVersion},
-	}
+	components := []distribution.Component{{Component: r.operatorComponent()}}
 	for _, img := range imgs {
 		components = append(components, distribution.Component{Registry: reg, Image: img, Version: r.calicoVersion})
 	}
@@ -417,32 +412,15 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 // Fetch the registry from the calicoctl manifest file.
 // For hashrelease, it looks in the hashrelease source directory.
 func (r *CalicoManager) getRegistryFromManifests() (string, error) {
-	key := "spec.containers.image"
-	path := filepath.Join(r.repoRoot, manifestsDir, calicoctlManifest)
+	root := r.repoRoot
 	if r.isHashRelease {
-		p := filepath.Join(r.hashrelease.Source, manifestsDir, calicoctlManifest)
-		if _, err := os.Stat(p); err != nil {
+		if _, err := os.Stat(filepath.Join(manifests.Dir(r.hashrelease.Source), manifests.RegistryFile)); err != nil {
 			// if the file does not exist, fall back to the default image registry.
 			return r.imageRegistries[0], nil
 		}
-		path = p
+		root = r.hashrelease.Source
 	}
-	imgs, err := yamledit.Read(path, key)
-	if err != nil {
-		return "", err
-	}
-	for _, img := range imgs {
-		if !strings.Contains(img, "calico") {
-			continue
-		}
-		// registry/image:tag, so everything before the last slash.
-		// A registry may carry a path of its own e.g. example/path/to/image:tag
-		if i := strings.LastIndex(img, "/"); i > 0 {
-			return img[:i], nil
-		}
-		return "", nil
-	}
-	return "", fmt.Errorf("no registry found in %s using key(%s)", path, key)
+	return manifests.Registry(root)
 }
 
 func (r *CalicoManager) PreHashreleaseValidate() error {
@@ -515,8 +493,7 @@ func (r *CalicoManager) PreReleaseValidate() error {
 	}
 
 	// Assert that manifests are using the correct version.
-	err = r.assertManifestVersions(r.calicoVersion)
-	if err != nil {
+	if err := manifests.AssertVersions(r.manifestValues(), manifests.WithRunner(r.runner)); err != nil {
 		return err
 	}
 
@@ -651,17 +628,6 @@ func (r *CalicoManager) helmRepo() (string, error) {
 		return r.helmRepoURL, nil
 	}
 	return charts.RepoURL()
-}
-
-func (r *CalicoManager) buildOCPBundle() error {
-	if !r.ocpBundle {
-		logrus.Info("Skipping building OCP bundle")
-		return nil
-	}
-	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "bin/ocp.tgz"); err != nil {
-		return fmt.Errorf("failed to build OCP bundle: %w", err)
-	}
-	return r.collectOCPBundle()
 }
 
 func (r *CalicoManager) hashreleaseUpload() []distribution.Upload {
@@ -953,31 +919,6 @@ func (r *CalicoManager) collectBinaries() error {
 	return nil
 }
 
-func (r *CalicoManager) collectManifests() error {
-	if !r.isHashRelease {
-		// Hashrelease include manifests in a different way, instead of just in the release tarball.
-		return nil
-	}
-	if !r.manifests {
-		return nil
-	}
-	uploadDir := r.uploadDir()
-	manifestsSrc := filepath.Join(r.repoRoot, manifestsDir) + "/"
-	manifestsDest := filepath.Join(uploadDir, manifestsDir) + "/"
-	if err := os.MkdirAll(manifestsDest, utils.DirPerms); err != nil {
-		return fmt.Errorf("create manifests directory %s: %w", manifestsDest, err)
-	}
-	rsyncArgs := []string{"-av", "--delete", "--exclude=generate.sh", "--exclude=README.md", "--exclude=.gitattributes"}
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		rsyncArgs = append(rsyncArgs, "--verbose", "--progress")
-	}
-	if _, err := r.runner.Run("rsync", append(rsyncArgs, manifestsSrc, manifestsDest), nil); err != nil {
-		logrus.WithError(err).Error("Failed to copy manifests to output directory")
-		return fmt.Errorf("failed to copy manifests to output directory: %w", err)
-	}
-	return nil
-}
-
 func (r *CalicoManager) archive() archives.Archive {
 	return archives.Archive{
 		RepoRoot:        r.repoRoot,
@@ -1000,56 +941,43 @@ func (r *CalicoManager) buildWindowsArchive() error {
 	)
 }
 
-func (r *CalicoManager) collectOCPBundle() error {
-	if !r.ocpBundle {
-		return nil
-	}
-	uploadDir := r.uploadDir()
-	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"bin/ocp.tgz", uploadDir}, nil); err != nil {
-		return fmt.Errorf("failed to copy OCP bundle: %w", err)
-	}
-	return nil
-}
-
 // buildManifests regenerates manifests for pinned calico/operator versions and
 // builds the manifest-derived OCP bundle.
 func (r *CalicoManager) buildManifests() error {
-	if !r.isHashRelease {
-		// regular releases build the OCP bundle directly from the checked-in manifests
-		return r.buildOCPBundle()
-	}
-	if !r.manifests {
-		logrus.Info("Skipping regenerating manifests")
+	// Only a hashrelease regenerates: a release ships the checked-in manifests.
+	generate := r.isHashRelease && r.manifests
+	if !generate && !r.ocpBundle {
+		logrus.Info("Skipping manifests")
 		return nil
 	}
-	defer r.resetManifests()
-	env := os.Environ()
-	env = append(env, fmt.Sprintf("PRODUCT_VERSION=%s", r.calicoVersion))
-	env = append(env, fmt.Sprintf("OPERATOR_VERSION=%s", r.operatorVersion))
-	env = append(env, fmt.Sprintf("OPERATOR_REGISTRY_OVERRIDE=%s", r.operatorRegistry))
-	env = append(env, fmt.Sprintf("OPERATOR_IMAGE_OVERRIDE=%s", r.operatorImage))
-	if !slices.Equal(r.imageRegistries, defaultRegistries) {
-		env = append(env, fmt.Sprintf("REGISTRY=%s", r.imageRegistries[0]))
+	opts := []manifests.BuildOption{manifests.WithRunner(r.runner), manifests.WithLogsDir(r.logsDir)}
+	if r.isHashRelease {
+		// A release ships the manifests in the archive instead.
+		opts = append(opts, manifests.WithCollect())
 	}
-	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "gen-manifests", env...); err != nil {
-		logrus.WithError(err).Error("Failed to make manifests")
-		return fmt.Errorf("failed to generate manifests: %w", err)
-	}
-	if err := r.buildOCPBundle(); err != nil {
-		return fmt.Errorf("build OCP bundle: %w", err)
-	}
-	return r.collectManifests()
+	return manifests.Build(r.manifestValues(), generate, r.ocpBundle, opts...)
 }
 
-func (r *CalicoManager) resetManifests() {
-	if !r.manifests {
-		return
-	}
-	if _, err := r.runner.RunInDir(r.repoRoot, "git", []string{"checkout", manifestsDir, "test-tools/mocknode/mock-node.yaml"}, nil); err != nil {
-		logrus.WithError(err).Error("Failed to reset manifests")
+func (r *CalicoManager) manifestValues() manifests.Manifests {
+	return manifests.Manifests{
+		RepoRoot:  r.repoRoot,
+		Version:   r.calicoVersion,
+		Operator:  r.operatorComponent(),
+		Registry:  r.imageRegistries[0],
+		OutputDir: r.uploadDir(),
 	}
 }
 
+func (r *CalicoManager) operatorComponent() registry.Component {
+	return registry.Component{
+		Version:  r.operatorVersion,
+		Image:    r.operatorImage,
+		Registry: r.operatorRegistry,
+	}
+}
+
+// Compared against the manifests, not the default registries: those can
+// disagree, and the checked-in one may be a registry a release must not use.
 // Validated before any step runs; see publishPrereqs.
 func (r *CalicoManager) uploadDir() string {
 	return r.outputDir
@@ -1102,9 +1030,10 @@ func (r *CalicoManager) archiveSources() []archives.Contributor {
 			root = r.hashrelease.Source
 		}
 		sources = append(sources, archives.DirSource{
-			Label: "manifests",
-			To:    manifestsDir,
-			From:  filepath.Join(root, manifestsDir),
+			Label:  manifests.DirName,
+			To:     manifests.DirName,
+			From:   manifests.Dir(root),
+			Filter: manifests.Include,
 		})
 	}
 	return sources
@@ -1543,34 +1472,6 @@ func (r *CalicoManager) assertReleaseNotesPresent(ver string) error {
 	return nil
 }
 
-func (r *CalicoManager) assertManifestVersions(ver string) error {
-	// Go through a subset of yaml files in manifests/ and extract the images
-	// that they use. Verify that the images are using the given version.
-	// We also do the manifests/ocp/ yaml to check the calico/ctl image is correct.
-	manifests := []string{"calico.yaml", "ocp/02-tigera-operator.yaml"}
-
-	for _, m := range manifests {
-		args := []string{"-Po", `image:\K(.*)`, m}
-		out, err := r.runner.RunInDir(filepath.Join(r.repoRoot, manifestsDir), "grep", args, nil)
-		if err != nil {
-			return fmt.Errorf("failed to get images from manifest %s: %w", m, err)
-		}
-		imgs := strings.SplitSeq(out, "\n")
-		for i := range imgs {
-			if strings.Contains(i, "operator") {
-				// We don't handle the operator image here yet, since
-				// the version is different.
-				continue
-			}
-			if !strings.HasSuffix(i, ver) {
-				return fmt.Errorf("incorrect image version (expected %s) in manifest %s: %s", ver, m, i)
-			}
-		}
-	}
-
-	return nil
-}
-
 // determineBranch returns the current checked out branch.
 func (r *CalicoManager) determineBranch() (string, error) {
 	out, err := r.git("rev-parse", "--abbrev-ref", "HEAD")
@@ -1616,7 +1517,7 @@ func (r *CalicoManager) releaseBranchPrereqs() error {
 // them so the branch flow stages them into the cut commit.
 var branchChangedPaths = []string{
 	chartsDir,
-	manifestsDir,
+	manifests.DirName,
 	".semaphore",
 	"test-tools/mocknode",
 }
@@ -1814,7 +1715,7 @@ func (r *CalicoManager) updateAndCommitPrep() error {
 
 	if _, err := r.git("add",
 		filepath.Join(r.repoRoot, chartsDir),
-		filepath.Join(r.repoRoot, manifestsDir),
+		manifests.Dir(r.repoRoot),
 		filepath.Join(r.repoRoot, outputs.ReleaseNotesDir),
 	); err != nil {
 		return fmt.Errorf("failed to stage files: %w", err)

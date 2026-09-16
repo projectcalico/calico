@@ -41,6 +41,12 @@ const (
 
 	EnvGitVersion = "GIT_VERSION"
 
+	EnvProductVersion           = "PRODUCT_VERSION"
+	EnvOperatorVersion          = "OPERATOR_VERSION"
+	EnvOperatorRegistryOverride = "OPERATOR_REGISTRY_OVERRIDE"
+	EnvOperatorImageOverride    = "OPERATOR_IMAGE_OVERRIDE"
+	EnvRegistry                 = "REGISTRY"
+
 	EnvChartDestination = "CHART_DESTINATION"
 	EnvTZ               = "TZ" // EnvTZ fixes the timezone helm stamps index entries with.
 )
