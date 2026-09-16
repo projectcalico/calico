@@ -96,11 +96,6 @@ func NewHelper(cli client.Client, cfg Config) *Helper {
 	return &Helper{cli: cli, cfg: cfg}
 }
 
-// proxyObjects returns the variant's additions beside the proxy.
-func (h *Helper) proxyObjects() []client.Object {
-	return h.cfg.Extension.ProxyObjects(h.cfg.ResourcePrefix, h.cfg.BackendNamespace)
-}
-
 // Components renders the component's gateway resources, plus deletion
 // components for any namespace the Gateway has left behind.
 func (h *Helper) Components(
@@ -164,7 +159,7 @@ func (h *Helper) Components(
 		BackendCABundleConfigMapName: h.cfg.BackendCABundleConfigMapName,
 		TLSKeyPair:                   keyPair,
 		ResourcePrefix:               h.cfg.ResourcePrefix,
-		ExtraProxyObjects:            h.proxyObjects(),
+		ExtraProxyObjects:            h.cfg.Extension.ProxyObjects(h.cfg.ResourcePrefix, h.cfg.BackendNamespace),
 		OpenShift:                    h.cfg.Provider.IsOpenShift(),
 		RouteRequestTimeout:          h.cfg.RouteRequestTimeout,
 	})), nil
@@ -219,6 +214,7 @@ func (h *Helper) StaleComponents(ctx context.Context, desiredNS string) ([]rende
 	if err != nil {
 		return nil, err
 	}
+	extraProxyObjects := h.cfg.Extension.ProxyObjects(h.cfg.ResourcePrefix, h.cfg.BackendNamespace)
 	var components []render.Component
 	for _, ns := range strays {
 		if ns == desiredNS {
@@ -233,7 +229,7 @@ func (h *Helper) StaleComponents(ctx context.Context, desiredNS string) ([]rende
 			StaleNamespace:    ns,
 			BackendNamespace:  h.cfg.BackendNamespace,
 			TLSSecretName:     h.cfg.TLSSecretName,
-			ExtraProxyObjects: h.proxyObjects(),
+			ExtraProxyObjects: extraProxyObjects,
 			DeleteNamespace:   deletable,
 			TargetNamespace:   desiredNS,
 		}))
@@ -256,6 +252,7 @@ func (h *Helper) Teardown(ctx context.Context) ([]render.Component, error) {
 	if !slices.Contains(namespaces, h.cfg.BackendNamespace) {
 		namespaces = append(namespaces, h.cfg.BackendNamespace)
 	}
+	extraProxyObjects := h.cfg.Extension.ProxyObjects(h.cfg.ResourcePrefix, h.cfg.BackendNamespace)
 	var components []render.Component
 	for _, ns := range namespaces {
 		deletable, err := h.namespaceDeletable(ctx, ns)
@@ -267,7 +264,7 @@ func (h *Helper) Teardown(ctx context.Context) ([]render.Component, error) {
 			StaleNamespace:    ns,
 			BackendNamespace:  h.cfg.BackendNamespace,
 			TLSSecretName:     h.cfg.TLSSecretName,
-			ExtraProxyObjects: h.proxyObjects(),
+			ExtraProxyObjects: extraProxyObjects,
 			DeleteNamespace:   deletable,
 		}))
 	}
