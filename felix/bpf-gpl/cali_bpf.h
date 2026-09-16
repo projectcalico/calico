@@ -332,7 +332,12 @@ extern const volatile struct cali_tc_preamble_globals __globals;
 #define EXT_TO_SVC_MARK	CALI_CONFIGURABLE(ext_to_svc_mark)
 #define PSNAT_START	CALI_CONFIGURABLE(psnat_start)
 #define PSNAT_LEN	CALI_CONFIGURABLE(psnat_len)
+#if CALI_F_XDP
+/* The placeholder above is 1, which would read as the bit-0 flag set. */
+#define GLOBAL_FLAGS 	0
+#else
 #define GLOBAL_FLAGS 	CALI_CONFIGURABLE(flags)
+#endif
 #define HOST_TUNNEL_IP	CALI_CONFIGURABLE_IP(host_tunnel_ip)
 #define WG_PORT		CALI_CONFIGURABLE(wg_port)
 #define NATIN_IFACE	CALI_CONFIGURABLE(natin_idx)
