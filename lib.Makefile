@@ -300,7 +300,22 @@ DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL)\
 	--build-arg CALICO_BASE=$(CALICO_BASE) \
 	--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE)
 
-DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
+DEFAULT_GO_CACHE_PATH := $(REPO_ROOT)/.go-pkg-cache
+GOENV_GOCACHE := $(strip $(shell go env GOCACHE 2>/dev/null))
+
+# Mount source for the Go build cache, first match wins:
+#   1. LOCAL_GO_PKG_CACHE from the environment
+#   2. GOCACHE, when the Go tools resolve it to an absolute path (it is either
+#      that or the literal "off"; a relative path would make docker -v fail)
+#   3. the repo-local .go-pkg-cache
+#
+# override, not ?=: `LOCAL_GO_PKG_CACHE= make ...` to opt out leaves the
+# variable defined-but-empty, which ?= keeps, yielding `docker run -v :/go-cache`.
+ifeq ($(strip $(LOCAL_GO_PKG_CACHE)),)
+override LOCAL_GO_PKG_CACHE := $(or $(filter /%,$(GOENV_GOCACHE)),$(DEFAULT_GO_CACHE_PATH))
+endif
+
+DOCKER_RUN_PRIV_NET := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--init \
 		$(EXTRA_DOCKER_ARGS) \
@@ -313,7 +328,7 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 		-e "GOFLAGS=$(GOFLAGS)" \
 		-e ACK_GINKGO_DEPRECATIONS=1.16.5 \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
-		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
+		-v $(LOCAL_GO_PKG_CACHE):/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
 DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
