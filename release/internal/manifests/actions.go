@@ -164,10 +164,6 @@ func AssertVersions(m Manifests, opts ...AssertOption) error {
 
 const imageKey = "image"
 
-// Matched on the pinned image, not the name: prometheus-operator is
-// operator-adjacent but carries the product version.
-// A path segment match, so an image whose name merely ends in the operator's
-// (prometheus-operator) is not mistaken for it.
 func isImage(ref, image string) bool {
 	name, _, _ := strings.Cut(ref, ":")
 	return name == image || strings.HasSuffix(name, "/"+image)
