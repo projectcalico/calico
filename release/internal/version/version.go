@@ -224,9 +224,12 @@ func DetermineOperatorVersion(repoRoot string) (Version, error) {
 	return versionFromManifest(repoRoot, "tigera-operator.yaml", "operator")
 }
 
+// used to determine the version in manifests.
+var productImage = "calico/calico"
+
 // VersionsFromManifests returns the versions of the product and operator from manifests.
 func VersionsFromManifests(repoRoot string) (Version, Version, error) {
-	productVersion, err := versionFromManifest(repoRoot, "ocp/02-tigera-operator.yaml", "calico/calico")
+	productVersion, err := versionFromManifest(repoRoot, "ocp/02-tigera-operator.yaml", productImage)
 	if err != nil {
 		return "", "", err
 	}
