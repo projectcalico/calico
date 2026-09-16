@@ -182,30 +182,27 @@ func TestCTNatRSTHandling(t *testing.T) {
 			"the forward entry is a stub — state written there is never read")
 	})
 
-	t.Run("a flow closed by an RST expires without waiting out the established timeout",
-		func(t *testing.T) {
-			RegisterTestingT(t)
-			f := setupNATRSTFixture(t, 0)
+	t.Run("a flow closed by an RST expires at TCPResetSeen", func(t *testing.T) {
+		RegisterTestingT(t)
+		f := setupNATRSTFixture(t, 0)
 
-			runPkt(t, f, natRSTPacket(true /* rst */))
+		runPkt(t, f, natRSTPacket(true /* rst */))
 
-			rev := f.revEntry()
-			to := timeouts.DefaultTimeouts()
+		rev := f.revEntry()
+		to := timeouts.DefaultTimeouts()
 
-			// Three minutes after the RST, with no traffic since.
-			reason, expired := conntrack.EntryExpired(to,
-				rev.LastSeen()+int64(3*time.Minute), 6 /* TCP */, rev)
-			Expect(expired).To(BeTrue(),
-				"flow survived to the established timeout (%s); reason=%q",
-				to.TCPEstablished, reason)
+		// The Go two-minute rule is gone: cleanup now reaps on the
+		// connection-level RST timestamp, which a straggler cannot clear.
+		reason, expired := conntrack.EntryExpired(to,
+			rev.LastSeen()+int64(to.TCPResetSeen)+1, 6 /* TCP */, rev)
+		Expect(expired).To(BeTrue(),
+			"flow survived TCPResetSeen (%s); reason=%q", to.TCPResetSeen, reason)
 
-			// One minute in it is still inside the spurious-RST window: the
-			// RST may yet turn out to have been bogus, so the flow has to stay.
-			reason, expired = conntrack.EntryExpired(to,
-				rev.LastSeen()+int64(time.Minute), 6, rev)
-			Expect(expired).To(BeFalse(),
-				"flow expired inside the 2-minute spurious-RST window; reason=%q", reason)
-		})
+		reason, expired = conntrack.EntryExpired(to,
+			rev.LastSeen()+int64(to.TCPResetSeen)-1, 6, rev)
+		Expect(expired).To(BeFalse(),
+			"flow expired before TCPResetSeen; reason=%q", reason)
+	})
 
 	t.Run("a spurious RST is retracted once traffic continues", func(t *testing.T) {
 		RegisterTestingT(t)
