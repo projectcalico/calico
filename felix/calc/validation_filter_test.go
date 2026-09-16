@@ -17,8 +17,12 @@
 package calc_test
 
 import (
+	"strings"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/config"
@@ -26,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
+	v3v "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
 type TestSyncer struct {
@@ -85,5 +90,51 @@ var _ = Describe("WorkloadEndpoint Source IP Spoofing validation", func() {
 		vf.OnUpdates([]api.Update{workloadUpdateWithSpoofRequest})
 		Expect(len(sink.Received)).To(Equal(1))
 		Expect(sink.Received).To(ConsistOf(workloadUpdateWithSpoofRequest))
+	})
+})
+
+// The CRD schema and CEL rules only run for a runtime.Object, which a
+// dereferenced struct is not, so the filter has to hand over the pointer.
+var _ = Describe("CRD schema validation", func() {
+	var (
+		vf   *calc.ValidationFilter
+		sink *TestSyncer
+	)
+
+	BeforeEach(func() {
+		v3v.SetCRDValidationEnabled(true)
+		DeferCleanup(func() { v3v.SetCRDValidationEnabled(false) })
+		sink = &TestSyncer{Received: make([]api.Update, 0)}
+		vf = calc.NewValidationFilter(sink, config.New())
+	})
+
+	poolUpdate := func(selector string) api.Update {
+		return api.Update{
+			KVPair: model.KVPair{
+				Key: model.ResourceKey{Name: "pool", Kind: apiv3.KindIPPool},
+				Value: &apiv3.IPPool{
+					ObjectMeta: metav1.ObjectMeta{Name: "pool"},
+					Spec: apiv3.IPPoolSpec{
+						CIDR:              "10.0.0.0/16",
+						NamespaceSelector: selector,
+					},
+				},
+			},
+		}
+	}
+
+	It("should reject a value the schema forbids", func() {
+		// The selector parses, so only the schema's 1024 byte limit catches it.
+		update := poolUpdate("k == '" + strings.Repeat("a", 1024) + "'")
+		vf.OnUpdates([]api.Update{update})
+		Expect(len(sink.Received)).To(Equal(1))
+		Expect(sink.Received[0].Value).To(BeNil())
+	})
+
+	It("should pass a value the schema allows", func() {
+		update := poolUpdate("k == 'a'")
+		vf.OnUpdates([]api.Update{update})
+		Expect(len(sink.Received)).To(Equal(1))
+		Expect(sink.Received[0].Value).NotTo(BeNil())
 	})
 })
