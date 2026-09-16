@@ -2701,6 +2701,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					FloatingIPs:              ptr.To(apiv3.FloatingIPsEnabled),
 					NFTablesMode:             ptr.To(apiv3.NFTablesModeAuto),
 					NFTablesFlowTableOffload: ptr.To(apiv3.NFTablesFlowTableOffloadAll),
+					ProgramClusterRoutes:     ptr.To(apiv3.EnabledIPIPOnly),
 				},
 			},
 		}
