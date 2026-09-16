@@ -86,6 +86,10 @@ type KubeConfig struct {
 	K8sCurrentContext string `json:"k8sCurrentContext" envconfig:"K8S_CURRENT_CONTEXT" default:""`
 
 	CalicoAPIGroup string `json:"calicoAPIGroup" envconfig:"CALICO_API_GROUP"`
+
+	// UserAgent identifies the component making requests. It is set by the process
+	// rather than by the user, so it is neither loaded from config nor serialized.
+	UserAgent string `json:"-" ignored:"true"`
 }
 
 // NewCalicoAPIConfig creates a new (zeroed) CalicoAPIConfig struct with the

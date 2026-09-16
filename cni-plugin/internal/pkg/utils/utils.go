@@ -726,6 +726,8 @@ func CreateClient(conf types.NetConf) (client.Interface, error) {
 		return nil, err
 	}
 
+	clientConfig.Spec.UserAgent = apiconfig.UserAgentFor("calico-cni")
+
 	// Create a new client.
 	calicoClient, err := client.New(*clientConfig)
 	if err != nil {
