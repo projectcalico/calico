@@ -1345,6 +1345,7 @@ bgpconfig_name1_rev1 = {
         'nodeToNodeMeshEnabled': True,
         'asNumber': 6512,
         'serviceLoadBalancerAggregation': 'Enabled',
+        'programClusterRoutes': 'EnabledNoEncapOnly',
     }
 }
 
