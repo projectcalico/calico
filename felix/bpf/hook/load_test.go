@@ -21,8 +21,9 @@ import (
 )
 
 // Calico's own overlay devices carry no endpoint of their own to police, so
-// they default to allow. A device of the same kind that Calico does not own is
-// an ordinary host endpoint and must still get real policy.
+// they default to allow. A device of the same kind that Calico does not own
+// reaches this as a plain host endpoint with the flag clear, and keeps real
+// policy. The L3 cases are allow either way, as on master.
 func TestDefaultPolicy(t *testing.T) {
 	for _, tc := range []struct {
 		name        string

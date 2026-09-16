@@ -1549,6 +1549,11 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(bpfEpMgr.ifaceEncaps("vxlan.calico")).To(BeTrue())
 		})
 
+		It("should not give an overlay device the DSR object variant", func() {
+			Expect(bpfEpMgr.calculateTCAttachPoint("vxlan.calico").DSR).To(BeFalse())
+			Expect(bpfEpMgr.calculateTCAttachPoint("eth0").DSR).To(BeTrue())
+		})
+
 		It("should not flag a vxlan device Calico does not own", func() {
 			Expect(bpfEpMgr.getEndpointType("vxlan0")).To(Equal(tcdefs.EpTypeHost))
 			Expect(bpfEpMgr.ifaceEncaps("vxlan0")).To(BeFalse())
