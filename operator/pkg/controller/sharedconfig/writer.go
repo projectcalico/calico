@@ -26,6 +26,9 @@ import (
 // DeclareFelixConfiguration states which FelixConfiguration fields the caller owns, given the current object.
 type DeclareFelixConfiguration func(current *v3.FelixConfiguration) (*FelixConfigurationDeclaration, error)
 
+// DeclareBGPConfiguration states which BGPConfiguration fields the caller owns, given the current object.
+type DeclareBGPConfiguration func(current *v3.BGPConfiguration) (*BGPConfigurationDeclaration, error)
+
 // Writer persists operator-owned fields on shared Calico configuration resources.
 type Writer interface {
 	// UpdateFelixConfiguration applies updateFn to the default FelixConfiguration and persists the result.
@@ -33,6 +36,32 @@ type Writer interface {
 
 	// ApplyFelixConfiguration writes the declared fields and returns the whole resulting object.
 	ApplyFelixConfiguration(ctx context.Context, declare DeclareFelixConfiguration) (*v3.FelixConfiguration, error)
+
+	// ApplyBGPConfiguration writes the declared fields and returns the whole resulting object.
+	ApplyBGPConfiguration(ctx context.Context, declare DeclareBGPConfiguration) (*v3.BGPConfiguration, error)
+}
+
+// declareFn is the untyped declaration callback the writers share.
+type declareFn func(current client.Object) (*declaration, error)
+
+func felixDeclareFn(declare DeclareFelixConfiguration) declareFn {
+	return func(current client.Object) (*declaration, error) {
+		d, err := declare(current.(*v3.FelixConfiguration))
+		if err != nil || d == nil {
+			return nil, err
+		}
+		return d.untyped(), nil
+	}
+}
+
+func bgpDeclareFn(declare DeclareBGPConfiguration) declareFn {
+	return func(current client.Object) (*declaration, error) {
+		d, err := declare(current.(*v3.BGPConfiguration))
+		if err != nil || d == nil {
+			return nil, err
+		}
+		return d.untyped(), nil
+	}
 }
 
 // NewWriter returns a Writer for the API group the operator writes through.

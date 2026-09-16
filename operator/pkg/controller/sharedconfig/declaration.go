@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // ConflictPolicy resolves a field that both the operator and someone else set.
@@ -47,10 +48,46 @@ type FelixConfigurationDeclaration struct {
 	Policies map[string]ConflictPolicy
 }
 
+func (d *FelixConfigurationDeclaration) untyped() *declaration {
+	owned := d.Owned
+	if owned == nil {
+		owned = &v3.FelixConfiguration{}
+	}
+	return &declaration{manager: d.Manager, owned: owned, policies: d.Policies}
+}
+
+// BGPConfigurationDeclaration is one field manager's statement of what it owns.
+type BGPConfigurationDeclaration struct {
+	// Manager is the field manager name, and has to stay the same across reconciles.
+	Manager string
+
+	// Owned carries the declared fields and nothing else. Fields left nil are not owned.
+	Owned *v3.BGPConfiguration
+
+	// Policies is keyed by field path, e.g. "spec.programClusterRoutes". Every declared field
+	// needs an entry.
+	Policies map[string]ConflictPolicy
+}
+
+func (d *BGPConfigurationDeclaration) untyped() *declaration {
+	owned := d.Owned
+	if owned == nil {
+		owned = &v3.BGPConfiguration{}
+	}
+	return &declaration{manager: d.Manager, owned: owned, policies: d.Policies}
+}
+
+// declaration is the form the writers work in, which is the same for every governed resource.
+type declaration struct {
+	manager  string
+	owned    client.Object
+	policies map[string]ConflictPolicy
+}
+
 // policyFor returns the policy governing path, which may name a field below a declared one.
-func (d *FelixConfigurationDeclaration) policyFor(path string) (string, ConflictPolicy, bool) {
+func (d *declaration) policyFor(path string) (string, ConflictPolicy, bool) {
 	best := ""
-	for declared := range d.Policies {
+	for declared := range d.policies {
 		if path != declared && !strings.HasPrefix(path, declared+".") {
 			continue
 		}
@@ -61,14 +98,15 @@ func (d *FelixConfigurationDeclaration) policyFor(path string) (string, Conflict
 	if best == "" {
 		return "", "", false
 	}
-	return best, d.Policies[best], true
+	return best, d.policies[best], true
 }
 
 // ConflictingFieldsError reports fields the operator declares that someone else owns.
 type ConflictingFieldsError struct {
+	Kind  string
 	Paths []string
 }
 
 func (e *ConflictingFieldsError) Error() string {
-	return fmt.Sprintf("FelixConfiguration fields modified outside the operator: %s", strings.Join(e.Paths, ", "))
+	return fmt.Sprintf("%s fields modified outside the operator: %s", e.Kind, strings.Join(e.Paths, ", "))
 }

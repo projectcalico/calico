@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	// felixConfigFieldManager owns the FelixConfiguration fields defaulted from the Installation.
-	felixConfigFieldManager = "installation"
+	// installationFieldManager owns the shared config fields defaulted from the Installation.
+	installationFieldManager = "installation"
 
 	// bpfFieldManager owns spec.bpfEnabled, which both installation write sites declare.
 	bpfFieldManager = "installation-bpf"
@@ -42,7 +42,7 @@ const (
 func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) sharedconfig.DeclareFelixConfiguration {
 	return func(current *v3.FelixConfiguration) (*sharedconfig.FelixConfigurationDeclaration, error) {
 		d := &sharedconfig.FelixConfigurationDeclaration{
-			Manager: felixConfigFieldManager,
+			Manager: installationFieldManager,
 			Owned:   &v3.FelixConfiguration{},
 			Policies: map[string]sharedconfig.ConflictPolicy{
 				"spec.routeTableRange":         sharedconfig.ConflictDefer,
@@ -117,6 +117,28 @@ func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, i
 			d.Policies[path] = sharedconfig.ConflictOverride
 		}
 
+		return d, nil
+	}
+}
+
+// declareBGPConfiguration declares the BIRD half of cluster route programming. It moves in
+// lockstep with the FelixConfiguration half: whatever Felix is not programming, BIRD has to be.
+func (r *ReconcileInstallation) declareBGPConfiguration(install *operatorv1.Installation) sharedconfig.DeclareBGPConfiguration {
+	return func(current *v3.BGPConfiguration) (*sharedconfig.BGPConfigurationDeclaration, error) {
+		d := &sharedconfig.BGPConfigurationDeclaration{
+			Manager: installationFieldManager,
+			Owned:   &v3.BGPConfiguration{},
+			Policies: map[string]sharedconfig.ConflictPolicy{
+				"spec.programClusterRoutes": sharedconfig.ConflictOverride,
+			},
+		}
+
+		// Gated on the field being set, so leaving it unset keeps meaning "whatever Calico
+		// defaults to" rather than pinning today's default into the datastore.
+		if install.Spec.CalicoNetwork != nil && install.Spec.CalicoNetwork.ClusterRoutingMode != nil {
+			mode := *install.Spec.CalicoNetwork.ClusterRoutingMode
+			d.Owned.Spec.ProgramClusterRoutes = ptr.To(birdProgramClusterRoutesValue(mode))
+		}
 		return d, nil
 	}
 }

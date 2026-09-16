@@ -19,9 +19,8 @@ import (
 	"fmt"
 	"strings"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // legacyFieldManager is what the API server derives from the /usr/bin/operator user agent,
@@ -30,20 +29,20 @@ const legacyFieldManager = "operator"
 
 // reclaimablePaths lists fields a plain update owns that the operator wrote itself.
 // An apply must force ownership across once.
-func reclaimablePaths(fc *v3.FelixConfiguration, manager string) (map[string]bool, error) {
-	reclaimable, others, err := updateOwnedPaths(fc)
-	if err != nil || len(others) == 0 || appliedBy(fc, manager) {
+func reclaimablePaths(obj client.Object, manager string) (map[string]bool, error) {
+	reclaimable, others, err := updateOwnedPaths(obj)
+	if err != nil || len(others) == 0 || appliedBy(obj, manager) {
 		return reclaimable, err
 	}
 
 	// Ownership moves on a plain update too, so fall back to the values the operator recorded.
-	lastWritten, err := lastWrittenValues(fc)
+	lastWritten, err := lastWrittenValues(obj)
 	if err != nil || len(lastWritten) == 0 {
 		return reclaimable, err
 	}
-	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(fc)
+	content, err := toUnstructured(obj)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read FelixConfiguration fields: %w", err)
+		return nil, err
 	}
 	for path := range lastWritten {
 		if !others[path] {
@@ -63,8 +62,8 @@ func reclaimablePaths(fc *v3.FelixConfiguration, manager string) (map[string]boo
 
 // appliedBy reports whether manager has already applied to fc. The operator's records only speak
 // for the writes that came before its first apply, so they stop counting once it has one.
-func appliedBy(fc *v3.FelixConfiguration, manager string) bool {
-	for _, entry := range fc.ManagedFields {
+func appliedBy(obj client.Object, manager string) bool {
+	for _, entry := range obj.GetManagedFields() {
 		if entry.Operation == metav1.ManagedFieldsOperationApply && entry.Manager == manager {
 			return true
 		}
@@ -74,9 +73,9 @@ func appliedBy(fc *v3.FelixConfiguration, manager string) bool {
 
 // updateOwnedPaths splits the fields owned through a plain update by whether the operator's own
 // legacy field manager holds them.
-func updateOwnedPaths(fc *v3.FelixConfiguration) (legacy, others map[string]bool, err error) {
+func updateOwnedPaths(obj client.Object) (legacy, others map[string]bool, err error) {
 	legacy, others = map[string]bool{}, map[string]bool{}
-	for _, entry := range fc.ManagedFields {
+	for _, entry := range obj.GetManagedFields() {
 		if entry.Operation != metav1.ManagedFieldsOperationUpdate || entry.FieldsV1 == nil {
 			continue
 		}

@@ -1091,34 +1091,25 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	// Set any non-default FelixConfiguration values that we need.
-	felixWriter := sharedconfig.NewWriter(r.client, r.opts.UseV3CRDs)
-	if _, err := felixWriter.ApplyFelixConfiguration(ctx, r.declareFelixConfiguration(ctx, defaulted, needsNamespaceMigration)); err != nil {
+	configWriter := sharedconfig.NewWriter(r.client, r.opts.UseV3CRDs)
+	if _, err := configWriter.ApplyFelixConfiguration(ctx, r.declareFelixConfiguration(ctx, defaulted, needsNamespaceMigration)); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
 		return reconcile.Result{}, err
 	}
 
 	// The return carries both writes, so the render below sees the health port and cgroup path
 	// a user may have kept.
-	felixConfiguration, err := felixWriter.ApplyFelixConfiguration(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration))
+	felixConfiguration, err := configWriter.ApplyFelixConfiguration(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration))
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
 		return reconcile.Result{}, err
 	}
 
 	// Set any non-default BGPConfiguration values that we need.
-	_, err = utils.PatchBGPConfiguration(ctx, r.client, func(bgpConfig *v3.BGPConfiguration) (bool, error) {
-		// Configure cluster routing mode.
-		u, err := setClusterRoutingOnBGPConfiguration(defaulted, bgpConfig, reqLogger)
-		if err != nil {
-			return false, err
-		}
-
-		return u, nil
-	})
-	if err != nil {
-		// Since, programClusterRoutes in FelixConfiguration is already updated earlier,
-		// failure in updating programClusterRouting in BGPConfiguration, essentially results in inconsistency
-		// between the configuration of BIRD and Felix in programming cluster routes, until the next reconcile convergence
+	if _, err := configWriter.ApplyBGPConfiguration(ctx, r.declareBGPConfiguration(defaulted)); err != nil {
+		// The FelixConfiguration write above already landed, so until the next reconcile
+		// converges, Felix and BIRD disagree about who programs the cluster routes.
+		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating BGPConfiguration", err, reqLogger)
 		return reconcile.Result{}, err
 	}
 
@@ -1481,7 +1472,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	certificateManager.AddToStatusManager(r.status, common.CalicoNamespace)
 
 	// Now that calico-node has rolled out, re-check whether eBPF can be enabled within Felix.
-	_, err = felixWriter.ApplyFelixConfiguration(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration))
+	_, err = configWriter.ApplyFelixConfiguration(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration))
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating resource", err, reqLogger)
 		return reconcile.Result{}, err
@@ -1629,29 +1620,6 @@ func allNodesRunTargetVersion(install *operatorv1.Installation, needNsMigration,
 	return install.Status.Variant == install.Spec.Variant && install.Status.CalicoVersion == targetVersion
 }
 
-// setClusterRoutingOnBGPConfiguration sets programClusterRoutes in the BGPConfiguration resource
-// based on the value of clusterRoutingMode in the install config.
-func setClusterRoutingOnBGPConfiguration(
-	install *operatorv1.Installation,
-	bgpConfig *v3.BGPConfiguration,
-	reqLogger logr.Logger,
-) (bool, error) {
-	if install.Spec.CalicoNetwork == nil || install.Spec.CalicoNetwork.ClusterRoutingMode == nil {
-		return false, nil
-	}
-
-	updated := false
-	desiredValue := birdProgramClusterRoutesValue(*install.Spec.CalicoNetwork.ClusterRoutingMode)
-
-	if bgpConfig.Spec.ProgramClusterRoutes == nil || *bgpConfig.Spec.ProgramClusterRoutes != desiredValue {
-		bgpConfig.Spec.ProgramClusterRoutes = &desiredValue
-		updated = true
-		reqLogger.Info("Patching BGPConfiguration", "programClusterRoutes", desiredValue)
-	}
-
-	return updated, nil
-}
-
 // felixProgramClusterRoutesValue and birdProgramClusterRoutesValue map a cluster routing mode onto
 // the FelixConfiguration and BGPConfiguration programClusterRoutes values that implement it.  The
 // two must always be complementary: whatever Felix is not programming, BIRD has to, and vice versa.
@@ -1703,7 +1671,7 @@ func felixProgramsNoEncapClusterRoutes(install *operatorv1.Installation) bool {
 //
 // This is deliberately not used to decide whether to *write* programClusterRoutes into
 // FelixConfiguration and BGPConfiguration.  Those writes stay gated on the field being explicitly
-// set (see setClusterRoutingOnFelixConfiguration and setClusterRoutingOnBGPConfiguration), so that
+// set (see declareFelixConfiguration and declareBGPConfiguration), so that
 // leaving it unset continues to mean "whatever Calico's defaults are" rather than pinning today's
 // defaults into the datastore.
 func clusterRoutingMode(install *operatorv1.Installation) operatorv1.ClusterRoutingMode {

@@ -21,17 +21,18 @@ import (
 	"strconv"
 	"strings"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
 // lastWrittenValues reads back the values the operator recorded on its previous write.
-func lastWrittenValues(fc *v3.FelixConfiguration) (map[string]any, error) {
+func lastWrittenValues(obj client.Object) (map[string]any, error) {
+	annotations := obj.GetAnnotations()
 	values := map[string]any{}
-	if raw := fc.Annotations[ownedFieldsAnnotation]; raw != "" {
+	if raw := annotations[ownedFieldsAnnotation]; raw != "" {
 		if err := json.Unmarshal([]byte(raw), &values); err != nil {
 			return nil, fmt.Errorf("unable to parse %s annotation: %w", ownedFieldsAnnotation, err)
 		}
@@ -39,7 +40,7 @@ func lastWrittenValues(fc *v3.FelixConfiguration) (map[string]any, error) {
 
 	// Clusters last written by an older operator only have the legacy annotation.
 	if _, ok := values[bpfEnabledPath]; !ok {
-		if raw := fc.Annotations[render.BPFOperatorAnnotation]; raw != "" {
+		if raw := annotations[render.BPFOperatorAnnotation]; raw != "" {
 			enabled, err := strconv.ParseBool(raw)
 			if err != nil {
 				return nil, fmt.Errorf("unable to parse %s annotation: %w", render.BPFOperatorAnnotation, err)
@@ -87,8 +88,8 @@ func valuesAgree(currentContent, payloadObj map[string]any, path string) (bool, 
 }
 
 // recordWrittenValues stores the values being written so the next reconcile can compare against them.
-func recordWrittenValues(fc *v3.FelixConfiguration, payload *unstructured.Unstructured, d *FelixConfigurationDeclaration, deferred []string) error {
-	values, err := lastWrittenValues(fc)
+func recordWrittenValues(obj client.Object, payload *unstructured.Unstructured, d *declaration, deferred []string) error {
+	values, err := lastWrittenValues(obj)
 	if err != nil {
 		return err
 	}
@@ -96,7 +97,7 @@ func recordWrittenValues(fc *v3.FelixConfiguration, payload *unstructured.Unstru
 		delete(values, path)
 	}
 
-	for path := range d.Policies {
+	for path := range d.policies {
 		written, found, err := unstructured.NestedFieldNoCopy(payload.Object, strings.Split(path, ".")...)
 		if err != nil {
 			return fmt.Errorf("unable to read %s: %w", path, err)
@@ -113,7 +114,7 @@ func recordWrittenValues(fc *v3.FelixConfiguration, payload *unstructured.Unstru
 	if err != nil {
 		return fmt.Errorf("unable to record written fields: %w", err)
 	}
-	annotations := fc.Annotations
+	annotations := obj.GetAnnotations()
 	if annotations == nil {
 		annotations = map[string]string{}
 	}
@@ -125,12 +126,12 @@ func recordWrittenValues(fc *v3.FelixConfiguration, payload *unstructured.Unstru
 	} else {
 		delete(annotations, render.BPFOperatorAnnotation)
 	}
-	fc.SetAnnotations(annotations)
+	obj.SetAnnotations(annotations)
 	return nil
 }
 
 // mergeInto overlays the declared fields onto fc, leaving every other field alone.
-func mergeInto(fc *v3.FelixConfiguration, payload *unstructured.Unstructured) error {
+func mergeInto(obj client.Object, payload *unstructured.Unstructured) error {
 	declared, _, err := unstructured.NestedMap(payload.Object, "spec")
 	if err != nil {
 		return fmt.Errorf("unable to read declared fields: %w", err)
@@ -139,13 +140,13 @@ func mergeInto(fc *v3.FelixConfiguration, payload *unstructured.Unstructured) er
 		return nil
 	}
 
-	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(fc)
+	content, err := toUnstructured(obj)
 	if err != nil {
-		return fmt.Errorf("unable to read FelixConfiguration fields: %w", err)
+		return err
 	}
 	spec, _, err := unstructured.NestedMap(content, "spec")
 	if err != nil {
-		return fmt.Errorf("unable to read FelixConfiguration fields: %w", err)
+		return fmt.Errorf("unable to read %T fields: %w", obj, err)
 	}
 	if spec == nil {
 		spec = map[string]any{}
@@ -158,7 +159,7 @@ func mergeInto(fc *v3.FelixConfiguration, payload *unstructured.Unstructured) er
 	if err := unstructured.SetNestedMap(content, spec, "spec"); err != nil {
 		return err
 	}
-	return runtime.DefaultUnstructuredConverter.FromUnstructured(content, fc)
+	return runtime.DefaultUnstructuredConverter.FromUnstructured(content, obj)
 }
 
 // canonicalize renders a value the way it will read back out of the annotation.

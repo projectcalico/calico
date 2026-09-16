@@ -19,25 +19,22 @@ import (
 	"fmt"
 	"strings"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// defaultFelixConfigName is the only FelixConfiguration the operator writes.
-const defaultFelixConfigName = "default"
+// defaultResourceName is the only FelixConfiguration or BGPConfiguration the operator writes.
+const defaultResourceName = "default"
 
 // declaredPayload renders the governed fields as an object carrying no other state.  It is built
 // from the policy paths rather than the struct, which serializes some fields unconditionally.
-func declaredPayload(owned *v3.FelixConfiguration, policies map[string]ConflictPolicy) (*unstructured.Unstructured, error) {
-	if owned == nil {
-		owned = &v3.FelixConfiguration{}
-	}
-	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(owned)
+func declaredPayload(owned client.Object, policies map[string]ConflictPolicy) (*unstructured.Unstructured, error) {
+	content, err := toUnstructured(owned)
 	if err != nil {
-		return nil, fmt.Errorf("unable to render FelixConfiguration fields: %w", err)
+		return nil, err
 	}
 
 	declared := map[string]any{}
@@ -59,8 +56,17 @@ func declaredPayload(owned *v3.FelixConfiguration, policies map[string]ConflictP
 	}
 
 	u := &unstructured.Unstructured{Object: declared}
-	u.SetName(defaultFelixConfigName)
+	u.SetName(defaultResourceName)
 	return u, nil
+}
+
+// toUnstructured renders an object as a field map.
+func toUnstructured(obj client.Object) (map[string]any, error) {
+	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	if err != nil {
+		return nil, fmt.Errorf("unable to render %T fields: %w", obj, err)
+	}
+	return content, nil
 }
 
 // declaresSpec reports whether the payload sets any field at all.

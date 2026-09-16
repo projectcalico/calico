@@ -110,6 +110,7 @@ func uncachedObjects(extra []client.Object) []client.Object {
 
 		// The shared-config writer resolves field ownership from managedFields.
 		&v3.FelixConfiguration{},
+		&v3.BGPConfiguration{},
 	}, extra...)
 }
 

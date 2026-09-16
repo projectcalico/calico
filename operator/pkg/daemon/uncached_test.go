@@ -23,21 +23,26 @@ import (
 )
 
 // The cache strips managedFields, so the shared-config writer cannot resolve ownership from a
-// cached FelixConfiguration.
-func TestUncachedObjectsReadsFelixConfigurationLive(t *testing.T) {
+// cached copy of the resources it governs.
+func TestUncachedObjectsReadsSharedConfigLive(t *testing.T) {
 	objects := uncachedObjects([]client.Object{&corev1.Secret{}})
 
-	var felixConfig, caller bool
+	var felixConfig, bgpConfig, caller bool
 	for _, obj := range objects {
 		switch obj.(type) {
 		case *v3.FelixConfiguration:
 			felixConfig = true
+		case *v3.BGPConfiguration:
+			bgpConfig = true
 		case *corev1.Secret:
 			caller = true
 		}
 	}
 	if !felixConfig {
 		t.Error("expected FelixConfiguration to be read uncached")
+	}
+	if !bgpConfig {
+		t.Error("expected BGPConfiguration to be read uncached")
 	}
 	if !caller {
 		t.Error("expected the caller's own uncached objects to be kept")

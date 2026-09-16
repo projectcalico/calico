@@ -22,9 +22,9 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -47,24 +47,52 @@ func (w *v3Writer) ApplyFelixConfiguration(ctx context.Context, declare DeclareF
 	if err != nil {
 		return nil, err
 	}
-
-	declaration, err := declare(current)
+	applied, err := w.applyDeclared(ctx, current, felixDeclareFn(declare))
 	if err != nil {
 		return nil, err
 	}
-	if declaration == nil {
+	return applied.(*v3.FelixConfiguration), nil
+}
+
+func (w *v3Writer) ApplyBGPConfiguration(ctx context.Context, declare DeclareBGPConfiguration) (*v3.BGPConfiguration, error) {
+	current, err := utils.GetBGPConfiguration(ctx, w.client)
+	if err != nil {
+		return nil, err
+	}
+	applied, err := w.applyDeclared(ctx, current, bgpDeclareFn(declare))
+	if err != nil {
+		return nil, err
+	}
+	return applied.(*v3.BGPConfiguration), nil
+}
+
+func (w *v3Writer) applyDeclared(ctx context.Context, current client.Object, declare declareFn) (client.Object, error) {
+	d, err := declare(current)
+	if err != nil {
+		return nil, err
+	}
+	if d == nil {
 		return current, nil
 	}
 
-	payload, err := declaredPayload(declaration.Owned, declaration.Policies)
+	gvk, err := apiutil.GVKForObject(current, w.client.Scheme())
 	if err != nil {
 		return nil, err
 	}
-	if err := w.clearLegacyOwned(ctx, current, declaration, payload); err != nil {
+
+	payload, err := declaredPayload(d.owned, d.policies)
+	if err != nil {
+		return nil, err
+	}
+	if current.GetResourceVersion() == "" && !declaresSpec(payload) {
+		// The declaration holds nothing to write, so don't create an empty object.
+		return current, nil
+	}
+	if err := w.clearLegacyOwned(ctx, current, gvk, d, payload); err != nil {
 		return nil, err
 	}
 
-	applied, err := w.apply(ctx, payload, declaration.Manager, false)
+	applied, err := w.apply(ctx, gvk, payload, d.manager, false)
 	if err == nil {
 		return applied, nil
 	}
@@ -72,25 +100,25 @@ func (w *v3Writer) ApplyFelixConfiguration(ctx context.Context, declare DeclareF
 		return nil, err
 	}
 
-	force, err := w.resolveConflicts(err, current, declaration, payload)
+	force, err := w.resolveConflicts(err, current, d, payload)
 	if err != nil {
 		return nil, err
 	}
-	return w.apply(ctx, payload, declaration.Manager, force)
+	return w.apply(ctx, gvk, payload, d.manager, force)
 }
 
 // resolveConflicts drops deferred fields from payload and reports whether the retry must force.
-func (w *v3Writer) resolveConflicts(applyErr error, current *v3.FelixConfiguration, d *FelixConfigurationDeclaration, payload *unstructured.Unstructured) (bool, error) {
+func (w *v3Writer) resolveConflicts(applyErr error, current client.Object, d *declaration, payload *unstructured.Unstructured) (bool, error) {
 	paths := conflictPaths(applyErr)
 	if len(paths) == 0 {
 		return false, applyErr
 	}
 
-	currentContent, err := runtime.DefaultUnstructuredConverter.ToUnstructured(current)
+	currentContent, err := toUnstructured(current)
 	if err != nil {
-		return false, fmt.Errorf("unable to read FelixConfiguration fields: %w", err)
+		return false, err
 	}
-	reclaimable, err := reclaimablePaths(current, fieldManagerPrefix+d.Manager)
+	reclaimable, err := reclaimablePaths(current, fieldManagerPrefix+d.manager)
 	if err != nil {
 		return false, err
 	}
@@ -132,21 +160,21 @@ func (w *v3Writer) resolveConflicts(applyErr error, current *v3.FelixConfigurati
 		return false, fmt.Errorf("conflict on fields with no declared policy %v: %w", undeclared, applyErr)
 	}
 	if len(refused) > 0 {
-		return false, &ConflictingFieldsError{Paths: refused}
+		return false, &ConflictingFieldsError{Kind: kindOf(current), Paths: refused}
 	}
 	return force, nil
 }
 
 // clearLegacyOwned deletes governed fields the operator's pre-apply field manager still holds and
 // the declaration does not set. An apply cannot drop a field it does not own.
-func (w *v3Writer) clearLegacyOwned(ctx context.Context, current *v3.FelixConfiguration, d *FelixConfigurationDeclaration, payload *unstructured.Unstructured) error {
+func (w *v3Writer) clearLegacyOwned(ctx context.Context, current client.Object, gvk schema.GroupVersionKind, d *declaration, payload *unstructured.Unstructured) error {
 	legacyOwned, _, err := updateOwnedPaths(current)
 	if err != nil || len(legacyOwned) == 0 {
 		return err
 	}
 
 	remove := map[string]any{}
-	for path := range d.Policies {
+	for path := range d.policies {
 		if !legacyOwned[path] || pathSet(payload.Object, path) {
 			continue
 		}
@@ -162,19 +190,16 @@ func (w *v3Writer) clearLegacyOwned(ctx context.Context, current *v3.FelixConfig
 	if err != nil {
 		return fmt.Errorf("unable to render the fields to clear: %w", err)
 	}
-	fc := &v3.FelixConfiguration{ObjectMeta: metav1.ObjectMeta{Name: defaultFelixConfigName}}
-	return w.client.Patch(ctx, fc, client.RawPatch(types.MergePatchType, encoded))
+	target := &unstructured.Unstructured{}
+	target.SetGroupVersionKind(gvk)
+	target.SetName(defaultResourceName)
+	return w.client.Patch(ctx, target, client.RawPatch(types.MergePatchType, encoded))
 }
 
-func (w *v3Writer) apply(ctx context.Context, payload *unstructured.Unstructured, manager string, force bool) (*v3.FelixConfiguration, error) {
+func (w *v3Writer) apply(ctx context.Context, gvk schema.GroupVersionKind, payload *unstructured.Unstructured, manager string, force bool) (client.Object, error) {
 	opts := []client.ApplyOption{client.FieldOwner(fieldManagerPrefix + manager)}
 	if force {
 		opts = append(opts, client.ForceOwnership)
-	}
-
-	gvk, err := apiutil.GVKForObject(&v3.FelixConfiguration{}, w.client.Scheme())
-	if err != nil {
-		return nil, err
 	}
 
 	applied := payload.DeepCopy()
@@ -183,9 +208,12 @@ func (w *v3Writer) apply(ctx context.Context, payload *unstructured.Unstructured
 		return nil, err
 	}
 
-	fc := &v3.FelixConfiguration{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(applied.Object, fc); err != nil {
-		return nil, fmt.Errorf("unable to read back applied FelixConfiguration: %w", err)
+	out, err := w.client.Scheme().New(gvk)
+	if err != nil {
+		return nil, err
 	}
-	return fc, nil
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(applied.Object, out); err != nil {
+		return nil, fmt.Errorf("unable to read back the applied %s: %w", gvk.Kind, err)
+	}
+	return out.(client.Object), nil
 }
