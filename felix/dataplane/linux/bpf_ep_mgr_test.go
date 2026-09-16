@@ -52,8 +52,10 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/qos"
 	"github.com/projectcalico/calico/felix/bpf/state"
 	"github.com/projectcalico/calico/felix/bpf/tc"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/calc"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
@@ -445,6 +447,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		ipSetIDAllocatorV4   *idalloc.IDAllocator
 		ipSetIDAllocatorV6   *idalloc.IDAllocator
 		vxlanMTU             int
+		encapsEnabled        bool
 		nodePortDSR          bool
 		bpfAttachType        v3.BPFAttachOption
 		maps                 *bpfmap.Maps
@@ -473,6 +476,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		ipSetIDAllocatorV4 = idalloc.New()
 		ipSetIDAllocatorV6 = idalloc.New()
 		vxlanMTU = 0
+		encapsEnabled = false
 		nodePortDSR = true
 		bpfAttachType = v3.BPFAttachOptionNetkit
 
@@ -575,7 +579,11 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				VXLANPort:             rrConfigNormal.VXLANPort,
 				BPFNodePortDSREnabled: nodePortDSR,
 				RulesConfig: rules.Config{
-					EndpointToHostAction: endpointToHostAction,
+					EndpointToHostAction:   endpointToHostAction,
+					IPIPEnabled:            encapsEnabled,
+					VXLANEnabled:           encapsEnabled,
+					WireguardEnabled:       encapsEnabled,
+					WireguardInterfaceName: "wireguard.cali",
 				},
 				BPFExtToServiceConnmark: 0,
 				BPFHostNetworkedNAT:     "Enabled",
@@ -1518,6 +1526,38 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(dp.getErangeCount()).To(BeNumerically(">", 0))
 			Expect(dp.getFinalTrampolineStride()).To(BeNumerically(">", 0))
 			Expect(dp.getFinalTrampolineStride()).To(BeNumerically("<=", 15000))
+		})
+	})
+
+	Context("Encapsulating devices", func() {
+		JustBeforeEach(func() {
+			encapsEnabled = true
+			dataIfacePattern = "^eth|vxlan"
+			// Anchored as production builds it; a bare "cali" would also
+			// match vxlan.calico.
+			workloadIfaceRegex = "^cali.*"
+			// A vxlan device Calico owns, and one it does not.
+			Expect(dp.createIface("vxlan.calico", 20, "vxlan")).NotTo(HaveOccurred())
+			Expect(dp.createIface("vxlan0", 21, "vxlan")).NotTo(HaveOccurred())
+			newBpfEpMgr(false)
+			genIfaceUpdate("vxlan.calico", ifacemonitor.StateUp, 20)()
+			genIfaceUpdate("vxlan0", ifacemonitor.StateUp, 21)()
+		})
+
+		It("should run Calico's vxlan device on the host object, flagged as encapsulating", func() {
+			Expect(bpfEpMgr.getEndpointType("vxlan.calico")).To(Equal(tcdefs.EpTypeHost))
+			Expect(bpfEpMgr.ifaceEncaps("vxlan.calico")).To(BeTrue())
+		})
+
+		It("should not flag a vxlan device Calico does not own", func() {
+			Expect(bpfEpMgr.getEndpointType("vxlan0")).To(Equal(tcdefs.EpTypeHost))
+			Expect(bpfEpMgr.ifaceEncaps("vxlan0")).To(BeFalse())
+		})
+
+		It("should flag the tunnel and wireguard devices by their configured names", func() {
+			Expect(bpfEpMgr.ifaceEncaps(dataplanedefs.IPIPIfaceName)).To(BeTrue())
+			Expect(bpfEpMgr.ifaceEncaps("wireguard.cali")).To(BeTrue())
+			Expect(bpfEpMgr.ifaceEncaps("eth0")).To(BeFalse())
 		})
 	})
 

@@ -224,6 +224,10 @@ DSR-enabled, cgroup, etc. `LoadObj` loads the object at most once per
 `AttachType` and returns a `Layout` that maps every sub-program to the
 jump-map index it was placed at.
 
+Whether the device encapsulates is deliberately *not* part of it. It is
+per-attach-point runtime state (the `IFACE_ENCAPS` global), so Calico's
+own overlay devices share the host object rather than each needing one.
+
 `GetApplicableSubProgs` filters the list based on capability: the
 host-CT-conflict helper is only loaded for HEP egress, the Maglev
 helper only where Maglev can be used, the IP-frag helper only on
