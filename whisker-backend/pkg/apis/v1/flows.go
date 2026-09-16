@@ -269,12 +269,12 @@ type FlowResponse struct {
 	BytesIn         int64       `json:"bytes_in"`
 	BytesOut        int64       `json:"bytes_out"`
 
-	// Service is the destination service the flow targets, if any. Populated by
-	// both the Goldmane (OSS) and Linseed upstreams.
+	// Service is the destination service the flow targets, if any.
 	Service *ServiceRef `json:"service,omitempty"`
 
-	// Endpoint types for source and destination — used internally for RBAC
-	// filtering. Values match linseed EndpointType constants (wep, hep, ns, net).
+	// Endpoint types for source and destination, named as Goldmane's EndpointType
+	// enum does: WorkloadEndpoint, HostEndpoint, NetworkSet, Network. Empty when
+	// the upstream did not report one.
 	SourceType string `json:"-"`
 	DestType   string `json:"-"`
 }

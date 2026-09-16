@@ -128,16 +128,15 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusInternalServerError).SetError("Internal Server Error")
 	}
 
-	// A single-page result the RBAC filter emptied is no pages at all —
-	// backends already report 0 for an empty result, and the UI must not be
-	// told there is a page to render with nothing in it. Multi-page counts are
-	// left alone: they are real pagination state from the backend.
+	// An empty single-page result means there is nothing to show at all, so report
+	// no pages rather than one page with nothing in it. A multi-page count is left
+	// alone: an empty page there is a page past the end, or one this caller cannot
+	// see, and the totals are still real pagination state for the other pages.
 	if len(flows) == 0 && meta.TotalPages == 1 {
 		meta = apiutil.ListMeta{}
 	}
 
-	return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusOK).
-		SendList(meta, flows)
+	return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusOK).SendList(meta, flows)
 }
 
 // ListFilterHints returns a list of filter hints. This provides filter values for various filters that will produce
