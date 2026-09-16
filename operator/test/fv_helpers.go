@@ -145,7 +145,7 @@ func removeInstallation(ctx context.Context, c client.Client, name string) {
 		} else if err != nil {
 			return err
 		}
-		return fmt.Errorf("Installation still exists")
+		return fmt.Errorf("installation still exists")
 	}, 120*time.Second).ShouldNot(HaveOccurred(), func() string {
 		// Collect debugging information for failure message
 		var debugInfo strings.Builder
@@ -204,7 +204,7 @@ func waitForProductTeardown(c client.Client) {
 		}
 		err := GetResource(c, ns)
 		if err == nil {
-			return fmt.Errorf("Calico namespace still exists")
+			return fmt.Errorf("calico namespace still exists")
 		}
 		if !kerror.IsNotFound(err) {
 			return err
@@ -215,7 +215,7 @@ func waitForProductTeardown(c client.Client) {
 		}
 		err = GetResource(c, crb)
 		if err == nil {
-			return fmt.Errorf("Node CRB still exists")
+			return fmt.Errorf("node CRB still exists")
 		}
 		if !kerror.IsNotFound(err) {
 			return err
