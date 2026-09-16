@@ -822,7 +822,7 @@ type FelixConfigurationSpec struct {
 	// [Default: Off].
 	// +optional
 	// +kubebuilder:validation:Pattern=`^(?i)(Off|Info|Debug)?$`
-	BPFLogLevel string `json:"bpfLogLevel"`
+	BPFLogLevel string `json:"bpfLogLevel,omitempty"`
 
 	// BPFConntrackLogLevel controls the log level of the BPF conntrack cleanup program, which runs periodically
 	// to clean up expired BPF conntrack entries.
