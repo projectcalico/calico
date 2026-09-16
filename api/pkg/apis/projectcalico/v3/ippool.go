@@ -101,7 +101,7 @@ type IPPoolSpec struct {
 	// The pool CIDR.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Format=cidr
-	// +kubebuilder:validation:MaxLength=48
+	// +kubebuilder:validation:MaxLength=49
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="CIDR cannot be changed; follow IP pool migration guide to avoid corruption.",reason=FieldValueInvalid
 	CIDR string `json:"cidr" validate:"net"`
 

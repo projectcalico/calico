@@ -156,7 +156,7 @@ type BGPFilterRuleV6 struct {
 	// MatchOperator and PrefixLength.  CIDR should be in conventional CIDR notation,
 	// <prefix>/<length>.
 	// +kubebuilder:validation:Format=cidr
-	// +kubebuilder:validation:MaxLength=43
+	// +kubebuilder:validation:MaxLength=49
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,netv6"`
 
 	// PrefixLength further constrains the CIDR match by restricting the range of allowed
