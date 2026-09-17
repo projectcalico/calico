@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sharedconfig_test
+package managedfields_test
 
 import (
 	"testing"
@@ -23,10 +23,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-func TestSharedConfig(t *testing.T) {
+func TestManagedFields(t *testing.T) {
 	logf.SetLogger(zap.New(zap.WriteTo(ginkgo.GinkgoWriter), zap.UseDevMode(true)))
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../../report/ut/sharedconfig_suite.xml"
-	ginkgo.RunSpecs(t, "pkg/controller/sharedconfig Suite", suiteConfig, reporterConfig)
+	reporterConfig.JUnitReport = "../../../report/ut/managedfields_suite.xml"
+	ginkgo.RunSpecs(t, "pkg/controller/managedfields Suite", suiteConfig, reporterConfig)
 }

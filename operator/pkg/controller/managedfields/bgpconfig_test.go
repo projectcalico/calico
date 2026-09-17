@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sharedconfig_test
+package managedfields_test
 
 import (
 	"context"
@@ -27,17 +27,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/operator/pkg/apis"
-	"github.com/projectcalico/calico/operator/pkg/controller/sharedconfig"
+	"github.com/projectcalico/calico/operator/pkg/controller/managedfields"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 )
 
 // declareClusterRoutes governs spec.programClusterRoutes, declaring a value only when mode is set.
-func declareClusterRoutes(mode string) sharedconfig.DeclareBGPConfiguration {
-	return func(_ *v3.BGPConfiguration) (*sharedconfig.BGPConfigurationDeclaration, error) {
-		d := &sharedconfig.BGPConfigurationDeclaration{
+func declareClusterRoutes(mode string) managedfields.DeclareBGPConfiguration {
+	return func(_ *v3.BGPConfiguration) (*managedfields.BGPConfigurationDeclaration, error) {
+		d := &managedfields.BGPConfigurationDeclaration{
 			Manager:  "installation",
 			Owned:    &v3.BGPConfiguration{},
-			Policies: map[string]sharedconfig.ConflictPolicy{"spec.programClusterRoutes": sharedconfig.ConflictOverride},
+			Policies: map[string]managedfields.ConflictPolicy{"spec.programClusterRoutes": managedfields.ConflictOverride},
 		}
 		if mode != "" {
 			d.Owned.Spec.ProgramClusterRoutes = ptr.To(mode)
@@ -65,7 +65,7 @@ var _ = Describe("Applying declared BGPConfiguration fields", func() {
 		}
 
 		Context(group, func() {
-			var w sharedconfig.Writer
+			var w managedfields.FieldManager
 
 			BeforeEach(func() {
 				scheme := runtime.NewScheme()
@@ -76,7 +76,7 @@ var _ = Describe("Applying declared BGPConfiguration fields", func() {
 				}
 				c = builder.Build()
 				ctx = context.Background()
-				w = sharedconfig.NewWriter(c, useV3CRDs)
+				w = managedfields.New(c, useV3CRDs)
 			})
 
 			It("should write the declared value", func() {

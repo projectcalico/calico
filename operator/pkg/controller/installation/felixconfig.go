@@ -25,7 +25,7 @@ import (
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
-	"github.com/projectcalico/calico/operator/pkg/controller/sharedconfig"
+	"github.com/projectcalico/calico/operator/pkg/controller/managedfields"
 	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
@@ -45,24 +45,24 @@ const (
 // declareFelixConfiguration declares the fields defaulted from the Installation spec. It declares
 // every one every time, so a field the spec stops asking for is declared without a value, which
 // clears whatever the operator wrote there.
-func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) sharedconfig.DeclareFelixConfiguration {
-	return func(current *v3.FelixConfiguration) (*sharedconfig.FelixConfigurationDeclaration, error) {
-		d := &sharedconfig.FelixConfigurationDeclaration{
+func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) managedfields.DeclareFelixConfiguration {
+	return func(current *v3.FelixConfiguration) (*managedfields.FelixConfigurationDeclaration, error) {
+		d := &managedfields.FelixConfigurationDeclaration{
 			Manager: installationFieldManager,
 			Owned:   &v3.FelixConfiguration{},
 
 			// Defer leaves a user's value alone, Override takes the field back. Fields the
 			// operator only defaults get Defer; modes it has to keep consistent with what it
 			// renders get Override.
-			Policies: map[string]sharedconfig.ConflictPolicy{
-				"spec.routeTableRange":         sharedconfig.ConflictDefer,
-				"spec.healthPort":              sharedconfig.ConflictDefer,
-				"spec.vxlanVNI":                sharedconfig.ConflictDefer,
-				"spec.vxlanPort":               sharedconfig.ConflictDefer,
-				"spec.bpfHostConntrackBypass":  sharedconfig.ConflictDefer,
-				"spec.bpfKubeProxyHealthzPort": sharedconfig.ConflictDefer,
-				"spec.nftablesMode":            sharedconfig.ConflictOverride,
-				"spec.programClusterRoutes":    sharedconfig.ConflictOverride,
+			Policies: map[string]managedfields.ConflictPolicy{
+				"spec.routeTableRange":         managedfields.ConflictDefer,
+				"spec.healthPort":              managedfields.ConflictDefer,
+				"spec.vxlanVNI":                managedfields.ConflictDefer,
+				"spec.vxlanPort":               managedfields.ConflictDefer,
+				"spec.bpfHostConntrackBypass":  managedfields.ConflictDefer,
+				"spec.bpfKubeProxyHealthzPort": managedfields.ConflictDefer,
+				"spec.nftablesMode":            managedfields.ConflictOverride,
+				"spec.programClusterRoutes":    managedfields.ConflictOverride,
 			},
 		}
 		owned := &d.Owned.Spec
@@ -124,7 +124,7 @@ func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, i
 			return nil, err
 		}
 		for _, path := range extPaths {
-			d.Policies[path] = sharedconfig.ConflictOverride
+			d.Policies[path] = managedfields.ConflictOverride
 		}
 
 		return d, nil
@@ -133,13 +133,13 @@ func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, i
 
 // declareBGPConfiguration declares the BIRD half of cluster route programming. It moves in
 // lockstep with the FelixConfiguration half: whatever Felix is not programming, BIRD has to be.
-func (r *ReconcileInstallation) declareBGPConfiguration(install *operatorv1.Installation) sharedconfig.DeclareBGPConfiguration {
-	return func(current *v3.BGPConfiguration) (*sharedconfig.BGPConfigurationDeclaration, error) {
-		d := &sharedconfig.BGPConfigurationDeclaration{
+func (r *ReconcileInstallation) declareBGPConfiguration(install *operatorv1.Installation) managedfields.DeclareBGPConfiguration {
+	return func(current *v3.BGPConfiguration) (*managedfields.BGPConfigurationDeclaration, error) {
+		d := &managedfields.BGPConfigurationDeclaration{
 			Manager: installationFieldManager,
 			Owned:   &v3.BGPConfiguration{},
-			Policies: map[string]sharedconfig.ConflictPolicy{
-				"spec.programClusterRoutes": sharedconfig.ConflictOverride,
+			Policies: map[string]managedfields.ConflictPolicy{
+				"spec.programClusterRoutes": managedfields.ConflictOverride,
 			},
 		}
 
@@ -191,20 +191,20 @@ func nftablesMode(install *operatorv1.Installation) v3.NFTablesMode {
 
 // declareBPFEnabled declares spec.bpfEnabled. Both installation write sites use it so the field
 // stays under one manager with the same value.
-func (r *ReconcileInstallation) declareBPFEnabled(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) sharedconfig.DeclareFelixConfiguration {
-	return func(current *v3.FelixConfiguration) (*sharedconfig.FelixConfigurationDeclaration, error) {
+func (r *ReconcileInstallation) declareBPFEnabled(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) managedfields.DeclareFelixConfiguration {
+	return func(current *v3.FelixConfiguration) (*managedfields.FelixConfigurationDeclaration, error) {
 		enabled, err := r.bpfEnabledValue(ctx, install, current, needNsMigration)
 		if err != nil || enabled == nil {
 			return nil, err
 		}
-		return &sharedconfig.FelixConfigurationDeclaration{
+		return &managedfields.FelixConfigurationDeclaration{
 			Manager: bpfFieldManager,
 			Owned: &v3.FelixConfiguration{
 				Spec: v3.FelixConfigurationSpec{BPFEnabled: enabled},
 			},
-			Policies: map[string]sharedconfig.ConflictPolicy{
+			Policies: map[string]managedfields.ConflictPolicy{
 				// A user who changed this by hand gets a degraded status, not an override.
-				"spec.bpfEnabled": sharedconfig.ConflictError,
+				"spec.bpfEnabled": managedfields.ConflictError,
 			},
 		}, nil
 	}

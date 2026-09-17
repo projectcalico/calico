@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sharedconfig_test
+package managedfields_test
 
 import (
 	"context"
@@ -27,14 +27,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/operator/pkg/apis"
-	"github.com/projectcalico/calico/operator/pkg/controller/sharedconfig"
+	"github.com/projectcalico/calico/operator/pkg/controller/managedfields"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 )
 
 var _ = Describe("crd.projectcalico.org/v1 writer", func() {
 	var c client.Client
 	var ctx context.Context
-	var w sharedconfig.Writer
+	var w managedfields.FieldManager
 
 	getFelixConfig := func() *v3.FelixConfiguration {
 		fc := &v3.FelixConfiguration{}
@@ -47,17 +47,17 @@ var _ = Describe("crd.projectcalico.org/v1 writer", func() {
 		Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
 		c = ctrlrfake.DefaultFakeClientBuilder(scheme).Build()
 		ctx = context.Background()
-		w = sharedconfig.NewWriter(c, false)
+		w = managedfields.New(c, false)
 	})
 
 	Context("a declaration that stops declaring a field", func() {
-		declare := func(port *int) sharedconfig.DeclareFelixConfiguration {
-			return func(_ *v3.FelixConfiguration) (*sharedconfig.FelixConfigurationDeclaration, error) {
-				return &sharedconfig.FelixConfigurationDeclaration{
+		declare := func(port *int) managedfields.DeclareFelixConfiguration {
+			return func(_ *v3.FelixConfiguration) (*managedfields.FelixConfigurationDeclaration, error) {
+				return &managedfields.FelixConfigurationDeclaration{
 					Manager: "test",
 					Owned:   &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: port}},
-					Policies: map[string]sharedconfig.ConflictPolicy{
-						"spec.healthPort": sharedconfig.ConflictDefer,
+					Policies: map[string]managedfields.ConflictPolicy{
+						"spec.healthPort": managedfields.ConflictDefer,
 					},
 				}, nil
 			}
@@ -99,7 +99,7 @@ var _ = Describe("crd.projectcalico.org/v1 writer", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				var seen map[string]string
-				_, err = w.ApplyFelixConfiguration(ctx, func(current *v3.FelixConfiguration) (*sharedconfig.FelixConfigurationDeclaration, error) {
+				_, err = w.ApplyFelixConfiguration(ctx, func(current *v3.FelixConfiguration) (*managedfields.FelixConfigurationDeclaration, error) {
 					seen = current.Annotations
 					return declare(ptr.To(9099))(current)
 				})

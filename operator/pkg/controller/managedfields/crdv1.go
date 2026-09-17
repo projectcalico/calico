@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sharedconfig
+package managedfields
 
 import (
 	"context"
@@ -34,21 +34,21 @@ const ownedFieldsAnnotation = "operator.tigera.io/owned-fields"
 // bpfEnabledPath is tracked by its own legacy annotation, which predates ownedFieldsAnnotation.
 const bpfEnabledPath = "spec.bpfEnabled"
 
-// crdV1Writer writes through crd.projectcalico.org/v1, the API group used in aggregated apiserver mode.
-type crdV1Writer struct {
+// crdV1FieldManager writes through crd.projectcalico.org/v1, the API group used in aggregated apiserver mode.
+type crdV1FieldManager struct {
 	client client.Client
 }
 
-var _ Writer = &crdV1Writer{}
+var _ FieldManager = &crdV1FieldManager{}
 
 // ApplyFelixConfiguration writes the declared fields, comparing each against the value the operator
 // last wrote to spot changes made by others.
-func (w *crdV1Writer) ApplyFelixConfiguration(ctx context.Context, declare DeclareFelixConfiguration) (*v3.FelixConfiguration, error) {
-	current, err := utils.GetFelixConfiguration(ctx, w.client)
+func (m *crdV1FieldManager) ApplyFelixConfiguration(ctx context.Context, declare DeclareFelixConfiguration) (*v3.FelixConfiguration, error) {
+	current, err := utils.GetFelixConfiguration(ctx, m.client)
 	if err != nil {
 		return nil, err
 	}
-	applied, err := w.applyDeclared(ctx, current, felixDeclareFn(declare))
+	applied, err := m.applyDeclared(ctx, current, felixDeclareFn(declare))
 	if err != nil {
 		return nil, err
 	}
@@ -57,19 +57,19 @@ func (w *crdV1Writer) ApplyFelixConfiguration(ctx context.Context, declare Decla
 
 // ApplyBGPConfiguration writes the declared fields, comparing each against the value the operator
 // last wrote to spot changes made by others.
-func (w *crdV1Writer) ApplyBGPConfiguration(ctx context.Context, declare DeclareBGPConfiguration) (*v3.BGPConfiguration, error) {
-	current, err := utils.GetBGPConfiguration(ctx, w.client)
+func (m *crdV1FieldManager) ApplyBGPConfiguration(ctx context.Context, declare DeclareBGPConfiguration) (*v3.BGPConfiguration, error) {
+	current, err := utils.GetBGPConfiguration(ctx, m.client)
 	if err != nil {
 		return nil, err
 	}
-	applied, err := w.applyDeclared(ctx, current, bgpDeclareFn(declare))
+	applied, err := m.applyDeclared(ctx, current, bgpDeclareFn(declare))
 	if err != nil {
 		return nil, err
 	}
 	return applied.(*v3.BGPConfiguration), nil
 }
 
-func (w *crdV1Writer) applyDeclared(ctx context.Context, current client.Object, declare declareFn) (client.Object, error) {
+func (m *crdV1FieldManager) applyDeclared(ctx context.Context, current client.Object, declare declareFn) (client.Object, error) {
 	if err := utils.RestoreV3Metadata(current); err != nil {
 		return nil, err
 	}
@@ -121,7 +121,7 @@ func (w *crdV1Writer) applyDeclared(ctx context.Context, current client.Object, 
 	}
 
 	logResolution(current, d.manager, deferred, removed, nil)
-	return w.persist(ctx, merged, patchFrom)
+	return m.persist(ctx, merged, patchFrom)
 }
 
 // resolveTrackedConflicts drops deferred fields from payload and returns the paths it dropped.
@@ -243,15 +243,15 @@ func kindOf(obj client.Object) string {
 	return t.Name()
 }
 
-func (w *crdV1Writer) persist(ctx context.Context, obj client.Object, patchFrom client.Patch) (client.Object, error) {
+func (m *crdV1FieldManager) persist(ctx context.Context, obj client.Object, patchFrom client.Patch) (client.Object, error) {
 	if obj.GetResourceVersion() == "" {
 		obj.SetName(defaultResourceName)
-		if err := w.client.Create(ctx, obj); err != nil {
+		if err := m.client.Create(ctx, obj); err != nil {
 			return nil, err
 		}
 		return obj, nil
 	}
-	if err := w.client.Patch(ctx, obj, patchFrom); err != nil {
+	if err := m.client.Patch(ctx, obj, patchFrom); err != nil {
 		return nil, err
 	}
 	return obj, nil

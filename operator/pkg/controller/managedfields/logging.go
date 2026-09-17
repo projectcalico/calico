@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sharedconfig
+package managedfields
 
 import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-var log = logf.Log.WithName("sharedconfig")
+var log = logf.Log.WithName("managedfields")
 
 // logResolution records what the writer did with fields it does not simply own. Reconciles that
 // only rewrite the operator's own values say nothing, so the log carries the surprises.

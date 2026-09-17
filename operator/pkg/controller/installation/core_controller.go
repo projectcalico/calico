@@ -58,11 +58,11 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
 	"github.com/projectcalico/calico/operator/pkg/controller/ippool"
 	"github.com/projectcalico/calico/operator/pkg/controller/k8sapi"
+	"github.com/projectcalico/calico/operator/pkg/controller/managedfields"
 	"github.com/projectcalico/calico/operator/pkg/controller/migration"
 	"github.com/projectcalico/calico/operator/pkg/controller/migration/convert"
 	"github.com/projectcalico/calico/operator/pkg/controller/migration/datastoremigration"
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
-	"github.com/projectcalico/calico/operator/pkg/controller/sharedconfig"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
 	"github.com/projectcalico/calico/operator/pkg/controller/typhaautoscaler"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
@@ -319,6 +319,7 @@ func NewReconciler(o ReconcilerOptions) *ReconcileInstallation {
 		newComponentHandler: utils.NewComponentHandler,
 		opts:                o.Options,
 		ext:                 o.Options.Extensions.Installation(),
+		managedFields:       managedfields.New(o.Client, o.Options.UseV3CRDs),
 	}
 }
 
@@ -366,6 +367,7 @@ type ReconcileInstallation struct {
 	migrationWatchReady *utils.ReadyFlag
 	opts                options.ControllerOptions
 	ext                 extensions.InstallationExtension
+	managedFields       managedfields.FieldManager
 
 	// newComponentHandler returns a new component handler. Useful stub for unit testing.
 	newComponentHandler func(log logr.Logger, client client.Client, scheme *runtime.Scheme, cr metav1.Object, opts ...utils.ComponentHandlerOption) utils.ComponentHandler
@@ -1091,22 +1093,21 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	// Set any non-default FelixConfiguration values that we need.
-	configWriter := sharedconfig.NewWriter(r.client, r.opts.UseV3CRDs)
-	if _, err := configWriter.ApplyFelixConfiguration(ctx, r.declareFelixConfiguration(ctx, defaulted, needsNamespaceMigration)); err != nil {
+	if _, err := r.managedFields.ApplyFelixConfiguration(ctx, r.declareFelixConfiguration(ctx, defaulted, needsNamespaceMigration)); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
 		return reconcile.Result{}, err
 	}
 
 	// The return carries both writes, so the render below sees the health port and cgroup path
 	// a user may have kept.
-	felixConfiguration, err := configWriter.ApplyFelixConfiguration(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration))
+	felixConfiguration, err := r.managedFields.ApplyFelixConfiguration(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration))
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
 		return reconcile.Result{}, err
 	}
 
 	// Set any non-default BGPConfiguration values that we need.
-	if _, err := configWriter.ApplyBGPConfiguration(ctx, r.declareBGPConfiguration(defaulted)); err != nil {
+	if _, err := r.managedFields.ApplyBGPConfiguration(ctx, r.declareBGPConfiguration(defaulted)); err != nil {
 		// The FelixConfiguration write above already landed, so until the next reconcile
 		// converges, Felix and BIRD disagree about who programs the cluster routes.
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating BGPConfiguration", err, reqLogger)
@@ -1472,7 +1473,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	certificateManager.AddToStatusManager(r.status, common.CalicoNamespace)
 
 	// Re-check whether eBPF can be enabled within Felix once calico-node has rolled out.
-	_, err = configWriter.ApplyFelixConfiguration(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration))
+	_, err = r.managedFields.ApplyFelixConfiguration(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration))
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating resource", err, reqLogger)
 		return reconcile.Result{}, err

@@ -24,7 +24,7 @@ import (
 
 // The cache strips managedFields, so the shared-config writer cannot resolve ownership from a
 // cached copy of the resources it governs.
-func TestUncachedObjectsReadsSharedConfigLive(t *testing.T) {
+func TestUncachedObjectsReadsManagedFieldsLive(t *testing.T) {
 	objects := uncachedObjects([]client.Object{&corev1.Secret{}})
 
 	var felixConfig, bgpConfig, caller bool

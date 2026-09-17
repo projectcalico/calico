@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package sharedconfig writes operator-owned fields to Calico resources that
+// Package managedfields owns a declared set of fields on Calico resources that
 // users also modify. One implementation per API group.
-package sharedconfig
+package managedfields
 
 import (
 	"context"
@@ -29,8 +29,8 @@ type DeclareFelixConfiguration func(current *v3.FelixConfiguration) (*FelixConfi
 // DeclareBGPConfiguration states which BGPConfiguration fields the caller owns, given the current object.
 type DeclareBGPConfiguration func(current *v3.BGPConfiguration) (*BGPConfigurationDeclaration, error)
 
-// Writer persists operator-owned fields on shared Calico configuration resources.
-type Writer interface {
+// FieldManager owns a declared set of fields on shared Calico configuration resources.
+type FieldManager interface {
 	// ApplyFelixConfiguration writes the declared fields and returns the whole resulting object.
 	ApplyFelixConfiguration(ctx context.Context, declare DeclareFelixConfiguration) (*v3.FelixConfiguration, error)
 
@@ -61,10 +61,10 @@ func bgpDeclareFn(declare DeclareBGPConfiguration) declareFn {
 	}
 }
 
-// NewWriter returns a Writer for the API group the operator writes through.
-func NewWriter(c client.Client, useV3CRDs bool) Writer {
+// New returns a FieldManager for the API group the operator writes through.
+func New(c client.Client, useV3CRDs bool) FieldManager {
 	if useV3CRDs {
-		return &v3Writer{crdV1Writer{client: c}}
+		return &v3FieldManager{crdV1FieldManager{client: c}}
 	}
-	return &crdV1Writer{client: c}
+	return &crdV1FieldManager{client: c}
 }

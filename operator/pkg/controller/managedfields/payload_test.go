@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sharedconfig_test
+package managedfields_test
 
 import (
 	"context"
@@ -27,7 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/operator/pkg/apis"
-	"github.com/projectcalico/calico/operator/pkg/controller/sharedconfig"
+	"github.com/projectcalico/calico/operator/pkg/controller/managedfields"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 )
 
@@ -46,18 +46,18 @@ var _ = Describe("Fields outside the declaration", func() {
 	// The fake's deduced type converter takes the field set from the typed object, so an applier
 	// picks up fields with no omitempty that its payload never carried.  A real server does not.
 	Context("projectcalico.org/v3, where the API server tracks ownership", func() {
-		var w sharedconfig.Writer
+		var w managedfields.FieldManager
 
 		BeforeEach(func() {
 			scheme := runtime.NewScheme()
 			Expect(apis.AddToScheme(scheme, true)).NotTo(HaveOccurred())
 			c = ctrlrfake.DefaultFakeClientBuilder(scheme).WithReturnManagedFields().Build()
 			ctx = context.Background()
-			w = sharedconfig.NewWriter(c, true)
+			w = managedfields.New(c, true)
 		})
 
 		It("should not take ownership of an undeclared field", func() {
-			_, err := w.ApplyFelixConfiguration(ctx, declare(sharedconfig.ConflictDefer, sharedconfig.ConflictDefer))
+			_, err := w.ApplyFelixConfiguration(ctx, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
 			Expect(err).NotTo(HaveOccurred())
 
 			fc := getFelixConfig()
@@ -68,14 +68,14 @@ var _ = Describe("Fields outside the declaration", func() {
 	})
 
 	Context("crd.projectcalico.org/v1, where the operator tracks what it wrote", func() {
-		var w sharedconfig.Writer
+		var w managedfields.FieldManager
 
 		BeforeEach(func() {
 			scheme := runtime.NewScheme()
 			Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
 			c = ctrlrfake.DefaultFakeClientBuilder(scheme).Build()
 			ctx = context.Background()
-			w = sharedconfig.NewWriter(c, false)
+			w = managedfields.New(c, false)
 		})
 
 		It("should leave an undeclared field a user set alone", func() {
@@ -84,7 +84,7 @@ var _ = Describe("Fields outside the declaration", func() {
 				Spec:       v3.FelixConfigurationSpec{BPFLogLevel: "Debug"},
 			})).NotTo(HaveOccurred())
 
-			_, err := w.ApplyFelixConfiguration(ctx, declare(sharedconfig.ConflictDefer, sharedconfig.ConflictDefer))
+			_, err := w.ApplyFelixConfiguration(ctx, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
 			Expect(err).NotTo(HaveOccurred())
 
 			fc := getFelixConfig()
