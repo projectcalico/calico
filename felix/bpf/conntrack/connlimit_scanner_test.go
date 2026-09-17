@@ -15,12 +15,14 @@
 package conntrack
 
 import (
+	"encoding/binary"
 	"net"
 	"testing"
 	"time"
 
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	ctv4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/qos"
 )
@@ -312,7 +314,9 @@ func TestConnLimitScannerSkipsFINSeen(t *testing.T) {
 	}
 }
 
-func TestConnLimitScannerSkipsRSTSeen(t *testing.T) {
+// TestConnLimitScannerCountsRSTSeenConnection pins the absence of an RST skip:
+// a pod emits RSTs at will and must not hide behind one.
+func TestConnLimitScannerCountsRSTSeenConnection(t *testing.T) {
 	podIP := "10.65.0.2"
 	remoteIP := "10.65.1.3"
 
@@ -331,8 +335,9 @@ func TestConnLimitScannerSkipsRSTSeen(t *testing.T) {
 	if verdict != ScanVerdictOK {
 		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
 	}
-	if len(scanner.counts) != 0 {
-		t.Errorf("expected no counts for RST connection, got %v", scanner.counts)
+	if n := scanner.counts[connlimitKey{ifindex: 9, direction: 1}]; n != 1 {
+		t.Errorf("an RST let a live connection hide from the recount: "+
+			"expected ingress count 1 for ifindex 9, got counts: %v", scanner.counts)
 	}
 }
 
@@ -488,6 +493,85 @@ func TestConnLimitScannerBothPodsLimited(t *testing.T) {
 	ingressKey := connlimitKey{ifindex: 10, direction: 1}
 	if scanner.counts[ingressKey] != 1 {
 		t.Errorf("expected ingress count 1 for pod B, got %v", scanner.counts)
+	}
+}
+
+// makeRSTClosedValue builds the shape an RST-closed connection presents: the
+// dataplane clears the per-leg bits on the RST itself, leaving only the stamp.
+func makeRSTClosedValue(flags uint32, rstSeen, lastSeen time.Duration) Value {
+	v := NewValueNormal(lastSeen, flags,
+		established(true),  // A is opener
+		established(false), // B is responder
+	)
+	binary.LittleEndian.PutUint64(v[ctv4.VoRSTSeen:ctv4.VoRSTSeen+8], uint64(rstSeen))
+	return v
+}
+
+// An RST-closed flow reaches entryDone with only the stamp set, so the
+// two-minute residual window is what decides its dwell.
+func TestEntryDoneReapsRSTClosedConnectionAtResidualWindow(t *testing.T) {
+	to := timeouts.DefaultTimeouts()
+	// entryDone's window for an RST that may have been spurious.
+	const residual = 2 * time.Minute
+	rstAt := 10 * time.Second
+
+	val := makeRSTClosedValue(ctv4.FlagConnLimitIn, rstAt, rstAt+5*time.Millisecond)
+	lastSeen := val.LastSeen()
+
+	if reason, done := entryDone(to, lastSeen+int64(to.TCPResetSeen)+1, ProtoTCP, val, false); done {
+		t.Errorf("entry reaped at TCPResetSeen; the RST may yet prove spurious, "+
+			"so it has to stay for the residual window (reason %q)", reason)
+	}
+	if reason, done := entryDone(to, lastSeen+int64(residual)+1, ProtoTCP, val, false); !done {
+		t.Errorf("RST-closed entry outlived the residual window; it holds a "+
+			"connlimit slot until it is reaped (reason %q)", reason)
+	}
+}
+
+// Reaping needs silence, not just an RST, or a forged one would tear down a
+// live connection.
+func TestEntryDoneKeepsRSTHitConnectionWhileTrafficFlows(t *testing.T) {
+	to := timeouts.DefaultTimeouts()
+
+	// The RST is five minutes stale; the flow kept running afterwards.
+	rstAt := 10 * time.Second
+	val := makeRSTClosedValue(ctv4.FlagConnLimitIn, rstAt, rstAt+5*time.Minute)
+	lastSeen := val.LastSeen()
+
+	// Age is measured from LastSeen, so traffic alone keeps the entry.
+	if reason, done := entryDone(to, lastSeen+int64(time.Second), ProtoTCP, val, false); done {
+		t.Errorf("live connection reaped one second after its last packet "+
+			"because an RST had been seen (reason %q)", reason)
+	}
+}
+
+// TestConnLimitScannerCountsLiveConnectionLongAfterRST pins the other side of
+// the predicate: continued use keeps a connection counted.
+func TestConnLimitScannerCountsLiveConnectionLongAfterRST(t *testing.T) {
+	podIP := "10.65.0.2"
+	remoteIP := "10.65.1.3"
+
+	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
+		counts: make(map[connlimitKey]uint32),
+		podInfo: map[string]ConnLimitPodInfo{
+			string(net.ParseIP(podIP).To4()): podInfo(9, true, false),
+		},
+	}
+
+	// Traffic 30s after the RST: the connection demonstrably continued.
+	rstAt := 10 * time.Second
+	key := makeKey(remoteIP, podIP, 54321, 8080)
+	val := makeRSTClosedValue(ctv4.FlagConnLimitIn, rstAt, rstAt+30*time.Second)
+
+	verdict, _ := scanner.Check(key, val, nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
+
+	if n := scanner.counts[connlimitKey{ifindex: 9, direction: 1}]; n != 1 {
+		t.Errorf("live connection was excluded from the recount after a spurious "+
+			"RST: expected ingress count 1 for ifindex 9, got counts: %v", scanner.counts)
 	}
 }
 
