@@ -344,10 +344,19 @@ e2e-test-clusternetworkpolicy:
 ## Selection comes from E2E_TEST_CONFIG. E2E_GINKGO_ARGS passes extra ginkgo flags for
 ## an ad-hoc local run; it expands in the shell so its regex metacharacters survive.
 ## --fail-on-empty fails a run that selects no specs instead of passing it.
+#
+# A failed suite tears down what it created, which is the state worth looking at.
+# Kept only where something collects it afterwards and the cluster is thrown away
+# regardless; locally it would leave the namespaces behind for someone to notice.
+ifdef CI
+E2E_KEEP_FAILED := --delete-namespace-on-failure=false
+CNP_KEEP_FAILED := -cleanup-base-resources=false
+endif
+
 e2e-run: bin/ginkgo
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
 	mkdir -p $(E2E_OUTPUT_DIR)
-	KUBECONFIG=$(KUBECONFIG) ./bin/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- $${E2E_GINKGO_ARGS} $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
+	KUBECONFIG=$(KUBECONFIG) ./bin/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- $${E2E_GINKGO_ARGS} $(E2E_KEEP_FAILED) $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
 
 # The suite it runs is already a built binary, so this is the only reason a Go
 # toolchain would be needed at run time. Version comes from go.mod.
@@ -367,7 +376,7 @@ e2e-run-cnp:
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run-cnp: KUBECONFIG must be set"; exit 1; fi
 	KUBECONFIG=$(KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test \
 	  -exempt-features=$(K8S_NETPOL_UNSUPPORTED_FEATURES) \
-	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
+	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES) $(CNP_KEEP_FAILED)
 
 ###############################################################################
 # Gateway API conformance
