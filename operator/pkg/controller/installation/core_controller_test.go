@@ -1305,6 +1305,36 @@ var _ = Describe("Testing core-controller installation", func() {
 			Expect(err).Should(HaveOccurred())
 		})
 
+		It("should take both cluster routing values back when ClusterRoutingMode is removed", func() {
+			bird := operator.ClusterRoutingModeBIRD
+			cr.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{ClusterRoutingMode: &bird}
+			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			fc := &v3.FelixConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, fc)).NotTo(HaveOccurred())
+			Expect(fc.Spec.ProgramClusterRoutes).To(Equal(ptr.To("Disabled")))
+			bgpConfig := &v3.BGPConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, bgpConfig)).NotTo(HaveOccurred())
+			Expect(bgpConfig.Spec.ProgramClusterRoutes).To(Equal(ptr.To("Enabled")))
+
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, cr)).NotTo(HaveOccurred())
+			cr.Spec.CalicoNetwork.ClusterRoutingMode = nil
+			Expect(c.Update(ctx, cr)).NotTo(HaveOccurred())
+			_, err = r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			// Felix and BIRD have to give the routes up together.  One retracting alone leaves
+			// both programming the IPIP routes, which is worse than leaving both stale.
+			fc = &v3.FelixConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, fc)).NotTo(HaveOccurred())
+			Expect(fc.Spec.ProgramClusterRoutes).To(BeNil())
+			bgpConfig = &v3.BGPConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, bgpConfig)).NotTo(HaveOccurred())
+			Expect(bgpConfig.Spec.ProgramClusterRoutes).To(BeNil())
+		})
+
 		It("should correctly patch FelixConfig and BGPConfig with ClusterRouteMode set to BIRD", func() {
 			bird := operator.ClusterRoutingModeBIRD
 			cr.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{ClusterRoutingMode: &bird}

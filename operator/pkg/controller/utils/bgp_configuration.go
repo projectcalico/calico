@@ -36,12 +36,12 @@ func PatchBGPConfiguration(
 		return nil, fmt.Errorf("unable to read BGPConfiguration: %w", err)
 	}
 
-	// Create a base state for the upcoming patch operation.
-	patchFrom := client.MergeFrom(bgpConfig.DeepCopy())
-
 	if err = RestoreV3Metadata(bgpConfig); err != nil {
 		return nil, err
 	}
+
+	// Diff against the restored object, so the patch leaves the v3 metadata stash alone.
+	patchFrom := client.MergeFrom(bgpConfig.DeepCopy())
 
 	// Apply desired changes to the BGPConfiguration.
 	updated, err := patchFn(bgpConfig)
