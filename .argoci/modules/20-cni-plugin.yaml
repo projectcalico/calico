@@ -19,6 +19,7 @@ steps:
       - docker
     depends: [build-calico-image]
     commands: |
+      sudo apt-get update -y && sudo apt-get install -y make
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       .argoci/scripts/load-cached-images calico
       cd cni-plugin

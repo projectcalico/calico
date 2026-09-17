@@ -17,6 +17,7 @@ steps:
       machineType: e2-standard-8
     depends: [build-calico-image]
     commands: |
+      sudo apt-get update -y && sudo apt-get install -y make
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       .argoci/scripts/load-cached-images calico
       cd typha
@@ -38,6 +39,7 @@ steps:
       - name: USE_UBI_AS_CALICO_BASE
         value: "1"
     commands: |
+      sudo apt-get update -y && sudo apt-get install -y make
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       make -C cmd/calico clean image
       cd typha
