@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -334,6 +334,11 @@ func (f *fakeIPAMClient) ReleaseIPs(ctx context.Context, opts ...ipam.ReleaseOpt
 // GetAssignmentAttributes returns the attributes stored with the given IP address
 // upon assignment, as well as the handle used for assignment (if any).
 func (f *fakeIPAMClient) GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (map[string]string, *string, error) {
+	panic("not implemented") // TODO: Implement
+}
+
+// MoveIPToHandle transfers an already-allocated address to a new handle.
+func (f *fakeIPAMClient) MoveIPToHandle(ctx context.Context, ip cnet.IP, opts ipam.MoveOptions) error {
 	panic("not implemented") // TODO: Implement
 }
 

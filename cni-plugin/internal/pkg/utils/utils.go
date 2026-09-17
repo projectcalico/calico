@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2015-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -635,6 +635,38 @@ func GetHandleID(netName, containerID, workload string) string {
 		"ContainerID": containerID,
 	}).Debug("Generated IPAM handle")
 	return handleID
+}
+
+// ParsedPodHandle is a pod's IPAM handle broken into its components.
+type ParsedPodHandle struct {
+	Network     string
+	ContainerID string
+}
+
+// ParsePodHandleID splits a pod's IPAM handle for the given network. Workload, VM and
+// load balancer handles use their own formats and are rejected; see
+// design/ipam/ipam-cni.md for the pod form.
+func ParsePodHandleID(handleID, netName string) (ParsedPodHandle, bool) {
+	// Handles written during the host-local migration can carry a trailing carriage
+	// return; see https://github.com/projectcalico/cni-plugin/issues/821.
+	handleID = strings.Split(handleID, "\r")[0]
+
+	containerID, ok := strings.CutPrefix(handleID, netName+".")
+	if !ok {
+		return ParsedPodHandle{}, false
+	}
+
+	// A dot left in the container ID means this is not a sandbox handle: pre-v3 handles
+	// name the workload (k8s-pod-network.default.mypod), VM handles name the VMI
+	// (k8s-pod-network.vmi.default.vm1).
+	if containerID == "" || strings.Contains(containerID, ".") {
+		return ParsedPodHandle{}, false
+	}
+
+	return ParsedPodHandle{
+		Network:     netName,
+		ContainerID: containerID,
+	}, true
 }
 
 func CreateClient(conf types.NetConf) (client.Interface, error) {

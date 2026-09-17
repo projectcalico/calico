@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -430,6 +430,107 @@ func (b allocationBlock) attributeRefCounts() map[int]int {
 	return refCounts
 }
 
+// ownershipPreconditions gates an ownership update on what the allocation holds now.
+// A zero value checks nothing.
+type ownershipPreconditions struct {
+	// handle, when non-empty, requires the allocation to sit on it already.
+	handle string
+	owner  *AttributeOwner
+}
+
+// ownershipUpdate is the new tuple. A nil field leaves it unchanged; clearOwner sets the
+// owner attributes to nil.
+type ownershipUpdate struct {
+	handle     *string
+	owner      map[string]string
+	clearOwner bool
+}
+
+// updateAllocationOwnership is the one path that changes who owns an allocated address.
+// Returns the handle that owned it before.
+func (b *allocationBlock) updateAllocationOwnership(ip cnet.IP, pre ownershipPreconditions, update ownershipUpdate) (string, error) {
+	ordinal, err := b.IPToOrdinal(ip)
+	if err != nil {
+		return "", err
+	}
+
+	attrIdx := b.Allocations[ordinal]
+	if attrIdx == nil {
+		return "", cerrors.ErrorResourceDoesNotExist{
+			Identifier: ip.String(),
+			Err:        errors.New("address is not allocated"),
+		}
+	}
+
+	// Copy rather than alias: the entry may be shared, and findOrAddAttribute below can
+	// reallocate b.Attributes.
+	attr := b.Attributes[*attrIdx]
+
+	fromHandle := ""
+	if h := attr.AttrPrimary; h != nil {
+		fromHandle = sanitizeHandle(*h)
+	}
+
+	// Verify every precondition before touching the block.
+	if pre.handle != "" && fromHandle != pre.handle {
+		return "", cerrors.ErrorResourceUpdateConflict{
+			Identifier: ip.String(),
+			Err: cerrors.ErrorBadHandle{
+				Requested: pre.handle,
+				Expected:  fromHandle,
+			},
+		}
+	}
+	if err := verifyExpectedOwner(attr.AttrSecondary, pre.owner, ip); err != nil {
+		return "", err
+	}
+
+	// Build the new tuple from the current one, so an update names only what it changes.
+	toHandle := fromHandle
+	if update.handle != nil {
+		toHandle = sanitizeHandle(*update.handle)
+	}
+	owner := attr.AttrSecondary
+	switch {
+	case update.clearOwner:
+		owner = nil
+	case update.owner != nil:
+		owner = update.owner
+	}
+
+	oldIdx := *attrIdx
+	newIdx := b.findOrAddAttribute(&toHandle, owner)
+	if newIdx == oldIdx {
+		// Already what was asked for, so a retry is a no-op rather than a second update.
+		return fromHandle, nil
+	}
+	b.Allocations[ordinal] = &newIdx
+	b.SetSequenceNumberForOrdinal(ordinal)
+
+	// Drops the old attribute if this was the last ordinal referencing it.
+	if b.attributeRefCounts()[oldIdx] == 0 {
+		b.deleteAttributes([]int{oldIdx}, []int{ordinal})
+	}
+
+	return fromHandle, nil
+}
+
+// moveIPToHandle transfers an allocated address to opts.ToHandle, returning the handle
+// that owned it before.
+func (b *allocationBlock) moveIPToHandle(ip cnet.IP, opts MoveOptions) (string, error) {
+	return b.updateAllocationOwnership(ip,
+		ownershipPreconditions{
+			handle: opts.ExpectedHandle,
+			owner:  opts.ExpectedOwner,
+		},
+		ownershipUpdate{
+			handle:     &opts.ToHandle,
+			owner:      opts.Attrs,
+			clearOwner: opts.Attrs == nil,
+		},
+	)
+}
+
 func (b allocationBlock) attributeIndexesByHandle(handleID string) []int {
 	indexes := []int{}
 	for i, attr := range b.Attributes {
@@ -536,6 +637,8 @@ func (b allocationBlock) handleForIP(ip cnet.IP) (*string, error) {
 	return nil, nil
 }
 
+// findOrAddAttribute returns the index of an entry matching both fields, adding one if
+// needed.
 func (b *allocationBlock) findOrAddAttribute(handleID *string, attrs map[string]string) int {
 	logCtx := log.WithField("attrs", attrs)
 	if handleID != nil {
@@ -588,4 +691,24 @@ func intInSlice(searchInt int, slice []int) bool {
 		}
 	}
 	return false
+}
+
+// verifyExpectedOwner checks that currentAttrs matches expectedOwner. Returns nil if
+// expectedOwner is nil (no check requested) or the match succeeds.
+func verifyExpectedOwner(currentAttrs map[string]string, expectedOwner *AttributeOwner, ip cnet.IP) error {
+	if expectedOwner == nil {
+		return nil
+	}
+	if expectedOwner.Matches(currentAttrs) {
+		return nil
+	}
+	var currentPod, currentNamespace string
+	if currentAttrs != nil {
+		currentPod = currentAttrs[AttributePod]
+		currentNamespace = currentAttrs[AttributeNamespace]
+	}
+	return cerrors.ErrorResourceUpdateConflict{
+		Err:        fmt.Errorf("cannot set owner attributes: expected pod=%s namespace=%s but found pod=%s namespace=%s", expectedOwner.Name, expectedOwner.Namespace, currentPod, currentNamespace),
+		Identifier: ip.String(),
+	}
 }
