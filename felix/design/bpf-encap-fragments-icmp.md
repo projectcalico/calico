@@ -192,8 +192,10 @@ _not_ strictly satisfied and this is deliberate:
 
 The `IPFRAG_TIMEOUT` global controls how long a fragment-tracking
 entry may live. Absent a configured value, the kernel's default
-fragment timeout applies. A timer-based cleanup removes entries that
-were never completed (e.g. a last fragment that never arrived).
+fragment timeout applies. Entries carry an expiry stamp and are
+dropped on the lookup that first sees them expired, so one that was
+never completed (e.g. a last fragment that never arrived) is never
+honoured; the LRU map reclaims the space.
 
 ### Review notes for this section
 
@@ -206,7 +208,13 @@ were never completed (e.g. a last fragment that never arrived).
   the attach type cannot defrag, and loading retries with it
   disabled on verifier failure; see `LoadObj` in
   `felix/bpf/hook/map.go`). A new sub-program the defrag path
-  depends on must tolerate `SubProgIPFrag` being absent.
+  depends on must tolerate `SubProgIPFrag` being absent. Keeping
+  that opt-out effective also means no code reachable from a
+  non-optional program may take a callback's address (`bpf_loop`,
+  `bpf_timer_set_callback`, `bpf_for_each_map_elem`): the resulting
+  `BPF_PSEUDO_FUNC` is rejected below kernel 5.13 during BTF
+  validation, before any instruction runs, so a CO-RE gate cannot
+  hide it.
 - IPv6 fragmentation is not currently handled; any change that needs
   IPv6 fragments to be seen by policy must add an equivalent for v6
   rather than assuming the v4 path handles both.
