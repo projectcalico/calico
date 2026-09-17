@@ -349,11 +349,18 @@ e2e-run: bin/ginkgo
 	mkdir -p $(E2E_OUTPUT_DIR)
 	KUBECONFIG=$(KUBECONFIG) ./bin/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- $${E2E_GINKGO_ARGS} $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
 
-# The suite it runs is already a built binary, and the host has no Go toolchain
-# to compile this one on the fly. Version comes from go.mod.
+# The suite it runs is already a built binary, so this is the only reason a Go
+# toolchain would be needed at run time. Version comes from go.mod.
+#
+# Whichever of Go and docker is present: the lanes that drive a kind cluster have
+# docker and no Go, and the ones that drive a remote cluster have the reverse.
 bin/ginkgo:
 	mkdir -p bin
-	$(DOCKER_GO_BUILD) sh -c "CGO_ENABLED=0 go build -o $@ github.com/onsi/ginkgo/v2/ginkgo"
+	@if command -v go >/dev/null 2>&1; then \
+	    set -x; CGO_ENABLED=0 go build -o $@ github.com/onsi/ginkgo/v2/ginkgo; \
+	else \
+	    set -x; $(DOCKER_GO_BUILD) sh -c "CGO_ENABLED=0 go build -o $@ github.com/onsi/ginkgo/v2/ginkgo"; \
+	fi
 
 ## Run the ClusterNetworkPolicy specific e2e tests against the cluster at $KUBECONFIG.
 e2e-run-cnp:

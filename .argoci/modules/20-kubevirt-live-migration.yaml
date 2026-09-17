@@ -47,4 +47,7 @@ steps:
       artifact push job report --destination test-results || true
       if [ "$CI_STEP_EXIT_CODE" != 0 ]; then
         .semaphore/collect-kind-diags || true
+        KUBECONFIG=hack/test/kind/kind-kubeconfig.yaml \
+          kubectl-snapshot --output-dir kind-snapshot || true
+        artifact push job kind-snapshot --destination kind-snapshot || true
       fi
