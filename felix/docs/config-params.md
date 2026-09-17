@@ -451,10 +451,10 @@ substituted and any %-specifiers are rendered literally.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_LogConnectionTransitionsPrefix` |
-| Encoding (env var/config file) | String |
+| Encoding (env var/config file) | String matching regex <code>^[a-zA-Z0-9%: /_-]*$</code> |
 | Default value (above encoding) | `calico-response` |
 | `FelixConfiguration` field | `logConnectionTransitionsPrefix` (YAML) `LogConnectionTransitionsPrefix` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | String matching the regular expression <code>^([a-zA-Z0-9%: /_-])*$</code>. |
 | Default value (YAML) | `calico-response` |
 
 ### `LogDebugFilenameRegex` (config file) / `logDebugFilenameRegex` (YAML)
