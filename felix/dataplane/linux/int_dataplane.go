@@ -244,31 +244,39 @@ type Config struct {
 	BPFConnTimeLBEnabled               bool
 	BPFConnTimeLB                      string
 	BPFHostNetworkedNAT                string
-	BPFNodePortDSREnabled              bool
-	BPFDSROptoutCIDRs                  []string
-	BPFPSNATPorts                      numorstring.Port
-	BPFMapSizeRoute                    int
-	BPFMapSizeConntrack                int
-	BPFMapSizePerCPUConntrack          int
-	BPFMapSizeConntrackScaling         string
-	BPFMapSizeConntrackCleanupQueue    int
-	BPFMapSizeNATFrontend              int
-	BPFMapSizeNATBackend               int
-	BPFMapSizeNATAffinity              int
-	BPFMapSizeIPSets                   int
-	BPFMapSizeIfState                  int
-	BPFMapSizeMaglev                   int
-	BPFMaglevLUTSize                   int
-	BPFIpv6Enabled                     bool
-	BPFHostConntrackBypass             bool
-	BPFIPFragmentReassemblyEnabled     bool
-	BPFEnforceRPF                      string
-	BPFDisableGROForIfaces             *regexp.Regexp
-	BPFExcludeCIDRsFromNAT             []string
-	BPFExportBufferSizeMB              int
-	BPFRedirectToPeer                  string
-	BPFAttachType                      apiv3.BPFAttachOption
-	BPFIPFragTimeout                   time.Duration
+	// BPFHostNATMark is the fwmark bit used to steer host traffic to
+	// services into the bpfin.cali veth (CTLB workaround); 0 outside BPF mode.
+	BPFHostNATMark uint32
+	// BPFHostNATTableIndexV4/V6 are the dedicated routing table indices for
+	// the CTLB-workaround steering route, one per family.  Allocated even
+	// when BPF mode is off so that stale state can be cleaned up.
+	BPFHostNATTableIndexV4          int
+	BPFHostNATTableIndexV6          int
+	BPFNodePortDSREnabled           bool
+	BPFDSROptoutCIDRs               []string
+	BPFPSNATPorts                   numorstring.Port
+	BPFMapSizeRoute                 int
+	BPFMapSizeConntrack             int
+	BPFMapSizePerCPUConntrack       int
+	BPFMapSizeConntrackScaling      string
+	BPFMapSizeConntrackCleanupQueue int
+	BPFMapSizeNATFrontend           int
+	BPFMapSizeNATBackend            int
+	BPFMapSizeNATAffinity           int
+	BPFMapSizeIPSets                int
+	BPFMapSizeIfState               int
+	BPFMapSizeMaglev                int
+	BPFMaglevLUTSize                int
+	BPFIpv6Enabled                  bool
+	BPFHostConntrackBypass          bool
+	BPFIPFragmentReassemblyEnabled  bool
+	BPFEnforceRPF                   string
+	BPFDisableGROForIfaces          *regexp.Regexp
+	BPFExcludeCIDRsFromNAT          []string
+	BPFExportBufferSizeMB           int
+	BPFRedirectToPeer               string
+	BPFAttachType                   apiv3.BPFAttachOption
+	BPFIPFragTimeout                time.Duration
 
 	BPFProfiling               string
 	KubeProxyMinSyncPeriod     time.Duration
@@ -319,6 +327,69 @@ type Config struct {
 // the TC programs.
 func (config *Config) ctlbExcludesUDP() bool {
 	return config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBTCP) &&
+		config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled)
+}
+
+// cleanUpHostNATRouteRules removes any routing rules pointing at the given
+// CTLB-workaround steering table.  Used when BPF mode is disabled to sweep
+// state left behind by a previous BPF-mode run.
+func cleanUpHostNATRouteRules(ipVersion, tableIndex int, netlinkTimeout time.Duration, opRecorder logrusr.OpRecorder) {
+	if tableIndex <= 0 {
+		return
+	}
+	rr, err := routerule.New(
+		ipVersion,
+		set.From(tableIndex),
+		routerule.RulesMatchSrcFWMarkTable,
+		routerule.RulesMatchSrcFWMarkTable,
+		netlinkTimeout,
+		func() (routerule.HandleIface, error) {
+			return netlinkshim.NewRealNetlink()
+		},
+		opRecorder,
+	)
+	if err != nil {
+		log.WithError(err).Warnf("Failed to create IPv%d rule manager for service steering cleanup.", ipVersion)
+		return
+	}
+	// Nothing is desired, so Apply just removes stray rules targeting the table.
+	if err := rr.Apply(); err != nil {
+		log.WithError(err).Infof("Failed to clean up IPv%d service steering rules, ignoring.", ipVersion)
+	}
+}
+
+// hostNATAwareIPSetFilter wraps an ipsets dataplane's SetFilter so that the
+// host-networked NAT service steering set always survives filtering.  In BPF
+// mode the raw-egress policy manager filters the iptables/nftables ipsets down
+// to the ones referenced by untracked policy chains; the steering set is
+// referenced by a static mangle rule instead, so without this it would never
+// be programmed.
+func hostNATAwareIPSetFilter(
+	config *Config,
+	ipSets dpsets.IPSetsDataplane,
+	ipSetConfig *ipsets.IPVersionConfig,
+) func(neededIPSets set.Set[string]) {
+	if !config.bpfHostNetworkedNATEnabled() {
+		return ipSets.SetFilter
+	}
+	svcSetName := ipSetConfig.NameForMainIPSet(rules.IPSetIDBPFHostNATServices)
+	return func(neededIPSets set.Set[string]) {
+		if neededIPSets != nil {
+			neededIPSets.Add(svcSetName)
+		}
+		ipSets.SetFilter(neededIPSets)
+	}
+}
+
+// bpfHostNetworkedNATEnabled returns whether the BPF host-networked NAT (CTLB
+// workaround) is active, i.e. host traffic to services must be steered to the
+// bpfin.cali/bpfout.cali veth pair.  Must mirror the hostNetworkedNATMode
+// derivation in NewBPFEndpointManager.
+func (config *Config) bpfHostNetworkedNATEnabled() bool {
+	if !config.BPFEnabled {
+		return false
+	}
+	return config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBTCP) ||
 		config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled)
 }
 
@@ -845,6 +916,44 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.mainRouteTables = append(dp.mainRouteTables, routeTableV6)
 	}
 
+	// In BPF mode, the CTLB workaround steers host traffic to services into
+	// bpfin.cali via dedicated routing tables (one per family), fully owned by
+	// Felix.  Created whenever the table indices are allocated (even when the
+	// host-networked NAT mode is off) so that stale routes are cleaned up; the
+	// BPF endpoint manager owns and syncs them.
+	var bpfHostNATRTV4, bpfHostNATRTV6 routetable.Interface
+	if config.BPFEnabled {
+		newHostNATTable := func(ipVersion uint8, tableIndex int) routetable.Interface {
+			if tableIndex <= 0 {
+				return nil
+			}
+			if config.RouteSyncDisabled {
+				return &routetable.DummyTable{}
+			}
+			return routetable.New(
+				&ownershippol.ExclusiveOwnershipPolicy{
+					InterfaceNames: []string{
+						dataplanedefs.BPFInDev,
+						routetable.InterfaceNone,
+					},
+				},
+				ipVersion,
+				config.NetlinkTimeout,
+				nil, // deviceRouteSourceAddress; the steering route carries its own Src.
+				config.DeviceRouteProtocol,
+				true, // removeExternalRoutes: the table is exclusively ours.
+				tableIndex,
+				dp.loopSummarizer,
+				featureDetector,
+				routetable.WithLivenessCB(dp.reportHealth),
+			)
+		}
+		bpfHostNATRTV4 = newHostNATTable(4, config.BPFHostNATTableIndexV4)
+		if config.BPFIpv6Enabled {
+			bpfHostNATRTV6 = newHostNATTable(6, config.BPFHostNATTableIndexV6)
+		}
+	}
+
 	// Start a noEncap manager if an IP pool with no encapsulation exists.
 	if config.ProgramNoEncapClusterRoutes && config.NoEncapNeeded {
 		log.Info("NoEncap IP pool present, starting thread to keep IPv4 noencap routes in sync.")
@@ -1028,9 +1137,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 		tc.CleanUpProgramsAndPins()
 		bpfutils.RemoveBPFSpecialDevices()
+		// Remove any CTLB-workaround steering routing rules left over from a
+		// previous BPF-mode run.  (Routes in the steering tables disappear
+		// with the bpfin.cali device removed above.)
+		cleanUpHostNATRouteRules(4, config.BPFHostNATTableIndexV4, config.NetlinkTimeout, dp.loopSummarizer)
+		cleanUpHostNATRouteRules(6, config.BPFHostNATTableIndexV6, config.NetlinkTimeout, dp.loopSummarizer)
 	} else {
 		// In BPF mode we still use iptables for raw egress policy.
-		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4, ipSetsV4.SetFilter, nftablesEnabled))
+		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4,
+			hostNATAwareIPSetFilter(&config, ipSetsV4, config.RulesConfig.IPSetConfigV4), nftablesEnabled))
 	}
 
 	interfaceRegexes := make([]string, len(config.RulesConfig.WorkloadIfacePrefixes))
@@ -1160,6 +1275,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.loopSummarizer,
 			routeTableV4,
 			routeTableV6,
+			bpfHostNATRTV4,
+			bpfHostNATRTV6,
+			ipSetsV4,
 			config.LookupsCache,
 			config.HealthAggregator,
 			dataplaneFeatures,
@@ -1547,6 +1665,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		ipsetsManagerV6.AddDataplane(ipSetsV6)
 		dp.RegisterManager(ipsetsManagerV6)
+
+		if bpfEndpointManager != nil {
+			// The IPv6 ipsets dataplane is created after the BPF endpoint
+			// manager, so attach it now for the CTLB-workaround service
+			// steering ipset.
+			bpfEndpointManager.setHostNATIPSetV6(ipSetsV6, config.MaxIPSetSize)
+		}
 		if !config.BPFEnabled {
 			dp.RegisterManager(newHostIPManager(
 				config.RulesConfig.WorkloadIfacePrefixes,
@@ -1555,7 +1680,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				config.MaxIPSetSize))
 			dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6, nftablesEnabled))
 		} else {
-			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter, nftablesEnabled))
+			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6,
+				hostNATAwareIPSetFilter(&config, ipSetsV6, config.RulesConfig.IPSetConfigV6), nftablesEnabled))
 		}
 
 		var filterMapsV6 nftables.MapsDataplane
@@ -2296,6 +2422,40 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				),
 				Comment: []string{"Mark connections with ExtToServiceConnmark"},
 				Action:  d.actions.SetConnmark(mark, mark),
+			}})
+		}
+	}
+
+	// CTLB workaround: fwmark host traffic destined to a service IP (kept in
+	// an ipset) in mangle OUTPUT.  The mark triggers a re-route, and a single
+	// routing rule steers the packet to the bpfin.cali veth, where the BPF
+	// program performs the service NAT.
+	if d.config.BPFHostNATMark != 0 && d.config.bpfHostNetworkedNATEnabled() {
+		mark := d.config.BPFHostNATMark
+		for _, t := range d.mangleTables {
+			ipSetConfig := d.config.RulesConfig.IPSetConfigV4
+			tableIndex := d.config.BPFHostNATTableIndexV4
+			if t.IPVersion() == 6 {
+				if !d.config.BPFIpv6Enabled {
+					continue
+				}
+				ipSetConfig = d.config.RulesConfig.IPSetConfigV6
+				tableIndex = d.config.BPFHostNATTableIndexV6
+			}
+			if tableIndex <= 0 {
+				// No routing table was allocated for this family, so there is
+				// no steering rule either; marking packets would send them to
+				// the main table, which no longer has per-service routes.
+				log.Errorf("No routing table index for IPv%d host-networked NAT; "+
+					"host access to services will not work for this family. "+
+					"Check the RouteTableRanges configuration.", t.IPVersion())
+				continue
+			}
+			svcIPSet := ipSetConfig.NameForMainIPSet(rules.IPSetIDBPFHostNATServices)
+			t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
+				Match:   d.newMatch().DestIPSet(svcIPSet),
+				Comment: []string{fmt.Sprintf("Steer host traffic to services via %s", dataplanedefs.BPFInDev)},
+				Action:  d.actions.SetMaskedMark(mark, mark),
 			}})
 		}
 	}
