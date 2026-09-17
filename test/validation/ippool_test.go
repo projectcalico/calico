@@ -415,6 +415,17 @@ func TestIPPool_Validation(t *testing.T) {
 				},
 			},
 		},
+		{
+			// The longest form a valid CIDR can take, at 49 characters.
+			name: "CIDR with embedded IPv4 is accepted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      "ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255/128",
+					BlockSize: 128,
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
