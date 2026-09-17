@@ -1922,6 +1922,7 @@ var _ = Describe("Component handler tests", func() {
 						Name:        "topology.webhook.example.io",
 						SideEffects: &sideEffectsNone,
 						ClientConfig: admissionregv1.WebhookClientConfig{
+							URL:      ptr.To("https://topology-injector.example.io/mutate"),
 							CABundle: []byte("existing-ca-bundle"),
 						},
 						AdmissionReviewVersions: []string{"v1"},
@@ -1953,6 +1954,7 @@ var _ = Describe("Component handler tests", func() {
 						Name:        "owned.webhook.example.io",
 						SideEffects: &sideEffectsNone,
 						ClientConfig: admissionregv1.WebhookClientConfig{
+							URL:      ptr.To("https://topology-injector-owned.example.io/mutate"),
 							CABundle: []byte("stale-ca-bundle"),
 						},
 						AdmissionReviewVersions: []string{"v1"},

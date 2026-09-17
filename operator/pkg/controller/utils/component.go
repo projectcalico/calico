@@ -812,7 +812,7 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 		for i, wh := range dmwc.Webhooks {
 			if len(wh.ClientConfig.CABundle) == 0 {
 				if cur, ok := currentByName[wh.Name]; ok {
-					dmwc.Webhooks[i].ClientConfig.CABundle = cur
+					dmwc.Webhooks[i].ClientConfig.CABundle = slices.Clone(cur)
 				}
 			}
 		}
