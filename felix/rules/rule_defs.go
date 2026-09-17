@@ -82,6 +82,12 @@ const (
 	IPSetIDThisHostIPs        = "this-host"
 	IPSetIDAllIstioWEPs       = "all-istio-weps"
 
+	// IPSetIDBPFHostNATServices holds every service ClusterIP and LoadBalancer
+	// IP when the BPF host-networked NAT (CTLB workaround) is active.  Host
+	// traffic to these IPs is fwmarked in mangle OUTPUT and steered to the
+	// bpfin.cali/bpfout.cali veth pair by a single routing rule.
+	IPSetIDBPFHostNATServices = "svc-nat-out"
+
 	ChainFIPDnat = ChainNamePrefix + "fip-dnat"
 	ChainFIPSnat = ChainNamePrefix + "fip-snat"
 
