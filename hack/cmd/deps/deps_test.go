@@ -15,6 +15,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -413,16 +414,37 @@ func TestAddSecondaryPkgInclusionsNonGo(t *testing.T) {
 	}
 }
 
-func TestHardCodedInclusionsAreRooted(t *testing.T) {
-	inclusions := map[string][]string{"defaultInclusions": defaultInclusions}
-	for pkg, deps := range nonGoDeps {
-		inclusions["nonGoDeps["+pkg+"]"] = deps
+func TestSecondaryPkgBuildInputGlobs(t *testing.T) {
+	// An unrooted glob resolves against .semaphore/ and matches nothing, so the
+	// block would never fire on a change to these files.
+	cases := map[string][]string{
+		"typha":      {"/typha/Makefile", "/typha/deps.txt", "/typha/**/*Dockerfile*"},
+		"cmd/calico": {"/cmd/calico/Makefile", "/cmd/calico/deps.txt", "/cmd/calico/**/*Dockerfile*"},
 	}
-	for name, deps := range inclusions {
-		for _, dep := range deps {
-			if !strings.HasPrefix(dep, "/") {
-				t.Errorf("%s: %q must start with '/'; change_in paths are relative to the root of the repo", name, dep)
+	for pkg, want := range cases {
+		got := set.From(secondaryPkgBuildInputGlobs(pkg)...)
+		if got.Len() != len(want) {
+			t.Errorf("%s: got %v, want %v", pkg, got.Slice(), want)
+		}
+		for _, w := range want {
+			if !got.Contains(w) {
+				t.Errorf("%s: missing glob %q", pkg, w)
 			}
 		}
+	}
+}
+
+func TestStaticGlobsAreRepoRooted(t *testing.T) {
+	check := func(src string, globs []string) {
+		for _, g := range globs {
+			if !strings.HasPrefix(g, "/") {
+				t.Errorf("%s: %q is not repo-rooted; Semaphore would resolve it under .semaphore/", src, g)
+			}
+		}
+	}
+	check("defaultInclusions", defaultInclusions)
+	check("defaultExclusions", defaultExclusions)
+	for pkg, globs := range nonGoDeps {
+		check(fmt.Sprintf("nonGoDeps[%q]", pkg), globs)
 	}
 }
