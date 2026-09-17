@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	cli "github.com/urfave/cli/v3"
+
+	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 // runFlags builds a *cli.Command with the given flags and runs it with args.
@@ -313,6 +315,41 @@ func TestInverseFlagName(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("inverseFlagName(%q) = %q, want %q", tc.in, got, tc.want)
 			}
+		})
+	}
+}
+
+func TestReleaseNotesFlag(t *testing.T) {
+	flags := []cli.Flag{releaseNotesFlag, githubTokenFlag, orgFlag, repoFlag, validationFlag, branchCheckFlag}
+	calico := func(rest ...string) []string {
+		return append(rest, "--org", utils.ProjectCalicoOrg, "--repo", utils.CalicoRepoName)
+	}
+	for _, tc := range []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "notes wanted with no token",
+			args:    calico("--release-notes"),
+			wantErr: "GitHub token is required to generate release notes",
+		},
+		{
+			name: "notes wanted with a token",
+			args: calico("--release-notes", "--github-token", "t"),
+		},
+		{
+			name:    "another repository cannot generate notes",
+			args:    []string{"--release-notes", "--github-token", "t", "--org", "example", "--repo", "fork"},
+			wantErr: "release notes can only be generated from",
+		},
+		{
+			name: "no validation skips both checks",
+			args: []string{"--release-notes", "--no-validation", "--no-branch-check", "--org", "example", "--repo", "fork"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertRun(t, flags, tc.args, tc.wantErr)
 		})
 	}
 }
