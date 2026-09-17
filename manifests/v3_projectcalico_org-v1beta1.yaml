@@ -1,6 +1,254 @@
-# crd.projectcalico.org/v1 and operator.tigera.io/v1 APIs
+# projectcalico.org/v3 and operator.tigera.io/v1 APIs
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_apiservers.yaml
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# This MutatingAdmissionPolicy carries the two IP pool defaults a static CRD default
+# cannot express: blockSize depends on the CIDR family, and allowedUses depends on
+# whether a namespaceSelector is set.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "ippool.policy.projectcalico.org"
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - ippools
+  failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
+  variables:
+    # Mutation runs before schema validation, so a missing or malformed CIDR has to
+    # be tolerated here and left for the validator to reject.
+    - name: cidrUsable
+      expression: |
+        has(object.spec.cidr) && isCIDR(object.spec.cidr)
+    - name: blockSizeUnset
+      expression: |
+        !has(object.spec.blockSize) || object.spec.blockSize == 0
+    - name: blockSize
+      expression: |
+        variables.cidrUsable && cidr(object.spec.cidr).ip().family() == 6 ? 122 : 26
+    - name: allowedUsesUnset
+      expression: |
+        !has(object.spec.allowedUses) || size(object.spec.allowedUses) == 0
+    # A pool that names a namespace is a workload pool, and Tunnel is rejected
+    # alongside a namespaceSelector, so the back-compatible pair is wrong there.
+    - name: namespaceScoped
+      expression: |
+        has(object.spec.namespaceSelector) && size(object.spec.namespaceSelector) != 0
+  mutations:
+    # Also on update: blockSize is immutable, but its transition rule cannot fire
+    # when the field is absent, so a write that omits it would otherwise clear it.
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          variables.cidrUsable && variables.blockSizeUnset ?
+            [JSONPatch{op: "add", path: "/spec/blockSize", value: variables.blockSize}] :
+            []
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          variables.allowedUsesUnset ?
+            [JSONPatch{
+              op: "add",
+              path: "/spec/allowedUses",
+              value: variables.namespaceScoped ? ["Workload"] : ["Workload", "Tunnel"],
+            }] :
+            []
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# This MutatingAdmissionPolicy defaults the types/policyTypes field on Calico policy resources.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "policytypes.policy.projectcalico.org"
+spec:
+  paramKind:
+    kind: NetworkPolicy
+    apiVersion: projectcalico.org/v3
+  matchConditions:
+    # Apply this mutation only if the 'types' field is missing (or policyTypes for stagednetworkpolicies).
+    - name: missing-types
+      expression: "!has(object.spec.types) && !has(object.spec.policyTypes)"
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+          - stagedkubernetesnetworkpolicies
+  failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
+  variables:
+    # Determine the policy types based on the presence of ingress and egress rules.
+    # If both are present, set types to ["Ingress", "Egress"].
+    # If only ingress is present, set types to ["Ingress"].
+    # If only egress is present, set types to ["Egress"].
+    # If neither is present, default to ["Ingress"] for backward compatibility with policies from before types were required.
+    - name: defaultTypes
+      expression: |
+        (has(object.spec.ingress) && has(object.spec.egress)) ? ["Ingress", "Egress"] :
+        has(object.spec.egress) ? ["Egress"] : ["Ingress"]
+
+    # The logic for StagedKubernetesNetworkPolicy is slightly different from the above:
+    # - If both ingress and egress are present, set types to ["Ingress", "Egress"].
+    # - If only ingress is present, set types to ["Ingress"].
+    # - If only egress is present, set types to ["Ingress", "Egress"].
+    # - If neither is present, default to ["Ingress"] for backward compatibility.
+    - name: defaultKubeTypes
+      expression: |
+        (has(object.spec.ingress) && has(object.spec.egress)) ? ["Ingress", "Egress"] :
+        has(object.spec.egress) ? ["Ingress", "Egress"] : ["Ingress"]
+
+  mutations:
+    # Add the calculated 'types' field to the spec.
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          [
+            JSONPatch{
+              op: "add",
+              path: object.kind == "StagedKubernetesNetworkPolicy" ? "/spec/policyTypes" : "/spec/types",
+              value: object.kind == "StagedKubernetesNetworkPolicy" ? variables.defaultKubeTypes : variables.defaultTypes
+            }
+          ]
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# This MutatingAdmissionPolicy defaults the spec.tier field to "default" if not specified,
+# and sets the projectcalico.org/tier label to match.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "tierlabel.policy.projectcalico.org"
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+  failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
+  variables:
+    - name: tierValue
+      expression: |
+        has(object.spec.tier) && object.spec.tier != "" ? object.spec.tier : "default"
+  mutations:
+    # Default spec.tier to "default" if empty or unset.
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          !has(object.spec.tier) || object.spec.tier == "" ?
+            [JSONPatch{op: "add", path: "/spec/tier", value: variables.tierValue}] :
+            []
+    # Set the projectcalico.org/tier label to match spec.tier.
+    # Uses ~1 encoding for the / in the label key per RFC 6901 (JSON Pointer).
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          has(object.metadata.labels) ?
+            [JSONPatch{op: "add", path: "/metadata/labels/projectcalico.org~1tier", value: variables.tierValue}] :
+            [
+              JSONPatch{op: "add", path: "/metadata/labels", value: {}},
+              JSONPatch{op: "add", path: "/metadata/labels/projectcalico.org~1tier", value: variables.tierValue}
+            ]
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# This MutatingAdmissionPolicyBinding binds the IP pool defaulting policy to IP pools.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: set-ippool-defaults-binding
+spec:
+  policyName: ippool.policy.projectcalico.org
+  matchResources:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - ippools
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# This MutatingAdmissionPolicyBinding binds the policy types defaulting mutation to the relevant resources.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: set-policytypes-binding
+spec:
+  policyName: policytypes.policy.projectcalico.org
+  matchResources:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+          - stagedkubernetesnetworkpolicies
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# This MutatingAdmissionPolicyBinding binds the tier label mutation to the relevant resources.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: set-tier-label-binding
+spec:
+  policyName: tierlabel.policy.projectcalico.org
+  matchResources:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# ValidatingAdmissionPolicy that prevents deletion of the built-in Calico tiers
+# (default, kube-admin, kube-baseline). These tiers are required for correct
+# operation and should never be deleted.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: protect-builtin-tiers.projectcalico.org
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        resources: ["tiers"]
+        operations: ["DELETE"]
+  validations:
+    - expression: "!(oldObject.metadata.name in ['default', 'kube-admin', 'kube-baseline'])"
+      messageExpression: "'The built-in tier ' + oldObject.metadata.name + ' cannot be deleted'"
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: protect-builtin-tiers.projectcalico.org
+spec:
+  policyName: protect-builtin-tiers.projectcalico.org
+  validationActions:
+    - Deny
+---
+# Source: projectcalico.org.v3/templates/operator.tigera.io_apiservers.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2995,7 +3243,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_gatewayapis.yaml
+# Source: projectcalico.org.v3/templates/operator.tigera.io_gatewayapis.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -8765,7 +9013,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_goldmanes.yaml
+# Source: projectcalico.org.v3/templates/operator.tigera.io_goldmanes.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -10357,7 +10605,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_imagesets.yaml
+# Source: projectcalico.org.v3/templates/operator.tigera.io_imagesets.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -10437,7 +10685,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_installations.yaml
+# Source: projectcalico.org.v3/templates/operator.tigera.io_installations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -29496,7 +29744,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_istios.yaml
+# Source: projectcalico.org.v3/templates/operator.tigera.io_istios.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -32954,7 +33202,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_managementclusterconnections.yaml
+# Source: projectcalico.org.v3/templates/operator.tigera.io_managementclusterconnections.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -33374,7 +33622,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_tigerastatuses.yaml
+# Source: projectcalico.org.v3/templates/operator.tigera.io_tigerastatuses.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -33496,7 +33744,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/operator.tigera.io_whiskers.yaml
+# Source: projectcalico.org.v3/templates/operator.tigera.io_whiskers.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -35088,26 +35336,28 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_bgpconfigurations.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_bgpconfigurations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: bgpconfigurations.crd.projectcalico.org
+  name: bgpconfigurations.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: BGPConfiguration
     listKind: BGPConfigurationList
     plural: bgpconfigurations
+    shortNames:
+      - bgpconfig
+      - bgpconfigs
     singular: bgpconfiguration
   scope: Cluster
   versions:
-    - name: v1
+    - name: v3
       schema:
         openAPIV3Schema:
-          description: BGPConfiguration contains the configuration for any BGP routing.
           properties:
             apiVersion:
               description: |-
@@ -35403,19 +35653,22 @@ spec:
                   rule:
                     "!has(self.communities) || size(self.communities) == 0 || (has(self.prefixAdvertisements)
                     && size(self.prefixAdvertisements) > 0)"
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_bgpfilters.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_bgpfilters.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: bgpfilters.crd.projectcalico.org
+  name: bgpfilters.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: BGPFilter
     listKind: BGPFilterList
@@ -35423,7 +35676,7 @@ spec:
     singular: bgpfilter
   scope: Cluster
   versions:
-    - name: v1
+    - name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -36302,19 +36555,22 @@ spec:
                   type: array
                   x-kubernetes-list-type: atomic
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_bgppeers.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_bgppeers.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: bgppeers.crd.projectcalico.org
+  name: bgppeers.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: BGPPeer
     listKind: BGPPeerList
@@ -36322,7 +36578,38 @@ spec:
     singular: bgppeer
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: Selector for the nodes that should have this peering
+          jsonPath: .spec.nodeSelector
+          name: Node Selector
+          type: string
+        - description:
+            The node name identifying the Calico node instance that is targeted
+            by this peer
+          jsonPath: .spec.node
+          name: Node
+          type: string
+        - description:
+            The optional Local AS Number to use when peering with this remote
+            peer
+          jsonPath: .spec.localASNumber
+          name: Local ASN
+          type: string
+        - description: Selector for the remote nodes to peer with
+          jsonPath: .spec.peerSelector
+          name: Peer Selector
+          type: string
+        - description:
+            The IP address of the peer followed by an optional port number
+            to peer with
+          jsonPath: .spec.peerIP
+          name: Peer IP
+          type: string
+        - description: The AS Number of the peer
+          jsonPath: .spec.asNumber
+          name: Peer ASN
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -36563,29 +36850,50 @@ spec:
                   rule:
                     "!has(self.keepOriginalNextHop) || !self.keepOriginalNextHop ||
                     !has(self.nextHopMode)"
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_blockaffinities.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_blockaffinities.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: blockaffinities.crd.projectcalico.org
+  name: blockaffinities.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: BlockAffinity
     listKind: BlockAffinityList
     plural: blockaffinities
+    shortNames:
+      - affinity
+      - affinities
     singular: blockaffinity
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: The block CIDR
+          jsonPath: .spec.cidr
+          name: CIDR
+          type: string
+        - description: The node the block is affine to
+          jsonPath: .spec.node
+          name: Node
+          type: string
+        - description: The type of block affinity
+          jsonPath: .spec.type
+          name: Type
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
+          description: BlockAffinity maintains a block affinity's state
           properties:
             apiVersion:
               description: |-
@@ -36610,18 +36918,31 @@ spec:
                 resource.
               properties:
                 cidr:
+                  description: The CIDR range this block affinity references.
+                  format: cidr
                   type: string
                 deleted:
+                  default: false
                   description: |-
-                    Deleted indicates that this block affinity is being deleted.
-                    This field is a string for compatibility with older releases that
-                    mistakenly treat this field as a string.
-                  type: string
+                    Deleted indicates whether or not this block affinity is disabled and is
+                    used as part of race-condition prevention. When set to true, clients
+                    should treat this block as if it does not exist.
+                  type: boolean
                 node:
+                  description: The node that this block affinity is assigned to.
                   type: string
                 state:
+                  description:
+                    The state of the block affinity with regard to any referenced
+                    IPAM blocks.
+                  enum:
+                    - ""
+                    - confirmed
+                    - pending
+                    - pendingDeletion
                   type: string
                 type:
+                  description: The type of affinity.
                   type: string
               required:
                 - cidr
@@ -36629,19 +36950,23 @@ spec:
                 - node
                 - state
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_caliconodestatuses.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_caliconodestatuses.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: caliconodestatuses.crd.projectcalico.org
+  name: caliconodestatuses.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: CalicoNodeStatus
     listKind: CalicoNodeStatusList
@@ -36649,7 +36974,16 @@ spec:
     singular: caliconodestatus
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: The name of the node
+          jsonPath: .spec.node
+          name: Node
+          type: string
+        - description: The types of information to monitor for this calico/node
+          jsonPath: .spec.classes
+          name: Classes
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -36971,32 +37305,50 @@ spec:
                       x-kubernetes-list-type: atomic
                   type: object
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_clusterinformations.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_clusterinformations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: clusterinformations.crd.projectcalico.org
+  name: clusterinformations.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: ClusterInformation
     listKind: ClusterInformationList
     plural: clusterinformations
+    shortNames:
+      - clusterinfo
+      - clusterinfos
     singular: clusterinformation
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: The version of Calico that the cluster is running
+          jsonPath: .spec.calicoVersion
+          name: Version
+          type: string
+        - description: Whether the datastore is ready for use
+          jsonPath: .spec.datastoreReady
+          name: Ready
+          type: boolean
+        - description: The types associated with the cluster
+          jsonPath: .spec.clusterType
+          name: Types
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
-          description: ClusterInformation contains the cluster specific information.
           properties:
             apiVersion:
               description: |-
@@ -37044,19 +37396,23 @@ spec:
                   description: Variant declares which variant of Calico is active.
                   type: string
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_felixconfigurations.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_felixconfigurations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: felixconfigurations.crd.projectcalico.org
+  name: felixconfigurations.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: FelixConfiguration
     listKind: FelixConfigurationList
@@ -37064,10 +37420,9 @@ spec:
     singular: felixconfiguration
   scope: Cluster
   versions:
-    - name: v1
+    - name: v3
       schema:
         openAPIV3Schema:
-          description: Felix Configuration contains the configuration for Felix.
           properties:
             apiVersion:
               description: |-
@@ -38648,6 +39003,9 @@ spec:
                     "!has(self.deviceRouteSourceAddressIPv6) || size(self.deviceRouteSourceAddressIPv6)
                     == 0 || (isIP(self.deviceRouteSourceAddressIPv6) && ip(self.deviceRouteSourceAddressIPv6).family()
                     == 6)"
+          required:
+            - metadata
+            - spec
           type: object
           x-kubernetes-validations:
             - message:
@@ -38660,23 +39018,36 @@ spec:
       served: true
       storage: true
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_globalnetworkpolicies.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_globalnetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: globalnetworkpolicies.crd.projectcalico.org
+  name: globalnetworkpolicies.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: GlobalNetworkPolicy
     listKind: GlobalNetworkPolicyList
     plural: globalnetworkpolicies
+    shortNames:
+      - gnp
+      - cgnp
     singular: globalnetworkpolicy
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - jsonPath: .spec.tier
+          name: Tier
+          type: string
+        - jsonPath: .spec.order
+          name: Order
+          type: number
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -39989,32 +40360,41 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
+          required:
+            - metadata
+            - spec
           type: object
+      selectableFields:
+        - jsonPath: .spec.tier
       served: true
       storage: true
+      subresources: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_globalnetworksets.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_globalnetworksets.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: globalnetworksets.crd.projectcalico.org
+  name: globalnetworksets.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: GlobalNetworkSet
     listKind: GlobalNetworkSetList
     plural: globalnetworksets
+    shortNames:
+      - gns
     singular: globalnetworkset
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      name: v3
       schema:
         openAPIV3Schema:
-          description: |-
-            GlobalNetworkSet contains a set of arbitrary IP sub-networks/CIDRs that share labels to
-            allow rules to refer to them via selectors.  The labels of GlobalNetworkSet are not namespaced.
           properties:
             apiVersion:
               description: |-
@@ -40053,27 +40433,45 @@ spec:
                       reason: FieldValueInvalid
                       rule: self.all(n, isCIDR(n) || isIP(n))
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_hostendpoints.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_hostendpoints.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: hostendpoints.crd.projectcalico.org
+  name: hostendpoints.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: HostEndpoint
     listKind: HostEndpointList
     plural: hostendpoints
+    shortNames:
+      - hep
+      - heps
     singular: hostendpoint
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description:
+            The node name identifying the Calico node instance that is targeted
+            by this HostEndpoint
+          jsonPath: .spec.node
+          name: Node
+          type: string
+        - description: The name of the interface that is targeted by this HostEndpoint
+          jsonPath: .spec.interfaceName
+          name: Interface
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -40187,19 +40585,23 @@ spec:
                 - message: node must be specified
                   reason: FieldValueInvalid
                   rule: has(self.node) && size(self.node) > 0
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_ipamblocks.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_ipamblocks.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: ipamblocks.crd.projectcalico.org
+  name: ipamblocks.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: IPAMBlock
     listKind: IPAMBlockList
@@ -40207,7 +40609,20 @@ spec:
     singular: ipamblock
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: The block CIDR
+          jsonPath: .spec.cidr
+          name: CIDR
+          type: string
+        - description: The block affinity
+          jsonPath: .spec.affinity
+          name: Affinity
+          type: string
+        - description: The time at which affinity was claimed
+          jsonPath: .spec.affinityClaimTime
+          name: ClaimTime
+          type: date
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -40229,16 +40644,18 @@ spec:
             metadata:
               type: object
             spec:
-              description:
-                IPAMBlockSpec contains the specification for an IPAMBlock
-                resource.
+              description: |-
+                IPAMBlockSpec contains the specification for an IPAMBlock resource.
+                This resource is managed internally by Calico IPAM and should not be modified manually.
               properties:
                 affinity:
                   description: |-
                     Affinity of the block, if this block has one. If set, it will be of the form
-                    "host:<hostname>". If not set, this block is not affine to a host.
+                    "host:<hostname>" or "virtual:<hostname>". If not set, this block is not affine to a host.
+                  pattern: ^(host|virtual):[a-zA-Z0-9\.\-_]+$
                   type: string
                 affinityClaimTime:
+                  description: Time at which affinity was claimed.
                   format: date-time
                   type: string
                 allocations:
@@ -40250,22 +40667,28 @@ spec:
                     nullable: true
                     type: integer
                   type: array
+                  x-kubernetes-list-type: atomic
                 attributes:
                   description: |-
                     Attributes is an array of arbitrary metadata associated with allocations in the block. To find
                     attributes for a given allocation, use the value of the allocation's entry in the Allocations array
                     as the index of the element in this array.
                   items:
+                    description:
+                      AllocationAttribute holds metadata associated with
+                      a single IP allocation within a block.
                     properties:
                       alternateOwnerAttrs:
                         additionalProperties:
                           type: string
-                        description: |-
-                          AlternateOwnerAttrs contains attributes of the previous or potential owner
-                          (used during live migration to track the source or target pod).
+                        description:
+                          AlternateOwnerAttrs stores attributes of a secondary
+                          owner, used during IP address migration.
                         type: object
                       handle_id:
-                        description: HandleID is the primary identifier for the allocation.
+                        description:
+                          HandleID is the ID of the IPAM handle that owns
+                          this allocation.
                         type: string
                       releasedAt:
                         description: |-
@@ -40278,13 +40701,15 @@ spec:
                         additionalProperties:
                           type: string
                         description:
-                          ActiveOwnerAttrs contains attributes of the active
-                          owner (the pod currently using the IP).
+                          ActiveOwnerAttrs stores attributes of the primary
+                          owner of this allocation (e.g., pod name, namespace).
                         type: object
                     type: object
                   type: array
+                  x-kubernetes-list-type: atomic
                 cidr:
                   description: The block's CIDR.
+                  format: cidr
                   type: string
                 deleted:
                   description: |-
@@ -40322,6 +40747,7 @@ spec:
                   items:
                     type: integer
                   type: array
+                  x-kubernetes-list-type: atomic
               required:
                 - allocations
                 - attributes
@@ -40329,29 +40755,52 @@ spec:
                 - strictAffinity
                 - unallocated
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_ipamconfigs.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_ipamconfigurations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: ipamconfigs.crd.projectcalico.org
+  name: ipamconfigurations.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
-    kind: IPAMConfig
-    listKind: IPAMConfigList
-    plural: ipamconfigs
-    singular: ipamconfig
+    kind: IPAMConfiguration
+    listKind: IPAMConfigurationList
+    plural: ipamconfigurations
+    shortNames:
+      - ipamconfig
+      - ipamconfigs
+    singular: ipamconfiguration
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: Whether borrowing IP addresses is allowed
+          jsonPath: .spec.strictAffinity
+          name: StrictAffinity
+          type: boolean
+        - description: The max number of blocks that can be affine to each host
+          jsonPath: .spec.maxBlocksPerHost
+          name: MaxBlocksPerHost
+          type: integer
+        - description: Whether or not to auto allocate blocks to hosts
+          jsonPath: .spec.autoAllocateBlocks
+          name: AutoAllocateBlocks
+          type: boolean
+      name: v3
       schema:
         openAPIV3Schema:
+          description:
+            IPAMConfiguration contains information about a block for IP address
+            assignment.
           properties:
             apiVersion:
               description: |-
@@ -40372,61 +40821,73 @@ spec:
               type: object
             spec:
               description:
-                IPAMConfigSpec contains the specification for an IPAMConfig
+                IPAMConfigurationSpec contains the specification for an IPAMConfiguration
                 resource.
               properties:
                 autoAllocateBlocks:
+                  default: true
+                  description: Whether or not to auto allocate blocks to hosts.
                   type: boolean
                 ipCooldownSeconds:
                   description: |-
                     IPCooldownSeconds is the minimum age of a released IP in a block before it is re-used.
                     If set to zero, IPs can be re-used immediately (but are still handled with a FIFO queue to
                     minimize immediate reuse).
+                  format: int32
                   maximum: 1200
                   minimum: 0
                   type: integer
                 kubeVirtVMAddressPersistence:
                   description: |-
                     KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads
-                    maintain persistent IP addresses across VM lifecycle events.
-                    When set to VMAddressPersistenceEnabled, Calico automatically ensures that KubeVirt VMs retain their
-                    IP addresses when their underlying pods are recreated during VM operations such as
-                    reboot, live migration, or pod eviction. IP persistency is ensured when the
-                    VirtualMachineInstance (VMI) resource is deleted and recreated by the VM controller.
-                    When set to VMAddressPersistenceDisabled, VMs receive new IP addresses whenever their pods are recreated,
-                    following standard pod IP allocation behavior. Live migration target pods are not allowed
-                    when this is set to VMAddressPersistenceDisabled and will result in an error.
-                    If nil, defaults to VMAddressPersistenceEnabled (IP persistence enabled if not specified).
+                    maintain persistent IP addresses across VM lifecycle events (reboot, migration, pod eviction).
+                    When Enabled, Calico automatically ensures that KubeVirt VMs retain their IP addresses
+                    when their underlying pods are recreated during VM operations.
+                    When Disabled, VMs receive new IP addresses whenever their pods are recreated,
+                    and creating a live migration target pod is not supported because the migration
+                    target pod requires the same IP as the source pod, which is only possible with
+                    address persistence.
+                    Defaults to Enabled if not specified.
                   enum:
                     - Enabled
                     - Disabled
                   type: string
                 maxBlocksPerHost:
+                  default: 0
                   description: |-
                     MaxBlocksPerHost, if non-zero, is the max number of blocks that can be
                     affine to each host.
-                  maximum: 2147483647
+                  format: int32
+                  maximum: 1000000
                   minimum: 0
                   type: integer
                 strictAffinity:
+                  default: false
+                  description:
+                    When StrictAffinity is true, borrowing IP addresses is
+                    not allowed.
                   type: boolean
               required:
                 - autoAllocateBlocks
                 - strictAffinity
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_ipamhandles.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_ipamhandles.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: ipamhandles.crd.projectcalico.org
+  name: ipamhandles.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: IPAMHandle
     listKind: IPAMHandleList
@@ -40434,7 +40895,12 @@ spec:
     singular: ipamhandle
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: The handle ID
+          jsonPath: .spec.handleID
+          name: ID
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -40456,35 +40922,48 @@ spec:
             metadata:
               type: object
             spec:
-              description:
-                IPAMHandleSpec contains the specification for an IPAMHandle
-                resource.
+              description: |-
+                IPAMHandleSpec contains the specification for an IPAMHandle resource.
+                This resource is managed internally by Calico IPAM and should not be modified manually.
               properties:
                 block:
                   additionalProperties:
                     type: integer
+                  description:
+                    Block maps block CIDRs to the number of allocations from
+                    that block held by this handle.
                   type: object
                 deleted:
+                  description:
+                    Deleted is an internal flag used to prevent races during
+                    handle cleanup. Should not be set manually.
                   type: boolean
                 handleID:
+                  description:
+                    HandleID is the unique identifier for this allocation
+                    handle.
                   type: string
               required:
                 - block
                 - handleID
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_ippools.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_ippools.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: ippools.crd.projectcalico.org
+  name: ippools.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: IPPool
     listKind: IPPoolList
@@ -40492,7 +40971,32 @@ spec:
     singular: ippool
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: The pool CIDR
+          jsonPath: .spec.cidr
+          name: CIDR
+          type: string
+        - description: The VXLAN mode for this pool
+          jsonPath: .spec.vxlanMode
+          name: VXLAN
+          type: string
+        - description: The IPIP mode for this pool
+          jsonPath: .spec.ipipMode
+          name: IPIP
+          type: string
+        - description: Whether outgoing NAT is enabled for this pool
+          jsonPath: .spec.natOutgoing
+          name: NAT
+          type: boolean
+        - description: Whether or not this pool is available for IP allocations
+          jsonPath: .status.conditions[?(@.type=='Allocatable')].status
+          name: Allocatable
+          type: string
+        - description: The age of the pool
+          jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -40758,21 +41262,24 @@ spec:
                     - type
                   x-kubernetes-list-type: map
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_ipreservations.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_ipreservations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: ipreservations.crd.projectcalico.org
+  name: ipreservations.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: IPReservation
     listKind: IPReservationList
@@ -40780,9 +41287,15 @@ spec:
     singular: ipreservation
   scope: Cluster
   versions:
-    - name: v1
+    - name: v3
       schema:
         openAPIV3Schema:
+          description: |-
+            IPReservation allows certain IP addresses to be reserved (i.e. prevented from being allocated) by Calico
+            IPAM.  Reservations only block new allocations, they do not cause existing IP allocations to be released.
+            The current implementation is only suitable for reserving small numbers of IP addresses relative to the
+            size of the IP pool.  If large portions of an IP pool are reserved, Calico IPAM may hunt for a long time
+            to find a non-reserved IP.
           properties:
             apiVersion:
               description: |-
@@ -40816,27 +41329,33 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_kubecontrollersconfigurations.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_kubecontrollersconfigurations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: kubecontrollersconfigurations.crd.projectcalico.org
+  name: kubecontrollersconfigurations.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: KubeControllersConfiguration
     listKind: KubeControllersConfigurationList
     plural: kubecontrollersconfigurations
+    shortNames:
+      - kcc
+      - kccs
     singular: kubecontrollersconfiguration
   scope: Cluster
   versions:
-    - name: v1
+    - name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -41344,29 +41863,42 @@ spec:
                     - controllers
                   type: object
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
       subresources:
         status: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_networkpolicies.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_networkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: networkpolicies.crd.projectcalico.org
+  name: networkpolicies.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: NetworkPolicy
     listKind: NetworkPolicyList
     plural: networkpolicies
+    shortNames:
+      - cnp
+      - caliconetworkpolicy
     singular: networkpolicy
   scope: Namespaced
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - jsonPath: .spec.tier
+          name: Tier
+          type: string
+        - jsonPath: .spec.order
+          name: Order
+          type: number
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -42630,19 +43162,25 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')"
+          required:
+            - metadata
+            - spec
           type: object
+      selectableFields:
+        - jsonPath: .spec.tier
       served: true
       storage: true
+      subresources: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_networksets.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_networksets.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: networksets.crd.projectcalico.org
+  name: networksets.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: NetworkSet
     listKind: NetworkSetList
@@ -42650,10 +43188,9 @@ spec:
     singular: networkset
   scope: Namespaced
   versions:
-    - name: v1
+    - name: v3
       schema:
         openAPIV3Schema:
-          description: NetworkSet is the Namespaced-equivalent of the GlobalNetworkSet.
           properties:
             apiVersion:
               description: |-
@@ -42692,29 +43229,42 @@ spec:
                       reason: FieldValueInvalid
                       rule: self.all(n, isCIDR(n) || isIP(n))
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_stagedglobalnetworkpolicies.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_stagedglobalnetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: stagedglobalnetworkpolicies.crd.projectcalico.org
+  name: stagedglobalnetworkpolicies.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: StagedGlobalNetworkPolicy
     listKind: StagedGlobalNetworkPolicyList
     plural: stagedglobalnetworkpolicies
+    shortNames:
+      - sgnp
     singular: stagedglobalnetworkpolicy
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - jsonPath: .spec.tier
+          name: Tier
+          type: string
+        - jsonPath: .spec.order
+          name: Order
+          type: number
+      name: v3
       schema:
         openAPIV3Schema:
+          description: StagedGlobalNetworkPolicy is a staged GlobalNetworkPolicy.
           properties:
             apiVersion:
               description: |-
@@ -44035,29 +44585,38 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
+          required:
+            - metadata
+            - spec
           type: object
+      selectableFields:
+        - jsonPath: .spec.tier
       served: true
       storage: true
+      subresources: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_stagedkubernetesnetworkpolicies.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_stagedkubernetesnetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: stagedkubernetesnetworkpolicies.crd.projectcalico.org
+  name: stagedkubernetesnetworkpolicies.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: StagedKubernetesNetworkPolicy
     listKind: StagedKubernetesNetworkPolicyList
     plural: stagedkubernetesnetworkpolicies
+    shortNames:
+      - sknp
     singular: stagedkubernetesnetworkpolicy
   scope: Namespaced
   versions:
-    - name: v1
+    - name: v3
       schema:
         openAPIV3Schema:
+          description: StagedKubernetesNetworkPolicy is a staged GlobalNetworkPolicy.
           properties:
             apiVersion:
               description: |-
@@ -44566,29 +45125,45 @@ spec:
                     - Ignore
                   type: string
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_stagednetworkpolicies.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_stagednetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: stagednetworkpolicies.crd.projectcalico.org
+  name: stagednetworkpolicies.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: StagedNetworkPolicy
     listKind: StagedNetworkPolicyList
     plural: stagednetworkpolicies
+    shortNames:
+      - scnp
+      - snp
     singular: stagednetworkpolicy
   scope: Namespaced
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - jsonPath: .spec.tier
+          name: Tier
+          type: string
+        - jsonPath: .spec.order
+          name: Order
+          type: number
+      name: v3
       schema:
         openAPIV3Schema:
+          description: |-
+            StagedNetworkPolicy is a staged NetworkPolicy.
+            StagedNetworkPolicy is the Namespaced-equivalent of the StagedGlobalNetworkPolicy.
           properties:
             apiVersion:
               description: |-
@@ -45861,19 +46436,25 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')"
+          required:
+            - metadata
+            - spec
           type: object
+      selectableFields:
+        - jsonPath: .spec.tier
       served: true
       storage: true
+      subresources: {}
 ---
-# Source: crd.projectcalico.org.v1/templates/calico/crd.projectcalico.org_tiers.yaml
+# Source: projectcalico.org.v3/templates/calico/projectcalico.org_tiers.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: tiers.crd.projectcalico.org
+  name: tiers.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: Tier
     listKind: TierList
@@ -45881,9 +46462,26 @@ spec:
     singular: tier
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: Order in which the tier is applied
+          jsonPath: .spec.order
+          name: Order
+          type: integer
+        - description: Default action for the tier
+          jsonPath: .spec.defaultAction
+          name: DefaultAction
+          type: string
+        - description: Current status of the tier
+          jsonPath: .status.conditions[?(@.type=='Ready')].reason
+          name: Status
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
+          description: |-
+            Tier contains a set of policies that are applied to packets.  Multiple tiers may
+            be created and each tier is applied in the order specified in the tier specification.
+            Tier is globally-scoped (i.e. not Namespaced).
           properties:
             apiVersion:
               description: |-
@@ -46038,1189 +46636,3 @@ spec:
       storage: true
       subresources:
         status: {}
----
-# Source: crd.projectcalico.org.v1/templates/calico/policy.networking.k8s.io_clusternetworkpolicies.yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/network-policy-api/pull/347
-    policy.networking.k8s.io/bundle-version: v0.2.0
-    policy.networking.k8s.io/channel: standard
-  name: clusternetworkpolicies.policy.networking.k8s.io
-spec:
-  group: policy.networking.k8s.io
-  names:
-    kind: ClusterNetworkPolicy
-    listKind: ClusterNetworkPolicyList
-    plural: clusternetworkpolicies
-    shortNames:
-      - cnp
-    singular: clusternetworkpolicy
-  scope: Cluster
-  versions:
-    - additionalPrinterColumns:
-        - jsonPath: .spec.tier
-          name: Tier
-          type: string
-        - jsonPath: .spec.priority
-          name: Priority
-          type: string
-        - jsonPath: .metadata.creationTimestamp
-          name: Age
-          type: date
-      name: v1alpha2
-      schema:
-        openAPIV3Schema:
-          description: ClusterNetworkPolicy is a cluster-wide network policy resource.
-          properties:
-            apiVersion:
-              description: |-
-                APIVersion defines the versioned schema of this representation of an object.
-                Servers should convert recognized schemas to the latest internal value, and
-                may reject unrecognized values.
-                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
-              type: string
-            kind:
-              description: |-
-                Kind is a string value representing the REST resource this object represents.
-                Servers may infer this from the endpoint the client submits requests to.
-                Cannot be updated.
-                In CamelCase.
-                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
-              type: string
-            metadata:
-              type: object
-            spec:
-              description: Spec defines the desired behavior of ClusterNetworkPolicy.
-              properties:
-                egress:
-                  description: |-
-                    Egress is the list of Egress rules to be applied to the selected pods.
-
-                    A maximum of 25 rules is allowed in this block.
-
-                    The relative precedence of egress rules within a single CNP object
-                    (all of which share the priority) will be determined by the order
-                    in which the rule is written.
-                    Thus, a rule that appears at the top of the egress rules
-                    would take the highest precedence.
-                    CNPs with no egress rules do not affect egress traffic.
-                  items:
-                    description: |-
-                      ClusterNetworkPolicyEgressRule describes an action to take on a particular
-                      set of traffic originating from pods selected by a ClusterNetworkPolicy's
-                      Subject field.
-
-                      <network-policy-api:experimental:validation>
-                    properties:
-                      action:
-                        description: |-
-                          Action specifies the effect this rule will have on matching
-                          traffic.  Currently the following actions are supported:
-
-                          - Accept: Accepts the selected traffic, allowing it to
-                            egress. No further ClusterNetworkPolicy or NetworkPolicy
-                            rules will be processed.
-
-                          - Deny: Drops the selected traffic. No further
-                            ClusterNetworkPolicy or NetworkPolicy rules will be
-                            processed.
-
-                          - Pass: Skips all further ClusterNetworkPolicy rules in the
-                            current tier for the selected traffic, and passes
-                            evaluation to the next tier.
-                        enum:
-                          - Accept
-                          - Deny
-                          - Pass
-                        type: string
-                      name:
-                        description: |-
-                          Name is an identifier for this rule, that may be no more than
-                          100 characters in length. This field should be used by the implementation
-                          to help improve observability, readability and error-reporting
-                          for any applied policies.
-                        maxLength: 100
-                        type: string
-                      protocols:
-                        description: |-
-                          Protocols allows for more fine-grain matching of traffic on
-                          protocol-specific attributes such as the port. If
-                          unspecified, protocol-specific attributes will not be used
-                          to match traffic.
-                        items:
-                          description: |-
-                            ClusterNetworkPolicyProtocol describes additional protocol-specific match rules.
-                            Exactly one field must be set.
-                          maxProperties: 1
-                          minProperties: 1
-                          properties:
-                            destinationNamedPort:
-                              description: |-
-                                DestinationNamedPort selects a destination port on a pod based on the
-                                ContainerPort name. You can't use this in a rule that targets resources
-                                without named ports (e.g. Nodes or Networks).
-                              type: string
-                            sctp:
-                              description: SCTP specific protocol matches.
-                              minProperties: 1
-                              properties:
-                                destinationPort:
-                                  description: DestinationPort for the match.
-                                  maxProperties: 1
-                                  minProperties: 1
-                                  properties:
-                                    number:
-                                      description: Number defines a network port value.
-                                      format: int32
-                                      maximum: 65535
-                                      minimum: 1
-                                      type: integer
-                                    range:
-                                      description:
-                                        Range defines a contiguous range
-                                        of ports.
-                                      properties:
-                                        end:
-                                          description: |-
-                                            end specifies the last port in the range. It must be
-                                            greater than start.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                        start:
-                                          description: |-
-                                            start defines a network port that is the start of a port
-                                            range, the Start value must be less than End.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                      required:
-                                        - end
-                                        - start
-                                      type: object
-                                      x-kubernetes-validations:
-                                        - message: Start port must be less than End port
-                                          rule: self.start < self.end
-                                  type: object
-                              type: object
-                            tcp:
-                              description: TCP specific protocol matches.
-                              minProperties: 1
-                              properties:
-                                destinationPort:
-                                  description: DestinationPort for the match.
-                                  maxProperties: 1
-                                  minProperties: 1
-                                  properties:
-                                    number:
-                                      description: Number defines a network port value.
-                                      format: int32
-                                      maximum: 65535
-                                      minimum: 1
-                                      type: integer
-                                    range:
-                                      description:
-                                        Range defines a contiguous range
-                                        of ports.
-                                      properties:
-                                        end:
-                                          description: |-
-                                            end specifies the last port in the range. It must be
-                                            greater than start.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                        start:
-                                          description: |-
-                                            start defines a network port that is the start of a port
-                                            range, the Start value must be less than End.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                      required:
-                                        - end
-                                        - start
-                                      type: object
-                                      x-kubernetes-validations:
-                                        - message: Start port must be less than End port
-                                          rule: self.start < self.end
-                                  type: object
-                              type: object
-                            udp:
-                              description: UDP specific protocol matches.
-                              minProperties: 1
-                              properties:
-                                destinationPort:
-                                  description: DestinationPort for the match.
-                                  maxProperties: 1
-                                  minProperties: 1
-                                  properties:
-                                    number:
-                                      description: Number defines a network port value.
-                                      format: int32
-                                      maximum: 65535
-                                      minimum: 1
-                                      type: integer
-                                    range:
-                                      description:
-                                        Range defines a contiguous range
-                                        of ports.
-                                      properties:
-                                        end:
-                                          description: |-
-                                            end specifies the last port in the range. It must be
-                                            greater than start.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                        start:
-                                          description: |-
-                                            start defines a network port that is the start of a port
-                                            range, the Start value must be less than End.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                      required:
-                                        - end
-                                        - start
-                                      type: object
-                                      x-kubernetes-validations:
-                                        - message: Start port must be less than End port
-                                          rule: self.start < self.end
-                                  type: object
-                              type: object
-                          type: object
-                        maxItems: 25
-                        minItems: 1
-                        type: array
-                      to:
-                        description: |-
-                          To is the list of destinations whose traffic this rule applies to. If any
-                          element matches the destination of outgoing traffic then the specified
-                          action is applied. This field must be defined and contain at least one
-                          item.
-                        items:
-                          description: |-
-                            ClusterNetworkPolicyEgressPeer defines a peer to allow traffic to.
-
-                            Exactly one of the fields must be set for a given peer and this is enforced
-                            by the validation rules on the CRD. If an implementation sees no fields are
-                            set then it can infer that the deployed CRD is of an incompatible version
-                            with an unknown field.  In that case it should fail closed.
-
-                            For "Accept" rules, "fail closed" means: "treat the rule as matching no
-                            traffic". For "Deny" and "Pass" rules, "fail closed" means: "treat the rule
-                            as a 'Deny all' rule".
-                          maxProperties: 1
-                          minProperties: 1
-                          properties:
-                            namespaces:
-                              description: |-
-                                Namespaces defines a way to select all pods within a set of Namespaces.
-                                Note that host-networked pods are not included in this type of peer.
-                              properties:
-                                matchExpressions:
-                                  description:
-                                    matchExpressions is a list of label selector
-                                    requirements. The requirements are ANDed.
-                                  items:
-                                    description: |-
-                                      A label selector requirement is a selector that contains values, a key, and an operator that
-                                      relates the key and values.
-                                    properties:
-                                      key:
-                                        description:
-                                          key is the label key that the selector
-                                          applies to.
-                                        type: string
-                                      operator:
-                                        description: |-
-                                          operator represents a key's relationship to a set of values.
-                                          Valid operators are In, NotIn, Exists and DoesNotExist.
-                                        type: string
-                                      values:
-                                        description: |-
-                                          values is an array of string values. If the operator is In or NotIn,
-                                          the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                          the values array must be empty. This array is replaced during a strategic
-                                          merge patch.
-                                        items:
-                                          type: string
-                                        type: array
-                                        x-kubernetes-list-type: atomic
-                                    required:
-                                      - key
-                                      - operator
-                                    type: object
-                                  type: array
-                                  x-kubernetes-list-type: atomic
-                                matchLabels:
-                                  additionalProperties:
-                                    type: string
-                                  description: |-
-                                    matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                    map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                    operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                  type: object
-                              type: object
-                              x-kubernetes-map-type: atomic
-                            networks:
-                              description: |-
-                                Networks defines a way to select peers via CIDR blocks.
-                                This is intended for representing entities that live outside the cluster,
-                                which can't be selected by pods, namespaces and nodes peers, but note
-                                that cluster-internal traffic will be checked against the rule as
-                                well. So if you Accept or Deny traffic to `"0.0.0.0/0"`, that will allow
-                                or deny all IPv4 pod-to-pod traffic as well. If you don't want that,
-                                add a rule that Passes all pod traffic before the Networks rule.
-
-                                Each item in Networks should be provided in the CIDR format and should be
-                                IPv4 or IPv6, for example "10.0.0.0/8" or "fd00::/8".
-
-                                Networks can have up to 25 CIDRs specified.
-                              items:
-                                description: |-
-                                  CIDR is an IP address range in CIDR notation
-                                  (for example, "10.0.0.0/8" or "fd00::/8").
-                                maxLength: 43
-                                type: string
-                                x-kubernetes-validations:
-                                  - message: Invalid CIDR format provided
-                                    rule: isCIDR(self)
-                              maxItems: 25
-                              minItems: 1
-                              type: array
-                              x-kubernetes-list-type: set
-                            pods:
-                              description: |-
-                                Pods defines a way to select a set of pods in
-                                a set of namespaces. Note that host-networked pods
-                                are not included in this type of peer.
-                              properties:
-                                namespaceSelector:
-                                  description: |-
-                                    NamespaceSelector follows standard label selector
-                                    semantics; if empty, it selects all Namespaces.
-                                  properties:
-                                    matchExpressions:
-                                      description:
-                                        matchExpressions is a list of label
-                                        selector requirements. The requirements are
-                                        ANDed.
-                                      items:
-                                        description: |-
-                                          A label selector requirement is a selector that contains values, a key, and an operator that
-                                          relates the key and values.
-                                        properties:
-                                          key:
-                                            description:
-                                              key is the label key that the
-                                              selector applies to.
-                                            type: string
-                                          operator:
-                                            description: |-
-                                              operator represents a key's relationship to a set of values.
-                                              Valid operators are In, NotIn, Exists and DoesNotExist.
-                                            type: string
-                                          values:
-                                            description: |-
-                                              values is an array of string values. If the operator is In or NotIn,
-                                              the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                              the values array must be empty. This array is replaced during a strategic
-                                              merge patch.
-                                            items:
-                                              type: string
-                                            type: array
-                                            x-kubernetes-list-type: atomic
-                                        required:
-                                          - key
-                                          - operator
-                                        type: object
-                                      type: array
-                                      x-kubernetes-list-type: atomic
-                                    matchLabels:
-                                      additionalProperties:
-                                        type: string
-                                      description: |-
-                                        matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                        map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                        operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                      type: object
-                                  type: object
-                                  x-kubernetes-map-type: atomic
-                                podSelector:
-                                  description: |-
-                                    PodSelector is used to explicitly select pods within a namespace;
-                                    if empty, it selects all Pods.
-                                  properties:
-                                    matchExpressions:
-                                      description:
-                                        matchExpressions is a list of label
-                                        selector requirements. The requirements are
-                                        ANDed.
-                                      items:
-                                        description: |-
-                                          A label selector requirement is a selector that contains values, a key, and an operator that
-                                          relates the key and values.
-                                        properties:
-                                          key:
-                                            description:
-                                              key is the label key that the
-                                              selector applies to.
-                                            type: string
-                                          operator:
-                                            description: |-
-                                              operator represents a key's relationship to a set of values.
-                                              Valid operators are In, NotIn, Exists and DoesNotExist.
-                                            type: string
-                                          values:
-                                            description: |-
-                                              values is an array of string values. If the operator is In or NotIn,
-                                              the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                              the values array must be empty. This array is replaced during a strategic
-                                              merge patch.
-                                            items:
-                                              type: string
-                                            type: array
-                                            x-kubernetes-list-type: atomic
-                                        required:
-                                          - key
-                                          - operator
-                                        type: object
-                                      type: array
-                                      x-kubernetes-list-type: atomic
-                                    matchLabels:
-                                      additionalProperties:
-                                        type: string
-                                      description: |-
-                                        matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                        map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                        operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                      type: object
-                                  type: object
-                                  x-kubernetes-map-type: atomic
-                              required:
-                                - podSelector
-                              type: object
-                          type: object
-                        maxItems: 25
-                        minItems: 1
-                        type: array
-                    required:
-                      - action
-                      - to
-                    type: object
-                  maxItems: 25
-                  type: array
-                ingress:
-                  description: |-
-                    Ingress is the list of Ingress rules to be applied to the selected pods.
-
-                    A maximum of 25 rules is allowed in this block.
-
-                    The relative precedence of ingress rules within a single CNP object
-                    (all of which share the priority) will be determined by the order
-                    in which the rule is written.
-                    Thus, a rule that appears at the top of the ingress rules
-                    would take the highest precedence.
-                    CNPs with no ingress rules do not affect ingress traffic.
-                  items:
-                    description: |-
-                      ClusterNetworkPolicyIngressRule describes an action to take on a particular
-                      set of traffic destined for pods selected by a ClusterNetworkPolicy's
-                      Subject field.
-                    properties:
-                      action:
-                        description: |-
-                          Action specifies the effect this rule will have on matching
-                          traffic. Currently the following actions are supported:
-
-                          - Accept: Accepts the selected traffic, allowing it into
-                            the destination. No further ClusterNetworkPolicy or
-                            NetworkPolicy rules will be processed.
-
-                            Note: while Accept ensures traffic is accepted by
-                            Kubernetes network policy, it is still possible that the
-                            packet is blocked in other ways: custom nftable rules,
-                            high-layers e.g. service mesh.
-
-                          - Deny: Drops the selected traffic. No further
-                            ClusterNetworkPolicy or NetworkPolicy rules will be
-                            processed.
-
-                          - Pass: Skips all further ClusterNetworkPolicy rules in the
-                            current tier for the selected traffic, and passes
-                            evaluation to the next tier.
-                        enum:
-                          - Accept
-                          - Deny
-                          - Pass
-                        type: string
-                      from:
-                        description: |-
-                          From is the list of sources whose traffic this rule applies to.
-                          If any element matches the source of incoming
-                          traffic then the specified action is applied.
-                          This field must be defined and contain at least one item.
-                        items:
-                          description: |-
-                            ClusterNetworkPolicyIngressPeer defines a peer to allow traffic from.
-
-                            Exactly one of the fields must be set for a given peer and this is enforced
-                            by the validation rules on the CRD. If an implementation sees no fields are
-                            set then it can infer that the deployed CRD is of an incompatible version
-                            with an unknown field.  In that case it should fail closed.
-
-                            For "Accept" rules, "fail closed" means: "treat the rule as matching no
-                            traffic". For "Deny" and "Pass" rules, "fail closed" means: "treat the rule
-                            as a 'Deny all' rule".
-                          maxProperties: 1
-                          minProperties: 1
-                          properties:
-                            namespaces:
-                              description: |-
-                                Namespaces defines a way to select all pods within a set of Namespaces.
-                                Note that host-networked pods are not included in this type of peer.
-                              properties:
-                                matchExpressions:
-                                  description:
-                                    matchExpressions is a list of label selector
-                                    requirements. The requirements are ANDed.
-                                  items:
-                                    description: |-
-                                      A label selector requirement is a selector that contains values, a key, and an operator that
-                                      relates the key and values.
-                                    properties:
-                                      key:
-                                        description:
-                                          key is the label key that the selector
-                                          applies to.
-                                        type: string
-                                      operator:
-                                        description: |-
-                                          operator represents a key's relationship to a set of values.
-                                          Valid operators are In, NotIn, Exists and DoesNotExist.
-                                        type: string
-                                      values:
-                                        description: |-
-                                          values is an array of string values. If the operator is In or NotIn,
-                                          the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                          the values array must be empty. This array is replaced during a strategic
-                                          merge patch.
-                                        items:
-                                          type: string
-                                        type: array
-                                        x-kubernetes-list-type: atomic
-                                    required:
-                                      - key
-                                      - operator
-                                    type: object
-                                  type: array
-                                  x-kubernetes-list-type: atomic
-                                matchLabels:
-                                  additionalProperties:
-                                    type: string
-                                  description: |-
-                                    matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                    map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                    operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                  type: object
-                              type: object
-                              x-kubernetes-map-type: atomic
-                            pods:
-                              description: |-
-                                Pods defines a way to select a set of pods in
-                                a set of namespaces. Note that host-networked pods
-                                are not included in this type of peer.
-                              properties:
-                                namespaceSelector:
-                                  description: |-
-                                    NamespaceSelector follows standard label selector
-                                    semantics; if empty, it selects all Namespaces.
-                                  properties:
-                                    matchExpressions:
-                                      description:
-                                        matchExpressions is a list of label
-                                        selector requirements. The requirements are
-                                        ANDed.
-                                      items:
-                                        description: |-
-                                          A label selector requirement is a selector that contains values, a key, and an operator that
-                                          relates the key and values.
-                                        properties:
-                                          key:
-                                            description:
-                                              key is the label key that the
-                                              selector applies to.
-                                            type: string
-                                          operator:
-                                            description: |-
-                                              operator represents a key's relationship to a set of values.
-                                              Valid operators are In, NotIn, Exists and DoesNotExist.
-                                            type: string
-                                          values:
-                                            description: |-
-                                              values is an array of string values. If the operator is In or NotIn,
-                                              the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                              the values array must be empty. This array is replaced during a strategic
-                                              merge patch.
-                                            items:
-                                              type: string
-                                            type: array
-                                            x-kubernetes-list-type: atomic
-                                        required:
-                                          - key
-                                          - operator
-                                        type: object
-                                      type: array
-                                      x-kubernetes-list-type: atomic
-                                    matchLabels:
-                                      additionalProperties:
-                                        type: string
-                                      description: |-
-                                        matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                        map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                        operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                      type: object
-                                  type: object
-                                  x-kubernetes-map-type: atomic
-                                podSelector:
-                                  description: |-
-                                    PodSelector is used to explicitly select pods within a namespace;
-                                    if empty, it selects all Pods.
-                                  properties:
-                                    matchExpressions:
-                                      description:
-                                        matchExpressions is a list of label
-                                        selector requirements. The requirements are
-                                        ANDed.
-                                      items:
-                                        description: |-
-                                          A label selector requirement is a selector that contains values, a key, and an operator that
-                                          relates the key and values.
-                                        properties:
-                                          key:
-                                            description:
-                                              key is the label key that the
-                                              selector applies to.
-                                            type: string
-                                          operator:
-                                            description: |-
-                                              operator represents a key's relationship to a set of values.
-                                              Valid operators are In, NotIn, Exists and DoesNotExist.
-                                            type: string
-                                          values:
-                                            description: |-
-                                              values is an array of string values. If the operator is In or NotIn,
-                                              the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                              the values array must be empty. This array is replaced during a strategic
-                                              merge patch.
-                                            items:
-                                              type: string
-                                            type: array
-                                            x-kubernetes-list-type: atomic
-                                        required:
-                                          - key
-                                          - operator
-                                        type: object
-                                      type: array
-                                      x-kubernetes-list-type: atomic
-                                    matchLabels:
-                                      additionalProperties:
-                                        type: string
-                                      description: |-
-                                        matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                        map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                        operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                      type: object
-                                  type: object
-                                  x-kubernetes-map-type: atomic
-                              required:
-                                - podSelector
-                              type: object
-                          type: object
-                        maxItems: 25
-                        minItems: 1
-                        type: array
-                      name:
-                        description: |-
-                          Name is an identifier for this rule, that may be no more than
-                          100 characters in length. This field should be used by the implementation
-                          to help improve observability, readability and error-reporting
-                          for any applied policies.
-                        maxLength: 100
-                        type: string
-                      protocols:
-                        description: |-
-                          Protocols allows for more fine-grain matching of traffic on
-                          protocol-specific attributes such as the port. If
-                          unspecified, protocol-specific attributes will not be used
-                          to match traffic.
-                        items:
-                          description: |-
-                            ClusterNetworkPolicyProtocol describes additional protocol-specific match rules.
-                            Exactly one field must be set.
-                          maxProperties: 1
-                          minProperties: 1
-                          properties:
-                            destinationNamedPort:
-                              description: |-
-                                DestinationNamedPort selects a destination port on a pod based on the
-                                ContainerPort name. You can't use this in a rule that targets resources
-                                without named ports (e.g. Nodes or Networks).
-                              type: string
-                            sctp:
-                              description: SCTP specific protocol matches.
-                              minProperties: 1
-                              properties:
-                                destinationPort:
-                                  description: DestinationPort for the match.
-                                  maxProperties: 1
-                                  minProperties: 1
-                                  properties:
-                                    number:
-                                      description: Number defines a network port value.
-                                      format: int32
-                                      maximum: 65535
-                                      minimum: 1
-                                      type: integer
-                                    range:
-                                      description:
-                                        Range defines a contiguous range
-                                        of ports.
-                                      properties:
-                                        end:
-                                          description: |-
-                                            end specifies the last port in the range. It must be
-                                            greater than start.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                        start:
-                                          description: |-
-                                            start defines a network port that is the start of a port
-                                            range, the Start value must be less than End.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                      required:
-                                        - end
-                                        - start
-                                      type: object
-                                      x-kubernetes-validations:
-                                        - message: Start port must be less than End port
-                                          rule: self.start < self.end
-                                  type: object
-                              type: object
-                            tcp:
-                              description: TCP specific protocol matches.
-                              minProperties: 1
-                              properties:
-                                destinationPort:
-                                  description: DestinationPort for the match.
-                                  maxProperties: 1
-                                  minProperties: 1
-                                  properties:
-                                    number:
-                                      description: Number defines a network port value.
-                                      format: int32
-                                      maximum: 65535
-                                      minimum: 1
-                                      type: integer
-                                    range:
-                                      description:
-                                        Range defines a contiguous range
-                                        of ports.
-                                      properties:
-                                        end:
-                                          description: |-
-                                            end specifies the last port in the range. It must be
-                                            greater than start.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                        start:
-                                          description: |-
-                                            start defines a network port that is the start of a port
-                                            range, the Start value must be less than End.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                      required:
-                                        - end
-                                        - start
-                                      type: object
-                                      x-kubernetes-validations:
-                                        - message: Start port must be less than End port
-                                          rule: self.start < self.end
-                                  type: object
-                              type: object
-                            udp:
-                              description: UDP specific protocol matches.
-                              minProperties: 1
-                              properties:
-                                destinationPort:
-                                  description: DestinationPort for the match.
-                                  maxProperties: 1
-                                  minProperties: 1
-                                  properties:
-                                    number:
-                                      description: Number defines a network port value.
-                                      format: int32
-                                      maximum: 65535
-                                      minimum: 1
-                                      type: integer
-                                    range:
-                                      description:
-                                        Range defines a contiguous range
-                                        of ports.
-                                      properties:
-                                        end:
-                                          description: |-
-                                            end specifies the last port in the range. It must be
-                                            greater than start.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                        start:
-                                          description: |-
-                                            start defines a network port that is the start of a port
-                                            range, the Start value must be less than End.
-                                          format: int32
-                                          maximum: 65535
-                                          minimum: 1
-                                          type: integer
-                                      required:
-                                        - end
-                                        - start
-                                      type: object
-                                      x-kubernetes-validations:
-                                        - message: Start port must be less than End port
-                                          rule: self.start < self.end
-                                  type: object
-                              type: object
-                          type: object
-                        maxItems: 25
-                        minItems: 1
-                        type: array
-                    required:
-                      - action
-                      - from
-                    type: object
-                  maxItems: 25
-                  type: array
-                priority:
-                  description: |-
-                    Priority is a value from 0 to 1000 indicating the precedence of
-                    the policy within its tier. Policies with lower priority values have
-                    higher precedence, and are checked before policies with higher priority
-                    values in the same tier. All Admin tier rules have higher precedence than
-                    NetworkPolicy or Baseline tier rules.
-                    If two (or more) policies in the same tier with the same priority
-                    could match a connection, then the implementation can apply any of the
-                    matching policies to the connection, and there is no way for the user to
-                    reliably determine which one it will choose. Administrators must be
-                    careful about assigning the priorities for policies with rules that will
-                    match many connections, and ensure that policies have unique priority
-                    values in cases where ambiguity would be unacceptable.
-                  format: int32
-                  maximum: 1000
-                  minimum: 0
-                  type: integer
-                subject:
-                  description:
-                    Subject defines the pods to which this ClusterNetworkPolicy
-                    applies.
-                  maxProperties: 1
-                  minProperties: 1
-                  properties:
-                    namespaces:
-                      description: Namespaces is used to select pods via namespace selectors.
-                      properties:
-                        matchExpressions:
-                          description:
-                            matchExpressions is a list of label selector
-                            requirements. The requirements are ANDed.
-                          items:
-                            description: |-
-                              A label selector requirement is a selector that contains values, a key, and an operator that
-                              relates the key and values.
-                            properties:
-                              key:
-                                description:
-                                  key is the label key that the selector
-                                  applies to.
-                                type: string
-                              operator:
-                                description: |-
-                                  operator represents a key's relationship to a set of values.
-                                  Valid operators are In, NotIn, Exists and DoesNotExist.
-                                type: string
-                              values:
-                                description: |-
-                                  values is an array of string values. If the operator is In or NotIn,
-                                  the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                  the values array must be empty. This array is replaced during a strategic
-                                  merge patch.
-                                items:
-                                  type: string
-                                type: array
-                                x-kubernetes-list-type: atomic
-                            required:
-                              - key
-                              - operator
-                            type: object
-                          type: array
-                          x-kubernetes-list-type: atomic
-                        matchLabels:
-                          additionalProperties:
-                            type: string
-                          description: |-
-                            matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                            map is equivalent to an element of matchExpressions, whose key field is "key", the
-                            operator is "In", and the values array contains only "value". The requirements are ANDed.
-                          type: object
-                      type: object
-                      x-kubernetes-map-type: atomic
-                    pods:
-                      description:
-                        Pods is used to select pods via namespace AND pod
-                        selectors.
-                      properties:
-                        namespaceSelector:
-                          description: |-
-                            NamespaceSelector follows standard label selector
-                            semantics; if empty, it selects all Namespaces.
-                          properties:
-                            matchExpressions:
-                              description:
-                                matchExpressions is a list of label selector
-                                requirements. The requirements are ANDed.
-                              items:
-                                description: |-
-                                  A label selector requirement is a selector that contains values, a key, and an operator that
-                                  relates the key and values.
-                                properties:
-                                  key:
-                                    description:
-                                      key is the label key that the selector
-                                      applies to.
-                                    type: string
-                                  operator:
-                                    description: |-
-                                      operator represents a key's relationship to a set of values.
-                                      Valid operators are In, NotIn, Exists and DoesNotExist.
-                                    type: string
-                                  values:
-                                    description: |-
-                                      values is an array of string values. If the operator is In or NotIn,
-                                      the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                      the values array must be empty. This array is replaced during a strategic
-                                      merge patch.
-                                    items:
-                                      type: string
-                                    type: array
-                                    x-kubernetes-list-type: atomic
-                                required:
-                                  - key
-                                  - operator
-                                type: object
-                              type: array
-                              x-kubernetes-list-type: atomic
-                            matchLabels:
-                              additionalProperties:
-                                type: string
-                              description: |-
-                                matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                operator is "In", and the values array contains only "value". The requirements are ANDed.
-                              type: object
-                          type: object
-                          x-kubernetes-map-type: atomic
-                        podSelector:
-                          description: |-
-                            PodSelector is used to explicitly select pods within a namespace;
-                            if empty, it selects all Pods.
-                          properties:
-                            matchExpressions:
-                              description:
-                                matchExpressions is a list of label selector
-                                requirements. The requirements are ANDed.
-                              items:
-                                description: |-
-                                  A label selector requirement is a selector that contains values, a key, and an operator that
-                                  relates the key and values.
-                                properties:
-                                  key:
-                                    description:
-                                      key is the label key that the selector
-                                      applies to.
-                                    type: string
-                                  operator:
-                                    description: |-
-                                      operator represents a key's relationship to a set of values.
-                                      Valid operators are In, NotIn, Exists and DoesNotExist.
-                                    type: string
-                                  values:
-                                    description: |-
-                                      values is an array of string values. If the operator is In or NotIn,
-                                      the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                      the values array must be empty. This array is replaced during a strategic
-                                      merge patch.
-                                    items:
-                                      type: string
-                                    type: array
-                                    x-kubernetes-list-type: atomic
-                                required:
-                                  - key
-                                  - operator
-                                type: object
-                              type: array
-                              x-kubernetes-list-type: atomic
-                            matchLabels:
-                              additionalProperties:
-                                type: string
-                              description: |-
-                                matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                operator is "In", and the values array contains only "value". The requirements are ANDed.
-                              type: object
-                          type: object
-                          x-kubernetes-map-type: atomic
-                      required:
-                        - podSelector
-                      type: object
-                  type: object
-                tier:
-                  description: |-
-                    Tier is used as the top-level grouping for network policy prioritization.
-
-                    Policy tiers are evaluated in the following order:
-                    * Admin tier
-                    * NetworkPolicy tier
-                    * Baseline tier
-
-                    ClusterNetworkPolicy can use 2 of these tiers: Admin and Baseline.
-
-                    The Admin tier takes precedence over all other policies. Policies
-                    defined in this tier are used to set cluster-wide security rules
-                    that cannot be overridden in the other tiers. If Admin tier has
-                    made a final decision (Accept or Deny) on a connection, then no
-                    further evaluation is done.
-
-                    NetworkPolicy tier is the tier for the namespaced v1.NetworkPolicy.
-                    These policies are intended for the application developer to describe
-                    the security policy associated with their deployments inside their
-                    namespace. v1.NetworkPolicy always makes a final decision for selected
-                    pods. Further evaluation only happens for Pods not selected by a
-                    v1.NetworkPolicy.
-
-                    Baseline tier is a cluster-wide policy that can be overridden by the
-                    v1.NetworkPolicy. If Baseline tier has made a final decision (Accept or
-                    Deny) on a connection, then no further evaluation is done.
-
-                    If a given connection wasn't allowed or denied by any of the tiers,
-                    the default kubernetes policy is applied, which says that
-                    all pods can communicate with each other.
-                  enum:
-                    - Admin
-                    - Baseline
-                  type: string
-              required:
-                - priority
-                - subject
-                - tier
-              type: object
-            status:
-              description: Status is the status to be reported by the implementation.
-              properties:
-                conditions:
-                  items:
-                    description:
-                      Condition contains details for one aspect of the current
-                      state of this API Resource.
-                    properties:
-                      lastTransitionTime:
-                        description: |-
-                          lastTransitionTime is the last time the condition transitioned from one status to another.
-                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
-                        format: date-time
-                        type: string
-                      message:
-                        description: |-
-                          message is a human readable message indicating details about the transition.
-                          This may be an empty string.
-                        maxLength: 32768
-                        type: string
-                      observedGeneration:
-                        description: |-
-                          observedGeneration represents the .metadata.generation that the condition was set based upon.
-                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
-                          with respect to the current state of the instance.
-                        format: int64
-                        minimum: 0
-                        type: integer
-                      reason:
-                        description: |-
-                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
-                          Producers of specific condition types may define expected values and meanings for this field,
-                          and whether the values are considered a guaranteed API.
-                          The value should be a CamelCase string.
-                          This field may not be empty.
-                        maxLength: 1024
-                        minLength: 1
-                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
-                        type: string
-                      status:
-                        description: status of the condition, one of True, False, Unknown.
-                        enum:
-                          - "True"
-                          - "False"
-                          - Unknown
-                        type: string
-                      type:
-                        description: type of condition in CamelCase or in foo.example.com/CamelCase.
-                        maxLength: 316
-                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
-                        type: string
-                    required:
-                      - lastTransitionTime
-                      - message
-                      - reason
-                      - status
-                      - type
-                    type: object
-                  type: array
-                  x-kubernetes-list-map-keys:
-                    - type
-                  x-kubernetes-list-type: map
-              required:
-                - conditions
-              type: object
-          required:
-            - metadata
-            - spec
-          type: object
-      served: true
-      storage: true
-      subresources:
-        status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
