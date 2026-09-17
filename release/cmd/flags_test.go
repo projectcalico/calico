@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	cli "github.com/urfave/cli/v3"
+
+	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 // runFlags builds a *cli.Command with the given flags and runs it with args.
@@ -313,6 +315,39 @@ func TestInverseFlagName(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("inverseFlagName(%q) = %q, want %q", tc.in, got, tc.want)
 			}
+		})
+	}
+}
+
+// A token is only needed to read the Calico repository's pull requests, so a
+// run that generates no notes — an enterprise hashrelease, say — must not be
+// blocked on one.
+func TestReleaseNotesFlagRequiresATokenOnlyWhenItReadsThem(t *testing.T) {
+	flags := []cli.Flag{releaseNotesFlag, githubTokenFlag, orgFlag, repoFlag}
+	calico := func(rest ...string) []string {
+		return append(rest, "--org", utils.ProjectCalicoOrg, "--repo", utils.CalicoRepoName)
+	}
+	for _, tc := range []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "notes wanted with no token",
+			args:    calico("--release-notes"),
+			wantErr: "GitHub token is required to generate release notes",
+		},
+		{
+			name: "notes wanted with a token",
+			args: calico("--release-notes", "--github-token", "t"),
+		},
+		{
+			name: "another repository generates no notes",
+			args: []string{"--release-notes", "--org", "tigera", "--repo", "calico-private"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertRun(t, flags, tc.args, tc.wantErr)
 		})
 	}
 }
