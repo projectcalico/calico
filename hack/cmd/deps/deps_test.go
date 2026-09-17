@@ -15,6 +15,8 @@
 package main
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -359,5 +361,40 @@ func TestCalculateMacroOwnDepsEmpty(t *testing.T) {
 	// Default inclusions/exclusions are still present.
 	if !d.Exclusions.Contains("/**/*.md") {
 		t.Error("expected default exclusions in empty own-spec deps")
+	}
+}
+
+func TestSecondaryPkgBuildInputGlobs(t *testing.T) {
+	// An unrooted glob resolves against .semaphore/ and matches nothing, so the
+	// block would never fire on a change to these files.
+	cases := map[string][]string{
+		"typha":      {"/typha/Makefile", "/typha/deps.txt", "/typha/**/*Dockerfile*"},
+		"cmd/calico": {"/cmd/calico/Makefile", "/cmd/calico/deps.txt", "/cmd/calico/**/*Dockerfile*"},
+	}
+	for pkg, want := range cases {
+		got := set.From(secondaryPkgBuildInputGlobs(pkg)...)
+		if got.Len() != len(want) {
+			t.Errorf("%s: got %v, want %v", pkg, got.Slice(), want)
+		}
+		for _, w := range want {
+			if !got.Contains(w) {
+				t.Errorf("%s: missing glob %q", pkg, w)
+			}
+		}
+	}
+}
+
+func TestStaticGlobsAreRepoRooted(t *testing.T) {
+	check := func(src string, globs []string) {
+		for _, g := range globs {
+			if !strings.HasPrefix(g, "/") {
+				t.Errorf("%s: %q is not repo-rooted; Semaphore would resolve it under .semaphore/", src, g)
+			}
+		}
+	}
+	check("defaultInclusions", defaultInclusions)
+	check("defaultExclusions", defaultExclusions)
+	for pkg, globs := range nonGoDeps {
+		check(fmt.Sprintf("nonGoDeps[%q]", pkg), globs)
 	}
 }
