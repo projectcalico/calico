@@ -22,7 +22,7 @@
         commands:
           - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
           - 'artifact push job ./report/ --destination semaphore/gateway-conformance-reports || true'
-          # Permanent copy in GCS for upstream submission and historical
+          # Permanent copy in S3 for upstream submission and historical
           # comparison. Semaphore's job artifacts are GC'd after ~30 days,
           # which isn't long enough for "go fish out the v3.30 report next
           # year". PRs are skipped — their Semaphore artifact is plenty,
@@ -31,7 +31,7 @@
             if [[ -z "${SEMAPHORE_GIT_PR_NUMBER}" && -d ./report ]]; then
               ref="${SEMAPHORE_GIT_TAG_NAME:-${SEMAPHORE_GIT_BRANCH}}"
               sha="${SEMAPHORE_GIT_SHA:0:12}"
-              dst="gs://${GCS_BUILD_CACHE_BUCKET}/gateway-conformance/${ref}/${sha}/"
+              dst="s3://${CALICO_S3_BUCKET}/${CALICO_S3_KEY_PREFIX}/gateway-conformance/${ref}/${sha}/"
               echo "Publishing conformance report to ${dst}"
-              gcloud storage cp ./report/* "${dst}" || true
+              .semaphore/s3-cmd cp ./report/* "${dst}" || true
             fi
