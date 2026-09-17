@@ -112,6 +112,7 @@ local:api/pkg/apis/projectcalico/v3
 local:api/pkg/defaults
 local:api/pkg/lib/numorstring
 local:crypto/pkg/tls
+local:felix/ip
 local:hack/cmd/calico-selector
 local:hack/cmd/coalesce-imports
 local:hack/cmd/deps

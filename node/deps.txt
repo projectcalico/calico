@@ -202,6 +202,7 @@ local:cni-plugin/pkg/types
 local:cni-plugin/pkg/upgrade
 local:cni-plugin/pkg/wait
 local:crypto/pkg/tls
+local:felix/ip
 local:lib/logrusr
 local:lib/std/log
 local:lib/std/uniquelabels
