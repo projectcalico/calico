@@ -45,18 +45,22 @@ Static / BYO IP and pool / floating-IP annotations are handled inside `cni-plugi
 - KubeVirt VM persistence relies on the handle ID being VM-scoped, not pod-scoped. Don't fold the two handle paths together.
 - Pool resolution is hot path. `ResolvePools` was hand-optimized in https://github.com/projectcalico/calico/pull/9891; preserve the fast path.
 - Don't log `stdinData` - it may contain `K8sAuthToken` / `K8sClientKey`. See `cni-plugin/pkg/k8s/k8s.go`.
+- A conflict on a requested static IP is resolved by moving the address to this sandbox's handle under the pod's own identity, never by releasing it. Release-by-address cannot
+  express "only if this pod owns it".
+- The owner precondition comes from CNI_ARGS (kubelet). Anything a pod spec can set, including the addresses `getPodIPs` projects from the pod, is attacker-controlled.
 
 ## DEL flow
 
 Invariants:
 
 - **DEL is idempotent.** Any subset of block, handle, or allocation may already be gone. "Not found" is success.
-- **Release by both handle forms.** The primary handle (`<network>.<container-id>`) plus the workload-ID handle (`<namespace>.<pod>`). Skipping the second leaks IPs across CRI
-  container-ID changes and across v2.x-era allocations.
+- **Release by every handle form.** `utils.PodHandleIDs` lists the container-ID forms, of which one at most holds the allocation, and the workload-ID handle (`<namespace>.<pod>`) is
+  released on top of those. Dropping a form leaves its IPs for the kube-controllers GC to reclaim instead of freeing them on DEL.
 - **KubeVirt DEL is not "release immediately."** Clear owner attrs first; release only when the VM/VMI is gone and all attrs are empty.
 
-`cmdDel` in the same file. The standard path releases by both handle forms (primary `<network>.<container-id>` then workload-ID `<namespace>.<pod>`); the second is what survives
-CRI container-ID rotation and pre-v3 allocations. `ErrorResourceDoesNotExist` at this stage is success, not failure - any subset of block / handle / allocation may already be gone.
+`cmdDel` in the same file. The standard path tries the forms `utils.PodHandleIDs` returns, stopping at the first that releases something, then releases the workload-ID handle
+(`<namespace>.<pod>`) unconditionally: that one is not derived from the container ID, so it can hold an allocation at the same time as a container-ID handle.
+`ErrorResourceDoesNotExist` at this stage is success, not failure - any subset of block / handle / allocation may already be gone.
 
 KubeVirt with persistence is the exception: the IP must survive pod deletion so it follows the VM through live migration. The plugin fetches the VMI, checks `DeletionTimestamp`,
 enumerates via `IPsByHandle`, and clears owner attrs through `SetOwnerAttributes` under preconditions. `ReleaseByHandle` runs only when the VM/VMI itself has `DeletionTimestamp`
@@ -64,8 +68,8 @@ enumerates via `IPsByHandle`, and clears owner attrs through `SetOwnerAttributes
 
 **Review notes**
 
-- Always release by both the primary handle and the workload-ID handle. Dropping the second call leaks IPs across CRI container-ID changes and across upgrades from v2.x-era
-  allocations.
+- Always release by every form in `utils.PodHandleIDs` and by the workload-ID handle. Dropping the workload-ID call leaks IPs across CRI container-ID changes and across upgrades
+  from v2.x-era allocations.
 - DEL must be idempotent. A retry that fails because the block is gone is a bug, not a feature.
 - KubeVirt DEL is not "release immediately." The `SetOwnerAttributes` preconditions exist because Felix can race the active/alternate swap; if the precondition fails, the CNI
   plugin retries.
@@ -78,7 +82,7 @@ annotations are read as defaults; per-pod annotations override.
 
 | Annotation | What it does |
 |---|---|
-| `cni.projectcalico.org/ipAddrs` | JSON array of IPs. Each IP allocated via `AssignIP` with `IntendedUse: Workload` - goes through IPAM, tracked normally, and the containing pool's `allowedUses` is enforced (an IP from a non-workload pool is rejected). |
+| `cni.projectcalico.org/ipAddrs` | JSON array of IPs. Each IP allocated via `AssignIP` with `IntendedUse: Workload` - goes through IPAM, tracked normally, and the containing pool's `allowedUses` is enforced (an IP from a non-workload pool is rejected). An address the pod already holds under an earlier sandbox's handle is moved to the new handle rather than released. |
 | `cni.projectcalico.org/ipAddrsNoIpam` | JSON array of IPs. **Bypasses IPAM entirely**, no allocation record. Requires `feature_control.ip_addrs_no_ipam=true`. |
 | `cni.projectcalico.org/ipv4pools`, `ipv6pools` | Pool names or CIDRs scoping the allocation. Feeds `utils.ResolvePools` ahead of the conf default. |
 | `cni.projectcalico.org/ipFamilies` | `["IPv4","IPv6"]` - controls which families to assign. |
@@ -136,6 +140,19 @@ entire budget on lock contention and then fail the ADD with no allocation attemp
   - the CAS layer is still correct, the lock is a contention optimization.
 - The lock is host-local. It doesn't protect against another node racing for the same block; the BlockAffinity two-phase claim does that.
 - Don't take the lock around the libcalico client construction or other slow setup. Hold it only across the allocation call.
+
+## Pod handle form
+
+`GetHandleID` builds it and `ParsePodHandleID` parses it, both in `cni-plugin/internal/pkg/utils`.
+
+| Form | Written by | Accepted |
+|---|---|---|
+| `<network>.<container-id>` | `GetHandleID`, and `upgrade/migrate.go` for host-local migration | yes |
+| `<namespace>.<pod>` | pre-v3 workload-ID handles | no, there is no container ID to hand over from |
+| `<network>.vmi.<namespace>.<vm>` | KubeVirt VM-scoped handles | no, those persist across sandboxes by design |
+
+A handle may carry a trailing carriage return, from the host-local migration file-format change in
+[cni-plugin#821](https://github.com/projectcalico/cni-plugin/issues/821).
 
 ## Keep in sync with
 
