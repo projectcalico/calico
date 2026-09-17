@@ -17,7 +17,10 @@ package extensions
 import (
 	"context"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/projectcalico/calico/operator/pkg/components"
 )
 
 // StartupExtension is the variant's hook into the operator's startup, before any
@@ -29,18 +32,21 @@ type StartupExtension interface {
 	VerifyAPIsExist(cs kubernetes.Interface) error
 
 	// VerifyClusterState rejects a cluster whose existing state contradicts the
-	// configuration the operator was given.
-	VerifyClusterState(ctx context.Context, cs kubernetes.Interface, migrating, external bool) error
+	// bootstrap configuration the operator was given.
+	VerifyClusterState(ctx context.Context, cs kubernetes.Interface, bootConfig *corev1.ConfigMap) error
 
 	// ProtectedNamespaces are the namespaces the variant manages. The operator must
 	// not run in one of them.
 	ProtectedNamespaces() []string
 
-	// MultiTenant reports whether the cluster runs the variant in multi-tenant mode.
-	MultiTenant() bool
+	// Controllers are the reconcilers the variant adds to the core set. They are added
+	// after the core controllers, so a variant can watch resources those own.
+	Controllers() []Controller
 
-	// Cloud reports whether this binary was built for the variant's hosted product.
-	Cloud() bool
+	// Images are the images the variant supplies for the variant it resolved as. The
+	// daemon registers them before any controller renders, so a build serving several
+	// variants ships the images the Installation asked for.
+	Images() components.Build
 }
 
 // noopStartup runs the core operator's behavior unchanged.
@@ -50,7 +56,7 @@ func (noopStartup) VerifyAPIsExist(kubernetes.Interface) error {
 	return nil
 }
 
-func (noopStartup) VerifyClusterState(context.Context, kubernetes.Interface, bool, bool) error {
+func (noopStartup) VerifyClusterState(context.Context, kubernetes.Interface, *corev1.ConfigMap) error {
 	return nil
 }
 
@@ -58,10 +64,10 @@ func (noopStartup) ProtectedNamespaces() []string {
 	return nil
 }
 
-func (noopStartup) MultiTenant() bool {
-	return false
+func (noopStartup) Controllers() []Controller {
+	return nil
 }
 
-func (noopStartup) Cloud() bool {
-	return false
+func (noopStartup) Images() components.Build {
+	return components.Build{}
 }

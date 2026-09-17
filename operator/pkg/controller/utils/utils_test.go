@@ -22,8 +22,8 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/stretchr/testify/mock"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	apps "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -60,24 +60,24 @@ var _ = Describe("Tigera License polling test", func() {
 		client = fakeClient{discovery: discovery}
 	})
 
-	It("should be able to verify that the LicenseKey is ready", func() {
+	It("should be able to verify that a resource is ready", func() {
 		discovery.On("ServerResourcesForGroupVersion", v3.GroupVersionCurrent).Return(&metav1.APIResourceList{
 			APIResources: []metav1.APIResource{{
-				Kind: "LicenseKey",
+				Kind: "Tier",
 			}},
 		})
-		gvk := schema.GroupVersionKind{Kind: v3.KindLicenseKey}
+		gvk := schema.GroupVersionKind{Kind: v3.KindTier}
 		Expect(isResourceReady(client, gvk)).To(BeTrue())
 		discovery.AssertExpectations(GinkgoT())
 	})
 
-	It("should be able to verify that the LicenseKey is not ready", func() {
+	It("should be able to verify that a resource is not ready", func() {
 		discovery.On("ServerResourcesForGroupVersion", v3.GroupVersionCurrent).Return(&metav1.APIResourceList{
 			APIResources: []metav1.APIResource{{
 				Kind: "Deployment",
 			}},
 		})
-		gvk := schema.GroupVersionKind{Kind: v3.KindLicenseKey}
+		gvk := schema.GroupVersionKind{Kind: v3.KindTier}
 		Expect(isResourceReady(client, gvk)).To(BeFalse())
 		discovery.AssertExpectations(GinkgoT())
 	})

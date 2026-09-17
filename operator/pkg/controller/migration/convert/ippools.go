@@ -19,7 +19,7 @@ import (
 	"net"
 	"strings"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"

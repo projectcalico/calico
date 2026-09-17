@@ -15,39 +15,15 @@
 package render
 
 import (
-	"fmt"
-
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
 )
 
 const (
 	TigeraOperatorSecrets = "tigera-operator-secrets"
 )
-
-// LinseedNamespace determine the namespace in which Linseed is running.
-// For management and standalone clusters, this is always the tigera-elasticsearch
-// namespace. For multi-tenant management clusters, this is the tenant namespace
-func LinseedNamespace(tenant *operatorv1.Tenant) string {
-	if tenant.MultiTenant() {
-		return tenant.Namespace
-	}
-	return ElasticsearchNamespace
-}
-
-// ManagerService determine the name of the calico manager service.
-// For management and standalone clusters, this is always the calico-manager.calico-system
-// namespace. For multi-tenant management clusters, this is a service that resides within the
-// tenant namespace
-func ManagerService(tenant *operatorv1.Tenant) string {
-	if tenant.MultiTenant() {
-		return fmt.Sprintf("https://%s.%s.svc:%d", ManagerServiceName, tenant.Namespace, ManagerPort)
-	}
-	return fmt.Sprintf("https://%s.%s.svc:%d", ManagerServiceName, ManagerNamespace, ManagerPort)
-}
 
 // CreateOperatorSecretsRoleBinding binds the tigera-operator-secrets ClusterRole to the operator's ServiceAccount
 // in the given namespace, granting permission to manipulate secrets.

@@ -24,7 +24,6 @@ import (
 
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"github.com/projectcalico/calico/operator/pkg/controller/secrets"
-	"github.com/projectcalico/calico/operator/pkg/controller/tenantsecrets"
 )
 
 // LogStorageReconciler reconciles a LogStorage object
@@ -38,11 +37,5 @@ type SecretsReconciler struct {
 // +kubebuilder:rbac:groups=operator.tigera.io,resources=logstorages/status,verbs=get;update;patch
 
 func (r *SecretsReconciler) SetupWithManager(mgr ctrl.Manager, opts options.ControllerOptions) error {
-	if err := secrets.AddClusterCAController(mgr, opts); err != nil {
-		return err
-	}
-	if err := tenantsecrets.AddTenantController(mgr, opts); err != nil {
-		return err
-	}
-	return nil
+	return secrets.AddClusterCAController(mgr, opts)
 }

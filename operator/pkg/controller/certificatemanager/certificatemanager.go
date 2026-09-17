@@ -176,7 +176,7 @@ func Create(cli client.Client, installation *operatorv1.InstallationSpec, cluste
 		}
 		// We instantiate csrImage regardless of whether certificate management is enabled; it may still be used.
 		// The init container runs out of the combined image as a key-cert-provisioner subcommand.
-		csrImage, err = components.GetReference(components.CombinedCalicoImage(installation), installation.Registry, installation.ImagePath, installation.ImagePrefix, imageSet)
+		csrImage, err = components.ReferenceFor(components.ImageKeyCalico, installation, imageSet)
 		if err != nil {
 			return nil, err
 		}

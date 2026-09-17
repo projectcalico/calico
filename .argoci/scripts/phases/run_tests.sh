@@ -100,11 +100,30 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     fi
   fi
 
+  # The go-build entrypoint useradds LOCAL_USER_ID and su-execs to that account,
+  # which cannot work when the runner is already root. RUN_AS_ROOT skips it.
+  run_as_root_env=()
+  if [[ "$(id -u)" -eq 0 ]]; then
+    run_as_root_env=(-e RUN_AS_ROOT=true)
+  fi
+
+  # Resolve the Go build cache the way lib.Makefile does, so the host-side
+  # `make -C e2e build` above and this container share one cache rather than
+  # compiling from cold in each: LOCAL_GO_PKG_CACHE, then GOCACHE when the Go
+  # tools resolve it to an absolute path, then the repo-local default.
+  go_cache="${LOCAL_GO_PKG_CACHE:-$(go env GOCACHE 2>/dev/null || true)}"
+  case "${go_cache}" in
+    /*) ;;
+    *) go_cache="$(pwd)/.go-pkg-cache" ;;
+  esac
+  mkdir -p "${go_cache}"
+
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
   e2e_rc=0
   docker run --rm --init --net=host \
     -e LOCAL_USER_ID="$(id -u)" \
+    "${run_as_root_env[@]}" \
     -e GOCACHE=/go-cache \
     -e GOPATH=/go \
     -e KUBECONFIG=/kubeconfig \
@@ -113,7 +132,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     "${auth_mount[@]}" \
     "${aws_cred_env[@]}" \
     -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
-    -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
+    -v "${go_cache}":/go-cache:rw \
     -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
     -w /go/src/github.com/projectcalico/calico \
     "${RUN_IMAGE}" \

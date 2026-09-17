@@ -57,7 +57,7 @@ var _ = Describe("CRD management tests", func() {
 			Scheme: scheme,
 		})
 		Expect(err).NotTo(HaveOccurred())
-		verifyCRDsExist(c, operator.CalicoEnterprise)
+		VerifyCRDsExist(c, operator.Calico)
 
 		// Save the networkpolicies CRD so we can restore it when finished
 		npCRD = &apiextenv1.CustomResourceDefinition{
@@ -81,11 +81,11 @@ var _ = Describe("CRD management tests", func() {
 	})
 
 	AfterEach(func() {
-		cleanupResources(c)
+		CleanupResources(c)
 
 		// Clean up Calico data that might be left behind.
 		Eventually(func() error {
-			cs := kubernetes.NewForConfigOrDie(mgr.GetConfig())
+			cs := kubernetes.NewForConfigOrDie(AdminConfig())
 			nodes, err := cs.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 			if err != nil {
 				return err
@@ -151,8 +151,8 @@ var _ = Describe("CRD management tests", func() {
 		})
 
 		It("Should create CRD if it doesn't exist", func() {
-			c, shutdownContext, cancel, mgr = setupManager(ManageCRDsEnable, SingleTenant, operator.Calico)
-			operatorDone = createInstallation(c, mgr, shutdownContext, nil)
+			c, shutdownContext, cancel, mgr = setupManager(ManageCRDsEnable, operator.Calico)
+			operatorDone = CreateInstallation(c, mgr, shutdownContext, nil)
 
 			np := npCRD.DeepCopy()
 			By("Checking that the networkpolicies CRD is created")
@@ -185,8 +185,8 @@ var _ = Describe("CRD management tests", func() {
 			}, 60*time.Second, 1*time.Second).Should(BeNil())
 		})
 		It("Should add tier to networkpolicy CRD", func() {
-			c, shutdownContext, cancel, mgr = setupManager(ManageCRDsEnable, SingleTenant, operator.Calico)
-			operatorDone = createInstallation(c, mgr, shutdownContext, nil)
+			c, shutdownContext, cancel, mgr = setupManager(ManageCRDsEnable, operator.Calico)
+			operatorDone = CreateInstallation(c, mgr, shutdownContext, nil)
 
 			By("Checking that the networkpolicies CRD is updated with tier")
 			Eventually(func() error {

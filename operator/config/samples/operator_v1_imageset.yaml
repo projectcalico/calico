@@ -12,5 +12,5 @@ spec:
     digest: "sha256:0deadbeef1234567890"
   - image: "calico/kube-controllers"
     digest: "sha256:0deadbeef1234567890"
-  - image: "tigera/operator"
+  - image: "calico/operator"
     digest: "sha256:0deadbeef1234567890"

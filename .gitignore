@@ -24,6 +24,7 @@ builder.coverprofile
 *.log
 *.pprof
 .release-*.*
+published.refs
 
 /* Docker image tarballs */
 image.tar

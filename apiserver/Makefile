@@ -59,12 +59,12 @@ GITHUB_TEST_INTEGRATION_URI := https://raw.githubusercontent.com/kubernetes/kube
 
 hack-lib:
 	mkdir -p hack/lib/
-	curl -s --fail $(GITHUB_TEST_INTEGRATION_URI)/init.sh -o hack/lib/init.sh
-	curl -s --fail $(GITHUB_TEST_INTEGRATION_URI)/util.sh -o hack/lib/util.sh
-	curl -s --fail $(GITHUB_TEST_INTEGRATION_URI)/logging.sh -o hack/lib/logging.sh
-	curl -s --fail $(GITHUB_TEST_INTEGRATION_URI)/version.sh -o hack/lib/version.sh
-	curl -s --fail $(GITHUB_TEST_INTEGRATION_URI)/golang.sh -o hack/lib/golang.sh
-	curl -s --fail $(GITHUB_TEST_INTEGRATION_URI)/etcd.sh -o hack/lib/etcd.sh
+	$(call fetch_file,$(GITHUB_TEST_INTEGRATION_URI)/init.sh,hack/lib/init.sh)
+	$(call fetch_file,$(GITHUB_TEST_INTEGRATION_URI)/util.sh,hack/lib/util.sh)
+	$(call fetch_file,$(GITHUB_TEST_INTEGRATION_URI)/logging.sh,hack/lib/logging.sh)
+	$(call fetch_file,$(GITHUB_TEST_INTEGRATION_URI)/version.sh,hack/lib/version.sh)
+	$(call fetch_file,$(GITHUB_TEST_INTEGRATION_URI)/golang.sh,hack/lib/golang.sh)
+	$(call fetch_file,$(GITHUB_TEST_INTEGRATION_URI)/etcd.sh,hack/lib/etcd.sh)
 
 ## Run a local kubernetes server with API in a container.
 run-kubernetes-server: run-k8s-controller-manager

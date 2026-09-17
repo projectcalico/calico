@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -61,18 +61,40 @@ const ResourceName string = "apiserver"
 
 var log = logf.Log.WithName("controller_apiserver")
 
+// ReconcilerOptions is what the API server reconciler needs to run.
+type ReconcilerOptions struct {
+	Client              client.Client
+	Scheme              *runtime.Scheme
+	Status              status.StatusManager
+	TierWatchReady      *utils.ReadyFlag
+	MigrationWatchReady *utils.ReadyFlag
+	Options             options.ControllerOptions
+}
+
+// NewReconciler returns an API server reconciler a caller can drive without a manager.
+func NewReconciler(o ReconcilerOptions) *ReconcileAPIServer {
+	return &ReconcileAPIServer{
+		client:              o.Client,
+		scheme:              o.Scheme,
+		status:              o.Status,
+		tierWatchReady:      o.TierWatchReady,
+		migrationWatchReady: o.MigrationWatchReady,
+		opts:                o.Options,
+		ext:                 o.Options.Extensions.APIServer(),
+	}
+}
+
 // Add creates a new APIServer Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	r := &ReconcileAPIServer{
-		client:              mgr.GetClient(),
-		scheme:              mgr.GetScheme(),
-		status:              status.New(mgr.GetClient(), "apiserver", opts.KubernetesVersion),
-		tierWatchReady:      &utils.ReadyFlag{},
-		migrationWatchReady: &utils.ReadyFlag{},
-		opts:                opts,
-		ext:                 opts.Extensions.APIServer(),
-	}
+	r := NewReconciler(ReconcilerOptions{
+		Client:              mgr.GetClient(),
+		Scheme:              mgr.GetScheme(),
+		Status:              status.New(mgr.GetClient(), "apiserver", opts.KubernetesVersion),
+		TierWatchReady:      &utils.ReadyFlag{},
+		MigrationWatchReady: &utils.ReadyFlag{},
+		Options:             opts,
+	})
 	r.status.Run(opts.ShutdownContext)
 
 	c, err := ctrlruntime.NewController("apiserver-controller", mgr, ctrl.Options{Reconciler: r})
@@ -391,7 +413,6 @@ func (r *ReconcileAPIServer) Reconcile(ctx context.Context, request reconcile.Re
 		PullSecrets:                  pullSecrets,
 		OpenShift:                    r.opts.DetectedProvider.IsOpenShift(),
 		TrustedBundle:                trustedBundle,
-		MultiTenant:                  r.opts.MultiTenant,
 		KubernetesVersion:            r.opts.KubernetesVersion,
 		ClusterDomain:                r.opts.ClusterDomain,
 		RequiresAggregationServer:    !r.opts.UseV3CRDs,

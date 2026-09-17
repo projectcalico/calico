@@ -3,7 +3,7 @@ PACKAGE_NAME = github.com/projectcalico/calico
 include metadata.mk
 include lib.Makefile
 
-DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
+DOCKER_RUN := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--net=host \
 		--init \
@@ -17,7 +17,7 @@ DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e GOOS=$(BUILDOS) \
 		-e "GOFLAGS=$(GOFLAGS)" \
 		-v $(CURDIR):/go/src/github.com/projectcalico/calico:rw \
-		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
+		-v $(LOCAL_GO_PKG_CACHE):/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
 .PHONY: update-file-copyrights
@@ -42,6 +42,7 @@ clean:
 	$(MAKE) -C confd clean
 	$(MAKE) -C felix clean
 	$(MAKE) -C cmd/calico clean
+	$(MAKE) -C istio clean
 	$(MAKE) -C kube-controllers clean
 	$(MAKE) -C libcalico-go clean
 	$(MAKE) -C node clean
@@ -53,6 +54,7 @@ clean:
 	$(MAKE) -C third_party/envoy-gateway clean
 	$(MAKE) -C third_party/envoy-proxy clean
 	$(MAKE) -C third_party/envoy-ratelimit clean
+	$(MAKE) -C whisker clean
 	rm -rf ./bin .stamp.*
 
 check-go-mod:
@@ -85,6 +87,11 @@ check-ocp-no-crds:
 	@echo "Checking for files in manifests/ocp with CustomResourceDefinitions"
 	@CRD_FILES_IN_OCP_DIR=$$(grep "^kind: CustomResourceDefinition" manifests/ocp/* -l || true); if [ ! -z "$$CRD_FILES_IN_OCP_DIR" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$$CRD_FILES_IN_OCP_DIR"; exit 1; fi
 
+.PHONY: test-charts
+## Render the helm charts and assert on the resulting Kubernetes objects.
+test-charts: bin/helm
+	$(DOCKER_GO_BUILD) sh -c 'PATH=$$PWD/bin::$$PATH go test -count=1 ./charts/test/...'
+	
 yaml-lint:
 	@docker run --rm $$(tty -s && echo "-it" || echo) -v $(PWD):/data cytopia/yamllint:latest .
 
@@ -108,6 +115,7 @@ generate:
 	# Before the manifests, which take the operator's CRDs from its own tree.
 	$(MAKE) -C operator gen-files
 	$(MAKE) gen-manifests
+	$(MAKE) -C e2e gen-test-set
 	$(MAKE) fix-changed
 
 gen-manifests: bin/helm bin/yq
@@ -139,6 +147,23 @@ $(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./
 	  grep '^go' go.mod && \
 	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps combined $(patsubst %/,%,$(dir $@))"; \
 	} > $@
+
+# The pin file is what onboards a component: one without it is left out,
+# because the generator treats an absent pin file as "no pins" and would delete
+# the patch.
+THIRDPARTY_DEP_PIN_FILES=$(wildcard third_party/*/dep-pins.txt istio/dep-pins.txt)
+
+.PHONY: regen-thirdparty-dep-patches
+regen-thirdparty-dep-patches:
+	@for pins in $(THIRDPARTY_DEP_PIN_FILES); do \
+		$(MAKE) -C $$(dirname $$pins) regen-dep-patches || exit 1; \
+	done
+
+.PHONY: check-thirdparty-dep-patches
+check-thirdparty-dep-patches:
+	@for pins in $(THIRDPARTY_DEP_PIN_FILES); do \
+		$(MAKE) -C $$(dirname $$pins) check-dep-patches || exit 1; \
+	done
 
 # bin/send-perf-results is the tool that pushes hack/perf JSON docs to the Lens
 # Elasticsearch cluster (see hack/perf/README.md). Built statically so CI jobs
@@ -180,8 +205,7 @@ $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz: bin/helm $(shell f
 # optionally push to a remote registry.
 #
 # Images are only re-tagged / re-pushed when their docker image ID changes,
-# and the operator is only rebuilt when its inputs change. This makes repeated
-# runs fast when only one component has been modified.
+# which makes repeated runs fast when only one component has been modified.
 #
 # Usage:
 #   make image                                              # build + tag as calico/<name>:<version>
@@ -205,14 +229,11 @@ image:
 	  ARCH="$(ARCH)" \
 	  STAMP_DIR="$(DEV_STAMP_DIR)" \
 	  $(REPO_ROOT)/hack/dev-build.sh --tag
-	@STAMP_DIR="$(DEV_STAMP_DIR)" \
-	  KIND_INFRA_DIR="$(KIND_INFRA_DIR)" \
-	  REPO_ROOT="$(REPO_ROOT)" \
-	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
-	  DEV_IMAGE_REGISTRY="$(DEV_IMAGE_REGISTRY)" \
-	  DEV_IMAGE_PATH="$(DEV_IMAGE_PATH)" \
-	  $(REPO_ROOT)/hack/dev-build.sh --operator
 	@echo "image complete"
+
+.PHONY: operator-image
+## Build the operator image with the dev registry's component references baked in.
+operator-image: $(REPO_ROOT)/operator/.image.created-$(ARCH)
 
 .PHONY: push
 ## Push all tagged images to the remote registry.
@@ -236,24 +257,19 @@ push-chart: bin/helm
 ###############################################################################
 E2E_PROCS ?= 4
 E2E_TIMEOUT ?= 90m
-# Local-development default only. CI never reaches it: run_tests.sh always passes
-# E2E_TEST_CONFIG on make's command line, and a command-line assignment overrides
-# ?= even when its value is empty.
+# The conformance kind lane relies on this default. The provisioned lanes never
+# reach it: run_tests.sh always passes E2E_TEST_CONFIG on make's command line,
+# and a command-line assignment overrides ?= even when its value is empty.
 E2E_TEST_CONFIG ?= e2e/config/kind/conformance.yaml
 E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
 
-# rapidclient (packet-size / maglev helper image) for the kind e2e lanes. Fork PRs
-# can't push to quay, so the packet-size lane (e2e-test-bpf) builds the image from PR
-# source and loads it straight into the kind nodes + external node; pods then pin this
-# exact tag with ImagePullPolicy=Never (see images.RapidClientImage / packet_size.go).
-# This mirrors the gcp-kubeadm side-load in .semaphore/.../load_images.sh (pr-<N>).
-# ?= so the gcp path's own RAPIDCLIENT_TAG wins if it ever runs through here; exported
-# so the ginkgo e2e process (which reads os.Getenv) inherits it across the sub-make.
-RAPIDCLIENT_TAG ?= kind-e2e
-export RAPIDCLIENT_TAG
+# rapidclient helper image for the packet-size and maglev specs. e2e-test-bpf loads
+# a PR-built copy into the kind nodes under the tag the tests use, so
+# PullIfNotPresent finds it. Keep in sync with images.go.
+RAPIDCLIENT_TAG := latest
 RAPIDCLIENT_IMAGE := quay.io/tigeradev/rapidclient
 EXTERNAL_NODE_NAME ?= kind-external-node
 
@@ -302,10 +318,8 @@ e2e-test-bpf:
 		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind/bpf.yaml
 
 ## Build the rapidclient helper image from PR source and load it into the kind
-## nodes so the packet-size server pods (ImagePullPolicy=Never) find it. Note:
-## unlike the rest of the kind image flow (local registry + PullAlways), rapidclient
-## is loaded directly with `kind load` to match the containerd-import + PullNever
-## model that images.RapidClientImage()/packet_size.go already use for gcp.
+## nodes, so the packet-size server pods use the PR build rather than pulling
+## the published image.
 .PHONY: kind-load-rapidclient
 kind-load-rapidclient:
 	$(MAKE) -C e2e/images/rapidclient image TAG_NAME=$(RAPIDCLIENT_TAG)
@@ -450,7 +464,7 @@ bin/ghr:
 # Install GitHub CLI
 bin/gh:
 	@mkdir -p bin
-	@curl -sSL --retry 5 -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
+	@$(call fetch_file,https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz,bin/gh.tgz)
 	@tar -zxvf bin/gh.tgz -C bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
 	@chmod +x $@
 	@rm bin/gh.tgz
@@ -462,9 +476,6 @@ release: release/bin/release
 # Publish an already built release.
 release-publish: release/bin/release bin/gh bin/ghr bin/helm
 	@release/bin/release release publish
-
-release-public: bin/gh release/bin/release
-	@release/bin/release release public
 
 # Create a release branch.
 create-release-branch: release/bin/release

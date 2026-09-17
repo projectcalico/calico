@@ -18,7 +18,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -43,10 +43,9 @@ var (
 	numDeprecatedObjects     = 1
 
 	// calicoImageRef resolves the combined calico/calico image exactly as the
-	// renderer does, so the expected image tracks the pinned ComponentCalico
-	// version on any branch (:master on master, :v3.32.x on release-v1.43)
-	// rather than a hardcoded tag.
-	calicoImageRef, _ = components.GetReference(components.CombinedCalicoImage(&operatorv1.InstallationSpec{Variant: operatorv1.Calico}), "", "", "", nil)
+	// renderer does, so the expected image tracks whatever version this build
+	// stamps into ComponentCalico rather than a hardcoded tag.
+	calicoImageRef, _ = components.GetReference(components.ComponentCalico, "", "", "", nil)
 	// whiskerImageRef resolves the whisker image the same way the renderer does.
 	whiskerImageRef, _ = components.GetReference(components.ComponentCalicoWhisker, "", "", "", nil)
 )

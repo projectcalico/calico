@@ -21,8 +21,8 @@ import (
 
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/stringsutil"
 	"github.com/go-logr/logr"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	"github.com/tigera/api/pkg/lib/numorstring"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -97,16 +97,36 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager, opts options.ControllerOptions) *ReconcileIstio {
-	r := &ReconcileIstio{
+	r := NewReconciler(ReconcilerOptions{
 		Client:   mgr.GetClient(),
-		scheme:   mgr.GetScheme(),
-		status:   status.New(mgr.GetClient(), "istio", opts.KubernetesVersion),
-		provider: opts.DetectedProvider,
-		ext:      opts.Extensions,
-	}
+		Scheme:   mgr.GetScheme(),
+		Status:   status.New(mgr.GetClient(), "istio", opts.KubernetesVersion),
+		Provider: opts.DetectedProvider,
+		Ext:      opts.Extensions,
+	})
 
 	r.status.Run(opts.ShutdownContext)
 	return r
+}
+
+// ReconcilerOptions is what the Istio reconciler needs to run.
+type ReconcilerOptions struct {
+	Client   client.Client
+	Scheme   *runtime.Scheme
+	Status   status.StatusManager
+	Provider operatorv1.Provider
+	Ext      extensions.Extensions
+}
+
+// NewReconciler returns an Istio reconciler a caller can drive without a manager.
+func NewReconciler(o ReconcilerOptions) *ReconcileIstio {
+	return &ReconcileIstio{
+		Client:   o.Client,
+		scheme:   o.Scheme,
+		status:   o.Status,
+		provider: o.Provider,
+		ext:      o.Ext,
+	}
 }
 
 // ReconcileIstio reconciles a Istio object

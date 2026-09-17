@@ -15,6 +15,7 @@
 package calico
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/projectcalico/calico/release/internal/branch"
@@ -127,6 +128,14 @@ func WithGitRef(enabled bool) Option {
 func WithGithubRelease(enabled bool) Option {
 	return func(r *CalicoManager) error {
 		r.githubRelease = enabled
+		return nil
+	}
+}
+
+// WithDraftRelease determines whether the GitHub release is published in draft mode.
+func WithDraftRelease(draft bool) Option {
+	return func(r *CalicoManager) error {
+		r.draftRelease = draft
 		return nil
 	}
 }
@@ -317,5 +326,32 @@ func WithBranchCutOptions(opts branch.CutOptions) Option {
 	return func(r *CalicoManager) error {
 		r.cutOptions = opts
 		return nil
+	}
+}
+
+// WithImageReleaseDirs limits image building and publishing to dirs.
+func WithImageReleaseDirs(dirs []string) Option {
+	return func(r *CalicoManager) error {
+		r.imageReleaseDirs = dirs
+		return nil
+	}
+}
+
+func WithRetagImages(fromRegistry, fromTag string) Option {
+	return func(r *CalicoManager) error {
+		var err error
+		if fromRegistry == "" {
+			err = errors.Join(err, fmt.Errorf("fromRegistry cannot be blank"))
+		}
+		if fromTag == "" {
+			err = errors.Join(err, fmt.Errorf("fromTag cannot be blank"))
+		}
+		if err != nil {
+			return err
+		}
+		r.retagImages = true
+		r.fromRegistry = fromRegistry
+		r.fromTag = fromTag
+		return err
 	}
 }

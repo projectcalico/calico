@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	admregv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -77,12 +77,11 @@ const (
 	deprecatedAPIServerServiceAccountName = "tigera-apiserver"
 	deprecatedAPIServerNamespace          = "tigera-system"
 
-	APIServerSecretsRBACName                        = "calico-extension-apiserver-secrets-access"
-	MultiTenantManagedClustersAccessClusterRoleName = "calico-managed-cluster-access"
-	ManagedClustersWatchClusterRoleName             = "calico-managed-cluster-watch"
-	L7AdmissionControllerContainerName              = "calico-l7-admission-controller"
-	L7AdmissionControllerPort                       = 6443
-	L7AdmissionControllerPortName                   = "l7admctrl"
+	APIServerSecretsRBACName            = "calico-extension-apiserver-secrets-access"
+	ManagedClustersWatchClusterRoleName = "calico-managed-cluster-watch"
+	L7AdmissionControllerContainerName  = "calico-l7-admission-controller"
+	L7AdmissionControllerPort           = 6443
+	L7AdmissionControllerPortName       = "l7admctrl"
 )
 
 var (
@@ -159,7 +158,6 @@ type APIServerConfiguration struct {
 	PullSecrets                  []*corev1.Secret
 	OpenShift                    bool
 	TrustedBundle                certificatemanagement.TrustedBundle
-	MultiTenant                  bool
 	KubernetesVersion            *common.VersionInfo
 	ClusterDomain                string
 
@@ -449,17 +447,6 @@ func calicoSystemAPIServerPolicy(cfg *APIServerConfiguration) *v3.NetworkPolicy 
 			Action:      v3.Allow,
 			Protocol:    &networkpolicy.TCPProtocol,
 			Destination: networkpolicy.PrometheusEntityRule,
-		},
-		{
-			Action:      v3.Allow,
-			Protocol:    &networkpolicy.TCPProtocol,
-			Destination: DexEntityRule,
-		},
-		{
-			// Allow queryserver to reach Linseed for policy activity enrichment.
-			Action:      v3.Allow,
-			Protocol:    &networkpolicy.TCPProtocol,
-			Destination: networkpolicy.DefaultHelper().LinseedEntityRule(),
 		},
 	}...)
 
@@ -980,10 +967,6 @@ func (c *apiServerComponent) apiServerContainer() corev1.Container {
 
 	env := []corev1.EnvVar{
 		{Name: "DATASTORE_TYPE", Value: "kubernetes"},
-	}
-
-	if c.cfg.MultiTenant {
-		env = append(env, corev1.EnvVar{Name: "MULTI_TENANT_ENABLED", Value: "true"})
 	}
 
 	if c.hostNetwork() {

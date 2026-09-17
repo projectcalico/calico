@@ -14,6 +14,10 @@ This file is **operational guidance** for agents working in this repo: build com
 - **ALWAYS** remove `FIt`/`FDescribe` before committing. Nothing in the repo
   catches these for you — check your own diff.
 - **ALWAYS** commit generated files alongside source changes.
+- **ALWAYS** fetch files and repos from GitHub with `$(call fetch_file,...)` and
+  `$(call fetch_repo,...)`, not `curl` or `git clone` directly — they
+  centralise the retry and throttling handling. See
+  [`.github/instructions/external-downloads.instructions.md`](../.github/instructions/external-downloads.instructions.md).
 
 ## Essential Build Commands
 

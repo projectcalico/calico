@@ -24,6 +24,8 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/defaults"
+	"github.com/projectcalico/calico/release/internal/github"
+	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
@@ -160,6 +162,12 @@ var (
 			},
 		}
 	}
+	forceFlag = &cli.BoolFlag{
+		Name:     "force",
+		Category: stepControlCategory,
+		Usage:    "Republish artifacts whose published digest differs from the record.",
+		Sources:  cli.EnvVars("FORCE"),
+	}
 )
 
 // Development flags are flags used to control development behavior of the release process
@@ -228,6 +236,50 @@ var (
 			return nil
 		},
 	}
+
+	// fromRegistryFlag and fromTagFlag publish by retagging images that are
+	// already published, instead of pushing a fresh build.
+	fromRegistryFlag = &cli.StringFlag{
+		Name:     "from-registry",
+		Category: containerImageCategory,
+		Usage:    "Publish by retagging the images already in this registry.",
+		Sources:  cli.EnvVars("FROM_REGISTRY"),
+	}
+	fromTagFlag = &cli.StringFlag{
+		Name:     "from-tag",
+		Category: containerImageCategory,
+		Usage:    "The tag to retag from. Required with --from-registry.",
+		Sources:  cli.EnvVars("FROM_TAG"),
+	}
+	skipDevImageRetagFlag = &cli.BoolFlag{
+		Name:     "skip-dev-image-retag",
+		Category: containerImageCategory,
+		Usage:    "Leave the dev tag in place when retagging.",
+		Sources:  cli.EnvVars("SKIP_DEV_IMAGE_RETAG"),
+	}
+
+	// imageReleaseDirsFlag limits a run to some of the directories that ship
+	// images.
+	imageReleaseDirsFlag = &cli.StringSliceFlag{
+		Name:     "image-release-dir",
+		Category: containerImageCategory,
+		Usage:    "Limit image building and publishing to these directories. Repeat for multiple directories.",
+		Sources:  cli.EnvVars("IMAGE_RELEASE_DIRS"),
+		Action: func(_ context.Context, c *cli.Command, dirs []string) error {
+			// Build and publish cover different directories; accept either.
+			valid := append(images.VariantDirs(images.BuildVariants), images.VariantDirs(images.PublishVariants)...)
+			var invalid []string
+			for _, dir := range dirs {
+				if !slices.Contains(valid, dir) {
+					invalid = append(invalid, dir)
+				}
+			}
+			if len(invalid) > 0 {
+				return fmt.Errorf("invalid image release dirs specified: %s", strings.Join(invalid, ", "))
+			}
+			return nil
+		},
+	}
 )
 
 var (
@@ -262,7 +314,7 @@ var (
 		Category: operatorCategory,
 		Usage:    "The registry to use for Tigera operator release",
 		Sources:  cli.EnvVars("OPERATOR_REGISTRY"),
-		Value:    operator.DefaultRegistry,
+		Value:    operator.DefaultRegistries[0],
 	}
 	operatorImageFlag = &cli.StringFlag{
 		Name:     "operator-image",
@@ -411,7 +463,7 @@ var (
 	githubTokenFlag = &cli.StringFlag{
 		Name:    "github-token",
 		Usage:   "The GitHub token to use when interacting with the GitHub API",
-		Sources: cli.EnvVars("GITHUB_TOKEN", "GH_TOKEN"),
+		Sources: cli.EnvVars(github.TokenEnvVars...),
 		Action: func(_ context.Context, c *cli.Command, s string) error {
 			if s == "" {
 				if c.Bool(ciFlag.Name) {
@@ -426,6 +478,12 @@ var (
 
 // Hashrelease specific flags.
 var (
+	hashreleaseFlag = &cli.BoolFlag{
+		Name:     "hashrelease",
+		Category: stepControlCategory,
+		Usage:    "Indicates that the release is a hashrelease",
+		Sources:  cli.EnvVars("HASHRELEASE"),
+	}
 
 	// Hashrelease server configuration flags.
 	hashreleaseServerFlags = []cli.Flag{hashreleaseServerBucketFlag}
@@ -500,7 +558,10 @@ const (
 	envPublishGitRef        = "PUBLISH_GIT_REF"
 	envReleaseGitRef        = "RELEASE_GIT_REF"
 	envPublishGithubRelease = "PUBLISH_GITHUB_RELEASE"
+	envReleaseGithub        = "RELEASE_GITHUB"
 	envReleaseGithubRelease = "RELEASE_GITHUB_RELEASE"
+	envDraftGithubRelease   = "PUBLISH_GITHUB_RELEASE_DRAFT"
+	envReleaseGithubDraft   = "RELEASE_GITHUB_DRAFT"
 )
 
 var (
@@ -532,7 +593,8 @@ var (
 		return append(f,
 			helmIndexFlag(envHelmIndexLegacy, envPublishHelmIndex, envReleaseHelmIndex),
 			gitRefFlag,
-			githubReleaseFlag)
+			githubReleaseFlag,
+			draftGithubReleaseFlag)
 	}
 
 	imagesFlag = func(value bool, envVars ...string) *cli.BoolWithInverseFlag {
@@ -658,11 +720,18 @@ var (
 		Sources:  cli.EnvVars(envPublishGitRefLegacy, envPublishGitRef, envReleaseGitRef),
 		Value:    true,
 	}
+	draftGithubReleaseFlag = &cli.BoolWithInverseFlag{
+		Name:     "draft-github-release",
+		Category: stepControlCategory,
+		Usage:    "Publish GitHub Release in drafts mode",
+		Sources:  cli.EnvVars(envDraftGithubRelease, envReleaseGithubDraft),
+		Value:    true,
+	}
 	githubReleaseFlag = &cli.BoolWithInverseFlag{
 		Name:     "github-release",
 		Category: stepControlCategory,
 		Usage:    "Publish the GitHub release",
-		Sources:  cli.EnvVars(envPublishGithubRelease, envReleaseGithubRelease),
+		Sources:  cli.EnvVars(envPublishGithubRelease, envReleaseGithub, envReleaseGithubRelease),
 		Value:    true,
 		Action: func(_ context.Context, c *cli.Command, b bool) error {
 			if b && c.String(githubTokenFlag.Name) == "" {

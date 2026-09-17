@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus/testutil"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -62,7 +61,7 @@ var _ = Describe("OperatorCollector", func() {
 				},
 			}
 			cli := ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(ts).Build()
-			collector := metrics.NewOperatorCollector(cli, false)
+			collector := metrics.NewOperatorCollector(cli)
 
 			expected := `
 # HELP tigera_operator_component_status TigeraStatus conditions for operator-managed components. 1 = true, 0 = false.
@@ -81,7 +80,7 @@ tigera_operator_component_status{component="calico",condition="degraded"} 0
 				Status:     operatorv1.TigeraStatusStatus{},
 			}
 			cli := ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(ts).Build()
-			collector := metrics.NewOperatorCollector(cli, false)
+			collector := metrics.NewOperatorCollector(cli)
 
 			expected := `
 # HELP tigera_operator_component_status TigeraStatus conditions for operator-managed components. 1 = true, 0 = false.
@@ -116,7 +115,7 @@ tigera_operator_component_status{component="monitor",condition="degraded"} 0
 				},
 			}
 			cli := ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(ts1, ts2).Build()
-			collector := metrics.NewOperatorCollector(cli, false)
+			collector := metrics.NewOperatorCollector(cli)
 
 			// Verify each component's metrics individually
 			count := testutil.CollectAndCount(collector, "tigera_operator_component_status")
@@ -141,7 +140,7 @@ tigera_operator_component_status{component="monitor",condition="degraded"} 0
 				},
 			}
 			cli := ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(secret).Build()
-			collector := metrics.NewOperatorCollector(cli, false)
+			collector := metrics.NewOperatorCollector(cli)
 
 			count := testutil.CollectAndCount(collector, "tigera_operator_tls_certificate_expiry_timestamp_seconds")
 			Expect(count).To(Equal(1))
@@ -158,7 +157,7 @@ tigera_operator_component_status{component="monitor",condition="degraded"} 0
 				},
 			}
 			cli := ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(secret).Build()
-			collector := metrics.NewOperatorCollector(cli, false)
+			collector := metrics.NewOperatorCollector(cli)
 
 			count := testutil.CollectAndCount(collector, "tigera_operator_tls_certificate_expiry_timestamp_seconds")
 			Expect(count).To(Equal(0))
@@ -175,84 +174,10 @@ tigera_operator_component_status{component="monitor",condition="degraded"} 0
 				},
 			}
 			cli := ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(secret).Build()
-			collector := metrics.NewOperatorCollector(cli, false)
+			collector := metrics.NewOperatorCollector(cli)
 
 			count := testutil.CollectAndCount(collector, "tigera_operator_tls_certificate_expiry_timestamp_seconds")
 			Expect(count).To(Equal(0))
-		})
-	})
-
-	Context("license metrics", func() {
-		It("should emit license metrics when license exists", func() {
-			license := &v3.LicenseKey{
-				ObjectMeta: metav1.ObjectMeta{Name: "default"},
-				Status: v3.LicenseKeyStatus{
-					Expiry:      metav1.Time{Time: time.Now().Add(365 * 24 * time.Hour)},
-					GracePeriod: "90d",
-					Package:     "Enterprise",
-				},
-			}
-			cli := ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(license).Build()
-			collector := metrics.NewOperatorCollector(cli, true)
-
-			expiryCount := testutil.CollectAndCount(collector, "tigera_operator_license_expiry_timestamp_seconds")
-			Expect(expiryCount).To(Equal(1))
-
-			validCount := testutil.CollectAndCount(collector, "tigera_operator_license_valid")
-			Expect(validCount).To(Equal(1))
-		})
-
-		It("should report valid=0 when license is expired past grace period", func() {
-			license := &v3.LicenseKey{
-				ObjectMeta: metav1.ObjectMeta{Name: "default"},
-				Status: v3.LicenseKeyStatus{
-					Expiry:      metav1.Time{Time: time.Now().Add(-200 * 24 * time.Hour)},
-					GracePeriod: "90d",
-					Package:     "Enterprise",
-				},
-			}
-			cli := ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(license).Build()
-			collector := metrics.NewOperatorCollector(cli, true)
-
-			expected := `
-# HELP tigera_operator_license_valid Whether the Tigera license is valid (including grace period). 1 = valid, 0 = invalid.
-# TYPE tigera_operator_license_valid gauge
-tigera_operator_license_valid{package="Enterprise"} 0
-`
-			Expect(testutil.CollectAndCompare(collector, strings.NewReader(expected),
-				"tigera_operator_license_valid")).NotTo(HaveOccurred())
-		})
-
-		It("should not emit license metrics when license does not exist", func() {
-			cli := ctrlrfake.DefaultFakeClientBuilder(scheme).Build()
-			collector := metrics.NewOperatorCollector(cli, false)
-
-			expiryCount := testutil.CollectAndCount(collector, "tigera_operator_license_expiry_timestamp_seconds")
-			Expect(expiryCount).To(Equal(0))
-
-			validCount := testutil.CollectAndCount(collector, "tigera_operator_license_valid")
-			Expect(validCount).To(Equal(0))
-		})
-
-		It("should report valid=1 when license is in grace period", func() {
-			license := &v3.LicenseKey{
-				ObjectMeta: metav1.ObjectMeta{Name: "default"},
-				Status: v3.LicenseKeyStatus{
-					Expiry:      metav1.Time{Time: time.Now().Add(-30 * 24 * time.Hour)},
-					GracePeriod: "90d",
-					Package:     "Enterprise",
-				},
-			}
-			cli := ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(license).Build()
-			collector := metrics.NewOperatorCollector(cli, true)
-
-			expected := `
-# HELP tigera_operator_license_valid Whether the Tigera license is valid (including grace period). 1 = valid, 0 = invalid.
-# TYPE tigera_operator_license_valid gauge
-tigera_operator_license_valid{package="Enterprise"} 1
-`
-			Expect(testutil.CollectAndCompare(collector, strings.NewReader(expected),
-				"tigera_operator_license_valid")).NotTo(HaveOccurred())
 		})
 	})
 })

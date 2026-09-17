@@ -16,7 +16,6 @@ package test
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -24,7 +23,6 @@ import (
 
 	//nolint:staticcheck // Ignore ST1001 error strings should not be capitalized
 	. "github.com/onsi/gomega"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -212,34 +210,6 @@ func GetContainer(containers []corev1.Container, name string) *corev1.Container 
 		}
 	}
 	return nil
-}
-
-func ExpectGlobalReportType(resource runtime.Object, name string) {
-	actualName := resource.(metav1.ObjectMetaAccessor).GetObjectMeta().GetName()
-	Expect(actualName).To(Equal(name), "Rendered resource has wrong name")
-	gvk := schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "GlobalReportType"}
-	Expect(resource.GetObjectKind().GroupVersionKind()).To(Equal(gvk), fmt.Sprintf("Rendered resource %s does not match expected GVK", name))
-	v, ok := resource.(*v3.GlobalReportType)
-	Expect(ok).To(BeTrue(), fmt.Sprintf("resource (%v) should convert to GlobalReportType", resource))
-	Expect(v.Spec.UISummaryTemplate.Template).ToNot(BeEmpty())
-	_, err := json.Marshal(v.Spec.UISummaryTemplate.Template)
-	Expect(err).To(BeNil())
-	for _, t := range v.Spec.DownloadTemplates {
-		Expect(t.Template).ToNot(BeEmpty(), fmt.Sprintf("%s template should not be empty", t.Name))
-		_, err = json.Marshal(t.Template)
-		Expect(err).To(BeNil())
-	}
-}
-
-func ExpectGlobalAlertTemplateToBePopulated(resource runtime.Object) {
-	v, ok := resource.(*v3.GlobalAlertTemplate)
-	Expect(ok).To(BeTrue(), fmt.Sprintf("resource (%v) should convert to GlobalAlertTemplate", resource))
-	Expect(v.Spec.Description).ToNot(BeEmpty(), fmt.Sprintf("Description should not be empty for resource (%v)", resource))
-	Expect(v.Spec.Severity).ToNot(BeNumerically("==", 0), fmt.Sprintf("Severity should not be empty for resource (%v)", resource))
-
-	if v.Spec.Type != v3.GlobalAlertTypeAnomalyDetection { // ignored for  AnomalyDetection Typed
-		Expect(v.Spec.DataSet).ToNot(BeEmpty(), fmt.Sprintf("DataSet should not be empty for resource (%v)", resource))
-	}
 }
 
 func ExpectEnv(env []corev1.EnvVar, key, value string) {

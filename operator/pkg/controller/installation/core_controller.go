@@ -29,7 +29,7 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/stringsutil"
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -265,24 +265,60 @@ func newReconciler(mgr manager.Manager, opts options.ControllerOptions) (*Reconc
 	// Create a Typha autoscaler.
 	typhaScaler := typhaautoscaler.New(mgr.GetClient(), common.TyphaDeploymentName, typhaautoscaler.NodeReplicaCounter, statusManager)
 
-	r := &ReconcileInstallation{
-		config:              mgr.GetConfig(),
-		client:              mgr.GetClient(),
-		scheme:              mgr.GetScheme(),
-		watches:             make(map[runtime.Object]struct{}),
-		status:              statusManager,
-		typhaAutoscaler:     typhaScaler,
-		namespaceMigration:  nm,
-		tierWatchReady:      &utils.ReadyFlag{},
-		migrationWatchReady: &utils.ReadyFlag{},
-		newComponentHandler: utils.NewComponentHandler,
-		opts:                opts,
-		ext:                 opts.Extensions.Installation(),
-	}
+	r := NewReconciler(ReconcilerOptions{
+		Config:             mgr.GetConfig(),
+		Client:             mgr.GetClient(),
+		Scheme:             mgr.GetScheme(),
+		Status:             statusManager,
+		TyphaAutoscaler:    typhaScaler,
+		NamespaceMigration: nm,
+		Options:            opts,
+	})
 	r.status.Run(opts.ShutdownContext)
 	r.typhaAutoscaler.Start(opts.ShutdownContext)
 
 	return r, nil
+}
+
+// ReconcilerOptions is what the Installation reconciler needs to run.
+type ReconcilerOptions struct {
+	Config              *rest.Config
+	Client              client.Client
+	Scheme              *runtime.Scheme
+	Status              status.StatusManager
+	TyphaAutoscaler     *typhaautoscaler.Autoscaler
+	NamespaceMigration  migration.NamespaceMigration
+	TierWatchReady      *utils.ReadyFlag
+	MigrationWatchReady *utils.ReadyFlag
+	Options             options.ControllerOptions
+}
+
+// NewReconciler returns an Installation reconciler a caller can drive without a manager.
+func NewReconciler(o ReconcilerOptions) *ReconcileInstallation {
+	tierWatchReady := o.TierWatchReady
+	if tierWatchReady == nil {
+		tierWatchReady = &utils.ReadyFlag{}
+	}
+
+	migrationWatchReady := o.MigrationWatchReady
+	if migrationWatchReady == nil {
+		migrationWatchReady = &utils.ReadyFlag{}
+	}
+
+	return &ReconcileInstallation{
+		config:              o.Config,
+		client:              o.Client,
+		scheme:              o.Scheme,
+		watches:             make(map[runtime.Object]struct{}),
+		status:              o.Status,
+		typhaAutoscaler:     o.TyphaAutoscaler,
+		namespaceMigration:  o.NamespaceMigration,
+		tierWatchReady:      tierWatchReady,
+		migrationWatchReady: migrationWatchReady,
+		newComponentHandler: utils.NewComponentHandler,
+		opts:                o.Options,
+		ext:                 o.Options.Extensions.Installation(),
+	}
 }
 
 // secondaryResources returns a list of the secondary resources that this controller
@@ -1080,6 +1116,12 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
+	// Provide the extension a chance to default any fields it needs.
+	if err := r.ext.DefaultFelixConfiguration(ctx, r.client, &defaulted.Spec); err != nil {
+		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error defaulting FelixConfiguration for the variant", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+
 	// Set any non-default BGPConfiguration values that we need.
 	_, err = utils.PatchBGPConfiguration(ctx, r.client, func(bgpConfig *v3.BGPConfiguration) (bool, error) {
 		// Configure cluster routing mode.
@@ -1399,6 +1441,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		Namespace:              common.CalicoNamespace,
 		BindingNamespaces:      []string{common.CalicoNamespace},
 		Image:                  r.ext.KubeControllersImage(),
+		MigrationActive:        migrationExists,
 	}
 	components = append(components, kubecontrollers.NewCalicoKubeControllers(&kubeControllersCfg))
 
@@ -1469,12 +1512,12 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	if needsNamespaceMigration {
 		if err := r.namespaceMigration.Run(ctx, reqLogger); err != nil {
 			r.status.SetDegraded(operatorv1.ResourceMigrationError, "error migrating resources to calico-system", err, reqLogger)
-			// We should always requeue a migration problem. Don't return error
-			// to make sure we never start backing off retrying.
-			return reconcile.Result{Requeue: true}, nil
+			// Poll rather than returning the error, so a migration problem does not
+			// push the reconcile onto the error backoff.
+			return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
 		}
 		// Requeue so we can update our resources (without the migration changes)
-		return reconcile.Result{Requeue: true}, nil
+		return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
 	} else if r.namespaceMigration.NeedCleanup() {
 		if err := r.namespaceMigration.CleanupMigration(ctx, reqLogger); err != nil {
 			r.status.SetDegraded(operatorv1.ResourceMigrationError, "error migrating resources to calico-system", err, reqLogger)
@@ -1696,23 +1739,31 @@ func (r *ReconcileInstallation) setDefaultsOnFelixConfiguration(ctx context.Cont
 		}
 	}
 
+	// Whether a calico-node DaemonSet is already running decides both what version is out
+	// there and how bpfEnabled has to be derived, below.
+	ds := &appsv1.DaemonSet{}
+	nodeDSExists := true
+	if err := r.client.Get(ctx, types.NamespacedName{Namespace: common.CalicoNamespace, Name: common.NodeDaemonSetName}, ds); err != nil {
+		if !apierrors.IsNotFound(err) {
+			reqLogger.Error(err, "An error occurred when getting the Daemonset resource")
+			return false, err
+		}
+		nodeDSExists = false
+	}
+
 	// When BPF is enabled but the operator is not managing kube-proxy (e.g. on AKS, where
 	// the platform owns the kube-proxy DaemonSet), the platform's kube-proxy keeps the
 	// default healthz port (10256), and Felix's BPF kube-proxy healthz server would fail
 	// to bind. Default the port to 0 (disabled) so calico-node starts cleanly. Users can
 	// still override by setting BPFKubeProxyHealthzPort explicitly on FelixConfiguration.
-	if install.Spec.BPFEnabled() && !install.Spec.KubeProxyManagementEnabled() && fc.Spec.BPFKubeProxyHealthzPort == nil {
+	//
+	// 0 is only a valid port for Calico >= v3.32.0 and Enterprise >= v3.23.0-2.0, so hold
+	// the write until every node can accept it.
+	if allNodesRunTargetVersion(install, needNsMigration, nodeDSExists, r.ext.ProductVersion(&install.Spec)) &&
+		install.Spec.BPFEnabled() && !install.Spec.KubeProxyManagementEnabled() && fc.Spec.BPFKubeProxyHealthzPort == nil {
 		disableBPFKubeProxyHealthz(fc)
 		updated = true
 	}
-
-	// Variant-specific FelixConfiguration defaults (e.g. the Enterprise
-	// provider-specific dnsTrustedServers) are owned by the variant extension.
-	extUpdated, err := r.ext.DefaultFelixConfiguration(&install.Spec, fc)
-	if err != nil {
-		return updated, err
-	}
-	updated = updated || extUpdated
 
 	// If BPF is enabled, but not set on FelixConfiguration, do so here. This could happen when an older
 	// version of operator is replaced by the new one. Older versions of the operator used an
@@ -1722,15 +1773,9 @@ func (r *ReconcileInstallation) setDefaultsOnFelixConfiguration(ctx context.Cont
 
 	// If calico-node daemonset exists, we need to check the ENV VAR and set FelixConfiguration accordingly.
 	// Otherwise, this is a fresh install in eBPF mode, set the felix config.
-	ds := &appsv1.DaemonSet{}
-	err = r.client.Get(ctx, types.NamespacedName{Namespace: common.CalicoNamespace, Name: common.NodeDaemonSetName}, ds)
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			reqLogger.Error(err, "An error occurred when getting the Daemonset resource")
-			return false, err
-		}
+	if !nodeDSExists {
 		if !needNsMigration && install.Spec.BPFEnabled() {
-			err = setBPFEnabledOnFelixConfiguration(fc, true)
+			err := setBPFEnabledOnFelixConfiguration(fc, true)
 			if err != nil {
 				reqLogger.Error(err, "Unable to enable eBPF data plane with a fresh install")
 				return false, err
@@ -1754,6 +1799,22 @@ func (r *ReconcileInstallation) setDefaultsOnFelixConfiguration(ctx context.Cont
 	}
 
 	return updated, nil
+}
+
+// allNodesRunTargetVersion reports whether every calico-node runs targetVersion. Gate
+// FelixConfiguration writes that older nodes' validators reject on it.
+func allNodesRunTargetVersion(install *operatorv1.Installation, needNsMigration, nodeDSExists bool, targetVersion string) bool {
+	if needNsMigration {
+		// Manifest-install pods still serve nodes out of kube-system.
+		return false
+	}
+	if !nodeDSExists {
+		// Fresh install: nothing is running yet.
+		return true
+	}
+	// Written together, and only once the stack was seen available on that version. A status
+	// reporting neither fails this too, which is what we want.
+	return install.Status.Variant == install.Spec.Variant && install.Status.CalicoVersion == targetVersion
 }
 
 // setClusterRoutingOnFelixConfiguration sets programClusterRoutes in the FelixConfiguration resource

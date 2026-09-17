@@ -640,6 +640,8 @@ message RouteUpdate {
   string dst_node_ip = 5;
   bool same_subnet = 7;
   bool nat_outgoing = 8;
+  // Set when a live local WEP holds this IP. Decides locality when types has
+  // both LOCAL_WORKLOAD and REMOTE_WORKLOAD, as a borrowed IP does.
   bool local_workload = 9;
   TunnelType tunnel_type = 10;
   bool borrowed = 11;

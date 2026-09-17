@@ -74,6 +74,9 @@ func Commands(cfg *Config) []*cli.Command {
 		hashreleaseCommand(cfg),
 		releaseCommand(cfg),
 		branchCommand(cfg),
+		imagesCommand(cfg),
+		chartsCommand(cfg),
+		manifestsCommand(cfg),
 	}
 }
 

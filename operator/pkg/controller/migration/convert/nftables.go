@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"strings"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/types"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"

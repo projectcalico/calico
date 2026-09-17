@@ -19,9 +19,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/stretchr/testify/mock"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	"github.com/tigera/api/pkg/lib/numorstring"
 	admregv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -42,8 +42,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
-	eistio "github.com/projectcalico/calico/operator/pkg/enterprise/istio"
-	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render/istio"
 	"github.com/projectcalico/calico/operator/test"
 )
@@ -570,69 +568,6 @@ var _ = Describe("Istio controller tests", func() {
 				Expect(patched.Spec.PolicySyncPathPrefix).To(Equal("/var/run/customer"))
 			})
 
-			It("leaves policySyncPathPrefix set on Istio deletion when ApplicationLayer still needs it", func() {
-				// AL with logsCollection enabled — the symmetric coordination
-				// case the user called out: Istio deletion must not clear the
-				// field while AL is still actively using it.
-				enabled := operatorv1.L7LogCollectionEnabled
-				al := &operatorv1.ApplicationLayer{
-					ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
-					Spec: operatorv1.ApplicationLayerSpec{
-						LogCollection: &operatorv1.LogCollectionSpec{CollectLogs: &enabled},
-					},
-				}
-				Expect(cli.Create(ctx, al)).NotTo(HaveOccurred())
-
-				fc := &v3.FelixConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "default"}}
-				Expect(cli.Create(ctx, fc)).NotTo(HaveOccurred())
-
-				r := &ReconcileIstio{Client: cli, scheme: scheme, provider: operatorv1.ProviderNone, status: mockStatus}
-				_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
-				Expect(err).ShouldNot(HaveOccurred())
-
-				// Now delete the Istio CR and reconcile the finalizer cleanup.
-				updated := &operatorv1.Istio{}
-				Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, updated)).NotTo(HaveOccurred())
-				Expect(cli.Delete(ctx, updated)).NotTo(HaveOccurred())
-				_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
-				Expect(err).ShouldNot(HaveOccurred())
-
-				cleaned := &v3.FelixConfiguration{}
-				Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, cleaned)).NotTo(HaveOccurred())
-				Expect(cleaned.Spec.PolicySyncPathPrefix).To(Equal("/var/run/nodeagent"))
-			})
-
-			It("leaves policySyncPathPrefix set on Istio deletion when ApplicationLayer features are all disabled", func() {
-				disabled := operatorv1.L7LogCollectionDisabled
-				al := &operatorv1.ApplicationLayer{
-					ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
-					Spec: operatorv1.ApplicationLayerSpec{
-						LogCollection: &operatorv1.LogCollectionSpec{CollectLogs: &disabled},
-					},
-				}
-				Expect(cli.Create(ctx, al)).NotTo(HaveOccurred())
-
-				fc := &v3.FelixConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "default"}}
-				Expect(cli.Create(ctx, fc)).NotTo(HaveOccurred())
-
-				r := &ReconcileIstio{Client: cli, scheme: scheme, provider: operatorv1.ProviderNone, status: mockStatus}
-				_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
-				Expect(err).ShouldNot(HaveOccurred())
-
-				updated := &operatorv1.Istio{}
-				Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, updated)).NotTo(HaveOccurred())
-				Expect(cli.Delete(ctx, updated)).NotTo(HaveOccurred())
-				_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
-				Expect(err).ShouldNot(HaveOccurred())
-
-				cleaned := &v3.FelixConfiguration{}
-				Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, cleaned)).NotTo(HaveOccurred())
-				// Never clear a value we may not own: egressgateway and Gateway
-				// API share this default and never clear it, so Istio deletion
-				// preserves it rather than wiping it out from under them.
-				Expect(cleaned.Spec.PolicySyncPathPrefix).To(Equal("/var/run/nodeagent"))
-			})
-
 			It("leaves policySyncPathPrefix set on Istio deletion when ApplicationLayer is absent", func() {
 				fc := &v3.FelixConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "default"}}
 				Expect(cli.Create(ctx, fc)).NotTo(HaveOccurred())
@@ -875,94 +810,5 @@ var _ = Describe("Istio controller tests", func() {
 			Expect(ztunnelDaemonSet.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("@sha256:ztunnel123"))
 		})
 
-		It("should create expected Istio resources for Enterprise variant", func() {
-			installation.Spec.Variant = operatorv1.CalicoEnterprise
-			installation.Status.Variant = operatorv1.CalicoEnterprise
-			Expect(cli.Update(ctx, installation)).NotTo(HaveOccurred())
-			installation.Status.Computed = installation.Spec.DeepCopy()
-			Expect(cli.Status().Update(ctx, installation)).NotTo(HaveOccurred())
-
-			r := &ReconcileIstio{
-				Client:   cli,
-				scheme:   scheme,
-				provider: operatorv1.ProviderNone,
-				status:   mockStatus,
-			}
-
-			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
-			Expect(err).ShouldNot(HaveOccurred())
-
-			// Verify Istiod Deployment was created
-			istiodDeploy := &appsv1.Deployment{}
-			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, istiodDeploy)).NotTo(HaveOccurred())
-
-			// Verify Istio CNI DaemonSet was created
-			cniDaemonSet := &appsv1.DaemonSet{}
-			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.IstioCNIDaemonSetName, Namespace: istio.IstioNamespace}, cniDaemonSet)).NotTo(HaveOccurred())
-
-			// Verify Istio Ztunnel DaemonSet was created
-			ztunnelDaemonSet := &appsv1.DaemonSet{}
-			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.IstioZTunnelDaemonSetName, Namespace: istio.IstioNamespace}, ztunnelDaemonSet)).NotTo(HaveOccurred())
-
-			// Verify status was marked ready
-			mockStatus.AssertCalled(GinkgoT(), "ClearDegraded")
-		})
-
-		It("should handle ImageSet application for Enterprise variant", func() {
-			DeferCleanup(components.UseImages(components.EnterpriseImages))
-
-			installation.Spec.Variant = operatorv1.CalicoEnterprise
-			installation.Status.Variant = operatorv1.CalicoEnterprise
-			Expect(cli.Update(ctx, installation)).NotTo(HaveOccurred())
-			installation.Status.Computed = installation.Spec.DeepCopy()
-			Expect(cli.Status().Update(ctx, installation)).NotTo(HaveOccurred())
-
-			// Create ImageSet with all required Istio images for Enterprise
-			imageSet := &operatorv1.ImageSet{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "enterprise-" + components.EnterpriseRelease,
-				},
-				Spec: operatorv1.ImageSetSpec{
-					Images: []operatorv1.Image{
-						{Image: "tigera/istio-pilot", Digest: "sha256:pilot123"},
-						{Image: "tigera/istio-install-cni", Digest: "sha256:cni123"},
-						{Image: "tigera/istio-ztunnel", Digest: "sha256:ztunnel123"},
-						{Image: "tigera/istio-proxyv2", Digest: "sha256:proxyv2123"},
-						// Waypoint l7-collector runs from the combined calico image.
-						{Image: "tigera/calico", Digest: "sha256:calico123"},
-					},
-				},
-			}
-			Expect(cli.Create(ctx, imageSet)).NotTo(HaveOccurred())
-
-			r := &ReconcileIstio{
-				Client:   cli,
-				scheme:   scheme,
-				provider: operatorv1.ProviderNone,
-				status:   mockStatus,
-				ext:      extensions.New(extensions.Set{Istio: eistio.New(operatorv1.CalicoEnterprise)}),
-			}
-
-			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
-			Expect(err).ShouldNot(HaveOccurred())
-
-			// Verify Istiod Deployment uses ImageSet digest
-			istiodDeploy := &appsv1.Deployment{}
-			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, istiodDeploy)).NotTo(HaveOccurred())
-			Expect(istiodDeploy.Spec.Template.Spec.Containers).NotTo(BeEmpty())
-			Expect(istiodDeploy.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("@sha256:pilot123"))
-
-			// Verify CNI DaemonSet uses ImageSet digest
-			cniDaemonSet := &appsv1.DaemonSet{}
-			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.IstioCNIDaemonSetName, Namespace: istio.IstioNamespace}, cniDaemonSet)).NotTo(HaveOccurred())
-			Expect(cniDaemonSet.Spec.Template.Spec.Containers).NotTo(BeEmpty())
-			Expect(cniDaemonSet.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("@sha256:cni123"))
-
-			// Verify Ztunnel DaemonSet uses ImageSet digest
-			ztunnelDaemonSet := &appsv1.DaemonSet{}
-			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.IstioZTunnelDaemonSetName, Namespace: istio.IstioNamespace}, ztunnelDaemonSet)).NotTo(HaveOccurred())
-			Expect(ztunnelDaemonSet.Spec.Template.Spec.Containers).NotTo(BeEmpty())
-			Expect(ztunnelDaemonSet.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("@sha256:ztunnel123"))
-		})
 	})
 })

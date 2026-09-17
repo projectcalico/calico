@@ -14,30 +14,6 @@
 
 package components
 
-import (
-	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
-)
-
 // CalicoBinaryPath is the absolute path to the combined "calico" binary inside the calico/calico image.
 // Components deployed from the combined image invoke this binary via Command / probe exec.
 const CalicoBinaryPath = "/usr/bin/calico"
-
-// CombinedCalicoImage returns the combined calico/calico Component for the given installation.
-// The right Component is selected based on the installation variant (Calico OSS vs. Calico Enterprise).
-func CombinedCalicoImage(installation *operatorv1.InstallationSpec) Component {
-	if installation.Variant.IsEnterprise() {
-		return ComponentTigeraCalico
-	}
-	return ComponentCalico
-}
-
-// CalicoCloudImage returns the tesla-compiled variant of the combined calico image. It is the same
-// image repository as ComponentTigeraCalico (so ImageSet digests still resolve by that name),
-// published under a tesla- tag. It carries the Calico Cloud behavior for the components that need it
-// — currently only kube-controllers, the sole component with tesla-gated code. See TSLA-11580, and
-// TSLA-11650 for possible removal of this cloud-image handling.
-func CalicoCloudImage() Component {
-	c := ComponentTigeraCalico
-	c.Version = "tesla-" + c.Version
-	return c
-}

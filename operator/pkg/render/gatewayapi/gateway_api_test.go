@@ -20,7 +20,7 @@ import (
 	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	admissionregv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -407,11 +407,9 @@ var _ = Describe("Gateway API rendering tests", func() {
 	})
 
 	It("honours gateway controller customizations", func() {
-		DeferCleanup(components.UseImages(components.EnterpriseImages))
-
 		installation := &operatorv1.InstallationSpec{
 			Registry: "myregistry.io/",
-			Variant:  operatorv1.CalicoEnterprise,
+			Variant:  operatorv1.Calico,
 		}
 		threeReplicas := int32(3)
 		topologySpreadConstraints := []corev1.TopologySpreadConstraint{{
@@ -458,9 +456,9 @@ var _ = Describe("Gateway API rendering tests", func() {
 		Expect(gatewayCompErr).NotTo(HaveOccurred())
 
 		Expect(gatewayComp.ResolveImages(nil)).NotTo(HaveOccurred())
-		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyGatewayImage).To(Equal("myregistry.io/tigera/envoy-gateway:" + components.ComponentGatewayAPIEnvoyGateway.Version))
-		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyRatelimitImage).To(Equal("myregistry.io/tigera/envoy-ratelimit:" + components.ComponentGatewayAPIEnvoyRatelimit.Version))
-		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyProxyImage).To(Equal("myregistry.io/tigera/envoy-proxy:" + components.ComponentGatewayAPIEnvoyProxy.Version))
+		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyGatewayImage).To(Equal("myregistry.io/calico/envoy-gateway:" + components.ComponentCalicoEnvoyGateway.Version))
+		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyRatelimitImage).To(Equal("myregistry.io/calico/envoy-ratelimit:" + components.ComponentCalicoEnvoyRatelimit.Version))
+		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyProxyImage).To(Equal("myregistry.io/calico/envoy-proxy:" + components.ComponentCalicoEnvoyProxy.Version))
 
 		objsToCreate, objsToDelete := gatewayComp.Objects()
 		expectLegacyCleanup(objsToDelete, false)
@@ -479,18 +477,16 @@ var _ = Describe("Gateway API rendering tests", func() {
 		Expect(gatewayConfig.Provider.Kubernetes.RateLimitDeployment).NotTo(BeNil())
 		Expect(gatewayConfig.Provider.Kubernetes.RateLimitDeployment.Name).NotTo(BeNil())
 		Expect(*gatewayConfig.Provider.Kubernetes.RateLimitDeployment.Name).To(Equal(customName))
-		Expect(*gatewayConfig.Provider.Kubernetes.ShutdownManager.Image).To(Equal("myregistry.io/tigera/envoy-gateway:" + components.ComponentGatewayAPIEnvoyGateway.Version))
+		Expect(*gatewayConfig.Provider.Kubernetes.ShutdownManager.Image).To(Equal("myregistry.io/calico/envoy-gateway:" + components.ComponentCalicoEnvoyGateway.Version))
 		Expect(gatewayConfig.ExtensionAPIs).NotTo(BeNil())
 		Expect(gatewayConfig.ExtensionAPIs.EnableBackend).To(BeTrue())
 		Expect(gatewayConfig.ExtensionAPIs.EnableEnvoyPatchPolicy).To(BeTrue())
 	})
 
 	It("honours GatewayClass and EnvoyProxy customizations", func() {
-		DeferCleanup(components.UseImages(components.EnterpriseImages))
-
 		installation := &operatorv1.InstallationSpec{
 			Registry: "myregistry.io/",
-			Variant:  operatorv1.CalicoEnterprise,
+			Variant:  operatorv1.Calico,
 		}
 		twoReplicas := int32(2)
 		topologySpreadConstraints := []corev1.TopologySpreadConstraint{{
@@ -661,9 +657,9 @@ var _ = Describe("Gateway API rendering tests", func() {
 		Expect(gatewayCompErr).NotTo(HaveOccurred())
 
 		Expect(gatewayComp.ResolveImages(nil)).NotTo(HaveOccurred())
-		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyGatewayImage).To(Equal("myregistry.io/tigera/envoy-gateway:" + components.ComponentGatewayAPIEnvoyGateway.Version))
-		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyRatelimitImage).To(Equal("myregistry.io/tigera/envoy-ratelimit:" + components.ComponentGatewayAPIEnvoyRatelimit.Version))
-		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyProxyImage).To(Equal("myregistry.io/tigera/envoy-proxy:" + components.ComponentGatewayAPIEnvoyProxy.Version))
+		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyGatewayImage).To(Equal("myregistry.io/calico/envoy-gateway:" + components.ComponentCalicoEnvoyGateway.Version))
+		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyRatelimitImage).To(Equal("myregistry.io/calico/envoy-ratelimit:" + components.ComponentCalicoEnvoyRatelimit.Version))
+		Expect(gatewayComp.(*gatewayAPIImplementationComponent).envoyProxyImage).To(Equal("myregistry.io/calico/envoy-proxy:" + components.ComponentCalicoEnvoyProxy.Version))
 
 		objsToCreate, objsToDelete := gatewayComp.Objects()
 		expectLegacyCleanup(objsToDelete, false)
@@ -1054,34 +1050,6 @@ value:
 			Expect(isPolicy).To(BeFalse(),
 				"unexpected v3 NetworkPolicy %s/%s with IncludeV3NetworkPolicy=false", obj.GetNamespace(), obj.GetName())
 		}
-	})
-
-	It("should not create per-namespace resources for open-source", func() {
-		installation := &operatorv1.InstallationSpec{
-			Variant: operatorv1.Calico,
-		}
-		gatewayAPI := &operatorv1.GatewayAPI{
-			Spec: operatorv1.GatewayAPISpec{
-				GatewayClasses: []operatorv1.GatewayClassSpec{{Name: "tigera-gateway-class"}},
-			},
-		}
-		gatewayComp, gatewayCompErr := GatewayAPIImplementationComponent(&GatewayAPIImplementationConfig{
-			Scheme:            testScheme(),
-			Installation:      installation,
-			GatewayAPI:        gatewayAPI,
-			GatewayNamespaces: []string{"default"},
-		})
-		Expect(gatewayCompErr).NotTo(HaveOccurred())
-
-		objsToCreate, _ := gatewayComp.Objects()
-
-		// Open-source should NOT have the shared per-namespace CRB.
-		_, err := rtest.GetResourceOfType[*rbacv1.ClusterRoleBinding](objsToCreate, GatewayNamespacesCRBName, "")
-		Expect(err).To(HaveOccurred())
-
-		// Open-source should NOT have waf-http-filter SA at all.
-		_, err = rtest.GetResourceOfType[*corev1.ServiceAccount](objsToCreate, "waf-http-filter", "default")
-		Expect(err).To(HaveOccurred())
 	})
 
 	It("should queue the legacy tigera-gateway install for cleanup on every reconcile", func() {

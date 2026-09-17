@@ -35,25 +35,12 @@ $(HACK_BIN):
 
 PACKAGE_NAME = github.com/projectcalico/calico/operator
 
-# The image, registry and arches the ci/cd common targets in lib.Makefile read.
-# These sit above metadata.mk, whose Calico defaults would otherwise win, and use
-# ?= for the registry so a hashrelease can send the image somewhere else (see
-# hack/release/README.md).
-CLOUD_LDFLAGS =
-ifeq ($(VARIANT),cloud)
-# Calico Cloud variant: operator-cloud on GCR, amd64 only.
-BUILD_IMAGES    = tigera-tesla/operator-cloud
-DEV_REGISTRIES ?= gcr.io
-ARCHES          = amd64
-BINARY_NAME    ?= operator-cloud
-# Bake cloud mode into the operator binary so it cannot be disabled at runtime.
-CLOUD_LDFLAGS = -X $(PACKAGE_NAME)/version.BuildVariant=cloud
-else
-BUILD_IMAGES    = tigera/operator
-DEV_REGISTRIES ?= quay.io
+# The image and arches the ci/cd common targets in lib.Makefile read. The operator
+# publishes alongside the other Calico component images, so the registries come from
+# metadata.mk rather than an override here.
+BUILD_IMAGES    = operator
 ARCHES          = amd64 arm64 ppc64le s390x
 BINARY_NAME    ?= operator
-endif
 
 include ../metadata.mk
 
@@ -81,6 +68,19 @@ else
   GIT_VERSION?=$(shell git describe --tags --dirty --always --abbrev=12)
 endif
 
+# The version, registry and image path the built operator resolves Calico images at. A
+# release names it, since an operator-only release carries its own tag while still
+# deploying the components of the release it patches. Anything else resolves the tag cd
+# publishes for this branch; the kind rig passes what it just pushed.
+ifneq ($(RELEASE),true)
+CALICO_VERSION    ?= $(BRANCH_IMAGE_TAG)
+endif
+CALICO_REGISTRY   ?=
+CALICO_IMAGE_PATH ?=
+CALICO_LDFLAGS = -X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(CALICO_VERSION) \
+                 -X $(PACKAGE_NAME)/pkg/components.calicoRegistry=$(CALICO_REGISTRY) \
+                 -X $(PACKAGE_NAME)/pkg/components.calicoImagePath=$(CALICO_IMAGE_PATH)
+
 # To update the Istio version, see "Updating the bundled version of Istio" in docs/common_tasks.md.
 ISTIO_HELM_REPO ?= https://istio-release.storage.googleapis.com/charts
 ISTIO_VERSION ?= 1.29.2
@@ -93,7 +93,7 @@ istio_charts: $(ISTIO_CHART_FILES)
 
 $(ISTIO_RESOURCES_DIR)/%.tgz:
 	@echo "Downloading Istio chart $* version $(ISTIO_VERSION)..."
-	@curl -fsSL -o $@ $(ISTIO_HELM_REPO)/$*-$(ISTIO_VERSION).tgz
+	@$(call fetch_file,$(ISTIO_HELM_REPO)/$*-$(ISTIO_VERSION).tgz,$@)
 
 # To update the Envoy Gateway version, see "Updating the bundled version of
 # Envoy Gateway" in docs/common_tasks.md.
@@ -128,7 +128,7 @@ $(BINDIR)/$(BINARY_NAME)-$(ARCH): $(SRC_FILES) $(ENVOY_GATEWAY_CHART) $(ISTIO_CH
 	mkdir -p $(BINDIR)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
-	go build -buildvcs=false -v -o $(BINDIR)/$(BINARY_NAME)-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) $(CLOUD_LDFLAGS) -s -w" ./cmd/'
+	go build -buildvcs=false -v -o $(BINDIR)/$(BINARY_NAME)-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) $(CALICO_LDFLAGS) -s -w" ./cmd/'
 
 OPERATOR_IMAGE_NAME = $(firstword $(BUILD_IMAGES))
 IMAGE_BUILD_MARKER  = operator_container-$(ARCH).created
@@ -147,6 +147,13 @@ ifeq ($(ARCH),amd64)
 	docker tag $(OPERATOR_IMAGE_NAME):latest-$(ARCH) $(OPERATOR_IMAGE_NAME):latest
 endif
 	touch $@
+
+# The component references are ldflags, which Make cannot see, so a build that
+# changes them asks for the relink explicitly.
+.PHONY: dev-image
+dev-image:
+	rm -f $(BINDIR)/$(BINARY_NAME)-$(ARCH) $(IMAGE_BUILD_MARKER)
+	$(MAKE) image
 
 .PHONY: image-all
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
@@ -193,30 +200,36 @@ ut: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	gotestsum --format testname --junitfile report/operator_ut.xml -- $(UT_DIR)/... $(GO_TEST_ARGS) $(GINKGO_FOCUS_ARG)'
 
 ## Run the functional tests against a local kind cluster.
-fv: kind-cluster-create deploy-crds load-container-images run-fvs kind-cluster-destroy
+fv: kind-cluster-create deploy-crds deploy-operator-rbac push-fv-images run-fvs kind-cluster-destroy
 run-fvs: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	-mkdir -p .go-pkg-cache report
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-	gotestsum --format testname --junitfile report/operator_fv.xml -- $(FV_DIR)/... $(GO_TEST_ARGS) -timeout $(FV_TEST_TIMEOUT) $(GINKGO_FOCUS_ARG)'
+	gotestsum --format testname --junitfile report/operator_fv.xml -- $(FV_DIR)/... $(GO_TEST_ARGS) -timeout $(FV_TEST_TIMEOUT) $(FV_LDFLAGS) $(GINKGO_FOCUS_ARG)'
 
-# The tag the operator resolves for these components, from config/calico_versions.yml.
-FV_IMAGE_TAG ?= master
-FV_IMAGES     = calico/calico calico/node calico/whisker
+# The FV's in-process operator resolves its components here, stamped into the test
+# binary the same way a real build stamps the operator. kind-cluster-create points the
+# cluster's nodes at the same registry.
+FV_LDFLAGS = -ldflags "-X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(KIND_TEST_BUILD_TAG) \
+	-X $(PACKAGE_NAME)/pkg/components.calicoRegistry=$(KIND_IMAGE_REGISTRY) \
+	-X $(PACKAGE_NAME)/pkg/components.calicoImagePath=$(KIND_IMAGE_PATH)"
 
-# Prefer the images built from this commit, which CI restores from its cache before
-# the FV runs, and fall back to a pull for a local run that has none.
-load-container-images: $(KIND)
-	@for image in $(FV_IMAGES); do \
-		if docker image inspect $$image:latest-$(ARCH) >/dev/null 2>&1; then \
-			docker tag $$image:latest-$(ARCH) $$image:$(FV_IMAGE_TAG); \
-		else \
-			docker pull $$image:$(FV_IMAGE_TAG); \
-		fi; \
-		$(KIND) load docker-image --name $(KIND_NAME) $$image:$(FV_IMAGE_TAG); \
-	done
-	# Restart the Calico containers so they launch with the newly loaded code.
-	# TODO: We should be able to do this without restarting everything in kube-system.
-	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n kube-system --all
+# Every component the FV's operator installs has to be in the registry, including the
+# cni-plugins init container, or calico-node never leaves Init. FV_MARKER_<name> names
+# the build marker for an image that does not use <name>/.image.created-<arch>.
+FV_IMAGES = calico node whisker third-party-cni-plugins
+FV_MARKER_calico                  = cmd/calico/.image.created-$(ARCH)
+FV_MARKER_third-party-cni-plugins = third_party/cni-plugins/.cni-plugins.created-$(ARCH)
+
+.PHONY: push-fv-images
+push-fv-images: kind-registry-up $(addprefix push-fv-image-,$(FV_IMAGES))
+
+# Prefer the image built from this commit, which CI restores from its cache before the
+# FV runs, and build one for a local run that has none.
+push-fv-image-%:
+	@docker image inspect calico/$*:latest-$(ARCH) >/dev/null 2>&1 || \
+		$(MAKE) $(REPO_ROOT)/$(or $(FV_MARKER_$*),$*/.image.created-$(ARCH))
+	docker tag calico/$*:latest-$(ARCH) $(KIND_IMAGE_REGISTRY)/$(KIND_IMAGE_PATH)/$*:$(KIND_TEST_BUILD_TAG)
+	docker push $(KIND_IMAGE_REGISTRY)/$(KIND_IMAGE_PATH)/$*:$(KIND_TEST_BUILD_TAG)
 
 ## Deploy the CRDs the FVs need on top of the ones kind-cluster-create installs:
 ## every operator CRD, including the Enterprise-only kinds, plus prometheus.
@@ -232,6 +245,22 @@ deploy-crds: $(KUBECTL)
 
 create-tigera-operator-namespace: $(KUBECTL)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create ns tigera-operator
+
+## Apply the operator's ServiceAccount and RBAC, rendered from the chart that ships
+## them, so the FV's operator is bound by the same rules a real install grants it.
+OPERATOR_RBAC_TEMPLATES = \
+	02-serviceaccount-tigera-operator.yaml \
+	02-role-tigera-operator.yaml \
+	02-role-tigera-operator-secrets.yaml \
+	02-rolebinding-tigera-operator.yaml \
+	02-rolebinding-tigera-operator-secrets.yaml
+
+deploy-operator-rbac: $(KUBECTL) $(HELM_BUILDARCH_BINARY)
+	@export KUBECONFIG=$(KIND_KUBECONFIG) && \
+		$(KUBECTL) create ns tigera-operator --dry-run=client -o yaml | $(KUBECTL) apply -f - && \
+		$(HELM_BUILDARCH_BINARY) template ../charts/tigera-operator --namespace tigera-operator \
+			$(addprefix --show-only templates/tigera-operator/,$(OPERATOR_RBAC_TEMPLATES)) \
+		| $(KUBECTL) apply -f -
 
 ###############################################################################
 # Static checks
@@ -279,15 +308,9 @@ foss-checks:
 .PHONY: ci
 ## Run what CI runs
 # Not `test`, which lib.Makefile defines as `ut fv st`. The FV block runs the
-# kind suite on its own.
-ci: clean format-check validate-gen-versions static-checks image-all fmt vet ut gen-files fix-changed dirty-check test-crds
-
-# This repository is public and the Enterprise CRDs come from one that is not,
-# so only the core half is checked here. The Enterprise generated files are
-# committed and revalidated where their source lives.
-validate-gen-versions:
-	$(MAKE) gen-versions-calico
-	$(MAKE) dirty-check
+# kind suite on its own. amd64 only here; the "Operator: multi-arch build"
+# block covers the other arches.
+ci: clean format-check static-checks image fmt vet ut gen-files fix-changed dirty-check test-crds
 
 ## Deploys images to registry
 cd: image-all cd-common
@@ -295,81 +318,39 @@ cd: image-all cd-common
 ###############################################################################
 # Release
 ###############################################################################
-## Create a release for the specified RELEASE_TAG.
-release-tag: var-require-all-RELEASE_TAG-GITHUB_TOKEN
-	$(MAKE) release VERSION=$(RELEASE_TAG)
-	REPO=$(REPO) $(MAKE) release-publish VERSION=$(RELEASE_TAG)
+# The component versions the operator deploys are baked into its binary, so a release is a
+# rebuild rather than a retag of an image built for a different set of them.
+## Build and tag the release images for the specified VERSION.
+release-build: var-require-all-VERSION check-release-image-tags
+	$(MAKE) clean image-all RELEASE=true
+	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 
-# Calico Cloud releases reuse release-tag with VARIANT=cloud, e.g.
-# `make release-tag VARIANT=cloud RELEASE_TAG=vX.Y.Z-cloud`. The release tool applies cloud
-# behavior (GCR/operator-cloud image, vX.Y.Z-cloud version format, no GitHub release) at runtime
-# based on VARIANT. Cloud tags are the regular operator version with a -cloud suffix.
-
-## Generate release notes for the specified VERSION.
-release-notes: hack/bin/release var-require-all-VERSION-GITHUB_TOKEN
-	REPO=$(REPO) hack/bin/release notes
-
-## Build a release from start to finish.
-release: clean hack/bin/release
-	hack/bin/release build
-
-## Produces a clean build of release artifacts at the specified version.
-release-build: operator-release-prereqs var-require-all-VERSION-GIT_VERSION
-# Check that the correct code is checked out.
-ifneq ($(VERSION), $(GIT_VERSION))
-	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
-endif
-	$(MAKE) image-all
-	$(MAKE) tag-images-all IMAGETAG=$(VERSION)
-	# Generate the `latest` images.
-	$(MAKE) tag-images-all IMAGETAG=latest
-
-release-check-image-exists: operator-release-prereqs
-	@echo "Checking if $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):$(VERSION) exists already"; \
-	if docker manifest inspect $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):$(VERSION) >/dev/null; \
-		then echo "Image $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):$(VERSION) already exists"; \
+# The tag is compiled in, so a release that guessed it would ship an operator naming
+# images that were never published.
+.PHONY: check-release-image-tags
+check-release-image-tags:
+	@if [ -z "$(CALICO_VERSION)" ]; then \
+		echo "A release must set CALICO_VERSION to the version its component images are published at."; \
+		echo "For an operator-only release that is the release being patched, not VERSION."; \
 		exit 1; \
-	else \
-		echo "Image tag check passed; image does not already exist"; \
+	fi; \
+	if [ "$(ALLOW_BRANCH_IMAGE_TAGS)" = "true" ]; then exit 0; fi; \
+	if [ "$(CALICO_VERSION)" = "$(BRANCH_IMAGE_TAG)" ]; then \
+		echo "A release must name the tag it publishes at, not the branch default $(BRANCH_IMAGE_TAG)."; \
+		echo "Set CALICO_VERSION, build through the release tooling, or pass ALLOW_BRANCH_IMAGE_TAGS=true."; \
+		exit 1; \
 	fi
 
-release-publish: hack/bin/release
-	hack/bin/release publish
-
-release-publish-images: operator-release-prereqs release-check-image-exists var-require-all-VERSION
-	# Push images.
-	$(MAKE) push-all push-manifests push-non-manifests IMAGETAG=$(VERSION)
-
-release-github: hack/bin/release var-require-all-VERSION-GITHUB_TOKEN
-	hack/bin/release github
-
-GITHUB_CLI_VERSION?=2.62.0
-hack/bin/gh:
-	mkdir -p hack/bin
-	curl -sSL -o hack/bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
-	tar -zxvf hack/bin/gh.tgz -C hack/bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
-	chmod +x $@
-	rm hack/bin/gh.tgz
-
-hack/bin/release: $(shell find ./hack/release -type f)
-	mkdir -p hack/bin
-	$(DOCKER_GO_BUILD) \
-	sh -c '$(GIT_CONFIG_SSH) \
-	go build -buildvcs=false -o hack/bin/release ./hack/release'
-
-# Calico Cloud releases use the same release binary and targets with VARIANT=cloud, e.g.
-# `make release VARIANT=cloud` / `make release-tag VARIANT=cloud`. The release tool activates its
-# cloud behavior (GCR/operator-cloud image, vX.Y.Z-cloud version format, no GitHub release) at
-# runtime when VARIANT=cloud; no separate binary or build tag is required.
-
-hack/release/ut:
-	mkdir -p report/release
-	$(DOCKER_GO_BUILD) \
-	sh -c '$(GIT_CONFIG_SSH) \
-	gotestsum --format=testname --junitfile report/release/ut.xml $$(go list $(PACKAGE_NAME)/hack/release/... | grep -v /hack/release/validate)'
-
-release-from: hack/bin/release var-require-all-VERSION-OPERATOR_BASE_VERSION var-require-one-of-EE_IMAGES_VERSIONS-OS_IMAGES_VERSIONS
-	hack/bin/release from
+# The operator ships as part of a Calico release, so publishing it is the image push.
+# A release run that resumes after a failure re-enters this, so an image already at
+# this version is skipped rather than treated as an error.
+.PHONY: release-publish
+release-publish: operator-release-prereqs var-require-all-VERSION bin/crane
+	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
+		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \
+	else \
+		$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM); \
+	fi
 
 # operator-release-prereqs checks the environment on top of lib.Makefile's own
 # release-prereqs, which the release targets below also depend on.
@@ -377,22 +358,6 @@ operator-release-prereqs: release-prereqs
 ifdef LOCAL_BUILD
 	$(error LOCAL_BUILD must not be set for a release)
 endif
-
-release-prep: hack/bin/release hack/bin/gh var-require-all-VERSION var-require-one-of-CALICO_VERSION-ENTERPRISE_VERSION
-	@REPO=$(REPO) hack/bin/release prep
-
-create-release-branch: hack/bin/release var-require-all-CALICO_REF-ENTERPRISE_REF var-require-one-of-STREAM-RELEASE_STREAM
-	hack/bin/release branch cut
-
-GOTESTSUM_VERSION?=1.13.0
-$(HACK_BIN)/gotestsum: $(HACK_BIN)
-	@curl -sSL -o $(HACK_BIN)/gotestsum.tar.gz https://github.com/gotestyourself/gotestsum/releases/download/v$(GOTESTSUM_VERSION)/gotestsum_$(GOTESTSUM_VERSION)_$(NATIVE_OS)_$(NATIVE_ARCH).tar.gz
-	@tar -zxvf $(HACK_BIN)/gotestsum.tar.gz -C $(HACK_BIN) gotestsum
-	@chmod +x $@
-	@rm $(HACK_BIN)/gotestsum.tar.gz
-
-branch-validate: hack/bin/release $(HACK_BIN)/gotestsum var-require-one-of-STREAM-RELEASE_STREAM
-	PATH=$$PATH:$(CURDIR)/$(HACK_BIN) hack/bin/release branch validate
 
 ###############################################################################
 # Utilities
@@ -406,7 +371,7 @@ operator-sdk: $(OPERATOR_SDK_BARE)
 $(OPERATOR_SDK):
 	$(info ░▒▓ Downloading operator-sdk to $(OPERATOR_SDK))
 	@mkdir -p hack/bin
-	@curl -fsSL -o $@ $(OPERATOR_SDK_URL)
+	@$(call fetch_file,$(OPERATOR_SDK_URL),$@)
 	@chmod +x $@
 
 $(OPERATOR_SDK_BARE): $(OPERATOR_SDK)
@@ -415,25 +380,6 @@ $(OPERATOR_SDK_BARE): $(OPERATOR_SDK)
 
 ## Generating code after API changes.
 gen-files: manifests generate
-
-OS_VERSIONS?=config/calico_versions.yml
-EE_VERSIONS?=config/enterprise_versions.yml
-
-.PHONY: gen-versions gen-versions-calico gen-versions-enterprise
-
-gen-versions: gen-versions-calico gen-versions-enterprise
-
-gen-versions-calico: $(BINDIR)/gen-versions
-	$(BINDIR)/gen-versions -os-versions=$(OS_VERSIONS) > pkg/components/calico.go
-
-gen-versions-enterprise: $(BINDIR)/gen-versions
-	$(BINDIR)/gen-versions -ee-versions=$(EE_VERSIONS) > pkg/components/enterprise.go
-
-$(BINDIR)/gen-versions: $(shell find ./hack/gen-versions -type f)
-	mkdir -p $(BINDIR)
-	$(DOCKER_GO_BUILD) \
-	sh -c '$(GIT_CONFIG_SSH) \
-	go build -buildvcs=false -o $(BINDIR)/gen-versions ./hack/gen-versions'
 
 .PHONY: prepull-image
 prepull-image:
@@ -447,11 +393,11 @@ prepull-image:
 #     {
 #         "Id": "sha256:34a1114040c03830da0a8d57f8d999deba26d8e31bda353aed201a375f68870b",
 #         "RepoTags": [
-#             "quay.io/tigera/operator:v1.3.1",
+#             "quay.io/calico/operator:v3.32.0",
 #             "..."
 #         ],
 #         "RepoDigests": [
-#             "quay.io/tigera/operator@sha256:5e1d551b5a711592472f4a3cc4645698d5f826da4253f0d47cfa5d5b641a2e1a",
+#             "quay.io/calico/operator@sha256:5e1d551b5a711592472f4a3cc4645698d5f826da4253f0d47cfa5d5b641a2e1a",
 #             "..."
 #         ],
 #         ...
@@ -530,7 +476,9 @@ KUSTOMIZE = $(HACK_BIN)/kustomize
 kustomize: $(KUSTOMIZE)
 $(KUSTOMIZE): $(HACK_BIN)
 	$(info ░▒▓ Downloading kustomize $(KUSTOMIZE_VERSION) to $(KUSTOMIZE))
-	@curl -fsSL $(KUSTOMIZE_DOWNLOAD_URL) | tar -C $(HACK_BIN) --extract --gzip kustomize
+	@$(call fetch_file,$(KUSTOMIZE_DOWNLOAD_URL),$(HACK_BIN)/kustomize.tar.gz)
+	@tar -C $(HACK_BIN) --extract --gzip -f $(HACK_BIN)/kustomize.tar.gz kustomize
+	@rm $(HACK_BIN)/kustomize.tar.gz
 	@chmod a+x $(KUSTOMIZE)
 
 
@@ -570,6 +518,11 @@ bundle-crd-clean:
 bundle-validate: $(OPERATOR_SDK_BARE)
 	$(OPERATOR_SDK_BARE) bundle validate bundle/$(VERSION)
 
+# The Calico release the bundle's manifests come from. GIT_VERSION cannot serve
+# here: the bundle fetches manifests by git ref, and a describe of an untagged
+# commit is not one.
+BUNDLE_CALICO_VERSION ?= $(shell git describe --tags --abbrev=0)
+
 .PHONY: bundle-manifests
 bundle-manifests:
 ifndef VERSION
@@ -578,7 +531,7 @@ endif
 ifndef PREV_VERSION
 	$(error PREV_VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
 endif
-	$(eval EXTRA_DOCKER_ARGS += -e BUNDLE_CRD_DIR=$(BUNDLE_CRD_DIR) -e BUNDLE_DEPLOY_DIR=$(BUNDLE_DEPLOY_DIR))
+	$(eval EXTRA_DOCKER_ARGS += -e BUNDLE_CRD_DIR=$(BUNDLE_CRD_DIR) -e BUNDLE_DEPLOY_DIR=$(BUNDLE_DEPLOY_DIR) -e CALICO_VERSION=$(BUNDLE_CALICO_VERSION))
 	$(DOCKER_GO_BUILD) "hack/gen-bundle/get-manifests.sh"
 
 .PHONY: bundle-generate
@@ -609,19 +562,13 @@ endif
 
 
 .PHONY: test-crds
-test-crds: test-enterprise-crds test-calico-crds
+test-crds: test-calico-crds
 
 # TODO: Improve this testing by comparing the individual source files
 # with the yaml printed out, this will need to be a yaml diff since the
 # fields won't necessarily be in the same order or indentation.
 test-calico-crds: $(BINDIR)/$(BINARY_NAME)-$(ARCH)
 	$(BINDIR)/$(BINARY_NAME)-$(ARCH) --print-calico-crds all >/dev/null 2>&1
-
-# TODO: Improve this testing by comparing the individual source files
-# with the yaml printed out, this will need to be a yaml diff since the
-# fields won't necessarily be in the same order or indentation.
-test-enterprise-crds: $(BINDIR)/$(BINARY_NAME)-$(ARCH)
-	$(BINDIR)/$(BINARY_NAME)-$(ARCH) --print-enterprise-crds all >/dev/null 2>&1
 
 #####################################
 #####################################
@@ -648,41 +595,19 @@ endef
 export imageset_header
 
 ifeq ($(OLD_STYLE_PRINT_IMAGE),true)
-calico_img_filter=list | grep -e /calico/ -e tigera/operator
-enterprise_img_filter=list | grep -v -e calico
+calico_img_filter=list | grep -e /calico/
 else
 calico_img_filter=listcalico
-enterprise_img_filter=listenterprise
 endif
 
 # This gen-imageset target only creates an ImageSet for the built-in registries and cannot be used
 # to generate an ImageSet for an alternate registry.
 # The operator used needs to be one that all images it references have been pushed to the registry,
 # this even includes the operator which references a version of itself.
-.PHONY: gen-imageset gen-enterprise-imageset gen-calico-imageset
-gen-imageset: gen-enterprise-imageset gen-calico-imageset $(BUILD_DIR)
-	@cat $(BUILD_DIR)/imageset-enterprise.yaml > $(BUILD_DIR)/imageset.yaml
-	@echo "---" >> $(BUILD_DIR)/imageset.yaml
-	@cat $(BUILD_DIR)/imageset-calico.yaml >> $(BUILD_DIR)/imageset.yaml
+.PHONY: gen-imageset gen-calico-imageset
+gen-imageset: gen-calico-imageset $(BUILD_DIR)
+	@cat $(BUILD_DIR)/imageset-calico.yaml > $(BUILD_DIR)/imageset.yaml
 	@echo Imageset written to file $(BUILD_DIR)/imageset.yaml
-
-.PHONY: gen-enterprise-imageset
-gen-enterprise-imageset: $(BUILD_DIR)
-	$(eval IMAGESET_VER = $(shell docker run $(OPERATOR_IMAGE) --version 2>/dev/null | \
-		grep "Enterprise:" | sed -e 's/Enterprise://'))
-	@echo Enterprise version: $(IMAGESET_VER)
-	@echo "$$imageset_header" > $(BUILD_DIR)/imageset-enterprise.yaml
-	@echo "  name: enterprise-$(IMAGESET_VER)" >> $(BUILD_DIR)/imageset-enterprise.yaml
-	@echo "spec:" >> $(BUILD_DIR)/imageset-enterprise.yaml
-	@echo "  images:" >> $(BUILD_DIR)/imageset-enterprise.yaml
-	@docker run $(OPERATOR_IMAGE) --print-images=$(enterprise_img_filter) | \
-	  grep -v "Failed to read" | \
-	while read -r line; do \
-	  echo "Adding digest for $${line}"; \
-	  digest=$$($(CRANE) digest $${line}$(double_quote)); \
-	  echo "  - image: \"$$(echo $${line} | sed -e 's|^.*/\([^/]*/[^/]*\):.*$$|\1|')\"" >> $(BUILD_DIR)/imageset-enterprise.yaml; \
-	  echo "    digest: $${digest}" >> $(BUILD_DIR)/imageset-enterprise.yaml; \
-	done
 
 .PHONY: gen-calico-imageset
 gen-calico-imageset: $(BUILD_DIR)

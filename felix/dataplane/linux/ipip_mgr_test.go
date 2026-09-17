@@ -350,6 +350,37 @@ var _ = Describe("IPIPManager", func() {
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
 	})
 
+	It("should program no tunnel route for a local workload that borrowed a remote block's IP", func() {
+		By("Sending host updates")
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "172.0.2.2",
+		})
+
+		By("Sending a local workload holding an IP borrowed from node2's block")
+		// The calc graph flags a borrowed IP both ways and sets LocalWorkload.
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:         proto.RouteType_REMOTE_WORKLOAD | proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:    proto.IPPoolType_IPIP,
+			Dst:           "10.0.1.1/32",
+			DstNodeName:   "node1",
+			DstNodeIp:     "172.0.0.2",
+			LocalWorkload: true,
+			Borrowed:      true,
+		})
+
+		err := ipipMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Treating it as remote yields an onlink route via our own address, which
+		// the kernel rejects forever.
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(BeEmpty())
+	})
+
 	It("should only program black hole routes for local endpoints", func() {
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node1",

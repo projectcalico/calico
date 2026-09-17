@@ -20,7 +20,7 @@ import (
 	"strconv"
 	"strings"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -37,7 +37,6 @@ import (
 	rcomp "github.com/projectcalico/calico/operator/pkg/render/common/components"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
-	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
 	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontext"
 	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontextconstraints"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
@@ -67,8 +66,7 @@ type KubeControllersConfiguration struct {
 	K8sServiceEp           k8sapi.ServiceEndpoint
 	K8sServiceEpPodNetwork k8sapi.ServiceEndpoint
 
-	Installation   *operatorv1.InstallationSpec
-	Authentication *operatorv1.Authentication
+	Installation *operatorv1.InstallationSpec
 
 	// ManagedClusterWatchBinding binds kube-controllers to the managed-cluster watch
 	// ClusterRole. The assemblers set it; multi-cluster management is not a core feature.
@@ -80,11 +78,15 @@ type KubeControllersConfiguration struct {
 	// For details on why this is needed see 'Node and Installation finalizer' in the core_controller.
 	Terminating bool
 
+	// MigrationActive host-networks the deployment for the duration of a
+	// DatastoreMigration. The migration locks the datastore, which stops CNI, so a
+	// pod-networked replacement could never be scheduled to finish the job.
+	MigrationActive bool
+
 	// Secrets - provided by the caller. Used to generate secrets in the destination
 	// namespace to be returned by the rendered. Expected that the calling code
 	// take care to pass the same secret on each reconcile where possible.
-	KubeControllersGatewaySecret *corev1.Secret
-	TrustedBundle                certificatemanagement.TrustedBundleRO
+	TrustedBundle certificatemanagement.TrustedBundleRO
 
 	// ImageOverrides lets a variant swap the kube-controllers image. The controller
 	// wires in the operator's image overrides; nil resolves to the core image.
@@ -119,7 +121,7 @@ type KubeControllersConfiguration struct {
 	Rules []rbacv1.PolicyRule
 	// NetworkPolicy, when set, is rendered into the install namespace (and the
 	// deprecated allow-tigera policy named DeprecatedNetworkPolicyName is deleted).
-	NetworkPolicy               *v3.NetworkPolicy
+	NetworkPolicy               client.Object
 	DeprecatedNetworkPolicyName string
 	// ExtraEnv is appended to the deployment's container env.
 	ExtraEnv []corev1.EnvVar
@@ -165,7 +167,7 @@ func (c calicoKubeControllersPolicy) KubeControllersPolicyConfig() *KubeControll
 	return c.cfg
 }
 
-func NewCalicoKubeControllersPolicy(cfg *KubeControllersConfiguration, defaultDeny *v3.NetworkPolicy) render.Component {
+func NewCalicoKubeControllersPolicy(cfg *KubeControllersConfiguration, defaultDeny client.Object) render.Component {
 	toCreate := []client.Object{kubeControllersCalicoSystemPolicy(cfg)}
 
 	if defaultDeny != nil {
@@ -263,11 +265,6 @@ func (c *kubeControllersComponent) Objects() ([]client.Object, []client.Object) 
 	if c.cfg.Installation.KubernetesProvider.IsOpenShift() {
 		objectsToCreate = append(objectsToCreate, c.controllersOCPFederationRoleBinding())
 	}
-	if c.cfg.KubeControllersGatewaySecret != nil {
-		objectsToCreate = append(objectsToCreate, secret.ToRuntimeObjects(
-			secret.CopyToNamespace(c.cfg.Namespace, c.cfg.KubeControllersGatewaySecret)...)...)
-	}
-
 	if c.cfg.MetricsPort != 0 {
 		objectsToCreate = append(objectsToCreate, c.prometheusService())
 	} else {
@@ -535,6 +532,11 @@ func (c *kubeControllersComponent) controllersDeployment() *appsv1.Deployment {
 		Volumes:            c.kubeControllersVolumes(),
 	}
 
+	if c.cfg.MigrationActive {
+		podSpec.HostNetwork = true
+		podSpec.DNSPolicy = corev1.DNSClusterFirstWithHostNet
+	}
+
 	var replicas int32 = 1
 
 	d := appsv1.Deployment{
@@ -654,9 +656,6 @@ func (c *kubeControllersComponent) annotations() map[string]string {
 		am = make(map[string]string)
 	}
 
-	if c.cfg.KubeControllersGatewaySecret != nil {
-		am[render.ElasticsearchUserHashAnnotation] = rmeta.AnnotationHash(c.cfg.KubeControllersGatewaySecret.Data)
-	}
 	return am
 }
 

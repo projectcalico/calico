@@ -25,7 +25,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
-	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
@@ -45,40 +44,22 @@ var (
 		[]string{"name", "namespace", "issuer"},
 		nil,
 	)
-
-	licenseExpiryDesc = prometheus.NewDesc(
-		"tigera_operator_license_expiry_timestamp_seconds",
-		"Unix timestamp of Tigera license expiry.",
-		[]string{"package"},
-		nil,
-	)
-
-	licenseValidDesc = prometheus.NewDesc(
-		"tigera_operator_license_valid",
-		"Whether the Tigera license is valid (including grace period). 1 = valid, 0 = invalid.",
-		[]string{"package"},
-		nil,
-	)
 )
 
 // OperatorCollector implements prometheus.Collector and exposes custom operator metrics.
 type OperatorCollector struct {
-	client           client.Client
-	licenseAvailable bool
+	client client.Client
 }
 
-// NewOperatorCollector creates a new OperatorCollector. Set licenseAvailable to true
-// when the LicenseKey CRD exists (Calico Enterprise).
-func NewOperatorCollector(c client.Client, licenseAvailable bool) *OperatorCollector {
-	return &OperatorCollector{client: c, licenseAvailable: licenseAvailable}
+// NewOperatorCollector creates a new OperatorCollector.
+func NewOperatorCollector(c client.Client) *OperatorCollector {
+	return &OperatorCollector{client: c}
 }
 
 // Describe implements prometheus.Collector.
 func (c *OperatorCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- componentStatusDesc
 	ch <- tlsCertExpiryDesc
-	ch <- licenseExpiryDesc
-	ch <- licenseValidDesc
 }
 
 // Collect implements prometheus.Collector.
@@ -86,9 +67,6 @@ func (c *OperatorCollector) Collect(ch chan<- prometheus.Metric) {
 	ctx := context.Background()
 	c.collectComponentStatus(ctx, ch)
 	c.collectTLSCertExpiry(ctx, ch)
-	if c.licenseAvailable {
-		c.collectLicense(ctx, ch)
-	}
 }
 
 func (c *OperatorCollector) collectComponentStatus(ctx context.Context, ch chan<- prometheus.Metric) {
@@ -156,40 +134,4 @@ func (c *OperatorCollector) collectTLSCertExpiry(ctx context.Context, ch chan<- 
 			issuer,
 		)
 	}
-}
-
-func (c *OperatorCollector) collectLicense(ctx context.Context, ch chan<- prometheus.Metric) {
-	license, err := utils.FetchLicenseKey(ctx, c.client)
-	if err != nil {
-		// License not yet available or transient read error. Skip gracefully.
-		return
-	}
-
-	pkg := string(license.Status.Package)
-	if pkg == "" {
-		pkg = "Enterprise"
-	}
-
-	if !license.Status.Expiry.IsZero() {
-		ch <- prometheus.MustNewConstMetric(
-			licenseExpiryDesc,
-			prometheus.GaugeValue,
-			float64(license.Status.Expiry.Unix()),
-			pkg,
-		)
-	}
-
-	gracePeriod := utils.ParseGracePeriod(license.Status.GracePeriod)
-	licenseStatus := utils.GetLicenseStatus(license, gracePeriod)
-	valid := float64(1)
-	if licenseStatus == utils.LicenseStatusExpired {
-		valid = 0
-	}
-
-	ch <- prometheus.MustNewConstMetric(
-		licenseValidDesc,
-		prometheus.GaugeValue,
-		valid,
-		pkg,
-	)
 }

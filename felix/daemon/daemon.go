@@ -44,6 +44,7 @@ import (
 	"github.com/projectcalico/calico/felix/statusrep"
 	"github.com/projectcalico/calico/felix/usagerep"
 	"github.com/projectcalico/calico/lib/logrusr"
+	stdlog "github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
@@ -115,6 +116,13 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 	// Special-case handling for environment variable-configured logging:
 	// Initialise early so we can trace out config parsing.
 	logrusr.ConfigureEarlyLoggingFromEnv("felix")
+
+	// Point the lib/std/log facade at the same logrus logger, so code written against the
+	// facade lands in Felix's log output rather than being dropped.  The facade discards
+	// everything until a backend is registered, and Felix reaches such code through the
+	// collector, which evaluates policy using app-policy/checker.  The adapter holds the
+	// standard logger itself, so the levels ConfigureLogging sets below apply to it too.
+	stdlog.SetDefaultLogger(logrusr.New(log.StandardLogger()))
 
 	ctx := context.Background()
 

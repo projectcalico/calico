@@ -30,6 +30,9 @@ type TiersExtension interface {
 	// DNSClientNamespaces are the variant's namespaces that run product code and so
 	// need access to the DNS service.
 	DNSClientNamespaces(ctx context.Context, cli client.Client) ([]string, error)
+
+	// Reconcile does the extension's own work on the tiers, before the core render.
+	Reconcile(ctx context.Context, cli client.Client) error
 }
 
 // noopTiers runs the core operator's behavior unchanged.
@@ -41,4 +44,8 @@ func (noopTiers) Watches(ctrlruntime.Controller) error {
 
 func (noopTiers) DNSClientNamespaces(context.Context, client.Client) ([]string, error) {
 	return nil, nil
+}
+
+func (noopTiers) Reconcile(context.Context, client.Client) error {
+	return nil
 }

@@ -239,8 +239,10 @@ rules:
   - apiGroups:
       - apps
     resources:
-      # The status manager reads ReplicaSets to find a Deployment's active revision.
+      # The status manager reads ReplicaSets to find a Deployment's active revision,
+      # and ControllerRevisions for a DaemonSet's or StatefulSet's.
       - replicasets
+      - controllerrevisions
     verbs:
       - get
       - list
@@ -390,6 +392,7 @@ rules:
     resources:
       - apiservices
     verbs:
+      - get
       - list
       - watch
       - create
@@ -580,6 +583,7 @@ rules:
       - cronjobs
     verbs:
       - create
+      - get
       - update
       - list
       - watch
@@ -705,6 +709,7 @@ rules:
       - jobs
     verbs:
       - create
+      - get
       - list
       - watch
   - apiGroups:
@@ -849,7 +854,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: tigera-operator
-          image: quay.io/tigera/operator:master
+          image: quay.io/calico/operator:master
           imagePullPolicy: IfNotPresent
           command:
             - operator
@@ -891,7 +896,7 @@ spec:
       initContainers:
         # Install CRDs first, so that APIs exist for calicoctl to use.
         - name: bootstrap-crds
-          image: quay.io/tigera/operator:master
+          image: quay.io/calico/operator:master
           command:
             - operator
           args:

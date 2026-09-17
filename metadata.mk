@@ -2,7 +2,7 @@
 # This file contains Makefile configuration parameters and metadata for this branch.
 #################################################################################################
 # The project Go version
-GO_VERSION=1.27.0
+GO_VERSION=1.27.1
 # Version of Kubernetes to use for dependencies, tests, registry.k8s.io/kubectl, and kubectl binary release.
 K8S_VERSION=v1.37.0
 # The version of LLVM to use for go-build and calico/base images.
@@ -15,7 +15,7 @@ GO_BUILD_VER_SUFFIX=
 GO_BUILD_VER=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)$(GO_BUILD_VER_SUFFIX)
 RUST_BUILD_VER=1.96.0
 
-CALICO_BASE_VER=ubi9-1787783643
+CALICO_BASE_VER=ubi9-1789183536
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
@@ -74,6 +74,8 @@ WINDOWS_VERSIONS ?= ltsc2019 ltsc2022
 # bump it to pick up upstream changes.
 CNI_VERSION=9ffe547cb3b66f80dd32a00fc69a6d0082b55321
 FLANNEL_VERSION=v1.2.0-flannel2-go1.22.7
+CONTAINERNETWORKING_PLUGINS_REPO=https://github.com/projectcalico/containernetworking-plugins.git
+FLANNEL_CNI_PLUGIN_REPO=https://github.com/projectcalico/flannel-cni-plugin.git
 
 # The libbpf version to use
 LIBBPF_VERSION=v1.6.2
@@ -91,3 +93,4 @@ LIBNFTNL_SHA256=37fea5d6b5c9b08de7920d298de3cdc942e7ae64b1a3e8b880b2d390ae67ad95
 
 # quay.io expiry time for hashrelease/dev images
 QUAY_EXPIRE_DAYS=90
+

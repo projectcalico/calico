@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -49,15 +49,37 @@ import (
 
 var log = logf.Log.WithName("controller_tiers")
 
+// ReconcilerOptions is what the Tiers reconciler needs to run.
+type ReconcilerOptions struct {
+	Client             client.Client
+	Scheme             *runtime.Scheme
+	Status             status.StatusManager
+	TierWatchReady     *utils.ReadyFlag
+	PolicyWatchesReady *utils.ReadyFlag
+	Options            options.ControllerOptions
+}
+
+// NewReconciler returns a Tiers reconciler a caller can drive without a manager.
+func NewReconciler(o ReconcilerOptions) *ReconcileTiers {
+	return &ReconcileTiers{
+		client:             o.Client,
+		scheme:             o.Scheme,
+		status:             o.Status,
+		tierWatchReady:     o.TierWatchReady,
+		policyWatchesReady: o.PolicyWatchesReady,
+		opts:               o.Options,
+	}
+}
+
 // Add creates a new Tiers Controller and adds it to the Manager.
 // The Manager will set fields on the Controller and Start it when the Manager is Started.
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	r := &ReconcileTiers{
-		client: mgr.GetClient(),
-		scheme: mgr.GetScheme(),
-		status: status.New(mgr.GetClient(), "tiers", opts.KubernetesVersion),
-		opts:   opts,
-	}
+	r := NewReconciler(ReconcilerOptions{
+		Client:  mgr.GetClient(),
+		Scheme:  mgr.GetScheme(),
+		Status:  status.New(mgr.GetClient(), "tiers", opts.KubernetesVersion),
+		Options: opts,
+	})
 	r.status.Run(opts.ShutdownContext)
 
 	c, err := ctrlruntime.NewController("tiers-controller", mgr, controller.Options{Reconciler: r})
@@ -114,11 +136,9 @@ func (r *ReconcileTiers) Reconcile(ctx context.Context, request reconcile.Reques
 		return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
 	}
 
-	if r.opts.Cloud {
-		if err := r.cloudPatchTier(ctx); err != nil {
-			r.status.SetDegraded(operatorv1.ResourcePatchError, "Error patching tier", err, reqLogger)
-			return reconcile.Result{}, nil
-		}
+	if err := r.opts.Extensions.Tiers().Reconcile(ctx, r.client); err != nil {
+		r.status.SetDegraded(operatorv1.ResourcePatchError, "Error patching tier", err, reqLogger)
+		return reconcile.Result{}, nil
 	}
 
 	tiersConfig, reconcileResult := r.prepareTiersConfig(ctx, reqLogger)

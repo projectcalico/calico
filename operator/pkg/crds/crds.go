@@ -45,40 +45,37 @@ var (
 	//go:embed calico_operator_crds.txt
 	calicoOperatorCRDList string
 
-	calicoOperatorCRDs map[string]bool
+	// calicoOperatorCRDs are the operator CRDs a Calico install ships. A build
+	// serving another variant generates more of them into the same directory.
+	calicoOperatorCRDs = func() map[string]bool {
+		names := map[string]bool{}
+		for _, line := range strings.Split(calicoOperatorCRDList, "\n") {
+			if name := strings.TrimSpace(line); name != "" && !strings.HasPrefix(name, "#") {
+				names[name] = true
+			}
+		}
+		return names
+	}()
 
-	// variantCRDs holds the CRDs a variant installs beyond the operator's own.
-	// Enterprise registers its own, which are not built from this repo.
-	variantCRDs map[opv1.ProductVariant][]CRDSource
+	// variantCRDs holds the CRDs a variant installs beyond the operator's own,
+	// which are not built from this repo.
+	variantCRDs = map[opv1.ProductVariant][]CRDSource{}
 
-	// We cache these CRDs because to generate the calico and enterprise takes
-	// approximately 40ms, with the caching 1ms.
-	lock           sync.Mutex
-	calicoCRDs     []*apiextenv1.CustomResourceDefinition
-	enterpriseCRDs []*apiextenv1.CustomResourceDefinition
+	// Parsing a variant's CRDs takes around 40ms, against 1ms for a cache hit.
+	lock     sync.Mutex
+	crdCache = map[opv1.ProductVariant][]*apiextenv1.CustomResourceDefinition{}
 )
 
 // CRDSource returns CRD YAML documents keyed by a name unique within the source.
 type CRDSource func(v3 bool) map[string][]byte
 
 // RegisterVariantCRDs adds CRDs a variant installs beyond the operator's own.
-// Call from an init(): the bootstrap path reads the registry before main runs.
+// Call it before the operator starts; the bootstrap path reads the registry first.
 func RegisterVariantCRDs(variant opv1.ProductVariant, sources ...CRDSource) {
 	lock.Lock()
 	defer lock.Unlock()
 	variantCRDs[variant] = append(variantCRDs[variant], sources...)
-	calicoCRDs = nil
-	enterpriseCRDs = nil
-}
-
-func init() {
-	variantCRDs = map[opv1.ProductVariant][]CRDSource{}
-	calicoOperatorCRDs = map[string]bool{}
-	for _, line := range strings.Split(calicoOperatorCRDList, "\n") {
-		if name := strings.TrimSpace(line); name != "" && !strings.HasPrefix(name, "#") {
-			calicoOperatorCRDs[name] = true
-		}
-	}
+	clear(crdCache)
 }
 
 // ReadCRDs splits every CRD in files into its YAML documents, for variants whose
@@ -135,8 +132,8 @@ func getK8sPolicyCRDSource() map[string][]byte {
 	})
 }
 
-// getOperatorCRDSource returns the operator's own CRDs, trimmed to the set a Calico
-// install ships.
+// getOperatorCRDSource returns the operator's own CRDs, trimmed to the set a
+// Calico install ships.
 func getOperatorCRDSource(variant opv1.ProductVariant) map[string][]byte {
 	files, err := fs.Sub(operatorCRDFiles, "operator")
 	if err != nil {
@@ -169,31 +166,21 @@ func GetCRDs(variant opv1.ProductVariant, v3 bool) []*apiextenv1.CustomResourceD
 	lock.Lock()
 	defer lock.Unlock()
 
-	var crds []*apiextenv1.CustomResourceDefinition
-	if variant == opv1.Calico {
-		if len(calicoCRDs) == 0 {
-			calicoCRDs = convertYamlsToCRDs(getCalicoCRDSource(v3), getK8sPolicyCRDSource(), getOperatorCRDSource(variant))
+	if len(crdCache[variant]) == 0 {
+		yamls := []map[string][]byte{getOperatorCRDSource(variant)}
+		if variant == opv1.Calico {
+			yamls = append(yamls, getCalicoCRDSource(v3), getK8sPolicyCRDSource())
 		}
-		crds = calicoCRDs
-	} else {
-		if len(enterpriseCRDs) == 0 {
-			yamls := []map[string][]byte{getOperatorCRDSource(variant)}
-			for _, source := range variantCRDs[variant] {
-				yamls = append(yamls, source(v3))
-			}
-			enterpriseCRDs = convertYamlsToCRDs(yamls...)
+		for _, source := range variantCRDs[variant] {
+			yamls = append(yamls, source(v3))
 		}
-		crds = enterpriseCRDs
+		crdCache[variant] = convertYamlsToCRDs(yamls...)
 	}
 
 	// Make a cp of the slice so that when we use the resource to Create or Update
 	// our original cp of the definitions are not tainted with a ResourceVersion
 	cp := []*apiextenv1.CustomResourceDefinition{}
-	for _, crd := range crds {
-		// Skip the Tenant CRD - this is only used in Calico Cloud.
-		if crd.Name == "tenants.operator.tigera.io" {
-			continue
-		}
+	for _, crd := range crdCache[variant] {
 		cp = append(cp, crd.DeepCopy())
 	}
 

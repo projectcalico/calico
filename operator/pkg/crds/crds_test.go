@@ -16,6 +16,9 @@ package crds
 
 import (
 	"fmt"
+	"os"
+	"strings"
+	"testing/fstest"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -35,21 +38,8 @@ var _ = Describe("test crds pkg", func() {
 			Expect(func() { Expect(GetCRDs(opv1.Calico, v3)).ToNot(BeEmpty()) }).ToNot(Panic())
 		})
 
-		It("gets the operator's own CRDs for Enterprise, whose others are registered elsewhere", func() {
-			enterpriseCRDs = nil
-			crds := GetCRDs(opv1.CalicoEnterprise, v3)
-			Expect(crds).ToNot(BeEmpty())
-
-			crdNames := map[string]bool{}
-			for _, crd := range crds {
-				crdNames[crd.Name] = true
-			}
-			Expect(crdNames).To(HaveKey("logstorages.operator.tigera.io"))
-			Expect(crdNames).ToNot(HaveKey("wafpolicies.applicationlayer.projectcalico.org"))
-		})
-
 		It(fmt.Sprintf("includes K8s policy CRDs for Calico (v3=%t)", v3), func() {
-			calicoCRDs = nil
+			clear(crdCache)
 			crds := GetCRDs(opv1.Calico, v3)
 			crdNames := map[string]bool{}
 			for _, crd := range crds {
@@ -64,7 +54,7 @@ var _ = Describe("test crds pkg", func() {
 			})
 			DeferCleanup(func() {
 				variantCRDs = map[opv1.ProductVariant][]CRDSource{}
-				enterpriseCRDs = nil
+				clear(crdCache)
 			})
 
 			crdNames := map[string]bool{}
@@ -75,16 +65,60 @@ var _ = Describe("test crds pkg", func() {
 		})
 	}
 
-	It("can parse Operator CRDs used with calico", func() {
+	It("can parse the operator's own CRDs", func() {
 		Expect(func() { Expect(getOperatorCRDSource(opv1.Calico)).ToNot(BeEmpty()) }).ToNot(Panic())
 	})
 
-	It("can parse Operator CRDs used with Enterprise", func() {
-		Expect(func() { Expect(getOperatorCRDSource(opv1.CalicoEnterprise)).ToNot(BeEmpty()) }).ToNot(Panic())
+	// A build serving another variant generates that variant's operator CRDs into
+	// the same directory, so a Calico install has to be trimmed back to its own.
+	It("gives a Calico install only the operator CRDs it ships", func() {
+		files := fstest.MapFS{
+			"operator.tigera.io_installations.yaml": {Data: []byte("kind: CustomResourceDefinition")},
+			"operator.tigera.io_logstorages.yaml":   {Data: []byte("kind: CustomResourceDefinition")},
+		}
+		keep := func(name string) bool { return calicoOperatorCRDs[name] }
+
+		docs := readCRDs(files, "test", keep)
+		Expect(docs).To(HaveKey("operator.tigera.io_installations.yaml_0"))
+		Expect(docs).NotTo(HaveKey("operator.tigera.io_logstorages.yaml_0"))
+	})
+
+	It("gives another variant every operator CRD its build generated", func() {
+		files := fstest.MapFS{
+			"operator.tigera.io_installations.yaml": {Data: []byte("kind: CustomResourceDefinition")},
+			"operator.tigera.io_logstorages.yaml":   {Data: []byte("kind: CustomResourceDefinition")},
+		}
+
+		docs := readCRDs(files, "test", func(string) bool { return true })
+		Expect(docs).To(HaveLen(2))
 	})
 
 	It("installs GatewayAPI CRD with Calico OSS", func() {
 		Expect(getOperatorCRDSource(opv1.Calico)).To(HaveKey(ContainSubstring("gatewayapis")))
+	})
+
+	// manifests/generate.sh reads calico_operator_crds.txt and copies each file it
+	// names, so a listed file that is not on disk breaks manifest generation.
+	It("has every operator CRD calico_operator_crds.txt lists", func() {
+		entries, err := os.ReadDir("operator")
+		Expect(err).NotTo(HaveOccurred())
+		onDisk := map[string]bool{}
+		for _, e := range entries {
+			onDisk[e.Name()] = true
+		}
+
+		for name := range calicoOperatorCRDs {
+			Expect(onDisk).To(HaveKey(name))
+		}
+	})
+
+	It("installs exactly those on Calico, whatever else the build generated", func() {
+		installed := map[string]bool{}
+		for key := range getOperatorCRDSource(opv1.Calico) {
+			// readCRDs keys each YAML document as "<file>_<index>".
+			installed[key[:strings.LastIndex(key, "_")]] = true
+		}
+		Expect(installed).To(Equal(calicoOperatorCRDs))
 	})
 })
 

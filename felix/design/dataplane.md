@@ -458,9 +458,10 @@ the flowtable entry.
 
 Two invariants follow:
 
-- **The offload rule sits ahead of the dispatch jumps.** It matches
-  `RELATED,ESTABLISHED` only, so `NEW` and `INVALID` packets still
-  traverse policy. Per-endpoint chains accept established traffic
+- **The offload rule sits ahead of the dispatch jumps.** FORWARD
+  jumps to `cali-flow-offload` on `RELATED,ESTABLISHED` only, so `NEW`
+  and `INVALID` packets still traverse policy and pay for neither the
+  jump nor the chain. Per-endpoint chains accept established traffic
   before any NFLOG rule, so policy attribution in flow logs is
   unaffected; connection byte counts come from `nf_conntrack_acct`
   rather than from Felix.
@@ -470,8 +471,8 @@ Two invariants follow:
   the `no-flow-offload` IP set, holding the IPs of endpoints with DSCP
   marking (rendered into mangle POSTROUTING) or a connection or packet
   rate limit (rendered into the endpoint's filter chain), and the
-  offload rule matches neither source nor destination in that set.
-  Bandwidth QoS is
+  offload rule in `cali-flow-offload` matches neither source nor
+  destination in that set. Bandwidth QoS is
   enforced by tc on the veth, which the fast path still traverses, so
   it does not disqualify an endpoint.
 
@@ -547,7 +548,8 @@ nothing about the next.
 - A PR that renders a new rule into filter FORWARD or mangle
   POSTROUTING for a subset of endpoints has to decide whether those
   endpoints can still be offloaded. If the rule has to run, add them to
-  the `no-flow-offload` set and cover it in `fv/flowtable_test.go`.
+  the `no-flow-offload` set, or return from `cali-flow-offload` for the
+  traffic it matches, and cover it in `fv/flowtable_test.go`.
 - A PR adding `*tables` rule semantics must first decide the
   iptables/nftables story explicitly (both? nft-only? — see above),
   and should carry FV coverage in the relevant mode(s)

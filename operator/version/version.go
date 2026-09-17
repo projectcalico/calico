@@ -16,7 +16,3 @@ package version
 
 // VERSION is filled out during the build process (using git describe output)
 var VERSION = "unknown"
-
-// BuildVariant names the product variant baked into this binary, empty for a stock
-// build. It is filled out during the build process; see CLOUD_LDFLAGS in the Makefile.
-var BuildVariant string

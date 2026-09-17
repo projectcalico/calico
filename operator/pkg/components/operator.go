@@ -19,4 +19,5 @@ import "github.com/projectcalico/calico/operator/version"
 var ComponentOperatorInit = Component{
 	Version: version.VERSION,
 	Image:   "operator",
+	Variant: operatorVariant,
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -112,7 +112,7 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 		}
 
 		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusOK).
-			SendList(apiutil.ListMeta{TotalPages: int(meta.TotalPages)}, rspFlows)
+			SendList(apiutil.ListMeta{TotalPages: int(meta.TotalPages), TotalResults: int(meta.TotalResults)}, rspFlows)
 	}
 }
 
@@ -150,6 +150,6 @@ func (hdlr *flowsHdlr) ListFilterHints(ctx apictx.Context, params whiskerv1.Flow
 
 	return apiutil.NewListResponse[whiskerv1.FlowFilterHintResponse]().
 		SetStatus(http.StatusOK).
-		SetMeta(apiutil.ListMeta{TotalPages: int(hintsMeta.TotalPages)}).
+		SetMeta(apiutil.ListMeta{TotalPages: int(hintsMeta.TotalPages), TotalResults: int(hintsMeta.TotalResults)}).
 		SetItems(hints)
 }

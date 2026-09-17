@@ -37,7 +37,7 @@ import (
 
 func releaseOutputDir(repoRootDir, version string) string {
 	baseOutputDir := filepath.Join(append([]string{repoRootDir}, releaseOutputPath...)...)
-	return filepath.Join(baseOutputDir, "upload", version)
+	return filepath.Join(baseOutputDir, "release", version)
 }
 
 // The release command suite is used to build and publish official releases.
@@ -50,7 +50,7 @@ func releaseCommand(cfg *Config) *cli.Command {
 	}
 }
 
-func releaseSubCommands(cfg *Config) []*cli.Command {
+var releaseSubCommands = func(cfg *Config) []*cli.Command {
 	return []*cli.Command{
 		// Prepare for a release.
 		releasePrepCommand(cfg),
@@ -113,6 +113,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 					calico.WithImages(c.Bool(imagesFlagName)),
 					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
+					calico.WithImageReleaseDirs(c.StringSlice(imageReleaseDirsFlag.Name)),
 					calico.WithArchiveImages(c.Bool(archiveImagesFlagName)),
 					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
 					calico.WithManifests(c.Bool(manifestsFlag.Name)),
@@ -127,6 +128,24 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
 				}
+				// The operator carries the versions of the images it deploys in its binary, so a
+				// release rebuilds it rather than retagging the one a hashrelease published.
+				operatorOpts := []operator.Option{
+					operator.WithVersion(operatorVer.FormattedString()),
+					operator.WithCalicoDirectory(cfg.RepoRootDir),
+					operator.WithCalicoVersion(ver.FormattedString()),
+					operator.WithArchitectures(c.StringSlice(archFlag.Name)),
+					operator.WithValidate(c.Bool(validationFlag.Name)),
+				}
+				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
+					operatorOpts = append(operatorOpts, operator.WithProductRegistry(reg[0]))
+				}
+				if c.Bool(operatorFlagName) {
+					if err := operator.NewManager(operatorOpts...).Build(); err != nil {
+						return err
+					}
+				}
+
 				r := calico.NewManager(opts...)
 				return r.Build()
 			},
@@ -156,10 +175,12 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 					calico.WithGithubToken(c.String(githubTokenFlag.Name)),
 					calico.WithImages(c.Bool(imagesFlagName)),
+					calico.WithImageReleaseDirs(c.StringSlice(imageReleaseDirsFlag.Name)),
 					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
 					calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
 					calico.WithGitRef(c.Bool(gitRefFlag.Name)),
 					calico.WithGithubRelease(c.Bool(githubReleaseFlag.Name)),
+					calico.WithDraftRelease(c.Bool(draftGithubReleaseFlag.Name)),
 					calico.WithValidation(c.Bool(validationFlag.Name)),
 					calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
 				}
@@ -175,54 +196,26 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 				if v := c.String(s3BucketFlag.Name); v != "" {
 					opts = append(opts, calico.WithS3Bucket(v))
 				}
+				if c.Bool(operatorFlagName) {
+					o := operator.NewManager(
+						operator.WithCalicoDirectory(cfg.RepoRootDir),
+						operator.WithVersion(operatorVer.FormattedString()),
+					)
+					if err := o.PrePublishValidation(); err != nil {
+						return err
+					}
+					if err := o.Publish(); err != nil {
+						return err
+					}
+				}
+
 				r := calico.NewManager(opts...)
 				return r.PublishRelease()
 			},
 		},
 
-		// Publish a release to the public.
-		releasePublicSubCommands(cfg),
-
 		// Post-release validation.
 		releaseValidationSubCommand(cfg),
-	}
-}
-
-func releasePublicSubCommands(cfg *Config) *cli.Command {
-	flags := []cli.Flag{
-		orgFlag,
-		repoFlag,
-		repoRemoteFlag,
-	}
-	return &cli.Command{
-		Name:  "public",
-		Usage: "Make a published release available to the public",
-		Flags: flags,
-		Action: func(_ context.Context, c *cli.Command) error {
-			configureLogging("release-public.log")
-			ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
-			if err != nil {
-				return err
-			}
-			opts := []calico.Option{
-				calico.WithRepoRoot(cfg.RepoRootDir),
-				calico.WithVersion(ver.FormattedString()),
-				calico.WithOperatorVersion(operatorVer.FormattedString()),
-				calico.WithGithubOrg(c.String(orgFlag.Name)),
-				calico.WithRepoName(c.String(repoFlag.Name)),
-				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
-			}
-			m := calico.NewManager(opts...)
-			if err := m.ReleasePublic(); err != nil {
-				return err
-			}
-			opOpts := []operator.Option{
-				operator.WithVersion(operatorVer.FormattedString()),
-				operator.WithCalicoDirectory(cfg.RepoRootDir),
-			}
-			o := operator.NewManager(opOpts...)
-			return o.ReleasePublic()
-		},
 	}
 }
 
@@ -285,7 +278,9 @@ func releaseBuildFlags() []cli.Flag {
 	f := append(slices.Clone(productFlags), buildStepFlags(false)...)
 	f = append(f,
 		registryFlag,
-		archFlag)
+		archFlag,
+		imageReleaseDirsFlag)
+	f = append(f, operatorBuildCommandFlags...)
 	f = append(f,
 		branchCheckFlag,
 		validationFlag,
@@ -296,8 +291,10 @@ func releaseBuildFlags() []cli.Flag {
 // releasePublishFlags returns the flags for release publish command.
 func releasePublishFlags() []cli.Flag {
 	f := append(slices.Clone(productFlags), publishStepFlags(false)...)
+	f = append(f, operatorPublishCommandFlags...)
 	f = append(f,
 		registryFlag,
+		imageReleaseDirsFlag,
 		helmRegistryFlag,
 		githubTokenFlag,
 		awsProfileFlag,
@@ -327,6 +324,11 @@ func releaseValidationSubCommand(cfg *Config) *cli.Command {
 				return err
 			}
 
+			imgs, err := utils.ReleaseImages()
+			if err != nil {
+				return err
+			}
+
 			postreleaseDir := filepath.Join(cfg.RepoRootDir, utils.ReleaseFolderName, "pkg", "postrelease")
 			args := []string{
 				"--format=testname",
@@ -337,7 +339,7 @@ func releaseValidationSubCommand(cfg *Config) *cli.Command {
 				fmt.Sprintf("-github-org=%s", c.String(orgFlag.Name)),
 				fmt.Sprintf("-github-repo=%s", c.String(repoFlag.Name)),
 				fmt.Sprintf("-github-repo-remote=%s", c.String(repoRemoteFlag.Name)),
-				fmt.Sprintf("-images=%s", strings.Join(utils.ReleaseImages(), " ")),
+				fmt.Sprintf("-images=%s", strings.Join(imgs, " ")),
 			}
 			if c.String(githubTokenFlag.Name) != "" {
 				args = append(args, fmt.Sprintf("-github-token=%s", c.String(githubTokenFlag.Name)))

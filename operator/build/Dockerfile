@@ -40,6 +40,7 @@ LABEL release="1"
 LABEL summary="Tigera Operator manages the lifecycle of a Calico or Calico Enterprise installation on Kubernetes or OpenShift"
 LABEL vendor="Tigera"
 LABEL version=${GIT_VERSION}
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
 
 COPY --from=source / /
 

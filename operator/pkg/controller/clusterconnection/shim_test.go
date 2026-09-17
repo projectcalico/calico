@@ -1,5 +1,5 @@
 // Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -18,8 +18,7 @@
 package clusterconnection
 
 import (
-	"context"
-
+	"golang.org/x/net/http/httpproxy"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -28,8 +27,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
-	"github.com/projectcalico/calico/operator/pkg/enterprise"
-	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
 )
 
 func NewReconcilerWithShims(
@@ -39,12 +36,20 @@ func NewReconcilerWithShims(
 	provider operatorv1.Provider,
 	tierWatchReady *utils.ReadyFlag,
 	clusterInfoWatchReady *utils.ReadyFlag,
+	opts options.ControllerOptions,
 ) reconcile.Reconciler {
-	opts := options.ControllerOptions{
-		ShutdownContext: context.Background(),
-		Extensions:      enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{}),
-		Variant:         operatorv1.CalicoEnterprise,
-	}
+	return NewReconciler(ReconcilerOptions{
+		Client:                cli,
+		Scheme:                schema,
+		Status:                status,
+		Provider:              provider,
+		TierWatchReady:        tierWatchReady,
+		ClusterInfoWatchReady: clusterInfoWatchReady,
+		Options:               opts,
+	})
+}
 
-	return newReconciler(cli, schema, status, provider, tierWatchReady, clusterInfoWatchReady, opts)
+// ResolvedPodProxies exposes what the reconciler read off the Guardian pods.
+func ResolvedPodProxies(r reconcile.Reconciler) []*httpproxy.Config {
+	return r.(*ReconcileConnection).resolvedPodProxies
 }

@@ -20,8 +20,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/stretchr/testify/mock"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -41,7 +41,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
-	"github.com/projectcalico/calico/operator/pkg/enterprise/render/monitor"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	"github.com/projectcalico/calico/operator/pkg/tls"
 	"github.com/projectcalico/calico/operator/test"
@@ -125,11 +124,10 @@ var _ = Describe("windows-controller installation tests", func() {
 
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 			r = ReconcileWindows{
-				ext: testExtensions.Windows(),
+				ext: coreExtensions.Windows(),
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
 					DetectedProvider: operator.ProviderNone,
-					Variant:          operator.CalicoEnterprise,
+					Variant:          operator.Calico,
 				},
 				config:               nil, // there is no fake for config
 				client:               c,
@@ -166,11 +164,6 @@ var _ = Describe("windows-controller installation tests", func() {
 				},
 			}
 			Expect(updateInstallationWithDefaults(ctx, r.client, cr, r.opts.DetectedProvider, r.opts.Variant)).NotTo(HaveOccurred())
-			certificateManager, err := certificatemanager.Create(c, nil, "", common.OperatorNamespace(), certificatemanager.AllowCACreation())
-			Expect(err).NotTo(HaveOccurred())
-			prometheusTLS, err := certificateManager.GetOrCreateKeyPair(c, monitor.PrometheusClientTLSSecretName, common.OperatorNamespace(), []string{monitor.PrometheusClientTLSSecretName})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(c.Create(ctx, prometheusTLS.Secret(common.OperatorNamespace()))).NotTo(HaveOccurred())
 			Expect(c.Create(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "calico-system"}})).NotTo(HaveOccurred())
 		})
 		AfterEach(func() {
@@ -621,11 +614,10 @@ var _ = Describe("windows-controller installation tests", func() {
 
 					// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 					r = ReconcileWindows{
-						ext: testExtensions.Windows(),
+						ext: coreExtensions.Windows(),
 						opts: options.ControllerOptions{
-							Extensions:       testExtensions,
 							DetectedProvider: operator.ProviderNone,
-							Variant:          operator.CalicoEnterprise,
+							Variant:          operator.Calico,
 						},
 						config:               nil, // there is no fake for config
 						client:               c,
@@ -637,9 +629,6 @@ var _ = Describe("windows-controller installation tests", func() {
 
 					certificateManager, err := certificatemanager.Create(c, nil, "", common.OperatorNamespace(), certificatemanager.AllowCACreation())
 					Expect(err).NotTo(HaveOccurred())
-					prometheusTLS, err := certificateManager.GetOrCreateKeyPair(c, monitor.PrometheusClientTLSSecretName, common.OperatorNamespace(), []string{monitor.PrometheusClientTLSSecretName})
-					Expect(err).NotTo(HaveOccurred())
-					Expect(c.Create(ctx, prometheusTLS.Secret(common.OperatorNamespace()))).NotTo(HaveOccurred())
 					Expect(c.Create(ctx, certificateManager.KeyPair().Secret(common.OperatorNamespace()))).NotTo(HaveOccurred())
 					Expect(c.Create(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "calico-system"}})).NotTo(HaveOccurred())
 					// We start off with a 'standard' installation, with nothing special
@@ -654,7 +643,7 @@ var _ = Describe("windows-controller installation tests", func() {
 						Spec: operator.InstallationSpec{
 							Variant:               operator.Calico,
 							Registry:              "some.registry.org/",
-							CertificateManagement: &operator.CertificateManagement{CACert: prometheusTLS.GetCertificatePEM()},
+							CertificateManagement: &operator.CertificateManagement{CACert: certificateManager.KeyPair().GetCertificatePEM()},
 							CalicoNetwork: &operator.CalicoNetworkSpec{
 								WindowsDataplane: &winDp,
 								IPPools: []operator.IPPool{
@@ -682,8 +671,6 @@ var _ = Describe("windows-controller installation tests", func() {
 				})
 
 				It("should use builtin images", func() {
-					// This suite builds the Enterprise extensions, which register their images.
-					DeferCleanup(components.UseImages(components.CalicoImages))
 
 					_, err := r.Reconcile(ctx, reconcile.Request{})
 					Expect(err).ShouldNot(HaveOccurred())
@@ -739,8 +726,6 @@ var _ = Describe("windows-controller installation tests", func() {
 					}
 				})
 				It("should use images from imageset", func() {
-					// This suite builds the Enterprise extensions, which register their images.
-					DeferCleanup(components.UseImages(components.CalicoImages))
 
 					imageSet := &operator.ImageSet{
 						ObjectMeta: metav1.ObjectMeta{Name: "calico-" + components.CalicoRelease},

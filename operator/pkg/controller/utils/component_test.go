@@ -19,13 +19,10 @@ import (
 	stderrors "errors"
 	"fmt"
 
-	esv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/elasticsearch/v1"
-	kbv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/kibana/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	ocsv1 "github.com/openshift/api/security/v1"
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	apps "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -58,7 +55,7 @@ const (
 var _ = Describe("Component handler tests", func() {
 	var (
 		c        client.Client
-		instance *operatorv1.Manager
+		instance *operatorv1.APIServer
 		ctx      context.Context
 		scheme   *runtime.Scheme
 		sm       status.StatusManager
@@ -81,9 +78,9 @@ var _ = Describe("Component handler tests", func() {
 		sm = status.New(c, "fake-component", &common.VersionInfo{Major: 1, Minor: 19})
 
 		// We need to provide something to handler even though it seems to be unused..
-		instance = &operatorv1.Manager{
-			TypeMeta:   metav1.TypeMeta{Kind: "Manager", APIVersion: "operator.tigera.io/v1"},
-			ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
+		instance = &operatorv1.APIServer{
+			TypeMeta:   metav1.TypeMeta{Kind: "APIServer", APIVersion: "operator.tigera.io/v1"},
+			ObjectMeta: metav1.ObjectMeta{Name: "default"},
 		}
 		handler = NewComponentHandler(logf.Log, c, scheme, instance)
 	})
@@ -183,8 +180,8 @@ var _ = Describe("Component handler tests", func() {
 		t := true
 		expectOR := metav1.OwnerReference{
 			APIVersion:         "operator.tigera.io/v1",
-			Kind:               "Manager",
-			Name:               "tigera-secure",
+			Kind:               "APIServer",
+			Name:               "default",
 			Controller:         &t,
 			BlockOwnerDeletion: &t,
 		}
@@ -433,58 +430,6 @@ var _ = Describe("Component handler tests", func() {
 		Expect(ns.GetAnnotations()).To(Equal(expectedAnnotations))
 	})
 
-	It("merges UISettings leaving owners unchanged", func() {
-		fc := &fakeComponent{
-			supportedOSType: rmeta.OSTypeLinux,
-			objs: []client.Object{&v3.UISettings{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test.test-settings",
-					OwnerReferences: []metav1.OwnerReference{{
-						APIVersion: "projectcalico.org/v3",
-						Kind:       "UISettingsGroup",
-						Name:       "owner",
-						UID:        "abcde",
-					}},
-				},
-				Spec: v3.UISettingsSpec{
-					Group:       "test",
-					Description: "just a test",
-					Layer: &v3.UIGraphLayer{
-						Nodes: []v3.UIGraphNode{},
-					},
-				},
-			}},
-		}
-
-		err := handler.CreateOrUpdateOrDelete(ctx, fc, sm)
-		Expect(err).To(BeNil())
-
-		By("checking that the UISettings is created and ownerref is not modified")
-		uiKey := client.ObjectKey{
-			Name: "test.test-settings",
-		}
-		ui := &v3.UISettings{}
-		err = c.Get(ctx, uiKey, ui)
-		Expect(err).To(BeNil())
-		Expect(ui.OwnerReferences).To(HaveLen(1))
-		Expect(ui.OwnerReferences[0].Name).To(Equal("owner"))
-
-		By("overwriting the description and updating the owner.")
-		ui.Spec.Description = "another test"
-		ui.OwnerReferences[0].Name = "differentowner"
-		fc.objs = []client.Object{ui}
-		err = handler.CreateOrUpdateOrDelete(ctx, fc, sm)
-		Expect(err).To(BeNil())
-
-		By("checking that the uisettings is updated with description, but ownerref is not modified")
-		ui = &v3.UISettings{}
-		err = c.Get(ctx, uiKey, ui)
-		Expect(err).To(BeNil())
-		Expect(ui.OwnerReferences).To(HaveLen(1))
-		Expect(ui.OwnerReferences[0].Name).To(Equal("owner"))
-		Expect(ui.Spec.Description).To(Equal("another test"))
-	})
-
 	It("merges labels and reconciles only operator added labels", func() {
 		fc := &fakeComponent{
 			supportedOSType: rmeta.OSTypeLinux,
@@ -504,12 +449,12 @@ var _ = Describe("Component handler tests", func() {
 		By("checking that the namespace is created and desired label is present")
 		expectedLabels := map[string]string{
 			fakeComponentLabelKey:          fakeComponentLabelValue,
-			"app.kubernetes.io/instance":   "tigera-secure",
+			"app.kubernetes.io/instance":   "default",
 			"app.kubernetes.io/managed-by": "tigera-operator",
 			"app.kubernetes.io/part-of":    "Calico",
 			"app.kubernetes.io/name":       "test-namespace",
 			"k8s-app":                      "test-namespace",
-			"app.kubernetes.io/component":  "Manager.operator.tigera.io",
+			"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
 		}
 		nsKey := client.ObjectKey{
 			Name: "test-namespace",
@@ -561,8 +506,8 @@ var _ = Describe("Component handler tests", func() {
 			"extra":                        "extra-value",
 			fakeComponentLabelKey:          fakeComponentLabelValue,
 			"k8s-app":                      "test-namespace",
-			"app.kubernetes.io/component":  "Manager.operator.tigera.io",
-			"app.kubernetes.io/instance":   "tigera-secure",
+			"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
+			"app.kubernetes.io/instance":   "default",
 			"app.kubernetes.io/managed-by": "tigera-operator",
 			"app.kubernetes.io/name":       "test-namespace",
 			"app.kubernetes.io/part-of":    "Calico",
@@ -580,9 +525,9 @@ var _ = Describe("Component handler tests", func() {
 			"app.kubernetes.io/part-of":    "Calico",
 			"k8s-app":                      "test-namespace",
 			"app.kubernetes.io/name":       "test-namespace",
-			"app.kubernetes.io/component":  "Manager.operator.tigera.io",
+			"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
 			"app.kubernetes.io/managed-by": "tigera-operator",
-			"app.kubernetes.io/instance":   "tigera-secure",
+			"app.kubernetes.io/instance":   "default",
 		}
 		ns.Labels = labels
 		err = c.Update(ctx, ns)
@@ -593,8 +538,8 @@ var _ = Describe("Component handler tests", func() {
 			"cattle-not-pets":              "indeed",
 			"extra":                        "extra-value",
 			fakeComponentLabelKey:          "not-present",
-			"app.kubernetes.io/component":  "Manager.operator.tigera.io",
-			"app.kubernetes.io/instance":   "tigera-secure",
+			"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
+			"app.kubernetes.io/instance":   "default",
 			"app.kubernetes.io/managed-by": "tigera-operator",
 			"app.kubernetes.io/name":       "test-namespace",
 			"app.kubernetes.io/part-of":    "Calico",
@@ -631,11 +576,11 @@ var _ = Describe("Component handler tests", func() {
 			"cattle-not-pets":              "indeed",
 			"extra":                        "extra-value",
 			fakeComponentLabelKey:          fakeComponentLabelValue,
-			"app.kubernetes.io/component":  "Manager.operator.tigera.io",
+			"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
 			"app.kubernetes.io/managed-by": "tigera-operator",
 			"app.kubernetes.io/name":       "test-namespace",
 			"k8s-app":                      "test-namespace",
-			"app.kubernetes.io/instance":   "tigera-secure",
+			"app.kubernetes.io/instance":   "default",
 			"app.kubernetes.io/part-of":    "Calico",
 		}
 		ns = &corev1.Namespace{}
@@ -893,19 +838,6 @@ var _ = Describe("Component handler tests", func() {
 			nodeSelectors = x.Spec.JobTemplate.Spec.Template.Spec.NodeSelector
 		case *batchv1.Job:
 			nodeSelectors = x.Spec.Template.Spec.NodeSelector
-		case *kbv1.Kibana:
-			nodeSelectors = x.Spec.PodTemplate.Spec.NodeSelector
-		case *esv1.Elasticsearch:
-			// elasticsearch resource describes multiple nodeSets which each have a nodeSelector.
-			nodeSets := x.Spec.NodeSets
-			for _, ns := range nodeSets {
-				Expect(ns.PodTemplate.Spec.NodeSelector).Should(Equal(expectedNodeSelectors))
-			}
-			return
-		case *monitoringv1.Alertmanager:
-			nodeSelectors = x.Spec.NodeSelector
-		case *monitoringv1.Prometheus:
-			nodeSelectors = x.Spec.NodeSelector
 		default:
 			Expect(fmt.Errorf("unexpected type passed to test")).ToNot(HaveOccurred())
 		}
@@ -1172,57 +1104,6 @@ var _ = Describe("Component handler tests", func() {
 				"kubernetes.io/os": "windows",
 			},
 		),
-		Entry("sets the required annotations for kibana",
-			&fakeComponent{
-				supportedOSType: rmeta.OSTypeLinux,
-				objs: []client.Object{&kbv1.Kibana{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-kibana"},
-					Spec: kbv1.KibanaSpec{
-						PodTemplate: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								NodeSelector: map[string]string{},
-							},
-						},
-					},
-				}},
-			},
-			client.ObjectKey{Name: "test-kibana"},
-			&kbv1.Kibana{},
-			map[string]string{
-				"kubernetes.io/os": "linux",
-			},
-		),
-		Entry("sets the required annotations for an elasticsearch nodeset",
-			&fakeComponent{
-				supportedOSType: rmeta.OSTypeLinux,
-				objs: []client.Object{&esv1.Elasticsearch{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-elasticsearch"},
-					Spec: esv1.ElasticsearchSpec{
-						NodeSets: []esv1.NodeSet{
-							{
-								PodTemplate: corev1.PodTemplateSpec{
-									Spec: corev1.PodSpec{
-										NodeSelector: map[string]string{},
-									},
-								},
-							},
-							{
-								PodTemplate: corev1.PodTemplateSpec{
-									Spec: corev1.PodSpec{
-										NodeSelector: nil,
-									},
-								},
-							},
-						},
-					},
-				}},
-			},
-			client.ObjectKey{Name: "test-elasticsearch"},
-			&esv1.Elasticsearch{},
-			map[string]string{
-				"kubernetes.io/os": "linux",
-			},
-		),
 		Entry("linux - leaves other annotations alone and sets the required ones",
 			&fakeComponent{
 				supportedOSType: rmeta.OSTypeLinux,
@@ -1269,46 +1150,6 @@ var _ = Describe("Component handler tests", func() {
 				"kubernetes.io/os":  "windows",
 			},
 		),
-		Entry("linux - sets the required annotations for Prometheus Alertmanager nodes",
-			&fakeComponent{
-				supportedOSType: rmeta.OSTypeLinux,
-				objs: []client.Object{&monitoringv1.Alertmanager{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-alertmanager"},
-					Spec: monitoringv1.AlertmanagerSpec{
-						NodeSelector: map[string]string{
-							"kubernetes.io/a": "b",
-						},
-					},
-				}},
-			},
-			client.ObjectKey{Name: "test-alertmanager"},
-			&monitoringv1.Alertmanager{},
-			map[string]string{
-				"kubernetes.io/a":  "b",
-				"kubernetes.io/os": "linux",
-			},
-		),
-		Entry("linux - sets the required annotations for Prometheus nodes",
-			&fakeComponent{
-				supportedOSType: rmeta.OSTypeLinux,
-				objs: []client.Object{&monitoringv1.Prometheus{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-prometheus"},
-					Spec: monitoringv1.PrometheusSpec{
-						CommonPrometheusFields: monitoringv1.CommonPrometheusFields{
-							NodeSelector: map[string]string{
-								"kubernetes.io/a": "b",
-							},
-						},
-					},
-				}},
-			},
-			client.ObjectKey{Name: "test-prometheus"},
-			&monitoringv1.Prometheus{},
-			map[string]string{
-				"kubernetes.io/a":  "b",
-				"kubernetes.io/os": "linux",
-			},
-		),
 	)
 
 	It("recreates a service if its ClusterIP is removed", func() {
@@ -1318,12 +1159,12 @@ var _ = Describe("Component handler tests", func() {
 				Name: "my-service",
 				Labels: map[string]string{
 					"old":                          "should-be-preserved",
-					"app.kubernetes.io/instance":   "tigera-secure",
+					"app.kubernetes.io/instance":   "default",
 					"app.kubernetes.io/managed-by": "tigera-operator",
 					"app.kubernetes.io/name":       "my-service",
 					"app.kubernetes.io/part-of":    "Calico",
 					"k8s-app":                      "my-service",
-					"app.kubernetes.io/component":  "Manager.operator.tigera.io",
+					"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
 				},
 			},
 			Spec: corev1.ServiceSpec{
@@ -1342,12 +1183,12 @@ var _ = Describe("Component handler tests", func() {
 		Expect(svcWithIP.Spec.ClusterIP).To(Equal("10.96.0.1"))
 		Expect(svcWithIP.Labels).To(Equal(map[string]string{
 			"old":                          "should-be-preserved",
-			"app.kubernetes.io/instance":   "tigera-secure",
+			"app.kubernetes.io/instance":   "default",
 			"app.kubernetes.io/managed-by": "tigera-operator",
 			"app.kubernetes.io/name":       "my-service",
 			"app.kubernetes.io/part-of":    "Calico",
 			"k8s-app":                      "my-service",
-			"app.kubernetes.io/component":  "Manager.operator.tigera.io",
+			"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
 		}))
 
 		// Now pretend we're the new operator version, wanting to remove the cluster IP.
@@ -1377,10 +1218,10 @@ var _ = Describe("Component handler tests", func() {
 			"new":                          "should-be-added",
 			"k8s-app":                      "my-service",
 			"app.kubernetes.io/name":       "my-service",
-			"app.kubernetes.io/instance":   "tigera-secure",
+			"app.kubernetes.io/instance":   "default",
 			"app.kubernetes.io/managed-by": "tigera-operator",
 			"app.kubernetes.io/part-of":    "Calico",
-			"app.kubernetes.io/component":  "Manager.operator.tigera.io",
+			"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
 		}))
 
 		// The fake client resets the resource version to 1 on create.
@@ -1397,8 +1238,8 @@ var _ = Describe("Component handler tests", func() {
 			"new":                          "should-be-added",
 			"newer":                        "should-be-added",
 			"k8s-app":                      "my-service",
-			"app.kubernetes.io/instance":   "tigera-secure",
-			"app.kubernetes.io/component":  "Manager.operator.tigera.io",
+			"app.kubernetes.io/instance":   "default",
+			"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
 			"app.kubernetes.io/managed-by": "tigera-operator",
 			"app.kubernetes.io/name":       "my-service",
 			"app.kubernetes.io/part-of":    "Calico",
@@ -1645,65 +1486,6 @@ var _ = Describe("Component handler tests", func() {
 							},
 						},
 					},
-					&esv1.Elasticsearch{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-elasticsearch",
-							Namespace: "test-namespace",
-						},
-						Spec: esv1.ElasticsearchSpec{
-							NodeSets: []esv1.NodeSet{
-								{
-									PodTemplate: corev1.PodTemplateSpec{
-										Spec: corev1.PodSpec{
-											Containers: []corev1.Container{
-												{
-													Name:           "test-elasticsearch-container",
-													LivenessProbe:  &corev1.Probe{},
-													ReadinessProbe: &corev1.Probe{},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-					&kbv1.Kibana{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-kibana",
-							Namespace: "test-namespace",
-						},
-						Spec: kbv1.KibanaSpec{
-							PodTemplate: corev1.PodTemplateSpec{
-								Spec: corev1.PodSpec{
-									Containers: []corev1.Container{
-										{
-											Name:           "test-kibana-container",
-											LivenessProbe:  &corev1.Probe{},
-											ReadinessProbe: &corev1.Probe{},
-										},
-									},
-								},
-							},
-						},
-					},
-					&monitoringv1.Prometheus{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-prometheus",
-							Namespace: "test-namespace",
-						},
-						Spec: monitoringv1.PrometheusSpec{
-							CommonPrometheusFields: monitoringv1.CommonPrometheusFields{
-								Containers: []corev1.Container{
-									{
-										Name:           "test-prometheus-container",
-										LivenessProbe:  &corev1.Probe{},
-										ReadinessProbe: &corev1.Probe{},
-									},
-								},
-							},
-						},
-					},
 				},
 			}
 
@@ -1723,24 +1505,7 @@ var _ = Describe("Component handler tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			containers = append(containers, ds.Spec.Template.Spec.Containers...)
 
-			var es esv1.Elasticsearch
-			err = c.Get(ctx, client.ObjectKey{Name: "test-elasticsearch", Namespace: "test-namespace"}, &es)
-			Expect(err).NotTo(HaveOccurred())
-			for _, nodeset := range es.Spec.NodeSets {
-				containers = append(containers, nodeset.PodTemplate.Spec.Containers...)
-			}
-
-			var kb kbv1.Kibana
-			err = c.Get(ctx, client.ObjectKey{Name: "test-kibana", Namespace: "test-namespace"}, &kb)
-			Expect(err).NotTo(HaveOccurred())
-			containers = append(containers, kb.Spec.PodTemplate.Spec.Containers...)
-
-			var prom monitoringv1.Prometheus
-			err = c.Get(ctx, client.ObjectKey{Name: "test-prometheus", Namespace: "test-namespace"}, &prom)
-			Expect(err).NotTo(HaveOccurred())
-			containers = append(containers, prom.Spec.Containers...)
-
-			Expect(containers).To(HaveLen(5))
+			Expect(containers).To(HaveLen(2))
 			for _, c := range containers {
 				Expect(c.LivenessProbe.FailureThreshold).To(BeEquivalentTo(3))
 				Expect(c.LivenessProbe.PeriodSeconds).To(BeEquivalentTo(60))
@@ -1871,8 +1636,8 @@ var _ = Describe("Component handler tests", func() {
 			expectedLabels := map[string]string{
 				"k8s-app":                      "test-daemonset",
 				"app.kubernetes.io/name":       "test-daemonset",
-				"app.kubernetes.io/component":  "Manager.operator.tigera.io",
-				"app.kubernetes.io/instance":   "tigera-secure",
+				"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
+				"app.kubernetes.io/instance":   "default",
 				"app.kubernetes.io/managed-by": "tigera-operator",
 				"app.kubernetes.io/part-of":    "Calico",
 			}
@@ -1913,8 +1678,8 @@ var _ = Describe("Component handler tests", func() {
 			expectedLabels := map[string]string{
 				"k8s-app":                      "test-daemonset",
 				"app.kubernetes.io/name":       "test-daemonset",
-				"app.kubernetes.io/component":  "Manager.operator.tigera.io",
-				"app.kubernetes.io/instance":   "tigera-secure",
+				"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
+				"app.kubernetes.io/instance":   "default",
 				"app.kubernetes.io/managed-by": "tigera-operator",
 				"app.kubernetes.io/part-of":    "Calico",
 			}
@@ -1950,10 +1715,10 @@ var _ = Describe("Component handler tests", func() {
 			expectedLabels := map[string]string{
 				"k8s-app":                      "test-deployment",
 				"app.kubernetes.io/name":       "test-deployment",
-				"app.kubernetes.io/instance":   "tigera-secure",
+				"app.kubernetes.io/instance":   "default",
 				"app.kubernetes.io/managed-by": "tigera-operator",
 				"app.kubernetes.io/part-of":    "Calico",
-				"app.kubernetes.io/component":  "Manager.operator.tigera.io",
+				"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
 			}
 			expectedSelector := metav1.LabelSelector{
 				MatchLabels: map[string]string{"k8s-app": "test-deployment"},
@@ -1993,8 +1758,8 @@ var _ = Describe("Component handler tests", func() {
 			expectedLabels := map[string]string{
 				"k8s-app":                      "test-deployment",
 				"app.kubernetes.io/name":       "test-deployment",
-				"app.kubernetes.io/component":  "Manager.operator.tigera.io",
-				"app.kubernetes.io/instance":   "tigera-secure",
+				"app.kubernetes.io/component":  "APIServer.operator.tigera.io",
+				"app.kubernetes.io/instance":   "default",
 				"app.kubernetes.io/managed-by": "tigera-operator",
 				"app.kubernetes.io/part-of":    "Calico",
 			}

@@ -275,22 +275,8 @@ func NewValueV6NATReverseSNAT(lastSeen time.Duration, flags uint32, legA, legB L
 	return v
 }
 
-func readConntrackLegV6(b []byte) Leg {
-	bits := binary.LittleEndian.Uint32(b[legExtra+4 : legExtra+8])
-	return Leg{
-		Bytes:    binary.LittleEndian.Uint64(b[0:8]),
-		Packets:  binary.LittleEndian.Uint32(b[8:12]),
-		Seqno:    binary.BigEndian.Uint32(b[legExtra+0 : legExtra+4]),
-		SynSeen:  bitSet(bits, 0),
-		AckSeen:  bitSet(bits, 1),
-		FinSeen:  bitSet(bits, 2),
-		RstSeen:  bitSet(bits, 3),
-		Approved: bitSet(bits, 4),
-		Opener:   bitSet(bits, 5),
-		Workload: bitSet(bits, 6),
-		Ifindex:  binary.LittleEndian.Uint32(b[legExtra+8 : legExtra+12]),
-	}
-}
+// readConntrackLegV6 decodes a v6 leg, whose layout is identical to the v4 one.
+var readConntrackLegV6 = readConntrackLeg
 
 func (e ValueV6) Data() EntryData {
 	ip := e[VoOrigIPV6 : VoOrigIPV6+16]

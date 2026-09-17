@@ -25,50 +25,10 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/yamledit"
 )
-
-// Versions is the interface that provides version data for a hashrelease or release.
-type Versions interface {
-	Hash() string
-	ProductVersion() string
-	OperatorVersion() string
-	HelmChartVersion() string
-	ReleaseBranch(releaseBranchPrefix string) string
-}
-
-func NewHashreleaseVersions(calico Version) *HashreleaseVersions {
-	return &HashreleaseVersions{
-		calico: calico,
-	}
-}
-
-// HashreleaseVersions implements the Versions interface for a hashrelease.
-type HashreleaseVersions struct {
-	calico Version
-}
-
-func (v *HashreleaseVersions) ProductVersion() string {
-	return v.calico.FormattedString()
-}
-
-// OperatorVersion returns the operator's version. The operator ships on
-// Calico's version stream, so this is the same as the product version.
-func (v *HashreleaseVersions) OperatorVersion() string {
-	return v.ProductVersion()
-}
-
-func (v *HashreleaseVersions) HelmChartVersion() string {
-	return v.calico.FormattedString()
-}
-
-func (v *HashreleaseVersions) Hash() string {
-	return v.calico.FormattedString()
-}
-
-func (v *HashreleaseVersions) ReleaseBranch(releaseBranchPrefix string) string {
-	return fmt.Sprintf("%s-%s", releaseBranchPrefix, v.calico.Stream())
-}
 
 // Version represents a version, and contains methods for working with versions.
 type Version string
@@ -264,9 +224,12 @@ func DetermineOperatorVersion(repoRoot string) (Version, error) {
 	return versionFromManifest(repoRoot, "tigera-operator.yaml", "operator")
 }
 
+// used to determine the version in manifests.
+var productImage = "calico/calico"
+
 // VersionsFromManifests returns the versions of the product and operator from manifests.
 func VersionsFromManifests(repoRoot string) (Version, Version, error) {
-	productVersion, err := versionFromManifest(repoRoot, "ocp/02-tigera-operator.yaml", "calico/calico")
+	productVersion, err := versionFromManifest(repoRoot, "ocp/02-tigera-operator.yaml", productImage)
 	if err != nil {
 		return "", "", err
 	}
@@ -300,15 +263,12 @@ func DeterminePublishStream(branch string, version string) string {
 
 // versionFromManifest returns the version of the image matching the given match string from the given manifest.
 func versionFromManifest(repoRoot, manifest, imgMatch string) (Version, error) {
-	runner := &command.RealCommandRunner{}
-	args := []string{"-Po", `image:\K(.*)`, manifest}
-	out, err := runner.RunInDir(filepath.Join(repoRoot, "manifests"), "grep", args, nil)
+	imgs, err := yamledit.Read(filepath.Join(manifests.Dir(repoRoot), manifest), "image")
 	if err != nil {
-		return "", fmt.Errorf("failed to grep for image in manifest %s: %s", manifest, err)
+		return "", fmt.Errorf("read %s image from manifest %s: %w", imgMatch, manifest, err)
 	}
 
-	imgs := strings.SplitSeq(out, "\n")
-	for i := range imgs {
+	for _, i := range imgs {
 		if strings.Contains(i, imgMatch) {
 			splits := strings.SplitAfter(i, ":")
 			ver := splits[len(splits)-1]
@@ -320,5 +280,5 @@ func versionFromManifest(repoRoot, manifest, imgMatch string) (Version, error) {
 			return New(ver), nil
 		}
 	}
-	return "", fmt.Errorf("image for %s not found in manifest %s", imgMatch, manifest)
+	return "", fmt.Errorf("no images matching %s in manifest %s", imgMatch, manifest)
 }

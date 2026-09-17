@@ -95,7 +95,7 @@ done
 # Build manifest which includes both Calico and Operator CRDs.
 ##########################################################################
 # The operator CRDs a Calico install ships come from the operator's own generated
-# copies, listed in the file both this script and pkg/crds/crds.go read.
+# copies. A test asserts this list matches what the operator installs.
 OPERATOR_CRD_DIR=../operator/pkg/crds/operator
 append_operator_crds() {
 	local out=$1

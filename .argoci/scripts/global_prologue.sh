@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # global_prologue.sh - ArgoCI e2e prologue for OSS Calico.
 #
-# Ported from .semaphore/end-to-end/scripts/global_prologue.sh and adapted for
-# ArgoCI (see .argoci/DESIGN.md):
+# Ported from the Semaphore equivalent (since deleted) and adapted for
+# ArgoCI:
 #   - secrets are materialised from mounted k8s Secrets via the platform
 #     `createLocalSecret` helper (not Semaphore's ~/secrets copy);
 #   - no `checkout`/`cache`, no gcloud/aws/az/bz install — the ArgoCI base
@@ -10,7 +10,9 @@
 #   - Semaphore vars (SEMAPHORE_*) become CI_*/ARGO_* equivalents;
 #   - RELEASE_STREAM is derived from the checked-out branch.
 #
-# Sourced (not executed) by the e2e-test template, so no `set -e`/`exit`.
+# Sourced (not executed) by the e2e-test template, so no `set -e`/`exit` — the
+# exceptions are the bz-install and bz-init hard-fails, where nothing later can
+# succeed, so aborting the step is the intended outcome.
 set -o pipefail
 
 echo "[INFO] starting prologue"
@@ -231,8 +233,12 @@ if [[ "${CREATE_WINDOWS_NODES:-false}" == "true" ]] && ! command -v puttygen >/d
 fi
 
 echo "[INFO] initialising bz profile..."
+# A half-initialised directory is not a profile, so provision, diags and destroy
+# would each fail with "is not a cluster profile directory" and bury the real
+# cause. pipefail is set above, so tee cannot mask bz's status.
 ( cd "${HOME}" && bz init profile -n "${BZ_PROFILE_NAME}" --skip-prompt --secretsPath "${HOME}/secrets" ) \
-  |& tee "${BZ_LOGS_DIR}/initialize.log" || true
+  |& tee "${BZ_LOGS_DIR}/initialize.log" \
+  || { echo "[ERROR] bz init profile failed — see ${BZ_LOGS_DIR}/initialize.log"; exit 1; }
 mkdir -p "${BZ_LOCAL_DIR}" "${REPORT_DIR}" "${BZ_LOCAL_DIR}/config"
 # bz provision prereq wants the docker auth at <profile>/.local/config/docker_auth.json
 # (the DOCKER_AUTH_FILE env alone does not redirect the prereq check).

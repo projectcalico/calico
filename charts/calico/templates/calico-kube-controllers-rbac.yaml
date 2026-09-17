@@ -137,13 +137,16 @@ rules:
       - update
       - delete
       - watch
-  # Pools are watched to maintain a mapping of blocks to IP pools.
+  # Pools are watched to maintain a mapping of blocks to IP pools. The pool
+  # controller records which of a set of overlapping pools is allocatable.
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - ippools
+      - ippools/status
     verbs:
       - list
       - watch
+      - update
   # kube-controllers manages hostendpoints.
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
