@@ -179,3 +179,41 @@ func TestBGPPeer_Validation(t *testing.T) {
 		})
 	}
 }
+
+func TestBGPPeer_PeerIPValidation(t *testing.T) {
+	const wantErr = "peerIP must be an IP address"
+
+	tests := []struct {
+		name    string
+		peerIP  string
+		wantErr string
+	}{
+		{name: "IPv4 address", peerIP: "10.0.0.1"},
+		{name: "IPv6 address", peerIP: "fd00::1"},
+		{name: "IPv4 with port", peerIP: "10.0.0.1:179"},
+		{name: "bracketed IPv6 with port", peerIP: "[fd00::1]:179"},
+		{name: "not an IP at all", peerIP: "not-an-ip", wantErr: wantErr},
+		{name: "out of range IPv4 octets", peerIP: "999.999.999.999", wantErr: wantErr},
+		{name: "unbracketed IPv6 that looks like host:port", peerIP: "fd00::1:179"},
+		{name: "port zero", peerIP: "10.0.0.1:0", wantErr: wantErr},
+		{name: "port above 65535", peerIP: "10.0.0.1:99999", wantErr: wantErr},
+		{name: "bracketed IPv6 with port zero", peerIP: "[fd00::1]:0", wantErr: wantErr},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			peer := &v3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgppeer")},
+				Spec: v3.BGPPeerSpec{
+					PeerIP:   tt.peerIP,
+					ASNumber: numorstring.ASNumber(64512),
+				},
+			}
+			if tt.wantErr != "" {
+				expectCreateFails(t, peer, tt.wantErr)
+			} else {
+				expectCreateSucceeds(t, peer)
+			}
+		})
+	}
+}
