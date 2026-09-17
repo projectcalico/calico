@@ -12,7 +12,7 @@ defaults:
 
 steps:
   - name: e2e-ut
-    requests: {cpu: 4000m, memory: 5Gi}
+    requests: {cpu: 4000m, memory: 7Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"

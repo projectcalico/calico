@@ -16,7 +16,7 @@ steps:
   # Generated from the live Go import graph, so a stale copy under-fires every
   # other gate in the file and nothing else would report it.
   - name: check-semaphore-files
-    requests: {cpu: 2750m, memory: 1.5Gi}
+    requests: {cpu: 2750m, memory: 2Gi}
     image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
     workspaceVolumes: none
     changes:
@@ -35,7 +35,7 @@ steps:
 
     jobSize: small
 
-    requests: {cpu: 1750m, memory: 768Mi}
+    requests: {cpu: 1750m, memory: 1Gi}
     services: [docker]
     changes:
       in:
@@ -51,7 +51,7 @@ steps:
   # `fix-changed` splices its own flags into the nested `docker run`, so this
   # block cannot yet drop the daemon the way the two above it do.
   - name: check-go
-    requests: {cpu: 5750m, memory: 8.5Gi}
+    requests: {cpu: 5750m, memory: 10.5Gi}
     services: [docker]
     changes:
       in:
@@ -136,7 +136,7 @@ steps:
       make check-dirty
 
   - name: check-manifests
-    requests: {cpu: 3250m, memory: 3Gi}
+    requests: {cpu: 3250m, memory: 3.5Gi}
     services: [docker]
     changes:
       in:
@@ -178,7 +178,7 @@ steps:
   - name: build-calico-image
     services: [docker]
     timeout: 1h
-    requests: {cpu: 5500m, memory: 6.5Gi}
+    requests: {cpu: 5500m, memory: 8.5Gi}
     changes:
       dependsOn: [cmd, dependents-of-build-calico-image]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
@@ -198,7 +198,7 @@ steps:
   - name: build-nft-rpms
     services: [docker]
     timeout: 1h
-    requests: {cpu: 3000m, memory: 4Gi}
+    requests: {cpu: 3000m, memory: 1.5Gi}
     changes:
       dependsOn: [dependents-of-build-nft-rpms]
       in:
@@ -218,7 +218,7 @@ steps:
   - name: build-node-image
     services: [docker]
     timeout: 1h
-    requests: {cpu: 4000m, memory: 5Gi}
+    requests: {cpu: 4000m, memory: 7.5Gi}
     depends: [build-nft-rpms]
     changes:
       dependsOn: [node, dependents-of-build-node-image]
@@ -241,7 +241,7 @@ steps:
   - name: build-whisker-image
     services: [docker]
     timeout: 1h
-    requests: {cpu: 2500m, memory: 3Gi}
+    requests: {cpu: 2500m, memory: 2.5Gi}
     changes:
       dependsOn: [dependents-of-build-whisker-image]
       in:
@@ -260,7 +260,7 @@ steps:
   - name: build-operator-image
     services: [docker]
     timeout: 1h
-    requests: {cpu: 3500m, memory: 4Gi}
+    requests: {cpu: 3500m, memory: 7.5Gi}
     changes:
       dependsOn: [operator, dependents-of-build-operator-image]
       in:

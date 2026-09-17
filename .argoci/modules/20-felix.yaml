@@ -9,7 +9,7 @@ defaults:
 
 steps:
   - name: felix-build-windows
-    requests: {cpu: 3750m, memory: 5.5Gi}
+    requests: {cpu: 3750m, memory: 8Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"

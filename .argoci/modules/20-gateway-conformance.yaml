@@ -9,7 +9,7 @@ defaults:
 
 steps:
   - name: gateway-conformance
-    requests: {cpu: 5000m, memory: 16Gi}
+    requests: {cpu: 5000m, memory: 11Gi}
     depends:
       - build-calico-image
       - build-node-image

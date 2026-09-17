@@ -11,7 +11,7 @@ defaults:
 
 steps:
   - name: guardian-ci
-    requests: {cpu: 3500m, memory: 2.5Gi}
+    requests: {cpu: 3500m, memory: 3Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"

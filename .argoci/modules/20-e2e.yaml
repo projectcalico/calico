@@ -1,0 +1,65 @@
+# The Kubernetes e2e suites, run against a kind cluster built from the images
+# the producers cached. Four variants of the same lane: the routing mode and the
+# suite differ, nothing else does.
+version: condensed-module
+
+defaults:
+  # A conformance suite plus the cluster it needs does not fit the hour the
+  # lighter lanes get.
+  timeout: 1h30m
+  services:
+    - docker
+
+steps:
+  - name: e2e-kind
+    requests: {cpu: 6000m, memory: 16Gi}
+    depends:
+      - build-calico-image
+      - build-node-image
+      - build-whisker-image
+      - build-operator-image
+      - build-third-party-images
+    matrix:
+      # Pinned rather than defaulted: from v3.33 the default gives Felix the
+      # IPIP routes, and these tests need BGP to be the only routing mechanism.
+      - name: conformance-bird
+        env:
+          - name: E2E_TARGET
+            value: e2e-test
+          - name: EXTRA_VALUES_FILES
+            value: hack/test/kind/infra/values-bird-routing.yaml
+      - name: conformance-felix
+        env:
+          - name: E2E_TARGET
+            value: e2e-test
+          - name: EXTRA_VALUES_FILES
+            value: hack/test/kind/infra/values-felix-routing.yaml
+          - name: KIND_CALICO_API_GROUP
+            value: crd.projectcalico.org/v1
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/kind/felix-routing.yaml
+      - name: clusternetworkpolicy-felix
+        env:
+          - name: E2E_TARGET
+            value: e2e-test-clusternetworkpolicy
+          - name: EXTRA_VALUES_FILES
+            value: hack/test/kind/infra/values-felix-routing.yaml
+          - name: KIND_CALICO_API_GROUP
+            value: projectcalico.org/v3
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/kind/felix-routing.yaml
+      - name: sig-calico-bpf
+        env:
+          - name: E2E_TARGET
+            value: e2e-test-bpf
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      .argoci/scripts/load-cached-images calico node whisker
+      make ${E2E_TARGET}
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job report --destination test-results || true
+      if [ "$CI_STEP_EXIT_CODE" != 0 ]; then
+        .semaphore/collect-kind-diags || true
+      fi

@@ -13,7 +13,7 @@ defaults:
 
 steps:
   - name: e2e-test-set-drift
-    requests: {cpu: 4750m, memory: 6.5Gi}
+    requests: {cpu: 4750m, memory: 8Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"

@@ -11,7 +11,7 @@ defaults:
 
 steps:
   - name: goldmane-ci
-    requests: {cpu: 4000m, memory: 3.5Gi}
+    requests: {cpu: 4000m, memory: 4.5Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"

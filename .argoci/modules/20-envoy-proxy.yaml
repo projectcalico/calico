@@ -9,7 +9,7 @@ defaults:
 
 steps:
   - name: envoy-proxy-ci
-    requests: {cpu: 1000m, memory: 3Gi}
+    requests: {cpu: 1000m, memory: 1.5Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
@@ -19,7 +19,7 @@ steps:
   # amd64 is already covered, since the step above builds the image. arm64 is
   # the other architecture this component supports.
   - name: envoy-proxy-image
-    requests: {cpu: 1000m, memory: 3.5Gi}
+    requests: {cpu: 1000m, memory: 1.5Gi}
     matrix:
       - name: arm64
         env: [{name: ARCH, value: arm64}]

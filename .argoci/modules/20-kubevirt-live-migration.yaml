@@ -1,0 +1,50 @@
+# Live migration against a kind cluster with KubeVirt in simulation mode.
+version: condensed-module
+
+defaults:
+  timeout: 1h30m
+  services:
+    - docker
+
+steps:
+  - name: kubevirt-live-migration
+    requests: {cpu: 6000m, memory: 16Gi}
+    depends:
+      - build-calico-image
+      - build-node-image
+      - build-operator-image
+      - build-third-party-images
+    env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/kind/kubevirt.yaml
+      # Route-priority propagation here is built on confd and BIRD programming
+      # the cluster routes, and IPIP will not gain Felix-programmed live
+      # migration — so the mode is pinned rather than defaulted.
+      - name: EXTRA_VALUES_FILES
+        value: hack/test/kind/infra/values-bird-routing.yaml
+      - name: KUBEVIRT_RELEASE_URL
+        value: https://github.com/tigera/kubevirt/releases/download/mockvirt-v1.8.1
+      - name: BIRD_BGPPEER_CONTAINER_NAME
+        value: bird-bgp-peer
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      .argoci/scripts/load-cached-images calico node
+      make -C e2e build
+      make kind-up
+      for f in ci-deploy-kind.sh kubevirt-operator.yaml kubevirt-cr.yaml; do
+        hack/fetch-file "${KUBEVIRT_RELEASE_URL}/${f}" "/tmp/kubevirt-manifests/${f}"
+      done
+      chmod +x /tmp/kubevirt-manifests/ci-deploy-kind.sh
+      MOCKVIRT_KUBECONFIG="$(pwd)/hack/test/kind/kind-kubeconfig.yaml" \
+        MOCKVIRT_MANIFESTS_DIR=/tmp/kubevirt-manifests \
+        /tmp/kubevirt-manifests/ci-deploy-kind.sh
+      # The tests find this peer by name on the kind network.
+      docker run -d --name "${BIRD_BGPPEER_CONTAINER_NAME}" --privileged --network kind calico/bird:v0.3.3-211-g9111ec3c
+      make e2e-run KUBECONFIG="$(pwd)/hack/test/kind/kind-kubeconfig.yaml"
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job report --destination test-results || true
+      if [ "$CI_STEP_EXIT_CODE" != 0 ]; then
+        .semaphore/collect-kind-diags || true
+      fi

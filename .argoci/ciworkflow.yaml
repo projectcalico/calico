@@ -346,3 +346,20 @@ includes:
       in:
         - (^|/)Makefile$
         - ^\.argoci/modules/10-check-operator-images\.yaml$
+
+  # `whisker` is listed as a path rather than a component: it is TypeScript, so
+  # there is no import graph to derive one from.
+  - path: .argoci/modules/20-e2e.yaml
+    changes:
+      dependsOn: [e2e, node, typha, apiserver, cni-plugin, pod2daemon, calicoctl,
+                  kube-controllers, goldmane, whisker-backend, cmd, operator]
+      in:
+        - ^whisker/
+        - ^\.argoci/modules/20-e2e\.yaml$
+
+  - path: .argoci/modules/20-kubevirt-live-migration.yaml
+    changes:
+      dependsOn: [felix, cni-plugin, confd, node, e2e, libcalico-go, operator]
+      in:
+        - ^e2e/pkg/
+        - ^\.argoci/modules/20-kubevirt-live-migration\.yaml$
