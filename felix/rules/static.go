@@ -1142,7 +1142,7 @@ func (r *DefaultRuleRenderer) connStateLogPrefix(suffix string) string {
 	}
 	maxLen := 29 // iptables shows at most 29 characters of log prefix.
 	if r.nft {
-		maxLen = 127 // nftables allows up to 127 characters.
+		maxLen = 126 // nftables accepts at most 126 characters of log prefix.
 	}
 	maxBase := maxLen - len(suffix) - len(": ")
 	if len(base) > maxBase {
