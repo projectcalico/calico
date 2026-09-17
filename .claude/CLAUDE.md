@@ -125,6 +125,8 @@ This repo carries an extensive corpus of architecture and review guidance.
 invariants, design rationale, and review criteria that are hard to recover from
 the source alone.
 
+- [`CONTEXT.md`](../CONTEXT.md) at the repo root: the glossary. Vocabulary only,
+  no architecture and no implementation detail.
 - [`DESIGN.md`](../DESIGN.md) at the repo root — cross-cutting architecture, and
   the authoritative starting point for *what the repo is*.
 - `<component>/DESIGN.md` — per-component architecture, invariants, and
@@ -142,34 +144,40 @@ every matching sub-design.
 
 **Rules for agents reading this repo:**
 
-1. Before writing or reviewing code in a component, read that component's
+1. Before writing code or prose in this repo, read
+   [`CONTEXT.md`](../CONTEXT.md) at the root. It gives the canonical word for
+   each Calico concept and lists the synonyms to avoid; use the canonical one in
+   code, comments, commit messages and PR descriptions. When a change introduces
+   a concept the glossary does not name, add the entry in the same PR: one or
+   two sentences, no implementation detail.
+2. Before writing or reviewing code in a component, read that component's
    `DESIGN.md` (or, for Felix, the sub-designs matching the paths you touch).
-2. Follow links. A design is a graph, not a single node.
-3. A design doc records the design, not the change that introduced it, and
+3. Follow links. A design is a graph, not a single node.
+4. A design doc records the design, not the change that introduced it, and
    **the default is no edit**. Edit one only when a sentence in it is now
    false, a new invariant exists that a future change could silently break, or
    a new concept exists that the doc's mental model does not name. A new
    behaviour, flag, field, config key, or bug fix is not by itself any of
    those. A warranted edit lands **in the same PR as the code**, in the doc
    covering the area — for Felix, the matching sub-design, not the index.
-4. A warranted edit is normally **one to three lines**, into the section that
+5. A warranted edit is normally **one to three lines**, into the section that
    already covers the area — never a paraphrase of the commit message or PR
    description, and no new `###` heading for a new behaviour. Past about five
    lines you are narrating the change. A doc already past ~500 lines gets
    compressed by the next PR that touches it, not grown.
-5. **In doubt, propose — don't write.** Keep the edit out of the PR: show the
+6. **In doubt, propose — don't write.** Keep the edit out of the PR: show the
    user the target file, the target section and the exact lines, and wait for
    approval. Raise it at the pre-commit checkpoint, batched into a single ask,
-   so it never blocks the code work. When one of the three conditions in rule 3
+   so it never blocks the code work. When one of the three conditions in rule 4
    clearly holds, just make the edit.
-6. Before writing or reviewing a design-doc edit, load the
+7. Before writing or reviewing a design-doc edit, load the
    [`design-doc-edits`](skills/design-doc-edits/SKILL.md) skill — the altitude
    rule, the worked example and the reviewer criteria are there rather than
    here, so they are not in context for every session.
 
-Rules 3-5 are mirrored for Copilot in
+Rules 4-6 are mirrored for Copilot in
 [`.github/copilot-instructions.md` → Documentation map](../.github/copilot-instructions.md)
-— keep the two in sync. Copilot has no skills, so rule 6's content is a file it
+— keep the two in sync. Copilot has no skills, so rule 7's content is a file it
 reads rather than a skill it loads.
 
 ## Tests required for code changes
