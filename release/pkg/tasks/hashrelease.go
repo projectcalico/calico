@@ -24,6 +24,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/archives"
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -65,8 +66,8 @@ func ReformatHashrelease(pin *pinnedversion.Pin, hashreleaseOutputDir string) er
 	}
 
 	// Copy the ocp.tgz to manifests/ocp.tgz
-	ocpTarball := filepath.Join(hashreleaseOutputDir, "ocp.tgz")
-	ocpTarballDst := filepath.Join(hashreleaseOutputDir, "manifests", "ocp.tgz")
+	ocpTarball := manifests.BundlePath(hashreleaseOutputDir)
+	ocpTarballDst := filepath.Join(manifests.Dir(hashreleaseOutputDir), manifests.OCPBundleFileName)
 	if err := copyIfExists(ocpTarball, ocpTarballDst); err != nil {
 		return err
 	}
