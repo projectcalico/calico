@@ -100,8 +100,8 @@ func updateOwnedPaths(obj client.Object) (legacy, others map[string]bool, err er
 	return legacy, others, nil
 }
 
-// dottedPath renders a field path as "spec.field". A path through a list item has no such form,
-// and the declarations govern no lists, so it reports that the path is not one of them.
+// dottedPath renders a field path as "spec.field". Ownership of a single list item has no such
+// form, and no declaration governs a list item by item, so those paths are reported as unusable.
 func dottedPath(p fieldpath.Path) (string, bool) {
 	names := make([]string, 0, len(p))
 	for _, element := range p {
