@@ -16,7 +16,28 @@ package v3
 
 import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+const (
+	// PolicyConditionValid indicates whether the policy passes validation.
+	PolicyConditionValid = "Valid"
+)
+
+const (
+	// PolicyReasonValid indicates the policy is valid.
+	PolicyReasonValid = "Valid"
+
+	// PolicyReasonInvalid indicates the policy has validation errors.
+	PolicyReasonInvalid = "Invalid"
+)
+
+// PolicyStatus contains the status of a Calico policy resource.
+type PolicyStatus struct {
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty" protobuf:"bytes,1,rep,name=conditions"`
+}
 
 // PolicyType enumerates the possible values of the PolicySpec Types field.
 // +kubebuilder:validation:Enum=Ingress;Egress
