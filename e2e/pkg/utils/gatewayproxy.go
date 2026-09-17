@@ -45,19 +45,20 @@ const (
 // without a cloud LoadBalancer, so this deliberately port-forwards to the
 // ClusterIP instead of waiting for Programmed=True.
 //
-// With https true the HTTPS port is preferred and the returned URL uses the
-// https scheme; otherwise the HTTP port. A port matches on Envoy Gateway's own
-// name for it, "<protocol>-<port>", or on the default port number. Either way
-// the first TCP port is the fallback.
+// With https true the HTTPS port is required and the returned URL uses the
+// https scheme; otherwise the HTTP port. A port matches only on Envoy Gateway's
+// own name for it, "<protocol>-<port>"; a Service with no port for the requested
+// protocol is skipped rather than falling back to another port, so an https://
+// URL can never point at a plaintext port.
 func GatewayProxyBaseURL(ctx context.Context, clientset kubernetes.Interface, gwNamespace, gwName string, https bool) (string, func()) {
 	selector := fmt.Sprintf("%s=%s,%s=%s",
 		egOwningGatewayNameLabel, gwName,
 		egOwningGatewayNamespaceLabel, gwNamespace)
 
-	preferredProto, preferredPort := "http", int32(80)
+	preferredProto := "http"
 	scheme := "http"
 	if https {
-		preferredProto, preferredPort = "https", 443
+		preferredProto = "https"
 		scheme = "https"
 	}
 
@@ -81,17 +82,15 @@ func GatewayProxyBaseURL(ctx context.Context, clientset kubernetes.Interface, gw
 				if p.Protocol != "" && p.Protocol != corev1.ProtocolTCP {
 					continue
 				}
-				// Envoy Gateway names the port "<protocol>-<port>", so match
-				// the protocol prefix rather than the bare scheme, which never
-				// equals the name. Without this a TLS listener on a port other
-				// than 443 falls through to the fallback below and can hand
-				// back a plaintext port behind an https:// URL.
-				if strings.HasPrefix(p.Name, preferredProto+"-") || p.Port == preferredPort {
+				// Envoy Gateway names the port "<protocol>-<port>"; match the
+				// requested protocol by that prefix. Matching on the port number
+				// alone, or falling back to any TCP port, can hand back an
+				// opposite-protocol port behind the requested scheme (an https://
+				// URL pointing at a plaintext port), where TLS then fails
+				// opaquely for the whole timeout.
+				if strings.HasPrefix(p.Name, preferredProto+"-") {
 					chosen = p.Port
 					break
-				}
-				if chosen == 0 {
-					chosen = p.Port
 				}
 			}
 			if chosen == 0 {
@@ -106,7 +105,9 @@ func GatewayProxyBaseURL(ctx context.Context, clientset kubernetes.Interface, gw
 				return err
 			}
 			if !ready {
-				return fmt.Errorf("no serving Envoy Gateway proxy Pod for Gateway %s/%s yet", gwNamespace, gwName)
+				// A stale sibling Service can outlive a re-render; skip it so a
+				// serving Service later in the list is still tried.
+				continue
 			}
 			svcNS, svcName, remotePort = svc.Namespace, svc.Name, chosen
 			return nil

@@ -30,6 +30,7 @@ import (
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/sirupsen/logrus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -108,12 +109,17 @@ var _ = describe.CalicoDescribe(
 			// Skip rather than fail on a cluster this feature cannot run on: it
 			// needs an operator-managed Calico install with Whisker present.
 			installation := &operatorv1.Installation{}
-			if err := cli.Get(ctx, types.NamespacedName{Name: "default"}, installation); apierrors.IsNotFound(err) {
+			// A manifest/non-operator cluster has no operator.tigera.io CRDs, so the
+			// Get comes back as a no-match rather than NotFound; both mean this
+			// feature cannot run here, so skip either way.
+			if err := cli.Get(ctx, types.NamespacedName{Name: "default"}, installation); apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
 				ginkgo.Skip("No Installation; this cluster is not operator managed")
 			} else {
 				Expect(err).NotTo(HaveOccurred(), "reading the Installation")
 			}
-			if installation.Spec.Variant != operatorv1.Calico {
+			// The operator records the defaulted variant in status, not spec, so
+			// a stock install leaves spec.variant empty; read status.
+			if installation.Status.Variant != operatorv1.Calico {
 				ginkgo.Skip("Whisker only runs on the Calico variant")
 			}
 			if err := cli.Get(ctx, types.NamespacedName{Name: "default"}, &operatorv1.Whisker{}); apierrors.IsNotFound(err) {
@@ -151,12 +157,33 @@ var _ = describe.CalicoDescribe(
 				ctx, cancel := context.WithTimeout(context.Background(), whiskerSpecTimeout)
 				ginkgo.DeferCleanup(cancel)
 
+				// Read the Whisker CR first and skip if it already carries a gateway
+				// config: the cleanup patches spec.ingressGateway back to null, which
+				// would wipe a configuration the cluster came with.
+				whisker := &operatorv1.Whisker{}
+				Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, whisker)).NotTo(HaveOccurred(), "reading the Whisker CR")
+				if whisker.Spec.IngressGateway != nil {
+					ginkgo.Skip("Whisker spec.ingressGateway is already set; not overwriting an existing gateway configuration")
+				}
+
 				ginkgo.By("Enabling Gateway API support")
 				createWhiskerGatewayAPICR(ctx, cli)
 
+				// Registered right after the create, before anything that can fail,
+				// so a later error never strands the GatewayAPI CR and the Envoy
+				// Gateway install for the rest of the lane. Registered before the
+				// teardown patch below so it runs last: the CR must go only after the
+				// Gateway is gone, since Envoy Gateway finalizes the GatewayClass
+				// while a Gateway still references it.
+				ginkgo.DeferCleanup(func() {
+					cleanupCtx, cancel := context.WithTimeout(context.Background(), whiskerCleanupTimeout)
+					defer cancel()
+
+					ginkgo.By("Deleting the GatewayAPI CR")
+					deleteWhiskerGatewayAPICR(cleanupCtx, cli)
+				})
+
 				ginkgo.By("Setting spec.ingressGateway on the Whisker CR")
-				whisker := &operatorv1.Whisker{}
-				Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, whisker)).NotTo(HaveOccurred(), "reading the Whisker CR")
 				patch := fmt.Sprintf(`{"spec":{"ingressGateway":{"hostname":%q}}}`, whiskerGatewayHostname)
 				Expect(cli.Patch(ctx, whisker, ctrlclient.RawPatch(types.MergePatchType, []byte(patch)))).NotTo(HaveOccurred(),
 					"setting spec.ingressGateway on the Whisker CR")
@@ -176,24 +203,20 @@ var _ = describe.CalicoDescribe(
 						logrus.WithError(err).Warn("Failed to remove spec.ingressGateway from the Whisker CR")
 					}
 
-					// Wait the Gateway out before dropping the GatewayAPI CR.
-					// Envoy Gateway holds a finalizer on the GatewayClass while
-					// any Gateway still references it, so tearing the controller
-					// down first leaves nothing to clear it and the GatewayClass
-					// and its namespace hang in Terminating.
 					ginkgo.By("Waiting for gateway resources to be cleaned up")
 					expectGone(func(ctx context.Context) error {
 						return cli.Get(ctx, types.NamespacedName{Name: whiskerGatewayName, Namespace: whiskerBackendNS}, &gatewayv1.Gateway{})
 					}, "Gateway")
-
-					ginkgo.By("Deleting the GatewayAPI CR")
-					deleteWhiskerGatewayAPICR(cleanupCtx, cli)
 				})
 
 				ginkgo.By("Waiting for the Gateway to be accepted")
 				// Accepted is set by the Gateway API controller without needing
 				// a cloud LoadBalancer; Programmed never goes True without an
-				// assigned address, so it is deliberately not waited on here.
+				// assigned address, so it is deliberately not waited on here. The
+				// budget also covers the operator installing Envoy Gateway and its
+				// controller starting, which the step above may have just
+				// triggered, so it matches the proxy-Pod wait rather than the
+				// shorter API timeouts.
 				Eventually(func() error {
 					gw := &gatewayv1.Gateway{}
 					if err := cli.Get(ctx, types.NamespacedName{Name: whiskerGatewayName, Namespace: whiskerBackendNS}, gw); err != nil {
@@ -205,7 +228,7 @@ var _ = describe.CalicoDescribe(
 						}
 					}
 					return fmt.Errorf("Gateway %s/%s not Accepted yet", whiskerBackendNS, whiskerGatewayName)
-				}, 3*time.Minute, 5*time.Second).Should(Succeed(), "Gateway should become Accepted")
+				}, 5*time.Minute, 5*time.Second).Should(Succeed(), "Gateway should become Accepted")
 			})
 
 			ginkgo.It("should serve the Whisker UI through the Gateway", func() {
@@ -382,8 +405,12 @@ func whiskerCABundle(ctx context.Context, f *framework.Framework) *x509.CertPool
 	Expect(err).NotTo(HaveOccurred(), "reading the tigera-ca-bundle ConfigMap")
 
 	roots := x509.NewCertPool()
-	caCert, ok := cm.Data["tigera-ca-bundle.crt"]
-	Expect(ok).To(BeTrue(), "tigera-ca-bundle ConfigMap should hold tigera-ca-bundle.crt")
-	Expect(roots.AppendCertsFromPEM([]byte(caCert))).To(BeTrue(), "the CA bundle should parse")
+	appended := false
+	for _, pem := range cm.Data {
+		if roots.AppendCertsFromPEM([]byte(pem)) {
+			appended = true
+		}
+	}
+	Expect(appended).To(BeTrue(), "the tigera-ca-bundle ConfigMap should hold a parseable CA certificate")
 	return roots
 }
