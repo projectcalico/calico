@@ -9,14 +9,16 @@ import (
 )
 
 // CreateClient loads the client config from environments and creates the
-// Calico client.
-func CreateClient() (*apiconfig.CalicoAPIConfig, client.Interface) {
+// Calico client. The component names the caller to the API server, which records
+// it as the field manager on every write the client makes.
+func CreateClient(component string) (*apiconfig.CalicoAPIConfig, client.Interface) {
 	// Load the client config from environment.
 	cfg, err := apiconfig.LoadClientConfig("")
 	if err != nil {
 		fmt.Printf("ERROR: Error loading datastore config: %s\n", err)
 		os.Exit(1)
 	}
+	cfg.Spec.UserAgent = apiconfig.UserAgentFor(component)
 	c, err := client.New(*cfg)
 	if err != nil {
 		fmt.Printf("ERROR: Error accessing the Calico datastore: %s\n", err)
