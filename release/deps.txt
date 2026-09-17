@@ -119,6 +119,7 @@ local:operator/pkg/components
 local:operator/version
 local:release/cmd
 local:release/internal/archives
+local:release/internal/binaries
 local:release/internal/branch
 local:release/internal/charts
 local:release/internal/ci
