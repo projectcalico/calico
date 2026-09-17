@@ -312,10 +312,10 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				Eventually(checkSvcEndpoints(k8sClient, testSvc), "10s").Should(Equal(2),
 					"Service endpoints didn't get created? Is controller-manager happy?")
 				Eventually(func() bool {
-					return checkServiceRoute(tc.Felixes[0], testSvc.Spec.ClusterIPs[0])
+					return checkHostNATServiceIP(tc.Felixes[0], testSvc.Spec.ClusterIPs[0])
 				}, 10*time.Second, 300*time.Millisecond).Should(BeTrue(), "Failed to sync with udp service")
 				Eventually(func() bool {
-					return checkServiceRoute(tc.Felixes[0], testSvc.Spec.ClusterIPs[1])
+					return checkHostNATServiceIP(tc.Felixes[0], testSvc.Spec.ClusterIPs[1])
 				}, 10*time.Second, 300*time.Millisecond).Should(BeTrue(), "Failed to sync with udp service")
 			})
 		}
