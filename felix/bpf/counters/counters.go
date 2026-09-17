@@ -83,7 +83,7 @@ const (
 	DroppedFragReorder
 	DroppedFragUnsupported
 	DroppedQoS
-	Reserved1
+	RedirectL2HeaderFailed
 	DroppedMaglevNoBackend
 	DroppedNoHostIP
 )
@@ -207,6 +207,10 @@ var descriptions DescList = DescList{
 	{
 		Counter:  DroppedQoS,
 		Category: "Dropped", Caption: "QoS control limit",
+	},
+	{
+		Counter:  RedirectL2HeaderFailed,
+		Category: "Redirect", Caption: "failed to insert L2 header",
 	},
 	{
 		Counter:  DroppedMaglevNoBackend,
