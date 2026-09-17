@@ -107,7 +107,7 @@ spec:
                 cidr:
                   description: The pool CIDR.
                   format: cidr
-                  maxLength: 48
+                  maxLength: 49
                   type: string
                   x-kubernetes-validations:
                     - message:
