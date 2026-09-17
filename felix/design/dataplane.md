@@ -669,7 +669,7 @@ Mechanism and invariants:
   shared by all policies, so `LogPrefix`-style `%`-specifiers
   cannot be resolved and are rendered literally (the API doc says
   so) — with the base truncated so suffix plus the `": "` appended
-  by the Log action fit the backend limit (29 chars iptables, 127
+  by the Log action fit the backend limit (29 chars iptables, 126
   nftables).
 - **RST visibility**: netfilter hooks run before the TCP stack sees
   a packet (forwarded traffic never touches the host TCP stack at
