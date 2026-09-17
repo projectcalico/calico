@@ -20,6 +20,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/qos"
 )
@@ -50,12 +51,12 @@ type connlimitKey struct {
 // serving as the sole decrement mechanism (connections that close or time out
 // simply aren't counted on the next scan).
 // connLimitScannerRunEveryN downsamples the scanner relative to the parent CT
-// scan loop. With timeouts.ScanPeriod = 10s and N = 3 the scanner does a real
-// recount roughly every 30s; the intervening 2 iterations early-return in
-// IterationStart / Check / IterationEnd. The scanner only exists as a drift
-// safety net for silent CT-entry purges (half-close, idle TCPEstablished,
-// network partition), so a ~30s recovery window is adequate.
-const connLimitScannerRunEveryN = 3
+// scan loop, which runs every timeouts.ScanPeriod.
+//
+// N = 1 because the recount is no longer only a drift safety net: an RST no
+// longer decrements on the fast path, so this is what returns the slot of an
+// RST-closed connection once its entry is purged.
+const connLimitScannerRunEveryN = 1
 
 // connLimitQoSMap is the subset of the cali_qos_conn BPF map API that the
 // scanner needs. Narrowed from maps.MapWithUpdateWithFlags so tests can
@@ -133,21 +134,14 @@ func (s *ConnLimitScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get E
 
 	data := ctVal.Data()
 
-	// Skip connections that are closing or closed (any FIN or RST):
-	// the fast path decremented when it saw the close, or the cleanup
-	// path will when the entry expires, so counting them here would
-	// overwrite the decremented value with a higher one.
-	//
-	// Deliberately NOT skipped: entries carrying CONNLIMIT_DEC. The
-	// fast path claims that flag on any RST, including a spurious one
-	// both peers ignore, and rarely clears it again, so it sits on
-	// live connections. Since this recount is the only thing that can
-	// give a slot back, skipping on it made such an under-count
-	// effectively permanent. The FIN/RST skips above already prevent
-	// the double-count it was added for.
-	if data.FINsSeenDSR() || data.RSTSeen() {
+	// Skip a close both endpoints agreed on; the fast path decremented it.
+	if data.FINsSeenDSR() {
 		return ScanVerdictOK, 0
 	}
+
+	// No RST state is skipped: a pod emits RSTs at will and would hide its
+	// own live connections (CORE-13478 Failure.1).
+
 	// Only count fully established connections.
 	if !data.Established() {
 		return ScanVerdictOK, 0
@@ -167,10 +161,14 @@ func (s *ConnLimitScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get E
 
 	aIsOpener := data.A2B.Opener
 
+	// to-wep stamps this when it skips the ingress limit for a local-host
+	// source. CORE-13478 Failure.4.
+	hostOpened := ctVal.Flags()&v4.FlagHostOrigin != 0
+
 	if podAIsLimited {
 		if aIsOpener && podA.HasEgressLimit {
 			s.counts[connlimitKey{ifindex: podA.IfIndex, direction: 0}]++
-		} else if !aIsOpener && podA.HasIngressLimit {
+		} else if !aIsOpener && podA.HasIngressLimit && !hostOpened {
 			s.counts[connlimitKey{ifindex: podA.IfIndex, direction: 1}]++
 		}
 	}
@@ -178,7 +176,7 @@ func (s *ConnLimitScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get E
 	if podBIsLimited {
 		if !aIsOpener && podB.HasEgressLimit {
 			s.counts[connlimitKey{ifindex: podB.IfIndex, direction: 0}]++
-		} else if aIsOpener && podB.HasIngressLimit {
+		} else if aIsOpener && podB.HasIngressLimit && !hostOpened {
 			s.counts[connlimitKey{ifindex: podB.IfIndex, direction: 1}]++
 		}
 	}
