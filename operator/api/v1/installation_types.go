@@ -200,6 +200,12 @@ type InstallationSpec struct {
 	// +optional
 	TLSCipherSuites TLSCipherSuites `json:"tlsCipherSuites,omitempty"`
 
+	// TLSMinVersion defines the minimum TLS version that the TLS protocol should use during secure communication.
+	// Default: 1.2
+	// +optional
+	// +kubebuilder:validation:Enum=1.2;1.3
+	TLSMinVersion *TLSVersion `json:"tlsMinVersion,omitempty"`
+
 	// Deprecated. NonPrivileged is deprecated and will be removed from the API in a future release.
 	// Enabling this field is not supported and will cause errors.
 	// NonPrivileged configures Calico to be run in non-privileged containers as non-root users where possible.
@@ -294,6 +300,13 @@ type TLSCipher string
 func (c TLSCipher) String() string {
 	return string(c)
 }
+
+type TLSVersion string
+
+const (
+	TLSVersion1_2 TLSVersion = "1.2"
+	TLSVersion1_3 TLSVersion = "1.3"
+)
 
 const (
 	// TLS 1.3
