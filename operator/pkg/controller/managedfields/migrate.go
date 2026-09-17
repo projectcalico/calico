@@ -15,12 +15,13 @@
 package managedfields
 
 import (
-	"encoding/json"
+	"bytes"
 	"fmt"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/structured-merge-diff/v6/fieldpath"
 )
 
 // legacyFieldManager is what the API server derives from the /usr/bin/operator user agent,
@@ -49,6 +50,7 @@ func reclaimablePaths(obj client.Object, manager string) (map[string]bool, error
 		if reclaimable[path] {
 			continue
 		}
+
 		// Legacy ownership is beside the point here: these paths belong to another manager.
 		changed, err := changedByOther(content, lastWritten, nil, path)
 		if err != nil {
@@ -80,33 +82,33 @@ func updateOwnedPaths(obj client.Object) (legacy, others map[string]bool, err er
 		if entry.Operation != metav1.ManagedFieldsOperationUpdate || entry.FieldsV1 == nil {
 			continue
 		}
-		fields := map[string]any{}
-		if err := json.Unmarshal(entry.FieldsV1.GetRawBytes(), &fields); err != nil {
+		owned := &fieldpath.Set{}
+		if err := owned.FromJSON(bytes.NewReader(entry.FieldsV1.GetRawBytes())); err != nil {
 			return nil, nil, fmt.Errorf("unable to parse the fields managed by %q: %w", entry.Manager, err)
 		}
+
 		out := others
 		if entry.Manager == legacyFieldManager {
 			out = legacy
 		}
-		collectFieldPaths(fields, "", out)
+		owned.Iterate(func(p fieldpath.Path) {
+			if path, ok := dottedPath(p); ok {
+				out[path] = true
+			}
+		})
 	}
 	return legacy, others, nil
 }
 
-// collectFieldPaths flattens a managed field set into paths of the "spec.field" form.
-func collectFieldPaths(fields map[string]any, prefix string, out map[string]bool) {
-	for key, value := range fields {
-		name, found := strings.CutPrefix(key, "f:")
-		if !found {
-			continue
+// dottedPath renders a field path as "spec.field". A path through a list item has no such form,
+// and the declarations govern no lists, so it reports that the path is not one of them.
+func dottedPath(p fieldpath.Path) (string, bool) {
+	names := make([]string, 0, len(p))
+	for _, element := range p {
+		if element.FieldName == nil {
+			return "", false
 		}
-		path := name
-		if prefix != "" {
-			path = prefix + "." + name
-		}
-		out[path] = true
-		if children, ok := value.(map[string]any); ok {
-			collectFieldPaths(children, path, out)
-		}
+		names = append(names, *element.FieldName)
 	}
+	return strings.Join(names, "."), true
 }

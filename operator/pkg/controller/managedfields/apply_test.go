@@ -63,6 +63,18 @@ func declarePolicySync(prefix string) managedfields.DeclareFelixConfiguration {
 	}
 }
 
+// declareRouteTableRange governs spec.routeTableRange, a struct field the API server records
+// field by field, declaring a value only when one is given.
+func declareRouteTableRange(r *v3.RouteTableRange) managedfields.DeclareFelixConfiguration {
+	return func(_ *v3.FelixConfiguration) (*managedfields.FelixConfigurationDeclaration, error) {
+		return &managedfields.FelixConfigurationDeclaration{
+			Manager:  "installation",
+			Owned:    &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{RouteTableRange: r}},
+			Policies: map[string]managedfields.ConflictPolicy{"spec.routeTableRange": managedfields.ConflictDefer},
+		}, nil
+	}
+}
+
 var _ = Describe("Applying declared FelixConfiguration fields", func() {
 	var c client.Client
 	var ctx context.Context
@@ -283,6 +295,22 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(fc.Spec.HealthPort).To(Equal(ptr.To(9100)))
 				Expect(fc.Spec.VXLANPort).To(Equal(ptr.To(4789)))
+			})
+
+			It("should take over a struct field its own legacy manager still owns", func() {
+				createAsManager("operator", nil, v3.FelixConfigurationSpec{RouteTableRange: &v3.RouteTableRange{Min: 1, Max: 50}})
+
+				fc, err := w.ApplyFelixConfiguration(ctx, declareRouteTableRange(&v3.RouteTableRange{Min: 65, Max: 99}))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(fc.Spec.RouteTableRange).To(Equal(&v3.RouteTableRange{Min: 65, Max: 99}))
+			})
+
+			It("should clear a struct field its legacy manager holds that the declaration dropped", func() {
+				createAsManager("operator", nil, v3.FelixConfigurationSpec{RouteTableRange: &v3.RouteTableRange{Min: 1, Max: 50}})
+
+				_, err := w.ApplyFelixConfiguration(ctx, declareRouteTableRange(nil))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(getFelixConfig().Spec.RouteTableRange).To(BeNil())
 			})
 
 			It("should clear a field its legacy manager holds that the declaration dropped", func() {
