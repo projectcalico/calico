@@ -178,7 +178,9 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 
 		if BPFMode() {
 			It("should not program Linux IP sets", func() {
-				Consistently(tc.Felixes[0].NumIPSets, "5s", "1s").Should(BeZero())
+				// The host-NAT steering sets always exist in BPF mode; nothing
+				// else should be programmed.
+				Consistently(ipSetNamesExceptHostNAT(tc.Felixes[0]), "5s", "1s").Should(BeEmpty())
 			})
 		}
 	})

@@ -72,6 +72,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/cachingmap"
 	"github.com/projectcalico/calico/felix/calc"
+	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ethtool"
@@ -79,7 +80,10 @@ import (
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/routerule"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
@@ -183,8 +187,8 @@ type bpfDataplane interface {
 	removePolicyProgram(ap attachPoint, ipFamily proto.IPVersion) error
 	setAcceptLocal(iface string, val bool) error
 	setRPFilter(iface string, val int) error
-	setRoute(ip.CIDR)
-	delRoute(ip.CIDR)
+	addServiceIP(ip.CIDR)
+	delServiceIP(ip.CIDR)
 	ruleMatchID(dir rules.RuleDir, action string, owner rules.RuleOwnerType, idx int, id types.IDMaker) polprog.RuleMatchID
 	loadDefaultPolicies(hk hook.Hook) error
 	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
@@ -427,6 +431,19 @@ type bpfEndpointManager struct {
 	profiling          string
 	bpfUDPGSOLinearize bool
 
+	// CTLB workaround steering: service IPs are kept in an ipset, an
+	// iptables rule in mangle OUTPUT fwmarks packets destined to them and a
+	// single routing rule per family steers marked traffic to a dedicated
+	// routing table whose default route points at bpfin.cali.
+	hostNATIPSetV4      dpsets.IPSetsDataplane
+	hostNATIPSetV6      dpsets.IPSetsDataplane
+	hostNATRouteTableV4 *routetable.ClassView
+	hostNATRouteTableV6 *routetable.ClassView
+	hostNATRouteSyncers []routetable.SyncerInterface
+	hostNATRouteRules   []routeRules
+	hostNATMark         uint32
+	dirtyHostNATRoutes  bool
+
 	// Maps for policy rule counters
 	polNameToMatchIDs map[string]set.Set[polprog.RuleMatchID]
 	dirtyRules        set.Set[polprog.RuleMatchID]
@@ -569,6 +586,9 @@ func NewBPFEndpointManager(
 	opReporter logrusr.OpRecorder,
 	mainRouteTableV4 routetable.Interface,
 	mainRouteTableV6 routetable.Interface,
+	hostNATRouteTableV4 routetable.Interface,
+	hostNATRouteTableV6 routetable.Interface,
+	hostNATIPSetsV4 dpsets.IPSetsDataplane,
 	lookupsCache *calc.LookupsCache,
 	healthAggregator *health.HealthAggregator,
 	dataplanefeatures *environment.Features,
@@ -776,6 +796,63 @@ func NewBPFEndpointManager(
 		m.v6 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV6, bpfmaps.V6, iptablesFilterTableV6, ipSetIDAllocV6, workloadRemoveChanV6, m)
 	}
 
+	// Sync the CTLB-workaround steering table and routing rules even when the
+	// host-networked NAT mode is disabled so that state left over from a
+	// previous run is cleaned up.  With the mode disabled nothing is desired,
+	// so applying them just removes strays.
+	if hostNATRouteTableV4 != nil {
+		m.hostNATRouteTableV4 = routetable.NewClassView(routetable.RouteClassBPFSpecial, hostNATRouteTableV4)
+		m.hostNATRouteSyncers = append(m.hostNATRouteSyncers, hostNATRouteTableV4)
+	}
+	if hostNATRouteTableV6 != nil {
+		m.hostNATRouteTableV6 = routetable.NewClassView(routetable.RouteClassBPFSpecial, hostNATRouteTableV6)
+		m.hostNATRouteSyncers = append(m.hostNATRouteSyncers, hostNATRouteTableV6)
+	}
+	m.hostNATMark = config.BPFHostNATMark
+	hostNATRuleActive := m.hostNetworkedNATMode != hostNetworkedNATDisabled && m.hostNATMark != 0
+	for _, family := range []struct {
+		ipVersion  int
+		tableIndex int
+		ruleWanted bool
+	}{
+		{4, config.BPFHostNATTableIndexV4, hostNATRuleActive},
+		{6, config.BPFHostNATTableIndexV6, hostNATRuleActive && m.ipv6Enabled},
+	} {
+		if family.tableIndex <= 0 {
+			continue
+		}
+		rr, err := routerule.New(
+			family.ipVersion,
+			set.From(family.tableIndex),
+			routerule.RulesMatchSrcFWMarkTable,
+			routerule.RulesMatchSrcFWMarkTable,
+			config.NetlinkTimeout,
+			func() (routerule.HandleIface, error) {
+				return netlinkshim.NewRealNetlink()
+			},
+			opReporter,
+		)
+		if err != nil {
+			if family.ruleWanted {
+				return nil, fmt.Errorf("creating service steering route rules for IPv%d: %w", family.ipVersion, err)
+			}
+			logrus.WithError(err).Warnf("Failed to create IPv%d service steering route rule manager, "+
+				"stale rules may not be cleaned up.", family.ipVersion)
+			continue
+		}
+		if family.ruleWanted {
+			// The mask requires the SEEN bit to be clear: the BPF programs set
+			// wire marks whose high bits (e.g. MarkSeenTunnelKeySet) lie outside
+			// tcdefs.MarksMask and can therefore collide with our pool-allocated
+			// bit, but they always carry the SEEN bit, while freshly marked
+			// host-originated packets never do.
+			rr.SetRule(routerule.NewRule(family.ipVersion, dataplanedefs.BPFHostNATRulePriority).
+				GoToTable(family.tableIndex).
+				MatchFWMarkWithMask(m.hostNATMark, m.hostNATMark|tcdefs.MarkSeen))
+		}
+		m.hostNATRouteRules = append(m.hostNATRouteRules, rr)
+	}
+
 	if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
 		logrus.Infof("HostNetworkedNATMode is %d", m.hostNetworkedNATMode)
 		m.routeTableV4 = routetable.NewClassView(routetable.RouteClassBPFSpecial, mainRouteTableV4)
@@ -783,6 +860,16 @@ func NewBPFEndpointManager(
 		m.services = make(map[serviceKey][]ip.CIDR)
 		m.dirtyServices = set.New[serviceKey]()
 		m.natExcludedCIDRs = ip.NewCIDRTrie()
+		m.dirtyHostNATRoutes = true
+
+		if hostNATIPSetsV4 != nil {
+			m.hostNATIPSetV4 = hostNATIPSetsV4
+			m.hostNATIPSetV4.AddOrReplaceIPSet(ipsets.IPSetMetadata{
+				MaxSize: config.MaxIPSetSize,
+				SetID:   rules.IPSetIDBPFHostNATServices,
+				Type:    ipsets.IPSetTypeHashNet,
+			}, []string{})
+		}
 
 		excludeCIDRsMatch := 1
 
@@ -1010,10 +1097,11 @@ func (m *bpfEndpointManager) updateOurHostIP(ip net.IP, ipFamily int) {
 	m.markEverythingDirty()
 }
 
-// markEverythingDirty marks every interface and service known to the BPF
-// endpoint manager as dirty, forcing the next apply pass to rebuild the
-// attach points and service routes. Used when a change (e.g. a new host
-// IP) invalidates the program globals or the service source-IP.
+// markEverythingDirty marks every interface known to the BPF endpoint
+// manager as dirty and the service steering route for refresh, forcing the
+// next apply pass to rebuild the attach points and the steering route. Used
+// when a change (e.g. a new host IP) invalidates the program globals or the
+// steering route's source IP.
 func (m *bpfEndpointManager) markEverythingDirty() {
 	// Should be safe without the lock since there shouldn't be any active background threads
 	// but taking it now makes us robust to refactoring.
@@ -1026,11 +1114,10 @@ func (m *bpfEndpointManager) markEverythingDirty() {
 		})
 	}
 	m.ifacesLock.Unlock()
-	// We use host IP as the source when routing service for the ctlb workaround. We
-	// need to update those routes, so make them all dirty.
-	for svc := range m.services {
-		m.dirtyServices.Add(svc)
-	}
+	// We use the host IP as the source hint of the steering route for the ctlb
+	// workaround, so refresh it.  Service ipset membership does not depend on
+	// the host IP.
+	m.dirtyHostNATRoutes = true
 }
 
 // parseHostIP parses a host IP address string (CIDR or bare IP). Returns
@@ -2151,9 +2238,13 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		// Update all existing IPs of dirty services
 		for svc := range m.dirtyServices.All() {
 			for _, ip := range m.services[svc] {
-				m.dp.setRoute(ip)
+				m.dp.addServiceIP(ip)
 			}
 			m.dirtyServices.Discard(svc)
+		}
+		if m.dirtyHostNATRoutes {
+			m.updateHostNATRoutes()
+			m.dirtyHostNATRoutes = false
 		}
 	}
 
@@ -5147,7 +5238,7 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 	for _, old := range m.services[key] {
 		exists := slices.Contains(ips, old)
 		if !exists {
-			m.dp.delRoute(old)
+			m.dp.delServiceIP(old)
 		}
 	}
 
@@ -5168,7 +5259,7 @@ func (m *bpfEndpointManager) onServiceRemove(update *proto.ServiceRemove) {
 	key := serviceKey{name: update.Name, namespace: update.Namespace}
 
 	for _, svcIP := range m.services[key] {
-		m.dp.delRoute(svcIP)
+		m.dp.delServiceIP(svcIP)
 	}
 
 	delete(m.services, key)
@@ -5181,43 +5272,86 @@ var (
 	bpfnatGWv6     = net.ParseIP("2001:db8::1")
 	bpfnatGWIPv6   = ip.FromNetIP(bpfnatGWv6)
 	bpfnatGWCIDRv6 = ip.CIDRFromAddrAndPrefix(bpfnatGWIPv6, 128)
+
+	defaultCIDRv4 = ip.MustParseCIDROrIP("0.0.0.0/0")
+	defaultCIDRv6 = ip.MustParseCIDROrIP("::/0")
 )
 
-func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
-	target := routetable.Target{
-		Type: routetable.TargetTypeGlobalUnicast,
-		RouteKey: routetable.RouteKey{
-			CIDR: cidr,
-		},
-	}
-
+// addServiceIP adds a service IP to the per-family steering ipset; the
+// mangle OUTPUT rule fwmarks host traffic destined to members and a single
+// routing rule steers it to bpfin.cali via the dedicated table.
+func (m *bpfEndpointManager) addServiceIP(cidr ip.CIDR) {
 	if cidr.Version() == 6 {
-		if m.v6 != nil && m.v6.lastSeenHostIP != nil {
-			target.GW = bpfnatGWIPv6
-			target.Src = ip.FromNetIP(m.v6.lastSeenHostIP)
-			m.routeTableV6.RouteUpdate(dataplanedefs.BPFInDev, target)
+		if m.hostNATIPSetV6 != nil {
+			m.hostNATIPSetV6.AddMembers(rules.IPSetIDBPFHostNATServices, []string{cidr.String()})
 		}
-	} else if m.v4 != nil && m.v4.lastSeenHostIP != nil {
-		target.GW = bpfnatGWIP
-		target.Src = ip.FromNetIP(m.v4.lastSeenHostIP)
-		m.routeTableV4.RouteUpdate(dataplanedefs.BPFInDev, target)
+	} else if m.hostNATIPSetV4 != nil {
+		m.hostNATIPSetV4.AddMembers(rules.IPSetIDBPFHostNATServices, []string{cidr.String()})
 	}
 
 	logrus.WithFields(logrus.Fields{
 		"cidr": cidr,
-	}).Debug("setRoute")
+	}).Debug("addServiceIP")
 }
 
-func (m *bpfEndpointManager) delRoute(cidr ip.CIDR) {
-	if m.v6 != nil && cidr.Version() == 6 {
-		m.routeTableV6.RouteRemove(dataplanedefs.BPFInDev, routetable.RouteKey{CIDR: cidr})
+func (m *bpfEndpointManager) delServiceIP(cidr ip.CIDR) {
+	if cidr.Version() == 6 {
+		if m.hostNATIPSetV6 != nil {
+			m.hostNATIPSetV6.RemoveMembers(rules.IPSetIDBPFHostNATServices, []string{cidr.String()})
+		}
+	} else if m.hostNATIPSetV4 != nil {
+		m.hostNATIPSetV4.RemoveMembers(rules.IPSetIDBPFHostNATServices, []string{cidr.String()})
 	}
-	if m.v4 != nil && cidr.Version() == 4 {
-		m.routeTableV4.RouteRemove(dataplanedefs.BPFInDev, routetable.RouteKey{CIDR: cidr})
-	}
+
 	logrus.WithFields(logrus.Fields{
 		"cidr": cidr,
-	}).Debug("delRoute")
+	}).Debug("delServiceIP")
+}
+
+// setHostNATIPSetV6 attaches the IPv6 ipsets dataplane once it exists (it is
+// created after this manager) and declares the steering set.  No-op when the
+// host-networked NAT mode is off.
+func (m *bpfEndpointManager) setHostNATIPSetV6(ipSets dpsets.IPSetsDataplane, maxSize int) {
+	if m.hostNetworkedNATMode == hostNetworkedNATDisabled || ipSets == nil || m.v6 == nil {
+		return
+	}
+	m.hostNATIPSetV6 = ipSets
+	m.hostNATIPSetV6.AddOrReplaceIPSet(ipsets.IPSetMetadata{
+		MaxSize: maxSize,
+		SetID:   rules.IPSetIDBPFHostNATServices,
+		Type:    ipsets.IPSetTypeHashNet,
+	}, []string{})
+}
+
+// updateHostNATRoutes programs the single default route per family in the
+// dedicated steering table: default via 169.254.1.1 dev bpfin.cali onlink,
+// with the host IP as the source hint (needed so that the kernel picks a
+// source that survives the tunnel SNAT dance on the return path).
+func (m *bpfEndpointManager) updateHostNATRoutes() {
+	if m.hostNATRouteTableV4 != nil && m.v4 != nil && m.v4.lastSeenHostIP != nil {
+		m.hostNATRouteTableV4.RouteUpdate(dataplanedefs.BPFInDev, routetable.Target{
+			Type:     routetable.TargetTypeOnLink,
+			RouteKey: routetable.RouteKey{CIDR: defaultCIDRv4},
+			GW:       bpfnatGWIP,
+			Src:      ip.FromNetIP(m.v4.lastSeenHostIP),
+		})
+	}
+	if m.hostNATRouteTableV6 != nil && m.v6 != nil && m.v6.lastSeenHostIP != nil {
+		m.hostNATRouteTableV6.RouteUpdate(dataplanedefs.BPFInDev, routetable.Target{
+			Type:     routetable.TargetTypeOnLink,
+			RouteKey: routetable.RouteKey{CIDR: defaultCIDRv6},
+			GW:       bpfnatGWIPv6,
+			Src:      ip.FromNetIP(m.v6.lastSeenHostIP),
+		})
+	}
+}
+
+func (m *bpfEndpointManager) GetRouteTableSyncers() []routetable.SyncerInterface {
+	return m.hostNATRouteSyncers
+}
+
+func (m *bpfEndpointManager) GetRouteRules() []routeRules {
+	return m.hostNATRouteRules
 }
 
 func (m *bpfEndpointManager) updatePolicyCacheProfile(id types.ProfileID, inboundRules, outboundRules []*proto.Rule) {
