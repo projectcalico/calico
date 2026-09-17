@@ -432,6 +432,7 @@ type FelixConfigurationSpec struct {
 	// rules that emit these logs are shared by all policies, so per-policy values cannot be
 	// substituted and any %-specifiers are rendered literally. [Default: calico-response]
 	// +optional
+	// +kubebuilder:validation:Pattern=`^([a-zA-Z0-9%: /_-])*$`
 	LogConnectionTransitionsPrefix string `json:"logConnectionTransitionsPrefix,omitempty"`
 
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]

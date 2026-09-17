@@ -1053,6 +1053,7 @@ spec:
                     is appended to it. Unlike LogPrefix, it does not support %-specifiers (such as %p): the
                     rules that emit these logs are shared by all policies, so per-policy values cannot be
                     substituted and any %-specifiers are rendered literally. [Default: calico-response]
+                  pattern: "^([a-zA-Z0-9%: /_-])*$"
                   type: string
                 logDebugFilenameRegex:
                   description: |-
