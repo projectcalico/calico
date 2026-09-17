@@ -16,6 +16,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -361,6 +363,54 @@ func TestCalculateMacroOwnDepsEmpty(t *testing.T) {
 	// Default inclusions/exclusions are still present.
 	if !d.Exclusions.Contains("/**/*.md") {
 		t.Error("expected default exclusions in empty own-spec deps")
+	}
+}
+
+func TestEmbedGlobsForPattern(t *testing.T) {
+	root := t.TempDir()
+	for _, file := range []string{"pkg/data.yaml", "pkg/other.yaml", "pkg/templates/a.gotmpl", "pkg/sub/nested/b.txt", "pkg/sub/c.txt"} {
+		path := filepath.Join(root, file)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+		if err := os.WriteFile(path, nil, 0o644); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+	}
+	t.Chdir(root)
+
+	for _, tc := range []struct {
+		name     string
+		pattern  string
+		expected []string
+	}{
+		{name: "wildcard matching files", pattern: "*.yaml", expected: []string{"/pkg/*.yaml"}},
+		{name: "single file", pattern: "data.yaml", expected: []string{"/pkg/data.yaml"}},
+		{name: "whole directory", pattern: "templates", expected: []string{"/pkg/templates/**"}},
+		{name: "all: prefix", pattern: "all:templates", expected: []string{"/pkg/templates/**"}},
+		{name: "wildcard matching a directory", pattern: "sub/*", expected: []string{"/pkg/sub/nested/**", "/pkg/sub/*"}},
+		{name: "generated file not on disk", pattern: "chart.tgz", expected: []string{"/pkg/chart.tgz"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			globs := embedGlobsForPattern("/pkg", tc.pattern)
+			if !set.From(globs...).Equals(set.From(tc.expected...)) {
+				t.Errorf("embedGlobsForPattern(%q) = %v, want %v", tc.pattern, globs, tc.expected)
+			}
+		})
+	}
+}
+
+func TestAddSecondaryPkgInclusionsNonGo(t *testing.T) {
+	inclusions := set.New[string]()
+	if _, err := addSecondaryPkgInclusions(inclusions, "non-go:/felix/bpf-gpl"); err != nil {
+		t.Fatalf("rooted non-go spec: %v", err)
+	}
+	if !inclusions.Contains("/felix/bpf-gpl") {
+		t.Errorf("inclusions = %v, want /felix/bpf-gpl", inclusions.Slice())
+	}
+
+	if _, err := addSecondaryPkgInclusions(inclusions, "non-go:felix/bpf-gpl"); err == nil {
+		t.Error("unrooted non-go spec was accepted, want an error")
 	}
 }
 

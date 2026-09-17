@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -62,7 +63,13 @@ that node depends on felix/bpf-*.
 	os.Exit(1)
 }
 
-const mainBranchName = "master"
+const (
+	mainBranchName = "master"
+
+	// apiModulePath is the api directory's own module path; go.mod replaces it
+	// with ./api, so its packages are in-repo dependencies like any other.
+	apiModulePath = "github.com/projectcalico/api"
+)
 
 var (
 	pretty   = flag.Bool("pretty", false, "Pretty-print the output (only applies to sem-change-in).")
@@ -159,15 +166,11 @@ var nonGoDeps = map[string][]string{
 		"/kube-controllers/pkg/apis/migration/v1/crd",
 	},
 
-	// The YAML the operator embeds and installs is invisible to the dir-scan:
-	// its own CRDs, the Calico CRDs it pulls from libcalico-go, the whisker
-	// config it renders, and the deploy-time manifests.
+	// The manifests the operator installs at deploy time are read from disk
+	// rather than embedded, so nothing in the import graph points at them.
 	"operator": {
-		"/libcalico-go/config/crd",
 		"/operator/config",
 		"/operator/deploy/crds",
-		"/operator/pkg/crds",
-		"/operator/pkg/render/whisker",
 	},
 }
 
@@ -321,7 +324,7 @@ func calculateSemDeps(pkgList string) (deps *Deps, err error) {
 		logrus.Infof("Calculating deps for %s package; including secondary deps: %v", primaryPkg, otherPkgs)
 	}
 
-	localDirs, err := loadLocalDirs(primaryPkg, false)
+	local, err := loadLocalDirs(primaryPkg, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load local dirs: %w", err)
 	}
@@ -330,13 +333,14 @@ func calculateSemDeps(pkgList string) (deps *Deps, err error) {
 	inclusions.Add("/" + primaryPkg + "/**")
 	inclusions.AddAll(defaultInclusions)
 	inclusions.AddAll(nonGoDeps[primaryPkg])
+	inclusions.AddAll(local.embedGlobs)
 	// dirs under the primary package are covered by the "/<pkg>/**" glob above;
 	// formatChangeIn's dropSubsumedInclusions drops the redundant per-dir globs.
-	for _, dir := range localDirs {
+	for _, dir := range local.dirs {
 		inclusions.Add(dir + "/*.go")
 	}
 
-	exclusions := set.From(calculateTestExclusionGlobs(primaryPkg, localDirs)...)
+	exclusions := set.From(calculateTestExclusionGlobs(primaryPkg, local.dirs)...)
 	exclusions.AddAll(defaultExclusions)
 
 	// Some jobs depend on secondary packages.  For example, the node tests
@@ -364,19 +368,23 @@ func calculateSemDeps(pkgList string) (deps *Deps, err error) {
 // packages; without the filter we'd pick those up unintentionally.
 func addSecondaryPkgInclusions(inclusions set.Set[string], pkg string) ([]string, error) {
 	if after, ok := strings.CutPrefix(pkg, "non-go:"); ok {
+		if !strings.HasPrefix(after, "/") {
+			return nil, fmt.Errorf("non-go dependency %q must start with '/'; the path is relative to the root of the repo", after)
+		}
 		inclusions.Add(after)
 		return nil, nil
 	}
-	dirs, err := loadLocalDirs(pkg, true)
+	local, err := loadLocalDirs(pkg, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load local dirs for secondary package %s: %w", pkg, err)
 	}
-	for _, dir := range dirs {
+	for _, dir := range local.dirs {
 		inclusions.Add(dir + "/*.go")
 	}
 	inclusions.AddAll(secondaryPkgBuildInputGlobs(pkg))
 	inclusions.AddAll(nonGoDeps[pkg])
-	return dirs, nil
+	inclusions.AddAll(local.embedGlobs)
+	return local.dirs, nil
 }
 
 // secondaryPkgBuildInputGlobs returns the non-Go build inputs of a secondary
@@ -693,27 +701,27 @@ func formatSemList(s set.Set[string]) string {
 }
 
 func printLocalDirs(pkg string, mainsOnly bool) {
-	localDirs, err := loadLocalDirs(pkg, mainsOnly)
+	local, err := loadLocalDirs(pkg, mainsOnly)
 	if err != nil {
 		logrus.Fatalln("Failed to load local dirs:", err)
 		os.Exit(1)
 	}
-	logrus.Infof("Loaded %d local dirs.", len(localDirs))
-	for _, dir := range localDirs {
+	logrus.Infof("Loaded %d local dirs.", len(local.dirs))
+	for _, dir := range local.dirs {
 		_, _ = fmt.Println(dir)
 	}
 }
 
 func printCombined(pkg string) {
 	printModules(pkg)
-	localDirs, err := loadLocalDirs(pkg, true)
+	local, err := loadLocalDirs(pkg, true)
 	if err != nil {
 		logrus.Fatalln("Failed to load local dirs:", err)
 		os.Exit(1)
 	}
-	if len(localDirs) > 0 {
+	if len(local.dirs) > 0 {
 		fmt.Println()
-		for _, dir := range localDirs {
+		for _, dir := range local.dirs {
 			// Strip leading "/" and prefix with "local:" so the Makefile
 			// can grep these out easily.
 			_, _ = fmt.Println("local:" + strings.TrimPrefix(dir, "/"))
@@ -722,12 +730,12 @@ func printCombined(pkg string) {
 }
 
 func printTestExclusions(pkg string) {
-	localDirs, err := loadLocalDirs(pkg, false)
+	local, err := loadLocalDirs(pkg, false)
 	if err != nil {
 		logrus.Fatalln("Failed to load local dirs:", err)
 		os.Exit(1)
 	}
-	for _, dir := range calculateTestExclusionGlobs(pkg, localDirs) {
+	for _, dir := range calculateTestExclusionGlobs(pkg, local.dirs) {
 		_, _ = fmt.Println(dir)
 	}
 }
@@ -752,23 +760,91 @@ func calculateTestExclusionGlobs(pkg string, localDirs []string) []string {
 	return s
 }
 
-func loadLocalDirs(pkg string, mainDepsOnly bool) (out []string, err error) {
+// localDeps are a package's in-repo inputs: the dirs of the Go packages it
+// depends on, plus globs for the non-Go files those packages go:embed, which no
+// "<dir>/*.go" glob reaches.
+type localDeps struct {
+	dirs       []string
+	embedGlobs []string
+}
+
+func loadLocalDirs(pkg string, mainDepsOnly bool) (localDeps, error) {
 	packageDeps, err := loadPackageDeps(pkg, mainDepsOnly)
 	if err != nil {
 		logrus.Fatalln("Failed to load package deps:", err)
 		os.Exit(1)
 	}
-	for _, pkg := range packageDeps {
-		const ourPackage = "github.com/projectcalico/calico"
-		if strings.HasPrefix(pkg, ourPackage+"/") {
-			pkg = strings.TrimPrefix(pkg, ourPackage)
-			out = append(out, pkg)
+
+	const ourPackage = "github.com/projectcalico/calico"
+	var dirs []string
+	embedPatterns := map[string][]string{}
+	for _, dep := range packageDeps {
+		if !strings.HasPrefix(dep.ImportPath, ourPackage+"/") {
+			continue
+		}
+		dir := strings.TrimPrefix(dep.ImportPath, ourPackage)
+		dirs = append(dirs, dir)
+		embedPatterns[dir] = append(embedPatterns[dir], dep.EmbedPatterns...)
+	}
+
+	out := localDeps{dirs: filterInclusions(pkg, set.FromArray(dirs)).Slice()}
+	sort.Strings(out.dirs)
+
+	globs := set.New[string]()
+	for _, dir := range out.dirs {
+		for _, pattern := range embedPatterns[dir] {
+			for _, glob := range embedGlobsForPattern(dir, pattern) {
+				// A package that embeds its own source is already covered by
+				// the "<dir>/*.go" glob its callers add for every dep dir.
+				if path.Dir(glob) == dir && strings.HasSuffix(glob, ".go") {
+					continue
+				}
+				globs.Add(glob)
+			}
+		}
+	}
+	out.embedGlobs = globs.Slice()
+	sort.Strings(out.embedGlobs)
+	return out, nil
+}
+
+// embedGlobsForPattern converts one go:embed pattern in the package at
+// repo-relative dir into change_in() globs.  A pattern that names or matches a
+// directory embeds that subtree, so it becomes "<dir>/**".
+func embedGlobsForPattern(dir, pattern string) []string {
+	pattern = strings.TrimPrefix(pattern, "all:")
+	glob := path.Join(dir, pattern)
+
+	// The tool runs from the root of the repo, so stripping the leading slash
+	// off a repo-relative path gives the path on disk.
+	matches, err := filepath.Glob(strings.TrimPrefix(glob, "/"))
+	if err != nil {
+		logrus.WithError(err).Warnf("Failed to expand go:embed pattern %q in %s", pattern, dir)
+		return []string{glob}
+	}
+
+	var globs []string
+	matchedFile := false
+	for _, match := range matches {
+		info, err := os.Stat(match)
+		if err != nil {
+			logrus.WithError(err).Warnf("Failed to stat go:embed match %s", match)
+			matchedFile = true
+			continue
+		}
+		if info.IsDir() {
+			globs = append(globs, "/"+match+"/**")
+		} else {
+			matchedFile = true
 		}
 	}
 
-	out = filterInclusions(pkg, set.FromArray(out)).Slice()
-	sort.Strings(out)
-	return out, nil
+	// Patterns for generated files match nothing on a clean checkout; emit the
+	// pattern itself so the output does not depend on what has been built.
+	if matchedFile || len(globs) == 0 {
+		globs = append(globs, glob)
+	}
+	return globs
 }
 
 func printModules(pkg string) {
@@ -799,8 +875,8 @@ func printModules(pkg string) {
 			mod = *mod.Replace
 		}
 
-		for _, pkg := range packageDeps {
-			if strings.HasPrefix(pkg, importPath) {
+		for _, dep := range packageDeps {
+			if strings.HasPrefix(dep.ImportPath, importPath) {
 				if mod.Version != "" {
 					mods = append(mods, mod.Path+" "+mod.Version)
 				} else {
@@ -817,7 +893,14 @@ func printModules(pkg string) {
 	logrus.Info("Done.")
 }
 
-func loadPackageDeps(pkg string, mainDepsOnly bool) ([]string, error) {
+// goPackage is the slice of "go list" output that we need: where the package
+// lives in the import graph, and the patterns whose non-Go data it go:embeds.
+type goPackage struct {
+	ImportPath    string
+	EmbedPatterns []string
+}
+
+func loadPackageDeps(pkg string, mainDepsOnly bool) ([]goPackage, error) {
 	pkgs := []string{"./..."}
 
 	if mainDepsOnly {
@@ -832,22 +915,17 @@ func loadPackageDeps(pkg string, mainDepsOnly bool) ([]string, error) {
 		}
 	}
 
-	args := append([]string{"list", "-deps"}, pkgs...)
-	command := exec.Command("go", args...)
-	command.Dir = pkg
-	raw, err := command.Output()
+	args := append([]string{"list", "-deps", "-json=ImportPath,EmbedPatterns"}, pkgs...)
+	out, err := loadGoToolJSON[goPackage](pkg, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load package deps for %v: %w", pkgs, err)
 	}
-	var out []string
-	for line := range bytes.Lines(raw) {
-		dep := string(bytes.TrimSpace(line))
-		if strings.HasPrefix(dep, "github.com/projectcalico/api/") {
-			// HACK, handle the API go mod replace.
-			dep = strings.Replace(dep, "github.com/projectcalico/api/", "github.com/projectcalico/calico/api/", 1)
+	for i, dep := range out {
+		// HACK, handle the API go mod replace.  The module's root package
+		// (github.com/projectcalico/api itself) counts: it embeds the v3 CRDs.
+		if rest, ok := strings.CutPrefix(dep.ImportPath, apiModulePath); ok && (rest == "" || strings.HasPrefix(rest, "/")) {
+			out[i].ImportPath = "github.com/projectcalico/calico/api" + rest
 		}
-		out = append(out, dep)
-		logrus.Debugf("Loaded package: %s", strings.TrimRight(string(line), "\n"))
 	}
 	return out, nil
 }
@@ -879,11 +957,12 @@ type module struct {
 }
 
 func loadGoMods() ([]module, error) {
-	return loadGoToolJSON[module]("list", "-m", "-json", "all")
+	return loadGoToolJSON[module](".", "list", "-m", "-json", "all")
 }
 
-func loadGoToolJSON[Item any](args ...string) ([]Item, error) {
+func loadGoToolJSON[Item any](dir string, args ...string) ([]Item, error) {
 	cmd := exec.Command("go", args...)
+	cmd.Dir = dir
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
