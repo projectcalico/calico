@@ -682,6 +682,18 @@ var (
 		Usage:    "Generate release notes",
 		Sources:  cli.EnvVars(envBuildReleaseNotes, envReleaseNotes),
 		Value:    true,
+		Action: func(_ context.Context, c *cli.Command, b bool) error {
+			if !b || !c.Bool(validationFlag.Name) {
+				return nil
+			}
+			if c.String(orgFlag.Name) != utils.ProjectCalicoOrg || c.String(repoFlag.Name) != utils.CalicoRepoName {
+				return fmt.Errorf("release notes can only be generated from %s/%s", utils.ProjectCalicoOrg, utils.CalicoRepoName)
+			}
+			if c.String(githubTokenFlag.Name) == "" {
+				return fmt.Errorf("GitHub token is required to generate release notes")
+			}
+			return nil
+		},
 	}
 	manifestsFlag = &cli.BoolWithInverseFlag{
 		Name:     "manifests",
