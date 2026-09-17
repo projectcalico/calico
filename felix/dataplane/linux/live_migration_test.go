@@ -1197,3 +1197,7 @@ func (i *fakeIPAM) UpgradeHost(ctx context.Context, nodeName string) error { ret
 func (i *fakeIPAM) SetOwnerAttributes(ctx context.Context, ip cnet.IP, handleID string, updates *ipam.OwnerAttributeUpdates, preconditions *ipam.OwnerAttributePreconditions) error {
 	return nil
 }
+
+func (i *fakeIPAM) MoveIPToHandle(ctx context.Context, ip cnet.IP, opts ipam.MoveOptions) error {
+	panic("MoveIPToHandle not expected on the live migration path")
+}
