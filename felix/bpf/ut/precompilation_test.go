@@ -234,6 +234,135 @@ func TestNoTracePrintkFlagStripsTraceHelper(t *testing.T) {
 		"with no_trace_printk set, the loaded program must reference no trace helper")
 }
 
+// TestCallbackRefsStayInsideOptionalPrograms guards the one construct Felix
+// cannot work around at load time. Passing a callback's address to a helper
+// (bpf_loop, bpf_timer_set_callback, bpf_for_each_map_elem) emits a
+// BPF_PSEUDO_FUNC reference, which only exists from kernel 5.13. Older kernels
+// reject the whole object while validating BTF, before a single instruction is
+// verified, so a bpf_core_enum_value_exists() gate cannot hide one -- the gate
+// folds instructions, and the count that fails is over BTF func_info records.
+// Felix's only lever is skipping an optional sub-program before load, so every
+// such reference has to sit inside one.
+//
+// conntrack_cleanup_*.o is deliberately out of scope: it is a single-program
+// object loaded on its own, with no optional-program mechanism to use.
+func TestCallbackRefsStayInsideOptionalPrograms(t *testing.T) {
+	RegisterTestingT(t)
+
+	optional := map[string]bool{}
+	for sp := hook.SubProgTCMain; sp <= hook.SubProgTCMainDebug; sp++ {
+		if info := hook.GetOptionalSubProgInfo(sp); info != nil {
+			optional[info.ProgName] = true
+		}
+	}
+	Expect(optional).NotTo(BeEmpty(), "no optional sub-programs registered")
+
+	objects := make(map[string]struct{})
+	for _, at := range hook.ListAttachTypes() {
+		objects[at.ObjectFile()] = struct{}{}
+	}
+
+	for obj := range objects {
+		t.Run(obj, func(t *testing.T) {
+			RegisterTestingT(t)
+			refs, err := callbackRefs(path.Join(bpfdefs.ObjectDir, obj))
+			Expect(err).NotTo(HaveOccurred())
+			for _, r := range refs {
+				Expect(optional).To(HaveKey(r.prog), fmt.Sprintf(
+					"%s takes the address of %s; a kernel below 5.13 cannot load %s at all, "+
+						"and disabling an optional program cannot help because %s is not one",
+					r.prog, r.callback, obj, r.prog))
+			}
+		})
+	}
+}
+
+// callbackRef is one BPF_PSEUDO_FUNC reference: the program holding it and the
+// callback it points at.
+type callbackRef struct {
+	prog     string
+	callback string
+}
+
+// callbackRefs finds the references by walking relocations rather than
+// instructions: an ld_imm64 (opcode 0x18) is a callback address only when a
+// relocation ties it to a function in .text, which is where clang emits the
+// callbacks it never inlines.
+func callbackRefs(file string) ([]callbackRef, error) {
+	f, err := elf.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+
+	syms, err := f.Symbols()
+	if err != nil {
+		return nil, err
+	}
+
+	textIdx := -1
+	for i, sec := range f.Sections {
+		if sec.Name == ".text" {
+			textIdx = i
+			break
+		}
+	}
+	if textIdx < 0 {
+		return nil, nil // no out-of-line functions, so no callbacks
+	}
+
+	var refs []callbackRef
+	for _, rel := range f.Sections {
+		if rel.Type != elf.SHT_REL || int(rel.Info) == textIdx {
+			continue
+		}
+		target := f.Sections[rel.Info]
+		if target.Type != elf.SHT_PROGBITS || target.Flags&elf.SHF_EXECINSTR == 0 {
+			continue
+		}
+		code, err := target.Data()
+		if err != nil {
+			return nil, err
+		}
+		data, err := rel.Data()
+		if err != nil {
+			return nil, err
+		}
+		// Elf64_Rel: 8-byte offset, 8-byte info whose high word is the symbol index.
+		for off := 0; off+16 <= len(data); off += 16 {
+			rOff := binary.LittleEndian.Uint64(data[off:])
+			symIdx := int(binary.LittleEndian.Uint64(data[off+8:]) >> 32)
+			if symIdx == 0 || symIdx > len(syms) {
+				continue
+			}
+			sym := syms[symIdx-1]
+			if int(sym.Section) != textIdx {
+				continue
+			}
+			if rOff+8 > uint64(len(code)) || code[rOff] != 0x18 {
+				continue
+			}
+			addend := sym.Value + uint64(binary.LittleEndian.Uint32(code[rOff+4:rOff+8]))
+			refs = append(refs, callbackRef{
+				prog:     funcAt(syms, rel.Info, rOff),
+				callback: funcAt(syms, uint32(textIdx), addend),
+			})
+		}
+	}
+	return refs, nil
+}
+
+// funcAt names the function covering an offset in a section.
+func funcAt(syms []elf.Symbol, sec uint32, off uint64) string {
+	for _, s := range syms {
+		if uint32(s.Section) == sec && elf.ST_TYPE(s.Info) == elf.STT_FUNC &&
+			off >= s.Value && off < s.Value+s.Size {
+			return s.Name
+		}
+	}
+	return fmt.Sprintf("<section %d>+0x%x", sec, off)
+}
+
 func createVeth() (string, netlink.Link) {
 	vethName := fmt.Sprintf("test%xa", rand.Uint32())
 	return vethName, createVethName(vethName)
