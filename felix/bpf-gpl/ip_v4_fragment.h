@@ -6,7 +6,6 @@
 #define __CALI_IP_V4_FRAGMENT_H__
 
 #include <linux/ip.h>
-#include <time.h> /* CLOCK_MONOTONIC */
 
 #include "cali_bpf.h"
 #include "globals.h"
@@ -43,7 +42,7 @@ CALI_MAP(cali_v4_frgtmp, 3,
 		__u32, struct frags4_value,
 		1, 0)
 
-#define CALI_V4_FRGFWD_VER 4
+#define CALI_V4_FRGFWD_VER 5
 CALI_MAP(cali_v4_frgfwd, CALI_V4_FRGFWD_VER, BPF_MAP_TYPE_LRU_HASH,
 		struct frags4_fwd_key, struct frags4_fwd_value, 10000, 0)
 
@@ -58,7 +57,7 @@ struct frags4_fwd_key {
 #define FRAGS4_FWD_FLAG_FIRST_OOR  (1<<0) /* Signals that the first fragment was out of order */
 
 struct frags4_fwd_value {
-	struct bpf_timer timer;
+	__u64 expires_at; /* bpf_ktime_get_ns() stamp; entries are expired on lookup. */
 	__u16 sport;
 	__u16 dport;
 	__u32 marks;
@@ -202,16 +201,6 @@ out:
 	return false;
 }
 
-static int frags4_remove_ct_cb(void *map, struct frags4_fwd_key *key, __unused struct frags4_fwd_value *value)
-{
-	cali_v4_frgfwd_delete_elem(key);
-
-	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
-		bpf_log("IP FRAG: timer expired, removed ct entry ifindex %d id %d", key->ifindex, key->id);
-	}
-	return 0;
-}
-
 #define FRAGS4_HANDLE_UNSUPPORTED	0
 #define FRAGS4_HANDLE_FIRST_IN_ORDER 	1
 #define FRAGS4_HANDLE_STORE_ONLY	2
@@ -340,6 +329,7 @@ static CALI_BPF_INLINE void frags4_record_ct_flags(struct cali_tc_ctx *ctx, __u3
 	};
 
 	struct frags4_fwd_value vinit = {
+		.expires_at = bpf_ktime_get_ns() + IPFRAG_TIMEOUT * 1000000000ULL,
 		.sport = ctx->state->sport,
 		.dport = ctx->state->pre_nat_dport,
 		.marks = ctx->state->fwd.mark,
@@ -351,22 +341,6 @@ static CALI_BPF_INLINE void frags4_record_ct_flags(struct cali_tc_ctx *ctx, __u3
 			debug_ip(k.src), debug_ip(k.dst));
 	CALI_DEBUG("IP FRAG: created ct from %d to %d",
 			vinit.sport, vinit.dport);
-
-	struct frags4_fwd_value *val = cali_v4_frgfwd_lookup_elem(&k);
-
-	if (!val) {
-		CALI_DEBUG("IP FRAG: failed to create ct entry");
-		return;
-	}
-
-	int err = bpf_timer_init(&val->timer, &map_symbol(cali_v4_frgfwd, CALI_V4_FRGFWD_VER), CLOCK_MONOTONIC);
-	if (err) {
-		CALI_DEBUG("IP FRAG: bpf_timer_init failed %d", err);
-		return;
-	}
-
-	bpf_timer_set_callback(&val->timer, frags4_remove_ct_cb);
-	bpf_timer_start(&val->timer, IPFRAG_TIMEOUT * 1000000000ULL, 0);
 }
 
 static CALI_BPF_INLINE void frags4_record_ct(struct cali_tc_ctx *ctx)
@@ -418,6 +392,12 @@ static CALI_BPF_INLINE struct frags4_fwd_value *frags4_lookup_ct(struct cali_tc_
 	CALI_DEBUG("IP FRAG: lookup ct from " IP_FMT " to " IP_FMT,
 			debug_ip(ctx->state->ip_src), debug_ip(ctx->state->ip_dst));
 	struct frags4_fwd_value *val = cali_v4_frgfwd_lookup_elem(&k);
+
+	if (val && bpf_ktime_get_ns() >= val->expires_at) {
+		CALI_DEBUG("IP FRAG: ct entry expired, removing");
+		cali_v4_frgfwd_delete_elem(&k);
+		val = NULL;
+	}
 
 	CALI_DEBUG("IP FRAG: lookup ct %s flags 0x%x", val ? "hit" : "miss", val ? val->flags : 0);
 

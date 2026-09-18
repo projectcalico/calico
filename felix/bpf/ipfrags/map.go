@@ -35,7 +35,7 @@ const (
 	KeySize      = 12
 	ValueSize    = 2 + 2 + 4 + 1504
 	KeySizeFwd   = 16
-	ValueSizeFwd = 32
+	ValueSizeFwd = 24
 )
 
 func Map() maps.Map {
@@ -61,7 +61,7 @@ var FwdMapParams = maps.MapParameters{
 	ValueSize:  ValueSizeFwd,
 	MaxEntries: 10000,
 	Name:       "cali_v4_frgfwd",
-	Version:    4,
+	Version:    5,
 }
 
 func FwdMap() maps.Map {

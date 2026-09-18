@@ -17,6 +17,7 @@ package ut_test
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
@@ -199,7 +200,7 @@ func TestIP4Defrag(t *testing.T) {
 		Expect(pktFull.Bytes()).To(Equal(res.dataOut))
 	})
 
-	/* First fragment only - sets timer, it needs to kick in */
+	/* First fragment only - the entry expires and stops being honoured */
 
 	cleanupMap(ipfragsFwdMap)
 
@@ -214,6 +215,8 @@ func TestIP4Defrag(t *testing.T) {
 
 	Expect(ipfragsFwdMapCount()).To(Equal(0))
 
+	// A generous timeout here: the live check must not race the harness
+	// reloading the objects between the two runs.
 	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		bytes := pkt0.Bytes()
@@ -223,11 +226,43 @@ func TestIP4Defrag(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+	}, withIPFragTimeout(30))
+
+	Expect(ipfragsFwdMapCount()).To(Equal(1))
+
+	// While the entry is live a later fragment rides it through.
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pkt1.Bytes())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+	}, withIPFragTimeout(30))
+
+	/* Expired entry must stop being honoured */
+
+	cleanupMap(ipfragsFwdMap)
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		bytes := pkt0.Bytes()
+		copy(bytes[40:42], pktFull.Bytes()[40:42]) // patch in the udp csum for the entire packet
+		res, err := bpfrun(bytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	}, withIPFragTimeout(1))
 
 	Expect(ipfragsFwdMapCount()).To(Equal(1))
 
-	Eventually(func() int {
-		return ipfragsFwdMapCount()
-	}, "2s", "200ms").Should(Equal(0))
+	time.Sleep(1500 * time.Millisecond)
+
+	// Nothing sweeps the map; the lookup drops the expired entry, so the
+	// fragment takes the out-of-order path instead of riding a stale one.
+	Expect(ipfragsFwdMapCount()).To(Equal(1))
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pkt1.Bytes())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+	}, withIPFragTimeout(1))
 }
