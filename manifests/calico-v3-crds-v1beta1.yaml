@@ -36,6 +36,13 @@ metadata:
   name: calico-cni-plugin
   namespace: kube-system
 ---
+# Source: calico/templates/calico-webhooks.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-webhooks
+  namespace: kube-system
+---
 # Source: calico/templates/calico-config.yaml
 # This ConfigMap is used to configure a self-hosted Calico installation.
 kind: ConfigMap
@@ -92,20 +99,22 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: bgpconfigurations.crd.projectcalico.org
+  name: bgpconfigurations.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: BGPConfiguration
     listKind: BGPConfigurationList
     plural: bgpconfigurations
+    shortNames:
+      - bgpconfig
+      - bgpconfigs
     singular: bgpconfiguration
   scope: Cluster
   versions:
-    - name: v1
+    - name: v3
       schema:
         openAPIV3Schema:
-          description: BGPConfiguration contains the configuration for any BGP routing.
           properties:
             apiVersion:
               description: |-
@@ -401,6 +410,9 @@ spec:
                   rule:
                     "!has(self.communities) || size(self.communities) == 0 || (has(self.prefixAdvertisements)
                     && size(self.prefixAdvertisements) > 0)"
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
@@ -411,9 +423,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: bgpfilters.crd.projectcalico.org
+  name: bgpfilters.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: BGPFilter
     listKind: BGPFilterList
@@ -421,7 +433,7 @@ spec:
     singular: bgpfilter
   scope: Cluster
   versions:
-    - name: v1
+    - name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -1300,6 +1312,9 @@ spec:
                   type: array
                   x-kubernetes-list-type: atomic
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
@@ -1310,9 +1325,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: bgppeers.crd.projectcalico.org
+  name: bgppeers.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: BGPPeer
     listKind: BGPPeerList
@@ -1320,7 +1335,38 @@ spec:
     singular: bgppeer
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: Selector for the nodes that should have this peering
+          jsonPath: .spec.nodeSelector
+          name: Node Selector
+          type: string
+        - description:
+            The node name identifying the Calico node instance that is targeted
+            by this peer
+          jsonPath: .spec.node
+          name: Node
+          type: string
+        - description:
+            The optional Local AS Number to use when peering with this remote
+            peer
+          jsonPath: .spec.localASNumber
+          name: Local ASN
+          type: string
+        - description: Selector for the remote nodes to peer with
+          jsonPath: .spec.peerSelector
+          name: Peer Selector
+          type: string
+        - description:
+            The IP address of the peer followed by an optional port number
+            to peer with
+          jsonPath: .spec.peerIP
+          name: Peer IP
+          type: string
+        - description: The AS Number of the peer
+          jsonPath: .spec.asNumber
+          name: Peer ASN
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -1561,9 +1607,13 @@ spec:
                   rule:
                     "!has(self.keepOriginalNextHop) || !self.keepOriginalNextHop ||
                     !has(self.nextHopMode)"
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -1571,19 +1621,36 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: blockaffinities.crd.projectcalico.org
+  name: blockaffinities.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: BlockAffinity
     listKind: BlockAffinityList
     plural: blockaffinities
+    shortNames:
+      - affinity
+      - affinities
     singular: blockaffinity
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: The block CIDR
+          jsonPath: .spec.cidr
+          name: CIDR
+          type: string
+        - description: The node the block is affine to
+          jsonPath: .spec.node
+          name: Node
+          type: string
+        - description: The type of block affinity
+          jsonPath: .spec.type
+          name: Type
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
+          description: BlockAffinity maintains a block affinity's state
           properties:
             apiVersion:
               description: |-
@@ -1608,18 +1675,31 @@ spec:
                 resource.
               properties:
                 cidr:
+                  description: The CIDR range this block affinity references.
+                  format: cidr
                   type: string
                 deleted:
+                  default: false
                   description: |-
-                    Deleted indicates that this block affinity is being deleted.
-                    This field is a string for compatibility with older releases that
-                    mistakenly treat this field as a string.
-                  type: string
+                    Deleted indicates whether or not this block affinity is disabled and is
+                    used as part of race-condition prevention. When set to true, clients
+                    should treat this block as if it does not exist.
+                  type: boolean
                 node:
+                  description: The node that this block affinity is assigned to.
                   type: string
                 state:
+                  description:
+                    The state of the block affinity with regard to any referenced
+                    IPAM blocks.
+                  enum:
+                    - ""
+                    - confirmed
+                    - pending
+                    - pendingDeletion
                   type: string
                 type:
+                  description: The type of affinity.
                   type: string
               required:
                 - cidr
@@ -1627,9 +1707,13 @@ spec:
                 - node
                 - state
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -1637,9 +1721,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: caliconodestatuses.crd.projectcalico.org
+  name: caliconodestatuses.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: CalicoNodeStatus
     listKind: CalicoNodeStatusList
@@ -1647,7 +1731,16 @@ spec:
     singular: caliconodestatus
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: The name of the node
+          jsonPath: .spec.node
+          name: Node
+          type: string
+        - description: The types of information to monitor for this calico/node
+          jsonPath: .spec.classes
+          name: Classes
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -1969,6 +2062,9 @@ spec:
                       x-kubernetes-list-type: atomic
                   type: object
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
@@ -1981,20 +2077,35 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: clusterinformations.crd.projectcalico.org
+  name: clusterinformations.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: ClusterInformation
     listKind: ClusterInformationList
     plural: clusterinformations
+    shortNames:
+      - clusterinfo
+      - clusterinfos
     singular: clusterinformation
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: The version of Calico that the cluster is running
+          jsonPath: .spec.calicoVersion
+          name: Version
+          type: string
+        - description: Whether the datastore is ready for use
+          jsonPath: .spec.datastoreReady
+          name: Ready
+          type: boolean
+        - description: The types associated with the cluster
+          jsonPath: .spec.clusterType
+          name: Types
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
-          description: ClusterInformation contains the cluster specific information.
           properties:
             apiVersion:
               description: |-
@@ -2042,9 +2153,13 @@ spec:
                   description: Variant declares which variant of Calico is active.
                   type: string
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -2052,9 +2167,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: felixconfigurations.crd.projectcalico.org
+  name: felixconfigurations.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: FelixConfiguration
     listKind: FelixConfigurationList
@@ -2062,10 +2177,9 @@ spec:
     singular: felixconfiguration
   scope: Cluster
   versions:
-    - name: v1
+    - name: v3
       schema:
         openAPIV3Schema:
-          description: Felix Configuration contains the configuration for Felix.
           properties:
             apiVersion:
               description: |-
@@ -3085,13 +3199,12 @@ spec:
                     follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the
                     transition: "-est" when the first reply packet is seen, "-rst" when the response is a TCP
                     RST (connection refused), or "-icmp-err" when the response is a related ICMP error (e.g.
-                    port unreachable). The log body is the standard kernel packet log of the response packet.
-                    For "-est" and "-rst" its 5-tuple is the original policy Log line's with source and
-                    destination swapped; for "-icmp-err" the bracketed inner header carries the original
-                    5-tuple unswapped. A logged connection with no follow-up log never received a response.
-                    Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log
-                    either, so every follow-up log pairs with an initial one. Enabling this consumes one bit
-                    from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+                    port unreachable). The log body is the standard kernel packet log of the response packet,
+                    so the flow is identified by its 5-tuple and can be correlated with the original policy Log
+                    line (with source and destination swapped). A logged connection with no follow-up log never
+                    received a response. Connections whose initial log was suppressed by LogActionRateLimit get
+                    no follow-up log either, so every follow-up log pairs with an initial one. Enabling this
+                    consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
                     [Default: Disabled]
                   enum:
                     - Disabled
@@ -3104,7 +3217,6 @@ spec:
                     is appended to it. Unlike LogPrefix, it does not support %-specifiers (such as %p): the
                     rules that emit these logs are shared by all policies, so per-policy values cannot be
                     substituted and any %-specifiers are rendered literally. [Default: calico-response]
-                  pattern: "^([a-zA-Z0-9%: /_-])*$"
                   type: string
                 logDebugFilenameRegex:
                   description: |-
@@ -3648,6 +3760,9 @@ spec:
                     "!has(self.deviceRouteSourceAddressIPv6) || size(self.deviceRouteSourceAddressIPv6)
                     == 0 || (isIP(self.deviceRouteSourceAddressIPv6) && ip(self.deviceRouteSourceAddressIPv6).family()
                     == 6)"
+          required:
+            - metadata
+            - spec
           type: object
           x-kubernetes-validations:
             - message:
@@ -3666,17 +3781,30 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: globalnetworkpolicies.crd.projectcalico.org
+  name: globalnetworkpolicies.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: GlobalNetworkPolicy
     listKind: GlobalNetworkPolicyList
     plural: globalnetworkpolicies
+    shortNames:
+      - gnp
+      - cgnp
     singular: globalnetworkpolicy
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - jsonPath: .spec.tier
+          name: Tier
+          type: string
+        - jsonPath: .spec.order
+          name: Order
+          type: number
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -4989,9 +5117,15 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
+          required:
+            - metadata
+            - spec
           type: object
+      selectableFields:
+        - jsonPath: .spec.tier
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -4999,22 +5133,25 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: globalnetworksets.crd.projectcalico.org
+  name: globalnetworksets.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: GlobalNetworkSet
     listKind: GlobalNetworkSetList
     plural: globalnetworksets
+    shortNames:
+      - gns
     singular: globalnetworkset
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      name: v3
       schema:
         openAPIV3Schema:
-          description: |-
-            GlobalNetworkSet contains a set of arbitrary IP sub-networks/CIDRs that share labels to
-            allow rules to refer to them via selectors.  The labels of GlobalNetworkSet are not namespaced.
           properties:
             apiVersion:
               description: |-
@@ -5053,9 +5190,13 @@ spec:
                       reason: FieldValueInvalid
                       rule: self.all(n, isCIDR(n) || isIP(n))
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -5063,17 +5204,31 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: hostendpoints.crd.projectcalico.org
+  name: hostendpoints.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: HostEndpoint
     listKind: HostEndpointList
     plural: hostendpoints
+    shortNames:
+      - hep
+      - heps
     singular: hostendpoint
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description:
+            The node name identifying the Calico node instance that is targeted
+            by this HostEndpoint
+          jsonPath: .spec.node
+          name: Node
+          type: string
+        - description: The name of the interface that is targeted by this HostEndpoint
+          jsonPath: .spec.interfaceName
+          name: Interface
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -5187,9 +5342,13 @@ spec:
                 - message: node must be specified
                   reason: FieldValueInvalid
                   rule: has(self.node) && size(self.node) > 0
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -5197,9 +5356,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: ipamblocks.crd.projectcalico.org
+  name: ipamblocks.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: IPAMBlock
     listKind: IPAMBlockList
@@ -5207,7 +5366,20 @@ spec:
     singular: ipamblock
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: The block CIDR
+          jsonPath: .spec.cidr
+          name: CIDR
+          type: string
+        - description: The block affinity
+          jsonPath: .spec.affinity
+          name: Affinity
+          type: string
+        - description: The time at which affinity was claimed
+          jsonPath: .spec.affinityClaimTime
+          name: ClaimTime
+          type: date
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -5229,16 +5401,18 @@ spec:
             metadata:
               type: object
             spec:
-              description:
-                IPAMBlockSpec contains the specification for an IPAMBlock
-                resource.
+              description: |-
+                IPAMBlockSpec contains the specification for an IPAMBlock resource.
+                This resource is managed internally by Calico IPAM and should not be modified manually.
               properties:
                 affinity:
                   description: |-
                     Affinity of the block, if this block has one. If set, it will be of the form
-                    "host:<hostname>". If not set, this block is not affine to a host.
+                    "host:<hostname>" or "virtual:<hostname>". If not set, this block is not affine to a host.
+                  pattern: ^(host|virtual):[a-zA-Z0-9\.\-_]+$
                   type: string
                 affinityClaimTime:
+                  description: Time at which affinity was claimed.
                   format: date-time
                   type: string
                 allocations:
@@ -5250,22 +5424,28 @@ spec:
                     nullable: true
                     type: integer
                   type: array
+                  x-kubernetes-list-type: atomic
                 attributes:
                   description: |-
                     Attributes is an array of arbitrary metadata associated with allocations in the block. To find
                     attributes for a given allocation, use the value of the allocation's entry in the Allocations array
                     as the index of the element in this array.
                   items:
+                    description:
+                      AllocationAttribute holds metadata associated with
+                      a single IP allocation within a block.
                     properties:
                       alternateOwnerAttrs:
                         additionalProperties:
                           type: string
-                        description: |-
-                          AlternateOwnerAttrs contains attributes of the previous or potential owner
-                          (used during live migration to track the source or target pod).
+                        description:
+                          AlternateOwnerAttrs stores attributes of a secondary
+                          owner, used during IP address migration.
                         type: object
                       handle_id:
-                        description: HandleID is the primary identifier for the allocation.
+                        description:
+                          HandleID is the ID of the IPAM handle that owns
+                          this allocation.
                         type: string
                       releasedAt:
                         description: |-
@@ -5278,13 +5458,15 @@ spec:
                         additionalProperties:
                           type: string
                         description:
-                          ActiveOwnerAttrs contains attributes of the active
-                          owner (the pod currently using the IP).
+                          ActiveOwnerAttrs stores attributes of the primary
+                          owner of this allocation (e.g., pod name, namespace).
                         type: object
                     type: object
                   type: array
+                  x-kubernetes-list-type: atomic
                 cidr:
                   description: The block's CIDR.
+                  format: cidr
                   type: string
                 deleted:
                   description: |-
@@ -5322,6 +5504,7 @@ spec:
                   items:
                     type: integer
                   type: array
+                  x-kubernetes-list-type: atomic
               required:
                 - allocations
                 - attributes
@@ -5329,9 +5512,13 @@ spec:
                 - strictAffinity
                 - unallocated
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -5339,19 +5526,38 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: ipamconfigs.crd.projectcalico.org
+  name: ipamconfigurations.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
-    kind: IPAMConfig
-    listKind: IPAMConfigList
-    plural: ipamconfigs
-    singular: ipamconfig
+    kind: IPAMConfiguration
+    listKind: IPAMConfigurationList
+    plural: ipamconfigurations
+    shortNames:
+      - ipamconfig
+      - ipamconfigs
+    singular: ipamconfiguration
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: Whether borrowing IP addresses is allowed
+          jsonPath: .spec.strictAffinity
+          name: StrictAffinity
+          type: boolean
+        - description: The max number of blocks that can be affine to each host
+          jsonPath: .spec.maxBlocksPerHost
+          name: MaxBlocksPerHost
+          type: integer
+        - description: Whether or not to auto allocate blocks to hosts
+          jsonPath: .spec.autoAllocateBlocks
+          name: AutoAllocateBlocks
+          type: boolean
+      name: v3
       schema:
         openAPIV3Schema:
+          description:
+            IPAMConfiguration contains information about a block for IP address
+            assignment.
           properties:
             apiVersion:
               description: |-
@@ -5372,51 +5578,63 @@ spec:
               type: object
             spec:
               description:
-                IPAMConfigSpec contains the specification for an IPAMConfig
+                IPAMConfigurationSpec contains the specification for an IPAMConfiguration
                 resource.
               properties:
                 autoAllocateBlocks:
+                  default: true
+                  description: Whether or not to auto allocate blocks to hosts.
                   type: boolean
                 ipCooldownSeconds:
                   description: |-
                     IPCooldownSeconds is the minimum age of a released IP in a block before it is re-used.
                     If set to zero, IPs can be re-used immediately (but are still handled with a FIFO queue to
                     minimize immediate reuse).
+                  format: int32
                   maximum: 1200
                   minimum: 0
                   type: integer
                 kubeVirtVMAddressPersistence:
                   description: |-
                     KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads
-                    maintain persistent IP addresses across VM lifecycle events.
-                    When set to VMAddressPersistenceEnabled, Calico automatically ensures that KubeVirt VMs retain their
-                    IP addresses when their underlying pods are recreated during VM operations such as
-                    reboot, live migration, or pod eviction. IP persistency is ensured when the
-                    VirtualMachineInstance (VMI) resource is deleted and recreated by the VM controller.
-                    When set to VMAddressPersistenceDisabled, VMs receive new IP addresses whenever their pods are recreated,
-                    following standard pod IP allocation behavior. Live migration target pods are not allowed
-                    when this is set to VMAddressPersistenceDisabled and will result in an error.
-                    If nil, defaults to VMAddressPersistenceEnabled (IP persistence enabled if not specified).
+                    maintain persistent IP addresses across VM lifecycle events (reboot, migration, pod eviction).
+                    When Enabled, Calico automatically ensures that KubeVirt VMs retain their IP addresses
+                    when their underlying pods are recreated during VM operations.
+                    When Disabled, VMs receive new IP addresses whenever their pods are recreated,
+                    and creating a live migration target pod is not supported because the migration
+                    target pod requires the same IP as the source pod, which is only possible with
+                    address persistence.
+                    Defaults to Enabled if not specified.
                   enum:
                     - Enabled
                     - Disabled
                   type: string
                 maxBlocksPerHost:
+                  default: 0
                   description: |-
                     MaxBlocksPerHost, if non-zero, is the max number of blocks that can be
                     affine to each host.
-                  maximum: 2147483647
+                  format: int32
+                  maximum: 1000000
                   minimum: 0
                   type: integer
                 strictAffinity:
+                  default: false
+                  description:
+                    When StrictAffinity is true, borrowing IP addresses is
+                    not allowed.
                   type: boolean
               required:
                 - autoAllocateBlocks
                 - strictAffinity
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -5424,9 +5642,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: ipamhandles.crd.projectcalico.org
+  name: ipamhandles.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: IPAMHandle
     listKind: IPAMHandleList
@@ -5434,7 +5652,12 @@ spec:
     singular: ipamhandle
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: The handle ID
+          jsonPath: .spec.handleID
+          name: ID
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -5456,25 +5679,38 @@ spec:
             metadata:
               type: object
             spec:
-              description:
-                IPAMHandleSpec contains the specification for an IPAMHandle
-                resource.
+              description: |-
+                IPAMHandleSpec contains the specification for an IPAMHandle resource.
+                This resource is managed internally by Calico IPAM and should not be modified manually.
               properties:
                 block:
                   additionalProperties:
                     type: integer
+                  description:
+                    Block maps block CIDRs to the number of allocations from
+                    that block held by this handle.
                   type: object
                 deleted:
+                  description:
+                    Deleted is an internal flag used to prevent races during
+                    handle cleanup. Should not be set manually.
                   type: boolean
                 handleID:
+                  description:
+                    HandleID is the unique identifier for this allocation
+                    handle.
                   type: string
               required:
                 - block
                 - handleID
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -5482,9 +5718,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: ippools.crd.projectcalico.org
+  name: ippools.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: IPPool
     listKind: IPPoolList
@@ -5492,7 +5728,32 @@ spec:
     singular: ippool
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: The pool CIDR
+          jsonPath: .spec.cidr
+          name: CIDR
+          type: string
+        - description: The VXLAN mode for this pool
+          jsonPath: .spec.vxlanMode
+          name: VXLAN
+          type: string
+        - description: The IPIP mode for this pool
+          jsonPath: .spec.ipipMode
+          name: IPIP
+          type: string
+        - description: Whether outgoing NAT is enabled for this pool
+          jsonPath: .spec.natOutgoing
+          name: NAT
+          type: boolean
+        - description: Whether or not this pool is available for IP allocations
+          jsonPath: .status.conditions[?(@.type=='Allocatable')].status
+          name: Allocatable
+          type: string
+        - description: The age of the pool
+          jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -5758,6 +6019,9 @@ spec:
                     - type
                   x-kubernetes-list-type: map
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
@@ -5770,9 +6034,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: ipreservations.crd.projectcalico.org
+  name: ipreservations.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: IPReservation
     listKind: IPReservationList
@@ -5780,9 +6044,15 @@ spec:
     singular: ipreservation
   scope: Cluster
   versions:
-    - name: v1
+    - name: v3
       schema:
         openAPIV3Schema:
+          description: |-
+            IPReservation allows certain IP addresses to be reserved (i.e. prevented from being allocated) by Calico
+            IPAM.  Reservations only block new allocations, they do not cause existing IP allocations to be released.
+            The current implementation is only suitable for reserving small numbers of IP addresses relative to the
+            size of the IP pool.  If large portions of an IP pool are reserved, Calico IPAM may hunt for a long time
+            to find a non-reserved IP.
           properties:
             apiVersion:
               description: |-
@@ -5816,6 +6086,9 @@ spec:
                   type: array
                   x-kubernetes-list-type: set
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
@@ -5826,17 +6099,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: kubecontrollersconfigurations.crd.projectcalico.org
+  name: kubecontrollersconfigurations.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: KubeControllersConfiguration
     listKind: KubeControllersConfigurationList
     plural: kubecontrollersconfigurations
+    shortNames:
+      - kcc
+      - kccs
     singular: kubecontrollersconfiguration
   scope: Cluster
   versions:
-    - name: v1
+    - name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -6344,6 +6620,9 @@ spec:
                     - controllers
                   type: object
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
@@ -6356,17 +6635,27 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: networkpolicies.crd.projectcalico.org
+  name: networkpolicies.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: NetworkPolicy
     listKind: NetworkPolicyList
     plural: networkpolicies
+    shortNames:
+      - cnp
+      - caliconetworkpolicy
     singular: networkpolicy
   scope: Namespaced
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - jsonPath: .spec.tier
+          name: Tier
+          type: string
+        - jsonPath: .spec.order
+          name: Order
+          type: number
+      name: v3
       schema:
         openAPIV3Schema:
           properties:
@@ -7630,9 +7919,15 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')"
+          required:
+            - metadata
+            - spec
           type: object
+      selectableFields:
+        - jsonPath: .spec.tier
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -7640,9 +7935,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: networksets.crd.projectcalico.org
+  name: networksets.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: NetworkSet
     listKind: NetworkSetList
@@ -7650,10 +7945,9 @@ spec:
     singular: networkset
   scope: Namespaced
   versions:
-    - name: v1
+    - name: v3
       schema:
         openAPIV3Schema:
-          description: NetworkSet is the Namespaced-equivalent of the GlobalNetworkSet.
           properties:
             apiVersion:
               description: |-
@@ -7692,6 +7986,9 @@ spec:
                       reason: FieldValueInvalid
                       rule: self.all(n, isCIDR(n) || isIP(n))
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
@@ -7702,19 +7999,29 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: stagedglobalnetworkpolicies.crd.projectcalico.org
+  name: stagedglobalnetworkpolicies.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: StagedGlobalNetworkPolicy
     listKind: StagedGlobalNetworkPolicyList
     plural: stagedglobalnetworkpolicies
+    shortNames:
+      - sgnp
     singular: stagedglobalnetworkpolicy
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - jsonPath: .spec.tier
+          name: Tier
+          type: string
+        - jsonPath: .spec.order
+          name: Order
+          type: number
+      name: v3
       schema:
         openAPIV3Schema:
+          description: StagedGlobalNetworkPolicy is a staged GlobalNetworkPolicy.
           properties:
             apiVersion:
               description: |-
@@ -9035,9 +9342,15 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
+          required:
+            - metadata
+            - spec
           type: object
+      selectableFields:
+        - jsonPath: .spec.tier
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -9045,19 +9358,22 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: stagedkubernetesnetworkpolicies.crd.projectcalico.org
+  name: stagedkubernetesnetworkpolicies.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: StagedKubernetesNetworkPolicy
     listKind: StagedKubernetesNetworkPolicyList
     plural: stagedkubernetesnetworkpolicies
+    shortNames:
+      - sknp
     singular: stagedkubernetesnetworkpolicy
   scope: Namespaced
   versions:
-    - name: v1
+    - name: v3
       schema:
         openAPIV3Schema:
+          description: StagedKubernetesNetworkPolicy is a staged GlobalNetworkPolicy.
           properties:
             apiVersion:
               description: |-
@@ -9566,6 +9882,9 @@ spec:
                     - Ignore
                   type: string
               type: object
+          required:
+            - metadata
+            - spec
           type: object
       served: true
       storage: true
@@ -9576,19 +9895,32 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: stagednetworkpolicies.crd.projectcalico.org
+  name: stagednetworkpolicies.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: StagedNetworkPolicy
     listKind: StagedNetworkPolicyList
     plural: stagednetworkpolicies
+    shortNames:
+      - scnp
+      - snp
     singular: stagednetworkpolicy
   scope: Namespaced
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - jsonPath: .spec.tier
+          name: Tier
+          type: string
+        - jsonPath: .spec.order
+          name: Order
+          type: number
+      name: v3
       schema:
         openAPIV3Schema:
+          description: |-
+            StagedNetworkPolicy is a staged NetworkPolicy.
+            StagedNetworkPolicy is the Namespaced-equivalent of the StagedGlobalNetworkPolicy.
           properties:
             apiVersion:
               description: |-
@@ -10861,9 +11193,15 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')"
+          required:
+            - metadata
+            - spec
           type: object
+      selectableFields:
+        - jsonPath: .spec.tier
       served: true
       storage: true
+      subresources: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -10871,9 +11209,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: tiers.crd.projectcalico.org
+  name: tiers.projectcalico.org
 spec:
-  group: crd.projectcalico.org
+  group: projectcalico.org
   names:
     kind: Tier
     listKind: TierList
@@ -10881,9 +11219,26 @@ spec:
     singular: tier
   scope: Cluster
   versions:
-    - name: v1
+    - additionalPrinterColumns:
+        - description: Order in which the tier is applied
+          jsonPath: .spec.order
+          name: Order
+          type: integer
+        - description: Default action for the tier
+          jsonPath: .spec.defaultAction
+          name: DefaultAction
+          type: string
+        - description: Current status of the tier
+          jsonPath: .status.conditions[?(@.type=='Ready')].reason
+          name: Status
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
+          description: |-
+            Tier contains a set of policies that are applied to packets.  Multiple tiers may
+            be created and each tier is applied in the order specified in the tier specification.
+            Tier is globally-scoped (i.e. not Namespaced).
           properties:
             apiVersion:
               description: |-
@@ -12511,8 +12866,6 @@ rules:
   # Calico monitors various CRDs for config.
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
-      - globalfelixconfigs
-      - globalbgpconfigs
       - felixconfigurations
       - bgppeers
       - bgpfilters
@@ -12667,6 +13020,27 @@ rules:
     verbs:
       - get
 ---
+# Source: calico/templates/calico-webhooks.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: calico-webhooks
+rules:
+  - apiGroups:
+      - authorization.k8s.io
+    resources:
+      - subjectaccessreviews
+    verbs:
+      - create
+  - apiGroups:
+      - projectcalico.org
+    resources:
+      - tiers
+    verbs:
+      - get
+      - list
+      - watch
+---
 # Source: calico/templates/tier-getter.yaml
 # Implements the necessary permissions for the kube-controller-manager to interact with
 # Tiers and Tiered Policies for GC.
@@ -12726,6 +13100,20 @@ subjects:
     name: calico-cni-plugin
     namespace: kube-system
 ---
+# Source: calico/templates/calico-webhooks.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-webhooks
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-webhooks
+subjects:
+  - kind: ServiceAccount
+    name: calico-webhooks
+    namespace: kube-system
+---
 # Source: calico/templates/tier-getter.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -12739,6 +13127,21 @@ subjects:
   - apiGroup: rbac.authorization.k8s.io
     kind: User
     name: system:kube-controller-manager
+---
+# Source: calico/templates/calico-webhooks.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: calico-webhooks
+  namespace: kube-system
+spec:
+  selector:
+    k8s-app: calico-webhooks
+  ports:
+    - port: 443
+      targetPort: 6443
+      protocol: TCP
+  type: ClusterIP
 ---
 # Source: calico/templates/calico-node.yaml
 # This manifest installs the calico-node container, as well
@@ -13165,3 +13568,394 @@ spec:
             periodSeconds: 10
           securityContext:
             runAsNonRoot: true
+---
+# Source: calico/templates/calico-webhooks.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calico-webhooks
+  namespace: kube-system
+  labels:
+    k8s-app: calico-webhooks
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: calico-webhooks
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        k8s-app: calico-webhooks
+    spec:
+      serviceAccountName: calico-webhooks
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
+      containers:
+        - name: calico-webhooks
+          image: quay.io/calico/calico:release-v3.33
+          imagePullPolicy: IfNotPresent
+          args:
+            - component
+            - webhooks
+            - webhook
+            - --tls-cert-file=/certs/tls.crt
+            - --tls-private-key-file=/certs/tls.key
+          ports:
+            - containerPort: 6443
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 6443
+              scheme: HTTPS
+            periodSeconds: 10
+            timeoutSeconds: 5
+          securityContext:
+            runAsUser: 10001
+            runAsGroup: 10001
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            privileged: false
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+      volumes:
+        - name: certs
+          secret:
+            secretName: calico-webhooks-tls
+---
+# Source: calico/templates/calico-webhooks.yaml
+# Calico webhooks for tiered RBAC enforcement on policy resources.
+# Requires TLS certificates:
+#   1. Create a cert/key pair valid for calico-webhooks.kube-system.svc
+#   2. kubectl -n kube-system create secret tls calico-webhooks-tls --cert=<cert> --key=<key>
+#   3. Patch the ValidatingWebhookConfiguration caBundle with the CA cert (base64-encoded)
+---
+# Source: calico/templates/admission-policies.yaml
+# This MutatingAdmissionPolicy carries the two IP pool defaults a static CRD default
+# cannot express: blockSize depends on the CIDR family, and allowedUses depends on
+# whether a namespaceSelector is set.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "ippool.policy.projectcalico.org"
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - ippools
+  failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
+  variables:
+    # Mutation runs before schema validation, so a missing or malformed CIDR has to
+    # be tolerated here and left for the validator to reject.
+    - name: cidrUsable
+      expression: |
+        has(object.spec.cidr) && isCIDR(object.spec.cidr)
+    - name: blockSizeUnset
+      expression: |
+        !has(object.spec.blockSize) || object.spec.blockSize == 0
+    - name: blockSize
+      expression: |
+        variables.cidrUsable && cidr(object.spec.cidr).ip().family() == 6 ? 122 : 26
+    - name: allowedUsesUnset
+      expression: |
+        !has(object.spec.allowedUses) || size(object.spec.allowedUses) == 0
+    # A pool that names a namespace is a workload pool, and Tunnel is rejected
+    # alongside a namespaceSelector, so the back-compatible pair is wrong there.
+    - name: namespaceScoped
+      expression: |
+        has(object.spec.namespaceSelector) && size(object.spec.namespaceSelector) != 0
+  mutations:
+    # Also on update: blockSize is immutable, but its transition rule cannot fire
+    # when the field is absent, so a write that omits it would otherwise clear it.
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          variables.cidrUsable && variables.blockSizeUnset ?
+            [JSONPatch{op: "add", path: "/spec/blockSize", value: variables.blockSize}] :
+            []
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          variables.allowedUsesUnset ?
+            [JSONPatch{
+              op: "add",
+              path: "/spec/allowedUses",
+              value: variables.namespaceScoped ? ["Workload"] : ["Workload", "Tunnel"],
+            }] :
+            []
+---
+# Source: calico/templates/admission-policies.yaml
+# This MutatingAdmissionPolicy defaults the types/policyTypes field on Calico policy resources.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "policytypes.policy.projectcalico.org"
+spec:
+  paramKind:
+    kind: NetworkPolicy
+    apiVersion: projectcalico.org/v3
+  matchConditions:
+    # Apply this mutation only if the 'types' field is missing (or policyTypes for stagednetworkpolicies).
+    - name: missing-types
+      expression: "!has(object.spec.types) && !has(object.spec.policyTypes)"
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+          - stagedkubernetesnetworkpolicies
+  failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
+  variables:
+    # Determine the policy types based on the presence of ingress and egress rules.
+    # If both are present, set types to ["Ingress", "Egress"].
+    # If only ingress is present, set types to ["Ingress"].
+    # If only egress is present, set types to ["Egress"].
+    # If neither is present, default to ["Ingress"] for backward compatibility with policies from before types were required.
+    - name: defaultTypes
+      expression: |
+        (has(object.spec.ingress) && has(object.spec.egress)) ? ["Ingress", "Egress"] :
+        has(object.spec.egress) ? ["Egress"] : ["Ingress"]
+
+    # The logic for StagedKubernetesNetworkPolicy is slightly different from the above:
+    # - If both ingress and egress are present, set types to ["Ingress", "Egress"].
+    # - If only ingress is present, set types to ["Ingress"].
+    # - If only egress is present, set types to ["Ingress", "Egress"].
+    # - If neither is present, default to ["Ingress"] for backward compatibility.
+    - name: defaultKubeTypes
+      expression: |
+        (has(object.spec.ingress) && has(object.spec.egress)) ? ["Ingress", "Egress"] :
+        has(object.spec.egress) ? ["Ingress", "Egress"] : ["Ingress"]
+
+  mutations:
+    # Add the calculated 'types' field to the spec.
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          [
+            JSONPatch{
+              op: "add",
+              path: object.kind == "StagedKubernetesNetworkPolicy" ? "/spec/policyTypes" : "/spec/types",
+              value: object.kind == "StagedKubernetesNetworkPolicy" ? variables.defaultKubeTypes : variables.defaultTypes
+            }
+          ]
+---
+# Source: calico/templates/admission-policies.yaml
+# This MutatingAdmissionPolicy defaults the spec.tier field to "default" if not specified,
+# and sets the projectcalico.org/tier label to match.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "tierlabel.policy.projectcalico.org"
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+  failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
+  variables:
+    - name: tierValue
+      expression: |
+        has(object.spec.tier) && object.spec.tier != "" ? object.spec.tier : "default"
+  mutations:
+    # Default spec.tier to "default" if empty or unset.
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          !has(object.spec.tier) || object.spec.tier == "" ?
+            [JSONPatch{op: "add", path: "/spec/tier", value: variables.tierValue}] :
+            []
+    # Set the projectcalico.org/tier label to match spec.tier.
+    # Uses ~1 encoding for the / in the label key per RFC 6901 (JSON Pointer).
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          has(object.metadata.labels) ?
+            [JSONPatch{op: "add", path: "/metadata/labels/projectcalico.org~1tier", value: variables.tierValue}] :
+            [
+              JSONPatch{op: "add", path: "/metadata/labels", value: {}},
+              JSONPatch{op: "add", path: "/metadata/labels/projectcalico.org~1tier", value: variables.tierValue}
+            ]
+---
+# Source: calico/templates/admission-policies.yaml
+# This MutatingAdmissionPolicyBinding binds the IP pool defaulting policy to IP pools.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: set-ippool-defaults-binding
+spec:
+  policyName: ippool.policy.projectcalico.org
+  matchResources:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - ippools
+---
+# Source: calico/templates/admission-policies.yaml
+# This MutatingAdmissionPolicyBinding binds the policy types defaulting mutation to the relevant resources.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: set-policytypes-binding
+spec:
+  policyName: policytypes.policy.projectcalico.org
+  matchResources:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+          - stagedkubernetesnetworkpolicies
+---
+# Source: calico/templates/admission-policies.yaml
+# This MutatingAdmissionPolicyBinding binds the tier label mutation to the relevant resources.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: set-tier-label-binding
+spec:
+  policyName: tierlabel.policy.projectcalico.org
+  matchResources:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+---
+# Source: calico/templates/admission-policies.yaml
+# ValidatingAdmissionPolicy that prevents deletion of the built-in Calico tiers
+# (default, kube-admin, kube-baseline). These tiers are required for correct
+# operation and should never be deleted.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: protect-builtin-tiers.projectcalico.org
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        resources: ["tiers"]
+        operations: ["DELETE"]
+  validations:
+    - expression: "!(oldObject.metadata.name in ['default', 'kube-admin', 'kube-baseline'])"
+      messageExpression: "'The built-in tier ' + oldObject.metadata.name + ' cannot be deleted'"
+---
+# Source: calico/templates/admission-policies.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: protect-builtin-tiers.projectcalico.org
+spec:
+  policyName: protect-builtin-tiers.projectcalico.org
+  validationActions:
+    - Deny
+---
+# Source: calico/templates/calico-webhooks.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: calico-webhooks
+webhooks:
+  - name: tiered-rbac.projectcalico.org
+    admissionReviewVersions:
+      - v1
+    clientConfig:
+      # Replace with the CA bundle for the webhook TLS certificate.
+      caBundle: ""
+      service:
+        name: calico-webhooks
+        namespace: kube-system
+        path: /rbac
+    failurePolicy: Fail
+    sideEffects: None
+    timeoutSeconds: 5
+    rules:
+      - apiGroups:
+          - projectcalico.org
+        apiVersions:
+          - v3
+        operations:
+          - CREATE
+          - UPDATE
+          - DELETE
+          - CONNECT
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+        scope: '*'
+  # Blocks user writes to ClusterInformation, which is managed by Calico system components.
+  # This mirrors the write protection provided by the aggregated API server.
+  - name: cluster-info.api.projectcalico.org
+    admissionReviewVersions:
+      - v1
+    clientConfig:
+      # Replace with the CA bundle for the webhook TLS certificate.
+      caBundle: ""
+      service:
+        name: calico-webhooks
+        namespace: kube-system
+        path: /cluster-info
+    # Ignore rather than Fail: calico-node and typha write ClusterInformation at startup,
+    # so a cluster restart must not depend on the webhook being up.
+    failurePolicy: Ignore
+    sideEffects: None
+    timeoutSeconds: 5
+    rules:
+      - apiGroups:
+          - projectcalico.org
+        apiVersions:
+          - v3
+        operations:
+          - CREATE
+          - UPDATE
+          - DELETE
+        resources:
+          - clusterinformations
+        scope: '*'
