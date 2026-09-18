@@ -7,12 +7,11 @@
 package proto
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -1794,8 +1793,17 @@ type Flow struct {
 	// NumConnectionsLive tracks the total number of still active connections recorded for this Flow. It counts each
 	// connection that matches the FlowKey that was active at this Flow's EndTime.
 	NumConnectionsLive int64 `protobuf:"varint,12,opt,name=num_connections_live,json=numConnectionsLive,proto3" json:"num_connections_live,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// SourceIps contains the set of distinct source IP addresses observed for the connections aggregated
+	// into this Flow. Because a single FlowKey aggregates traffic across many individual connections (and
+	// across nodes and time), this is a set rather than a single value. The list is bounded: at most a
+	// configurable maximum number of addresses are retained per Flow to cap memory and wire size. When the
+	// limit is exceeded, addresses are dropped (the set is best-effort, not exhaustive).
+	SourceIps []string `protobuf:"bytes,13,rep,name=source_ips,json=sourceIps,proto3" json:"source_ips,omitempty"`
+	// DestIps contains the set of distinct destination IP addresses observed for the connections aggregated
+	// into this Flow. As with source_ips, this is a bounded, best-effort set rather than a single value.
+	DestIps       []string `protobuf:"bytes,14,rep,name=dest_ips,json=destIps,proto3" json:"dest_ips,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Flow) Reset() {
@@ -1910,6 +1918,20 @@ func (x *Flow) GetNumConnectionsLive() int64 {
 		return x.NumConnectionsLive
 	}
 	return 0
+}
+
+func (x *Flow) GetSourceIps() []string {
+	if x != nil {
+		return x.SourceIps
+	}
+	return nil
+}
+
+func (x *Flow) GetDestIps() []string {
+	if x != nil {
+		return x.DestIps
+	}
+	return nil
 }
 
 type PolicyTrace struct {
@@ -2418,7 +2440,7 @@ const file_api_proto_rawDesc = "" +
 	"\x05proto\x18\f \x01(\tR\x05proto\x12.\n" +
 	"\breporter\x18\r \x01(\x0e2\x12.goldmane.ReporterR\breporter\x12(\n" +
 	"\x06action\x18\x0e \x01(\x0e2\x10.goldmane.ActionR\x06action\x121\n" +
-	"\bpolicies\x18\x0f \x01(\v2\x15.goldmane.PolicyTraceR\bpolicies\"\xc9\x03\n" +
+	"\bpolicies\x18\x0f \x01(\v2\x15.goldmane.PolicyTraceR\bpolicies\"\x83\x04\n" +
 	"\x04Flow\x12#\n" +
 	"\x03Key\x18\x01 \x01(\v2\x11.goldmane.FlowKeyR\x03Key\x12\x1d\n" +
 	"\n" +
@@ -2436,7 +2458,10 @@ const file_api_proto_rawDesc = "" +
 	"\x17num_connections_started\x18\n" +
 	" \x01(\x03R\x15numConnectionsStarted\x12:\n" +
 	"\x19num_connections_completed\x18\v \x01(\x03R\x17numConnectionsCompleted\x120\n" +
-	"\x14num_connections_live\x18\f \x01(\x03R\x12numConnectionsLive\"\x8f\x01\n" +
+	"\x14num_connections_live\x18\f \x01(\x03R\x12numConnectionsLive\x12\x1d\n" +
+	"\n" +
+	"source_ips\x18\r \x03(\tR\tsourceIps\x12\x19\n" +
+	"\bdest_ips\x18\x0e \x03(\tR\adestIps\"\x8f\x01\n" +
 	"\vPolicyTrace\x12@\n" +
 	"\x11enforced_policies\x18\x01 \x03(\v2\x13.goldmane.PolicyHitR\x10enforcedPolicies\x12>\n" +
 	"\x10pending_policies\x18\x02 \x03(\v2\x13.goldmane.PolicyHitR\x0fpendingPolicies\"\x96\x02\n" +
