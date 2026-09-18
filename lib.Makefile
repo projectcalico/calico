@@ -188,30 +188,26 @@ endif
 endif
 endif
 
+# Container prefix (docker run + calico/go-build) for the build macros below; they keep
+# their env and mkdir inside the sh -c so it is the only container-vs-native difference.
+# Recursive so nulling it under NATIVE_GO_BUILD (below) runs them on the host.
+DOCKER_GO_BUILD = $(DOCKER_RUN) $(CALICO_BUILD)
+
 # Use this when building binaries that need cgo (e.g. for libbpf).
 define build_cgo_binary
-	$(DOCKER_RUN) \
-		-e CGO_ENABLED=1 \
-		$(if $(CROSS_CC),-e CC="$(CROSS_CC)") \
-		-e CGO_CFLAGS=$(CGO_CFLAGS) \
-		-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
-		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
+	$(DOCKER_GO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) mkdir -p $(dir $(2)) && CGO_ENABLED=1 $(if $(CROSS_CC),CC="$(CROSS_CC)") CGO_CFLAGS=$(CGO_CFLAGS) CGO_LDFLAGS=$(CGO_LDFLAGS) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
 endef
 
 # For binaries that do not require cgo.
 define build_binary
-	$(DOCKER_RUN) \
-		-e CGO_ENABLED=0 \
-		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
+	$(DOCKER_GO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) mkdir -p $(dir $(2)) && CGO_ENABLED=0 go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
 endef
 
 define build_binary_dir
-	$(DOCKER_RUN) \
-		-e CGO_ENABLED=0 \
-		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -C $(1) -o $(3) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(2)'
+	$(DOCKER_GO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) mkdir -p $(dir $(3)) && CGO_ENABLED=0 go build -C $(1) -o $(3) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(2)'
 endef
 
 # For windows builds that do not require cgo.
@@ -455,7 +451,20 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 
 DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 
-DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
+# NATIVE_GO_BUILD=true: we already run inside calico/go-build (e.g. a CI go-build pod),
+# so null the container prefix and run commands directly. DOCKER_GO_BUILD is recursive,
+# so emptying DOCKER_RUN/CALICO_BUILD empties it too.
+ifeq ($(NATIVE_GO_BUILD),true)
+DOCKER_RUN :=
+CALICO_BUILD :=
+# The container passed the Go target via -e (GOARCH_FLAGS, GOOS); export the same on
+# the host so a cross-arch `make ARCH=... NATIVE_GO_BUILD=true` still targets $(ARCH).
+export GOARCH := $(ARCH)
+export GOOS := $(BUILDOS)
+ifeq ($(ARCH),amd64)
+export GOAMD64 := v2
+endif
+endif
 
 # Cross-compile env for Rust + cc-rs / bindgen. Same gate as the Go side.
 # Key suffixes use the long Rust triple (cc-rs convention); extend for ppc64le.
@@ -881,8 +890,9 @@ fix-changed go-fmt-changed goimports-changed:
 	fi
 
 .PHONY: fix-all go-fmt-all goimports-all
+# $(DOCKER_GO_BUILD) is empty under NATIVE_GO_BUILD, so this runs the formatter directly.
 fix-all go-fmt-all goimports-all:
-	$(DOCKER_RUN) $(CALICO_BUILD) $(REPO_REL_DIR)/hack/format-all-files.sh
+	$(DOCKER_GO_BUILD) $(REPO_REL_DIR)/hack/format-all-files.sh
 
 GOMODDER=$(REPO_REL_DIR)/hack/cmd/gomodder/main.go
 
