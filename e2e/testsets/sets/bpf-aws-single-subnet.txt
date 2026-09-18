@@ -174,6 +174,8 @@
 [sig-calico] [Team:CORE] [Feature:IPIP] [Category:Networking] [NoEncap] [RequiresBGP] IP-in-IP tests should assign an IPIP address to the tunl0 interface [Serial]
 [sig-calico] [Team:CORE] [Feature:IPIP] [Category:Networking] [NoEncap] [RequiresBGP] IP-in-IP tests should support toggling IPIP on and off [Serial]
 [sig-calico] [Team:CORE] [Feature:IPPool] [Category:Operator] [RequiresOperator] [RequiresCalicoCNI] operator IPPool management tests should create and delete IP pools [Serial]
+[sig-calico] [Team:CORE] [Feature:Ingress-Gateway] [Category:Operator] [RequiresGoldmane] whisker access via calico ingress gateway Whisker accessible through Gateway in the install namespace should clean up gateway resources when spec.ingressGateway is removed [Serial]
+[sig-calico] [Team:CORE] [Feature:Ingress-Gateway] [Category:Operator] [RequiresGoldmane] whisker access via calico ingress gateway Whisker accessible through Gateway in the install namespace should serve the Whisker UI through the Gateway [Serial]
 [sig-calico] [Team:CORE] [Feature:MTU] [Category:Networking] Automatic MTU tests should select the correct MTU for the platform
 [sig-calico] [Team:CORE] [Feature:Maglev] [Category:Networking] [ExternalNode] [Dataplane:BPF] [RequiresAWS] Maglev load balancing tests test service ip load balancing behavior before and after maglev annotation (IPv4) [Serial]
 [sig-calico] [Team:CORE] [Feature:Maglev] [Category:Networking] [ExternalNode] [Dataplane:BPF] [RequiresAWS] Maglev load balancing tests test service ip load balancing behavior before and after maglev annotation (IPv6) [Serial]
