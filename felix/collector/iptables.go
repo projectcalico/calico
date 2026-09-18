@@ -72,6 +72,8 @@ func NewNFLogReader(lookupsCache *calc.LookupsCache, inGrp, eGrp, bufSize int, s
 
 func (r *NFLogReader) Start() error {
 	if err := r.subscribe(); err != nil {
+		// A subscription may already have succeeded; shut it down again.
+		r.Stop()
 		return err
 	}
 
@@ -85,6 +87,9 @@ func (r *NFLogReader) Start() error {
 func (r *NFLogReader) Stop() {
 	r.stopOnce.Do(func() {
 		close(r.stopC)
+		// Each subscription owns a netlink socket, which it closes when its done channel does.
+		close(r.nfIngressDoneC)
+		close(r.nfEgressDoneC)
 	})
 }
 

@@ -39,16 +39,27 @@ func TestNFLogReaderStartReportsSubscribeFailure(t *testing.T) {
 		{"egress subscription fails", 2, "egress"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			withStubbedNflogSubscribe(t, func(gn int, _ int, _ chan map[nfnetlink.NflogPacketTuple]*nfnetlink.NflogPacketAggregate, _ chan struct{}, _ bool) error {
+			var subscribed []chan struct{}
+			withStubbedNflogSubscribe(t, func(gn int, _ int, _ chan map[nfnetlink.NflogPacketTuple]*nfnetlink.NflogPacketAggregate, doneC chan struct{}, _ bool) error {
 				if gn == tc.failOnGroup {
 					return subscribeErr
 				}
+				subscribed = append(subscribed, doneC)
 				return nil
 			})
 
 			err := NewNFLogReader(nil, 1, 2, 0, false).Start()
 			if err == nil {
 				t.Fatal("Start() returned nil after the subscription failed")
+			}
+			// A subscription that did succeed owns a netlink socket, which it only closes when
+			// its done channel does.
+			for _, doneC := range subscribed {
+				select {
+				case <-doneC:
+				default:
+					t.Error("Start() left a successful subscription running after the other one failed")
+				}
 			}
 			if !errors.Is(err, subscribeErr) {
 				t.Errorf("Start() error does not wrap the subscribe error: %v", err)
