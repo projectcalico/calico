@@ -215,6 +215,8 @@ func TestIP4Defrag(t *testing.T) {
 
 	Expect(ipfragsFwdMapCount()).To(Equal(0))
 
+	// A generous timeout here: the live check must not race the harness
+	// reloading the objects between the two runs.
 	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		bytes := pkt0.Bytes()
@@ -224,7 +226,7 @@ func TestIP4Defrag(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
-	}, withIPFragTimeout(1))
+	}, withIPFragTimeout(30))
 
 	Expect(ipfragsFwdMapCount()).To(Equal(1))
 
@@ -234,7 +236,22 @@ func TestIP4Defrag(t *testing.T) {
 		res, err := bpfrun(pkt1.Bytes())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+	}, withIPFragTimeout(30))
+
+	/* Expired entry must stop being honoured */
+
+	cleanupMap(ipfragsFwdMap)
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		bytes := pkt0.Bytes()
+		copy(bytes[40:42], pktFull.Bytes()[40:42]) // patch in the udp csum for the entire packet
+		res, err := bpfrun(bytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	}, withIPFragTimeout(1))
+
+	Expect(ipfragsFwdMapCount()).To(Equal(1))
 
 	time.Sleep(1500 * time.Millisecond)
 

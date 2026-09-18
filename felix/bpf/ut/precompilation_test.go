@@ -261,6 +261,14 @@ func TestCallbackRefsStayInsideOptionalPrograms(t *testing.T) {
 	for _, at := range hook.ListAttachTypes() {
 		objects[at.ObjectFile()] = struct{}{}
 	}
+	// These carry no optional sub-program at all, so a callback reference in
+	// one is strictly worse than in a tc object.
+	for _, o := range []string{
+		"tc_preamble_ingress.o", "tc_preamble_egress.o", "xdp_preamble.o",
+		"tc_preamble_ingress_notrace.o", "tc_preamble_egress_notrace.o", "xdp_preamble_notrace.o",
+	} {
+		objects[o] = struct{}{}
+	}
 
 	for obj := range objects {
 		t.Run(obj, func(t *testing.T) {
@@ -287,7 +295,9 @@ type callbackRef struct {
 // callbackRefs finds the references by walking relocations rather than
 // instructions: an ld_imm64 (opcode 0x18) is a callback address only when a
 // relocation ties it to a function in .text, which is where clang emits the
-// callbacks it never inlines.
+// callbacks it never inlines. A reference whose holder is itself in .text is
+// reported under that function's name, which is in no optional set, so it
+// fails rather than passing unnoticed.
 func callbackRefs(file string) ([]callbackRef, error) {
 	f, err := elf.Open(file)
 	if err != nil {
@@ -313,9 +323,12 @@ func callbackRefs(file string) ([]callbackRef, error) {
 
 	var refs []callbackRef
 	for _, rel := range f.Sections {
-		if rel.Type != elf.SHT_REL || int(rel.Info) == textIdx {
+		if rel.Type != elf.SHT_REL {
 			continue
 		}
+		// .text is included on purpose: libbpf appends an out-of-line helper to
+		// whichever program calls it, so a callback taken there reaches the
+		// caller, which may not be optional.
 		target := f.Sections[rel.Info]
 		if target.Type != elf.SHT_PROGBITS || target.Flags&elf.SHF_EXECINSTR == 0 {
 			continue
