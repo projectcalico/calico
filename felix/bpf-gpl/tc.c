@@ -1480,9 +1480,10 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 			!(ctx->state->ct_result.flags & CALI_CT_FLAG_CONNLIMIT_INGRESS)) {
 		/* First SYN OR retransmission of a previously-rejected SYN. */
 		struct calico_ct_key ck;
+		bool rst_src_lt_dest = src_lt_dest(&ctx->state->ip_src, &ctx->state->ip_dst,
+						ctx->state->sport, ctx->state->dport);
 		fill_ct_key(&ck,
-				src_lt_dest(&ctx->state->ip_src, &ctx->state->ip_dst,
-						ctx->state->sport, ctx->state->dport),
+				rst_src_lt_dest,
 				ctx->state->ip_proto,
 				&ctx->state->ip_src, &ctx->state->ip_dst,
 				ctx->state->sport, ctx->state->dport);
@@ -1492,6 +1493,11 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 			CALI_DEBUG("Ingress connection limit exceeded, rejecting with TCP RST");
 			if (cv) {
 				ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED);
+				/* Under netkit the RST can only leave via the pod's own
+				 * device, returning through from-wep. Approve that leg
+				 * so conntrack admits it there. */
+				ct_leg_set_flags(rst_src_lt_dest ? &cv->b_to_a : &cv->a_to_b,
+						CALI_CT_LEG_APPROVED);
 			}
 			ctx->state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
 			ctx->state->flags |= CALI_ST_RST_NO_CT;
