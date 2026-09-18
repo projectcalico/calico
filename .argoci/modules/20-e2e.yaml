@@ -1,18 +1,30 @@
 # The Kubernetes e2e suites, run against a kind cluster built from the images
 # the producers cached. Four variants of the same lane: the routing mode and the
 # suite differ, nothing else does.
+#
+# On a machine rather than in a pod: the suites exercise SCTP, whose protocol
+# module the container-optimised node image does not ship at all — so it cannot
+# be loaded from anywhere in a pod. A lane this size takes most of a node
+# regardless, so an instance of its own costs little.
 version: condensed-module
 
 defaults:
   # A conformance suite plus the cluster it needs does not fit the hour the
   # lighter lanes get.
   timeout: 1h30m
+  runOn: vm
   services:
     - docker
 
 steps:
   - name: e2e-kind
-    requests: {cpu: 6000m, memory: 16Gi}
+    vm:
+      machineType: e2-standard-8
+      # kind writes heavily: loading the cached images and the cluster's own
+      # churn ran to 25GiB and tens of thousands of IOPS on the pod this
+      # replaces, which is more than a small balanced disk sustains.
+      diskType: pd-ssd
+      diskSize: 200GB
     depends:
       - build-calico-image
       - build-node-image
@@ -53,16 +65,23 @@ steps:
           - name: E2E_TARGET
             value: e2e-test-bpf
     commands: |
+      sudo apt-get update -y && sudo apt-get install -y make
+      sudo modprobe sctp
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       .argoci/scripts/load-cached-images calico node whisker
       make ${E2E_TARGET}
     epilogue: |
-      cd "${CI_HOME}/${CI_GIT_DIR}"
+      copyFromVirtualMachine report report || true
       artifact push job report --destination test-results || true
       if [ "$CI_STEP_EXIT_CODE" != 0 ]; then
-        .semaphore/collect-kind-diags || true
-        kubectl-snapshot create --kubeconfig hack/test/kind/kind-kubeconfig.yaml \
-          -o kind-snapshot.tar.gz || true
+        # Collected where the cluster is; the script pushes its own bundle.
+        sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && .semaphore/collect-kind-diags' || true
+        # The snapshot tool ships in the CI image rather than on the machine, and
+        # the machine has no registry credentials of its own. Worth the pull: the
+        # cluster is gone once this returns.
+        sshOnVirtualMachine 'docker login -u _json_key --password-stdin https://gcr.io < "${CI_ARTIFACT_SA_KEY_FILE}"' || true
+        sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && docker run --rm --network host -v "$PWD:/w" -w /w gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2 kubectl-snapshot create --kubeconfig hack/test/kind/kind-kubeconfig.yaml -o kind-snapshot.tar.gz' || true
+        copyFromVirtualMachine kind-snapshot.tar.gz kind-snapshot.tar.gz || true
         artifact push job kind-snapshot.tar.gz --destination kind-snapshot.tar.gz || true
       fi
