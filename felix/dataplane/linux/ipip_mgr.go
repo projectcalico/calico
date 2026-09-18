@@ -176,7 +176,8 @@ func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetabl
 	return &routetable.Target{
 		Type: routetable.TargetTypeOnLink,
 		RouteKey: routetable.RouteKey{
-			CIDR: cidr,
+			CIDR:     cidr,
+			Priority: m.routeMgr.routePriority,
 		},
 		GW:       ip.FromIPOrCIDRString(remoteAddr),
 		Protocol: m.routeProtocol,
