@@ -70,7 +70,9 @@ spec:
               properties:
                 asNumber:
                   description: The AS Number of the peer.
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 filters:
                   description: The ordered set of BGPFilters applied on this BGP peer.
@@ -96,7 +98,9 @@ spec:
                   description: |-
                     The optional Local AS Number to use when peering with this remote peer.
                     If not specified, the AS Number defined in default BGPConfiguration will be used.
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 localWorkloadSelector:
                   description: |-
