@@ -15,7 +15,7 @@ steps:
   - name: typha-ci
     vm:
       machineType: e2-standard-8
-    depends: [build-calico-image, prerequisites]
+    depends: [build-calico-image, check-go]
     commands: |
       sudo apt-get update -y && sudo apt-get install -y make
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
@@ -34,7 +34,7 @@ steps:
   - name: typha-fv-ubi
     vm:
       machineType: e2-standard-8
-    depends: [build-calico-image, prerequisites]
+    depends: [build-calico-image, check-go]
     env:
       - name: USE_UBI_AS_CALICO_BASE
         value: "1"

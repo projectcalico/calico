@@ -141,10 +141,8 @@ DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
 DEPS_SOURCES=go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./hack/list-go-sources.sh hack/cmd/deps/*
 
 # Derived from the same import graph as deps.txt, so it belongs to the same
-# regenerate-and-diff check rather than one of its own. Its dependents-of-*
-# entries come from the workflow as well, which deps.txt knows nothing about.
+# regenerate-and-diff check rather than one of its own.
 ARGOCI_DEPS_FILE=.argoci/depstree.yaml
-ARGOCI_WORKFLOW_SOURCES=.argoci/ciworkflow.yaml $(wildcard .argoci/modules/*.yaml)
 
 gen-deps-files: operator-charts
 	$(MAKE) -j$$(nproc) $(DEP_FILES)
@@ -164,7 +162,7 @@ $(DEP_FILES): $(DEPS_SOURCES)
 #
 # Via a temporary, because a truncated file here is an empty component list —
 # which gates nothing, and says nothing.
-$(ARGOCI_DEPS_FILE): $(DEPS_SOURCES) $(ARGOCI_WORKFLOW_SOURCES)
+$(ARGOCI_DEPS_FILE): $(DEPS_SOURCES)
 	@$(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps gen-argoci-deps $(GO_DIRS)" > $@.tmp \
 	  && mv $@.tmp $@ || { rm -f $@.tmp; exit 1; }
 

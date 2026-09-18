@@ -14,7 +14,7 @@ defaults:
 
 steps:
   - name: libcalico-go-ci
-    depends: [prerequisites]
+    depends: [check-go]
     # A whole kind control plane shares this pod, so the apiserver the
     # syncer races against is competing for the same cores it is.
     requests: {cpu: 5000m, memory: 9.5Gi}

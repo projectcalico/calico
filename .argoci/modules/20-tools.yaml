@@ -11,7 +11,7 @@ defaults:
 
 steps:
   - name: tools-ci
-    depends: [prerequisites]
+    depends: [check-go]
     requests: {cpu: 3750m, memory: 2.25Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin

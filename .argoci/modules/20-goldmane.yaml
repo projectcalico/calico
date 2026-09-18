@@ -11,7 +11,7 @@ defaults:
 
 steps:
   - name: goldmane-ci
-    depends: [prerequisites]
+    depends: [check-go]
     requests: {cpu: 4000m, memory: 2.75Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin

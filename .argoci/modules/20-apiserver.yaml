@@ -11,7 +11,7 @@ defaults:
 
 steps:
   - name: apiserver-ci
-    depends: [prerequisites]
+    depends: [check-go]
     requests: {cpu: 4500m, memory: 3.5Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin

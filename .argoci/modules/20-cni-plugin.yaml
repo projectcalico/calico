@@ -17,7 +17,7 @@ steps:
       machineType: e2-standard-8
     services:
       - docker
-    depends: [build-calico-image, prerequisites]
+    depends: [build-calico-image, check-go]
     commands: |
       sudo apt-get update -y && sudo apt-get install -y make
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin

@@ -711,9 +711,6 @@ const argoCIDepsHeader = `# !!! GENERATED FILE, DO NOT EDIT !!!
 # One entry per Go component. A component that is not a Go package has no import
 # graph to derive, so it gates on a hand-written pattern in the workflow.
 #
-# The dependents-of-* entries come from the workflow instead: what every step
-# depending on that one is gated on. A producer named narrowly enough to be gated
-# out while a consumer runs drops that consumer, and the check passes green.
 `
 
 type argoCIDepsFile struct {
@@ -751,15 +748,6 @@ func generateArgoCIDeps(pkgs []string) {
 			logrus.Fatalf("Failed to convert exclusions for package %s: %v", pkg, err)
 		}
 		out.Components[pkg] = argoCIComponent{In: inclusions, Exclude: exclusions}
-	}
-
-	steps, includes, err := loadArgoSteps(".")
-	if err != nil {
-		logrus.Fatalln("Failed to read the ArgoCI workflow:", err)
-	}
-	wanted := referencedDependentGates(steps, includes)
-	for name, comp := range dependentGates(steps, out.Components, wanted) {
-		out.Components[name] = comp
 	}
 
 	_, _ = fmt.Print(argoCIDepsHeader)

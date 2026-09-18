@@ -21,7 +21,7 @@ steps:
       - build-node-image
       - build-operator-image
       - build-third-party-images
-      - prerequisites
+      - check-go
     env:
       - name: E2E_TEST_CONFIG
         value: e2e/config/kind/kubevirt.yaml

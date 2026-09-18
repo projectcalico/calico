@@ -10,7 +10,6 @@ defaults:
 
 steps:
   - name: e2e-validation
-    depends: [prerequisites]
     jobSize: small
     requests: {cpu: 1750m, memory: 548Mi}
     commands: |

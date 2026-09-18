@@ -11,7 +11,7 @@ defaults:
 steps:
   - name: istio-ci
     requests: {cpu: 3250m, memory: 5.25Gi}
-    depends: [build-nft-rpms, prerequisites]
+    depends: [build-nft-rpms]
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
@@ -24,7 +24,6 @@ steps:
   # wait for it. ztunnel cross-compiles through the Rust toolchain in the build
   # image, so no arm64 runner is involved.
   - name: istio-build
-    depends: [prerequisites]
     requests: {cpu: 5000m, memory: 6Gi}
     matrix:
       - name: arm64

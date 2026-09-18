@@ -31,7 +31,7 @@ steps:
       - build-whisker-image
       - build-operator-image
       - build-third-party-images
-      - prerequisites
+      - check-go
     matrix:
       # Pinned rather than defaulted: from v3.33 the default gives Felix the
       # IPIP routes, and these tests need BGP to be the only routing mechanism.

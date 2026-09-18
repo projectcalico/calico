@@ -16,7 +16,7 @@ defaults:
 
 steps:
   - name: cni-plugin-windows-fv
-    depends: [prerequisites]
+    depends: [check-go]
     requests: {cpu: 3, memory: 6Gi}
     matrix:
       - name: overlay

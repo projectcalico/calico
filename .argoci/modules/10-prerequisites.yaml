@@ -9,23 +9,6 @@ defaults:
   timeout: 1h
 
 steps:
-  # Holds the executor fan-out behind whichever checks the change triggered. No
-  # gate of its own, so it survives to sequence them however few of them ran.
-  - name: prerequisites
-    jobSize: small
-    requests: {cpu: 2250m, memory: 548Mi}
-    workspaceVolumes: none
-    image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
-    depends:
-      - check-yaml
-      - check-go
-      - check-python
-      - check-language-dockerfiles
-      - check-protobufs
-      - check-manifests
-    commands: |
-      true
-
   - name: check-yaml
 
     jobSize: small
@@ -168,14 +151,14 @@ steps:
       make check-ocp-no-crds
       make check-dirty
 
-  # The generated half of the gate carries what the consumers are gated on:
-  # gated out while one of them runs, this would drop it.
+  # Gated on what makes the image itself interesting. A consumer needing it is
+  # what brings it back, so this does not have to describe their triggers too.
   - name: build-calico-image
     services: [docker]
     timeout: 1h
     requests: {cpu: 5500m, memory: 5.5Gi}
     changes:
-      dependsOn: [cmd, dependents-of-build-calico-image]
+      dependsOn: [cmd]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
@@ -195,7 +178,6 @@ steps:
     timeout: 1h
     requests: {cpu: 2000m, memory: 1Gi}
     changes:
-      dependsOn: [dependents-of-build-nft-rpms]
       in:
         - '^hack/rpms/nftables/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
@@ -220,7 +202,6 @@ steps:
     depends: [build-nft-rpms]
     when: GIT_REF_TYPE == 'MERGE'
     changes:
-      dependsOn: [dependents-of-build-nft-rpms]
       in:
         - '^hack/rpms/nftables/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
@@ -242,7 +223,7 @@ steps:
     requests: {cpu: 4000m, memory: 5Gi}
     depends: [build-nft-rpms]
     changes:
-      dependsOn: [node, dependents-of-build-node-image]
+      dependsOn: [node]
       in:
         - '^node/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
@@ -264,7 +245,6 @@ steps:
     timeout: 1h
     requests: {cpu: 2000m, memory: 1.75Gi}
     changes:
-      dependsOn: [dependents-of-build-whisker-image]
       in:
         - '^whisker/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
@@ -283,7 +263,7 @@ steps:
     timeout: 1h
     requests: {cpu: 2750m, memory: 5.25Gi}
     changes:
-      dependsOn: [operator, dependents-of-build-operator-image]
+      dependsOn: [operator]
       in:
         - '^operator/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
@@ -302,7 +282,7 @@ steps:
     timeout: 1h
     requests: {cpu: 3500m, memory: 3.5Gi}
     changes:
-      dependsOn: [third_party, dependents-of-build-third-party-images]
+      dependsOn: [third_party]
       in:
         - '^third_party/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'

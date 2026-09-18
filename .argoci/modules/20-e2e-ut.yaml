@@ -12,7 +12,7 @@ defaults:
 
 steps:
   - name: e2e-ut
-    depends: [prerequisites]
+    depends: [check-go]
     requests: {cpu: 4250m, memory: 4.75Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin

@@ -15,7 +15,7 @@ defaults:
 
 steps:
   - name: e2e-gcp-kubeadm-local-binary
-    depends: [prerequisites]
+    depends: [check-go]
     requests: {cpu: 1250m, memory: 6Gi}
     services:
       - docker

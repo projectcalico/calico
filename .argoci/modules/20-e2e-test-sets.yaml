@@ -13,7 +13,7 @@ defaults:
 
 steps:
   - name: e2e-test-set-drift
-    depends: [prerequisites]
+    depends: [check-go]
     requests: {cpu: 5500m, memory: 5.5Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin

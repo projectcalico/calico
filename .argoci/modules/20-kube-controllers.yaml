@@ -9,7 +9,7 @@ defaults:
 steps:
   - name: kube-controllers-ci
     requests: {cpu: 5750m, memory: 5.5Gi}
-    depends: [build-calico-image, prerequisites]
+    depends: [build-calico-image, check-go]
     matrix:
       - name: crd-v1
       - name: v3

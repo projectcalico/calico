@@ -11,7 +11,7 @@ defaults:
 
 steps:
   - name: pod2daemon-ci
-    depends: [prerequisites]
+    depends: [check-go]
     requests: {cpu: 2750m, memory: 2Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
