@@ -44,8 +44,18 @@ func ClampToInt(n *big.Int) int {
 	if n == nil {
 		return 0
 	}
-	if !n.IsInt64() || n.Int64() > math.MaxInt {
+	if !n.IsInt64() {
+		if n.Sign() < 0 {
+			return math.MinInt
+		}
 		return math.MaxInt
 	}
-	return int(n.Int64())
+	v := n.Int64()
+	if v > math.MaxInt {
+		return math.MaxInt
+	}
+	if v < math.MinInt {
+		return math.MinInt
+	}
+	return int(v)
 }
