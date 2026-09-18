@@ -16,6 +16,7 @@ steps:
       - build-whisker-image
       - build-operator-image
       - build-third-party-images
+      - prerequisites
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"

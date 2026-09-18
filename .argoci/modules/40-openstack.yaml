@@ -7,6 +7,7 @@ defaults:
 
 steps:
   - name: openstack-tox
+    depends: [prerequisites]
     requests: {cpu: 1250m, memory: 1.5Gi}
     services:
       - docker
@@ -22,6 +23,7 @@ steps:
   # DevStack installs OpenStack over the machine it runs on — uninstalling
   # system packages as it goes — so it gets one of its own.
   - name: openstack-devstack
+    depends: [prerequisites]
     runOn: vm
     # Installing the whole control plane and then exercising it does not fit the
     # hour the other lanes get.

@@ -330,6 +330,17 @@ includes:
       dependsOn: [cni-plugin]
       in: ['^\.argoci/modules/20-cni-plugin\.yaml$']
 
+  # The FV drivers are shell and PowerShell rather than Go, so the generated
+  # component does not reach them and they are listed here.
+  - path: .argoci/modules/20-cni-plugin-windows.yaml
+    changes:
+      dependsOn: [cni-plugin]
+      in:
+        - ^process/testing/aso/
+        - ^process/testing/util/
+        - ^process/testing/winfv-cni-plugin/
+        - ^\.argoci/modules/20-cni-plugin-windows\.yaml$
+
   # No generated component: the tree holds Dockerfiles and a Makefile, and the
   # sources they build come from upstream.
   - path: .argoci/modules/20-istio.yaml

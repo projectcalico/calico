@@ -9,6 +9,7 @@ defaults:
 
 steps:
   - name: felix-build-windows
+    depends: [prerequisites]
     requests: {cpu: 3750m, memory: 8Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin

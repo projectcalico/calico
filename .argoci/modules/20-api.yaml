@@ -15,6 +15,7 @@ defaults:
 
 steps:
   - name: api-ci
+    depends: [prerequisites]
     requests: {cpu: 3000m, memory: 3.5Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
@@ -26,6 +27,7 @@ steps:
       artifact push job report --destination test-results || true
 
   - name: api-validation
+    depends: [prerequisites]
     requests: {cpu: 3750m, memory: 3.5Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin

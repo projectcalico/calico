@@ -100,25 +100,25 @@ type step struct {
 
 // loadArgoSteps resolves each step to the gate governing it, which is the
 // include's unless the step overrides it.
-func loadArgoSteps(repoRoot string) ([]step, error) {
+func loadArgoSteps(repoRoot string) ([]step, []argoInclude, error) {
 	data, err := os.ReadFile(filepath.Join(repoRoot, argoWorkflowFile))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var wf argoWorkflow
 	if err := yaml.Unmarshal(data, &wf); err != nil {
-		return nil, fmt.Errorf("%s: %w", argoWorkflowFile, err)
+		return nil, nil, fmt.Errorf("%s: %w", argoWorkflowFile, err)
 	}
 
 	var steps []step
 	for _, inc := range wf.Includes {
 		modData, err := os.ReadFile(filepath.Join(repoRoot, inc.Path))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		var mod argoModule
 		if err := yaml.Unmarshal(modData, &mod); err != nil {
-			return nil, fmt.Errorf("%s: %w", inc.Path, err)
+			return nil, nil, fmt.Errorf("%s: %w", inc.Path, err)
 		}
 		for _, s := range mod.Steps {
 			gate := gateSpec{}
@@ -131,13 +131,38 @@ func loadArgoSteps(repoRoot string) ([]step, error) {
 			steps = append(steps, step{name: s.Name, gate: gate, deps: dependsNames(s.Depends)})
 		}
 	}
-	return steps, nil
+	return steps, wf.Includes, nil
+}
+
+// referencedDependentGates collects the derived entries the workflow actually
+// names. A step can be a dependency for ordering alone, and deriving a gate for
+// one of those would union the whole repo into an entry nothing reads.
+func referencedDependentGates(steps []step, includes []argoInclude) map[string]bool {
+	referenced := map[string]bool{}
+	note := func(g *gateSpec) {
+		if g == nil {
+			return
+		}
+		for _, name := range g.DependsOn {
+			if strings.HasPrefix(name, dependentsPrefix) {
+				referenced[strings.TrimPrefix(name, dependentsPrefix)] = true
+			}
+		}
+	}
+	for _, inc := range includes {
+		note(inc.Changes)
+	}
+	for _, s := range steps {
+		g := s.gate
+		note(&g)
+	}
+	return referenced
 }
 
 // dependentGates unions what a step's dependents are gated on, transitively.
 // Exclusions are dropped: one dependent's must not suppress another's
 // inclusions, and firing too often only costs time.
-func dependentGates(steps []step, components map[string]argoCIComponent) map[string]argoCIComponent {
+func dependentGates(steps []step, components map[string]argoCIComponent, wanted map[string]bool) map[string]argoCIComponent {
 	byName := map[string]step{}
 	for _, s := range steps {
 		byName[s.name] = s
@@ -151,6 +176,9 @@ func dependentGates(steps []step, components map[string]argoCIComponent) map[str
 
 	out := map[string]argoCIComponent{}
 	for producer := range dependents {
+		if !wanted[producer] {
+			continue
+		}
 		seen := map[string]bool{}
 		var patterns []string
 		var walk func(string)

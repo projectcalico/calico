@@ -9,6 +9,7 @@ defaults:
 
 steps:
   - name: whisker-ci
+    depends: [prerequisites]
     requests: {cpu: 5250m, memory: 6Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
@@ -19,6 +20,7 @@ steps:
   # amd64 is already covered, since the step above builds the image on its way
   # to the nginx smoke test. arm64 is the other architecture whisker supports.
   - name: whisker-image
+    depends: [prerequisites]
     requests: {cpu: 1750m, memory: 2.5Gi}
     # The Dockerfile installs nginx with dnf, which an amd64 runner would have
     # to emulate. Native instead — at the cost of waiting for a node, since the

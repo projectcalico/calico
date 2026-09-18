@@ -3,8 +3,8 @@
 # On a machine rather than in a pod: the dataplane tests create netkit devices,
 # which the container-optimised node image has no driver for.
 #
-# The Windows FV lane is not here: it drives Azure VMs rather than containers, so
-# it has nothing in common with this beyond the component name.
+# The Windows FV is a module of its own: it drives Azure VMs rather than
+# containers, and gates on paths this one has no interest in.
 version: condensed-module
 
 defaults:
@@ -17,7 +17,7 @@ steps:
       machineType: e2-standard-8
     services:
       - docker
-    depends: [build-calico-image]
+    depends: [build-calico-image, prerequisites]
     commands: |
       sudo apt-get update -y && sudo apt-get install -y make
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin

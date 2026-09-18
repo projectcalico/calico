@@ -753,11 +753,12 @@ func generateArgoCIDeps(pkgs []string) {
 		out.Components[pkg] = argoCIComponent{In: inclusions, Exclude: exclusions}
 	}
 
-	steps, err := loadArgoSteps(".")
+	steps, includes, err := loadArgoSteps(".")
 	if err != nil {
 		logrus.Fatalln("Failed to read the ArgoCI workflow:", err)
 	}
-	for name, comp := range dependentGates(steps, out.Components) {
+	wanted := referencedDependentGates(steps, includes)
+	for name, comp := range dependentGates(steps, out.Components, wanted) {
 		out.Components[name] = comp
 	}
 

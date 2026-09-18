@@ -11,6 +11,7 @@ defaults:
 
 steps:
   - name: confd-ci
+    depends: [prerequisites]
     requests: {cpu: 3750m, memory: 5Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin

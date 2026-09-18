@@ -11,6 +11,7 @@ defaults:
 
 steps:
   - name: operator-ci
+    depends: [prerequisites]
     requests: {cpu: 5000m, memory: 8.5Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
@@ -26,6 +27,7 @@ steps:
   # No cgo and no build constraints, so cross-compiling the binary is the whole
   # of the per-architecture coverage — the images are assembled at release.
   - name: operator-build
+    depends: [prerequisites]
     requests: {cpu: 5000m, memory: 8Gi}
     matrix:
       - name: arm64

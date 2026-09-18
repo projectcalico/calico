@@ -10,6 +10,7 @@ defaults:
 
 steps:
   - name: mock-node-ci
+    depends: [prerequisites]
     requests: {cpu: 4250m, memory: 3Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin

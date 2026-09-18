@@ -7,6 +7,7 @@ defaults:
 
 steps:
   - name: node-static-checks
+    depends: [prerequisites]
     requests: {cpu: 4000m, memory: 5.5Gi}
     image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
     # The image ships the linters under /go/bin, which the default emptyDir over
@@ -16,6 +17,7 @@ steps:
       make -C node static-checks DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
 
   - name: node-ut
+    depends: [prerequisites]
     requests: {cpu: 4750m, memory: 5Gi}
     services:
       - docker

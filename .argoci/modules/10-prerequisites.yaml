@@ -1,10 +1,6 @@
 # The pre-flight checks. Each step is one Semaphore block, gating itself rather
 # than the include, so they stay as independent as they are there.
 #
-# Nothing depends on these: a dropped dependency cascades, so making a component
-# wait on a check would drop the component whenever the check gated out. Branch
-# protection is what makes them blocking.
-#
 # Most still shell out to a nested build container. A step that says nothing
 # about `image` or `services` runs natively in the build image.
 version: condensed-module
@@ -13,23 +9,22 @@ defaults:
   timeout: 1h
 
 steps:
-  # Generated from the live Go import graph, so a stale copy under-fires every
-  # other gate in the file and nothing else would report it.
-  - name: check-semaphore-files
-    requests: {cpu: 2750m, memory: 2Gi}
-    image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
+  # Holds the executor fan-out behind whichever checks the change triggered. No
+  # gate of its own, so it survives to sequence them however few of them ran.
+  - name: prerequisites
+    jobSize: small
+    requests: {cpu: 300m, memory: 640Mi}
     workspaceVolumes: none
-    changes:
-      in:
-        - ^\.semaphore/
-        - ^hack/
-        - ^Makefile$
-        - ^lib\.Makefile$
-        - ^metadata\.mk$
-        - ^\.argoci/modules/10-prerequisites\.yaml$
+    image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
+    depends:
+      - check-yaml
+      - check-go
+      - check-python
+      - check-language-dockerfiles
+      - check-protobufs
+      - check-manifests
     commands: |
-      make gen-semaphore-yaml DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
-      make check-dirty
+      true
 
   - name: check-yaml
 

@@ -10,6 +10,7 @@ defaults:
 
 steps:
   - name: cmd-calico-ut
+    depends: [prerequisites]
     requests: {cpu: 5000m, memory: 5Gi}
     # The image ships gotestsum under /go/bin, which the default emptyDir over
     # /go hides — as `command not found`, minutes in.

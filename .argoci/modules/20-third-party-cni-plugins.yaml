@@ -11,6 +11,7 @@ defaults:
 
 steps:
   - name: third-party-cni-plugins-ci
+    depends: [prerequisites]
     requests: {cpu: 2750m, memory: 2Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
@@ -19,6 +20,7 @@ steps:
       make ci
 
   - name: third-party-cni-plugins-build
+    depends: [prerequisites]
     requests: {cpu: 2750m, memory: 2Gi}
     matrix:
       - name: arm64

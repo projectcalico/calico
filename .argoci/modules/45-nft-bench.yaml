@@ -8,6 +8,7 @@ version: condensed-module
 
 steps:
   - name: nft-bench
+    depends: [prerequisites]
     runOn: vm
     timeout: 30m
     # Two vCPUs, matching what this has always been measured on. Any fixed size

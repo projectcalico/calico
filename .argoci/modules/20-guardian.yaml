@@ -11,6 +11,7 @@ defaults:
 
 steps:
   - name: guardian-ci
+    depends: [prerequisites]
     requests: {cpu: 3500m, memory: 3Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
