@@ -43,8 +43,8 @@ static CALI_BPF_INLINE int make_room_for_l2_header(struct cali_tc_ctx *ctx)
 		return -1;
 	}
 
-	/* skb_iphdr_offset() describes the program, not the skb, and does not know
-	 * about the header just inserted, so place the IP header by hand. */
+	/* skb_iphdr_offset() assumes the L3 packet layout, and it does not know
+	  * about the header just inserted. Calculate header offset by hand. */
 	ctx->ip_header = ctx->data_start + ETH_SIZE;
 
 #ifdef IPVER6
