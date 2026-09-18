@@ -60,8 +60,11 @@ func TestClampToInt(t *testing.T) {
 		{"nil", nil, 0},
 		{"zero", big.NewInt(0), 0},
 		{"positive", big.NewInt(42), 42},
+		{"negative", big.NewInt(-42), -42},
 		{"max int", big.NewInt(math.MaxInt64), math.MaxInt},
 		{"overflow", new(big.Int).Add(big.NewInt(math.MaxInt64), big.NewInt(1)), math.MaxInt},
+		{"min int", big.NewInt(math.MinInt64), math.MinInt},
+		{"underflow", new(big.Int).Sub(big.NewInt(math.MinInt64), big.NewInt(1)), math.MinInt},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
