@@ -22,10 +22,6 @@ import (
 	"strings"
 )
 
-// The range markers below are load-bearing: controller-gen renders a Go uint32
-// as OpenAPI "format: int32", which rejects every AS number above 2147483647.
-// The doc comment is deliberately user-facing because controller-gen copies it
-// into the generated schema wherever the field itself carries no comment.
 
 // ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
 // number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
