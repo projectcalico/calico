@@ -87,6 +87,9 @@ func newBPFTestEpMgr(
 		logrusr.NewSummarizer("test"),
 		&routetable.DummyTable{},
 		&routetable.DummyTable{},
+		&routetable.DummyTable{}, // Host-networked NAT steering table.
+		&routetable.DummyTable{}, // Host-networked NAT steering table.
+		nil,                      // Host-networked NAT service ipsets.
 		calc.NewLookupsCache(),
 		nil,
 		&environment.Features{},
