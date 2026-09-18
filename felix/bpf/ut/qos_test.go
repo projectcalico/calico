@@ -1816,6 +1816,70 @@ func TestQoSConnLimitIngressRejectRSTIsAddressedAndSent(t *testing.T) {
 	}, withIngressQoSConnLimit())
 }
 
+// Under netkit the rejection RST leaves through the pod's own device and
+// re-enters at from-wep, where conntrack must admit it.
+func TestQoSConnLimitIngressRejectApprovesReplyLeg(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "HWapp"
+	defer func() { bpfIfaceName = "" }()
+
+	const (
+		ifIndex               = 1
+		maxConnections        = 1
+		srcPort        uint16 = 23458 // remote client
+		dstPort        uint16 = 8055  // workload listening port
+	)
+
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+
+	ctMap := conntrack.Map()
+	Expect(ctMap.EnsureExists()).NotTo(HaveOccurred())
+	defer resetCTMap(ctMap)
+	resetCTMap(ctMap)
+
+	// legA is the client (opener), so legB carries the pod's replies.
+	legA := ctv4.Leg{SynSeen: true, Opener: true}
+	legB := ctv4.Leg{Ifindex: ifIndex}
+	k := ctv4.NewKey(6, srcIP, srcPort, dstIP, dstPort)
+	v := ctv4.NewValueNormal(time.Duration(0), ctv4.FlagConnLimitInRej, legA, legB)
+	Expect(ctMap.Update(k.AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
+
+	Expect(ctv4.ValueFromBytes(v.AsBytes()[:]).Data().B2A.Approved).To(BeFalse(),
+		"the reply leg starts unapproved, or this test proves nothing")
+
+	defer resetQoSMap(qosConnMap)
+	resetQoSMap(qosConnMap)
+	qosKey := qos.NewKey(uint32(ifIndex), 1 /* ingress */, qos.IPFamilyV4)
+	Expect(qosConnMap.Update(qosKey.AsBytes(),
+		qos.NewConnValue(maxConnections, maxConnections).AsBytes())).NotTo(HaveOccurred())
+
+	_, _, _, _, synPkt, err := testPacketTCPV4WithPayload(dstIP, srcPort, dstPort,
+		true /* syn */, []byte{})
+	Expect(err).NotTo(HaveOccurred())
+
+	skbMark = tcdefs.MarkSeen
+	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(synPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_UNSPEC), "the SYN was not rejected")
+	}, withIngressQoSConnLimit())
+
+	b, err := ctMap.Get(k.AsBytes())
+	Expect(err).NotTo(HaveOccurred())
+	data := ctv4.ValueFromBytes(b).Data()
+
+	Expect(data.B2A.Approved).To(BeTrue(),
+		"the reply leg was not approved, so under netkit from-wep denies the "+
+			"rejection RST and the client waits out tcp_syn_retries")
+}
+
 // TestQoSConnLimitEgressRejectRSTSurvivesReturnTrip covers CORE-13478
 // Failure.2: the rejection RST must reach the pod that sent the SYN.
 
