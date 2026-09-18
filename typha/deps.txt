@@ -12,7 +12,7 @@ github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 github.com/emicklei/go-restful/v3 v3.11.0
 github.com/fxamacker/cbor/v2 v2.7.0
 github.com/go-ini/ini v1.67.0
-github.com/go-logr/logr v1.4.3
+github.com/go-logr/logr v1.4.4
 github.com/go-openapi/jsonpointer v0.21.0
 github.com/go-openapi/jsonreference v0.20.2
 github.com/go-openapi/swag v0.23.0
