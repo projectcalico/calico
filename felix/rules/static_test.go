@@ -2274,6 +2274,31 @@ var _ = Describe("Static with connection transition logging", func() {
 		})
 	})
 
+	Describe("with a long prefix in nftables mode", func() {
+		const base = "abcdefghijklmnopqrstuvwxyz" +
+			"abcdefghijklmnopqrstuvwxyz" +
+			"abcdefghijklmnopqrstuvwxyz" +
+			"abcdefghijklmnopqrstuvwxyz" +
+			"abcdefghijklmnopqrstuvwxyz" // 130 characters.
+
+		BeforeEach(func() {
+			conf.LogConnectionTransitionsPrefix = base
+		})
+
+		JustBeforeEach(func() {
+			rr = NewRenderer(conf, true).(*DefaultRuleRenderer)
+		})
+
+		It("should truncate the base so the suffix and trailing colon-space fit nftables' 126 character limit", func() {
+			chain := findChain(rr.StaticFilterTableChains(4), "cali-log-conn")
+			Expect(chain).NotTo(BeNil())
+			// The Log action appends ": ", so prefix+suffix must fit in 124 characters.
+			Expect(chain.Rules[0].Action).To(Equal(nftrender.LogAction{Prefix: base[:120] + "-rst"}))
+			Expect(chain.Rules[3].Action).To(Equal(nftrender.LogAction{Prefix: base[:115] + "-icmp-err"}))
+			Expect(chain.Rules[6].Action).To(Equal(nftrender.LogAction{Prefix: base[:120] + "-est"}))
+		})
+	})
+
 	Describe("with the feature disabled", func() {
 		BeforeEach(func() {
 			conf.LogConnectionTransitions = false
