@@ -86,12 +86,12 @@ var (
 	// dataplaneStatsUpdate processing prometheus metrics
 	histogramDataplaneStatsUpdate = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name: "felix_collector_dataplanestats_update_processing_latency_seconds",
-		Help: "Histogram for measuring latency for processing merging the proto.DataplaneStatistics to the current data cache.",
+		Help: "Histogram for measuring latency for processing and merging the proto.DataplaneStatistics into the current data cache.",
 	})
 
 	counterDataplaneStatsUpdateErrors = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "felix_collector_dataplanestats_update_processing_errors_total",
-		Help: "Number of errors encountered when processing merging the proto.DataplaneStatistics to the current data cache.",
+		Help: "Number of errors encountered when processing and merging the proto.DataplaneStatistics into the current data cache.",
 	})
 
 	// epStats cache prometheus metrics
@@ -1077,7 +1077,7 @@ func extractTupleFromDataplaneStats(d *proto.DataplaneStats) (tuple.Tuple, error
 		case "udp":
 			protocol = 17
 		default:
-			return tuple.Tuple{}, fmt.Errorf("unhandled protocol: %s", n)
+			return tuple.Tuple{}, fmt.Errorf("unhandled protocol: %q", n.Name)
 		}
 	}
 
