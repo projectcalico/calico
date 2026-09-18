@@ -22,7 +22,6 @@ import (
 	"strings"
 )
 
-
 // ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
 // number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
 // +kubebuilder:validation:Format=int64
