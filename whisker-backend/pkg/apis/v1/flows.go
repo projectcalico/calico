@@ -257,6 +257,8 @@ type FlowResponse struct {
 	SourceName      string      `json:"source_name"`
 	SourceNamespace string      `json:"source_namespace"`
 	SourceLabels    string      `json:"source_labels"`
+	SourceIP        string      `json:"source_ip"`
+	SourcePort      int64       `json:"source_port"`
 	DestName        string      `json:"dest_name"`
 	DestNamespace   string      `json:"dest_namespace"`
 	DestLabels      string      `json:"dest_labels"`

@@ -149,6 +149,8 @@ func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
 		SourceName:      protoToName(flow.Key.SourceName),
 		SourceNamespace: flow.Key.SourceNamespace,
 		SourceLabels:    strings.Join(flow.SourceLabels, " | "),
+		SourceIP:        flow.Key.SourceIp,
+		SourcePort:      flow.Key.SourcePort,
 
 		DestName:      protoToName(flow.Key.DestName),
 		DestNamespace: flow.Key.DestNamespace,
