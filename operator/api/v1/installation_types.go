@@ -201,9 +201,8 @@ type InstallationSpec struct {
 	TLSCipherSuites TLSCipherSuites `json:"tlsCipherSuites,omitempty"`
 
 	// TLSMinVersion defines the minimum TLS version that the TLS protocol should use during secure communication.
-	// Default: 1.2
+	// Default: VersionTLS12
 	// +optional
-	// +kubebuilder:validation:Enum=1.2;1.3
 	TLSMinVersion *TLSVersion `json:"tlsMinVersion,omitempty"`
 
 	// Deprecated. NonPrivileged is deprecated and will be removed from the API in a future release.
@@ -301,11 +300,12 @@ func (c TLSCipher) String() string {
 	return string(c)
 }
 
+// +kubebuilder:validation:Enum=VersionTLS12;VersionTLS13
 type TLSVersion string
 
 const (
-	TLSVersion1_2 TLSVersion = "1.2"
-	TLSVersion1_3 TLSVersion = "1.3"
+	TLSVersion12 TLSVersion = "VersionTLS12"
+	TLSVersion13 TLSVersion = "VersionTLS13"
 )
 
 const (

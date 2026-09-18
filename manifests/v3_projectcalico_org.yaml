@@ -18212,6 +18212,14 @@ spec:
                         type: string
                     type: object
                   type: array
+                tlsMinVersion:
+                  description: |-
+                    TLSMinVersion defines the minimum TLS version that the TLS protocol should use during secure communication.
+                    Default: VersionTLS12
+                  enum:
+                    - VersionTLS12
+                    - VersionTLS13
+                  type: string
                 typhaAffinity:
                   description: |-
                     Deprecated. Please use Installation.Spec.TyphaDeployment instead.

@@ -7527,10 +7527,10 @@ spec:
                 tlsMinVersion:
                   description: |-
                     TLSMinVersion defines the minimum TLS version that the TLS protocol should use during secure communication.
-                    Default: 1.2
+                    Default: VersionTLS12
                   enum:
-                    - 1.2
-                    - 1.3
+                    - VersionTLS12
+                    - VersionTLS13
                   type: string
                 typhaAffinity:
                   description: |-
