@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016,2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,11 @@ import (
 	"strings"
 )
 
+// ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
+// number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
+// +kubebuilder:validation:Format=int64
+// +kubebuilder:validation:Minimum=0
+// +kubebuilder:validation:Maximum=4294967295
 type ASNumber uint32
 
 // ASNumberFromString creates an ASNumber struct from a string value.  The
