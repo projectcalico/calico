@@ -17,6 +17,34 @@ timeout: 4h
 # the live import graph, so a gate cannot fall behind what it gates.
 dependencies: .argoci/depstree.yaml
 
+# Resolved at the promoted run's commit, so pressing this on an old build
+# republishes what that build was, not what master holds now. One component per
+# press: the dropdown is the picker, and only that component's images are built.
+promotions:
+  - name: push-images
+    workflowFile: .argoci/promotions/push-images.yaml
+    description: Republish one component's images at this commit
+    parameters:
+      - name: COMPONENT
+        description: Which component's images to push
+        required: true
+        options:
+          - calico
+          - node
+          - cni-plugin
+          - third-party-cni-plugins
+          - mock-node
+          - whisker
+          - operator
+          - istio
+          - envoy
+
+  # Automatic on merge from its own config entry; this button is how a branch or
+  # PR gets packaged, which the PPA naming already accounts for.
+  - name: openstack-packages
+    workflowFile: .argoci/publish/openstack-packages.yaml
+    description: Build and publish the OpenStack packages for this ref
+
 # The Makefiles address the tree by its GOPATH location, which is a path inside
 # the build image rather than anywhere the checkout can land. A step running the
 # build image directly has to put the tree there itself; one shelling out to a

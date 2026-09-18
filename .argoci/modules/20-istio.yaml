@@ -10,7 +10,7 @@ defaults:
 
 steps:
   - name: istio-ci
-    requests: {cpu: 5000m, memory: 7.5Gi}
+    requests: {cpu: 3250m, memory: 5.25Gi}
     depends: [build-nft-rpms, prerequisites]
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin

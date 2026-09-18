@@ -16,7 +16,7 @@ defaults:
 steps:
   - name: api-ci
     depends: [prerequisites]
-    requests: {cpu: 3000m, memory: 3.5Gi}
+    requests: {cpu: 2750m, memory: 2.25Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
@@ -28,7 +28,7 @@ steps:
 
   - name: api-validation
     depends: [prerequisites]
-    requests: {cpu: 3750m, memory: 3.5Gi}
+    requests: {cpu: 3000m, memory: 2.25Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"

@@ -18,3 +18,17 @@ workflows:
     runWhen:
       alwaysRunOnPR: true
       alwaysRunOnMerge: true
+
+  # Own entries rather than steps in the workflow above: neither reads what the
+  # build produced, and a publish failing should not colour the build's status.
+  - name: fossa-scan
+    workflowFile: .argoci/publish/fossa-scan.yaml
+    runWhen:
+      alwaysRunOnMerge: true
+
+  # Also reachable from a run's promotion button, which is how a branch or PR
+  # gets packaged.
+  - name: openstack-packages
+    workflowFile: .argoci/publish/openstack-packages.yaml
+    runWhen:
+      alwaysRunOnMerge: true

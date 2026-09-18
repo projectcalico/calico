@@ -4,8 +4,8 @@ set -o pipefail
 
 # push-nft-rpms.sh: Publishes a cached nftables RPM image for a specific
 # architecture. This script is intended to be run only from trusted
-# Semaphore branch builds after build-nft-rpms.sh has uploaded the image tarball
-# to S3.
+# branch builds after build-nft-rpms.sh has uploaded the image tarball
+# to the workflow's artifact storage.
 
 ARCH=$1
 if [ -z "$ARCH" ]; then
@@ -21,7 +21,7 @@ if [ -z "$DOCKER_USER" ] || [ -z "$DOCKER_TOKEN" ]; then
   exit 1
 fi
 
-S3_CMD="$(dirname "$0")/../s3-cmd"
+S3_CMD="$(git rev-parse --show-toplevel)/.semaphore/s3-cmd"
 
 NFT_RPMS_TAG=$(make --no-print-directory -C hack/rpms/nftables print-tag)
 NFT_RPMS_IMAGE="calico/nftables-rpms:${NFT_RPMS_TAG}-${ARCH}"
@@ -36,7 +36,12 @@ CACHE_PATH="${S3_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst"
     echo "Image already published, skipping push"
   else
     echo "$DOCKER_TOKEN" | docker login --username "$DOCKER_USER" --password-stdin
-    "$S3_CMD" cp "$CACHE_PATH" /tmp/nft-rpms.tar.zst
+    if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
+      artifact pull workflow "nft-rpms-${ARCH}.tar.zst"
+      mv "nft-rpms-${ARCH}.tar.zst" /tmp/nft-rpms.tar.zst
+    else
+      "$S3_CMD" cp "$CACHE_PATH" /tmp/nft-rpms.tar.zst
+    fi
     zstd -d --rm /tmp/nft-rpms.tar.zst
     docker load -i /tmp/nft-rpms.tar
     rm -f /tmp/nft-rpms.tar

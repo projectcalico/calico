@@ -1456,6 +1456,7 @@ components:
       - ^guardian/pkg/daemon/[^/]*\.go$
       - ^guardian/pkg/server/[^/]*\.go$
       - ^guardian/pkg/tunnel/[^/]*\.go$
+      - ^hack/rpms/nftables/
       - ^hack/test/certs/
       - ^hack/test/kind/
       - ^hack/test/kind/gateway-setup\.sh$

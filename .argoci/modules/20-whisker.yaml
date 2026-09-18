@@ -10,7 +10,7 @@ defaults:
 steps:
   - name: whisker-ci
     depends: [prerequisites]
-    requests: {cpu: 5250m, memory: 6Gi}
+    requests: {cpu: 3250m, memory: 4.25Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"

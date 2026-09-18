@@ -12,7 +12,7 @@ defaults:
 steps:
   - name: app-policy-ci
     depends: [prerequisites]
-    requests: {cpu: 4250m, memory: 5Gi}
+    requests: {cpu: 4500m, memory: 3.5Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"

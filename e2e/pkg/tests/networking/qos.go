@@ -71,12 +71,16 @@ var _ = describe.CalicoDescribe(
 
 			// Measure baseline throughput without any QoS limit.
 			By("Running iperf3 to measure baseline throughput")
-			baseline, err := tester.MeasureBandwidth(client, server, iperfcheck.WithRetries(5, 5*time.Second))
+			const minBandwidthBaseline = 10_000_000.0 * 5
+			baseline, err := tester.MeasureBandwidth(client, server,
+				iperfcheck.WithRetries(5, 5*time.Second),
+				iperfcheck.WithMinRate(minBandwidthBaseline),
+			)
 			Expect(err).NotTo(HaveOccurred(), "failed to measure baseline throughput")
 			logrus.Infof("Baseline throughput (bps): %.0f", baseline.AverageRate)
 
 			// The baseline should be much higher than the 10Mbit limit we'll configure.
-			Expect(baseline.AverageRate).To(BeNumerically(">=", 10_000_000.0*5), "baseline throughput too low to meaningfully test bandwidth limiting")
+			Expect(baseline.AverageRate).To(BeNumerically(">=", minBandwidthBaseline), "baseline throughput too low to meaningfully test bandwidth limiting")
 
 			// Replace the client with a pod annotated for 10Mbit ingress bandwidth.
 			By("Replacing iperf3 client with 10Mbit ingress bandwidth limit")
@@ -178,16 +182,18 @@ var _ = describe.CalicoDescribe(
 
 			// Measure baseline UDP throughput to ensure the cluster can handle the test traffic.
 			By("Running iperf3 to measure baseline UDP throughput")
+			const minPacketRateBaseline = 100_000_000.0 * 0.8
 			baseline, err := tester.MeasureBandwidth(
 				clientPeer, server,
 				iperfcheck.WithUDP(),
 				iperfcheck.WithPacketLength(1000),
 				iperfcheck.WithTargetBandwidth("100M"),
 				iperfcheck.WithRetries(5, 5*time.Second),
+				iperfcheck.WithMinRate(minPacketRateBaseline),
 			)
 			Expect(err).NotTo(HaveOccurred(), "failed to measure baseline UDP throughput")
 			logrus.Infof("Baseline UDP throughput (bps): %.0f", baseline.AverageRate)
-			Expect(baseline.AverageRate).To(BeNumerically(">=", 100_000_000.0*0.8), "baseline UDP throughput too low for packet rate test")
+			Expect(baseline.AverageRate).To(BeNumerically(">=", minPacketRateBaseline), "baseline UDP throughput too low for packet rate test")
 
 			// --- Ingress packet rate limit ---
 			By("Replacing server with ingressPacketRate=100 annotation")

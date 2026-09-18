@@ -1,0 +1,50 @@
+# Builds and publishes the OpenStack debs to a Launchpad PPA.
+#
+# Reached two ways: automatically on a merge, and manually from a run's
+# promotion button for a branch or PR. The PPA follows from the ref — master
+# publishes to the "master" PPA, any other branch to "testing", and a PR to
+# "pr-<number>", which has to have been created by hand first.
+version: condensed
+generateName: openstack-packages-
+timeout: 1h
+
+defaults:
+  timeout: 1h
+  secretBundles:
+    - name: google-service-account-for-tigera-infra
+      keys:
+        - name: tigera-infra-access.json
+          as: TIGERA_INFRA_SA_KEY
+          localFile: /root/secrets/tigera-infra-access.json
+    - name: launchpad-secret-key
+      keys:
+        - name: marvin.txt
+          as: LAUNCHPAD_SECRET_KEY
+          localFile: /root/secrets/marvin.txt
+
+steps:
+  - name: openstack-packages
+    requests: {cpu: 2000m, memory: 4Gi}
+    env:
+      - name: GOOGLE_APPLICATION_CREDENTIALS
+        value: /root/secrets/tigera-infra-access.json
+      - name: SECRET_KEY
+        value: /root/secrets/marvin.txt
+      - name: GCLOUD_ARGS
+        value: --zone us-east1-c --project tigera-wp-tcp-redirect
+      - name: HOST
+        value: ubuntu@binaries-projectcalico-org
+      # For the containers being built, not the machine running the build.
+      - name: UBUNTU_REPO_OVERRIDE
+        value: ftp.uni-stuttgart.de
+    commands: |
+      apt-get update -y && apt-get install -y --no-install-recommends devscripts moreutils patchelf jq
+      git config --global user.email marvin@tigera.io
+      git config --global user.name Marvin
+      gcloud config set project tigera-wp-tcp-redirect
+      gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
+      if [ -n "${CI_GIT_PR_NUMBER}" ] && [ "${CI_GIT_PR_NUMBER}" != none ]; then
+        make -C release/packaging release-publish VERSION="pr-${CI_GIT_PR_NUMBER}"
+      else
+        make -C release/packaging release-publish VERSION="${CI_GIT_BRANCH}"
+      fi

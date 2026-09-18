@@ -16,7 +16,7 @@ defaults:
 steps:
   - name: e2e-gcp-kubeadm-local-binary
     depends: [prerequisites]
-    requests: {cpu: 6000m, memory: 6.5Gi}
+    requests: {cpu: 1250m, memory: 6Gi}
     services:
       - docker
       - http-cache-proxy

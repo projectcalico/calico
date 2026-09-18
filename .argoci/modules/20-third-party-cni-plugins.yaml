@@ -12,7 +12,7 @@ defaults:
 steps:
   - name: third-party-cni-plugins-ci
     depends: [prerequisites]
-    requests: {cpu: 2750m, memory: 2Gi}
+    requests: {cpu: 2000m, memory: 1.25Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"

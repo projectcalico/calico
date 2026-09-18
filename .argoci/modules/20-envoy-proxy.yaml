@@ -10,7 +10,7 @@ defaults:
 steps:
   - name: envoy-proxy-ci
     depends: [prerequisites]
-    requests: {cpu: 1000m, memory: 1.5Gi}
+    requests: {cpu: 1750m, memory: 1Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"

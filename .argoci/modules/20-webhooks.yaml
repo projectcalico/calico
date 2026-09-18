@@ -11,7 +11,7 @@ defaults:
 steps:
   - name: webhooks-ci
     depends: [prerequisites]
-    requests: {cpu: 4500m, memory: 2.5Gi}
+    requests: {cpu: 5500m, memory: 1.75Gi}
     # The image ships golangci-lint and gotestsum, which the default emptyDir
     # over /go hides — as `command not found`, minutes in.
     workspaceVolumes: none

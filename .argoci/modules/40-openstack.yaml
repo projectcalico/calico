@@ -8,7 +8,7 @@ defaults:
 steps:
   - name: openstack-tox
     depends: [prerequisites]
-    requests: {cpu: 1250m, memory: 1.5Gi}
+    requests: {cpu: 1000m, memory: 1Gi}
     services:
       - docker
     commands: |
@@ -51,10 +51,9 @@ steps:
       # Enough rungs to show whether scaling is still linear. The wider ladder
       # belongs to the scheduled run, which has the time budget for it.
       export RESYNC_SCALES=100,1000
-      # The machine is deleted the moment this step ends, so tearing the last
-      # scale's ports back down first costs minutes to no end. See the test's
-      # docstring — only safe because the machine is disposable.
-      export RESYNC_SKIP_FINAL_CLEANUP=true
+      # RESYNC_SKIP_FINAL_CLEANUP does not belong here: Tempest runs against
+      # this same DevStack afterwards, and the fake agents the benchmark leaves
+      # behind break instance networking for it.
       # Taken from the secret alongside the token, so rotating the credential to
       # a different account does not silently stop publishing.
       export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200

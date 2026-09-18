@@ -11,7 +11,7 @@ steps:
   # container inherits only what is spliced in explicitly.
   - name: envoy-ratelimit-ci
     depends: [prerequisites]
-    requests: {cpu: 2250m, memory: 2Gi}
+    requests: {cpu: 2000m, memory: 1.25Gi}
     services:
       - docker
     commands: |

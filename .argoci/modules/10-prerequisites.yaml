@@ -13,7 +13,7 @@ steps:
   # gate of its own, so it survives to sequence them however few of them ran.
   - name: prerequisites
     jobSize: small
-    requests: {cpu: 300m, memory: 640Mi}
+    requests: {cpu: 2250m, memory: 0.5Gi}
     workspaceVolumes: none
     image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
     depends:
@@ -30,7 +30,7 @@ steps:
 
     jobSize: small
 
-    requests: {cpu: 1750m, memory: 1Gi}
+    requests: {cpu: 1500m, memory: 0.5Gi}
     services: [docker]
     changes:
       in:
@@ -46,7 +46,7 @@ steps:
   # `fix-changed` splices its own flags into the nested `docker run`, so this
   # block cannot yet drop the daemon the way the two above it do.
   - name: check-go
-    requests: {cpu: 5750m, memory: 10.5Gi}
+    requests: {cpu: 6250m, memory: 7.5Gi}
     services: [docker]
     changes:
       in:
@@ -77,7 +77,7 @@ steps:
 
     jobSize: small
 
-    requests: {cpu: 2250m, memory: 1Gi}
+    requests: {cpu: 2000m, memory: 0.75Gi}
     services: [docker]
     changes:
       in:
@@ -94,7 +94,7 @@ steps:
   # Grep-speed checks, so one step rather than three.
   - name: check-language-dockerfiles
     jobSize: small
-    requests: {cpu: 750m, memory: 768Mi}
+    requests: {cpu: 2250m, memory: 0.5Gi}
     image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
     workspaceVolumes: none
     changes:
@@ -114,7 +114,7 @@ steps:
       make check-mockery-config
 
   - name: check-protobufs
-    requests: {cpu: 1500m, memory: 1.5Gi}
+    requests: {cpu: 1500m, memory: 1Gi}
     services: [docker]
     changes:
       in:
@@ -131,7 +131,7 @@ steps:
       make check-dirty
 
   - name: check-manifests
-    requests: {cpu: 3250m, memory: 3.5Gi}
+    requests: {cpu: 2750m, memory: 2.5Gi}
     services: [docker]
     changes:
       in:
@@ -173,7 +173,7 @@ steps:
   - name: build-calico-image
     services: [docker]
     timeout: 1h
-    requests: {cpu: 5500m, memory: 8.5Gi}
+    requests: {cpu: 5500m, memory: 5.5Gi}
     changes:
       dependsOn: [cmd, dependents-of-build-calico-image]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
@@ -193,7 +193,7 @@ steps:
   - name: build-nft-rpms
     services: [docker]
     timeout: 1h
-    requests: {cpu: 3000m, memory: 1.5Gi}
+    requests: {cpu: 2000m, memory: 1Gi}
     changes:
       dependsOn: [dependents-of-build-nft-rpms]
       in:
@@ -208,12 +208,38 @@ steps:
       cd "${CI_HOME}/${CI_GIT_DIR}"
       artifact push job logs --destination logs || true
 
+  # A build-time prerequisite the next run pulls rather than a release artifact,
+  # so it publishes on merge instead of waiting for a release. It reads the
+  # tarball the build cached, which only exists inside this workflow — hence a
+  # step here rather than a workflow of its own. The tag is a hash of the recipe,
+  # so an unchanged one is already published and the push is a no-op.
+  - name: push-nft-rpms
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 1500m, memory: 1.5Gi}
+    depends: [build-nft-rpms]
+    when: GIT_REF_TYPE == 'MERGE'
+    changes:
+      dependsOn: [dependents-of-build-nft-rpms]
+      in:
+        - '^hack/rpms/nftables/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      export DOCKER_USER="$DOCKERHUB_USERNAME"
+      export DOCKER_TOKEN="$DOCKERHUB_PASSWORD"
+      mkdir -p logs
+      export BUILD_LOG="logs/push-nft-rpms-amd64.log"
+      .argoci/scripts/push-nft-rpms.sh amd64
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job logs --destination logs || true
+
   # Still the DaemonSet image OSS users install, so it ships alongside the
   # combined one.
   - name: build-node-image
     services: [docker]
     timeout: 1h
-    requests: {cpu: 4000m, memory: 7.5Gi}
+    requests: {cpu: 4000m, memory: 5Gi}
     depends: [build-nft-rpms]
     changes:
       dependsOn: [node, dependents-of-build-node-image]
@@ -236,7 +262,7 @@ steps:
   - name: build-whisker-image
     services: [docker]
     timeout: 1h
-    requests: {cpu: 2500m, memory: 2.5Gi}
+    requests: {cpu: 2000m, memory: 1.75Gi}
     changes:
       dependsOn: [dependents-of-build-whisker-image]
       in:
@@ -255,7 +281,7 @@ steps:
   - name: build-operator-image
     services: [docker]
     timeout: 1h
-    requests: {cpu: 3500m, memory: 7.5Gi}
+    requests: {cpu: 2750m, memory: 5.25Gi}
     changes:
       dependsOn: [operator, dependents-of-build-operator-image]
       in:
@@ -274,7 +300,7 @@ steps:
   - name: build-third-party-images
     services: [docker]
     timeout: 1h
-    requests: {cpu: 4000m, memory: 5Gi}
+    requests: {cpu: 3500m, memory: 3.5Gi}
     changes:
       dependsOn: [third_party, dependents-of-build-third-party-images]
       in:

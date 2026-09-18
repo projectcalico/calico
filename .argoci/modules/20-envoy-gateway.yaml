@@ -11,7 +11,7 @@ steps:
   # container inherits only what is spliced in explicitly.
   - name: envoy-gateway-ci
     depends: [prerequisites]
-    requests: {cpu: 3750m, memory: 5Gi}
+    requests: {cpu: 3750m, memory: 3.5Gi}
     services:
       - docker
     commands: |
