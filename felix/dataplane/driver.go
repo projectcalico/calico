@@ -141,6 +141,22 @@ func StartDataplaneDriver(
 			}
 		}
 
+		// In BPF mode, host traffic to services is fwmarked in mangle OUTPUT
+		// and steered to the bpfin.cali veth by a routing rule (the
+		// host-networked NAT, aka CTLB workaround), so allocate a mark bit
+		// for it.
+		var markBPFHostNAT uint32
+		if configParams.BPFEnabled {
+			markBPFHostNAT, _ = markBitsManager.NextSingleBitMark()
+			if markBPFHostNAT == 0 {
+				log.WithFields(
+					log.Fields{
+						"Name":     "felix-iptables",
+						"MarkMask": allowedMarkBits,
+					}).Panic("Failed to allocate a mark bit for BPF host-networked NAT, not enough mark bits available.")
+			}
+		}
+
 		if markAccept == 0 || markScratch0 == 0 || markPass == 0 || markScratch1 == 0 {
 			log.WithFields(
 				log.Fields{
@@ -226,6 +242,23 @@ func StartDataplaneDriver(
 			wireguardTableIndexV6 = idx
 		} else {
 			log.WithError(err).Warning("Unable to assign table index for IPv6 wireguard")
+		}
+
+		// Always allocate the BPF host-networked NAT (CTLB workaround) steering
+		// table indices (even outside BPF mode) so that entries can be tidied up
+		// if BPF mode is disabled after being previously enabled.
+		var bpfHostNATTableIndexV4, bpfHostNATTableIndexV6 int
+		if idx, err := routeTableIndexAllocator.GrabIndex(); err == nil {
+			log.Debugf("Assigned IPv4 BPF host-networked NAT table index: %d", idx)
+			bpfHostNATTableIndexV4 = idx
+		} else {
+			log.WithError(err).Warning("Unable to assign table index for IPv4 BPF host-networked NAT")
+		}
+		if idx, err := routeTableIndexAllocator.GrabIndex(); err == nil {
+			log.Debugf("Assigned IPv6 BPF host-networked NAT table index: %d", idx)
+			bpfHostNATTableIndexV6 = idx
+		} else {
+			log.WithError(err).Warning("Unable to assign table index for IPv6 BPF host-networked NAT")
 		}
 
 		// Extract node labels from the hosts such they could be referenced later
@@ -436,6 +469,9 @@ func StartDataplaneDriver(
 			BPFConnTimeLBEnabled:               configParams.BPFConnectTimeLoadBalancingEnabled,
 			BPFConnTimeLB:                      configParams.BPFConnectTimeLoadBalancing,
 			BPFHostNetworkedNAT:                configParams.BPFHostNetworkedNATWithoutCTLB,
+			BPFHostNATMark:                     markBPFHostNAT,
+			BPFHostNATTableIndexV4:             bpfHostNATTableIndexV4,
+			BPFHostNATTableIndexV6:             bpfHostNATTableIndexV6,
 			BPFKubeProxyIptablesCleanupEnabled: configParams.BPFKubeProxyIptablesCleanupEnabled,
 			BPFLogLevel:                        configParams.BPFLogLevel,
 			BPFConntrackLogLevel:               configParams.BPFConntrackLogLevel,
