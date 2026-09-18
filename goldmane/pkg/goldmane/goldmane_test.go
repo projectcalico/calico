@@ -1554,6 +1554,15 @@ func TestStatistics(t *testing.T) {
 		for i := range numFlows {
 			fl := testutils.NewRandomFlow(roller.clock.Now().Unix())
 
+			// The reporter decides whether a flow counts as ingress or egress, and
+			// grouping by policy rule splits the well-known hit across the two. Left
+			// random, every flow can land on one side and that rule appears once.
+			if i%2 == 0 {
+				fl.Key.Reporter = proto.Reporter_Src
+			} else {
+				fl.Key.Reporter = proto.Reporter_Dst
+			}
+
 			// If a mutator was given, apply it to the flow.
 			for _, mutator := range mutators {
 				mutator(fl, i)
@@ -1570,7 +1579,7 @@ func TestStatistics(t *testing.T) {
 		// Wait for all flows to be received.
 		Eventually(func() bool {
 			results, _ := gm.List(&proto.FlowListRequest{})
-			return len(results.Flows) == 10
+			return len(results.Flows) == numFlows
 		}, waitTimeout, retryTime).Should(BeTrue(), "Didn't receive all flows")
 		return flows
 	}
