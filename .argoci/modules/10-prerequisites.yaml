@@ -13,7 +13,7 @@ steps:
   # gate of its own, so it survives to sequence them however few of them ran.
   - name: prerequisites
     jobSize: small
-    requests: {cpu: 2250m, memory: 0.5Gi}
+    requests: {cpu: 2250m, memory: 548Mi}
     workspaceVolumes: none
     image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
     depends:
@@ -30,7 +30,7 @@ steps:
 
     jobSize: small
 
-    requests: {cpu: 1500m, memory: 0.5Gi}
+    requests: {cpu: 1500m, memory: 548Mi}
     services: [docker]
     changes:
       in:
@@ -94,7 +94,7 @@ steps:
   # Grep-speed checks, so one step rather than three.
   - name: check-language-dockerfiles
     jobSize: small
-    requests: {cpu: 2250m, memory: 0.5Gi}
+    requests: {cpu: 2250m, memory: 548Mi}
     image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
     workspaceVolumes: none
     changes:

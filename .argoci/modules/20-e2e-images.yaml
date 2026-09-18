@@ -12,7 +12,7 @@ steps:
   - name: e2e-images-rapidclient-ci
     depends: [prerequisites]
     jobSize: small
-    requests: {cpu: 2750m, memory: 0.5Gi}
+    requests: {cpu: 2750m, memory: 548Mi}
     # The image ships gotestsum under /go/bin, which the default emptyDir over
     # /go hides — as `command not found`, minutes in.
     workspaceVolumes: none
