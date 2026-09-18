@@ -1224,7 +1224,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 	}
 
-	if ((CALI_F_INGRESS && CALI_F_TUNNEL) || !skb_seen(ctx->skb) ||
+	if ((CALI_F_INGRESS && IFACE_ENCAPS) || !skb_seen(ctx->skb) ||
 			(result.flags & CALI_CT_FLAG_NAT_OUT)) {
 		/* Account for the src->dst leg if we haven't seen the packet yet.
 		 * Since when the traffic is tunneled, BPF program on the host

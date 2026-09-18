@@ -149,7 +149,6 @@ const (
 	EpTypeL3Device EndpointType = "l3dev"
 	EpTypeNAT      EndpointType = "nat"
 	EpTypeLO       EndpointType = "lo"
-	EpTypeVXLAN    EndpointType = "vxlan"
 )
 
 func SectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
@@ -189,8 +188,6 @@ func ProgFilename(ipVer int, epType EndpointType, toOrFrom ToOrFromEp, epToHostD
 		epTypeShort = "nat"
 	case EpTypeLO:
 		epTypeShort = "lo"
-	case EpTypeVXLAN:
-		epTypeShort = "vxlan"
 	}
 	var versionPart string
 	if ipVer == 6 {
