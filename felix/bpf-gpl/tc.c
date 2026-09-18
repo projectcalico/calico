@@ -1462,9 +1462,10 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 			!(ctx->state->ct_result.flags & CALI_CT_FLAG_CONNLIMIT_INGRESS)) {
 		/* First SYN OR retransmission of a previously-rejected SYN. */
 		struct calico_ct_key ck;
+		bool rst_src_lt_dest = src_lt_dest(&ctx->state->ip_src, &ctx->state->ip_dst,
+						ctx->state->sport, ctx->state->dport);
 		fill_ct_key(&ck,
-				src_lt_dest(&ctx->state->ip_src, &ctx->state->ip_dst,
-						ctx->state->sport, ctx->state->dport),
+				rst_src_lt_dest,
 				ctx->state->ip_proto,
 				&ctx->state->ip_src, &ctx->state->ip_dst,
 				ctx->state->sport, ctx->state->dport);
@@ -1474,8 +1475,14 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 			CALI_DEBUG("Ingress connection limit exceeded, rejecting with TCP RST");
 			if (cv) {
 				ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED);
+				/* Under netkit the RST can only leave via the pod's own
+				 * device, returning through from-wep. Approve that leg
+				 * so conntrack admits it there. */
+				ct_leg_set_flags(rst_src_lt_dest ? &cv->b_to_a : &cv->a_to_b,
+						CALI_CT_LEG_APPROVED);
 			}
 			ctx->state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
+			ctx->state->flags |= CALI_ST_RST_NO_CT;
 			CALI_JUMP_TO(ctx, PROG_INDEX_TCP_RST);
 			goto deny;
 		}
@@ -1580,6 +1587,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 		if (qos_connlimit_check_and_increment(ctx) < 0) {
 			CALI_DEBUG("Egress connection limit exceeded, rejecting with TCP RST");
 			ctx->state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
+			ctx->state->flags |= CALI_ST_RST_NO_CT;
 			CALI_JUMP_TO(ctx, PROG_INDEX_TCP_RST);
 			goto deny;
 		}
@@ -2134,6 +2142,11 @@ int calico_tc_skb_send_tcp_rst(struct __sk_buff *skb)
 	if (ret) {
 		ctx->state->fwd.res = TC_ACT_SHOT;
 	} else {
+		if (ctx->state->flags & CALI_ST_RST_NO_CT) {
+			/* Without an entry the destination would drop this as a
+			 * mid-flow miss. */
+			ctx->state->fwd.mark = CALI_SKB_MARK_BYPASS_FWD;
+		}
 		fwd_fib_set(&ctx->state->fwd, true);
 	}
 
@@ -2144,6 +2157,81 @@ int calico_tc_skb_send_tcp_rst(struct __sk_buff *skb)
 	}
 
 	tc_state_fill_from_iphdr(ctx);
+
+#if CALI_F_TO_WEP
+	/* CALI_FIB_ENABLED is 0 here, so forward_or_drop() would transmit this
+	 * reply into the pod. Route it ourselves. */
+	if (!ret && (ctx->state->flags & CALI_ST_RST_NO_CT)) {
+		*fib_params(ctx) = (struct bpf_fib_lookup) {
+#ifdef IPVER6
+			.family = 10, /* AF_INET6 */
+#else
+			.family = 2, /* AF_INET */
+#endif
+			.tot_len = 0,
+			.ifindex = ctx->skb->ifindex,
+			.l4_protocol = IPPROTO_TCP,
+		};
+#ifdef IPVER6
+		ipv6_addr_t_to_be32_4_ip(fib_params(ctx)->ipv6_src, &ctx->state->ip_src);
+		ipv6_addr_t_to_be32_4_ip(fib_params(ctx)->ipv6_dst, &ctx->state->ip_dst);
+#else
+		fib_params(ctx)->ipv4_src = ctx->state->ip_src;
+		fib_params(ctx)->ipv4_dst = ctx->state->ip_dst;
+#endif
+		/* An input lookup, like the egress path: OUTPUT would constrain
+		 * the route to the pod's own veth. */
+		int frc = bpf_fib_lookup(ctx->skb, fib_params(ctx),
+					 sizeof(struct bpf_fib_lookup), BPF_FIB_LOOKUP_SKIP_NEIGH);
+		if (frc != 0) {
+			CALI_DEBUG("RST: no route to " IP_FMT " (%d), dropping",
+					debug_ip(ctx->state->ip_dst), frc);
+			return TC_ACT_SHOT;
+		}
+
+		struct bpf_redir_neigh nh_params = {};
+
+		nh_params.nh_family = fib_params(ctx)->family;
+#ifdef IPVER6
+		__builtin_memcpy(nh_params.ipv6_nh, fib_params(ctx)->ipv6_dst,
+				 sizeof(nh_params.ipv6_nh));
+#else
+		nh_params.ipv4_nh = fib_params(ctx)->ipv4_dst;
+#endif
+		/* The destination's program has no CT entry for this reply. */
+		__u32 mark = CALI_SKB_MARK_BYPASS_FWD;
+
+		/* A bypassed packet reaches the tunnel device unparsed, so set its
+		 * key here. */
+		struct cali_rt *dest_rt = cali_rt_lookup(&ctx->state->ip_dst);
+		if (dest_rt && cali_rt_is_tunneled(dest_rt) && !cali_rt_is_same_subnet(dest_rt)) {
+			struct bpf_tunnel_key key = {
+				.tunnel_id = OVERLAY_TUNNEL_ID,
+			};
+			__u64 tflags = 0;
+			__u32 tsize = 0;
+#ifdef IPVER6
+			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
+			tflags |= BPF_F_TUNINFO_IPV6;
+			tsize = offsetof(struct bpf_tunnel_key, local_ipv6);
+#else
+			key.remote_ipv4 = bpf_htonl(dest_rt->next_hop);
+			tflags |= BPF_F_ZERO_CSUM_TX;
+			tsize = offsetof(struct bpf_tunnel_key, local_ipv4);
+#endif
+			int terr = bpf_skb_set_tunnel_key(ctx->skb, &key, tsize, tflags);
+			CALI_DEBUG("RST: tunnel key %d nh " IP_FMT, terr, &dest_rt->next_hop);
+			mark |= CALI_SKB_MARK_TUNNEL_KEY_SET;
+		}
+
+		skb_set_mark(ctx->skb, mark);
+
+		CALI_DEBUG("RST: redirecting to iface %d", fib_params(ctx)->ifindex);
+		return bpf_redirect_neigh(fib_params(ctx)->ifindex, &nh_params,
+					  sizeof(nh_params), 0);
+	}
+#endif
+
 	return forward_or_drop(ctx);
 }
 
