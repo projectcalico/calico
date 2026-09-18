@@ -546,6 +546,9 @@ var _ = DescribeTable("Config parsing",
 	Entry("BPFForceTrackPacketsFromIfaces Single invalid entry", "BPFForceTrackPacketsFromIfaces", "cali@123", []string{"docker+"}),
 	Entry("BPFForceTrackPacketsFromIfaces Multiple invalid entries", "BPFForceTrackPacketsFromIfaces", "cali-123,cali@123", []string{"docker+"}),
 
+	Entry("LogConnectionTransitionsPrefix valid", "LogConnectionTransitionsPrefix", "acme-%n", "acme-%n"),
+	Entry("LogConnectionTransitionsPrefix with quote falls back to default", "LogConnectionTransitionsPrefix", `ab"cd`, "calico-response"),
+
 	Entry("RequireMTUFile valid", "RequireMTUFile", "true", true),
 	Entry("RequireMTUFile valid", "RequireMTUFile", "y", true),
 	Entry("RequireMTUFile valid", "RequireMTUFile", "True", true),
