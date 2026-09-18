@@ -68,6 +68,9 @@ steps:
     commands: |
       sudo apt-get update -y && sudo apt-get install -y make
       sudo modprobe sctp
+      # The Makefiles call the kubectl they download by full path; the deploy
+      # script and the tests' connection tester call it by name.
+      export PATH="$(pwd)/hack/test/kind:${PATH}"
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       .argoci/scripts/load-cached-images calico node whisker

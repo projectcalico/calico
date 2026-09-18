@@ -316,3 +316,37 @@ func TestInverseFlagName(t *testing.T) {
 		})
 	}
 }
+
+// A subcommand that reads no CI metadata must run under CI without it. The CI
+// runner sets CI for every job, so a demand made at flag-parse time reaches
+// commands that have no use for the values.
+func TestCIWithoutJobIdentityIsNotAnError(t *testing.T) {
+	assertRun(t, ciFlags, []string{"--ci"}, "")
+}
+
+// The one caller that builds a job link drops it rather than failing, so an
+// announcement still goes out from a runner this tool cannot identify.
+func TestCIJobURLEmptyWithoutJobIdentity(t *testing.T) {
+	var got string
+	cmd := &cli.Command{
+		Name:  "test",
+		Flags: ciFlags,
+		Action: func(_ context.Context, c *cli.Command) error {
+			got = ciJobURL(c)
+			return nil
+		},
+	}
+	if err := cmd.Run(context.Background(), []string{"test", "--ci"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "" {
+		t.Errorf("ciJobURL() = %q, want empty when the job is unidentified", got)
+	}
+
+	if err := cmd.Run(context.Background(), []string{"test", "--ci", "--ci-url", "https://ci.example", "--ci-job-id", "42"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "https://ci.example/jobs/42"; got != want {
+		t.Errorf("ciJobURL() = %q, want %q", got, want)
+	}
+}

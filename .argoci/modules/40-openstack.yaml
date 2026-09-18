@@ -48,6 +48,13 @@ steps:
       sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
       # A single-node setup does not need BGP, and ours logs errors without it.
       export CALICO_BGP_MODE=none
+      # Enough rungs to show whether scaling is still linear. The wider ladder
+      # belongs to the scheduled run, which has the time budget for it.
+      export RESYNC_SCALES=100,1000
+      # The machine is deleted the moment this step ends, so tearing the last
+      # scale's ports back down first costs minutes to no end. See the test's
+      # docstring — only safe because the machine is disposable.
+      export RESYNC_SKIP_FINAL_CLEANUP=true
       # Taken from the secret alongside the token, so rotating the credential to
       # a different account does not silently stop publishing.
       export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200

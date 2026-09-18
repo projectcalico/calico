@@ -425,12 +425,15 @@ var validateHashreleasePublishFlags = func(c *cli.Command) error {
 	return nil
 }
 
-// ciJobURL returns the URL to the CI job if the command is running on CI.
+// ciJobURL returns the URL to the CI job if the command is running on CI. An
+// announcement is worth more without a link than not at all, so an unidentified
+// job only loses the link.
 func ciJobURL(c *cli.Command) string {
-	if !c.Bool(ciFlag.Name) {
+	orgURL, jobID := c.String(ciBaseURLFlag.Name), c.String(ciJobIDFlag.Name)
+	if !c.Bool(ciFlag.Name) || orgURL == "" || jobID == "" {
 		return ""
 	}
-	return fmt.Sprintf("%s/jobs/%s", c.String(ciBaseURLFlag.Name), c.String(ciJobIDFlag.Name))
+	return fmt.Sprintf("%s/jobs/%s", orgURL, jobID)
 }
 
 func hashreleaseServerConfig(c *cli.Command) *hashreleaseserver.Config {
@@ -458,6 +461,9 @@ func validateCIBuildRequirements(c *cli.Command, repoRootDir string) error {
 	orgURL := c.String(ciBaseURLFlag.Name)
 	token := c.String(ciTokenFlag.Name)
 	pipelineID := c.String(ciPipelineIDFlag.Name)
+	if orgURL == "" || pipelineID == "" {
+		return fmt.Errorf("checking image promotions requires --%s and --%s", ciBaseURLFlag.Name, ciPipelineIDFlag.Name)
+	}
 	promotionsDone, err := ci.EvaluateImagePromotions(repoRootDir, orgURL, pipelineID, token)
 	if err != nil {
 		return err
