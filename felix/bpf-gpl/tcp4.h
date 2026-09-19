@@ -49,7 +49,7 @@ static CALI_BPF_INLINE int tcp_v4_rst(struct cali_tc_ctx *ctx) {
 	ip_hdr(ctx)->saddr = ip_orig.daddr;
 	ip_hdr(ctx)->daddr = ip_orig.saddr;
 	ip_hdr(ctx)->check = 0;
-	ip_hdr(ctx)->tot_len = bpf_htons(len - (CALI_F_L3_DEV ? 0 : ETH_SIZE));
+	ip_hdr(ctx)->tot_len = bpf_htons(len - (CALI_F_L3 ? 0 : ETH_SIZE));
 	ctx->ipheader_len = 20;
 
 	struct tcphdr *th = ((void *)ip_hdr(ctx)) + IP_SIZE;
