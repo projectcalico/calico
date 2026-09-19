@@ -85,8 +85,8 @@ golang.org/x/text v0.41.0
 golang.org/x/time v0.15.0
 google.golang.org/api v0.236.0
 google.golang.org/genproto v0.0.0-20250603155806-513f23925822
-google.golang.org/genproto/googleapis/api v0.0.0-20260414002931-afd174a4e478
-google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478
+google.golang.org/genproto/googleapis/api v0.0.0-20260720211330-0afa2a65878a
+google.golang.org/genproto/googleapis/rpc v0.0.0-20260720211330-0afa2a65878a
 google.golang.org/grpc v1.82.1
 google.golang.org/grpc/stats/opentelemetry v0.0.0-20240907200651-3ffb98b2c93a
 google.golang.org/protobuf v1.36.11
