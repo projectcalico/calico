@@ -73,7 +73,7 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 		logger.Debug("Watch is set, streaming flows...")
 		// TODO figure out how we're going to handle errors.
 
-		// Streaming is optional. Backends that cannot stream (e.g. Linseed)
+		// Streaming is optional. Backends that cannot stream
 		// implement only FlowsBackend; reject the watch request with a clear
 		// error instead of a generic 500.
 		streamer, ok := hdlr.backend.(whiskerv1.StreamingFlowsBackend)
