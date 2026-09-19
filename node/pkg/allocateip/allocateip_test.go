@@ -1728,8 +1728,7 @@ var _ = Describe("reconciler run loop", func() {
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
 		done = make(chan error, 1)
-		// Unbuffered, as in production: OnUpdates drops triggers sent mid-reconcile.
-		r = reconciler{nodename: "node1", ch: make(chan struct{})}
+		r = *newReconciler("node1", nil, nil, nil)
 	})
 
 	AfterEach(func() { cancel() })
@@ -1747,8 +1746,7 @@ var _ = Describe("reconciler run loop", func() {
 		Eventually(done, "5s").Should(Receive(BeNil()))
 	})
 
-	// OnUpdates drops a trigger that lands mid-reconcile, so the loop has to
-	// re-check on its own or it waits for an update that never comes.
+	// A missing node must be retried even if no further update arrives.
 	It("retries a missing node without needing another trigger", func() {
 		c := &countingNotFoundClient{}
 		r.client = c
