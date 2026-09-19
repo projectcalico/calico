@@ -273,10 +273,10 @@ type FlowResponse struct {
 	Service *ServiceRef `json:"service,omitempty"`
 
 	// Endpoint types for source and destination, named as Goldmane's EndpointType
-	// enum does: WorkloadEndpoint, HostEndpoint, NetworkSet, Network. Empty when
-	// the upstream did not report one.
-	SourceType string `json:"-"`
-	DestType   string `json:"-"`
+	// enum does: WorkloadEndpoint, HostEndpoint, NetworkSet, Network. Omitted
+	// when the upstream did not report one.
+	SourceType string `json:"source_type,omitempty"`
+	DestType   string `json:"dest_type,omitempty"`
 }
 
 type ServiceRef struct {
