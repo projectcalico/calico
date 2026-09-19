@@ -75,7 +75,7 @@ type mockDataplane struct {
 	progs                map[string]int
 	numAttaches          map[string]int
 	policy               map[string]polprog.Rules
-	routes               map[ip.CIDR]struct{}
+	serviceIPs           map[ip.CIDR]struct{}
 	netlinkShim          netlinkshim.Interface
 	natDevicesConfigured bool
 
@@ -105,7 +105,7 @@ func newMockDataplane() *mockDataplane {
 		progs:       map[string]int{},
 		numAttaches: map[string]int{},
 		policy:      map[string]polprog.Rules{},
-		routes:      map[ip.CIDR]struct{}{},
+		serviceIPs:  map[ip.CIDR]struct{}{},
 		netlinkShim: netlinkShim,
 		netkitPins:  map[string]bool{},
 	}
@@ -347,18 +347,18 @@ func (m *mockDataplane) getErangeCount() int {
 	return m.erangeCount
 }
 
-func (m *mockDataplane) setRoute(cidr ip.CIDR) {
+func (m *mockDataplane) addServiceIP(cidr ip.CIDR) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	m.routes[cidr] = struct{}{}
+	m.serviceIPs[cidr] = struct{}{}
 }
 
-func (m *mockDataplane) delRoute(cidr ip.CIDR) {
+func (m *mockDataplane) delServiceIP(cidr ip.CIDR) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	delete(m.routes, cidr)
+	delete(m.serviceIPs, cidr)
 }
 
 func (m *mockDataplane) ruleMatchID(dir rules.RuleDir, action string, owner rules.RuleOwnerType, idx int, id types.IDMaker) polprog.RuleMatchID {
@@ -594,6 +594,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			logrusr.NewSummarizer("test"),
 			&routetable.DummyTable{}, // FIXME test the routes.
 			&routetable.DummyTable{}, // FIXME test the routes.
+			&routetable.DummyTable{}, // Host-networked NAT steering table.
+			&routetable.DummyTable{}, // Host-networked NAT steering table.
+			nil,                      // Host-networked NAT service ipsets; tested via the dp indirection.
 			lookupsCache,
 			nil,
 			environment.NewFeatureDetector(nil).GetFeatures(),
@@ -2082,7 +2085,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		JustBeforeEach(func() {
 			newBpfEpMgr(true)
 		})
-		It("should program the routes reflecting service state", func() {
+		It("should program the service ipset members reflecting service state", func() {
 			bpfEpMgr.OnUpdate(&proto.ServiceUpdate{
 				Name:       "service",
 				Namespace:  "test",
@@ -2090,9 +2093,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(dp.routes).To(HaveLen(2))
-			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("1.2.3.4")))
-			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("1::2")))
+			Expect(dp.serviceIPs).To(HaveLen(2))
+			Expect(dp.serviceIPs).To(HaveKey(ip.MustParseCIDROrIP("1.2.3.4")))
+			Expect(dp.serviceIPs).To(HaveKey(ip.MustParseCIDROrIP("1::2")))
 
 			bpfEpMgr.OnUpdate(&proto.ServiceUpdate{
 				Name:           "service",
@@ -2102,9 +2105,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(dp.routes).To(HaveLen(2))
-			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("1.2.3.4")))
-			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("5.6.7.8")))
+			Expect(dp.serviceIPs).To(HaveLen(2))
+			Expect(dp.serviceIPs).To(HaveKey(ip.MustParseCIDROrIP("1.2.3.4")))
+			Expect(dp.serviceIPs).To(HaveKey(ip.MustParseCIDROrIP("5.6.7.8")))
 
 			bpfEpMgr.OnUpdate(&proto.ServiceUpdate{
 				Name:           "service",
@@ -2115,9 +2118,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(dp.routes).To(HaveLen(2))
-			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("1.2.3.4")))
-			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("5.6.7.8")))
+			Expect(dp.serviceIPs).To(HaveLen(2))
+			Expect(dp.serviceIPs).To(HaveKey(ip.MustParseCIDROrIP("1.2.3.4")))
+			Expect(dp.serviceIPs).To(HaveKey(ip.MustParseCIDROrIP("5.6.7.8")))
 
 			bpfEpMgr.OnUpdate(&proto.ServiceUpdate{
 				Name:       "service",
@@ -2126,8 +2129,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(dp.routes).To(HaveLen(1))
-			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("1.2.3.4")))
+			Expect(dp.serviceIPs).To(HaveLen(1))
+			Expect(dp.serviceIPs).To(HaveKey(ip.MustParseCIDROrIP("1.2.3.4")))
 
 			bpfEpMgr.OnUpdate(&proto.ServiceRemove{
 				Name:      "service",
@@ -2135,7 +2138,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(dp.routes).To(HaveLen(0))
+			Expect(dp.serviceIPs).To(HaveLen(0))
 
 			bpfEpMgr.OnUpdate(&proto.ServiceUpdate{
 				Name:           "service",
@@ -2145,9 +2148,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(dp.routes).To(HaveLen(2))
-			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("1.2.3.4")))
-			Expect(dp.routes).To(HaveKey(ip.MustParseCIDROrIP("5.6.7.8")))
+			Expect(dp.serviceIPs).To(HaveLen(2))
+			Expect(dp.serviceIPs).To(HaveKey(ip.MustParseCIDROrIP("1.2.3.4")))
+			Expect(dp.serviceIPs).To(HaveKey(ip.MustParseCIDROrIP("5.6.7.8")))
 
 			bpfEpMgr.OnUpdate(&proto.ServiceRemove{
 				Name:      "service",
@@ -2155,7 +2158,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(dp.routes).To(HaveLen(0))
+			Expect(dp.serviceIPs).To(HaveLen(0))
 		})
 	})
 

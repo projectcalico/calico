@@ -57,6 +57,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -876,8 +877,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Expect(err).NotTo(HaveOccurred())
 
 						Eventually(func() bool {
-							return checkServiceRoute(tc.Felixes[0], udpsvc.Spec.ClusterIP)
+							return checkHostNATServiceIP(tc.Felixes[0], udpsvc.Spec.ClusterIP)
 						}, 10*time.Second, 300*time.Millisecond).Should(BeTrue(), "Failed to sync with udp service")
+
+						Eventually(func() bool {
+							return checkHostNATSteeringRoute(tc.Felixes[0], testOpts.ipv6)
+						}, 10*time.Second, 300*time.Millisecond).Should(BeTrue(),
+							"Host-networked NAT steering rule/route not programmed")
 
 						clusterIP2 := "10.101.0.202"
 						if testOpts.ipv6 {
@@ -906,7 +912,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Expect(err).NotTo(HaveOccurred())
 
 						Consistently(func() bool {
-							return checkServiceRoute(tc.Felixes[0], tcpsvc.Spec.ClusterIP)
+							return checkHostNATServiceIP(tc.Felixes[0], tcpsvc.Spec.ClusterIP)
 						}, 1*time.Second, 300*time.Millisecond).Should(BeFalse(), "Unexpected TCP service")
 
 						clusterIP3 := "10.101.0.203"
@@ -942,10 +948,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Expect(err).NotTo(HaveOccurred())
 
 						Eventually(func() bool {
-							return checkServiceRoute(tc.Felixes[0], tcpudpsvc.Spec.ClusterIP)
+							return checkHostNATServiceIP(tc.Felixes[0], tcpudpsvc.Spec.ClusterIP)
 						}, 10*time.Second, 300*time.Millisecond).Should(BeTrue(), "Failed to sync with tcpudp service")
 
-						Expect(checkServiceRoute(tc.Felixes[0], tcpsvc.Spec.ClusterIP)).To(BeFalse())
+						Expect(checkHostNATServiceIP(tc.Felixes[0], tcpsvc.Spec.ClusterIP)).To(BeFalse())
 					})
 				})
 			}
@@ -4313,7 +4319,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											f := felix
 											idx := i
 											Eventually(func() bool {
-												return checkServiceRoute(f, testSvc.Spec.ClusterIP)
+												return checkHostNATServiceIP(f, testSvc.Spec.ClusterIP)
 											}, 10*time.Second, 300*time.Millisecond).Should(BeTrue(),
 												fmt.Sprintf("felix %d failed to sync with service", idx))
 
@@ -6849,23 +6855,89 @@ func setRPF(felixes []*infrastructure.Felix, tunnel string, all, main int) {
 	wg.Wait()
 }
 
-func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
+// checkHostNATServiceIP returns whether the given service IP is a member of
+// the host-networked NAT steering ipset.  Host traffic to members is
+// fwmarked in mangle OUTPUT and steered to bpfin.cali by a routing rule.
+func checkHostNATServiceIP(felix *infrastructure.Felix, ipStr string) bool {
+	ipVersion := uint8(4)
+	if strings.Contains(ipStr, ":") {
+		ipVersion = 6
+	}
+	setName := utils.IPSetName(rules.IPSetIDBPFHostNATServices, ipVersion)
+
 	var (
 		out string
 		err error
 	)
-
-	if strings.Contains(ip, ":") && felix.TopologyOptions.EnableIPv6 {
-		out, err = felix.ExecOutput("ip", "-6", "route")
+	if NFTMode() {
+		family := "ip"
+		if ipVersion == 6 {
+			family = "ip6"
+		}
+		out, err = felix.ExecOutput("nft", "list", "set", family, "calico", setName)
 	} else {
-		out, err = felix.ExecOutput("ip", "route")
+		out, err = felix.ExecOutput("ipset", "list", setName)
 	}
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		// The set may not have been created yet.
+		return false
+	}
 
-	lines := strings.Split(out, "\n")
-	rtRE := regexp.MustCompile(ip + " .* dev bpfin.cali")
+	memberRE := regexp.MustCompile(fmt.Sprintf("(^|[ \t,])%s(/[0-9]+)?([ \t,;]|$)", regexp.QuoteMeta(ipStr)))
+	return slices.ContainsFunc(strings.Split(out, "\n"), memberRE.MatchString)
+}
 
-	return slices.ContainsFunc(lines, rtRE.MatchString)
+// ipSetNamesExceptHostNAT returns a function that lists the felix container's
+// Linux IP set names, filtering out the host-networked NAT service steering
+// sets, which are expected to always exist in BPF mode.
+func ipSetNamesExceptHostNAT(felix *infrastructure.Felix) func() []string {
+	hostNATSets := []string{
+		utils.IPSetName(rules.IPSetIDBPFHostNATServices, 4),
+		utils.IPSetName(rules.IPSetIDBPFHostNATServices, 6),
+	}
+	return func() []string {
+		var names []string
+		for _, name := range felix.IPSetNames() {
+			if !slices.Contains(hostNATSets, name) {
+				names = append(names, name)
+			}
+		}
+		return names
+	}
+}
+
+// checkHostNATSteeringRoute returns whether the host-networked NAT steering
+// plumbing is in place: the fwmark routing rule and, in the table it points
+// at, the default route to bpfin.cali.
+func checkHostNATSteeringRoute(felix *infrastructure.Felix, ipv6 bool) bool {
+	ipArgs := []string{"ip"}
+	gw := "169.254.1.1"
+	if ipv6 {
+		ipArgs = append(ipArgs, "-6")
+		gw = "2001:db8::1"
+	}
+
+	out, err := felix.ExecOutput(append(ipArgs, "rule")...)
+	if err != nil {
+		return false
+	}
+	ruleRE := regexp.MustCompile(`^100:.*fwmark.*lookup (\d+)`)
+	table := ""
+	for _, line := range strings.Split(out, "\n") {
+		if m := ruleRE.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
+			table = m[1]
+			break
+		}
+	}
+	if table == "" {
+		return false
+	}
+
+	out, err = felix.ExecOutput(append(ipArgs, "route", "show", "table", table)...)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(out, fmt.Sprintf("default via %s dev bpfin.cali", gw))
 }
 
 func checkIfPolicyOrRuleProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool, polType string, ipFamily proto.IPVersion) bool {
