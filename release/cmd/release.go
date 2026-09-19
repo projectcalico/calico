@@ -59,7 +59,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 		{
 			Name:  "generate-release-notes",
 			Usage: "Generate release notes for the next release",
-			Flags: []cli.Flag{orgFlag, devTagSuffixFlag, githubTokenFlag},
+			Flags: []cli.Flag{orgFlag, devTagSuffixFlag},
 			Action: func(_ context.Context, c *cli.Command) error {
 				configureLogging("release-notes.log")
 
@@ -70,7 +70,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 				}
 
 				// Generate the release notes.
-				filePath, err := outputs.ReleaseNotes(c.String(orgFlag.Name), c.String(githubTokenFlag.Name), cfg.RepoRootDir, "", ver)
+				filePath, err := outputs.ReleaseNotes(c.String(orgFlag.Name), cfg.RepoRootDir, "", ver)
 				if err != nil {
 					return fmt.Errorf("failed to generate release notes: %w", err)
 				}
@@ -173,7 +173,6 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
-					calico.WithGithubToken(c.String(githubTokenFlag.Name)),
 					calico.WithImages(c.Bool(imagesFlagName)),
 					calico.WithImageReleaseDirs(c.StringSlice(imageReleaseDirsFlag.Name)),
 					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
@@ -222,7 +221,6 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 func releasePrepCommand(cfg *Config) *cli.Command {
 	flags := slices.Clone(productFlags)
 	flags = append(flags,
-		githubTokenFlag,
 		branchCheckFlag,
 		validationFlag,
 		localFlag,
@@ -244,7 +242,7 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 			outs["operator"] = operatorVer
 
 			// Generate release notes
-			if _, err := outputs.ReleaseNotes(c.String(orgFlag.Name), c.String(githubTokenFlag.Name), cfg.RepoRootDir, "", ver); err != nil {
+			if _, err := outputs.ReleaseNotes(c.String(orgFlag.Name), cfg.RepoRootDir, "", ver); err != nil {
 				return ver.FormattedString(), outs, fmt.Errorf("generate release notes: %w", err)
 			}
 
@@ -283,8 +281,7 @@ func releaseBuildFlags() []cli.Flag {
 	f = append(f, operatorBuildCommandFlags...)
 	f = append(f,
 		branchCheckFlag,
-		validationFlag,
-		githubTokenFlag)
+		validationFlag)
 	return f
 }
 
@@ -296,7 +293,6 @@ func releasePublishFlags() []cli.Flag {
 		registryFlag,
 		imageReleaseDirsFlag,
 		helmRegistryFlag,
-		githubTokenFlag,
 		awsProfileFlag,
 		s3BucketFlag,
 		branchCheckFlag,
@@ -314,7 +310,6 @@ func releaseValidationSubCommand(cfg *Config) *cli.Command {
 			repoFlag,
 			repoRemoteFlag,
 			releaseBranchPrefixFlag,
-			githubTokenFlag,
 		},
 		Action: func(_ context.Context, c *cli.Command) error {
 			configureLogging("postrelease-validation.log")
@@ -340,9 +335,6 @@ func releaseValidationSubCommand(cfg *Config) *cli.Command {
 				fmt.Sprintf("-github-repo=%s", c.String(repoFlag.Name)),
 				fmt.Sprintf("-github-repo-remote=%s", c.String(repoRemoteFlag.Name)),
 				fmt.Sprintf("-images=%s", strings.Join(imgs, " ")),
-			}
-			if c.String(githubTokenFlag.Name) != "" {
-				args = append(args, fmt.Sprintf("-github-token=%s", c.String(githubTokenFlag.Name)))
 			}
 
 			cmd := exec.Command(filepath.Join(cfg.RepoRootDir, "bin", "gotestsum"), args...)
