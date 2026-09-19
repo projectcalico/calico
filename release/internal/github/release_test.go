@@ -403,23 +403,6 @@ func TestLatestTagNoReleases(t *testing.T) {
 	}
 }
 
-// The real client is only built when no service is injected, so this is where
-// a missing token has to be caught.
-func TestNewReleasesWithoutServiceNeedsAToken(t *testing.T) {
-	for _, name := range TokenEnvVars {
-		t.Setenv(name, "")
-	}
-	if _, err := NewReleases(Repo{Org: "projectcalico", Name: "calico"}, nil); err == nil ||
-		!strings.Contains(err.Error(), "GITHUB_TOKEN") {
-		t.Errorf("expected an error naming the token env vars, got %v", err)
-	}
-
-	t.Setenv("GH_TOKEN", "t")
-	if _, err := NewReleases(Repo{Org: "projectcalico", Name: "calico"}, nil); err != nil {
-		t.Errorf("expected the fallback env var honoured, got %v", err)
-	}
-}
-
 // A draft carries no git tag, so the by-tag lookup 404s on one. Without the
 // listing fallback every run would create another draft for the same tag.
 func TestCreateDraftReusesADraftTheTagLookupCannotSee(t *testing.T) {
@@ -445,28 +428,6 @@ func TestCreateDraftRefusesAPublishedReleaseFoundByListing(t *testing.T) {
 	if _, err := testReleases(t, f).CreateDraft(context.Background(), "v3.30.0", "v3.30.0", "notes"); err == nil ||
 		!strings.Contains(err.Error(), "already published") {
 		t.Errorf("expected a refusal to modify a published release, got %v", err)
-	}
-}
-
-// A failed token lookup must keep failing with the same message, rather than
-// handing back a client that panics at the first call.
-func TestClientBuildFailureRepeats(t *testing.T) {
-	for _, key := range TokenEnvVars {
-		t.Setenv(key, "")
-	}
-	for range 2 {
-		c, err := githubClient()
-		if err == nil {
-			t.Fatalf("expected an error with no token, got client=%v", c != nil)
-		}
-		if c != nil {
-			t.Errorf("expected no client alongside the error, got %v", c)
-		}
-	}
-
-	t.Setenv("GITHUB_TOKEN", "t")
-	if c, err := githubClient(); err != nil || c == nil {
-		t.Errorf("expected a client once the token is set, got (%v, %v)", c != nil, err)
 	}
 }
 

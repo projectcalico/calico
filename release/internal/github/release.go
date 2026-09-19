@@ -21,7 +21,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/google/go-github/v53/github"
 )
@@ -89,28 +88,11 @@ func NewReleases(repo Repo, svc ReleaseService) (*Releases, error) {
 	if svc != nil {
 		return &Releases{repo: repo, svc: svc}, nil
 	}
-	cli, err := githubClient()
-	if err != nil {
-		return nil, fmt.Errorf("github client: %w", err)
-	}
-	return &Releases{repo: repo, svc: cli.Repositories}, nil
+	return &Releases{repo: repo, svc: Client().Repositories}, nil
 }
 
-func githubToken() (string, error) {
-	for _, key := range TokenEnvVars {
-		if v := os.Getenv(key); v != "" {
-			return v, nil
-		}
-	}
-	return "", fmt.Errorf("not found. checked environment variables %s", strings.Join(TokenEnvVars, " or "))
-}
-
-func githubClient() (*github.Client, error) {
-	token, err := githubToken()
-	if err != nil {
-		return nil, fmt.Errorf("github token: %w", err)
-	}
-	return github.NewTokenClient(context.Background(), token), nil
+func Client() *github.Client {
+	return github.NewClient(&http.Client{Transport: &GithubAuthTransport{}})
 }
 
 // Get returns the release for a tag. exists is false with a nil error when no

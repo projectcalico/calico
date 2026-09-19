@@ -261,11 +261,9 @@ func (d GithubRelease) Publish(ctx context.Context, src string) error {
 		return fmt.Errorf("create draft: %w", err)
 	}
 
-	assets := make([]github.Asset, len(files))
-	for i, f := range files {
-		if assets[i], err = github.NewAsset(f); err != nil {
-			return err
-		}
+	assets, err := steps.Go(files, github.NewAsset)
+	if err != nil {
+		return fmt.Errorf("release assets: %w", err)
 	}
 	missing, err := gh.SyncAssets(ctx, rel.GetID(), assets)
 	if err != nil {

@@ -21,6 +21,7 @@ import (
 
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -320,27 +321,30 @@ func TestInverseFlagName(t *testing.T) {
 }
 
 func TestReleaseNotesFlag(t *testing.T) {
-	flags := []cli.Flag{releaseNotesFlag, githubTokenFlag, orgFlag, repoFlag, validationFlag, branchCheckFlag}
+	flags := []cli.Flag{releaseNotesFlag, orgFlag, repoFlag, validationFlag, branchCheckFlag}
 	calico := func(rest ...string) []string {
 		return append(rest, "--org", utils.ProjectCalicoOrg, "--repo", utils.CalicoRepoName)
 	}
 	for _, tc := range []struct {
 		name    string
 		args    []string
+		token   string
 		wantErr string
 	}{
 		{
-			name:    "notes wanted with no token",
+			name:    "notes wanted with no credential",
 			args:    calico("--release-notes"),
-			wantErr: "GitHub token is required to generate release notes",
+			wantErr: "release notes need GitHub authentication",
 		},
 		{
-			name: "notes wanted with a token",
-			args: calico("--release-notes", "--github-token", "t"),
+			name:  "notes wanted with a credential",
+			args:  calico("--release-notes"),
+			token: "t",
 		},
 		{
 			name:    "another repository cannot generate notes",
-			args:    []string{"--release-notes", "--github-token", "t", "--org", "example", "--repo", "fork"},
+			args:    []string{"--release-notes", "--org", "example", "--repo", "fork"},
+			token:   "t",
 			wantErr: "release notes can only be generated from",
 		},
 		{
@@ -349,6 +353,13 @@ func TestReleaseNotesFlag(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PATH", t.TempDir())
+			for _, key := range github.TokenEnvVars {
+				t.Setenv(key, "")
+			}
+			if tc.token != "" {
+				t.Setenv(github.TokenEnvVars[0], tc.token)
+			}
 			assertRun(t, flags, tc.args, tc.wantErr)
 		})
 	}

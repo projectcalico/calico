@@ -187,7 +187,6 @@ type CalicoManager struct {
 	draftRelease  bool
 	awsProfile    string
 	s3Bucket      string
-	githubToken   string
 
 	// tagAtHEAD memoizes tagExistsAtHEAD so the rev-parse runs once per release.
 	tagAtHEAD *tagCheck

@@ -458,22 +458,6 @@ var (
 			return nil
 		},
 	}
-
-	// GitHub API flags
-	githubTokenFlag = &cli.StringFlag{
-		Name:    "github-token",
-		Usage:   "The GitHub token to use when interacting with the GitHub API",
-		Sources: cli.EnvVars(github.TokenEnvVars...),
-		Action: func(_ context.Context, c *cli.Command, s string) error {
-			if s == "" {
-				if c.Bool(ciFlag.Name) {
-					return fmt.Errorf("GitHub token is required")
-				}
-				logrus.Warn("This command requires a GitHub token")
-			}
-			return nil
-		},
-	}
 )
 
 // Hashrelease specific flags.
@@ -689,8 +673,8 @@ var (
 			if c.String(orgFlag.Name) != utils.ProjectCalicoOrg || c.String(repoFlag.Name) != utils.CalicoRepoName {
 				return fmt.Errorf("release notes can only be generated from %s/%s", utils.ProjectCalicoOrg, utils.CalicoRepoName)
 			}
-			if c.String(githubTokenFlag.Name) == "" {
-				return fmt.Errorf("GitHub token is required to generate release notes")
+			if !github.Authenticated() {
+				return fmt.Errorf("release notes need GitHub authentication")
 			}
 			return nil
 		},
@@ -745,9 +729,12 @@ var (
 		Usage:    "Publish the GitHub release",
 		Sources:  cli.EnvVars(envPublishGithubRelease, envReleaseGithub, envReleaseGithubRelease),
 		Value:    true,
-		Action: func(_ context.Context, c *cli.Command, b bool) error {
-			if b && c.String(githubTokenFlag.Name) == "" {
-				return fmt.Errorf("GitHub token is required to publish release")
+		Action: func(_ context.Context, _ *cli.Command, b bool) error {
+			if !b {
+				return nil
+			}
+			if !github.Authenticated() {
+				return fmt.Errorf("publishing a release needs GitHub authentication")
 			}
 			return nil
 		},

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -12,6 +13,7 @@ import (
 	"github.com/google/go-github/v53/github"
 
 	"github.com/projectcalico/calico/release/internal/charts"
+	igithub "github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
@@ -34,13 +36,7 @@ func calicoctlBinaryList() []string {
 	return binaries
 }
 
-func githubClient() *github.Client {
-	cli := github.NewClient(http.DefaultClient)
-	if githubToken != "" {
-		cli = github.NewTokenClient(context.Background(), githubToken)
-	}
-	return cli
-}
+var githubClient = sync.OnceValue(igithub.Client)
 
 func TestGitHubRelease(t *testing.T) {
 	t.Parallel()

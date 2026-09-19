@@ -29,6 +29,7 @@ import (
 	"github.com/google/go-github/v53/github"
 	"github.com/sirupsen/logrus"
 
+	igithub "github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
@@ -196,10 +197,7 @@ func outputReleaseNotes(issueDataList []*ReleaseNoteIssueData, outputFilePath st
 
 // ReleaseNotes generates release notes for a milestone
 // and outputs it to a file in <outputDir>/release-notes/<milestone>-release-notes.md
-func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version.Version) (string, error) {
-	if githubToken == "" {
-		return "", fmt.Errorf("github token not set, set GITHUB_TOKEN environment variable")
-	}
+func ReleaseNotes(owner, repoRootDir, outputDir string, ver version.Version) (string, error) {
 	if outputDir == "" && repoRootDir == "" {
 		return "", fmt.Errorf("either outputDir or repoRootDir must be set")
 	}
@@ -213,7 +211,7 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 
 	logrus.Infof("Generating release notes for %s", ver.FormattedString())
 	milestone := ver.Milestone(utils.ProductName)
-	githubClient := github.NewTokenClient(context.Background(), githubToken)
+	githubClient := igithub.Client()
 	releaseNoteDataList := []*ReleaseNoteIssueData{}
 	opts := &github.MilestoneListOptions{
 		State: string(openState),
