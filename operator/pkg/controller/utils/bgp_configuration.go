@@ -64,15 +64,3 @@ func PatchBGPConfiguration(
 
 	return bgpConfig, nil
 }
-
-func GetBGPConfiguration(
-	ctx context.Context,
-	c client.Client,
-) (*v3.BGPConfiguration, error) {
-	bgpConfig := &v3.BGPConfiguration{}
-	err := c.Get(ctx, types.NamespacedName{Name: "default"}, bgpConfig)
-	if err != nil && !errors.IsNotFound(err) {
-		return nil, fmt.Errorf("unable to read BGPConfiguration: %w", err)
-	}
-	return bgpConfig, nil
-}

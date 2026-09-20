@@ -46,9 +46,9 @@ const (
 // declareFelixConfiguration declares the fields defaulted from the Installation spec. It declares
 // every one every time, so a field the spec stops asking for is declared without a value, which
 // clears whatever the operator wrote there.
-func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) managedfields.DeclareFelixConfiguration {
-	return func(current *v3.FelixConfiguration) (*managedfields.FelixConfigurationDeclaration, error) {
-		d := &managedfields.FelixConfigurationDeclaration{
+func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) managedfields.Declare[*v3.FelixConfiguration] {
+	return func(current *v3.FelixConfiguration) (*managedfields.Declaration[*v3.FelixConfiguration], error) {
+		d := &managedfields.Declaration[*v3.FelixConfiguration]{
 			Manager: installationFieldManager,
 			Owned:   &v3.FelixConfiguration{},
 
@@ -156,9 +156,9 @@ func joinFieldConflicts(conflicts []error) error {
 
 // declareBGPConfiguration declares the BIRD half of cluster route programming. It moves in
 // lockstep with the FelixConfiguration half: whatever Felix is not programming, BIRD has to be.
-func (r *ReconcileInstallation) declareBGPConfiguration(install *operatorv1.Installation) managedfields.DeclareBGPConfiguration {
-	return func(current *v3.BGPConfiguration) (*managedfields.BGPConfigurationDeclaration, error) {
-		d := &managedfields.BGPConfigurationDeclaration{
+func (r *ReconcileInstallation) declareBGPConfiguration(install *operatorv1.Installation) managedfields.Declare[*v3.BGPConfiguration] {
+	return func(current *v3.BGPConfiguration) (*managedfields.Declaration[*v3.BGPConfiguration], error) {
+		d := &managedfields.Declaration[*v3.BGPConfiguration]{
 			Manager: installationFieldManager,
 			Owned:   &v3.BGPConfiguration{},
 			Policies: map[string]managedfields.ConflictPolicy{
@@ -215,13 +215,13 @@ func nftablesMode(install *operatorv1.Installation) v3.NFTablesMode {
 
 // declareBPFEnabled declares spec.bpfEnabled. Both installation write sites use it so the field
 // stays under one manager with the same value.
-func (r *ReconcileInstallation) declareBPFEnabled(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) managedfields.DeclareFelixConfiguration {
-	return func(current *v3.FelixConfiguration) (*managedfields.FelixConfigurationDeclaration, error) {
+func (r *ReconcileInstallation) declareBPFEnabled(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) managedfields.Declare[*v3.FelixConfiguration] {
+	return func(current *v3.FelixConfiguration) (*managedfields.Declaration[*v3.FelixConfiguration], error) {
 		enabled, err := r.bpfEnabledValue(ctx, install, current, needNsMigration)
 		if err != nil || enabled == nil {
 			return nil, err
 		}
-		return &managedfields.FelixConfigurationDeclaration{
+		return &managedfields.Declaration[*v3.FelixConfiguration]{
 			Manager: bpfFieldManager,
 			Owned: &v3.FelixConfiguration{
 				Spec: v3.FelixConfigurationSpec{BPFEnabled: enabled},

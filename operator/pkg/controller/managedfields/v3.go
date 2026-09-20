@@ -22,7 +22,6 @@ import (
 	"sort"
 	"strings"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,8 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
-
-	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 )
 
 // fieldManagerPrefix namespaces the operator's field managers away from other writers.
@@ -42,31 +39,7 @@ type v3FieldManager struct {
 	crdV1FieldManager
 }
 
-var _ FieldManager = &v3FieldManager{}
-
-func (m *v3FieldManager) ApplyFelixConfiguration(ctx context.Context, declare DeclareFelixConfiguration) (*v3.FelixConfiguration, error) {
-	current, err := utils.GetFelixConfiguration(ctx, m.client)
-	if err != nil {
-		return nil, err
-	}
-	applied, err := m.applyDeclared(ctx, current, felixDeclareFn(declare))
-	if applied == nil {
-		return nil, err
-	}
-	return applied.(*v3.FelixConfiguration), err
-}
-
-func (m *v3FieldManager) ApplyBGPConfiguration(ctx context.Context, declare DeclareBGPConfiguration) (*v3.BGPConfiguration, error) {
-	current, err := utils.GetBGPConfiguration(ctx, m.client)
-	if err != nil {
-		return nil, err
-	}
-	applied, err := m.applyDeclared(ctx, current, bgpDeclareFn(declare))
-	if applied == nil {
-		return nil, err
-	}
-	return applied.(*v3.BGPConfiguration), err
-}
+var _ writer = &v3FieldManager{}
 
 func (m *v3FieldManager) applyDeclared(ctx context.Context, current client.Object, declare declareFn) (client.Object, error) {
 	d, err := declare(current)

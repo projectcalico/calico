@@ -46,7 +46,7 @@ var _ = Describe("Fields outside the declaration", func() {
 	// The fake's deduced type converter takes the field set from the typed object, so an applier
 	// picks up fields with no omitempty that its payload never carried.  A real server does not.
 	Context("projectcalico.org/v3, where the API server tracks ownership", func() {
-		var w managedfields.FieldManager
+		var w *managedfields.FieldManager
 
 		BeforeEach(func() {
 			scheme := runtime.NewScheme()
@@ -57,7 +57,7 @@ var _ = Describe("Fields outside the declaration", func() {
 		})
 
 		It("should not take ownership of an undeclared field", func() {
-			_, err := w.ApplyFelixConfiguration(ctx, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
+			_, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
 			Expect(err).NotTo(HaveOccurred())
 
 			fc := getFelixConfig()
@@ -68,7 +68,7 @@ var _ = Describe("Fields outside the declaration", func() {
 	})
 
 	Context("crd.projectcalico.org/v1, where the operator tracks what it wrote", func() {
-		var w managedfields.FieldManager
+		var w *managedfields.FieldManager
 
 		BeforeEach(func() {
 			scheme := runtime.NewScheme()
@@ -84,7 +84,7 @@ var _ = Describe("Fields outside the declaration", func() {
 				Spec:       v3.FelixConfigurationSpec{BPFLogLevel: "Debug"},
 			})).NotTo(HaveOccurred())
 
-			_, err := w.ApplyFelixConfiguration(ctx, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
+			_, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
 			Expect(err).NotTo(HaveOccurred())
 
 			fc := getFelixConfig()

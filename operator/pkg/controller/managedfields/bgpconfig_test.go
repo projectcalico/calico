@@ -32,9 +32,9 @@ import (
 )
 
 // declareClusterRoutes governs spec.programClusterRoutes, declaring a value only when mode is set.
-func declareClusterRoutes(mode string) managedfields.DeclareBGPConfiguration {
-	return func(_ *v3.BGPConfiguration) (*managedfields.BGPConfigurationDeclaration, error) {
-		d := &managedfields.BGPConfigurationDeclaration{
+func declareClusterRoutes(mode string) managedfields.Declare[*v3.BGPConfiguration] {
+	return func(_ *v3.BGPConfiguration) (*managedfields.Declaration[*v3.BGPConfiguration], error) {
+		d := &managedfields.Declaration[*v3.BGPConfiguration]{
 			Manager:  "installation",
 			Owned:    &v3.BGPConfiguration{},
 			Policies: map[string]managedfields.ConflictPolicy{"spec.programClusterRoutes": managedfields.ConflictOverride},
@@ -65,7 +65,7 @@ var _ = Describe("Applying declared BGPConfiguration fields", func() {
 		}
 
 		Context(group, func() {
-			var w managedfields.FieldManager
+			var w *managedfields.FieldManager
 
 			BeforeEach(func() {
 				scheme := runtime.NewScheme()
@@ -80,24 +80,24 @@ var _ = Describe("Applying declared BGPConfiguration fields", func() {
 			})
 
 			It("should write the declared value", func() {
-				bgpConfig, err := w.ApplyBGPConfiguration(ctx, declareClusterRoutes("EnabledNoEncapOnly"))
+				bgpConfig, err := managedfields.Apply(ctx, w, declareClusterRoutes("EnabledNoEncapOnly"))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(bgpConfig.Spec.ProgramClusterRoutes).To(Equal(ptr.To("EnabledNoEncapOnly")))
 				Expect(getBGPConfig().Spec.ProgramClusterRoutes).To(Equal(ptr.To("EnabledNoEncapOnly")))
 			})
 
 			It("should take the field back when the declaration stops setting it", func() {
-				_, err := w.ApplyBGPConfiguration(ctx, declareClusterRoutes("EnabledNoEncapOnly"))
+				_, err := managedfields.Apply(ctx, w, declareClusterRoutes("EnabledNoEncapOnly"))
 				Expect(err).NotTo(HaveOccurred())
 
-				bgpConfig, err := w.ApplyBGPConfiguration(ctx, declareClusterRoutes(""))
+				bgpConfig, err := managedfields.Apply(ctx, w, declareClusterRoutes(""))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(bgpConfig.Spec.ProgramClusterRoutes).To(BeNil())
 				Expect(getBGPConfig().Spec.ProgramClusterRoutes).To(BeNil())
 			})
 
 			It("should not create a BGPConfiguration for a declaration with nothing to write", func() {
-				_, err := w.ApplyBGPConfiguration(ctx, declareClusterRoutes(""))
+				_, err := managedfields.Apply(ctx, w, declareClusterRoutes(""))
 				Expect(err).NotTo(HaveOccurred())
 
 				bgpConfig := &v3.BGPConfiguration{}
@@ -111,7 +111,7 @@ var _ = Describe("Applying declared BGPConfiguration fields", func() {
 					Spec:       v3.BGPConfigurationSpec{ProgramClusterRoutes: ptr.To("Enabled")},
 				})).NotTo(HaveOccurred())
 
-				_, err := w.ApplyBGPConfiguration(ctx, declareClusterRoutes(""))
+				_, err := managedfields.Apply(ctx, w, declareClusterRoutes(""))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(getBGPConfig().Spec.ProgramClusterRoutes).To(Equal(ptr.To("Enabled")))
 			})

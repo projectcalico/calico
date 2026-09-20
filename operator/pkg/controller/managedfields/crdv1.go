@@ -20,7 +20,6 @@ import (
 	"reflect"
 	"sort"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -40,35 +39,7 @@ type crdV1FieldManager struct {
 	client client.Client
 }
 
-var _ FieldManager = &crdV1FieldManager{}
-
-// ApplyFelixConfiguration writes the declared fields, comparing each against the value the operator
-// last wrote to spot changes made by others.
-func (m *crdV1FieldManager) ApplyFelixConfiguration(ctx context.Context, declare DeclareFelixConfiguration) (*v3.FelixConfiguration, error) {
-	current, err := utils.GetFelixConfiguration(ctx, m.client)
-	if err != nil {
-		return nil, err
-	}
-	applied, err := m.applyDeclared(ctx, current, felixDeclareFn(declare))
-	if err != nil {
-		return nil, err
-	}
-	return applied.(*v3.FelixConfiguration), nil
-}
-
-// ApplyBGPConfiguration writes the declared fields, comparing each against the value the operator
-// last wrote to spot changes made by others.
-func (m *crdV1FieldManager) ApplyBGPConfiguration(ctx context.Context, declare DeclareBGPConfiguration) (*v3.BGPConfiguration, error) {
-	current, err := utils.GetBGPConfiguration(ctx, m.client)
-	if err != nil {
-		return nil, err
-	}
-	applied, err := m.applyDeclared(ctx, current, bgpDeclareFn(declare))
-	if err != nil {
-		return nil, err
-	}
-	return applied.(*v3.BGPConfiguration), nil
-}
+var _ writer = &crdV1FieldManager{}
 
 func (m *crdV1FieldManager) applyDeclared(ctx context.Context, current client.Object, declare declareFn) (client.Object, error) {
 	if err := utils.RestoreV3Metadata(current); err != nil {

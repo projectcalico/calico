@@ -16,9 +16,9 @@ package managedfields
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -36,43 +36,24 @@ const (
 	ConflictOverride ConflictPolicy = "Override"
 )
 
-// FelixConfigurationDeclaration is one field manager's statement of what it owns.
-type FelixConfigurationDeclaration struct {
+// Declaration is one field manager's statement of what it owns on T.
+type Declaration[T client.Object] struct {
 	// Manager is the field manager name, and has to stay the same across reconciles.
 	Manager string
 
 	// Owned carries the declared fields and nothing else. Fields left nil are not owned.
-	Owned *v3.FelixConfiguration
+	Owned T
 
 	// Policies is keyed by field path, e.g. "spec.healthPort". Every declared field needs an entry.
 	Policies map[string]ConflictPolicy
 }
 
-func (d *FelixConfigurationDeclaration) untyped() *declaration {
-	owned := d.Owned
-	if owned == nil {
-		owned = &v3.FelixConfiguration{}
-	}
-	return &declaration{manager: d.Manager, owned: owned, policies: d.Policies}
-}
-
-// BGPConfigurationDeclaration is one field manager's statement of what it owns.
-type BGPConfigurationDeclaration struct {
-	// Manager is the field manager name, and has to stay the same across reconciles.
-	Manager string
-
-	// Owned carries the declared fields and nothing else. Fields left nil are not owned.
-	Owned *v3.BGPConfiguration
-
-	// Policies is keyed by field path, e.g. "spec.programClusterRoutes". Every declared field
-	// needs an entry.
-	Policies map[string]ConflictPolicy
-}
-
-func (d *BGPConfigurationDeclaration) untyped() *declaration {
-	owned := d.Owned
-	if owned == nil {
-		owned = &v3.BGPConfiguration{}
+func (d *Declaration[T]) untyped() *declaration {
+	owned := client.Object(d.Owned)
+	if reflect.ValueOf(d.Owned).IsNil() {
+		// A declaration that governs fields without setting any still needs an object to
+		// read them from, so give it an empty one of the same type.
+		owned = reflect.New(reflect.TypeOf(d.Owned).Elem()).Interface().(client.Object)
 	}
 	return &declaration{manager: d.Manager, owned: owned, policies: d.Policies}
 }

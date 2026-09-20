@@ -34,7 +34,7 @@ import (
 var _ = Describe("crd.projectcalico.org/v1 writer", func() {
 	var c client.Client
 	var ctx context.Context
-	var w managedfields.FieldManager
+	var w *managedfields.FieldManager
 
 	getFelixConfig := func() *v3.FelixConfiguration {
 		fc := &v3.FelixConfiguration{}
@@ -51,9 +51,9 @@ var _ = Describe("crd.projectcalico.org/v1 writer", func() {
 	})
 
 	Context("a declaration that stops declaring a field", func() {
-		declare := func(port *int) managedfields.DeclareFelixConfiguration {
-			return func(_ *v3.FelixConfiguration) (*managedfields.FelixConfigurationDeclaration, error) {
-				return &managedfields.FelixConfigurationDeclaration{
+		declare := func(port *int) managedfields.Declare[*v3.FelixConfiguration] {
+			return func(_ *v3.FelixConfiguration) (*managedfields.Declaration[*v3.FelixConfiguration], error) {
+				return &managedfields.Declaration[*v3.FelixConfiguration]{
 					Manager: "test",
 					Owned:   &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: port}},
 					Policies: map[string]managedfields.ConflictPolicy{
@@ -64,11 +64,11 @@ var _ = Describe("crd.projectcalico.org/v1 writer", func() {
 		}
 
 		It("should delete a field it wrote itself", func() {
-			_, err := w.ApplyFelixConfiguration(ctx, declare(ptr.To(9099)))
+			_, err := managedfields.Apply(ctx, w, declare(ptr.To(9099)))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getFelixConfig().Spec.HealthPort).To(Equal(ptr.To(9099)))
 
-			_, err = w.ApplyFelixConfiguration(ctx, declare(nil))
+			_, err = managedfields.Apply(ctx, w, declare(nil))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getFelixConfig().Spec.HealthPort).To(BeNil())
 		})
@@ -79,7 +79,7 @@ var _ = Describe("crd.projectcalico.org/v1 writer", func() {
 				Spec:       v3.FelixConfigurationSpec{HealthPort: ptr.To(9199)},
 			})).NotTo(HaveOccurred())
 
-			_, err := w.ApplyFelixConfiguration(ctx, declare(nil))
+			_, err := managedfields.Apply(ctx, w, declare(nil))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getFelixConfig().Spec.HealthPort).To(Equal(ptr.To(9199)))
 		})
@@ -95,11 +95,11 @@ var _ = Describe("crd.projectcalico.org/v1 writer", func() {
 			})
 
 			It("should read back the record it wrote", func() {
-				_, err := w.ApplyFelixConfiguration(ctx, declare(ptr.To(9099)))
+				_, err := managedfields.Apply(ctx, w, declare(ptr.To(9099)))
 				Expect(err).NotTo(HaveOccurred())
 
 				var seen map[string]string
-				_, err = w.ApplyFelixConfiguration(ctx, func(current *v3.FelixConfiguration) (*managedfields.FelixConfigurationDeclaration, error) {
+				_, err = managedfields.Apply(ctx, w, func(current *v3.FelixConfiguration) (*managedfields.Declaration[*v3.FelixConfiguration], error) {
 					seen = current.Annotations
 					return declare(ptr.To(9099))(current)
 				})
@@ -108,12 +108,12 @@ var _ = Describe("crd.projectcalico.org/v1 writer", func() {
 			})
 
 			It("should stop writing once the declared values are in place", func() {
-				_, err := w.ApplyFelixConfiguration(ctx, declare(ptr.To(9099)))
+				_, err := managedfields.Apply(ctx, w, declare(ptr.To(9099)))
 				Expect(err).NotTo(HaveOccurred())
 				settled := getFelixConfig().ResourceVersion
 
 				for range 2 {
-					_, err = w.ApplyFelixConfiguration(ctx, declare(ptr.To(9099)))
+					_, err = managedfields.Apply(ctx, w, declare(ptr.To(9099)))
 					Expect(err).NotTo(HaveOccurred())
 				}
 				Expect(getFelixConfig().ResourceVersion).To(Equal(settled))
@@ -121,7 +121,7 @@ var _ = Describe("crd.projectcalico.org/v1 writer", func() {
 
 			It("should leave the stash alone", func() {
 				for range 3 {
-					_, err := w.ApplyFelixConfiguration(ctx, declare(ptr.To(9099)))
+					_, err := managedfields.Apply(ctx, w, declare(ptr.To(9099)))
 					Expect(err).NotTo(HaveOccurred())
 				}
 				Expect(getFelixConfig().Annotations).To(HaveKey("projectcalico.org/metadata"))
@@ -129,14 +129,14 @@ var _ = Describe("crd.projectcalico.org/v1 writer", func() {
 		})
 
 		It("should leave a value someone else changed", func() {
-			_, err := w.ApplyFelixConfiguration(ctx, declare(ptr.To(9099)))
+			_, err := managedfields.Apply(ctx, w, declare(ptr.To(9099)))
 			Expect(err).NotTo(HaveOccurred())
 
 			fc := getFelixConfig()
 			fc.Spec.HealthPort = ptr.To(9199)
 			Expect(c.Update(ctx, fc)).NotTo(HaveOccurred())
 
-			_, err = w.ApplyFelixConfiguration(ctx, declare(nil))
+			_, err = managedfields.Apply(ctx, w, declare(nil))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getFelixConfig().Spec.HealthPort).To(Equal(ptr.To(9199)))
 		})
