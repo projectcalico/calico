@@ -179,8 +179,7 @@ func (m *v3FieldManager) clearLegacyOwned(ctx context.Context, current client.Ob
 	if err != nil {
 		return fmt.Errorf("unable to render the fields to clear: %w", err)
 	}
-	log.Info("Clearing shared configuration fields the operator no longer declares",
-		"kind", kindOf(current), "manager", d.manager, "fields", string(encoded))
+	log.Info("Clearing shared configuration fields the operator no longer declares", "kind", kindOf(current), "manager", d.manager, "fields", string(encoded))
 	target := &unstructured.Unstructured{}
 	target.SetGroupVersionKind(gvk)
 	target.SetName(defaultResourceName)
