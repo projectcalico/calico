@@ -128,7 +128,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 		})
 
 		It("should create the FelixConfiguration owning only the declared fields", func() {
-			_, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
+			_, err := declare(managedfields.ConflictDefer, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 
 			fc := getFelixConfig()
@@ -140,10 +140,10 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 		})
 
 		It("should keep the same values when it applies the same declaration twice", func() {
-			_, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
+			_, err := declare(managedfields.ConflictDefer, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 
-			fc, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
+			fc, err := declare(managedfields.ConflictDefer, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(fc.Spec.HealthPort).To(Equal(ptr.To(9099)))
 			Expect(fc.Spec.VXLANPort).To(Equal(ptr.To(4789)))
@@ -153,7 +153,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 		It("should leave a deferred field with the other owner and still write the rest", func() {
 			applyAs("kubectl", 9100)
 
-			fc, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
+			fc, err := declare(managedfields.ConflictDefer, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(fc.Spec.HealthPort).To(Equal(ptr.To(9100)))
 			Expect(fc.Spec.VXLANPort).To(Equal(ptr.To(4789)))
@@ -164,7 +164,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 		It("should take an overridden field back", func() {
 			applyAs("kubectl", 9100)
 
-			fc, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictOverride, managedfields.ConflictDefer))
+			fc, err := declare(managedfields.ConflictOverride, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(fc.Spec.HealthPort).To(Equal(ptr.To(9099)))
 			Expect(getFelixConfig().Spec.HealthPort).To(Equal(ptr.To(9099)))
@@ -173,7 +173,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 		It("should report a conflict on a field it refuses to take", func() {
 			applyAs("kubectl", 9100)
 
-			_, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictError, managedfields.ConflictDefer))
+			_, err := declare(managedfields.ConflictError, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).To(BeAssignableToTypeOf(&managedfields.ConflictingFieldsError{}))
 			Expect(err.(*managedfields.ConflictingFieldsError).Paths).To(ConsistOf("spec.healthPort"))
 			Expect(getFelixConfig().Spec.HealthPort).To(Equal(ptr.To(9100)))
@@ -182,7 +182,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 		It("should take a field that already holds the declared value, without arbitrating", func() {
 			applyAs("kubectl", 9099)
 
-			fc, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictError, managedfields.ConflictDefer))
+			fc, err := declare(managedfields.ConflictError, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(fc.Spec.HealthPort).To(Equal(ptr.To(9099)))
 			Expect(getFelixConfig().ManagedFields).To(ContainElement(SatisfyAll(
@@ -192,16 +192,16 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 		})
 
 		It("should delete a field it stops declaring, so the declared set has to stay stable", func() {
-			_, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
+			_, err := declare(managedfields.ConflictDefer, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = managedfields.Apply(ctx, w, func(_ *v3.FelixConfiguration) (*managedfields.Declaration[*v3.FelixConfiguration], error) {
+			_, err = managedfields.Declare[*v3.FelixConfiguration](func(_ *v3.FelixConfiguration) (*managedfields.Declaration[*v3.FelixConfiguration], error) {
 				return &managedfields.Declaration[*v3.FelixConfiguration]{
 					Manager:  "installation",
 					Owned:    &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)}},
 					Policies: map[string]managedfields.ConflictPolicy{"spec.healthPort": managedfields.ConflictDefer},
 				}, nil
-			})
+			}).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getFelixConfig().Spec.VXLANPort).To(BeNil())
 		})
@@ -234,7 +234,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 				createByUpdate(map[string]string{render.BPFOperatorAnnotation: "true"},
 					v3.FelixConfigurationSpec{BPFEnabled: ptr.To(true)})
 
-				_, err := managedfields.Apply(ctx, w, declareBPF(managedfields.ConflictError))
+				_, err := declareBPF(managedfields.ConflictError).Apply(ctx, w)
 				Expect(err).NotTo(HaveOccurred())
 
 				fc := getFelixConfig()
@@ -248,7 +248,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 			It("should write the rest of the declaration when one field is refused", func() {
 				createByUpdate(nil, v3.FelixConfigurationSpec{BPFEnabled: ptr.To(true)})
 
-				fc, err := managedfields.Apply(ctx, w, declareRefusedPlusOne())
+				fc, err := declareRefusedPlusOne().Apply(ctx, w)
 				Expect(err).To(BeAssignableToTypeOf(&managedfields.ConflictingFieldsError{}))
 				Expect(fc).NotTo(BeNil())
 
@@ -261,7 +261,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 			It("should refuse a field it has no record of writing", func() {
 				createByUpdate(nil, v3.FelixConfigurationSpec{BPFEnabled: ptr.To(true)})
 
-				_, err := managedfields.Apply(ctx, w, declareBPF(managedfields.ConflictError))
+				_, err := declareBPF(managedfields.ConflictError).Apply(ctx, w)
 				Expect(err).To(BeAssignableToTypeOf(&managedfields.ConflictingFieldsError{}))
 				Expect(getFelixConfig().Spec.BPFEnabled).To(Equal(ptr.To(true)))
 			})
@@ -269,7 +269,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 			It("should stop trusting its old record once ownership has moved", func() {
 				createByUpdate(map[string]string{render.BPFOperatorAnnotation: "true"},
 					v3.FelixConfigurationSpec{BPFEnabled: ptr.To(true)})
-				_, err := managedfields.Apply(ctx, w, declareBPF(managedfields.ConflictError))
+				_, err := declareBPF(managedfields.ConflictError).Apply(ctx, w)
 				Expect(err).NotTo(HaveOccurred())
 
 				// The stale annotation still reads "true", matching the value the user applies.
@@ -281,7 +281,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 				}}
 				Expect(c.Apply(ctx, client.ApplyConfigurationFromUnstructured(other), client.FieldOwner("kubectl"), client.ForceOwnership)).NotTo(HaveOccurred())
 
-				_, err = managedfields.Apply(ctx, w, declareBPF(managedfields.ConflictError))
+				_, err = declareBPF(managedfields.ConflictError).Apply(ctx, w)
 				Expect(err).To(BeAssignableToTypeOf(&managedfields.ConflictingFieldsError{}))
 				Expect(getFelixConfig().Spec.BPFEnabled).To(Equal(ptr.To(true)))
 			})
@@ -301,7 +301,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 				fc.Annotations = map[string]string{render.BPFOperatorAnnotation: "true"}
 				Expect(c.Update(ctx, fc, client.FieldOwner("operator"))).NotTo(HaveOccurred())
 
-				_, err := managedfields.Apply(ctx, w, declareBPF(managedfields.ConflictError))
+				_, err := declareBPF(managedfields.ConflictError).Apply(ctx, w)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(getFelixConfig().Spec.BPFEnabled).To(Equal(ptr.To(false)))
 			})
@@ -309,7 +309,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 			It("should take over a field its own legacy manager still owns", func() {
 				createAsManager("operator", nil, v3.FelixConfigurationSpec{HealthPort: ptr.To(9098)})
 
-				fc, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
+				fc, err := declare(managedfields.ConflictDefer, managedfields.ConflictDefer).Apply(ctx, w)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(fc.Spec.HealthPort).To(Equal(ptr.To(9099)))
 
@@ -324,7 +324,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 			It("should defer on a field it never recorded, leaving the value alone", func() {
 				createByUpdate(nil, v3.FelixConfigurationSpec{HealthPort: ptr.To(9100)})
 
-				fc, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
+				fc, err := declare(managedfields.ConflictDefer, managedfields.ConflictDefer).Apply(ctx, w)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(fc.Spec.HealthPort).To(Equal(ptr.To(9100)))
 				Expect(fc.Spec.VXLANPort).To(Equal(ptr.To(4789)))
@@ -333,7 +333,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 			It("should take over a struct field its own legacy manager still owns", func() {
 				createAsManager("operator", nil, v3.FelixConfigurationSpec{RouteTableRange: &v3.RouteTableRange{Min: 1, Max: 50}})
 
-				fc, err := managedfields.Apply(ctx, w, declareRouteTableRange(&v3.RouteTableRange{Min: 65, Max: 99}))
+				fc, err := declareRouteTableRange(&v3.RouteTableRange{Min: 65, Max: 99}).Apply(ctx, w)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(fc.Spec.RouteTableRange).To(Equal(&v3.RouteTableRange{Min: 65, Max: 99}))
 			})
@@ -341,7 +341,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 			It("should clear a struct field its legacy manager holds that the declaration dropped", func() {
 				createAsManager("operator", nil, v3.FelixConfigurationSpec{RouteTableRange: &v3.RouteTableRange{Min: 1, Max: 50}})
 
-				_, err := managedfields.Apply(ctx, w, declareRouteTableRange(nil))
+				_, err := declareRouteTableRange(nil).Apply(ctx, w)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(getFelixConfig().Spec.RouteTableRange).To(BeNil())
 			})
@@ -349,7 +349,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 			It("should clear a field its legacy manager holds that the declaration dropped", func() {
 				createAsManager("operator", nil, v3.FelixConfigurationSpec{PolicySyncPathPrefix: "/var/run/nodeagent"})
 
-				_, err := managedfields.Apply(ctx, w, declarePolicySync(""))
+				_, err := declarePolicySync("").Apply(ctx, w)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(getFelixConfig().Spec.PolicySyncPathPrefix).To(BeEmpty())
 			})
@@ -357,7 +357,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 			It("should leave a dropped field alone when someone else wrote it", func() {
 				createByUpdate(nil, v3.FelixConfigurationSpec{PolicySyncPathPrefix: "/var/run/customer"})
 
-				_, err := managedfields.Apply(ctx, w, declarePolicySync(""))
+				_, err := declarePolicySync("").Apply(ctx, w)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(getFelixConfig().Spec.PolicySyncPathPrefix).To(Equal("/var/run/customer"))
 			})
@@ -365,7 +365,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 			It("should stop using its record once it has applied the field itself", func() {
 				createByUpdate(map[string]string{render.BPFOperatorAnnotation: "true"},
 					v3.FelixConfigurationSpec{BPFEnabled: ptr.To(true)})
-				_, err := managedfields.Apply(ctx, w, declareBPF(managedfields.ConflictError))
+				_, err := declareBPF(managedfields.ConflictError).Apply(ctx, w)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(getFelixConfig().Spec.BPFEnabled).To(Equal(ptr.To(false)))
 
@@ -374,7 +374,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 				fc.Spec.BPFEnabled = ptr.To(true)
 				Expect(c.Update(ctx, fc, client.FieldOwner("kubectl"))).NotTo(HaveOccurred())
 
-				_, err = managedfields.Apply(ctx, w, declareBPF(managedfields.ConflictError))
+				_, err = declareBPF(managedfields.ConflictError).Apply(ctx, w)
 				Expect(err).To(BeAssignableToTypeOf(&managedfields.ConflictingFieldsError{}))
 				Expect(getFelixConfig().Spec.BPFEnabled).To(Equal(ptr.To(true)))
 			})
@@ -393,7 +393,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 		})
 
 		It("should create the FelixConfiguration and record the values it wrote", func() {
-			_, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
+			_, err := declare(managedfields.ConflictDefer, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 
 			fc := getFelixConfig()
@@ -404,24 +404,24 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 		})
 
 		It("should not write again when the declaration has not changed", func() {
-			_, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
+			_, err := declare(managedfields.ConflictDefer, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 			before := getFelixConfig().ResourceVersion
 
-			_, err = managedfields.Apply(ctx, w, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
+			_, err = declare(managedfields.ConflictDefer, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getFelixConfig().ResourceVersion).To(Equal(before))
 		})
 
 		It("should leave a deferred field alone and drop it from the record", func() {
-			_, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
+			_, err := declare(managedfields.ConflictDefer, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 
 			fc := getFelixConfig()
 			fc.Spec.HealthPort = ptr.To(9100)
 			Expect(c.Update(ctx, fc)).NotTo(HaveOccurred())
 
-			_, err = managedfields.Apply(ctx, w, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
+			_, err = declare(managedfields.ConflictDefer, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 
 			fc = getFelixConfig()
@@ -430,27 +430,27 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 		})
 
 		It("should take an overridden field back", func() {
-			_, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictOverride, managedfields.ConflictDefer))
+			_, err := declare(managedfields.ConflictOverride, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 
 			fc := getFelixConfig()
 			fc.Spec.HealthPort = ptr.To(9100)
 			Expect(c.Update(ctx, fc)).NotTo(HaveOccurred())
 
-			_, err = managedfields.Apply(ctx, w, declare(managedfields.ConflictOverride, managedfields.ConflictDefer))
+			_, err = declare(managedfields.ConflictOverride, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getFelixConfig().Spec.HealthPort).To(Equal(ptr.To(9099)))
 		})
 
 		It("should report a conflict on a field it refuses to take", func() {
-			_, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictError, managedfields.ConflictDefer))
+			_, err := declare(managedfields.ConflictError, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 
 			fc := getFelixConfig()
 			fc.Spec.HealthPort = ptr.To(9100)
 			Expect(c.Update(ctx, fc)).NotTo(HaveOccurred())
 
-			_, err = managedfields.Apply(ctx, w, declare(managedfields.ConflictError, managedfields.ConflictDefer))
+			_, err = declare(managedfields.ConflictError, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).To(BeAssignableToTypeOf(&managedfields.ConflictingFieldsError{}))
 			Expect(getFelixConfig().Spec.HealthPort).To(Equal(ptr.To(9100)))
 		})
@@ -461,10 +461,10 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 				Spec:       v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)},
 			})).NotTo(HaveOccurred())
 
-			_, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
+			_, err := declare(managedfields.ConflictDefer, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = managedfields.Apply(ctx, w, func(_ *v3.FelixConfiguration) (*managedfields.Declaration[*v3.FelixConfiguration], error) {
+			_, err = managedfields.Declare[*v3.FelixConfiguration](func(_ *v3.FelixConfiguration) (*managedfields.Declaration[*v3.FelixConfiguration], error) {
 				return &managedfields.Declaration[*v3.FelixConfiguration]{
 					Manager: "installation",
 					Owned:   &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{VXLANPort: ptr.To(4789)}},
@@ -473,7 +473,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 						"spec.vxlanPort":  managedfields.ConflictDefer,
 					},
 				}, nil
-			})
+			}).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getFelixConfig().Spec.HealthPort).To(Equal(ptr.To(9099)))
 		})
@@ -484,7 +484,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 				Spec:       v3.FelixConfigurationSpec{HealthPort: ptr.To(9100)},
 			})).NotTo(HaveOccurred())
 
-			_, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictError, managedfields.ConflictDefer))
+			_, err := declare(managedfields.ConflictError, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).To(BeAssignableToTypeOf(&managedfields.ConflictingFieldsError{}))
 		})
 
@@ -507,7 +507,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 			It("should take over a field its own legacy manager holds", func() {
 				createAsManager("operator", v3.FelixConfigurationSpec{HealthPort: ptr.To(9100)})
 
-				fc, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictError, managedfields.ConflictDefer))
+				fc, err := declare(managedfields.ConflictError, managedfields.ConflictDefer).Apply(ctx, w)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(fc.Spec.HealthPort).To(Equal(ptr.To(9099)))
 			})
@@ -515,7 +515,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 			It("should clear a field its legacy manager holds that the declaration dropped", func() {
 				createAsManager("operator", v3.FelixConfigurationSpec{PolicySyncPathPrefix: "/var/run/nodeagent"})
 
-				_, err := managedfields.Apply(ctx, w, declarePolicySync(""))
+				_, err := declarePolicySync("").Apply(ctx, w)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(getFelixConfig().Spec.PolicySyncPathPrefix).To(BeEmpty())
 			})
@@ -523,7 +523,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 			It("should leave a dropped field alone when someone else wrote it", func() {
 				createAsManager("someone-else", v3.FelixConfigurationSpec{PolicySyncPathPrefix: "/var/run/customer"})
 
-				_, err := managedfields.Apply(ctx, w, declarePolicySync(""))
+				_, err := declarePolicySync("").Apply(ctx, w)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(getFelixConfig().Spec.PolicySyncPathPrefix).To(Equal("/var/run/customer"))
 			})
@@ -549,7 +549,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 					Spec: v3.FelixConfigurationSpec{BPFEnabled: ptr.To(true)},
 				})).NotTo(HaveOccurred())
 
-				_, err := managedfields.Apply(ctx, w, declareBPF(managedfields.ConflictError))
+				_, err := declareBPF(managedfields.ConflictError).Apply(ctx, w)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(getFelixConfig().Spec.BPFEnabled).To(Equal(ptr.To(true)))
 			})
@@ -563,7 +563,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 					Spec: v3.FelixConfigurationSpec{BPFEnabled: ptr.To(true)},
 				})).NotTo(HaveOccurred())
 
-				_, err := managedfields.Apply(ctx, w, declareBPF(managedfields.ConflictError))
+				_, err := declareBPF(managedfields.ConflictError).Apply(ctx, w)
 				Expect(err).NotTo(HaveOccurred())
 				fc := getFelixConfig()
 				Expect(fc.Spec.BPFEnabled).To(Equal(ptr.To(true)))
@@ -576,13 +576,13 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 					Spec:       v3.FelixConfigurationSpec{BPFEnabled: ptr.To(false)},
 				})).NotTo(HaveOccurred())
 
-				_, err := managedfields.Apply(ctx, w, declareBPF(managedfields.ConflictError))
+				_, err := declareBPF(managedfields.ConflictError).Apply(ctx, w)
 				Expect(err).To(MatchError(ContainSubstring("spec.bpfEnabled")))
 				Expect(getFelixConfig().Spec.BPFEnabled).To(Equal(ptr.To(false)))
 			})
 
 			It("should keep the legacy annotation in step with what it writes", func() {
-				_, err := managedfields.Apply(ctx, w, declareBPF(managedfields.ConflictDefer))
+				_, err := declareBPF(managedfields.ConflictDefer).Apply(ctx, w)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(getFelixConfig().Annotations).To(HaveKeyWithValue(render.BPFOperatorAnnotation, "true"))
 			})

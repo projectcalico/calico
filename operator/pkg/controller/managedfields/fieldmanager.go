@@ -19,6 +19,7 @@ package managedfields
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -43,22 +44,21 @@ func New(c client.Client, useV3CRDs bool) *FieldManager {
 // Declare states which fields the caller owns, given the current object.
 type Declare[T client.Object] func(current T) (*Declaration[T], error)
 
-// object constrains Apply to a pointer type, so it can make one to read into.
-type object[U any] interface {
-	*U
-	client.Object
-}
-
-// Apply writes the fields declare asks for on the governed resource, and returns the whole
-// resulting object.
-func Apply[U any, T object[U]](ctx context.Context, m *FieldManager, declare Declare[T]) (T, error) {
+// Apply writes the fields the declaration asks for on the governed resource, and returns the
+// whole resulting object.
+func (d Declare[T]) Apply(ctx context.Context, m *FieldManager) (T, error) {
 	var zero T
-	current := T(new(U))
+	governed := reflect.TypeOf(zero)
+	if governed == nil || governed.Kind() != reflect.Pointer {
+		return zero, fmt.Errorf("a declaration governs a pointer type, not %T", zero)
+	}
+
+	current := reflect.New(governed.Elem()).Interface().(T)
 	if err := m.client.Get(ctx, types.NamespacedName{Name: defaultResourceName}, current); err != nil && !apierrors.IsNotFound(err) {
 		return zero, fmt.Errorf("unable to read %T: %w", current, err)
 	}
 
-	applied, err := m.writer.applyDeclared(ctx, current, untypedDeclare(declare))
+	applied, err := m.writer.applyDeclared(ctx, current, untypedDeclare(d))
 	if applied == nil {
 		return zero, err
 	}
