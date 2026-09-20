@@ -160,7 +160,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
-				managedFields:       managedfields.New(c, false),
+				fieldManager:        managedfields.New(c, false),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -699,7 +699,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
-				managedFields:       managedfields.New(c, false),
+				fieldManager:        managedfields.New(c, false),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -872,7 +872,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
-				managedFields:       managedfields.New(c, false),
+				fieldManager:        managedfields.New(c, false),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -2273,7 +2273,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
-				managedFields:       managedfields.New(c, false),
+				fieldManager:        managedfields.New(c, false),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -2384,7 +2384,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
-				managedFields:       managedfields.New(c, false),
+				fieldManager:        managedfields.New(c, false),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -2570,10 +2570,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client:        clientFor(),
-			managedFields: managedfields.New(clientFor(), true),
-			scheme:        scheme,
-			status:        mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor(), true),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2605,10 +2605,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1Beta1),
 			},
-			client:        clientFor(),
-			managedFields: managedfields.New(clientFor(), true),
-			scheme:        scheme,
-			status:        mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor(), true),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2638,10 +2638,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1Alpha1),
 			},
-			client:        clientFor(),
-			managedFields: managedfields.New(clientFor(), true),
-			scheme:        scheme,
-			status:        mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor(), true),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2671,10 +2671,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(""),
 			},
-			client:        clientFor(),
-			managedFields: managedfields.New(clientFor(), true),
-			scheme:        scheme,
-			status:        mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor(), true),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2693,10 +2693,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    false,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client:        clientFor(),
-			managedFields: managedfields.New(clientFor(), false),
-			scheme:        scheme,
-			status:        mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor(), false),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2714,10 +2714,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client:        clientFor(),
-			managedFields: managedfields.New(clientFor(), true),
-			scheme:        scheme,
-			status:        mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor(), true),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2793,10 +2793,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client:        clientFor(initial...),
-			managedFields: managedfields.New(clientFor(initial...), true),
-			scheme:        scheme,
-			status:        mockStatus,
+			client:       clientFor(initial...),
+			fieldManager: managedfields.New(clientFor(initial...), true),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2815,10 +2815,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client:        clientFor(),
-			managedFields: managedfields.New(clientFor(), true),
-			scheme:        scheme,
-			status:        mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor(), true),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2891,10 +2891,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client:        clientFor(),
-			managedFields: managedfields.New(clientFor(), true),
-			scheme:        scheme,
-			status:        mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor(), true),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2926,10 +2926,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1Beta1),
 			},
-			client:        clientFor(),
-			managedFields: managedfields.New(clientFor(), true),
-			scheme:        scheme,
-			status:        mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor(), true),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2959,10 +2959,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1Alpha1),
 			},
-			client:        clientFor(),
-			managedFields: managedfields.New(clientFor(), true),
-			scheme:        scheme,
-			status:        mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor(), true),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2980,10 +2980,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(""),
 			},
-			client:        clientFor(),
-			managedFields: managedfields.New(clientFor(), true),
-			scheme:        scheme,
-			status:        mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor(), true),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -3002,10 +3002,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    false,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client:        clientFor(),
-			managedFields: managedfields.New(clientFor(), false),
-			scheme:        scheme,
-			status:        mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor(), false),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -3063,10 +3063,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client:        clientFor(),
-			managedFields: managedfields.New(clientFor(), true),
-			scheme:        scheme,
-			status:        mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor(), true),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},

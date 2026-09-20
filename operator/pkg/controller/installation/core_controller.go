@@ -319,7 +319,7 @@ func NewReconciler(o ReconcilerOptions) *ReconcileInstallation {
 		newComponentHandler: utils.NewComponentHandler,
 		opts:                o.Options,
 		ext:                 o.Options.Extensions.Installation(),
-		managedFields:       managedfields.New(o.Client, o.Options.UseV3CRDs),
+		fieldManager:        managedfields.New(o.Client, o.Options.UseV3CRDs),
 	}
 }
 
@@ -367,7 +367,7 @@ type ReconcileInstallation struct {
 	migrationWatchReady *utils.ReadyFlag
 	opts                options.ControllerOptions
 	ext                 extensions.InstallationExtension
-	managedFields       *managedfields.FieldManager
+	fieldManager        *managedfields.FieldManager
 
 	// newComponentHandler returns a new component handler. Useful stub for unit testing.
 	newComponentHandler func(log logr.Logger, client client.Client, scheme *runtime.Scheme, cr metav1.Object, opts ...utils.ComponentHandlerOption) utils.ComponentHandler
@@ -1096,7 +1096,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	// is reported and skipped rather than fought over, so the reconcile carries on: freezing
 	// everything the operator manages does not win the field back.
 	var fieldConflicts []error
-	if _, err := r.declareFelixConfiguration(ctx, defaulted, needsNamespaceMigration).Apply(ctx, r.managedFields); err != nil {
+	if _, err := r.declareFelixConfiguration(ctx, defaulted, needsNamespaceMigration).Apply(ctx, r.fieldManager); err != nil {
 		if !isFieldConflict(err) {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
 			return reconcile.Result{}, err
@@ -1106,7 +1106,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 
 	// The return carries both writes, so the render below sees the health port and cgroup path
 	// a user may have kept.
-	felixConfiguration, err := r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration).Apply(ctx, r.managedFields)
+	felixConfiguration, err := r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration).Apply(ctx, r.fieldManager)
 	if err != nil {
 		if !isFieldConflict(err) {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
@@ -1116,7 +1116,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	// Set any non-default BGPConfiguration values that we need.
-	if _, err := r.declareBGPConfiguration(defaulted).Apply(ctx, r.managedFields); err != nil {
+	if _, err := r.declareBGPConfiguration(defaulted).Apply(ctx, r.fieldManager); err != nil {
 		if !isFieldConflict(err) {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating BGPConfiguration", err, reqLogger)
 			return reconcile.Result{}, err
@@ -1483,7 +1483,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	certificateManager.AddToStatusManager(r.status, common.CalicoNamespace)
 
 	// Re-check whether eBPF can be enabled within Felix once calico-node has rolled out.
-	if _, err := r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration).Apply(ctx, r.managedFields); err != nil {
+	if _, err := r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration).Apply(ctx, r.fieldManager); err != nil {
 		if !isFieldConflict(err) {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating resource", err, reqLogger)
 			return reconcile.Result{}, err
