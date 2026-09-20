@@ -208,6 +208,7 @@ func nftablesMode(install *operatorv1.Installation) v3.NFTablesMode {
 		// BPF mode replaces kube-proxy, so nftables needs no compatibility with its mode.
 		return v3.NFTablesModeEnabled
 	}
+
 	// kube-proxy is running, so let Felix pick per node and keep upgrades smooth.
 	return v3.NFTablesModeAuto
 }
