@@ -88,7 +88,7 @@ func valuesAgree(currentContent, payloadObj map[string]any, path string) (bool, 
 }
 
 // recordWrittenValues stores the values being written so the next reconcile can compare against them.
-func recordWrittenValues(obj client.Object, payload *unstructured.Unstructured, d *declaration, deferred []string) error {
+func recordWrittenValues(obj client.Object, payload *unstructured.Unstructured, d *Declaration, deferred []string) error {
 	values, err := lastWrittenValues(obj)
 	if err != nil {
 		return err
@@ -97,7 +97,7 @@ func recordWrittenValues(obj client.Object, payload *unstructured.Unstructured, 
 		delete(values, path)
 	}
 
-	for path := range d.policies {
+	for path := range d.Policies {
 		written, found, err := unstructured.NestedFieldNoCopy(payload.Object, strings.Split(path, ".")...)
 		if err != nil {
 			return fmt.Errorf("unable to read %s: %w", path, err)

@@ -34,14 +34,9 @@ const ownedFieldsAnnotation = "operator.tigera.io/owned-fields"
 // bpfEnabledPath is tracked by its own legacy annotation, which predates ownedFieldsAnnotation.
 const bpfEnabledPath = "spec.bpfEnabled"
 
-// crdV1FieldManager writes through crd.projectcalico.org/v1, the API group used in aggregated apiserver mode.
-type crdV1FieldManager struct {
-	client client.Client
-}
-
-var _ writer = &crdV1FieldManager{}
-
-func (m *crdV1FieldManager) applyDeclared(ctx context.Context, current client.Object, declare declareFn) (client.Object, error) {
+// applyCRDV1 writes through crd.projectcalico.org/v1, the API group used in aggregated apiserver
+// mode, where the operator tracks its own fields.
+func (m *FieldManager) applyCRDV1(ctx context.Context, current client.Object, declare declareFn) (client.Object, error) {
 	if err := utils.RestoreV3Metadata(current); err != nil {
 		return nil, err
 	}
@@ -57,7 +52,7 @@ func (m *crdV1FieldManager) applyDeclared(ctx context.Context, current client.Ob
 		return current, nil
 	}
 
-	payload, err := declaredPayload(d.owned, d.policies)
+	payload, err := declaredPayload(d.Owned, d.Policies)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +89,7 @@ func (m *crdV1FieldManager) applyDeclared(ctx context.Context, current client.Ob
 		return current, conflict
 	}
 
-	logResolution(current, d.manager, deferred, removed, nil)
+	logResolution(current, d.Manager, deferred, removed, nil)
 	persisted, err := m.persist(ctx, merged, patchFrom)
 	if err != nil {
 		return nil, err
@@ -103,7 +98,7 @@ func (m *crdV1FieldManager) applyDeclared(ctx context.Context, current client.Ob
 }
 
 // resolveTrackedConflicts drops deferred fields from payload and returns the paths it dropped.
-func resolveTrackedConflicts(current client.Object, d *declaration, payload *unstructured.Unstructured, legacyOwned map[string]bool) ([]string, error) {
+func resolveTrackedConflicts(current client.Object, d *Declaration, payload *unstructured.Unstructured, legacyOwned map[string]bool) ([]string, error) {
 	currentContent, err := toUnstructured(current)
 	if err != nil {
 		return nil, err
@@ -114,7 +109,7 @@ func resolveTrackedConflicts(current client.Object, d *declaration, payload *uns
 	}
 
 	var deferred, refused []string
-	for path := range d.policies {
+	for path := range d.Policies {
 		if !pathSet(payload.Object, path) {
 			continue
 		}
@@ -126,7 +121,7 @@ func resolveTrackedConflicts(current client.Object, d *declaration, payload *uns
 			continue
 		}
 
-		switch d.policies[path] {
+		switch d.Policies[path] {
 		case ConflictDefer:
 			// Agreeing on the value is not ownership. Recording it here would delete the other
 			// writer's setting the moment the operator stops declaring it.
@@ -171,7 +166,7 @@ func joinConflicts(current client.Object, conflict error, paths []string) error 
 
 // removeUndeclared deletes governed fields the declaration left out, matching the way a sole
 // apply owner drops them.
-func removeUndeclared(merged, current client.Object, d *declaration, payload *unstructured.Unstructured, legacyOwned map[string]bool) (remove, refused []string, err error) {
+func removeUndeclared(merged, current client.Object, d *Declaration, payload *unstructured.Unstructured, legacyOwned map[string]bool) (remove, refused []string, err error) {
 	currentContent, err := toUnstructured(current)
 	if err != nil {
 		return nil, nil, err
@@ -181,7 +176,7 @@ func removeUndeclared(merged, current client.Object, d *declaration, payload *un
 		return nil, nil, err
 	}
 
-	for path := range d.policies {
+	for path := range d.Policies {
 		if pathSet(payload.Object, path) || !pathSet(currentContent, path) {
 			continue
 		}
@@ -194,7 +189,7 @@ func removeUndeclared(merged, current client.Object, d *declaration, payload *un
 			return nil, nil, err
 		}
 		if changed {
-			switch d.policies[path] {
+			switch d.Policies[path] {
 			case ConflictDefer:
 				continue
 			case ConflictOverride:
@@ -233,7 +228,7 @@ func kindOf(obj client.Object) string {
 	return t.Name()
 }
 
-func (m *crdV1FieldManager) persist(ctx context.Context, obj client.Object, patchFrom client.Patch) (client.Object, error) {
+func (m *FieldManager) persist(ctx context.Context, obj client.Object, patchFrom client.Patch) (client.Object, error) {
 	if obj.GetResourceVersion() == "" {
 		obj.SetName(defaultResourceName)
 		if err := m.client.Create(ctx, obj); err != nil {

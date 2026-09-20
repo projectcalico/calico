@@ -47,10 +47,11 @@ const (
 // every one every time, so a field the spec stops asking for is declared without a value, which
 // clears whatever the operator wrote there.
 func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) managedfields.Declare[*v3.FelixConfiguration] {
-	return func(current *v3.FelixConfiguration) (*managedfields.Declaration[*v3.FelixConfiguration], error) {
-		d := &managedfields.Declaration[*v3.FelixConfiguration]{
+	return func(current *v3.FelixConfiguration) (*managedfields.Declaration, error) {
+		felixConfig := &v3.FelixConfiguration{}
+		d := &managedfields.Declaration{
 			Manager: installationFieldManager,
-			Owned:   &v3.FelixConfiguration{},
+			Owned:   felixConfig,
 
 			// Defer leaves a user's value alone, Override takes the field back. Fields the
 			// operator only defaults get Defer; modes it has to keep consistent with what it
@@ -66,7 +67,7 @@ func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, i
 				"spec.programClusterRoutes":    managedfields.ConflictOverride,
 			},
 		}
-		owned := &d.Owned.Spec
+		owned := &felixConfig.Spec
 
 		// Keep calico-node's route tables clear of the ones the CNI plugin uses.
 		switch install.Spec.CNI.Type {
@@ -120,7 +121,7 @@ func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, i
 			owned.ProgramClusterRoutes = ptr.To(felixProgramClusterRoutesValue(mode))
 		}
 
-		extPaths, err := r.ext.DeclareFelixConfiguration(&install.Spec, current, d.Owned)
+		extPaths, err := r.ext.DeclareFelixConfiguration(&install.Spec, current, felixConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -157,10 +158,11 @@ func joinFieldConflicts(conflicts []error) error {
 // declareBGPConfiguration declares the BIRD half of cluster route programming. It moves in
 // lockstep with the FelixConfiguration half: whatever Felix is not programming, BIRD has to be.
 func (r *ReconcileInstallation) declareBGPConfiguration(install *operatorv1.Installation) managedfields.Declare[*v3.BGPConfiguration] {
-	return func(current *v3.BGPConfiguration) (*managedfields.Declaration[*v3.BGPConfiguration], error) {
-		d := &managedfields.Declaration[*v3.BGPConfiguration]{
+	return func(current *v3.BGPConfiguration) (*managedfields.Declaration, error) {
+		bgpConfig := &v3.BGPConfiguration{}
+		d := &managedfields.Declaration{
 			Manager: installationFieldManager,
-			Owned:   &v3.BGPConfiguration{},
+			Owned:   bgpConfig,
 			Policies: map[string]managedfields.ConflictPolicy{
 				"spec.programClusterRoutes": managedfields.ConflictOverride,
 			},
@@ -170,7 +172,7 @@ func (r *ReconcileInstallation) declareBGPConfiguration(install *operatorv1.Inst
 		// defaults to" rather than pinning today's default into the datastore.
 		if install.Spec.CalicoNetwork != nil && install.Spec.CalicoNetwork.ClusterRoutingMode != nil {
 			mode := *install.Spec.CalicoNetwork.ClusterRoutingMode
-			d.Owned.Spec.ProgramClusterRoutes = ptr.To(birdProgramClusterRoutesValue(mode))
+			bgpConfig.Spec.ProgramClusterRoutes = ptr.To(birdProgramClusterRoutesValue(mode))
 		}
 		return d, nil
 	}
@@ -216,12 +218,12 @@ func nftablesMode(install *operatorv1.Installation) v3.NFTablesMode {
 // declareBPFEnabled declares spec.bpfEnabled. Both installation write sites use it so the field
 // stays under one manager with the same value.
 func (r *ReconcileInstallation) declareBPFEnabled(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) managedfields.Declare[*v3.FelixConfiguration] {
-	return func(current *v3.FelixConfiguration) (*managedfields.Declaration[*v3.FelixConfiguration], error) {
+	return func(current *v3.FelixConfiguration) (*managedfields.Declaration, error) {
 		enabled, err := r.bpfEnabledValue(ctx, install, current, needNsMigration)
 		if err != nil || enabled == nil {
 			return nil, err
 		}
-		return &managedfields.Declaration[*v3.FelixConfiguration]{
+		return &managedfields.Declaration{
 			Manager: bpfFieldManager,
 			Owned: &v3.FelixConfiguration{
 				Spec: v3.FelixConfigurationSpec{BPFEnabled: enabled},

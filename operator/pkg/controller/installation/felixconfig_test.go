@@ -30,6 +30,11 @@ import (
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 )
 
+// ownedFelixConfig is the object a FelixConfiguration declaration sets its fields on.
+func ownedFelixConfig(d *managedfields.Declaration) *v3.FelixConfiguration {
+	return d.Owned.(*v3.FelixConfiguration)
+}
+
 var _ = Describe("FelixConfiguration declarations", func() {
 	var r ReconcileInstallation
 
@@ -122,12 +127,12 @@ var _ = Describe("FelixConfiguration declarations", func() {
 		i.Spec.CalicoNetwork.ClusterRoutingMode = ptr.To(operatorv1.ClusterRoutingModeFelix)
 		d, err := r.declareFelixConfiguration(context.Background(), i, false)(&v3.FelixConfiguration{})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(d.Owned.Spec.ProgramClusterRoutes).NotTo(BeNil())
+		Expect(ownedFelixConfig(d).Spec.ProgramClusterRoutes).NotTo(BeNil())
 
 		// Declared with no value, which is what clears whatever the operator wrote there.
 		d, err = r.declareFelixConfiguration(context.Background(), install(), false)(&v3.FelixConfiguration{})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(d.Owned.Spec.ProgramClusterRoutes).To(BeNil())
+		Expect(ownedFelixConfig(d).Spec.ProgramClusterRoutes).To(BeNil())
 		Expect(d.Policies).To(HaveKey("spec.programClusterRoutes"))
 	})
 
@@ -135,7 +140,7 @@ var _ = Describe("FelixConfiguration declarations", func() {
 		current := &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: ptr.To(1234)}}
 		d, err := r.declareFelixConfiguration(context.Background(), install(), false)(current)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(d.Owned.Spec.HealthPort).To(Equal(ptr.To(9099)))
+		Expect(ownedFelixConfig(d).Spec.HealthPort).To(Equal(ptr.To(9099)))
 		Expect(d.Policies["spec.healthPort"]).To(Equal(managedfields.ConflictDefer))
 	})
 
@@ -146,7 +151,7 @@ var _ = Describe("FelixConfiguration declarations", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(d.Manager).To(Equal(installationFieldManager))
 		Expect(d.Policies["spec.programClusterRoutes"]).To(Equal(managedfields.ConflictOverride))
-		Expect(d.Owned.Spec.ProgramClusterRoutes).To(Equal(ptr.To("Enabled")))
+		Expect(ownedFelixConfig(d).Spec.ProgramClusterRoutes).To(Equal(ptr.To("Enabled")))
 	})
 
 	It("declares nothing while calico-node still serves nodes out of kube-system", func() {
@@ -160,7 +165,7 @@ var _ = Describe("FelixConfiguration declarations", func() {
 
 		d, err = r.declareBPFEnabled(context.Background(), i, false)(&v3.FelixConfiguration{})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(d.Owned.Spec.BPFEnabled).To(Equal(ptr.To(true)))
+		Expect(ownedFelixConfig(d).Spec.BPFEnabled).To(Equal(ptr.To(true)))
 	})
 
 	It("declares bpfEnabled under its own manager, refusing to fight over it", func() {
@@ -169,7 +174,7 @@ var _ = Describe("FelixConfiguration declarations", func() {
 		Expect(d.Manager).To(Equal(bpfFieldManager))
 		Expect(d.Policies).To(HaveLen(1))
 		Expect(d.Policies["spec.bpfEnabled"]).To(Equal(managedfields.ConflictError))
-		Expect(d.Owned.Spec.BPFEnabled).To(Equal(ptr.To(false)))
+		Expect(ownedFelixConfig(d).Spec.BPFEnabled).To(Equal(ptr.To(false)))
 	})
 })
 
@@ -188,7 +193,7 @@ var _ = Describe("BGPConfiguration declarations", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(d.Manager).To(Equal(installationFieldManager))
 		Expect(d.Policies["spec.programClusterRoutes"]).To(Equal(managedfields.ConflictOverride))
-		Expect(d.Owned.Spec.ProgramClusterRoutes).To(Equal(ptr.To("Disabled")))
+		Expect(d.Owned.(*v3.BGPConfiguration).Spec.ProgramClusterRoutes).To(Equal(ptr.To("Disabled")))
 	})
 
 	It("governs the field whether or not the Installation asks for a mode", func() {
@@ -196,6 +201,6 @@ var _ = Describe("BGPConfiguration declarations", func() {
 		d, err := r.declareBGPConfiguration(install(nil))(&v3.BGPConfiguration{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(d.Policies).To(HaveKey("spec.programClusterRoutes"))
-		Expect(d.Owned.Spec.ProgramClusterRoutes).To(BeNil())
+		Expect(d.Owned.(*v3.BGPConfiguration).Spec.ProgramClusterRoutes).To(BeNil())
 	})
 })

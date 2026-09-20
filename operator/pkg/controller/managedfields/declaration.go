@@ -16,7 +16,6 @@ package managedfields
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,39 +35,22 @@ const (
 	ConflictOverride ConflictPolicy = "Override"
 )
 
-// Declaration is one field manager's statement of what it owns on T.
-type Declaration[T client.Object] struct {
+// Declaration is one field manager's statement of what it owns on a resource.
+type Declaration struct {
 	// Manager is the field manager name, and has to stay the same across reconciles.
 	Manager string
 
 	// Owned carries the declared fields and nothing else. Fields left nil are not owned.
-	Owned T
+	Owned client.Object
 
 	// Policies is keyed by field path, e.g. "spec.healthPort". Every declared field needs an entry.
 	Policies map[string]ConflictPolicy
 }
 
-func (d *Declaration[T]) untyped() *declaration {
-	owned := client.Object(d.Owned)
-	if reflect.ValueOf(d.Owned).IsNil() {
-		// A declaration that governs fields without setting any still needs an object to
-		// read them from, so give it an empty one of the same type.
-		owned = reflect.New(reflect.TypeOf(d.Owned).Elem()).Interface().(client.Object)
-	}
-	return &declaration{manager: d.Manager, owned: owned, policies: d.Policies}
-}
-
-// declaration is the form the writers work in, which is the same for every governed resource.
-type declaration struct {
-	manager  string
-	owned    client.Object
-	policies map[string]ConflictPolicy
-}
-
 // policyFor returns the policy governing path, which may name a field below a declared one.
-func (d *declaration) policyFor(path string) (string, ConflictPolicy, bool) {
+func (d *Declaration) policyFor(path string) (string, ConflictPolicy, bool) {
 	best := ""
-	for declared := range d.policies {
+	for declared := range d.Policies {
 		if path != declared && !strings.HasPrefix(path, declared+".") {
 			continue
 		}
@@ -79,7 +61,7 @@ func (d *declaration) policyFor(path string) (string, ConflictPolicy, bool) {
 	if best == "" {
 		return "", "", false
 	}
-	return best, d.policies[best], true
+	return best, d.Policies[best], true
 }
 
 // ConflictingFieldsError reports fields the operator declares that someone else owns.

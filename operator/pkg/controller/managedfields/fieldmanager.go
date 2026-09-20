@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Package managedfields owns a declared set of fields on Calico resources that
-// users also modify. One implementation per API group.
+// users also modify. One write path per API group.
 package managedfields
 
 import (
@@ -29,20 +29,16 @@ import (
 // FieldManager owns a declared set of fields on shared Calico configuration resources.
 type FieldManager struct {
 	client client.Client
-	writer writer
+	useV3  bool
 }
 
 // New returns a FieldManager for the API group the operator writes through.
 func New(c client.Client, useV3CRDs bool) *FieldManager {
-	crdV1 := crdV1FieldManager{client: c}
-	if useV3CRDs {
-		return &FieldManager{client: c, writer: &v3FieldManager{crdV1}}
-	}
-	return &FieldManager{client: c, writer: &crdV1}
+	return &FieldManager{client: c, useV3: useV3CRDs}
 }
 
 // Declare states which fields the caller owns, given the current object.
-type Declare[T client.Object] func(current T) (*Declaration[T], error)
+type Declare[T client.Object] func(current T) (*Declaration, error)
 
 // Apply writes the fields the declaration asks for on the governed resource, and returns the
 // whole resulting object.
@@ -58,7 +54,7 @@ func (d Declare[T]) Apply(ctx context.Context, m *FieldManager) (T, error) {
 		return zero, fmt.Errorf("unable to read %T: %w", current, err)
 	}
 
-	applied, err := m.writer.applyDeclared(ctx, current, untypedDeclare(d))
+	applied, err := m.applyDeclared(ctx, current, untypedDeclare(d))
 	if applied == nil {
 		return zero, err
 	}
@@ -69,25 +65,27 @@ func (d Declare[T]) Apply(ctx context.Context, m *FieldManager) (T, error) {
 	return typed, err
 }
 
-// writer persists a declaration through one API group.
-type writer interface {
-	applyDeclared(ctx context.Context, current client.Object, declare declareFn) (client.Object, error)
+// applyDeclared persists a declaration through the API group the operator writes.
+func (m *FieldManager) applyDeclared(ctx context.Context, current client.Object, declare declareFn) (client.Object, error) {
+	if m.useV3 {
+		return m.applyV3(ctx, current, declare)
+	}
+	return m.applyCRDV1(ctx, current, declare)
 }
 
 // declareFn is the untyped declaration callback the writers share.
-type declareFn func(current client.Object) (*declaration, error)
+type declareFn func(current client.Object) (*Declaration, error)
 
 // untypedDeclare adapts a caller's typed declaration to the form the writers work in.
 func untypedDeclare[T client.Object](declare Declare[T]) declareFn {
-	return func(current client.Object) (*declaration, error) {
-		typed, ok := current.(T)
-		if !ok {
-			return nil, nil
-		}
-		d, err := declare(typed)
+	return func(current client.Object) (*Declaration, error) {
+		d, err := declare(current.(T))
 		if err != nil || d == nil {
 			return nil, err
 		}
-		return d.untyped(), nil
+		if _, ok := d.Owned.(T); !ok {
+			return nil, fmt.Errorf("a %T declaration cannot own %T", current, d.Owned)
+		}
+		return d, nil
 	}
 }

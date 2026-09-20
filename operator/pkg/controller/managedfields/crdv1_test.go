@@ -52,8 +52,8 @@ var _ = Describe("crd.projectcalico.org/v1 writer", func() {
 
 	Context("a declaration that stops declaring a field", func() {
 		declare := func(port *int) managedfields.Declare[*v3.FelixConfiguration] {
-			return func(_ *v3.FelixConfiguration) (*managedfields.Declaration[*v3.FelixConfiguration], error) {
-				return &managedfields.Declaration[*v3.FelixConfiguration]{
+			return func(_ *v3.FelixConfiguration) (*managedfields.Declaration, error) {
+				return &managedfields.Declaration{
 					Manager: "test",
 					Owned:   &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: port}},
 					Policies: map[string]managedfields.ConflictPolicy{
@@ -99,7 +99,7 @@ var _ = Describe("crd.projectcalico.org/v1 writer", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				var seen map[string]string
-				_, err = managedfields.Declare[*v3.FelixConfiguration](func(current *v3.FelixConfiguration) (*managedfields.Declaration[*v3.FelixConfiguration], error) {
+				_, err = managedfields.Declare[*v3.FelixConfiguration](func(current *v3.FelixConfiguration) (*managedfields.Declaration, error) {
 					seen = current.Annotations
 					return declare(ptr.To(9099))(current)
 				}).Apply(ctx, w)

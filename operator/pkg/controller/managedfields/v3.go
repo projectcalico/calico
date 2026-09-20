@@ -34,14 +34,8 @@ import (
 // fieldManagerPrefix namespaces the operator's field managers away from other writers.
 const fieldManagerPrefix = "tigera-operator/"
 
-// v3FieldManager writes through projectcalico.org/v3, where the API server tracks the operator's fields.
-type v3FieldManager struct {
-	crdV1FieldManager
-}
-
-var _ writer = &v3FieldManager{}
-
-func (m *v3FieldManager) applyDeclared(ctx context.Context, current client.Object, declare declareFn) (client.Object, error) {
+// applyV3 writes through projectcalico.org/v3, where the API server tracks the operator's fields.
+func (m *FieldManager) applyV3(ctx context.Context, current client.Object, declare declareFn) (client.Object, error) {
 	d, err := declare(current)
 	if err != nil {
 		return nil, err
@@ -55,7 +49,7 @@ func (m *v3FieldManager) applyDeclared(ctx context.Context, current client.Objec
 		return nil, err
 	}
 
-	payload, err := declaredPayload(d.owned, d.policies)
+	payload, err := declaredPayload(d.Owned, d.Policies)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +61,7 @@ func (m *v3FieldManager) applyDeclared(ctx context.Context, current client.Objec
 		return nil, err
 	}
 
-	applied, err := m.apply(ctx, gvk, payload, d.manager, false)
+	applied, err := m.serverSideApply(ctx, gvk, payload, d.Manager, false)
 	if err == nil {
 		return applied, nil
 	}
@@ -75,7 +69,7 @@ func (m *v3FieldManager) applyDeclared(ctx context.Context, current client.Objec
 		return nil, err
 	}
 
-	force, conflict := m.resolveConflicts(err, current, d, payload)
+	force, conflict := resolveConflicts(err, current, d, payload)
 	var refused *ConflictingFieldsError
 	if conflict != nil && !errors.As(conflict, &refused) {
 		return nil, conflict
@@ -83,7 +77,7 @@ func (m *v3FieldManager) applyDeclared(ctx context.Context, current client.Objec
 
 	// A refused field is dropped from the payload rather than fought over, so the rest of the
 	// declaration still lands. The caller degrades on the error it gets back.
-	applied, err = m.apply(ctx, gvk, payload, d.manager, force)
+	applied, err = m.serverSideApply(ctx, gvk, payload, d.Manager, force)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +85,7 @@ func (m *v3FieldManager) applyDeclared(ctx context.Context, current client.Objec
 }
 
 // resolveConflicts drops deferred fields from payload and reports whether the retry must force.
-func (m *v3FieldManager) resolveConflicts(applyErr error, current client.Object, d *declaration, payload *unstructured.Unstructured) (bool, error) {
+func resolveConflicts(applyErr error, current client.Object, d *Declaration, payload *unstructured.Unstructured) (bool, error) {
 	paths := conflictPaths(applyErr)
 	if len(paths) == 0 {
 		return false, applyErr
@@ -101,7 +95,7 @@ func (m *v3FieldManager) resolveConflicts(applyErr error, current client.Object,
 	if err != nil {
 		return false, err
 	}
-	reclaimable, err := reclaimablePaths(current, fieldManagerPrefix+d.manager)
+	reclaimable, err := reclaimablePaths(current, fieldManagerPrefix+d.Manager)
 	if err != nil {
 		return false, err
 	}
@@ -146,7 +140,7 @@ func (m *v3FieldManager) resolveConflicts(applyErr error, current client.Object,
 	if len(undeclared) > 0 {
 		return false, fmt.Errorf("conflict on fields with no declared policy %v: %w", undeclared, applyErr)
 	}
-	logResolution(current, d.manager, deferred, nil, forced)
+	logResolution(current, d.Manager, deferred, nil, forced)
 	if len(refused) > 0 {
 		sort.Strings(refused)
 		return len(forced) > 0, &ConflictingFieldsError{Kind: kindOf(current), Paths: refused}
@@ -156,14 +150,14 @@ func (m *v3FieldManager) resolveConflicts(applyErr error, current client.Object,
 
 // clearLegacyOwned deletes governed fields the operator's pre-apply field manager still holds and
 // the declaration does not set. An apply cannot drop a field it does not own.
-func (m *v3FieldManager) clearLegacyOwned(ctx context.Context, current client.Object, gvk schema.GroupVersionKind, d *declaration, payload *unstructured.Unstructured) error {
+func (m *FieldManager) clearLegacyOwned(ctx context.Context, current client.Object, gvk schema.GroupVersionKind, d *Declaration, payload *unstructured.Unstructured) error {
 	legacyOwned, _, err := updateOwnedPaths(current)
 	if err != nil || len(legacyOwned) == 0 {
 		return err
 	}
 
 	remove := map[string]any{}
-	for path := range d.policies {
+	for path := range d.Policies {
 		if !legacyOwned[path] || pathSet(payload.Object, path) {
 			continue
 		}
@@ -179,14 +173,14 @@ func (m *v3FieldManager) clearLegacyOwned(ctx context.Context, current client.Ob
 	if err != nil {
 		return fmt.Errorf("unable to render the fields to clear: %w", err)
 	}
-	log.Info("Clearing shared configuration fields the operator no longer declares", "kind", kindOf(current), "manager", d.manager, "fields", string(encoded))
+	log.Info("Clearing shared configuration fields the operator no longer declares", "kind", kindOf(current), "manager", d.Manager, "fields", string(encoded))
 	target := &unstructured.Unstructured{}
 	target.SetGroupVersionKind(gvk)
 	target.SetName(defaultResourceName)
 	return m.client.Patch(ctx, target, client.RawPatch(types.MergePatchType, encoded))
 }
 
-func (m *v3FieldManager) apply(ctx context.Context, gvk schema.GroupVersionKind, payload *unstructured.Unstructured, manager string, force bool) (client.Object, error) {
+func (m *FieldManager) serverSideApply(ctx context.Context, gvk schema.GroupVersionKind, payload *unstructured.Unstructured, manager string, force bool) (client.Object, error) {
 	opts := []client.ApplyOption{client.FieldOwner(fieldManagerPrefix + manager)}
 	if force {
 		opts = append(opts, client.ForceOwnership)
