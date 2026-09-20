@@ -52,6 +52,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/components"
 	"github.com/projectcalico/calico/operator/pkg/controller"
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
+	"github.com/projectcalico/calico/operator/pkg/controller/managedfields"
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
 	"github.com/projectcalico/calico/operator/pkg/controller/typhaautoscaler"
@@ -159,6 +160,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
+				managedFields:       managedfields.New(c, false),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -697,6 +699,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
+				managedFields:       managedfields.New(c, false),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -869,6 +872,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
+				managedFields:       managedfields.New(c, false),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -1303,6 +1307,36 @@ var _ = Describe("Testing core-controller installation", func() {
 			bgpConfig := &v3.BGPConfiguration{}
 			err = c.Get(ctx, types.NamespacedName{Name: "default"}, bgpConfig)
 			Expect(err).Should(HaveOccurred())
+		})
+
+		It("should take both cluster routing values back when ClusterRoutingMode is removed", func() {
+			bird := operator.ClusterRoutingModeBIRD
+			cr.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{ClusterRoutingMode: &bird}
+			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			fc := &v3.FelixConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, fc)).NotTo(HaveOccurred())
+			Expect(fc.Spec.ProgramClusterRoutes).To(Equal(ptr.To("Disabled")))
+			bgpConfig := &v3.BGPConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, bgpConfig)).NotTo(HaveOccurred())
+			Expect(bgpConfig.Spec.ProgramClusterRoutes).To(Equal(ptr.To("Enabled")))
+
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, cr)).NotTo(HaveOccurred())
+			cr.Spec.CalicoNetwork.ClusterRoutingMode = nil
+			Expect(c.Update(ctx, cr)).NotTo(HaveOccurred())
+			_, err = r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			// Felix and BIRD have to give the routes up together.  One retracting alone leaves
+			// both programming the IPIP routes, which is worse than leaving both stale.
+			fc = &v3.FelixConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, fc)).NotTo(HaveOccurred())
+			Expect(fc.Spec.ProgramClusterRoutes).To(BeNil())
+			bgpConfig = &v3.BGPConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, bgpConfig)).NotTo(HaveOccurred())
+			Expect(bgpConfig.Spec.ProgramClusterRoutes).To(BeNil())
 		})
 
 		It("should correctly patch FelixConfig and BGPConfig with ClusterRouteMode set to BIRD", func() {
@@ -2239,6 +2273,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
+				managedFields:       managedfields.New(c, false),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -2349,6 +2384,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
+				managedFields:       managedfields.New(c, false),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -2534,9 +2570,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:        clientFor(),
+			managedFields: managedfields.New(clientFor(), true),
+			scheme:        scheme,
+			status:        mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2568,9 +2605,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1Beta1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:        clientFor(),
+			managedFields: managedfields.New(clientFor(), true),
+			scheme:        scheme,
+			status:        mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2600,9 +2638,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1Alpha1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:        clientFor(),
+			managedFields: managedfields.New(clientFor(), true),
+			scheme:        scheme,
+			status:        mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2632,9 +2671,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(""),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:        clientFor(),
+			managedFields: managedfields.New(clientFor(), true),
+			scheme:        scheme,
+			status:        mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2653,9 +2693,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    false,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:        clientFor(),
+			managedFields: managedfields.New(clientFor(), false),
+			scheme:        scheme,
+			status:        mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2673,9 +2714,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:        clientFor(),
+			managedFields: managedfields.New(clientFor(), true),
+			scheme:        scheme,
+			status:        mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2751,9 +2793,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client: clientFor(initial...),
-			scheme: scheme,
-			status: mockStatus,
+			client:        clientFor(initial...),
+			managedFields: managedfields.New(clientFor(initial...), true),
+			scheme:        scheme,
+			status:        mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2772,9 +2815,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:        clientFor(),
+			managedFields: managedfields.New(clientFor(), true),
+			scheme:        scheme,
+			status:        mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2847,9 +2891,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:        clientFor(),
+			managedFields: managedfields.New(clientFor(), true),
+			scheme:        scheme,
+			status:        mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2881,9 +2926,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1Beta1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:        clientFor(),
+			managedFields: managedfields.New(clientFor(), true),
+			scheme:        scheme,
+			status:        mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2913,9 +2959,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1Alpha1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:        clientFor(),
+			managedFields: managedfields.New(clientFor(), true),
+			scheme:        scheme,
+			status:        mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2933,9 +2980,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(""),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:        clientFor(),
+			managedFields: managedfields.New(clientFor(), true),
+			scheme:        scheme,
+			status:        mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2954,9 +3002,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    false,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:        clientFor(),
+			managedFields: managedfields.New(clientFor(), false),
+			scheme:        scheme,
+			status:        mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -3014,9 +3063,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:        clientFor(),
+			managedFields: managedfields.New(clientFor(), true),
+			scheme:        scheme,
+			status:        mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
