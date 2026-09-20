@@ -17,7 +17,9 @@ package managedfields
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -48,10 +50,10 @@ func (m *v3FieldManager) ApplyFelixConfiguration(ctx context.Context, declare De
 		return nil, err
 	}
 	applied, err := m.applyDeclared(ctx, current, felixDeclareFn(declare))
-	if err != nil {
+	if applied == nil {
 		return nil, err
 	}
-	return applied.(*v3.FelixConfiguration), nil
+	return applied.(*v3.FelixConfiguration), err
 }
 
 func (m *v3FieldManager) ApplyBGPConfiguration(ctx context.Context, declare DeclareBGPConfiguration) (*v3.BGPConfiguration, error) {
@@ -60,10 +62,10 @@ func (m *v3FieldManager) ApplyBGPConfiguration(ctx context.Context, declare Decl
 		return nil, err
 	}
 	applied, err := m.applyDeclared(ctx, current, bgpDeclareFn(declare))
-	if err != nil {
+	if applied == nil {
 		return nil, err
 	}
-	return applied.(*v3.BGPConfiguration), nil
+	return applied.(*v3.BGPConfiguration), err
 }
 
 func (m *v3FieldManager) applyDeclared(ctx context.Context, current client.Object, declare declareFn) (client.Object, error) {
@@ -100,11 +102,19 @@ func (m *v3FieldManager) applyDeclared(ctx context.Context, current client.Objec
 		return nil, err
 	}
 
-	force, err := m.resolveConflicts(err, current, d, payload)
+	force, conflict := m.resolveConflicts(err, current, d, payload)
+	var refused *ConflictingFieldsError
+	if conflict != nil && !errors.As(conflict, &refused) {
+		return nil, conflict
+	}
+
+	// A refused field is dropped from the payload rather than fought over, so the rest of the
+	// declaration still lands. The caller degrades on the error it gets back.
+	applied, err = m.apply(ctx, gvk, payload, d.manager, force)
 	if err != nil {
 		return nil, err
 	}
-	return m.apply(ctx, gvk, payload, d.manager, force)
+	return applied, conflict
 }
 
 // resolveConflicts drops deferred fields from payload and reports whether the retry must force.
@@ -153,6 +163,8 @@ func (m *v3FieldManager) resolveConflicts(applyErr error, current client.Object,
 				// Both writers want the same value, so there is nothing to arbitrate.
 				forced = append(forced, declared)
 			} else {
+				// Leave the other writer's value alone and let the caller report it.
+				removePath(payload.Object, declared)
 				refused = append(refused, declared)
 			}
 		}
@@ -161,11 +173,11 @@ func (m *v3FieldManager) resolveConflicts(applyErr error, current client.Object,
 	if len(undeclared) > 0 {
 		return false, fmt.Errorf("conflict on fields with no declared policy %v: %w", undeclared, applyErr)
 	}
-	if len(refused) > 0 {
-		return false, &ConflictingFieldsError{Kind: kindOf(current), Paths: refused}
-	}
-
 	logResolution(current, d.manager, deferred, nil, forced)
+	if len(refused) > 0 {
+		sort.Strings(refused)
+		return len(forced) > 0, &ConflictingFieldsError{Kind: kindOf(current), Paths: refused}
+	}
 	return len(forced) > 0, nil
 }
 

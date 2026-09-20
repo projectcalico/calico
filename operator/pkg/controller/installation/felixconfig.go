@@ -16,6 +16,7 @@ package installation
 
 import (
 	"context"
+	"errors"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
@@ -129,6 +130,28 @@ func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, i
 
 		return d, nil
 	}
+}
+
+// isFieldConflict reports whether err is another writer owning a field the operator declares.
+// The reconcile reports those and carries on, rather than failing on them.
+func isFieldConflict(err error) bool {
+	var conflict *managedfields.ConflictingFieldsError
+	return errors.As(err, &conflict)
+}
+
+// joinFieldConflicts folds the conflicts a reconcile stepped over into one error, dropping the
+// repeats that come from declaring the same field at more than one write site.
+func joinFieldConflicts(conflicts []error) error {
+	seen := map[string]bool{}
+	unique := make([]error, 0, len(conflicts))
+	for _, err := range conflicts {
+		if seen[err.Error()] {
+			continue
+		}
+		seen[err.Error()] = true
+		unique = append(unique, err)
+	}
+	return errors.Join(unique...)
 }
 
 // declareBGPConfiguration declares the BIRD half of cluster route programming. It moves in

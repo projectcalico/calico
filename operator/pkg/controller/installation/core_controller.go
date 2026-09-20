@@ -1092,26 +1092,36 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
-	// Set any non-default FelixConfiguration values that we need.
+	// Set any non-default FelixConfiguration values that we need. A field another writer owns
+	// is reported and skipped rather than fought over, so the reconcile carries on: freezing
+	// everything the operator manages does not win the field back.
+	var fieldConflicts []error
 	if _, err := r.managedFields.ApplyFelixConfiguration(ctx, r.declareFelixConfiguration(ctx, defaulted, needsNamespaceMigration)); err != nil {
-		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
-		return reconcile.Result{}, err
+		if !isFieldConflict(err) {
+			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+		fieldConflicts = append(fieldConflicts, err)
 	}
 
 	// The return carries both writes, so the render below sees the health port and cgroup path
 	// a user may have kept.
 	felixConfiguration, err := r.managedFields.ApplyFelixConfiguration(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration))
 	if err != nil {
-		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
-		return reconcile.Result{}, err
+		if !isFieldConflict(err) {
+			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+		fieldConflicts = append(fieldConflicts, err)
 	}
 
 	// Set any non-default BGPConfiguration values that we need.
 	if _, err := r.managedFields.ApplyBGPConfiguration(ctx, r.declareBGPConfiguration(defaulted)); err != nil {
-		// The FelixConfiguration write above already landed, so until the next reconcile
-		// converges, Felix and BIRD disagree about who programs the cluster routes.
-		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating BGPConfiguration", err, reqLogger)
-		return reconcile.Result{}, err
+		if !isFieldConflict(err) {
+			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating BGPConfiguration", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+		fieldConflicts = append(fieldConflicts, err)
 	}
 
 	calicoVersion := r.ext.ProductVersion(&instance.Spec)
@@ -1473,10 +1483,12 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	certificateManager.AddToStatusManager(r.status, common.CalicoNamespace)
 
 	// Re-check whether eBPF can be enabled within Felix once calico-node has rolled out.
-	_, err = r.managedFields.ApplyFelixConfiguration(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration))
-	if err != nil {
-		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating resource", err, reqLogger)
-		return reconcile.Result{}, err
+	if _, err := r.managedFields.ApplyFelixConfiguration(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration)); err != nil {
+		if !isFieldConflict(err) {
+			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating resource", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+		fieldConflicts = append(fieldConflicts, err)
 	}
 
 	// Run this after we have rendered our components so the new (operator created)
@@ -1557,6 +1569,12 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 
 	// We can clear the degraded state now since as far as we know everything is in order.
 	r.status.ClearDegraded()
+
+	// Except for fields another writer owns, which the reconcile stepped over rather than
+	// failed on. Re-report them here so a successful pass does not clear the news.
+	if conflict := joinFieldConflicts(fieldConflicts); conflict != nil {
+		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Shared configuration modified outside the operator", conflict, reqLogger)
+	}
 
 	if !r.status.IsAvailable() {
 		// Schedule a kick to check again in the near future. Hopefully by then

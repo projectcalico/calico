@@ -16,6 +16,7 @@ package managedfields
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"sort"
 
@@ -96,32 +97,38 @@ func (m *crdV1FieldManager) applyDeclared(ctx context.Context, current client.Ob
 	if err != nil {
 		return nil, err
 	}
-	deferred, err := resolveTrackedConflicts(current, d, payload, legacyOwned)
-	if err != nil {
-		return nil, err
+	deferred, conflict := resolveTrackedConflicts(current, d, payload, legacyOwned)
+	var refused *ConflictingFieldsError
+	if conflict != nil && !errors.As(conflict, &refused) {
+		return nil, conflict
 	}
 
 	merged := current.DeepCopyObject().(client.Object)
 	if err := mergeInto(merged, payload); err != nil {
 		return nil, err
 	}
-	removed, err := removeUndeclared(merged, current, d, payload, legacyOwned)
+	removed, dropped, err := removeUndeclared(merged, current, d, payload, legacyOwned)
 	if err != nil {
 		return nil, err
 	}
+	conflict = joinConflicts(current, conflict, dropped)
 	if err := recordWrittenValues(merged, payload, d, append(deferred, removed...)); err != nil {
 		return nil, err
 	}
 	if equality.Semantic.DeepEqual(current, merged) {
-		return current, nil
+		return current, conflict
 	}
 	if current.GetResourceVersion() == "" && !declaresSpec(payload) {
 		// The declaration holds nothing to write, so don't create an object carrying only a record.
-		return current, nil
+		return current, conflict
 	}
 
 	logResolution(current, d.manager, deferred, removed, nil)
-	return m.persist(ctx, merged, patchFrom)
+	persisted, err := m.persist(ctx, merged, patchFrom)
+	if err != nil {
+		return nil, err
+	}
+	return persisted, conflict
 }
 
 // resolveTrackedConflicts drops deferred fields from payload and returns the paths it dropped.
@@ -162,6 +169,8 @@ func resolveTrackedConflicts(current client.Object, d *declaration, payload *uns
 				return nil, err
 			}
 			if !agree {
+				// Leave the other writer's value alone and let the caller report it.
+				removePath(payload.Object, path)
 				refused = append(refused, path)
 			}
 		}
@@ -169,24 +178,38 @@ func resolveTrackedConflicts(current client.Object, d *declaration, payload *uns
 
 	if len(refused) > 0 {
 		sort.Strings(refused)
-		return nil, &ConflictingFieldsError{Kind: kindOf(current), Paths: refused}
+		return deferred, &ConflictingFieldsError{Kind: kindOf(current), Paths: refused}
 	}
 	return deferred, nil
 }
 
+// joinConflicts folds newly refused paths into an existing refusal, or reports them on their own.
+func joinConflicts(current client.Object, conflict error, paths []string) error {
+	if len(paths) == 0 {
+		return conflict
+	}
+	var refused *ConflictingFieldsError
+	if errors.As(conflict, &refused) {
+		refused.Paths = append(refused.Paths, paths...)
+		sort.Strings(refused.Paths)
+		return refused
+	}
+	sort.Strings(paths)
+	return &ConflictingFieldsError{Kind: kindOf(current), Paths: paths}
+}
+
 // removeUndeclared deletes governed fields the declaration left out, matching the way a sole
 // apply owner drops them.
-func removeUndeclared(merged, current client.Object, d *declaration, payload *unstructured.Unstructured, legacyOwned map[string]bool) ([]string, error) {
+func removeUndeclared(merged, current client.Object, d *declaration, payload *unstructured.Unstructured, legacyOwned map[string]bool) (remove, refused []string, err error) {
 	currentContent, err := toUnstructured(current)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	lastWritten, err := lastWrittenValues(current)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	var remove, refused []string
 	for path := range d.policies {
 		if pathSet(payload.Object, path) || !pathSet(currentContent, path) {
 			continue
@@ -197,7 +220,7 @@ func removeUndeclared(merged, current client.Object, d *declaration, payload *un
 		}
 		changed, err := changedByOther(currentContent, lastWritten, legacyOwned, path)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if changed {
 			switch d.policies[path] {
@@ -212,11 +235,7 @@ func removeUndeclared(merged, current client.Object, d *declaration, payload *un
 		remove = append(remove, path)
 	}
 
-	if len(refused) > 0 {
-		sort.Strings(refused)
-		return nil, &ConflictingFieldsError{Kind: kindOf(current), Paths: refused}
-	}
-	return remove, deletePaths(merged, remove)
+	return remove, refused, deletePaths(merged, remove)
 }
 
 // deletePaths clears the named fields on obj.

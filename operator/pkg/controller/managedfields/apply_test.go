@@ -75,6 +75,26 @@ func declareRouteTableRange(r *v3.RouteTableRange) managedfields.DeclareFelixCon
 	}
 }
 
+// declareRefusedPlusOne governs a field the operator will not arbitrate (spec.bpfEnabled) and
+// one it merely defaults, so a test can check the second still lands when the first is refused.
+func declareRefusedPlusOne() managedfields.DeclareFelixConfiguration {
+	return func(_ *v3.FelixConfiguration) (*managedfields.FelixConfigurationDeclaration, error) {
+		return &managedfields.FelixConfigurationDeclaration{
+			Manager: "installation-bpf",
+			Owned: &v3.FelixConfiguration{
+				Spec: v3.FelixConfigurationSpec{
+					BPFEnabled: ptr.To(false),
+					HealthPort: ptr.To(9099),
+				},
+			},
+			Policies: map[string]managedfields.ConflictPolicy{
+				"spec.bpfEnabled": managedfields.ConflictError,
+				"spec.healthPort": managedfields.ConflictDefer,
+			},
+		}, nil
+	}
+}
+
 var _ = Describe("Applying declared FelixConfiguration fields", func() {
 	var c client.Client
 	var ctx context.Context
@@ -223,6 +243,19 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 					HaveField("Manager", "tigera-operator/installation-bpf"),
 					HaveField("Operation", metav1.ManagedFieldsOperationApply),
 				)))
+			})
+
+			It("should write the rest of the declaration when one field is refused", func() {
+				createByUpdate(nil, v3.FelixConfigurationSpec{BPFEnabled: ptr.To(true)})
+
+				fc, err := w.ApplyFelixConfiguration(ctx, declareRefusedPlusOne())
+				Expect(err).To(BeAssignableToTypeOf(&managedfields.ConflictingFieldsError{}))
+				Expect(fc).NotTo(BeNil())
+
+				// The refused field keeps the other writer's value; the rest still lands.
+				stored := getFelixConfig()
+				Expect(stored.Spec.BPFEnabled).To(Equal(ptr.To(true)))
+				Expect(stored.Spec.HealthPort).To(Equal(ptr.To(9099)))
 			})
 
 			It("should refuse a field it has no record of writing", func() {
