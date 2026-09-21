@@ -24,7 +24,9 @@
 
 set -u
 
-crane=${1:?usage: image-published CRANE REGISTRIES IMAGES TAG}
+# CRANE may be a multi-word command (`go -C <repo root> tool crane`), so split
+# it into an array rather than invoking it as a single word.
+read -ra crane <<<"${1:?usage: image-published CRANE REGISTRIES IMAGES TAG}"
 registries=${2:?}
 images=${3:?}
 tag=${4:?}
@@ -38,7 +40,7 @@ arches=${5:-}
 resolved() {
 	local image=$1 attempt=1 out
 	while :; do
-		if out=$("$crane" digest "$image" 2>&1); then
+		if out=$("${crane[@]}" digest "$image" 2>&1); then
 			return 0
 		fi
 		if printf '%s' "$out" | grep -qiE 'MANIFEST_UNKNOWN|NAME_UNKNOWN|not found|404'; then

@@ -87,18 +87,6 @@ endif
 # to interact with docker.
 TEST_BINARIES=$(addsuffix /ut.test,$(WHAT))
 
-# Install gotestsum using the version pinned by metadata.mk, building it with
-# the Go toolchain from the calico/go-build container for consistency. The
-# binary runs on the host because run-uts invokes test binaries outside the
-# container so they can talk to docker.
-bin/gotestsum:
-	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
-
-# gotestsum converts test output with this, and the host it runs on has no Go
-# toolchain to reach `go tool test2json` in.
-bin/test2json:
-	$(DOCKER_RUN) $(CALICO_BUILD) go build -o /go/src/$(PACKAGE_NAME)/bin/test2json cmd/test2json
-
 ## Run the unit tests in a container.
 # kube-controllers tests use the combined calico/calico image (loaded from the
 # calico-image prerequisite in CI, or built locally via the marker rule in
@@ -112,7 +100,9 @@ ut fv: ut-prereqs
 
 ut-prereqs: $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
 
-ut-no-prereqs: $(TEST_BINARIES) setup-envtest bin/gotestsum bin/test2json
+# gotestsum runs on the host, not in the build container: run-uts invokes the
+# test binaries outside it so they can talk to docker.
+ut-no-prereqs: $(TEST_BINARIES) setup-envtest bin/test2json
 	KUBE_IMAGE=$(CALICO_BUILD) \
 		   ETCD_IMAGE=$(ETCD_IMAGE) \
 		   CALICO_API_GROUP=$(CALICO_API_GROUP) \
@@ -120,7 +110,7 @@ ut-no-prereqs: $(TEST_BINARIES) setup-envtest bin/gotestsum bin/test2json
 		   CRDS=$(REPO_ROOT)/$(CALICO_CRD_PATH) \
 		   CERTS_PATH=$(CERTS_PATH) \
 		   KUBEBUILDER_ASSETS=$$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1) \
-		   GOTESTSUM=$(abspath bin/gotestsum) \
+		   GOTESTSUM="$(GO_TOOL) gotestsum" \
 		   TEST2JSON=$(abspath bin/test2json) \
 		   ./run-uts $(WHAT)
 
