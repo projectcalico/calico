@@ -45,7 +45,7 @@ func New(c client.Client) *FieldManager {
 }
 
 // DeclareFn states which fields the caller owns, given the current object.
-type DeclareFn[T client.Object] func(current T) (*Declaration, error)
+type DeclareFn[T client.Object] func(current T) (*Declaration[T], error)
 
 // object constrains a declaration to a pointer type, so the write path can make one to read into.
 type object[U any] interface {
@@ -80,10 +80,6 @@ func (m *FieldManager) applyDeclared[U any, T object[U]](ctx context.Context, cu
 	if d == nil {
 		return current, nil
 	}
-	if _, ok := d.Owned.(T); !ok {
-		return zero, fmt.Errorf("a %T declaration cannot own %T", current, d.Owned)
-	}
-
 	gvk, err := apiutil.GVKForObject(current, m.client.Scheme())
 	if err != nil {
 		return zero, err
@@ -139,7 +135,7 @@ func (m *FieldManager) applyDeclared[U any, T object[U]](ctx context.Context, cu
 }
 
 // resolveConflicts drops deferred fields from payload and reports whether the retry must force.
-func resolveConflicts(applyErr error, current client.Object, d *Declaration, payload *unstructured.Unstructured) (bool, error) {
+func resolveConflicts[T client.Object](applyErr error, current client.Object, d *Declaration[T], payload *unstructured.Unstructured) (bool, error) {
 	paths := conflictPaths(applyErr)
 	if len(paths) == 0 {
 		return false, applyErr
@@ -206,7 +202,7 @@ func resolveConflicts(applyErr error, current client.Object, d *Declaration, pay
 // clearLegacyOwned deletes governed fields the operator's pre-apply field manager still holds and
 // the declaration does not set. It takes its own request, because an apply cannot drop a field it
 // does not own.
-func (m *FieldManager) clearLegacyOwned(ctx context.Context, current client.Object, gvk schema.GroupVersionKind, d *Declaration, payload *unstructured.Unstructured) error {
+func (m *FieldManager) clearLegacyOwned[T client.Object](ctx context.Context, current client.Object, gvk schema.GroupVersionKind, d *Declaration[T], payload *unstructured.Unstructured) error {
 	legacyOwned, err := legacyOwnedPaths(current)
 	if err != nil || len(legacyOwned) == 0 {
 		return err

@@ -46,9 +46,9 @@ const (
 // every one every time, so a field the spec stops asking for is declared without a value, which
 // clears whatever the operator wrote there.
 func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) managedfields.DeclareFn[*v3.FelixConfiguration] {
-	return func(current *v3.FelixConfiguration) (*managedfields.Declaration, error) {
+	return func(current *v3.FelixConfiguration) (*managedfields.Declaration[*v3.FelixConfiguration], error) {
 		felixConfig := &v3.FelixConfiguration{}
-		d := &managedfields.Declaration{
+		d := &managedfields.Declaration[*v3.FelixConfiguration]{
 			Manager: installationFieldManager,
 			Owned:   felixConfig,
 
@@ -172,12 +172,12 @@ func nftablesMode(install *operatorv1.Installation) v3.NFTablesMode {
 // declareBPFEnabled declares spec.bpfEnabled. Both installation write sites use it so the field
 // stays under one manager with the same value.
 func (r *ReconcileInstallation) declareBPFEnabled(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) managedfields.DeclareFn[*v3.FelixConfiguration] {
-	return func(current *v3.FelixConfiguration) (*managedfields.Declaration, error) {
+	return func(current *v3.FelixConfiguration) (*managedfields.Declaration[*v3.FelixConfiguration], error) {
 		enabled, err := r.bpfEnabledValue(ctx, install, current, needNsMigration)
 		if err != nil || enabled == nil {
 			return nil, err
 		}
-		return &managedfields.Declaration{
+		return &managedfields.Declaration[*v3.FelixConfiguration]{
 			Manager: bpfFieldManager,
 			Owned: &v3.FelixConfiguration{
 				Spec: v3.FelixConfigurationSpec{BPFEnabled: enabled},

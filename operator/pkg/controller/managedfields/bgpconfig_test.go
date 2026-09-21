@@ -33,9 +33,9 @@ import (
 
 // declareClusterRoutes governs spec.programClusterRoutes, declaring a value only when mode is set.
 func declareClusterRoutes(mode string) managedfields.DeclareFn[*v3.BGPConfiguration] {
-	return func(_ *v3.BGPConfiguration) (*managedfields.Declaration, error) {
+	return func(_ *v3.BGPConfiguration) (*managedfields.Declaration[*v3.BGPConfiguration], error) {
 		bgpConfig := &v3.BGPConfiguration{}
-		d := &managedfields.Declaration{
+		d := &managedfields.Declaration[*v3.BGPConfiguration]{
 			Manager:  "installation",
 			Owned:    bgpConfig,
 			Policies: map[string]managedfields.ConflictPolicy{"spec.programClusterRoutes": managedfields.ConflictOverride},

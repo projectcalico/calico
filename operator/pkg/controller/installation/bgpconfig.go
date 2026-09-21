@@ -25,9 +25,9 @@ import (
 // declareBGPConfiguration declares the BIRD half of cluster route programming. It moves in
 // lockstep with the FelixConfiguration half: whatever Felix is not programming, BIRD has to be.
 func (r *ReconcileInstallation) declareBGPConfiguration(install *operatorv1.Installation) managedfields.DeclareFn[*v3.BGPConfiguration] {
-	return func(current *v3.BGPConfiguration) (*managedfields.Declaration, error) {
+	return func(current *v3.BGPConfiguration) (*managedfields.Declaration[*v3.BGPConfiguration], error) {
 		bgpConfig := &v3.BGPConfiguration{}
-		d := &managedfields.Declaration{
+		d := &managedfields.Declaration[*v3.BGPConfiguration]{
 			Manager: installationFieldManager,
 			Owned:   bgpConfig,
 			Policies: map[string]managedfields.ConflictPolicy{

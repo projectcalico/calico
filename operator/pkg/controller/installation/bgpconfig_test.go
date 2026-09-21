@@ -39,7 +39,7 @@ var _ = Describe("BGPConfiguration declarations", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(d.Manager).To(Equal(installationFieldManager))
 		Expect(d.Policies["spec.programClusterRoutes"]).To(Equal(managedfields.ConflictOverride))
-		Expect(d.Owned.(*v3.BGPConfiguration).Spec.ProgramClusterRoutes).To(Equal(ptr.To("Disabled")))
+		Expect(d.Owned.Spec.ProgramClusterRoutes).To(Equal(ptr.To("Disabled")))
 	})
 
 	It("governs the field whether or not the Installation asks for a mode", func() {
@@ -47,6 +47,6 @@ var _ = Describe("BGPConfiguration declarations", func() {
 		d, err := r.declareBGPConfiguration(install(nil))(&v3.BGPConfiguration{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(d.Policies).To(HaveKey("spec.programClusterRoutes"))
-		Expect(d.Owned.(*v3.BGPConfiguration).Spec.ProgramClusterRoutes).To(BeNil())
+		Expect(d.Owned.Spec.ProgramClusterRoutes).To(BeNil())
 	})
 })

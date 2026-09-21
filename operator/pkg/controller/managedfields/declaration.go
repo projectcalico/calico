@@ -37,19 +37,19 @@ const (
 )
 
 // Declaration is one field manager's statement of what it owns on a resource.
-type Declaration struct {
+type Declaration[T client.Object] struct {
 	// Manager is the field manager name, and has to stay the same across reconciles.
 	Manager string
 
 	// Owned carries the declared fields and nothing else. Fields left nil are not owned.
-	Owned client.Object
+	Owned T
 
 	// Policies is keyed by field path, e.g. "spec.healthPort". Every declared field needs an entry.
 	Policies map[string]ConflictPolicy
 }
 
 // policyFor returns the policy governing path, which may name a field below a declared one.
-func (d *Declaration) policyFor(path string) (string, ConflictPolicy, bool) {
+func (d *Declaration[T]) policyFor(path string) (string, ConflictPolicy, bool) {
 	best := ""
 	for declared := range d.Policies {
 		if path != declared && !strings.HasPrefix(path, declared+".") {
