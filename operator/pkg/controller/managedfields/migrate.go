@@ -17,16 +17,84 @@ package managedfields
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"reflect"
+	"strconv"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/structured-merge-diff/v6/fieldpath"
 
 	"github.com/projectcalico/calico/operator/pkg/render"
 )
+
+// ownedFieldsAnnotation records the values an operator that wrote through update left behind.
+const ownedFieldsAnnotation = "operator.tigera.io/owned-fields"
+
+// bpfEnabledPath was tracked by its own annotation, which predates ownedFieldsAnnotation.
+const bpfEnabledPath = "spec.bpfEnabled"
+
+// lastWrittenValues reads back the values an operator that wrote through update recorded.
+func lastWrittenValues(obj client.Object) (map[string]any, error) {
+	annotations := obj.GetAnnotations()
+	values := map[string]any{}
+	if raw := annotations[ownedFieldsAnnotation]; raw != "" {
+		if err := json.Unmarshal([]byte(raw), &values); err != nil {
+			return nil, fmt.Errorf("unable to parse %s annotation: %w", ownedFieldsAnnotation, err)
+		}
+	}
+
+	// Clusters last written by an older operator only have the legacy annotation.
+	if _, ok := values[bpfEnabledPath]; !ok {
+		if raw := annotations[render.BPFOperatorAnnotation]; raw != "" {
+			enabled, err := strconv.ParseBool(raw)
+			if err != nil {
+				return nil, fmt.Errorf("unable to parse %s annotation: %w", render.BPFOperatorAnnotation, err)
+			}
+			values[bpfEnabledPath] = enabled
+		}
+	}
+	return values, nil
+}
+
+// changedByOther reports whether path holds a value the operator did not write. Fields the
+// operator wrote before it kept records are still its own, marked by its pre-apply field manager.
+func changedByOther(currentContent map[string]any, lastWritten map[string]any, legacyOwned map[string]bool, path string) (bool, error) {
+	current, found, err := unstructured.NestedFieldNoCopy(currentContent, strings.Split(path, ".")...)
+	if err != nil {
+		return false, fmt.Errorf("unable to read %s: %w", path, err)
+	}
+	if !found {
+		return false, nil
+	}
+
+	written, recorded := lastWritten[path]
+	if !recorded {
+		return !legacyOwned[path], nil
+	}
+	canonical, err := canonicalize(current)
+	if err != nil {
+		return false, err
+	}
+	return !reflect.DeepEqual(canonical, written), nil
+}
+
+// canonicalize renders a value the way it will read back out of the annotation.
+func canonicalize(value any) (any, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("unable to encode field value: %w", err)
+	}
+	var decoded any
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		return nil, fmt.Errorf("unable to decode field value: %w", err)
+	}
+	return decoded, nil
+}
 
 // legacyFieldManager is what the API server derives from the /usr/bin/operator user agent,
 // so it records the operator's pre-apply writes.
@@ -35,7 +103,7 @@ const legacyFieldManager = "operator"
 // reclaimablePaths lists fields a plain update owns that the operator wrote itself.
 // An apply must force ownership across once.
 func reclaimablePaths(obj client.Object, manager string) (map[string]bool, error) {
-	reclaimable, _, err := updateOwnedPaths(obj)
+	reclaimable, err := legacyOwnedPaths(obj)
 	if err != nil || appliedBy(obj, manager) {
 		return reclaimable, err
 	}
@@ -78,30 +146,31 @@ func appliedBy(obj client.Object, manager string) bool {
 	return false
 }
 
-// updateOwnedPaths splits the fields owned through a plain update by whether the operator's own
-// legacy field manager holds them.
-func updateOwnedPaths(obj client.Object) (legacy, others map[string]bool, err error) {
-	legacy, others = map[string]bool{}, map[string]bool{}
+// legacyOwnedPaths lists the fields the operator's pre-apply field manager holds.
+func legacyOwnedPaths(obj client.Object) (map[string]bool, error) {
+	return ownedPaths(obj, func(entry metav1.ManagedFieldsEntry) bool {
+		return entry.Operation == metav1.ManagedFieldsOperationUpdate && entry.Manager == legacyFieldManager
+	})
+}
+
+// ownedPaths lists the fields held by the managed-fields entries want selects.
+func ownedPaths(obj client.Object, want func(metav1.ManagedFieldsEntry) bool) (map[string]bool, error) {
+	paths := map[string]bool{}
 	for _, entry := range obj.GetManagedFields() {
-		if entry.Operation != metav1.ManagedFieldsOperationUpdate || entry.FieldsV1 == nil {
+		if entry.FieldsV1 == nil || !want(entry) {
 			continue
 		}
 		owned := &fieldpath.Set{}
 		if err := owned.FromJSON(bytes.NewReader(entry.FieldsV1.GetRawBytes())); err != nil {
-			return nil, nil, fmt.Errorf("unable to parse the fields managed by %q: %w", entry.Manager, err)
-		}
-
-		out := others
-		if entry.Manager == legacyFieldManager {
-			out = legacy
+			return nil, fmt.Errorf("unable to parse the fields managed by %q: %w", entry.Manager, err)
 		}
 		owned.Iterate(func(p fieldpath.Path) {
 			if path, ok := dottedPath(p); ok {
-				out[path] = true
+				paths[path] = true
 			}
 		})
 	}
-	return legacy, others, nil
+	return paths, nil
 }
 
 // dottedPath renders a field path as "spec.field". Ownership of a single list item has no such
@@ -164,23 +233,7 @@ func (m *FieldManager) clearSpentRecords(ctx context.Context, obj client.Object,
 
 // operatorAppliedPaths lists the fields the operator's own field managers hold through an apply.
 func operatorAppliedPaths(obj client.Object) (map[string]bool, error) {
-	applied := map[string]bool{}
-	for _, entry := range obj.GetManagedFields() {
-		if entry.Operation != metav1.ManagedFieldsOperationApply || entry.FieldsV1 == nil {
-			continue
-		}
-		if !strings.HasPrefix(entry.Manager, fieldManagerPrefix) {
-			continue
-		}
-		owned := &fieldpath.Set{}
-		if err := owned.FromJSON(bytes.NewReader(entry.FieldsV1.GetRawBytes())); err != nil {
-			return nil, fmt.Errorf("unable to parse the fields managed by %q: %w", entry.Manager, err)
-		}
-		owned.Iterate(func(p fieldpath.Path) {
-			if path, ok := dottedPath(p); ok {
-				applied[path] = true
-			}
-		})
-	}
-	return applied, nil
+	return ownedPaths(obj, func(entry metav1.ManagedFieldsEntry) bool {
+		return entry.Operation == metav1.ManagedFieldsOperationApply && strings.HasPrefix(entry.Manager, fieldManagerPrefix)
+	})
 }

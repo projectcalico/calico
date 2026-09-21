@@ -157,7 +157,7 @@ func resolveConflicts(applyErr error, current client.Object, d *Declaration, pay
 // clearLegacyOwned deletes governed fields the operator's pre-apply field manager still holds and
 // the declaration does not set. An apply cannot drop a field it does not own.
 func (m *FieldManager) clearLegacyOwned(ctx context.Context, current client.Object, gvk schema.GroupVersionKind, d *Declaration, payload *unstructured.Unstructured) error {
-	legacyOwned, _, err := updateOwnedPaths(current)
+	legacyOwned, err := legacyOwnedPaths(current)
 	if err != nil || len(legacyOwned) == 0 {
 		return err
 	}

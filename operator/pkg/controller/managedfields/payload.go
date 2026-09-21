@@ -112,3 +112,17 @@ func kindOf(obj client.Object) string {
 	}
 	return t.Name()
 }
+
+// valuesAgree reports whether the value about to be written is already there.
+func valuesAgree(currentContent, payloadObj map[string]any, path string) (bool, error) {
+	keys := strings.Split(path, ".")
+	current, found, err := unstructured.NestedFieldNoCopy(currentContent, keys...)
+	if err != nil || !found {
+		return false, err
+	}
+	written, found, err := unstructured.NestedFieldNoCopy(payloadObj, keys...)
+	if err != nil || !found {
+		return false, err
+	}
+	return reflect.DeepEqual(current, written), nil
+}
