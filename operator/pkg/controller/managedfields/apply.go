@@ -35,13 +35,16 @@ import (
 const fieldManagerPrefix = "tigera-operator/"
 
 // applyDeclared writes the declared fields, letting the API server track who owns each one.
-func (m *FieldManager) applyDeclared(ctx context.Context, current client.Object, declare declareFn) (client.Object, error) {
+func applyDeclared[T client.Object](ctx context.Context, m *FieldManager, current T, declare Declare[T]) (client.Object, error) {
 	d, err := declare(current)
 	if err != nil {
 		return nil, err
 	}
 	if d == nil {
 		return current, nil
+	}
+	if _, ok := d.Owned.(T); !ok {
+		return nil, fmt.Errorf("a %T declaration cannot own %T", current, d.Owned)
 	}
 
 	gvk, err := apiutil.GVKForObject(current, m.client.Scheme())

@@ -53,7 +53,7 @@ func (d Declare[T]) Apply(ctx context.Context, m *FieldManager) (T, error) {
 		return zero, fmt.Errorf("unable to read %T: %w", current, err)
 	}
 
-	applied, err := m.applyDeclared(ctx, current, untypedDeclare(d))
+	applied, err := applyDeclared(ctx, m, current, d)
 	if applied == nil {
 		return zero, err
 	}
@@ -62,21 +62,4 @@ func (d Declare[T]) Apply(ctx context.Context, m *FieldManager) (T, error) {
 		return zero, err
 	}
 	return typed, err
-}
-
-// declareFn is the untyped declaration callback the write path works in.
-type declareFn func(current client.Object) (*Declaration, error)
-
-// untypedDeclare adapts a caller's typed declaration to the form the write path works in.
-func untypedDeclare[T client.Object](declare Declare[T]) declareFn {
-	return func(current client.Object) (*Declaration, error) {
-		d, err := declare(current.(T))
-		if err != nil || d == nil {
-			return nil, err
-		}
-		if _, ok := d.Owned.(T); !ok {
-			return nil, fmt.Errorf("a %T declaration cannot own %T", current, d.Owned)
-		}
-		return d, nil
-	}
 }
