@@ -1097,7 +1097,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	// everything the operator manages does not win the field back.
 	var fieldConflicts []error
 	if _, err := r.declareFelixConfiguration(ctx, defaulted, needsNamespaceMigration).Apply(ctx, r.fieldManager); err != nil {
-		if !isFieldConflict(err) {
+		if !managedfields.IsFieldConflict(err) {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
 			return reconcile.Result{}, err
 		}
@@ -1108,7 +1108,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	// a user may have kept.
 	felixConfiguration, err := r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration).Apply(ctx, r.fieldManager)
 	if err != nil {
-		if !isFieldConflict(err) {
+		if !managedfields.IsFieldConflict(err) {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
 			return reconcile.Result{}, err
 		}
@@ -1117,7 +1117,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 
 	// Set any non-default BGPConfiguration values that we need.
 	if _, err := r.declareBGPConfiguration(defaulted).Apply(ctx, r.fieldManager); err != nil {
-		if !isFieldConflict(err) {
+		if !managedfields.IsFieldConflict(err) {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating BGPConfiguration", err, reqLogger)
 			return reconcile.Result{}, err
 		}
@@ -1484,7 +1484,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 
 	// Re-check whether eBPF can be enabled within Felix once calico-node has rolled out.
 	if _, err := r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration).Apply(ctx, r.fieldManager); err != nil {
-		if !isFieldConflict(err) {
+		if !managedfields.IsFieldConflict(err) {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating resource", err, reqLogger)
 			return reconcile.Result{}, err
 		}
@@ -1572,7 +1572,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 
 	// Except for fields another writer owns, which the reconcile stepped over rather than
 	// failed on. Re-report them here so a successful pass does not clear the news.
-	if conflict := joinFieldConflicts(fieldConflicts); conflict != nil {
+	if conflict := managedfields.JoinFieldConflicts(fieldConflicts); conflict != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Shared configuration modified outside the operator", conflict, reqLogger)
 	}
 

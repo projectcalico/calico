@@ -60,7 +60,7 @@ var _ = Describe("Fields outside the declaration", func() {
 
 			fc := getFelixConfig()
 			Expect(fc.ManagedFields).To(HaveLen(1))
-			Expect(fc.ManagedFields[0].Manager).To(Equal("tigera-operator/installation"))
+			Expect(fc.ManagedFields[0].Manager).To(Equal("operator.tigera.io/installation"))
 			Expect(fc.ManagedFields[0].FieldsV1.GetRawString()).NotTo(ContainSubstring("bpfLogLevel"))
 		})
 	})

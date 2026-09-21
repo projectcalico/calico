@@ -34,7 +34,7 @@ import (
 )
 
 // declare returns a declaration of healthPort and vxlanPort, with a policy per field.
-func declare(healthPolicy, vxlanPolicy managedfields.ConflictPolicy) managedfields.Declare[*v3.FelixConfiguration] {
+func declare(healthPolicy, vxlanPolicy managedfields.ConflictPolicy) managedfields.DeclareFn[*v3.FelixConfiguration] {
 	return func(_ *v3.FelixConfiguration) (*managedfields.Declaration, error) {
 		return &managedfields.Declaration{
 			Manager: "installation",
@@ -53,7 +53,7 @@ func declare(healthPolicy, vxlanPolicy managedfields.ConflictPolicy) managedfiel
 }
 
 // declarePolicySync governs spec.policySyncPathPrefix, declaring a value only when prefix is set.
-func declarePolicySync(prefix string) managedfields.Declare[*v3.FelixConfiguration] {
+func declarePolicySync(prefix string) managedfields.DeclareFn[*v3.FelixConfiguration] {
 	return func(_ *v3.FelixConfiguration) (*managedfields.Declaration, error) {
 		return &managedfields.Declaration{
 			Manager:  "policy-sync",
@@ -65,7 +65,7 @@ func declarePolicySync(prefix string) managedfields.Declare[*v3.FelixConfigurati
 
 // declareRouteTableRange governs spec.routeTableRange, a struct field the API server records
 // field by field, declaring a value only when one is given.
-func declareRouteTableRange(r *v3.RouteTableRange) managedfields.Declare[*v3.FelixConfiguration] {
+func declareRouteTableRange(r *v3.RouteTableRange) managedfields.DeclareFn[*v3.FelixConfiguration] {
 	return func(_ *v3.FelixConfiguration) (*managedfields.Declaration, error) {
 		return &managedfields.Declaration{
 			Manager:  "installation",
@@ -77,7 +77,7 @@ func declareRouteTableRange(r *v3.RouteTableRange) managedfields.Declare[*v3.Fel
 
 // declareRefusedPlusOne governs a field the operator will not arbitrate (spec.bpfEnabled) and
 // one it merely defaults, so a test can check the second still lands when the first is refused.
-func declareRefusedPlusOne() managedfields.Declare[*v3.FelixConfiguration] {
+func declareRefusedPlusOne() managedfields.DeclareFn[*v3.FelixConfiguration] {
 	return func(_ *v3.FelixConfiguration) (*managedfields.Declaration, error) {
 		return &managedfields.Declaration{
 			Manager: "installation-bpf",
@@ -135,7 +135,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 			Expect(fc.Spec.HealthPort).To(Equal(ptr.To(9099)))
 			Expect(fc.Spec.VXLANPort).To(Equal(ptr.To(4789)))
 			Expect(fc.ManagedFields).To(HaveLen(1))
-			Expect(fc.ManagedFields[0].Manager).To(Equal("tigera-operator/installation"))
+			Expect(fc.ManagedFields[0].Manager).To(Equal("operator.tigera.io/installation"))
 			Expect(fc.ManagedFields[0].Operation).To(Equal(metav1.ManagedFieldsOperationApply))
 		})
 
@@ -186,7 +186,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(fc.Spec.HealthPort).To(Equal(ptr.To(9099)))
 			Expect(getFelixConfig().ManagedFields).To(ContainElement(SatisfyAll(
-				HaveField("Manager", "tigera-operator/installation"),
+				HaveField("Manager", "operator.tigera.io/installation"),
 				HaveField("Operation", metav1.ManagedFieldsOperationApply),
 			)))
 		})
@@ -195,7 +195,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 			_, err := declare(managedfields.ConflictDefer, managedfields.ConflictDefer).Apply(ctx, w)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = managedfields.Declare[*v3.FelixConfiguration](func(_ *v3.FelixConfiguration) (*managedfields.Declaration, error) {
+			_, err = managedfields.DeclareFn[*v3.FelixConfiguration](func(_ *v3.FelixConfiguration) (*managedfields.Declaration, error) {
 				return &managedfields.Declaration{
 					Manager:  "installation",
 					Owned:    &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)}},
@@ -222,7 +222,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 		})
 
 		Context("a cluster the operator wrote before it applied", func() {
-			declareBPF := func(policy managedfields.ConflictPolicy) managedfields.Declare[*v3.FelixConfiguration] {
+			declareBPF := func(policy managedfields.ConflictPolicy) managedfields.DeclareFn[*v3.FelixConfiguration] {
 				return func(_ *v3.FelixConfiguration) (*managedfields.Declaration, error) {
 					return &managedfields.Declaration{
 						Manager:  "installation-bpf",
@@ -255,7 +255,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 				fc := getFelixConfig()
 				Expect(fc.Spec.BPFEnabled).To(Equal(ptr.To(false)))
 				Expect(fc.ManagedFields).To(ContainElement(SatisfyAll(
-					HaveField("Manager", "tigera-operator/installation-bpf"),
+					HaveField("Manager", "operator.tigera.io/installation-bpf"),
 					HaveField("Operation", metav1.ManagedFieldsOperationApply),
 				)))
 			})

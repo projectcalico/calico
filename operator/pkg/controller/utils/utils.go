@@ -65,7 +65,7 @@ const (
 	unsupportedIgnoreAnnotation = "unsupported.operator.tigera.io/ignore"
 
 	// v3MetadataAnnotation is where libcalico-go stashes the v3 labels and annotations of a
-	// CRD-backed resource.
+	// CRD-backed resource when in aggregated API server mode.
 	v3MetadataAnnotation = "projectcalico.org/metadata"
 )
 

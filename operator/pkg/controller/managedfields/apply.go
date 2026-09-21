@@ -32,10 +32,10 @@ import (
 )
 
 // fieldManagerPrefix namespaces the operator's field managers away from other writers.
-const fieldManagerPrefix = "tigera-operator/"
+const fieldManagerPrefix = "operator.tigera.io/"
 
 // applyDeclared writes the declared fields, letting the API server track who owns each one.
-func applyDeclared[T client.Object](ctx context.Context, m *FieldManager, current T, declare Declare[T]) (client.Object, error) {
+func applyDeclared[T client.Object](ctx context.Context, m *FieldManager, current T, declare DeclareFn[T]) (client.Object, error) {
 	d, err := declare(current)
 	if err != nil {
 		return nil, err
@@ -60,30 +60,34 @@ func applyDeclared[T client.Object](ctx context.Context, m *FieldManager, curren
 		// The declaration holds nothing to write, so don't create an empty object.
 		return current, nil
 	}
+
+	// Fields an older operator wrote through update have to go before the apply, which cannot
+	// drop a field it does not own.
 	if err := m.clearLegacyOwned(ctx, current, gvk, d, payload); err != nil {
 		return nil, err
 	}
 
+	var conflict error
 	applied, err := m.serverSideApply(ctx, gvk, payload, d.Manager, false)
-	if err == nil {
-		return applied, m.clearSpentRecords(ctx, applied, gvk)
-	}
-	if !apierrors.IsConflict(err) {
-		return nil, err
-	}
-
-	force, conflict := resolveConflicts(err, current, d, payload)
-	var refused *ConflictingFieldsError
-	if conflict != nil && !errors.As(conflict, &refused) {
-		return nil, conflict
-	}
-
-	// A refused field is dropped from the payload rather than fought over, so the rest of the
-	// declaration still lands. The caller degrades on the error it gets back.
-	applied, err = m.serverSideApply(ctx, gvk, payload, d.Manager, force)
 	if err != nil {
-		return nil, err
+		if !apierrors.IsConflict(err) {
+			return nil, err
+		}
+
+		var force bool
+		force, conflict = resolveConflicts(err, current, d, payload)
+		var refused *ConflictingFieldsError
+		if conflict != nil && !errors.As(conflict, &refused) {
+			return nil, conflict
+		}
+
+		// A refused field is dropped from the payload rather than fought over, so the rest of
+		// the declaration still lands. The caller degrades on the error it gets back.
+		if applied, err = m.serverSideApply(ctx, gvk, payload, d.Manager, force); err != nil {
+			return nil, err
+		}
 	}
+
 	if err := m.clearSpentRecords(ctx, applied, gvk); err != nil {
 		return nil, err
 	}
@@ -121,8 +125,9 @@ func resolveConflicts(applyErr error, current client.Object, d *Declaration, pay
 
 		switch policy {
 		case ConflictDefer:
-			// Agreeing on the value is not ownership. Taking the field here would delete the
-			// other writer's setting the moment the operator stops declaring it.
+			// Agreeing on the value with another field manager doesn't mean we own the field.
+			// Taking it here would delete the other writer's setting the moment the operator
+			// stops declaring it.
 			removePath(payload.Object, declared)
 			deferred = append(deferred, declared)
 		case ConflictOverride:
@@ -155,7 +160,8 @@ func resolveConflicts(applyErr error, current client.Object, d *Declaration, pay
 }
 
 // clearLegacyOwned deletes governed fields the operator's pre-apply field manager still holds and
-// the declaration does not set. An apply cannot drop a field it does not own.
+// the declaration does not set. It takes its own request, because an apply cannot drop a field it
+// does not own.
 func (m *FieldManager) clearLegacyOwned(ctx context.Context, current client.Object, gvk schema.GroupVersionKind, d *Declaration, payload *unstructured.Unstructured) error {
 	legacyOwned, err := legacyOwnedPaths(current)
 	if err != nil || len(legacyOwned) == 0 {
@@ -179,7 +185,8 @@ func (m *FieldManager) clearLegacyOwned(ctx context.Context, current client.Obje
 	return m.clearFields(ctx, gvk, remove)
 }
 
-// clearFields deletes the fields remove names, which a merge patch expresses as nulls.
+// clearFields deletes the fields remove names, through a patch request. remove is an unstructured
+// form of that request, with every field to clear set to nil.
 func (m *FieldManager) clearFields(ctx context.Context, gvk schema.GroupVersionKind, remove map[string]any) error {
 	encoded, err := json.Marshal(remove)
 	if err != nil {

@@ -100,7 +100,7 @@ func printVersion() {
 }
 
 // uncachedObjects lists the types the client reads straight from the apiserver rather than the
-// cache, which strips managedFields.
+// cache.
 func uncachedObjects(extra []client.Object) []client.Object {
 	return append([]client.Object{
 		// Pods are only listed by label/namespace selector from a handful of controllers.
@@ -108,7 +108,8 @@ func uncachedObjects(extra []client.Object) []client.Object {
 		// (~36 MiB per 1000 pods).
 		&corev1.Pod{},
 
-		// The shared-config writer resolves field ownership from managedFields.
+		// The shared-config writer resolves field ownership from managedFields, which are
+		// not preserved by the cache.
 		&v3.FelixConfiguration{},
 		&v3.BGPConfiguration{},
 	}, extra...)

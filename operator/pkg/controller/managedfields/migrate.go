@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// The operator wrote these fields through plain updates before it applied them, and this file is
+// what recognizes that. All of it goes away once upgrades from those versions are out of support.
+
 package managedfields
 
 import (
@@ -38,7 +41,8 @@ const ownedFieldsAnnotation = "operator.tigera.io/owned-fields"
 // bpfEnabledPath was tracked by its own annotation, which predates ownedFieldsAnnotation.
 const bpfEnabledPath = "spec.bpfEnabled"
 
-// lastWrittenValues reads back the values an operator that wrote through update recorded.
+// lastWrittenValues reads back the values an older operator recorded, from when it wrote through
+// update instead of apply.
 func lastWrittenValues(obj client.Object) (map[string]any, error) {
 	annotations := obj.GetAnnotations()
 	values := map[string]any{}
@@ -96,12 +100,12 @@ func canonicalize(value any) (any, error) {
 	return decoded, nil
 }
 
-// legacyFieldManager is what the API server derives from the /usr/bin/operator user agent,
-// so it records the operator's pre-apply writes.
+// legacyFieldManager is what the API server derives from the /usr/bin/operator user agent, so it
+// is what managed fields show for the fields older operators set.
 const legacyFieldManager = "operator"
 
-// reclaimablePaths lists fields a plain update owns that the operator wrote itself.
-// An apply must force ownership across once.
+// reclaimablePaths lists the fields the operator wrote itself through a plain update. The first
+// apply forces ownership of those across to its own field manager.
 func reclaimablePaths(obj client.Object, manager string) (map[string]bool, error) {
 	reclaimable, err := legacyOwnedPaths(obj)
 	if err != nil || appliedBy(obj, manager) {

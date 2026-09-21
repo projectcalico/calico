@@ -32,7 +32,7 @@ import (
 )
 
 // declareClusterRoutes governs spec.programClusterRoutes, declaring a value only when mode is set.
-func declareClusterRoutes(mode string) managedfields.Declare[*v3.BGPConfiguration] {
+func declareClusterRoutes(mode string) managedfields.DeclareFn[*v3.BGPConfiguration] {
 	return func(_ *v3.BGPConfiguration) (*managedfields.Declaration, error) {
 		bgpConfig := &v3.BGPConfiguration{}
 		d := &managedfields.Declaration{

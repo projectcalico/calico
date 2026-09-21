@@ -16,7 +16,6 @@ package installation
 
 import (
 	"context"
-	"errors"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
@@ -46,7 +45,7 @@ const (
 // declareFelixConfiguration declares the fields defaulted from the Installation spec. It declares
 // every one every time, so a field the spec stops asking for is declared without a value, which
 // clears whatever the operator wrote there.
-func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) managedfields.Declare[*v3.FelixConfiguration] {
+func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) managedfields.DeclareFn[*v3.FelixConfiguration] {
 	return func(current *v3.FelixConfiguration) (*managedfields.Declaration, error) {
 		felixConfig := &v3.FelixConfiguration{}
 		d := &managedfields.Declaration{
@@ -133,51 +132,6 @@ func (r *ReconcileInstallation) declareFelixConfiguration(ctx context.Context, i
 	}
 }
 
-// isFieldConflict reports whether err is another writer owning a field the operator declares.
-// The reconcile reports those and carries on, rather than failing on them.
-func isFieldConflict(err error) bool {
-	var conflict *managedfields.ConflictingFieldsError
-	return errors.As(err, &conflict)
-}
-
-// joinFieldConflicts folds the conflicts a reconcile stepped over into one error, dropping the
-// repeats that come from declaring the same field at more than one write site.
-func joinFieldConflicts(conflicts []error) error {
-	seen := map[string]bool{}
-	unique := make([]error, 0, len(conflicts))
-	for _, err := range conflicts {
-		if seen[err.Error()] {
-			continue
-		}
-		seen[err.Error()] = true
-		unique = append(unique, err)
-	}
-	return errors.Join(unique...)
-}
-
-// declareBGPConfiguration declares the BIRD half of cluster route programming. It moves in
-// lockstep with the FelixConfiguration half: whatever Felix is not programming, BIRD has to be.
-func (r *ReconcileInstallation) declareBGPConfiguration(install *operatorv1.Installation) managedfields.Declare[*v3.BGPConfiguration] {
-	return func(current *v3.BGPConfiguration) (*managedfields.Declaration, error) {
-		bgpConfig := &v3.BGPConfiguration{}
-		d := &managedfields.Declaration{
-			Manager: installationFieldManager,
-			Owned:   bgpConfig,
-			Policies: map[string]managedfields.ConflictPolicy{
-				"spec.programClusterRoutes": managedfields.ConflictOverride,
-			},
-		}
-
-		// Gated on the field being set, so leaving it unset keeps meaning "whatever Calico
-		// defaults to" rather than pinning today's default into the datastore.
-		if install.Spec.CalicoNetwork != nil && install.Spec.CalicoNetwork.ClusterRoutingMode != nil {
-			mode := *install.Spec.CalicoNetwork.ClusterRoutingMode
-			bgpConfig.Spec.ProgramClusterRoutes = ptr.To(birdProgramClusterRoutesValue(mode))
-		}
-		return d, nil
-	}
-}
-
 // nodeDaemonSetExists reports whether calico-node has been rendered yet.
 func (r *ReconcileInstallation) nodeDaemonSetExists(ctx context.Context) (bool, error) {
 	ds := &appsv1.DaemonSet{}
@@ -217,7 +171,7 @@ func nftablesMode(install *operatorv1.Installation) v3.NFTablesMode {
 
 // declareBPFEnabled declares spec.bpfEnabled. Both installation write sites use it so the field
 // stays under one manager with the same value.
-func (r *ReconcileInstallation) declareBPFEnabled(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) managedfields.Declare[*v3.FelixConfiguration] {
+func (r *ReconcileInstallation) declareBPFEnabled(ctx context.Context, install *operatorv1.Installation, needNsMigration bool) managedfields.DeclareFn[*v3.FelixConfiguration] {
 	return func(current *v3.FelixConfiguration) (*managedfields.Declaration, error) {
 		enabled, err := r.bpfEnabledValue(ctx, install, current, needNsMigration)
 		if err != nil || enabled == nil {

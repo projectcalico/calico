@@ -36,18 +36,19 @@ func New(c client.Client) *FieldManager {
 	return &FieldManager{client: c}
 }
 
-// Declare states which fields the caller owns, given the current object.
-type Declare[T client.Object] func(current T) (*Declaration, error)
+// DeclareFn states which fields the caller owns, given the current object.
+type DeclareFn[T client.Object] func(current T) (*Declaration, error)
 
 // Apply writes the fields the declaration asks for on the governed resource, and returns the
 // whole resulting object.
-func (d Declare[T]) Apply(ctx context.Context, m *FieldManager) (T, error) {
+func (d DeclareFn[T]) Apply(ctx context.Context, m *FieldManager) (T, error) {
 	var zero T
 	governed := reflect.TypeOf(zero)
 	if governed == nil || governed.Kind() != reflect.Pointer {
 		return zero, fmt.Errorf("a declaration governs a pointer type, not %T", zero)
 	}
 
+	// Read the object the declaration governs, so the caller can decide from its current state.
 	current := reflect.New(governed.Elem()).Interface().(T)
 	if err := m.client.Get(ctx, types.NamespacedName{Name: defaultResourceName}, current); err != nil && !apierrors.IsNotFound(err) {
 		return zero, fmt.Errorf("unable to read %T: %w", current, err)

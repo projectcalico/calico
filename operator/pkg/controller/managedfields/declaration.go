@@ -15,6 +15,7 @@
 package managedfields
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -72,4 +73,26 @@ type ConflictingFieldsError struct {
 
 func (e *ConflictingFieldsError) Error() string {
 	return fmt.Sprintf("%s fields modified outside the operator: %s", e.Kind, strings.Join(e.Paths, ", "))
+}
+
+// IsFieldConflict reports whether err is another writer owning a field the operator declares.
+// A caller reports those and carries on, rather than failing on them.
+func IsFieldConflict(err error) bool {
+	var conflict *ConflictingFieldsError
+	return errors.As(err, &conflict)
+}
+
+// JoinFieldConflicts folds the conflicts a caller stepped over into one error, dropping the
+// repeats that come from declaring the same field at more than one write site.
+func JoinFieldConflicts(conflicts []error) error {
+	seen := map[string]bool{}
+	unique := make([]error, 0, len(conflicts))
+	for _, err := range conflicts {
+		if seen[err.Error()] {
+			continue
+		}
+		seen[err.Error()] = true
+		unique = append(unique, err)
+	}
+	return errors.Join(unique...)
 }

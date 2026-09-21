@@ -177,30 +177,3 @@ var _ = Describe("FelixConfiguration declarations", func() {
 		Expect(ownedFelixConfig(d).Spec.BPFEnabled).To(Equal(ptr.To(false)))
 	})
 })
-
-var _ = Describe("BGPConfiguration declarations", func() {
-	var r ReconcileInstallation
-
-	install := func(mode *operatorv1.ClusterRoutingMode) *operatorv1.Installation {
-		return &operatorv1.Installation{Spec: operatorv1.InstallationSpec{
-			CNI:           &operatorv1.CNISpec{Type: operatorv1.PluginCalico},
-			CalicoNetwork: &operatorv1.CalicoNetworkSpec{ClusterRoutingMode: mode},
-		}}
-	}
-
-	It("declares the BIRD value complementary to the one Felix gets", func() {
-		d, err := r.declareBGPConfiguration(install(ptr.To(operatorv1.ClusterRoutingModeFelix)))(&v3.BGPConfiguration{})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(d.Manager).To(Equal(installationFieldManager))
-		Expect(d.Policies["spec.programClusterRoutes"]).To(Equal(managedfields.ConflictOverride))
-		Expect(d.Owned.(*v3.BGPConfiguration).Spec.ProgramClusterRoutes).To(Equal(ptr.To("Disabled")))
-	})
-
-	It("governs the field whether or not the Installation asks for a mode", func() {
-		// Declared with no value, which is what clears whatever the operator wrote there.
-		d, err := r.declareBGPConfiguration(install(nil))(&v3.BGPConfiguration{})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(d.Policies).To(HaveKey("spec.programClusterRoutes"))
-		Expect(d.Owned.(*v3.BGPConfiguration).Spec.ProgramClusterRoutes).To(BeNil())
-	})
-})
