@@ -479,8 +479,9 @@ type iperf3Result struct {
 type iperf3Sum struct {
 	BitsPerSecond float64 `json:"bits_per_second"`
 	Seconds       float64 `json:"seconds"`
-	// Packets counts every datagram the sender emitted, not the number that
-	// arrived -- LostPackets has to be subtracted to get that.
+	// Packets is the datagram total iperf3 measures its loss figure against, not the
+	// number that arrived -- LostPackets has to be subtracted to get that.  The sender's
+	// and the receiver's blocks each report their own total, so the two differ slightly.
 	Packets     int     `json:"packets"`
 	LostPackets int     `json:"lost_packets"`
 	LostPercent float64 `json:"lost_percent"`
