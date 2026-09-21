@@ -41,7 +41,7 @@ type DeclareFn[T client.Object] func(current T) (*Declaration, error)
 
 // Apply writes the fields the declaration asks for on the governed resource, and returns the
 // whole resulting object.
-func (d DeclareFn[T]) Apply(ctx context.Context, m *FieldManager) (T, error) {
+func Apply[T client.Object](ctx context.Context, m *FieldManager, declare DeclareFn[T]) (T, error) {
 	var zero T
 	governed := reflect.TypeOf(zero)
 	if governed == nil || governed.Kind() != reflect.Pointer {
@@ -54,7 +54,7 @@ func (d DeclareFn[T]) Apply(ctx context.Context, m *FieldManager) (T, error) {
 		return zero, fmt.Errorf("unable to read %T: %w", current, err)
 	}
 
-	applied, err := applyDeclared(ctx, m, current, d)
+	applied, err := applyDeclared(ctx, m, current, declare)
 	if applied == nil {
 		return zero, err
 	}
