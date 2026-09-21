@@ -144,6 +144,12 @@ DEPS_SOURCES=go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./h
 # regenerate-and-diff check rather than one of its own.
 ARGOCI_DEPS_FILE=.argoci/depstree.yaml
 
+# Packages below a component that one CI lane gates on by itself. A lane whose
+# subject is a single package would otherwise have to gate on the whole
+# component and run for anything in its import closure. No deps.txt is
+# generated for these — only a depstree entry.
+ARGOCI_DEPS_SUBPACKAGES=felix/nftables test-tools/mocknode
+
 gen-deps-files: operator-charts
 	$(MAKE) -j$$(nproc) $(DEP_FILES)
 	$(MAKE) $(ARGOCI_DEPS_FILE)
@@ -163,7 +169,7 @@ $(DEP_FILES): $(DEPS_SOURCES)
 # Via a temporary, because a truncated file here is an empty component list —
 # which gates nothing, and says nothing.
 $(ARGOCI_DEPS_FILE): $(DEPS_SOURCES)
-	@$(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps gen-argoci-deps $(GO_DIRS)" > $@.tmp \
+	@$(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps gen-argoci-deps $(GO_DIRS) $(ARGOCI_DEPS_SUBPACKAGES)" > $@.tmp \
 	  && mv $@.tmp $@ || { rm -f $@.tmp; exit 1; }
 
 # bin/send-perf-results is the tool that pushes hack/perf JSON docs to the Lens

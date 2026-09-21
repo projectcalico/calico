@@ -17,11 +17,10 @@
 # in GCS. The counterpart to this script is load-test-artifacts, which runs on
 # the test VM.  It can assume that the artifacts have been downloaded to /tmp.
 #
-# fv-artifacts are published to GCS (GCS_WORKFLOW_DIR) rather than the S3 build
+# fv-artifacts are published to GCS (GCS_WORKFLOW_DIR) rather than the build
 # cache so the in-cloud GCP test VMs fetch them without cross-cloud egress. The
-# source images, however, live on S3 (S3_WORKFLOW_DIR), published there by the
-# "Build: *" prerequisite blocks, so this script bridges the two backends:
-# `s3-cmd` (S3) to fetch, `gcloud storage` (GCS) to publish.
+# source images live in whichever store the CI system provides, published there
+# by the blocks that build them, so this script bridges the two backends.
 
 set -e
 set -x
@@ -31,15 +30,25 @@ S3_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.semaphore/s3-cmd"
 
 cd ../..
 
-# Fetch pre-built images from the S3 workflow cache if available, and re-upload
-# them into the GCS fv-artifacts directory for the test VM.
-# These were built by the "Build: *" blocks in the Prerequisites stage.
+# Fetches one pre-built image tarball into /tmp, whichever store holds it.
+fetch_image() {
+  local img=$1
+  if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
+    ( cd /tmp && artifact pull workflow "${img}" ) 2>/dev/null
+    return
+  fi
+  "$S3_CMD" cp "${S3_WORKFLOW_DIR}/${img}" "/tmp/${img}" 2>/dev/null
+}
+
+# Fetch the pre-built images if they are available, and re-upload them into the
+# GCS fv-artifacts directory for the test VM. These were built by the "Build: *"
+# blocks in the Prerequisites stage.
 for img in calico-image.tar.zst node-image.tar.zst whisker-image.tar.zst; do
-  if "$S3_CMD" cp "${S3_WORKFLOW_DIR}/${img}" "/tmp/${img}" 2>/dev/null; then
+  if fetch_image "${img}"; then
     echo "Found pre-built ${img}, including in artifacts."
     gcloud storage cp "/tmp/${img}" "${GCS_WORKFLOW_DIR}/node/fv-artifacts/${img}"
   else
-    echo "WARNING: ${img} not in ${S3_WORKFLOW_DIR}; the test VMs will build it from source."
+    echo "WARNING: ${img} is not in the workflow cache; the test VMs will build it from source."
   fi
 done
 

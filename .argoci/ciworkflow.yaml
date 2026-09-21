@@ -184,12 +184,16 @@ includes:
       dependsOn: [e2e]
       in: ['^\.argoci/modules/20-e2e-ut\.yaml$']
 
+  # The drift check compares the suites the workflow definitions name against
+  # the ones that exist, so an edit to either side has to re-run it.
   - path: .argoci/modules/20-e2e-test-sets.yaml
     changes:
       dependsOn: [e2e]
       in:
         - ^e2e/config/
         - ^\.argoci/cron/
+        - ^\.argoci/ciworkflow\.yaml$
+        - ^\.semaphore/semaphore\.yml\.d/blocks/
         - ^\.argoci/modules/20-e2e-test-sets\.yaml$
 
   - path: .argoci/modules/20-e2e-validation.yaml
@@ -207,7 +211,7 @@ includes:
 
   - path: .argoci/modules/60-mock-node.yaml
     changes:
-      dependsOn: [test-tools]
+      dependsOn: [test-tools/mocknode]
       in: ['^\.argoci/modules/60-mock-node\.yaml$']
 
   - path: .argoci/modules/90-release.yaml
@@ -278,31 +282,46 @@ includes:
         - (^|/)README\.md$
         - (^|/)LICENSE$
 
-  # Disabled as this may be outdated and was failing
-  # - path: .argoci/modules/10-check-images.yaml
-  #   changes:
-  #     in:
-  #       - ^charts/
-  #       - ^manifests/
-  #       - ^\.argoci/modules/10-check-images\.yaml$
+  - path: .argoci/modules/10-check-images.yaml
+    changes:
+      in:
+        - ^charts/
+        - ^manifests/
+        - ^\.argoci/modules/10-check-images\.yaml$
 
+  # The chart is what the FV installs the operator from, so it belongs in the
+  # trigger even though no Go file references it.
   - path: .argoci/modules/20-operator.yaml
     changes:
       dependsOn: [operator]
-      in: ['^\.argoci/modules/20-operator\.yaml$']
+      in:
+        - ^charts/tigera-operator/
+        - ^\.argoci/modules/20-operator\.yaml$
 
   - path: .argoci/modules/20-node.yaml
     changes:
       dependsOn: [node]
       in: ['^\.argoci/modules/20-node\.yaml$']
 
-  # The nftables dataplane and the publisher it feeds. Narrower than the
-  # generated `felix` entry, which would run the benchmark for any change in
-  # felix's import closure.
+  # The system tests install the whole DaemonSet, so every component in it
+  # triggers them.
+  - path: .argoci/modules/20-node-kind.yaml
+    changes:
+      dependsOn: [node, typha, apiserver, cni-plugin, pod2daemon, calicoctl,
+                  kube-controllers, goldmane, whisker-backend, cmd]
+      in:
+        - ^whisker/
+        - ^\.semaphore/vms/
+        - ^\.argoci/scripts/vm-fleet-setup\.sh$
+        - ^\.argoci/modules/20-node-kind\.yaml$
+
+  # The nftables dataplane and the publisher it feeds. `felix/nftables` is that
+  # package's own import closure rather than the whole `felix` component, which
+  # would run the benchmark for anything felix imports.
   - path: .argoci/modules/45-nft-bench.yaml
     changes:
+      dependsOn: [felix/nftables]
       in:
-        - ^felix/nftables/
         - ^hack/perf/
         - ^\.argoci/modules/45-nft-bench\.yaml$
 
@@ -320,10 +339,18 @@ includes:
         - (^|/)README\.md$
         - (^|/)LICENSE$
 
+  # `typha` because the FV lanes run it alongside Felix, and the fleet scripts
+  # because a change to them changes how every lane here is driven.
   - path: .argoci/modules/20-felix.yaml
     changes:
-      dependsOn: [felix]
-      in: ['^\.argoci/modules/20-felix\.yaml$']
+      dependsOn: [felix, typha]
+      in:
+        - ^\.semaphore/vms/
+        - ^\.argoci/scripts/vm-fleet-setup\.sh$
+        - ^process/testing/aso/
+        - ^process/testing/util/
+        - ^process/testing/winfv-felix/
+        - ^\.argoci/modules/20-felix\.yaml$
 
   - path: .argoci/modules/40-openstack.yaml
     changes:

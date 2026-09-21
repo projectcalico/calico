@@ -12,8 +12,15 @@ steps:
     depends: [build-calico-image, check-go]
     matrix:
       - name: crd-v1
+        env:
+          - name: KC_TARGET
+            value: ci-no-prereqs
+      # The v3 API group is covered by the unit tests alone: the FVs underneath
+      # `ci` exercise the backend, which the group does not reach.
       - name: v3
         env:
+          - name: KC_TARGET
+            value: ut-no-prereqs
           - name: CALICO_API_GROUP
             value: projectcalico.org/v3
     commands: |
@@ -21,7 +28,7 @@ steps:
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       .argoci/scripts/load-cached-images calico
       cd kube-controllers
-      make ci-no-prereqs
+      make ${KC_TARGET}
     epilogue: |
       cd "${CI_HOME}/${CI_GIT_DIR}/kube-controllers"
       artifact push job report --destination test-results || true

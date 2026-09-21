@@ -998,6 +998,44 @@ components:
       - ^pkg/(?:[^/]+/)*[^/]*_test\.go$
       - ^pod2daemon/(?:[^/]+/)*[^/]*_test\.go$
       - ^typha/(?:[^/]+/)*[^/]*_test\.go$
+  felix/nftables:
+    in:
+      - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
+      - ^api/pkg/lib/numorstring/[^/]*\.go$
+      - ^felix/dataplane/ipsets/[^/]*\.go$
+      - ^felix/dataplane/linux/dataplanedefs/[^/]*\.go$
+      - ^felix/deltatracker/[^/]*\.go$
+      - ^felix/environment/[^/]*\.go$
+      - ^felix/generictables/[^/]*\.go$
+      - ^felix/ip/[^/]*\.go$
+      - ^felix/ipsets/[^/]*\.go$
+      - ^felix/iptables/cmdshim/[^/]*\.go$
+      - ^felix/labelindex/ipsetmember/[^/]*\.go$
+      - ^felix/netlinkshim/[^/]*\.go$
+      - ^felix/nftables/
+      - ^felix/proto/[^/]*\.go$
+      - ^felix/rules/rulesdefs/[^/]*\.go$
+      - ^hack/test/certs/
+      - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/log/[^/]*\.go$
+      - ^lib\.Makefile$
+      - ^libcalico-go/lib/net/[^/]*\.go$
+      - ^libcalico-go/lib/prometheus/[^/]*\.go$
+      - ^libcalico-go/lib/set/[^/]*\.go$
+      - ^metadata\.mk$
+    exclude:
+      - ^(?:[^/]+/)*AUTHORS[^/]*$
+      - ^(?:[^/]+/)*CONTRIBUTING[^/]*$
+      - ^(?:[^/]+/)*DEVELOPER_GUIDE[^/]*$
+      - ^(?:[^/]+/)*LICENSE[^/]*$
+      - ^(?:[^/]+/)*README[^/]*$
+      - ^(?:[^/]+/)*SECURITY\.md$
+      - ^(?:[^/]+/)*[^/]*\.md$
+      - ^(?:[^/]+/)*\.gitignore$
+      - ^api/(?:[^/]+/)*[^/]*_test\.go$
+      - ^felix/(?:[^/]+/)*[^/]*_test\.go$
+      - ^lib/(?:[^/]+/)*[^/]*_test\.go$
+      - ^libcalico-go/(?:[^/]+/)*[^/]*_test\.go$
   goldmane:
     in:
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
@@ -1631,6 +1669,49 @@ components:
       - ^metadata\.mk$
       - ^pkg/buildinfo/[^/]*\.go$
       - ^test-tools/
+      - ^typha/pkg/discovery/[^/]*\.go$
+      - ^typha/pkg/syncclient/[^/]*\.go$
+      - ^typha/pkg/syncproto/[^/]*\.go$
+      - ^typha/pkg/tlsutils/[^/]*\.go$
+    exclude:
+      - ^(?:[^/]+/)*AUTHORS[^/]*$
+      - ^(?:[^/]+/)*CONTRIBUTING[^/]*$
+      - ^(?:[^/]+/)*DEVELOPER_GUIDE[^/]*$
+      - ^(?:[^/]+/)*LICENSE[^/]*$
+      - ^(?:[^/]+/)*README[^/]*$
+      - ^(?:[^/]+/)*SECURITY\.md$
+      - ^(?:[^/]+/)*[^/]*\.md$
+      - ^(?:[^/]+/)*\.gitignore$
+      - ^api/(?:[^/]+/)*[^/]*_test\.go$
+      - ^crypto/(?:[^/]+/)*[^/]*_test\.go$
+      - ^lib/(?:[^/]+/)*[^/]*_test\.go$
+      - ^libcalico-go/(?:[^/]+/)*[^/]*_test\.go$
+      - ^pkg/(?:[^/]+/)*[^/]*_test\.go$
+      - ^typha/(?:[^/]+/)*[^/]*_test\.go$
+  test-tools/mocknode:
+    in:
+      - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
+      - ^api/pkg/lib/numorstring/[^/]*\.go$
+      - ^crypto/pkg/tls/[^/]*\.go$
+      - ^hack/test/certs/
+      - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/log/[^/]*\.go$
+      - ^lib/std/uniquelabels/[^/]*\.go$
+      - ^lib/std/uniquestr/[^/]*\.go$
+      - ^lib\.Makefile$
+      - ^libcalico-go/lib/apis/internalapi/[^/]*\.go$
+      - ^libcalico-go/lib/backend/api/[^/]*\.go$
+      - ^libcalico-go/lib/backend/encap/[^/]*\.go$
+      - ^libcalico-go/lib/backend/model/[^/]*\.go$
+      - ^libcalico-go/lib/errors/[^/]*\.go$
+      - ^libcalico-go/lib/names/[^/]*\.go$
+      - ^libcalico-go/lib/namespace/[^/]*\.go$
+      - ^libcalico-go/lib/net/[^/]*\.go$
+      - ^libcalico-go/lib/readlogger/[^/]*\.go$
+      - ^libcalico-go/lib/winutils/[^/]*\.go$
+      - ^metadata\.mk$
+      - ^pkg/buildinfo/[^/]*\.go$
+      - ^test-tools/mocknode/
       - ^typha/pkg/discovery/[^/]*\.go$
       - ^typha/pkg/syncclient/[^/]*\.go$
       - ^typha/pkg/syncproto/[^/]*\.go$

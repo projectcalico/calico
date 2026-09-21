@@ -83,14 +83,15 @@ steps:
     changes:
       in:
         - ^.*$
-      # Everything is in scope except vendored C and the dot-directories that
-      # hold no source. Listed rather than matched as `^\.`, which would also
+      # Everything is in scope except vendored C and the directories that hold
+      # no source. `.github/` and `.semaphore/` stay in: check-language skips
+      # dot-directories itself, but the Dockerfile and mockery scans walk the
+      # whole tree. Listed rather than matched as `^\.`, which would also
       # swallow this file and stop an edit to it retesting anything.
       exclude:
         - ^libbpf/
         - ^\.git
         - ^\.claude/
-        - ^\.go-pkg-cache/
     commands: |
       make check-language
       make check-dockerfiles
@@ -164,19 +165,44 @@ steps:
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       make -C cmd/calico image
-      # Built for their GOCACHE fingerprints, which the FVs downstream reuse.
+      # The Felix FVs run one or the other of these directly, so they ship
+      # rather than being rebuilt per lane.
       make -C cmd/calico build-cgo build-race
       docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
       zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/calico-image.tar
       artifact push workflow /tmp/calico-image.tar.zst
+      artifact push workflow cmd/calico/bin/calico-cgo-amd64
+      artifact push workflow cmd/calico/bin/calico-race-amd64
+      # build-cgo pulls libbpf in through Felix's cgo chain; the test keeps this
+      # a no-op on a warm tree but still produces the artifact if that chain is
+      # ever severed. Shipping the clone is what lets every Felix lane skip it,
+      # and with it the github.com/libbpf HTTP 500 flake.
+      test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || make -C felix libbpf
+      LIBBPF_VERSION=$(grep -E '^LIBBPF_VERSION[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
+      # tar warns and exits 0 on a missing path, which would leave every Felix
+      # lane silently back on a cold libbpf build.
+      test -d felix/bpf-gpl/libbpf || { echo "libbpf clone missing at felix/bpf-gpl/libbpf" >&2; exit 1; }
+      test -f "felix/bpf-gpl/.libbpf-${LIBBPF_VERSION}" || { echo "libbpf version marker felix/bpf-gpl/.libbpf-${LIBBPF_VERSION} missing" >&2; exit 1; }
+      tar --use-compress-program="zstd -3" -cf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
+      artifact push workflow /tmp/libbpf-amd64.tar.zst
 
   # The tag is a hash of the specs and patches, so an unchanged recipe is a pull
-  # rather than the ~20 minutes an emulated build takes. Only amd64 is cached:
-  # nothing here consumes another arch yet.
+  # rather than the ~20 minutes an emulated build takes. Every architecture
+  # calico/node ships is built: a consumer reaching a tag nobody published has
+  # nowhere else to get it from.
   - name: build-nft-rpms
     services: [docker]
     timeout: 1h
     requests: {cpu: 2000m, memory: 1Gi}
+    matrix:
+      - name: amd64
+        env: [{name: ARCH, value: amd64}]
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
     changes:
       in:
         - '^hack/rpms/nftables/'
@@ -184,8 +210,8 @@ steps:
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       mkdir -p logs
-      export BUILD_LOG="logs/build-nft-rpms-amd64.log"
-      .argoci/scripts/build-nft-rpms.sh amd64
+      export BUILD_LOG="logs/build-nft-rpms-${ARCH}.log"
+      .argoci/scripts/build-nft-rpms.sh "${ARCH}"
     epilogue: |
       cd "${CI_HOME}/${CI_GIT_DIR}"
       artifact push job logs --destination logs || true
@@ -201,6 +227,15 @@ steps:
     requests: {cpu: 1500m, memory: 1.5Gi}
     depends: [build-nft-rpms]
     when: GIT_REF_TYPE == 'MERGE'
+    matrix:
+      - name: amd64
+        env: [{name: ARCH, value: amd64}]
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
     changes:
       in:
         - '^hack/rpms/nftables/'
@@ -209,8 +244,8 @@ steps:
       export DOCKER_USER="$DOCKERHUB_USERNAME"
       export DOCKER_TOKEN="$DOCKERHUB_PASSWORD"
       mkdir -p logs
-      export BUILD_LOG="logs/push-nft-rpms-amd64.log"
-      .argoci/scripts/push-nft-rpms.sh amd64
+      export BUILD_LOG="logs/push-nft-rpms-${ARCH}.log"
+      .argoci/scripts/push-nft-rpms.sh "${ARCH}"
     epilogue: |
       cd "${CI_HOME}/${CI_GIT_DIR}"
       artifact push job logs --destination logs || true

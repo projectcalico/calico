@@ -41,3 +41,25 @@ steps:
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       cd operator
       make build ARCH=$ARCH
+
+  # The FV stands up a kind cluster and a local registry inside the docker
+  # sidecar, then installs the components from this commit through the real
+  # operator. Every image its operator resolves has to be in that registry, so a
+  # producer missing here becomes calico-node stuck in Init rather than a build
+  # error.
+  - name: operator-fv
+    depends: [build-calico-image, build-node-image, build-whisker-image, check-go]
+    timeout: 1h
+    requests: {cpu: 3500m, memory: 7Gi}
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      # The Makefiles call the kubectl they download by full path; the scripts
+      # underneath call it by name.
+      export PATH="$(pwd)/hack/test/kind:${PATH}"
+      .argoci/scripts/load-cached-images calico node whisker
+      cd operator
+      make fv
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}/operator"
+      artifact push job report --destination test-results || true
