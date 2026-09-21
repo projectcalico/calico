@@ -21,6 +21,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 // fakeResult is the canned response for a matched command.
@@ -657,5 +659,57 @@ func TestBuildE2EBinariesUsesARCHES(t *testing.T) {
 		if strings.HasPrefix(e, "VALIDARCHES=") {
 			t.Errorf("e2e build-all should not set VALIDARCHES (lib.Makefile ignores it): %s", e)
 		}
+	}
+}
+
+// TestPublishHelmChartsSemverTag asserts that each chart pushed to an OCI
+// registry is also tagged with its normalized semver version, since the
+// "v"-prefixed chart version is not resolvable by helm.
+func TestPublishHelmChartsSemverTag(t *testing.T) {
+	tests := []struct {
+		name    string
+		version string
+		// wantCopyTo is the semver tag the pushed tag should be copied to.
+		// An empty value means no copy is expected.
+		wantCopyTo string
+	}{
+		{"v-prefixed release version is copied", "v3.33.3", "3.33.3"},
+		{"hashrelease version is copied", "v3.33.0-0.dev-1-gabcdef123456", "3.33.0-0.dev-1-gabcdef123456"},
+		{"already-normalized version is not copied", "3.33.3", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeRunner()
+			r := &CalicoManager{
+				runner:         f,
+				repoRoot:       t.TempDir(),
+				outputDir:      t.TempDir(),
+				calicoVersion:  tt.version,
+				helmCharts:     true,
+				helmRegistries: []string{"quay.io/calico/charts"},
+			}
+
+			if err := r.publishHelmCharts(); err != nil {
+				t.Fatalf("publishHelmCharts() unexpected error: %v", err)
+			}
+
+			charts := utils.AllReleaseCharts()
+			if got := f.count("./bin/helm push"); got != len(charts) {
+				t.Errorf("helm push count = %d, want %d (calls: %v)", got, len(charts), f.calls)
+			}
+			if tt.wantCopyTo == "" {
+				if f.ran("./bin/crane") {
+					t.Errorf("crane should not run for an already-normalized version (calls: %v)", f.calls)
+				}
+				return
+			}
+			for _, chart := range charts {
+				want := fmt.Sprintf("./bin/crane copy quay.io/calico/charts/%s:%s quay.io/calico/charts/%s:%s",
+					chart, tt.version, chart, tt.wantCopyTo)
+				if !slices.Contains(f.calls, want) {
+					t.Errorf("missing crane copy for %s\nwant: %s\ncalls: %v", chart, want, f.calls)
+				}
+			}
+		})
 	}
 }
