@@ -20,6 +20,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/qos"
 )
@@ -160,10 +161,14 @@ func (s *ConnLimitScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get E
 
 	aIsOpener := data.A2B.Opener
 
+	// to-wep stamps this when it skips the ingress limit for a local-host
+	// source. CORE-13478 Failure.4.
+	hostOpened := ctVal.Flags()&v4.FlagHostOrigin != 0
+
 	if podAIsLimited {
 		if aIsOpener && podA.HasEgressLimit {
 			s.counts[connlimitKey{ifindex: podA.IfIndex, direction: 0}]++
-		} else if !aIsOpener && podA.HasIngressLimit {
+		} else if !aIsOpener && podA.HasIngressLimit && !hostOpened {
 			s.counts[connlimitKey{ifindex: podA.IfIndex, direction: 1}]++
 		}
 	}
@@ -171,7 +176,7 @@ func (s *ConnLimitScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get E
 	if podBIsLimited {
 		if !aIsOpener && podB.HasEgressLimit {
 			s.counts[connlimitKey{ifindex: podB.IfIndex, direction: 0}]++
-		} else if aIsOpener && podB.HasIngressLimit {
+		} else if aIsOpener && podB.HasIngressLimit && !hostOpened {
 			s.counts[connlimitKey{ifindex: podB.IfIndex, direction: 1}]++
 		}
 	}
