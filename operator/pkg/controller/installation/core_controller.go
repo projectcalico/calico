@@ -1096,7 +1096,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	// is reported and skipped rather than fought over, so the reconcile carries on: freezing
 	// everything the operator manages does not win the field back.
 	var fieldConflicts []error
-	if _, err := managedfields.Apply(ctx, r.fieldManager, r.declareFelixConfiguration(ctx, defaulted, needsNamespaceMigration)); err != nil {
+	if _, err := r.fieldManager.Apply(ctx, r.declareFelixConfiguration(ctx, defaulted, needsNamespaceMigration)); err != nil {
 		if !managedfields.IsFieldConflict(err) {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
 			return reconcile.Result{}, err
@@ -1106,7 +1106,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 
 	// The return carries both writes, so the render below sees the health port and cgroup path
 	// a user may have kept.
-	felixConfiguration, err := managedfields.Apply(ctx, r.fieldManager, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration))
+	felixConfiguration, err := r.fieldManager.Apply(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration))
 	if err != nil {
 		if !managedfields.IsFieldConflict(err) {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
@@ -1116,7 +1116,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	// Set any non-default BGPConfiguration values that we need.
-	if _, err := managedfields.Apply(ctx, r.fieldManager, r.declareBGPConfiguration(defaulted)); err != nil {
+	if _, err := r.fieldManager.Apply(ctx, r.declareBGPConfiguration(defaulted)); err != nil {
 		if !managedfields.IsFieldConflict(err) {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating BGPConfiguration", err, reqLogger)
 			return reconcile.Result{}, err
@@ -1484,7 +1484,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	certificateManager.AddToStatusManager(r.status, common.CalicoNamespace)
 
 	// Re-check whether eBPF can be enabled within Felix once calico-node has rolled out.
-	if _, err := managedfields.Apply(ctx, r.fieldManager, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration)); err != nil {
+	if _, err := r.fieldManager.Apply(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration)); err != nil {
 		if !managedfields.IsFieldConflict(err) {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating resource", err, reqLogger)
 			return reconcile.Result{}, err

@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
 	"sort"
 	"strings"
 
@@ -48,30 +47,22 @@ func New(c client.Client) *FieldManager {
 // DeclareFn states which fields the caller owns, given the current object.
 type DeclareFn[T client.Object] func(current T) (*Declaration, error)
 
+// object constrains a declaration to a pointer type, so the write path can make one to read into.
+type object[U any] interface {
+	*U
+	client.Object
+}
+
 // Apply writes the fields the declaration asks for on the governed resource, and returns the
 // whole resulting object.
-func Apply[T client.Object](ctx context.Context, m *FieldManager, declare DeclareFn[T]) (T, error) {
-	var zero T
-	governed := reflect.TypeOf(zero)
-	if governed == nil || governed.Kind() != reflect.Pointer {
-		return zero, fmt.Errorf("a declaration governs a pointer type, not %T", zero)
-	}
-
+func (m *FieldManager) Apply[U any, T object[U]](ctx context.Context, declare DeclareFn[T]) (T, error) {
 	// Read the object the declaration governs, so the caller can decide from its current state.
-	current := reflect.New(governed.Elem()).Interface().(T)
+	current := T(new(U))
 	if err := m.client.Get(ctx, types.NamespacedName{Name: defaultResourceName}, current); err != nil && !apierrors.IsNotFound(err) {
+		var zero T
 		return zero, fmt.Errorf("unable to read %T: %w", current, err)
 	}
-
-	applied, err := applyDeclared(ctx, m, current, declare)
-	if applied == nil {
-		return zero, err
-	}
-	typed, ok := applied.(T)
-	if !ok {
-		return zero, err
-	}
-	return typed, err
+	return m.applyDeclared[U](ctx, current, declare)
 }
 
 // fieldManagerPrefix namespaces the operator's field managers away from other writers.
@@ -80,30 +71,31 @@ const fieldManagerPrefix = "operator.tigera.io/"
 var log = logf.Log.WithName("managedfields")
 
 // applyDeclared writes the declared fields, letting the API server track who owns each one.
-func applyDeclared[T client.Object](ctx context.Context, m *FieldManager, current T, declare DeclareFn[T]) (client.Object, error) {
+func (m *FieldManager) applyDeclared[U any, T object[U]](ctx context.Context, current T, declare DeclareFn[T]) (T, error) {
+	var zero T
 	d, err := declare(current)
 	if err != nil {
-		return nil, err
+		return zero, err
 	}
 	if d == nil {
 		return current, nil
 	}
 	if _, ok := d.Owned.(T); !ok {
-		return nil, fmt.Errorf("a %T declaration cannot own %T", current, d.Owned)
+		return zero, fmt.Errorf("a %T declaration cannot own %T", current, d.Owned)
 	}
 
 	gvk, err := apiutil.GVKForObject(current, m.client.Scheme())
 	if err != nil {
-		return nil, err
+		return zero, err
 	}
 
 	payload, err := declaredPayload(d.Owned, d.Policies)
 	if err != nil {
-		return nil, err
+		return zero, err
 	}
 	declared, err := declaresSpec(payload)
 	if err != nil {
-		return nil, err
+		return zero, err
 	}
 	if current.GetResourceVersion() == "" && !declared {
 		// The declaration holds nothing to write, so don't create an empty object.
@@ -113,27 +105,28 @@ func applyDeclared[T client.Object](ctx context.Context, m *FieldManager, curren
 	// Fields an older operator wrote through update have to go before the apply, which cannot
 	// drop a field it does not own.
 	if err := m.clearLegacyOwned(ctx, current, gvk, d, payload); err != nil {
-		return nil, err
+		return zero, err
 	}
 
 	var conflict error
-	applied, err := m.serverSideApply(ctx, gvk, payload, d.Manager, false)
-	if err != nil {
+	applied := T(new(U))
+	if err := m.serverSideApply(ctx, gvk, payload, d.Manager, false, applied); err != nil {
 		if !apierrors.IsConflict(err) {
-			return nil, err
+			return zero, err
 		}
 
 		var force bool
 		force, conflict = resolveConflicts(err, current, d, payload)
 		var refused *ConflictingFieldsError
 		if conflict != nil && !errors.As(conflict, &refused) {
-			return nil, conflict
+			return zero, conflict
 		}
 
 		// A refused field is dropped from the payload rather than fought over, so the rest of
 		// the declaration still lands. The caller degrades on the error it gets back.
-		if applied, err = m.serverSideApply(ctx, gvk, payload, d.Manager, force); err != nil {
-			return nil, err
+		applied = T(new(U))
+		if err := m.serverSideApply(ctx, gvk, payload, d.Manager, force, applied); err != nil {
+			return zero, err
 		}
 	}
 
@@ -253,7 +246,8 @@ func (m *FieldManager) clearFields(ctx context.Context, gvk schema.GroupVersionK
 	return m.client.Patch(ctx, target, client.RawPatch(types.MergePatchType, encoded))
 }
 
-func (m *FieldManager) serverSideApply(ctx context.Context, gvk schema.GroupVersionKind, payload *unstructured.Unstructured, manager string, force bool) (client.Object, error) {
+// serverSideApply applies payload and reads the result back into out.
+func (m *FieldManager) serverSideApply(ctx context.Context, gvk schema.GroupVersionKind, payload *unstructured.Unstructured, manager string, force bool, out client.Object) error {
 	opts := []client.ApplyOption{client.FieldOwner(fieldManagerPrefix + manager)}
 	if force {
 		opts = append(opts, client.ForceOwnership)
@@ -262,17 +256,13 @@ func (m *FieldManager) serverSideApply(ctx context.Context, gvk schema.GroupVers
 	applied := payload.DeepCopy()
 	applied.SetGroupVersionKind(gvk)
 	if err := m.client.Apply(ctx, client.ApplyConfigurationFromUnstructured(applied), opts...); err != nil {
-		return nil, err
+		return err
 	}
 
-	out, err := m.client.Scheme().New(gvk)
-	if err != nil {
-		return nil, err
-	}
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(applied.Object, out); err != nil {
-		return nil, fmt.Errorf("unable to read back the applied %s: %w", gvk.Kind, err)
+		return fmt.Errorf("unable to read back the applied %s: %w", gvk.Kind, err)
 	}
-	return out.(client.Object), nil
+	return nil
 }
 
 // logResolution records what the write path did with fields it does not simply own. Reconciles

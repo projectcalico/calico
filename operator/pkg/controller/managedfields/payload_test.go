@@ -55,7 +55,7 @@ var _ = Describe("Fields outside the declaration", func() {
 		})
 
 		It("should not take ownership of an undeclared field", func() {
-			_, err := managedfields.Apply(ctx, w, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
+			_, err := w.Apply(ctx, declare(managedfields.ConflictDefer, managedfields.ConflictDefer))
 			Expect(err).NotTo(HaveOccurred())
 
 			fc := getFelixConfig()
