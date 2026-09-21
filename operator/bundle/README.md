@@ -17,7 +17,7 @@ make -C operator bundle VERSION=3.34.0 PREV_VERSION=3.33.0 CHANNEL=release-v3.34
 |---|---|
 | `VERSION` | The operator version to publish, `X.Y.Z`. The bundle pins `quay.io/calico/operator:v$(VERSION)` by digest, so that tag must already be pushed. |
 | `PREV_VERSION` | The version this one replaces, `X.Y.Z`, or `0.0.0` for none. |
-| `CHANNEL` | The OperatorHub channel, which must be a `release-vX.YY` branch name. Defaults to the current branch. |
+| `CHANNEL` | The OperatorHub channel, which must be a `release-v3.YY` branch name. Defaults to the current branch when that branch is one; from any other branch, pass it explicitly. |
 | `DEFAULT_CHANNEL` | Optional. Only set it when the channel should become the package default. |
 
 Output:

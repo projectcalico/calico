@@ -438,13 +438,20 @@ $(KUSTOMIZE): $(HACK_BIN)
 
 # Options for 'bundle-build'
 
-# Set the channels to the current release branch, unless
-# we got another one passed to us. Channel should be
-# release-vX.YY
-CHANNEL ?= $(shell git branch --show-current)
+# Set the channel to the current release branch, unless we got another one
+# passed to us. Channel should be release-v3.YY.
+#
+# The match is a prefix match rather than a substring one: branches like
+# 'auto-pick-of-#12612-upstream-release-v3.31' contain a release branch name
+# without being one, and would otherwise be published as a channel. A branch
+# that is not a release branch leaves CHANNEL empty, so building a bundle from
+# one means passing CHANNEL explicitly.
+RELEASE_BRANCH_PATTERN := release-v3.%
+CURRENT_BRANCH := $(shell git branch --show-current)
+CHANNEL ?= $(filter $(RELEASE_BRANCH_PATTERN),$(CURRENT_BRANCH))
 BUNDLE_CHANNEL = --channels=$(if \
-		 $(findstring release-v,$(CHANNEL)),$(CHANNEL),\
-		 $(error Channel for bundle should be a release branch of the format 'release-vX.YY', not '$(CHANNEL)'))
+		 $(filter $(RELEASE_BRANCH_PATTERN),$(CHANNEL)),$(CHANNEL),\
+		 $(error Channel for bundle should be a release branch of the format 'release-v3.YY', not '$(CHANNEL)'))
 
 # We only specify one channel so we don't need to set a
 # default, but if we have one then include it.
