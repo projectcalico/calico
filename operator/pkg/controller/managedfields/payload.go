@@ -30,8 +30,9 @@ import (
 // defaultResourceName is the only FelixConfiguration or BGPConfiguration the operator writes.
 const defaultResourceName = "default"
 
-// declaredPayload renders the governed fields as an object carrying no other state.  It is built
-// from the policy paths rather than the struct, which serializes some fields unconditionally.
+// declaredPayload renders the governed fields as an object carrying no other state. It reads the
+// policy paths, so a field the declaration sets without governing stays out, where the resolver
+// could not classify it.
 func declaredPayload(owned client.Object, policies map[string]ConflictPolicy) (*unstructured.Unstructured, error) {
 	content, err := toUnstructured(owned)
 	if err != nil {
