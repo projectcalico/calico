@@ -51,6 +51,9 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED	0x80000 /* marks connections rejected by the ingress connection limit */
 #define CALI_CT_FLAG_CONNLIMIT_EGRESS	0x100000 /* marks connections counted against an egress connection limit */
 #define CALI_CT_FLAG_CONNLIMIT_DEC	0x200000 /* marks connections already decremented from connlimit counter */
+/* Set at to-wep when policy was skipped because the source is a local host
+ * route. The ingress connlimit check is skipped for the same reason. */
+#define CALI_CT_FLAG_HOST_ORIGIN	0x400000
 
 /* Flags kept in calico_ct_leg's bits_word. felix/bpf/conntrack/v4 map.go and
  * map6.go mirror these bit positions.
