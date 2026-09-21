@@ -29,6 +29,7 @@ import (
 
 	"github.com/cloudflare/cfssl/log"
 	"github.com/go-logr/logr"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -96,6 +97,22 @@ func printVersion() {
 	log.Info(fmt.Sprintf("Version: %v", version.VERSION))
 	log.Info(fmt.Sprintf("Go Version: %s", goruntime.Version()))
 	log.Info(fmt.Sprintf("Go OS/Arch: %s/%s", goruntime.GOOS, goruntime.GOARCH))
+}
+
+// uncachedObjects lists the types the client reads straight from the apiserver rather than the
+// cache.
+func uncachedObjects(extra []client.Object) []client.Object {
+	return append([]client.Object{
+		// Pods are only listed by label/namespace selector from a handful of controllers.
+		// Caching them starts a shared informer that holds every pod in the cluster in memory
+		// (~36 MiB per 1000 pods).
+		&corev1.Pod{},
+
+		// The shared-config writer resolves field ownership from managedFields, which are
+		// not preserved by the cache.
+		&v3.FelixConfiguration{},
+		&v3.BGPConfiguration{},
+	}, extra...)
 }
 
 // Run starts the operator and returns only when it is asked to stop. Startup paths
@@ -329,19 +346,11 @@ admission policy installation; once an Installation exists it is the authority o
 		LeaderElection:   enableLeaderElection,
 		LeaderElectionID: "operator-lock",
 		Client: client.Options{
-			Cache: &client.CacheOptions{
-				DisableFor: append([]client.Object{
-					// Pods are only listed by label/namespace selector from a handful of
-					// controllers. Caching them starts a shared informer that holds every pod
-					// in the cluster in memory (~36 MiB per 1000 pods), so read them uncached
-					// from the apiserver instead.
-					&corev1.Pod{},
-				}, opts.UncachedObjects...),
-			},
+			Cache: &client.CacheOptions{DisableFor: uncachedObjects(opts.UncachedObjects)},
 		},
 
-		// Cached objects are only read by the operator's own controllers, which
-		// never consult managedFields; stripping them substantially shrinks the cache.
+		// Stripping managedFields substantially shrinks the cache.  Anything that resolves
+		// ownership from them has to be listed in uncachedObjects.
 		Cache: cache.Options{DefaultTransform: cache.TransformStripManagedFields()},
 
 		// Explicitly set the MapperProvider to the NewDynamicRESTMapper, as we had previously had issues with the default
