@@ -16,6 +16,7 @@ package managedfields_test
 
 import (
 	"context"
+	"errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -26,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/projectcalico/calico/operator/pkg/apis"
 	"github.com/projectcalico/calico/operator/pkg/controller/managedfields"
@@ -107,6 +109,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 
 	Context("with the API server tracking ownership", func() {
 		var w *managedfields.FieldManager
+		var scheme *runtime.Scheme
 
 		// applyAs writes healthPort as another field manager, taking the field if it has to.
 		applyAs := func(manager string, healthPort int64) {
@@ -120,7 +123,7 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 		}
 
 		BeforeEach(func() {
-			scheme := runtime.NewScheme()
+			scheme = runtime.NewScheme()
 			Expect(apis.AddToScheme(scheme, true)).NotTo(HaveOccurred())
 			c = ctrlrfake.DefaultFakeClientBuilder(scheme).WithReturnManagedFields().Build()
 			ctx = context.Background()
@@ -349,6 +352,26 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 				Expect(fc.Spec.BPFEnabled).To(Equal(ptr.To(false)))
 				Expect(fc.Annotations).NotTo(HaveKey("operator.tigera.io/owned-fields"))
 				Expect(fc.Annotations).NotTo(HaveKey(render.BPFOperatorAnnotation))
+			})
+
+			It("should keep the applied object when the records cannot be cleared", func() {
+				failing := ctrlrfake.DefaultFakeClientBuilder(scheme).WithReturnManagedFields().
+					WithInterceptorFuncs(interceptor.Funcs{
+						Patch: func(_ context.Context, _ client.WithWatch, _ client.Object, _ client.Patch, _ ...client.PatchOption) error {
+							return errors.New("no patching today")
+						},
+					}).Build()
+				Expect(failing.Create(ctx, &v3.FelixConfiguration{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:        "default",
+						Annotations: map[string]string{"operator.tigera.io/owned-fields": `{"spec.bpfEnabled":false}`},
+					},
+					Spec: v3.FelixConfigurationSpec{BPFEnabled: ptr.To(false)},
+				}, client.FieldOwner("operator"))).NotTo(HaveOccurred())
+
+				fc, err := managedfields.Apply(ctx, managedfields.New(failing), declareBPF(managedfields.ConflictError))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(fc.Spec.BPFEnabled).To(Equal(ptr.To(false)))
 			})
 
 			It("should keep the records while a field they name is still unclaimed", func() {
