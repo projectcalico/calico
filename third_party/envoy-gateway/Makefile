@@ -137,8 +137,8 @@ release-build: .release-$(VERSION).created
 	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
 	touch $@
 
-release-publish: release-prereqs bin/crane
-	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
+release-publish: release-prereqs
+	@if $(REPO_ROOT)/hack/image-published "$(CRANE_CMD)" "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
 		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \
 	else \
 		$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM); \

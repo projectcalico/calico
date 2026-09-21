@@ -2,7 +2,12 @@ module github.com/projectcalico/calico
 
 go 1.27.1
 
-tool golang.org/x/tools/cmd/goimports
+tool (
+	github.com/google/go-containerregistry/cmd/crane
+	golang.org/x/tools/cmd/goimports
+	gotest.tools/gotestsum
+	sigs.k8s.io/controller-runtime/tools/setup-envtest
+)
 
 require (
 	cloud.google.com/go/storage v1.62.3
@@ -37,7 +42,7 @@ require (
 	github.com/golang/snappy v1.0.0
 	github.com/google/btree v1.1.3
 	github.com/google/go-cmp v0.7.0
-	github.com/google/go-containerregistry v0.21.7
+	github.com/google/go-containerregistry v0.22.1
 	github.com/google/go-github/v53 v53.2.0
 	github.com/google/netstack v0.0.0-20191123085552-55fcc16cd0eb
 	github.com/google/nftables v0.3.0
@@ -208,6 +213,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.37.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.44.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/boombuler/barcode v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
@@ -229,7 +235,8 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/cyphar/filepath-securejoin v0.7.0 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
-	github.com/docker/cli v29.6.2+incompatible // indirect
+	github.com/dnephin/pflag v1.0.7 // indirect
+	github.com/docker/cli v29.7.2+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.8 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/ebitengine/purego v0.10.1 // indirect
@@ -292,6 +299,7 @@ require (
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/pprof v0.0.0-20260402051712-545e8a4df936 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
+	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.14 // indirect
 	github.com/googleapis/gax-go/v2 v2.21.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
@@ -418,6 +426,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
+	gotest.tools/gotestsum v1.13.0 // indirect
 	howett.net/plist v1.0.1 // indirect
 	k8s.io/cli-runtime v0.37.0 // indirect
 	k8s.io/cloud-provider v0.37.0 // indirect
@@ -437,6 +446,7 @@ require (
 	kubevirt.io/controller-lifecycle-operator-sdk/api v0.2.4 // indirect
 	oras.land/oras-go/v2 v2.6.2 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.36.0 // indirect
+	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.25.1 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kustomize/api v0.21.1 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.21.1 // indirect

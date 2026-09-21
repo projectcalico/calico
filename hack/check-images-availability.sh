@@ -20,13 +20,14 @@ set -euo pipefail
 # Resolve script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Use provided CRANE or fallback to ../bin/crane (relative to hack/)
-CRANE="${CRANE:-../bin/crane}"
+# Use provided CRANE or fall back to the crane declared as a tool in the root
+# go.mod. Either form can be a multi-word command, so split it into an array
+# rather than invoking it as a single word.
+read -ra CRANE_CMD <<<"${CRANE:-go -C ${SCRIPT_DIR}/.. tool crane}"
 YQ="${YQ:-${SCRIPT_DIR}/../bin/yq}"
 
-if [ ! -x "$CRANE" ]; then
-  echo "Error: crane not found or not executable at: $CRANE" >&2
-  echo "Resolved path: $(realpath "$CRANE" 2>/dev/null || echo '<unresolvable>')" >&2
+if ! "${CRANE_CMD[@]}" version >/dev/null 2>&1; then
+  echo "Error: crane is not runnable as: ${CRANE_CMD[*]}" >&2
   exit 1
 fi
 
@@ -105,14 +106,14 @@ while IFS= read -r image; do
   success=0
   last_err=""
   for attempt in 1 2 3; do
-    if last_err=$("$CRANE" digest "$image" 2>&1 >/dev/null); then
+    if last_err=$("${CRANE_CMD[@]}" digest "$image" 2>&1 >/dev/null); then
       echo "✅ Available: $image"
       success=1
       break
     else
       echo "Attempt $attempt failed for: $image"
       if [ "$attempt" -eq 3 ]; then
-        echo "Used crane at: $(realpath "$CRANE" 2>/dev/null || echo '<unresolvable>')"
+        echo "Used crane: ${CRANE_CMD[*]}"
       fi
       sleep 3
     fi
