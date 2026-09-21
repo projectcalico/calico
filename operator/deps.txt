@@ -212,6 +212,7 @@ local:operator/pkg/controller/ippool
 local:operator/pkg/controller/istio
 local:operator/pkg/controller/k8sapi
 local:operator/pkg/controller/kubeproxy
+local:operator/pkg/controller/managedfields
 local:operator/pkg/controller/metrics
 local:operator/pkg/controller/migration
 local:operator/pkg/controller/migration/cni

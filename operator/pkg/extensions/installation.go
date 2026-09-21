@@ -17,7 +17,7 @@ package extensions
 import (
 	"context"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/components"
@@ -37,10 +37,9 @@ type InstallationExtension interface {
 	// Watches registers the watches the extension needs.
 	Watches(c ctrlruntime.Controller) error
 
-	// DefaultFelixConfiguration defaults the FelixConfiguration fields only the variant
-	// knows about. It fetches and patches the resource itself, because those fields are
-	// not on the type the core operator compiles against.
-	DefaultFelixConfiguration(ctx context.Context, cli client.Client, install *operatorv1.InstallationSpec) error
+	// DeclareFelixConfiguration writes the variant's defaults into owned, merging with current
+	// where needed, and returns the paths it declared.
+	DeclareFelixConfiguration(install *operatorv1.InstallationSpec, current, owned *v3.FelixConfiguration) ([]string, error)
 
 	// ProductVersion is the version the operator writes to the Installation status
 	// for the variant the given spec installs.
@@ -67,8 +66,8 @@ func (noopInstallation) Watches(ctrlruntime.Controller) error {
 	return nil
 }
 
-func (noopInstallation) DefaultFelixConfiguration(context.Context, client.Client, *operatorv1.InstallationSpec) error {
-	return nil
+func (noopInstallation) DeclareFelixConfiguration(*operatorv1.InstallationSpec, *v3.FelixConfiguration, *v3.FelixConfiguration) ([]string, error) {
+	return nil, nil
 }
 
 func (noopInstallation) ProductVersion(*operatorv1.InstallationSpec) string {
