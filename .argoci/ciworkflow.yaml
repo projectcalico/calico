@@ -329,6 +329,7 @@ includes:
     changes:
       in:
         - ^e2e/cmd/gateway/
+        - ^hack/test/certs/
         - ^hack/test/kind/gateway-setup\.sh$
         - ^third_party/envoy-gateway/
         - ^third_party/envoy-proxy/
@@ -402,6 +403,7 @@ includes:
     changes:
       in:
         - ^istio/
+        - ^hack/test/certs/
         - ^metadata\.mk$
         - ^lib\.Makefile$
         - ^\.argoci/modules/20-istio\.yaml$
