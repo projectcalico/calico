@@ -44,9 +44,7 @@ const (
 	// RTPROT_BIRD, which `ip route` renders as "bird".
 	birdRouteProto = "bird"
 
-	// IPv4NormalRoutePriority's default, i.e. the metric both Felix and BIRD give a route to a
-	// workload on another node.  A stand-in for one of BIRD's routes has to carry it to share a
-	// route key with Felix's.
+	// The metric Felix and BIRD both give a remote workload route, so their route keys match.
 	birdRouteMetric = "1024"
 )
 
@@ -66,6 +64,8 @@ func ipipBIRDRouteTopology(birdOwnsClusterRoutes bool) infrastructure.TopologyOp
 	// monitor's netlink subscription only feeds address tracking.  The default of 90s would make
 	// these tests very slow.
 	opts.ExtraEnvVars["FELIX_ROUTEREFRESHINTERVAL"] = "1"
+	// Pinned so birdRouteMetric keeps matching the metric Felix programs.
+	opts.ExtraEnvVars["FELIX_IPV4NORMALROUTEPRIORITY"] = birdRouteMetric
 	return opts
 }
 
