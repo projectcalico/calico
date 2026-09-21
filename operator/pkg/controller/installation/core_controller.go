@@ -319,7 +319,7 @@ func NewReconciler(o ReconcilerOptions) *ReconcileInstallation {
 		newComponentHandler: utils.NewComponentHandler,
 		opts:                o.Options,
 		ext:                 o.Options.Extensions.Installation(),
-		fieldManager:        managedfields.New(o.Client, o.Options.UseV3CRDs),
+		fieldManager:        managedfields.New(o.Client),
 	}
 }
 

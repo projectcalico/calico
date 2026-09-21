@@ -60,9 +60,9 @@ var _ = Describe("Applying declared BGPConfiguration fields", func() {
 	// Both API groups have to retract, because Felix gives its half of cluster route programming
 	// up as soon as the Installation stops asking for a mode.
 	for _, useV3CRDs := range []bool{true, false} {
-		group := "crd.projectcalico.org/v1, where the operator tracks what it wrote"
+		group := "crd.projectcalico.org/v1"
 		if useV3CRDs {
-			group = "projectcalico.org/v3, where the API server tracks ownership"
+			group = "projectcalico.org/v3"
 		}
 
 		Context(group, func() {
@@ -71,13 +71,9 @@ var _ = Describe("Applying declared BGPConfiguration fields", func() {
 			BeforeEach(func() {
 				scheme := runtime.NewScheme()
 				Expect(apis.AddToScheme(scheme, useV3CRDs)).NotTo(HaveOccurred())
-				builder := ctrlrfake.DefaultFakeClientBuilder(scheme)
-				if useV3CRDs {
-					builder = builder.WithReturnManagedFields()
-				}
-				c = builder.Build()
+				c = ctrlrfake.DefaultFakeClientBuilder(scheme).WithReturnManagedFields().Build()
 				ctx = context.Background()
-				w = managedfields.New(c, useV3CRDs)
+				w = managedfields.New(c)
 			})
 
 			It("should write the declared value", func() {

@@ -160,7 +160,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
-				fieldManager:        managedfields.New(c, false),
+				fieldManager:        managedfields.New(c),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -699,7 +699,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
-				fieldManager:        managedfields.New(c, false),
+				fieldManager:        managedfields.New(c),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -872,7 +872,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
-				fieldManager:        managedfields.New(c, false),
+				fieldManager:        managedfields.New(c),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -1246,9 +1246,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			// This is only set on EKS / GKE.
 			Expect(fc.Spec.RouteTableRange).To(BeNil())
 
-			// Should set correct annoation and BPFEnabled field.
-			Expect(fc.Annotations).NotTo(BeNil())
-			Expect(fc.Annotations[render.BPFOperatorAnnotation]).To(Equal("false"))
+			// Should set the BPFEnabled field.
 			Expect(fc.Spec.BPFEnabled).NotTo(BeNil())
 			Expect(*fc.Spec.BPFEnabled).To(BeFalse())
 		})
@@ -1610,9 +1608,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			err = c.Get(ctx, types.NamespacedName{Name: "default"}, fc)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			// Should set correct annoation and BPFEnabled field.
-			Expect(fc.Annotations).NotTo(BeNil())
-			Expect(fc.Annotations[render.BPFOperatorAnnotation]).To(Equal("true"))
+			// Should set the BPFEnabled field.
 			Expect(fc.Spec.BPFEnabled).NotTo(BeNil())
 			Expect(*fc.Spec.BPFEnabled).To(BeTrue())
 		})
@@ -1628,9 +1624,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			err = c.Get(ctx, types.NamespacedName{Name: "default"}, fc)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			// Should set correct annoation and BPFEnabled field.
-			Expect(fc.Annotations).NotTo(BeNil())
-			Expect(fc.Annotations[render.BPFOperatorAnnotation]).To(Equal("true"))
+			// Should set the BPFEnabled field.
 			Expect(fc.Spec.BPFEnabled).NotTo(BeNil())
 			Expect(*fc.Spec.BPFEnabled).To(BeTrue())
 		})
@@ -1649,9 +1643,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			err = c.Get(ctx, types.NamespacedName{Name: "default"}, fc)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			// Should set correct annoation and BPFEnabled field.
-			Expect(fc.Annotations).NotTo(BeNil())
-			Expect(fc.Annotations[render.BPFOperatorAnnotation]).To(Equal("true"))
+			// Should set the BPFEnabled field.
 			Expect(fc.Spec.BPFEnabled).NotTo(BeNil())
 			Expect(*fc.Spec.BPFEnabled).To(BeTrue())
 
@@ -1668,9 +1660,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			err = c.Get(ctx, types.NamespacedName{Name: "default"}, fc)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			// Should set correct annoation and BPFEnabled field.
-			Expect(fc.Annotations).NotTo(BeNil())
-			Expect(fc.Annotations[render.BPFOperatorAnnotation]).To(Equal("false"))
+			// Should set the BPFEnabled field.
 			Expect(fc.Spec.BPFEnabled).NotTo(BeNil())
 			Expect(*fc.Spec.BPFEnabled).To(BeFalse())
 		})
@@ -1698,9 +1688,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			err = c.Get(ctx, types.NamespacedName{Name: "default"}, fc)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			// Should set correct annoation and BPFEnabled field.
-			Expect(fc.Annotations).NotTo(BeNil())
-			Expect(fc.Annotations[render.BPFOperatorAnnotation]).To(Equal("true"))
+			// Should set the BPFEnabled field.
 			Expect(fc.Spec.BPFEnabled).NotTo(BeNil())
 			Expect(*fc.Spec.BPFEnabled).To(BeTrue())
 		})
@@ -2273,7 +2261,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
-				fieldManager:        managedfields.New(c, false),
+				fieldManager:        managedfields.New(c),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -2384,7 +2372,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
-				fieldManager:        managedfields.New(c, false),
+				fieldManager:        managedfields.New(c),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -2571,7 +2559,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
 			client:       clientFor(),
-			fieldManager: managedfields.New(clientFor(), true),
+			fieldManager: managedfields.New(clientFor()),
 			scheme:       scheme,
 			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
@@ -2606,7 +2594,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				APIDiscovery: discoveryFor(admission.VersionV1Beta1),
 			},
 			client:       clientFor(),
-			fieldManager: managedfields.New(clientFor(), true),
+			fieldManager: managedfields.New(clientFor()),
 			scheme:       scheme,
 			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
@@ -2639,7 +2627,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				APIDiscovery: discoveryFor(admission.VersionV1Alpha1),
 			},
 			client:       clientFor(),
-			fieldManager: managedfields.New(clientFor(), true),
+			fieldManager: managedfields.New(clientFor()),
 			scheme:       scheme,
 			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
@@ -2672,7 +2660,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				APIDiscovery: discoveryFor(""),
 			},
 			client:       clientFor(),
-			fieldManager: managedfields.New(clientFor(), true),
+			fieldManager: managedfields.New(clientFor()),
 			scheme:       scheme,
 			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
@@ -2694,7 +2682,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
 			client:       clientFor(),
-			fieldManager: managedfields.New(clientFor(), false),
+			fieldManager: managedfields.New(clientFor()),
 			scheme:       scheme,
 			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
@@ -2715,7 +2703,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
 			client:       clientFor(),
-			fieldManager: managedfields.New(clientFor(), true),
+			fieldManager: managedfields.New(clientFor()),
 			scheme:       scheme,
 			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
@@ -2794,7 +2782,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
 			client:       clientFor(initial...),
-			fieldManager: managedfields.New(clientFor(initial...), true),
+			fieldManager: managedfields.New(clientFor(initial...)),
 			scheme:       scheme,
 			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
@@ -2816,7 +2804,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
 			client:       clientFor(),
-			fieldManager: managedfields.New(clientFor(), true),
+			fieldManager: managedfields.New(clientFor()),
 			scheme:       scheme,
 			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
@@ -2892,7 +2880,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
 			client:       clientFor(),
-			fieldManager: managedfields.New(clientFor(), true),
+			fieldManager: managedfields.New(clientFor()),
 			scheme:       scheme,
 			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
@@ -2927,7 +2915,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				APIDiscovery: discoveryFor(admission.VersionV1Beta1),
 			},
 			client:       clientFor(),
-			fieldManager: managedfields.New(clientFor(), true),
+			fieldManager: managedfields.New(clientFor()),
 			scheme:       scheme,
 			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
@@ -2960,7 +2948,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				APIDiscovery: discoveryFor(admission.VersionV1Alpha1),
 			},
 			client:       clientFor(),
-			fieldManager: managedfields.New(clientFor(), true),
+			fieldManager: managedfields.New(clientFor()),
 			scheme:       scheme,
 			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
@@ -2981,7 +2969,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				APIDiscovery: discoveryFor(""),
 			},
 			client:       clientFor(),
-			fieldManager: managedfields.New(clientFor(), true),
+			fieldManager: managedfields.New(clientFor()),
 			scheme:       scheme,
 			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
@@ -3003,7 +2991,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
 			client:       clientFor(),
-			fieldManager: managedfields.New(clientFor(), false),
+			fieldManager: managedfields.New(clientFor()),
 			scheme:       scheme,
 			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
@@ -3064,7 +3052,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
 			client:       clientFor(),
-			fieldManager: managedfields.New(clientFor(), true),
+			fieldManager: managedfields.New(clientFor()),
 			scheme:       scheme,
 			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {

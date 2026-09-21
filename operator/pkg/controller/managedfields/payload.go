@@ -17,6 +17,7 @@ package managedfields
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -101,4 +102,13 @@ func conflictPaths(err error) []string {
 		paths = append(paths, strings.TrimPrefix(cause.Field, "."))
 	}
 	return paths
+}
+
+// kindOf names a governed resource for error messages.
+func kindOf(obj client.Object) string {
+	t := reflect.TypeOf(obj)
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	return t.Name()
 }

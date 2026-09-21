@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Package managedfields owns a declared set of fields on Calico resources that
-// users also modify. One write path per API group.
+// users also modify, through server-side apply.
 package managedfields
 
 import (
@@ -29,12 +29,11 @@ import (
 // FieldManager owns a declared set of fields on shared Calico configuration resources.
 type FieldManager struct {
 	client client.Client
-	useV3  bool
 }
 
-// New returns a FieldManager for the API group the operator writes through.
-func New(c client.Client, useV3CRDs bool) *FieldManager {
-	return &FieldManager{client: c, useV3: useV3CRDs}
+// New returns a FieldManager that writes through the API group the client is configured for.
+func New(c client.Client) *FieldManager {
+	return &FieldManager{client: c}
 }
 
 // Declare states which fields the caller owns, given the current object.
@@ -65,18 +64,10 @@ func (d Declare[T]) Apply(ctx context.Context, m *FieldManager) (T, error) {
 	return typed, err
 }
 
-// applyDeclared persists a declaration through the API group the operator writes.
-func (m *FieldManager) applyDeclared(ctx context.Context, current client.Object, declare declareFn) (client.Object, error) {
-	if m.useV3 {
-		return m.applyV3(ctx, current, declare)
-	}
-	return m.applyCRDV1(ctx, current, declare)
-}
-
-// declareFn is the untyped declaration callback the writers share.
+// declareFn is the untyped declaration callback the write path works in.
 type declareFn func(current client.Object) (*Declaration, error)
 
-// untypedDeclare adapts a caller's typed declaration to the form the writers work in.
+// untypedDeclare adapts a caller's typed declaration to the form the write path works in.
 func untypedDeclare[T client.Object](declare Declare[T]) declareFn {
 	return func(current client.Object) (*Declaration, error) {
 		d, err := declare(current.(T))

@@ -20,10 +20,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/operator/pkg/apis"
@@ -45,7 +43,7 @@ var _ = Describe("Fields outside the declaration", func() {
 
 	// The fake's deduced type converter takes the field set from the typed object, so an applier
 	// picks up fields with no omitempty that its payload never carried.  A real server does not.
-	Context("projectcalico.org/v3, where the API server tracks ownership", func() {
+	Context("with the API server tracking ownership", func() {
 		var w *managedfields.FieldManager
 
 		BeforeEach(func() {
@@ -53,7 +51,7 @@ var _ = Describe("Fields outside the declaration", func() {
 			Expect(apis.AddToScheme(scheme, true)).NotTo(HaveOccurred())
 			c = ctrlrfake.DefaultFakeClientBuilder(scheme).WithReturnManagedFields().Build()
 			ctx = context.Background()
-			w = managedfields.New(c, true)
+			w = managedfields.New(c)
 		})
 
 		It("should not take ownership of an undeclared field", func() {
@@ -64,32 +62,6 @@ var _ = Describe("Fields outside the declaration", func() {
 			Expect(fc.ManagedFields).To(HaveLen(1))
 			Expect(fc.ManagedFields[0].Manager).To(Equal("tigera-operator/installation"))
 			Expect(fc.ManagedFields[0].FieldsV1.GetRawString()).NotTo(ContainSubstring("bpfLogLevel"))
-		})
-	})
-
-	Context("crd.projectcalico.org/v1, where the operator tracks what it wrote", func() {
-		var w *managedfields.FieldManager
-
-		BeforeEach(func() {
-			scheme := runtime.NewScheme()
-			Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
-			c = ctrlrfake.DefaultFakeClientBuilder(scheme).Build()
-			ctx = context.Background()
-			w = managedfields.New(c, false)
-		})
-
-		It("should leave an undeclared field a user set alone", func() {
-			Expect(c.Create(ctx, &v3.FelixConfiguration{
-				ObjectMeta: metav1.ObjectMeta{Name: "default"},
-				Spec:       v3.FelixConfigurationSpec{BPFLogLevel: "Debug"},
-			})).NotTo(HaveOccurred())
-
-			_, err := declare(managedfields.ConflictDefer, managedfields.ConflictDefer).Apply(ctx, w)
-			Expect(err).NotTo(HaveOccurred())
-
-			fc := getFelixConfig()
-			Expect(fc.Spec.BPFLogLevel).To(Equal("Debug"))
-			Expect(fc.Spec.HealthPort).To(Equal(ptr.To(9099)))
 		})
 	})
 })

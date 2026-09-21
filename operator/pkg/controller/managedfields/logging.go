@@ -21,17 +21,16 @@ import (
 
 var log = logf.Log.WithName("managedfields")
 
-// logResolution records what the writer did with fields it does not simply own. Reconciles that
-// only rewrite the operator's own values say nothing, so the log carries the surprises.
-func logResolution(obj client.Object, manager string, deferred, removed, forced []string) {
-	if len(deferred) == 0 && len(removed) == 0 && len(forced) == 0 {
+// logResolution records what the write path did with fields it does not simply own. Reconciles
+// that only rewrite the operator's own values say nothing, so the log carries the surprises.
+func logResolution(obj client.Object, manager string, deferred, forced []string) {
+	if len(deferred) == 0 && len(forced) == 0 {
 		return
 	}
 	log.Info("Resolved shared configuration ownership",
 		"kind", kindOf(obj),
 		"manager", manager,
 		"deferred", deferred,
-		"removed", removed,
 		"forced", forced,
 	)
 }

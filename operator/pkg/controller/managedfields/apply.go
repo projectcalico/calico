@@ -34,8 +34,8 @@ import (
 // fieldManagerPrefix namespaces the operator's field managers away from other writers.
 const fieldManagerPrefix = "tigera-operator/"
 
-// applyV3 writes through projectcalico.org/v3, where the API server tracks the operator's fields.
-func (m *FieldManager) applyV3(ctx context.Context, current client.Object, declare declareFn) (client.Object, error) {
+// applyDeclared writes the declared fields, letting the API server track who owns each one.
+func (m *FieldManager) applyDeclared(ctx context.Context, current client.Object, declare declareFn) (client.Object, error) {
 	d, err := declare(current)
 	if err != nil {
 		return nil, err
@@ -140,7 +140,7 @@ func resolveConflicts(applyErr error, current client.Object, d *Declaration, pay
 	if len(undeclared) > 0 {
 		return false, fmt.Errorf("conflict on fields with no declared policy %v: %w", undeclared, applyErr)
 	}
-	logResolution(current, d.Manager, deferred, nil, forced)
+	logResolution(current, d.Manager, deferred, forced)
 	if len(refused) > 0 {
 		sort.Strings(refused)
 		return len(forced) > 0, &ConflictingFieldsError{Kind: kindOf(current), Paths: refused}

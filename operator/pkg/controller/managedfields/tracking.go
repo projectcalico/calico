@@ -22,13 +22,18 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
-// lastWrittenValues reads back the values the operator recorded on its previous write.
+// ownedFieldsAnnotation records the values an operator that wrote through update left behind.
+const ownedFieldsAnnotation = "operator.tigera.io/owned-fields"
+
+// bpfEnabledPath was tracked by its own annotation, which predates ownedFieldsAnnotation.
+const bpfEnabledPath = "spec.bpfEnabled"
+
+// lastWrittenValues reads back the values an operator that wrote through update recorded.
 func lastWrittenValues(obj client.Object) (map[string]any, error) {
 	annotations := obj.GetAnnotations()
 	values := map[string]any{}
@@ -85,81 +90,6 @@ func valuesAgree(currentContent, payloadObj map[string]any, path string) (bool, 
 		return false, err
 	}
 	return reflect.DeepEqual(current, written), nil
-}
-
-// recordWrittenValues stores the values being written so the next reconcile can compare against them.
-func recordWrittenValues(obj client.Object, payload *unstructured.Unstructured, d *Declaration, deferred []string) error {
-	values, err := lastWrittenValues(obj)
-	if err != nil {
-		return err
-	}
-	for _, path := range deferred {
-		delete(values, path)
-	}
-
-	for path := range d.Policies {
-		written, found, err := unstructured.NestedFieldNoCopy(payload.Object, strings.Split(path, ".")...)
-		if err != nil {
-			return fmt.Errorf("unable to read %s: %w", path, err)
-		}
-		if !found {
-			continue
-		}
-		if values[path], err = canonicalize(written); err != nil {
-			return err
-		}
-	}
-
-	encoded, err := json.Marshal(values)
-	if err != nil {
-		return fmt.Errorf("unable to record written fields: %w", err)
-	}
-	annotations := obj.GetAnnotations()
-	if annotations == nil {
-		annotations = map[string]string{}
-	}
-	annotations[ownedFieldsAnnotation] = string(encoded)
-
-	// Keep the legacy annotation in step, so a rollback to an older operator still reads it.
-	if enabled, ok := values[bpfEnabledPath].(bool); ok {
-		annotations[render.BPFOperatorAnnotation] = strconv.FormatBool(enabled)
-	} else {
-		delete(annotations, render.BPFOperatorAnnotation)
-	}
-	obj.SetAnnotations(annotations)
-	return nil
-}
-
-// mergeInto overlays the declared fields onto fc, leaving every other field alone.
-func mergeInto(obj client.Object, payload *unstructured.Unstructured) error {
-	declared, _, err := unstructured.NestedMap(payload.Object, "spec")
-	if err != nil {
-		return fmt.Errorf("unable to read declared fields: %w", err)
-	}
-	if len(declared) == 0 {
-		return nil
-	}
-
-	content, err := toUnstructured(obj)
-	if err != nil {
-		return err
-	}
-	spec, _, err := unstructured.NestedMap(content, "spec")
-	if err != nil {
-		return fmt.Errorf("unable to read %T fields: %w", obj, err)
-	}
-	if spec == nil {
-		spec = map[string]any{}
-	}
-	// Overlay whole fields rather than merging into them, so a struct field lands the way an
-	// apply would place it.
-	for field, value := range declared {
-		spec[field] = value
-	}
-	if err := unstructured.SetNestedMap(content, spec, "spec"); err != nil {
-		return err
-	}
-	return runtime.DefaultUnstructuredConverter.FromUnstructured(content, obj)
 }
 
 // canonicalize renders a value the way it will read back out of the annotation.
