@@ -12,10 +12,14 @@ globalPrologue: |
   export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise)}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
   export PRODUCT="${PRODUCT:-calico}"
-  export RELEASE_STREAM="${RELEASE_STREAM:-v3.29}"
+  export RELEASE_STREAM="${RELEASE_STREAM:-v3.31}"
   export TEST_TYPE="${TEST_TYPE:-k8s-e2e}"
   export UPLEVEL_PRE_RELEASE="${UPLEVEL_PRE_RELEASE:-true}"
   export UPLEVEL_PRODUCT="${UPLEVEL_PRODUCT:-calico}"
+  # migrate.sh only runs `bz upgrade` when this is non-empty; without it the
+  # cluster stays on RELEASE_STREAM and run_tests.sh looks for an e2e binary
+  # in that stream's long-expired hashrelease.
+  export UPLEVEL_RELEASE_STREAM="${UPLEVEL_RELEASE_STREAM:-v3.33}"
   export USE_HASH_RELEASE="${USE_HASH_RELEASE:-false}"
   export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
   source .argoci/scripts/global_prologue.sh
