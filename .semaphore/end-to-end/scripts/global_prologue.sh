@@ -156,6 +156,8 @@ if [[ $SEMAPHORE_AGENT_MACHINE_TYPE =~ ^c1-.* ]]; then eval "$install_tools_cmd"
 
 if [[ "$CREATE_WINDOWS_NODES" == "true" ]]; then echo "[INFO] Installing putty-tools..."; install-package --skip-update putty-tools; fi
 
+if ! python3 -c "import ensurepip" >/dev/null 2>&1; then echo "[INFO] Installing python3-venv..."; install-package --skip-update python3-venv; fi
+
 echo "[INFO] Installing Banzai CLI..."
 [[ -n "${BZ_VERSION}" ]] && export BZ_RELEASE=tags/${BZ_VERSION} || export BZ_RELEASE=latest
 export BZ_ASSET_ID=$(curl --retry 9 --retry-all-errors -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" -H "Accept: application/vnd.github.v3.raw" -s https://api.github.com/repos/${BZ_REPO}/releases/${BZ_RELEASE} | jq '.assets[] | select(.name|test("^bz.*linux-amd64"))| .id')
