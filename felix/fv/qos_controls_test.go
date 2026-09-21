@@ -1040,6 +1040,18 @@ var _ = infrastructure.DatastoreDescribe(
 						It(name, func() {
 							const numConnections = 2
 
+							// CORE-13478: under the netkit attach API the RST
+							// can only leave via the pod's own device, and the
+							// tunnel drops it. Cross-node only; same-node and
+							// veth deliver it.
+							if BPFMode() && infrastructure.NetkitAttachMode() &&
+								encap != "none" && limitedIdx != clientIdx {
+								Skip("KNOWN ISSUE (CORE-13478): on netkit with an " +
+									"overlay the ingress connlimit rejection RST is " +
+									"dropped at the tunnel device, so the client times " +
+									"out instead of failing fast")
+							}
+
 							// Indexed here, not captured as arguments: the
 							// workloads only exist once BeforeEach has run.
 							limited, client := w[limitedIdx], w[clientIdx]
