@@ -2204,6 +2204,55 @@ class TestLiveMigration(TestPluginEtcdBase):
         # The stale LiveMigration should have been deleted.
         self.assertIn(stale_lm_key, self.recent_deletes)
 
+    def test_resync_does_not_delete_live_migration_started_mid_resync(self):
+        """Resync must not delete a LiveMigration written after it read Neutron.
+
+        The resync used to read Neutron first and etcd second.  A migration that
+        started in between wrote its LiveMigration to etcd in time to show up in the
+        etcd read, but too late to show up in the Neutron snapshot, so the resync saw
+        a LiveMigration with no migrating port and deleted it.
+        """
+        self._do_initial_resync()
+
+        # A LiveMigration that really is orphaned, in etcd before the resync starts.
+        # It must still be deleted, so that this test fails if the race is ever
+        # "fixed" by simply not deleting anything.
+        stale_lm_name = "stale--lm--name"
+        stale_lm_key = (
+            "/calico/resources/v3/projectcalico.org/livemigrations/"
+            + self.namespace
+            + "/"
+            + stale_lm_name
+        )
+        stale_lm = copy.deepcopy(self._lm_value("old-host", "new-host"))
+        stale_lm["metadata"]["name"] = stale_lm_name
+        self.etcd_data[stale_lm_key] = json.dumps(stale_lm)
+
+        # No port is migrating as far as Neutron is concerned: the migration starts
+        # only once the resync has read the Neutron port list.  Injecting the
+        # LiveMigration from the get_ports side effect places that write exactly in
+        # the window between the resync's two reads.
+        racing_lm_key = self._lm_key(self.DEST_HOST)
+        racing_lm = self._lm_value(self.SOURCE_HOST, self.DEST_HOST)
+
+        def get_ports_then_start_migration(context, filters=None):
+            ports = self.get_ports(context, filters=filters)
+            self.etcd_data[racing_lm_key] = json.dumps(racing_lm)
+            return ports
+
+        self.db.get_ports.side_effect = get_ports_then_start_migration
+
+        self.recent_writes = {}
+        self.recent_deletes = set()
+        self.driver.endpoint_syncer._resync_live_migrations(self.db_context)
+
+        # The racing LiveMigration must survive the resync...
+        self.assertNotIn(racing_lm_key, self.recent_deletes)
+        self.assertIn(racing_lm_key, self.etcd_data)
+
+        # ...and the genuinely orphaned one must still be reaped.
+        self.assertIn(stale_lm_key, self.recent_deletes)
+
 
 class TestPluginEtcdRegion(TestPluginEtcdBase):
 

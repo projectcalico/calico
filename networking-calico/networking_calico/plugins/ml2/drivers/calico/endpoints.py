@@ -104,6 +104,18 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         LOG.info("Starting LiveMigration resync")
         namespace = self.namespace
 
+        # Read etcd first and Neutron second, as ResourceSyncer.resync does.  Only the
+        # LiveMigrations in this snapshot are candidates for deletion below, so a
+        # migration that starts after this read - writing its LiveMigration to etcd too
+        # late to be reflected in the Neutron snapshot we take next - cannot be mistaken
+        # for an orphan.
+        #
+        # Reading etcd first also gives the mod_revision CAS on the delete something to
+        # do: a LiveMigration rewritten between the two reads is now at a newer revision
+        # than the one recorded here, so the delete fails harmlessly instead of
+        # discarding a resource that has moved on since we read it.
+        existing_lms = datamodel_v3.get_all("LiveMigration", namespace)
+
         # Build the set of LiveMigration names that should exist, based on
         # Neutron ports with migrating_to set.
         expected_lm_names = set()
@@ -129,7 +141,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 )
 
         # Delete orphaned LiveMigration resources.
-        for name, _, mod_revision in datamodel_v3.get_all("LiveMigration", namespace):
+        for name, _, mod_revision in existing_lms:
             if name not in expected_lm_names:
                 LOG.warning("LiveMigration resync: deleting orphaned LM %s", name)
                 self.delete_live_migration(name, mod_revision=mod_revision)
