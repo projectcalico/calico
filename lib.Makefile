@@ -188,24 +188,24 @@ endif
 endif
 endif
 
-# The build macros below use $(GO_BUILD_CONTAINER) (defined with DOCKER_RUN, further down)
+# The build macros below use $(DOCKER_GO_BUILD_RECURSIVE) (defined with DOCKER_RUN, further down)
 # as their container prefix; they keep their env and mkdir inside the sh -c so it is the
 # only container-vs-native difference.
 
 # Use this when building binaries that need cgo (e.g. for libbpf).
 define build_cgo_binary
-	$(GO_BUILD_CONTAINER) \
+	$(DOCKER_GO_BUILD_RECURSIVE) \
 		sh -c '$(GIT_CONFIG_SSH) mkdir -p $(dir $(2)) && CGO_ENABLED=1 $(if $(CROSS_CC),CC="$(CROSS_CC)") CGO_CFLAGS=$(CGO_CFLAGS) CGO_LDFLAGS=$(CGO_LDFLAGS) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
 endef
 
 # For binaries that do not require cgo.
 define build_binary
-	$(GO_BUILD_CONTAINER) \
+	$(DOCKER_GO_BUILD_RECURSIVE) \
 		sh -c '$(GIT_CONFIG_SSH) mkdir -p $(dir $(2)) && CGO_ENABLED=0 go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
 endef
 
 define build_binary_dir
-	$(GO_BUILD_CONTAINER) \
+	$(DOCKER_GO_BUILD_RECURSIVE) \
 		sh -c '$(GIT_CONFIG_SSH) mkdir -p $(1)/$(dir $(3)) && CGO_ENABLED=0 go build -C $(1) -o $(3) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(2)'
 endef
 
@@ -457,7 +457,7 @@ DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
 
 # Prefix for the build_* macros. Recursive (=) so it honors a sub-Makefile's DOCKER_RUN
 # override -- api/Makefile mounts itself as .../api for its own local builds (e.g. list-gnp).
-GO_BUILD_CONTAINER = $(DOCKER_RUN) $(CALICO_BUILD)
+DOCKER_GO_BUILD_RECURSIVE = $(DOCKER_RUN) $(CALICO_BUILD)
 
 # NATIVE_GO_BUILD=true (already inside calico/go-build, e.g. a CI go-build pod): null the
 # go-build prefixes so those recipes run on the host, and export the Go env the container
@@ -465,7 +465,7 @@ GO_BUILD_CONTAINER = $(DOCKER_RUN) $(CALICO_BUILD)
 # DOCKER_RUN/CALICO_BUILD.
 ifeq ($(NATIVE_GO_BUILD),true)
 DOCKER_GO_BUILD :=
-GO_BUILD_CONTAINER :=
+DOCKER_GO_BUILD_RECURSIVE :=
 export GOARCH := $(ARCH)
 export GOOS := $(BUILDOS)
 export GOFLAGS := $(GOFLAGS)
