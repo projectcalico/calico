@@ -416,12 +416,13 @@ type FelixConfigurationSpec struct {
 	// follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the
 	// transition: "-est" when the first reply packet is seen, "-rst" when the response is a TCP
 	// RST (connection refused), or "-icmp-err" when the response is a related ICMP error (e.g.
-	// port unreachable). The log body is the standard kernel packet log of the response packet,
-	// so the flow is identified by its 5-tuple and can be correlated with the original policy Log
-	// line (with source and destination swapped). A logged connection with no follow-up log never
-	// received a response. Connections whose initial log was suppressed by LogActionRateLimit get
-	// no follow-up log either, so every follow-up log pairs with an initial one. Enabling this
-	// consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+	// port unreachable). The log body is the standard kernel packet log of the response packet.
+	// For "-est" and "-rst" its 5-tuple is the original policy Log line's with source and
+	// destination swapped; for "-icmp-err" the bracketed inner header carries the original
+	// 5-tuple unswapped. A logged connection with no follow-up log never received a response.
+	// Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log
+	// either, so every follow-up log pairs with an initial one. Enabling this consumes one bit
+	// from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
 	// [Default: Disabled]
 	// +optional
 	LogConnectionTransitions *LogConnectionTransitionsMode `json:"logConnectionTransitions,omitempty" validate:"omitempty,oneof=Disabled FirstResponseAfterLog"`
@@ -432,6 +433,7 @@ type FelixConfigurationSpec struct {
 	// rules that emit these logs are shared by all policies, so per-policy values cannot be
 	// substituted and any %-specifiers are rendered literally. [Default: calico-response]
 	// +optional
+	// +kubebuilder:validation:Pattern=`^([a-zA-Z0-9%: /_-])*$`
 	LogConnectionTransitionsPrefix string `json:"logConnectionTransitionsPrefix,omitempty"`
 
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]
@@ -822,7 +824,7 @@ type FelixConfigurationSpec struct {
 	// [Default: Off].
 	// +optional
 	// +kubebuilder:validation:Pattern=`^(?i)(Off|Info|Debug)?$`
-	BPFLogLevel string `json:"bpfLogLevel"`
+	BPFLogLevel string `json:"bpfLogLevel,omitempty"`
 
 	// BPFConntrackLogLevel controls the log level of the BPF conntrack cleanup program, which runs periodically
 	// to clean up expired BPF conntrack entries.
@@ -905,10 +907,12 @@ type FelixConfigurationSpec struct {
 	// balancer. The connect-time load balancer is required for the host to be able to reach Kubernetes services
 	// and it improves the performance of pod-to-service connections.When set to TCP, connect time load balancing
 	// is available only for services with TCP ports. [Default: TCP]
+	// +kubebuilder:default=TCP
 	BPFConnectTimeLoadBalancing *BPFConnectTimeLBType `json:"bpfConnectTimeLoadBalancing,omitempty" validate:"omitempty,oneof=TCP Enabled Disabled"`
 
 	// BPFHostNetworkedNATWithoutCTLB when in BPF mode, controls whether Felix does a NAT without CTLB. This along with BPFConnectTimeLoadBalancing
 	// determines the CTLB behavior. [Default: Enabled]
+	// +kubebuilder:default=Enabled
 	BPFHostNetworkedNATWithoutCTLB *BPFHostNetworkedNATType `json:"bpfHostNetworkedNATWithoutCTLB,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 
 	// BPFExternalServiceMode in BPF mode, controls how connections from outside the cluster to services (node ports
@@ -1235,6 +1239,7 @@ type FelixConfigurationSpec struct {
 	// floating IPs are always programmed, regardless of this setting.)
 	//
 	// +optional
+	// +kubebuilder:default=Disabled
 	FloatingIPs *FloatingIPType `json:"floatingIPs,omitempty" validate:"omitempty"`
 
 	// LocalSubnetL2Reachability controls whether Felix automatically responds to

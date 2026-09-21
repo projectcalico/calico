@@ -27,11 +27,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/projectcalico/calico/release/internal/binaries"
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/images"
+	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
@@ -567,7 +569,7 @@ func TestBuildBinariesBuildsFelixWhateverTheImagesFlagIs(t *testing.T) {
 			m.binaries = true
 			// buildBinaries collects what it built, and the fake runner does
 			// not produce files.
-			bin := filepath.Join(root, calicoctlComponent, binDir)
+			bin := filepath.Join(root, binaries.CalicoctlComponent, binDir)
 			if err := os.MkdirAll(bin, 0o755); err != nil {
 				t.Fatal(err)
 			}
@@ -590,8 +592,8 @@ func TestBuildBinariesBuildsFelixWhateverTheImagesFlagIs(t *testing.T) {
 // must not reach the archive by matching on a base name.
 func TestFelixContentShipsOnlyTheBPFTool(t *testing.T) {
 	root := t.TempDir()
-	bin := filepath.Join(root, felixComponent, binDir)
-	for _, name := range []string{"calico-felix", felixBPFBinary, "bpf/" + felixBPFBinary} {
+	bin := filepath.Join(root, binaries.FelixComponent, binDir)
+	for _, name := range []string{"calico-felix", binaries.FelixBinary, "bpf/" + binaries.FelixBinary} {
 		path := filepath.Join(bin, name)
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
@@ -604,7 +606,7 @@ func TestFelixContentShipsOnlyTheBPFTool(t *testing.T) {
 	m := &CalicoManager{repoRoot: root, binaries: true}
 	dest := t.TempDir()
 	for _, c := range m.archiveSources() {
-		if !strings.HasPrefix(c.Name(), felixComponent) {
+		if !strings.HasPrefix(c.Name(), binaries.FelixComponent) {
 			continue
 		}
 		if err := c.Contribute(dest); err != nil {
@@ -624,7 +626,7 @@ func TestFelixContentShipsOnlyTheBPFTool(t *testing.T) {
 		t.Fatal(err)
 	}
 	slices.Sort(got)
-	if want := []string{filepath.Join(binDir, felixBPFBinary)}; !slices.Equal(got, want) {
+	if want := []string{filepath.Join(binDir, binaries.FelixBinary)}; !slices.Equal(got, want) {
 		t.Errorf("staged %v, want %v", got, want)
 	}
 }
@@ -635,7 +637,7 @@ func TestFelixContentShipsOnlyTheBPFTool(t *testing.T) {
 func TestHashreleaseManifestsAreCollectedBeforeTheArchiveReadsThem(t *testing.T) {
 	root := t.TempDir()
 	out := filepath.Join(t.TempDir(), "upload")
-	if err := os.MkdirAll(filepath.Join(root, manifestsDir), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, manifests.DirName), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -647,6 +649,9 @@ func TestHashreleaseManifestsAreCollectedBeforeTheArchiveReadsThem(t *testing.T)
 		isHashRelease:   true,
 		runner:          f,
 		imageRegistries: defaultRegistries,
+		calicoVersion:   "v3.30.0",
+		operatorVersion: "v1.40.0",
+		operatorImage:   "tigera/operator",
 	}
 	m.hashrelease.Source = out
 	if err := m.buildManifests(); err != nil {
@@ -657,7 +662,7 @@ func TestHashreleaseManifestsAreCollectedBeforeTheArchiveReadsThem(t *testing.T)
 	// building the manifests rather than in a later pass.
 	gen := slices.IndexFunc(f.calls, func(c string) bool { return strings.Contains(c, "gen-manifests") })
 	copied := slices.IndexFunc(f.calls, func(c string) bool {
-		return strings.Contains(c, filepath.Join(out, manifestsDir)) ||
+		return strings.Contains(c, filepath.Join(out, manifests.DirName)) ||
 			strings.HasSuffix(c, out)
 	})
 	if gen < 0 || copied < 0 {
@@ -665,6 +670,29 @@ func TestHashreleaseManifestsAreCollectedBeforeTheArchiveReadsThem(t *testing.T)
 	}
 	if copied < gen {
 		t.Errorf("manifests were copied before they were generated, ran: %v", f.calls)
+	}
+}
+
+func TestReleaseNoteNamesTheArtifactsThroughTheirAccessors(t *testing.T) {
+	m := &CalicoManager{
+		calicoVersion: "v3.30.0",
+		githubRelease: true,
+		githubOrg:     "projectcalico",
+		repo:          "calico",
+	}
+	up := m.githubReleaseUpload()
+	if up == nil {
+		t.Fatal("githubReleaseUpload() = nil")
+	}
+	body := up.Handler.(distribution.GithubRelease).Body
+
+	// Stated outright rather than computed from the accessors: the note tells a
+	// user what to download, so it has to match the published asset names that
+	// pkg/postrelease asserts against a real release.
+	for _, want := range []string{"release-v3.30.0.tgz", "calico-windows-v3.30.0.zip"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("release note does not name %q:\n%s", want, body)
+		}
 	}
 }
 
@@ -705,12 +733,12 @@ func TestArchiveSourcesIsGatedPerSource(t *testing.T) {
 func manifestRepo(t *testing.T, image string) string {
 	t.Helper()
 	root := t.TempDir()
-	dir := filepath.Join(root, manifestsDir)
+	dir := filepath.Join(root, manifests.DirName)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("creating manifests dir: %v", err)
 	}
 	doc := fmt.Sprintf("kind: Pod\nspec:\n  containers:\n    - name: calicoctl\n      image: %s\n", image)
-	if err := os.WriteFile(filepath.Join(dir, calicoctlManifest), []byte(doc), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, manifests.RegistryFile), []byte(doc), 0o644); err != nil {
 		t.Fatalf("writing manifest: %v", err)
 	}
 	return root
@@ -1002,69 +1030,6 @@ func TestOutputDirRequiredEvenWithoutValidation(t *testing.T) {
 				t.Errorf("error should name the output directory, got %q", err)
 			}
 		})
-	}
-}
-
-// TestE2EArchitectures covers the supported-arch intersection: an empty set
-// means "all" (the tooling-wide convention), the four-arch default drops
-// ppc64le/s390x, a narrowed build keeps only its supported arches, and an
-// unsupported-only set yields none.
-func TestE2EArchitectures(t *testing.T) {
-	tests := []struct {
-		name       string
-		configured []string
-		want       []string
-	}{
-		{"empty means all supported", nil, []string{"amd64", "arm64"}},
-		{"default four arches drop ppc64le/s390x", []string{"amd64", "arm64", "ppc64le", "s390x"}, []string{"amd64", "arm64"}},
-		{"narrowed build keeps only its supported arch", []string{"arm64"}, []string{"arm64"}},
-		{"unsupported-only yields none", []string{"ppc64le", "s390x"}, nil},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, e2eArchitectures(tt.configured))
-		})
-	}
-}
-
-// TestBuildE2EBinariesUsesARCHES asserts the e2e build is restricted through
-// ARCHES, not VALIDARCHES (lib.Makefile assigns VALIDARCHES with `=`, so passing
-// it via the environment is a no-op).
-func TestBuildE2EBinariesUsesARCHES(t *testing.T) {
-	repoRoot := t.TempDir()
-	// Stage a built e2e binary so the post-build hard-link step succeeds.
-	e2eBinDir := filepath.Join(repoRoot, "e2e", "bin", "k8s")
-	require.NoError(t, os.MkdirAll(e2eBinDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(e2eBinDir, "e2e-linux-amd64.test"), []byte("x"), 0o644))
-
-	f := newFakeRunner()
-	r := &CalicoManager{
-		runner:        f,
-		repoRoot:      repoRoot,
-		outputDir:     t.TempDir(),
-		calicoVersion: "v3.34.0-0.dev-1-gabcdef123456",
-		architectures: []string{"amd64", "arm64", "ppc64le", "s390x"},
-		isHashRelease: true,
-		e2eBinaries:   true,
-	}
-
-	require.NoError(t, r.buildE2EBinaries())
-
-	makePrefix := "make -C " + filepath.Join(repoRoot, "e2e") + " build-all"
-	env := f.envFor(makePrefix)
-	require.NotNil(t, env, "e2e build-all was not run (calls: %v)", f.calls)
-	// Only inspect the arch env vars: env also carries os.Environ(), which can
-	// hold secrets that must not be printed on failure.
-	var archEnv []string
-	for _, e := range env {
-		if strings.HasPrefix(e, "ARCHES=") || strings.HasPrefix(e, "VALIDARCHES=") {
-			archEnv = append(archEnv, e)
-		}
-	}
-	require.Contains(t, archEnv, "ARCHES=amd64 arm64")
-	for _, e := range archEnv {
-		require.False(t, strings.HasPrefix(e, "VALIDARCHES="),
-			"e2e build-all should not set VALIDARCHES (lib.Makefile ignores it): %s", e)
 	}
 }
 

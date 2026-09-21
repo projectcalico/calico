@@ -188,6 +188,19 @@ var releaseVersion = func(cfg *Config, c *cli.Command) (*version.Version, error)
 	return &ver, nil
 }
 
+// outputDir is where a release's artifacts are gathered.
+var outputDir = func(cfg *Config, c *cli.Command, version string) (string, error) {
+	if c.Bool(hashreleaseFlag.Name) {
+		pin := oncePin(pinForBuild)
+		p, err := pin(cfg, c)
+		if err != nil {
+			return "", err
+		}
+		return p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false).Source, nil
+	}
+	return releaseOutputDir(cfg.RepoRootDir, version), nil
+}
+
 func publishRecord(cfg *Config, step, version string, confirm bool) ([]string, *outputs.RefsWriter, error) {
 	published, err := outputs.ReadRefs(cfg.OutputDir, step, version)
 	if err != nil {

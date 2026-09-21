@@ -29,7 +29,7 @@ fi
 
 flags=0
 
-# WARNING: these constants must be kept in sync with bpf.h.
+# WARNING: these constants must be kept in sync with cali_bpf.h.
 ((CALI_TC_HOST_EP = 1 << 0))
 ((CALI_TC_INGRESS = 1 << 1))
 ((CALI_TC_IPIP = 1 << 2))

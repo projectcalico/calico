@@ -1,0 +1,170 @@
+#!/bin/bash
+
+# Project Calico BPF dataplane build scripts.
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+
+# Checks that every header:
+#
+# - has an include guard named __CALI_<FILENAME>_H__ (any cali_ prefix on the
+#   file name dropped), so guards are unique
+#   and cannot silently hide one header behind another; and
+# - is self-contained: a translation unit that includes only that header must
+#   compile under each build variant the header is meant for.  A failure means
+#   the header relies on its includer having included something first.
+#
+# Usage: ./check-headers <compiler> [cflags...]
+#
+# The (header, variant) pairs are compiled in parallel: this script lists them
+# and xargs re-invokes it with --one for each pair.
+
+set -u
+
+if [ $# -lt 1 ]; then
+  echo "usage: $0 <compiler> [cflags...]" >&2
+  exit 2
+fi
+
+# --one "<header>|<variant>|<variant cflags>" <compiler> [cflags...]: compile a
+# single pair.  Handled before the variant table is built so that the
+# per-pair invocations stay cheap.
+if [ "$1" = "--one" ]; then
+  IFS='|' read -r h v vflags <<< "$2"
+  shift 2
+  src=$(mktemp --suffix=.c)
+  trap 'rm -f "${src}"' EXIT
+  echo "#include \"$h\"" > "${src}"
+  if [ "$h" = "ut/ut.h" ]; then
+    # The UT harness calls the entry point that each ut/*.c defines.
+    echo "static CALI_BPF_INLINE int calico_unittest_entry(struct __sk_buff *skb) { return 0; }" >> "${src}"
+  fi
+  if [ "$v" = "userspace" ]; then
+    out=$("${HOST_CC:-cc}" -Wall -Werror -I . -I ./libbpf/include/uapi -fsyntax-only "${src}" 2>&1) && exit 0
+    echo "FAIL: $h does not compile for userspace:"
+  else
+    out=$("$1" -I . "${@:2}" ${vflags} -fsyntax-only "${src}" 2>&1) && exit 0
+    echo "FAIL: $h is not self-contained under variant $v (${vflags}):"
+  fi
+  echo "${out}" | grep -E 'error:' | head -5 | sed 's/^/    /'
+  exit 1
+fi
+
+declare -A variants=()
+
+# Most objects get their flags from calculate-flags, keyed off the file name,
+# so derive those variants from the real object lists rather than restating
+# the matrix here: a new program with a new flag combination is then covered
+# automatically.
+n=0
+while read -r flags; do
+  variants[obj$((n++))]="${flags}"
+done < <(for o in $(./list-objs) $(./list-ut-objs) \
+                  $(sed -n 's|^OBJS+=bin/\(.*\)$|\1|p' Makefile); do
+           ll=${o%.o}; ll=${ll#bin/}
+           ./calculate-flags "${ll}.ll" 2>/dev/null
+         done | sort -u)
+
+# The rest of the matrix: the objects the Makefile compiles with literal flags
+# instead of calculate-flags.  Keep in sync with felix/bpf-gpl/Makefile.
+debug="-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG"
+ut_cflags="-D__BPFTOOL_LOADER__ ${debug} -DUNITTEST -DCALI_LOG_PFX=UNITTEST"
+variants[ut]="${ut_cflags}"                                  # ut/%.ll
+variants[ut6]="${ut_cflags} -DIPVER6"                        # ut/icmp6_port_unreachable.ll
+variants[xdp_preamble]="-DCALI_COMPILE_FLAGS=64"             # xdp_preamble.ll
+variants[xdp_preamble_notrace]="-DCALI_COMPILE_FLAGS=64 -DCALI_NO_TRACE_PRINTK"
+variants[tc_preamble_notrace]="-DCALI_COMPILE_FLAGS=2048 -DCALI_NO_TRACE_PRINTK"
+variants[tc_preamble_ing_notrace]="-DCALI_COMPILE_FLAGS=2050 -DCALI_NO_TRACE_PRINTK"
+variants[tcx_test]=""                                        # tcx_test.ll
+variants[map_stub]=""                                        # bin/{common,ipv4}_map_stub.o
+variants[map_stub_ing]="-DCALI_COMPILE_FLAGS=2"              # bin/common_map_stub_ing.o
+variants[map_stub_v6]="-DIPVER6"                             # bin/ipv6_map_stub.o
+variants[map_stub_xdp]="-DCALI_COMPILE_FLAGS=64"             # bin/xdp_map_stub.o
+
+# Bits of CALI_COMPILE_FLAGS, kept in sync with cali_bpf.h by calculate-flags.
+((CALI_CGROUP = 1 << 3))
+((CALI_XDP_PROG = 1 << 6))
+
+# Sort the variants into the groups the "only" table below is written in terms
+# of: the tc programs, conntrack cleanup, the preambles and the UT harness all
+# share the skb-based context; xdp and cgroup have their own.  The notrace,
+# tcx_test and map-stub variants are deliberately in no group: the only headers
+# they compile are the ones those programs include, and none of those is listed
+# in "only", so they are already checked under every variant.
+tc4=""; tc6=""; xdp4=""; xdp6=""; cgroup4=""; cgroup6=""
+for v in "${!variants[@]}"; do
+  case " ${variants[$v]} " in *" -DCALI_NO_TRACE_PRINTK "*) continue;; esac
+  case "$v" in map_stub*|tcx_test) continue;; esac
+  f=$(grep -o -- '-DCALI_COMPILE_FLAGS=[0-9]*' <<<"${variants[$v]}" | grep -o '[0-9]*$')
+  f=${f:-0}
+  if   ((f & CALI_CGROUP));   then g=cgroup
+  elif ((f & CALI_XDP_PROG)); then g=xdp
+  else                             g=tc
+  fi
+  case " ${variants[$v]} " in *" -DIPVER6 "*) grp="${g}6";; *) grp="${g}4";; esac
+  eval "$grp=\"\${$grp} \$v\""
+done
+tc="${tc4} ${tc6}"; xdp="${xdp4} ${xdp6}"; cgroup="${cgroup4} ${cgroup6}"
+
+# Which variants a header is meant for.  Headers not listed must compile under
+# every variant.
+declare -A only=(
+  [ctlb.h]="$cgroup" [connect.h]="$cgroup" [sock_type.h]="$cgroup"
+  [ut/ut.h]="ut ut6"
+  [conntrack.h]="$tc" [fib.h]="$tc" [fib_co_re.h]="$tc" [fib_common.h]="$tc" [maglev.h]="$tc"
+  [nat.h]="$tc" [icmp.h]="$tc" [qos.h]="$tc" [rpf.h]="$tc" [events.h]="$tc" [tc.h]="$tc"
+  [nat4.h]="$tc4" [icmp4.h]="$tc4" [parsing4.h]="$tc4 $xdp4" [tcp4.h]="$tc4" [ip_v4_fragment.h]="$tc4"
+  [nat6.h]="$tc6" [icmp6.h]="$tc6" [parsing6.h]="$tc6 $xdp6" [tcp6.h]="$tc6"
+)
+
+fail=0
+for h in *.h ut/*.h; do
+  name=$(basename "${h%.h}"); name=${name#cali_}
+  guard="__CALI_$(echo "${name}" | tr '[:lower:]' '[:upper:]')_H__"
+  if ! grep -qx "#ifndef ${guard}" "$h" || ! grep -qx "#define ${guard}" "$h"; then
+    echo "FAIL: $h must have include guard: #ifndef ${guard} / #define ${guard}"
+    fail=1
+  fi
+done
+# A stale or mistyped "only" entry would silently skip every variant.
+for h in "${!only[@]}"; do
+  if [ ! -f "$h" ]; then
+    echo "FAIL: only[$h] names a header that does not exist"
+    fail=1
+  fi
+  for v in ${only[$h]}; do
+    if [ -z "${variants[$v]+set}" ]; then
+      echo "FAIL: only[$h] names unknown variant $v"
+      fail=1
+    fi
+  done
+done
+# Every group must be non-empty; an empty one would silently exempt its
+# headers from all checking.
+for g in tc4 tc6 xdp4 xdp6 cgroup4 cgroup6; do
+  if [ -z "${!g// /}" ]; then
+    echo "FAIL: variant group ${g} is empty"
+    fail=1
+  fi
+done
+if [ "${fail}" != 0 ]; then
+  exit 1
+fi
+
+if ! {
+  for h in *.h ut/*.h; do
+    for v in "${!variants[@]}"; do
+      if [ -n "${only[$h]:-}" ] && ! [[ " ${only[$h]} " == *" $v "* ]]; then
+        continue
+      fi
+      echo "$h|$v|${variants[$v]}"
+    done
+  done
+  # Headers shared with userspace (felix/bpf/libbpf) must also compile with the
+  # host compiler, without the BPF helper definitions.
+  for h in globals.h ip_addr.h bpf_inline.h; do
+    echo "$h|userspace|"
+  done
+} | xargs -P "$(nproc)" -I{} bash -c 'exec "$0" --one "{}" "$@"' "$0" "$@"; then
+  exit 1
+fi
+echo "All headers are self-contained."

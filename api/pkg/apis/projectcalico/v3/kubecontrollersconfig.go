@@ -78,6 +78,7 @@ type KubeControllersConfigurationSpec struct {
 
 	// PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. Set to 0 to disable. [Default: 9094]
 	// Valid values are: 0-65535.
+	// +kubebuilder:default=9094
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=65535
 	PrometheusMetricsPort *int `json:"prometheusMetricsPort,omitempty"`

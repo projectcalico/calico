@@ -2568,7 +2568,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		}
 
 		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
-		Expect(componentHandler.objectsToCreate).To(HaveLen(4))
+		Expect(componentHandler.objectsToCreate).To(HaveLen(6))
 
 		var mapCount, mapbCount int
 		for _, obj := range componentHandler.objectsToCreate {
@@ -2581,8 +2581,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				Expect(obj.GetLabels()).To(HaveKeyWithValue(admission.ManagedMAPLabel, admission.ManagedMAPLabelValue))
 			}
 		}
-		Expect(mapCount).To(Equal(2))
-		Expect(mapbCount).To(Equal(2))
+		Expect(mapCount).To(Equal(3))
+		Expect(mapbCount).To(Equal(3))
 	})
 
 	It("should create v1beta1 MAPs when only v1beta1 is served", func() {
@@ -2603,7 +2603,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		}
 
 		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
-		Expect(componentHandler.objectsToCreate).To(HaveLen(4))
+		Expect(componentHandler.objectsToCreate).To(HaveLen(6))
 
 		var mapCount, mapbCount int
 		for _, obj := range componentHandler.objectsToCreate {
@@ -2614,8 +2614,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				mapbCount++
 			}
 		}
-		Expect(mapCount).To(Equal(2))
-		Expect(mapbCount).To(Equal(2))
+		Expect(mapCount).To(Equal(3))
+		Expect(mapbCount).To(Equal(3))
 	})
 
 	It("should create v1alpha1 MAPs when only v1alpha1 is served", func() {
@@ -2636,7 +2636,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		}
 
 		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
-		Expect(componentHandler.objectsToCreate).To(HaveLen(4))
+		Expect(componentHandler.objectsToCreate).To(HaveLen(6))
 
 		var mapCount, mapbCount int
 		for _, obj := range componentHandler.objectsToCreate {
@@ -2647,8 +2647,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				mapbCount++
 			}
 		}
-		Expect(mapCount).To(Equal(2))
-		Expect(mapbCount).To(Equal(2))
+		Expect(mapCount).To(Equal(3))
+		Expect(mapbCount).To(Equal(3))
 	})
 
 	It("should not create MAPs when no served version exists and should set degraded", func() {
@@ -2745,7 +2745,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		}
 
 		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
-		Expect(componentHandler.objectsToCreate).To(HaveLen(4))
+		Expect(componentHandler.objectsToCreate).To(HaveLen(6))
 		Expect(componentHandler.objectsToDelete).To(HaveLen(2))
 		deletedNames := map[string]bool{}
 		for _, obj := range componentHandler.objectsToDelete {
@@ -2757,7 +2757,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should not delete MAPs that are in the desired set", func() {
 		var initial []client.Object
-		for _, n := range []string{"policytypes.policy.projectcalico.org", "tierlabel.policy.projectcalico.org"} {
+		for _, n := range []string{"policytypes.policy.projectcalico.org", "tierlabel.policy.projectcalico.org", "ippool.policy.projectcalico.org"} {
 			initial = append(initial, &admissionregistrationv1.MutatingAdmissionPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   n,
@@ -2765,7 +2765,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				},
 			})
 		}
-		for _, n := range []string{"set-policytypes-binding", "set-tier-label-binding"} {
+		for _, n := range []string{"set-policytypes-binding", "set-tier-label-binding", "set-ippool-defaults-binding"} {
 			initial = append(initial, &admissionregistrationv1.MutatingAdmissionPolicyBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   n,
@@ -2791,7 +2791,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		}
 
 		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
-		Expect(componentHandler.objectsToCreate).To(HaveLen(4))
+		Expect(componentHandler.objectsToCreate).To(HaveLen(6))
 		Expect(componentHandler.objectsToDelete).To(BeEmpty())
 	})
 
