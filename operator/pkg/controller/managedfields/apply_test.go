@@ -336,6 +336,33 @@ var _ = Describe("Applying declared FelixConfiguration fields", func() {
 				}
 			})
 
+			It("should clear the records an earlier operator left once it holds the fields", func() {
+				createAsManager("operator", map[string]string{
+					"operator.tigera.io/owned-fields": `{"spec.bpfEnabled":true}`,
+					render.BPFOperatorAnnotation:      "true",
+				}, v3.FelixConfigurationSpec{BPFEnabled: ptr.To(true)})
+
+				_, err := declareBPF(managedfields.ConflictError).Apply(ctx, w)
+				Expect(err).NotTo(HaveOccurred())
+
+				fc := getFelixConfig()
+				Expect(fc.Spec.BPFEnabled).To(Equal(ptr.To(false)))
+				Expect(fc.Annotations).NotTo(HaveKey("operator.tigera.io/owned-fields"))
+				Expect(fc.Annotations).NotTo(HaveKey(render.BPFOperatorAnnotation))
+			})
+
+			It("should keep the records while a field they name is still unclaimed", func() {
+				createAsManager("operator", map[string]string{
+					"operator.tigera.io/owned-fields": `{"spec.bpfEnabled":true,"spec.healthPort":9098}`,
+				}, v3.FelixConfigurationSpec{BPFEnabled: ptr.To(true), HealthPort: ptr.To(9098)})
+
+				// Only the manager that governs bpfEnabled has applied, so the record still
+				// speaks for healthPort.
+				_, err := declareBPF(managedfields.ConflictError).Apply(ctx, w)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(getFelixConfig().Annotations).To(HaveKey("operator.tigera.io/owned-fields"))
+			})
+
 			It("should defer on a field it never recorded, leaving the value alone", func() {
 				createByUpdate(nil, v3.FelixConfigurationSpec{HealthPort: ptr.To(9100)})
 

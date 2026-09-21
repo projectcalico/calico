@@ -63,7 +63,7 @@ func (m *FieldManager) applyDeclared(ctx context.Context, current client.Object,
 
 	applied, err := m.serverSideApply(ctx, gvk, payload, d.Manager, false)
 	if err == nil {
-		return applied, nil
+		return applied, m.clearSpentRecords(ctx, applied, gvk)
 	}
 	if !apierrors.IsConflict(err) {
 		return nil, err
@@ -79,6 +79,9 @@ func (m *FieldManager) applyDeclared(ctx context.Context, current client.Object,
 	// declaration still lands. The caller degrades on the error it gets back.
 	applied, err = m.serverSideApply(ctx, gvk, payload, d.Manager, force)
 	if err != nil {
+		return nil, err
+	}
+	if err := m.clearSpentRecords(ctx, applied, gvk); err != nil {
 		return nil, err
 	}
 	return applied, conflict
@@ -169,11 +172,16 @@ func (m *FieldManager) clearLegacyOwned(ctx context.Context, current client.Obje
 		return nil
 	}
 
+	log.Info("Clearing shared configuration fields the operator no longer declares", "kind", kindOf(current), "manager", d.Manager, "fields", remove)
+	return m.clearFields(ctx, gvk, remove)
+}
+
+// clearFields deletes the fields remove names, which a merge patch expresses as nulls.
+func (m *FieldManager) clearFields(ctx context.Context, gvk schema.GroupVersionKind, remove map[string]any) error {
 	encoded, err := json.Marshal(remove)
 	if err != nil {
 		return fmt.Errorf("unable to render the fields to clear: %w", err)
 	}
-	log.Info("Clearing shared configuration fields the operator no longer declares", "kind", kindOf(current), "manager", d.Manager, "fields", string(encoded))
 	target := &unstructured.Unstructured{}
 	target.SetGroupVersionKind(gvk)
 	target.SetName(defaultResourceName)

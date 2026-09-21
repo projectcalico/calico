@@ -16,12 +16,16 @@ package managedfields
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/structured-merge-diff/v6/fieldpath"
+
+	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
 // legacyFieldManager is what the API server derives from the /usr/bin/operator user agent,
@@ -111,4 +115,72 @@ func dottedPath(p fieldpath.Path) (string, bool) {
 		names = append(names, *element.FieldName)
 	}
 	return strings.Join(names, "."), true
+}
+
+// clearSpentRecords deletes the annotations an operator that wrote through update left behind,
+// once no declared field still needs them. Their values freeze at the upgrade, so anyone who
+// finds them later reads them as current.
+func (m *FieldManager) clearSpentRecords(ctx context.Context, obj client.Object, gvk schema.GroupVersionKind) error {
+	annotations := obj.GetAnnotations()
+	_, recordPresent := annotations[ownedFieldsAnnotation]
+	_, legacyPresent := annotations[render.BPFOperatorAnnotation]
+	if !recordPresent && !legacyPresent {
+		return nil
+	}
+
+	recorded, err := lastWrittenValues(obj)
+	if err != nil {
+		return err
+	}
+	content, err := toUnstructured(obj)
+	if err != nil {
+		return err
+	}
+	applied, err := operatorAppliedPaths(obj)
+	if err != nil {
+		return err
+	}
+	for path := range recorded {
+		if applied[path] {
+			continue
+		}
+		changed, err := changedByOther(content, recorded, nil, path)
+		if err != nil {
+			return err
+		}
+		if !changed {
+			// The record still speaks for this field, so a manager that has not applied yet
+			// can use it to reclaim the field.
+			return nil
+		}
+	}
+
+	log.Info("Clearing the field records an earlier operator left behind", "kind", kindOf(obj))
+	return m.clearFields(ctx, gvk, map[string]any{"metadata": map[string]any{"annotations": map[string]any{
+		ownedFieldsAnnotation:        nil,
+		render.BPFOperatorAnnotation: nil,
+	}}})
+}
+
+// operatorAppliedPaths lists the fields the operator's own field managers hold through an apply.
+func operatorAppliedPaths(obj client.Object) (map[string]bool, error) {
+	applied := map[string]bool{}
+	for _, entry := range obj.GetManagedFields() {
+		if entry.Operation != metav1.ManagedFieldsOperationApply || entry.FieldsV1 == nil {
+			continue
+		}
+		if !strings.HasPrefix(entry.Manager, fieldManagerPrefix) {
+			continue
+		}
+		owned := &fieldpath.Set{}
+		if err := owned.FromJSON(bytes.NewReader(entry.FieldsV1.GetRawBytes())); err != nil {
+			return nil, fmt.Errorf("unable to parse the fields managed by %q: %w", entry.Manager, err)
+		}
+		owned.Iterate(func(p fieldpath.Path) {
+			if path, ok := dottedPath(p); ok {
+				applied[path] = true
+			}
+		})
+	}
+	return applied, nil
 }
