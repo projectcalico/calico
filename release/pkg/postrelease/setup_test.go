@@ -15,9 +15,9 @@ var (
 )
 
 var (
-	releaseVersion, operatorVersion, flannelVersion  string
-	githubOrg, githubRepo, githubRemote, githubToken string
-	images                                           string
+	releaseVersion, operatorVersion, flannelVersion string
+	githubOrg, githubRepo, githubRemote             string
+	images                                          string
 )
 
 func init() {
@@ -28,7 +28,6 @@ func init() {
 	flag.StringVar(&githubRepo, "github-repo", utils.CalicoRepoName, "GitHub repository")
 	flag.StringVar(&githubRemote, "github-repo-remote", utils.DefaultRemote, "GitHub repository remote")
 	flag.StringVar(&images, "images", "", "List of images to check")
-	flag.StringVar(&githubToken, "github-token", "", "GitHub token")
 }
 
 func checkVersion(t testing.TB, version string) {

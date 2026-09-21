@@ -264,13 +264,6 @@ func WithComponents(components map[string]registry.Component) Option {
 	}
 }
 
-func WithGithubToken(token string) Option {
-	return func(r *CalicoManager) error {
-		r.githubToken = token
-		return nil
-	}
-}
-
 func WithArchiveImages(archive bool) Option {
 	return func(r *CalicoManager) error {
 		r.archiveImages = archive
