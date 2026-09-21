@@ -190,10 +190,10 @@ func dottedPath(p fieldpath.Path) (string, bool) {
 	return strings.Join(names, "."), true
 }
 
-// clearSpentRecords deletes the annotations an operator that wrote through update left behind,
-// once no declared field still needs them. Their values freeze at the upgrade, so anyone who
-// finds them later reads them as current.
-func (m *FieldManager) clearSpentRecords(ctx context.Context, obj client.Object, gvk schema.GroupVersionKind) error {
+// clearLegacyAnnotationTracking deletes the annotations an operator that wrote through update left
+// behind, once no declared field still needs them. Their values freeze at the upgrade, so anyone
+// who finds them later reads them as current.
+func (m *FieldManager) clearLegacyAnnotationTracking(ctx context.Context, obj client.Object, gvk schema.GroupVersionKind) error {
 	annotations := obj.GetAnnotations()
 	_, recordPresent := annotations[ownedFieldsAnnotation]
 	_, legacyPresent := annotations[render.BPFOperatorAnnotation]

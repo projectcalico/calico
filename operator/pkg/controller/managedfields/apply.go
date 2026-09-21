@@ -56,7 +56,11 @@ func applyDeclared[T client.Object](ctx context.Context, m *FieldManager, curren
 	if err != nil {
 		return nil, err
 	}
-	if current.GetResourceVersion() == "" && !declaresSpec(payload) {
+	declared, err := declaresSpec(payload)
+	if err != nil {
+		return nil, err
+	}
+	if current.GetResourceVersion() == "" && !declared {
 		// The declaration holds nothing to write, so don't create an empty object.
 		return current, nil
 	}
@@ -88,7 +92,7 @@ func applyDeclared[T client.Object](ctx context.Context, m *FieldManager, curren
 		}
 	}
 
-	if err := m.clearSpentRecords(ctx, applied, gvk); err != nil {
+	if err := m.clearLegacyAnnotationTracking(ctx, applied, gvk); err != nil {
 		return nil, err
 	}
 	return applied, conflict
@@ -170,7 +174,11 @@ func (m *FieldManager) clearLegacyOwned(ctx context.Context, current client.Obje
 
 	remove := map[string]any{}
 	for path := range d.Policies {
-		if !legacyOwned[path] || pathSet(payload.Object, path) {
+		set, err := pathSet(payload.Object, path)
+		if err != nil {
+			return err
+		}
+		if !legacyOwned[path] || set {
 			continue
 		}
 		if err := unstructured.SetNestedField(remove, nil, strings.Split(path, ".")...); err != nil {

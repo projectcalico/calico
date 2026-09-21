@@ -72,15 +72,21 @@ func toUnstructured(obj client.Object) (map[string]any, error) {
 }
 
 // declaresSpec reports whether the payload sets any field at all.
-func declaresSpec(payload *unstructured.Unstructured) bool {
+func declaresSpec(payload *unstructured.Unstructured) (bool, error) {
 	spec, found, err := unstructured.NestedMap(payload.Object, "spec")
-	return err == nil && found && len(spec) > 0
+	if err != nil {
+		return false, fmt.Errorf("unable to read the declared fields: %w", err)
+	}
+	return found && len(spec) > 0, nil
 }
 
 // pathSet reports whether path holds a value in obj.
-func pathSet(obj map[string]any, path string) bool {
+func pathSet(obj map[string]any, path string) (bool, error) {
 	_, found, err := unstructured.NestedFieldNoCopy(obj, strings.Split(path, ".")...)
-	return err == nil && found
+	if err != nil {
+		return false, fmt.Errorf("unable to read %s: %w", path, err)
+	}
+	return found, nil
 }
 
 // removePath drops path from obj, so the operator stops claiming it.
