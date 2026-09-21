@@ -3662,13 +3662,8 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 			return tcdefs.EpTypeNAT
 		}
 		return tcdefs.EpTypeHost
-	case IfaceTypeWireguard, IfaceTypeL3:
+	case IfaceTypeWireguard, IfaceTypeL3, IfaceTypeIPIP:
 		return tcdefs.EpTypeL3Device
-	case IfaceTypeIPIP:
-		if m.features.IPIPDeviceIsL3 {
-			return tcdefs.EpTypeL3Device
-		}
-		return tcdefs.EpTypeIPIP
 	default:
 		logrus.Panicf("Unsupported ifaceName %v", ifaceName)
 	}
@@ -3720,7 +3715,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.WorkloadSrcSpoofingConfigured = m.workloadSourceSpoofing
 	if m.bpfRedirectToPeer == "Disabled" {
 		ap.RedirectPeer = false
-	} else if (ap.Type == tcdefs.EpTypeIPIP || ap.Type == tcdefs.EpTypeL3Device) && m.bpfRedirectToPeer == "L2Only" {
+	} else if ap.Type == tcdefs.EpTypeL3Device && m.bpfRedirectToPeer == "L2Only" {
 		ap.RedirectPeer = false
 	}
 
