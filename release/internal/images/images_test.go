@@ -657,15 +657,12 @@ func TestPrefixedVariantRecordsPrefixedRefs(t *testing.T) {
 	}
 }
 
-// Archiving saves every image a variant ships, not a hardcoded pair.
-func TestArchiveSavesEveryVariantsImages(t *testing.T) {
+// The tarball ships what a user deploys: standard images only, since the
+// Windows images have an archive of their own.
+func TestArchiveSavesStandardImagesOnly(t *testing.T) {
 	f := &imageNameRunner{images: "node node-windows"}
 	dir := t.TempDir()
-	err := Archive(testRepoRoot, testVersion, []Variant{
-		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
-		{Name: WindowsVariant, Target: "release-windows", ReleaseDirs: []string{"node"}},
-	}, dir, archiveOpts(f)...)
-	if err != nil {
+	if err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...).Contribute(dir); err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
 	var saved []string
@@ -675,7 +672,7 @@ func TestArchiveSavesEveryVariantsImages(t *testing.T) {
 		}
 	}
 	slices.Sort(saved)
-	want := []string{testRegistry + "/node-windows:" + testVersion, testRegistry + "/node:" + testVersion}
+	want := []string{testRegistry + "/node:" + testVersion}
 	if !slices.Equal(saved, want) {
 		t.Errorf("archived\n got %v\nwant %v", saved, want)
 	}
@@ -685,9 +682,7 @@ func TestArchiveSavesEveryVariantsImages(t *testing.T) {
 func TestArchivePullsWhenAsked(t *testing.T) {
 	f := &imageNameRunner{images: "node"}
 	f.failures = map[string]int{"inspect": 9}
-	err := Archive(testRepoRoot, testVersion, oneStandardVariant("node"), t.TempDir(),
-		archiveOpts(f, WithPull(true))...)
-	if err != nil {
+	if err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f, WithPull(true))...).Contribute(t.TempDir()); err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
 	var pulled bool
@@ -703,7 +698,7 @@ func TestArchivePullsWhenAsked(t *testing.T) {
 
 func TestArchiveRejectsNoDir(t *testing.T) {
 	f := &imageNameRunner{images: "node"}
-	if err := Archive(testRepoRoot, testVersion, oneStandardVariant("node"), "", archiveOpts(f)...); err == nil {
+	if err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...).Contribute(""); err == nil {
 		t.Fatal("expected an error when no archive directory is given")
 	}
 }
@@ -712,7 +707,7 @@ func TestArchiveRejectsNoDir(t *testing.T) {
 // than indexed into.
 func TestArchiveRejectsNoRegistry(t *testing.T) {
 	f := &imageNameRunner{images: "node"}
-	err := Archive(testRepoRoot, testVersion, oneStandardVariant("node"), t.TempDir(), WithRunner(f))
+	err := Archive(testRepoRoot, testVersion, []string{"node"}, WithRunner(f)).Contribute(t.TempDir())
 	if err == nil {
 		t.Fatal("expected an error when no registry is given")
 	}

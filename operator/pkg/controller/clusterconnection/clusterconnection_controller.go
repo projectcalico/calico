@@ -68,7 +68,15 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	// Create the reconciler
 	tierWatchReady := &utils.ReadyFlag{}
 	clusterInfoWatchReady := &utils.ReadyFlag{}
-	reconciler := newReconciler(mgr.GetClient(), mgr.GetScheme(), statusManager, opts.DetectedProvider, tierWatchReady, clusterInfoWatchReady, opts)
+	reconciler := NewReconciler(ReconcilerOptions{
+		Client:                mgr.GetClient(),
+		Scheme:                mgr.GetScheme(),
+		Status:                statusManager,
+		Provider:              opts.DetectedProvider,
+		TierWatchReady:        tierWatchReady,
+		ClusterInfoWatchReady: clusterInfoWatchReady,
+		Options:               opts,
+	})
 
 	// Create a new controller
 	c, err := ctrlruntime.NewController(controllerName, mgr, ctrl.Options{Reconciler: reconciler})
@@ -128,27 +136,34 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	return nil
 }
 
-// newReconciler returns a new reconcile.Reconciler
-func newReconciler(
-	cli client.Client,
-	schema *runtime.Scheme,
-	statusMgr status.StatusManager,
-	p operatorv1.Provider,
-	tierWatchReady *utils.ReadyFlag,
-	clusterInfoWatchReady *utils.ReadyFlag,
-	opts options.ControllerOptions,
-) *ReconcileConnection {
-	c := &ReconcileConnection{
-		cli:                   cli,
-		scheme:                schema,
-		provider:              p,
-		status:                statusMgr,
-		tierWatchReady:        tierWatchReady,
-		clusterInfoWatchReady: clusterInfoWatchReady,
-		opts:                  opts,
-		ext:                   opts.Extensions.ClusterConnection(),
+// ReconcilerOptions is what the cluster connection reconciler needs to run.
+type ReconcilerOptions struct {
+	Client                client.Client
+	Scheme                *runtime.Scheme
+	Status                status.StatusManager
+	Provider              operatorv1.Provider
+	TierWatchReady        *utils.ReadyFlag
+	ClusterInfoWatchReady *utils.ReadyFlag
+	Options               options.ControllerOptions
+}
+
+// NewReconciler returns a cluster connection reconciler a caller can drive without a manager.
+func NewReconciler(o ReconcilerOptions) *ReconcileConnection {
+	if o.Options.ShutdownContext == nil {
+		o.Options.ShutdownContext = context.Background()
 	}
-	c.status.Run(opts.ShutdownContext)
+
+	c := &ReconcileConnection{
+		cli:                   o.Client,
+		scheme:                o.Scheme,
+		provider:              o.Provider,
+		status:                o.Status,
+		tierWatchReady:        o.TierWatchReady,
+		clusterInfoWatchReady: o.ClusterInfoWatchReady,
+		opts:                  o.Options,
+		ext:                   o.Options.Extensions.ClusterConnection(),
+	}
+	c.status.Run(o.Options.ShutdownContext)
 	return c
 }
 

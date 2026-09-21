@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v1
+package goldmane
 
 import (
 	"strings"
@@ -141,7 +141,7 @@ func protoToPolicyHit(policyHit *proto.PolicyHit) *whiskerv1.PolicyHit {
 }
 
 func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
-	return whiskerv1.FlowResponse{
+	resp := whiskerv1.FlowResponse{
 		StartTime: time.Unix(flow.StartTime, 0),
 		EndTime:   time.Unix(flow.EndTime, 0),
 		Action:    whiskerv1.Action(flow.Key.Action),
@@ -149,10 +149,12 @@ func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
 		SourceName:      protoToName(flow.Key.SourceName),
 		SourceNamespace: flow.Key.SourceNamespace,
 		SourceLabels:    strings.Join(flow.SourceLabels, " | "),
+		SourceType:      protoToEndpointType(flow.Key.SourceType),
 
 		DestName:      protoToName(flow.Key.DestName),
 		DestNamespace: flow.Key.DestNamespace,
 		DestLabels:    strings.Join(flow.DestLabels, " | "),
+		DestType:      protoToEndpointType(flow.Key.DestType),
 
 		Protocol:   flow.Key.Proto,
 		DestPort:   flow.Key.DestPort,
@@ -163,6 +165,26 @@ func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
 		BytesIn:    flow.BytesIn,
 		BytesOut:   flow.BytesOut,
 	}
+
+	if flow.Key.DestServiceName != "" {
+		resp.Service = &whiskerv1.ServiceRef{
+			Name:      flow.Key.DestServiceName,
+			Namespace: flow.Key.DestServiceNamespace,
+			Port:      flow.Key.DestServicePort,
+			PortName:  flow.Key.DestServicePortName,
+		}
+	}
+
+	return resp
+}
+
+// An unspecified endpoint type stays empty, so a consumer that gates on the type
+// sees "unknown" rather than a type name it would have to special-case.
+func protoToEndpointType(t proto.EndpointType) string {
+	if t == proto.EndpointType_EndpointTypeUnspecified {
+		return ""
+	}
+	return t.String()
 }
 
 // The Goldmane API uses an empty namespace to represent "no namespace", but the UI wants a value.

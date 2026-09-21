@@ -83,6 +83,7 @@ spec:
                     [Default: unset - means logs are emitted when BPFLogLevel id debug and BPFLogFilters not set.]
                   type: string
                 bpfConnectTimeLoadBalancing:
+                  default: TCP
                   description: |-
                     BPFConnectTimeLoadBalancing when in BPF mode, controls whether Felix installs the connect-time load
                     balancer. The connect-time load balancer is required for the host to be able to reach Kubernetes services
@@ -256,6 +257,8 @@ spec:
                     BPFExtToServiceConnmark in BPF mode, controls a 32bit mark that is set on connections from an
                     external client to a local service. This mark allows us to control how packets of that
                     connection are routed within the host and how is routing interpreted by RPF check. [Default: 0]
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 bpfExternalServiceMode:
                   description: |-
@@ -282,6 +285,7 @@ spec:
                     workloads and services. [Default: true - bypass Linux conntrack]
                   type: boolean
                 bpfHostNetworkedNATWithoutCTLB:
+                  default: Enabled
                   description: |-
                     BPFHostNetworkedNATWithoutCTLB when in BPF mode, controls whether Felix does a NAT without CTLB. This along with BPFConnectTimeLoadBalancing
                     determines the CTLB behavior. [Default: Enabled]
@@ -321,6 +325,8 @@ spec:
                     BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
                     The health check server is used by external load balancers to determine if this node should receive traffic.
                     Set to 0 to disable the health check server.  [Default: 10256]
+                  maximum: 65535
+                  minimum: 0
                   type: integer
                 bpfKubeProxyIptablesCleanupEnabled:
                   description: |-
@@ -369,6 +375,8 @@ spec:
                     and thus the amount of memory reserved.
 
                     [Default: 100]
+                  maximum: 3000
+                  minimum: 1
                   type: integer
                 bpfMaglevMaxServices:
                   description: |-
@@ -376,6 +384,8 @@ spec:
                     services that Felix will allocate lookup-tables for.
 
                     [Default: 100]
+                  maximum: 3000
+                  minimum: 1
                   type: integer
                 bpfMapSizeConntrack:
                   description: |-
@@ -529,6 +539,8 @@ spec:
                   description: |-
                     DebugPort if set, enables Felix's debug HTTP port, which allows memory and CPU profiles
                     to be retrieved.  The debug port is not secure, it should not be exposed to the internet.
+                  maximum: 65535
+                  minimum: 0
                   type: integer
                 debugSimulateCalcGraphHangAfter:
                   description: |-
@@ -671,6 +683,7 @@ spec:
                   pattern: ^([a-zA-Z0-9-_]+=([^=]+),)*([a-zA-Z0-9-_]+=([^=]+))?$
                   type: string
                 floatingIPs:
+                  default: Disabled
                   description: |-
                     FloatingIPs configures whether or not Felix will program non-OpenStack floating IP addresses.  (OpenStack-derived
                     floating IPs are always programmed, regardless of this setting.)
@@ -912,11 +925,15 @@ spec:
                     values mean lower priority.  Elevated priority is used during VM live migration, and for
                     optimal behaviour IPv4ElevatedRoutePriority must be less than IPv4NormalRoutePriority
                     [Default: 512]
+                  maximum: 2147483646
+                  minimum: 1
                   type: integer
                 ipv4NormalRoutePriority:
                   description: |-
                     Route Priority value for a normal priority Calico-programmed IPv4 route.  Note, higher
                     values mean lower priority. [Default: 1024]
+                  maximum: 2147483646
+                  minimum: 1
                   type: integer
                 ipv6ElevatedRoutePriority:
                   description: |-
@@ -924,11 +941,15 @@ spec:
                     values mean lower priority.  Elevated priority is used during VM live migration, and for
                     optimal behaviour IPv6ElevatedRoutePriority must be less than IPv6NormalRoutePriority
                     [Default: 512]
+                  maximum: 2147483646
+                  minimum: 1
                   type: integer
                 ipv6NormalRoutePriority:
                   description: |-
                     Route Priority value for a normal priority Calico-programmed IPv6 route.  Note, higher
                     values mean lower priority. [Default: 1024]
+                  maximum: 2147483646
+                  minimum: 1
                   type: integer
                 ipv6Support:
                   description:
@@ -1015,12 +1036,13 @@ spec:
                     follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the
                     transition: "-est" when the first reply packet is seen, "-rst" when the response is a TCP
                     RST (connection refused), or "-icmp-err" when the response is a related ICMP error (e.g.
-                    port unreachable). The log body is the standard kernel packet log of the response packet,
-                    so the flow is identified by its 5-tuple and can be correlated with the original policy Log
-                    line (with source and destination swapped). A logged connection with no follow-up log never
-                    received a response. Connections whose initial log was suppressed by LogActionRateLimit get
-                    no follow-up log either, so every follow-up log pairs with an initial one. Enabling this
-                    consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+                    port unreachable). The log body is the standard kernel packet log of the response packet.
+                    For "-est" and "-rst" its 5-tuple is the original policy Log line's with source and
+                    destination swapped; for "-icmp-err" the bracketed inner header carries the original
+                    5-tuple unswapped. A logged connection with no follow-up log never received a response.
+                    Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log
+                    either, so every follow-up log pairs with an initial one. Enabling this consumes one bit
+                    from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
                     [Default: Disabled]
                   enum:
                     - Disabled
@@ -1033,6 +1055,7 @@ spec:
                     is appended to it. Unlike LogPrefix, it does not support %-specifiers (such as %p): the
                     rules that emit these logs are shared by all policies, so per-policy values cannot be
                     substituted and any %-specifiers are rendered literally. [Default: calico-response]
+                  pattern: "^([a-zA-Z0-9%: /_-])*$"
                   type: string
                 logDebugFilenameRegex:
                   description: |-
@@ -1499,11 +1522,15 @@ spec:
                   description:
                     "WireguardListeningPort controls the listening port used
                     by IPv4 Wireguard. [Default: 51820]"
+                  maximum: 65535
+                  minimum: 1
                   type: integer
                 wireguardListeningPortV6:
                   description:
                     "WireguardListeningPortV6 controls the listening port
                     used by IPv6 Wireguard. [Default: 51821]"
+                  maximum: 65535
+                  minimum: 1
                   type: integer
                 wireguardMTU:
                   description:
@@ -1519,6 +1546,8 @@ spec:
                   description:
                     "WireguardRoutingRulePriority controls the priority value
                     to use for the Wireguard routing rule. [Default: 99]"
+                  maximum: 32765
+                  minimum: 1
                   type: integer
                 wireguardThreadingEnabled:
                   description: |-

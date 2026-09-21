@@ -23,7 +23,7 @@ have_credentials() {
     [[ -n "${CALICO_S3_ACCESS_KEY:-}" && -n "${CALICO_S3_SECRET_KEY:-}" ]]
 }
 
-# Fetches one artifact the calico-image producer uploaded, into $2.
+# Reads from whichever store the CI system provides.
 fetch_artifact() {
   local name=$1 dest=$2
   if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then

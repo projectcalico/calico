@@ -32,8 +32,8 @@ echo "Publishing any reports from the artifacts directory."
 
 cd "$artifacts_dir"
 
-# The `test-results` CLI below is a Semaphore toolbox command. Elsewhere the
-# viewer renders one merged JUnit file per step, so the batches' XML is folded
+# The `test-results` CLI is a Semaphore toolbox command, absent elsewhere. The
+# other viewer renders one merged JUnit file per step, so fold the batches' XML
 # into that shape instead.
 if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
   # Outside the tree it scans, so the merged file is never an input to itself.

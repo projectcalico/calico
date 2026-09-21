@@ -21,8 +21,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/archives"
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -53,20 +55,19 @@ func HashreleasePublished(cfg *hashreleaseserver.Config, hash string, ci bool) (
 func ReformatHashrelease(pin *pinnedversion.Pin, hashreleaseOutputDir string) error {
 	logrus.Info("Modifying hashrelease output to match legacy format")
 
-	// Copy the windows zip file to files/windows/calico-windows-<ver>.zip
-	windowsDir := filepath.Join(hashreleaseOutputDir, "files", "windows")
+	windowsDir := archives.WindowsHashreleaseDir(hashreleaseOutputDir)
 	if err := os.MkdirAll(windowsDir, 0o755); err != nil {
 		return err
 	}
-	windowsZip := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("calico-windows-%s.zip", pin.ProductVersion))
-	windowsZipDst := filepath.Join(windowsDir, fmt.Sprintf("calico-windows-%s.zip", pin.ProductVersion))
-	if err := copyIfExists(windowsZip, windowsZipDst); err != nil {
+	windowsZipName := archives.WindowsFileName(pin.ProductVersion)
+	windowsZip := filepath.Join(archives.WindowsDir(hashreleaseOutputDir), windowsZipName)
+	if err := copyIfExists(windowsZip, filepath.Join(windowsDir, windowsZipName)); err != nil {
 		return err
 	}
 
 	// Copy the ocp.tgz to manifests/ocp.tgz
-	ocpTarball := filepath.Join(hashreleaseOutputDir, "ocp.tgz")
-	ocpTarballDst := filepath.Join(hashreleaseOutputDir, "manifests", "ocp.tgz")
+	ocpTarball := manifests.BundlePath(hashreleaseOutputDir)
+	ocpTarballDst := filepath.Join(manifests.Dir(hashreleaseOutputDir), manifests.OCPBundleFileName)
 	if err := copyIfExists(ocpTarball, ocpTarballDst); err != nil {
 		return err
 	}

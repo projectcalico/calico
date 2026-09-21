@@ -56,7 +56,10 @@ import (
 // unsupported.operator.tigera.io/ignore annotation.
 var errObjectIgnored = fmt.Errorf("object has unsupported ignore annotation")
 
-const TLS_CIPHERS_ENV_VAR_NAME = "TLS_CIPHER_SUITES"
+const (
+	TLSCiphersEnvVarName    = "TLS_CIPHER_SUITES"
+	TLSMinVersionEnvVarName = "TLS_MIN_VERSION"
+)
 
 // dCache is a global deduplication cache that is used to avoid unnecessary updates to objects. It is shared
 // across all component handlers to ensure that objects are only updated when necessary.
@@ -282,8 +285,8 @@ func (c *componentHandler) createOrUpdateObject(ctx context.Context, obj client.
 	// Make sure we have our standard selector and pod labels
 	setStandardSelectorAndLabels(obj, c.cr, multipleOwners)
 
-	if err := ensureTLSCiphers(obj, installationSpec); err != nil {
-		return fmt.Errorf("failed to set TLS Ciphers: %w", err)
+	if err := ensureTLSConfig(obj, installationSpec); err != nil {
+		return fmt.Errorf("failed to set TLS configuration: %w", err)
 	}
 
 	cur, ok := obj.DeepCopyObject().(client.Object)
@@ -867,8 +870,8 @@ func setImagePullPolicy(podSpec *v1.PodSpec, configuredPolicy *v1.PullPolicy) {
 	}
 }
 
-// ensureTLSCiphers sets the TLSCipherSuites configuration as a Env Var to the Deployments and DaemonSets.
-func ensureTLSCiphers(obj client.Object, installationSpec *operatorv1.InstallationSpec) error {
+// ensureTLSConfig sets the TLS configuration as environment variables on Deployments and DaemonSets.
+func ensureTLSConfig(obj client.Object, installationSpec *operatorv1.InstallationSpec) error {
 	if installationSpec == nil {
 		return nil
 	}
@@ -883,23 +886,25 @@ func ensureTLSCiphers(obj client.Object, installationSpec *operatorv1.Installati
 	}
 
 	for i := range containers {
-		exists := false
-		for _, envVar := range containers[i].Env {
-			if envVar.Name == TLS_CIPHERS_ENV_VAR_NAME {
-				exists = true
-				break
-			}
-		}
-		envVarValue := installationSpec.TLSCipherSuites.ToString()
-		if !exists && envVarValue != "" {
-			containers[i].Env = append(containers[i].Env, v1.EnvVar{
-				Name:  TLS_CIPHERS_ENV_VAR_NAME,
-				Value: envVarValue,
-			})
+		containers[i].Env = appendTLSConfigEnvVar(containers[i].Env, TLSCiphersEnvVarName, installationSpec.TLSCipherSuites.ToString())
+		if installationSpec.TLSMinVersion != nil {
+			containers[i].Env = appendTLSConfigEnvVar(containers[i].Env, TLSMinVersionEnvVarName, string(*installationSpec.TLSMinVersion))
 		}
 	}
 
 	return nil
+}
+
+func appendTLSConfigEnvVar(env []v1.EnvVar, name, value string) []v1.EnvVar {
+	for _, envVar := range env {
+		if envVar.Name == name {
+			return env
+		}
+	}
+	if value == "" {
+		return env
+	}
+	return append(env, v1.EnvVar{Name: name, Value: value})
 }
 
 func orderVolumes(podSpec *v1.PodSpec) {

@@ -15,19 +15,200 @@
 package checker
 
 import (
-	"io"
+	"context"
+	"slices"
+	"sync"
 	"testing"
 	"time"
 
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
-	"github.com/projectcalico/calico/lib/logrusr"
+	log "github.com/projectcalico/calico/lib/std/log"
 )
+
+// TestGetIPSetAggregatesMisses covers the wiring rather than the aggregator itself (which has its
+// own tests in lib/std/log): a store miss must still return nil, and the repeated misses a single
+// flow provokes must collapse to one line naming the sets that went missing, not one line each.
+func TestGetIPSetAggregatesMisses(t *testing.T) {
+	RegisterTestingT(t)
+
+	capture, restore := captureCheckerLogs()
+	defer restore()
+
+	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
+		Source:      &authz.AttributeContext_Peer{Principal: ""},
+		Destination: &authz.AttributeContext_Peer{Principal: ""},
+	}}
+	rc := NewRequestCache(policystore.NewPolicyStore(), NewCheckRequestToFlowAdapter(req))
+
+	// The store is empty, so every lookup misses. Aggregation changes only the logging: the value
+	// getIPSet returns is what it always was.
+	for range 100 {
+		Expect(rc.getIPSet("missing-a")).To(BeNil())
+		Expect(rc.getIPSet("missing-b")).To(BeNil())
+	}
+
+	// The first miss is reported as it happens, carrying only itself.
+	lines := capture.snapshot()
+	Expect(lines).To(HaveLen(1))
+	Expect(lines[0].msg).To(Equal("IPSet not found"))
+	Expect(lines[0].level).To(Equal(missingIPSetsLevel))
+	Expect(argValue(lines[0], "ipsets")).To(Equal(log.AggregatedValues{"missing-a"}))
+
+	// The other 199 fold into the window behind it, which closes on its own and names both sets that
+	// went missing. Without aggregation these 200 misses were 200 lines.
+	Eventually(capture.snapshot, "5s", "10ms").Should(HaveLen(2))
+	lines = capture.snapshot()
+	Expect(argValue(lines[1], "ipsets")).To(Equal(log.AggregatedValues{"missing-a", "missing-b"}))
+	Expect(argValue(lines[1], "totalEvents")).To(Equal(199))
+}
+
+// TestAggregatedConditionLevels pins the severities themselves. captureCheckerLogs builds its
+// stand-ins from these same constants, so the other tests follow production wherever it goes;
+// this one is what makes moving it a deliberate edit rather than a silent one.
+func TestAggregatedConditionLevels(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(missingIPSetsLevel).To(Equal(log.LevelWarn))
+	Expect(unparseablePrincipalsLevel).To(Equal(log.LevelError))
+}
+
+// TestGetIPSetHit confirms the hit path is untouched: a set that is present is returned as-is and
+// logs nothing.
+func TestGetIPSetHit(t *testing.T) {
+	RegisterTestingT(t)
+
+	capture, restore := captureCheckerLogs()
+	defer restore()
+
+	store := policystore.NewPolicyStore()
+	store.IPSetByID["present"] = policystore.NewIPSet(proto.IPSetUpdate_IP)
+
+	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
+		Source:      &authz.AttributeContext_Peer{Principal: ""},
+		Destination: &authz.AttributeContext_Peer{Principal: ""},
+	}}
+	rc := NewRequestCache(store, NewCheckRequestToFlowAdapter(req))
+
+	Expect(rc.getIPSet("present")).NotTo(BeNil())
+	Expect(capture.snapshot()).To(BeEmpty())
+}
+
+// captureCheckerLogs points this package's aggregating loggers at one capturing logger, and returns
+// that capture alongside the func that puts the originals back. They are package-level because an
+// aggregation window is shared process-wide, so a test driving the real ones would leak both their
+// window state and their output into every other test in the package.
+//
+// The interval is cut to a fraction of the production five minutes so that a test can watch a window
+// close without waiting on one.
+func captureCheckerLogs() (*captureLogger, func()) {
+	capture := &captureLogger{}
+	savedIPSets, savedPrincipals := missingIPSets, unparseablePrincipals
+	// Built from the production levels, not from restated literals: without OptLevel both would
+	// default to Warn, and the principal site would be exercised a level below the one it reports
+	// at. Taking the constants means a change to either severity reaches these tests.
+	missingIPSets = log.NewAggregatingLogger("IPSet not found", "ipsets",
+		log.OptLogger(capture), log.OptInterval(captureInterval), log.OptLevel(missingIPSetsLevel))
+	unparseablePrincipals = log.NewAggregatingLogger("failed to parse principal", "principals",
+		log.OptLogger(capture), log.OptInterval(captureInterval), log.OptLevel(unparseablePrincipalsLevel))
+	return capture, func() {
+		missingIPSets, unparseablePrincipals = savedIPSets, savedPrincipals
+	}
+}
+
+// captureInterval is long enough that a test's whole burst lands in one window, short enough that
+// waiting for that window to close costs nothing worth measuring.
+const captureInterval = 100 * time.Millisecond
+
+// captureLogger is a log.Logger recording what it was asked to write, so a test can assert on it.
+// Windows close on a timer, so lines arrive on a goroutine of their own; the mutex is what lets a
+// test read them while that is happening.
+type captureLogger struct {
+	mu    sync.Mutex
+	lines []capturedLine
+}
+
+type capturedLine struct {
+	msg   string
+	args  []any
+	level log.Level
+}
+
+func (c *captureLogger) Debug(msg string, args ...any) { c.record(log.LevelDebug, msg, args) }
+func (c *captureLogger) Info(msg string, args ...any)  { c.record(log.LevelInfo, msg, args) }
+func (c *captureLogger) Warn(msg string, args ...any)  { c.record(log.LevelWarn, msg, args) }
+func (c *captureLogger) Error(msg string, args ...any) { c.record(log.LevelError, msg, args) }
+
+func (c *captureLogger) With(args ...any) log.Logger { return c }
+
+func (c *captureLogger) Enabled(context.Context, log.Level) bool { return true }
+
+func (c *captureLogger) record(level log.Level, msg string, args []any) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lines = append(c.lines, capturedLine{msg: msg, args: args, level: level})
+}
+
+// snapshot returns the lines written so far. Gomega polls it, so it must copy rather than hand out
+// the slice the writer is appending to.
+func (c *captureLogger) snapshot() []capturedLine {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.lines)
+}
+
+// argValue returns the value a captured line carries under key, out of the alternating key/value
+// arguments the facade takes.
+func argValue(line capturedLine, key string) any {
+	for i := 0; i+1 < len(line.args); i += 2 {
+		if line.args[i] == key {
+			return line.args[i+1]
+		}
+	}
+	return nil
+}
+
+// TestInitPeerAggregatesParseFailures covers the other converted site. A peer whose principal will
+// not parse provokes the same failure on every flow it sources, so those must collapse to one line
+// naming the principals rather than one line per flow. Aggregating on the principal is what makes
+// dropping the error harmless - parseSpiffeID's only failure is a function of the principal.
+func TestInitPeerAggregatesParseFailures(t *testing.T) {
+	RegisterTestingT(t)
+
+	capture, restore := captureCheckerLogs()
+	defer restore()
+
+	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
+		Source:      &authz.AttributeContext_Peer{Principal: ""},
+		Destination: &authz.AttributeContext_Peer{Principal: ""},
+	}}
+	rc := NewRequestCache(policystore.NewPolicyStore(), NewCheckRequestToFlowAdapter(req))
+
+	// Neither principal is a SPIFFE ID, so every call fails to parse and returns nil.
+	for range 100 {
+		Expect(rc.initPeer("not-a-spiffe-id", nil)).To(BeNil())
+		Expect(rc.initPeer("spiffe://missing-the-rest", nil)).To(BeNil())
+	}
+
+	// The first failure is reported as it happens, naming the principal rather than an error string.
+	lines := capture.snapshot()
+	Expect(lines).To(HaveLen(1))
+	Expect(lines[0].msg).To(Equal("failed to parse principal"))
+	Expect(lines[0].level).To(Equal(unparseablePrincipalsLevel))
+	Expect(argValue(lines[0], "principals")).To(Equal(log.AggregatedValues{"not-a-spiffe-id"}))
+
+	// The remaining 199 fold into the window behind it, which closes on its own naming both bad
+	// principals.
+	Eventually(capture.snapshot, "5s", "10ms").Should(HaveLen(2))
+	lines = capture.snapshot()
+	Expect(argValue(lines[1], "principals")).To(
+		Equal(log.AggregatedValues{"not-a-spiffe-id", "spiffe://missing-the-rest"}))
+	Expect(argValue(lines[1], "totalEvents")).To(Equal(199))
+}
 
 // Successful parse should return name and namespace.
 func TestParseSpiffeIdOk(t *testing.T) {
@@ -271,60 +452,6 @@ func TestUnparseablePrincipalIsMemoized(t *testing.T) {
 	// and re-logs the failure.
 	Expect(uut.identities[sourceSide].resolved).To(BeTrue())
 	Expect(matchServiceAccounts(nil, uut.getSrcPeer())).To(BeTrue())
-}
-
-// Repeated failures on the evaluation path are rate limited: one line, then a count of what
-// was suppressed. Without this a single dangling IP set reference logs once per rule, for
-// every request.
-func TestEvalPathWarningsAreRateLimited(t *testing.T) {
-	RegisterTestingT(t)
-
-	logger := log.StandardLogger()
-	oldLevel, oldOut := logger.GetLevel(), logger.Out
-	counter := &entryCounter{}
-	hooks := make(log.LevelHooks)
-	hooks.Add(counter)
-	oldHooks := logger.ReplaceHooks(hooks)
-	savedLogger := rlogIPSetMissing
-	defer func() {
-		logger.SetLevel(oldLevel)
-		logger.SetOutput(oldOut)
-		logger.ReplaceHooks(oldHooks)
-		rlogIPSetMissing = savedLogger
-	}()
-	logger.SetLevel(log.WarnLevel)
-	logger.SetOutput(io.Discard)
-	// A long interval with no burst allowance: the first message is written, the rest are
-	// counted.
-	rlogIPSetMissing = logrusr.NewRateLimitedLogger(logrusr.OptInterval(time.Hour))
-
-	uut := NewRequestCache(policystore.NewPolicyStore(), NewCheckRequestToFlowAdapter(
-		&authz.CheckRequest{Attributes: &authz.AttributeContext{}}))
-	for range 100 {
-		Expect(uut.getIPSet("missing-set")).To(BeNil())
-	}
-
-	Expect(counter.entries).To(HaveLen(1), "expected one emitted warning for 100 misses")
-	Expect(counter.entries[0].Message).To(ContainSubstring("missing-set"))
-	Expect(counter.entries[0].Data).NotTo(HaveKey("logsSkipped"))
-
-	// The suppressed count surfaces on the next line that is allowed through, so the storm is
-	// still visible in the log.
-	rlogIPSetMissing.Force().Warnf("IPSet not found: %s", "missing-set")
-	Expect(counter.entries).To(HaveLen(2))
-	Expect(counter.entries[1].Data).To(HaveKeyWithValue("logsSkipped", 99))
-}
-
-// entryCounter collects the log entries written during a test.
-type entryCounter struct {
-	entries []*log.Entry
-}
-
-func (c *entryCounter) Levels() []log.Level { return log.AllLevels }
-
-func (c *entryCounter) Fire(e *log.Entry) error {
-	c.entries = append(c.entries, e)
-	return nil
 }
 
 // ipProtoPortKey has to produce exactly the member format Felix emits for an IP+port

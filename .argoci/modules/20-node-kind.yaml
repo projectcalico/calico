@@ -32,8 +32,8 @@ steps:
         value: calico
       - name: CI_JOB_LABEL
         value: kind-cluster-tests
-      # The fleet's own watchdog, which captures a hung VM's serial console
-      # before killing the batch. The step deadline above leaves it room to.
+      # The fleet's watchdog, which captures a hung VM's serial console before
+      # killing the batch. The step deadline leaves it room to.
       - name: JOB_TIMEOUT_MINUTES
         value: "120"
     commands: |
@@ -46,8 +46,8 @@ steps:
       cd ..
       .semaphore/vms/run-tests-on-vms "${VM_PREFIX}"
     epilogue: |
-      # The commands ran in a subshell, so VM_PREFIX has to be re-derived here or
-      # the teardown below reaches no fleet at all.
+      # The commands ran in a subshell, so VM_PREFIX has to be re-derived or the
+      # teardown reaches no fleet at all.
       cd "${CI_HOME}/${CI_GIT_DIR}"
       source .argoci/scripts/vm-fleet-setup.sh
       export VM_PREFIX="argoci-${CI_GIT_REPO_NAME}-${SHORT_WORKFLOW_ID}-kind-"

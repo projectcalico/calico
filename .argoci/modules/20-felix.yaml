@@ -1,9 +1,8 @@
 # Felix's own checks, and the FV fleet.
 #
-# The FVs do not run here: they need a real kernel per dataplane and per Ubuntu
-# release, so a lane brings up a fleet of GCE VMs, runs a batch of specs on each
-# and tears them down. This step orchestrates that from a pod — it compiles
-# nothing and spends its hour on ssh.
+# The FVs need a real kernel per dataplane and per Ubuntu release, so each lane
+# drives a fleet of GCE VMs from a pod — it compiles nothing and spends its hour
+# on ssh.
 version: condensed-module
 
 defaults:
@@ -16,8 +15,8 @@ defaults:
       value: "true"
 
 steps:
-  # Producer for the FV fleet: everything a test VM unpacks comes from here, so
-  # a lane whose batches all fail to configure usually failed in this step.
+  # Everything a test VM unpacks comes from here, so a lane whose batches all
+  # fail to configure usually failed further up.
   - name: felix-build
     depends: [build-calico-image, check-go]
     timeout: 40m
@@ -36,10 +35,9 @@ steps:
       .argoci/scripts/load-cached-images calico
       .semaphore/scripts/load-felix-prereqs.sh
       cd felix
-      # REMOTE_DEPS= keeps this from rebuilding the calico image and race binary
-      # the producer already shipped. `make build` is skipped with it: on amd64
-      # that also cross-compiles the Windows binary, which has its own step and
-      # which nothing in the Linux FV path consumes.
+      # REMOTE_DEPS= keeps this from rebuilding the image and race binary already
+      # shipped. `make build` is left out because on amd64 it also cross-compiles
+      # the Windows binary, which nothing in the Linux FV path consumes.
       make REMOTE_DEPS= bin/calico-felix image ut-bpf-prereqs fv-prereqs
       ./.semaphore/cache-test-artifacts
 
@@ -96,14 +94,12 @@ steps:
       cd "${CI_HOME}/${CI_GIT_DIR}/felix"
       artifact push job report --destination test-results || true
 
-  # FELIX_TEST_GROUP is the whole configuration: fv-prologue reads the Ubuntu
-  # release, the dataplane, whether UTs come along and how many batches to split
-  # into out of this one string.
+  # FELIX_TEST_GROUP is parsed, not just labelled: the Ubuntu release, dataplane
+  # and whether UTs come along are all read back out of this one string.
   #
-  # The step outlives JOB_TIMEOUT_MINUTES on purpose. That is the fleet's own
-  # watchdog, which captures a hung VM's serial console and pushes it before
-  # killing the batch; a step deadline reached first would take the diagnostics
-  # with it.
+  # The step deadline deliberately exceeds JOB_TIMEOUT_MINUTES. That is the
+  # fleet's watchdog, which captures a hung VM's serial console before killing
+  # the batch; a step killed first would take the diagnostics with it.
   - name: felix-fv
     depends: [felix-build]
     timeout: 1h15m
@@ -121,19 +117,19 @@ steps:
         env:
           - name: FELIX_TEST_GROUP
             value: 22.04-ipt
-          - name: NUM_FV_BATCHES
+          - name: FV_BATCHES_OVERRIDE
             value: "16"
       - name: nftables-2204
         env:
           - name: FELIX_TEST_GROUP
             value: 22.04-nft
-          - name: NUM_FV_BATCHES
+          - name: FV_BATCHES_OVERRIDE
             value: "16"
       - name: bpf-2404-iptables
         env:
           - name: FELIX_TEST_GROUP
             value: bpf-24.04-ipt-with-ut
-          - name: NUM_FV_BATCHES
+          - name: FV_BATCHES_OVERRIDE
             value: "60"
       - name: bpf-2204-nftables
         env:
@@ -142,9 +138,9 @@ steps:
           - name: FELIX_FV_BPFATTACHTYPE
             value: tc
           # Conntrack only, to keep the lane inside its hour.
-          - name: FV_FOCUS
+          - name: FV_FOCUS_OVERRIDE
             value: _BPF_.*ct=true
-          - name: NUM_FV_BATCHES
+          - name: FV_BATCHES_OVERRIDE
             value: "10"
       - name: bpf-2604-netkit
         env:
@@ -155,7 +151,7 @@ steps:
           # mechanism would opt the node out of netkit entirely.
           - name: FELIX_FV_NETKIT
             value: Enabled
-          - name: NUM_FV_BATCHES
+          - name: FV_BATCHES_OVERRIDE
             value: "60"
       - name: bpf-2604-jitharden
         env:
@@ -164,25 +160,32 @@ steps:
           - name: FELIX_FV_BPFATTACHTYPE
             value: tc
           # TCP and conntrack only, to keep the lane inside its hour.
-          - name: FV_FOCUS
+          - name: FV_FOCUS_OVERRIDE
             value: _BPF_.*tcp.*ct=true
-          - name: NUM_FV_BATCHES
+          - name: FV_BATCHES_OVERRIDE
             value: "16"
     commands: |
       source .argoci/scripts/vm-fleet-setup.sh
       source felix/.semaphore/fv-prologue
+      # After the prologue, which derives its own values for both from
+      # FELIX_TEST_GROUP and would otherwise win.
+      if [ -n "${FV_BATCHES_OVERRIDE:-}" ]; then
+        export NUM_FV_BATCHES="${FV_BATCHES_OVERRIDE}"
+      fi
+      if [ -n "${FV_FOCUS_OVERRIDE:-}" ]; then
+        export FV_FOCUS="${FV_FOCUS_OVERRIDE}"
+      fi
       .semaphore/vms/run-tests-on-vms "${VM_PREFIX}"
     epilogue: |
-      # The commands ran in a subshell, so none of what fv-prologue derived —
-      # VM_PREFIX above all — survives to here. Re-deriving it is what makes the
-      # VM teardown below reach the fleet this lane created.
+      # The commands ran in a subshell, so nothing they derived survives here —
+      # VM_PREFIX above all, without which the teardown reaches no fleet.
       cd "${CI_HOME}/${CI_GIT_DIR}"
       source .argoci/scripts/vm-fleet-setup.sh
       source felix/.semaphore/fv-prologue
       source felix/.semaphore/fv-epilogue
 
-  # The Windows binaries the FV installs. Built here rather than in felix-build
-  # because nothing in the Linux FV path consumes them.
+  # Separate from the Linux prerequisites because nothing in that path consumes
+  # these.
   - name: felix-build-windows
     depends: [check-go]
     requests: {cpu: 4250m, memory: 5.5Gi}

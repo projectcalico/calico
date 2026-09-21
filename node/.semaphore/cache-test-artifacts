@@ -30,7 +30,7 @@ S3_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.semaphore/s3-cmd"
 
 cd ../..
 
-# Fetches one pre-built image tarball into /tmp, whichever store holds it.
+# Reads from whichever store the CI system provides.
 fetch_image() {
   local img=$1
   if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then

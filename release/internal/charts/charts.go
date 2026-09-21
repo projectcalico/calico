@@ -24,6 +24,7 @@ import (
 	"slices"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/docs"
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -57,13 +58,10 @@ const (
 	CalicoChart              = "calico"
 	ProjectCalicoV1CRDsChart = "crd.projectcalico.org.v1"
 	ProjectCalicoV3CRDsChart = "projectcalico.org.v3"
-
-	// docsURL is the base URL for the docs site
-	docsURL = "https://docs.tigera.io"
 )
 
 var RepoURL = func() (string, error) {
-	url, err := url.JoinPath(docsURL, "calico", chartsDirName)
+	url, err := url.JoinPath(docs.BaseURL, docs.ProductSlug, chartsDirName)
 	if err != nil {
 		return "", fmt.Errorf("charts repo URL: %w", err)
 	}
@@ -86,6 +84,10 @@ var All = func() []string {
 		ProjectCalicoV1CRDsChart,
 		ProjectCalicoV3CRDsChart,
 	}
+}
+
+func IndexFilePath(baseDir string) string {
+	return filepath.Join(baseDir, indexFileName)
 }
 
 // Version qualifies the product version when the charts rev separately from

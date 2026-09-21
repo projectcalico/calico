@@ -31,6 +31,8 @@ components:
       - ^(?:[^/]+/)*\.gitignore$
   apiserver:
     in:
+      - ^api/[^/]*\.go$
+      - ^api/config/crd/[^/]*\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/client/applyconfiguration_generated/internal/[^/]*\.go$
       - ^api/pkg/client/applyconfiguration_generated/projectcalico/v3/[^/]*\.go$
@@ -93,6 +95,8 @@ components:
       - ^libcalico-go/(?:[^/]+/)*[^/]*_test\.go$
   app-policy:
     in:
+      - ^api/[^/]*\.go$
+      - ^api/config/crd/[^/]*\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/defaults/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
@@ -132,6 +136,7 @@ components:
       - ^lib/std/uniquestr/[^/]*\.go$
       - ^lib\.Makefile$
       - ^libcalico-go/config/[^/]*\.go$
+      - ^libcalico-go/config/crd/[^/]*\.yaml$
       - ^libcalico-go/lib/apiconfig/[^/]*\.go$
       - ^libcalico-go/lib/apis/crd\.projectcalico\.org/v1/scheme/[^/]*\.go$
       - ^libcalico-go/lib/apis/internalapi/[^/]*\.go$
@@ -188,6 +193,8 @@ components:
       - ^typha/(?:[^/]+/)*[^/]*_test\.go$
   calicoctl:
     in:
+      - ^api/[^/]*\.go$
+      - ^api/config/crd/[^/]*\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/defaults/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
@@ -209,6 +216,7 @@ components:
       - ^lib/std/uniquestr/[^/]*\.go$
       - ^lib\.Makefile$
       - ^libcalico-go/config/[^/]*\.go$
+      - ^libcalico-go/config/crd/[^/]*\.yaml$
       - ^libcalico-go/lib/apiconfig/[^/]*\.go$
       - ^libcalico-go/lib/apis/crd\.projectcalico\.org/v1/scheme/[^/]*\.go$
       - ^libcalico-go/lib/apis/internalapi/[^/]*\.go$
@@ -272,6 +280,8 @@ components:
       - ^(?:[^/]+/)*\.gitignore$
   cmd:
     in:
+      - ^api/[^/]*\.go$
+      - ^api/config/crd/[^/]*\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/client/applyconfiguration_generated/internal/[^/]*\.go$
       - ^api/pkg/client/applyconfiguration_generated/projectcalico/v3/[^/]*\.go$
@@ -528,6 +538,7 @@ components:
       - ^lib/std/uniquestr/[^/]*\.go$
       - ^lib\.Makefile$
       - ^libcalico-go/config/[^/]*\.go$
+      - ^libcalico-go/config/crd/[^/]*\.yaml$
       - ^libcalico-go/lib/apiconfig/[^/]*\.go$
       - ^libcalico-go/lib/apis/crd\.projectcalico\.org/v1/scheme/[^/]*\.go$
       - ^libcalico-go/lib/apis/internalapi/[^/]*\.go$
@@ -627,8 +638,10 @@ components:
       - ^webhooks/pkg/webhook/[^/]*\.go$
       - ^whisker-backend/cmd/whiskerbackend/[^/]*\.go$
       - ^whisker-backend/pkg/apis/v1/[^/]*\.go$
+      - ^whisker-backend/pkg/auth/[^/]*\.go$
       - ^whisker-backend/pkg/config/[^/]*\.go$
       - ^whisker-backend/pkg/handlers/v1/[^/]*\.go$
+      - ^whisker-backend/pkg/upstream/goldmane/[^/]*\.go$
     exclude:
       - ^(?:[^/]+/)*AUTHORS[^/]*$
       - ^(?:[^/]+/)*CONTRIBUTING[^/]*$
@@ -660,6 +673,8 @@ components:
       - ^whisker-backend/(?:[^/]+/)*[^/]*_test\.go$
   cni-plugin:
     in:
+      - ^api/[^/]*\.go$
+      - ^api/config/crd/[^/]*\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/defaults/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
@@ -723,6 +738,8 @@ components:
       - ^pkg/(?:[^/]+/)*[^/]*_test\.go$
   confd:
     in:
+      - ^api/[^/]*\.go$
+      - ^api/config/crd/[^/]*\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/defaults/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
@@ -811,6 +828,8 @@ components:
   e2e:
     in:
       - ^Makefile$
+      - ^api/[^/]*\.go$
+      - ^api/config/crd/[^/]*\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/defaults/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
@@ -895,6 +914,8 @@ components:
       - ^whisker-backend/(?:[^/]+/)*[^/]*_test\.go$
   felix:
     in:
+      - ^api/[^/]*\.go$
+      - ^api/config/crd/[^/]*\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/defaults/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
@@ -923,6 +944,7 @@ components:
       - ^lib/std/uniquestr/[^/]*\.go$
       - ^lib\.Makefile$
       - ^libcalico-go/config/[^/]*\.go$
+      - ^libcalico-go/config/crd/[^/]*\.yaml$
       - ^libcalico-go/lib/apiconfig/[^/]*\.go$
       - ^libcalico-go/lib/apis/crd\.projectcalico\.org/v1/scheme/[^/]*\.go$
       - ^libcalico-go/lib/apis/internalapi/[^/]*\.go$
@@ -1109,6 +1131,8 @@ components:
       - ^pkg/(?:[^/]+/)*[^/]*_test\.go$
   hack:
     in:
+      - ^api/[^/]*\.go$
+      - ^api/config/crd/[^/]*\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/defaults/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
@@ -1179,6 +1203,8 @@ components:
       - ^(?:[^/]+/)*\.gitignore$
   kube-controllers:
     in:
+      - ^api/[^/]*\.go$
+      - ^api/config/crd/[^/]*\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/client/applyconfiguration_generated/internal/[^/]*\.go$
       - ^api/pkg/client/applyconfiguration_generated/projectcalico/v3/[^/]*\.go$
@@ -1234,6 +1260,7 @@ components:
       - ^lib/std/uniquestr/[^/]*\.go$
       - ^lib\.Makefile$
       - ^libcalico-go/config/[^/]*\.go$
+      - ^libcalico-go/config/crd/[^/]*\.yaml$
       - ^libcalico-go/lib/apiconfig/[^/]*\.go$
       - ^libcalico-go/lib/apis/crd\.projectcalico\.org/v1/scheme/[^/]*\.go$
       - ^libcalico-go/lib/apis/internalapi/[^/]*\.go$
@@ -1301,6 +1328,8 @@ components:
       - ^typha/(?:[^/]+/)*[^/]*_test\.go$
   libcalico-go:
     in:
+      - ^api/[^/]*\.go$
+      - ^api/config/crd/[^/]*\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/defaults/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
@@ -1330,6 +1359,8 @@ components:
   node:
     in:
       - ^Makefile$
+      - ^api/[^/]*\.go$
+      - ^api/config/crd/[^/]*\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/defaults/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
@@ -1485,6 +1516,7 @@ components:
       - ^lib/std/uniquestr/[^/]*\.go$
       - ^lib\.Makefile$
       - ^libcalico-go/config/[^/]*\.go$
+      - ^libcalico-go/config/crd/[^/]*\.yaml$
       - ^libcalico-go/lib/apiconfig/[^/]*\.go$
       - ^libcalico-go/lib/apis/crd\.projectcalico\.org/v1/scheme/[^/]*\.go$
       - ^libcalico-go/lib/apis/internalapi/[^/]*\.go$
@@ -1568,13 +1600,15 @@ components:
   operator:
     in:
       - ^api/admission/[^/]*\.go$
+      - ^api/admission/[^/]*\.yaml$
       - ^api/config/crd/[^/]*\.go$
+      - ^api/config/crd/[^/]*\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib\.Makefile$
-      - ^libcalico-go/config/crd/
       - ^libcalico-go/config/crd/[^/]*\.go$
+      - ^libcalico-go/config/crd/[^/]*\.yaml$
       - ^metadata\.mk$
       - ^operator/
     exclude:
@@ -1748,6 +1782,8 @@ components:
       - ^(?:[^/]+/)*\.gitignore$
   typha:
     in:
+      - ^api/[^/]*\.go$
+      - ^api/config/crd/[^/]*\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/defaults/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$

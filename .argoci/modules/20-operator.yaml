@@ -42,10 +42,9 @@ steps:
       cd operator
       make build ARCH=$ARCH
 
-  # The FV stands up a kind cluster and a local registry inside the docker
-  # sidecar, then installs the components from this commit through the real
-  # operator. Every image its operator resolves has to be in that registry, so a
-  # producer missing here becomes calico-node stuck in Init rather than a build
+  # The FV installs this commit's components through the real operator, so every
+  # image it resolves has to reach the local registry first. A producer missing
+  # from the list below surfaces as calico-node stuck in Init, not a build
   # error.
   - name: operator-fv
     depends: [build-calico-image, build-node-image, build-whisker-image, check-go]

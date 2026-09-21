@@ -152,6 +152,50 @@ steps:
       make check-ocp-no-crds
       make check-dirty
 
+  # A chart can change what it renders without any committed manifest changing,
+  # which a diff of the tree cannot see.
+  - name: check-helm-charts
+    jobSize: small
+    requests: {cpu: 2000m, memory: 1Gi}
+    services: [docker]
+    changes:
+      in:
+        - ^charts/
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make test-charts
+
+  # Each auto-generated patch is derived from its pin file, so regenerating has
+  # to be a no-op. metadata.mk is in the trigger because `go mod tidy`'s output
+  # depends on the toolchain: a version bump can leave every patch stale.
+  - name: check-thirdparty-dep-patches
+    requests: {cpu: 2000m, memory: 2Gi}
+    services: [docker]
+    changes:
+      in:
+        - ^hack/thirdparty/
+        - ^istio/
+        - ^third_party/envoy-gateway/
+        - ^third_party/envoy-ratelimit/
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make check-thirdparty-dep-patches
+      make check-dirty
+
   # Gated on what makes the image itself interesting. A consumer needing it is
   # what brings it back, so this does not have to describe their triggers too.
   - name: build-calico-image
@@ -173,10 +217,9 @@ steps:
       artifact push workflow /tmp/calico-image.tar.zst
       artifact push workflow cmd/calico/bin/calico-cgo-amd64
       artifact push workflow cmd/calico/bin/calico-race-amd64
-      # build-cgo pulls libbpf in through Felix's cgo chain; the test keeps this
-      # a no-op on a warm tree but still produces the artifact if that chain is
-      # ever severed. Shipping the clone is what lets every Felix lane skip it,
-      # and with it the github.com/libbpf HTTP 500 flake.
+      # Shipping the clone is what lets every Felix lane skip it, and with it the
+      # github.com/libbpf HTTP 500 flake. The test covers the cgo chain above
+      # having already produced it.
       test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || make -C felix libbpf
       LIBBPF_VERSION=$(grep -E '^LIBBPF_VERSION[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
       # tar warns and exits 0 on a missing path, which would leave every Felix
