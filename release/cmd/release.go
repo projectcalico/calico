@@ -337,7 +337,11 @@ func releaseValidationSubCommand(cfg *Config) *cli.Command {
 				fmt.Sprintf("-images=%s", strings.Join(imgs, " ")),
 			}
 
-			cmd := exec.Command(filepath.Join(cfg.RepoRootDir, "bin", "gotestsum"), args...)
+			// gotestsum is a `tool` directive in the repo's root go.mod, so it
+			// is run through the Go toolchain rather than from a bin/ copy.
+			// cmd.Dir is inside that module, which is what lets `go tool`
+			// resolve it and what keeps "./..." scoped to the test package.
+			cmd := exec.Command("go", append([]string{"tool", "gotestsum"}, args...)...)
 			cmd.Dir = postreleaseDir
 			var errb strings.Builder
 			if logrus.IsLevelEnabled(logrus.DebugLevel) {

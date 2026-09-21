@@ -350,6 +350,24 @@ endif
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
+# The path DOCKER_RUN mounts the repo at inside the build container.
+CONTAINER_REPO_ROOT := /go/src/github.com/projectcalico/calico
+
+# Build tools (crane, gotestsum, setup-envtest, goimports) are declared with
+# `tool` directives in the root go.mod, so their versions move with the module
+# graph and Renovate updates them alongside every other dependency.
+#
+# `go tool` resolves the directives from the module containing the working
+# directory and runs the tool there, so plain GO_TOOL is what component
+# Makefiles want: their relative arguments (report/x.xml, dist/windows/*.tar)
+# stay relative to the component. CONTAINER_GO_TOOL is for the callers that
+# cannot resolve the root module from where they stand - api/ is a separate
+# module, and DOCKER_GO_BUILD lands there in a directory that has no go.mod at
+# all. Because it moves the tool's working directory, only pass it absolute
+# paths.
+GO_TOOL           := go tool
+CONTAINER_GO_TOOL := go -C $(CONTAINER_REPO_ROOT) tool
+
 # Support for git worktrees.  In a worktree, .git is a file pointing to
 # <main-repo>/.git/worktrees/<name>.  When Docker containers need git access,
 # the main .git directory must also be mounted, and GIT_DIR / GIT_WORK_TREE
@@ -724,7 +742,7 @@ git-commit:
 ifdef LOCAL_CRANE
 CRANE_CMD         = crane
 else
-CRANE_CMD         = $(REPO_ROOT)/bin/crane
+CRANE_CMD         = $(GO_TOOL) crane
 endif
 
 ifdef LOCAL_PYTHON
@@ -1490,7 +1508,7 @@ release-retag-dev-images-in-registry-%:
 # release-retag-dev-image-in-registry-% retags the build image specified by $* in the dev registry specified by
 # DEV_REGISTRY with the release tag specified by RELEASE_TAG. If DEV_REGISTRY is in the list of registries specified by
 # RELEASE_REGISTRIES then the retag is not done
-release-retag-dev-image-in-registry-%: bin/crane
+release-retag-dev-image-in-registry-%:
 	$(if $(filter-out $(RELEASE_REGISTRIES),$(DEV_REGISTRY)),\
 		$(CRANE) cp $(DEV_REGISTRY)/$(call unescapefs,$*):$(DEV_TAG) $(DEV_REGISTRY)/$(call unescapefs,$*):$(RELEASE_TAG))
 
@@ -1502,7 +1520,7 @@ release-dev-images-to-registry-%:
 
 # release-dev-image-to-registry-% copies the build image and build arch images specified by $* and VALIDARCHES from
 # the dev repo specified by DEV_TAG and RELEASE.
-release-dev-image-to-registry-%: bin/crane
+release-dev-image-to-registry-%:
 	$(if $(SKIP_MANIFEST_RELEASE),,\
 		$(CRANE) cp $(DEV_REGISTRY)/$(call unescapefs,$*):$(DEV_TAG) $(RELEASE_REGISTRY)/$(call unescapefs,$*):$(RELEASE_TAG))
 	$(if $(SKIP_ARCH_RELEASE),,\
@@ -1510,7 +1528,7 @@ release-dev-image-to-registry-%: bin/crane
 
 # release-dev-image-to-registry-% copies the build arch image specified by BUILD_IMAGE and ARCH from the dev repo
 # specified by DEV_TAG and RELEASE.
-release-dev-image-arch-to-registry-%: bin/crane
+release-dev-image-arch-to-registry-%:
 	$(CRANE) cp $(DEV_REGISTRY)/$(BUILD_IMAGE):$(DEV_TAG)-$* $(RELEASE_REGISTRY)/$(BUILD_IMAGE):$(RELEASE_TAG)-$*
 
 # release-prereqs checks that the environment is configured properly to create a release.
@@ -1531,28 +1549,6 @@ bin/yq:
 	$(call fetch_file,https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz,$(TMP)/yq4.tar.gz)
 	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
 	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
-
-# This setup is used to download and install the `crane` binary into $(REPO_ROOT)/bin/crane.
-# Normalize architecture for go-containerregistry filenames
-CRANE_ARCH = $(subst amd64,x86_64,$(BUILDARCH))
-ifeq ($(OS),Windows_NT)
-CRANE_OS = Windows
-else
-CRANE_OS = $(shell uname -s)
-endif
-CRANE_URL = https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/go-containerregistry_$(CRANE_OS)_$(CRANE_ARCH).tar.gz
-
-.PHONY: bin/crane
-bin/crane: $(REPO_ROOT)/bin/crane
-# Moved into place last: a half-extracted binary looks complete to make.
-$(REPO_ROOT)/bin/crane:
-	$(info ::: Downloading crane from $(CRANE_URL))
-	@mkdir -p $(REPO_ROOT)/bin
-	@tmp=$$(mktemp -d $(REPO_ROOT)/bin/.crane.XXXXXX) && trap 'rm -rf "$$tmp"' EXIT && \
-		$(call fetch_file,$(CRANE_URL),"$$tmp/crane.tar.gz") && \
-		tar xz -C "$$tmp" -f "$$tmp/crane.tar.gz" crane && \
-		chmod +x "$$tmp/crane" && \
-		mv "$$tmp/crane" "$@"
 
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.
@@ -1950,7 +1946,7 @@ kind-reload:
 # Common functions for setting up a local envtest environment.
 ###############################################################################
 ENVTEST_DIR := $(REPO_ROOT)/hack/test/envtest
-ENVTEST_CONTAINER_DIR := /go/src/github.com/projectcalico/calico/hack/test/envtest
+ENVTEST_CONTAINER_DIR := $(CONTAINER_REPO_ROOT)/hack/test/envtest
 # Derive major.minor from K8S_VERSION (e.g. v1.34.3 -> 1.34.x) for setup-envtest.
 # Envtest publishes binaries per minor version, not per patch, so we use a wildcard.
 # Skip on Windows: envtest is Linux-only test infra; bash sed/cut would error otherwise.
@@ -1980,7 +1976,7 @@ $(ENVTEST_ASSETS_MARKER):
 		case "$(K8S_VERSION)" in \
 			*-alpha*) echo "K8S_VERSION $(K8S_VERSION) is an alpha; envtest does not pin to alphas." >&2; exit 1;; \
 		esac; \
-		if go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
+		if $(CONTAINER_GO_TOOL) setup-envtest \
 			use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_K8S_VERSION); then \
 			exit 0; \
 		fi; \
@@ -2021,7 +2017,7 @@ $(ENVTEST_MIN_ASSETS_MARKER):
 	@echo "Setting up envtest binaries for minimum K8s $(ENVTEST_MIN_K8S_VERSION)..."
 	mkdir -p $(ENVTEST_DIR)
 	$(DOCKER_GO_BUILD) sh -c \
-		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
+		'$(CONTAINER_GO_TOOL) setup-envtest \
 		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_MIN_K8S_VERSION)'
 	touch $@
 
@@ -2178,7 +2174,7 @@ image-windows: setup-windows-builder var-require-all-WINDOWS_VERSIONS
 		$(MAKE) windows-sub-image-$${version}; \
 	done;
 
-release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAGETAG-DEV_REGISTRIES image-windows bin/crane
+release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAGETAG-DEV_REGISTRIES image-windows
 	for registry in $(DEV_REGISTRIES); do \
 		echo Pushing Windows images to $${registry}; \
 		all_images=""; \
@@ -2204,12 +2200,12 @@ release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAG
 # retag-windows-image-with-registries copies the Windows image from DEV_TAG to
 # IMAGETAG in each registry. Windows images are single-arch manifests built by
 # buildx, so they have no local per-arch images to retag.
-retag-windows-image-with-registries: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE-DEV_TAG-IMAGETAG bin/crane
+retag-windows-image-with-registries: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE-DEV_TAG-IMAGETAG
 	for registry in $(DEV_REGISTRIES); do \
 		$(CRANE) cp $${registry}/$(WINDOWS_IMAGE):$(DEV_TAG) $${registry}/$(WINDOWS_IMAGE):$(IMAGETAG); \
 	done;
 
-release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE var-require-one-of-VERSION-BRANCH_NAME bin/crane
+release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE var-require-one-of-VERSION-BRANCH_NAME
 	describe_tag=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(shell git describe --tags --dirty --long --always --abbrev=12); \
 	release_tag=$(if $(VERSION),$(VERSION),$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME)); \
 	$(MAKE) release-windows-with-tag IMAGETAG=$${describe_tag}; \

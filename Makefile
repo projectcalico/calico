@@ -71,8 +71,8 @@ update-x-libraries:
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
 
-check-images-availability: bin/crane bin/yq
-	cd ./hack && RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) ./check-images-availability.sh
+check-images-availability: bin/yq
+	cd ./hack && RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) CRANE="$(CRANE_CMD)" ./check-images-availability.sh
 
 check-language:
 	./hack/check-language.sh
@@ -535,8 +535,5 @@ endif
 ###############################################################################
 # Post-release validation
 ###############################################################################
-bin/gotestsum:
-	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
-
-postrelease-checks release-validate: release/bin/release bin/gotestsum
+postrelease-checks release-validate: release/bin/release
 	@release/bin/release release validate
