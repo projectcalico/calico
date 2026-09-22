@@ -240,6 +240,7 @@ const (
 	FlagConnLimitInRej uint32 = (1 << 19)
 	FlagConnLimitOut   uint32 = (1 << 20)
 	FlagConnLimitDec   uint32 = (1 << 21)
+	FlagHostOrigin     uint32 = (1 << 22)
 )
 
 // LegFlag* mirror the CALI_CT_LEG_* masks in felix/bpf-gpl/conntrack_types.h.
@@ -279,6 +280,7 @@ func FlagNames(flags uint32) []string {
 		{FlagConnLimitInRej, "connlimit-in-rej"},
 		{FlagConnLimitOut, "connlimit-out"},
 		{FlagConnLimitDec, "connlimit-dec"},
+		{FlagHostOrigin, "host-origin"},
 	}
 	var names []string
 	for _, f := range flagTable {

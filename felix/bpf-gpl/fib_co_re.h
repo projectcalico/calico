@@ -140,7 +140,12 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 
 	if (rc == CALI_RES_REDIR_BACK) {
 		int redir_flags = 0;
-		if  (CALI_F_FROM_HOST) {
+		/* On netkit a to-workload program runs with skb->dev already swapped
+		 * to the pod-side peer, so skb->ifindex is the peer's and
+		 * BPF_F_INGRESS would deliver into the pod; transmitting out of it is
+		 * what sends the packet back towards the host. On veth skb->ifindex
+		 * is the host-side device and BPF_F_INGRESS is the way back. */
+		if (CALI_F_FROM_HOST && !ctx->globals->data.host_ifindex) {
 			redir_flags = BPF_F_INGRESS;
 		}
 
