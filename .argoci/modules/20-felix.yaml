@@ -57,9 +57,14 @@ steps:
 
   # Produces nothing the FV fleet consumes, so it runs alongside rather than
   # ahead of it.
+  #
+  # Unprivileged because two of its suites read geteuid(): one asserts a write to
+  # a root-owned path is refused, and the BPF wrapper picks its real or mock
+  # implementation from it. As root both take the wrong branch.
   - name: felix-ut
     depends: [build-calico-image, check-go]
     timeout: 45m
+    runAsNonRoot: true
     requests: {cpu: 4000m, memory: 6Gi}
     services:
       - docker
@@ -74,15 +79,19 @@ steps:
       cd "${CI_HOME}/${CI_GIT_DIR}/felix"
       artifact push job report --destination test-results || true
 
-  # k8sfv runs the combined binary as `component typha`, so it needs the same
-  # preloaded image the FVs do.
+  # On a machine because the suite loads ip6_tables, and a pod cannot insert a
+  # module at all — neither the tools nor the privileges are there. It also runs
+  # the combined binary as `component typha`, hence the preloaded image.
   - name: felix-k8sfv
     depends: [build-calico-image, check-go]
-    timeout: 30m
-    requests: {cpu: 3000m, memory: 6Gi}
+    timeout: 45m
+    runOn: vm
+    vm:
+      machineType: e2-standard-4
     services:
       - docker
     commands: |
+      sudo apt-get update -y && sudo apt-get install -y make
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       .argoci/scripts/load-cached-images calico
@@ -91,7 +100,7 @@ steps:
       make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
       make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
     epilogue: |
-      cd "${CI_HOME}/${CI_GIT_DIR}/felix"
+      copyFromVirtualMachine felix/report report || true
       artifact push job report --destination test-results || true
 
   # FELIX_TEST_GROUP is parsed, not just labelled: the Ubuntu release, dataplane

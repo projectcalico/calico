@@ -54,4 +54,3 @@ steps:
       export COMPONENT=node
       .semaphore/vms/publish-reports "Node: KinD STs" || true
       .semaphore/vms/clean-up-vms "${VM_PREFIX}" || true
-

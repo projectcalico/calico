@@ -31,6 +31,10 @@ chmod 600 "${HOME}/secrets/secret.google-service-account-key.json"
 export GOOGLE_APPLICATION_CREDENTIALS="${HOME}/secrets/secret.google-service-account-key.json"
 gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
 gcloud config set project "${GOOGLE_PROJECT}"
+# `artifact` is gsutil underneath, and gsutil takes whichever account gcloud
+# has active unless told not to. Without this the fleet credential above
+# silently replaces the artifact store's for the rest of the step.
+gcloud config set pass_credentials_to_gsutil false
 
 # Nothing outlives the fleet, so there is no shared key to rotate.
 mkdir -p "${HOME}/.ssh"
@@ -50,7 +54,8 @@ export SEMAPHORE_GIT_BRANCH="${CI_GIT_BRANCH}"
 export SEMAPHORE_GIT_REF_TYPE="${CI_GIT_REF_TYPE}"
 export SEMAPHORE_GIT_PR_NUMBER="${CI_GIT_PR_NUMBER}"
 export SEMAPHORE_GIT_SHA="${CI_GIT_SHA}"
-export CI_JOB_TYPE_LABEL="$(echo "${CI_GIT_REF_TYPE}" | tr '[:upper:]' '[:lower:]')"
+CI_JOB_TYPE_LABEL=$(echo "${CI_GIT_REF_TYPE}" | tr '[:upper:]' '[:lower:]')
+export CI_JOB_TYPE_LABEL
 
 # A GCE instance name is capped at 63 characters, so the workflow contributes a
 # digest rather than its name. Derived rather than passed, so an epilogue
