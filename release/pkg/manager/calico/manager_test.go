@@ -1033,7 +1033,7 @@ func TestOutputDirRequiredEvenWithoutValidation(t *testing.T) {
 	}
 }
 
-func TestChartsAndIndexShareADirectory(t *testing.T) {
+func TestChartsAndIndexLocation(t *testing.T) {
 	out := t.TempDir()
 	for _, tt := range []struct {
 		name        string
@@ -1045,9 +1045,12 @@ func TestChartsAndIndexShareADirectory(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := filepath.Join(out, "release", "v3.30.0")
 			r := &CalicoManager{outputDir: dir, calicoVersion: "v3.30.0", isHashRelease: tt.hashrelease}
-			want := filepath.Join(dir, "charts")
-			if got := r.chart().BaseDir; got != want {
+			if got, want := r.chart().BaseDir, charts.OutputDir(dir); got != want {
 				t.Errorf("chart().BaseDir = %q, want %q", got, want)
+			}
+			want := filepath.Join(dir, "charts")
+			if got := charts.IndexDir(dir); got != want {
+				t.Errorf("IndexDir = %q, want %q", got, want)
 			}
 		})
 	}
