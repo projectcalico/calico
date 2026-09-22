@@ -146,9 +146,19 @@ func FileName(chart, chartVersion string) string {
 	return fmt.Sprintf("%s.tgz", name)
 }
 
-// Dir is where a release's charts or their index sit under outputDir.
-func Dir(outputDir string) string {
+// Dir returns the output dir with the charts directory appended.
+var Dir = func(outputDir string) string {
 	return filepath.Join(outputDir, chartsDirName)
+}
+
+// OutputDir is where a release's charts are built under outputDir.
+var OutputDir = func(outputDir string) string {
+	return outputDir
+}
+
+// IndexDir is where a chart index sit under outputDir.
+var IndexDir = func(outputDir string) string {
+	return Dir(outputDir)
 }
 
 // versionedDir keeps one release's charts apart from another's, for a directory

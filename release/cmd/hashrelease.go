@@ -214,7 +214,7 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 		}
 
 		// Adjust the formatting of the generated outputs to match the legacy hashrelease format.
-		return tasks.ReformatHashrelease(pin, hashrel.Source)
+		return tasks.ReformatHashrelease(pin, hashrel.Source, c.Bool(helmChartsFlagName))
 	}
 }
 
