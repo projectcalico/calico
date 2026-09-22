@@ -3,7 +3,7 @@
 version: condensed
 generateName: e2e-windows-
 schedule: 10 23 * * 5
-# v3.31 patch releases are cancelled: e2e stays suspended until one is scheduled.
+# v3.31.x patch releases are cancelled.
 suspend: true
 globalPrologue: |
   cd "${CI_HOME}/${CI_GIT_DIR}"
