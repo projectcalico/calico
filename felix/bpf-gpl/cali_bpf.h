@@ -63,7 +63,6 @@
 #define CALI_TC_NAT_IF	(1<<7)
 #define CALI_TC_LO	(1<<8)
 #define CALI_CT_CLEANUP	(1<<9)
-#define CALI_TC_VXLAN	(1<<10)
 #define CALI_TC_PREAMBLE	(1<<11)
 #define CALI_TC_DEF_POLICY      (1<<12)
 
@@ -103,11 +102,6 @@
 #define CALI_F_L3            ((CALI_F_TO_HEP && CALI_F_IPIP) || CALI_F_L3_DEV)
 #define CALI_F_IPIP_ENCAPPED ((CALI_F_INGRESS && CALI_F_IPIP))
 #define CALI_F_L3_INGRESS    (CALI_F_INGRESS && CALI_F_L3_DEV)
-
-#define CALI_F_WIREGUARD	CALI_F_L3_DEV
-#define CALI_F_VXLAN		(((CALI_COMPILE_FLAGS) & CALI_TC_VXLAN) != 0)
-
-#define CALI_F_TUNNEL	(CALI_F_IPIP || CALI_F_WIREGUARD || CALI_F_VXLAN)
 
 #define CALI_F_CGROUP	(((CALI_COMPILE_FLAGS) & CALI_CGROUP) != 0)
 #define CALI_F_DSR	((CALI_COMPILE_FLAGS & CALI_TC_DSR) != 0)
@@ -338,7 +332,12 @@ extern const volatile struct cali_tc_preamble_globals __globals;
 #define EXT_TO_SVC_MARK	CALI_CONFIGURABLE(ext_to_svc_mark)
 #define PSNAT_START	CALI_CONFIGURABLE(psnat_start)
 #define PSNAT_LEN	CALI_CONFIGURABLE(psnat_len)
+#if CALI_F_XDP
+/* The placeholder above is 1, which would read as the bit-0 flag set. */
+#define GLOBAL_FLAGS 	0
+#else
 #define GLOBAL_FLAGS 	CALI_CONFIGURABLE(flags)
+#endif
 #define HOST_TUNNEL_IP	CALI_CONFIGURABLE_IP(host_tunnel_ip)
 #define WG_PORT		CALI_CONFIGURABLE(wg_port)
 #define NATIN_IFACE	CALI_CONFIGURABLE(natin_idx)
@@ -349,6 +348,10 @@ extern const volatile struct cali_tc_preamble_globals __globals;
 #define MAGLEV_LUT_SIZE CALI_CONFIGURABLE(maglev_lut_size)
 #define IPFRAG_TIMEOUT CALI_CONFIGURABLE(ipfrag_timeout)
 
+/* The device this program is attached to encapsulates traffic. Compile flags
+ * cannot say: wireguard and a plain L3 NIC share the l3 object. Only a host
+ * endpoint is ever one, which keeps it out of the workload programs. */
+#define IFACE_ENCAPS (CALI_F_HEP && (GLOBAL_FLAGS & CALI_GLOBALS_IFACE_ENCAPS))
 #define FLOWLOGS_ENABLED (GLOBAL_FLAGS & CALI_GLOBALS_FLOWLOGS_ENABLED)
 #define INGRESS_PACKET_RATE_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_INGRESS_PACKET_RATE_CONFIGURED)
 #define EGRESS_PACKET_RATE_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_EGRESS_PACKET_RATE_CONFIGURED)

@@ -310,7 +310,7 @@ skip_redir_ifindex:
 				goto skip_fib;
 			}
 		}
-	} else if (CALI_F_TUNNEL && CALI_F_TO_HEP) {
+	} else if (IFACE_ENCAPS && CALI_F_TO_HEP) {
 		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN) ||
 			!skb_mark_equals(ctx->skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET)) {
 			/* packet to vxlan from the host, needs to set tunnel key. Either
@@ -635,7 +635,10 @@ deny:
 	rc = TC_ACT_SHOT;
 
 allow:
-	if (CALI_F_VXLAN && CALI_F_TO_HOST && rc != TC_ACT_SHOT) {
+	/* In-kernel decap can deliver an inner frame addressed to the sender's
+	 * choice of MAC, which local delivery would drop. */
+	if (IFACE_ENCAPS && CALI_F_TO_HOST && rc != TC_ACT_SHOT &&
+			ctx->skb->pkt_type == PACKET_OTHERHOST) {
 		bpf_skb_change_type(ctx->skb, PACKET_HOST);
 	}
 

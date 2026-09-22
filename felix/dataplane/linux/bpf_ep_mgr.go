@@ -332,9 +332,11 @@ type bpfEndpointManager struct {
 	// when the kernel is running with lockdown=confidentiality (ftrace
 	// disabled), where loading a preamble that references bpf_trace_printk
 	// spams the kernel log on every attach.
-	bpfNoTracePrintk        bool
-	hostname                string
-	dataIfaceRegex          *regexp.Regexp
+	bpfNoTracePrintk bool
+	hostname         string
+	dataIfaceRegex   *regexp.Regexp
+	// encapIfaces holds Calico's own encapsulating devices, by name.
+	encapIfaces             set.Set[string]
 	l3IfaceRegex            *regexp.Regexp
 	workloadIfaceRegex      *regexp.Regexp
 	epToHostAction          string
@@ -606,6 +608,7 @@ func NewBPFEndpointManager(
 		policiesToWorkloads:     map[types.PolicyID]set.Set[any]{},
 		profilesToWorkloads:     map[types.ProfileID]set.Set[any]{},
 		dirtyIfaceNames:         set.New[string](),
+		encapIfaces:             set.New[string](),
 		hostIfaceTrees:          make(bpfIfaceTrees),
 		bpfLogLevel:             bpfLogLevel,
 		bpfNoTracePrintk:        bpfNoTracePrintk,
@@ -686,18 +689,23 @@ func NewBPFEndpointManager(
 	specialInterfaces := []string{"egress.calico"}
 	if config.RulesConfig.IPIPEnabled {
 		specialInterfaces = append(specialInterfaces, dataplanedefs.IPIPIfaceName)
+		m.encapIfaces.Add(dataplanedefs.IPIPIfaceName)
 	}
 	if config.RulesConfig.VXLANEnabled {
 		specialInterfaces = append(specialInterfaces, dataplanedefs.VXLANIfaceNameV4)
+		m.encapIfaces.Add(dataplanedefs.VXLANIfaceNameV4)
 	}
 	if config.RulesConfig.VXLANEnabledV6 {
 		specialInterfaces = append(specialInterfaces, dataplanedefs.VXLANIfaceNameV6)
+		m.encapIfaces.Add(dataplanedefs.VXLANIfaceNameV6)
 	}
 	if config.RulesConfig.WireguardEnabled {
 		specialInterfaces = append(specialInterfaces, config.RulesConfig.WireguardInterfaceName)
+		m.encapIfaces.Add(config.RulesConfig.WireguardInterfaceName)
 	}
 	if config.RulesConfig.WireguardEnabledV6 {
 		specialInterfaces = append(specialInterfaces, config.RulesConfig.WireguardInterfaceNameV6)
+		m.encapIfaces.Add(config.RulesConfig.WireguardInterfaceNameV6)
 	}
 
 	if config.RulesConfig.IPIPEnabled || config.RulesConfig.WireguardEnabled || config.RulesConfig.WireguardEnabledV6 {
@@ -3652,9 +3660,6 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 	m.ifacesLock.Unlock()
 	switch ifaceType {
 	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond, IfaceTypeBondSlave, IfaceTypeNetkit, IfaceTypeBridge, IfaceTypeBridgeSlave:
-		if ifaceName == "vxlan.calico" || ifaceName == "vxlan-v6.calico" {
-			return tcdefs.EpTypeVXLAN
-		}
 		if ifaceName == "lo" {
 			return tcdefs.EpTypeLO
 		}
@@ -3675,6 +3680,13 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 	return tcdefs.EpTypeHost
 }
 
+// ifaceEncaps reports whether this is one of Calico's own encapsulating
+// devices. The endpoint type cannot answer it: wireguard and a plain
+// L3-classified NIC both compile as EpTypeL3Device.
+func (m *bpfEndpointManager) ifaceEncaps(ifaceName string) bool {
+	return m.encapIfaces.Contains(ifaceName)
+}
+
 func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.AttachPoint {
 	ap := &tc.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
@@ -3685,6 +3697,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	}
 
 	ap.Type = m.getEndpointType(ifaceName)
+	ap.IfaceEncaps = m.ifaceEncaps(ifaceName)
 
 	if ap.Type == tcdefs.EpTypeLO && m.hostNetworkedNATMode == hostNetworkedNATUDPOnly {
 		ap.UDPOnly = true
@@ -3704,7 +3717,9 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	}
 
 	ap.ToHostDrop = (m.epToHostAction == "DROP")
-	ap.DSR = m.dsrEnabled
+	// ProgFilename gives EpTypeHost a DSR variant; an overlay device has no
+	// DSR return path and must not get one.
+	ap.DSR = m.dsrEnabled && !ap.IfaceEncaps
 	ap.DSROptoutCIDRs = m.dsrOptoutCidrs
 	ap.LogLevel, ap.LogFilter = m.apLogFilter(ap, ifaceName)
 	ap.VXLANPort = m.vxlanPort
@@ -4493,7 +4508,7 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 			denyFDs = m.policyNetkitDenyFDs
 		}
 		// Load default policy before the real policy is created and loaded.
-		switch at.DefaultPolicy() {
+		switch at.DefaultPolicy(aptc.IfaceEncaps) {
 		case hook.DefPolicyAllow:
 			err = maps.UpdateMapEntry(jmpMap.MapFD(),
 				jump.Key(policyIdx), jump.Value(allowFDs[aptc.Hook].FD()))
