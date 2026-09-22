@@ -120,7 +120,7 @@ var pinnedChart = func(cfg *Config, c *cli.Command, pin pinned) (*charts.Chart, 
 			ProductVersion: p.ProductVersion,
 			ChartVersion:   p.ChartVersion,
 			Names:          charts.All(),
-			BaseDir:        charts.Dir(p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false).Source),
+			BaseDir:        charts.OutputDir(p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false).Source),
 		}, nil
 	}
 	ver, _, err := version.VersionsFromManifests(cfg.RepoRootDir)
@@ -131,7 +131,7 @@ var pinnedChart = func(cfg *Config, c *cli.Command, pin pinned) (*charts.Chart, 
 		RepoRoot:       cfg.RepoRootDir,
 		ProductVersion: ver.FormattedString(),
 		Names:          charts.All(),
-		BaseDir:        charts.Dir(filepath.Join(cfg.OutputDir, ver.FormattedString())),
+		BaseDir:        charts.OutputDir(filepath.Join(cfg.OutputDir, ver.FormattedString())),
 	}, nil
 }
 
@@ -156,7 +156,7 @@ var chartsBuildOptions = func(cfg *Config, c *cli.Command, chart charts.Chart, p
 		if err != nil {
 			return nil, err
 		}
-		opts = append(opts, charts.WithIndex(repoURL, chartURL, chart.BaseDir, cfg.TmpDir))
+		opts = append(opts, charts.WithIndex(repoURL, chartURL, charts.IndexDir(chart.BaseDir), cfg.TmpDir))
 	}
 	return opts, nil
 }
