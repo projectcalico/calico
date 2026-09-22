@@ -1064,9 +1064,22 @@ var _ = infrastructure.DatastoreDescribe(
 							setLimit(numConnections)
 							defer setLimit(0)
 
+							// A connection opened before the rule lands is never
+							// counted by nft/iptables, since the rule only sees SYNs.
+							By("Waiting for the limit to be programmed")
 							if BPFMode() {
 								Eventually(getBPFMaxConnections(felixIdx, wlIdx, hook), "10s", "1s").
 									Should(Equal(uint32(numConnections)))
+							} else {
+								chain := "tw"
+								if hook == "egress" {
+									chain = "fw"
+								}
+								if NFTMode() {
+									Eventually(getRules(felixIdx), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-` + chain + `-` + limited.InterfaceName + ` {[^}]*ct count over ` + fmt.Sprintf("%d", numConnections) + ` reject with tcp reset`))
+								} else {
+									Eventually(getRules(felixIdx), "10s", "1s").Should(MatchRegexp(`-A cali-` + chain + `-` + regexp.QuoteMeta(limited.InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + `.*-j REJECT --reject-with tcp-reset`))
+								}
 							}
 
 							By("Filling the limit")
