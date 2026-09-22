@@ -47,6 +47,10 @@ touch "${HOME}/.ssh/known_hosts"
 # A GCP label value takes only lowercase alphanumerics, dashes and underscores.
 # The fleet sanitises the branch name but not these, so they have to arrive
 # clean.
+# Labels every instance the fleet creates, so the exit handler sweeps this
+# system's and leaves the other's alone.
+export CI_SYSTEM="${ARGOCI_RESOURCE_PREFIX:-argoci}"
+
 export SEMAPHORE_PROJECT_NAME="${CI_GIT_REPO_NAME}"
 export SEMAPHORE_WORKFLOW_ID="${CI_WORKFLOW_NAME}"
 export SEMAPHORE_JOB_ID="${CI_STEP_NAME:-unknown}"

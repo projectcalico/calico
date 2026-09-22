@@ -56,6 +56,10 @@ branch_label="${SEMAPHORE_GIT_BRANCH:-unknown}"
 branch_label="$(echo "$branch_label" | tr '[:upper:]' '[:lower:]')"
 branch_label="${branch_label//[^a-z0-9_-]/-}"
 labels="ci-runner=true"
+# Which CI system asked for this VM. Both run against the same project while
+# one is being migrated to the other, so a sweeper has to be able to tell its
+# own instances from the other system's.
+labels+=",ci-system=${CI_SYSTEM:-semaphore}"
 labels+=",ci-job-type=${CI_JOB_TYPE_LABEL:-${SEMAPHORE_GIT_REF_TYPE:-unknown}}"
 labels+=",ci-group=${CI_GROUP_LABEL:-unknown}"
 labels+=",ci-job=${CI_JOB_LABEL:-unknown}"

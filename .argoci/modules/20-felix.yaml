@@ -225,16 +225,16 @@ steps:
         value: "false"
       - name: CONTAINERD_VERSION
         value: 1.7.28
-      # Outside the checkout so the epilogue finds it wherever the FV script
-      # left off.
+      # Where the FV script writes, which it hardcodes rather than reading from
+      # here. Naming anything else loses the logs that explain a failure.
       - name: LOGS_DIR
-        value: /tmp/winfv-felix-logs
+        value: /home/semaphore/fv.log
     commands: |
       export AZURE_SUBSCRIPTION_ID="$AZ_SUBSCRIPTION_ID"
       export AZURE_TENANT_ID="$AZ_TENANT_ID"
       export AZURE_CLIENT_ID="$AZ_SP_ID"
       export AZURE_CLIENT_SECRET="$AZ_SP_PASSWORD"
-      export AZURE_RESOURCE_GROUP="calico-win-felix-${CI_GIT_SHA:0:4}-pr${CI_GIT_PR_NUMBER:-merge}-rg"
+      export AZURE_RESOURCE_GROUP="${ARGOCI_RESOURCE_PREFIX}-win-felix-${CI_GIT_SHA:0:4}-pr${CI_GIT_PR_NUMBER:-merge}-rg"
       export REPORT_DIR="${CI_HOME}/${CI_GIT_DIR}/process/testing/winfv-felix/report"
       az login --service-principal -u "$AZ_SP_ID" -p "$AZ_SP_PASSWORD" --tenant "$AZ_TENANT_ID" --output none
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
@@ -252,6 +252,6 @@ steps:
       export AZURE_TENANT_ID="$AZ_TENANT_ID"
       export AZURE_CLIENT_ID="$AZ_SP_ID"
       export AZURE_CLIENT_SECRET="$AZ_SP_PASSWORD"
-      export AZURE_RESOURCE_GROUP="calico-win-felix-${CI_GIT_SHA:0:4}-pr${CI_GIT_PR_NUMBER:-merge}-rg"
+      export AZURE_RESOURCE_GROUP="${ARGOCI_RESOURCE_PREFIX}-win-felix-${CI_GIT_SHA:0:4}-pr${CI_GIT_PR_NUMBER:-merge}-rg"
       az login --service-principal -u "$AZ_SP_ID" -p "$AZ_SP_PASSWORD" --tenant "$AZ_TENANT_ID" --output none || true
       cd process/testing/aso && make dist-clean || true

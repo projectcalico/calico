@@ -71,6 +71,14 @@ defaults:
   # justifies more.
   timeout: 1h
 
+  # Stamped on every cloud resource a lane creates, and matched by the sweeper in
+  # the exit handler. Defined once here because a lane and the sweeper drifting
+  # apart means either leaked resources or, far worse, deleting another CI
+  # system's while the two run side by side.
+  env:
+    - name: ARGOCI_RESOURCE_PREFIX
+      value: argoci
+
   # Modules merge collections with these rather than replacing them, and the
   # merge is a union — a step cannot drop what it inherits. So `docker` is
   # declared by the modules that shell out to a nested container, not here.
@@ -82,6 +90,9 @@ defaults:
 includes:
   # Ungated: each check inside carries its own, as its Semaphore block does.
   - path: .argoci/modules/10-prerequisites.yaml
+
+  # Ungated deliberately — see the module.
+  - path: .argoci/modules/99-cleanup.yaml
 
   # Each module is gated on its own file as well as its component, so editing a
   # module retests what it builds. Match the path exactly — a bare `^\.argoci/`
