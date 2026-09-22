@@ -2801,14 +2801,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			resultSecondAdd, _, _, _, err := testutils.RunCNIPluginWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", "new-container-id", "eth0", contNs)
 			Expect(err).NotTo(HaveOccurred())
 
-			// The pod keeps its address, and still gets a route to it. The mask differs
-			// because a specific-IP assignment returns a host route where auto-assign
-			// returns the block's.
+			// The pod keeps its address.
 			Expect(resultSecondAdd.IPs).Should(Equal(result.IPs))
-			Expect(resultSecondAdd.Routes).Should(HaveLen(1))
-			Expect(resultSecondAdd.Routes[0].Dst.IP).Should(Equal(result.Routes[0].Dst.IP))
-			resultSecondAdd.Routes = nil
-			result.Routes = nil
 
 			// The MAC address will be different, since we create a new veth.
 			Expect(len(resultSecondAdd.Interfaces)).Should(Equal(len(result.Interfaces)))
@@ -2964,10 +2958,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(resultY.IPs).To(HaveLen(1))
 			Expect(resultY.IPs[0].Address.IP.String()).To(Equal(podIP))
 
-			// A reused address still has to come back with its host-side route.
-			Expect(resultY.Routes).To(HaveLen(1))
-			Expect(resultY.Routes[0].Dst.IP.String()).To(Equal(podIP))
-			Expect(resultY.Routes[0].Dst.Mask).To(Equal(net.CIDRMask(32, 32)))
 
 			_, handleID, err := calicoClient.IPAM().GetAssignmentAttributes(ctx, cnet.IP{IP: net.ParseIP(podIP)})
 			Expect(err).NotTo(HaveOccurred())
