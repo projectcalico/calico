@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 
 	"github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -43,6 +44,7 @@ func (s *MockIPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, newMemb
 		if setMetadata.Type == ipsets.IPSetTypeHashIP {
 			gomega.Expect(net.ParseIP(member)).ToNot(gomega.BeNil())
 		}
+		s.expectNoOverlap(setMetadata.SetID, members, member)
 		members.Add(member)
 	}
 	s.Members[setMetadata.SetID] = members
@@ -56,6 +58,7 @@ func (s *MockIPSets) AddMembers(setID string, newMembers []string) {
 			gomega.Expect(net.ParseIP(member)).ToNot(gomega.BeNil())
 		}
 		gomega.Expect(members.Contains(member)).To(gomega.BeFalse())
+		s.expectNoOverlap(setID, members, member)
 		members.Add(member)
 	}
 }
@@ -69,6 +72,31 @@ func (s *MockIPSets) RemoveMembers(setID string, removedMembers []string) {
 		gomega.Expect(members.Contains(member)).To(gomega.BeTrue())
 		members.Discard(member)
 	}
+}
+
+// expectNoOverlap fails the test if member overlaps one already in the set. hash:net sets become
+// nftables interval sets, and nft rejects a batch that adds an element overlapping another.
+func (s *MockIPSets) expectNoOverlap(setID string, members set.Set[string], member string) {
+	if s.Metadata[setID].Type != ipsets.IPSetTypeHashNet {
+		return
+	}
+
+	cidr, err := ip.ParseCIDROrIP(member)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	members.Iter(func(existing string) error {
+		other, err := ip.ParseCIDROrIP(existing)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		// An exact duplicate collapses into the same element, so only strict containment conflicts.
+		if other.Version() != cidr.Version() || other == cidr {
+			return nil
+		}
+
+		common := ip.CommonPrefix(cidr, other)
+		gomega.Expect(common == cidr || common == other).To(gomega.BeFalse(),
+			"IP set %s: new member %s overlaps existing member %s", setID, member, existing)
+		return nil
+	})
 }
 
 func (s *MockIPSets) RemoveIPSet(setID string) {
