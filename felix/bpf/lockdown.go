@@ -61,9 +61,11 @@ var (
 func readLockdown(fs securityfs, mountPoint, file string) bool {
 	if !fs.isMounted(mountPoint) {
 		if err := fs.mount(mountPoint); err != nil {
-			// No CONFIG_SECURITYFS, or we lack CAP_SYS_ADMIN. Either way the
-			// lockdown state stays unknown, which reads as "not locked down".
-			log.WithError(err).Debug("Could not mount securityfs to read the kernel lockdown state.")
+			// No CONFIG_SECURITYFS, or no CAP_SYS_ADMIN in the initial user
+			// namespace. Either way the lockdown state stays unknown, which
+			// reads as "not locked down".
+			log.WithError(err).Warn("Could not mount securityfs; assuming the kernel is not " +
+				"locked down. Under lockdown=confidentiality that leaves BPF log spam in dmesg.")
 		} else {
 			defer func() {
 				if err := fs.unmount(mountPoint); err != nil {
