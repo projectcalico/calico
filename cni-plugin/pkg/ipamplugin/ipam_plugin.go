@@ -25,7 +25,6 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -635,10 +634,8 @@ func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *l
 		return nil, nil
 	}
 
-	// Quick pre-filter: skip API server queries for pods that are clearly not virt-launcher pods.
-	// KubeVirt hardcodes the "virt-launcher-" prefix in pod GenerateName when creating virt-launcher pods.
-	// This avoids unnecessary API server queries for normal (non-VM) pods on the CNI hot path.
-	if !strings.HasPrefix(epIDs.Pod, "virt-launcher-") {
+	// Skip the API server query for pods that are clearly not virt-launcher pods.
+	if !kubevirt.MaybeVirtLauncherPod(epIDs.Pod) {
 		return nil, nil
 	}
 
