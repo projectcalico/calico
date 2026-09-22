@@ -205,4 +205,62 @@ var _ = Describe("Masquerade manager", func() {
 		Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/16")))
 		Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.20.0.0/16")))
 	})
+
+	Describe("with overlapping pools", func() {
+		It("should suppress a nested pool added after the pool that covers it", func() {
+			addPool("pool-1", "10.0.0.0/8", true)
+			addPool("pool-2", "10.0.0.0/16", true)
+			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
+
+			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/8")))
+			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.0.0.0/8")))
+		})
+
+		It("should withdraw a nested pool when the pool that covers it arrives", func() {
+			addPool("pool-2", "10.0.0.0/16", true)
+			addPool("pool-1", "10.0.0.0/8", true)
+			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
+
+			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/8")))
+			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.0.0.0/8")))
+		})
+
+		It("should re-expose a nested pool when the pool that covers it is removed", func() {
+			addPool("pool-1", "10.0.0.0/8", true)
+			addPool("pool-2", "10.0.0.0/16", true)
+			masqMgr.OnUpdate(&proto.IPAMPoolRemove{Id: "pool-1"})
+			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
+
+			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/16")))
+			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
+		})
+
+		It("should leave the covering pool alone when the nested pool is removed", func() {
+			addPool("pool-1", "10.0.0.0/8", true)
+			addPool("pool-2", "10.0.0.0/16", true)
+			masqMgr.OnUpdate(&proto.IPAMPoolRemove{Id: "pool-2"})
+			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
+
+			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/8")))
+			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.0.0.0/8")))
+		})
+
+		It("should suppress per IP set, not globally", func() {
+			addPool("pool-1", "10.0.0.0/8", false)
+			addPool("pool-2", "10.0.0.0/16", true)
+			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
+
+			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/8")))
+			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
+		})
+
+		It("should keep sibling pools that don't cover each other", func() {
+			addPool("pool-1", "10.0.0.0/9", true)
+			addPool("pool-2", "10.128.0.0/9", true)
+			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
+
+			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/9", "10.128.0.0/9")))
+			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.0.0.0/9", "10.128.0.0/9")))
+		})
+	})
 })
