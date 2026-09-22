@@ -44,10 +44,7 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 	describe.WithCategory(describe.Policy),
 	describe.WithSerial(),
 	describe.WithFeature("AutoHEPs"),
-	// Ordered so the auto host endpoint enable/disable and node discovery run
-	// once for the whole container instead of once per spec. Toggling auto HEPs
-	// reconfigures kube-controllers and waits for host endpoints to appear (or
-	// disappear), which is slow, and none of these specs need a fresh toggle.
+	// Ordered so the slow auto HEP toggle runs once per container, not per spec.
 	ginkgo.Ordered,
 	"auto host endpoint tests",
 	func() {
@@ -93,12 +90,7 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 		}
 
 		ginkgo.BeforeEach(func() {
-			// A framework clientset is needed to reach the KubeControllersConfiguration, but it's
-			// only created in the context of a BeforeEach or an It. Build the client here rather
-			// than rolling our own. This part is cheap, so it stays per-spec; the auto HEP toggle
-			// and node discovery below run once, guarded by hepSetupDone, because the framework
-			// client isn't available in a BeforeAll (it's populated in the framework's own
-			// BeforeEach, which runs after BeforeAll in an Ordered container).
+			// The framework client isn't ready in a BeforeAll, so the one-time setup lives here behind hepSetupDone.
 			var err error
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
@@ -118,7 +110,7 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 
 			// Turn on default auto host endpoints if not already enabled.
 			if !GetAutoHEPsEnabled(originalKCC) {
-				logrus.Info("BeforeAll: auto host endpoints not previously enabled so enabling")
+				logrus.Info("Setup: auto host endpoints not previously enabled so enabling")
 				// Enabled creation of auto host endpoints and creation of default host endpoints.
 				// Initialise nil pointer fields so we can set the values below.
 				if testKCC.Spec.Controllers.Node == nil {
