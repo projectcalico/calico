@@ -251,6 +251,9 @@ const (
 	LegFlagApproved uint32 = (1 << 4)
 	LegFlagOpener   uint32 = (1 << 5)
 	LegFlagWorkload uint32 = (1 << 6)
+	LegFlagTunnel   uint32 = (1 << 7)
+	LegFlagPinned   uint32 = (1 << 8)
+	LegFlagChecked  uint32 = (1 << 9)
 )
 
 // FlagNames returns the human-readable names for the set bits in flags.
@@ -391,6 +394,9 @@ type Leg struct {
 	Approved bool
 	Opener   bool
 	Workload bool
+	Tunnel   bool
+	Pinned   bool
+	Checked  bool
 	Ifindex  uint32
 }
 
@@ -428,6 +434,9 @@ func (leg Leg) Flags() uint32 {
 	setFlag(&flags, LegFlagApproved, leg.Approved)
 	setFlag(&flags, LegFlagOpener, leg.Opener)
 	setFlag(&flags, LegFlagWorkload, leg.Workload)
+	setFlag(&flags, LegFlagTunnel, leg.Tunnel)
+	setFlag(&flags, LegFlagPinned, leg.Pinned)
+	setFlag(&flags, LegFlagChecked, leg.Checked)
 
 	return flags
 }
@@ -449,6 +458,9 @@ func readConntrackLeg(b []byte) Leg {
 		Approved: flagSet(bits, LegFlagApproved),
 		Opener:   flagSet(bits, LegFlagOpener),
 		Workload: flagSet(bits, LegFlagWorkload),
+		Tunnel:   flagSet(bits, LegFlagTunnel),
+		Pinned:   flagSet(bits, LegFlagPinned),
+		Checked:  flagSet(bits, LegFlagChecked),
 		Ifindex:  binary.LittleEndian.Uint32(b[legExtra+8 : legExtra+12]),
 	}
 }
