@@ -45,7 +45,7 @@ var (
 	// Where a build leaves the packaged charts. A product that writes them
 	// somewhere other than a per-version directory replaces this.
 	chartsCLIChartDir = func(cfg *Config) string {
-		return charts.Dir(filepath.Join(cfg.OutputDir, chartsCLITestVersion))
+		return filepath.Join(cfg.OutputDir, chartsCLITestVersion)
 	}
 
 	// The make target that packages every chart.
@@ -178,8 +178,8 @@ func TestChartsBuildBuildsTheIndexByDefault(t *testing.T) {
 	if repo := chartsCLIRepoURL(t); !r.ran(repo) {
 		t.Errorf("expected the index at %q to be downloaded", repo)
 	}
-	// The index sits with the charts, so a sweep of the output takes both.
-	indexDir := chartsCLIChartDir(cfg)
+	// The index is served from charts/
+	indexDir := charts.Dir(chartsCLIChartDir(cfg))
 	if _, err := os.Stat(filepath.Join(indexDir, "index.yaml")); err != nil {
 		t.Errorf("expected the index in %q: %v", indexDir, err)
 	}
@@ -361,7 +361,7 @@ func TestChartsBuildForAHashrelease(t *testing.T) {
 	prevVer, prevDir := chartsCLIChartVersion, chartsCLIChartDir
 	chartsCLIChartVersion = pinned
 	chartsCLIChartDir = func(cfg *Config) string {
-		return charts.Dir(filepath.Join(baseHashreleaseOutputDir(cfg.RepoRootDir), "abc123"))
+		return filepath.Join(baseHashreleaseOutputDir(cfg.RepoRootDir), "abc123")
 	}
 	t.Cleanup(func() { chartsCLIChartVersion, chartsCLIChartDir = prevVer, prevDir })
 
@@ -408,7 +408,7 @@ func TestHashreleaseChartDirMatchesTheHashreleaseFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pinnedChart: %v", err)
 	}
-	want := charts.Dir(pin.Hashrelease(baseHashreleaseOutputDir(root), false).Source)
+	want := pin.Hashrelease(baseHashreleaseOutputDir(root), false).Source
 	if chart.BaseDir != want {
 		t.Errorf("BaseDir = %q, want %q", chart.BaseDir, want)
 	}
