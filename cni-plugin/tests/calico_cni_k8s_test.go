@@ -2958,7 +2958,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(resultY.IPs).To(HaveLen(1))
 			Expect(resultY.IPs[0].Address.IP.String()).To(Equal(podIP))
 
-
 			_, handleID, err := calicoClient.IPAM().GetAssignmentAttributes(ctx, cnet.IP{IP: net.ParseIP(podIP)})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(*handleID).To(ContainSubstring(containerIDY))
