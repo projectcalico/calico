@@ -1475,8 +1475,8 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 			CALI_DEBUG("Ingress connection limit exceeded, rejecting with TCP RST");
 			if (cv) {
 				ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED);
-				/* Under netkit the RST can only leave via the pod's own
-				 * device, returning through from-wep. Approve that leg
+				/* The RST leaves via CALI_RES_REDIR_BACK, which returns it
+				 * through from-wep on every device type. Approve that leg
 				 * so conntrack admits it there. */
 				ct_leg_set_flags(rst_src_lt_dest ? &cv->b_to_a : &cv->a_to_b,
 						CALI_CT_LEG_APPROVED);
