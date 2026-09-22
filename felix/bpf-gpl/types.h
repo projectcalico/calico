@@ -174,6 +174,9 @@ enum cali_state_flags {
 	/* CALI_ST_NO_L4_HDR is set when the packet has no L4 header (non-first IP fragment),
 	 * so nothing may read one, NAT included. */
 	CALI_ST_NO_L4_HDR	  = 0x8000,
+	/* CALI_ST_RST_NO_CT is set when the RST rejects a flow that has no CT
+	 * entry, so the destination must not police it. */
+	CALI_ST_RST_NO_CT	  = 0x10000,
 };
 
 struct cali_tc_ctx {

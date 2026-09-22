@@ -50,7 +50,42 @@ func TestTCPReset(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		checkTcpRst(pktR, ipv4, tcp, false)
+		checkTcpRst(pktR, ipv4, tcp, tcp.Seq+uint32(len(payloadDefault)))
+	})
+}
+
+// TestTCPResetToBareSYN covers what a real client sends: a SYN with no
+// payload, so the RST must acknowledge exactly ISN+1.
+func TestTCPResetToBareSYN(t *testing.T) {
+	RegisterTestingT(t)
+	cleanUpMaps()
+	defer cleanUpMaps()
+
+	syn := &layers.TCP{
+		SrcPort:    54321,
+		DstPort:    7890,
+		SYN:        true,
+		Seq:        1000,
+		DataOffset: 5,
+	}
+
+	// An explicit empty payload: nil would be replaced by payloadDefault.
+	_, ipv4, l4, _, pktBytes, err := testPacketV4(nil, nil, syn, []byte{})
+	Expect(err).NotTo(HaveOccurred())
+	tcp, ok := l4.(*layers.TCP)
+	Expect(ok).To(BeTrue())
+
+	runBpfUnitTest(t, "tcp_rst.c", func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(0))
+
+		Expect(res.dataOut).To(HaveLen(54)) // eth(14) + ip(20) + tcp(20)
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		checkTcpRst(pktR, ipv4, tcp, tcp.Seq+1)
 	})
 }
 
@@ -107,6 +142,10 @@ func TestTCPResetIPv6(t *testing.T) {
 		Expect(tcpR.DstPort).To(Equal(tcp.SrcPort))
 		Expect(tcpR.Seq).To(Equal(uint32(0)))
 
+		// The HopByHop header must not be counted as payload.
+		Expect(tcpR.ACK).To(BeTrue())
+		Expect(tcpR.Ack).To(Equal(tcp.Seq + uint32(len(payloadDefault))))
+
 		// Verify TCP checksum by recomputing it with gopacket
 		tcpCSum := tcpR.Checksum
 		_ = tcpR.SetNetworkLayerForChecksum(ipv6R)
@@ -119,7 +158,7 @@ func TestTCPResetIPv6(t *testing.T) {
 
 }
 
-func checkTcpRst(pktR gopacket.Packet, ipv4 *layers.IPv4, tcp *layers.TCP, ack bool) {
+func checkTcpRst(pktR gopacket.Packet, ipv4 *layers.IPv4, tcp *layers.TCP, expectAckSeq uint32) {
 	ipv4L := pktR.Layer(layers.LayerTypeIPv4)
 	Expect(ipv4L).NotTo(BeNil())
 	ipv4R, ok := ipv4L.(*layers.IPv4)
@@ -145,6 +184,10 @@ func checkTcpRst(pktR gopacket.Packet, ipv4 *layers.IPv4, tcp *layers.TCP, ack b
 	Expect(tcpR.SrcPort).To(Equal(tcp.DstPort))
 	Expect(tcpR.DstPort).To(Equal(tcp.SrcPort))
 	Expect(tcpR.Seq).To(Equal(uint32(0)))
+
+	// A peer only acts on an RST that acknowledges what it sent.
+	Expect(tcpR.ACK).To(BeTrue())
+	Expect(tcpR.Ack).To(Equal(expectAckSeq))
 
 	// Verify TCP checksum by recomputing it with gopacket
 	tcpCSum := tcpR.Checksum
