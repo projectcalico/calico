@@ -135,7 +135,9 @@ func (s *ConnLimitScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get E
 	data := ctVal.Data()
 
 	// Skip a close both endpoints agreed on; the fast path decremented it.
-	if data.FINsSeenDSR() {
+	// Only DSR takes one FIN as the whole close, because the return leg
+	// never reaches this hook (CORE-13478 Failure.6).
+	if (ctVal.IsForwardDSR() && data.FINsSeenDSR()) || data.FINsSeen() {
 		return ScanVerdictOK, 0
 	}
 
