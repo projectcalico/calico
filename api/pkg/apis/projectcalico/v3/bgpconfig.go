@@ -175,6 +175,7 @@ type BGPConfigurationSpec struct {
 	//
 	// [Default: EnabledNoEncapOnly]
 	// +kubebuilder:validation:Enum=Enabled;Disabled;EnabledIPIPOnly;EnabledNoEncapOnly
+	// +kubebuilder:default=EnabledNoEncapOnly
 	// +optional
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 
