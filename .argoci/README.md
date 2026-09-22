@@ -19,6 +19,14 @@ migrated off Semaphore's scheduled e2e builds.
 These crons and scripts are maintained **by hand** going forward: edit the
 YAML (or the scripts) directly to change a suite's jobs, env, or schedule.
 
+## All suites are suspended on this branch
+
+The v3.31.x patch releases are cancelled, so every `cron/*.yaml` here carries
+`suspend: true` and nothing runs on a schedule. The suites stay in place, with
+their real schedules intact, so a short-notice patch release has working e2e:
+drop the `suspend` lines and merge to this branch, and `cc-argoci-handler`
+re-applies the CronWorkflows.
+
 ## Layout is flat (no `end-to-end/` subdir)
 
 Unlike `.semaphore/end-to-end/`, e2e lives at the top of `.argoci/`. ArgoCI's
