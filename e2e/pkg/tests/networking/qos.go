@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -323,9 +324,8 @@ var _ = describe.CalicoDescribe(
 
 			probeTarget := conncheck.NewTCPConnectTarget(serverIP, connLimitPort)
 
-			By("Verifying the server is reachable")
-			checker.ExpectSuccess(client, probeTarget)
-			checker.Execute()
+			// No standalone reachability probe: its slot lingers until both
+			// ends FIN, so the holders below would race it.
 
 			// Each holder bridges to a sleep so neither end closes the socket; it
 			// stays ESTABLISHED, occupying a slot until stop() is called.
@@ -343,9 +343,17 @@ var _ = describe.CalicoDescribe(
 					[]string{"socat", connectAddr, "EXEC:sleep 3600"},
 					io.Discard,
 				)
-				Expect(err).NotTo(HaveOccurred(), "failed to open held connection %d", i)
+				Expect(err).NotTo(HaveOccurred(), "failed to start held connection %d", i)
 				holders = append(holders, stop)
 			}
+
+			// ExecStream returns when the stream is up, not when socat has
+			// connected.
+			By("Waiting for the held connections to establish")
+			Eventually(func() (int, error) {
+				return countEstablished(client, serverIP, connLimitPort)
+			}, 30*time.Second, time.Second).Should(Equal(maxConns),
+				"the held connections did not all reach ESTABLISHED")
 
 			By("Verifying the (N+1)th connection is refused")
 			checker.ResetExpectations()
@@ -360,6 +368,17 @@ var _ = describe.CalicoDescribe(
 			checker.Execute()
 		})
 	})
+
+// countEstablished reports how many ESTABLISHED TCP connections the client pod
+// holds to ip:port.
+func countEstablished(client conncheck.Client, ip string, port int) (int, error) {
+	out, err := client.Exec(context.Background(),
+		fmt.Sprintf("ss -Htn state established dst %s:%d | wc -l", ip, port))
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(strings.TrimSpace(out))
+}
 
 // measureWithRateRetry runs a bandwidth measurement and retries once if the
 // measured rate exceeds maxRate. This handles two startup conditions on a
