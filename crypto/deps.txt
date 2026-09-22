@@ -3,7 +3,7 @@ Run 'make gen-deps-files' to regenerate.
 
 go 1.27.1
 github.com/fxamacker/cbor/v2 v2.9.1
-github.com/go-logr/logr v1.4.3
+github.com/go-logr/logr v1.4.4
 github.com/jinzhu/copier v0.4.0
 github.com/json-iterator/go v1.1.12
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
