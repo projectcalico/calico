@@ -749,9 +749,18 @@ func CreateClient(conf types.NetConf) (client.Interface, error) {
 }
 
 // ReleaseIPAllocation is called to cleanup IPAM allocations if something goes wrong during
-// CNI ADD execution. It forces the CNI_COMMAND to be DEL.
+// CNI ADD execution. It forces the CNI_COMMAND to be DEL for the duration of the cleanup.
 func ReleaseIPAllocation(logger *logrus.Entry, conf types.NetConf, args *skel.CmdArgs) {
 	logger.Info("Cleaning up IP allocations for failed ADD")
+
+	// The caller may carry on with the ADD after a cleanup it can recover from.
+	command := os.Getenv("CNI_COMMAND")
+	defer func() {
+		if err := os.Setenv("CNI_COMMAND", command); err != nil {
+			logger.WithError(err).Warning("Failed to restore CNI_COMMAND")
+		}
+	}()
+
 	if err := os.Setenv("CNI_COMMAND", "DEL"); err != nil {
 		// Failed to set CNI_COMMAND to DEL.
 		logger.Warning("Failed to set CNI_COMMAND=DEL")
