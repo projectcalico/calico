@@ -30,6 +30,6 @@ func init() {
 func TestNfnetlink(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../report/felix_nfnetlink_suite.xml"
+	testutils.RegisterJUnitReporter("felix_nfnetlink_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/nfnetlink", suiteConfig, reporterConfig)
 }

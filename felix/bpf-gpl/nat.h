@@ -5,21 +5,32 @@
 #ifndef __CALI_NAT_H__
 #define __CALI_NAT_H__
 
-#ifndef CALI_VXLAN_VNI
-#define CALI_VXLAN_VNI 0xca11c0
-#endif
+#include <linux/if_ether.h>
+#include <linux/in.h>
 
-#define vxlan_udp_csum_ok(udp) ((udp)->check == 0)
-
+#include "arp.h"
+#include "cali_bpf.h"
+#include "counters.h"
+#include "globals.h"
+#include "ip_addr.h"
+#include "log.h"
+#include "nat_types.h"
+#include "reasons.h"
+#include "routes.h"
+#include "skb.h"
+#include "types.h"
 #ifdef IPVER6
 #include "nat6.h"
 #else
 #include "nat4.h"
 #endif
 
-#define dnat_should_encap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV && !CALI_F_NAT_IF)
-#define dnat_return_should_encap() (CALI_F_FROM_WEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV && !CALI_F_NAT_IF)
-#define dnat_should_decap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV && !CALI_F_NAT_IF)
+/* An encapsulating device never adds another layer of its own. */
+#define dnat_on_plain_dev() (!CALI_F_IPIP && !CALI_F_L3_DEV && !CALI_F_NAT_IF && !IFACE_ENCAPS)
+
+#define dnat_should_encap() (CALI_F_FROM_HEP && dnat_on_plain_dev())
+#define dnat_return_should_encap() (CALI_F_FROM_WEP && dnat_on_plain_dev())
+#define dnat_should_decap() (CALI_F_FROM_HEP && dnat_on_plain_dev())
 
 static CALI_BPF_INLINE int is_vxlan_tunnel(struct cali_tc_ctx *ctx, __u16 vxlanport)
 {

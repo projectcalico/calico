@@ -51,3 +51,11 @@ func (d *InternalDataplane) WireguardEnabled() bool {
 func (d *InternalDataplane) WireguardEnabledV6() bool {
 	return d.wireguardManagerV6 != nil && d.wireguardManagerV6.wireguardRouteTable.Enabled()
 }
+
+// LiveMigrationListenerCount reports how many listeners - in production, endpoint
+// managers - are registered with the live migration monitor.  There must be one per
+// enabled IP version: with the IPv6 endpoint manager missing, IPv6 workload routes
+// are neither suppressed on a migration target nor elevated after cutover.
+func (d *InternalDataplane) LiveMigrationListenerCount() int {
+	return len(d.liveMigrationMonitor.listeners)
+}

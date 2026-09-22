@@ -2,25 +2,9 @@
 // Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#include <linux/types.h>
-#include <linux/bpf.h>
-#include <linux/pkt_cls.h>
-#include <linux/ip.h>
-#include <linux/tcp.h>
-#include <linux/in.h>
-#include <linux/udp.h>
-#include <linux/if_ether.h>
-#include <iproute2/bpf_elf.h>
-
-// stdbool.h has no deps so it's OK to include; stdint.h pulls in parts
-// of the std lib that aren't compatible with BPF.
-#include <stdbool.h>
-
-
-#include "bpf.h"
-
+/* Log prefix for this program.  log.h only defines CALI_LOG if it is not
+ * already set, so this must come before any include. */
 #define CALI_IFACE_LOG(fmt, ...) bpf_log("%s" fmt, ctx->globals->data.iface_name, ## __VA_ARGS__)
-
 #define CALI_LOG(fmt, ...) do { \
 	if (((CALI_COMPILE_FLAGS) & CALI_TC_HOST_EP) && ((CALI_COMPILE_FLAGS) & CALI_TC_INGRESS)) { \
 		CALI_IFACE_LOG("-I: " fmt, ## __VA_ARGS__);	\
@@ -33,38 +17,51 @@
 	}							\
 } while (0)
 
-#include "types.h"
-#include "counters.h"
-#include "skb.h"
-#include "policy.h"
+#include <linux/icmp.h>
+#include <linux/icmpv6.h>
+#include <linux/if_ether.h>
+#include <linux/in.h>
+#include <linux/ip.h>
+#include <linux/ipv6.h>
+#include <linux/tcp.h>
+#include <linux/udp.h>
+
+#include "arp.h"
+#include "cali_bpf.h"
 #include "conntrack.h"
+#include "conntrack_types.h"
+#include "counters.h"
+#include "events.h"
+#include "failsafe.h"
+#include "fib.h"
+#include "globals.h"
+#include "icmp.h"
+#include "ip_addr.h"
+#include "jump.h"
+#include "log.h"
+#include "maglev.h"
+#include "metadata.h"
 #include "nat.h"
 #include "nat_lookup.h"
-#include "routes.h"
-#include "jump.h"
-#include "reasons.h"
-#include "icmp.h"
-#include "arp.h"
-#include "sendrecv.h"
-#include "events.h"
-#include "fib.h"
-#include "rpf.h"
+#include "nat_types.h"
 #include "parsing.h"
-#include "failsafe.h"
-#include "metadata.h"
-#include "bpf_helpers.h"
-#include "rule_counters.h"
+#include "parsing_types.h"
+#include "policy.h"
 #include "qos.h"
-#include "maglev.h"
-
-#ifndef IPVER6
+#include "reasons.h"
+#include "routes.h"
+#include "rpf.h"
+#include "rule_counters.h"
+#include "sendrecv.h"
+#include "skb.h"
+#include "tc.h"
+#include "types.h"
+#ifdef IPVER6
+#include "tcp6.h"
+#else
 #include "ip_v4_fragment.h"
 #include "tcp4.h"
-#else
-#include "tcp6.h"
 #endif
-
-#include "tc.h"
 
 #define HAS_HOST_CONFLICT_PROG CALI_F_TO_HEP
 
@@ -108,6 +105,24 @@ static CALI_BPF_INLINE int state_fill_from_l4(struct cali_tc_ctx *ctx, bool deca
 	return tc_state_fill_from_nexthdr(ctx, decap);
 }
 
+/* True on an encapsulating device whose packet still needs its tunnel key set.
+ * Reads the globals directly: the fast path below has no ctx yet.
+ */
+static CALI_BPF_INLINE bool encap_needs_key(struct __sk_buff *skb)
+{
+	if (!CALI_F_HEP) {
+		return false;
+	}
+
+	struct cali_tc_globals *gl = state_get_globals_tc();
+
+	if (!gl || !(gl->data.flags & CALI_GLOBALS_IFACE_ENCAPS)) {
+		return false;
+	}
+
+	return !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET);
+}
+
 /* calico_tc_main is the main function used in all of the tc programs.  It is specialised
  * for particular hook at build time based on the CALI_F build flags.
  */
@@ -123,7 +138,7 @@ int calico_tc_main(struct __sk_buff *skb)
 	 * skip all processing. */
 	if (CALI_F_FROM_HOST && skb_mark_equals(skb, CALI_SKB_MARK_BYPASS, CALI_SKB_MARK_BYPASS) &&
 			/* If we are on tunnel and we do not have the key set, we cannot short-circuit */
-			!(CALI_F_TUNNEL &&  !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET))) {
+			!encap_needs_key(skb)) {
 		if  (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
 			/* This generates a bit more richer output for logging */
 			DECLARE_TC_CTX(_ctx,
@@ -246,7 +261,7 @@ int calico_tc_main(struct __sk_buff *skb)
 		goto finalize;
 	}
 
-	if (CALI_F_TUNNEL && CALI_F_TO_HEP
+	if (IFACE_ENCAPS && CALI_F_TO_HEP
 			&& skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS, CALI_SKB_MARK_BYPASS)) {
 		/* In case we are on tunnel device, CALI_SKB_MARK_BYPASS is set we only got
 		 * here because CALI_SKB_MARK_TUNNEL_KEY_SET wasn't set. This happens when
@@ -1570,8 +1585,15 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	/* Check egress connection limit for new TCP connections from WEP.
 	 * Atomically check the limit and increment the counter in the QoS map.
 	 * The Go-side CT scanner periodically recounts and corrects drift.
+	 *
+	 * Gated on EGRESS_CONN_LIMIT_CONFIGURED to match the CONNLIMIT_EGRESS
+	 * stamp below and the ingress check. Felix writes the cali_qos_conn
+	 * entry before the program is reattached with the new global, so
+	 * without this a connection opened in that window is counted but not
+	 * stamped, and nothing can decrement it until the next recount.
 	 */
 	if (CALI_F_FROM_WEP && state->ip_proto == IPPROTO_TCP &&
+			EGRESS_CONN_LIMIT_CONFIGURED &&
 			!(state->flags & CALI_ST_SUPPRESS_CT_STATE)) {
 		if (qos_connlimit_check_and_increment(ctx) < 0) {
 			CALI_DEBUG("Egress connection limit exceeded, rejecting with TCP RST");

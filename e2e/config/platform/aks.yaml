@@ -1,0 +1,19 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# AKS platform gaps: upstream conformance specs that fail here for
+# environmental reasons, plus any Calico labels the platform rules out.
+#
+# Composition-only: carries no include scope. Reference it alongside a
+# pipeline config, e.g. `extends: [pipeline.yaml, ../platform/aks.yaml]`.
+
+exclude:
+  labels:
+    - label: Feature:MTU
+      reason: "AKS enforces its own MTU; these specs assert Calico's"
+  namePatterns:
+    - group: "AKS load balancer does not hairpin traffic originating in-cluster"
+      patterns:
+        - 'outside.the.cluster'
+        - 'external.to.nodeport'
+        - 'StrictAffinity'
+        - 'allow.ingress.access.from.updated.pod'

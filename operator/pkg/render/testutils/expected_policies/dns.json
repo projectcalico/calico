@@ -1,0 +1,39 @@
+{
+  "apiVersion": "projectcalico.org/v3",
+  "kind": "NetworkPolicy",
+  "metadata": {
+    "name": "calico-system.cluster-dns",
+    "namespace": "kube-system"
+  },
+  "spec": {
+    "tier": "calico-system",
+    "order": 1,
+    "ingress": [
+      {
+        "action": "Allow",
+        "source": {
+          "selector": "projectcalico.org/namespace in {'calico-system'}",
+          "namespaceSelector": "all()"
+        },
+        "destination": {}
+      },
+      {
+        "action": "Pass",
+        "source": {},
+        "destination": {}
+      }
+    ],
+    "egress": [
+      {
+        "action": "Allow",
+        "source": {},
+        "destination": {}
+      }
+    ],
+    "selector": "k8s-app in { 'kube-dns', 'coredns' }",
+    "types": [
+      "Ingress",
+      "Egress"
+    ]
+  }
+}

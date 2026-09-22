@@ -19,7 +19,7 @@ func TestOperatorPrintedImagesInExpectedList(t *testing.T) {
 	checkVersion(t, operatorVersion)
 	checkImages(t, images)
 
-	fqOperatorImage := fmt.Sprintf("%s/%s:%s", operator.DefaultRegistry, operator.DefaultImage, operatorVersion)
+	fqOperatorImage := fmt.Sprintf("%s/%s:%s", operator.DefaultRegistries[0], operator.DefaultImage, operatorVersion)
 
 	// Pull the operator image.
 	t.Logf("Pulling operator image %s", fqOperatorImage)
@@ -43,7 +43,7 @@ func TestOperatorPrintedImagesInExpectedList(t *testing.T) {
 	}
 
 	// Parse the output and check that every calico image is in our expected list.
-	calicoPrefix := registry.DefaultCalicoRegistry + "/"
+	calicoPrefix := registry.DefaultProductRegistry + "/"
 	var missing []string
 	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
 		line = strings.TrimSpace(line)

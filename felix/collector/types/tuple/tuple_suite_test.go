@@ -32,6 +32,6 @@ func init() {
 func TestTuple(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../../report/felix_collector_tuple_suite.xml"
+	testutils.RegisterJUnitReporter("felix_collector_tuple_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/collector/tuple", suiteConfig, reporterConfig)
 }

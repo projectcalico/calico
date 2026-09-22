@@ -6,11 +6,16 @@
 #define __CALI_TCP4_H__
 
 #include <linux/if_ether.h>
+#include <linux/in.h>
 #include <linux/ip.h>
+#include <linux/tcp.h>
 
-#include "bpf.h"
+#include "cali_bpf.h"
+#include "counters.h"
 #include "log.h"
+#include "reasons.h"
 #include "skb.h"
+#include "types.h"
 
 static CALI_BPF_INLINE int tcp_v4_rst(struct cali_tc_ctx *ctx) {
 	if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
@@ -44,7 +49,7 @@ static CALI_BPF_INLINE int tcp_v4_rst(struct cali_tc_ctx *ctx) {
 	ip_hdr(ctx)->saddr = ip_orig.daddr;
 	ip_hdr(ctx)->daddr = ip_orig.saddr;
 	ip_hdr(ctx)->check = 0;
-	ip_hdr(ctx)->tot_len = bpf_htons(len - (CALI_F_L3_DEV ? 0 : ETH_SIZE));
+	ip_hdr(ctx)->tot_len = bpf_htons(len - (CALI_F_L3 ? 0 : ETH_SIZE));
 	ctx->ipheader_len = 20;
 
 	struct tcphdr *th = ((void *)ip_hdr(ctx)) + IP_SIZE;

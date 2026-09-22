@@ -5,6 +5,21 @@
 #ifndef __CALI_ICMP6_H__
 #define __CALI_ICMP6_H__
 
+#include <linux/icmpv6.h>
+#include <linux/if_ether.h>
+#include <linux/in.h>
+#include <linux/ipv6.h>
+
+#include "cali_bpf.h"
+#include "counters.h"
+#include "globals.h"
+#include "ip_addr.h"
+#include "log.h"
+#include "reasons.h"
+#include "routes.h"
+#include "skb.h"
+#include "types.h"
+
 static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 					__u8 type, __u8 code, __be32 un)
 {
@@ -34,7 +49,7 @@ static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 	}
 
 	__u32 max = 1280 - sizeof(struct ipv6hdr) - sizeof(struct icmp6hdr);
-	if (! CALI_F_L3_DEV) {
+	if (! CALI_F_L3) {
 		max += ETH_SIZE;
 	}
 

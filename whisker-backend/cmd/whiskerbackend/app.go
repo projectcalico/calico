@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,21 +21,94 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/server"
 	gorillaadpt "github.com/projectcalico/calico/lib/httpmachinery/pkg/server/adaptors/gorilla"
 	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/lib/std/log"
+	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 	"github.com/projectcalico/calico/whisker-backend/pkg/config"
 	v1 "github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
+	goldmaneupstream "github.com/projectcalico/calico/whisker-backend/pkg/upstream/goldmane"
 )
 
-func Run(ctx context.Context, cfg *config.Config) {
+// Option customizes Run. Production wiring needs none; options exist for tests.
+type Option func(*runOptions)
+
+type runOptions struct {
+	newBackend func(cfg *config.Config) (whiskerv1.FlowsBackend, []apiutil.Middleware, []v1.FlowsOption)
+}
+
+// WithFlowsBackend serves flows from the given backend instead of the Goldmane
+// backend Run builds, with no endpoint middleware or flow handler options. For
+// tests that exercise the HTTP surface against a bespoke upstream.
+func WithFlowsBackend(backend whiskerv1.FlowsBackend) Option {
+	return func(o *runOptions) {
+		o.newBackend = func(*config.Config) (whiskerv1.FlowsBackend, []apiutil.Middleware, []v1.FlowsOption) {
+			return backend, nil, nil
+		}
+	}
+}
+
+func Run(ctx context.Context, cfg *config.Config, options ...Option) {
 	log.SetDefaultLogger(logrusr.New(logrus.StandardLogger()))
 
 	// Config fields are file paths and host:port only — no inline credentials or key material.
 	logrus.WithField("cfg", cfg.String()).Info("Applying configuration...")
 
-	// Generate credentials for the Goldmane client.
+	runOpts := runOptions{
+		newBackend: func(cfg *config.Config) (whiskerv1.FlowsBackend, []apiutil.Middleware, []v1.FlowsOption) {
+			return newGoldmaneBackend(cfg), nil, nil
+		},
+	}
+	for _, o := range options {
+		o(&runOpts)
+	}
+	backend, endpointMiddleware, flowsOpts := runOpts.newBackend(cfg)
+
+	opts := []server.Option{
+		server.WithAddr(cfg.HostAddr()),
+	}
+
+	if cfg.ServerTLSCertPath == "" || cfg.ServerTLSKeyPath == "" {
+		logrus.Fatal("SERVER_TLS_CERT_PATH and SERVER_TLS_KEY_PATH must be set.")
+	}
+	opts = append(opts, server.WithTLSFiles(cfg.ServerTLSCertPath, cfg.ServerTLSKeyPath))
+
+	flowsAPI := v1.NewFlows(backend, flowsOpts...)
+	endpoints := withMiddleware(flowsAPI.APIs(), endpointMiddleware...)
+
+	srv, err := server.NewHTTPServer(
+		gorillaadpt.NewRouter(),
+		endpoints,
+		opts...,
+	)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create server.")
+	}
+
+	logrus.Infof("Listening on %s.", cfg.HostAddr())
+	if err := srv.ListenAndServeTLS(ctx); err != nil {
+		logrus.WithError(err).Fatal("Failed to start server.")
+	}
+
+	if err := srv.WaitForShutdown(); err != nil {
+		logrus.WithError(err).Fatal("An unexpected error occurred while waiting for shutdown.")
+	}
+}
+
+// withMiddleware appends the given middleware to every endpoint, after any the
+// endpoint declares for itself. Applying it to the whole list means an endpoint
+// added later cannot be served unauthenticated by accident.
+func withMiddleware(endpoints []apiutil.Endpoint, middleware ...apiutil.Middleware) []apiutil.Endpoint {
+	for i := range endpoints {
+		endpoints[i].Middleware = append(endpoints[i].Middleware, middleware...)
+	}
+	return endpoints
+}
+
+func newGoldmaneBackend(cfg *config.Config) whiskerv1.FlowsBackend {
+	logrus.Info("Using Goldmane upstream for flow data.")
 	creds, err := client.ClientCredentials(cfg.TLSCertPath, cfg.TLSKeyPath, cfg.CACertPath)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
@@ -45,34 +118,5 @@ func Run(ctx context.Context, cfg *config.Config) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create goldmane client.")
 	}
-
-	opts := []server.Option{
-		server.WithAddr(cfg.HostAddr()),
-	}
-
-	// TODO maybe we can push getting tls files to the common http utilities package?
-	if cfg.TLSKeyPath != "" && cfg.TLSCertPath != "" {
-		opts = append(opts, server.WithTLSFiles(cfg.TLSCertPath, cfg.TLSKeyPath))
-	}
-
-	flowsAPI := v1.NewFlows(gmCli)
-
-	srv, err := server.NewHTTPServer(
-		gorillaadpt.NewRouter(),
-		flowsAPI.APIs(),
-		opts...,
-	)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create server.")
-	}
-
-	// TODO Should we require that this is TLS? It will be in the same pod as nginx.
-	logrus.Infof("Listening on %s.", cfg.HostAddr())
-	if err := srv.ListenAndServe(ctx); err != nil {
-		logrus.WithError(err).Fatal("Failed to start server.")
-	}
-
-	if err := srv.WaitForShutdown(); err != nil {
-		logrus.WithError(err).Fatal("An unexpected error occurred while waiting for shutdown.")
-	}
+	return goldmaneupstream.NewBackend(gmCli)
 }

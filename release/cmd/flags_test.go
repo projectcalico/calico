@@ -20,6 +20,9 @@ import (
 	"testing"
 
 	cli "github.com/urfave/cli/v3"
+
+	"github.com/projectcalico/calico/release/internal/github"
+	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 // runFlags builds a *cli.Command with the given flags and runs it with args.
@@ -298,25 +301,6 @@ func TestEnvVarPrecedence(t *testing.T) {
 	}
 }
 
-// TestHashreleasePublishFlagsRegisterOperatorGit guards against the regression
-// where the publish subcommand referenced operatorRepoFlag in its action but
-// did not register operatorGitFlags, so c.String("operator-repo") returned ""
-// and the operator dir collapsed to cfg.TmpDir.
-func TestHashreleasePublishFlagsRegisterOperatorGit(t *testing.T) {
-	flags := hashreleasePublishFlags()
-	have := map[string]bool{}
-	for _, f := range flags {
-		for _, n := range f.Names() {
-			have[n] = true
-		}
-	}
-	for _, n := range []string{operatorOrgFlagName, operatorRepoFlagName, operatorBranchFlagName} {
-		if !have[n] {
-			t.Errorf("hashreleasePublishFlags is missing --%s", n)
-		}
-	}
-}
-
 func TestInverseFlagName(t *testing.T) {
 	cases := []struct {
 		in   string
@@ -332,6 +316,51 @@ func TestInverseFlagName(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("inverseFlagName(%q) = %q, want %q", tc.in, got, tc.want)
 			}
+		})
+	}
+}
+
+func TestReleaseNotesFlag(t *testing.T) {
+	flags := []cli.Flag{releaseNotesFlag, orgFlag, repoFlag, validationFlag, branchCheckFlag}
+	calico := func(rest ...string) []string {
+		return append(rest, "--org", utils.ProjectCalicoOrg, "--repo", utils.CalicoRepoName)
+	}
+	for _, tc := range []struct {
+		name    string
+		args    []string
+		token   string
+		wantErr string
+	}{
+		{
+			name:    "notes wanted with no credential",
+			args:    calico("--release-notes"),
+			wantErr: "release notes need GitHub authentication",
+		},
+		{
+			name:  "notes wanted with a credential",
+			args:  calico("--release-notes"),
+			token: "t",
+		},
+		{
+			name:    "another repository cannot generate notes",
+			args:    []string{"--release-notes", "--org", "example", "--repo", "fork"},
+			token:   "t",
+			wantErr: "release notes can only be generated from",
+		},
+		{
+			name: "no validation skips both checks",
+			args: []string{"--release-notes", "--no-validation", "--no-branch-check", "--org", "example", "--repo", "fork"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PATH", t.TempDir())
+			for _, key := range github.TokenEnvVars {
+				t.Setenv(key, "")
+			}
+			if tc.token != "" {
+				t.Setenv(github.TokenEnvVars[0], tc.token)
+			}
+			assertRun(t, flags, tc.args, tc.wantErr)
 		})
 	}
 }

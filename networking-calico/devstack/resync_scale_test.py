@@ -41,6 +41,9 @@ Run as the ``stack`` user with the admin openrc sourced, plus:
                                        neutron.conf)
     RESYNC_CALICO_RESYNC_LOG=<path>   (default /tmp/calico-resync-scale.log;
                                        where calico-resync writes its logs)
+    RESYNC_SKIP_FINAL_CLEANUP=true     (default false; leave the last scale's
+                                       resources in place.  Only for a
+                                       disposable machine -- see below)
 
 One JSON document per resync iteration is also dropped into
 ``artifacts/perf/benchmark_data_neutron_resync/`` so that the
@@ -50,6 +53,12 @@ Elastic -- it just writes the files.  See ``hack/perf/README.md`` for convention
 
     RESYNC_PERF_ARTIFACTS_DIR=<path>  (default artifacts/perf; set to "" to
                                        disable JSON-file writes)
+
+Cleanup between scales is not optional: each scale has to start from a known
+state.  The *last* scale's cleanup is different -- every measurement is already
+recorded by then, so on a machine that is about to be destroyed it is pure cost.
+At 10,000 ports it took 28 minutes of an 89-minute run.  RESYNC_SKIP_FINAL_CLEANUP
+skips it.  Do not set it where the cloud resources outlive the run.
 """
 
 import argparse
@@ -704,7 +713,9 @@ def summarise(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
 # ---------------------------------------------------------------------------
 
 
-def run_one_scale(scale, conn, etcd_client, db_args, neutron_conf, extra_conf):
+def run_one_scale(
+    scale, conn, etcd_client, db_args, neutron_conf, extra_conf, skip_cleanup=False
+):
     """Populate, measure, clean up.  Returns True on success."""
     LOG.info("=" * 60)
     LOG.info("Scale = %d ports", scale)
@@ -763,8 +774,14 @@ def run_one_scale(scale, conn, etcd_client, db_args, neutron_conf, extra_conf):
         summarise(scale, num_networks, num_sgs, num_hosts, cold, steady_runs)
         return True
     finally:
-        cleanup_neutron(conn)
-        delete_fake_agents(db_args)
+        if skip_cleanup:
+            LOG.info(
+                "Leaving scale %d's resources in place (RESYNC_SKIP_FINAL_CLEANUP)",
+                scale,
+            )
+        else:
+            cleanup_neutron(conn)
+            delete_fake_agents(db_args)
 
 
 # ---------------------------------------------------------------------------
@@ -824,8 +841,12 @@ def main():
     scales = parse_scales()
     LOG.info("Scales: %s", scales)
 
+    skip_final_cleanup = os.environ.get(
+        "RESYNC_SKIP_FINAL_CLEANUP", "false"
+    ).strip().lower() in ("1", "true", "yes")
+
     failed = False
-    for scale in scales:
+    for index, scale in enumerate(scales):
         try:
             run_one_scale(
                 scale,
@@ -834,6 +855,7 @@ def main():
                 db_args,
                 args.neutron_conf,
                 extra_conf,
+                skip_cleanup=skip_final_cleanup and index == len(scales) - 1,
             )
         except Exception:
             # Abort the whole run on the first scale failure -- if

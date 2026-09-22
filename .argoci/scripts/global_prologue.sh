@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # global_prologue.sh - ArgoCI e2e prologue for OSS Calico.
 #
-# Ported from .semaphore/end-to-end/scripts/global_prologue.sh and adapted for
-# ArgoCI (see .argoci/DESIGN.md):
+# Ported from the Semaphore equivalent (since deleted) and adapted for
+# ArgoCI:
 #   - secrets are materialised from mounted k8s Secrets via the platform
 #     `createLocalSecret` helper (not Semaphore's ~/secrets copy);
 #   - no `checkout`/`cache`, no gcloud/aws/az/bz install — the ArgoCI base
@@ -10,7 +10,9 @@
 #   - Semaphore vars (SEMAPHORE_*) become CI_*/ARGO_* equivalents;
 #   - RELEASE_STREAM is derived from the checked-out branch.
 #
-# Sourced (not executed) by the e2e-test template, so no `set -e`/`exit`.
+# Sourced (not executed) by the e2e-test template, so no `set -e`/`exit` — the
+# exceptions are the bz-install and bz-init hard-fails, where nothing later can
+# succeed, so aborting the step is the intended outcome.
 set -o pipefail
 
 echo "[INFO] starting prologue"
@@ -35,6 +37,12 @@ if [[ -f "${GOOGLE_APPLICATION_CREDENTIALS}" ]]; then
 else
   echo "[WARN] GOOGLE_APPLICATION_CREDENTIALS missing: ${GOOGLE_APPLICATION_CREDENTIALS}"
 fi
+# gcr.io is Artifact-Registry-backed; the static token in docker_cfg.json is
+# short-lived, so a long job can no longer pull by the time the epilogue runs.
+# The helper mints a token per pull (must follow the docker_cfg.json secret
+# above, which it rewrites, and the service-account activation).
+gcloud auth --quiet configure-docker gcr.io || echo "[WARN] gcloud configure-docker failed"
+
 # Azure SP login for azr-* (bz's azure path needs an active az session).
 # Creds via banzai-secrets: AZ_SP_ID/AZ_SP_PASSWORD/AZ_TENANT_ID/AZ_SUBSCRIPTION_ID.
 if [[ "${PROVISIONER:-}" == azr-* ]]; then
@@ -101,6 +109,9 @@ else
   export TEST_TYPE=${TEST_TYPE:-k8s-e2e}
 fi
 export GOOGLE_PROJECT=${GOOGLE_PROJECT:-unique-caldron-775}
+# banzai-core's name for the Azure *subscription name*: azr-aso/azr-capi
+# resolve the subscription id by matching it against `az account list`.
+export AZ_PROJECT=${AZ_PROJECT:-tigera-dev-ci}
 
 # GCP placement: gcp-openstack has its own defaults in banzai-core
 # (europe-west3-c in the openstack-calico-test VPC, which carries the
@@ -117,6 +128,15 @@ if [[ "${PROVISIONER}" != "gcp-openstack" ]]; then
   export GOOGLE_NETWORK=${GOOGLE_NETWORK:-semaphore-autotest}
 fi
 export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
+
+# banzai-core defaults these to the tigera-dev developer account (the
+# kops-tigera-dev bucket and the *.crc.aws.eng.tigera.net zones), which the CI
+# IAM user cannot reach: kops 403s reading its state store and the OpenShift
+# installer finds no matching Route53 zone. Semaphore set them in its own
+# prologue, so the ArgoCI port has to as well.
+export KOPS_STATE_STORE_NAME=${KOPS_STATE_STORE_NAME:-kops-tigera-dev-ci}
+export KOPS_AWS_DNS_ZONE=${KOPS_AWS_DNS_ZONE:-kops.ci.aws.eng.tigera.net}
+export OPENSHIFT_BASE_DOMAIN=${OPENSHIFT_BASE_DOMAIN:-openshift.ci.aws.eng.tigera.net}
 
 # RELEASE_STREAM: release-vX.Y -> vX.Y, else master. BRANCH is passed by the
 # workflow (from the cron's `branch` parameter).
@@ -143,7 +163,6 @@ export USE_LATEST_RELEASE="${USE_LATEST_RELEASE:-false}"
 export BZ_LOCAL_DIR=${BZ_LOCAL_DIR:-${BZ_HOME}/.local}
 export BZ_LOGS_DIR=${BZ_LOGS_DIR:-${HOME}/.bz/logs}
 export REPORT_DIR=${REPORT_DIR:-${BZ_LOCAL_DIR}/report/${TEST_TYPE}}
-export GS_BUCKET=${GS_BUCKET:-argoci-artifacts}
 mkdir -p "${BZ_LOGS_DIR}"   # BZ_HOME + .local are created by "bz init profile"
 
 # --- Install the banzai (bz) CLI: the ArgoCI runner image does not ship it ---
@@ -220,8 +239,12 @@ if [[ "${CREATE_WINDOWS_NODES:-false}" == "true" ]] && ! command -v puttygen >/d
 fi
 
 echo "[INFO] initialising bz profile..."
+# A half-initialised directory is not a profile, so provision, diags and destroy
+# would each fail with "is not a cluster profile directory" and bury the real
+# cause. pipefail is set above, so tee cannot mask bz's status.
 ( cd "${HOME}" && bz init profile -n "${BZ_PROFILE_NAME}" --skip-prompt --secretsPath "${HOME}/secrets" ) \
-  |& tee "${BZ_LOGS_DIR}/initialize.log" || true
+  |& tee "${BZ_LOGS_DIR}/initialize.log" \
+  || { echo "[ERROR] bz init profile failed — see ${BZ_LOGS_DIR}/initialize.log"; exit 1; }
 mkdir -p "${BZ_LOCAL_DIR}" "${REPORT_DIR}" "${BZ_LOCAL_DIR}/config"
 # bz provision prereq wants the docker auth at <profile>/.local/config/docker_auth.json
 # (the DOCKER_AUTH_FILE env alone does not redirect the prereq check).

@@ -240,6 +240,16 @@ func (t *RuleTrace) addRuleID(rid *calc.RuleID, matchIdx, numPkts, numBytes int)
 		}
 	}
 
+	// A verdict hit at a different index than the recorded verdict means the rule trace has
+	// changed, even if the slot at matchIdx is empty (e.g. a policy update mid-flow shifts the
+	// verdict from an end-of-tier deny to a profile allow at a higher index). Silently moving the
+	// verdict would change the trace's action without expiring the previously reported flow,
+	// permanently leaking the flow's active reference in the flow log aggregator.
+	if !model.KindIsStaged(rid.Kind) && rid.Action != rules.RuleActionPass &&
+		t.verdictIdx >= 0 && t.verdictIdx != matchIdx {
+		return RuleMatchIsDifferent
+	}
+
 	if existingRuleID := t.path[matchIdx]; existingRuleID == nil {
 		// Position is empty, insert and be done. Reset the rules to report just incase we are adding a new staged
 		// policy hit.
@@ -282,7 +292,7 @@ func (t *RuleTrace) replaceRuleID(rid *calc.RuleID, matchIdx, numPkts, numBytes 
 	// Reset the reporting path so that we recalculate it next report.
 	t.rulesToReport = nil
 
-	if !model.KindIsStaged(rid.Name) && rid.Action != rules.RuleActionPass {
+	if !model.KindIsStaged(rid.Kind) && rid.Action != rules.RuleActionPass {
 		// This is a verdict action, so reset and set counters and set our verdict index.
 		t.pktsCtr.ResetAndSet(numPkts)
 		t.bytesCtr.ResetAndSet(numBytes)
@@ -473,9 +483,13 @@ func (d *Data) ConntrackBytesCounterReverse() counter.Counter {
 }
 
 // Set In Counters' values to packets and bytes. Use the SetConntrackCounters* methods
-// when the source if packets/bytes are absolute values.
+// when the packet/byte counts are absolute values.
 func (d *Data) SetConntrackCounters(packets int, bytes int) {
-	if d.conntrackPktsCtr.Set(packets) && d.conntrackBytesCtr.Set(bytes) {
+	// Evaluate both counters before testing them: && would skip the bytes update whenever the
+	// packet count happens to be unchanged.
+	pktsChanged := d.conntrackPktsCtr.Set(packets)
+	bytesChanged := d.conntrackBytesCtr.Set(bytes)
+	if pktsChanged || bytesChanged {
 		d.setDirtyFlag()
 	}
 	d.IsConnection = true
@@ -515,7 +529,11 @@ func (d *Data) VerdictFound() bool {
 // Set In Counters' values to packets and bytes. Use the SetConntrackCounters* methods
 // when the source if packets/bytes are absolute values.
 func (d *Data) SetConntrackCountersReverse(packets int, bytes int) {
-	if d.conntrackPktsCtrReverse.Set(packets) && d.conntrackBytesCtrReverse.Set(bytes) {
+	// Evaluate both counters before testing them: && would skip the bytes update whenever the
+	// packet count happens to be unchanged.
+	pktsChanged := d.conntrackPktsCtrReverse.Set(packets)
+	bytesChanged := d.conntrackBytesCtrReverse.Set(bytes)
+	if pktsChanged || bytesChanged {
 		d.setDirtyFlag()
 	}
 	d.IsConnection = true

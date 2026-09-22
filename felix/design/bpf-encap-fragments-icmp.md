@@ -262,7 +262,7 @@ where an error is actually needed.
 
 ### Cases
 
-- **TTL exceeded.** `ip_ttl_exceeded` in `bpf.h` tests for TTL==1
+- **TTL exceeded.** `ip_ttl_exceeded` in `cali_bpf.h` tests for TTL==1
   (IPv4) / hop-limit==1 (IPv6) on a host-egress path. If that
   holds and the packet would have been forwarded, the program
   generates an ICMP Time Exceeded and drops the packet instead.
@@ -306,17 +306,9 @@ here is acceptable.
 
 ---
 
-## Keep this doc in sync with the code
+## Cross-cutting rules
 
-A change to how the BPF dataplane works in the area this file
-covers must update the relevant section in the same PR — new
-mechanism, new flag, new map field, new config knob, or any
-change to the packet path. Exemptions: (a) bug fix restoring
-documented behaviour, (b) mechanical refactor with no observable
-change, (c) comment / log-message edits, (d) dependency bumps.
-If in doubt, update.
-
-Cross-cutting rules that apply to **every** BPF change (map
-versioning, mark discipline, sub-program registration, kernel-
-version sensitivity) live in
+Rules that apply to **every** BPF change (map versioning, mark
+discipline, sub-program registration, kernel-version sensitivity)
+live in
 [`bpf-overview.md` → Cross-cutting review notes](./bpf-overview.md).

@@ -19,6 +19,8 @@ import (
 
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 )
 
 func TestRouteIsOurs_BIRDRoutesOnBGPPeerIfaces(t *testing.T) {
@@ -26,7 +28,7 @@ func TestRouteIsOurs_BIRDRoutesOnBGPPeerIfaces(t *testing.T) {
 		wlIface    = "cali12345"
 		nonWlIface = "eth0"
 	)
-	exclusiveProto := netlink.RouteProtocol(80) // dataplanedefs.DefaultRouteProto
+	exclusiveProto := dataplanedefs.DefaultRouteProto
 
 	peerTrue := func(string) bool { return true }
 	peerFalse := func(string) bool { return false }
@@ -106,6 +108,81 @@ func TestRouteIsOurs_BIRDRoutesOnBGPPeerIfaces(t *testing.T) {
 				AllRouteProtocols:             []netlink.RouteProtocol{unix.RTPROT_BOOT, exclusiveProto},
 				ExclusiveRouteProtocols:       []netlink.RouteProtocol{exclusiveProto},
 				IsWorkloadBGPPeerIface:        tt.peerCallback,
+			}
+
+			route := &netlink.Route{Protocol: tt.protocol}
+			got := pol.RouteIsOurs(tt.ifaceName, route)
+			if got != tt.expectedRouteIsOurs {
+				t.Errorf("RouteIsOurs(%q, proto=%d) = %v, want %v",
+					tt.ifaceName, tt.protocol, got, tt.expectedRouteIsOurs)
+			}
+		})
+	}
+}
+
+// TestRouteIsOurs_BIRDRoutesOnIPIPDevice covers OwnBIRDIPIPRoutes: when Felix programs the IPIP
+// cluster routes, BIRD's routes via the IPIP device come inside Felix's ownership boundary, so that
+// the ones BIRD left behind on exit (its kernel protocol runs with `persist`) are reconciled away.
+// Only BIRD's protocol is claimed, and only on the IPIP device.
+func TestRouteIsOurs_BIRDRoutesOnIPIPDevice(t *testing.T) {
+	exclusiveProto := dataplanedefs.DefaultRouteProto
+
+	tests := []struct {
+		name                string
+		ownBIRDIPIPRoutes   bool
+		ifaceName           string
+		protocol            netlink.RouteProtocol
+		expectedRouteIsOurs bool
+	}{
+		{
+			name:                "IPIP device, RTPROT_BIRD, Felix owns IPIP routes => ours",
+			ownBIRDIPIPRoutes:   true,
+			ifaceName:           dataplanedefs.IPIPIfaceName,
+			protocol:            unix.RTPROT_BIRD,
+			expectedRouteIsOurs: true,
+		},
+		{
+			name:                "IPIP device, RTPROT_BIRD, BIRD owns IPIP routes => not ours",
+			ownBIRDIPIPRoutes:   false,
+			ifaceName:           dataplanedefs.IPIPIfaceName,
+			protocol:            unix.RTPROT_BIRD,
+			expectedRouteIsOurs: false,
+		},
+		{
+			// Felix's own routes are claimed by the exclusive protocol check, whether or not
+			// it is the configured owner, so they do not depend on this flag.
+			name:                "IPIP device, exclusive proto, BIRD owns IPIP routes => ours",
+			ownBIRDIPIPRoutes:   false,
+			ifaceName:           dataplanedefs.IPIPIfaceName,
+			protocol:            exclusiveProto,
+			expectedRouteIsOurs: true,
+		},
+		{
+			// A third party's routes through the device are left alone, even though Felix owns
+			// the device itself.
+			name:                "IPIP device, unrelated proto, Felix owns IPIP routes => not ours",
+			ownBIRDIPIPRoutes:   true,
+			ifaceName:           dataplanedefs.IPIPIfaceName,
+			protocol:            unix.RTPROT_STATIC,
+			expectedRouteIsOurs: false,
+		},
+		{
+			name:                "non-IPIP device, RTPROT_BIRD, Felix owns IPIP routes => not ours",
+			ownBIRDIPIPRoutes:   true,
+			ifaceName:           "eth0",
+			protocol:            unix.RTPROT_BIRD,
+			expectedRouteIsOurs: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pol := &MainTableOwnershipPolicy{
+				WorkloadInterfacePrefixes: []string{"cali"},
+				CalicoSpecialInterfaces:   []string{"vxlan.calico"},
+				AllRouteProtocols:         []netlink.RouteProtocol{unix.RTPROT_BOOT, exclusiveProto},
+				ExclusiveRouteProtocols:   []netlink.RouteProtocol{exclusiveProto},
+				OwnBIRDIPIPRoutes:         tt.ownBIRDIPIPRoutes,
 			}
 
 			route := &netlink.Route{Protocol: tt.protocol}

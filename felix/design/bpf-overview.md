@@ -175,7 +175,7 @@ it forwards directly and the host stack never sees the packet.
 ### Marks: the out-of-band channel between BPF and netfilter
 
 BPF and `*tables` communicate via the top bits of the skb mark. The
-full table is in `felix/bpf-gpl/bpf.h` (`enum calico_skb_mark`); the
+full table is in `felix/bpf-gpl/cali_bpf.h` (`enum calico_skb_mark`); the
 marks a reviewer encounters most often are:
 
 | Mark                          | Set by            | Meaning                                                            |
@@ -275,7 +275,7 @@ packet" condition); if it could and isn't, that's a red flag.
   already in cache; reading and writing them is negligible.
 - **Gate optional work on compile-time flags.** When a feature is
   off for this attach type, a `CALI_F_*` / `HAS_*` guard in
-  `bpf.h` eliminates the code at verification time. A runtime
+  `cali_bpf.h` eliminates the code at verification time. A runtime
   global flag costs a load per packet — cheap but not free.
 - **Own a sub-program for slow work.** When a feature does need
   real computation (Maglev hashing, fragment reassembly, ICMP
@@ -312,21 +312,6 @@ The per-section review notes cover what a reviewer should check inside
 a given topic. This final section collects the handful of checks that
 don't belong to any single topic — they come up repeatedly in BPF
 dataplane review because several subsystems happen to share them.
-
-### Keep this document in sync with the code
-
-The repo-wide doc-update rule
-([`.claude/CLAUDE.md` → Documentation map](../../.claude/CLAUDE.md),
-mirrored in
-[`.github/copilot-instructions.md`](../../.github/copilot-instructions.md))
-applies. For the BPF dataplane, "changes how it works" means a
-new sub-program, a new CT flag, a new mark bit, a new map or map
-field, a new config knob affecting any of those, or any change
-to the packet path or forwarding decision. The relevant section
-of the matching sub-design (and `bpf-overview.md` if cross-cutting
-content is affected) must be updated in the same PR. This file
-and its sibling sub-designs under [`felix/design/`](.) are the
-source of truth.
 
 ### Changes that touch shared maps
 
@@ -414,8 +399,9 @@ Several BPF features depend on kernel version:
 - Jump maps per TCX direction (kernel 6.12+) — the split into
   `cali_progs_ing` vs `cali_progs_egr` is the workaround ([bpf-tc-programs.md → TC program layout](./bpf-tc-programs.md)).
 - Netkit attach — used only when the workload interface is a
-  netkit device and the kernel supports the netkit attach API.
-  Felix probes at runtime (`tc.IsNetkitSupported`) and falls
+  netkit device, the kernel supports the netkit attach API, and
+  `BPFAttachType` has not selected TC or TCX outright. Felix
+  probes at runtime (`tc.IsNetkitSupported`) and falls
   back to TCX/clsact when not supported. See
   [bpf-tc-programs.md → Attach mechanisms](./bpf-tc-programs.md).
 - `bpf_redirect_neigh` availability — [bpf-host-networking.md → Host-networked workaround (bpfnat veth)](./bpf-host-networking.md)'s bpfnat turnaround falls

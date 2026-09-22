@@ -31,6 +31,9 @@ here. A few methods carry design-relevant constraints worth calling out:
 - **`ReleaseIPs`** takes `ReleaseOptions` with a sequence number; every release path must plumb it through (see [CAS retry and sequence numbers](#cas-retry-and-sequence-numbers)).
 - **`SetOwnerAttributes`** is KubeVirt-only and swaps owner attributes under preconditions, without releasing and re-allocating. Felix's live-migration monitor is the only non-CNI
   caller.
+- **`MoveIPToHandle`** re-points an allocated address at a different handle in one block CAS, without releasing it, so the address is never unowned and never enters cooldown.
+  `ExpectedOwner` is required and has to name a namespace and a pod, so only the address's current owner can move it; handing an address to a different workload is a release and a
+  fresh assignment.
 - **`GetIPAMConfig` / `SetIPAMConfig`** read and write the v1 `IPAMConfig` / v3 `IPAMConfiguration` singleton. Field-level bounds are enforced by the CRD schema in k8s mode, but the
   cross-field rules live only in `SetIPAMConfig` - a direct CRD write can persist a config that violates them, which the library rejects on read (see [IPAMConfig](#ipamconfig)).
 
@@ -67,6 +70,10 @@ A few non-obvious design points:
   release](./ipam-gc.md#empty-block-release) safe.
 - The block cap is `min(global MaxBlocksPerHost, request-level)`, defaulting to 20 if both are zero. Once a node reaches it, `allowNewClaim` is forced false; existing blocks still
   fill.
+- `GetEnabledPools` skips a pool that lacks `Allocatable=True` when an allocatable or terminating pool covers its CIDR. The IP pool controller resolves overlap asynchronously, so
+  without this a pool created over an active one is allocatable until the controller's first status write - unbounded while kube-controllers is down. A pool already marked
+  `Allocatable=True` is taken at its word and never tested against the others. Administratively disabled pools never mask, including while they are terminating, which matches the
+  controller's trie.
 
 **Review notes**
 
@@ -75,6 +82,8 @@ A few non-obvious design points:
 - Treat pending block affinities as if absent when deciding ownership or advertising routes.
 - Pre-existing blocks may lack `AffinityType`; default to `"host"` on read. https://github.com/projectcalico/calico/pull/11179 was a crash from this assumption.
 - Pool resolution is in the hot path. `ResolvePools` was hand-optimized in https://github.com/projectcalico/calico/pull/9891 - preserve the fast path.
+- Overlap is enforced at pool selection, not only by the IP pool controller. Don't reduce the gate back to a bare `Allocatable=False` check; that reopens the window a new
+  overlapping pool is allocatable in.
 - `MaxBlocksPerHost` defaults are a recurring doc/code drift point (https://github.com/projectcalico/calico/issues/9462). If you change the default in code, update the docs in the
   same PR.
 
@@ -140,7 +149,7 @@ Conventions in use:
 | Caller | Handle ID format |
 |---|---|
 | CNI workload (default) | `<network-name>.<container-id>` via `cni-plugin/internal/pkg/utils.GetHandleID`. For the default network, `<network-name>` is `k8s-pod-network`. |
-| CNI workload (KubeVirt persistent) | `<network-name>.<namespace>-<vm-name>` so live-migrated VMs keep the same handle. |
+| CNI workload (KubeVirt persistent) | `<network-name>.vmi.<namespace>.<vm-name>` via `vmipam.CreateVMHandleID`, so live-migrated VMs keep the same handle. Hashed if it would exceed 128 characters. |
 | IPIP tunnel | `ipip-tunnel-addr-<node>` |
 | VXLAN tunnel | `vxlan-tunnel-addr-<node>`; IPv6 variant is `vxlan-v6-tunnel-addr-<node>` (note the `-v6-` infix, not a suffix) |
 | WireGuard tunnel | `wireguard-tunnel-addr-<node>`; IPv6 variant is `wireguard-v6-tunnel-addr-<node>` |
@@ -158,6 +167,8 @@ found - see [`./ipam-cni.md`](./ipam-cni.md).
   handles on node rename. That parser's prefix list is v4-only today (`ipip-tunnel-addr-`, `vxlan-tunnel-addr-`, `wireguard-tunnel-addr-`), so it already skips the `*-v6-tunnel-addr-`
   handles - add v6 prefixes there if you touch it.
 - Skipping the workload-ID release on CNI DEL leaks IPs whose container-ID changed under CRI. Don't drop the second release call.
+- Every change to an allocation's `(handle, active owner, alternate owner)` tuple goes through `updateAllocationOwnership`, which re-points the ordinal at a new attribute entry.
+  Editing an entry in place rewrites the ownership of every other address sharing it, since `findOrAddAttribute` de-duplicates entries by value.
 
 ## IPAMConfig
 

@@ -47,9 +47,15 @@ spec:
                     The list of IP networks that belong to this set. Each entry must be in CIDR notation,
                     e.g. "192.168.1.0/24". To include a single IP address, use a /32 (IPv4) or /128 (IPv6) mask.
                   items:
+                    maxLength: 49
                     type: string
+                  maxItems: 100000
                   type: array
                   x-kubernetes-list-type: set
+                  x-kubernetes-validations:
+                    - message: nets entries must be IP addresses or CIDRs
+                      reason: FieldValueInvalid
+                      rule: self.all(n, isCIDR(n) || isIP(n))
               type: object
           type: object
       served: true

@@ -209,7 +209,7 @@ func TestFilterHints(t *testing.T) {
 				}
 
 				// Send it to goldmane.
-				gm.Receive(types.ProtoToFlow(fl))
+				gm.Receive(types.ProtoToFlow(fl), "")
 			}
 
 			// Wait for all flows to be received.
@@ -286,7 +286,7 @@ func TestFilterHints(t *testing.T) {
 				}
 
 				// Send it to goldmane.
-				gm.Receive(types.ProtoToFlow(fl))
+				gm.Receive(types.ProtoToFlow(fl), "")
 			}
 
 			// Wait for all flows to be received.

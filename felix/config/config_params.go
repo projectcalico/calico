@@ -58,6 +58,7 @@ var (
 	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
 	HostAddressRegexp   = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
 	LogActionRateRegexp = regexp.MustCompile(`^([1-9]\d{0,3}/(?:second|minute|hour|day))?$`)
+	LogPrefixRegexp     = regexp.MustCompile(`^[a-zA-Z0-9%: /_-]*$`)
 )
 
 // Source of a config value.  Values from higher-numbered sources override
@@ -233,7 +234,7 @@ type Config struct {
 	BPFDisableGROForIfaces             *regexp.Regexp    `config:"regexp;"`
 	BPFExcludeCIDRsFromNAT             []string          `config:"cidr-list;;"`
 	BPFRedirectToPeer                  string            `config:"oneof(Disabled,Enabled,L2Only);Enabled;non-zero"`
-	BPFAttachType                      string            `config:"oneof(TCX,TC);TCX;non-zero"`
+	BPFAttachType                      string            `config:"oneof(Netkit,TCX,TC);Netkit;non-zero"`
 	BPFExportBufferSizeMB              int               `config:"int;1;non-zero"`
 	BPFProfiling                       string            `config:"oneof(Disabled,Enabled);Disabled;non-zero"`
 
@@ -315,7 +316,7 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6       net.IP            `config:"ipv6;"`
 	DeviceRouteProtocol                int               `config:"int;3"`
 	RemoveExternalRoutes               bool              `config:"bool;true"`
-	ProgramClusterRoutes               string            `config:"oneof(Enabled,Disabled);Disabled"`
+	ProgramClusterRoutes               string            `config:"oneof(Enabled,Disabled,EnabledIPIPOnly,EnabledNoEncapOnly);EnabledIPIPOnly"`
 	IPForwarding                       string            `config:"oneof(Enabled,Disabled);Enabled"`
 	IptablesRefreshInterval            time.Duration     `config:"seconds;180"`
 	IptablesPostWriteCheckIntervalSecs time.Duration     `config:"seconds;5"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
@@ -338,14 +339,16 @@ type Config struct {
 	InterfacePrefix  string           `config:"iface-list;cali;non-zero,die-on-fail"`
 	InterfaceExclude []*regexp.Regexp `config:"iface-list-regexp;kube-ipvs0"`
 
-	ChainInsertMode             string `config:"oneof(insert,append);insert;non-zero,die-on-fail"`
-	DefaultEndpointToHostAction string `config:"oneof(DROP,RETURN,ACCEPT);DROP;non-zero,die-on-fail"`
-	IptablesFilterAllowAction   string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
-	IptablesMangleAllowAction   string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
-	IptablesFilterDenyAction    string `config:"oneof(DROP,REJECT);DROP;non-zero,die-on-fail"`
-	LogPrefix                   string `config:"string;calico-packet"`
-	LogActionRateLimit          string `config:"log-rate;"`
-	LogActionRateLimitBurst     int    `config:"int(0,9999);5"`
+	ChainInsertMode                string `config:"oneof(insert,append);insert;non-zero,die-on-fail"`
+	DefaultEndpointToHostAction    string `config:"oneof(DROP,RETURN,ACCEPT);DROP;non-zero,die-on-fail"`
+	IptablesFilterAllowAction      string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
+	IptablesMangleAllowAction      string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
+	IptablesFilterDenyAction       string `config:"oneof(DROP,REJECT);DROP;non-zero,die-on-fail"`
+	LogPrefix                      string `config:"string;calico-packet"`
+	LogActionRateLimit             string `config:"log-rate;"`
+	LogActionRateLimitBurst        int    `config:"int(0,9999);5"`
+	LogConnectionTransitions       string `config:"oneof(Disabled,FirstResponseAfterLog);Disabled"`
+	LogConnectionTransitionsPrefix string `config:"log-prefix;calico-response"`
 
 	LogFilePath string `config:"file;/var/log/calico/felix.log;die-on-fail"`
 
@@ -517,6 +520,10 @@ type Config struct {
 	// Encapsulation information calculated from IP Pools and FelixConfiguration (VXLANEnabled and IpInIpEnabled)
 	Encapsulation Encapsulation
 
+	// NFTablesEnabled is the dataplane that NFTablesMode resolves to on this host, decided at
+	// startup because Auto mode depends on runtime detection.
+	NFTablesEnabled bool
+
 	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 180s]
 	NftablesRefreshInterval time.Duration `config:"seconds;180"`
 
@@ -558,35 +565,35 @@ type Config struct {
 }
 
 func (config *Config) FilterAllowAction() string {
-	if config.NFTablesMode == "Enabled" {
+	if config.NFTablesEnabled {
 		return config.NftablesFilterAllowAction
 	}
 	return config.IptablesFilterAllowAction
 }
 
 func (config *Config) MangleAllowAction() string {
-	if config.NFTablesMode == "Enabled" {
+	if config.NFTablesEnabled {
 		return config.NftablesMangleAllowAction
 	}
 	return config.IptablesMangleAllowAction
 }
 
 func (config *Config) FilterDenyAction() string {
-	if config.NFTablesMode == "Enabled" {
+	if config.NFTablesEnabled {
 		return config.NftablesFilterDenyAction
 	}
 	return config.IptablesFilterDenyAction
 }
 
 func (config *Config) MarkMask() uint32 {
-	if config.NFTablesMode == "Enabled" {
+	if config.NFTablesEnabled {
 		return config.NftablesMarkMask
 	}
 	return config.IptablesMarkMask
 }
 
 func (config *Config) TableRefreshInterval() time.Duration {
-	if config.NFTablesMode == "Enabled" {
+	if config.NFTablesEnabled {
 		return config.NftablesRefreshInterval
 	}
 	return config.IptablesRefreshInterval
@@ -601,8 +608,18 @@ func (config *Config) FlowLogsEnabled() bool {
 		config.FlowLogsLocalReporterEnabled()
 }
 
-func (config *Config) ProgramClusterRoutesEnabled() bool {
-	return config.ProgramClusterRoutes == "Enabled"
+// ProgramIPIPClusterRoutes returns whether Felix should program the cluster routes for IP Pools
+// with ipipMode Always or CrossSubnet.  When it returns false, confd and BIRD are expected to
+// program those routes instead; that is deprecated as of v3.33.
+func (config *Config) ProgramIPIPClusterRoutes() bool {
+	return config.ProgramClusterRoutes == v3.Enabled || config.ProgramClusterRoutes == v3.EnabledIPIPOnly
+}
+
+// ProgramNoEncapClusterRoutes returns whether Felix should program the cluster routes for
+// unencapsulated IP Pools (ipipMode and vxlanMode both Never).  When it returns false, confd and
+// BIRD are expected to program those routes instead.
+func (config *Config) ProgramNoEncapClusterRoutes() bool {
+	return config.ProgramClusterRoutes == v3.Enabled || config.ProgramClusterRoutes == v3.EnabledNoEncapOnly
 }
 
 // Copy makes a copy of the object.  Internal state is deep copied but config parameters are only shallow copied.
@@ -1117,6 +1134,11 @@ func ParamForField(fieldName string, tag string) (param Param, defaultStr, flags
 			Regexp: LogActionRateRegexp,
 			Msg:    "invalid log rate limit",
 		}
+	case "log-prefix":
+		param = &RegexpParam{
+			Regexp: LogPrefixRegexp,
+			Msg:    "invalid log prefix",
+		}
 	case "regexp":
 		param = &RegexpPatternParam{
 			Flags: strings.Split(kindParams, ","),
@@ -1296,7 +1318,8 @@ func (config *Config) RouteTableIndices() []idalloc.IndexRange {
 	} else if config.RouteTableRange != (idalloc.IndexRange{}) {
 		log.Warn("Both `RouteTableRanges` and deprecated `RouteTableRange` options are set. `RouteTableRanges` value will be given precedence.")
 	}
-	return config.RouteTableRanges
+	// Clone so that callers cannot mutate our copy of the config.
+	return slices.Clone(config.RouteTableRanges)
 }
 
 func (config *Config) GetBPFAttachType() v3.BPFAttachOption {
@@ -1342,5 +1365,5 @@ type Encapsulation struct {
 	IPIPEnabled    bool
 	VXLANEnabled   bool
 	VXLANEnabledV6 bool
-	NoEncapEnabled bool
+	NoEncapNeeded  bool
 }

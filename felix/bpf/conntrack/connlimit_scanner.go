@@ -20,7 +20,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
-	ctv4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/qos"
 )
@@ -51,12 +50,12 @@ type connlimitKey struct {
 // serving as the sole decrement mechanism (connections that close or time out
 // simply aren't counted on the next scan).
 // connLimitScannerRunEveryN downsamples the scanner relative to the parent CT
-// scan loop. With timeouts.ScanPeriod = 10s and N = 3 the scanner does a real
-// recount roughly every 30s; the intervening 2 iterations early-return in
-// IterationStart / Check / IterationEnd. The scanner only exists as a drift
-// safety net for silent CT-entry purges (half-close, idle TCPEstablished,
-// network partition), so a ~30s recovery window is adequate.
-const connLimitScannerRunEveryN = 3
+// scan loop, which runs every timeouts.ScanPeriod.
+//
+// N = 1 because the recount is no longer only a drift safety net: an RST no
+// longer decrements on the fast path, so this is what returns the slot of an
+// RST-closed connection once its entry is purged.
+const connLimitScannerRunEveryN = 1
 
 // connLimitQoSMap is the subset of the cali_qos_conn BPF map API that the
 // scanner needs. Narrowed from maps.MapWithUpdateWithFlags so tests can
@@ -134,17 +133,14 @@ func (s *ConnLimitScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get E
 
 	data := ctVal.Data()
 
-	// Skip connections that are closing or closed (any FIN or RST),
-	// or already decremented by the BPF fast path. The CONNLIMIT_DEC
-	// flag is set when the BPF program decrements the counter on
-	// FIN/RST; if we counted these entries, the scanner's recount
-	// would overwrite the decremented value with a higher one.
-	if data.FINsSeenDSR() || data.RSTSeen() {
+	// Skip a close both endpoints agreed on; the fast path decremented it.
+	if data.FINsSeenDSR() {
 		return ScanVerdictOK, 0
 	}
-	if ctVal.Flags()&ctv4.FlagConnLimitDec != 0 {
-		return ScanVerdictOK, 0
-	}
+
+	// No RST state is skipped: a pod emits RSTs at will and would hide its
+	// own live connections (CORE-13478 Failure.1).
+
 	// Only count fully established connections.
 	if !data.Established() {
 		return ScanVerdictOK, 0
