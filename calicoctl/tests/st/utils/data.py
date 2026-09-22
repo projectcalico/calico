@@ -1409,6 +1409,7 @@ bgpconfig_name3_rev1 = {
     'spec': {
         'logSeverityScreen': 'Debug',
         'serviceLoadBalancerAggregation': 'Enabled',
+        'programClusterRoutes': 'EnabledNoEncapOnly',
     }
 }
 
