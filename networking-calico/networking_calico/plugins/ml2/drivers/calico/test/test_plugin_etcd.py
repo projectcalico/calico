@@ -3119,6 +3119,38 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             self.driver._try_to_update_port_status(context, ("host", "p1"))
         self.db.update_port_status.assert_not_called()
 
+    def _read_failure_is_retried(self, exception):
+        """The hoisted port read must retry, not drop the queued update.
+
+        Our caller only logs exceptions, and the status cache was already updated
+        before this key was queued, so a dropped update is never re-queued by a
+        resync -- Neutron would keep a stale status indefinitely.
+        """
+        self.driver._get_db()
+        self.driver._init_start_endpoint_status_watcher()
+
+        self.db.update_port_status = mock.Mock()
+        self.db.get_port.side_effect = exception
+        context = mock.Mock()
+        with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
+            self.driver._try_to_update_port_status(context, ("host", "p1"))
+
+        self.db.update_port_status.assert_not_called()
+        self.assertEqual(
+            [mock.call(5, self.driver._retry_port_status_update, ("host", "p1"))],
+            m_spawn.mock_calls,
+        )
+
+    @mock.patch("eventlet.spawn")
+    def test_try_to_update_port_status_read_fail(self, _m_spawn):
+        self._read_failure_is_retried(lib.DBError())
+
+    @mock.patch("eventlet.spawn")
+    def test_try_to_update_port_status_read_fail_sqlalchemy(self, _m_spawn):
+        # Worth its own case: SQLAlchemyError only reaches the handler when it is not
+        # also a DBError, so this guards the second half of the except tuple.
+        self._read_failure_is_retried(lib.SQLAlchemyError())
+
     @mock.patch("eventlet.spawn")
     def test_try_to_update_port_status_fail(self, _m_spawn):
         self.driver._get_db()
