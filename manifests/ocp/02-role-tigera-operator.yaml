@@ -630,6 +630,7 @@ rules:
       - xbackendtrafficpolicies.gateway.networking.x-k8s.io
       - listenersets.gateway.networking.k8s.io
       - xmeshes.gateway.networking.x-k8s.io
+      - xbackends.gateway.networking.x-k8s.io
       - backends.gateway.envoyproxy.io
       - backendtrafficpolicies.gateway.envoyproxy.io
       - clienttrafficpolicies.gateway.envoyproxy.io
