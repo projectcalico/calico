@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 
@@ -367,7 +368,8 @@ var validateHashreleaseBuildFlags = func(c *cli.Command) error {
 			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s is set",
 				hashreleaseServerBucketFlag.Name)
 		}
-		if c.String(ciTokenFlag.Name) == "" {
+		// Only the image promotions check reads it, and that is Semaphore's alone.
+		if c.String(ciTokenFlag.Name) == "" && os.Getenv("CI_WORKFLOW_NAME") == "" {
 			return fmt.Errorf("%s API token must be set when running on CI, either set \"SEMAPHORE_API_TOKEN\" or use %s flag", semaphoreCI, ciTokenFlag.Name)
 		}
 	} else {
@@ -452,6 +454,12 @@ func imageScanningAPIConfig(c *cli.Command) *imagescanner.Config {
 
 func validateCIBuildRequirements(c *cli.Command, repoRootDir string) error {
 	if !c.Bool(ciFlag.Name) {
+		return nil
+	}
+	// The check below walks a Semaphore pipeline to its parent to read the
+	// sibling image promotions' results, which only Semaphore can answer.
+	if os.Getenv("CI_WORKFLOW_NAME") != "" {
+		logrus.Info("Not running on Semaphore, skipping images promotions check...")
 		return nil
 	}
 	if c.Bool(imagesFlagName) {

@@ -61,10 +61,18 @@ steps:
   # Unprivileged because two of its suites read geteuid(): one asserts a write to
   # a root-owned path is refused, and the BPF wrapper picks its real or mock
   # implementation from it. As root both take the wrong branch.
+  #
+  # The home is named here rather than assumed because it belongs to the user our
+  # own base image creates — a volume because fsGroup reaches nothing else, and
+  # HOME because OpenSSH reads the passwd entry instead of the environment.
   - name: felix-ut
     depends: [build-calico-image, check-go]
     timeout: 45m
     runAsNonRoot: true
+    scratchVolumes: [/home/ci]
+    env:
+      - name: HOME
+        value: /home/ci
     requests: {cpu: 4000m, memory: 6Gi}
     services:
       - docker
@@ -176,8 +184,10 @@ steps:
     commands: |
       source .argoci/scripts/vm-fleet-setup.sh
       source felix/.semaphore/fv-prologue
-      # After the prologue, which derives its own values for both from
-      # FELIX_TEST_GROUP and would otherwise win.
+      # After the prologue, which sets its own and would otherwise win. The
+      # fleet sits in the artifact store's region so the working copy and images
+      # each VM pulls do not cross one.
+      export REGION=us-central1
       if [ -n "${FV_BATCHES_OVERRIDE:-}" ]; then
         export NUM_FV_BATCHES="${FV_BATCHES_OVERRIDE}"
       fi

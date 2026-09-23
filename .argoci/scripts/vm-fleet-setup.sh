@@ -19,8 +19,9 @@ export CALICO_DIR_NAME="${CI_GIT_DIR}"
 
 # The fleet's own bucket rather than the workflow's artifact store: the test VMs
 # read it with the service account attached to them, which is scoped to this
-# project.
-export GCS_BUILD_CACHE_BUCKET="${GCS_BUILD_CACHE_BUCKET:-calico-transient-build-artifacts-europe-west3}"
+# project. Same region as the VMs, so the working copy and images they pull do
+# not cross one.
+export GCS_BUILD_CACHE_BUCKET="${GCS_BUILD_CACHE_BUCKET:-calico-transient-build-artifacts-us-central1}"
 export GCS_WORKFLOW_DIR="gs://${GCS_BUILD_CACHE_BUCKET}/workflow/${CI_WORKFLOW_NAME}"
 
 # The whole directory is copied onto every VM the fleet brings up, so anything

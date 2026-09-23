@@ -24,8 +24,10 @@ steps:
     env:
       - name: COMPONENT
         value: node
+      # The artifact store's region, so the working copy and images each VM
+      # pulls do not cross one.
       - name: REGION
-        value: europe-west3
+        value: us-central1
       - name: VM_DISK_SIZE
         value: 80GB
       - name: CI_GROUP_LABEL

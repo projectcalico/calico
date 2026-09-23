@@ -1,0 +1,87 @@
+# Builds and publishes a hashrelease from the promoted run's commit.
+#
+# A button rather than an automatic step: a hashrelease is a deliberate act, and
+# resolving the workflow at the source run's commit is what lets an older build
+# be published as what it was.
+version: condensed
+generateName: hashrelease-
+
+# Building every image and publishing them does not fit the hour a test lane
+# gets.
+timeout: 6h
+
+defaults:
+  timeout: 6h
+  jobSize: medium
+  # Named rather than inherited: a promotion is its own workflow, and the repo
+  # default is the cloud-provider image the e2e lanes want.
+  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2
+  services:
+    - docker
+  secretBundles:
+    - docker-hub
+    # GITHUB_TOKEN, the AWS profile, and the ssh key the release tooling clones
+    # private trees with.
+    - name: oss-release-secrets
+      keys:
+        - name: GITHUB_TOKEN
+        - name: AWS_PROFILE
+        - name: S3_BUCKET
+        - name: aws-config
+          localFile: /root/.aws/config
+        - name: aws-credentials
+          localFile: /root/.aws/credentials
+        - name: git_ssh_rsa
+          localFile: /root/.keys/git_ssh_rsa
+    - name: private-repo
+      keys:
+        - name: private-repo
+          localFile: /root/.keys/private-repo
+    - quay-hashrelease
+    - docker
+    - iss-image-scanning
+    - releasebot-slack
+    # Writes the library and `latest` pointer, and rsyncs the release itself,
+    # into the hashrelease server's bucket. Scoped to that bucket alone.
+    - name: argoci-hashrelease-publisher
+      keys:
+        - name: argoci-hashrelease-publisher.json
+          as: HASHRELEASE_PUBLISHER_KEY
+          localFile: /root/secrets/hashrelease-publisher.json
+
+  # The tool reads its whole configuration from the environment.
+  env:
+    - name: HASHRELEASE_SERVER_BUCKET
+      value: hashreleaseserver-static
+    - name: GOOGLE_APPLICATION_CREDENTIALS
+      value: /root/secrets/hashrelease-publisher.json
+
+steps:
+  - name: hashrelease
+    requests: {cpu: 3500m, memory: 8Gi}
+    commands: |
+      # The tooling reads GITHUB_TOKEN; the bundle above supplies one already,
+      # but the marvin identity is the one with the rate limit we want.
+      export GITHUB_TOKEN="${MARVIN_GITHUB_TOKEN:-$GITHUB_TOKEN}"
+      export LOGS_DIR="${CI_HOME}/${CI_GIT_DIR}/release/_logs"
+
+      chmod 0600 /root/.keys/* || true
+      eval "$(ssh-agent -s)" >/dev/null
+      ssh-add /root/.keys/* 2>/dev/null || true
+
+      echo "$DOCKER_TOKEN" | docker login --username "$DOCKER_USER" --password-stdin
+      echo "$QUAY_TOKEN" | docker login --username "$QUAY_USER" --password-stdin quay.io
+
+      # Charts go to the same registry as an OCI artifact, and helm keeps its own
+      # credential store. It arrives in ./bin on demand rather than in the image.
+      make -C "${CI_HOME}/${CI_GIT_DIR}" helm
+      echo "$QUAY_TOKEN" | "${CI_HOME}/${CI_GIT_DIR}/bin/helm" registry login \
+        --username "$QUAY_USER" --password-stdin quay.io
+
+      gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
+
+      cd release
+      make hashrelease
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job release/_logs --destination hashrelease-logs || true

@@ -45,6 +45,10 @@ promotions:
     workflowFile: .argoci/publish/openstack-packages.yaml
     description: Build and publish the OpenStack packages for this ref
 
+  - name: hashrelease
+    workflowFile: .argoci/promotions/hashrelease.yaml
+    description: Build and publish a hashrelease from this build
+
 # The Makefiles address the tree by its GOPATH location, which is a path inside
 # the build image rather than anywhere the checkout can land. A step running the
 # build image directly has to put the tree there itself; one shelling out to a
