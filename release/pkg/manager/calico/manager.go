@@ -85,6 +85,7 @@ func NewManager(opts ...Option) (*CalicoManager, error) {
 		tarball:          true,
 		windowsArchive:   true,
 		helmCharts:       true,
+		operator:         true,
 		helmIndex:        true,
 		e2eBinaries:      true,
 		dryRun:           false,
@@ -247,6 +248,7 @@ type CalicoManager struct {
 	windowsArchive bool
 	tarball        bool
 	helmCharts     bool
+	operator       bool
 	helmIndex      bool
 	e2eBinaries    bool
 
@@ -1287,6 +1289,10 @@ func (r *CalicoManager) publishBranchTag() error {
 }
 
 func (r *CalicoManager) publishOperatorBranchTag(branch string) error {
+	if !r.operator {
+		logrus.WithField("branch", branch).Info("Skip moving the operator branch tag: the operator is off")
+		return nil
+	}
 	if registry.DefaultOperatorRegistry != r.operatorRegistry {
 		logrus.WithFields(logrus.Fields{
 			"registry": r.operatorRegistry,
@@ -1296,7 +1302,7 @@ func (r *CalicoManager) publishOperatorBranchTag(branch string) error {
 	}
 
 	// The operator publishes to its own registries, so it takes a pass of its own.
-	if err := operator.PublishBranchTag(r.operator(), operator.Variants(), branch,
+	if err := operator.PublishBranchTag(r.operatorConfig(), operator.Variants(), branch,
 		operator.WithRunner(r.runner),
 		operator.WithArches(r.architectures...),
 		operator.WithLogsDir(r.logsDir),
@@ -1307,7 +1313,7 @@ func (r *CalicoManager) publishOperatorBranchTag(branch string) error {
 	return nil
 }
 
-func (r *CalicoManager) operator() operator.Operator {
+func (r *CalicoManager) operatorConfig() operator.Operator {
 	return operator.Operator{
 		RepoRoot:   r.repoRoot,
 		Version:    r.operatorVersion,

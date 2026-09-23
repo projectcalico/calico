@@ -217,13 +217,6 @@ func DetermineReleaseVersion(v Version, devTagSuffix string) (Version, error) {
 	}
 }
 
-// DetermineOperatorVersion returns the operator version that will be used for this release.
-// This is determined by looking at the tigera-operator.yaml manifest on this commit, as
-// manifests are updated prior to cutting the release.
-func DetermineOperatorVersion(repoRoot string) (Version, error) {
-	return versionFromManifest(repoRoot, "tigera-operator.yaml", "operator")
-}
-
 // used to determine the version in manifests.
 var productImage = "calico/calico"
 

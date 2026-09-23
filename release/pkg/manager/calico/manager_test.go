@@ -762,6 +762,7 @@ func imageManager(t *testing.T, f *fakeRunner, logsDir string) (*CalicoManager, 
 		images:              true,
 		operatorImage:       registry.OperatorImage,
 		operatorRegistry:    registry.DefaultOperatorRegistry,
+		operator:            true,
 		logsDir:             logsDir,
 		outputDir:           t.TempDir(),
 		releaseBranchPrefix: "release",
@@ -959,6 +960,18 @@ func TestPublishBranchTag(t *testing.T) {
 		}
 		if got := "make -C " + root + "/cmd/calico " + branchTagTarget; f.ran(got) {
 			t.Errorf("ran %q for a registry outside the default (calls: %v)", got, f.calls)
+		}
+	})
+
+	t.Run("skipped when the operator is off", func(t *testing.T) {
+		f := newFakeRunner()
+		r, root := imageManager(t, f, "")
+		r.operator = false
+		if err := r.publishContainerImages(); err != nil {
+			t.Fatalf("publishContainerImages: %v", err)
+		}
+		if got := "make -C " + root + "/operator " + branchTagTarget; f.ran(got) {
+			t.Errorf("ran %q with the operator off (calls: %v)", got, f.calls)
 		}
 	})
 

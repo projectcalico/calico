@@ -107,7 +107,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithVersion(o.ProductVersion),
-					calico.WithOperator(operator.Registry(*o), o.Image, o.Version),
+					calico.WithOperatorImage(operator.Registry(*o), o.Image, o.Version),
 					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, o.ProductVersion)),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithLogsDir(filepath.Join(cfg.LogsDir, o.ProductVersion)),
@@ -162,8 +162,10 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 				}
 				opts := []calico.Option{
 					calico.WithRepoRoot(cfg.RepoRootDir),
+					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithVersion(o.ProductVersion),
-					calico.WithOperator(operator.Registry(*o), o.Image, o.Version),
+					calico.WithOperatorImage(operator.Registry(*o), o.Image, o.Version),
+					calico.WithOperator(c.Bool(operatorFlagName)),
 					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, o.ProductVersion)),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithLogsDir(filepath.Join(cfg.LogsDir, o.ProductVersion)),

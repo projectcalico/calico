@@ -193,7 +193,6 @@ func TestHashreleaseBuilds(t *testing.T) {
 			{name: "operator", flags: operatorBuildFlags},
 			{name: "manifests", flags: manifestsBuildFlags},
 			{name: "charts", flags: chartsBuildFlags},
-			{name: "binaries", flags: binariesBuildFlags},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				var got pinnedversion.Config

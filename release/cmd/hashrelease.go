@@ -135,8 +135,8 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 		productRegistriesFromFlag := c.StringSlice(registryFlag.Name)
 
 		// Build the operator
+		o := pinnedOperator(cfg, c, pin.Operator, pin.ProductVersion)
 		if c.Bool(operatorFlagName) {
-			o := pinnedOperator(cfg, c, pin.Operator, pin.ProductVersion)
 			if err := operator.Build(o, operatorVariants(c), true,
 				operatorBuildOptions(c, filepath.Join(cfg.LogsDir, pin.ProductVersion))...); err != nil {
 				return fmt.Errorf("operator build: %w", err)
@@ -152,7 +152,7 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 			calico.WithRepoRoot(cfg.RepoRootDir),
 			calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 			calico.WithVersion(pin.ProductVersion),
-			calico.WithOperator(pin.Operator.Registry, pin.Operator.Image, pin.Operator.Version),
+			calico.WithOperatorImage(operator.Registry(o), o.Image, o.Version),
 			calico.WithOutputDir(hashrel.Source),
 			calico.WithTmpDir(cfg.TmpDir),
 			calico.WithLogsDir(filepath.Join(cfg.LogsDir, pin.ProductVersion)),
@@ -247,8 +247,8 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 
 		// Push the operator hashrelease first before validation.
 		// This is because validation checks all images exists and sends to Image Scan Service
+		o := pinnedOperator(cfg, c, hashrel.Operator, hashrel.ProductVersion)
 		if c.Bool(operatorFlagName) {
-			o := pinnedOperator(cfg, c, hashrel.Operator, hashrel.ProductVersion)
 			opts, err := operatorPublishOptions(c, o.Version, hashrel.Source, filepath.Join(cfg.LogsDir, hashrel.ProductVersion))
 			if err != nil {
 				return fmt.Errorf("operator publish options: %w", err)
@@ -263,7 +263,8 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 			calico.WithHashrelease(*hashrel, *serverCfg),
 			calico.WithRepoRoot(cfg.RepoRootDir),
 			calico.WithVersion(hashrel.ProductVersion),
-			calico.WithOperatorVersion(hashrel.Operator.Version),
+			calico.WithOperatorImage(operator.Registry(o), o.Image, o.Version),
+			calico.WithOperator(c.Bool(operatorFlagName)),
 			calico.WithOutputDir(hashrel.Source),
 			calico.WithTmpDir(cfg.TmpDir),
 			calico.WithLogsDir(filepath.Join(cfg.LogsDir, hashrel.ProductVersion)),

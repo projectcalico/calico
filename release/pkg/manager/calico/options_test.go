@@ -53,6 +53,7 @@ func TestNewManagerStepDefaults(t *testing.T) {
 		{"tarball", m.tarball},
 		{"windowsArchive", m.windowsArchive},
 		{"helmCharts", m.helmCharts},
+		{"operator", m.operator},
 		{"helmIndex", m.helmIndex},
 		{"e2eBinaries", m.e2eBinaries},
 		{"gitRef", m.gitRef},

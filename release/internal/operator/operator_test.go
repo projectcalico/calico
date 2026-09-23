@@ -437,6 +437,18 @@ func TestProductEnv(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("skips the operator's own image for a bare registry", func(t *testing.T) {
+		o := testOperator()
+		o.Registries = []string{"localhost:5000"}
+		f := &fakeRunner{}
+		if err := Publish(o, oneVariant(), false, WithRunner(f)); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got, ok := envValue(f.calls[0].env, "OPERATOR_IMAGE_REGISTRY"); ok {
+			t.Errorf("OPERATOR_IMAGE_REGISTRY = %q, want it unset", got)
+		}
+	})
 }
 
 func TestVerbs(t *testing.T) {
@@ -536,6 +548,14 @@ func TestVerbs(t *testing.T) {
 					return Build(o, oneVariant(), false, WithRunner(&fakeRunner{}), WithValidation(false))
 				},
 				want: "no operator registries specified",
+			},
+			{
+				name: "build needs an operator registry with a path",
+				o:    func(o Operator) Operator { o.Registries = []string{"localhost:5000"}; return o },
+				run: func(o Operator) error {
+					return Build(o, oneVariant(), false, WithRunner(&fakeRunner{}), WithValidation(false))
+				},
+				want: "operator registry",
 			},
 			{
 				name: "publish needs registries",
@@ -670,8 +690,10 @@ func TestPublishBranchTag(t *testing.T) {
 			// The chain retags local images under IMAGETAG, so it needs no version.
 			{name: "no version", branch: "release-v3.33"},
 			{name: "no branch", version: "v1.44.0", wantErr: true},
-			{name: "with a recorder", version: "v1.44.0", branch: "release-v3.33",
-				opts: []PublishOption{WithRecord(&fakeRecorder{})}, wantErr: true},
+			{
+				name: "with a recorder", version: "v1.44.0", branch: "release-v3.33",
+				opts: []PublishOption{WithRecord(&fakeRecorder{})}, wantErr: true,
+			},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				o := testOperator()

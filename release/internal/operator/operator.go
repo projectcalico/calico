@@ -130,6 +130,11 @@ func validate(o Operator) error {
 func validateBuild(hashrelease bool) func(Operator) error {
 	return func(o Operator) error {
 		errs := []error{validate(o), validateImage(o)}
+		if reg := Registry(o); reg != "" {
+			if _, _, err := registryParts(reg); err != nil {
+				errs = append(errs, fmt.Errorf("operator registry: %w", err))
+			}
+		}
 		if o.ProductRegistry == "" {
 			errs = append(errs, fmt.Errorf("no product registry specified"))
 		}
