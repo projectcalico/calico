@@ -321,7 +321,7 @@ cd: image-all cd-common
 # rebuild rather than a retag of an image built for a different set of them.
 ## Build and tag the release images for the specified VERSION.
 release-build: var-require-all-VERSION check-release-image-tags
-	rm -f $(BINDIR)/$(BINARY_NAME)-* *.created
+	rm -f $(BINDIR)/$(BINARY_NAME)-* *.created $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	$(MAKE) image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 
