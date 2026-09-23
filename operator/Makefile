@@ -39,7 +39,6 @@ PACKAGE_NAME = github.com/projectcalico/calico/operator
 # publishes alongside the other Calico component images, so the registries come from
 # metadata.mk rather than an override here.
 BUILD_IMAGES    = operator
-ARCHES          = amd64 arm64 ppc64le s390x
 BINARY_NAME    ?= operator
 
 include ../metadata.mk
@@ -322,7 +321,8 @@ cd: image-all cd-common
 # rebuild rather than a retag of an image built for a different set of them.
 ## Build and tag the release images for the specified VERSION.
 release-build: var-require-all-VERSION check-release-image-tags
-	$(MAKE) clean image-all RELEASE=true
+	rm -f $(BINDIR)/$(BINARY_NAME)-* *.created
+	$(MAKE) image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 
 # The tag is compiled in, so a release that guessed it would ship an operator naming

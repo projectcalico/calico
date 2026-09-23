@@ -27,12 +27,12 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
-	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 func releaseOutputDir(repoRootDir, version string) string {
@@ -90,24 +90,20 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 				configureLogging("release-build.log")
 
 				// Determine the versions to use for the release.
-				ver, err := version.DetermineReleaseVersion(version.GitVersion(), c.String(devTagSuffixFlag.Name))
+				o, err := releaseOperator(cfg, c)
 				if err != nil {
-					return err
-				}
-				operatorVer, err := version.DetermineOperatorVersion(cfg.RepoRootDir)
-				if err != nil {
-					return err
+					return fmt.Errorf("operator: %w", err)
 				}
 
 				// Configure the builder.
 				opts := []calico.Option{
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
-					calico.WithVersion(ver.FormattedString()),
-					calico.WithOperatorVersion(operatorVer.FormattedString()),
-					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
+					calico.WithVersion(o.ProductVersion),
+					calico.WithOperatorVersion(o.Version),
+					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, o.ProductVersion)),
 					calico.WithTmpDir(cfg.TmpDir),
-					calico.WithLogsDir(filepath.Join(cfg.LogsDir, ver.FormattedString())),
+					calico.WithLogsDir(filepath.Join(cfg.LogsDir, o.ProductVersion)),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
@@ -130,23 +126,21 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 				}
 				// The operator carries the versions of the images it deploys in its binary, so a
 				// release rebuilds it rather than retagging the one a hashrelease published.
-				operatorOpts := []operator.Option{
-					operator.WithVersion(operatorVer.FormattedString()),
-					operator.WithCalicoDirectory(cfg.RepoRootDir),
-					operator.WithCalicoVersion(ver.FormattedString()),
-					operator.WithArchitectures(c.StringSlice(archFlag.Name)),
-					operator.WithValidate(c.Bool(validationFlag.Name)),
-				}
-				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
-					operatorOpts = append(operatorOpts, operator.WithProductRegistry(reg[0]))
-				}
 				if c.Bool(operatorFlagName) {
-					if err := operator.NewManager(operatorOpts...).Build(); err != nil {
-						return err
+					if err := operator.Build(*o, operatorVariants(c), false,
+						operator.WithRunner(commandRunner),
+						operator.WithLogsDir(filepath.Join(cfg.LogsDir, o.ProductVersion)),
+						operator.WithArches(c.StringSlice(archFlag.Name)...),
+						operator.WithValidation(c.Bool(validationFlag.Name)),
+					); err != nil {
+						return fmt.Errorf("operator build: %w", err)
 					}
 				}
 
-				r := calico.NewManager(opts...)
+				r, err := calico.NewManager(opts...)
+				if err != nil {
+					return fmt.Errorf("calico manager: %w", err)
+				}
 				return r.Build()
 			},
 		},
@@ -159,17 +153,17 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 			Action: func(_ context.Context, c *cli.Command) error {
 				configureLogging("release-publish.log")
 
-				ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
+				o, err := releaseOperator(cfg, c)
 				if err != nil {
-					return err
+					return fmt.Errorf("operator: %w", err)
 				}
 				opts := []calico.Option{
 					calico.WithRepoRoot(cfg.RepoRootDir),
-					calico.WithVersion(ver.FormattedString()),
-					calico.WithOperatorVersion(operatorVer.FormattedString()),
-					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
+					calico.WithVersion(o.ProductVersion),
+					calico.WithOperatorVersion(o.Version),
+					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, o.ProductVersion)),
 					calico.WithTmpDir(cfg.TmpDir),
-					calico.WithLogsDir(filepath.Join(cfg.LogsDir, ver.FormattedString())),
+					calico.WithLogsDir(filepath.Join(cfg.LogsDir, o.ProductVersion)),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
@@ -196,19 +190,19 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					opts = append(opts, calico.WithS3Bucket(v))
 				}
 				if c.Bool(operatorFlagName) {
-					o := operator.NewManager(
-						operator.WithCalicoDirectory(cfg.RepoRootDir),
-						operator.WithVersion(operatorVer.FormattedString()),
-					)
-					if err := o.PrePublishValidation(); err != nil {
-						return err
+					opts, err := operatorPublishOptions(cfg, c, o.Version, filepath.Join(cfg.LogsDir, o.ProductVersion))
+					if err != nil {
+						return fmt.Errorf("operator publish options: %w", err)
 					}
-					if err := o.Publish(); err != nil {
-						return err
+					if err := operator.Publish(*o, operatorVariants(c), false, opts...); err != nil {
+						return fmt.Errorf("operator publish: %w", err)
 					}
 				}
 
-				r := calico.NewManager(opts...)
+				r, err := calico.NewManager(opts...)
+				if err != nil {
+					return fmt.Errorf("calico manager: %w", err)
+				}
 				return r.PublishRelease()
 			},
 		},
@@ -260,10 +254,13 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 				calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
 				calico.WithGitRef(!c.Bool(localFlag.Name)),
 			}
-			r := calico.NewManager(opts...)
+			r, err := calico.NewManager(opts...)
+			if err != nil {
+				return ver.FormattedString(), outs, fmt.Errorf("calico manager: %w", err)
+			}
 			branch, err := r.PrepareRelease()
 			if err != nil {
-				return ver.FormattedString(), outs, err
+				return ver.FormattedString(), outs, fmt.Errorf("prepare release: %w", err)
 			}
 			outs["branch"] = branch
 			return ver.FormattedString(), outs, nil

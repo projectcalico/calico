@@ -98,8 +98,8 @@ var pinnedManifests = func(cfg *Config, c *cli.Command, pin pinned) (*manifests.
 		Version:  ver.FormattedString(),
 		Operator: registry.Component{
 			Version:  operatorVer.FormattedString(),
-			Image:    c.String(operatorImageFlag.Name),
-			Registry: c.String(operatorRegistryFlag.Name),
+			Image:    operatorImage(c),
+			Registry: operatorRegistries(c)[0],
 		},
 		Registry:  firstRegistry(c),
 		OutputDir: filepath.Join(cfg.OutputDir, ver.FormattedString()),

@@ -27,7 +27,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/utils"
-	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 var globalFlags = append([]cli.Flag{debugFlag}, append(ciFlags, slackFlags...)...)
@@ -305,23 +304,22 @@ var (
 	}
 
 	operatorPublishCommandFlags = []cli.Flag{
+		operatorRegistryFlag, operatorImageFlag,
 		operatorFlag(envPublishOperator, envReleaseOperator),
 	}
 
 	// Container image flags
-	operatorRegistryFlag = &cli.StringFlag{
+	operatorRegistryFlag = &cli.StringSliceFlag{
 		Name:     "operator-registry",
 		Category: operatorCategory,
-		Usage:    "The registry to use for Tigera operator release",
-		Sources:  cli.EnvVars("OPERATOR_REGISTRY"),
-		Value:    operator.DefaultRegistries[0],
+		Usage:    "The registry to use for operator, repeat for multiple registries. If not set, the default registries will be used.",
+		Sources:  cli.EnvVars("OPERATOR_REGISTRY", "OPERATOR_REGISTRIES"),
 	}
 	operatorImageFlag = &cli.StringFlag{
 		Name:     "operator-image",
 		Category: operatorCategory,
-		Usage:    "The image name to use for Tigera operator release",
+		Usage:    "The image name to use for operator. If not set, the default image will be used.",
 		Sources:  cli.EnvVars("OPERATOR_IMAGE"),
-		Value:    operator.DefaultImage,
 	}
 
 	operatorFlagName   = "operator"

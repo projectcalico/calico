@@ -21,6 +21,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	cli "github.com/urfave/cli/v3"
 )
 
 // recordingRunner runs nothing and records what it was asked to run. Units run
@@ -90,6 +92,28 @@ func (r *recordingRunner) ran(want ...string) bool {
 	return slices.ContainsFunc(r.args, func(args []string) bool {
 		return containsAll(args, want)
 	})
+}
+
+// cli flags are package-level and remember whether they were set, so a test
+// sharing them sees what an earlier one parsed.
+func freshFlags(flags []cli.Flag) []cli.Flag {
+	out := make([]cli.Flag, 0, len(flags))
+	for _, f := range flags {
+		switch v := f.(type) {
+		case *cli.StringFlag:
+			c := *v
+			out = append(out, &c)
+		case *cli.StringSliceFlag:
+			c := *v
+			out = append(out, &c)
+		case *cli.BoolFlag:
+			c := *v
+			out = append(out, &c)
+		default:
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func containsAll(args, want []string) bool {

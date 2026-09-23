@@ -27,13 +27,13 @@ import (
 	"github.com/projectcalico/calico/release/internal/ci"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
-	"github.com/projectcalico/calico/release/pkg/manager/operator"
 	"github.com/projectcalico/calico/release/pkg/tasks"
 )
 
@@ -53,8 +53,8 @@ var (
 			ReleaseBranchPrefix: c.String(releaseBranchPrefixFlag.Name),
 			Registry:            productRegistry(c),
 			Operator: registry.Component{
-				Image:    c.String(operatorImageFlag.Name),
-				Registry: c.String(operatorRegistryFlag.Name),
+				Image:    operatorImage(c),
+				Registry: operatorRegistries(c)[0],
 			},
 		}
 	}
@@ -135,26 +135,14 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 		productRegistriesFromFlag := c.StringSlice(registryFlag.Name)
 
 		// Build the operator
-		operatorOpts := []operator.Option{
-			operator.IsHashRelease(),
-			operator.WithImage(pin.Operator.Image),
-			operator.WithArchitectures(c.StringSlice(archFlag.Name)),
-			operator.WithValidate(c.Bool(validationFlag.Name)),
-			operator.WithVersion(pin.Operator.Version),
-			operator.WithCalicoDirectory(cfg.RepoRootDir),
-			operator.WithCalicoVersion(pin.ProductVersion),
-		}
-		if reg := c.String(operatorRegistryFlag.Name); reg != "" {
-			operatorOpts = append(operatorOpts, operator.WithRegistry(reg))
-		} else {
-			operatorOpts = append(operatorOpts, operator.WithRegistry(pin.Operator.Registry))
-		}
-		if len(productRegistriesFromFlag) > 0 {
-			operatorOpts = append(operatorOpts, operator.WithProductRegistry(productRegistriesFromFlag[0]))
-		}
 		if c.Bool(operatorFlagName) {
-			o := operator.NewManager(operatorOpts...)
-			if err := o.Build(); err != nil {
+			o := pinnedOperator(cfg, c, pin.Operator, pin.ProductVersion)
+			if err := operator.Build(o, operatorVariants(c), true,
+				operator.WithRunner(commandRunner),
+				operator.WithLogsDir(filepath.Join(cfg.LogsDir, pin.ProductVersion)),
+				operator.WithArches(c.StringSlice(archFlag.Name)...),
+				operator.WithValidation(c.Bool(validationFlag.Name)),
+			); err != nil {
 				return fmt.Errorf("operator build: %w", err)
 			}
 		}
@@ -192,9 +180,12 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 		if len(productRegistriesFromFlag) > 0 {
 			opts = append(opts, calico.WithImageRegistries(productRegistriesFromFlag))
 		}
-		r := calico.NewManager(opts...)
+		r, err := calico.NewManager(opts...)
+		if err != nil {
+			return fmt.Errorf("calico manager: %w", err)
+		}
 		if err := r.Build(); err != nil {
-			return err
+			return fmt.Errorf("calico manager build: %w", err)
 		}
 
 		// For real releases, release notes are generated prior to building the release.
@@ -260,19 +251,14 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 
 		// Push the operator hashrelease first before validation.
 		// This is because validation checks all images exists and sends to Image Scan Service
-		o := operator.NewManager(
-			operator.WithCalicoDirectory(cfg.RepoRootDir),
-			operator.IsHashRelease(),
-			operator.WithImage(hashrel.Operator.Image),
-			operator.WithRegistry(hashrel.Operator.Registry),
-			operator.WithVersion(hashrel.Operator.Version),
-			operator.WithCalicoVersion(hashrel.ProductVersion),
-			operator.WithArchitectures(c.StringSlice(archFlag.Name)),
-			operator.WithValidate(c.Bool(validationFlag.Name)),
-		)
 		if c.Bool(operatorFlagName) {
-			if err := o.Publish(); err != nil {
-				return err
+			o := pinnedOperator(cfg, c, hashrel.Operator, hashrel.ProductVersion)
+			opts, err := operatorPublishOptions(cfg, c, o.Version, filepath.Join(cfg.LogsDir, hashrel.ProductVersion))
+			if err != nil {
+				return fmt.Errorf("operator publish options: %w", err)
+			}
+			if err := operator.Publish(o, operatorVariants(c), true, opts...); err != nil {
+				return fmt.Errorf("operator publish: %w", err)
 			}
 		}
 
@@ -307,9 +293,12 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 		if reg := c.StringSlice(helmRegistryFlag.Name); len(reg) > 0 {
 			opts = append(opts, calico.WithHelmRegistries(reg))
 		}
-		r := calico.NewManager(opts...)
+		r, err := calico.NewManager(opts...)
+		if err != nil {
+			return fmt.Errorf("calico manager: %w", err)
+		}
 		if err := r.PublishRelease(); err != nil {
-			return err
+			return fmt.Errorf("publish release: %w", err)
 		}
 
 		if c.Bool(imageScanFlag.Name) {
@@ -349,9 +338,9 @@ var hashreleaseBuildFlags = func() []cli.Flag {
 
 // validateHashreleaseBuildFlags checks that the flags are set correctly for the hashrelease build command.
 var validateHashreleaseBuildFlags = func(c *cli.Command) error {
-	// If using a custom registry for product, ensure operator is also using a custom registry.
-	if len(c.StringSlice(registryFlag.Name)) > 0 && c.String(operatorRegistryFlag.Name) == "" {
-		return fmt.Errorf("%s must be set if %s is set", operatorRegistryFlag, registryFlag)
+	// IsSet, not non-empty: the flag carries a default, so it is never empty.
+	if len(c.StringSlice(registryFlag.Name)) > 0 && len(c.StringSlice(operatorRegistryFlag.Name)) == 0 {
+		return fmt.Errorf("%s must be set if %s is set", operatorRegistryFlag.Name, registryFlag.Name)
 	}
 
 	// Hashrelease regenerates manifests before building the OCP bundle.
@@ -375,9 +364,8 @@ var validateHashreleaseBuildFlags = func(c *cli.Command) error {
 			logrus.Warn("Building images without specifying a registry will result in images being built with the default registries")
 		}
 
-		// If using the default operator image and registry, log a warning.
-		if c.String(operatorRegistryFlag.Name) == "" {
-			logrus.Warnf("Local builds should specify an operator registry using %s", operatorRegistryFlag)
+		if len(c.StringSlice(operatorRegistryFlag.Name)) == 0 {
+			logrus.Warnf("Local builds should specify an operator registry using %s", operatorRegistryFlag.Name)
 		}
 	}
 
