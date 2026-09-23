@@ -35,7 +35,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/outputs"
-	"github.com/projectcalico/calico/release/pkg/manager/operator"
+	"github.com/projectcalico/calico/release/internal/registry"
 )
 
 // fakeResult is the canned response for a matched command.
@@ -758,8 +758,10 @@ func imageManager(t *testing.T, f *fakeRunner, logsDir string) (*CalicoManager, 
 		runner:              f,
 		repoRoot:            root,
 		calicoVersion:       "v3.30.0",
-		imageRegistries:     []string{"quay.io/tigera"},
+		imageRegistries:     []string{registry.DefaultProductRegistry},
 		images:              true,
+		operatorImage:       registry.OperatorImage,
+		operatorRegistry:    registry.DefaultOperatorRegistry,
 		logsDir:             logsDir,
 		outputDir:           t.TempDir(),
 		releaseBranchPrefix: "release",
@@ -825,143 +827,174 @@ func TestImageStepsWriteLogFiles(t *testing.T) {
 	}
 }
 
-func TestPublishContainerImagesBranchTag(t *testing.T) {
-	tests := []struct {
-		name          string
-		version       string
-		images        bool
-		isHashRelease bool
-		wantPublish   bool
-		wantBranchTag bool
-		wantTag       string
-		prefix        string
-		wantErr       bool
-	}{
-		{
-			name:          "hashrelease also pushes the branch tag",
-			version:       "v3.33.0-0.dev-1-gabcdef123456",
-			images:        true,
-			isHashRelease: true,
-			wantPublish:   true,
-			wantBranchTag: true,
-			wantTag:       "release-v3.33",
-		},
-		{
-			name:          "early preview keeps its stream suffix",
-			version:       "v3.33.0-1.0-0.dev-1-gabcdef123456",
-			images:        true,
-			isHashRelease: true,
-			wantPublish:   true,
-			wantBranchTag: true,
-			wantTag:       "release-v3.33-1",
-		},
-		{
-			name:          "an official release moves it too",
-			version:       "v3.33.0",
-			images:        true,
-			isHashRelease: false,
-			wantPublish:   true,
-			wantBranchTag: true,
-			wantTag:       "release-v3.33",
-		},
-		{
-			// An unset prefix would silently tag images "-v3.33".
-			name:          "missing branch prefix is an error",
-			version:       "v3.33.0-0.dev-1-gabcdef123456",
-			images:        true,
-			isHashRelease: true,
-			prefix:        "",
-			wantPublish:   true,
-			wantErr:       true,
-		},
-		{
-			name:          "images disabled publishes nothing",
-			version:       "v3.33.0-0.dev-1-gabcdef123456",
-			images:        false,
-			isHashRelease: true,
-			wantPublish:   false,
-			wantBranchTag: false,
-		},
-	}
+func TestPublishBranchTag(t *testing.T) {
+	t.Run("moves the tag", func(t *testing.T) {
+		tests := []struct {
+			name          string
+			version       string
+			images        bool
+			isHashRelease bool
+			wantPublish   bool
+			wantBranchTag bool
+			wantTag       string
+			prefix        string
+			wantErr       bool
+		}{
+			{
+				name:          "hashrelease also pushes the branch tag",
+				version:       "v3.33.0-0.dev-1-gabcdef123456",
+				images:        true,
+				isHashRelease: true,
+				wantPublish:   true,
+				wantBranchTag: true,
+				wantTag:       "release-v3.33",
+			},
+			{
+				name:          "early preview keeps its stream suffix",
+				version:       "v3.33.0-1.0-0.dev-1-gabcdef123456",
+				images:        true,
+				isHashRelease: true,
+				wantPublish:   true,
+				wantBranchTag: true,
+				wantTag:       "release-v3.33-1",
+			},
+			{
+				name:          "an official release moves it too",
+				version:       "v3.33.0",
+				images:        true,
+				isHashRelease: false,
+				wantPublish:   true,
+				wantBranchTag: true,
+				wantTag:       "release-v3.33",
+			},
+			{
+				// An unset prefix would silently tag images "-v3.33".
+				name:          "missing branch prefix is an error",
+				version:       "v3.33.0-0.dev-1-gabcdef123456",
+				images:        true,
+				isHashRelease: true,
+				prefix:        "",
+				wantPublish:   true,
+				wantErr:       true,
+			},
+			{
+				name:          "images disabled publishes nothing",
+				version:       "v3.33.0-0.dev-1-gabcdef123456",
+				images:        false,
+				isHashRelease: true,
+				wantPublish:   false,
+				wantBranchTag: false,
+			},
+		}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			f := newFakeRunner()
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				f := newFakeRunner()
 
-			prefix := tt.prefix
-			if prefix == "" && !tt.wantErr {
-				prefix = "release"
-			}
-			r, root := imageManager(t, f, "")
-			r.images = tt.images
-			r.isHashRelease = tt.isHashRelease
-			// A hashrelease reads its registry from its own source tree.
-			r.hashrelease.Source = root
-			r.calicoVersion = tt.version
-			r.releaseBranchPrefix = prefix
-
-			err := r.publishContainerImages()
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("publishContainerImages() = nil, want error")
+				prefix := tt.prefix
+				if prefix == "" && !tt.wantErr {
+					prefix = "release"
 				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("publishContainerImages() unexpected error: %v", err)
-			}
+				r, root := imageManager(t, f, "")
+				r.images = tt.images
+				r.isHashRelease = tt.isHashRelease
+				// A hashrelease reads its registry from its own source tree.
+				r.hashrelease.Source = root
+				r.calicoVersion = tt.version
+				r.releaseBranchPrefix = prefix
 
-			if got := f.ran("make -C " + root + "/cmd/calico release-publish"); got != tt.wantPublish {
-				t.Errorf("release-publish ran = %v, want %v (calls: %v)", got, tt.wantPublish, f.calls)
-			}
-			if got := f.ran("make -C " + root + "/cmd/calico " + branchTagTarget); got != tt.wantBranchTag {
-				t.Errorf("branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
-			}
-			if tt.wantBranchTag {
-				if got := f.envFor("make -C " + root + "/cmd/calico " + branchTagTarget); !slices.Contains(got, "IMAGETAG="+tt.wantTag) {
-					t.Errorf("branch tag env = %v, want IMAGETAG=%s", got, tt.wantTag)
+				err := r.publishContainerImages()
+				if tt.wantErr {
+					if err == nil {
+						t.Fatalf("publishContainerImages() = nil, want error")
+					}
+					return
 				}
-			}
-
-			// The operator carries the branch tag too, published to its own registries.
-			opTarget := "make -C " + root + "/operator retag-build-images-with-registries"
-			if got := f.ran(opTarget); got != tt.wantBranchTag {
-				t.Errorf("operator branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
-			}
-			if tt.wantBranchTag {
-				env := f.envFor(opTarget)
-				if !slices.Contains(env, "IMAGETAG="+tt.wantTag) {
-					t.Errorf("operator branch tag env = %v, want IMAGETAG=%s", env, tt.wantTag)
+				if err != nil {
+					t.Fatalf("publishContainerImages() unexpected error: %v", err)
 				}
-				want := "DEV_REGISTRIES=" + strings.Join(operator.DefaultRegistries, " ")
-				if !slices.Contains(env, want) {
-					t.Errorf("operator branch tag env = %v, want %s", env, want)
+
+				if got := f.ran("make -C " + root + "/cmd/calico release-publish"); got != tt.wantPublish {
+					t.Errorf("release-publish ran = %v, want %v (calls: %v)", got, tt.wantPublish, f.calls)
 				}
-			}
-		})
-	}
-}
+				if got := f.ran("make -C " + root + "/cmd/calico " + branchTagTarget); got != tt.wantBranchTag {
+					t.Errorf("branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
+				}
+				if tt.wantBranchTag {
+					if got := f.envFor("make -C " + root + "/cmd/calico " + branchTagTarget); !slices.Contains(got, "IMAGETAG="+tt.wantTag) {
+						t.Errorf("branch tag env = %v, want IMAGETAG=%s", got, tt.wantTag)
+					}
+				}
 
-// cni-plugin ships only a Windows image, so the standard branch tag target
-// there retags arch images that were never built.
-func TestPublishBranchTagSplitsWindowsFromStandard(t *testing.T) {
-	f := newFakeRunner()
-	m, root := imageManager(t, f, "")
-	if err := m.publishContainerImages(); err != nil {
-		t.Fatalf("publishContainerImages: %v", err)
-	}
-	if got := "make -C " + root + "/cni-plugin " + branchTagTarget; f.ran(got) {
-		t.Errorf("branch tag ran %q, which has no arch images to retag (calls: %v)", got, f.calls)
-	}
-	want := "make -C " + root + "/cni-plugin " + windowsBranchTagTarget
-	if !f.ran(want) {
-		t.Errorf("did not run %q, ran: %v", want, f.calls)
-	}
+				// The operator carries the branch tag too, published to its own registries.
+				opTarget := "make -C " + root + "/operator retag-build-images-with-registries"
+				if got := f.ran(opTarget); got != tt.wantBranchTag {
+					t.Errorf("operator branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
+				}
+				if tt.wantBranchTag {
+					env := f.envFor(opTarget)
+					if !slices.Contains(env, "IMAGETAG="+tt.wantTag) {
+						t.Errorf("operator branch tag env = %v, want IMAGETAG=%s", env, tt.wantTag)
+					}
+					// These targets iterate DEV_REGISTRIES, so it names the
+					// destination rather than a retag source.
+					want := "DEV_REGISTRIES=" + r.operatorRegistry
+					if !slices.Contains(env, want) {
+						t.Errorf("operator branch tag env = %v, want %s", env, want)
+					}
+				}
+			})
+		}
+	})
 
-	// The copy is registry side, so it needs the tag it copies from.
-	if env := f.envFor(want); !slices.Contains(env, "DEV_TAG=v3.30.0") {
-		t.Errorf("windows branch tag env = %v, want DEV_TAG=v3.30.0", env)
-	}
+	// The branch tag is a release-channel convention, so a build aimed at some
+	// other registry must not push one there. The operator is gated separately
+	// because it publishes to registries of its own.
+	t.Run("skipped for a non-default product registry", func(t *testing.T) {
+		f := newFakeRunner()
+		r, root := imageManager(t, f, "")
+		r.imageRegistries = []string{"quay.io/somewhere-else"}
+		if err := r.publishContainerImages(); err != nil {
+			t.Fatalf("publishContainerImages: %v", err)
+		}
+		if got := "make -C " + root + "/cmd/calico " + branchTagTarget; f.ran(got) {
+			t.Errorf("ran %q for a registry outside the default (calls: %v)", got, f.calls)
+		}
+	})
+
+	t.Run("skipped for a non-default operator registry", func(t *testing.T) {
+		f := newFakeRunner()
+		r, root := imageManager(t, f, "")
+		r.operatorRegistry = "quay.io/somewhere-else"
+		if err := r.publishContainerImages(); err != nil {
+			t.Fatalf("publishContainerImages: %v", err)
+		}
+		if got := "make -C " + root + "/operator " + branchTagTarget; f.ran(got) {
+			t.Errorf("ran %q for a registry outside the defaults (calls: %v)", got, f.calls)
+		}
+	})
+
+	// cni-plugin ships only a Windows image, so the standard branch tag target
+	// there retags arch images that were never built.
+	t.Run("windows split from standard", func(t *testing.T) {
+		f := newFakeRunner()
+		m, root := imageManager(t, f, "")
+		if err := m.publishContainerImages(); err != nil {
+			t.Fatalf("publishContainerImages: %v", err)
+		}
+		if got := "make -C " + root + "/cni-plugin " + branchTagTarget; f.ran(got) {
+			t.Errorf("branch tag ran %q, which has no arch images to retag (calls: %v)", got, f.calls)
+		}
+		want := "make -C " + root + "/cni-plugin " + windowsBranchTagTarget
+		if !f.ran(want) {
+			t.Errorf("did not run %q, ran: %v", want, f.calls)
+		}
+
+		// The copy is registry side, so it needs the tag it copies from.
+		if env := f.envFor(want); !slices.Contains(env, "DEV_TAG=v3.30.0") {
+			t.Errorf("windows branch tag env = %v, want DEV_TAG=v3.30.0", env)
+		}
+	})
 }
 
 // Narrowing must scope the manager's image steps the same way the CLI does.

@@ -35,7 +35,10 @@ func requiredOpts() []Option {
 // contract. CLI gating relies on these defaults being on at the manager
 // layer; flipping a default silently breaks every release without a flag set.
 func TestNewManagerStepDefaults(t *testing.T) {
-	m := NewManager(requiredOpts()...)
+	m, err := NewManager(requiredOpts()...)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
 	cases := []struct {
 		name string
 		got  bool
@@ -177,8 +180,11 @@ func TestPreBuildValidation(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			m := NewManager(tc.opts...)
-			err := m.PreBuildValidation()
+			m, err := NewManager(tc.opts...)
+			if err != nil {
+				t.Fatalf("NewManager: %v", err)
+			}
+			err = m.PreBuildValidation()
 			if tc.expectErr {
 				if err == nil {
 					t.Fatalf("expected error containing %q, got nil", tc.wantErr)
