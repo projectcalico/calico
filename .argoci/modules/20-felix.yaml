@@ -249,13 +249,31 @@ steps:
       az login --service-principal -u "$AZ_SP_ID" -p "$AZ_SP_PASSWORD" --tenant "$AZ_TENANT_ID" --output none
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       .argoci/scripts/load-cached-images calico node
-      ./process/testing/winfv-felix/run-win-fv.sh
+      # The driver writes its own logs into the checkout, but it has been dying
+      # before producing any; the console is the only record of how far it got.
+      set -o pipefail
+      ./process/testing/winfv-felix/run-win-fv.sh 2>&1 | tee /tmp/winfv-console.log
     epilogue: |
       cd "${CI_HOME}/${CI_GIT_DIR}"
       # Skipped specs are reported as failures otherwise.
       python3 hack/strip-skipped-tests.py process/testing/winfv-felix/report/*.xml 2>/dev/null || true
       artifact push job process/testing/winfv-felix/report --destination test-results || true
       artifact push job "${LOGS_DIR}" --destination logs || true
+
+      # Collected before the teardown below, which deletes the cluster that
+      # holds the only account of what the Windows node did.
+      mkdir -p /tmp/winfv-debug
+      cp /tmp/winfv-console.log /tmp/winfv-debug/ 2>/dev/null || true
+      cp process/testing/winfv-felix/setupfv.log /tmp/winfv-debug/ 2>/dev/null || true
+      cp -r "${LOGS_DIR}" /tmp/winfv-debug/fv.log 2>/dev/null || true
+      ls -lR process/testing/winfv-felix > /tmp/winfv-debug/winfv-tree.txt 2>&1 || true
+      KUBECTL="process/testing/aso/bin/kubectl --kubeconfig=process/testing/aso/kubeconfig"
+      ${KUBECTL} get nodes -o wide      > /tmp/winfv-debug/nodes.txt 2>&1 || true
+      ${KUBECTL} get pods -A -o wide    > /tmp/winfv-debug/pods.txt 2>&1 || true
+      ${KUBECTL} describe nodes         > /tmp/winfv-debug/nodes-describe.txt 2>&1 || true
+      ${KUBECTL} get events -A --sort-by=.lastTimestamp > /tmp/winfv-debug/events.txt 2>&1 || true
+      artifact push job /tmp/winfv-debug --destination winfv-debug || true
+
       # Azure resources outlive the step, so this logs in again rather than
       # relying on the session the commands opened.
       export AZURE_SUBSCRIPTION_ID="$AZ_SUBSCRIPTION_ID"
