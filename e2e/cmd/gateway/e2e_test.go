@@ -208,10 +208,6 @@ func envoyGatewayCuratedSet() curatedSet {
 		// EG does not implement misdirected-request detection on HTTPS
 		// listeners. Still skipped upstream at v1.9.1.
 		features.GatewayHTTPSListenerDetectMisdirectedRequestsFeature.Name,
-		// ListenerSet routes traffic but isn't status-conformant here. EG
-		// v1.9.1 dropped its own ListenerSet test skips, so this may now be
-		// removable. Confirm with a conformance run before dropping it.
-		features.ListenerSetFeature.Name,
 	)
 
 	supported := sets.New[features.FeatureName]()
