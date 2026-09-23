@@ -35,7 +35,7 @@ $(HACK_BIN):
 
 PACKAGE_NAME = github.com/projectcalico/calico/operator
 
-# The image and arches the ci/cd common targets in lib.Makefile read. The operator
+# The image the ci/cd common targets in lib.Makefile read. The operator
 # publishes alongside the other Calico component images, so the registries come from
 # metadata.mk rather than an override here.
 BUILD_IMAGES    = operator
@@ -130,7 +130,7 @@ $(BINDIR)/$(BINARY_NAME)-$(ARCH): $(SRC_FILES) $(ENVOY_GATEWAY_CHART) $(ISTIO_CH
 	go build -buildvcs=false -v -o $(BINDIR)/$(BINARY_NAME)-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) $(CALICO_LDFLAGS) -s -w" ./cmd/'
 
 OPERATOR_IMAGE_NAME = $(firstword $(BUILD_IMAGES))
-IMAGE_BUILD_MARKER  = operator_container-$(ARCH).created
+IMAGE_BUILD_MARKER  = $(OPERATOR_IMAGE_NAME)_container-$(ARCH).created
 
 .PHONY: image images
 image images: $(IMAGE_BUILD_MARKER)

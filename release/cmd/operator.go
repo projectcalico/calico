@@ -161,7 +161,7 @@ var releaseOperator = func(cfg *Config, c *cli.Command) (*operator.Operator, err
 		Image:           operatorImage(c),
 		Registries:      operatorRegistries(c),
 		ProductVersion:  ver.FormattedString(),
-		ProductRegistry: operatorProductRegistry(c),
+		ProductRegistry: productRegistry(c),
 	}, nil
 }
 
@@ -169,11 +169,11 @@ var pinnedOperator = func(cfg *Config, c *cli.Command, pinned registry.Component
 	// An explicit flag beats the pin; otherwise the pin names where the
 	// hashrelease already published.
 	reg := operatorRegistries(c)
-	if !c.IsSet(operatorRegistryFlag.Name) && pinned.Registry != "" {
+	if len(c.StringSlice(operatorRegistryFlag.Name)) == 0 && pinned.Registry != "" {
 		reg = []string{pinned.Registry}
 	}
 	img := operatorImage(c)
-	if !c.IsSet(operatorImageFlag.Name) && pinned.Image != "" {
+	if c.String(operatorImageFlag.Name) == "" && pinned.Image != "" {
 		img = pinned.Image
 	}
 	return operator.Operator{
@@ -182,13 +182,6 @@ var pinnedOperator = func(cfg *Config, c *cli.Command, pinned registry.Component
 		Image:           img,
 		Registries:      reg,
 		ProductVersion:  productVersion,
-		ProductRegistry: operatorProductRegistry(c),
+		ProductRegistry: productRegistry(c),
 	}
-}
-
-func operatorProductRegistry(c *cli.Command) string {
-	if reg := firstRegistry(c); reg != "" {
-		return reg
-	}
-	return registry.DefaultProductRegistry
 }

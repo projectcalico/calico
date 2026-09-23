@@ -288,7 +288,7 @@ func TestBuildSplitsTheProductRegistry(t *testing.T) {
 }
 
 // The operator bakes the product it deploys into its binary, so every value
-// buildEnv names has to survive into the make call.
+// productEnv names has to survive into the make call.
 func TestBuildCarriesTheProductEnv(t *testing.T) {
 	for _, hashrelease := range []bool{true, false} {
 		t.Run(fmt.Sprintf("hashrelease=%v", hashrelease), func(t *testing.T) {
@@ -300,12 +300,12 @@ func TestBuildCarriesTheProductEnv(t *testing.T) {
 			if len(f.calls) != 1 {
 				t.Fatalf("len = %d, want 1", len(f.calls))
 			}
-			want, err := buildEnv(testOperator())
+			want, err := productEnv(testOperator())
 			if err != nil {
-				t.Fatalf("buildEnv: %v", err)
+				t.Fatalf("productEnv: %v", err)
 			}
 			if len(want) == 0 {
-				t.Fatal("buildEnv named nothing")
+				t.Fatal("productEnv named nothing")
 			}
 			for _, e := range want {
 				name, value, _ := strings.Cut(e, "=")
@@ -569,6 +569,14 @@ func TestVerbsValidateTheirConfiguration(t *testing.T) {
 			want: "hashrelease requires the product version",
 		},
 		{
+			name: "build needs a registry",
+			o:    func(o Operator) Operator { o.Registries = []string{""}; return o },
+			run: func(o Operator) error {
+				return Build(o, oneVariant(), false, WithRunner(&fakeRunner{}), WithValidation(false))
+			},
+			want: "no operator registries specified",
+		},
+		{
 			name: "publish needs registries",
 			o:    func(o Operator) Operator { o.Registries = nil; return o },
 			run:  func(o Operator) error { return Publish(o, oneVariant(), false, WithRunner(&fakeRunner{})) },
@@ -599,27 +607,68 @@ func TestVerbsValidateTheirConfiguration(t *testing.T) {
 	}
 }
 
-// A product replaces buildEnv rather than appending to it, so it can drop or
-// rewrite a variable the shared set names.
-func TestBuildEnvIsReplaceable(t *testing.T) {
-	restore := buildEnv
-	t.Cleanup(func() { buildEnv = restore })
-	buildEnv = func(o Operator) ([]string, error) {
+// Each verb runs through productEnv, so a product's replacement reaches every
+// make call and can drop what the default names.
+func TestProductEnvIsReplaceable(t *testing.T) {
+	restore := productEnv
+	t.Cleanup(func() { productEnv = restore })
+	productEnv = func(o Operator) ([]string, error) {
 		return []string{utils.Env("REPLACED_VERSION", o.ProductVersion)}, nil
 	}
 
-	f := &fakeRunner{}
-	if err := Build(testOperator(), oneVariant(), false, WithRunner(f), WithValidation(false)); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	for _, tc := range verbs() {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeRunner{}
+			if err := tc.run(testOperator(), f); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got, _ := envValue(f.calls[0].env, "REPLACED_VERSION"); got != "v3.34.0" {
+				t.Errorf("REPLACED_VERSION = %q, want v3.34.0", got)
+			}
+			for _, dropped := range []string{"CALICO_VERSION", "CALICO_REGISTRY", "CALICO_IMAGE_PATH"} {
+				if got, ok := envValue(f.calls[0].env, dropped); ok {
+					t.Errorf("%s = %q, want it dropped by the replacement", dropped, got)
+				}
+			}
+		})
 	}
+}
 
-	if got, _ := envValue(f.calls[0].env, "REPLACED_VERSION"); got != "v3.34.0" {
-		t.Errorf("REPLACED_VERSION = %q, want v3.34.0", got)
+// A branch tag from the manager names no product, and a push does not need one.
+func TestProductEnvSkipsAMissingProductRegistry(t *testing.T) {
+	for _, tc := range verbs()[1:] {
+		t.Run(tc.name, func(t *testing.T) {
+			o := testOperator()
+			o.ProductRegistry = ""
+			f := &fakeRunner{}
+			if err := tc.run(o, f); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got, ok := envValue(f.calls[0].env, "CALICO_REGISTRY"); ok {
+				t.Errorf("CALICO_REGISTRY = %q, want it unset", got)
+			}
+		})
 	}
-	for _, dropped := range []string{"CALICO_VERSION", "CALICO_REGISTRY", "CALICO_IMAGE_PATH"} {
-		if got, ok := envValue(f.calls[0].env, dropped); ok {
-			t.Errorf("%s = %q, want it dropped by the replacement", dropped, got)
-		}
+}
+
+// Build comes first, so a test that cannot build takes verbs()[1:].
+func verbs() []struct {
+	name string
+	run  func(Operator, *fakeRunner) error
+} {
+	return []struct {
+		name string
+		run  func(Operator, *fakeRunner) error
+	}{
+		{name: "build", run: func(o Operator, f *fakeRunner) error {
+			return Build(o, oneVariant(), false, WithRunner(f), WithValidation(false))
+		}},
+		{name: "publish", run: func(o Operator, f *fakeRunner) error {
+			return Publish(o, oneVariant(), false, WithRunner(f))
+		}},
+		{name: "branch tag", run: func(o Operator, f *fakeRunner) error {
+			return PublishBranchTag(o, oneVariant(), "release-v3.33", WithRunner(f))
+		}},
 	}
 }
 
@@ -631,9 +680,9 @@ func TestBuildNamesEachVariableOnce(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	env, err := buildEnv(testOperator())
+	env, err := productEnv(testOperator())
 	if err != nil {
-		t.Fatalf("buildEnv: %v", err)
+		t.Fatalf("productEnv: %v", err)
 	}
 	for _, e := range env {
 		name, _, ok := strings.Cut(e, "=")

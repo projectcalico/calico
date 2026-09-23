@@ -338,7 +338,6 @@ var hashreleaseBuildFlags = func() []cli.Flag {
 
 // validateHashreleaseBuildFlags checks that the flags are set correctly for the hashrelease build command.
 var validateHashreleaseBuildFlags = func(c *cli.Command) error {
-	// IsSet, not non-empty: the flag carries a default, so it is never empty.
 	if len(c.StringSlice(registryFlag.Name)) > 0 && len(c.StringSlice(operatorRegistryFlag.Name)) == 0 {
 		return fmt.Errorf("%s must be set if %s is set", operatorRegistryFlag.Name, registryFlag.Name)
 	}

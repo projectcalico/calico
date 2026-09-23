@@ -35,9 +35,17 @@ func TestPinnedOperator(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
 		args         []string
+		env          map[string]string
 		wantRegistry string
 		wantImage    string
 	}{
+		{
+			name:         "empty env vars leave the pin",
+			args:         []string{"publish"},
+			env:          map[string]string{"OPERATOR_REGISTRY": "", "OPERATOR_IMAGE": ""},
+			wantRegistry: "quay.io/pinned",
+			wantImage:    "operator",
+		},
 		{name: "unset flags leave the pin", args: []string{"publish"}, wantRegistry: "quay.io/pinned", wantImage: "operator"},
 		{
 			name:         "registry flag overrides the pin",
@@ -53,6 +61,9 @@ func TestPinnedOperator(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			for k, v := range tc.env {
+				t.Setenv(k, v)
+			}
 			cfg := &Config{RepoRootDir: "/repo"}
 			var got operator.Operator
 			cmd := &cli.Command{
@@ -223,5 +234,26 @@ func TestOperatorLogsUnderTheProductVersion(t *testing.T) {
 		if !strings.HasPrefix(p, "/logs/v3.34.0/") {
 			t.Errorf("log %q is not under /logs/v3.34.0", p)
 		}
+	}
+}
+
+func TestOperatorFollowsTheProductRegistry(t *testing.T) {
+	prev := productRegistry
+	productRegistry = func(*cli.Command) string { return "gcr.io/chosen/path" }
+	t.Cleanup(func() { productRegistry = prev })
+
+	var got operator.Operator
+	cmd := &cli.Command{
+		Flags: freshFlags(operatorBuildFlags),
+		Action: func(_ context.Context, c *cli.Command) error {
+			got = pinnedOperator(&Config{RepoRootDir: "/repo"}, c, registry.Component{Version: "v1.44.0"}, "v3.34.0")
+			return nil
+		},
+	}
+	if err := cmd.Run(context.Background(), []string{"build"}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if got.ProductRegistry != "gcr.io/chosen/path" {
+		t.Errorf("ProductRegistry = %q, want gcr.io/chosen/path", got.ProductRegistry)
 	}
 }

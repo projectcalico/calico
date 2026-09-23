@@ -34,12 +34,8 @@ func Build(o Operator, variants []Variant, hashrelease bool, opts ...BuildOption
 	if err := s.preBuildValidation(); err != nil {
 		return err
 	}
-	env, err := buildEnv(s.Operator)
-	if err != nil {
-		return s.Errorf("%w", err)
-	}
 	return eachVariant(variants, func(v Variant) error {
-		return s.run(buildTarget, v, hashrelease, env)
+		return s.run(buildTarget, v, hashrelease, nil)
 	})
 }
 
@@ -99,7 +95,12 @@ func eachVariant(variants []Variant, fn func(Variant) error) error {
 
 // The variant's env goes last so an inherited value cannot pick the variant.
 func (s settings) run(target string, v Variant, hashrelease bool, env []string) error {
+	product, err := productEnv(s.Operator)
+	if err != nil {
+		return s.Errorf("%w", err)
+	}
 	full := append(os.Environ(), s.env(v, hashrelease)...)
+	full = append(full, product...)
 	full = append(full, env...)
 	full = append(full, v.Env...)
 
@@ -123,9 +124,11 @@ func logSlug(target string) string {
 	return strings.ReplaceAll(target, " ", "-")
 }
 
-// buildEnv names the product whose component images the built operator
-// deploys, which it bakes into its binary.
-var buildEnv = func(o Operator) ([]string, error) {
+// A replacement, not an append hook: a product can drop or rewrite a variable.
+var productEnv = func(o Operator) ([]string, error) {
+	if o.ProductRegistry == "" {
+		return nil, nil
+	}
 	reg, imagePath, err := productRegistryParts(o.ProductRegistry)
 	if err != nil {
 		return nil, err

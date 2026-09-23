@@ -129,7 +129,7 @@ func validate(o Operator) error {
 // guessed them would name images that were never published.
 func validateBuild(hashrelease bool) func(Operator) error {
 	return func(o Operator) error {
-		errs := []error{validate(o)}
+		errs := []error{validate(o), validateImage(o)}
 		if o.ProductRegistry == "" {
 			errs = append(errs, fmt.Errorf("no product registry specified"))
 		}
