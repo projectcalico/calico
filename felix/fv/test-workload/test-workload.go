@@ -16,6 +16,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -48,7 +49,7 @@ const usage = `test-workload, test workload for Felix FV testing.
 If <interface-name> is "", the workload will start in the current namespace.
 
 Usage:
-  test-workload [--protocol=<protocol>] [--namespace-path=<path>] [--sidecar-iptables] [--mtu=<mtu>] [--listen-any-ip] [--netkit] <interface-name> <ip-address> <ports>
+  test-workload [--protocol=<protocol>] [--namespace-path=<path>] [--sidecar-iptables] [--mtu=<mtu>] [--listen-any-ip] [--netkit] [--no-keepalive] <interface-name> <ip-address> <ports>
 `
 
 func main() {
@@ -86,6 +87,11 @@ func main() {
 	useNetkit := false
 	if arg, ok := arguments["--netkit"]; ok && arg.(bool) {
 		useNetkit = true
+	}
+	// Go enables a 15s keepalive on accepted TCP connections by default.
+	var lc net.ListenConfig
+	if arg, ok := arguments["--no-keepalive"]; ok && arg.(bool) {
+		lc.KeepAlive = -1
 	}
 
 	ports := strings.Split(portsStr, ",")
@@ -388,7 +394,7 @@ func main() {
 					}()
 				} else {
 					logCxt.Info("About to listen for TCP connections")
-					l, err := net.Listen("tcp", myAddr)
+					l, err := lc.Listen(context.Background(), "tcp", myAddr)
 					panicIfError(err)
 					logCxt.Info("Listening for TCP connections")
 					go func() {
