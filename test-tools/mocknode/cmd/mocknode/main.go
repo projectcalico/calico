@@ -25,9 +25,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
@@ -119,7 +119,7 @@ const (
 
 func main() {
 	defer func() {
-		logrus.WithField(logutils.FieldForceFlush, true).Warning("Exiting...")
+		logrus.WithField(logrusr.FieldForceFlush, true).Warning("Exiting...")
 	}()
 	configureLogging()
 	logrus.WithFields(logrus.Fields{
@@ -211,26 +211,26 @@ func getMyCPUTime() time.Duration {
 func configureLogging() {
 	logLevel := logrus.InfoLevel
 	logrus.SetLevel(logLevel)
-	logutils.ConfigureFormatter("mocknode")
+	logrusr.ConfigureFormatter("mocknode")
 
 	// Disable logrus' default output, which only supports a single destination.  We use the
 	// hook above to fan out logs to multiple destinations.
-	logrus.SetOutput(&logutils.NullWriter{})
+	logrus.SetOutput(&logrusr.NullWriter{})
 
 	// Since we push our logs onto a second thread via a channel, we can disable the
 	// Logger's built-in mutex completely.
 	logrus.StandardLogger().SetNoLock()
-	screenDest := logutils.NewStreamDestination(
+	screenDest := logrusr.NewStreamDestination(
 		logLevel,
 		os.Stdout,
-		make(chan logutils.QueuedLog, 1000),
+		make(chan logrusr.QueuedLog, 1000),
 		false,
 		counterLogErrors,
 	)
-	hook := logutils.NewBackgroundHook(
-		logutils.FilterLevels(logLevel),
+	hook := logrusr.NewBackgroundHook(
+		logrusr.FilterLevels(logLevel),
 		logrus.PanicLevel,
-		[]*logutils.Destination{screenDest},
+		[]*logrusr.Destination{screenDest},
 		counterLogErrors,
 	)
 	hook.Start()

@@ -28,7 +28,6 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
@@ -85,20 +84,11 @@ var _ = describe.CalicoDescribe(
 			cli, err := client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			nodes, err := e2enode.GetBoundedReadySchedulableNodes(ctx, f.ClientSet, 3)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(nodes.Items)).To(BeNumerically(">=", 2),
-				"workload egress tests require at least 2 schedulable nodes")
-
-			nodesInfo := utils.GetNodesInfo(f, nodes, false)
+			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
 			allNames := nodesInfo.GetNames()
 			allIPs := nodesInfo.GetIPv4s()
-			Expect(len(allNames)).To(BeNumerically(">=", 2),
-				"workload egress tests require at least 2 non-master nodes with names")
 			Expect(len(allIPs)).To(BeNumerically(">=", 2),
-				"workload egress tests require at least 2 non-master nodes with IPv4 addresses")
+				"workload egress tests require at least 2 nodes with IPv4 addresses, found %d", len(allIPs))
 			nodeNames = allNames[:2]
 			nodeIPs = allIPs[:2]
 			logrus.Infof("Nodes: %v IPs: %v", nodeNames, nodeIPs)

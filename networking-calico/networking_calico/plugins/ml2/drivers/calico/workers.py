@@ -98,14 +98,40 @@ class CalicoManagerWorker(worker.BaseWorker):
     """Service for doing election and compaction.
 
     The super class will trigger the post_fork_initialize in the mech driver.
+
+    Holds a back-reference to the mech driver so stop() can ask the elector
+    to step down cleanly.  Without that, neutron-server's SIGTERM would just
+    kill the elector greenlet, the ``finally: _attempt_step_down()`` block
+    would not run, and the election key would linger in etcd until its lease
+    expired -- adding ttl seconds of delay before any node could win the
+    next election.
     """
+
+    def __init__(self, driver=None, *args, **kwargs):
+        super(CalicoManagerWorker, self).__init__(*args, **kwargs)
+        self._driver = driver
 
     def start(self, name="calico-manager", desc=None):
         """Start service."""
         super(CalicoManagerWorker, self).start(name, desc)
 
     def stop(self):
-        """Stop service."""
+        """Stop service.
+
+        Step down from mastership before chaining to the base ``stop()``.
+        The elector's stop() blocks until its greenlet has exited, which is
+        what runs the ``finally: _attempt_step_down()`` that deletes the
+        election key in etcd.  Guarded against the case where stop() fires
+        before post_fork_initialize has populated ``driver.elector``.
+        """
+        elector = getattr(self._driver, "elector", None) if self._driver else None
+        if elector is not None:
+            try:
+                elector.stop()
+            except Exception:
+                # Best-effort -- we are already on the shutdown path, and
+                # the key will expire with its lease either way.
+                LOG.exception("Error stopping elector during worker shutdown")
         super(CalicoManagerWorker, self).stop()
 
     def wait(self):

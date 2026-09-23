@@ -121,6 +121,11 @@ function Install-CNIPlugin()
     Write-Host "Copying CNI binaries to $env:CNI_BIN_DIR"
     cp "$baseDir\cni\*.exe" "$env:CNI_BIN_DIR"
 
+    # calico.exe is a monobinary that also acts as the IPAM plugin when invoked as
+    # calico-ipam, so install it under that name too (as cni-plugin's install-cni
+    # does) to satisfy the conf's calico-ipam ipam type.
+    cp "$env:CNI_BIN_DIR\calico.exe" "$env:CNI_BIN_DIR\calico-ipam.exe" -Force -ErrorAction Stop
+
     $cniConfFile = $env:CNI_CONF_DIR + "\" + $env:CNI_CONF_FILENAME
     Write-Host "Writing CNI configuration to $cniConfFile."
     $nodeNameFile = "$baseDir\nodename".replace('\', '\\')

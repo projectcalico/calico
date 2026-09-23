@@ -21,6 +21,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
+	. "github.com/onsi/gomega"
 )
 
 // RouteProto identifies the netlink protocol that owns a kernel route. The
@@ -121,7 +124,7 @@ func AssertRouteOwnership(t testing.TB, nodeName, dstSubstring, expectedDev stri
 	t.Helper()
 	t.Logf("Asserting routes for %q on node %s use dev=%q proto=%s",
 		dstSubstring, nodeName, expectedDev, expectedProto)
-	err := RetryUntilSuccess(t, 60*time.Second, func() error {
+	NewWithT(t).Eventually(func() error {
 		routes, err := GetNodeRoutes(t, nodeName, dstSubstring)
 		if err != nil {
 			return err
@@ -139,8 +142,32 @@ func AssertRouteOwnership(t testing.TB, nodeName, dstSubstring, expectedDev stri
 		}
 		return fmt.Errorf("no route on node %s with dev=%q proto=%s found among %v",
 			nodeName, expectedDev, expectedProto, routes)
-	})
-	if err != nil {
-		t.Fatalf("route ownership assertion failed: %v", err)
+	}, 60*time.Second, time.Second).Should(Succeed(), "route ownership assertion failed")
+}
+
+// AssertNoRouteWithProto waits until the main routing table on nodeName has no
+// route matching dstSubstring owned by proto, then confirms that holds for a
+// short window. Used to verify a component has stopped programming a route (e.g.
+// BIRD once the WireGuard peer filter takes effect). Eventually rather than an
+// immediate check because BIRD may briefly hold the route until the filter
+// converges; the trailing Consistently guards against it reappearing.
+func AssertNoRouteWithProto(t testing.TB, nodeName, dstSubstring string, proto RouteProto) {
+	t.Helper()
+	t.Logf("Waiting for no %s-owned route to %q on node %s", proto, dstSubstring, nodeName)
+	check := func() error {
+		routes, err := GetNodeRoutes(t, nodeName, dstSubstring)
+		if err != nil {
+			return err
+		}
+		for _, r := range routes {
+			if r.Proto == proto {
+				return fmt.Errorf("unexpected %s-owned route on node %s: %s", proto, nodeName, r.Raw)
+			}
+		}
+		return nil
 	}
+	NewWithT(t).Eventually(check, 90*time.Second, 3*time.Second).Should(Succeed(),
+		"expected %s to withdraw its route to %q on node %s", proto, dstSubstring, nodeName)
+	NewWithT(t).Consistently(check, 10*time.Second, 2*time.Second).Should(Succeed(),
+		"%s-owned route to %q on node %s reappeared", proto, dstSubstring, nodeName)
 }

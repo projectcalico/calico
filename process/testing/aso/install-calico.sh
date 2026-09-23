@@ -94,11 +94,11 @@ if [[ ${HASH_RELEASE} == 'true' && ${RELEASE_STREAM} != 'local' && ${RELEASE_STR
 	    exit 1
     fi
     if [ ${PRODUCT} == 'calient' ]; then
-      URL_HASH="https://latest-cnx.docs.eng.tigera.net/${RELEASE_STREAM}.txt"
+      URL_HASH="https://latest-cnx.hashrelease.tools.tigera.net/${RELEASE_STREAM}.txt"
     else
-      URL_HASH="https://latest-os.docs.eng.tigera.net/${RELEASE_STREAM}.txt"
+      URL_HASH="https://latest-os.hashrelease.tools.tigera.net/${RELEASE_STREAM}.txt"
     fi
-    RELEASE_BASE_URL=$(curl -sS ${URL_HASH})
+    RELEASE_BASE_URL=$(curl -fsS ${URL_HASH})
 fi
 
 if [[ ${RELEASE_STREAM} != 'local' && ${RELEASE_STREAM} != 'local-build' ]]; then

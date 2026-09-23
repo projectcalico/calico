@@ -101,6 +101,12 @@ type AllocationAttribute struct {
 
 	// AlternateOwnerAttrs stores attributes of a secondary owner, used during IP address migration.
 	AlternateOwnerAttrs map[string]string `json:"alternateOwnerAttrs,omitempty"`
+
+	// ReleasedAt is the time this allocation was released, and is set during the allocation's
+	// "cooldown" phase. After `IPCooldownSeconds` have elapsed, the IP is deallocated (moved
+	// from `Allocated` to `Unallocated`).
+	// +optional
+	ReleasedAt *metav1.Time `json:"releasedAt,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

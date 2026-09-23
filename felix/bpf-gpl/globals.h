@@ -5,6 +5,9 @@
 #ifndef __CALI_GLOBALS_H__
 #define __CALI_GLOBALS_H__
 
+#include <linux/types.h>
+#include <stdbool.h>
+
 #include "ip_addr.h"
 
 #define DECLARE_TC_GLOBAL_DATA(name, ip_t) \
@@ -50,6 +53,9 @@ struct cali_tc_preamble_globals {
 };
 
 enum cali_globals_flags {
+	/* Set on an attach point whose device encapsulates traffic: a vxlan,
+	 * ipip or wireguard device. */
+	CALI_GLOBALS_IFACE_ENCAPS                         = 0x00000001,
 	CALI_GLOBALS_RESERVED1                            = 0x00000002,
 	CALI_GLOBALS_RESERVED2                            = 0x00000004,
 	CALI_GLOBALS_RESERVED3                            = 0x00000008,
@@ -69,6 +75,8 @@ enum cali_globals_flags {
 	CALI_GLOBALS_WORKLOAD_SRC_SPOOFING_CONFIGURED     = 0x00020000,
 	CALI_GLOBALS_INGRESS_CONN_LIMIT_CONFIGURED        = 0x00040000,
 	CALI_GLOBALS_EGRESS_CONN_LIMIT_CONFIGURED         = 0x00080000,
+	CALI_GLOBALS_RESERVED21                           = 0x00100000,
+	CALI_GLOBALS_RESERVED22                           = 0x00200000,
 };
 
 struct cali_ctlb_globals {
@@ -85,6 +93,27 @@ struct cali_xdp_preamble_globals {
 	struct cali_xdp_globals v4;
 	struct cali_xdp_globals v6;
 };
+
+/* prog_flags holds per-program, load-time feature flags, distinct from the
+ * node-wide globals above: it lives in its own frozen read-only section so it
+ * does not disturb their layout, and Felix sets it per program at load. Because
+ * the section is frozen, the verifier folds each field to a constant and
+ * dead-code-eliminates the guarded branches (e.g. a program can load with no
+ * reference to the bpf_trace_printk helper at all). New per-program load-time
+ * flags belong here — append fields as needed.
+ */
+struct prog_flags {
+	/* no_trace_printk, when set, drops the code paths that call
+	 * bpf_trace_printk/bpf_trace_vprintk. Felix sets it on nodes running with
+	 * kernel lockdown=confidentiality, where ftrace is disabled and loading any
+	 * program that references the helper spams the kernel log on every load. */
+	__u8 no_trace_printk;
+};
+
+/* Instance lives in its own .rodata section; only objects that reference it get
+ * the map. Declared volatile const so the compiler emits real loads that the
+ * verifier can fold against the frozen map. */
+__attribute__((section(".rodata.prog_flags"))) volatile const struct prog_flags PROG_FLAGS;
 
 struct cali_ct_cleanup_globals {
     __u64 creation_grace;

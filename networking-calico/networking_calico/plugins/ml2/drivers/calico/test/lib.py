@@ -27,6 +27,19 @@ from types import SimpleNamespace
 import eventlet
 import mock
 
+# Grab the real classes and constants that the mocks below need to expose, while
+# the real packages are still importable: once sys.modules has been overwritten,
+# "from neutron_lib import constants" yields a MagicMock instead.
+#
+# It matters that these are the real objects.  A MagicMock attribute standing in
+# for an exception class is not a class, so "except that_attribute" raises
+# TypeError if it is ever evaluated, and a hand-written stand-in drifts from the
+# real thing without anything noticing.
+from neutron_lib.constants import IP_PROTOCOL_MAP
+from neutron_lib.exceptions import PortNotFound
+from oslo_db.exception import DBError
+from sqlalchemy.exc import SQLAlchemyError
+
 # When you're working on a test and need to see logging - both from the test
 # code and the code _under_ test - uncomment the following line.
 #
@@ -75,20 +88,22 @@ sys.modules["oslo_context"] = m_oslo_context = mock.Mock()
 sys.modules["oslo_db"] = m_oslo_db = mock.Mock()
 sys.modules["oslo_log"] = m_oslo_log = mock.Mock()
 sys.modules["sqlalchemy"] = m_sqlalchemy = mock.Mock()
-sys.modules["sqlalchemy.orm"] = m_sqlalchemy.orm
-sys.modules["sqlalchemy.orm.exc"] = m_sqlalchemy.orm.exc
 sys.modules["networking_calico.plugins.ml2.drivers.calico.qos_driver"] = (
     m_qos_driver
 ) = mock.Mock()
 
-# Set up some IP protocol mappings to test.  (Unfortunately, importing
-# the real IP_PROTOCOL_MAP from neutron_lib.constants tries to pull in
-# too much other stuff.)
-m_neutron_lib.constants.IP_PROTOCOL_MAP = {
-    "esp": 50,
-    "ah": 51,
-    "rsvp": 46,
-}
+# Expose the real protocol map, so that policy.py maps the same protocol names
+# in test as it does in production.
+m_neutron_lib.constants.IP_PROTOCOL_MAP = IP_PROTOCOL_MAP
+
+# Likewise the real exception classes, so that the code under test raises and
+# catches what it really would.  sqlalchemy.exc is not itself mocked, so without
+# this SQLAlchemyError would be a MagicMock attribute, and the "except
+# sa_exc.SQLAlchemyError" in mech_calico would raise TypeError the first time a
+# non-DBError exception reached it.
+m_neutron_lib.exceptions.PortNotFound = PortNotFound
+m_oslo_db.exception.DBError = DBError
+m_sqlalchemy.exc.SQLAlchemyError = SQLAlchemyError
 
 port1 = {
     "binding:vif_type": "tap",
@@ -179,35 +194,17 @@ class EtcdKeyNotFound(Exception):
     pass
 
 
-class DBError(Exception):
-    pass
-
-
-m_oslo_db.exception.DBError = DBError
-
-
-class NoResultFound(Exception):
-    pass
-
-
-m_sqlalchemy.orm.exc.NoResultFound = NoResultFound
-
-
-class PortNotFound(Exception):
-
-    def __init__(self, port_id=None):
-        super(PortNotFound, self).__init__()
-        self.port_id = port_id
-
-
-m_neutron_lib.exceptions.PortNotFound = PortNotFound
-
-
-# Define a stub class, that we will use as the base class for
-# CalicoMechanismDriver.
+# Define a stub class, that we will use as the base class for CalicoMechanismDriver.
+# The real ``neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase``
+# stashes ``vif_details`` on the instance and exposes a ``get_vif_details`` accessor;
+# mirror both so overrides that call up to ``super().get_vif_details(...)`` behave the
+# same in tests as they do in production.
 class DriverBase(object):
     def __init__(self, agent_type, vif_type, vif_details):
-        pass
+        self.vif_details = dict(vif_details)
+
+    def get_vif_details(self, context, agent, segment):
+        return self.vif_details
 
 
 # Define another stub class that mocks out leader election: assume we're always
@@ -234,7 +231,7 @@ m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = Driver
 from networking_calico import datamodel_v3
 from networking_calico import etcdutils
 from networking_calico import etcdv3
-from networking_calico.plugins.calico.context import SGRUpdateContext
+from networking_calico.plugins.calico.context import SGUpdateContext
 from networking_calico.plugins.ml2.drivers.calico import election
 from networking_calico.plugins.ml2.drivers.calico import endpoints
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
@@ -631,7 +628,7 @@ class Lib(object):
         try:
             return self.get_ports(context, filters={"id": [port_id]})[0]
         except IndexError:
-            raise mech_calico.n_exc.PortNotFound(port_id=port_id)
+            raise PortNotFound(port_id=port_id)
 
     def get_ports(self, context, filters=None):
         if filters is None:
@@ -701,10 +698,8 @@ class Lib(object):
             self.db.get_port.return_value = port
 
         if type == "rule":
-            # Call security_groups_rule_updated with the new or changed ID.
-            self.driver.security_groups_rule_updated(
-                SGRUpdateContext(mock.MagicMock(), [id])
-            )
+            # Call security_groups_updated with the new or changed ID.
+            self.driver.security_groups_updated(SGUpdateContext(mock.MagicMock(), [id]))
 
     def get_port_security_group_bindings(self, context, filters):
         if filters is None:

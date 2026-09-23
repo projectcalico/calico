@@ -216,6 +216,7 @@ func (c *ipamBlockClient) IPAMBlockV3toV1(kvpv3 *model.KVPair) (*model.KVPair, e
 				HandleID:            a.HandleID,
 				ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
 				AlternateOwnerAttrs: a.AlternateOwnerAttrs,
+				ReleasedAt:          a.ReleasedAt,
 			})
 		}
 
@@ -253,6 +254,7 @@ func (c *ipamBlockClient) IPAMBlockV3toV1(kvpv3 *model.KVPair) (*model.KVPair, e
 				HandleID:            a.HandleID,
 				ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
 				AlternateOwnerAttrs: a.AlternateOwnerAttrs,
+				ReleasedAt:          a.ReleasedAt,
 			})
 		}
 
@@ -291,6 +293,7 @@ func (c *ipamBlockClient) IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 				HandleID:            a.HandleID,
 				ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
 				AlternateOwnerAttrs: a.AlternateOwnerAttrs,
+				ReleasedAt:          a.ReleasedAt,
 			})
 		}
 
@@ -336,6 +339,7 @@ func (c *ipamBlockClient) IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 				HandleID:            a.HandleID,
 				ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
 				AlternateOwnerAttrs: a.AlternateOwnerAttrs,
+				ReleasedAt:          a.ReleasedAt,
 			})
 		}
 

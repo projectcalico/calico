@@ -44,6 +44,12 @@ trap 'exit_code=$?; if [ $exit_code -ne 0 ]; then echo ""; echo "===============
 # Create management cluster
 ${KIND} create cluster --image "kindest/node:${KINDEST_NODE_VERSION}" --name "${KIND_CLUSTER_NAME}" --verbosity 5
 ${KIND} get kubeconfig --name "${KIND_CLUSTER_NAME}" > "${ASO_DIR}/kind-kubeconfig"
+
+# Pin every kubectl/cmctl/helm call below to this cluster rather than the ambient
+# kubeconfig, whose default namespace on a CI pod is the pod's own (e.g. argoci).
+export KUBECONFIG="${ASO_DIR}/kind-kubeconfig"
+${KUBECTL} config set-context --current --namespace=default
+
 ${KUBECTL} wait node "${KIND_CLUSTER_NAME}-control-plane" --for=condition=ready --timeout=90s
 
 # Install cert-manager

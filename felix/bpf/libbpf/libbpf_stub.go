@@ -185,6 +185,7 @@ func (m *Map) IsMapInternal() bool {
 }
 
 const (
+	GlobalsIfaceEncaps                   uint32 = 1
 	GlobalsRPFOptionEnabled              uint32 = 16
 	GlobalsRPFOptionStrict               uint32 = 32
 	GlobalsNoDSRCidrs                    uint32 = 12345
@@ -243,6 +244,10 @@ func (t *CTCleanupGlobalData) Set(m *Map) error {
 }
 
 func (t *CTLBGlobalData) Set(m *Map) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (m *Map) SetProgFlags(noTracePrintk bool) error {
 	panic("LIBBPF syscall stub")
 }
 

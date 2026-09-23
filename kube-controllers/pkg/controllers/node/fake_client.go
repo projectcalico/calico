@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 
@@ -93,6 +94,23 @@ func (f *FakeCalicoClient) SetReleaseHostAffinityError(host string, err error) {
 			delete(fic.releaseHostAffinityErrors, host)
 		} else {
 			fic.releaseHostAffinityErrors[host] = err
+		}
+	}
+}
+
+// SetColdGCError configures the fake IPAM client to return the given error for the
+// specified CIDR block, simulating a stale-revision conflict during the cold IP GC sweep
+func (f *FakeCalicoClient) SetColdGCError(blockCIDR string, err error) {
+	if fic, ok := f.ipamClient.(*fakeIPAMClient); ok {
+		fic.Lock()
+		defer fic.Unlock()
+		if fic.coldGCErrors == nil {
+			fic.coldGCErrors = make(map[string]error)
+		}
+		if err == nil {
+			delete(fic.coldGCErrors, blockCIDR)
+		} else {
+			fic.coldGCErrors[blockCIDR] = err
 		}
 	}
 }
@@ -282,16 +300,41 @@ func (f *fakeNodeClient) Watch(ctx context.Context, opts options.ListOptions) (w
 // fakeIPAMClient implements ipam.Interface for testing purposes.
 type fakeIPAMClient struct {
 	sync.Mutex
+	config             ipam.IPAMConfig
 	affinitiesReleased map[string]bool
 	handlesReleased    map[string]bool
 	// Tracking for UpgradeHost calls
 	upgradeCalls     int
 	upgradeNodeNames []string
 	upgradeErrors    []error // returned in order on successive calls
+	garbageCollected bool
+
+	// garbageCollectedBlocks records the CIDR of every block passed to
+	// GarbageCollectColdIPs, so tests can assert which blocks the GC visited.
+	garbageCollectedBlocks []string
 
 	// releaseHostAffinityErrors maps host names to errors that ReleaseHostAffinities
 	// should return, simulating per-node "block not empty" failures during cleanup.
 	releaseHostAffinityErrors map[string]error
+
+	// coldGCErrors maps cold IPs to errors that GarbageCollectColdIPs should
+	// return, simulating stale-revision conflicts during the cold IP GC sweep.
+	coldGCErrors map[string]error
+	// coldGCSeen records the cold IPs passed to GarbageCollectColdIPs.
+	coldGCSeen map[string]bool
+}
+
+// gcBlocks returns the CIDRs of the blocks GarbageCollectColdIPs was called with.
+func (f *fakeIPAMClient) gcBlocks() []string {
+	f.Lock()
+	defer f.Unlock()
+	return slices.Clone(f.garbageCollectedBlocks)
+}
+
+func (f *fakeIPAMClient) coldGCVisited(blockCIDR string) bool {
+	f.Lock()
+	defer f.Unlock()
+	return f.coldGCSeen[blockCIDR]
 }
 
 func (f *fakeIPAMClient) affinityReleased(aff string) bool {
@@ -342,6 +385,11 @@ func (f *fakeIPAMClient) GetAssignmentAttributes(ctx context.Context, addr cnet.
 
 // SetOwnerAttributes sets ActiveOwnerAttrs and/or AlternateOwnerAttrs for an IP atomically.
 func (f *fakeIPAMClient) SetOwnerAttributes(ctx context.Context, ip cnet.IP, handleID string, updates *ipam.OwnerAttributeUpdates, preconditions *ipam.OwnerAttributePreconditions) error {
+	panic("not implemented") // TODO: Implement
+}
+
+// MoveIPToHandle transfers an already-allocated address to a new handle.
+func (f *fakeIPAMClient) MoveIPToHandle(ctx context.Context, ip cnet.IP, opts ipam.MoveOptions) error {
 	panic("not implemented") // TODO: Implement
 }
 
@@ -419,7 +467,7 @@ func (f *fakeIPAMClient) ReleasePoolAffinities(ctx context.Context, pool cnet.IP
 // has been set, returns a default configuration with StrictAffinity disabled
 // and AutoAllocateBlocks enabled.
 func (f *fakeIPAMClient) GetIPAMConfig(ctx context.Context) (*ipam.IPAMConfig, error) {
-	panic("not implemented") // TODO: Implement
+	return &f.config, nil
 }
 
 // SetIPAMConfig sets global IPAM configuration.  This can only
@@ -447,6 +495,22 @@ func (f *fakeIPAMClient) GetUtilization(ctx context.Context, args ipam.GetUtiliz
 // It returns IPv4, IPv6 block CIDR and any error encountered.
 func (f *fakeIPAMClient) EnsureBlock(ctx context.Context, args ipam.BlockArgs) (*cnet.IPNet, *cnet.IPNet, error) {
 	panic("not implemented") // TODO: Implement
+}
+
+func (f *fakeIPAMClient) GarbageCollectColdIPs(ctx context.Context, config *ipam.IPAMConfig, kvp *model.KVPair) error {
+	f.Lock()
+	defer f.Unlock()
+	f.garbageCollected = true
+	cidr := kvp.Key.(model.BlockKey).CIDR.String()
+	f.garbageCollectedBlocks = append(f.garbageCollectedBlocks, cidr)
+	if f.coldGCSeen == nil {
+		f.coldGCSeen = make(map[string]bool)
+	}
+	f.coldGCSeen[cidr] = true
+	if err, ok := f.coldGCErrors[cidr]; ok {
+		return err
+	}
+	return nil
 }
 
 func (c *fakeIPAMClient) UpgradeHost(ctx context.Context, nodeName string) error {

@@ -1,0 +1,56 @@
+# Condensed ArgoCI per-PR workflow; cc-argoci-handler expands it at runtime.
+# Ports the Semaphore "E2E tests on GCP kubeadm (local binary)" block, which was
+# the only e2e lane with no .argoci/cron counterpart — the cron suites test
+# published hashrelease images, this one tests the binary built from the PR.
+version: condensed
+generateName: e2e-pr-gcp-
+timeout: 3h
+globalPrologue: |
+  cd "${CI_HOME}/${CI_GIT_DIR}"
+  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
+  export ARGO_WORKFLOW_UID="{{workflow.uid}}"
+  source .argoci/scripts/global_prologue.sh
+globalEpilogue: |
+  source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
+defaults:
+  secretBundles:
+    - banzai-secrets
+steps:
+  - name: gcp-kubeadm-e2e-local-binary
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: TEST_TYPE
+        value: k8s-e2e
+      - name: PRODUCT
+        value: calico
+      # Names the Semaphore pipeline this lane replaces. Lens slices its history
+      # by this key, so it stays put even though the file is gone.
+      - name: FUNCTIONAL_AREA
+        value: e2e-gcp.yml
+      - name: PROVISIONER
+        value: gcp-kubeadm
+      - name: K8S_VERSION
+        value: stable
+      - name: INSTALLER
+        value: operator
+      - name: DATAPLANE
+        value: CalicoBPF
+      # Selection rationale lives in the config file itself.
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/gcp/bpf.yaml
+      # Builds the e2e binary and the rapidclient image from PR source rather
+      # than pulling the published ones.
+      - name: RUN_LOCAL_TESTS
+        value: "true"
+      - name: USE_PRIVATE_REGISTRY
+        value: "true"
+      - name: PRIVATE_REGISTRY
+        value: "quay.io/"
+      - name: USE_API_SERVER
+        value: "false"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+    commands: |
+      .argoci/scripts/body_standard.sh

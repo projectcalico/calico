@@ -92,19 +92,26 @@ type IPPoolStatus struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'Tunnel') || !has(self.namespaceSelector) || size(self.namespaceSelector) == 0",message="IP Pool with AllowedUse Tunnel cannot have namespaceSelector",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="!has(self.nodeSelector) || !self.nodeSelector.contains('global(')",message="global() selector is not valid for IPPool nodeSelector",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')",message="global() selector is not valid for IPPool namespaceSelector",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="cidr(self.cidr) == cidr(self.cidr).masked()",message="IPPool CIDR must be strictly masked",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!cidr('169.254.0.0/16').containsIP(cidr(self.cidr).ip()) && !cidr(self.cidr).containsIP('169.254.0.0')",message="IPPool CIDR overlaps with IPv4 link local range 169.254.0.0/16",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!cidr('fe80::/10').containsIP(cidr(self.cidr).ip()) && !cidr(self.cidr).containsIP('fe80::')",message="IPPool CIDR overlaps with IPv6 link local range fe80::/10",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.blockSize) || self.blockSize == 0 || (cidr(self.cidr).ip().family() == 4 ? self.blockSize >= 20 && self.blockSize <= 32 : self.blockSize >= 116 && self.blockSize <= 128)",message="blockSize must be between 20 and 32 for IPv4 pools, and between 116 and 128 for IPv6 pools",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="(has(self.disabled) && self.disabled) || cidr(self.cidr).prefixLength() <= (has(self.blockSize) && self.blockSize != 0 ? self.blockSize : (cidr(self.cidr).ip().family() == 4 ? 26 : 122))",message="IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.",reason=FieldValueInvalid
 type IPPoolSpec struct {
 	// The pool CIDR.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Format=cidr
-	// +kubebuilder:validation:MaxLength=48
+	// +kubebuilder:validation:MaxLength=49
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="CIDR cannot be changed; follow IP pool migration guide to avoid corruption.",reason=FieldValueInvalid
 	CIDR string `json:"cidr" validate:"net"`
 
 	// Contains configuration for VXLAN tunneling for this pool.
+	// +kubebuilder:default=Never
 	VXLANMode VXLANMode `json:"vxlanMode,omitempty"`
 
 	// Contains configuration for IPIP tunneling for this pool.
 	// For IPv6 pools, IPIP tunneling must be disabled.
+	// +kubebuilder:default=Never
 	IPIPMode IPIPMode `json:"ipipMode,omitempty"`
 
 	// When natOutgoing is true, packets sent from Calico networked containers in
@@ -118,8 +125,8 @@ type IPPoolSpec struct {
 	DisableBGPExport bool `json:"disableBGPExport,omitempty" validate:"omitempty"`
 
 	// The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 122 for IPv6.
-	// The block size must be between 0 and 32 for IPv4 and between 0 and 128 for IPv6. It must also be smaller than
-	// or equal to the size of the pool CIDR.
+	// The block size must be between 20 and 32 for IPv4 and between 116 and 128 for IPv6. It must also be smaller
+	// than or equal to the size of the pool CIDR.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=128
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="Block size cannot be changed; follow IP pool migration guide to avoid corruption.",reason=FieldValueInvalid

@@ -2,17 +2,20 @@
 // Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#ifndef __SKB_H__
-#define __SKB_H__
+#ifndef __CALI_SKB_H__
+#define __CALI_SKB_H__
 
 #include <linux/if_ether.h>
+#include <linux/in.h>
 #include <linux/ip.h>
-#include <linux/udp.h>
+#include <linux/ipv6.h>
 #include <linux/tcp.h>
+#include <linux/udp.h>
 
-#include "bpf.h"
-#include "types.h"
+#include "cali_bpf.h"
+#include "globals.h"
 #include "log.h"
+#include "types.h"
 
 /* skb_start_ptr is equivalent to (void*)((__u64)skb->data); the read is done
  * in a way that is acceptable to the verifier and it is done as a volatile read
@@ -173,6 +176,26 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 	return 0;
 }
 
+/* bpf_load_bytes copies len bytes of packet data at offset into buf, using the
+ * loader helper appropriate to the program type.
+ */
+static CALI_BPF_INLINE int bpf_load_bytes(struct cali_tc_ctx *ctx, __u32 offset, void *buf, __u32 len)
+{
+	int ret;
+
+#if CALI_F_XDP
+	if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_xdp_load_bytes)) {
+		ret = bpf_xdp_load_bytes(ctx->xdp, offset, buf, len);
+	} else {
+		return -22 /* EINVAL */;
+	}
+#else /* CALI_F_XDP */
+	ret = bpf_skb_load_bytes(ctx->skb, offset, buf, len);
+#endif /* CALI_F_XDP */
+
+	return ret;
+}
+
 #define skb_ptr_after(skb, ptr) ((void *)((ptr) + 1))
 #define skb_seen(skb) (((skb)->mark & CALI_SKB_MARK_SEEN_MASK) == CALI_SKB_MARK_SEEN)
 
@@ -208,6 +231,17 @@ static CALI_BPF_INLINE void skb_set_mark(struct __sk_buff *skb, __u32 mark)
 
 static CALI_BPF_INLINE void skb_log(struct cali_tc_ctx *ctx, bool accepted)
 {
+	/* skb_log's bpf_trace_vprintk/bpf_log calls are the only unconditional
+	 * reference to the trace-printk helpers in the main programs (they are gated
+	 * at runtime by CALI_ST_LOG_PACKET, not by CALI_LOG_LEVEL, so they survive
+	 * into the no_log builds). When Felix sets no_trace_printk (kernel
+	 * lockdown=confidentiality), this constant read folds and the verifier
+	 * dead-code-eliminates the rest of the function, so the loaded program
+	 * carries no trace-printk reference and its load does not spam the kernel
+	 * log. The policy Log action cannot work under that lockdown level anyway. */
+	if (PROG_FLAGS.no_trace_printk) {
+		return;
+	}
 	if (ctx->state->flags & CALI_ST_LOG_PACKET) {
 		if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_trace_vprintk)) {
 #if CALI_F_XDP
@@ -244,4 +278,27 @@ static CALI_BPF_INLINE void skb_log(struct cali_tc_ctx *ctx, bool accepted)
 	}
 }
 
-#endif /* __SKB_H__ */
+/* tcp_seq_space returns the sequence numbers this segment consumes: its payload
+ * plus one for each of SYN and FIN. */
+static CALI_BPF_INLINE __u32 tcp_seq_space(struct cali_tc_ctx *ctx, struct tcphdr *tcp_header)
+{
+	/* The IP header, not skb->len: the latter can include Ethernet padding
+	 * on a small frame, which would over-advance snd_nxt. */
+	int hdrs = ctx->ipheader_len + tcp_header->doff * 4;
+
+#ifdef IPVER6
+	/* state->ip_size is payload_len, which excludes the base header that
+	 * ipheader_len counts. */
+	hdrs -= IP_SIZE;
+#endif
+
+	int payload = (int)bpf_ntohs(ctx->state->ip_size) - hdrs;
+
+	if (payload < 0) {
+		payload = 0;
+	}
+
+	return (__u32)payload + (tcp_header->syn ? 1 : 0) + (tcp_header->fin ? 1 : 0);
+}
+
+#endif /* __CALI_SKB_H__ */

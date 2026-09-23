@@ -25,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 const (
@@ -131,6 +132,35 @@ func GetNodesInfo(f *framework.Framework, nodes *corev1.NodeList, masterOK bool)
 		calicoNodeNames: calicoNodeNames,
 		tunnelIPs:       tunnelIPs,
 	}
+}
+
+// AwaitReadySchedulableNodesInfo polls until at least minCount ready and
+// schedulable nodes are available, then returns their NodesInfo. masterOK
+// controls whether the control-plane node is eligible (see GetNodesInfo).
+//
+// It retries rather than asserting once because a node can be *transiently*
+// unschedulable. For example, a HostEndpoint datapath test reprogramming the
+// BPF dataplane on a host interface briefly flaps calico-node readiness, which
+// re-adds the node.kubernetes.io/network-unavailable:NoSchedule taint; a
+// GetBoundedReadySchedulableNodes call landing in that window then reports too
+// few nodes. A one-shot node-count precondition races that recovery and fails
+// spuriously — use this helper for any multi-node requirement instead.
+func AwaitReadySchedulableNodesInfo(f *framework.Framework, minCount int, masterOK bool) NodesInfoGetter {
+	var info NodesInfoGetter
+	gomega.EventuallyWithOffset(1, func(g gomega.Gomega) {
+		// Keep the per-attempt timeout well under the polling interval so a slow
+		// or erroring List doesn't eat the whole Eventually budget in one attempt.
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		// Bound generously so we still clear minCount after any master node is
+		// filtered out.
+		nodes, err := e2enode.GetBoundedReadySchedulableNodes(ctx, f.ClientSet, minCount+4)
+		g.Expect(err).NotTo(gomega.HaveOccurred(), "failed to list schedulable nodes")
+		info = GetNodesInfo(f, nodes, masterOK)
+		g.Expect(len(info.GetNames())).To(gomega.BeNumerically(">=", minCount),
+			"require at least %d ready schedulable nodes, found %d", minCount, len(info.GetNames()))
+	}).WithTimeout(60 * time.Second).WithPolling(5 * time.Second).Should(gomega.Succeed())
+	return info
 }
 
 func getNodeTunnelIP(node *corev1.Node) string {

@@ -1,4 +1,4 @@
-// Copyright (c) 2017, 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ type IPReservationSpec struct {
 	// ReservedCIDRs is a list of CIDRs that Calico IPAM will exclude from new allocations.
 	// Each entry must be in CIDR notation (e.g., "10.0.0.0/24" or "10.0.0.1/32" for a single IP).
 	// +listType=set
-	// +kubebuilder:validation:Format=cidr
+	// +kubebuilder:validation:items:Format=cidr
 	ReservedCIDRs []string `json:"reservedCIDRs,omitempty" validate:"cidrs,omitempty"`
 }
 

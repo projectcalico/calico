@@ -55,3 +55,11 @@ var _ = DescribeTable("Actions",
 	Entry("DSCPAction", environment.Features{}, DSCPAction{Value: 0}, "--jump DSCP --set-dscp 0"),
 	Entry("DSCPAction", environment.Features{}, DSCPAction{Value: 20}, "--jump DSCP --set-dscp 20"),
 )
+
+var _ = Describe("FlowOffload", func() {
+	It("panics in iptables mode; flowtable offload is nftables-only", func() {
+		Expect(func() {
+			Actions().FlowOffload()
+		}).To(Panic())
+	})
+})

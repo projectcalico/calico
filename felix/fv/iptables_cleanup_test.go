@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ iptables cleanup tests", []
 	BeforeEach(func() {
 		infra = getInfra()
 		options = infrastructure.DefaultTopologyOptions()
-		options.ExtraEnvVars["FELIX_IptablesRefreshInterval"] = "1" // Make sure Felix re-scans iptables frequently
+		// Make sure Felix re-scans the dataplane frequently. Only one of these applies, depending
+		// on the mode Felix is in.
+		options.ExtraEnvVars["FELIX_IptablesRefreshInterval"] = "1"
+		options.ExtraEnvVars["FELIX_NftablesRefreshInterval"] = "1"
 		tc, _ = infrastructure.StartSingleNodeTopology(options, infra)
 	})
 
@@ -82,22 +85,70 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ iptables cleanup tests", []
 				Skip("This test is only relevant in nftables mode")
 			}
 
-			// Install some iptables rules that we expect to be cleaned up.
+			// Install some iptables rules that we expect to be cleaned up. Name the binaries
+			// explicitly: a previous Felix in iptables mode wrote via iptables-nft, and that's
+			// the dataplane the cleanup covers.
 			err := tc.Felixes[0].CopyFileIntoContainer("cali-iptables-dump.txt", "/iptables-dump.txt")
 			Expect(err).ToNot(HaveOccurred(), "Failed to copy iptables dump into felix container")
 			Eventually(func() error {
 				// Can fail if felix is trying to do a concurrent update.  Just keep trying...
-				return tc.Felixes[0].ExecMayFail("iptables-restore", "/iptables-dump.txt")
+				return tc.Felixes[0].ExecMayFail("iptables-nft-restore", "/iptables-dump.txt")
 			}, "5s", "100ms").ShouldNot(HaveOccurred())
+
+			// Restart so the rules are already there when Felix starts, as they would be after a
+			// mode switch.
+			tc.Felixes[0].Restart()
 		})
 
 		It("should clean up iptables rules when running in nftables mode", func() {
-			// There should be no cali chains left in iptables after Felix has run.
-			Eventually(func() string {
-				out, err := tc.Felixes[0].ExecOutput("iptables-save")
+			iptablesSave := func() string {
+				out, err := tc.Felixes[0].ExecOutput("iptables-nft-save")
 				Expect(err).NotTo(HaveOccurred())
 				return out
-			}, "5s").ShouldNot(ContainSubstring("cali-"))
+			}
+
+			// There should be no cali chains left in iptables after Felix has run.
+			Eventually(iptablesSave, "10s").ShouldNot(ContainSubstring("cali-"))
+
+			// Cleanup never terminates, so rules that turn up while Felix is running go too.
+			Eventually(func() error {
+				return tc.Felixes[0].ExecMayFail("iptables-nft-restore", "/iptables-dump.txt")
+			}, "5s", "100ms").ShouldNot(HaveOccurred())
+			Eventually(iptablesSave, "10s").ShouldNot(ContainSubstring("cali-"))
+		})
+	})
+
+	// The nftables and legacy copies of the shared tables are separate dataplanes, and only the
+	// legacy copies go through the CleanupOnly iptables tables.
+	Describe("switching from legacy iptables -> nftables", func() {
+		BeforeEach(func() {
+			if !NFTMode() {
+				Skip("This test is only relevant in nftables mode")
+			}
+
+			err := tc.Felixes[0].CopyFileIntoContainer("cali-iptables-dump.txt", "/iptables-dump.txt")
+			Expect(err).ToNot(HaveOccurred(), "Failed to copy iptables dump into felix container")
+			Eventually(func() error {
+				return tc.Felixes[0].ExecMayFail("iptables-legacy-restore", "/iptables-dump.txt")
+			}, "5s", "100ms").ShouldNot(HaveOccurred())
+
+			tc.Felixes[0].Restart()
+		})
+
+		It("should clean up legacy iptables rules when running in nftables mode", func() {
+			legacySave := func() string {
+				out, err := tc.Felixes[0].ExecOutput("iptables-legacy-save")
+				Expect(err).NotTo(HaveOccurred())
+				return out
+			}
+
+			Eventually(legacySave, "20s").ShouldNot(ContainSubstring("cali-"))
+
+			// Cleanup never terminates, so rules that turn up while Felix is running go too.
+			Eventually(func() error {
+				return tc.Felixes[0].ExecMayFail("iptables-legacy-restore", "/iptables-dump.txt")
+			}, "5s", "100ms").ShouldNot(HaveOccurred())
+			Eventually(legacySave, "20s").ShouldNot(ContainSubstring("cali-"))
 		})
 	})
 
@@ -113,16 +164,27 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ iptables cleanup tests", []
 			Eventually(func() error {
 				return tc.Felixes[0].ExecMayFail("nft", "-f", "/nftables-dump.txt")
 			}, "5s", "100ms").ShouldNot(HaveOccurred())
+
+			// See the iptables -> nftables case: the table is there before Felix starts.
+			tc.Felixes[0].Restart()
 		})
 
 		It("should clean up nftables rules when running in iptables mode", func() {
-			// The stale "table ip calico" should be cleaned up. The "table arp calico-arp"
-			// is legitimately created by Felix for ARP suppression regardless of dataplane mode.
-			Eventually(func() string {
+			listTables := func() string {
 				out, err := tc.Felixes[0].ExecOutput("nft", "list", "tables")
 				Expect(err).NotTo(HaveOccurred())
 				return out
-			}, "5s").ShouldNot(ContainSubstring("table ip calico"))
+			}
+
+			// The stale "table ip calico" should be cleaned up. The "table arp calico-arp"
+			// is legitimately created by Felix for ARP suppression regardless of dataplane mode.
+			Eventually(listTables, "5s").ShouldNot(ContainSubstring("table ip calico"))
+
+			// Cleanup never terminates, so a table that turns up while Felix is running goes too.
+			Eventually(func() error {
+				return tc.Felixes[0].ExecMayFail("nft", "-f", "/nftables-dump.txt")
+			}, "5s", "100ms").ShouldNot(HaveOccurred())
+			Eventually(listTables, "10s").ShouldNot(ContainSubstring("table ip calico"))
 		})
 	})
 })

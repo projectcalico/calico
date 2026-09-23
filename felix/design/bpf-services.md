@@ -161,7 +161,7 @@ runs:
 >   WireGuard, or no encap. It carries external traffic that has
 >   hit a NodePort on a node whose selected backend is on a
 >   different node. It uses a fixed VNI of **`0xca11c0`**
->   (`CALI_VXLAN_VNI` in `felix/bpf-gpl/nat.h`) — reserving that
+>   (`CALI_VXLAN_VNI` in `felix/bpf-gpl/nat_types.h`) — reserving that
 >   value so receivers can tell NodePort-forwarding packets from
 >   overlay packets on the same device.
 > - **Pod-to-pod overlay VXLAN** is what pod→pod traffic uses when
@@ -264,7 +264,7 @@ flow — return packets must still match the CT entry.
   layout need to respect both.
 - A change to DSR gating must still compile-time-assert
   `CALI_F_DSR` only with `CALI_F_FROM_WEP` or `CALI_F_HEP`
-  (see the `COMPILE_TIME_ASSERT` in `felix/bpf-gpl/bpf.h`). DSR
+  (see the `COMPILE_TIME_ASSERT` in `felix/bpf-gpl/cali_bpf.h`). DSR
   makes no sense on WEP ingress.
 
 
@@ -323,7 +323,7 @@ destination and then tail-calls into policy as any other caller
 would.
 
 Only HEP-ingress programs on the main interface need Maglev; the
-macro `HAS_MAGLEV` in `felix/bpf-gpl/bpf.h` expands to
+macro `HAS_MAGLEV` in `felix/bpf-gpl/cali_bpf.h` expands to
 `(CALI_F_FROM_HEP && CALI_F_MAIN)`, and `GetApplicableSubProgs` in
 `hook/map.go` only loads the Maglev sub-program for attach types
 where this is true.
@@ -424,6 +424,35 @@ per-packet forwarding does not revisit the affinity map. The affinity
 map's `last_used` is updated opportunistically on new-flow backend
 resolution; flow-lifetime fast-path packets are not affected.
 
+### Enforced affinity for unconnected UDP
+
+An *unconnected* UDP socket has no connect() for the CTLB to hook, so
+every `sendmsg` runs backend selection afresh. Without affinity,
+consecutive datagrams from one socket would land on different backends.
+The CTLB therefore enforces affinity for unconnected UDP on **every** UDP
+service, whether or not it asks for `sessionAffinity: ClientIP`
+(`connect.h`, passing `CTLB_UDP_NOT_SEEN_TIMEO` as
+`affinity_always_timeo` to `calico_nat_lookup`). The timeout is the
+`UDPTimeout` BPF conntrack timeout, and the entry's timestamp is
+refreshed on each use, so the affinity lasts as long as the socket keeps
+sending.
+
+These entries live in the same affinity map as the `sessionAffinity`
+ones. When both apply — a UDP service that also sets
+`sessionAffinity: ClientIP` — `calico_nat_lookup` uses whichever timeout
+is **longer**. Using the shorter one would break the promise the other
+made; in particular, honouring the CTLB's timeout over a service's
+3-hour `sessionAffinity` would re-pick a backend after a few idle
+seconds, which is not the stickiness the user asked for.
+
+A caveat on granularity: the CTLB looks the entry up with `client_ip` set
+to `VOID_IP`, because the source IP is not known at connect/sendmsg time.
+So there is one CTLB affinity entry per (service, port), shared by every
+workload on the node, rather than one per client IP. That is a known
+limitation (see the `XXX` comment in `connect.h`), independent of the
+timeout: within a burst of traffic the entry is refreshed on each use, so
+node-local clients coalesce onto one backend at any timeout value.
+
 ### Applicability
 
 - Works for both the TC path and the CTLB path: CTLB's connect-time
@@ -450,6 +479,19 @@ resolution; flow-lifetime fast-path packets are not affected.
 - An affinity entry that points at a backend that no longer exists
   must be treated as a miss, not as a drop. A change that tightens
   the "is backend still valid" check must preserve that.
+- The BPF programs never delete affinity entries; the syncer's
+  `cleanupSticky()` is the only reclaim path, and it runs on every
+  sync. Its notion of which frontends may hold entries, and for how
+  long, must therefore cover **every** writer — including the CTLB's
+  enforced UDP affinity, which has no `sessionAffinity` on the service
+  to key off. An entry the syncer does not recognise is deleted on the
+  next sync, which silently un-pins a live client. There are two
+  frontend writers — `writeSvc()` and, for a `LoadBalancer` or
+  `ExternalIP` frontend with `loadBalancerSourceRanges`,
+  `writeLBSrcRangeSvcNATKeys()` — and both must register the frontend
+  with `registerStickyFrontend()`. The BPF programs key affinity
+  entries on the destination alone, so all of a service's source-range
+  frontends share the affinity key of its zero-source-range frontend.
 
 
 
@@ -505,6 +547,40 @@ the BPF program ever runs.
 - Reverse-SNAT map (`cali_v4_srmsg` / `cali_v6_srmsg`) — used by
   the CTLB's `recvmsg` hook to undo destination rewrites.
 
+### Service IDs, and the second writer of these maps
+
+A service ID indexes the service's own block of the backend map, so
+**no two services may hold the same ID** — their backends would sit at
+the same `(id, ordinal)` keys and overwrite each other on every sync,
+leaving one frontend NATing to the other's backends. A service does
+share its ID with all of its *own* derived (NodePort, ExternalIP,
+LoadBalancer) frontends; that is how `applyDerived` points them at one
+block of backends.
+
+IDs are handed out by `newSvcID` and, on restart, re-adopted from the
+maps by `startupBuildPrev`, which pairs each frontend entry with the
+service that must have written it. Re-adoption keeps a restart from
+disrupting traffic, but it means Felix trusts the maps — and Felix is
+not their only writer:
+
+- the maps are pinned, so they outlive both Felix and calico-node;
+- with `bpfNetworkBootstrap` enabled the `ebpf-bootstrap` init
+  container programs the API server service into them on every
+  calico-node start, before Felix runs (`node/pkg/nodeinit`).
+
+So `startupBuildPrev` must **not** adopt an ID it finds shared by two
+different services: adopting it makes the conflict permanent, since
+`applySvc` keeps an unchanged service's ID forever and every later
+restart re-adopts it. Both services are instead left out of
+`prevSvcMap`, which gives each a fresh ID and rewrites its frontends
+and backends; nothing read through a duplicated ID is carried over,
+because those backends may belong to the other service.
+
+The bootstrap writer holds up the other end of the invariant: it
+reuses the ID already recorded for the service it is programming, and
+otherwise picks one no frontend entry uses, rather than assuming an ID
+is free.
+
 ### Semantics it enforces
 
 - Backend selection honours `externalTrafficPolicy=Local`
@@ -515,6 +591,34 @@ the BPF program ever runs.
   the Kubernetes draining semantics.
 - Session affinity populated and refreshed (Service session affinity).
 - Maglev LUTs regenerated consistently across nodes (Maglev load balancer).
+- The `default/kubernetes` API server service is never allowed to
+  drop to zero backends — see below.
+
+### API server service: never drop to zero backends
+
+With `bpfNetworkBootstrap` enabled, Felix reaches the API server
+*through* the `default/kubernetes` ClusterIP service's NAT entry
+(`KUBERNETES_SERVICE_HOST` is the ClusterIP, and the
+`ebpf-bootstrap` init container seeds the frontend/backend from
+`KUBERNETES_SERVICE_IPS_PORTS` / `KUBERNETES_APISERVER_ENDPOINTS`
+before Felix starts — see `node/pkg/nodeinit/calico-init_linux.go`).
+
+This creates a hazard the generic kube-proxy model doesn't have:
+if that service transiently loses all its (ready) endpoints — e.g.
+the API server's own endpoint reconciler de-lists it across a
+restart — the syncer would write `count=0` and delete the backend,
+**severing Felix's own connection to the API server**. Felix can
+then no longer learn the restored endpoints, so the NAT stays empty
+until calico-node is restarted (which re-seeds it from the init
+container). The deadlock is therefore unique to bootstrap mode.
+
+The syncer therefore retains the last-known-good backend for the
+API server service whenever an update would leave it with zero ready
+endpoints (`apiServerFallbackEps` in `syncer.go`, sourced from
+`prevEpsMap`, which is rebuilt from the BPF maps on restart by
+`startupBuildPrev`). The API server's backend (the control-plane
+host IP) is stable across such an outage, so the retained backend is
+correct; a later update with real ready endpoints overwrites it.
 
 ### Review notes
 
@@ -531,6 +635,17 @@ the BPF program ever runs.
 - Syncer changes should preserve the "converge, then apply" model
   — don't emit partial state to BPF mid-update. A partially-synced
   service can serve traffic to a non-existent backend.
+- Don't weaken the "API server service never drops to zero
+  backends" guarantee (above) without accounting for the bootstrap
+  deadlock. Generalising the preservation to other services would
+  be wrong: a normal service legitimately scaling to zero must clear
+  its backends so clients get a connection refusal rather than NAT
+  to a dead backend.
+- Anything that writes a service ID — in Felix or in the bootstrap
+  init container — must keep IDs unique across services (above). A
+  change to either writer needs to hold up its end: Felix does not
+  adopt duplicated IDs from the maps, and the bootstrap does not claim
+  an ID that is already in use.
 
 
 
@@ -618,17 +733,9 @@ issue.
 
 ---
 
-## Keep this doc in sync with the code
+## Cross-cutting rules
 
-A change to how the BPF dataplane works in the area this file
-covers must update the relevant section in the same PR — new
-mechanism, new flag, new map field, new config knob, or any
-change to the packet path. Exemptions: (a) bug fix restoring
-documented behaviour, (b) mechanical refactor with no observable
-change, (c) comment / log-message edits, (d) dependency bumps.
-If in doubt, update.
-
-Cross-cutting rules that apply to **every** BPF change (map
-versioning, mark discipline, sub-program registration, kernel-
-version sensitivity) live in
+Rules that apply to **every** BPF change (map versioning, mark
+discipline, sub-program registration, kernel-version sensitivity)
+live in
 [`bpf-overview.md` → Cross-cutting review notes](./bpf-overview.md).

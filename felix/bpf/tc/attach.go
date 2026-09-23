@@ -70,6 +70,7 @@ type AttachPoint struct {
 	NATOutgoingExcludeHosts       bool
 	UDPOnly                       bool
 	RedirectPeer                  bool
+	IfaceEncaps                   bool
 	FlowLogsEnabled               bool
 	OverlayTunnelID               uint32
 	AttachType                    apiv3.BPFAttachOption
@@ -210,7 +211,11 @@ func (ap *AttachPoint) AttachProgram() error {
 	// only need to load and configure the preamble that will pass the
 	// configuration further to the selected set of programs.
 
-	binaryToLoad := path.Join(bpfdefs.ObjectDir, fmt.Sprintf("tc_preamble_%s.o", ap.Hook))
+	preambleName := fmt.Sprintf("tc_preamble_%s", ap.Hook)
+	if ap.NoTracePrintk {
+		preambleName += "_notrace"
+	}
+	binaryToLoad := path.Join(bpfdefs.ObjectDir, preambleName+".o")
 	if ap.IsNetkit() {
 		err := ap.attachNetkitProgram(binaryToLoad)
 		if err != nil {
@@ -234,6 +239,10 @@ func (ap *AttachPoint) AttachProgram() error {
 		if err != nil {
 			log.Errorf("error removing qdisc from %s:%s", ap.Iface, err)
 		}
+		// A netkit device driven by TC/TCX still runs whatever netkit program is
+		// attached to it, so leaving one behind would mean two dataplanes on one
+		// device, each with its own policy and conntrack state.
+		ap.cleanUpNetkitAttach()
 		logCxt.Info("Program attached to tcx.")
 		return nil
 	}
@@ -267,7 +276,21 @@ func (ap *AttachPoint) AttachProgram() error {
 			logCxt.Warnf("error removing tcx program from %s", err)
 		}
 	}
+	ap.cleanUpNetkitAttach()
 	return nil
+}
+
+// cleanUpNetkitAttach removes a netkit attachment left over from an earlier run
+// that used the netkit mechanism on this interface. It is a no-op on the vast
+// majority of interfaces, which never had one.
+func (ap *AttachPoint) cleanUpNetkitAttach() {
+	if _, err := os.Stat(ap.NetkitProgPinPath()); err != nil {
+		return
+	}
+	ap.Log().Info("Removing existing netkit program")
+	if err := ap.detachNetkitProgram(); err != nil {
+		ap.Log().Warnf("error removing netkit program: %s", err)
+	}
 }
 
 func (ap *AttachPoint) ProgPinPath() string {
@@ -616,6 +639,10 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		globalData.Flags |= libbpf.GlobalsRedirectPeer
 	}
 
+	if ap.IfaceEncaps {
+		globalData.Flags |= libbpf.GlobalsIfaceEncaps
+	}
+
 	if ap.FlowLogsEnabled {
 		globalData.Flags |= libbpf.GlobalsFlowLogsEnabled
 	}
@@ -632,11 +659,12 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		globalData.Flags |= libbpf.GlobalsUDPGSOLinearize
 	}
 
-	globalData.HostTunnelIPv4 = globalData.HostIPv4
-	globalData.HostTunnelIPv6 = globalData.HostIPv6
-
-	copy(globalData.HostTunnelIPv4[0:4], ap.HostTunnelIPv4.To4())
-	copy(globalData.HostTunnelIPv6[:], ap.HostTunnelIPv6.To16())
+	if ap.HostTunnelIPv4 != nil {
+		copy(globalData.HostTunnelIPv4[0:4], ap.HostTunnelIPv4.To4())
+	}
+	if ap.HostTunnelIPv6 != nil {
+		copy(globalData.HostTunnelIPv6[:], ap.HostTunnelIPv6.To16())
+	}
 
 	for i := range len(globalData.Jumps) {
 		globalData.Jumps[i] = 0xffffffff   /* uint32(-1) */
@@ -672,6 +700,24 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 	globalData.OverlayTunnelID = ap.OverlayTunnelID
 
 	return globalData
+}
+
+// ResolveAttachType maps a configured BPFAttachType onto the mechanism used for
+// attach points that are not netkit-attached, and reports whether netkit
+// attachment may be used at all. Netkit is not a mechanism that applies to every
+// device, only to workload netkit devices, so it resolves to TCX for everything
+// else; TCX in turn falls back to TC on kernels without it. Callers that only
+// care about the mechanism can therefore treat the result as a two-valued enum.
+func ResolveAttachType(attachType apiv3.BPFAttachOption) (mechanism apiv3.BPFAttachOption, netkitAllowed bool) {
+	mechanism = attachType
+	if mechanism == apiv3.BPFAttachOptionNetkit {
+		netkitAllowed = true
+		mechanism = apiv3.BPFAttachOptionTCX
+	}
+	if mechanism == apiv3.BPFAttachOptionTCX && !IsTcxSupported() {
+		mechanism = apiv3.BPFAttachOptionTC
+	}
+	return mechanism, netkitAllowed
 }
 
 var IsTcxSupported = sync.OnceValue(func() bool {

@@ -20,11 +20,39 @@ import (
 )
 
 // GlobalNetworkSetInformer provides access to a shared informer and lister for
-// GlobalNetworkSets.
+// GlobalNetworkSets. Prefer using the type-safe variant (see [TypedGlobalNetworkSetInformer]).
 type GlobalNetworkSetInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.GlobalNetworkSetLister
 }
+
+// TypedGlobalNetworkSetInformer provides access to a shared informer and lister for
+// GlobalNetworkSets, including the type-safe TypedInformer variant.
+// It is a superset of GlobalNetworkSetInformer.
+type TypedGlobalNetworkSetInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() GlobalNetworkSetIndexInformer
+	Lister() projectcalicov3.GlobalNetworkSetLister
+}
+
+// GlobalNetworkSetIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type GlobalNetworkSetIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.GlobalNetworkSet]
+
+// GlobalNetworkSetHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for GlobalNetworkSet.
+type GlobalNetworkSetHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.GlobalNetworkSet]
+
+// GlobalNetworkSetDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for GlobalNetworkSet.
+type GlobalNetworkSetDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.GlobalNetworkSet]
+
+// GlobalNetworkSetFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for GlobalNetworkSet.
+type GlobalNetworkSetFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.GlobalNetworkSet]
+
+// GlobalNetworkSetIndexers is a specialization of [cache.TypedIndexers] for GlobalNetworkSet.
+type GlobalNetworkSetIndexers = cache.TypedIndexers[*apisprojectcalicov3.GlobalNetworkSet]
+
+// DeletedGlobalNetworkSet is a specialization of [cache.DeletedObject] for GlobalNetworkSet.
+type DeletedGlobalNetworkSet = cache.DeletedObject[*apisprojectcalicov3.GlobalNetworkSet]
 
 type globalNetworkSetInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,25 +62,49 @@ type globalNetworkSetInformer struct {
 // NewGlobalNetworkSetInformer constructs a new informer for GlobalNetworkSet type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedGlobalNetworkSetInformer]).
 func NewGlobalNetworkSetInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewGlobalNetworkSetInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedGlobalNetworkSetInformer constructs a new informer for GlobalNetworkSet type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedGlobalNetworkSetInformer(client clientset.Interface, resyncPeriod time.Duration, indexers GlobalNetworkSetIndexers) GlobalNetworkSetIndexInformer {
+	return NewTypedGlobalNetworkSetInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredGlobalNetworkSetInformer constructs a new informer for GlobalNetworkSet type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredGlobalNetworkSetInformer]).
 func NewFilteredGlobalNetworkSetInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewGlobalNetworkSetInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedGlobalNetworkSetInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredGlobalNetworkSetInformer constructs a new informer for GlobalNetworkSet type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredGlobalNetworkSetInformer(client clientset.Interface, resyncPeriod time.Duration, indexers GlobalNetworkSetIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) GlobalNetworkSetIndexInformer {
+	return NewTypedGlobalNetworkSetInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewGlobalNetworkSetInformerWithOptions constructs a new informer for GlobalNetworkSet type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedGlobalNetworkSetInformerWithOptions]).
 func NewGlobalNetworkSetInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedGlobalNetworkSetInformerWithOptions(client, options)
+}
+
+// NewTypedGlobalNetworkSetInformerWithOptions constructs a new informer for GlobalNetworkSet type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedGlobalNetworkSetInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) GlobalNetworkSetIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "globalnetworksets"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.GlobalNetworkSet](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -85,17 +137,57 @@ func NewGlobalNetworkSetInformerWithOptions(client clientset.Interface, options 
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *globalNetworkSetInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewGlobalNetworkSetInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedGlobalNetworkSetInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *globalNetworkSetInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.GlobalNetworkSet{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *globalNetworkSetInformer) TypedInformer() GlobalNetworkSetIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.GlobalNetworkSet](f.factory.InformerFor(&apisprojectcalicov3.GlobalNetworkSet{}, f.defaultInformer))
 }
 
 func (f *globalNetworkSetInformer) Lister() projectcalicov3.GlobalNetworkSetLister {
 	return projectcalicov3.NewGlobalNetworkSetLister(f.Informer().GetIndexer())
+}
+
+// ToTypedGlobalNetworkSetInformer converts an untyped informer into a TypedGlobalNetworkSetInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *GlobalNetworkSet. If that is not the case, calling type-safe methods of the returned
+// TypedGlobalNetworkSetInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedGlobalNetworkSetInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedGlobalNetworkSetInformer(informer GlobalNetworkSetInformer) TypedGlobalNetworkSetInformer {
+	if informer, ok := informer.(TypedGlobalNetworkSetInformer); ok {
+		return informer
+	}
+	return &globalNetworkSetTypedInformerAdapter{informer}
+}
+
+type globalNetworkSetTypedInformerAdapter struct {
+	GlobalNetworkSetInformer
+}
+
+func (a *globalNetworkSetTypedInformerAdapter) TypedInformer() GlobalNetworkSetIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.GlobalNetworkSet](a.Informer())
+}
+
+// ToGlobalNetworkSetIndexInformer converts an untyped informer into a GlobalNetworkSetIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *GlobalNetworkSet. If that is not the case, calling type-safe methods of the returned
+// GlobalNetworkSetIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a GlobalNetworkSetIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToGlobalNetworkSetIndexInformer(informer cache.SharedIndexInformer) GlobalNetworkSetIndexInformer {
+	if informer, ok := informer.(GlobalNetworkSetIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.GlobalNetworkSet](informer)
 }

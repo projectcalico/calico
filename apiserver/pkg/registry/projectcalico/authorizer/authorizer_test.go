@@ -32,6 +32,19 @@ func (t *testAuth) Authorize(ctx context.Context, a k8sauth.Attributes) (authori
 	return d, "", nil
 }
 
+// ConditionsAwareAuthorize satisfies the conditions-aware Authorizer interface
+// added in Kubernetes 1.37. This mock is not conditions-aware, so it defers to
+// Authorize as the upstream interface documents.
+func (t *testAuth) ConditionsAwareAuthorize(ctx context.Context, a k8sauth.Attributes) k8sauth.ConditionsAwareDecision {
+	return k8sauth.ConditionsAwareDecisionFromParts(t.Authorize(ctx, a))
+}
+
+// EvaluateConditions satisfies the conditions-aware Authorizer interface added
+// in Kubernetes 1.37. This mock does not support conditions, so it fails closed.
+func (t *testAuth) EvaluateConditions(ctx context.Context, decision k8sauth.ConditionsAwareDecision, data k8sauth.ConditionsData) (k8sauth.Decision, string, error) {
+	return k8sauth.DecisionDeny, "", k8sauth.ErrorConditionEvaluationNotSupported
+}
+
 var (
 	// Test users and attributes that are used for multiple tests.
 	testUser = &user.DefaultInfo{

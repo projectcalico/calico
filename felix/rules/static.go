@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,15 +22,21 @@ import (
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/generictables"
-	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 func (r *DefaultRuleRenderer) StaticFilterTableChains(ipVersion uint8) (chains []*generictables.Chain) {
-	chains = append(chains, r.StaticFilterForwardChains()...)
+	chains = append(chains, r.StaticFilterForwardChains(ipVersion)...)
 	chains = append(chains, r.StaticFilterInputChains(ipVersion)...)
 	chains = append(chains, r.StaticFilterOutputChains(ipVersion)...)
+	if r.LogConnectionTransitions {
+		chains = append(chains, r.connStateLogChain(ipVersion))
+	}
+	if r.nft && r.NFTablesFlowTableOffload {
+		chains = append(chains, r.FlowOffloadChain(ipVersion))
+	}
 	return
 }
 
@@ -606,8 +612,18 @@ func (r *DefaultRuleRenderer) failsafeOutChain(table string, ipVersion uint8) *g
 	}
 }
 
-func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*generictables.Chain {
+func (r *DefaultRuleRenderer) StaticFilterForwardChains(ipVersion uint8) []*generictables.Chain {
 	rules := []generictables.Rule{}
+
+	if r.nft && r.NFTablesFlowTableOffload {
+		// Offload established flows here, ahead of the dispatch jumps below: the per-workload
+		// dispatch chains terminally accept established traffic, and the kernel only allows flow
+		// offload in chains reached from the forward hook.
+		rules = append(rules, generictables.Rule{
+			Match:  r.NewMatch().ConntrackState("RELATED,ESTABLISHED"),
+			Action: r.Jump(ChainFlowOffload),
+		})
+	}
 
 	// Rules for filter forward chains dispatches the packet to our dispatch chains if it is going
 	// to/from an interface that we're responsible for.  Note: the dispatch chains represent "allow"
@@ -670,11 +686,30 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*generictables.Chain
 	}}
 }
 
+// FlowOffloadChain renders the chain filter FORWARD jumps to under flowtable
+// offload. An offloaded flow skips FORWARD and POSTROUTING for its whole life,
+// so endpoints needing rules there are excluded by IP.
+func (r *DefaultRuleRenderer) FlowOffloadChain(ipVersion uint8) *generictables.Chain {
+	noOffloadSetName := r.ipSetConfig(ipVersion).NameForMainIPSet(IPSetIDNoFlowOffload)
+	return &generictables.Chain{
+		Name: ChainFlowOffload,
+		Rules: []generictables.Rule{{
+			Match: r.NewMatch().
+				NotSourceIPSet(noOffloadSetName).
+				NotDestIPSet(noOffloadSetName),
+			Action:  r.FlowOffload(),
+			Comment: []string{"Offload established Calico flows."},
+		}},
+	}
+}
+
 // StaticFilterForwardAppendRules returns rules which should be statically appended to the end of the filter
 // table's forward chain.
 func (r *DefaultRuleRenderer) StaticFilterForwardAppendRules() []generictables.Rule {
-	return []generictables.Rule{
-		{
+	var rules []generictables.Rule
+
+	rules = append(rules,
+		generictables.Rule{
 			Match:   r.NewMatch().MarkSingleBitSet(r.MarkAccept),
 			Action:  r.filterAllowAction,
 			Comment: []string{"Policy explicitly accepted packet."},
@@ -682,10 +717,12 @@ func (r *DefaultRuleRenderer) StaticFilterForwardAppendRules() []generictables.R
 
 		// Set IptablesMarkAccept bit here, to indicate to our mangle-POSTROUTING chain that this is
 		// forwarded traffic and should not be subject to normal host endpoint policy.
-		{
+		generictables.Rule{
 			Action: r.SetMark(r.MarkAccept),
 		},
-	}
+	)
+
+	return rules
 }
 
 func (r *DefaultRuleRenderer) StaticFilterOutputChains(ipVersion uint8) []*generictables.Chain {
@@ -704,6 +741,13 @@ func (r *DefaultRuleRenderer) StaticFilterOutputChains(ipVersion uint8) []*gener
 
 func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *generictables.Chain {
 	var rules []generictables.Rule
+
+	if r.LogConnectionTransitions {
+		// Replies to workload-to-host connections leave via this chain and return to the
+		// workload interface below without traversing any per-endpoint chain, so the
+		// connection state log check must happen here.
+		rules = append(rules, r.connStateLogRule())
+	}
 
 	// Accept immediately if we've already accepted this packet in the raw or mangle table.
 	rules = append(rules, r.acceptAlreadyAccepted()...)
@@ -829,7 +873,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *generictables.
 
 	// Matching on conntrack status varies by table type.
 	notDNATMatch := r.NewMatch()
-	if m, ok := notDNATMatch.(nftables.NFTMatchCriteria); ok {
+	if m, ok := notDNATMatch.(nftrender.NFTMatchCriteria); ok {
 		notDNATMatch = m.NotConntrackStatus("DNAT")
 	} else {
 		notDNATMatch = notDNATMatch.NotConntrackState("DNAT")
@@ -918,16 +962,31 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 		}, rules...)
 	}
 
+	// If a masquerade below picks the VXLAN port as the source port, replies come back
+	// with that as their dest port and get caught by our "Drop VXLAN packets from
+	// non-allowed hosts" filter rule. When VXLAN is enabled, build a source port range
+	// that excludes the VXLAN port and apply it to the UDP masquerade below.
+	// See https://github.com/projectcalico/calico/issues/12244.
+	masqToPorts := ""
+	if (ipVersion == 4 && r.VXLANEnabled) || (ipVersion == 6 && r.VXLANEnabledV6) {
+		masqToPorts = masqPortRangeExcluding(r.VXLANPort)
+	}
+
 	var tunnelIfaces []string
 
-	if ipVersion == 4 && r.IPIPEnabled && len(r.IPIPTunnelAddress) > 0 {
-		tunnelIfaces = append(tunnelIfaces, dataplanedefs.IPIPIfaceName)
-	}
-	if ipVersion == 4 && r.VXLANEnabled && len(r.VXLANTunnelAddress) > 0 {
-		tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV4)
-	}
-	if ipVersion == 6 && r.VXLANEnabledV6 && len(r.VXLANTunnelAddressV6) > 0 {
-		tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV6)
+	if !r.BPFEnabled || r.BPFOverlayIPOnDevice {
+		// In BPF mode (without BPFOverlayIPOnDevice), encap/decap and source IP
+		// selection are handled by BPF programs directly, so these masquerade
+		// rules for IPIP/VXLAN tunnels are not needed.
+		if ipVersion == 4 && r.IPIPEnabled && len(r.IPIPTunnelAddress) > 0 {
+			tunnelIfaces = append(tunnelIfaces, dataplanedefs.IPIPIfaceName)
+		}
+		if ipVersion == 4 && r.VXLANEnabled && len(r.VXLANTunnelAddress) > 0 {
+			tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV4)
+		}
+		if ipVersion == 6 && r.VXLANEnabledV6 && len(r.VXLANTunnelAddressV6) > 0 {
+			tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV6)
+		}
 	}
 	if ipVersion == 4 && r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 {
 		// Wireguard is assigned an IP dynamically and without restarting Felix. Just add the interface if we have
@@ -956,19 +1015,29 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 		// Other remote sources will only reach the tunnel if they're being NATted
 		// already (for example, a Kubernetes "NodePort").  The kernel will then
 		// choose the correct source on its own.
+		//
+		// Both rules below share the same match: packets going out the tunnel
+		// (OutInterface) whose source is not the tunnel's own address (NotSrcAddrType,
+		// limited to the output interface) but is some local IP on the box (SrcAddrType).
+		// Matching on address type rather than the specific IP keeps the rule static.
+		if masqToPorts != "" {
+			// Only UDP can hit the drop rule, so only UDP needs its source port
+			// constrained; the rule below masquerades everything else normally. A
+			// separate rule is needed regardless, since --to-ports is only valid on a
+			// rule that also matches a protocol.
+			rules = append(rules, generictables.Rule{
+				Match: r.NewMatch().
+					ProtocolNum(ProtoUDP).
+					OutInterface(tunnel).
+					NotSrcAddrType(generictables.AddrTypeLocal, true).
+					SrcAddrType(generictables.AddrTypeLocal, false),
+				Action: r.Masq(masqToPorts),
+			})
+		}
 		rules = append(rules, generictables.Rule{
 			Match: r.NewMatch().
-				// Only match packets going out the tunnel.
 				OutInterface(tunnel).
-				// Match packets that don't have the correct source address.  This
-				// matches local addresses (i.e. ones assigned to this host)
-				// limiting the match to the output interface (which we matched
-				// above as the tunnel).  Avoiding embedding the IP address lets
-				// us use a static rule, which is easier to manage.
 				NotSrcAddrType(generictables.AddrTypeLocal, true).
-				// Only match if the IP is also some local IP on the box.  This
-				// prevents us from matching packets from workloads, which are
-				// remote as far as the routing table is concerned.
 				SrcAddrType(generictables.AddrTypeLocal, false),
 			Action: r.Masq(""),
 		})
@@ -977,6 +1046,21 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 		Name:  ChainNATPostrouting,
 		Rules: rules,
 	}}
+}
+
+// masqPortRangeExcluding returns a masquerade "--to-ports" range that excludes the given
+// port. iptables and nftables only accept a single contiguous range, so we can't punch a
+// hole in the middle; instead we take whichever side of the port is wider, with a floor of
+// 1024 to stay off privileged ports. Returns "" (no restriction) for an out-of-range port.
+func masqPortRangeExcluding(port int) string {
+	if port <= 0 || port > 65535 {
+		return ""
+	}
+	const lo, hi = 1024, 65535
+	if port-lo >= hi-port {
+		return fmt.Sprintf("%d-%d", lo, port-1)
+	}
+	return fmt.Sprintf("%d-%d", port+1, hi)
 }
 
 func (r *DefaultRuleRenderer) StaticNATOutputChains(ipVersion uint8) []*generictables.Chain {
@@ -992,6 +1076,90 @@ func (r *DefaultRuleRenderer) StaticNATOutputChains(ipVersion uint8) []*generict
 	}}
 }
 
+// connStateLogRule returns the rule used at the top of the per-endpoint conntrack rules
+// (and the filter OUTPUT chain) to divert the first response packet of a connection that
+// matched a Log rule to the connection state log chain.  The ctstate match ensures that
+// only response (or related) packets are diverted; same-direction packets such as a
+// retransmitted SYN still carry the connmark bit but are ctstate NEW.
+func (r *DefaultRuleRenderer) connStateLogRule() generictables.Rule {
+	return generictables.Rule{
+		Match: r.NewMatch().
+			ConnMarkMatchesWithMask(r.MarkConnStateLog, r.MarkConnStateLog).
+			ConntrackState("RELATED,ESTABLISHED"),
+		Action: r.Jump(ChainConnStateLog),
+	}
+}
+
+// connStateLogChain builds the chain that receives the first response packet of each
+// connection that matched a policy Log rule.  It writes a single LOG recording how the
+// connection was answered, clears the "no response seen yet" connmark bit and returns.
+// Three mutually exclusive branches, each a LOG/clear/RETURN triplet (LOG is
+// non-terminating, so each branch must return before the next branch's LOG):
+//
+//   - TCP RST: the connection was refused.
+//   - Related ICMP error (e.g. port unreachable): conntrack associates ICMP errors with
+//     the original connection's conntrack entry, so they carry its connmark.  Any other
+//     ctstate RELATED packet (conntrack-helper child flows) falls through to the branch
+//     below rather than being logged as an ICMP error.
+//   - Anything else is the first genuine reply: the connection is established.
+//
+// These rules are not rate limited: the connmark bit that brings a packet here is only
+// set when the policy Log rule's own LOG was emitted (see
+// CombineMatchAndActionsForProtoRule), so the volume of these logs is already bounded
+// by LogActionRateLimit, and each of these logs pairs with a log that the user has
+// already seen.
+func (r *DefaultRuleRenderer) connStateLogChain(ipVersion uint8) *generictables.Chain {
+	icmpProtocol := "icmp"
+	if ipVersion == 6 {
+		icmpProtocol = "ipv6-icmp"
+	}
+	var rules []generictables.Rule
+	appendBranch := func(match generictables.MatchCriteria, logSuffix string) {
+		rules = append(rules,
+			generictables.Rule{
+				Match:  match,
+				Action: r.Log(r.connStateLogPrefix(logSuffix)),
+			},
+			generictables.Rule{
+				Match:  match,
+				Action: r.SetConnmark(0, r.MarkConnStateLog),
+			},
+			generictables.Rule{
+				Match:  match,
+				Action: r.Return(),
+			},
+		)
+	}
+	appendBranch(r.NewMatch().TCPFlagsSet("RST"), "-rst")
+	appendBranch(r.NewMatch().Protocol(icmpProtocol).ConntrackState("RELATED"), "-icmp-err")
+	appendBranch(r.NewMatch(), "-est")
+	return &generictables.Chain{
+		Name:  ChainConnStateLog,
+		Rules: rules,
+	}
+}
+
+// connStateLogPrefix generates the log prefix for a connection transition log by
+// appending the transition suffix to LogConnectionTransitionsPrefix.  The prefix is used
+// verbatim (the chain is shared by all endpoints so, unlike generateLogPrefix, per-policy
+// %-specifiers cannot be resolved) and truncated so that the suffix and the ": " appended
+// by the Log action stay within the backend's log prefix limit.
+func (r *DefaultRuleRenderer) connStateLogPrefix(suffix string) string {
+	base := r.LogConnectionTransitionsPrefix
+	if len(base) == 0 {
+		base = "calico-response"
+	}
+	maxLen := 29 // iptables shows at most 29 characters of log prefix.
+	if r.nft {
+		maxLen = 126 // nftables accepts at most 126 characters of log prefix.
+	}
+	maxBase := maxLen - len(suffix) - len(": ")
+	if len(base) > maxBase {
+		base = base[:maxBase]
+	}
+	return base + suffix
+}
+
 func (r *DefaultRuleRenderer) StaticMangleTableChains(ipVersion uint8) []*generictables.Chain {
 	var chains []*generictables.Chain
 
@@ -1001,6 +1169,11 @@ func (r *DefaultRuleRenderer) StaticMangleTableChains(ipVersion uint8) []*generi
 		r.StaticManglePreroutingChain(ipVersion),
 		r.StaticManglePostroutingChain(ipVersion),
 	)
+
+	if r.LogConnectionTransitions {
+		// The per-endpoint chains in this table jump to the connection state log chain.
+		chains = append(chains, r.connStateLogChain(ipVersion))
+	}
 
 	return chains
 }
@@ -1149,7 +1322,7 @@ func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *gen
 
 	// Matching on conntrack status varies by table type.
 	dnatMatch := r.NewMatch()
-	if m, ok := dnatMatch.(nftables.NFTMatchCriteria); ok {
+	if m, ok := dnatMatch.(nftrender.NFTMatchCriteria); ok {
 		dnatMatch = m.ConntrackStatus("DNAT")
 	} else {
 		dnatMatch = dnatMatch.ConntrackState("DNAT")

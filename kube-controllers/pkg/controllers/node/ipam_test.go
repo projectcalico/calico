@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,12 +16,15 @@ package node
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math/big"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -37,6 +40,7 @@ import (
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -76,6 +80,10 @@ func assertConsistentState(c *IPAMController) {
 	for cidr := range c.allocationsByBlock {
 		_, ok := c.allBlocks[cidr]
 		Expect(ok).To(BeTrue(), fmt.Sprintf("Block %s not present in allBlocks, but is present in allocationsByBlock", cidr))
+	}
+	for cidr := range c.coldBlocks {
+		_, ok := c.allBlocks[cidr]
+		Expect(ok).To(BeTrue(), fmt.Sprintf("Block %s not present in allBlocks, but is present in coldBlocks", cidr))
 	}
 
 	// Make sure blocksByNode and nodesByBlock are consistent.
@@ -227,6 +235,49 @@ var _ = Describe("IPAM controller UTs", func() {
 		Expect(c.handleTracker.allocationsByHandle).NotTo(HaveKey(a.handle))
 		Expect(c.confirmedLeaks).NotTo(HaveKey(a.id()))
 		done()
+	})
+
+	It("should publish the reserved-IP gauge from syncer updates", func() {
+		c.Start(stopChan)
+		resume := c.pause()
+		defer resume()
+
+		poolReservedGauge.Reset()
+		poolName := "reserved-gauge-test-pool"
+		reservedGauge := func() float64 {
+			c.updateReservedMetrics()
+			return testutil.ToFloat64(poolReservedGauge.With(prometheus.Labels{"ippool": poolName}))
+		}
+
+		c.handleUpdate(model.KVPair{
+			Key: model.ResourceKey{Kind: apiv3.KindIPPool, Name: poolName},
+			Value: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: poolName},
+				Spec:       apiv3.IPPoolSpec{CIDR: "10.0.0.0/24"},
+			},
+		})
+		Expect(reservedGauge()).To(BeZero(), "no reservations yet")
+
+		// No block covers this space, so the count cannot come from the block state
+		// the controller tracks.  The two reservations overlap, so the shared /29
+		// must only be counted once.
+		reservationKey := model.ResourceKey{Kind: apiv3.KindIPReservation, Name: "test-reservation"}
+		c.handleUpdate(model.KVPair{
+			Key: reservationKey,
+			Value: &apiv3.IPReservation{
+				ObjectMeta: metav1.ObjectMeta{Name: reservationKey.Name},
+				Spec:       apiv3.IPReservationSpec{ReservedCIDRs: []string{"10.0.0.128/28", "10.0.0.128/29"}},
+			},
+		})
+		Expect(reservedGauge()).To(Equal(16.0))
+
+		// Deleting the reservation frees the addresses again.
+		c.handleUpdate(model.KVPair{Key: reservationKey})
+		Expect(reservedGauge()).To(BeZero())
+
+		// Deleting the pool should take its gauge with it.
+		c.onPoolDeleted(poolName)
+		Expect(testutil.CollectAndCount(poolReservedGauge)).To(BeZero())
 	})
 
 	Describe("VMI allocation validation", func() {
@@ -720,6 +771,108 @@ var _ = Describe("IPAM controller UTs", func() {
 			defer done()
 			return c.allocationsByBlock[blockCIDR]
 		}, 1*time.Second, 100*time.Millisecond).Should(BeNil())
+	})
+
+	Describe("cold IP garbage collection", func() {
+		var fakeIPAM *fakeIPAMClient
+
+		cidrOf := func(kvp model.KVPair) string {
+			return kvp.Key.(model.BlockKey).CIDR.String()
+		}
+
+		// coldBlock builds a block affine to cnode containing a single IP whose
+		// ReleasedAt is set to releasedAt, i.e. an IP in cooldown.
+		coldBlock := func(cidrStr string, releasedAt metav1.Time) model.KVPair {
+			cidr := net.MustParseCIDR(cidrStr)
+			aff := "host:cnode"
+			idx := 0
+			b := model.AllocationBlock{
+				CIDR:        cidr,
+				Affinity:    &aff,
+				Allocations: []*int{&idx, nil, nil, nil},
+				Unallocated: []int{1, 2, 3},
+				Attributes:  []model.AllocationAttribute{{ReleasedAt: &releasedAt}},
+			}
+			return model.KVPair{Key: model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}, Value: &b}
+		}
+
+		// liveBlock builds a block affine to cnode with a single normal allocation
+		// and no IPs in cooldown.
+		liveBlock := func(cidrStr string) model.KVPair {
+			cidr := net.MustParseCIDR(cidrStr)
+			aff := "host:cnode"
+			idx := 0
+			handle := "live-handle"
+			b := model.AllocationBlock{
+				CIDR:        cidr,
+				Affinity:    &aff,
+				Allocations: []*int{&idx, nil, nil, nil},
+				Unallocated: []int{1, 2, 3},
+				Attributes: []model.AllocationAttribute{{
+					HandleID:         &handle,
+					ActiveOwnerAttrs: map[string]string{ipam.AttributeNode: "cnode"},
+				}},
+			}
+			return model.KVPair{Key: model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}, Value: &b}
+		}
+
+		BeforeEach(func() {
+			fakeIPAM = cli.IPAM().(*fakeIPAMClient)
+			fakeIPAM.config.IPCooldownSeconds = 3600
+			c.Start(stopChan)
+		})
+
+		It("only garbage collects blocks whose cooldown has elapsed", func() {
+			expired := coldBlock("10.0.0.0/30", metav1.NewTime(time.Now().Add(-2*time.Hour)))
+			cooling := coldBlock("10.0.1.0/30", metav1.NewTime(time.Now()))
+			live := liveBlock("10.0.2.0/30")
+
+			for _, kvp := range []model.KVPair{expired, cooling, live} {
+				c.onUpdate(bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew})
+			}
+
+			// Both cooldown blocks are tracked; the live block is not.
+			Eventually(func() map[string]metav1.Time {
+				done := c.pause()
+				defer done()
+				return maps.Clone(c.coldBlocks)
+			}, 1*time.Second, 100*time.Millisecond).Should(And(
+				HaveKey(cidrOf(expired)),
+				HaveKey(cidrOf(cooling)),
+				Not(HaveKey(cidrOf(live))),
+			))
+
+			// Only the block past its cooldown is visited.
+			done := c.pause()
+			Expect(c.garbageCollectColdIPs()).To(Succeed())
+			done()
+			Expect(fakeIPAM.gcBlocks()).To(ConsistOf(cidrOf(expired)))
+		})
+
+		It("stops tracking a block once its cooldown IPs are deallocated", func() {
+			block := coldBlock("10.0.0.0/30", metav1.NewTime(time.Now().Add(-2*time.Hour)))
+			c.onUpdate(bapi.Update{KVPair: block, UpdateType: bapi.UpdateTypeKVNew})
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				_, ok := c.coldBlocks[cidrOf(block)]
+				return ok
+			}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			// The IP is deallocated, so the block no longer carries a ReleasedAt.
+			b := block.Value.(*model.AllocationBlock)
+			b.Allocations[0] = nil
+			b.Unallocated = []int{0, 1, 2, 3}
+			b.Attributes = []model.AllocationAttribute{}
+			c.onUpdate(bapi.Update{KVPair: block, UpdateType: bapi.UpdateTypeKVUpdated})
+
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				_, ok := c.coldBlocks[cidrOf(block)]
+				return ok
+			}, 1*time.Second, 100*time.Millisecond).Should(BeFalse())
+		})
 	})
 
 	It("should refresh the sequence number of an already-tracked allocation on block update", func() {
@@ -2440,6 +2593,87 @@ var _ = Describe("IPAM controller UTs", func() {
 		Eventually(func() bool {
 			return fakeClient.affinityReleased("node-c")
 		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "node-c affinity should be released after error is cleared")
+	})
+
+	// Regression test: a stale-revision conflict during the cold IP GC sweep must not
+	// abort the whole IPAM sync. The controller GCs blocks using cached revisions from
+	// the syncer, so conflicts with concurrent writers are routine; before the fix, the
+	// first ErrorResourceUpdateConflict aborted syncIPAM before releaseUnusedBlocks and
+	// releaseNodes, so a single contended block starved deleted-node cleanup indefinitely.
+	It("should clean up deleted nodes even when cold IP GC hits update conflicts", func() {
+		c.Start(stopChan)
+
+		fakeClient := cli.IPAM().(*fakeIPAMClient)
+		fc := cli.(*FakeCalicoClient)
+
+		// node-gc-a's block persistently fails cold GC with a CAS conflict, as happens
+		// when the syncer cache is stale relative to the datastore.
+		fc.SetColdGCError("10.1.0.0/30", cerrors.ErrorResourceUpdateConflict{Identifier: "10.1.0.0/30"})
+
+		// Create blocks with tunnel address allocations for two nodes that don't exist
+		// in Kubernetes.
+		type testNode struct {
+			name   string
+			cidr   string
+			handle string
+		}
+		nodes := []testNode{
+			{"node-gc-a", "10.1.0.0/30", "vxlan-tunnel-addr-node-gc-a"},
+			{"node-gc-b", "10.1.1.0/30", "vxlan-tunnel-addr-node-gc-b"},
+		}
+		// The cold IP GC sweep only visits blocks with an elapsed cooldown IP.
+		releasedAt := metav1.NewTime(time.Now().Add(-2 * time.Hour))
+		for _, n := range nodes {
+			cidr := net.MustParseCIDR(n.cidr)
+			aff := fmt.Sprintf("host:%s", n.name)
+			handle := n.handle
+			idx := 0
+			b := model.AllocationBlock{
+				CIDR:        cidr,
+				Affinity:    &aff,
+				Allocations: []*int{&idx, nil, nil, nil},
+				Unallocated: []int{1, 2, 3},
+				Attributes: []model.AllocationAttribute{
+					{
+						HandleID:   &handle,
+						ReleasedAt: &releasedAt,
+						ActiveOwnerAttrs: map[string]string{
+							ipam.AttributeNode: n.name,
+							ipam.AttributeType: ipam.AttributeTypeVXLAN,
+						},
+					},
+				},
+			}
+			kvp := model.KVPair{Key: model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}, Value: &b}
+			c.onUpdate(bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew})
+		}
+
+		// Wait for all blocks to be cached.
+		for _, n := range nodes {
+			cidr := n.cidr
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				_, ok := c.allBlocks[cidr]
+				return ok
+			}, 1*time.Second, 100*time.Millisecond).Should(BeTrue(), "Block %s should be cached", cidr)
+		}
+
+		// Trigger a full sync.
+		c.fullScanNextSync("forced by test")
+		c.onStatusUpdate(bapi.InSync)
+
+		// Despite the persistent conflict on node-gc-a's block, both nodes should be
+		// cleaned up: the conflict only skips that block's GC, not the rest of the sync.
+		Eventually(func() bool {
+			return fakeClient.affinityReleased("node-gc-a")
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "node-gc-a affinity should be released despite cold GC conflict")
+		Eventually(func() bool {
+			return fakeClient.affinityReleased("node-gc-b")
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "node-gc-b affinity should be released")
+
+		// The sweep should also have carried on past the conflicting block.
+		Expect(fakeClient.coldGCVisited("10.1.1.0/30")).To(BeTrue(), "cold GC should visit the healthy block")
 	})
 
 	// Regression test: verifies the controller makes progress even when ALL nodes fail

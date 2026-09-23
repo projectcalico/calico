@@ -17,21 +17,15 @@ package ipam
 import (
 	"context"
 	"fmt"
-	"math"
 	"os"
 	"reflect"
 	"sort"
 	"strings"
 
-	docopt "github.com/docopt/docopt-go"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -214,37 +208,41 @@ func ShowBlockUtilization(ctx context.Context, ipamClient ipam.Interface, showBl
 	}
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
-	t.AppendHeader(table.Row{"GROUPING", "CIDR", "IPS TOTAL", "IPS IN USE", "IPS FREE"})
+	t.AppendHeader(table.Row{"GROUPING", "CIDR", "IPS TOTAL", "IPS IN USE", "IPS RESERVED", "IPS FREE"})
 	t.SetColumnConfigs([]table.ColumnConfig{
 		{Name: "IPS TOTAL", Align: text.AlignRight},
 		{Name: "IPS IN USE", Align: text.AlignRight},
+		{Name: "IPS RESERVED", Align: text.AlignRight},
 		{Name: "IPS FREE", Align: text.AlignRight},
 	})
-	genRow := func(kind, cidr string, inUse, capacity float64) table.Row {
+	// IN USE counts allocated IPs and RESERVED counts IPs that an IPReservation
+	// covers; an IP allocated before it was reserved falls into both, so the
+	// percentages need not add up to 100.  FREE counts the IPs that are neither,
+	// which is why it comes from the library rather than being derived here.
+	genRow := func(kind, cidr string, capacity, inUse, reserved, free int) table.Row {
+		withPercentage := func(n int) string {
+			return fmt.Sprintf("%.5g (%.f%%)", float64(n), 100*float64(n)/float64(capacity))
+		}
 		return table.Row{
 			kind,
 			cidr,
-			fmt.Sprintf("%.5g", capacity),
-			// Note: the '+capacity/2' bits here give us rounding to the nearest
-			// integer, instead of rounding down, and so ensure that the two percentages
-			// add up to 100.
-			fmt.Sprintf("%.5g (%.f%%)", inUse, 100*inUse/capacity),
-			fmt.Sprintf("%.5g (%.f%%)", capacity-inUse, 100*(capacity-inUse)/capacity),
+			fmt.Sprintf("%.5g", float64(capacity)),
+			withPercentage(inUse),
+			withPercentage(reserved),
+			withPercentage(free),
 		}
 	}
 	for _, poolUse := range usage {
 		var blockRows []table.Row
-		var poolInUse float64
 		for _, blockUse := range poolUse.Blocks {
-			blockRows = append(blockRows, genRow("Block", blockUse.CIDR.String(), float64(blockUse.Capacity-blockUse.Available), float64(blockUse.Capacity)))
-			poolInUse += float64(blockUse.Capacity - blockUse.Available)
+			blockRows = append(blockRows, genRow("Block", blockUse.CIDR.String(),
+				blockUse.Capacity, blockUse.InUse, blockUse.Reserved, blockUse.Available))
 		}
-		ones, bits := poolUse.CIDR.Mask.Size()
-		poolCapacity := math.Pow(2, float64(bits-ones))
-		if ones > 0 {
+		if ones, _ := poolUse.CIDR.Mask.Size(); ones > 0 {
 			// Only show the IP Pool row for a real IP Pool and not for the orphaned
 			// block case.
-			t.AppendRow(genRow("IP Pool", poolUse.CIDR.String(), poolInUse, poolCapacity))
+			t.AppendRow(genRow("IP Pool", poolUse.CIDR.String(),
+				poolUse.Capacity, poolUse.InUse, poolUse.Reserved, poolUse.Available))
 		}
 		if showBlocks {
 			t.AppendRows(blockRows)
@@ -273,77 +271,4 @@ func ShowConfiguration(ctx context.Context, ipamClient ipam.Interface) error {
 	}
 	t.Render()
 	return nil
-}
-
-// IPAM takes keyword with an IP address then calls the subcommands.
-func Show(args []string) error {
-	doc := constants.DatastoreIntro + `Usage:
-  <BINARY_NAME> ipam show [--ip=<IP> | --show-blocks | --show-borrowed | --show-configuration] [--config=<CONFIG>] [--allow-version-mismatch]
-
-Options:
-  -h --help                    Show this screen.
-     --ip=<IP>                 Report whether this specific IP address is in use.
-     --show-blocks             Show detailed information for IP blocks as well as pools.
-     --show-borrowed           Show detailed information for "borrowed" IP addresses.
-     --show-configuration      Show current Calico IPAM configuration.
-  -c --config=<CONFIG>         Path to the file containing connection configuration in
-                               YAML or JSON format.
-                               [default: ` + constants.DefaultConfigPath + `]
-     --allow-version-mismatch  Allow client and cluster versions mismatch.
-
-Description:
-  The ipam show command prints information about a given IP address, or about
-  overall IP usage.
-`
-	// Replace all instances of BINARY_NAME with the name of the binary.
-	name, _ := util.NameAndDescription()
-	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
-
-	parsedArgs, err := docopt.ParseArgs(doc, args, "")
-	if err != nil {
-		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
-	}
-	if len(parsedArgs) == 0 {
-		return nil
-	}
-
-	err = common.CheckVersionMismatch(parsedArgs["--config"], parsedArgs["--allow-version-mismatch"])
-	if err != nil {
-		return err
-	}
-
-	ctx := context.Background()
-
-	// Create a new backend client from env vars.
-	cf := parsedArgs["--config"].(string)
-	client, err := clientmgr.NewClient(cf)
-	if err != nil {
-		return err
-	}
-
-	ipamClient := client.IPAM()
-	ippoolClient := client.IPPools()
-
-	// Get the backend client.
-	type accessor interface {
-		Backend() bapi.Client
-	}
-	bc := client.(accessor).Backend()
-
-	passedIP := parsedArgs["--ip"]
-	showBlocks := parsedArgs["--show-blocks"].(bool)
-	showBorrowed := parsedArgs["--show-borrowed"].(bool)
-	configuration := parsedArgs["--show-configuration"].(bool)
-
-	if passedIP != nil {
-		return ShowIP(ctx, ipamClient, passedIP.(string))
-	} else if showBlocks {
-		return ShowBlockUtilization(ctx, ipamClient, true)
-	} else if showBorrowed {
-		return ShowBorrowedDetails(ctx, ippoolClient, bc)
-	} else if configuration {
-		return ShowConfiguration(ctx, ipamClient)
-	}
-
-	return ShowBlockUtilization(ctx, ipamClient, false)
 }

@@ -17,6 +17,7 @@ package tier
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -90,6 +91,48 @@ func TestReconcile_AddsFinalizer(t *testing.T) {
 	}
 }
 
+// TestReconcile_AddFinalizerPatchOmitsStatus verifies that the finalizer write is a
+// metadata-only patch that does not carry status. Sending status on the main resource
+// endpoint makes the API server log a spurious `unknown field "status"` warning.
+func TestReconcile_AddFinalizerPatchOmitsStatus(t *testing.T) {
+	tier := &v3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-tier"},
+		Spec:       v3.TierSpec{},
+		Status: v3.TierStatus{
+			Conditions: []metav1.Condition{{
+				Type:   "Ready",
+				Status: metav1.ConditionTrue,
+				Reason: "Active",
+			}},
+		},
+	}
+	cli := fake.NewClientset(tier)
+	c := newTestController(cli, tier)
+
+	if err := c.reconcile("my-tier"); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
+	}
+
+	patched := false
+	for _, action := range cli.Actions() {
+		if action.GetVerb() != "patch" || action.GetResource().Resource != "tiers" {
+			continue
+		}
+		patched = true
+		pa := action.(k8stesting.PatchAction)
+		if strings.Contains(string(pa.GetPatch()), "status") {
+			t.Fatalf("finalizer patch should not include status, got: %s", pa.GetPatch())
+		}
+	}
+	if !patched {
+		t.Fatalf("expected a finalizer patch; actions: %s", actionSummary(cli.Actions()))
+	}
+
+	if !hasFinalizer(getUpdatedTier(t, cli, "my-tier")) {
+		t.Fatal("expected finalizer to be added")
+	}
+}
+
 func TestReconcile_SkipsFinalizerIfAlreadyPresent(t *testing.T) {
 	tier := &v3.Tier{
 		ObjectMeta: metav1.ObjectMeta{
@@ -106,8 +149,8 @@ func TestReconcile_SkipsFinalizerIfAlreadyPresent(t *testing.T) {
 	}
 
 	for _, action := range cli.Actions() {
-		if action.GetVerb() == "update" && action.GetResource().Resource == "tiers" {
-			t.Fatal("unexpected update action when finalizer already present")
+		if isTierWrite(action) {
+			t.Fatal("unexpected write action when finalizer already present")
 		}
 	}
 }
@@ -199,8 +242,8 @@ func TestReconcile_DeletingTierWithoutFinalizer(t *testing.T) {
 	}
 
 	for _, action := range cli.Actions() {
-		if action.GetVerb() == "update" {
-			t.Fatal("unexpected update for deleting tier without finalizer")
+		if isTierWrite(action) {
+			t.Fatal("unexpected write for deleting tier without finalizer")
 		}
 	}
 }
@@ -214,8 +257,8 @@ func TestReconcile_TierNotInCache(t *testing.T) {
 	}
 
 	for _, action := range cli.Actions() {
-		if action.GetVerb() == "update" {
-			t.Fatal("unexpected update for nonexistent tier")
+		if isTierWrite(action) {
+			t.Fatal("unexpected write for nonexistent tier")
 		}
 	}
 }
@@ -384,21 +427,24 @@ func (f *fakeRateLimitingQueue) AddRateLimited(item string)  { f.rateLimitedAdds
 func (f *fakeRateLimitingQueue) Forget(item string)          { f.forgets++ }
 func (f *fakeRateLimitingQueue) NumRequeues(item string) int { return f.requeues }
 
-// getUpdatedTier finds the tier from Update actions in the fake client.
+// getUpdatedTier reads the tier back from the fake client after reconcile, so it
+// reflects whatever write the controller made (Update or Patch).
 func getUpdatedTier(t *testing.T, cli *fake.Clientset, name string) *v3.Tier {
 	t.Helper()
-	for _, action := range cli.Actions() {
-		if action.GetVerb() == "update" && action.GetResource().Resource == "tiers" && action.GetSubresource() == "" {
-			ua := action.(k8stesting.UpdateAction)
-			obj := ua.GetObject()
-			tier, ok := obj.(*v3.Tier)
-			if ok && tier.Name == name {
-				return tier
-			}
-		}
+	tier, err := cli.ProjectcalicoV3().Tiers().Get(context.Background(), name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("failed to get tier %q: %v", name, err)
 	}
-	t.Fatalf("no Update action found for tier %q; actions: %s", name, actionSummary(cli.Actions()))
-	return nil
+	return tier
+}
+
+// isTierWrite reports whether the action mutates a tier (Update or Patch), so tests
+// can assert that no write happened regardless of which verb the controller uses.
+func isTierWrite(action k8stesting.Action) bool {
+	if action.GetResource().Resource != "tiers" {
+		return false
+	}
+	return action.GetVerb() == "update" || action.GetVerb() == "patch"
 }
 
 func actionSummary(actions []k8stesting.Action) string {

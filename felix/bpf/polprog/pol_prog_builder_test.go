@@ -16,6 +16,7 @@ package polprog
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -142,6 +143,74 @@ func TestPolicyDump(t *testing.T) {
 	checkLabelsAndComments(&proto.Rule{NotIcmp: &proto.Rule_NotIcmpType{NotIcmpType: 10}}, "If ICMP type == 10, skip to next rule", "comment")
 }
 
+// TestPolicyDumpMatchComment checks the end-to-end wiring of the per-rule
+// "Match:" summary in the policy-debug build: that it is emitted with the
+// selector IP sets folded into the src/dst tokens as hex IDs, that the old
+// standalone "IPSets ..." summary comment is gone, and that it sits directly
+// under the rule header (ahead of the "Rule MatchID" hit-count comment).
+func TestPolicyDumpMatchComment(t *testing.T) {
+	RegisterTestingT(t)
+
+	alloc := idalloc.New()
+	const srcSet = "s:sbcdef1234567890"
+	const notDstSet = "d:sbcdef1234567890"
+	alloc.GetOrAlloc(srcSet)
+	alloc.GetOrAlloc(notDstSet)
+	srcHex := fmt.Sprintf("0x%x", alloc.GetNoAlloc(srcSet))
+	notDstHex := fmt.Sprintf("0x%x", alloc.GetNoAlloc(notDstSet))
+
+	pg := NewBuilder(alloc, 1, 2, 3, 4, WithAllowDenyJumps(666, 777), WithPolicyDebugEnabled())
+	insns, err := pg.Instructions(Rules{
+		Tiers: []Tier{{
+			Policies: []Policy{{
+				Rules: []Rule{{
+					Rule: &proto.Rule{
+						Action:         "Allow",
+						IpVersion:      4,
+						Protocol:       &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 6}},
+						SrcNet:         []string{"11.0.0.8/32", "10.0.0.8/32"},
+						SrcIpSetIds:    []string{srcSet},
+						NotDstNet:      []string{"13.0.0.8/32"},
+						NotDstIpSetIds: []string{notDstSet},
+					},
+				}},
+			}},
+		}},
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	_, comments := aggregateCommentsAndLabels(&insns[0])
+
+	// The selector IP sets are folded into the src/!dst tokens as hex IDs; the
+	// dump resolves those to live member IPs.
+	expectedMatch := fmt.Sprintf(
+		"Match: proto=tcp src={11.0.0.8/32,10.0.0.8/32,%s} !dst={13.0.0.8/32,%s}",
+		srcHex, notDstHex)
+	Expect(comments).To(ContainElement(expectedMatch))
+
+	// The standalone "IPSets ..." summary comment is no longer emitted.
+	for _, c := range comments {
+		Expect(c).NotTo(HavePrefix("IPSets "))
+	}
+
+	// The Match line sits directly under the rule header, ahead of the hit
+	// count ("Rule MatchID").
+	idxOf := func(prefix string) int {
+		for i, c := range comments {
+			if strings.HasPrefix(c, prefix) {
+				return i
+			}
+		}
+		return -1
+	}
+	startIdx := idxOf("Start of rule ")
+	matchIdx := idxOf("Match: ")
+	matchIDIdx := idxOf("Rule MatchID")
+	Expect(startIdx).To(BeNumerically(">=", 0), "missing 'Start of rule' comment")
+	Expect(matchIdx).To(BeNumerically(">", startIdx), "Match should follow the rule header")
+	Expect(matchIDIdx).To(BeNumerically(">", matchIdx), "Match should precede the hit count")
+}
+
 func aggregateCommentsAndLabels(insns *asm.Insns) ([]string, []string) {
 	labels := []string{}
 	comments := []string{}
@@ -207,4 +276,92 @@ func TestProgramSplitting(t *testing.T) {
 	// Allow leeway in program size for enterprise.
 	Expect(len(progs)).To(BeNumerically(">=", 6))
 	Expect(len(progs)).To(BeNumerically("<=", 8))
+}
+
+func TestFormatRuleMatch(t *testing.T) {
+	RegisterTestingT(t)
+
+	tcp := &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 6}}
+	udp := &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "UDP"}}
+
+	for _, tc := range []struct {
+		name                                     string
+		rule                                     *proto.Rule
+		srcSets, notSrcSets, dstSets, notDstSets []string
+		expected                                 string
+	}{
+		{
+			name:     "empty rule (default deny)",
+			rule:     &proto.Rule{},
+			expected: "",
+		},
+		{
+			name:     "action only, no L3/L4 match",
+			rule:     &proto.Rule{Action: "Allow"},
+			expected: "",
+		},
+		{
+			name: "tcp with nets and ports",
+			rule: &proto.Rule{
+				Protocol: tcp,
+				SrcNet:   []string{"11.0.0.8/32", "10.0.0.8/32"},
+				DstNet:   []string{"12.0.0.8/32"},
+				SrcPorts: []*proto.PortRange{{First: 8055, Last: 8055}, {First: 100, Last: 105}},
+				DstPorts: []*proto.PortRange{{First: 9055, Last: 9055}, {First: 200, Last: 205}},
+			},
+			expected: "proto=tcp src={11.0.0.8/32,10.0.0.8/32} dst={12.0.0.8/32} sports={8055,100-105} dports={9055,200-205}",
+		},
+		{
+			name: "negated protocol, nets and ports",
+			rule: &proto.Rule{
+				NotProtocol: tcp,
+				NotSrcNet:   []string{"11.0.0.8/32"},
+				NotDstNet:   []string{"13.0.0.8/32"},
+				NotSrcPorts: []*proto.PortRange{{First: 8055, Last: 8055}},
+				NotDstPorts: []*proto.PortRange{{First: 200, Last: 205}},
+			},
+			expected: "!proto=tcp !src={11.0.0.8/32} !dst={13.0.0.8/32} !sports={8055} !dports={200-205}",
+		},
+		{
+			name: "named ports marker",
+			rule: &proto.Rule{
+				Protocol:             udp,
+				SrcNamedPortIpSetIds: []string{"a", "b"},
+				DstPorts:             []*proto.PortRange{{First: 53, Last: 53}},
+				DstNamedPortIpSetIds: []string{"c"},
+			},
+			expected: "proto=udp sports={named(2)} dports={53,named(1)}",
+		},
+		{
+			name: "icmp type",
+			rule: &proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 1}},
+				Icmp:     &proto.Rule_IcmpType{IcmpType: 8},
+			},
+			expected: "proto=icmp icmp=8",
+		},
+		{
+			name: "icmp type/code and negated icmp",
+			rule: &proto.Rule{
+				Icmp:    &proto.Rule_IcmpTypeCode{IcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}},
+				NotIcmp: &proto.Rule_NotIcmpType{NotIcmpType: 3},
+			},
+			expected: "icmp=10/12 !icmp=3",
+		},
+		{
+			name: "selector IP sets folded into src/dst as hex IDs",
+			rule: &proto.Rule{
+				Protocol: tcp,
+				SrcNet:   []string{"11.0.0.8/32", "10.0.0.8/32"},
+			},
+			srcSets:    []string{"0x1a2b"},
+			notDstSets: []string{"0x3c4d", "0x5e6f"},
+			expected:   "proto=tcp src={11.0.0.8/32,10.0.0.8/32,0x1a2b} !dst={0x3c4d,0x5e6f}",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			RegisterTestingT(t)
+			Expect(formatRuleMatch(tc.rule, tc.srcSets, tc.notSrcSets, tc.dstSets, tc.notDstSets)).To(Equal(tc.expected))
+		})
+	}
 }

@@ -16,7 +16,7 @@ import (
 // ClusterInformationApplyConfiguration represents a declarative configuration of the ClusterInformation type for use
 // with apply.
 type ClusterInformationApplyConfiguration struct {
-	v1.TypeMetaApplyConfiguration    `json:",inline"`
+	v1.TypeMetaApplyConfiguration    `json:""`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *ClusterInformationSpecApplyConfiguration `json:"spec,omitempty"`
 }

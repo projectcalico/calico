@@ -25,7 +25,6 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -43,20 +42,20 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/cni-plugin/pkg/upgrade"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 func Main(version string) {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("ipam")
+	logrusr.ConfigureFormatter("ipam")
 
 	// Display the version on "-v", otherwise just delegate to the skel code.
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"
@@ -244,6 +243,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 			HandleID: &handleID,
 			Hostname: nodename,
 			Attrs:    attrs,
+			// A specific-IP request (the ipAddrs annotation) is a workload
+			// allocation, same as the auto-assign path below; declare it so
+			// IPAM enforces the pool's AllowedUses.
+			IntendedUse: v3.IPPoolAllowedUseWorkload,
 		}
 
 		// For VMI pods with persistence enabled, limit the IPs per handle so that parallel calls for the same VM don't over-allocate (instead one will fail and then the retry will go through the IP persistence path).
@@ -265,7 +268,23 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return fmt.Errorf("failed to upgrade IPAM database: %w", err)
 			}
 
-			return calicoClient.IPAM().AssignIP(ctx, assignArgs)
+			if err := calicoClient.IPAM().AssignIP(ctx, assignArgs); err != nil {
+				var exists cerrors.ErrorResourceAlreadyExists
+				if !errors.As(err, &exists) {
+					return err
+				}
+
+				// VM persistence reuses its VM-scoped handle earlier in this function, and a
+				// pod-identity precondition would be wrong across live migration.
+				if epIDs.Pod == "" || ipPersistenceEnabledForVM {
+					return err
+				}
+
+				if terr := transferFromPriorSandbox(ctx, calicoClient.IPAM(), ipamArgs.IP, handleID, attrs, conf.Name, epIDs, logger); terr != nil {
+					return fmt.Errorf("%w: %w", terr, err)
+				}
+			}
+			return nil
 		}
 		err := assignIPWithLock()
 		if err != nil {
@@ -482,6 +501,58 @@ func cmdAdd(args *skel.CmdArgs) error {
 	return cnitypes.PrintResult(r, conf.CNIVersion)
 }
 
+// transferFromPriorSandbox hands an address the pod already holds to this sandbox's handle.
+// It performs the necessary precondition checks and errors if the allocation cannot be transferred.
+func transferFromPriorSandbox(
+	ctx context.Context,
+	ipamClient ipam.Interface,
+	ip net.IP,
+	toHandle string,
+	attrs map[string]string,
+	netName string,
+	epIDs *utils.WEPIdentifiers,
+	logger *logrus.Entry,
+) error {
+	attr, err := ipamClient.GetAssignmentAttributes(ctx, cnet.IP{IP: ip})
+	var inCooldown cerrors.ErrorIPInCooldown
+	if errors.As(err, &inCooldown) {
+		// A released address has no owner to check, so it must finish its cooldown first.
+		return fmt.Errorf("address %s is still in its IP cooldown period and cannot be reused yet: %w", ip, err)
+	}
+	if err != nil {
+		return fmt.Errorf("could not determine the current owner of address %s: %w", ip, err)
+	}
+	if attr == nil || attr.HandleID == nil {
+		return fmt.Errorf("address %s is allocated to no handle and cannot be transferred", ip)
+	}
+
+	currentHandle := *attr.HandleID
+	parsed, ok := utils.ParsePodHandleID(currentHandle, netName)
+	if !ok {
+		logger.WithField("fromHandle", currentHandle).Info("Requested address is not held by a pod sandbox")
+		return fmt.Errorf("address %s is not held by a pod sandbox and cannot be transferred", ip)
+	}
+
+	logger.WithFields(logrus.Fields{
+		"fromHandle":       currentHandle,
+		"priorContainerID": parsed.ContainerID,
+	}).Info("Requested address belongs to a previous sandbox of this pod, transferring it")
+	moveOpts := ipam.MoveOptions{
+		ToHandle:       toHandle,
+		Attrs:          attrs,
+		ExpectedHandle: currentHandle,
+		ExpectedOwner: &ipam.AttributeOwner{
+			Namespace: epIDs.Namespace,
+			Name:      epIDs.Pod,
+		},
+	}
+	if err := ipamClient.MoveIPToHandle(ctx, cnet.IP{IP: ip}, moveOpts); err != nil {
+		logger.WithError(err).Info("Failed to transfer the requested address")
+		return fmt.Errorf("address %s is already allocated and cannot be transferred to this pod", ip)
+	}
+	return nil
+}
+
 const ipamUpgradedFilePath = "/var/run/calico/cni/ipam_upgraded"
 
 func maybeUpgradeIPAM(ctx context.Context, ipamClient ipam.Interface, nodename string) error {
@@ -563,10 +634,8 @@ func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *l
 		return nil, nil
 	}
 
-	// Quick pre-filter: skip API server queries for pods that are clearly not virt-launcher pods.
-	// KubeVirt hardcodes the "virt-launcher-" prefix in pod GenerateName when creating virt-launcher pods.
-	// This avoids unnecessary API server queries for normal (non-VM) pods on the CNI hot path.
-	if !strings.HasPrefix(epIDs.Pod, "virt-launcher-") {
+	// Skip the API server query for pods that are clearly not virt-launcher pods.
+	if !kubevirt.MaybeVirtLauncherPod(epIDs.Pod) {
 		return nil, nil
 	}
 
@@ -818,6 +887,11 @@ func cmdDel(args *skel.CmdArgs) error {
 				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 					// IP was already released by someone else, treat as no attributes remaining.
 					logger.WithField("ip", ip).Info("IP already released during cleanup, skipping")
+					continue
+				}
+				if _, ok := err.(cerrors.ErrorIPInCooldown); ok {
+					// IP was already released, and is in cooldown.
+					logger.WithField("ip", ip).Info("IP already released during cleanup and in cooldown, skipping")
 					continue
 				}
 				logger.WithError(err).WithField("ip", ip).Error("Failed to get assignment attributes for post-cleanup check")

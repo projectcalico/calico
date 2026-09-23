@@ -14,16 +14,22 @@
 
 package registry
 
-const DefaultCalicoRegistry = "quay.io/calico"
+const defaultCalicoRegistry = "quay.io/calico"
+
+var DefaultProductRegistry = defaultCalicoRegistry
 
 var DefaultCalicoRegistries = []string{
+	defaultCalicoRegistry,
 	"docker.io/calico",
-	DefaultCalicoRegistry,
 	"gcr.io/projectcalico-org",
 	"eu.gcr.io/projectcalico-org",
 	"asia.gcr.io/projectcalico-org",
 	"us.gcr.io/projectcalico-org",
 }
+
+// DefaultOperatorRegistries are the registries the operator image publishes to. It
+// ships alongside the other Calico component images, but is not mirrored to GCR.
+var DefaultOperatorRegistries = []string{defaultCalicoRegistry, "docker.io/calico"}
 
 var DefaultHelmRegistries = []string{
 	"quay.io/calico/charts",

@@ -21,16 +21,35 @@ Tests for etcdutils with a real etcd server.
 
 from __future__ import print_function
 
-# It's advised always to do eventlet monkey-patching as early as possible; but
-# __future__ imports are required to be at the very top of the file, so we must come
-# after those.  https://eventlet.readthedocs.io/en/latest/patching.html
+# These are functional-verification tests: they need a real etcd binary on
+# disk and use eventlet's cooperative I/O.  Running them under the standard
+# tox / subunit unit-test discovery is problematic for two reasons:
+#
+#  - ``eventlet.monkey_patch()`` at module import time patches socket /
+#    threading globally for the test process, even if these tests are
+#    skipped, which interacts badly with subunit's runner and hangs the run.
+#  - Other unit tests in the same process suddenly find themselves under a
+#    monkey-patched interpreter, which can change their behaviour subtly.
+#
+# So this entire file is opt-in via the CALICO_RUN_FV_TESTS=1 environment
+# variable.  Without it, the module imports cleanly (no monkey_patch) and
+# the test class is marked skipped at class-decoration time by
+# @unittest.skipUnless -- no setUpClass needs to run.  See the eventlet docs:
+# https://eventlet.readthedocs.io/en/latest/patching.html
+import os
+
+_FV_ENABLED = os.environ.get("CALICO_RUN_FV_TESTS") == "1"
+
 import eventlet
 
-eventlet.monkey_patch()
+if _FV_ENABLED:
+    eventlet.monkey_patch()
 
-import logging  # noqa: I100
+import base64  # noqa: I100
+import logging
 import shutil
 import subprocess
+import time
 import unittest
 
 from oslo_config import cfg
@@ -42,6 +61,7 @@ from networking_calico.common import config as calico_config
 _log = logging.getLogger(__name__)
 
 
+@unittest.skipUnless(_FV_ENABLED, "set CALICO_RUN_FV_TESTS=1 to run FV tests")
 class TestFVEtcdutils(unittest.TestCase):
     def setUp(self):
         super(TestFVEtcdutils, self).setUp()
@@ -208,4 +228,71 @@ class TestFVEtcdutils(unittest.TestCase):
         )
 
         # Kill the etcd server.
+        self.stop_etcd_server()
+
+    def wait_for(self, description, predicate, timeout_secs=5):
+        deadline = time.monotonic() + timeout_secs
+        while time.monotonic() < deadline:
+            if predicate():
+                return
+            eventlet.sleep(0.05)
+        self.fail("Timed out (%ss) waiting for %s" % (timeout_secs, description))
+
+    def test_event_during_stall_survives_watch_cancel(self):
+        # Regression test for watch event loss at cancellation, found when
+        # investigating why the DHCP agent missed WorkloadEndpoint deletions
+        # in CI.  An event that arrives while this process
+        # is stalled - such that EtcdWatcher's WATCH_TIMEOUT_SECS inactivity
+        # deadline expires during the same stall - used to be discarded:
+        # after the stall, eventlet runs the canceller's timer before the
+        # event's consumer, and etcd3gw's watch cancellation threw away
+        # everything already received but not yet consumed.  With
+        # drain-then-cancel semantics (Etcd3AuthClient.watch) the event must
+        # still be delivered.
+        self.start_etcd_server()
+        calico_config.register_options(cfg.CONF)
+        self.wait_etcd_ready()
+
+        events = []
+        ew = etcdutils.EtcdWatcher("/drain-test")
+        ew.register_path(
+            "/drain-test/<key>",
+            on_set=lambda response, key: events.append(("set", key)),
+            on_del=lambda response, key: events.append(("del", key)),
+        )
+        eventlet.spawn(ew.start)
+        eventlet.sleep(1)
+
+        # Write a key and wait for the event; this also resets the watch's
+        # inactivity deadline to WATCH_TIMEOUT_SECS from now.
+        etcdv3.put("/drain-test/k1", "v")
+        self.wait_for("set event", lambda: ("set", "k1") in events)
+
+        # Wait until just before that deadline, then delete the key from a
+        # separate process while stalling this process's eventlet hub across
+        # the deadline.  (The delete must come from another process, since
+        # this process is stalled.)
+        eventlet.sleep(8)
+        curl = subprocess.Popen(
+            [
+                "curl",
+                "-s",
+                "-o",
+                "/dev/null",
+                "http://127.0.0.1:2379/v3/kv/deleterange",
+                "-X",
+                "POST",
+                "-d",
+                '{"key": "%s"}' % base64.b64encode(b"/drain-test/k1").decode(),
+            ]
+        )
+        eventlet.patcher.original("time").sleep(3.5)
+        curl.wait(timeout=10)
+
+        # The delete event arrived during the stall, and the watch is now
+        # being cancelled for inactivity; the cancellation must deliver the
+        # event rather than throw it away.
+        self.wait_for("del event", lambda: ("del", "k1") in events)
+
+        ew.stop()
         self.stop_etcd_server()

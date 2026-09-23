@@ -16,18 +16,23 @@ package nftables_test
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"sigs.k8s.io/knftables"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/nftables"
-	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
+	"github.com/projectcalico/calico/felix/rules/rulesdefs"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var expectedBaseChains = []string{
@@ -60,12 +65,12 @@ var _ = Describe("Table with an empty dataplane", func() {
 		table = nftables.NewTable(
 			"calico",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 			},
 			true,
 		)
@@ -98,8 +103,8 @@ var _ = Describe("Table with an empty dataplane", func() {
 			Name: "filter-FORWARD",
 			Rules: []generictables.Rule{
 				{
-					Match:  nftables.Match(),
-					Action: nftables.JumpAction{Target: chain.Name},
+					Match:  nftrender.Match(),
+					Action: nftrender.JumpAction{Target: chain.Name},
 				},
 			},
 		}
@@ -132,7 +137,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 
 		// Remove a non-existent chain. It should not trigger any new updates.
 		table.RemoveChains([]*generictables.Chain{
-			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: nftables.Match(), Action: nftables.AcceptAction{}}}},
+			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: nftrender.Match(), Action: nftrender.AcceptAction{}}}},
 		})
 		table.Apply()
 		Expect(f.transactions).To(HaveLen(1))
@@ -140,10 +145,10 @@ var _ = Describe("Table with an empty dataplane", func() {
 
 	It("Should defer updates until Apply is called", func() {
 		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-			{Match: nftables.Match(), Action: nftables.DropAction{}},
+			{Match: nftrender.Match(), Action: nftrender.DropAction{}},
 		})
 		table.UpdateChains([]*generictables.Chain{
-			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: nftables.Match(), Action: nftables.AcceptAction{}}}},
+			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: nftrender.Match(), Action: nftrender.AcceptAction{}}}},
 		})
 		Expect(f.transactions).To(BeEmpty())
 		table.Apply()
@@ -153,11 +158,126 @@ var _ = Describe("Table with an empty dataplane", func() {
 	It("Should panic on nft failures", func() {
 		// Insert rules into a non-existent chain.
 		table.InsertOrAppendRules("badchain", []generictables.Rule{
-			{Match: nftables.Match(), Action: nftables.DropAction{}},
+			{Match: nftrender.Match(), Action: nftrender.DropAction{}},
 		})
 		Expect(func() {
 			table.Apply()
 		}).To(Panic())
+	})
+
+	It("Should keep the base chains programmed while retrying nft failures", func() {
+		// Settle, so the table is fully programmed before we break it.
+		table.Apply()
+		table.ApplyUpdates(nil)
+		chains, err := f.List(context.TODO(), "chain")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(chains).To(ConsistOf(expectedBaseChains))
+
+		// Insert rules into a non-existent chain to make every subsequent write fail.
+		table.InsertOrAppendRules("badchain", []generictables.Rule{
+			{Match: nftrender.Match(), Action: nftrender.DropAction{}},
+		})
+		Expect(func() {
+			table.Apply()
+		}).To(Panic())
+
+		// The retry loop recreates the table after repeated failures. Each recreate must be part of
+		// the transaction that writes the whole ruleset back, so that a failed attempt leaves the
+		// table alone rather than stripping its hooks.
+		recreates := 0
+		for _, tx := range f.transactions {
+			s := tx.String()
+			if !strings.Contains(s, "delete table") {
+				continue
+			}
+			recreates++
+			for _, chain := range expectedBaseChains {
+				Expect(s).To(ContainSubstring("add chain ip calico %s ", chain))
+			}
+		}
+		Expect(recreates).To(BeNumerically(">", 0), "expected the retry loop to attempt a table recreate")
+
+		// The property that matters: nothing was committed, so the dataplane still has our hooks.
+		chains, err = f.List(context.TODO(), "chain")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(chains).To(ConsistOf(expectedBaseChains))
+
+		// The recreate would have dropped the IP sets too, so a resync must be queued for them.
+		listCalls := f.ListCallCount
+		table.ApplyUpdates(nil)
+		Expect(f.ListCallCount).To(BeNumerically(">", listCalls), "expected an IP set resync to have been queued")
+	})
+
+	It("Should recreate the table and reprogram everything after repeated nft failures", func() {
+		table.UpdateChain(&generictables.Chain{
+			Name:  "cali-foobar",
+			Rules: []generictables.Rule{{Match: nftrender.Match(), Action: nftrender.AcceptAction{}}},
+		})
+		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+			{Match: nftrender.Match(), Action: nftrender.JumpAction{Target: "cali-foobar"}},
+		})
+		table.Apply()
+		Expect(f.List(context.TODO(), "chain")).To(ConsistOf(append(expectedBaseChains, "cali-foobar")))
+
+		table.UpdateChain(&generictables.Chain{
+			Name:  "cali-foobar",
+			Rules: []generictables.Rule{{Match: nftrender.Match(), Action: nftrender.DropAction{}}},
+		})
+
+		// Six consecutive write failures is enough to trigger a recreate. The seventh attempt goes
+		// through, and must restore the whole ruleset rather than just the part that was dirty.
+		f.RunErrors = 6
+		Expect(func() {
+			table.Apply()
+		}).NotTo(Panic())
+		Expect(f.RunErrors).To(BeZero(), "expected the retry loop to consume every injected error")
+
+		lastTx := f.transactions[len(f.transactions)-1].String()
+		Expect(lastTx).To(ContainSubstring("delete table"))
+		Expect(f.List(context.TODO(), "chain")).To(ConsistOf(append(expectedBaseChains, "cali-foobar")))
+		Expect(f.ListRules(context.TODO(), "filter-FORWARD")).To(nftables.ContainRule(knftables.Rule{
+			Chain:   "filter-FORWARD",
+			Rule:    "counter jump cali-foobar",
+			Comment: ptr("cali:5BWf2dLBa-ZMC-kf;"),
+		}))
+		Expect(f.ListRules(context.TODO(), "cali-foobar")).To(nftables.ContainRule(knftables.Rule{
+			Chain:   "cali-foobar",
+			Rule:    "counter drop",
+			Comment: ptr("cali:qEazjD2XdAvzH1n5;"),
+		}))
+	})
+
+	It("Should re-add the table's maps in the transaction that recreates it", func() {
+		m := nftables.MapMetadata{Name: "cali-map", Type: nftables.MapTypeInterfaceMatch}
+		table.AddOrReplaceMap(m, map[string][]string{"cali1234": {"jump cali-foobar"}})
+		table.UpdateChain(&generictables.Chain{
+			Name:  "cali-foobar",
+			Rules: []generictables.Rule{{Match: nftrender.Match(), Action: nftrender.AcceptAction{}}},
+		})
+		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+			{Match: nftrender.Match(), Action: nftrender.JumpAction{Target: "cali-foobar"}},
+		})
+		table.Apply()
+		Expect(f.List(context.TODO(), "map")).To(ContainElement("cali-map"))
+
+		// Dirty the table, then fail enough writes to trigger a recreate.
+		table.UpdateChain(&generictables.Chain{
+			Name:  "cali-foobar",
+			Rules: []generictables.Rule{{Match: nftrender.Match(), Action: nftrender.DropAction{}}},
+		})
+		f.RunErrors = 6
+		Expect(func() {
+			table.Apply()
+		}).NotTo(Panic())
+
+		// The delete takes the maps with it, so the same transaction has to put them back. If the
+		// map survived while our cached view said it was gone, re-adding its members would fail.
+		lastTx := f.transactions[len(f.transactions)-1].String()
+		Expect(lastTx).To(ContainSubstring("delete table"))
+		Expect(strings.Index(lastTx, "delete table")).To(
+			BeNumerically("<", strings.Index(lastTx, "add map")),
+			"the table delete must be emitted before the map is re-added")
+		Expect(f.List(context.TODO(), "map")).To(ContainElement("cali-map"))
 	})
 
 	It("should not reload the dataplane on a no-op Apply()", func() {
@@ -178,10 +298,41 @@ var _ = Describe("Table with an empty dataplane", func() {
 		Expect(f.ListCallCount).To(Equal(listCalls))
 	})
 
+	It("should skip the resync when the object listing fails transiently", func() {
+		// Drive to a settled, in-sync state with one programmed rule.
+		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+			{Match: nftrender.Match(), Action: nftrender.DropAction{}},
+		})
+		table.Apply()
+		txCount := len(f.transactions)
+		Expect(txCount).To(BeNumerically(">", 0))
+
+		// Force a resync, but make the object listing fail transiently. We bail
+		// out rather than falling back to per-type List calls or treating the
+		// table as empty, so the only list call is the failed ListAll and no
+		// reprogramming transaction is issued.
+		table.InvalidateDataplaneCache("test")
+		listCalls := f.ListCallCount
+		f.ListAllError = errors.New("transient nft failure")
+		table.Apply()
+		Expect(f.ListAllError).To(BeNil(), "expected the resync to consume the injected error")
+		Expect(f.ListCallCount-listCalls).To(Equal(1), "should not fall back to extra List calls after a failed ListAll")
+		Expect(f.transactions).To(HaveLen(txCount), "transient list failure should not trigger reprogramming")
+
+		// Our rule should still be present in the dataplane.
+		rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(rules).To(nftables.ContainRule(knftables.Rule{
+			Chain:   "filter-FORWARD",
+			Rule:    "counter drop",
+			Comment: ptr("cali:DCGauXoHP5A9-AIO;"),
+		}))
+	})
+
 	Describe("after inserting a rule", func() {
 		BeforeEach(func() {
 			table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-				{Match: nftables.Match(), Action: nftables.DropAction{}},
+				{Match: nftrender.Match(), Action: nftrender.DropAction{}},
 			})
 			table.Apply()
 			Expect(f.transactions).To(HaveLen(1))
@@ -199,7 +350,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 
 		It("further inserts should be idempotent", func() {
 			table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-				{Match: nftables.Match(), Action: nftables.DropAction{}},
+				{Match: nftrender.Match(), Action: nftrender.DropAction{}},
 			})
 			table.Apply()
 
@@ -215,10 +366,10 @@ var _ = Describe("Table with an empty dataplane", func() {
 		Describe("after inserting a rule then updating the insertions", func() {
 			BeforeEach(func() {
 				table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-					{Match: nftables.Match(), Action: nftables.DropAction{}},
-					{Match: nftables.Match(), Action: nftables.AcceptAction{}},
-					{Match: nftables.Match(), Action: nftables.DropAction{}},
-					{Match: nftables.Match(), Action: nftables.AcceptAction{}},
+					{Match: nftrender.Match(), Action: nftrender.DropAction{}},
+					{Match: nftrender.Match(), Action: nftrender.AcceptAction{}},
+					{Match: nftrender.Match(), Action: nftrender.DropAction{}},
+					{Match: nftrender.Match(), Action: nftrender.AcceptAction{}},
 				})
 				table.Apply()
 				Expect(f.transactions).To(HaveLen(2))
@@ -271,7 +422,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 			BeforeEach(func() {
 				// Append a rule to the filter-FORWARD base chain, and trigger programming.
 				table.AppendRules("filter-FORWARD", []generictables.Rule{
-					{Match: nftables.Match(), Action: nftables.AcceptAction{}},
+					{Match: nftrender.Match(), Action: nftrender.AcceptAction{}},
 				})
 				table.Apply()
 
@@ -362,12 +513,12 @@ var _ = Describe("Table with an empty dataplane", func() {
 			BeforeEach(func() {
 				table.UpdateChains([]*generictables.Chain{
 					{Name: "cali-foobar", Rules: []generictables.Rule{
-						{Action: nftables.AcceptAction{}},
-						{Action: nftables.DropAction{}},
+						{Action: nftrender.AcceptAction{}},
+						{Action: nftrender.DropAction{}},
 					}},
 					{Name: "cali-bazzbiff", Rules: []generictables.Rule{
-						{Action: nftables.AcceptAction{}},
-						{Action: nftables.DropAction{}},
+						{Action: nftrender.AcceptAction{}},
+						{Action: nftrender.DropAction{}},
 					}},
 				})
 				table.Apply()
@@ -384,7 +535,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 					table.UpdateChain(&generictables.Chain{
 						Name: "cali-FORWARD",
 						Rules: []generictables.Rule{
-							{Action: nftables.JumpAction{Target: "cali-foobar"}},
+							{Action: nftrender.JumpAction{Target: "cali-foobar"}},
 						},
 					})
 					table.Apply()
@@ -399,7 +550,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 				Describe("after adding an indirect reference from a base chain", func() {
 					BeforeEach(func() {
 						table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-							{Action: nftables.JumpAction{Target: "cali-FORWARD"}},
+							{Action: nftrender.JumpAction{Target: "cali-FORWARD"}},
 						})
 						table.Apply()
 					})
@@ -428,7 +579,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 							table.UpdateChain(&generictables.Chain{
 								Name: "cali-FORWARD",
 								Rules: []generictables.Rule{
-									{Action: nftables.JumpAction{Target: "cali-bazzbiff"}},
+									{Action: nftrender.JumpAction{Target: "cali-bazzbiff"}},
 								},
 							})
 							table.Apply()
@@ -462,12 +613,12 @@ var _ = Describe("Table with an empty dataplane", func() {
 			Describe("after adding a reference from another referenced chain", func() {
 				BeforeEach(func() {
 					table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-						{Action: nftables.JumpAction{Target: "cali-FORWARD"}},
+						{Action: nftrender.JumpAction{Target: "cali-FORWARD"}},
 					})
 					table.UpdateChain(&generictables.Chain{
 						Name: "cali-FORWARD",
 						Rules: []generictables.Rule{
-							{Action: nftables.JumpAction{Target: "cali-foobar"}},
+							{Action: nftrender.JumpAction{Target: "cali-foobar"}},
 						},
 					})
 					table.Apply()
@@ -482,7 +633,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 				Describe("after adding a reference from an insert", func() {
 					BeforeEach(func() {
 						table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-							{Action: nftables.JumpAction{Target: "cali-foobar"}},
+							{Action: nftrender.JumpAction{Target: "cali-foobar"}},
 						})
 						table.Apply()
 					})
@@ -523,7 +674,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 			Describe("after adding a reference from a base chain", func() {
 				BeforeEach(func() {
 					table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-						{Action: nftables.JumpAction{Target: "cali-foobar"}},
+						{Action: nftrender.JumpAction{Target: "cali-foobar"}},
 					})
 					table.Apply()
 					Expect(f.transactions).To(HaveLen(2))
@@ -562,8 +713,8 @@ var _ = Describe("Table with an empty dataplane", func() {
 						table.UpdateChains([]*generictables.Chain{
 							{Name: "cali-foobar", Rules: []generictables.Rule{
 								// We swap the rules.
-								{Action: nftables.DropAction{}},
-								{Action: nftables.AcceptAction{}},
+								{Action: nftrender.DropAction{}},
+								{Action: nftrender.AcceptAction{}},
 							}},
 						})
 						table.Apply()
@@ -588,8 +739,8 @@ var _ = Describe("Table with an empty dataplane", func() {
 						table.UpdateChains([]*generictables.Chain{
 							{Name: "cali-foobar", Rules: []generictables.Rule{
 								// Same data as above.
-								{Action: nftables.DropAction{}},
-								{Action: nftables.AcceptAction{}},
+								{Action: nftrender.DropAction{}},
+								{Action: nftrender.AcceptAction{}},
 							}},
 						})
 						Expect(f.transactions).To(HaveLen(3))
@@ -602,9 +753,9 @@ var _ = Describe("Table with an empty dataplane", func() {
 					BeforeEach(func() {
 						table.UpdateChains([]*generictables.Chain{
 							{Name: "cali-foobar", Rules: []generictables.Rule{
-								{Action: nftables.AcceptAction{}},
-								{Action: nftables.DropAction{}},
-								{Action: nftables.ReturnAction{}},
+								{Action: nftrender.AcceptAction{}},
+								{Action: nftrender.DropAction{}},
+								{Action: nftrender.ReturnAction{}},
 							}},
 						})
 						table.Apply()
@@ -625,7 +776,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 						BeforeEach(func() {
 							table.UpdateChains([]*generictables.Chain{
 								{Name: "cali-foobar", Rules: []generictables.Rule{
-									{Action: nftables.AcceptAction{}},
+									{Action: nftrender.AcceptAction{}},
 								}},
 							})
 							table.Apply()
@@ -645,7 +796,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 						BeforeEach(func() {
 							table.UpdateChains([]*generictables.Chain{
 								{Name: "cali-foobar", Rules: []generictables.Rule{
-									{Action: nftables.ReturnAction{}},
+									{Action: nftrender.ReturnAction{}},
 								}},
 							})
 							table.Apply()
@@ -678,8 +829,8 @@ var _ = Describe("Table with an empty dataplane", func() {
 					BeforeEach(func() {
 						table.RemoveChains([]*generictables.Chain{
 							{Name: "cali-foobar", Rules: []generictables.Rule{
-								{Action: nftables.AcceptAction{}},
-								{Action: nftables.DropAction{}},
+								{Action: nftrender.AcceptAction{}},
+								{Action: nftrender.DropAction{}},
 							}},
 						})
 						table.Apply()
@@ -695,14 +846,14 @@ var _ = Describe("Table with an empty dataplane", func() {
 		Describe("applying updates when underlying rules have changed in a approved chain", func() {
 			BeforeEach(func() {
 				table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-					{Action: nftables.AcceptAction{}},
-					{Action: nftables.DropAction{}},
-					{Action: nftables.JumpAction{Target: "cali-foobar"}},
+					{Action: nftrender.AcceptAction{}},
+					{Action: nftrender.DropAction{}},
+					{Action: nftrender.JumpAction{Target: "cali-foobar"}},
 				})
 				table.UpdateChains([]*generictables.Chain{
 					{Name: "cali-foobar", Rules: []generictables.Rule{
-						{Action: nftables.AcceptAction{}},
-						{Action: nftables.DropAction{}},
+						{Action: nftrender.AcceptAction{}},
+						{Action: nftrender.DropAction{}},
 					}},
 				})
 				table.Apply()
@@ -733,12 +884,12 @@ var _ = Describe("Table with an empty dataplane", func() {
 			Describe("inserting and appending into a base chain results in the expected writes", func() {
 				BeforeEach(func() {
 					table.AppendRules("filter-FORWARD", []generictables.Rule{
-						{Action: nftables.DropAction{}, Comment: []string{"append drop rule"}},
-						{Action: nftables.AcceptAction{}, Comment: []string{"append accept rule"}},
+						{Action: nftrender.DropAction{}, Comment: []string{"append drop rule"}},
+						{Action: nftrender.AcceptAction{}, Comment: []string{"append accept rule"}},
 					})
 					table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-						{Action: nftables.DropAction{}, Comment: []string{"insert drop rule"}},
-						{Action: nftables.AcceptAction{}, Comment: []string{"insert accept rule"}},
+						{Action: nftrender.DropAction{}, Comment: []string{"insert drop rule"}},
+						{Action: nftrender.AcceptAction{}, Comment: []string{"insert accept rule"}},
 					})
 
 					table.Apply()
@@ -759,8 +910,8 @@ var _ = Describe("Table with an empty dataplane", func() {
 				Describe("then appending the same rules", func() {
 					BeforeEach(func() {
 						table.AppendRules("filter-FORWARD", []generictables.Rule{
-							{Action: nftables.DropAction{}, Comment: []string{"append drop rule"}},
-							{Action: nftables.AcceptAction{}, Comment: []string{"append accept rule"}},
+							{Action: nftrender.DropAction{}, Comment: []string{"append drop rule"}},
+							{Action: nftrender.AcceptAction{}, Comment: []string{"append accept rule"}},
 						})
 						table.Apply()
 
@@ -783,14 +934,14 @@ var _ = Describe("Table with an empty dataplane", func() {
 				Describe("then inserting and appending different rules", func() {
 					BeforeEach(func() {
 						table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-							{Action: nftables.DropAction{}, Comment: []string{"insert drop rule"}},
-							{Action: nftables.AcceptAction{}, Comment: []string{"insert accept rule"}},
-							{Action: nftables.DropAction{}, Comment: []string{"second insert drop rule"}},
+							{Action: nftrender.DropAction{}, Comment: []string{"insert drop rule"}},
+							{Action: nftrender.AcceptAction{}, Comment: []string{"insert accept rule"}},
+							{Action: nftrender.DropAction{}, Comment: []string{"second insert drop rule"}},
 						})
 						table.AppendRules("filter-FORWARD", []generictables.Rule{
-							{Action: nftables.DropAction{}, Comment: []string{"append drop rule"}},
-							{Action: nftables.AcceptAction{}, Comment: []string{"append accept rule"}},
-							{Action: nftables.DropAction{}, Comment: []string{"second append drop rule"}},
+							{Action: nftrender.DropAction{}, Comment: []string{"append drop rule"}},
+							{Action: nftrender.AcceptAction{}, Comment: []string{"append accept rule"}},
+							{Action: nftrender.DropAction{}, Comment: []string{"second append drop rule"}},
 						})
 						table.Apply()
 						Expect(f.transactions).To(HaveLen(4))
@@ -819,13 +970,13 @@ var _ = Describe("Table with an empty dataplane", func() {
 			table.UpdateChain(&generictables.Chain{
 				Name: "cali-tw-1234",
 				Rules: []generictables.Rule{
-					{Action: nftables.AcceptAction{}},
+					{Action: nftrender.AcceptAction{}},
 				},
 			})
 			table.UpdateChain(&generictables.Chain{
 				Name: "cali-tw-5678",
 				Rules: []generictables.Rule{
-					{Action: nftables.DropAction{}},
+					{Action: nftrender.DropAction{}},
 				},
 			})
 
@@ -886,12 +1037,12 @@ var _ = Describe("Insert early rules", func() {
 		table = nftables.NewTable(
 			"cali-filter",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 			},
 			true,
 		)
@@ -899,8 +1050,8 @@ var _ = Describe("Insert early rules", func() {
 
 	It("should insert rules immediately without Apply", func() {
 		rls := []generictables.Rule{
-			{Action: nftables.DropAction{}, Comment: []string{"my rule"}},
-			{Action: nftables.AcceptAction{}, Comment: []string{"my other rule"}},
+			{Action: nftrender.DropAction{}, Comment: []string{"my rule"}},
+			{Action: nftrender.AcceptAction{}, Comment: []string{"my other rule"}},
 		}
 
 		err := table.InsertRulesNow("filter-FORWARD", rls)
@@ -922,8 +1073,8 @@ var _ = Describe("Insert early rules", func() {
 
 	It("should find out if rules already present", func() {
 		rls := []generictables.Rule{
-			{Action: nftables.DropAction{}, Comment: []string{"my rule"}},
-			{Action: nftables.AcceptAction{}, Comment: []string{"my other rule"}},
+			{Action: nftrender.DropAction{}, Comment: []string{"my rule"}},
+			{Action: nftrender.AcceptAction{}, Comment: []string{"my other rule"}},
 		}
 
 		// Init chains
@@ -945,8 +1096,10 @@ var _ = Describe("Disabled table cache invalidation", func() {
 	var table *nftables.NftablesTable
 	var featureDetector *environment.FeatureDetector
 	var f *fakeNFT
+	var mockNow time.Time
 
 	BeforeEach(func() {
+		mockNow = time.Date(2026, 8, 19, 0, 0, 0, 0, time.UTC)
 		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
 			f = NewFake(fam, name)
 			return f, nil
@@ -955,13 +1108,14 @@ var _ = Describe("Disabled table cache invalidation", func() {
 		table = nftables.NewTable(
 			"calico",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 				Disabled:         true,
+				NowOverride:      func() time.Time { return mockNow },
 			},
 			true,
 		)
@@ -1002,6 +1156,39 @@ var _ = Describe("Disabled table cache invalidation", func() {
 		})
 	})
 
+	// The table Felix sweeps is one it doesn't program, and its chains can go while we work. That
+	// costs us a pass, not the process.
+	Context("when the dataplane rejects the cleanup", func() {
+		BeforeEach(func() {
+			tx := f.NewTransaction()
+			tx.Add(&knftables.Table{})
+			tx.Add(&knftables.Chain{Name: "cali-foobar"})
+			tx.Add(&knftables.Rule{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:en3LGdDuVUQEgLl8;")})
+			Expect(f.Run(context.Background(), tx)).NotTo(HaveOccurred())
+
+			// More than the retry budget, so every attempt in one Apply fails.
+			f.RunErrors = 100
+		})
+
+		It("reschedules instead of panicking", func() {
+			Expect(func() { table.Apply() }).NotTo(Panic())
+		})
+
+		It("holds off until the retry is due, then cleans up", func() {
+			table.Apply()
+
+			f.RunErrors = 0
+			listCalls := f.ListCallCount
+			table.Apply()
+			Expect(f.ListCallCount).To(Equal(listCalls), "Expected no retry before the next attempt was due")
+
+			mockNow = mockNow.Add(10 * time.Minute)
+			table.Apply()
+			_, err := f.Fake().List(context.Background(), "chain")
+			Expect(err).To(HaveOccurred(), "Expected table to be deleted once cleanup succeeded")
+		})
+	})
+
 	Context("when there are no chains in the dataplane", func() {
 		It("should not invalidate cache after apply (no cleanup needed)", func() {
 			// First Apply: empty dataplane, nothing to clean up. The first Apply will call
@@ -1034,12 +1221,12 @@ var _ = Describe("Enabled table cache invalidation", func() {
 		table = nftables.NewTable(
 			"calico",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 			},
 			true,
 		)
@@ -1058,11 +1245,11 @@ var _ = Describe("Enabled table cache invalidation", func() {
 		table.UpdateChain(&generictables.Chain{
 			Name: "cali-pi-test",
 			Rules: []generictables.Rule{
-				{Match: nftables.Match(), Action: nftables.ReturnAction{}},
+				{Match: nftrender.Match(), Action: nftrender.ReturnAction{}},
 			},
 		})
 		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-			{Match: nftables.Match(), Action: nftables.JumpAction{Target: "cali-pi-test"}},
+			{Match: nftrender.Match(), Action: nftrender.JumpAction{Target: "cali-pi-test"}},
 		})
 		table.Apply()
 		Expect(f.ListCallCount).To(Equal(listCalls),
@@ -1087,12 +1274,12 @@ var _ = Describe("ARP Table", func() {
 		featureDetector = environment.NewFeatureDetector(nil)
 		table = nftables.NewARPTable(
 			"calico-arp",
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 			},
 			true,
 		)
@@ -1116,15 +1303,15 @@ var _ = Describe("ARP Table", func() {
 
 	It("should support inserting rules into the OUTPUT base chain", func() {
 		table.InsertOrAppendRules("filter-OUTPUT", []generictables.Rule{{
-			Match:  nftables.Match(),
-			Action: nftables.JumpAction{Target: "cali-arp-dispatch"},
+			Match:  nftrender.Match(),
+			Action: nftrender.JumpAction{Target: "cali-arp-dispatch"},
 		}})
 
 		chain := generictables.Chain{
 			Name: "cali-arp-dispatch",
 			Rules: []generictables.Rule{{
-				Match:  nftables.Match().OutInterface("cali1234").ARPOperation("reply").ARPSrcIP("10.0.0.1"),
-				Action: nftables.DropAction{},
+				Match:  nftrender.Match().OutInterface("cali1234").ARPOperation("reply").ARPSrcIP("10.0.0.1"),
+				Action: nftrender.DropAction{},
 			}},
 		}
 		table.UpdateChain(&chain)
@@ -1135,3 +1322,285 @@ var _ = Describe("ARP Table", func() {
 		Expect(chains).To(ContainElement("cali-arp-dispatch"))
 	})
 })
+
+var _ = Describe("Table with flowtable offload enabled", func() {
+	var table *nftables.NftablesTable
+	var f *fakeNFT
+	BeforeEach(func() {
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		table = nftables.NewTable(
+			"calico",
+			4,
+			rulesdefs.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
+				ListInterfacesOverride: func() ([]string, error) {
+					// Everything the flowtable specs program is treated as present by default;
+					// the prune spec overrides this with its own narrower lister.
+					return []string{"cali1234", "vxlan.calico", "eth0", "lo"}, nil
+				},
+			},
+			true,
+		)
+	})
+
+	// The FORWARD rule references the flowtable whenever offload is on, so it must be created even
+	// with no devices. Deleting it instead (the old behavior) failed the transaction.
+	It("should program the flowtable even when there are no devices", func() {
+		table.SetOverlayDevices(nil)
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+	})
+
+	It("should leave the counter flag off when the kernel doesn't support it", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		Expect(f.Fake().Dump()).NotTo(ContainSubstring("counter ;"))
+	})
+
+	It("should set the counter flag when the kernel supports it", func() {
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		table = nftables.NewTable(
+			"calico",
+			4,
+			rulesdefs.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
+				FlowtableCounter: true,
+				ListInterfacesOverride: func() ([]string, error) {
+					return []string{"vxlan.calico"}, nil
+				},
+			},
+			true,
+		)
+
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		Expect(f.Fake().Dump()).To(ContainSubstring("counter ;"))
+	})
+
+	It("should attach the configured overlay and workload devices to the flowtable", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+
+		// Devices are combined and sorted, so the workload interface sorts ahead of the tunnel.
+		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { cali1234, vxlan.calico }"))
+	})
+
+	It("should report the flowtable device count as a metric", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(2)))
+	})
+
+	It("should attach external devices to the flowtable alongside overlay and workload devices", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+		table.SetExternalDevices([]string{"eth0"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(3)))
+		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { cali1234, eth0, vxlan.calico }"))
+	})
+
+	// A full resync must re-assert the flowtable even with no devices, otherwise the always-present
+	// FORWARD rule would reference a flowtable that the resync failed to recreate.
+	It("should re-assert the flowtable on a resync with no devices", func() {
+		table.SetOverlayDevices(nil)
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+
+		// Simulate another process removing the flowtable behind our back.
+		tx := f.Fake().NewTransaction()
+		tx.Delete(&knftables.Flowtable{Name: dataplanedefs.FlowtableName})
+		Expect(f.Fake().Run(context.TODO(), tx)).NotTo(HaveOccurred())
+		Expect(f.List(context.TODO(), "flowtable")).To(BeEmpty())
+
+		// A resync should put it back, despite the empty device set.
+		table.InvalidateDataplaneCache("test")
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+	})
+
+	// When offload is turned off, Felix restarts and comes up without ever enabling the flowtable.
+	// It must clean up the flowtable left behind by the previous run.
+	It("should delete a leftover flowtable when offload is disabled", func() {
+		// Offload is disabled here (no SetOverlayDevices call); this first Apply just creates the table.
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		// Simulate a flowtable left behind by a previous run that had offload enabled.
+		prio := knftables.FilterIngressPriority
+		tx := f.Fake().NewTransaction()
+		tx.Add(&knftables.Flowtable{Name: dataplanedefs.FlowtableName, Priority: &prio})
+		Expect(f.Fake().Run(context.TODO(), tx)).NotTo(HaveOccurred())
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+
+		// The next resync should spot the stale flowtable and remove it.
+		table.InvalidateDataplaneCache("test")
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(f.List(context.TODO(), "flowtable")).To(BeEmpty())
+	})
+
+	It("should prune flowtable devices that no longer exist in the kernel", func() {
+		// net.Interfaces() reports cali1234 and vxlan.calico exist, but not the dead veth.
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		table = nftables.NewTable(
+			"calico",
+			4,
+			rulesdefs.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
+				ListInterfacesOverride: func() ([]string, error) {
+					return []string{"cali1234", "vxlan.calico", "lo"}, nil
+				},
+			},
+			true,
+		)
+
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234", "caliDEAD"})
+
+		// Dropping a device asks for a prompt retry, in case it was on its way up rather than gone.
+		Expect(table.Apply()).To(Equal(nftables.FlowtablePruneRetryDelay))
+
+		// caliDEAD is dropped; only the surviving devices are programmed.
+		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { cali1234, vxlan.calico }"))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(2)))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableMissingDevices())).To(Equal(float64(1)))
+	})
+
+	// A failure to read the kernel's interfaces must not wipe offload from every device.
+	It("should keep the cached device list when listing interfaces fails", func() {
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		table = nftables.NewTable(
+			"calico",
+			4,
+			rulesdefs.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
+				ListInterfacesOverride: func() ([]string, error) {
+					return nil, errors.New("netlink is having a bad day")
+				},
+			},
+			true,
+		)
+
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+
+		// Nothing was pruned, so there's nothing to retry for either.
+		Expect(table.Apply()).To(BeZero())
+		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { cali1234, vxlan.calico }"))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(2)))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableMissingDevices())).To(BeZero())
+	})
+
+	// A device can be missing because it's still being created, not because it's gone. The desired
+	// list doesn't change when it finally appears, so without the retry the device would go
+	// unoffloaded until the next resync.
+	It("should re-assert the flowtable once a pruned device appears", func() {
+		present := []string{"vxlan.calico", "lo"}
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		table = nftables.NewTable(
+			"calico",
+			4,
+			rulesdefs.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
+				ListInterfacesOverride: func() ([]string, error) {
+					return present, nil
+				},
+			},
+			true,
+		)
+
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+		Expect(table.Apply()).To(Equal(nftables.FlowtablePruneRetryDelay))
+		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { vxlan.calico }"))
+
+		// The veth lands. Nothing tells the table about it, so the retry has to notice.
+		present = append(present, "cali1234")
+		Expect(table.Apply()).To(BeZero())
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(2)))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableMissingDevices())).To(BeZero())
+
+		// knftables' fake ignores an "add flowtable" for a flowtable that already exists, where
+		// real nft treats it as create-or-update, so the device list in Dump() is stuck at what
+		// the first Apply wrote. Assert on what we asked nft to do instead.
+		Expect(flowtableDevicesProgrammed(f)).To(ContainElement("devices = { cali1234, vxlan.calico }"))
+	})
+
+	// A workload endpoint whose veth is gone for good would otherwise keep us re-asserting the
+	// flowtable every few seconds forever.
+	It("should stop retrying a pruned device that never appears", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"caliGHOST"})
+
+		for i := 0; i < nftables.MaxFlowtablePruneRetries; i++ {
+			Expect(table.Apply()).To(Equal(nftables.FlowtablePruneRetryDelay), "expected a retry on attempt %d", i+1)
+		}
+		Expect(table.Apply()).To(BeZero())
+	})
+})
+
+// flowtableDevicesProgrammed returns the "devices = { ... }" clause of every "add flowtable"
+// operation the table has sent to nft, oldest first.
+func flowtableDevicesProgrammed(f *fakeNFT) []string {
+	var clauses []string
+	for _, tx := range f.Transactions() {
+		for _, line := range strings.Split(tx.String(), "\n") {
+			if !strings.Contains(line, "add flowtable") {
+				continue
+			}
+
+			start := strings.Index(line, "devices = {")
+			if start < 0 {
+				continue
+			}
+			end := strings.Index(line[start:], "}")
+			if end < 0 {
+				continue
+			}
+			clauses = append(clauses, line[start:start+end+1])
+		}
+	}
+	return clauses
+}

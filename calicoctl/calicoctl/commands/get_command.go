@@ -30,10 +30,19 @@ func newGetCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get [KIND [NAME...]]",
 		Short: "Get a resource by file, directory, stdin, or type and name",
+		Long: `Get one or more Calico resources - all resources of a type, specific ones by
+name, or those described in a file. Output can be a table (the default), YAML,
+JSON, or a custom template; the YAML and JSON output can be fed back into apply
+or replace.`,
+		Example: `  # List all network policies.
+  calicoctl get networkpolicy
+
+  # Get specific policies as YAML.
+  calicoctl get networkpolicy my-policy-1 my-policy-2 -o yaml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsedArgs := argsFromCRUDFlags(cmd, args)
 
-			allNamespaces, _ := cmd.Flags().GetBool("all-namespaces")
+			allNamespaces := allNamespacesRequested(cmd)
 			parsedArgs["--all-namespaces"] = allNamespaces
 			export, _ := cmd.Flags().GetBool("export")
 			parsedArgs["--export"] = export
@@ -79,8 +88,22 @@ func newGetCommand() *cobra.Command {
 	addCRUDFlags(cmd)
 	cmd.Flags().StringP("output", "o", "ps", "Output format: yaml, json, ps, wide, custom-columns=..., go-template=..., go-template-file=...")
 	cmd.Flags().BoolP("all-namespaces", "A", false, "List the requested object(s) across all namespaces.")
+	// calicoctl historically accepted -a as well as -A (a docopt quirk locked in by
+	// TestMultiOption); cobra allows one shorthand per flag, so register -a as a hidden alias.
+	cmd.Flags().BoolP("all-namespaces-a", "a", false, "Alias for --all-namespaces.")
+	_ = cmd.Flags().MarkHidden("all-namespaces-a")
 	cmd.Flags().Bool("export", false, "Strip cluster-specific information from the output.")
 	return cmd
+}
+
+// allNamespacesRequested reports whether the user asked to list across all
+// namespaces, accepting both -A and the historical -a alias.
+func allNamespacesRequested(cmd *cobra.Command) bool {
+	if a, _ := cmd.Flags().GetBool("all-namespaces"); a {
+		return true
+	}
+	aAlias, _ := cmd.Flags().GetBool("all-namespaces-a")
+	return aAlias
 }
 
 func buildResourcePrinter(output string, printNamespace bool) (common.ResourcePrinter, error) {

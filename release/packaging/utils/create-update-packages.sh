@@ -37,7 +37,7 @@ fi
 
 # We used to have some Semaphore environment-dependent logic here, but we now
 # place that in the Semaphore YAML (which is a more appropriate place for it).
-: ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq ${pub_steps}}
+: ${STEPS:=bld_images net_cal felix calicoctl etcd3gw dnsmasq ${pub_steps}}
 
 function check_bin {
     which "$1" > /dev/null
@@ -141,6 +141,10 @@ function precheck_felix {
     require_version
 }
 
+function precheck_calicoctl {
+    require_version
+}
+
 function precheck_etcd3gw {
     :
 }
@@ -237,6 +241,35 @@ function do_felix {
 
     # Packages are produced in rootDir/ - move them to the output dir.
     find ../ -type f -name 'felix_*-*' -exec mv '{}' "$outputDir" \;
+    popd
+}
+
+function do_calicoctl {
+    # Build calicoctl packages.
+    pushd "${rootdir}/calicoctl"
+
+    # As for Felix, we build the calicoctl binary and include it in our
+    # source package content, because it's infeasible to work out a set
+    # of Debian and RPM golang build dependencies that is exactly
+    # equivalent to our containerized builds.  Unlike Felix, calicoctl
+    # is statically linked (CGO_ENABLED=0), so it needs no patchelf
+    # fixups and has no shared library dependencies.
+    make bin/calicoctl
+
+    # Remove the arch-suffixed binary that the build also creates,
+    # keeping just bin/calicoctl.
+    rm -f bin/calicoctl-linux-amd64
+
+    # Override dpkg's default file exclusions, otherwise our binary
+    # won't get included.
+    PKG_NAME=calicoctl \
+            NAME=calicoctl \
+            RPM_TAR_ARGS='--exclude=bin/calicoctl-* --exclude=.gitignore --exclude=.go-pkg-cache --exclude=report --exclude=test-data --exclude=tests' \
+            DPKG_EXCL="-I'bin/calicoctl-*' -I.git -I.gitignore -I.go-pkg-cache -Ireport -Itest-data -Itests" \
+            "${rootdir}/release/packaging/utils/make-packages.sh" rpm deb
+
+    # Packages are produced in rootDir/ - move them to the output dir.
+    find ../ -type f -name 'calicoctl_*-*' -exec mv '{}' "$outputDir" \;
     popd
 }
 

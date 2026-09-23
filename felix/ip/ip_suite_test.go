@@ -26,7 +26,7 @@ import (
 func TestIp(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../report/felix_ip_suite.xml"
+	testutils.RegisterJUnitReporter("felix_ip_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/ip", suiteConfig, reporterConfig)
 }
 

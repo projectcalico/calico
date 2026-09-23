@@ -23,7 +23,9 @@ spec:
   nodeSelector:
     # Important: This makes sure that calicoctl is installed on the control plane node,
     # where it will not be subjected to potentially disruptive actions taken by our test code.
-    kubernetes.io/hostname: kind-control-plane
+    # Using the control-plane role label rather than a specific hostname so this
+    # works for any kind cluster name.
+    node-role.kubernetes.io/control-plane: ""
   hostNetwork: true
   serviceAccountName: calicoctl
   containers:

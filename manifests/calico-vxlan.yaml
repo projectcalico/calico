@@ -59,7 +59,7 @@ data:
   cni_network_config: |-
     {
       "name": "k8s-pod-network",
-      "cniVersion": "0.3.1",
+      "cniVersion": "1.0.0",
       "plugins": [
         {
           "type": "calico",
@@ -100,7 +100,6 @@ spec:
     listKind: BGPConfigurationList
     plural: bgpconfigurations
     singular: bgpconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -132,7 +131,9 @@ spec:
                   description:
                     "ASNumber is the default AS number used by a node. [Default:
                     64512]"
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 bindMode:
                   description: |-
@@ -293,14 +294,35 @@ spec:
                   type: array
                   x-kubernetes-list-type: atomic
                 programClusterRoutes:
+                  default: EnabledNoEncapOnly
                   description: |-
-                    ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
-                    when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Enabled,
-                    confd and BIRD program that route. When ProgramClusterRoutes is Disabled, it is expected that Felix will program that route.
-                    Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Enabled]
+                    ProgramClusterRoutes controls which "cluster routes" are programmed by Calico's BGP
+                    stack, i.e. the routes that a node needs in order to reach workloads on other nodes.  It
+                    only applies to IP Pools with vxlanMode: Never; the cluster routes for IP Pools with
+                    vxlanMode: Always or vxlanMode: CrossSubnet are always programmed by Felix.  The routes
+                    that BIRD does not program here are expected to be programmed by Felix instead.  Below,
+                    an IPIP IP Pool is one with ipipMode: Always or CrossSubnet, and an unencapsulated one
+                    has ipipMode and vxlanMode both Never.
+
+                    - Disabled: BIRD programs no cluster routes.
+                    - EnabledNoEncapOnly: BIRD programs them for unencapsulated IP Pools.
+                    - EnabledIPIPOnly: BIRD programs them for IPIP IP Pools.
+                    - Enabled: BIRD programs them for both.
+
+                    This field must be kept consistent with FelixConfiguration.ProgramClusterRoutes, which
+                    makes the same choice from Felix's side.  If both Felix and BIRD are enabled for the same
+                    kind of IP Pool they will fight over the routes; if neither is, there will be no cluster
+                    routes at all.
+
+                    Note: asking BIRD to program IPIP cluster routes, which the Enabled and EnabledIPIPOnly
+                    values do, is deprecated as of v3.33 and will be removed in v3.35.
+
+                    [Default: EnabledNoEncapOnly]
                   enum:
                     - Enabled
                     - Disabled
+                    - EnabledIPIPOnly
+                    - EnabledNoEncapOnly
                   type: string
                 serviceClusterIPs:
                   description: |-
@@ -400,7 +422,6 @@ spec:
     listKind: BGPFilterList
     plural: bgpfilters
     singular: bgpfilter
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -448,7 +469,12 @@ spec:
                           If non-empty, this filter rule will only apply to routes whose AS path begins with the
                           specified sequence of AS numbers.
                         items:
-                          format: int32
+                          description: |-
+                            ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
+                            number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
+                          format: int64
+                          maximum: 4294967295
+                          minimum: 0
                           type: integer
                         type: array
                         x-kubernetes-list-type: atomic
@@ -544,7 +570,12 @@ spec:
                                     The resulting path starts with these AS numbers in the order listed;
                                     e.g. [65000, 65001] produces the path "65000 65001 <original>".
                                   items:
-                                    format: int32
+                                    description: |-
+                                      ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
+                                      number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
+                                    format: int64
+                                    maximum: 4294967295
+                                    minimum: 0
                                     type: integer
                                   maxItems: 10
                                   minItems: 1
@@ -661,7 +692,12 @@ spec:
                           If non-empty, this filter rule will only apply to routes whose AS path begins with the
                           specified sequence of AS numbers.
                         items:
-                          format: int32
+                          description: |-
+                            ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
+                            number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
+                          format: int64
+                          maximum: 4294967295
+                          minimum: 0
                           type: integer
                         type: array
                         x-kubernetes-list-type: atomic
@@ -672,7 +708,7 @@ spec:
                           MatchOperator and PrefixLength.  CIDR should be in conventional CIDR notation,
                           <prefix>/<length>.
                         format: cidr
-                        maxLength: 43
+                        maxLength: 49
                         type: string
                       communities:
                         description: |-
@@ -757,7 +793,12 @@ spec:
                                     The resulting path starts with these AS numbers in the order listed;
                                     e.g. [65000, 65001] produces the path "65000 65001 <original>".
                                   items:
-                                    format: int32
+                                    description: |-
+                                      ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
+                                      number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
+                                    format: int64
+                                    maximum: 4294967295
+                                    minimum: 0
                                     type: integer
                                   maxItems: 10
                                   minItems: 1
@@ -874,7 +915,12 @@ spec:
                           If non-empty, this filter rule will only apply to routes whose AS path begins with the
                           specified sequence of AS numbers.
                         items:
-                          format: int32
+                          description: |-
+                            ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
+                            number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
+                          format: int64
+                          maximum: 4294967295
+                          minimum: 0
                           type: integer
                         type: array
                         x-kubernetes-list-type: atomic
@@ -970,7 +1016,12 @@ spec:
                                     The resulting path starts with these AS numbers in the order listed;
                                     e.g. [65000, 65001] produces the path "65000 65001 <original>".
                                   items:
-                                    format: int32
+                                    description: |-
+                                      ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
+                                      number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
+                                    format: int64
+                                    maximum: 4294967295
+                                    minimum: 0
                                     type: integer
                                   maxItems: 10
                                   minItems: 1
@@ -1087,7 +1138,12 @@ spec:
                           If non-empty, this filter rule will only apply to routes whose AS path begins with the
                           specified sequence of AS numbers.
                         items:
-                          format: int32
+                          description: |-
+                            ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
+                            number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
+                          format: int64
+                          maximum: 4294967295
+                          minimum: 0
                           type: integer
                         type: array
                         x-kubernetes-list-type: atomic
@@ -1098,7 +1154,7 @@ spec:
                           MatchOperator and PrefixLength.  CIDR should be in conventional CIDR notation,
                           <prefix>/<length>.
                         format: cidr
-                        maxLength: 43
+                        maxLength: 49
                         type: string
                       communities:
                         description: |-
@@ -1183,7 +1239,12 @@ spec:
                                     The resulting path starts with these AS numbers in the order listed;
                                     e.g. [65000, 65001] produces the path "65000 65001 <original>".
                                   items:
-                                    format: int32
+                                    description: |-
+                                      ASNumber is a BGP autonomous system number. RFC 4893 defines the 4-byte AS
+                                      number space as an unsigned 32-bit value, so the valid range is 0-4294967295.
+                                    format: int64
+                                    maximum: 4294967295
+                                    minimum: 0
                                     type: integer
                                   maxItems: 10
                                   minItems: 1
@@ -1300,7 +1361,6 @@ spec:
     listKind: BGPPeerList
     plural: bgppeers
     singular: bgppeer
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -1329,7 +1389,9 @@ spec:
               properties:
                 asNumber:
                   description: The AS Number of the peer.
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 filters:
                   description: The ordered set of BGPFilters applied on this BGP peer.
@@ -1355,7 +1417,9 @@ spec:
                   description: |-
                     The optional Local AS Number to use when peering with this remote peer.
                     If not specified, the AS Number defined in default BGPConfiguration will be used.
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 localWorkloadSelector:
                   description: |-
@@ -1442,6 +1506,19 @@ spec:
                     with ListenPort set in BGPConfiguration, then we use that port to peer.
                   maxLength: 64
                   type: string
+                  x-kubernetes-validations:
+                    - message:
+                        peerIP must be an IP address, optionally with a port as
+                        <IPv4>:<port> or [<IPv6>]:<port>
+                      reason: FieldValueInvalid
+                      rule:
+                        self == '' || isIP(self) || (self.startsWith('[') && self.contains(']:')
+                        && isIP(self.substring(1, self.lastIndexOf(']:'))) && self.substring(self.lastIndexOf(']:')
+                        + 2).matches('^[0-9]{1,5}$') && int(self.substring(self.lastIndexOf(']:')
+                        + 2)) >= 1 && int(self.substring(self.lastIndexOf(']:') + 2))
+                        <= 65535) || (self.matches('^[0-9.]+:[0-9]{1,5}$') && isIP(self.split(':')[0])
+                        && int(self.split(':')[1]) >= 1 && int(self.split(':')[1]) <=
+                        65535)
                 peerSelector:
                   description: |-
                     Selector for the remote nodes to peer with.  When this is set, the PeerIP and
@@ -1549,7 +1626,6 @@ spec:
     listKind: BlockAffinityList
     plural: blockaffinities
     singular: blockaffinity
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -1616,7 +1692,6 @@ spec:
     listKind: CalicoNodeStatusList
     plural: caliconodestatuses
     singular: caliconodestatus
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -1667,6 +1742,8 @@ spec:
                     UpdatePeriodSeconds is the period at which CalicoNodeStatus should be updated.
                     Set to 0 to disable CalicoNodeStatus refresh. Maximum update period is one day.
                   format: int32
+                  maximum: 86400
+                  minimum: 0
                   type: integer
               type: object
             status:
@@ -1959,7 +2036,6 @@ spec:
     listKind: ClusterInformationList
     plural: clusterinformations
     singular: clusterinformation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -2031,7 +2107,6 @@ spec:
     listKind: FelixConfigurationList
     plural: felixconfigurations
     singular: felixconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -2083,12 +2158,18 @@ spec:
                 bpfAttachType:
                   description: |-
                     BPFAttachType controls how are the BPF programs at the network interfaces attached.
-                    By default `TCX` is used where available to enable easier coexistence with 3rd party programs.
-                    `TC` can force the legacy method of attaching via a qdisc. `TCX` falls back to `TC` if `TCX` is not available.
-                    [Default: TCX]
+                    By default `Netkit` is used, which attaches via the netkit API on workload interfaces that are
+                    netkit devices and via `TCX` on every other interface. `TCX` is used where available to enable
+                    easier coexistence with 3rd party programs. `TC` can force the legacy method of attaching via a
+                    qdisc. `TCX` falls back to `TC` if `TCX` is not available.
+                    Setting this to `TCX` or `TC` also makes Felix drive existing netkit devices with that mechanism
+                    instead of the netkit API, which is required before downgrading to a release without netkit
+                    support.
+                    [Default: Netkit]
                   enum:
                     - TC
                     - TCX
+                    - Netkit
                   type: string
                 bpfCTLBLogFilter:
                   description: |-
@@ -2098,6 +2179,7 @@ spec:
                     [Default: unset - means logs are emitted when BPFLogLevel id debug and BPFLogFilters not set.]
                   type: string
                 bpfConnectTimeLoadBalancing:
+                  default: TCP
                   description: |-
                     BPFConnectTimeLoadBalancing when in BPF mode, controls whether Felix installs the connect-time load
                     balancer. The connect-time load balancer is required for the host to be able to reach Kubernetes services
@@ -2271,6 +2353,8 @@ spec:
                     BPFExtToServiceConnmark in BPF mode, controls a 32bit mark that is set on connections from an
                     external client to a local service. This mark allows us to control how packets of that
                     connection are routed within the host and how is routing interpreted by RPF check. [Default: 0]
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 bpfExternalServiceMode:
                   description: |-
@@ -2297,6 +2381,7 @@ spec:
                     workloads and services. [Default: true - bypass Linux conntrack]
                   type: boolean
                 bpfHostNetworkedNATWithoutCTLB:
+                  default: Enabled
                   description: |-
                     BPFHostNetworkedNATWithoutCTLB when in BPF mode, controls whether Felix does a NAT without CTLB. This along with BPFConnectTimeLoadBalancing
                     determines the CTLB behavior. [Default: Enabled]
@@ -2323,23 +2408,21 @@ spec:
                     packets from external sources are dropped. [Default: true]
                   type: boolean
                 bpfJITHardening:
-                  allOf:
-                    - enum:
-                        - Auto
-                        - Strict
-                    - enum:
-                        - Auto
-                        - Strict
                   description: |-
                     BPFJITHardening controls BPF JIT hardening. When set to "Auto", Felix will set JIT hardening to 1
                     if it detects the current value is 2 (strict mode that hurts performance). When set to "Strict",
                     Felix will not modify the JIT hardening setting. [Default: Auto]
+                  enum:
+                    - Auto
+                    - Strict
                   type: string
                 bpfKubeProxyHealthzPort:
                   description: |-
                     BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
                     The health check server is used by external load balancers to determine if this node should receive traffic.
                     Set to 0 to disable the health check server.  [Default: 10256]
+                  maximum: 65535
+                  minimum: 0
                   type: integer
                 bpfKubeProxyIptablesCleanupEnabled:
                   description: |-
@@ -2388,6 +2471,8 @@ spec:
                     and thus the amount of memory reserved.
 
                     [Default: 100]
+                  maximum: 3000
+                  minimum: 1
                   type: integer
                 bpfMaglevMaxServices:
                   description: |-
@@ -2395,6 +2480,8 @@ spec:
                     services that Felix will allocate lookup-tables for.
 
                     [Default: 100]
+                  maximum: 3000
+                  minimum: 1
                   type: integer
                 bpfMapSizeConntrack:
                   description: |-
@@ -2456,6 +2543,18 @@ spec:
                     to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and
                     tunnel IPs).
                   type: integer
+                bpfOverlayHostSourceIP:
+                  description: |-
+                    BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked
+                    (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  "TunnelAddress" (the default)
+                    assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
+                    of clusters upgraded from earlier releases.  "HostAddress" uses the node's own IP directly and does not
+                    assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel
+                    device IP.  [Default: TunnelAddress]
+                  enum:
+                    - TunnelAddress
+                    - HostAddress
+                  type: string
                 bpfPSNATPorts:
                   anyOf:
                     - type: integer
@@ -2536,6 +2635,8 @@ spec:
                   description: |-
                     DebugPort if set, enables Felix's debug HTTP port, which allows memory and CPU profiles
                     to be retrieved.  The debug port is not secure, it should not be exposed to the internet.
+                  maximum: 65535
+                  minimum: 0
                   type: integer
                 debugSimulateCalcGraphHangAfter:
                   description: |-
@@ -2678,6 +2779,7 @@ spec:
                   pattern: ^([a-zA-Z0-9-_]+=([^=]+),)*([a-zA-Z0-9-_]+=([^=]+))?$
                   type: string
                 floatingIPs:
+                  default: Disabled
                   description: |-
                     FloatingIPs configures whether or not Felix will program non-OpenStack floating IP addresses.  (OpenStack-derived
                     floating IPs are always programmed, regardless of this setting.)
@@ -2919,11 +3021,15 @@ spec:
                     values mean lower priority.  Elevated priority is used during VM live migration, and for
                     optimal behaviour IPv4ElevatedRoutePriority must be less than IPv4NormalRoutePriority
                     [Default: 512]
+                  maximum: 2147483646
+                  minimum: 1
                   type: integer
                 ipv4NormalRoutePriority:
                   description: |-
                     Route Priority value for a normal priority Calico-programmed IPv4 route.  Note, higher
                     values mean lower priority. [Default: 1024]
+                  maximum: 2147483646
+                  minimum: 1
                   type: integer
                 ipv6ElevatedRoutePriority:
                   description: |-
@@ -2931,11 +3037,15 @@ spec:
                     values mean lower priority.  Elevated priority is used during VM live migration, and for
                     optimal behaviour IPv6ElevatedRoutePriority must be less than IPv6NormalRoutePriority
                     [Default: 512]
+                  maximum: 2147483646
+                  minimum: 1
                   type: integer
                 ipv6NormalRoutePriority:
                   description: |-
                     Route Priority value for a normal priority Calico-programmed IPv6 route.  Note, higher
                     values mean lower priority. [Default: 1024]
+                  maximum: 2147483646
+                  minimum: 1
                   type: integer
                 ipv6Support:
                   description:
@@ -3003,6 +3113,8 @@ spec:
                   description: |-
                     LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format "N/unit",
                     where N is a number and unit is one of: second, minute, hour, or day. For example: "10/second" or "100/hour".
+                    When LogConnectionTransitions is enabled, this also bounds the follow-up logs: a connection whose
+                    initial log was suppressed by this rate limit gets no follow-up log either.
                   pattern: ^[1-9]\d{0,3}/(?:second|minute|hour|day)$
                   type: string
                 logActionRateLimitBurst:
@@ -3012,6 +3124,35 @@ spec:
                   maximum: 9999
                   minimum: 0
                   type: integer
+                logConnectionTransitions:
+                  description: |-
+                    LogConnectionTransitions controls whether Felix emits an additional kernel log recording the
+                    first observed response for each connection that matched a policy rule with a Log action.
+                    When set to FirstResponseAfterLog, each connection whose initial log was emitted gets one
+                    follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the
+                    transition: "-est" when the first reply packet is seen, "-rst" when the response is a TCP
+                    RST (connection refused), or "-icmp-err" when the response is a related ICMP error (e.g.
+                    port unreachable). The log body is the standard kernel packet log of the response packet.
+                    For "-est" and "-rst" its 5-tuple is the original policy Log line's with source and
+                    destination swapped; for "-icmp-err" the bracketed inner header carries the original
+                    5-tuple unswapped. A logged connection with no follow-up log never received a response.
+                    Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log
+                    either, so every follow-up log pairs with an initial one. Enabling this consumes one bit
+                    from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+                    [Default: Disabled]
+                  enum:
+                    - Disabled
+                    - FirstResponseAfterLog
+                  type: string
+                logConnectionTransitionsPrefix:
+                  description: |-
+                    LogConnectionTransitionsPrefix is the log prefix used for the logs emitted when
+                    LogConnectionTransitions is enabled; the transition suffix ("-est", "-rst" or "-icmp-err")
+                    is appended to it. Unlike LogPrefix, it does not support %-specifiers (such as %p): the
+                    rules that emit these logs are shared by all policies, so per-policy values cannot be
+                    substituted and any %-specifiers are rendered literally. [Default: calico-response]
+                  pattern: "^([a-zA-Z0-9%: /_-])*$"
+                  type: string
                 logDebugFilenameRegex:
                   description: |-
                     LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
@@ -3124,6 +3265,25 @@ spec:
                     blocks traffic with a "drop" action. If you want to use a "reject" action instead you can configure it here.
                   pattern: ^(?i)(Drop|Reject)?$
                   type: string
+                nftablesFlowTableDataIfacePattern:
+                  description: |-
+                    NFTablesFlowTableDataIfacePattern is a regular expression that controls which host
+                    interfaces are added to the nftables flowtable, so that traffic forwarded between those
+                    interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
+                    offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
+                    is not Disabled. [Default: ""]
+                  type: string
+                nftablesFlowTableOffload:
+                  default: Disabled
+                  description: |-
+                    NFTablesFlowTableOffload controls which traffic nftables flowtable offload is enabled for,
+                    for improved forwarding performance. When set to "All", established connections accepted by
+                    Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
+                    nftables mode is active. [Default: Disabled]
+                  enum:
+                    - All
+                    - Disabled
+                  type: string
                 nftablesMangleAllowAction:
                   description: |-
                     NftablesMangleAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict
@@ -3142,9 +3302,10 @@ spec:
                   type: integer
                 nftablesMode:
                   default: Auto
-                  description:
-                    "NFTablesMode configures nftables support in Felix. [Default:
-                    Auto]"
+                  description: |-
+                    NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the
+                    nftables dataplane if kube-proxy is detected to be running in nftables mode.
+                    [Default: Auto]
                   enum:
                     - Disabled
                     - Enabled
@@ -3184,14 +3345,35 @@ spec:
                     like Application layer policy. [Default: Empty]
                   type: string
                 programClusterRoutes:
+                  default: EnabledIPIPOnly
                   description: |-
-                    ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
-                    when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled,
-                    it is expected that confd and BIRD will program that route. When ProgramClusterRoutes is Enabled, Felix program that route.
-                    Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Disabled]
+                    ProgramClusterRoutes controls which "cluster routes" Felix programs, i.e. the routes that
+                    a node needs in order to reach workloads on other nodes.  It only applies to IP Pools
+                    with vxlanMode: Never; Felix always programs the cluster routes for IP Pools with
+                    vxlanMode: Always or vxlanMode: CrossSubnet.  The routes that Felix does not program here
+                    are expected to be programmed by Calico's BGP stack instead.  Below, an IPIP IP Pool is
+                    one with ipipMode: Always or CrossSubnet, and an unencapsulated one has ipipMode and
+                    vxlanMode both Never.
+
+                    - Disabled: Felix programs no cluster routes.
+                    - EnabledIPIPOnly: Felix programs them for IPIP IP Pools.
+                    - EnabledNoEncapOnly: Felix programs them for unencapsulated IP Pools.
+                    - Enabled: Felix programs them for both.
+
+                    This field must be kept consistent with BGPConfiguration.ProgramClusterRoutes, which
+                    makes the same choice from BIRD's side.  If both Felix and BIRD are enabled for the same
+                    kind of IP Pool they will fight over the routes; if neither is, there will be no cluster
+                    routes at all.
+
+                    Note: leaving the IPIP cluster routes to BGP, which the Disabled and EnabledNoEncapOnly
+                    values do, is deprecated as of v3.33 and will be removed in v3.35.
+
+                    [Default: EnabledIPIPOnly]
                   enum:
                     - Enabled
                     - Disabled
+                    - EnabledIPIPOnly
+                    - EnabledNoEncapOnly
                   type: string
                 prometheusGoMetricsEnabled:
                   description: |-
@@ -3211,7 +3393,12 @@ spec:
                 prometheusMetricsClientAuth:
                   description: |-
                     PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
-                    This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+                    This determines how the server validates client certificates. Default is "NoClientCert".
+                  enum:
+                    - RequireAndVerifyClientCert
+                    - RequireAnyClientCert
+                    - VerifyClientCertIfGiven
+                    - NoClientCert
                   type: string
                 prometheusMetricsEnabled:
                   description:
@@ -3432,11 +3619,15 @@ spec:
                   description:
                     "WireguardListeningPort controls the listening port used
                     by IPv4 Wireguard. [Default: 51820]"
+                  maximum: 65535
+                  minimum: 1
                   type: integer
                 wireguardListeningPortV6:
                   description:
                     "WireguardListeningPortV6 controls the listening port
                     used by IPv6 Wireguard. [Default: 51821]"
+                  maximum: 65535
+                  minimum: 1
                   type: integer
                 wireguardMTU:
                   description:
@@ -3452,6 +3643,8 @@ spec:
                   description:
                     "WireguardRoutingRulePriority controls the priority value
                     to use for the Wireguard routing rule. [Default: 99]"
+                  maximum: 32765
+                  minimum: 1
                   type: integer
                 wireguardThreadingEnabled:
                   description: |-
@@ -3529,7 +3722,6 @@ spec:
     listKind: GlobalNetworkPolicyList
     plural: globalnetworkpolicies
     singular: globalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -4120,6 +4312,22 @@ spec:
                           (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
                           && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
                           == 6
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP',
+                          'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.notProtocol) || (type(self.notProtocol) == int
+                          ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
+                          in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -4676,6 +4884,22 @@ spec:
                           (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
                           && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
                           == 6
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP',
+                          'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.notProtocol) || (type(self.notProtocol) == int
+                          ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
+                          in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -4831,7 +5055,6 @@ spec:
     listKind: GlobalNetworkSetList
     plural: globalnetworksets
     singular: globalnetworkset
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -4868,9 +5091,15 @@ spec:
                     The list of IP networks that belong to this set. Each entry must be in CIDR notation,
                     e.g. "192.168.1.0/24". To include a single IP address, use a /32 (IPv4) or /128 (IPv6) mask.
                   items:
+                    maxLength: 49
                     type: string
+                  maxItems: 100000
                   type: array
                   x-kubernetes-list-type: set
+                  x-kubernetes-validations:
+                    - message: nets entries must be IP addresses or CIDRs
+                      reason: FieldValueInvalid
+                      rule: self.all(n, isCIDR(n) || isIP(n))
               type: object
           type: object
       served: true
@@ -4890,7 +5119,6 @@ spec:
     listKind: HostEndpointList
     plural: hostendpoints
     singular: hostendpoint
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -4978,6 +5206,14 @@ spec:
                       - port
                       - protocol
                     type: object
+                    x-kubernetes-validations:
+                      - message:
+                          protocol must be one of TCP, UDP, SCTP, or their numbers
+                          6, 17, 132
+                        reason: FieldValueInvalid
+                        rule:
+                          "type(self.protocol) == int ? self.protocol in [6, 17, 132]
+                          : self.protocol in ['TCP', 'UDP', 'SCTP']"
                   type: array
                   x-kubernetes-list-type: atomic
                 profiles:
@@ -5017,7 +5253,6 @@ spec:
     listKind: IPAMBlockList
     plural: ipamblocks
     singular: ipamblock
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -5079,6 +5314,13 @@ spec:
                         type: object
                       handle_id:
                         description: HandleID is the primary identifier for the allocation.
+                        type: string
+                      releasedAt:
+                        description: |-
+                          ReleasedAt is the time this allocation was released, and is set during the allocation's
+                          "cooldown" phase. After `IPCooldownSeconds` have elapsed, the IP is deallocated (moved
+                          from `Allocated` to `Unallocated`).
+                        format: date-time
                         type: string
                       secondary:
                         additionalProperties:
@@ -5153,7 +5395,6 @@ spec:
     listKind: IPAMConfigList
     plural: ipamconfigs
     singular: ipamconfig
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -5184,6 +5425,14 @@ spec:
               properties:
                 autoAllocateBlocks:
                   type: boolean
+                ipCooldownSeconds:
+                  description: |-
+                    IPCooldownSeconds is the minimum age of a released IP in a block before it is re-used.
+                    If set to zero, IPs can be re-used immediately (but are still handled with a FIFO queue to
+                    minimize immediate reuse).
+                  maximum: 1200
+                  minimum: 0
+                  type: integer
                 kubeVirtVMAddressPersistence:
                   description: |-
                     KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads
@@ -5231,7 +5480,6 @@ spec:
     listKind: IPAMHandleList
     plural: ipamhandles
     singular: ipamhandle
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -5290,7 +5538,6 @@ spec:
     listKind: IPPoolList
     plural: ippools
     singular: ippool
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -5348,8 +5595,8 @@ spec:
                 blockSize:
                   description: |-
                     The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 122 for IPv6.
-                    The block size must be between 0 and 32 for IPv4 and between 0 and 128 for IPv6. It must also be smaller than
-                    or equal to the size of the pool CIDR.
+                    The block size must be between 20 and 32 for IPv4 and between 116 and 128 for IPv6. It must also be smaller
+                    than or equal to the size of the pool CIDR.
                   maximum: 128
                   minimum: 0
                   type: integer
@@ -5362,7 +5609,7 @@ spec:
                 cidr:
                   description: The pool CIDR.
                   format: cidr
-                  maxLength: 48
+                  maxLength: 49
                   type: string
                   x-kubernetes-validations:
                     - message:
@@ -5381,6 +5628,7 @@ spec:
                     from this pool.
                   type: boolean
                 ipipMode:
+                  default: Never
                   description: |-
                     Contains configuration for IPIP tunneling for this pool.
                     For IPv6 pools, IPIP tunneling must be disabled.
@@ -5408,6 +5656,7 @@ spec:
                   maxLength: 1024
                   type: string
                 vxlanMode:
+                  default: Never
                   description: Contains configuration for VXLAN tunneling for this pool.
                   enum:
                     - Never
@@ -5467,6 +5716,33 @@ spec:
                 - message: global() selector is not valid for IPPool namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
+                - message: IPPool CIDR must be strictly masked
+                  reason: FieldValueInvalid
+                  rule: cidr(self.cidr) == cidr(self.cidr).masked()
+                - message: IPPool CIDR overlaps with IPv4 link local range 169.254.0.0/16
+                  reason: FieldValueInvalid
+                  rule:
+                    "!cidr('169.254.0.0/16').containsIP(cidr(self.cidr).ip()) &&
+                    !cidr(self.cidr).containsIP('169.254.0.0')"
+                - message: IPPool CIDR overlaps with IPv6 link local range fe80::/10
+                  reason: FieldValueInvalid
+                  rule: "!cidr('fe80::/10').containsIP(cidr(self.cidr).ip()) && !cidr(self.cidr).containsIP('fe80::')"
+                - message:
+                    blockSize must be between 20 and 32 for IPv4 pools, and between
+                    116 and 128 for IPv6 pools
+                  reason: FieldValueInvalid
+                  rule:
+                    "!has(self.blockSize) || self.blockSize == 0 || (cidr(self.cidr).ip().family()
+                    == 4 ? self.blockSize >= 20 && self.blockSize <= 32 : self.blockSize
+                    >= 116 && self.blockSize <= 128)"
+                - message:
+                    IP pool size is too small for use with Calico IPAM. It must
+                    be equal to or greater than the block size.
+                  reason: FieldValueInvalid
+                  rule:
+                    "(has(self.disabled) && self.disabled) || cidr(self.cidr).prefixLength()
+                    <= (has(self.blockSize) && self.blockSize != 0 ? self.blockSize :
+                    (cidr(self.cidr).ip().family() == 4 ? 26 : 122))"
             status:
               properties:
                 conditions:
@@ -5550,7 +5826,6 @@ spec:
     listKind: IPReservationList
     plural: ipreservations
     singular: ipreservation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -5583,8 +5858,8 @@ spec:
                   description: |-
                     ReservedCIDRs is a list of CIDRs that Calico IPAM will exclude from new allocations.
                     Each entry must be in CIDR notation (e.g., "10.0.0.0/24" or "10.0.0.1/32" for a single IP).
-                  format: cidr
                   items:
+                    format: cidr
                     type: string
                   type: array
                   x-kubernetes-list-type: set
@@ -5607,7 +5882,6 @@ spec:
     listKind: KubeControllersConfigurationList
     plural: kubecontrollersconfigurations
     singular: kubecontrollersconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -5709,6 +5983,13 @@ spec:
                                 AutoHostEndpoints
                               items:
                                 properties:
+                                  annotations:
+                                    additionalProperties:
+                                      type: string
+                                    description:
+                                      Annotations adds the specified annotations
+                                      to the generated AutoHostEndpoint.
+                                    type: object
                                   generateName:
                                     description:
                                       GenerateName is appended to the end
@@ -5800,6 +6081,17 @@ spec:
                           type: string
                       type: object
                   type: object
+                debugProfileHost:
+                  description: |-
+                    DebugProfileHost is the host IP or hostname to bind the profiling port to. Set to "0.0.0.0"
+                    for all interfaces to make profiles reachable from off-host. The profiling endpoints are
+                    unauthenticated and expose heap dumps, goroutine stacks and CPU profiles, so prefer the
+                    default and use kubectl port-forward for remote access. Only used if DebugProfilePort is set.
+                    [Default: localhost]
+                  maxLength: 64
+                  minLength: 1
+                  pattern: ^[a-zA-Z0-9:._+-]+$
+                  type: string
                 debugProfilePort:
                   description: |-
                     DebugProfilePort configures the port to serve memory and cpu profiles on. If not specified, profiling
@@ -5837,6 +6129,7 @@ spec:
                     - Panic
                   type: string
                 prometheusMetricsPort:
+                  default: 9094
                   description: |-
                     PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. Set to 0 to disable. [Default: 9094]
                     Valid values are: 0-65535.
@@ -5938,6 +6231,13 @@ spec:
                                     AutoHostEndpoints
                                   items:
                                     properties:
+                                      annotations:
+                                        additionalProperties:
+                                          type: string
+                                        description:
+                                          Annotations adds the specified
+                                          annotations to the generated AutoHostEndpoint.
+                                        type: object
                                       generateName:
                                         description:
                                           GenerateName is appended to the
@@ -6033,6 +6333,17 @@ spec:
                               type: string
                           type: object
                       type: object
+                    debugProfileHost:
+                      description: |-
+                        DebugProfileHost is the host IP or hostname to bind the profiling port to. Set to "0.0.0.0"
+                        for all interfaces to make profiles reachable from off-host. The profiling endpoints are
+                        unauthenticated and expose heap dumps, goroutine stacks and CPU profiles, so prefer the
+                        default and use kubectl port-forward for remote access. Only used if DebugProfilePort is set.
+                        [Default: localhost]
+                      maxLength: 64
+                      minLength: 1
+                      pattern: ^[a-zA-Z0-9:._+-]+$
+                      type: string
                     debugProfilePort:
                       description: |-
                         DebugProfilePort configures the port to serve memory and cpu profiles on. If not specified, profiling
@@ -6070,6 +6381,7 @@ spec:
                         - Panic
                       type: string
                     prometheusMetricsPort:
+                      default: 9094
                       description: |-
                         PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. Set to 0 to disable. [Default: 9094]
                         Valid values are: 0-65535.
@@ -6100,7 +6412,6 @@ spec:
     listKind: NetworkPolicyList
     plural: networkpolicies
     singular: networkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -6679,6 +6990,22 @@ spec:
                           (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
                           && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
                           == 6
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP',
+                          'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.notProtocol) || (type(self.notProtocol) == int
+                          ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
+                          in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -7235,6 +7562,22 @@ spec:
                           (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
                           && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
                           == 6
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP',
+                          'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.notProtocol) || (type(self.notProtocol) == int
+                          ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
+                          in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -7353,7 +7696,6 @@ spec:
     listKind: NetworkSetList
     plural: networksets
     singular: networkset
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -7388,9 +7730,15 @@ spec:
                     The list of IP networks that belong to this set. Each entry must be in CIDR notation,
                     e.g. "192.168.1.0/24". To include a single IP address, use a /32 (IPv4) or /128 (IPv6) mask.
                   items:
+                    maxLength: 49
                     type: string
+                  maxItems: 100000
                   type: array
                   x-kubernetes-list-type: set
+                  x-kubernetes-validations:
+                    - message: nets entries must be IP addresses or CIDRs
+                      reason: FieldValueInvalid
+                      rule: self.all(n, isCIDR(n) || isIP(n))
               type: object
           type: object
       served: true
@@ -7410,7 +7758,6 @@ spec:
     listKind: StagedGlobalNetworkPolicyList
     plural: stagedglobalnetworkpolicies
     singular: stagedglobalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -8001,6 +8348,22 @@ spec:
                           (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
                           && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
                           == 6
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP',
+                          'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.notProtocol) || (type(self.notProtocol) == int
+                          ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
+                          in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -8557,6 +8920,22 @@ spec:
                           (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
                           && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
                           == 6
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP',
+                          'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.notProtocol) || (type(self.notProtocol) == int
+                          ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
+                          in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -8722,7 +9101,6 @@ spec:
     listKind: StagedKubernetesNetworkPolicyList
     plural: stagedkubernetesnetworkpolicies
     singular: stagedkubernetesnetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -9254,7 +9632,6 @@ spec:
     listKind: StagedNetworkPolicyList
     plural: stagednetworkpolicies
     singular: stagednetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -9833,6 +10210,22 @@ spec:
                           (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
                           && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
                           == 6
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP',
+                          'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.notProtocol) || (type(self.notProtocol) == int
+                          ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
+                          in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -10389,6 +10782,22 @@ spec:
                           (!has(self.notProtocol) || (self.notProtocol != 'ICMPv6'
                           && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion
                           == 6
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.protocol) || (type(self.protocol) == int ? self.protocol
+                          >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP',
+                          'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
+                      - message:
+                          protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP,
+                          UDPLite) or a number in 1-255
+                        reason: FieldValueInvalid
+                        rule:
+                          "!has(self.notProtocol) || (type(self.notProtocol) == int
+                          ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol
+                          in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])"
                   maxItems: 1024
                   type: array
                   x-kubernetes-list-type: atomic
@@ -10518,7 +10927,6 @@ spec:
     listKind: TierList
     plural: tiers
     singular: tier
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -11913,6 +12321,7 @@ rules:
       - ipreservations
     verbs:
       - list
+      - watch
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - blockaffinities
@@ -11928,13 +12337,16 @@ rules:
       - update
       - delete
       - watch
-  # Pools are watched to maintain a mapping of blocks to IP pools.
+  # Pools are watched to maintain a mapping of blocks to IP pools. The pool
+  # controller records which of a set of overlapping pools is allocatable.
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - ippools
+      - ippools/status
     verbs:
       - list
       - watch
+      - update
   # kube-controllers manages hostendpoints.
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
@@ -12187,6 +12599,12 @@ rules:
       - clusterinformations
     verbs:
       - create
+      - update
+  # Calico marks the IP pools it creates allocatable.
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
+    resources:
+      - ippools/status
+    verbs:
       - update
   # Calico must update some CRDs.
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
@@ -12444,12 +12862,13 @@ spec:
               name: cni-bin-dir
           securityContext:
             privileged: true
+            runAsUser: 0
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
           image: quay.io/calico/calico:master
           imagePullPolicy: IfNotPresent
-          args: ["cni", "install"]
+          args: ["component", "cni", "install"]
           envFrom:
             - configMapRef:
                 # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
@@ -12486,6 +12905,7 @@ spec:
               name: cni-net-dir
           securityContext:
             privileged: true
+            runAsUser: 0
         # This init container mounts the necessary filesystems needed by the BPF data plane
         # i.e. bpf at /sys/fs/bpf and cgroup2 at /run/calico/cgroup. It also configures the initial
         # networking to allow communication with the API Server. Calico-node initialization is executed
@@ -12649,6 +13069,13 @@ spec:
             # parent directory.
             - name: bpffs
               mountPath: /sys/fs/bpf
+            # Felix reads /sys/kernel/security/lockdown to detect kernel
+            # lockdown=confidentiality; under it, ftrace is disabled and Felix
+            # loads trace-printk-free BPF program variants. securityfs is a
+            # separate filesystem from /sys/fs, so it needs its own mount.
+            - name: sys-kernel-security
+              mountPath: /sys/kernel/security
+              readOnly: true
             - name: cni-log-dir
               mountPath: /var/log/calico/cni
               readOnly: true
@@ -12677,6 +13104,12 @@ spec:
           hostPath:
             path: /sys/fs/bpf
             type: Directory
+        # securityfs, read by Felix to detect kernel lockdown=confidentiality.
+        # No type set (like nodeproc below) so nodes without securityfs still
+        # start; Felix treats an unreadable lockdown file as "not locked down".
+        - name: sys-kernel-security
+          hostPath:
+            path: /sys/kernel/security
         # mount /proc at /nodeproc to be used by ebpf-bootstrap initContainer to mount root cgroup2 fs.
         - name: nodeproc
           hostPath:

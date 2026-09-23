@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,8 @@ import (
 	"sigs.k8s.io/knftables"
 
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -51,7 +51,7 @@ var _ = Describe("Maps with empty data plane", func() {
 		// Reset chain references.
 		chainRefs = make(map[string]int)
 
-		s = nftables.NewMaps(ipv, f, increfChain, decrefChain, logutils.NewSummarizer("test loop"))
+		s = nftables.NewMaps(ipv, f, increfChain, decrefChain, logrusr.NewSummarizer("test loop"))
 	})
 
 	It("should generate MapUpdates on empty state)", func() {
@@ -176,7 +176,7 @@ var _ = Describe("Maps with empty data plane", func() {
 		Expect(f.Run(context.TODO(), tx)).NotTo(HaveOccurred())
 
 		// Resync with dataplane.
-		Expect(s.LoadDataplaneState()).NotTo(HaveOccurred())
+		Expect(loadMapsDataplaneState(f, s)).NotTo(HaveOccurred())
 
 		// Should be no work to do.
 		Expect(s.MapUpdates()).To(Equal(&nftables.MapUpdates{
@@ -195,7 +195,7 @@ var _ = Describe("Maps with empty data plane", func() {
 		Expect(f.Run(context.TODO(), tx)).NotTo(HaveOccurred())
 
 		// Resync with dataplane. We should now detect the new element and queue it for removal.
-		Expect(s.LoadDataplaneState()).NotTo(HaveOccurred())
+		Expect(loadMapsDataplaneState(f, s)).NotTo(HaveOccurred())
 		upd := s.MapUpdates()
 		Expect(upd.MapToAddedMembers).To(HaveLen(0))
 		Expect(upd.MapToDeletedMembers).To(HaveLen(1))
@@ -226,7 +226,7 @@ var _ = Describe("Maps with empty data plane", func() {
 		Expect(f.Run(context.TODO(), tx)).NotTo(HaveOccurred())
 
 		// A resync should fix both the map and the elements.
-		Expect(s.LoadDataplaneState()).NotTo(HaveOccurred())
+		Expect(loadMapsDataplaneState(f, s)).NotTo(HaveOccurred())
 		upd = s.MapUpdates()
 		Expect(upd.MapToAddedMembers).To(HaveLen(1))
 		Expect(upd.MapToDeletedMembers).To(HaveLen(0))
@@ -251,7 +251,7 @@ var _ = Describe("Maps with empty data plane", func() {
 		Expect(f.Run(context.Background(), tx)).NotTo(HaveOccurred())
 
 		// Trigger a resync.
-		Expect(s.LoadDataplaneState()).NotTo(HaveOccurred())
+		Expect(loadMapsDataplaneState(f, s)).NotTo(HaveOccurred())
 
 		// Expect queued deletions for all the maps.
 		upd := s.MapUpdates()
@@ -281,7 +281,7 @@ var _ = Describe("Maps with empty data plane", func() {
 		Expect(f.Run(context.Background(), tx)).NotTo(HaveOccurred())
 
 		// Trigger a resync. We should delete the unexpected map.
-		Expect(s.LoadDataplaneState()).NotTo(HaveOccurred())
+		Expect(loadMapsDataplaneState(f, s)).NotTo(HaveOccurred())
 
 		// Expect the set to be deleted.
 		upd := s.MapUpdates()
@@ -315,7 +315,7 @@ var _ = Describe("Maps with empty data plane", func() {
 		s.AddOrReplaceMap(meta, nil)
 
 		// Load the dataplane state. We should delete the unexpected map.
-		Expect(s.LoadDataplaneState()).NotTo(HaveOccurred())
+		Expect(loadMapsDataplaneState(f, s)).NotTo(HaveOccurred())
 
 		// Expect members to be correct. We should remove the unexpected members despite not knowing the type.
 		// NOTE: We currently have no way to know or change the type of the map via knftables.
@@ -329,6 +329,15 @@ var _ = Describe("Maps with empty data plane", func() {
 		s.FinishMapUpdates(upd)
 	})
 })
+
+func loadMapsDataplaneState(f *fakeNFT, s *nftables.Maps) error {
+	ctx := context.TODO()
+	mapNames, err := f.List(ctx, "map")
+	if err != nil {
+		return fmt.Errorf("listing maps: %w", err)
+	}
+	return s.LoadDataplaneState(ctx, mapNames)
+}
 
 func addMapToTx(tx *knftables.Transaction, m nftables.MapMetadata, elements map[string][]string) {
 	tx.Add(&knftables.Map{

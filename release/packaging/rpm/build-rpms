@@ -30,7 +30,7 @@ for f in ${repo}/rpm/*; do ln -sf $f; done
 version=`grep Version: $spec | head -1 | awk '{print $2;}'`
 
 case ${pkg} in
-    felix | networking-calico | dnsmasq )
+    calicoctl | felix | networking-calico | dnsmasq )
 	# Tar up the Git source, with the naming that rpmbuild expects.
 	dir=${pkg}-${version}
 	cp -a ${repo} /tmp/$dir

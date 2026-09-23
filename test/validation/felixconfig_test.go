@@ -15,12 +15,72 @@
 package validation_test
 
 import (
+	"context"
 	"testing"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// These three were defaulted on write by libcalico-go, which the native CRD path
+// does not run. The values match Felix's own built-in defaults.
+func TestFelixConfiguration_SchemaDefaults(t *testing.T) {
+	name := uniqueName("felixconfig-defaults")
+	mustCreate(t, &v3.FelixConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec:       v3.FelixConfigurationSpec{},
+	})
+
+	got := &v3.FelixConfiguration{}
+	if err := testClient.Get(context.Background(), client.ObjectKey{Name: name}, got); err != nil {
+		t.Fatalf("failed to get config: %v", err)
+	}
+
+	if got.Spec.FloatingIPs == nil || *got.Spec.FloatingIPs != v3.FloatingIPsDisabled {
+		t.Errorf("expected spec.floatingIPs=%q, got %v", v3.FloatingIPsDisabled, got.Spec.FloatingIPs)
+	}
+	if got.Spec.BPFConnectTimeLoadBalancing == nil || *got.Spec.BPFConnectTimeLoadBalancing != v3.BPFConnectTimeLBTCP {
+		t.Errorf("expected spec.bpfConnectTimeLoadBalancing=%q, got %v", v3.BPFConnectTimeLBTCP, got.Spec.BPFConnectTimeLoadBalancing)
+	}
+	if got.Spec.BPFHostNetworkedNATWithoutCTLB == nil || *got.Spec.BPFHostNetworkedNATWithoutCTLB != v3.BPFHostNetworkedNATEnabled {
+		t.Errorf("expected spec.bpfHostNetworkedNATWithoutCTLB=%q, got %v", v3.BPFHostNetworkedNATEnabled, got.Spec.BPFHostNetworkedNATWithoutCTLB)
+	}
+}
+
+// Felix treats an absent programClusterRoutes as EnabledIPIPOnly, so the schema default puts that
+// in the datastore where a reader can see it.
+func TestFelixConfiguration_ProgramClusterRoutesDefault(t *testing.T) {
+	defaulted := uniqueName("felixconfig-cluster-routes")
+	mustCreate(t, &v3.FelixConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: defaulted},
+		Spec:       v3.FelixConfigurationSpec{},
+	})
+
+	got := &v3.FelixConfiguration{}
+	if err := testClient.Get(context.Background(), client.ObjectKey{Name: defaulted}, got); err != nil {
+		t.Fatalf("failed to get config: %v", err)
+	}
+	if got.Spec.ProgramClusterRoutes == nil || *got.Spec.ProgramClusterRoutes != v3.EnabledIPIPOnly {
+		t.Errorf("expected spec.programClusterRoutes=%q, got %v", v3.EnabledIPIPOnly, got.Spec.ProgramClusterRoutes)
+	}
+
+	explicit := uniqueName("felixconfig-cluster-routes")
+	mustCreate(t, &v3.FelixConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: explicit},
+		Spec:       v3.FelixConfigurationSpec{ProgramClusterRoutes: ptr.To(v3.Disabled)},
+	})
+
+	got = &v3.FelixConfiguration{}
+	if err := testClient.Get(context.Background(), client.ObjectKey{Name: explicit}, got); err != nil {
+		t.Fatalf("failed to get config: %v", err)
+	}
+	if got.Spec.ProgramClusterRoutes == nil || *got.Spec.ProgramClusterRoutes != v3.Disabled {
+		t.Errorf("expected spec.programClusterRoutes=%q, got %v", v3.Disabled, got.Spec.ProgramClusterRoutes)
+	}
+}
 
 func TestFelixConfiguration_Validation(t *testing.T) {
 	tests := []struct {
@@ -168,6 +228,53 @@ func TestFelixConfiguration_Validation(t *testing.T) {
 			} else {
 				expectCreateSucceeds(t, tt.obj)
 			}
+		})
+	}
+}
+
+// The bounds come from the libcalico-go struct tags, which only the calicoctl
+// path enforced before they reached the schema.
+func TestFelixConfiguration_NumericBounds(t *testing.T) {
+	bounded := []struct {
+		field string
+		min   int64
+		max   int64
+	}{
+		{field: "debugPort", min: 0, max: 65535},
+		{field: "bpfExtToServiceConnmark", min: 0, max: 4294967295},
+		{field: "bpfKubeProxyHealthzPort", min: 0, max: 65535},
+		{field: "ipv4NormalRoutePriority", min: 1, max: 2147483646},
+		{field: "ipv4ElevatedRoutePriority", min: 1, max: 2147483646},
+		{field: "ipv6NormalRoutePriority", min: 1, max: 2147483646},
+		{field: "ipv6ElevatedRoutePriority", min: 1, max: 2147483646},
+		{field: "wireguardListeningPort", min: 1, max: 65535},
+		{field: "wireguardListeningPortV6", min: 1, max: 65535},
+		{field: "wireguardRoutingRulePriority", min: 1, max: 32765},
+		{field: "bpfMaglevMaxEndpointsPerService", min: 1, max: 3000},
+		{field: "bpfMaglevMaxServices", min: 1, max: 3000},
+	}
+
+	newConfig := func(field string, value int64) *unstructured.Unstructured {
+		return &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "projectcalico.org/v3",
+				"kind":       "FelixConfiguration",
+				"metadata":   map[string]interface{}{"name": uniqueName("felixconfig")},
+				"spec":       map[string]interface{}{field: value},
+			},
+		}
+	}
+
+	for _, b := range bounded {
+		t.Run(b.field+" below minimum", func(t *testing.T) {
+			expectCreateFails(t, newConfig(b.field, b.min-1), b.field)
+		})
+		t.Run(b.field+" above maximum", func(t *testing.T) {
+			expectCreateFails(t, newConfig(b.field, b.max+1), b.field)
+		})
+		t.Run(b.field+" at the bounds", func(t *testing.T) {
+			expectCreateSucceeds(t, newConfig(b.field, b.min))
+			expectCreateSucceeds(t, newConfig(b.field, b.max))
 		})
 	}
 }

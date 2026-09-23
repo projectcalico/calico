@@ -151,9 +151,32 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	LogPrefix *string `json:"logPrefix,omitempty"`
 	// LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format "N/unit",
 	// where N is a number and unit is one of: second, minute, hour, or day. For example: "10/second" or "100/hour".
+	// When LogConnectionTransitions is enabled, this also bounds the follow-up logs: a connection whose
+	// initial log was suppressed by this rate limit gets no follow-up log either.
 	LogActionRateLimit *string `json:"logActionRateLimit,omitempty"`
 	// LogActionRateLimitBurst sets the rate limit burst of hitting a Log action when LogActionRateLimit is enabled.
 	LogActionRateLimitBurst *int `json:"logActionRateLimitBurst,omitempty"`
+	// LogConnectionTransitions controls whether Felix emits an additional kernel log recording the
+	// first observed response for each connection that matched a policy rule with a Log action.
+	// When set to FirstResponseAfterLog, each connection whose initial log was emitted gets one
+	// follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the
+	// transition: "-est" when the first reply packet is seen, "-rst" when the response is a TCP
+	// RST (connection refused), or "-icmp-err" when the response is a related ICMP error (e.g.
+	// port unreachable). The log body is the standard kernel packet log of the response packet.
+	// For "-est" and "-rst" its 5-tuple is the original policy Log line's with source and
+	// destination swapped; for "-icmp-err" the bracketed inner header carries the original
+	// 5-tuple unswapped. A logged connection with no follow-up log never received a response.
+	// Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log
+	// either, so every follow-up log pairs with an initial one. Enabling this consumes one bit
+	// from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+	// [Default: Disabled]
+	LogConnectionTransitions *projectcalicov3.LogConnectionTransitionsMode `json:"logConnectionTransitions,omitempty"`
+	// LogConnectionTransitionsPrefix is the log prefix used for the logs emitted when
+	// LogConnectionTransitions is enabled; the transition suffix ("-est", "-rst" or "-icmp-err")
+	// is appended to it. Unlike LogPrefix, it does not support %-specifiers (such as %p): the
+	// rules that emit these logs are shared by all policies, so per-policy values cannot be
+	// substituted and any %-specifiers are rendered literally. [Default: calico-response]
+	LogConnectionTransitionsPrefix *string `json:"logConnectionTransitionsPrefix,omitempty"`
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]
 	LogFilePath *string `json:"logFilePath,omitempty"`
 	// LogSeverityFile is the log severity above which logs are sent to the log file. [Default: Info]
@@ -254,7 +277,7 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// used for securing the /metrics endpoint. The private key must be valid and accessible by the calico-node process.
 	PrometheusMetricsKeyFile *string `json:"prometheusMetricsKeyFile,omitempty"`
 	// PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
-	// This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+	// This determines how the server validates client certificates. Default is "NoClientCert".
 	PrometheusMetricsClientAuth *projectcalicov3.PrometheusMetricsClientAuthType `json:"prometheusMetricsClientAuth,omitempty"`
 	// FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will
 	// allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidentally
@@ -310,10 +333,28 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// always clean up expected routes that use the configured DeviceRouteProtocol.  To add your own routes, you must
 	// use a distinct protocol (in addition to setting this field to false).
 	RemoveExternalRoutes *bool `json:"removeExternalRoutes,omitempty"`
-	// ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
-	// when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled,
-	// it is expected that confd and BIRD will program that route. When ProgramClusterRoutes is Enabled, Felix program that route.
-	// Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Disabled]
+	// ProgramClusterRoutes controls which "cluster routes" Felix programs, i.e. the routes that
+	// a node needs in order to reach workloads on other nodes.  It only applies to IP Pools
+	// with vxlanMode: Never; Felix always programs the cluster routes for IP Pools with
+	// vxlanMode: Always or vxlanMode: CrossSubnet.  The routes that Felix does not program here
+	// are expected to be programmed by Calico's BGP stack instead.  Below, an IPIP IP Pool is
+	// one with ipipMode: Always or CrossSubnet, and an unencapsulated one has ipipMode and
+	// vxlanMode both Never.
+	//
+	// - Disabled: Felix programs no cluster routes.
+	// - EnabledIPIPOnly: Felix programs them for IPIP IP Pools.
+	// - EnabledNoEncapOnly: Felix programs them for unencapsulated IP Pools.
+	// - Enabled: Felix programs them for both.
+	//
+	// This field must be kept consistent with BGPConfiguration.ProgramClusterRoutes, which
+	// makes the same choice from BIRD's side.  If both Felix and BIRD are enabled for the same
+	// kind of IP Pool they will fight over the routes; if neither is, there will be no cluster
+	// routes at all.
+	//
+	// Note: leaving the IPIP cluster routes to BGP, which the Disabled and EnabledNoEncapOnly
+	// values do, is deprecated as of v3.33 and will be removed in v3.35.
+	//
+	// [Default: EnabledIPIPOnly]
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 	// IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required
 	// when using Calico for workload networking.  This should be disabled only on hosts where Calico is used solely for
@@ -358,8 +399,21 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// modes can use XDP. This is not recommended since it doesn't provide better performance than
 	// iptables. [Default: false]
 	GenericXDPEnabled *bool `json:"genericXDPEnabled,omitempty"`
-	// NFTablesMode configures nftables support in Felix. [Default: Auto]
+	// NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the
+	// nftables dataplane if kube-proxy is detected to be running in nftables mode.
+	// [Default: Auto]
 	NFTablesMode *projectcalicov3.NFTablesMode `json:"nftablesMode,omitempty"`
+	// NFTablesFlowTableOffload controls which traffic nftables flowtable offload is enabled for,
+	// for improved forwarding performance. When set to "All", established connections accepted by
+	// Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
+	// nftables mode is active. [Default: Disabled]
+	NFTablesFlowTableOffload *projectcalicov3.NFTablesFlowTableOffload `json:"nftablesFlowTableOffload,omitempty"`
+	// NFTablesFlowTableDataIfacePattern is a regular expression that controls which host
+	// interfaces are added to the nftables flowtable, so that traffic forwarded between those
+	// interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
+	// offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
+	// is not Disabled. [Default: ""]
+	NFTablesFlowTableDataIfacePattern *string `json:"nftablesFlowTableDataIfacePattern,omitempty"`
 	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]
 	NftablesRefreshInterval *v1.Duration `json:"nftablesRefreshInterval,omitempty"`
 	// NftablesFilterAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict
@@ -379,6 +433,13 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	NftablesMarkMask *int64 `json:"nftablesMarkMask,omitempty"`
 	// BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]
 	BPFEnabled *bool `json:"bpfEnabled,omitempty"`
+	// BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked
+	// (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  "TunnelAddress" (the default)
+	// assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
+	// of clusters upgraded from earlier releases.  "HostAddress" uses the node's own IP directly and does not
+	// assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel
+	// device IP.  [Default: TunnelAddress]
+	BPFOverlayHostSourceIP *projectcalicov3.BPFOverlayHostSourceIPType `json:"bpfOverlayHostSourceIP,omitempty"`
 	// BPFDisableUnprivileged, if enabled, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable
 	// unprivileged use of BPF.  This ensures that unprivileged users cannot access Calico's BPF maps and
 	// cannot insert their own BPF programs to interfere with Calico's. [Default: true]
@@ -584,9 +645,14 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic. [Default: Enabled]
 	BPFRedirectToPeer *string `json:"bpfRedirectToPeer,omitempty"`
 	// BPFAttachType controls how are the BPF programs at the network interfaces attached.
-	// By default `TCX` is used where available to enable easier coexistence with 3rd party programs.
-	// `TC` can force the legacy method of attaching via a qdisc. `TCX` falls back to `TC` if `TCX` is not available.
-	// [Default: TCX]
+	// By default `Netkit` is used, which attaches via the netkit API on workload interfaces that are
+	// netkit devices and via `TCX` on every other interface. `TCX` is used where available to enable
+	// easier coexistence with 3rd party programs. `TC` can force the legacy method of attaching via a
+	// qdisc. `TCX` falls back to `TC` if `TCX` is not available.
+	// Setting this to `TCX` or `TC` also makes Felix drive existing netkit devices with that mechanism
+	// instead of the netkit API, which is required before downgrading to a release without netkit
+	// support.
+	// [Default: Netkit]
 	BPFAttachType *projectcalicov3.BPFAttachOption `json:"bpfAttachType,omitempty"`
 	// FlowLogsFlushInterval configures the interval at which Felix exports flow logs.
 	FlowLogsFlushInterval *v1.Duration `json:"flowLogsFlushInterval,omitempty"`
@@ -683,6 +749,7 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	MTUIfacePattern *string `json:"mtuIfacePattern,omitempty"`
 	// FloatingIPs configures whether or not Felix will program non-OpenStack floating IP addresses.  (OpenStack-derived
 	// floating IPs are always programmed, regardless of this setting.)
+	//
 	FloatingIPs *projectcalicov3.FloatingIPType `json:"floatingIPs,omitempty"`
 	// LocalSubnetL2Reachability controls whether Felix automatically responds to
 	// ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
@@ -987,6 +1054,22 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithLogActionRateLimit(value 
 // If called multiple times, the LogActionRateLimitBurst field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithLogActionRateLimitBurst(value int) *FelixConfigurationSpecApplyConfiguration {
 	b.LogActionRateLimitBurst = &value
+	return b
+}
+
+// WithLogConnectionTransitions sets the LogConnectionTransitions field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the LogConnectionTransitions field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithLogConnectionTransitions(value projectcalicov3.LogConnectionTransitionsMode) *FelixConfigurationSpecApplyConfiguration {
+	b.LogConnectionTransitions = &value
+	return b
+}
+
+// WithLogConnectionTransitionsPrefix sets the LogConnectionTransitionsPrefix field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the LogConnectionTransitionsPrefix field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithLogConnectionTransitionsPrefix(value string) *FelixConfigurationSpecApplyConfiguration {
+	b.LogConnectionTransitionsPrefix = &value
 	return b
 }
 
@@ -1531,6 +1614,22 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithNFTablesMode(value projec
 	return b
 }
 
+// WithNFTablesFlowTableOffload sets the NFTablesFlowTableOffload field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the NFTablesFlowTableOffload field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithNFTablesFlowTableOffload(value projectcalicov3.NFTablesFlowTableOffload) *FelixConfigurationSpecApplyConfiguration {
+	b.NFTablesFlowTableOffload = &value
+	return b
+}
+
+// WithNFTablesFlowTableDataIfacePattern sets the NFTablesFlowTableDataIfacePattern field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the NFTablesFlowTableDataIfacePattern field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithNFTablesFlowTableDataIfacePattern(value string) *FelixConfigurationSpecApplyConfiguration {
+	b.NFTablesFlowTableDataIfacePattern = &value
+	return b
+}
+
 // WithNftablesRefreshInterval sets the NftablesRefreshInterval field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the NftablesRefreshInterval field is set to the value of the last call.
@@ -1576,6 +1675,14 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithNftablesMarkMask(value in
 // If called multiple times, the BPFEnabled field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithBPFEnabled(value bool) *FelixConfigurationSpecApplyConfiguration {
 	b.BPFEnabled = &value
+	return b
+}
+
+// WithBPFOverlayHostSourceIP sets the BPFOverlayHostSourceIP field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the BPFOverlayHostSourceIP field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithBPFOverlayHostSourceIP(value projectcalicov3.BPFOverlayHostSourceIPType) *FelixConfigurationSpecApplyConfiguration {
+	b.BPFOverlayHostSourceIP = &value
 	return b
 }
 

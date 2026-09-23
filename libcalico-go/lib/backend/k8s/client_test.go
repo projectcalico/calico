@@ -2073,7 +2073,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					},
 					Spec: apiv3.BGPPeerSpec{
 						Node:     nodename,
-						PeerIP:   "aa:bb::cc/128",
+						PeerIP:   "aa:bb::cc",
 						ASNumber: numorstring.ASNumber(6514),
 					},
 				},
@@ -2093,7 +2093,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					},
 					Spec: apiv3.BGPPeerSpec{
 						Node:   nodename,
-						PeerIP: "aa:bb::cc/128",
+						PeerIP: "aa:bb::cc",
 					},
 				},
 			}
@@ -2696,10 +2696,16 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "myfelixconfig",
 				},
+				// The fields the CRD schema defaults are spelled out, so the
+				// round trip compares equal.
 				Spec: apiv3.FelixConfigurationSpec{
-					InterfacePrefix: "xali-",
-					FloatingIPs:     ptr.To(apiv3.FloatingIPsEnabled),
-					NFTablesMode:    ptr.To(apiv3.NFTablesModeAuto),
+					InterfacePrefix:                "xali-",
+					FloatingIPs:                    ptr.To(apiv3.FloatingIPsEnabled),
+					NFTablesMode:                   ptr.To(apiv3.NFTablesModeAuto),
+					NFTablesFlowTableOffload:       ptr.To(apiv3.NFTablesFlowTableOffloadAll),
+					BPFConnectTimeLoadBalancing:    ptr.To(apiv3.BPFConnectTimeLBTCP),
+					BPFHostNetworkedNATWithoutCTLB: ptr.To(apiv3.BPFHostNetworkedNATEnabled),
+					ProgramClusterRoutes:           ptr.To(apiv3.EnabledIPIPOnly),
 				},
 			},
 		}
@@ -3995,6 +4001,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(err).NotTo(HaveOccurred())
 
 			kvpRes.Value.(*model.IPAMConfig).MaxBlocksPerHost = 1000
+			kvpRes.Value.(*model.IPAMConfig).IPCooldownSeconds = 120
 
 			kvpRes, err = c.Update(ctx, kvpRes)
 			Expect(err).NotTo(HaveOccurred())
@@ -4005,6 +4012,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).Spec.MaxBlocksPerHost).To(Equal(int32(1000)))
+			Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).Spec.IPCooldownSeconds).To(Equal(int32(120)))
 			Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
 		})
 

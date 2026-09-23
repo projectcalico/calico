@@ -1,0 +1,144 @@
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
+
+package goldmane
+
+import (
+	"testing"
+
+	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/goldmane/proto"
+	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
+)
+
+func TestProtoToFlow_BasicFields(t *testing.T) {
+	RegisterTestingT(t)
+
+	flow := &proto.Flow{
+		StartTime: 1000,
+		EndTime:   2000,
+		Key: &proto.FlowKey{
+			Action:          proto.Action_Allow,
+			SourceName:      "frontend-abc",
+			SourceNamespace: "team-a",
+			DestName:        "backend-xyz",
+			DestNamespace:   "team-b",
+			Proto:           "tcp",
+			DestPort:        8080,
+			Reporter:        proto.Reporter_Src,
+		},
+		SourceLabels: []string{"app=frontend", "env=prod"},
+		DestLabels:   []string{"app=backend"},
+		SourceIps:    []string{"10.0.0.1", "10.0.0.2"},
+		DestIps:      []string{"192.168.0.1"},
+		PacketsIn:    12,
+		PacketsOut:   14,
+		BytesIn:      4321,
+		BytesOut:     8765,
+	}
+
+	resp := protoToFlow(flow)
+
+	Expect(resp.StartTime.Unix()).To(Equal(int64(1000)))
+	Expect(resp.EndTime.Unix()).To(Equal(int64(2000)))
+	Expect(resp.Action).To(Equal(whiskerv1.Action(proto.Action_Allow)))
+	Expect(resp.SourceName).To(Equal("frontend-abc"))
+	Expect(resp.SourceNamespace).To(Equal("team-a"))
+	Expect(resp.DestName).To(Equal("backend-xyz"))
+	Expect(resp.DestNamespace).To(Equal("team-b"))
+	Expect(resp.Protocol).To(Equal("tcp"))
+	Expect(resp.DestPort).To(Equal(int64(8080)))
+	Expect(resp.Reporter).To(Equal(whiskerv1.Reporter(proto.Reporter_Src)))
+	Expect(resp.SourceLabels).To(Equal("app=frontend | env=prod"))
+	Expect(resp.DestLabels).To(Equal("app=backend"))
+	Expect(resp.SourceIPs).To(Equal([]string{"10.0.0.1", "10.0.0.2"}))
+	Expect(resp.DestIPs).To(Equal([]string{"192.168.0.1"}))
+	Expect(resp.PacketsIn).To(Equal(int64(12)))
+	Expect(resp.PacketsOut).To(Equal(int64(14)))
+	Expect(resp.BytesIn).To(Equal(int64(4321)))
+	Expect(resp.BytesOut).To(Equal(int64(8765)))
+
+}
+
+// TestProtoToFlow_EndpointTypes checks the endpoint types carried on the Goldmane
+// FlowKey reach the response under Goldmane's own enum names, and that an
+// unreported type stays empty rather than becoming a name of its own.
+func TestProtoToFlow_EndpointTypes(t *testing.T) {
+	RegisterTestingT(t)
+
+	for _, tc := range []struct {
+		name             string
+		source, dest     proto.EndpointType
+		wantSrc, wantDst string
+	}{
+		{"workload and host", proto.EndpointType_WorkloadEndpoint, proto.EndpointType_HostEndpoint, "WorkloadEndpoint", "HostEndpoint"},
+		{"networkset and network", proto.EndpointType_NetworkSet, proto.EndpointType_Network, "NetworkSet", "Network"},
+		{"unspecified stays empty", proto.EndpointType_EndpointTypeUnspecified, proto.EndpointType_EndpointTypeUnspecified, "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			RegisterTestingT(t)
+
+			resp := protoToFlow(&proto.Flow{Key: &proto.FlowKey{SourceType: tc.source, DestType: tc.dest}})
+
+			Expect(resp.SourceType).To(Equal(tc.wantSrc))
+			Expect(resp.DestType).To(Equal(tc.wantDst))
+		})
+	}
+}
+
+func TestProtoToFlow_Service(t *testing.T) {
+	RegisterTestingT(t)
+
+	flow := &proto.Flow{
+		Key: &proto.FlowKey{
+			DestServiceName:      "api",
+			DestServiceNamespace: "team-b",
+			DestServicePort:      8080,
+			DestServicePortName:  "http",
+		},
+	}
+
+	resp := protoToFlow(flow)
+
+	Expect(resp.Service).NotTo(BeNil())
+	Expect(resp.Service.Name).To(Equal("api"))
+	Expect(resp.Service.Namespace).To(Equal("team-b"))
+	Expect(resp.Service.Port).To(Equal(int64(8080)))
+	Expect(resp.Service.PortName).To(Equal("http"))
+}
+
+func TestProtoToFlow_ServiceAbsent(t *testing.T) {
+	RegisterTestingT(t)
+
+	resp := protoToFlow(&proto.Flow{Key: &proto.FlowKey{}})
+	Expect(resp.Service).To(BeNil())
+}
+
+func TestProtoToFlow_NameAndNamespaceSpecialCases(t *testing.T) {
+	RegisterTestingT(t)
+
+	flow := &proto.Flow{
+		Key: &proto.FlowKey{
+			SourceName:      pub,
+			SourceNamespace: "",
+			DestName:        pvt,
+			DestNamespace:   "-",
+		},
+	}
+
+	resp := protoToFlow(flow)
+
+	// "pub"/"pvt" expand to the public/private network display names; the empty
+	// and "-" namespaces are left as-is by protoToFlow (only filter hints remap
+	// namespaces to "Global").
+	Expect(resp.SourceName).To(Equal(publicNetwork))
+	Expect(resp.DestName).To(Equal(privateNetwork))
+}
+
+func TestProtoToNamespace(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(protoToNamespace("")).To(Equal(global))
+	Expect(protoToNamespace("-")).To(Equal(global))
+	Expect(protoToNamespace("team-a")).To(Equal("team-a"))
+}

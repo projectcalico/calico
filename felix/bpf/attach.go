@@ -36,6 +36,10 @@ type AttachPoint struct {
 	LogLevel    string
 	Profiling   string
 	IfIndex     int
+	// NoTracePrintk selects the trace-printk-free preamble object variants,
+	// used on nodes running with kernel lockdown=confidentiality. See
+	// KernelLockdownConfidentiality.
+	NoTracePrintk bool
 }
 
 func (ap *AttachPoint) LogVal() string {

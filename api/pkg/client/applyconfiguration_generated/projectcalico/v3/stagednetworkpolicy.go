@@ -19,7 +19,7 @@ import (
 // StagedNetworkPolicy is a staged NetworkPolicy.
 // StagedNetworkPolicy is the Namespaced-equivalent of the StagedGlobalNetworkPolicy.
 type StagedNetworkPolicyApplyConfiguration struct {
-	v1.TypeMetaApplyConfiguration    `json:",inline"`
+	v1.TypeMetaApplyConfiguration    `json:""`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *StagedNetworkPolicySpecApplyConfiguration `json:"spec,omitempty"`
 }

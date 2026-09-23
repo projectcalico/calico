@@ -23,6 +23,16 @@ installation:
     # Enable policy setup timeout to increase test reliability.
     linuxPolicySetupTimeoutSeconds: 5
 
+    # Pin IPv6 node-address autodetection to the 2001:20::/64 range that
+    # deploy_resources.sh assigns to each node. The kind docker network now
+    # gets an auto-assigned IPv6 ULA (fc00:f853:ccd:e793::/64), so the default
+    # firstFound method non-deterministically picks that ULA instead of the
+    # 2001:20:: address. The k8st BGP tests peer external routers against the
+    # 2001:20:: addresses, so the node BGP IPv6 must be in that range.
+    nodeAddressAutodetectionV6:
+      cidrs:
+      - 2001:20::/64
+
     # Configure CIDRs to match kubeadm cluster.
     ipPools:
     - cidr: 192.168.0.0/16

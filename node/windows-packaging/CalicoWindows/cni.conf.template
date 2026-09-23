@@ -2,7 +2,7 @@
   "name": "Calico",
   "windows_use_single_network": true,
 
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "type": "calico",
   "mode": "__MODE__",
 

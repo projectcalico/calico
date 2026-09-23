@@ -48,13 +48,9 @@ var binariesToDisable = []string{
 	"/host/opt/cni/bin/host-local",
 }
 
-type accessor interface {
-	Backend() bapi.Client
-}
-
 func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 	// k8sClient directly calls the k8s apiserver.
-	k8sClient := c.(accessor).Backend().(*k8s.KubeClient).ClientSet
+	k8sClient := c.(bapi.BackendAccessor).Backend().(*k8s.KubeClient).ClientSet
 
 	// Check to see if the system is still using host-local
 	// by checking the existence of the path.

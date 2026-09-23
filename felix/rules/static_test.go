@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
 	. "github.com/projectcalico/calico/felix/rules"
 )
@@ -1064,6 +1065,7 @@ var _ = Describe("Static", func() {
 			Describe("with IPv4 VXLAN enabled", func() {
 				BeforeEach(func() {
 					conf.VXLANEnabled = true
+					conf.VXLANPort = 4789
 				})
 
 				checkManglePostrouting(4, kubeIPVSEnabled)
@@ -1075,6 +1077,14 @@ var _ = Describe("Static", func() {
 							Rules: []generictables.Rule{
 								{Action: iptables.JumpAction{Target: "cali-fip-snat"}},
 								{Action: iptables.JumpAction{Target: "cali-nat-outgoing"}},
+								{
+									Match: iptables.Match().
+										ProtocolNum(ProtoUDP).
+										OutInterface(dataplanedefs.IPIPIfaceName).
+										NotSrcAddrType(generictables.AddrTypeLocal, true).
+										SrcAddrType(generictables.AddrTypeLocal, false),
+									Action: iptables.MasqAction{ToPorts: "4790-65535"},
+								},
 								{
 									Match: iptables.Match().
 										OutInterface(dataplanedefs.IPIPIfaceName).
@@ -1166,10 +1176,26 @@ var _ = Describe("Static", func() {
 									{Action: iptables.JumpAction{Target: "cali-nat-outgoing"}},
 									{
 										Match: iptables.Match().
+											ProtocolNum(ProtoUDP).
+											OutInterface(dataplanedefs.IPIPIfaceName).
+											NotSrcAddrType(generictables.AddrTypeLocal, true).
+											SrcAddrType(generictables.AddrTypeLocal, false),
+										Action: iptables.MasqAction{ToPorts: "4790-65535"},
+									},
+									{
+										Match: iptables.Match().
 											OutInterface(dataplanedefs.IPIPIfaceName).
 											NotSrcAddrType(generictables.AddrTypeLocal, true).
 											SrcAddrType(generictables.AddrTypeLocal, false),
 										Action: iptables.MasqAction{},
+									},
+									{
+										Match: iptables.Match().
+											ProtocolNum(ProtoUDP).
+											OutInterface(dataplanedefs.VXLANIfaceNameV4).
+											NotSrcAddrType(generictables.AddrTypeLocal, true).
+											SrcAddrType(generictables.AddrTypeLocal, false),
+										Action: iptables.MasqAction{ToPorts: "4790-65535"},
 									},
 									{
 										Match: iptables.Match().
@@ -1182,12 +1208,27 @@ var _ = Describe("Static", func() {
 							},
 						}))
 					})
+
+					Describe("with a high custom VXLAN port", func() {
+						BeforeEach(func() {
+							conf.VXLANPort = 60000
+						})
+
+						It("IPv4: Should masquerade UDP to the wider range below the VXLAN port", func() {
+							chains := rr.StaticNATPostroutingChains(4)
+							// Rules[2] is the UDP masquerade with the port range excluding the
+							// custom VXLAN port; Rules[3] is the catch-all with no range.
+							Expect(chains[0].Rules[2].Action).To(Equal(iptables.MasqAction{ToPorts: "1024-59999"}))
+							Expect(chains[0].Rules[3].Action).To(Equal(iptables.MasqAction{}))
+						})
+					})
 				})
 			})
 
 			Describe("with IPv6 VXLAN enabled", func() {
 				BeforeEach(func() {
 					conf.VXLANEnabledV6 = true
+					conf.VXLANPort = 4789
 				})
 
 				checkManglePostrouting(6, kubeIPVSEnabled)
@@ -1258,6 +1299,14 @@ var _ = Describe("Static", func() {
 								Rules: []generictables.Rule{
 									{Action: iptables.JumpAction{Target: "cali-fip-snat"}},
 									{Action: iptables.JumpAction{Target: "cali-nat-outgoing"}},
+									{
+										Match: iptables.Match().
+											ProtocolNum(ProtoUDP).
+											OutInterface(dataplanedefs.VXLANIfaceNameV6).
+											NotSrcAddrType(generictables.AddrTypeLocal, true).
+											SrcAddrType(generictables.AddrTypeLocal, false),
+										Action: iptables.MasqAction{ToPorts: "4790-65535"},
+									},
 									{
 										Match: iptables.Match().
 											OutInterface(dataplanedefs.VXLANIfaceNameV6).
@@ -2024,6 +2073,261 @@ var _ = Describe("Static", func() {
 				expectBPFModeRawChains := &generictables.Chain{Name: "cali-untracked-flows", Rules: expectBPFModeRawRules}
 				Expect(actualBPFModeRawChains).To(Equal(expectBPFModeRawChains))
 			})
+		})
+	})
+})
+
+var _ = Describe("Flowtable offload", func() {
+	flowtableConfig := Config{
+		IPSetConfigV4:       ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:       ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		MarkAccept:          0x8,
+		MarkPass:            0x10,
+		MarkScratch0:        0x20,
+		MarkScratch1:        0x40,
+		MarkDrop:            0x80,
+		MarkEndpoint:        0xff00,
+		MarkNonCaliEndpoint: 0x0100,
+		FilterDenyAction:    "DROP",
+		VXLANPort:           4789,
+		VXLANVNI:            4096,
+
+		WorkloadIfacePrefixes: []string{"cali"},
+
+		NFTablesFlowTableOffload: true,
+	}
+	renderer := NewRenderer(flowtableConfig, true).(*DefaultRuleRenderer)
+
+	noOffloadSetName := ipSetName(IPSetIDNoFlowOffload, 4)
+	offloadRule := generictables.Rule{
+		Match: nftrender.Match().
+			NotSourceIPSet(noOffloadSetName).
+			NotDestIPSet(noOffloadSetName),
+		Action:  nftrender.FlowOffloadAction{},
+		Comment: []string{"Offload established Calico flows."},
+	}
+
+	It("should jump to the flow-offload chain at the top of the forward chain, ahead of the workload dispatch jump", func() {
+		chains := renderer.StaticFilterForwardChains(4)
+		chain := findChain(chains, ChainFilterForward)
+		Expect(chain).NotTo(BeNil())
+
+		offloadIdx := indexOfJumpTo(chain.Rules, ChainFlowOffload)
+		Expect(offloadIdx).To(BeNumerically(">=", 0), "expected a jump to the flow-offload chain")
+		dispatchIdx := indexOfJumpTo(chain.Rules, ChainFromWorkloadDispatch)
+		Expect(dispatchIdx).To(BeNumerically(">=", 0), "expected a jump to the workload dispatch chain")
+		Expect(offloadIdx).To(BeNumerically("<", dispatchIdx), "offload jump must precede the workload dispatch jump")
+		Expect(chain.Rules[offloadIdx].Match).To(Equal(nftrender.Match().ConntrackState("RELATED,ESTABLISHED")),
+			"NEW and INVALID packets must not pay for the jump")
+	})
+
+	It("should offload established flows from the flow-offload chain", func() {
+		chain := renderer.FlowOffloadChain(4)
+		Expect(chain).NotTo(BeNil())
+		Expect(chain.Name).To(Equal(ChainFlowOffload))
+		Expect(chain.Rules).To(ConsistOf(offloadRule))
+	})
+
+	It("should render the flow-offload chain as part of the static filter chains", func() {
+		Expect(findChain(renderer.StaticFilterTableChains(4), ChainFlowOffload)).NotTo(BeNil())
+	})
+
+	It("should not offload flows when flow table offload is disabled", func() {
+		disabledConfig := flowtableConfig
+		disabledConfig.NFTablesFlowTableOffload = false
+		disabledRenderer := NewRenderer(disabledConfig, true).(*DefaultRuleRenderer)
+
+		chains := disabledRenderer.StaticFilterForwardChains(4)
+		chain := findChain(chains, ChainFilterForward)
+		Expect(chain).NotTo(BeNil())
+		Expect(indexOfJumpTo(chain.Rules, ChainFlowOffload)).To(Equal(-1))
+		Expect(findChain(disabledRenderer.StaticFilterTableChains(4), ChainFlowOffload)).To(BeNil())
+	})
+
+	It("should not offload flows in iptables mode", func() {
+		iptablesRenderer := NewRenderer(flowtableConfig, false).(*DefaultRuleRenderer)
+
+		chain := findChain(iptablesRenderer.StaticFilterForwardChains(4), ChainFilterForward)
+		Expect(chain).NotTo(BeNil())
+		Expect(indexOfJumpTo(chain.Rules, ChainFlowOffload)).To(Equal(-1))
+		Expect(findChain(iptablesRenderer.StaticFilterTableChains(4), ChainFlowOffload)).To(BeNil())
+	})
+})
+
+func indexOfJumpTo(rules []generictables.Rule, chainName string) int {
+	for i, r := range rules {
+		if jump, ok := r.Action.(*nftrender.JumpAction); ok && jump.Target == chainName {
+			return i
+		}
+	}
+	return -1
+}
+
+var _ = Describe("Static with connection transition logging", func() {
+	var rr *DefaultRuleRenderer
+	var conf Config
+
+	const connStateLogMark = uint32(0x100000)
+
+	BeforeEach(func() {
+		conf = Config{
+			WorkloadIfacePrefixes:    []string{"cali"},
+			IPSetConfigV4:            ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+			IPSetConfigV6:            ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+			MarkAccept:               0x10,
+			MarkPass:                 0x20,
+			MarkScratch0:             0x40,
+			MarkScratch1:             0x80,
+			MarkDrop:                 0x200,
+			MarkEndpoint:             0xff000,
+			MarkNonCaliEndpoint:      0x1000,
+			LogConnectionTransitions: true,
+			MarkConnStateLog:         connStateLogMark,
+		}
+	})
+
+	JustBeforeEach(func() {
+		rr = NewRenderer(conf, false).(*DefaultRuleRenderer)
+	})
+
+	clearMarkAction := iptables.SetConnMarkAction{Mark: 0, Mask: connStateLogMark}
+
+	expLogConnChain := func(icmpProto string) *generictables.Chain {
+		return &generictables.Chain{
+			Name: "cali-log-conn",
+			Rules: []generictables.Rule{
+				{
+					Match:  iptables.Match().TCPFlagsSet("RST"),
+					Action: iptables.LogAction{Prefix: "calico-response-rst"},
+				},
+				{
+					Match:  iptables.Match().TCPFlagsSet("RST"),
+					Action: clearMarkAction,
+				},
+				{
+					Match:  iptables.Match().TCPFlagsSet("RST"),
+					Action: iptables.ReturnAction{},
+				},
+				{
+					Match:  iptables.Match().Protocol(icmpProto).ConntrackState("RELATED"),
+					Action: iptables.LogAction{Prefix: "calico-response-icmp-err"},
+				},
+				{
+					Match:  iptables.Match().Protocol(icmpProto).ConntrackState("RELATED"),
+					Action: clearMarkAction,
+				},
+				{
+					Match:  iptables.Match().Protocol(icmpProto).ConntrackState("RELATED"),
+					Action: iptables.ReturnAction{},
+				},
+				{
+					Match:  iptables.Match(),
+					Action: iptables.LogAction{Prefix: "calico-response-est"},
+				},
+				{
+					Match:  iptables.Match(),
+					Action: clearMarkAction,
+				},
+				{
+					Match:  iptables.Match(),
+					Action: iptables.ReturnAction{},
+				},
+			},
+		}
+	}
+
+	It("should include the cali-log-conn chain in the filter table", func() {
+		Expect(findChain(rr.StaticFilterTableChains(4), "cali-log-conn")).To(Equal(expLogConnChain("icmp")))
+		Expect(findChain(rr.StaticFilterTableChains(6), "cali-log-conn")).To(Equal(expLogConnChain("ipv6-icmp")))
+	})
+
+	It("should include the cali-log-conn chain in the mangle table", func() {
+		Expect(findChain(rr.StaticMangleTableChains(4), "cali-log-conn")).To(Equal(expLogConnChain("icmp")))
+		Expect(findChain(rr.StaticMangleTableChains(6), "cali-log-conn")).To(Equal(expLogConnChain("ipv6-icmp")))
+	})
+
+	It("should put the connection state log check at the top of cali-OUTPUT", func() {
+		for _, ipVersion := range []uint8{4, 6} {
+			chain := findChain(rr.StaticFilterTableChains(ipVersion), "cali-OUTPUT")
+			Expect(chain).NotTo(BeNil())
+			Expect(chain.Rules[0]).To(Equal(generictables.Rule{
+				Match: iptables.Match().
+					ConnMarkMatchesWithMask(connStateLogMark, connStateLogMark).
+					ConntrackState("RELATED,ESTABLISHED"),
+				Action: iptables.JumpAction{Target: "cali-log-conn"},
+			}))
+		}
+	})
+
+	Describe("with a custom prefix containing specifiers", func() {
+		BeforeEach(func() {
+			conf.LogPrefix = "unrelated"
+			conf.LogConnectionTransitionsPrefix = "acme-%n"
+		})
+
+		It("should use the prefix verbatim, ignoring LogPrefix and rendering specifiers literally", func() {
+			chain := findChain(rr.StaticFilterTableChains(4), "cali-log-conn")
+			Expect(chain).NotTo(BeNil())
+			Expect(chain.Rules[0].Action).To(Equal(iptables.LogAction{Prefix: "acme-%n-rst"}))
+		})
+	})
+
+	Describe("with a long prefix", func() {
+		BeforeEach(func() {
+			conf.LogConnectionTransitionsPrefix = "abcdefghijklmnopqrstuvwxyz0123" // 30 characters.
+		})
+
+		It("should truncate the base so the suffix and trailing colon-space fit iptables' 29 character limit", func() {
+			chain := findChain(rr.StaticFilterTableChains(4), "cali-log-conn")
+			Expect(chain).NotTo(BeNil())
+			// The Log action appends ": ", so prefix+suffix must fit in 27 characters.
+			Expect(chain.Rules[0].Action).To(Equal(iptables.LogAction{Prefix: "abcdefghijklmnopqrstuvw-rst"}))
+			Expect(chain.Rules[3].Action).To(Equal(iptables.LogAction{Prefix: "abcdefghijklmnopqr-icmp-err"}))
+			Expect(chain.Rules[6].Action).To(Equal(iptables.LogAction{Prefix: "abcdefghijklmnopqrstuvw-est"}))
+		})
+	})
+
+	Describe("with a long prefix in nftables mode", func() {
+		const base = "abcdefghijklmnopqrstuvwxyz" +
+			"abcdefghijklmnopqrstuvwxyz" +
+			"abcdefghijklmnopqrstuvwxyz" +
+			"abcdefghijklmnopqrstuvwxyz" +
+			"abcdefghijklmnopqrstuvwxyz" // 130 characters.
+
+		BeforeEach(func() {
+			conf.LogConnectionTransitionsPrefix = base
+		})
+
+		JustBeforeEach(func() {
+			rr = NewRenderer(conf, true).(*DefaultRuleRenderer)
+		})
+
+		It("should truncate the base so the suffix and trailing colon-space fit nftables' 126 character limit", func() {
+			chain := findChain(rr.StaticFilterTableChains(4), "cali-log-conn")
+			Expect(chain).NotTo(BeNil())
+			// The Log action appends ": ", so prefix+suffix must fit in 124 characters.
+			Expect(chain.Rules[0].Action).To(Equal(nftrender.LogAction{Prefix: base[:120] + "-rst"}))
+			Expect(chain.Rules[3].Action).To(Equal(nftrender.LogAction{Prefix: base[:115] + "-icmp-err"}))
+			Expect(chain.Rules[6].Action).To(Equal(nftrender.LogAction{Prefix: base[:120] + "-est"}))
+		})
+	})
+
+	Describe("with the feature disabled", func() {
+		BeforeEach(func() {
+			conf.LogConnectionTransitions = false
+			conf.MarkConnStateLog = 0
+		})
+
+		It("should not render the chain or the cali-OUTPUT check rule", func() {
+			Expect(findChain(rr.StaticFilterTableChains(4), "cali-log-conn")).To(BeNil())
+			Expect(findChain(rr.StaticMangleTableChains(4), "cali-log-conn")).To(BeNil())
+			chain := findChain(rr.StaticFilterTableChains(4), "cali-OUTPUT")
+			Expect(chain).NotTo(BeNil())
+			for _, rule := range chain.Rules {
+				if jump, ok := rule.Action.(iptables.JumpAction); ok {
+					Expect(jump.Target).NotTo(Equal("cali-log-conn"))
+				}
+			}
 		})
 	})
 })

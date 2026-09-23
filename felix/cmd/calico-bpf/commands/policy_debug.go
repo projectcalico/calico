@@ -197,39 +197,29 @@ func loadIPSetMembers() map[uint64][]string {
 // ipsetHexIDRegex matches hex IP set IDs like "0x1234abcd5678ef90".
 var ipsetHexIDRegex = regexp.MustCompile(`0x[0-9a-fA-F]+`)
 
-// formatIPSets converts a raw IPSets comment into a more readable form,
-// resolving hex IDs to their members when available.
-// Input:  `IPSets src_ip_set_ids:<0x1234>`
-// Output without resolution: `IP sets: src=0x1234`
-// Output with resolution:    `IP sets: src={10.0.0.0/8, 192.168.0.0/16}`
-func formatIPSets(comment string, membersBySet map[uint64][]string) string {
-	after := strings.TrimPrefix(comment, "IPSets ")
-	// Replace the verbose field names with shorter labels.
-	r := strings.NewReplacer(
-		"src_ip_set_ids:<", "src=",
-		"dst_ip_set_ids:<", "dst=",
-		"not_src_ip_set_ids:<", "!src=",
-		"not_dst_ip_set_ids:<", "!dst=",
-		">", "",
-		" ,", ",",
-	)
-	formatted := strings.TrimSpace(r.Replace(after))
-
-	if membersBySet != nil {
-		formatted = ipsetHexIDRegex.ReplaceAllStringFunc(formatted, func(hexID string) string {
-			id, err := strconv.ParseUint(hexID, 0, 64)
-			if err != nil {
-				return hexID
-			}
-			members, ok := membersBySet[id]
-			if !ok || len(members) == 0 {
-				return hexID
-			}
-			return "{" + strings.Join(members, ", ") + "}"
-		})
+// resolveMatchIPSets resolves any "0x..." IP set hex IDs embedded in a "Match:"
+// comment to their live member IPs, joining multiple members with "," so they
+// sit naturally inside the surrounding src/dst brace token, e.g.
+//
+//	Match: proto=tcp src={11.0.0.8/32,0x1a2b} ...
+//	  -> Match: proto=tcp src={11.0.0.8/32,10.65.0.3/32} ...
+//
+// Unresolvable IDs (map unavailable or set not programmed) are left as-is.
+func resolveMatchIPSets(comment string, membersBySet map[uint64][]string) string {
+	if membersBySet == nil {
+		return comment
 	}
-
-	return "IP sets: " + formatted
+	return ipsetHexIDRegex.ReplaceAllStringFunc(comment, func(hexID string) string {
+		id, err := strconv.ParseUint(hexID, 0, 64)
+		if err != nil {
+			return hexID
+		}
+		members, ok := membersBySet[id]
+		if !ok || len(members) == 0 {
+			return hexID
+		}
+		return strings.Join(members, ",")
+	})
 }
 
 // formatTierEnd converts "End of tier <name>: <action>" into a readable form.
@@ -318,8 +308,15 @@ func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.Po
 				cmd.Printf("%sEnd Policy: %s\n", indent(depth), policyName)
 				depth = 1
 
-			case strings.HasPrefix(comment, "IPSets "):
-				cmd.Printf("%s%s\n", indent(depth), formatIPSets(comment, ipsetMembers))
+			case strings.HasPrefix(comment, "Match: "):
+				// Positive per-rule match summary (protocol/nets/ports/ICMP,
+				// plus any selector IP sets folded into the src/dst tokens as
+				// hex IDs, resolved here to live member IPs). Only shown in the
+				// plain dump; the asm (-a) dump already prints the per-criterion
+				// "If ..." match comments inline with the instructions.
+				if !verboseFlagSet {
+					cmd.Printf("%s%s\n", indent(depth), resolveMatchIPSets(comment, ipsetMembers))
+				}
 
 			case strings.HasPrefix(comment, "##### Start of program"):
 				if verboseFlagSet {

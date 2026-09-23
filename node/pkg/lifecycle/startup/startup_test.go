@@ -1,4 +1,4 @@
-// Copyright (c) 2016,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016,2021,2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -445,6 +445,30 @@ var _ = Describe("FV tests against a real etcd", func() {
 			[]EnvItem{{"CALICO_IPV4POOL_DISABLE_BGP_EXPORT", "false"}, {"CALICO_IPV6POOL_DISABLE_BGP_EXPORT", "false"}},
 			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "all()", "all()", false, false),
 	)
+
+	It("should honor CALICO_IPV6POOL_VXLAN when the IPv4 pool is disabled", func() {
+		cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+		Expect(err).NotTo(HaveOccurred())
+		c, err := client.New(*cfg)
+		Expect(err).NotTo(HaveOccurred())
+		be, err := backend.NewClient(*cfg)
+		Expect(err).NotTo(HaveOccurred())
+		err = be.Clean()
+		Expect(err).NotTo(HaveOccurred())
+
+		defer temporarilySetEnv("CALICO_IPV4POOL_CIDR", "none")()
+		defer temporarilySetEnv("CALICO_IPV6POOL_VXLAN", "Always")()
+
+		configureIPPools(ctx, c, kubeadmConfig)
+
+		poolList, err := c.IPPools().List(ctx, options.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(poolList.Items).To(HaveLen(1))
+
+		pool := poolList.Items[0]
+		Expect(pool.Name).To(Equal(DEFAULT_IPV6_POOL_NAME))
+		Expect(pool.Spec.VXLANMode).To(Equal(apiv3.VXLANModeAlways))
+	})
 
 	It("should properly clear node IPs", func() {
 		cfg, err := apiconfig.LoadClientConfigFromEnvironment()
@@ -1066,10 +1090,16 @@ var _ = Describe("NetworkUnavailable condition", func() {
 	})
 
 	It("should set the NetworkUnavailable condition to false", func() {
+		// Cancelling up front would now be read as a shutdown, so let the
+		// readiness wait time out instead and cancel once it has done its work.
 		done, cancel := context.WithCancel(ctx)
-		cancel() // Immediately cancel, we don't need to run indefinitely.
-		err := ManageNodeCondition(done, 10*time.Second)
-		Expect(err).NotTo(HaveOccurred(), "ManageNodeCondition failed")
+		defer cancel()
+		errCh := make(chan error, 1)
+		go func() { errCh <- ManageNodeCondition(done, 2*time.Second) }()
+		DeferCleanup(func() {
+			cancel()
+			Eventually(errCh, "10s").Should(Receive(BeNil()), "ManageNodeCondition failed")
+		})
 
 		// Query the k8s node object and check the condition.
 		var k8sNode *v1.Node
@@ -1081,12 +1111,21 @@ var _ = Describe("NetworkUnavailable condition", func() {
 		Expect(k8sNode).NotTo(BeNil(), "k8s node %s was nil", nodeName)
 
 		var condition *v1.NodeCondition
-		for i := range k8sNode.Status.Conditions {
-			if k8sNode.Status.Conditions[i].Type == v1.NodeNetworkUnavailable {
-				condition = &k8sNode.Status.Conditions[i]
-				break
+		Eventually(func() *v1.NodeCondition {
+			n, err := cs.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+			if err != nil {
+				return nil
 			}
-		}
+			for i := range n.Status.Conditions {
+				if n.Status.Conditions[i].Type == v1.NodeNetworkUnavailable {
+					return &n.Status.Conditions[i]
+				}
+			}
+			return nil
+		}, "30s", "1s").Should(Satisfy(func(c *v1.NodeCondition) bool {
+			condition = c
+			return c != nil
+		}), "k8s node %s did not have a NetworkUnavailable condition", nodeName)
 		Expect(condition).NotTo(BeNil(), "k8s node %s did not have a NetworkUnavailable condition", nodeName)
 		Expect(condition.Status).To(Equal(v1.ConditionFalse), "k8s node %s NetworkUnavailable condition was not False", nodeName)
 	})
@@ -1487,4 +1526,32 @@ var _ = Describe("UT for IP and IP6", func() {
 		Entry("get the original cidr", "5:4:3:2::1/64", 6, "5:4:3:2::1/64"),
 		Entry("get the original ip(v6)", "1:2:3:4::1111", 6, "1:2:3:4::1111"),
 	)
+})
+
+var _ = Describe("waitForReady", func() {
+	// The health check errors immediately when no components are enabled, so the
+	// loop spins without touching the network.
+	It("returns as soon as the context is cancelled, not at the timeout", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		done := make(chan error, 1)
+		go func() { done <- waitForReady(ctx, time.Hour) }()
+
+		// Let it get inside the retry sleep, then cancel.
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+
+		select {
+		case err := <-done:
+			Expect(err).To(MatchError(context.Canceled))
+		case <-time.After(10 * time.Second):
+			Fail("waitForReady ignored the cancelled context")
+		}
+	})
+
+	It("still reports a timeout when the context stays live", func() {
+		err := waitForReady(context.Background(), 50*time.Millisecond)
+		Expect(err).To(MatchError(ContainSubstring("timed out waiting for Calico to become ready")))
+	})
 })

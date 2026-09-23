@@ -1,14 +1,27 @@
 - name: "E2E tests: Gateway API Conformance"
   run:
-    when: "${FORCE_RUN} or change_in(['/e2e/cmd/gateway', '/hack/test/kind/gateway-setup.sh', '/third_party/envoy-gateway', '/third_party/envoy-proxy', '/third_party/envoy-ratelimit'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${CHANGE_IN(e2e/cmd/gateway,non-go:/hack/test/kind/gateway-setup.sh,non-go:/third_party/envoy-gateway/,non-go:/third_party/envoy-proxy/,non-go:/third_party/envoy-ratelimit/)}"
   execution_time_limit:
-    minutes: 30
+    minutes: 60
   dependencies:
     - Prerequisites
+    - "Build: calico image"
+    - "Build: node image"
+    - "Build: whisker image"
+    - "Build: operator image"
+    - "Build: third-party images"
   task:
     env_vars:
+      # "calico" is the only group any block stores; the e2e runner this lane
+      # builds is calico Go code, so it is the one worth restoring.
       - name: BUILD_CACHE_GROUP
-        value: "node"
+        value: "calico"
+    prologue:
+      commands:
+        # Match the other kind lanes: free the /var/lib/docker space the
+        # pre-loaded images hold before loading the ones this lane needs.
+        - docker system prune -af
+        - .semaphore/load-cached-images calico node whisker
     jobs:
       - name: "Gateway API: Conformance Tests"
         commands:
@@ -22,7 +35,7 @@
         commands:
           - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
           - 'artifact push job ./report/ --destination semaphore/gateway-conformance-reports || true'
-          # Permanent copy in GCS for upstream submission and historical
+          # Permanent copy in S3 for upstream submission and historical
           # comparison. Semaphore's job artifacts are GC'd after ~30 days,
           # which isn't long enough for "go fish out the v3.30 report next
           # year". PRs are skipped — their Semaphore artifact is plenty,
@@ -31,7 +44,7 @@
             if [[ -z "${SEMAPHORE_GIT_PR_NUMBER}" && -d ./report ]]; then
               ref="${SEMAPHORE_GIT_TAG_NAME:-${SEMAPHORE_GIT_BRANCH}}"
               sha="${SEMAPHORE_GIT_SHA:0:12}"
-              dst="gs://${GCS_BUILD_CACHE_BUCKET}/gateway-conformance/${ref}/${sha}/"
+              dst="s3://${CALICO_S3_BUCKET}/${CALICO_S3_KEY_PREFIX}/gateway-conformance/${ref}/${sha}/"
               echo "Publishing conformance report to ${dst}"
-              gcloud storage cp ./report/* "${dst}" || true
+              .semaphore/s3-cmd cp ./report/* "${dst}" || true
             fi

@@ -236,6 +236,17 @@ rules:
       - watch
   - apiGroups:
       - apps
+    resources:
+      # The status manager reads ReplicaSets to find a Deployment's active revision,
+      # and ControllerRevisions for a DaemonSet's or StatefulSet's.
+      - replicasets
+      - controllerrevisions
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apps
     resourceNames:
       - tigera-operator
     resources:
@@ -379,6 +390,7 @@ rules:
     resources:
       - apiservices
     verbs:
+      - get
       - list
       - watch
       - create
@@ -594,7 +606,7 @@ rules:
       - tlsroutes.gateway.networking.k8s.io
       - udproutes.gateway.networking.k8s.io
       - xbackendtrafficpolicies.gateway.networking.x-k8s.io
-      - xlistenersets.gateway.networking.x-k8s.io
+      - listenersets.gateway.networking.k8s.io
       - xmeshes.gateway.networking.x-k8s.io
       - backends.gateway.envoyproxy.io
       - backendtrafficpolicies.gateway.envoyproxy.io
@@ -635,6 +647,7 @@ rules:
       - jobs
     verbs:
       - create
+      - get
       - list
       - watch
   - apiGroups:
@@ -645,15 +658,26 @@ rules:
       - update
     resourceNames:
       - tigera-gateway-api-gateway-helm-certgen
-  # 4. The operator needs to be able to read Gateway resources to determine namespaces to apply
-  # CIG resources to.
+  # 4. Gateway API resources for Whisker UI access through Calico Ingress Gateway.
+  # Reads are cluster-wide for the operator's cache; writes are self-granted per
+  # namespace at runtime.
   - apiGroups:
       - gateway.networking.k8s.io
     resources:
       - gateways
+      - httproutes
+      - referencegrants
     verbs:
-      - list
       - get
+      - list
+      - watch
+  - apiGroups:
+      - gateway.envoyproxy.io
+    resources:
+      - backends
+    verbs:
+      - get
+      - list
       - watch
   # For monitoring KubeVirt live migration.  The operator does not do this itself, but needs to
   # be able to assign this RBAC to Typha and calico-node.
@@ -761,7 +785,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: tigera-operator
-          image: quay.io/tigera/operator:master
+          image: quay.io/calico/operator:master
           imagePullPolicy: IfNotPresent
           command:
             - operator

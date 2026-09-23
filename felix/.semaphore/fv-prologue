@@ -22,9 +22,10 @@ export NUM_FV_BATCHES=8
 JOB_TAG=""
 TEST_REPORT_NAME=""
 
-# In BPF runs, only run BPF-SAFE tagged tests
+# In BPF runs, only run tests tagged for BPF mode: _BPF-SAFE_ (shared FV) or _BPF_ (BPF-specific).
+# (The full BPF job treats _BPF_ as implying _BPF-SAFE_ via the focus regex.)
 if [[ $FELIX_TEST_GROUP =~ bpf ]]; then
-  export FV_FOCUS=BPF-SAFE
+  export FV_FOCUS='BPF-SAFE|_BPF_'
   JOB_TAG+="bpf"
   TEST_REPORT_NAME+="BPF/"
   FV_NO_PREREQ_TARGET=fv-bpf-no-prereqs
@@ -41,10 +42,10 @@ elif [[ $FELIX_TEST_GROUP =~ 24.04 ]]; then
   export IMAGE_FAMILY=ubuntu-2404-lts-amd64
   JOB_TAG+="2404"
   TEST_REPORT_NAME+="Ubuntu-24.04/"
-elif [[ $FELIX_TEST_GROUP =~ 25.10 ]]; then
-  export IMAGE_FAMILY=ubuntu-2510-amd64
-  JOB_TAG+="2510"
-  TEST_REPORT_NAME+="Ubuntu-25.10/"
+elif [[ $FELIX_TEST_GROUP =~ 26.04 ]]; then
+  export IMAGE_FAMILY=ubuntu-2604-lts-amd64
+  JOB_TAG+="2604"
+  TEST_REPORT_NAME+="Ubuntu-26.04/"
 else
   echo "Unknown OS version in FELIX_TEST_GROUP: $FELIX_TEST_GROUP"
   exit 1

@@ -16,7 +16,7 @@ import (
 // NetworkSetApplyConfiguration represents a declarative configuration of the NetworkSet type for use
 // with apply.
 type NetworkSetApplyConfiguration struct {
-	v1.TypeMetaApplyConfiguration    `json:",inline"`
+	v1.TypeMetaApplyConfiguration    `json:""`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *NetworkSetSpecApplyConfiguration `json:"spec,omitempty"`
 }

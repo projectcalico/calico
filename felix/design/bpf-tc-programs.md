@@ -16,7 +16,7 @@ limitations under the License.
 
 # eBPF dataplane — TC program layout
 
-How the per-interface BPF programs are organised: the attach mechanisms (clsact, TCX, netkit) and the netkit-specific concessions that follow, the per-interface preamble, the two-tier jump maps that decouple per-endpoint policy from generic packet-handling, the `skb->cb` allow/deny convention, and the fast/debug path machinery. Also covers the `cali_iface` ifstate map and the attach-gap protection it enables.
+How the per-interface BPF programs are organised: the attach mechanisms (clsact, TCX, netkit), how one is selected and how a device moves between them, the netkit-specific concessions that follow, the per-interface preamble, the two-tier jump maps that decouple per-endpoint policy from generic packet-handling, the `skb->cb` allow/deny convention, and the fast/debug path machinery. Also covers the `cali_iface` ifstate map and the attach-gap protection it enables.
 
 This is one of several sub-designs for the eBPF dataplane. See
 [`bpf-overview.md`](./bpf-overview.md) for the packet-path mental
@@ -52,13 +52,20 @@ kernel mechanisms, selected per interface:
   (`tc.IsNetkitSupported` in `felix/bpf/tc/attach.go`) and only
   uses netkit attachment for the workload interfaces it
   manages — host or data-plane netkit devices are not Felix's
-  concern. The internal signal `AttachPoint.Netkit` is set
-  separately from the user-facing `BPFAttachType` enum so that
-  the override is scoped to Felix's own detection.
+  concern.
+
+`BPFAttachType` selects between them. Its default, `Netkit`,
+means netkit where it applies and TCX everywhere else; `TCX` and
+`TC` name a single mechanism and so opt the node out of netkit
+attachment. `tc.ResolveAttachType` turns the option into a
+mechanism — only ever TC or TCX, carried on every attach point —
+plus whether netkit attachment is allowed. The internal
+`AttachPoint.Netkit` signal stays separate from the enum so the
+attach layer remains two-valued.
 
 A netkit-enabled cluster is not a wholesale swap. Felix selects
 the attach mechanism per attach point at attach time
-(`calculateTCAttachPoint` in `bpf_ep_mgr.go`): TC clsact or TCX
+(`doApplyPolicy` in `bpf_ep_mgr.go`): TC clsact or TCX
 for HEPs, tunnels, the bpfnat and loopback pair, and any workload
 interface that is still a regular veth; netkit only for workload
 interfaces that are themselves netkit devices. A single Felix
@@ -66,6 +73,27 @@ process therefore programs both styles concurrently — the
 supporting machinery (jump-map sets, globals plumbing, cleanup
 paths) handles both in parallel rather than switching wholesale
 when netkit is enabled.
+
+### Leaving netkit attachment
+
+Selecting `TCX` or `TC` restarts Felix and moves existing netkit
+devices onto that mechanism at start of day; the devices stay
+netkit and no pod is recreated. Three cleanup points make the
+switch safe:
+
+- `cleanUpNetkitAttach` (`felix/bpf/tc/attach.go`) drops the
+  leftover netkit link, mirroring the netkit path's cleanup of
+  leftover TC/TCX state. Without it the device would run both
+  dataplanes at once, each with its own policy and conntrack
+  state. Detaching is safe because a netkit pair created with
+  `NETKIT_POLICY_FORWARD` and no programs forwards like a veth.
+- `wepStateFillJumps` returns jump-map indices to whichever
+  allocator issued them — the two are disjoint — using the
+  `netkitJumps` record, which at start of day comes from the
+  netkit link pin rather than the device type, since the device
+  is still netkit while the mechanism may already have changed.
+- `ensureQdisc` keys off the mechanism, not the link type, so a
+  TC-driven device gets the qdisc it now needs.
 
 The packet-handling code is mechanism-agnostic — same preamble,
 same jump-map layout, same policy program — with four
@@ -95,8 +123,9 @@ netkit-specific concessions:
   `skb_at_tc_ingress` context; netkit programs run in xmit
   context where the helper silently drops the packet. Felix
   forces `RedirectPeer = false` on netkit attach points so the
-  FIB path uses plain `bpf_redirect`. Set in
-  `calculateTCAttachPoint` in `bpf_ep_mgr.go`.
+  FIB path uses plain `bpf_redirect`. Set in `doApplyPolicy` in
+  `bpf_ep_mgr.go`, alongside the rest of the netkit override, so
+  a device driven by TC/TCX gets `bpf_redirect_peer` back.
 - **Synchronous detach on cleanup.** `detachAndRemoveLinkPins`
   in `felix/bpf/tc/cleanup.go` opens each pinned link, calls
   `Detach()`, and only then unlinks the pin file. The same
@@ -120,7 +149,29 @@ XDP has an equivalent preamble in `xdp_preamble.c`. The cgroup
 connect-time hooks ([bpf-services.md → Connect-Time Load Balancer (CTLB)](./bpf-services.md)) are attached directly — they have no preamble.
 
 Because the preamble is cheap to reload, Felix can swap it per
-interface without re-verifying the large program chain it fronts.
+interface without re-verifying the large program chain it fronts — and
+must, since it bakes per-interface config (jump-map indices, host IP,
+flags) into `.rodata`, some of which changes without a restart. So the
+preamble is re-loaded, and re-verified, on every attach.
+
+The preamble calls `bpf_trace_printk` on its drop/error paths
+regardless of `BPFLogLevel`. Under kernel `lockdown=confidentiality`
+ftrace is disabled, so every load makes the kernel log `could not
+enable bpf_trace_printk events`. Felix detects this at startup
+(`bpf.KernelLockdownConfidentiality`) and instead loads
+trace-printk-free preamble variants (`*_notrace.o`,
+`AttachPoint.NoTracePrintk`), forcing `BPFLogLevel: Debug` off on such
+nodes.
+
+The main programs avoid `_notrace` duplicates (which would double the
+program matrix): each carries a `struct prog_flags` in its own frozen
+`.rodata.prog_flags` section. Felix sets `no_trace_printk` there before
+load (`bpf.SetNoTracePrintk` → `Map.SetProgFlags`); the frozen constant
+lets the verifier fold the flag and dead-code-eliminate `skb_log` (the
+policy `Log` action, which references the trace helper regardless of
+`BPFLogLevel`). **Per-program, load-time flags belong in `struct
+prog_flags`** — it is the vehicle for them, distinct from the node-wide
+globals.
 
 ### Two-tier jump maps
 
@@ -172,6 +223,10 @@ ingress/egress or XDP), whether the interface is a WEP, HEP, tunnel,
 DSR-enabled, cgroup, etc. `LoadObj` loads the object at most once per
 `AttachType` and returns a `Layout` that maps every sub-program to the
 jump-map index it was placed at.
+
+Whether the device encapsulates is deliberately *not* part of it. It is
+per-attach-point runtime state (the `IFACE_ENCAPS` global), so Calico's
+own overlay devices share the host object rather than each needing one.
 
 `GetApplicableSubProgs` filters the list based on capability: the
 host-CT-conflict helper is only loaded for HEP egress, the Maglev
@@ -260,6 +315,34 @@ drop rules apply. Confirmed (already-established) flows are allowed
 through directly — the policy check happened when the flow was
 created.
 
+`bpf_redirect_peer` (in `try_redirect_to_peer`,
+`felix/bpf-gpl/fib_co_re.h`) is a stronger form of the same forward: it
+delivers into the destination's network namespace, so the destination's
+program does not run at all. It is gated on the conntrack verdict being
+`CALI_CT_ESTABLISHED_BYPASS`, which means both endpoints approved their
+own leg.
+
+That gate assumes the endpoint that approved a leg is the endpoint the
+packet will keep reaching, and while routing is still converging it is
+not. A packet can be forwarded to one endpoint, be approved by it, and
+then — once the route it was missing lands — be retransmitted to a
+different endpoint that has never seen it. An approval granted by
+whoever happened to be on the path becomes an approval on behalf of
+whoever ends up receiving the traffic.
+
+`tc.c` already guards against exactly this by forcing policy on every
+TCP SYN, so the retransmitted SYN would be re-evaluated by its real
+destination. The peer redirect defeats that guard, because it removes
+the program that would apply it. Initial SYNs are therefore excluded
+from the peer redirect; established traffic still takes the fast path.
+
+`is_tcp_syn()` in `felix/bpf-gpl/conntrack.h` is the single spelling of
+that question, shared with the force-policy path, the ingress connlimit
+counter, the Istio DSCP mark, and the withholding of the bypass mark. It
+reads `CT_RES_SYN`, which `calico_ct_lookup()` sets from the packet's own
+flags and only on a lookup hit, so it answers "SYN on a flow we already
+track" — which is what each of those callers wants.
+
 ### Review notes for this section
 
 - A new sub-program added to the generic program chain needs:
@@ -285,6 +368,12 @@ created.
   through `*tables` should consult `fib_approve` (or an equivalent
   check) for the ifstate-ready flag; otherwise it reopens the
   attach-gap hole.
+- A path that skips the destination endpoint's program must not treat
+  `CALI_CT_ESTABLISHED_BYPASS` as proof that *this* destination ran
+  policy. A leg can have been approved by a different endpoint the
+  packet reached earlier, while routing was still converging. Any such
+  path needs its own new-connection check — for TCP that is an initial
+  SYN; UDP has no equivalent and needs a different signal.
 - Helpers and maps keyed by the host-side ifindex must read
   `host_ifindex` from globals first and fall back to
   `skb->ifindex` only when it is zero. Reading `skb->ifindex`
@@ -310,17 +399,9 @@ created.
 
 ---
 
-## Keep this doc in sync with the code
+## Cross-cutting rules
 
-A change to how the BPF dataplane works in the area this file
-covers must update the relevant section in the same PR — new
-mechanism, new flag, new map field, new config knob, or any
-change to the packet path. Exemptions: (a) bug fix restoring
-documented behaviour, (b) mechanical refactor with no observable
-change, (c) comment / log-message edits, (d) dependency bumps.
-If in doubt, update.
-
-Cross-cutting rules that apply to **every** BPF change (map
-versioning, mark discipline, sub-program registration, kernel-
-version sensitivity) live in
+Rules that apply to **every** BPF change (map versioning, mark
+discipline, sub-program registration, kernel-version sensitivity)
+live in
 [`bpf-overview.md` → Cross-cutting review notes](./bpf-overview.md).

@@ -11,7 +11,6 @@ spec:
     listKind: FelixConfigurationList
     plural: felixconfigurations
     singular: felixconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -63,12 +62,18 @@ spec:
                 bpfAttachType:
                   description: |-
                     BPFAttachType controls how are the BPF programs at the network interfaces attached.
-                    By default `TCX` is used where available to enable easier coexistence with 3rd party programs.
-                    `TC` can force the legacy method of attaching via a qdisc. `TCX` falls back to `TC` if `TCX` is not available.
-                    [Default: TCX]
+                    By default `Netkit` is used, which attaches via the netkit API on workload interfaces that are
+                    netkit devices and via `TCX` on every other interface. `TCX` is used where available to enable
+                    easier coexistence with 3rd party programs. `TC` can force the legacy method of attaching via a
+                    qdisc. `TCX` falls back to `TC` if `TCX` is not available.
+                    Setting this to `TCX` or `TC` also makes Felix drive existing netkit devices with that mechanism
+                    instead of the netkit API, which is required before downgrading to a release without netkit
+                    support.
+                    [Default: Netkit]
                   enum:
                     - TC
                     - TCX
+                    - Netkit
                   type: string
                 bpfCTLBLogFilter:
                   description: |-
@@ -78,6 +83,7 @@ spec:
                     [Default: unset - means logs are emitted when BPFLogLevel id debug and BPFLogFilters not set.]
                   type: string
                 bpfConnectTimeLoadBalancing:
+                  default: TCP
                   description: |-
                     BPFConnectTimeLoadBalancing when in BPF mode, controls whether Felix installs the connect-time load
                     balancer. The connect-time load balancer is required for the host to be able to reach Kubernetes services
@@ -251,6 +257,8 @@ spec:
                     BPFExtToServiceConnmark in BPF mode, controls a 32bit mark that is set on connections from an
                     external client to a local service. This mark allows us to control how packets of that
                     connection are routed within the host and how is routing interpreted by RPF check. [Default: 0]
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 bpfExternalServiceMode:
                   description: |-
@@ -277,6 +285,7 @@ spec:
                     workloads and services. [Default: true - bypass Linux conntrack]
                   type: boolean
                 bpfHostNetworkedNATWithoutCTLB:
+                  default: Enabled
                   description: |-
                     BPFHostNetworkedNATWithoutCTLB when in BPF mode, controls whether Felix does a NAT without CTLB. This along with BPFConnectTimeLoadBalancing
                     determines the CTLB behavior. [Default: Enabled]
@@ -303,23 +312,21 @@ spec:
                     packets from external sources are dropped. [Default: true]
                   type: boolean
                 bpfJITHardening:
-                  allOf:
-                    - enum:
-                        - Auto
-                        - Strict
-                    - enum:
-                        - Auto
-                        - Strict
                   description: |-
                     BPFJITHardening controls BPF JIT hardening. When set to "Auto", Felix will set JIT hardening to 1
                     if it detects the current value is 2 (strict mode that hurts performance). When set to "Strict",
                     Felix will not modify the JIT hardening setting. [Default: Auto]
+                  enum:
+                    - Auto
+                    - Strict
                   type: string
                 bpfKubeProxyHealthzPort:
                   description: |-
                     BPFKubeProxyHealthzPort, in BPF mode, controls the port that Felix's embedded kube-proxy health check server binds to.
                     The health check server is used by external load balancers to determine if this node should receive traffic.
                     Set to 0 to disable the health check server.  [Default: 10256]
+                  maximum: 65535
+                  minimum: 0
                   type: integer
                 bpfKubeProxyIptablesCleanupEnabled:
                   description: |-
@@ -368,6 +375,8 @@ spec:
                     and thus the amount of memory reserved.
 
                     [Default: 100]
+                  maximum: 3000
+                  minimum: 1
                   type: integer
                 bpfMaglevMaxServices:
                   description: |-
@@ -375,6 +384,8 @@ spec:
                     services that Felix will allocate lookup-tables for.
 
                     [Default: 100]
+                  maximum: 3000
+                  minimum: 1
                   type: integer
                 bpfMapSizeConntrack:
                   description: |-
@@ -436,6 +447,18 @@ spec:
                     to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and
                     tunnel IPs).
                   type: integer
+                bpfOverlayHostSourceIP:
+                  description: |-
+                    BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked
+                    (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  "TunnelAddress" (the default)
+                    assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
+                    of clusters upgraded from earlier releases.  "HostAddress" uses the node's own IP directly and does not
+                    assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel
+                    device IP.  [Default: TunnelAddress]
+                  enum:
+                    - TunnelAddress
+                    - HostAddress
+                  type: string
                 bpfPSNATPorts:
                   anyOf:
                     - type: integer
@@ -516,6 +539,8 @@ spec:
                   description: |-
                     DebugPort if set, enables Felix's debug HTTP port, which allows memory and CPU profiles
                     to be retrieved.  The debug port is not secure, it should not be exposed to the internet.
+                  maximum: 65535
+                  minimum: 0
                   type: integer
                 debugSimulateCalcGraphHangAfter:
                   description: |-
@@ -658,6 +683,7 @@ spec:
                   pattern: ^([a-zA-Z0-9-_]+=([^=]+),)*([a-zA-Z0-9-_]+=([^=]+))?$
                   type: string
                 floatingIPs:
+                  default: Disabled
                   description: |-
                     FloatingIPs configures whether or not Felix will program non-OpenStack floating IP addresses.  (OpenStack-derived
                     floating IPs are always programmed, regardless of this setting.)
@@ -899,11 +925,15 @@ spec:
                     values mean lower priority.  Elevated priority is used during VM live migration, and for
                     optimal behaviour IPv4ElevatedRoutePriority must be less than IPv4NormalRoutePriority
                     [Default: 512]
+                  maximum: 2147483646
+                  minimum: 1
                   type: integer
                 ipv4NormalRoutePriority:
                   description: |-
                     Route Priority value for a normal priority Calico-programmed IPv4 route.  Note, higher
                     values mean lower priority. [Default: 1024]
+                  maximum: 2147483646
+                  minimum: 1
                   type: integer
                 ipv6ElevatedRoutePriority:
                   description: |-
@@ -911,11 +941,15 @@ spec:
                     values mean lower priority.  Elevated priority is used during VM live migration, and for
                     optimal behaviour IPv6ElevatedRoutePriority must be less than IPv6NormalRoutePriority
                     [Default: 512]
+                  maximum: 2147483646
+                  minimum: 1
                   type: integer
                 ipv6NormalRoutePriority:
                   description: |-
                     Route Priority value for a normal priority Calico-programmed IPv6 route.  Note, higher
                     values mean lower priority. [Default: 1024]
+                  maximum: 2147483646
+                  minimum: 1
                   type: integer
                 ipv6Support:
                   description:
@@ -983,6 +1017,8 @@ spec:
                   description: |-
                     LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format "N/unit",
                     where N is a number and unit is one of: second, minute, hour, or day. For example: "10/second" or "100/hour".
+                    When LogConnectionTransitions is enabled, this also bounds the follow-up logs: a connection whose
+                    initial log was suppressed by this rate limit gets no follow-up log either.
                   pattern: ^[1-9]\d{0,3}/(?:second|minute|hour|day)$
                   type: string
                 logActionRateLimitBurst:
@@ -992,6 +1028,35 @@ spec:
                   maximum: 9999
                   minimum: 0
                   type: integer
+                logConnectionTransitions:
+                  description: |-
+                    LogConnectionTransitions controls whether Felix emits an additional kernel log recording the
+                    first observed response for each connection that matched a policy rule with a Log action.
+                    When set to FirstResponseAfterLog, each connection whose initial log was emitted gets one
+                    follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the
+                    transition: "-est" when the first reply packet is seen, "-rst" when the response is a TCP
+                    RST (connection refused), or "-icmp-err" when the response is a related ICMP error (e.g.
+                    port unreachable). The log body is the standard kernel packet log of the response packet.
+                    For "-est" and "-rst" its 5-tuple is the original policy Log line's with source and
+                    destination swapped; for "-icmp-err" the bracketed inner header carries the original
+                    5-tuple unswapped. A logged connection with no follow-up log never received a response.
+                    Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log
+                    either, so every follow-up log pairs with an initial one. Enabling this consumes one bit
+                    from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+                    [Default: Disabled]
+                  enum:
+                    - Disabled
+                    - FirstResponseAfterLog
+                  type: string
+                logConnectionTransitionsPrefix:
+                  description: |-
+                    LogConnectionTransitionsPrefix is the log prefix used for the logs emitted when
+                    LogConnectionTransitions is enabled; the transition suffix ("-est", "-rst" or "-icmp-err")
+                    is appended to it. Unlike LogPrefix, it does not support %-specifiers (such as %p): the
+                    rules that emit these logs are shared by all policies, so per-policy values cannot be
+                    substituted and any %-specifiers are rendered literally. [Default: calico-response]
+                  pattern: "^([a-zA-Z0-9%: /_-])*$"
+                  type: string
                 logDebugFilenameRegex:
                   description: |-
                     LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
@@ -1104,6 +1169,25 @@ spec:
                     blocks traffic with a "drop" action. If you want to use a "reject" action instead you can configure it here.
                   pattern: ^(?i)(Drop|Reject)?$
                   type: string
+                nftablesFlowTableDataIfacePattern:
+                  description: |-
+                    NFTablesFlowTableDataIfacePattern is a regular expression that controls which host
+                    interfaces are added to the nftables flowtable, so that traffic forwarded between those
+                    interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
+                    offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
+                    is not Disabled. [Default: ""]
+                  type: string
+                nftablesFlowTableOffload:
+                  default: Disabled
+                  description: |-
+                    NFTablesFlowTableOffload controls which traffic nftables flowtable offload is enabled for,
+                    for improved forwarding performance. When set to "All", established connections accepted by
+                    Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
+                    nftables mode is active. [Default: Disabled]
+                  enum:
+                    - All
+                    - Disabled
+                  type: string
                 nftablesMangleAllowAction:
                   description: |-
                     NftablesMangleAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict
@@ -1122,9 +1206,10 @@ spec:
                   type: integer
                 nftablesMode:
                   default: Auto
-                  description:
-                    "NFTablesMode configures nftables support in Felix. [Default:
-                    Auto]"
+                  description: |-
+                    NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the
+                    nftables dataplane if kube-proxy is detected to be running in nftables mode.
+                    [Default: Auto]
                   enum:
                     - Disabled
                     - Enabled
@@ -1164,14 +1249,35 @@ spec:
                     like Application layer policy. [Default: Empty]
                   type: string
                 programClusterRoutes:
+                  default: EnabledIPIPOnly
                   description: |-
-                    ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
-                    when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled,
-                    it is expected that confd and BIRD will program that route. When ProgramClusterRoutes is Enabled, Felix program that route.
-                    Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Disabled]
+                    ProgramClusterRoutes controls which "cluster routes" Felix programs, i.e. the routes that
+                    a node needs in order to reach workloads on other nodes.  It only applies to IP Pools
+                    with vxlanMode: Never; Felix always programs the cluster routes for IP Pools with
+                    vxlanMode: Always or vxlanMode: CrossSubnet.  The routes that Felix does not program here
+                    are expected to be programmed by Calico's BGP stack instead.  Below, an IPIP IP Pool is
+                    one with ipipMode: Always or CrossSubnet, and an unencapsulated one has ipipMode and
+                    vxlanMode both Never.
+
+                    - Disabled: Felix programs no cluster routes.
+                    - EnabledIPIPOnly: Felix programs them for IPIP IP Pools.
+                    - EnabledNoEncapOnly: Felix programs them for unencapsulated IP Pools.
+                    - Enabled: Felix programs them for both.
+
+                    This field must be kept consistent with BGPConfiguration.ProgramClusterRoutes, which
+                    makes the same choice from BIRD's side.  If both Felix and BIRD are enabled for the same
+                    kind of IP Pool they will fight over the routes; if neither is, there will be no cluster
+                    routes at all.
+
+                    Note: leaving the IPIP cluster routes to BGP, which the Disabled and EnabledNoEncapOnly
+                    values do, is deprecated as of v3.33 and will be removed in v3.35.
+
+                    [Default: EnabledIPIPOnly]
                   enum:
                     - Enabled
                     - Disabled
+                    - EnabledIPIPOnly
+                    - EnabledNoEncapOnly
                   type: string
                 prometheusGoMetricsEnabled:
                   description: |-
@@ -1191,7 +1297,12 @@ spec:
                 prometheusMetricsClientAuth:
                   description: |-
                     PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
-                    This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+                    This determines how the server validates client certificates. Default is "NoClientCert".
+                  enum:
+                    - RequireAndVerifyClientCert
+                    - RequireAnyClientCert
+                    - VerifyClientCertIfGiven
+                    - NoClientCert
                   type: string
                 prometheusMetricsEnabled:
                   description:
@@ -1412,11 +1523,15 @@ spec:
                   description:
                     "WireguardListeningPort controls the listening port used
                     by IPv4 Wireguard. [Default: 51820]"
+                  maximum: 65535
+                  minimum: 1
                   type: integer
                 wireguardListeningPortV6:
                   description:
                     "WireguardListeningPortV6 controls the listening port
                     used by IPv6 Wireguard. [Default: 51821]"
+                  maximum: 65535
+                  minimum: 1
                   type: integer
                 wireguardMTU:
                   description:
@@ -1432,6 +1547,8 @@ spec:
                   description:
                     "WireguardRoutingRulePriority controls the priority value
                     to use for the Wireguard routing rule. [Default: 99]"
+                  maximum: 32765
+                  minimum: 1
                   type: integer
                 wireguardThreadingEnabled:
                   description: |-

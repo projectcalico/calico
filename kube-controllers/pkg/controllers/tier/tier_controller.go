@@ -16,6 +16,7 @@ package tier
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -105,12 +107,16 @@ func NewController(
 			c.queue.Add(tier.Name)
 		},
 		DeleteFunc: func(obj any) {
-			tier, ok := obj.(*v3.Tier)
-			if !ok {
-				logrus.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in tier delete handler")
+			// Only the name is needed, so use the deletion-handling key func:
+			// it unwraps the cache.DeletedFinalStateUnknown tombstone the
+			// informer may deliver, including one that carries only a key.
+			// Tiers are cluster-scoped, so the key is the name.
+			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+			if err != nil {
+				logrus.WithError(err).Error("Unexpected object in tier delete handler")
 				return
 			}
-			c.queue.Add(tier.Name)
+			c.queue.Add(key)
 		},
 	}
 	if _, err := tierInformer.AddEventHandler(tierHandlers); err != nil {
@@ -231,8 +237,8 @@ func (c *TierController) reconcile(name string) error {
 		// Tier is not being deleted — ensure it has a finalizer.
 		if !hasFinalizer(tier) {
 			logCtx.Info("Adding finalizer to Tier")
-			tier.SetFinalizers(append(tier.Finalizers, v3.TierFinalizer))
-			if _, err := c.cli.ProjectcalicoV3().Tiers().Update(c.ctx, tier, metav1.UpdateOptions{}); err != nil {
+			finalizers := append(slices.Clone(tier.Finalizers), v3.TierFinalizer)
+			if err := c.patchFinalizers(tier.Name, finalizers); err != nil {
 				return fmt.Errorf("failed to add finalizer: %v", err)
 			}
 		}
@@ -258,11 +264,29 @@ func (c *TierController) reconcile(name string) error {
 
 	// No policies left — remove the finalizer to allow deletion.
 	logCtx.Info("No policies remain in tier, removing finalizer")
-	tier.Finalizers = slices.DeleteFunc(tier.Finalizers, func(s string) bool { return s == v3.TierFinalizer })
-	if _, err := c.cli.ProjectcalicoV3().Tiers().Update(c.ctx, tier, metav1.UpdateOptions{}); err != nil {
+	finalizers := slices.DeleteFunc(slices.Clone(tier.Finalizers), func(s string) bool { return s == v3.TierFinalizer })
+	if err := c.patchFinalizers(tier.Name, finalizers); err != nil {
 		return fmt.Errorf("failed to remove finalizer: %v", err)
 	}
 	return nil
+}
+
+// patchFinalizers updates only the tier's finalizers via a merge patch. We patch
+// rather than Update the whole object so that status is left out of the request
+// body. Status is owned by the status subresource, and TierStatus is a non-pointer
+// struct, so a full Update always serializes it and the API server logs a spurious
+// `unknown field "status"` warning.
+func (c *TierController) patchFinalizers(name string, finalizers []string) error {
+	patch, err := json.Marshal(map[string]any{
+		"metadata": map[string]any{
+			"finalizers": finalizers,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("marshaling finalizer patch: %v", err)
+	}
+	_, err = c.cli.ProjectcalicoV3().Tiers().Patch(c.ctx, name, types.MergePatchType, patch, metav1.PatchOptions{})
+	return err
 }
 
 // policyCounts tracks the number of policies referencing a tier, broken down by kind.

@@ -337,7 +337,7 @@ func updateHostEndpointConfig(client ctrlclient.Client, desiredKCC v3.KubeContro
 			return fmt.Errorf("failed to toggle auto-creation of host endpoints")
 		}
 		return nil
-	}, 5*time.Second, 1*time.Second).Should(BeNil())
+	}, 2*time.Minute, 2*time.Second).Should(BeNil())
 }
 
 // getHostEndpointConfig returns the HostEndpoint config from a KCC, or nil if

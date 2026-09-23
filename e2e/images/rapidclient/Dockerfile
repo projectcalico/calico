@@ -1,7 +1,10 @@
 FROM scratch
 
-ARG BINARY_PATH=rapidclient
+# TARGETARCH is set by buildx per target platform; it selects the matching
+# pre-built static binary (bin/rapidclient-<arch>) so a single Dockerfile
+# produces a multi-arch manifest.
+ARG TARGETARCH
 
-COPY ${BINARY_PATH} /rapidclient
+COPY bin/rapidclient-${TARGETARCH} /rapidclient
 
 ENTRYPOINT ["/rapidclient"]

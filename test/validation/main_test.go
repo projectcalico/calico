@@ -15,8 +15,11 @@
 package validation_test
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,10 +31,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	sigsyaml "sigs.k8s.io/yaml"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -40,9 +43,8 @@ var (
 	testClient client.Client
 	testEnvObj *envtest.Environment
 
-	// admissionPoliciesEnabled is true when the envtest API server supports
-	// MutatingAdmissionPolicy (K8s >= 1.32). Admission tests should skip
-	// when this is false.
+	// admissionPoliciesEnabled is true when the API server serves
+	// MutatingAdmissionPolicy at v1beta1. Admission tests skip when false.
 	admissionPoliciesEnabled bool
 )
 
@@ -59,8 +61,8 @@ func admissionDir() string {
 	return filepath.Join(testutils.FindRepoRoot(), "api", "admission")
 }
 
-// envtestSupportsMAP checks if the envtest kube-apiserver binary supports
-// MutatingAdmissionPolicy (requires K8s >= 1.32).
+// envtestSupportsMAP checks if the envtest kube-apiserver binary serves
+// MutatingAdmissionPolicy at v1beta1, which K8s 1.34 is the first to do.
 func envtestSupportsMAP() bool {
 	assets := os.Getenv("KUBEBUILDER_ASSETS")
 	if assets == "" {
@@ -83,7 +85,7 @@ func envtestSupportsMAP() bool {
 	if _, err := fmt.Sscanf(parts[1], "%d", &minor); err != nil {
 		return false
 	}
-	return minor >= 32
+	return minor >= 34
 }
 
 // installAdmissionPolicies applies all YAML files in the admission directory to the envtest cluster.
@@ -100,12 +102,25 @@ func installAdmissionPolicies(c client.Client) error {
 		if err != nil {
 			return fmt.Errorf("reading %s: %w", entry.Name(), err)
 		}
-		obj := &unstructured.Unstructured{}
-		if err := sigsyaml.Unmarshal(data, &obj.Object); err != nil {
-			return fmt.Errorf("unmarshaling %s: %w", entry.Name(), err)
-		}
-		if err := c.Create(context.Background(), obj); err != nil {
-			return fmt.Errorf("creating %s: %w", entry.Name(), err)
+		// An admission file may contain multiple YAML documents (e.g. a policy
+		// and its binding), so decode and create each one. Installing only the
+		// first document would, for example, create a ValidatingAdmissionPolicy
+		// without its binding, leaving the policy unenforced.
+		dec := utilyaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
+		for {
+			obj := &unstructured.Unstructured{}
+			if err := dec.Decode(&obj.Object); err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				return fmt.Errorf("decoding %s: %w", entry.Name(), err)
+			}
+			if len(obj.Object) == 0 {
+				continue
+			}
+			if err := c.Create(context.Background(), obj); err != nil {
+				return fmt.Errorf("creating %s: %w", entry.Name(), err)
+			}
 		}
 	}
 	return nil
@@ -147,8 +162,8 @@ func TestMain(m *testing.M) {
 		CRDDirectoryPaths: []string{crdDir()},
 	}
 
-	// MutatingAdmissionPolicy requires K8s >= 1.32. Only enable on supported versions
-	// so the test suite still works on older envtest binaries (e.g., ut-validation-min-k8s).
+	// Older API servers refuse to start with this runtime-config, so leave it
+	// off for the ut-validation-min-k8s lane.
 	admissionPoliciesEnabled = envtestSupportsMAP()
 	if admissionPoliciesEnabled {
 		testEnvObj.ControlPlane.GetAPIServer().Configure().

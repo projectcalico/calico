@@ -22,7 +22,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/docopt/docopt-go"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -33,8 +32,6 @@ import (
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	lcconfig "github.com/projectcalico/calico/libcalico-go/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -47,39 +44,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-func Import(args []string) error {
-	doc := `Usage:
-  <BINARY_NAME> datastore migrate import --filename=<FILENAME> [--config=<CONFIG>] [--allow-version-mismatch]
-
-Options:
-  -h --help                    Show this screen.
-  -f --filename=<FILENAME>     Filename to use to import resources.  If set to
-                               "-" loads from stdin.
-  -c --config=<CONFIG>         Path to the file containing connection
-                               configuration in YAML or JSON format.
-                               [default: ` + constants.DefaultConfigPath + `]
-     --allow-version-mismatch  Allow client and cluster versions mismatch.
-
-Description:
-  Import the contents of the etcdv3 datastore from the file created by the
-  export command.
-`
-	// Replace all instances of BINARY_NAME with the name of the binary.
-	name, _ := util.NameAndDescription()
-	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
-
-	parsedArgs, err := docopt.ParseArgs(doc, args, "")
-	if err != nil {
-		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
-	}
-	if len(parsedArgs) == 0 {
-		return nil
-	}
-
-	// Note: Intentionally not check version mismatch for this command
-
-	cf := parsedArgs["--config"].(string)
-	cfg, err := clientmgr.LoadClientConfig(cf)
+// Import imports the contents of the etcdv3 datastore from a file created by
+// Export. Version mismatch is intentionally not checked for this command.
+func Import(config, filename string) error {
+	cfg, err := clientmgr.LoadClientConfig(config)
 	if err != nil {
 		log.Info("Error loading config")
 		return err
@@ -106,7 +74,7 @@ Description:
 		return fmt.Errorf("error applying the CRDs necessary to begin datastore import: %s", err)
 	}
 
-	err = checkCalicoResourcesNotExist(parsedArgs, client)
+	err = checkCalicoResourcesNotExist(config, client)
 	if err != nil {
 		// TODO: Add something like 'calicoctl datastore migrate clean' to delete all the CRDs to wipe out the Calico resources.
 		return fmt.Errorf("datastore already has Calico resources: %s. Clear out all Calico resources by deleting all Calico CRDs", err)
@@ -124,14 +92,12 @@ Description:
 	if err != nil {
 		return fmt.Errorf("error while checking if datastore was locked: %s", err)
 	} else if !locked {
-		err := Lock([]string{"datastore", "migrate", "lock", "-c", cf})
-		if err != nil {
+		if err := Lock(config, false); err != nil {
 			return fmt.Errorf("error while attempting to lock the datastore for import: %s", err)
 		}
 	}
 
 	// Split file into v3 API, ClusterGUID, and IPAM components
-	filename := parsedArgs["--filename"].(string)
 	v3Yaml, clusterInfoJson, ipamJson, err := splitImportFile(filename)
 	if err != nil {
 		return fmt.Errorf("error while reading migration file: %s", err)
@@ -203,7 +169,7 @@ func splitImportFile(filename string) ([]byte, []byte, []byte, error) {
 	return split[0], split[1], split[2], nil
 }
 
-func checkCalicoResourcesNotExist(args map[string]any, c client.Interface) error {
+func checkCalicoResourcesNotExist(config string, c client.Interface) error {
 	// Loop through all the v3 resources to see if anything is returned
 	extendedV3Resources := append(allV3Resources, "clusterinfo")
 	for _, r := range extendedV3Resources {
@@ -216,7 +182,7 @@ func checkCalicoResourcesNotExist(args map[string]any, c client.Interface) error
 		mockArgs := map[string]any{
 			"<KIND>":   r,
 			"<NAME>":   []string{},
-			"--config": args["--config"].(string),
+			"--config": config,
 			"--export": false,
 			"--output": "ps",
 			"get":      true,

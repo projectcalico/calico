@@ -77,6 +77,17 @@ every other tail-caller ([bpf-tc-programs.md → TC program layout](./bpf-tc-pro
 - `skb->cb[0]` = fast-path main index (no match → go here),
 - `skb->cb[1]` = debug-path main index (match → go here).
 
+### Loops and `ip6 protochain`
+
+`ip6 protochain`, which walks the IPv6 extension-header chain, compiles to
+a loop with a backward `BPF_JA` that the eBPF verifier rejects. `cBPF2eBPF`
+**unrolls** it: a back-edge becomes a forward jump into the next of
+`maxLoopUnroll` copies of the loop body, and the last copy falls through to
+`miss` (chain longer than the bound ⇒ no match). This is a bounded walk of
+the extension-header chain, like the dataplane's own IPv6 header parsing in
+`felix/bpf-gpl/parsing6.h`. Only a single reducible loop is supported;
+anything more complex is rejected at compile time.
+
 ### Integration with the preamble
 
 `tc_preamble.c` checks `globals->data.log_filter_jmp`. If it is not
@@ -117,6 +128,12 @@ per-interface.
   machinery to load two path-variants of every sub-program is
   already there; duplicating it across filter types is how this
   area becomes unmaintainable.
+- `maxLoopUnroll` in `filter.go` is a correctness/size trade-off, not a
+  free knob: every increment replicates the whole loop body once more in
+  every filter that contains a loop. It is intentionally smaller than the
+  extension-header bound the C dataplane walks (`felix/bpf-gpl/parsing6.h`,
+  which goes up to 8) — a debug log filter does not need to follow every
+  chain to the end. Raise it only with a concrete need.
 
 
 
@@ -145,7 +162,7 @@ should not assume changes propagate to the other.
 ### Enablement
 
 Flow logs are gated globally by the `FLOWLOGS_ENABLED` flag
-(`felix/bpf-gpl/bpf.h` / `globals.h`, bit
+(`felix/bpf-gpl/cali_bpf.h` / `globals.h`, bit
 `CALI_GLOBALS_FLOWLOGS_ENABLED`). Set per-attach-type through
 the `FlowLogsEnabled` field on the AttachPoint. When the flag
 is off, the emission paths in the BPF programs are compiled to
@@ -322,10 +339,28 @@ on connection close.
   purges (LRU eviction, idle TCPEstablished) don't leak slots.
 - **Decrement (safety net)**: a userspace `ConnLimitScanner`
   (`felix/bpf/conntrack/connlimit_scanner.go`) recounts established
-  TCP CT entries every ~30s and overwrites `current_count` in
-  `cali_qos_conn` via `BPF_F_LOCK` batch updates. It corrects any
-  residual drift the fast/cleanup paths missed and skips entries
-  with `CONNLIMIT_DEC` already set so it doesn't double-count.
+  TCP CT entries once per CT scan and overwrites `current_count` in
+  `cali_qos_conn` via `BPF_F_LOCK` batch updates. It skips a close
+  both endpoints agreed on — either FIN bit — which the fast path has
+  already accounted for, and nothing else.
+
+**An RST releases no slot.** One RST is a single packet from either
+side, so a pod holding only `CAP_NET_RAW` could forge one per
+connection and admit an extra; two FINs cannot be forged by one party.
+An RST-closed connection keeps its slot until its entry is purged — at
+`TCPResetSeen`, or at the two-minute residual window if a packet crossed
+the close — and the next recount rebases.
+
+For the same reason the recount skips no RST state, and no other
+signal a pod can refresh at will: anything it honours is something a
+pod can hide its live connections behind.
+
+Host-originated traffic — including from host-networked pods — is
+exempt from the ingress limit: it takes the `skip_policy` path in
+`tc.c` and the admission check is gated on `!policy_skipped`, so it is
+neither counted nor limited. Same in iptables/nftables, where the
+connlimit rule sits in `cali-tw-<iface>`, a chain host-origin traffic
+never reaches.
 
 The per-direction `INGRESS_CONN_LIMIT_CONFIGURED` /
 `EGRESS_CONN_LIMIT_CONFIGURED` flags gate the BPF connlimit code
@@ -371,10 +406,38 @@ global, `ISTIO_DSCP`; see Istio ambient mode integration for the integration.
   decision is part of the atomic section. Dropping outside the lock
   allows overshoot.
 - Any change to connlimit decrement paths must preserve the
-  `CONNLIMIT_DEC` idempotence flag — both the fast path (FIN/RST in
+  `CONNLIMIT_DEC` idempotence flag — both the fast path (both FINs in
   `calico_ct_lookup`) and the cleanup path (BPF conntrack cleanup
-  scanner) set it before decrementing, and the Go scanner skips
-  entries that carry it. Without that, drift accumulates upward.
+  scanner) set it before decrementing. It is what stops the same
+  close being counted twice when both paths see one entry.
+- `CONNLIMIT_DEC` is an idempotence latch, **not** a statement that
+  the connection is gone. Do not gate the userspace recount on it,
+  and do not add any other long-lived "already handled" marker that
+  the recount honours. The recount is the only path that can return
+  a slot, so anything it skips unconditionally is leaked for the
+  life of the entry — and the fast path claims the latch on signals
+  a live connection can survive (any RST, unvalidated). Keep the
+  skip conditions to state that clears itself or dies with the
+  entry: the per-leg FIN/RST bits.
+- The latch describes a decrement that is only meaningful while the
+  counter still reflects it, and the recount rebases the counter
+  every ~30s. That is why `calico_ct_lookup` releases the latch at
+  the same point it concludes an RST was spurious — two minutes of
+  continued traffic, where it also clears `v->rst_seen`. Without
+  that release, a connection that survived a spurious RST would find
+  the latch already taken when it genuinely closed, and free its
+  slot at recount speed rather than immediately. Release it with an
+  atomic AND on `type_flags_word`, mirroring the claim: a byte-wide
+  `ct_value_clear_flags()` would race with a concurrent claim on
+  another CPU. Note this re-arms the latch for that entry, so a
+  connection can be decremented once per spurious RST rather than
+  once ever; the recount bounds the resulting under-count either
+  way.
+- When choosing between holding a slot too long and releasing one
+  too early, hold. Over-counting fails closed — a pod is briefly
+  refused a connection it could have had. Under-counting fails open:
+  the limit stops being a limit, and if the under-count is permanent
+  an unauthenticated packet defeats it outright.
 - ep_mgr writes to `cali_qos` / `cali_qos_conn` must skip the
   UpdateWithFlags when the configured fields match the existing
   entry. The dataplane owns the dynamic fields between configuration
@@ -462,17 +525,9 @@ a convention shared with Istio ztunnel).
 
 ---
 
-## Keep this doc in sync with the code
+## Cross-cutting rules
 
-A change to how the BPF dataplane works in the area this file
-covers must update the relevant section in the same PR — new
-mechanism, new flag, new map field, new config knob, or any
-change to the packet path. Exemptions: (a) bug fix restoring
-documented behaviour, (b) mechanical refactor with no observable
-change, (c) comment / log-message edits, (d) dependency bumps.
-If in doubt, update.
-
-Cross-cutting rules that apply to **every** BPF change (map
-versioning, mark discipline, sub-program registration, kernel-
-version sensitivity) live in
+Rules that apply to **every** BPF change (map versioning, mark
+discipline, sub-program registration, kernel-version sensitivity)
+live in
 [`bpf-overview.md` → Cross-cutting review notes](./bpf-overview.md).

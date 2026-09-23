@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -46,7 +46,11 @@ type MapsDataplane interface {
 
 	MapUpdates() *MapUpdates
 	FinishMapUpdates(updates *MapUpdates)
-	LoadDataplaneState() error
+	LoadDataplaneState(ctx context.Context, mapNames []string) error
+
+	// InvalidateMapsCache discards our view of what is programmed, so that everything is
+	// reprogrammed. Used when the whole table is about to be recreated underneath us.
+	InvalidateMapsCache()
 }
 
 var _ MapsDataplane = &Maps{}
@@ -83,7 +87,7 @@ type Maps struct {
 	mapsWithDirtyMembers set.Set[string]
 
 	gaugeNumMaps prometheus.Gauge
-	opReporter   logutils.OpRecorder
+	opReporter   logrusr.OpRecorder
 	sleep        func(time.Duration)
 	logCxt       *logrus.Entry
 
@@ -100,7 +104,7 @@ func NewMaps(
 	nft knftables.Interface,
 	increfChain func(chain string),
 	decrefChain func(chain string),
-	recorder logutils.OpRecorder,
+	recorder logrusr.OpRecorder,
 ) *Maps {
 	return NewMapsWithShims(
 		ipVersionConfig,
@@ -119,7 +123,7 @@ func NewMapsWithShims(
 	nft knftables.Interface,
 	increfChain func(chain string),
 	decrefChain func(chain string),
-	recorder logutils.OpRecorder,
+	recorder logrusr.OpRecorder,
 ) *Maps {
 	familyStr := string(ipVersionConfig.Family)
 	familyLogger := logrus.WithFields(logrus.Fields{"family": ipVersionConfig.Family})
@@ -278,10 +282,9 @@ func (s *Maps) filterAndCanonicaliseMembers(mtype MapType, members map[string][]
 	return filtered
 }
 
-// tryResync attempts to bring our state into sync with the dataplane.  It scans the contents of the
-// maps in the dataplane and queues up updates to any maps that are out-of-sync.
-func (s *Maps) LoadDataplaneState() error {
-	// Log the time spent as we exit the function.
+// LoadDataplaneState resyncs map state using the provided list of map names
+// (typically obtained from a ListAll call by the caller).
+func (s *Maps) LoadDataplaneState(ctx context.Context, maps []string) error {
 	resyncStart := time.Now()
 	defer func() {
 		s.logCxt.WithFields(logrus.Fields{
@@ -294,21 +297,6 @@ func (s *Maps) LoadDataplaneState() error {
 
 	// Clear the dataplane metadata view, we'll build it back up again as we scan.
 	s.mapNameToProgrammedMetadata.Dataplane().DeleteAll()
-
-	// Load from the dataplane. Update our Dataplane() maps with the actual contents
-	// of the data plane.
-	//
-	// For any map that doesn't match the desired data plane state, we'll queue up an update.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-	defer cancel()
-	maps, err := s.nft.List(ctx, "map")
-	if err != nil {
-		if knftables.IsNotFound(err) {
-			// Table doesn't exist - nothing to resync.
-			return nil
-		}
-		return fmt.Errorf("error listing nftables maps: %s", err)
-	}
 
 	// We'll process each map in parallel, so we need a struct to hold the results.
 	// Once knftables is augmented to support reading many maps at once, we can remove this.
@@ -377,7 +365,7 @@ func (s *Maps) LoadDataplaneState() error {
 
 		memberTracker := s.getOrCreateMemberTracker(mapName)
 		numExtrasExpected := memberTracker.PendingDeletions().Len()
-		err = memberTracker.Dataplane().ReplaceFromIter(func(f func(k MapMember)) error {
+		err := memberTracker.Dataplane().ReplaceFromIter(func(f func(k MapMember)) error {
 			for item := range elemsSet.All() {
 				f(item)
 			}
@@ -423,6 +411,15 @@ func (s *Maps) LoadDataplaneState() error {
 	}
 
 	return nil
+}
+
+func (s *Maps) InvalidateMapsCache() {
+	s.logCxt.Debug("Discarding cached view of programmed maps.")
+	s.mapNameToProgrammedMetadata.Dataplane().DeleteAll()
+	for name, members := range s.mapNameToMembers {
+		members.Dataplane().DeleteAll()
+		s.updateDirtiness(name)
+	}
 }
 
 func (s *Maps) NFTablesMap(name string) *knftables.Map {
