@@ -124,7 +124,6 @@ github.com/spf13/cobra v1.10.2
 github.com/spf13/pflag v1.0.10
 github.com/stretchr/objx v0.5.3
 github.com/stretchr/testify v1.11.1
-github.com/urfave/cli v1.22.16
 github.com/urfave/cli/v3 v3.10.0
 github.com/x448/float16 v0.8.4
 github.com/xlab/treeprint v1.2.0
