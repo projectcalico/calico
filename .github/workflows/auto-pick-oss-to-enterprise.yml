@@ -1,18 +1,18 @@
-# Stage 2 of the auto-pick (security split): the privileged worker. Runs via
-# workflow_run from the trusted default branch, so the cross-repo token and the
-# Claude agent never run in the untrusted PR event's context. It has no PR
-# payload, so it re-derives the merged PR from the trigger's head SHA
-# (GitHub-set) and confirms it merged to master before doing anything.
+# Privileged worker (stage 2) of the OSS master -> Enterprise master auto-pick.
+# Runs via workflow_run from the trusted default branch and re-derives the merged
+# PR from the trigger's head SHA, so no untrusted PR payload reaches it.
 #
-# Flow: OSS master -> EE master. The git work is done by the generic
-# .github/workflows/scripts/oss-pick.sh (source/target passed in); Claude is
-# invoked ONLY to resolve conflicts by editing files.
+# Two jobs, so the write token never shares a runner with the Claude agent:
+#   pick    (Job A) clone (READ token) + cherry-pick + Claude resolve, then export
+#           the result as a git-format-patch artifact. No write token, no Slack.
+#   open-pr (Job B) fresh runner: git am the artifact (WRITE token), push, open
+#           the PR, DM the author.
 #
 # Auth (secrets/vars on projectcalico/calico):
-#   - CLAUDE_TOKEN: org Anthropic API key for the Claude action.
-#   - TIGERA_BOT_PAT: token with write access to tigera/calico-private
-#     (clone/push branches, open PRs, manage labels).
-#   - SLACK_MERGE_CAT_TOKEN + SLACK_NOTIFY_MAP: Slack DM to the PR author.
+#   CLAUDE_TOKEN              Anthropic API key                       (Job A)
+#   TIGERA_BOT_PAT_READONLY   read-only calico-private token          (Job A)
+#   TIGERA_BOT_PAT            write calico-private token              (Job B)
+#   SLACK_MERGE_CAT_TOKEN + SLACK_NOTIFY_MAP   author DM              (Job B)
 
 name: Auto-pick OSS PR into Enterprise
 
@@ -22,8 +22,8 @@ on:
     types: [completed]
 
 # Least privilege: every target write (push, gh pr create, labels) uses
-# TIGERA_BOT_PAT; github.token is read-only here (source clone, gh api reads,
-# the Claude action's actor-permission check). So no pull-requests: write.
+# TIGERA_BOT_PAT in Job B; github.token is read-only here (source reads, the
+# Claude action's actor-permission check). So no pull-requests: write.
 permissions:
   contents: read
   pull-requests: read
@@ -33,29 +33,37 @@ concurrency:
   group: auto-pick-oss-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: false
 
+env:
+  # This workflow's flow: OSS master -> EE master.
+  SOURCE_REPO: ${{ github.repository }}
+  SOURCE_REF: master
+  TARGET_REPO: tigera/calico-private
+  TARGET_BRANCH: master
+  EXTRA_LABELS: merge-oss-cherry-pick
+  TITLE_PREFIX: "[OSS pick] "
+
 jobs:
-  auto-pick:
+  # =========================================================================
+  # Job A: resolve + pick + Claude + export. READ-ONLY target token, no Slack.
+  # =========================================================================
+  pick:
     # Only act on a successful trigger run from the pull_request event.
     if: >
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     env:
-      # This workflow's flow: OSS master -> EE master.
-      SOURCE_REPO: ${{ github.repository }}
-      SOURCE_REF: master
-      TARGET_REPO: tigera/calico-private
-      TARGET_BRANCH: master
-      EXTRA_LABELS: merge-oss-cherry-pick
-      TITLE_PREFIX: "[OSS pick] "
-      # Common, NON-secret values set once for every step. github.token is
-      # already handed to the Claude action, so exposing it job-wide adds no
-      # risk. The Slack BOT TOKEN is deliberately NOT here: it stays per-notify
-      # step so it never enters the Claude step's (untrusted-content) env.
-      TARGET_LABEL: calico-private
       GH_TOKEN: ${{ github.token }}
-      PICK_NOTIFY_MAP: ${{ vars.SLACK_NOTIFY_MAP }}
-      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    outputs:
+      proceed: ${{ steps.resolve.outputs.proceed }}
+      pr: ${{ steps.resolve.outputs.pr }}
+      sha: ${{ steps.resolve.outputs.sha }}
+      login: ${{ steps.resolve.outputs.login }}
+      outcome: ${{ steps.pick.outputs.outcome }}
+      escalated: ${{ steps.escalation.outputs.escalated }}
+      reason: ${{ steps.escalation.outputs.reason }}
+      severity: ${{ steps.escalation.outputs.severity }}
+      export: ${{ steps.export.outputs.export }}
     steps:
       # Fetch the vendored scripts without checking out the (large) repo; the
       # enterprise clone happens into the workspace root, so the scripts live
@@ -63,7 +71,7 @@ jobs:
       # step below runs resolve-merged-pr.js.
       - name: Fetch scripts
         run: |
-          for f in oss-pick.sh notify-slack.js resolve-merged-pr.js; do
+          for f in oss-pick.sh resolve-merged-pr.js; do
             gh api "repos/${SOURCE_REPO}/contents/.github/workflows/scripts/${f}?ref=master" \
               --jq '.content' | base64 -d > "$RUNNER_TEMP/${f}"
           done
@@ -80,13 +88,15 @@ jobs:
           BASE_REF: ${{ env.SOURCE_REF }}
         run: node "$RUNNER_TEMP/resolve-merged-pr.js"
 
-      # 1. Clone the target, cherry-pick the merged commit. Conflicts (if any)
-      #    are left in the tree for Claude. Outcome: clean|conflict|empty|already.
+      # 1. Clone the target with a READ-ONLY token and cherry-pick the merged
+      #    commit. Conflicts (if any) are left in the tree for Claude. This step
+      #    (and everything after it in Job A, including Claude) must never see a
+      #    write credential. Outcome: clean|conflict|empty|already.
       - name: Pick
         id: pick
         if: steps.resolve.outputs.proceed == 'true'
         env:
-          TARGET_TOKEN: ${{ secrets.TIGERA_BOT_PAT }}
+          TARGET_TOKEN: ${{ secrets.TIGERA_BOT_PAT_READONLY }}
           SOURCE_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.resolve.outputs.pr }}
           MERGE_SHA: ${{ steps.resolve.outputs.sha }}
@@ -119,7 +129,8 @@ jobs:
           echo "wrote change context ($(wc -l < "$f") lines) to $f"
 
       # 2. Claude resolves conflicts ONLY (edits + git add + cherry-pick
-      #    --continue). No push, no PR. Cross-fork intent: keep Enterprise side.
+      #    --continue). No push, no PR, no write token in scope. Cross-fork
+      #    intent: keep the Enterprise side.
       - name: Claude resolves the conflict
         id: claude
         if: steps.resolve.outputs.proceed == 'true' && steps.pick.outputs.outcome == 'conflict'
@@ -222,121 +233,183 @@ jobs:
             echo "escalated=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # 3. Open the PR (push + bot-parseable body + labels), unless the pick was
-      #    empty/already, the agent escalated, or Claude could not finish a
-      #    conflict. The script self-guards against pushing a broken tree.
-      - name: Open PR
-        id: openpr
+      # 3. Turn the resolved commit into a portable git-format-patch plus the
+      #    report/severity/meta, so Job B can rebuild it on a clean runner. The
+      #    script refuses to export an unfinished pick or leftover markers.
+      #    export=ready (has a patch) | noop (no net change) | (skipped).
+      - name: Export patch
+        id: export
         if: >
           steps.resolve.outputs.proceed == 'true' &&
           steps.escalation.outputs.escalated != 'true' &&
           (steps.pick.outputs.outcome == 'clean' ||
            steps.pick.outputs.outcome == 'conflict')
         env:
-          TARGET_TOKEN: ${{ secrets.TIGERA_BOT_PAT }}
-          SOURCE_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ steps.resolve.outputs.pr }}
-          MERGE_SHA: ${{ steps.resolve.outputs.sha }}
           OUTCOME: ${{ steps.pick.outputs.outcome }}
           CONFLICT_SEVERITY: ${{ steps.escalation.outputs.severity }}
           RESOLUTION_REPORT: /tmp/resolution-report.md
-        run: bash "$RUNNER_TEMP/oss-pick.sh" open-pr
+          EXPORT_DIR: /tmp/pick-export
+          PR_NUMBER: ${{ steps.resolve.outputs.pr }}
+          MERGE_SHA: ${{ steps.resolve.outputs.sha }}
+        run: bash "$RUNNER_TEMP/oss-pick.sh" export
 
-      # Notify steps share the common env from the job (GH_TOKEN, PICK_NOTIFY_MAP,
-      # TARGET_LABEL, RUN_URL, SOURCE_REPO). Each sets only SLACK_BOT_TOKEN (kept
-      # out of the job env so it never reaches the Claude step), the author/PR,
-      # the MODE, and the mode-specific fields. notify-slack.js derives the source
-      # PR url/title itself, so the attacker-controlled title never flows through
-      # a step output. All soft-fail.
+      - name: Upload pick artifact
+        if: steps.export.outputs.export == 'ready'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pick-export-${{ github.run_id }}
+          path: /tmp/pick-export
+          retention-days: 1
+          if-no-files-found: error
 
-      # 4. Picked: DM the author that their change was auto-cherry-picked.
-      - name: Notify author on Slack
-        if: steps.openpr.outputs.pr_url != ''
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_MERGE_CAT_TOKEN }}
-          AUTHOR_LOGIN: ${{ steps.resolve.outputs.login }}
-          SRC_PR: ${{ steps.resolve.outputs.pr }}
-          EE_PR_URL: ${{ steps.openpr.outputs.pr_url }}
-          OUTCOME: ${{ steps.pick.outputs.outcome }}
-          CONFLICT_SEVERITY: ${{ steps.escalation.outputs.severity }}
-        run: node "$RUNNER_TEMP/notify-slack.js"
-
-      # 4b. On escalation (deliberate marker or unfinished run), DM the author
-      #     that their pick needs manual work, then surface the report and fail
-      #     the run (below). No PR is opened for an escalated pick.
-      - name: Notify author of escalation on Slack
+      # Surface the escalation report in this job's summary (the file lives here).
+      - name: Summarize escalation
         if: steps.escalation.outputs.escalated == 'true'
         env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_MERGE_CAT_TOKEN }}
-          AUTHOR_LOGIN: ${{ steps.resolve.outputs.login }}
-          SRC_PR: ${{ steps.resolve.outputs.pr }}
-          MODE: escalated
-          ESCALATION_REASON: ${{ steps.escalation.outputs.reason }}
-        run: node "$RUNNER_TEMP/notify-slack.js"
-
-      # 4c. Fail the run so the escalation is visible; no PR was opened.
-      - name: Fail on escalation
-        if: steps.escalation.outputs.escalated == 'true'
-        env:
-          PR: ${{ steps.resolve.outputs.pr }}
           REASON: ${{ steps.escalation.outputs.reason }}
         run: |
-          echo "::error::Cherry-pick of PR #${PR} needs manual resolution: ${REASON}."
           {
             echo "### Auto-pick ESCALATED: ${REASON}"
             echo
             [ -f /tmp/resolution-report.md ] && cat /tmp/resolution-report.md
           } >> "$GITHUB_STEP_SUMMARY"
-          exit 1
 
-      # 4d. Superseded / nothing to pick: the resolution produced no net change,
-      #     so no PR was opened. Tell the author it was a no-op (informational).
+  # =========================================================================
+  # Job B: apply + open PR + notify. FRESH runner, WRITE token + Slack token.
+  # Runs whenever Job A actually executed (any result), so it can DM on failure.
+  # =========================================================================
+  open-pr:
+    needs: pick
+    if: always() && needs.pick.result != 'skipped' && needs.pick.result != 'cancelled'
+    runs-on: ubuntu-latest
+    env:
+      # Common, NON-secret values. github.token is read-only here. The Slack BOT
+      # TOKEN is deliberately NOT job-wide: it stays per-notify step. (There is no
+      # Claude step in this job, but keeping the pattern avoids a future slip.)
+      GH_TOKEN: ${{ github.token }}
+      TARGET_LABEL: calico-private
+      PICK_NOTIFY_MAP: ${{ vars.SLACK_NOTIFY_MAP }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Fetch scripts
+        run: |
+          for f in oss-pick.sh notify-slack.js; do
+            gh api "repos/${SOURCE_REPO}/contents/.github/workflows/scripts/${f}?ref=master" \
+              --jq '.content' | base64 -d > "$RUNNER_TEMP/${f}"
+          done
+          chmod +x "$RUNNER_TEMP/oss-pick.sh"
+
+      - name: Download pick artifact
+        if: needs.pick.outputs.export == 'ready'
+        uses: actions/download-artifact@v4
+        with:
+          name: pick-export-${{ github.run_id }}
+          path: /tmp/pick-export
+
+      # Rebuild the resolved commit on this clean runner and open the PR. The
+      # write token lives only in this step, which the agent never influenced.
+      - name: Apply and open PR
+        id: openpr
+        if: >
+          needs.pick.outputs.proceed == 'true' &&
+          needs.pick.outputs.escalated != 'true' &&
+          needs.pick.outputs.export == 'ready'
+        env:
+          TARGET_TOKEN: ${{ secrets.TIGERA_BOT_PAT }}
+          SOURCE_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.pick.outputs.pr }}
+          MERGE_SHA: ${{ needs.pick.outputs.sha }}
+          OUTCOME: ${{ needs.pick.outputs.outcome }}
+          CONFLICT_SEVERITY: ${{ needs.pick.outputs.severity }}
+          EXPORT_DIR: /tmp/pick-export
+        run: bash "$RUNNER_TEMP/oss-pick.sh" apply
+
+      # Notify steps each set only SLACK_BOT_TOKEN (kept out of the job env), the
+      # author/PR, the MODE, and the mode-specific fields. notify-slack.js derives
+      # the source PR url/title itself, so the attacker-controlled title never
+      # flows through a step output. All soft-fail.
+
+      # Picked: DM the author that their change was auto-cherry-picked.
+      - name: Notify author on Slack
+        if: steps.openpr.outputs.pr_url != ''
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_MERGE_CAT_TOKEN }}
+          AUTHOR_LOGIN: ${{ needs.pick.outputs.login }}
+          SRC_PR: ${{ needs.pick.outputs.pr }}
+          EE_PR_URL: ${{ steps.openpr.outputs.pr_url }}
+          OUTCOME: ${{ needs.pick.outputs.outcome }}
+          CONFLICT_SEVERITY: ${{ needs.pick.outputs.severity }}
+        run: node "$RUNNER_TEMP/notify-slack.js"
+
+      # Escalation: DM the author it needs manual work.
+      - name: Notify author of escalation on Slack
+        if: needs.pick.outputs.escalated == 'true' && needs.pick.outputs.login != ''
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_MERGE_CAT_TOKEN }}
+          AUTHOR_LOGIN: ${{ needs.pick.outputs.login }}
+          SRC_PR: ${{ needs.pick.outputs.pr }}
+          MODE: escalated
+          ESCALATION_REASON: ${{ needs.pick.outputs.reason }}
+        run: node "$RUNNER_TEMP/notify-slack.js"
+
+      # Nothing to pick (superseded / empty / already): informational DM.
       - name: Notify author (nothing to pick) on Slack
         if: >
           success() &&
-          steps.resolve.outputs.proceed == 'true' &&
-          steps.escalation.outputs.escalated != 'true' &&
+          needs.pick.result == 'success' &&
+          needs.pick.outputs.proceed == 'true' &&
+          needs.pick.outputs.escalated != 'true' &&
+          needs.pick.outputs.export != 'ready' &&
           steps.openpr.outputs.pr_url == '' &&
-          steps.resolve.outputs.login != ''
+          needs.pick.outputs.login != ''
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_MERGE_CAT_TOKEN }}
-          AUTHOR_LOGIN: ${{ steps.resolve.outputs.login }}
-          SRC_PR: ${{ steps.resolve.outputs.pr }}
+          AUTHOR_LOGIN: ${{ needs.pick.outputs.login }}
+          SRC_PR: ${{ needs.pick.outputs.pr }}
           MODE: noop
         run: node "$RUNNER_TEMP/notify-slack.js"
 
-      # 4e. Catch-all: the run failed for a reason other than a deliberate
-      #     escalation (e.g. the push was rejected). DM the author so a failed
-      #     pick is never silent. Soft (exit 0) so it cannot mask the failure.
+      # Catch-all: the run failed (Job A errored, or the push failed here) other
+      # than a deliberate escalation. DM the author so it is never silent. Soft
+      # (exit 0) so it cannot mask the failure.
       - name: Notify author of failure on Slack
         if: >
-          failure() &&
-          steps.escalation.outputs.escalated != 'true' &&
-          steps.resolve.outputs.login != ''
+          (failure() || needs.pick.result == 'failure') &&
+          needs.pick.outputs.escalated != 'true' &&
+          needs.pick.outputs.login != ''
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_MERGE_CAT_TOKEN }}
-          AUTHOR_LOGIN: ${{ steps.resolve.outputs.login }}
-          SRC_PR: ${{ steps.resolve.outputs.pr }}
+          AUTHOR_LOGIN: ${{ needs.pick.outputs.login }}
+          SRC_PR: ${{ needs.pick.outputs.pr }}
           MODE: escalated
           ESCALATION_REASON: the auto-cherry-pick run failed before a PR could be opened
         run: node "$RUNNER_TEMP/notify-slack.js"
 
-      # 5. Always: a one-line summary of what happened.
+      # Fail the run so an escalation is visible; no PR was opened.
+      - name: Fail on escalation
+        if: needs.pick.outputs.escalated == 'true'
+        env:
+          PR: ${{ needs.pick.outputs.pr }}
+          REASON: ${{ needs.pick.outputs.reason }}
+        run: |
+          echo "::error::Cherry-pick of PR #${PR} needs manual resolution: ${REASON}."
+          exit 1
+
       - name: Summary
         if: always()
         env:
-          PROCEED: ${{ steps.resolve.outputs.proceed }}
-          PR: ${{ steps.resolve.outputs.pr }}
-          OUTCOME: ${{ steps.pick.outputs.outcome }}
-          CLAUDE: ${{ steps.claude.outcome }}
-          SEVERITY: ${{ steps.escalation.outputs.severity }}
-          ESCALATED: ${{ steps.escalation.outputs.escalated }}
+          PROCEED: ${{ needs.pick.outputs.proceed }}
+          PR: ${{ needs.pick.outputs.pr }}
+          OUTCOME: ${{ needs.pick.outputs.outcome }}
+          SEVERITY: ${{ needs.pick.outputs.severity }}
+          ESCALATED: ${{ needs.pick.outputs.escalated }}
+          EXPORTV: ${{ needs.pick.outputs.export }}
+          PRURL: ${{ steps.openpr.outputs.pr_url }}
         run: |
           {
             echo "### Auto-pick summary (${SOURCE_REPO}@${SOURCE_REF} -> ${TARGET_REPO}@${TARGET_BRANCH})"
             echo "- resolved PR: ${PR:-none} (proceed=${PROCEED:-false})"
-            echo "- outcome: ${OUTCOME:-n/a}"
-            echo "- claude: ${CLAUDE:-skipped}"
-            echo "- severity: ${SEVERITY:-n/a}"
-            echo "- escalated: ${ESCALATED:-false}"
+            echo "- outcome: ${OUTCOME:-n/a}, export: ${EXPORTV:-n/a}"
+            echo "- severity: ${SEVERITY:-n/a}, escalated: ${ESCALATED:-false}"
+            echo "- pick PR: ${PRURL:-none}"
           } >> "$GITHUB_STEP_SUMMARY"
