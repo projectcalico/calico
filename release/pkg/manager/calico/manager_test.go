@@ -1242,6 +1242,17 @@ func TestHelmIndexUploadTargetsTheChartsPrefix(t *testing.T) {
 	}
 }
 
+func TestHelmIndexUploadSetsCachePolicy(t *testing.T) {
+	r := &CalicoManager{helmCharts: true, helmIndex: true, s3Bucket: "bucket", outputDir: t.TempDir()}
+	got, ok := r.helmIndexUpload().Handler.(distribution.S3)
+	if !ok {
+		t.Fatalf("handler is %T, want distribution.S3", r.helmIndexUpload().Handler)
+	}
+	if got.CachePolicy != distribution.MutableCachePolicy {
+		t.Errorf("CachePolicy = %q, want %q", got.CachePolicy, distribution.MutableCachePolicy)
+	}
+}
+
 func TestPublishGitTagPreviewsThePushOnADryRun(t *testing.T) {
 	f := newFakeRunner()
 	f.on("git ls-remote --tags origin refs/tags/v3.30.0", "", nil)

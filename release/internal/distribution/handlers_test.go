@@ -162,6 +162,29 @@ func TestS3ProfileOnlyWhenSet(t *testing.T) {
 	}
 }
 
+func TestS3CachePolicy(t *testing.T) {
+	t.Run("absent when unset", func(t *testing.T) {
+		f := &fakeRunner{}
+		if err := (S3{URI: "s3://b/x/", Runner: f}).Publish(context.Background(), srcPath(t, false)); err != nil {
+			t.Fatalf("Publish: %v", err)
+		}
+		if f.has(cacheControlFlag) {
+			t.Errorf("expected no %s when unset, got %v", cacheControlFlag, f.args)
+		}
+	})
+
+	t.Run("sent when set", func(t *testing.T) {
+		f := &fakeRunner{}
+		d := S3{URI: "s3://b/x/", CachePolicy: MutableCachePolicy, Runner: f}
+		if err := d.Publish(context.Background(), srcPath(t, false)); err != nil {
+			t.Fatalf("Publish: %v", err)
+		}
+		if got := f.valueAfter(cacheControlFlag); got != MutableCachePolicy {
+			t.Errorf("%s = %q, want %q", cacheControlFlag, got, MutableCachePolicy)
+		}
+	})
+}
+
 func TestGCSSyncDeletesWhatTheSourceDropped(t *testing.T) {
 	f := &fakeRunner{}
 	d := GCS{URI: "gs://bucket/hash", Sync: true, Runner: f}
