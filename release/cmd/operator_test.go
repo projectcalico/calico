@@ -201,53 +201,53 @@ func TestOperatorCommand(t *testing.T) {
 			}
 		}
 	})
-}
 
-func TestOperatorLogsUnderTheProductVersion(t *testing.T) {
-	t.Chdir(t.TempDir())
-	r := &recordingRunner{}
-	prevRunner, prevPin := commandRunner, pinForBuild
-	commandRunner = r
-	pinForBuild = func(*Config, *cli.Command) (*pinnedversion.Pin, error) {
-		return &pinnedversion.Pin{
-			ProductVersion: "v3.34.0",
-			Operator:       registry.Component{Registry: "quay.io/pinned", Image: "operator", Version: "v1.44.0"},
-		}, nil
-	}
-	t.Cleanup(func() { commandRunner, pinForBuild = prevRunner, prevPin })
-
-	cfg := &Config{RepoRootDir: t.TempDir(), LogsDir: "/logs"}
-	cmd := &cli.Command{Flags: freshFlags(operatorBuildFlags), Action: operatorBuildAction(cfg)}
-	if err := cmd.Run(context.Background(), []string{"build", "--hashrelease", "--no-validation"}); err != nil {
-		t.Fatalf("build: %v", err)
-	}
-	if len(r.logPaths) == 0 {
-		t.Fatal("nothing ran")
-	}
-	for _, p := range r.logPaths {
-		if !strings.HasPrefix(p, "/logs/v3.34.0/") {
-			t.Errorf("log %q is not under /logs/v3.34.0", p)
+	t.Run("logs under the product version", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		r := &recordingRunner{}
+		prevRunner, prevPin := commandRunner, pinForBuild
+		commandRunner = r
+		pinForBuild = func(*Config, *cli.Command) (*pinnedversion.Pin, error) {
+			return &pinnedversion.Pin{
+				ProductVersion: "v3.34.0",
+				Operator:       registry.Component{Registry: "quay.io/pinned", Image: "operator", Version: "v1.44.0"},
+			}, nil
 		}
-	}
-}
+		t.Cleanup(func() { commandRunner, pinForBuild = prevRunner, prevPin })
 
-func TestOperatorFollowsTheProductRegistry(t *testing.T) {
-	prev := productRegistry
-	productRegistry = func(*cli.Command) string { return "gcr.io/chosen/path" }
-	t.Cleanup(func() { productRegistry = prev })
+		cfg := &Config{RepoRootDir: t.TempDir(), LogsDir: "/logs"}
+		cmd := &cli.Command{Flags: freshFlags(operatorBuildFlags), Action: operatorBuildAction(cfg)}
+		if err := cmd.Run(context.Background(), []string{"build", "--hashrelease", "--no-validation"}); err != nil {
+			t.Fatalf("build: %v", err)
+		}
+		if len(r.logPaths) == 0 {
+			t.Fatal("nothing ran")
+		}
+		for _, p := range r.logPaths {
+			if !strings.HasPrefix(p, "/logs/v3.34.0/") {
+				t.Errorf("log %q is not under /logs/v3.34.0", p)
+			}
+		}
+	})
 
-	var got operator.Operator
-	cmd := &cli.Command{
-		Flags: freshFlags(operatorBuildFlags),
-		Action: func(_ context.Context, c *cli.Command) error {
-			got = pinnedOperator(&Config{RepoRootDir: "/repo"}, c, registry.Component{Version: "v1.44.0"}, "v3.34.0")
-			return nil
-		},
-	}
-	if err := cmd.Run(context.Background(), []string{"build"}); err != nil {
-		t.Fatalf("run: %v", err)
-	}
-	if got.ProductRegistry != "gcr.io/chosen/path" {
-		t.Errorf("ProductRegistry = %q, want gcr.io/chosen/path", got.ProductRegistry)
-	}
+	t.Run("follows the product registry", func(t *testing.T) {
+		prev := productRegistry
+		productRegistry = func(*cli.Command) string { return "gcr.io/chosen/path" }
+		t.Cleanup(func() { productRegistry = prev })
+
+		var got operator.Operator
+		cmd := &cli.Command{
+			Flags: freshFlags(operatorBuildFlags),
+			Action: func(_ context.Context, c *cli.Command) error {
+				got = pinnedOperator(&Config{RepoRootDir: "/repo"}, c, registry.Component{Version: "v1.44.0"}, "v3.34.0")
+				return nil
+			},
+		}
+		if err := cmd.Run(context.Background(), []string{"build"}); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		if got.ProductRegistry != "gcr.io/chosen/path" {
+			t.Errorf("ProductRegistry = %q, want gcr.io/chosen/path", got.ProductRegistry)
+		}
+	})
 }

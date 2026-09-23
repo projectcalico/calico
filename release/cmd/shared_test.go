@@ -183,32 +183,34 @@ func writeChartValues(t *testing.T, root string) {
 	}
 }
 
-// A hashrelease build may generate its pin, which needs the branch prefix.
-func TestHashreleaseBuildsCanGenerateThePin(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		flags []cli.Flag
-	}{
-		{name: "operator", flags: operatorBuildFlags},
-		{name: "manifests", flags: manifestsBuildFlags},
-		{name: "charts", flags: chartsBuildFlags},
-		{name: "binaries", flags: binariesBuildFlags},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			var got pinnedversion.Config
-			cmd := &cli.Command{
-				Flags: freshFlags(tc.flags),
-				Action: func(_ context.Context, c *cli.Command) error {
-					got = pinConfig(&Config{RepoRootDir: "/repo"}, c)
-					return nil
-				},
-			}
-			if err := cmd.Run(context.Background(), []string{"build", "--hashrelease"}); err != nil {
-				t.Fatalf("run: %v", err)
-			}
-			if got.ReleaseBranchPrefix != releaseBranchPrefixFlag.Value {
-				t.Errorf("ReleaseBranchPrefix = %q, want %q", got.ReleaseBranchPrefix, releaseBranchPrefixFlag.Value)
-			}
-		})
-	}
+func TestHashreleaseBuilds(t *testing.T) {
+	// A hashrelease build may generate its pin, which needs the branch prefix.
+	t.Run("can generate the pin", func(t *testing.T) {
+		for _, tc := range []struct {
+			name  string
+			flags []cli.Flag
+		}{
+			{name: "operator", flags: operatorBuildFlags},
+			{name: "manifests", flags: manifestsBuildFlags},
+			{name: "charts", flags: chartsBuildFlags},
+			{name: "binaries", flags: binariesBuildFlags},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				var got pinnedversion.Config
+				cmd := &cli.Command{
+					Flags: freshFlags(tc.flags),
+					Action: func(_ context.Context, c *cli.Command) error {
+						got = pinConfig(&Config{RepoRootDir: "/repo"}, c)
+						return nil
+					},
+				}
+				if err := cmd.Run(context.Background(), []string{"build", "--hashrelease"}); err != nil {
+					t.Fatalf("run: %v", err)
+				}
+				if got.ReleaseBranchPrefix != releaseBranchPrefixFlag.Value {
+					t.Errorf("ReleaseBranchPrefix = %q, want %q", got.ReleaseBranchPrefix, releaseBranchPrefixFlag.Value)
+				}
+			})
+		}
+	})
 }
