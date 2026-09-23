@@ -30,7 +30,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"strings"
 	"testing"
 
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -47,7 +46,6 @@ import (
 	gwapiv1alpha3 "sigs.k8s.io/gateway-api/apis/v1alpha3"
 	gwapiv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 	"sigs.k8s.io/gateway-api/conformance"
-	confv1 "sigs.k8s.io/gateway-api/conformance/apis/v1"
 	"sigs.k8s.io/gateway-api/conformance/tests"
 	"sigs.k8s.io/gateway-api/conformance/utils/flags"
 	"sigs.k8s.io/gateway-api/conformance/utils/suite"
@@ -58,13 +56,13 @@ import (
 // curatedFlag selects a pre-baked feature/test/profile set. Empty means
 // "honour the individual upstream flags". Currently supports:
 //
-//	envoy-gateway   - mirrors envoyproxy/gateway v1.8.0's
+//	envoy-gateway   - mirrors envoyproxy/gateway v1.9.1's
 //	                  EnvoyGatewaySuite for GatewayNamespace mode (the
 //	                  mode the tigera-operator deploys): full upstream
 //	                  features minus mesh, plus UDP, with the features
 //	                  and tests EG and Calico's deployment don't support
 //	                  skipped. See test/conformance/suite.go in the
-//	                  envoyproxy/gateway v1.8.0 tag, and
+//	                  envoyproxy/gateway v1.9.1 tag, and
 //	                  envoyGatewayCuratedSet for the exact set.
 var curatedFlag = flag.String("curated", "", "Pre-baked feature/test/profile set: \"envoy-gateway\" or empty.")
 
@@ -107,27 +105,16 @@ func TestGatewayAPIConformance(t *testing.T) {
 		t.Fatalf("install apiextensions scheme: %v", err)
 	}
 
-	profileNames := sets.New[suite.ConformanceProfileName]()
-	for _, p := range strings.Split(*flags.ConformanceProfiles, ",") {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		profileNames.Insert(suite.ConformanceProfileName(p))
+	// gateway-api v1.6 replaced the individual exported flag pointers with a
+	// registry plus flags.ApplyAll, which applies only the flags the caller
+	// actually set. Defaults therefore have to be seeded here.
+	opts := suite.ConfigurableOptions{
+		GatewayClassName:     flags.DefaultGatewayClassName,
+		Mode:                 flags.DefaultMode,
+		CleanupBaseResources: flags.DefaultCleanupBaseResources,
+		CleanupTestResources: flags.DefaultCleanupTestResources,
 	}
-
-	var contacts []string
-	if *flags.ImplementationContact != "" {
-		contacts = strings.Split(*flags.ImplementationContact, ",")
-		for i := range contacts {
-			contacts[i] = strings.TrimSpace(contacts[i])
-		}
-	}
-
-	supportedFeatures := parseFeatures(*flags.SupportedFeatures)
-	exemptFeatures := parseFeatures(*flags.ExemptFeatures)
-	skipTests := splitCSV(*flags.SkipTests)
-	enableAll := *flags.EnableAllSupportedFeatures
+	flags.ApplyAll(&opts)
 
 	if *curatedFlag != "" {
 		curated, err := curatedConfig(*curatedFlag)
@@ -136,46 +123,27 @@ func TestGatewayAPIConformance(t *testing.T) {
 		}
 		// Curated overrides individual feature/test/profile flags so the
 		// caller can't accidentally mix and match an inconsistent set.
-		supportedFeatures = curated.SupportedFeatures
-		exemptFeatures = curated.ExemptFeatures
-		skipTests = curated.SkipTests
-		profileNames = curated.Profiles
-		enableAll = false
+		opts.SupportedFeatures = curated.SupportedFeatures.UnsortedList()
+		opts.ExemptFeatures = curated.ExemptFeatures.UnsortedList()
+		opts.SkipTests = curated.SkipTests
+		opts.ConformanceProfiles = curated.Profiles.UnsortedList()
+		opts.EnableAllSupportedFeatures = false
 	}
 
-	if profileNames.Len() == 0 {
+	if len(opts.ConformanceProfiles) == 0 {
 		// Default to GATEWAY-HTTP for Calico's Envoy-Gateway-based impl.
-		profileNames.Insert(suite.GatewayHTTPConformanceProfileName)
+		opts.ConformanceProfiles = []suite.ConformanceProfileName{suite.GatewayHTTPConformanceProfileName}
 	}
 
 	t.Logf("running gateway-api conformance: gatewayClass=%s mode=%s version=%q curated=%q profiles=%v allFeatures=%t",
-		*flags.GatewayClassName, *flags.Mode, *flags.ImplementationVersion, *curatedFlag, profileNames.UnsortedList(), enableAll)
+		opts.GatewayClassName, opts.Mode, opts.Implementation.Version, *curatedFlag, opts.ConformanceProfiles, opts.EnableAllSupportedFeatures)
 
 	cSuite, err := suite.NewConformanceTestSuite(suite.ConformanceOptions{
-		Client:                     c,
-		Clientset:                  cs,
-		RestConfig:                 cfg,
-		GatewayClassName:           *flags.GatewayClassName,
-		MeshName:                   *flags.MeshName,
-		Debug:                      *flags.ShowDebug,
-		CleanupBaseResources:       *flags.CleanupBaseResources,
-		Mode:                       *flags.Mode,
-		AllowCRDsMismatch:          *flags.AllowCRDsMismatch,
-		SupportedFeatures:          supportedFeatures,
-		ExemptFeatures:             exemptFeatures,
-		EnableAllSupportedFeatures: enableAll,
-		SkipTests:                  skipTests,
-		SkipProvisionalTests:       *flags.SkipProvisionalTests,
-		RunTest:                    *flags.RunTest,
-		ManifestFS:                 []fs.FS{&conformance.Manifests},
-		Implementation: confv1.Implementation{
-			Organization: *flags.ImplementationOrganization,
-			Project:      *flags.ImplementationProject,
-			URL:          *flags.ImplementationURL,
-			Version:      *flags.ImplementationVersion,
-			Contact:      contacts,
-		},
-		ConformanceProfiles: profileNames,
+		ConfigurableOptions: opts,
+		Client:              c,
+		Clientset:           cs,
+		RestConfig:          cfg,
+		ManifestFS:          []fs.FS{&conformance.Manifests},
 	})
 	if err != nil {
 		t.Fatalf("constructing conformance suite: %v", err)
@@ -196,38 +164,15 @@ func TestGatewayAPIConformance(t *testing.T) {
 		t.Fatalf("marshalling report: %v", err)
 	}
 
-	if *flags.ReportOutput == "" {
+	if opts.ReportOutputPath == "" {
 		t.Logf("\n--- ConformanceReport ---\n%s\n", out)
 		return
 	}
 	// Per upstream README: report MUST be uploaded exactly as produced.
-	if err := os.WriteFile(*flags.ReportOutput, out, 0o600); err != nil {
+	if err := os.WriteFile(opts.ReportOutputPath, out, 0o600); err != nil {
 		t.Fatalf("writing report: %v", err)
 	}
-	t.Logf("wrote ConformanceReport to %s", *flags.ReportOutput)
-}
-
-func splitCSV(s string) []string {
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	out := parts[:0]
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
-func parseFeatures(s string) sets.Set[features.FeatureName] {
-	out := sets.New[features.FeatureName]()
-	for _, name := range splitCSV(s) {
-		out.Insert(features.FeatureName(name))
-	}
-	return out
+	t.Logf("wrote ConformanceReport to %s", opts.ReportOutputPath)
 }
 
 // curatedSet bundles the four conformance suite levers a curated profile
@@ -250,20 +195,22 @@ func curatedConfig(name string) (curatedSet, error) {
 }
 
 // envoyGatewayCuratedSet mirrors the curated configuration in
-// envoyproxy/gateway v1.8.0's test/conformance/suite.go for the
+// envoyproxy/gateway v1.9.1's test/conformance/suite.go for the
 // GatewayNamespace operating mode (the mode the tigera-operator deploys).
 // Calico's Gateway API implementation is a Calico-deployed Envoy Gateway,
 // so the supported feature surface is, by construction, the same.
 //
-// Source ref: https://github.com/envoyproxy/gateway/blob/v1.8.0/test/conformance/suite.go
+// Source ref: https://github.com/envoyproxy/gateway/blob/v1.9.1/test/conformance/suite.go
 func envoyGatewayCuratedSet() curatedSet {
 	skipFeatures := sets.New(
 		features.GatewayStaticAddressesFeature.Name,
 		features.GatewayInfrastructurePropagationFeature.Name,
-		// New in gateway-api v1.5.x / EG v1.8.0: EG does not implement
-		// misdirected-request detection on HTTPS listeners.
+		// EG does not implement misdirected-request detection on HTTPS
+		// listeners. Still skipped upstream at v1.9.1.
 		features.GatewayHTTPSListenerDetectMisdirectedRequestsFeature.Name,
-		// ListenerSet works on EG v1.8.0 (routes traffic) but isn't yet status-conformant to gateway-api v1.5.1's ListenerSet tests.
+		// ListenerSet routes traffic but isn't status-conformant here. EG
+		// v1.9.1 dropped its own ListenerSet test skips, so this may now be
+		// removable. Confirm with a conformance run before dropping it.
 		features.ListenerSetFeature.Name,
 	)
 
@@ -273,7 +220,7 @@ func envoyGatewayCuratedSet() curatedSet {
 			supported.Insert(f.Name)
 		}
 	}
-	for _, f := range features.UDPRouteFeatures {
+	for _, f := range features.UDPRouteFeatures.UnsortedList() {
 		supported.Insert(f.Name)
 	}
 
@@ -291,7 +238,8 @@ func envoyGatewayCuratedSet() curatedSet {
 		SkipTests: []string{
 			tests.GatewayStaticAddresses.ShortName,
 			tests.GatewayInfrastructure.ShortName,
-			// EG v1.8.0 fails only the uri-type SAN case (dns/multi SAN pass); skip until EG fixes URI SAN verification — revisit full support later (likely an Envoy-side fix).
+			// EG fails only the uri-type SAN case (dns and multi SAN pass).
+			// Skip until EG fixes URI SAN verification, likely an Envoy-side fix.
 			tests.BackendTLSPolicySANValidation.ShortName,
 		},
 		Profiles: sets.New(
