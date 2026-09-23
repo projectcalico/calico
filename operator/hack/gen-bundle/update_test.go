@@ -108,6 +108,12 @@ func TestParseArchitectures(t *testing.T) {
 	if _, err := parseArchitectures(`{"manifests": []}`); err == nil {
 		t.Error("parseArchitectures of an empty manifest list succeeded, want an error")
 	}
+	// A single-architecture image has a plain manifest, and the error has to say
+	// so, since that is not obvious from an empty architecture list.
+	_, err := parseArchitectures(`{"schemaVersion": 2, "config": {"digest": "sha256:aaa"}}`)
+	if err == nil || !strings.Contains(err.Error(), "multi-arch") {
+		t.Errorf("parseArchitectures of a single-arch manifest returned %v, want an error naming the cause", err)
+	}
 }
 
 // TestInspectImageOverrides checks that passing both inspections in keeps docker
@@ -144,42 +150,47 @@ func TestReleaseStream(t *testing.T) {
 }
 
 func TestUpdateDockerfile(t *testing.T) {
-	// updateDockerfile works on paths relative to the operator directory, so
-	// this test cannot run in parallel with the rest.
-	t.Chdir(t.TempDir())
-	writeFile(t, bundleDockerfile, `FROM scratch
+	t.Parallel()
+
+	operatorDir := t.TempDir()
+	writeFile(t, filepath.Join(operatorDir, bundleDockerfile), `FROM scratch
 
 # Core bundle labels.
 LABEL operators.operatorframework.io.bundle.package.v1=tigera-operator
 LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.42.2
 LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
 
+# Labels for testing.
+LABEL operators.operatorframework.io.test.mediatype.v1=scorecard+v1
+LABEL operators.operatorframework.io.test.config.v1=tests/scorecard/
+
 # Copy files to locations specified by labels.
 COPY bundle/manifests /manifests/
 COPY bundle/metadata /metadata/
 `)
-	if err := os.MkdirAll(bundleDir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(operatorDir, bundleDir), 0o755); err != nil {
 		t.Fatalf("creating %s: %v", bundleDir, err)
 	}
 
-	if err := updateDockerfile("3.34.0"); err != nil {
+	if err := updateDockerfile(operatorDir, "3.34.0", "v4.19-v4.22"); err != nil {
 		t.Fatalf("updateDockerfile: %v", err)
 	}
 
-	if _, err := os.Stat(bundleDockerfile); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(operatorDir, bundleDockerfile)); !os.IsNotExist(err) {
 		t.Errorf("%s is still there, want it moved into %s", bundleDockerfile, bundleDir)
 	}
 	want := `FROM scratch
 # Core bundle labels.
 LABEL operators.operatorframework.io.bundle.package.v1=tigera-operator
+# Labels for testing.
 # Copy files to locations specified by labels.
-LABEL com.redhat.openshift.versions="v4.16-v4.18"
+LABEL com.redhat.openshift.versions="v4.19-v4.22"
 LABEL com.redhat.delivery.backport=true
 LABEL com.redhat.delivery.operator.bundle=true
 COPY 3.34.0/manifests /manifests/
 COPY 3.34.0/metadata /metadata/
 `
-	if got := readFile(t, filepath.Join(bundleDir, "bundle-v3.34.0.Dockerfile")); got != want {
+	if got := readFile(t, filepath.Join(operatorDir, bundleDir, "bundle-v3.34.0.Dockerfile")); got != want {
 		t.Errorf("Dockerfile is\n%s\nwant\n%s", got, want)
 	}
 }
@@ -196,6 +207,7 @@ func TestUpdateAnnotations(t *testing.T) {
   operators.operatorframework.io.bundle.package.v1: tigera-operator
 
   operators.operatorframework.io.metrics.builder: operator-sdk-v1.42.2
+  operators.operatorframework.io.test.config.v1: tests/scorecard/
 `,
 		"replaces an existing annotation": `annotations:
   # Core bundle annotations.
@@ -207,7 +219,7 @@ func TestUpdateAnnotations(t *testing.T) {
 	const want = `annotations:
   # Core bundle annotations.
   operators.operatorframework.io.bundle.package.v1: tigera-operator
-  com.redhat.openshift.versions: v4.16-v4.18
+  com.redhat.openshift.versions: v4.19-v4.22
 `
 
 	for name, content := range cases {
@@ -217,7 +229,7 @@ func TestUpdateAnnotations(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "annotations.yaml")
 			writeFile(t, path, content)
 
-			if err := updateAnnotations(path); err != nil {
+			if err := updateAnnotations(path, "v4.19-v4.22"); err != nil {
 				t.Fatalf("updateAnnotations: %v", err)
 			}
 			if got := readFile(t, path); got != want {
@@ -432,6 +444,53 @@ func TestUpdateCSVWithoutTheOperator(t *testing.T) {
 			assertNotContains(t, readFile(t, path), "sha256:bbb")
 		})
 	}
+}
+
+// TestUpdateBundle checks that the bundle is found and rearranged under
+// --operator-dir, rather than wherever update-bundle happens to be run from.
+func TestUpdateBundle(t *testing.T) {
+	t.Parallel()
+
+	operatorDir := t.TempDir()
+	for _, dir := range []string{"manifests", "metadata"} {
+		if err := os.MkdirAll(filepath.Join(operatorDir, bundleDir, dir), 0o755); err != nil {
+			t.Fatalf("creating %s: %v", dir, err)
+		}
+	}
+	writeFile(t, filepath.Join(operatorDir, bundleDir, "manifests", csvName), `spec:
+  install:
+    spec:
+      deployments:
+        - name: tigera-operator
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: tigera-operator
+                    image: quay.io/tigera/operator:v0.0.0
+`)
+	writeFile(t, filepath.Join(operatorDir, bundleDir, "metadata", "annotations.yaml"), "annotations:\n")
+	writeFile(t, filepath.Join(operatorDir, bundleDockerfile), "FROM scratch\nCOPY bundle/manifests /manifests/\n")
+
+	err := updateBundle(bundleConfig{
+		operatorDir:       operatorDir,
+		version:           "3.34.0",
+		prevVersion:       "3.33.0",
+		capabilities:      "Basic Install",
+		openShiftVersions: "v4.19-v4.22",
+	}, image{
+		digest:        "quay.io/tigera/operator@sha256:bbb",
+		created:       "2026-01-02T03:04:05Z",
+		architectures: []string{"amd64"},
+	})
+	if err != nil {
+		t.Fatalf("updateBundle: %v", err)
+	}
+
+	versionDir := filepath.Join(operatorDir, bundleDir, "3.34.0")
+	assertContains(t, readFile(t, filepath.Join(versionDir, "manifests", csvName)), "replaces: tigera-operator.v3.33.0")
+	assertContains(t, readFile(t, filepath.Join(versionDir, "metadata", "annotations.yaml")), "com.redhat.openshift.versions: v4.19-v4.22")
+	assertContains(t, readFile(t, filepath.Join(operatorDir, bundleDir, "bundle-v3.34.0.Dockerfile")), "COPY 3.34.0/manifests /manifests/")
 }
 
 func encode(content string) string {

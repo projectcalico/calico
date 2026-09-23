@@ -24,6 +24,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
@@ -87,21 +88,41 @@ var (
 	}
 )
 
-// Release flags.
+// operatorDirFlag anchors the bundle that operator-sdk generated, for the same
+// reason repoRootFlag anchors the staged manifests.
+var operatorDirFlag = &cli.StringFlag{
+	Name:      "operator-dir",
+	Usage:     "The operator directory, where 'operator-sdk generate bundle' left its output",
+	Sources:   cli.EnvVars("BUNDLE_OPERATOR_DIR"),
+	Value:     ".",
+	Validator: nonEmpty("operator-dir"),
+}
+
+// Release flags. The versions name the bundle's directory, so they are held to
+// X.Y.Z rather than just being non-empty.
 var (
 	versionFlag = &cli.StringFlag{
 		Name:      "version",
 		Usage:     "The version of the operator to publish, as X.Y.Z",
 		Sources:   cli.EnvVars("VERSION"),
 		Required:  true,
-		Validator: nonEmpty("version"),
+		Validator: semverFlag("version"),
 	}
 	prevVersionFlag = &cli.StringFlag{
 		Name:      "prev-version",
 		Usage:     "The version of the operator that this version replaces, as X.Y.Z. Use 0.0.0 if it replaces nothing",
 		Sources:   cli.EnvVars("PREV_VERSION"),
 		Required:  true,
-		Validator: nonEmpty("prev-version"),
+		Validator: semverFlag("prev-version"),
+	}
+	// The supported OpenShift range moves with every release, and a bundle only
+	// appears in the catalog for an OpenShift version that this range includes.
+	openShiftVersionsFlag = &cli.StringFlag{
+		Name:      "openshift-versions",
+		Usage:     "The OpenShift versions the bundle supports, as vX.Y-vX.Y, or vX.Y for that version and later",
+		Sources:   cli.EnvVars("BUNDLE_OPENSHIFT_VERSIONS"),
+		Value:     "v4.19-v4.22",
+		Validator: nonEmpty("openshift-versions"),
 	}
 	// The capabilities level is the claim the bundle is certified against, so it
 	// is only raised deliberately - hence the flag rather than a value in the CSV
@@ -120,21 +141,23 @@ var (
 // that is not in a registry we can reach.
 var (
 	imageFlag = &cli.StringFlag{
-		Name:      "image",
-		Usage:     "The operator image repository the bundle pins its digest from. The tag comes from --version",
-		Sources:   cli.EnvVars("OPERATOR_IMAGE"),
+		Name:  "image",
+		Usage: "The operator image repository the bundle pins its digest from. The tag comes from --version",
+		// Not OPERATOR_IMAGE: the operator Makefile already uses that for a
+		// reference that includes the tag.
+		Sources:   cli.EnvVars("BUNDLE_OPERATOR_IMAGE"),
 		Value:     "quay.io/calico/operator",
 		Validator: nonEmpty("image"),
 	}
 	imageInspectFlag = &cli.StringFlag{
 		Name:    "image-inspect",
 		Usage:   "Output of 'docker image inspect' for the operator image, raw or base64-encoded, instead of running it",
-		Sources: cli.EnvVars("OPERATOR_IMAGE_INSPECT"),
+		Sources: cli.EnvVars("BUNDLE_OPERATOR_IMAGE_INSPECT"),
 	}
 	manifestInspectFlag = &cli.StringFlag{
 		Name:    "manifest-inspect",
 		Usage:   "Output of 'docker manifest inspect' for the operator image, raw or base64-encoded, instead of running it",
-		Sources: cli.EnvVars("OPERATOR_MANIFEST_INSPECT"),
+		Sources: cli.EnvVars("BUNDLE_OPERATOR_MANIFEST_INSPECT"),
 	}
 )
 
@@ -144,6 +167,17 @@ func nonEmpty(name string) func(string) error {
 	return func(value string) error {
 		if strings.TrimSpace(value) == "" {
 			return fmt.Errorf("%s is empty", name)
+		}
+		return nil
+	}
+}
+
+// semverFlag returns a flag validator that accepts only an X.Y.Z version. That
+// also keeps a value such as '../..' from escaping the bundle directory it names.
+func semverFlag(name string) func(string) error {
+	return func(value string) error {
+		if _, err := semver.StrictNewVersion(value); err != nil {
+			return fmt.Errorf("%s %q is not an X.Y.Z version: %w", name, value, err)
 		}
 		return nil
 	}

@@ -15,10 +15,12 @@ make -C operator bundle VERSION=3.34.0 PREV_VERSION=3.33.0 CHANNEL=release-v3.34
 
 | Variable | Meaning |
 |---|---|
-| `VERSION` | The operator version to publish, `X.Y.Z`. The bundle pins `quay.io/calico/operator:v$(VERSION)` by digest, so that tag must already be pushed. |
+| `VERSION` | The operator version to publish, `X.Y.Z`. The bundle pins `$(DEV_REGISTRY)/operator:v$(VERSION)` by digest, so that tag must already be pushed. |
 | `PREV_VERSION` | The version this one replaces, `X.Y.Z`, or `0.0.0` for none. |
 | `CHANNEL` | The OperatorHub channel, which must be a `release-v3.YY` branch name. Defaults to the current branch when that branch is one; from any other branch, pass it explicitly. |
 | `DEFAULT_CHANNEL` | Optional. Only set it when the channel should become the package default. |
+| `DEV_REGISTRY` | Optional. The registry the operator image is pinned from. Defaults to `calico` (Docker Hub); pass `DEV_REGISTRY=quay.io/calico` to pin the Quay image. |
+| `BUNDLE_OPENSHIFT_VERSIONS` | Optional. The `com.redhat.openshift.versions` range, e.g. `v4.19-v4.22`. The default in `gen-bundle` moves with each release; a bundle only reaches the catalog of an OpenShift version inside this range. |
 
 Output:
 
@@ -33,7 +35,8 @@ host — the build container has no docker-in-docker.
 
 ## What runs, in order
 
-`make bundle` is four targets:
+`make bundle` is four targets, each depending on the one before it, so running
+any one of them runs the steps ahead of it too:
 
 1. **`bundle-generate`** — depends on `bundle-manifests`, which runs
    `gen-bundle get-manifests` to stage, under
@@ -50,7 +53,10 @@ host — the build container has no docker-in-docker.
 4. **`bundle-image`** — `docker build` of the generated Dockerfile.
 
 `gen-bundle` is a Go program in [`../hack/gen-bundle`](../hack/gen-bundle), with
-unit tests run by `make -C operator hack/gen-bundle/ut` (and by `make ci`).
+unit tests run by `make -C operator hack/gen-bundle/ut` (and by `make ci`). Both
+of its commands take their paths from flags (`--repo-root`, `--operator-dir`)
+that default to running from `operator/`, so pass them when running it by hand
+from anywhere else.
 
 ## Where each piece comes from
 

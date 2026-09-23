@@ -33,7 +33,8 @@ import (
 
 const (
 	// bundleDir is where 'operator-sdk generate bundle' leaves its output, and
-	// where the rearranged, versioned bundle is written.
+	// where the rearranged, versioned bundle is written, relative to the
+	// operator directory that --operator-dir names.
 	bundleDir = "bundle"
 
 	// bundleDockerfile is the Dockerfile that 'operator-sdk generate bundle'
@@ -47,18 +48,14 @@ const (
 	// relatedImages entry are all called.
 	operatorName = "tigera-operator"
 
-	// openShiftVersions is the range of OpenShift versions the bundle supports.
-	// Specify min version.
-	openShiftVersions = "v4.16-v4.18"
-
 	// noPreviousVersion is the value PREV_VERSION takes when this version
 	// replaces nothing.
 	noPreviousVersion = "0.0.0"
 )
 
-// metricsAnnotation is the operator-sdk metrics annotation, which a certified
-// bundle must not carry.
-var metricsAnnotation = regexp.MustCompile(`operators\.operatorframework\.io\.metrics`)
+// unwantedAnnotation matches the operator-sdk metrics and scorecard test
+// annotations, which a certified bundle must not carry.
+var unwantedAnnotation = regexp.MustCompile(`operators\.operatorframework\.io\.(metrics|test)\.`)
 
 // openShiftVersionsAnnotation matches the supported-versions annotation that
 // updateAnnotations writes, so that an existing one is replaced rather than
@@ -77,7 +74,10 @@ var updateBundleCommand = &cli.Command{
 		"what it replaces, the build timestamp, and the architectures the image was built for. If you find yourself adding\n" +
 		"a constant, put it in the base instead. The capability level is the exception: it is the claim we are certified\n" +
 		"against, so it is set here, behind --capabilities, rather than being editable in the base.",
-	Flags: []cli.Flag{versionFlag, prevVersionFlag, capabilitiesFlag, imageFlag, imageInspectFlag, manifestInspectFlag},
+	Flags: []cli.Flag{
+		operatorDirFlag, versionFlag, prevVersionFlag, capabilitiesFlag, openShiftVersionsFlag,
+		imageFlag, imageInspectFlag, manifestInspectFlag,
+	},
 	Action: func(ctx context.Context, c *cli.Command) error {
 		version := c.String(versionFlag.Name)
 		repository := c.String(imageFlag.Name)
@@ -86,7 +86,13 @@ var updateBundleCommand = &cli.Command{
 		if err != nil {
 			return err
 		}
-		return updateBundle(version, c.String(prevVersionFlag.Name), c.String(capabilitiesFlag.Name), inspected)
+		return updateBundle(bundleConfig{
+			operatorDir:       c.String(operatorDirFlag.Name),
+			version:           version,
+			prevVersion:       c.String(prevVersionFlag.Name),
+			capabilities:      c.String(capabilitiesFlag.Name),
+			openShiftVersions: c.String(openShiftVersionsFlag.Name),
+		}, inspected)
 	},
 }
 
@@ -156,23 +162,33 @@ func docker(ctx context.Context, args ...string) (string, error) {
 	return stdout.String(), nil
 }
 
-func updateBundle(version, prevVersion, capabilities string, img image) error {
-	versionDir := filepath.Join(bundleDir, version)
-	if err := rearrangeBundle(versionDir); err != nil {
+// bundleConfig is what update-bundle was asked to build.
+type bundleConfig struct {
+	operatorDir       string
+	version           string
+	prevVersion       string
+	capabilities      string
+	openShiftVersions string
+}
+
+func updateBundle(cfg bundleConfig, img image) error {
+	bundleRoot := filepath.Join(cfg.operatorDir, bundleDir)
+	versionDir := filepath.Join(bundleRoot, cfg.version)
+	if err := rearrangeBundle(bundleRoot, versionDir); err != nil {
 		return err
 	}
-	if err := updateCSV(filepath.Join(versionDir, "manifests", csvName), version, prevVersion, capabilities, img); err != nil {
+	if err := updateCSV(filepath.Join(versionDir, "manifests", csvName), cfg.version, cfg.prevVersion, cfg.capabilities, img); err != nil {
 		return err
 	}
-	if err := updateDockerfile(version); err != nil {
+	if err := updateDockerfile(cfg.operatorDir, cfg.version, cfg.openShiftVersions); err != nil {
 		return err
 	}
-	return updateAnnotations(filepath.Join(versionDir, "metadata", "annotations.yaml"))
+	return updateAnnotations(filepath.Join(versionDir, "metadata", "annotations.yaml"), cfg.openShiftVersions)
 }
 
 // rearrangeBundle moves the manifests and metadata that operator-sdk generated
 // into a directory named for the version they belong to.
-func rearrangeBundle(versionDir string) error {
+func rearrangeBundle(bundleRoot, versionDir string) error {
 	if err := os.RemoveAll(versionDir); err != nil {
 		return fmt.Errorf("clearing %s: %w", versionDir, err)
 	}
@@ -180,7 +196,7 @@ func rearrangeBundle(versionDir string) error {
 		return fmt.Errorf("creating %s: %w", versionDir, err)
 	}
 	for _, name := range []string{"manifests", "metadata"} {
-		src := filepath.Join(bundleDir, name)
+		src := filepath.Join(bundleRoot, name)
 		if err := os.Rename(src, filepath.Join(versionDir, name)); err != nil {
 			return fmt.Errorf("moving %s into %s: %w", src, versionDir, err)
 		}
@@ -303,8 +319,9 @@ func releaseStream(version string) string {
 	return version
 }
 
-func updateDockerfile(version string) error {
-	err := editLines(bundleDockerfile, func(lines []string) []string {
+func updateDockerfile(operatorDir, version, openShiftVersions string) error {
+	src := filepath.Join(operatorDir, bundleDockerfile)
+	err := editLines(src, func(lines []string) []string {
 		// Add in required labels.
 		lines = append(lines,
 			fmt.Sprintf("LABEL com.redhat.openshift.versions=%q", openShiftVersions),
@@ -313,7 +330,7 @@ func updateDockerfile(version string) error {
 		)
 		// Remove unneeded labels, and fix the bundle path.
 		lines = filterLines(lines, func(line string) bool {
-			return metricsAnnotation.MatchString(line) || bundleCopy.MatchString(line)
+			return unwantedAnnotation.MatchString(line) || bundleCopy.MatchString(line)
 		})
 		lines = append(lines,
 			fmt.Sprintf("COPY %s/manifests /manifests/", version),
@@ -327,22 +344,22 @@ func updateDockerfile(version string) error {
 	}
 
 	// Lastly move the dockerfile to the bundle dir, renaming it with the version.
-	dst := filepath.Join(bundleDir, fmt.Sprintf("bundle-v%s.Dockerfile", version))
-	if err := os.Rename(bundleDockerfile, dst); err != nil {
-		return fmt.Errorf("moving %s to %s: %w", bundleDockerfile, dst, err)
+	dst := filepath.Join(operatorDir, bundleDir, fmt.Sprintf("bundle-v%s.Dockerfile", version))
+	if err := os.Rename(src, dst); err != nil {
+		return fmt.Errorf("moving %s to %s: %w", src, dst, err)
 	}
 	logrus.Infof("Updated %s", dst)
 	return nil
 }
 
-func updateAnnotations(path string) error {
+func updateAnnotations(path, openShiftVersions string) error {
 	err := editLines(path, func(lines []string) []string {
 		// Remove unneeded labels and empty lines. Any openshift.versions already
 		// there goes too, so that re-running against the same file - or an
 		// operator-sdk that starts emitting the key itself - leaves one copy of it
 		// rather than a duplicate key.
 		lines = filterLines(lines, func(line string) bool {
-			return line == "" || metricsAnnotation.MatchString(line) || openShiftVersionsAnnotation.MatchString(line)
+			return line == "" || unwantedAnnotation.MatchString(line) || openShiftVersionsAnnotation.MatchString(line)
 		})
 		// Add required com.redhat.openshift.versions.
 		return append(lines, fmt.Sprintf("  com.redhat.openshift.versions: %s", openShiftVersions))
@@ -413,7 +430,9 @@ func parseArchitectures(content string) ([]string, error) {
 		architectures = append(architectures, manifest.Platform.Architecture)
 	}
 	if len(architectures) == 0 {
-		return nil, fmt.Errorf("no architectures in manifest inspect output")
+		// A single-architecture image has a plain manifest rather than a list,
+		// which is the usual way to end up here with a locally built image.
+		return nil, fmt.Errorf("no architectures in manifest inspect output (not a multi-arch manifest list?)")
 	}
 	return architectures, nil
 }

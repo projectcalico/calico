@@ -468,13 +468,16 @@ BUNDLE_DEPLOY_DIR ?= $(BUNDLE_BASE_DIR)/deploy
 
 ## Create an operator bundle image.
 # E.g., make bundle VERSION=3.34.0 PREV_VERSION=3.33.0 CHANNEL=release-v3.34 DEFAULT_CHANNEL=release-v3.34
+#
+# Each step depends on the one before it, rather than being listed here in
+# order, so that the steps still run in order under 'make -j'.
 .PHONY: bundle
-bundle: bundle-generate update-bundle bundle-validate bundle-image
+bundle: bundle-image
 
 # Validate against the full Operator Framework suite, not just the required
 # checks, since this bundle is built to be certified.
 .PHONY: bundle-validate
-bundle-validate: $(OPERATOR_SDK_BARE)
+bundle-validate: $(OPERATOR_SDK_BARE) update-bundle
 	$(OPERATOR_SDK_BARE) bundle validate bundle/$(VERSION) --select-optional suite=operatorframework
 
 .PHONY: bundle-manifests
@@ -513,7 +516,7 @@ bundle-generate: $(OPERATOR_SDK_BARE) bundle-manifests
 # gen-bundle pulls and inspects the operator image itself, which is why it runs
 # on the host: the build container has no docker-in-docker.
 .PHONY: update-bundle
-update-bundle: $(BINDIR)/gen-bundle
+update-bundle: $(BINDIR)/gen-bundle bundle-generate
 ifndef VERSION
 	$(error VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
 endif
@@ -521,11 +524,12 @@ ifndef PREV_VERSION
 	$(error PREV_VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
 endif
 	$(BINDIR)/gen-bundle update-bundle \
+		--operator-dir "$(CURDIR)" \
 		--version "$(VERSION)" \
 		--prev-version "$(PREV_VERSION)" \
 		--image "$(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME)"
 
-$(BINDIR)/gen-bundle: $(shell find ./hack/gen-bundle -type f)
+$(BINDIR)/gen-bundle: $(wildcard hack/gen-bundle/*)
 	mkdir -p $(BINDIR)
 	$(DOCKER_GO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
@@ -542,7 +546,7 @@ hack/gen-bundle/ut:
 
 # Build the bundle image.
 .PHONY: bundle-image
-bundle-image:
+bundle-image: bundle-validate
 ifndef VERSION
 	$(error VERSION is undefined - run using make $@ VERSION=X.Y.Z)
 endif
