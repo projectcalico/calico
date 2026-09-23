@@ -230,6 +230,38 @@ func TestPublishRetagVersusPush(t *testing.T) {
 	})
 }
 
+func TestPublishEnvIsReplaceable(t *testing.T) {
+	restore := publishEnv
+	t.Cleanup(func() { publishEnv = restore })
+	publishEnv = func(s settings) []string {
+		return append(slices.DeleteFunc(restore(s), func(e string) bool {
+			return strings.HasPrefix(e, "RELEASE=")
+		}), "REPLACED=true")
+	}
+
+	for _, tc := range []struct {
+		name  string
+		extra []PublishOption
+	}{
+		{name: "push"},
+		{name: "retag", extra: []PublishOption{WithRetag("gcr.io/unique-caldron/hashrelease", "v3.30.0-abcdef", false)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeRunner{}
+			if err := publish(f, sharedTargetVariants(), tc.extra...); err != nil {
+				t.Fatalf("Publish: %v", err)
+			}
+			env := f.envFor("cmd/calico", "publish-image")
+			if !hasEnv(env, "REPLACED=true") {
+				t.Errorf("env missing the added variable, got %v", env)
+			}
+			if hasEnv(env, "RELEASE=true") {
+				t.Errorf("env still carries the dropped RELEASE, got %v", env)
+			}
+		})
+	}
+}
+
 // A publish latches CONFIRM; a dry run latches DRYRUN and pushes nothing.
 func TestPublishConfirmLatch(t *testing.T) {
 	for _, tc := range []struct {
