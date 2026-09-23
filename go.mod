@@ -126,8 +126,8 @@ require (
 	kubevirt.io/client-go v1.9.0-beta.0.0.20260820173903-b1272ce720d5
 	modernc.org/memory v1.11.0
 	sigs.k8s.io/controller-runtime v0.24.1
-	sigs.k8s.io/gateway-api v1.5.1
-	sigs.k8s.io/gateway-api/conformance v1.5.1
+	sigs.k8s.io/gateway-api v1.6.1
+	sigs.k8s.io/gateway-api/conformance v1.6.1
 	sigs.k8s.io/kind v0.32.0
 	sigs.k8s.io/knftables v0.0.23-0.20260903141422-0087e9ef619d
 	sigs.k8s.io/network-policy-api v0.2.0
@@ -266,7 +266,7 @@ require (
 	github.com/gonvenience/ytbx v1.4.4 // indirect
 	github.com/google/cadvisor/lib v0.60.5 // indirect
 	github.com/google/cel-go v0.29.2 // indirect
-	github.com/google/gnostic-models v0.7.0 // indirect
+	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/pprof v0.0.0-20260402051712-545e8a4df936 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
@@ -366,7 +366,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.45.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.27.1 // indirect
+	go.uber.org/zap v1.28.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
