@@ -7,7 +7,7 @@ BUILD_IMAGES ?= $(ENVOY_GATEWAY_IMAGE)
 
 # For updating this version please see
 # operator/docs/common_tasks.md, "Updating the bundled version of Envoy Gateway".
-ENVOY_GATEWAY_VERSION=v1.8.2
+ENVOY_GATEWAY_VERSION=v1.9.1
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -35,19 +35,19 @@ DEP_PINS=dep-pins.txt
 # 	-F0 drops patch's default fuzz: a stale patch fails rather than landing
 # 	somewhere approximate.
 
-# 	Upstream at the pinned tag with the custom patches applied. Removed first
-# 	so a re-extraction cannot mix in files, or a stale baseline, from an older
-# 	tag.
+# 	Upstream at the pinned tag. Removed first so a re-extraction cannot mix in
+# 	files, or a stale baseline, from an older tag. No custom patches today, so
+# 	there is no class 01 loop; the check below fails rather than let one be
+# 	added and never applied.
 $(ENVOY_GATEWAY_FETCHED):
+	@[ ! -d patches/01-custom-patches ] || { \
+		echo "error: patches/01-custom-patches/ exists but nothing applies it;" >&2; \
+		echo "       restore the class 01 loop from git history" >&2; \
+		exit 1; \
+	}
 	rm -rf envoy-gateway && mkdir -p envoy-gateway
 	$(call fetch_file,https://github.com/envoyproxy/gateway/archive/refs/tags/$(ENVOY_GATEWAY_VERSION).tar.gz,/tmp/envoy-gateway.tar.gz)
 	tar xz --strip-components 1 -C envoy-gateway -f /tmp/envoy-gateway.tar.gz && rm -f /tmp/envoy-gateway.tar.gz
-	found=; \
-	for patch in patches/01-custom-patches/*.patch; do \
-		[ -f "$$patch" ] || continue; found=1; \
-		patch -d envoy-gateway -p1 -F0 < "$$patch" || exit 1; \
-	done; \
-	[ -n "$$found" ] || { echo "error: no patches in patches/01-custom-patches/" >&2; exit 1; }
 # 	Record what the generator diffs against, before any dependency patch
 # 	lands. No-op for a cloned tree.
 	../../hack/thirdparty/init-dep-baseline.sh envoy-gateway
