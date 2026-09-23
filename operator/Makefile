@@ -76,9 +76,14 @@ CALICO_VERSION    ?= $(BRANCH_IMAGE_TAG)
 endif
 CALICO_REGISTRY   ?=
 CALICO_IMAGE_PATH ?=
+# Where the operator resolves its own image. Empty keeps the variant default.
+OPERATOR_IMAGE_REGISTRY ?=
+OPERATOR_IMAGE_PATH     ?=
 CALICO_LDFLAGS = -X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(CALICO_VERSION) \
                  -X $(PACKAGE_NAME)/pkg/components.calicoRegistry=$(CALICO_REGISTRY) \
-                 -X $(PACKAGE_NAME)/pkg/components.calicoImagePath=$(CALICO_IMAGE_PATH)
+                 -X $(PACKAGE_NAME)/pkg/components.calicoImagePath=$(CALICO_IMAGE_PATH) \
+                 -X $(PACKAGE_NAME)/pkg/components.operatorRegistry=$(OPERATOR_IMAGE_REGISTRY) \
+                 -X $(PACKAGE_NAME)/pkg/components.operatorImagePath=$(OPERATOR_IMAGE_PATH)
 
 # To update the Istio version, see "Updating the bundled version of Istio" in docs/common_tasks.md.
 ISTIO_HELM_REPO ?= https://istio-release.storage.googleapis.com/charts

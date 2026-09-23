@@ -42,7 +42,7 @@ func TestPinnedOperator(t *testing.T) {
 		{
 			name:         "empty env vars leave the pin",
 			args:         []string{"publish"},
-			env:          map[string]string{"OPERATOR_REGISTRY": "", "OPERATOR_IMAGE": ""},
+			env:          map[string]string{"OPERATOR_REGISTRY": ""},
 			wantRegistry: "quay.io/pinned",
 			wantImage:    "operator",
 		},
@@ -52,12 +52,6 @@ func TestPinnedOperator(t *testing.T) {
 			args:         []string{"publish", "--operator-registry", "gcr.io/flagged"},
 			wantRegistry: "gcr.io/flagged",
 			wantImage:    "operator",
-		},
-		{
-			name:         "image flag overrides the pin",
-			args:         []string{"publish", "--operator-image", "flagged"},
-			wantRegistry: "quay.io/pinned",
-			wantImage:    "flagged",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -53,7 +53,7 @@ var (
 			ReleaseBranchPrefix: c.String(releaseBranchPrefixFlag.Name),
 			Registry:            productRegistry(c),
 			Operator: registry.Component{
-				Image:    operatorImage(c),
+				Image:    registry.OperatorImage,
 				Registry: operatorRegistries(c)[0],
 			},
 		}
@@ -138,11 +138,7 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 		if c.Bool(operatorFlagName) {
 			o := pinnedOperator(cfg, c, pin.Operator, pin.ProductVersion)
 			if err := operator.Build(o, operatorVariants(c), true,
-				operator.WithRunner(commandRunner),
-				operator.WithLogsDir(filepath.Join(cfg.LogsDir, pin.ProductVersion)),
-				operator.WithArches(c.StringSlice(archFlag.Name)...),
-				operator.WithValidation(c.Bool(validationFlag.Name)),
-			); err != nil {
+				operatorBuildOptions(c, filepath.Join(cfg.LogsDir, pin.ProductVersion))...); err != nil {
 				return fmt.Errorf("operator build: %w", err)
 			}
 		}
@@ -253,7 +249,7 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 		// This is because validation checks all images exists and sends to Image Scan Service
 		if c.Bool(operatorFlagName) {
 			o := pinnedOperator(cfg, c, hashrel.Operator, hashrel.ProductVersion)
-			opts, err := operatorPublishOptions(cfg, c, o.Version, filepath.Join(cfg.LogsDir, hashrel.ProductVersion))
+			opts, err := operatorPublishOptions(c, o.Version, hashrel.Source, filepath.Join(cfg.LogsDir, hashrel.ProductVersion))
 			if err != nil {
 				return fmt.Errorf("operator publish options: %w", err)
 			}

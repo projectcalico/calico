@@ -169,15 +169,15 @@ func validateImage(o Operator) error {
 }
 
 // Both parts keep the trailing slash the make targets join on.
-func productRegistryParts(productRegistry string) (reg string, imagePath string, err error) {
+func registryParts(fullRegistry string) (reg string, imagePath string, err error) {
 	var parts []string
-	for _, part := range strings.Split(productRegistry, "/") {
+	for _, part := range strings.Split(fullRegistry, "/") {
 		if part != "" {
 			parts = append(parts, part)
 		}
 	}
 	if len(parts) < 2 {
-		return "", "", fmt.Errorf("failed to parse product registry: %s", productRegistry)
+		return "", "", fmt.Errorf("failed to parse registry %q: it needs a path, as in quay.io/calico", fullRegistry)
 	}
 	return strings.Join(parts[:len(parts)-1], "/") + "/", parts[len(parts)-1] + "/", nil
 }

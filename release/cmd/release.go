@@ -98,7 +98,9 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 				if err != nil {
 					return fmt.Errorf("release version: %w", err)
 				}
-				o.ProductVersion = ver.FormattedString()
+				if ver.FormattedString() != o.ProductVersion {
+					return fmt.Errorf("manifests are at %s but git says this release is %s: run release prep first", o.ProductVersion, ver.FormattedString())
+				}
 
 				// Configure the builder.
 				opts := []calico.Option{
@@ -133,11 +135,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 				// release rebuilds it rather than retagging the one a hashrelease published.
 				if c.Bool(operatorFlagName) {
 					if err := operator.Build(*o, operatorVariants(c), false,
-						operator.WithRunner(commandRunner),
-						operator.WithLogsDir(filepath.Join(cfg.LogsDir, o.ProductVersion)),
-						operator.WithArches(c.StringSlice(archFlag.Name)...),
-						operator.WithValidation(c.Bool(validationFlag.Name)),
-					); err != nil {
+						operatorBuildOptions(c, filepath.Join(cfg.LogsDir, o.ProductVersion))...); err != nil {
 						return fmt.Errorf("operator build: %w", err)
 					}
 				}
@@ -195,11 +193,11 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					opts = append(opts, calico.WithS3Bucket(v))
 				}
 				if c.Bool(operatorFlagName) {
-					opts, err := operatorPublishOptions(cfg, c, o.Version, filepath.Join(cfg.LogsDir, o.ProductVersion))
+					oOpts, err := operatorPublishOptions(c, o.Version, releaseOutputDir(cfg.RepoRootDir, o.ProductVersion), filepath.Join(cfg.LogsDir, o.ProductVersion))
 					if err != nil {
 						return fmt.Errorf("operator publish options: %w", err)
 					}
-					if err := operator.Publish(*o, operatorVariants(c), false, opts...); err != nil {
+					if err := operator.Publish(*o, operatorVariants(c), false, oOpts...); err != nil {
 						return fmt.Errorf("operator publish: %w", err)
 					}
 				}

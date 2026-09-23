@@ -37,7 +37,7 @@ func binariesCommand(cfg *Config) *cli.Command {
 }
 
 var (
-	binariesBuildFlags  = []cli.Flag{hashreleaseFlag}
+	binariesBuildFlags  = []cli.Flag{hashreleaseFlag, releaseBranchPrefixFlag}
 	binariesBuildAction = func(cfg *Config) func(ctx context.Context, c *cli.Command) error {
 		return func(_ context.Context, c *cli.Command) error {
 			configureLogging("binaries-build.log")

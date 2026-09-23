@@ -1247,6 +1247,10 @@ func (r *CalicoManager) publishBranchTag() error {
 		return nil
 	}
 	if registry.DefaultProductRegistry != reg {
+		logrus.WithFields(logrus.Fields{
+			"registry": reg,
+			"branch":   branch,
+		}).Warning("Skip moving the branch tag outside the default registry")
 		return r.publishOperatorBranchTag(branch)
 	}
 	registry, err := r.getRegistryFromManifests()
@@ -1284,6 +1288,10 @@ func (r *CalicoManager) publishBranchTag() error {
 
 func (r *CalicoManager) publishOperatorBranchTag(branch string) error {
 	if registry.DefaultOperatorRegistry != r.operatorRegistry {
+		logrus.WithFields(logrus.Fields{
+			"registry": r.operatorRegistry,
+			"branch":   branch,
+		}).Info("Skip moving the operator branch tag outside the default registry")
 		return nil
 	}
 

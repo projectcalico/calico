@@ -40,8 +40,8 @@ var manifestsSubcommands = func(cfg *Config) []*cli.Command {
 }
 
 var manifestsBuildFlags = []cli.Flag{
-	registryFlag, operatorRegistryFlag, operatorImageFlag,
-	ocpBundleFlag, hashreleaseFlag,
+	registryFlag, operatorRegistryFlag,
+	ocpBundleFlag, hashreleaseFlag, releaseBranchPrefixFlag,
 }
 
 var manifestsBuildAction = func(cfg *Config) func(context.Context, *cli.Command) error {
@@ -98,7 +98,7 @@ var pinnedManifests = func(cfg *Config, c *cli.Command, pin pinned) (*manifests.
 		Version:  ver.FormattedString(),
 		Operator: registry.Component{
 			Version:  operatorVer.FormattedString(),
-			Image:    operatorImage(c),
+			Image:    registry.OperatorImage,
 			Registry: operatorRegistries(c)[0],
 		},
 		Registry:  firstRegistry(c),

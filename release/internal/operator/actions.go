@@ -44,11 +44,7 @@ func Publish(o Operator, variants []Variant, hashrelease bool, opts ...PublishOp
 	if err != nil {
 		return err
 	}
-	latch := utils.EnvConfirm
-	if s.dryRun {
-		latch = utils.EnvDryRun
-	}
-	env := []string{utils.EnvTrue(latch)}
+	env := []string{s.latch()}
 
 	return eachVariant(variants, func(v Variant) error {
 		if err := s.run(publishTarget, v, hashrelease, env); err != nil {
@@ -72,11 +68,7 @@ func PublishBranchTag(o Operator, variants []Variant, branch string, opts ...Pub
 	}
 	// No manifest refers to another variant under a branch tag.
 	variants = Narrow(variants, []string{standardVariant})
-	latch := utils.EnvConfirm
-	if s.dryRun {
-		latch = utils.EnvDryRun
-	}
-	env := []string{utils.EnvTrue(latch), utils.Env(utils.EnvImageTag, branch)}
+	env := []string{s.latch(), utils.Env(utils.EnvImageTag, branch)}
 
 	return eachVariant(variants, func(v Variant) error {
 		return s.run(branchTagTarget, v, false, env)
@@ -91,6 +83,13 @@ func eachVariant(variants []Variant, fn func(Variant) error) error {
 		errs = append(errs, fn(v))
 	}
 	return errors.Join(errs...)
+}
+
+func (s settings) latch() string {
+	if s.dryRun {
+		return utils.EnvTrue(utils.EnvDryRun)
+	}
+	return utils.EnvTrue(utils.EnvConfirm)
 }
 
 // The variant's env goes last so an inherited value cannot pick the variant.
@@ -126,19 +125,29 @@ func logSlug(target string) string {
 
 // A replacement, not an append hook: a product can drop or rewrite a variable.
 var productEnv = func(o Operator) ([]string, error) {
-	if o.ProductRegistry == "" {
-		return nil, nil
-	}
-	reg, imagePath, err := productRegistryParts(o.ProductRegistry)
-	if err != nil {
-		return nil, err
-	}
-	env := []string{
-		utils.Env("CALICO_REGISTRY", reg),
-		utils.Env("CALICO_IMAGE_PATH", imagePath),
+	var env []string
+	if o.ProductRegistry != "" {
+		reg, imagePath, err := registryParts(o.ProductRegistry)
+		if err != nil {
+			return nil, err
+		}
+		env = append(env,
+			utils.Env("CALICO_REGISTRY", reg),
+			utils.Env("CALICO_IMAGE_PATH", imagePath),
+		)
 	}
 	if o.ProductVersion != "" {
 		env = append(env, utils.Env("CALICO_VERSION", o.ProductVersion))
+	}
+	if reg := Registry(o); reg != "" {
+		opReg, opPath, err := registryParts(reg)
+		if err != nil {
+			return nil, err
+		}
+		env = append(env,
+			utils.Env("OPERATOR_IMAGE_REGISTRY", opReg),
+			utils.Env("OPERATOR_IMAGE_PATH", opPath),
+		)
 	}
 	return env, nil
 }

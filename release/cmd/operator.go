@@ -41,8 +41,8 @@ var operatorSubCommands = func(cfg *Config) []*cli.Command {
 }
 
 var operatorBuildFlags = []cli.Flag{
-	operatorRegistryFlag, operatorImageFlag, registryFlag, archFlag,
-	validationFlag, hashreleaseFlag,
+	operatorRegistryFlag, registryFlag, archFlag,
+	validationFlag, hashreleaseFlag, releaseBranchPrefixFlag,
 }
 
 var operatorBuildAction = func(cfg *Config) func(context.Context, *cli.Command) error {
@@ -53,11 +53,7 @@ var operatorBuildAction = func(cfg *Config) func(context.Context, *cli.Command) 
 			return err
 		}
 		return operator.Build(*o, operatorVariants(c), c.Bool(hashreleaseFlag.Name),
-			operator.WithRunner(commandRunner),
-			operator.WithLogsDir(filepath.Join(cfg.LogsDir, o.ProductVersion)),
-			operator.WithArches(c.StringSlice(archFlag.Name)...),
-			operator.WithValidation(c.Bool(validationFlag.Name)),
-		)
+			operatorBuildOptions(c, filepath.Join(cfg.LogsDir, o.ProductVersion))...)
 	}
 }
 
@@ -71,7 +67,7 @@ func operatorBuildCommand(cfg *Config) *cli.Command {
 }
 
 var operatorPublishFlags = []cli.Flag{
-	operatorRegistryFlag, operatorImageFlag, archFlag, localFlag, hashreleaseFlag,
+	operatorRegistryFlag, archFlag, localFlag, hashreleaseFlag,
 }
 
 var operatorPublishAction = func(cfg *Config) func(context.Context, *cli.Command) error {
@@ -81,7 +77,7 @@ var operatorPublishAction = func(cfg *Config) func(context.Context, *cli.Command
 		if err != nil {
 			return err
 		}
-		opts, err := operatorPublishOptions(cfg, c, o.Version, filepath.Join(cfg.LogsDir, o.ProductVersion))
+		opts, err := operatorPublishOptions(c, o.Version, cfg.OutputDir, filepath.Join(cfg.LogsDir, o.ProductVersion))
 		if err != nil {
 			return err
 		}
@@ -98,16 +94,23 @@ func operatorPublishCommand(cfg *Config) *cli.Command {
 	}
 }
 
-// One assembly for every publish path, so they cannot record to different
-// places.
-var operatorPublishOptions = func(cfg *Config, c *cli.Command, version, logsDir string) ([]operator.PublishOption, error) {
+var operatorBuildOptions = func(c *cli.Command, logsDir string) []operator.BuildOption {
+	return []operator.BuildOption{
+		operator.WithRunner(commandRunner),
+		operator.WithLogsDir(logsDir),
+		operator.WithArches(c.StringSlice(archFlag.Name)...),
+		operator.WithValidation(c.Bool(validationFlag.Name)),
+	}
+}
+
+var operatorPublishOptions = func(c *cli.Command, version, uploadDir, logsDir string) ([]operator.PublishOption, error) {
 	opts := []operator.PublishOption{
 		operator.WithRunner(commandRunner),
 		operator.WithLogsDir(logsDir),
 		operator.WithArches(c.StringSlice(archFlag.Name)...),
 		operator.WithDryRun(c.Bool(localFlag.Name)),
 	}
-	_, w, err := publishRecord(cfg, operator.PublishStep, version, !c.Bool(localFlag.Name))
+	_, w, err := publishRecord(uploadDir, operator.PublishStep, version, !c.Bool(localFlag.Name))
 	if err != nil {
 		return nil, err
 	}
@@ -123,13 +126,6 @@ var operatorRegistries = func(c *cli.Command) []string {
 		return registry.DefaultOperatorRegistries
 	}
 	return reg
-}
-
-var operatorImage = func(c *cli.Command) string {
-	if c.String(operatorImageFlag.Name) != "" {
-		return c.String(operatorImageFlag.Name)
-	}
-	return registry.OperatorImage
 }
 
 var operatorVariants = func(_ *cli.Command) []operator.Variant {
@@ -158,7 +154,7 @@ var releaseOperator = func(cfg *Config, c *cli.Command) (*operator.Operator, err
 	return &operator.Operator{
 		RepoRoot:        cfg.RepoRootDir,
 		Version:         operatorVer.FormattedString(),
-		Image:           operatorImage(c),
+		Image:           registry.OperatorImage,
 		Registries:      operatorRegistries(c),
 		ProductVersion:  ver.FormattedString(),
 		ProductRegistry: productRegistry(c),
@@ -172,8 +168,8 @@ var pinnedOperator = func(cfg *Config, c *cli.Command, pinned registry.Component
 	if len(c.StringSlice(operatorRegistryFlag.Name)) == 0 && pinned.Registry != "" {
 		reg = []string{pinned.Registry}
 	}
-	img := operatorImage(c)
-	if c.String(operatorImageFlag.Name) == "" && pinned.Image != "" {
+	img := registry.OperatorImage
+	if pinned.Image != "" {
 		img = pinned.Image
 	}
 	return operator.Operator{

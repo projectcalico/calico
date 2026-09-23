@@ -95,7 +95,7 @@ var (
 			if err != nil {
 				return err
 			}
-			published, w, err := publishRecord(cfg, imagesPublishStep, ver.FormattedString(), !c.Bool(localFlag.Name))
+			published, w, err := publishRecord(cfg.OutputDir, imagesPublishStep, ver.FormattedString(), !c.Bool(localFlag.Name))
 			if err != nil {
 				return err
 			}

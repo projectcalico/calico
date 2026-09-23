@@ -299,12 +299,12 @@ var (
 // Operator flags are flags used to interact with Tigera operator repository
 var (
 	operatorBuildCommandFlags = []cli.Flag{
-		operatorRegistryFlag, operatorImageFlag,
+		operatorRegistryFlag,
 		operatorFlag(envBuildOperator, envReleaseOperator),
 	}
 
 	operatorPublishCommandFlags = []cli.Flag{
-		operatorRegistryFlag, operatorImageFlag,
+		operatorRegistryFlag,
 		operatorFlag(envPublishOperator, envReleaseOperator),
 	}
 
@@ -314,12 +314,6 @@ var (
 		Category: operatorCategory,
 		Usage:    "The registry to use for operator, repeat for multiple registries. If not set, the default registries will be used.",
 		Sources:  cli.EnvVars("OPERATOR_REGISTRY", "OPERATOR_REGISTRIES"),
-	}
-	operatorImageFlag = &cli.StringFlag{
-		Name:     "operator-image",
-		Category: operatorCategory,
-		Usage:    "The image name to use for operator. If not set, the default image will be used.",
-		Sources:  cli.EnvVars("OPERATOR_IMAGE"),
 	}
 
 	operatorFlagName   = "operator"
