@@ -165,7 +165,7 @@ var (
 	forceFlag = &cli.BoolFlag{
 		Name:     "force",
 		Category: stepControlCategory,
-		Usage:    "Republish artifacts whose published digest differs from the record.",
+		Usage:    "Ignore safety check and force the action to proceed",
 		Sources:  cli.EnvVars("FORCE"),
 	}
 )
