@@ -2087,6 +2087,9 @@ class TestLiveMigration(TestPluginEtcdBase):
         # Clear initial writes.
         self.recent_writes = {}
         self.recent_deletes = set()
+        # The plugin mock is module-level and so shared between tests; without this,
+        # notifications sent by an earlier test are still visible here.
+        self.db.nova_notifier.notify_port_active_direct.reset_mock()
 
     def _ep_key(self, host):
         """Build WEP etcd key for port1 on the given host."""
@@ -2443,6 +2446,116 @@ class TestLiveMigration(TestPluginEtcdBase):
 
         # Should NOT have called notify_port_active_direct.
         self.db.nova_notifier.notify_port_active_direct.assert_not_called()
+
+    def _complete_migration(self):
+        """Simulate Nova's cutover: the binding moves to the destination host."""
+        self.osdb_ports[0]["binding:host_id"] = self.DEST_HOST
+        self.osdb_ports[0]["binding:profile"] = {}
+
+    def _rollback_migration(self):
+        """Simulate a failed migration: the binding stays at the source host."""
+        self.osdb_ports[0]["binding:profile"] = {}
+
+    def _report_status(self, hostname, port_id, status=None):
+        """Drive _try_to_update_port_status as the status writer thread would.
+
+        ``status`` is the Calico endpoint status now cached for ``hostname``; None
+        models Felix having deleted that host's status key.  Returns the
+        update_port_status mock, for the caller to assert on.
+        """
+        self.driver._get_db()
+        if status is None:
+            self.driver._port_status_cache.pop((hostname, port_id), None)
+        else:
+            self.driver._port_status_cache[(hostname, port_id)] = status
+        self.db.update_port_status = mock.Mock()
+        context = mock.Mock()
+        with mock.patch("eventlet.spawn_after", autospec=True):
+            self.driver._try_to_update_port_status(context, (hostname, port_id))
+        return self.db.update_port_status
+
+    def test_dest_up_during_migration_sets_active(self):
+        """The destination may report the port up before Nova's cutover."""
+        self._do_initial_resync()
+        self._pre_migrate()
+
+        m_update = self._report_status(
+            self.DEST_HOST, self.port["id"], datamodel_v1.ENDPOINT_STATUS_UP
+        )
+
+        m_update.assert_called_once_with(
+            mock.ANY,
+            self.port["id"],
+            mech_calico.constants.PORT_STATUS_ACTIVE,
+            host=self.DEST_HOST,
+        )
+
+    def test_source_deletion_after_migration_leaves_port_active(self):
+        """The source's endpoint deletion must not flip a migrated port to ERROR.
+
+        This was a reported bug: the destination reports "up" and then the source's
+        status key is deleted, and with a single Neutron status field the deletion
+        used to land last and win.
+        """
+        self._do_initial_resync()
+        self._pre_migrate()
+        self._complete_migration()
+        self.driver._port_status_cache[(self.DEST_HOST, self.port["id"])] = (
+            datamodel_v1.ENDPOINT_STATUS_UP
+        )
+
+        m_update = self._report_status(self.SOURCE_HOST, self.port["id"])
+
+        m_update.assert_called_once_with(
+            mock.ANY,
+            self.port["id"],
+            mech_calico.constants.PORT_STATUS_ACTIVE,
+            host=self.SOURCE_HOST,
+        )
+
+    def test_failed_migration_dest_deletion_heals_port(self):
+        """A rolled-back migration re-asserts the source's status.
+
+        The VM never left the source, so Felix there has nothing new to report and the
+        only event is the destination WEP being cleaned up.  That event has to carry
+        the source's status, or a port left DOWN by the rebind would stay there.
+        """
+        self._do_initial_resync()
+        self._pre_migrate()
+        self._rollback_migration()
+        self.driver._port_status_cache[(self.SOURCE_HOST, self.port["id"])] = (
+            datamodel_v1.ENDPOINT_STATUS_UP
+        )
+
+        m_update = self._report_status(self.DEST_HOST, self.port["id"])
+
+        m_update.assert_called_once_with(
+            mock.ANY,
+            self.port["id"],
+            mech_calico.constants.PORT_STATUS_ACTIVE,
+            host=self.DEST_HOST,
+        )
+
+    def test_deletion_at_owning_host_still_reports_error(self):
+        """A port still bound here, with no Calico endpoint, is a genuine error."""
+        self._do_initial_resync()
+
+        m_update = self._report_status(self.SOURCE_HOST, self.port["id"])
+
+        m_update.assert_called_once_with(
+            mock.ANY,
+            self.port["id"],
+            mech_calico.constants.PORT_STATUS_ERROR,
+            host=self.SOURCE_HOST,
+        )
+
+    def test_status_from_unrelated_host_is_ignored(self):
+        """A host that owns no endpoint for this port cannot move its status."""
+        self._do_initial_resync()
+
+        m_update = self._report_status("some-other-host", self.port["id"])
+
+        m_update.assert_not_called()
 
     def test_resync_creates_missing_live_migration(self):
         """Resync creates LiveMigration and dest WEP for migrating port."""
@@ -2973,18 +3086,38 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             mock_calls.append(mock.call(context, port_id, status, host=host))
 
         self.db.update_port_status = m_update_port_status
+        self.osdb_ports = [copy.deepcopy(lib.port1)]
+        host = lib.port1["binding:host_id"]
+        port_id = lib.port1["id"]
         context = mock.Mock()
         with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
-            self.driver._try_to_update_port_status(context, ("host", "p1"))
+            self.driver._try_to_update_port_status(context, (host, port_id))
         self.assertEqual(
             [
                 mock.call(
-                    context, "p1", mech_calico.constants.PORT_STATUS_ERROR, host="host"
+                    context,
+                    port_id,
+                    mech_calico.constants.PORT_STATUS_ERROR,
+                    host=host,
                 )
             ],
             mock_calls,
         )
         self.assertEqual([], m_spawn.mock_calls)  # No retry on success
+
+    @mock.patch("eventlet.spawn")
+    def test_try_to_update_port_status_port_gone(self, _m_spawn):
+        # A port that Neutron no longer has is not worth a write: update_port_status()
+        # would ignore it anyway.
+        self.driver._get_db()
+        self.driver._init_start_endpoint_status_watcher()
+
+        self.db.update_port_status = mock.Mock()
+        self.osdb_ports = []
+        context = mock.Mock()
+        with mock.patch("eventlet.spawn_after", autospec=True):
+            self.driver._try_to_update_port_status(context, ("host", "p1"))
+        self.db.update_port_status.assert_not_called()
 
     @mock.patch("eventlet.spawn")
     def test_try_to_update_port_status_fail(self, _m_spawn):
@@ -2998,20 +3131,26 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             raise lib.DBError()
 
         self.db.update_port_status = m_update_port_status
-        self.driver._port_status_cache[("host", "p1")] = "up"
+        self.osdb_ports = [copy.deepcopy(lib.port1)]
+        host = lib.port1["binding:host_id"]
+        port_id = lib.port1["id"]
+        self.driver._port_status_cache[(host, port_id)] = "up"
         context = mock.Mock()
         with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
-            self.driver._try_to_update_port_status(context, ("host", "p1"))
+            self.driver._try_to_update_port_status(context, (host, port_id))
         self.assertEqual(
             [
                 mock.call(
-                    context, "p1", mech_calico.constants.PORT_STATUS_ACTIVE, host="host"
+                    context,
+                    port_id,
+                    mech_calico.constants.PORT_STATUS_ACTIVE,
+                    host=host,
                 )
             ],
             mock_calls,
         )
         self.assertEqual(
-            [mock.call(5, self.driver._retry_port_status_update, ("host", "p1"))],
+            [mock.call(5, self.driver._retry_port_status_update, (host, port_id))],
             m_spawn.mock_calls,
         )
 
@@ -3027,12 +3166,15 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             raise lib.SQLAlchemyError()
 
         self.db.update_port_status = m_update_port_status
-        self.driver._port_status_cache[("host", "p1")] = "up"
+        self.osdb_ports = [copy.deepcopy(lib.port1)]
+        host = lib.port1["binding:host_id"]
+        port_id = lib.port1["id"]
+        self.driver._port_status_cache[(host, port_id)] = "up"
         context = mock.Mock()
         with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
-            self.driver._try_to_update_port_status(context, ("host", "p1"))
+            self.driver._try_to_update_port_status(context, (host, port_id))
         self.assertEqual(
-            [mock.call(5, self.driver._retry_port_status_update, ("host", "p1"))],
+            [mock.call(5, self.driver._retry_port_status_update, (host, port_id))],
             m_spawn.mock_calls,
         )
 
