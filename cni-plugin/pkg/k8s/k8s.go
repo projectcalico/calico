@@ -312,11 +312,14 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	ipAddrsNoIpam := annot["cni.projectcalico.org/ipAddrsNoIpam"]
 	ipAddrs := annot["cni.projectcalico.org/ipAddrs"]
 
+	// Whether result holds addresses carried over from an earlier sandbox of this pod
+	// rather than newly assigned ones. See releaseIPAM below.
+	var reusedIPs bool
+
 	// Switch based on which annotations are passed or not passed.
 	switch {
 	case ipAddrs == "" && ipAddrsNoIpam == "":
-		// Call the IPAM plugin.
-		result, err = utils.AddIPAM(conf, args, logger)
+		result, reusedIPs, err = assignPodIPs(conf, args, epIDs, endpoint, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -412,6 +415,13 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 	// releaseIPAM cleans up any IPAM allocations on failure.
 	releaseIPAM := func() {
+		if reusedIPs {
+			// The pod's endpoint still records these addresses, so the next ADD claims
+			// them again; releasing them would cost a running pod its IP.
+			logger.WithField("endpointIPs", endpoint.Spec.IPNetworks).Info("Leaving reused IPAM allocation(s) in place after failure")
+			return
+		}
+
 		logger.WithField("endpointIPs", endpoint.Spec.IPNetworks).Info("Releasing IPAM allocation(s) after failure")
 		utils.ReleaseIPAllocation(logger, conf, args)
 	}
@@ -679,21 +689,78 @@ func ipAddrsResult(ipAddrs string, conf types.NetConf, args *skel.CmdArgs, logge
 		return nil, err
 	}
 
+	return assignRequestedIPs(ipList, conf, args, logger)
+}
+
+// assignPodIPs allocates this pod's addresses, preferring the ones its existing endpoint
+// already holds. Reuse lets an in-place sandbox rebuild succeed in a pool that has no
+// spare capacity for a second allocation.
+func assignPodIPs(
+	conf types.NetConf,
+	args *skel.CmdArgs,
+	epIDs utils.WEPIdentifiers,
+	endpoint *internalapi.WorkloadEndpoint,
+	logger *logrus.Entry,
+) (*cniv1.Result, bool, error) {
+	priorIPs := priorSandboxIPs(conf, epIDs, endpoint, logger)
+	if len(priorIPs) != 0 {
+		logger.WithField("ips", priorIPs).Info("Reassigning existing IP to new sandbox")
+		result, err := assignRequestedIPs(priorIPs, conf, args, logger)
+		if err == nil {
+			return result, true, nil
+		}
+
+		// IPAM can return a partial success. Release any IPs that we just assigned to this
+		// sandbox before attempting to allocate a fresh one.
+		logger.WithError(err).Warn("Could not reuse the endpoint's addresses, assigning new ones")
+		utils.ReleaseIPAllocation(logger, conf, args)
+	}
+
+	// Assign a fresh IP address via the IPAM plugin.
+	result, err := utils.AddIPAM(conf, args, logger)
+	return result, false, err
+}
+
+// priorSandboxIPs returns the addresses recorded on an existing endpoint, which a new
+// sandbox for the same pod should request by address rather than auto-assign.
+func priorSandboxIPs(conf types.NetConf, epIDs utils.WEPIdentifiers, endpoint *internalapi.WorkloadEndpoint, logger *logrus.Entry) []net.IP {
+	if endpoint == nil || conf.IPAM.Type != "calico-ipam" {
+		return nil
+	}
+
+	// KubeVirt pods key their allocations on the VM rather than the sandbox, and the IPAM
+	// plugin has its own reuse path for them.
+	if kubevirt.MaybeVirtLauncherPod(epIDs.Pod) {
+		return nil
+	}
+
+	var ips []net.IP
+	for _, ipNetwork := range endpoint.Spec.IPNetworks {
+		ip, _, err := net.ParseCIDR(ipNetwork)
+		if err != nil {
+			logger.WithError(err).WithField("ipNetwork", ipNetwork).Warn("Endpoint records an address we cannot parse, not reusing any of them")
+			return nil
+		}
+		ips = append(ips, ip)
+	}
+	return ips
+}
+
+// assignRequestedIPs calls the configured IPAM plugin once per address, asking for that
+// specific address instead of letting IPAM choose.
+func assignRequestedIPs(ips []net.IP, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
 	result := cniv1.Result{
 		CNIVersion: cniv1.ImplementedSpecVersion,
 	}
 
-	// Go through all the IPs passed in as annotation value and call IPAM plugin
-	// for each, and populate the result variable with IP4 and/or IP6 IPs returned
-	// from the IPAM plugin.
-	for _, ip := range ipList {
-		// Call callIPAMWithIP with the ip address.
+	for _, ip := range ips {
 		r, err := callIPAMWithIP(ip, conf, args, logger)
 		if err != nil {
-			return nil, fmt.Errorf("error getting IP from IPAM: %s", err)
+			return nil, fmt.Errorf("error getting IP from IPAM: %w", err)
 		}
 
 		result.IPs = append(result.IPs, r.IPs[0])
+		result.Routes = append(result.Routes, r.Routes...)
 		version := "6"
 		if r.IPs[0].Address.IP.To4() != nil {
 			version = "4"

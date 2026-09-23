@@ -2783,15 +2783,19 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		var contNs ns.NetNS
 		var result *cniv1.Result
 
-		checkIPAMReservation := func() {
+		checkIPAMReservationFor := func(handleContainerID string) {
 			// IPAM reservation should still be in place.
-			handleID := utils.GetHandleID("calico-uts", containerID, workloadName)
+			handleID := utils.GetHandleID("calico-uts", handleContainerID, workloadName)
 			ipamIPs, err := calicoClient.IPAM().IPsByHandle(context.Background(), handleID)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "error getting IPs")
 			ExpectWithOffset(1, ipamIPs).To(HaveLen(1),
 				"There should be an IPAM handle for endpoint")
-			Expect(endpointSpec.IPNetworks).To(HaveLen(1))
+			ExpectWithOffset(1, endpointSpec.IPNetworks).To(HaveLen(1))
 			ExpectWithOffset(1, ipamIPs[0].String()+"/32").To(Equal(endpointSpec.IPNetworks[0]))
+		}
+
+		checkIPAMReservation := func() {
+			checkIPAMReservationFor(containerID)
 		}
 
 		BeforeEach(func() {
@@ -2878,19 +2882,17 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			ensurePodDeleted(clientset, testutils.K8S_TEST_NS, testPodName)
 		})
 
-		It("a second ADD for the same container should work, assigning a new IP", func() {
+		It("a second ADD for the same pod should keep the address the endpoint already holds", func() {
 			// Try to create the same pod with a different container (so CNI receives the ADD for the same endpoint again)
 			resultSecondAdd, _, _, _, err := testutils.RunCNIPluginWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", "new-container-id", "eth0", contNs)
 			Expect(err).NotTo(HaveOccurred())
 
-			// The IP addresses shouldn't be the same, since we'll reassign one.
-			Expect(resultSecondAdd.IPs).ShouldNot(Equal(result.IPs))
-
-			// Otherwise, they should be the same.
-			resultSecondAdd.IPs = nil
-			result.IPs = nil
-
-			// Routes are derived from the allocated IPs, so they will differ too.
+			// The pod keeps its address, and still gets a route to it. The mask differs
+			// because a specific-IP assignment returns a host route where auto-assign
+			// returns the block's.
+			Expect(resultSecondAdd.IPs).Should(Equal(result.IPs))
+			Expect(resultSecondAdd.Routes).Should(HaveLen(1))
+			Expect(resultSecondAdd.Routes[0].Dst.IP).Should(Equal(result.Routes[0].Dst.IP))
 			resultSecondAdd.Routes = nil
 			result.Routes = nil
 
@@ -2906,8 +2908,44 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			Expect(resultSecondAdd).Should(Equal(result))
 
-			// IPAM reservation should still be in place.
-			checkIPAMReservation()
+			// The allocation moved to the new sandbox's handle, so the old one owns nothing.
+			checkIPAMReservationFor("new-container-id")
+			_, err = calicoClient.IPAM().IPsByHandle(ctx, utils.GetHandleID("calico-uts", containerID, workloadName))
+			Expect(err).To(HaveOccurred())
+
+			_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), testPodName, testutils.K8S_TEST_NS, "new-container-id")
+			Expect(err).ShouldNot(HaveOccurred())
+		})
+
+		It("a second ADD should assign a new IP when another pod holds the endpoint's address", func() {
+			// Hand the address to a different workload behind the plugin's back. The endpoint
+			// still names it, so only the ownership check stops the new sandbox taking it.
+			oldIP := cnet.IP{IP: net.ParseIP(strings.TrimSuffix(endpointSpec.IPNetworks[0], "/32"))}
+			Expect(calicoClient.IPAM().ReleaseByHandle(ctx, utils.GetHandleID("calico-uts", containerID, workloadName))).To(Succeed())
+
+			otherHandle := utils.GetHandleID("calico-uts", "other-container-id", "other-workload")
+			Expect(calicoClient.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
+				IP:       oldIP,
+				HandleID: &otherHandle,
+				Hostname: testNodeName,
+				Attrs: map[string]string{
+					ipam.AttributePod:       "other-pod",
+					ipam.AttributeNamespace: testutils.K8S_TEST_NS,
+				},
+			})).To(Succeed())
+
+			resultSecondAdd, _, _, _, err := testutils.RunCNIPluginWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", "new-container-id", "eth0", contNs)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resultSecondAdd.IPs).To(HaveLen(1))
+			Expect(resultSecondAdd.IPs[0].Address.IP.String()).NotTo(Equal(oldIP.String()))
+
+			// The other workload keeps what it was given.
+			attrs, err := calicoClient.IPAM().GetAssignmentAttributes(ctx, oldIP)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(*attrs.HandleID).To(Equal(otherHandle))
+
+			_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), testPodName, testutils.K8S_TEST_NS, "new-container-id")
+			Expect(err).ShouldNot(HaveOccurred())
 		})
 
 		Context("with networking rigged to fail", func() {
@@ -2936,14 +2974,100 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				_, _, _, _, err := testutils.RunCNIPluginWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", "new-container-id", "eth0", contNs)
 				Expect(err).Should(HaveOccurred())
 
-				// IPAM reservation should still be in place.
-				checkIPAMReservation()
+				// The failed ADD had already taken the address onto its own handle. It stays
+				// there, so the pod keeps the address and a DEL for that sandbox can free it.
+				checkIPAMReservationFor("new-container-id")
 			})
 
 			AfterEach(func() {
 				// So the tear-down succeeds, put the veth back.
 				renameVeth(tweakedVethName, realVethName)
 			})
+		})
+	})
+
+	Context("when the pod's IP pool has no spare capacity", func() {
+		var netconf string
+		var clientset *kubernetes.Clientset
+
+		// A pool of exactly one address: whatever the pod holds is all there is, so an ADD
+		// that asks for a second address cannot succeed.
+		const poolCIDR = "10.100.0.0/32"
+
+		BeforeEach(func() {
+			testutils.MustCreateNewIPPoolBlockSize(calicoClient, poolCIDR, false, false, true, 32)
+
+			nc := types.NetConf{
+				CNIVersion:           cniVersion,
+				Name:                 "calico-uts",
+				Type:                 "calico",
+				EtcdEndpoints:        fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
+				DatastoreType:        os.Getenv("DATASTORE_TYPE"),
+				Kubernetes:           types.Kubernetes{Kubeconfig: "/home/user/certs/kubeconfig"},
+				Policy:               types.Policy{PolicyType: "k8s"},
+				NodenameFileOptional: true,
+				LogLevel:             "debug",
+				Nodename:             testNodeName,
+				CalicoAPIGroup:       k8s.BackendAPIGroup(&config.Spec),
+			}
+			nc.IPAM.Type = "calico-ipam"
+			ncb, err := json.Marshal(nc)
+			Expect(err).NotTo(HaveOccurred())
+			netconf = string(ncb)
+
+			clientset = getKubernetesClient()
+			ensureNamespace(clientset, testutils.K8S_TEST_NS)
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testPodName,
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name:  testPodName,
+						Image: "ignore",
+					}},
+					NodeName: testNodeName,
+				},
+			})
+		})
+
+		AfterEach(func() {
+			ensurePodDeleted(clientset, testutils.K8S_TEST_NS, testPodName)
+		})
+
+		It("rebuilds the sandbox on the pod's own address", func() {
+			containerIDX := "container-id-full-pool-x"
+			containerIDY := "container-id-full-pool-y"
+
+			_, _, _, contAddresses, _, contNs, err := testutils.CreateContainerWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", containerIDX)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(contAddresses).To(HaveLen(1))
+			podIP := contAddresses[0].IP.String()
+
+			// No DEL for the old sandbox: kubelet rebuilds it in place, so the address is
+			// still allocated under handle X when the new sandbox asks for one.
+			resultY, _, _, _, err := testutils.RunCNIPluginWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", containerIDY, "eth0", contNs)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resultY.IPs).To(HaveLen(1))
+			Expect(resultY.IPs[0].Address.IP.String()).To(Equal(podIP))
+
+			// Host-side routes are only skipped for KubeVirt migration targets, so a reused
+			// address still has to come back with its route.
+			Expect(resultY.Routes).To(HaveLen(1))
+			Expect(resultY.Routes[0].Dst.IP.String()).To(Equal(podIP))
+			Expect(resultY.Routes[0].Dst.Mask).To(Equal(net.CIDRMask(32, 32)))
+
+			attrs, err := calicoClient.IPAM().GetAssignmentAttributes(ctx, cnet.IP{IP: net.ParseIP(podIP)})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(*attrs.HandleID).To(ContainSubstring(containerIDY))
+
+			// The DEL for the sandbox that now owns the address frees it, so the allocation
+			// is never stranded on a handle no DEL can name.
+			_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), testPodName, testutils.K8S_TEST_NS, containerIDY)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = calicoClient.IPAM().GetAssignmentAttributes(ctx, cnet.IP{IP: net.ParseIP(podIP)})
+			Expect(err).To(HaveOccurred())
 		})
 	})
 
