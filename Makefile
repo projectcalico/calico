@@ -183,21 +183,21 @@ $(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz: bin/helm $(shell find .
 	mkdir -p $(CHART_DESTINATION)
 	bin/helm package ./charts/tigera-operator \
 	--destination $(CHART_DESTINATION)/ \
-	--version $(GIT_VERSION) \
+	--version $(GIT_VERSION:v%=%) \
 	--app-version $(GIT_VERSION)
 
 $(CHART_DESTINATION)/crd.projectcalico.org.v1-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/crd.projectcalico.org.v1/ -type f)
 	mkdir -p $(CHART_DESTINATION)
 	bin/helm package ./charts/crd.projectcalico.org.v1/ \
 	--destination $(CHART_DESTINATION)/ \
-	--version $(GIT_VERSION) \
+	--version $(GIT_VERSION:v%=%) \
 	--app-version $(GIT_VERSION)
 
 $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/projectcalico.org.v3/ -type f)
 	mkdir -p $(CHART_DESTINATION)
 	bin/helm package ./charts/projectcalico.org.v3/ \
 	--destination $(CHART_DESTINATION)/ \
-	--version $(GIT_VERSION) \
+	--version $(GIT_VERSION:v%=%) \
 	--app-version $(GIT_VERSION)
 
 ###############################################################################
