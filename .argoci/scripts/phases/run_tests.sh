@@ -32,7 +32,10 @@ if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
 elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
   # Scheduled CI: download the pre-built e2e binary from the hashrelease.
   echo "[INFO] downloading e2e binary from hashrelease..."
-  HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${RELEASE_STREAM}.txt")
+  # Upgrade runs set RELEASE_STREAM to the downlevel version they install
+  # first, but the tests run against the uplevel version.
+  E2E_STREAM=${UPLEVEL_RELEASE_STREAM:-${RELEASE_STREAM}}
+  HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${E2E_STREAM}.txt")
   echo "[INFO] hashrelease URL: ${HASHREL_URL}"
   ARCH=$(uname -m); [[ "$ARCH" == "x86_64" ]] && ARCH=amd64; [[ "$ARCH" == "aarch64" ]] && ARCH=arm64
   mkdir -p "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s"
