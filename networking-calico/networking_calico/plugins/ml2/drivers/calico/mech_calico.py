@@ -41,6 +41,7 @@ from neutron.plugins.ml2.drivers import mech_agent
 
 from neutron_lib import constants
 from neutron_lib import context as ctx
+from neutron_lib import exceptions as n_exc
 from neutron_lib.agent import topics
 from neutron_lib.callbacks import events
 from neutron_lib.callbacks import registry
@@ -871,6 +872,83 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         finally:
             _close_session_safely(admin_context)
 
+    @staticmethod
+    def _owning_hosts(port):
+        """Return the hosts that currently own a Calico endpoint for ``port``.
+
+        This mirrors ``EndpointSyncer._wep_desired_present``: a host owns an endpoint
+        either because the port is bound to it, or because the port is live migrating to
+        it.  During a migration both hold at once -- the VM keeps running at the source
+        until Nova's cutover, while the destination already has a WEP so that Felix can
+        program the dataplane ahead of time.
+
+        The binding host comes first, so that a caller wanting a single answer gets the
+        host Neutron considers canonical.
+
+        This deliberately duplicates the ``endpoints.py`` predicate instead of calling
+        it, so that the logic here stays self-contained and backports unchanged to
+        branches where ``EndpointSyncer`` has a different shape.
+        """
+        migrating_to = port.get("binding:profile", {}).get("migrating_to")
+        host = port.get("binding:host_id")
+        owners = []
+
+        # Source role.  The port has to be bound here: an unbound port has no endpoint
+        # anywhere, and treating its host as an owner would reinstate the very ERROR
+        # this function exists to suppress -- on an ordinary interface detach rather
+        # than on a migration.  The ``or migrating_to`` exception covers the rebind
+        # window, where ``vif_type`` flips transiently to "unbound" while
+        # ``binding:host_id`` stays at the source and the VM keeps running there.
+        if host and (port.get("binding:vif_type") != "unbound" or migrating_to):
+            owners.append(host)
+
+        # Destination role.
+        if migrating_to and migrating_to != host:
+            owners.append(migrating_to)
+
+        return owners
+
+    def _neutron_status_for_port(self, port, port_id, hostname):
+        """Work out the Neutron status to write for ``port``.
+
+        ``hostname`` is the host whose Calico endpoint status just changed, which is not
+        necessarily a host that still owns the port.  Calico keeps endpoint status per
+        host, so across a live migration both the destination's "up" and the source's
+        subsequent deletion arrive for the same Neutron port -- which has only a single
+        status field.  Whichever landed last used to win, so a completed migration could
+        leave a healthy VM's port in ERROR.
+
+        We therefore ignore who reported, and answer for the owning hosts instead: the
+        port is ACTIVE if any owner has it up, and otherwise takes the binding host's
+        status.  Answering on behalf of a host that did not report is also what makes
+        this self-healing, because a non-owner's deletion is precisely the event that
+        re-asserts the owner's status: Felix writes a status key only when it changes,
+        so the owner itself will not report again.
+
+        Returns None if there is nothing worth writing.
+        """
+        owners = self._owning_hosts(port)
+        statuses = [self._port_status_cache.get((host, port_id)) for host in owners]
+
+        if datamodel_v1.ENDPOINT_STATUS_UP in statuses:
+            # The VM is running somewhere, which is all that Neutron's single status
+            # field can usefully say.
+            return constants.PORT_STATUS_ACTIVE
+
+        for status in statuses:
+            if status:
+                return PORT_STATUS_MAPPING[status]
+
+        # No owning host has a status for this port.  If the reporting host is itself an
+        # owner, that is a genuine disagreement -- Neutron believes the port lives there
+        # and Calico has no endpoint for it -- and ERROR is the right signal.  Otherwise
+        # this is stale housekeeping from a host with nothing left to do with the port,
+        # and we have no basis for an opinion; stay quiet and let an owner tell us.
+        if hostname in owners:
+            return constants.PORT_STATUS_ERROR
+
+        return None
+
     def _try_to_update_port_status(self, admin_context, port_status_key):
         """Attempts to update the given port status.
 
@@ -880,18 +958,38 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """
         hostname, port_id = port_status_key
         calico_status = self._port_status_cache.get(port_status_key)
-        if calico_status:
-            neutron_status = PORT_STATUS_MAPPING[calico_status]
-            LOG.info("Updating port %s status to %s", port_id, neutron_status)
-        else:
-            # Report deletion as error.  Either the port has genuinely been
-            # deleted, in which case this update is ignored by
-            # update_port_status() or the port still exists but we disagree,
-            # which is an error.
-            neutron_status = constants.PORT_STATUS_ERROR
-            LOG.info("Reporting port %s deletion", port_id)
+
+        # Read the port once, up front.  Its binding state decides which hosts' reports
+        # count for this port, and the same read serves the live-migration check below.
+        try:
+            port = self.db.get_port(admin_context, port_id)
+        except n_exc.PortNotFound:
+            # The port has genuinely been deleted.  update_port_status() would ignore
+            # us, so there is nothing useful to write.
+            LOG.info("Port %s no longer exists; not reporting status", port_id)
+            return
+
+        neutron_status = self._neutron_status_for_port(port, port_id, hostname)
+        if neutron_status is None:
+            LOG.info(
+                "Ignoring status report for port %s from host %s, which no longer"
+                " owns it",
+                port_id,
+                hostname,
+            )
+            return
+
+        LOG.info(
+            "Updating port %s status to %s (reported by %s)",
+            port_id,
+            neutron_status,
+            hostname,
+        )
 
         try:
+            # ``host`` stays the reporting host even when the status being written came
+            # from a different owner.  Neutron only uses it to select a binding for DVR
+            # ports, which these are not.
             self.db.update_port_status(
                 admin_context, port_id, neutron_status, host=hostname
             )
@@ -923,8 +1021,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             )
         else:
             LOG.debug("Updated port status for %s", port_id)
+            # Keyed on the reporting host's own status rather than on the status we
+            # just wrote: Nova is waiting to hear that the VIF is plugged on this host,
+            # and a status redirected from another owner says nothing about that.
             if calico_status == datamodel_v1.ENDPOINT_STATUS_UP:
-                port = self.db.get_port(admin_context, port_id)
                 migrating_to = port.get("binding:profile", {}).get("migrating_to")
                 if migrating_to == hostname:
                     dest_port = port.copy()
@@ -941,14 +1041,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                         port_id,
                         hostname,
                     )
-                    # notify_port_active_direct expects a db
-                    # model (not a dict), matching the pattern
-                    # used by OVN and ML2 RPC callers.
-                    # TODO: verify that db_port has the correct
-                    # binding:host_id for the destination host at
-                    # this point in the migration lifecycle, and
-                    # that this interacts correctly with Nova's
-                    # live_migration_wait_for_vif_plug mechanism.
+                    # notify_port_active_direct expects a db model (not a dict),
+                    # matching the pattern used by OVN and ML2 RPC callers.
                     db_port = ml2_db.get_port(admin_context, port_id)
                     if db_port:
                         self.db.nova_notifier.notify_port_active_direct(db_port)
