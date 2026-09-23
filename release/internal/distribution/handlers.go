@@ -44,7 +44,12 @@ const (
 	syncVerb  = "sync"
 	rsyncVerb = "rsync"
 
-	recursiveFlag = "--recursive"
+	recursiveFlag    = "--recursive"
+	cacheControlFlag = "--cache-control"
+
+	// RewrittenObjectCacheControl caps how long a CDN serves a stale copy of an
+	// object a later release overwrites.
+	RewrittenObjectCacheControl = "max-age=300"
 )
 
 var publicRead = []string{"--acl", "public-read"}
@@ -98,6 +103,8 @@ type S3 struct {
 
 	Private bool
 
+	CacheControl string
+
 	DryRun bool
 
 	Runner command.CommandRunner
@@ -132,6 +139,9 @@ func (d S3) Publish(_ context.Context, src string) error {
 	args = append(args, p.src, p.dest)
 	if !d.Private {
 		args = append(args, publicRead...)
+	}
+	if d.CacheControl != "" {
+		args = append(args, cacheControlFlag, d.CacheControl)
 	}
 	if d.DryRun {
 		args = append(args, "--dryrun")
