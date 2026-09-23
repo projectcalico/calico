@@ -968,6 +968,19 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # us, so there is nothing useful to write.
             LOG.info("Port %s no longer exists; not reporting status", port_id)
             return
+        except (db_exc.DBError, sa_exc.SQLAlchemyError) as e:
+            # A transient DB failure must not swallow this update.  Our caller only
+            # logs exceptions, and the status cache was already updated before this
+            # was queued, so a later resync would see no change and never re-queue it:
+            # Neutron would keep a stale status until the next real transition.  Retry
+            # on the same terms as the write below.
+            LOG.warning("Failed to read port %s due to %r.", port_id, e)
+            eventlet.spawn_after(
+                PORT_UPDATE_RETRY_DELAY_SECS,
+                self._retry_port_status_update,
+                port_status_key,
+            )
+            return
 
         neutron_status = self._neutron_status_for_port(port, port_id, hostname)
         if neutron_status is None:
