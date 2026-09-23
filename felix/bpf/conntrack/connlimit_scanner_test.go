@@ -16,6 +16,7 @@ package conntrack
 
 import (
 	"encoding/binary"
+	"errors"
 	"net"
 	"testing"
 	"time"
@@ -964,5 +965,63 @@ func TestConnLimitScannerBatchZeroesOutInactiveLimits(t *testing.T) {
 	}
 	if m.lastBatchSize != 2 {
 		t.Errorf("expected batch size 2, got %d", m.lastBatchSize)
+	}
+}
+
+// A forged-RST flow whose BPF entry was reaped keeps its slot while Linux
+// conntrack still carries it (e.g. nat-outgoing).
+func TestConnLimitScannerCountsReapedRSTFlowWhileLinuxHoldsIt(t *testing.T) {
+	const ifindex = 6
+	podIP, extIP := "10.65.1.2", "172.17.0.8"
+
+	linuxHas := true
+	var linuxErr error
+	m := newFakeQoSMap()
+	m.seed(t, ifindex, 0, 3, 3)
+	scanner := NewConnLimitScanner(m, func() map[string]ConnLimitPodInfo {
+		return map[string]ConnLimitPodInfo{string(net.ParseIP(podIP).To4()): podInfo(ifindex, false, true)}
+	}, qos.IPFamilyV4, WithLinuxEstablishedTCPFlows(func(uint16) (map[flowKey]struct{}, error) {
+		flows := map[flowKey]struct{}{}
+		if linuxHas {
+			flows[makeFlowKey(net.ParseIP(podIP), 15300, net.ParseIP(extIP), 8055)] = struct{}{}
+		}
+		return flows, linuxErr
+	}))
+
+	key := makeKey(podIP, extIP, 15300, 8055)
+	val := NewValueNormal(time.Duration(0), ctv4.FlagConnLimitOut,
+		established(true, ifindex), // the pod opened it
+		established(false, remoteIfIndex))
+	binary.LittleEndian.PutUint64(val[ctv4.VoRSTSeen:ctv4.VoRSTSeen+8], uint64(time.Second))
+
+	pass := func(inBPF bool) uint32 {
+		scanner.IterationStart()
+		if inBPF {
+			scanner.Check(key, val, nil)
+		}
+		scanner.IterationEnd()
+		return m.currentCount(t, ifindex, 0)
+	}
+
+	if got := pass(true); got != 1 {
+		t.Fatalf("while in BPF: count %d, want 1", got)
+	}
+	if got := pass(true); got != 1 {
+		t.Fatalf("counted twice while in BPF: count %d, want 1", got)
+	}
+	if got := pass(false); got != 1 {
+		t.Fatalf("reaped but live in Linux: count %d, want 1", got)
+	}
+	linuxErr = errors.New("netlink failed")
+	if got := pass(false); got != 1 {
+		t.Fatalf("Linux read failed: count %d, want 1", got)
+	}
+	linuxErr, linuxHas = nil, false
+	if got := pass(false); got != 0 {
+		t.Fatalf("gone from Linux: count %d, want 0", got)
+	}
+	linuxHas = true
+	if got := pass(false); got != 0 {
+		t.Fatalf("forgotten flow counted again: count %d, want 0", got)
 	}
 }
