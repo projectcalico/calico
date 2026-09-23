@@ -28,6 +28,10 @@ steps:
       # pulls do not cross one.
       - name: REGION
         value: us-central1
+      # Same 4 vCPU / 16 GB as the fleet script's default, on a family whose
+      # capacity pool is deeper.
+      - name: VM_MACHINE_TYPE
+        value: e2-custom-4-16384
       - name: VM_DISK_SIZE
         value: 80GB
       - name: CI_GROUP_LABEL
