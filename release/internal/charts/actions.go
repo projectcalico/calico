@@ -149,7 +149,9 @@ func (s settings) build() error {
 		return s.Errorf("creating chart dir: %w", err)
 	}
 	env := append(os.Environ(),
-		utils.Env(utils.EnvGitVersion, s.Version()),
+		// The chart target derives the semver chart version from GIT_VERSION, and
+		// stamps GIT_VERSION itself as the appVersion.
+		utils.Env(utils.EnvGitVersion, s.AppVersion()),
 		utils.Env(utils.EnvChartDestination, s.BaseDir),
 	)
 	env = append(env, s.env...)

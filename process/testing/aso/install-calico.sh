@@ -78,9 +78,12 @@ LOCAL_MANIFESTS_DIR="${SCRIPT_CURRENT_DIR}/../../../manifests"
 
 # For RELEASE_STREAM=local-build: GIT_VERSION is normally inherited from the
 # Makefile; recompute it the same way as a fallback so the chart filename matches
-# bin/tigera-operator-${GIT_VERSION}.tgz (built at the repo root by 'make chart').
+# bin/tigera-operator-${CHART_VERSION}.tgz (built at the repo root by 'make chart').
+# Helm chart versions must be valid semver, so the chart archive is named without
+# the leading "v" that GIT_VERSION carries.
 : "${REPO_ROOT:=$( cd "${SCRIPT_CURRENT_DIR}/../../.." >/dev/null 2>&1 && pwd -P )}"
 : "${GIT_VERSION:=$(git -C "${REPO_ROOT}" describe --tags --dirty --long --always --abbrev=12)}"
+: "${CHART_VERSION:=${GIT_VERSION#v}}"
 
 if [ ${PRODUCT} == 'calient' ]; then
     RELEASE_BASE_URL="https://downloads.tigera.io/ee/${RELEASE_STREAM}"
@@ -120,7 +123,7 @@ if [[ ${RELEASE_STREAM} == 'local-build' ]]; then
     # Component + operator images are ctr-imported onto the nodes at
     # docker.io/calico/<name>:test-build and the Installation sets
     # imagePullPolicy: IfNotPresent, so kubelet uses them without a registry pull.
-    CHART="${REPO_ROOT}/bin/tigera-operator-${GIT_VERSION}.tgz"
+    CHART="${REPO_ROOT}/bin/tigera-operator-${CHART_VERSION}.tgz"
     if [ ! -f "${CHART}" ]; then
         echo "ERROR: operator chart not found at ${CHART}; run 'make chart' first"
         exit 1

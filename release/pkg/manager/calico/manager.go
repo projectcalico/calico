@@ -1089,9 +1089,9 @@ Additional links:
 		"{release_stream}", fmt.Sprintf("v%d.%d", sv.Major(), sv.Minor()),
 		"{release_tar}", fmt.Sprintf("`%s`", archives.ArchiveFileName(r.archive())),
 		"{calico_windows_zip}", fmt.Sprintf("`%s`", archives.WindowsFileName(r.calicoVersion)),
-		"{helm_chart}", fmt.Sprintf("`%s-%s.tgz`", charts.TigeraOperatorChart, r.calicoVersion),
-		"{helm_v1_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", charts.ProjectCalicoV1CRDsChart, r.calicoVersion),
-		"{helm_v3_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", charts.ProjectCalicoV3CRDsChart, r.calicoVersion),
+		"{helm_chart}", fmt.Sprintf("`%s`", charts.FileName(charts.TigeraOperatorChart, r.chart().Version())),
+		"{helm_v1_crd_chart}", fmt.Sprintf("`%s`", charts.FileName(charts.ProjectCalicoV1CRDsChart, r.chart().Version())),
+		"{helm_v3_crd_chart}", fmt.Sprintf("`%s`", charts.FileName(charts.ProjectCalicoV3CRDsChart, r.chart().Version())),
 	}
 	replacer := strings.NewReplacer(formatters...)
 	releaseNote := replacer.Replace(releaseNoteTemplate)

@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/docs"
@@ -90,9 +91,17 @@ func IndexFilePath(baseDir string) string {
 	return filepath.Join(baseDir, indexFileName)
 }
 
-// Version qualifies the product version when the charts rev separately from
-// it. An empty suffix means the charts share the product version.
+// Version is the chart version: the product version, qualified when the charts
+// rev separately from it. An empty suffix means the charts share the product
+// version. Helm requires chart versions to be valid semver, so it carries no
+// leading "v"; Helm names the packaged archive and OCI tag after it.
 func Version(productVersion, suffix string) string {
+	return strings.TrimPrefix(AppVersion(productVersion, suffix), "v")
+}
+
+// AppVersion is the version the charts' appVersion names. It keeps the "v"
+// prefix, since it names a product release rather than a chart version.
+func AppVersion(productVersion, suffix string) string {
 	if suffix == "" {
 		return productVersion
 	}
@@ -135,6 +144,10 @@ func (c Chart) validate() error {
 
 func (c Chart) Version() string {
 	return Version(c.ProductVersion, c.ChartVersion)
+}
+
+func (c Chart) AppVersion() string {
+	return AppVersion(c.ProductVersion, c.ChartVersion)
 }
 
 // FileName is the file one chart is packaged into.
