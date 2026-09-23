@@ -230,8 +230,12 @@ func releaseImages(images []string, version, registry, operatorImage, operatorVe
 	return imgList
 }
 
+// helmChartVersion returns the version stamped into the Helm charts and used in
+// their archive names. Helm requires a valid semver version, so this is the
+// Calico version without the leading "v". The charts' appVersion keeps the "v"
+// prefix, since it names a Calico release rather than a chart version.
 func (r *CalicoManager) helmChartVersion() string {
-	return r.calicoVersion
+	return strings.TrimPrefix(r.calicoVersion, "v")
 }
 
 func (r *CalicoManager) PreBuildValidation() error {
@@ -946,7 +950,8 @@ func (r *CalicoManager) publishPrereqs() error {
 // It assumes that all other artifacts already been built, and simply wraps them up.
 //   - release-vX.Y.Z.tgz: contains images, manifests, and binaries.
 //   - ocp-vX.Y.Z.tgz: contains the OCP bundle.
-//   - tigera-operator-vX.Y.Z.tgz: contains the helm v3 chart.
+//   - tigera-operator-X.Y.Z.tgz: contains the helm v3 chart (helm chart versions
+//     are semver, so they carry no "v" prefix).
 //   - calico-windows-vX.Y.Z.zip: Calico for Windows zip archive for non-HPC installation.
 //   - calicoctl/bin: All calicoctl binaries.
 //
@@ -1315,9 +1320,9 @@ Additional links:
 		"{release_stream}", fmt.Sprintf("v%d.%d", sv.Major(), sv.Minor()),
 		"{release_tar}", fmt.Sprintf("`release-%s.tgz`", r.calicoVersion),
 		"{calico_windows_zip}", fmt.Sprintf("`calico-windows-%s.zip`", r.calicoVersion),
-		"{helm_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.TigeraOperatorChart, r.calicoVersion),
-		"{helm_v1_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.ProjectCalicoV1CRDsChart, r.calicoVersion),
-		"{helm_v3_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.ProjectCalicoV3CRDsChart, r.calicoVersion),
+		"{helm_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.TigeraOperatorChart, r.helmChartVersion()),
+		"{helm_v1_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.ProjectCalicoV1CRDsChart, r.helmChartVersion()),
+		"{helm_v3_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.ProjectCalicoV3CRDsChart, r.helmChartVersion()),
 	}
 	replacer := strings.NewReplacer(formatters...)
 	releaseNote := replacer.Replace(releaseNoteTemplate)

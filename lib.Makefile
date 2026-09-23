@@ -262,6 +262,13 @@ BUILD_ID:=$(shell git rev-parse HEAD || uuidgen | sed 's/-//g')
 GIT_DESCRIPTION=$(shell git describe --tags --dirty --always --abbrev=12 || echo '<unknown>')
 endif
 
+# Helm chart versions must be valid semver, which does not allow the leading "v"
+# that GIT_VERSION carries. Helm names the packaged archive
+# <chart>-$(CHART_VERSION).tgz, so anything that builds or consumes a chart
+# archive must use CHART_VERSION rather than GIT_VERSION.
+# The chart's appVersion keeps the "v" prefix, since it names a Calico release.
+CHART_VERSION = $(GIT_VERSION:v%=%)
+
 # Calculate a timestamp for any build artifacts.
 ifneq ($(OS),Windows_NT)
 DATE:=$(shell date -u +'%FT%T%z')
@@ -1850,6 +1857,7 @@ kind-deploy:
 	KIND_NAME=$(KIND_NAME) \
 	ARCH=$(ARCH) \
 	GIT_VERSION=$(GIT_VERSION) \
+	CHART_VERSION=$(CHART_VERSION) \
 	CALICO_API_GROUP=$(KIND_CALICO_API_GROUP) \
 	$(REPO_ROOT)/hack/test/kind/deploy_resources.sh
 
@@ -1861,7 +1869,7 @@ kind-reload:
 	$(MAKE) -j$(NUM_BUILD_JOBS) kind-build-images
 	$(MAKE) -C $(REPO_ROOT) chart CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(REPO_ROOT)/bin/helm upgrade calico \
-		$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \
+		$(REPO_ROOT)/bin/tigera-operator-$(CHART_VERSION).tgz \
 		--reuse-values \
 		-n tigera-operator
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all

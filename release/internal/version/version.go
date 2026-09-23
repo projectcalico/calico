@@ -58,8 +58,11 @@ func (v *HashreleaseVersions) OperatorVersion() string {
 	return fmt.Sprintf("%s-%s", v.operator, v.ProductVersion())
 }
 
+// HelmChartVersion returns the version stamped into the Helm charts and used in
+// their archive names. Helm requires a valid semver version, so this is the
+// product version without the leading "v".
 func (v *HashreleaseVersions) HelmChartVersion() string {
-	return v.calico.FormattedString()
+	return v.calico.String()
 }
 
 func (v *HashreleaseVersions) Hash() string {

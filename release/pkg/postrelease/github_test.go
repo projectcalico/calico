@@ -60,7 +60,7 @@ func TestGitHubRelease(t *testing.T) {
 			"install-calico-windows.ps1",
 			fmt.Sprintf("calico-windows-%s.zip", releaseVersion),
 			fmt.Sprintf("release-%s.tgz", releaseVersion),
-			fmt.Sprintf("tigera-operator-%s.tgz", releaseVersion),
+			fmt.Sprintf("tigera-operator-%s.tgz", helmChartVersion(releaseVersion)),
 			"SHA256SUMS",
 			"ocp.tgz",
 			"LICENSE",

@@ -42,6 +42,10 @@ Calico’s flexible architecture supports a wide range of deployment options, us
    helm install calico projectcalico/tigera-operator --namespace tigera-operator
    ```
 
+   To pin a particular release, pass `--version`. Chart versions are semver, so they
+   have no leading `v` — use `--version 3.32.0`, not `--version v3.32.0`. The chart's
+   `appVersion` is the Calico release it installs, and does keep the `v` prefix.
+
 # Custom Resource Definitions
 
 This chart does not install the Calico CRDs (the `crd.projectcalico.org` and `operator.tigera.io` API groups). Helm does not upgrade or delete CRDs that live in a chart's `crds/` directory, which makes CRD lifecycle management awkward over the life of a cluster. Following [Helm's CRD best practices](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/), the CRDs are shipped in a separate `crd.projectcalico.org.v1` chart that you install and upgrade yourself.
@@ -90,7 +94,7 @@ Starting in Calico v3.28, a change in the way UIDs are generated for projectcali
 1. Install the helm chart in the `tigera-operator` namespace.
 
    ```
-   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title}} --namespace tigera-operator
+   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title | remove_first: "v"}} --namespace tigera-operator
    ```
 
 1. Once the install has succeeded, you can delete any old releases in the `default` namespace.

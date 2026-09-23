@@ -152,30 +152,31 @@ bin/send-perf-results: $(shell find ./hack/perf -name '*.go')
 
 CHART_DESTINATION ?= ./bin
 
-# Build helm charts.
-chart: $(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz \
-			 $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz \
-			 $(CHART_DESTINATION)/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
+# Build helm charts. The archive names use CHART_VERSION (GIT_VERSION without the
+# leading "v") because that is what helm derives the archive name from.
+chart: $(CHART_DESTINATION)/tigera-operator-$(CHART_VERSION).tgz \
+			 $(CHART_DESTINATION)/projectcalico.org.v3-$(CHART_VERSION).tgz \
+			 $(CHART_DESTINATION)/crd.projectcalico.org.v1-$(CHART_VERSION).tgz
 
-$(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/tigera-operator -type f)
+$(CHART_DESTINATION)/tigera-operator-$(CHART_VERSION).tgz: bin/helm $(shell find ./charts/tigera-operator -type f)
 	mkdir -p $(CHART_DESTINATION)
 	bin/helm package ./charts/tigera-operator \
 	--destination $(CHART_DESTINATION)/ \
-	--version $(GIT_VERSION:v%=%) \
+	--version $(CHART_VERSION) \
 	--app-version $(GIT_VERSION)
 
-$(CHART_DESTINATION)/crd.projectcalico.org.v1-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/crd.projectcalico.org.v1/ -type f)
+$(CHART_DESTINATION)/crd.projectcalico.org.v1-$(CHART_VERSION).tgz: bin/helm $(shell find ./charts/crd.projectcalico.org.v1/ -type f)
 	mkdir -p $(CHART_DESTINATION)
 	bin/helm package ./charts/crd.projectcalico.org.v1/ \
 	--destination $(CHART_DESTINATION)/ \
-	--version $(GIT_VERSION:v%=%) \
+	--version $(CHART_VERSION) \
 	--app-version $(GIT_VERSION)
 
-$(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/projectcalico.org.v3/ -type f)
+$(CHART_DESTINATION)/projectcalico.org.v3-$(CHART_VERSION).tgz: bin/helm $(shell find ./charts/projectcalico.org.v3/ -type f)
 	mkdir -p $(CHART_DESTINATION)
 	bin/helm package ./charts/projectcalico.org.v3/ \
 	--destination $(CHART_DESTINATION)/ \
-	--version $(GIT_VERSION:v%=%) \
+	--version $(CHART_VERSION) \
 	--app-version $(GIT_VERSION)
 
 ###############################################################################

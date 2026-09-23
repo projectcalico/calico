@@ -18,10 +18,13 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
+// chartURLs returns the GitHub release download URLs for every released chart.
+// The release tag keeps the "v" prefix; the chart archive names use the semver
+// chart version, which does not.
 func chartURLs(githubOrg, githubRepo, version string) []string {
 	urls := []string{}
 	for _, chart := range utils.AllReleaseCharts() {
-		u := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s-%s.tgz", githubOrg, githubRepo, version, chart, version)
+		u := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s-%s.tgz", githubOrg, githubRepo, version, chart, helmChartVersion(version))
 		urls = append(urls, u)
 	}
 	return urls
@@ -61,15 +64,16 @@ func TestHelmChart(t *testing.T) {
 				t.Parallel()
 
 				dir := t.TempDir()
+				chartVersion := helmChartVersion(releaseVersion)
 				args := []string{
 					"pull", fmt.Sprintf("oci://%s/%s", reg, utils.TigeraOperatorChart),
-					"--version", releaseVersion,
+					"--version", chartVersion,
 				}
 				out, err := command.RunInDir(dir, "helm", args)
 				if err != nil {
-					t.Fatalf("pull %s %s helm chart from %s: %v\nOutput: %s", utils.TigeraOperatorChart, releaseVersion, reg, err, out)
+					t.Fatalf("pull %s %s helm chart from %s: %v\nOutput: %s", utils.TigeraOperatorChart, chartVersion, reg, err, out)
 				}
-				chart, err := loader.Load(filepath.Join(dir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, releaseVersion)))
+				chart, err := loader.Load(filepath.Join(dir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, chartVersion)))
 				if err != nil {
 					t.Fatalf("load helm chart from %s: %v", reg, err)
 				}
@@ -83,6 +87,11 @@ func validateChart(t testing.TB, chart *chart.Chart) {
 	t.Helper()
 	if err := chart.Validate(); err != nil {
 		t.Fatalf("invalid helm chart: %v", err)
+	}
+	// The chart version is semver, so it carries no "v" prefix, while the
+	// appVersion names the Calico release and does.
+	if expected := helmChartVersion(releaseVersion); chart.Metadata.Version != expected {
+		t.Fatalf("expected helm chart version %s, got %s", expected, chart.Metadata.Version)
 	}
 	if chart.AppVersion() != releaseVersion {
 		t.Fatalf("expected helm chart app version %s, got %s", releaseVersion, chart.AppVersion())
@@ -121,27 +130,29 @@ func TestHelmIndex(t *testing.T) {
 	if !ok || len(tigeraOperatorEntries) == 0 {
 		t.Fatalf("helm index does not contain tigera-operator entries")
 	}
+	// The index is keyed by chart version, which is semver and so has no "v" prefix.
+	chartVersion := helmChartVersion(releaseVersion)
 	filteredEntries := slices.Collect(func(yield func(map[string]any) bool) {
 		for _, entry := range tigeraOperatorEntries {
-			if entry["version"].(string) == releaseVersion {
+			if entry["version"].(string) == chartVersion {
 				yield(entry)
 			}
 		}
 	})
 	if len(filteredEntries) == 0 {
-		t.Fatalf("helm index does not contain tigera-operator entry for version %s", releaseVersion)
+		t.Fatalf("helm index does not contain tigera-operator entry for version %s", chartVersion)
 	} else if len(filteredEntries) > 1 {
-		t.Fatalf("helm index contains multiple tigera-operator entries for version %s", releaseVersion)
+		t.Fatalf("helm index contains multiple tigera-operator entries for version %s", chartVersion)
 	}
 	helmEntry := filteredEntries[0]
 	urls, ok := helmEntry["urls"]
 	if !ok || len(urls.([]any)) == 0 {
-		t.Fatalf("helm index entry for version %s does not contain urls", releaseVersion)
+		t.Fatalf("helm index entry for version %s does not contain urls", chartVersion)
 	}
 
 	for _, url := range chartURLs(githubOrg, githubRepo, releaseVersion) {
 		if !slices.Contains(cast.ToStringSlice(urls), url) {
-			t.Fatalf("helm index entry for version %s does not contain expected URL: %s", releaseVersion, url)
+			t.Fatalf("helm index entry for version %s does not contain expected URL: %s", chartVersion, url)
 		}
 	}
 }

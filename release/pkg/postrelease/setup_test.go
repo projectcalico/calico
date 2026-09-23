@@ -31,6 +31,13 @@ func init() {
 	flag.StringVar(&githubToken, "github-token", "", "GitHub token")
 }
 
+// helmChartVersion returns the Helm chart version corresponding to the given
+// release version. Helm requires a valid semver version, so the charts are
+// versioned - and their archives named - without the leading "v".
+func helmChartVersion(version string) string {
+	return strings.TrimPrefix(version, "v")
+}
+
 func checkVersion(t testing.TB, version string) {
 	t.Helper()
 	if version == "" {

@@ -327,9 +327,9 @@ ut fv: $(LIBBPF_A) run-k8s-apiserver
 ###############################################################################
 # System tests
 ###############################################################################
-CHARTS=../bin/tigera-operator-$(GIT_VERSION).tgz \
-			 ../bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz \
-			 ../bin/projectcalico.org.v3-$(GIT_VERSION).tgz
+CHARTS=../bin/tigera-operator-$(CHART_VERSION).tgz \
+			 ../bin/crd.projectcalico.org.v1-$(CHART_VERSION).tgz \
+			 ../bin/projectcalico.org.v3-$(CHART_VERSION).tgz
 
 dist/calicoctl:
 	mkdir -p dist
@@ -354,12 +354,12 @@ test_image: .calico_test.created
 	touch $@
 
 chart: $(CHARTS)
-../bin/tigera-operator-$(GIT_VERSION).tgz:
-	make -C ../ bin/tigera-operator-$(GIT_VERSION).tgz
-../bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz:
-	make -C ../ bin/crd.projectcalico.org.v1-$(GIT_VERSION).tgz
-../bin/projectcalico.org.v3-$(GIT_VERSION).tgz:
-	make -C ../ bin/projectcalico.org.v3-$(GIT_VERSION).tgz
+../bin/tigera-operator-$(CHART_VERSION).tgz:
+	make -C ../ bin/tigera-operator-$(CHART_VERSION).tgz
+../bin/crd.projectcalico.org.v1-$(CHART_VERSION).tgz:
+	make -C ../ bin/crd.projectcalico.org.v1-$(CHART_VERSION).tgz
+../bin/projectcalico.org.v3-$(CHART_VERSION).tgz:
+	make -C ../ bin/projectcalico.org.v3-$(CHART_VERSION).tgz
 
 .PHONY: k8s-test
 ## Run the k8s tests
