@@ -135,12 +135,26 @@ containerSecurityContext: {}
 # Common labels for all resources created by this chart
 additionalLabels: {}
 
-# Tolerations for the tigera/operator pod.
+# Tolerations for the tigera/operator pod. The defaults allow scheduling before the CNI is up,
+# but not onto cordoned nodes.
 tolerations:
-  - effect: NoExecute
+  - key: CriticalAddonsOnly
     operator: Exists
-  - effect: NoSchedule
+  - key: node-role.kubernetes.io/master
     operator: Exists
+    effect: NoSchedule
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+  - key: node.kubernetes.io/not-ready
+    operator: Exists
+    effect: NoSchedule
+  - key: node.kubernetes.io/network-unavailable
+    operator: Exists
+    effect: NoSchedule
+  - key: node.cloudprovider.kubernetes.io/uninitialized
+    operator: Exists
+    effect: NoSchedule
 
 # NodeSelector for the tigera/operator pod.
 nodeSelector:

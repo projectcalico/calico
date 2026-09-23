@@ -24,9 +24,22 @@ spec:
       nodeSelector:
         kubernetes.io/os: linux
       tolerations:
-        - effect: NoExecute
+        - key: CriticalAddonsOnly
           operator: Exists
         - effect: NoSchedule
+          key: node-role.kubernetes.io/master
+          operator: Exists
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
+          operator: Exists
+        - effect: NoSchedule
+          key: node.kubernetes.io/not-ready
+          operator: Exists
+        - effect: NoSchedule
+          key: node.kubernetes.io/network-unavailable
+          operator: Exists
+        - effect: NoSchedule
+          key: node.cloudprovider.kubernetes.io/uninitialized
           operator: Exists
       serviceAccountName: tigera-operator
       hostNetwork: true
