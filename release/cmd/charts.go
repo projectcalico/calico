@@ -38,7 +38,7 @@ func chartsCommand(cfg *Config) *cli.Command {
 }
 
 var chartsBuildFlags = []cli.Flag{
-	registryFlag, operatorRegistryFlag, operatorImageFlag,
+	registryFlag, operatorRegistryFlag,
 	helmIndexFlag(envBuildHelmIndex), hashreleaseFlag, releaseBranchPrefixFlag,
 }
 
@@ -88,7 +88,7 @@ var chartsPublishAction = func(cfg *Config) func(context.Context, *cli.Command) 
 			charts.WithLogsDir(cfg.LogsDir),
 			charts.WithResolver(registryDigestResolver),
 		}
-		published, w, err := publishRecord(cfg, charts.PublishStep, chart.Version(), confirm)
+		published, w, err := publishRecord(cfg.OutputDir, charts.PublishStep, chart.Version(), confirm)
 		if err != nil {
 			return err
 		}
