@@ -62,4 +62,11 @@ func TestURLEncodedJSONDecoding(t *testing.T) {
 	param, err := codec.DecodeAndValidateRequestParams[params](apicontext.NewRequestContext(req), NoopURLVarsFunc, req)
 	Expect(err).Should(Not(HaveOccurred()))
 	Expect(param).Should(Equal(&params{Filter: filter{Name: "foo"}}))
+
+	special := url.QueryEscape(testutil.MustMarshal(t, filter{Name: "100% a+b"}))
+	req, err = http.NewRequest("GET", fmt.Sprintf("http://example.com?filter=%s", special), nil)
+	Expect(err).NotTo(HaveOccurred())
+	param, err = codec.DecodeAndValidateRequestParams[params](apicontext.NewRequestContext(req), NoopURLVarsFunc, req)
+	Expect(err).Should(Not(HaveOccurred()))
+	Expect(param).Should(Equal(&params{Filter: filter{Name: "100% a+b"}}))
 }

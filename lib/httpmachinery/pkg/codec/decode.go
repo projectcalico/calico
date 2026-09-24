@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/go-playground/form"
@@ -65,16 +64,13 @@ func RegisterCustomDecodeTypeFunc[E any](fn func(vals []string) (E, error)) {
 	headerDecoder.RegisterCustomTypeFunc(f, typ)
 }
 
-// RegisterURLQueryJSONType registers a type as one that should be decoded as url encoded json.
+// RegisterURLQueryJSONType registers a type as one that should be decoded as json carried in a query parameter. The
+// value is decoded as-is: url.Values has already unescaped it, so unescaping again would turn a literal '%' in a value
+// into an error and a literal '+' into a space.
 func RegisterURLQueryJSONType[T any]() {
 	RegisterCustomDecodeTypeFunc(func(vals []string) (T, error) {
 		var obj T
-		jsonStr, err := url.QueryUnescape(vals[0])
-		if err != nil {
-			return obj, err
-		}
-
-		if err := json.Unmarshal([]byte(jsonStr), &obj); err != nil {
+		if err := json.Unmarshal([]byte(vals[0]), &obj); err != nil {
 			return obj, err
 		}
 		return obj, nil
