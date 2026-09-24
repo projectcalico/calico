@@ -16,73 +16,44 @@ package calico
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
-	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/kubernetes/test/e2e/framework"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 const (
-	// gatewayAPIName is the GatewayAPI singleton the operator reconciles. It
-	// must be "default" on OSS; the legacy "tigera-secure" name is Enterprise
-	// only, and a second CR makes the operator reject both.
-	gatewayAPIName = "default"
-
 	whiskerGatewayName     = "calico-whisker-gateway"
 	whiskerHTTPRouteName   = "calico-whisker-route"
 	whiskerGatewayTLSName  = "calico-whisker-gateway-tls"
 	whiskerBackendNS       = "calico-system"
 	whiskerGatewayHostname = "whisker.e2e-test.local"
 
-	// The Whisker UI's document title. Envoy's own error pages do not carry it,
-	// so it separates "reached Whisker" from "reached the proxy".
+	// whiskerPageMarker is the Whisker UI's document title. Envoy's error pages do
+	// not carry it, so it separates reaching Whisker from reaching the proxy.
 	whiskerPageMarker = "<title>Calico Whisker"
-
-	// Bound every context so a hung API call fails the spec with a readable
-	// error instead of running into Ginkgo's global timeout.
-	whiskerSpecTimeout    = 10 * time.Minute
-	whiskerCleanupTimeout = 2 * time.Minute
-
-	// A delete poll runs on its own context, so it always gets the full window
-	// however much of the cleanup budget the steps before it used.
-	whiskerGoneTimeout = 2 * time.Minute
-
-	// gatewayAPICreatedByLabel marks a GatewayAPI CR this suite created, so
-	// cleanup only removes its own and never a CR the cluster came with.
-	gatewayAPICreatedByLabel = "e2e.tigera.io/created-by"
-	gatewayAPICreatedByValue = "ingress-gateway-whisker-e2e"
 )
 
-// This test validates Whisker access via Calico Ingress Gateway: the full
-// lifecycle wired end to end — Whisker CR patch, operator render, Envoy proxy
-// serving the Whisker UI, and teardown.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("Ingress-Gateway"),
+	describe.WithFeature("IngressGateway"),
 	describe.WithCategory(describe.Operator),
-	// Patches the cluster-singleton Whisker and GatewayAPI CRs, so it must not
-	// run alongside other specs.
 	describe.WithSerial(),
+	describe.RequiresOperator(),
 	describe.RequiresGoldmane(),
 	"whisker access via calico ingress gateway",
 	func() {
@@ -94,54 +65,21 @@ var _ = describe.CalicoDescribe(
 		)
 
 		ginkgo.BeforeEach(func() {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(context.Background(), whiskerSpecTimeout)
-			ginkgo.DeferCleanup(cancel)
+			ctx = context.Background()
 
 			scheme := runtime.NewScheme()
-			Expect(operatorv1.AddToScheme(scheme)).NotTo(HaveOccurred(), "registering operator.tigera.io/v1")
-			Expect(gatewayv1.Install(scheme)).NotTo(HaveOccurred(), "registering gateway.networking.k8s.io/v1")
+			Expect(corev1.AddToScheme(scheme)).NotTo(HaveOccurred())
+			Expect(operatorv1.AddToScheme(scheme)).NotTo(HaveOccurred())
+			Expect(gatewayv1.Install(scheme)).NotTo(HaveOccurred())
 
 			var err error
 			cli, err = ctrlclient.NewWithWatch(f.ClientConfig(), ctrlclient.Options{Scheme: scheme})
-			Expect(err).NotTo(HaveOccurred(), "creating a controller-runtime client")
-
-			// Skip rather than fail on a cluster this feature cannot run on: it
-			// needs an operator-managed Calico install with Whisker present.
-			installation := &operatorv1.Installation{}
-			// A manifest/non-operator cluster has no operator.tigera.io CRDs, so the
-			// Get comes back as a no-match rather than NotFound; both mean this
-			// feature cannot run here, so skip either way.
-			if err := cli.Get(ctx, types.NamespacedName{Name: "default"}, installation); apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
-				ginkgo.Skip("No Installation; this cluster is not operator managed")
-			} else {
-				Expect(err).NotTo(HaveOccurred(), "reading the Installation")
-			}
-			// The operator records the defaulted variant in status, not spec, so
-			// a stock install leaves spec.variant empty; read status.
-			if installation.Status.Variant != operatorv1.Calico {
-				ginkgo.Skip("Whisker only runs on the Calico variant")
-			}
-			if err := cli.Get(ctx, types.NamespacedName{Name: "default"}, &operatorv1.Whisker{}); apierrors.IsNotFound(err) {
-				ginkgo.Skip("No Whisker CR on this cluster")
-			} else {
-				Expect(err).NotTo(HaveOccurred(), "reading the Whisker CR")
-			}
+			Expect(err).NotTo(HaveOccurred())
 		})
 
-		// expectGone polls until get returns NotFound. Any other error (or the
-		// object still existing) keeps the poll going and is reported on
-		// timeout instead of a bare "expected false to be true".
-		//
-		// The poll gets a fresh context rather than the caller's: a cleanup
-		// context part-spent on earlier steps would expire mid-poll, and every
-		// remaining attempt would then fail on the dead context instead of
-		// reporting what was still there.
 		expectGone := func(get func(context.Context) error, what string) {
-			pollCtx, cancel := context.WithTimeout(context.Background(), whiskerGoneTimeout+30*time.Second)
-			defer cancel()
 			Eventually(func() error {
-				err := get(pollCtx)
+				err := get(context.Background())
 				if err == nil {
 					return fmt.Errorf("%s still exists", what)
 				}
@@ -149,74 +87,28 @@ var _ = describe.CalicoDescribe(
 					return nil
 				}
 				return err
-			}, whiskerGoneTimeout, 5*time.Second).Should(Succeed(), "%s should be deleted", what)
+			}, 2*time.Minute, 5*time.Second).Should(Succeed(), "%s should be deleted", what)
 		}
 
 		ginkgo.Context("Whisker accessible through Gateway in the install namespace", ginkgo.Ordered, func() {
 			ginkgo.BeforeAll(func() {
-				ctx, cancel := context.WithTimeout(context.Background(), whiskerSpecTimeout)
-				ginkgo.DeferCleanup(cancel)
-
-				// Read the Whisker CR first and skip if it already carries a gateway
-				// config: the cleanup patches spec.ingressGateway back to null, which
-				// would wipe a configuration the cluster came with.
-				whisker := &operatorv1.Whisker{}
-				Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, whisker)).NotTo(HaveOccurred(), "reading the Whisker CR")
-				if whisker.Spec.IngressGateway != nil {
-					ginkgo.Skip("Whisker spec.ingressGateway is already set; not overwriting an existing gateway configuration")
-				}
-
 				ginkgo.By("Enabling Gateway API support")
-				createWhiskerGatewayAPICR(ctx, cli)
-
-				// Registered right after the create, before anything that can fail,
-				// so a later error never strands the GatewayAPI CR and the Envoy
-				// Gateway install for the rest of the lane. Registered before the
-				// teardown patch below so it runs last: the CR must go only after the
-				// Gateway is gone, since Envoy Gateway finalizes the GatewayClass
-				// while a Gateway still references it.
-				ginkgo.DeferCleanup(func() {
-					cleanupCtx, cancel := context.WithTimeout(context.Background(), whiskerCleanupTimeout)
-					defer cancel()
-
-					ginkgo.By("Deleting the GatewayAPI CR")
-					deleteWhiskerGatewayAPICR(cleanupCtx, cli)
-				})
+				// The GatewayAPI singleton must be "default" on OSS; the Enterprise
+				// "tigera-secure" name makes the operator reject a second CR.
+				restoreGatewayAPI, err := utils.ConfigureWithCleanup(cli, ctrlclient.ObjectKey{Name: "default"}, &operatorv1.GatewayAPI{}, func(*operatorv1.GatewayAPI) {})
+				Expect(err).NotTo(HaveOccurred(), "enabling the GatewayAPI CR")
+				ginkgo.DeferCleanup(restoreGatewayAPI)
 
 				ginkgo.By("Setting spec.ingressGateway on the Whisker CR")
-				patch := fmt.Sprintf(`{"spec":{"ingressGateway":{"hostname":%q}}}`, whiskerGatewayHostname)
-				Expect(cli.Patch(ctx, whisker, ctrlclient.RawPatch(types.MergePatchType, []byte(patch)))).NotTo(HaveOccurred(),
-					"setting spec.ingressGateway on the Whisker CR")
-
-				ginkgo.DeferCleanup(func() {
-					cleanupCtx, cancel := context.WithTimeout(context.Background(), whiskerCleanupTimeout)
-					defer cancel()
-
-					ginkgo.By("Removing spec.ingressGateway from the Whisker CR")
-					w := &operatorv1.Whisker{}
-					if err := cli.Get(cleanupCtx, types.NamespacedName{Name: "default"}, w); err != nil {
-						logrus.WithError(err).Warn("Failed to get Whisker CR for cleanup")
-						return
-					}
-					removePatch := []byte(`{"spec":{"ingressGateway":null}}`)
-					if err := cli.Patch(cleanupCtx, w, ctrlclient.RawPatch(types.MergePatchType, removePatch)); err != nil {
-						logrus.WithError(err).Warn("Failed to remove spec.ingressGateway from the Whisker CR")
-					}
-
-					ginkgo.By("Waiting for gateway resources to be cleaned up")
-					expectGone(func(ctx context.Context) error {
-						return cli.Get(ctx, types.NamespacedName{Name: whiskerGatewayName, Namespace: whiskerBackendNS}, &gatewayv1.Gateway{})
-					}, "Gateway")
+				restoreWhisker, err := utils.ConfigureWithCleanup(cli, ctrlclient.ObjectKey{Name: "default"}, &operatorv1.Whisker{}, func(w *operatorv1.Whisker) {
+					w.Spec.IngressGateway = &operatorv1.IngressGatewaySpec{Hostname: whiskerGatewayHostname}
 				})
+				Expect(err).NotTo(HaveOccurred(), "setting spec.ingressGateway on the Whisker CR")
+				ginkgo.DeferCleanup(restoreWhisker)
 
 				ginkgo.By("Waiting for the Gateway to be accepted")
-				// Accepted is set by the Gateway API controller without needing
-				// a cloud LoadBalancer; Programmed never goes True without an
-				// assigned address, so it is deliberately not waited on here. The
-				// budget also covers the operator installing Envoy Gateway and its
-				// controller starting, which the step above may have just
-				// triggered, so it matches the proxy-Pod wait rather than the
-				// shorter API timeouts.
+				// Accepted needs no cloud LoadBalancer, unlike Programmed; the wait also
+				// covers the operator installing Envoy Gateway on the first GatewayAPI CR.
 				Eventually(func() error {
 					gw := &gatewayv1.Gateway{}
 					if err := cli.Get(ctx, types.NamespacedName{Name: whiskerGatewayName, Namespace: whiskerBackendNS}, gw); err != nil {
@@ -232,105 +124,63 @@ var _ = describe.CalicoDescribe(
 			})
 
 			ginkgo.It("should serve the Whisker UI through the Gateway", func() {
-				ctx, cancel := context.WithTimeout(context.Background(), whiskerSpecTimeout)
-				ginkgo.DeferCleanup(cancel)
-
 				ginkgo.By("Port-forwarding to the Gateway's Envoy proxy Service")
-				baseURL, stop := utils.GatewayProxyBaseURL(ctx, f.ClientSet, whiskerBackendNS, whiskerGatewayName, true)
-				ginkgo.DeferCleanup(stop)
+				kc := &utils.Kubectl{}
+				stopCh := make(chan time.Time, 1)
+				localPort, err := kc.PortForward(whiskerBackendNS, "svc/"+whiskerGatewayName, "443", "", stopCh)
+				Expect(err).NotTo(HaveOccurred(), "port-forwarding to the Gateway proxy Service")
+				ginkgo.DeferCleanup(func() { stopCh <- time.Now(); close(stopCh) })
+
+				gw, err := utils.NewGatewayClient(ctx, cli, whiskerBackendNS, whiskerGatewayHostname)
+				Expect(err).NotTo(HaveOccurred(), "building the gateway client")
+				baseURL := fmt.Sprintf("https://127.0.0.1:%d", localPort)
+				kc.WaitForPortForward(gw.HTTPClient(), baseURL+"/")
 
 				ginkgo.By("Requesting the Whisker UI through the Gateway")
-				gwClient := &http.Client{
-					Transport: &http.Transport{
-						TLSClientConfig: &tls.Config{
-							RootCAs: whiskerCABundle(ctx, f),
-							// SNI must match the Gateway listener hostname or
-							// Envoy has no filter chain for the connection.
-							ServerName: whiskerGatewayHostname,
-						},
-					},
-					CheckRedirect: func(req *http.Request, via []*http.Request) error {
-						return http.ErrUseLastResponse
-					},
-					Timeout: 10 * time.Second,
-				}
-
-				// Envoy's default handler answers unrouted requests, so a
-				// response alone proves nothing: require the Whisker UI's own
-				// 200 with its document title.
+				// Envoy's default handler answers unrouted requests, so require the UI's
+				// own 200 with its document title.
 				Eventually(func() error {
-					req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/", nil)
+					body, code, err := gw.Get(baseURL + "/")
 					if err != nil {
 						return err
 					}
-					req.Host = whiskerGatewayHostname
-
-					resp, err := gwClient.Do(req)
-					if err != nil {
-						return err
+					if code != 200 {
+						return fmt.Errorf("got status %d, want 200", code)
 					}
-					defer resp.Body.Close()
-
-					body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
-					if err != nil {
-						return err
-					}
-					if resp.StatusCode != http.StatusOK {
-						return fmt.Errorf("got status %d, want 200", resp.StatusCode)
-					}
-					if !strings.Contains(string(body), whiskerPageMarker) {
+					if !strings.Contains(body, whiskerPageMarker) {
 						return fmt.Errorf("response did not contain %q; reached the proxy but not Whisker", whiskerPageMarker)
 					}
 					return nil
-				}, 3*time.Minute, 5*time.Second).Should(Succeed(), "the Whisker UI should be served through the Gateway")
+				}, 2*time.Minute, 5*time.Second).Should(Succeed(), "the Whisker UI should be served through the Gateway")
 
-				// The UI shell above is served by nginx alone. A flow query
-				// crosses the one hop nothing else tests end to end: nginx
-				// proxying over TLS to whisker-backend inside the pod.
 				ginkgo.By("Querying flows through the Gateway")
+				// A flow query crosses the one hop the UI shell does not: nginx proxying
+				// over TLS to whisker-backend.
 				Eventually(func() error {
-					req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/whisker-backend/flows", nil)
+					body, code, err := gw.Get(baseURL + "/whisker-backend/flows")
 					if err != nil {
 						return err
 					}
-					req.Host = whiskerGatewayHostname
-
-					resp, err := gwClient.Do(req)
-					if err != nil {
-						return err
+					if code != 200 {
+						return fmt.Errorf("got status %d, want 200: %.200s", code, body)
 					}
-					defer resp.Body.Close()
-
-					body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-					if err != nil {
-						return err
-					}
-					if resp.StatusCode != http.StatusOK {
-						return fmt.Errorf("got status %d, want 200: %.200s", resp.StatusCode, body)
-					}
-					// nginx rewrites errors to HTML pages, so require the
-					// backend's JSON list shape, not just a 200.
 					var flows map[string]json.RawMessage
-					if err := json.Unmarshal(body, &flows); err != nil {
+					if err := json.Unmarshal([]byte(body), &flows); err != nil {
 						return fmt.Errorf("response is not JSON; reached nginx but not whisker-backend: %.200s", body)
 					}
 					if _, ok := flows["items"]; !ok {
 						return fmt.Errorf("JSON response has no items key; not a flows list: %.200s", body)
 					}
 					return nil
-				}, 3*time.Minute, 5*time.Second).Should(Succeed(), "flows should be served through the Gateway via nginx and whisker-backend")
+				}, 2*time.Minute, 5*time.Second).Should(Succeed(), "flows should be served through the Gateway via nginx and whisker-backend")
 			})
 
 			ginkgo.It("should clean up gateway resources when spec.ingressGateway is removed", func() {
-				ctx, cancel := context.WithTimeout(context.Background(), whiskerSpecTimeout)
-				ginkgo.DeferCleanup(cancel)
-
 				ginkgo.By("Removing spec.ingressGateway from the Whisker CR")
 				whisker := &operatorv1.Whisker{}
-				Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, whisker)).NotTo(HaveOccurred(), "reading the Whisker CR")
-				removePatch := []byte(`{"spec":{"ingressGateway":null}}`)
-				Expect(cli.Patch(ctx, whisker, ctrlclient.RawPatch(types.MergePatchType, removePatch))).NotTo(HaveOccurred(),
-					"removing spec.ingressGateway from the Whisker CR")
+				Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, whisker)).NotTo(HaveOccurred())
+				whisker.Spec.IngressGateway = nil
+				Expect(cli.Update(ctx, whisker)).NotTo(HaveOccurred(), "removing spec.ingressGateway from the Whisker CR")
 
 				expectGone(func(ctx context.Context) error {
 					return cli.Get(ctx, types.NamespacedName{Name: whiskerGatewayName, Namespace: whiskerBackendNS}, &gatewayv1.Gateway{})
@@ -339,78 +189,9 @@ var _ = describe.CalicoDescribe(
 					return cli.Get(ctx, types.NamespacedName{Name: whiskerHTTPRouteName, Namespace: whiskerBackendNS}, &gatewayv1.HTTPRoute{})
 				}, "HTTPRoute")
 				expectGone(func(ctx context.Context) error {
-					_, err := f.ClientSet.CoreV1().Secrets(whiskerBackendNS).Get(ctx, whiskerGatewayTLSName, metav1.GetOptions{})
-					return err
+					return cli.Get(ctx, types.NamespacedName{Name: whiskerGatewayTLSName, Namespace: whiskerBackendNS}, &corev1.Secret{})
 				}, "TLS Secret")
 			})
 		})
 	},
 )
-
-// createWhiskerGatewayAPICR enables Gateway API support, waiting out any
-// deletion still in progress from a previous run's cleanup. The CR is stamped
-// so cleanup can tell it apart from one the cluster already had.
-func createWhiskerGatewayAPICR(ctx context.Context, cli ctrlclient.Client) {
-	Eventually(func() error {
-		gatewayAPI := &operatorv1.GatewayAPI{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   gatewayAPIName,
-				Labels: map[string]string{gatewayAPICreatedByLabel: gatewayAPICreatedByValue},
-			},
-		}
-		err := cli.Create(ctx, gatewayAPI)
-		if err == nil {
-			return nil
-		}
-		if !apierrors.IsAlreadyExists(err) {
-			return err
-		}
-		// A CR already exists. Retry while it is still terminating from a
-		// previous run so the next Create takes effect; otherwise adopt it.
-		existing := &operatorv1.GatewayAPI{}
-		if getErr := cli.Get(ctx, types.NamespacedName{Name: gatewayAPIName}, existing); getErr != nil {
-			return getErr
-		}
-		if existing.DeletionTimestamp != nil {
-			return fmt.Errorf("GatewayAPI CR %s is still terminating", gatewayAPIName)
-		}
-		return nil
-	}, 2*time.Minute, 5*time.Second).Should(Succeed(), "the GatewayAPI CR should be created")
-}
-
-// deleteWhiskerGatewayAPICR deletes the GatewayAPI CR, but only when this suite
-// created it: deleting one the cluster already had takes envoy-gateway down
-// with it and breaks every later suite.
-func deleteWhiskerGatewayAPICR(ctx context.Context, cli ctrlclient.Client) {
-	existing := &operatorv1.GatewayAPI{}
-	if err := cli.Get(ctx, types.NamespacedName{Name: gatewayAPIName}, existing); err != nil {
-		if !apierrors.IsNotFound(err) {
-			logrus.WithError(err).Warn("Failed to read GatewayAPI CR for cleanup")
-		}
-		return
-	}
-	if existing.Labels[gatewayAPICreatedByLabel] != gatewayAPICreatedByValue {
-		logrus.Info("Leaving pre-existing GatewayAPI CR in place")
-		return
-	}
-	if err := cli.Delete(ctx, existing); err != nil && !apierrors.IsNotFound(err) {
-		logrus.WithError(err).Warn("Failed to delete GatewayAPI CR")
-	}
-}
-
-// whiskerCABundle returns the cluster's CA bundle, which signs the Gateway
-// listener certificate the operator renders.
-func whiskerCABundle(ctx context.Context, f *framework.Framework) *x509.CertPool {
-	cm, err := f.ClientSet.CoreV1().ConfigMaps(whiskerBackendNS).Get(ctx, "tigera-ca-bundle", metav1.GetOptions{})
-	Expect(err).NotTo(HaveOccurred(), "reading the tigera-ca-bundle ConfigMap")
-
-	roots := x509.NewCertPool()
-	appended := false
-	for _, pem := range cm.Data {
-		if roots.AppendCertsFromPEM([]byte(pem)) {
-			appended = true
-		}
-	}
-	Expect(appended).To(BeTrue(), "the tigera-ca-bundle ConfigMap should hold a parseable CA certificate")
-	return roots
-}
