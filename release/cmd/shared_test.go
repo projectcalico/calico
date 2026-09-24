@@ -85,6 +85,19 @@ func (r *recordingRunner) envFor(want ...string) []string {
 	return nil
 }
 
+// ranExactly is ran for callers that pass whole arguments: a target name is a
+// prefix of a longer one, so a substring match cannot tell them apart.
+func (r *recordingRunner) ranExactly(want ...string) bool {
+	return slices.ContainsFunc(r.args, func(args []string) bool {
+		for _, w := range want {
+			if !slices.Contains(args, w) {
+				return false
+			}
+		}
+		return true
+	})
+}
+
 // ran reports whether any recorded call's args contain every one of want.
 func (r *recordingRunner) ran(want ...string) bool {
 	return slices.ContainsFunc(r.args, func(args []string) bool {

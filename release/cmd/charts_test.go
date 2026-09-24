@@ -45,8 +45,16 @@ var (
 	// Where a build leaves the packaged charts. A product that writes them
 	// somewhere other than a per-version directory replaces this.
 	chartsCLIChartDir = func(cfg *Config) string {
-		return filepath.Join(cfg.OutputDir, chartsCLITestVersion)
+		return charts.OutputDir(releaseOutputDir(cfg.RepoRootDir, chartsCLITestVersion))
 	}
+
+	// Where a build leaves the chart index. A product that keeps it beside the
+	// charts replaces this.
+	chartsCLIIndexDir = func(cfg *Config) string { return charts.Dir(chartsCLIChartDir(cfg)) }
+
+	// Where a hashrelease build leaves the packaged charts, given the
+	// hashrelease's own directory. A product that nests them replaces this.
+	chartsCLIHashreleaseChartDir = func(hashreleaseDir string) string { return hashreleaseDir }
 
 	// The make target that packages every chart.
 	chartsCLITarget = "chart"
@@ -178,8 +186,7 @@ func TestChartsBuildBuildsTheIndexByDefault(t *testing.T) {
 	if repo := chartsCLIRepoURL(t); !r.ran(repo) {
 		t.Errorf("expected the index at %q to be downloaded", repo)
 	}
-	// The index is served from charts/
-	indexDir := charts.Dir(chartsCLIChartDir(cfg))
+	indexDir := chartsCLIIndexDir(cfg)
 	if _, err := os.Stat(filepath.Join(indexDir, "index.yaml")); err != nil {
 		t.Errorf("expected the index in %q: %v", indexDir, err)
 	}
@@ -361,7 +368,7 @@ func TestChartsBuildForAHashrelease(t *testing.T) {
 	prevVer, prevDir := chartsCLIChartVersion, chartsCLIChartDir
 	chartsCLIChartVersion = pinned
 	chartsCLIChartDir = func(cfg *Config) string {
-		return filepath.Join(baseHashreleaseOutputDir(cfg.RepoRootDir), "abc123")
+		return chartsCLIHashreleaseChartDir(filepath.Join(baseHashreleaseOutputDir(cfg.RepoRootDir), "abc123"))
 	}
 	t.Cleanup(func() { chartsCLIChartVersion, chartsCLIChartDir = prevVer, prevDir })
 
@@ -408,7 +415,7 @@ func TestHashreleaseChartDirMatchesTheHashreleaseFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pinnedChart: %v", err)
 	}
-	want := pin.Hashrelease(baseHashreleaseOutputDir(root), false).Source
+	want := chartsCLIHashreleaseChartDir(pin.Hashrelease(baseHashreleaseOutputDir(root), false).Source)
 	if chart.BaseDir != want {
 		t.Errorf("BaseDir = %q, want %q", chart.BaseDir, want)
 	}
