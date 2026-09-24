@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -74,6 +75,35 @@ func RegisterURLQueryJSONType[T any]() {
 			return obj, err
 		}
 		return obj, nil
+	})
+}
+
+// RegisterStrictURLQueryJSONType registers a type as one that should be decoded as json carried in a query parameter,
+// rejecting any field the type does not declare. Use it for filter parameters, where a misspelt key would otherwise
+// decode to an empty filter and silently widen the query.
+//
+// The value is decoded as-is: url.Values has already unescaped it, so unescaping again would turn a literal '%' in a
+// value into a 400.
+func RegisterStrictURLQueryJSONType[T any]() {
+	RegisterCustomDecodeTypeFunc(func(vals []string) (T, error) {
+		var obj T
+		if len(vals) == 0 || vals[0] == "" {
+			return obj, nil
+		}
+		dec := json.NewDecoder(strings.NewReader(vals[0]))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&obj); err != nil {
+			return obj, err
+		}
+		// A Decoder stops after the first value; anything after it is a malformed parameter, not a second value.
+		switch tok, err := dec.Token(); {
+		case errors.Is(err, io.EOF):
+			return obj, nil
+		case err != nil:
+			return obj, fmt.Errorf("unexpected data after the JSON value: %w", err)
+		default:
+			return obj, fmt.Errorf("unexpected data after the JSON value: %v", tok)
+		}
 	})
 }
 
