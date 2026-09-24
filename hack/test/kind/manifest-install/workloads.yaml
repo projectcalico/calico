@@ -1,0 +1,90 @@
+# Workloads for the manifest install test. The client and server are pinned to
+# different nodes so the connectivity checks cross the overlay, and the server
+# publishes a hostPort so the checks exercise the portmap plugin.
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: manifest-install-test
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server
+  namespace: manifest-install-test
+  labels:
+    app: manifest-install-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: manifest-install-server
+  template:
+    metadata:
+      labels:
+        app: manifest-install-server
+    spec:
+      containers:
+      - name: server
+        image: busybox:1.36
+        command:
+        - /bin/sh
+        - -c
+        - |
+          mkdir -p /www
+          echo "ok" > /www/index.html
+          httpd -f -p 8080 -h /www
+        ports:
+        - containerPort: 8080
+          hostPort: 30080
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 1
+          periodSeconds: 2
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server
+  namespace: manifest-install-test
+spec:
+  selector:
+    app: manifest-install-server
+  ports:
+  - port: 80
+    targetPort: 8080
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client
+  namespace: manifest-install-test
+  labels:
+    app: manifest-install-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: manifest-install-client
+  template:
+    metadata:
+      labels:
+        app: manifest-install-client
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app: manifest-install-server
+            topologyKey: kubernetes.io/hostname
+      containers:
+      - name: client
+        image: busybox:1.36
+        command: ["/bin/sh", "-c", "sleep infinity"]
