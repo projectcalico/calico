@@ -134,7 +134,9 @@ Fragments are hostile to stateless BPF programs. Only the first
 fragment carries L4 headers, so only the first fragment can be keyed
 against conntrack. Fragments may arrive out of order, so even the
 first fragment may arrive second. BPF cannot pause a packet waiting
-for more; it must allow, drop or modify immediately.
+for more; it must allow, drop or modify immediately. A non-first
+fragment's payload can be shorter than any L4 header, so no program it
+can reach may demand one (`skb_refresh_validate_ptrs_l4()` in `skb.h`).
 
 ### HEP-only defrag
 

@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	mapsbpf "github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/felix/bpf/routes"
 )
 
 func TestIP4Defrag(t *testing.T) {
@@ -230,4 +231,106 @@ func TestIP4Defrag(t *testing.T) {
 	Eventually(func() int {
 		return ipfragsFwdMapCount()
 	}, "2s", "200ms").Should(Equal(0))
+}
+
+// TestIP4FragShortTail checks that a non-first fragment whose payload is
+// shorter than a UDP header is not dropped as too short. Such a fragment
+// carries no L4 header, so the 8-byte L4 minimum does not apply to it.
+// See https://github.com/projectcalico/calico/issues/14052
+func TestIP4FragShortTail(t *testing.T) {
+	RegisterTestingT(t)
+
+	defer resetCTMap(ctMap)
+	defer cleanupMap(ipfragsFwdMap)
+
+	bpfIfaceName = "FRST"
+	defer func() { bpfIfaceName = "" }()
+
+	firstData := make([]byte, 40)
+	for i := range firstData {
+		firstData[i] = byte(i)
+	}
+
+	ipHdr := *ipv4Default
+	ipHdr.Id = 0x4321
+	ipHdr.Flags = layers.IPv4MoreFragments
+	ipHdr.FragOffset = 0
+	ipHdr.Length = uint16(20 + 8 + len(firstData))
+	udp := *udpDefault
+	// The length of the whole datagram, 1 byte ends up in the last fragment.
+	udp.Length = uint16(8 + len(firstData) + 1)
+	_ = udp.SetNetworkLayerForChecksum(&ipHdr)
+
+	pktFirst := gopacket.NewSerializeBuffer()
+	err := gopacket.SerializeLayers(pktFirst, gopacket.SerializeOptions{ComputeChecksums: true},
+		ethDefault, &ipHdr, &udp, gopacket.Payload(firstData))
+	Expect(err).NotTo(HaveOccurred())
+
+	ipHdr.Flags = 0
+	ipHdr.FragOffset = uint16((8 + len(firstData)) / 8)
+	ipHdr.Length = 20 + 1
+
+	// Serialize the tail without the Ethernet layer as it would pad the frame
+	// to the Ethernet minimum and the padding would hide the short payload.
+	ipTail := gopacket.NewSerializeBuffer()
+	err = gopacket.SerializeLayers(ipTail, gopacket.SerializeOptions{ComputeChecksums: true},
+		&ipHdr, gopacket.Payload([]byte{0xab}))
+	Expect(err).NotTo(HaveOccurred())
+
+	pktTail := append([]byte{}, ethDefault.DstMAC...)
+	pktTail = append(pktTail, ethDefault.SrcMAC...)
+	pktTail = append(pktTail, 0x08, 0x00)
+	pktTail = append(pktTail, ipTail.Bytes()...)
+	Expect(pktTail).To(HaveLen(14 + 20 + 1))
+
+	t.Run("from workload", func(t *testing.T) {
+		RegisterTestingT(t)
+
+		resetCTMap(ctMap)
+		cleanupMap(ipfragsFwdMap)
+
+		rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+		rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+		defer resetRTMap(rtMap)
+		err := rtMap.Update(rtKey, rtVal)
+		Expect(err).NotTo(HaveOccurred())
+
+		var firstRetval int
+
+		skbMark = 0
+		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pktFirst.Bytes())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.RetvalStr()).NotTo(Equal("TC_ACT_SHOT"))
+			firstRetval = res.Retval
+		})
+
+		skbMark = 0
+		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pktTail)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(firstRetval))
+		})
+	})
+
+	t.Run("from host", func(t *testing.T) {
+		RegisterTestingT(t)
+
+		resetCTMap(ctMap)
+		cleanupMap(ipfragsFwdMap)
+
+		skbMark = 0
+		runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pktFirst.Bytes())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		})
+
+		skbMark = 0
+		runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pktTail)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		})
+	})
 }
