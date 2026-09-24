@@ -17,13 +17,15 @@ RUST_BUILD_VER=1.96.0
 
 CALICO_BASE_VER=ubi9-1789183536
 
-# Version of various tools used in the build and tests.
+# Version of various tools used in the build and tests. Tools that are Go
+# programs (crane, gotestsum, setup-envtest, goimports) are not pinned here:
+# they are `tool` directives in the root go.mod, so Renovate's gomod manager
+# updates them with the rest of the module graph. See the GO_TOOL comment in
+# lib.Makefile.
 COREDNS_VERSION=1.5.2
-CRANE_VERSION=v0.21.6
 ETCD_VERSION=v3.5.31
 GHR_VERSION=v0.18.3
 GITHUB_CLI_VERSION=2.94.0
-GOTESTSUM_VERSION=v1.13.0
 HELM_VERSION=v3.21.1
 # KINDEST_NODE_VERSION is the Kubernetes version of the KIND cluster used in
 # tests, and is deliberately held one minor behind K8S_VERSION: the KubeVirt

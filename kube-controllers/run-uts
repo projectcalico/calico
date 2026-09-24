@@ -13,6 +13,10 @@ echo GINKGO_ARGS: $GINKGO_ARGS
 # time a suite fails.
 RC=0
 
+# GOTESTSUM may be a multi-word command (`go -C <repo root> tool gotestsum`),
+# so split it into an array rather than invoking it as a single word.
+read -ra GOTESTSUM_CMD <<<"${GOTESTSUM:-gotestsum}"
+
 mkdir -p report
 
 # Go through each package we've been told to test. If there are actually test files present,
@@ -41,7 +45,7 @@ for PKG in "$@"; do
 		else
 			set -o pipefail
 			${PKG}/ut.test -test.v |& \
-				"${GOTESTSUM:-gotestsum}" \
+				"${GOTESTSUM_CMD[@]}" \
 					--junitfile report/${REPORT_NAME}.xml \
 					--format testname \
 					--raw-command -- \

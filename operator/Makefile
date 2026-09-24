@@ -195,8 +195,7 @@ ENVTEST_K8S_VERSION?=1.34.x
 ut: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	-mkdir -p .go-pkg-cache report
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-	go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.22 && \
-	export KUBEBUILDER_ASSETS=$$(setup-envtest use $(ENVTEST_K8S_VERSION) --bin-dir /tmp/envtest-bins -p path) && \
+	export KUBEBUILDER_ASSETS=$$($(CONTAINER_GO_TOOL) setup-envtest use $(ENVTEST_K8S_VERSION) --bin-dir /tmp/envtest-bins -p path) && \
 	gotestsum --format testname --junitfile report/operator_ut.xml -- $(UT_DIR)/... $(GO_TEST_ARGS) $(GINKGO_FOCUS_ARG)'
 
 ## Run the functional tests against a local kind cluster.
@@ -345,8 +344,8 @@ check-release-image-tags:
 # A release run that resumes after a failure re-enters this, so an image already at
 # this version is skipped rather than treated as an error.
 .PHONY: release-publish
-release-publish: operator-release-prereqs var-require-all-VERSION bin/crane
-	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
+release-publish: operator-release-prereqs var-require-all-VERSION
+	@if $(REPO_ROOT)/hack/image-published "$(CRANE_CMD)" "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
 		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \
 	else \
 		$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM); \
