@@ -16,12 +16,14 @@ package conntrack
 
 import (
 	"net"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/qos"
@@ -50,13 +52,11 @@ type flowKey struct {
 	portA, portB uint16
 }
 
-func makeFlowKey(ip1 net.IP, port1 uint16, ip2 net.IP, port2 uint16) flowKey {
-	a, b := ipToString(ip1), ipToString(ip2)
-	if a > b || (a == b && port1 > port2) {
-		a, b = b, a
-		port1, port2 = port2, port1
-	}
-	return flowKey{ipA: a, ipB: b, portA: port1, portB: port2}
+// rstFlow is a counted flow that saw an RST, and the counters it charged.
+type rstFlow struct {
+	charged  []connlimitKey
+	seenIter int
+	lastSeen time.Time
 }
 
 // LinuxEstablishedTCPFlows returns the TCP flows that Linux conntrack holds in
@@ -107,19 +107,35 @@ type ConnLimitScanner struct {
 	skipThisRun bool
 
 	// rstFlows: counted flows that saw an RST. Once reaped, they count while
-	// Linux conntrack holds them ESTABLISHED.
-	rstFlows         map[flowKey][]connlimitKey
-	rstFlowsSeen     map[flowKey]bool
+	// Linux conntrack holds them ESTABLISHED, for at most rstFlowMaxAge.
+	rstFlows         map[flowKey]*rstFlow
+	rstFlowMaxAge    time.Duration
 	linuxEstablished LinuxEstablishedTCPFlows
+	now              func() time.Time
 }
 
 // ConnLimitScannerOpt configures a ConnLimitScanner.
 type ConnLimitScannerOpt func(*ConnLimitScanner)
 
+// WithRSTFlowMaxAge bounds how long a reaped RST'd flow keeps counting;
+// TCPEstablished reaps any idle flow anyway.
+func WithRSTFlowMaxAge(d time.Duration) ConnLimitScannerOpt {
+	return func(s *ConnLimitScanner) {
+		s.rstFlowMaxAge = d
+	}
+}
+
 // WithLinuxEstablishedTCPFlows replaces the Linux conntrack reader, for tests.
 func WithLinuxEstablishedTCPFlows(f LinuxEstablishedTCPFlows) ConnLimitScannerOpt {
 	return func(s *ConnLimitScanner) {
 		s.linuxEstablished = f
+	}
+}
+
+// WithClock replaces the clock, for tests.
+func WithClock(now func() time.Time) ConnLimitScannerOpt {
+	return func(s *ConnLimitScanner) {
+		s.now = now
 	}
 }
 
@@ -138,8 +154,10 @@ func NewConnLimitScanner(
 		getPodInfo:       getPodInfo,
 		family:           family,
 		counts:           make(map[connlimitKey]uint32),
-		rstFlows:         make(map[flowKey][]connlimitKey),
+		rstFlows:         make(map[flowKey]*rstFlow),
+		rstFlowMaxAge:    timeouts.DefaultTimeouts().TCPEstablished,
 		linuxEstablished: linuxEstablishedTCPFlows,
+		now:              time.Now,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -158,7 +176,6 @@ func (s *ConnLimitScanner) IterationStart() {
 	}
 	s.podInfo = s.getPodInfo()
 	s.counts = make(map[connlimitKey]uint32)
-	s.rstFlowsSeen = make(map[flowKey]bool)
 }
 
 // Check satisfies EntryScanner. For each active TCP CT entry, it counts the
@@ -245,14 +262,13 @@ func (s *ConnLimitScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get E
 	viaNetfilter := ctVal.Flags()&(v4.FlagNATOut|v4.FlagSkipFIB) != 0
 	if len(charged) > 0 && ctVal.RSTSeen() != 0 && viaNetfilter {
 		if s.rstFlows == nil {
-			s.rstFlows = make(map[flowKey][]connlimitKey)
+			s.rstFlows = make(map[flowKey]*rstFlow)
 		}
-		if s.rstFlowsSeen == nil {
-			s.rstFlowsSeen = make(map[flowKey]bool)
+		s.rstFlows[makeFlowKey(addrA, ctKey.PortA(), addrB, ctKey.PortB())] = &rstFlow{
+			charged:  charged,
+			seenIter: s.iterCount,
+			lastSeen: s.clock(),
 		}
-		fk := makeFlowKey(addrA, ctKey.PortA(), addrB, ctKey.PortB())
-		s.rstFlows[fk] = charged
-		s.rstFlowsSeen[fk] = true
 	}
 
 	return ScanVerdictOK, 0
@@ -328,19 +344,30 @@ func (s *ConnLimitScanner) IterationEnd() {
 // countReapedRSTFlows counts RST'd flows whose BPF entry is gone but which Linux
 // conntrack still holds ESTABLISHED, and forgets the rest.
 func (s *ConnLimitScanner) countReapedRSTFlows() {
+	limited := s.limitedKeys()
+	now := s.clock()
 	var reaped []flowKey
-	for fk := range s.rstFlows {
-		if !s.rstFlowsSeen[fk] {
-			reaped = append(reaped, fk)
+	for fk, f := range s.rstFlows {
+		if f.seenIter == s.iterCount {
+			continue
 		}
+		if now.Sub(f.lastSeen) > s.rstFlowMaxAge || !chargesStillLimited(f.charged, limited) {
+			delete(s.rstFlows, fk)
+			continue
+		}
+		reaped = append(reaped, fk)
 	}
 	if len(reaped) == 0 {
 		return
 	}
 
-	linux, err := s.linuxEstablished(s.family)
+	readLinux := s.linuxEstablished
+	if readLinux == nil {
+		readLinux = linuxEstablishedTCPFlows
+	}
+	linux, err := readLinux(s.family)
 	if err != nil {
-		// Keep counting them; the next scan retries.
+		// Keep counting them until the age cap; the next scan retries.
 		log.WithError(err).Warn("ConnLimitScanner: failed to read Linux conntrack.")
 	}
 	for _, fk := range reaped {
@@ -350,10 +377,42 @@ func (s *ConnLimitScanner) countReapedRSTFlows() {
 				continue
 			}
 		}
-		for _, k := range s.rstFlows[fk] {
+		for _, k := range s.rstFlows[fk].charged {
 			s.counts[k]++
 		}
 	}
+}
+
+// limitedKeys returns the counters of the pods limited right now.
+func (s *ConnLimitScanner) limitedKeys() map[connlimitKey]bool {
+	keys := make(map[connlimitKey]bool)
+	for _, pod := range s.podInfo {
+		if pod.HasIngressLimit {
+			keys[connlimitKey{ifindex: pod.IfIndex, direction: 1}] = true
+		}
+		if pod.HasEgressLimit {
+			keys[connlimitKey{ifindex: pod.IfIndex, direction: 0}] = true
+		}
+	}
+	return keys
+}
+
+// chargesStillLimited reports whether every charged counter still belongs to a
+// limited pod; ifindexes get reused.
+func chargesStillLimited(charged []connlimitKey, limited map[connlimitKey]bool) bool {
+	for _, k := range charged {
+		if !limited[k] {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *ConnLimitScanner) clock() time.Time {
+	if s.now == nil {
+		return time.Now()
+	}
+	return s.now()
 }
 
 // linuxEstablishedTCPFlows reads Linux conntrack over netlink.
@@ -366,6 +425,11 @@ func linuxEstablishedTCPFlows(family uint16) (map[flowKey]struct{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	return establishedTCPFlowKeys(flows), nil
+}
+
+// establishedTCPFlowKeys keys each ESTABLISHED TCP flow by both of its tuples.
+func establishedTCPFlowKeys(flows []*netlink.ConntrackFlow) map[flowKey]struct{} {
 	established := make(map[flowKey]struct{})
 	for _, f := range flows {
 		if f.Forward.Protocol != unix.IPPROTO_TCP {
@@ -376,8 +440,20 @@ func linuxEstablishedTCPFlows(family uint16) (map[flowKey]struct{}, error) {
 			continue
 		}
 		established[makeFlowKey(f.Forward.SrcIP, f.Forward.SrcPort, f.Forward.DstIP, f.Forward.DstPort)] = struct{}{}
+		// A flow Linux DNATs to a workload is keyed post-DNAT in BPF, which
+		// only the reply tuple carries.
+		established[makeFlowKey(f.Reverse.SrcIP, f.Reverse.SrcPort, f.Reverse.DstIP, f.Reverse.DstPort)] = struct{}{}
 	}
-	return established, nil
+	return established
+}
+
+func makeFlowKey(ip1 net.IP, port1 uint16, ip2 net.IP, port2 uint16) flowKey {
+	a, b := ipToString(ip1), ipToString(ip2)
+	if a > b || (a == b && port1 > port2) {
+		a, b = b, a
+		port1, port2 = port2, port1
+	}
+	return flowKey{ipA: a, ipB: b, portA: port1, portB: port2}
 }
 
 // prepareUpdate reads the existing cali_qos_conn entry and returns the key

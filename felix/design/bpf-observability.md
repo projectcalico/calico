@@ -336,7 +336,8 @@ on connection close.
   `CONNLIMIT_DEC`.
 - **Decrement on cleanup**: when the BPF conntrack cleanup scanner
   removes an expired CT entry, the same helper fires so silent
-  purges (LRU eviction, idle TCPEstablished) don't leak slots.
+  purges (LRU eviction, idle TCPEstablished) don't leak slots. An entry
+  that saw an RST is the exception: only the recount releases its slot.
 - **Decrement (safety net)**: a userspace `ConnLimitScanner`
   (`felix/bpf/conntrack/connlimit_scanner.go`) recounts established
   TCP CT entries once per CT scan and overwrites `current_count` in
@@ -349,7 +350,9 @@ side, so a pod holding only `CAP_NET_RAW` could forge one per
 connection and admit an extra; two FINs cannot be forged by one party.
 An RST-closed connection keeps its slot until its entry is purged — at
 `TCPResetSeen`, or at the two-minute residual window if a packet crossed
-the close — and the next recount rebases.
+the close — and the next recount rebases. A flow that crosses netfilter
+(nat-outgoing) can outlive its entry in Linux conntrack, so it keeps the
+slot while Linux holds it ESTABLISHED, for at most `TCPEstablished`.
 
 For the same reason the recount skips no RST state, and no other
 signal a pod can refresh at will: anything it honours is something a

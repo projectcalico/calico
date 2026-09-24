@@ -1057,9 +1057,9 @@ var _ = infrastructure.DatastoreDescribe(
 							wOpts[0] = []workload.Opt{workload.WithoutTCPKeepAlive()}
 						})
 
-						// Reaping a forged-RST entry must not free a slot its live
-						// connection still holds.
-						forgeRSTsAndIdle := func(serverIP string) {
+						// viaNetfilter: the flow crosses iptables, so Linux conntrack
+						// carries it past the reap and its slot must hold.
+						forgeRSTsAndIdle := func(serverIP string, viaNetfilter bool) {
 							if !BPFMode() {
 								Skip("The reap is BPF conntrack only")
 							}
@@ -1172,12 +1172,17 @@ var _ = infrastructure.DatastoreDescribe(
 							logrus.Infof("CORE-13478: %d extra connections admitted over a limit of %d, egress current_count: %d",
 								extra, numConnections, getBPFCurrentCount(1, 1, "egress")())
 
-							Expect(extra).To(BeNumerically("<=", numConnections-survived),
-								"a reaped forged-RST entry freed a slot its live connection still holds")
+							if viaNetfilter {
+								Expect(survived).To(Equal(numConnections), "Linux conntrack did not carry the reaped connections")
+								Expect(extra).To(BeZero(), "a reaped forged-RST entry freed a slot its live connection still holds")
+							} else {
+								Expect(survived).To(BeZero(), "a reaped connection survived with no conntrack state")
+								Expect(extra).To(Equal(numConnections), "the reap did not free the dead connections' slots")
+							}
 						}
 
 						It("should not let a workload forge RSTs and idle to exceed its egress connlimit", func() {
-							forgeRSTsAndIdle(w[0].IP)
+							forgeRSTsAndIdle(w[0].IP, false)
 						})
 
 						// Unlike pod-to-pod, a nat-outgoing flow crosses netfilter both
@@ -1208,7 +1213,7 @@ var _ = infrastructure.DatastoreDescribe(
 							})
 
 							It("should not let a workload forge RSTs and idle to exceed its egress connlimit", func() {
-								forgeRSTsAndIdle(extServer.IP)
+								forgeRSTsAndIdle(extServer.IP, true)
 							})
 						})
 					})

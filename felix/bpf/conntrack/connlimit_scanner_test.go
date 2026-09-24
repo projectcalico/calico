@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vishvananda/netlink"
+	"github.com/vishvananda/netlink/nl"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
@@ -975,27 +977,42 @@ type reapTest struct {
 	m          *fakeQoSMap
 	scanner    *ConnLimitScanner
 	key        Key
+	pod        ConnLimitPodInfo
+	now        time.Time
 	linuxHas   bool
 	linuxErr   error
 	linuxReads int
 }
 
-const reapTestIfindex = 6
+const (
+	reapTestIfindex = 6
+	reapTestMaxAge  = time.Hour
+)
 
 func newReapTest(t *testing.T) *reapTest {
 	podIP, extIP := "10.65.1.2", "172.17.0.8"
-	rt := &reapTest{t: t, m: newFakeQoSMap(), key: makeKey(podIP, extIP, 15300, 8055), linuxHas: true}
+	rt := &reapTest{
+		t:        t,
+		m:        newFakeQoSMap(),
+		key:      makeKey(podIP, extIP, 15300, 8055),
+		pod:      podInfo(reapTestIfindex, false, true),
+		now:      time.Unix(1000, 0),
+		linuxHas: true,
+	}
 	rt.m.seed(t, reapTestIfindex, 0, 3, 3)
 	rt.scanner = NewConnLimitScanner(rt.m, func() map[string]ConnLimitPodInfo {
-		return map[string]ConnLimitPodInfo{string(net.ParseIP(podIP).To4()): podInfo(reapTestIfindex, false, true)}
-	}, qos.IPFamilyV4, WithLinuxEstablishedTCPFlows(func(uint16) (map[flowKey]struct{}, error) {
-		rt.linuxReads++
-		flows := map[flowKey]struct{}{}
-		if rt.linuxHas {
-			flows[makeFlowKey(net.ParseIP(podIP), 15300, net.ParseIP(extIP), 8055)] = struct{}{}
-		}
-		return flows, rt.linuxErr
-	}))
+		return map[string]ConnLimitPodInfo{string(net.ParseIP(podIP).To4()): rt.pod}
+	}, qos.IPFamilyV4,
+		WithRSTFlowMaxAge(reapTestMaxAge),
+		WithClock(func() time.Time { return rt.now }),
+		WithLinuxEstablishedTCPFlows(func(uint16) (map[flowKey]struct{}, error) {
+			rt.linuxReads++
+			flows := map[flowKey]struct{}{}
+			if rt.linuxHas {
+				flows[makeFlowKey(net.ParseIP(podIP), 15300, net.ParseIP(extIP), 8055)] = struct{}{}
+			}
+			return flows, rt.linuxErr
+		}))
 	return rt
 }
 
@@ -1089,5 +1106,72 @@ func TestConnLimitScannerSkipsLinuxReadForFlowOutsideNetfilter(t *testing.T) {
 	}
 	if rt.linuxReads != 0 {
 		t.Errorf("read Linux conntrack %d times for a flow outside netfilter", rt.linuxReads)
+	}
+}
+
+// A failing Linux read, or a close Linux never sees, must not hold the slot
+// past the age cap.
+func TestConnLimitScannerForgetsReapedRSTFlowAfterMaxAge(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		linuxErr error
+	}{
+		{"Linux still holds it", nil},
+		{"Linux read keeps failing", errors.New("netlink failed")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rt := newReapTest(t)
+			rt.linuxErr = tc.linuxErr
+			v := rt.value(ctv4.FlagNATOut, true)
+
+			rt.pass(&v)
+			rt.now = rt.now.Add(reapTestMaxAge)
+			if got := rt.pass(nil); got != 1 {
+				t.Fatalf("at the age cap: count %d, want 1", got)
+			}
+			rt.now = rt.now.Add(time.Second)
+			if got := rt.pass(nil); got != 0 {
+				t.Fatalf("past the age cap: count %d, want 0", got)
+			}
+		})
+	}
+}
+
+// A reaped flow stops charging once its pod loses that limit; the ifindex may
+// be reused.
+func TestConnLimitScannerForgetsReapedRSTFlowOfUnlimitedPod(t *testing.T) {
+	rt := newReapTest(t)
+	v := rt.value(ctv4.FlagNATOut, true)
+
+	rt.pass(&v)
+	rt.pod = podInfo(reapTestIfindex, true, false) // now ingress-limited only
+	rt.pass(nil)
+	rt.pod = podInfo(reapTestIfindex, false, true)
+	if got := rt.pass(nil); got != 0 {
+		t.Fatalf("stale charge came back: count %d, want 0", got)
+	}
+}
+
+// A flow Linux DNATs to a workload is keyed post-DNAT in BPF, which only the
+// reply tuple carries.
+func TestEstablishedTCPFlowKeysIncludesReplyTuple(t *testing.T) {
+	client, hostIP, podIP := net.ParseIP("10.0.0.9"), net.ParseIP("192.168.1.1"), net.ParseIP("10.65.0.2")
+	dnat := &netlink.ConntrackFlow{
+		Forward:   netlink.IPTuple{Protocol: unix.IPPROTO_TCP, SrcIP: client, SrcPort: 40000, DstIP: hostIP, DstPort: 80},
+		Reverse:   netlink.IPTuple{Protocol: unix.IPPROTO_TCP, SrcIP: podIP, SrcPort: 8080, DstIP: client, DstPort: 40000},
+		ProtoInfo: &netlink.ProtoInfoTCP{State: nl.TCP_CONNTRACK_ESTABLISHED},
+	}
+	closing := &netlink.ConntrackFlow{
+		Forward:   netlink.IPTuple{Protocol: unix.IPPROTO_TCP, SrcIP: client, SrcPort: 40001, DstIP: podIP, DstPort: 8080},
+		Reverse:   netlink.IPTuple{Protocol: unix.IPPROTO_TCP, SrcIP: podIP, SrcPort: 8080, DstIP: client, DstPort: 40001},
+		ProtoInfo: &netlink.ProtoInfoTCP{State: nl.TCP_CONNTRACK_CLOSE},
+	}
+
+	keys := establishedTCPFlowKeys([]*netlink.ConntrackFlow{dnat, closing})
+	if _, ok := keys[makeFlowKey(client, 40000, podIP, 8080)]; !ok {
+		t.Error("post-DNAT tuple of an ESTABLISHED flow is missing")
+	}
+	if _, ok := keys[makeFlowKey(client, 40001, podIP, 8080)]; ok {
+		t.Error("a closing flow was reported ESTABLISHED")
 	}
 }
