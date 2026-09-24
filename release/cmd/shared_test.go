@@ -15,12 +15,17 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+
+	cli "github.com/urfave/cli/v3"
+
+	"github.com/projectcalico/calico/release/internal/pinnedversion"
 )
 
 // recordingRunner runs nothing and records what it was asked to run. Units run
@@ -92,6 +97,28 @@ func (r *recordingRunner) ran(want ...string) bool {
 	})
 }
 
+// cli flags are package-level and remember whether they were set, so a test
+// sharing them sees what an earlier one parsed.
+func freshFlags(flags []cli.Flag) []cli.Flag {
+	out := make([]cli.Flag, 0, len(flags))
+	for _, f := range flags {
+		switch v := f.(type) {
+		case *cli.StringFlag:
+			c := *v
+			out = append(out, &c)
+		case *cli.StringSliceFlag:
+			c := *v
+			out = append(out, &c)
+		case *cli.BoolFlag:
+			c := *v
+			out = append(out, &c)
+		default:
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 func containsAll(args, want []string) bool {
 	for _, w := range want {
 		if !slices.ContainsFunc(args, func(a string) bool { return strings.Contains(a, w) }) {
@@ -156,4 +183,35 @@ func writeChartValues(t *testing.T, root string) {
 			t.Fatalf("write values: %v", err)
 		}
 	}
+}
+
+func TestHashreleaseBuilds(t *testing.T) {
+	// A hashrelease build may generate its pin, which needs the branch prefix.
+	t.Run("can generate the pin", func(t *testing.T) {
+		for _, tc := range []struct {
+			name  string
+			flags []cli.Flag
+		}{
+			{name: "operator", flags: operatorBuildFlags},
+			{name: "manifests", flags: manifestsBuildFlags},
+			{name: "charts", flags: chartsBuildFlags},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				var got pinnedversion.Config
+				cmd := &cli.Command{
+					Flags: freshFlags(tc.flags),
+					Action: func(_ context.Context, c *cli.Command) error {
+						got = pinConfig(&Config{RepoRootDir: "/repo"}, c)
+						return nil
+					},
+				}
+				if err := cmd.Run(context.Background(), []string{"build", "--hashrelease"}); err != nil {
+					t.Fatalf("run: %v", err)
+				}
+				if got.ReleaseBranchPrefix != releaseBranchPrefixFlag.Value {
+					t.Errorf("ReleaseBranchPrefix = %q, want %q", got.ReleaseBranchPrefix, releaseBranchPrefixFlag.Value)
+				}
+			})
+		}
+	})
 }

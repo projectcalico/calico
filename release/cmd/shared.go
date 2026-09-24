@@ -201,15 +201,15 @@ var outputDir = func(cfg *Config, c *cli.Command, version string) (string, error
 	return releaseOutputDir(cfg.RepoRootDir, version), nil
 }
 
-func publishRecord(cfg *Config, step, version string, confirm bool) ([]string, *outputs.RefsWriter, error) {
-	published, err := outputs.ReadRefs(cfg.OutputDir, step, version)
+func publishRecord(uploadDir, step, version string, confirm bool) ([]string, *outputs.RefsWriter, error) {
+	published, err := outputs.ReadRefs(uploadDir, step, version)
 	if err != nil {
 		return nil, nil, err
 	}
 	if !confirm {
 		return published, nil, nil
 	}
-	w, err := outputs.NewRefsWriter(cfg.OutputDir, step, version)
+	w, err := outputs.NewRefsWriter(uploadDir, step, version)
 	if err != nil {
 		return nil, nil, err
 	}

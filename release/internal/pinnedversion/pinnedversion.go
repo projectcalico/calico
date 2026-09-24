@@ -30,7 +30,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
-	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 const pinnedVersionFileName = "pinned_versions.yml"
@@ -126,8 +125,8 @@ func pinnedFrom(p *Pin) PinnedVersion {
 // operatorComponent is the operator this build ships.
 var operatorComponent = func(cfg Config, productVer string) registry.Component {
 	return registry.Component{
-		Image:    cmp.Or(cfg.Operator.Image, operator.DefaultImage),
-		Registry: cmp.Or(cfg.Operator.Registry, operator.DefaultRegistries[0]),
+		Image:    cmp.Or(cfg.Operator.Image, registry.OperatorImage),
+		Registry: cmp.Or(cfg.Operator.Registry, registry.DefaultOperatorRegistry),
 		Version:  productVer,
 	}
 }

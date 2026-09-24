@@ -35,11 +35,10 @@ $(HACK_BIN):
 
 PACKAGE_NAME = github.com/projectcalico/calico/operator
 
-# The image and arches the ci/cd common targets in lib.Makefile read. The operator
+# The image the ci/cd common targets in lib.Makefile read. The operator
 # publishes alongside the other Calico component images, so the registries come from
 # metadata.mk rather than an override here.
 BUILD_IMAGES    = operator
-ARCHES          = amd64 arm64 ppc64le s390x
 BINARY_NAME    ?= operator
 
 include ../metadata.mk
@@ -77,9 +76,14 @@ CALICO_VERSION    ?= $(BRANCH_IMAGE_TAG)
 endif
 CALICO_REGISTRY   ?=
 CALICO_IMAGE_PATH ?=
+# Where the operator resolves its own image. Empty keeps the variant default.
+OPERATOR_IMAGE_REGISTRY ?=
+OPERATOR_IMAGE_PATH     ?=
 CALICO_LDFLAGS = -X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(CALICO_VERSION) \
                  -X $(PACKAGE_NAME)/pkg/components.calicoRegistry=$(CALICO_REGISTRY) \
-                 -X $(PACKAGE_NAME)/pkg/components.calicoImagePath=$(CALICO_IMAGE_PATH)
+                 -X $(PACKAGE_NAME)/pkg/components.calicoImagePath=$(CALICO_IMAGE_PATH) \
+                 -X $(PACKAGE_NAME)/pkg/components.operatorRegistry=$(OPERATOR_IMAGE_REGISTRY) \
+                 -X $(PACKAGE_NAME)/pkg/components.operatorImagePath=$(OPERATOR_IMAGE_PATH)
 
 # To update the Istio version, see "Updating the bundled version of Istio" in docs/common_tasks.md.
 ISTIO_HELM_REPO ?= https://istio-release.storage.googleapis.com/charts
@@ -131,7 +135,7 @@ $(BINDIR)/$(BINARY_NAME)-$(ARCH): $(SRC_FILES) $(ENVOY_GATEWAY_CHART) $(ISTIO_CH
 	go build -buildvcs=false -v -o $(BINDIR)/$(BINARY_NAME)-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) $(CALICO_LDFLAGS) -s -w" ./cmd/'
 
 OPERATOR_IMAGE_NAME = $(firstword $(BUILD_IMAGES))
-IMAGE_BUILD_MARKER  = operator_container-$(ARCH).created
+IMAGE_BUILD_MARKER  = $(OPERATOR_IMAGE_NAME)_container-$(ARCH).created
 
 .PHONY: image images
 image images: $(IMAGE_BUILD_MARKER)
@@ -322,7 +326,8 @@ cd: image-all cd-common
 # rebuild rather than a retag of an image built for a different set of them.
 ## Build and tag the release images for the specified VERSION.
 release-build: var-require-all-VERSION check-release-image-tags
-	$(MAKE) clean image-all RELEASE=true
+	rm -f $(BINDIR)/$(BINARY_NAME)-* *.created $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
+	$(MAKE) image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 
 # The tag is compiled in, so a release that guessed it would ship an operator naming
