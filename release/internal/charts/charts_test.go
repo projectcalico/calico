@@ -944,7 +944,7 @@ func TestCalicoChartEditsRewriteEveryImageRegistry(t *testing.T) {
 
 	edited := map[string]bool{}
 	for _, edit := range calicoChartEdits("v3.30.0", "example.com/calico") {
-		edited[edit.Edit.Key] = true
+		edited[edit.Key] = true
 	}
 
 	for name, value := range values {
