@@ -493,10 +493,8 @@ func (m *CoreNamespaceMigration) deleteKubeSystemCalicoNode(ctx context.Context)
 	return nil
 }
 
-// deleteKubeSystemWebhooks removes the webhook server a manifest install leaves
-// behind in kube-system, once the operator runs one of its own. The operator's
-// configuration is a separate object, api.projectcalico.org, so the manifest's
-// survives the upgrade pointing at a namespace nothing serves from any more.
+// deleteKubeSystemWebhooks removes the webhook server, and the configuration
+// aimed at it, that a manifest install leaves behind in kube-system.
 func (m *CoreNamespaceMigration) deleteKubeSystemWebhooks(ctx context.Context, log logr.Logger) error {
 	if _, err := m.client.AppsV1().Deployments(kubeSystem).Get(ctx, webhooksDeploymentName, metav1.GetOptions{}); err != nil {
 		if apierrs.IsNotFound(err) {
