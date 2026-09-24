@@ -634,6 +634,7 @@ blocks:
         '/calicoctl/tests/fv/helper/*.go',
         '/charts/calico/',
         '/charts/tigera-operator',
+        '/charts/tigera-operator/',
         '/cmd/calico/**/*Dockerfile*',
         '/cmd/calico/*.go',
         '/cmd/calico/Makefile',
@@ -1052,6 +1053,7 @@ blocks:
         '/calicoctl/tests/fv/helper/*.go',
         '/charts/calico/',
         '/charts/tigera-operator',
+        '/charts/tigera-operator/',
         '/cmd/calico/**/*Dockerfile*',
         '/cmd/calico/*.go',
         '/cmd/calico/Makefile',
@@ -1394,6 +1396,7 @@ blocks:
         '/calicoctl/tests/fv/helper/*.go',
         '/charts/calico/',
         '/charts/tigera-operator',
+        '/charts/tigera-operator/',
         '/cmd/calico/**/*Dockerfile*',
         '/cmd/calico/*.go',
         '/cmd/calico/Makefile',
@@ -2113,10 +2116,10 @@ blocks:
     # without its stamp would fail the consumer's untolerated gcloud cp.
     #
     # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)", "E2E tests:
-    # Gateway API Conformance") list this block in their `dependencies:`, so
-    # CHANGE_IN_WITH_DEPENDENTS() folds their triggers into the arg below — this
-    # block's own inputs, the operator's Go closure plus everything else under
-    # operator/.
+    # Gateway API Conformance", "Manifest install (KIND)") list this block in
+    # their `dependencies:`, so CHANGE_IN_WITH_DEPENDENTS() folds their triggers
+    # into the arg below — this block's own inputs, the operator's Go closure plus
+    # everything else under operator/.
     run:
       when: >-
         change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
@@ -2128,6 +2131,7 @@ blocks:
         '/.semaphore/semaphore.yml.d/blocks/20-e2e.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-gateway-conformance.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-kubevirt-live-migration.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-manifest-install.yml',
         '/Makefile',
         '/api/*.go',
         '/api/admission/*.go',
@@ -2209,6 +2213,8 @@ blocks:
         '/calicoctl/calicoctl/util/yaml/*.go',
         '/calicoctl/deps.txt',
         '/calicoctl/tests/fv/helper/*.go',
+        '/charts/calico/',
+        '/charts/tigera-operator/',
         '/cmd/calico/**/*Dockerfile*',
         '/cmd/calico/*.go',
         '/cmd/calico/Makefile',
@@ -2275,6 +2281,7 @@ blocks:
         '/guardian/pkg/tunnel/*.go',
         '/hack/test/certs/',
         '/hack/test/kind',
+        '/hack/test/kind/',
         '/hack/test/kind/gateway-setup.sh',
         '/key-cert-provisioner/pkg/cfg/*.go',
         '/key-cert-provisioner/pkg/k8s/*.go',
@@ -2380,6 +2387,7 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
+        '/manifests/',
         '/metadata.mk',
         '/node/**/*Dockerfile*',
         '/node/Makefile',
@@ -2447,6 +2455,7 @@ blocks:
         '/operator/pkg/controller/kubeproxy/*.go',
         '/operator/pkg/controller/managedfields/*.go',
         '/operator/pkg/controller/metrics/*.go',
+        '/operator/pkg/controller/migration/',
         '/operator/pkg/controller/migration/*.go',
         '/operator/pkg/controller/migration/cni/*.go',
         '/operator/pkg/controller/migration/convert/*.go',
@@ -2513,6 +2522,7 @@ blocks:
         '/pod2daemon/pkg/flexvol/*.go',
         '/pod2daemon/proto/*.go',
         '/pod2daemon/workloadapi/*.go',
+        '/third_party/cni-plugins/**',
         '/third_party/envoy-gateway/',
         '/third_party/envoy-proxy/',
         '/third_party/envoy-ratelimit/',
@@ -2681,6 +2691,7 @@ blocks:
         '/calicoctl/deps.txt',
         '/calicoctl/tests/fv/helper/*.go',
         '/charts/calico/',
+        '/charts/tigera-operator/',
         '/cmd/calico/**/*Dockerfile*',
         '/cmd/calico/*.go',
         '/cmd/calico/Makefile',
@@ -2920,6 +2931,7 @@ blocks:
         '/operator/pkg/controller/kubeproxy/*.go',
         '/operator/pkg/controller/managedfields/*.go',
         '/operator/pkg/controller/metrics/*.go',
+        '/operator/pkg/controller/migration/',
         '/operator/pkg/controller/migration/*.go',
         '/operator/pkg/controller/migration/cni/*.go',
         '/operator/pkg/controller/migration/convert/*.go',
@@ -6720,7 +6732,8 @@ blocks:
     # Every other kind lane installs Calico through the operator, which renders
     # its own DaemonSet. Only this lane applies the generated manifests, so it is
     # the one that catches a manifest missing a piece the operator supplies. It
-    # then runs the datapath and policy specs to say the cluster works.
+    # then upgrades that cluster to the operator, which is the one place the
+    # migration out of kube-system runs against the manifests we ship.
     run:
       when: >-
         change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
@@ -6736,6 +6749,7 @@ blocks:
         '/api/pkg/defaults/*.go',
         '/api/pkg/lib/numorstring/*.go',
         '/charts/calico/',
+        '/charts/tigera-operator/',
         '/cni-plugin/**/*Dockerfile*',
         '/cni-plugin/Makefile',
         '/cni-plugin/cmd/calico/*.go',
@@ -6796,6 +6810,7 @@ blocks:
         '/libcalico-go/lib/winutils/*.go',
         '/manifests/',
         '/metadata.mk',
+        '/operator/pkg/controller/migration/',
         '/pkg/buildinfo/*.go',
         '/third_party/cni-plugins/**'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
@@ -6817,6 +6832,7 @@ blocks:
       - Prerequisites
       - "Build: calico image"
       - "Build: node image"
+      - "Build: operator image"
       - "Build: third-party images"
     task:
       env_vars:
