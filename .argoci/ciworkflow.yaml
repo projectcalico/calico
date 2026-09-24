@@ -440,6 +440,17 @@ includes:
         - ^whisker/
         - ^\.argoci/modules/20-e2e\.yaml$
 
+  - path: .argoci/modules/20-manifest-install.yaml
+    changes:
+      dependsOn: [third_party, cni-plugin]
+      in:
+        - ^manifests/
+        - ^charts/calico/
+        - ^hack/test/kind/
+        - ^e2e/config/
+        - ^Makefile$
+        - ^\.argoci/modules/20-manifest-install\.yaml$
+
   - path: .argoci/modules/20-kubevirt-live-migration.yaml
     changes:
       dependsOn: [felix, cni-plugin, confd, node, e2e, libcalico-go, operator]
