@@ -12,8 +12,11 @@ installation:
   cni:
     type: Calico
 
+# The manifest install ships its own webhook server in kube-system, and the
+# migration only removes it once the operator runs one, which the API server
+# brings with it.
 apiServer:
-  enabled: false
+  enabled: true
 goldmane:
   enabled: false
 whisker:

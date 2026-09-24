@@ -77,4 +77,15 @@ done
 ${kubectl} -n calico-system rollout status ds/calico-node --timeout=600s
 ${kubectl} get tigerastatus
 
+# The migration removes the webhook server the manifest puts in kube-system,
+# along with the configuration aimed at it, which fails closed.
+if ${kubectl} -n kube-system get deployment calico-webhooks &>/dev/null; then
+  echo "FAIL: the manifest's webhook server is still in kube-system"
+  exit 1
+fi
+if ${kubectl} get validatingwebhookconfiguration calico-webhooks &>/dev/null; then
+  echo "FAIL: the manifest's webhook configuration is still there"
+  exit 1
+fi
+
 echo "Calico is running under the operator."

@@ -56,6 +56,7 @@ const (
 	typhaDeploymentName          = "calico-typha"
 	nodeDaemonSetName            = "calico-node"
 	kubeControllerDeploymentName = "calico-kube-controllers"
+	webhooksDeploymentName       = "calico-webhooks"
 	calicoNodeMigrationName      = "calico-node-migration"
 
 	k8sServicesEndpointConfigMap = "kubernetes-services-endpoint"
@@ -321,6 +322,9 @@ func (m *CoreNamespaceMigration) Run(ctx context.Context, log logr.Logger) error
 	if err := m.deleteKubeSystemServiceEndPointConfigMap(ctx, log); err != nil {
 		return fmt.Errorf("failed to delete kube-system k8sServicesEndpoint ConfigMap: %s", err.Error())
 	}
+	if err := m.deleteKubeSystemWebhooks(ctx, log); err != nil {
+		return fmt.Errorf("failed to delete kube-system webhooks Deployment: %s", err.Error())
+	}
 	log.Info("Namespace migration complete")
 
 	return nil
@@ -487,6 +491,57 @@ func (m *CoreNamespaceMigration) deleteKubeSystemCalicoNode(ctx context.Context)
 		return err
 	}
 	return nil
+}
+
+// deleteKubeSystemWebhooks removes the webhook server a manifest install leaves
+// behind in kube-system, once the operator runs one of its own. The operator's
+// configuration is a separate object, api.projectcalico.org, so the manifest's
+// survives the upgrade pointing at a namespace nothing serves from any more.
+func (m *CoreNamespaceMigration) deleteKubeSystemWebhooks(ctx context.Context, log logr.Logger) error {
+	if _, err := m.client.AppsV1().Deployments(kubeSystem).Get(ctx, webhooksDeploymentName, metav1.GetOptions{}); err != nil {
+		if apierrs.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	if !m.operatorWebhooksAvailable(ctx) {
+		// The configuration fails closed, so deleting the only server behind it
+		// would reject every policy write.
+		log.Info("Leaving the kube-system webhook server in place, the operator is not running one")
+		return nil
+	}
+
+	// The configuration goes first: between its deletion and the server's, calls
+	// to a server that is already gone would fail closed.
+	if err := m.client.AdmissionregistrationV1().ValidatingWebhookConfigurations().Delete(ctx, webhooksDeploymentName, metav1.DeleteOptions{}); err != nil && !apierrs.IsNotFound(err) {
+		return err
+	}
+	if err := m.client.CoreV1().Services(kubeSystem).Delete(ctx, webhooksDeploymentName, metav1.DeleteOptions{}); err != nil && !apierrs.IsNotFound(err) {
+		return err
+	}
+	if err := m.client.AppsV1().Deployments(kubeSystem).Delete(ctx, webhooksDeploymentName, metav1.DeleteOptions{}); err != nil && !apierrs.IsNotFound(err) {
+		return err
+	}
+	log.V(1).Info("kube-system webhooks deleted")
+	return nil
+}
+
+// operatorWebhooksAvailable reports whether the operator's own webhook server is
+// serving. The apiserver controller renders it, so a cluster without the Calico
+// API server never has one and waiting out the timeout is the answer.
+func (m *CoreNamespaceMigration) operatorWebhooksAvailable(ctx context.Context) bool {
+	err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+		d, err := m.client.AppsV1().Deployments(common.CalicoNamespace).Get(ctx, webhooksDeploymentName, metav1.GetOptions{})
+		if err != nil {
+			if apierrs.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		return d.Status.AvailableReplicas > 0, nil
+	})
+	return err == nil
 }
 
 // waitForOperatorTyphaDeploymentReady waits until the 'new' typha deployment in
