@@ -389,9 +389,10 @@
   # because no lane wants a subset of them.
   #
   # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)", "E2E tests:
-  # Gateway API Conformance") list this block in their `dependencies:`, so
-  # CHANGE_IN_WITH_DEPENDENTS() folds their triggers into the arg below, which
-  # is this block's own input: everything under third_party/.
+  # Gateway API Conformance", "Manifest install (KIND)") list this block in
+  # their `dependencies:`, so CHANGE_IN_WITH_DEPENDENTS() folds their triggers
+  # into the arg below, which is this block's own input: everything under
+  # third_party/.
   run:
     when: "${CHANGE_IN_WITH_DEPENDENTS(non-go:/third_party/)}"
   dependencies: []
