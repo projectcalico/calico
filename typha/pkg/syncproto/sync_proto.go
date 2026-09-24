@@ -241,8 +241,35 @@ var AllSyncerTypes = [NumSyncerTypes]SyncerType{
 type CompressionAlgorithm string
 
 const (
+	// CompressionNone is the zero value: the stream carries plain bytes.
+	// It is a peer of the real algorithms everywhere an algorithm is
+	// chosen, advertised or looked up, so that the uncompressed case needs
+	// no special handling.
+	CompressionNone   CompressionAlgorithm = ""
 	CompressionSnappy CompressionAlgorithm = "snappy"
+	CompressionZstd   CompressionAlgorithm = "zstd"
+
+	NumCompressionAlgorithms = 2
 )
+
+// AllCompressionAlgorithms contains each of the compression algorithms a
+// stream can be encoded with, in no particular order.  It excludes
+// CompressionNone, which is not something a peer advertises support for.  We
+// use an array rather than a slice so that it is copied, not aliased, when a
+// caller takes it.
+var AllCompressionAlgorithms = [NumCompressionAlgorithms]CompressionAlgorithm{
+	CompressionSnappy,
+	CompressionZstd,
+}
+
+// MetricLabelValue returns the value used for the "compression" label on
+// Prometheus metrics: the algorithm name, or "none" for CompressionNone.
+func (a CompressionAlgorithm) MetricLabelValue() string {
+	if a == CompressionNone {
+		return "none"
+	}
+	return string(a)
+}
 
 // MsgClientHello is the first message sent by the client after it opens the connection.  It begins the handshake.
 // It includes a request to use a particular kind of syncer and tells the server what features are supported.
@@ -255,7 +282,12 @@ type MsgClientHello struct {
 	// SyncerTypeFelix.
 	SyncerType SyncerType
 
-	SupportsDecoderRestart         bool
+	SupportsDecoderRestart bool
+
+	// SupportedCompressionAlgorithms is the set of algorithms the client can
+	// decode.  The server picks one (or none) using its own preference order
+	// and reports its choice in MsgDecoderRestart.  Requires
+	// SupportsDecoderRestart.
 	SupportedCompressionAlgorithms []CompressionAlgorithm
 
 	// SupportsModernPolicyKeys tells the server whether this client supports modern PolicyKey
