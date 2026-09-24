@@ -138,6 +138,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     -e KUBECONFIG=/kubeconfig \
     -e PRODUCT=${PRODUCT:-calico} \
     -e E2E_GINKGO_ARGS="${E2E_GINKGO_ARGS}" \
+    -e WINDOWS_OS \
     ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
     "${auth_mount[@]}" \
     "${aws_cred_env[@]}" \
