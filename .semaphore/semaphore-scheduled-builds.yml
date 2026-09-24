@@ -1748,6 +1748,9 @@ blocks:
           commands:
             - .semaphore/run-and-monitor manifest-install.log make kind-manifest-install-test
       epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
         on_fail:
           commands:
             - KUBECONFIG=$(pwd)/hack/test/kind/kind-manifests-kubeconfig.yaml .semaphore/collect-kind-diags
