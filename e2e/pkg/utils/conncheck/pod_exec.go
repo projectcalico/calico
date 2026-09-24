@@ -32,6 +32,10 @@ import (
 
 const deletionTimeout = 1 * time.Minute
 
+// streamStartGrace must cover a refused TCP connect making it back through the
+// exec stream.
+const streamStartGrace = time.Second
+
 // podReadyTimeout is longer on Windows because the server image is multi-GB.
 func podReadyTimeout(_ context.Context) time.Duration {
 	if windows.ClusterIsWindows() {
@@ -51,7 +55,8 @@ func execShellInPod(pod *v1.Pod, cmd string) (string, error) {
 // execStreamInPod launches a long-lived command in pod via SPDY exec, writing
 // merged stdout/stderr to w. The returned stop function closes stdin (which
 // triggers the streamWrapper reaper to SIGTERM the child) and waits for the
-// stream to drain.
+// stream to drain. A command that exits on its own within streamStartGrace is
+// reported as an error here rather than from stop.
 func execStreamInPod(ctx context.Context, pod *v1.Pod, command []string, w io.Writer) (func() error, error) {
 	if windows.ClusterIsWindows() {
 		return nil, fmt.Errorf("execStreamInPod: streaming probes are not supported on Windows pods")
@@ -129,6 +134,21 @@ func execStreamInPod(ctx context.Context, pod *v1.Pod, command []string, w io.Wr
 		defer mu.Unlock()
 		return streamErr
 	}
+
+	// A command that dies at birth is otherwise indistinguishable from a running
+	// one, and its error surfaces from stop(), blaming the teardown.
+	select {
+	case <-doneCh:
+		mu.Lock()
+		err := streamErr
+		mu.Unlock()
+		if err == nil {
+			err = errors.New("command exited without running")
+		}
+		return nil, fmt.Errorf("execStreamInPod: %w", err)
+	case <-time.After(streamStartGrace):
+	}
+
 	return stop, nil
 }
 

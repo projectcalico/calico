@@ -327,29 +327,38 @@ var _ = describe.CalicoDescribe(
 
 			probeTarget := conncheck.NewTCPConnectTarget(serverIP, connLimitPort)
 
-			By("Verifying the server is reachable")
-			checker.ExpectSuccess(client, probeTarget)
-			checker.Execute()
-
 			// Each holder bridges to a sleep so neither end closes the socket; it
-			// stays ESTABLISHED, occupying a slot until stop() is called.
+			// stays ESTABLISHED, occupying a slot until stop() is called. A separate
+			// reachability probe would occupy one too, until its conntrack entry
+			// expired, so the holders serve as one.
 			By(fmt.Sprintf("Holding %d concurrent connections open", maxConns))
 			connectAddr := fmt.Sprintf("TCP:%s:%d", serverIP, connLimitPort)
 			var holders []func() error
-			defer func() {
+			releaseHolders := func() {
 				for _, stop := range holders {
 					_ = stop()
 				}
-			}()
-			for i := range maxConns {
-				stop, err := client.ExecStream(
-					context.Background(),
-					[]string{"socat", connectAddr, "EXEC:sleep 3600"},
-					io.Discard,
-				)
-				Expect(err).NotTo(HaveOccurred(), "failed to open held connection %d", i)
-				holders = append(holders, stop)
+				holders = nil
 			}
+			defer releaseHolders()
+
+			// A partial set still owns its slots, so a retry has to start from none.
+			Eventually(func() error {
+				releaseHolders()
+				for i := range maxConns {
+					stop, err := client.ExecStream(
+						context.Background(),
+						[]string{"socat", connectAddr, "EXEC:sleep 3600"},
+						io.Discard,
+					)
+					if err != nil {
+						return fmt.Errorf("failed to open held connection %d: %w", i, err)
+					}
+					holders = append(holders, stop)
+				}
+				return nil
+			}, 2*time.Minute, 5*time.Second).Should(Succeed(),
+				"could not hold %d connections open at once", maxConns)
 
 			By("Verifying the (N+1)th connection is refused")
 			checker.ResetExpectations()
