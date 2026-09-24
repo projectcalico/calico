@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/go-playground/form"
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 
 	apicontext "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
@@ -165,6 +166,10 @@ func DecodeAndValidateURLParameters[T any](obj *T, header map[string][]string, p
 
 	// Validate parameters.
 	if err := validate.Struct(obj); err != nil {
+		var verrs validator.ValidationErrors
+		if errors.As(err, &verrs) {
+			return errors.New(strings.Join(TranslateValidationErrors(verrs), "; "))
+		}
 		return err
 	}
 
