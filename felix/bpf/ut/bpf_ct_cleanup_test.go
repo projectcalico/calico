@@ -15,7 +15,10 @@
 package ut_test
 
 import (
+	"encoding/binary"
+	"net"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 
@@ -23,7 +26,9 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/conntrack/cleanupv1"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/cttestdata"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
+	ctv4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/felix/bpf/qos"
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
 )
 
@@ -31,6 +36,48 @@ func TestBPFProgCleaner(t *testing.T) {
 	for _, tc := range cttestdata.CTCleanupTests {
 		t.Run(tc.Description, func(t *testing.T) {
 			runCTCleanupTest(t, tc)
+		})
+	}
+}
+
+// Reaping an RST'd entry leaves its connlimit slot to the recount; an RST-free
+// reap still frees it.
+func TestBPFProgCleanerConnLimitRSTReap(t *testing.T) {
+	const ifIndex = 7
+	for _, tc := range []struct {
+		name      string
+		rstSeen   bool
+		wantCount uint32
+	}{
+		{"RST seen keeps the slot", true, 3},
+		{"idle timeout frees the slot", false, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			scanner := setUpConntrackScanTest(t)
+			resetQoSMap(qosConnMap)
+			t.Cleanup(func() { resetQoSMap(qosConnMap) })
+
+			qosKey := qos.NewKey(ifIndex, 0 /* egress */, qos.IPFamilyV4)
+			Expect(qosConnMap.Update(qosKey.AsBytes(), qos.NewConnValue(3, 3).AsBytes())).To(Succeed())
+
+			// Old enough for both the 2-minute RST window and TCPEstablished.
+			lastSeen := cttestdata.Now - 2*time.Hour
+			v := conntrack.NewValueNormal(lastSeen, ctv4.FlagConnLimitOut,
+				conntrack.Leg{SynSeen: true, AckSeen: true, Approved: true, Opener: true, Ifindex: ifIndex},
+				conntrack.Leg{SynSeen: true, AckSeen: true, Approved: true})
+			if tc.rstSeen {
+				binary.LittleEndian.PutUint64(v[ctv4.VoRSTSeen:], uint64(lastSeen))
+			}
+			k := conntrack.NewKey(conntrack.ProtoTCP, net.ParseIP("10.0.0.1"), 1234, net.ParseIP("10.0.0.2"), 8055)
+			Expect(ctMap.Update(k.AsBytes(), v.AsBytes())).To(Succeed())
+
+			scanner.Scan()
+
+			_, err := ctMap.Get(k.AsBytes())
+			Expect(maps.IsNotExists(err)).To(BeTrue(), "entry was not reaped")
+			b, err := qosConnMap.Get(qosKey.AsBytes())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(qos.ConnValueFromBytes(b).CurrentCount()).To(Equal(tc.wantCount))
 		})
 	}
 }

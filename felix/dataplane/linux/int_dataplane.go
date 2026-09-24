@@ -1259,13 +1259,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			connLimitProvider := func() map[string]bpfconntrack.ConnLimitPodInfo {
 				return bpfEndpointManager.GetConnLimitedPodInfo()
 			}
+			rstMaxAge := bpfconntrack.WithRSTFlowMaxAge(config.BPFConntrackTimeouts.TCPEstablished)
 			if conntrackScannerV4 != nil {
 				conntrackScannerV4.AddUnlocked(bpfconntrack.NewConnLimitScanner(
-					bpfMaps.CommonMaps.QoSConnMap, connLimitProvider, qos.IPFamilyV4))
+					bpfMaps.CommonMaps.QoSConnMap, connLimitProvider, qos.IPFamilyV4, rstMaxAge))
 			}
 			if conntrackScannerV6 != nil {
 				conntrackScannerV6.AddUnlocked(bpfconntrack.NewConnLimitScanner(
-					bpfMaps.CommonMaps.QoSConnMap, connLimitProvider, qos.IPFamilyV6))
+					bpfMaps.CommonMaps.QoSConnMap, connLimitProvider, qos.IPFamilyV6, rstMaxAge))
 			}
 		}
 
