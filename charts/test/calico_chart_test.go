@@ -44,6 +44,30 @@ func TestCalicoNodeRunsHostWritingInitContainersAsRoot(t *testing.T) {
 	}
 }
 
+// The combined calico image ships no upstream CNI plugins, so install-cni has nothing
+// to copy onto the host unless cni-plugins stages them first.
+func TestCalicoNodeStagesUpstreamCNIPlugins(t *testing.T) {
+	g := NewWithT(t)
+
+	var daemonSet appsv1.DaemonSet
+	renderCalicoResource(t, "templates/calico-node.yaml", "DaemonSet", "calico-node", &daemonSet)
+
+	initContainers := daemonSet.Spec.Template.Spec.InitContainers
+	g.Expect(containerIndex(t, initContainers, "cni-plugins")).To(BeNumerically("<", containerIndex(t, initContainers, "install-cni")))
+
+	staging := containerByName(t, initContainers, "cni-plugins")
+	g.Expect(staging.VolumeMounts).To(ContainElement(corev1.VolumeMount{Name: "cni-plugins-stage", MountPath: "/stage"}))
+	g.Expect(staging.SecurityContext.RunAsUser).To(Equal(ptr.To[int64](0)))
+
+	installCNI := containerByName(t, initContainers, "install-cni")
+	g.Expect(installCNI.VolumeMounts).To(ContainElement(corev1.VolumeMount{Name: "cni-plugins-stage", MountPath: "/opt/cni/bin"}))
+
+	g.Expect(daemonSet.Spec.Template.Spec.Volumes).To(ContainElement(corev1.Volume{
+		Name:         "cni-plugins-stage",
+		VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+	}))
+}
+
 func TestCalicoWebhooksKeepsTheServerUnprivileged(t *testing.T) {
 	g := NewWithT(t)
 
@@ -106,6 +130,18 @@ func renderCalicoResource(t *testing.T, templatePath, kind, name string, into an
 		return
 	}
 	t.Fatalf("%s %q was not rendered from %s", kind, name, templatePath)
+}
+
+func containerIndex(t *testing.T, containers []corev1.Container, name string) int {
+	t.Helper()
+
+	for i, container := range containers {
+		if container.Name == name {
+			return i
+		}
+	}
+	t.Fatalf("container %q not found", name)
+	return -1
 }
 
 func containerByName(t *testing.T, containers []corev1.Container, name string) corev1.Container {
