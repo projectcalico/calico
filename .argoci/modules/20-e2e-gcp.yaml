@@ -58,10 +58,12 @@ steps:
         value: "{{workflow.name}}"
       - name: ARGO_WORKFLOW_UID
         value: "{{workflow.uid}}"
-    # A module cannot set globalPrologue, so the e2e environment is sourced
-    # here, into the shell that then runs the body.
-    commands: |
+    # In the prologue, not the commands: the epilogue tears the cluster down with
+    # `bz`, which this puts on PATH, and only a prologue's exports survive into
+    # the shell an epilogue runs in.
+    prologue: |
       source .argoci/scripts/global_prologue.sh
+    commands: |
       .argoci/scripts/body_standard.sh
     epilogue: |
       source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
