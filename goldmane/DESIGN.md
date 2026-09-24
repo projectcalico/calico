@@ -106,10 +106,10 @@ a flow are carried as **bounded sets on the `Flow` message** (`source_ips`,
 - Felix collects the IP sets from the underlying connection tuples before the
   aggregation level zeroes the per-flow tuple, and sends them on each
   `FlowUpdate`.
-- Goldmane merges these sets as flows with the same key are combined across
-  nodes and time windows (`storage.Window` / `DiachronicFlow`), deduplicating
-  and **truncating to `storage.MaxIPsPerFlow` (100) entries** to cap memory and
-  wire size. Once the cap is reached the sets are best-effort, not exhaustive.
+- Goldmane keeps one set per `DiachronicFlow` (i.e. per key), **capped at
+  `storage.MaxIPsPerFlow` (100) entries**, with a per-IP bitmap of the windows
+  it was seen in so range queries stay exact. When full, the least-recently-seen
+  IP is evicted, so the sets are best-effort, not exhaustive.
 - The sets are surfaced to consumers via the `Flows` API and the Whisker
   backend (`source_ips` / `dest_ips` JSON fields).
 
@@ -120,9 +120,11 @@ value. This can be revisited if a compelling use case arises.
 ### Review notes
 
 - The IP sets must never move into the `FlowKey` — doing so reintroduces the
-  cardinality explosion described above. Keep them on `Flow` / `Window`.
+  cardinality explosion described above. Keep them on `Flow` / `DiachronicFlow`.
 - The truncation cap (`MaxIPsPerFlow`) bounds memory; changing it affects the
   per-flow footprint at scale. Benchmark before raising it.
+- The IP window bitmap has `windowSlots` (256) bits; history (`numBuckets`) must
+  stay below that or windows share a bit and range queries over-report.
 - A change to any of the five concepts above — bucket layout,
   rollover cadence, emit semantics, sink reload protocol — is a
   protocol-level change. Callers (Felix's flow reporter, Whisker,

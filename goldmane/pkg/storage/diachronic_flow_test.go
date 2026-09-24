@@ -180,3 +180,250 @@ func TestDiachronicFlow_IPSetCap(t *testing.T) {
 	af := df.Aggregate(0, 1)
 	require.Len(t, af.SourceIps, storage.MaxIPsPerFlow, "source IP set should be truncated to the cap")
 }
+
+const ipTestInterval = 15
+
+func ipTestFlowKey() *types.FlowKey {
+	return types.NewFlowKey(
+		&types.FlowKeySource{},
+		&types.FlowKeyDestination{},
+		&types.FlowKeyMeta{},
+		&proto.PolicyTrace{},
+	)
+}
+
+// addIPs adds a flow carrying the given source IPs to window i of df.
+func addIPs(df *storage.DiachronicFlow, k *types.FlowKey, i int, srcIPs ...string) {
+	start := int64(i * ipTestInterval)
+	df.AddFlow(&types.Flow{
+		Key:          k,
+		SourceLabels: unique.Make(""),
+		DestLabels:   unique.Make(""),
+		SourceIps:    srcIPs,
+	}, start, start+ipTestInterval)
+}
+
+// distinctIPs returns n distinct IPv4 addresses, offset so different calls can avoid overlap.
+func distinctIPs(offset, n int) []string {
+	ips := make([]string, n)
+	for i := range ips {
+		v := offset + i
+		ips[i] = net.IP{10, byte(v >> 16), byte(v >> 8), byte(v)}.String()
+	}
+	return ips
+}
+
+// TestDiachronicFlow_IPSetCapIsPerKey verifies the cap bounds the IPs retained across all of a
+// flow's windows, not per window, and that the most recently seen addresses win.
+func TestDiachronicFlow_IPSetCapIsPerKey(t *testing.T) {
+	defer setupTest(t)()
+
+	k := ipTestFlowKey()
+	df := storage.NewDiachronicFlow(k, 0)
+
+	// A full cap's worth of distinct IPs in each of 5 windows.
+	for i := range 5 {
+		addIPs(df, k, i, distinctIPs(i*storage.MaxIPsPerFlow, storage.MaxIPsPerFlow)...)
+	}
+
+	af := df.Aggregate(0, 5*ipTestInterval)
+	require.Len(t, af.SourceIps, storage.MaxIPsPerFlow, "cap should apply across all windows of the key")
+
+	newest := distinctIPs(4*storage.MaxIPsPerFlow, storage.MaxIPsPerFlow)
+	require.ElementsMatch(t, newest, af.SourceIps, "the newest window's IPs should have evicted older ones")
+
+	// Older windows no longer report any IPs, since all their addresses were evicted.
+	require.Empty(t, df.Aggregate(0, ipTestInterval).SourceIps)
+}
+
+// TestDiachronicFlow_IPSetTimeRange verifies a range query returns only the IPs seen in that range.
+func TestDiachronicFlow_IPSetTimeRange(t *testing.T) {
+	defer setupTest(t)()
+
+	k := ipTestFlowKey()
+	df := storage.NewDiachronicFlow(k, 0)
+
+	addIPs(df, k, 0, "10.0.0.1")
+	addIPs(df, k, 1, "10.0.0.2")
+	addIPs(df, k, 2, "10.0.0.1", "10.0.0.3")
+
+	require.Equal(t, []string{"10.0.0.1"}, df.Aggregate(0, ipTestInterval).SourceIps)
+	require.Equal(t, []string{"10.0.0.2"}, df.Aggregate(ipTestInterval, 2*ipTestInterval).SourceIps)
+	require.Equal(t, []string{"10.0.0.1", "10.0.0.3"}, df.Aggregate(2*ipTestInterval, 3*ipTestInterval).SourceIps)
+	require.Equal(t, []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"}, df.Aggregate(0, 3*ipTestInterval).SourceIps)
+}
+
+// TestDiachronicFlow_IPSetRollover verifies IPs are dropped once every window they were seen in has
+// expired, and retained while any such window is still live.
+func TestDiachronicFlow_IPSetRollover(t *testing.T) {
+	defer setupTest(t)()
+
+	k := ipTestFlowKey()
+	df := storage.NewDiachronicFlow(k, 0)
+
+	addIPs(df, k, 0, "10.0.0.1", "10.0.0.2")
+	addIPs(df, k, 1, "10.0.0.2")
+
+	// Expire window 0. 10.0.0.1 was only seen there; 10.0.0.2 is still live in window 1.
+	df.Rollover(ipTestInterval)
+	require.Equal(t, []string{"10.0.0.2"}, df.Aggregate(0, 2*ipTestInterval).SourceIps)
+
+	// Re-adding 10.0.0.1 to a new window must not resurrect its expired window.
+	addIPs(df, k, 2, "10.0.0.1")
+	require.Equal(t, []string{"10.0.0.1", "10.0.0.2"}, df.Aggregate(0, 3*ipTestInterval).SourceIps)
+	require.Equal(t, []string{"10.0.0.2"}, df.Aggregate(ipTestInterval, 2*ipTestInterval).SourceIps)
+
+	// Expire everything.
+	df.Rollover(3 * ipTestInterval)
+	require.True(t, df.Empty())
+	addIPs(df, k, 3)
+	require.Empty(t, df.Aggregate(0, 4*ipTestInterval).SourceIps)
+}
+
+// TestDiachronicFlow_IPSetLateArrival verifies that, once the set is full, an IP arriving for a
+// window older than everything retained is dropped rather than evicting newer data.
+func TestDiachronicFlow_IPSetLateArrival(t *testing.T) {
+	defer setupTest(t)()
+
+	k := ipTestFlowKey()
+	df := storage.NewDiachronicFlow(k, 0)
+
+	addIPs(df, k, 5, distinctIPs(0, storage.MaxIPsPerFlow)...)
+	addIPs(df, k, 1, "192.168.0.1")
+
+	af := df.Aggregate(0, 6*ipTestInterval)
+	require.Len(t, af.SourceIps, storage.MaxIPsPerFlow)
+	require.NotContains(t, af.SourceIps, "192.168.0.1")
+}
+
+// TestDiachronicFlow_DestIPSetTimeRange verifies destination IPs follow the same per-window
+// tracking and rollover as source IPs.
+func TestDiachronicFlow_DestIPSetTimeRange(t *testing.T) {
+	defer setupTest(t)()
+
+	k := ipTestFlowKey()
+	df := storage.NewDiachronicFlow(k, 0)
+
+	for i, ip := range []string{"192.168.0.1", "192.168.0.2"} {
+		start := int64(i * ipTestInterval)
+		df.AddFlow(&types.Flow{
+			Key:          k,
+			SourceLabels: unique.Make(""),
+			DestLabels:   unique.Make(""),
+			DestIps:      []string{ip},
+		}, start, start+ipTestInterval)
+	}
+
+	require.Equal(t, []string{"192.168.0.1"}, df.Aggregate(0, ipTestInterval).DestIps)
+	require.Equal(t, []string{"192.168.0.1", "192.168.0.2"}, df.Aggregate(0, 2*ipTestInterval).DestIps)
+
+	df.Rollover(ipTestInterval)
+	require.Equal(t, []string{"192.168.0.2"}, df.Aggregate(0, 2*ipTestInterval).DestIps)
+}
+
+// TestDeferredFlowBuilder_IPSnapshot verifies the builder captures the IPs at construction, so later
+// changes to the DiachronicFlow (made by the main loop) don't leak into a flow being streamed.
+func TestDeferredFlowBuilder_IPSnapshot(t *testing.T) {
+	defer setupTest(t)()
+
+	k := ipTestFlowKey()
+	df := storage.NewDiachronicFlow(k, 0)
+	addIPs(df, k, 0, "10.0.0.1")
+
+	b := storage.NewDeferredFlowBuilder(df, 0, ipTestInterval)
+
+	// Mutate the flow after the builder was created.
+	addIPs(df, k, 0, "10.0.0.2")
+
+	res := &proto.FlowResult{Flow: &proto.Flow{}}
+	require.True(t, b.BuildInto(nil, res))
+	require.Equal(t, []string{"10.0.0.1"}, res.Flow.SourceIps)
+}
+
+// TestDiachronicFlow_IPSetEvictionKeepsRefreshedHistory verifies that, when the set is full, an IP
+// present in the incoming flow is refreshed before any eviction, so a new IP earlier in the same
+// flow cannot evict it and wipe its history from earlier windows.
+func TestDiachronicFlow_IPSetEvictionKeepsRefreshedHistory(t *testing.T) {
+	defer setupTest(t)()
+
+	k := ipTestFlowKey()
+	df := storage.NewDiachronicFlow(k, 0)
+
+	// Window 0: "10.0.0.0" becomes the oldest entry. Window 1 fills the rest of the set.
+	addIPs(df, k, 0, "10.0.0.0")
+	addIPs(df, k, 1, distinctIPs(1, storage.MaxIPsPerFlow-1)...)
+
+	// Window 2: a new IP listed before the oldest existing one.
+	addIPs(df, k, 2, "192.168.0.1", "10.0.0.0")
+
+	require.Contains(t, df.Aggregate(0, ipTestInterval).SourceIps, "10.0.0.0",
+		"re-seen IP must keep its window 0 history")
+	require.Contains(t, df.Aggregate(2*ipTestInterval, 3*ipTestInterval).SourceIps, "192.168.0.1")
+}
+
+func TestDiachronicFlow_IPSetEvictionSameWindowTie(t *testing.T) {
+	defer setupTest(t)()
+
+	for _, tc := range []struct {
+		name string
+		ips  []string
+	}{
+		{name: "new IP first", ips: []string{"10.0.0.0", "10.0.0.1"}},
+		{name: "retained IP first", ips: []string{"10.0.0.1", "10.0.0.0"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			k := ipTestFlowKey()
+			df := storage.NewDiachronicFlow(k, 0)
+			add := func(window int, ips ...string) {
+				start := int64(window * ipTestInterval)
+				df.AddFlow(&types.Flow{
+					Key:          k,
+					SourceLabels: unique.Make(""),
+					DestLabels:   unique.Make(""),
+					SourceIps:    ips,
+					DestIps:      ips,
+				}, start, start+ipTestInterval)
+			}
+
+			add(0, "10.0.0.1")
+			add(1, distinctIPs(2, storage.MaxIPsPerFlow-1)...)
+			// Refreshing the retained IP makes every entry equally recent. The new,
+			// lower address should be dropped without erasing the retained IP's history.
+			add(1, tc.ips...)
+			historical := df.Aggregate(0, ipTestInterval)
+			require.Equal(t, []string{"10.0.0.1"}, historical.SourceIps)
+			require.Equal(t, historical.SourceIps, historical.DestIps)
+			current := df.Aggregate(ipTestInterval, 2*ipTestInterval)
+			require.Len(t, current.SourceIps, storage.MaxIPsPerFlow)
+			require.Contains(t, current.SourceIps, "10.0.0.1")
+			require.NotContains(t, current.SourceIps, "10.0.0.0")
+			require.Equal(t, current.SourceIps, current.DestIps)
+
+			// A higher address at the same timestamp should still replace the lowest one.
+			add(1, "192.0.2.1")
+			current = df.Aggregate(ipTestInterval, 2*ipTestInterval)
+			require.Len(t, current.SourceIps, storage.MaxIPsPerFlow)
+			require.Contains(t, current.SourceIps, "192.0.2.1")
+			require.NotContains(t, current.SourceIps, "10.0.0.1")
+			require.Equal(t, current.SourceIps, current.DestIps)
+			historical = df.Aggregate(0, ipTestInterval)
+			require.Empty(t, historical.SourceIps)
+			require.Empty(t, historical.DestIps)
+		})
+	}
+}
+
+// BenchmarkDiachronicFlow_AddFlowDuplicateIPs checks that a flow with many duplicate addresses doesn't
+// size the IP set by its input length rather than by MaxIPsPerFlow.
+func BenchmarkDiachronicFlow_AddFlowDuplicateIPs(b *testing.B) {
+	k := ipTestFlowKey()
+	ips := make([]string, 100_000)
+	for i := range ips {
+		ips[i] = "10.0.0.1"
+	}
+	f := &types.Flow{Key: k, SourceLabels: unique.Make(""), DestLabels: unique.Make(""), SourceIps: ips}
+	b.ReportAllocs()
+	for b.Loop() {
+		storage.NewDiachronicFlow(k, 0).AddFlow(f, 0, ipTestInterval)
+	}
+}

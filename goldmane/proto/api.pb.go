@@ -7,11 +7,12 @@
 package proto
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -1793,14 +1794,12 @@ type Flow struct {
 	// NumConnectionsLive tracks the total number of still active connections recorded for this Flow. It counts each
 	// connection that matches the FlowKey that was active at this Flow's EndTime.
 	NumConnectionsLive int64 `protobuf:"varint,12,opt,name=num_connections_live,json=numConnectionsLive,proto3" json:"num_connections_live,omitempty"`
-	// SourceIps contains the set of distinct source IP addresses observed for the connections aggregated
-	// into this Flow. Because a single FlowKey aggregates traffic across many individual connections (and
-	// across nodes and time), this is a set rather than a single value. The list is bounded: at most a
-	// configurable maximum number of addresses are retained per Flow to cap memory and wire size. When the
-	// limit is exceeded, addresses are dropped (the set is best-effort, not exhaustive).
+	// SourceIps contains the distinct source IP addresses observed for the connections aggregated into
+	// this Flow. A FlowKey spans many connections, so this is a set rather than a single value. It is
+	// capped at a fixed maximum number of addresses (100); beyond that, the least recently seen addresses
+	// are dropped, so the set is best-effort rather than exhaustive.
 	SourceIps []string `protobuf:"bytes,13,rep,name=source_ips,json=sourceIps,proto3" json:"source_ips,omitempty"`
-	// DestIps contains the set of distinct destination IP addresses observed for the connections aggregated
-	// into this Flow. As with source_ips, this is a bounded, best-effort set rather than a single value.
+	// DestIps contains the distinct destination IP addresses, with the same semantics as source_ips.
 	DestIps       []string `protobuf:"bytes,14,rep,name=dest_ips,json=destIps,proto3" json:"dest_ips,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

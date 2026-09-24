@@ -818,7 +818,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 			// FlowPrefixName (the default aggregation level) zeroes the FlowMeta tuple so that
 			// connections from many source IPs collapse into a single flow log. The IP sets must
 			// still be collected from the underlying connection tuples and surfaced on the FlowLog.
-			ca := NewAggregator()
+			ca := NewAggregator().IncludeIPs(true)
 
 			// First connection: src 10.0.0.1 -> dst 20.0.0.1 (tuple1).
 			Expect(ca.FeedUpdate(&muNoConn1Rule1AllowUpdateWithEndpointMeta)).NotTo(HaveOccurred())
@@ -848,7 +848,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 		It("collects and renders IPv6 source and destination IPs", func() {
 			// IPs are stored as a 16-byte array (net.IP.To16 covers both families) and rendered with
 			// net.IP.String, so IPv6 connections must surface as canonical IPv6 strings.
-			ca := NewAggregator()
+			ca := NewAggregator().IncludeIPs(true)
 
 			// First connection: IPv6 src 2001:db8::1 -> dst 2001:db8:1::1.
 			muV6 := muNoConn1Rule1AllowUpdateWithEndpointMeta
@@ -873,6 +873,16 @@ var _ = Describe("Flow log aggregator tests", func() {
 			// The distinct IPv6 addresses are preserved and rendered in canonical form.
 			Expect(flowLog.SourceIPs).Should(Equal([]string{"2001:db8::1", "2001:db8::3"}))
 			Expect(flowLog.DestIPs).Should(Equal([]string{"2001:db8:1::1"}))
+		})
+
+		It("omits source and destination IPs when IP collection is disabled", func() {
+			ca := NewAggregator().IncludeIPs(false)
+			Expect(ca.FeedUpdate(&muNoConn1Rule1AllowUpdateWithEndpointMeta)).NotTo(HaveOccurred())
+
+			messages := ca.GetAndCalibrate()
+			Expect(len(messages)).Should(Equal(1))
+			Expect(messages[0].SourceIPs).Should(BeNil())
+			Expect(messages[0].DestIPs).Should(BeNil())
 		})
 	})
 })

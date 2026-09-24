@@ -141,15 +141,11 @@ func (k *FlowKey) DestServicePort() int64 {
 
 // This struct should be an exact copy of the proto.Flow structure, but without the private fields.
 type Flow struct {
-	Key          *FlowKey
-	StartTime    int64
-	EndTime      int64
-	SourceLabels unique.Handle[string]
-	DestLabels   unique.Handle[string]
-	// SourceIps and DestIps hold the bounded, best-effort sets of source and destination IP
-	// addresses observed for the connections aggregated into this Flow. They are not part of the
-	// FlowKey: a single key aggregates many connections (and across nodes/time), so the IPs are
-	// stored as sets on the Flow to avoid exploding key cardinality. See goldmane/DESIGN.md.
+	Key                     *FlowKey
+	StartTime               int64
+	EndTime                 int64
+	SourceLabels            unique.Handle[string]
+	DestLabels              unique.Handle[string]
 	SourceIps               []string
 	DestIps                 []string
 	PacketsIn               int64

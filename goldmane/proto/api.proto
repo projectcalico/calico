@@ -429,15 +429,13 @@ message Flow {
   // connection that matches the FlowKey that was active at this Flow's EndTime.
   int64 num_connections_live = 12;
 
-  // SourceIps contains the set of distinct source IP addresses observed for the connections aggregated
-  // into this Flow. Because a single FlowKey aggregates traffic across many individual connections (and
-  // across nodes and time), this is a set rather than a single value. The list is bounded: at most a
-  // configurable maximum number of addresses are retained per Flow to cap memory and wire size. When the
-  // limit is exceeded, addresses are dropped (the set is best-effort, not exhaustive).
+  // SourceIps contains the distinct source IP addresses observed for the connections aggregated into
+  // this Flow. A FlowKey spans many connections, so this is a set rather than a single value. It is
+  // capped at a fixed maximum number of addresses (100); beyond that, the least recently seen addresses
+  // are dropped, so the set is best-effort rather than exhaustive.
   repeated string source_ips = 13;
 
-  // DestIps contains the set of distinct destination IP addresses observed for the connections aggregated
-  // into this Flow. As with source_ips, this is a bounded, best-effort set rather than a single value.
+  // DestIps contains the distinct destination IP addresses, with the same semantics as source_ips.
   repeated string dest_ips = 14;
 }
 
