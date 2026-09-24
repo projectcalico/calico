@@ -6,6 +6,9 @@ version: master
 calico:
   image: calico
   registry: quay.io/calico
+cniPlugins:
+  image: third-party-cni-plugins
+  registry: quay.io/calico
 node:
   image: node
   registry: quay.io/calico
