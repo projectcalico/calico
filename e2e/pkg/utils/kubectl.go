@@ -16,9 +16,12 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"time"
 
+	"github.com/onsi/gomega"
 	"k8s.io/kubernetes/test/e2e/framework/kubectl"
 )
 
@@ -51,6 +54,9 @@ func (k *Kubectl) Wait(kind, ns, name, user, condition string, timeout time.Dura
 
 // PortForward starts a kubectl port-forward in the background, allocating a random
 // local port to avoid conflicts when tests run in parallel. It returns the local port.
+// kubectl port-forward exits on the first refused connection, so it is re-spawned
+// until the caller signals shutdown via timeOut; a connection refused while a pod is
+// still starting no longer strands the caller with a dead local port.
 func (k *Kubectl) PortForward(ns, pod, remotePort, user string, timeOut chan time.Time) (int, error) {
 	localPort, err := getFreePort()
 	if err != nil {
@@ -63,12 +69,36 @@ func (k *Kubectl) PortForward(ns, pod, remotePort, user string, timeOut chan tim
 	}
 
 	go func() {
-		_, err := kubectl.NewKubectlCommand(ns, options...).WithTimeout(timeOut).Exec()
-		if err != nil {
-			return
+		for {
+			select {
+			case <-timeOut:
+				return
+			default:
+			}
+			if _, err := kubectl.NewKubectlCommand(ns, options...).WithTimeout(timeOut).Exec(); err != nil {
+				select {
+				case <-timeOut:
+					return
+				default:
+				}
+			}
 		}
 	}()
 	return localPort, nil
+}
+
+// WaitForPortForward polls the URL until the forwarded connection serves a response,
+// so callers do not race a proxy Pod that is Ready but not yet serving traffic.
+func (k *Kubectl) WaitForPortForward(httpClient *http.Client, url string) {
+	gomega.Eventually(func() error {
+		resp, err := httpClient.Get(url)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = resp.Body.Close() }()
+		_, err = io.ReadAll(resp.Body)
+		return err
+	}, 2*time.Minute, 500*time.Millisecond).Should(gomega.Succeed(), "timed out waiting for port-forward to %s to be ready", url)
 }
 
 func getFreePort() (int, error) {
