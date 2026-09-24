@@ -3,7 +3,7 @@
   # its own DaemonSet. Only this lane applies manifests/calico.yaml, so it is
   # the one that catches a manifest missing a piece the operator supplies.
   run:
-    when: "${CHANGE_IN(cni-plugin,node,cmd/calico,non-go:/manifests/,non-go:/charts/calico/,non-go:/hack/test/kind/,non-go:/third_party/cni-plugins/)}"
+    when: "${CHANGE_IN(third_party/cni-plugins,cni-plugin,non-go:/manifests/,non-go:/charts/calico/,non-go:/hack/test/kind/,non-go:/Makefile)}"
   dependencies:
     - Prerequisites
     - "Build: calico image"
