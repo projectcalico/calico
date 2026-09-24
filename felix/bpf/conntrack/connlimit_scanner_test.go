@@ -16,6 +16,7 @@ package conntrack
 
 import (
 	"encoding/binary"
+	"errors"
 	"net"
 	"testing"
 	"time"
@@ -964,5 +965,129 @@ func TestConnLimitScannerBatchZeroesOutInactiveLimits(t *testing.T) {
 	}
 	if m.lastBatchSize != 2 {
 		t.Errorf("expected batch size 2, got %d", m.lastBatchSize)
+	}
+}
+
+// reapTest drives one egress-limited flow through recounts; fake Linux
+// conntrack holds it while linuxHas is set.
+type reapTest struct {
+	t          *testing.T
+	m          *fakeQoSMap
+	scanner    *ConnLimitScanner
+	key        Key
+	linuxHas   bool
+	linuxErr   error
+	linuxReads int
+}
+
+const reapTestIfindex = 6
+
+func newReapTest(t *testing.T) *reapTest {
+	podIP, extIP := "10.65.1.2", "172.17.0.8"
+	rt := &reapTest{t: t, m: newFakeQoSMap(), key: makeKey(podIP, extIP, 15300, 8055), linuxHas: true}
+	rt.m.seed(t, reapTestIfindex, 0, 3, 3)
+	rt.scanner = NewConnLimitScanner(rt.m, func() map[string]ConnLimitPodInfo {
+		return map[string]ConnLimitPodInfo{string(net.ParseIP(podIP).To4()): podInfo(reapTestIfindex, false, true)}
+	}, qos.IPFamilyV4, WithLinuxEstablishedTCPFlows(func(uint16) (map[flowKey]struct{}, error) {
+		rt.linuxReads++
+		flows := map[flowKey]struct{}{}
+		if rt.linuxHas {
+			flows[makeFlowKey(net.ParseIP(podIP), 15300, net.ParseIP(extIP), 8055)] = struct{}{}
+		}
+		return flows, rt.linuxErr
+	}))
+	return rt
+}
+
+// value builds the pod-opened entry, with an RST stamp when rst is set.
+func (rt *reapTest) value(flags uint32, rst bool) Value {
+	v := NewValueNormal(time.Duration(0), ctv4.FlagConnLimitOut|flags,
+		established(true, reapTestIfindex),
+		established(false, remoteIfIndex))
+	if rst {
+		binary.LittleEndian.PutUint64(v[ctv4.VoRSTSeen:ctv4.VoRSTSeen+8], uint64(time.Second))
+	}
+	return v
+}
+
+// pass runs one recount, with val in the BPF map unless it is nil.
+func (rt *reapTest) pass(val *Value) uint32 {
+	rt.scanner.IterationStart()
+	if val != nil {
+		rt.scanner.Check(rt.key, *val, nil)
+	}
+	rt.scanner.IterationEnd()
+	return rt.m.currentCount(rt.t, reapTestIfindex, 0)
+}
+
+// A forged-RST flow whose BPF entry was reaped keeps its slot while Linux
+// conntrack still carries it (e.g. nat-outgoing).
+func TestConnLimitScannerCountsReapedRSTFlowWhileLinuxHoldsIt(t *testing.T) {
+	rt := newReapTest(t)
+	v := rt.value(ctv4.FlagNATOut, true)
+	pass := func(inBPF bool) uint32 {
+		if inBPF {
+			return rt.pass(&v)
+		}
+		return rt.pass(nil)
+	}
+
+	if got := pass(true); got != 1 {
+		t.Fatalf("while in BPF: count %d, want 1", got)
+	}
+	if got := pass(true); got != 1 {
+		t.Fatalf("counted twice while in BPF: count %d, want 1", got)
+	}
+	if got := pass(false); got != 1 {
+		t.Fatalf("reaped but live in Linux: count %d, want 1", got)
+	}
+	rt.linuxErr = errors.New("netlink failed")
+	if got := pass(false); got != 1 {
+		t.Fatalf("Linux read failed: count %d, want 1", got)
+	}
+	rt.linuxErr, rt.linuxHas = nil, false
+	if got := pass(false); got != 0 {
+		t.Fatalf("gone from Linux: count %d, want 0", got)
+	}
+	rt.linuxHas = true
+	if got := pass(false); got != 0 {
+		t.Fatalf("forgotten flow counted again: count %d, want 0", got)
+	}
+}
+
+// Traffic past the residual window clears the RST stamp; the live entry must
+// not also count from Linux.
+func TestConnLimitScannerNoDoubleCountOnceRSTStampClears(t *testing.T) {
+	rt := newReapTest(t)
+	withRST := rt.value(ctv4.FlagNATOut, true)
+	cleared := rt.value(ctv4.FlagNATOut, false)
+
+	if got := rt.pass(&withRST); got != 1 {
+		t.Fatalf("with RST stamp: count %d, want 1", got)
+	}
+	for i := range 3 {
+		if got := rt.pass(&cleared); got != 1 {
+			t.Fatalf("pass %d after the stamp cleared: count %d, want 1", i, got)
+		}
+	}
+	if rt.linuxReads != 0 {
+		t.Errorf("read Linux conntrack %d times for a flow still in BPF", rt.linuxReads)
+	}
+}
+
+// Pod-to-pod flows never touch netfilter, so a reaped one must not trigger a
+// Linux conntrack dump.
+func TestConnLimitScannerSkipsLinuxReadForFlowOutsideNetfilter(t *testing.T) {
+	rt := newReapTest(t)
+	v := rt.value(0, true)
+
+	if got := rt.pass(&v); got != 1 {
+		t.Fatalf("while in BPF: count %d, want 1", got)
+	}
+	if got := rt.pass(nil); got != 0 {
+		t.Fatalf("after the reap: count %d, want 0", got)
+	}
+	if rt.linuxReads != 0 {
+		t.Errorf("read Linux conntrack %d times for a flow outside netfilter", rt.linuxReads)
 	}
 }
