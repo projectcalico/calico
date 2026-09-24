@@ -28,10 +28,10 @@ steps:
       # pulls do not cross one.
       - name: REGION
         value: us-central1
-      # Same 4 vCPU / 16 GB as the fleet script's default, on a family whose
-      # capacity pool is deeper.
+      # Same 4 vCPU / 16 GB as the fleet script's default, from a different
+      # capacity pool. Has to stay a family that takes a hyperdisk boot disk.
       - name: VM_MACHINE_TYPE
-        value: e2-custom-4-16384
+        value: c3-standard-4
       - name: VM_DISK_SIZE
         value: 80GB
       - name: CI_GROUP_LABEL

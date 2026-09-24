@@ -188,11 +188,11 @@ steps:
       # fleet sits in the artifact store's region so the working copy and images
       # each VM pulls do not cross one.
       export REGION=us-central1
-      # Same 4 vCPU / 8 GB the prologue asks for, on a family whose capacity
-      # pool survives bulk-creating sixty at once. The RAM is what that shape
-      # was chosen for, so it is matched exactly rather than rounded to a
-      # predefined type.
-      export VM_MACHINE_TYPE=e2-custom-4-8192
+      # Same 4 vCPU / 8 GB the prologue asks for, from a different capacity pool:
+      # bulk-creating sixty at once is what empties one. It has to stay a family
+      # that takes a hyperdisk boot disk, which rules out the older and cheaper
+      # ones — at 20GB a pd-ssd would give a fifth of the IOPS.
+      export VM_MACHINE_TYPE=c3-highcpu-4
       if [ -n "${FV_BATCHES_OVERRIDE:-}" ]; then
         export NUM_FV_BATCHES="${FV_BATCHES_OVERRIDE}"
       fi
