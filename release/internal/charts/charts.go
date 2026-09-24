@@ -358,6 +358,7 @@ func calicoChartEdits(productVersion, productRegistry string) []ValueEdit {
 	return []ValueEdit{
 		{Chart: CalicoChart, Edit: yamledit.Edit{Key: "version", To: productVersion}},
 		{Chart: CalicoChart, Edit: yamledit.Edit{Key: "calico.registry", To: productRegistry}},
+		{Chart: CalicoChart, Edit: yamledit.Edit{Key: "cniPlugins.registry", To: productRegistry}},
 		{Chart: CalicoChart, Edit: yamledit.Edit{Key: "node.registry", To: productRegistry}},
 		{Chart: CalicoChart, Edit: yamledit.Edit{Key: "flannelMigration.registry", To: productRegistry}},
 	}
