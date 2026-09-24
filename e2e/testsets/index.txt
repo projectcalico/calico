@@ -124,3 +124,4 @@
 .semaphore/semaphore.yml.d/blocks/20-e2e.yml | E2E tests (KinD) / E2E tests: Conformance (cluster routing: Felix) | kind/felix-routing | 78
 .semaphore/semaphore.yml.d/blocks/20-e2e.yml | E2E tests (KinD) / E2E tests: sig-calico (dataplane: BPF) | kind/bpf | 124
 .semaphore/semaphore.yml.d/blocks/20-kubevirt-live-migration.yml | KubeVirt live migration (KIND) / KubeVirt live migration (KIND) | kind/kubevirt | 11
+.semaphore/semaphore.yml.d/blocks/20-manifest-install.yml | Manifest install (KIND) / Manifest install (KIND) | kind/manifest-install | 13
