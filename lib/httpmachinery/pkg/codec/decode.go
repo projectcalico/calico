@@ -139,6 +139,10 @@ func DecodeAndValidateRequestParams[RequestParam any](ctx apicontext.Context, ur
 }
 
 func DecodeAndValidateURLParameters[T any](obj *T, header map[string][]string, path map[string]string, query map[string][]string) error {
+	if err := rejectUnknownQueryParameters(QueryParamNames[T](), query); err != nil {
+		return err
+	}
+
 	pathParams := map[string][]string{}
 	for key, v := range path {
 		pathParams[key] = []string{v}
