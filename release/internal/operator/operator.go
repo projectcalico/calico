@@ -198,7 +198,16 @@ type settings struct {
 
 	refs steps.RefRecorder
 
+	resolve steps.DigestResolver
+
+	resume *resume
+
 	steps.Step
+}
+
+type resume struct {
+	published []string
+	force     bool
 }
 
 type (
@@ -272,6 +281,23 @@ func WithRecord(rec steps.RefRecorder) PublishOption {
 			return fmt.Errorf("no recorder given")
 		}
 		s.refs = rec
+		return nil
+	})
+}
+
+func WithResolver(resolve steps.DigestResolver) PublishOption {
+	return publishSetting(func(s *settings) error {
+		if resolve == nil {
+			return fmt.Errorf("no resolver given")
+		}
+		s.resolve = resolve
+		return nil
+	})
+}
+
+func WithResume(published []string, force bool) PublishOption {
+	return publishSetting(func(s *settings) error {
+		s.resume = &resume{published: published, force: force}
 		return nil
 	})
 }

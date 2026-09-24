@@ -93,6 +93,13 @@ func testOperator() Operator {
 	}
 }
 
+func oneRegistryOperator() Operator {
+	o := testOperator()
+	o.Registries = []string{"quay.io/a"}
+	o.Image = "operator"
+	return o
+}
+
 func envValue(env []string, name string) (string, bool) {
 	prefix := name + "="
 	// Last wins, as it does for the process the env is handed to.
@@ -501,20 +508,56 @@ func TestVerbs(t *testing.T) {
 			{Name: standardVariant},
 			{Name: "alt", Image: "operator-alt"},
 		}
-		if err := Publish(testOperator(), variants, false, WithRunner(&fakeRunner{}), WithRecord(rec)); err != nil {
+		o := testOperator()
+		o.Registries = []string{"quay.io/a", "quay.io/b"}
+		resolve := fakeResolver{
+			"quay.io/a/operator:v1.44.0":           "sha256:a",
+			"quay.io/a/operator:v1.44.0-arm64":     "sha256:a-arm64",
+			"quay.io/b/operator:v1.44.0":           "sha256:b",
+			"quay.io/a/operator-alt:v1.44.0":       "sha256:alt",
+			"quay.io/b/operator-alt:v1.44.0-arm64": "sha256:alt-arm64",
+		}
+		err := Publish(o, variants, false, WithRunner(&fakeRunner{}), WithRecord(rec),
+			WithResolver(resolve.resolve), WithArches("arm64"))
+		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		o := testOperator()
 		want := []string{
-			Component(o, variants[0]).String(),
-			Component(o, variants[1]).String(),
+			"quay.io/a/operator@sha256:a",
+			"quay.io/a/operator@sha256:a-arm64",
+			"quay.io/b/operator@sha256:b",
+			"quay.io/a/operator-alt@sha256:alt",
+			"quay.io/b/operator-alt@sha256:alt-arm64",
 		}
-		if diff := cmp.Diff(want, rec.refs, cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
+		if diff := cmp.Diff(want, rec.refs); diff != "" {
 			t.Errorf("refs mismatch (-want +got):\n%s", diff)
 		}
-		if !strings.Contains(rec.refs[0], o.Version) {
-			t.Errorf("%q does not contain %q", rec.refs[0], o.Version)
+	})
+
+	t.Run("publish records what a failed push left", func(t *testing.T) {
+		rec := &fakeRecorder{}
+		resolve := fakeResolver{"quay.io/a/operator:v1.44.0": "sha256:a"}
+		err := Publish(oneRegistryOperator(), oneVariant(), false, WithRunner(&fakeRunner{err: fmt.Errorf("boom")}),
+			WithRecord(rec), WithResolver(resolve.resolve))
+		if err == nil {
+			t.Fatal("expected an error, got nil")
+		}
+		if diff := cmp.Diff([]string{"quay.io/a/operator@sha256:a"}, rec.refs); diff != "" {
+			t.Errorf("refs mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("dry run records nothing", func(t *testing.T) {
+		rec := &fakeRecorder{}
+		resolve := fakeResolver{"quay.io/a/operator:v1.44.0": "sha256:a"}
+		err := Publish(oneRegistryOperator(), oneVariant(), false, WithRunner(&fakeRunner{}), WithDryRun(true),
+			WithRecord(rec), WithResolver(resolve.resolve))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(rec.refs) != 0 {
+			t.Errorf("refs = %v, want none", rec.refs)
 		}
 	})
 
@@ -644,6 +687,61 @@ func TestVerbs(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("publish resumes from its record", func(t *testing.T) {
+		variants := []Variant{{Name: standardVariant}, {Name: "alt", Image: "operator-alt"}}
+		resolve := fakeResolver{
+			"quay.io/a/operator:v1.44.0":     "sha256:a",
+			"quay.io/a/operator-alt:v1.44.0": "sha256:alt",
+		}
+
+		for _, tc := range []struct {
+			name      string
+			published []string
+			force     bool
+			wantRuns  int
+			wantErr   string
+		}{
+			{
+				name:      "skips what the record holds",
+				published: []string{"quay.io/a/operator@sha256:a"},
+				wantRuns:  1,
+			},
+			{
+				name:     "skips nothing without a record",
+				wantRuns: 2,
+			},
+			{
+				name:      "refuses a tag that moved",
+				published: []string{"quay.io/a/operator@sha256:old", "quay.io/a/operator-alt@sha256:alt"},
+				wantErr:   "Pass --force",
+			},
+			{
+				name:      "force publishes a tag that moved",
+				published: []string{"quay.io/a/operator@sha256:old", "quay.io/a/operator-alt@sha256:alt"},
+				force:     true,
+				wantRuns:  1,
+			},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				f := &fakeRunner{}
+				err := Publish(oneRegistryOperator(), variants, false, WithRunner(f),
+					WithResolver(resolve.resolve), WithResume(tc.published, tc.force))
+				if tc.wantErr != "" {
+					if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+						t.Fatalf("err = %v, want it to contain %q", err, tc.wantErr)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if len(f.calls) != tc.wantRuns {
+					t.Errorf("runs = %d, want %d", len(f.calls), tc.wantRuns)
+				}
+			})
+		}
+	})
 }
 
 type overlapRunner struct {
@@ -663,6 +761,13 @@ func (f *overlapRunner) RunInDir(_, _ string, args, env []string) (string, error
 
 func (f *overlapRunner) RunInDirToFile(dir, name string, args, env []string, _ string) (string, error) {
 	return f.RunInDir(dir, name, args, env)
+}
+
+type fakeResolver map[string]string
+
+func (f fakeResolver) resolve(ref string) (string, bool, error) {
+	digest, ok := f[ref]
+	return digest, ok, nil
 }
 
 type fakeRecorder struct {
