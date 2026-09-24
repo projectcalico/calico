@@ -131,6 +131,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     -e GOPATH=/go \
     -e KUBECONFIG=/kubeconfig \
     -e PRODUCT=${PRODUCT:-calico} \
+    -e WINDOWS_OS \
     ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
     "${auth_mount[@]}" \
     "${aws_cred_env[@]}" \
