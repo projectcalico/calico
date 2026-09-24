@@ -287,6 +287,14 @@ kind-migration-test:
 	KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 $(MAKE) kind-up
 	$(REPO_ROOT)/hack/test/kind/migration/run_test.sh
 
+## Create a kind cluster, install Calico from the generated manifests, and check
+## that pod networking works. Every other kind lane installs via the operator.
+.PHONY: kind-manifest-install-test
+kind-manifest-install-test:
+	$(MAKE) -j$(NUM_BUILD_JOBS) kind-build-images
+	$(MAKE) kind-cluster-create KIND_CONFIG=$(KIND_DIR)/kind-manifests.config CALICO_API_GROUP=crd.projectcalico.org/v1
+	$(REPO_ROOT)/hack/test/kind/manifest-install/run_test.sh
+
 ## Create a kind cluster and run the conformance e2e tests.
 e2e-test:
 	$(MAKE) -C e2e build

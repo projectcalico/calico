@@ -91,6 +91,17 @@ spec:
             privileged: true
             runAsUser: 0
 {{- end }}
+        # This container stages the upstream CNI plugins that the CNI config
+        # references (portmap, host-local, loopback, tuning, flannel) for
+        # install-cni to copy onto the host.
+        - name: cni-plugins
+          image: {{.Values.cniPlugins.registry}}/{{.Values.cniPlugins.image}}:{{ .Values.version }}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
+          volumeMounts:
+            - mountPath: /stage
+              name: cni-plugins-stage
+          securityContext:
+            runAsUser: 0
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
@@ -183,6 +194,8 @@ spec:
               name: cni-bin-dir
             - mountPath: /host/etc/cni/net.d
               name: cni-net-dir
+            - mountPath: /opt/cni/bin
+              name: cni-plugins-stage
 {{- if eq .Values.datastore "etcd" }}
             - mountPath: /calico-secrets
               name: etcd-certs
@@ -653,6 +666,10 @@ spec:
           hostPath:
             path: /opt/cni/bin
             type: DirectoryOrCreate
+        # Staging area for the upstream CNI plugins, written by cni-plugins and
+        # read by install-cni.
+        - name: cni-plugins-stage
+          emptyDir: {}
         - name: cni-net-dir
           hostPath:
             path: /etc/cni/net.d
