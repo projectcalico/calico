@@ -46,6 +46,7 @@ IMAGE_TAG=${IMAGE_TAG:-test-build}
 
 NAMESPACE=manifest-install-test
 WORKLOAD_IMAGE=busybox:1.36
+JUNIT_REPORT=${JUNIT_REPORT:-${REPO_ROOT}/report/manifest-install.xml}
 
 # The plugins the CNI config references, plus the two the calico binary installs
 # under its own names.
@@ -57,6 +58,10 @@ export KUBECONFIG
 passed=0
 failed=0
 errors=""
+results=()
+case_start=${SECONDS}
+report_written=false
+manifest=""
 
 function log() {
   echo ""
@@ -68,17 +73,62 @@ function log() {
 function pass() {
   echo "  PASS: $1"
   passed=$((passed + 1))
+  record pass "$1" ""
 }
 
+# fail takes the check's name and, optionally, what went wrong. The name stays
+# the same as the passing case so the published results track one test.
 function fail() {
-  echo "  FAIL: $1"
+  echo "  FAIL: $1${2:+: $2}"
   failed=$((failed + 1))
-  errors="${errors}\n  - $1"
+  errors="${errors}\n  - $1${2:+: $2}"
+  record fail "$1" "${2:-$1}"
 }
+
+function record() {
+  results+=("$1|$((SECONDS - case_start))|$2|$3")
+  case_start=${SECONDS}
+}
+
+function escape() {
+  echo "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g'
+}
+
+# write_junit reports the checks the way the e2e lanes do, so `test-results
+# publish` picks them up.
+function write_junit() {
+  report_written=true
+  mkdir -p "$(dirname "${JUNIT_REPORT}")"
+  {
+    echo '<?xml version="1.0" encoding="UTF-8"?>'
+    printf '<testsuite name="Manifest install (KIND)" tests="%d" failures="%d">\n' "$((passed + failed))" "${failed}"
+    for result in ${results+"${results[@]}"}; do
+      IFS='|' read -r status elapsed name message <<<"${result}"
+      printf '  <testcase classname="manifest-install" name="%s" time="%s"' "$(escape "${name}")" "${elapsed}"
+      if [ "${status}" = "fail" ]; then
+        printf '>\n    <failure message="%s"/>\n  </testcase>\n' "$(escape "${message}")"
+      else
+        printf '/>\n'
+      fi
+    done
+    echo '</testsuite>'
+  } > "${JUNIT_REPORT}"
+  echo "  Wrote ${JUNIT_REPORT}"
+}
+
+# An unexpected error still leaves a report behind, so the job publishes what
+# ran rather than nothing.
+function cleanup() {
+  rm -f "${manifest}"
+  ${report_written} || write_junit
+}
+trap cleanup EXIT
 
 # summary reports the results and exits, dumping cluster state if anything
 # failed. Callers that cannot carry on invoke it early.
 function summary() {
+  write_junit
+
   log "Test Summary"
 
   echo ""
@@ -162,7 +212,6 @@ done
 log "Step 2: Installing Calico from manifests/calico.yaml"
 
 manifest=$(mktemp -t calico-manifest-XXXXXX.yaml)
-trap 'rm -f "${manifest}"' EXIT
 
 sed -E "s|image: [a-zA-Z0-9./:-]+/([a-z0-9-]+):[A-Za-z0-9_.-]+|image: ${IMAGE_REGISTRY}/${IMAGE_PATH}/\1:${IMAGE_TAG}|g" \
   "${REPO_ROOT}/manifests/calico.yaml" > "${manifest}"
@@ -174,10 +223,20 @@ grep "image:" "${manifest}" | sort -u | sed 's/^/    /'
 ${kubectl} apply --server-side --force-conflicts -f "${manifest}"
 
 echo "  Waiting for calico-node to roll out"
-${kubectl} -n kube-system rollout status ds/calico-node --timeout=600s
+if ${kubectl} -n kube-system rollout status ds/calico-node --timeout=600s; then
+  pass "calico-node rolled out"
+else
+  fail "calico-node rolled out" "the rollout did not finish within 600s"
+  summary
+fi
 
 echo "  Waiting for nodes to go Ready"
-${kubectl} wait --for=condition=Ready nodes --all --timeout=300s
+if ${kubectl} wait --for=condition=Ready nodes --all --timeout=300s; then
+  pass "Every node went Ready"
+else
+  fail "Every node went Ready" "a node stayed NotReady for 300s"
+  summary
+fi
 
 ###############################################################################
 # Step 3: Check the plugins Calico installed onto each node
@@ -195,7 +254,7 @@ for node in $(nodes); do
   if [ -z "${missing}" ]; then
     pass "${node} has every CNI plugin Calico installs"
   else
-    fail "${node} is missing CNI plugins:${missing}"
+    fail "${node} has every CNI plugin Calico installs" "missing:${missing}"
   fi
 done
 
@@ -213,7 +272,7 @@ if ${kubectl} wait --for=condition=Available --timeout=300s -n ${NAMESPACE} depl
   pass "Both workloads got a pod sandbox and became ready"
 else
   ${kubectl} describe pod -n ${NAMESPACE} 2>&1 | tail -40 || true
-  fail "Workloads never became ready"
+  fail "Both workloads got a pod sandbox and became ready" "neither deployment became available within 300s"
   summary
 fi
 
