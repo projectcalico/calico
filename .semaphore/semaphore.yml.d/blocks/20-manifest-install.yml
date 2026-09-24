@@ -1,9 +1,10 @@
 - name: "Manifest install (KIND)"
   # Every other kind lane installs Calico through the operator, which renders
-  # its own DaemonSet. Only this lane applies manifests/calico.yaml, so it is
-  # the one that catches a manifest missing a piece the operator supplies.
+  # its own DaemonSet. Only this lane applies the generated manifests, so it is
+  # the one that catches a manifest missing a piece the operator supplies. It
+  # then runs the datapath and policy specs to say the cluster works.
   run:
-    when: "${CHANGE_IN(third_party/cni-plugins,cni-plugin,non-go:/manifests/,non-go:/charts/calico/,non-go:/hack/test/kind/,non-go:/Makefile)}"
+    when: "${CHANGE_IN(third_party/cni-plugins,cni-plugin,non-go:/manifests/,non-go:/charts/calico/,non-go:/hack/test/kind/,non-go:/e2e/config/,non-go:/Makefile)}"
   dependencies:
     - Prerequisites
     - "Build: calico image"

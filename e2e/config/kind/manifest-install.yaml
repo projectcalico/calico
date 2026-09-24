@@ -1,0 +1,16 @@
+# kind/manifest-install.yaml - test selection for the manifest install lane.
+#
+# The lane exists to prove a manifest install networks pods, so it takes the
+# smallest set that would fail if it did not: the datapath specs for pod,
+# service and NodePort paths, and the Calico policy specs.
+
+extends: ../base.yaml
+
+include:
+  - Conformance && sig-calico && Feature:Datapath
+  - Conformance && sig-calico && Feature:NetworkPolicy
+
+exclude:
+  labels:
+    - label: RequiresCalicoAPIServer
+      reason: "a manifest install serves the v3 CRDs without the aggregated Calico API server"

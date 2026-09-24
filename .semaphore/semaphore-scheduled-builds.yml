@@ -1722,8 +1722,9 @@ blocks:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: "Manifest install (KIND)"
     # Every other kind lane installs Calico through the operator, which renders
-    # its own DaemonSet. Only this lane applies manifests/calico.yaml, so it is
-    # the one that catches a manifest missing a piece the operator supplies.
+    # its own DaemonSet. Only this lane applies the generated manifests, so it is
+    # the one that catches a manifest missing a piece the operator supplies. It
+    # then runs the datapath and policy specs to say the cluster works.
     run:
       when: "true"
     dependencies:
