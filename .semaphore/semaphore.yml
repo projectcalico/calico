@@ -547,6 +547,7 @@ blocks:
         '/.semaphore/semaphore.yml.d/blocks/20-gateway-conformance.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-istio.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-kubevirt-live-migration.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-manifest-install.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-node.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-operator.yml',
         '/.semaphore/vms/',
@@ -631,6 +632,7 @@ blocks:
         '/calicoctl/calicoctl/util/yaml/*.go',
         '/calicoctl/deps.txt',
         '/calicoctl/tests/fv/helper/*.go',
+        '/charts/calico/',
         '/charts/tigera-operator',
         '/cmd/calico/**/*Dockerfile*',
         '/cmd/calico/*.go',
@@ -699,6 +701,7 @@ blocks:
         '/hack/rpms/nftables/',
         '/hack/test/certs/',
         '/hack/test/kind',
+        '/hack/test/kind/',
         '/hack/test/kind/gateway-setup.sh',
         '/istio/**',
         '/key-cert-provisioner/pkg/cfg/*.go',
@@ -805,6 +808,7 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
+        '/manifests/',
         '/metadata.mk',
         '/node/**',
         '/operator/**',
@@ -824,6 +828,7 @@ blocks:
         '/process/testing/aso',
         '/process/testing/util',
         '/process/testing/winfv-felix',
+        '/third_party/cni-plugins/**',
         '/third_party/envoy-gateway/',
         '/third_party/envoy-proxy/',
         '/third_party/envoy-ratelimit/',
@@ -959,6 +964,7 @@ blocks:
         '/.semaphore/semaphore.yml.d/blocks/20-gateway-conformance.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-kube-controllers.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-kubevirt-live-migration.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-manifest-install.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-node.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-operator.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-typha.yml',
@@ -1044,6 +1050,7 @@ blocks:
         '/calicoctl/calicoctl/util/yaml/*.go',
         '/calicoctl/deps.txt',
         '/calicoctl/tests/fv/helper/*.go',
+        '/charts/calico/',
         '/charts/tigera-operator',
         '/cmd/calico/**/*Dockerfile*',
         '/cmd/calico/*.go',
@@ -1094,6 +1101,7 @@ blocks:
         '/guardian/pkg/tunnel/*.go',
         '/hack/test/certs/',
         '/hack/test/kind',
+        '/hack/test/kind/',
         '/hack/test/kind/gateway-setup.sh',
         '/key-cert-provisioner/pkg/cfg/*.go',
         '/key-cert-provisioner/pkg/k8s/*.go',
@@ -1175,6 +1183,7 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
+        '/manifests/',
         '/metadata.mk',
         '/node/**',
         '/operator/**',
@@ -1194,6 +1203,7 @@ blocks:
         '/process/testing/aso',
         '/process/testing/util',
         '/process/testing/winfv-felix',
+        '/third_party/cni-plugins/**',
         '/third_party/envoy-gateway/',
         '/third_party/envoy-proxy/',
         '/third_party/envoy-ratelimit/',
@@ -1297,6 +1307,7 @@ blocks:
         '/.semaphore/semaphore.yml.d/blocks/20-felix.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-gateway-conformance.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-kubevirt-live-migration.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-manifest-install.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-node.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-operator.yml',
         '/.semaphore/vms/',
@@ -1381,6 +1392,7 @@ blocks:
         '/calicoctl/calicoctl/util/yaml/*.go',
         '/calicoctl/deps.txt',
         '/calicoctl/tests/fv/helper/*.go',
+        '/charts/calico/',
         '/charts/tigera-operator',
         '/cmd/calico/**/*Dockerfile*',
         '/cmd/calico/*.go',
@@ -1448,6 +1460,7 @@ blocks:
         '/guardian/pkg/tunnel/*.go',
         '/hack/test/certs/',
         '/hack/test/kind',
+        '/hack/test/kind/',
         '/hack/test/kind/gateway-setup.sh',
         '/key-cert-provisioner/pkg/cfg/*.go',
         '/key-cert-provisioner/pkg/k8s/*.go',
@@ -1553,6 +1566,7 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
+        '/manifests/',
         '/metadata.mk',
         '/node/**',
         '/operator/**',
@@ -1572,6 +1586,7 @@ blocks:
         '/process/testing/aso',
         '/process/testing/util',
         '/process/testing/winfv-felix',
+        '/third_party/cni-plugins/**',
         '/third_party/envoy-gateway/',
         '/third_party/envoy-proxy/',
         '/third_party/envoy-ratelimit/',
@@ -2568,9 +2583,10 @@ blocks:
     # because no lane wants a subset of them.
     #
     # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)", "E2E tests:
-    # Gateway API Conformance") list this block in their `dependencies:`, so
-    # CHANGE_IN_WITH_DEPENDENTS() folds their triggers into the arg below, which
-    # is this block's own input: everything under third_party/.
+    # Gateway API Conformance", "Manifest install (KIND)") list this block in
+    # their `dependencies:`, so CHANGE_IN_WITH_DEPENDENTS() folds their triggers
+    # into the arg below, which is this block's own input: everything under
+    # third_party/.
     run:
       when: >-
         change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
@@ -2582,6 +2598,7 @@ blocks:
         '/.semaphore/semaphore.yml.d/blocks/20-e2e.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-gateway-conformance.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-kubevirt-live-migration.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-manifest-install.yml',
         '/Makefile',
         '/api/*.go',
         '/api/admission/*.go',
@@ -2663,6 +2680,7 @@ blocks:
         '/calicoctl/calicoctl/util/yaml/*.go',
         '/calicoctl/deps.txt',
         '/calicoctl/tests/fv/helper/*.go',
+        '/charts/calico/',
         '/cmd/calico/**/*Dockerfile*',
         '/cmd/calico/*.go',
         '/cmd/calico/Makefile',
@@ -2729,6 +2747,7 @@ blocks:
         '/guardian/pkg/tunnel/*.go',
         '/hack/test/certs/',
         '/hack/test/kind',
+        '/hack/test/kind/',
         '/hack/test/kind/gateway-setup.sh',
         '/key-cert-provisioner/pkg/cfg/*.go',
         '/key-cert-provisioner/pkg/k8s/*.go',
@@ -2834,6 +2853,7 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/libcalico-go/lib/writelogger/*.go',
+        '/manifests/',
         '/metadata.mk',
         '/node/**/*Dockerfile*',
         '/node/Makefile',
@@ -2967,6 +2987,7 @@ blocks:
         '/pod2daemon/proto/*.go',
         '/pod2daemon/workloadapi/*.go',
         '/third_party/',
+        '/third_party/cni-plugins/**',
         '/third_party/envoy-gateway/',
         '/third_party/envoy-proxy/',
         '/third_party/envoy-ratelimit/',
@@ -6695,6 +6716,131 @@ blocks:
           commands:
             - 'python3 ../hack/strip-skipped-tests.py ./report/*.xml 2>/dev/null || true'
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+  - name: "Manifest install (KIND)"
+    # Every other kind lane installs Calico through the operator, which renders
+    # its own DaemonSet. Only this lane applies the generated manifests, so it is
+    # the one that catches a manifest missing a piece the operator supplies. It
+    # then runs the datapath and policy specs to say the cluster works.
+    run:
+      when: >-
+        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
+        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
+        '/.semaphore/semaphore.yml.d/03-promotions.yml',
+        '/.semaphore/semaphore.yml.d/09-blocks.yml',
+        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-manifest-install.yml',
+        '/Makefile',
+        '/api/*.go',
+        '/api/config/crd/*.yaml',
+        '/api/pkg/apis/projectcalico/v3/*.go',
+        '/api/pkg/defaults/*.go',
+        '/api/pkg/lib/numorstring/*.go',
+        '/charts/calico/',
+        '/cni-plugin/**/*Dockerfile*',
+        '/cni-plugin/Makefile',
+        '/cni-plugin/cmd/calico/*.go',
+        '/cni-plugin/deps.txt',
+        '/cni-plugin/internal/pkg/azure/*.go',
+        '/cni-plugin/internal/pkg/utils/*.go',
+        '/cni-plugin/internal/pkg/utils/cri/*.go',
+        '/cni-plugin/pkg/dataplane/*.go',
+        '/cni-plugin/pkg/dataplane/grpc/*.go',
+        '/cni-plugin/pkg/dataplane/grpc/proto/*.go',
+        '/cni-plugin/pkg/dataplane/linux/*.go',
+        '/cni-plugin/pkg/ipamplugin/*.go',
+        '/cni-plugin/pkg/k8s/*.go',
+        '/cni-plugin/pkg/plugin/*.go',
+        '/cni-plugin/pkg/types/*.go',
+        '/cni-plugin/pkg/upgrade/*.go',
+        '/cni-plugin/pkg/wait/*.go',
+        '/cni-plugin/tests/*.go',
+        '/crypto/pkg/tls/*.go',
+        '/e2e/config/',
+        '/felix/ip/*.go',
+        '/hack/test/certs/',
+        '/hack/test/kind/',
+        '/lib.Makefile',
+        '/lib/logrusr/*.go',
+        '/lib/std/log/*.go',
+        '/lib/std/uniquelabels/*.go',
+        '/lib/std/uniquestr/*.go',
+        '/libcalico-go/lib/apiconfig/*.go',
+        '/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/*.go',
+        '/libcalico-go/lib/apis/internalapi/*.go',
+        '/libcalico-go/lib/backend/*.go',
+        '/libcalico-go/lib/backend/api/*.go',
+        '/libcalico-go/lib/backend/encap/*.go',
+        '/libcalico-go/lib/backend/etcdv3/*.go',
+        '/libcalico-go/lib/backend/k8s/*.go',
+        '/libcalico-go/lib/backend/k8s/conversion/*.go',
+        '/libcalico-go/lib/backend/k8s/resources/*.go',
+        '/libcalico-go/lib/backend/model/*.go',
+        '/libcalico-go/lib/clientv3/*.go',
+        '/libcalico-go/lib/errors/*.go',
+        '/libcalico-go/lib/hash/*.go',
+        '/libcalico-go/lib/ipam/*.go',
+        '/libcalico-go/lib/ipam/vmipam/*.go',
+        '/libcalico-go/lib/kubevirt/*.go',
+        '/libcalico-go/lib/names/*.go',
+        '/libcalico-go/lib/namespace/*.go',
+        '/libcalico-go/lib/net/*.go',
+        '/libcalico-go/lib/netlinkutils/*.go',
+        '/libcalico-go/lib/options/*.go',
+        '/libcalico-go/lib/resources/*.go',
+        '/libcalico-go/lib/selector/*.go',
+        '/libcalico-go/lib/selector/parser/*.go',
+        '/libcalico-go/lib/selector/tokenizer/*.go',
+        '/libcalico-go/lib/set/*.go',
+        '/libcalico-go/lib/validator/v3/*.go',
+        '/libcalico-go/lib/watch/*.go',
+        '/libcalico-go/lib/winutils/*.go',
+        '/manifests/',
+        '/metadata.mk',
+        '/pkg/buildinfo/*.go',
+        '/third_party/cni-plugins/**'],
+        {pipeline_file: 'ignore', exclude: ['/**/*.md',
+        '/**/.gitignore',
+        '/**/AUTHORS*',
+        '/**/CONTRIBUTING*',
+        '/**/DEVELOPER_GUIDE*',
+        '/**/LICENSE*',
+        '/**/README*',
+        '/**/SECURITY.md',
+        '/api/**/*_test.go',
+        '/cni-plugin/**/*_test.go',
+        '/crypto/**/*_test.go',
+        '/felix/**/*_test.go',
+        '/lib/**/*_test.go',
+        '/libcalico-go/**/*_test.go',
+        '/pkg/**/*_test.go']})
+    dependencies:
+      - Prerequisites
+      - "Build: calico image"
+      - "Build: node image"
+      - "Build: third-party images"
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      prologue:
+        commands:
+          - docker system prune -af
+          - .semaphore/load-cached-images calico node
+      jobs:
+        - name: "Manifest install (KIND)"
+          commands:
+            - .semaphore/run-and-monitor manifest-install.log make kind-manifest-install-test
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+        on_fail:
+          commands:
+            - KUBECONFIG=$(pwd)/hack/test/kind/kind-manifests-kubeconfig.yaml .semaphore/collect-kind-diags
   - name: "Node: Static checks and UT"
     run:
       when: >-
