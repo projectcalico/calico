@@ -723,6 +723,9 @@ var _ = infrastructure.DatastoreDescribe(
 							Expect(err).NotTo(HaveOccurred())
 							pcs[i] = pc
 						}
+						if BPFMode() {
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), connLimitCountSettle, "1s").Should(Equal(uint32(numConnections)))
+						}
 
 						By("Starting n+1th connection on workload 1, expecting failure")
 						Eventually(func() bool {
@@ -854,6 +857,9 @@ var _ = infrastructure.DatastoreDescribe(
 						for i := range len(pcs) {
 							pcs[i] = w[1].StartPersistentConnection(w[0].IP, 8055, workload.PersistentConnectionOpts{})
 						}
+						if BPFMode() {
+							Eventually(getBPFCurrentCount(1, 1, "egress"), connLimitCountSettle, "1s").Should(Equal(uint32(numConnections)))
+						}
 
 						By("Starting n+1th connection on workload 1, expecting failure")
 						Eventually(func() bool {
@@ -957,6 +963,10 @@ var _ = infrastructure.DatastoreDescribe(
 						}
 						for _, pc := range pcs {
 							Eventually(pc.PongCount, "10s").Should(BeNumerically(">", 0))
+						}
+						// An undercount from a straddling recount would pass for extra connections the RSTs bought.
+						if BPFMode() {
+							Eventually(getBPFCurrentCount(1, 1, "egress"), connLimitCountSettle, "1s").Should(Equal(uint32(numConnections)))
 						}
 
 						// See the same-node ingress test for why this is
@@ -1263,6 +1273,11 @@ var _ = infrastructure.DatastoreDescribe(
 							}()
 							for _, pc := range pcs {
 								Eventually(pc.PongCount, "10s").Should(BeNumerically(">", 0))
+							}
+							// A recount straddling the opens can undercount until the next scan.
+							if BPFMode() {
+								Eventually(getBPFCurrentCount(felixIdx, wlIdx, hook), connLimitCountSettle, "1s").
+									Should(Equal(uint32(numConnections)))
 							}
 
 							// The RST claims to come from the server in both
