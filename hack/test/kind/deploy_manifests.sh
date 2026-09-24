@@ -67,8 +67,21 @@ for node in $(${KIND} get nodes --name "${KIND_NAME}"); do
   done
 done
 
+# The webhook server's certificate is the installer's job on a manifest install,
+# so mint one the way charts/calico/templates/calico-webhooks.yaml documents.
+certs=$(mktemp -d)
+trap 'rm -rf "${certs}"' EXIT
+openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+  -keyout "${certs}/tls.key" -out "${certs}/tls.crt" \
+  -subj "/CN=calico-webhooks.kube-system.svc" \
+  -addext "subjectAltName=DNS:calico-webhooks.kube-system.svc" 2>/dev/null
+
+${kubectl} -n kube-system create secret tls calico-webhooks-tls \
+  --cert="${certs}/tls.crt" --key="${certs}/tls.key" \
+  --dry-run=client -o yaml | ${kubectl} apply -f -
+
 manifest=$(mktemp -t calico-manifest-XXXXXX.yaml)
-trap 'rm -f "${manifest}"' EXIT
+trap 'rm -rf "${certs}" "${manifest}"' EXIT
 
 sed -E "s|image: [a-zA-Z0-9./:-]+/([a-z0-9-]+):[A-Za-z0-9_.-]+|image: ${IMAGE_REGISTRY}/${IMAGE_PATH}/\1:${IMAGE_TAG}|g" \
   "${MANIFEST}" > "${manifest}"
@@ -80,7 +93,14 @@ grep "image:" "${manifest}" | sort -u | sed 's/^/  /'
 # copies land on top of them.
 ${kubectl} apply --server-side --force-conflicts -f "${manifest}"
 
+# The configuration ships with an empty caBundle for the installer to fill in.
+ca=$(base64 -w0 < "${certs}/tls.crt")
+${kubectl} patch validatingwebhookconfiguration calico-webhooks --type=json \
+  -p "[{\"op\": \"replace\", \"path\": \"/webhooks/0/clientConfig/caBundle\", \"value\": \"${ca}\"}]"
+
 ${kubectl} -n kube-system rollout status ds/calico-node --timeout=600s
+${kubectl} -n kube-system rollout status deploy/calico-kube-controllers --timeout=300s
+${kubectl} -n kube-system rollout status deploy/calico-webhooks --timeout=300s
 ${kubectl} wait --for=condition=Ready nodes --all --timeout=300s
 
 echo "Calico is running."
