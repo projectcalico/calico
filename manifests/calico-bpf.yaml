@@ -12835,7 +12835,7 @@ spec:
         # references (portmap, host-local, loopback, tuning, flannel) for
         # install-cni to copy onto the host.
         - name: cni-plugins
-          image: quay.io/calico/third-party-cni-plugins:master
+          image: quay.io/calico/third-party-cni-plugins:release-v3.33
           imagePullPolicy: IfNotPresent
           volumeMounts:
             - mountPath: /stage
