@@ -1248,6 +1248,74 @@ class TestPluginEtcd(TestPluginEtcdBase):
         self.driver.delete_network_postcommit(None)
         self.driver.create_network_postcommit(None)
 
+    def test_sg_registry_events(self):
+        """test_sg_registry_events
+
+        Security-group changes reach the mechanism driver through Neutron
+        registry events (see _subscribe_to_security_group_events), so that
+        the driver is told about them whether the core plugin is our own
+        CalicoPlugin or plain ML2 with our mechanism driver.
+
+        Check the subscriptions, and each handler's dispatch.
+        """
+        # The driver subscribes to the four security-group AFTER_* events.
+        mech_calico.registry.subscribe.reset_mock()
+        self.driver._subscribe_to_security_group_events()
+        self.assertEqual(
+            mech_calico.registry.subscribe.call_args_list,
+            [
+                mock.call(
+                    self.driver._sg_rule_created,
+                    mech_calico.resources.SECURITY_GROUP_RULE,
+                    mech_calico.events.AFTER_CREATE,
+                ),
+                mock.call(
+                    self.driver._sg_rule_deleted,
+                    mech_calico.resources.SECURITY_GROUP_RULE,
+                    mech_calico.events.AFTER_DELETE,
+                ),
+                mock.call(
+                    self.driver._sg_created,
+                    mech_calico.resources.SECURITY_GROUP,
+                    mech_calico.events.AFTER_CREATE,
+                ),
+                mock.call(
+                    self.driver._sg_deleted,
+                    mech_calico.resources.SECURITY_GROUP,
+                    mech_calico.events.AFTER_DELETE,
+                ),
+            ],
+        )
+
+        # A SECURITY_GROUP_RULE AFTER_CREATE, end to end: the handler
+        # extracts the SG ID from the created rule and dispatches to
+        # security_groups_updated, which CAS-writes the corresponding
+        # NetworkPolicy to etcd.
+        self.recent_writes = {}
+        payload = mock.MagicMock()
+        payload.context = self.make_context()
+        payload.states = [{"security_group_id": "SGID-default"}]
+        self.driver._sg_rule_created(None, None, None, payload=payload)
+        self.assertEtcdWrites({self.sg_default_key_v3: self.sg_default_value_v3})
+
+        # The other three handlers extract the SG ID from their own event's
+        # payload fields, and pass the event's context through to
+        # security_groups_updated.
+        for handler in (
+            self.driver._sg_rule_deleted,
+            self.driver._sg_created,
+            self.driver._sg_deleted,
+        ):
+            payload = mock.MagicMock()
+            payload.context = self.make_context()
+            payload.metadata = {"security_group_id": "SGID-default"}
+            payload.resource_id = "SGID-default"
+            with mock.patch.object(self.driver, "security_groups_updated") as updated:
+                handler(None, None, None, payload=payload)
+                context = updated.call_args[0][0]
+                self.assertEqual(context.sgids, ["SGID-default"])
+                self.assertIs(context.plugin_context, payload.context)
+
     def test_subnet_hooks(self):
         """Test subnet creation, update and deletion hooks."""
 

@@ -67,6 +67,7 @@ from networking_calico.common import config as calico_config
 from networking_calico.common import intern_string
 from networking_calico.logutils import logging_exceptions
 from networking_calico.monotonic import monotonic_time
+from networking_calico.plugins.calico.context import SGUpdateContext
 from networking_calico.plugins.ml2.drivers.calico import qos_driver
 from networking_calico.plugins.ml2.drivers.calico.election import Elector, elector_opt
 from networking_calico.plugins.ml2.drivers.calico.endpoints import (
@@ -452,6 +453,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         we get a chance to run code in each worker process we own (see ``get_workers``)
         once it has been forked.
 
+        We also subscribe here to the security-group events that drive our
+        dynamic NetworkPolicy updates, so that we get those events in the
+        workers -- and so that we get them whether the operator has
+        configured neutron.conf to use our own core plugin or plain ML2 with
+        our mechanism driver.  (``_subscribe_to_security_group_events``)
+
         Also validate the configured MySQL driver up front so a bad
         ``[database] connection`` fails the worker at startup rather than
         on the first port operation, and surface any deprecated-for-removal
@@ -486,6 +493,60 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             events.AFTER_INIT,
             cancellable=True,
         )
+        self._subscribe_to_security_group_events()
+
+    def _subscribe_to_security_group_events(self):
+        """Subscribe to the registry events for security-group changes.
+
+        Security-group changes need to reach this driver so that we can
+        update the corresponding NetworkPolicy in etcd.  Up to now they
+        arrived through ``CalicoPlugin``'s overrides of the security-group
+        CRUD methods -- but those only ran when neutron.conf configured
+        ``core_plugin = calico``.  A deployment running plain
+        ``core_plugin = ml2`` with our mechanism driver got no notification
+        at all, and so no dynamic NetworkPolicy updates: the NetworkPolicies
+        in etcd went stale until the next resync.
+
+        The events that we subscribe to here are published by
+        ``SecurityGroupDbMixin``, which both of those core plugins inherit,
+        so they reach us whichever one the operator has configured.  We
+        subscribe in the parent process, before any fork: each forked worker
+        inherits these subscriptions as part of its memory image, and
+        handles the events for the API requests that it serves.
+
+        All of these are AFTER_* events, published after (and outside) the
+        DB transaction that made the change.  That matters because our sync
+        code reaches the Neutron DB through
+        ``@retry_if_session_inactive``-decorated calls, which must not run
+        inside a transaction that we own.  The one non-obvious path is
+        Neutron's implicit creation of a project's default security group,
+        which can happen from a PORT or NETWORK BEFORE_CREATE callback --
+        but those callbacks run before the writer context is opened, in
+        both the single and bulk create paths, so the SECURITY_GROUP
+        AFTER_CREATE that they publish is untransacted too.
+
+        SECURITY_GROUP AFTER_UPDATE is deliberately not subscribed.  A
+        rename does not change the NetworkPolicy -- its selector is keyed
+        on the SG ID, not on the name -- but it does invalidate the
+        ``sg-name.projectcalico.org`` labels on every WorkloadEndpoint in
+        the group, and updating those needs the endpoint syncer rather
+        than the policy syncer.  That is left for separate work.
+        """
+        for resource, event, handler in (
+            (
+                resources.SECURITY_GROUP_RULE,
+                events.AFTER_CREATE,
+                self._sg_rule_created,
+            ),
+            (
+                resources.SECURITY_GROUP_RULE,
+                events.AFTER_DELETE,
+                self._sg_rule_deleted,
+            ),
+            (resources.SECURITY_GROUP, events.AFTER_CREATE, self._sg_created),
+            (resources.SECURITY_GROUP, events.AFTER_DELETE, self._sg_deleted),
+        ):
+            registry.subscribe(handler, resource, event)
 
     def get_workers(self):
         """Workers that neutron-server should fork on our behalf.
@@ -1280,6 +1341,70 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # port never had a WEP).
         if host:
             self.endpoint_syncer.sync_wep(port, host, plugin_context)
+
+    # Handlers for the security-group registry events subscribed in
+    # ``_subscribe_to_security_group_events``.  Each extracts the affected
+    # security-group ID from the event payload and dispatches to
+    # ``security_groups_updated``, which does the CAS-protected NetworkPolicy
+    # write to etcd.
+    #
+    # A handler that raises does NOT fail the operator's API request: these
+    # are AFTER_* events, and neutron-lib's registry logs a subscriber
+    # exception and carries on -- it aborts the request only for BEFORE_* and
+    # PRECOMMIT_* events.  So an etcd outage here leaves drift to be repaired
+    # by the next resync, rather than failing the security-group call.
+    #
+    # In each case the event's context is the request's ``NeutronContext``,
+    # which carries the DB session.  Our sync code does not use that session
+    # -- see ``security_groups_updated`` -- but we pass it through anyway, as
+    # ``SGUpdateContext.plugin_context``, for uniformity with the other
+    # ``security_groups_updated`` entry points.
+
+    def _sg_rule_created(self, resource, event, trigger, payload=None):
+        """SECURITY_GROUP_RULE / AFTER_CREATE.
+
+        Neutron publishes this once per created rule -- on the bulk-create
+        path as well as the single-rule one -- with the created rule as
+        ``payload.states[0]``.
+        """
+        self.security_groups_updated(
+            SGUpdateContext(payload.context, [payload.states[0]["security_group_id"]])
+        )
+
+    def _sg_rule_deleted(self, resource, event, trigger, payload=None):
+        """SECURITY_GROUP_RULE / AFTER_DELETE.
+
+        The rule row has already been deleted by the time we are called, so
+        the SG ID comes from the payload metadata rather than from a DB read.
+        """
+        self.security_groups_updated(
+            SGUpdateContext(payload.context, [payload.metadata["security_group_id"]])
+        )
+
+    def _sg_created(self, resource, event, trigger, payload=None):
+        """SECURITY_GROUP / AFTER_CREATE.
+
+        Neutron creates an SG's initial rules in the same transaction as the
+        SG row itself, without going through ``create_security_group_rule``,
+        so this event is our only signal that those rules exist.  It also
+        covers the per-project ``default`` security group, which Neutron
+        creates implicitly.
+        """
+        self.security_groups_updated(
+            SGUpdateContext(payload.context, [payload.resource_id])
+        )
+
+    def _sg_deleted(self, resource, event, trigger, payload=None):
+        """SECURITY_GROUP / AFTER_DELETE.
+
+        Neutron deletes an SG's rules by DB cascade rather than by iterating
+        ``delete_security_group_rule``, so the rule-level event above does not
+        fire here.  ``sync_sgs_to_etcd`` re-reads the DB, finds no SG with
+        this ID, and CAS-deletes the corresponding NetworkPolicy from etcd.
+        """
+        self.security_groups_updated(
+            SGUpdateContext(payload.context, [payload.resource_id])
+        )
 
     def security_groups_updated(self, context):
         """Called whenever security group rules, membership or existence change."""

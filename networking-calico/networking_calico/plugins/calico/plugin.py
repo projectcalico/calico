@@ -24,8 +24,6 @@ from oslo_config import cfg
 
 from oslo_log import log
 
-from networking_calico.plugins.calico.context import SGUpdateContext
-
 
 LOG = log.getLogger(__name__)
 
@@ -166,38 +164,11 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
             self.mechanism_manager._call_on_drivers("update_floatingip", context)
         return new_floatingip
 
-    def create_security_group_rule(self, context, security_group_rule):
-        rule = super().create_security_group_rule(context, security_group_rule)
-        sgids = [rule["security_group_id"]]
-        self._notify_sg_update(context, sgids)
-        return rule
-
-    def create_security_group_rule_bulk(self, context, security_group_rules):
-        rules = super().create_security_group_rule_bulk_native(
-            context, security_group_rules
-        )
-        sgids = set([r["security_group_id"] for r in rules])
-        self._notify_sg_update(context, list(sgids))
-        return rules
-
-    def delete_security_group_rule(self, context, sgrid):
-        rule = self.get_security_group_rule(context, sgrid)
-        super().delete_security_group_rule(context, sgrid)
-        self._notify_sg_update(context, [rule["security_group_id"]])
-
-    def delete_security_group(self, context, id):
-        # Neutron's ``delete_security_group`` drops the SG row directly and relies on
-        # the DB-level cascade to remove its rules, rather than iterating
-        # ``delete_security_group_rule`` per rule.  So the rule-level override above
-        # does NOT fire during an SG delete, and the driver would otherwise miss the
-        # signal.  Notify here, after ``super()`` has removed the SG from the DB:
-        # ``sync_sgs_to_etcd`` re-reads from the Neutron DB, sees no SG with this id,
-        # and takes its CAS-protected delete branch to drop the corresponding
-        # NetworkPolicy from etcd.
-        super().delete_security_group(context, id)
-        self._notify_sg_update(context, [id])
-
-    def _notify_sg_update(self, context, sgids):
-        self.mechanism_manager._call_on_drivers(
-            "security_groups_updated", SGUpdateContext(context, sgids)
-        )
+    # Security-group changes are dispatched to the mechanism driver through
+    # Neutron registry events -- see
+    # ``CalicoMechanismDriver._subscribe_to_security_group_events`` -- which
+    # arrive whichever core plugin the operator has configured.  They used to
+    # be dispatched from overrides of the security-group CRUD methods here,
+    # but those only ran when neutron.conf had ``core_plugin = calico``: a
+    # deployment running ``core_plugin = ml2`` with our mechanism driver got
+    # no notification at all, and so no dynamic NetworkPolicy updates.
