@@ -67,7 +67,7 @@ func operatorBuildCommand(cfg *Config) *cli.Command {
 }
 
 var operatorPublishFlags = []cli.Flag{
-	operatorRegistryFlag, archFlag, localFlag, hashreleaseFlag,
+	operatorRegistryFlag, archFlag, localFlag, forceFlag, hashreleaseFlag,
 }
 
 var operatorPublishAction = func(cfg *Config) func(context.Context, *cli.Command) error {
@@ -109,11 +109,13 @@ var operatorPublishOptions = func(c *cli.Command, version, uploadDir, logsDir st
 		operator.WithLogsDir(logsDir),
 		operator.WithArches(c.StringSlice(archFlag.Name)...),
 		operator.WithDryRun(c.Bool(localFlag.Name)),
+		operator.WithResolver(registryDigestResolver),
 	}
-	_, w, err := publishRecord(uploadDir, operator.PublishStep, version, !c.Bool(localFlag.Name))
+	published, w, err := publishRecord(uploadDir, operator.PublishStep, version, !c.Bool(localFlag.Name))
 	if err != nil {
 		return nil, err
 	}
+	opts = append(opts, operator.WithResume(published, c.Bool(forceFlag.Name)))
 	if w != nil {
 		opts = append(opts, operator.WithRecord(w))
 	}

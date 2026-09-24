@@ -17,11 +17,14 @@ package operator
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -44,13 +47,30 @@ func Publish(o Operator, variants []Variant, hashrelease bool, opts ...PublishOp
 	if err != nil {
 		return err
 	}
+	if s.resolve == nil {
+		s.resolve = registry.ResolveDigest
+	}
+	if s.dryRun {
+		// A dry run pushes nothing, so there is nothing to record.
+		s.refs = nil
+	}
 	env := []string{s.latch()}
 
+	var recorded steps.RecordedDigests
+	if s.resume != nil {
+		recorded = steps.DigestsByRepo(s.resume.published)
+	}
 	return eachVariant(variants, func(v Variant) error {
-		if err := s.run(publishTarget, v, hashrelease, env); err != nil {
+		done, err := s.published(v, recorded)
+		if err != nil {
 			return err
 		}
-		return s.record(v)
+		if done {
+			s.Logger().WithField("variant", v.Name).Info("Already published, skipping")
+			return nil
+		}
+		// Recorded even when the push failed, so a resume knows what landed.
+		return errors.Join(s.run(publishTarget, v, hashrelease, env), s.record(v))
 	})
 }
 
@@ -170,11 +190,76 @@ func (s settings) record(v Variant) error {
 	if s.refs == nil {
 		return nil
 	}
-	c := Component(s.Operator, v)
-	if err := s.refs.Add(c.String()); err != nil {
-		return s.Errorf("recording %s: %w", v.Name, err)
+	var refs []string
+	var errs []error
+	for _, t := range s.tags(v) {
+		digest, exists, err := s.resolve(t.ref())
+		if err != nil {
+			errs = append(errs, s.Errorf("recording %s: %w", t.ref(), err))
+			continue
+		}
+		if !exists {
+			s.Logger().WithField("image", t.ref()).Debug("Published tag absent, not recording")
+			continue
+		}
+		refs = append(refs, t.repo+"@"+digest)
 	}
-	return nil
+	if err := s.refs.Add(refs...); err != nil {
+		errs = append(errs, s.Errorf("recording %s: %w", v.Name, err))
+	}
+	return errors.Join(errs...)
+}
+
+func (s settings) published(v Variant, recorded steps.RecordedDigests) (bool, error) {
+	if len(recorded) == 0 {
+		return false, nil
+	}
+	for _, t := range s.tags(v) {
+		digests, ok := recorded[t.repo]
+		if !ok {
+			return false, nil
+		}
+		got, exists, err := s.resolve(t.ref())
+		if err != nil {
+			// A failed lookup says nothing about what is published.
+			s.Logger().WithError(err).WithField("image", t.ref()).Warn("Could not resolve digest, will publish")
+			return false, nil
+		}
+		if !exists {
+			return false, nil
+		}
+		if _, known := digests[got]; known {
+			continue
+		}
+		if s.resume.force {
+			return false, nil
+		}
+		return false, s.Errorf(
+			"%s is published at %s; this release recorded %s. Pass --force to publish anyway",
+			t.ref(), got, strings.Join(slices.Sorted(maps.Keys(digests)), ", "))
+	}
+	return true, nil
+}
+
+type tag struct {
+	repo string
+	tag  string
+}
+
+func (t tag) ref() string {
+	return t.repo + ":" + t.tag
+}
+
+func (s settings) tags(v Variant) []tag {
+	var out []tag
+	for _, reg := range s.Registries {
+		repo := reg + "/" + image(s.Operator, v)
+		out = append(out, tag{repo: repo, tag: s.Version})
+		for _, arch := range s.arches {
+			out = append(out, tag{repo: repo, tag: s.Version + "-" + arch})
+		}
+	}
+	return out
 }
 
 func (s settings) preBuildValidation() error {
