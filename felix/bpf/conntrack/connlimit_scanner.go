@@ -178,6 +178,12 @@ func (s *ConnLimitScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get E
 		return ScanVerdictOK, 0
 	}
 
+	// A present entry is not reaped; it is remembered again below if it
+	// still counts.
+	if len(s.rstFlows) > 0 {
+		delete(s.rstFlows, makeFlowKey(ctKey.AddrA(), ctKey.PortA(), ctKey.AddrB(), ctKey.PortB()))
+	}
+
 	data := ctVal.Data()
 
 	// Skip a close both endpoints agreed on; the fast path decremented it.
@@ -234,7 +240,10 @@ func (s *ConnLimitScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get E
 		s.counts[k]++
 	}
 
-	if len(charged) > 0 && ctVal.RSTSeen() != 0 {
+	// Only flows routed through the host stack have Linux conntrack state to
+	// outlive the reap.
+	viaNetfilter := ctVal.Flags()&(v4.FlagNATOut|v4.FlagSkipFIB) != 0
+	if len(charged) > 0 && ctVal.RSTSeen() != 0 && viaNetfilter {
 		if s.rstFlows == nil {
 			s.rstFlows = make(map[flowKey][]connlimitKey)
 		}
