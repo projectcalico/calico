@@ -361,10 +361,10 @@
   # without its stamp would fail the consumer's untolerated gcloud cp.
   #
   # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)", "E2E tests:
-  # Gateway API Conformance") list this block in their `dependencies:`, so
-  # CHANGE_IN_WITH_DEPENDENTS() folds their triggers into the arg below — this
-  # block's own inputs, the operator's Go closure plus everything else under
-  # operator/.
+  # Gateway API Conformance", "Manifest install (KIND)") list this block in
+  # their `dependencies:`, so CHANGE_IN_WITH_DEPENDENTS() folds their triggers
+  # into the arg below — this block's own inputs, the operator's Go closure plus
+  # everything else under operator/.
   run:
     when: "${CHANGE_IN_WITH_DEPENDENTS(operator,non-go:/operator/)}"
   dependencies: []
