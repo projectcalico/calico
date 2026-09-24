@@ -7,7 +7,7 @@ BUILD_IMAGES ?= $(ENVOY_RATELIMIT_IMAGE)
 
 # For updating this version please see
 # https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
-ENVOY_RATELIMIT_VERSION=ff287602
+ENVOY_RATELIMIT_VERSION=8fe6ea421048bdb2a8873d5f676b3f6eac76a997
 
 ##############################################################################
 # Include lib.Makefile before anything else
