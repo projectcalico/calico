@@ -187,7 +187,6 @@ type CalicoManager struct {
 	draftRelease  bool
 	awsProfile    string
 	s3Bucket      string
-	githubToken   string
 
 	// tagAtHEAD memoizes tagExistsAtHEAD so the rev-parse runs once per release.
 	tagAtHEAD *tagCheck
@@ -590,7 +589,7 @@ func (r *CalicoManager) BuildHelm() error {
 		if err != nil {
 			return fmt.Errorf("helm repo URL: %w", err)
 		}
-		opts = append(opts, charts.WithIndex(repoURL, chartsURL, chart.BaseDir, r.tmpDir))
+		opts = append(opts, charts.WithIndex(repoURL, chartsURL, charts.IndexDir(r.uploadDir()), r.tmpDir))
 	}
 	if r.isHashRelease {
 		opts = append(opts, charts.WithModifiedValues(charts.ValueEditsFor(r.calicoVersion, r.imageRegistries[0], r.operatorImage, r.operatorVersion, r.operatorRegistry)))
@@ -605,7 +604,7 @@ func (r *CalicoManager) chart() charts.Chart {
 		ProductVersion: r.calicoVersion,
 		ChartVersion:   r.chartVersion,
 		Names:          charts.All(),
-		BaseDir:        charts.Dir(r.uploadDir()),
+		BaseDir:        charts.OutputDir(r.uploadDir()),
 	}
 }
 
@@ -1326,7 +1325,7 @@ func (r *CalicoManager) publishHelmCharts() error {
 func (r *CalicoManager) helmIndexUpload() distribution.Upload {
 	return distribution.Upload{
 		Name:   "chart index",
-		Source: charts.IndexFilePath(r.chart().BaseDir),
+		Source: charts.IndexFilePath(charts.IndexDir(r.uploadDir())),
 		Skip:   !r.helmCharts || !r.helmIndex,
 		Handler: distribution.S3{
 			URI:     r.s3URI(chartsDir),

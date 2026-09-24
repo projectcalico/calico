@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -71,16 +72,12 @@ var _ = describe.CalicoDescribe(
 
 			// Measure baseline throughput without any QoS limit.
 			By("Running iperf3 to measure baseline throughput")
-			const minBandwidthBaseline = 10_000_000.0 * 5
-			baseline, err := tester.MeasureBandwidth(client, server,
-				iperfcheck.WithRetries(5, 5*time.Second),
-				iperfcheck.WithMinRate(minBandwidthBaseline),
-			)
+			baseline, err := tester.MeasureBandwidth(client, server, iperfcheck.WithRetries(5, 5*time.Second))
 			Expect(err).NotTo(HaveOccurred(), "failed to measure baseline throughput")
 			logrus.Infof("Baseline throughput (bps): %.0f", baseline.AverageRate)
 
 			// The baseline should be much higher than the 10Mbit limit we'll configure.
-			Expect(baseline.AverageRate).To(BeNumerically(">=", minBandwidthBaseline), "baseline throughput too low to meaningfully test bandwidth limiting")
+			Expect(baseline.AverageRate).To(BeNumerically(">=", 10_000_000.0*5), "baseline throughput too low to meaningfully test bandwidth limiting")
 
 			// Replace the client with a pod annotated for 10Mbit ingress bandwidth.
 			By("Replacing iperf3 client with 10Mbit ingress bandwidth limit")
@@ -327,38 +324,36 @@ var _ = describe.CalicoDescribe(
 
 			probeTarget := conncheck.NewTCPConnectTarget(serverIP, connLimitPort)
 
+			// No standalone reachability probe: its slot lingers until both
+			// ends FIN, so the holders below would race it.
+
 			// Each holder bridges to a sleep so neither end closes the socket; it
-			// stays ESTABLISHED, occupying a slot until stop() is called. A separate
-			// reachability probe would occupy one too, until its conntrack entry
-			// expired, so the holders serve as one.
+			// stays ESTABLISHED, occupying a slot until stop() is called.
 			By(fmt.Sprintf("Holding %d concurrent connections open", maxConns))
 			connectAddr := fmt.Sprintf("TCP:%s:%d", serverIP, connLimitPort)
 			var holders []func() error
-			releaseHolders := func() {
+			defer func() {
 				for _, stop := range holders {
 					_ = stop()
 				}
-				holders = nil
+			}()
+			for i := range maxConns {
+				stop, err := client.ExecStream(
+					context.Background(),
+					[]string{"socat", connectAddr, "EXEC:sleep 3600"},
+					io.Discard,
+				)
+				Expect(err).NotTo(HaveOccurred(), "failed to start held connection %d", i)
+				holders = append(holders, stop)
 			}
-			defer releaseHolders()
 
-			// A partial set still owns its slots, so a retry has to start from none.
-			Eventually(func() error {
-				releaseHolders()
-				for i := range maxConns {
-					stop, err := client.ExecStream(
-						context.Background(),
-						[]string{"socat", connectAddr, "EXEC:sleep 3600"},
-						io.Discard,
-					)
-					if err != nil {
-						return fmt.Errorf("failed to open held connection %d: %w", i, err)
-					}
-					holders = append(holders, stop)
-				}
-				return nil
-			}, 2*time.Minute, 5*time.Second).Should(Succeed(),
-				"could not hold %d connections open at once", maxConns)
+			// ExecStream returns when the stream is up, not when socat has
+			// connected.
+			By("Waiting for the held connections to establish")
+			Eventually(func() (int, error) {
+				return countEstablished(client, serverIP, connLimitPort)
+			}, 30*time.Second, time.Second).Should(Equal(maxConns),
+				"the held connections did not all reach ESTABLISHED")
 
 			By("Verifying the (N+1)th connection is refused")
 			checker.ResetExpectations()
@@ -373,6 +368,17 @@ var _ = describe.CalicoDescribe(
 			checker.Execute()
 		})
 	})
+
+// countEstablished reports how many ESTABLISHED TCP connections the client pod
+// holds to ip:port.
+func countEstablished(client conncheck.Client, ip string, port int) (int, error) {
+	out, err := client.Exec(context.Background(),
+		fmt.Sprintf("ss -Htn state established dst %s:%d | wc -l", ip, port))
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(strings.TrimSpace(out))
+}
 
 // measureWithRateRetry runs a bandwidth measurement and retries once if the
 // measured rate exceeds maxRate. This handles two startup conditions on a

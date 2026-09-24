@@ -105,6 +105,24 @@ static CALI_BPF_INLINE int state_fill_from_l4(struct cali_tc_ctx *ctx, bool deca
 	return tc_state_fill_from_nexthdr(ctx, decap);
 }
 
+/* True on an encapsulating device whose packet still needs its tunnel key set.
+ * Reads the globals directly: the fast path below has no ctx yet.
+ */
+static CALI_BPF_INLINE bool encap_needs_key(struct __sk_buff *skb)
+{
+	if (!CALI_F_HEP) {
+		return false;
+	}
+
+	struct cali_tc_globals *gl = state_get_globals_tc();
+
+	if (!gl || !(gl->data.flags & CALI_GLOBALS_IFACE_ENCAPS)) {
+		return false;
+	}
+
+	return !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET);
+}
+
 /* calico_tc_main is the main function used in all of the tc programs.  It is specialised
  * for particular hook at build time based on the CALI_F build flags.
  */
@@ -120,7 +138,7 @@ int calico_tc_main(struct __sk_buff *skb)
 	 * skip all processing. */
 	if (CALI_F_FROM_HOST && skb_mark_equals(skb, CALI_SKB_MARK_BYPASS, CALI_SKB_MARK_BYPASS) &&
 			/* If we are on tunnel and we do not have the key set, we cannot short-circuit */
-			!(CALI_F_TUNNEL &&  !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET))) {
+			!encap_needs_key(skb)) {
 		if  (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
 			/* This generates a bit more richer output for logging */
 			DECLARE_TC_CTX(_ctx,
@@ -243,7 +261,7 @@ int calico_tc_main(struct __sk_buff *skb)
 		goto finalize;
 	}
 
-	if (CALI_F_TUNNEL && CALI_F_TO_HEP
+	if (IFACE_ENCAPS && CALI_F_TO_HEP
 			&& skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS, CALI_SKB_MARK_BYPASS)) {
 		/* In case we are on tunnel device, CALI_SKB_MARK_BYPASS is set we only got
 		 * here because CALI_SKB_MARK_TUNNEL_KEY_SET wasn't set. This happens when
@@ -586,6 +604,7 @@ syn_force_policy:
 		 * seen by another program since it must have come in via another interface.
 		 */
 		CALI_DEBUG("Packet is from the host: ACCEPT");
+		ctx->state->flags |= CALI_ST_HOST_ORIGIN;
 		goto skip_policy;
 	}
 
@@ -1462,9 +1481,10 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 			!(ctx->state->ct_result.flags & CALI_CT_FLAG_CONNLIMIT_INGRESS)) {
 		/* First SYN OR retransmission of a previously-rejected SYN. */
 		struct calico_ct_key ck;
+		bool rst_src_lt_dest = src_lt_dest(&ctx->state->ip_src, &ctx->state->ip_dst,
+						ctx->state->sport, ctx->state->dport);
 		fill_ct_key(&ck,
-				src_lt_dest(&ctx->state->ip_src, &ctx->state->ip_dst,
-						ctx->state->sport, ctx->state->dport),
+				rst_src_lt_dest,
 				ctx->state->ip_proto,
 				&ctx->state->ip_src, &ctx->state->ip_dst,
 				ctx->state->sport, ctx->state->dport);
@@ -1474,8 +1494,14 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 			CALI_DEBUG("Ingress connection limit exceeded, rejecting with TCP RST");
 			if (cv) {
 				ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED);
+				/* The RST leaves via CALI_RES_REDIR_BACK, which returns it
+				 * through from-wep on every device type. Approve that leg
+				 * so conntrack admits it there. */
+				ct_leg_set_flags(rst_src_lt_dest ? &cv->b_to_a : &cv->a_to_b,
+						CALI_CT_LEG_APPROVED);
 			}
 			ctx->state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
+			ctx->state->flags |= CALI_ST_RST_NO_CT;
 			CALI_JUMP_TO(ctx, PROG_INDEX_TCP_RST);
 			goto deny;
 		}
@@ -1580,6 +1606,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 		if (qos_connlimit_check_and_increment(ctx) < 0) {
 			CALI_DEBUG("Egress connection limit exceeded, rejecting with TCP RST");
 			ctx->state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
+			ctx->state->flags |= CALI_ST_RST_NO_CT;
 			CALI_JUMP_TO(ctx, PROG_INDEX_TCP_RST);
 			goto deny;
 		}
@@ -1624,6 +1651,11 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	}
 	if (CALI_F_FROM_WEP && state->ip_proto == IPPROTO_TCP && EGRESS_CONN_LIMIT_CONFIGURED) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_CONNLIMIT_EGRESS;
+	}
+	/* Not gated on INGRESS_CONN_LIMIT_CONFIGURED: a limit added later must
+	 * still find the connection marked. */
+	if (CALI_F_TO_WEP && (state->flags & CALI_ST_HOST_ORIGIN)) {
+		ct_ctx_nat->flags |= CALI_CT_FLAG_HOST_ORIGIN;
 	}
 	if (CALI_F_TO_WEP) {
 		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN)) {
@@ -2134,7 +2166,16 @@ int calico_tc_skb_send_tcp_rst(struct __sk_buff *skb)
 	if (ret) {
 		ctx->state->fwd.res = TC_ACT_SHOT;
 	} else {
+		if (ctx->state->flags & CALI_ST_RST_NO_CT) {
+			/* Without an entry the destination would drop this as a
+			 * mid-flow miss. */
+			ctx->state->fwd.mark = CALI_SKB_MARK_BYPASS_FWD;
+		}
 		fwd_fib_set(&ctx->state->fwd, true);
+		if (CALI_F_TO_WEP) {
+			/* we know it came from workload, just send it back the same way */
+			ctx->state->fwd.res = CALI_RES_REDIR_BACK;
+		}
 	}
 
 	if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
@@ -2144,6 +2185,7 @@ int calico_tc_skb_send_tcp_rst(struct __sk_buff *skb)
 	}
 
 	tc_state_fill_from_iphdr(ctx);
+
 	return forward_or_drop(ctx);
 }
 

@@ -64,8 +64,7 @@ type Client interface {
 	// ExecStream runs a long-lived command, writing combined output to w.
 	// Used for continuous probes (ExpectContinuously). Returns a stop
 	// function that terminates the remote command and waits for the
-	// streaming goroutine to drain. A command that exits on its own shortly
-	// after starting is reported as an error here instead.
+	// streaming goroutine to drain.
 	ExecStream(ctx context.Context, cmd []string, w io.Writer) (stop func() error, err error)
 }
 

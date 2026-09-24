@@ -311,6 +311,7 @@ spec:
                   type: array
                   x-kubernetes-list-type: atomic
                 programClusterRoutes:
+                  default: EnabledNoEncapOnly
                   description: |-
                     ProgramClusterRoutes controls which "cluster routes" are programmed by Calico's BGP
                     stack, i.e. the routes that a node needs in order to reach workloads on other nodes.  It
@@ -3361,6 +3362,7 @@ spec:
                     like Application layer policy. [Default: Empty]
                   type: string
                 programClusterRoutes:
+                  default: EnabledIPIPOnly
                   description: |-
                     ProgramClusterRoutes controls which "cluster routes" Felix programs, i.e. the routes that
                     a node needs in order to reach workloads on other nodes.  It only applies to IP Pools
@@ -12832,6 +12834,17 @@ spec:
       terminationGracePeriodSeconds: 0
       priorityClassName: system-node-critical
       initContainers:
+        # This container stages the upstream CNI plugins that the CNI config
+        # references (portmap, host-local, loopback, tuning, flannel) for
+        # install-cni to copy onto the host.
+        - name: cni-plugins
+          image: quay.io/calico/third-party-cni-plugins:master
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - mountPath: /stage
+              name: cni-plugins-stage
+          securityContext:
+            runAsUser: 0
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
@@ -12878,6 +12891,8 @@ spec:
               name: cni-bin-dir
             - mountPath: /host/etc/cni/net.d
               name: cni-net-dir
+            - mountPath: /opt/cni/bin
+              name: cni-plugins-stage
           securityContext:
             privileged: true
             runAsUser: 0
@@ -13110,6 +13125,10 @@ spec:
           hostPath:
             path: /opt/cni/bin
             type: DirectoryOrCreate
+        # Staging area for the upstream CNI plugins, written by cni-plugins and
+        # read by install-cni.
+        - name: cni-plugins-stage
+          emptyDir: {}
         - name: cni-net-dir
           hostPath:
             path: /etc/cni/net.d
@@ -13166,7 +13185,7 @@ spec:
         - name: calico-kube-controllers
           image: quay.io/calico/calico:master
           imagePullPolicy: IfNotPresent
-          args: ["component", "kube-controllers"]
+          args: ["component", "kube-controllers", "--health-port=9440"]
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
@@ -13177,10 +13196,9 @@ spec:
             exec:
               command:
                 - /usr/bin/calico
-                - component
-                - kube-controllers
-                - kube-controllers-health
-                - -l
+                - health
+                - --port=9440
+                - --type=liveness
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
@@ -13189,10 +13207,9 @@ spec:
             exec:
               command:
                 - /usr/bin/calico
-                - component
-                - kube-controllers
-                - kube-controllers-health
-                - -r
+                - health
+                - --port=9440
+                - --type=readiness
             periodSeconds: 10
           securityContext:
             runAsNonRoot: true

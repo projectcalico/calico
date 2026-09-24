@@ -283,6 +283,7 @@ type fakeReleaseService struct {
 
 	mu       sync.Mutex
 	uploaded []string
+	attached []*ghapi.ReleaseAsset
 }
 
 func (f *fakeReleaseService) GetReleaseByTag(context.Context, string, string, string) (*ghapi.RepositoryRelease, *ghapi.Response, error) {
@@ -298,13 +299,27 @@ func (f *fakeReleaseService) CreateRelease(_ context.Context, _, _ string, r *gh
 }
 
 func (f *fakeReleaseService) ListReleaseAssets(context.Context, string, string, int64, *ghapi.ListOptions) ([]*ghapi.ReleaseAsset, *ghapi.Response, error) {
-	return nil, &ghapi.Response{}, nil
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.attached), &ghapi.Response{}, nil
 }
 
-func (f *fakeReleaseService) UploadReleaseAsset(_ context.Context, _, _ string, _ int64, opts *ghapi.UploadOptions, _ *os.File) (*ghapi.ReleaseAsset, *ghapi.Response, error) {
+// Records what it received the way GitHub would, so a second Publish sees the
+// assets the first one attached.
+func (f *fakeReleaseService) UploadReleaseAsset(_ context.Context, _, _ string, _ int64, opts *ghapi.UploadOptions, file *os.File) (*ghapi.ReleaseAsset, *ghapi.Response, error) {
+	info, err := file.Stat()
+	if err != nil {
+		return nil, nil, err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.uploaded = append(f.uploaded, opts.Name)
+	f.attached = append(f.attached, &ghapi.ReleaseAsset{
+		ID:    ghapi.Int64(int64(len(f.attached) + 1)),
+		Name:  ghapi.String(opts.Name),
+		State: ghapi.String("uploaded"),
+		Size:  ghapi.Int(int(info.Size())),
+	})
 	return nil, nil, nil
 }
 
@@ -432,16 +447,19 @@ func TestPublishIsIdempotent(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// One service across both runs, so the second sees what the first attached.
+	svc := &fakeReleaseService{draft: &ghapi.RepositoryRelease{ID: ghapi.Int64(1), Draft: ghapi.Bool(true)}}
+	rels, err := gh.NewReleases(gh.Repo{Org: "projectcalico", Name: "calico"}, svc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	var first string
 	for run := range 2 {
 		if err := SHA256Sums(dir); err != nil {
 			t.Fatalf("run %d: SHA256Sums: %v", run, err)
 		}
-		svc := &fakeReleaseService{draft: &ghapi.RepositoryRelease{ID: ghapi.Int64(1), Draft: ghapi.Bool(true)}}
-		rels, err := gh.NewReleases(gh.Repo{Org: "projectcalico", Name: "calico"}, svc)
-		if err != nil {
-			t.Fatal(err)
-		}
+		svc.uploaded = nil
 		d := GithubRelease{releases: rels, Tag: "v3.30.0", Draft: true}
 		if err := d.Publish(context.Background(), dir); err != nil {
 			t.Fatalf("run %d: Publish: %v", run, err)
@@ -450,7 +468,12 @@ func TestPublishIsIdempotent(t *testing.T) {
 		if got := slices.Compact(slices.Clone(svc.uploaded)); len(got) != len(svc.uploaded) {
 			t.Errorf("run %d: an asset was uploaded twice: %v", run, svc.uploaded)
 		}
-		want := []string{sumsFileName, "metadata.yaml", "release.tgz"}
+		// The first run uploads everything; the second finds it all attached
+		// and complete, so it resends nothing.
+		var want []string
+		if run == 0 {
+			want = []string{sumsFileName, "metadata.yaml", "release.tgz"}
+		}
 		if !slices.Equal(svc.uploaded, want) {
 			t.Errorf("run %d: uploaded %v, want %v", run, svc.uploaded, want)
 		}

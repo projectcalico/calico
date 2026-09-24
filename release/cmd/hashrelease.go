@@ -209,13 +209,13 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 			if err != nil {
 				return fmt.Errorf("failed to determine release version: %v", err)
 			}
-			if _, err := outputs.ReleaseNotes(utils.ProjectCalicoOrg, c.String(githubTokenFlag.Name), cfg.RepoRootDir, filepath.Join(hashrel.Source, outputs.ReleaseNotesDir), releaseVersion); err != nil {
+			if _, err := outputs.ReleaseNotes(utils.ProjectCalicoOrg, cfg.RepoRootDir, filepath.Join(hashrel.Source, outputs.ReleaseNotesDir), releaseVersion); err != nil {
 				return err
 			}
 		}
 
 		// Adjust the formatting of the generated outputs to match the legacy hashrelease format.
-		return tasks.ReformatHashrelease(pin, hashrel.Source)
+		return tasks.ReformatHashrelease(pin, hashrel.Source, c.Bool(helmChartsFlagName))
 	}
 }
 
@@ -344,8 +344,7 @@ var hashreleaseBuildFlags = func() []cli.Flag {
 	f = append(f, operatorBuildCommandFlags...)
 	f = append(f,
 		branchCheckFlag,
-		validationFlag,
-		githubTokenFlag)
+		validationFlag)
 	return f
 }
 

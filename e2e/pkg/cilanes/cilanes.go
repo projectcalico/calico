@@ -56,9 +56,10 @@ var kindTargets = map[string]struct {
 	// names none.
 	fallback string
 }{
-	"e2e-test":     {fallback: "e2e/config/kind/conformance.yaml"},
-	"e2e-test-bpf": {fixed: "e2e/config/kind/bpf.yaml"},
-	"e2e-run":      {},
+	"e2e-test":                   {fallback: "e2e/config/kind/conformance.yaml"},
+	"e2e-test-bpf":               {fixed: "e2e/config/kind/bpf.yaml"},
+	"kind-manifest-install-test": {fixed: "e2e/config/kind/manifest-install.yaml"},
+	"e2e-run":                    {},
 }
 
 // Selection variables. run_tests.sh runs the e2e binary against the config
