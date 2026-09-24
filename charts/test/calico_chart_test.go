@@ -68,6 +68,28 @@ func TestCalicoNodeStagesUpstreamCNIPlugins(t *testing.T) {
 	}))
 }
 
+// The probes reach the health server that the container's own flag starts, so a
+// port they disagree on leaves kube-controllers failing its liveness probe for good.
+func TestCalicoKubeControllersProbesMatchItsHealthPort(t *testing.T) {
+	g := NewWithT(t)
+
+	var deployment appsv1.Deployment
+	renderCalicoResource(t, "templates/calico-kube-controllers.yaml", "Deployment", "calico-kube-controllers", &deployment)
+
+	container := containerByName(t, deployment.Spec.Template.Spec.Containers, "calico-kube-controllers")
+
+	var port string
+	for _, arg := range container.Args {
+		if value, ok := strings.CutPrefix(arg, "--health-port="); ok {
+			port = value
+		}
+	}
+	g.Expect(port).ToNot(BeEmpty(), "the container has to start a health server for the probes to reach")
+
+	g.Expect(container.LivenessProbe.Exec.Command).To(Equal([]string{"/usr/bin/calico", "health", "--port=" + port, "--type=liveness"}))
+	g.Expect(container.ReadinessProbe.Exec.Command).To(Equal([]string{"/usr/bin/calico", "health", "--port=" + port, "--type=readiness"}))
+}
+
 func TestCalicoWebhooksKeepsTheServerUnprivileged(t *testing.T) {
 	g := NewWithT(t)
 
