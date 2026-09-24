@@ -136,6 +136,8 @@ calicoctl:
 	"calico": `version: master
 calico:
   registry: quay.io/calico
+cniPlugins:
+  registry: quay.io/calico
 node:
   registry: quay.io/calico
 flannelMigration:
