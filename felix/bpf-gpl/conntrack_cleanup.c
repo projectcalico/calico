@@ -28,6 +28,16 @@ struct ct_iter_ctx {
 	__u64 num_cleaned;
 };
 
+// A forgeable RST frees no slot on reap; the recount releases it once Linux
+// conntrack drops the flow.
+static CALI_BPF_INLINE void connlimit_decrement_on_reap(struct calico_ct_value *v)
+{
+	if (v->rst_seen) {
+		return;
+	}
+	qos_connlimit_decrement_for_ct(v);
+}
+
 // process_ccq_entry processes an entry in the "cleanup queue" map. The map
 // is keyed with conntrack key which the userspace cleaner sees as expired.
 // The value has <rev_key>:<last_seen_ts>:<rev_last_seen_ts>
@@ -45,7 +55,7 @@ static long process_ccq_entry(void *map, struct calico_ct_key *key, struct cali_
 			// Decrement the per-pod connlimit counter if this entry
 			// carried one of the CONNLIMIT_* flags and the packet
 			// path didn't already decrement.
-			qos_connlimit_decrement_for_ct(actual_ct_value);
+			connlimit_decrement_on_reap(actual_ct_value);
 			if (!cali_ct_delete_elem(key)) {
 				ictx->num_cleaned++;
 			}
@@ -64,7 +74,7 @@ static long process_ccq_entry(void *map, struct calico_ct_key *key, struct cali_
 		struct calico_ct_value *rev_ct_value = cali_ct_lookup_elem(rev_key);
 		if (rev_ct_value && (rev_ct_value->last_seen == value->rev_last_seen)) {
 			// The reverse leg holds the connlimit flags + ifindex.
-			qos_connlimit_decrement_for_ct(rev_ct_value);
+			connlimit_decrement_on_reap(rev_ct_value);
 			if (!cali_ct_delete_elem(rev_key)) {
 				ictx->num_cleaned++;
 			}
