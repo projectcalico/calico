@@ -28,7 +28,7 @@ static CALI_BPF_INLINE int parse_packet_ip_v4(struct cali_tc_ctx *ctx)
 	 * for more headers.
 	 */
 #if CALI_F_XDP
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs_l4(ctx)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short");
 		goto deny;
@@ -67,7 +67,7 @@ static CALI_BPF_INLINE int parse_packet_ip_v4(struct cali_tc_ctx *ctx)
 	// In TC programs, parse packet and validate its size. This is
 	// already done for XDP programs at the beginning of the function.
 #if !CALI_F_XDP
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs_l4(ctx)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short");
 		goto deny;
