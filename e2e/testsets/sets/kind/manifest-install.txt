@@ -1,3 +1,4 @@
+[sig-calico] [Team:CORE] [Category:Networking] [Feature:HostPorts] HostPorts tests with host port resources active on :8080 should support Pod HostPorts [Conformance] [Serial]
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Egress Datapath ClusterIP access scenario-0C2: pod0 -> clusterIP -> pod2 (cross node) [Conformance]
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Egress Datapath ExternalIP access scenario-0EC2: pod0 -> externalIP Cluster -> pod2 (other node) [Conformance]
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Egress Datapath NodePort access scenario-0N02: pod0 -> node0 NodePort -> pod2 (other node) [Conformance]
