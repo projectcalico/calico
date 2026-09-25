@@ -1384,7 +1384,17 @@ func ensureDefaultConfig(
 		return err
 	}
 
+	if !calicoIPAMInUse() {
+		log.WithField("CALICO_IPAM_TYPE", os.Getenv("CALICO_IPAM_TYPE")).Info("Calico IPAM not in use, skipping default IPAMConfiguration")
+		return nil
+	}
 	return ensureDefaultIPAMConfigExists(ctx, c)
+}
+
+// calicoIPAMInUse treats an unset CALICO_IPAM_TYPE as Calico IPAM, since older manifests don't set it.
+func calicoIPAMInUse() bool {
+	ipamType := os.Getenv("CALICO_IPAM_TYPE")
+	return ipamType == "" || strings.EqualFold(ipamType, "Calico")
 }
 
 func ensureDefaultBGPConfigExists(ctx context.Context, c client.Interface) error {
