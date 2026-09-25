@@ -174,7 +174,8 @@ enum cali_state_flags {
 	CALI_ST_SET_DSCP   = 0x2000,
 	/* CALI_ST_FIRST_FRAG is set if this packet is the first fragment of a fragmented IP packet */
 	CALI_ST_FIRST_FRAG        = 0x4000,
-	/* CALI_ST_NO_L4_NAT is set to skip L4 NAT even if there is a NAT - typically IP fragment */
+	/* CALI_ST_NO_L4_NAT is set when the packet has no L4 header (non-first IP fragment):
+	 * skip L4 NAT and TCP state tracking. */
 	CALI_ST_NO_L4_NAT	  = 0x8000,
 	/* CALI_ST_RST_NO_CT is set when the RST rejects a flow that has no CT
 	 * entry, so the destination must not police it. */

@@ -84,6 +84,8 @@ static CALI_BPF_INLINE int state_fill_from_l4(struct cali_tc_ctx *ctx, bool deca
 		if (!ip_is_first_frag(ip_hdr(ctx))) {
 			struct frags4_fwd_value *frag_ct_val = frags4_lookup_ct(ctx);
 			if (frag_ct_val) {
+				/* No L4 header; clear what the previous packet left. */
+				__builtin_memset(ctx->scratch->l4, 0, TCP_SIZE);
 				ctx->state->sport = frag_ct_val->sport;
 				ctx->state->dport = frag_ct_val->dport;
 				CALI_DEBUG("IP FRAG: hit ports %d -> %d", ctx->state->sport, ctx->state->dport);
@@ -658,7 +660,7 @@ syn_force_policy:
 	/* [SMC] I had to add this revalidation when refactoring the conntrack code to use the context and
 	 * adding possible packet pulls in the VXLAN logic.  I believe it is spurious but the verifier is
 	 * not clever enough to spot that we'd have already bailed out if one of the pulls failed. */
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs_l4(ctx)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short");
 		goto deny;
@@ -1424,7 +1426,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		}
 	}
 
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs_l4(ctx)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short");
 		goto deny;
@@ -1709,7 +1711,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 		}
 	}
 
-	if (state->ip_proto == IPPROTO_TCP) {
+	if (state->ip_proto == IPPROTO_TCP && !(state->flags & CALI_ST_NO_L4_NAT)) {
 		if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short for TCP: DROP");
@@ -1766,7 +1768,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	}
 
 	/* Only do the refresh if we get here */
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs_l4(ctx)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short");
 		goto deny;
@@ -2185,6 +2187,8 @@ int calico_tc_skb_send_tcp_rst(struct __sk_buff *skb)
 	}
 
 	tc_state_fill_from_iphdr(ctx);
+	/* The reply is not a fragment even if the packet it answers was. */
+	ctx->state->flags &= ~CALI_ST_FIRST_FRAG;
 
 	return forward_or_drop(ctx);
 }
@@ -2234,6 +2238,8 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 
 	tc_state_fill_from_iphdr(ctx);
 	ctx->state->sport = ctx->state->dport = 0;
+	/* The reply is not a fragment even if the packet it answers was. */
+	ctx->state->flags &= ~CALI_ST_FIRST_FRAG;
 	return forward_or_drop(ctx);
 deny:
 	(void)fib_flags;
@@ -2392,7 +2398,7 @@ int calico_tc_skb_ipv4_frag(struct __sk_buff *skb)
 	CALI_DEBUG("Entering calico_tc_skb_ipv4_frag");
 	CALI_DEBUG("iphdr_offset %d ihl %d", skb_iphdr_offset(ctx), ctx->ipheader_len);
 
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs_l4(ctx)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short");
 		goto deny;
@@ -2439,7 +2445,7 @@ int calico_tc_maglev(struct __sk_buff *skb)
 
 	CALI_DEBUG("Entering calico_tc_maglev");
 
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs_l4(ctx)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short");
 		goto deny;
