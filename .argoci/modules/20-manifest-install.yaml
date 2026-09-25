@@ -36,7 +36,7 @@ steps:
       .argoci/scripts/load-cached-images calico node
       make kind-manifest-install-test
     epilogue: |
-      copyFromVirtualMachine report report || true
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/report" report || true
       artifact push job report --destination test-results || true
       if [ "$CI_STEP_EXIT_CODE" != 0 ]; then
         # Collected where the cluster is; the script pushes its own bundle. The

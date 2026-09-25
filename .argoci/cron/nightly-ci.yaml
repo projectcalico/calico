@@ -1,0 +1,78 @@
+# The nightly: every lane a given diff would have gated out.
+#
+# A cron drops the gates its modules carry for PR runs, so including them is all
+# this takes. The list is repeated rather than shared because a cron cannot
+# include another workflow, and `check-cron-coverage` fails the build when the two
+# drift.
+version: condensed
+generateName: calico-nightly-
+
+# Off the hour, so it does not land with every other repo's.
+schedule: 30 0 * * *
+
+timeout: 6h
+
+globalPrologue: |
+  mkdir -p /go/src/github.com/projectcalico
+  ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
+
+defaults:
+  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2
+  jobSize: medium
+  requests: {cpu: 1500m, memory: 2Gi}
+  timeout: 1h
+  env:
+    - name: ARGOCI_RESOURCE_PREFIX
+      value: argoci
+  services:
+    - goproxy
+  secretBundles:
+    - docker-hub
+
+includes:
+  - path: .argoci/modules/10-prerequisites.yaml
+  - path: .argoci/modules/99-cleanup.yaml
+  - path: .argoci/modules/20-lib.yaml
+  - path: .argoci/modules/20-api.yaml
+  - path: .argoci/modules/20-calicoctl.yaml
+  - path: .argoci/modules/20-confd.yaml
+  - path: .argoci/modules/20-pod2daemon.yaml
+  - path: .argoci/modules/20-app-policy.yaml
+  - path: .argoci/modules/20-goldmane.yaml
+  - path: .argoci/modules/20-guardian.yaml
+  - path: .argoci/modules/20-libcalico-go.yaml
+  - path: .argoci/modules/20-apiserver.yaml
+  - path: .argoci/modules/20-whisker-backend.yaml
+  - path: .argoci/modules/20-webhooks.yaml
+  - path: .argoci/modules/20-tools.yaml
+  - path: .argoci/modules/20-whisker.yaml
+  - path: .argoci/modules/20-cmd-calico.yaml
+  - path: .argoci/modules/20-e2e-ut.yaml
+  - path: .argoci/modules/20-e2e-test-sets.yaml
+  - path: .argoci/modules/20-e2e-validation.yaml
+  - path: .argoci/modules/30-key-cert-provisioner.yaml
+  - path: .argoci/modules/60-mock-node.yaml
+  - path: .argoci/modules/90-release.yaml
+  - path: .argoci/modules/20-envoy-gateway.yaml
+  - path: .argoci/modules/20-envoy-proxy.yaml
+  - path: .argoci/modules/20-envoy-ratelimit.yaml
+  - path: .argoci/modules/20-third-party-cni-plugins.yaml
+  - path: .argoci/modules/20-e2e-images.yaml
+  - path: .argoci/modules/10-check-images.yaml
+  - path: .argoci/modules/20-operator.yaml
+  - path: .argoci/modules/20-node.yaml
+  - path: .argoci/modules/20-node-kind.yaml
+  - path: .argoci/modules/45-nft-bench.yaml
+  - path: .argoci/modules/20-gateway-conformance.yaml
+  - path: .argoci/modules/20-felix.yaml
+  - path: .argoci/modules/40-openstack.yaml
+  - path: .argoci/modules/20-e2e-gcp.yaml
+  - path: .argoci/modules/20-kube-controllers.yaml
+  - path: .argoci/modules/20-typha.yaml
+  - path: .argoci/modules/20-cni-plugin.yaml
+  - path: .argoci/modules/20-cni-plugin-windows.yaml
+  - path: .argoci/modules/20-istio.yaml
+  - path: .argoci/modules/10-check-operator-images.yaml
+  - path: .argoci/modules/20-e2e.yaml
+  - path: .argoci/modules/20-manifest-install.yaml
+  - path: .argoci/modules/20-kubevirt-live-migration.yaml

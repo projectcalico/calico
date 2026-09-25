@@ -24,8 +24,10 @@ set -x
 
 job_tag="$1"
 
-my_dir="$(dirname $0)"
-repo_dir="$my_dir/../.."
+# Absolute, because the cd below would otherwise re-resolve them against the
+# artifacts directory.
+my_dir="$(cd "$(dirname "$0")" && pwd)"
+repo_dir="$(cd "${my_dir}/../.." && pwd)"
 artifacts_dir="${repo_dir}/artifacts"
 
 echo "Publishing any reports from the artifacts directory."

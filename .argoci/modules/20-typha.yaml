@@ -23,8 +23,8 @@ steps:
       cd typha
       make ci-no-prereqs
     epilogue: |
-      copyFromVirtualMachine typha/report typha-report || true
-      copyFromVirtualMachine felix/report felix-report || true
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/typha/report" typha-report || true
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/felix/report" felix-report || true
       artifact push job typha-report --destination test-results || true
       artifact push job felix-report --destination test-results-felix || true
 
@@ -45,7 +45,7 @@ steps:
       cd typha
       make fv-no-prereqs
     epilogue: |
-      copyFromVirtualMachine typha/report typha-report || true
-      copyFromVirtualMachine felix/report felix-report || true
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/typha/report" typha-report || true
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/felix/report" felix-report || true
       artifact push job typha-report --destination test-results-ubi || true
       artifact push job felix-report --destination test-results-ubi-felix || true

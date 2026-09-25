@@ -39,5 +39,5 @@ steps:
     epilogue: |
       # Runs in the pod, which is only an SSH session — the results are on the
       # machine, and it is still up until this returns.
-      copyFromVirtualMachine artifacts/perf artifacts/perf || true
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/artifacts/perf" artifacts/perf || true
       artifact push job artifacts/perf || true

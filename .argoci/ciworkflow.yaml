@@ -49,6 +49,10 @@ promotions:
     workflowFile: .argoci/promotions/hashrelease.yaml
     description: Build and publish a hashrelease from this build
 
+  - name: publish-release
+    workflowFile: .argoci/promotions/publish-release.yaml
+    description: Publish an official release from this build
+
 # The Makefiles address the tree by its GOPATH location, which is a path inside
 # the build image rather than anywhere the checkout can land. A step running the
 # build image directly has to put the tree there itself; one shelling out to a

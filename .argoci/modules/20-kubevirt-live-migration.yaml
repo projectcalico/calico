@@ -56,7 +56,7 @@ steps:
       docker run -d --name "${BIRD_BGPPEER_CONTAINER_NAME}" --privileged --network kind calico/bird:v0.3.3-211-g9111ec3c
       make e2e-run KUBECONFIG="$(pwd)/hack/test/kind/kind-kubeconfig.yaml"
     epilogue: |
-      copyFromVirtualMachine report report || true
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/report" report || true
       artifact push job report --destination test-results || true
       if [ "$CI_STEP_EXIT_CODE" != 0 ]; then
         # Collected where the cluster is; the script pushes its own bundle.
@@ -66,6 +66,6 @@ steps:
         # cluster is gone once this returns.
         sshOnVirtualMachine 'docker login -u _json_key --password-stdin https://gcr.io < "${CI_ARTIFACT_SA_KEY_FILE}"' || true
         sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && docker run --rm --network host -v "$PWD:/w" -w /w gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2 kubectl-snapshot create --kubeconfig hack/test/kind/kind-kubeconfig.yaml -o kind-snapshot.tar.gz' || true
-        copyFromVirtualMachine kind-snapshot.tar.gz kind-snapshot.tar.gz || true
+        copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/kind-snapshot.tar.gz" kind-snapshot.tar.gz || true
         artifact push job kind-snapshot.tar.gz --destination kind-snapshot.tar.gz || true
       fi

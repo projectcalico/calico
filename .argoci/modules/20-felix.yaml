@@ -108,7 +108,9 @@ steps:
       make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
       make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
     epilogue: |
-      copyFromVirtualMachine felix/report report || true
+      # Absolute: scp resolves a relative remote path against the SSH user's
+      # home, not the checkout.
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/felix/report" report || true
       artifact push job report --destination test-results || true
 
   # FELIX_TEST_GROUP is parsed, not just labelled: the Ubuntu release, dataplane

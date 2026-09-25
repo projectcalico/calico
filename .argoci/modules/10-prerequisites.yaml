@@ -379,3 +379,16 @@ steps:
         -o /tmp/third-party-images.tar
       zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/third-party-images.tar
       artifact push workflow /tmp/third-party-images.tar.zst
+
+  # The nightly repeats this workflow's module list, and nothing else would
+  # notice the two parting company.
+  - name: check-cron-coverage
+    jobSize: small
+    requests: {cpu: 1500m, memory: 548Mi}
+    changes:
+      in:
+        - ^\.argoci/ciworkflow\.yaml$
+        - ^\.argoci/cron/nightly-ci\.yaml$
+        - ^\.argoci/scripts/test_scripts/check-cron-coverage\.sh$
+    commands: |
+      ./.argoci/scripts/test_scripts/check-cron-coverage.sh
