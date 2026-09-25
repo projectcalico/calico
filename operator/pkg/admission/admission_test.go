@@ -189,6 +189,46 @@ var _ = Describe("MutatingAdmissionPolicies", func() {
 			Expect(GetValidatingAdmissionPolicies(opv1.Calico, true, "")).To(BeEmpty())
 		})
 	})
+
+	Describe("GetK8sValidatingAdmissionPolicies", func() {
+		It("returns the policies over Kubernetes resources, labeled apart from the v3 ones", func() {
+			objs := GetK8sValidatingAdmissionPolicies(opv1.Calico, VersionV1)
+			Expect(objs).To(HaveLen(2))
+
+			var vapCount, vapbCount int
+			for _, obj := range objs {
+				switch obj.(type) {
+				case *admissionregistrationv1.ValidatingAdmissionPolicy:
+					vapCount++
+				case *admissionregistrationv1.ValidatingAdmissionPolicyBinding:
+					vapbCount++
+				}
+				Expect(obj.GetName()).To(Equal("protect-cni-annotations.projectcalico.org"))
+				Expect(obj.GetLabels()).To(HaveKeyWithValue(ManagedVAPLabel, ManagedK8sVAPLabelValue))
+			}
+			Expect(vapCount).To(Equal(1))
+			Expect(vapbCount).To(Equal(1))
+		})
+
+		It("does not return them among the v3 policies", func() {
+			for _, obj := range GetValidatingAdmissionPolicies(opv1.Calico, true, VersionV1) {
+				Expect(obj.GetName()).NotTo(Equal("protect-cni-annotations.projectcalico.org"))
+			}
+		})
+
+		It("returns nothing for a variant that registers none", func() {
+			RegisterVariantPolicies(opv1.CalicoEnterprise, fstest.MapFS{
+				"policy.yaml": &fstest.MapFile{Data: []byte(enterpriseMAP)},
+			})
+			DeferCleanup(func() { RegisterVariantPolicies(opv1.CalicoEnterprise, nil) })
+
+			Expect(GetK8sValidatingAdmissionPolicies(opv1.CalicoEnterprise, VersionV1)).To(BeEmpty())
+		})
+
+		It("returns empty when apiVersion is empty", func() {
+			Expect(GetK8sValidatingAdmissionPolicies(opv1.Calico, "")).To(BeEmpty())
+		})
+	})
 })
 
 const enterpriseMAP = `apiVersion: admissionregistration.k8s.io/v1

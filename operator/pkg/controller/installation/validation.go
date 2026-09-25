@@ -52,6 +52,12 @@ func validateCustomResource(instance *operatorv1.Installation) error {
 			instance.Spec.CNI.Type)
 	}
 
+	// Only the Calico CNI plugin writes the annotations this protects.
+	if instance.Spec.CNI.AnnotationProtection != nil && instance.Spec.CNI.Type != operatorv1.PluginCalico {
+		return fmt.Errorf("spec.cni.annotationProtection is only valid when spec.cni.type is Calico, not %s",
+			instance.Spec.CNI.Type)
+	}
+
 	// Perform validation based on the chosen CNI plugin.
 	// For example, make sure the plugin is supported on the specified k8s provider.
 	switch instance.Spec.CNI.Type {

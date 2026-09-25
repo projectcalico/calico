@@ -17,8 +17,10 @@ package admission
 import (
 	"bytes"
 	"context"
+	stderrors "errors"
 	"fmt"
 	"io/fs"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -49,6 +51,12 @@ const (
 	ManagedVAPLabel = "operator.tigera.io/validating-admission-policy"
 	// ManagedVAPLabelValue is the label value for operator-managed VAP resources.
 	ManagedVAPLabelValue = "managed"
+	// ManagedK8sVAPLabelValue is the label value for operator-managed VAP resources over built-in
+	// Kubernetes resources. They are reconciled separately, so each set only ever sees its own objects.
+	ManagedK8sVAPLabelValue = "managed-k8s"
+
+	// k8sPolicyDir holds the policies over built-in Kubernetes resources.
+	k8sPolicyDir = "k8s"
 
 	// APIGroup is the API group for MutatingAdmissionPolicy and ValidatingAdmissionPolicy resources.
 	APIGroup = "admissionregistration.k8s.io"
@@ -112,6 +120,25 @@ func GetValidatingAdmissionPolicies(variant opv1.ProductVariant, v3 bool, apiVer
 	return getAdmissionPolicies(variant, v3, apiVersion, parseValidatingAdmissionPolicyYAML, ManagedVAPLabel, ManagedVAPLabelValue)
 }
 
+// GetK8sValidatingAdmissionPolicies returns the variant's ValidatingAdmissionPolicy and Binding
+// objects over built-in Kubernetes resources, typed at the requested API version and labeled with
+// ManagedVAPLabel=ManagedK8sVAPLabelValue. These do not depend on v3 CRDs.
+func GetK8sValidatingAdmissionPolicies(variant opv1.ProductVariant, apiVersion string) []client.Object {
+	if apiVersion == "" {
+		return nil
+	}
+
+	files := policyFiles(variant)
+	if files == nil {
+		return nil
+	}
+	if _, err := fs.Stat(files, k8sPolicyDir); stderrors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+
+	return readAdmissionPolicies(files, k8sPolicyDir, apiVersion, parseValidatingAdmissionPolicyYAML, ManagedVAPLabel, ManagedK8sVAPLabelValue)
+}
+
 // policyFiles returns the policies for a variant, or nil when this build ships none.
 func policyFiles(variant opv1.ProductVariant) fs.FS {
 	if variant == opv1.Calico {
@@ -136,7 +163,13 @@ func getAdmissionPolicies(variant opv1.ProductVariant, v3 bool, apiVersion strin
 		return nil
 	}
 
-	entries, err := fs.ReadDir(files, ".")
+	return readAdmissionPolicies(files, ".", apiVersion, parseFn, labelKey, labelValue)
+}
+
+// readAdmissionPolicies returns the policy documents in dir that parseFn recognizes, each labeled
+// labelKey=labelValue.
+func readAdmissionPolicies(files fs.FS, dir, apiVersion string, parseFn policyParseFunc, labelKey, labelValue string) []client.Object {
+	entries, err := fs.ReadDir(files, dir)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to read admission policy files: %v", err))
 	}
@@ -147,7 +180,7 @@ func getAdmissionPolicies(variant opv1.ProductVariant, v3 bool, apiVersion strin
 			continue
 		}
 
-		b, err := fs.ReadFile(files, entry.Name())
+		b, err := fs.ReadFile(files, path.Join(dir, entry.Name()))
 		if err != nil {
 			panic(fmt.Sprintf("Failed to read admission policy file %s: %v", entry.Name(), err))
 		}
@@ -438,16 +471,16 @@ func ListManaged(ctx context.Context, c client.Client, apiVersion string) (polic
 }
 
 // ListManagedValidating returns the operator-managed ValidatingAdmissionPolicy and
-// ValidatingAdmissionPolicyBinding objects currently present on the cluster at the given API version,
-// mirroring ListManaged. Returns nil if apiVersion is empty.
-func ListManagedValidating(ctx context.Context, c client.Client, apiVersion string) (policies, bindings []client.Object, err error) {
+// ValidatingAdmissionPolicyBinding objects labeled ManagedVAPLabel=labelValue currently present on
+// the cluster at the given API version, mirroring ListManaged. Returns nil if apiVersion is empty.
+func ListManagedValidating(ctx context.Context, c client.Client, apiVersion, labelValue string) (policies, bindings []client.Object, err error) {
 	if apiVersion == "" {
 		return nil, nil, nil
 	}
 	switch apiVersion {
 	case VersionV1:
 		vapList := &admissionregistrationv1.ValidatingAdmissionPolicyList{}
-		if err := c.List(ctx, vapList, client.MatchingLabels{ManagedVAPLabel: ManagedVAPLabelValue}); err != nil {
+		if err := c.List(ctx, vapList, client.MatchingLabels{ManagedVAPLabel: labelValue}); err != nil {
 			return nil, nil, fmt.Errorf("listing ValidatingAdmissionPolicies: %w", err)
 		}
 		for i := range vapList.Items {
@@ -455,7 +488,7 @@ func ListManagedValidating(ctx context.Context, c client.Client, apiVersion stri
 		}
 
 		bindList := &admissionregistrationv1.ValidatingAdmissionPolicyBindingList{}
-		if err := c.List(ctx, bindList, client.MatchingLabels{ManagedVAPLabel: ManagedVAPLabelValue}); err != nil {
+		if err := c.List(ctx, bindList, client.MatchingLabels{ManagedVAPLabel: labelValue}); err != nil {
 			return nil, nil, fmt.Errorf("listing ValidatingAdmissionPolicyBindings: %w", err)
 		}
 		for i := range bindList.Items {
@@ -463,7 +496,7 @@ func ListManagedValidating(ctx context.Context, c client.Client, apiVersion stri
 		}
 	case VersionV1Beta1:
 		vapList := &admissionv1beta1.ValidatingAdmissionPolicyList{}
-		if err := c.List(ctx, vapList, client.MatchingLabels{ManagedVAPLabel: ManagedVAPLabelValue}); err != nil {
+		if err := c.List(ctx, vapList, client.MatchingLabels{ManagedVAPLabel: labelValue}); err != nil {
 			return nil, nil, fmt.Errorf("listing ValidatingAdmissionPolicies: %w", err)
 		}
 		for i := range vapList.Items {
@@ -471,7 +504,7 @@ func ListManagedValidating(ctx context.Context, c client.Client, apiVersion stri
 		}
 
 		bindList := &admissionv1beta1.ValidatingAdmissionPolicyBindingList{}
-		if err := c.List(ctx, bindList, client.MatchingLabels{ManagedVAPLabel: ManagedVAPLabelValue}); err != nil {
+		if err := c.List(ctx, bindList, client.MatchingLabels{ManagedVAPLabel: labelValue}); err != nil {
 			return nil, nil, fmt.Errorf("listing ValidatingAdmissionPolicyBindings: %w", err)
 		}
 		for i := range bindList.Items {
@@ -479,7 +512,7 @@ func ListManagedValidating(ctx context.Context, c client.Client, apiVersion stri
 		}
 	case VersionV1Alpha1:
 		vapList := &admissionregistrationv1alpha1.ValidatingAdmissionPolicyList{}
-		if err := c.List(ctx, vapList, client.MatchingLabels{ManagedVAPLabel: ManagedVAPLabelValue}); err != nil {
+		if err := c.List(ctx, vapList, client.MatchingLabels{ManagedVAPLabel: labelValue}); err != nil {
 			return nil, nil, fmt.Errorf("listing ValidatingAdmissionPolicies: %w", err)
 		}
 		for i := range vapList.Items {
@@ -487,7 +520,7 @@ func ListManagedValidating(ctx context.Context, c client.Client, apiVersion stri
 		}
 
 		bindList := &admissionregistrationv1alpha1.ValidatingAdmissionPolicyBindingList{}
-		if err := c.List(ctx, bindList, client.MatchingLabels{ManagedVAPLabel: ManagedVAPLabelValue}); err != nil {
+		if err := c.List(ctx, bindList, client.MatchingLabels{ManagedVAPLabel: labelValue}); err != nil {
 			return nil, nil, fmt.Errorf("listing ValidatingAdmissionPolicyBindings: %w", err)
 		}
 		for i := range bindList.Items {
