@@ -67,16 +67,18 @@ spec:
   validations:
     - expression: "variables.addedOrChanged.size() == 0 || variables.canDeletePolicy"
       reason: Forbidden
-      message: "Only Calico may set, change or remove these pod annotations"
+      message: "Only Calico may set, change or remove these pod annotations. To allow this, set spec.cni.annotationProtection to Disabled on the Installation, or delete this policy on installs without the operator."
       messageExpression: >-
         'Only Calico may set, change or remove these pod annotations: ' +
-        variables.addedOrChanged.join(', ')
+        variables.addedOrChanged.join(', ') +
+        '. To allow this, set spec.cni.annotationProtection to Disabled on the Installation, or delete this policy on installs without the operator.'
     - expression: "variables.removed.size() == 0 || variables.canDeletePolicy"
       reason: Forbidden
-      message: "Only Calico may set, change or remove these pod annotations"
+      message: "Only Calico may set, change or remove these pod annotations. To allow this, set spec.cni.annotationProtection to Disabled on the Installation, or delete this policy on installs without the operator."
       messageExpression: >-
         'Only Calico may set, change or remove these pod annotations: ' +
-        variables.removed.join(', ')
+        variables.removed.join(', ') +
+        '. To allow this, set spec.cni.annotationProtection to Disabled on the Installation, or delete this policy on installs without the operator.'
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

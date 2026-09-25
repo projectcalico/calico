@@ -493,7 +493,8 @@ rules:
       - list
       - watch
   # The operator manages ValidatingAdmissionPolicy resources protecting built-in
-  # Calico tiers (e.g. protect-builtin-tiers) when serving v3 CRDs (k8s 1.30+).
+  # Calico tiers (e.g. protect-builtin-tiers) when serving v3 CRDs, and the Calico
+  # CNI plugin's pod annotations (k8s 1.30+).
   - apiGroups:
       - admissionregistration.k8s.io
     resources:

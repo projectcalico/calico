@@ -82,6 +82,7 @@ const (
 	cniPluginUser       = "system:serviceaccount:calico-system:calico-cni-plugin"
 	tenantUser          = "tenant-editor"
 	cniAnnotationDenial = "Only Calico may set, change or remove these pod annotations"
+	cniAnnotationHint   = "set spec.cni.annotationProtection to Disabled"
 	policyName          = "protect-cni-annotations.projectcalico.org"
 	podWritePath        = "pods"
 	podStatusWritePath  = "pods/status"
@@ -181,6 +182,12 @@ func TestProtectCNIAnnotations_PolicyShape(t *testing.T) {
 	for i, v := range policy.Spec.Validations {
 		if !strings.Contains(v.Message, cniAnnotationDenial) {
 			t.Errorf("validation %d: expected message to contain %q, got %q", i, cniAnnotationDenial, v.Message)
+		}
+		if !strings.Contains(v.Message, cniAnnotationHint) {
+			t.Errorf("validation %d: expected message to contain %q, got %q", i, cniAnnotationHint, v.Message)
+		}
+		if !strings.Contains(v.MessageExpression, cniAnnotationHint) {
+			t.Errorf("validation %d: expected messageExpression to contain %q, got %q", i, cniAnnotationHint, v.MessageExpression)
 		}
 		if v.MessageExpression != "" && !strings.Contains(v.MessageExpression, cniAnnotationDenial) {
 			t.Errorf("validation %d: expected messageExpression to contain %q, got %q", i, cniAnnotationDenial, v.MessageExpression)
@@ -620,6 +627,9 @@ func expectRefused(t *testing.T, err error, key string) {
 	}
 	if !strings.Contains(err.Error(), key) {
 		t.Fatalf("expected the refusal to name %q, got: %v", key, err)
+	}
+	if !strings.Contains(err.Error(), cniAnnotationHint) {
+		t.Fatalf("expected the refusal to say how to allow the write, got: %v", err)
 	}
 }
 
