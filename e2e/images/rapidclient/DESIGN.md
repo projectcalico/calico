@@ -223,7 +223,7 @@ locally under the same `:latest` tag and loads it onto its nodes, where
 - **kind** (`e2e-test-bpf`, the sig-calico BPF lane that runs packet-size): builds
   the image, `kind load docker-image`s it into the kind nodes, and `docker load`s
   it into the external node's inner docker daemon (a `dind` container). The non-BPF
-  `e2e-test` lane (`kind.yaml` focus `Conformance && sig-calico`) does
+  `e2e-test` lane (`kind/conformance.yaml` focus `Conformance && sig-calico`) does
   not run packet-size, and the CNP lane uses a separate test binary, so only
   `e2e-test-bpf` is wired.
 

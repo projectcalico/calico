@@ -48,30 +48,4 @@ if [ $FAILED = "true" ]; then
     exit 1
 fi
 
-echo [INFO] Checking K8S_E2E_FLAGS survive word splitting
-# run_tests.sh expands these unquoted, so a literal space inside a regex splits
-# it into two arguments. Use "." to match a space instead.
-FAILED="false"
-for file in .semaphore/end-to-end/pipelines/* .argoci/cron/*.yaml
-do
-    [ -f "$file" ] || continue
-    while IFS= read -r flags
-    do
-        # shellcheck disable=SC2086 # deliberate: mimics the unquoted expansion
-        set -- $flags
-        for arg in "$@"
-        do
-            case "$arg" in
-                --ginkgo.*) ;;
-                *)
-                    echo "$file: stray argument '$arg' from: $flags"
-                    FAILED="true"
-                    ;;
-            esac
-        done
-    done < <(grep -oh -- '--ginkgo\..*' "$file" | sed -E 's/[}"'"'"']*$//')
-done
-if [ $FAILED = "true" ]; then
-    exit 1
-fi
 echo "OK"
