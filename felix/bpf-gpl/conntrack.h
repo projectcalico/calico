@@ -115,7 +115,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 	bool syn = false;
 	__u64 now;
 
-	if (ct_ctx->proto == IPPROTO_TCP) {
+	if (ct_ctx->proto == IPPROTO_TCP && !(ctx->state->flags & CALI_ST_NO_L4_NAT)) {
 		seq = tcp_hdr(ctx)->seq;
 		syn = tcp_hdr(ctx)->syn;
 	}
@@ -697,19 +697,20 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 	};
 	struct ct_lookup_ctx *ct_ctx = &ct_lookup_ctx;
 
-	switch (STATE->ip_proto) {
-	case IPPROTO_TCP:
+	/* A non-first fragment carries no TCP header to track. */
+	bool has_tcp_hdr = STATE->ip_proto == IPPROTO_TCP && !(STATE->flags & CALI_ST_NO_L4_NAT);
+
+	if (has_tcp_hdr) {
 		if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short");
 			bpf_exit(TC_ACT_SHOT);
 		}
 		ct_lookup_ctx.tcp = tcp_hdr(ctx);
-		break;
 	}
 
 	__u8 proto_orig = STATE->ip_proto;
-	struct tcphdr *tcp_header = STATE->ip_proto == IPPROTO_TCP ? tcp_hdr(ctx) : NULL;
+	struct tcphdr *tcp_header = has_tcp_hdr ? tcp_hdr(ctx) : NULL;
 	bool related = false;
 
 	CALI_CT_DEBUG("lookup from " IP_FMT ":%d", debug_ip(STATE->ip_src), STATE->sport);

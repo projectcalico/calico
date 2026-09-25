@@ -1709,7 +1709,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 		}
 	}
 
-	if (state->ip_proto == IPPROTO_TCP) {
+	if (state->ip_proto == IPPROTO_TCP && !(state->flags & CALI_ST_NO_L4_NAT)) {
 		if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short for TCP: DROP");
