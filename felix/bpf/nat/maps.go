@@ -203,17 +203,19 @@ func FrontendKeyFromBytes(b []byte) FrontendKeyInterface {
 }
 
 const (
-	NATFlgExternalLocal = 0x1
-	NATFlgInternalLocal = 0x2
-	NATFlgExclude       = 0x4
-	NATFlgMaglev        = 0x8
+	NATFlgExternalLocal     = 0x1
+	NATFlgInternalLocal     = 0x2
+	NATFlgExclude           = 0x4
+	NATFlgMaglev            = 0x8
+	NATFlgNoBackendForward = 0x10
 )
 
 var flgTostr = map[int]string{
-	NATFlgExternalLocal: "external-local",
-	NATFlgInternalLocal: "internal-local",
-	NATFlgExclude:       "nat-exclude",
-	NATFlgMaglev:        "maglev",
+	NATFlgExternalLocal:     "external-local",
+	NATFlgInternalLocal:     "internal-local",
+	NATFlgExclude:           "nat-exclude",
+	NATFlgMaglev:            "maglev",
+	NATFlgNoBackendForward: "no-backend-forward",
 }
 
 type FrontendValue [frontendValueSize]byte
