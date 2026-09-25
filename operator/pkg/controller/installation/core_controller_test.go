@@ -3043,6 +3043,33 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 		Expect(deletedNames).To(HaveKey("stale-binding"))
 	})
 
+	It("should leave the policies over Kubernetes resources alone", func() {
+		k8sVAP := &admissionregistrationv1.ValidatingAdmissionPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "protect-cni-annotations.projectcalico.org",
+				Labels: map[string]string{admission.ManagedVAPLabel: admission.ManagedK8sVAPLabelValue},
+			},
+		}
+
+		r = ReconcileInstallation{
+			ext: coreExtensions.Installation(),
+			opts: options.ControllerOptions{
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1),
+			},
+			client: clientFor(k8sVAP),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
+				return componentHandler
+			},
+		}
+
+		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(componentHandler.objectsToDelete).To(BeEmpty())
+	})
+
 	It("should create nothing for a variant that ships no policies", func() {
 		r = ReconcileInstallation{
 			ext: coreExtensions.Installation(),
@@ -3066,6 +3093,161 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 		Expect(componentHandler.objectsToCreate).To(BeEmpty())
 	})
 
+})
+
+var _ = Describe("updateK8sValidatingAdmissionPolicies", func() {
+	const policyName = "protect-cni-annotations.projectcalico.org"
+
+	var (
+		ctx              context.Context
+		cancel           context.CancelFunc
+		scheme           *runtime.Scheme
+		mockStatus       *status.MockStatus
+		componentHandler *fakeComponentHandler
+		log              logr.Logger
+		installation     *operator.Installation
+	)
+
+	managedVAP := func(name, labelValue string) *admissionregistrationv1.ValidatingAdmissionPolicy {
+		return &admissionregistrationv1.ValidatingAdmissionPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   name,
+				Labels: map[string]string{admission.ManagedVAPLabel: labelValue},
+			},
+		}
+	}
+
+	managedVAPB := func(name, labelValue string) *admissionregistrationv1.ValidatingAdmissionPolicyBinding {
+		return &admissionregistrationv1.ValidatingAdmissionPolicyBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   name,
+				Labels: map[string]string{admission.ManagedVAPLabel: labelValue},
+			},
+		}
+	}
+
+	// reconcilerFor returns a reconciler that neither uses v3 CRDs nor manages CRDs, since this
+	// path must run regardless of either.
+	reconcilerFor := func(vapVersion string, initial ...client.Object) ReconcileInstallation {
+		m := map[schema.GroupKind]string{}
+		if vapVersion != "" {
+			m[admission.ValidatingPolicyGroupKind] = vapVersion
+		}
+		return ReconcileInstallation{
+			ext: coreExtensions.Installation(),
+			opts: options.ControllerOptions{
+				APIDiscovery: discovery.NewStaticAPIDiscovery(m),
+			},
+			client: ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(initial...).Build(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
+				return componentHandler
+			},
+		}
+	}
+
+	names := func(objs []client.Object) []string {
+		var out []string
+		for _, obj := range objs {
+			out = append(out, obj.GetName())
+		}
+		return out
+	}
+
+	BeforeEach(func() {
+		log = logr.Discard()
+		ctx, cancel = context.WithCancel(context.Background())
+
+		scheme = runtime.NewScheme()
+		Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
+		Expect(operator.SchemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+		Expect(admissionregistrationv1.SchemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+		Expect(admissionregistrationv1alpha1.SchemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+		Expect(admissionv1beta1.SchemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+
+		mockStatus = &status.MockStatus{}
+		mockStatus.On("SetDegraded", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return()
+
+		componentHandler = newFakeComponentHandler()
+		enabled := operator.AnnotationProtectionEnabled
+		installation = &operator.Installation{
+			ObjectMeta: metav1.ObjectMeta{Name: "default"},
+			Spec: operator.InstallationSpec{
+				Variant: operator.Calico,
+				CNI: &operator.CNISpec{
+					Type:                 operator.PluginCalico,
+					AnnotationProtection: &enabled,
+				},
+			},
+		}
+	})
+
+	AfterEach(func() {
+		cancel()
+	})
+
+	It("should create the CNI annotation policy without v3 CRDs or CRD management", func() {
+		r := reconcilerFor(admission.VersionV1)
+
+		Expect(r.updateK8sValidatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(names(componentHandler.objectsToCreate)).To(ConsistOf(policyName, policyName))
+
+		var vapCount, vapbCount int
+		for _, obj := range componentHandler.objectsToCreate {
+			switch obj.(type) {
+			case *admissionregistrationv1.ValidatingAdmissionPolicy:
+				vapCount++
+			case *admissionregistrationv1.ValidatingAdmissionPolicyBinding:
+				vapbCount++
+			}
+			Expect(obj.GetLabels()).To(HaveKeyWithValue(admission.ManagedVAPLabel, admission.ManagedK8sVAPLabelValue))
+		}
+		Expect(vapCount).To(Equal(1))
+		Expect(vapbCount).To(Equal(1))
+		Expect(componentHandler.objectsToDelete).To(BeEmpty())
+	})
+
+	It("should remove the policy when annotation protection is disabled", func() {
+		disabled := operator.AnnotationProtectionDisabled
+		installation.Spec.CNI.AnnotationProtection = &disabled
+		r := reconcilerFor(admission.VersionV1,
+			managedVAP(policyName, admission.ManagedK8sVAPLabelValue),
+			managedVAPB(policyName, admission.ManagedK8sVAPLabelValue))
+
+		Expect(r.updateK8sValidatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(componentHandler.objectsToCreate).To(BeEmpty())
+		Expect(names(componentHandler.objectsToDelete)).To(ConsistOf(policyName, policyName))
+	})
+
+	It("should remove the policy when the CNI plugin is not Calico", func() {
+		installation.Spec.CNI = &operator.CNISpec{Type: operator.PluginAmazonVPC}
+		r := reconcilerFor(admission.VersionV1,
+			managedVAP(policyName, admission.ManagedK8sVAPLabelValue),
+			managedVAPB(policyName, admission.ManagedK8sVAPLabelValue))
+
+		Expect(r.updateK8sValidatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(componentHandler.objectsToCreate).To(BeEmpty())
+		Expect(names(componentHandler.objectsToDelete)).To(ConsistOf(policyName, policyName))
+	})
+
+	It("should leave the v3 policies alone", func() {
+		r := reconcilerFor(admission.VersionV1,
+			managedVAP("protect-builtin-tiers.projectcalico.org", admission.ManagedVAPLabelValue),
+			managedVAPB("protect-builtin-tiers.projectcalico.org", admission.ManagedVAPLabelValue))
+
+		Expect(r.updateK8sValidatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(names(componentHandler.objectsToCreate)).To(ConsistOf(policyName, policyName))
+		Expect(componentHandler.objectsToDelete).To(BeEmpty())
+	})
+
+	It("should skip without degrading when no served version exists", func() {
+		r := reconcilerFor("")
+
+		Expect(r.updateK8sValidatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(componentHandler.objectsToCreate).To(BeEmpty())
+		mockStatus.AssertNotCalled(GinkgoT(), "SetDegraded", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
 })
 
 // rejectingInstallation rejects the configuration, so the controller's degrade path

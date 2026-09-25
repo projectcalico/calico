@@ -1117,6 +1117,16 @@ type CNISpec struct {
 	// +optional
 	// +kubebuilder:validation:Enum=All;CalicoOnly
 	InstallMode *CNIInstallMode `json:"installMode,omitempty"`
+
+	// AnnotationProtection controls whether only Calico may set, change or remove the pod
+	// annotations the Calico CNI plugin writes, such as cni.projectcalico.org/podIP and
+	// cni.projectcalico.org/network-status. Calico programs pod networking from these
+	// annotations, so while protection is Disabled anyone who can update a pod can change the
+	// addresses, network or VLAN it is given. Only relevant when using the Calico CNI plugin.
+	// Default: Enabled
+	// +optional
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	AnnotationProtection *AnnotationProtectionType `json:"annotationProtection,omitempty"`
 }
 
 // CNIInstallMode controls which CNI plugin binaries the operator installs onto the host.
@@ -1130,6 +1140,14 @@ const (
 	// CNIInstallModeCalicoOnly installs only Calico's own CNI binaries; the host is
 	// expected to provide any required upstream plugins.
 	CNIInstallModeCalicoOnly CNIInstallMode = "CalicoOnly"
+)
+
+// AnnotationProtectionType controls whether the Calico CNI plugin's pod annotations are protected.
+type AnnotationProtectionType string
+
+const (
+	AnnotationProtectionEnabled  AnnotationProtectionType = "Enabled"
+	AnnotationProtectionDisabled AnnotationProtectionType = "Disabled"
 )
 
 // InstallationStatus defines the observed state of the Calico or Calico Enterprise installation.
