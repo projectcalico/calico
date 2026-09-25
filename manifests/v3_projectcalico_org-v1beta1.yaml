@@ -31170,6 +31170,8 @@ spec:
             - metadata
             - spec
           type: object
+      selectableFields:
+        - jsonPath: .spec.node
       served: true
       storage: true
       subresources: {}
