@@ -68,6 +68,9 @@ type routeManager struct {
 	dpConfig      Config
 	routeProtocol netlink.RouteProtocol
 
+	// routePriority is the metric to give the routes to workloads on other nodes.
+	routePriority int
+
 	// Log context
 	logCtx     *logrus.Entry
 	opRecorder logrusr.OpRecorder
@@ -108,12 +111,22 @@ func newRouteManager(
 		dpConfig:             dpConfig,
 		nlHandle:             nlHandle,
 		routeProtocol:        calculateRouteProtocol(dpConfig),
+		routePriority:        normalRoutePriority(dpConfig, ipVersion),
 		opRecorder:           opRecorder,
 		logCtx: logrus.WithFields(logrus.Fields{
 			"ipVersion":    ipVersion,
 			"tunnelDevice": tunnelDevice,
 		}),
 	}
+}
+
+// normalRoutePriority is the metric Felix gives a route to a workload on another node.  BIRD writes
+// the same value for those, so a route keeps its priority whichever component owns it.
+func normalRoutePriority(dpConfig Config, ipVersion uint8) int {
+	if ipVersion == 6 {
+		return dpConfig.IPv6NormalRoutePriority
+	}
+	return dpConfig.IPv4NormalRoutePriority
 }
 
 // ipamBlockDropRouteClass returns the route class to use for the blackhole "drop" routes programmed
@@ -426,6 +439,9 @@ func (m *routeManager) setTunnelRouteFunc(fn func(ip.CIDR, *proto.RouteUpdate) *
 	m.tunnelRouteFn = fn
 }
 
+// The blackholes keep the default priority.  BIRD emits them from its static protocol, and confd
+// only sets krt_metric on RTS_BGP routes, so BIRD's land at metric 0 too - and Felix has to share a
+// route key with them to replace one atomically.
 func blackholeRoutes(localIPAMBlocks map[string]*proto.RouteUpdate, proto netlink.RouteProtocol) []routetable.Target {
 	var rtt []routetable.Target
 	for dst := range localIPAMBlocks {
@@ -460,7 +476,8 @@ func (m *routeManager) noEncapRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routeta
 	noEncapRoute := routetable.Target{
 		Type: routetable.TargetTypeNoEncap,
 		RouteKey: routetable.RouteKey{
-			CIDR: cidr,
+			CIDR:     cidr,
+			Priority: m.routePriority,
 		},
 		GW:       ip.FromString(r.DstNodeIp),
 		Protocol: m.routeProtocol,
