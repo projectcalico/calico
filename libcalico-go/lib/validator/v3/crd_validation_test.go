@@ -1640,3 +1640,69 @@ func TestCRDValidation_BGPConfiguration_Communities(t *testing.T) {
 		},
 	})
 }
+
+// TestCRDValidation_ListTypeSet covers the x-kubernetes-list-type: set
+// uniqueness invariant, which the kube-apiserver enforces from the structural
+// schema rather than from OpenAPI or CEL.
+func TestCRDValidation_ListTypeSet(t *testing.T) {
+	runCRDTests(t, []crdTestCase{
+		{
+			name: "networkSet with distinct nets passes",
+			obj: &apiv3.NetworkSet{
+				ObjectMeta: metav1.ObjectMeta{Name: "netset", Namespace: "default"},
+				Spec: apiv3.NetworkSetSpec{
+					Nets: []string{"10.0.0.1/32", "10.0.0.2/32"},
+				},
+			},
+		},
+		{
+			name: "networkSet with a repeated net fails",
+			obj: &apiv3.NetworkSet{
+				ObjectMeta: metav1.ObjectMeta{Name: "netset", Namespace: "default"},
+				Spec: apiv3.NetworkSetSpec{
+					Nets: []string{"10.0.0.1/32", "10.0.0.1/32"},
+				},
+			},
+			errSubstr: `Duplicate value: "10.0.0.1/32"`,
+		},
+		{
+			name: "globalNetworkSet with a repeated net fails",
+			obj: &apiv3.GlobalNetworkSet{
+				ObjectMeta: metav1.ObjectMeta{Name: "gnetset"},
+				Spec: apiv3.GlobalNetworkSetSpec{
+					Nets: []string{"10.0.0.0/8", "10.0.0.0/8"},
+				},
+			},
+			errSubstr: `Duplicate value: "10.0.0.0/8"`,
+		},
+		{
+			name: "entity rule with a repeated net fails",
+			obj: &apiv3.GlobalNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "gnp"},
+				Spec: apiv3.GlobalNetworkPolicySpec{
+					Selector: "all()",
+					Ingress: []apiv3.Rule{
+						{
+							Action: apiv3.Allow,
+							Source: apiv3.EntityRule{
+								Nets: []string{"10.0.0.0/8", "10.0.0.0/8"},
+							},
+						},
+					},
+				},
+			},
+			errSubstr: `Duplicate value: "10.0.0.0/8"`,
+		},
+		{
+			name: "ipPool with a repeated allowedUse fails",
+			obj: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "pool"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:        "192.168.0.0/16",
+					AllowedUses: []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseWorkload},
+				},
+			},
+			errSubstr: `Duplicate value: "Workload"`,
+		},
+	})
+}
