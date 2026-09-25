@@ -16,10 +16,13 @@ package commands
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
+	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
 // Replace maps to ActionUpdate, which reports failures in results.Err rather
@@ -63,6 +66,93 @@ func TestReportReplaceResults(t *testing.T) {
 				t.Fatalf("expected no error, got %v", err)
 			}
 			if tc.wantInErr != "" && !strings.Contains(err.Error(), tc.wantInErr) {
+				t.Errorf("error %q should contain %q", err, tc.wantInErr)
+			}
+		})
+	}
+}
+
+// TestValidateCommand drives the command tree rather than calling the
+// validator directly, so it covers the wiring that turns CRD validation on for
+// an offline validate.
+func TestValidateCommand(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		manifest  string
+		wantInErr string
+	}{
+		{
+			name: "duplicate networkSet address is rejected",
+			manifest: `apiVersion: projectcalico.org/v3
+kind: NetworkSet
+metadata:
+  name: dup
+  namespace: default
+spec:
+  nets:
+  - 10.0.0.1/32
+  - 10.0.0.1/32
+`,
+			wantInErr: `Duplicate value: "10.0.0.1/32"`,
+		},
+		{
+			name: "distinct networkSet addresses are accepted",
+			manifest: `apiVersion: projectcalico.org/v3
+kind: NetworkSet
+metadata:
+  name: distinct
+  namespace: default
+spec:
+  nets:
+  - 10.0.0.1/32
+  - 10.0.0.2/32
+`,
+		},
+		{
+			name: "policy failing a CEL rule is rejected",
+			manifest: `apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: bad-icmp
+spec:
+  selector: all()
+  ingress:
+  - action: Allow
+    protocol: ICMP
+    icmp:
+      code: 1
+`,
+			wantInErr: "ICMP code specified without an ICMP type",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// The registry is process-wide, so clear it first to prove the
+			// command is what enables CRD validation.
+			validator.SetCRDValidationEnabled(false)
+			t.Cleanup(func() {
+				validator.SetCRDValidationEnabled(false)
+			})
+
+			path := filepath.Join(t.TempDir(), "resource.yaml")
+			if err := os.WriteFile(path, []byte(tc.manifest), 0o644); err != nil {
+				t.Fatalf("failed to write manifest: %v", err)
+			}
+
+			cmd := NewCommand()
+			cmd.SetArgs([]string{"validate", "-f", path})
+			err := cmd.Execute()
+
+			if tc.wantInErr == "" {
+				if err != nil {
+					t.Fatalf("expected the resource to validate, got %v", err)
+				}
+				return
+			}
+
+			if err == nil {
+				t.Fatal("expected a validation error, got nil")
+			}
+			if !strings.Contains(err.Error(), tc.wantInErr) {
 				t.Errorf("error %q should contain %q", err, tc.wantInErr)
 			}
 		})
