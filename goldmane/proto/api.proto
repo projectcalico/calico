@@ -428,6 +428,17 @@ message Flow {
   // NumConnectionsLive tracks the total number of still active connections recorded for this Flow. It counts each
   // connection that matches the FlowKey that was active at this Flow's EndTime.
   int64 num_connections_live = 12;
+
+  // SourceIps contains the set of distinct source IP addresses observed for the connections aggregated
+  // into this Flow. Because a single FlowKey aggregates traffic across many individual connections (and
+  // across nodes and time), this is a set rather than a single value. The list is bounded: at most a
+  // configurable maximum number of addresses are retained per Flow to cap memory and wire size. When the
+  // limit is exceeded, addresses are dropped (the set is best-effort, not exhaustive).
+  repeated string source_ips = 13;
+
+  // DestIps contains the set of distinct destination IP addresses observed for the connections aggregated
+  // into this Flow. As with source_ips, this is a bounded, best-effort set rather than a single value.
+  repeated string dest_ips = 14;
 }
 
 message PolicyTrace {
