@@ -564,6 +564,9 @@ func (c *windowsComponent) windowsEnvVars() []corev1.EnvVar {
 			Value: "true",
 		})
 	}
+	if cni != nil && cni.IPAM != nil {
+		windowsEnv = append(windowsEnv, corev1.EnvVar{Name: "CALICO_IPAM_TYPE", Value: string(cni.IPAM.Type)})
+	}
 
 	windowsEnv = append(windowsEnv, corev1.EnvVar{Name: "CALICO_NETWORKING_BACKEND", Value: getWindowsBackend(c.cfg.Installation)})
 

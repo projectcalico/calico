@@ -1570,6 +1570,9 @@ func (c *nodeComponent) nodeEnvVars() []corev1.EnvVar {
 			Value: "true",
 		})
 	}
+	if cni != nil && cni.IPAM != nil {
+		nodeEnv = append(nodeEnv, corev1.EnvVar{Name: "CALICO_IPAM_TYPE", Value: string(cni.IPAM.Type)})
+	}
 
 	// Configure whether or not BGP should be enabled.
 	if !bgpEnabled(c.cfg.Installation) {
