@@ -49,9 +49,9 @@ var _ = Describe("Namespace rendering tests", func() {
 		namespace := rtest.GetResource(resources, "calico-system", "", "", "v1", "Namespace").(*corev1.Namespace)
 
 		Expect(namespace.Labels["name"]).To(Equal("calico-system"))
-		Expect(namespace.GetLabels()).NotTo(ContainElement("openshift.io/run-level"))
-		Expect(namespace.GetLabels()).NotTo(ContainElement("control-plane"))
-		Expect(namespace.GetAnnotations()).NotTo(ContainElement("openshift.io/node-selector"))
+		Expect(namespace.GetLabels()).NotTo(HaveKey("openshift.io/run-level"))
+		Expect(namespace.GetLabels()).NotTo(HaveKey("control-plane"))
+		Expect(namespace.GetAnnotations()).NotTo(HaveKey("openshift.io/node-selector"))
 	})
 
 	It("should render a namespace for openshift", func() {
@@ -68,7 +68,7 @@ var _ = Describe("Namespace rendering tests", func() {
 
 		namespace := rtest.GetResource(resources, "calico-system", "", "", "v1", "Namespace").(*corev1.Namespace)
 		Expect(namespace.GetLabels()["openshift.io/run-level"]).To(Equal("0"))
-		Expect(namespace.GetLabels()).NotTo(ContainElement("control-plane"))
+		Expect(namespace.GetLabels()).NotTo(HaveKey("control-plane"))
 		Expect(namespace.GetAnnotations()["openshift.io/node-selector"]).To(Equal(""))
 		Expect(namespace.GetAnnotations()["security.openshift.io/scc.podSecurityLabelSync"]).To(Equal("false"))
 	})
@@ -85,7 +85,7 @@ var _ = Describe("Namespace rendering tests", func() {
 
 		rtest.ExpectResources(resources, expectedCreateResources)
 		namespace := rtest.GetResource(resources, "calico-system", "", "", "v1", "Namespace").(*corev1.Namespace)
-		Expect(namespace.GetLabels()).NotTo(ContainElement("openshift.io/run-level"))
+		Expect(namespace.GetLabels()).NotTo(HaveKey("openshift.io/run-level"))
 		Expect(namespace.GetLabels()["control-plane"]).To(Equal("true"))
 	})
 
@@ -97,7 +97,7 @@ var _ = Describe("Namespace rendering tests", func() {
 		Expect(len(resources)).To(Equal(2))
 		rtest.ExpectResourceTypeAndObjectMetadata(resources[0], "calico-system", "", "", "v1", "Namespace")
 		meta := resources[0].(metav1.ObjectMetaAccessor).GetObjectMeta()
-		Expect(meta.GetLabels()).NotTo(ContainElement("openshift.io/run-level"))
+		Expect(meta.GetLabels()).NotTo(HaveKey("openshift.io/run-level"))
 		Expect(meta.GetLabels()["control-plane"]).To(Equal("true"))
 		rtest.ExpectResourceTypeAndObjectMetadata(resources[1], "tigera-operator-secrets", "calico-system", "rbac.authorization.k8s.io", "v1", "RoleBinding")
 	})
@@ -113,7 +113,7 @@ var _ = Describe("Namespace rendering tests", func() {
 		Expect(len(resources)).To(Equal(2))
 		rtest.ExpectResourceTypeAndObjectMetadata(resources[0], "calico-system", "", "", "v1", "Namespace")
 		meta := resources[0].(metav1.ObjectMetaAccessor).GetObjectMeta()
-		Expect(meta.GetLabels()).NotTo(ContainElement("openshift.io/run-level"))
+		Expect(meta.GetLabels()).NotTo(HaveKey("openshift.io/run-level"))
 		Expect(meta.GetLabels()["control-plane"]).To(Equal("true"))
 		rtest.ExpectResourceTypeAndObjectMetadata(resources[1], "tigera-operator-secrets", "calico-system", "rbac.authorization.k8s.io", "v1", "RoleBinding")
 	})
@@ -129,8 +129,8 @@ var _ = Describe("Namespace rendering tests", func() {
 		Expect(len(resources)).To(Equal(2))
 		rtest.ExpectResourceTypeAndObjectMetadata(resources[0], "calico-system", "", "", "v1", "Namespace")
 		meta := resources[0].(metav1.ObjectMetaAccessor).GetObjectMeta()
-		Expect(meta.GetLabels()).NotTo(ContainElement("openshift.io/run-level"))
-		Expect(meta.GetLabels()).NotTo(ContainElement("control-plane"))
+		Expect(meta.GetLabels()).NotTo(HaveKey("openshift.io/run-level"))
+		Expect(meta.GetLabels()).NotTo(HaveKey("control-plane"))
 		rtest.ExpectResourceTypeAndObjectMetadata(resources[1], "tigera-operator-secrets", "calico-system", "rbac.authorization.k8s.io", "v1", "RoleBinding")
 	})
 })
