@@ -176,6 +176,23 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 	return 0;
 }
 
+/* skb_refresh_validate_ptrs_l4 is skb_refresh_validate_ptrs for UDP_SIZE bytes of
+ * the next header, except for a non-first IPv4 fragment. That carries no L4 header,
+ * only a piece of the payload that can be shorter than any L4 header, so only the
+ * IP header is validated.
+ */
+static CALI_BPF_INLINE int skb_refresh_validate_ptrs_l4(struct cali_tc_ctx *ctx)
+{
+#ifndef IPVER6
+	int err = skb_refresh_validate_ptrs(ctx, 0);
+
+	if (err || ip_is_nonfirst_frag(ip_hdr(ctx))) {
+		return err;
+	}
+#endif
+	return skb_refresh_validate_ptrs(ctx, UDP_SIZE);
+}
+
 /* bpf_load_bytes copies len bytes of packet data at offset into buf, using the
  * loader helper appropriate to the program type.
  */
