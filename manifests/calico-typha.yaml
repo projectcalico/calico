@@ -12597,6 +12597,15 @@ rules:
     verbs:
       - create
       - update
+  # calico/node creates the default IPAMConfiguration at startup, even when
+  # Calico IPAM is not in use.
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
+    resources:
+      - ipamconfigurations
+      - ipamconfigs
+    verbs:
+      - get
+      - create
   # These permissions are required for Calico CNI to perform IPAM allocations.
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
@@ -12609,15 +12618,6 @@ rules:
       - create
       - update
       - delete
-  # The CNI plugin and calico/node need to be able to create a default
-  # IPAMConfiguration
-  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
-    resources:
-      - ipamconfigurations
-      - ipamconfigs
-    verbs:
-      - get
-      - create
   # Block affinities must also be watchable by confd for route aggregation.
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
