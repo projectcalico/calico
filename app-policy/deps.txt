@@ -21,7 +21,7 @@ github.com/fxamacker/cbor/v2 v2.9.0
 github.com/go-ini/ini v1.67.0
 github.com/go-kit/log v0.2.1
 github.com/go-logfmt/logfmt v0.6.0
-github.com/go-logr/logr v1.4.3
+github.com/go-logr/logr v1.4.4
 github.com/go-openapi/jsonpointer v0.21.0
 github.com/go-openapi/jsonreference v0.20.2
 github.com/go-openapi/swag v0.23.0
@@ -36,7 +36,7 @@ github.com/google/gnostic-models v0.7.0
 github.com/google/go-cmp v0.7.0
 github.com/google/uuid v1.6.0
 github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
-github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.2
+github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0
 github.com/jinzhu/copier v0.4.0
 github.com/josharian/intern v1.0.0
 github.com/josharian/native v1.1.0
@@ -75,8 +75,8 @@ github.com/x448/float16 v0.8.4
 go.etcd.io/etcd/api/v3 v3.6.5
 go.etcd.io/etcd/client/pkg/v3 v3.6.5
 go.etcd.io/etcd/client/v3 v3.6.5
-go.opentelemetry.io/otel v1.44.0
-go.opentelemetry.io/otel/trace v1.44.0
+go.opentelemetry.io/otel v1.45.0
+go.opentelemetry.io/otel/trace v1.45.0
 go.uber.org/multierr v1.11.0
 go.uber.org/zap v1.27.0
 go.yaml.in/yaml/v2 v2.4.3
@@ -93,8 +93,8 @@ golang.org/x/time v0.15.0
 golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173
 golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
 google.golang.org/genproto v0.0.0-20260128011058-8636f8732409
-google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa
-google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa
+google.golang.org/genproto/googleapis/api v0.0.0-20260720211330-0afa2a65878a
+google.golang.org/genproto/googleapis/rpc v0.0.0-20260720211330-0afa2a65878a
 google.golang.org/grpc v1.83.2
 google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 gopkg.in/evanphx/json-patch.v4 v4.13.0
