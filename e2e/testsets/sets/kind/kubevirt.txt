@@ -8,4 +8,3 @@
 [sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresMockVirt] [Category:Networking] KubeVirt live migration (MockVirt) should converge iBGP routes after live migration
 [sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresMockVirt] [Category:Networking] KubeVirt live migration (MockVirt) should enforce NetworkPolicy after live migration
 [sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresMockVirt] [Category:Networking] KubeVirt live migration (MockVirt) should not have /32 host route on target node after a migration timeout
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresMockVirt] [Category:Networking] KubeVirt live migration (MockVirt) should prefer the local workload route on the migration target node
