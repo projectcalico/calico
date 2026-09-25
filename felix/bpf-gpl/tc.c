@@ -84,6 +84,8 @@ static CALI_BPF_INLINE int state_fill_from_l4(struct cali_tc_ctx *ctx, bool deca
 		if (!ip_is_first_frag(ip_hdr(ctx))) {
 			struct frags4_fwd_value *frag_ct_val = frags4_lookup_ct(ctx);
 			if (frag_ct_val) {
+				/* No L4 header; clear what the previous packet left. */
+				__builtin_memset(ctx->scratch->l4, 0, TCP_SIZE);
 				ctx->state->sport = frag_ct_val->sport;
 				ctx->state->dport = frag_ct_val->dport;
 				CALI_DEBUG("IP FRAG: hit ports %d -> %d", ctx->state->sport, ctx->state->dport);
@@ -2185,6 +2187,8 @@ int calico_tc_skb_send_tcp_rst(struct __sk_buff *skb)
 	}
 
 	tc_state_fill_from_iphdr(ctx);
+	/* The reply is not a fragment even if the packet it answers was. */
+	ctx->state->flags &= ~CALI_ST_FIRST_FRAG;
 
 	return forward_or_drop(ctx);
 }
@@ -2234,6 +2238,8 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 
 	tc_state_fill_from_iphdr(ctx);
 	ctx->state->sport = ctx->state->dport = 0;
+	/* The reply is not a fragment even if the packet it answers was. */
+	ctx->state->flags &= ~CALI_ST_FIRST_FRAG;
 	return forward_or_drop(ctx);
 deny:
 	(void)fib_flags;

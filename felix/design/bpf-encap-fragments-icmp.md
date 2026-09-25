@@ -160,6 +160,9 @@ The algorithm:
   ports and the disposition reached by policy. Subsequent fragments
   match on `(src_ip, dst_ip, ip_id)` and are allowed through without
   policy re-evaluation.
+  This holds for every protocol, ICMP included. An ICMP error or TCP
+  RST that BPF sends in reply clears `CALI_ST_FIRST_FRAG`, so it
+  records no entry of its own.
 - If fragments arrive out of order, the program stores each fragment
   in the **fragment-reassembly** map (`cali_v4_frags`). Once all
   fragments are in, the program reassembles the packet in place and
