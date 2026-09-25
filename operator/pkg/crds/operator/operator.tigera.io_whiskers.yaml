@@ -65,6 +65,7 @@ spec:
                     - hostname
                   type: object
                 notifications:
+                  default: Enabled
                   description: |-
                     Default: Enabled
                     This setting enables calls to an external API to retrieve notification banner text in the Whisker UI.
