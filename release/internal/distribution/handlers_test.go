@@ -185,6 +185,36 @@ func TestS3CachePolicy(t *testing.T) {
 	})
 }
 
+func TestS3Filters(t *testing.T) {
+	t.Run("absent when unset", func(t *testing.T) {
+		f := &fakeRunner{}
+		if err := (S3{URI: "s3://b/x/", Runner: f}).Publish(context.Background(), srcPath(t, true)); err != nil {
+			t.Fatalf("Publish: %v", err)
+		}
+		if f.has(excludeFlag) || f.has(includeFlag) {
+			t.Errorf("args = %v, want no filters", f.args)
+		}
+	})
+
+	t.Run("exclude precedes include", func(t *testing.T) {
+		f := &fakeRunner{}
+		d := S3{URI: "s3://b/x/", Sync: true, Exclude: []string{"*"}, Include: []string{"dists/*"}, Runner: f}
+		if err := d.Publish(context.Background(), srcPath(t, true)); err != nil {
+			t.Fatalf("Publish: %v", err)
+		}
+		e, i := slices.Index(f.args, excludeFlag), slices.Index(f.args, includeFlag)
+		if e < 0 || i < 0 {
+			t.Fatalf("args = %v, want both filters", f.args)
+		}
+		if e > i {
+			t.Errorf("args = %v, want %s before %s", f.args, excludeFlag, includeFlag)
+		}
+		if got := f.valueAfter(includeFlag); got != "dists/*" {
+			t.Errorf("%s = %q, want dists/*", includeFlag, got)
+		}
+	})
+}
+
 func TestGCSSyncDeletesWhatTheSourceDropped(t *testing.T) {
 	f := &fakeRunner{}
 	d := GCS{URI: "gs://bucket/hash", Sync: true, Runner: f}
