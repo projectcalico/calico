@@ -1356,10 +1356,11 @@ func (r *CalicoManager) helmIndexUpload() distribution.Upload {
 		Source: charts.IndexFilePath(charts.IndexDir(r.uploadDir())),
 		Skip:   !r.helmCharts || !r.helmIndex,
 		Handler: distribution.S3{
-			URI:     r.s3URI(chartsDir),
-			Profile: r.awsProfile,
-			DryRun:  r.dryRun,
-			Runner:  r.runner,
+			URI:         r.s3URI(chartsDir),
+			Profile:     r.awsProfile,
+			CachePolicy: distribution.MutableCachePolicy,
+			DryRun:      r.dryRun,
+			Runner:      r.runner,
 		},
 	}
 }
