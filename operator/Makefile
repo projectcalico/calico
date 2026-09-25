@@ -35,11 +35,10 @@ $(HACK_BIN):
 
 PACKAGE_NAME = github.com/projectcalico/calico/operator
 
-# The image and arches the ci/cd common targets in lib.Makefile read. The operator
+# The image the ci/cd common targets in lib.Makefile read. The operator
 # publishes alongside the other Calico component images, so the registries come from
 # metadata.mk rather than an override here.
 BUILD_IMAGES    = operator
-ARCHES          = amd64 arm64 ppc64le s390x
 BINARY_NAME    ?= operator
 
 include ../metadata.mk
@@ -77,9 +76,14 @@ CALICO_VERSION    ?= $(BRANCH_IMAGE_TAG)
 endif
 CALICO_REGISTRY   ?=
 CALICO_IMAGE_PATH ?=
+# Where the operator resolves its own image. Empty keeps the variant default.
+OPERATOR_IMAGE_REGISTRY ?=
+OPERATOR_IMAGE_PATH     ?=
 CALICO_LDFLAGS = -X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(CALICO_VERSION) \
                  -X $(PACKAGE_NAME)/pkg/components.calicoRegistry=$(CALICO_REGISTRY) \
-                 -X $(PACKAGE_NAME)/pkg/components.calicoImagePath=$(CALICO_IMAGE_PATH)
+                 -X $(PACKAGE_NAME)/pkg/components.calicoImagePath=$(CALICO_IMAGE_PATH) \
+                 -X $(PACKAGE_NAME)/pkg/components.operatorRegistry=$(OPERATOR_IMAGE_REGISTRY) \
+                 -X $(PACKAGE_NAME)/pkg/components.operatorImagePath=$(OPERATOR_IMAGE_PATH)
 
 # To update the Istio version, see "Updating the bundled version of Istio" in docs/common_tasks.md.
 ISTIO_HELM_REPO ?= https://istio-release.storage.googleapis.com/charts
@@ -93,12 +97,12 @@ istio_charts: $(ISTIO_CHART_FILES)
 
 $(ISTIO_RESOURCES_DIR)/%.tgz:
 	@echo "Downloading Istio chart $* version $(ISTIO_VERSION)..."
-	@curl -fsSL -o $@ $(ISTIO_HELM_REPO)/$*-$(ISTIO_VERSION).tgz
+	@$(call fetch_file,$(ISTIO_HELM_REPO)/$*-$(ISTIO_VERSION).tgz,$@)
 
 # To update the Envoy Gateway version, see "Updating the bundled version of
 # Envoy Gateway" in docs/common_tasks.md.
 ENVOY_GATEWAY_HELM_CHART ?= oci://docker.io/envoyproxy/gateway-helm
-ENVOY_GATEWAY_VERSION ?= v1.8.3
+ENVOY_GATEWAY_VERSION ?= v1.9.1
 ENVOY_GATEWAY_CHART = pkg/render/gatewayapi/gateway-helm.tgz
 
 $(ENVOY_GATEWAY_CHART): $(HACK_BIN)/helm-$(BUILDARCH)
@@ -126,12 +130,12 @@ $(HELM_BUILDARCH_VERSIONED_BINARY): | $(HACK_BIN)
 build: $(BINDIR)/$(BINARY_NAME)-$(ARCH)
 $(BINDIR)/$(BINARY_NAME)-$(ARCH): $(SRC_FILES) $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	mkdir -p $(BINDIR)
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-	sh -c '$(GIT_CONFIG_SSH) \
+	$(DOCKER_GO_BUILD_RECURSIVE) \
+	sh -c '$(GIT_CONFIG_SSH) CGO_ENABLED=$(CGO_ENABLED) \
 	go build -buildvcs=false -v -o $(BINDIR)/$(BINARY_NAME)-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) $(CALICO_LDFLAGS) -s -w" ./cmd/'
 
 OPERATOR_IMAGE_NAME = $(firstword $(BUILD_IMAGES))
-IMAGE_BUILD_MARKER  = operator_container-$(ARCH).created
+IMAGE_BUILD_MARKER  = $(OPERATOR_IMAGE_NAME)_container-$(ARCH).created
 
 .PHONY: image images
 image images: $(IMAGE_BUILD_MARKER)
@@ -200,33 +204,36 @@ ut: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	gotestsum --format testname --junitfile report/operator_ut.xml -- $(UT_DIR)/... $(GO_TEST_ARGS) $(GINKGO_FOCUS_ARG)'
 
 ## Run the functional tests against a local kind cluster.
-fv: kind-cluster-create deploy-crds load-container-images run-fvs kind-cluster-destroy
+fv: kind-cluster-create deploy-crds deploy-operator-rbac push-fv-images run-fvs kind-cluster-destroy
 run-fvs: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	-mkdir -p .go-pkg-cache report
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 	gotestsum --format testname --junitfile report/operator_fv.xml -- $(FV_DIR)/... $(GO_TEST_ARGS) -timeout $(FV_TEST_TIMEOUT) $(FV_LDFLAGS) $(GINKGO_FOCUS_ARG)'
 
-# The tag the FV suite's in-process operator resolves for the components below, and
-# loads them into kind under. Stamped into the test binary the same way a real build
-# stamps the operator.
-FV_IMAGE_TAG ?= $(CALICO_VERSION)
-FV_LDFLAGS    = -ldflags "-X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(FV_IMAGE_TAG)"
-FV_IMAGES     = calico/calico calico/node calico/whisker
+# The FV's in-process operator resolves its components here, stamped into the test
+# binary the same way a real build stamps the operator. kind-cluster-create points the
+# cluster's nodes at the same registry.
+FV_LDFLAGS = -ldflags "-X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(KIND_TEST_BUILD_TAG) \
+	-X $(PACKAGE_NAME)/pkg/components.calicoRegistry=$(KIND_IMAGE_REGISTRY) \
+	-X $(PACKAGE_NAME)/pkg/components.calicoImagePath=$(KIND_IMAGE_PATH)"
 
-# Prefer the images built from this commit, which CI restores from its cache before
-# the FV runs, and fall back to a pull for a local run that has none.
-load-container-images: $(KIND)
-	@for image in $(FV_IMAGES); do \
-		if docker image inspect $$image:latest-$(ARCH) >/dev/null 2>&1; then \
-			docker tag $$image:latest-$(ARCH) $$image:$(FV_IMAGE_TAG); \
-		else \
-			docker pull $$image:$(FV_IMAGE_TAG); \
-		fi; \
-		$(KIND) load docker-image --name $(KIND_NAME) $$image:$(FV_IMAGE_TAG); \
-	done
-	# Restart the Calico containers so they launch with the newly loaded code.
-	# TODO: We should be able to do this without restarting everything in kube-system.
-	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n kube-system --all
+# Every component the FV's operator installs has to be in the registry, including the
+# cni-plugins init container, or calico-node never leaves Init. FV_MARKER_<name> names
+# the build marker for an image that does not use <name>/.image.created-<arch>.
+FV_IMAGES = calico node whisker third-party-cni-plugins
+FV_MARKER_calico                  = cmd/calico/.image.created-$(ARCH)
+FV_MARKER_third-party-cni-plugins = third_party/cni-plugins/.cni-plugins.created-$(ARCH)
+
+.PHONY: push-fv-images
+push-fv-images: kind-registry-up $(addprefix push-fv-image-,$(FV_IMAGES))
+
+# Prefer the image built from this commit, which CI restores from its cache before the
+# FV runs, and build one for a local run that has none.
+push-fv-image-%:
+	@docker image inspect calico/$*:latest-$(ARCH) >/dev/null 2>&1 || \
+		$(MAKE) $(REPO_ROOT)/$(or $(FV_MARKER_$*),$*/.image.created-$(ARCH))
+	docker tag calico/$*:latest-$(ARCH) $(KIND_IMAGE_REGISTRY)/$(KIND_IMAGE_PATH)/$*:$(KIND_TEST_BUILD_TAG)
+	docker push $(KIND_IMAGE_REGISTRY)/$(KIND_IMAGE_PATH)/$*:$(KIND_TEST_BUILD_TAG)
 
 ## Deploy the CRDs the FVs need on top of the ones kind-cluster-create installs:
 ## every operator CRD, including the Enterprise-only kinds, plus prometheus.
@@ -242,6 +249,22 @@ deploy-crds: $(KUBECTL)
 
 create-tigera-operator-namespace: $(KUBECTL)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create ns tigera-operator
+
+## Apply the operator's ServiceAccount and RBAC, rendered from the chart that ships
+## them, so the FV's operator is bound by the same rules a real install grants it.
+OPERATOR_RBAC_TEMPLATES = \
+	02-serviceaccount-tigera-operator.yaml \
+	02-role-tigera-operator.yaml \
+	02-role-tigera-operator-secrets.yaml \
+	02-rolebinding-tigera-operator.yaml \
+	02-rolebinding-tigera-operator-secrets.yaml
+
+deploy-operator-rbac: $(KUBECTL) $(HELM_BUILDARCH_BINARY)
+	@export KUBECONFIG=$(KIND_KUBECONFIG) && \
+		$(KUBECTL) create ns tigera-operator --dry-run=client -o yaml | $(KUBECTL) apply -f - && \
+		$(HELM_BUILDARCH_BINARY) template ../charts/tigera-operator --namespace tigera-operator \
+			$(addprefix --show-only templates/tigera-operator/,$(OPERATOR_RBAC_TEMPLATES)) \
+		| $(KUBECTL) apply -f -
 
 ###############################################################################
 # Static checks
@@ -303,7 +326,8 @@ cd: image-all cd-common
 # rebuild rather than a retag of an image built for a different set of them.
 ## Build and tag the release images for the specified VERSION.
 release-build: var-require-all-VERSION check-release-image-tags
-	$(MAKE) clean image-all RELEASE=true
+	rm -f $(BINDIR)/$(BINARY_NAME)-* *.created $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
+	$(MAKE) image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 
 # The tag is compiled in, so a release that guessed it would ship an operator naming

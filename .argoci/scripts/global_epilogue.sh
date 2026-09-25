@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # global_epilogue.sh - ArgoCI e2e epilogue for OSS Calico.
 #
-# Ported from .semaphore/end-to-end/scripts/global_epilogue.sh, adapted for
+# Ported from the Semaphore equivalent (since deleted), adapted for
 # ArgoCI: artifacts via the bundled `artifact` shim (no Semaphore `cache`/
 # `test-results` CLIs), diags/destroy via bz. Best-effort throughout (|| true)
 # so teardown always runs. Sourced by the e2e-test template.

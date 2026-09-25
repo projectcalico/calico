@@ -52,6 +52,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/components"
 	"github.com/projectcalico/calico/operator/pkg/controller"
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
+	"github.com/projectcalico/calico/operator/pkg/controller/managedfields"
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
 	"github.com/projectcalico/calico/operator/pkg/controller/typhaautoscaler"
@@ -69,10 +70,10 @@ import (
 
 var errMismatchedError = fmt.Errorf("installation spec.kubernetesProvider 'DockerEnterprise' does not match auto-detected value 'OpenShift'")
 
-type fakeNamespaceMigration struct{}
+type fakeNamespaceMigration struct{ needsMigration bool }
 
 func (f *fakeNamespaceMigration) NeedsCoreNamespaceMigration(ctx context.Context) (bool, error) {
-	return false, nil
+	return f.needsMigration, nil
 }
 
 func (f *fakeNamespaceMigration) Run(ctx context.Context, log logr.Logger) error {
@@ -159,6 +160,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
+				fieldManager:        managedfields.New(c),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -697,6 +699,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
+				fieldManager:        managedfields.New(c),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -869,6 +872,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
+				fieldManager:        managedfields.New(c),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -1242,9 +1246,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			// This is only set on EKS / GKE.
 			Expect(fc.Spec.RouteTableRange).To(BeNil())
 
-			// Should set correct annoation and BPFEnabled field.
-			Expect(fc.Annotations).NotTo(BeNil())
-			Expect(fc.Annotations[render.BPFOperatorAnnotation]).To(Equal("false"))
+			// Should set the BPFEnabled field.
 			Expect(fc.Spec.BPFEnabled).NotTo(BeNil())
 			Expect(*fc.Spec.BPFEnabled).To(BeFalse())
 		})
@@ -1303,6 +1305,36 @@ var _ = Describe("Testing core-controller installation", func() {
 			bgpConfig := &v3.BGPConfiguration{}
 			err = c.Get(ctx, types.NamespacedName{Name: "default"}, bgpConfig)
 			Expect(err).Should(HaveOccurred())
+		})
+
+		It("should take both cluster routing values back when ClusterRoutingMode is removed", func() {
+			bird := operator.ClusterRoutingModeBIRD
+			cr.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{ClusterRoutingMode: &bird}
+			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			fc := &v3.FelixConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, fc)).NotTo(HaveOccurred())
+			Expect(fc.Spec.ProgramClusterRoutes).To(Equal(ptr.To("Disabled")))
+			bgpConfig := &v3.BGPConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, bgpConfig)).NotTo(HaveOccurred())
+			Expect(bgpConfig.Spec.ProgramClusterRoutes).To(Equal(ptr.To("Enabled")))
+
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, cr)).NotTo(HaveOccurred())
+			cr.Spec.CalicoNetwork.ClusterRoutingMode = nil
+			Expect(c.Update(ctx, cr)).NotTo(HaveOccurred())
+			_, err = r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			// Felix and BIRD have to give the routes up together.  One retracting alone leaves
+			// both programming the IPIP routes, which is worse than leaving both stale.
+			fc = &v3.FelixConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, fc)).NotTo(HaveOccurred())
+			Expect(fc.Spec.ProgramClusterRoutes).To(BeNil())
+			bgpConfig = &v3.BGPConfiguration{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, bgpConfig)).NotTo(HaveOccurred())
+			Expect(bgpConfig.Spec.ProgramClusterRoutes).To(BeNil())
 		})
 
 		It("should correctly patch FelixConfig and BGPConfig with ClusterRouteMode set to BIRD", func() {
@@ -1505,6 +1537,64 @@ var _ = Describe("Testing core-controller installation", func() {
 			Expect(*fc.Spec.BPFKubeProxyHealthzPort).To(Equal(12345))
 		})
 
+		It("should not set BPFKubeProxyHealthzPort while calico-node is still on an older version", func() {
+			// A calico-node DaemonSet is already running and the status reports no version
+			// yet, so nodes may predate the value.
+			createNodeDaemonSet()
+
+			network := operator.LinuxDataplaneBPF
+			cr.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{LinuxDataplane: &network}
+			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			fc := &v3.FelixConfiguration{}
+			err = c.Get(ctx, types.NamespacedName{Name: "default"}, fc)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			Expect(fc.Spec.BPFKubeProxyHealthzPort).To(BeNil())
+		})
+
+		It("should set BPFKubeProxyHealthzPort once calico-node reports the target version", func() {
+			createNodeDaemonSet()
+
+			network := operator.LinuxDataplaneBPF
+			cr.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{LinuxDataplane: &network}
+			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+
+			cr.Status.Variant = operator.Calico
+			cr.Status.CalicoVersion = components.CalicoRelease
+			Expect(c.Status().Update(ctx, cr)).NotTo(HaveOccurred())
+
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			fc := &v3.FelixConfiguration{}
+			err = c.Get(ctx, types.NamespacedName{Name: "default"}, fc)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			Expect(fc.Spec.BPFKubeProxyHealthzPort).NotTo(BeNil())
+			Expect(*fc.Spec.BPFKubeProxyHealthzPort).To(Equal(0))
+		})
+
+		It("should not set BPFKubeProxyHealthzPort while the kube-system migration is pending", func() {
+			// calico-node pods from the manifest install are still serving nodes out of
+			// kube-system, so the operator's own DaemonSet says nothing about them.
+			r.namespaceMigration = &fakeNamespaceMigration{needsMigration: true}
+
+			network := operator.LinuxDataplaneBPF
+			cr.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{LinuxDataplane: &network}
+			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			fc := &v3.FelixConfiguration{}
+			err = c.Get(ctx, types.NamespacedName{Name: "default"}, fc)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			Expect(fc.Spec.BPFKubeProxyHealthzPort).To(BeNil())
+		})
+
 		It("should set BPFEnabled to ture on FelixConfiguration if BPF is enabled on installation", func() {
 			createNodeDaemonSet()
 
@@ -1518,9 +1608,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			err = c.Get(ctx, types.NamespacedName{Name: "default"}, fc)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			// Should set correct annoation and BPFEnabled field.
-			Expect(fc.Annotations).NotTo(BeNil())
-			Expect(fc.Annotations[render.BPFOperatorAnnotation]).To(Equal("true"))
+			// Should set the BPFEnabled field.
 			Expect(fc.Spec.BPFEnabled).NotTo(BeNil())
 			Expect(*fc.Spec.BPFEnabled).To(BeTrue())
 		})
@@ -1536,9 +1624,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			err = c.Get(ctx, types.NamespacedName{Name: "default"}, fc)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			// Should set correct annoation and BPFEnabled field.
-			Expect(fc.Annotations).NotTo(BeNil())
-			Expect(fc.Annotations[render.BPFOperatorAnnotation]).To(Equal("true"))
+			// Should set the BPFEnabled field.
 			Expect(fc.Spec.BPFEnabled).NotTo(BeNil())
 			Expect(*fc.Spec.BPFEnabled).To(BeTrue())
 		})
@@ -1557,9 +1643,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			err = c.Get(ctx, types.NamespacedName{Name: "default"}, fc)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			// Should set correct annoation and BPFEnabled field.
-			Expect(fc.Annotations).NotTo(BeNil())
-			Expect(fc.Annotations[render.BPFOperatorAnnotation]).To(Equal("true"))
+			// Should set the BPFEnabled field.
 			Expect(fc.Spec.BPFEnabled).NotTo(BeNil())
 			Expect(*fc.Spec.BPFEnabled).To(BeTrue())
 
@@ -1576,9 +1660,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			err = c.Get(ctx, types.NamespacedName{Name: "default"}, fc)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			// Should set correct annoation and BPFEnabled field.
-			Expect(fc.Annotations).NotTo(BeNil())
-			Expect(fc.Annotations[render.BPFOperatorAnnotation]).To(Equal("false"))
+			// Should set the BPFEnabled field.
 			Expect(fc.Spec.BPFEnabled).NotTo(BeNil())
 			Expect(*fc.Spec.BPFEnabled).To(BeFalse())
 		})
@@ -1606,9 +1688,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			err = c.Get(ctx, types.NamespacedName{Name: "default"}, fc)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			// Should set correct annoation and BPFEnabled field.
-			Expect(fc.Annotations).NotTo(BeNil())
-			Expect(fc.Annotations[render.BPFOperatorAnnotation]).To(Equal("true"))
+			// Should set the BPFEnabled field.
 			Expect(fc.Spec.BPFEnabled).NotTo(BeNil())
 			Expect(*fc.Spec.BPFEnabled).To(BeTrue())
 		})
@@ -2181,6 +2261,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
+				fieldManager:        managedfields.New(c),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -2291,6 +2372,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				},
 				config:              nil, // there is no fake for config
 				client:              c,
+				fieldManager:        managedfields.New(c),
 				scheme:              scheme,
 				status:              mockStatus,
 				typhaAutoscaler:     typhaautoscaler.New(c, common.TyphaDeploymentName, fixedReplicaCounter(1), mockStatus),
@@ -2393,6 +2475,30 @@ func (f *fakeComponentHandler) CreateOrUpdateOrDelete(ctx context.Context, compo
 	return nil
 }
 
+var _ = Describe("allNodesRunTargetVersion", func() {
+	const targetVersion = "v3.32.0"
+
+	install := func(statusVariant operator.ProductVariant, statusVersion string) *operator.Installation {
+		return &operator.Installation{
+			Spec:   operator.InstallationSpec{Variant: operator.Calico},
+			Status: operator.InstallationStatus{Variant: statusVariant, CalicoVersion: statusVersion},
+		}
+	}
+
+	DescribeTable("deciding whether older calico-node pods may still be running",
+		func(install *operator.Installation, needNsMigration, nodeDSExists, expected bool) {
+			Expect(allNodesRunTargetVersion(install, needNsMigration, nodeDSExists, targetVersion)).To(Equal(expected))
+		},
+		Entry("fresh install, no DaemonSet yet", install("", ""), false, false, true),
+		Entry("migration pending, no DaemonSet yet", install("", ""), true, false, false),
+		Entry("migration pending alongside a DaemonSet", install(operator.Calico, targetVersion), true, true, false),
+		Entry("DaemonSet running, no version reported yet", install("", ""), false, true, false),
+		Entry("version upgrade in flight", install(operator.Calico, "v3.31.7"), false, true, false),
+		Entry("variant change in flight", install(operator.CalicoEnterprise, targetVersion), false, true, false),
+		Entry("target version rolled out", install(operator.Calico, targetVersion), false, true, true),
+	)
+})
+
 var _ = Describe("updateMutatingAdmissionPolicies", func() {
 	var (
 		ctx              context.Context
@@ -2452,16 +2558,17 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor()),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
 
 		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
-		Expect(componentHandler.objectsToCreate).To(HaveLen(4))
+		Expect(componentHandler.objectsToCreate).To(HaveLen(6))
 
 		var mapCount, mapbCount int
 		for _, obj := range componentHandler.objectsToCreate {
@@ -2474,8 +2581,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				Expect(obj.GetLabels()).To(HaveKeyWithValue(admission.ManagedMAPLabel, admission.ManagedMAPLabelValue))
 			}
 		}
-		Expect(mapCount).To(Equal(2))
-		Expect(mapbCount).To(Equal(2))
+		Expect(mapCount).To(Equal(3))
+		Expect(mapbCount).To(Equal(3))
 	})
 
 	It("should create v1beta1 MAPs when only v1beta1 is served", func() {
@@ -2486,16 +2593,17 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1Beta1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor()),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
 
 		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
-		Expect(componentHandler.objectsToCreate).To(HaveLen(4))
+		Expect(componentHandler.objectsToCreate).To(HaveLen(6))
 
 		var mapCount, mapbCount int
 		for _, obj := range componentHandler.objectsToCreate {
@@ -2506,8 +2614,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				mapbCount++
 			}
 		}
-		Expect(mapCount).To(Equal(2))
-		Expect(mapbCount).To(Equal(2))
+		Expect(mapCount).To(Equal(3))
+		Expect(mapbCount).To(Equal(3))
 	})
 
 	It("should create v1alpha1 MAPs when only v1alpha1 is served", func() {
@@ -2518,16 +2626,17 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1Alpha1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor()),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
 
 		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
-		Expect(componentHandler.objectsToCreate).To(HaveLen(4))
+		Expect(componentHandler.objectsToCreate).To(HaveLen(6))
 
 		var mapCount, mapbCount int
 		for _, obj := range componentHandler.objectsToCreate {
@@ -2538,8 +2647,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				mapbCount++
 			}
 		}
-		Expect(mapCount).To(Equal(2))
-		Expect(mapbCount).To(Equal(2))
+		Expect(mapCount).To(Equal(3))
+		Expect(mapbCount).To(Equal(3))
 	})
 
 	It("should not create MAPs when no served version exists and should set degraded", func() {
@@ -2550,9 +2659,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(""),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor()),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2571,9 +2681,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    false,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor()),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2591,9 +2702,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor()),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2633,7 +2745,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		}
 
 		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
-		Expect(componentHandler.objectsToCreate).To(HaveLen(4))
+		Expect(componentHandler.objectsToCreate).To(HaveLen(6))
 		Expect(componentHandler.objectsToDelete).To(HaveLen(2))
 		deletedNames := map[string]bool{}
 		for _, obj := range componentHandler.objectsToDelete {
@@ -2645,7 +2757,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should not delete MAPs that are in the desired set", func() {
 		var initial []client.Object
-		for _, n := range []string{"policytypes.policy.projectcalico.org", "tierlabel.policy.projectcalico.org"} {
+		for _, n := range []string{"policytypes.policy.projectcalico.org", "tierlabel.policy.projectcalico.org", "ippool.policy.projectcalico.org"} {
 			initial = append(initial, &admissionregistrationv1.MutatingAdmissionPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   n,
@@ -2653,7 +2765,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				},
 			})
 		}
-		for _, n := range []string{"set-policytypes-binding", "set-tier-label-binding"} {
+		for _, n := range []string{"set-policytypes-binding", "set-tier-label-binding", "set-ippool-defaults-binding"} {
 			initial = append(initial, &admissionregistrationv1.MutatingAdmissionPolicyBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   n,
@@ -2669,16 +2781,17 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client: clientFor(initial...),
-			scheme: scheme,
-			status: mockStatus,
+			client:       clientFor(initial...),
+			fieldManager: managedfields.New(clientFor(initial...)),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
 
 		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
-		Expect(componentHandler.objectsToCreate).To(HaveLen(4))
+		Expect(componentHandler.objectsToCreate).To(HaveLen(6))
 		Expect(componentHandler.objectsToDelete).To(BeEmpty())
 	})
 
@@ -2690,9 +2803,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor()),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2765,9 +2879,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor()),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2799,9 +2914,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1Beta1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor()),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2831,9 +2947,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1Alpha1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor()),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2851,9 +2968,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(""),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor()),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2872,9 +2990,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    false,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor()),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
@@ -2932,9 +3051,10 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 				UseV3CRDs:    true,
 				APIDiscovery: discoveryFor(admission.VersionV1),
 			},
-			client: clientFor(),
-			scheme: scheme,
-			status: mockStatus,
+			client:       clientFor(),
+			fieldManager: managedfields.New(clientFor()),
+			scheme:       scheme,
+			status:       mockStatus,
 			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},

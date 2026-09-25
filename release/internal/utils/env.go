@@ -19,9 +19,9 @@ import "fmt"
 // Environment variables the component Makefiles read. A typo in one of these is
 // silent: make treats an unknown variable as empty rather than failing.
 const (
-	// EnvConfirm and EnvDryRun are the publish latch. Exactly one is set.
 	EnvConfirm = "CONFIRM"
 	EnvDryRun  = "DRYRUN"
+	EnvDebug   = "DEBUG"
 
 	EnvRelease       = "RELEASE"
 	EnvReleaseBranch = "RELEASE_BRANCH"
@@ -38,6 +38,17 @@ const (
 	EnvReleaseRegistries = "RELEASE_REGISTRIES"
 	EnvImageOnly         = "IMAGE_ONLY"
 	EnvSkipDevImageRetag = "SKIP_DEV_IMAGE_RETAG"
+
+	EnvGitVersion = "GIT_VERSION"
+
+	EnvProductVersion           = "PRODUCT_VERSION"
+	EnvOperatorVersion          = "OPERATOR_VERSION"
+	EnvOperatorRegistryOverride = "OPERATOR_REGISTRY_OVERRIDE"
+	EnvOperatorImageOverride    = "OPERATOR_IMAGE_OVERRIDE"
+	EnvRegistry                 = "REGISTRY"
+
+	EnvChartDestination = "CHART_DESTINATION"
+	EnvTZ               = "TZ" // EnvTZ fixes the timezone helm stamps index entries with.
 )
 
 func Env(name string, value any) string {

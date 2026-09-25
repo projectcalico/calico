@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/steps"
 )
 
 // fakeRunner records every make invocation and can fail a component a set number
@@ -36,24 +37,26 @@ type fakeRunner struct {
 }
 
 type call struct {
+	// dir is where the command was run.
+	dir  string
 	args []string
 	env  []string
 	// logPath is empty when the unit's output was captured in memory.
 	logPath string
 }
 
-func (f *fakeRunner) RunInDir(_, _ string, args, env []string) (string, error) {
-	return f.record(args, env, "")
+func (f *fakeRunner) RunInDir(dir, _ string, args, env []string) (string, error) {
+	return f.record(dir, args, env, "")
 }
 
-func (f *fakeRunner) RunInDirToFile(_, _ string, args, env []string, logPath string) (string, error) {
-	return f.record(args, env, logPath)
+func (f *fakeRunner) RunInDirToFile(dir, _ string, args, env []string, logPath string) (string, error) {
+	return f.record(dir, args, env, logPath)
 }
 
-func (f *fakeRunner) record(args, env []string, logPath string) (string, error) {
+func (f *fakeRunner) record(runDir string, args, env []string, logPath string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.calls = append(f.calls, call{args: slices.Clone(args), env: slices.Clone(env), logPath: logPath})
+	f.calls = append(f.calls, call{dir: runDir, args: slices.Clone(args), env: slices.Clone(env), logPath: logPath})
 	dir := args[1]
 	if n, ok := f.failures[dir]; ok && n > 0 {
 		f.failures[dir] = n - 1
@@ -64,7 +67,7 @@ func (f *fakeRunner) record(args, env []string, logPath string) (string, error) 
 
 // Run records too: archiving drives docker through it rather than make.
 func (f *fakeRunner) Run(_ string, args, env []string) (string, error) {
-	return f.record(args, env, "")
+	return f.record("", args, env, "")
 }
 
 func (f *fakeRunner) RunNoCapture(string, []string, []string) error              { return nil }
@@ -223,6 +226,40 @@ func TestPublishRetagVersusPush(t *testing.T) {
 		f := &fakeRunner{}
 		if err := publish(f, ossVariants(), WithRetag("gcr.io/x", "", false)); err == nil {
 			t.Error("a retag without a tag should be rejected")
+		}
+	})
+}
+
+func TestPublishEnv(t *testing.T) {
+	t.Run("is replaceable", func(t *testing.T) {
+		restore := publishEnv
+		t.Cleanup(func() { publishEnv = restore })
+		publishEnv = func(s settings) []string {
+			return append(slices.DeleteFunc(restore(s), func(e string) bool {
+				return strings.HasPrefix(e, "RELEASE=")
+			}), "REPLACED=true")
+		}
+
+		for _, tc := range []struct {
+			name  string
+			extra []PublishOption
+		}{
+			{name: "push"},
+			{name: "retag", extra: []PublishOption{WithRetag("gcr.io/unique-caldron/hashrelease", "v3.30.0-abcdef", false)}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				f := &fakeRunner{}
+				if err := publish(f, sharedTargetVariants(), tc.extra...); err != nil {
+					t.Fatalf("Publish: %v", err)
+				}
+				env := f.envFor("cmd/calico", "publish-image")
+				if !hasEnv(env, "REPLACED=true") {
+					t.Errorf("env missing the added variable, got %v", env)
+				}
+				if hasEnv(env, "RELEASE=true") {
+					t.Errorf("env still carries the dropped RELEASE, got %v", env)
+				}
+			})
 		}
 	})
 }
@@ -444,8 +481,8 @@ func dirArg(args []string) string {
 	return ""
 }
 
-func (r *imageNameRunner) RunInDir(_, _ string, args, env []string) (string, error) {
-	if _, err := r.record(args, env, ""); err != nil {
+func (r *imageNameRunner) RunInDir(dir, _ string, args, env []string) (string, error) {
+	if _, err := r.record(dir, args, env, ""); err != nil {
 		return "", err
 	}
 	if slices.Contains(args, "build-images") {
@@ -466,13 +503,13 @@ func (r *imageNameRunner) RunInDir(_, _ string, args, env []string) (string, err
 // alwaysResolves answers every image with the same digest. Suitable for asking
 // whether anything was recorded, but NOT for anything comparing digests: it
 // cannot tell a repo's tags apart. Use resolvesPerTag for that.
-func alwaysResolves(digest string) DigestResolver {
+func alwaysResolves(digest string) steps.DigestResolver {
 	return func(string) (string, bool, error) { return digest, true, nil }
 }
 
 // resolvesPerTag gives each tag its own digest, as a registry does, so a repo
 // carrying a manifest list and its arch tags holds several distinct digests.
-func resolvesPerTag() DigestResolver {
+func resolvesPerTag() steps.DigestResolver {
 	return func(image string) (string, bool, error) {
 		_, tag, _ := strings.Cut(image, ":")
 		return "sha256:" + strings.Repeat(fmt.Sprintf("%x", len(tag))[:1], 64), true, nil
@@ -480,7 +517,7 @@ func resolvesPerTag() DigestResolver {
 }
 
 // recordingOpts are the options a publish needs to record what it pushed.
-func recordingOpts(f *imageNameRunner, rec RefRecorder, extra ...PublishOption) []PublishOption {
+func recordingOpts(f *imageNameRunner, rec steps.RefRecorder, extra ...PublishOption) []PublishOption {
 	return append([]PublishOption{
 		WithRunner(f),
 		WithRegistries("quay.io/calico"),
@@ -654,15 +691,12 @@ func TestPrefixedVariantRecordsPrefixedRefs(t *testing.T) {
 	}
 }
 
-// Archiving saves every image a variant ships, not a hardcoded pair.
-func TestArchiveSavesEveryVariantsImages(t *testing.T) {
+// The tarball ships what a user deploys: standard images only, since the
+// Windows images have an archive of their own.
+func TestArchiveSavesStandardImagesOnly(t *testing.T) {
 	f := &imageNameRunner{images: "node node-windows"}
 	dir := t.TempDir()
-	err := Archive(testRepoRoot, testVersion, []Variant{
-		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
-		{Name: WindowsVariant, Target: "release-windows", ReleaseDirs: []string{"node"}},
-	}, dir, archiveOpts(f)...)
-	if err != nil {
+	if err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...).Contribute(dir); err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
 	var saved []string
@@ -672,7 +706,7 @@ func TestArchiveSavesEveryVariantsImages(t *testing.T) {
 		}
 	}
 	slices.Sort(saved)
-	want := []string{testRegistry + "/node-windows:" + testVersion, testRegistry + "/node:" + testVersion}
+	want := []string{testRegistry + "/node:" + testVersion}
 	if !slices.Equal(saved, want) {
 		t.Errorf("archived\n got %v\nwant %v", saved, want)
 	}
@@ -682,9 +716,7 @@ func TestArchiveSavesEveryVariantsImages(t *testing.T) {
 func TestArchivePullsWhenAsked(t *testing.T) {
 	f := &imageNameRunner{images: "node"}
 	f.failures = map[string]int{"inspect": 9}
-	err := Archive(testRepoRoot, testVersion, oneStandardVariant("node"), t.TempDir(),
-		archiveOpts(f, WithPull(true))...)
-	if err != nil {
+	if err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f, WithPull(true))...).Contribute(t.TempDir()); err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
 	var pulled bool
@@ -700,7 +732,7 @@ func TestArchivePullsWhenAsked(t *testing.T) {
 
 func TestArchiveRejectsNoDir(t *testing.T) {
 	f := &imageNameRunner{images: "node"}
-	if err := Archive(testRepoRoot, testVersion, oneStandardVariant("node"), "", archiveOpts(f)...); err == nil {
+	if err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...).Contribute(""); err == nil {
 		t.Fatal("expected an error when no archive directory is given")
 	}
 }
@@ -709,7 +741,7 @@ func TestArchiveRejectsNoDir(t *testing.T) {
 // than indexed into.
 func TestArchiveRejectsNoRegistry(t *testing.T) {
 	f := &imageNameRunner{images: "node"}
-	err := Archive(testRepoRoot, testVersion, oneStandardVariant("node"), t.TempDir(), WithRunner(f))
+	err := Archive(testRepoRoot, testVersion, []string{"node"}, WithRunner(f)).Contribute(t.TempDir())
 	if err == nil {
 		t.Fatal("expected an error when no registry is given")
 	}

@@ -2,23 +2,23 @@
 Run 'make gen-deps-files' to regenerate.
 
 go 1.27.1
-cel.dev/expr v0.25.2
+cel.dev/expr v0.25.3
 github.com/Masterminds/semver/v3 v3.5.0
 github.com/antlr4-go/antlr/v4 v4.13.1
-github.com/aws/aws-sdk-go-v2 v1.42.1
+github.com/aws/aws-sdk-go-v2 v1.43.6
 github.com/aws/aws-sdk-go-v2/config v1.32.25
-github.com/aws/aws-sdk-go-v2/credentials v1.19.28
-github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.30
-github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.30
-github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.30
-github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.31
-github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.13
-github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.30
-github.com/aws/aws-sdk-go-v2/service/signin v1.4.0
-github.com/aws/aws-sdk-go-v2/service/sso v1.32.0
-github.com/aws/aws-sdk-go-v2/service/ssooidc v1.37.0
-github.com/aws/aws-sdk-go-v2/service/sts v1.44.0
-github.com/aws/smithy-go v1.27.3
+github.com/aws/aws-sdk-go-v2/credentials v1.19.36
+github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.37
+github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.37
+github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.37
+github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.38
+github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.17
+github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.37
+github.com/aws/aws-sdk-go-v2/service/signin v1.5.6
+github.com/aws/aws-sdk-go-v2/service/sso v1.33.6
+github.com/aws/aws-sdk-go-v2/service/ssooidc v1.38.6
+github.com/aws/aws-sdk-go-v2/service/sts v1.45.6
+github.com/aws/smithy-go v1.27.8
 github.com/beorn7/perks v1.0.1
 github.com/bits-and-blooms/bitset v1.24.5
 github.com/blang/semver/v4 v4.0.0
@@ -35,8 +35,8 @@ github.com/distribution/reference v0.6.0
 github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 github.com/emicklei/go-restful v2.15.0+incompatible
 github.com/emicklei/go-restful/v3 v3.13.0
-github.com/envoyproxy/go-control-plane v0.14.1-0.20260409050421-3f47accd6e14
-github.com/envoyproxy/go-control-plane/envoy v1.37.1-0.20260409050421-3f47accd6e14
+github.com/envoyproxy/go-control-plane v0.14.1-0.20260729145720-a2d8c7492908
+github.com/envoyproxy/go-control-plane/envoy v1.37.1-0.20260729145720-a2d8c7492908
 github.com/envoyproxy/protoc-gen-validate v1.3.3
 github.com/fsnotify/fsnotify v1.10.1
 github.com/fxamacker/cbor/v2 v2.9.2
@@ -46,25 +46,25 @@ github.com/go-logfmt/logfmt v0.6.1
 github.com/go-logr/logr v1.4.4
 github.com/go-openapi/jsonpointer v1.0.0
 github.com/go-openapi/jsonreference v1.0.0
-github.com/go-openapi/swag v0.27.1
-github.com/go-openapi/swag/cmdutils v0.27.1
-github.com/go-openapi/swag/conv v0.27.3
-github.com/go-openapi/swag/fileutils v0.27.3
-github.com/go-openapi/swag/jsonutils v0.27.3
-github.com/go-openapi/swag/loading v0.27.3
-github.com/go-openapi/swag/mangling v0.27.3
-github.com/go-openapi/swag/netutils v0.27.1
-github.com/go-openapi/swag/pools v0.27.3
-github.com/go-openapi/swag/stringutils v0.27.3
-github.com/go-openapi/swag/typeutils v0.27.3
-github.com/go-openapi/swag/yamlutils v0.27.3
+github.com/go-openapi/swag v0.28.0
+github.com/go-openapi/swag/cmdutils v0.28.0
+github.com/go-openapi/swag/conv v0.28.0
+github.com/go-openapi/swag/fileutils v0.28.0
+github.com/go-openapi/swag/jsonutils v0.28.0
+github.com/go-openapi/swag/loading v0.28.0
+github.com/go-openapi/swag/mangling v0.28.0
+github.com/go-openapi/swag/netutils v0.28.0
+github.com/go-openapi/swag/pools v0.28.0
+github.com/go-openapi/swag/stringutils v0.28.0
+github.com/go-openapi/swag/typeutils v0.28.0
+github.com/go-openapi/swag/yamlutils v0.28.0
 github.com/go-playground/locales v0.14.1
 github.com/go-playground/universal-translator v0.18.1
 github.com/go-viper/mapstructure/v2 v2.5.0
 github.com/golang/protobuf v1.5.4
 github.com/golang/snappy v1.0.0
 github.com/google/btree v1.1.3
-github.com/google/cel-go v0.29.2
+github.com/google/cel-go v0.30.0
 github.com/google/gnostic-models v0.7.1
 github.com/google/go-cmp v0.7.0
 github.com/google/nftables v0.3.0
@@ -84,7 +84,7 @@ github.com/klauspost/cpuid/v2 v2.2.10
 github.com/leodido/go-urn v1.4.0
 github.com/libp2p/go-reuseport v0.4.0
 github.com/lithammer/dedent v1.1.0
-github.com/mattn/go-runewidth v0.0.24
+github.com/mattn/go-runewidth v0.0.27
 github.com/mdlayher/arp v0.0.0-20260528070854-93566ba168e9
 github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118
 github.com/mdlayher/genetlink v1.3.2
@@ -106,9 +106,9 @@ github.com/pelletier/go-toml/v2 v2.4.3
 github.com/pkg/errors v0.9.1
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 github.com/projectcalico/calico
-github.com/prometheus/client_golang v1.24.0
+github.com/prometheus/client_golang v1.24.1
 github.com/prometheus/client_model v0.6.2
-github.com/prometheus/common v0.70.0
+github.com/prometheus/common v0.70.1
 github.com/prometheus/procfs v0.21.1
 github.com/robfig/cron v1.2.0
 github.com/robfig/cron/v3 v3.0.1
@@ -129,12 +129,12 @@ github.com/zeebo/xxh3 v1.1.0
 go.etcd.io/etcd/api/v3 v3.7.0
 go.etcd.io/etcd/client/pkg/v3 v3.7.0
 go.etcd.io/etcd/client/v3 v3.7.0
-go.opentelemetry.io/otel v1.44.0
-go.opentelemetry.io/otel/trace v1.44.0
+go.opentelemetry.io/otel v1.45.0
+go.opentelemetry.io/otel/trace v1.45.0
 go.uber.org/multierr v1.11.0
 go.uber.org/zap v1.28.0
 go.yaml.in/yaml/v2 v2.4.4
-go.yaml.in/yaml/v3 v3.0.4
+go.yaml.in/yaml/v3 v3.0.5
 go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 golang.org/x/crypto v0.56.0
 golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f
@@ -150,10 +150,10 @@ golang.org/x/tools v0.49.0
 golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173
 golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
 google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7
-google.golang.org/genproto/googleapis/api v0.0.0-20260706201446-f0a921348800
-google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800
+google.golang.org/genproto/googleapis/api v0.0.0-20260803160001-6ac0973c030d
+google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d
 google.golang.org/grpc v1.83.1
-google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
+google.golang.org/protobuf v1.36.12
 gopkg.in/evanphx/json-patch.v4 v4.13.0
 gopkg.in/go-playground/validator.v9 v9.31.0
 gopkg.in/inf.v0 v0.9.1
@@ -184,6 +184,7 @@ sigs.k8s.io/randfill v1.0.0
 sigs.k8s.io/structured-merge-diff/v6 v6.4.2
 sigs.k8s.io/yaml v1.6.0
 
+local:api
 local:api/pkg/apis/projectcalico/v3
 local:api/pkg/defaults
 local:api/pkg/lib/numorstring

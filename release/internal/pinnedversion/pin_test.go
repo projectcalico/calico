@@ -28,7 +28,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
-	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 var dateApprovalScrubber = approvals.NewDateScrubber(`[a-zA-Z]{3}, \d{1,2} [a-zA-Z]{3} \d{4} \d{2}:\d{2}:\d{2} [A-Z]{3}`)
@@ -61,8 +60,8 @@ func testPin() *Pin {
 		ProductVersion: testProductVersion,
 		branch:         "release-v3.31",
 		Operator: registry.Component{
-			Image:    operator.DefaultImage,
-			Registry: operator.DefaultRegistries[0],
+			Image:    registry.OperatorImage,
+			Registry: registry.DefaultOperatorRegistry,
 			Version:  testProductVersion,
 		},
 		Components: testComponents(),
@@ -792,8 +791,8 @@ func TestImagesOperatorOptional(t *testing.T) {
 	if _, ok := p.Images()[""]; ok {
 		t.Error("an operator with no image was added to the map")
 	}
-	p.Operator = registry.Component{Image: operator.DefaultImage, Version: testProductVersion}
-	if _, ok := p.Images()[operator.DefaultImage]; !ok {
+	p.Operator = registry.Component{Image: registry.OperatorImage, Version: testProductVersion}
+	if _, ok := p.Images()[registry.OperatorImage]; !ok {
 		t.Error("the operator is missing from the image map")
 	}
 }

@@ -49,15 +49,37 @@ import (
 
 var log = logf.Log.WithName("controller_tiers")
 
+// ReconcilerOptions is what the Tiers reconciler needs to run.
+type ReconcilerOptions struct {
+	Client             client.Client
+	Scheme             *runtime.Scheme
+	Status             status.StatusManager
+	TierWatchReady     *utils.ReadyFlag
+	PolicyWatchesReady *utils.ReadyFlag
+	Options            options.ControllerOptions
+}
+
+// NewReconciler returns a Tiers reconciler a caller can drive without a manager.
+func NewReconciler(o ReconcilerOptions) *ReconcileTiers {
+	return &ReconcileTiers{
+		client:             o.Client,
+		scheme:             o.Scheme,
+		status:             o.Status,
+		tierWatchReady:     o.TierWatchReady,
+		policyWatchesReady: o.PolicyWatchesReady,
+		opts:               o.Options,
+	}
+}
+
 // Add creates a new Tiers Controller and adds it to the Manager.
 // The Manager will set fields on the Controller and Start it when the Manager is Started.
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	r := &ReconcileTiers{
-		client: mgr.GetClient(),
-		scheme: mgr.GetScheme(),
-		status: status.New(mgr.GetClient(), "tiers", opts.KubernetesVersion),
-		opts:   opts,
-	}
+	r := NewReconciler(ReconcilerOptions{
+		Client:  mgr.GetClient(),
+		Scheme:  mgr.GetScheme(),
+		Status:  status.New(mgr.GetClient(), "tiers", opts.KubernetesVersion),
+		Options: opts,
+	})
 	r.status.Run(opts.ShutdownContext)
 
 	c, err := ctrlruntime.NewController("tiers-controller", mgr, controller.Options{Reconciler: r})

@@ -220,6 +220,11 @@ and the Go-side reader must agree on units and reference clock.
   (`cali_v4_ct`/`cali_v6_ct` have `Version: 4` at the time of
   writing). The kernel refuses to pin two layouts under the same
   name, and older Felixes reading a newer map will misparse.
+- A flag change on a *live* conntrack entry must be an atomic set
+  or clear, never a read-modify-write: both directions of a flow,
+  and parallel packets on other CPUs, write the same per-leg and
+  per-value flag words. The create path is exempt, as it fills the
+  entry on the stack and publishes it in one update.
 - A new scanner should return the smallest verdict that does the job
   (`ScanVerdictOK` for no-op) and should be idempotent across
   iterations. Scanners may be called once or many times per sweep
@@ -269,7 +274,7 @@ unambiguously a mid-flow packet. BPF and `*tables` cooperate to let
 it through:
 
 - On host ingress, a BPF program that sees a mid-flow TCP miss sets
-  `CALI_SKB_MARK_FALLTHROUGH` on the packet (`bpf.h` enum
+  `CALI_SKB_MARK_FALLTHROUGH` on the packet (`cali_bpf.h` enum
   `calico_skb_mark`) and returns `TC_ACT_UNSPEC`, letting the packet
   continue into netfilter.
 - Felix installs a rule
@@ -381,7 +386,7 @@ comment: "Mark traffic towards the host - it is TRACKed"
 
 The mark is `tcdefs.MarkSeenSkipFIB`, which equals
 `CALI_SKB_MARK_SKIP_FIB` on the BPF side
-(see `felix/bpf-gpl/bpf.h` `enum calico_skb_mark`). Because this
+(see `felix/bpf-gpl/cali_bpf.h` `enum calico_skb_mark`). Because this
 happens in raw-PREROUTING, it runs _before_ any DNAT chain, so the
 destination is still the host IP at match time.
 

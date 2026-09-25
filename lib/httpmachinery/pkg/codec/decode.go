@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,11 +18,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/go-playground/form"
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 
 	apicontext "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
@@ -65,19 +66,45 @@ func RegisterCustomDecodeTypeFunc[E any](fn func(vals []string) (E, error)) {
 	headerDecoder.RegisterCustomTypeFunc(f, typ)
 }
 
-// RegisterURLQueryJSONType registers a type as one that should be decoded as url encoded json.
+// RegisterURLQueryJSONType registers a type as one that should be decoded as json carried in a query parameter. The
+// value is decoded as-is: url.Values has already unescaped it, so unescaping again would turn a literal '%' in a value
+// into an error and a literal '+' into a space.
 func RegisterURLQueryJSONType[T any]() {
 	RegisterCustomDecodeTypeFunc(func(vals []string) (T, error) {
 		var obj T
-		jsonStr, err := url.QueryUnescape(vals[0])
-		if err != nil {
-			return obj, err
-		}
-
-		if err := json.Unmarshal([]byte(jsonStr), &obj); err != nil {
+		if err := json.Unmarshal([]byte(vals[0]), &obj); err != nil {
 			return obj, err
 		}
 		return obj, nil
+	})
+}
+
+// RegisterStrictURLQueryJSONType registers a type as one that should be decoded as json carried in a query parameter,
+// rejecting any field the type does not declare. Use it for filter parameters, where a misspelt key would otherwise
+// decode to an empty filter and silently widen the query.
+//
+// The value is decoded as-is: url.Values has already unescaped it, so unescaping again would turn a literal '%' in a
+// value into a 400.
+func RegisterStrictURLQueryJSONType[T any]() {
+	RegisterCustomDecodeTypeFunc(func(vals []string) (T, error) {
+		var obj T
+		if len(vals) == 0 || vals[0] == "" {
+			return obj, nil
+		}
+		dec := json.NewDecoder(strings.NewReader(vals[0]))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&obj); err != nil {
+			return obj, err
+		}
+		// A Decoder stops after the first value; anything after it is a malformed parameter, not a second value.
+		switch tok, err := dec.Token(); {
+		case errors.Is(err, io.EOF):
+			return obj, nil
+		case err != nil:
+			return obj, fmt.Errorf("unexpected data after the JSON value: %w", err)
+		default:
+			return obj, fmt.Errorf("unexpected data after the JSON value: %v", tok)
+		}
 	})
 }
 
@@ -113,6 +140,10 @@ func DecodeAndValidateRequestParams[RequestParam any](ctx apicontext.Context, ur
 }
 
 func DecodeAndValidateURLParameters[T any](obj *T, header map[string][]string, path map[string]string, query map[string][]string) error {
+	if err := rejectUnknownQueryParameters(QueryParamNames[T](), query); err != nil {
+		return err
+	}
+
 	pathParams := map[string][]string{}
 	for key, v := range path {
 		pathParams[key] = []string{v}
@@ -135,6 +166,10 @@ func DecodeAndValidateURLParameters[T any](obj *T, header map[string][]string, p
 
 	// Validate parameters.
 	if err := validate.Struct(obj); err != nil {
+		var verrs validator.ValidationErrors
+		if errors.As(err, &verrs) {
+			return errors.New(strings.Join(TranslateValidationErrors(verrs), "; "))
+		}
 		return err
 	}
 

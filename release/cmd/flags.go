@@ -24,9 +24,9 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/defaults"
+	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/utils"
-	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 var globalFlags = append([]cli.Flag{debugFlag}, append(ciFlags, slackFlags...)...)
@@ -161,6 +161,12 @@ var (
 			},
 		}
 	}
+	forceFlag = &cli.BoolFlag{
+		Name:     "force",
+		Category: stepControlCategory,
+		Usage:    "Republish artifacts whose published digest differs from the record.",
+		Sources:  cli.EnvVars("FORCE"),
+	}
 )
 
 // Development flags are flags used to control development behavior of the release process
@@ -251,13 +257,6 @@ var (
 		Sources:  cli.EnvVars("SKIP_DEV_IMAGE_RETAG"),
 	}
 
-	forceFlag = &cli.BoolFlag{
-		Name:     "force",
-		Category: containerImageCategory,
-		Usage:    "Republish images whose published digest differs from the record.",
-		Sources:  cli.EnvVars("FORCE"),
-	}
-
 	// imageReleaseDirsFlag limits a run to some of the directories that ship
 	// images.
 	imageReleaseDirsFlag = &cli.StringSliceFlag{
@@ -300,28 +299,21 @@ var (
 // Operator flags are flags used to interact with Tigera operator repository
 var (
 	operatorBuildCommandFlags = []cli.Flag{
-		operatorRegistryFlag, operatorImageFlag,
+		operatorRegistryFlag,
 		operatorFlag(envBuildOperator, envReleaseOperator),
 	}
 
 	operatorPublishCommandFlags = []cli.Flag{
+		operatorRegistryFlag,
 		operatorFlag(envPublishOperator, envReleaseOperator),
 	}
 
 	// Container image flags
-	operatorRegistryFlag = &cli.StringFlag{
+	operatorRegistryFlag = &cli.StringSliceFlag{
 		Name:     "operator-registry",
 		Category: operatorCategory,
-		Usage:    "The registry to use for Tigera operator release",
-		Sources:  cli.EnvVars("OPERATOR_REGISTRY"),
-		Value:    operator.DefaultRegistries[0],
-	}
-	operatorImageFlag = &cli.StringFlag{
-		Name:     "operator-image",
-		Category: operatorCategory,
-		Usage:    "The image name to use for Tigera operator release",
-		Sources:  cli.EnvVars("OPERATOR_IMAGE"),
-		Value:    operator.DefaultImage,
+		Usage:    "The registry to use for operator, repeat for multiple registries. If not set, the default registries will be used.",
+		Sources:  cli.EnvVars("OPERATOR_REGISTRY", "OPERATOR_REGISTRIES"),
 	}
 
 	operatorFlagName   = "operator"
@@ -458,22 +450,6 @@ var (
 			return nil
 		},
 	}
-
-	// GitHub API flags
-	githubTokenFlag = &cli.StringFlag{
-		Name:    "github-token",
-		Usage:   "The GitHub token to use when interacting with the GitHub API",
-		Sources: cli.EnvVars("GITHUB_TOKEN", "GH_TOKEN"),
-		Action: func(_ context.Context, c *cli.Command, s string) error {
-			if s == "" {
-				if c.Bool(ciFlag.Name) {
-					return fmt.Errorf("GitHub token is required")
-				}
-				logrus.Warn("This command requires a GitHub token")
-			}
-			return nil
-		},
-	}
 )
 
 // Hashrelease specific flags.
@@ -558,7 +534,10 @@ const (
 	envPublishGitRef        = "PUBLISH_GIT_REF"
 	envReleaseGitRef        = "RELEASE_GIT_REF"
 	envPublishGithubRelease = "PUBLISH_GITHUB_RELEASE"
+	envReleaseGithub        = "RELEASE_GITHUB"
 	envReleaseGithubRelease = "RELEASE_GITHUB_RELEASE"
+	envDraftGithubRelease   = "PUBLISH_GITHUB_RELEASE_DRAFT"
+	envReleaseGithubDraft   = "RELEASE_GITHUB_DRAFT"
 )
 
 var (
@@ -590,7 +569,8 @@ var (
 		return append(f,
 			helmIndexFlag(envHelmIndexLegacy, envPublishHelmIndex, envReleaseHelmIndex),
 			gitRefFlag,
-			githubReleaseFlag)
+			githubReleaseFlag,
+			draftGithubReleaseFlag)
 	}
 
 	imagesFlag = func(value bool, envVars ...string) *cli.BoolWithInverseFlag {
@@ -678,6 +658,18 @@ var (
 		Usage:    "Generate release notes",
 		Sources:  cli.EnvVars(envBuildReleaseNotes, envReleaseNotes),
 		Value:    true,
+		Action: func(_ context.Context, c *cli.Command, b bool) error {
+			if !b || !c.Bool(validationFlag.Name) {
+				return nil
+			}
+			if c.String(orgFlag.Name) != utils.ProjectCalicoOrg || c.String(repoFlag.Name) != utils.CalicoRepoName {
+				return fmt.Errorf("release notes can only be generated from %s/%s", utils.ProjectCalicoOrg, utils.CalicoRepoName)
+			}
+			if !github.Authenticated() {
+				return fmt.Errorf("release notes need GitHub authentication")
+			}
+			return nil
+		},
 	}
 	manifestsFlag = &cli.BoolWithInverseFlag{
 		Name:     "manifests",
@@ -716,15 +708,25 @@ var (
 		Sources:  cli.EnvVars(envPublishGitRefLegacy, envPublishGitRef, envReleaseGitRef),
 		Value:    true,
 	}
+	draftGithubReleaseFlag = &cli.BoolWithInverseFlag{
+		Name:     "draft-github-release",
+		Category: stepControlCategory,
+		Usage:    "Publish GitHub Release in drafts mode",
+		Sources:  cli.EnvVars(envDraftGithubRelease, envReleaseGithubDraft),
+		Value:    true,
+	}
 	githubReleaseFlag = &cli.BoolWithInverseFlag{
 		Name:     "github-release",
 		Category: stepControlCategory,
 		Usage:    "Publish the GitHub release",
-		Sources:  cli.EnvVars(envPublishGithubRelease, envReleaseGithubRelease),
+		Sources:  cli.EnvVars(envPublishGithubRelease, envReleaseGithub, envReleaseGithubRelease),
 		Value:    true,
-		Action: func(_ context.Context, c *cli.Command, b bool) error {
-			if b && c.String(githubTokenFlag.Name) == "" {
-				return fmt.Errorf("GitHub token is required to publish release")
+		Action: func(_ context.Context, _ *cli.Command, b bool) error {
+			if !b {
+				return nil
+			}
+			if !github.Authenticated() {
+				return fmt.Errorf("publishing a release needs GitHub authentication")
 			}
 			return nil
 		},

@@ -5,15 +5,21 @@
 #ifndef __CALI_NAT6_H__
 #define __CALI_NAT6_H__
 
-#include <stddef.h>
-
 #include <linux/if_ether.h>
+#include <linux/in.h>
+#include <linux/ip.h>
+#include <linux/ipv6.h>
 #include <linux/udp.h>
 
-#include "bpf.h"
-#include "skb.h"
-#include "routes.h"
+#include "cali_bpf.h"
+#include "counters.h"
+#include "globals.h"
+#include "ip_addr.h"
+#include "log.h"
 #include "nat_types.h"
+#include "reasons.h"
+#include "skb.h"
+#include "types.h"
 
 /* Number of bytes we add to a packet when we do encap. */
 #define VXLAN_ENCAP_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + \
@@ -63,7 +69,8 @@ static CALI_BPF_INLINE int vxlan_encap(struct cali_tc_ctx *ctx, ipv6_addr_t *ip_
 
 	udp->source = bpf_htons(src_port);
 	udp->dest = bpf_htons(VXLAN_PORT);
-	udp->len = bpf_htons(bpf_ntohs(ip_hdr(ctx)->payload_len) - sizeof(struct iphdr));
+	/* payload_len already excludes the IPv6 base header, unlike IPv4 tot_len. */
+	udp->len = ip_hdr(ctx)->payload_len;
 	/* XXX we leave udp->check == 0 which is not legal in IPv6, but we are
 	 * the only ones parsing that packet!
 	 */

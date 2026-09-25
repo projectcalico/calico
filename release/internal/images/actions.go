@@ -23,8 +23,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/archives"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -44,30 +45,51 @@ func Build(repoRoot, version string, variants []Variant, opts ...BuildOption) er
 }
 
 // Archive writes each image to its own tar under tarDir.
-func Archive(repoRoot, version string, variants []Variant, tarDir string, opts ...ArchiveOption) error {
-	s, err := newSettings(archiveStep, repoRoot, version, variants, opts)
+func Archive(repoRoot, version string, imageDirs []string, opts ...ArchiveOption) archives.Contributor {
+	return archiver{
+		RepoRoot: repoRoot,
+		Version:  version,
+		Variants: NarrowVariants(StandardVariants(PublishVariants), imageDirs),
+		Options:  opts,
+	}
+}
+
+var _ archives.Contributor = archiver{}
+
+type archiver struct {
+	RepoRoot string
+	Version  string
+	Variants []Variant
+	Options  []ArchiveOption
+}
+
+func (a archiver) Name() string {
+	return "images"
+}
+
+func (a archiver) Contribute(dir string) error {
+	s, err := newSettings(archiveStep, a.RepoRoot, a.Version, a.Variants, a.Options)
 	if err != nil {
 		return err
 	}
-	if tarDir == "" {
+	if dir == "" {
 		return s.Errorf("no directory to write images to")
 	}
+	dest := filepath.Join(dir, "images")
 	if len(s.Registries) == 0 {
 		return s.Errorf("no registry to archive images from")
 	}
-	s.dir = tarDir
-
 	units := s.units(s.env())
 	s.Logger().WithField("images", len(units)).Info("Archiving container images")
-	if err := os.MkdirAll(tarDir, os.ModePerm); err != nil {
-		return fmt.Errorf("creating images dir: %w", err)
+	if err := os.MkdirAll(dest, os.ModePerm); err != nil {
+		return fmt.Errorf("creating images dir %s: %w", dest, err)
 	}
 
 	// Images come from the first registry: an archive holds one copy, whichever
 	// registry it is pulled from.
 	reg := s.Registries[0]
-	if _, err := forEachUnit(units, func(u unit) (unitDone, error) {
-		return unitDone{}, saveUnit(s, u, reg, tarDir)
+	if _, err := steps.Go(units, func(u unit) (unitDone, error) {
+		return unitDone{}, saveUnit(s, u, reg, dest)
 	}); err != nil {
 		return err
 	}
@@ -75,21 +97,21 @@ func Archive(repoRoot, version string, variants []Variant, tarDir string, opts .
 	return nil
 }
 
-func saveUnit(s settings, u unit, reg, tarDir string) error {
+func saveUnit(s settings, u unit, reg, dest string) error {
 	names, err := s.imageNames(u)
 	if err != nil {
 		return s.Errorf("%w", err)
 	}
 	for _, name := range names {
 		image := fmt.Sprintf("%s/%s:%s", reg, name, s.Version)
-		if err := save(s, image, filepath.Join(tarDir, name+".tar")); err != nil {
+		if err := save(s, image, filepath.Join(dest, name+".tar")); err != nil {
 			return s.Errorf("%w", err)
 		}
 	}
 	return nil
 }
 
-func publishEnv(s settings) []string {
+var publishEnv = func(s settings) []string {
 	env := append(s.env(),
 		utils.EnvTrue(utils.EnvRelease),
 		utils.Env(utils.EnvReleaseTag, s.Version),
@@ -117,7 +139,7 @@ func publishEnv(s settings) []string {
 
 // confirm latches the push: without it the make targets run as a dry run, so it
 // is an argument rather than an option a caller can forget.
-func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve DigestResolver, opts ...PublishOption) error {
+func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve steps.DigestResolver, opts ...PublishOption) error {
 	s, err := newSettings(publishStep, repoRoot, version, variants, opts)
 	if err != nil {
 		return err
@@ -177,7 +199,7 @@ func sendImagesToISS(s settings) {
 // newSettings is generic so each step accepts only its own option type.
 func newSettings[O any](step, repoRoot, version string, variants []Variant, opts []O) (settings, error) {
 	s := settings{RepoRoot: repoRoot, Version: version, Variants: variants}
-	s.Apply([]command.Option{command.WithName(step)})
+	s.Apply([]steps.Option{steps.WithName(step)})
 	if err := s.validate(); err != nil {
 		return s, s.Errorf("%w", err)
 	}
@@ -203,7 +225,7 @@ func applyTo(opt any, s *settings) error {
 }
 
 // unitStateAgainst binds one record, so every unit is judged against the same.
-func (s settings) unitStateAgainst(recorded recordedDigests) func(unit) (bool, error) {
+func (s settings) unitStateAgainst(recorded steps.RecordedDigests) func(unit) (bool, error) {
 	return func(u unit) (bool, error) { return unitState(s, u, recorded) }
 }
 
@@ -213,8 +235,8 @@ func pending(s settings, units []unit) ([]unit, error) {
 	if s.resume == nil {
 		return units, nil
 	}
-	recorded := digestsByRepo(s.resume.published)
-	done, err := forEachUnit(units, s.unitStateAgainst(recorded))
+	recorded := steps.DigestsByRepo(s.resume.published)
+	done, err := steps.Go(units, s.unitStateAgainst(recorded))
 	if err != nil {
 		return nil, err
 	}

@@ -30,7 +30,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
-	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 const pinnedVersionFileName = "pinned_versions.yml"
@@ -65,6 +64,7 @@ type PinnedVersion struct {
 	Branch         string                        `yaml:"branch,omitempty"`
 	Hash           string                        `yaml:"full_hash,omitempty"`
 	TigeraOperator registry.Component            `yaml:"tigera-operator"`
+	Registry       string                        `yaml:"registry,omitempty"`
 	Components     map[string]registry.Component `yaml:"components"`
 }
 
@@ -75,14 +75,15 @@ func (p *PinnedVersion) pin() *Pin {
 		branch = branchFromNote(p.Note)
 	}
 	return &Pin{
-		ReleaseName:    p.ReleaseName,
-		Hash:           p.Hash,
-		Note:           p.Note,
-		ProductVersion: p.Title,
-		ChartVersion:   p.HelmRelease,
-		Operator:       p.TigeraOperator,
-		Components:     p.Components,
-		branch:         branch,
+		ReleaseName:     p.ReleaseName,
+		Hash:            p.Hash,
+		Note:            p.Note,
+		ProductVersion:  p.Title,
+		ChartVersion:    p.HelmRelease,
+		Operator:        p.TigeraOperator,
+		ProductRegistry: cmp.Or(p.Registry, registry.DefaultProductRegistry),
+		Components:      p.Components,
+		branch:          branch,
 	}
 }
 
@@ -116,6 +117,7 @@ func pinnedFrom(p *Pin) PinnedVersion {
 			Registry: p.Operator.Registry,
 			Version:  p.Operator.Version,
 		},
+		Registry:   p.ProductRegistry,
 		Components: p.Components,
 	}
 }
@@ -123,8 +125,8 @@ func pinnedFrom(p *Pin) PinnedVersion {
 // operatorComponent is the operator this build ships.
 var operatorComponent = func(cfg Config, productVer string) registry.Component {
 	return registry.Component{
-		Image:    cmp.Or(cfg.Operator.Image, operator.DefaultImage),
-		Registry: cmp.Or(cfg.Operator.Registry, operator.DefaultRegistries[0]),
+		Image:    cmp.Or(cfg.Operator.Image, registry.OperatorImage),
+		Registry: cmp.Or(cfg.Operator.Registry, registry.DefaultOperatorRegistry),
 		Version:  productVer,
 	}
 }

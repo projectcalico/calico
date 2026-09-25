@@ -56,18 +56,6 @@ const (
 	// TigeraCompany is the short-form human-facing name of the company, for freeform text fields or branding
 	TigeraCompany = "Tigera"
 
-	// TigeraOperatorChart is the name of the Tigera Operator Helm chart.
-	TigeraOperatorChart = "tigera-operator"
-
-	// ProjectCalicoV1CRDsChart is the name of the crd.projectcalico.org/v1 CRD helm chart.
-	ProjectCalicoV1CRDsChart = "crd.projectcalico.org.v1"
-
-	// ProjectCalicoV3CRDsChart is the name of the projectcalico.org/v3 CRD helm chart.
-	ProjectCalicoV3CRDsChart = "projectcalico.org.v3"
-
-	// CalicoHelmRepoURL is the URL for the Calico Helm charts.
-	CalicoHelmRepoURL = "https://docs.tigera.io/calico/charts"
-
 	// ReleaseBranchPrefix is the prefix for release branches.
 	DefaultReleaseBranchPrefix = "release"
 
@@ -105,15 +93,6 @@ func FilterDirs(have, want []string) []string {
 	return out
 }
 
-// AllReleaseCharts returns a list of all Helm charts to be released.
-func AllReleaseCharts() []string {
-	return []string{
-		TigeraOperatorChart,
-		ProjectCalicoV1CRDsChart,
-		ProjectCalicoV3CRDsChart,
-	}
-}
-
 var once sync.Once
 
 var (
@@ -123,10 +102,6 @@ var (
 	// apiserver, dikastes, webhooks, typha, goldmane, guardian,
 	// whisker-backend, key-cert-provisioner, CSI, flexvol, Linux CNI) live
 	// under cmd/calico and are not listed here.
-	// OperatorDir is the operator's component directory. It publishes to registries of
-	// its own, so it is named apart from the list rather than added to it.
-	OperatorDir = "operator"
-
 	ImageReleaseDirs = []string{
 		"cmd/calico",
 		"istio",

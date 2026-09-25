@@ -1,0 +1,7 @@
+# Minimum versions this image requires. `go mod tidy` settles everything else,
+# so a module that only moves as a consequence of a pin is not listed here.
+# No file, or no entries, means no pins and the generated patch is removed.
+
+github.com/moby/spdystream v0.5.1         # GO-2026-4958 / CVE-2026-35469
+github.com/prometheus/prometheus v0.311.3 # CVE-2026-42154, CVE-2026-42151
+golang.org/x/net v0.56.0                  # CVE-2026-33814; above the v0.53.0 fix to match calico's modules

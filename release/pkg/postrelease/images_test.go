@@ -12,7 +12,6 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 var excludeImageArch = map[string][]string{
@@ -61,7 +60,7 @@ func TestImagesPublished(t *testing.T) {
 
 		checkVersion(t, operatorVersion)
 
-		fqOperatorImage := fmt.Sprintf("%s/%s:%s", operator.DefaultRegistries[0], operator.DefaultImage, operatorVersion)
+		fqOperatorImage := fqOperatorImage(t)
 		if ok, err := registry.CheckImage(fqOperatorImage); err != nil {
 			t.Fatalf("failed to check image %s: %v", fqOperatorImage, err)
 		} else if !ok {
@@ -102,7 +101,7 @@ func TestImagesInMetadata(t *testing.T) {
 
 	var expectedImages []string
 	for image := range strings.SplitSeq(images, " ") {
-		registry := registry.DefaultCalicoRegistry
+		registry := registry.DefaultProductRegistry
 		if registry != "" {
 			registry += "/"
 		}
@@ -111,7 +110,7 @@ func TestImagesInMetadata(t *testing.T) {
 	if len(expectedImages) == 0 {
 		t.Fatal("no images provided")
 	}
-	expectedImages = append(expectedImages, fmt.Sprintf("%s/%s:%s", operator.DefaultRegistries[0], operator.DefaultImage, operatorVersion))
+	expectedImages = append(expectedImages, fqOperatorImage(t))
 	t.Logf("expected images: %v", expectedImages)
 
 	metadataImages, err := getMetadataImages()

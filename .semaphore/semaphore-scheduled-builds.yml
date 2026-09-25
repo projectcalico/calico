@@ -46,6 +46,10 @@ global_job_config:
     commands:
       - export GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN}
       - export CALICO_DIR_NAME=${SEMAPHORE_GIT_DIR}
+      # Pin the build cache inside the working copy, which is what the epilogue
+      # tars and restores between runs. Left unset, the agent's own GOCACHE wins
+      # and nothing is persisted.
+      - export LOCAL_GO_PKG_CACHE=$HOME/${CALICO_DIR_NAME}/.go-pkg-cache
       - export S3_CACHE_DIR=s3://$CALICO_S3_BUCKET/$CALICO_S3_KEY_PREFIX/cache/${CALICO_DIR_NAME}
       - export S3_WORKFLOW_DIR=s3://$CALICO_S3_BUCKET/$CALICO_S3_KEY_PREFIX/workflow/${SEMAPHORE_WORKFLOW_ID}
       # The FV test artifacts the GCP VMs exchange live in GCS (see
@@ -305,6 +309,32 @@ blocks:
         - name: Check operator images
           commands:
             - ../.semaphore/run-and-monitor check-operator-images.log make check-operator-images
+  - name: "Check third-party dependency patches"
+    # Each component's patches/02-auto-gen-patches/ is derived from its
+    # dep-pins.txt, so regenerating it must be a no-op.
+    #
+    # metadata.mk is in the trigger because `go mod tidy`'s output depends on the
+    # Go toolchain: bumping GO_VERSION can leave every checked-in patch stale.
+    #
+    # Not a Prerequisites dependency -- it fetches three upstream trees and tidies
+    # each, so it gates the PR on its own rather than the component builds.
+    run:
+      when: >-
+        true or
+        change_in(['/Makefile', '/lib.Makefile', '/metadata.mk', '/hack/thirdparty', '/istio', '/third_party/envoy-gateway', '/third_party/envoy-ratelimit'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+    execution_time_limit:
+      minutes: 30
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      jobs:
+        - name: "Check dependency patches match their pins"
+          commands:
+            - make check-thirdparty-dep-patches
+            - make check-dirty
   - name: Check SemaphoreCI files
     run:
       when: >-
@@ -423,6 +453,9 @@ blocks:
             - make fix-changed
             - make check-ocp-no-crds
             - make check-dirty
+        - name: Check helm charts
+          commands:
+            - make test-charts
   - name: Store working copy
     run:
       when: "branch =~ '.*'"
@@ -636,10 +669,12 @@ blocks:
     # Whisker is a TypeScript/React frontend that won't consolidate into the
     # calico binary — it ships as its own image indefinitely. No Go build cache
     # to populate; only produces the image tarball for consumer blocks.
+    #
+    # Consumers ("E2E tests (KinD)", "Operator FV") list this block in their
+    # `dependencies:`, so CHANGE_IN_WITH_DEPENDENTS() folds their triggers into the
+    # arg below.
     run:
-      when: >-
-        true or
-        change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+      when: "true"
     dependencies: []
     task:
       jobs:
@@ -660,10 +695,11 @@ blocks:
     # tarball for load-cached-images to restore. Upload it first: a tarball
     # without its stamp would fail the consumer's untolerated gcloud cp.
     #
-    # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)") list this
-    # block in their `dependencies:`, so CHANGE_IN_WITH_DEPENDENTS() folds their
-    # triggers into the arg below — this block's own inputs, the operator's Go
-    # closure plus everything else under operator/.
+    # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)", "E2E tests:
+    # Gateway API Conformance") list this block in their `dependencies:`, so
+    # CHANGE_IN_WITH_DEPENDENTS() folds their triggers into the arg below — this
+    # block's own inputs, the operator's Go closure plus everything else under
+    # operator/.
     run:
       when: "true"
     dependencies: []
@@ -682,6 +718,40 @@ blocks:
             - docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
             - zstd -3 --rm /tmp/operator-image.tar
             - .semaphore/s3-cmd cp /tmp/operator-image.tar.zst "${S3_WORKFLOW_DIR}/operator-image.tar.zst"
+  - name: "Build: third-party images"
+    # The envoy images and the third-party CNI plugins fetch upstream sources and
+    # compile them, which every kind lane repeats today. They ship as one tarball
+    # because no lane wants a subset of them.
+    #
+    # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)", "E2E tests:
+    # Gateway API Conformance", "Manifest install (KIND)") list this block in
+    # their `dependencies:`, so CHANGE_IN_WITH_DEPENDENTS() folds their triggers
+    # into the arg below, which is this block's own input: everything under
+    # third_party/.
+    run:
+      when: "true"
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      jobs:
+        - name: "Build and cache third-party images"
+          commands:
+            - make -C third_party/envoy-gateway image
+            - make -C third_party/envoy-proxy image
+            - make -C third_party/envoy-ratelimit image
+            - make -C third_party/cni-plugins image
+            - >-
+              docker save
+              calico/envoy-gateway:latest-amd64
+              calico/envoy-proxy:latest-amd64
+              calico/envoy-ratelimit:latest-amd64
+              calico/third-party-cni-plugins:latest-amd64
+              -o /tmp/third-party-images.tar
+            - zstd -3 --rm /tmp/third-party-images.tar
+            - .semaphore/s3-cmd cp /tmp/third-party-images.tar.zst "${S3_WORKFLOW_DIR}/third-party-images.tar.zst"
   - name: Prerequisites
     skip:
       # Always skip, this is a dummy job used to group prerequisite checks.
@@ -902,61 +972,6 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
-  - name: "E2E tests on GCP kubeadm (local binary)"
-    run:
-      when: >-
-        true or change_in(['/e2e/**', '/.semaphore/end-to-end/scripts/'],
-        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
-    dependencies:
-      - Prerequisites
-    task:
-      secrets:
-        - name: marvin-github-ssh-private-key
-        - name: banzai-secrets
-      prologue:
-        commands:
-          - checkout
-          - source .semaphore/end-to-end/scripts/global_prologue.sh
-      epilogue:
-        always:
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh
-      env_vars:
-        - name: TEST_TYPE
-          value: k8s-e2e
-        - name: PRODUCT
-          value: calico
-        - name: FUNCTIONAL_AREA
-          value: "e2e-gcp.yml"
-        - name: USE_PRIVATE_REGISTRY
-          value: "true"
-        - name: PRIVATE_REGISTRY
-          value: "quay.io/"
-        - name: RUN_LOCAL_TESTS
-          value: "true"
-        - name: E2E_TEST_CONFIG
-          # Test selection is driven by the config file; see gcp/bpf.yaml for the
-          # include/exclude rationale.
-          value: "e2e/config/gcp/bpf.yaml"
-        - name: USE_API_SERVER
-          value: "false"
-        - name: ENABLE_EXTERNAL_NODE
-          value: "true"
-      jobs:
-        - name: gcp-kubeadm - e2e local binary
-          execution_time_limit:
-            hours: 3
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          matrix:
-            - env_var: PROVISIONER
-              values: ["gcp-kubeadm"]
-            - env_var: K8S_VERSION
-              values: ["stable"]
-            - env_var: INSTALLER
-              values: ["operator"]
-            - env_var: DATAPLANE
-              values: ["CalicoBPF"]
   - name: "E2E images"
     run:
       when: >-
@@ -1009,20 +1024,6 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
-  - name: E2E script & pipeline validations
-    run:
-      when: >-
-        true or change_in(['/.semaphore/end-to-end/'],
-        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
-    execution_time_limit:
-      minutes: 5
-    dependencies:
-      - Prerequisites
-    task:
-      jobs:
-        - name: "E2E script & pipeline validations: validate yaml"
-          commands:
-            - ./.semaphore/end-to-end/scripts/test_scripts/e2e-validation.sh
   - name: "E2E tests (KinD)"
     run:
       when: "true"
@@ -1032,6 +1033,7 @@ blocks:
       - "Build: node image"
       - "Build: whisker image"
       - "Build: operator image"
+      - "Build: third-party images"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
@@ -1457,17 +1459,28 @@ blocks:
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
   - name: "E2E tests: Gateway API Conformance"
     run:
-      when: >-
-        true or change_in(['/e2e/cmd/gateway', '/hack/test/kind/gateway-setup.sh', '/third_party/envoy-gateway', '/third_party/envoy-proxy', '/third_party/envoy-ratelimit'],
-        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+      when: "true"
     execution_time_limit:
       minutes: 60
     dependencies:
       - Prerequisites
+      - "Build: calico image"
+      - "Build: node image"
+      - "Build: whisker image"
+      - "Build: operator image"
+      - "Build: third-party images"
     task:
       env_vars:
+        # "calico" is the only group any block stores; the e2e runner this lane
+        # builds is calico Go code, so it is the one worth restoring.
         - name: BUILD_CACHE_GROUP
-          value: "node"
+          value: "calico"
+      prologue:
+        commands:
+          # Match the other kind lanes: free the /var/lib/docker space the
+          # pre-loaded images hold before loading the ones this lane needs.
+          - docker system prune -af
+          - .semaphore/load-cached-images calico node whisker
       jobs:
         - name: "Gateway API: Conformance Tests"
           commands:
@@ -1607,6 +1620,7 @@ blocks:
       - "Build: calico image"
       - "Build: node image"
       - "Build: operator image"
+      - "Build: third-party images"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
@@ -1706,6 +1720,41 @@ blocks:
           commands:
             - 'python3 ../hack/strip-skipped-tests.py ./report/*.xml 2>/dev/null || true'
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+  - name: "Manifest install (KIND)"
+    # Every other kind lane installs Calico through the operator, which renders
+    # its own DaemonSet. Only this lane applies the generated manifests, so it is
+    # the one that catches a manifest missing a piece the operator supplies. It
+    # then runs the datapath and policy specs to say the cluster works.
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+      - "Build: calico image"
+      - "Build: node image"
+      - "Build: third-party images"
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      prologue:
+        commands:
+          - docker system prune -af
+          - .semaphore/load-cached-images calico node
+      jobs:
+        - name: "Manifest install (KIND)"
+          commands:
+            - .semaphore/run-and-monitor manifest-install.log make kind-manifest-install-test
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+        on_fail:
+          commands:
+            - KUBECONFIG=$(pwd)/hack/test/kind/kind-manifests-kubeconfig.yaml .semaphore/collect-kind-diags
   - name: "Node: Static checks and UT"
     run:
       when: "true"
@@ -1877,6 +1926,8 @@ blocks:
     dependencies:
       - Prerequisites
       - "Build: calico image"
+      - "Build: node image"
+      - "Build: whisker image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP

@@ -10,8 +10,13 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
+
+func fqOperatorImage(t testing.TB) string {
+	t.Helper()
+	checkVersion(t, operatorVersion)
+	return fmt.Sprintf("%s/%s:%s", registry.DefaultOperatorRegistry, registry.OperatorImage, operatorVersion)
+}
 
 func TestOperatorPrintedImagesInExpectedList(t *testing.T) {
 	t.Parallel()
@@ -19,7 +24,7 @@ func TestOperatorPrintedImagesInExpectedList(t *testing.T) {
 	checkVersion(t, operatorVersion)
 	checkImages(t, images)
 
-	fqOperatorImage := fmt.Sprintf("%s/%s:%s", operator.DefaultRegistries[0], operator.DefaultImage, operatorVersion)
+	fqOperatorImage := fqOperatorImage(t)
 
 	// Pull the operator image.
 	t.Logf("Pulling operator image %s", fqOperatorImage)
@@ -43,14 +48,14 @@ func TestOperatorPrintedImagesInExpectedList(t *testing.T) {
 	}
 
 	// Parse the output and check that every calico image is in our expected list.
-	calicoPrefix := registry.DefaultCalicoRegistry + "/"
+	calicoPrefix := registry.DefaultProductRegistry + "/"
 	var missing []string
 	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		if strings.Contains(line, operator.DefaultImage) {
+		if strings.Contains(line, registry.OperatorImage) {
 			continue
 		}
 		// Extract the image name from the fully qualified image reference.

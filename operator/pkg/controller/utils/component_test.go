@@ -637,7 +637,7 @@ var _ = Describe("Component handler tests", func() {
 		Expect(rb.GetLabels()).NotTo(HaveKey(common.MultipleOwnersLabel))
 	})
 
-	Context("ensureTLSCiphers", func() {
+	Context("ensureTLSConfig", func() {
 		cipher1 := operatorv1.TLS_AES_128_GCM_SHA256
 		cipher2 := operatorv1.TLS_AES_256_GCM_SHA384
 		cipherList := operatorv1.TLSCipherSuites{
@@ -645,8 +645,8 @@ var _ = Describe("Component handler tests", func() {
 			operatorv1.TLSCipherSuite{Name: &cipher2},
 		}
 		ciphersToString := fmt.Sprintf("%s,%s", cipher1, cipher2)
-		DescribeTable("ensuring TLS Ciphers are set properly",
-			func(obj client.Object, installationCiphers operatorv1.TLSCipherSuites, expectedEnvVar string) {
+		DescribeTable("ensuring TLS configuration is set properly",
+			func(obj client.Object, installationCiphers operatorv1.TLSCipherSuites, tlsMinVersion *operatorv1.TLSVersion, expectedEnvVars map[string]string) {
 				installation := &operatorv1.Installation{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "default",
@@ -654,10 +654,11 @@ var _ = Describe("Component handler tests", func() {
 					},
 					Spec: operatorv1.InstallationSpec{
 						TLSCipherSuites: installationCiphers,
+						TLSMinVersion:   tlsMinVersion,
 					},
 				}
 				Expect(c.Create(ctx, installation)).To(BeNil())
-				Expect(ensureTLSCiphers(obj, &installation.Spec)).To(BeNil())
+				Expect(ensureTLSConfig(obj, &installation.Spec)).To(BeNil())
 
 				var containers []corev1.Container
 				switch o := obj.(type) {
@@ -668,14 +669,13 @@ var _ = Describe("Component handler tests", func() {
 				}
 
 				for _, c := range containers {
-					envVarFound := false
+					actualEnvVars := map[string]string{}
 					for _, envVar := range c.Env {
-						if envVar.Name == TLS_CIPHERS_ENV_VAR_NAME {
-							Expect(envVar.Value).To(Equal(expectedEnvVar))
-							return
+						if envVar.Name == TLSCiphersEnvVarName || envVar.Name == TLSMinVersionEnvVarName {
+							actualEnvVars[envVar.Name] = envVar.Value
 						}
 					}
-					Expect(envVarFound).To(Equal(expectedEnvVar != ""), "%s env var not found in container %s", TLS_CIPHERS_ENV_VAR_NAME, c.Name)
+					Expect(actualEnvVars).To(Equal(expectedEnvVars), "unexpected TLS environment variables in container %s", c.Name)
 				}
 			},
 			Entry("set TLS Ciphers on a DaemonSet",
@@ -690,7 +690,8 @@ var _ = Describe("Component handler tests", func() {
 					},
 				},
 				cipherList,
-				ciphersToString,
+				nil,
+				map[string]string{TLSCiphersEnvVarName: ciphersToString},
 			),
 			Entry("set TLS Ciphers on a Deployment",
 				&apps.Deployment{
@@ -704,7 +705,23 @@ var _ = Describe("Component handler tests", func() {
 					},
 				},
 				cipherList,
-				ciphersToString,
+				nil,
+				map[string]string{TLSCiphersEnvVarName: ciphersToString},
+			),
+			Entry("set TLS minimum version on a Deployment",
+				&apps.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-podtemplate"},
+					Spec: apps.DeploymentSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{{Image: "foo"}, {Image: "bar"}},
+							},
+						},
+					},
+				},
+				nil,
+				ptr.To(operatorv1.TLSVersion13),
+				map[string]string{TLSMinVersionEnvVarName: "VersionTLS13"},
 			),
 			Entry("set TLS Ciphers env var explicitly in the object",
 				&apps.Deployment{
@@ -717,7 +734,7 @@ var _ = Describe("Component handler tests", func() {
 										Image: "foo",
 										Env: []corev1.EnvVar{
 											{
-												Name:  TLS_CIPHERS_ENV_VAR_NAME,
+												Name:  TLSCiphersEnvVarName,
 												Value: "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
 											},
 										},
@@ -728,7 +745,33 @@ var _ = Describe("Component handler tests", func() {
 					},
 				},
 				cipherList,
-				string(operatorv1.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256),
+				nil,
+				map[string]string{TLSCiphersEnvVarName: string(operatorv1.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256)},
+			),
+			Entry("preserve TLS minimum version env var explicitly in the object",
+				&apps.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-podtemplate"},
+					Spec: apps.DeploymentSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Image: "foo",
+										Env: []corev1.EnvVar{
+											{
+												Name:  TLSMinVersionEnvVarName,
+												Value: "1.2",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				nil,
+				ptr.To(operatorv1.TLSVersion13),
+				map[string]string{TLSMinVersionEnvVarName: "1.2"},
 			),
 			Entry("empty TLS Ciphers configuration",
 				&apps.Deployment{
@@ -742,7 +785,8 @@ var _ = Describe("Component handler tests", func() {
 					},
 				},
 				nil,
-				"",
+				nil,
+				map[string]string{},
 			),
 		)
 	})

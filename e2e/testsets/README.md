@@ -2,7 +2,7 @@
 
 Generated. Run `make -C e2e gen-test-set` and commit the result; CI fails the diff otherwise.
 
-`index.txt` lists every CI lane in `.argoci/cron/` and `.semaphore/end-to-end/pipelines/`, the test set it resolves to, and how many specs that set selects. `sets/` holds one file per distinct selection, listing the spec names a run would execute.
+`index.txt` lists every CI lane in `.argoci/cron/` and `.semaphore/semaphore.yml.d/blocks/`, the test set it resolves to, and how many specs that set selects. `sets/` holds one file per distinct selection, listing the spec names a run would execute.
 
 The point is review. A change to a config under `e2e/config/`, or to a spec's name or labels, shows up here as the specs it added or removed, so the effect on CI coverage is visible in the PR rather than in the next cron run.
 

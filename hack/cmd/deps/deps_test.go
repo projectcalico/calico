@@ -15,6 +15,10 @@
 package main
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -359,5 +363,88 @@ func TestCalculateMacroOwnDepsEmpty(t *testing.T) {
 	// Default inclusions/exclusions are still present.
 	if !d.Exclusions.Contains("/**/*.md") {
 		t.Error("expected default exclusions in empty own-spec deps")
+	}
+}
+
+func TestEmbedGlobsForPattern(t *testing.T) {
+	root := t.TempDir()
+	for _, file := range []string{"pkg/data.yaml", "pkg/other.yaml", "pkg/templates/a.gotmpl", "pkg/sub/nested/b.txt", "pkg/sub/c.txt"} {
+		path := filepath.Join(root, file)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+		if err := os.WriteFile(path, nil, 0o644); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+	}
+	t.Chdir(root)
+
+	for _, tc := range []struct {
+		name     string
+		pattern  string
+		expected []string
+	}{
+		{name: "wildcard matching files", pattern: "*.yaml", expected: []string{"/pkg/*.yaml"}},
+		{name: "single file", pattern: "data.yaml", expected: []string{"/pkg/data.yaml"}},
+		{name: "whole directory", pattern: "templates", expected: []string{"/pkg/templates/**"}},
+		{name: "all: prefix", pattern: "all:templates", expected: []string{"/pkg/templates/**"}},
+		{name: "wildcard matching a directory", pattern: "sub/*", expected: []string{"/pkg/sub/nested/**", "/pkg/sub/*"}},
+		{name: "generated file not on disk", pattern: "chart.tgz", expected: []string{"/pkg/chart.tgz"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			globs := embedGlobsForPattern("/pkg", tc.pattern)
+			if !set.From(globs...).Equals(set.From(tc.expected...)) {
+				t.Errorf("embedGlobsForPattern(%q) = %v, want %v", tc.pattern, globs, tc.expected)
+			}
+		})
+	}
+}
+
+func TestAddSecondaryPkgInclusionsNonGo(t *testing.T) {
+	inclusions := set.New[string]()
+	if _, err := addSecondaryPkgInclusions(inclusions, "non-go:/felix/bpf-gpl"); err != nil {
+		t.Fatalf("rooted non-go spec: %v", err)
+	}
+	if !inclusions.Contains("/felix/bpf-gpl") {
+		t.Errorf("inclusions = %v, want /felix/bpf-gpl", inclusions.Slice())
+	}
+
+	if _, err := addSecondaryPkgInclusions(inclusions, "non-go:felix/bpf-gpl"); err == nil {
+		t.Error("unrooted non-go spec was accepted, want an error")
+	}
+}
+
+func TestSecondaryPkgBuildInputGlobs(t *testing.T) {
+	// An unrooted glob resolves against .semaphore/ and matches nothing, so the
+	// block would never fire on a change to these files.
+	cases := map[string][]string{
+		"typha":      {"/typha/Makefile", "/typha/deps.txt", "/typha/**/*Dockerfile*"},
+		"cmd/calico": {"/cmd/calico/Makefile", "/cmd/calico/deps.txt", "/cmd/calico/**/*Dockerfile*"},
+	}
+	for pkg, want := range cases {
+		got := set.From(secondaryPkgBuildInputGlobs(pkg)...)
+		if got.Len() != len(want) {
+			t.Errorf("%s: got %v, want %v", pkg, got.Slice(), want)
+		}
+		for _, w := range want {
+			if !got.Contains(w) {
+				t.Errorf("%s: missing glob %q", pkg, w)
+			}
+		}
+	}
+}
+
+func TestStaticGlobsAreRepoRooted(t *testing.T) {
+	check := func(src string, globs []string) {
+		for _, g := range globs {
+			if !strings.HasPrefix(g, "/") {
+				t.Errorf("%s: %q is not repo-rooted; Semaphore would resolve it under .semaphore/", src, g)
+			}
+		}
+	}
+	check("defaultInclusions", defaultInclusions)
+	check("defaultExclusions", defaultExclusions)
+	for pkg, globs := range nonGoDeps {
+		check(fmt.Sprintf("nonGoDeps[%q]", pkg), globs)
 	}
 }

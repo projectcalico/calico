@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -385,6 +385,11 @@ func (f *fakeIPAMClient) GetAssignmentAttributes(ctx context.Context, addr cnet.
 
 // SetOwnerAttributes sets ActiveOwnerAttrs and/or AlternateOwnerAttrs for an IP atomically.
 func (f *fakeIPAMClient) SetOwnerAttributes(ctx context.Context, ip cnet.IP, handleID string, updates *ipam.OwnerAttributeUpdates, preconditions *ipam.OwnerAttributePreconditions) error {
+	panic("not implemented") // TODO: Implement
+}
+
+// MoveIPToHandle transfers an already-allocated address to a new handle.
+func (f *fakeIPAMClient) MoveIPToHandle(ctx context.Context, ip cnet.IP, opts ipam.MoveOptions) error {
 	panic("not implemented") // TODO: Implement
 }
 

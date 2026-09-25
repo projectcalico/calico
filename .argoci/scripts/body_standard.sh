@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # body_standard.sh - ArgoCI orchestrator for the standard OSS e2e flow.
 #
-# Dispatches to the phase scripts in phases/. Ported from
-# .semaphore/end-to-end/scripts/body_standard.sh, trimmed to the OSS path
-# (the Semaphore version's HCP/MCM/hosting branches are Calico-Enterprise-only
-# and are dropped here). Each phase is self-contained; see phases/*.sh.
+# Dispatches to the phase scripts in phases/. Ported from the Semaphore
+# equivalent (since deleted) and trimmed to the OSS path: that version's
+# HCP/MCM/hosting branches are Calico-Enterprise-only and are dropped here.
+# Each phase is self-contained; see phases/*.sh.
 set -eo pipefail
 
 PHASES="$(cd "$(dirname "$0")" && pwd)/phases"
@@ -19,4 +19,5 @@ source "${PHASES}/install.sh"
 source "${PHASES}/configure.sh"
 source "${PHASES}/migrate.sh"
 source "${PHASES}/seed_images.sh"
+source "${PHASES}/load_images.sh"
 source "${PHASES}/run_tests.sh"

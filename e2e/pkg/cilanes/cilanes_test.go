@@ -96,70 +96,23 @@ func TestParseArgo(t *testing.T) {
 	Expect(byName["matrix-step [encap]"].Config).To(Equal("e2e/config/iptables/xtables-encap-nobgp.yaml"))
 }
 
-const semaphoreFixture = `
-global_job_config:
-  env_vars:
-    - name: E2E_TEST_CONFIG
-      value: e2e/config/nftables/xtables.yaml
-    - name: FUNCTIONAL_AREA
-      value: nftables.yml
-blocks:
-  - name: Block one
-    task:
-      env_vars:
-        - name: INSTALLER
-          value: operator
-      jobs:
-        - name: inherits
-          commands:
-            - body_standard.sh
-        - name: configured
-          env_vars:
-            - name: E2E_TEST_CONFIG
-              value: e2e/config/nftables/eks.yaml
-          commands:
-            - body_standard.sh
-        - name: matrixed
-          matrix:
-            - env_var: NETWORK_PLUGIN
-              values: ["calico", "aws"]
-          commands:
-            - body_standard.sh
-`
-
 const semaphoreSelectionMatrix = `
-blocks:
-  - name: Block one
-    task:
-      jobs:
-        - name: matrixed
-          matrix:
-            - env_var: E2E_TEST_CONFIG
-              values: ["e2e/config/nftables/xtables.yaml"]
-          commands:
-            - body_standard.sh
+- name: Block one
+  task:
+    jobs:
+      - name: matrixed
+        matrix:
+          - env_var: E2E_TEST_CONFIG
+            values: ["e2e/config/nftables/xtables.yaml"]
+        commands:
+          - body_standard.sh
 `
 
-func TestParseSemaphore(t *testing.T) {
+func TestParseSemaphoreBlocksRefusesSelectionMatrix(t *testing.T) {
 	RegisterTestingT(t)
 
-	lanes, err := parseSemaphore("pipeline.yml", []byte(semaphoreFixture))
-	Expect(err).NotTo(HaveOccurred())
-
-	byName := map[string]Lane{}
-	for _, l := range lanes {
-		byName[l.Name] = l
-	}
-
-	Expect(byName["Block one / inherits"].Config).To(Equal("e2e/config/nftables/xtables.yaml"))
-	Expect(byName["Block one / configured"].Config).To(Equal("e2e/config/nftables/eks.yaml"))
-	Expect(byName["Block one / inherits"].Area).To(Equal("nftables.yml"))
-
-	// A non-selection axis leaves the job as one lane.
-	Expect(byName["Block one / matrixed"].Config).To(Equal("e2e/config/nftables/xtables.yaml"))
-
-	// No pipeline varies the selection by matrix, so the parser refuses to guess.
-	_, err = parseSemaphore("pipeline.yml", []byte(semaphoreSelectionMatrix))
+	// No block varies the selection by matrix, so the parser refuses to guess.
+	_, err := parseSemaphoreBlocks("blocks/20-e2e.yml", []byte(semaphoreSelectionMatrix))
 	Expect(err).To(MatchError(ContainSubstring("matrix on E2E_TEST_CONFIG")))
 }
 
@@ -223,7 +176,13 @@ const blocksFixture = `
     jobs:
       - name: gcp-kubeadm
         commands:
-          - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          - .argoci/scripts/body_standard.sh
+      - name: matrixed
+        matrix:
+          - env_var: NETWORK_PLUGIN
+            values: ["calico", "aws"]
+        commands:
+          - .argoci/scripts/body_standard.sh
 `
 
 func TestParseSemaphoreBlocks(t *testing.T) {
@@ -261,6 +220,9 @@ func TestParseSemaphoreBlocks(t *testing.T) {
 	// A provisioned lane in the same directory still reads its config from the
 	// environment.
 	Expect(byName["E2E tests on GCP kubeadm / gcp-kubeadm"].Config).To(Equal("e2e/config/iptables/xtables.yaml"))
+
+	// A non-selection axis leaves the job as one lane, unsuffixed.
+	Expect(byName["E2E tests on GCP kubeadm / matrixed"].Config).To(Equal("e2e/config/iptables/xtables.yaml"))
 }
 
 // kindTargets duplicates what the Makefile does with E2E_TEST_CONFIG, so a

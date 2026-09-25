@@ -21,7 +21,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/archives"
+	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -47,47 +50,48 @@ func HashreleasePublished(cfg *hashreleaseserver.Config, hash string, ci bool) (
 // Specifically, we need to do the following:
 // - Copy the windows zip file to files/windows/calico-windows-<ver>.zip
 // - Copy all release Helm charts to charts/<chart>.tgz (without the version in the filename)
-// - Additionally keep an unversioned tigera-operator.tgz at the hashrelease root for compatibility
 // - Copy ocp.tgz to manifests/ocp.tgz
-func ReformatHashrelease(pin *pinnedversion.Pin, hashreleaseOutputDir string) error {
+//
+// helmCharts is false when the build was told to skip them, and there is
+// nothing to relocate.
+func ReformatHashrelease(pin *pinnedversion.Pin, hashreleaseOutputDir string, helmCharts bool) error {
 	logrus.Info("Modifying hashrelease output to match legacy format")
 
-	// Copy the windows zip file to files/windows/calico-windows-<ver>.zip
-	windowsDir := filepath.Join(hashreleaseOutputDir, "files", "windows")
+	windowsDir := archives.WindowsHashreleaseDir(hashreleaseOutputDir)
 	if err := os.MkdirAll(windowsDir, 0o755); err != nil {
 		return err
 	}
-	windowsZip := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("calico-windows-%s.zip", pin.ProductVersion))
-	windowsZipDst := filepath.Join(windowsDir, fmt.Sprintf("calico-windows-%s.zip", pin.ProductVersion))
-	if err := copyIfExists(windowsZip, windowsZipDst); err != nil {
+	windowsZipName := archives.WindowsFileName(pin.ProductVersion)
+	windowsZip := filepath.Join(archives.WindowsDir(hashreleaseOutputDir), windowsZipName)
+	if err := copyIfExists(windowsZip, filepath.Join(windowsDir, windowsZipName)); err != nil {
 		return err
 	}
 
 	// Copy the ocp.tgz to manifests/ocp.tgz
-	ocpTarball := filepath.Join(hashreleaseOutputDir, "ocp.tgz")
-	ocpTarballDst := filepath.Join(hashreleaseOutputDir, "manifests", "ocp.tgz")
+	ocpTarball := manifests.BundlePath(hashreleaseOutputDir)
+	ocpTarballDst := filepath.Join(manifests.Dir(hashreleaseOutputDir), manifests.OCPBundleFileName)
 	if err := copyIfExists(ocpTarball, ocpTarballDst); err != nil {
 		return err
 	}
 
-	// Add copy of charts with no version in name
-	chartsDir := filepath.Join(hashreleaseOutputDir, "charts")
-	if err := os.MkdirAll(chartsDir, 0o755); err != nil {
-		return err
+	if !helmCharts {
+		logrus.Info("Skipping helm chart reformat")
+		return nil
 	}
-	for _, chart := range utils.AllReleaseCharts() {
-		chartTarball := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("%s-%s.tgz", chart, pin.HelmChartVersion()))
-		chartTarballDst := filepath.Join(chartsDir, fmt.Sprintf("%s.tgz", chart))
-		if err := copyIfExists(chartTarball, chartTarballDst); err != nil {
-			return err
-		}
-	}
+	return unversionedCharts(pin, charts.OutputDir(hashreleaseOutputDir), charts.Dir(hashreleaseOutputDir))
+}
 
-	// Keep copy of the Tigera operator chart without version in name in root dir
-	operatorTarball := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("%s-%s.tgz", utils.TigeraOperatorChart, pin.HelmChartVersion()))
-	operatorTarballDst := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("%s.tgz", utils.TigeraOperatorChart))
-	if err := copyIfExists(operatorTarball, operatorTarballDst); err != nil {
+// A chart the build was asked to produce is not optional
+func unversionedCharts(pin *pinnedversion.Pin, srcDir, dstDir string) error {
+	if err := os.MkdirAll(dstDir, utils.DirPerms); err != nil {
 		return err
+	}
+	for _, chart := range charts.All() {
+		src := filepath.Join(srcDir, charts.FileName(chart, pin.HelmChartVersion()))
+		dst := filepath.Join(dstDir, charts.FileName(chart, ""))
+		if err := utils.CopyFile(src, dst); err != nil {
+			return fmt.Errorf("copying %s chart: %w", chart, err)
+		}
 	}
 	return nil
 }

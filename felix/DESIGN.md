@@ -253,7 +253,7 @@ cost rule, cross-cutting review notes); the others have tight
 `applyTo` globs scoped to their topic. **Load each of them either
 when you touch a matched file or when you're working on the
 related topic** — the globs cover the common cases, but a change
-in a central file (e.g. `tc.c`, `bpf.h`) may legitimately need a
+in a central file (e.g. `tc.c`, `cali_bpf.h`) may legitimately need a
 sub-design even if the immediate edit site doesn't match its glob
 narrowly, and conversely a PR description that says "this fixes
 the conntrack scanner" should pull `bpf-conntrack-flowstate.md`
@@ -264,7 +264,7 @@ large enough to bloat AI-tool context.
 | Topic | Applies to | Status |
 |---|---|---|
 | [bpf-overview](./design/bpf-overview.md) | `felix/bpf/**`, `felix/bpf-gpl/**`, `felix/dataplane/linux/bpf_*.go`, `felix/dataplane/linux/vxlan_mgr.go` (umbrella — pulled by every BPF change) | ✅ exists |
-| [bpf-tc-programs](./design/bpf-tc-programs.md) | `felix/bpf-gpl/tc.c`, `tc_preamble.c`, `xdp_preamble.c`, `jump.h`, `bpf.h`, `globals.h`, `types.h`, `felix/bpf/hook/**`, `felix/bpf/tc/**`, `felix/bpf/jump/**`, `felix/bpf/ifstate/**` | ✅ exists |
+| [bpf-tc-programs](./design/bpf-tc-programs.md) | `felix/bpf-gpl/tc.c`, `tc_preamble.c`, `xdp_preamble.c`, `jump.h`, `cali_bpf.h`, `globals.h`, `types.h`, `felix/bpf/hook/**`, `felix/bpf/tc/**`, `felix/bpf/jump/**`, `felix/bpf/ifstate/**` | ✅ exists |
 | [bpf-xdp](./design/bpf-xdp.md) | `felix/bpf-gpl/xdp.c`, `xdp_preamble.c`, `metadata.h`, `felix/bpf/xdp/**` | ✅ exists |
 | [bpf-services](./design/bpf-services.md) | `felix/bpf/proxy/**`, `felix/bpf/nat/**`, `felix/bpf/consistenthash/**`, `felix/bpf-gpl/connect*.{c,h}`, `nat*.h`, `nat_lookup.h`, `maglev.h`, `ctlb*.h`, `sendrecv.h`, `felix/dataplane/linux/bpf_ep_mgr.go` | ✅ exists |
 | [bpf-host-networking](./design/bpf-host-networking.md) | `felix/dataplane/linux/bpf_ep_mgr.go`, `dataplanedefs/dataplane_defs.go`, `felix/bpf-gpl/fib_co_re.h` | ✅ exists |
@@ -274,6 +274,7 @@ large enough to bloat AI-tool context.
 | [bpf-tests](./design/bpf-tests.md) | `felix/bpf/ut/**`, `felix/fv/bpf_*_test.go` | ✅ exists |
 | [dataplane](./design/dataplane.md) | `felix/dataplane/linux/**` (the shared loop/manager/resync architecture, all modes — BPF-specific files here are *also* matched by the `bpf-*` rows, intentionally), `felix/iptables/**`, `felix/nftables/**`, `felix/generictables/**`, `felix/ipsets/**`, `felix/markbits/**`, `felix/rules/**`; also the manager/driver architecture & resync doctrine for `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` | ✅ exists |
 | [calc-graph](./design/calc-graph.md) | `felix/calc/**`, `felix/labelindex/**`, `felix/dispatcher/**` | ✅ exists |
+| [neighbour-discovery](./design/neighbour-discovery.md) | `felix/dataplane/linux/proxy_neigh_mgr.go`; the proxy-ARP sysctl and live-migration ARP-suppression parts of `felix/dataplane/linux/endpoint_mgr.go` (that file's manager architecture is [dataplane](./design/dataplane.md)'s). Depends on, and is invalidated by changes to, `cni-plugin/pkg/dataplane/linux/dataplane_linux.go` and `networking-calico/networking_calico/agent/linux/dhcp.py` | ✅ exists |
 | route-sync (deep netlink design only) | `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` — *architecture covered by [dataplane.md](./design/dataplane.md); this row reserved for the deeper netlink-level resync design* | *not yet written* |
 | flow-logs-collector | `felix/collector/**` | *not yet written* |
 | config-engine | `felix/config/**` | *not yet written* |

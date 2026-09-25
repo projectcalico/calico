@@ -81,7 +81,7 @@ func TestRapidClientImageIsConsistent(t *testing.T) {
 			"RAPIDCLIENT_IMAGE := " + repo,
 			"RAPIDCLIENT_TAG := " + tag,
 		},
-		"../../../../.semaphore/end-to-end/scripts/phases/load_images.sh": {
+		"../../../../.argoci/scripts/phases/load_images.sh": {
 			`_img="` + ref + `"`,
 			`TAG_NAME="` + tag + `"`,
 		},

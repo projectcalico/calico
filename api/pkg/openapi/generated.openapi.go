@@ -3194,7 +3194,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"logConnectionTransitions": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogConnectionTransitions controls whether Felix emits an additional kernel log recording the first observed response for each connection that matched a policy rule with a Log action. When set to FirstResponseAfterLog, each connection whose initial log was emitted gets one follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the transition: \"-est\" when the first reply packet is seen, \"-rst\" when the response is a TCP RST (connection refused), or \"-icmp-err\" when the response is a related ICMP error (e.g. port unreachable). The log body is the standard kernel packet log of the response packet, so the flow is identified by its 5-tuple and can be correlated with the original policy Log line (with source and destination swapped). A logged connection with no follow-up log never received a response. Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log either, so every follow-up log pairs with an initial one. Enabling this consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode. [Default: Disabled]",
+							Description: "LogConnectionTransitions controls whether Felix emits an additional kernel log recording the first observed response for each connection that matched a policy rule with a Log action. When set to FirstResponseAfterLog, each connection whose initial log was emitted gets one follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the transition: \"-est\" when the first reply packet is seen, \"-rst\" when the response is a TCP RST (connection refused), or \"-icmp-err\" when the response is a related ICMP error (e.g. port unreachable). The log body is the standard kernel packet log of the response packet. For \"-est\" and \"-rst\" its 5-tuple is the original policy Log line's with source and destination swapped; for \"-icmp-err\" the bracketed inner header carries the original 5-tuple unswapped. A logged connection with no follow-up log never received a response. Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log either, so every follow-up log pairs with an initial one. Enabling this consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode. [Default: Disabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3762,7 +3762,6 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"bpfLogLevel": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFLogLevel controls the log level of the BPF programs when in BPF dataplane mode.  One of \"Off\", \"Info\", or \"Debug\".  The logs are emitted to the BPF trace pipe, accessible with the command `tc exec bpf debug`. [Default: Off].",
-							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -6050,6 +6049,13 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref commo
 							Description: "DebugProfilePort configures the port to serve memory and cpu profiles on. If not specified, profiling is disabled. Valid values are: 0-65535.",
 							Type:        []string{"integer"},
 							Format:      "int32",
+						},
+					},
+					"debugProfileHost": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DebugProfileHost is the host IP or hostname to bind the profiling port to. Set to \"0.0.0.0\" for all interfaces to make profiles reachable from off-host. The profiling endpoints are unauthenticated and expose heap dumps, goroutine stacks and CPU profiles, so prefer the default and use kubectl port-forward for remote access. Only used if DebugProfilePort is set. [Default: localhost]",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},

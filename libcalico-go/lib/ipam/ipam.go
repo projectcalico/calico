@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1123,6 +1123,106 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 		return nil
 	}
 	return errors.New("Max retries hit - excessive concurrent IPAM requests")
+}
+
+// MoveIPToHandle transfers an allocated address to opts.ToHandle in one block update.
+func (c ipamClient) MoveIPToHandle(ctx context.Context, ip net.IP, opts MoveOptions) error {
+	if opts.ToHandle == "" {
+		return errors.New("no target handle specified in options")
+	}
+	if opts.ExpectedOwner == nil {
+		return errors.New("no expected owner specified in options; moving an address requires verifying who owns it")
+	}
+	if opts.ExpectedOwner.Namespace == "" || opts.ExpectedOwner.Name == "" {
+		// The empty owner matches an allocation with no owner attributes at all, which is
+		// never a workload's.
+		return errors.New("expected owner must name both a namespace and a pod")
+	}
+
+	// A move hands an address between two handles of the same workload. Letting the new
+	// attributes name someone else would be a transfer of ownership, which this is not.
+	if !opts.ExpectedOwner.Matches(opts.Attrs) {
+		return fmt.Errorf("new attributes for %s do not match the expected owner pod=%s namespace=%s; a move cannot change who owns an address",
+			ip, opts.ExpectedOwner.Name, opts.ExpectedOwner.Namespace)
+	}
+	opts.ToHandle = sanitizeHandle(opts.ToHandle)
+	opts.ExpectedHandle = sanitizeHandle(opts.ExpectedHandle)
+
+	logCtx := log.WithFields(log.Fields{
+		"ip":       ip,
+		"toHandle": opts.ToHandle,
+	})
+
+	pool, err := c.blockReaderWriter.getPoolForIP(ctx, ip, nil)
+	if err != nil {
+		return err
+	}
+	if pool == nil {
+		return fmt.Errorf("the provided IP address %s is not in a configured pool", ip)
+	}
+
+	cfg, err := c.GetIPAMConfig(ctx)
+	if err != nil {
+		logCtx.WithError(err).Error("Error getting IPAM config")
+		return err
+	}
+
+	blockCIDR := getBlockCIDRForAddress(ip, pool)
+	for range datastoreRetries {
+		obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
+		if err != nil {
+			logCtx.WithError(err).Error("Error getting block")
+			return err
+		}
+
+		block := blockFromBackend(cfg, obj.Value.(*model.AllocationBlock))
+		fromHandle, err := block.moveIPToHandle(cfg, ip, opts)
+		if err != nil {
+			logCtx.WithError(err).Error("Failed to move address to new handle")
+			return err
+		}
+		if fromHandle == opts.ToHandle {
+			logCtx.Info("Address is already owned by the target handle, nothing to move")
+			return nil
+		}
+
+		// Claim against the new handle before the block write, so we never end up with an
+		// allocation that no handle accounts for.
+		if err := c.incrementHandle(ctx, opts.ToHandle, blockCIDR, 1, 0); err != nil {
+			logCtx.WithError(err).Warn("Failed to increment target handle")
+			return fmt.Errorf("failed to increment handle %s: %w", opts.ToHandle, err)
+		}
+
+		if _, err = c.blockReaderWriter.updateBlock(ctx, obj); err != nil {
+			// Give the claim back whatever the failure was, otherwise a retry double-counts.
+			cleanupCtx, cancel := contextForCleanup(ctx)
+			if derr := c.decrementHandle(cleanupCtx, opts.ToHandle, blockCIDR, 1, nil); derr != nil {
+				logCtx.WithError(derr).Warn("Failed to decrement target handle after failed block update")
+			}
+			cancel()
+
+			if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+				logCtx.WithError(err).Debug("CAS error moving address - retry")
+				continue
+			}
+			logCtx.WithError(err).Warnf("Update failed on block %s", blockCIDR.String())
+			return err
+		}
+
+		// A failed decrement strands the old handle permanently: nothing reconciles the
+		// count, though no allocation is lost.
+		if fromHandle != "" {
+			cleanupCtx, cancel := contextForCleanup(ctx)
+			if err := c.decrementHandle(cleanupCtx, fromHandle, blockCIDR, 1, nil); err != nil {
+				logCtx.WithError(err).WithField("fromHandle", fromHandle).Warn("Failed to decrement previous handle")
+			}
+			cancel()
+		}
+
+		logCtx.WithField("fromHandle", fromHandle).Info("Moved address to new handle")
+		return nil
+	}
+	return errors.New("max retries hit - excessive concurrent IPAM requests")
 }
 
 // handleMaxAllocReached handles the case where incrementHandle fails due to maxAlloc constraint.

@@ -1254,12 +1254,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			collectorConntrackInfoReader = collectorCtInfoReader
 		}
 
-		// Add connection limit scanner as a low-frequency drift safety net.
-		// It piggybacks on the CT scan loop but downsamples its recount work
-		// internally (see connLimitScannerRunEveryN in connlimit_scanner.go),
-		// so the actual recount runs roughly every 30s. It covers silent
-		// CT-entry purges that the BPF fast-path can't observe: half-close,
-		// idle TCPEstablished timeout, network partition, and LRU eviction.
+		// Returns the slot of any connection the fast path did not decrement.
 		if bpfEndpointManager != nil {
 			connLimitProvider := func() map[string]bpfconntrack.ConnLimitPodInfo {
 				return bpfEndpointManager.GetConnLimitedPodInfo()
@@ -2248,6 +2243,18 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 					Match:   d.newMatch().InInterface(dataplanedefs.BPFOutDev),
 					Action:  d.actions.Allow(),
 					Comment: []string{"From ", dataplanedefs.BPFOutDev, " device, mark verified, accept."},
+				},
+			)
+
+			// Forwarded between two host interfaces, so matched by none of the accepts
+			// above. Linux conntrack vetted it, the same signal INPUT trusts.
+			fwdRules = append(fwdRules,
+				generictables.Rule{
+					Match: d.newMatch().
+						MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask).
+						ConntrackState("ESTABLISHED,RELATED"),
+					Action:  d.actions.Allow(),
+					Comment: []string{"Accept forwarded packets from flows that pre-date BPF."},
 				},
 			)
 		}

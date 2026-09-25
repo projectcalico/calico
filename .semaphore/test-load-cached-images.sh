@@ -69,6 +69,19 @@ run() {
   "$@"
 }
 
+# Every case below loads the third-party tarball, whose markers live in the
+# working tree. Note the ones this tree lacks, so case 3b can remove them again.
+tp_markers=(
+  "$repo_root/third_party/envoy-gateway/.envoy-gateway.created-amd64"
+  "$repo_root/third_party/envoy-proxy/.envoy-proxy.created-amd64"
+  "$repo_root/third_party/envoy-ratelimit/.envoy-ratelimit.created-amd64"
+  "$repo_root/third_party/cni-plugins/.cni-plugins.created-amd64"
+)
+tp_stale=()
+for marker in "${tp_markers[@]}"; do
+  [ -e "$marker" ] || tp_stale+=("$marker")
+done
+
 # 1. Credential-less build, empty cache: only the requested components are
 #    built from source, through their .image.created marker rules.
 out=$(CURL_FAIL=1 run "$repo_root/.semaphore/load-cached-images" calico 2>&1)
@@ -77,6 +90,7 @@ check "read-only miss RC=0" [ "$rc" = 0 ]
 check "read-only miss builds calico" grep -q "^make -C ${repo_root} ${repo_root}/cmd/calico/.image.created-amd64" "$stub_log"
 check "read-only miss skips node" test "$(grep -c 'node/.image.created' "$stub_log")" = 0
 check "read-only miss skips whisker" test "$(grep -c 'whisker/.image.created' "$stub_log")" = 0
+check "read-only miss skips third-party" test "$(grep -c 'third_party/' "$stub_log")" = 0
 check "read-only miss says so" grep -q "credential-less build" <<<"$out"
 
 # 2. A requested node image goes through load-nft-rpms.sh before building, so
@@ -91,6 +105,18 @@ rc=$?
 check "cache hit RC=0" [ "$rc" = 0 ]
 check "cache hit loads image" grep -q "^docker load " "$stub_log"
 check "cache hit builds nothing" test "$(grep -c '^make ' "$stub_log")" = 0
+
+# 3b. The third-party images arrive as one tarball covering four markers, so a
+#     hit has to touch every one or the lane rebuilds that component. An earlier
+#     case already touched them, so clear them first.
+rm -f "${tp_markers[@]}"
+run "$repo_root/.semaphore/load-cached-images" calico >/dev/null 2>&1
+tp_missing=0
+for marker in "${tp_markers[@]}"; do
+  [ -f "$marker" ] || tp_missing=$((tp_missing + 1))
+done
+check "cache hit touches every third-party marker" test "$tp_missing" = 0
+[ ${#tp_stale[@]} -eq 0 ] || rm -f "${tp_stale[@]}"
 
 # 4. With credentials, a miss is tolerated and nothing is built — unchanged
 #    behaviour, since the producer block simply may not have run.

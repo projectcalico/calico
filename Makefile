@@ -3,7 +3,7 @@ PACKAGE_NAME = github.com/projectcalico/calico
 include metadata.mk
 include lib.Makefile
 
-DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
+DOCKER_RUN := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--net=host \
 		--init \
@@ -17,7 +17,7 @@ DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e GOOS=$(BUILDOS) \
 		-e "GOFLAGS=$(GOFLAGS)" \
 		-v $(CURDIR):/go/src/github.com/projectcalico/calico:rw \
-		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
+		-v $(LOCAL_GO_PKG_CACHE):/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
 .PHONY: update-file-copyrights
@@ -87,6 +87,11 @@ check-ocp-no-crds:
 	@echo "Checking for files in manifests/ocp with CustomResourceDefinitions"
 	@CRD_FILES_IN_OCP_DIR=$$(grep "^kind: CustomResourceDefinition" manifests/ocp/* -l || true); if [ ! -z "$$CRD_FILES_IN_OCP_DIR" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$$CRD_FILES_IN_OCP_DIR"; exit 1; fi
 
+.PHONY: test-charts
+## Render the helm charts and assert on the resulting Kubernetes objects.
+test-charts: bin/helm
+	$(DOCKER_GO_BUILD) sh -c 'PATH=$$PWD/bin::$$PATH go test -count=1 ./charts/test/...'
+	
 yaml-lint:
 	@docker run --rm $$(tty -s && echo "-it" || echo) -v $(PWD):/data cytopia/yamllint:latest .
 
@@ -110,6 +115,7 @@ generate:
 	# Before the manifests, which take the operator's CRDs from its own tree.
 	$(MAKE) -C operator gen-files
 	$(MAKE) gen-manifests
+	$(MAKE) -C e2e gen-test-set
 	$(MAKE) fix-changed
 
 gen-manifests: bin/helm bin/yq
@@ -141,6 +147,23 @@ $(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./
 	  grep '^go' go.mod && \
 	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps combined $(patsubst %/,%,$(dir $@))"; \
 	} > $@
+
+# The pin file is what onboards a component: one without it is left out,
+# because the generator treats an absent pin file as "no pins" and would delete
+# the patch.
+THIRDPARTY_DEP_PIN_FILES=$(wildcard third_party/*/dep-pins.txt istio/dep-pins.txt)
+
+.PHONY: regen-thirdparty-dep-patches
+regen-thirdparty-dep-patches:
+	@for pins in $(THIRDPARTY_DEP_PIN_FILES); do \
+		$(MAKE) -C $$(dirname $$pins) regen-dep-patches || exit 1; \
+	done
+
+.PHONY: check-thirdparty-dep-patches
+check-thirdparty-dep-patches:
+	@for pins in $(THIRDPARTY_DEP_PIN_FILES); do \
+		$(MAKE) -C $$(dirname $$pins) check-dep-patches || exit 1; \
+	done
 
 # bin/send-perf-results is the tool that pushes hack/perf JSON docs to the Lens
 # Elasticsearch cluster (see hack/perf/README.md). Built statically so CI jobs
@@ -263,6 +286,23 @@ kind-up:
 kind-migration-test:
 	KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 $(MAKE) kind-up
 	$(REPO_ROOT)/hack/test/kind/migration/run_test.sh
+
+## Create a kind cluster, install Calico from the generated manifests, and run
+## the datapath and policy conformance specs against it. Every other kind lane
+## installs via the operator.
+.PHONY: kind-manifest-install-test
+kind-manifest-install-test:
+	$(MAKE) -C e2e build
+	$(MAKE) -j$(NUM_BUILD_JOBS) kind-build-images
+	$(MAKE) kind-cluster-create KIND_CONFIG=$(KIND_DIR)/kind-manifests.config CALICO_API_GROUP=projectcalico.org/v3
+	REPO_ROOT=$(REPO_ROOT) KIND=$(KIND) KIND_NAME=kind-manifests \
+		KUBECONFIG=$(KIND_DIR)/kind-manifests-kubeconfig.yaml \
+		$(REPO_ROOT)/hack/test/kind/deploy_manifests.sh
+	$(MAKE) e2e-run \
+		KIND_NAME=kind-manifests \
+		KUBECONFIG=$(KIND_DIR)/kind-manifests-kubeconfig.yaml \
+		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind/manifest-install.yaml \
+		E2E_JUNIT_REPORT=e2e_manifest_install.xml
 
 ## Create a kind cluster and run the conformance e2e tests.
 e2e-test:
@@ -453,9 +493,6 @@ release: release/bin/release
 # Publish an already built release.
 release-publish: release/bin/release bin/gh bin/ghr bin/helm
 	@release/bin/release release publish
-
-release-public: bin/gh release/bin/release
-	@release/bin/release release public
 
 # Create a release branch.
 create-release-branch: release/bin/release

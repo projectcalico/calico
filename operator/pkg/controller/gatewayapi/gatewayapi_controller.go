@@ -64,22 +64,54 @@ const (
 
 var log = logf.Log.WithName("controller_gatewayapi")
 
+// ReconcilerOptions is what the Gateway API reconciler needs to run.
+type ReconcilerOptions struct {
+	Client         client.Client
+	Scheme         *runtime.Scheme
+	Status         status.StatusManager
+	TierWatchReady *utils.ReadyFlag
+	ClusterDomain  string
+	Variant        operatorv1.ProductVariant
+	Ext            extensions.GatewayAPIExtension
+}
+
+// NewReconciler returns a Gateway API reconciler a caller can drive without a manager.
+// Add replaces the lazy watches, which a manager-less caller has no controller to add.
+func NewReconciler(o ReconcilerOptions) *ReconcileGatewayAPI {
+	tierWatchReady := o.TierWatchReady
+	if tierWatchReady == nil {
+		tierWatchReady = &utils.ReadyFlag{}
+	}
+
+	return &ReconcileGatewayAPI{
+		client:              o.Client,
+		scheme:              o.Scheme,
+		status:              o.Status,
+		tierWatchReady:      tierWatchReady,
+		clusterDomain:       o.ClusterDomain,
+		variant:             o.Variant,
+		ext:                 o.Ext,
+		newComponentHandler: utils.NewComponentHandler,
+		watchEnvoyProxy:     func(operatorv1.NamespacedName) error { return nil },
+		watchEnvoyGateway:   func(operatorv1.NamespacedName) error { return nil },
+		watchGateways:       func() error { return nil },
+	}
+}
+
 // Add creates a new GatewayAPI Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 //
 // Start Watches within the Add function for any resources that this controller creates or monitors. This will trigger
 // calls to Reconcile() when an instance of one of the watched resources is modified.
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	r := &ReconcileGatewayAPI{
-		client:              mgr.GetClient(),
-		scheme:              mgr.GetScheme(),
-		tierWatchReady:      &utils.ReadyFlag{},
-		status:              status.New(mgr.GetClient(), "gatewayapi", opts.KubernetesVersion),
-		clusterDomain:       opts.ClusterDomain,
-		variant:             opts.Variant,
-		ext:                 opts.Extensions.GatewayAPI(),
-		newComponentHandler: utils.NewComponentHandler,
-	}
+	r := NewReconciler(ReconcilerOptions{
+		Client:        mgr.GetClient(),
+		Scheme:        mgr.GetScheme(),
+		Status:        status.New(mgr.GetClient(), "gatewayapi", opts.KubernetesVersion),
+		ClusterDomain: opts.ClusterDomain,
+		Variant:       opts.Variant,
+		Ext:           opts.Extensions.GatewayAPI(),
+	})
 	r.status.Run(opts.ShutdownContext)
 
 	c, err := ctrlruntime.NewController("gatewayapi-controller", mgr, ctrl.Options{Reconciler: r})
@@ -602,7 +634,7 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 	}
 
 	// Per-namespace resources, owned by the namespace's Gateways so the GC cleans them up.
-	if err = r.reconcileGatewayNamespaceResources(ctx, trustedBundle, pullSecrets, gwList.Items, ownedClass); err != nil {
+	if err = r.ReconcileGatewayNamespaceResources(ctx, trustedBundle, pullSecrets, gwList.Items, ownedClass); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error writing per-namespace Gateway resources", err, log)
 		return reconcile.Result{}, err
 	}
@@ -684,16 +716,10 @@ func (r *ReconcileGatewayAPI) maintainFinalizer(ctx context.Context, gatewayAPI 
 	return utils.MaintainInstallationFinalizer(ctx, r.client, gatewayAPI, render.GatewayAPIFinalizer, &gatewayAPIDeployment)
 }
 
-// reconcileGatewayNamespaceResources writes the per-namespace resources owned by the namespace's
-// Gateways, so the GC removes them once the last Gateway is gone (and the GatewayAPI CR's deletion
-// doesn't strand them). Reserved namespaces are skipped; the trust bundle and operator-secrets
-// RoleBinding are written for every variant, and the variant's extension adds whatever else the
-// namespace needs.
-// Each object is written once per owning Gateway, because the component handler takes a single
-// owner. MultipleOwnersLabel makes it merge that owner reference into the references already on the
-// object instead of replacing them, which is what keeps the namespace's other Gateways — and any
-// reference another feature added, such as the waypoint controller's Istio CR — in place.
-func (r *ReconcileGatewayAPI) reconcileGatewayNamespaceResources(ctx context.Context, bundle certificatemanagement.TrustedBundle, pullSecrets []*corev1.Secret, gateways []gapi.Gateway, ownedClass map[string]bool) error {
+// ReconcileGatewayNamespaceResources writes each namespace's resources once per owning Gateway,
+// skipping reserved namespaces. MultipleOwnersLabel makes the handler merge that owner into the
+// references already there rather than replace them.
+func (r *ReconcileGatewayAPI) ReconcileGatewayNamespaceResources(ctx context.Context, bundle certificatemanagement.TrustedBundle, pullSecrets []*corev1.Secret, gateways []gapi.Gateway, ownedClass map[string]bool) error {
 	gatewaysByNamespace := map[string][]*gapi.Gateway{}
 	for i := range gateways {
 		gw := &gateways[i]

@@ -2,27 +2,30 @@
 // Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#ifndef __CALI_BPF_TYPES_H__
-#define __CALI_BPF_TYPES_H__
+#ifndef __CALI_TYPES_H__
+#define __CALI_TYPES_H__
 
-#include <linux/types.h>
 #include <linux/bpf.h>
-#include <linux/pkt_cls.h>
-#ifdef IPVER6
-#include <linux/ipv6.h>
-#include <linux/icmpv6.h>
-#else
-#include <linux/ip.h>
-#include <linux/icmp.h>
-#endif
-#include <linux/tcp.h>
+#include <linux/if_ether.h>
 #include <linux/in.h>
+#include <linux/pkt_cls.h>
+#include <linux/tcp.h>
+#include <linux/types.h>
 #include <linux/udp.h>
-#include "bpf.h"
-#include "arp.h"
+#ifdef IPVER6
+#include <linux/icmpv6.h>
+#include <linux/ipv6.h>
+#else
+#include <linux/icmp.h>
+#include <linux/ip.h>
+#endif
+
+#include "cali_bpf.h"
 #include "conntrack_types.h"
-#include "nat_types.h"
 #include "events_type.h"
+#include "globals.h"
+#include "ip_addr.h"
+#include "nat_types.h"
 #include "reasons.h"
 
 #define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
@@ -173,6 +176,12 @@ enum cali_state_flags {
 	CALI_ST_FIRST_FRAG        = 0x4000,
 	/* CALI_ST_NO_L4_NAT is set to skip L4 NAT even if there is a NAT - typically IP fragment */
 	CALI_ST_NO_L4_NAT	  = 0x8000,
+	/* CALI_ST_RST_NO_CT is set when the RST rejects a flow that has no CT
+	 * entry, so the destination must not police it. */
+	CALI_ST_RST_NO_CT	  = 0x10000,
+	/* CALI_ST_HOST_ORIGIN is set when a to-workload packet came from the
+	 * host namespace. */
+	CALI_ST_HOST_ORIGIN	  = 0x20000,
 };
 
 struct cali_tc_ctx {
@@ -324,4 +333,4 @@ static CALI_BPF_INLINE int l4_hdr_len(struct cali_tc_ctx *ctx)
 #define IP_SET(var, val) ((var) = (val))
 
 
-#endif /* __CALI_BPF_TYPES_H__ */
+#endif /* __CALI_TYPES_H__ */

@@ -270,3 +270,14 @@ func TestOperatorComponentHonoursOverrides(t *testing.T) {
 		t.Errorf("version %q, want %q", over.Version, testProductVersion)
 	}
 }
+
+// A pin written before the registry had a field, or one that omitted it as
+// empty, still names the default rather than nothing.
+func TestPinRegistryDefaults(t *testing.T) {
+	if got := (&PinnedVersion{Title: "v3.30.0"}).pin().ProductRegistry; got != registry.DefaultProductRegistry {
+		t.Errorf("omitted registry = %q, want %q", got, registry.DefaultProductRegistry)
+	}
+	if got := (&PinnedVersion{Title: "v3.30.0", Registry: "gcr.io/x"}).pin().ProductRegistry; got != "gcr.io/x" {
+		t.Errorf("set registry = %q, want %q", got, "gcr.io/x")
+	}
+}
