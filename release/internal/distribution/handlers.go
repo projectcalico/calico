@@ -47,7 +47,7 @@ const (
 	recursiveFlag    = "--recursive"
 	cacheControlFlag = "--cache-control"
 
-	MutableCachePolicy = "max-age=300"
+	MutableCachePolicy = "max-age=60, s-maxage=300, stale-while-revalidate=60"
 )
 
 var publicRead = []string{"--acl", "public-read"}
@@ -101,10 +101,9 @@ type S3 struct {
 
 	Private bool
 
-	// Empty omits the header.
-	CachePolicy string
-
 	DryRun bool
+
+	CachePolicy string // Caching behaviour for the uploaded objects.
 
 	Runner command.CommandRunner
 }
