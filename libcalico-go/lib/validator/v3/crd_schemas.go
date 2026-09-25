@@ -27,6 +27,8 @@ import (
 	structuralschema "k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
 	celvalidation "k8s.io/apiextensions-apiserver/pkg/apiserver/schema/cel"
 	schemadefaulting "k8s.io/apiextensions-apiserver/pkg/apiserver/schema/defaulting"
+	"k8s.io/apiextensions-apiserver/pkg/apiserver/schema/listtype"
+	schemaobjectmeta "k8s.io/apiextensions-apiserver/pkg/apiserver/schema/objectmeta"
 	schemavalidation "k8s.io/apiextensions-apiserver/pkg/apiserver/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	celconfig "k8s.io/apiserver/pkg/apis/cel"
@@ -41,8 +43,10 @@ type crdSchemaRegistry struct {
 }
 
 // DefaultAndValidate applies CRD schema defaults to obj in-place and then
-// runs CRD validation rules (OpenAPI schema constraints + CEL
-// x-kubernetes-validations). For create operations pass nil for oldObj.
+// runs the same CRD validation the kube-apiserver applies on admission:
+// OpenAPI schema constraints, embedded ObjectMeta, list-type set/map
+// uniqueness, and CEL x-kubernetes-validations. For create operations pass
+// nil for oldObj.
 // Returns nil if the object's Kind has no CRD schema or if defaulting and
 // validation both succeed.
 func (r *crdSchemaRegistry) DefaultAndValidate(ctx context.Context, kind string, obj, oldObj any) field.ErrorList {
@@ -67,6 +71,14 @@ func (r *crdSchemaRegistry) DefaultAndValidate(ctx context.Context, kind string,
 	// Run OpenAPI schema validation (MinItems, MaxLength, Pattern, Enum, etc.).
 	if s.schemaValidator != nil {
 		allErrs = append(allErrs, schemavalidation.ValidateCustomResource(nil, obj, s.schemaValidator)...)
+	}
+
+	if m, ok := obj.(map[string]any); ok && s.structural != nil {
+		// Validate the ObjectMeta of any embedded resources.
+		allErrs = append(allErrs, schemaobjectmeta.Validate(ctx, nil, m, s.structural, false)...)
+
+		// Reject duplicates in x-kubernetes-list-type set/map fields.
+		allErrs = append(allErrs, listtype.ValidateListSetsAndMaps(nil, s.structural, m)...)
 	}
 
 	// Run CEL validation (x-kubernetes-validations rules).
