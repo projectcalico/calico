@@ -72,7 +72,9 @@ func NewNFLogReader(lookupsCache *calc.LookupsCache, inGrp, eGrp, bufSize int, s
 
 func (r *NFLogReader) Start() error {
 	if err := r.subscribe(); err != nil {
-		return nil
+		// A subscription may already have succeeded; shut it down again.
+		r.Stop()
+		return err
 	}
 
 	r.wg.Go(func() {
@@ -85,6 +87,9 @@ func (r *NFLogReader) Start() error {
 func (r *NFLogReader) Stop() {
 	r.stopOnce.Do(func() {
 		close(r.stopC)
+		// Each subscription owns a netlink socket, which it closes when its done channel does.
+		close(r.nfIngressDoneC)
+		close(r.nfEgressDoneC)
 	})
 }
 
@@ -93,7 +98,8 @@ func (r *NFLogReader) PacketInfoChan() <-chan types.PacketInfo {
 	return r.packetInfoC
 }
 
-func subscribeToNflog(gn int, nlBufSiz int, nflogChan chan map[nfnetlink.NflogPacketTuple]*nfnetlink.NflogPacketAggregate, nflogDoneChan chan struct{}, enableServices bool) error {
+// subscribeToNflog is a variable so that tests can stand in for the netlink subscription.
+var subscribeToNflog = func(gn int, nlBufSiz int, nflogChan chan map[nfnetlink.NflogPacketTuple]*nfnetlink.NflogPacketAggregate, nflogDoneChan chan struct{}, enableServices bool) error {
 	return nfnetlink.NflogSubscribe(gn, nlBufSiz, nflogChan, nflogDoneChan, enableServices)
 }
 
