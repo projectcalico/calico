@@ -18,6 +18,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"regexp"
 	"slices"
@@ -693,8 +694,12 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 	desiredMeta.SetAnnotations(mergedAnnotations)
 
 	// Merge labels by reconciling the ones that components expect, but leaving everything else
-	// as-is.
-	currentLabels := common.MapExistsOrInitialize(currentMeta.GetLabels())
+	// as-is. Labels that the operator owns are not kept from the current object, so they are
+	// removed when the desired object does not set them.
+	currentLabels := maps.Clone(common.MapExistsOrInitialize(currentMeta.GetLabels()))
+	for _, key := range ownedLabels(desired) {
+		delete(currentLabels, key)
+	}
 	desiredLabels := common.MapExistsOrInitialize(desiredMeta.GetLabels())
 	mergedLabels := common.MergeMaps(currentLabels, desiredLabels)
 	desiredMeta.SetLabels(mergedLabels)
@@ -823,6 +828,14 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 		// Default to just using the desired state, with an updated RV.
 		return desired
 	}
+}
+
+func ownedLabels(obj client.Object) []string {
+	switch obj.(type) {
+	case *v1.Namespace:
+		return render.PodSecurityLabelKeys()
+	}
+	return nil
 }
 
 // modifyPodSpec is a helper for pulling out pod specifications from an arbitrary object.

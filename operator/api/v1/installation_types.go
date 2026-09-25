@@ -275,6 +275,16 @@ type InstallationSpec struct {
 	// it installs to protect the Calico components it manages.
 	// +optional
 	NetworkPolicy *NetworkPolicySpec `json:"networkPolicy,omitempty"`
+
+	// PodSecurityLabels controls whether the operator sets the Pod Security Admission labels on the
+	// calico-system namespace. When set to Enabled, the operator sets pod-security.kubernetes.io/enforce
+	// to privileged and pod-security.kubernetes.io/enforce-version to latest. When set to Disabled, the
+	// operator removes these two labels. The namespace must then still allow privileged pods, for example
+	// through a Pod Security Admission exemption, or new Calico pods are rejected. Other
+	// pod-security.kubernetes.io labels on the namespace are left as they are. Defaults to Enabled.
+	// +kubebuilder:default=Enabled
+	// +optional
+	PodSecurityLabels *PodSecurityLabelsMode `json:"podSecurityLabels,omitempty"`
 }
 
 // BPFNetworkBootstrapType defines how the initial networking configuration is executed.
@@ -291,6 +301,16 @@ type KubeProxyManagementType string
 const (
 	KubeProxyManagementEnabled  KubeProxyManagementType = "Enabled"
 	KubeProxyManagementDisabled KubeProxyManagementType = "Disabled"
+)
+
+// PodSecurityLabelsMode specifies whether the operator manages the Pod Security Admission labels on the
+// calico-system namespace.
+// +kubebuilder:validation:Enum=Enabled;Disabled
+type PodSecurityLabelsMode string
+
+const (
+	PodSecurityLabelsEnabled  PodSecurityLabelsMode = "Enabled"
+	PodSecurityLabelsDisabled PodSecurityLabelsMode = "Disabled"
 )
 
 // +kubebuilder:validation:Enum=TLS_AES_256_GCM_SHA384;TLS_CHACHA20_POLY1305_SHA256;TLS_AES_128_GCM_SHA256;TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384;TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384;TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256;TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256;TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;TLS_RSA_WITH_AES_256_GCM_SHA384;TLS_RSA_WITH_AES_128_GCM_SHA256;TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA;TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA;TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA
