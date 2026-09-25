@@ -28,11 +28,15 @@ import (
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/discovery"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
@@ -41,11 +45,17 @@ import (
 
 var (
 	testClient client.Client
+	testCfg    *rest.Config
+	testScheme *k8sruntime.Scheme
 	testEnvObj *envtest.Environment
 
 	// admissionPoliciesEnabled is true when the API server serves
 	// MutatingAdmissionPolicy at v1beta1. Admission tests skip when false.
 	admissionPoliciesEnabled bool
+
+	// k8sPoliciesEnabled is true when the API server serves
+	// ValidatingAdmissionPolicy. It gates the policies in api/admission/k8s/.
+	k8sPoliciesEnabled bool
 )
 
 // crdDir returns the path to api/config/crd/ containing Calico CRD YAML files.
@@ -59,6 +69,11 @@ func crdDir() string {
 // admissionDir returns the path to api/admission/ containing MutatingAdmissionPolicy YAML files.
 func admissionDir() string {
 	return filepath.Join(testutils.FindRepoRoot(), "api", "admission")
+}
+
+// k8sAdmissionDir returns the path to api/admission/k8s/.
+func k8sAdmissionDir() string {
+	return filepath.Join(admissionDir(), "k8s")
 }
 
 // envtestSupportsMAP checks if the envtest kube-apiserver binary serves
@@ -122,6 +137,95 @@ func installAdmissionPolicies(c client.Client) error {
 				return fmt.Errorf("creating %s: %w", entry.Name(), err)
 			}
 		}
+	}
+	return nil
+}
+
+// envtestServesVAP reports whether the API server serves ValidatingAdmissionPolicy.
+func envtestServesVAP(cfg *rest.Config) (bool, error) {
+	dc, err := discovery.NewDiscoveryClientForConfig(cfg)
+	if err != nil {
+		return false, fmt.Errorf("building a discovery client: %w", err)
+	}
+	resources, err := dc.ServerResourcesForGroupVersion("admissionregistration.k8s.io/v1")
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("listing admissionregistration.k8s.io/v1 resources: %w", err)
+	}
+	for _, r := range resources.APIResources {
+		if r.Kind == "ValidatingAdmissionPolicy" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// installK8sAdmissionPolicies applies all YAML files in api/admission/k8s/.
+func installK8sAdmissionPolicies(c client.Client) error {
+	entries, err := os.ReadDir(k8sAdmissionDir())
+	if err != nil {
+		return fmt.Errorf("reading admission dir: %w", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(k8sAdmissionDir(), entry.Name()))
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", entry.Name(), err)
+		}
+		dec := utilyaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
+		for {
+			obj := &unstructured.Unstructured{}
+			if err := dec.Decode(&obj.Object); err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				return fmt.Errorf("decoding %s: %w", entry.Name(), err)
+			}
+			if len(obj.Object) == 0 {
+				continue
+			}
+			if err := c.Create(context.Background(), obj); err != nil {
+				return fmt.Errorf("creating %s: %w", entry.Name(), err)
+			}
+		}
+	}
+	return nil
+}
+
+// grantPodWrites lets authenticated identities write Pods, so impersonated
+// clients are refused by admission rather than RBAC.
+func grantPodWrites(c client.Client) error {
+	ctx := context.Background()
+	role := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{Name: "validation-test-pod-writer"},
+		Rules: []rbacv1.PolicyRule{{
+			APIGroups: []string{""},
+			Resources: []string{"pods", "pods/status"},
+			Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+		}},
+	}
+	if err := c.Create(ctx, role); err != nil {
+		return fmt.Errorf("creating ClusterRole: %w", err)
+	}
+	binding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: "validation-test-pod-writer"},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name:     role.Name,
+		},
+		Subjects: []rbacv1.Subject{{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "Group",
+			Name:     "system:authenticated",
+		}},
+	}
+	if err := c.Create(ctx, binding); err != nil {
+		return fmt.Errorf("creating ClusterRoleBinding: %w", err)
 	}
 	return nil
 }
@@ -196,9 +300,17 @@ func TestMain(m *testing.M) {
 		return
 	}
 
+	testCfg = cfg
+	testScheme = scheme
+
 	testClient, err = client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
+		return
+	}
+
+	if err := grantPodWrites(testClient); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to grant Pod writes to authenticated users: %v\n", err)
 		return
 	}
 
@@ -212,6 +324,18 @@ func TestMain(m *testing.M) {
 		// unavailable while reloading. Wait for a known CRD to be usable.
 		if err := waitForCRDsReady(testClient); err != nil {
 			fmt.Fprintf(os.Stderr, "CRDs not ready after admission policy install: %v\n", err)
+			return
+		}
+	}
+
+	k8sPoliciesEnabled, err = envtestServesVAP(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to check whether ValidatingAdmissionPolicy is served: %v\n", err)
+		return
+	}
+	if k8sPoliciesEnabled {
+		if err := installK8sAdmissionPolicies(testClient); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to install admission policies over Kubernetes resources: %v\n", err)
 			return
 		}
 	}
