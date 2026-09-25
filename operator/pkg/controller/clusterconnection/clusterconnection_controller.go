@@ -237,15 +237,14 @@ func (r *ReconcileConnection) Reconcile(ctx context.Context, request reconcile.R
 		return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
 	}
 
-	preDefaultPatchFrom := client.MergeFrom(managementClusterConnection.DeepCopy())
 	if err = r.ext.ValidateAndDefault(managementClusterConnection); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceValidationError, "Invalid ManagementClusterConnection configuration", err, reqLogger)
 		return reconcile.Result{}, err
 	}
+
+	// The CRD schema defaults the tunnel CA. Impersonation stays in memory only, since OSS
+	// rejects the field being set at all.
 	fillDefaults(managementClusterConnection)
-	if err = r.cli.Patch(ctx, managementClusterConnection, preDefaultPatchFrom); err != nil {
-		r.status.SetDegraded(operatorv1.ResourceUpdateError, err.Error(), err, reqLogger)
-	}
 
 	if _, err = r.maintainFinalizer(ctx, managementClusterConnection); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error setting finalizer on Installation", err, reqLogger)
