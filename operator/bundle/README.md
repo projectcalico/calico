@@ -33,6 +33,25 @@ bundle/<VERSION>/metadata/            # annotations.yaml
 `make bundle` pulls and inspects the operator image, so it runs docker on the
 host — the build container has no docker-in-docker.
 
+## The catalog decides the upgrade graph, not the bundle
+
+Each `catalog-templates/v4.XX.yaml` in the certified-operators repo is an
+`olm.template.basic` template, with hand-written channel entries and a
+`defaultChannel`. Those entries decide who upgrades to what; the bundle's
+`spec.replaces` and `DEFAULT_CHANNEL` do not. Publishing a bundle into a new
+channel therefore also needs, in every template for an OpenShift version the
+bundle supports:
+
+- a `release-v3.YY` channel block with an entry for the new bundle, and
+- `defaultChannel` moved to it, if it should become the default.
+
+**The first bundle built from this repo** is a move off the `release-v1.YY`
+channels that tigera/operator published into, which top out at
+`tigera-operator.v1.42.2`. Build it with `PREV_VERSION=1.42.2`, not the previous
+Calico version, which was never published as a bundle. Its channel entry
+should `replace` `tigera-operator.v1.42.2`; the `olm.skipRange` of
+`<VERSION>` already covers every 1.x bundle.
+
 ## What runs, in order
 
 `make bundle` is four targets, each depending on the one before it, so running
