@@ -263,6 +263,26 @@ var _ = Describe("Installation validation tests", func() {
 		Expect(err.Error()).To(ContainSubstring("spec.cni.specVersion is only valid"))
 	})
 
+	It("should allow annotationProtection with Calico CNI", func() {
+		disabled := operator.AnnotationProtectionDisabled
+		instance.Spec.CNI.AnnotationProtection = &disabled
+		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
+	})
+
+	It("should reject annotationProtection when the CNI plugin is not Calico", func() {
+		enabled := operator.AnnotationProtectionEnabled
+		bgp := operator.BGPDisabled
+		dis := operator.HostPortsDisabled
+		instance.Spec.CalicoNetwork.BGP = &bgp
+		instance.Spec.CalicoNetwork.HostPorts = &dis
+		instance.Spec.CNI.Type = operator.PluginAmazonVPC
+		instance.Spec.CNI.IPAM.Type = operator.IPAMPluginAmazonVPC
+		instance.Spec.CNI.AnnotationProtection = &enabled
+		err := validateCustomResource(instance)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("spec.cni.annotationProtection is only valid"))
+	})
+
 	It("should prevent IPIP with BGP disabled in BIRD cluster routing mode", func() {
 		disabled := operator.BGPDisabled
 		instance.Spec.CalicoNetwork.BGP = &disabled

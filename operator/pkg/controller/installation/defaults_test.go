@@ -117,6 +117,7 @@ var _ = Describe("Defaulting logic tests", func() {
 		cniSpecVersion := operator.CNISpecVersion100
 		cniConfDir := "/etc/custom/cni/net.d"
 		cniInstallMode := operator.CNIInstallModeAll
+		cniAnnotationProtection := operator.AnnotationProtectionDisabled
 
 		hpEnabled := operator.HostPortsEnabled
 		disabled := operator.BGPDisabled
@@ -136,12 +137,13 @@ var _ = Describe("Defaulting logic tests", func() {
 					},
 				},
 				CNI: &operator.CNISpec{
-					Type:        operator.PluginCalico,
-					IPAM:        &operator.IPAMSpec{Type: operator.IPAMPluginCalico},
-					BinDir:      &cniBinDir,
-					ConfDir:     &cniConfDir,
-					InstallMode: &cniInstallMode,
-					SpecVersion: &cniSpecVersion,
+					Type:                 operator.PluginCalico,
+					IPAM:                 &operator.IPAMSpec{Type: operator.IPAMPluginCalico},
+					BinDir:               &cniBinDir,
+					ConfDir:              &cniConfDir,
+					InstallMode:          &cniInstallMode,
+					SpecVersion:          &cniSpecVersion,
+					AnnotationProtection: &cniAnnotationProtection,
 				},
 				CalicoNetwork: &operator.CalicoNetworkSpec{
 					LinuxDataplane:   &dpIptables, // Actually the default but BPF would make other values invalid.
@@ -216,6 +218,7 @@ var _ = Describe("Defaulting logic tests", func() {
 		cniSpecVersion := operator.CNISpecVersion100
 		cniConfDir := "/etc/custom/cni/net.d"
 		cniInstallMode := operator.CNIInstallModeAll
+		cniAnnotationProtection := operator.AnnotationProtectionDisabled
 
 		disabled := operator.BGPDisabled
 		miMode := operator.MultiInterfaceModeNone
@@ -235,12 +238,13 @@ var _ = Describe("Defaulting logic tests", func() {
 					},
 				},
 				CNI: &operator.CNISpec{
-					Type:        operator.PluginCalico,
-					IPAM:        &operator.IPAMSpec{Type: operator.IPAMPluginCalico},
-					BinDir:      &cniBinDir,
-					ConfDir:     &cniConfDir,
-					InstallMode: &cniInstallMode,
-					SpecVersion: &cniSpecVersion,
+					Type:                 operator.PluginCalico,
+					IPAM:                 &operator.IPAMSpec{Type: operator.IPAMPluginCalico},
+					BinDir:               &cniBinDir,
+					ConfDir:              &cniConfDir,
+					InstallMode:          &cniInstallMode,
+					SpecVersion:          &cniSpecVersion,
+					AnnotationProtection: &cniAnnotationProtection,
 				},
 				CalicoNetwork: &operator.CalicoNetworkSpec{
 					LinuxDataplane:   &dpBPF, // Actually the default but BPF would make other values invalid.
@@ -332,6 +336,36 @@ var _ = Describe("Defaulting logic tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(instance.Spec.CNI.SpecVersion).NotTo(BeNil())
 		Expect(*instance.Spec.CNI.SpecVersion).To(Equal(operator.CNISpecVersionAuto))
+		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
+	})
+
+	It("should default annotation protection to Enabled for Calico CNI", func() {
+		instance := &operator.Installation{
+			Spec: operator.InstallationSpec{
+				CNI: &operator.CNISpec{
+					Type: operator.PluginCalico,
+				},
+			},
+		}
+		err := fillDefaults(instance, nil, operator.Calico)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(instance.Spec.CNI.AnnotationProtection).NotTo(BeNil())
+		Expect(*instance.Spec.CNI.AnnotationProtection).To(Equal(operator.AnnotationProtectionEnabled))
+		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
+	})
+
+	It("should not set annotation protection for other CNI plugins", func() {
+		instance := &operator.Installation{
+			Spec: operator.InstallationSpec{
+				CNI: &operator.CNISpec{
+					Type: operator.PluginAmazonVPC,
+				},
+				CalicoNetwork: &operator.CalicoNetworkSpec{},
+			},
+		}
+		err := fillDefaults(instance, nil, operator.Calico)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(instance.Spec.CNI.AnnotationProtection).To(BeNil())
 		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
 	})
 

@@ -13987,6 +13987,82 @@ spec:
       messageExpression: "'The built-in tier ' + oldObject.metadata.name + ' cannot be deleted'"
 ---
 # Source: calico/templates/admission-policies.yaml
+# ValidatingAdmissionPolicy that allows only Calico to set, change or remove the
+# pod annotations the Calico CNI plugin writes. Felix programs the dataplane
+# from these, so they must not be writable by whoever can update the pod.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: protect-cni-annotations.projectcalico.org
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      # Annotations are writable through pods/status too. Don't widen this to
+      # pods/*: pods/exec carries no metadata, so kubectl exec would be denied.
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods", "pods/status"]
+        operations: ["CREATE", "UPDATE"]
+  matchConditions:
+    - name: not-calico
+      expression: >-
+        !(request.userInfo.username in [
+          'system:serviceaccount:calico-system:calico-cni-plugin',
+          'system:serviceaccount:kube-system:calico-cni-plugin',
+          'system:serviceaccount:kube-system:canal'
+        ]) && !('system:masters' in request.userInfo.groups)
+  variables:
+    - name: newAnn
+      expression: "has(object.metadata.annotations) ? object.metadata.annotations : {}"
+    # oldObject is null on CREATE.
+    - name: oldAnn
+      expression: >-
+        request.operation == 'UPDATE'
+          ? (has(oldObject.metadata.annotations) ? oldObject.metadata.annotations : {})
+          : {}
+    - name: perInterfaceKeys
+      expression: >-
+        variables.newAnn.filter(k,
+          k.startsWith('cni.projectcalico.org/') && k.endsWith('.network-status')) +
+        variables.oldAnn.filter(k,
+          k.startsWith('cni.projectcalico.org/') && k.endsWith('.network-status') &&
+          !(k in variables.newAnn))
+    - name: protectedKeys
+      expression: >-
+        [
+          'cni.projectcalico.org/podIP',
+          'cni.projectcalico.org/podIPs',
+          'cni.projectcalico.org/containerID',
+          'cni.projectcalico.org/podNetns',
+          'cni.projectcalico.org/network-status'
+        ] + variables.perInterfaceKeys
+    - name: addedOrChanged
+      expression: >-
+        variables.protectedKeys.filter(k,
+          k in variables.newAnn &&
+          (!(k in variables.oldAnn) || variables.oldAnn[k] != variables.newAnn[k]))
+    - name: removed
+      expression: >-
+        variables.protectedKeys.filter(k,
+          k in variables.oldAnn && !(k in variables.newAnn))
+  validations:
+    - expression: "variables.addedOrChanged.size() == 0"
+      reason: Forbidden
+      message: "Only Calico may set, change or remove these pod annotations. To allow this, set spec.cni.annotationProtection to Disabled on the Installation, or delete this policy on installs without the operator."
+      messageExpression: >-
+        'Only Calico may set, change or remove these pod annotations: ' +
+        variables.addedOrChanged.join(', ') +
+        '. To allow this, set spec.cni.annotationProtection to Disabled on the Installation, or delete this policy on installs without the operator.'
+    - expression: "variables.removed.size() == 0"
+      reason: Forbidden
+      message: "Only Calico may set, change or remove these pod annotations. To allow this, set spec.cni.annotationProtection to Disabled on the Installation, or delete this policy on installs without the operator."
+      messageExpression: >-
+        'Only Calico may set, change or remove these pod annotations: ' +
+        variables.removed.join(', ') +
+        '. To allow this, set spec.cni.annotationProtection to Disabled on the Installation, or delete this policy on installs without the operator.'
+---
+# Source: calico/templates/admission-policies.yaml
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
@@ -13995,6 +14071,15 @@ spec:
   policyName: protect-builtin-tiers.projectcalico.org
   validationActions:
     - Deny
+---
+# Source: calico/templates/admission-policies.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: protect-cni-annotations.projectcalico.org
+spec:
+  policyName: protect-cni-annotations.projectcalico.org
+  validationActions: [Deny]
 ---
 # Source: calico/templates/calico-webhooks.yaml
 apiVersion: admissionregistration.k8s.io/v1

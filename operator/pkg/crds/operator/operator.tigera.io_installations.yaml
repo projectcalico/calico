@@ -5756,6 +5756,18 @@ spec:
                 cni:
                   description: CNI specifies the CNI that will be used by this installation.
                   properties:
+                    annotationProtection:
+                      description: |-
+                        AnnotationProtection controls whether only Calico may set, change or remove the pod
+                        annotations the Calico CNI plugin writes, such as cni.projectcalico.org/podIP and
+                        cni.projectcalico.org/network-status. Calico programs pod networking from these
+                        annotations, so while protection is Disabled anyone who can update a pod can change the
+                        addresses, network or VLAN it is given. Only relevant when using the Calico CNI plugin.
+                        Default: Enabled
+                      enum:
+                        - Enabled
+                        - Disabled
+                      type: string
                     binDir:
                       description: |-
                         BinDir is the path to the CNI binaries directory.
