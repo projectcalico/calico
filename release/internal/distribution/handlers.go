@@ -44,7 +44,10 @@ const (
 	syncVerb  = "sync"
 	rsyncVerb = "rsync"
 
-	recursiveFlag = "--recursive"
+	recursiveFlag    = "--recursive"
+	cacheControlFlag = "--cache-control"
+
+	MutableCachePolicy = "max-age=300"
 )
 
 var publicRead = []string{"--acl", "public-read"}
@@ -98,6 +101,9 @@ type S3 struct {
 
 	Private bool
 
+	// Empty omits the header.
+	CachePolicy string
+
 	DryRun bool
 
 	Runner command.CommandRunner
@@ -132,6 +138,9 @@ func (d S3) Publish(_ context.Context, src string) error {
 	args = append(args, p.src, p.dest)
 	if !d.Private {
 		args = append(args, publicRead...)
+	}
+	if d.CachePolicy != "" {
+		args = append(args, cacheControlFlag, d.CachePolicy)
 	}
 	if d.DryRun {
 		args = append(args, "--dryrun")
