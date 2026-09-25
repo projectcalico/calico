@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -443,12 +443,9 @@ var _ = infrastructure.DatastoreDescribe("_NET_SETS_ Network sets tests with ini
 					namespacedSrcNS.Spec.Nets = []string{
 						c.workloadCIDR(1, 0, true),
 						c.workloadCIDR(2, 0, true),
-						// Lots of dupes...
+						// Exact duplicates fail list-type set validation, so repeat workload 3 via equivalent spellings and overlapping CIDRs.
 						c.workloadFullLengthCIDR(3, true),
-						c.workloadFullLengthCIDR(3, true),
-						c.workloadCIDR(3, 4, true),
-						c.workloadCIDR(3, 0, true),
-						c.workloadCIDR(3, 0, true),
+						c.workloadIP(3, true),
 						c.workloadCIDR(3, 4, true),
 						c.workloadCIDR(3, 0, true),
 					}
@@ -860,12 +857,9 @@ var _ = infrastructure.DatastoreDescribe("_NET_SETS_ Network sets tests with ini
 					srcNS.Spec.Nets = []string{
 						c.workloadCIDR(1, 0, false),
 						c.workloadCIDR(2, 0, false),
-						// Lots of dupes...
+						// Exact duplicates fail list-type set validation, so repeat workload 3 via equivalent spellings and overlapping CIDRs.
 						c.workloadFullLengthCIDR(3, false),
-						c.workloadFullLengthCIDR(3, false),
-						c.workloadCIDR(3, 4, false),
-						c.workloadCIDR(3, 0, false),
-						c.workloadCIDR(3, 0, false),
+						c.workloadIP(3, false),
 						c.workloadCIDR(3, 4, false),
 						c.workloadCIDR(3, 0, false),
 					}
@@ -1191,15 +1185,21 @@ var _ = infrastructure.DatastoreDescribe("_NET_SETS_ Network sets tests with ini
 	})
 })
 
+// generateNets returns n distinct random CIDRs, since network sets reject repeated entries.
 func generateNets(n int) []string {
 	var nets []string
-	for range n {
+	seen := map[string]bool{}
+	for len(nets) < n {
 		a := rand.Intn(255)
 		b := rand.Intn(255)
 		pr := rand.Intn(16) + 16
 		netStr := fmt.Sprintf("%d.%d.0.0/%d", a, b, pr)
 		_, cidr, err := net.ParseCIDR(netStr)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to parse %s", netStr))
+		if seen[cidr.String()] {
+			continue
+		}
+		seen[cidr.String()] = true
 		nets = append(nets, cidr.String())
 	}
 	return nets
