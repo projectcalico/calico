@@ -165,6 +165,13 @@ rules:
       - update
       - delete
       - watch
+  # Rancher's admission webhook rejects Namespace pod-security label changes without this verb.
+  - apiGroups:
+      - management.cattle.io
+    resources:
+      - projects
+    verbs:
+      - updatepsa
   - apiGroups:
       - ""
     resources:
