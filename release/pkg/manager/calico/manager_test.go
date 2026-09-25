@@ -1242,6 +1242,19 @@ func TestHelmIndexUploadTargetsTheChartsPrefix(t *testing.T) {
 	}
 }
 
+// Every release rewrites the index in place, so a CDN default TTL would hide a
+// new release behind the old index.
+func TestHelmIndexUploadSetsCacheControl(t *testing.T) {
+	r := &CalicoManager{helmCharts: true, helmIndex: true, s3Bucket: "bucket", outputDir: t.TempDir()}
+	got, ok := r.helmIndexUpload().Handler.(distribution.S3)
+	if !ok {
+		t.Fatalf("handler is %T, want distribution.S3", r.helmIndexUpload().Handler)
+	}
+	if got.CacheControl != distribution.RewrittenObjectCacheControl {
+		t.Errorf("CacheControl = %q, want %q", got.CacheControl, distribution.RewrittenObjectCacheControl)
+	}
+}
+
 func TestPublishGitTagPreviewsThePushOnADryRun(t *testing.T) {
 	f := newFakeRunner()
 	f.on("git ls-remote --tags origin refs/tags/v3.30.0", "", nil)
