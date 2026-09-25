@@ -1259,14 +1259,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			connLimitProvider := func() map[string]bpfconntrack.ConnLimitPodInfo {
 				return bpfEndpointManager.GetConnLimitedPodInfo()
 			}
-			rstMaxAge := bpfconntrack.WithRSTFlowMaxAge(config.BPFConntrackTimeouts.TCPEstablished)
 			if conntrackScannerV4 != nil {
 				conntrackScannerV4.AddUnlocked(bpfconntrack.NewConnLimitScanner(
-					bpfMaps.CommonMaps.QoSConnMap, connLimitProvider, qos.IPFamilyV4, rstMaxAge))
+					bpfMaps.CommonMaps.QoSConnMap, connLimitProvider, qos.IPFamilyV4))
 			}
 			if conntrackScannerV6 != nil {
 				conntrackScannerV6.AddUnlocked(bpfconntrack.NewConnLimitScanner(
-					bpfMaps.CommonMaps.QoSConnMap, connLimitProvider, qos.IPFamilyV6, rstMaxAge))
+					bpfMaps.CommonMaps.QoSConnMap, connLimitProvider, qos.IPFamilyV6))
 			}
 		}
 
@@ -3219,7 +3218,8 @@ func startBPFDataplaneComponents(
 	bpfRTMgr := newBPFRouteManager(config, maps, ipFamily, dp.loopSummarizer)
 	dp.RegisterManager(bpfRTMgr)
 
-	livenessScanner := bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled)
+	livenessScanner := bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled,
+		bpfconntrack.WithLinuxConntrack(bpfconntrack.LinuxHoldsTCPFlow))
 	ctLogLevel := bpfconntrack.BPFLogLevelNone
 	// The debug cleanup program references bpf_trace_printk; skip it under
 	// lockdown=confidentiality where that would spam the kernel log on load.

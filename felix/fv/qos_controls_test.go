@@ -1058,7 +1058,7 @@ var _ = infrastructure.DatastoreDescribe(
 						})
 
 						// viaNetfilter: the flow crosses iptables, so Linux conntrack
-						// carries it past the reap and its slot must hold.
+						// carries it and its entry must not be reaped.
 						forgeRSTsAndIdle := func(serverIP string, viaNetfilter bool) {
 							if !BPFMode() {
 								Skip("The reap is BPF conntrack only")
@@ -1131,15 +1131,27 @@ var _ = infrastructure.DatastoreDescribe(
 								Expect(err).NotTo(HaveOccurred(), out)
 							}
 
-							By("Waiting for BPF conntrack to reap the forged-RST entries")
-							Eventually(func() string {
+							entriesLeft := func() int {
 								out, _ := tc.Felixes[1].ExecCombinedOutput("calico-bpf", "conntrack", "dump")
-								return out
-							}, "180s", "5s").ShouldNot(MatchRegexp(
-								fmt.Sprintf(`%s:(%d|%d|%d)\b`, regexp.QuoteMeta(w[1].IP), srcPorts[0], srcPorts[1], srcPorts[2])))
-							// Let the recount that follows the reap run.
-							time.Sleep(15 * time.Second)
-							logrus.Infof("CORE-13478: egress current_count after the reap: %d",
+								n := 0
+								for _, sp := range srcPorts {
+									if regexp.MustCompile(fmt.Sprintf(`%s:%d\b`, regexp.QuoteMeta(w[1].IP), sp)).MatchString(out) {
+										n++
+									}
+								}
+								return n
+							}
+							if viaNetfilter {
+								// Past the two-minute residual window that would reap them.
+								By("Confirming BPF conntrack keeps the entries while Linux carries the flows")
+								Consistently(entriesLeft, "150s", "10s").Should(Equal(numConnections))
+							} else {
+								By("Waiting for BPF conntrack to reap the forged-RST entries")
+								Eventually(entriesLeft, "180s", "5s").Should(BeZero())
+								// Let the recount that follows the reap run.
+								time.Sleep(15 * time.Second)
+							}
+							logrus.Infof("CORE-13478: egress current_count after the reap window: %d",
 								getBPFCurrentCount(1, 1, "egress")())
 
 							By("Resuming the clients")
@@ -1173,8 +1185,8 @@ var _ = infrastructure.DatastoreDescribe(
 								extra, numConnections, getBPFCurrentCount(1, 1, "egress")())
 
 							if viaNetfilter {
-								Expect(survived).To(Equal(numConnections), "Linux conntrack did not carry the reaped connections")
-								Expect(extra).To(BeZero(), "a reaped forged-RST entry freed a slot its live connection still holds")
+								Expect(survived).To(Equal(numConnections), "the connections did not survive the forged RSTs")
+								Expect(extra).To(BeZero(), "a forged RST freed a slot its live connection still holds")
 							} else {
 								Expect(survived).To(BeZero(), "a reaped connection survived with no conntrack state")
 								Expect(extra).To(Equal(numConnections), "the reap did not free the dead connections' slots")
@@ -1186,7 +1198,7 @@ var _ = infrastructure.DatastoreDescribe(
 						})
 
 						// Unlike pod-to-pod, a nat-outgoing flow crosses netfilter both
-						// ways, so Linux conntrack holds it after the BPF reap.
+						// ways, so Linux conntrack keeps carrying it after a forged RST.
 						Describe("with nat-outgoing to an external server", func() {
 							var extServer *workload.Workload
 
