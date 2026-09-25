@@ -310,6 +310,11 @@ func mergeCNISpecs(cfg, override *operatorv1.CNISpec) *operatorv1.CNISpec {
 		out.InstallMode = override.InstallMode
 	}
 
+	switch compareFields(out.AnnotationProtection, override.AnnotationProtection) {
+	case BOnlySet, Different:
+		out.AnnotationProtection = override.AnnotationProtection
+	}
+
 	return out
 }
 

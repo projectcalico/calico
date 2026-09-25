@@ -21,7 +21,7 @@ import (
 	"io/fs"
 )
 
-//go:embed *.yaml
+//go:embed *.yaml k8s/*.yaml
 var crds embed.FS
 
 // FS returns the admission policy YAML in this directory.

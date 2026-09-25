@@ -197,6 +197,10 @@ var _ = Describe("Installation merge tests", func() {
 			&opv1.CNISpec{Type: opv1.PluginAmazonVPC},
 			&opv1.CNISpec{IPAM: &opv1.IPAMSpec{Type: opv1.IPAMPluginAmazonVPC}},
 			&opv1.CNISpec{Type: opv1.PluginAmazonVPC, IPAM: &opv1.IPAMSpec{Type: opv1.IPAMPluginAmazonVPC}}),
+		Entry("Second disables annotation protection",
+			&opv1.CNISpec{Type: opv1.PluginCalico, AnnotationProtection: ptr.To(opv1.AnnotationProtectionEnabled)},
+			&opv1.CNISpec{AnnotationProtection: ptr.To(opv1.AnnotationProtectionDisabled)},
+			&opv1.CNISpec{Type: opv1.PluginCalico, AnnotationProtection: ptr.To(opv1.AnnotationProtectionDisabled)}),
 	)
 
 	Context("test CalicoNetwork merge", func() {
