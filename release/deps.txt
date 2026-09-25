@@ -67,6 +67,7 @@ github.com/sirupsen/logrus v1.9.4
 github.com/slack-go/slack v0.26.0
 github.com/snowzach/rotatefilehook v0.0.0-20220211133110-53752135082d
 github.com/spiffe/go-spiffe/v2 v2.8.1
+github.com/urfave/cli v1.22.16
 github.com/urfave/cli/v3 v3.10.0
 github.com/x448/float16 v0.8.4
 go.opentelemetry.io/auto/sdk v1.2.1
