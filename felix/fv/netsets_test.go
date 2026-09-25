@@ -1185,15 +1185,21 @@ var _ = infrastructure.DatastoreDescribe("_NET_SETS_ Network sets tests with ini
 	})
 })
 
+// generateNets returns n distinct random CIDRs, since network sets reject repeated entries.
 func generateNets(n int) []string {
 	var nets []string
-	for range n {
+	seen := map[string]bool{}
+	for len(nets) < n {
 		a := rand.Intn(255)
 		b := rand.Intn(255)
 		pr := rand.Intn(16) + 16
 		netStr := fmt.Sprintf("%d.%d.0.0/%d", a, b, pr)
 		_, cidr, err := net.ParseCIDR(netStr)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to parse %s", netStr))
+		if seen[cidr.String()] {
+			continue
+		}
+		seen[cidr.String()] = true
 		nets = append(nets, cidr.String())
 	}
 	return nets
