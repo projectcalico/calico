@@ -1,0 +1,25 @@
+# Reclaims what the Windows and fleet lanes create in GCP and Azure.
+#
+# In the exit handler rather than behind a button: those resources are billed
+# whether or not anyone presses it, and an exit handler runs even for a cancelled
+# or timed-out run — which is exactly when a lane's own teardown did not.
+#
+# Ungated, because a module gated out contributes no exit steps either, and the
+# run that needs sweeping most is the one that failed early.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+
+onExit:
+  - name: cleanup-cloud-resources
+    requests: {cpu: 500m, memory: 548Mi}
+    secretBundles:
+      - name: google-service-account-for-gce
+        keys:
+          - name: google-service-account-for-gce-key.json
+            as: GCE_SERVICE_ACCOUNT_KEY
+      - banzai-secrets
+    commands: |
+      source .argoci/scripts/vm-fleet-setup.sh
+      .argoci/scripts/cleanup-cloud-resources.sh

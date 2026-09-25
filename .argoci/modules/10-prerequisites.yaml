@@ -1,0 +1,394 @@
+# The pre-flight checks. Each step is one Semaphore block, gating itself rather
+# than the include, so they stay as independent as they are there.
+#
+# Most still shell out to a nested build container. A step that says nothing
+# about `image` or `services` runs natively in the build image.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+
+steps:
+  - name: check-yaml
+
+    jobSize: small
+
+    requests: {cpu: 1500m, memory: 548Mi}
+    services: [docker]
+    changes:
+      in:
+        - ^.*\.ya?ml$
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      make yaml-lint
+
+  # `fix-changed` splices its own flags into the nested `docker run`, so this
+  # block cannot yet drop the daemon the way the two above it do.
+  - name: check-go
+    requests: {cpu: 6250m, memory: 7.5Gi}
+    services: [docker]
+    changes:
+      in:
+        - ^go\.mod$
+        - ^go\.sum$
+        - ^.*\.go$
+        - ^.*deps\.txt$
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/depstree\.yaml$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make check-ginkgo-v2
+      make check-go-mod
+      make verify-go-mods
+      make gen-deps-files
+      # Generated from the same import graph as deps.txt, so it goes stale here too.
+      make gen-semaphore-yaml
+      make go-vet
+      # A merge has no PR to diff against, so it reformats everything.
+      if [ -n "$CI_GIT_PR_NUMBER" ]; then make fix-changed; else make fix-all; fi
+      make check-dirty
+
+  - name: check-python
+
+    jobSize: small
+
+    requests: {cpu: 2000m, memory: 0.75Gi}
+    services: [docker]
+    changes:
+      in:
+        - ^networking-calico/
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      make -C networking-calico fmtpy
+      make -C networking-calico flake8
+      make check-dirty
+
+  # Grep-speed checks, so one step rather than three.
+  - name: check-language-dockerfiles
+    jobSize: small
+    requests: {cpu: 2250m, memory: 548Mi}
+    image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
+    workspaceVolumes: none
+    changes:
+      in:
+        - ^.*$
+      # Everything is in scope except vendored C and the directories that hold
+      # no source. `.github/` and `.semaphore/` stay in: check-language skips
+      # dot-directories itself, but the Dockerfile and mockery scans walk the
+      # whole tree. Listed rather than matched as `^\.`, which would also
+      # swallow this file and stop an edit to it retesting anything.
+      exclude:
+        - ^libbpf/
+        - ^\.git
+        - ^\.claude/
+    commands: |
+      make check-language
+      make check-dockerfiles
+      make check-mockery-config
+
+  - name: check-protobufs
+    requests: {cpu: 1500m, memory: 1Gi}
+    services: [docker]
+    changes:
+      in:
+        - ^.*\.pb\.go$
+        - ^.*\.proto$
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make protobuf fix-changed
+      make check-dirty
+
+  - name: check-manifests
+    requests: {cpu: 2750m, memory: 2.5Gi}
+    services: [docker]
+    changes:
+      in:
+        - ^api/
+        - ^manifests/
+        - ^charts/
+        - ^libcalico-go/lib/apis/
+        - ^libcalico-go/config/
+        - ^libcalico-go/Makefile$
+        - ^felix/config/
+        - ^felix/docs/
+        - ^felix/Makefile$
+        - ^goldmane/
+        - ^kube-controllers/pkg/apis/migration/
+        - ^operator/api/
+        - ^operator/pkg/crds/
+        - ^operator/pkg/admission/
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make -C lib gen-files
+      make -C api gen-files
+      make -C libcalico-go gen-files
+      make -C felix gen-files
+      make -C goldmane gen-files
+      make -C kube-controllers gen-files
+      make -C operator gen-files
+      make gen-manifests
+      make fix-changed
+      make check-ocp-no-crds
+      make check-dirty
+
+  # A chart can change what it renders without any committed manifest changing,
+  # which a diff of the tree cannot see.
+  - name: check-helm-charts
+    jobSize: small
+    requests: {cpu: 2000m, memory: 1Gi}
+    services: [docker]
+    changes:
+      in:
+        - ^charts/
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make test-charts
+
+  # Each auto-generated patch is derived from its pin file, so regenerating has
+  # to be a no-op. metadata.mk is in the trigger because `go mod tidy`'s output
+  # depends on the toolchain: a version bump can leave every patch stale.
+  - name: check-thirdparty-dep-patches
+    requests: {cpu: 2000m, memory: 2Gi}
+    services: [docker]
+    changes:
+      in:
+        - ^hack/thirdparty/
+        - ^istio/
+        - ^third_party/envoy-gateway/
+        - ^third_party/envoy-ratelimit/
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make check-thirdparty-dep-patches
+      make check-dirty
+
+  # Gated on what makes the image itself interesting. A consumer needing it is
+  # what brings it back, so this does not have to describe their triggers too.
+  - name: build-calico-image
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 5500m, memory: 5.5Gi}
+    changes:
+      dependsOn: [cmd]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make -C cmd/calico image
+      # The Felix FVs run one or the other of these directly, so they ship
+      # rather than being rebuilt per lane.
+      make -C cmd/calico build-cgo build-race
+      docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
+      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/calico-image.tar
+      artifact push workflow /tmp/calico-image.tar.zst
+      artifact push workflow cmd/calico/bin/calico-cgo-amd64
+      artifact push workflow cmd/calico/bin/calico-race-amd64
+      # Shipping the clone is what lets every Felix lane skip it, and with it the
+      # github.com/libbpf HTTP 500 flake. The test covers the cgo chain above
+      # having already produced it.
+      test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || make -C felix libbpf
+      LIBBPF_VERSION=$(grep -E '^LIBBPF_VERSION[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
+      # tar warns and exits 0 on a missing path, which would leave every Felix
+      # lane silently back on a cold libbpf build.
+      test -d felix/bpf-gpl/libbpf || { echo "libbpf clone missing at felix/bpf-gpl/libbpf" >&2; exit 1; }
+      test -f "felix/bpf-gpl/.libbpf-${LIBBPF_VERSION}" || { echo "libbpf version marker felix/bpf-gpl/.libbpf-${LIBBPF_VERSION} missing" >&2; exit 1; }
+      tar --use-compress-program="zstd -3" -cf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
+      artifact push workflow /tmp/libbpf-amd64.tar.zst
+
+  # The tag is a hash of the specs and patches, so an unchanged recipe is a pull
+  # rather than the ~20 minutes an emulated build takes. Every architecture
+  # calico/node ships is built: a consumer reaching a tag nobody published has
+  # nowhere else to get it from.
+  - name: build-nft-rpms
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 2000m, memory: 1Gi}
+    matrix:
+      - name: amd64
+        env: [{name: ARCH, value: amd64}]
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    changes:
+      in:
+        - '^hack/rpms/nftables/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      mkdir -p logs
+      export BUILD_LOG="logs/build-nft-rpms-${ARCH}.log"
+      .argoci/scripts/build-nft-rpms.sh "${ARCH}"
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job logs --destination logs || true
+
+  # A build-time prerequisite the next run pulls rather than a release artifact,
+  # so it publishes on merge instead of waiting for a release. It reads the
+  # tarball the build cached, which only exists inside this workflow — hence a
+  # step here rather than a workflow of its own. The tag is a hash of the recipe,
+  # so an unchanged one is already published and the push is a no-op.
+  - name: push-nft-rpms
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 1500m, memory: 1.5Gi}
+    depends: [build-nft-rpms]
+    when: GIT_REF_TYPE == 'MERGE'
+    matrix:
+      - name: amd64
+        env: [{name: ARCH, value: amd64}]
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    changes:
+      in:
+        - '^hack/rpms/nftables/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      export DOCKER_USER="$DOCKERHUB_USERNAME"
+      export DOCKER_TOKEN="$DOCKERHUB_PASSWORD"
+      mkdir -p logs
+      export BUILD_LOG="logs/push-nft-rpms-${ARCH}.log"
+      .argoci/scripts/push-nft-rpms.sh "${ARCH}"
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job logs --destination logs || true
+
+  # Still the DaemonSet image OSS users install, so it ships alongside the
+  # combined one.
+  - name: build-node-image
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 4000m, memory: 5Gi}
+    depends: [build-nft-rpms]
+    changes:
+      dependsOn: [node]
+      in:
+        - '^node/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
+      # does not go back to the registry for it.
+      .argoci/scripts/load-nft-rpms.sh amd64
+      make -C node image
+      docker save calico/node:latest-amd64 -o /tmp/node-image.tar
+      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/node-image.tar
+      artifact push workflow /tmp/node-image.tar.zst
+
+  # A TypeScript frontend that will not fold into the combined binary, so it has
+  # no Go closure to derive a gate from — hence the literal path.
+  - name: build-whisker-image
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 2000m, memory: 1.75Gi}
+    changes:
+      in:
+        - '^whisker/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make -C whisker image
+      docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
+      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/whisker-image.tar
+      artifact push workflow /tmp/whisker-image.tar.zst
+
+  # Built through the same target its consumers run, so the refs it bakes in
+  # (localhost:5000/calico/<name>:test-build) are the ones they install.
+  - name: build-operator-image
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 2750m, memory: 5.25Gi}
+    changes:
+      dependsOn: [operator]
+      in:
+        - '^operator/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make kind-operator-image
+      docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
+      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/operator-image.tar
+      artifact push workflow /tmp/operator-image.tar.zst
+
+  # One tarball because no lane wants a subset, and each of these fetches and
+  # compiles upstream sources that every kind lane would otherwise repeat.
+  - name: build-third-party-images
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 3500m, memory: 3.5Gi}
+    changes:
+      dependsOn: [third_party]
+      in:
+        - '^third_party/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      make -C third_party/envoy-gateway image
+      make -C third_party/envoy-proxy image
+      make -C third_party/envoy-ratelimit image
+      make -C third_party/cni-plugins image
+      docker save \
+        calico/envoy-gateway:latest-amd64 \
+        calico/envoy-proxy:latest-amd64 \
+        calico/envoy-ratelimit:latest-amd64 \
+        calico/third-party-cni-plugins:latest-amd64 \
+        -o /tmp/third-party-images.tar
+      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/third-party-images.tar
+      artifact push workflow /tmp/third-party-images.tar.zst
+
+  # The nightly repeats this workflow's module list, and nothing else would
+  # notice the two parting company.
+  - name: check-cron-coverage
+    jobSize: small
+    requests: {cpu: 1500m, memory: 548Mi}
+    changes:
+      in:
+        - ^\.argoci/ciworkflow\.yaml$
+        - ^\.argoci/cron/nightly-ci\.yaml$
+        - ^\.argoci/scripts/test_scripts/check-cron-coverage\.sh$
+    commands: |
+      ./.argoci/scripts/test_scripts/check-cron-coverage.sh

@@ -1,0 +1,31 @@
+# Runs against the calico image built once for the whole workflow.
+#
+# On a machine rather than in a pod: the dataplane tests create netkit devices,
+# which the container-optimised node image has no driver for.
+#
+# The Windows FV is a module of its own: it drives Azure VMs rather than
+# containers, and gates on paths this one has no interest in.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+
+steps:
+  - name: cni-plugin-ci
+    runOn: vm
+    vm:
+      machineType: e2-standard-8
+    services:
+      - docker
+    depends: [build-calico-image, check-go]
+    commands: |
+      sudo apt-get update -y && sudo apt-get install -y make
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      .argoci/scripts/load-cached-images calico
+      cd cni-plugin
+      make ci-no-prereqs
+    epilogue: |
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/cni-plugin/report" report || true
+      # Skipped specs are reported as failures otherwise.
+      python3 hack/strip-skipped-tests.py ./report/*.xml 2>/dev/null || true
+      artifact push job report --destination test-results || true

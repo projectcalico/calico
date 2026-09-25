@@ -2,14 +2,14 @@
 # Smoke tests for load-nft-rpms.sh, covering the Docker Hub fallback that keeps
 # a credential-less (read-only) build going when the S3 tarball is missing.
 # Not run in CI; run manually:
-#   .semaphore/test-load-nft-rpms.sh
+#   .argoci/scripts/test-load-nft-rpms.sh
 #
 # docker, make, zstd and curl are stubbed on PATH, so nothing is pulled, built
 # or fetched: the stubs record their argv to $stub_log. The real s3-cmd runs,
 # with no credentials, so its anonymous-read path goes through the curl stub.
 set -u
-cd "$(dirname "$0")/.." || exit 1
-loader="$PWD/.semaphore/scripts/load-nft-rpms.sh"
+cd "$(dirname "$0")/../.." || exit 1
+loader="$PWD/.argoci/scripts/load-nft-rpms.sh"
 fails=0
 
 check() {
@@ -76,12 +76,13 @@ run() {
   "$loader" "$@"
 }
 
-# 1. Tarball available: load it, and do not fall back to a pull.
+# 1. Tarball available: load it, and do not fall back to a pull. The local
+# name carries the arch, matching the object it came from.
 out=$(run amd64 2>&1)
 rc=$?
 check "tarball load RC=0" [ "$rc" = 0 ]
 check "tarball fetched over S3" grep -q "^curl .*nft-rpms-amd64.tar.zst" "$stub_log"
-check "tarball loaded into docker" grep -q "^docker load -i /tmp/nft-rpms.tar" "$stub_log"
+check "tarball loaded into docker" grep -q "^docker load -i /tmp/nft-rpms-amd64.tar" "$stub_log"
 check "no Docker Hub pull" test "$(grep -c '^docker pull ' "$stub_log")" = 0
 
 # 2. No tarball (the read-only case: the producer's upload was skipped): fall
@@ -96,7 +97,7 @@ check "fallback does not docker load" test "$(grep -c '^docker load ' "$stub_log
 out=$(CURL_FAIL=1 PULL_FAIL=1 run arm64 2>&1)
 rc=$?
 check "no source available fails" [ "$rc" != 0 ]
-check "no source available explains why" grep -q "neither the S3 workflow cache nor Docker Hub" <<<"$out"
+check "no source available explains why" grep -q "neither the workflow cache nor Docker Hub" <<<"$out"
 
 # 4. Image already loaded locally: skip both the fetch and the pull.
 out=$(IMAGE_PRESENT=1 run amd64 2>&1)

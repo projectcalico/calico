@@ -31,9 +31,9 @@ const (
 	argoDir   = ".argoci/cron"
 	blocksDir = ".semaphore/semaphore.yml.d/blocks"
 
-	// The per-PR lane is one workflow file rather than a directory of them, so
-	// it needs naming separately, but the format is the same as a cron's.
-	argoPRFile = ".argoci/ciworkflow.yaml"
+	// The per-PR lanes are composed from modules, one file each, in the same
+	// format as a cron.
+	modulesDir = ".argoci/modules"
 
 	// The end-to-end body scripts drive a provisioned cluster and take their
 	// selection from the environment.
@@ -111,14 +111,14 @@ func (l Lane) SelectionArgs(repoRoot string) ([]string, error) {
 	return []string{"--calico.test-config=" + abs}, nil
 }
 
-// Load resolves every lane declared under .argoci/cron and
-// .semaphore/semaphore.yml.d/blocks, plus the per-PR .argoci/ciworkflow.yaml,
-// sorted by source then name.
+// Load resolves every lane declared under .argoci/cron, .argoci/modules and
+// .semaphore/semaphore.yml.d/blocks, sorted by source then name.
 func Load(repoRoot string) ([]Lane, error) {
 	var lanes []Lane
 	for dir, parse := range map[string]func(string, []byte) ([]Lane, error){
-		argoDir:   parseArgo,
-		blocksDir: parseSemaphoreBlocks,
+		argoDir:    parseArgo,
+		modulesDir: parseArgoModule,
+		blocksDir:  parseSemaphoreBlocks,
 	} {
 		entries, err := os.ReadDir(filepath.Join(repoRoot, dir))
 		if err != nil {
@@ -141,16 +141,6 @@ func Load(repoRoot string) ([]Lane, error) {
 			lanes = append(lanes, found...)
 		}
 	}
-	prData, err := os.ReadFile(filepath.Join(repoRoot, argoPRFile))
-	if err != nil {
-		return nil, err
-	}
-	prLanes, err := parseArgo(argoPRFile, prData)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", argoPRFile, err)
-	}
-	lanes = append(lanes, prLanes...)
-
 	if len(lanes) == 0 {
 		return nil, fmt.Errorf("no CI lanes found under %s: wrong repo root?", repoRoot)
 	}
@@ -238,6 +228,23 @@ type argoStep struct {
 type argoMatrix struct {
 	Name string   `yaml:"name"`
 	Env  []envVar `yaml:"env"`
+}
+
+// parseArgoModule reads a module, whose steps are mostly not e2e at all. A cron
+// file is entirely lanes and can default its way to one; here a step has to say
+// it selects specs, or every build and lint step in the repo becomes a lane.
+func parseArgoModule(source string, data []byte) ([]Lane, error) {
+	lanes, err := parseArgo(source, data)
+	if err != nil {
+		return nil, err
+	}
+	kept := lanes[:0]
+	for _, l := range lanes {
+		if l.Config != "" {
+			kept = append(kept, l)
+		}
+	}
+	return kept, nil
 }
 
 func parseArgo(source string, data []byte) ([]Lane, error) {

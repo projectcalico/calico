@@ -1,0 +1,51 @@
+# Typha's own tests, plus a second pass against a UBI-minimal base to catch what
+# only that base image breaks.
+#
+# On a machine rather than in a pod: the k8sfv run loads ip6_tables, which needs
+# both the tooling and the privileges a container does not have.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  runOn: vm
+  services:
+    - docker
+
+steps:
+  - name: typha-ci
+    vm:
+      machineType: e2-standard-8
+    depends: [build-calico-image, check-go]
+    commands: |
+      sudo apt-get update -y && sudo apt-get install -y make
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      .argoci/scripts/load-cached-images calico
+      cd typha
+      make ci-no-prereqs
+    epilogue: |
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/typha/report" typha-report || true
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/felix/report" felix-report || true
+      artifact push job typha-report --destination test-results || true
+      artifact push job felix-report --destination test-results-felix || true
+
+  # Waits on the producer without loading what it cached: `clean` would discard
+  # that image anyway, but there is no sense building a second base off a commit
+  # whose first one just failed.
+  - name: typha-fv-ubi
+    vm:
+      machineType: e2-standard-8
+    depends: [build-calico-image, check-go]
+    env:
+      - name: USE_UBI_AS_CALICO_BASE
+        value: "1"
+    commands: |
+      sudo apt-get update -y && sudo apt-get install -y make
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      make -C cmd/calico clean image
+      cd typha
+      make fv-no-prereqs
+    epilogue: |
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/typha/report" typha-report || true
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/felix/report" felix-report || true
+      artifact push job typha-report --destination test-results-ubi || true
+      artifact push job felix-report --destination test-results-ubi-felix || true

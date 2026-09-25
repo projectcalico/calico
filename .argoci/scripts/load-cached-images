@@ -28,6 +28,15 @@ if [ ${#REQUESTED[@]} -eq 0 ]; then
     REQUESTED=(calico node whisker)
 fi
 
+fetch_tarball() {
+    local name=$1
+    if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
+        ( cd /tmp && artifact pull workflow "${name}" )
+        return
+    fi
+    "${REPO_ROOT}/.semaphore/s3-cmd" cp "${S3_WORKFLOW_DIR}/${name}" "/tmp/${name}" 2>/dev/null
+}
+
 load_image() {
     local component=$1
     local name=$2
@@ -36,7 +45,12 @@ load_image() {
     local markers=("$@")
     local marker
 
-    if ! "${REPO_ROOT}/.semaphore/s3-cmd" cp "${S3_WORKFLOW_DIR}/${s3_path}" "/tmp/${s3_path}" 2>/dev/null; then
+    if ! fetch_tarball "${s3_path}"; then
+        # The producer already ran, so this is a broken contract, not a cold cache.
+        if [ -n "${CI_ARTIFACT_STORAGE:-}" ] && was_requested "$component"; then
+            echo "Expected ${name} from ${CI_ARTIFACT_STORAGE}/${s3_path} and it was not there." >&2
+            return 1
+        fi
         if have_credentials || ! was_requested "$component"; then
             echo "No cached ${name} image found; leaving Make to build it if a target needs it."
             return
@@ -82,7 +96,7 @@ build_image() {
     # build would produce that image from scratch (~20 min); pulling the
     # published one first is much cheaper when it exists.
     if [ "$component" = node ]; then
-        "${REPO_ROOT}/.semaphore/scripts/load-nft-rpms.sh" "$ARCH"
+        "${REPO_ROOT}/.argoci/scripts/load-nft-rpms.sh" "$ARCH"
     fi
 
     make -C "${REPO_ROOT}" "$@" ARCH="$ARCH"

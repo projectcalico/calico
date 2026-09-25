@@ -5,16 +5,30 @@ set -e
 hack_dir="$(dirname $0)"
 repo_dir="$(dirname $hack_dir)"
 
-# Allow for the parent branch to be passed in as an env var
-if [[ -z "${parent_branch}" ]]; then
-  parent_branch="$($repo_dir/hack/find-parent-release-branch.sh)"
-fi
+# CI already knows the range this change spans, and a three-dot range is the same
+# merge-base comparison the scan below reconstructs. Prefer it: the scan needs a
+# remote for the upstream repo, which a clone of a fork does not have.
+#
+# Only when its base commit is present locally — a shallow or otherwise
+# incomplete clone would make git diff fail rather than fall back.
+diff_base=()
+if [[ -n "${CI_GIT_COMMIT_RANGE}" ]] &&
+   git rev-parse -q --verify "${CI_GIT_COMMIT_RANGE%%...*}^{commit}" >/dev/null; then
+  echo "Using commit range: ${CI_GIT_COMMIT_RANGE}"
+  diff_base=("${CI_GIT_COMMIT_RANGE}")
+else
+  # Allow for the parent branch to be passed in as an env var
+  if [[ -z "${parent_branch}" ]]; then
+    parent_branch="$($repo_dir/hack/find-parent-release-branch.sh)"
+  fi
 
-if [ -z "$parent_branch" ]; then
-  echo "No parent branch found."
-  exit 1
+  if [ -z "$parent_branch" ]; then
+    echo "No parent branch found."
+    exit 1
+  fi
+  echo "Detected parent branch: $parent_branch"
+  diff_base=(--merge-base "$parent_branch")
 fi
-echo "Detected parent branch: $parent_branch"
 
 # Find all the .go files that have changed vs the parent branch.  We use
 # --diff-filter=d to filter out deleted files and -z to use NUL as the
@@ -26,8 +40,8 @@ echo "Detected parent branch: $parent_branch"
 file_list=$(mktemp)
 trap "rm -f $file_list" EXIT
 
-# Collect files changed vs the parent branch...
-git diff -z --name-only --diff-filter=d --merge-base "$parent_branch" -- . > $file_list || true
+# Collect files changed vs the base...
+git diff -z --name-only --diff-filter=d "${diff_base[@]}" -- . > $file_list || true
 # ...and also any files that are dirty in the working tree (e.g. regenerated
 # by a previous build step like "make protobuf").
 git diff -z --name-only --diff-filter=d -- . >> $file_list || true

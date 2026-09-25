@@ -1,0 +1,22 @@
+# Licence scanning. A merge-triggered workflow rather than a promotion, because
+# nothing here reads the run's artifacts and it is meant to fire on its own.
+version: condensed
+generateName: fossa-scan-
+timeout: 1h
+
+defaults:
+  timeout: 1h
+  secretBundles:
+    - foss-api-key
+
+steps:
+  - name: fossa-scan
+    jobSize: small
+    requests: {cpu: 1000m, memory: 2Gi}
+    # Only the branches the scan is meant to trend, and a merge is the only ref
+    # type that reaches here anyway.
+    when: GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-'
+    commands: |
+      hack/fetch-file https://raw.githubusercontent.com/fossas/fossa-cli/master/install-latest.sh /tmp/install-fossa.sh
+      bash /tmp/install-fossa.sh -b /usr/local/bin
+      fossa analyze

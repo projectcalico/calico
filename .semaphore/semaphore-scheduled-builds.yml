@@ -494,7 +494,7 @@ blocks:
     # Consumers: "Build: node image" (10-prerequisites.yml), "Node: multi-arch
     # build" (20-node.yml), "Istio" (20-istio.yml) — every block that lists this
     # one in its `dependencies:`. They all go through
-    # .semaphore/scripts/load-nft-rpms.sh, which falls back to a Docker Hub pull
+    # .argoci/scripts/load-nft-rpms.sh, which falls back to a Docker Hub pull
     # when the tarball is missing; that covers a credential-less (read-only)
     # build, but only for a tag that has already been published. If a consumer
     # fires on an unpublished tag while this producer is skipped (Semaphore treats
@@ -532,7 +532,7 @@ blocks:
                 - ppc64le
                 - s390x
           commands:
-            - .semaphore/scripts/build-nft-rpms.sh "${ARCH}"
+            - .argoci/scripts/build-nft-rpms.sh "${ARCH}"
   - name: "Pull: go-build image"
     # Populate the GCS cache of calico/go-build so it can serve as a fallback when
     # a Docker Hub pull fails (which we still see occasionally even with an
@@ -660,7 +660,7 @@ blocks:
             # Load the patched nftables RPMs producer image (built/cached by
             # "Build: nftables RPMs") so the node Dockerfile's FROM ${NFT_RPMS_IMAGE}
             # resolves locally without re-pulling from Docker Hub.
-            - .semaphore/scripts/load-nft-rpms.sh amd64
+            - .argoci/scripts/load-nft-rpms.sh amd64
             - make -C node image
             - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
             - zstd -3 --rm /tmp/node-image.tar
@@ -886,7 +886,7 @@ blocks:
           value: "calico"
       prologue:
         commands:
-          - .semaphore/load-cached-images calico
+          - .argoci/scripts/load-cached-images calico
           - cd cni-plugin
       jobs:
         - name: "CNI Plugin: CI"
@@ -1046,7 +1046,7 @@ blocks:
         commands:
           # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
           - docker system prune -af
-          - .semaphore/load-cached-images calico node whisker
+          - .argoci/scripts/load-cached-images calico node whisker
       jobs:
         - name: "E2E tests: Conformance (cluster routing: BIRD)"
           commands:
@@ -1191,7 +1191,7 @@ blocks:
           # then put the cgo + race binaries and the pre-built libbpf in place so
           # build-calico-cgo / build-calico-race and the libbpf clone are all
           # skipped.
-          - .semaphore/load-cached-images calico
+          - .argoci/scripts/load-cached-images calico
           - .semaphore/scripts/load-felix-prereqs.sh
           - cd felix
           - gcloud config set project unique-caldron-775
@@ -1255,7 +1255,7 @@ blocks:
         commands:
           - gcloud config set project unique-caldron-775
           - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
-          - .semaphore/load-cached-images calico
+          - .argoci/scripts/load-cached-images calico
           - .semaphore/scripts/load-felix-prereqs.sh
           - cd felix
       secrets:
@@ -1318,7 +1318,7 @@ blocks:
         commands:
           # Load the locally-built calico + node images from the S3 cache so the
           # local-build install uses images from the commit under test.
-          - .semaphore/load-cached-images calico node
+          - .argoci/scripts/load-cached-images calico node
           - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
           - export REPORT_DIR=/home/semaphore/report
           - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
@@ -1480,7 +1480,7 @@ blocks:
           # Match the other kind lanes: free the /var/lib/docker space the
           # pre-loaded images hold before loading the ones this lane needs.
           - docker system prune -af
-          - .semaphore/load-cached-images calico node whisker
+          - .argoci/scripts/load-cached-images calico node whisker
       jobs:
         - name: "Gateway API: Conformance Tests"
           commands:
@@ -1570,7 +1570,7 @@ blocks:
           commands:
             # Load the amd64 patched nftables RPMs producer image so the
             # install-cni Dockerfile's FROM ${NFT_RPMS_IMAGE} resolves locally.
-            - ../.semaphore/scripts/load-nft-rpms.sh amd64
+            - ../.argoci/scripts/load-nft-rpms.sh amd64
             # Include the istio ztunnel build in the amd64 CI job.
             - ../.semaphore/run-and-monitor ci.log make ci
         - name: "Istio: build arm64"
@@ -1595,7 +1595,7 @@ blocks:
           value: "calico"
       prologue:
         commands:
-          - .semaphore/load-cached-images calico
+          - .argoci/scripts/load-cached-images calico
           - cd kube-controllers
       jobs:
         - name: "kube-controllers: CI"
@@ -1640,7 +1640,7 @@ blocks:
       prologue:
         commands:
           - docker system prune -af
-          - .semaphore/load-cached-images calico node
+          - .argoci/scripts/load-cached-images calico node
       jobs:
         - name: "KubeVirt live migration (KIND)"
           commands:
@@ -1815,7 +1815,7 @@ blocks:
             # Load the per-arch patched nftables RPMs producer image (built/cached
             # by "Build: nftables RPMs") so Dockerfile's FROM ${NFT_RPMS_IMAGE}
             # resolves locally without re-pulling from Docker Hub.
-            - ../.semaphore/scripts/load-nft-rpms.sh "${ARCH}"
+            - ../.argoci/scripts/load-nft-rpms.sh "${ARCH}"
             - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
         - name: "Node: build Windows archive"
           commands:
@@ -1887,7 +1887,7 @@ blocks:
           value: "calico"
       prologue:
         commands:
-          - .semaphore/load-cached-images
+          - .argoci/scripts/load-cached-images
           - cd operator
       jobs:
         - name: "Operator: static checks and unit tests"
@@ -1934,7 +1934,7 @@ blocks:
           value: "calico"
       prologue:
         commands:
-          - .semaphore/load-cached-images
+          - .argoci/scripts/load-cached-images
           - cd operator
       jobs:
         - name: "Operator: FV on kind"
@@ -2020,7 +2020,7 @@ blocks:
           value: "calico"
       prologue:
         commands:
-          - .semaphore/load-cached-images calico
+          - .argoci/scripts/load-cached-images calico
           - cd typha
       jobs:
         - name: "Typha: UT and FV tests"

@@ -1,0 +1,37 @@
+# Calico's Istio integration images, built from upstream Istio sources rather
+# than from anything in this tree — which is why it has no generated component
+# and gates on its own directory.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: istio-ci
+    requests: {cpu: 3250m, memory: 5.25Gi}
+    depends: [build-nft-rpms]
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      # Resolves the install-cni Dockerfile's nft-rpms base locally.
+      .argoci/scripts/load-nft-rpms.sh amd64
+      cd istio
+      make ci
+
+  # Binaries only, so it never resolves the nft-rpms base and has no reason to
+  # wait for it. ztunnel cross-compiles through the Rust toolchain in the build
+  # image, so no arm64 runner is involved.
+  - name: istio-build
+    requests: {cpu: 5000m, memory: 6Gi}
+    matrix:
+      - name: arm64
+        env:
+          - name: ARCH
+            value: arm64
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd istio
+      make build ARCH=$ARCH

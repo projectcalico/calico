@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 
@@ -351,7 +352,8 @@ var validateHashreleaseBuildFlags = func(c *cli.Command) error {
 			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s is set",
 				hashreleaseServerBucketFlag.Name)
 		}
-		if c.String(ciTokenFlag.Name) == "" {
+		// Only the image promotions check reads it, and that is Semaphore's alone.
+		if c.String(ciTokenFlag.Name) == "" && os.Getenv("CI_WORKFLOW_NAME") == "" {
 			return fmt.Errorf("%s API token must be set when running on CI, either set \"SEMAPHORE_API_TOKEN\" or use %s flag", semaphoreCI, ciTokenFlag.Name)
 		}
 	} else {
@@ -408,12 +410,15 @@ var validateHashreleasePublishFlags = func(c *cli.Command) error {
 	return nil
 }
 
-// ciJobURL returns the URL to the CI job if the command is running on CI.
+// ciJobURL returns the URL to the CI job if the command is running on CI. An
+// announcement is worth more without a link than not at all, so an unidentified
+// job only loses the link.
 func ciJobURL(c *cli.Command) string {
-	if !c.Bool(ciFlag.Name) {
+	orgURL, jobID := c.String(ciBaseURLFlag.Name), c.String(ciJobIDFlag.Name)
+	if !c.Bool(ciFlag.Name) || orgURL == "" || jobID == "" {
 		return ""
 	}
-	return fmt.Sprintf("%s/jobs/%s", c.String(ciBaseURLFlag.Name), c.String(ciJobIDFlag.Name))
+	return fmt.Sprintf("%s/jobs/%s", orgURL, jobID)
 }
 
 func hashreleaseServerConfig(c *cli.Command) *hashreleaseserver.Config {
@@ -434,6 +439,12 @@ func validateCIBuildRequirements(c *cli.Command, repoRootDir string) error {
 	if !c.Bool(ciFlag.Name) {
 		return nil
 	}
+	// The check below walks a Semaphore pipeline to its parent to read the
+	// sibling image promotions' results, which only Semaphore can answer.
+	if os.Getenv("CI_WORKFLOW_NAME") != "" {
+		logrus.Info("Not running on Semaphore, skipping images promotions check...")
+		return nil
+	}
 	if c.Bool(imagesFlagName) {
 		logrus.Info("Building images in hashrelease, skipping images promotions check...")
 		return nil
@@ -441,6 +452,9 @@ func validateCIBuildRequirements(c *cli.Command, repoRootDir string) error {
 	orgURL := c.String(ciBaseURLFlag.Name)
 	token := c.String(ciTokenFlag.Name)
 	pipelineID := c.String(ciPipelineIDFlag.Name)
+	if orgURL == "" || pipelineID == "" {
+		return fmt.Errorf("checking image promotions requires --%s and --%s", ciBaseURLFlag.Name, ciPipelineIDFlag.Name)
+	}
 	promotionsDone, err := ci.EvaluateImagePromotions(repoRootDir, orgURL, pipelineID, token)
 	if err != nil {
 		return err

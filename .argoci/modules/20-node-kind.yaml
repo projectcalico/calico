@@ -1,0 +1,62 @@
+# The calico/node system tests: a real kind cluster on a GCE VM of its own.
+#
+# Its own module because its trigger is much wider than node/'s — the suite
+# installs every component the DaemonSet pulls in, so a change to any of them
+# should exercise it.
+version: condensed-module
+
+defaults:
+  timeout: 2h15m
+
+steps:
+  # The system tests install calico/node on a real kind cluster, which needs a
+  # kernel of its own — so one GCE VM, driven from this pod.
+  - name: node-kind-cluster-tests
+    depends: [build-calico-image, build-node-image, build-whisker-image, check-go]
+    requests: {cpu: 2000m, memory: 4Gi}
+    services:
+      - docker
+    secretBundles:
+      - name: google-service-account-for-gce
+        keys:
+          - name: google-service-account-for-gce-key.json
+            as: GCE_SERVICE_ACCOUNT_KEY
+    env:
+      - name: COMPONENT
+        value: node
+      # The artifact store's region, so the working copy and images each VM
+      # pulls do not cross one.
+      - name: REGION
+        value: us-central1
+      # Same 4 vCPU / 16 GB as the fleet script's default, from a different
+      # capacity pool. Has to stay a family that takes a hyperdisk boot disk.
+      - name: VM_MACHINE_TYPE
+        value: c3-standard-4
+      - name: VM_DISK_SIZE
+        value: 80GB
+      - name: CI_GROUP_LABEL
+        value: calico
+      - name: CI_JOB_LABEL
+        value: kind-cluster-tests
+      # The fleet's watchdog, which captures a hung VM's serial console before
+      # killing the batch. The step deadline leaves it room to.
+      - name: JOB_TIMEOUT_MINUTES
+        value: "120"
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      source .argoci/scripts/vm-fleet-setup.sh
+      export VM_PREFIX="argoci-${CI_GIT_REPO_NAME}-${SHORT_WORKFLOW_ID}-kind-"
+      mkdir -p artifacts
+      cd node
+      ./.semaphore/cache-test-artifacts
+      cd ..
+      .semaphore/vms/run-tests-on-vms "${VM_PREFIX}"
+    epilogue: |
+      # The commands ran in a subshell, so VM_PREFIX has to be re-derived or the
+      # teardown reaches no fleet at all.
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      source .argoci/scripts/vm-fleet-setup.sh
+      export VM_PREFIX="argoci-${CI_GIT_REPO_NAME}-${SHORT_WORKFLOW_ID}-kind-"
+      export COMPONENT=node
+      .semaphore/vms/publish-reports "Node: KinD STs" || true
+      .semaphore/vms/clean-up-vms "${VM_PREFIX}" || true

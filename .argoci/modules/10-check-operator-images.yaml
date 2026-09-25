@@ -1,0 +1,18 @@
+# An image built here but missing from the operator's component list is
+# published and then never deployed. BUILD_IMAGES lives in the component
+# Makefiles, so those are triggers too.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: check-operator-images
+    requests: {cpu: 2250m, memory: 2Gi}
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      cd release
+      make check-operator-images

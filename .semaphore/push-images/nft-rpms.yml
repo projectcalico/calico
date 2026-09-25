@@ -40,4 +40,4 @@ blocks:
                 - ppc64le
                 - s390x
           commands:
-            - .semaphore/scripts/push-nft-rpms.sh "${ARCH}"
+            - .argoci/scripts/push-nft-rpms.sh "${ARCH}"

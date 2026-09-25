@@ -1,0 +1,121 @@
+# Builds and publishes an official release from the promoted run's commit, then
+# packages OpenStack for the version that release produced.
+#
+# A button, never automatic: the tag it publishes under comes from the tree, so
+# the only safe trigger is someone deciding this commit is the release.
+version: condensed
+generateName: publish-release-
+
+# Building every image, publishing them, and cutting the GitHub release runs
+# well past what a test lane gets.
+timeout: 14h
+
+defaults:
+  # Named rather than inherited: a promotion is its own workflow, and the repo
+  # default is the cloud-provider image the e2e lanes want.
+  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2
+  jobSize: medium
+  services:
+    - docker
+  secretBundles:
+    - docker-hub
+    - quay-repo-push-access-public-repos
+    # Carries the GitHub token the release is cut with, the key private trees
+    # are cloned over, the terraform vars, and the GCR key that reaches the
+    # mirrored registries.
+    - name: oss-release-secrets
+      keys:
+        - name: GITHUB_TOKEN
+        - name: AWS_PROFILE
+        - name: S3_BUCKET
+        - name: aws-config
+          localFile: /root/.aws/config
+        - name: aws-credentials
+          localFile: /root/.aws/credentials
+        - name: git_ssh_rsa
+          localFile: /root/.keys/git_ssh_rsa
+        - name: gcr-credentials.json
+          localFile: /root/secrets/gcr-credentials.json
+        - name: release.tfvars
+          localFile: /root/secrets/release.tfvars
+
+steps:
+  - name: publish-release
+    timeout: 6h
+    requests: {cpu: 3500m, memory: 8Gi}
+    env:
+      - name: GOOGLE_APPLICATION_CREDENTIALS
+        value: /root/secrets/gcr-credentials.json
+      - name: VAR_FILE
+        value: /root/secrets/release.tfvars
+    commands: |
+      if [ -n "${CI_GIT_PR_NUMBER}" ] && [ "${CI_GIT_PR_NUMBER}" != none ]; then
+        echo "refusing to publish a release from PR #${CI_GIT_PR_NUMBER}" >&2
+        exit 1
+      fi
+
+      chmod 0600 /root/.keys/* || true
+      eval "$(ssh-agent -s)" >/dev/null
+      ssh-add /root/.keys/* 2>/dev/null || true
+
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      echo "$QUAY_TOKEN" | docker login --username "$QUAY_USERNAME" --password-stdin quay.io
+
+      # Charts publish to quay as an OCI artifact, and helm keeps its own
+      # credential store. It arrives in ./bin on demand rather than in the image.
+      make bin/helm
+      echo "$QUAY_TOKEN" | ./bin/helm registry login \
+        --username "$QUAY_USERNAME" --password-stdin quay.io
+
+      gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
+      # The regional hostnames are separate registries to docker, so each needs
+      # its own login even though one key covers them all.
+      for host in gcr.io eu.gcr.io asia.gcr.io us.gcr.io; do
+        docker login -u _json_key --password-stdin "https://${host}" < "${GOOGLE_APPLICATION_CREDENTIALS}"
+      done
+
+      make GIT_BRANCH="${CI_GIT_BRANCH}" release
+      make GIT_BRANCH="${CI_GIT_BRANCH}" release-publish
+
+  - name: openstack-packages
+    depends: [publish-release]
+    timeout: 1h
+    requests: {cpu: 2000m, memory: 4Gi}
+    secretBundles:
+      - name: google-service-account-for-tigera-infra
+        keys:
+          - name: tigera-infra-access.json
+            as: TIGERA_INFRA_SA_KEY
+            localFile: /root/secrets/tigera-infra-access.json
+      - name: launchpad-secret-key
+        keys:
+          - name: marvin.txt
+            as: LAUNCHPAD_SECRET_KEY
+            localFile: /root/secrets/marvin.txt
+    env:
+      - name: GOOGLE_APPLICATION_CREDENTIALS
+        value: /root/secrets/tigera-infra-access.json
+      - name: SECRET_KEY
+        value: /root/secrets/marvin.txt
+      - name: GCLOUD_ARGS
+        value: --zone us-east1-c --project tigera-wp-tcp-redirect
+      - name: HOST
+        value: ubuntu@binaries-projectcalico-org
+      # For the containers being built, not the machine running the build.
+      - name: UBUNTU_REPO_OVERRIDE
+        value: ftp.uni-stuttgart.de
+    commands: |
+      apt-get update -y && apt-get install -y --no-install-recommends devscripts moreutils patchelf jq
+      git config --global user.email marvin@tigera.io
+      git config --global user.name Marvin
+      gcloud config set project tigera-wp-tcp-redirect
+      gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
+      # Takes its version from the chart rather than the ref, which is what
+      # makes this the released packages instead of a branch's.
+      make publish-openstack
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      if [ -d release/packaging/output ]; then
+        mv release/packaging/output release/packaging/openstack
+        artifact push workflow release/packaging/openstack || true
+      fi

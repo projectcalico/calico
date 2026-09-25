@@ -3,7 +3,7 @@ set -e
 set -o pipefail
 
 # build-nft-rpms.sh: Builds and caches nftables RPMs for a specific architecture.
-# This script is intended to be run from Semaphore CI.
+# Caches through whichever workflow storage the CI system provides.
 # It produces a log file at /tmp/nft-build-${ARCH}.log.
 
 ARCH=$1
@@ -16,11 +16,12 @@ if [ -z "$BUILD_LOG" ]; then
   exit 1
 fi
 
-S3_CMD="$(dirname "$0")/../s3-cmd"
+S3_CMD="$(git rev-parse --show-toplevel)/.semaphore/s3-cmd"
 
 NFT_RPMS_TAG=$(make --no-print-directory -C hack/rpms/nftables print-tag)
 NFT_RPMS_IMAGE="calico/nftables-rpms:${NFT_RPMS_TAG}-${ARCH}"
-CACHE_PATH="${S3_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst"
+CACHE_NAME="nft-rpms-${ARCH}.tar.zst"
+CACHE_PATH="${S3_WORKFLOW_DIR}/${CACHE_NAME}"
 
 # Use a subshell to capture all output to the log file while still printing to stdout.
 {
@@ -39,7 +40,11 @@ CACHE_PATH="${S3_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst"
   fi
 
   echo "Saving and uploading image tarball..."
-  docker save "$NFT_RPMS_IMAGE" -o /tmp/nft-rpms.tar
-  zstd -3 --rm /tmp/nft-rpms.tar
-  "$S3_CMD" cp /tmp/nft-rpms.tar.zst "$CACHE_PATH"
+  docker save "$NFT_RPMS_IMAGE" -o "/tmp/${CACHE_NAME%.zst}"
+  zstd -3 --rm "/tmp/${CACHE_NAME%.zst}"
+  if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
+    artifact push workflow "/tmp/${CACHE_NAME}"
+  else
+    "$S3_CMD" cp "/tmp/${CACHE_NAME}" "$CACHE_PATH"
+  fi
 } 2>&1 | tee "$BUILD_LOG"

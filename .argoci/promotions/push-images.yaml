@@ -1,0 +1,50 @@
+# Re-publishes one component's images at the promoted run's commit, so a single
+# component can be pushed again without re-running a hashrelease.
+#
+# The component is a parameter rather than a workflow per component: the push is
+# the same `make` either way, and the directories a component covers are a
+# property of the tree rather than of the button.
+version: condensed
+generateName: push-images-
+timeout: 1h
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+  secretBundles:
+    - docker-hub
+    - quay-repo-push-access-public-repos
+  env:
+    - name: DEV_REGISTRIES
+      value: quay.io/calico docker.io/calico
+
+steps:
+  - name: push-images
+    requests: {cpu: 2000m, memory: 3Gi}
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      echo "$QUAY_TOKEN" | docker login --username "$QUAY_USERNAME" --password-stdin quay.io
+      export BRANCH_NAME="${CI_GIT_BRANCH}"
+
+      manifests=""
+      windows=""
+      case "${COMPONENT}" in
+        calico)                  manifests="cmd/calico" ;;
+        node)                    manifests="node"; windows="node" ;;
+        cni-plugin)              windows="cni-plugin" ;;
+        third-party-cni-plugins) manifests="third_party/cni-plugins" ;;
+        mock-node)               manifests="test-tools/mocknode" ;;
+        whisker)                 manifests="whisker" ;;
+        operator)                manifests="operator" ;;
+        istio)                   manifests="istio" ;;
+        envoy)                   manifests="third_party/envoy-gateway third_party/envoy-proxy third_party/envoy-ratelimit" ;;
+        *) echo "unknown component: ${COMPONENT}" >&2; exit 1 ;;
+      esac
+
+      for dir in ${manifests}; do
+        make -C "${dir}" cd push-manifests-with-tag CONFIRM=true
+      done
+      for dir in ${windows}; do
+        make -C "${dir}" release-windows CONFIRM=true
+      done

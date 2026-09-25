@@ -1,0 +1,27 @@
+# Publishes the helper images the e2e suites install into a test cluster.
+#
+# A merge-triggered workflow rather than a promotion: it builds everything it
+# pushes from source, so it reads nothing the run produced.
+version: condensed
+generateName: e2e-images-
+timeout: 30m
+
+defaults:
+  timeout: 30m
+  services:
+    - docker
+  # Pushes to quay.io/tigeradev, which the registry the other image pushes use
+  # has no access to.
+  secretBundles:
+    - quay-tigeradev-hashrelease
+
+steps:
+  - name: publish-e2e-images
+    requests: {cpu: 2000m, memory: 3Gi}
+    commands: |
+      echo "$QUAY_TOKEN" | docker login --username "$QUAY_USER" --password-stdin quay.io
+      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
+      # What the image is tagged with. Unset, the Makefile falls back to the
+      # current branch, which is a detached HEAD here and would push ":".
+      export BRANCH_NAME="${CI_GIT_BRANCH}"
+      make -C e2e publish-test-images CONFIRM=true

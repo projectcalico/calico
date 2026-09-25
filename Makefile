@@ -83,6 +83,11 @@ check-mockery-config:
 check-ginkgo-v2:
 	./hack/check-ginkgo-v2.sh
 
+# Exported rather than passed, so the composed value is make's to expand.
+check-argoci-image: export GO_BUILD_VER := $(GO_BUILD_VER)
+check-argoci-image:
+	./hack/check-argoci-image.sh
+
 check-ocp-no-crds:
 	@echo "Checking for files in manifests/ocp with CustomResourceDefinitions"
 	@CRD_FILES_IN_OCP_DIR=$$(grep "^kind: CustomResourceDefinition" manifests/ocp/* -l || true); if [ ! -z "$$CRD_FILES_IN_OCP_DIR" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$$CRD_FILES_IN_OCP_DIR"; exit 1; fi
@@ -128,18 +133,34 @@ operator-charts:
 	$(MAKE) -C operator embedded_charts
 
 gen-semaphore-yaml: operator-charts
+ifdef CI_WORKFLOW_NAME
+	@echo "Skipping Semaphore config generation under ArgoCI"
+else
 	$(DOCKER_GO_BUILD) sh -c "DEFAULT_BRANCH_OVERRIDE=$(DEFAULT_BRANCH_OVERRIDE) \
 	                          SEMAPHORE_GIT_BRANCH=$(SEMAPHORE_GIT_BRANCH) \
 	                          RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) \
 	                          go run ./hack/cmd/deps $(DEPS_ARGS) generate-semaphore-yamls"
+endif
 
 GO_DIRS=$(shell ./hack/list-go-sources.sh dirs)
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
+DEPS_SOURCES=go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./hack/list-go-sources.sh hack/cmd/deps/*
+
+# Derived from the same import graph as deps.txt, so it belongs to the same
+# regenerate-and-diff check rather than one of its own.
+ARGOCI_DEPS_FILE=.argoci/depstree.yaml
+
+# Packages below a component that one CI lane gates on by itself. A lane whose
+# subject is a single package would otherwise have to gate on the whole
+# component and run for anything in its import closure. No deps.txt is
+# generated for these — only a depstree entry.
+ARGOCI_DEPS_SUBPACKAGES=felix/nftables test-tools/mocknode
 
 gen-deps-files: operator-charts
 	$(MAKE) -j$$(nproc) $(DEP_FILES)
+	$(MAKE) $(ARGOCI_DEPS_FILE)
 
-$(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./hack/list-go-sources.sh hack/cmd/deps/*
+$(DEP_FILES): $(DEPS_SOURCES)
 	@{ \
 	  echo "!!! GENERATED FILE, DO NOT EDIT !!!" && \
 	  echo "Run 'make gen-deps-files' to regenerate." && \
@@ -147,6 +168,15 @@ $(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./
 	  grep '^go' go.mod && \
 	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps combined $(patsubst %/,%,$(dir $@))"; \
 	} > $@
+
+# All components in one invocation, since each is a whole-repo `go list` pass and
+# the tool already fans them out across cores.
+#
+# Via a temporary, because a truncated file here is an empty component list —
+# which gates nothing, and says nothing.
+$(ARGOCI_DEPS_FILE): $(DEPS_SOURCES)
+	@$(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps gen-argoci-deps $(GO_DIRS) $(ARGOCI_DEPS_SUBPACKAGES)" > $@.tmp \
+	  && mv $@.tmp $@ || { rm -f $@.tmp; exit 1; }
 
 # The pin file is what onboards a component: one without it is left out,
 # because the generator treats an absent pin file as "no pins" and would delete
@@ -362,17 +392,39 @@ e2e-test-clusternetworkpolicy:
 ## Selection comes from E2E_TEST_CONFIG. E2E_GINKGO_ARGS passes extra ginkgo flags for
 ## an ad-hoc local run; it expands in the shell so its regex metacharacters survive.
 ## --fail-on-empty fails a run that selects no specs instead of passing it.
-e2e-run:
+#
+# A failed suite tears down what it created, which is the state worth looking at.
+# Kept only where something collects it afterwards and the cluster is thrown away
+# regardless; locally it would leave the namespaces behind for someone to notice.
+ifdef CI
+E2E_KEEP_FAILED := --delete-namespace-on-failure=false
+CNP_KEEP_FAILED := -cleanup-base-resources=false
+endif
+
+e2e-run: bin/ginkgo
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
 	mkdir -p $(E2E_OUTPUT_DIR)
-	KUBECONFIG=$(KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- $${E2E_GINKGO_ARGS} $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
+	KUBECONFIG=$(KUBECONFIG) ./bin/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- $${E2E_GINKGO_ARGS} $(E2E_KEEP_FAILED) $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
+
+# The suite it runs is already a built binary, so this is the only reason a Go
+# toolchain would be needed at run time. Version comes from go.mod.
+#
+# Whichever of Go and docker is present: the lanes that drive a kind cluster have
+# docker and no Go, and the ones that drive a remote cluster have the reverse.
+bin/ginkgo:
+	mkdir -p bin
+	@if command -v go >/dev/null 2>&1; then \
+	    set -x; CGO_ENABLED=0 go build -o $@ github.com/onsi/ginkgo/v2/ginkgo; \
+	else \
+	    set -x; $(DOCKER_GO_BUILD) sh -c "CGO_ENABLED=0 go build -o $@ github.com/onsi/ginkgo/v2/ginkgo"; \
+	fi
 
 ## Run the ClusterNetworkPolicy specific e2e tests against the cluster at $KUBECONFIG.
 e2e-run-cnp:
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run-cnp: KUBECONFIG must be set"; exit 1; fi
 	KUBECONFIG=$(KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test \
 	  -exempt-features=$(K8S_NETPOL_UNSUPPORTED_FEATURES) \
-	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
+	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES) $(CNP_KEEP_FAILED)
 
 ###############################################################################
 # Gateway API conformance
