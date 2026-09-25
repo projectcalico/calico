@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -227,6 +228,37 @@ func TestOperatorCommand(t *testing.T) {
 			if !strings.HasPrefix(p, "/logs/v3.34.0/") {
 				t.Errorf("log %q is not under /logs/v3.34.0", p)
 			}
+		}
+	})
+
+	t.Run("publish resumes from its record", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		r := &recordingRunner{}
+		prevRunner, prevPin, prevResolve := commandRunner, pinForPublish, registryDigestResolver
+		commandRunner = r
+		pinForPublish = func(*Config, *cli.Command) (*pinnedversion.Pin, error) {
+			return &pinnedversion.Pin{
+				ProductVersion: "v3.34.0",
+				Operator:       registry.Component{Registry: "quay.io/pinned", Image: "operator", Version: "v1.44.0"},
+			}, nil
+		}
+		registryDigestResolver = func(string) (string, bool, error) { return "sha256:a", true, nil }
+		t.Cleanup(func() { commandRunner, pinForPublish, registryDigestResolver = prevRunner, prevPin, prevResolve })
+
+		cfg := &Config{RepoRootDir: t.TempDir(), OutputDir: filepath.Join(t.TempDir(), "upload")}
+		publish := func() int {
+			before := len(r.args)
+			cmd := &cli.Command{Flags: freshFlags(operatorPublishFlags), Action: operatorPublishAction(cfg)}
+			if err := cmd.Run(context.Background(), []string{"publish", "--hashrelease"}); err != nil {
+				t.Fatalf("publish: %v", err)
+			}
+			return len(r.args) - before
+		}
+		if n := publish(); n == 0 {
+			t.Fatal("first publish ran nothing")
+		}
+		if n := publish(); n != 0 {
+			t.Errorf("second publish ran %d commands, want 0", n)
 		}
 	})
 
