@@ -175,7 +175,7 @@ enum cali_state_flags {
 	 * so nothing may read one, NAT included. */
 	CALI_ST_NO_L4_HDR	  = 0x8000,
 	/* CALI_ST_RST_NO_CT is set when the RST rejects a flow that has no CT
-	 * entry, so the destination must not police it. */
+	 * entry (the egress reject), so the destination must not police it. */
 	CALI_ST_RST_NO_CT	  = 0x10000,
 	/* CALI_ST_HOST_ORIGIN is set when a to-workload packet came from the
 	 * host namespace. */

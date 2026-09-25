@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/qos"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -198,12 +199,14 @@ var _ = infrastructure.DatastoreDescribe(
 					calicoClient client.Interface
 					topt         infrastructure.TopologyOptions
 					w            [3]*workload.Workload
+					wOpts        [3][]workload.Opt
 					cancel       context.CancelFunc
 				)
 
 				BeforeEach(func() {
 					infra = getInfra(infrastructure.WithBPFLogByteLimit(16 * 1024 * 1024))
 					topt = infrastructure.DefaultTopologyOptions()
+					wOpts = [3][]workload.Opt{}
 
 					switch encap {
 					case "none":
@@ -254,7 +257,7 @@ var _ = infrastructure.DatastoreDescribe(
 						wIP := wIPs[ii]
 						wName := fmt.Sprintf("w%d", ii)
 						infrastructure.AssignIP(wName, wIP, tc.Felixes[wFelix[ii]].Hostname, calicoClient)
-						w[ii] = workload.Run(tc.Felixes[wFelix[ii]], wName, "default", wIP, "8055", "tcp")
+						w[ii] = workload.Run(tc.Felixes[wFelix[ii]], wName, "default", wIP, "8055", "tcp", wOpts[ii]...)
 						w[ii].ConfigureInInfra(infra)
 					}
 
@@ -720,6 +723,9 @@ var _ = infrastructure.DatastoreDescribe(
 							Expect(err).NotTo(HaveOccurred())
 							pcs[i] = pc
 						}
+						if BPFMode() {
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), connLimitCountSettle, "1s").Should(Equal(uint32(numConnections)))
+						}
 
 						By("Starting n+1th connection on workload 1, expecting failure")
 						Eventually(func() bool {
@@ -851,6 +857,9 @@ var _ = infrastructure.DatastoreDescribe(
 						for i := range len(pcs) {
 							pcs[i] = w[1].StartPersistentConnection(w[0].IP, 8055, workload.PersistentConnectionOpts{})
 						}
+						if BPFMode() {
+							Eventually(getBPFCurrentCount(1, 1, "egress"), connLimitCountSettle, "1s").Should(Equal(uint32(numConnections)))
+						}
 
 						By("Starting n+1th connection on workload 1, expecting failure")
 						Eventually(func() bool {
@@ -955,6 +964,10 @@ var _ = infrastructure.DatastoreDescribe(
 						for _, pc := range pcs {
 							Eventually(pc.PongCount, "10s").Should(BeNumerically(">", 0))
 						}
+						// An undercount from a straddling recount would pass for extra connections the RSTs bought.
+						if BPFMode() {
+							Eventually(getBPFCurrentCount(1, 1, "egress"), connLimitCountSettle, "1s").Should(Equal(uint32(numConnections)))
+						}
 
 						// See the same-node ingress test for why this is
 						// CanConnectTo and not StartPersistentConnectionMayFail.
@@ -1037,6 +1050,186 @@ var _ = infrastructure.DatastoreDescribe(
 							"forged RSTs bought connections the egress limit should have refused")
 					})
 
+					// The RST'd entry is reaped only after two minutes with no packet.
+					Describe("with forged RSTs on idle connections", func() {
+						BeforeEach(func() {
+							// Server keepalive probes would refresh the entry, so it would never be reaped.
+							wOpts[0] = []workload.Opt{workload.WithoutTCPKeepAlive()}
+						})
+
+						// viaNetfilter: the flow crosses iptables, so Linux conntrack
+						// carries it and its entry must not be reaped.
+						forgeRSTsAndIdle := func(serverIP string, viaNetfilter bool) {
+							if !BPFMode() {
+								Skip("The reap is BPF conntrack only")
+							}
+
+							const (
+								numConnections = 3
+								basePort       = 15300
+								extraBasePort  = 15400
+							)
+
+							By("Setting connection limit for egress on workload 1")
+							w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+								EgressMaxConnections: int64(numConnections),
+							}
+							w[1].UpdateInInfra(infra)
+							defer func() {
+								w[1].WorkloadEndpoint.Spec.QoSControls = nil
+								w[1].UpdateInInfra(infra)
+							}()
+							Eventually(getBPFMaxConnections(1, 1, "egress"), "10s", "1s").Should(Equal(uint32(numConnections)))
+
+							pcs := make([]*connectivity.PersistentConnection, 0, 2*numConnections)
+							defer func() {
+								// A stopped client cannot drain its loop file.
+								_ = w[1].C.ExecMayFail("pkill", "-CONT", "-f", "test-connection")
+								for _, pc := range pcs {
+									if pc != nil {
+										pc.Stop()
+									}
+								}
+							}()
+
+							By("Filling the egress slots with pinned-source-port connections")
+							srcPorts := make([]int, numConnections)
+							for i := range srcPorts {
+								srcPorts[i] = basePort + i
+								pcs = append(pcs, w[1].StartPersistentConnection(serverIP, 8055,
+									workload.PersistentConnectionOpts{
+										SourcePort:          srcPorts[i],
+										MonitorConnectivity: true,
+										NoKeepAlive:         true,
+									}))
+							}
+							for _, pc := range pcs {
+								Eventually(pc.PongCount, "10s").Should(BeNumerically(">", 0))
+							}
+							Eventually(getBPFCurrentCount(1, 1, "egress"), connLimitCountSettle, "1s").Should(Equal(uint32(numConnections)))
+
+							By("Confirming the limit refuses another connection")
+							Eventually(func() bool {
+								return w[1].CanConnectTo(serverIP, "8055", "tcp").HasConnectivity()
+							}, "10s", "1s").Should(BeFalse())
+
+							// Before forging, so no ping crosses an RST and defers
+							// the reap to entryDone's two-minute window.
+							By("Freezing the clients so the connections idle")
+							Expect(w[1].C.ExecMayFail("pkill", "-STOP", "-f", "test-connection")).NotTo(HaveOccurred())
+							pongsBefore := make([]int, len(pcs))
+							for i, pc := range pcs {
+								pongsBefore[i] = pc.PongCount()
+							}
+
+							By("Forging an out-of-window RST for each live connection")
+							for _, sp := range srcPorts {
+								out, err := w[1].RunCmd("pktgen", w[1].IP, serverIP, "tcp",
+									"--port-src", fmt.Sprintf("%d", sp),
+									"--port-dst", "8055",
+									"--tcp-rst", "--tcp-seq-no=123456")
+								Expect(err).NotTo(HaveOccurred(), out)
+							}
+
+							entriesLeft := func() int {
+								out, _ := tc.Felixes[1].ExecCombinedOutput("calico-bpf", "conntrack", "dump")
+								n := 0
+								for _, sp := range srcPorts {
+									if regexp.MustCompile(fmt.Sprintf(`%s:%d\b`, regexp.QuoteMeta(w[1].IP), sp)).MatchString(out) {
+										n++
+									}
+								}
+								return n
+							}
+							if viaNetfilter {
+								// Past the two-minute residual window that would reap them.
+								By("Confirming BPF conntrack keeps the entries while Linux carries the flows")
+								Consistently(entriesLeft, "150s", "10s").Should(Equal(numConnections))
+							} else {
+								By("Waiting for BPF conntrack to reap the forged-RST entries")
+								Eventually(entriesLeft, "180s", "5s").Should(BeZero())
+								// Let the recount that follows the reap run.
+								time.Sleep(15 * time.Second)
+							}
+							logrus.Infof("CORE-13478: egress current_count after the reap window: %d",
+								getBPFCurrentCount(1, 1, "egress")())
+
+							By("Resuming the clients")
+							Expect(w[1].C.ExecMayFail("pkill", "-CONT", "-f", "test-connection")).NotTo(HaveOccurred())
+							// Dying is a legitimate outcome here, so poll rather than assert.
+							time.Sleep(10 * time.Second)
+							survived := 0
+							for i, pc := range pcs {
+								if pc.PongCount() > pongsBefore[i] {
+									survived++
+								}
+							}
+							logrus.Infof("CORE-13478: %d of %d connections survived the reap", survived, numConnections)
+
+							By("Measuring how many extra connections the reap bought")
+							extra := 0
+							for i := range numConnections {
+								pc, err := w[1].StartPersistentConnectionMayFail(serverIP, 8055,
+									workload.PersistentConnectionOpts{
+										SourcePort:          extraBasePort + i,
+										MonitorConnectivity: true,
+										Timeout:             5 * time.Second,
+									})
+								if err != nil {
+									break
+								}
+								pcs = append(pcs, pc)
+								extra++
+							}
+							logrus.Infof("CORE-13478: %d extra connections admitted over a limit of %d, egress current_count: %d",
+								extra, numConnections, getBPFCurrentCount(1, 1, "egress")())
+
+							if viaNetfilter {
+								Expect(survived).To(Equal(numConnections), "the connections did not survive the forged RSTs")
+								Expect(extra).To(BeZero(), "a forged RST freed a slot its live connection still holds")
+							} else {
+								Expect(survived).To(BeZero(), "a reaped connection survived with no conntrack state")
+								Expect(extra).To(Equal(numConnections), "the reap did not free the dead connections' slots")
+							}
+						}
+
+						It("should not let a workload forge RSTs and idle to exceed its egress connlimit", func() {
+							forgeRSTsAndIdle(w[0].IP, false)
+						})
+
+						// Unlike pod-to-pod, a nat-outgoing flow crosses netfilter both
+						// ways, so Linux conntrack keeps carrying it after a forged RST.
+						Describe("with nat-outgoing to an external server", func() {
+							var extServer *workload.Workload
+
+							BeforeEach(func() {
+								topt.NATOutgoingEnabled = true
+							})
+
+							JustBeforeEach(func() {
+								extClient := infrastructure.RunExtClientWithOpts(infra, "ext-server",
+									infrastructure.ExtClientOpts{Image: utils.Config.FelixImage})
+								extServer = &workload.Workload{
+									C:        extClient,
+									Name:     "ext-server",
+									Ports:    "8055",
+									Protocol: "tcp",
+									IP:       extClient.IP,
+								}
+								workload.WithoutTCPKeepAlive()(extServer)
+								Expect(extServer.Start(infra)).To(Succeed())
+							})
+
+							AfterEach(func() {
+								extServer.Stop()
+							})
+
+							It("should not let a workload forge RSTs and idle to exceed its egress connlimit", func() {
+								forgeRSTsAndIdle(extServer.IP, true)
+							})
+						})
+					})
+
 					// CORE-13478 Failure.2: the rejection RST must reach the
 					// client, which must then fail fast rather than retry.
 					describeRejectionRST := func(name string, limitedIdx, clientIdx int,
@@ -1097,6 +1290,11 @@ var _ = infrastructure.DatastoreDescribe(
 							}()
 							for _, pc := range pcs {
 								Eventually(pc.PongCount, "10s").Should(BeNumerically(">", 0))
+							}
+							// A recount straddling the opens can undercount until the next scan.
+							if BPFMode() {
+								Eventually(getBPFCurrentCount(felixIdx, wlIdx, hook), connLimitCountSettle, "1s").
+									Should(Equal(uint32(numConnections)))
 							}
 
 							// The RST claims to come from the server in both
