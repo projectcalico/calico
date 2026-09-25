@@ -19,12 +19,16 @@ defaults:
 steps:
   - name: e2e-kind
     vm:
-      machineType: e2-standard-8
-      # kind writes heavily: loading the cached images and the cluster's own
-      # churn ran to 25GiB and tens of thousands of IOPS on the pod this
-      # replaces, which is more than a small balanced disk sustains.
-      diskType: pd-ssd
+      # Third-generation family, which is what hyperdisk needs.
+      machineType: c3-standard-8
+      # Same region as the artifact store the cached images come from.
+      zone: us-central1-b
+      # kind's churn wants tens of thousands of IOPS, and 200GB of pd-ssd caps at
+      # 6000 — reaching them that way would mean paying for a terabyte.
+      diskType: hyperdisk-balanced
       diskSize: 200GB
+      provisionedIops: 10000
+      provisionedThroughput: 200
     depends:
       - build-calico-image
       - build-node-image
