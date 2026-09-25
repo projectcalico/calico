@@ -55,7 +55,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 		 */
 		CALI_DEBUG("IP FRAG: non-first fragment, no L4 header");
 		__builtin_memset(ctx->scratch->l4, 0, TCP_SIZE);
-		ctx->state->flags |= CALI_ST_NO_L4_NAT;
+		ctx->state->flags |= CALI_ST_NO_L4_HDR;
 	} else if (ctx->ipheader_len == 20) {
 		switch (ctx->state->ip_proto) {
 		case IPPROTO_TCP:

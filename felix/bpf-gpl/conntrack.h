@@ -115,7 +115,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 	bool syn = false;
 	__u64 now;
 
-	if (ct_ctx->proto == IPPROTO_TCP && !(ctx->state->flags & CALI_ST_NO_L4_NAT)) {
+	if (ct_ctx->proto == IPPROTO_TCP && !(ctx->state->flags & CALI_ST_NO_L4_HDR)) {
 		seq = tcp_hdr(ctx)->seq;
 		syn = tcp_hdr(ctx)->syn;
 	}
@@ -698,7 +698,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 	struct ct_lookup_ctx *ct_ctx = &ct_lookup_ctx;
 
 	/* A non-first fragment carries no TCP header to track. */
-	bool has_tcp_hdr = STATE->ip_proto == IPPROTO_TCP && !(STATE->flags & CALI_ST_NO_L4_NAT);
+	bool has_tcp_hdr = STATE->ip_proto == IPPROTO_TCP && !(STATE->flags & CALI_ST_NO_L4_HDR);
 
 	if (has_tcp_hdr) {
 		if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
@@ -741,7 +741,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 #ifdef IPVER6
 		if (icmp_type_is_err(icmp_hdr(ctx)->icmp6_type)) {
 #else
-		if (icmp_type_is_err(icmp_hdr(ctx)->type)) {
+		if (!(STATE->flags & CALI_ST_NO_L4_HDR) && icmp_type_is_err(icmp_hdr(ctx)->type)) {
 #endif
 			/* ICMP error packets are a response to a failed UDP/TCP/etc
 			 * packet.  Try to extract the details of the inner packet.

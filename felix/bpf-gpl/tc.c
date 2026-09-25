@@ -93,7 +93,7 @@ static CALI_BPF_INLINE int state_fill_from_l4(struct cali_tc_ctx *ctx, bool deca
 				if (!CALI_F_FROM_HEP && ip_is_last_frag(ip_hdr(ctx))) {
 					frags4_remove_ct(ctx);
 				}
-				ctx->state->flags |= CALI_ST_NO_L4_NAT;
+				ctx->state->flags |= CALI_ST_NO_L4_HDR;
 				return PARSING_OK;
 			} else {
 				CALI_DEBUG("IP FRAG: no first fragment");
@@ -1012,7 +1012,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 		ip_hdr_set_ip(ctx, saddr, STATE->ct_result.nat_sip);
 		ip_hdr_set_ip(ctx, daddr, STATE->post_nat_ip_dst);
 
-		if (STATE->flags & CALI_ST_NO_L4_NAT) {
+		if (STATE->flags & CALI_ST_NO_L4_HDR) {
 			CALI_DEBUG("Skipping L4 DNAT");
 			goto skip_l4_dnat;
 		}
@@ -1151,7 +1151,7 @@ skip_l4_dnat:
 		ip_hdr_set_ip(ctx, saddr, STATE->ct_result.nat_ip);
 		ip_hdr_set_ip(ctx, daddr, STATE->ct_result.nat_sip);
 
-		if (STATE->flags & CALI_ST_NO_L4_NAT) {
+		if (STATE->flags & CALI_ST_NO_L4_HDR) {
 			CALI_DEBUG("Skipping L4 DNAT");
 			goto skip_l4_snat;
 		}
@@ -1711,7 +1711,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 		}
 	}
 
-	if (state->ip_proto == IPPROTO_TCP && !(state->flags & CALI_ST_NO_L4_NAT)) {
+	if (state->ip_proto == IPPROTO_TCP && !(state->flags & CALI_ST_NO_L4_HDR)) {
 		if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short for TCP: DROP");
