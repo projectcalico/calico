@@ -40,6 +40,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/rawcrdclient"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/ipamtestutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -776,6 +777,35 @@ var _ = Describe("FV tests against a real etcd", func() {
 			Expect(ipamConfig.Spec.KubeVirtVMAddressPersistence).NotTo(BeNil())
 			Expect(*ipamConfig.Spec.KubeVirtVMAddressPersistence).To(Equal(apiv3.VMAddressPersistenceEnabled))
 		})
+
+		DescribeTable("should only create the default IPAMConfiguration for Calico IPAM",
+			func(ipamType string, expectCreated bool) {
+				defer temporarilySetEnv("CALICO_IPAM_TYPE", ipamType)()
+
+				cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+				Expect(err).NotTo(HaveOccurred())
+
+				c, err := client.New(*cfg)
+				Expect(err).NotTo(HaveOccurred())
+
+				be, err := backend.NewClient(*cfg)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(be.Clean()).To(Succeed())
+
+				node := getNode(ctx, c, utils.DetermineNodeName())
+				Expect(ensureDefaultConfig(ctx, cfg, c, node, OSTypeLinux, nil, nil)).To(Succeed())
+
+				_, err = c.IPAMConfiguration().Get(ctx, "default", options.GetOptions{})
+				if expectCreated {
+					Expect(err).NotTo(HaveOccurred())
+				} else {
+					Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
+				}
+			},
+			Entry("Calico", "Calico", true),
+			Entry("HostLocal", "HostLocal", false),
+			Entry("AmazonVPC", "AmazonVPC", false),
+		)
 
 		It("should respect the env var", func() {
 			// Create a new client.
