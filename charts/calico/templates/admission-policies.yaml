@@ -12,3 +12,7 @@
 {{ $.Files.Get $path | replace "admissionregistration.k8s.io/v1beta1" $apiVersion }}
 {{- end }}
 {{- end }}
+{{ range $path, $_ := .Files.Glob "admission/k8s/*.yaml" }}
+---
+{{ $.Files.Get $path }}
+{{- end }}
