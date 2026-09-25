@@ -197,12 +197,25 @@ certs:
 resources: {}
 
 # Tolerations for the tigera/operator pod itself.
-# By default, will schedule on all possible place.
+# By default, will schedule on nodes that are not yet ready, but not on cordoned nodes.
 tolerations:
-- effect: NoExecute
+- key: CriticalAddonsOnly
   operator: Exists
-- effect: NoSchedule
+- key: node-role.kubernetes.io/master
   operator: Exists
+  effect: NoSchedule
+- key: node-role.kubernetes.io/control-plane
+  operator: Exists
+  effect: NoSchedule
+- key: node.kubernetes.io/not-ready
+  operator: Exists
+  effect: NoSchedule
+- key: node.kubernetes.io/network-unavailable
+  operator: Exists
+  effect: NoSchedule
+- key: node.cloudprovider.kubernetes.io/uninitialized
+  operator: Exists
+  effect: NoSchedule
 
 # NodeSelector for the tigera/operator pod itself.
 nodeSelector:
