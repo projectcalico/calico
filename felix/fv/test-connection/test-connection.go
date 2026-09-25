@@ -44,10 +44,13 @@ import (
 	"github.com/projectcalico/calico/felix/fv/utils"
 )
 
+// noKeepAlive is set from --no-keepalive.
+var noKeepAlive bool
+
 const usage = `test-connection: test connection to some target, for Felix FV testing.
 
 Usage:
-  test-connection <namespace-path> <ip-address> <port> [--source-ip=<source_ip>] [--source-port=<source>] [--protocol=<protocol>] [--duration=<seconds>] [--loop-with-file=<file>] [--sendlen=<bytes>] [--recvlen=<bytes>] [--log-pongs] [--stdin] [--timeout=<seconds>] [--sleep=<seconds>] [--send-rst]
+  test-connection <namespace-path> <ip-address> <port> [--source-ip=<source_ip>] [--source-port=<source>] [--protocol=<protocol>] [--duration=<seconds>] [--loop-with-file=<file>] [--sendlen=<bytes>] [--recvlen=<bytes>] [--log-pongs] [--stdin] [--timeout=<seconds>] [--sleep=<seconds>] [--send-rst] [--no-keepalive]
 
 Options:
   --source-ip=<source_ip>  Source IP to use for the connection [default: 0.0.0.0].
@@ -63,6 +66,7 @@ Options:
   --timeout=<seconds>      Exit after timeout if pong not received
   --sleep=<seconds>        How long to sleep before sending another ping
   --send-rst               Close connection with TCP RST (SO_LINGER 0) instead of graceful FIN
+  --no-keepalive           Disable TCP keepalive probes, which Go enables by default
 
 If connection is successful, test-connection exits successfully.
 
@@ -156,6 +160,11 @@ func main() {
 	sendRST, err := arguments.Bool("--send-rst")
 	if err != nil {
 		log.WithError(err).Fatal("Invalid --send-rst")
+	}
+
+	noKeepAlive, err = arguments.Bool("--no-keepalive")
+	if err != nil {
+		log.WithError(err).Fatal("Invalid --no-keepalive")
 	}
 
 	var timeout, sleep time.Duration
@@ -1230,6 +1239,17 @@ func (d *connectedTCP) Connect() error {
 		conn, err = reuse.Dial("tcp", d.localAddr, d.remoteAddr)
 		if err != nil {
 			return err
+		}
+	}
+
+	if noKeepAlive {
+		// reuse.Dial may wrap the connection, so go through syscall.Conn.
+		if sc, ok := conn.(syscall.Conn); ok {
+			if raw, err := sc.SyscallConn(); err == nil {
+				_ = raw.Control(func(fd uintptr) {
+					_ = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_KEEPALIVE, 0)
+				})
+			}
 		}
 	}
 
