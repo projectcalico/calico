@@ -57,10 +57,15 @@ C-side configurables. (The reference design document refers to these
 as `bpfnatin`/`bpfnatout`; the implementation names are slightly
 different.)
 
-Felix programs host routes for every service ClusterIP via the
-link-local gateway `169.254.1.1` (IPv4) / `2001:db8::1` (IPv6),
-pointing at `bpfin.cali`. The effect is that any host-originated
-packet destined for a service first exits through `bpfin.cali`.
+Felix keeps every service ClusterIP and LoadBalancer IP in an ipset
+(`cali40svc-nat-out` / `cali60svc-nat-out`). A rule in the mangle
+OUTPUT chain fwmarks host-originated packets whose destination is in
+the set, and a single routing rule per address family steers marked
+packets to a dedicated routing table containing one default route via
+the link-local gateway `169.254.1.1` (IPv4) / `2001:db8::1` (IPv6) out
+`bpfin.cali`, with the host IP as the source hint. The effect is that
+any host-originated packet destined for a service first exits through
+`bpfin.cali`, without per-service routes in the main routing table.
 
 - The packet immediately enters `bpfout.cali` (the peer end). The TC
   program there runs NAT, policy and conntrack creation as for any
@@ -148,11 +153,13 @@ the redirect path.
 
 ### Review notes for this section
 
-- Any change to the service-IP routing should preserve the
-  "service-IP → 169.254.1.1 via `bpfin.cali`" pattern for IPv4
-  and the equivalent for IPv6. Removing those routes silently
-  breaks host service access when CTLB is not handling the
-  protocol.
+- Any change to the service-IP steering should preserve the invariant
+  that a host-originated packet to a service IP reaches `bpfin.cali`
+  via the `169.254.1.1` gateway (and the IPv6 equivalent). Today that
+  is: service IP in the steering ipset → fwmark in mangle OUTPUT →
+  per-family routing rule → dedicated table's default route out
+  `bpfin.cali`. Breaking any link in that chain silently breaks host
+  service access when CTLB is not handling the protocol.
 - A change that introduces new sysctl dependencies (`rp_filter`,
   `accept_local`, or a new one) should be reflected in
   `bpf_ep_mgr.go`'s initialisation path; silent breakage from a

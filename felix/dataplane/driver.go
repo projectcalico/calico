@@ -149,6 +149,27 @@ func StartDataplaneDriver(
 				}).Panic("Not enough mark bits available.")
 		}
 
+		// When the BPF host-networked NAT (CTLB workaround) is active, host
+		// traffic to services is fwmarked in mangle OUTPUT and steered to the
+		// bpfin.cali veth by a routing rule, so allocate a mark bit for it.
+		// Skipped when full CTLB handles everything so that the bit stays
+		// available for the endpoint-mark block.  Must mirror
+		// bpfHostNetworkedNATEnabled in the dataplane.
+		bpfHostNATActive := configParams.BPFEnabled &&
+			(configParams.BPFConnectTimeLoadBalancing == string(apiv3.BPFConnectTimeLBTCP) ||
+				configParams.BPFHostNetworkedNATWithoutCTLB == string(apiv3.BPFHostNetworkedNATEnabled))
+		var markBPFHostNAT uint32
+		if bpfHostNATActive {
+			markBPFHostNAT, _ = markBitsManager.NextSingleBitMark()
+			if markBPFHostNAT == 0 {
+				log.WithFields(
+					log.Fields{
+						"Name":     "felix-iptables",
+						"MarkMask": allowedMarkBits,
+					}).Panic("Failed to allocate a mark bit for BPF host-networked NAT. Not enough mark bits available.")
+			}
+		}
+
 		// The connection transition log bit is mainly a connmark bit, so that it persists
 		// for the lifetime of the connection: a policy Log rule sets it, and the first
 		// response packet tests and clears it.  It must be reserved from the packet-mark
@@ -226,6 +247,23 @@ func StartDataplaneDriver(
 			wireguardTableIndexV6 = idx
 		} else {
 			log.WithError(err).Warning("Unable to assign table index for IPv6 wireguard")
+		}
+
+		// Always allocate the BPF host-networked NAT (CTLB workaround) steering
+		// table indices (even outside BPF mode) so that entries can be tidied up
+		// if BPF mode is disabled after being previously enabled.
+		var bpfHostNATTableIndexV4, bpfHostNATTableIndexV6 int
+		if idx, err := routeTableIndexAllocator.GrabIndex(); err == nil {
+			log.Debugf("Assigned IPv4 BPF host-networked NAT table index: %d", idx)
+			bpfHostNATTableIndexV4 = idx
+		} else {
+			log.WithError(err).Warning("Unable to assign table index for IPv4 BPF host-networked NAT")
+		}
+		if idx, err := routeTableIndexAllocator.GrabIndex(); err == nil {
+			log.Debugf("Assigned IPv6 BPF host-networked NAT table index: %d", idx)
+			bpfHostNATTableIndexV6 = idx
+		} else {
+			log.WithError(err).Warning("Unable to assign table index for IPv6 BPF host-networked NAT")
 		}
 
 		// Extract node labels from the hosts such they could be referenced later
@@ -436,6 +474,9 @@ func StartDataplaneDriver(
 			BPFConnTimeLBEnabled:               configParams.BPFConnectTimeLoadBalancingEnabled,
 			BPFConnTimeLB:                      configParams.BPFConnectTimeLoadBalancing,
 			BPFHostNetworkedNAT:                configParams.BPFHostNetworkedNATWithoutCTLB,
+			BPFHostNATMark:                     markBPFHostNAT,
+			BPFHostNATTableIndexV4:             bpfHostNATTableIndexV4,
+			BPFHostNATTableIndexV6:             bpfHostNATTableIndexV6,
 			BPFKubeProxyIptablesCleanupEnabled: configParams.BPFKubeProxyIptablesCleanupEnabled,
 			BPFLogLevel:                        configParams.BPFLogLevel,
 			BPFConntrackLogLevel:               configParams.BPFConntrackLogLevel,
