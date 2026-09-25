@@ -86,7 +86,7 @@ EventLoop:
 		}
 	}
 	// Got stop signal! Stop directory watch.
-	stopWatch <- true
+	close(stopWatch)
 	// Close any open sockets
 	for _, wl := range b.workloads.getAll() {
 		_ = wl.listener.Close()
