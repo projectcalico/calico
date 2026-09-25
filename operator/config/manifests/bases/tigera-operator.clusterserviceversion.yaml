@@ -38,7 +38,9 @@ metadata:
     features.operators.openshift.io/token-auth-aws: "false"
     features.operators.openshift.io/token-auth-azure: "false"
     features.operators.openshift.io/token-auth-gcp: "false"
-    features.operators.openshift.io/valid-subscription: No subscription required
+    # The console reads this key, not features.operators.openshift.io/valid-subscription,
+    # and parses it as a JSON list.
+    operators.openshift.io/valid-subscription: '["No subscription required"]'
   name: tigera-operator.v0.0.0
   namespace: placeholder
 spec:
