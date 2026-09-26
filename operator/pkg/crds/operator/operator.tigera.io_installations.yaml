@@ -7458,6 +7458,19 @@ spec:
                     Enabling this field is not supported and will cause errors.
                     NonPrivileged configures Calico to be run in non-privileged containers as non-root users where possible.
                   type: string
+                podSecurityLabels:
+                  default: Enabled
+                  description: |-
+                    PodSecurityLabels controls whether the operator sets the Pod Security Admission labels on the
+                    calico-system namespace. When set to Enabled, the operator sets pod-security.kubernetes.io/enforce
+                    to privileged and pod-security.kubernetes.io/enforce-version to latest. When set to Disabled, the
+                    operator removes these two labels. The namespace must then still allow privileged pods, for example
+                    through a Pod Security Admission exemption, or new Calico pods are rejected. Other
+                    pod-security.kubernetes.io labels on the namespace are left as they are. Defaults to Enabled.
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 proxy:
                   description: |-
                     Proxy is used to configure the HTTP(S) proxy settings that will be applied to Tigera containers that connect
