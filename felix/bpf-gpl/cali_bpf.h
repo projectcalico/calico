@@ -43,20 +43,13 @@
 // relative to the workload so the ingress program is applied at egress from the host namespace
 // and vice-versa.
 #define CALI_TC_INGRESS		(1<<1)
-// CALI_TC_IPIP is set when compiling the program for the IPIP tunnel. It is *not* set
-// when compiling the wireguard or tunnel program (or VXLAN).  IPIP is a special case because
-// it is a layer 3 device, so we don't see an ethernet header on packets arriving from the IPIP
-// device.
-#define CALI_TC_IPIP		(1<<2)
 // CALI_CGROUP is set when compiling the cgroup connect-time load balancer programs.
 #define CALI_CGROUP		(1<<3)
 // CALI_TC_DSR is set when compiling programs for DSR mode.  In DSR mode, traffic to node
 // ports is encapped on the "request" leg but the response is returned directly from the
 // node with the backing workload.
 #define CALI_TC_DSR		(1<<4)
-// CALI_L3_DEV is set for any L3 device such as wireguard and IPIP tunnels that act fully
-// at layer 3. In kernels before 5.14 (rhel 4.18.0-330) IPIP tunnels on inbound
-// direction were acting differently, where they could see outer ethernet and ip headers.
+// CALI_L3_DEV is set for any L3 device such as wireguard and IPIP tunnels.
 #define CALI_TC_L3_DEV 	(1<<5)
 // CALI_XDP_PROG is set for programs attached to the XDP hook
 #define CALI_XDP_PROG 	(1<<6)
@@ -79,14 +72,13 @@
 
 #define CALI_F_HEP     	 ((CALI_COMPILE_FLAGS) & (CALI_TC_HOST_EP | CALI_TC_NAT_IF))
 #define CALI_F_WEP     	 (!CALI_F_HEP)
-#define CALI_F_IPIP  	 (((CALI_COMPILE_FLAGS) & CALI_TC_IPIP) != 0)
 #define CALI_F_L3_DEV    (((CALI_COMPILE_FLAGS) & CALI_TC_L3_DEV) != 0)
 #define CALI_F_NAT_IF    (((CALI_COMPILE_FLAGS) & CALI_TC_NAT_IF) != 0)
 #define CALI_F_LO        (((CALI_COMPILE_FLAGS) & CALI_TC_LO) != 0)
 #define CALI_F_CT_CLEANUP (((CALI_COMPILE_FLAGS) & CALI_CT_CLEANUP) != 0)
 #define CALI_F_DEF_POLICY (((CALI_COMPILE_FLAGS) & CALI_TC_DEF_POLICY) != 0)
 
-#define CALI_F_MAIN	(CALI_F_HEP && !CALI_F_IPIP && !CALI_F_L3_DEV && !CALI_F_NAT_IF && !CALI_F_LO)
+#define CALI_F_MAIN	(CALI_F_HEP && !CALI_F_L3_DEV && !CALI_F_NAT_IF && !CALI_F_LO)
 
 #define CALI_F_XDP ((CALI_COMPILE_FLAGS) & CALI_XDP_PROG)
 
@@ -99,8 +91,9 @@
 
 #define CALI_F_TO_HOST       ((CALI_F_FROM_HEP || CALI_F_FROM_WEP) != 0)
 #define CALI_F_FROM_HOST     (!CALI_F_TO_HOST)
-#define CALI_F_L3            ((CALI_F_TO_HEP && CALI_F_IPIP) || CALI_F_L3_DEV)
-#define CALI_F_IPIP_ENCAPPED ((CALI_F_INGRESS && CALI_F_IPIP))
+/* CALI_F_L3 means the skb carries no ethernet header, which is the case in both
+ * directions on an L3 device. */
+#define CALI_F_L3            CALI_F_L3_DEV
 #define CALI_F_L3_INGRESS    (CALI_F_INGRESS && CALI_F_L3_DEV)
 
 #define CALI_F_CGROUP	(((CALI_COMPILE_FLAGS) & CALI_CGROUP) != 0)
@@ -144,7 +137,7 @@ static CALI_BPF_INLINE void __compile_asserts(void) {
 		CALI_COMPILE_FLAGS == 0 ||
 		CALI_F_CT_CLEANUP ||
 		!!(CALI_COMPILE_FLAGS & CALI_CGROUP) !=
-		!!(CALI_COMPILE_FLAGS & (CALI_TC_HOST_EP | CALI_TC_INGRESS | CALI_TC_IPIP | CALI_TC_DSR | CALI_XDP_PROG | CALI_TC_PREAMBLE | CALI_TC_DEF_POLICY))
+		!!(CALI_COMPILE_FLAGS & (CALI_TC_HOST_EP | CALI_TC_INGRESS | CALI_TC_DSR | CALI_XDP_PROG | CALI_TC_PREAMBLE | CALI_TC_DEF_POLICY))
 	);
 	COMPILE_TIME_ASSERT(!CALI_F_DSR || (CALI_F_DSR && CALI_F_FROM_WEP) || (CALI_F_DSR && CALI_F_HEP));
 	COMPILE_TIME_ASSERT(CALI_F_TO_HOST || CALI_F_FROM_HOST);
@@ -290,9 +283,9 @@ static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
 }
 
 #ifdef IPVER6
-#define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && !CALI_F_IPIP && (ip)->hop_limit <= 1)
+#define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && (ip)->hop_limit <= 1)
 #else
-#define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && !CALI_F_IPIP && (ip)->ttl <= 1)
+#define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && (ip)->ttl <= 1)
 #endif
 
 /* Accessors for the configured globals (see globals.h).  Programs that are
