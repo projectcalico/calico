@@ -44,6 +44,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			}, "60s", "500ms").Should(Equal(fmt.Sprint(mtu)))
 		}
 		if BPFMode() {
+			// Wait for all BPF programs to be attached before checking
+			// bpfin/bpfout devices; they are only created after all BPF
+			// maps are loaded.
+			ensureAllNodesBPFProgramsAttached(tc.Felixes)
 			felix := tc.Felixes[0]
 			EventuallyWithOffset(1, func() string {
 				out, _ := felix.ExecOutput("ip", "link", "show", "dev", "bpfin.cali")
@@ -83,15 +87,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				It("should get the MTU from the main interface", func() {
 					// Set a distinctive MTU on the main interface.
 					for _, f := range tc.Felixes {
-						f.Exec("ip", "link", "set", "dev", "eth0", "mtu", "1312")
+						f.Exec("ip", "link", "set", "dev", "eth0", "mtu", "1362")
 					}
 					tc.TriggerDelayedStart()
-					expectMTU(1312 - vxlanOverhead(enableIPv6))
+					expectMTU(1362 - vxlanOverhead(enableIPv6))
 				})
 
 				addDummyNIC := func(f *infrastructure.Felix, up bool) {
 					f.Exec("ip", "link", "add", "type", "dummy")
-					f.Exec("ip", "link", "set", "dev", "dummy0", "mtu", "1300")
+					// MTU must be high enough that after VXLAN overhead (70 bytes
+					// for IPv6), the BPF device MTU stays >= 1280 (IPv6 minimum).
+					f.Exec("ip", "link", "set", "dev", "dummy0", "mtu", "1350")
 					f.Exec("ip", "link", "set", "name", "eth1", "dummy0")
 					if up {
 						f.Exec("ip", "link", "set", "dev", "eth1", "up")
@@ -100,20 +106,20 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				It("should ignore a secondary interface that is down", func() {
 					// Set a distinctive MTU on the main interface.
 					for _, f := range tc.Felixes {
-						f.Exec("ip", "link", "set", "dev", "eth0", "mtu", "1312")
+						f.Exec("ip", "link", "set", "dev", "eth0", "mtu", "1362")
 						addDummyNIC(f, false)
 					}
 					tc.TriggerDelayedStart()
-					expectMTU(1312 - vxlanOverhead(enableIPv6))
+					expectMTU(1362 - vxlanOverhead(enableIPv6))
 				})
 				It("should consider a secondary interface that is up", func() {
 					// Set a distinctive MTU on the main interface.
 					for _, f := range tc.Felixes {
-						f.Exec("ip", "link", "set", "dev", "eth0", "mtu", "1312")
+						f.Exec("ip", "link", "set", "dev", "eth0", "mtu", "1362")
 						addDummyNIC(f, true)
 					}
 					tc.TriggerDelayedStart()
-					expectMTU(1300 - vxlanOverhead(enableIPv6))
+					expectMTU(1350 - vxlanOverhead(enableIPv6))
 				})
 			})
 
