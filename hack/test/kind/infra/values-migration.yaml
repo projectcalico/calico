@@ -1,0 +1,34 @@
+# Operator values for the manifest install lane's upgrade phase, where the
+# operator adopts a cluster Calico already runs on from the manifests.
+#
+# Deliberately thin: the migration derives the installation from the DaemonSet
+# it finds in kube-system, so anything set here is a chance to contradict it.
+installation:
+  enabled: true
+  imagePullPolicy: Always
+
+  # The lane deletes the plugins the kind node image ships, so the operator has
+  # to stage its own for pods to keep networking after the migration.
+  cni:
+    type: Calico
+
+# The manifest install ships its own webhook server in kube-system, and the
+# migration only removes it once the operator runs one, which the API server
+# brings with it.
+apiServer:
+  enabled: true
+goldmane:
+  enabled: false
+whisker:
+  enabled: false
+
+# The cluster already has them, from kind-cluster-create and the manifest.
+manageCRDs: false
+
+zapDevel: true
+
+tigeraOperator:
+  image: calico/operator
+  version: test-build
+  registry: localhost:5000
+  imagePullPolicy: Always
