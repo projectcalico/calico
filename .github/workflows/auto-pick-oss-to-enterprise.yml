@@ -1,6 +1,5 @@
-# Privileged worker (stage 2) of the OSS master -> Enterprise master auto-pick.
-# Runs via workflow_run from the trusted default branch and re-derives the merged
-# PR from the trigger's head SHA, so no untrusted PR payload reaches it.
+# OSS master -> Enterprise master auto-pick. Runs on push to master, so it runs
+# master's own workflow code and GitHub never holds it for approval.
 #
 # Two jobs, so the write token never shares a runner with the Claude agent:
 #   pick    (Job A) clone (READ token) + cherry-pick + Claude resolve, then export
@@ -18,9 +17,8 @@
 name: Auto-pick OSS PR into Enterprise
 
 on:
-  workflow_run:
-    workflows: ["Auto-pick OSS PR into Enterprise (trigger)"]
-    types: [completed]
+  push:
+    branches: [master]
 
 # Least privilege: every target write (push, gh pr create, labels) uses
 # TIGERA_BOT_PAT in Job B; github.token is read-only here (source reads, the
@@ -30,8 +28,8 @@ permissions:
   pull-requests: read
 
 concurrency:
-  # PR number is unknown until the resolve step; key on the trigger's head SHA.
-  group: auto-pick-oss-${{ github.event.workflow_run.head_sha }}
+  # PR number is unknown until the resolve step; key on the pushed commit.
+  group: auto-pick-oss-${{ github.sha }}
   cancel-in-progress: false
 
 env:
@@ -48,10 +46,8 @@ jobs:
   # Job A: resolve + pick + Claude + export. READ-ONLY target token, no Slack.
   # =========================================================================
   pick:
-    # Only act on a successful trigger run from the pull_request event.
-    if: >
-      github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.conclusion == 'success'
+    # Forks syncing master must not run it; they have no secrets.
+    if: github.repository == 'projectcalico/calico'
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -79,15 +75,15 @@ jobs:
           done
           chmod +x "$RUNNER_TEMP/oss-pick.sh"
 
-      # 0. Re-derive the merged PR from the trigger's head SHA (workflow_run has
-      #    no PR payload). resolve-merged-pr.js searches by SHA, retries once for
-      #    index lag, confirms the PR merged to master, and writes the outputs
+      # 0. Find the PR whose merge commit is the pushed commit (a push has no PR
+      #    payload). resolve-merged-pr.js retries once for API lag, confirms the
+      #    PR merged to master, and writes the outputs
       #    proceed/pr/sha/login/merger/trusted. trusted = author is a tigera
       #    org member; only then may the agent read the author's text.
       - name: Resolve merged PR
         id: resolve
         env:
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          MERGE_SHA: ${{ github.sha }}
           BASE_REF: ${{ env.SOURCE_REF }}
           MEMBER_ORG: tigera
           MEMBER_TOKEN: ${{ secrets.TIGERA_BOT_PAT_READONLY }}
