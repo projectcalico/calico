@@ -92,6 +92,27 @@ EOF
   fi
 }
 
+function kubectl_apply_retry() {
+  # Apply a manifest, retrying on failure. Right after ASO is installed its
+  # conversion webhook can still reject requests (cert-manager has not yet
+  # injected the CA into the CRDs), and a silently failed apply leaves the
+  # subsequent wait_for_aso_resource polling for a resource that was never
+  # admitted. Retry through the transient window and fail loudly otherwise.
+  local manifest=$1
+  local retries=${2:-12}
+  local delay=${3:-5}
+  local attempt
+  for ((attempt=1; attempt<=retries; attempt++)); do
+    if ${KUBECTL} apply -f "${manifest}"; then
+      return 0
+    fi
+    log_info "kubectl apply ${manifest} failed (attempt ${attempt}/${retries}); retrying in ${delay}s..."
+    sleep "${delay}"
+  done
+  log_error "kubectl apply ${manifest} failed after ${retries} attempts"
+  return 1
+}
+
 function apply_azure_crds() {
   log_info "Starting ASO v2 resource deployment"
 
@@ -123,7 +144,7 @@ EOF
 
   # Step 1: Resource Group (foundational)
   log_info "Creating Resource Group..."
-  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/resource-group.yaml
+  kubectl_apply_retry ${ASO_DIR}/infra/manifests/resource-group.yaml || return 1
 
   if ! wait_for_aso_resource "resourcegroup" "$AZURE_RESOURCE_GROUP" "aso" "300s"; then
     log_error "Failed to create Resource Group"
@@ -132,8 +153,8 @@ EOF
 
   # Step 2: Networking components
   log_info "Creating networking components..."
-  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/vnet.yaml
-  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/security-group.yaml
+  kubectl_apply_retry ${ASO_DIR}/infra/manifests/vnet.yaml || return 1
+  kubectl_apply_retry ${ASO_DIR}/infra/manifests/security-group.yaml || return 1
 
   # Wait for VNet to be ready before proceeding
   if ! wait_for_aso_resource "virtualnetwork" "vnet-aso" "aso" "300s"; then
@@ -141,14 +162,27 @@ EOF
     return 1
   fi
 
+  # NICs reference subnet-aso directly; ASO does not retry NIC creation if
+  # the subnet hasn't reconciled in Azure yet, so gate on the subnet too.
+  if ! wait_for_aso_resource "virtualnetworkssubnet" "subnet-aso" "aso" "300s"; then
+    log_error "Failed to create Subnet"
+    return 1
+  fi
+
+  # NICs also reference aso-sg; same race class as the subnet.
+  if ! wait_for_aso_resource "networksecuritygroup" "aso-sg" "aso" "300s"; then
+    log_error "Failed to create Network Security Group"
+    return 1
+  fi
+
   # Step 3: Secrets
   log_info "Creating secrets..."
-  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/password.yaml
+  kubectl_apply_retry ${ASO_DIR}/infra/manifests/password.yaml || return 1
 
   # Step 4: Virtual Machines and Network Resources
   log_info "Creating Virtual Machines and network resources..."
-  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/vmss-linux.yaml
-  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/vmss-windows.yaml
+  kubectl_apply_retry ${ASO_DIR}/infra/manifests/vmss-linux.yaml || return 1
+  kubectl_apply_retry ${ASO_DIR}/infra/manifests/vmss-windows.yaml || return 1
 
   # Build list of all VMs to wait for based on node counts
   local vm_resources=()
@@ -199,11 +233,13 @@ function wait_for_aso_resource() {
 
   log_info "Waiting for $resource_type/$resource_name in namespace $namespace (timeout: $timeout)..."
 
-  # First, wait for the resource to exist (up to 60 seconds)
+  # First, wait for the resource to exist (up to 120 seconds). Callers only get here
+  # after a successful apply, so this covers resources the ASO controller creates
+  # for us (e.g. subnets and extensions nested in a parent manifest)
   local wait_count=0
   while ! ${KUBECTL} get "$resource_type/$resource_name" -n "$namespace" >/dev/null 2>&1; do
-    if [[ $wait_count -ge 60 ]]; then
-      log_fail "$resource_type/$resource_name does not exist after 60 seconds"
+    if [[ $wait_count -ge 120 ]]; then
+      log_fail "$resource_type/$resource_name does not exist after 120 seconds"
       return 1
     fi
     log_info "Waiting for $resource_type/$resource_name to be created... (${wait_count}s)"
@@ -240,6 +276,17 @@ function get_and_export_node_ips() {
     log_info "Ensuring ${vm_name} is ready with ASO v2 status check..."
     if ! wait_for_aso_resource "virtualmachine" "${vm_name}" "aso" "480s"; then
       log_error "${vm_name} did not become ready in time"
+      return 1
+    fi
+
+    # The VirtualMachine Ready condition does NOT propagate NIC/PIP failures,
+    # so we must explicitly wait on those before reading their status fields.
+    if ! wait_for_aso_resource "networkinterface" "${nic_name}" "aso" "300s"; then
+      log_error "${nic_name} did not become ready"
+      return 1
+    fi
+    if ! wait_for_aso_resource "publicipaddress" "${pip_name}" "aso" "300s"; then
+      log_error "${pip_name} did not become ready"
       return 1
     fi
 
@@ -281,6 +328,16 @@ function get_and_export_node_ips() {
     log_info "Ensuring ${vm_name} is ready with ASO v2 status check..."
     if ! wait_for_aso_resource "virtualmachine" "${vm_name}" "aso" "480s"; then
       log_error "${vm_name} did not become ready in time"
+      return 1
+    fi
+
+    # See note above: VM Ready does not imply NIC/PIP Ready.
+    if ! wait_for_aso_resource "networkinterface" "${nic_name}" "aso" "300s"; then
+      log_error "${nic_name} did not become ready"
+      return 1
+    fi
+    if ! wait_for_aso_resource "publicipaddress" "${pip_name}" "aso" "300s"; then
+      log_error "${pip_name} did not become ready"
       return 1
     fi
 
