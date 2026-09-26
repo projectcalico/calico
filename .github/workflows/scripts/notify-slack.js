@@ -8,7 +8,8 @@
 //                    chat.postMessage with channel=<user-id> directly, like the
 //                    merge-queue-bot (no conversations.open / im:write needed).
 //   PICK_NOTIFY_MAP  "login:slack-id,login:slack-id,..." opt-in map.
-//   AUTHOR_LOGIN     GitHub login of the original PR author.
+//   AUTHOR_LOGIN     GitHub login to DM (the PR author, or its merger).
+//   NOTIFY_AS        'author' (default) | 'merger' (escalated mode wording).
 //   SOURCE_REPO, SRC_PR   The source repo and PR number. SRC_URL is derived
 //                    from them, and SRC_TITLE is fetched via `gh` (best-effort),
 //                    unless either is passed in explicitly.
@@ -79,7 +80,7 @@ async function main() {
     const reason = (env.ESCALATION_REASON || 'needs manual resolution').replace(/[<>|*]/g, '').trim();
     const lines = [
       `#${env.SRC_PR} ${osTag}${titlePart}`,
-      `:warning:  Your OSS PR could NOT be auto-cherry-picked to ${targetPlain}.`,
+      `:warning:  ${env.NOTIFY_AS === 'merger' ? 'The OSS PR you merged' : 'Your OSS PR'} could NOT be auto-cherry-picked to ${targetPlain}.`,
       `*Reason:*  ${reason}.`,
     ];
     if (env.RUN_URL) lines.push(`<${env.RUN_URL}|See the run>.`);

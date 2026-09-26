@@ -1,14 +1,16 @@
 // Re-derive the merged PR from a workflow_run head SHA. Stage 2 of a
 // workflow_run-driven pick has no PR payload, so it looks the PR up by the
 // trigger's head SHA (GitHub-set, trusted) and confirms it merged into the
-// expected base branch. Writes step outputs proceed/pr/sha/login to
-// $GITHUB_OUTPUT. Reusable by every workflow_run-driven pick/backport flow.
+// expected base branch. Writes step outputs proceed/pr/sha/login/merger/trusted
+// to $GITHUB_OUTPUT. Reusable by every workflow_run-driven pick/backport flow.
 //
 // Env:
 //   SOURCE_REPO       owner/name the PR lives in.
 //   HEAD_SHA          github.event.workflow_run.head_sha.
 //   BASE_REF          required base branch (default "master").
 //   GH_TOKEN          token for `gh` (set by the caller).
+//   MEMBER_ORG        org whose members count as trusted PR authors.
+//   MEMBER_TOKEN      token that can see MEMBER_ORG's private memberships.
 //   RESOLVE_RETRY_MS  retry delay for search-index lag (default 5000).
 //   GITHUB_OUTPUT     set by Actions; falls back to stdout for local runs.
 
@@ -21,8 +23,8 @@ const HEAD_SHA = env.HEAD_SHA || '';
 const BASE_REF = env.BASE_REF || 'master';
 const RETRY_MS = Number(env.RESOLVE_RETRY_MS ?? 5000);
 
-function gh(args) {
-  return execFileSync('gh', args, { encoding: 'utf8' });
+function gh(args, extraEnv = {}) {
+  return execFileSync('gh', args, { encoding: 'utf8', env: { ...env, ...extraEnv } });
 }
 
 function sleepSync(ms) {
@@ -54,6 +56,18 @@ function findPrs() {
     return out ? out.split('\n').map((n) => n.trim()).filter(Boolean) : [];
   } catch {
     return [];
+  }
+}
+
+// Gates on the author, who writes the text the agent reads. Any error means untrusted.
+function isOrgMember(login) {
+  if (!login || !env.MEMBER_ORG || !env.MEMBER_TOKEN) return false;
+  try {
+    gh(['api', `orgs/${env.MEMBER_ORG}/members/${login}`, '--silent'],
+      { GH_TOKEN: env.MEMBER_TOKEN });
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -106,8 +120,11 @@ function main() {
     return;
   }
 
-  console.log(`Resolved merged PR #${pr} (merge ${sha})`);
-  setOutputs({ proceed: true, pr, sha, login });
+  const merger = (j.merged_by && j.merged_by.login) || '';
+  const trusted = isOrgMember(login);
+  console.log(`Resolved merged PR #${pr} (merge ${sha}, author ${login}, ` +
+    `${env.MEMBER_ORG || 'org'} member: ${trusted})`);
+  setOutputs({ proceed: true, pr, sha, login, merger, trusted });
 }
 
 main();

@@ -10,7 +10,8 @@
 #
 # Auth (secrets/vars on projectcalico/calico):
 #   CLAUDE_TOKEN              Anthropic API key                       (Job A)
-#   TIGERA_BOT_PAT_READONLY   read-only calico-private token          (Job A)
+#   TIGERA_BOT_PAT_READONLY   read-only calico-private token; also checks
+#                             tigera org membership (needs read:org)  (Job A)
 #   TIGERA_BOT_PAT            write calico-private token              (Job B)
 #   SLACK_MERGE_CAT_TOKEN + SLACK_NOTIFY_MAP   author DM              (Job B)
 
@@ -59,6 +60,7 @@ jobs:
       pr: ${{ steps.resolve.outputs.pr }}
       sha: ${{ steps.resolve.outputs.sha }}
       login: ${{ steps.resolve.outputs.login }}
+      notify: ${{ steps.escalation.outputs.notify }}
       outcome: ${{ steps.pick.outputs.outcome }}
       escalated: ${{ steps.escalation.outputs.escalated }}
       reason: ${{ steps.escalation.outputs.reason }}
@@ -80,12 +82,15 @@ jobs:
       # 0. Re-derive the merged PR from the trigger's head SHA (workflow_run has
       #    no PR payload). resolve-merged-pr.js searches by SHA, retries once for
       #    index lag, confirms the PR merged to master, and writes the outputs
-      #    proceed/pr/sha/login.
+      #    proceed/pr/sha/login/merger/trusted. trusted = author is a tigera
+      #    org member; only then may the agent read the author's text.
       - name: Resolve merged PR
         id: resolve
         env:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           BASE_REF: ${{ env.SOURCE_REF }}
+          MEMBER_ORG: tigera
+          MEMBER_TOKEN: ${{ secrets.TIGERA_BOT_PAT_READONLY }}
         run: node "$RUNNER_TEMP/resolve-merged-pr.js"
 
       # 1. Clone the target with a READ-ONLY token and cherry-pick the merged
@@ -106,7 +111,10 @@ jobs:
       #     body, commit messages) in a file, so the author-controlled text never
       #     enters Claude's instructions. Read-only token.
       - name: Prepare change context
-        if: steps.resolve.outputs.proceed == 'true' && steps.pick.outputs.outcome == 'conflict'
+        if: >
+          steps.resolve.outputs.proceed == 'true' &&
+          steps.resolve.outputs.trusted == 'true' &&
+          steps.pick.outputs.outcome == 'conflict'
         env:
           PR_NUMBER: ${{ steps.resolve.outputs.pr }}
         run: |
@@ -133,7 +141,10 @@ jobs:
       #    intent: keep the Enterprise side.
       - name: Claude resolves the conflict
         id: claude
-        if: steps.resolve.outputs.proceed == 'true' && steps.pick.outputs.outcome == 'conflict'
+        if: >
+          steps.resolve.outputs.proceed == 'true' &&
+          steps.resolve.outputs.trusted == 'true' &&
+          steps.pick.outputs.outcome == 'conflict'
         uses: anthropics/claude-code-action@v1
         continue-on-error: true
         env:
@@ -214,15 +225,28 @@ jobs:
       #     OR an unfinished run (turn limit / error, claude.outcome != success)
       #     both mean "no PR, fail loudly + DM", recorded with distinct reasons.
       #     severity (light|heavy) drives the conflict label and the DM.
+      #     A non-member's conflict skips the agent and goes to the merger.
       - name: Detect escalation and severity
         id: escalation
         if: steps.resolve.outputs.proceed == 'true' && steps.pick.outputs.outcome == 'conflict'
         env:
           CLAUDE_OUTCOME: ${{ steps.claude.outcome }}
+          TRUSTED: ${{ steps.resolve.outputs.trusted }}
+          AUTHOR: ${{ steps.resolve.outputs.login }}
+          MERGER: ${{ steps.resolve.outputs.merger }}
         run: |
           severity=""
           [ -f /tmp/pick-severity ] && severity="$(tr '[:upper:]' '[:lower:]' < /tmp/pick-severity | tr -dc 'a-z')"
           echo "severity=$severity" >> "$GITHUB_OUTPUT"
+          if [ "$TRUSTED" != "true" ]; then
+            {
+              echo "notify=$MERGER"
+              echo "escalated=true"
+              echo "reason=conflict on a PR by a non-tigera author, not AI-resolved"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "notify=$AUTHOR" >> "$GITHUB_OUTPUT"
           if [ -f /tmp/pick-escalated ]; then
             echo "escalated=true" >> "$GITHUB_OUTPUT"
             echo "reason=agent escalated (irreconcilable or major refactor)" >> "$GITHUB_OUTPUT"
@@ -341,12 +365,14 @@ jobs:
           CONFLICT_SEVERITY: ${{ needs.pick.outputs.severity }}
         run: node "$RUNNER_TEMP/notify-slack.js"
 
-      # Escalation: DM the author it needs manual work.
+      # Escalation: DM the author (the merger, for a non-member's PR) that it
+      # needs manual work.
       - name: Notify author of escalation on Slack
-        if: needs.pick.outputs.escalated == 'true' && needs.pick.outputs.login != ''
+        if: needs.pick.outputs.escalated == 'true' && needs.pick.outputs.notify != ''
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_MERGE_CAT_TOKEN }}
-          AUTHOR_LOGIN: ${{ needs.pick.outputs.login }}
+          AUTHOR_LOGIN: ${{ needs.pick.outputs.notify }}
+          NOTIFY_AS: ${{ needs.pick.outputs.notify != needs.pick.outputs.login && 'merger' || 'author' }}
           SRC_PR: ${{ needs.pick.outputs.pr }}
           MODE: escalated
           ESCALATION_REASON: ${{ needs.pick.outputs.reason }}
