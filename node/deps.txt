@@ -242,3 +242,4 @@ local:node/cmd/calico
 local:node/cmd/calico-ipam
 local:node/cmd/mountns
 local:node/windows-packaging/tests
+local:pkg/buildinfo

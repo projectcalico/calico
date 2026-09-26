@@ -153,3 +153,4 @@ local:libcalico-go/lib/set
 local:libcalico-go/lib/validator/v3
 local:libcalico-go/lib/watch
 local:libcalico-go/lib/winutils
+local:pkg/buildinfo
