@@ -141,6 +141,19 @@ EOF
     return 1
   fi
 
+  # NICs reference subnet-aso directly; ASO does not retry NIC creation if
+  # the subnet hasn't reconciled in Azure yet, so gate on the subnet too.
+  if ! wait_for_aso_resource "virtualnetworkssubnet" "subnet-aso" "aso" "300s"; then
+    log_error "Failed to create Subnet"
+    return 1
+  fi
+
+  # NICs also reference aso-sg; same race class as the subnet.
+  if ! wait_for_aso_resource "networksecuritygroup" "aso-sg" "aso" "300s"; then
+    log_error "Failed to create Network Security Group"
+    return 1
+  fi
+
   # Step 3: Secrets
   log_info "Creating secrets..."
   ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/password.yaml
@@ -199,11 +212,12 @@ function wait_for_aso_resource() {
 
   log_info "Waiting for $resource_type/$resource_name in namespace $namespace (timeout: $timeout)..."
 
-  # First, wait for the resource to exist (up to 60 seconds)
+  # First, wait for the resource to exist (up to 120 seconds — controller restarts
+  # or webhook backpressure occasionally push past 60s).
   local wait_count=0
   while ! ${KUBECTL} get "$resource_type/$resource_name" -n "$namespace" >/dev/null 2>&1; do
-    if [[ $wait_count -ge 60 ]]; then
-      log_fail "$resource_type/$resource_name does not exist after 60 seconds"
+    if [[ $wait_count -ge 120 ]]; then
+      log_fail "$resource_type/$resource_name does not exist after 120 seconds"
       return 1
     fi
     log_info "Waiting for $resource_type/$resource_name to be created... (${wait_count}s)"
@@ -240,6 +254,17 @@ function get_and_export_node_ips() {
     log_info "Ensuring ${vm_name} is ready with ASO v2 status check..."
     if ! wait_for_aso_resource "virtualmachine" "${vm_name}" "aso" "480s"; then
       log_error "${vm_name} did not become ready in time"
+      return 1
+    fi
+
+    # The VirtualMachine Ready condition does NOT propagate NIC/PIP failures,
+    # so we must explicitly wait on those before reading their status fields.
+    if ! wait_for_aso_resource "networkinterface" "${nic_name}" "aso" "300s"; then
+      log_error "${nic_name} did not become ready"
+      return 1
+    fi
+    if ! wait_for_aso_resource "publicipaddress" "${pip_name}" "aso" "300s"; then
+      log_error "${pip_name} did not become ready"
       return 1
     fi
 
@@ -281,6 +306,16 @@ function get_and_export_node_ips() {
     log_info "Ensuring ${vm_name} is ready with ASO v2 status check..."
     if ! wait_for_aso_resource "virtualmachine" "${vm_name}" "aso" "480s"; then
       log_error "${vm_name} did not become ready in time"
+      return 1
+    fi
+
+    # See note above: VM Ready does not imply NIC/PIP Ready.
+    if ! wait_for_aso_resource "networkinterface" "${nic_name}" "aso" "300s"; then
+      log_error "${nic_name} did not become ready"
+      return 1
+    fi
+    if ! wait_for_aso_resource "publicipaddress" "${pip_name}" "aso" "300s"; then
+      log_error "${pip_name} did not become ready"
       return 1
     fi
 
