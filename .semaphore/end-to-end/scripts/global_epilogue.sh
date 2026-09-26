@@ -73,7 +73,7 @@ upload_to_gcs() {
     gcs_dir="${METADATA}"
   fi
   echo "[INFO] bucket_upload: uploading ${dest_name} to gs://${GS_BUCKET}/${gcs_dir}/"
-  gsutil cp "${src}" "gs://${GS_BUCKET}/${gcs_dir}/${dest_name}" || true
+  gcloud storage cp "${src}" "gs://${GS_BUCKET}/${gcs_dir}/${dest_name}" || true
 }
 
 # Upload log files to a logs/ subdirectory in GCS.
@@ -90,7 +90,14 @@ upload_logs_to_gcs() {
     gcs_dir="${METADATA}"
   fi
   echo "[INFO] bucket_upload: uploading logs to gs://${GS_BUCKET}/${gcs_dir}/logs/"
-  gsutil -m cp -r "${BZ_LOGS_DIR}/." "gs://${GS_BUCKET}/${gcs_dir}/logs/" || true
+  # Upload the *contents* of BZ_LOGS_DIR. `gcloud storage cp -r <dir>` would
+  # nest them under an extra <dir> basename component (unlike `gsutil cp -r
+  # <dir>/.`), so glob the children instead; nullglob/dotglob keep an empty or
+  # dotfile-only directory correct, and are set in a subshell to avoid leaking.
+  (
+    shopt -s nullglob dotglob
+    gcloud storage cp -r "${BZ_LOGS_DIR}"/* "gs://${GS_BUCKET}/${gcs_dir}/logs/"
+  ) || true
 }
 
 echo "[INFO] starting global_epilogue"

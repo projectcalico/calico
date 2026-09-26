@@ -130,15 +130,20 @@
           - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
           - |-
             if [[ "${SEMAPHORE_GIT_BRANCH}" == "master" ]]; then
-              # master uses Semaphore's free cache (other branches use GCS). This
+              # master uses Semaphore's free cache (other branches use S3). This
               # block only runs on branch builds (its `when: "branch =~ '.*'"`),
               # so PRs never store here — they only restore, in the prologue.
               # Cache keys are not overwritten, so delete-then-store to refresh.
               cache delete "working-copy-${SEMAPHORE_GIT_BRANCH}" || true
               cache store "working-copy-${SEMAPHORE_GIT_BRANCH}" /tmp/working-copy.tar.zstd
             else
-              gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-              gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+              # Must match the restore path in the global prologue
+              # (02-global_job_config.yml), which reads $S3_CACHE_DIR. We have
+              # cd'd to $HOME, so the wrapper lives at ./${CALICO_DIR_NAME};
+              # going through it rather than bare s3cmd applies the
+              # CALICO_S3_EXPIRY_DAYS default expiry.
+              s3_branch_cache_dir="${S3_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+              "${CALICO_DIR_NAME}/.semaphore/s3-cmd" cp /tmp/working-copy.tar.zstd "$s3_branch_cache_dir/working-copy.tar.zstd"
             fi
 
 - name: "Build: nftables RPMs"
@@ -151,14 +156,17 @@
   # Publishing to Docker Hub happens in a separate post-build promotion
   # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
   #
-  # Consumers (untolerated gcloud cp): "Build: node image" (10-prerequisites.yml),
-  # "Node: multi-arch build" (20-node.yml), "Istio" (20-istio.yml) — every block
-  # that lists this one in its `dependencies:`. If a consumer fires but this
-  # producer is skipped, the consumer hard-fails on
-  # `gcloud storage cp: URL matched no objects` (Semaphore treats a skipped
-  # dependency as passed). To prevent that, this block's trigger must be a
-  # superset of the union of all consumer triggers. That superset is derived
-  # automatically by the CHANGE_IN_WITH_DEPENDENTS() macro: it merges the arg
+  # Consumers: "Build: node image" (10-prerequisites.yml), "Node: multi-arch
+  # build" (20-node.yml), "Istio" (20-istio.yml) — every block that lists this
+  # one in its `dependencies:`. They all go through
+  # .semaphore/scripts/load-nft-rpms.sh, which falls back to a Docker Hub pull
+  # when the tarball is missing; that covers a credential-less (read-only)
+  # build, but only for a tag that has already been published. If a consumer
+  # fires on an unpublished tag while this producer is skipped (Semaphore treats
+  # a skipped dependency as passed), the consumer still hard-fails. To prevent
+  # that, this block's trigger must be a superset of the union of all consumer
+  # triggers. That superset is derived automatically by the
+  # CHANGE_IN_WITH_DEPENDENTS() macro: it merges the arg
   # below (this block's own intrinsic trigger — the RPM build inputs) with the
   # resolved trigger of every block that depends on it. DO NOT hand-maintain a
   # list of consumer paths here; just keep the producer in the consumers'
@@ -192,13 +200,14 @@
           - .semaphore/scripts/build-nft-rpms.sh "${ARCH}"
 
 - name: "Pull: go-build image"
-  # Populate the GCS cache of calico/go-build so it can serve as a fallback when
+  # Populate the S3 cache of calico/go-build so it can serve as a fallback when
   # a Docker Hub pull fails (which we still see occasionally even with an
   # authenticated session). Jobs pull from Docker Hub first and only fall back to
-  # this GCS copy on failure (see the global prologue), so this is just an
+  # this S3 copy on failure (see the global prologue), so this is just an
   # insurance upload — uploads are free and the common case is a no-op
-  # `gcloud storage ls` cache hit, keyed by GO_BUILD_VER so the tarball survives
-  # across workflows.
+  # `s3-cmd ls` cache hit, keyed by GO_BUILD_VER so the tarball survives
+  # across workflows. The path here must match the fallback in the global
+  # prologue (02-global_job_config.yml).
   run:
     when: "true"
   dependencies: []
@@ -207,29 +216,30 @@
       - name: SKIP_CACHE_RESTORE
         value: "true"
     jobs:
-      - name: "Cache calico/go-build to GCS"
+      - name: "Cache calico/go-build to S3"
         commands:
           - GO_BUILD_VER=$(make --no-print-directory -f metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
-          - cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
+          - cache_path="s3://${CALICO_S3_BUCKET}/${CALICO_S3_KEY_PREFIX}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
           - |-
-            if gcloud storage ls "$cache_path" >/dev/null 2>&1; then
+            if .semaphore/s3-cmd ls "$cache_path" >/dev/null 2>&1; then
               echo "Cache hit for calico/go-build:${GO_BUILD_VER}"
             else
               echo "Cache miss for calico/go-build:${GO_BUILD_VER}, pulling and uploading"
               docker pull "calico/go-build:${GO_BUILD_VER}"
               docker save "calico/go-build:${GO_BUILD_VER}" -o /tmp/go-build.tar
               zstd -3 --rm /tmp/go-build.tar
-              gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
+              # A credential-less build skips the upload (see .semaphore/s3-cmd).
+              .semaphore/s3-cmd cp /tmp/go-build.tar.zst "$cache_path"
             fi
 - name: "Build: calico image"
   # Build and cache the calico image so that downstream CI blocks can load it
-  # from GCS instead of rebuilding per component. This block is the sole
+  # from S3 instead of rebuilding per component. This block is the sole
   # producer for the "calico" build-cache group — every Go component block on
   # master restores the module + build cache populated here.
   #
   # This producer must run whenever any of its consumers run: the Felix
   # Build/UT/FV and Windows FV blocks (and others) trigger and then do an
-  # untolerated gcloud cp of calico-cgo/calico-race/libbpf (or load the cached
+  # untolerated s3-cmd cp of calico-cgo/calico-race/libbpf (or load the cached
   # calico image), so a skipped producer leaves the artifacts unuploaded and the
   # consumer hard-fails (Semaphore treats a skipped dependency as passed). The
   # CHANGE_IN_WITH_DEPENDENTS() macro guarantees the superset automatically: it
@@ -263,13 +273,13 @@
           - make -C cmd/calico build-cgo build-race
           - docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
           - zstd -3 --rm /tmp/calico-image.tar
-          - gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/calico-image.tar.zst"
+          - .semaphore/s3-cmd cp /tmp/calico-image.tar.zst "${S3_WORKFLOW_DIR}/calico-image.tar.zst"
           # Upload the cgo + race binaries so Felix FV can consume them
           # directly instead of rebuilding. Felix Build downloads these into
           # cmd/calico/bin/ so the working-copy tarball carries them through
           # to the test VMs.
-          - gcloud storage cp cmd/calico/bin/calico-cgo-amd64 "${GCS_WORKFLOW_DIR}/calico-cgo-amd64"
-          - gcloud storage cp cmd/calico/bin/calico-race-amd64 "${GCS_WORKFLOW_DIR}/calico-race-amd64"
+          - .semaphore/s3-cmd cp cmd/calico/bin/calico-cgo-amd64 "${S3_WORKFLOW_DIR}/calico-cgo-amd64"
+          - .semaphore/s3-cmd cp cmd/calico/bin/calico-race-amd64 "${S3_WORKFLOW_DIR}/calico-race-amd64"
           # Upload the libbpf clone + compiled static lib. `make -C
           # cmd/calico build-cgo` above transitively built it via the Felix
           # CGO dependency chain; the test-or-build below keeps this a
@@ -286,7 +296,7 @@
           - test -d felix/bpf-gpl/libbpf || (echo "ERROR libbpf clone missing at felix/bpf-gpl/libbpf" >&2; exit 1)
           - test -f "felix/bpf-gpl/.libbpf-${LIBBPF_VERSION}" || (echo "ERROR libbpf version marker felix/bpf-gpl/.libbpf-${LIBBPF_VERSION} missing" >&2; exit 1)
           - tar --use-compress-program="zstd -3" -cf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
-          - gcloud storage cp /tmp/libbpf-amd64.tar.zst "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst"
+          - .semaphore/s3-cmd cp /tmp/libbpf-amd64.tar.zst "${S3_WORKFLOW_DIR}/libbpf-amd64.tar.zst"
 - name: "Build: node image"
   # Builds the node image on top of the combined calico binary. calico/node is
   # still the canonical DaemonSet image for OSS users, so it continues to ship
@@ -294,9 +304,9 @@
   # "calico" build cache populated by "Build: calico image" — only the Docker
   # stage assembly (copying binaries onto the base image) runs here, not the Go
   # compile. Kept in prerequisites (rather than 20-node.yml) so consumer blocks
-  # can depend on the shared producer→GCS→consumer upload pattern.
+  # can depend on the shared producer→S3→consumer upload pattern.
   # Like "Build: calico image", this producer must run whenever any consumer
-  # that downloads its GCS artifact runs (E2E KinD, Windows FV, KubeVirt). The
+  # that downloads its S3 artifact runs (E2E KinD, Windows FV, KubeVirt). The
   # CHANGE_IN_WITH_DEPENDENTS() macro derives that superset automatically from
   # the consumers' `dependencies:`, so the felix / process/testing / stacktrace /
   # 20-felix.yml consumer-mirror paths are no longer hand-maintained here. The
@@ -318,14 +328,11 @@
           # Load the patched nftables RPMs producer image (built/cached by
           # "Build: nftables RPMs") so the node Dockerfile's FROM ${NFT_RPMS_IMAGE}
           # resolves locally without re-pulling from Docker Hub.
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
-          - zstd -d --rm /tmp/nft-rpms.tar.zst
-          - docker load -i /tmp/nft-rpms.tar
-          - rm -f /tmp/nft-rpms.tar
+          - .semaphore/scripts/load-nft-rpms.sh amd64
           - make -C node image
           - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
           - zstd -3 --rm /tmp/node-image.tar
-          - gcloud storage cp /tmp/node-image.tar.zst "${GCS_WORKFLOW_DIR}/node-image.tar.zst"
+          - .semaphore/s3-cmd cp /tmp/node-image.tar.zst "${S3_WORKFLOW_DIR}/node-image.tar.zst"
 - name: "Build: whisker image"
   # Whisker is a TypeScript/React frontend that won't consolidate into the
   # calico binary — it ships as its own image indefinitely. No Go build cache
@@ -342,7 +349,7 @@
           - make -C whisker image
           - docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
           - zstd -3 --rm /tmp/whisker-image.tar
-          - gcloud storage cp /tmp/whisker-image.tar.zst "${GCS_WORKFLOW_DIR}/whisker-image.tar.zst"
+          - .semaphore/s3-cmd cp /tmp/whisker-image.tar.zst "${S3_WORKFLOW_DIR}/whisker-image.tar.zst"
 - name: Prerequisites
   skip:
     # Always skip, this is a dummy job used to group prerequisite checks.
