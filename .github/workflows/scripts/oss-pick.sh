@@ -118,7 +118,7 @@ do_export() {
   done < <(git diff --name-only "origin/${TARGET_BRANCH}..HEAD")
 
   rm -rf "$EXPORT_DIR"; mkdir -p "$EXPORT_DIR/patches"
-  git format-patch --no-signature -o "$EXPORT_DIR/patches" "origin/${TARGET_BRANCH}..HEAD" >/dev/null
+  git format-patch -k --no-signature -o "$EXPORT_DIR/patches" "origin/${TARGET_BRANCH}..HEAD" >/dev/null
   if ! ls "$EXPORT_DIR"/patches/*.patch >/dev/null 2>&1; then
     echo "::notice::no commits to export; nothing to pick"; emit "export=noop"; return 0
   fi
@@ -260,7 +260,7 @@ do_apply() {
   git checkout -b "$BRANCH_NAME" "origin/${TARGET_BRANCH}"
   # Apply the resolved commit. If the base moved and it no longer applies, fail
   # loudly rather than pushing a broken tree.
-  if ! git am "$EXPORT_DIR"/patches/*.patch; then
+  if ! git am -k "$EXPORT_DIR"/patches/*.patch; then
     git am --abort || true
     echo "::error::patch no longer applies onto origin/${TARGET_BRANCH} (base moved?); re-run the pick"; exit 1
   fi
