@@ -51,6 +51,15 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
+      # Overrides repo config, so a planted hook or fsmonitor cannot run code
+      # through an allowed git command.
+      GIT_CONFIG_COUNT: "3"
+      GIT_CONFIG_KEY_0: core.hooksPath
+      GIT_CONFIG_VALUE_0: /dev/null
+      GIT_CONFIG_KEY_1: core.fsmonitor
+      GIT_CONFIG_VALUE_1: "false"
+      GIT_CONFIG_KEY_2: commit.gpgSign
+      GIT_CONFIG_VALUE_2: "false"
     outputs:
       proceed: ${{ steps.resolve.outputs.proceed }}
       pr: ${{ steps.resolve.outputs.pr }}
@@ -145,11 +154,20 @@ jobs:
         continue-on-error: true
         env:
           MERGE_SHA: ${{ steps.resolve.outputs.sha }}
+          GIT_EDITOR: "true"
+          CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
         with:
           anthropic_api_key: ${{ secrets.CLAUDE_TOKEN }}
           github_token: ${{ github.token }}
+          # Only local git commands: nothing the agent can run reaches the
+          # network. Denying .git/ edits keeps git config and hooks out of reach.
           claude_args: |
-            --allowedTools Bash,Edit,Read,Grep,Glob
+            --allowedTools "Read,Grep,Glob,Edit,Write"
+            --allowedTools "Bash(git status:*),Bash(git diff:*),Bash(git show:*),Bash(git log:*)"
+            --allowedTools "Bash(git add:*),Bash(git rm:*),Bash(git checkout --ours:*),Bash(git checkout --theirs:*)"
+            --allowedTools "Bash(git cherry-pick --continue:*),Bash(git cherry-pick --abort:*)"
+            --disallowedTools "Edit(/${{ github.workspace }}/.git/**),Write(/${{ github.workspace }}/.git/**),Read(//proc/**)"
+            --add-dir /tmp
             --max-turns 60
             --model claude-sonnet-5
           prompt: |
@@ -198,13 +216,19 @@ jobs:
             correctly would require a substantial refactor or porting a
             non-trivial amount of code that is not present in Enterprise. In that
             case run `git cherry-pick --abort`, explain precisely what a human
-            must decide in /tmp/resolution-report.md, create an empty marker file
+            must decide in /tmp/resolution-report.md, write an empty marker file
             `/tmp/pick-escalated` so the workflow knows a human must take over,
             and stop (do not push, do not open a PR).
 
             When you have resolved everything: `git add` the files, then
-            `GIT_EDITOR=true git cherry-pick --continue`. Do NOT push and do NOT
-            open a PR; later workflow steps handle that.
+            `git cherry-pick --continue`. Do NOT push and do NOT open a PR;
+            later workflow steps handle that.
+
+            Tools: Bash is limited to `git status`, `diff`, `show`, `log`,
+            `add`, `rm`, `checkout --ours/--theirs`, and `cherry-pick
+            --continue/--abort`; other commands are refused. Use Read, Grep and
+            Glob to inspect files, and Edit or Write to change them and to write
+            the /tmp files below.
 
             Then rate the resolution: write a single word to /tmp/pick-severity --
             `light` if the conflicts were straightforward and low-risk, or `heavy`
