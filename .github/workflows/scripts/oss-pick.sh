@@ -15,6 +15,7 @@
 # export    : EXPORT_DIR OUTCOME CONFLICT_SEVERITY RESOLUTION_REPORT
 # apply     : EXPORT_DIR EXTRA_LABELS TITLE_PREFIX OUTCOME CONFLICT_SEVERITY
 # Optional  : SOURCE_REF(=master) BRANCH_NAME WORKDIR(=PWD) CARRY_SOURCE_LABELS(=true)
+#             PICK_PATHS_FILE(=$RUNNER_TEMP/pick-paths, outside the agent's reach)
 set -o errexit -o nounset -o pipefail
 
 : "${SOURCE_REPO:?}" "${TARGET_REPO:?}" "${TARGET_BRANCH:?}"
@@ -25,6 +26,7 @@ CARRY_SOURCE_LABELS="${CARRY_SOURCE_LABELS:-true}"
 WORKDIR="${WORKDIR:-$PWD}"
 EXPORT_DIR="${EXPORT_DIR:-/tmp/pick-export}"
 TITLE_PREFIX="${TITLE_PREFIX-__DERIVE__}"
+PICK_PATHS_FILE="${PICK_PATHS_FILE:-${RUNNER_TEMP:-/tmp}/pick-paths}"
 
 src_org="${SOURCE_REPO%%/*}"; src_name="${SOURCE_REPO##*/}"
 
@@ -84,9 +86,10 @@ do_pick() {
   fi
 
   if [ "$rc" -eq 0 ]; then
-    echo "Clean cherry-pick."; emit "outcome=clean"
+    echo "Clean cherry-pick."; record_pick_paths HEAD~1 HEAD; emit "outcome=clean"
   elif git diff --name-only --diff-filter=U | grep -q .; then
-    echo "Conflicts:"; git diff --name-only --diff-filter=U; emit "outcome=conflict"
+    echo "Conflicts:"; git diff --name-only --diff-filter=U
+    record_pick_paths HEAD; emit "outcome=conflict"
   else
     echo "Cherry-pick empty (already present / superseded)."
     git cherry-pick --abort || true; emit "outcome=empty"
@@ -97,6 +100,13 @@ do_pick() {
 # Job A: export (no token). Turn the resolved commit into a portable patch plus
 # the report/severity/meta, so Job B can rebuild it on a clean runner.
 # ---------------------------------------------------------------------------
+# The paths a resolution may touch: git's own pick (which follows renames into
+# Enterprise paths) plus the OSS change's paths, some of which Enterprise lacks.
+record_pick_paths() {
+  { git diff --name-only "$@"; git diff --name-only "${MERGE_SHA}^1" "$MERGE_SHA"; } |
+    sort -u > "$PICK_PATHS_FILE"
+}
+
 do_export() {
   cd "$WORKDIR"
   # An unfinished cherry-pick or leftover markers is real breakage.
@@ -112,6 +122,20 @@ do_export() {
   if git diff --quiet "origin/${TARGET_BRANCH}" HEAD 2>/dev/null; then
     echo "::notice::resolution produced no net change over origin/${TARGET_BRANCH}; nothing to pick"
     emit "export=noop"; return 0
+  fi
+  # The pick makes exactly one commit, and a resolution stays within its paths.
+  local ncommits extra
+  ncommits="$(git rev-list --count "origin/${TARGET_BRANCH}..HEAD")"
+  if [ "$ncommits" -ne 1 ]; then
+    echo "::error::expected 1 commit over origin/${TARGET_BRANCH}, found ${ncommits}; refusing to export"; exit 1
+  fi
+  if [ ! -s "$PICK_PATHS_FILE" ]; then
+    echo "::error::pick path list $PICK_PATHS_FILE missing; refusing to export"; exit 1
+  fi
+  extra="$(git diff --name-only "origin/${TARGET_BRANCH}..HEAD" | sort -u | comm -23 - "$PICK_PATHS_FILE")"
+  if [ -n "$extra" ]; then
+    echo "::error::resolution touches paths the pick did not; refusing to export"
+    echo "$extra"; exit 1
   fi
   # Check the commit being exported, not the files on disk.
   local changed markers rc=0
