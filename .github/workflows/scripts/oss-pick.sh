@@ -148,7 +148,9 @@ build_pr_text() {
   body="$(jq -r '.body // ""' <<<"$pj")"
   labels="$(jq -r '.labels[].name' <<<"$pj")"
 
-  local stripped; stripped="$(printf '%s' "$title" | sed 's/^\[.*\] //')"
+  # Drop only an earlier pick's branch tag; other tags (Jira keys, areas) stay.
+  local stripped
+  stripped="$(printf '%s' "$title" | sed -E 's/^\[(master|v[0-9]+\.[0-9]+(\.[0-9]+)?|release-[^]]*)\] //')"
   if [ "$SOURCE_REPO" != "$TARGET_REPO" ]; then
     body="$(printf '%s' "$body" | sed "s/\([^a-zA-Z0-9_.-]\|^\)#\([0-9]\+\)/\1${src_org}\/${src_name}#\2/g")"
   fi
