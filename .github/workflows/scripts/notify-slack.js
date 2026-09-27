@@ -19,10 +19,12 @@
 //   MODE             'picked' (default) | 'escalated'.
 //   ESCALATION_REASON short reason string (escalated mode).
 //   RUN_URL          workflow run URL (escalated mode; link for the human).
+//   REPORT_FILE      resolution report appended in escalated mode, if present.
 //   TARGET_LABEL     Human label for the target (e.g. "Enterprise").
 //   TARGET_BRANCH    Target branch (e.g. "master").
 
 const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
 
 const env = process.env;
 
@@ -34,6 +36,19 @@ function slackIdFor(login, map) {
     if (s.slice(0, i).trim() === login) return s.slice(i + 1).trim();
   }
   return '';
+}
+
+// Agent-written text: a code block keeps Slack from rendering links or mentions in it.
+function readReport(path) {
+  if (!path) return '';
+  let s;
+  try {
+    s = fs.readFileSync(path, 'utf8');
+  } catch {
+    return '';
+  }
+  s = s.replace(/```/g, "'''").trim();
+  return s.length > 2800 ? `${s.slice(0, 2800)}\n[truncated]` : s;
 }
 
 async function main() {
@@ -84,6 +99,8 @@ async function main() {
       `*Reason:*  ${reason}.`,
     ];
     if (env.RUN_URL) lines.push(`<${env.RUN_URL}|See the run>.`);
+    const report = readReport(env.REPORT_FILE);
+    if (report) lines.push('*Resolution report:*', '```', report, '```');
     text = lines.join('\n');
   } else if (env.MODE === 'noop') {
     const lines = [

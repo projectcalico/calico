@@ -10,7 +10,8 @@
 # Auth (secrets/vars on projectcalico/calico):
 #   CLAUDE_TOKEN              Anthropic API key                       (Job A)
 #   TIGERA_BOT_PAT_READONLY   read-only calico-private token; also checks
-#                             tigera org membership (needs read:org)  (Job A)
+#                             tigera org membership (needs read:org) and
+#                             encrypts the pick artifact            (Job A + B)
 #   TIGERA_BOT_PAT            write calico-private token              (Job B)
 #   SLACK_MERGE_CAT_TOKEN + SLACK_NOTIFY_MAP   author DM              (Job B)
 
@@ -71,6 +72,7 @@ jobs:
       reason: ${{ steps.escalation.outputs.reason }}
       severity: ${{ steps.escalation.outputs.severity }}
       export: ${{ steps.export.outputs.export }}
+      artifact: ${{ steps.encrypt.outputs.artifact }}
     steps:
       # Fetch the vendored scripts without checking out the (large) repo; the
       # enterprise clone happens into the workspace root, so the scripts live
@@ -159,10 +161,11 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.CLAUDE_TOKEN }}
           github_token: ${{ github.token }}
-          # Only local git commands: nothing the agent can run reaches the
-          # network. Denying .git/ edits keeps git config and hooks out of reach.
+          # Only local git commands, and writes only to the clone and /tmp, so
+          # nothing the agent does reaches the network or a later step.
           claude_args: |
-            --allowedTools "Read,Grep,Glob,Edit,Write"
+            --allowedTools "Read,Grep,Glob"
+            --allowedTools "Edit(/${{ github.workspace }}/**),Write(/${{ github.workspace }}/**),Edit(//tmp/**),Write(//tmp/**)"
             --allowedTools "Bash(git status:*),Bash(git diff:*),Bash(git show:*),Bash(git log:*)"
             --allowedTools "Bash(git add:*),Bash(git rm:*),Bash(git checkout --ours:*),Bash(git checkout --theirs:*)"
             --allowedTools "Bash(git cherry-pick --continue:*),Bash(git cherry-pick --abort:*)"
@@ -297,26 +300,48 @@ jobs:
           MERGE_SHA: ${{ steps.resolve.outputs.sha }}
         run: bash "$RUNNER_TEMP/oss-pick.sh" export
 
+      # This repo's artifacts are public, and the patch and report carry
+      # Enterprise code. The read-only PAT as passphrase grants nothing new.
+      # An escalation ships only the report, for the DM.
+      - name: Encrypt pick artifact
+        id: encrypt
+        if: >
+          steps.export.outputs.export == 'ready' ||
+          steps.escalation.outputs.escalated == 'true'
+        env:
+          ARTIFACT_KEY: ${{ secrets.TIGERA_BOT_PAT_READONLY }}
+          ESCALATED: ${{ steps.escalation.outputs.escalated }}
+          REPORT: /tmp/resolution-report.md
+        run: |
+          d=/tmp/pick-export
+          if [ "$ESCALATED" = "true" ]; then
+            rm -rf "$d"
+            [ -s "$REPORT" ] || exit 0
+            mkdir -p "$d" && cp "$REPORT" "$d/report.md"
+          fi
+          tar -C "$d" -czf /tmp/pick-export.tgz .
+          gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+            --symmetric --cipher-algo AES256 \
+            -o /tmp/pick-export.tgz.gpg /tmp/pick-export.tgz <<<"$ARTIFACT_KEY"
+          echo "artifact=true" >> "$GITHUB_OUTPUT"
+
       - name: Upload pick artifact
-        if: steps.export.outputs.export == 'ready'
+        if: steps.encrypt.outputs.artifact == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: pick-export-${{ github.run_id }}
-          path: /tmp/pick-export
+          path: /tmp/pick-export.tgz.gpg
           retention-days: 1
           if-no-files-found: error
 
-      # Surface the escalation report in this job's summary (the file lives here).
+      # The run page is public, so only the reason goes here; the report
+      # reaches the human by DM.
       - name: Summarize escalation
         if: steps.escalation.outputs.escalated == 'true'
         env:
           REASON: ${{ steps.escalation.outputs.reason }}
         run: |
-          {
-            echo "### Auto-pick ESCALATED: ${REASON}"
-            echo
-            [ -f /tmp/resolution-report.md ] && cat /tmp/resolution-report.md
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "### Auto-pick ESCALATED: ${REASON}" >> "$GITHUB_STEP_SUMMARY"
 
   # =========================================================================
   # Job B: apply + open PR + notify. FRESH runner, WRITE token + Slack token.
@@ -344,11 +369,21 @@ jobs:
           chmod +x "$RUNNER_TEMP/oss-pick.sh"
 
       - name: Download pick artifact
-        if: needs.pick.outputs.export == 'ready'
+        if: needs.pick.outputs.artifact == 'true'
         uses: actions/download-artifact@v4
         with:
           name: pick-export-${{ github.run_id }}
-          path: /tmp/pick-export
+          path: /tmp/pick-dl
+
+      - name: Decrypt pick artifact
+        if: needs.pick.outputs.artifact == 'true'
+        env:
+          ARTIFACT_KEY: ${{ secrets.TIGERA_BOT_PAT_READONLY }}
+        run: |
+          gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+            -o /tmp/pick-export.tgz -d /tmp/pick-dl/pick-export.tgz.gpg <<<"$ARTIFACT_KEY"
+          mkdir -p /tmp/pick-export
+          tar -C /tmp/pick-export --no-same-owner -xzf /tmp/pick-export.tgz
 
       # Rebuild the resolved commit on this clean runner and open the PR. The
       # write token lives only in this step, which the agent never influenced.
@@ -396,6 +431,7 @@ jobs:
           SRC_PR: ${{ needs.pick.outputs.pr }}
           MODE: escalated
           ESCALATION_REASON: ${{ needs.pick.outputs.reason }}
+          REPORT_FILE: /tmp/pick-export/report.md
         run: node "$RUNNER_TEMP/notify-slack.js"
 
       # Nothing to pick (superseded / empty / already): informational DM.
