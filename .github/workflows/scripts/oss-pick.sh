@@ -103,19 +103,26 @@ do_export() {
   if [ -e .git/CHERRY_PICK_HEAD ]; then
     echo "::error::cherry-pick still in progress; refusing to export"; exit 1
   fi
+  # format-patch exports HEAD, so a fix left only in the working tree would be dropped.
+  if ! git diff --quiet HEAD; then
+    echo "::error::resolution left uncommitted changes; refusing to export"; exit 1
+  fi
   # No NET change over the base means the OSS change was fully superseded once
   # resolved: a legitimate "nothing to pick", not an error.
   if git diff --quiet "origin/${TARGET_BRANCH}" HEAD 2>/dev/null; then
     echo "::notice::resolution produced no net change over origin/${TARGET_BRANCH}; nothing to pick"
     emit "export=noop"; return 0
   fi
-  local f
-  while IFS= read -r f; do
-    [ -f "$f" ] || continue
-    if grep -qE '^(<<<<<<<|>>>>>>>)' "$f"; then
-      echo "::error::conflict markers remain in $f; refusing to export"; exit 1
-    fi
-  done < <(git diff --name-only "origin/${TARGET_BRANCH}..HEAD")
+  # Check the commit being exported, not the files on disk.
+  local changed markers rc=0
+  mapfile -t changed < <(git diff --name-only "origin/${TARGET_BRANCH}..HEAD")
+  markers="$(git grep -nE '^(<<<<<<<|>>>>>>>)( |$)' HEAD -- "${changed[@]}")" || rc=$?
+  case "$rc" in
+    0) echo "::error::conflict markers remain in the commit; refusing to export"
+       echo "$markers" | cut -d: -f2,3; exit 1 ;;
+    1) ;;
+    *) echo "::error::marker check failed (git grep exit $rc); refusing to export"; exit 1 ;;
+  esac
 
   rm -rf "$EXPORT_DIR"; mkdir -p "$EXPORT_DIR/patches"
   git format-patch -k --no-signature -o "$EXPORT_DIR/patches" "origin/${TARGET_BRANCH}..HEAD" >/dev/null
