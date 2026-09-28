@@ -205,6 +205,7 @@ spec:
                   type: array
                   x-kubernetes-list-type: atomic
                 programClusterRoutes:
+                  default: EnabledNoEncapOnly
                   description: |-
                     ProgramClusterRoutes controls which "cluster routes" are programmed by Calico's BGP
                     stack, i.e. the routes that a node needs in order to reach workloads on other nodes.  It

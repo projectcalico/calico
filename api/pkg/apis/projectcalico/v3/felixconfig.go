@@ -684,6 +684,7 @@ type FelixConfigurationSpec struct {
 	//
 	// [Default: EnabledIPIPOnly]
 	// +kubebuilder:validation:Enum=Enabled;Disabled;EnabledIPIPOnly;EnabledNoEncapOnly
+	// +kubebuilder:default=EnabledIPIPOnly
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 
 	// IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required
