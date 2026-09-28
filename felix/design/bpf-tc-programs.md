@@ -161,7 +161,12 @@ enable bpf_trace_printk events`. Felix detects this at startup
 (`bpf.KernelLockdownConfidentiality`) and instead loads
 trace-printk-free preamble variants (`*_notrace.o`,
 `AttachPoint.NoTracePrintk`), forcing `BPFLogLevel: Debug` off on such
-nodes.
+nodes. The lockdown state lives on securityfs, which Felix mounts
+read-only into its own mount namespace for that one read rather than
+taking it as a host mount — a host mount would make `CONFIG_SECURITYFS`
+a hard requirement for starting `calico-node` at all. The mount needs
+`CAP_SYS_ADMIN` in the initial user namespace; when it fails, Felix
+assumes the kernel is not locked down.
 
 The main programs avoid `_notrace` duplicates (which would double the
 program matrix): each carries a `struct prog_flags` in its own frozen
