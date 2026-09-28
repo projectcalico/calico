@@ -42,7 +42,9 @@ spec:
                   description:
                     "ASNumber is the default AS number used by a node. [Default:
                     64512]"
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 bindMode:
                   description: |-
