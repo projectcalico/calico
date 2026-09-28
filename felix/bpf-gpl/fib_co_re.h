@@ -11,6 +11,8 @@
 #endif
 #include <linux/if_packet.h>
 
+/* Inserts an Ethernet header ahead of an L3 program's IP header.  Call once a
+ * redirect is armed; it takes effect only after the program returns. */
 static CALI_BPF_INLINE int make_room_for_l2_header(struct cali_tc_ctx *ctx)
 {
 	int rc = bpf_skb_change_head(ctx->skb, ETH_HLEN, 0);
@@ -18,10 +20,17 @@ static CALI_BPF_INLINE int make_room_for_l2_header(struct cali_tc_ctx *ctx)
 		CALI_DEBUG("bpf_skb_change_head failed %d.", rc);
 		return rc;
 	}
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+
+	skb_refresh_start_end(ctx);
+	if (ctx->data_start + ETH_SIZE + IP_SIZE > ctx->data_end) {
 		CALI_DEBUG("Too short");
 		return -1;
 	}
+
+	/* skb_iphdr_offset() assumes the L3 packet layout, and it does not know
+	  * about the header just inserted. Calculate header offset by hand. */
+	ctx->ip_header = ctx->data_start + ETH_SIZE;
+
 #ifdef IPVER6
 	eth_hdr(ctx)->h_proto = bpf_htons(ETH_P_IPV6);
 #else
@@ -41,14 +50,11 @@ static CALI_BPF_INLINE int try_redirect_to_peer(struct cali_tc_ctx *ctx)
 			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX  &&
 			!(ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_REDIR_PEER) &&
 			!is_tcp_syn(ctx)) {
-		if (CALI_F_L3_DEV) {
-			rc = make_room_for_l2_header(ctx);
-			if (rc < 0) {
-				return TC_ACT_UNSPEC;
-			}
-		}
 		rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
 		if (rc == TC_ACT_REDIRECT) {
+			if (CALI_F_L3 && make_room_for_l2_header(ctx) < 0) {
+				return TC_ACT_UNSPEC;
+			}
 			counter_inc(ctx, CALI_REDIRECT_PEER);
 			CALI_DEBUG("Redirect to peer interface (%d) succeeded.", state->ct_result.ifindex_fwd);
 			return rc;
@@ -73,6 +79,10 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 	int rc = ctx->state->fwd.res;
 	struct cali_tc_state *state = ctx->state;
 	__u32 fib_flags = 0;
+#if CALI_FIB_ENABLED
+	/* Set by whichever redirect needs an Ethernet header; see no_fib_redirect. */
+	bool add_l2 = false;
+#endif
 
 	if (rc == TC_ACT_SHOT) {
 		goto deny;
@@ -350,14 +360,9 @@ try_fib_external:
 				nh_params.nh_family = 2 /* AF_INET */;
 				nh_params.ipv4_nh = state->ip_dst;
 #endif
-				if (CALI_F_L3_DEV) {
-					rc = make_room_for_l2_header(ctx);
-					if (rc < 0) {
-						goto cancel_fib;
-					}
-				}
 				rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, &nh_params, sizeof(nh_params), 0);
 				if (rc == TC_ACT_REDIRECT) {
+					add_l2 = CALI_F_L3;
 					counter_inc(ctx, CALI_REDIRECT_NEIGH);
 					CALI_DEBUG("Redirect to workload dev %d without fib lookup",
 							state->ct_result.ifindex_fwd);
@@ -467,13 +472,10 @@ try_fib_external:
 
 			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.", fib_params(ctx)->ifindex);
 
-			if (CALI_F_L3_DEV) {
-				rc = make_room_for_l2_header(ctx);
-				if (rc < 0) {
-					goto cancel_fib;
-				}
-			}
 			rc = bpf_redirect_neigh(fib_params(ctx)->ifindex, &nh_params, sizeof(nh_params), 0);
+			if (rc == TC_ACT_REDIRECT) {
+				add_l2 = CALI_F_L3;
+			}
 			break;
 		default:
 			fib_error_log(ctx, rc);
@@ -481,8 +483,9 @@ try_fib_external:
 		}
 
 no_fib_redirect:
-		/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
+		/* The switch above falls through to here when it did not redirect. */
 		if (rc == TC_ACT_REDIRECT) {
+			/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
 #ifndef UNITTEST
 #ifdef IPVER6
 			ip_hdr(ctx)->hop_limit--;
@@ -490,6 +493,11 @@ no_fib_redirect:
 			ip_dec_ttl(ip_hdr(ctx));
 #endif
 #endif /* UNITTEST - makes comparing equivalency on packets difficult as TTL and csum change */
+			/* Last, it moves the IP header out from under ip_hdr(ctx). */
+			if (add_l2 && make_room_for_l2_header(ctx) < 0) {
+				rc = TC_ACT_UNSPEC;
+				goto cancel_fib;
+			}
 		}
 	}
 
