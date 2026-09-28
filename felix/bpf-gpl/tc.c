@@ -1501,7 +1501,6 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 						CALI_CT_LEG_APPROVED);
 			}
 			ctx->state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
-			ctx->state->flags |= CALI_ST_RST_NO_CT;
 			CALI_JUMP_TO(ctx, PROG_INDEX_TCP_RST);
 			goto deny;
 		}
@@ -2173,7 +2172,8 @@ int calico_tc_skb_send_tcp_rst(struct __sk_buff *skb)
 		}
 		fwd_fib_set(&ctx->state->fwd, true);
 		if (CALI_F_TO_WEP) {
-			/* we know it came from workload, just send it back the same way */
+			/* REDIR_BACK never writes fwd.mark to the skb; the ingress
+			 * reject approved the CT leg this RST returns on instead. */
 			ctx->state->fwd.res = CALI_RES_REDIR_BACK;
 		}
 	}

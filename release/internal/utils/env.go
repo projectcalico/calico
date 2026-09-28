@@ -19,9 +19,9 @@ import "fmt"
 // Environment variables the component Makefiles read. A typo in one of these is
 // silent: make treats an unknown variable as empty rather than failing.
 const (
-	// EnvConfirm and EnvDryRun are the publish latch. Exactly one is set.
 	EnvConfirm = "CONFIRM"
 	EnvDryRun  = "DRYRUN"
+	EnvDebug   = "DEBUG"
 
 	EnvRelease       = "RELEASE"
 	EnvReleaseBranch = "RELEASE_BRANCH"

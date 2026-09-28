@@ -47,6 +47,7 @@ type WhiskerSpec struct {
 	// This setting enables calls to an external API to retrieve notification banner text in the Whisker UI.
 	// Allowed values are Enabled or Disabled. Defaults to Enabled.
 	// +optional
+	// +kubebuilder:default=Enabled
 	Notifications *NotificationMode `json:"notifications,omitempty"`
 
 	// IngressGateway configures Calico Ingress Gateway access to the Whisker UI.

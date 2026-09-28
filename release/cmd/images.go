@@ -21,6 +21,7 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/images"
+	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/operatorimages"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -94,7 +95,7 @@ var (
 			if err != nil {
 				return err
 			}
-			published, w, err := publishRecord(cfg, imagesPublishStep, ver.FormattedString(), !c.Bool(localFlag.Name))
+			published, w, err := publishRecord(cfg.OutputDir, imagesPublishStep, ver.FormattedString(), !c.Bool(localFlag.Name))
 			if err != nil {
 				return err
 			}
@@ -151,7 +152,7 @@ var imagesCheckOperatorAction = func(cfg *Config) func(ctx context.Context, c *c
 
 		// The operator publishes to registries of its own, so it is named apart from the
 		// release directories rather than discovered with them.
-		dirs := append(utils.ImageDiscoveryDirs(), utils.OperatorDir)
+		dirs := append(utils.ImageDiscoveryDirs(), operator.DirName)
 		built, err := releaseImageList(cfg.RepoRootDir, dirs...)
 		if err != nil {
 			return err

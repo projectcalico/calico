@@ -40,12 +40,12 @@ import (
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/manifests"
+	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
-	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 // Global configuration for releases.
@@ -70,7 +70,7 @@ var (
 	windowsBranchTagTarget = "retag-windows-image-with-registries"
 )
 
-func NewManager(opts ...Option) *CalicoManager {
+func NewManager(opts ...Option) (*CalicoManager, error) {
 	// Configure defaults here.
 	b := &CalicoManager{
 		runner:           &command.RealCommandRunner{},
@@ -85,6 +85,7 @@ func NewManager(opts ...Option) *CalicoManager {
 		tarball:          true,
 		windowsArchive:   true,
 		helmCharts:       true,
+		operator:         true,
 		helmIndex:        true,
 		e2eBinaries:      true,
 		dryRun:           false,
@@ -92,33 +93,36 @@ func NewManager(opts ...Option) *CalicoManager {
 		githubRelease:    true,
 		imageRegistries:  defaultRegistries,
 		helmRegistries:   registry.DefaultHelmRegistries,
-		operatorRegistry: operator.DefaultRegistries[0],
-		operatorImage:    operator.DefaultImage,
+		operatorRegistry: registry.DefaultOperatorRegistry,
+		operatorImage:    registry.OperatorImage,
 	}
 
-	// Run through provided options.
 	for _, o := range opts {
 		if err := o(b); err != nil {
-			logrus.WithError(err).Fatal("Failed to apply option to release builder")
+			return nil, fmt.Errorf("applying option: %w", err)
 		}
 	}
 
-	// Validate the resulting configuration.
+	var errs []error
 	if b.repoRoot == "" {
-		logrus.Fatal("No repo root specified")
+		errs = append(errs, fmt.Errorf("no repo root specified"))
 	}
+	if b.githubOrg == "" {
+		errs = append(errs, fmt.Errorf("no GitHub organization specified"))
+	}
+	if b.repo == "" {
+		errs = append(errs, fmt.Errorf("no GitHub repository specified"))
+	}
+	if b.remote == "" {
+		errs = append(errs, fmt.Errorf("no git remote specified"))
+	}
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
+	}
+
 	logrus.WithField("repoRoot", b.repoRoot).Info("Using repo root")
 	if b.logsDir != "" {
 		logrus.WithField("logsDir", b.logsDir).Info("Per-step logs enabled")
-	}
-	if b.githubOrg == "" {
-		logrus.Fatal("GitHub organization not specified")
-	}
-	if b.repo == "" {
-		logrus.Fatal("GitHub repository not specified")
-	}
-	if b.remote == "" {
-		logrus.Fatal("No git remote specified")
 	}
 	logrus.WithFields(logrus.Fields{
 		"org":    b.githubOrg,
@@ -126,7 +130,7 @@ func NewManager(opts ...Option) *CalicoManager {
 		"remote": b.remote,
 	}).Info("Using GitHub configuration")
 
-	return b
+	return b, nil
 }
 
 type CalicoManager struct {
@@ -244,6 +248,7 @@ type CalicoManager struct {
 	windowsArchive bool
 	tarball        bool
 	helmCharts     bool
+	operator       bool
 	helmIndex      bool
 	e2eBinaries    bool
 
@@ -1235,12 +1240,20 @@ var releaseBranch = func(r *CalicoManager) (string, error) {
 // images just published, so the branch always has a pullable tag between
 // official releases.
 func (r *CalicoManager) publishBranchTag() error {
+	reg := r.imageRegistries[0]
 	branch, err := releaseBranch(r)
 	if err != nil {
 		return fmt.Errorf("release branch: %w", err)
 	}
 	if branch == "" {
 		return nil
+	}
+	if registry.DefaultProductRegistry != reg {
+		logrus.WithFields(logrus.Fields{
+			"registry": reg,
+			"branch":   branch,
+		}).Warning("Skip moving the branch tag outside the default registry")
+		return r.publishOperatorBranchTag(branch)
 	}
 	registry, err := r.getRegistryFromManifests()
 	if err != nil {
@@ -1268,30 +1281,45 @@ func (r *CalicoManager) publishBranchTag() error {
 		images.WithArches(r.architectures...),
 		images.WithLogsDir(r.logsDir),
 		images.WithStepName("images-publish-branch"),
-		images.WithRetag(r.imageRegistries[0], r.calicoVersion, true),
+		images.WithRetag(reg, r.calicoVersion, true),
 	); err != nil {
 		return fmt.Errorf("publish branch %s tag images: %w", branch, err)
 	}
+	return r.publishOperatorBranchTag(branch)
+}
+
+func (r *CalicoManager) publishOperatorBranchTag(branch string) error {
+	if !r.operator {
+		logrus.WithField("branch", branch).Info("Skip moving the operator branch tag: the operator is off")
+		return nil
+	}
+	if registry.DefaultOperatorRegistry != r.operatorRegistry {
+		logrus.WithFields(logrus.Fields{
+			"registry": r.operatorRegistry,
+			"branch":   branch,
+		}).Info("Skip moving the operator branch tag outside the default registry")
+		return nil
+	}
 
 	// The operator publishes to its own registries, so it takes a pass of its own.
-	if err := images.Publish(
-		r.repoRoot, branch,
-		[]images.Variant{{
-			Name:        images.StandardVariant,
-			Target:      branchTagTarget,
-			ReleaseDirs: []string{utils.OperatorDir},
-		}},
-		!r.dryRun, r.digestResolver(),
-		images.WithRunner(r.runner),
-		images.WithRegistries(operator.DefaultRegistries...),
-		images.WithArches(r.architectures...),
-		images.WithLogsDir(r.logsDir),
-		images.WithStepName("images-publish-branch-operator"),
-		images.WithRetag(operator.DefaultRegistries[0], r.calicoVersion, true),
+	if err := operator.PublishBranchTag(r.operatorConfig(), operator.Variants(), branch,
+		operator.WithRunner(r.runner),
+		operator.WithArches(r.architectures...),
+		operator.WithLogsDir(r.logsDir),
+		operator.WithDryRun(r.dryRun),
 	); err != nil {
 		return fmt.Errorf("publish branch %s tag operator image: %w", branch, err)
 	}
 	return nil
+}
+
+func (r *CalicoManager) operatorConfig() operator.Operator {
+	return operator.Operator{
+		RepoRoot:   r.repoRoot,
+		Version:    r.operatorVersion,
+		Image:      r.operatorImage,
+		Registries: []string{r.operatorRegistry},
+	}
 }
 
 func (r *CalicoManager) publishHelmCharts() error {

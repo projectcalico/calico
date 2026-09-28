@@ -111,7 +111,7 @@ func saveUnit(s settings, u unit, reg, dest string) error {
 	return nil
 }
 
-func publishEnv(s settings) []string {
+var publishEnv = func(s settings) []string {
 	env := append(s.env(),
 		utils.EnvTrue(utils.EnvRelease),
 		utils.Env(utils.EnvReleaseTag, s.Version),

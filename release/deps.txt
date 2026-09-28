@@ -132,6 +132,7 @@ local:release/internal/hashreleaseserver
 local:release/internal/images
 local:release/internal/imagescanner
 local:release/internal/manifests
+local:release/internal/operator
 local:release/internal/operatorimages
 local:release/internal/outputs
 local:release/internal/pinnedversion
@@ -142,5 +143,4 @@ local:release/internal/utils
 local:release/internal/version
 local:release/internal/yamledit
 local:release/pkg/manager/calico
-local:release/pkg/manager/operator
 local:release/pkg/tasks

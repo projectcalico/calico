@@ -12647,6 +12647,15 @@ rules:
     verbs:
       - create
       - update
+  # calico/node creates the default IPAMConfiguration at startup, even when
+  # Calico IPAM is not in use.
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
+    resources:
+      - ipamconfigurations
+      - ipamconfigs
+    verbs:
+      - get
+      - create
   # For monitoring KubeVirt live migration.
   - apiGroups: ["kubevirt.io"]
     resources:
