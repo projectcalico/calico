@@ -57,8 +57,7 @@ gen-files:
 ###############################################################################
 # Tests
 ###############################################################################
-# Two CI systems run this in parallel and spell these differently, so both
-# spellings are accepted until one of them goes away.
+# Semaphore and ArgoCI spell the PR ref type differently.
 ifneq ($(filter pull-request PR,$(SEMAPHORE_GIT_REF_TYPE) $(CI_GIT_REF_TYPE)),)
 # Determine the tests to run using the test spider tool, which emits a list of impacted packages.
 SPIDER_COMMIT_RANGE:=$(or $(CI_GIT_COMMIT_RANGE),$(SEMAPHORE_GIT_COMMIT_RANGE))

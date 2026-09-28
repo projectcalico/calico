@@ -1,16 +1,9 @@
-# The Kubernetes e2e suites, run against a kind cluster built from the images
-# the producers cached. Four variants of the same lane: the routing mode and the
-# suite differ, nothing else does.
-#
-# On a machine rather than in a pod: the suites exercise SCTP, whose protocol
-# module the container-optimised node image does not ship at all — so it cannot
-# be loaded from anywhere in a pod. A lane this size takes most of a node
-# regardless, so an instance of its own costs little.
+# Kubernetes e2e suites on a kind cluster, one lane per routing mode and suite.
+# On a VM because the suites exercise SCTP, which the pod nodes' image lacks.
 version: condensed-module
 
 defaults:
-  # A conformance suite plus the cluster it needs does not fit the hour the
-  # lighter lanes get.
+  # Longer than the default hour: a cluster plus a conformance suite.
   timeout: 1h30m
   runOn: vm
   services:
@@ -19,13 +12,13 @@ defaults:
 steps:
   - name: e2e-kind
     vm:
-      # Third-generation family, which is what hyperdisk needs.
+      # Hyperdisk needs a third-generation family.
       machineType: c3-standard-8
-      # Same region as the artifact store the cached images come from. A region
-      # rather than a zone: c3 capacity runs out zone by zone.
+      # The artifact store's region, in any zone: c3 capacity runs out zone by
+      # zone.
       zone: us-central1
-      # kind's churn wants tens of thousands of IOPS, and 200GB of pd-ssd caps at
-      # 6000 — reaching them that way would mean paying for a terabyte.
+      # kind wants tens of thousands of IOPS, which pd-ssd only reaches at about
+      # a terabyte.
       diskType: hyperdisk-balanced
       diskSize: 200GB
       provisionedIops: 10000
@@ -86,9 +79,8 @@ steps:
       if [ "$CI_STEP_EXIT_CODE" != 0 ]; then
         # Collected where the cluster is; the script pushes its own bundle.
         sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && .semaphore/collect-kind-diags' || true
-        # The snapshot tool ships in the CI image rather than on the machine, and
-        # the machine has no registry credentials of its own. Worth the pull: the
-        # cluster is gone once this returns.
+        # The snapshot tool is only in the CI image, and the VM has no registry
+        # credentials of its own.
         sshOnVirtualMachine 'docker login -u _json_key --password-stdin https://gcr.io < "${CI_ARTIFACT_SA_KEY_FILE}"' || true
         sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && docker run --rm --network host -v "$PWD:/w" -w /w gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2 kubectl-snapshot create --kubeconfig hack/test/kind/kind-kubeconfig.yaml -o kind-snapshot.tar.gz' || true
         copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/kind-snapshot.tar.gz" kind-snapshot.tar.gz || true

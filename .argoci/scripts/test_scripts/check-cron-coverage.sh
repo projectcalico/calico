@@ -13,10 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# A cron cannot include another workflow, so the nightly repeats the CI
-# workflow's module list. The nightly exists to cover the lanes a diff gates
-# out, so a module missing from it is one nothing scheduled ever runs — and
-# nothing else would say so.
+# Fails when the nightly and the CI workflow include different modules.
 
 set -euo pipefail
 

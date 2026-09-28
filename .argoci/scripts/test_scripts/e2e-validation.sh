@@ -4,7 +4,6 @@ set -eo pipefail
 pipelines_dir="${1:-.argoci/cron}"
 scripts_dir="${2:-.argoci/scripts}"
 
-# Install yq
 wget -q https://github.com/mikefarah/yq/releases/download/v4.11.0/yq_linux_amd64 -O yq && chmod +x yq
 echo [INFO] Checking pipeline file syntax
 FAILED="false"
@@ -24,7 +23,6 @@ if [ $FAILED = "true" ]; then
 fi
 
 echo [INFO] Checking *.sh file syntax
-# Install shellcheck
 wget -q https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz -O shellcheck.tar.xz
 tar -xf shellcheck.tar.xz
 chmod +x shellcheck-v0.11.0/shellcheck

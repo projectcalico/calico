@@ -47,10 +47,7 @@ Usage:
 
   deps [options] generate-semaphore-yamls          # Generate Semaphore pipeline YAMLs
 
-  deps [options] gen-argoci-deps <package>... # Print the ArgoCI dependency file:
-                                  # one entry per package, holding the path
-                                  # regexes an ArgoCI changes: gate names
-                                  # instead of listing them by hand.
+  deps [options] gen-argoci-deps <package>... # Print the ArgoCI component path table
 
 Options:
 
@@ -230,7 +227,8 @@ func calculateDeps(packages set.Set[string]) map[string]*Deps {
 
 	var lock sync.Mutex
 	var eg errgroup.Group
-	eg.SetLimit(runtime.NumCPU())
+	// NumCPU ignores GOMAXPROCS, which is how CI says what it was given.
+	eg.SetLimit(runtime.GOMAXPROCS(0))
 	for pkg := range deps {
 		eg.Go(func() error {
 			repl, err := calculateSemDeps(pkg)
@@ -717,16 +715,8 @@ const argoCIDepsVersion = "argoci-dependencies"
 const argoCIDepsHeader = `# !!! GENERATED FILE, DO NOT EDIT !!!
 # Run 'make gen-deps-files' to regenerate.
 #
-# What a component's CI must re-run for, as path patterns an ArgoCI workflow
-# names instead of listing by hand. Same dependency model as the SemaphoreCI
-# change_in clauses, so a component's trigger cannot mean two different things
-# in the two systems.
-#
-# Regexes, not globs: this is matched with regexp, on a substring, which is why
-# every pattern is anchored.
-#
-# One entry per Go component. A component that is not a Go package has no import
-# graph to derive, so it gates on a hand-written pattern in the workflow.
+# Each Go component's import closure as anchored path regexes, for ArgoCI's
+# changes.dependsOn.
 #
 `
 
@@ -735,16 +725,14 @@ type argoCIDepsFile struct {
 	Components map[string]argoCIComponent `yaml:"components"`
 }
 
-// Mirrors the `changes:` block an author would otherwise maintain by hand.
+// The shape of a workflow's `changes:` block.
 type argoCIComponent struct {
 	In      []string `yaml:"in"`
 	Exclude []string `yaml:"exclude,omitempty"`
 }
 
-// Every component is rendered as its own primary package. Union-ing those
-// over-fires slightly against a job that names a primary plus secondaries, and
-// never under-fires — which is what lets a consumer combine entries freely
-// instead of this file enumerating every combination anyone might ask for.
+// generateArgoCIDeps renders each component alone, so a workflow can union
+// entries freely: that may over-fire slightly but never under-fires.
 func generateArgoCIDeps(pkgs []string) {
 	if len(pkgs) == 0 {
 		logrus.Warn("gen-argoci-deps needs at least one package")
@@ -778,8 +766,8 @@ func generateArgoCIDeps(pkgs []string) {
 	}
 }
 
-// Ordering has to be stable: the generated file is diffed against the committed
-// copy, where an unstable one reads as stale every other run.
+// globsToRegexps sorts, since the generated file is diffed against the
+// committed copy.
 func globsToRegexps(globs set.Set[string]) ([]string, error) {
 	items := globs.Slice()
 	sort.Strings(items)
@@ -803,14 +791,11 @@ func globsToRegexps(globs set.Set[string]) ([]string, error) {
 	return out, nil
 }
 
-// Rejected rather than escaped: a character class quietly turned into literal
-// text matches nothing, and a dependency that matches nothing is one nobody
-// re-tests.
+// Rejected rather than escaped: a class turned literal would match nothing.
 const globMetachars = "?[]{}"
 
-// A bare path is the awkward case, meaning either a file or a whole directory
-// depending on which it is — so the working tree decides, and a path that is
-// neither is reported as the dead pattern it is.
+// globToRegexp asks the working tree whether a bare path is a file or a
+// directory.
 func globToRegexp(glob string) (string, error) {
 	rest, ok := strings.CutPrefix(glob, "/")
 	if !ok || rest == "" {

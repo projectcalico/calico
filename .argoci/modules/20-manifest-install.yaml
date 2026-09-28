@@ -1,15 +1,10 @@
-# Every other kind lane installs Calico through the operator, which renders its
-# own DaemonSet. Only this one applies the generated manifests, so it is the
-# one that catches a manifest missing a piece the operator supplies.
-#
-# On a machine rather than in a pod for the same reason as the other kind lanes:
-# the datapath specs reach for kernel modules the container-optimised node image
-# does not ship, and a cluster's disk churn outgrows what a pod sustains.
+# Installs Calico from the generated manifests rather than the operator, which
+# catches a manifest missing a piece the operator supplies. On a VM for the
+# kernel modules the datapath specs need.
 version: condensed-module
 
 defaults:
-  # A cluster plus the suite it exists to run does not fit the hour the lighter
-  # lanes get.
+  # Longer than the default hour: a cluster plus its suite.
   timeout: 1h30m
   runOn: vm
   services:
@@ -39,8 +34,7 @@ steps:
       copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/report" report || true
       artifact push job report --destination test-results || true
       if [ "$CI_STEP_EXIT_CODE" != 0 ]; then
-        # Collected where the cluster is; the script pushes its own bundle. The
-        # cluster this lane builds keeps its kubeconfig apart from the one the
-        # script would otherwise find.
+        # Collected where the cluster is; the script pushes its own bundle. This
+        # lane's kubeconfig is not the one the script would find.
         sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && KUBECONFIG="$(pwd)/hack/test/kind/kind-manifests-kubeconfig.yaml" .semaphore/collect-kind-diags' || true
       fi

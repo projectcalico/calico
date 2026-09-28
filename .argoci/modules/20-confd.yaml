@@ -1,7 +1,4 @@
-# A single `make ci` in confd/, gated on what that component is built from.
-#
-# The recipes shell out to a nested build container: unauthenticated pulls are
-# rate-limited, and it inherits only what is spliced in explicitly.
+# confd `make ci`.
 version: condensed-module
 
 defaults:
@@ -19,7 +16,6 @@ steps:
       cd confd
       make ci
     epilogue: |
-      # Runs in the parent shell, so it inherits neither the `cd` above nor
-      # anything the commands exported.
+      # Epilogues don't inherit the commands' `cd` or exports.
       cd "${CI_HOME}/${CI_GIT_DIR}/confd"
       artifact push job report --destination test-results || true

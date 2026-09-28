@@ -1,10 +1,5 @@
-# `make ci` in libcalico-go/, run once per backing API version — the same suite
-# reads through two different datastore shapes, and only running both catches a
-# change that works through one.
-#
-# The FVs stand up etcd, CoreDNS and a kind cluster inside the docker sidecar,
-# and the recipes shell out to a nested build container besides: unauthenticated
-# pulls are rate-limited, and it inherits only what is spliced in explicitly.
+# libcalico-go `make ci`, once per API group: a change can work through one and
+# break the other.
 version: condensed-module
 
 defaults:
@@ -15,8 +10,7 @@ defaults:
 steps:
   - name: libcalico-go-ci
     depends: [check-go]
-    # A whole kind control plane shares this pod, so the apiserver the
-    # syncer races against is competing for the same cores it is.
+    # A kind control plane shares this pod's cores with the tests.
     requests: {cpu: 5000m, memory: 9.5Gi}
     matrix:
       - name: crd-v1
@@ -32,10 +26,8 @@ steps:
       cd libcalico-go
       make ci
     epilogue: |
-      # Runs in the parent shell, so it inherits neither the `cd` above nor
-      # anything the commands exported. Matrix env vars it does see.
+      # Epilogues don't inherit the commands' `cd` or exports.
       cd "${CI_HOME}/${CI_GIT_DIR}/libcalico-go"
-      # A skipped spec still reports as a case, so the v3 run would otherwise
-      # publish every etcdv3 spec it deliberately did not execute.
+      # Skipped specs would otherwise be reported as cases.
       python3 ../hack/strip-skipped-tests.py ./report/*.xml 2>/dev/null || true
       artifact push job report --destination test-results || true

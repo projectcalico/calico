@@ -129,9 +129,8 @@ func installAdmissionPolicies(c client.Client) error {
 // waitForAPIReady waits for the CRDs to be served and, where admission policies are
 // installed, for them to be mutating.
 //
-// A successful create proves only the former: an unbound policy rejects nothing and
-// silently fails to mutate, so a slow API server would let the suite start early and
-// the mutation-dependent tests fail intermittently.
+// A successful create proves only the former: an unbound policy mutates nothing, so
+// the suite could start early and its mutation tests flake.
 func waitForAPIReady(c client.Client) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

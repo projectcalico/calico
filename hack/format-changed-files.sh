@@ -5,12 +5,9 @@ set -e
 hack_dir="$(dirname $0)"
 repo_dir="$(dirname $hack_dir)"
 
-# CI already knows the range this change spans, and a three-dot range is the same
-# merge-base comparison the scan below reconstructs. Prefer it: the scan needs a
-# remote for the upstream repo, which a clone of a fork does not have.
-#
-# Only when its base commit is present locally — a shallow or otherwise
-# incomplete clone would make git diff fail rather than fall back.
+# Prefer CI's range: it is the same merge-base comparison, and the branch scan
+# needs an upstream remote a fork's clone lacks. Only when its base commit is
+# here, or git diff fails rather than falling back.
 diff_base=()
 if [[ -n "${CI_GIT_COMMIT_RANGE}" ]] &&
    git rev-parse -q --verify "${CI_GIT_COMMIT_RANGE%%...*}^{commit}" >/dev/null; then

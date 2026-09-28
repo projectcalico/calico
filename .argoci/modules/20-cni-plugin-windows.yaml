@@ -1,10 +1,5 @@
-# The Windows CNI FV, which cross-compiles the Windows binaries here and runs
-# them against a kubeadm cluster of Azure VMs driven by Azure Service Operator.
-#
-# In a pod, not on a machine: the only local container work is the kind cluster
-# that hosts the operator, and the CI image already carries `az` and an ssh
-# client for the rest. The cluster itself is remote, so the step spends most of
-# its hour waiting on Azure.
+# Windows CNI FV against a kubeadm cluster of Azure VMs. In a pod, since the
+# cluster is remote.
 version: condensed-module
 
 defaults:
@@ -54,8 +49,7 @@ steps:
       python3 hack/strip-skipped-tests.py process/testing/winfv-cni-plugin/report/*.xml 2>/dev/null || true
       artifact push job process/testing/winfv-cni-plugin/report --destination test-results || true
       artifact push job "${LOGS_DIR}" --destination logs || true
-      # Azure resources outlive the step, so this runs even when the login above
-      # is still valid from the commands.
+      # The commands' login and exports don't reach the epilogue.
       export AZURE_SUBSCRIPTION_ID="$AZ_SUBSCRIPTION_ID"
       export AZURE_TENANT_ID="$AZ_TENANT_ID"
       export AZURE_CLIENT_ID="$AZ_SP_ID"

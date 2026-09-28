@@ -1,7 +1,4 @@
-# A single `make ci` in hack/, covering the in-repo tooling.
-#
-# The recipes shell out to a nested build container: unauthenticated pulls are
-# rate-limited, and it inherits only what is spliced in explicitly.
+# In-repo tooling (hack/) `make ci`.
 version: condensed-module
 
 defaults:

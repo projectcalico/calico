@@ -1,18 +1,14 @@
 # Builds and publishes an official release from the promoted run's commit, then
 # packages OpenStack for the version that release produced.
 #
-# A button, never automatic: the tag it publishes under comes from the tree, so
-# the only safe trigger is someone deciding this commit is the release.
+# Manual only: the tag comes from the tree, so a person has to decide this
+# commit is the release.
 version: condensed
 generateName: publish-release-
-
-# Building every image, publishing them, and cutting the GitHub release runs
-# well past what a test lane gets.
 timeout: 14h
 
 defaults:
-  # Named rather than inherited: a promotion is its own workflow, and the repo
-  # default is the cloud-provider image the e2e lanes want.
+  # A promotion inherits nothing from the CI workflow's defaults.
   image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2
   jobSize: medium
   services:
@@ -20,9 +16,6 @@ defaults:
   secretBundles:
     - docker-hub
     - quay-repo-push-access-public-repos
-    # Carries the GitHub token the release is cut with, the key private trees
-    # are cloned over, the terraform vars, and the GCR key that reaches the
-    # mirrored registries.
     - name: oss-release-secrets
       keys:
         - name: GITHUB_TOKEN
@@ -61,8 +54,8 @@ steps:
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       echo "$QUAY_TOKEN" | docker login --username "$QUAY_USERNAME" --password-stdin quay.io
 
-      # Charts publish to quay as an OCI artifact, and helm keeps its own
-      # credential store. It arrives in ./bin on demand rather than in the image.
+      # Helm keeps its own credential store, and comes from ./bin rather than
+      # the image.
       make bin/helm
       echo "$QUAY_TOKEN" | ./bin/helm registry login \
         --username "$QUAY_USERNAME" --password-stdin quay.io
@@ -110,8 +103,8 @@ steps:
       git config --global user.name Marvin
       gcloud config set project tigera-wp-tcp-redirect
       gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
-      # Takes its version from the chart rather than the ref, which is what
-      # makes this the released packages instead of a branch's.
+      # Versioned from the chart rather than the ref, so these are the
+      # release's packages.
       make publish-openstack
     epilogue: |
       cd "${CI_HOME}/${CI_GIT_DIR}"

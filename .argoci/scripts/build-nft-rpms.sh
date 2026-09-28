@@ -3,7 +3,6 @@ set -e
 set -o pipefail
 
 # build-nft-rpms.sh: Builds and caches nftables RPMs for a specific architecture.
-# Caches through whichever workflow storage the CI system provides.
 # It produces a log file at /tmp/nft-build-${ARCH}.log.
 
 ARCH=$1

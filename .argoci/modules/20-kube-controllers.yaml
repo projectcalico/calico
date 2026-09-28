@@ -1,4 +1,4 @@
-# Runs against the calico image built once for the whole workflow.
+# kube-controllers CI, per API group.
 version: condensed-module
 
 defaults:

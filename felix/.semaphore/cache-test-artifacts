@@ -28,7 +28,6 @@ set -x
 # Resolve the s3-cmd wrapper before we cd out of the component directory.
 S3_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.semaphore/s3-cmd"
 
-# Reads from whichever store the CI system provides.
 fetch_calico_image() {
   if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
     ( cd /tmp && artifact pull workflow calico-image.tar.zst )

@@ -1,9 +1,6 @@
-# The nightly: every lane a given diff would have gated out.
-#
-# A cron drops the gates its modules carry for PR runs, so including them is all
-# this takes. The list is repeated rather than shared because a cron cannot
-# include another workflow, and `check-cron-coverage` fails the build when the two
-# drift.
+# Nightly run of every CI lane, whatever changed: a cron ignores its modules'
+# gates. The includes repeat the CI workflow's, since a cron cannot include a
+# workflow, and a check fails the build when the two drift.
 version: condensed
 generateName: calico-nightly-
 

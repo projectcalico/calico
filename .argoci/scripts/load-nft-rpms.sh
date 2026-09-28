@@ -2,15 +2,11 @@
 set -e
 set -o pipefail
 
-# load-nft-rpms.sh: Makes the patched nftables RPMs producer image available
-# locally, so a consumer Dockerfile's `FROM ${NFT_RPMS_IMAGE}` resolves without
-# reaching out mid-build. Run by every block that lists "Build: nftables RPMs"
-# in its dependencies.
+# load-nft-rpms.sh: Makes the nftables RPMs image available locally, so a
+# Dockerfile's `FROM ${NFT_RPMS_IMAGE}` resolves without a mid-build pull.
 #
-# The image normally arrives as a tarball in the workflow's storage, put there
-# by build-nft-rpms.sh. Falling back to a Docker Hub pull is safe here in a way
-# it would not be for an image built from the branch: the tag is a hash of the
-# specs and patches, so a published one holds exactly these RPMs.
+# The Docker Hub fallback is safe: the tag is a hash of the recipe, so a
+# published image holds exactly these RPMs.
 
 ARCH=$1
 if [ -z "$ARCH" ]; then

@@ -1,33 +1,26 @@
-# ArgoCI config. Scheduled e2e suites are CronWorkflows in .argoci/cron/*.yaml,
-# registered on merge to the default branch; the per-PR workflow below composes
-# every lane, e2e included, from .argoci/modules/.
+# Which workflows run on which events. The crons in .argoci/cron/ register on
+# merge to the default branch.
 version: v2
 
-# Fork PRs from non-writers have CI withheld everywhere, and that is not
-# configurable. Without this the withholding is silent, so on a repo whose PRs
-# are mostly community forks the gate would look like it had simply vanished;
-# with it, a maintainer gets a per-commit checkbox to release the run.
+# Fork PRs from non-writers get no CI either way; this gives a maintainer a
+# per-commit checkbox to release the run rather than withholding it silently.
 requireApproval: true
 
 workflows:
-  # Gating lives at each include inside the workflow, not here, so this entry
-  # always runs and its status reports on every PR — which is what lets it be a
-  # required check.
+  # Always runs, so its status can be a required check; gating happens inside.
   - name: calico
     workflowFile: .argoci/ciworkflow.yaml
     runWhen:
       alwaysRunOnPR: true
       alwaysRunOnMerge: true
 
-  # Own entries rather than steps in the workflow above: neither reads what the
-  # build produced, and a publish failing should not colour the build's status.
+  # Separate workflows, so a publish failing doesn't colour the build's status.
   - name: fossa-scan
     workflowFile: .argoci/publish/fossa-scan.yaml
     runWhen:
       alwaysRunOnMerge: true
 
-  # Also reachable from a run's promotion button, which is how a branch or PR
-  # gets packaged.
+  # Also a promotion button, for packaging a branch or PR.
   - name: openstack-packages
     workflowFile: .argoci/publish/openstack-packages.yaml
     runWhen:

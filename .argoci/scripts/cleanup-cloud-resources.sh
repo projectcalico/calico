@@ -1,27 +1,16 @@
 #!/bin/bash
-# Reclaims the cloud resources a run creates outside ArgoCI's own provisioning,
-# for the case where the lane that made them never got to tear them down — a pod
-# killed hard enough to run no epilogue.
+# Deletes cloud resources a run's lanes created but never tore down, such as
+# after a pod was killed before its epilogue.
 #
-# Everything is derived rather than handed over — instances from their labels,
-# resource groups from the same commit fields the lanes named them with — so
-# there is no state to pass between steps, and a lane added later is covered as
-# soon as it follows either convention.
-#
-# Scoped twice over, because another CI system runs against the same project and
-# subscription while one is migrated to the other: an instance must carry this
-# system's label, and a resource group its name prefix.
-#
-# Safe to run when nothing leaked, which is the usual case.
+# Scoped by label and name prefix, since other CI systems share the project and
+# subscription.
 
 set -u
 
-# The same value the lanes stamp on what they create.
 prefix="${ARGOCI_RESOURCE_PREFIX:?the workflow must define it}"
 
 status=0
 
-# Two labels: the system that created it, and the workflow that asked for it.
 sweep_gce() {
   if [ -z "${CI_WORKFLOW_NAME:-}" ]; then
     echo "[INFO] no workflow name; skipping the instance sweep"
@@ -87,8 +76,7 @@ sweep_azure() {
       continue
     fi
     echo "[WARN] resource group ${rg} outlived its lane; deleting"
-    # --no-wait: Azure takes minutes to finish, and nothing here needs to see it
-    # through. A group left half-deleted is picked up by the next run's sweep.
+    # Azure takes minutes to finish, and nothing here waits on it.
     if ! az group delete --name "${rg}" --yes --no-wait; then
       echo "[WARN] failed to start deletion of ${rg}"
       rc=1

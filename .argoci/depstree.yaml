@@ -1,16 +1,8 @@
 # !!! GENERATED FILE, DO NOT EDIT !!!
 # Run 'make gen-deps-files' to regenerate.
 #
-# What a component's CI must re-run for, as path patterns an ArgoCI workflow
-# names instead of listing by hand. Same dependency model as the SemaphoreCI
-# change_in clauses, so a component's trigger cannot mean two different things
-# in the two systems.
-#
-# Regexes, not globs: this is matched with regexp, on a substring, which is why
-# every pattern is anchored.
-#
-# One entry per Go component. A component that is not a Go package has no import
-# graph to derive, so it gates on a hand-written pattern in the workflow.
+# Each Go component's import closure as anchored path regexes, for ArgoCI's
+# changes.dependsOn.
 #
 version: argoci-dependencies
 components:

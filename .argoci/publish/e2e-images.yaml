@@ -1,7 +1,5 @@
-# Publishes the helper images the e2e suites install into a test cluster.
-#
-# A merge-triggered workflow rather than a promotion: it builds everything it
-# pushes from source, so it reads nothing the run produced.
+# Publishes the e2e suites' helper images. On merge rather than a promotion,
+# since it builds from source and reads nothing a run produced.
 version: condensed
 generateName: e2e-images-
 timeout: 30m
@@ -10,8 +8,7 @@ defaults:
   timeout: 30m
   services:
     - docker
-  # Pushes to quay.io/tigeradev, which the registry the other image pushes use
-  # has no access to.
+  # quay.io/tigeradev needs its own credential.
   secretBundles:
     - quay-tigeradev-hashrelease
 

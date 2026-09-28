@@ -1,9 +1,4 @@
-# Catches a test set that the suites reference but the config no longer defines,
-# or the reverse — a drift that otherwise only shows up when a nightly e2e run
-# fails hours later.
-#
-# Answering it means building the test binary, which splices its own `-e`
-# flags into a nested `docker run`.
+# Fails when the suites and the e2e config disagree on which test sets exist.
 version: condensed-module
 
 defaults:

@@ -1,9 +1,4 @@
-# Re-publishes one component's images at the promoted run's commit, so a single
-# component can be pushed again without re-running a hashrelease.
-#
-# The component is a parameter rather than a workflow per component: the push is
-# the same `make` either way, and the directories a component covers are a
-# property of the tree rather than of the button.
+# Re-publishes one component's images at the promoted run's commit.
 version: condensed
 generateName: push-images-
 timeout: 1h

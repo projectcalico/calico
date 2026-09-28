@@ -1,11 +1,5 @@
-# Reclaims what the Windows and fleet lanes create in GCP and Azure.
-#
-# In the exit handler rather than behind a button: those resources are billed
-# whether or not anyone presses it, and an exit handler runs even for a cancelled
-# or timed-out run — which is exactly when a lane's own teardown did not.
-#
-# Ungated, because a module gated out contributes no exit steps either, and the
-# run that needs sweeping most is the one that failed early.
+# Sweeps what the Windows and fleet lanes leave in GCP and Azure. An exit
+# handler, because it runs even for a cancelled or timed-out run.
 version: condensed-module
 
 defaults:

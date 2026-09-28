@@ -1,5 +1,4 @@
-# Whisker is a TypeScript frontend rather than a Go component, so it has no
-# import graph to gate on and names its paths directly.
+# Whisker CI and its arm64 image.
 version: condensed-module
 
 defaults:
@@ -8,11 +7,8 @@ defaults:
     - docker
 
 steps:
-  # The jest suite's 5s per-test default is the real constraint here, not
-  # throughput: starved of CPU, the slower component tests time out rather than
-  # run slowly. Two workers against the request below leaves each one the couple
-  # of cores the component suites need — jest's own default counts the node's
-  # cores instead, and oversubscribes by a factor of three.
+  # Jest sizes its pool from the node's cores, not the pod's, and a worker short
+  # of CPU trips the 5s per-test timeout. Two leaves each about two cores.
   - name: whisker-ci
     requests: {cpu: 4000m, memory: 4.25Gi}
     env:
@@ -24,13 +20,10 @@ steps:
       cd whisker
       make ci
 
-  # amd64 is already covered, since the step above builds the image on its way
-  # to the nginx smoke test. arm64 is the other architecture whisker supports.
+  # The CI step already builds amd64.
   - name: whisker-image
     requests: {cpu: 1750m, memory: 2.5Gi}
-    # The Dockerfile installs nginx with dnf, which an amd64 runner would have
-    # to emulate. Native instead — at the cost of waiting for a node, since the
-    # arm pools sit at zero.
+    # Native, because the Dockerfile's dnf install would be emulated on amd64.
     runOn: arm
     timeout: 1h
     matrix:

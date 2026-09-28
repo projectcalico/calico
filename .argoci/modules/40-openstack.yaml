@@ -25,8 +25,7 @@ steps:
   - name: openstack-devstack
     depends: [check-python]
     runOn: vm
-    # Installing the whole control plane and then exercising it does not fit the
-    # hour the other lanes get.
+    # Longer than the default hour: DevStack installs the whole control plane.
     timeout: 2h
     vm:
       machineType: e2-standard-8
@@ -37,7 +36,7 @@ steps:
           - name: LENS_ELASTICSEARCH_TOKEN
     commands: |
       sudo apt-get remove -y python3-wrapt || true
-      # Defaults to the path the checkout used to land on.
+      # The default is not where this checkout lands.
       export CALICO_REPO_DIR="${CI_HOME}/${CI_GIT_DIR}"
       cd networking-calico
       # DevStack installs the plugin from a ref, so the commit under test needs
@@ -48,14 +47,13 @@ steps:
       sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
       # A single-node setup does not need BGP, and ours logs errors without it.
       export CALICO_BGP_MODE=none
-      # Enough rungs to show whether scaling is still linear. The wider ladder
-      # belongs to the scheduled run, which has the time budget for it.
+      # Enough rungs to show scaling is still linear; the nightly runs more.
       export RESYNC_SCALES=100,1000
       # RESYNC_SKIP_FINAL_CLEANUP does not belong here: Tempest runs against
       # this same DevStack afterwards, and the fake agents the benchmark leaves
       # behind break instance networking for it.
-      # Taken from the secret alongside the token, so rotating the credential to
-      # a different account does not silently stop publishing.
+      # The user comes from the secret too, so rotating to another account keeps
+      # publishing.
       export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
       export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
       export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}

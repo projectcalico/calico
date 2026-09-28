@@ -888,10 +888,8 @@ REPO_REL_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else
 
 .PHONY: fix-changed go-fmt-changed goimports-changed
 # Format changed files only.
-#
-# The branch probe needs a remote for the upstream repo, which a clone of a fork
-# does not have. Where CI hands us the range outright, skip it: the script
-# prefers the range anyway, so the probe would only fail noisily.
+# The parent-branch probe needs an upstream remote, which a fork's clone lacks,
+# so skip it when CI supplies the range.
 fix-changed go-fmt-changed goimports-changed:
 	if [ "$(SKIP_FIX_CHANGED)" != "true" ]; then \
 	  if [ -z "$(CI_GIT_COMMIT_RANGE)" ]; then \

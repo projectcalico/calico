@@ -320,15 +320,12 @@ func TestInverseFlagName(t *testing.T) {
 	}
 }
 
-// A subcommand that reads no CI metadata must run under CI without it. The CI
-// runner sets CI for every job, so a demand made at flag-parse time reaches
-// commands that have no use for the values.
+// A subcommand that reads no CI metadata must still run under --ci without it.
 func TestCIWithoutJobIdentityIsNotAnError(t *testing.T) {
 	assertRun(t, ciFlags, []string{"--ci"}, "")
 }
 
-// The one caller that builds a job link drops it rather than failing, so an
-// announcement still goes out from a runner this tool cannot identify.
+// A job link that cannot be built is dropped rather than failing the command.
 func TestCIJobURLEmptyWithoutJobIdentity(t *testing.T) {
 	var got string
 	cmd := &cli.Command{

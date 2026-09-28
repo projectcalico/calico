@@ -1,10 +1,5 @@
-# Runs against the calico image built once for the whole workflow.
-#
-# On a machine rather than in a pod: the dataplane tests create netkit devices,
-# which the container-optimised node image has no driver for.
-#
-# The Windows FV is a module of its own: it drives Azure VMs rather than
-# containers, and gates on paths this one has no interest in.
+# cni-plugin CI. On a VM because the dataplane tests create netkit devices,
+# which the pod nodes' image has no driver for.
 version: condensed-module
 
 defaults:

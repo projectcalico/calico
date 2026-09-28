@@ -1,6 +1,4 @@
-# Calico's Istio integration images, built from upstream Istio sources rather
-# than from anything in this tree — which is why it has no generated component
-# and gates on its own directory.
+# Calico's Istio integration images, built from upstream Istio sources.
 version: condensed-module
 
 defaults:
@@ -20,9 +18,8 @@ steps:
       cd istio
       make ci
 
-  # Binaries only, so it never resolves the nft-rpms base and has no reason to
-  # wait for it. ztunnel cross-compiles through the Rust toolchain in the build
-  # image, so no arm64 runner is involved.
+  # Binaries only, so no nft-rpms dependency. ztunnel cross-compiles, so no
+  # arm64 runner either.
   - name: istio-build
     requests: {cpu: 5000m, memory: 6Gi}
     matrix:

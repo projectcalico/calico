@@ -1,8 +1,5 @@
-# The one e2e lane with no cron counterpart: the cron suites test published
-# hashrelease images, this one tests the binary built from the PR.
-#
-# The cluster is provisioned externally rather than by the step, so this runs in
-# a pod like the cron suites do.
+# e2e on a GCP kubeadm cluster, testing binaries built from the PR rather than a
+# hashrelease. The cluster is provisioned externally, so this runs in a pod.
 version: condensed-module
 
 defaults:
@@ -25,8 +22,7 @@ steps:
         value: k8s-e2e
       - name: PRODUCT
         value: calico
-      # Names the Semaphore pipeline this lane replaces. Lens slices its history
-      # by this key, so it stays put even though the file is gone.
+      # Lens keys this lane's history on the value, so it must not change.
       - name: FUNCTIONAL_AREA
         value: e2e-gcp.yml
       - name: PROVISIONER
@@ -37,7 +33,6 @@ steps:
         value: operator
       - name: DATAPLANE
         value: CalicoBPF
-      # Selection rationale lives in the config file itself.
       - name: E2E_TEST_CONFIG
         value: e2e/config/gcp/bpf.yaml
       # Builds the e2e binary and the rapidclient image from PR source rather
@@ -58,9 +53,8 @@ steps:
         value: "{{workflow.name}}"
       - name: ARGO_WORKFLOW_UID
         value: "{{workflow.uid}}"
-    # In the prologue, not the commands: the epilogue tears the cluster down with
-    # `bz`, which this puts on PATH, and only a prologue's exports survive into
-    # the shell an epilogue runs in.
+    # A prologue, because the epilogue's teardown needs `bz` on PATH and only
+    # prologue exports reach it.
     prologue: |
       source .argoci/scripts/global_prologue.sh
     commands: |

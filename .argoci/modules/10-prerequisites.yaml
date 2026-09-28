@@ -1,8 +1,4 @@
-# The pre-flight checks. Each step is one Semaphore block, gating itself rather
-# than the include, so they stay as independent as they are there.
-#
-# Most still shell out to a nested build container. A step that says nothing
-# about `image` or `services` runs natively in the build image.
+# Pre-flight checks, and the images later lanes consume. Each step gates itself.
 version: condensed-module
 
 defaults:
@@ -10,9 +6,7 @@ defaults:
 
 steps:
   - name: check-yaml
-
     jobSize: small
-
     requests: {cpu: 1500m, memory: 548Mi}
     services: [docker]
     changes:
@@ -26,8 +20,6 @@ steps:
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       make yaml-lint
 
-  # `fix-changed` splices its own flags into the nested `docker run`, so this
-  # block cannot yet drop the daemon the way the two above it do.
   - name: check-go
     requests: {cpu: 6250m, memory: 7.5Gi}
     services: [docker]
@@ -57,9 +49,7 @@ steps:
       make check-dirty
 
   - name: check-python
-
     jobSize: small
-
     requests: {cpu: 2000m, memory: 0.75Gi}
     services: [docker]
     changes:
@@ -83,11 +73,7 @@ steps:
     changes:
       in:
         - ^.*$
-      # Everything is in scope except vendored C and the directories that hold
-      # no source. `.github/` and `.semaphore/` stay in: check-language skips
-      # dot-directories itself, but the Dockerfile and mockery scans walk the
-      # whole tree. Listed rather than matched as `^\.`, which would also
-      # swallow this file and stop an edit to it retesting anything.
+      # Listed rather than `^\.`, which would exclude this module's own file too.
       exclude:
         - ^libbpf/
         - ^\.git
@@ -170,9 +156,8 @@ steps:
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       make test-charts
 
-  # Each auto-generated patch is derived from its pin file, so regenerating has
-  # to be a no-op. metadata.mk is in the trigger because `go mod tidy`'s output
-  # depends on the toolchain: a version bump can leave every patch stale.
+  # Regenerating the patches must be a no-op. metadata.mk is in the trigger
+  # because `go mod tidy`'s output depends on the toolchain.
   - name: check-thirdparty-dep-patches
     requests: {cpu: 2000m, memory: 2Gi}
     services: [docker]
@@ -196,8 +181,6 @@ steps:
       make check-thirdparty-dep-patches
       make check-dirty
 
-  # Gated on what makes the image itself interesting. A consumer needing it is
-  # what brings it back, so this does not have to describe their triggers too.
   - name: build-calico-image
     services: [docker]
     timeout: 1h
@@ -209,30 +192,24 @@ steps:
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       make -C cmd/calico image
-      # The Felix FVs run one or the other of these directly, so they ship
-      # rather than being rebuilt per lane.
+      # Shipped for the Felix FVs, which would otherwise build them per lane.
       make -C cmd/calico build-cgo build-race
       docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
       zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/calico-image.tar
       artifact push workflow /tmp/calico-image.tar.zst
       artifact push workflow cmd/calico/bin/calico-cgo-amd64
       artifact push workflow cmd/calico/bin/calico-race-amd64
-      # Shipping the clone is what lets every Felix lane skip it, and with it the
-      # github.com/libbpf HTTP 500 flake. The test covers the cgo chain above
-      # having already produced it.
+      # Shipped so no Felix lane clones libbpf; the cgo build has usually made it.
       test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || make -C felix libbpf
       LIBBPF_VERSION=$(grep -E '^LIBBPF_VERSION[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
-      # tar warns and exits 0 on a missing path, which would leave every Felix
-      # lane silently back on a cold libbpf build.
+      # tar only warns on a missing path.
       test -d felix/bpf-gpl/libbpf || { echo "libbpf clone missing at felix/bpf-gpl/libbpf" >&2; exit 1; }
       test -f "felix/bpf-gpl/.libbpf-${LIBBPF_VERSION}" || { echo "libbpf version marker felix/bpf-gpl/.libbpf-${LIBBPF_VERSION} missing" >&2; exit 1; }
       tar --use-compress-program="zstd -3" -cf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
       artifact push workflow /tmp/libbpf-amd64.tar.zst
 
-  # The tag is a hash of the specs and patches, so an unchanged recipe is a pull
-  # rather than the ~20 minutes an emulated build takes. Every architecture
-  # calico/node ships is built: a consumer reaching a tag nobody published has
-  # nowhere else to get it from.
+  # Tagged by a hash of the recipe, so an unchanged one is a pull rather than a
+  # ~20 minute emulated build.
   - name: build-nft-rpms
     services: [docker]
     timeout: 1h
@@ -259,11 +236,8 @@ steps:
       cd "${CI_HOME}/${CI_GIT_DIR}"
       artifact push job logs --destination logs || true
 
-  # A build-time prerequisite the next run pulls rather than a release artifact,
-  # so it publishes on merge instead of waiting for a release. It reads the
-  # tarball the build cached, which only exists inside this workflow — hence a
-  # step here rather than a workflow of its own. The tag is a hash of the recipe,
-  # so an unchanged one is already published and the push is a no-op.
+  # Published on merge because later builds pull it. A step here rather than a
+  # workflow of its own because it reads this workflow's cached build.
   - name: push-nft-rpms
     services: [docker]
     timeout: 1h
@@ -293,8 +267,6 @@ steps:
       cd "${CI_HOME}/${CI_GIT_DIR}"
       artifact push job logs --destination logs || true
 
-  # Still the DaemonSet image OSS users install, so it ships alongside the
-  # combined one.
   - name: build-node-image
     services: [docker]
     timeout: 1h
@@ -316,8 +288,7 @@ steps:
       zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/node-image.tar
       artifact push workflow /tmp/node-image.tar.zst
 
-  # A TypeScript frontend that will not fold into the combined binary, so it has
-  # no Go closure to derive a gate from — hence the literal path.
+  # TypeScript, so there is no Go import graph to gate on.
   - name: build-whisker-image
     services: [docker]
     timeout: 1h
@@ -353,8 +324,7 @@ steps:
       zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/operator-image.tar
       artifact push workflow /tmp/operator-image.tar.zst
 
-  # One tarball because no lane wants a subset, and each of these fetches and
-  # compiles upstream sources that every kind lane would otherwise repeat.
+  # One tarball, since every kind lane wants all four.
   - name: build-third-party-images
     services: [docker]
     timeout: 1h
@@ -380,8 +350,7 @@ steps:
       zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/third-party-images.tar
       artifact push workflow /tmp/third-party-images.tar.zst
 
-  # The nightly repeats this workflow's module list, and nothing else would
-  # notice the two parting company.
+  # The nightly repeats the CI module list; this catches the two drifting.
   - name: check-cron-coverage
     jobSize: small
     requests: {cpu: 1500m, memory: 548Mi}

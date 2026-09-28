@@ -367,9 +367,8 @@ func TestCalculateMacroOwnDepsEmpty(t *testing.T) {
 	}
 }
 
-// The glob shapes that carry their own answer: a wildcard or a trailing
-// separator says whether the pattern is a whole path or a prefix, so these need
-// nothing from the filesystem.
+// Shapes that need nothing from the filesystem: a wildcard or a trailing
+// separator already says whole path or prefix.
 func TestGlobToRegexp(t *testing.T) {
 	for _, tc := range []struct {
 		glob string
@@ -394,8 +393,7 @@ func TestGlobToRegexp(t *testing.T) {
 	}
 }
 
-// change_in reads a bare path as a file or a whole directory depending on which
-// it is, so the working tree is what decides.
+// A bare path means a file or a directory, whichever the working tree holds.
 func TestGlobToRegexpBarePath(t *testing.T) {
 	t.Chdir(t.TempDir())
 	if err := os.MkdirAll("felix/bpf-gpl", 0o755); err != nil {
@@ -425,8 +423,7 @@ func TestGlobToRegexpBarePath(t *testing.T) {
 	}
 }
 
-// What the patterns have to actually do, since a plausible-looking translation
-// can still match the wrong files.
+// A plausible-looking translation can still match the wrong files.
 func TestGlobToRegexpMatching(t *testing.T) {
 	for _, tc := range []struct {
 		glob    string
@@ -436,15 +433,13 @@ func TestGlobToRegexpMatching(t *testing.T) {
 		{
 			glob:    "/node/**",
 			matches: []string{"node/main.go", "node/pkg/deep/file.go", "node/deps.txt"},
-			// A sibling with the same prefix is the failure an unanchored pattern
-			// would cause, and the reason every pattern here is anchored.
+			// A sibling sharing the prefix must not match.
 			misses: []string{"nodeworker/main.go", "third_party/node/x.go", "node"},
 		},
 		{
 			glob:    "/libcalico-go/lib/ipam/*.go",
 			matches: []string{"libcalico-go/lib/ipam/ipam.go"},
-			// One star does not cross a separator: the dependency is that package,
-			// not the tree below it.
+			// One star does not cross a separator.
 			misses: []string{"libcalico-go/lib/ipam/sub/x.go", "libcalico-go/lib/ipam/README"},
 		},
 		{
@@ -503,8 +498,8 @@ func TestGlobToRegexpRejects(t *testing.T) {
 	}
 }
 
-// Regeneration is diffed against the committed file, so the same inputs have to
-// render byte-identically however the set happens to iterate.
+// Regeneration is diffed against the committed file, so set iteration order
+// must not leak into the output.
 func TestGlobsToRegexpsSortedAndDeduped(t *testing.T) {
 	t.Chdir(t.TempDir())
 	if err := os.Mkdir("felix", 0o755); err != nil {

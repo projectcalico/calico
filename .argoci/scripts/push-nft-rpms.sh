@@ -2,10 +2,8 @@
 set -e
 set -o pipefail
 
-# push-nft-rpms.sh: Publishes a cached nftables RPM image for a specific
-# architecture. This script is intended to be run only from trusted
-# branch builds after build-nft-rpms.sh has uploaded the image tarball
-# to the workflow's artifact storage.
+# push-nft-rpms.sh: Publishes the nftables RPM image build-nft-rpms.sh cached,
+# for one architecture. Trusted branch builds only.
 
 ARCH=$1
 if [ -z "$ARCH" ]; then

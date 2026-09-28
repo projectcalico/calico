@@ -1,7 +1,4 @@
-# The operator's own CI, plus a cross-architecture build of its binary.
-#
-# Both shell out to a nested build container: unauthenticated pulls are
-# rate-limited, and it inherits only what is spliced in explicitly.
+# Operator CI, cross-architecture builds and FV.
 version: condensed-module
 
 defaults:
@@ -19,13 +16,11 @@ steps:
       cd operator
       make ci
     epilogue: |
-      # Runs in the parent shell, so it inherits neither the `cd` above nor
-      # anything the commands exported.
+      # Epilogues don't inherit the commands' `cd` or exports.
       cd "${CI_HOME}/${CI_GIT_DIR}/operator"
       artifact push job report --destination test-results || true
 
-  # No cgo and no build constraints, so cross-compiling the binary is the whole
-  # of the per-architecture coverage — the images are assembled at release.
+  # Pure Go, so cross-compiling is all the per-architecture coverage it needs.
   - name: operator-build
     depends: [check-go]
     requests: {cpu: 5000m, memory: 8Gi}
@@ -42,10 +37,8 @@ steps:
       cd operator
       make build ARCH=$ARCH
 
-  # The FV installs this commit's components through the real operator, so every
-  # image it resolves has to reach the local registry first. A producer missing
-  # from the list below surfaces as calico-node stuck in Init, not a build
-  # error.
+  # Every image the FV installs must reach the local registry first; a missing
+  # producer shows up as calico-node stuck in Init.
   - name: operator-fv
     depends: [build-calico-image, build-node-image, build-whisker-image, check-go]
     timeout: 1h

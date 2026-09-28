@@ -1,25 +1,19 @@
-# One workflow rather than one per component: `depends:` and the artifact
-# namespace are both workflow-scoped, so producers and consumers must share one.
-# A workflow that doesn't run posts no commit status, so a gated one could never
-# be a required check.
+# PR and merge CI. One workflow, not one per component, because `depends:` and
+# artifacts are both workflow-scoped.
 #
-# Argo workflow objects live in etcd (~1.5MB). Gated-out steps never reach the
-# object, but a change matching every module fires everything — measure before
-# adding many more:
+# Argo keeps the whole workflow in etcd (~1.5MB); measure after adding modules:
 #   argoci-expand -o yaml -changed metadata.mk .argoci/ciworkflow.yaml | wc -c
 version: condensed
 generateName: calico-
 
-# Bounds the DAG itself, catching a hang outside any step's own deadline.
+# Catches a hang outside any step's own timeout.
 timeout: 4h
 
-# Where the component names in each `dependsOn:` below come from. Generated from
-# the live import graph, so a gate cannot fall behind what it gates.
+# Generated from the Go import graph; every `dependsOn:` name resolves here.
 dependencies: .argoci/depstree.yaml
 
-# Resolved at the promoted run's commit, so pressing this on an old build
-# republishes what that build was, not what master holds now. One component per
-# press: the dropdown is the picker, and only that component's images are built.
+# A promotion runs at the source run's commit, so an old build republishes
+# itself rather than master.
 promotions:
   - name: push-images
     workflowFile: .argoci/promotions/push-images.yaml
@@ -39,8 +33,7 @@ promotions:
           - istio
           - envoy
 
-  # Automatic on merge from its own config entry; this button is how a branch or
-  # PR gets packaged, which the PPA naming already accounts for.
+  # Runs by itself on merge; the button is for packaging a branch or PR.
   - name: openstack-packages
     workflowFile: .argoci/publish/openstack-packages.yaml
     description: Build and publish the OpenStack packages for this ref
@@ -53,58 +46,46 @@ promotions:
     workflowFile: .argoci/promotions/publish-release.yaml
     description: Publish an official release from this build
 
-# The Makefiles address the tree by its GOPATH location, which is a path inside
-# the build image rather than anywhere the checkout can land. A step running the
-# build image directly has to put the tree there itself; one shelling out to a
-# nested container gets the same path from the bind mount, and ignores this.
+# The Makefiles expect the tree at its GOPATH location inside the build image.
 globalPrologue: |
   mkdir -p /go/src/github.com/projectcalico
   ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
 
 defaults:
-  # Carries the host-level tooling the steps shell out to and nothing else — a
-  # quarter of the pull of a general-purpose runner, which every step pays.
-  # A step doing its work in-process names the build image instead.
+  # Only the host tooling steps shell out to, since every step pulls it. A step
+  # working in-process names the build image instead.
   image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2
 
-  # A request rather than a limit, so it decides what a step is scheduled
-  # alongside and never caps it.
   jobSize: medium
 
-  # Roughly what a step of this shape sustains, not what it peaks at — nothing
-  # is capped, so the spikes are covered either way. A heavier step says so.
+  # Sustained use rather than peak: a request never caps a step.
   requests: {cpu: 1500m, memory: 2Gi}
 
-  # An unset timeout means run-forever. A module overrides this when its work
-  # justifies more.
+  # Unset would mean no limit at all.
   timeout: 1h
 
-  # Stamped on every cloud resource a lane creates, and matched by the sweeper in
-  # the exit handler. Defined once here because a lane and the sweeper drifting
-  # apart means either leaked resources or, far worse, deleting another CI
-  # system's while the two run side by side.
+  # Names every cloud resource a lane creates, so the exit-handler sweep deletes
+  # only ours.
   env:
     - name: ARGOCI_RESOURCE_PREFIX
       value: argoci
 
-  # Modules merge collections with these rather than replacing them, and the
-  # merge is a union — a step cannot drop what it inherits. So `docker` is
-  # declared by the modules that shell out to a nested container, not here.
+  # Merged into every step and never droppable, so `docker` belongs on the
+  # modules that need it rather than here.
   services:
     - goproxy
   secretBundles:
     - docker-hub
 
 includes:
-  # Ungated: each check inside carries its own, as its Semaphore block does.
+  # Each check inside carries its own gate.
   - path: .argoci/modules/10-prerequisites.yaml
 
-  # Ungated deliberately — see the module.
+  # Ungated: the sweep must run on every build.
   - path: .argoci/modules/99-cleanup.yaml
 
-  # Each module is gated on its own file as well as its component, so editing a
-  # module retests what it builds. Match the path exactly — a bare `^\.argoci/`
-  # would fire every component on any CI edit.
+  # Each module is also gated on its own file, so editing one retests it. Match
+  # it exactly — a bare `^\.argoci/` would fire everything on any CI edit.
   - path: .argoci/modules/20-lib.yaml
     changes:
       in:
@@ -124,8 +105,6 @@ includes:
         - (^|/)README\.md$
         - (^|/)LICENSE$
 
-  # Leaf components: one `make ci` each, so the gate is the component in the
-  # generated table plus the module's own file.
   - path: .argoci/modules/20-calicoctl.yaml
     changes:
       dependsOn: [calicoctl]
@@ -203,8 +182,7 @@ includes:
       dependsOn: [e2e]
       in: ['^\.argoci/modules/20-e2e-ut\.yaml$']
 
-  # The drift check compares the suites the workflow definitions name against
-  # the ones that exist, so an edit to either side has to re-run it.
+  # The drift check reads the workflow definitions, so editing one re-runs it.
   - path: .argoci/modules/20-e2e-test-sets.yaml
     changes:
       dependsOn: [e2e]
@@ -238,9 +216,8 @@ includes:
       dependsOn: [release]
       in: ['^\.argoci/modules/90-release\.yaml$']
 
-  # Vendored upstream trees. `third_party` is one generated entry covering all
-  # four, where each Semaphore block names just its own directory — so these
-  # keep the narrower literal paths.
+  # Literal paths: the generated `third_party` entry would fire all four on a
+  # change to any one.
   - path: .argoci/modules/20-envoy-gateway.yaml
     changes:
       in:
@@ -334,9 +311,8 @@ includes:
         - ^\.argoci/scripts/vm-fleet-setup\.sh$
         - ^\.argoci/modules/20-node-kind\.yaml$
 
-  # The nftables dataplane and the publisher it feeds. `felix/nftables` is that
-  # package's own import closure rather than the whole `felix` component, which
-  # would run the benchmark for anything felix imports.
+  # `felix/nftables` is that package's own import closure, far narrower than the
+  # whole `felix` component.
   - path: .argoci/modules/45-nft-bench.yaml
     changes:
       dependsOn: [felix/nftables]
@@ -359,8 +335,7 @@ includes:
         - (^|/)README\.md$
         - (^|/)LICENSE$
 
-  # `typha` because the FV lanes run it alongside Felix, and the fleet scripts
-  # because a change to them changes how every lane here is driven.
+  # The FV lanes run Typha alongside Felix, and the fleet scripts drive them all.
   - path: .argoci/modules/20-felix.yaml
     changes:
       dependsOn: [felix, typha]

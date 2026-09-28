@@ -411,8 +411,7 @@ var validateHashreleasePublishFlags = func(c *cli.Command) error {
 }
 
 // ciJobURL returns the URL to the CI job if the command is running on CI. An
-// announcement is worth more without a link than not at all, so an unidentified
-// job only loses the link.
+// unidentified job loses the link, not the announcement.
 func ciJobURL(c *cli.Command) string {
 	orgURL, jobID := c.String(ciBaseURLFlag.Name), c.String(ciJobIDFlag.Name)
 	if !c.Bool(ciFlag.Name) || orgURL == "" || jobID == "" {
@@ -439,8 +438,6 @@ func validateCIBuildRequirements(c *cli.Command, repoRootDir string) error {
 	if !c.Bool(ciFlag.Name) {
 		return nil
 	}
-	// The check below walks a Semaphore pipeline to its parent to read the
-	// sibling image promotions' results, which only Semaphore can answer.
 	if os.Getenv("CI_WORKFLOW_NAME") != "" {
 		logrus.Info("Not running on Semaphore, skipping images promotions check...")
 		return nil

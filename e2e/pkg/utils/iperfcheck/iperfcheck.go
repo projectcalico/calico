@@ -270,21 +270,16 @@ func WithRetries(n int, interval time.Duration) MeasureOption {
 	}
 }
 
-// WithMinRate treats a sample below rate (bits per second) as worth another
-// attempt rather than an answer. Throughput on shared infrastructure is noisy
-// enough that a single low reading says more about the neighbours than about
-// the cluster.
-//
-// When every attempt falls short the best of them is returned, so the caller's
-// own assertion still reports the shortfall.
+// WithMinRate retries a sample below rate (bits per second): one low reading on
+// shared infrastructure is usually noise. If every attempt falls short, the best
+// is returned for the caller's own assertion to report.
 func WithMinRate(rate float64) MeasureOption {
 	return func(c *measureConfig) {
 		c.minRate = rate
 	}
 }
 
-// bestResult returns whichever sample is higher, preferring the candidate when
-// there is no incumbent.
+// bestResult returns the higher-rate sample.
 func bestResult(best, candidate *Result) *Result {
 	if best == nil || candidate.AverageRate > best.AverageRate {
 		return candidate

@@ -230,9 +230,8 @@ type argoMatrix struct {
 	Env  []envVar `yaml:"env"`
 }
 
-// parseArgoModule reads a module, whose steps are mostly not e2e at all. A cron
-// file is entirely lanes and can default its way to one; here a step has to say
-// it selects specs, or every build and lint step in the repo becomes a lane.
+// parseArgoModule keeps only the steps that select specs. A module is mostly
+// build and lint steps, which would otherwise default their way into lanes.
 func parseArgoModule(source string, data []byte) ([]Lane, error) {
 	lanes, err := parseArgo(source, data)
 	if err != nil {

@@ -1,8 +1,4 @@
-# Catches a manifest referencing an image tag that was never published, which
-# otherwise surfaces as a pull failure in someone's cluster.
-#
-# Semaphore also skips this on `build-v*` branches. Nothing here triggers on a
-# branch push, so there is no equivalent to carry over.
+# Fails when a manifest references an image tag that was never published.
 version: condensed-module
 
 defaults:

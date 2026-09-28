@@ -117,8 +117,7 @@ func TestLossyRunClearsBaselineGate(t *testing.T) {
 	}
 }
 
-// Every attempt falling short still has to report the best of them, or a
-// re-measured baseline would tell the caller less than a single sample did.
+// When every attempt falls short, the best must be reported rather than the last.
 func TestBestResultKeepsTheHighestSample(t *testing.T) {
 	low, high := &Result{AverageRate: 7.3e7}, &Result{AverageRate: 7.9e7}
 
@@ -139,8 +138,7 @@ func TestWithMinRateSetsTheFloor(t *testing.T) {
 	if cfg.minRate != 8e7 {
 		t.Errorf("minRate = %.0f, want 8e7", cfg.minRate)
 	}
-	// Unset means every completed measurement is an answer, which is what the
-	// callers that do not pass a floor rely on.
+	// Unset must mean no floor.
 	if (&measureConfig{}).minRate != 0 {
 		t.Error("minRate should default to 0")
 	}

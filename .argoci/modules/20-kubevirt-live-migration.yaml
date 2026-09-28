@@ -1,7 +1,5 @@
-# Live migration against a kind cluster with KubeVirt in simulation mode.
-#
-# On a machine rather than in a pod: the suites exercise SCTP, whose protocol
-# module the container-optimised node image does not ship at all.
+# Live migration against a kind cluster with KubeVirt in simulation mode. On a
+# VM because the suites exercise SCTP, which the pod nodes' image lacks.
 version: condensed-module
 
 defaults:
@@ -61,9 +59,8 @@ steps:
       if [ "$CI_STEP_EXIT_CODE" != 0 ]; then
         # Collected where the cluster is; the script pushes its own bundle.
         sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && .semaphore/collect-kind-diags' || true
-        # The snapshot tool ships in the CI image rather than on the machine, and
-        # the machine has no registry credentials of its own. Worth the pull: the
-        # cluster is gone once this returns.
+        # The snapshot tool is only in the CI image, and the VM has no registry
+        # credentials of its own.
         sshOnVirtualMachine 'docker login -u _json_key --password-stdin https://gcr.io < "${CI_ARTIFACT_SA_KEY_FILE}"' || true
         sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && docker run --rm --network host -v "$PWD:/w" -w /w gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2 kubectl-snapshot create --kubeconfig hack/test/kind/kind-kubeconfig.yaml -o kind-snapshot.tar.gz' || true
         copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/kind-snapshot.tar.gz" kind-snapshot.tar.gz || true

@@ -261,8 +261,7 @@ steps:
       .argoci/scripts/body_standard.sh
 `
 
-// A module is mostly build and lint steps. Only the ones selecting specs are
-// lanes; the rest would otherwise default their way into the index.
+// Only a module's spec-selecting steps are lanes.
 func TestParseArgoModuleKeepsOnlyLanesThatSelectSpecs(t *testing.T) {
 	RegisterTestingT(t)
 

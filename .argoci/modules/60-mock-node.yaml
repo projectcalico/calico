@@ -1,6 +1,4 @@
-# A single `make ci` for the mock node test tool.
-#
-# Its recipes build and run images, so this one needs the daemon.
+# Mock node test tool `make ci`.
 version: condensed-module
 
 defaults:

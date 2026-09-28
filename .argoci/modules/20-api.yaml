@@ -1,11 +1,4 @@
-# The `api` step stands up a kind cluster inside the docker sidecar: the nodes
-# and the local registry become containers there, and their published ports land
-# on the pod loopback the step shares. Both steps bind-mount into the nested
-# build container, which only resolves because the paths sit under /src.
-#
-# That container is also why each step logs in and forwards the proxy itself:
-# unauthenticated pulls are rate-limited, and it inherits only what is spliced
-# into the run explicitly.
+# api `make ci`, and the offline validation tests under test/.
 version: condensed-module
 
 defaults:

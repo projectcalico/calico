@@ -1,9 +1,7 @@
 # Builds and publishes the OpenStack debs to a Launchpad PPA.
 #
-# Reached two ways: automatically on a merge, and manually from a run's
-# promotion button for a branch or PR. The PPA follows from the ref — master
-# publishes to the "master" PPA, any other branch to "testing", and a PR to
-# "pr-<number>", which has to have been created by hand first.
+# The PPA follows the ref: master to "master", other branches to "testing", and
+# a PR to "pr-<number>", which must be created by hand first.
 version: condensed
 generateName: openstack-packages-
 timeout: 1h

@@ -1,8 +1,5 @@
-# Typha's own tests, plus a second pass against a UBI-minimal base to catch what
-# only that base image breaks.
-#
-# On a machine rather than in a pod: the k8sfv run loads ip6_tables, which needs
-# both the tooling and the privileges a container does not have.
+# Typha CI, and its FVs again on a UBI-minimal base. On VMs because the k8sfv
+# run loads ip6_tables, which a pod cannot.
 version: condensed-module
 
 defaults:
@@ -28,9 +25,8 @@ steps:
       artifact push job typha-report --destination test-results || true
       artifact push job felix-report --destination test-results-felix || true
 
-  # Waits on the producer without loading what it cached: `clean` would discard
-  # that image anyway, but there is no sense building a second base off a commit
-  # whose first one just failed.
+  # Depends on the producer only to skip a commit whose first build failed;
+  # `clean` discards the cached image anyway.
   - name: typha-fv-ubi
     vm:
       machineType: e2-standard-8

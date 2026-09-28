@@ -1,14 +1,10 @@
-# Third-party envoy-gateway: its own CI, plus a cross-architecture build of the
-# binaries it ships.
+# envoy-gateway CI and cross-architecture builds.
 version: condensed-module
 
 defaults:
   timeout: 30m
 
 steps:
-  # Builds an image, so this one needs the daemon and the nested build
-  # container it shells out to. Unauthenticated pulls are rate-limited, and that
-  # container inherits only what is spliced in explicitly.
   - name: envoy-gateway-ci
     requests: {cpu: 3750m, memory: 3.5Gi}
     services:
@@ -19,8 +15,7 @@ steps:
       cd third_party/envoy-gateway
       make ci
 
-  # Cross-compiles only, so it runs in the build image directly rather than
-  # paying for a daemon and a second pull.
+  # Cross-compiles only, so it needs no daemon.
   - name: envoy-gateway-build
     requests: {cpu: 5250m, memory: 4.5Gi}
     image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
@@ -34,6 +29,5 @@ steps:
         env: [{name: ARCH, value: s390x}]
     commands: |
       cd third_party/envoy-gateway
-      # Emptying the wrappers runs each recipe here instead of in a nested
-      # container; the tools they call are already on PATH.
+      # Empty wrappers run each recipe here rather than in a nested container.
       make build ARCH=$ARCH DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=

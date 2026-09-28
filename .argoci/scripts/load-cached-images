@@ -46,7 +46,7 @@ load_image() {
     local marker
 
     if ! fetch_tarball "${s3_path}"; then
-        # The producer already ran, so this is a broken contract, not a cold cache.
+        # Under ArgoCI the producer has already run, so a miss is a real failure.
         if [ -n "${CI_ARTIFACT_STORAGE:-}" ] && was_requested "$component"; then
             echo "Expected ${name} from ${CI_ARTIFACT_STORAGE}/${s3_path} and it was not there." >&2
             return 1

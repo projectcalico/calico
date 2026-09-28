@@ -1,27 +1,22 @@
-# A single `make ci` in webhooks/, gated on what that component is built from.
+# webhooks `make ci`.
 version: condensed-module
 
 defaults:
   timeout: 1h
-  # Nothing here builds an image or needs a cluster, so the work runs in the
-  # build image directly. A step shelling out to a nested container pulls this
-  # same image a second time inside the daemon, on top of its own.
+  # In the build image directly, saving a nested container and a second pull.
   image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
 
 steps:
   - name: webhooks-ci
     depends: [check-go]
     requests: {cpu: 5500m, memory: 1.75Gi}
-    # The image ships golangci-lint and gotestsum, which the default emptyDir
-    # over /go hides — as `command not found`, minutes in.
+    # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none
     commands: |
       cd webhooks
-      # Emptying the wrappers runs each recipe here instead of in a nested
-      # container; the tools they call are already on PATH.
+      # Empty wrappers run each recipe here rather than in a nested container.
       make ci DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
     epilogue: |
-      # Runs in the parent shell, so it inherits neither the `cd` above nor
-      # anything the commands exported.
+      # Epilogues don't inherit the commands' `cd` or exports.
       cd "${CI_HOME}/${CI_GIT_DIR}/webhooks"
       artifact push job report --destination test-results || true

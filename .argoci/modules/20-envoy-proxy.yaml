@@ -1,5 +1,5 @@
-# Third-party envoy-proxy: a repackaging of an upstream image, so there is no
-# per-architecture binary to build — only the image.
+# envoy-proxy CI. It repackages an upstream image, so there is no binary to
+# cross-build.
 version: condensed-module
 
 defaults:
@@ -16,8 +16,7 @@ steps:
       cd third_party/envoy-proxy
       make ci
 
-  # amd64 is already covered, since the step above builds the image. arm64 is
-  # the other architecture this component supports.
+  # The CI step already builds amd64.
   - name: envoy-proxy-image
     requests: {cpu: 1000m, memory: 1.5Gi}
     matrix:

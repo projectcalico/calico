@@ -83,7 +83,7 @@ check-mockery-config:
 check-ginkgo-v2:
 	./hack/check-ginkgo-v2.sh
 
-# Exported rather than passed, so the composed value is make's to expand.
+# Exported so the script sees make's fully expanded value.
 check-argoci-image: export GO_BUILD_VER := $(GO_BUILD_VER)
 check-argoci-image:
 	./hack/check-argoci-image.sh
@@ -146,18 +146,17 @@ GO_DIRS=$(shell ./hack/list-go-sources.sh dirs)
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
 DEPS_SOURCES=go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./hack/list-go-sources.sh hack/cmd/deps/*
 
-# Derived from the same import graph as deps.txt, so it belongs to the same
-# regenerate-and-diff check rather than one of its own.
+# Regenerated with the deps.txt files, from the same import graph.
 ARGOCI_DEPS_FILE=.argoci/depstree.yaml
 
-# Packages below a component that one CI lane gates on by itself. A lane whose
-# subject is a single package would otherwise have to gate on the whole
-# component and run for anything in its import closure. No deps.txt is
-# generated for these — only a depstree entry.
+# Subpackages a CI lane gates on by themselves, narrower than their component.
+# They get a depstree entry but no deps.txt.
 ARGOCI_DEPS_SUBPACKAGES=felix/nftables test-tools/mocknode
 
+# Each job starts its own go-build container, so it is sized from the CPU a CI
+# step was given where there is one; nproc counts the node's cores instead.
 gen-deps-files: operator-charts
-	$(MAKE) -j$$(nproc) $(DEP_FILES)
+	$(MAKE) -j$(or $(GOMAXPROCS),$$(nproc)) $(DEP_FILES)
 	$(MAKE) $(ARGOCI_DEPS_FILE)
 
 $(DEP_FILES): $(DEPS_SOURCES)
@@ -169,11 +168,8 @@ $(DEP_FILES): $(DEPS_SOURCES)
 	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps combined $(patsubst %/,%,$(dir $@))"; \
 	} > $@
 
-# All components in one invocation, since each is a whole-repo `go list` pass and
-# the tool already fans them out across cores.
-#
-# Via a temporary, because a truncated file here is an empty component list —
-# which gates nothing, and says nothing.
+# One invocation for every component, since each is a whole-repo `go list` pass.
+# Via a temporary, because a truncated file would silently gate nothing.
 $(ARGOCI_DEPS_FILE): $(DEPS_SOURCES)
 	@$(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps gen-argoci-deps $(GO_DIRS) $(ARGOCI_DEPS_SUBPACKAGES)" > $@.tmp \
 	  && mv $@.tmp $@ || { rm -f $@.tmp; exit 1; }
@@ -393,9 +389,8 @@ e2e-test-clusternetworkpolicy:
 ## an ad-hoc local run; it expands in the shell so its regex metacharacters survive.
 ## --fail-on-empty fails a run that selects no specs instead of passing it.
 #
-# A failed suite tears down what it created, which is the state worth looking at.
-# Kept only where something collects it afterwards and the cluster is thrown away
-# regardless; locally it would leave the namespaces behind for someone to notice.
+# In CI, keep a failed suite's namespaces for the diagnostics collected after;
+# locally they would just be left behind.
 ifdef CI
 E2E_KEEP_FAILED := --delete-namespace-on-failure=false
 CNP_KEEP_FAILED := -cleanup-base-resources=false
@@ -406,11 +401,8 @@ e2e-run: bin/ginkgo
 	mkdir -p $(E2E_OUTPUT_DIR)
 	KUBECONFIG=$(KUBECONFIG) ./bin/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- $${E2E_GINKGO_ARGS} $(E2E_KEEP_FAILED) $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
 
-# The suite it runs is already a built binary, so this is the only reason a Go
-# toolchain would be needed at run time. Version comes from go.mod.
-#
-# Whichever of Go and docker is present: the lanes that drive a kind cluster have
-# docker and no Go, and the ones that drive a remote cluster have the reverse.
+# Version from go.mod. Built with whichever of Go and docker the host has: the
+# kind lanes have only docker, the remote-cluster lanes only Go.
 bin/ginkgo:
 	mkdir -p bin
 	@if command -v go >/dev/null 2>&1; then \

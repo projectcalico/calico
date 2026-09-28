@@ -1,22 +1,18 @@
-# The unit tests for the combined calico binary. Its image build lives in the
-# producer blocks, not here.
+# Unit tests for the combined calico binary.
 version: condensed-module
 
 defaults:
   timeout: 1h
-  # Nothing here builds an image or needs a cluster, so the work runs in the
-  # build image directly.
+  # In the build image directly, saving a nested container and a second pull.
   image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
 
 steps:
   - name: cmd-calico-ut
     depends: [check-go]
     requests: {cpu: 7250m, memory: 3.5Gi}
-    # The image ships gotestsum under /go/bin, which the default emptyDir over
-    # /go hides — as `command not found`, minutes in.
+    # The image ships tools under /go/bin, which the default /go volume hides.
     workspaceVolumes: none
     commands: |
       cd cmd/calico
-      # Emptying the wrappers runs each recipe here instead of in a nested
-      # container; the tools they call are already on PATH.
+      # Empty wrappers run each recipe here rather than in a nested container.
       make ut DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
