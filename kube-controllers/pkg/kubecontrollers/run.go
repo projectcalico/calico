@@ -427,13 +427,17 @@ func (cc *controllerControl) initControllers(
 	if v3c != nil {
 		// The resync period doubles as the recovery path for controllers that drop work after max retries.
 		calicoFactory := externalversions.NewSharedInformerFactory(v3c, 5*time.Minute)
-		poolInformer := calicoFactory.Projectcalico().V3().IPPools().Informer()
-		blockInformer := calicoFactory.Projectcalico().V3().IPAMBlocks().Informer()
 
 		apiCfg, _ := apiconfig.LoadClientConfigFromEnvironment()
 		v3CRDs := k8s.UsingV3CRDs(&apiCfg.Spec)
 
+		if !v3CRDs && apiCfg.Spec.DatastoreType == apiconfig.Kubernetes {
+			cc.initV1PoolController(ctx, calicoClient, k8sconfig)
+		}
+
 		if v3CRDs {
+			poolInformer := calicoFactory.Projectcalico().V3().IPPools().Informer()
+			blockInformer := calicoFactory.Projectcalico().V3().IPAMBlocks().Informer()
 			poolController := ippool.NewController(ctx, v3c, poolInformer, blockInformer, calicoClient.IPAM())
 			cc.controllers["IPPool"] = poolController
 			cc.registerInformers(poolInformer, blockInformer)
@@ -538,6 +542,25 @@ func (cc *controllerControl) initControllers(
 	if err := podInformer.SetTransform(converter.PodTransformer(cfg.Controllers.WorkloadEndpoint != nil)); err != nil {
 		logrus.WithError(err).Fatal("Failed to set transform on pod informer")
 	}
+}
+
+// initV1PoolController runs the IPPool controller against crd.projectcalico.org/v1 directly, so it works whether or
+// not the Calico API server is installed.
+func (cc *controllerControl) initV1PoolController(ctx context.Context, calicoClient client.Interface, k8sconfig *rest.Config) {
+	dynClient, err := dynamic.NewForConfig(k8sconfig)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create dynamic client for IPPool controller")
+	}
+	poolInformer, err := ippool.NewV1PoolInformer(dynClient, 5*time.Minute)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create v1 IPPool informer")
+	}
+	blockInformer, err := ippool.NewV1BlockInformer(dynClient, 5*time.Minute)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create v1 IPAMBlock informer")
+	}
+	cc.controllers["IPPool"] = ippool.NewV1Controller(ctx, calicoClient, poolInformer, blockInformer, calicoClient.IPAM())
+	cc.registerInformers(poolInformer, blockInformer)
 }
 
 func (cc *controllerControl) registerInformers(infs ...cache.SharedIndexInformer) {
