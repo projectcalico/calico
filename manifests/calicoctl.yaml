@@ -1,7 +1,7 @@
-# Calico Version release-v3.33
-# https://projectcalico.docs.tigera.io/releases#release-v3.33
+# Calico Version v3.33.0
+# https://projectcalico.docs.tigera.io/releases#v3.33.0
 # This manifest includes the following component versions:
-#   calico/calico:release-v3.33
+#   calico/calico:v3.33.0
 
 apiVersion: v1
 kind: ServiceAccount
@@ -22,7 +22,7 @@ spec:
   serviceAccountName: calicoctl
   containers:
     - name: calicoctl
-      image: quay.io/calico/calico:release-v3.33
+      image: quay.io/calico/calico:v3.33.0
       command:
         - /usr/bin/calicoctl
       args:
