@@ -17,13 +17,18 @@ sweep_gce() {
     return 0
   fi
 
-  local listing
+  # stderr kept apart: gcloud warns there when no instance carries a label yet,
+  # and read as a listing that warning is a leak with no zone.
+  local listing errors
+  errors=$(mktemp)
   if ! listing=$(gcloud --quiet compute instances list \
       --filter="labels.ci-system=${prefix} AND labels.ci-workflow-id=${CI_WORKFLOW_NAME}" \
-      --format='csv[no-heading](name,zone.basename())' 2>&1); then
-    echo "[WARN] could not list instances: ${listing}"
+      --format='csv[no-heading](name,zone.basename())' 2>"${errors}"); then
+    echo "[WARN] could not list instances: $(cat "${errors}")"
+    rm -f "${errors}"
     return 1
   fi
+  rm -f "${errors}"
   if [ -z "${listing}" ]; then
     echo "[INFO] no leaked instances for ${CI_WORKFLOW_NAME}"
     return 0
@@ -37,7 +42,7 @@ sweep_gce() {
   local -A by_zone=()
   local name zone
   while IFS=, read -r name zone; do
-    [ -n "${name}" ] || continue
+    [ -n "${name}" ] && [ -n "${zone}" ] || continue
     by_zone["${zone}"]+=" ${name}"
   done <<< "${listing}"
 
