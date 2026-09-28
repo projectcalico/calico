@@ -21,8 +21,9 @@ steps:
     vm:
       # Third-generation family, which is what hyperdisk needs.
       machineType: c3-standard-8
-      # Same region as the artifact store the cached images come from.
-      zone: us-central1-b
+      # Same region as the artifact store the cached images come from. A region
+      # rather than a zone: c3 capacity runs out zone by zone.
+      zone: us-central1
       # kind's churn wants tens of thousands of IOPS, and 200GB of pd-ssd caps at
       # 6000 — reaching them that way would mean paying for a terabyte.
       diskType: hyperdisk-balanced
