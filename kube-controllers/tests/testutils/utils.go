@@ -1,4 +1,4 @@
-// Copyright (c) 2017,2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2019,2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -101,6 +101,22 @@ func ApplyCRDs(apiserver *containers.Container) {
 		return nil
 	}
 	EventuallyWithOffset(1, apply, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+	// kubectl apply returns as soon as the API server accepts each CRD object, but
+	// the apiserver needs additional time to register the CRD's API in discovery.
+	// Tests that hit the new CRD immediately race against that registration and can
+	// see a NoKindMatchError from the controller-runtime RESTMapper. Wait for all
+	// CRDs to report Established before returning. The budget is generous because a
+	// slow-starting apiserver on a loaded CI runner can take well over 30s to
+	// establish every CRD.
+	waitEstablished := func() error {
+		out, err := apiserver.ExecOutput("kubectl", "wait", "--for=condition=Established", "--all", "crds", "--timeout=30s")
+		if err != nil {
+			return fmt.Errorf("%s: %s", err, out)
+		}
+		return nil
+	}
+	EventuallyWithOffset(1, waitEstablished, 120*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 }
 
 func RunK8sApiserver(etcdIp string) *containers.Container {

@@ -200,11 +200,15 @@ var _ = Describe("FlowLogAvg reporting for a Reporter", func() {
 
 		var timeResetStart time.Time
 		var timeResetEnd time.Time
+		resetDone := make(chan struct{})
 
 		time.AfterFunc(2*time.Second, func() {
 			timeResetStart = time.Now()
+			cr.flowLogAvgMutex.Lock()
 			cr.resetFlowLogsAvg()
+			cr.flowLogAvgMutex.Unlock()
 			timeResetEnd = time.Now()
+			close(resetDone)
 		})
 
 		// Update is a little after resetFlowLogsAvg because feedupdate has some preprocesssing
@@ -213,7 +217,16 @@ var _ = Describe("FlowLogAvg reporting for a Reporter", func() {
 			cr.updateFlowLogsAvg(newTotal)
 		})
 
-		Eventually(func() int { return cr.flowLogAvg.totalFlows }, "6s", "2s").Should(Equal(newTotal))
+		Eventually(func() int {
+			cr.flowLogAvgMutex.RLock()
+			defer cr.flowLogAvgMutex.RUnlock()
+			return cr.flowLogAvg.totalFlows
+		}, "6s", "100ms").Should(Equal(newTotal))
+		// Receiving on resetDone synchronises us with the goroutine that wrote
+		// timeResetStart/End.
+		Eventually(resetDone, "6s").Should(BeClosed())
+		cr.flowLogAvgMutex.RLock()
+		defer cr.flowLogAvgMutex.RUnlock()
 		Expect(cr.flowLogAvg.lastReportTime.Before(timeResetEnd)).To(BeTrue())
 		Expect(cr.flowLogAvg.lastReportTime.After(timeResetStart)).To(BeTrue())
 	})
