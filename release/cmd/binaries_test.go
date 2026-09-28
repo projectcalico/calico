@@ -23,25 +23,34 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectcalico/calico/release/internal/binaries"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 const binariesCLITestVersion = "v3.30.0"
 
-// The components an OSS release builds, and the target each is built with.
-// Spelled out rather than read from the package, so a change to either is
-// visible here.
-var ossBinaries = map[string]string{
+// The components a release builds, and the target each is built with. Spelled
+// out rather than read from the package, so a change to either is visible here.
+var binariesCLIComponents = map[string]string{
 	"calicoctl": "build-all",
 	"felix":     "release-build",
 }
+
+// Where a build collects the binaries it attaches individually, and which
+// components it attaches.
+var (
+	binariesCLICollectDir = func(outputDir string) string { return outputDir }
+
+	binariesCLICollected = map[string]bool{
+		"calicoctl": true,
+		"felix":     false,
+	}
+)
 
 // The recording runner does not run make, so the collect needs something to
 // pick up.
 func stageBuiltBinaries(t *testing.T, root string) {
 	t.Helper()
-	for component := range ossBinaries {
+	for component := range binariesCLIComponents {
 		dir := filepath.Join(root, component, "bin")
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("mkdir: %v", err)
@@ -77,8 +86,8 @@ func TestBinariesBuildRunsEveryComponent(t *testing.T) {
 	root := fakeRepo(t, binariesCLITestVersion)
 	r := runBinaries(t, root, "build")
 
-	for component, target := range ossBinaries {
-		if !r.ran(filepath.Join(root, component), target) {
+	for component, target := range binariesCLIComponents {
+		if !r.ranExactly(filepath.Join(root, component), target) {
 			t.Errorf("did not build %s with %s, ran: %v", component, target, r.args)
 		}
 	}
@@ -89,7 +98,7 @@ func TestBinariesBuildTakesTheVersionFromTheManifests(t *testing.T) {
 	r := runBinaries(t, root, "build")
 
 	want := utils.Env(utils.EnvVersion, binariesCLITestVersion)
-	for component := range ossBinaries {
+	for component := range binariesCLIComponents {
 		env := r.envFor(filepath.Join(root, component))
 		if !slices.Contains(env, want) {
 			t.Errorf("%s built without %q, env: %v", component, want, env)
@@ -108,7 +117,7 @@ func TestBinariesBuildMatchesTheManagerComponents(t *testing.T) {
 		}
 	}
 	slices.Sort(built)
-	if want := slices.Sorted(maps.Keys(ossBinaries)); !slices.Equal(built, want) {
+	if want := slices.Sorted(maps.Keys(binariesCLIComponents)); !slices.Equal(built, want) {
 		t.Errorf("built %v, want %v", built, want)
 	}
 }
@@ -132,18 +141,19 @@ func TestBinariesCollectDirMatchesTheReleaseFlow(t *testing.T) {
 	}
 }
 
-func TestBinariesBuildCollectsIntoTheReleaseDir(t *testing.T) {
+func TestBinariesBuildCollectsIntoTheRightDir(t *testing.T) {
 	root := fakeRepo(t, binariesCLITestVersion)
 	runBinaries(t, root, "build")
 
-	// Only calicoctl is attached individually; felix reaches a release inside
-	// the archive.
-	dir := releaseOutputDir(root, binariesCLITestVersion)
-	want := binaries.CalicoctlComponent + "-amd64"
-	if _, err := os.Stat(filepath.Join(dir, want)); err != nil {
-		t.Errorf("%s was not collected into %s: %v", want, dir, err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, binaries.FelixComponent+"-amd64")); err == nil {
-		t.Error("felix binaries were attached individually")
+	dir := binariesCLICollectDir(releaseOutputDir(root, binariesCLITestVersion))
+	for component, collected := range binariesCLICollected {
+		name := component + "-amd64"
+		_, err := os.Stat(filepath.Join(dir, name))
+		if collected && err != nil {
+			t.Errorf("%s was not collected into %s: %v", name, dir, err)
+		}
+		if !collected && err == nil {
+			t.Errorf("%s was collected into %s, want it left out", name, dir)
+		}
 	}
 }

@@ -55,6 +55,8 @@ const (
 	KeyDevTagSuffix        = "DEV_TAG_SUFFIX"
 )
 
+const MetadataFile = "metadata.mk"
+
 var load = sync.OnceValue(readMetadata)
 
 func readMetadata() map[string]string {
@@ -71,7 +73,7 @@ func readMetadata() map[string]string {
 		logrus.WithError(err).Warn("Failed to locate git root for metadata.mk; release flag defaults will be empty")
 		return map[string]string{}
 	}
-	data, err := os.ReadFile(filepath.Join(root, "metadata.mk"))
+	data, err := os.ReadFile(filepath.Join(root, MetadataFile))
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to read metadata.mk; release flag defaults will be empty")
 		return map[string]string{}

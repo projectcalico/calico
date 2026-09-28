@@ -152,17 +152,17 @@ var productEnv = func(o Operator) ([]string, error) {
 			return nil, err
 		}
 		env = append(env,
-			utils.Env("CALICO_REGISTRY", reg),
-			utils.Env("CALICO_IMAGE_PATH", imagePath),
+			utils.Env(utils.EnvCalicoRegistry, reg),
+			utils.Env(utils.EnvCalicoImagePath, imagePath),
 		)
 	}
 	if o.ProductVersion != "" {
-		env = append(env, utils.Env("CALICO_VERSION", o.ProductVersion))
+		env = append(env, utils.Env(utils.EnvCalicoVersion, o.ProductVersion))
 	}
 	if opReg, opPath, err := registryParts(Registry(o)); err == nil {
 		env = append(env,
-			utils.Env("OPERATOR_IMAGE_REGISTRY", opReg),
-			utils.Env("OPERATOR_IMAGE_PATH", opPath),
+			utils.Env(utils.EnvOperatorImageRegistry, opReg),
+			utils.Env(utils.EnvOperatorImagePath, opPath),
 		)
 	}
 	return env, nil
