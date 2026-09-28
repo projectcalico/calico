@@ -80,7 +80,8 @@ var _ = Describe("BPF Proxy", func() {
 		k8s := fake.NewClientset()
 		syncStop = make(chan struct{})
 
-		first := newMockSyncer(syncStop)
+		firstStop := make(chan struct{})
+		first := newMockSyncer(firstStop)
 		p, err := proxy.New(k8s, first, "testnode", proxy.WithImmediateSync())
 		Expect(err).NotTo(HaveOccurred())
 
@@ -91,6 +92,10 @@ var _ = Describe("BPF Proxy", func() {
 
 		// Drain the initial sync.
 		first.checkState(func(proxy.DPSyncerState) {})
+
+		// Both informer-synced callbacks may Apply; an undrained one would block
+		// holding the syncer lock and stall SetSyncer.
+		close(firstStop)
 
 		// SetSyncer calls forceSyncDP synchronously, which calls Apply on
 		// the new syncer; that blocks until checkState drains it. Run

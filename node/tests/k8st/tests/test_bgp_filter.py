@@ -4,7 +4,7 @@ import logging
 import re
 
 from tests.k8st.test_base import Container, Pod, TestBase
-from tests.k8st.utils.utils import DiagsCollector, calicoctl, kubectl, run, retry_until_success, node_info, start_external_node_with_bgp, update_ds_env
+from tests.k8st.utils.utils import DiagsCollector, calicoctl, kubectl, run, retry_until_success, node_info, start_external_node_with_bgp
 
 _log = logging.getLogger(__name__)
 
@@ -37,11 +37,6 @@ protocol bgp Mesh_with_node_1 from bgp_template {
 class TestBGPFilter(TestBase):
     def setUp(self):
         super(TestBGPFilter, self).setUp()
-
-        # Enable debug logging
-        update_ds_env("calico-node",
-                      "calico-system",
-                      {"BGP_LOGSEVERITYSCREEN": "debug"})
 
         # Create test namespace
         self.ns = "bgpfilter-test"

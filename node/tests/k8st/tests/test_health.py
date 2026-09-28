@@ -16,7 +16,7 @@ import re
 from subprocess import CalledProcessError
 
 from tests.k8st.test_base import TestBase
-from tests.k8st.utils.utils import DiagsCollector, calicoctl, kubectl, exec_in_calico_node, run, retry_until_success, node_info, start_external_node_with_bgp, update_ds_env
+from tests.k8st.utils.utils import DiagsCollector, calicoctl, kubectl, exec_in_calico_node, run, retry_until_success, node_info, start_external_node_with_bgp
 
 _log = logging.getLogger(__name__)
 _log.setLevel(logging.DEBUG)

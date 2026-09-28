@@ -128,12 +128,6 @@ class _TestLocalBGPPeer(TestBase):
         )
         self.add_cleanup(self.delete_extra_node)
 
-        # Enable debug logging on BGP and set endpointStatusPathPrefix
-        self.update_ds_env("calico-node",
-                           "calico-system",
-                           {"BGP_LOGSEVERITYSCREEN": "debug",
-                            "FELIX_EndpointStatusPathPrefix": "/var/run/calico"})
-
         # Create the BGP filter to export to the ToR.
         kubectl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
@@ -218,7 +212,7 @@ spec:
   asNumber: 63000
   nextHopMode: Keep
   filters:
-  - export-child-cluster-cidr          
+  - export-child-cluster-cidr
 EOF
 """ % self.external_node_ip)
           self.add_cleanup(lambda: calicoctl("delete bgppeer rr-tor-peer", allow_fail=True))
@@ -444,7 +438,7 @@ protocol bgp from_workload_to_local_host from bgp_template {
   neighbor %s as %s;
 }
 """ % (router_id, child_block,  child_block, child_ip, as_number_child, local_workload_peer_ip, as_number_parent)
-    
+
     # Given a pod, check if should have BGP connections with the host.
     def assert_bgp_established(self, pod):
         output = run("kubectl exec -t %s -n %s -- birdcl show protocols" % (pod.name, pod.ns))
@@ -517,7 +511,7 @@ protocol bgp from_workload_to_local_host from bgp_template {
           self.assertRegexpMatches(output, "10\.123\.0\.0/26.*via %s on .*Node_172_18_0_.*AS65401" % (self.ips[1],))
           self.assertRegexpMatches(output, "10\.123\.1\.0/26.*via %s on .*Node_172_18_0_.*AS65401" % (self.ips[2],))
           self.assertRegexpMatches(output, "10\.123\.3\.0/26.*via %s on .*Node_172_18_0_.*AS65401" % (self.ips[2],))
-          
+
           # Check that the ToR hears about all the routes from RR(master node).
           # Note that `nextHopMode: Keep` is specified for `rr-tor-peer`, ToR sees routes with original next hop.
           # 10.123.3.0/26      via 172.18.0.5 on eth0 [RR_with_master_node 09:46:12 from 172.18.0.3] * (100/0) [AS65401i]
@@ -527,7 +521,7 @@ protocol bgp from_workload_to_local_host from bgp_template {
           self.assertRegexpMatches(output, "10\.123\.0\.0/26.*via %s on .*RR_with_master_node.*AS65401" % (self.ips[1],))
           self.assertRegexpMatches(output, "10\.123\.1\.0/26.*via %s on .*RR_with_master_node.*AS65401" % (self.ips[2],))
           self.assertRegexpMatches(output, "10\.123\.3\.0/26.*via %s on .*RR_with_master_node.*AS65401" % (self.ips[2],))
-        
+
         # Check connectivity from ToR to workload.
         self.red_pod_0_0.execute("ip addr add 10.123.0.1 dev lo")
 
@@ -552,7 +546,7 @@ class TestLocalBGPPeerRR(_TestLocalBGPPeer):
 
     def setUp(self):
         self.set_topology(TopologyMode.RR)
-        super(TestLocalBGPPeerRR, self).setUp() 
+        super(TestLocalBGPPeerRR, self).setUp()
 
 class TestLocalBGPPeerMesh(_TestLocalBGPPeer):
 
@@ -572,7 +566,7 @@ class TestLocalBGPPeerMesh(_TestLocalBGPPeer):
 
     def setUp(self):
         self.set_topology(TopologyMode.MESH)
-        super(TestLocalBGPPeerMesh, self).setUp() 
+        super(TestLocalBGPPeerMesh, self).setUp()
 
 def stop_for_debug():
     # Touch debug file under projectcalico/calico/node to stop the process
