@@ -182,13 +182,9 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		}
 	}
 
-	// Set defaults
-	preDefaultPatchFrom := client.MergeFrom(instance.DeepCopy())
+	// The CRD schema defaults these fields. Defaulting in memory as well covers a cluster
+	// whose CRDs the operator doesn't manage.
 	updateDefaults(instance)
-	if err := r.Patch(ctx, instance, preDefaultPatchFrom); err != nil {
-		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to write defaults", err, reqLogger)
-		return reconcile.Result{}, err
-	}
 
 	// Get the Installation, for k8s provider info.
 	installationSpec, err := utils.GetComputedInstallationSpec(ctx, r)

@@ -268,17 +268,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Unable to create the trusted bundle", err, reqLogger)
 	}
 
-	preDefaultPatchFrom := client.MergeFrom(whiskerCR.DeepCopy())
-
-	// update Installation with defaults
+	// The CRD schema defaults these fields. Defaulting in memory as well covers a cluster
+	// whose CRDs the operator doesn't manage.
 	updateWhiskerWithDefaults(whiskerCR)
-
-	// Write the whisker CR configuration back to the API. This is essentially a poor-man's defaulting, and
-	// ensures that we don't surprise anyone by changing defaults in a future version of the operator.
-	if err := r.cli.Patch(ctx, whiskerCR, preDefaultPatchFrom); err != nil {
-		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to write defaults", err, reqLogger)
-		return reconcile.Result{}, err
-	}
 
 	if _, err := r.maintainFinalizer(ctx, whiskerCR); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error setting finalizer on Installation", err, reqLogger)

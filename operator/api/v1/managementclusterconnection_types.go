@@ -29,6 +29,7 @@ type ManagementClusterConnectionSpec struct {
 
 	// TLS provides options for configuring how Managed Clusters can establish an mTLS connection with the Management Cluster.
 	// +optional
+	// +kubebuilder:default={}
 	TLS *ManagementClusterTLS `json:"tls,omitempty"`
 
 	// GuardianDeployment configures the guardian Deployment.
@@ -75,6 +76,7 @@ type ManagementClusterTLS struct {
 	// Default: Tigera
 	//
 	// +kubebuilder:validation:Enum=Tigera;Public
+	// +kubebuilder:default=Tigera
 	CA CAType `json:"ca,omitempty"`
 }
 

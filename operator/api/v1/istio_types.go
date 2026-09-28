@@ -157,6 +157,7 @@ type IstioSpec struct {
 	// +kubebuilder:validation:Type=integer
 	// +kubebuilder:validation:XIntOrString
 	// +kubebuilder:validation:Pattern=`^.*`
+	// +kubebuilder:default=23
 	DSCPMark *numorstring.DSCP `json:"dscpMark,omitempty"`
 }
 
