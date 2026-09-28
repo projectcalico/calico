@@ -91,6 +91,16 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # the container, and we prepend that to PATH inside the bash -c below.
   make kubectl
 
+  # Some provisioners (notably OpenShift) taint control-plane nodes
+  # NoSchedule. The k8s e2e framework waits for *all* nodes to be schedulable
+  # (--allowed-not-ready-nodes 0) and otherwise hangs until the 30m
+  # SynchronizedBeforeSuite timeout, so untaint them first — matching what the
+  # legacy `bz tests` runner did. Harmless (`|| true`) on clusters with no such
+  # taint. Run on the host (API is reachable here; install used it).
+  for _taint in node-role.kubernetes.io/master- node-role.kubernetes.io/control-plane-; do
+    KUBECONFIG="${BZ_LOCAL_DIR}/kubeconfig" ./hack/test/kind/kubectl taint nodes --all "${_taint}" || true
+  done
+
   # EKS kubeconfigs exec aws-iam-authenticator (PATH lookup), which the stock
   # golang image lacks, so client-go fails before any tests run. The aws-eks
   # provisioner installs it on the host; bind-mount it when present (no-op otherwise).
