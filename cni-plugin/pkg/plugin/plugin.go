@@ -45,6 +45,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane"
 	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
+	calicowait "github.com/projectcalico/calico/cni-plugin/pkg/wait"
 	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
@@ -54,7 +55,12 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
-const testConnectionTimeout = 2 * time.Second
+const (
+	testConnectionTimeout = 2 * time.Second
+
+	// nodenameFileTimeout tells how long ADD and DEL wait for calico/node to write the nodename file
+	nodenameFileTimeout = 30 * time.Second
+)
 
 func init() {
 	// This ensures that main runs only on main thread (thread group leader).
@@ -147,6 +153,22 @@ func pollEndpointReadiness(endpoint string, interval, timeout time.Duration) err
 		})
 }
 
+// waitForNodenameFile waits for calico/node to write the nodename file
+func waitForNodenameFile(conf types.NetConf) error {
+	if conf.NodenameFileOptional {
+		return nil
+	}
+	nodeNameFile := "/var/lib/calico/nodename"
+	if conf.NodenameFile != "" {
+		nodeNameFile = conf.NodenameFile
+	}
+	if err := calicowait.ForFileWithTimeout(nodeNameFile, nodenameFileTimeout); err != nil {
+		return fmt.Errorf("%s: check that the calico/node container is running and has mounted /var/lib/calico/", err)
+	}
+	logrus.Debugf("%s exists", nodeNameFile)
+	return nil
+}
+
 func cmdAdd(args *skel.CmdArgs) (err error) {
 	// Defer a panic recover, so that in case we panic we can still return
 	// a proper error to the runtime.
@@ -181,18 +203,8 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 
 	utils.ConfigureLogging(conf)
 
-	nodeNameFile := "/var/lib/calico/nodename"
-	if conf.NodenameFile != "" {
-		nodeNameFile = conf.NodenameFile
-	}
-
-	if !conf.NodenameFileOptional {
-		// Configured to wait for the nodename file - don't start until it exists.
-		if _, err := os.Stat(nodeNameFile); err != nil {
-			s := "%s: check that the calico/node container is running and has mounted /var/lib/calico/"
-			return fmt.Errorf(s, err)
-		}
-		logrus.Debug("/var/lib/calico/nodename exists")
+	if err := waitForNodenameFile(conf); err != nil {
+		return err
 	}
 
 	// Determine MTU to use.
@@ -626,19 +638,8 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 
 	utils.ConfigureLogging(conf)
 
-	nodeNameFile := "/var/lib/calico/nodename"
-	if conf.NodenameFile != "" {
-		nodeNameFile = conf.NodenameFile
-	}
-
-	if !conf.NodenameFileOptional {
-		// Configured to wait for the nodename file - don't start until it exists.
-		if _, err = os.Stat(nodeNameFile); err != nil {
-			s := "%s: check that the calico/node container is running and has mounted /var/lib/calico/"
-			err = fmt.Errorf(s, err)
-			return
-		}
-		logrus.Debug("/var/lib/calico/nodename exists")
+	if err = waitForNodenameFile(conf); err != nil {
+		return
 	}
 
 	// Determine which node name to use.
