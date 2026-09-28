@@ -14909,4 +14909,3 @@ spec:
                                                       An empty selector ({}) matches all namespaces.
                                                     properties:
                                                       matchExpressions:
-     
