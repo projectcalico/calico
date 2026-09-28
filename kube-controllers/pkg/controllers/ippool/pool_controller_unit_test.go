@@ -232,12 +232,13 @@ func newTestController(cli *fake.Clientset, pools ...*v3.IPPool) (*IPPoolControl
 	blockIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 
 	c := &IPPoolController{
-		ctx:           context.Background(),
-		cli:           cli,
-		poolInformer:  &fakeSharedIndexInformer{indexer: poolIndexer},
-		blockInformer: &fakeSharedIndexInformer{indexer: blockIndexer},
-		ipam:          &fakeIPAM{},
-		queue:         &fakeRateLimitingQueue{},
+		ctx:              context.Background(),
+		pools:            &v3PoolClient{cli: cli},
+		poolInformer:     &fakeSharedIndexInformer{indexer: poolIndexer},
+		blockInformer:    &fakeSharedIndexInformer{indexer: blockIndexer},
+		ipam:             &fakeIPAM{},
+		queue:            &fakeRateLimitingQueue{},
+		manageFinalizers: true,
 	}
 	return c, poolIndexer
 }

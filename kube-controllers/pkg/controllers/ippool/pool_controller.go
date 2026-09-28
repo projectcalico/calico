@@ -33,6 +33,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -59,11 +60,14 @@ type IPPoolController struct {
 	poolInformer  cache.SharedIndexInformer
 	blockInformer cache.SharedIndexInformer
 
-	cli   clientset.Interface
+	pools poolClient
 	ipam  ipam.Interface
 	queue workqueue.TypedRateLimitingInterface[string]
+
+	manageFinalizers bool
 }
 
+// NewController returns an IPPool controller for clusters whose projectcalico.org/v3 resources are CRDs.
 func NewController(
 	ctx context.Context,
 	cli clientset.Interface,
@@ -71,13 +75,37 @@ func NewController(
 	blockInformer cache.SharedIndexInformer,
 	ipam ipam.Interface,
 ) controller.Controller {
+	return newController(ctx, &v3PoolClient{cli: cli}, poolInformer, blockInformer, ipam, true)
+}
+
+// NewV1Controller returns an IPPool controller for clusters backed by crd.projectcalico.org/v1. It leaves finalizers
+// alone, because finishing a v1 delete needs the Calico API server, which itself needs IP pools.
+func NewV1Controller(
+	ctx context.Context,
+	cli client.Interface,
+	poolInformer cache.SharedIndexInformer,
+	blockInformer cache.SharedIndexInformer,
+	ipam ipam.Interface,
+) controller.Controller {
+	return newController(ctx, &datastorePoolClient{cli: cli}, poolInformer, blockInformer, ipam, false)
+}
+
+func newController(
+	ctx context.Context,
+	pools poolClient,
+	poolInformer cache.SharedIndexInformer,
+	blockInformer cache.SharedIndexInformer,
+	ipam ipam.Interface,
+	manageFinalizers bool,
+) *IPPoolController {
 	c := &IPPoolController{
-		ctx:           ctx,
-		cli:           cli,
-		poolInformer:  poolInformer,
-		blockInformer: blockInformer,
-		ipam:          ipam,
-		queue:         workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]()),
+		ctx:              ctx,
+		pools:            pools,
+		poolInformer:     poolInformer,
+		blockInformer:    blockInformer,
+		ipam:             ipam,
+		queue:            workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]()),
+		manageFinalizers: manageFinalizers,
 	}
 
 	// Every pool event triggers the same global reconcile, so the handlers just enqueue the
@@ -169,6 +197,9 @@ func (c *IPPoolController) reconcile() error {
 	if err != nil {
 		errs = append(errs, err)
 	}
+	if !c.manageFinalizers {
+		return utilerrors.NewAggregate(errs)
+	}
 
 	for _, p := range pools {
 		logCtx := logrus.WithFields(logrus.Fields{
@@ -238,7 +269,7 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) ([]*v3.IPPoo
 				Reason:  v3.IPPoolReasonDisabled,
 				Message: "IPPool.Spec.Disabled is true",
 			}
-			if err := updateCondition(ctx, c.cli, pool, cond); err != nil {
+			if err := updateCondition(ctx, c.pools, pool, cond); err != nil {
 				logrus.WithError(err).WithField("pool", pool.Name).Error("Failed to update status of IPPool")
 				errs = append(errs, err)
 			}
@@ -251,7 +282,7 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) ([]*v3.IPPoo
 				Reason:  v3.IPPoolReasonTerminating,
 				Message: "IPPool is being deleted",
 			}
-			if err := updateCondition(ctx, c.cli, pool, cond); err != nil {
+			if err := updateCondition(ctx, c.pools, pool, cond); err != nil {
 				logrus.WithError(err).WithField("pool", pool.Name).Error("Failed to update status of IPPool")
 				errs = append(errs, err)
 			}
@@ -286,7 +317,7 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) ([]*v3.IPPoo
 			Reason:  v3.IPPoolReasonCIDROverlap,
 			Message: "CIDR overlaps another pool; disabled to prevent IP allocation conflicts.",
 		}
-		if err := updateCondition(ctx, c.cli, pool, cond); err != nil {
+		if err := updateCondition(ctx, c.pools, pool, cond); err != nil {
 			logrus.WithError(err).WithField("pool", pool.Name).Error("Failed to update status of IPPool")
 			errs = append(errs, err)
 		}
@@ -300,7 +331,7 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) ([]*v3.IPPoo
 			Reason:  v3.IPPoolReasonOK,
 			Message: "IPPool is available for IP allocation.",
 		}
-		if err := updateCondition(ctx, c.cli, pool, cond); err != nil {
+		if err := updateCondition(ctx, c.pools, pool, cond); err != nil {
 			logrus.WithError(err).WithField("pool", pool.Name).Error("Failed to update status of IPPool")
 			errs = append(errs, err)
 		}
@@ -419,7 +450,7 @@ func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logru
 func (c *IPPoolController) updateFinalizers(ctx context.Context, p *v3.IPPool, finalizers []string) error {
 	updated := p.DeepCopy()
 	updated.Finalizers = finalizers
-	_, err := c.cli.ProjectcalicoV3().IPPools().Update(ctx, updated, metav1.UpdateOptions{})
+	_, err := c.pools.Update(ctx, updated)
 	return err
 }
 
@@ -463,13 +494,13 @@ func hasCondition(p *v3.IPPool, conditionType string, status metav1.ConditionSta
 
 // updateCondition updates the given condition on the IP pool if it has changed, and updates the status of the pool if needed.
 // It mutates p, so p must be a copy the caller owns rather than an object from the informer cache.
-func updateCondition(ctx context.Context, cli clientset.Interface, p *v3.IPPool, condition metav1.Condition) error {
+func updateCondition(ctx context.Context, pools poolClient, p *v3.IPPool, condition metav1.Condition) error {
 	if !setConditionOnPool(p, condition) {
 		return nil
 	}
 
 	logrus.WithField("pool", p.Name).Infof("Updating condition %s to %s", condition.Type, condition.Status)
-	updated, err := cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, p, metav1.UpdateOptions{})
+	updated, err := pools.UpdateStatus(ctx, p)
 	if err != nil {
 		return fmt.Errorf("update status of IPPool %s: %w", p.Name, err)
 	}
