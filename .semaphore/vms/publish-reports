@@ -42,14 +42,15 @@ if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
   if [ -f /tmp/junit.xml ]; then
     ( cd /tmp && artifact push job junit.xml --destination test-results/junit.xml ) || true
   fi
-  # A VM that never configured writes no test log, so its configure log, with
-  # the serial console it captures, is the only account of why.
+  # For a VM that never configured, its configure log, with the serial console
+  # it captures, is the only account of why. Every failed batch has a -FAILED
+  # test log, even one whose VM never ran a test, so that is what picks them out.
   for conf in configure-vm-*.log; do
     [ -e "$conf" ] || continue
     batch="${conf#configure-vm-}"
     batch="${batch%.log}"
-    if [ ! -e "test-${batch}.log" ] && [ ! -e "test-${batch}-FAILED.log" ]; then
-      artifact push job "$conf" --destination "failed-vm-configure/${conf}" || true
+    if [ -e "test-${batch}-FAILED.log" ]; then
+      artifact push job "$conf" --destination "failed-batches/${conf}" || true
     fi
   done
   exit 0
