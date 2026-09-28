@@ -39,13 +39,15 @@ function skip(msg) {
   setOutputs({ proceed: false });
 }
 
-// Returns the PRs whose merge commit is MERGE_SHA (empty on miss or API error).
+// Returns the PRs whose merge commit is MERGE_SHA, or null if the lookup itself
+// failed. null is not the same as an empty list: a failed call must not be read
+// as "no PR" and silently skip a real merged PR.
 function findPrs() {
   try {
     const prs = JSON.parse(gh(['api', `repos/${SOURCE_REPO}/commits/${MERGE_SHA}/pulls`]));
     return prs.filter((p) => p.merge_commit_sha === MERGE_SHA);
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -67,11 +69,18 @@ function main() {
     return;
   }
 
+  // The commit->PR association can lag a few seconds behind a merge, and the API
+  // can blip; try again once on either an empty result or a failed lookup.
   let prs = findPrs();
-  if (!prs.length) {
-    // The commit->PR association can lag a few seconds behind a merge; retry once.
+  if (prs === null || !prs.length) {
     sleepSync(RETRY_MS);
     prs = findPrs();
+  }
+  if (prs === null) {
+    // The lookup failed (not "no PR"): fail loudly so a transient API error
+    // cannot silently drop a real merged PR.
+    console.log(`::error::could not look up the PR for commit ${MERGE_SHA}; failing rather than skipping`);
+    process.exit(1);
   }
   if (!prs.length) {
     // A direct push (no PR) lands here too.
@@ -94,6 +103,14 @@ function main() {
   const login = (j.user && j.user.login) || '';
   if (!merged || base !== BASE_REF || !sha) {
     skip(`PR #${pr} is not a merged ${BASE_REF} PR`);
+    return;
+  }
+
+  // Opt-out: the skip-bot-cherry-pick label means "do not pick this PR". Gate
+  // here, before any clone or cherry-pick, and stay silent (no DM).
+  const labels = (j.labels || []).map((l) => l && l.name);
+  if (labels.includes('skip-bot-cherry-pick')) {
+    skip(`PR #${pr} has the skip-bot-cherry-pick label`);
     return;
   }
 
