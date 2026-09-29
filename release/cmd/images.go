@@ -95,7 +95,7 @@ var (
 			if err != nil {
 				return err
 			}
-			published, w, err := publishRecord(cfg.OutputDir, imagesPublishStep, ver.FormattedString(), !c.Bool(localFlag.Name))
+			published, w, err := publishRecord(cfg.OutputDir, images.PublishStep, ver.FormattedString(), !c.Bool(localFlag.Name))
 			if err != nil {
 				return err
 			}
@@ -131,8 +131,6 @@ var (
 		}
 	}
 )
-
-const imagesPublishStep = "images-publish"
 
 func imagesPublishCommand(cfg *Config) *cli.Command {
 	return &cli.Command{
@@ -190,5 +188,6 @@ func scanRequest(c *cli.Command, cfg *Config, dirs []string, stream, productCode
 		Stream:      stream,
 		Release:     !c.Bool(hashreleaseFlag.Name),
 		OutputDir:   cfg.TmpDir,
+		DryRun:      c.Bool(localFlag.Name),
 	}, nil
 }
