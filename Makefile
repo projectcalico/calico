@@ -299,6 +299,11 @@ RAPIDCLIENT_TAG := latest
 RAPIDCLIENT_IMAGE := quay.io/tigeradev/rapidclient
 EXTERNAL_NODE_NAME ?= kind-external-node
 
+# Set where the e2e binaries arrive already built: rebuilding them downloads
+# most of Kubernetes, which a host without a module proxy pays for every time.
+E2E_PREBUILT ?=
+E2E_BUILD = $(if $(E2E_PREBUILT),@echo "Using the prebuilt e2e binaries",$(MAKE) -C e2e build)
+
 ## Build all test images, create a kind cluster, and deploy Calico on it.
 .PHONY: kind-up
 kind-up:
@@ -318,7 +323,7 @@ kind-migration-test:
 ## installs via the operator.
 .PHONY: kind-manifest-install-test
 kind-manifest-install-test:
-	$(MAKE) -C e2e build
+	$(E2E_BUILD)
 	$(MAKE) -j$(NUM_BUILD_JOBS) kind-build-images
 	$(MAKE) kind-cluster-create KIND_CONFIG=$(KIND_DIR)/kind-manifests.config CALICO_API_GROUP=projectcalico.org/v3
 	REPO_ROOT=$(REPO_ROOT) KIND=$(KIND) KIND_NAME=kind-manifests \
@@ -332,7 +337,7 @@ kind-manifest-install-test:
 
 ## Create a kind cluster and run the conformance e2e tests.
 e2e-test:
-	$(MAKE) -C e2e build
+	$(E2E_BUILD)
 	$(MAKE) kind-up
 	$(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
 
@@ -342,7 +347,7 @@ e2e-test:
 ## ipvs kube-proxy) while keeping the cluster named "kind" so values.yaml's
 ## control-plane nodeSelector still matches.
 e2e-test-bpf:
-	$(MAKE) -C e2e build
+	$(E2E_BUILD)
 	$(MAKE) kind-up KIND_NAME=kind KIND_CONFIG=$(KIND_DIR)/kind-bpf.config EXTRA_VALUES_FILES=$(KIND_INFRA_DIR)/values-bpf.yaml
 	$(MAKE) kind-load-rapidclient KIND_NAME=kind
 	$(KIND_DIR)/external-node.sh up
@@ -379,7 +384,7 @@ external-node-load-rapidclient:
 
 ## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
 e2e-test-clusternetworkpolicy:
-	$(MAKE) -C e2e build
+	$(E2E_BUILD)
 	$(MAKE) kind-up
 	$(MAKE) e2e-run-cnp KUBECONFIG=$(KIND_KUBECONFIG)
 

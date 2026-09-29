@@ -12,7 +12,6 @@ steps:
     requests: {cpu: 1750m, memory: 1Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       cd third_party/envoy-proxy
       make ci
 
@@ -24,6 +23,5 @@ steps:
         env: [{name: ARCH, value: arm64}]
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       cd third_party/envoy-proxy
       make image ARCH=$ARCH

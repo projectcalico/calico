@@ -1,4 +1,6 @@
-# Pre-flight checks, and the images later lanes consume. Each step gates itself.
+# Pre-flight checks, and the artifacts later lanes consume. Each step gates
+# itself, and a lane that runs brings back any producer it depends on, so a
+# producer gates only on what makes it interesting in its own right.
 version: condensed-module
 
 defaults:
@@ -36,7 +38,6 @@ steps:
         - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       make check-ginkgo-v2
       make check-go-mod
       make verify-go-mods
@@ -96,7 +97,6 @@ steps:
         - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       make protobuf fix-changed
       make check-dirty
 
@@ -125,7 +125,6 @@ steps:
         - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       make -C lib gen-files
       make -C api gen-files
       make -C libcalico-go gen-files
@@ -153,7 +152,6 @@ steps:
         - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       make test-charts
 
   # Regenerating the patches must be a no-op. metadata.mk is in the trigger
@@ -177,7 +175,6 @@ steps:
         - (^|/)LICENSE$
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       make check-thirdparty-dep-patches
       make check-dirty
 
@@ -190,7 +187,6 @@ steps:
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       make -C cmd/calico image
       # Shipped for the Felix FVs, which would otherwise build them per lane.
       make -C cmd/calico build-cgo build-race
@@ -279,7 +275,6 @@ steps:
         - '^\.argoci/modules/10-prerequisites\.yaml$'
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
       # does not go back to the registry for it.
       .argoci/scripts/load-nft-rpms.sh amd64
@@ -299,7 +294,6 @@ steps:
         - '^\.argoci/modules/10-prerequisites\.yaml$'
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       make -C whisker image
       docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
       zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/whisker-image.tar
@@ -318,7 +312,6 @@ steps:
         - '^\.argoci/modules/10-prerequisites\.yaml$'
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       make kind-operator-image
       docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
       zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/operator-image.tar
@@ -336,7 +329,6 @@ steps:
         - '^\.argoci/modules/10-prerequisites\.yaml$'
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       make -C third_party/envoy-gateway image
       make -C third_party/envoy-proxy image
       make -C third_party/envoy-ratelimit image
@@ -349,6 +341,26 @@ steps:
         -o /tmp/third-party-images.tar
       zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/third-party-images.tar
       artifact push workflow /tmp/third-party-images.tar.zst
+
+  # Built here for the VM lanes, which have no module proxy: the binaries import
+  # most of Kubernetes, and a VM downloads all of it from the public proxy. libbpf
+  # comes from the calico image's build rather than a clone from GitHub.
+  - name: build-e2e-binaries
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 5500m, memory: 6Gi}
+    depends: [build-calico-image]
+    changes:
+      dependsOn: [e2e]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      ( cd /tmp && artifact pull workflow libbpf-amd64.tar.zst )
+      tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
+      make -C e2e build
+      make bin/ginkgo
+      tar --use-compress-program="zstd -3" -cf /tmp/e2e-binaries.tar.zst e2e/bin bin/ginkgo
+      artifact push workflow /tmp/e2e-binaries.tar.zst
 
   # The nightly repeats the CI module list; this catches the two drifting.
   - name: check-cron-coverage

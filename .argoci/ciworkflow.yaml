@@ -47,9 +47,14 @@ promotions:
     description: Publish an official release from this build
 
 # The Makefiles expect the tree at its GOPATH location inside the build image.
+#
+# A VM cannot reach the in-cluster module proxy that a pod's GOPROXY names, so it
+# uses the public one — falling back to the source repositories on any error,
+# since go does not retry a download that breaks mid-stream.
 globalPrologue: |
   mkdir -p /go/src/github.com/projectcalico
   ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
+  export GOPROXY="${GOPROXY:-https://proxy.golang.org|direct}"
 
 defaults:
   # Only the host tooling steps shell out to, since every step pulls it. A step

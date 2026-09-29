@@ -16,7 +16,6 @@ steps:
         value: "2"
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       cd whisker
       make ci
 
@@ -33,6 +32,5 @@ steps:
             value: arm64
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       cd whisker
       make image ARCH=$ARCH

@@ -12,7 +12,6 @@ steps:
     requests: {cpu: 2750m, memory: 2.25Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       cd api
       make ci
     epilogue: |
@@ -24,7 +23,6 @@ steps:
     requests: {cpu: 3000m, memory: 2.25Gi}
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       cd test
       make ci
     epilogue: |

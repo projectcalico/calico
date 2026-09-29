@@ -30,7 +30,6 @@ steps:
       - docker
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       cd release
       make build
       # A promotion is a separate run with its own artifact namespace, so the

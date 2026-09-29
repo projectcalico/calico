@@ -20,6 +20,7 @@ steps:
       - build-calico-image
       - build-node-image
       - build-third-party-images
+      - build-e2e-binaries
       - check-go
     commands: |
       sudo apt-get update -y && sudo apt-get install -y make
@@ -27,8 +28,9 @@ steps:
       # script and the tests' connection tester call it by name.
       export PATH="$(pwd)/hack/test/kind:${PATH}"
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       .argoci/scripts/load-cached-images calico node
+      .argoci/scripts/load-e2e-binaries
+      export E2E_PREBUILT=true
       make kind-manifest-install-test
     epilogue: |
       copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/report" report || true

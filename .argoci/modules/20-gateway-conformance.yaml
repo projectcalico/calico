@@ -18,7 +18,6 @@ steps:
       - build-third-party-images
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       # Marker files come with them, so make treats the images as already built.
       .argoci/scripts/load-cached-images calico node whisker
       make e2e-test-gateway-conformance

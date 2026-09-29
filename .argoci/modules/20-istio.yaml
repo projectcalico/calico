@@ -12,7 +12,6 @@ steps:
     depends: [build-nft-rpms]
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       # Resolves the install-cni Dockerfile's nft-rpms base locally.
       .argoci/scripts/load-nft-rpms.sh amd64
       cd istio
@@ -29,6 +28,5 @@ steps:
             value: arm64
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       cd istio
       make build ARCH=$ARCH

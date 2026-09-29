@@ -13,7 +13,6 @@ steps:
       - docker
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       cd networking-calico
       # Separate invocations: named as two targets, a parallel make would run
       # them at once and have both tox runs share one .tox/ tree.

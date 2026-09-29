@@ -335,6 +335,11 @@ endif
 ifneq ($(GOMAXPROCS),)
 EXTRA_DOCKER_ARGS += -e GOMAXPROCS=$(GOMAXPROCS)
 endif
+# By name, so docker reads the value from the environment: a proxy list can hold
+# a `|`, which spliced into the recipe would reach the shell as a pipe.
+ifneq ($(GOPROXY),)
+EXTRA_DOCKER_ARGS += -e GOPROXY
+endif
 ifneq ($(DOCKER_MEMORY),)
 EXTRA_DOCKER_ARGS += --memory=$(DOCKER_MEMORY) --memory-swap=$(if $(DOCKER_MEMORY_SWAP),$(DOCKER_MEMORY_SWAP),$(DOCKER_MEMORY))
 endif

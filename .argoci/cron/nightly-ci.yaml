@@ -12,6 +12,7 @@ timeout: 6h
 globalPrologue: |
   mkdir -p /go/src/github.com/projectcalico
   ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
+  export GOPROXY="${GOPROXY:-https://proxy.golang.org|direct}"
 
 defaults:
   image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2

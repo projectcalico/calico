@@ -1,0 +1,10 @@
+#!/bin/bash
+# Unpacks the e2e binaries built earlier in this workflow into the checkout. The
+# caller sets E2E_PREBUILT so the kind targets use them rather than rebuilding.
+
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+( cd /tmp && artifact pull workflow e2e-binaries.tar.zst )
+tar --use-compress-program="zstd -d" -xf /tmp/e2e-binaries.tar.zst
+rm -f /tmp/e2e-binaries.tar.zst

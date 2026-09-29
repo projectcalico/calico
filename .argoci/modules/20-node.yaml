@@ -21,7 +21,6 @@ steps:
       - docker
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       cd node
       make ut
     epilogue: |
@@ -44,7 +43,6 @@ steps:
         env: [{name: ARCH, value: s390x}]
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
       # does not go back to the registry for it.
       .argoci/scripts/load-nft-rpms.sh "${ARCH}"
@@ -59,7 +57,6 @@ steps:
       - docker
     commands: |
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
       cd node
       make build-windows-archive
       make image-windows
