@@ -22,6 +22,7 @@ import (
 
 	"github.com/gruntwork-io/terratest/modules/helm"
 	. "github.com/onsi/gomega"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -119,7 +120,38 @@ func TestCalicoWebhooksInvokesTheNestedWebhookCommand(t *testing.T) {
 	}))
 }
 
+// The policies over built-in Kubernetes resources apply whichever Calico API the manifest serves.
+func TestCalicoRendersTheCNIAnnotationPolicy(t *testing.T) {
+	const name = "protect-cni-annotations.projectcalico.org"
+
+	for _, useV3CRDs := range []string{"true", "false"} {
+		t.Run("useV3CRDs="+useV3CRDs, func(t *testing.T) {
+			values := map[string]string{
+				"datastore": "kubernetes",
+				"network":   "calico",
+				"useV3CRDs": useV3CRDs,
+			}
+
+			var policy admissionregistrationv1.ValidatingAdmissionPolicy
+			renderCalicoResourceWith(t, values, "templates/admission-policies.yaml", "ValidatingAdmissionPolicy", name, &policy)
+
+			var binding admissionregistrationv1.ValidatingAdmissionPolicyBinding
+			renderCalicoResourceWith(t, values, "templates/admission-policies.yaml", "ValidatingAdmissionPolicyBinding", name, &binding)
+			NewWithT(t).Expect(binding.Spec.PolicyName).To(Equal(name))
+		})
+	}
+}
+
 func renderCalicoResource(t *testing.T, templatePath, kind, name string, into any) {
+	t.Helper()
+	renderCalicoResourceWith(t, map[string]string{
+		"datastore": "kubernetes",
+		"network":   "calico",
+		"useV3CRDs": "true",
+	}, templatePath, kind, name, into)
+}
+
+func renderCalicoResourceWith(t *testing.T, values map[string]string, templatePath, kind, name string, into any) {
 	t.Helper()
 	g := NewWithT(t)
 
@@ -130,13 +162,7 @@ func renderCalicoResource(t *testing.T, templatePath, kind, name string, into an
 	chartPath, err := filepath.Abs("../calico")
 	g.Expect(err).ToNot(HaveOccurred())
 
-	options := &helm.Options{
-		SetValues: map[string]string{
-			"datastore": "kubernetes",
-			"network":   "calico",
-			"useV3CRDs": "true",
-		},
-	}
+	options := &helm.Options{SetValues: values}
 	output, err := helm.RenderTemplateE(t, options, chartPath, "calico", []string{templatePath})
 	g.Expect(err).ToNot(HaveOccurred())
 

@@ -958,6 +958,10 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
+	if err = r.updateK8sValidatingAdmissionPolicies(ctx, defaulted, reqLogger); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// Now that migrated config is stored in the installation resource, we no longer need
 	// to check if a migration is needed for the lifetime of the operator.
 	r.migrationChecked = true
@@ -1837,7 +1841,34 @@ func (r *ReconcileInstallation) updateValidatingAdmissionPolicies(ctx context.Co
 	}
 
 	desired := admission.GetValidatingAdmissionPolicies(install.Spec.Variant, r.opts.UseV3CRDs, vapAPIVersion)
-	existingVAPs, existingVAPBs, err := admission.ListManagedValidating(ctx, r.client, vapAPIVersion)
+	existingVAPs, existingVAPBs, err := admission.ListManagedValidating(ctx, r.client, vapAPIVersion, admission.ManagedVAPLabelValue)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed ValidatingAdmissionPolicy resources", err, log)
+		return err
+	}
+
+	return r.syncManagedAdmissionPolicies(ctx, install, log, desired, existingVAPs, existingVAPBs, admission.IsValidatingPolicyKind, admission.IsValidatingBindingKind, "Error syncing ValidatingAdmissionPolicy resources")
+}
+
+// updateK8sValidatingAdmissionPolicies reconciles the ValidatingAdmissionPolicies over built-in
+// Kubernetes resources. Kubernetes serves those resources whatever Calico API is installed, so unlike
+// updateValidatingAdmissionPolicies this does not depend on v3 CRDs or on the operator managing CRDs.
+// The policies protect the Calico CNI plugin's pod annotations, so none are installed when another
+// CNI plugin is in use.
+func (r *ReconcileInstallation) updateK8sValidatingAdmissionPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger) error {
+	vapAPIVersion := r.opts.APIDiscovery.ServedVersion(admission.APIGroup, admission.KindValidatingPolicy)
+	if vapAPIVersion == "" {
+		log.Info("Kubernetes cluster does not serve ValidatingAdmissionPolicy, skipping")
+		return nil
+	}
+
+	var desired []client.Object
+	cni := install.Spec.CNI
+	if cni != nil && cni.Type == operatorv1.PluginCalico {
+		desired = admission.GetK8sValidatingAdmissionPolicies(install.Spec.Variant, vapAPIVersion)
+	}
+
+	existingVAPs, existingVAPBs, err := admission.ListManagedValidating(ctx, r.client, vapAPIVersion, admission.ManagedK8sVAPLabelValue)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed ValidatingAdmissionPolicy resources", err, log)
 		return err
