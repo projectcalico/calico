@@ -65,9 +65,36 @@ enum cali_ct_type {
 #define CALI_CT_LEG_APPROVED	(1U << 4)
 #define CALI_CT_LEG_OPENER	(1U << 5)
 #define CALI_CT_LEG_WORKLOAD	(1U << 6) /* This leg was created from workload */
+#define CALI_CT_LEG_TUNNEL	(1U << 7) /* ifindex is a validated egress for this
+					   * flow's encap-flagged destinations: a tunnel
+					   * device, or whatever the FIB resolved for one
+					   * (under wireguard, remote routes are
+					   * encap-flagged even where a keyless peer's
+					   * egress is a plain NIC - CORE-13520). Written
+					   * only by whoever has authority over the
+					   * device: the program attached to it for an
+					   * ingress record, or the validator for a leg
+					   * it pinned. Invariant: never observable next
+					   * to an ifindex it does not describe - cleared
+					   * before the ifindex store, re-set only after.
+					   */
+#define CALI_CT_LEG_PINNED	(1U << 8) /* ifindex is a resolved egress for the
+					   * opposite direction, not this direction's
+					   * ingress record. Bookkeeping for userspace
+					   * cleanup; the dataplane still reconciles the
+					   * leg against routing like any other mismatch.
+					   */
+#define CALI_CT_LEG_CHECKED	(1U << 9) /* ifindex has been validated against the
+					   * route to this leg's source, no need to
+					   * resolve it again
+					   */
 
 /* This leg has seen the connection close, one way or the other. */
 #define CALI_CT_LEG_CLOSED	(CALI_CT_LEG_FIN_SEEN | CALI_CT_LEG_RST_SEEN)
+
+/* What the leg claims about the device in its ifindex. */
+#define CALI_CT_LEG_CLAIMS	(CALI_CT_LEG_TUNNEL | CALI_CT_LEG_PINNED | \
+				 CALI_CT_LEG_CHECKED)
 
 struct calico_ct_leg {
 	__u64 bytes;
@@ -79,7 +106,8 @@ struct calico_ct_leg {
 	__u32 ifindex; /* For a CT leg where packets ingress through an interface towards
 			* the host, this is the ingress interface index.  For a CT leg
 			* where packets originate _from_ the host, it's CT_INVALID_IFINDEX
-			* (0).
+			* (0).  While CALI_CT_LEG_PINNED is set it is instead a resolved
+			* egress for the opposite direction.
 			*/
 };
 
@@ -99,6 +127,39 @@ static CALI_BPF_INLINE void ct_leg_clear_flags(struct calico_ct_leg *leg, __u32 
 }
 
 #define CT_INVALID_IFINDEX	0
+
+/* ct_leg_repoint points a leg at ifindex and leaves it claiming exactly
+ * claims, which must describe that device.
+ *
+ * Claims that the new device does not carry are cleared before the ifindex
+ * store and the new ones set only after, so a concurrent reader never sees a
+ * claim beside an ifindex it does not describe.
+ *
+ * Reaffirming the device the leg already names only adds claims: clearing
+ * there would void the other direction's kind stamp on every packet.
+ *
+ * Each write is guarded by a read, so a leg that already holds the wanted
+ * state costs no atomic.
+ */
+static CALI_BPF_INLINE void ct_leg_repoint(struct calico_ct_leg *leg, __u32 ifindex,
+					   __u32 claims)
+{
+	__u32 bits = leg->bits_word;
+
+	if (leg->ifindex != ifindex) {
+		__u32 stale = bits & CALI_CT_LEG_CLAIMS & ~claims;
+
+		if (stale) {
+			ct_leg_clear_flags(leg, stale);
+			bits &= ~stale;
+		}
+		leg->ifindex = ifindex;
+	}
+
+	if (claims & ~bits) {
+		ct_leg_set_flags(leg, claims & ~bits);
+	}
+}
 struct calico_ct_value {
 	__u64 rst_seen;
 	__u64 last_seen;	// 8
@@ -290,9 +351,11 @@ enum calico_ct_result_type {
 #define ct_result_is_confirmed(rc)	((rc) & CT_RES_CONFIRMED)
 #define ct_result_is_to_workload(rc)	((rc) & CT_RES_TO_WORKLOAD)
 
+#define CT_FWD_FLAG_TUNNEL	0x1 /* ifindex_fwd is a tunnel device */
+
 struct calico_ct_result {
 	__s16 rc;
-	__u16 pad;
+	__u16 fwd_flags; /* CT_FWD_FLAG_* properties of ifindex_fwd */
 	__u32 flags;
 	ipv46_addr_t nat_ip;
 	ipv46_addr_t nat_sip;
@@ -304,6 +367,11 @@ struct calico_ct_result {
 				* through an interface towards the host, this is the
 				* ingress interface index.  For a CT state created by a
 				* packet _from_ the host, it's CT_INVALID_IFINDEX (0).
+				*
+				* Meaningful only for WEP- or host-opened flows - what
+				* DNS snooping keys on. A HEP-opened flow's opener leg
+				* can be pinned (an egress record), but no consumer
+				* reads those flows.
 				*/
 };
 
