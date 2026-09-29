@@ -35,21 +35,20 @@ prompt `MsgPong` replies, and decoding `MsgKVs` back into
 deadlines protect it from a hung server; the server's pings are
 what keep the read deadline fed when the datastore is quiet.
 
-**Reconnection is the consumer's choice.** A dropped connection
-means a full resync — new handshake, fresh snapshot — because the
-server keeps no per-client state to resume from. The client
-reconnects automatically only if the callbacks implement
+**Reconnection requires restart-aware callbacks.** A dropped
+connection means a full resync — new handshake, fresh snapshot —
+because the server keeps no per-client state to resume from. The
+client reconnects only if the callbacks implement
 `RestartAwareCallbacks` (`OnTyphaConnectionRestarted`), i.e. can
-reconcile a fresh snapshot against what they already applied.
-`dedupebuffer.DedupeBuffer` (see
+reconcile a fresh snapshot against what they already applied;
+otherwise it finishes. `dedupebuffer.DedupeBuffer` (see
 [`design/syncer/DESIGN.md`](../../design/syncer/DESIGN.md))
-implements this — it diffs the new snapshot against the keys it
-had, synthesizing deletions for anything that vanished — which is
-how Felix and the other consumers ride out Typha restarts without
-restarting themselves. Otherwise the client just finishes and the
-consumer restarts the process
-(`MustStartSyncerClientIfTyphaConfigured` does `log.Fatal`; a
-component restart is an acceptable, if heavyweight, resync).
+implements this by diffing the new snapshot against the keys it
+had and synthesizing deletions for anything that vanished. Felix
+and `MustStartSyncerClientIfTyphaConfigured` both put one in
+front of the consumer, so every current consumer rides out Typha
+restarts. If reconnection fails outright, the helper `log.Fatal`s
+and the component restart does the resync.
 
 ## Discovery (`pkg/discovery`)
 
@@ -83,14 +82,13 @@ the client gives up.
 
 ## TLS
 
-When configured (the operator install enforces TLS and mints the
-certificates automatically; manifest installs don't, but we
-recommend setting it up manually), the connection is mutual TLS:
-the server requires and verifies a client certificate, and both
-sides check the peer's identity — Common Name and/or URI SAN
-(SPIFFE-style) — against configuration, either matching if both
-are set. The
-client deliberately sets `InsecureSkipVerify` and does chain
+The operator install enforces TLS and mints the certificates;
+manifest installs don't, and we recommend configuring it
+manually. With TLS, the connection is mutual: the server requires
+and verifies a client certificate, and each side checks the
+peer's identity — Common Name and/or URI SAN (SPIFFE-style) —
+against configuration; if both are configured, either may match.
+The client deliberately sets `InsecureSkipVerify` and does chain
 verification plus the identity check itself
 (`tlsutils.CertificateVerifier`): Go's default verification binds
 the certificate to the dialled hostname/IP, but Typha addresses
@@ -99,11 +97,11 @@ are ephemeral pod IPs from EndpointSlices; identity here means
 
 ## Review notes
 
-- The client is a thin protocol adaptor: caching and filtering
-  live in the server (shared by all clients) or in the consumer's
-  callbacks. (The reconnection caching may move inside the client
-  one day; today it's outside, in `dedupebuffer`.) Its output must
-  be a valid Syncer stream.
+- Today the client is a thin protocol adaptor: caching and
+  filtering live in the server (shared by all clients) or in the
+  consumer's callbacks (`dedupebuffer` for reconnection). The
+  reconnection caching may move into the client in future. Either
+  way, its output must be a valid Syncer stream.
 - Anything that changes reconnection behaviour must keep the
   restart-aware contract: `OnTyphaConnectionRestarted` fires
   before any update from the new connection, and a consumer that

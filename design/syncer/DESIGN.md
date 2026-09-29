@@ -111,7 +111,7 @@ Reasoning about each event on its own, against prior knowledge of
 *that one key*, handles all of these; assuming values only move
 forward does not.
 
-Two more properties worth knowing:
+Two further properties:
 
 - **Recursive deletes are expanded.** Deleting a subtree produces
   one deletion update per leaf key (`OnUpdates` doc comment).

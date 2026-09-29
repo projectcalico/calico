@@ -14,19 +14,14 @@ Typha is a fan-out proxy for the
 [Syncer API](../design/syncer/DESIGN.md). It watches the
 datastore once — running one syncer per supported type — caches
 the resulting key/value state, and streams it to many clients
-(Felix, confd, `node` helpers) over TCP. Each client gets a
-stream equivalent to an in-process syncer's — Typha may reorder
-and coalesce, but the Syncer API is eventually consistent, so the
-callbacks are identical and client code doesn't know Typha is
-there.
+(Felix, confd, `node` helpers) over TCP. Typha may reorder and
+coalesce updates relative to an in-process syncer, but the result
+is still a valid, eventually consistent Syncer stream, so client
+code works unchanged.
 
-This document has two parts:
-
-1. **Architecture overview** — the shape of Typha as a whole.
-2. **Sub-design index** — per-topic design docs under
-   [`typha/design/`](./design/) with a path-to-doc mapping.
-   Invariants and review criteria live in the sub-designs, not
-   here.
+This index gives the architecture overview (§1) and maps paths
+to the per-topic sub-designs under [`typha/design/`](./design/)
+(§2). Invariants and review criteria live in the sub-designs.
 
 ## 1. Architecture overview
 
