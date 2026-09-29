@@ -164,7 +164,12 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         #                       the same reason as dest-wep.
         neutron_map = {}
         for port in endpoint_ports:
-            neutron_map["wep " + endpoint_name(port)] = port
+            # A port with no binding host has no source-side WEP slot: ``endpoint_name``
+            # would compose a name from an empty host.  Mirrors the ``if host`` guard at
+            # the ``sync_wep`` call sites, and keeps any such stale key out of the
+            # map, so that reconciliation deletes it rather than preserving it.
+            if port.get("binding:host_id"):
+                neutron_map["wep " + endpoint_name(port)] = port
             # binding:profile may carry migrating_to=None (or be missing entirely) after
             # a migration completes or is cancelled.  Only generate destination-side
             # entries when migrating_to is a truthy host string - calling endpoint_name
@@ -748,22 +753,27 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             return False
         migrating_to = db_port.get("binding:profile", {}).get("migrating_to")
 
-        # Source role: port is bound at this host.  Consider it bound if either
-        # ``vif_type != "unbound"``, or the port is undergoing live migration -- setting
-        # ``binding:profile.migrating_to`` triggers Neutron to rebind the port for the
-        # destination, and during that rebind ``vif_type`` flips transiently to
-        # "unbound" while ``binding:host_id`` stays at the source.  The VM is still
-        # running at the source throughout this window, so the source WEP must stay in
-        # place.  Without the ``or migrating_to`` clause we'd delete the source WEP
-        # mid-migration and drop traffic to the VM until Nova's actual cutover
-        # completes.
-        if db_port["binding:host_id"] == host and (
-            db_port.get("binding:vif_type") != "unbound" or migrating_to
-        ):
+        # Source role: the port is bound at this host.  Deliberately keyed on
+        # ``binding:host_id`` alone, and not on ``binding:vif_type``: Neutron rebinds
+        # the port whenever a binding attribute changes, and during that rebind it
+        # commits ``vif_type = "unbound"`` in one transaction and the new binding in a
+        # second one (see ``_process_port_binding`` in ML2's plugin.py).
+        # ``update_port_postcommit`` fires in between, so a ``vif_type``-based test
+        # sees a port that looks unbound while its VM is running perfectly well, and
+        # deletes the WEP underneath it.  That happens at both ends of a live
+        # migration: when ``migrating_to`` is set, and again at Nova's cutover, which
+        # clears ``migrating_to`` and moves ``binding:host_id`` in a single request.
+        # A genuine unbind clears ``binding:host_id``, which this test does catch --
+        # and ``host`` has to be truthy for the comparison to mean anything, or a
+        # hostless port would match itself and be given a WEP named after an empty
+        # host.  That is what the old ``vif_type`` test covered here incidentally.
+        if host and db_port["binding:host_id"] == host:
             return True
-        # Dest role: port is migrating to this host.
+
+        # Dest role: the port is migrating to this host.
         if migrating_to == host:
             return True
+
         return False
 
     def add_port_interface_name(self, port, port_extra):

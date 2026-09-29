@@ -1148,12 +1148,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if not _port_is_endpoint_port(port):
             return
 
-        # Ignore if the port binding VIF type is 'unbound'; then this port doesn't need
-        # to be networked yet.  ``sync_wep`` would correctly short-circuit here too (the
-        # re-read would say "absent" and the slot would not exist), but skipping saves
-        # the DB round-trip.
-        if port["binding:vif_type"] == "unbound":
-            LOG.info("Creating unbound port: no work required.")
+        # Ignore if the port has no binding host: there is no WEP slot to write, and
+        # ``endpoint_name`` would otherwise compose one from an empty host.  This
+        # mirrors the guard at every other ``sync_wep`` call site, and the predicate
+        # ``sync_wep`` itself applies, so that this path and a resync always reach the
+        # same answer.  In particular a port created with a host but not yet bound does
+        # get a WEP here: ML2 binds immediately after this postcommit, and a resync
+        # would write the WEP regardless.
+        if not port.get("binding:host_id"):
+            LOG.info("Creating port with no binding host: no work required.")
             return
 
         plugin_context = context._plugin_context
