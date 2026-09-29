@@ -139,6 +139,51 @@ Readers and writers alike have to reach it: a `NAT_FWD` hit gives
 `src_to_dst`/`dst_to_src` into the tracking entry's legs and uses
 `tracking_v` for the fields hanging off the value itself.
 
+### The forwarding hint on a leg
+
+Each leg records the ifindex where that direction's packets ingress, and
+the *opposite* direction reads it as an egress hint
+(`result.ifindex_fwd`) so it can `bpf_redirect` without a FIB lookup.
+That equivalence holds only while a flow is symmetric.
+
+Two flags (`CALI_CT_LEG_*` in `conntrack_types.h`) make the hint
+self-describing rather than assumed:
+
+- **`TUNNEL`** — the recorded device is a validated egress for this
+  flow's encap-flagged destinations. A hint without it must not be used
+  for an encap destination: `bpf_redirect` writes no headers, so a
+  physical device ignores the tunnel key and puts the raw inner frame on
+  the wire. The consumer pairs `cali_rt_needs_tunnel_egress` (does this
+  destination need encap right now?) with this flag (can the recorded
+  device perform it?). Only whoever has authority over the device writes
+  it: the program attached to it for an ingress record, the validator
+  for a leg it pinned. An attached program reads the device's nature
+  from its own `IFACE_ENCAPS` global; the compiled object cannot say,
+  since wireguard and a plain L3-classified NIC share the `l3` object.
+- **`PINNED`** — the ifindex is a resolved egress for the opposite
+  direction, not this direction's ingress record.
+
+A hint is repaired at two points, both while the entry is held. From the
+reply side, once per leg generation (`CALI_CT_LEG_CHECKED`): where the
+destination needs encapsulation and the hint is not a tunnel, the egress
+is resolved by FIB and pinned. That is the asymmetrically-routed flow —
+natively-routed forward, tunneled reply — whose reply would otherwise
+leave a physical NIC raw; NAT'd flows validate against the post-NAT
+destination. From the forward side, in the loose-RPF arm: `hep_rpf_check`
+has just computed the device that reaches the packet's source, so it is
+recorded rather than discarded.
+
+Neither writer names a device on a `tun_ip` flow's leg: that hint is half
+of the `{tun_ip, ifindex}` ARP-map key of the return-encap fast path, so
+route inference must not write it. The loose arm still discards a record
+the packet contradicts.
+
+Stale state heals from packets: a route move re-pins via the loose arm,
+and a packet confirming the recorded ingress refreshes the leg's claims
+from the program's own provenance. A flow whose forward traffic has
+stopped never re-enters the reconcile, so only a userspace scanner can
+repair it.
+
 ### Cleanup: three layers
 
 #### 1. Userspace scanners
