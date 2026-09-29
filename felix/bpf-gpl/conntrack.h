@@ -689,14 +689,22 @@ static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_valu
 	}
 }
 
-/* Refresh the leg's claims from this program's own provenance. Called only
- * when the packet confirms the recorded ingress, so IFACE_ENCAPS is
- * authoritative for the recorded device - and the leg is proven an honest
- * ingress record, so a stale PINNED is dropped (nothing else can clear it
- * once the leg stops mismatching). A wrong kind claim voids whatever
- * validation stamped it: CHECKED is cleared so the reply side revalidates.
- * Reads first and writes only on change - the healthy-flow caller pays no
- * atomic.
+/* ct_leg_refresh_kind updates the CT_LEG flags when a packet arrives via
+ * the interface that was recorded in the leg.  The interface/flags may have
+ * been written by this program, or by the other leg's program after a FIB
+ * lookup.  If the flags were ours already, this is a no-op, otherwise we
+ * make sure the flags match our knowledge of the interface.
+ *
+ * After this call:
+ * - CALI_CT_LEG_TUNNEL is set equal to IFACE_ENCAPS.
+ * - CALI_CT_LEG_CHECKED is cleared if CALI_CT_LEG_TUNNEL had to be
+ *   changed.  The opposite leg will set it again after it has checked for an
+ *   asymmetric route.
+ * - CALI_CT_LEG_PINNED is cleared if set.  PINNED means "recorded from the
+ *   FIB lookup". We clear it to record that the information now comes from us.
+ *
+ * Implementation note: does a read first to avoid paying for an atomic write
+ * if the flags are already correct.
  */
 static CALI_BPF_INLINE void ct_leg_refresh_kind(struct cali_tc_ctx *ctx,
 					       struct calico_ct_leg *leg)
