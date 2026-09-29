@@ -2372,6 +2372,28 @@ class TestLiveMigration(TestPluginEtcdBase):
 
         self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_deletes)
 
+    def test_create_unbound_port_writes_nothing(self):
+        """A port that is unbound at creation gets no WEP.
+
+        The counterpart to the transient-``unbound`` tolerance above: ``sync_wep`` no
+        longer tells the two apart, so ``create_port_postcommit``'s own ``vif_type ==
+        "unbound"`` check is what keeps a not-yet-bound port from being networked.  ML2
+        binds after this postcommit, and the resulting ``update_port_postcommit`` is
+        what writes the WEP.
+        """
+        self._do_initial_resync()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        context = self._make_port_context()
+        context._port = copy.deepcopy(self.port)
+        context._port["binding:vif_type"] = "unbound"
+
+        self.driver.create_port_postcommit(context)
+
+        self.assertEtcdWrites({})
+        self.assertEtcdDeletes(set())
+
     def test_live_migration_succeeded(self):
         """After migration succeeds, source WEP deleted, dest WEP kept."""
         self._do_initial_resync()

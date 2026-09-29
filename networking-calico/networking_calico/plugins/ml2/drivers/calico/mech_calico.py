@@ -1148,10 +1148,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if not _port_is_endpoint_port(port):
             return
 
-        # Ignore if the port binding VIF type is 'unbound'; then this port doesn't need
-        # to be networked yet.  ``sync_wep`` would correctly short-circuit here too (the
-        # re-read would say "absent" and the slot would not exist), but skipping saves
-        # the DB round-trip.
+        # Ignore if the port binding VIF type is 'unbound': this port does not need to
+        # be networked yet.  Unlike the transient "unbound" that Neutron commits
+        # mid-rebind, a port unbound at creation really has no binding -- ML2 binds
+        # after this postcommit, and that bind fires ``update_port_postcommit``, which
+        # writes the WEP.  The check does real work rather than just saving a DB
+        # round-trip: ``sync_wep`` keys only on ``binding:host_id``, so it would write
+        # a WEP here, including one named after an empty host for a port created with
+        # no ``binding:host_id`` at all.
         if port["binding:vif_type"] == "unbound":
             LOG.info("Creating unbound port: no work required.")
             return
