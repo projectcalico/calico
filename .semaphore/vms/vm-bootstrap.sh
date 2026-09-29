@@ -31,6 +31,9 @@ retry() {
   return 1
 }
 
+# Nothing reads the translations, and on a crawling mirror they cost minutes.
+echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/99-no-translations
+
 retry apt-get update -y
 retry apt-get install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common
 

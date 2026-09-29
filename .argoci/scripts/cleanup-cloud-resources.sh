@@ -17,8 +17,8 @@ sweep_gce() {
     return 0
   fi
 
-  # stderr kept apart: gcloud warns there when no instance carries a label yet,
-  # and read as a listing that warning is a leak with no zone.
+  # gcloud warns on stderr when no instance carries the label yet, and that
+  # warning parses as a leak.
   local listing errors
   errors=$(mktemp)
   if ! listing=$(gcloud --quiet compute instances list \
