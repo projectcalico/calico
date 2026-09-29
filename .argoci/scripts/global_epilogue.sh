@@ -19,6 +19,29 @@ cd "${BZ_HOME}" 2>/dev/null || echo "[WARN] could not cd to BZ_HOME=${BZ_HOME}"
 # variable, falling back to CI_EXIT_CODE then 0.
 CI_EXIT_CODE=${CI_STEP_EXIT_CODE:-${CI_EXIT_CODE:-0}}
 
+# bz is Go, which restores SIGTERM's default even though this shell ignores it,
+# so the repeated SIGTERMs of a stop kill whatever bz is running. Its own session
+# keeps them off.
+destroy_cluster() {
+  echo "[INFO] destroying cluster ${CLUSTER_NAME}"
+  if command -v setsid >/dev/null 2>&1; then
+    setsid --wait bz destroy |& tee "${BZ_LOGS_DIR}/destroy.log" || true
+  else
+    bz destroy |& tee "${BZ_LOGS_DIR}/destroy.log" || true
+  fi
+  if [[ -f "${BZ_LOGS_DIR}/destroy.log" ]]; then
+    artifact push job "${BZ_LOGS_DIR}/destroy.log" -d logs/destroy.log -f || true
+  fi
+}
+
+# A stopped run has nothing worth diagnosing, and the destroy alone takes most of
+# the grace period, so it goes first and the slow extras are skipped.
+stopped=false
+if [[ "${CI_POD_STOPPED:-false}" == "true" ]]; then
+  stopped=true
+  destroy_cluster
+fi
+
 # The viewer lists artifacts under CI_ARTIFACT_STEP_STORAGE, which is where
 # `artifact push job` publishes.
 echo "[INFO] publishing artifacts to ${CI_ARTIFACT_STEP_STORAGE}"
@@ -53,7 +76,7 @@ publish_vpp_copy() {
 }
 
 # Capture diags on failure (or always for cert runs).
-if [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
+if [[ "${stopped}" == "false" ]] && [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
   echo "[INFO] capturing diags"
   bz diags |& tee "${BZ_LOGS_DIR}/diagnostic.log" || true
   artifact push job "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" -d diags.tgz -f || true
@@ -81,7 +104,7 @@ artifact push job "${BZ_LOGS_DIR}" -d logs -f || true
 publish_vpp_copy
 
 # Upload results to Lens (best-effort; token from banzai-secrets).
-if [[ -n "${GITHUB_ACCESS_TOKEN:-}" ]]; then
+if [[ "${stopped}" == "false" && -n "${GITHUB_ACCESS_TOKEN:-}" ]]; then
   curl --retry 3 -fsSL -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
     -H "Accept: application/vnd.github.v3.raw" \
     -o /tmp/run-lens.sh \
@@ -89,14 +112,9 @@ if [[ -n "${GITHUB_ACCESS_TOKEN:-}" ]]; then
     chmod +x /tmp/run-lens.sh && /tmp/run-lens.sh || true
 fi
 
-# Tear the cluster down.
-echo "[INFO] destroying cluster ${CLUSTER_NAME}"
-bz destroy |& tee "${BZ_LOGS_DIR}/destroy.log" || true
-
-# destroy.log only exists now, after the logs push above. Pushing it separately
-# rather than moving that push keeps logs for runs where destroy hangs.
-if [[ -f "${BZ_LOGS_DIR}/destroy.log" ]]; then
-  artifact push job "${BZ_LOGS_DIR}/destroy.log" -d logs/destroy.log -f || true
+# Last otherwise, so the logs above are pushed even when destroy hangs.
+if [[ "${stopped}" == "false" ]]; then
+  destroy_cluster
 fi
 publish_vpp_logs
 

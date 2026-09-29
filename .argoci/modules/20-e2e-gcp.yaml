@@ -14,6 +14,8 @@ steps:
   - name: e2e-gcp-kubeadm-local-binary
     depends: [check-go]
     requests: {cpu: 1250m, memory: 6Gi}
+    # `bz destroy` alone takes about four minutes, the whole of the default.
+    terminationGracePeriodSeconds: 600
     services:
       - docker
       - http-cache-proxy

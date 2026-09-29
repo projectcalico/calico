@@ -58,6 +58,78 @@ sweep_gce() {
   return "${rc}"
 }
 
+# bz labels nothing it creates, so a cluster is found by the name it recorded
+# before provisioning, which every one of its resources starts with.
+sweep_bz() {
+  local dir
+  dir=$(mktemp -d)
+  if ! ( cd "${dir}" && artifact pull workflow bz-clusters ) >/dev/null 2>&1; then
+    echo "[INFO] no bz clusters recorded"
+    rm -rf "${dir}"
+    return 0
+  fi
+
+  local rc=0 info CLUSTER_NAME GOOGLE_PROJECT
+  for info in "${dir}"/bz-clusters/*.info; do
+    [ -e "${info}" ] || continue
+    CLUSTER_NAME="" GOOGLE_PROJECT=""
+    # shellcheck disable=SC1090
+    . "${info}"
+    # Anything looser could match another run's cluster.
+    if ! [[ "${CLUSTER_NAME}" =~ ^bz-[a-z0-9]+-[a-z0-9]{5}$ ]] || [ -z "${GOOGLE_PROJECT}" ]; then
+      echo "[WARN] ignoring malformed record ${info##*/}"
+      rc=1
+      continue
+    fi
+    # Instances first: the instance group and the address are attached to them.
+    delete_by_location "compute instances" zone "${GOOGLE_PROJECT}" "name~^${CLUSTER_NAME}-" || rc=1
+    delete_by_location "compute instance-groups unmanaged" zone "${GOOGLE_PROJECT}" "name~^${CLUSTER_NAME}-" || rc=1
+    delete_by_location "compute addresses" region "${GOOGLE_PROJECT}" "name~^${CLUSTER_NAME}-" || rc=1
+    delete_global "compute firewall-rules" "${GOOGLE_PROJECT}" "name~^${CLUSTER_NAME}-" || rc=1
+  done
+  rm -rf "${dir}"
+  return "${rc}"
+}
+
+# gcloud takes many names per delete but only one zone or region.
+delete_by_location() {
+  local kind=$1 scope=$2 project=$3 filter=$4 listing name loc rc=0
+  # shellcheck disable=SC2086 # kind is several words
+  if ! listing=$(gcloud --quiet ${kind} list --project "${project}" --filter="${filter}" \
+      --format="csv[no-heading](name,${scope}.basename())" 2>/dev/null); then
+    echo "[WARN] could not list ${kind} matching ${filter}"
+    return 1
+  fi
+  [ -n "${listing}" ] || return 0
+  echo "[WARN] ${kind} outlived their cluster:"
+  echo "${listing}"
+
+  local -A by_loc=()
+  while IFS=, read -r name loc; do
+    [ -n "${name}" ] && [ -n "${loc}" ] || continue
+    by_loc["${loc}"]+=" ${name}"
+  done <<< "${listing}"
+  for loc in "${!by_loc[@]}"; do
+    # shellcheck disable=SC2086 # deliberate word splitting: many names, one call
+    gcloud --quiet ${kind} delete ${by_loc[$loc]} --project "${project}" --"${scope}"="${loc}" || rc=1
+  done
+  return "${rc}"
+}
+
+delete_global() {
+  local kind=$1 project=$2 filter=$3 names
+  # shellcheck disable=SC2086 # kind is several words
+  if ! names=$(gcloud --quiet ${kind} list --project "${project}" --filter="${filter}" \
+      --format='value(name)' 2>/dev/null); then
+    echo "[WARN] could not list ${kind} matching ${filter}"
+    return 1
+  fi
+  [ -n "${names}" ] || return 0
+  echo "[WARN] ${kind} outlived their cluster: $(echo ${names})"
+  # shellcheck disable=SC2086
+  gcloud --quiet ${kind} delete ${names} --project "${project}"
+}
+
 # One resource group per Windows lane, each named from the commit under test.
 sweep_azure() {
   if [ -z "${AZ_SP_ID:-}" ]; then
@@ -91,5 +163,6 @@ sweep_azure() {
 }
 
 sweep_gce || status=1
+sweep_bz || status=1
 sweep_azure || status=1
 exit "${status}"

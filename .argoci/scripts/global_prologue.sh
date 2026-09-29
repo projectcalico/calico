@@ -152,6 +152,15 @@ export CALICOCTL_INSTALL_TYPE=${CALICOCTL_INSTALL_TYPE:-"binary"}
 export CLUSTER_NAME=${CLUSTER_NAME:-bz-${PRODUCT}-${RANDOM_TOKEN1}}
 export DIAGS_ARCHIVE_FILENAME=${DIAGS_ARCHIVE_FILENAME:-${PROVISIONER}-${CLUSTER_NAME}-diags.tgz}
 
+# Recorded before anything exists, so the exit handler can still find a cluster
+# whose step never reached its teardown. bz labels nothing it creates, but every
+# name starts with CLUSTER_NAME — which only holds for the gcp-* provisioners.
+if [[ "${PROVISIONER}" == gcp-* && -n "${CI_ARTIFACT_STORAGE:-}" ]]; then
+  printf 'CLUSTER_NAME=%s\nGOOGLE_PROJECT=%s\n' "${CLUSTER_NAME}" "${GOOGLE_PROJECT}" > "/tmp/${CLUSTER_NAME}.info"
+  artifact push workflow "/tmp/${CLUSTER_NAME}.info" --destination "bz-clusters/${CLUSTER_NAME}.info" ||
+    echo "[WARN] could not record ${CLUSTER_NAME} for the exit-handler sweep"
+fi
+
 # bz working directories and artifact bucket.
 # 'bz init profile -n NAME' creates the profile at <cwd>/NAME, and bz provision/
 # install/destroy must run from that dir. Init from $HOME (in a subshell so the
