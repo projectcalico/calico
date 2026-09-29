@@ -62,10 +62,10 @@ sequenceDiagram
 
 There is no goodbye message: either side disconnects by closing
 the connection, and the client treats any disconnection the same
-way (reconnect and resync — see [`client.md`](./client.md)). One
-could be added — to carry the disconnection reason into the peer's
-logs, or a "try this server next" hint for load-aware rebalancing
-— it just hasn't been needed.
+way (reconnect and resync — see [`client.md`](./client.md)).
+Adding one would be reasonable — to carry the disconnection
+reason into the peer's logs, or a "try this server next" hint for
+load-aware rebalancing.
 
 The handshake also selects the stream contents: `MsgClientHello`
 names a `SyncerType` (`felix`, `bgp`, `tunnel-ip-allocation`,
@@ -92,23 +92,21 @@ update type, TTL). The rationale, from the package comment:
    all listening clients — not easy in raw gob, because a gob
    connection is stateful.
 
-Two subtleties of `SerializedUpdate`:
+One subtlety: Typha suppresses updates that don't change the
+value (`WouldBeNoOp`) — this is how kubelet's node-heartbeat
+churn dies at Typha rather than fanning out. v3 resources carry
+their resource version *inside* the object, which would defeat
+the value comparison, so `SerializeUpdate` moves it out into the
+`V3ResourceVersion` field before serializing.
 
-- **Dedupe vs v3 metadata.** Typha suppresses updates that don't
-  change the value (`WouldBeNoOp`) — this is how kubelet's
-  node-heartbeat churn dies at Typha rather than fanning out.
-  v3 resources carry their resource version *inside* the object,
-  which would defeat the value comparison, so `SerializeUpdate`
-  moves it out into the `V3ResourceVersion` field before
-  serializing.
-- **Historical note: gob.** Gob was chosen for ease of use early
-  on. In hindsight its habit of sending type information inline,
-  per connection, defeats optimisations we later wanted (splicing
-  pre-encoded streams — see below); protobuf wrappers or
-  NDJSON/CBOR would be cleaner, and would let the whole
-  serialized update be cached, not just the KV inside it. We keep
-  gob for compatibility; the decoder-restart mechanism is the
-  escape hatch to a future protocol.
+Gob itself was chosen for ease of use early on. In hindsight its
+habit of sending type information inline, per connection,
+defeats optimisations we later wanted (splicing pre-encoded
+streams — see below); protobuf wrappers or NDJSON/CBOR would be
+cleaner, and would let the whole serialized update be cached, not
+just the KV inside it. We keep gob for compatibility; the
+decoder-restart mechanism is the escape hatch to a future
+encoding.
 
 ## Feature negotiation and decoder restart
 
@@ -139,8 +137,7 @@ once after the handshake to switch to compressed gob, and once
 more at the end of the shared snapshot — the canned snapshot is a
 self-contained gob+snappy byte stream generated once and replayed
 verbatim to every concurrently-connecting client, so each
-client's decoder must be reset around it. In principle the same
-mechanism can upgrade to an entirely different encoding.
+client's decoder must be reset around it.
 
 Compression is snappy (negotiated via
 `SupportedCompressionAlgorithms`; in prototyping it cut bandwidth

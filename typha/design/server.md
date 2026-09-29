@@ -200,8 +200,8 @@ features (see [`protocol.md`](./protocol.md) for the wire-level
 sequencing):
 
 - **Legacy path:** the KV-sender iterates the crumb's B-tree and
-  gob-encodes every KV to that one client. Cost: ~seconds of CPU
-  per client at 500k KVs — fine for one client, ruinous for a
+  gob-encodes every KV to that one client. Cost: a few seconds of
+  CPU per client at 500k KVs — fine for one client, ruinous for a
   thundering herd (500 clients ≈ 25 CPU-minutes, i.e. tens of
   minutes of wall clock on typical Typha CPU allocations).
 - **Shared path** (`snap_precalc.go`): the first arriving client
