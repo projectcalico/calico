@@ -104,7 +104,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 	}
 
 #ifndef IPVER6
-        if (ctx->state->ip_proto != IPPROTO_ICMP_46 && ctx->state->flags & CALI_ST_FIRST_FRAG) {
+	if (ctx->state->flags & CALI_ST_FIRST_FRAG) {
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
@@ -129,7 +129,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		}
 
 		/* Revalidate the access to the packet */
-		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+		if (skb_refresh_validate_ptrs_l4(ctx)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short");
 			goto deny;
@@ -351,7 +351,7 @@ try_fib_external:
 	// Try a short-circuit FIB lookup.
 	if (fwd_fib(&ctx->state->fwd)) {
 		/* Revalidate the access to the packet */
-		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+		if (skb_refresh_validate_ptrs_l4(ctx)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short");
 			goto deny;
