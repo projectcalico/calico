@@ -23,6 +23,10 @@ CI_EXIT_CODE=${CI_STEP_EXIT_CODE:-${CI_EXIT_CODE:-0}}
 # so the repeated SIGTERMs of a stop kill whatever bz is running. Its own session
 # keeps them off.
 destroy_cluster() {
+  if ! command -v bz >/dev/null 2>&1; then
+    echo "[INFO] bz never installed, so there is no cluster to destroy"
+    return 0
+  fi
   echo "[INFO] destroying cluster ${CLUSTER_NAME}"
   if command -v setsid >/dev/null 2>&1; then
     setsid --wait bz destroy |& tee "${BZ_LOGS_DIR}/destroy.log" || true

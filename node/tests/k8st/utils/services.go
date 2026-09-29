@@ -77,6 +77,26 @@ func CreateNamespace(t testing.TB, name string) {
 	if err != nil {
 		t.Fatalf("creating namespace %s: %v", name, err)
 	}
+	WaitForDefaultServiceAccount(t, name)
+}
+
+// WaitForDefaultServiceAccount blocks until namespace has its default
+// ServiceAccount. A controller creates it a moment after the namespace, and until
+// then the API server refuses any Pod created there.
+func WaitForDefaultServiceAccount(t testing.TB, namespace string) {
+	t.Helper()
+	sas := K8sClient(t).CoreV1().ServiceAccounts(namespace)
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		_, err := sas.Get(context.Background(), "default", metav1.GetOptions{})
+		if err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("namespace %s never got its default ServiceAccount: %v", namespace, err)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
 }
 
 // Deploy creates a Deployment (with pod anti-affinity so replicas prefer
