@@ -260,27 +260,25 @@ jobs:
             resolution a reviewer should scrutinize closely (lower-confidence
             merges, behavioural changes, anything non-obvious).
 
-      # 2a. The agent resolves the file contents but leaves the cherry-pick in
-      #     progress; complete the commit here so the pick does not depend on the
-      #     agent running git. If markers remain or the continue fails, drop the
-      #     escalation marker so the run escalates rather than shipping a bad pick.
+      # 2a. The agent resolves the file contents but often leaves the
+      #     cherry-pick in progress; complete the commit here so the pick does
+      #     not depend on the agent running git. finalize stages only the pick's
+      #     own paths and escalates on leftover markers, changes outside the
+      #     pick, a resolution with no net change, or a failed continue.
       - name: Finalize the cherry-pick
+        id: finalize
         if: >
           steps.resolve.outputs.proceed == 'true' &&
           steps.pick.outputs.outcome == 'conflict' &&
           steps.claude.outcome == 'success'
+        env:
+          PR_NUMBER: ${{ steps.resolve.outputs.pr }}
+          MERGE_SHA: ${{ steps.resolve.outputs.sha }}
+          ESCALATION_NOTES: /tmp/resolution-report.md
         run: |
-          cd "$GITHUB_WORKSPACE"
-          [ -e .git/CHERRY_PICK_HEAD ] || exit 0
-          if git grep -qE '^(<<<<<<<|>>>>>>>)( |$)' -- . ; then
-            echo "::warning::conflict markers remain after the agent; escalating"
-            : > /tmp/pick-escalated; exit 0
-          fi
-          git add -A
-          if ! GIT_EDITOR=true git cherry-pick --continue; then
-            echo "::warning::could not complete the cherry-pick; escalating"
-            : > /tmp/pick-escalated
-          fi
+          # The agent escalated itself; keep its reason.
+          [ -f /tmp/pick-escalated ] && exit 0
+          bash "$RUNNER_TEMP/oss-pick.sh" finalize
 
       # 2b. Read Claude's outcome: the escalation marker, the severity verdict,
       #     and whether Claude finished at all. A deliberate escalation (marker)
@@ -296,6 +294,8 @@ jobs:
           TRUSTED: ${{ steps.resolve.outputs.trusted }}
           AUTHOR: ${{ steps.resolve.outputs.login }}
           MERGER: ${{ steps.resolve.outputs.merger }}
+          FINALIZE: ${{ steps.finalize.outputs.finalize }}
+          FINALIZE_REASON: ${{ steps.finalize.outputs.reason }}
         run: |
           severity=""
           [ -f /tmp/pick-severity ] && severity="$(tr '[:upper:]' '[:lower:]' < /tmp/pick-severity | tr -dc 'a-z')"
@@ -312,6 +312,9 @@ jobs:
           if [ -f /tmp/pick-escalated ]; then
             echo "escalated=true" >> "$GITHUB_OUTPUT"
             echo "reason=agent escalated (irreconcilable or major refactor)" >> "$GITHUB_OUTPUT"
+          elif [ "$FINALIZE" = "escalate" ]; then
+            echo "escalated=true" >> "$GITHUB_OUTPUT"
+            echo "reason=$FINALIZE_REASON" >> "$GITHUB_OUTPUT"
           elif [ "$CLAUDE_OUTCOME" != "success" ]; then
             echo "escalated=true" >> "$GITHUB_OUTPUT"
             echo "reason=resolution did not finish (turn limit or error)" >> "$GITHUB_OUTPUT"

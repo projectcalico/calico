@@ -5,6 +5,8 @@
 #
 #   pick    (Job A, READ token) clone, cherry-pick -x, leave conflicts for Claude.
 #           Emits outcome=clean|conflict|empty|already.
+#   finalize (Job A, no token)  after the agent: stage the pick's paths and
+#           complete the cherry-pick, or emit finalize=escalate + reason.
 #   export  (Job A, no token)   git format-patch the resolved tree (+ report) into
 #           EXPORT_DIR. Emits export=ready|noop.
 #   apply   (Job B, WRITE token, fresh runner) fresh-clone, git am the patch,
@@ -16,6 +18,7 @@
 # apply     : EXPORT_DIR EXTRA_LABELS TITLE_PREFIX OUTCOME CONFLICT_SEVERITY
 # Optional  : SOURCE_REF(=master) BRANCH_NAME WORKDIR(=PWD) CARRY_SOURCE_LABELS(=true)
 #             PICK_PATHS_FILE(=$RUNNER_TEMP/pick-paths, outside the agent's reach)
+#             PICK_CONFLICTS_FILE(=$RUNNER_TEMP/pick-conflicts) ESCALATION_NOTES
 set -o errexit -o nounset -o pipefail
 
 : "${SOURCE_REPO:?}" "${TARGET_REPO:?}" "${TARGET_BRANCH:?}"
@@ -27,6 +30,7 @@ WORKDIR="${WORKDIR:-$PWD}"
 EXPORT_DIR="${EXPORT_DIR:-/tmp/pick-export}"
 TITLE_PREFIX="${TITLE_PREFIX-__DERIVE__}"
 PICK_PATHS_FILE="${PICK_PATHS_FILE:-${RUNNER_TEMP:-/tmp}/pick-paths}"
+PICK_CONFLICTS_FILE="${PICK_CONFLICTS_FILE:-${RUNNER_TEMP:-/tmp}/pick-conflicts}"
 
 src_org="${SOURCE_REPO%%/*}"; src_name="${SOURCE_REPO##*/}"
 
@@ -88,7 +92,7 @@ do_pick() {
   if [ "$rc" -eq 0 ]; then
     echo "Clean cherry-pick."; record_pick_paths HEAD~1 HEAD; emit "outcome=clean"
   elif git diff --name-only --diff-filter=U | grep -q .; then
-    echo "Conflicts:"; git diff --name-only --diff-filter=U
+    echo "Conflicts:"; git diff --name-only --diff-filter=U | tee "$PICK_CONFLICTS_FILE"
     record_pick_paths HEAD; emit "outcome=conflict"
   else
     echo "Cherry-pick empty (already present / superseded)."
@@ -107,6 +111,68 @@ record_pick_paths() {
     sort -u > "$PICK_PATHS_FILE"
 }
 
+# Runs after the agent. Anything the agent changed outside the pick's own paths
+# means an unexpected resolution, so a human reviews it instead of a PR opening.
+do_finalize() {
+  cd "$WORKDIR"
+  local base="origin/${TARGET_BRANCH}" extra
+  if [ ! -e .git/CHERRY_PICK_HEAD ]; then
+    # The agent aborted, or completed the pick itself.
+    if git diff --quiet "$base" HEAD; then
+      finalize_escalate "the conflict resolved to no change: check whether the OSS change is superseded in Enterprise or was dropped"
+      return 0
+    fi
+    extra="$(git diff --name-only "$base..HEAD" | sort -u | comm -23 - "$PICK_PATHS_FILE")"
+    [ -z "$extra" ] || finalize_escalate "the resolution changed files outside the pick" "$extra"
+    return 0
+  fi
+
+  local conflicted=() f rc=0
+  while IFS= read -r f; do [ -e "$f" ] && conflicted+=("$f"); done < "$PICK_CONFLICTS_FILE"
+  if [ "${#conflicted[@]}" -gt 0 ]; then
+    git grep -qE '^(<<<<<<<|>>>>>>>)( |$)' -- "${conflicted[@]}" || rc=$?
+    case "$rc" in
+      0) finalize_escalate "conflict markers remain after the agent"; return 0 ;;
+      1) ;;
+      *) echo "::error::marker check failed (git grep exit $rc)"; exit 1 ;;
+    esac
+  fi
+
+  extra="$( { git diff --name-only HEAD; git ls-files --others --exclude-standard; } |
+    sort -u | comm -23 - "$PICK_PATHS_FILE")"
+  if [ -n "$extra" ]; then
+    finalize_escalate "the resolution changed files outside the pick" "$extra"
+    return 0
+  fi
+
+  # Paths Enterprise lacks and the resolution did not create match nothing.
+  local stage=()
+  while IFS= read -r f; do
+    if [ -e "$f" ] || git ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then stage+=("$f"); fi
+  done < "$PICK_PATHS_FILE"
+  [ "${#stage[@]}" -eq 0 ] || git add -A -- "${stage[@]}"
+  if git diff --cached --quiet HEAD; then
+    finalize_escalate "the conflict resolved to no change: check whether the OSS change is superseded in Enterprise or was dropped"
+    return 0
+  fi
+  if ! GIT_EDITOR=true git cherry-pick --continue; then
+    finalize_escalate "could not complete the cherry-pick"
+    return 0
+  fi
+  emit "finalize=done"
+}
+
+# The run page is public, so file names go only into the notes, which ship
+# encrypted with the report.
+finalize_escalate() {
+  echo "::warning::escalating: $1"
+  emit "finalize=escalate"
+  emit "reason=$1"
+  if [ -n "${2:-}" ] && [ -n "${ESCALATION_NOTES:-}" ]; then
+    { echo; echo "## Files changed outside the pick"; printf '%s\n' "$2" | sed 's/^/- /'; } >> "$ESCALATION_NOTES"
+  fi
+}
+
 do_export() {
   cd "$WORKDIR"
   # An unfinished cherry-pick or leftover markers is real breakage.
@@ -120,6 +186,10 @@ do_export() {
   # No NET change over the base means the OSS change was fully superseded once
   # resolved: a legitimate "nothing to pick", not an error.
   if git diff --quiet "origin/${TARGET_BRANCH}" HEAD 2>/dev/null; then
+    # A conflict proves Enterprise differs, so no change here means a dropped resolution.
+    if [ "${OUTCOME:-}" = "conflict" ]; then
+      echo "::error::conflict pick has no net change; refusing to report nothing to pick"; exit 1
+    fi
     echo "::notice::resolution produced no net change over origin/${TARGET_BRANCH}; nothing to pick"
     emit "export=noop"; return 0
   fi
@@ -324,8 +394,9 @@ do_apply() {
 }
 
 case "${1:-}" in
-  pick)   do_pick ;;
-  export) do_export ;;
-  apply)  do_apply ;;
-  *) echo "usage: $0 {pick|export|apply}" >&2; exit 2 ;;
+  pick)     do_pick ;;
+  finalize) do_finalize ;;
+  export)   do_export ;;
+  apply)    do_apply ;;
+  *) echo "usage: $0 {pick|finalize|export|apply}" >&2; exit 2 ;;
 esac
