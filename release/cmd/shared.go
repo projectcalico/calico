@@ -215,3 +215,7 @@ func publishRecord(uploadDir, step, version string, confirm bool) ([]string, *ou
 	}
 	return published, w, nil
 }
+
+var scannedComponents = func(_ *cli.Command, pin *pinnedversion.Pin) map[string]registry.Component {
+	return pin.Images()
+}

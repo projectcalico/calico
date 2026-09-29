@@ -140,7 +140,7 @@ var publishEnv = func(s settings) []string {
 // confirm latches the push: without it the make targets run as a dry run, so it
 // is an argument rather than an option a caller can forget.
 func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve steps.DigestResolver, opts ...PublishOption) error {
-	s, err := newSettings(publishStep, repoRoot, version, variants, opts)
+	s, err := newSettings(PublishStep, repoRoot, version, variants, opts)
 	if err != nil {
 		return err
 	}
@@ -184,9 +184,60 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 	return nil
 }
 
+// Resolve records already published images a release uses.
+// A missing image fails only once the rest are recorded.
+func Resolve(repoRoot, version string, variants []Variant, resolve steps.DigestResolver, opts ...ResolveOption) error {
+	s, err := newSettings(ResolveStep, repoRoot, version, variants, opts)
+	if err != nil {
+		return err
+	}
+	if len(s.Registries) == 0 {
+		return s.Errorf("no registries to resolve images in")
+	}
+	if resolve == nil {
+		return s.Errorf("no digest resolver given")
+	}
+
+	s.resolve = resolve
+
+	units := s.units(s.env())
+	s.Logger().WithField("images", len(units)).Info("Resolving container images")
+	got, lookupErr := steps.Go(units, s.lookup)
+
+	var errs []error
+	if lookupErr != nil {
+		errs = append(errs, s.Errorf("%w", lookupErr))
+	}
+	if err := s.addRefs(got); err != nil {
+		errs = append(errs, s.Errorf("%w", err))
+	}
+	var missing []string
+	for _, r := range got {
+		missing = append(missing, r.missing...)
+	}
+	if len(missing) > 0 {
+		errs = append(errs, s.Errorf("images not found: %s", strings.Join(missing, ", ")))
+	}
+	if errs != nil {
+		return errors.Join(errs...)
+	}
+	s.Logger().Info("Finished resolving container images")
+
+	sendImagesToISS(s)
+	return nil
+}
+
 // A scan failure must not fail the release: the images are already published.
 func sendImagesToISS(s settings) {
 	if s.scan == nil {
+		return
+	}
+	if s.scan.DryRun {
+		s.Logger().WithFields(logrus.Fields{
+			"images":  s.scan.Images,
+			"stream":  s.scan.Stream,
+			"release": s.scan.Release,
+		}).Info("Dry run: would send images to ISS")
 		return
 	}
 	s.Logger().Info("Sending images to ISS")
@@ -200,7 +251,15 @@ func sendImagesToISS(s settings) {
 func newSettings[O any](step, repoRoot, version string, variants []Variant, opts []O) (settings, error) {
 	s := settings{RepoRoot: repoRoot, Version: version, Variants: variants}
 	s.Apply([]steps.Option{steps.WithName(step)})
-	if err := s.validate(); err != nil {
+	errs := []error{s.validate()}
+	if step != ResolveStep {
+		for _, v := range variants {
+			if len(v.Images) > 0 {
+				errs = append(errs, fmt.Errorf("variant %q declares its images, which only a resolve accepts", v.Name))
+			}
+		}
+	}
+	if err := errors.Join(errs...); err != nil {
 		return s, s.Errorf("%w", err)
 	}
 	for _, opt := range opts {
@@ -219,6 +278,8 @@ func applyTo(opt any, s *settings) error {
 		return o.applyArchive(s)
 	case PublishOption:
 		return o.applyPublish(s)
+	case ResolveOption:
+		return o.applyResolve(s)
 	default:
 		return fmt.Errorf("unknown option type %T", opt)
 	}

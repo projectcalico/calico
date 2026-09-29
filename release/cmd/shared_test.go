@@ -26,6 +26,7 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
+	"github.com/projectcalico/calico/release/internal/registry"
 )
 
 // recordingRunner runs nothing and records what it was asked to run. Units run
@@ -227,4 +228,41 @@ func TestHashreleaseBuilds(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestScannedComponents(t *testing.T) {
+	pin := func() *pinnedversion.Pin {
+		return &pinnedversion.Pin{
+			Components: map[string]registry.Component{"node": {Version: "v3.30.0"}},
+			Operator:   registry.Component{Image: "tigera/operator", Version: "v1.40.0"},
+		}
+	}
+
+	for _, flag := range []string{"--operator", "--no-operator"} {
+		t.Run("scans the pinned operator with "+flag, func(t *testing.T) {
+			got := scannedWith(t, pin(), []cli.Flag{operatorFlag("")}, flag)
+			for _, want := range []string{"tigera/operator", "node"} {
+				if _, ok := got[want]; !ok {
+					t.Errorf("%s is not scanned", want)
+				}
+			}
+		})
+	}
+}
+
+func scannedWith(t *testing.T, pin *pinnedversion.Pin, flags []cli.Flag, args ...string) map[string]registry.Component {
+	t.Helper()
+	var got map[string]registry.Component
+	cmd := &cli.Command{
+		Name:  "test",
+		Flags: flags,
+		Action: func(_ context.Context, c *cli.Command) error {
+			got = scannedComponents(c, pin)
+			return nil
+		},
+	}
+	if err := cmd.Run(context.Background(), append([]string{"test"}, args...)); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	return got
 }
