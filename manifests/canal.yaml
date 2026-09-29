@@ -13218,6 +13218,8 @@ spec:
         resources: ["pods", "pods/status"]
         operations: ["CREATE", "UPDATE"]
   matchConditions:
+    # `canal` is the only relevant username for Canal installs - other usernames exist,
+    # but only for etcd installs where Pods are not written.
     - name: not-calico
       expression: >-
         !(request.userInfo.username in [
