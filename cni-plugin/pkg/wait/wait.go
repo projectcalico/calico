@@ -60,6 +60,17 @@ func ForEndpointReadyWithTimeout(policyDir string, endpoint *libapi.WorkloadEndp
 	return nil
 }
 
+// ForFileWithTimeout blocks until the file at the given path exists.
+// Unblocks with an error after exceeding timeout.
+func ForFileWithTimeout(path string, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := waitUntilFileExists(ctx, filepath.Dir(path), filepath.Base(path)); err != nil {
+		return fmt.Errorf("timed out after %s waiting for file '%s': %w", timeout, path, err)
+	}
+	return nil
+}
+
 // Unblocks without error when the designated file is seen in directory.
 // Returns with error if context is cancelled before file is found.
 func waitUntilFileExists(ctx context.Context, directory, filename string) error {
