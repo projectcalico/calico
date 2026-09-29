@@ -206,6 +206,9 @@ policed there by the pod's own address, as with iptables.
   through the host stack must confirm that none of the "deferral"
   reasons above apply. In particular, bypassing the kernel on a flow
   that still needs SNAT will break the return path.
+- `CALI_SKB_MARK_BYPASS` never replaces `SKIP_FIB` or `NAT_OUT` on a flow
+  that must use the host stack: netfilter matches those marks, and BYPASS
+  would hide the flow from it.
 
 
 
