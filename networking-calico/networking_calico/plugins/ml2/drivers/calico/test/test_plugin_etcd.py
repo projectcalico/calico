@@ -2372,14 +2372,40 @@ class TestLiveMigration(TestPluginEtcdBase):
 
         self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_deletes)
 
-    def test_create_unbound_port_writes_nothing(self):
-        """A port that is unbound at creation gets no WEP.
+    def test_create_port_without_host_writes_nothing(self):
+        """A port created with no binding host gets no WEP.
 
-        The counterpart to the transient-``unbound`` tolerance above: ``sync_wep`` no
-        longer tells the two apart, so ``create_port_postcommit``'s own ``vif_type ==
-        "unbound"`` check is what keeps a not-yet-bound port from being networked.  ML2
-        binds after this postcommit, and the resulting ``update_port_postcommit`` is
-        what writes the WEP.
+        ``binding:host_id`` is what ``sync_wep`` keys on, so without this guard
+        ``endpoint_name`` would compose a WEP name from an empty host.
+        """
+        self._do_initial_resync()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        context = self._make_port_context()
+        context._port = copy.deepcopy(self.port)
+        context._port["binding:host_id"] = ""
+        context._port["binding:vif_type"] = "unbound"
+
+        # The DB re-read inside sync_wep must return the same shape, or this passes
+        # for the wrong reason: the re-read would find the original host and decide
+        # the slot is absent, rather than exercising the guard at all.
+        self.osdb_ports[0]["binding:host_id"] = ""
+        self.osdb_ports[0]["binding:vif_type"] = "unbound"
+
+        self.driver.create_port_postcommit(context)
+
+        self.assertEtcdWrites({})
+        self.assertEtcdDeletes(set())
+
+    def test_create_unbound_port_matches_resync(self):
+        """A port created with a host but not yet bound still gets its WEP.
+
+        ML2 fires this postcommit before binding, so ``vif_type`` is "unbound" for
+        every port created with a host.  We deliberately do not filter on that: a
+        resync applies ``_wep_desired_present``, which keys on ``binding:host_id``
+        alone and would write the WEP, and the create path disagreeing with the resync
+        path is how slots drift.
         """
         self._do_initial_resync()
         self.recent_writes = {}
@@ -2388,11 +2414,11 @@ class TestLiveMigration(TestPluginEtcdBase):
         context = self._make_port_context()
         context._port = copy.deepcopy(self.port)
         context._port["binding:vif_type"] = "unbound"
+        self.osdb_ports[0]["binding:vif_type"] = "unbound"
 
         self.driver.create_port_postcommit(context)
 
-        self.assertEtcdWrites({})
-        self.assertEtcdDeletes(set())
+        self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_writes)
 
     def test_live_migration_succeeded(self):
         """After migration succeeds, source WEP deleted, dest WEP kept."""
