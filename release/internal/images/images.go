@@ -36,8 +36,9 @@ import (
 // a failure, so a new step adds one here rather than passing a literal.
 const (
 	buildStep   = "images-build"
-	publishStep = "images-publish"
+	PublishStep = "images-publish"
 	archiveStep = "images-archive"
+	ResolveStep = "images-resolve"
 )
 
 const (
@@ -75,14 +76,13 @@ var (
 	}
 )
 
-// Variant is one kind of image and the directories that ship it. Target and Env
-// cover the two ways a make target tells variants apart: its own target, or the
-// shared one with extra environment.
+// Variant is one kind of image and the directories that ship it.
 type Variant struct {
 	Name        string
 	Target      string
 	Env         []string
 	ReleaseDirs []string
+	Images      []string // set only when the names are not read from make
 }
 
 type ScanRequest struct {
@@ -100,6 +100,8 @@ type ScanRequest struct {
 	Release bool
 
 	OutputDir string
+
+	DryRun bool
 }
 
 func VariantDirs(variants []Variant) []string {
@@ -190,20 +192,28 @@ type (
 	BuildOption   interface{ applyBuild(*settings) error }
 	ArchiveOption interface{ applyArchive(*settings) error }
 	PublishOption interface{ applyPublish(*settings) error }
+	ResolveOption interface{ applyResolve(*settings) error }
+
+	PublishResolveOption interface {
+		PublishOption
+		ResolveOption
+	}
 
 	Option interface {
 		applyBuild(*settings) error
 		applyArchive(*settings) error
 		applyPublish(*settings) error
+		applyResolve(*settings) error
 	}
 )
 
 // Each adapter must satisfy the interfaces its options are returned as, so a
 // missing apply method fails here rather than at a call site.
 var (
-	_ Option        = setting(nil)
-	_ ArchiveOption = archiveSetting(nil)
-	_ PublishOption = publishSetting(nil)
+	_ Option               = setting(nil)
+	_ ArchiveOption        = archiveSetting(nil)
+	_ PublishOption        = publishSetting(nil)
+	_ PublishResolveOption = publishResolveSetting(nil)
 )
 
 type setting func(*settings) error
@@ -211,6 +221,7 @@ type setting func(*settings) error
 func (f setting) applyBuild(s *settings) error   { return f(s) }
 func (f setting) applyArchive(s *settings) error { return f(s) }
 func (f setting) applyPublish(s *settings) error { return f(s) }
+func (f setting) applyResolve(s *settings) error { return f(s) }
 
 type archiveSetting func(*settings) error
 
@@ -219,6 +230,11 @@ func (f archiveSetting) applyArchive(s *settings) error { return f(s) }
 type publishSetting func(*settings) error
 
 func (f publishSetting) applyPublish(s *settings) error { return f(s) }
+
+type publishResolveSetting func(*settings) error
+
+func (f publishResolveSetting) applyPublish(s *settings) error { return f(s) }
+func (f publishResolveSetting) applyResolve(s *settings) error { return f(s) }
 
 func WithRunner(r command.CommandRunner) Option {
 	return setting(func(s *settings) error {
@@ -285,8 +301,8 @@ func WithRetag(registry, tag string, skipDev bool) PublishOption {
 	})
 }
 
-func WithScan(req *ScanRequest) PublishOption {
-	return publishSetting(func(s *settings) error {
+func WithScan(req *ScanRequest) PublishResolveOption {
+	return publishResolveSetting(func(s *settings) error {
 		if req == nil {
 			return fmt.Errorf("no scan request given")
 		}
@@ -295,8 +311,8 @@ func WithScan(req *ScanRequest) PublishOption {
 	})
 }
 
-func WithRecord(rec steps.RefRecorder) PublishOption {
-	return publishSetting(func(s *settings) error {
+func WithRecord(rec steps.RefRecorder) PublishResolveOption {
+	return publishResolveSetting(func(s *settings) error {
 		if rec == nil {
 			return fmt.Errorf("no recorder given")
 		}
@@ -431,6 +447,7 @@ type unit struct {
 	dir     string
 	target  string
 	env     []string
+	images  []string
 }
 
 // A directory shipping more than one kind of image appears once per variant.
@@ -441,7 +458,10 @@ func (c Image) units(baseEnv []string) []unit {
 			env := make([]string, 0, len(baseEnv)+len(v.Env))
 			env = append(env, baseEnv...)
 			env = append(env, v.Env...)
-			out = append(out, unit{variant: v.Name, dir: dir, target: v.Target, env: env})
+			out = append(out, unit{
+				variant: v.Name, dir: dir, target: v.Target, env: env,
+				images: v.Images,
+			})
 		}
 	}
 	return out
@@ -452,6 +472,9 @@ func (c Image) units(baseEnv []string) []unit {
 const windowsImageSuffix = "-windows"
 
 func (c Image) imageNames(u unit) ([]string, error) {
+	if len(u.images) > 0 {
+		return u.images, nil
+	}
 	dir := filepath.Join(c.RepoRoot, u.dir)
 	// RELEASE selects the released image names, set here so they cannot
 	// depend on the caller's environment.
@@ -536,36 +559,58 @@ func unitState(s settings, u unit, recorded steps.RecordedDigests) (done bool, e
 	return true, nil
 }
 
-func (c Image) publishedRefs(u unit, resolve steps.DigestResolver) ([]string, error) {
+type resolved struct {
+	refs    []string
+	missing []string
+}
+
+func (c Image) resolveUnit(u unit, resolve steps.DigestResolver) (resolved, error) {
 	names, err := c.imageNames(u)
 	if err != nil {
-		return nil, err
+		return resolved{}, err
 	}
 	tags, err := c.unitTags(u)
 	if err != nil {
-		return nil, err
+		return resolved{}, err
 	}
 
-	var refs []string
+	type lookup struct{ reg, name, tag string }
+	type found struct {
+		digest string
+		exists bool
+	}
+	var lookups []lookup
 	for _, reg := range c.Registries {
 		for _, name := range names {
 			for _, tag := range tags {
-				image := fmt.Sprintf("%s/%s:%s", reg, name, tag)
-				digest, exists, err := resolve(image)
-				if err != nil {
-					return nil, fmt.Errorf("resolving %s: %w", image, err)
-				}
-				if !exists {
-					// The manifest and architecture tags are separately
-					// skippable, so an absent tag is not an error.
-					logrus.WithField("image", image).Debug("Published tag absent, not recording")
-					continue
-				}
-				refs = append(refs, fmt.Sprintf("%s/%s@%s", reg, name, digest))
+				lookups = append(lookups, lookup{reg, name, tag})
 			}
 		}
 	}
-	return refs, nil
+	results, lookupErr := steps.Go(lookups, func(l lookup) (*found, error) {
+		image := fmt.Sprintf("%s/%s:%s", l.reg, l.name, l.tag)
+		digest, exists, err := resolve(image)
+		if err != nil {
+			return nil, fmt.Errorf("resolving %s: %w", image, err)
+		}
+		return &found{digest: digest, exists: exists}, nil
+	})
+
+	var out resolved
+	for i, l := range lookups {
+		switch f := results[i]; {
+		case f == nil:
+		case f.exists:
+			out.refs = append(out.refs, fmt.Sprintf("%s/%s@%s", l.reg, l.name, f.digest))
+		// Charts and manifests name only the first registry, so only its
+		// release tag must exist.
+		case l.reg == c.Registries[0] && l.tag == tags[0]:
+			out.missing = append(out.missing, fmt.Sprintf("%s/%s:%s", l.reg, l.name, l.tag))
+		default:
+			logrus.WithField("image", fmt.Sprintf("%s/%s:%s", l.reg, l.name, l.tag)).Debug("Published tag absent, not recording")
+		}
+	}
+	return out, lookupErr
 }
 
 // unitTags returns the tags a unit publishes. The Windows variant copies only
@@ -593,28 +638,38 @@ func record(s settings, units []unit) error {
 	if s.refs == nil {
 		return nil
 	}
-	refs, lookupErr := steps.Go(units, s.refsFor)
+	got, lookupErr := steps.Go(units, s.lookup)
 	// Written even when a lookup failed: a partial publish is exactly the run
-	// whose record decides what a resume still owes. Writing after the lookups
-	// keeps the record in the units' order.
-	errs := []error{lookupErr}
-	for _, got := range refs {
-		if err := s.refs.Add(got...); err != nil {
-			errs = append(errs, fmt.Errorf("recording published images: %w", err))
-			break
-		}
-	}
-	return errors.Join(errs...)
+	// whose record decides what a resume still owes.
+	return errors.Join(lookupErr, s.addRefs(got))
 }
 
-// refsFor names the unit in any failure: the lookups run together, so the error
+// lookup names the unit in any failure: the lookups run together, so the error
 // has to say which one it came from.
-func (s settings) refsFor(u unit) ([]string, error) {
-	refs, err := s.publishedRefs(u, s.resolve)
+func (s settings) lookup(u unit) (resolved, error) {
+	got, err := s.resolveUnit(u, s.resolve)
 	if err != nil {
-		return nil, fmt.Errorf("recording published images for %s: %w", u.dir, err)
+		label := u.dir
+		if len(u.images) > 0 {
+			// A declared image only borrows its dir for the tag prefix.
+			label = strings.Join(u.images, ", ")
+		}
+		return got, fmt.Errorf("resolving images for %s: %w", label, err)
 	}
-	return refs, nil
+	return got, nil
+}
+
+// Writing after the lookups keeps the record in the units' order.
+func (s settings) addRefs(got []resolved) error {
+	if s.refs == nil {
+		return nil
+	}
+	for _, r := range got {
+		if err := s.refs.Add(r.refs...); err != nil {
+			return fmt.Errorf("recording images: %w", err)
+		}
+	}
+	return nil
 }
 
 // save fetches the image first when it is not already local.
