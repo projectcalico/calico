@@ -709,8 +709,7 @@ static CALI_BPF_INLINE void ct_leg_refresh_kind(struct cali_tc_ctx *ctx,
 			ct_leg_set_flags(leg, CALI_CT_LEG_TUNNEL);
 			ct_leg_clear_flags(leg, CALI_CT_LEG_CHECKED | CALI_CT_LEG_PINNED);
 		} else {
-			ct_leg_clear_flags(leg, CALI_CT_LEG_TUNNEL | CALI_CT_LEG_CHECKED |
-					CALI_CT_LEG_PINNED);
+			ct_leg_clear_flags(leg, CALI_CT_LEG_CLAIMS);
 		}
 	} else if (bits & CALI_CT_LEG_PINNED) {
 		ct_leg_clear_flags(leg, CALI_CT_LEG_PINNED);
@@ -819,15 +818,14 @@ static CALI_BPF_INLINE void ct_leg_validate_fwd(struct cali_tc_ctx *ctx,
 
 	CALI_CT_DEBUG("fwd hint %d is not a tunnel for an encap dest, pinning %d",
 			leg->ifindex, fib_params.ifindex);
-	leg->ifindex = fib_params.ifindex;
-	ct_leg_set_flags(leg, CALI_CT_LEG_TUNNEL | CALI_CT_LEG_PINNED | CALI_CT_LEG_CHECKED);
-
-	/* The loose-RPF arm can race this write pair and leave the claims
-	 * beside its own ifindex. Accepted: both resolve the same route, so the
-	 * values differ only if routing moved this instant, and the state heals
-	 * like any stale pin. Closing it would take ifindex and flags in one
+	/* The loose-RPF arm can race these writes and leave the claims beside its
+	 * own ifindex. Accepted: both resolve the same route, so the values
+	 * differ only if routing moved this instant, and the state heals like any
+	 * stale pin. Closing it would take ifindex and flags in one
 	 * atomically-written word.
 	 */
+	ct_leg_repoint(leg, fib_params.ifindex,
+			CALI_CT_LEG_TUNNEL | CALI_CT_LEG_PINNED | CALI_CT_LEG_CHECKED);
 }
 
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_ctx *ctx)
@@ -1340,12 +1338,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			switch (rpf_passed) {
 			case RPF_RES_FAIL:
 				ct_result_set_flag(result.rc, CT_RES_RPF_FAILED);
-				/* Claims cleared before the ifindex store (see
-				 * CALI_CT_LEG_TUNNEL).
-				 */
-				ct_leg_clear_flags(src_to_dst, CALI_CT_LEG_TUNNEL |
-						CALI_CT_LEG_PINNED | CALI_CT_LEG_CHECKED);
-				src_to_dst->ifindex = CT_INVALID_IFINDEX;
+				ct_leg_repoint(src_to_dst, CT_INVALID_IFINDEX, 0);
 				CALI_CT_DEBUG("CT RPF failed invalidating ifindex");
 				break;
 			case RPF_RES_STRICT:
@@ -1353,25 +1346,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 					CALI_CT_DEBUG("Updating ifindex from %d to %d",
 							src_to_dst->ifindex, ifindex);
 					/* An honest ingress record again: the pin and its
-					 * validation are void, the kind claim is this
-					 * program's own. Stale claims are cleared before
-					 * the ifindex store, the new claim set after (see
-					 * CALI_CT_LEG_TUNNEL); TUNNEL may ride across a
-					 * tunnel-to-tunnel store, when it is true for
-					 * both values.
+					 * validation are void, and the kind claim is this
+					 * program's own.
 					 */
-					__u32 want = IFACE_ENCAPS ? CALI_CT_LEG_TUNNEL : 0;
-					__u32 stale = src_to_dst->bits_word &
-						(CALI_CT_LEG_TUNNEL | CALI_CT_LEG_PINNED |
-						 CALI_CT_LEG_CHECKED) & ~want;
-
-					if (stale) {
-						ct_leg_clear_flags(src_to_dst, stale);
-					}
-					src_to_dst->ifindex = ifindex;
-					if (want && !(src_to_dst->bits_word & want)) {
-						ct_leg_set_flags(src_to_dst, want);
-					}
+					ct_leg_repoint(src_to_dst, ifindex,
+							IFACE_ENCAPS ? CALI_CT_LEG_TUNNEL : 0);
 				}
 				break;
 			case RPF_RES_DISABLED:
@@ -1387,31 +1366,20 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 					 * half the {tun_ip, ifindex} ARP-map key. Such a
 					 * leg still discards.
 					 *
-					 * An unchanged pin writes nothing - clearing
-					 * claims here would void the reply side's kind
-					 * stamp per packet and ping-pong both directions
-					 * onto route lookups. On change, claims are
-					 * cleared before the ifindex store; the new
-					 * device's kind is the reply side's to stamp.
+					 * No kind claim: the new device's kind is the
+					 * reply side's to stamp.
 					 */
 					if (rev_ifindex != CT_INVALID_IFINDEX &&
 							ip_void(result.tun_ip)) {
 						if (src_to_dst->ifindex != rev_ifindex) {
 							CALI_CT_DEBUG("Packet from unexpected ingress dev %d "
 									"- pinning egress %d", ifindex, rev_ifindex);
-							ct_leg_clear_flags(src_to_dst, CALI_CT_LEG_TUNNEL |
-									CALI_CT_LEG_CHECKED);
-							src_to_dst->ifindex = rev_ifindex;
 						}
-						if (!ct_leg_flag(src_to_dst, CALI_CT_LEG_PINNED)) {
-							ct_leg_set_flags(src_to_dst, CALI_CT_LEG_PINNED);
-						}
+						ct_leg_repoint(src_to_dst, rev_ifindex, CALI_CT_LEG_PINNED);
 					} else {
 						CALI_CT_DEBUG("Packet from unexpected ingress dev - rpf loose or disabled "
 								"- reset ifindex", src_to_dst->ifindex, ifindex);
-						ct_leg_clear_flags(src_to_dst, CALI_CT_LEG_TUNNEL |
-								CALI_CT_LEG_PINNED | CALI_CT_LEG_CHECKED);
-						src_to_dst->ifindex = CT_INVALID_IFINDEX;
+						ct_leg_repoint(src_to_dst, CT_INVALID_IFINDEX, 0);
 					}
 				}
 				break;

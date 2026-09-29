@@ -89,6 +89,10 @@ enum cali_ct_type {
 /* This leg has seen the connection close, one way or the other. */
 #define CALI_CT_LEG_CLOSED	(CALI_CT_LEG_FIN_SEEN | CALI_CT_LEG_RST_SEEN)
 
+/* What the leg claims about the device in its ifindex. */
+#define CALI_CT_LEG_CLAIMS	(CALI_CT_LEG_TUNNEL | CALI_CT_LEG_PINNED | \
+				 CALI_CT_LEG_CHECKED)
+
 struct calico_ct_leg {
 	__u64 bytes;
 	__u32 packets;
@@ -120,6 +124,39 @@ static CALI_BPF_INLINE void ct_leg_clear_flags(struct calico_ct_leg *leg, __u32 
 }
 
 #define CT_INVALID_IFINDEX	0
+
+/* ct_leg_repoint points a leg at ifindex and leaves it claiming exactly
+ * claims, which must describe that device.
+ *
+ * Claims that the new device does not carry are cleared before the ifindex
+ * store and the new ones set only after, so a concurrent reader never sees a
+ * claim beside an ifindex it does not describe.
+ *
+ * Reaffirming the device the leg already names only adds claims: clearing
+ * there would void the other direction's kind stamp on every packet.
+ *
+ * Each write is guarded by a read, so a leg that already holds the wanted
+ * state costs no atomic.
+ */
+static CALI_BPF_INLINE void ct_leg_repoint(struct calico_ct_leg *leg, __u32 ifindex,
+					   __u32 claims)
+{
+	__u32 bits = leg->bits_word;
+
+	if (leg->ifindex != ifindex) {
+		__u32 stale = bits & CALI_CT_LEG_CLAIMS & ~claims;
+
+		if (stale) {
+			ct_leg_clear_flags(leg, stale);
+			bits &= ~stale;
+		}
+		leg->ifindex = ifindex;
+	}
+
+	if (claims & ~bits) {
+		ct_leg_set_flags(leg, claims & ~bits);
+	}
+}
 struct calico_ct_value {
 	__u64 rst_seen;
 	__u64 last_seen;	// 8
