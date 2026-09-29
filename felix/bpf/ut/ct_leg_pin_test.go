@@ -247,7 +247,12 @@ func TestCtLegPinValidator(t *testing.T) {
 		})
 	})
 
-	t.Run("marks checked for a dest with no route instead of retrying per packet", func(t *testing.T) {
+	// Felix fills the routes map independently of the flow, so a first packet
+	// can arrive before the destination's route does. Stamping CHECKED there
+	// would cache a non-answer: nothing clears CHECKED while the leg keeps
+	// naming the same device with a correct kind claim, so the pin would never
+	// happen and every reply would pay the consumer's fallback lookup.
+	t.Run("retries a dest with no route once the route appears", func(t *testing.T) {
 		f := setupCtPinFixture(t, "PIN4")
 		key := normalEntry(f, uint32(f.phys.Attrs().Index))
 
@@ -257,9 +262,23 @@ func TestCtLegPinValidator(t *testing.T) {
 
 			leg := f.leg(t, key, true)
 			Expect(leg.Ifindex).To(Equal(uint32(f.phys.Attrs().Index)))
-			Expect(leg.Checked).To(BeTrue())
+			Expect(leg.Checked).To(BeFalse(),
+				"an unresolvable dest must stay unchecked so a later packet retries")
 			Expect(leg.Tunnel).To(BeFalse())
 			Expect(leg.Pinned).To(BeFalse())
+
+			f.tunneledCaliRoute(t, ctPinDstCIDR())
+			f.kernelRoute(t, ctPinDstCIDR(), f.tunl)
+
+			_, err = bpfrun(pkt)
+			Expect(err).NotTo(HaveOccurred())
+
+			leg = f.leg(t, key, true)
+			Expect(leg.Ifindex).To(Equal(uint32(f.tunl.Attrs().Index)),
+				"the retry must pin the resolved egress")
+			Expect(leg.Tunnel).To(BeTrue())
+			Expect(leg.Pinned).To(BeTrue())
+			Expect(leg.Checked).To(BeTrue())
 		})
 	})
 

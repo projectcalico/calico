@@ -721,8 +721,8 @@ static CALI_BPF_INLINE void ct_leg_refresh_kind(struct cali_tc_ctx *ctx,
  * real, post-NAT destination - the address the packet is routed by).
  *
  * CHECKED is per leg generation: set once per recorded device, cleared
- * whenever the device or its kind claim changes. An unresolvable destination
- * stays unchecked so a later packet retries.
+ * whenever the device or its kind claim changes. A destination that cannot
+ * be resolved yet stays unchecked, so a later packet retries.
  */
 static CALI_BPF_INLINE void ct_leg_validate_fwd(struct cali_tc_ctx *ctx,
 						struct calico_ct_leg *leg,
@@ -730,13 +730,20 @@ static CALI_BPF_INLINE void ct_leg_validate_fwd(struct cali_tc_ctx *ctx,
 {
 	struct cali_rt *dest_rt = cali_rt_lookup(ip_dst);
 
-	/* Only an encap destination can be misserved by a non-tunnel hint. That
-	 * covers no-route too: without a route the consumer never raw-redirects,
-	 * so mark the leg checked rather than retry per packet. Should a route
-	 * appear later, the consumer's per-packet guard still distrusts a
-	 * non-tunnel hint for it.
+	/* No route to validate against yet - Felix fills the routes map
+	 * independently of this flow. Leave the leg unchecked so a later packet
+	 * retries; stamping here would cache a non-answer that nothing retracts.
 	 */
-	if (!dest_rt || !cali_rt_needs_tunnel_egress(dest_rt) ||
+	if (!dest_rt) {
+		return;
+	}
+
+	/* Only an encap destination can be misserved by a non-tunnel hint. A
+	 * destination that later becomes encap-flagged keeps this stamp, and
+	 * costs the consumer's per-packet guard; re-validating every plain flow
+	 * instead would cost far more.
+	 */
+	if (!cali_rt_needs_tunnel_egress(dest_rt) ||
 			ct_leg_flag(leg, CALI_CT_LEG_TUNNEL)) {
 		ct_leg_set_flags(leg, CALI_CT_LEG_CHECKED);
 		return;
