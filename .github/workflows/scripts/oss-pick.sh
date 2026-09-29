@@ -19,6 +19,7 @@
 # Optional  : SOURCE_REF(=master) BRANCH_NAME WORKDIR(=PWD) CARRY_SOURCE_LABELS(=true)
 #             PICK_PATHS_FILE(=$RUNNER_TEMP/pick-paths, outside the agent's reach)
 #             PICK_CONFLICTS_FILE(=$RUNNER_TEMP/pick-conflicts) ESCALATION_NOTES
+#             PICK_CONTEXT_DIR(=/tmp/pick-context) PICK_DELETE_FILE(=/tmp/pick-delete)
 set -o errexit -o nounset -o pipefail
 
 : "${SOURCE_REPO:?}" "${TARGET_REPO:?}" "${TARGET_BRANCH:?}"
@@ -31,6 +32,8 @@ EXPORT_DIR="${EXPORT_DIR:-/tmp/pick-export}"
 TITLE_PREFIX="${TITLE_PREFIX-__DERIVE__}"
 PICK_PATHS_FILE="${PICK_PATHS_FILE:-${RUNNER_TEMP:-/tmp}/pick-paths}"
 PICK_CONFLICTS_FILE="${PICK_CONFLICTS_FILE:-${RUNNER_TEMP:-/tmp}/pick-conflicts}"
+PICK_CONTEXT_DIR="${PICK_CONTEXT_DIR:-/tmp/pick-context}"
+PICK_DELETE_FILE="${PICK_DELETE_FILE:-/tmp/pick-delete}"
 
 src_org="${SOURCE_REPO%%/*}"; src_name="${SOURCE_REPO##*/}"
 
@@ -93,7 +96,7 @@ do_pick() {
     echo "Clean cherry-pick."; record_pick_paths HEAD~1 HEAD; emit "outcome=clean"
   elif git diff --name-only --diff-filter=U | grep -q .; then
     echo "Conflicts:"; git diff --name-only --diff-filter=U | tee "$PICK_CONFLICTS_FILE"
-    record_pick_paths HEAD; emit "outcome=conflict"
+    record_pick_paths HEAD; write_pick_context; emit "outcome=conflict"
   else
     echo "Cherry-pick empty (already present / superseded)."
     git cherry-pick --abort || true; emit "outcome=empty"
@@ -111,21 +114,33 @@ record_pick_paths() {
     sort -u > "$PICK_PATHS_FILE"
 }
 
+# The agent may not run git with arguments (--output writes any file), so
+# it reads what it needs from these files.
+write_pick_context() {
+  local d="$PICK_CONTEXT_DIR" f s
+  rm -rf "$d"; mkdir -p "$d/files"
+  cp "$PICK_CONFLICTS_FILE" "$d/conflicts.txt"
+  { git show --no-patch --format=fuller "$MERGE_SHA"; git diff "${MERGE_SHA}^1" "$MERGE_SHA"; } > "$d/oss-commit.patch"
+  while IFS= read -r f; do
+    mkdir -p "$d/files/$(dirname "$f")"
+    # A delete/modify conflict lacks a stage; skip it.
+    for s in 1:base 2:ours 3:theirs; do
+      git show ":${s%%:*}:$f" > "$d/files/$f.${s#*:}" 2>/dev/null || rm -f "$d/files/$f.${s#*:}"
+    done
+    { echo "## $f"; git log --oneline -20 HEAD -- "$f"; echo; } >> "$d/enterprise-history.txt"
+  done < "$PICK_CONFLICTS_FILE"
+}
+
 # Runs after the agent. Anything the agent changed outside the pick's own paths
 # means an unexpected resolution, so a human reviews it instead of a PR opening.
 do_finalize() {
   cd "$WORKDIR"
-  local base="origin/${TARGET_BRANCH}" extra
+  local extra
+  # The agent has no git command that ends the pick.
   if [ ! -e .git/CHERRY_PICK_HEAD ]; then
-    # The agent aborted, or completed the pick itself.
-    if git diff --quiet "$base" HEAD; then
-      finalize_escalate "the conflict resolved to no change: check whether the OSS change is superseded in Enterprise or was dropped"
-      return 0
-    fi
-    extra="$(git diff --name-only "$base..HEAD" | sort -u | comm -23 - "$PICK_PATHS_FILE")"
-    [ -z "$extra" ] || finalize_escalate "the resolution changed files outside the pick" "$extra"
-    return 0
+    echo "::error::no cherry-pick in progress after the agent"; exit 1
   fi
+  apply_pick_deletions || return 0
 
   local conflicted=() f rc=0
   while IFS= read -r f; do [ -e "$f" ] && conflicted+=("$f"); done < "$PICK_CONFLICTS_FILE"
@@ -160,6 +175,20 @@ do_finalize() {
     return 0
   fi
   emit "finalize=done"
+}
+
+# Write cannot delete, so the agent lists files to delete; only pick paths qualify.
+apply_pick_deletions() {
+  [ -s "$PICK_DELETE_FILE" ] || return 0
+  local f
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if ! grep -Fxq -- "$f" "$PICK_PATHS_FILE"; then
+      finalize_escalate "the resolution asked to delete a file outside the pick" "$f"
+      return 1
+    fi
+    rm -f -- "$f"
+  done < "$PICK_DELETE_FILE"
 }
 
 # The run page is public, so file names go only into the notes, which ship
