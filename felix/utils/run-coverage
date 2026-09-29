@@ -39,7 +39,7 @@ if [ "$#" -eq 0 ]; then
 fi
 
 set -x
-ginkgo2 -cover -covermode=count -coverpkg=${go_dirs} -keep-going -r "$@"
+ginkgo -cover -covermode=count -coverpkg=${go_dirs} -keep-going -r "$@"
 set +x
 
 gocovmerge $(find . -name 'coverprofile.out') > combined.coverprofile
