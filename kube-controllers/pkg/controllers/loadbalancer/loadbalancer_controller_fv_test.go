@@ -16,6 +16,7 @@ package loadbalancer
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -32,7 +33,6 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/json"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 

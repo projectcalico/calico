@@ -1734,7 +1734,9 @@ spec:
                   pattern: ^(?i)(Accept|Return)?$
                   type: string
                 iptablesMarkMask:
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 iptablesNATOutgoingInterfaceFilter:
                   type: string
@@ -1831,7 +1833,9 @@ spec:
                   pattern: ^(?i)(Accept|Return)?$
                   type: string
                 nftablesMarkMask:
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 nftablesMode:
                   default: Auto
