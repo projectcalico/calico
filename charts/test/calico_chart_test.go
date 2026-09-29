@@ -96,6 +96,42 @@ func TestCalicoRendersTheCNIAnnotationPolicy(t *testing.T) {
 	}
 }
 
+// The mutating policy renders at the newest MutatingAdmissionPolicy version the cluster serves.
+func TestCalicoRendersTheCNIAnnotationMutatingPolicy(t *testing.T) {
+	const name = "strip-cni-annotations.projectcalico.org"
+
+	for _, tc := range []struct {
+		served string
+		want   string
+	}{
+		{served: "", want: "admissionregistration.k8s.io/v1beta1"},
+		{served: "admissionregistration.k8s.io/v1/MutatingAdmissionPolicy", want: "admissionregistration.k8s.io/v1"},
+		{served: "admissionregistration.k8s.io/v1alpha1/MutatingAdmissionPolicy", want: "admissionregistration.k8s.io/v1alpha1"},
+	} {
+		t.Run("served="+tc.served, func(t *testing.T) {
+			g := NewWithT(t)
+			values := map[string]string{
+				"datastore": "kubernetes",
+				"network":   "calico",
+				"useV3CRDs": "false",
+			}
+			var args []string
+			if tc.served != "" {
+				args = []string{"--api-versions", tc.served}
+			}
+
+			var policy admissionregistrationv1.MutatingAdmissionPolicy
+			renderCalicoResourceWith(t, values, "templates/admission-policies.yaml", "MutatingAdmissionPolicy", name, &policy, args...)
+			g.Expect(policy.APIVersion).To(Equal(tc.want))
+
+			var binding admissionregistrationv1.MutatingAdmissionPolicyBinding
+			renderCalicoResourceWith(t, values, "templates/admission-policies.yaml", "MutatingAdmissionPolicyBinding", name, &binding, args...)
+			g.Expect(binding.APIVersion).To(Equal(tc.want))
+			g.Expect(binding.Spec.PolicyName).To(Equal(name))
+		})
+	}
+}
+
 func renderCalicoResource(t *testing.T, templatePath, kind, name string, into any) {
 	t.Helper()
 	renderCalicoResourceWith(t, map[string]string{
@@ -105,7 +141,7 @@ func renderCalicoResource(t *testing.T, templatePath, kind, name string, into an
 	}, templatePath, kind, name, into)
 }
 
-func renderCalicoResourceWith(t *testing.T, values map[string]string, templatePath, kind, name string, into any) {
+func renderCalicoResourceWith(t *testing.T, values map[string]string, templatePath, kind, name string, into any, templateArgs ...string) {
 	t.Helper()
 	g := NewWithT(t)
 
@@ -117,7 +153,7 @@ func renderCalicoResourceWith(t *testing.T, values map[string]string, templatePa
 	g.Expect(err).ToNot(HaveOccurred())
 
 	options := &helm.Options{SetValues: values}
-	output, err := helm.RenderTemplateE(t, options, chartPath, "calico", []string{templatePath})
+	output, err := helm.RenderTemplateE(t, options, chartPath, "calico", []string{templatePath}, templateArgs...)
 	g.Expect(err).ToNot(HaveOccurred())
 
 	for _, doc := range strings.Split(output, "\n---") {

@@ -190,6 +190,40 @@ var _ = Describe("MutatingAdmissionPolicies", func() {
 		})
 	})
 
+	Describe("GetK8sMutatingAdmissionPolicies", func() {
+		for _, version := range []string{VersionV1, VersionV1Beta1, VersionV1Alpha1} {
+			It("returns the policy that strips the CNI annotations at "+version, func() {
+				objs := GetK8sMutatingAdmissionPolicies(opv1.Calico, version)
+				Expect(objs).To(HaveLen(2))
+
+				var mapCount, mapbCount int
+				for _, obj := range objs {
+					switch {
+					case IsPolicyKind(obj):
+						mapCount++
+					case IsBindingKind(obj):
+						mapbCount++
+					}
+					Expect(obj.GetName()).To(Equal("strip-cni-annotations.projectcalico.org"))
+					Expect(obj.GetObjectKind().GroupVersionKind().Version).To(Equal(version))
+					Expect(obj.GetLabels()).To(HaveKeyWithValue(ManagedMAPLabel, ManagedK8sMAPLabelValue))
+				}
+				Expect(mapCount).To(Equal(1))
+				Expect(mapbCount).To(Equal(1))
+			})
+		}
+
+		It("does not return it among the v3 policies", func() {
+			for _, obj := range GetMutatingAdmissionPolicies(opv1.Calico, true, VersionV1) {
+				Expect(obj.GetName()).NotTo(Equal("strip-cni-annotations.projectcalico.org"))
+			}
+		})
+
+		It("returns empty when apiVersion is empty", func() {
+			Expect(GetK8sMutatingAdmissionPolicies(opv1.Calico, "")).To(BeEmpty())
+		})
+	})
+
 	Describe("GetK8sValidatingAdmissionPolicies", func() {
 		It("returns the policies over Kubernetes resources, labeled apart from the v3 ones", func() {
 			objs := GetK8sValidatingAdmissionPolicies(opv1.Calico, VersionV1)

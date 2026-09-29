@@ -962,6 +962,10 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
+	if err = r.updateK8sMutatingAdmissionPolicies(ctx, defaulted, reqLogger); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// Now that migrated config is stored in the installation resource, we no longer need
 	// to check if a migration is needed for the lifetime of the operator.
 	r.migrationChecked = true
@@ -1817,7 +1821,7 @@ func (r *ReconcileInstallation) updateMutatingAdmissionPolicies(ctx context.Cont
 	}
 
 	desired := admission.GetMutatingAdmissionPolicies(install.Spec.Variant, r.opts.UseV3CRDs, mapAPIVersion)
-	existingMAPs, existingMAPBs, err := admission.ListManaged(ctx, r.client, mapAPIVersion)
+	existingMAPs, existingMAPBs, err := admission.ListManaged(ctx, r.client, mapAPIVersion, admission.ManagedMAPLabelValue)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed MutatingAdmissionPolicy resources", err, log)
 		return err
@@ -1875,6 +1879,31 @@ func (r *ReconcileInstallation) updateK8sValidatingAdmissionPolicies(ctx context
 	}
 
 	return r.syncManagedAdmissionPolicies(ctx, install, log, desired, existingVAPs, existingVAPBs, admission.IsValidatingPolicyKind, admission.IsValidatingBindingKind, "Error syncing ValidatingAdmissionPolicy resources")
+}
+
+// updateK8sMutatingAdmissionPolicies reconciles the MutatingAdmissionPolicies over built-in
+// Kubernetes resources, alongside updateK8sValidatingAdmissionPolicies and on the same conditions.
+// Clusters that serve no version of MutatingAdmissionPolicy get none, without degrading: the
+// validating policy still protects the annotations there.
+func (r *ReconcileInstallation) updateK8sMutatingAdmissionPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger) error {
+	mapAPIVersion := r.opts.APIDiscovery.ServedVersion(admission.APIGroup, admission.KindPolicy)
+	if mapAPIVersion == "" {
+		log.Info("Kubernetes cluster does not serve MutatingAdmissionPolicy, skipping")
+		return nil
+	}
+
+	var desired []client.Object
+	if cni := install.Spec.CNI; cni != nil && cni.Type == operatorv1.PluginCalico {
+		desired = admission.GetK8sMutatingAdmissionPolicies(install.Spec.Variant, mapAPIVersion)
+	}
+
+	existingMAPs, existingMAPBs, err := admission.ListManaged(ctx, r.client, mapAPIVersion, admission.ManagedK8sMAPLabelValue)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed MutatingAdmissionPolicy resources", err, log)
+		return err
+	}
+
+	return r.syncManagedAdmissionPolicies(ctx, install, log, desired, existingMAPs, existingMAPBs, admission.IsPolicyKind, admission.IsBindingKind, "Error syncing MutatingAdmissionPolicy resources")
 }
 
 // syncManagedAdmissionPolicies creates or updates the desired admission policies and bindings and

@@ -188,6 +188,10 @@ func installK8sAdmissionPolicies(c client.Client) error {
 			if len(obj.Object) == 0 {
 				continue
 			}
+			// Mutating policies are only served where admissionPoliciesEnabled is set.
+			if !admissionPoliciesEnabled && strings.HasPrefix(obj.GetKind(), "MutatingAdmissionPolicy") {
+				continue
+			}
 			if err := c.Create(context.Background(), obj); err != nil {
 				return fmt.Errorf("creating %s: %w", entry.Name(), err)
 			}

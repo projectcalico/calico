@@ -87,7 +87,7 @@ const (
 	podStatusWritePath  = "pods/status"
 )
 
-// cniAnnotationPolicyPath returns the path of the shipped policy.
+// cniAnnotationPolicyPath returns the path of the shipped validating policy.
 func cniAnnotationPolicyPath() string {
 	return filepath.Join(testutils.FindRepoRoot(), "api", "admission", "k8s", "protect-cni-annotations.yaml")
 }
@@ -188,16 +188,50 @@ func TestProtectCNIAnnotations_PolicyShape(t *testing.T) {
 	}
 }
 
-// TestProtectCNIAnnotations_CreateRefused checks that a create carrying a protected key is refused.
-func TestProtectCNIAnnotations_CreateRefused(t *testing.T) {
+// TestProtectCNIAnnotations_Create checks what happens to a create carrying a protected key. Where
+// the API server serves MutatingAdmissionPolicy the key is stripped and the Pod admitted, keeping
+// every other annotation; elsewhere the create is refused.
+func TestProtectCNIAnnotations_Create(t *testing.T) {
 	requireCNIAnnotationPolicy(t)
-	tenant := clientAs(t, tenantUser)
 
-	for _, a := range protectedAnnotations {
-		t.Run(a.key, func(t *testing.T) {
-			pod := newTestPod(map[string]string{a.key: a.value})
-			expectRefused(t, tenant.Create(context.Background(), pod), a.key)
-		})
+	if !admissionPoliciesEnabled {
+		tenant := clientAs(t, tenantUser)
+		for _, a := range protectedAnnotations {
+			t.Run("refused/"+a.key, func(t *testing.T) {
+				pod := newTestPod(map[string]string{a.key: a.value})
+				expectRefused(t, tenant.Create(context.Background(), pod), a.key)
+			})
+		}
+		return
+	}
+
+	kept := append(slices.Clone(userInputAnnotations), foreignAnnotations...)
+	creators := map[string]client.Client{
+		tenantUser:       clientAs(t, tenantUser),
+		cniPluginUser:    clientAs(t, cniPluginUser),
+		"system:masters": testClient,
+	}
+	for _, name := range []string{tenantUser, cniPluginUser, "system:masters"} {
+		for _, a := range protectedAnnotations {
+			t.Run("stripped/"+name+"/"+a.key, func(t *testing.T) {
+				annotations := annotationMap(kept)
+				annotations[a.key] = a.value
+				pod := mustCreatePodAs(t, creators[name], annotations)
+
+				got := &corev1.Pod{}
+				if err := testClient.Get(context.Background(), client.ObjectKeyFromObject(pod), got); err != nil {
+					t.Fatalf("failed to read back the Pod: %v", err)
+				}
+				if v, ok := got.Annotations[a.key]; ok {
+					t.Errorf("expected %s to be stripped at create, got %q", a.key, v)
+				}
+				for _, k := range kept {
+					if got.Annotations[k.key] != k.value {
+						t.Errorf("expected %s to be kept as %q, got %q", k.key, k.value, got.Annotations[k.key])
+					}
+				}
+			})
+		}
 	}
 }
 
@@ -343,7 +377,13 @@ func TestProtectCNIAnnotations_ExemptIdentitiesAllowed(t *testing.T) {
 	for _, user := range exemptWriters {
 		t.Run(user, func(t *testing.T) {
 			c := clientAs(t, user)
-			pod := mustCreatePodAs(t, c, seeded)
+			pod := mustCreatePodAs(t, c, nil)
+
+			expectAllowed(t, updatePod(t, c, pod, podStatusWritePath, func(p *corev1.Pod) {
+				for k, v := range seeded {
+					setAnnotation(p, k, v)
+				}
+			}))
 
 			expectAllowed(t, updatePod(t, c, pod, podStatusWritePath, func(p *corev1.Pod) {
 				setAnnotation(p, conversion.AnnotationPodIP, "192.168.0.2")
@@ -381,7 +421,10 @@ func TestProtectCNIAnnotations_PolicyDeletersAllowed(t *testing.T) {
 			c := clientAs(t, tc.user)
 
 			for _, a := range protectedAnnotations {
-				pod := mustCreatePodAs(t, c, map[string]string{a.key: a.value})
+				pod := mustCreatePodAs(t, c, nil)
+				expectAllowed(t, updatePod(t, c, pod, podStatusWritePath, func(p *corev1.Pod) {
+					setAnnotation(p, a.key, a.value)
+				}))
 				for _, path := range []string{podWritePath, podStatusWritePath} {
 					expectAllowed(t, updatePod(t, c, pod, path, func(p *corev1.Pod) {
 						setAnnotation(p, a.key, a.value+"-"+path)
@@ -401,8 +444,10 @@ func TestProtectCNIAnnotations_PolicyDeletersAllowed(t *testing.T) {
 		tenant := clientAs(t, user)
 
 		for _, a := range protectedAnnotations {
-			pod := newTestPod(map[string]string{a.key: a.value})
-			expectRefused(t, tenant.Create(context.Background(), pod), a.key)
+			pod := seedPod(t, map[string]string{a.key: a.value})
+			expectRefused(t, updatePod(t, tenant, pod, podStatusWritePath, func(p *corev1.Pod) {
+				setAnnotation(p, a.key, a.value+"-forged")
+			}), a.key)
 		}
 	})
 }
@@ -470,6 +515,87 @@ func waitForPolicyDeleteAccess(t *testing.T, user string, want bool) {
 			t.Fatalf("%s may delete %s: wanted %v, still not after 30s (last error: %v)", user, policyName, want, err)
 		}
 		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// cniStripPolicyPath returns the path of the shipped mutating policy.
+func cniStripPolicyPath() string {
+	return filepath.Join(testutils.FindRepoRoot(), "api", "admission", "k8s", "strip-cni-annotations.yaml")
+}
+
+// TestStripCNIAnnotations_PolicyShape checks the shipped YAML of the mutating policy.
+func TestStripCNIAnnotations_PolicyShape(t *testing.T) {
+	data, err := os.ReadFile(cniStripPolicyPath())
+	if err != nil {
+		t.Fatalf("failed to read the policy: %v", err)
+	}
+
+	var policy *admissionregistrationv1.MutatingAdmissionPolicy
+	var binding *admissionregistrationv1.MutatingAdmissionPolicyBinding
+	for _, doc := range strings.Split(string(data), "\n---") {
+		if strings.TrimSpace(doc) == "" {
+			continue
+		}
+		var kind struct {
+			Kind string `json:"kind"`
+		}
+		if err := yaml.Unmarshal([]byte(doc), &kind); err != nil {
+			t.Fatalf("failed to read the kind of a document in %s: %v", cniStripPolicyPath(), err)
+		}
+		switch kind.Kind {
+		case "MutatingAdmissionPolicy":
+			policy = &admissionregistrationv1.MutatingAdmissionPolicy{}
+			if err := yaml.Unmarshal([]byte(doc), policy); err != nil {
+				t.Fatalf("failed to parse the policy: %v", err)
+			}
+		case "MutatingAdmissionPolicyBinding":
+			binding = &admissionregistrationv1.MutatingAdmissionPolicyBinding{}
+			if err := yaml.Unmarshal([]byte(doc), binding); err != nil {
+				t.Fatalf("failed to parse the binding: %v", err)
+			}
+		default:
+			t.Fatalf("unexpected kind %q in %s", kind.Kind, cniStripPolicyPath())
+		}
+	}
+	if policy == nil || binding == nil {
+		t.Fatalf("%s must carry a MutatingAdmissionPolicy and its binding", cniStripPolicyPath())
+	}
+	if binding.Spec.PolicyName != policy.Name {
+		t.Errorf("expected the binding to reference %q, got %q", policy.Name, binding.Spec.PolicyName)
+	}
+	if policy.Spec.FailurePolicy == nil || *policy.Spec.FailurePolicy != admissionregistrationv1.Fail {
+		t.Errorf("expected failurePolicy Fail, got %v", policy.Spec.FailurePolicy)
+	}
+
+	if policy.Spec.MatchConstraints == nil || len(policy.Spec.MatchConstraints.ResourceRules) != 1 {
+		t.Fatalf("expected exactly one resource rule, got %+v", policy.Spec.MatchConstraints)
+	}
+	rule := policy.Spec.MatchConstraints.ResourceRules[0]
+	if !slices.Equal(rule.Resources, []string{"pods"}) {
+		t.Errorf("expected the rule to match exactly [pods], got %v", rule.Resources)
+	}
+	if !slices.Equal(rule.Operations, []admissionregistrationv1.OperationType{admissionregistrationv1.Create}) {
+		t.Errorf("expected the rule to match exactly [CREATE], got %v", rule.Operations)
+	}
+
+	// The key list must match the validating policy's.
+	var stripped string
+	for _, v := range policy.Spec.Variables {
+		if v.Name == "protectedKeys" {
+			stripped = v.Expression
+		}
+	}
+	for _, a := range protectedAnnotations {
+		want := a.key
+		if a.key == annEth1NetworkStatus {
+			want = conversion.AnnotationNetworkStatusSuffix
+		}
+		if !strings.Contains(stripped, "'"+want+"'") {
+			t.Errorf("expected the protectedKeys variable to strip %q, got: %s", want, stripped)
+		}
+	}
+	if !strings.Contains(stripped, "'cni.projectcalico.org/'") {
+		t.Errorf("expected the protectedKeys variable to test the cni.projectcalico.org/ prefix, got: %s", stripped)
 	}
 }
 
@@ -572,10 +698,20 @@ func mustCreatePodAs(t *testing.T, c client.Client, annotations map[string]strin
 	return pod
 }
 
-// seedPod creates a Pod as the CNI plugin, so it can carry protected keys.
+// seedPod creates a Pod and then writes the given annotations onto it through pods/status as the CNI
+// plugin, as a CNI ADD would. A create would have the protected keys stripped.
 func seedPod(t *testing.T, annotations map[string]string) *corev1.Pod {
 	t.Helper()
-	return mustCreatePodAs(t, clientAs(t, cniPluginUser), annotations)
+	c := clientAs(t, cniPluginUser)
+	pod := mustCreatePodAs(t, c, nil)
+	if err := updatePod(t, c, pod, podStatusWritePath, func(p *corev1.Pod) {
+		for k, v := range annotations {
+			setAnnotation(p, k, v)
+		}
+	}); err != nil {
+		t.Fatalf("failed to seed the Pod's annotations: %v", err)
+	}
+	return pod
 }
 
 // updatePod re-reads the Pod, applies mutate, and writes it back through pods or pods/status.
@@ -636,36 +772,71 @@ var (
 	cniPolicyErr  error
 )
 
-// requireCNIAnnotationPolicy waits until the policy is enforcing.
+// requireCNIAnnotationPolicy waits until the validating policy is enforcing and, where it is served,
+// the mutating policy is stripping.
 func requireCNIAnnotationPolicy(t *testing.T) {
 	t.Helper()
 	if !k8sPoliciesEnabled {
 		t.Skip("ValidatingAdmissionPolicy not supported on this K8s version")
 	}
 	tenant := clientAs(t, tenantUser)
-	cniPolicyOnce.Do(func() { cniPolicyErr = waitForCNIAnnotationPolicy(tenant) })
+	cniPolicyOnce.Do(func() {
+		cniPolicyErr = waitForCNIAnnotationPolicy(tenant)
+		if cniPolicyErr == nil && admissionPoliciesEnabled {
+			cniPolicyErr = waitForCNIAnnotationStripping(tenant)
+		}
+	})
 	if cniPolicyErr != nil {
 		t.Fatal(cniPolicyErr)
 	}
 }
 
-// waitForCNIAnnotationPolicy polls until a Pod carrying a protected key is refused.
+// waitForCNIAnnotationPolicy polls until adding a protected key to a Pod is refused.
 func waitForCNIAnnotationPolicy(c client.Client) error {
+	ctx := context.Background()
+	probe := newTestPod(nil)
+	if err := testClient.Create(ctx, probe); err != nil {
+		return fmt.Errorf("failed to create the probe Pod: %w", err)
+	}
+	defer func() { _ = testClient.Delete(ctx, probe) }()
+
+	var lastErr error
+	deadline := time.Now().Add(60 * time.Second)
+	for attempt := 0; ; attempt++ {
+		got := &corev1.Pod{}
+		if lastErr = testClient.Get(ctx, client.ObjectKeyFromObject(probe), got); lastErr == nil {
+			// A new value each attempt: rewriting a value an earlier attempt landed is not a change.
+			got.Annotations = map[string]string{conversion.AnnotationPodIP: fmt.Sprintf("probe-%d", attempt)}
+			lastErr = c.Status().Update(ctx, got)
+			if lastErr != nil && strings.Contains(lastErr.Error(), cniAnnotationDenial) {
+				return nil
+			}
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("adding %s to a Pod was still not refused after 60s; is %s installed and bound? last result: %v",
+				conversion.AnnotationPodIP, cniAnnotationPolicyPath(), lastErr)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// waitForCNIAnnotationStripping polls until a Pod created with a protected key is admitted without it.
+func waitForCNIAnnotationStripping(c client.Client) error {
 	ctx := context.Background()
 	var lastErr error
 	deadline := time.Now().Add(60 * time.Second)
 	for {
 		probe := newTestPod(map[string]string{conversion.AnnotationPodIP: "192.168.0.1"})
-		lastErr = c.Create(ctx, probe)
-		switch {
-		case lastErr == nil:
+		if lastErr = c.Create(ctx, probe); lastErr == nil {
 			_ = testClient.Delete(ctx, probe)
-		case strings.Contains(lastErr.Error(), cniAnnotationDenial):
-			return nil
+			if _, ok := probe.Annotations[conversion.AnnotationPodIP]; !ok {
+				return nil
+			}
+			lastErr = fmt.Errorf("%s was not stripped", conversion.AnnotationPodIP)
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("a Pod carrying %s was still not refused after 60s; is %s installed and bound? last result: %v",
-				conversion.AnnotationPodIP, cniAnnotationPolicyPath(), lastErr)
+			return fmt.Errorf("a Pod created with %s still kept it after 60s; is %s installed and bound? last result: %v",
+				conversion.AnnotationPodIP, cniStripPolicyPath(), lastErr)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
