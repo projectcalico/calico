@@ -20,6 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
@@ -49,9 +50,9 @@ var _ = Describe("Namespace rendering tests", func() {
 		namespace := rtest.GetResource(resources, "calico-system", "", "", "v1", "Namespace").(*corev1.Namespace)
 
 		Expect(namespace.Labels["name"]).To(Equal("calico-system"))
-		Expect(namespace.GetLabels()).NotTo(ContainElement("openshift.io/run-level"))
-		Expect(namespace.GetLabels()).NotTo(ContainElement("control-plane"))
-		Expect(namespace.GetAnnotations()).NotTo(ContainElement("openshift.io/node-selector"))
+		Expect(namespace.GetLabels()).NotTo(HaveKey("openshift.io/run-level"))
+		Expect(namespace.GetLabels()).NotTo(HaveKey("control-plane"))
+		Expect(namespace.GetAnnotations()).NotTo(HaveKey("openshift.io/node-selector"))
 	})
 
 	It("should render a namespace for openshift", func() {
@@ -68,7 +69,7 @@ var _ = Describe("Namespace rendering tests", func() {
 
 		namespace := rtest.GetResource(resources, "calico-system", "", "", "v1", "Namespace").(*corev1.Namespace)
 		Expect(namespace.GetLabels()["openshift.io/run-level"]).To(Equal("0"))
-		Expect(namespace.GetLabels()).NotTo(ContainElement("control-plane"))
+		Expect(namespace.GetLabels()).NotTo(HaveKey("control-plane"))
 		Expect(namespace.GetAnnotations()["openshift.io/node-selector"]).To(Equal(""))
 		Expect(namespace.GetAnnotations()["security.openshift.io/scc.podSecurityLabelSync"]).To(Equal("false"))
 	})
@@ -85,7 +86,7 @@ var _ = Describe("Namespace rendering tests", func() {
 
 		rtest.ExpectResources(resources, expectedCreateResources)
 		namespace := rtest.GetResource(resources, "calico-system", "", "", "v1", "Namespace").(*corev1.Namespace)
-		Expect(namespace.GetLabels()).NotTo(ContainElement("openshift.io/run-level"))
+		Expect(namespace.GetLabels()).NotTo(HaveKey("openshift.io/run-level"))
 		Expect(namespace.GetLabels()["control-plane"]).To(Equal("true"))
 	})
 
@@ -97,7 +98,7 @@ var _ = Describe("Namespace rendering tests", func() {
 		Expect(len(resources)).To(Equal(2))
 		rtest.ExpectResourceTypeAndObjectMetadata(resources[0], "calico-system", "", "", "v1", "Namespace")
 		meta := resources[0].(metav1.ObjectMetaAccessor).GetObjectMeta()
-		Expect(meta.GetLabels()).NotTo(ContainElement("openshift.io/run-level"))
+		Expect(meta.GetLabels()).NotTo(HaveKey("openshift.io/run-level"))
 		Expect(meta.GetLabels()["control-plane"]).To(Equal("true"))
 		rtest.ExpectResourceTypeAndObjectMetadata(resources[1], "tigera-operator-secrets", "calico-system", "rbac.authorization.k8s.io", "v1", "RoleBinding")
 	})
@@ -113,7 +114,7 @@ var _ = Describe("Namespace rendering tests", func() {
 		Expect(len(resources)).To(Equal(2))
 		rtest.ExpectResourceTypeAndObjectMetadata(resources[0], "calico-system", "", "", "v1", "Namespace")
 		meta := resources[0].(metav1.ObjectMetaAccessor).GetObjectMeta()
-		Expect(meta.GetLabels()).NotTo(ContainElement("openshift.io/run-level"))
+		Expect(meta.GetLabels()).NotTo(HaveKey("openshift.io/run-level"))
 		Expect(meta.GetLabels()["control-plane"]).To(Equal("true"))
 		rtest.ExpectResourceTypeAndObjectMetadata(resources[1], "tigera-operator-secrets", "calico-system", "rbac.authorization.k8s.io", "v1", "RoleBinding")
 	})
@@ -129,8 +130,38 @@ var _ = Describe("Namespace rendering tests", func() {
 		Expect(len(resources)).To(Equal(2))
 		rtest.ExpectResourceTypeAndObjectMetadata(resources[0], "calico-system", "", "", "v1", "Namespace")
 		meta := resources[0].(metav1.ObjectMetaAccessor).GetObjectMeta()
-		Expect(meta.GetLabels()).NotTo(ContainElement("openshift.io/run-level"))
-		Expect(meta.GetLabels()).NotTo(ContainElement("control-plane"))
+		Expect(meta.GetLabels()).NotTo(HaveKey("openshift.io/run-level"))
+		Expect(meta.GetLabels()).NotTo(HaveKey("control-plane"))
 		rtest.ExpectResourceTypeAndObjectMetadata(resources[1], "tigera-operator-secrets", "calico-system", "rbac.authorization.k8s.io", "v1", "RoleBinding")
+	})
+
+	DescribeTable("pod security labels",
+		func(mode *operatorv1.PodSecurityLabelsMode, expectLabels bool) {
+			cfg.Installation.PodSecurityLabels = mode
+			resources, _ := render.Namespaces(cfg).Objects()
+			namespace := rtest.GetResource(resources, "calico-system", "", "", "v1", "Namespace").(*corev1.Namespace)
+
+			Expect(namespace.Labels).To(HaveKeyWithValue("name", "calico-system"))
+			if expectLabels {
+				Expect(namespace.Labels).To(HaveKeyWithValue("pod-security.kubernetes.io/enforce", "privileged"))
+				Expect(namespace.Labels).To(HaveKeyWithValue("pod-security.kubernetes.io/enforce-version", "latest"))
+			} else {
+				Expect(namespace.Labels).NotTo(HaveKey("pod-security.kubernetes.io/enforce"))
+				Expect(namespace.Labels).NotTo(HaveKey("pod-security.kubernetes.io/enforce-version"))
+			}
+		},
+		Entry("are set when PodSecurityLabels is unset", nil, true),
+		Entry("are set when PodSecurityLabels is Enabled", ptr.To(operatorv1.PodSecurityLabelsEnabled), true),
+		Entry("are not set when PodSecurityLabels is Disabled", ptr.To(operatorv1.PodSecurityLabelsDisabled), false),
+	)
+
+	It("should render a namespace for aks with control-plane label when PodSecurityLabels is Disabled", func() {
+		cfg.Installation.KubernetesProvider = operatorv1.ProviderAKS
+		cfg.Installation.PodSecurityLabels = ptr.To(operatorv1.PodSecurityLabelsDisabled)
+		resources, _ := render.Namespaces(cfg).Objects()
+		namespace := rtest.GetResource(resources, "calico-system", "", "", "v1", "Namespace").(*corev1.Namespace)
+
+		Expect(namespace.Labels).NotTo(HaveKey("pod-security.kubernetes.io/enforce"))
+		Expect(namespace.Labels).To(HaveKeyWithValue("control-plane", "true"))
 	})
 })

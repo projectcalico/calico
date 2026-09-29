@@ -1651,5 +1651,18 @@ var _ = Describe("Installation merge tests", func() {
 			Entry("Main unset, second set", nil, npSpec(&enabled), npSpec(&enabled)),
 			Entry("Both set, different", npSpec(&enabled), npSpec(&disabled), npSpec(&disabled)),
 		)
+
+		DescribeTable("merge PodSecurityLabels", func(main, second, expect *opv1.PodSecurityLabelsMode) {
+			m := opv1.InstallationSpec{PodSecurityLabels: main}
+			s := opv1.InstallationSpec{PodSecurityLabels: second}
+			inst := OverrideInstallationSpec(m, s)
+			Expect(inst.PodSecurityLabels).To(Equal(expect))
+		},
+			Entry("Both unset", nil, nil, nil),
+			Entry("Main only set", ptr.To(opv1.PodSecurityLabelsDisabled), nil, ptr.To(opv1.PodSecurityLabelsDisabled)),
+			Entry("Second only set", nil, ptr.To(opv1.PodSecurityLabelsDisabled), ptr.To(opv1.PodSecurityLabelsDisabled)),
+			Entry("Both set equal", ptr.To(opv1.PodSecurityLabelsEnabled), ptr.To(opv1.PodSecurityLabelsEnabled), ptr.To(opv1.PodSecurityLabelsEnabled)),
+			Entry("Both set not matching", ptr.To(opv1.PodSecurityLabelsEnabled), ptr.To(opv1.PodSecurityLabelsDisabled), ptr.To(opv1.PodSecurityLabelsDisabled)),
+		)
 	})
 })

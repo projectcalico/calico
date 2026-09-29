@@ -17,6 +17,7 @@ package render
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	psapi "k8s.io/pod-security-admission/api"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
@@ -53,7 +54,7 @@ func (c *namespaceComponent) SupportedOSType() rmeta.OSType {
 
 func (c *namespaceComponent) Objects() ([]client.Object, []client.Object) {
 	ns := []client.Object{
-		CreateNamespace(common.CalicoNamespace, c.cfg.Installation.KubernetesProvider, PSSPrivileged, c.cfg.Installation.Azure),
+		c.calicoNamespace(),
 		CreateOperatorSecretsRoleBinding(common.CalicoNamespace),
 	}
 
@@ -74,6 +75,18 @@ func (c *namespaceComponent) Objects() ([]client.Object, []client.Object) {
 	return ns, nil
 }
 
+func (c *namespaceComponent) calicoNamespace() *corev1.Namespace {
+	ns := newNamespace(common.CalicoNamespace, c.cfg.Installation.KubernetesProvider, PSSPrivileged, c.cfg.Installation.Azure)
+	if !podSecurityLabelsDisabled(c.cfg.Installation) {
+		setPodSecurityLabels(ns, PSSPrivileged)
+	}
+	return ns
+}
+
+func podSecurityLabelsDisabled(installation *operatorv1.InstallationSpec) bool {
+	return installation.PodSecurityLabels != nil && *installation.PodSecurityLabels == operatorv1.PodSecurityLabelsDisabled
+}
+
 func (c *namespaceComponent) Ready() bool {
 	return true
 }
@@ -86,7 +99,20 @@ const (
 	PSSRestricted = "restricted"
 )
 
+// PodSecurityLabelKeys returns the keys of the Pod Security Admission labels that the operator sets on
+// the namespaces it renders. The operator owns these labels, so it removes them from a namespace that
+// is rendered without them.
+func PodSecurityLabelKeys() []string {
+	return []string{psapi.EnforceLevelLabel, psapi.EnforceVersionLabel}
+}
+
 func CreateNamespace(name string, provider operatorv1.Provider, pss PodSecurityStandard, azure *operatorv1.Azure) *corev1.Namespace {
+	ns := newNamespace(name, provider, pss, azure)
+	setPodSecurityLabels(ns, pss)
+	return ns
+}
+
+func newNamespace(name string, provider operatorv1.Provider, pss PodSecurityStandard, azure *operatorv1.Azure) *corev1.Namespace {
 	ns := &corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{Kind: "Namespace", APIVersion: "v1"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -97,11 +123,6 @@ func CreateNamespace(name string, provider operatorv1.Provider, pss PodSecurityS
 			Annotations: map[string]string{},
 		},
 	}
-
-	// Add in labels for configuring pod security standards.
-	// https://kubernetes.io/docs/concepts/security/pod-security-standards/
-	ns.Labels["pod-security.kubernetes.io/enforce"] = string(pss)
-	ns.Labels["pod-security.kubernetes.io/enforce-version"] = "latest"
 
 	switch provider {
 	case operatorv1.ProviderOpenShift:
@@ -114,6 +135,13 @@ func CreateNamespace(name string, provider operatorv1.Provider, pss PodSecurityS
 		}
 	}
 	return ns
+}
+
+func setPodSecurityLabels(ns *corev1.Namespace, pss PodSecurityStandard) {
+	// Add in labels for configuring pod security standards.
+	// https://kubernetes.io/docs/concepts/security/pod-security-standards/
+	ns.Labels[psapi.EnforceLevelLabel] = string(pss)
+	ns.Labels[psapi.EnforceVersionLabel] = psapi.VersionLatest
 }
 
 func applyAzurePolicy(azure *operatorv1.Azure, pss PodSecurityStandard) bool {

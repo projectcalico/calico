@@ -255,6 +255,11 @@ func OverrideInstallationSpec(cfg, override operatorv1.InstallationSpec) operato
 		inst.NetworkPolicy = override.NetworkPolicy
 	}
 
+	switch compareFields(inst.PodSecurityLabels, override.PodSecurityLabels) {
+	case BOnlySet, Different:
+		inst.PodSecurityLabels = ptr.To(*override.PodSecurityLabels)
+	}
+
 	return inst
 }
 

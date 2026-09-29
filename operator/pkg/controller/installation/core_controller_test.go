@@ -1291,6 +1291,27 @@ var _ = Describe("Testing core-controller installation", func() {
 			Expect(pullSecret.Kind).To(Equal("Installation"))
 		})
 
+		It("should remove the pod security labels from the namespace when PodSecurityLabels is Disabled", func() {
+			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).NotTo(HaveOccurred())
+
+			namespace := &corev1.Namespace{}
+			Expect(c.Get(ctx, client.ObjectKey{Name: common.CalicoNamespace}, namespace)).NotTo(HaveOccurred())
+			Expect(namespace.Labels).To(HaveKeyWithValue("pod-security.kubernetes.io/enforce", "privileged"))
+			Expect(namespace.Labels).To(HaveKeyWithValue("pod-security.kubernetes.io/enforce-version", "latest"))
+
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, cr)).NotTo(HaveOccurred())
+			cr.Spec.PodSecurityLabels = ptr.To(operator.PodSecurityLabelsDisabled)
+			Expect(c.Update(ctx, cr)).NotTo(HaveOccurred())
+			_, err = r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(c.Get(ctx, client.ObjectKey{Name: common.CalicoNamespace}, namespace)).NotTo(HaveOccurred())
+			Expect(namespace.Labels).NotTo(HaveKey("pod-security.kubernetes.io/enforce"))
+			Expect(namespace.Labels).NotTo(HaveKey("pod-security.kubernetes.io/enforce-version"))
+		})
+
 		It("should not patch FelixConfig and BGPConfig when ClusterRouteMode not set", func() {
 			cr.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
 			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())

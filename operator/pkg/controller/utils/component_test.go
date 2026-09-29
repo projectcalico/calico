@@ -1487,6 +1487,74 @@ var _ = Describe("Component handler tests", func() {
 		})
 	})
 
+	Context("pod security labels", func() {
+		currentLabels := func() map[string]string {
+			return map[string]string{
+				"pod-security.kubernetes.io/enforce":         "baseline",
+				"pod-security.kubernetes.io/enforce-version": "v1.30",
+				"pod-security.kubernetes.io/warn":            "restricted",
+				"user-label":                                 "user-value",
+			}
+		}
+
+		applyObject := func(obj client.Object) {
+			Expect(handler.CreateOrUpdateOrDelete(
+				ctx,
+				&fakeComponent{objs: []client.Object{obj}, supportedOSType: rmeta.OSTypeAny},
+				sm,
+			)).To(Succeed())
+		}
+
+		It("removes the enforce labels from a Namespace when the desired Namespace does not set them", func() {
+			Expect(c.Create(ctx, &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-namespace", Labels: currentLabels()},
+			})).To(Succeed())
+
+			applyObject(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-namespace"}})
+
+			ns := &corev1.Namespace{}
+			Expect(c.Get(ctx, client.ObjectKey{Name: "test-namespace"}, ns)).To(Succeed())
+			Expect(ns.Labels).NotTo(HaveKey("pod-security.kubernetes.io/enforce"))
+			Expect(ns.Labels).NotTo(HaveKey("pod-security.kubernetes.io/enforce-version"))
+			Expect(ns.Labels).To(HaveKeyWithValue("pod-security.kubernetes.io/warn", "restricted"))
+			Expect(ns.Labels).To(HaveKeyWithValue("user-label", "user-value"))
+		})
+
+		It("sets the enforce labels on a Namespace when the desired Namespace sets them", func() {
+			Expect(c.Create(ctx, &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-namespace", Labels: currentLabels()},
+			})).To(Succeed())
+
+			applyObject(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
+				Name: "test-namespace",
+				Labels: map[string]string{
+					"pod-security.kubernetes.io/enforce":         "privileged",
+					"pod-security.kubernetes.io/enforce-version": "latest",
+				},
+			}})
+
+			ns := &corev1.Namespace{}
+			Expect(c.Get(ctx, client.ObjectKey{Name: "test-namespace"}, ns)).To(Succeed())
+			Expect(ns.Labels).To(HaveKeyWithValue("pod-security.kubernetes.io/enforce", "privileged"))
+			Expect(ns.Labels).To(HaveKeyWithValue("pod-security.kubernetes.io/enforce-version", "latest"))
+			Expect(ns.Labels).To(HaveKeyWithValue("pod-security.kubernetes.io/warn", "restricted"))
+			Expect(ns.Labels).To(HaveKeyWithValue("user-label", "user-value"))
+		})
+
+		It("keeps the enforce labels on objects that are not Namespaces", func() {
+			Expect(c.Create(ctx, &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-configmap", Namespace: "default", Labels: currentLabels()},
+			})).To(Succeed())
+
+			applyObject(&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "test-configmap", Namespace: "default"}})
+
+			cm := &corev1.ConfigMap{}
+			Expect(c.Get(ctx, client.ObjectKey{Name: "test-configmap", Namespace: "default"}, cm)).To(Succeed())
+			Expect(cm.Labels).To(HaveKeyWithValue("pod-security.kubernetes.io/enforce", "baseline"))
+			Expect(cm.Labels).To(HaveKeyWithValue("pod-security.kubernetes.io/enforce-version", "v1.30"))
+		})
+	})
+
 	Context("liveness and readiness probes", func() {
 		It("updates liveness and readiness probe default values", func() {
 			fc := &fakeComponent{
