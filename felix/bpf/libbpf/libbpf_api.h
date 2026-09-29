@@ -122,14 +122,14 @@ int bpf_update_link(struct bpf_link *link, struct bpf_object *obj, char *progNam
 }
 
 int bpf_ctlb_get_prog_fd(int target_fd, int attach_type) {
-       int err;
-        __u32 attach_flags, prog_cnt, prog_id;
+       int err, prog_fd = -1;
+        __u32 attach_flags, prog_cnt = 1, prog_id = 0;
 
         err = bpf_prog_query(target_fd, attach_type, 0, &attach_flags, &prog_id, &prog_cnt);
         if (err) {
                 goto out;
         }
-        int prog_fd = bpf_prog_get_fd_by_id(prog_id);
+        prog_fd = bpf_prog_get_fd_by_id(prog_id);
         if (prog_fd < 0) {
                 err = -prog_fd;
                 goto out;
