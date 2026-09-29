@@ -2398,6 +2398,48 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
 
+    def test_wep_not_desired_without_host(self):
+        """``_wep_desired_present`` must not match a hostless port against host "".
+
+        Keyed straight on the predicate, because both the create hook and the resync
+        map filter hostless ports out before reaching it -- so if this started
+        answering True again, nothing else here would notice until something else
+        called ``sync_wep`` with an empty host.
+        """
+        self._do_initial_resync()
+        desired_present = self.driver.endpoint_syncer._wep_desired_present
+
+        port = copy.deepcopy(self.port)
+        port["binding:host_id"] = ""
+        port["binding:vif_type"] = "unbound"
+
+        self.assertFalse(desired_present(port, ""))
+        self.assertFalse(desired_present(port, self.SOURCE_HOST))
+
+    def test_resync_ignores_port_without_host(self):
+        """A resync gives a hostless port no WEP either.
+
+        The companion to ``test_create_port_without_host_writes_nothing``: the create
+        hook and reconciliation have to reach the same answer, or the invariant one of
+        them enforces is lost as soon as the other runs.  ``get_from_neutron`` builds
+        its map from every endpoint port, so without a host filter ``endpoint_name``
+        composes a name from an empty host and the resync creates the WEP the create
+        hook declined to write.
+        """
+        self._do_initial_resync()
+
+        # The port loses its binding, as it would on detach or for a shelved instance.
+        self.osdb_ports[0]["binding:host_id"] = ""
+        self.osdb_ports[0]["binding:vif_type"] = "unbound"
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        self._trigger_resync()
+
+        # The WEP at the old host goes, and nothing is written in its place.
+        self.assertEtcdWrites({})
+        self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_deletes)
+
     def test_create_unbound_port_matches_resync(self):
         """A port created with a host but not yet bound still gets its WEP.
 

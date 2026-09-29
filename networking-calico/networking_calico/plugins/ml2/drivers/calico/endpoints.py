@@ -164,7 +164,12 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         #                       the same reason as dest-wep.
         neutron_map = {}
         for port in endpoint_ports:
-            neutron_map["wep " + endpoint_name(port)] = port
+            # A port with no binding host has no source-side WEP slot: ``endpoint_name``
+            # would compose a name from an empty host.  Mirrors the ``if host`` guard at
+            # the ``sync_wep`` call sites, and keeps any such stale key out of the
+            # map, so that reconciliation deletes it rather than preserving it.
+            if port.get("binding:host_id"):
+                neutron_map["wep " + endpoint_name(port)] = port
             # binding:profile may carry migrating_to=None (or be missing entirely) after
             # a migration completes or is cancelled.  Only generate destination-side
             # entries when migrating_to is a truthy host string - calling endpoint_name
@@ -758,8 +763,11 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         # deletes the WEP underneath it.  That happens at both ends of a live
         # migration: when ``migrating_to`` is set, and again at Nova's cutover, which
         # clears ``migrating_to`` and moves ``binding:host_id`` in a single request.
-        # A genuine unbind clears ``binding:host_id``, which this test does catch.
-        if db_port["binding:host_id"] == host:
+        # A genuine unbind clears ``binding:host_id``, which this test does catch --
+        # and ``host`` has to be truthy for the comparison to mean anything, or a
+        # hostless port would match itself and be given a WEP named after an empty
+        # host.  That is what the old ``vif_type`` test covered here incidentally.
+        if host and db_port["binding:host_id"] == host:
             return True
 
         # Dest role: the port is migrating to this host.
