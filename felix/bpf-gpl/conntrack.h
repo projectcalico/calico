@@ -759,8 +759,9 @@ static CALI_BPF_INLINE void ct_leg_validate_fwd(struct cali_tc_ctx *ctx,
 		.ifindex = ctx->globals->data.host_ifindex ?
 			ctx->globals->data.host_ifindex : ctx->skb->ifindex,
 		.l4_protocol = ctx->state->ip_proto,
-		/* Match hep_rpf_check's ports, the other writer of this leg, or
-		 * multipath hashing would ping-pong the pin.
+		/* Ports match hep_rpf_check, the other writer, so multipath
+		 * hashing agrees. The other inputs differ, so policy routing on
+		 * the input device can still make the two disagree.
 		 */
 		.sport = bpf_htons(ctx->state->sport),
 		.dport = bpf_htons(dport),
@@ -1447,8 +1448,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		 * may use it to directly forward the packet to the same interface where
 		 * packets in the opposite direction are coming from.
 		 *
-		 * Flags before ifindex is compiler-only order; a weakly-ordered CPU
-		 * can still pair TUNNEL with a stale ifindex for one packet.
+		 * Advisory: a writer dropping a claim can be straddled here,
+		 * pairing TUNNEL with the device that replaced it for one packet.
 		 */
 		result.fwd_flags = ((*(volatile __u32 *)&dst_to_src->bits_word) &
 				CALI_CT_LEG_TUNNEL) ? CT_FWD_FLAG_TUNNEL : 0;

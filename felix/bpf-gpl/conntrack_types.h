@@ -71,9 +71,10 @@ enum cali_ct_type {
 					   * only by whoever has authority over the
 					   * device: the program attached to it for an
 					   * ingress record, or the validator for a leg
-					   * it pinned. Invariant: never observable next
-					   * to an ifindex it does not describe - cleared
-					   * before the ifindex store, re-set only after.
+					   * it pinned. Cleared before the ifindex
+					   * store and re-set only after, so a writer
+					   * adding it is never seen ahead of its
+					   * device; one dropping it can be straddled.
 					   */
 #define CALI_CT_LEG_PINNED	(1U << 8) /* ifindex is a resolved egress for the
 					   * opposite direction, not this direction's
@@ -128,9 +129,10 @@ static CALI_BPF_INLINE void ct_leg_clear_flags(struct calico_ct_leg *leg, __u32 
 /* ct_leg_repoint points a leg at ifindex and leaves it claiming exactly
  * claims, which must describe that device.
  *
- * Claims that the new device does not carry are cleared before the ifindex
- * store and the new ones set only after, so a concurrent reader never sees a
- * claim beside an ifindex it does not describe.
+ * Claims the new device does not carry are cleared before the ifindex store
+ * and the new ones set only after, so a reader never sees a claim this call
+ * is adding ahead of its device. A claim being dropped can still be read
+ * beside the device that replaced it.
  *
  * Reaffirming the device the leg already names only adds claims: clearing
  * there would void the other direction's kind stamp on every packet.
