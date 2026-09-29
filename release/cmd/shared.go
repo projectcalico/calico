@@ -215,3 +215,11 @@ func publishRecord(uploadDir, step, version string, confirm bool) ([]string, *ou
 	}
 	return published, w, nil
 }
+
+var scannedComponents = func(c *cli.Command, pin *pinnedversion.Pin) map[string]registry.Component {
+	components := pin.Images()
+	if !c.Bool(operatorFlagName) {
+		delete(components, pin.Operator.Image)
+	}
+	return components
+}
