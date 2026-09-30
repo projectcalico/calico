@@ -15,6 +15,7 @@
 package charttest
 
 import (
+	"maps"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -22,8 +23,10 @@ import (
 
 	"github.com/gruntwork-io/terratest/modules/helm"
 	. "github.com/onsi/gomega"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
@@ -73,7 +76,132 @@ func TestCalicoWebhooksInvokesTheNestedWebhookCommand(t *testing.T) {
 	}))
 }
 
+// The policies over built-in Kubernetes resources apply whichever Calico API the manifest serves.
+func TestCalicoRendersTheCNIAnnotationPolicy(t *testing.T) {
+	const name = "protect-cni-annotations.projectcalico.org"
+
+	for _, useV3CRDs := range []string{"true", "false"} {
+		t.Run("useV3CRDs="+useV3CRDs, func(t *testing.T) {
+			values := map[string]string{
+				"datastore": "kubernetes",
+				"network":   "calico",
+				"useV3CRDs": useV3CRDs,
+			}
+
+			var policy admissionregistrationv1.ValidatingAdmissionPolicy
+			renderCalicoResourceWith(t, values, "templates/admission-policies.yaml", "ValidatingAdmissionPolicy", name, &policy)
+
+			var binding admissionregistrationv1.ValidatingAdmissionPolicyBinding
+			renderCalicoResourceWith(t, values, "templates/admission-policies.yaml", "ValidatingAdmissionPolicyBinding", name, &binding)
+			NewWithT(t).Expect(binding.Spec.PolicyName).To(Equal(name))
+		})
+	}
+}
+
+// The mutating policy renders at the newest MutatingAdmissionPolicy version the cluster serves.
+func TestCalicoRendersTheCNIAnnotationMutatingPolicy(t *testing.T) {
+	const name = "strip-cni-annotations.projectcalico.org"
+
+	for _, tc := range []struct {
+		served string
+		want   string
+	}{
+		{served: "", want: "admissionregistration.k8s.io/v1beta1"},
+		{served: "admissionregistration.k8s.io/v1/MutatingAdmissionPolicy", want: "admissionregistration.k8s.io/v1"},
+		{served: "admissionregistration.k8s.io/v1alpha1/MutatingAdmissionPolicy", want: "admissionregistration.k8s.io/v1alpha1"},
+	} {
+		t.Run("served="+tc.served, func(t *testing.T) {
+			g := NewWithT(t)
+			values := map[string]string{
+				"datastore": "kubernetes",
+				"network":   "calico",
+				"useV3CRDs": "false",
+			}
+			var args []string
+			if tc.served != "" {
+				args = []string{"--api-versions", tc.served}
+			}
+
+			var policy admissionregistrationv1.MutatingAdmissionPolicy
+			renderCalicoResourceWith(t, values, "templates/admission-policies.yaml", "MutatingAdmissionPolicy", name, &policy, args...)
+			g.Expect(policy.APIVersion).To(Equal(tc.want))
+
+			var binding admissionregistrationv1.MutatingAdmissionPolicyBinding
+			renderCalicoResourceWith(t, values, "templates/admission-policies.yaml", "MutatingAdmissionPolicyBinding", name, &binding, args...)
+			g.Expect(binding.APIVersion).To(Equal(tc.want))
+			g.Expect(binding.Spec.PolicyName).To(Equal(name))
+		})
+	}
+}
+
+// The CNI plugin is let through protect-cni-annotations.projectcalico.org by a permission its role
+// carries. On canal it runs as the node's own service account, so there the node role carries it too,
+// as it does during a canal to Calico migration, while canal's plugin still runs on unmigrated nodes.
+func TestCalicoGrantsTheCNIPluginItsAnnotationPermission(t *testing.T) {
+	grant := rbacv1.PolicyRule{
+		APIGroups: []string{"projectcalico.org"},
+		Resources: []string{"cniannotations"},
+		Verbs:     []string{"write"},
+	}
+
+	for _, tc := range []struct {
+		name           string
+		values         map[string]string
+		nodeRoleGrants bool
+	}{
+		{name: "calico", values: map[string]string{"network": "calico"}, nodeRoleGrants: false},
+		{name: "canal", values: map[string]string{"network": "flannel"}, nodeRoleGrants: true},
+		{name: "flannel-migration", values: map[string]string{"network": "calico", "flannel_migration": "true"}, nodeRoleGrants: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+			values := map[string]string{"datastore": "kubernetes"}
+			maps.Copy(values, tc.values)
+
+			var cniRole rbacv1.ClusterRole
+			renderCalicoResourceWith(t, values, "templates/calico-node-rbac.yaml", "ClusterRole", "calico-cni-plugin", &cniRole)
+			g.Expect(cniRole.Rules).To(ContainElement(grant))
+
+			var nodeRole rbacv1.ClusterRole
+			renderCalicoResourceWith(t, values, "templates/calico-node-rbac.yaml", "ClusterRole", "calico-node", &nodeRole)
+			if tc.nodeRoleGrants {
+				g.Expect(nodeRole.Rules).To(ContainElement(grant))
+			} else {
+				g.Expect(nodeRole.Rules).NotTo(ContainElement(grant))
+			}
+		})
+	}
+}
+
+// On etcd the CNI plugin writes workload endpoints to etcd, not to these pod annotations, so neither
+// policy is rendered.
+func TestCalicoOmitsTheCNIAnnotationPoliciesOnEtcd(t *testing.T) {
+	g := NewWithT(t)
+	if _, err := exec.LookPath("helm"); err != nil {
+		t.Skip("skipping chart render tests since 'helm' is not installed")
+	}
+	chartPath, err := filepath.Abs("../calico")
+	g.Expect(err).ToNot(HaveOccurred())
+
+	for _, network := range []string{"calico", "flannel"} {
+		options := &helm.Options{SetValues: map[string]string{"datastore": "etcd", "network": network}}
+		output, err := helm.RenderTemplateE(t, options, chartPath, "calico", nil)
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(output).NotTo(ContainSubstring("protect-cni-annotations.projectcalico.org"), network)
+		g.Expect(output).NotTo(ContainSubstring("strip-cni-annotations.projectcalico.org"), network)
+	}
+}
+
 func renderCalicoResource(t *testing.T, templatePath, kind, name string, into any) {
+	t.Helper()
+	renderCalicoResourceWith(t, map[string]string{
+		"datastore": "kubernetes",
+		"network":   "calico",
+		"useV3CRDs": "true",
+	}, templatePath, kind, name, into)
+}
+
+func renderCalicoResourceWith(t *testing.T, values map[string]string, templatePath, kind, name string, into any, templateArgs ...string) {
 	t.Helper()
 	g := NewWithT(t)
 
@@ -84,14 +212,8 @@ func renderCalicoResource(t *testing.T, templatePath, kind, name string, into an
 	chartPath, err := filepath.Abs("../calico")
 	g.Expect(err).ToNot(HaveOccurred())
 
-	options := &helm.Options{
-		SetValues: map[string]string{
-			"datastore": "kubernetes",
-			"network":   "calico",
-			"useV3CRDs": "true",
-		},
-	}
-	output, err := helm.RenderTemplateE(t, options, chartPath, "calico", []string{templatePath})
+	options := &helm.Options{SetValues: values}
+	output, err := helm.RenderTemplateE(t, options, chartPath, "calico", []string{templatePath}, templateArgs...)
 	g.Expect(err).ToNot(HaveOccurred())
 
 	for _, doc := range strings.Split(output, "\n---") {
