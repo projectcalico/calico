@@ -194,7 +194,7 @@ jobs:
             --max-turns 60
             --model claude-sonnet-5
           prompt: |
-            The cherry-pick of the OSS commit `$MERGE_SHA` onto Enterprise
+            The cherry-pick of the OSS commit `${{ steps.resolve.outputs.sha }}` onto Enterprise
             (tigera/calico-private) master has already been applied and left
             conflicts; the working tree is mid-cherry-pick. Enterprise is a
             superset fork of the OSS repo, so most conflicts are Enterprise-only
