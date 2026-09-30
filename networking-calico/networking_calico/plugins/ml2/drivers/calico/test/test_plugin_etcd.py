@@ -2398,23 +2398,21 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
 
-    def test_wep_not_desired_without_host(self):
-        """``_wep_desired_present`` must not match a hostless port against host "".
+    def test_wep_desired_present_requires_a_host(self):
+        """An empty host is a caller error, not a value the predicate handles.
 
-        Keyed straight on the predicate, because both the create hook and the resync
-        map filter hostless ports out before reaching it -- so if this started
-        answering True again, nothing else here would notice until something else
-        called ``sync_wep`` with an empty host.
+        Every ``sync_wep`` call site filters hostless ports out, so reaching the
+        predicate with one means a caller has lost its guard.  Without the assertion
+        an empty host would match a hostless port's own empty ``binding:host_id`` and
+        earn it a WEP named after no host at all.
         """
         self._do_initial_resync()
         desired_present = self.driver.endpoint_syncer._wep_desired_present
 
         port = copy.deepcopy(self.port)
         port["binding:host_id"] = ""
-        port["binding:vif_type"] = "unbound"
 
-        self.assertFalse(desired_present(port, ""))
-        self.assertFalse(desired_present(port, self.SOURCE_HOST))
+        self.assertRaises(AssertionError, desired_present, port, "")
 
     def test_resync_ignores_port_without_host(self):
         """A resync gives a hostless port no WEP either.

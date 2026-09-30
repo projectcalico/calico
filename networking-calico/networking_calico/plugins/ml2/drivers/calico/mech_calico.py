@@ -1152,13 +1152,17 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # ``endpoint_name`` would otherwise compose one from an empty host.  This
         # mirrors the guard at every other ``sync_wep`` call site, and the predicate
         # ``sync_wep`` itself applies, so that this path and a resync always reach the
-        # same answer.  In particular a port created with a host but not yet bound does
-        # get a WEP here: ML2 binds immediately after this postcommit, and a resync
-        # would write the WEP regardless.
+        # same answer.
         if not port.get("binding:host_id"):
             LOG.info("Creating port with no binding host: no work required.")
             return
 
+        # By contrast, a port that does have a host is written even though ML2 has not
+        # bound it yet: binding happens just after this postcommit, so ``vif_type`` is
+        # still "unbound" at this point for every such port.  We deliberately do not
+        # filter on that -- a resync keys on ``binding:host_id`` alone and would write
+        # the WEP anyway, and the create path disagreeing with the resync path is how
+        # slots drift.
         plugin_context = context._plugin_context
         self.endpoint_syncer.sync_wep(port, port["binding:host_id"], plugin_context)
 
