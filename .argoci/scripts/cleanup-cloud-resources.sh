@@ -51,11 +51,31 @@ sweep_gce() {
     # shellcheck disable=SC2086 # deliberate word splitting: many names, one call
     if ! gcloud --quiet beta compute instances delete ${by_zone[$zone]} \
         --zone="${zone}" --no-graceful-shutdown; then
-      echo "[WARN] failed to delete one or more instances in ${zone}"
-      rc=1
+      still_there "compute instances" zone "${zone}" \
+          --filter="labels.ci-system=${prefix} AND labels.ci-workflow-id=${CI_WORKFLOW_NAME}" || rc=1
     fi
   done
   return "${rc}"
+}
+
+# A lane's own teardown can delete what the sweep listed before the sweep gets to
+# it, and gcloud then fails the whole delete for the missing ones. Fails only if
+# something the listing matched is still in location.
+still_there() {
+  local kind=$1 scope=$2 location=$3
+  shift 3
+  local left
+  # shellcheck disable=SC2086 # kind is several words
+  if ! left=$(gcloud --quiet ${kind} list "$@" --format="csv[no-heading](name,${scope}.basename())" 2>/dev/null); then
+    echo "[WARN] could not check what is left of ${kind} in ${location}"
+    return 1
+  fi
+  left=$(awk -F, -v l="${location}" '$2 == l {print $1}' <<< "${left}")
+  if [ -n "${left}" ]; then
+    echo "[WARN] failed to delete ${kind} in ${location}: $(echo ${left})"
+    return 1
+  fi
+  echo "[INFO] ${kind} in ${location} were already gone"
 }
 
 # bz labels nothing it creates, so a cluster is found by the name it recorded
@@ -111,7 +131,9 @@ delete_by_location() {
   done <<< "${listing}"
   for loc in "${!by_loc[@]}"; do
     # shellcheck disable=SC2086 # deliberate word splitting: many names, one call
-    gcloud --quiet ${kind} delete ${by_loc[$loc]} --project "${project}" --"${scope}"="${loc}" || rc=1
+    if ! gcloud --quiet ${kind} delete ${by_loc[$loc]} --project "${project}" --"${scope}"="${loc}"; then
+      still_there "${kind}" "${scope}" "${loc}" --project "${project}" --filter="${filter}" || rc=1
+    fi
   done
   return "${rc}"
 }

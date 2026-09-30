@@ -34,8 +34,16 @@ retry() {
 # Nothing reads the translations, and on a crawling mirror they cost minutes.
 echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/99-no-translations
 
+# Everything here is in main; universe's index alone is 14MB on a slow mirror.
+if [ -f /etc/apt/sources.list ]; then
+  sed -i -E '/^deb(-src)? /{s/ (universe|multiverse)\b//g; /^deb(-src)? +(\[[^]]*\] +)?[^ ]+ +[^ ]+ *$/d}' /etc/apt/sources.list
+fi
+if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+  sed -i -E '/^Components:/s/ (universe|multiverse)\b//g' /etc/apt/sources.list.d/ubuntu.sources
+fi
+
 retry apt-get update -y
-retry apt-get install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common
+retry apt-get install -y --no-install-recommends ca-certificates curl software-properties-common
 
 # Add Docker's official GPG key:
 install -m 0755 -d /etc/apt/keyrings
@@ -69,7 +77,7 @@ elif [ "$ubuntu_codename" = "plucky" ]; then
 fi
 
 retry apt-get update -y
-retry apt-get install -y --no-install-recommends git docker-ce"${docker_version}" docker-ce-cli"${docker_version}" docker-buildx-plugin"${buildx_version}" containerd.io make iproute2 wireguard zstd
+retry apt-get install -y --no-install-recommends git docker-ce"${docker_version}" docker-ce-cli"${docker_version}" docker-buildx-plugin"${buildx_version}" containerd.io make iproute2 wireguard-tools zstd
 usermod -a -G docker ubuntu
 
 # The IPIP module is loaded on demand, but pre-loading it prevents flakes in
