@@ -3001,7 +3001,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		// Counts for one row of the utilization report, so that the table below
 		// carries the numbers and not the plumbing to fetch them.
 		type counts struct {
-			capacity, inUse, reserved, available int
+			capacity int
+			inUse    int
+			reserved int
+			free     int
 		}
 
 		BeforeEach(func() {
@@ -3036,35 +3039,35 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(usage[0].Blocks).To(HaveLen(1))
 				pool, block := usage[0], usage[0].Blocks[0]
 
-				Expect(counts{pool.Capacity, pool.InUse, pool.Reserved, pool.Available}).
+				Expect(counts{pool.Capacity, pool.InUse, pool.Reserved, pool.Free}).
 					To(Equal(expectedPool), "pool totals")
-				Expect(counts{block.Capacity, block.InUse, block.Reserved, block.Available}).
+				Expect(counts{block.Capacity, block.InUse, block.Reserved, block.Free}).
 					To(Equal(expectedBlock), "block totals")
 			},
 			// A /24 pool (256 addresses) with one /26 block (64) holding a single
 			// allocation, 10.0.0.5.
 			Entry("inside the block",
 				[]string{"10.0.0.32/30"},
-				counts{capacity: 256, inUse: 1, reserved: 4, available: 251},
-				counts{capacity: 64, inUse: 1, reserved: 4, available: 59}),
+				counts{capacity: 256, inUse: 1, reserved: 4, free: 251},
+				counts{capacity: 64, inUse: 1, reserved: 4, free: 59}),
 			// The reservation covers pool space that no block has been carved
 			// from, so only the pool totals see it.
 			Entry("over pool space with no block",
 				[]string{"10.0.0.128/25"},
-				counts{capacity: 256, inUse: 1, reserved: 128, available: 127},
-				counts{capacity: 64, inUse: 1, reserved: 0, available: 63}),
+				counts{capacity: 256, inUse: 1, reserved: 128, free: 127},
+				counts{capacity: 64, inUse: 1, reserved: 0, free: 63}),
 			// In use and reserved overlap here, so they sum to more than the
-			// capacity; the address is only withheld from available once.
+			// capacity; the address is only withheld from free once.
 			Entry("over the allocated address",
 				[]string{"10.0.0.5/32"},
-				counts{capacity: 256, inUse: 1, reserved: 1, available: 255},
-				counts{capacity: 64, inUse: 1, reserved: 1, available: 63}),
+				counts{capacity: 256, inUse: 1, reserved: 1, free: 255},
+				counts{capacity: 64, inUse: 1, reserved: 1, free: 63}),
 			// Nested and duplicated reservations must not be counted twice, and
 			// the block is reserved in its entirety.
 			Entry("overlapping each other",
 				[]string{"10.0.0.0/25", "10.0.0.5/32", "10.0.0.64/26"},
-				counts{capacity: 256, inUse: 1, reserved: 128, available: 128},
-				counts{capacity: 64, inUse: 1, reserved: 64, available: 0}),
+				counts{capacity: 256, inUse: 1, reserved: 128, free: 128},
+				counts{capacity: 64, inUse: 1, reserved: 64, free: 0}),
 		)
 	})
 

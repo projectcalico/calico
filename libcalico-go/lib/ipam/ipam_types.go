@@ -164,9 +164,8 @@ type GetUtilizationArgs struct {
 // BlockUtilization reports IP utilization for a single allocation block.
 //
 // InUse and Reserved overlap: an IP allocated before an IPReservation covered it
-// is counted in both.  Available excludes both, so it is the only field that
-// answers "how many IPs can still be handed out here?" and it cannot be derived
-// by subtracting the other fields from Capacity.
+// is counted in both.  Free excludes both, so it cannot be derived by
+// subtracting the other fields from Capacity.
 type BlockUtilization struct {
 	// This block's CIDR.
 	CIDR net.IPNet
@@ -177,19 +176,21 @@ type BlockUtilization struct {
 	// Number of allocated IPs in this block, whether or not they are also reserved.
 	InUse int
 
+	// Number of InUse IPs released and waiting out their cooldown before reuse.
+	Cooling int
+
 	// Number of reserved IPs in this block, whether or not they are also allocated.
 	Reserved int
 
 	// Number of IPs in this block that are neither allocated nor reserved.
-	Available int
+	Free int
 }
 
 // PoolUtilization reports IP utilization for a single IP pool.
 //
 // The counts cover the whole pool CIDR, including space that no allocation block
 // has been carved from yet, so Capacity is not the sum of the blocks' capacities.
-// InUse, Reserved and Available have the same meanings (and the same overlap) as
-// in BlockUtilization.
+// The other fields mean the same as in BlockUtilization.
 type PoolUtilization struct {
 	// This pool's name.
 	Name string
@@ -203,11 +204,14 @@ type PoolUtilization struct {
 	// Number of allocated IPs in this pool, whether or not they are also reserved.
 	InUse int
 
+	// Number of InUse IPs released and waiting out their cooldown before reuse.
+	Cooling int
+
 	// Number of reserved IPs in this pool, whether or not they are also allocated.
 	Reserved int
 
 	// Number of IPs in this pool that are neither allocated nor reserved.
-	Available int
+	Free int
 
 	// Utilization for each of this pool's blocks.
 	Blocks []BlockUtilization
