@@ -101,6 +101,22 @@ func (r *ReservedIPs) overlaps(n net.IPNet) bool {
 	return ok && r.ipSet().OverlapsPrefix(p)
 }
 
+// countIn is how many addresses in n are reserved.
+func (r *ReservedIPs) countIn(cidr net.IPNet) (*big.Int, error) {
+	p, err := prefixFromCIDR(cidr)
+	if err != nil {
+		return nil, err
+	}
+	var b netipx.IPSetBuilder
+	b.AddPrefix(p)
+	b.Intersect(r.ipSet())
+	s, err := b.IPSet()
+	if err != nil {
+		return nil, err
+	}
+	return numIPsInSet(s), nil
+}
+
 func (r *ReservedIPs) ipSet() *netipx.IPSet {
 	if r == nil || r.set == nil {
 		return &netipx.IPSet{}
@@ -110,15 +126,15 @@ func (r *ReservedIPs) ipSet() *netipx.IPSet {
 
 // countReserved is NumReservedIPsInCIDRBig over CIDRs already resolved from the reservations.
 func countReserved(cidr cnet.IPNet, reserved []cnet.IPNet) (*big.Int, error) {
-	prefix, err := PrefixFromCIDR(cidr.IPNet)
+	prefix, err := prefixFromCIDR(cidr.IPNet)
 	if err != nil {
 		return nil, err
 	}
-	assignable, err := SubtractReserved(prefix, reserved).IPSet()
+	assignable, err := subtractReserved(prefix, reserved).IPSet()
 	if err != nil {
 		return nil, err
 	}
-	return new(big.Int).Sub(NumIPsInPrefix(prefix), NumIPsInSet(assignable)), nil
+	return new(big.Int).Sub(numIPsInPrefix(prefix), numIPsInSet(assignable)), nil
 }
 
 // ReservationCIDRs returns the CIDRs that the given IPReservations cover.  Malformed
@@ -145,9 +161,9 @@ func ReservationCIDRs(reservations []*v3.IPReservation) []cnet.IPNet {
 	return cidrs
 }
 
-// SubtractReserved returns the part of prefix that no reservation covers. Reservations can overlap and nest, so this is
+// subtractReserved returns the part of prefix that no reservation covers. Reservations can overlap and nest, so this is
 // a set subtraction rather than a sum over the CIDRs.
-func SubtractReserved(prefix netip.Prefix, reserved []cnet.IPNet) *netipx.IPSetBuilder {
+func subtractReserved(prefix netip.Prefix, reserved []cnet.IPNet) *netipx.IPSetBuilder {
 	var assignable netipx.IPSetBuilder
 	assignable.AddPrefix(prefix)
 	for _, r := range reserved {
@@ -160,8 +176,8 @@ func SubtractReserved(prefix netip.Prefix, reserved []cnet.IPNet) *netipx.IPSetB
 	return &assignable
 }
 
-// PrefixFromCIDR converts a CIDR to a netip.Prefix, failing when it has no prefix form.
-func PrefixFromCIDR(cidr net.IPNet) (netip.Prefix, error) {
+// prefixFromCIDR converts a CIDR to a netip.Prefix, failing when it has no prefix form.
+func prefixFromCIDR(cidr net.IPNet) (netip.Prefix, error) {
 	p, ok := toPrefix(cidr)
 	if !ok {
 		return netip.Prefix{}, fmt.Errorf("CIDR %s cannot be represented as a prefix", cidr.String())
@@ -169,17 +185,17 @@ func PrefixFromCIDR(cidr net.IPNet) (netip.Prefix, error) {
 	return p, nil
 }
 
-// NumIPsInSet counts the addresses in s, as a big.Int because an IPv6 set overflows an int.
-func NumIPsInSet(s *netipx.IPSet) *big.Int {
+// numIPsInSet counts the addresses in s, as a big.Int because an IPv6 set overflows an int.
+func numIPsInSet(s *netipx.IPSet) *big.Int {
 	total := big.NewInt(0)
 	for _, p := range s.Prefixes() {
-		total.Add(total, NumIPsInPrefix(p))
+		total.Add(total, numIPsInPrefix(p))
 	}
 	return total
 }
 
-// NumIPsInPrefix counts the addresses in p.
-func NumIPsInPrefix(p netip.Prefix) *big.Int {
+// numIPsInPrefix counts the addresses in p.
+func numIPsInPrefix(p netip.Prefix) *big.Int {
 	return new(big.Int).Lsh(big.NewInt(1), uint(p.Addr().BitLen()-p.Bits()))
 }
 
