@@ -89,10 +89,12 @@ jobs:
       - name: Fetch scripts
         env:
           SCRIPTS_REF: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
         run: |
           for f in oss-pick.sh resolve-merged-pr.js; do
             gh api "repos/${SOURCE_REPO}/contents/.github/workflows/scripts/${f}?ref=${SCRIPTS_REF}" \
               --jq '.content' | base64 -d > "$RUNNER_TEMP/${f}"
+            test -s "$RUNNER_TEMP/${f}"
           done
           chmod +x "$RUNNER_TEMP/oss-pick.sh"
 
@@ -411,10 +413,12 @@ jobs:
       - name: Fetch scripts
         env:
           SCRIPTS_REF: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
         run: |
           for f in oss-pick.sh notify-slack.js; do
             gh api "repos/${SOURCE_REPO}/contents/.github/workflows/scripts/${f}?ref=${SCRIPTS_REF}" \
               --jq '.content' | base64 -d > "$RUNNER_TEMP/${f}"
+            test -s "$RUNNER_TEMP/${f}"
           done
           chmod +x "$RUNNER_TEMP/oss-pick.sh"
 
