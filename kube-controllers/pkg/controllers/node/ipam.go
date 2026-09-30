@@ -17,10 +17,8 @@ package node
 import (
 	"context"
 	"fmt"
-	"maps"
 	"math"
 	"net"
-	"slices"
 	"strings"
 	"time"
 
@@ -137,7 +135,14 @@ type rateLimiterItemKey struct {
 	Name string
 }
 
-func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer, deferredInformers *kubevirt.DeferredInformers) *IPAMController {
+func NewIPAMController(
+	cfg config.NodeControllerConfig,
+	c client.Interface,
+	cs kubernetes.Interface,
+	pi, ni cache.Indexer,
+	deferredInformers *kubevirt.DeferredInformers,
+	tracker *accounting.Tracker,
+) *IPAMController {
 	var leakGracePeriod *time.Duration
 	if cfg.LeakGracePeriod != nil {
 		leakGracePeriod = &cfg.LeakGracePeriod.Duration
@@ -170,6 +175,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		clientset:         cs,
 		config:            cfg,
 		deferredInformers: deferredInformers,
+		tracker:           tracker,
 
 		syncChan: syncChan,
 
@@ -183,7 +189,6 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		syncerUpdates: make(chan any, utils.BatchUpdateSize),
 
 		allBlocks:                   make(map[string]model.KVPair),
-		reservations:                make(map[string]*apiv3.IPReservation),
 		allocationsByBlock:          make(map[string]map[string]*allocation),
 		allocationState:             newAllocationState(),
 		handleTracker:               newHandleTracker(),
@@ -235,10 +240,8 @@ type IPAMController struct {
 	// Raw block storage, keyed by CIDR.
 	allBlocks map[string]model.KVPair
 
-	// IPReservations, keyed by name.  They make addresses unassignable without
-	// allocating them, so the block state above cannot account for them; only the
-	// reserved-IP metric needs them.
-	reservations map[string]*apiv3.IPReservation
+	// tracker is the process's shared IPAM accounting, kept current by the data feed.
+	tracker *accounting.Tracker
 
 	// allocationState is the primary in-memory representation of IPAM allocations used by the garbage collector.
 	allocationState *allocationState
@@ -465,7 +468,7 @@ func (c *IPAMController) handleUpdate(upd any) {
 				c.handlePoolUpdate(upd)
 				return
 			case apiv3.KindIPReservation:
-				c.handleIPReservationUpdate(upd)
+				// The shared tracker holds reservations. The update only has to trigger the sync that refreshes the metrics.
 				return
 			case apiv3.KindClusterInformation:
 				c.handleClusterInformationUpdate(upd)
@@ -525,18 +528,6 @@ func (c *IPAMController) handlePoolUpdate(kvp model.KVPair) {
 	} else {
 		poolName := kvp.Key.(model.ResourceKey).Name
 		c.onPoolDeleted(poolName)
-	}
-}
-
-// handleIPReservationUpdate wraps up the logic to execute when receiving an
-// IPReservation update.  We track reservations only to report how much of each pool
-// they cover; see updateReservedMetrics.
-func (c *IPAMController) handleIPReservationUpdate(kvp model.KVPair) {
-	name := kvp.Key.(model.ResourceKey).Name
-	if kvp.Value != nil {
-		c.reservations[name] = kvp.Value.(*apiv3.IPReservation)
-	} else {
-		delete(c.reservations, name)
 	}
 }
 
@@ -805,26 +796,16 @@ func (c *IPAMController) updateMetrics() {
 	log.Debug("IPAM metrics updated")
 }
 
-// updateReservedMetrics publishes how much of each pool an IPReservation covers.
-// Unlike the counts above, this cannot be derived from the blocks we track: a
-// reservation makes addresses unassignable without allocating them, and it can cover
-// pool space that no block has been carved from yet.  The reservations come from the
-// syncer like everything else here, so this needs no datastore reads; the arithmetic
-// is the library's, so this agrees with what `calicoctl ipam show` reports.
+// updateReservedMetrics publishes how much of each pool an IPReservation covers, including pool space no block has
+// been carved from. The tracker's count is the one `calicoctl ipam show` reports.
 func (c *IPAMController) updateReservedMetrics() {
-	reservations := slices.Collect(maps.Values(c.reservations))
-	for poolName, pool := range c.poolManager.allPools {
-		_, poolCIDR, err := cnet.ParseCIDR(pool.Spec.CIDR)
-		if err != nil {
-			log.WithError(err).Warnf("Unable to parse CIDR for IP Pool %s; skipping its reserved-IP metric", poolName)
+	for poolName := range c.poolManager.allPools {
+		counts, ok := c.tracker.Summarize(poolName)
+		if !ok {
+			// Its CIDR is unparseable, or the tracker has applied a delete still queued here.
 			continue
 		}
-		numReserved, err := accounting.NumReservedIPsInCIDR(*poolCIDR, reservations)
-		if err != nil {
-			log.WithError(err).Warnf("Unable to count reserved IPs in IP Pool %s", poolName)
-			continue
-		}
-		poolReservedGauge.With(prometheus.Labels{"ippool": poolName}).Set(float64(numReserved))
+		poolReservedGauge.With(prometheus.Labels{"ippool": poolName}).Set(float64(accounting.ClampToInt(counts.Reserved)))
 	}
 }
 
