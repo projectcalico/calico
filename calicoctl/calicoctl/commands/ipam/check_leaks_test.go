@@ -59,23 +59,23 @@ type checkFixture struct {
 
 // checkBlock builds a valid /29 block, whose Unallocated list is the complement of its allocations.
 func checkBlock(cidr, affinity string, attrs map[int]model.AllocationAttribute) *model.AllocationBlock {
-	b := &model.AllocationBlock{
+	block := &model.AllocationBlock{
 		CIDR:        net.MustParseCIDR(cidr),
 		Allocations: make([]*int, 8),
 	}
 	if affinity != "" {
-		b.Affinity = ptr.To(affinity)
+		block.Affinity = ptr.To(affinity)
 	}
 	for ord := range 8 {
 		attr, ok := attrs[ord]
 		if !ok {
-			b.Unallocated = append(b.Unallocated, ord)
+			block.Unallocated = append(block.Unallocated, ord)
 			continue
 		}
-		b.Attributes = append(b.Attributes, attr)
-		b.Allocations[ord] = ptr.To(len(b.Attributes) - 1)
+		block.Attributes = append(block.Attributes, attr)
+		block.Allocations[ord] = ptr.To(len(block.Attributes) - 1)
 	}
-	return b
+	return block
 }
 
 func podAttr(handle, node string) model.AllocationAttribute {
@@ -303,7 +303,7 @@ var _ = Describe("CheckIPAM leak and borrow classification", func() {
 	})
 })
 
-// These are where check's answer differs from before it moved onto the accounting package.
+// These cover the leak rules check takes from the accounting package.
 var _ = Describe("CheckIPAM on the accounting package", func() {
 	It("keeps a stopped VM's persisted address only while the VM or its VMI exists", func() {
 		// CNI DEL of a VM whose address persists clears the owners, leaving only the handle.

@@ -31,8 +31,8 @@ import (
 // final state must still match a rebuild.
 func TestConcurrentReadsAndWrites(t *testing.T) {
 	RegisterTestingT(t)
-	tr := NewTracker()
-	in := &trackerInputs{
+	tracker := NewTracker()
+	inputs := &trackerInputs{
 		pools:        map[string]*v3.IPPool{},
 		blocks:       map[string]*model.AllocationBlock{},
 		reservations: map[string]*v3.IPReservation{},
@@ -47,24 +47,24 @@ func TestConcurrentReadsAndWrites(t *testing.T) {
 		go func() {
 			defer readers.Done()
 			for !done.Load() {
-				for name := range tr.SummarizeAll() {
-					tr.Summarize(name)
-					tr.Allocations(name)
-					tr.Unreferenced(name)
+				for name := range tracker.SummarizeAll() {
+					tracker.Summarize(name)
+					tracker.Allocations(name)
+					tracker.Unreferenced(name)
 				}
-				tr.NoPoolBlocks()
-				tr.NoPoolUnreferenced()
-				tr.AllRefs()
-				tr.Refs(net.ParseIP("10.0.0.1"))
+				tracker.NoPoolBlocks()
+				tracker.NoPoolUnreferenced()
+				tracker.AllRefs()
+				tracker.Refs(net.ParseIP("10.0.0.1"))
 			}
 		}()
 	}
 
 	rng := rand.New(rand.NewPCG(7, 1))
 	for range 2000 {
-		randomOp(rng, tr, in)
+		randomOp(rng, tracker, inputs)
 	}
 	done.Store(true)
 	readers.Wait()
-	expectSameReads(tr, in.rebuild(), "after concurrent writes")
+	expectSameReads(tracker, inputs.rebuild(), "after concurrent writes")
 }

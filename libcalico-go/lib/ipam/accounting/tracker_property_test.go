@@ -116,34 +116,34 @@ func propertyBlock(rng *rand.Rand) *model.AllocationBlock {
 	default:
 		affinity = "host:" + propertyNodes[rng.IntN(len(propertyNodes))]
 	}
-	b := testBlock(cidr, affinity)
-	for ord := range len(b.Allocations) {
+	block := testBlock(cidr, affinity)
+	for ord := range len(block.Allocations) {
 		node := propertyNodes[rng.IntN(len(propertyNodes))]
 		handle := fmt.Sprintf("h-%s-%d", cidr, ord)
 		switch rng.IntN(10) {
 		case 0:
-			allocateTunnel(b, ord, node)
+			allocateTunnel(block, ord, node)
 		case 1:
-			allocateCooling(b, ord)
+			allocateCooling(block, ord)
 		case 2:
-			allocate(b, ord, handle, map[string]string{
+			allocate(block, ord, handle, map[string]string{
 				model.IPAMBlockAttributeNode: node,
 				model.IPAMBlockAttributeType: "somethingNew",
 			})
 		case 3:
-			allocate(b, ord, WindowsReservedHandle, nil)
+			allocate(block, ord, WindowsReservedHandle, nil)
 		case 4:
-			allocate(b, ord, handle, nil)
+			allocate(block, ord, handle, nil)
 		case 5, 6:
-			allocate(b, ord, handle, map[string]string{
+			allocate(block, ord, handle, map[string]string{
 				model.IPAMBlockAttributePod:       handle,
 				model.IPAMBlockAttributeNamespace: "default",
 				model.IPAMBlockAttributeNode:      node,
 			})
 		}
 	}
-	b.Deleted = rng.IntN(20) == 0
-	return b
+	block.Deleted = rng.IntN(20) == 0
+	return block
 }
 
 // randomOp applies one random change to both the tracker and the recorded inputs, and names it.
@@ -251,8 +251,10 @@ func expectSameReads(got, want *Tracker, context string) {
 
 // normalizedCounts is Counts with the big.Ints as strings, which compare by value.
 type normalizedCounts struct {
-	Total, Reserved, TotalBlocks string
-	c                            Counts
+	Total       string
+	Reserved    string
+	TotalBlocks string
+	c           Counts
 }
 
 func normalizeAll(all map[string]*Counts) map[string]normalizedCounts {

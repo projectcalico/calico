@@ -17,6 +17,7 @@ package accounting
 import (
 	"math/big"
 	"net"
+	"slices"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -52,27 +53,27 @@ func TestSummarizeCounts(t *testing.T) {
 	tr := NewTracker()
 	tr.AddPools(pool("p", "10.0.0.0/24", 26))
 	tr.AddBlocks(a, unaffined, lb)
-	c := mustSummarize(tr, "p")
+	counts := mustSummarize(tr, "p")
 
-	Expect(c.Total.String()).To(Equal("256"))
-	Expect(c.TotalBlocks.String()).To(Equal("4"))
-	Expect(c.Reserved.String()).To(Equal("0"))
-	Expect(c.BlocksInUse).To(Equal(3))
+	Expect(counts.Total.String()).To(Equal("256"))
+	Expect(counts.TotalBlocks.String()).To(Equal("4"))
+	Expect(counts.Reserved.String()).To(Equal("0"))
+	Expect(counts.BlocksInUse).To(Equal(3))
 
 	// Cooling is inside InUse, not beside it.
-	Expect(c.InUse).To(Equal(6))
-	Expect(c.Cooling).To(Equal(1))
-	Expect(c.Assigned()).To(Equal(5))
-	Expect(c.Free().String()).To(Equal("250"))
+	Expect(counts.InUse).To(Equal(6))
+	Expect(counts.Cooling).To(Equal(1))
+	Expect(counts.Assigned()).To(Equal(5))
+	Expect(counts.Free().String()).To(Equal("250"))
 
 	// node-b borrows from node-a's block, and node-c holds an address in a block affine to no node.
-	Expect(c.Borrowed).To(Equal(2))
+	Expect(counts.Borrowed).To(Equal(2))
 
 	// The LoadBalancer block's virtual affinity is neither unaffined nor a node.
-	Expect(c.NoAffinity).To(Equal(1))
-	Expect(c.VirtualAffinity).To(Equal(1))
-	Expect(c.BlocksByNode).To(Equal(map[string]int{"node-a": 1}))
-	Expect(c.AddressesByKind).To(Equal(map[v3.IPPoolAllowedUse]int{
+	Expect(counts.NoAffinity).To(Equal(1))
+	Expect(counts.VirtualAffinity).To(Equal(1))
+	Expect(counts.BlocksByNode).To(Equal(map[string]int{"node-a": 1}))
+	Expect(counts.AddressesByKind).To(Equal(map[v3.IPPoolAllowedUse]int{
 		v3.IPPoolAllowedUseWorkload:     3,
 		v3.IPPoolAllowedUseTunnel:       1,
 		v3.IPPoolAllowedUseLoadBalancer: 1,
@@ -180,42 +181,42 @@ func TestStaleAffinity(t *testing.T) {
 
 func TestBlockUpdateReplacesEarlierCopy(t *testing.T) {
 	RegisterTestingT(t)
-	tr := NewTracker()
-	tr.AddPools(pool("p", "10.0.0.0/24", 26))
+	tracker := NewTracker()
+	tracker.AddPools(pool("p", "10.0.0.0/24", 26))
 
 	b := testBlock("10.0.0.0/26", "host:node-a")
 	allocatePod(b, 0, "node-a")
-	tr.AddBlocks(b)
-	Expect(mustSummarize(tr, "p").InUse).To(Equal(1))
+	tracker.AddBlocks(b)
+	Expect(mustSummarize(tracker, "p").InUse).To(Equal(1))
 
 	updated := testBlock("10.0.0.0/26", "host:node-a")
 	allocatePod(updated, 0, "node-a")
 	allocatePod(updated, 1, "node-a")
-	tr.AddBlocks(updated)
-	tr.AddBlocks(updated)
-	c := mustSummarize(tr, "p")
+	tracker.AddBlocks(updated)
+	tracker.AddBlocks(updated)
+	c := mustSummarize(tracker, "p")
 	Expect(c.InUse).To(Equal(2))
 	Expect(c.BlocksInUse).To(Equal(1))
 
 	deleted := testBlock("10.0.0.0/26", "host:node-a")
 	deleted.Deleted = true
-	tr.AddBlocks(deleted)
-	Expect(mustSummarize(tr, "p").BlocksInUse).To(Equal(0))
+	tracker.AddBlocks(deleted)
+	Expect(mustSummarize(tracker, "p").BlocksInUse).To(Equal(0))
 
-	tr.AddBlocks(updated)
-	Expect(mustSummarize(tr, "p").BlocksInUse).To(Equal(1))
-	tr.RemoveBlock(updated.CIDR)
-	Expect(mustSummarize(tr, "p").BlocksInUse).To(Equal(0))
+	tracker.AddBlocks(updated)
+	Expect(mustSummarize(tracker, "p").BlocksInUse).To(Equal(1))
+	tracker.RemoveBlock(updated.CIDR)
+	Expect(mustSummarize(tracker, "p").BlocksInUse).To(Equal(0))
 }
 
 func TestPoolChangeReattributesBlocks(t *testing.T) {
 	RegisterTestingT(t)
-	b := testBlock("10.0.0.0/26", "host:node-a")
-	allocatePod(b, 0, "node-a")
+	block := testBlock("10.0.0.0/26", "host:node-a")
+	allocatePod(block, 0, "node-a")
 
 	tr := NewTracker()
 	tr.AddPools(pool("outer", "10.0.0.0/16", 26))
-	tr.AddBlocks(b)
+	tr.AddBlocks(block)
 	Expect(mustSummarize(tr, "outer").InUse).To(Equal(1))
 
 	tr.AddPools(pool("inner", "10.0.0.0/24", 26))
@@ -226,7 +227,7 @@ func TestPoolChangeReattributesBlocks(t *testing.T) {
 	Expect(mustSummarize(tr, "outer").InUse).To(Equal(1))
 
 	tr.RemovePool("outer")
-	Expect(tr.NoPoolBlocks()).To(ConsistOf(b))
+	Expect(tr.NoPoolBlocks()).To(ConsistOf(block))
 }
 
 func TestNoPoolBlocksInAddressOrder(t *testing.T) {
@@ -242,39 +243,39 @@ func TestNoPoolBlocksInAddressOrder(t *testing.T) {
 // TestIncrementalMatchesFresh reads between every change, then compares against a tracker given the end state at once.
 func TestIncrementalMatchesFresh(t *testing.T) {
 	RegisterTestingT(t)
-	a := testBlock("10.0.0.0/26", "host:node-a")
-	allocatePod(a, 1, "node-a")
-	allocatePod(a, 2, "node-b")
-	allocateCooling(a, 3)
-	b := testBlock("10.0.0.64/26", "host:node-b")
-	allocatePod(b, 1, "node-b")
+	blockA := testBlock("10.0.0.0/26", "host:node-a")
+	allocatePod(blockA, 1, "node-a")
+	allocatePod(blockA, 2, "node-b")
+	allocateCooling(blockA, 3)
+	blockB := testBlock("10.0.0.64/26", "host:node-b")
+	allocatePod(blockB, 1, "node-b")
 	outer := pool("outer", "10.0.0.0/16", 26)
 	inner := pool("inner", "10.0.0.64/26", 26)
 
-	tr := NewTracker()
+	tracker := NewTracker()
 	steps := []func(){
-		func() { tr.AddPools(outer) },
-		func() { tr.AddBlocks(a) },
-		func() { tr.AddReservations(reservation("r", "10.0.0.2")) },
-		func() { tr.AddBlocks(b) },
-		func() { tr.AddPools(inner) },
-		func() { tr.AddReservations(reservation("r", "10.0.0.2", "10.0.0.65")) },
-		func() { tr.AddReservations(reservation("elsewhere", "192.168.0.0/24")) },
-		func() { tr.AddNodes("node-a") },
+		func() { tracker.AddPools(outer) },
+		func() { tracker.AddBlocks(blockA) },
+		func() { tracker.AddReservations(reservation("r", "10.0.0.2")) },
+		func() { tracker.AddBlocks(blockB) },
+		func() { tracker.AddPools(inner) },
+		func() { tracker.AddReservations(reservation("r", "10.0.0.2", "10.0.0.65")) },
+		func() { tracker.AddReservations(reservation("elsewhere", "192.168.0.0/24")) },
+		func() { tracker.AddNodes("node-a") },
 	}
 	for _, step := range steps {
 		step()
-		tr.SummarizeAll()
+		tracker.SummarizeAll()
 	}
 
 	fresh := NewTracker()
 	fresh.AddPools(outer, inner)
-	fresh.AddBlocks(a, b)
+	fresh.AddBlocks(blockA, blockB)
 	fresh.AddReservations(reservation("r", "10.0.0.2", "10.0.0.65"), reservation("elsewhere", "192.168.0.0/24"))
 	fresh.AddNodes("node-a")
-	Expect(tr.SummarizeAll()).To(Equal(fresh.SummarizeAll()))
-	Expect(mustSummarize(tr, "outer").InUseReserved).To(Equal(1))
-	Expect(mustSummarize(tr, "inner").InUseReserved).To(Equal(1))
+	Expect(tracker.SummarizeAll()).To(Equal(fresh.SummarizeAll()))
+	Expect(mustSummarize(tracker, "outer").InUseReserved).To(Equal(1))
+	Expect(mustSummarize(tracker, "inner").InUseReserved).To(Equal(1))
 }
 
 func TestReservationChangeOutsideEveryPoolKeepsCounts(t *testing.T) {
@@ -362,36 +363,30 @@ func TestUnreferenced(t *testing.T) {
 	allocate(b, 3, WindowsReservedHandle, nil)
 	allocateCooling(b, 4)
 
-	tr := NewTracker()
-	tr.AddPools(pool("p", "10.0.0.0/24", 26))
-	tr.AddBlocks(b)
+	tracker := NewTracker()
+	tracker.AddPools(pool("p", "10.0.0.0/24", 26))
+	tracker.AddBlocks(b)
 
 	// With no references, every assigned address but the Windows one is leaked.
-	Expect(unreferencedIPs(tr, "p")).To(Equal([]string{"10.0.0.0", "10.0.0.1", "10.0.0.2"}))
+	Expect(unreferencedIPs(tracker, "p")).To(Equal([]string{"10.0.0.0", "10.0.0.1", "10.0.0.2"}))
 
-	tr.AddRefs(
-		ref("10.0.0.0", v3.IPPoolAllowedUseWorkload, "endpoint/default/a"),
-		ref("10.0.0.1", v3.IPPoolAllowedUseTunnel, "node/node-a"),
-	)
-	Expect(unreferencedIPs(tr, "p")).To(Equal([]string{"10.0.0.2"}))
+	tracker.AddRefs(ref("10.0.0.0", v3.IPPoolAllowedUseWorkload, "endpoint/default/a"), ref("10.0.0.1", v3.IPPoolAllowedUseTunnel, "node/node-a"))
+	Expect(unreferencedIPs(tracker, "p")).To(Equal([]string{"10.0.0.2"}))
 
 	// A reference of the wrong kind does not account for the address.
-	tr.AddRefs(ref("10.0.0.2", v3.IPPoolAllowedUseTunnel, "node/node-a"))
-	Expect(unreferencedIPs(tr, "p")).To(Equal([]string{"10.0.0.2"}))
+	tracker.AddRefs(ref("10.0.0.2", v3.IPPoolAllowedUseTunnel, "node/node-a"))
+	Expect(unreferencedIPs(tracker, "p")).To(Equal([]string{"10.0.0.2"}))
 
 	// Two references to one address: removing one leaves it referenced.
-	tr.AddRefs(
-		ref("10.0.0.2", v3.IPPoolAllowedUseWorkload, "endpoint/default/b"),
-		ref("10.0.0.2", v3.IPPoolAllowedUseWorkload, "endpoint/default/c"),
-	)
-	tr.RemoveRefs(ref("10.0.0.2", v3.IPPoolAllowedUseWorkload, "endpoint/default/b"))
-	Expect(unreferencedIPs(tr, "p")).To(BeEmpty())
+	tracker.AddRefs(ref("10.0.0.2", v3.IPPoolAllowedUseWorkload, "endpoint/default/b"), ref("10.0.0.2", v3.IPPoolAllowedUseWorkload, "endpoint/default/c"))
+	tracker.RemoveRefs(ref("10.0.0.2", v3.IPPoolAllowedUseWorkload, "endpoint/default/b"))
+	Expect(unreferencedIPs(tracker, "p")).To(BeEmpty())
 
-	tr.RemoveRefs(ref("10.0.0.2", v3.IPPoolAllowedUseWorkload, "endpoint/default/c"))
-	Expect(unreferencedIPs(tr, "p")).To(Equal([]string{"10.0.0.2"}))
+	tracker.RemoveRefs(ref("10.0.0.2", v3.IPPoolAllowedUseWorkload, "endpoint/default/c"))
+	Expect(unreferencedIPs(tracker, "p")).To(Equal([]string{"10.0.0.2"}))
 
 	// A reference never affects the counts.
-	Expect(mustSummarize(tr, "p").InUse).To(Equal(5))
+	Expect(mustSummarize(tracker, "p").InUse).To(Equal(5))
 }
 
 // A stopped VM's persisted address has no owner attributes left, so only a reference to the VM keeps it.
@@ -440,15 +435,17 @@ func TestNoPoolUnreferenced(t *testing.T) {
 	Expect(allocs[0].IP.String()).To(Equal("10.0.0.0"))
 }
 
+type allocationKindCase struct {
+	name     string
+	affinity string
+	handle   string
+	noHandle bool
+	attrType string
+	want     v3.IPPoolAllowedUse
+}
+
 func TestAllocationKind(t *testing.T) {
-	tests := []struct {
-		name     string
-		affinity string
-		handle   string
-		noHandle bool
-		attrType string
-		want     v3.IPPoolAllowedUse
-	}{
+	tests := []allocationKindCase{
 		{name: "pod", affinity: "host:n", want: v3.IPPoolAllowedUseWorkload},
 		{name: "tunnel from before attributes", affinity: "host:n", noHandle: true, want: v3.IPPoolAllowedUseTunnel},
 		{name: "ipip", affinity: "host:n", attrType: model.IPAMBlockAttributeTypeIPIP, want: v3.IPPoolAllowedUseTunnel},
@@ -474,8 +471,7 @@ func TestAllocationKind(t *testing.T) {
 			if tc.noHandle {
 				attr.HandleID = nil
 			}
-			allocs, malformed := blockAllocations(b)
-			Expect(malformed).To(Equal(0))
+			allocs := slices.Collect(allocations(b))
 			Expect(allocs).To(HaveLen(1))
 			Expect(allocs[0].Kind()).To(Equal(tc.want))
 		})
@@ -505,7 +501,7 @@ func TestUnaffinedBlockBorrowing(t *testing.T) {
 	b := testBlock("10.0.0.0/26", "")
 	allocatePod(b, 0, "node-c")
 	allocate(b, 1, "no-node", nil)
-	allocs, _ := blockAllocations(b)
+	allocs := slices.Collect(allocations(b))
 	Expect(allocs[0].IsBorrowed()).To(BeTrue())
 	Expect(allocs[1].IsBorrowed()).To(BeFalse())
 }
@@ -514,7 +510,7 @@ func TestAllocationNodeFallsBackToAffinity(t *testing.T) {
 	RegisterTestingT(t)
 	b := testBlock("10.0.0.0/26", "host:node-a")
 	allocate(b, 0, "h", nil)
-	allocs, _ := blockAllocations(b)
+	allocs := slices.Collect(allocations(b))
 	a := allocs[0]
 	Expect(a.Node()).To(Equal("node-a"))
 	Expect(a.IsBorrowed()).To(BeFalse())
@@ -547,11 +543,7 @@ func TestCountReservedDeduplicatesOverlap(t *testing.T) {
 func TestAllRefsInOrder(t *testing.T) {
 	RegisterTestingT(t)
 	tr := NewTracker()
-	tr.AddRefs(
-		ref("10.0.0.10", v3.IPPoolAllowedUseWorkload, "b"),
-		ref("10.0.0.9", v3.IPPoolAllowedUseTunnel, "node/a"),
-		ref("10.0.0.10", v3.IPPoolAllowedUseWorkload, "a"),
-	)
+	tr.AddRefs(ref("10.0.0.10", v3.IPPoolAllowedUseWorkload, "b"), ref("10.0.0.9", v3.IPPoolAllowedUseTunnel, "node/a"), ref("10.0.0.10", v3.IPPoolAllowedUseWorkload, "a"))
 	var got []string
 	for _, r := range tr.AllRefs() {
 		got = append(got, r.IP.String()+" "+r.Referrer.Name)

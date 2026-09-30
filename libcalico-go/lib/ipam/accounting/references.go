@@ -50,11 +50,7 @@ func (r Referrer) String() string {
 }
 
 func (r Referrer) compare(other Referrer) int {
-	return cmp.Or(
-		strings.Compare(r.Kind, other.Kind),
-		strings.Compare(r.Namespace, other.Namespace),
-		strings.Compare(r.Name, other.Name),
-	)
+	return cmp.Or(strings.Compare(r.Kind, other.Kind), strings.Compare(r.Namespace, other.Namespace), strings.Compare(r.Name, other.Name))
 }
 
 type addressRefKey struct {

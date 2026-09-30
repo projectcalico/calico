@@ -15,7 +15,6 @@
 package accounting
 
 import (
-	"fmt"
 	"slices"
 	"testing"
 
@@ -23,25 +22,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// reservationsCovering returns one IPReservation per CIDR, which is the interesting
-// shape: reservations that overlap each other arrive as separate resources.
-func reservationsCovering(cidrs []string) []*v3.IPReservation {
-	var reservations []*v3.IPReservation
-	for i, cidr := range cidrs {
-		reservations = append(reservations, &v3.IPReservation{
-			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("reservation-%d", i)},
-			Spec:       v3.IPReservationSpec{ReservedCIDRs: []string{cidr}},
-		})
-	}
-	return reservations
+type reservationCIDRsCase struct {
+	name     string
+	reserved []string
+	want     []string
 }
 
 func TestReservationCIDRs(t *testing.T) {
-	for _, tc := range []struct {
-		name     string
-		reserved []string
-		want     []string
-	}{
+	for _, tc := range []reservationCIDRsCase{
 		{
 			name:     "CIDRs and bare IPs",
 			reserved: []string{"10.0.0.0/24", "10.1.0.1", "fd00::1"},

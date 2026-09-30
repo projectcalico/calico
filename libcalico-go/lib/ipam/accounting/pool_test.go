@@ -37,6 +37,13 @@ func poolForCIDR(t *testing.T, pools []*v3.IPPool, cidr string) string {
 	return ""
 }
 
+type poolForCase struct {
+	name  string
+	pools []*v3.IPPool
+	block string
+	want  string
+}
+
 func TestPoolForAttribution(t *testing.T) {
 	disabled := pool("disabled-inner", "10.0.0.0/24", 26)
 	disabled.Spec.Disabled = true
@@ -67,12 +74,7 @@ func TestPoolForAttribution(t *testing.T) {
 		},
 	}}
 
-	tests := []struct {
-		name  string
-		pools []*v3.IPPool
-		block string
-		want  string
-	}{
+	tests := []poolForCase{
 		{
 			name:  "narrowest containing pool wins",
 			pools: []*v3.IPPool{pool("outer", "10.0.0.0/16", 26), pool("inner", "10.0.0.0/24", 26)},

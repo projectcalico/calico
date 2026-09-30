@@ -26,9 +26,9 @@ import (
 func TestCountsCloneSharesNothing(t *testing.T) {
 	RegisterTestingT(t)
 	orig := &Counts{}
-	ov := reflect.ValueOf(orig).Elem()
-	for i := range ov.NumField() {
-		f := ov.Field(i)
+	origFields := reflect.ValueOf(orig).Elem()
+	for i := range origFields.NumField() {
+		f := origFields.Field(i)
 		switch {
 		case f.Type() == reflect.TypeOf(&big.Int{}):
 			f.Set(reflect.ValueOf(big.NewInt(int64(i + 1))))
@@ -39,16 +39,16 @@ func TestCountsCloneSharesNothing(t *testing.T) {
 		case f.Kind() == reflect.Int:
 			f.SetInt(int64(i + 1))
 		default:
-			t.Fatalf("Counts.%s has a type this test cannot fill; teach it, and clone, about %s", ov.Type().Field(i).Name, f.Type())
+			t.Fatalf("Counts.%s has a type this test cannot fill; teach it, and clone, about %s", origFields.Type().Field(i).Name, f.Type())
 		}
 	}
 
 	c := orig.clone()
 	Expect(c).To(Equal(orig))
-	cv := reflect.ValueOf(c).Elem()
-	for i := range ov.NumField() {
-		if k := ov.Field(i).Kind(); k == reflect.Pointer || k == reflect.Map {
-			Expect(cv.Field(i).UnsafePointer()).NotTo(Equal(ov.Field(i).UnsafePointer()), ov.Type().Field(i).Name)
+	cloneFields := reflect.ValueOf(c).Elem()
+	for i := range origFields.NumField() {
+		if k := origFields.Field(i).Kind(); k == reflect.Pointer || k == reflect.Map {
+			Expect(cloneFields.Field(i).UnsafePointer()).NotTo(Equal(origFields.Field(i).UnsafePointer()), origFields.Type().Field(i).Name)
 		}
 	}
 }

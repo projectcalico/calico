@@ -573,22 +573,22 @@ func (c *IPAMChecker) recordAllocation(b *model.AllocationBlock, ord int) {
 
 	// A deleted block still names its allocations' owners, so read the attributes whether or not the tracker saw it.
 	if attrIdx := *b.Allocations[ord]; attrIdx >= 0 && attrIdx < len(b.Attributes) {
-		acct := &alloc.accountingAlloc
-		acct.Attr = &b.Attributes[attrIdx]
+		aa := &alloc.accountingAlloc
+		aa.Attr = &b.Attributes[attrIdx]
 
 		// The Windows reserved handle has no handle resource behind it.
-		if !acct.IsWindowsHandle() {
-			alloc.Handle = acct.Handle()
+		if !aa.IsWindowsHandle() {
+			alloc.Handle = aa.Handle()
 		}
 
 		// We do not have the IPAMConfig here to tell whether a cooling address could be deallocated yet.
-		alloc.CoolingDown = acct.IsCooling()
-		alloc.Node = acct.Node()
-		alloc.Borrowed = acct.IsBorrowed()
-		alloc.Pod = acct.Attr.ActiveOwnerAttrs[model.IPAMBlockAttributePod]
-		alloc.Namespace = acct.Attr.ActiveOwnerAttrs[model.IPAMBlockAttributeNamespace]
-		alloc.Type = acct.Attr.ActiveOwnerAttrs[model.IPAMBlockAttributeType]
-		alloc.CreationTimestamp = acct.Attr.ActiveOwnerAttrs[model.IPAMBlockAttributeTimestamp]
+		alloc.CoolingDown = aa.IsCooling()
+		alloc.Node = aa.Node()
+		alloc.Borrowed = aa.IsBorrowed()
+		alloc.Pod = aa.Attr.ActiveOwnerAttrs[model.IPAMBlockAttributePod]
+		alloc.Namespace = aa.Attr.ActiveOwnerAttrs[model.IPAMBlockAttributeNamespace]
+		alloc.Type = aa.Attr.ActiveOwnerAttrs[model.IPAMBlockAttributeType]
+		alloc.CreationTimestamp = aa.Attr.ActiveOwnerAttrs[model.IPAMBlockAttributeTimestamp]
 	}
 
 	// Fill in the sequence number for the allocation.

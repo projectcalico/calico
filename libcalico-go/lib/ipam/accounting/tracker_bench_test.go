@@ -52,43 +52,47 @@ type benchCluster struct {
 // newBenchCluster fills each /26 block to 75% with pods, four cooling addresses, and a tunnel on one block in eight.
 // One pod in ten is borrowed, and one in twenty is leaked.
 func newBenchCluster(s benchSize) *benchCluster {
-	c := &benchCluster{}
+	cluster := &benchCluster{}
 	for n := range s.nodes {
-		c.nodes = append(c.nodes, fmt.Sprintf("node-%d", n))
+		cluster.nodes = append(cluster.nodes, fmt.Sprintf("node-%d", n))
 	}
 	for p := range s.pools {
 		name := fmt.Sprintf("pool-%d", p)
-		c.pools = append(c.pools, pool(name, fmt.Sprintf("10.%d.0.0/16", p), 26))
-		c.reservations = append(c.reservations, reservation(name, fmt.Sprintf("10.%d.255.0/28", p)))
+		cluster.pools = append(cluster.pools, pool(name, fmt.Sprintf("10.%d.0.0/16", p), 26))
+		cluster.reservations = append(cluster.reservations, reservation(name, fmt.Sprintf("10.%d.255.0/28", p)))
 		for i := range s.blocksPerPool {
-			node := c.nodes[(p*s.blocksPerPool+i)%s.nodes]
-			b := testBlock(fmt.Sprintf("10.%d.%d.%d/26", p, i/4, i%4*64), "host:"+node)
+			node := cluster.nodes[(p*s.blocksPerPool+i)%s.nodes]
+			block := testBlock(fmt.Sprintf("10.%d.%d.%d/26", p, i/4, i%4*64), "host:"+node)
 			if i%8 == 0 {
-				allocateTunnel(b, 0, node)
-				c.refs = append(c.refs, AddressRef{IP: b.OrdinalToIP(0).IP, Kind: v3.IPPoolAllowedUseTunnel, Referrer: Referrer{Kind: "Node", Name: node}})
+				allocateTunnel(block, 0, node)
+				cluster.refs = append(cluster.refs, AddressRef{IP: block.OrdinalToIP(0).IP, Kind: v3.IPPoolAllowedUseTunnel, Referrer: Referrer{Kind: "Node", Name: node}})
 			}
 			for ord := 1; ord < 44; ord++ {
 				podNode := node
 				if ord%10 == 0 {
-					podNode = c.nodes[(p*s.blocksPerPool+i+1)%s.nodes]
+					podNode = cluster.nodes[(p*s.blocksPerPool+i+1)%s.nodes]
 				}
 				handle := fmt.Sprintf("k8s-pod-network.%d-%d-%d", p, i, ord)
-				allocate(b, ord, handle, map[string]string{
+				allocate(block, ord, handle, map[string]string{
 					model.IPAMBlockAttributePod:       handle,
 					model.IPAMBlockAttributeNamespace: "default",
 					model.IPAMBlockAttributeNode:      podNode,
 				})
 				if ord%20 != 0 {
-					c.refs = append(c.refs, AddressRef{IP: b.OrdinalToIP(ord).IP, Kind: v3.IPPoolAllowedUseWorkload, Referrer: Referrer{Kind: "Workload", Namespace: "default", Name: handle}})
+					cluster.refs = append(cluster.refs, AddressRef{
+						IP:       block.OrdinalToIP(ord).IP,
+						Kind:     v3.IPPoolAllowedUseWorkload,
+						Referrer: Referrer{Kind: "Workload", Namespace: "default", Name: handle},
+					})
 				}
 			}
 			for ord := 44; ord < 48; ord++ {
-				allocateCooling(b, ord)
+				allocateCooling(block, ord)
 			}
-			c.blocks = append(c.blocks, b)
+			cluster.blocks = append(cluster.blocks, block)
 		}
 	}
-	return c
+	return cluster
 }
 
 // load is what an inline caller does: add everything, then read.
@@ -113,7 +117,7 @@ func forEachSize(b *testing.B, fn func(b *testing.B, c *benchCluster)) {
 	}
 }
 
-// BenchmarkLoad is the inline caller's whole cost: ipam check and GetUtilization build a tracker per call.
+// BenchmarkLoad is the inline caller's whole cost: ipam check builds a tracker per call.
 func BenchmarkLoad(b *testing.B) {
 	forEachSize(b, func(b *testing.B, c *benchCluster) {
 		for b.Loop() {
@@ -140,15 +144,18 @@ func BenchmarkRetainedMemory(b *testing.B) {
 	})
 }
 
+// benchRead is one tracker read to time.
+type benchRead struct {
+	name string
+	read func()
+}
+
 // BenchmarkRead times each read on a loaded tracker with nothing pending, which is a syncer caller's steady state.
 func BenchmarkRead(b *testing.B) {
 	forEachSize(b, func(b *testing.B, c *benchCluster) {
 		tr := c.load()
 		first := c.pools[0].Name
-		for _, r := range []struct {
-			name string
-			read func()
-		}{
+		for _, r := range []benchRead{
 			{"Summarize", func() { tr.Summarize(first) }},
 			{"SummarizeAll", func() { tr.SummarizeAll() }},
 			{"Allocations", func() { tr.Allocations(first) }},

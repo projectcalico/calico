@@ -161,27 +161,3 @@ func countAllocated(b *model.AllocationBlock) int {
 	}
 	return n
 }
-
-// blockAllocations lists every allocated ordinal in the block, cooling included. It skips malformed entries and
-// counts them, so the caller decides whether to log.
-func blockAllocations(b *model.AllocationBlock) ([]Allocation, int) {
-	var allocs []Allocation
-	malformed := 0
-	size := b.NumAddresses()
-	for ordinal, idx := range b.Allocations {
-		if idx == nil {
-			continue
-		}
-		if *idx < 0 || *idx >= len(b.Attributes) || ordinal >= size {
-			malformed++
-			continue
-		}
-		allocs = append(allocs, Allocation{
-			IP:      b.OrdinalToIP(ordinal).IP,
-			Ordinal: ordinal,
-			Block:   b,
-			Attr:    &b.Attributes[*idx],
-		})
-	}
-	return allocs, malformed
-}

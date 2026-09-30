@@ -29,44 +29,22 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-// NumReservedIPsInCIDR returns how many of the addresses in cidr the given
-// IPReservations cover, whether or not they are also allocated.  An address
-// covered twice is counted once.
-//
-// GetUtilization reports this alongside the allocated and free counts, but doing so
-// costs a list of every allocation block.  This is for callers that already hold the
-// resources — kube-controllers gets them from its syncer — and need only this
-// number.
+// NumReservedIPsInCIDR returns how many addresses in cidr the reservations cover, allocated or not, counting overlaps
+// once. It is for callers such as kube-controllers that already hold the reservations and list no blocks.
 func NumReservedIPsInCIDR(cidr cnet.IPNet, reservations []*v3.IPReservation) (int, error) {
-	n, err := NumReservedIPsInCIDRBig(cidr, reservations)
+	n, err := countReserved(cidr, ReservationCIDRs(reservations))
 	if err != nil {
 		return 0, err
 	}
 	return ClampToInt(n), nil
 }
 
-// NumReservedIPsInCIDRBig is NumReservedIPsInCIDR without the saturation. A
-// caller comparing the count against the size of the CIDR needs it: an IPv6
-// pool holds more addresses than an int, so a reservation covering all of one
-// clamps to a number smaller than the pool and reads as partial cover.
-func NumReservedIPsInCIDRBig(cidr cnet.IPNet, reservations []*v3.IPReservation) (*big.Int, error) {
-	return countReserved(cidr, ReservationCIDRs(reservations))
-}
-
-// ReservedIPs answers whether one address is reserved, over the same set
-// NumReservedIPsInCIDR counts. A caller holding both the allocations and the
-// reservations needs this to tell an allocated address that is also reserved
-// from one that is not: the two counts overlap, so they cannot be added.
-type ReservedIPs struct {
+// reservedIPs is the reserved address set, built once for repeated lookups. A nil one reserves nothing.
+type reservedIPs struct {
 	set *netipx.IPSet
 }
 
-// NewReservedIPs builds the reserved set once, for repeated Contains calls.
-func NewReservedIPs(reservations []*v3.IPReservation) (*ReservedIPs, error) {
-	return newReservedIPs(ReservationCIDRs(reservations))
-}
-
-func newReservedIPs(reserved []cnet.IPNet) (*ReservedIPs, error) {
+func newReservedIPs(reserved []cnet.IPNet) (*reservedIPs, error) {
 	var b netipx.IPSetBuilder
 	for _, r := range reserved {
 		if p, ok := toPrefix(r.IPNet); ok {
@@ -79,30 +57,15 @@ func newReservedIPs(reserved []cnet.IPNet) (*ReservedIPs, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ReservedIPs{set: s}, nil
+	return &reservedIPs{set: s}, nil
 }
 
-// Contains is whether no allocation can use ip. A nil ReservedIPs reserves
-// nothing, so a caller that could not read the reservations is not told an
-// address is free when it may not be.
-func (r *ReservedIPs) Contains(ip net.IP) bool {
-	if r == nil || r.set == nil {
-		return false
-	}
-	addr, ok := netipx.FromStdIP(ip)
-	if !ok {
-		return false
-	}
-	return r.set.Contains(addr)
-}
-
-// containsAddr is Contains for an address the caller already holds as a netip.Addr.
-func (r *ReservedIPs) containsAddr(addr netip.Addr) bool {
+func (r *reservedIPs) containsAddr(addr netip.Addr) bool {
 	return r != nil && r.set != nil && r.set.Contains(addr)
 }
 
 // changedSince returns the addresses reserved in exactly one of r and old.
-func (r *ReservedIPs) changedSince(old *ReservedIPs) (*netipx.IPSet, error) {
+func (r *reservedIPs) changedSince(old *reservedIPs) (*netipx.IPSet, error) {
 	var added, removed netipx.IPSetBuilder
 	added.AddSet(r.ipSet())
 	added.RemoveSet(old.ipSet())
@@ -117,19 +80,19 @@ func (r *ReservedIPs) changedSince(old *ReservedIPs) (*netipx.IPSet, error) {
 }
 
 // overlaps is whether any address in n is reserved.
-func (r *ReservedIPs) overlaps(n net.IPNet) bool {
+func (r *reservedIPs) overlaps(n net.IPNet) bool {
 	p, ok := toPrefix(n)
 	return ok && r.ipSet().OverlapsPrefix(p)
 }
 
-func (r *ReservedIPs) ipSet() *netipx.IPSet {
+func (r *reservedIPs) ipSet() *netipx.IPSet {
 	if r == nil || r.set == nil {
 		return &netipx.IPSet{}
 	}
 	return r.set
 }
 
-// countReserved is NumReservedIPsInCIDRBig over CIDRs already resolved from the reservations.
+// countReserved is NumReservedIPsInCIDR over CIDRs already resolved from the reservations, without the clamp.
 func countReserved(cidr cnet.IPNet, reserved []cnet.IPNet) (*big.Int, error) {
 	prefix, err := PrefixFromCIDR(cidr.IPNet)
 	if err != nil {
@@ -166,12 +129,8 @@ func ReservationCIDRs(reservations []*v3.IPReservation) []cnet.IPNet {
 	return cidrs
 }
 
-// SubtractReserved returns the part of prefix that no reservation covers.
-//
-// Reservations may overlap and nest arbitrarily — one IPReservation can cover a /24
-// while another names a single address inside it — so this has to be a set operation
-// rather than a sum over the CIDRs.  Subtracting a prefix splits whatever it partly
-// overlaps and repeats are no-ops, so the set needs no deduplication of our own.
+// SubtractReserved returns the part of prefix that no reservation covers. Reservations can overlap and nest, so this is
+// a set subtraction rather than a sum over the CIDRs.
 func SubtractReserved(prefix netip.Prefix, reserved []cnet.IPNet) *netipx.IPSetBuilder {
 	var assignable netipx.IPSetBuilder
 	assignable.AddPrefix(prefix)
@@ -208,10 +167,8 @@ func NumIPsInPrefix(p netip.Prefix) *big.Int {
 	return new(big.Int).Lsh(big.NewInt(1), uint(p.Addr().BitLen()-p.Bits()))
 }
 
-// ClampToInt saturates rather than wrapping.  Real pools are far smaller than
-// this — IPv6 pools are /96 or longer — so it is purely defensive: it keeps the
-// conversion to the int fields of BlockUtilization and PoolUtilization total,
-// instead of turning an oversized count negative.
+// ClampToInt converts n to an int, saturating at math.MaxInt rather than wrapping negative. Real pools are far smaller,
+// so this is purely defensive.
 func ClampToInt(n *big.Int) int {
 	if !n.IsInt64() || n.Int64() > math.MaxInt {
 		return math.MaxInt

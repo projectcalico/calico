@@ -86,7 +86,7 @@ type trackedBlock struct {
 
 type reservedState struct {
 	cidrs []cnet.IPNet
-	ips   *ReservedIPs
+	ips   *reservedIPs
 }
 
 // blockSet is a set of blocks kept in address order as they come and go, so reading it in order writes nothing.
@@ -351,7 +351,7 @@ func (t *Tracker) blocksWithin(n *net.IPNet, except *trackedPool) []*trackedBloc
 	return out
 }
 
-// attributeToPool moves block to the pool attribution now picks for it, if that changed.
+// attributeToPool moves block to the pool poolFor picks for it, when that differs from its current pool.
 func (t *Tracker) attributeToPool(block *trackedBlock) {
 	next := t.poolFor(&block.allocationBlock.CIDR.IPNet)
 	if next == block.pool {
@@ -383,48 +383,48 @@ func (t *Tracker) unplace(block *trackedBlock) {
 
 // addToCounts adds block's contribution to the pool's totals. removeFromCounts is its exact inverse.
 func (t *Tracker) addToCounts(pool *trackedPool, block *trackedBlock) {
-	c := pool.counts
-	c.BlocksInUse++
+	counts := pool.counts
+	counts.BlocksInUse++
 	switch {
 	case block.allocationBlock.Affinity == nil:
-		c.NoAffinity++
+		counts.NoAffinity++
 	case block.virtual:
-		c.VirtualAffinity++
+		counts.VirtualAffinity++
 	case block.node != "":
-		incrementBy(c.BlocksByNode, block.node, 1)
+		incrementBy(counts.BlocksByNode, block.node, 1)
 		if t.isStale(block.node) {
-			c.StaleAffinity++
+			counts.StaleAffinity++
 		}
 	}
-	c.InUse += block.inUse
-	c.Cooling += block.cooling
-	c.Borrowed += block.borrowed
-	c.InUseReserved += block.inUseReserved
+	counts.InUse += block.inUse
+	counts.Cooling += block.cooling
+	counts.Borrowed += block.borrowed
+	counts.InUseReserved += block.inUseReserved
 	for i, n := range block.addressesByKind {
-		incrementBy(c.AddressesByKind, trackedKinds[i], n)
+		incrementBy(counts.AddressesByKind, trackedKinds[i], n)
 	}
 }
 
 func (t *Tracker) removeFromCounts(pool *trackedPool, block *trackedBlock) {
-	c := pool.counts
-	c.BlocksInUse--
+	counts := pool.counts
+	counts.BlocksInUse--
 	switch {
 	case block.allocationBlock.Affinity == nil:
-		c.NoAffinity--
+		counts.NoAffinity--
 	case block.virtual:
-		c.VirtualAffinity--
+		counts.VirtualAffinity--
 	case block.node != "":
-		decrementBy(c.BlocksByNode, block.node, 1)
+		decrementBy(counts.BlocksByNode, block.node, 1)
 		if t.isStale(block.node) {
-			c.StaleAffinity--
+			counts.StaleAffinity--
 		}
 	}
-	c.InUse -= block.inUse
-	c.Cooling -= block.cooling
-	c.Borrowed -= block.borrowed
-	c.InUseReserved -= block.inUseReserved
+	counts.InUse -= block.inUse
+	counts.Cooling -= block.cooling
+	counts.Borrowed -= block.borrowed
+	counts.InUseReserved -= block.inUseReserved
 	for i, n := range block.addressesByKind {
-		decrementBy(c.AddressesByKind, trackedKinds[i], n)
+		decrementBy(counts.AddressesByKind, trackedKinds[i], n)
 	}
 }
 
@@ -508,7 +508,7 @@ func (t *Tracker) applyReservedChange() {
 	}
 
 	// A block inside a pool overlaps the change only if its pool does, so the pools narrow the search.
-	diff := &ReservedIPs{set: changed}
+	diff := &reservedIPs{set: changed}
 	recountOverlapping := func(s *blockSet) {
 		for _, block := range s.blocks {
 			if diff.overlaps(block.allocationBlock.CIDR.IPNet) {
@@ -575,7 +575,7 @@ func containsNet(outer, inner *net.IPNet) bool {
 }
 
 // newTrackedBlock walks the block once, counting its reserved overlap against reserved.
-func newTrackedBlock(key string, b *model.AllocationBlock, reserved *ReservedIPs) *trackedBlock {
+func newTrackedBlock(key string, b *model.AllocationBlock, reserved *reservedIPs) *trackedBlock {
 	block := &trackedBlock{key: key, allocationBlock: b, base: blockBase(b)}
 	block.node, _ = NodeAffinity(b)
 	block.virtual = b.Affinity != nil && b.AffinityType() == model.IPAMAffinityTypeVirtual
@@ -616,14 +616,14 @@ func newTrackedBlock(key string, b *model.AllocationBlock, reserved *ReservedIPs
 	return block
 }
 
-func (block *trackedBlock) countReserved(reserved *ReservedIPs) {
-	block.inUseReserved = 0
-	if !reserved.overlaps(block.allocationBlock.CIDR.IPNet) {
+func (b *trackedBlock) countReserved(reserved *reservedIPs) {
+	b.inUseReserved = 0
+	if !reserved.overlaps(b.allocationBlock.CIDR.IPNet) {
 		return
 	}
-	for a := range allocations(block.allocationBlock) {
-		if reserved.containsAddr(addrAt(block.base, a.Ordinal)) {
-			block.inUseReserved++
+	for a := range allocations(b.allocationBlock) {
+		if reserved.containsAddr(addrAt(b.base, a.Ordinal)) {
+			b.inUseReserved++
 		}
 	}
 }

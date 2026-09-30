@@ -51,11 +51,8 @@ func NodeSelector(pool *v3.IPPool) string {
 	return pool.Spec.NodeSelector
 }
 
-// poolFor returns the pool that owns block, or nil when no pool contains it:
-//
-//  1. candidatePools keeps the pools of the block's address family whose CIDR contains the whole block.
-//  2. preferBlockSizeMatch narrows those to the pools whose block size matches the block, when any do.
-//  3. ranksBefore picks the best of what remains.
+// poolFor returns the pool that owns block, or nil when none contains it: the best-ranked candidate, preferring pools
+// whose block size matches.
 func (t *Tracker) poolFor(block *net.IPNet) *trackedPool {
 	var best *trackedPool
 	for _, pool := range preferBlockSizeMatch(t.candidatePools(block), block) {
