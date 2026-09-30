@@ -400,7 +400,7 @@ do_apply() {
     git push "$tgt_url" --delete "$BRANCH_NAME" || true
   fi
 
-  git clone "$tgt_url" .
+  git clone --depth=1 --branch "$TARGET_BRANCH" "$tgt_url" .
   git checkout -b "$BRANCH_NAME" "origin/${TARGET_BRANCH}"
   # Apply the resolved commit. If the base moved and it no longer applies, fail
   # loudly rather than pushing a broken tree.
