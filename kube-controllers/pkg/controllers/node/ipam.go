@@ -17,7 +17,7 @@ package node
 import (
 	"context"
 	"fmt"
-	"math"
+	"math/big"
 	"net"
 	"strings"
 	"time"
@@ -47,7 +47,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -695,7 +694,6 @@ func (c *IPAMController) forgetBlock(blockCIDR string) {
 func (c *IPAMController) onPoolUpdated(pool *apiv3.IPPool) {
 	if c.poolManager.allPools[pool.Name] == nil {
 		registerMetricVectorsForPool(pool.Name)
-		publishPoolSizeMetric(pool)
 	}
 
 	c.poolManager.onPoolUpdated(pool)
@@ -791,20 +789,22 @@ func (c *IPAMController) updateMetrics() {
 		legacyBorrowedGauge.WithLabelValues(node).Set(float64(num))
 	}
 
-	c.updateReservedMetrics()
+	c.updatePoolMetrics()
 
 	log.Debug("IPAM metrics updated")
 }
 
-// updateReservedMetrics publishes how much of each pool an IPReservation covers, including pool space no block has
-// been carved from. The tracker's count is the one `calicoctl ipam show` reports.
-func (c *IPAMController) updateReservedMetrics() {
+// updatePoolMetrics publishes each pool's size and how much of it an IPReservation covers, including pool space no
+// block has been carved from. The tracker's counts are the ones `calicoctl ipam show` reports.
+func (c *IPAMController) updatePoolMetrics() {
 	for poolName := range c.poolManager.allPools {
 		counts, ok := c.tracker.Summarize(poolName)
 		if !ok {
 			// Its CIDR is unparseable, or the tracker has applied a delete still queued here.
 			continue
 		}
+		size, _ := new(big.Float).SetInt(counts.Total).Float64()
+		poolSizeGauge.With(prometheus.Labels{"ippool": poolName}).Set(size)
 		poolReservedGauge.With(prometheus.Labels{"ippool": poolName}).Set(float64(accounting.ClampToInt(counts.Reserved)))
 	}
 }
@@ -1648,18 +1648,6 @@ func updatePoolGaugeWithNodeValues(gaugesByPool map[string]*prometheus.GaugeVec,
 	for node, value := range nodeValues {
 		poolGauge.With(prometheus.Labels{"node": node}).Set(float64(value))
 	}
-}
-
-func publishPoolSizeMetric(pool *apiv3.IPPool) {
-	_, poolNet, err := cnet.ParseCIDR(pool.Spec.CIDR)
-	if err != nil {
-		log.WithError(err).Warnf("Unable to parse CIDR for IP Pool %s", pool.Name)
-		return
-	}
-
-	ones, bits := poolNet.Mask.Size()
-	poolSize := math.Pow(2, float64(bits-ones))
-	poolSizeGauge.With(prometheus.Labels{"ippool": pool.Name}).Set(poolSize)
 }
 
 func clearPoolMetrics(poolName string) {

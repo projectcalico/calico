@@ -240,15 +240,16 @@ var _ = Describe("IPAM controller UTs", func() {
 		done()
 	})
 
-	It("should publish the reserved-IP gauge from the shared tracker", func() {
+	It("should publish the pool size and reserved-IP gauges from the shared tracker", func() {
 		c.Start(stopChan)
 		resume := c.pause()
 		defer resume()
 
+		poolSizeGauge.Reset()
 		poolReservedGauge.Reset()
 		poolName := "reserved-gauge-test-pool"
 		reservedGauge := func() float64 {
-			c.updateReservedMetrics()
+			c.updatePoolMetrics()
 			return testutil.ToFloat64(poolReservedGauge.With(prometheus.Labels{"ippool": poolName}))
 		}
 
@@ -263,6 +264,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		dataFeed.OnUpdates([]bapi.Update{{KVPair: poolKVP}})
 		c.handleUpdate(poolKVP)
 		Expect(reservedGauge()).To(BeZero(), "no reservations yet")
+		Expect(testutil.ToFloat64(poolSizeGauge.With(prometheus.Labels{"ippool": poolName}))).To(Equal(256.0))
 
 		// No block covers this space, so the count cannot come from the block state
 		// the controller tracks.  The two reservations overlap, so the shared /29
@@ -281,16 +283,18 @@ var _ = Describe("IPAM controller UTs", func() {
 		dataFeed.OnUpdates([]bapi.Update{{KVPair: model.KVPair{Key: reservationKey}}})
 		Expect(reservedGauge()).To(BeZero())
 
-		// Deleting the pool should take its gauge with it.
+		// Deleting the pool should take its gauges with it.
 		c.onPoolDeleted(poolName)
+		Expect(testutil.CollectAndCount(poolSizeGauge)).To(BeZero())
 		Expect(testutil.CollectAndCount(poolReservedGauge)).To(BeZero())
 	})
 
-	It("should not publish a reserved-IP gauge for a Terminating pool the tracker still holds", func() {
+	It("should not publish pool gauges for a Terminating pool the tracker still holds", func() {
 		c.Start(stopChan)
 		resume := c.pause()
 		defer resume()
 
+		poolSizeGauge.Reset()
 		poolReservedGauge.Reset()
 		now := metav1.Now()
 		poolKVP := model.KVPair{
@@ -312,7 +316,8 @@ var _ = Describe("IPAM controller UTs", func() {
 		})
 		c.handleUpdate(poolKVP)
 
-		c.updateReservedMetrics()
+		c.updatePoolMetrics()
+		Expect(testutil.CollectAndCount(poolSizeGauge)).To(BeZero())
 		Expect(testutil.CollectAndCount(poolReservedGauge)).To(BeZero())
 	})
 
