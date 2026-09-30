@@ -87,7 +87,6 @@ gen-files .generate_files: lint-cache-dir clean-generated
 	   sh -c '$(GIT_CONFIG_SSH) deepcopy-gen \
 		--v 1 --logtostderr \
 		--go-header-file "/go/src/$(PACKAGE_NAME)/hack/boilerplate/boilerplate.go.txt" \
-		--bounding-dirs $(PACKAGE_NAME) \
 		--output-file zz_generated.deepcopy.go \
 		"$(PACKAGE_NAME)/pkg/apis/projectcalico/v3"'
 
@@ -178,7 +177,7 @@ ut: kind-cluster-create
 		-e KUBECONFIG=/kubeconfig.yaml \
 		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
 		$(CALICO_BUILD) \
-		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo2 -r --junit-report=api_ut.xml --output-dir=report/ -focus="$(GINKGO_FOCUS)" $(WHAT)'
+		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=api_ut.xml --output-dir=report/ -focus="$(GINKGO_FOCUS)" $(WHAT)'
 
 ## Run CRD validation tests using envtest (no kind cluster required)
 .PHONY: ut-validation

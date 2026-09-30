@@ -134,9 +134,9 @@ Description:
 		var errStr strings.Builder
 		for _, err := range results.ResErrs {
 			if results.SingleKind != "" {
-				errStr.WriteString(fmt.Sprintf("Failed to delete '%s' resource: %v\n", results.SingleKind, err))
+				fmt.Fprintf(&errStr, "Failed to delete '%s' resource: %v\n", results.SingleKind, err)
 			} else {
-				errStr.WriteString(fmt.Sprintf("Failed to delete resource: %v\n", err))
+				fmt.Fprintf(&errStr, "Failed to delete resource: %v\n", err)
 			}
 		}
 		return errors.New(errStr.String())
