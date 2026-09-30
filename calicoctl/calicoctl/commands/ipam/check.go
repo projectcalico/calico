@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net"
 	"os"
 	"slices"
@@ -25,23 +26,48 @@ import (
 	"strings"
 	"time"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	kubevirtv1 "kubevirt.io/api/core/v1"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
-	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-func NewIPAMChecker(k8sClient kubernetes.Interface,
+// NewKubeClient reads the Kubernetes types that check cross-references with IPAM.
+func NewKubeClient(cfg *rest.Config) (ctrlclient.Client, error) {
+	scheme, err := newScheme()
+	if err != nil {
+		return nil, err
+	}
+	return ctrlclient.New(cfg, ctrlclient.Options{Scheme: scheme})
+}
+
+func newScheme() (*runtime.Scheme, error) {
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	if err := kubevirtv1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	return scheme, nil
+}
+
+func NewIPAMChecker(
+	k8sClient ctrlclient.Client,
 	v3Client clientv3.Interface,
 	backendClient bapi.Client,
 	showAllIPs bool,
@@ -50,12 +76,8 @@ func NewIPAMChecker(k8sClient kubernetes.Interface,
 	version string,
 ) *IPAMChecker {
 	return &IPAMChecker{
-		allocations:       map[string][]*Allocation{},
-		allocationsByNode: map[string][]*Allocation{},
-		allocationsByPod:  map[string][]*Allocation{},
-
-		inUseIPs:     map[string][]ownerRecord{},
-		inUseHandles: set.New[string](),
+		allocations: map[string][]*Allocation{},
+		tracker:     accounting.NewTracker(),
 
 		k8sClient:     k8sClient,
 		v3Client:      v3Client,
@@ -70,19 +92,19 @@ func NewIPAMChecker(k8sClient kubernetes.Interface,
 }
 
 type IPAMChecker struct {
-	allocations       map[string][]*Allocation
-	allocationsByNode map[string][]*Allocation
-	allocationsByPod  map[string][]*Allocation
-	leakedHandles     []HandleInfo
-	inUseIPs          map[string][]ownerRecord
-	inUseHandles      set.Set[string]
+	// The report: every allocation by address, and the handles no allocation names.
+	allocations   map[string][]*Allocation
+	leakedHandles []HandleInfo
+
+	// tracker holds the blocks, pools, nodes and live references, and decides what is leaked.
+	tracker *accounting.Tracker
 
 	clusterType         string
 	clusterInfoRevision string
 	datastoreLocked     bool
 	clusterGUID         string
 
-	k8sClient     kubernetes.Interface
+	k8sClient     ctrlclient.Client
 	backendClient bapi.Client
 	v3Client      clientv3.Interface
 
@@ -132,18 +154,23 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 				numAllocs++
 				c.recordAllocation(b, ord)
 			}
+			c.tracker.AddBlocks(b)
 		}
 		fmt.Printf("IPAM blocks record %d allocations.\n", numAllocs)
 		fmt.Println()
 	}
 	var activeIPPools []*cnet.IPNet
+	var poolNames []string
 	{
 		fmt.Println("Loading all IPAM pools...")
 		ipPools, err := c.v3Client.IPPools().List(ctx, options.ListOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to load IP pools: %w", err)
 		}
-		for _, p := range ipPools.Items {
+		for i, p := range ipPools.Items {
+			// Disabled pools still own their blocks.
+			c.tracker.AddPools(&ipPools.Items[i])
+			poolNames = append(poolNames, p.Name)
 			if p.Spec.Disabled {
 				continue
 			}
@@ -165,15 +192,17 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 			return fmt.Errorf("failed to list nodes: %w", err)
 		}
 		numNodeIPs := 0
+
+		// An empty list still tells the tracker which nodes exist.
+		c.tracker.AddNodes()
 		for _, n := range nodes.Items {
-			ips, err := getNodeIPs(n)
+			c.tracker.AddNodes(n.Name)
+			addressRefs, err := accounting.NodeAddressRefs(&n)
 			if err != nil {
 				return err
 			}
-			for _, ip := range ips {
-				c.recordInUseIP(ip, n, fmt.Sprintf("Node(%s)", n.Name))
-				numNodeIPs++
-			}
+			c.recordRefs(addressRefs...)
+			numNodeIPs += len(addressRefs)
 		}
 		fmt.Printf("Found %d node tunnel IPs.\n", numNodeIPs)
 		fmt.Println()
@@ -181,9 +210,9 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 
 	{
 		fmt.Println("Loading all service load balancer IPs.")
-		services, err := c.k8sClient.CoreV1().Services("").List(ctx, metav1.ListOptions{})
-		if err != nil {
-			return err
+		var services corev1.ServiceList
+		if err := c.k8sClient.List(ctx, &services); err != nil {
+			return fmt.Errorf("failed to list services: %w", err)
 		}
 
 		kubeControllerConfig, err := c.v3Client.KubeControllersConfiguration().Get(ctx, "default", options.GetOptions{})
@@ -191,20 +220,40 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 			return err
 		}
 
-		if kubeControllerConfig.Spec.Controllers.LoadBalancer == nil {
-			fmt.Println("No configuration for LoadBalancer kubecontroller found, skipping service check")
-		} else {
-			var lengthLoadBalancer int
-			for _, svc := range services.Items {
-				if svc.Spec.Type == corev1.ServiceTypeLoadBalancer &&
-					loadbalancer.IsCalicoManagedLoadBalancer(&svc, kubeControllerConfig.Spec.Controllers.LoadBalancer.AssignIPs) {
-					lengthLoadBalancer++
-					for _, ingress := range svc.Status.LoadBalancer.Ingress {
-						c.recordInUseIP(ingress.IP, svc, svc.Name)
-					}
-				}
+		lbConfig := kubeControllerConfig.Spec.Controllers.LoadBalancer
+		if lbConfig == nil {
+			// Without the controller's config there is no telling which services Calico manages, so count them all.
+			fmt.Println("No configuration for LoadBalancer kubecontroller found, counting every LoadBalancer service")
+		}
+		var numLoadBalancers int
+		for _, svc := range services.Items {
+			if svc.Spec.Type != corev1.ServiceTypeLoadBalancer {
+				continue
 			}
-			fmt.Printf("Found %d service load balancer(s).\n", lengthLoadBalancer)
+			if lbConfig != nil && !loadbalancer.IsCalicoManagedLoadBalancer(&svc, lbConfig.AssignIPs) {
+				continue
+			}
+			numLoadBalancers++
+			addressRefs, err := accounting.ServiceAddressRefs(&svc)
+			if err != nil {
+				return err
+			}
+			c.recordRefs(addressRefs...)
+		}
+		fmt.Printf("Found %d service load balancer(s).\n", numLoadBalancers)
+		fmt.Println()
+	}
+
+	{
+		fmt.Println("Loading all KubeVirt VMs.")
+		vms, err := c.liveVMs(ctx)
+		if err != nil {
+			return err
+		}
+		if vms == nil {
+			fmt.Println("KubeVirt is not installed, skipping VM check.")
+		} else {
+			fmt.Printf("Found %d VM IPs.\n", c.recordVMRefs(vms))
 		}
 		fmt.Println()
 	}
@@ -217,17 +266,15 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 		}
 		numWEPIPs := 0
 		for _, w := range weps.Items {
-			ips, err := getWEPIPs(w)
+			addressRefs, err := accounting.WorkloadEndpointAddressRefs(&w)
 			if err != nil {
 				return err
 			}
-			for _, ip := range ips {
-				c.recordInUseIP(ip, w, fmt.Sprintf("Workload(%s/%s)", w.Namespace, w.Name))
-				numWEPIPs++
-			}
+			c.recordRefs(addressRefs...)
+			numWEPIPs += len(addressRefs)
 		}
 		fmt.Printf("Found %d workload IPs.\n", numWEPIPs)
-		fmt.Printf("Workloads and nodes are using %d IPs.\n", len(c.inUseIPs))
+		fmt.Printf("Workloads and nodes are using %d IPs.\n", len(c.refsByIP()))
 		fmt.Println()
 	}
 
@@ -251,53 +298,75 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 	{
 		const numNodesToPrint = 20
 		fmt.Printf("Looking for top (up to %d) nodes by allocations...\n", numNodesToPrint)
-		var allNodes []string
-		for n := range c.allocationsByNode {
-			allNodes = append(allNodes, n)
+		numAllocationsByNode := map[string]int{}
+		for _, allocs := range c.allocations {
+			for _, a := range allocs {
+				numAllocationsByNode[a.Node]++
+			}
 		}
+		allNodes := slices.Collect(maps.Keys(numAllocationsByNode))
 		sort.Slice(allNodes, func(i, j int) bool {
 			// Reverse order
-			return len(c.allocationsByNode[allNodes[i]]) > len(c.allocationsByNode[allNodes[j]])
+			return numAllocationsByNode[allNodes[i]] > numAllocationsByNode[allNodes[j]]
 		})
 		for i, n := range allNodes {
 			if i >= numNodesToPrint {
 				break
 			}
-			fmt.Printf("  %s has %d allocations\n", n, len(c.allocationsByNode[n]))
+			fmt.Printf("  %s has %d allocations\n", n, numAllocationsByNode[n])
 		}
 		if len(allNodes) > 0 {
-			max := len(c.allocationsByNode[allNodes[0]])
-			median := len(c.allocationsByNode[allNodes[len(allNodes)/2]])
-			fmt.Printf("Node with most allocations has %d; median is %d\n", max, median)
+			most := numAllocationsByNode[allNodes[0]]
+			median := numAllocationsByNode[allNodes[len(allNodes)/2]]
+			fmt.Printf("Node with most allocations has %d; median is %d\n", most, median)
 		}
 		fmt.Println()
 	}
 
 	numProblems := 0
-	var allocatedButNotInUseIPs []string
 	{
-		fmt.Printf("Scanning for IPs that are allocated but not actually in use...\n")
-		for ip, allocs := range c.allocations {
-			if _, ok := c.inUseIPs[ip]; !ok {
-				// If the IP is in a cooldown state, do not report it as a problem/leak.
-				coolingDown := false
-				for _, alloc := range allocs {
-					if alloc.CoolingDown {
-						coolingDown = true
-						break
-					}
-				}
-				if coolingDown {
+		fmt.Printf("Scanning for IPs with unknown types...\n")
+		numUnknowns := 0
+		for _, allocs := range c.allocations {
+			for _, a := range allocs {
+				if !a.tracked() || a.accountingAlloc.Kind() != accounting.KindUnknown || len(c.tracker.Refs(a.accountingAlloc.IP)) > 0 {
 					continue
 				}
 
+				// A type we don't know about and nothing holds. Have to assume it's in use.
 				if c.showProblemIPs {
-					for _, alloc := range allocs {
-						fmt.Printf("  %s leaked; attrs %v\n", ip, alloc.GetAttrString())
-					}
+					fmt.Printf("  %s allocation has unknown type (%s) Assuming IP is still in use.\n", a.IP, a.Type)
 				}
-				allocatedButNotInUseIPs = append(allocatedButNotInUseIPs, ip)
+				numUnknowns++
 			}
+		}
+		if numUnknowns > 0 {
+			fmt.Printf("Warning: found %d IPs with unknown allocation types. Perhaps a new version of this tool is needed?\n", numUnknowns)
+			numProblems += numUnknowns
+		} else {
+			fmt.Print("Found 0 IPs with unknown allocation types.\n")
+		}
+	}
+
+	var allocatedButNotInUseIPs []string
+	{
+		fmt.Printf("Scanning for IPs that are allocated but not actually in use...\n")
+		leaked := c.leakedIPs(poolNames)
+		for _, ip := range slices.Sorted(maps.Keys(c.allocations)) {
+			allocs := c.allocations[ip]
+			c.markInUse(ip, allocs, leaked)
+			c.recordOwners(allocs)
+
+			// Leaked means none of the address's allocations is in use or cooling down.
+			if slices.ContainsFunc(allocs, func(a *Allocation) bool { return a.InUse || a.CoolingDown }) {
+				continue
+			}
+			if c.showProblemIPs {
+				for _, alloc := range allocs {
+					fmt.Printf("  %s leaked; attrs %v\n", ip, alloc.GetAttrString())
+				}
+			}
+			allocatedButNotInUseIPs = append(allocatedButNotInUseIPs, ip)
 		}
 		numProblems += len(allocatedButNotInUseIPs)
 		fmt.Printf("Found %d IPs that are allocated in IPAM but not actually in use.\n", len(allocatedButNotInUseIPs))
@@ -307,8 +376,8 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 	var nonCalicoIPs []string
 	{
 		fmt.Printf("Scanning for IPs that are in use by a workload or node but not allocated in IPAM...\n")
-		for ip, owners := range c.inUseIPs {
-			if c.showProblemIPs && len(owners) > 1 {
+		for ip, addressRefs := range c.refsByIP() {
+			if c.showProblemIPs && len(addressRefs) > 1 {
 				fmt.Printf("  %s has multiple owners.\n", ip)
 			}
 			if _, ok := c.allocations[ip]; !ok {
@@ -325,16 +394,16 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 				}
 				if !found {
 					if c.showProblemIPs {
-						for _, owner := range owners {
-							fmt.Printf("  %s in use by %v is not in any active IP pool.\n", ip, owner.FriendlyName)
+						for _, r := range addressRefs {
+							fmt.Printf("  %s in use by %v is not in any active IP pool.\n", ip, r.Referrer)
 						}
 					}
 					nonCalicoIPs = append(nonCalicoIPs, ip)
 					continue
 				}
 				if c.showProblemIPs {
-					for _, owner := range owners {
-						fmt.Printf("  %s in use by %v and in active IPAM pool but has no IPAM allocation.\n", ip, owner.FriendlyName)
+					for _, r := range addressRefs {
+						fmt.Printf("  %s in use by %v and in active IPAM pool but has no IPAM allocation.\n", ip, r.Referrer)
 					}
 				}
 				inUseButNotAllocatedIPs = append(inUseButNotAllocatedIPs, ip)
@@ -348,12 +417,20 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 		fmt.Println()
 	}
 
+	inUseHandles := set.New[string]()
+	for _, allocs := range c.allocations {
+		for _, a := range allocs {
+			if a.Handle != "" {
+				inUseHandles.Add(a.Handle)
+			}
+		}
+	}
 	{
 		fmt.Printf("Scanning for IPAM handles with no matching IPs...\n")
 		goodHandles := 0
 		var leakedHandles []HandleInfo
 		for handleID, handleInfo := range handles {
-			if c.inUseHandles.Contains(handleID) {
+			if inUseHandles.Contains(handleID) {
 				goodHandles++
 				continue
 			}
@@ -371,7 +448,7 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 	var missingHandles []string
 	{
 		fmt.Printf("Scanning for IPs with missing handle...\n")
-		for handleID := range c.inUseHandles.All() {
+		for handleID := range inUseHandles.All() {
 			if _, ok := handles[handleID]; ok {
 				continue
 			}
@@ -404,19 +481,6 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 		c.printReport()
 	}
 	return nil
-}
-
-func getWEPIPs(w internalapi.WorkloadEndpoint) ([]string, error) {
-	var ips []string
-	for _, a := range w.Spec.IPNetworks {
-		ip, err := normaliseIP(a)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse IP (%s) of workload %s/%s: %w",
-				a, w.Namespace, w.Name, err)
-		}
-		ips = append(ips, ip)
-	}
-	return ips, nil
 }
 
 func validateBlock(b *model.AllocationBlock) error {
@@ -497,136 +561,174 @@ func (c *IPAMChecker) printReport() {
 	_ = os.WriteFile(c.outFile, bytes, 0o777)
 }
 
-// recordAllocation takes a block and ordinal within that block and updates
-// the IPAMChecker's internal state to track the allocation.
+// recordAllocation takes a block and ordinal within that block and adds the
+// allocation to the report.
 func (c *IPAMChecker) recordAllocation(b *model.AllocationBlock, ord int) {
-	ip := b.OrdinalToIP(ord).String()
-	alloc := Allocation{IP: ip, Block: b, Ordinal: ord}
-
-	node := ""
-	blockAffinity := ""
-	if b.Affinity != nil {
-		affinity := *b.Affinity
-		if strings.HasPrefix(affinity, "host:") {
-			node = affinity[5:]
-			blockAffinity = affinity[5:]
-		}
+	ip := b.OrdinalToIP(ord)
+	alloc := Allocation{
+		IP:              ip.String(),
+		accountingAlloc: accounting.Allocation{IP: ip.IP, Ordinal: ord, Block: b},
 	}
+	alloc.Node, _ = accounting.NodeAffinity(b)
 
-	attrIdx := *b.Allocations[ord]
-	if len(b.Attributes) > attrIdx {
-		attrs := b.Attributes[attrIdx]
-		if attrs.HandleID != nil && *attrs.HandleID == ipam.WindowsReservedHandle {
-			c.recordInUseIP(ip, b, "Reserved for Windows")
-		} else if attrs.HandleID != nil {
-			alloc.Handle = *attrs.HandleID
-			c.recordInUseHandle(alloc.Handle)
+	// A deleted block still names its allocations' owners, so read the attributes whether or not the tracker saw it.
+	if attrIdx := *b.Allocations[ord]; attrIdx >= 0 && attrIdx < len(b.Attributes) {
+		acct := &alloc.accountingAlloc
+		acct.Attr = &b.Attributes[attrIdx]
+
+		// The Windows reserved handle has no handle resource behind it.
+		if !acct.IsWindowsHandle() {
+			alloc.Handle = acct.Handle()
 		}
-		if attrs.ReleasedAt != nil {
-			// Record this as cooling down. We do not have access
-			// to the IPAMConfig here to determine if this could
-			// be deallocated at this time.
-			alloc.CoolingDown = true
-		}
-		if n := attrs.ActiveOwnerAttrs["node"]; n != "" {
-			node = n
-		}
-		if p := attrs.ActiveOwnerAttrs["pod"]; p != "" {
-			alloc.Pod = p
-		}
-		if n := attrs.ActiveOwnerAttrs["namespace"]; n != "" {
-			alloc.Namespace = n
-		}
-		if t := attrs.ActiveOwnerAttrs["type"]; t != "" {
-			alloc.Type = t
-		}
-		if t := attrs.ActiveOwnerAttrs["timestamp"]; t != "" {
-			alloc.CreationTimestamp = t
-		}
+
+		// We do not have the IPAMConfig here to tell whether a cooling address could be deallocated yet.
+		alloc.CoolingDown = acct.IsCooling()
+		alloc.Node = acct.Node()
+		alloc.Borrowed = acct.IsBorrowed()
+		alloc.Pod = acct.Attr.ActiveOwnerAttrs[model.IPAMBlockAttributePod]
+		alloc.Namespace = acct.Attr.ActiveOwnerAttrs[model.IPAMBlockAttributeNamespace]
+		alloc.Type = acct.Attr.ActiveOwnerAttrs[model.IPAMBlockAttributeType]
+		alloc.CreationTimestamp = acct.Attr.ActiveOwnerAttrs[model.IPAMBlockAttributeTimestamp]
 	}
 
 	// Fill in the sequence number for the allocation.
 	s := b.GetSequenceNumberForOrdinal(ord)
 	alloc.SequenceNumber = &s
 
-	// Fill in the node for the allocation.
-	alloc.Node = node
-
-	// Determine if this is a borrowed address, and mark it as such if so.
-	if node != blockAffinity {
-		alloc.Borrowed = true
-	}
-
-	// Store the allocation in internal state.
-	c.allocations[ip] = append(c.allocations[ip], &alloc)
-	c.allocationsByNode[node] = append(c.allocationsByNode[node], &alloc)
-	if alloc.Pod != "" {
-		pod := fmt.Sprintf("%s/%s", alloc.Namespace, alloc.Pod)
-		c.allocationsByPod[pod] = append(c.allocationsByPod[pod], &alloc)
-	}
-
+	c.allocations[alloc.IP] = append(c.allocations[alloc.IP], &alloc)
 	if c.showAllIPs {
-		fmt.Printf("  %s allocated; attrs %s\n", ip, alloc.GetAttrString())
+		fmt.Printf("  %s allocated; attrs %s\n", alloc.IP, alloc.GetAttrString())
 	}
 }
 
-// recordInUseIP records that the given IP is currently being used by the given resource (i.e., pod, node, etc).
-func (c *IPAMChecker) recordInUseIP(ip string, referrer any, friendlyName string) {
+// leakedIPs is every unreferenced address, in any pool or none. Check has no grace period, so each one is a leak.
+func (c *IPAMChecker) leakedIPs(poolNames []string) set.Set[string] {
+	leaked := set.New[string]()
+	for _, name := range poolNames {
+		for _, a := range c.tracker.Unreferenced(name) {
+			leaked.Add(a.IP.String())
+		}
+	}
+	for _, a := range c.tracker.NoPoolUnreferenced() {
+		leaked.Add(a.IP.String())
+	}
+	return leaked
+}
+
+// markInUse marks each of ip's allocations in use or not. The tracker judges the ones it saw, and whether anything
+// references the address decides the rest.
+func (c *IPAMChecker) markInUse(ip string, allocs []*Allocation, leaked set.Set[string]) {
+	referenced := len(c.tracker.Refs(net.ParseIP(ip))) > 0
+	for _, a := range allocs {
+		if a.tracked() {
+			a.InUse = !a.CoolingDown && !leaked.Contains(ip)
+		} else {
+			a.InUse = !a.CoolingDown && referenced
+		}
+	}
+}
+
+// recordOwners fills in each allocation's report owners: whatever references the address, or the rule that keeps an unreferenced one in use.
+func (c *IPAMChecker) recordOwners(allocs []*Allocation) {
+	for _, a := range allocs {
+		for _, r := range c.tracker.Refs(net.ParseIP(a.IP)) {
+			a.Owners = append(a.Owners, r.Referrer.String())
+		}
+		if !a.tracked() || !a.InUse {
+			continue
+		}
+		switch a.accountingAlloc.Kind() {
+		case accounting.KindWindowsReserved:
+			a.Owners = append(a.Owners, "Reserved for Windows")
+		case accounting.KindUnknown:
+			a.Owners = append(a.Owners, fmt.Sprintf("UnknownType(%s)", a.Type))
+		}
+	}
+}
+
+// refsByIP groups the tracker's references by address.
+func (c *IPAMChecker) refsByIP() map[string][]accounting.AddressRef {
+	out := map[string][]accounting.AddressRef{}
+	for _, r := range c.tracker.AllRefs() {
+		ip := r.IP.String()
+		out[ip] = append(out[ip], r)
+	}
+	return out
+}
+
+// liveVMs names every VirtualMachine and VMI, or is nil when KubeVirt is not installed. A VMI owned by a VM shares
+// its name, so the set holds each VM once.
+func (c *IPAMChecker) liveVMs(ctx context.Context) (set.Set[types.NamespacedName], error) {
+	out := set.New[types.NamespacedName]()
+	var vms kubevirtv1.VirtualMachineList
+	if err := c.k8sClient.List(ctx, &vms); meta.IsNoMatchError(err) || runtime.IsNotRegisteredError(err) {
+		return nil, nil
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to list VirtualMachines: %w", err)
+	}
+	for _, vm := range vms.Items {
+		out.Add(types.NamespacedName{Namespace: vm.Namespace, Name: vm.Name})
+	}
+	var vmis kubevirtv1.VirtualMachineInstanceList
+	if err := c.k8sClient.List(ctx, &vmis); err != nil {
+		return nil, fmt.Errorf("failed to list VirtualMachineInstances: %w", err)
+	}
+	for _, vmi := range vmis.Items {
+		out.Add(types.NamespacedName{Namespace: vmi.Namespace, Name: vmi.Name})
+	}
+	return out, nil
+}
+
+// recordVMRefs references each allocation on a live VM's handle. A stopped VM keeps its address with no owner
+// attributes, so the handle is all that ties the address to the VM.
+func (c *IPAMChecker) recordVMRefs(vms set.Set[types.NamespacedName]) int {
+	networks := set.New[string]()
+	for _, allocs := range c.allocations {
+		for _, a := range allocs {
+			// A network name may itself contain the infix, so every prefix before one is a candidate.
+			for i := 0; ; i++ {
+				j := strings.Index(a.Handle[i:], vmipam.VMHandleInfix)
+				if j < 0 {
+					break
+				}
+				i += j
+				networks.Add(a.Handle[:i])
+			}
+		}
+	}
+
+	// Rebuilding each live VM's handle, rather than parsing handles, also matches the hashed form of a long name.
+	vmByHandle := map[string]types.NamespacedName{}
+	for network := range networks.All() {
+		for vm := range vms.All() {
+			vmByHandle[vmipam.CreateVMHandleID(network, vm.Namespace, vm.Name)] = vm
+		}
+	}
+
+	numVMIPs := 0
+	for ip, allocs := range c.allocations {
+		for _, a := range allocs {
+			if vm, ok := vmByHandle[a.Handle]; ok {
+				c.recordRefs(accounting.AddressRef{
+					IP:       net.ParseIP(ip),
+					Kind:     apiv3.IPPoolAllowedUseWorkload,
+					Referrer: accounting.Referrer{Kind: accounting.ReferrerVirtualMachine, Namespace: vm.Namespace, Name: vm.Name},
+				})
+				numVMIPs++
+			}
+		}
+	}
+	return numVMIPs
+}
+
+// recordRefs tells the tracker about live references.
+func (c *IPAMChecker) recordRefs(refs ...accounting.AddressRef) {
 	if c.showAllIPs {
-		fmt.Printf("  %s belongs to %s\n", ip, friendlyName)
-	}
-
-	c.inUseIPs[ip] = append(c.inUseIPs[ip], ownerRecord{
-		FriendlyName: friendlyName,
-		Resource:     referrer,
-	})
-
-	// Mark the corresponding allocation as in use.
-	for _, a := range c.allocations[ip] {
-		a.InUse = true
-		a.Owners = append(a.Owners, friendlyName)
-	}
-}
-
-func (c *IPAMChecker) recordInUseHandle(handle string) {
-	c.inUseHandles.Add(handle)
-}
-
-func getNodeIPs(n internalapi.Node) ([]string, error) {
-	var ips []string
-	if n.Spec.IPv4VXLANTunnelAddr != "" {
-		ip, err := normaliseIP(n.Spec.IPv4VXLANTunnelAddr)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse IPv4VXLANTunnelAddr (%s) of node %s: %w",
-				n.Spec.IPv4VXLANTunnelAddr, n.Name, err)
+		for _, r := range refs {
+			fmt.Printf("  %s belongs to %s\n", r.IP, r.Referrer)
 		}
-		ips = append(ips, ip)
 	}
-	if n.Spec.Wireguard != nil && n.Spec.Wireguard.InterfaceIPv4Address != "" {
-		ip, err := normaliseIP(n.Spec.Wireguard.InterfaceIPv4Address)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse Wireguard.InterfaceIPv4Address (%s) of node %s: %w",
-				n.Spec.Wireguard.InterfaceIPv4Address, n.Name, err)
-		}
-		ips = append(ips, ip)
-	}
-	if n.Spec.BGP != nil && n.Spec.BGP.IPv4IPIPTunnelAddr != "" {
-		ip, err := normaliseIP(n.Spec.BGP.IPv4IPIPTunnelAddr)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse IPv4IPIPTunnelAddr (%s) of node %s: %w",
-				n.Spec.BGP.IPv4IPIPTunnelAddr, n.Name, err)
-		}
-		ips = append(ips, ip)
-	}
-	return ips, nil
-}
-
-func normaliseIP(addr string) (string, error) {
-	ip, _, err := cnet.ParseCIDROrIP(addr)
-	if err != nil {
-		return "", err
-	}
-	return ip.String(), nil
+	c.tracker.AddRefs(refs...)
 }
 
 // Allocation represents an IP that is allocated in Calico IPAM, augmented with data
@@ -635,9 +737,9 @@ type Allocation struct {
 	// The actual address.
 	IP string `json:"ip"`
 
-	// Access to the block.
-	Block   *model.AllocationBlock `json:"-"`
-	Ordinal int                    `json:"-"`
+	// accountingAlloc is the block and ordinal behind the address. Its Attr is nil when the allocation indexes an
+	// attribute that does not exist.
+	accountingAlloc accounting.Allocation
 
 	Handle         string  `json:"handle,omitempty"`
 	SequenceNumber *uint64 `json:"sequenceNumber,omitempty"`
@@ -664,11 +766,15 @@ type Allocation struct {
 }
 
 func (a *Allocation) GetAttrString() string {
-	attrIdx := *a.Block.Allocations[a.Ordinal]
-	if len(a.Block.Attributes) > attrIdx {
-		return formatAttrs(a.Block.Attributes[attrIdx])
+	if a.accountingAlloc.Attr == nil {
+		return "<missing>"
 	}
-	return "<missing>"
+	return formatAttrs(*a.accountingAlloc.Attr)
+}
+
+// tracked is whether the tracker judged the allocation. It skips deleted blocks and missing attributes.
+func (a *Allocation) tracked() bool {
+	return a.accountingAlloc.Attr != nil && !a.accountingAlloc.Block.Deleted
 }
 
 type HandleInfo struct {
@@ -704,9 +810,4 @@ func kvsFormat(m map[string]string) string {
 		kvs = append(kvs, fmt.Sprintf("%s=%s", k, m[k]))
 	}
 	return strings.Join(kvs, ",")
-}
-
-type ownerRecord struct {
-	FriendlyName string
-	Resource     any
 }

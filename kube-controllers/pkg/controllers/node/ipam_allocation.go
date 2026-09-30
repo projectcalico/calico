@@ -21,6 +21,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 )
 
 func newBlockReleaseTracker(gracePeriod *time.Duration) *blockReleaseTracker {
@@ -245,7 +246,7 @@ func (a *allocation) isTunnelAddress() bool {
 }
 
 func (a *allocation) isWindowsReserved() bool {
-	return a.handle == ipam.WindowsReservedHandle
+	return a.handle == accounting.WindowsReservedHandle
 }
 
 func newAllocationState() *allocationState {

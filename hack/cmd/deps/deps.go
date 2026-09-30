@@ -193,7 +193,8 @@ var extraPrereqRegexps = map[string]*regexp.Regexp{
 	// Every project that imports the libcalico-go client would depend on the
 	// IPAM package due to transitive import.  Only list the IPAM package as a
 	// dependency if it's actually used.
-	"/libcalico-go/lib/ipam": regexp.MustCompile(`\.IPAM\(\)`),
+	"/libcalico-go/lib/ipam":            regexp.MustCompile(`\.IPAM\(\)`),
+	"/libcalico-go/lib/ipam/accounting": regexp.MustCompile(`\.IPAM\(\)|lib/ipam/accounting"`),
 }
 
 // changeInRe matches the ${CHANGE_IN(<spec>)} macro.  changeInWithDependentsRe
@@ -1168,7 +1169,7 @@ func buildSemaphoreYAML(file string, templates []templateData, globalExtraDeps [
 		_, _ = data.WriteString(content)
 	}
 
-	return os.WriteFile(file, []byte(convertToFoldedScalars(data.String())), 0644)
+	return os.WriteFile(file, []byte(convertToFoldedScalars(data.String())), 0o644)
 }
 
 func indentBlocks(blocks []templateData) []templateData {

@@ -34,6 +34,7 @@ import (
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -2728,7 +2729,7 @@ func (c ipamClient) getReservedCIDRs(ctx context.Context) (cidrSliceFilter, erro
 	for i := range reservations.Items {
 		items[i] = &reservations.Items[i]
 	}
-	return reservedCIDRs(items), nil
+	return cidrSliceFilter(accounting.ReservationCIDRs(items)), nil
 }
 
 func (c ipamClient) UpgradeHost(ctx context.Context, nodeName string) error {

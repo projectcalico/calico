@@ -28,6 +28,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
@@ -294,9 +295,7 @@ func (r ipPools) List(ctx context.Context, opts options.ListOptions) (*apiv3.IPP
 func convertIpPoolFromStorage(pool *apiv3.IPPool) error {
 	// Default the blockSize if it wasn't previously set
 	if pool.Spec.BlockSize == 0 {
-		// Get the IP address of the CIDR to find the IP version
-		ipAddr, _, err := cnet.ParseCIDR(pool.Spec.CIDR)
-		if err != nil {
+		if _, _, err := cnet.ParseCIDR(pool.Spec.CIDR); err != nil {
 			return cerrors.ErrorValidation{
 				ErroredFields: []cerrors.ErroredField{{
 					Name:   "IPPool.Spec.CIDR",
@@ -305,23 +304,10 @@ func convertIpPoolFromStorage(pool *apiv3.IPPool) error {
 				}},
 			}
 		}
-
-		if ipAddr.Version() == 4 {
-			pool.Spec.BlockSize = 26
-		} else {
-			pool.Spec.BlockSize = 122
-		}
+		pool.Spec.BlockSize = accounting.BlockSize(pool)
 	}
-
-	// Default allowed uses if not set.
-	if len(pool.Spec.AllowedUses) == 0 {
-		pool.Spec.AllowedUses = []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel}
-	}
-
-	// Default the nodeSelector if it wasn't previously set.
-	if pool.Spec.NodeSelector == "" {
-		pool.Spec.NodeSelector = "all()"
-	}
+	pool.Spec.AllowedUses = accounting.AllowedUses(pool)
+	pool.Spec.NodeSelector = accounting.NodeSelector(pool)
 
 	// Default IPIPMode to "Never" if not set.
 	if len(pool.Spec.IPIPMode) == 0 {
@@ -420,9 +406,7 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPP
 	new.Spec.CIDR = cidr.String()
 
 	// If a nodeSelector is not specified, then this IP pool selects all nodes.
-	if new.Spec.NodeSelector == "" {
-		new.Spec.NodeSelector = "all()"
-	}
+	new.Spec.NodeSelector = accounting.NodeSelector(new)
 
 	// If there was a previous pool then this must be an Update, validate that the
 	// CIDR has not changed. Use semantic comparison to handle different textual
@@ -435,19 +419,8 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPP
 		})
 	}
 
-	// Default the blockSize
-	if new.Spec.BlockSize == 0 {
-		if ipAddr.Version() == 4 {
-			new.Spec.BlockSize = 26
-		} else {
-			new.Spec.BlockSize = 122
-		}
-	}
-
-	// Default allowed uses if not set.
-	if len(new.Spec.AllowedUses) == 0 {
-		new.Spec.AllowedUses = []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel}
-	}
+	new.Spec.BlockSize = accounting.BlockSize(new)
+	new.Spec.AllowedUses = accounting.AllowedUses(new)
 
 	// Update, check if previously AllowedUses was LoadBalancer it has not changed
 	if old != nil {

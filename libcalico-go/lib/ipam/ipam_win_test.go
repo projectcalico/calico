@@ -30,6 +30,7 @@ import (
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/ipamtestutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
@@ -55,7 +56,7 @@ var (
 	rsvdAttrWindows = &HostReservedAttr{
 		StartOfBlock: 3,
 		EndOfBlock:   1,
-		Handle:       WindowsReservedHandle,
+		Handle:       accounting.WindowsReservedHandle,
 		Note:         "ipam ut",
 	}
 
@@ -63,7 +64,7 @@ var (
 	rsvdAttrTooBig = &HostReservedAttr{
 		StartOfBlock: 32,
 		EndOfBlock:   33,
-		Handle:       WindowsReservedHandle,
+		Handle:       accounting.WindowsReservedHandle,
 		Note:         "ipam ut",
 	}
 )

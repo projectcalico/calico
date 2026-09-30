@@ -47,6 +47,7 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -390,7 +391,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			rsvdAttrWindows := &ipam.HostReservedAttr{
 				StartOfBlock: 3,
 				EndOfBlock:   1,
-				Handle:       ipam.WindowsReservedHandle,
+				Handle:       accounting.WindowsReservedHandle,
 				Note:         "windows host rsvd",
 			}
 			assignArgs.HostReservedAttrIPv4s = rsvdAttrWindows

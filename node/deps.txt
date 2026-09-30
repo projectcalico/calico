@@ -223,6 +223,7 @@ local:libcalico-go/lib/clientv3
 local:libcalico-go/lib/errors
 local:libcalico-go/lib/hash
 local:libcalico-go/lib/ipam
+local:libcalico-go/lib/ipam/accounting
 local:libcalico-go/lib/ipam/vmipam
 local:libcalico-go/lib/kubevirt
 local:libcalico-go/lib/names
