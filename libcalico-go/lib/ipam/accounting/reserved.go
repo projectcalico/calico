@@ -32,19 +32,35 @@ import (
 // NumReservedIPsInCIDR returns how many addresses in cidr the reservations cover, allocated or not, counting overlaps
 // once. It is for callers such as kube-controllers that already hold the reservations and list no blocks.
 func NumReservedIPsInCIDR(cidr cnet.IPNet, reservations []*v3.IPReservation) (int, error) {
-	n, err := countReserved(cidr, ReservationCIDRs(reservations))
+	n, err := NumReservedIPsInCIDRBig(cidr, reservations)
 	if err != nil {
 		return 0, err
 	}
 	return ClampToInt(n), nil
 }
 
-// reservedIPs is the reserved address set, built once for repeated lookups. A nil one reserves nothing.
-type reservedIPs struct {
+// NumReservedIPsInCIDRBig is NumReservedIPsInCIDR without the clamp, for comparing against an IPv6 CIDR's size.
+func NumReservedIPsInCIDRBig(cidr cnet.IPNet, reservations []*v3.IPReservation) (*big.Int, error) {
+	return countReserved(cidr, ReservationCIDRs(reservations))
+}
+
+// ReservedIPs is the reserved address set, built once for repeated lookups. A nil one reserves nothing.
+type ReservedIPs struct {
 	set *netipx.IPSet
 }
 
-func newReservedIPs(reserved []cnet.IPNet) (*reservedIPs, error) {
+// NewReservedIPs builds the set the given reservations cover.
+func NewReservedIPs(reservations []*v3.IPReservation) (*ReservedIPs, error) {
+	return newReservedIPs(ReservationCIDRs(reservations))
+}
+
+// Contains is whether no allocation can use ip.
+func (r *ReservedIPs) Contains(ip net.IP) bool {
+	addr, ok := netipx.FromStdIP(ip)
+	return ok && r.containsAddr(addr)
+}
+
+func newReservedIPs(reserved []cnet.IPNet) (*ReservedIPs, error) {
 	var b netipx.IPSetBuilder
 	for _, r := range reserved {
 		if p, ok := toPrefix(r.IPNet); ok {
@@ -57,15 +73,15 @@ func newReservedIPs(reserved []cnet.IPNet) (*reservedIPs, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &reservedIPs{set: s}, nil
+	return &ReservedIPs{set: s}, nil
 }
 
-func (r *reservedIPs) containsAddr(addr netip.Addr) bool {
+func (r *ReservedIPs) containsAddr(addr netip.Addr) bool {
 	return r != nil && r.set != nil && r.set.Contains(addr)
 }
 
 // changedSince returns the addresses reserved in exactly one of r and old.
-func (r *reservedIPs) changedSince(old *reservedIPs) (*netipx.IPSet, error) {
+func (r *ReservedIPs) changedSince(old *ReservedIPs) (*netipx.IPSet, error) {
 	var added, removed netipx.IPSetBuilder
 	added.AddSet(r.ipSet())
 	added.RemoveSet(old.ipSet())
@@ -80,19 +96,19 @@ func (r *reservedIPs) changedSince(old *reservedIPs) (*netipx.IPSet, error) {
 }
 
 // overlaps is whether any address in n is reserved.
-func (r *reservedIPs) overlaps(n net.IPNet) bool {
+func (r *ReservedIPs) overlaps(n net.IPNet) bool {
 	p, ok := toPrefix(n)
 	return ok && r.ipSet().OverlapsPrefix(p)
 }
 
-func (r *reservedIPs) ipSet() *netipx.IPSet {
+func (r *ReservedIPs) ipSet() *netipx.IPSet {
 	if r == nil || r.set == nil {
 		return &netipx.IPSet{}
 	}
 	return r.set
 }
 
-// countReserved is NumReservedIPsInCIDR over CIDRs already resolved from the reservations, without the clamp.
+// countReserved is NumReservedIPsInCIDRBig over CIDRs already resolved from the reservations.
 func countReserved(cidr cnet.IPNet, reserved []cnet.IPNet) (*big.Int, error) {
 	prefix, err := PrefixFromCIDR(cidr.IPNet)
 	if err != nil {

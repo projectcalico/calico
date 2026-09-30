@@ -15,11 +15,15 @@
 package accounting
 
 import (
+	"math"
 	"slices"
 	"testing"
 
+	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 type reservationCIDRsCase struct {
@@ -63,4 +67,29 @@ func TestReservationCIDRs(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewReservedIPsContains(t *testing.T) {
+	RegisterTestingT(t)
+	set, err := NewReservedIPs([]*v3.IPReservation{reservation("r", "10.0.0.0/30")})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(set.Contains(cnet.MustParseIP("10.0.0.3").IP)).To(BeTrue())
+	Expect(set.Contains(cnet.MustParseIP("10.0.0.4").IP)).To(BeFalse())
+
+	var none *ReservedIPs
+	Expect(none.Contains(cnet.MustParseIP("10.0.0.3").IP)).To(BeFalse())
+}
+
+func TestNumReservedIPsInCIDRBigExceedsInt(t *testing.T) {
+	RegisterTestingT(t)
+	cidr := cnet.MustParseNetwork("fd00::/48")
+	reservations := []*v3.IPReservation{reservation("all", "fd00::/48")}
+
+	total, err := NumReservedIPsInCIDRBig(cidr, reservations)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(total.String()).To(Equal("1208925819614629174706176"))
+
+	clamped, err := NumReservedIPsInCIDR(cidr, reservations)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(clamped).To(Equal(math.MaxInt))
 }

@@ -86,7 +86,7 @@ type trackedBlock struct {
 
 type reservedState struct {
 	cidrs []cnet.IPNet
-	ips   *reservedIPs
+	ips   *ReservedIPs
 }
 
 // blockSet is a set of blocks kept in address order as they come and go, so reading it in order writes nothing.
@@ -508,7 +508,7 @@ func (t *Tracker) applyReservedChange() {
 	}
 
 	// A block inside a pool overlaps the change only if its pool does, so the pools narrow the search.
-	diff := &reservedIPs{set: changed}
+	diff := &ReservedIPs{set: changed}
 	recountOverlapping := func(s *blockSet) {
 		for _, block := range s.blocks {
 			if diff.overlaps(block.allocationBlock.CIDR.IPNet) {
@@ -575,7 +575,7 @@ func containsNet(outer, inner *net.IPNet) bool {
 }
 
 // newTrackedBlock walks the block once, counting its reserved overlap against reserved.
-func newTrackedBlock(key string, b *model.AllocationBlock, reserved *reservedIPs) *trackedBlock {
+func newTrackedBlock(key string, b *model.AllocationBlock, reserved *ReservedIPs) *trackedBlock {
 	block := &trackedBlock{key: key, allocationBlock: b, base: blockBase(b)}
 	block.node, _ = NodeAffinity(b)
 	block.virtual = b.Affinity != nil && b.AffinityType() == model.IPAMAffinityTypeVirtual
@@ -616,7 +616,7 @@ func newTrackedBlock(key string, b *model.AllocationBlock, reserved *reservedIPs
 	return block
 }
 
-func (b *trackedBlock) countReserved(reserved *reservedIPs) {
+func (b *trackedBlock) countReserved(reserved *ReservedIPs) {
 	b.inUseReserved = 0
 	if !reserved.overlaps(b.allocationBlock.CIDR.IPNet) {
 		return
