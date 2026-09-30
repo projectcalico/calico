@@ -94,8 +94,8 @@ function main() {
   try {
     j = JSON.parse(gh(['api', `repos/${SOURCE_REPO}/pulls/${pr}`]));
   } catch {
-    skip(`could not read PR #${pr}`);
-    return;
+    console.log(`::error::could not read PR #${pr}; failing rather than skipping`);
+    process.exit(1);
   }
   const merged = j.merged === true;
   const base = j.base && j.base.ref;
