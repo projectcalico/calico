@@ -164,7 +164,9 @@ for FILE in $VALUES_FILES; do
 		-f ../charts/values/$FILE > $FILE
 done
 
-# calico-v3-crds.yaml is the only values file with admission policies, so it also needs a v1beta1 build.
+# Only calico-v3-crds.yaml gets a v1beta1 build, for its v3 admission policies. The other manifests
+# carry strip-cni-annotations at v1 only: on Kubernetes 1.34 and 1.35 that document fails to apply,
+# and pods created with the protected CNI annotations are refused instead of having them stripped.
 ${HELM} -n kube-system template \
 	../charts/calico \
 	--set version=$CALICO_VERSION \
