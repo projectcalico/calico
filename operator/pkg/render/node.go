@@ -609,6 +609,13 @@ func (c *nodeComponent) cniPluginRole() *rbacv1.ClusterRole {
 				Verbs:     []string{"patch"},
 			},
 			{
+				// Lets the CNI plugin's pods/status patch through protect-cni-annotations.projectcalico.org.
+				// Nothing serves this resource; it exists only to be granted.
+				APIGroups: []string{"projectcalico.org"},
+				Resources: []string{"cniannotations"},
+				Verbs:     []string{"write"},
+			},
+			{
 				// Most IPAM resources need full CRUD permissions so we can allocate and
 				// release IP addresses for pods.
 				APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
