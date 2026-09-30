@@ -176,7 +176,7 @@ func (idx *index[E]) Add(d *DiachronicFlow) {
 		if logrus.IsLevelEnabled(logrus.DebugLevel) {
 			logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{"i": index}).Debug("Inserting new DiachronicFlow into index")
 		}
-		idx.diachronics = append(idx.diachronics[:index], append([]*DiachronicFlow{d}, idx.diachronics[index:]...)...)
+		idx.diachronics = slices.Insert(idx.diachronics, index, d)
 	}
 	// The DiachronicFlow already exists in the index, so do nothing.
 }
