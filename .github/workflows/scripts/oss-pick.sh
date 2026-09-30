@@ -97,9 +97,12 @@ do_pick() {
   elif git diff --name-only --diff-filter=U | grep -q .; then
     echo "Conflicts:"; git diff --name-only --diff-filter=U | tee "$PICK_CONFLICTS_FILE"
     record_pick_paths HEAD; write_pick_context; emit "outcome=conflict"
-  else
+  elif git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null && git diff --cached --quiet; then
     echo "Cherry-pick empty (already present / superseded)."
     git cherry-pick --abort || true; emit "outcome=empty"
+  else
+    echo "::error::cherry-pick of ${MERGE_SHA} failed (rc=${rc}) without conflicts"
+    return 1
   fi
 }
 
