@@ -483,14 +483,16 @@ jobs:
           REPORT_FILE: /tmp/pick-export/report.md
         run: node "$RUNNER_TEMP/notify-slack.js"
 
-      # Nothing to pick (superseded / empty / already): informational DM.
+      # Nothing to pick (superseded / empty): informational DM.
       # Also mirror the noop to #merge-queue-bot-errors (every non-success
       # outcome goes to the channel), even when the author is unmapped.
+      # A re-run whose pick PR already exists stays silent.
       - name: Notify author (nothing to pick) on Slack
         if: >
           success() &&
           needs.pick.result == 'success' &&
           needs.pick.outputs.proceed == 'true' &&
+          needs.pick.outputs.outcome != 'already' &&
           needs.pick.outputs.escalated != 'true' &&
           needs.pick.outputs.export != 'ready' &&
           steps.openpr.outputs.pr_url == ''
