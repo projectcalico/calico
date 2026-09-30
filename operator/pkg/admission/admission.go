@@ -17,8 +17,10 @@ package admission
 import (
 	"bytes"
 	"context"
+	stderrors "errors"
 	"fmt"
 	"io/fs"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -50,6 +52,9 @@ const (
 	// ManagedVAPLabelValue is the label value for operator-managed VAP resources.
 	ManagedVAPLabelValue = "managed"
 
+	// PolicySetLabel names the PolicySet an operator-managed admission policy belongs to.
+	PolicySetLabel = "operator.tigera.io/admission-policy-set"
+
 	// APIGroup is the API group for MutatingAdmissionPolicy and ValidatingAdmissionPolicy resources.
 	APIGroup = "admissionregistration.k8s.io"
 	// VersionV1 is the GA API version (k8s 1.36+).
@@ -78,6 +83,22 @@ var PolicyGroupKind = schema.GroupKind{Group: APIGroup, Kind: KindPolicy}
 // discovery registry in cmd/main.go can pre-resolve its served version at startup.
 var ValidatingPolicyGroupKind = schema.GroupKind{Group: APIGroup, Kind: KindValidatingPolicy}
 
+// PolicySet is a group of operator-managed admission policies that is reconciled together.
+type PolicySet string
+
+const (
+	// PolicySetV3CRDs validates and defaults projectcalico.org/v3 resources.
+	PolicySetV3CRDs PolicySet = "v3-crds"
+	// PolicySetCNIAnnotations protects the Calico CNI plugin's pod annotations.
+	PolicySetCNIAnnotations PolicySet = "cni-annotations"
+)
+
+// policySetDirs maps each PolicySet to the directory of the policy files that hold it.
+var policySetDirs = map[PolicySet]string{
+	PolicySetV3CRDs:         ".",
+	PolicySetCNIAnnotations: "k8s",
+}
+
 // policyParseFunc parses a single YAML document into a typed admission policy object at the given
 // API version, returning a nil object (and nil error) for kinds it does not handle.
 type policyParseFunc func(doc []byte, filename, apiVersion string) (client.Object, error)
@@ -98,18 +119,18 @@ func RegisterVariantPolicies(variant opv1.ProductVariant, files fs.FS) {
 	variantPolicies[variant] = files
 }
 
-// GetMutatingAdmissionPolicies returns the variant's MutatingAdmissionPolicy and Binding objects,
-// typed at the requested API version and labeled with ManagedMAPLabel so stale ones can be found.
-// Only v3 CRDs use these.
-func GetMutatingAdmissionPolicies(variant opv1.ProductVariant, v3 bool, apiVersion string) []client.Object {
-	return getAdmissionPolicies(variant, v3, apiVersion, parseMutatingAdmissionPolicyYAML, ManagedMAPLabel, ManagedMAPLabelValue)
+// GetMutatingAdmissionPolicies returns the variant's MutatingAdmissionPolicy and Binding objects in
+// the given set, typed at the requested API version and labeled with ManagedMAPLabel and
+// PolicySetLabel so stale ones can be found.
+func GetMutatingAdmissionPolicies(variant opv1.ProductVariant, set PolicySet, apiVersion string) []client.Object {
+	return loadPolicySet(variant, set, apiVersion, parseMutatingAdmissionPolicyYAML, ManagedMAPLabel, ManagedMAPLabelValue)
 }
 
-// GetValidatingAdmissionPolicies returns the variant's ValidatingAdmissionPolicy and Binding objects,
-// typed at the requested API version and labeled with ManagedVAPLabel so stale ones can be found.
-// Only v3 CRDs use these.
-func GetValidatingAdmissionPolicies(variant opv1.ProductVariant, v3 bool, apiVersion string) []client.Object {
-	return getAdmissionPolicies(variant, v3, apiVersion, parseValidatingAdmissionPolicyYAML, ManagedVAPLabel, ManagedVAPLabelValue)
+// GetValidatingAdmissionPolicies returns the variant's ValidatingAdmissionPolicy and Binding objects
+// in the given set, typed at the requested API version and labeled with ManagedVAPLabel and
+// PolicySetLabel so stale ones can be found.
+func GetValidatingAdmissionPolicies(variant opv1.ProductVariant, set PolicySet, apiVersion string) []client.Object {
+	return loadPolicySet(variant, set, apiVersion, parseValidatingAdmissionPolicyYAML, ManagedVAPLabel, ManagedVAPLabelValue)
 }
 
 // policyFiles returns the policies for a variant, or nil when this build ships none.
@@ -123,11 +144,11 @@ func policyFiles(variant opv1.ProductVariant) fs.FS {
 	return variantPolicies[variant]
 }
 
-// getAdmissionPolicies returns the variant's policy documents that parseFn recognizes, each labeled
-// labelKey=labelValue. Mutating and validating policies share the same files, so parseFn returns nil
-// for kinds outside its family and those are skipped.
-func getAdmissionPolicies(variant opv1.ProductVariant, v3 bool, apiVersion string, parseFn policyParseFunc, labelKey, labelValue string) []client.Object {
-	if !v3 || apiVersion == "" {
+// loadPolicySet returns the variant's policy documents in the given set that parseFn recognizes, each
+// labeled managedKey=managedValue and with its set. Mutating and validating policies share the same
+// files, so parseFn returns nil for kinds outside its family and those are skipped.
+func loadPolicySet(variant opv1.ProductVariant, set PolicySet, apiVersion string, parseFn policyParseFunc, managedKey, managedValue string) []client.Object {
+	if apiVersion == "" {
 		return nil
 	}
 
@@ -136,7 +157,15 @@ func getAdmissionPolicies(variant opv1.ProductVariant, v3 bool, apiVersion strin
 		return nil
 	}
 
-	entries, err := fs.ReadDir(files, ".")
+	dir, ok := policySetDirs[set]
+	if !ok {
+		panic(fmt.Sprintf("Unknown admission policy set %q", set))
+	}
+	if _, err := fs.Stat(files, dir); stderrors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+
+	entries, err := fs.ReadDir(files, dir)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to read admission policy files: %v", err))
 	}
@@ -147,7 +176,7 @@ func getAdmissionPolicies(variant opv1.ProductVariant, v3 bool, apiVersion strin
 			continue
 		}
 
-		b, err := fs.ReadFile(files, entry.Name())
+		b, err := fs.ReadFile(files, path.Join(dir, entry.Name()))
 		if err != nil {
 			panic(fmt.Sprintf("Failed to read admission policy file %s: %v", entry.Name(), err))
 		}
@@ -173,7 +202,8 @@ func getAdmissionPolicies(variant opv1.ProductVariant, v3 bool, apiVersion strin
 			if labels == nil {
 				labels = map[string]string{}
 			}
-			labels[labelKey] = labelValue
+			labels[managedKey] = managedValue
+			labels[PolicySetLabel] = string(set)
 			obj.SetLabels(labels)
 
 			objs = append(objs, obj)
@@ -185,16 +215,17 @@ func getAdmissionPolicies(variant opv1.ProductVariant, v3 bool, apiVersion strin
 
 // Ensure creates the MutatingAdmissionPolicies needed to bootstrap, leaving further reconciliation
 // to the core controller. An empty apiVersion means the cluster serves none, which logs a warning
-// and returns nil. Only v3 CRDs get them.
+// and returns nil. Only v3 CRDs get them, and only the v3 CRD set: the CNI annotation set must wait
+// for the CNI plugin's ClusterRole, which the core controller renders.
 func Ensure(c client.Client, variant string, v3 bool, apiVersion string, log logr.Logger) error {
-	return ensure(c, GetMutatingAdmissionPolicies(opv1.ProductVariant(variant), v3, apiVersion), v3, apiVersion, log)
+	return ensure(c, GetMutatingAdmissionPolicies(opv1.ProductVariant(variant), PolicySetV3CRDs, apiVersion), v3, apiVersion, log)
 }
 
 // EnsureValidating mirrors Ensure for ValidatingAdmissionPolicies. It bootstraps against its own
 // served version, which reached GA well before MutatingAdmissionPolicy, so it is never gated on
 // whether the cluster serves MAP.
 func EnsureValidating(c client.Client, variant string, v3 bool, apiVersion string, log logr.Logger) error {
-	return ensure(c, GetValidatingAdmissionPolicies(opv1.ProductVariant(variant), v3, apiVersion), v3, apiVersion, log)
+	return ensure(c, GetValidatingAdmissionPolicies(opv1.ProductVariant(variant), PolicySetV3CRDs, apiVersion), v3, apiVersion, log)
 }
 
 func ensure(c client.Client, objs []client.Object, v3 bool, apiVersion string, log logr.Logger) error {
@@ -377,15 +408,17 @@ func parseValidatingAdmissionPolicyYAML(doc []byte, filename, apiVersion string)
 }
 
 // ListManaged returns the operator-managed MutatingAdmissionPolicy and MutatingAdmissionPolicyBinding
-// objects currently present on the cluster at the given API version. Returns nil if apiVersion is empty.
-func ListManaged(ctx context.Context, c client.Client, apiVersion string) (policies, bindings []client.Object, err error) {
+// objects in the given set currently present on the cluster at the given API version. Returns nil if
+// apiVersion is empty.
+func ListManaged(ctx context.Context, c client.Client, apiVersion string, set PolicySet) (policies, bindings []client.Object, err error) {
 	if apiVersion == "" {
 		return nil, nil, nil
 	}
+	inSet := managedInSet(ManagedMAPLabel, ManagedMAPLabelValue, set)
 	switch apiVersion {
 	case VersionV1:
 		mapList := &admissionregistrationv1.MutatingAdmissionPolicyList{}
-		if err := c.List(ctx, mapList, client.MatchingLabels{ManagedMAPLabel: ManagedMAPLabelValue}); err != nil {
+		if err := c.List(ctx, mapList, inSet); err != nil {
 			return nil, nil, fmt.Errorf("listing MutatingAdmissionPolicies: %w", err)
 		}
 		for i := range mapList.Items {
@@ -393,7 +426,7 @@ func ListManaged(ctx context.Context, c client.Client, apiVersion string) (polic
 		}
 
 		bindList := &admissionregistrationv1.MutatingAdmissionPolicyBindingList{}
-		if err := c.List(ctx, bindList, client.MatchingLabels{ManagedMAPLabel: ManagedMAPLabelValue}); err != nil {
+		if err := c.List(ctx, bindList, inSet); err != nil {
 			return nil, nil, fmt.Errorf("listing MutatingAdmissionPolicyBindings: %w", err)
 		}
 		for i := range bindList.Items {
@@ -401,7 +434,7 @@ func ListManaged(ctx context.Context, c client.Client, apiVersion string) (polic
 		}
 	case VersionV1Beta1:
 		mapList := &admissionv1beta1.MutatingAdmissionPolicyList{}
-		if err := c.List(ctx, mapList, client.MatchingLabels{ManagedMAPLabel: ManagedMAPLabelValue}); err != nil {
+		if err := c.List(ctx, mapList, inSet); err != nil {
 			return nil, nil, fmt.Errorf("listing MutatingAdmissionPolicies: %w", err)
 		}
 		for i := range mapList.Items {
@@ -409,7 +442,7 @@ func ListManaged(ctx context.Context, c client.Client, apiVersion string) (polic
 		}
 
 		bindList := &admissionv1beta1.MutatingAdmissionPolicyBindingList{}
-		if err := c.List(ctx, bindList, client.MatchingLabels{ManagedMAPLabel: ManagedMAPLabelValue}); err != nil {
+		if err := c.List(ctx, bindList, inSet); err != nil {
 			return nil, nil, fmt.Errorf("listing MutatingAdmissionPolicyBindings: %w", err)
 		}
 		for i := range bindList.Items {
@@ -417,7 +450,7 @@ func ListManaged(ctx context.Context, c client.Client, apiVersion string) (polic
 		}
 	case VersionV1Alpha1:
 		mapList := &admissionregistrationv1alpha1.MutatingAdmissionPolicyList{}
-		if err := c.List(ctx, mapList, client.MatchingLabels{ManagedMAPLabel: ManagedMAPLabelValue}); err != nil {
+		if err := c.List(ctx, mapList, inSet); err != nil {
 			return nil, nil, fmt.Errorf("listing MutatingAdmissionPolicies: %w", err)
 		}
 		for i := range mapList.Items {
@@ -425,7 +458,7 @@ func ListManaged(ctx context.Context, c client.Client, apiVersion string) (polic
 		}
 
 		bindList := &admissionregistrationv1alpha1.MutatingAdmissionPolicyBindingList{}
-		if err := c.List(ctx, bindList, client.MatchingLabels{ManagedMAPLabel: ManagedMAPLabelValue}); err != nil {
+		if err := c.List(ctx, bindList, inSet); err != nil {
 			return nil, nil, fmt.Errorf("listing MutatingAdmissionPolicyBindings: %w", err)
 		}
 		for i := range bindList.Items {
@@ -438,16 +471,17 @@ func ListManaged(ctx context.Context, c client.Client, apiVersion string) (polic
 }
 
 // ListManagedValidating returns the operator-managed ValidatingAdmissionPolicy and
-// ValidatingAdmissionPolicyBinding objects currently present on the cluster at the given API version,
-// mirroring ListManaged. Returns nil if apiVersion is empty.
-func ListManagedValidating(ctx context.Context, c client.Client, apiVersion string) (policies, bindings []client.Object, err error) {
+// ValidatingAdmissionPolicyBinding objects in the given policy set currently present on the cluster
+// at the given API version, mirroring ListManaged. Returns nil if apiVersion is empty.
+func ListManagedValidating(ctx context.Context, c client.Client, apiVersion string, set PolicySet) (policies, bindings []client.Object, err error) {
 	if apiVersion == "" {
 		return nil, nil, nil
 	}
+	inSet := managedInSet(ManagedVAPLabel, ManagedVAPLabelValue, set)
 	switch apiVersion {
 	case VersionV1:
 		vapList := &admissionregistrationv1.ValidatingAdmissionPolicyList{}
-		if err := c.List(ctx, vapList, client.MatchingLabels{ManagedVAPLabel: ManagedVAPLabelValue}); err != nil {
+		if err := c.List(ctx, vapList, inSet); err != nil {
 			return nil, nil, fmt.Errorf("listing ValidatingAdmissionPolicies: %w", err)
 		}
 		for i := range vapList.Items {
@@ -455,7 +489,7 @@ func ListManagedValidating(ctx context.Context, c client.Client, apiVersion stri
 		}
 
 		bindList := &admissionregistrationv1.ValidatingAdmissionPolicyBindingList{}
-		if err := c.List(ctx, bindList, client.MatchingLabels{ManagedVAPLabel: ManagedVAPLabelValue}); err != nil {
+		if err := c.List(ctx, bindList, inSet); err != nil {
 			return nil, nil, fmt.Errorf("listing ValidatingAdmissionPolicyBindings: %w", err)
 		}
 		for i := range bindList.Items {
@@ -463,7 +497,7 @@ func ListManagedValidating(ctx context.Context, c client.Client, apiVersion stri
 		}
 	case VersionV1Beta1:
 		vapList := &admissionv1beta1.ValidatingAdmissionPolicyList{}
-		if err := c.List(ctx, vapList, client.MatchingLabels{ManagedVAPLabel: ManagedVAPLabelValue}); err != nil {
+		if err := c.List(ctx, vapList, inSet); err != nil {
 			return nil, nil, fmt.Errorf("listing ValidatingAdmissionPolicies: %w", err)
 		}
 		for i := range vapList.Items {
@@ -471,7 +505,7 @@ func ListManagedValidating(ctx context.Context, c client.Client, apiVersion stri
 		}
 
 		bindList := &admissionv1beta1.ValidatingAdmissionPolicyBindingList{}
-		if err := c.List(ctx, bindList, client.MatchingLabels{ManagedVAPLabel: ManagedVAPLabelValue}); err != nil {
+		if err := c.List(ctx, bindList, inSet); err != nil {
 			return nil, nil, fmt.Errorf("listing ValidatingAdmissionPolicyBindings: %w", err)
 		}
 		for i := range bindList.Items {
@@ -479,7 +513,7 @@ func ListManagedValidating(ctx context.Context, c client.Client, apiVersion stri
 		}
 	case VersionV1Alpha1:
 		vapList := &admissionregistrationv1alpha1.ValidatingAdmissionPolicyList{}
-		if err := c.List(ctx, vapList, client.MatchingLabels{ManagedVAPLabel: ManagedVAPLabelValue}); err != nil {
+		if err := c.List(ctx, vapList, inSet); err != nil {
 			return nil, nil, fmt.Errorf("listing ValidatingAdmissionPolicies: %w", err)
 		}
 		for i := range vapList.Items {
@@ -487,7 +521,7 @@ func ListManagedValidating(ctx context.Context, c client.Client, apiVersion stri
 		}
 
 		bindList := &admissionregistrationv1alpha1.ValidatingAdmissionPolicyBindingList{}
-		if err := c.List(ctx, bindList, client.MatchingLabels{ManagedVAPLabel: ManagedVAPLabelValue}); err != nil {
+		if err := c.List(ctx, bindList, inSet); err != nil {
 			return nil, nil, fmt.Errorf("listing ValidatingAdmissionPolicyBindings: %w", err)
 		}
 		for i := range bindList.Items {
@@ -497,6 +531,11 @@ func ListManagedValidating(ctx context.Context, c client.Client, apiVersion stri
 		return nil, nil, fmt.Errorf("unsupported ValidatingAdmissionPolicy API version %q", apiVersion)
 	}
 	return policies, bindings, nil
+}
+
+// managedInSet selects the operator-managed policies in the given set.
+func managedInSet(managedKey, managedValue string, set PolicySet) client.MatchingLabels {
+	return client.MatchingLabels{managedKey: managedValue, PolicySetLabel: string(set)}
 }
 
 // IsPolicyKind returns whether obj is a MutatingAdmissionPolicy (any served version).

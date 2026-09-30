@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -2567,7 +2568,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 			},
 		}
 
-		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log, admission.PolicySetV3CRDs)).NotTo(HaveOccurred())
 		Expect(componentHandler.objectsToCreate).To(HaveLen(6))
 
 		var mapCount, mapbCount int
@@ -2602,7 +2603,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 			},
 		}
 
-		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log, admission.PolicySetV3CRDs)).NotTo(HaveOccurred())
 		Expect(componentHandler.objectsToCreate).To(HaveLen(6))
 
 		var mapCount, mapbCount int
@@ -2635,7 +2636,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 			},
 		}
 
-		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log, admission.PolicySetV3CRDs)).NotTo(HaveOccurred())
 		Expect(componentHandler.objectsToCreate).To(HaveLen(6))
 
 		var mapCount, mapbCount int
@@ -2668,12 +2669,12 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 			},
 		}
 
-		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log, admission.PolicySetV3CRDs)).NotTo(HaveOccurred())
 		Expect(componentHandler.objectsToCreate).To(BeEmpty())
 		mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operator.ResourceNotReady, mock.Anything, mock.Anything, mock.Anything)
 	})
 
-	It("should not create MAPs when v3CRDs=false", func() {
+	It("should not manage the v3 policies when v3CRDs=false", func() {
 		r = ReconcileInstallation{
 			ext: coreExtensions.Installation(),
 			opts: options.ControllerOptions{
@@ -2690,11 +2691,10 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 			},
 		}
 
-		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
-		Expect(componentHandler.objectsToCreate).To(BeEmpty())
+		Expect(r.managesV3AdmissionPolicies()).To(BeFalse())
 	})
 
-	It("should not create MAPs when manageCRDs=false", func() {
+	It("should not manage the v3 policies when manageCRDs=false", func() {
 		r = ReconcileInstallation{
 			ext: coreExtensions.Installation(),
 			opts: options.ControllerOptions{
@@ -2711,21 +2711,20 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 			},
 		}
 
-		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
-		Expect(componentHandler.objectsToCreate).To(BeEmpty())
+		Expect(r.managesV3AdmissionPolicies()).To(BeFalse())
 	})
 
 	It("should delete stale v1 MAPs with managed label", func() {
 		staleMAP := &admissionregistrationv1.MutatingAdmissionPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   "stale-policy",
-				Labels: map[string]string{admission.ManagedMAPLabel: admission.ManagedMAPLabelValue},
+				Labels: map[string]string{admission.ManagedMAPLabel: admission.ManagedMAPLabelValue, admission.PolicySetLabel: string(admission.PolicySetV3CRDs)},
 			},
 		}
 		staleMAPB := &admissionregistrationv1.MutatingAdmissionPolicyBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   "stale-binding",
-				Labels: map[string]string{admission.ManagedMAPLabel: admission.ManagedMAPLabelValue},
+				Labels: map[string]string{admission.ManagedMAPLabel: admission.ManagedMAPLabelValue, admission.PolicySetLabel: string(admission.PolicySetV3CRDs)},
 			},
 		}
 
@@ -2744,7 +2743,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 			},
 		}
 
-		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log, admission.PolicySetV3CRDs)).NotTo(HaveOccurred())
 		Expect(componentHandler.objectsToCreate).To(HaveLen(6))
 		Expect(componentHandler.objectsToDelete).To(HaveLen(2))
 		deletedNames := map[string]bool{}
@@ -2753,6 +2752,69 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		}
 		Expect(deletedNames).To(HaveKey("stale-policy"))
 		Expect(deletedNames).To(HaveKey("stale-binding"))
+	})
+
+	It("should leave the CNI annotation policies alone", func() {
+		cniPolicy := &admissionregistrationv1.MutatingAdmissionPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "strip-cni-annotations.projectcalico.org",
+				Labels: map[string]string{admission.ManagedMAPLabel: admission.ManagedMAPLabelValue, admission.PolicySetLabel: string(admission.PolicySetCNIAnnotations)},
+			},
+		}
+
+		r = ReconcileInstallation{
+			ext: coreExtensions.Installation(),
+			opts: options.ControllerOptions{
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1),
+			},
+			client: clientFor(cniPolicy),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
+				return componentHandler
+			},
+		}
+
+		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log, admission.PolicySetV3CRDs)).NotTo(HaveOccurred())
+		Expect(componentHandler.objectsToDelete).To(BeEmpty())
+	})
+
+	It("should give a released v3 policy its set without deleting it", func() {
+		// Earlier operators labelled the v3 policies managed, with no set.
+		released := &admissionregistrationv1.MutatingAdmissionPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "policytypes.policy.projectcalico.org",
+				Labels: map[string]string{admission.ManagedMAPLabel: admission.ManagedMAPLabelValue},
+			},
+		}
+
+		r = ReconcileInstallation{
+			ext: coreExtensions.Installation(),
+			opts: options.ControllerOptions{
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1),
+			},
+			client: clientFor(released),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
+				return componentHandler
+			},
+		}
+
+		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log, admission.PolicySetV3CRDs)).NotTo(HaveOccurred())
+		Expect(componentHandler.objectsToDelete).To(BeEmpty())
+		var found bool
+		for _, obj := range componentHandler.objectsToCreate {
+			if obj.GetName() == released.Name {
+				found = true
+				Expect(obj.GetLabels()).To(HaveKeyWithValue(admission.PolicySetLabel, string(admission.PolicySetV3CRDs)))
+			}
+		}
+		Expect(found).To(BeTrue())
 	})
 
 	It("should not delete MAPs that are in the desired set", func() {
@@ -2790,7 +2852,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 			},
 		}
 
-		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log, admission.PolicySetV3CRDs)).NotTo(HaveOccurred())
 		Expect(componentHandler.objectsToCreate).To(HaveLen(6))
 		Expect(componentHandler.objectsToDelete).To(BeEmpty())
 	})
@@ -2814,7 +2876,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 		installation.Spec.Variant = operator.CalicoEnterprise
 
-		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log, admission.PolicySetV3CRDs)).NotTo(HaveOccurred())
 		Expect(componentHandler.objectsToCreate).To(BeEmpty())
 	})
 
@@ -2888,7 +2950,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 			},
 		}
 
-		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log, admission.PolicySetV3CRDs)).NotTo(HaveOccurred())
 		Expect(componentHandler.objectsToCreate).To(HaveLen(2))
 
 		var vapCount, vapbCount int
@@ -2923,7 +2985,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 			},
 		}
 
-		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log, admission.PolicySetV3CRDs)).NotTo(HaveOccurred())
 		Expect(componentHandler.objectsToCreate).To(HaveLen(2))
 
 		var vapCount, vapbCount int
@@ -2956,7 +3018,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 			},
 		}
 
-		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log, admission.PolicySetV3CRDs)).NotTo(HaveOccurred())
 		Expect(componentHandler.objectsToCreate).To(HaveLen(2))
 	})
 
@@ -2977,12 +3039,12 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 			},
 		}
 
-		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log, admission.PolicySetV3CRDs)).NotTo(HaveOccurred())
 		Expect(componentHandler.objectsToCreate).To(BeEmpty())
 		mockStatus.AssertNotCalled(GinkgoT(), "SetDegraded", operator.ResourceNotReady, mock.Anything, mock.Anything, mock.Anything)
 	})
 
-	It("should not create VAPs when v3CRDs=false", func() {
+	It("should not manage the v3 policies when v3CRDs=false", func() {
 		r = ReconcileInstallation{
 			ext: coreExtensions.Installation(),
 			opts: options.ControllerOptions{
@@ -2999,21 +3061,20 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 			},
 		}
 
-		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
-		Expect(componentHandler.objectsToCreate).To(BeEmpty())
+		Expect(r.managesV3AdmissionPolicies()).To(BeFalse())
 	})
 
 	It("should delete stale v1 VAPs with managed label", func() {
 		staleVAP := &admissionregistrationv1.ValidatingAdmissionPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   "stale-policy",
-				Labels: map[string]string{admission.ManagedVAPLabel: admission.ManagedVAPLabelValue},
+				Labels: map[string]string{admission.ManagedVAPLabel: admission.ManagedVAPLabelValue, admission.PolicySetLabel: string(admission.PolicySetV3CRDs)},
 			},
 		}
 		staleVAPB := &admissionregistrationv1.ValidatingAdmissionPolicyBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   "stale-binding",
-				Labels: map[string]string{admission.ManagedVAPLabel: admission.ManagedVAPLabelValue},
+				Labels: map[string]string{admission.ManagedVAPLabel: admission.ManagedVAPLabelValue, admission.PolicySetLabel: string(admission.PolicySetV3CRDs)},
 			},
 		}
 
@@ -3032,7 +3093,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 			},
 		}
 
-		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log, admission.PolicySetV3CRDs)).NotTo(HaveOccurred())
 		Expect(componentHandler.objectsToCreate).To(HaveLen(2))
 		Expect(componentHandler.objectsToDelete).To(HaveLen(2))
 		deletedNames := map[string]bool{}
@@ -3041,6 +3102,33 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 		}
 		Expect(deletedNames).To(HaveKey("stale-policy"))
 		Expect(deletedNames).To(HaveKey("stale-binding"))
+	})
+
+	It("should leave the CNI annotation policies alone", func() {
+		cniPolicy := &admissionregistrationv1.ValidatingAdmissionPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "protect-cni-annotations.projectcalico.org",
+				Labels: map[string]string{admission.ManagedVAPLabel: admission.ManagedVAPLabelValue, admission.PolicySetLabel: string(admission.PolicySetCNIAnnotations)},
+			},
+		}
+
+		r = ReconcileInstallation{
+			ext: coreExtensions.Installation(),
+			opts: options.ControllerOptions{
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1),
+			},
+			client: clientFor(cniPolicy),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
+				return componentHandler
+			},
+		}
+
+		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log, admission.PolicySetV3CRDs)).NotTo(HaveOccurred())
+		Expect(componentHandler.objectsToDelete).To(BeEmpty())
 	})
 
 	It("should create nothing for a variant that ships no policies", func() {
@@ -3062,10 +3150,173 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 		installation.Spec.Variant = operator.CalicoEnterprise
 
-		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
+		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log, admission.PolicySetV3CRDs)).NotTo(HaveOccurred())
 		Expect(componentHandler.objectsToCreate).To(BeEmpty())
 	})
 
+})
+
+// The policies over the Calico CNI plugin's pod annotations are reconciled in their own pass, after
+// the components, so the CNI plugin's ClusterRole carries the permission they check first.
+var _ = Describe("CNI annotation admission policies", func() {
+	const (
+		vapName = "protect-cni-annotations.projectcalico.org"
+		mapName = "strip-cni-annotations.projectcalico.org"
+	)
+
+	var (
+		ctx              context.Context
+		cancel           context.CancelFunc
+		scheme           *runtime.Scheme
+		mockStatus       *status.MockStatus
+		componentHandler *fakeComponentHandler
+		log              logr.Logger
+		installation     *operator.Installation
+	)
+
+	// reconcilerFor returns a reconciler that manages CRDs, with or without v3 CRDs. An empty
+	// version means the cluster doesn't serve that kind.
+	reconcilerFor := func(manageCRDs, v3CRDs bool, vapVersion, mapVersion string, initial ...client.Object) ReconcileInstallation {
+		m := map[schema.GroupKind]string{}
+		if vapVersion != "" {
+			m[admission.ValidatingPolicyGroupKind] = vapVersion
+		}
+		if mapVersion != "" {
+			m[admission.PolicyGroupKind] = mapVersion
+		}
+		return ReconcileInstallation{
+			ext: coreExtensions.Installation(),
+			opts: options.ControllerOptions{
+				ManageCRDs:   manageCRDs,
+				UseV3CRDs:    v3CRDs,
+				APIDiscovery: discovery.NewStaticAPIDiscovery(m),
+			},
+			client: ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(initial...).Build(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
+				return componentHandler
+			},
+		}
+	}
+
+	reconcileBoth := func(r ReconcileInstallation) {
+		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log, admission.PolicySetCNIAnnotations)).NotTo(HaveOccurred())
+		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log, admission.PolicySetCNIAnnotations)).NotTo(HaveOccurred())
+	}
+
+	names := func(objs []client.Object) []string {
+		var out []string
+		for _, obj := range objs {
+			out = append(out, obj.GetName())
+		}
+		return out
+	}
+
+	BeforeEach(func() {
+		log = logr.Discard()
+		ctx, cancel = context.WithCancel(context.Background())
+
+		scheme = runtime.NewScheme()
+		Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
+		Expect(operator.SchemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+		Expect(admissionregistrationv1.SchemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+		Expect(admissionregistrationv1alpha1.SchemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+		Expect(admissionv1beta1.SchemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+
+		mockStatus = &status.MockStatus{}
+		mockStatus.On("SetDegraded", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return()
+
+		componentHandler = newFakeComponentHandler()
+		installation = &operator.Installation{
+			ObjectMeta: metav1.ObjectMeta{Name: "default"},
+			Spec: operator.InstallationSpec{
+				Variant: operator.Calico,
+				CNI:     &operator.CNISpec{Type: operator.PluginCalico},
+			},
+		}
+	})
+
+	AfterEach(func() {
+		cancel()
+	})
+
+	It("should install both policies, labelled managed and in their own set", func() {
+		for _, v3CRDs := range []bool{false, true} {
+			componentHandler = newFakeComponentHandler()
+			reconcileBoth(reconcilerFor(true, v3CRDs, admission.VersionV1, admission.VersionV1))
+
+			Expect(names(componentHandler.objectsToCreate)).To(ConsistOf(vapName, vapName, mapName, mapName), "v3CRDs=%v", v3CRDs)
+			for _, obj := range componentHandler.objectsToCreate {
+				if obj.GetName() == vapName {
+					Expect(obj.GetLabels()).To(HaveKeyWithValue(admission.ManagedVAPLabel, admission.ManagedVAPLabelValue))
+				} else {
+					Expect(obj.GetLabels()).To(HaveKeyWithValue(admission.ManagedMAPLabel, admission.ManagedMAPLabelValue))
+				}
+				Expect(obj.GetLabels()).To(HaveKeyWithValue(admission.PolicySetLabel, string(admission.PolicySetCNIAnnotations)))
+			}
+			Expect(componentHandler.objectsToDelete).To(BeEmpty())
+		}
+	})
+
+	It("should leave the v3 policies alone", func() {
+		r := reconcilerFor(true, true, admission.VersionV1, admission.VersionV1,
+			&admissionregistrationv1.ValidatingAdmissionPolicy{ObjectMeta: metav1.ObjectMeta{Name: "protect-builtin-tiers.projectcalico.org", Labels: map[string]string{admission.ManagedVAPLabel: admission.ManagedVAPLabelValue, admission.PolicySetLabel: string(admission.PolicySetV3CRDs)}}},
+			&admissionregistrationv1.MutatingAdmissionPolicy{ObjectMeta: metav1.ObjectMeta{Name: "policytypes.policy.projectcalico.org", Labels: map[string]string{admission.ManagedMAPLabel: admission.ManagedMAPLabelValue, admission.PolicySetLabel: string(admission.PolicySetV3CRDs)}}},
+		)
+		reconcileBoth(r)
+
+		Expect(names(componentHandler.objectsToCreate)).To(ConsistOf(vapName, vapName, mapName, mapName))
+		Expect(componentHandler.objectsToDelete).To(BeEmpty())
+	})
+
+	It("should install the mutating policy at the served version", func() {
+		for _, version := range []string{admission.VersionV1, admission.VersionV1Beta1, admission.VersionV1Alpha1} {
+			componentHandler = newFakeComponentHandler()
+			r := reconcilerFor(true, false, "", version)
+
+			Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log, admission.PolicySetCNIAnnotations)).NotTo(HaveOccurred())
+			Expect(names(componentHandler.objectsToCreate)).To(ConsistOf(mapName, mapName), version)
+			for _, obj := range componentHandler.objectsToCreate {
+				Expect(obj.GetObjectKind().GroupVersionKind().Version).To(Equal(version))
+			}
+		}
+	})
+
+	It("should install them even when the operator doesn't manage CRDs", func() {
+		reconcileBoth(reconcilerFor(false, false, admission.VersionV1, admission.VersionV1))
+
+		Expect(names(componentHandler.objectsToCreate)).To(ConsistOf(vapName, vapName, mapName, mapName))
+		Expect(componentHandler.objectsToDelete).To(BeEmpty())
+	})
+
+	It("should install both policies whatever the CNI plugin", func() {
+		for _, plugin := range []operator.CNIPluginType{operator.PluginCalico, operator.PluginAmazonVPC, operator.PluginAzureVNET, operator.PluginGKE} {
+			componentHandler = newFakeComponentHandler()
+			installation.Spec.CNI = &operator.CNISpec{Type: plugin}
+			reconcileBoth(reconcilerFor(true, false, admission.VersionV1, admission.VersionV1))
+
+			Expect(names(componentHandler.objectsToCreate)).To(ConsistOf(vapName, vapName, mapName, mapName), string(plugin))
+			Expect(componentHandler.objectsToDelete).To(BeEmpty(), string(plugin))
+		}
+	})
+
+	It("should skip without degrading when no version is served, and warn once", func() {
+		mapNotServedWarnOnce.Reset()
+		vapNotServedWarnOnce.Reset()
+		var warnings []string
+		log = funcr.New(func(_, args string) { warnings = append(warnings, args) }, funcr.Options{})
+		r := reconcilerFor(true, false, "", "")
+
+		for range 3 {
+			reconcileBoth(r)
+		}
+		Expect(componentHandler.objectsToCreate).To(BeEmpty())
+		mockStatus.AssertNotCalled(GinkgoT(), "SetDegraded", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		Expect(warnings).To(HaveLen(2))
+		Expect(warnings[0]).To(ContainSubstring("[WARNING] Kubernetes cluster does not serve ValidatingAdmissionPolicy"))
+		Expect(warnings[1]).To(ContainSubstring("[WARNING] Kubernetes cluster does not serve MutatingAdmissionPolicy"))
+	})
 })
 
 // rejectingInstallation rejects the configuration, so the controller's degrade path

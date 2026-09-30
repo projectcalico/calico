@@ -115,7 +115,12 @@ var (
 	log                    = logf.Log.WithName("controller_installation")
 	openshiftNetworkConfig = "cluster"
 
-	warnOnce = utils.OnceFlag{}
+	bpfBootstrapWarnOnce = utils.OnceFlag{}
+
+	// The served admission policy versions are discovered once at start-up, so an unserved kind is
+	// only warned about once.
+	mapNotServedWarnOnce = utils.OnceFlag{}
+	vapNotServedWarnOnce = utils.OnceFlag{}
 )
 
 // Add creates a new Installation Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -950,12 +955,14 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
-	if err = r.updateMutatingAdmissionPolicies(ctx, defaulted, reqLogger); err != nil {
-		return reconcile.Result{}, err
-	}
+	if r.managesV3AdmissionPolicies() {
+		if err = r.updateMutatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetV3CRDs); err != nil {
+			return reconcile.Result{}, err
+		}
 
-	if err = r.updateValidatingAdmissionPolicies(ctx, defaulted, reqLogger); err != nil {
-		return reconcile.Result{}, err
+		if err = r.updateValidatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetV3CRDs); err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 
 	// Now that migrated config is stored in the installation resource, we no longer need
@@ -1394,7 +1401,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		if !defaulted.Spec.KubernetesProvider.IsNone() {
 			// Warn once about potential issues with API server connectivity.
 			// This lock is necessary to prevent multiple warnings, since this Reconcile is called by multiple workers.
-			if warnOnce.TrySet() {
+			if bpfBootstrapWarnOnce.TrySet() {
 				reqLogger.Info(fmt.Sprintf("[WARNING] Auto bootstrapping BPF network may result in unexpected behavior in %s. ", defaulted.Spec.KubernetesProvider) +
 					"If you experience API server communication issues, disable 'bpfBootstrapNetworking' in the Installation CR " +
 					"and follow the eBPF installation guide at https://docs.tigera.io.")
@@ -1403,7 +1410,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	if !defaulted.Spec.BPFNetworkBootstrapEnabled() {
-		warnOnce.Reset()
+		bpfBootstrapWarnOnce.Reset()
 	}
 
 	components = append(components, render.Node(&nodeCfg))
@@ -1475,6 +1482,17 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error creating / updating resource", err, reqLogger)
 			return reconcile.Result{}, err
 		}
+	}
+
+	// The CNI plugin's ClusterRole, rendered above, carries the permission these policies check, so
+	// they go in only after it. The CRD-only manifests don't carry them, so they're installed whether
+	// or not the operator manages CRDs.
+	if err = r.updateValidatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetCNIAnnotations); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	if err = r.updateMutatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetCNIAnnotations); err != nil {
+		return reconcile.Result{}, err
 	}
 
 	// TODO: We handle too many components in this controller at the moment. Once we are done consolidating,
@@ -1799,21 +1817,30 @@ func (r *ReconcileInstallation) updateCRDs(ctx context.Context, variant operator
 	return nil
 }
 
-func (r *ReconcileInstallation) updateMutatingAdmissionPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger) error {
-	if !r.opts.ManageCRDs || !r.opts.UseV3CRDs {
-		return nil
-	}
+// managesV3AdmissionPolicies reports whether the operator installs the admission policies for v3
+// CRDs: only when the cluster uses them and the operator manages CRDs.
+func (r *ReconcileInstallation) managesV3AdmissionPolicies() bool {
+	return r.opts.ManageCRDs && r.opts.UseV3CRDs
+}
 
+// updateMutatingAdmissionPolicies reconciles the operator's MutatingAdmissionPolicies in the given set.
+func (r *ReconcileInstallation) updateMutatingAdmissionPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger, set admission.PolicySet) error {
 	// MutatingAdmissionPolicy served version was discovered once at startup (v1 was promoted to GA
 	// in k8s 1.36 and v1beta1 (introduced in 1.32) is scheduled for removal in 1.37).
 	mapAPIVersion := r.opts.APIDiscovery.ServedVersion(admission.APIGroup, admission.KindPolicy)
 	if mapAPIVersion == "" {
-		r.status.SetDegraded(operatorv1.ResourceNotReady, "Kubernetes cluster does not serve MutatingAdmissionPolicy (requires v1.32+); policy defaulting will not be available", nil, log)
+		// v3 resources rely on their policies for defaulting. The CNI annotations are still
+		// protected by the validating policy without theirs.
+		if set == admission.PolicySetV3CRDs {
+			r.status.SetDegraded(operatorv1.ResourceNotReady, "Kubernetes cluster does not serve MutatingAdmissionPolicy (requires v1.32+); policy defaulting will not be available", nil, log)
+		} else if mapNotServedWarnOnce.TrySet() {
+			log.Info("[WARNING] Kubernetes cluster does not serve MutatingAdmissionPolicy, skipping")
+		}
 		return nil
 	}
 
-	desired := admission.GetMutatingAdmissionPolicies(install.Spec.Variant, r.opts.UseV3CRDs, mapAPIVersion)
-	existingMAPs, existingMAPBs, err := admission.ListManaged(ctx, r.client, mapAPIVersion)
+	desired := admission.GetMutatingAdmissionPolicies(install.Spec.Variant, set, mapAPIVersion)
+	existingMAPs, existingMAPBs, err := admission.ListManaged(ctx, r.client, mapAPIVersion, set)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed MutatingAdmissionPolicy resources", err, log)
 		return err
@@ -1822,22 +1849,22 @@ func (r *ReconcileInstallation) updateMutatingAdmissionPolicies(ctx context.Cont
 	return r.syncManagedAdmissionPolicies(ctx, install, log, desired, existingMAPs, existingMAPBs, admission.IsPolicyKind, admission.IsBindingKind, "Error syncing MutatingAdmissionPolicy resources")
 }
 
-func (r *ReconcileInstallation) updateValidatingAdmissionPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger) error {
-	if !r.opts.ManageCRDs || !r.opts.UseV3CRDs {
-		return nil
-	}
-
+// updateValidatingAdmissionPolicies reconciles the operator's ValidatingAdmissionPolicies in the given
+// set.
+func (r *ReconcileInstallation) updateValidatingAdmissionPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger, set admission.PolicySet) error {
 	// ValidatingAdmissionPolicy reached GA (v1) well before MutatingAdmissionPolicy, so it has its own
 	// served version and is reconciled independently of whether the cluster serves MAPs. If the cluster
 	// doesn't serve it at all there's nothing to do, so skip rather than degrade.
 	vapAPIVersion := r.opts.APIDiscovery.ServedVersion(admission.APIGroup, admission.KindValidatingPolicy)
 	if vapAPIVersion == "" {
-		log.Info("Kubernetes cluster does not serve ValidatingAdmissionPolicy, skipping")
+		if vapNotServedWarnOnce.TrySet() {
+			log.Info("[WARNING] Kubernetes cluster does not serve ValidatingAdmissionPolicy, skipping")
+		}
 		return nil
 	}
 
-	desired := admission.GetValidatingAdmissionPolicies(install.Spec.Variant, r.opts.UseV3CRDs, vapAPIVersion)
-	existingVAPs, existingVAPBs, err := admission.ListManagedValidating(ctx, r.client, vapAPIVersion)
+	desired := admission.GetValidatingAdmissionPolicies(install.Spec.Variant, set, vapAPIVersion)
+	existingVAPs, existingVAPBs, err := admission.ListManagedValidating(ctx, r.client, vapAPIVersion, set)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed ValidatingAdmissionPolicy resources", err, log)
 		return err
