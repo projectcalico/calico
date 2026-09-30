@@ -337,9 +337,8 @@ func (c *loadBalancerController) handleBlockUpdate(kvp model.KVPair) {
 	for i := range block.Allocations {
 		if block.Allocations[i] != nil {
 			attr := block.Attributes[*block.Allocations[i]]
-			ip := block.OrdinalToIP(i)
 			if attr.HandleID == nil {
-				log.WithFields(log.Fields{"block": key, "ip": ip}).Warn("No handle found for load balancer allocation")
+				log.WithFields(log.Fields{"block": key, "ip": block.OrdinalToIP(i)}).Warn("No handle found for load balancer allocation")
 				continue
 			}
 
@@ -353,6 +352,7 @@ func (c *loadBalancerController) handleBlockUpdate(kvp model.KVPair) {
 				continue
 			}
 
+			ip := block.OrdinalToIP(i)
 			svcKey := serviceKey{
 				handle:    *attr.HandleID,
 				namespace: attr.ActiveOwnerAttrs[ipam.AttributeNamespace],

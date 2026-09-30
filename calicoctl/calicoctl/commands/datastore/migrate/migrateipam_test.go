@@ -179,7 +179,9 @@ var _ = Describe("IPAM migration handling", func() {
 
 	DescribeTable("Should rename the handle for every tunnel address type",
 		func(oldHandle, wantHandle string) {
-			block1.Value.(*model.AllocationBlock).Attributes[0].HandleID = &oldHandle
+			block, ok := block1.Value.(*model.AllocationBlock)
+			Expect(ok).To(BeTrue())
+			block.Attributes[0].HandleID = &oldHandle
 			handle1.Key = model.IPAMHandleKey{HandleID: oldHandle}
 
 			bc := NewMockIPAMBackendClient(
