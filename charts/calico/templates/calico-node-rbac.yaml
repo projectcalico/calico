@@ -90,6 +90,15 @@ rules:
       - pods/status
     verbs:
       - patch
+{{- if eq .Values.network "flannel" }}
+  # On canal the CNI plugin runs as the node's own service account, so the node role carries the
+  # permission that lets its pods/status patch through protect-cni-annotations.projectcalico.org.
+  - apiGroups: ["projectcalico.org"]
+    resources:
+      - cniannotations
+    verbs:
+      - write
+{{- end }}
   # Calico monitors various CRDs for config.
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
@@ -232,6 +241,13 @@ rules:
       - pods/status
     verbs:
       - patch
+  # Lets the CNI plugin's pods/status patch through protect-cni-annotations.projectcalico.org.
+  # Nothing serves this resource; it exists only to be granted.
+  - apiGroups: ["projectcalico.org"]
+    resources:
+      - cniannotations
+    verbs:
+      - write
 {{- if eq .Values.network "calico" }}
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
