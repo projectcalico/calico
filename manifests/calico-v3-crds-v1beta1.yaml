@@ -13046,6 +13046,13 @@ rules:
       - pods/status
     verbs:
       - patch
+  # Lets the CNI plugin's pods/status patch through protect-cni-annotations.projectcalico.org.
+  # Nothing serves this resource; it exists only to be granted.
+  - apiGroups: ["projectcalico.org"]
+    resources:
+      - cniannotations
+    verbs:
+      - write
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - blockaffinities
@@ -13897,6 +13904,49 @@ spec:
             ]
 ---
 # Source: calico/templates/admission-policies.yaml
+# MutatingAdmissionPolicy that removes the pod annotations the Calico CNI plugin
+# writes when a pod is created. Their values describe a previous sandbox, so a
+# pod created with them (from a dumped manifest, say) would otherwise be refused
+# by protect-cni-annotations.projectcalico.org.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: strip-cni-annotations.projectcalico.org
+spec:
+  failurePolicy: Fail
+  reinvocationPolicy: Never
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+        operations: ["CREATE"]
+  matchConditions:
+    - name: has-annotations
+      expression: "has(object.metadata.annotations)"
+  variables:
+    # Must match protectedKeys in protect-cni-annotations.yaml.
+    - name: protectedKeys
+      expression: >-
+        object.metadata.annotations.filter(k,
+          k in [
+            'cni.projectcalico.org/podIP',
+            'cni.projectcalico.org/podIPs',
+            'cni.projectcalico.org/containerID',
+            'cni.projectcalico.org/podNetns',
+            'cni.projectcalico.org/network-status'
+          ] ||
+          (k.startsWith('cni.projectcalico.org/') && k.endsWith('.network-status')))
+  mutations:
+    - patchType: JSONPatch
+      jsonPatch:
+        expression: >-
+          variables.protectedKeys.map(k, JSONPatch{
+            op: "remove",
+            path: "/metadata/annotations/" + jsonpatch.escapeKey(k)
+          })
+---
+# Source: calico/templates/admission-policies.yaml
 # This MutatingAdmissionPolicyBinding binds the IP pool defaulting policy to IP pools.
 apiVersion: admissionregistration.k8s.io/v1beta1
 kind: MutatingAdmissionPolicyBinding
@@ -13952,6 +14002,14 @@ spec:
           - stagedglobalnetworkpolicies
 ---
 # Source: calico/templates/admission-policies.yaml
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: strip-cni-annotations.projectcalico.org
+spec:
+  policyName: strip-cni-annotations.projectcalico.org
+---
+# Source: calico/templates/admission-policies.yaml
 # ValidatingAdmissionPolicy that prevents deletion of the built-in Calico tiers
 # (default, kube-admin, kube-baseline). These tiers are required for correct
 # operation and should never be deleted.
@@ -13972,6 +14030,77 @@ spec:
       messageExpression: "'The built-in tier ' + oldObject.metadata.name + ' cannot be deleted'"
 ---
 # Source: calico/templates/admission-policies.yaml
+# ValidatingAdmissionPolicy that allows only Calico to set, change or remove the
+# pod annotations the Calico CNI plugin writes. Felix programs the dataplane
+# from these, so they must not be writable by whoever can update the pod.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: protect-cni-annotations.projectcalico.org
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      # Annotations are writable through pods/status too, and a pods/binding create
+      # copies its own annotations onto the pod. Don't widen this to pods/*:
+      # pods/exec carries no metadata, so kubectl exec would be denied.
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods", "pods/status", "pods/binding"]
+        operations: ["CREATE", "UPDATE"]
+  variables:
+    - name: newAnn
+      expression: "has(object.metadata.annotations) ? object.metadata.annotations : {}"
+    # oldObject is null on CREATE.
+    - name: oldAnn
+      expression: >-
+        request.operation == 'UPDATE'
+          ? (has(oldObject.metadata.annotations) ? oldObject.metadata.annotations : {})
+          : {}
+    - name: perInterfaceKeys
+      expression: >-
+        variables.newAnn.filter(k,
+          k.startsWith('cni.projectcalico.org/') && k.endsWith('.network-status')) +
+        variables.oldAnn.filter(k,
+          k.startsWith('cni.projectcalico.org/') && k.endsWith('.network-status') &&
+          !(k in variables.newAnn))
+    - name: protectedKeys
+      expression: >-
+        [
+          'cni.projectcalico.org/podIP',
+          'cni.projectcalico.org/podIPs',
+          'cni.projectcalico.org/containerID',
+          'cni.projectcalico.org/podNetns',
+          'cni.projectcalico.org/network-status'
+        ] + variables.perInterfaceKeys
+    # Keys this write adds, changes or removes.
+    - name: changed
+      expression: >-
+        variables.protectedKeys.filter(k,
+          k in variables.newAnn
+            ? !(k in variables.oldAnn) || variables.oldAnn[k] != variables.newAnn[k]
+            : k in variables.oldAnn)
+    - name: canWriteCNIAnnotations
+      expression: >-
+        authorizer.group('projectcalico.org')
+          .resource('cniannotations')
+          .check('write').allowed()
+    # Anyone who may delete this policy could remove it anyway, so they are not refused.
+    - name: canDeletePolicy
+      expression: >-
+        authorizer.group('admissionregistration.k8s.io')
+          .resource('validatingadmissionpolicies')
+          .name('protect-cni-annotations.projectcalico.org')
+          .check('delete').allowed()
+  validations:
+    - expression: "variables.changed.size() == 0 || variables.canWriteCNIAnnotations || variables.canDeletePolicy"
+      reason: Forbidden
+      message: "Only identities allowed to write cniannotations.projectcalico.org, or to delete this policy, may set, change or remove these pod annotations"
+      messageExpression: >-
+        'Only identities allowed to write cniannotations.projectcalico.org, or to delete this policy, may set, change or remove these pod annotations: ' +
+        variables.changed.join(', ')
+---
+# Source: calico/templates/admission-policies.yaml
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
@@ -13980,6 +14109,15 @@ spec:
   policyName: protect-builtin-tiers.projectcalico.org
   validationActions:
     - Deny
+---
+# Source: calico/templates/admission-policies.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: protect-cni-annotations.projectcalico.org
+spec:
+  policyName: protect-cni-annotations.projectcalico.org
+  validationActions: [Deny]
 ---
 # Source: calico/templates/calico-webhooks.yaml
 apiVersion: admissionregistration.k8s.io/v1
