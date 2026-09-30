@@ -42,6 +42,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/ipamtestutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
@@ -5143,7 +5144,7 @@ var _ = DescribeTable("IPAMAssignmentInfo.String() tests", func(ia *IPAMAssignme
 			HostReservedAttr: &HostReservedAttr{
 				StartOfBlock: 3,
 				EndOfBlock:   1,
-				Handle:       WindowsReservedHandle,
+				Handle:       accounting.WindowsReservedHandle,
 				Note:         "ipam ut",
 			},
 		},
@@ -5157,7 +5158,7 @@ var _ = DescribeTable("IPAMAssignmentInfo.String() tests", func(ia *IPAMAssignme
 			HostReservedAttr: &HostReservedAttr{
 				StartOfBlock: 3,
 				EndOfBlock:   1,
-				Handle:       WindowsReservedHandle,
+				Handle:       accounting.WindowsReservedHandle,
 				Note:         "ipam ut",
 			},
 		},

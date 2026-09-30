@@ -26,7 +26,8 @@ import (
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	fakek8s "k8s.io/client-go/kubernetes/fake"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -238,7 +239,7 @@ func (m *mockBackendClient) List(ctx context.Context, list model.ListInterface, 
 
 var _ = Describe("CheckIPAM with Cooldown IPs", func() {
 	var (
-		k8sClient     *fakek8s.Clientset
+		k8sClient     ctrlclient.Client
 		v3Client      *mockV3Client
 		backendClient *mockBackendClient
 		checker       *IPAMChecker
@@ -247,7 +248,9 @@ var _ = Describe("CheckIPAM with Cooldown IPs", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		k8sClient = fakek8s.NewSimpleClientset()
+		scheme, err := newScheme()
+		Expect(err).NotTo(HaveOccurred())
+		k8sClient = fake.NewClientBuilder().WithScheme(scheme).Build()
 
 		// Prepare mock cluster info
 		trueVal := true

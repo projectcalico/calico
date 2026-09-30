@@ -29,13 +29,10 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
-
-// windowsReservedHandle is the handle used to reserve addresses required for Windows
-// networking so that workloads do not get assigned these addresses.
-const WindowsReservedHandle = "windows-reserved-ipam-handle"
 
 // Wrap the backend AllocationBlock struct so that we can
 // attach methods to it.
@@ -267,7 +264,7 @@ func (b allocationBlock) empty() bool {
 			continue
 		}
 		attrs := b.Attributes[*attrIdx]
-		if attrs.HandleID == nil || strings.ToLower(*attrs.HandleID) != WindowsReservedHandle {
+		if attrs.HandleID == nil || strings.ToLower(*attrs.HandleID) != accounting.WindowsReservedHandle {
 			return false
 		}
 	}
