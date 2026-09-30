@@ -170,6 +170,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             # map, so that reconciliation deletes it rather than preserving it.
             if port.get("binding:host_id"):
                 neutron_map["wep " + endpoint_name(port)] = port
+
             # binding:profile may carry migrating_to=None (or be missing entirely) after
             # a migration completes or is cancelled.  Only generate destination-side
             # entries when migrating_to is a truthy host string - calling endpoint_name
@@ -583,6 +584,9 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         """
         port_id = port["id"]
 
+        # ``host`` must not be empty.  The callers all ensure this.
+        assert host
+
         # Overlay binding:host_id=host before computing the etcd name so the caller can
         # pass either ``port`` or ``original`` -- the slot is identified by (port_id,
         # host, device_id) and the caller-provided dict's ``binding:host_id`` does not
@@ -751,27 +755,33 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         """Decide whether a WEP slot at ``host`` should exist for ``db_port``."""
         if db_port is None:
             return False
-        migrating_to = db_port.get("binding:profile", {}).get("migrating_to")
 
-        # Source role: the port is bound at this host.  Deliberately keyed on
-        # ``binding:host_id`` alone, and not on ``binding:vif_type``: Neutron rebinds
-        # the port whenever a binding attribute changes, and during that rebind it
-        # commits ``vif_type = "unbound"`` in one transaction and the new binding in a
-        # second one (see ``_process_port_binding`` in ML2's plugin.py).
-        # ``update_port_postcommit`` fires in between, so a ``vif_type``-based test
-        # sees a port that looks unbound while its VM is running perfectly well, and
-        # deletes the WEP underneath it.  That happens at both ends of a live
-        # migration: when ``migrating_to`` is set, and again at Nova's cutover, which
-        # clears ``migrating_to`` and moves ``binding:host_id`` in a single request.
-        # A genuine unbind clears ``binding:host_id``, which this test does catch --
-        # and ``host`` has to be truthy for the comparison to mean anything, or a
-        # hostless port would match itself and be given a WEP named after an empty
-        # host.  That is what the old ``vif_type`` test covered here incidentally.
-        if host and db_port["binding:host_id"] == host:
+        # ``host`` must not be empty.  The callers all ensure this.
+        assert host
+
+        # ``binding:host_id`` specifies the host that a port should exist on in steady
+        # state, or - during a live migration - the host that the port is initially on
+        # (and migrating away from).  In both of those cases a WEP should exist on
+        # ``binding:host_id``.
+        #
+        # We intentionally do not also check ``binding:vif_type``, because Neutron
+        # rebinds the port whenever a binding attribute changes - notably both when a
+        # live migration operation begins, and when it completes - and during that
+        # rebind it commits ``vif_type = "unbound"`` in one transaction and the new
+        # binding in a second one (see ``_process_port_binding`` in ML2's plugin.py).
+        # We definitely do not want ``update_port_postcommit`` for the first commit to
+        # briefly delete the WEP, even if a second quickly following
+        # ``update_port_postcommit`` call will recreate it again.
+        #
+        # A genuine persistent unbind would also clear ``binding:host_id``, and then we
+        # would correctly delete the WEP from its old host.
+        if db_port["binding:host_id"] == host:
             return True
 
-        # Dest role: the port is migrating to this host.
-        if migrating_to == host:
+        # During a live migration, ``port["binding:profile"]["migrating_to"]`` specifies
+        # the host that the port is migrating to.  In this case a WEP should also exist
+        # on that destination host.
+        if db_port.get("binding:profile", {}).get("migrating_to") == host:
             return True
 
         return False
