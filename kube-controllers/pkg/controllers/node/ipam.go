@@ -47,6 +47,7 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -818,7 +819,7 @@ func (c *IPAMController) updateReservedMetrics() {
 			log.WithError(err).Warnf("Unable to parse CIDR for IP Pool %s; skipping its reserved-IP metric", poolName)
 			continue
 		}
-		numReserved, err := ipam.NumReservedIPsInCIDR(*poolCIDR, reservations)
+		numReserved, err := accounting.NumReservedIPsInCIDR(*poolCIDR, reservations)
 		if err != nil {
 			log.WithError(err).Warnf("Unable to count reserved IPs in IP Pool %s", poolName)
 			continue

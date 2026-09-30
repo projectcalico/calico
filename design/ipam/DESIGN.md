@@ -65,7 +65,7 @@ Per-topic design docs in this directory. A PR that touches files across multiple
 | Topic | Applies to | Status |
 |---|---|---|
 | [ipam-core-library](./ipam-core-library.md) | `libcalico-go/lib/ipam/**` (excluding `vmipam/`) | ✅ exists |
-| [ipam-datastore](./ipam-datastore.md) | `libcalico-go/lib/backend/**/ipam*`, `libcalico-go/lib/backend/**/block_affinity*` | ✅ exists |
+| [ipam-datastore](./ipam-datastore.md) | `libcalico-go/lib/backend/**/ipam*`, `libcalico-go/lib/backend/**/block_affinity*`, `libcalico-go/lib/backend/model/block.go` | ✅ exists |
 | [ipam-cni](./ipam-cni.md) | `cni-plugin/pkg/ipamplugin/**`, `cni-plugin/pkg/k8s/**`, `node/cmd/calico-ipam/**` | ✅ exists |
 | [ipam-gc](./ipam-gc.md) | `kube-controllers/pkg/controllers/node/ipam*.go`, `kube-controllers/pkg/controllers/node/pool_manager.go`, `kube-controllers/pkg/controllers/node/ipam_allocation.go` | ✅ exists |
 | [ipam-other-callers](./ipam-other-callers.md) | `node/pkg/allocateip/**`, `calicoctl/calicoctl/commands/ipam/**`, `calicoctl/calicoctl/commands/datastore/migrate/**`, `kube-controllers/pkg/controllers/loadbalancer/**`, `kube-controllers/pkg/controllers/flannelmigration/**`, `libcalico-go/lib/ipam/vmipam/**`, Felix IPAM read paths | ✅ exists |

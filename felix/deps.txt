@@ -355,6 +355,7 @@ local:libcalico-go/lib/errors
 local:libcalico-go/lib/hash
 local:libcalico-go/lib/health
 local:libcalico-go/lib/ipam
+local:libcalico-go/lib/ipam/accounting
 local:libcalico-go/lib/ipam/vmipam
 local:libcalico-go/lib/metricsserver
 local:libcalico-go/lib/names
