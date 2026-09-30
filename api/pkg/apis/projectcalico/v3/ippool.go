@@ -62,6 +62,7 @@ const (
 	IPPoolConditionAllocatable = "Allocatable"
 
 	// IPPoolConditionAddressSpaceNearlyFull is present while at least 80% of a pool's addresses are in use or reserved.
+	// Pools of 32 addresses or fewer never carry it.
 	IPPoolConditionAddressSpaceNearlyFull = "AddressSpaceNearlyFull"
 )
 

@@ -18,18 +18,13 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/client-go/tools/cache"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 const (
@@ -37,9 +32,6 @@ const (
 
 	// Pools this small fill up after a handful of pods, so the condition would only be noise.
 	minAddressesForNearlyFull = 32
-
-	// utilizationDelay collapses block and reservation churn into at most one reconcile per interval.
-	utilizationDelay = 5 * time.Second
 )
 
 // reconcileNearlyFull sets AddressSpaceNearlyFull on pools at or over the threshold and removes it from the rest.
@@ -87,83 +79,4 @@ func nearlyFullCondition(counts *accounting.Counts) *metav1.Condition {
 		Reason:  v3.IPPoolReasonThresholdExceeded,
 		Message: fmt.Sprintf("%s%% of addresses are in use or reserved.", percent),
 	}
-}
-
-func (c *IPPoolController) blockHandlers() cache.ResourceEventHandlerFuncs {
-	add := func(obj any) {
-		block, ok := toAllocationBlock(obj)
-		if !ok {
-			return
-		}
-		c.tracker.AddBlocks(block)
-		c.queue.AddAfter(reconcileKey, utilizationDelay)
-	}
-	return cache.ResourceEventHandlerFuncs{
-		AddFunc:    add,
-		UpdateFunc: func(_, newObj any) { add(newObj) },
-		DeleteFunc: func(obj any) {
-			block, ok := unwrapTombstone(obj).(*v3.IPAMBlock)
-			if !ok {
-				return
-			}
-			_, cidr, err := cnet.ParseCIDR(block.Spec.CIDR)
-			if err != nil {
-				logrus.WithError(err).WithField("cidr", block.Spec.CIDR).Error("Failed to parse CIDR from deleted IPAMBlock")
-				return
-			}
-			c.tracker.RemoveBlock(*cidr)
-
-			// Block deletions can unblock finalization of a deleting pool, so reconcile straight away.
-			c.queue.Add(reconcileKey)
-		},
-	}
-}
-
-func (c *IPPoolController) reservationHandlers() cache.ResourceEventHandlerFuncs {
-	add := func(obj any) {
-		reservation, ok := obj.(*v3.IPReservation)
-		if !ok {
-			return
-		}
-		c.tracker.AddReservations(reservation)
-		c.queue.AddAfter(reconcileKey, utilizationDelay)
-	}
-	return cache.ResourceEventHandlerFuncs{
-		AddFunc:    add,
-		UpdateFunc: func(_, newObj any) { add(newObj) },
-		DeleteFunc: func(obj any) {
-			reservation, ok := unwrapTombstone(obj).(*v3.IPReservation)
-			if !ok {
-				return
-			}
-			c.tracker.RemoveReservation(reservation.Name)
-			c.queue.AddAfter(reconcileKey, utilizationDelay)
-		},
-	}
-}
-
-func toAllocationBlock(obj any) (*model.AllocationBlock, bool) {
-	block, ok := obj.(*v3.IPAMBlock)
-	if !ok {
-		logrus.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in IPAMBlock cache")
-		return nil, false
-	}
-	kvp, err := resources.IPAMBlockV3toV1(&model.KVPair{Value: block})
-	if err != nil {
-		logrus.WithError(err).WithField("block", block.Name).Error("Failed to convert IPAMBlock")
-		return nil, false
-	}
-	allocationBlock, ok := kvp.Value.(*model.AllocationBlock)
-	if !ok {
-		logrus.WithField("type", fmt.Sprintf("%T", kvp.Value)).Error("Unexpected IPAMBlock conversion result")
-		return nil, false
-	}
-	return allocationBlock, true
-}
-
-func unwrapTombstone(obj any) any {
-	if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
-		return tombstone.Obj
-	}
-	return obj
 }

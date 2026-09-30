@@ -24,6 +24,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -33,6 +34,9 @@ import (
 
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/informerutil"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -48,6 +52,9 @@ const (
 	// reconcileKey is the single workqueue key this controller uses. Overlap detection is global
 	// across all pools, so there is nothing to gain from per-pool keys.
 	reconcileKey = "reconcile"
+
+	// utilizationDelay collapses block and reservation churn into at most one reconcile per interval.
+	utilizationDelay = 5 * time.Second
 )
 
 // IPPoolController is responsible for watching IPPool and IPAMBlock resources and managing the finalization / deletion
@@ -113,12 +120,88 @@ func (c *IPPoolController) poolHandlers() cache.ResourceEventHandlerFuncs {
 		AddFunc:    add,
 		UpdateFunc: func(_, newObj any) { add(newObj) },
 		DeleteFunc: func(obj any) {
-			if p, ok := unwrapTombstone(obj).(*v3.IPPool); ok {
-				c.tracker.RemovePool(p.Name)
+			if name, err := cache.DeletionHandlingObjectToName(obj); err != nil {
+				logrus.WithError(err).Error("Failed to get name of deleted IPPool")
+			} else {
+				c.tracker.RemovePool(name.Name)
 			}
 			c.queue.Add(reconcileKey)
 		},
 	}
+}
+
+func (c *IPPoolController) blockHandlers() cache.ResourceEventHandlerFuncs {
+	add := func(obj any) {
+		block, ok := toAllocationBlock(obj)
+		if !ok {
+			return
+		}
+		c.tracker.AddBlocks(block)
+		c.queue.AddAfter(reconcileKey, utilizationDelay)
+	}
+	return cache.ResourceEventHandlerFuncs{
+		AddFunc:    add,
+		UpdateFunc: func(_, newObj any) { add(newObj) },
+		DeleteFunc: func(obj any) {
+			block, err := informerutil.DeletedObject[*v3.IPAMBlock](obj)
+			if err != nil {
+				logrus.WithError(err).Error("Skipping IPAMBlock delete event")
+				return
+			}
+			_, cidr, err := cnet.ParseCIDR(block.Spec.CIDR)
+			if err != nil {
+				logrus.WithError(err).WithField("cidr", block.Spec.CIDR).Error("Failed to parse CIDR from deleted IPAMBlock")
+				return
+			}
+			c.tracker.RemoveBlock(*cidr)
+
+			// Block deletions can unblock finalization of a deleting pool, so reconcile straight away.
+			c.queue.Add(reconcileKey)
+		},
+	}
+}
+
+func (c *IPPoolController) reservationHandlers() cache.ResourceEventHandlerFuncs {
+	add := func(obj any) {
+		reservation, ok := obj.(*v3.IPReservation)
+		if !ok {
+			return
+		}
+		c.tracker.AddReservations(reservation)
+		c.queue.AddAfter(reconcileKey, utilizationDelay)
+	}
+	return cache.ResourceEventHandlerFuncs{
+		AddFunc:    add,
+		UpdateFunc: func(_, newObj any) { add(newObj) },
+		DeleteFunc: func(obj any) {
+			name, err := cache.DeletionHandlingObjectToName(obj)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to get name of deleted IPReservation")
+				return
+			}
+			c.tracker.RemoveReservation(name.Name)
+			c.queue.AddAfter(reconcileKey, utilizationDelay)
+		},
+	}
+}
+
+func toAllocationBlock(obj any) (*model.AllocationBlock, bool) {
+	block, ok := obj.(*v3.IPAMBlock)
+	if !ok {
+		logrus.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in IPAMBlock cache")
+		return nil, false
+	}
+	kvp, err := resources.IPAMBlockV3toV1(&model.KVPair{Value: block})
+	if err != nil {
+		logrus.WithError(err).WithField("block", block.Name).Error("Failed to convert IPAMBlock")
+		return nil, false
+	}
+	allocationBlock, ok := kvp.Value.(*model.AllocationBlock)
+	if !ok {
+		logrus.WithField("type", fmt.Sprintf("%T", kvp.Value)).Error("Unexpected IPAMBlock conversion result")
+		return nil, false
+	}
+	return allocationBlock, true
 }
 
 // Run starts the IP pool controller. It does start-of-day preparation
@@ -503,14 +586,9 @@ func updateCondition(ctx context.Context, cli clientset.Interface, p *v3.IPPool,
 
 // removeCondition drops the condition type from the IP pool and writes its status, if the pool carries it. It mutates p.
 func removeCondition(ctx context.Context, cli clientset.Interface, p *v3.IPPool, conditionType string) error {
-	if p.Status == nil {
+	if p.Status == nil || !meta.RemoveStatusCondition(&p.Status.Conditions, conditionType) {
 		return nil
 	}
-	kept := slices.DeleteFunc(slices.Clone(p.Status.Conditions), func(c metav1.Condition) bool { return c.Type == conditionType })
-	if len(kept) == len(p.Status.Conditions) {
-		return nil
-	}
-	p.Status.Conditions = kept
 
 	logrus.WithField("pool", p.Name).Infof("Removing condition %s", conditionType)
 	updated, err := cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, p, metav1.UpdateOptions{})

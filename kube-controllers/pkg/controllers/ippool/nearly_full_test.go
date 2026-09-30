@@ -77,8 +77,8 @@ func TestNearlyFullCondition(t *testing.T) {
 	}
 }
 
-// allocatedBlock returns a block covering cidr with the first n ordinals allocated.
-func allocatedBlock(t *testing.T, cidr string, n int) *model.AllocationBlock {
+// allocatedBlock returns a block covering cidr with the first numAllocated ordinals allocated.
+func allocatedBlock(t *testing.T, cidr string, numAllocated int) *model.AllocationBlock {
 	t.Helper()
 	_, blockNet, err := cnet.ParseCIDR(cidr)
 	if err != nil {
@@ -91,7 +91,7 @@ func allocatedBlock(t *testing.T, cidr string, n int) *model.AllocationBlock {
 		Attributes:  []model.AllocationAttribute{{HandleID: ptr.To("handle")}},
 	}
 	for i := range size {
-		if int(i) < n {
+		if int(i) < numAllocated {
 			block.Allocations[i] = ptr.To(0)
 		} else {
 			block.Unallocated = append(block.Unallocated, int(i))
