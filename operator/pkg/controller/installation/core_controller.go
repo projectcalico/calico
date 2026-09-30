@@ -958,14 +958,6 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
-	if err = r.updateK8sValidatingAdmissionPolicies(ctx, defaulted, reqLogger); err != nil {
-		return reconcile.Result{}, err
-	}
-
-	if err = r.updateK8sMutatingAdmissionPolicies(ctx, defaulted, reqLogger); err != nil {
-		return reconcile.Result{}, err
-	}
-
 	// Now that migrated config is stored in the installation resource, we no longer need
 	// to check if a migration is needed for the lifetime of the operator.
 	r.migrationChecked = true
@@ -1483,6 +1475,14 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error creating / updating resource", err, reqLogger)
 			return reconcile.Result{}, err
 		}
+	}
+
+	if err = r.updateK8sValidatingAdmissionPolicies(ctx, defaulted, reqLogger); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	if err = r.updateK8sMutatingAdmissionPolicies(ctx, defaulted, reqLogger); err != nil {
+		return reconcile.Result{}, err
 	}
 
 	// TODO: We handle too many components in this controller at the moment. Once we are done consolidating,

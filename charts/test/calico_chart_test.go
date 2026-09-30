@@ -25,6 +25,7 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
@@ -128,6 +129,41 @@ func TestCalicoRendersTheCNIAnnotationMutatingPolicy(t *testing.T) {
 			renderCalicoResourceWith(t, values, "templates/admission-policies.yaml", "MutatingAdmissionPolicyBinding", name, &binding, args...)
 			g.Expect(binding.APIVersion).To(Equal(tc.want))
 			g.Expect(binding.Spec.PolicyName).To(Equal(name))
+		})
+	}
+}
+
+// The CNI plugin is let through protect-cni-annotations.projectcalico.org by a permission its role
+// carries. On canal it runs as the node's own service account, so there the node role carries it too.
+func TestCalicoGrantsTheCNIPluginItsAnnotationPermission(t *testing.T) {
+	grant := rbacv1.PolicyRule{
+		APIGroups: []string{"projectcalico.org"},
+		Resources: []string{"cniannotations"},
+		Verbs:     []string{"write"},
+	}
+
+	for _, tc := range []struct {
+		network        string
+		nodeRoleGrants bool
+	}{
+		{network: "calico", nodeRoleGrants: false},
+		{network: "flannel", nodeRoleGrants: true},
+	} {
+		t.Run("network="+tc.network, func(t *testing.T) {
+			g := NewWithT(t)
+			values := map[string]string{"datastore": "kubernetes", "network": tc.network}
+
+			var cniRole rbacv1.ClusterRole
+			renderCalicoResourceWith(t, values, "templates/calico-node-rbac.yaml", "ClusterRole", "calico-cni-plugin", &cniRole)
+			g.Expect(cniRole.Rules).To(ContainElement(grant))
+
+			var nodeRole rbacv1.ClusterRole
+			renderCalicoResourceWith(t, values, "templates/calico-node-rbac.yaml", "ClusterRole", "calico-node", &nodeRole)
+			if tc.nodeRoleGrants {
+				g.Expect(nodeRole.Rules).To(ContainElement(grant))
+			} else {
+				g.Expect(nodeRole.Rules).NotTo(ContainElement(grant))
+			}
 		})
 	}
 }

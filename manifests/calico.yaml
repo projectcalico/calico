@@ -12691,6 +12691,13 @@ rules:
       - pods/status
     verbs:
       - patch
+  # Lets the CNI plugin's pods/status patch through protect-cni-annotations.projectcalico.org.
+  # Nothing serves this resource; it exists only to be granted.
+  - apiGroups: ["projectcalico.org"]
+    resources:
+      - cniannotations
+    verbs:
+      - write
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - blockaffinities
@@ -13283,16 +13290,6 @@ spec:
         apiVersions: ["v1"]
         resources: ["pods", "pods/status"]
         operations: ["CREATE", "UPDATE"]
-  matchConditions:
-    # `canal` is the only relevant username for Canal installs - other usernames exist,
-    # but only for etcd installs where Pods are not written.
-    - name: not-calico
-      expression: >-
-        !(request.userInfo.username in [
-          'system:serviceaccount:calico-system:calico-cni-plugin',
-          'system:serviceaccount:kube-system:calico-cni-plugin',
-          'system:serviceaccount:kube-system:canal'
-        ]) && !('system:masters' in request.userInfo.groups)
   variables:
     - name: newAnn
       expression: "has(object.metadata.annotations) ? object.metadata.annotations : {}"
@@ -13327,6 +13324,11 @@ spec:
       expression: >-
         variables.protectedKeys.filter(k,
           k in variables.oldAnn && !(k in variables.newAnn))
+    - name: canWriteCNIAnnotations
+      expression: >-
+        authorizer.group('projectcalico.org')
+          .resource('cniannotations')
+          .check('write').allowed()
     # Anyone who may delete this policy could remove it anyway, so they are not refused.
     - name: canDeletePolicy
       expression: >-
@@ -13335,17 +13337,17 @@ spec:
           .name('protect-cni-annotations.projectcalico.org')
           .check('delete').allowed()
   validations:
-    - expression: "variables.addedOrChanged.size() == 0 || variables.canDeletePolicy"
+    - expression: "variables.addedOrChanged.size() == 0 || variables.canWriteCNIAnnotations || variables.canDeletePolicy"
       reason: Forbidden
-      message: "Only Calico, or anyone allowed to delete this policy, may set, change or remove these pod annotations"
+      message: "Only identities allowed to write cniannotations.projectcalico.org, or to delete this policy, may set, change or remove these pod annotations"
       messageExpression: >-
-        'Only Calico, or anyone allowed to delete this policy, may set, change or remove these pod annotations: ' +
+        'Only identities allowed to write cniannotations.projectcalico.org, or to delete this policy, may set, change or remove these pod annotations: ' +
         variables.addedOrChanged.join(', ')
-    - expression: "variables.removed.size() == 0 || variables.canDeletePolicy"
+    - expression: "variables.removed.size() == 0 || variables.canWriteCNIAnnotations || variables.canDeletePolicy"
       reason: Forbidden
-      message: "Only Calico, or anyone allowed to delete this policy, may set, change or remove these pod annotations"
+      message: "Only identities allowed to write cniannotations.projectcalico.org, or to delete this policy, may set, change or remove these pod annotations"
       messageExpression: >-
-        'Only Calico, or anyone allowed to delete this policy, may set, change or remove these pod annotations: ' +
+        'Only identities allowed to write cniannotations.projectcalico.org, or to delete this policy, may set, change or remove these pod annotations: ' +
         variables.removed.join(', ')
 ---
 # Source: calico/templates/admission-policies.yaml

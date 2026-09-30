@@ -71,17 +71,20 @@ var foreignAnnotations = []annotation{
 	{"example.com/unrelated", "value"},
 }
 
-// The identities the policy exempts.
-var exemptWriters = []string{
-	"system:serviceaccount:calico-system:calico-cni-plugin",
-	"system:serviceaccount:kube-system:calico-cni-plugin",
-	"system:serviceaccount:kube-system:canal",
+// cniAnnotationWriteRules grants the made-up permission the policy lets through, as the CNI
+// plugin's role does in charts/calico and operator/pkg/render/node.go.
+func cniAnnotationWriteRules() []rbacv1.PolicyRule {
+	return []rbacv1.PolicyRule{{
+		APIGroups: []string{"projectcalico.org"},
+		Resources: []string{"cniannotations"},
+		Verbs:     []string{"write"},
+	}}
 }
 
 const (
 	cniPluginUser       = "system:serviceaccount:calico-system:calico-cni-plugin"
 	tenantUser          = "tenant-editor"
-	cniAnnotationDenial = "Only Calico, or anyone allowed to delete this policy, may set, change or remove these pod annotations"
+	cniAnnotationDenial = "Only identities allowed to write cniannotations.projectcalico.org, or to delete this policy, may set, change or remove these pod annotations"
 	policyName          = "protect-cni-annotations.projectcalico.org"
 	podWritePath        = "pods"
 	podStatusWritePath  = "pods/status"
@@ -164,14 +167,19 @@ func TestProtectCNIAnnotations_PolicyShape(t *testing.T) {
 		t.Errorf("expected the canDeletePolicy variable to check this policy by name, got: %s", canDeletePolicy)
 	}
 
-	if len(policy.Spec.MatchConditions) == 0 {
-		t.Fatal("expected the policy to carry a match condition exempting Calico")
+	// Writers are recognised by permission, not by name.
+	if len(policy.Spec.MatchConditions) != 0 {
+		t.Errorf("expected no match conditions, got %+v", policy.Spec.MatchConditions)
 	}
-	for _, principal := range append(slices.Clone(exemptWriters), "system:masters") {
-		if !slices.ContainsFunc(policy.Spec.MatchConditions, func(mc admissionregistrationv1.MatchCondition) bool {
-			return strings.Contains(mc.Expression, principal)
-		}) {
-			t.Errorf("expected the policy to exempt %q", principal)
+	canWrite := policyCELVariableExpression(t, policy, "canWriteCNIAnnotations")
+	for _, want := range []string{"'projectcalico.org'", "'cniannotations'", "'write'"} {
+		if !strings.Contains(canWrite, want) {
+			t.Errorf("expected the canWriteCNIAnnotations variable to check %s, got: %s", want, canWrite)
+		}
+	}
+	for i, v := range policy.Spec.Validations {
+		if !strings.Contains(v.Expression, "variables.canWriteCNIAnnotations") {
+			t.Errorf("validation %d: expected it to let canWriteCNIAnnotations through, got: %s", i, v.Expression)
 		}
 	}
 
@@ -365,8 +373,9 @@ func TestProtectCNIAnnotations_UntouchedWriteAllowed(t *testing.T) {
 	}
 }
 
-// TestProtectCNIAnnotations_ExemptIdentitiesAllowed checks that the exempt identities can write the protected keys.
-func TestProtectCNIAnnotations_ExemptIdentitiesAllowed(t *testing.T) {
+// TestProtectCNIAnnotations_PermittedWritersAllowed checks that identities granted write on
+// cniannotations.projectcalico.org can write the protected keys, whatever their name.
+func TestProtectCNIAnnotations_PermittedWritersAllowed(t *testing.T) {
 	requireCNIAnnotationPolicy(t)
 
 	seeded := map[string]string{
@@ -374,7 +383,11 @@ func TestProtectCNIAnnotations_ExemptIdentitiesAllowed(t *testing.T) {
 		conversion.AnnotationNetworkStatus: `{"name":"vlan100","vlan":100}`,
 	}
 
-	for _, user := range exemptWriters {
+	const customCNIUser = "system:serviceaccount:custom-namespace:custom-cni-account"
+	bindClusterRole(t, customCNIUser, "", cniAnnotationWriteRules())
+	waitForAccess(t, customCNIUser, cniAnnotationWriteAttributes(), true)
+
+	for _, user := range []string{cniPluginUser, customCNIUser} {
 		t.Run(user, func(t *testing.T) {
 			c := clientAs(t, user)
 			pod := mustCreatePodAs(t, c, nil)
@@ -395,10 +408,54 @@ func TestProtectCNIAnnotations_ExemptIdentitiesAllowed(t *testing.T) {
 		})
 	}
 
-	// envtest's own client is in system:masters.
+	// envtest's own client is in system:masters, which the authorizer allows everything.
 	t.Run("system:masters", func(t *testing.T) {
-		mustCreatePodAs(t, testClient, seeded)
+		pod := mustCreatePodAs(t, testClient, nil)
+		expectAllowed(t, updatePod(t, testClient, pod, podStatusWritePath, func(p *corev1.Pod) {
+			for k, v := range seeded {
+				setAnnotation(p, k, v)
+			}
+		}))
 	})
+}
+
+// TestProtectCNIAnnotations_UnpermittedWritersRefused checks that neither a Calico account name nor a
+// broad role over projectcalico.org is enough without the permission itself.
+func TestProtectCNIAnnotations_UnpermittedWritersRefused(t *testing.T) {
+	requireCNIAnnotationPolicy(t)
+
+	cases := []struct {
+		user  string
+		rules []rbacv1.PolicyRule
+	}{
+		// A service account Calico has used, granted nothing.
+		{user: "system:serviceaccount:kube-system:canal"},
+		// Standard verbs on every Calico resource, as kube-controllers' datastore migration role grants.
+		{user: "calico-resource-admin", rules: []rbacv1.PolicyRule{{
+			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
+			Resources: []string{"*"},
+			Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+		}}},
+		// The right verb on the wrong resource.
+		{user: "ippool-writer", rules: []rbacv1.PolicyRule{{
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{"ippools"},
+			Verbs:     []string{"write"},
+		}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.user, func(t *testing.T) {
+			if tc.rules != nil {
+				bindClusterRole(t, tc.user, "", tc.rules)
+			}
+			waitForAccess(t, tc.user, cniAnnotationWriteAttributes(), false)
+			c := clientAs(t, tc.user)
+			pod := seedPod(t, map[string]string{conversion.AnnotationPodIP: "192.168.0.1"})
+			expectRefused(t, updatePod(t, c, pod, podStatusWritePath, func(p *corev1.Pod) {
+				setAnnotation(p, conversion.AnnotationPodIP, "192.168.0.2")
+			}), conversion.AnnotationPodIP)
+		})
+	}
 }
 
 // TestProtectCNIAnnotations_PolicyDeletersAllowed checks that anyone allowed to delete the policy
@@ -490,29 +547,45 @@ func bindClusterRole(t *testing.T, user, role string, rules []rbacv1.PolicyRule)
 }
 
 // waitForPolicyDeleteAccess waits until the authorizer answers want for whether user may delete
-// the policy. RBAC changes reach the authorizer asynchronously.
+// the policy.
 func waitForPolicyDeleteAccess(t *testing.T, user string, want bool) {
 	t.Helper()
+	waitForAccess(t, user, &authorizationv1.ResourceAttributes{
+		Group:    "admissionregistration.k8s.io",
+		Resource: "validatingadmissionpolicies",
+		Name:     policyName,
+		Verb:     "delete",
+	}, want)
+}
+
+// cniAnnotationWriteAttributes is the check the policy's canWriteCNIAnnotations makes.
+func cniAnnotationWriteAttributes() *authorizationv1.ResourceAttributes {
+	return &authorizationv1.ResourceAttributes{Group: "projectcalico.org", Resource: "cniannotations", Verb: "write"}
+}
+
+// waitForAccess waits until the authorizer answers want for whether user has attrs. RBAC changes
+// reach the authorizer asynchronously.
+func waitForAccess(t *testing.T, user string, attrs *authorizationv1.ResourceAttributes, want bool) {
+	t.Helper()
+	if err := awaitAccess(user, attrs, want); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func awaitAccess(user string, attrs *authorizationv1.ResourceAttributes, want bool) error {
 	ctx := context.Background()
 	deadline := time.Now().Add(30 * time.Second)
 	for {
 		sar := &authorizationv1.SubjectAccessReview{
-			Spec: authorizationv1.SubjectAccessReviewSpec{
-				User: user,
-				ResourceAttributes: &authorizationv1.ResourceAttributes{
-					Group:    "admissionregistration.k8s.io",
-					Resource: "validatingadmissionpolicies",
-					Name:     policyName,
-					Verb:     "delete",
-				},
-			},
+			Spec: authorizationv1.SubjectAccessReviewSpec{User: user, ResourceAttributes: attrs},
 		}
 		err := testClient.Create(ctx, sar)
 		if err == nil && sar.Status.Allowed == want {
-			return
+			return nil
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("%s may delete %s: wanted %v, still not after 30s (last error: %v)", user, policyName, want, err)
+			return fmt.Errorf("%s allowed %s %s/%s: wanted %v, still not after 30s (last error: %v)",
+				user, attrs.Verb, attrs.Group, attrs.Resource, want, err)
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
@@ -781,6 +854,9 @@ func requireCNIAnnotationPolicy(t *testing.T) {
 	}
 	tenant := clientAs(t, tenantUser)
 	cniPolicyOnce.Do(func() {
+		if cniPolicyErr = grantCNIPluginAnnotationWrites(); cniPolicyErr != nil {
+			return
+		}
 		cniPolicyErr = waitForCNIAnnotationPolicy(tenant)
 		if cniPolicyErr == nil && admissionPoliciesEnabled {
 			cniPolicyErr = waitForCNIAnnotationStripping(tenant)
@@ -789,6 +865,26 @@ func requireCNIAnnotationPolicy(t *testing.T) {
 	if cniPolicyErr != nil {
 		t.Fatal(cniPolicyErr)
 	}
+}
+
+// grantCNIPluginAnnotationWrites gives cniPluginUser the CNI plugin's permission for the whole run,
+// as its ClusterRole does in a real install.
+func grantCNIPluginAnnotationWrites() error {
+	ctx := context.Background()
+	const name = "validation-test-cni-plugin"
+	role := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: name}, Rules: cniAnnotationWriteRules()}
+	if err := testClient.Create(ctx, role); err != nil {
+		return fmt.Errorf("creating ClusterRole %s: %w", name, err)
+	}
+	binding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: name},
+		Subjects:   []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: "User", Name: cniPluginUser}},
+	}
+	if err := testClient.Create(ctx, binding); err != nil {
+		return fmt.Errorf("creating ClusterRoleBinding %s: %w", name, err)
+	}
+	return awaitAccess(cniPluginUser, cniAnnotationWriteAttributes(), true)
 }
 
 // waitForCNIAnnotationPolicy polls until adding a protected key to a Pod is refused.
