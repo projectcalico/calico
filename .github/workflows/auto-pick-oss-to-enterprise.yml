@@ -84,11 +84,14 @@ jobs:
       # Fetch the vendored scripts without checking out the (large) repo; the
       # enterprise clone happens into the workspace root, so the scripts live
       # outside it in RUNNER_TEMP. Unconditional and first, because the resolve
-      # step below runs resolve-merged-pr.js.
+      # step below runs resolve-merged-pr.js. Both jobs fetch at the pushed
+      # commit, so they run the same script version.
       - name: Fetch scripts
+        env:
+          SCRIPTS_REF: ${{ github.event.workflow_run.head_sha }}
         run: |
           for f in oss-pick.sh resolve-merged-pr.js; do
-            gh api "repos/${SOURCE_REPO}/contents/.github/workflows/scripts/${f}?ref=master" \
+            gh api "repos/${SOURCE_REPO}/contents/.github/workflows/scripts/${f}?ref=${SCRIPTS_REF}" \
               --jq '.content' | base64 -d > "$RUNNER_TEMP/${f}"
           done
           chmod +x "$RUNNER_TEMP/oss-pick.sh"
@@ -406,9 +409,11 @@ jobs:
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Fetch scripts
+        env:
+          SCRIPTS_REF: ${{ github.event.workflow_run.head_sha }}
         run: |
           for f in oss-pick.sh notify-slack.js; do
-            gh api "repos/${SOURCE_REPO}/contents/.github/workflows/scripts/${f}?ref=master" \
+            gh api "repos/${SOURCE_REPO}/contents/.github/workflows/scripts/${f}?ref=${SCRIPTS_REF}" \
               --jq '.content' | base64 -d > "$RUNNER_TEMP/${f}"
           done
           chmod +x "$RUNNER_TEMP/oss-pick.sh"
