@@ -61,6 +61,10 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("Istio"),
 	describe.WithCategory(describe.Networking),
+	// Creates the operator.tigera.io Istio CR and waits for its TigeraStatus, so it
+	// needs an operator to reconcile it -- on a manifest install it would block
+	// until istioEnableTimeout instead of skipping.
+	describe.RequiresOperator(),
 	"Istio Ambient Mode",
 	func() {
 		f := utils.NewDefaultFramework("istio-ambient")
