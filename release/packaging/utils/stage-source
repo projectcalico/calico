@@ -1,0 +1,37 @@
+#!/bin/bash
+#
+# Populate a clean build copy of a component's source.
+#
+# Usage: stage-source <srcdir> <destdir> [excludes]
+#
+# `excludes` is a space-separated list of rsync exclude patterns; a pattern
+# containing a '/' is anchored at the top of the copy, anything else matches at
+# any depth.  Everything else about <srcdir> - including .git, unless excluded -
+# is copied verbatim.
+#
+# The point of this script is that no build ever writes to the working tree:
+# package builds patch, template and pollute their staging copy instead.
+
+set -eu -o pipefail
+
+if [ $# -lt 2 ]; then
+    echo >&2 "usage: $(basename "$0") <srcdir> <destdir> [excludes]"
+    exit 1
+fi
+
+srcdir=$1
+destdir=$2
+excludes=${3:-}
+
+if [ ! -d "${srcdir}" ]; then
+    echo >&2 "[error] source directory ${srcdir} does not exist"
+    exit 1
+fi
+
+rsync_args=(--archive --delete --delete-excluded)
+for pattern in ${excludes}; do
+    rsync_args+=("--exclude=${pattern}")
+done
+
+mkdir -p "${destdir}"
+rsync "${rsync_args[@]}" "${srcdir}/" "${destdir}/"

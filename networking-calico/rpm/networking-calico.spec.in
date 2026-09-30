@@ -1,5 +1,3 @@
-%{!?python3_sitelib: %define python3_sitelib %(%{__python3} -c "from distutils.sysconfig import get_python_lib; print get_python_lib()")}
-
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
@@ -25,11 +23,7 @@ those workloads.
 %package -n calico-compute
 Group:          Applications/Engineering
 Summary:        Project Calico networking for OpenStack/Neutron
-%if 0%{?el6}
-Requires:       calico-felix, networking-calico, openstack-neutron, iptables, python3-argparse
-%else
 Requires:       calico-felix, networking-calico, openstack-neutron, iptables
-%endif
 
 
 %description -n calico-compute
@@ -83,30 +77,24 @@ This package provides the Calico DHCP agent.
 %{_unitdir}/calico-dhcp-agent.service
 
 %post -n calico-dhcp-agent
-%if 0%{?el7}
 if [ $1 -eq 1 ] ; then
     # Initial installation
     /usr/bin/systemctl daemon-reload
     /usr/bin/systemctl enable calico-dhcp-agent
     /usr/bin/systemctl start calico-dhcp-agent
 fi
-%endif
 
 %preun -n calico-dhcp-agent
 if [ $1 -eq 0 ] ; then
     # Package removal, not upgrade
-%if 0%{?el7}
     /usr/bin/systemctl disable calico-dhcp-agent
     /usr/bin/systemctl stop calico-dhcp-agent
-%endif
 fi
 
 %postun -n calico-dhcp-agent
 if [ $1 -ge 1 ] ; then
     # Package upgrade, not uninstall
-%if 0%{?el7}
     /usr/bin/systemctl condrestart calico-dhcp-agent >/dev/null 2>&1 || :
-%endif
 fi
 
 
@@ -156,11 +144,9 @@ integration code.
 rm -rf $RPM_BUILD_ROOT
 %{__python3} setup.py install -O1 --skip-build --root $RPM_BUILD_ROOT
 
-# For EL7, install systemd service files
-%if 0%{?el7}
-    install -d -m 755 %{buildroot}%{_unitdir}
-    install -p -D -m 644 %{SOURCE45} %{buildroot}%{_unitdir}/calico-dhcp-agent.service
-%endif
+# Install the systemd service file
+install -d -m 755 %{buildroot}%{_unitdir}
+install -p -D -m 644 %{SOURCE45} %{buildroot}%{_unitdir}/calico-dhcp-agent.service
 
 
 %clean

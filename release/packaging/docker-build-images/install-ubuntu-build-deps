@@ -11,14 +11,19 @@ test -n "${UBUNTU_REPO_OVERRIDE:=}" && sed -E -i "s/(archive|security).ubuntu.co
 
 apt-get -q update
 
+# This list must cover every Build-Depends of every source package we build
+# here, so that `make build-binaries` needs no further installation.
 packages=(
     build-essential
     debhelper
     devscripts
     dh-python
+    equivs
+    fakeroot
     git
     libdatrie1
     libdbus-1-dev
+    libelf-dev
     libgmp-dev
     libidn11-dev
     libnetfilter-conntrack-dev

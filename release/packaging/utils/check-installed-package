@@ -1,0 +1,94 @@
+#!/bin/bash
+#
+# Check that installed packages actually work.
+#
+# Usage: check-installed-package <package>...
+#
+# For each package it lists the installed files (dpkg -L or rpm -ql, whichever
+# this system has), picks out the ELF objects, and fails on:
+#
+#   - 'not found' in `ldd -r` output       - a missing shared library
+#   - 'undefined symbol' in the same       - an ABI mismatch
+#   - a non-zero exit from the binary's own version command
+#
+# This is the check that catches the libpcap.so.1 versus libpcap.so.0.8 class of
+# soname mismatch, which until now only users found.
+
+set -u -o pipefail
+
+if [ $# -lt 1 ]; then
+    echo >&2 "usage: $(basename "$0") <package>..."
+    exit 1
+fi
+
+if command -v dpkg-query > /dev/null 2>&1; then
+    list_files() { dpkg -L "$1"; }
+else
+    list_files() { rpm -ql "$1"; }
+fi
+
+is_elf() {
+    [ "$(head -c 4 -- "$1" | od -An -tx1 | tr -d ' \n')" = "7f454c46" ]
+}
+
+# Only binaries we know how to ask for a version.  Anything else gets the
+# library checks alone, because running an arbitrary installed program - a
+# daemon, say - is not a smoke test.
+smoke_command() {
+    case $(basename "$1") in
+        calico-felix) echo "--version" ;;
+        calicoctl)    echo "version --client" ;;
+        *)            return 1 ;;
+    esac
+}
+
+failures=0
+
+fail() {
+    echo "  FAIL: $*"
+    failures=$((failures + 1))
+}
+
+for package in "$@"; do
+    echo "=== ${package} ==="
+
+    files=$(list_files "${package}") || { fail "${package} is not installed"; continue; }
+    checked=0
+
+    while IFS= read -r file; do
+        [ -f "${file}" ] || continue
+        is_elf "${file}" || continue
+        checked=$((checked + 1))
+
+        ldd_output=$(ldd -r -- "${file}" 2>&1) || true
+        if grep -q 'not found' <<< "${ldd_output}"; then
+            fail "${file} needs a library that is not installed:"
+            grep 'not found' <<< "${ldd_output}" | sed 's/^/    /'
+        fi
+        if grep -q 'undefined symbol' <<< "${ldd_output}"; then
+            fail "${file} refers to symbols its libraries do not have:"
+            grep 'undefined symbol' <<< "${ldd_output}" | head -5 | sed 's/^/    /'
+        fi
+
+        if [ -x "${file}" ] && args=$(smoke_command "${file}"); then
+            # shellcheck disable=SC2086 # args is a deliberate word list
+            if output=$("${file}" ${args} 2>&1); then
+                echo "  ok: ${file} ${args} -> $(head -1 <<< "${output}")"
+            else
+                fail "${file} ${args} exited $?:"
+                sed 's/^/    /' <<< "${output}" | head -5
+            fi
+        fi
+    done <<< "${files}"
+
+    echo "  checked ${checked} ELF object(s)"
+done
+
+if [ "${failures}" -ne 0 ]; then
+    echo
+    echo "[error] ${failures} problem(s) found in the installed packages"
+    exit 1
+fi
+
+echo
+echo "All installed packages look good."
