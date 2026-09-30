@@ -20,6 +20,10 @@
 //   ESCALATION_REASON short reason string (escalated mode).
 //   RUN_URL          workflow run URL (escalated mode; link for the human).
 //   REPORT_FILE      resolution report appended in escalated mode, if present.
+//   ALERT_CHANNEL    Slack channel id; on any non-success outcome (escalation,
+//                    failure, noop) the same message is also posted here, so a
+//                    non-picked outcome is never invisible even when the author
+//                    is unmapped or unknown. The plain picked success only DMs.
 //   TARGET_LABEL     Human label for the target (e.g. "Enterprise").
 //   TARGET_BRANCH    Target branch (e.g. "master").
 
@@ -53,16 +57,23 @@ function readReport(path) {
 
 async function main() {
   const token = env.SLACK_BOT_TOKEN;
-  const map = env.PICK_NOTIFY_MAP;
-  if (!token || !map) {
-    console.log('::notice::Slack token or PICK_NOTIFY_MAP unset -- skipping');
+  if (!token) {
+    console.log('::notice::Slack token unset -- skipping');
     return;
   }
+  const map = env.PICK_NOTIFY_MAP || '';
 
+  // The author DM is best-effort (needs a mapped login). In escalated mode the
+  // same message is also duplicated to ALERT_CHANNEL, so an error is never
+  // invisible even when the author is unmapped or unknown.
   const author = env.AUTHOR_LOGIN || '';
-  const slackId = slackIdFor(author, map);
-  if (!slackId) {
-    console.log(`::notice::author ${author} not in PICK_NOTIFY_MAP -- skipping`);
+  const slackId = author ? slackIdFor(author, map) : '';
+  // Mirror every non-success outcome (escalation, failure, noop) to the alert
+  // channel; the plain "picked" success only DMs the author.
+  const mirrorToChannel = env.MODE === 'escalated' || env.MODE === 'noop';
+  const alertChannel = (mirrorToChannel && env.ALERT_CHANNEL) ? env.ALERT_CHANNEL : '';
+  if (!slackId && !alertChannel) {
+    console.log(`::notice::author ${author || '(none)'} not in PICK_NOTIFY_MAP and no alert channel -- skipping`);
     return;
   }
 
@@ -125,28 +136,27 @@ async function main() {
     text = lines.join('\n');
   }
 
-  let data;
-  try {
-    const resp = await fetch('https://slack.com/api/chat.postMessage', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json; charset=utf-8',
-      },
-      body: JSON.stringify({ channel: slackId, text, unfurl_links: false }),
-      signal: AbortSignal.timeout(30000),
-    });
-    data = await resp.json();
-  } catch (err) {
-    console.log(`::warning::Slack request failed: ${err.message}`);
-    return;
+  async function post(channel, kind) {
+    try {
+      const resp = await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: JSON.stringify({ channel, text, unfurl_links: false }),
+        signal: AbortSignal.timeout(30000),
+      });
+      const data = await resp.json();
+      if (data && data.ok) console.log(`Slack ${kind} sent (${channel})`);
+      else console.log(`::warning::Slack ${kind} failed: ${(data && data.error) || 'unknown'}`);
+    } catch (err) {
+      console.log(`::warning::Slack ${kind} request failed: ${err.message}`);
+    }
   }
 
-  if (data && data.ok) {
-    console.log(`DM sent to ${author} (${slackId})`);
-  } else {
-    console.log(`::warning::Slack DM failed: ${(data && data.error) || 'unknown'}`);
-  }
+  if (slackId) await post(slackId, `DM to ${author}`);
+  if (alertChannel) await post(alertChannel, 'channel alert');
 }
 
 main().catch((err) => {

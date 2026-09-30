@@ -467,10 +467,14 @@ jobs:
 
       # Escalation: DM the author (the merger, for a non-member's PR) that it
       # needs manual work.
+      # DM the author (best-effort) and always mirror the error to
+      # #merge-queue-bot-errors, so an escalation is visible even if the author
+      # is unmapped.
       - name: Notify author of escalation on Slack
-        if: needs.pick.outputs.escalated == 'true' && needs.pick.outputs.notify != ''
+        if: needs.pick.outputs.escalated == 'true'
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_MERGE_CAT_TOKEN }}
+          ALERT_CHANNEL: C09DDMQRUC9
           AUTHOR_LOGIN: ${{ needs.pick.outputs.notify }}
           NOTIFY_AS: ${{ needs.pick.outputs.notify != needs.pick.outputs.login && 'merger' || 'author' }}
           SRC_PR: ${{ needs.pick.outputs.pr }}
@@ -480,6 +484,8 @@ jobs:
         run: node "$RUNNER_TEMP/notify-slack.js"
 
       # Nothing to pick (superseded / empty / already): informational DM.
+      # Also mirror the noop to #merge-queue-bot-errors (every non-success
+      # outcome goes to the channel), even when the author is unmapped.
       - name: Notify author (nothing to pick) on Slack
         if: >
           success() &&
@@ -487,10 +493,10 @@ jobs:
           needs.pick.outputs.proceed == 'true' &&
           needs.pick.outputs.escalated != 'true' &&
           needs.pick.outputs.export != 'ready' &&
-          steps.openpr.outputs.pr_url == '' &&
-          needs.pick.outputs.login != ''
+          steps.openpr.outputs.pr_url == ''
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_MERGE_CAT_TOKEN }}
+          ALERT_CHANNEL: C09DDMQRUC9
           AUTHOR_LOGIN: ${{ needs.pick.outputs.login }}
           SRC_PR: ${{ needs.pick.outputs.pr }}
           MODE: noop
@@ -499,13 +505,15 @@ jobs:
       # Catch-all: the run failed (Job A errored, or the push failed here) other
       # than a deliberate escalation. DM the author so it is never silent. Soft
       # (exit 0) so it cannot mask the failure.
+      # Mirror to #merge-queue-bot-errors even when the author is unknown (login
+      # empty), so a hard failure before author resolution is never silent.
       - name: Notify author of failure on Slack
         if: >
           (failure() || needs.pick.result == 'failure') &&
-          needs.pick.outputs.escalated != 'true' &&
-          needs.pick.outputs.login != ''
+          needs.pick.outputs.escalated != 'true'
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_MERGE_CAT_TOKEN }}
+          ALERT_CHANNEL: C09DDMQRUC9
           AUTHOR_LOGIN: ${{ needs.pick.outputs.login }}
           SRC_PR: ${{ needs.pick.outputs.pr }}
           MODE: escalated
