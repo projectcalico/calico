@@ -312,8 +312,17 @@ build_pr_text() {
     conflicts_block="$(printf '## Conflicts\n%s' "$conflicts")"
   fi
 
+  # Heavy conflicts get a loud banner at the top so the author re-checks the
+  # resolution instead of merging blind.
+  local heavy_banner=""
+  if [ "${OUTCOME:-}" = "conflict" ] && [ "${CONFLICT_SEVERITY:-}" = "heavy" ]; then
+    # $() strips trailing newlines, so add the blank-line separator after it.
+    heavy_banner="$(printf '> [!CAUTION]\n> ## :red_circle: Heavy conflict, re-check the resolution before merging\n> This pick needed real judgement to resolve. **Do NOT merge without carefully reviewing the conflict resolution below.** The AI kept Enterprise-specific code and applied the OSS change, but a human must confirm it is correct.')"
+    heavy_banner="${heavy_banner}"$'\n\n'
+  fi
+
   PR_BODY_OUT="$(cat <<EOF
-**Cherry-pick history**
+${heavy_banner}**Cherry-pick history**
 - Pick onto **${TARGET_BRANCH}**: ${src_org}/${src_name}#${PR_NUMBER}
 
 ${conflicts_block}
