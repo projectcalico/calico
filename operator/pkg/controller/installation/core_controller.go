@@ -116,6 +116,11 @@ var (
 	openshiftNetworkConfig = "cluster"
 
 	warnOnce = utils.OnceFlag{}
+
+	// The served admission policy versions are discovered once at start-up, so an unserved kind is
+	// only warned about once.
+	mapNotServedWarning = utils.OnceFlag{}
+	vapNotServedWarning = utils.OnceFlag{}
 )
 
 // Add creates a new Installation Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -1477,6 +1482,16 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		}
 	}
 
+	// The CNI plugin's ClusterRole, rendered above, carries the permission these policies check, so
+	// they go in only after it.
+	if err = r.updateCNIAnnotationValidatingPolicies(ctx, defaulted, reqLogger); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	if err = r.updateCNIAnnotationMutatingPolicies(ctx, defaulted, reqLogger); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// TODO: We handle too many components in this controller at the moment. Once we are done consolidating,
 	// we can have the CreateOrUpdate logic handle this for us.
 	r.status.AddDaemonsets([]types.NamespacedName{{Name: common.NodeDaemonSetName, Namespace: common.CalicoNamespace}})
@@ -1813,7 +1828,7 @@ func (r *ReconcileInstallation) updateMutatingAdmissionPolicies(ctx context.Cont
 	}
 
 	desired := admission.GetMutatingAdmissionPolicies(install.Spec.Variant, r.opts.UseV3CRDs, mapAPIVersion)
-	existingMAPs, existingMAPBs, err := admission.ListManaged(ctx, r.client, mapAPIVersion)
+	existingMAPs, existingMAPBs, err := admission.ListManaged(ctx, r.client, mapAPIVersion, "")
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed MutatingAdmissionPolicy resources", err, log)
 		return err
@@ -1837,13 +1852,67 @@ func (r *ReconcileInstallation) updateValidatingAdmissionPolicies(ctx context.Co
 	}
 
 	desired := admission.GetValidatingAdmissionPolicies(install.Spec.Variant, r.opts.UseV3CRDs, vapAPIVersion)
-	existingVAPs, existingVAPBs, err := admission.ListManagedValidating(ctx, r.client, vapAPIVersion)
+	existingVAPs, existingVAPBs, err := admission.ListManagedValidating(ctx, r.client, vapAPIVersion, "")
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed ValidatingAdmissionPolicy resources", err, log)
 		return err
 	}
 
 	return r.syncManagedAdmissionPolicies(ctx, install, log, desired, existingVAPs, existingVAPBs, admission.IsValidatingPolicyKind, admission.IsValidatingBindingKind, "Error syncing ValidatingAdmissionPolicy resources")
+}
+
+// updateCNIAnnotationValidatingPolicies reconciles the ValidatingAdmissionPolicy protecting the Calico
+// CNI plugin's pod annotations. It runs after the components are rendered, so the CNI plugin's
+// ClusterRole carries cniannotations write before the policy enforces. Like the CRDs, it is left
+// alone when the operator doesn't manage CRDs, so it can be installed and tuned by hand.
+func (r *ReconcileInstallation) updateCNIAnnotationValidatingPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger) error {
+	if !r.opts.ManageCRDs {
+		return nil
+	}
+
+	vapAPIVersion := r.opts.APIDiscovery.ServedVersion(admission.APIGroup, admission.KindValidatingPolicy)
+	if vapAPIVersion == "" {
+		if vapNotServedWarning.TrySet() {
+			log.Info("[WARNING] Kubernetes cluster does not serve ValidatingAdmissionPolicy, so the Calico CNI plugin's pod annotations are not protected")
+		}
+		return nil
+	}
+
+	desired := admission.GetK8sValidatingAdmissionPolicies(install.Spec.Variant, vapAPIVersion)
+	existingVAPs, existingVAPBs, err := admission.ListManagedValidating(ctx, r.client, vapAPIVersion, admission.PolicySetCNIAnnotations)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed ValidatingAdmissionPolicy resources", err, log)
+		return err
+	}
+
+	return r.syncManagedAdmissionPolicies(ctx, install, log, desired, existingVAPs, existingVAPBs, admission.IsValidatingPolicyKind, admission.IsValidatingBindingKind, "Error syncing ValidatingAdmissionPolicy resources")
+}
+
+// updateCNIAnnotationMutatingPolicies reconciles the MutatingAdmissionPolicy stripping the Calico CNI
+// plugin's pod annotations from pods being created, on the same terms as
+// updateCNIAnnotationValidatingPolicies. Without MutatingAdmissionPolicy the validating policy still
+// protects the annotations, so an unserved API doesn't degrade.
+func (r *ReconcileInstallation) updateCNIAnnotationMutatingPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger) error {
+	if !r.opts.ManageCRDs {
+		return nil
+	}
+
+	mapAPIVersion := r.opts.APIDiscovery.ServedVersion(admission.APIGroup, admission.KindPolicy)
+	if mapAPIVersion == "" {
+		if mapNotServedWarning.TrySet() {
+			log.Info("[WARNING] Kubernetes cluster does not serve MutatingAdmissionPolicy, so the Calico CNI plugin's pod annotations are not stripped from new pods")
+		}
+		return nil
+	}
+
+	desired := admission.GetK8sMutatingAdmissionPolicies(install.Spec.Variant, mapAPIVersion)
+	existingMAPs, existingMAPBs, err := admission.ListManaged(ctx, r.client, mapAPIVersion, admission.PolicySetCNIAnnotations)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed MutatingAdmissionPolicy resources", err, log)
+		return err
+	}
+
+	return r.syncManagedAdmissionPolicies(ctx, install, log, desired, existingMAPs, existingMAPBs, admission.IsPolicyKind, admission.IsBindingKind, "Error syncing MutatingAdmissionPolicy resources")
 }
 
 // syncManagedAdmissionPolicies creates or updates the desired admission policies and bindings and
