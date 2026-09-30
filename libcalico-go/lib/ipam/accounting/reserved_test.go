@@ -32,10 +32,7 @@ import (
 func reservationsCovering(cidrs []string) []*v3.IPReservation {
 	var reservations []*v3.IPReservation
 	for i, cidr := range cidrs {
-		reservations = append(reservations, &v3.IPReservation{
-			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("reservation-%d", i)},
-			Spec:       v3.IPReservationSpec{ReservedCIDRs: []string{cidr}},
-		})
+		reservations = append(reservations, reservation(fmt.Sprintf("reservation-%d", i), cidr))
 	}
 	return reservations
 }

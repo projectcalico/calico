@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-type rowCounts struct {
+type poolRowCounts struct {
 	total    string
 	inUse    int
 	reserved string
@@ -37,7 +37,7 @@ type blockRowCounts struct {
 type reservedCountsCase struct {
 	name      string
 	reserved  []string
-	wantPool  rowCounts
+	wantPool  poolRowCounts
 	wantBlock blockRowCounts
 }
 
@@ -47,25 +47,25 @@ func TestBlockAndPoolReservedCounts(t *testing.T) {
 		{
 			name:      "inside the block",
 			reserved:  []string{"10.0.0.32/30"},
-			wantPool:  rowCounts{total: "256", inUse: 1, reserved: "4", free: "251"},
+			wantPool:  poolRowCounts{total: "256", inUse: 1, reserved: "4", free: "251"},
 			wantBlock: blockRowCounts{total: 64, inUse: 1, reserved: 4, free: 59},
 		},
 		{
 			name:      "over pool space with no block",
 			reserved:  []string{"10.0.0.128/25"},
-			wantPool:  rowCounts{total: "256", inUse: 1, reserved: "128", free: "127"},
+			wantPool:  poolRowCounts{total: "256", inUse: 1, reserved: "128", free: "127"},
 			wantBlock: blockRowCounts{total: 64, inUse: 1, reserved: 0, free: 63},
 		},
 		{
 			name:      "over the allocated address",
 			reserved:  []string{"10.0.0.5/32"},
-			wantPool:  rowCounts{total: "256", inUse: 1, reserved: "1", free: "255"},
+			wantPool:  poolRowCounts{total: "256", inUse: 1, reserved: "1", free: "255"},
 			wantBlock: blockRowCounts{total: 64, inUse: 1, reserved: 1, free: 63},
 		},
 		{
 			name:      "overlapping each other",
 			reserved:  []string{"10.0.0.0/25", "10.0.0.5/32", "10.0.0.64/26"},
-			wantPool:  rowCounts{total: "256", inUse: 1, reserved: "128", free: "128"},
+			wantPool:  poolRowCounts{total: "256", inUse: 1, reserved: "128", free: "128"},
 			wantBlock: blockRowCounts{total: 64, inUse: 1, reserved: 64, free: 0},
 		},
 	}
@@ -81,7 +81,7 @@ func TestBlockAndPoolReservedCounts(t *testing.T) {
 			tr.AddReservations(reservation("resv", tc.reserved...))
 
 			c := mustSummarize(tr, "p")
-			Expect(rowCounts{c.Total.String(), c.InUse, c.Reserved.String(), c.Free().String()}).To(Equal(tc.wantPool))
+			Expect(poolRowCounts{c.Total.String(), c.InUse, c.Reserved.String(), c.Free().String()}).To(Equal(tc.wantPool))
 
 			blocks := tr.PoolBlockCounts("p")
 			Expect(blocks).To(HaveLen(1))

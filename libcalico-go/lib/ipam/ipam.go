@@ -2528,7 +2528,7 @@ func (c ipamClient) GetUtilization(ctx context.Context, args GetUtilizationArgs)
 			Free:     accounting.ClampToInt(counts.Free()),
 		}
 		for _, b := range tracker.PoolBlockCounts(pool.Name) {
-			poolUse.Blocks = append(poolUse.Blocks, blockUtilization(b))
+			poolUse.Blocks = append(poolUse.Blocks, toBlockUtilization(b))
 		}
 		usage = append(usage, poolUse)
 	}
@@ -2540,14 +2540,14 @@ func (c ipamClient) GetUtilization(ctx context.Context, args GetUtilizationArgs)
 			CIDR: net.MustParseNetwork("0.0.0.0/0").IPNet,
 		}
 		for _, counts := range tracker.NoPoolBlockCounts() {
-			orphanedBlocks.Blocks = append(orphanedBlocks.Blocks, blockUtilization(counts))
+			orphanedBlocks.Blocks = append(orphanedBlocks.Blocks, toBlockUtilization(counts))
 		}
 		usage = append(usage, orphanedBlocks)
 	}
 	return usage, nil
 }
 
-func blockUtilization(b *accounting.BlockCounts) BlockUtilization {
+func toBlockUtilization(b *accounting.BlockCounts) BlockUtilization {
 	return BlockUtilization{
 		CIDR:     b.Block.CIDR.IPNet,
 		Capacity: b.Total,

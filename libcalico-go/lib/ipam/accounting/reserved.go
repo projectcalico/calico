@@ -101,7 +101,7 @@ func (r *ReservedIPs) overlaps(n net.IPNet) bool {
 	return ok && r.ipSet().OverlapsPrefix(p)
 }
 
-// countIn is how many addresses in n are reserved.
+// countIn is how many addresses in cidr are reserved.
 func (r *ReservedIPs) countIn(cidr net.IPNet) (*big.Int, error) {
 	p, err := prefixFromCIDR(cidr)
 	if err != nil {
