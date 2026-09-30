@@ -77,12 +77,14 @@ func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 	pageStart := int(opts.page * opts.pageSize)
 
 	idx.diachronics.Ascend(func(diachronic *DiachronicFlow) bool {
-		flow := idx.evaluate(diachronic, opts)
-		if flow != nil {
-			totalMatchedCount++
-			if totalMatchedCount > pageStart && (opts.pageSize == 0 || int64(len(matchedFlows)) < opts.pageSize) {
-				matchedFlows = append(matchedFlows, flow)
-			}
+		if !idx.matches(diachronic, opts) {
+			return true
+		}
+
+		// Every match counts toward the total, but only the page's flows are worth aggregating.
+		totalMatchedCount++
+		if totalMatchedCount > pageStart && (opts.pageSize == 0 || int64(len(matchedFlows)) < opts.pageSize) {
+			matchedFlows = append(matchedFlows, diachronic.Aggregate(opts.startTimeGt, opts.startTimeLt))
 		}
 		return true
 	})
@@ -98,7 +100,7 @@ func (idx *index[E]) SortValueSet(opts IndexFindOpts) ([]E, types.ListMeta) {
 	var previousSortValue *E
 
 	idx.diachronics.Ascend(func(diachronic *DiachronicFlow) bool {
-		if idx.evaluate(diachronic, opts) == nil {
+		if !idx.matches(diachronic, opts) {
 			return true
 		}
 		// Equal sort values are adjacent, so a value matching the previous one has already been counted.
@@ -146,10 +148,7 @@ func (idx *index[E]) Remove(d *DiachronicFlow) {
 	}
 }
 
-// evaluate evaluates the given DiachronicFlow and returns the Flow that matches the given options, or nil if no match is found.
-func (idx *index[E]) evaluate(c *DiachronicFlow, opts IndexFindOpts) *types.Flow {
-	if c.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
-		return c.Aggregate(opts.startTimeGt, opts.startTimeLt)
-	}
-	return nil
+// matches is whether the flow has data in the time range and passes the filter. Aggregate never returns nil for such a flow.
+func (idx *index[E]) matches(c *DiachronicFlow, opts IndexFindOpts) bool {
+	return c.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt)
 }
