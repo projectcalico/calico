@@ -35,6 +35,7 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -118,6 +119,7 @@ func createPod(ctx context.Context, cs kubernetes.Interface, p *v1.Pod) (*v1.Pod
 
 var _ = Describe("IPAM controller UTs", func() {
 	var c *IPAMController
+	var ipamFeed *utils.IPAMFeed
 	var cli client.Interface
 	var cs kubernetes.Interface
 	var deferredInformers *kubevirt.DeferredInformers
@@ -182,7 +184,8 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.
-		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer(), deferredInformers)
+		ipamFeed = utils.NewIPAMFeed()
+		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer(), deferredInformers, ipamFeed.Tracker())
 
 		// For testing, speed up update batching.
 		c.consolidationWindow = 1 * time.Millisecond
@@ -237,7 +240,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		done()
 	})
 
-	It("should publish the reserved-IP gauge from syncer updates", func() {
+	It("should publish the reserved-IP gauge from the shared tracker", func() {
 		c.Start(stopChan)
 		resume := c.pause()
 		defer resume()
@@ -249,30 +252,33 @@ var _ = Describe("IPAM controller UTs", func() {
 			return testutil.ToFloat64(poolReservedGauge.With(prometheus.Labels{"ippool": poolName}))
 		}
 
-		c.handleUpdate(model.KVPair{
+		// The controller decides which pools to report, and the tracker what each one reserves.
+		poolKVP := model.KVPair{
 			Key: model.ResourceKey{Kind: apiv3.KindIPPool, Name: poolName},
 			Value: &apiv3.IPPool{
 				ObjectMeta: metav1.ObjectMeta{Name: poolName},
 				Spec:       apiv3.IPPoolSpec{CIDR: "10.0.0.0/24"},
 			},
-		})
+		}
+		ipamFeed.OnUpdate(bapi.Update{KVPair: poolKVP})
+		c.handleUpdate(poolKVP)
 		Expect(reservedGauge()).To(BeZero(), "no reservations yet")
 
 		// No block covers this space, so the count cannot come from the block state
 		// the controller tracks.  The two reservations overlap, so the shared /29
 		// must only be counted once.
 		reservationKey := model.ResourceKey{Kind: apiv3.KindIPReservation, Name: "test-reservation"}
-		c.handleUpdate(model.KVPair{
+		ipamFeed.OnUpdate(bapi.Update{KVPair: model.KVPair{
 			Key: reservationKey,
 			Value: &apiv3.IPReservation{
 				ObjectMeta: metav1.ObjectMeta{Name: reservationKey.Name},
 				Spec:       apiv3.IPReservationSpec{ReservedCIDRs: []string{"10.0.0.128/28", "10.0.0.128/29"}},
 			},
-		})
+		}})
 		Expect(reservedGauge()).To(Equal(16.0))
 
 		// Deleting the reservation frees the addresses again.
-		c.handleUpdate(model.KVPair{Key: reservationKey})
+		ipamFeed.OnUpdate(bapi.Update{KVPair: model.KVPair{Key: reservationKey}})
 		Expect(reservedGauge()).To(BeZero())
 
 		// Deleting the pool should take its gauge with it.
@@ -2299,7 +2305,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			cfg := config.NodeControllerConfig{
 				LeakGracePeriod: &metav1.Duration{Duration: 1 * time.Hour},
 			}
-			c = NewIPAMController(cfg, cli, scaleCS, scalePodIndexer, scaleNodeIndexer, deferredInformers)
+			c = NewIPAMController(cfg, cli, scaleCS, scalePodIndexer, scaleNodeIndexer, deferredInformers, utils.NewIPAMFeed().Tracker())
 			c.consolidationWindow = 1 * time.Second
 
 			// Start the controller.
