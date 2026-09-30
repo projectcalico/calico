@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -30,33 +31,33 @@ import (
 )
 
 func TestIPAMFeedAppliesPoolsBlocksAndReservations(t *testing.T) {
-	feed := utils.NewIPAMFeed()
-	feed.OnUpdate(poolUpdate("p", "10.0.0.0/24", nil))
-	feed.OnUpdate(blockUpdate("10.0.0.0/26", "host:node-a", 1))
-	feed.OnUpdate(reservationUpdate("r", "10.0.0.128/28"))
+	feed, send := newFeed()
+	send(poolUpdate("p", "10.0.0.0/24", nil))
+	send(blockUpdate("10.0.0.0/26", "host:node-a", 1))
+	send(reservationUpdate("r", "10.0.0.128/28"))
 
 	counts := mustSummarize(t, feed, "p")
 	if counts.InUse != 1 || counts.Reserved.Int64() != 16 || counts.BlocksInUse != 1 {
 		t.Fatalf("got InUse=%d Reserved=%s BlocksInUse=%d, want 1, 16, 1", counts.InUse, counts.Reserved, counts.BlocksInUse)
 	}
 
-	feed.OnUpdate(bapi.Update{KVPair: model.KVPair{Key: model.ResourceKey{Kind: apiv3.KindIPReservation, Name: "r"}}})
-	feed.OnUpdate(bapi.Update{KVPair: model.KVPair{Key: blockKey("10.0.0.0/26")}})
+	send(bapi.Update{KVPair: model.KVPair{Key: model.ResourceKey{Kind: apiv3.KindIPReservation, Name: "r"}}})
+	send(bapi.Update{KVPair: model.KVPair{Key: blockKey("10.0.0.0/26")}})
 	counts = mustSummarize(t, feed, "p")
 	if counts.InUse != 0 || counts.Reserved.Int64() != 0 || counts.BlocksInUse != 0 {
 		t.Fatalf("after deletes got InUse=%d Reserved=%s BlocksInUse=%d, want all 0", counts.InUse, counts.Reserved, counts.BlocksInUse)
 	}
 
-	feed.OnUpdate(bapi.Update{KVPair: model.KVPair{Key: model.ResourceKey{Kind: apiv3.KindIPPool, Name: "p"}}})
+	send(bapi.Update{KVPair: model.KVPair{Key: model.ResourceKey{Kind: apiv3.KindIPPool, Name: "p"}}})
 	if _, ok := feed.Tracker().Summarize("p"); ok {
 		t.Fatal("pool still tracked after its delete")
 	}
 }
 
 func TestIPAMFeedKeepsATerminatingPool(t *testing.T) {
-	feed := utils.NewIPAMFeed()
-	feed.OnUpdate(poolUpdate("p", "10.0.0.0/24", ptr.To(metav1.Now())))
-	feed.OnUpdate(blockUpdate("10.0.0.0/26", "host:node-a", 1))
+	feed, send := newFeed()
+	send(poolUpdate("p", "10.0.0.0/24", ptr.To(metav1.Now())))
+	send(blockUpdate("10.0.0.0/26", "host:node-a", 1))
 
 	if counts := mustSummarize(t, feed, "p"); counts.InUse != 1 {
 		t.Fatalf("Terminating pool InUse = %d, want its block's 1", counts.InUse)
@@ -64,34 +65,41 @@ func TestIPAMFeedKeepsATerminatingPool(t *testing.T) {
 }
 
 func TestIPAMFeedJudgesStaleAffinityByTheNodesItHasSeen(t *testing.T) {
-	feed := utils.NewIPAMFeed()
-	feed.OnUpdate(poolUpdate("p", "10.0.0.0/24", nil))
-	feed.OnUpdate(blockUpdate("10.0.0.0/26", "host:node-a", 1))
+	feed, send := newFeed()
+	send(poolUpdate("p", "10.0.0.0/24", nil))
+	send(blockUpdate("10.0.0.0/26", "host:node-a", 1))
 	if stale := mustSummarize(t, feed, "p").StaleAffinity; stale != 1 {
 		t.Fatalf("StaleAffinity before node-a = %d, want 1", stale)
 	}
 
 	nodeKey := model.ResourceKey{Kind: internalapi.KindNode, Name: "node-a"}
-	feed.OnUpdate(bapi.Update{KVPair: model.KVPair{Key: nodeKey, Value: &internalapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-a"}}}})
+	send(bapi.Update{KVPair: model.KVPair{Key: nodeKey, Value: &internalapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-a"}}}})
 	if stale := mustSummarize(t, feed, "p").StaleAffinity; stale != 0 {
 		t.Fatalf("StaleAffinity with node-a = %d, want 0", stale)
 	}
 
-	feed.OnUpdate(bapi.Update{KVPair: model.KVPair{Key: nodeKey}})
+	send(bapi.Update{KVPair: model.KVPair{Key: nodeKey}})
 	if stale := mustSummarize(t, feed, "p").StaleAffinity; stale != 1 {
 		t.Fatalf("StaleAffinity after node-a's delete = %d, want 1", stale)
 	}
 }
 
 func TestIPAMFeedIgnoresAValueOfTheWrongType(t *testing.T) {
-	feed := utils.NewIPAMFeed()
-	feed.OnUpdate(bapi.Update{KVPair: model.KVPair{
+	feed, send := newFeed()
+	send(bapi.Update{KVPair: model.KVPair{
 		Key:   model.ResourceKey{Kind: apiv3.KindIPPool, Name: "p"},
 		Value: &apiv3.IPReservation{},
 	}})
 	if _, ok := feed.Tracker().Summarize("p"); ok {
 		t.Fatal("a value of the wrong type created a pool")
 	}
+}
+
+// newFeed builds an IPAMFeed on a real DataFeed and returns a function that delivers an update through it.
+func newFeed() (*utils.IPAMFeed, func(bapi.Update)) {
+	dataFeed := utils.NewDataFeed(node.NewFakeCalicoClient(), "kubernetes")
+	feed := utils.NewIPAMFeed(dataFeed)
+	return feed, func(u bapi.Update) { dataFeed.OnUpdates([]bapi.Update{u}) }
 }
 
 func mustSummarize(t *testing.T, feed *utils.IPAMFeed, pool string) *accounting.Counts {

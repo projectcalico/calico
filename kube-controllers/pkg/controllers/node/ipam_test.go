@@ -119,7 +119,7 @@ func createPod(ctx context.Context, cs kubernetes.Interface, p *v1.Pod) (*v1.Pod
 
 var _ = Describe("IPAM controller UTs", func() {
 	var c *IPAMController
-	var ipamFeed *utils.IPAMFeed
+	var dataFeed *utils.DataFeed
 	var cli client.Interface
 	var cs kubernetes.Interface
 	var deferredInformers *kubevirt.DeferredInformers
@@ -184,8 +184,8 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.
-		ipamFeed = utils.NewIPAMFeed()
-		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer(), deferredInformers, ipamFeed.Tracker())
+		dataFeed = utils.NewDataFeed(cli, "kubernetes")
+		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer(), deferredInformers, utils.NewIPAMFeed(dataFeed).Tracker())
 
 		// For testing, speed up update batching.
 		c.consolidationWindow = 1 * time.Millisecond
@@ -260,7 +260,7 @@ var _ = Describe("IPAM controller UTs", func() {
 				Spec:       apiv3.IPPoolSpec{CIDR: "10.0.0.0/24"},
 			},
 		}
-		ipamFeed.OnUpdate(bapi.Update{KVPair: poolKVP})
+		dataFeed.OnUpdates([]bapi.Update{{KVPair: poolKVP}})
 		c.handleUpdate(poolKVP)
 		Expect(reservedGauge()).To(BeZero(), "no reservations yet")
 
@@ -268,21 +268,51 @@ var _ = Describe("IPAM controller UTs", func() {
 		// the controller tracks.  The two reservations overlap, so the shared /29
 		// must only be counted once.
 		reservationKey := model.ResourceKey{Kind: apiv3.KindIPReservation, Name: "test-reservation"}
-		ipamFeed.OnUpdate(bapi.Update{KVPair: model.KVPair{
+		dataFeed.OnUpdates([]bapi.Update{{KVPair: model.KVPair{
 			Key: reservationKey,
 			Value: &apiv3.IPReservation{
 				ObjectMeta: metav1.ObjectMeta{Name: reservationKey.Name},
 				Spec:       apiv3.IPReservationSpec{ReservedCIDRs: []string{"10.0.0.128/28", "10.0.0.128/29"}},
 			},
-		}})
+		}}})
 		Expect(reservedGauge()).To(Equal(16.0))
 
 		// Deleting the reservation frees the addresses again.
-		ipamFeed.OnUpdate(bapi.Update{KVPair: model.KVPair{Key: reservationKey}})
+		dataFeed.OnUpdates([]bapi.Update{{KVPair: model.KVPair{Key: reservationKey}}})
 		Expect(reservedGauge()).To(BeZero())
 
 		// Deleting the pool should take its gauge with it.
 		c.onPoolDeleted(poolName)
+		Expect(testutil.CollectAndCount(poolReservedGauge)).To(BeZero())
+	})
+
+	It("should not publish a reserved-IP gauge for a Terminating pool the tracker still holds", func() {
+		c.Start(stopChan)
+		resume := c.pause()
+		defer resume()
+
+		poolReservedGauge.Reset()
+		now := metav1.Now()
+		poolKVP := model.KVPair{
+			Key: model.ResourceKey{Kind: apiv3.KindIPPool, Name: "terminating-pool"},
+			Value: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "terminating-pool", DeletionTimestamp: &now},
+				Spec:       apiv3.IPPoolSpec{CIDR: "10.0.0.0/24"},
+			},
+		}
+		dataFeed.OnUpdates([]bapi.Update{
+			{KVPair: poolKVP},
+			{KVPair: model.KVPair{
+				Key: model.ResourceKey{Kind: apiv3.KindIPReservation, Name: "r"},
+				Value: &apiv3.IPReservation{
+					ObjectMeta: metav1.ObjectMeta{Name: "r"},
+					Spec:       apiv3.IPReservationSpec{ReservedCIDRs: []string{"10.0.0.0/28"}},
+				},
+			}},
+		})
+		c.handleUpdate(poolKVP)
+
+		c.updateReservedMetrics()
 		Expect(testutil.CollectAndCount(poolReservedGauge)).To(BeZero())
 	})
 
@@ -2305,7 +2335,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			cfg := config.NodeControllerConfig{
 				LeakGracePeriod: &metav1.Duration{Duration: 1 * time.Hour},
 			}
-			c = NewIPAMController(cfg, cli, scaleCS, scalePodIndexer, scaleNodeIndexer, deferredInformers, utils.NewIPAMFeed().Tracker())
+			c = NewIPAMController(cfg, cli, scaleCS, scalePodIndexer, scaleNodeIndexer, deferredInformers, utils.NewIPAMFeed(utils.NewDataFeed(cli, "kubernetes")).Tracker())
 			c.consolidationWindow = 1 * time.Second
 
 			// Start the controller.

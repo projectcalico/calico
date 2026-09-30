@@ -24,33 +24,33 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 )
 
-// IPAMFeed keeps one accounting.Tracker current from the data feed, so every controller in the process reads the
-// same IPAM state instead of keeping its own copy.
+// IPAMFeed keeps one accounting.Tracker current from the data feed, for the controllers that read IPAM state to
+// share instead of each keeping its own copy.
 type IPAMFeed struct {
 	tracker *accounting.Tracker
 }
 
-func NewIPAMFeed() *IPAMFeed {
+// NewIPAMFeed subscribes to the data feed. Build it before the controllers that read it, so the tracker applies each
+// update before they see it.
+func NewIPAMFeed(feed *DataFeed) *IPAMFeed {
 	tracker := accounting.NewTracker()
 
 	// The feed names every node that exists, so a block affine to one it never names is stale.
 	tracker.AddNodes()
-	return &IPAMFeed{tracker: tracker}
+	f := &IPAMFeed{tracker: tracker}
+	feed.RegisterForNotification(model.BlockKey{}, f.onUpdate)
+	feed.RegisterForNotification(model.ResourceKey{}, f.onUpdate)
+	return f
 }
 
-// RegisterWith subscribes to the feed. Register before the controllers that read the tracker, so it is updated first.
-func (f *IPAMFeed) RegisterWith(feed *DataFeed) {
-	feed.RegisterForNotification(model.BlockKey{}, f.OnUpdate)
-	feed.RegisterForNotification(model.ResourceKey{}, f.OnUpdate)
-}
-
-// Tracker is safe to read from any goroutine. Callers must not add to or remove from it.
+// Tracker is safe to read from any goroutine, but its counts are partial until the syncer is InSync. Callers must not
+// add to or remove from it.
 func (f *IPAMFeed) Tracker() *accounting.Tracker {
 	return f.tracker
 }
 
-// OnUpdate applies one syncer update to the tracker. It runs on the syncer goroutine, so it must not block.
-func (f *IPAMFeed) OnUpdate(update bapi.Update) {
+// onUpdate runs on the syncer goroutine, so it must not block.
+func (f *IPAMFeed) onUpdate(update bapi.Update) {
 	switch key := update.Key.(type) {
 	case model.BlockKey:
 		f.onBlockUpdate(key, update.Value)

@@ -240,7 +240,7 @@ type IPAMController struct {
 	// Raw block storage, keyed by CIDR.
 	allBlocks map[string]model.KVPair
 
-	// tracker is the process's shared IPAM accounting, kept current by the data feed. Read it, never write it.
+	// tracker is the process's shared IPAM accounting, kept current by the data feed.
 	tracker *accounting.Tracker
 
 	// allocationState is the primary in-memory representation of IPAM allocations used by the garbage collector.
@@ -802,7 +802,7 @@ func (c *IPAMController) updateReservedMetrics() {
 	for poolName := range c.poolManager.allPools {
 		counts, ok := c.tracker.Summarize(poolName)
 		if !ok {
-			// The tracker drops a pool with an unparseable CIDR, so there is nothing to report.
+			// Its CIDR is unparseable, or the tracker has applied a delete still queued here.
 			continue
 		}
 		poolReservedGauge.With(prometheus.Labels{"ippool": poolName}).Set(float64(accounting.ClampToInt(counts.Reserved)))
