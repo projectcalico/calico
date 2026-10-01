@@ -50,10 +50,12 @@ jobs:
   # Job A: resolve + pick + Claude + export. READ-ONLY target token, no Slack.
   # =========================================================================
   pick:
-    # Only a successful push-triggered stage-1 run, and only on this repo
-    # (forks syncing master have no secrets).
+    # Only a successful push-triggered stage-1 run of master, and only on this
+    # repo (forks syncing master have no secrets).
     if: >
       github.repository == 'projectcalico/calico' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_branch == 'master' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
@@ -84,11 +86,11 @@ jobs:
       # Fetch the vendored scripts without checking out the (large) repo; the
       # enterprise clone happens into the workspace root, so the scripts live
       # outside it in RUNNER_TEMP. Unconditional and first, because the resolve
-      # step below runs resolve-merged-pr.js. Both jobs fetch at the pushed
-      # commit, so they run the same script version.
+      # step below runs resolve-merged-pr.js. github.sha is the master commit
+      # this workflow file came from, so scripts and workflow match.
       - name: Fetch scripts
         env:
-          SCRIPTS_REF: ${{ github.event.workflow_run.head_sha }}
+          SCRIPTS_REF: ${{ github.sha }}
         shell: bash
         run: |
           for f in oss-pick.sh resolve-merged-pr.js; do
@@ -416,7 +418,7 @@ jobs:
     steps:
       - name: Fetch scripts
         env:
-          SCRIPTS_REF: ${{ github.event.workflow_run.head_sha }}
+          SCRIPTS_REF: ${{ github.sha }}
         shell: bash
         run: |
           for f in oss-pick.sh notify-slack.js; do
