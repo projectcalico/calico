@@ -194,7 +194,7 @@ jobs:
             --disallowedTools "Edit(/${{ github.workspace }}/.git/**),Write(/${{ github.workspace }}/.git/**),Read(/${{ github.workspace }}/.git/**),Read(//proc/**)"
             --add-dir /tmp
             --max-turns 60
-            --model claude-sonnet-5
+            --model claude-sonnet-5-5
           prompt: |
             The cherry-pick of the OSS commit `${{ steps.resolve.outputs.sha }}` onto Enterprise
             (tigera/calico-private) master has already been applied and left
