@@ -3122,14 +3122,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		pool2 := cnet.MustParseNetwork("20.0.0.0/24")
 		var block1, block2 cnet.IPNet
 
-		// The mock names each pool after its CIDR, so pool is both.
-		findInUse := func(usage []*PoolUtilization, pool, cidr string, expectedInUse int) bool {
+		// The mock names each pool after its CIDR, so callers pass the pool's CIDR as poolName.
+		findInUse := func(usage []*PoolUtilization, poolName, blockCIDR string, expectedInUse int) bool {
 			for _, poolUse := range usage {
-				if poolUse.Name != pool {
+				if poolUse.Name != poolName {
 					continue
 				}
 				for _, blockUse := range poolUse.Blocks {
-					if blockUse.CIDR.String() == cidr && blockUse.InUse == expectedInUse {
+					if blockUse.CIDR.String() == blockCIDR && blockUse.InUse == expectedInUse {
 						return true
 					}
 				}
