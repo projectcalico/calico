@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/yamux"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/http2"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/guardian/pkg/config"
@@ -103,10 +102,7 @@ func TestRequestsFromGuardianToUpstream(t *testing.T) {
 
 	mux := upstreamSrv.Accept()
 
-	http2Transport, err := http2.ConfigureTransports(http.DefaultTransport.(*http.Transport))
-	Expect(err).ShouldNot(HaveOccurred())
-
-	http2Conn := openHttp2TLSConn(http2Transport, mux)
+	http2Conn := openHttp2TLSConn(mux)
 
 	req, err := http.NewRequest(http.MethodGet, "https://localhost:8999/foobar", nil)
 	Expect(err).ShouldNot(HaveOccurred())
@@ -131,7 +127,7 @@ func TestRequestsFromGuardianToUpstream(t *testing.T) {
 	upstreamSrv = newUpstreamServer(":8443", tlsCfg)
 	mux = upstreamSrv.Accept()
 
-	http2Conn = openHttp2TLSConn(http2Transport, mux)
+	http2Conn = openHttp2TLSConn(mux)
 
 	req, err = http.NewRequest(http.MethodGet, "https://localhost:8999/foobar", nil)
 	Expect(err).ShouldNot(HaveOccurred())
@@ -150,18 +146,19 @@ func TestRequestsFromGuardianToUpstream(t *testing.T) {
 	<-daemonDoneSig
 }
 
-func openHttp2TLSConn(http2Transport *http2.Transport, mux *yamux.Session) *http2.ClientConn {
-	conn, err := mux.Open()
-	Expect(err).ShouldNot(HaveOccurred())
+func openHttp2TLSConn(mux *yamux.Session) *http.ClientConn {
+	protocols := new(http.Protocols)
+	protocols.SetHTTP2(true)
 
-	tlsConn := tls.Client(conn, &tls.Config{
-		InsecureSkipVerify: true,
-		NextProtos:         []string{"h2"},
-	})
+	transport := &http.Transport{
+		Protocols:       protocols,
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		DialContext: func(context.Context, string, string) (net.Conn, error) {
+			return mux.Open()
+		},
+	}
 
-	Expect(tlsConn.Handshake()).ShouldNot(HaveOccurred())
-
-	http2Conn, err := http2Transport.NewClientConn(tlsConn)
+	http2Conn, err := transport.NewClientConn(context.Background(), "https", "localhost:8999")
 	Expect(err).ShouldNot(HaveOccurred())
 
 	return http2Conn
