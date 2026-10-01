@@ -308,21 +308,6 @@ func TestFelixConfiguration_Validation(t *testing.T) {
 			},
 			wantErr: "spec.openstackRegion: Invalid value",
 		},
-		{
-			name: "bpfDataIfacePattern that is a valid regexp is accepted",
-			obj: &v3.FelixConfiguration{
-				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
-				Spec:       v3.FelixConfigurationSpec{BPFDataIfacePattern: "^(en.*|eth.*)$"},
-			},
-		},
-		{
-			name: "bpfDataIfacePattern that is not a valid regexp is rejected",
-			obj: &v3.FelixConfiguration{
-				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
-				Spec:       v3.FelixConfigurationSpec{BPFDataIfacePattern: "["},
-			},
-			wantErr: "spec.bpfDataIfacePattern",
-		},
 	}
 
 	for _, tt := range tests {
@@ -379,6 +364,39 @@ func TestFelixConfiguration_NumericBounds(t *testing.T) {
 		t.Run(b.field+" at the bounds", func(t *testing.T) {
 			expectCreateSucceeds(t, newConfig(b.field, b.min))
 			expectCreateSucceeds(t, newConfig(b.field, b.max))
+		})
+	}
+}
+
+// Felix compiles these with regexp.Compile. The schema rule evaluates each value
+// as a regexp, so the rejection carries the parse error rather than a rule message.
+func TestFelixConfiguration_RegexpFields(t *testing.T) {
+	fields := []string{
+		"logDebugFilenameRegex",
+		"nftablesFlowTableDataIfacePattern",
+		"bpfDataIfacePattern",
+		"bpfL3IfacePattern",
+		"bpfDisableGROForIfaces",
+		"mtuIfacePattern",
+	}
+
+	newConfig := func(field, value string) *unstructured.Unstructured {
+		return &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "projectcalico.org/v3",
+				"kind":       "FelixConfiguration",
+				"metadata":   map[string]interface{}{"name": uniqueName("felixconfig")},
+				"spec":       map[string]interface{}{field: value},
+			},
+		}
+	}
+
+	for _, field := range fields {
+		t.Run(field+" valid regexp", func(t *testing.T) {
+			expectCreateSucceeds(t, newConfig(field, "^(en.*|eth[0-9]+)$"))
+		})
+		t.Run(field+" invalid regexp", func(t *testing.T) {
+			expectCreateFails(t, newConfig(field, "eth["), "error parsing regexp")
 		})
 	}
 }
