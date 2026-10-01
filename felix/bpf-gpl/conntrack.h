@@ -279,16 +279,6 @@ create:
 
 	err = cali_ct_update_elem(k, &ct_value, BPF_NOEXIST);
 
-	if (CALI_F_TO_WEP && err == -17 /* EEXIST */ && ct_ctx->type == CALI_CT_TYPE_NORMAL) {
-		/* Host traffic to an existing entry whose workload leg is unproven; policy just passed. */
-		struct calico_ct_value *v = cali_ct_lookup_elem(k);
-		if (v) {
-			ct_leg_set_flags(srcLTDest ? &v->b_to_a : &v->a_to_b,
-					CALI_CT_LEG_APPROVED | CALI_CT_LEG_WORKLOAD);
-			err = 0;
-		}
-	}
-
 	if (CALI_F_HEP && err == -17 /* EEXIST */) {
 		int i;
 
@@ -1091,9 +1081,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			result.rc = (tcp_header && !syn) ? CALI_CT_INVALID : CALI_CT_NEW;
 		}
 	} else if (CALI_F_FROM_HOST) {
-		/* A HEP approval of a workload leg does not count; TCP is exempt, its SYN always runs policy. */
+		/* A HEP approval of a workload leg does not count. TCP SYNs and unseen host traffic skip it. */
 		bool dst_approved = ct_leg_flag(dst_to_src, CALI_CT_LEG_APPROVED) &&
-			(!CALI_F_TO_WEP || tcp_header || ct_leg_flag(dst_to_src, CALI_CT_LEG_WORKLOAD));
+			(!CALI_F_TO_WEP || tcp_header || !skb_seen(ctx->skb) ||
+			 ct_leg_flag(dst_to_src, CALI_CT_LEG_WORKLOAD));
 
 		/* Dest of the packet is the endpoint, so check the dest approval flag. */
 		if (CALI_F_LO || dst_approved ||
