@@ -484,7 +484,7 @@ jobs:
       # #merge-queue-bot-errors, so an escalation is visible even if the author
       # is unmapped.
       - name: Notify author of escalation on Slack
-        if: needs.pick.outputs.escalated == 'true'
+        if: always() && needs.pick.outputs.escalated == 'true'
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_MERGE_CAT_TOKEN }}
           ALERT_CHANNEL: C09DDMQRUC9
@@ -540,7 +540,7 @@ jobs:
 
       # Fail the run so an escalation is visible; no PR was opened.
       - name: Fail on escalation
-        if: needs.pick.outputs.escalated == 'true'
+        if: always() && needs.pick.outputs.escalated == 'true'
         env:
           PR: ${{ needs.pick.outputs.pr }}
           REASON: ${{ needs.pick.outputs.reason }}
