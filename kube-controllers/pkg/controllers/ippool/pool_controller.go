@@ -271,6 +271,10 @@ func (c *IPPoolController) reconcile() error {
 	if err != nil {
 		errs = append(errs, err)
 	}
+
+	// The informer has yet to deliver the conditions just derived. Without them, a new pool sharing a Terminating pool's
+	// CIDR could win its blocks and let it finalize early.
+	c.tracker.AddPools(pools...)
 	if err := c.reconcileNearlyFull(c.ctx, pools); err != nil {
 		errs = append(errs, err)
 	}
@@ -506,7 +510,7 @@ func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logru
 	}
 
 	// If there are no IPAM blocks left in this pool, it is safe to remove our finalizer.
-	if c.blocksInPool(*parsedNet) {
+	if c.blocksInPool(p.Name) {
 		logCtx.Info("IPAM blocks still exist in pool, not removing finalizer")
 		return nil
 	}
@@ -532,22 +536,10 @@ func withoutFinalizer(p *v3.IPPool) []string {
 	return slices.DeleteFunc(slices.Clone(p.Finalizers), func(s string) bool { return s == IPPoolFinalizer })
 }
 
-func (c *IPPoolController) blocksInPool(cidr cnet.IPNet) bool {
-	// Go through all of the IPAM blocks and check if any of them are in this pool.
-	// TODO: We should be able to optimize this by using better data structures instead of iterating through all blocks.
-	for _, i := range c.blockInformer.GetIndexer().List() {
-		block := i.(*v3.IPAMBlock)
-		_, parsedNet, err := cnet.ParseCIDR(block.Spec.CIDR)
-		if err != nil {
-			logrus.WithError(err).WithField("cidr", block.Spec.CIDR).Error("Failed to parse CIDR from IPAMBlock")
-			continue
-		}
-		if cidr.Contains(parsedNet.IP) {
-			logrus.WithField("cidr", cidr.String()).WithField("block", block.Spec.CIDR).Debug("Found IPAMBlock in pool")
-			return true
-		}
-	}
-	return false
+// blocksInPool is whether the tracker attributes any block to the pool. A pool it has not seen may still have some.
+func (c *IPPoolController) blocksInPool(name string) bool {
+	counts, ok := c.tracker.Summarize(name)
+	return !ok || counts.BlocksInUse > 0
 }
 
 func hasFinalizer(p *v3.IPPool) bool {

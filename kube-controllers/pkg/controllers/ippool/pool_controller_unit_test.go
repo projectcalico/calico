@@ -231,13 +231,15 @@ func newTestController(cli *fake.Clientset, pools ...*v3.IPPool) (*IPPoolControl
 		}
 	}
 	blockIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	tracker := accounting.NewTracker()
+	tracker.AddPools(pools...)
 
 	c := &IPPoolController{
 		ctx:           context.Background(),
 		cli:           cli,
 		poolInformer:  &fakeSharedIndexInformer{indexer: poolIndexer},
 		blockInformer: &fakeSharedIndexInformer{indexer: blockIndexer},
-		tracker:       accounting.NewTracker(),
+		tracker:       tracker,
 		ipam:          &fakeIPAM{},
 		queue:         &fakeRateLimitingQueue{},
 	}
@@ -536,4 +538,73 @@ func TestReconcile_FinalizerWriteUsesStatusResourceVersion(t *testing.T) {
 	if finalizerRV != "2" {
 		t.Fatalf("expected finalizer write to use resourceVersion 2, got %q", finalizerRV)
 	}
+}
+
+func terminatingPool(name, cidr string, created time.Time) *v3.IPPool {
+	pool := testPool(name, cidr)
+	pool.Spec.BlockSize = 26
+	pool.Finalizers = []string{IPPoolFinalizer}
+	pool.CreationTimestamp = metav1.NewTime(created)
+	pool.DeletionTimestamp = &metav1.Time{Time: created.Add(time.Hour)}
+	return pool
+}
+
+func expectFinalizer(t *testing.T, cli *fake.Clientset, name string, want bool) {
+	t.Helper()
+	pool, err := cli.ProjectcalicoV3().IPPools().Get(context.Background(), name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get pool %s: %v", name, err)
+	}
+	if hasFinalizer(pool) != want {
+		t.Fatalf("pool %s: expected finalizer present=%v, got finalizers %v", name, want, pool.Finalizers)
+	}
+}
+
+func TestReconcileFinalizer_WaitsForTheLastBlock(t *testing.T) {
+	pool := terminatingPool("pool-1", "192.168.0.0/24", time.Now())
+	cli := fake.NewClientset(pool)
+	c, _ := newTestController(cli, pool)
+	block := allocatedBlock(t, "192.168.0.0/26", 1)
+	c.tracker.AddBlocks(block)
+
+	if err := c.reconcileFinalizer(c.ctx, logEntry(), pool); err != nil {
+		t.Fatalf("reconcileFinalizer failed: %v", err)
+	}
+	expectFinalizer(t, cli, "pool-1", true)
+
+	c.tracker.RemoveBlock(block.CIDR)
+	if err := c.reconcileFinalizer(c.ctx, logEntry(), pool); err != nil {
+		t.Fatalf("reconcileFinalizer failed: %v", err)
+	}
+	expectFinalizer(t, cli, "pool-1", false)
+}
+
+func TestReconcileFinalizer_KeepsAPoolTheTrackerHasNotSeen(t *testing.T) {
+	pool := terminatingPool("pool-1", "192.168.0.0/24", time.Now())
+	cli := fake.NewClientset(pool)
+	c, _ := newTestController(cli, pool)
+	c.tracker.RemovePool("pool-1")
+
+	if err := c.reconcileFinalizer(c.ctx, logEntry(), pool); err != nil {
+		t.Fatalf("reconcileFinalizer failed: %v", err)
+	}
+	expectFinalizer(t, cli, "pool-1", true)
+}
+
+// The replacement pool sorts first by name, so it would win the block if the tracker ranked it before its CIDROverlap
+// condition reached the informer.
+func TestReconcile_ReplacementPoolDoesNotFinalizeATerminatingPool(t *testing.T) {
+	created := time.Now().Add(-time.Hour)
+	old := terminatingPool("z-old", "192.168.0.0/24", created)
+	replacement := testPool("a-new", "192.168.0.0/24")
+	replacement.Spec.BlockSize = 26
+	replacement.CreationTimestamp = metav1.NewTime(created.Add(time.Minute))
+	cli := fake.NewClientset(old, replacement)
+	c, _ := newTestController(cli, old, replacement)
+	c.tracker.AddBlocks(allocatedBlock(t, "192.168.0.0/26", 1))
+
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
+	}
+	expectFinalizer(t, cli, "z-old", true)
 }
