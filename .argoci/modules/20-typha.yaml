@@ -10,6 +10,9 @@ defaults:
 
 steps:
   - name: typha-ci
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
     vm:
       machineType: e2-standard-8
     depends: [build-calico-image, check-go]
@@ -31,6 +34,8 @@ steps:
       machineType: e2-standard-8
     depends: [build-calico-image, check-go]
     env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
       - name: USE_UBI_AS_CALICO_BASE
         value: "1"
     commands: |

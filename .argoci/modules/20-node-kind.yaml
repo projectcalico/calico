@@ -16,6 +16,8 @@ steps:
           - name: google-service-account-for-gce-key.json
             as: GCE_SERVICE_ACCOUNT_KEY
     env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
       - name: COMPONENT
         value: node
       # A capacity pool the fleets don't exhaust, and a family that takes a

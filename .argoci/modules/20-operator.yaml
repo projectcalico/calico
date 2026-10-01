@@ -8,6 +8,9 @@ defaults:
 
 steps:
   - name: operator-ci
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
     depends: [check-go]
     requests: {cpu: 5000m, memory: 6Gi}
     commands: |
@@ -36,6 +39,9 @@ steps:
   # Every image the FV installs must reach the local registry first; a missing
   # producer shows up as calico-node stuck in Init.
   - name: operator-fv
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
     depends: [build-calico-image, build-node-image, build-whisker-image, check-go]
     timeout: 1h
     requests: {cpu: 3500m, memory: 7Gi}

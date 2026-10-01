@@ -65,6 +65,23 @@ globalPrologue: |
       sleep 10
     done
   fi
+  # One place for the Go build cache, whether a build runs in docker or on the
+  # host, so what is restored is what the build reads.
+  export LOCAL_GO_PKG_CACHE="${CI_HOME}/${CI_GIT_DIR}/.go-pkg-cache"
+  export GOCACHE="${LOCAL_GO_PKG_CACHE}"
+  # Keyed on the target branch, so a PR builds on what its branch last built. A
+  # miss just builds cold.
+  if [ -n "${BUILD_CACHE_GROUP:-}" ]; then
+    ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache restore "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" ) || true
+  fi
+
+# Only a passing branch build is worth handing to the next run; a PR's cache
+# would only ever be read by that PR.
+globalEpilogue: |
+  if [ "${STORE_BUILD_CACHE:-}" = true ] && [ "${CI_STEP_EXIT_CODE:-1}" = 0 ] &&
+     [ "${CI_POD_STOPPED:-false}" != true ] && [ "${CI_GIT_REF_TYPE}" != PR ] && [ "${CI_GIT_REF_TYPE}" != TAG ]; then
+    ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache store "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" .go-pkg-cache ) || true
+  fi
 
 defaults:
   # Only the host tooling steps shell out to, since every step pulls it. A step

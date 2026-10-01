@@ -8,6 +8,9 @@ defaults:
 
 steps:
   - name: mock-node-ci
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
     depends: [check-go]
     requests: {cpu: 4000m, memory: 2Gi}
     commands: |

@@ -9,6 +9,9 @@ defaults:
 
 steps:
   - name: e2e-ut
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
     depends: [check-go]
     requests: {cpu: 4250m, memory: 4.75Gi}
     commands: |

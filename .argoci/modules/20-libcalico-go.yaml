@@ -9,6 +9,9 @@ defaults:
 
 steps:
   - name: libcalico-go-ci
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
     depends: [check-go]
     # A kind control plane shares this pod's cores with the tests.
     requests: {cpu: 5000m, memory: 9.5Gi}

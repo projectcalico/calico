@@ -23,6 +23,8 @@ steps:
           - name: BACKEND
             value: l2bridge
     env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
       - name: AZURE_LOCATION
         value: eastus2
       - name: KUBE_VERSION

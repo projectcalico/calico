@@ -13,6 +13,9 @@ steps:
   # Every FV VM unpacks this step's output, so a lane whose batches all fail to
   # configure usually broke here.
   - name: felix-build
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
     depends: [build-calico-image, check-go]
     timeout: 40m
     jobSize: large
@@ -35,6 +38,9 @@ steps:
       ./.semaphore/cache-test-artifacts
 
   - name: felix-static-checks
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
     depends: [build-calico-image, check-go]
     timeout: 30m
     requests: {cpu: 4000m, memory: 6Gi}
@@ -55,9 +61,12 @@ steps:
     runAsNonRoot: true
     scratchVolumes: [/home/ci]
     env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
       - name: HOME
         value: /home/ci
-    requests: {cpu: 4000m, memory: 6Gi}
+    jobSize: large
+    requests: {cpu: 7000m, memory: 10Gi}
     services:
       - docker
     secretBundles:
@@ -80,6 +89,9 @@ steps:
 
   # On a VM because the suite loads ip6_tables, which a pod cannot.
   - name: felix-k8sfv
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
     depends: [build-calico-image, check-go]
     timeout: 45m
     runOn: vm
@@ -193,6 +205,9 @@ steps:
       source felix/.semaphore/fv-epilogue
 
   - name: felix-build-windows
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
     jobSize: large
     requests: {cpu: 7000m, memory: 8Gi}
     services:
@@ -212,6 +227,8 @@ steps:
     secretBundles:
       - banzai-secrets
     env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
       - name: FV_TYPE
         value: calico-felix
       - name: RELEASE_STREAM

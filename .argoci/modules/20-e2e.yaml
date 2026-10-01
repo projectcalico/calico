@@ -11,6 +11,9 @@ defaults:
 
 steps:
   - name: e2e-kind
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
     vm:
       # Hyperdisk needs a third-generation family.
       machineType: c3-standard-8

@@ -23,6 +23,11 @@ steps:
 
   # go vet fans out across every package, so it scales with the cores it gets.
   - name: check-go
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: preflight-go-checks
+      - name: STORE_BUILD_CACHE
+        value: "true"
     jobSize: large
     requests: {cpu: 14000m, memory: 16Gi}
     services: [docker]
@@ -172,6 +177,11 @@ steps:
       make check-dirty
 
   - name: build-calico-image
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+      - name: STORE_BUILD_CACHE
+        value: "true"
     services: [docker]
     timeout: 1h
     jobSize: large
@@ -292,6 +302,9 @@ steps:
   # Built through the same target its consumers run, so the refs it bakes in
   # (localhost:5000/calico/<name>:test-build) are the ones they install.
   - name: build-operator-image
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
     services: [docker]
     timeout: 1h
     jobSize: large

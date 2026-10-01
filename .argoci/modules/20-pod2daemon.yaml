@@ -8,6 +8,9 @@ defaults:
 
 steps:
   - name: pod2daemon-ci
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
     depends: [check-go]
     requests: {cpu: 2750m, memory: 2Gi}
     commands: |

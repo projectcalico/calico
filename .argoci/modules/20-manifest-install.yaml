@@ -12,6 +12,9 @@ defaults:
 
 steps:
   - name: manifest-install-kind
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
     vm:
       machineType: e2-standard-8
       diskType: pd-ssd
