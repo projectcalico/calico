@@ -288,6 +288,9 @@ type bpfInterfaceState struct {
 	// change under a live interface, so the link type is not a stand-in for
 	// this — see useNetkitAttach.
 	netkitJumps bool
+	// preambleGlobals is what each hook's attached preamble was configured
+	// with; a workload whose globals differ must be re-attached.
+	preambleGlobals [hook.Count]libbpf.TcGlobalData
 }
 
 type bpfInterfaceJumpIndices struct {
@@ -2957,9 +2960,9 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		ap.Netkit = true
 		// Netkit programs have a different expected_attach_type and cannot
 		// share prog_array maps with TC/TCX programs. Use separate maps.
-		// Note: the AP is copied for both directions in applyPolicyToWeps,
+		// Note: the AP is copied for both directions in wepAttachPoints,
 		// so we set overrides for both ingress and egress here. The ProgramsMap
-		// is set per-direction in wepApplyPolicyToDirection.
+		// is set per-direction in wepTCAttachPoint.
 		ap.MapPinOverrides = hook.NetkitPinOverridesBoth()
 		// bpf_redirect_peer requires a TC ingress context (skb_at_tc_ingress),
 		// but netkit programs run in xmit context. Disable redirect_peer so the
@@ -3064,13 +3067,29 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	}
 
 	if m.v6 != nil {
+		ingressAP6, egressAP6 = m.v6.wepAttachPoints(&state, ap)
+	}
+	if m.v4 != nil {
+		ingressAP4, egressAP4 = m.v4.wepAttachPoints(&state, ap)
+	}
+
+	globals := wepPreambleGlobals(ingressAP4, ingressAP6, egressAP4, egressAP6)
+	if globals != state.preambleGlobals &&
+		(v4Readiness == ifaceIsReady || v6Readiness == ifaceIsReady) {
+		logrus.WithField("iface", ifaceName).Info(
+			"Workload's BPF program configuration has changed, re-attaching.")
+		v4Readiness = ifaceNotReady
+		v6Readiness = ifaceNotReady
+	}
+
+	if m.v6 != nil {
 		wg.Go(func() {
-			ingressAP6, egressAP6, err6 = m.v6.applyPolicyToWeps(v6Readiness, ifaceName, &state, wep, ap)
+			ingressAP6, egressAP6, err6 = m.v6.applyPolicyToWeps(v6Readiness, wep, ingressAP6, egressAP6)
 		})
 	}
 
 	if m.v4 != nil {
-		ingressAP4, egressAP4, err4 = m.v4.applyPolicyToWeps(v4Readiness, ifaceName, &state, wep, ap)
+		ingressAP4, egressAP4, err4 = m.v4.applyPolicyToWeps(v4Readiness, wep, ingressAP4, egressAP4)
 	}
 
 	wg.Wait()
@@ -3118,6 +3137,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	if errors.Join(err4, err6) != nil {
 		return state, errors.Join(err4, err6)
 	}
+	state.preambleGlobals = globals
 
 	applyTime := time.Since(startTime)
 	logrus.WithFields(logrus.Fields{"timeTaken": applyTime, "ifaceName": ifaceName}).
@@ -3304,10 +3324,15 @@ func (d *bpfEndpointManagerDataplane) wepTCAttachPoint(ap *tc.AttachPoint, polic
 	return ap
 }
 
-func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceReadiness, state *bpfInterfaceState,
-	endpoint *proto.WorkloadEndpoint, polDirection PolDirection, ap *tc.AttachPoint,
-) (*tc.AttachPoint, error) {
-	var policyIdx, filterIdx int
+// wepAttachPoints builds this family's attach points for a workload's two
+// hooks from the attach point shared by both families.
+func (d *bpfEndpointManagerDataplane) wepAttachPoints(state *bpfInterfaceState, ap *tc.AttachPoint) (ingress, egress *tc.AttachPoint) {
+	return d.wepDirectionAttachPoint(state, PolDirnIngress, ap), d.wepDirectionAttachPoint(state, PolDirnEgress, ap)
+}
+
+func (d *bpfEndpointManagerDataplane) wepDirectionAttachPoint(state *bpfInterfaceState,
+	polDirection PolDirection, ap *tc.AttachPoint,
+) *tc.AttachPoint {
 	// d.lastSeenHostIP may be nil if Felix has never been told a host IP
 	// for this family (e.g. the local Node resource has no address yet
 	// at startup). The attach pipeline handles a nil HostIPv*:
@@ -3328,11 +3353,41 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 	if polDirection == PolDirnIngress {
 		attachHook = hook.Egress
 	}
-	policyIdx = indices.policyIdx[attachHook]
-	filterIdx = state.filterIdx[attachHook]
 
-	ap = d.wepTCAttachPoint(ap, policyIdx, filterIdx, polDirection)
+	apCopy := *ap
+	return d.wepTCAttachPoint(&apCopy, indices.policyIdx[attachHook], state.filterIdx[attachHook], polDirection)
+}
 
+// wepPreambleGlobals returns each hook's preamble globals, minus the jump
+// tables, which change only when the programs reload.
+func wepPreambleGlobals(ingressAP4, ingressAP6, egressAP4, egressAP6 *tc.AttachPoint) [hook.Count]libbpf.TcGlobalData {
+	var globals [hook.Count]libbpf.TcGlobalData
+	for _, aps := range [][2]*tc.AttachPoint{{ingressAP4, ingressAP6}, {egressAP4, egressAP6}} {
+		merged := mergeAttachPoints(copyAttachPoint(aps[0]), copyAttachPoint(aps[1]))
+		if merged == nil {
+			continue
+		}
+		g := *merged.(*tc.AttachPoint).Configure()
+		g.Jumps = [len(g.Jumps)]uint32{}
+		g.JumpsV6 = [len(g.JumpsV6)]uint32{}
+		globals[merged.HookName()] = g
+	}
+	return globals
+}
+
+// copyAttachPoint keeps mergeAttachPoints, which writes into its v4 argument,
+// away from attach points that are yet to be loaded.
+func copyAttachPoint(ap *tc.AttachPoint) *tc.AttachPoint {
+	if ap == nil {
+		return nil
+	}
+	c := *ap
+	return &c
+}
+
+func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceReadiness,
+	endpoint *proto.WorkloadEndpoint, polDirection PolDirection, ap *tc.AttachPoint,
+) (*tc.AttachPoint, error) {
 	logrus.WithField("iface", ap.IfaceName()).Debugf("readiness: %d", readiness)
 	if readiness != ifaceIsReady {
 		err := d.mgr.loadPrograms(ap, d.ipFamily)
@@ -3426,25 +3481,20 @@ func (m *bpfEndpointManager) addHostPolicy(rules *polprog.Rules, hostEndpoint *p
 
 func (d *bpfEndpointManagerDataplane) applyPolicyToWeps(
 	readiness ifaceReadiness,
-	ifaceName string,
-	state *bpfInterfaceState,
 	endpoint *proto.WorkloadEndpoint,
-	ap *tc.AttachPoint,
+	ingressAttachPoint, egressAttachPoint *tc.AttachPoint,
 ) (*tc.AttachPoint, *tc.AttachPoint, error) {
-	ingressAttachPoint := *ap
-	egressAttachPoint := *ap
-
 	var parallelWG sync.WaitGroup
 	var ingressAP *tc.AttachPoint
 	var ingressErr error
 
 	parallelWG.Go(func() {
 		ingressAP, ingressErr = d.wepApplyPolicyToDirection(readiness,
-			state, endpoint, PolDirnIngress, &ingressAttachPoint)
+			endpoint, PolDirnIngress, ingressAttachPoint)
 	})
 
 	egressAP, egressErr := d.wepApplyPolicyToDirection(readiness,
-		state, endpoint, PolDirnEgress, &egressAttachPoint)
+		endpoint, PolDirnEgress, egressAttachPoint)
 	parallelWG.Wait()
 
 	return ingressAP, egressAP, errors.Join(ingressErr, egressErr)
@@ -3491,7 +3541,7 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 	state *bpfInterfaceState,
 	ap *tc.AttachPoint,
 ) (*tc.AttachPoint, error) {
-	// See wepApplyPolicyToDirection for why nil hostIP is allowed here.
+	// See wepDirectionAttachPoint for why nil hostIP is allowed here.
 	ap = d.configureTCAttachPoint(polDirection, ap, true)
 
 	ip, err := d.getInterfaceIP(ifaceName)
