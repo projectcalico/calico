@@ -463,6 +463,11 @@ func (in PolicyControllerConfig) OpenAPIModelName() string {
 }
 
 // OpenAPIModelName returns the OpenAPI model name for this type.
+func (in PolicyStatus) OpenAPIModelName() string {
+	return "com.github.projectcalico.api.pkg.apis.projectcalico.v3.PolicyStatus"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
 func (in PrefixAdvertisement) OpenAPIModelName() string {
 	return "com.github.projectcalico.api.pkg.apis.projectcalico.v3.PrefixAdvertisement"
 }
