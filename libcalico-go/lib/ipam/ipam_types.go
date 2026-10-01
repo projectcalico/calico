@@ -198,7 +198,8 @@ type PoolUtilization struct {
 	// This pool's CIDR.
 	CIDR net.IPNet
 
-	// Number of possible IPs in this pool.
+	// Number of possible IPs in this pool. A pool nested inside this one is counted here too, so totals summed across
+	// pools double count it.
 	Capacity int
 
 	// Number of allocated IPs in this pool, whether or not they are also reserved.
@@ -210,7 +211,8 @@ type PoolUtilization struct {
 	// Number of reserved IPs in this pool, whether or not they are also allocated.
 	Reserved int
 
-	// Number of IPs in this pool that are neither allocated nor reserved.
+	// Number of IPs in this pool that are neither allocated nor reserved. Like Capacity, it covers any nested pool's
+	// space, so a nested pool's allocations read as free here.
 	Free int
 
 	// Utilization for each of this pool's blocks.

@@ -3071,14 +3071,63 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		)
 	})
 
+	Describe("GetUtilization with nested pools", func() {
+		host := "host-a"
+
+		type row struct {
+			inUse   int
+			cooling int
+			blocks  []string
+		}
+		rowsByPool := func(usage []*PoolUtilization) map[string]row {
+			out := map[string]row{}
+			for _, poolUse := range usage {
+				r := row{inUse: poolUse.InUse, cooling: poolUse.Cooling}
+				for _, b := range poolUse.Blocks {
+					r.blocks = append(r.blocks, b.CIDR.String())
+				}
+				out[poolUse.Name] = r
+			}
+			return out
+		}
+
+		It("should count each block under the narrowest pool that contains it", func() {
+			ctx := context.Background()
+			Expect(bc.Clean()).To(Succeed())
+			deleteAllPools()
+			applyNode(bc, kc, host, nil)
+			applyPool("10.0.0.0/16", true, "")
+			applyPool("10.0.1.0/24", true, "")
+			Expect(ic.SetIPAMConfig(ctx, IPAMConfig{AutoAllocateBlocks: true, IPCooldownSeconds: 60})).To(Succeed())
+
+			for _, addr := range []string{"10.0.1.5", "10.0.1.6", "10.0.2.5"} {
+				Expect(ic.AssignIP(ctx, AssignIPArgs{IP: cnet.MustParseIP(addr), Hostname: host})).To(Succeed())
+			}
+			_, _, err := ic.ReleaseIPs(ctx, ReleaseOptions{Address: "10.0.1.6"})
+			Expect(err).NotTo(HaveOccurred())
+
+			usage, err := ic.GetUtilization(ctx, GetUtilizationArgs{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(rowsByPool(usage)).To(Equal(map[string]row{
+				"10.0.0.0/16":                {inUse: 1, blocks: []string{"10.0.2.0/26"}},
+				"10.0.1.0/24":                {inUse: 2, cooling: 1, blocks: []string{"10.0.1.0/26"}},
+				"orphaned allocation blocks": {},
+			}))
+		})
+	})
+
 	Describe("IPAM AutoAssign from different pools", func() {
 		host := "host-a"
 		pool1 := cnet.MustParseNetwork("10.0.0.0/24")
 		pool2 := cnet.MustParseNetwork("20.0.0.0/24")
 		var block1, block2 cnet.IPNet
 
-		findInUse := func(usage []*PoolUtilization, cidr string, expectedInUse int) bool {
+		// The mock names each pool after its CIDR, so pool is both.
+		findInUse := func(usage []*PoolUtilization, pool, cidr string, expectedInUse int) bool {
 			for _, poolUse := range usage {
+				if poolUse.Name != pool {
+					continue
+				}
 				for _, blockUse := range poolUse.Blocks {
 					if blockUse.CIDR.String() == cidr && blockUse.InUse == expectedInUse {
 						return true
@@ -3118,13 +3167,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			usage, err := ic.GetUtilization(context.Background(), GetUtilizationArgs{})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(findInUse(usage, "10.0.0.0/26", 1)).To(BeTrue())
+			Expect(findInUse(usage, "10.0.0.0/24", "10.0.0.0/26", 1)).To(BeTrue())
 
 			usage, err = ic.GetUtilization(context.Background(), GetUtilizationArgs{
 				Pools: []string{"20.0.0.0/24"},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(findInUse(usage, "10.0.0.0/26", 1)).To(BeFalse())
+			Expect(findInUse(usage, "10.0.0.0/24", "10.0.0.0/26", 1)).To(BeFalse())
 		})
 
 		It("should get an IP from pool2 when explicitly requesting from that pool", func() {
@@ -3150,13 +3199,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			usage, err := ic.GetUtilization(context.Background(), GetUtilizationArgs{})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(findInUse(usage, "20.0.0.0/26", 1)).To(BeTrue())
+			Expect(findInUse(usage, "20.0.0.0/24", "20.0.0.0/26", 1)).To(BeTrue())
 
 			usage, err = ic.GetUtilization(context.Background(), GetUtilizationArgs{
 				Pools: []string{"20.0.0.0/24"},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(findInUse(usage, "20.0.0.0/26", 1)).To(BeTrue())
+			Expect(findInUse(usage, "20.0.0.0/24", "20.0.0.0/26", 1)).To(BeTrue())
 		})
 
 		It("should get an IP from pool1 in the same allocation block as the first IP from pool1", func() {
