@@ -498,10 +498,9 @@ jobs:
           REPORT_FILE: /tmp/pick-export/report.md
         run: node "$RUNNER_TEMP/notify-slack.js"
 
-      # Nothing to pick (superseded / empty): informational DM.
-      # Also mirror the noop to #merge-queue-bot-errors (every non-success
-      # outcome goes to the channel), even when the author is unmapped.
-      # A re-run whose pick PR already exists stays silent.
+      # Nothing to pick (superseded / empty): informational DM to the author
+      # only, not the errors channel. A re-run whose pick PR already exists
+      # stays silent.
       - name: Notify author (nothing to pick) on Slack
         if: >
           success() &&
@@ -510,10 +509,10 @@ jobs:
           needs.pick.outputs.outcome != 'already' &&
           needs.pick.outputs.escalated != 'true' &&
           needs.pick.outputs.export != 'ready' &&
-          steps.openpr.outputs.pr_url == ''
+          steps.openpr.outputs.pr_url == '' &&
+          needs.pick.outputs.login != ''
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_MERGE_CAT_TOKEN }}
-          ALERT_CHANNEL: C09DDMQRUC9
           AUTHOR_LOGIN: ${{ needs.pick.outputs.login }}
           SRC_PR: ${{ needs.pick.outputs.pr }}
           MODE: noop

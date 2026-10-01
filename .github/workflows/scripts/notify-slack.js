@@ -20,10 +20,9 @@
 //   ESCALATION_REASON short reason string (escalated mode).
 //   RUN_URL          workflow run URL (escalated mode; link for the human).
 //   REPORT_FILE      resolution report appended in escalated mode, if present.
-//   ALERT_CHANNEL    Slack channel id; on any non-success outcome (escalation,
-//                    failure, noop) the same message is also posted here, so a
-//                    non-picked outcome is never invisible even when the author
-//                    is unmapped or unknown. The plain picked success only DMs.
+//   ALERT_CHANNEL    Slack channel id; an escalation or failure is also posted
+//                    here, so an error is never invisible even when the author
+//                    is unmapped or unknown. A noop or picked success only DMs.
 //   TARGET_LABEL     Human label for the target (e.g. "Enterprise").
 //   TARGET_BRANCH    Target branch (e.g. "master").
 
@@ -68,10 +67,9 @@ async function main() {
   // invisible even when the author is unmapped or unknown.
   const author = env.AUTHOR_LOGIN || '';
   const slackId = author ? slackIdFor(author, map) : '';
-  // Mirror every non-success outcome (escalation, failure, noop) to the alert
-  // channel; the plain "picked" success only DMs the author.
-  const mirrorToChannel = env.MODE === 'escalated' || env.MODE === 'noop';
-  const alertChannel = (mirrorToChannel && env.ALERT_CHANNEL) ? env.ALERT_CHANNEL : '';
+  // Mirror errors (escalation, failure) to the alert channel; a noop or a plain
+  // "picked" success only DMs the author.
+  const alertChannel = (env.MODE === 'escalated' && env.ALERT_CHANNEL) ? env.ALERT_CHANNEL : '';
   if (!slackId && !alertChannel) {
     console.log(`::notice::author ${author || '(none)'} not in PICK_NOTIFY_MAP and no alert channel -- skipping`);
     return;
