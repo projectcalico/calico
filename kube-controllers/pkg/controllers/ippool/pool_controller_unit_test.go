@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -607,4 +608,49 @@ func TestReconcile_ReplacementPoolDoesNotFinalizeATerminatingPool(t *testing.T) 
 		t.Fatalf("reconcile failed: %v", err)
 	}
 	expectFinalizer(t, cli, "z-old", true)
+}
+
+// pool-1's block reaches the tracker only after the informers have synced, as when a handler lags its informer. pool-2
+// gaining a finalizer shows that a reconcile ran.
+func TestRun_WaitsForTheHandlersBeforeReconciling(t *testing.T) {
+	terminating := terminatingPool("pool-1", "192.168.0.0/24", time.Now())
+	active := testPool("pool-2", "10.0.0.0/24")
+	cli := fake.NewClientset(terminating, active)
+	c, _ := newTestController(cli, terminating, active)
+	c.queue = workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]())
+	var handlersSynced atomic.Bool
+	c.handlersSynced = []cache.InformerSynced{handlersSynced.Load}
+
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		c.Run(stop)
+		close(done)
+	}()
+	defer func() {
+		close(stop)
+		<-done
+	}()
+
+	time.Sleep(500 * time.Millisecond)
+	expectFinalizer(t, cli, "pool-2", false)
+
+	c.tracker.AddBlocks(allocatedBlock(t, "192.168.0.0/26", 1))
+	handlersSynced.Store(true)
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		pool, err := cli.ProjectcalicoV3().IPPools().Get(context.Background(), "pool-2", metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("get pool-2: %v", err)
+		}
+		if hasFinalizer(pool) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("no reconcile ran after the handlers synced")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	expectFinalizer(t, cli, "pool-1", true)
 }

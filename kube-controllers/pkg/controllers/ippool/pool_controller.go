@@ -71,6 +71,9 @@ type IPPoolController struct {
 	// Per-pool utilization, kept current by the informer handlers.
 	tracker *accounting.Tracker
 
+	// handlersSynced reports when each handler has delivered its informer's initial list to the tracker.
+	handlersSynced []cache.InformerSynced
+
 	cli   clientset.Interface
 	ipam  ipam.Interface
 	queue workqueue.TypedRateLimitingInterface[string]
@@ -95,15 +98,19 @@ func NewController(
 		queue:               workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]()),
 	}
 
-	if _, err := poolInformer.AddEventHandler(c.poolHandlers()); err != nil {
+	poolReg, err := poolInformer.AddEventHandler(c.poolHandlers())
+	if err != nil {
 		logrus.WithError(err).Fatal("Failed to register event handler for IPPool")
 	}
-	if _, err := blockInformer.AddEventHandler(c.blockHandlers()); err != nil {
+	blockReg, err := blockInformer.AddEventHandler(c.blockHandlers())
+	if err != nil {
 		logrus.WithError(err).Fatal("Failed to register event handler for IPAMBlock")
 	}
-	if _, err := reservationInformer.AddEventHandler(c.reservationHandlers()); err != nil {
+	reservationReg, err := reservationInformer.AddEventHandler(c.reservationHandlers())
+	if err != nil {
 		logrus.WithError(err).Fatal("Failed to register event handler for IPReservation")
 	}
+	c.handlersSynced = []cache.InformerSynced{poolReg.HasSynced, blockReg.HasSynced, reservationReg.HasSynced}
 
 	return c
 }
@@ -212,9 +219,10 @@ func (c *IPPoolController) Run(stopCh chan struct{}) {
 
 	logrus.Info("Starting IPPool controller")
 
-	// Wait till k8s cache is synced
+	// An informer syncs before its handlers have fed the tracker. Waiting on the handlers stops the first reconcile from
+	// seeing a Terminating pool with no blocks and dropping its finalizer.
 	logrus.Debug("Waiting to sync with Kubernetes API")
-	if !cache.WaitForNamedCacheSync("pools", stopCh, c.poolInformer.HasSynced, c.blockInformer.HasSynced, c.reservationInformer.HasSynced) {
+	if !cache.WaitForNamedCacheSync("pools", stopCh, c.handlersSynced...) {
 		logrus.Info("Failed to sync resources, received signal for controller to shut down.")
 		return
 	}
