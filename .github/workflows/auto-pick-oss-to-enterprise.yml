@@ -528,7 +528,10 @@ jobs:
           AUTHOR_LOGIN: ${{ needs.pick.outputs.login }}
           SRC_PR: ${{ needs.pick.outputs.pr }}
           MODE: escalated
-          ESCALATION_REASON: the auto-cherry-pick run failed before a PR could be opened
+          ESCALATION_REASON: >-
+            ${{ steps.openpr.outputs.pushed != ''
+            && format('the pick was pushed to branch {0} but the PR could not be opened; open it from that branch or re-run the job', steps.openpr.outputs.pushed)
+            || 'the auto-cherry-pick run failed before a PR could be opened' }}
         run: node "$RUNNER_TEMP/notify-slack.js"
 
       # Fail the run so an escalation is visible; no PR was opened.
