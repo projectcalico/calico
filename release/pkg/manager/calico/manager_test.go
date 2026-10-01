@@ -15,14 +15,18 @@
 package calico
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path"
 	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -33,7 +37,9 @@ import (
 	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/images"
+	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/manifests"
+	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 )
@@ -772,6 +778,11 @@ func imageManager(t *testing.T, f *fakeRunner, logsDir string) (*CalicoManager, 
 	}, root
 }
 
+// What the image tests below expect of this release.
+var (
+	imagePublishTarget = "release-publish"
+)
+
 // A publish must latch CONFIRM; DRYRUN pushes nothing and still reports
 // success.
 func TestPublishContainerImagesConfirms(t *testing.T) {
@@ -780,8 +791,8 @@ func TestPublishContainerImagesConfirms(t *testing.T) {
 	if err := m.publishContainerImages(); err != nil {
 		t.Fatalf("publishContainerImages: %v", err)
 	}
-	if !f.ran("make -C " + root + "/cmd/calico release-publish") {
-		t.Errorf("publish did not run release-publish in cmd/calico, calls: %v", f.calls)
+	if !f.ran("make -C " + root + "/cmd/calico " + imagePublishTarget) {
+		t.Errorf("publish did not run %s in cmd/calico, calls: %v", imagePublishTarget, f.calls)
 	}
 	env := f.envForDir(root + "/cmd/calico ")
 	if !slices.Contains(env, "CONFIRM=true") {
@@ -790,6 +801,262 @@ func TestPublishContainerImagesConfirms(t *testing.T) {
 	if slices.Contains(env, "DRYRUN=true") {
 		t.Error("publish env should not carry DRYRUN=true")
 	}
+}
+
+func TestResolveContainerImages(t *testing.T) {
+	withoutImages := func(t *testing.T, f *fakeRunner) *CalicoManager {
+		m, _ := imageManager(t, f, "")
+		m.images = false
+		m.isHashRelease = true
+		return m
+	}
+	readRefs := func(t *testing.T, m *CalicoManager, step string) []string {
+		t.Helper()
+		refs, err := outputs.ReadRefs(m.outputDir, step, m.calicoVersion)
+		if err != nil {
+			t.Fatalf("ReadRefs(%s): %v", step, err)
+		}
+		return refs
+	}
+
+	t.Run("records the images as resolved", func(t *testing.T) {
+		f := newFakeRunner()
+		m := withoutImages(t, f)
+		if err := m.resolveContainerImages(); err != nil {
+			t.Fatalf("resolveContainerImages: %v", err)
+		}
+		if len(readRefs(t, m, images.ResolveStep)) == 0 {
+			t.Errorf("nothing recorded under %s", images.ResolveStep)
+		}
+		if refs := readRefs(t, m, "images-publish"); len(refs) != 0 {
+			t.Errorf("a resolve wrote the publish record: %v", refs)
+		}
+		for _, c := range f.calls {
+			if strings.HasSuffix(c, " "+imagePublishTarget) {
+				t.Errorf("a resolve ran the publish target: %s", c)
+			}
+		}
+	})
+
+	t.Run("a missing image fails after the rest are recorded", func(t *testing.T) {
+		m := withoutImages(t, newFakeRunner())
+		missing := registry.DefaultProductRegistry + "/calico:" + m.calicoVersion
+		m.resolveDigest = func(image string) (string, bool, error) {
+			if image == missing {
+				return "", false, nil
+			}
+			return "sha256:aaa", true, nil
+		}
+		err := m.resolveContainerImages()
+		if err == nil || !strings.Contains(err.Error(), missing) {
+			t.Fatalf("got %v, want an error naming %s", err, missing)
+		}
+		if len(readRefs(t, m, images.ResolveStep)) == 0 {
+			t.Error("the images that exist were not recorded")
+		}
+	})
+
+	t.Run("runs first, before metadata", func(t *testing.T) {
+		var kinds []string
+		for _, u := range withoutImages(t, newFakeRunner()).uploads() {
+			kinds = append(kinds, u.Handler.Name())
+		}
+		resolve, meta := slices.Index(kinds, "images"), slices.Index(kinds, metadataKey)
+		if resolve != 0 || meta < resolve {
+			t.Errorf("uploads %v: images must come first, before metadata", kinds)
+		}
+	})
+
+	t.Run("the images upload scans once every image is found", func(t *testing.T) {
+		m := withoutImages(t, newFakeRunner())
+		scans := enableScan(t, m)
+		if err := m.uploads()[0].Handler.Publish(context.Background(), ""); err != nil {
+			t.Fatalf("images upload: %v", err)
+		}
+		if got := scans.Load(); got != 1 {
+			t.Errorf("sent %d scan requests, want 1", got)
+		}
+	})
+
+	t.Run("a dry run does not scan", func(t *testing.T) {
+		m := withoutImages(t, newFakeRunner())
+		scans := enableScan(t, m)
+		m.dryRun = true
+		if err := m.uploads()[0].Handler.Publish(context.Background(), ""); err != nil {
+			t.Fatalf("images upload: %v", err)
+		}
+		if got := scans.Load(); got != 0 {
+			t.Errorf("a dry run sent %d scan requests", got)
+		}
+	})
+
+	t.Run("the prereqs look nothing up", func(t *testing.T) {
+		m := withoutImages(t, newFakeRunner())
+		m.operator = false
+		var lookups int
+		m.resolveDigest = func(string) (string, bool, error) {
+			lookups++
+			return "", false, nil
+		}
+		if err := m.hashreleasePrereqs(); err != nil {
+			t.Fatalf("hashreleasePrereqs: %v", err)
+		}
+		if lookups != 0 {
+			t.Errorf("the prereqs resolved %d images", lookups)
+		}
+	})
+}
+
+func TestComponentImages(t *testing.T) {
+	t.Run("scans the operator at the registry the run uses", func(t *testing.T) {
+		m, _ := imageManager(t, newFakeRunner(), "")
+		m.operatorRegistry = "quay.io/override"
+		m.operatorVersion = "v1.40.0"
+		m.imageComponents = map[string]registry.Component{
+			m.operatorImage: {Registry: "quay.io/pinned", Image: m.operatorImage, Version: m.operatorVersion},
+		}
+		want := "quay.io/override/" + m.operatorImage + ":v1.40.0"
+		if got := m.componentImages()[m.operatorImage]; got != want {
+			t.Errorf("scans %s, want %s", got, want)
+		}
+	})
+}
+
+func TestResolveOperator(t *testing.T) {
+	newManager := func(t *testing.T, resolve func(string) (string, bool, error)) *CalicoManager {
+		m, _ := imageManager(t, newFakeRunner(), "")
+		m.isHashRelease = true
+		m.operator = false
+		m.operatorVersion = "v1.40.0"
+		m.resolveDigest = resolve
+		m.imageComponents = map[string]registry.Component{
+			"node":          {Image: "calico/node", Version: m.calicoVersion},
+			m.operatorImage: {Registry: m.operatorRegistry, Image: m.operatorImage, Version: m.operatorVersion},
+		}
+		return m
+	}
+	scanned := func(m *CalicoManager, component string) bool {
+		m.imageScanning = true
+		return slices.Contains(m.scanRequest().Images, m.componentImages()[component])
+	}
+
+	t.Run("records an operator the run does not publish", func(t *testing.T) {
+		m := newManager(t, func(string) (string, bool, error) { return "sha256:aaa", true, nil })
+		if err := m.resolveOperator(); err != nil {
+			t.Fatalf("resolveOperator: %v", err)
+		}
+		refs, err := outputs.ReadRefs(m.outputDir, operator.ResolveStep, m.calicoVersion)
+		if err != nil {
+			t.Fatalf("ReadRefs: %v", err)
+		}
+		want := m.operatorRegistry + "/" + m.operatorImage + "@sha256:aaa"
+		if !slices.Contains(refs, want) {
+			t.Errorf("recorded %v, want %s", refs, want)
+		}
+		if !scanned(m, m.operatorImage) {
+			t.Error("a found operator left the scan")
+		}
+	})
+
+	t.Run("a missing operator only warns and leaves the scan", func(t *testing.T) {
+		m := newManager(t, func(string) (string, bool, error) { return "", false, nil })
+		if err := m.resolveOperator(); err != nil {
+			t.Fatalf("resolveOperator: %v", err)
+		}
+		if scanned(m, m.operatorImage) {
+			t.Error("a missing operator is still scanned")
+		}
+		if !scanned(m, "node") {
+			t.Error("the product image left the scan")
+		}
+	})
+
+	t.Run("a missing operator leaves the scan under an overridden registry", func(t *testing.T) {
+		m := newManager(t, func(string) (string, bool, error) { return "", false, nil })
+		m.operatorRegistry = "quay.io/override"
+		if err := m.resolveOperator(); err != nil {
+			t.Fatalf("resolveOperator: %v", err)
+		}
+		if scanned(m, m.operatorImage) {
+			t.Error("the pinned operator is still scanned after the overridden one was missing")
+		}
+	})
+
+	t.Run("a failed lookup fails and leaves the scan", func(t *testing.T) {
+		m := newManager(t, func(string) (string, bool, error) { return "", false, fmt.Errorf("unauthorized") })
+		if err := m.resolveOperator(); err == nil {
+			t.Fatal("expected the failed lookup to fail the run")
+		}
+		if scanned(m, m.operatorImage) {
+			t.Error("an unchecked operator is still scanned")
+		}
+	})
+
+	t.Run("a retry that finds the operator scans it", func(t *testing.T) {
+		var unavailable atomic.Bool
+		unavailable.Store(true)
+		m := newManager(t, func(string) (string, bool, error) {
+			if unavailable.Load() {
+				return "", false, fmt.Errorf("unavailable")
+			}
+			return "sha256:aaa", true, nil
+		})
+		attempt := m.withOperator(func() error { return nil })
+		if err := attempt(); err == nil {
+			t.Fatal("expected the first attempt to fail")
+		}
+		unavailable.Store(false)
+		if err := attempt(); err != nil {
+			t.Fatalf("retry: %v", err)
+		}
+		if !scanned(m, m.operatorImage) {
+			t.Error("the retry found the operator but the scan leaves it out")
+		}
+	})
+
+	t.Run("skips an operator the run publishes", func(t *testing.T) {
+		var lookups atomic.Int32
+		m := newManager(t, func(string) (string, bool, error) {
+			lookups.Add(1)
+			return "", false, nil
+		})
+		m.operator = true
+		if err := m.resolveOperator(); err != nil {
+			t.Fatalf("resolveOperator: %v", err)
+		}
+		if n := lookups.Load(); n != 0 {
+			t.Errorf("looked up %d images", n)
+		}
+	})
+
+	t.Run("runs before the images action", func(t *testing.T) {
+		m := newManager(t, func(string) (string, bool, error) { return "", false, nil })
+		var scannedFirst bool
+		if err := m.withOperator(func() error {
+			scannedFirst = scanned(m, m.operatorImage)
+			return nil
+		})(); err != nil {
+			t.Fatalf("withOperator: %v", err)
+		}
+		if scannedFirst {
+			t.Error("the images action ran before the operator left the scan")
+		}
+	})
+}
+
+func enableScan(t *testing.T, m *CalicoManager) *atomic.Int32 {
+	t.Helper()
+	var scans atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		scans.Add(1)
+		_, _ = w.Write([]byte(`{"results_link": "http://example.com/results"}`))
+	}))
+	t.Cleanup(srv.Close)
+	m.imageScanning = true
+	m.imageScanningConfig = imagescanner.Config{APIURL: srv.URL, Token: "token", Scanner: "scanner"}
+	m.imageComponents = map[string]registry.Component{"calico": {Image: "calico", Version: m.calicoVersion}}
+	m.tmpDir = t.TempDir()
+	return &scans
 }
 
 // Each image unit gets its own log file; concurrent units would otherwise
@@ -915,8 +1182,8 @@ func TestPublishBranchTag(t *testing.T) {
 					t.Fatalf("publishContainerImages() unexpected error: %v", err)
 				}
 
-				if got := f.ran("make -C " + root + "/cmd/calico release-publish"); got != tt.wantPublish {
-					t.Errorf("release-publish ran = %v, want %v (calls: %v)", got, tt.wantPublish, f.calls)
+				if got := f.ran("make -C " + root + "/cmd/calico " + imagePublishTarget); got != tt.wantPublish {
+					t.Errorf("%s ran = %v, want %v (calls: %v)", imagePublishTarget, got, tt.wantPublish, f.calls)
 				}
 				if got := f.ran("make -C " + root + "/cmd/calico " + branchTagTarget); got != tt.wantBranchTag {
 					t.Errorf("branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
@@ -1046,7 +1313,7 @@ func TestImageStepsUnnarrowedByDefault(t *testing.T) {
 		t.Fatalf("publishContainerImages: %v", err)
 	}
 	want := len(images.VariantDirs([]images.Variant{images.PublishVariants[0]}))
-	if got := len(unitCalls(f, "release-publish")); got != want {
+	if got := len(unitCalls(f, imagePublishTarget)); got != want {
 		t.Errorf("published %d dirs, want every one of %d: %v", got, want, f.calls)
 	}
 }
