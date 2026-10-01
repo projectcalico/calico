@@ -540,7 +540,7 @@ jobs:
 
       # Fail the run so an escalation is visible; no PR was opened.
       - name: Fail on escalation
-        if: always() && needs.pick.outputs.escalated == 'true'
+        if: needs.pick.outputs.escalated == 'true'
         env:
           PR: ${{ needs.pick.outputs.pr }}
           REASON: ${{ needs.pick.outputs.reason }}
