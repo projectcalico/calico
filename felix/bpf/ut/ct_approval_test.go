@@ -122,11 +122,7 @@ func TestCTApprovalOnCreate(t *testing.T) {
 	})
 
 	t.Run("to-WEP: host process to local pod", func(t *testing.T) {
-		// The workload's own program approves the workload's leg, but the
-		// create arm it runs (the CALI_F_FROM_HOST arm) never writes the
-		// workload bit, so a WEP-made approval is indistinguishable from a
-		// HEP-made one. Any consumer that reads workload as "a workload
-		// program approved this leg" misreads every host-to-local-pod entry.
+		// The workload's own program approves the workload's leg as a workload approval.
 		resetCTMap(ctMap)
 		resetRTMap(rtMap)
 		Expect(rtMap.Update(srcRT, localHost)).NotTo(HaveOccurred())
@@ -136,7 +132,7 @@ func TestCTApprovalOnCreate(t *testing.T) {
 		runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 			_, err := bpfrun(pktBytes)
 			Expect(err).NotTo(HaveOccurred())
-			ctAuditExpectLegs(ctAuditLoadEntry(ctKey), false, false, true, false)
+			ctAuditExpectLegs(ctAuditLoadEntry(ctKey), false, false, true, true)
 		}, withFromHost())
 	})
 
