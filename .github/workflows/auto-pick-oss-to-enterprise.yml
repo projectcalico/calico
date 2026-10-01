@@ -385,6 +385,8 @@ jobs:
           path: /tmp/pick-export.tgz.gpg
           retention-days: 1
           if-no-files-found: error
+          # "Re-run all jobs" uploads again under the same name.
+          overwrite: true
 
       # The run page is public, so only the reason goes here; the report
       # reaches the human by DM.
