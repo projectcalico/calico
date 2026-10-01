@@ -240,6 +240,35 @@ func TestNoPoolBlocksInAddressOrder(t *testing.T) {
 	Expect(tr.NoPoolBlocks()).To(Equal([]*model.AllocationBlock{low, high}))
 }
 
+func TestPoolBlocksAndBlockPool(t *testing.T) {
+	RegisterTestingT(t)
+	tracker := NewTracker()
+	tracker.AddPools(pool("outer", "10.0.0.0/16", 26), pool("inner", "10.0.0.0/24", 26))
+	inner := testBlock("10.0.0.64/26", "")
+	outerHigh := testBlock("10.0.9.0/26", "")
+	outerLow := testBlock("10.0.5.0/26", "")
+	stray := testBlock("10.9.0.0/26", "")
+	tracker.AddBlocks(outerHigh, inner, stray, outerLow)
+
+	Expect(tracker.PoolBlocks("outer")).To(Equal([]*model.AllocationBlock{outerLow, outerHigh}))
+	Expect(tracker.PoolBlocks("inner")).To(Equal([]*model.AllocationBlock{inner}))
+	Expect(tracker.PoolBlocks("missing")).To(BeNil())
+
+	owner, ok := tracker.BlockPool(inner.CIDR)
+	Expect(ok).To(BeTrue())
+	Expect(owner).To(Equal("inner"))
+	_, ok = tracker.BlockPool(stray.CIDR)
+	Expect(ok).To(BeFalse(), "no pool claims the stray block")
+	_, ok = tracker.BlockPool(cnet.MustParseCIDR("10.0.7.0/26"))
+	Expect(ok).To(BeFalse(), "the tracker has no such block")
+
+	// The narrower pool's removal hands its block to the wider one.
+	tracker.RemovePool("inner")
+	owner, _ = tracker.BlockPool(inner.CIDR)
+	Expect(owner).To(Equal("outer"))
+	Expect(tracker.PoolBlocks("outer")).To(Equal([]*model.AllocationBlock{inner, outerLow, outerHigh}))
+}
+
 // TestIncrementalMatchesFresh reads between every change, then compares against a tracker given the end state at once.
 func TestIncrementalMatchesFresh(t *testing.T) {
 	RegisterTestingT(t)
