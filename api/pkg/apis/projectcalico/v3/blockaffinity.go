@@ -56,6 +56,7 @@ type BlockAffinitySpec struct {
 	Node string `json:"node"`
 
 	// The type of affinity.
+	// +kubebuilder:validation:Enum=host;virtual
 	Type string `json:"type,omitempty"`
 
 	// The CIDR range this block affinity references.
