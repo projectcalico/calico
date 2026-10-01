@@ -16,6 +16,7 @@
 #                             encrypts the pick artifact            (Job A + B)
 #   TIGERA_BOT_PAT            write calico-private token              (Job B)
 #   SLACK_MERGE_CAT_TOKEN + SLACK_NOTIFY_MAP   author DM              (Job B)
+#   ALERT_SLACK_CHANNEL (var)  channel id for escalation/failure alerts (Job B)
 
 name: Auto-pick OSS PR into Enterprise
 
@@ -489,7 +490,7 @@ jobs:
         if: always() && needs.pick.outputs.escalated == 'true'
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_MERGE_CAT_TOKEN }}
-          ALERT_CHANNEL: C09DDMQRUC9
+          ALERT_CHANNEL: ${{ vars.ALERT_SLACK_CHANNEL }}
           AUTHOR_LOGIN: ${{ needs.pick.outputs.notify }}
           NOTIFY_AS: ${{ needs.pick.outputs.notify != needs.pick.outputs.login && 'merger' || 'author' }}
           SRC_PR: ${{ needs.pick.outputs.pr }}
@@ -529,7 +530,7 @@ jobs:
           needs.pick.outputs.escalated != 'true'
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_MERGE_CAT_TOKEN }}
-          ALERT_CHANNEL: C09DDMQRUC9
+          ALERT_CHANNEL: ${{ vars.ALERT_SLACK_CHANNEL }}
           AUTHOR_LOGIN: ${{ needs.pick.outputs.login }}
           SRC_PR: ${{ needs.pick.outputs.pr }}
           MODE: escalated
