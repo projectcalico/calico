@@ -340,6 +340,8 @@ TCP SYN, so the retransmitted SYN would be re-evaluated by its real
 destination. The peer redirect defeats that guard, because it removes
 the program that would apply it. Initial SYNs are therefore excluded
 from the peer redirect; established traffic still takes the fast path.
+Other protocols have no SYN, so a local workload counts as approving its
+leg only when its own program set the leg's `workload` bit.
 
 `is_tcp_syn()` in `felix/bpf-gpl/conntrack.h` is the single spelling of
 that question, shared with the force-policy path, the ingress connlimit
@@ -378,7 +380,7 @@ track" — which is what each of those callers wants.
   policy. A leg can have been approved by a different endpoint the
   packet reached earlier, while routing was still converging. Any such
   path needs its own new-connection check — for TCP that is an initial
-  SYN; UDP has no equivalent and needs a different signal.
+  SYN; for other protocols, the `workload` bit on a local workload's leg.
 - Helpers and maps keyed by the host-side ifindex must read
   `host_ifindex` from globals first and fall back to
   `skb->ifindex` only when it is zero. Reading `skb->ifindex`
