@@ -422,6 +422,15 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 		ct_result_set_rc(ctx->state->ct_result.rc, CALI_CT_ESTABLISHED);
 	}
 
+	/* Bypass a local workload only if its own program approved its leg. TCP SYNs always run its policy. */
+	if (CALI_F_TO_HOST && ctx->state->ip_proto != IPPROTO_TCP &&
+			ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
+			!ct_result_is_to_workload(ctx->state->ct_result.rc) &&
+			cali_rt_flags_local_workload(cali_rt_lookup_flags(&ctx->state->ip_dst))) {
+		CALI_DEBUG("Local workload has not approved this flow, no bypass");
+		ct_result_set_rc(ctx->state->ct_result.rc, CALI_CT_ESTABLISHED);
+	}
+
 	if (ct_result_rpf_failed(ctx->state->ct_result.rc)) {
 		goto deny;
 	}
@@ -1549,7 +1558,8 @@ deny:
 	return TC_ACT_SHOT;
 }
 
-static CALI_BPF_INLINE void update_fib_mark(struct cali_tc_ctx *ctx, __u32 *seen_mark)
+/* Returns true if the packet must go through the host stack with the mark set here. */
+static CALI_BPF_INLINE bool update_fib_mark(struct cali_tc_ctx *ctx, __u32 *seen_mark)
 {
 	if (CALI_F_FROM_WEP && (ctx->state->flags & CALI_ST_NAT_OUTGOING)) {
 		// We are going to SNAT this traffic, using iptables SNAT so set the mark
@@ -1557,13 +1567,16 @@ static CALI_BPF_INLINE void update_fib_mark(struct cali_tc_ctx *ctx, __u32 *seen
 		fwd_fib_set(&ctx->state->fwd, false);
 		*seen_mark = CALI_SKB_MARK_NAT_OUT;
 		CALI_DEBUG("Disabling FIB lookup due to outgoing SNAT");
+		return true;
 	} else {
 		if (ctx->state->flags & CALI_ST_SKIP_FIB) {
 			fwd_fib_set(&ctx->state->fwd, false);
 			*seen_mark = CALI_SKB_MARK_SKIP_FIB;
 			CALI_DEBUG("Disabling FIB lookup due to SKIP_FIB flag");
+			return true;
 		}
 	}
+	return false;
 }
 
 SEC("tc")
@@ -1827,7 +1840,7 @@ static CALI_BPF_INLINE void calico_tc_skb_accepted(struct cali_tc_ctx *ctx)
 		state->post_nat_dport = 0;
 	}
 
-	update_fib_mark(ctx, &seen_mark);
+	bool via_host_stack = update_fib_mark(ctx, &seen_mark);
 
 	/* We check the ttl here to avoid needing complicated handling of
 	 * related traffic back from the host if we let the host to handle it.
@@ -1959,7 +1972,8 @@ static CALI_BPF_INLINE void calico_tc_skb_accepted(struct cali_tc_ctx *ctx)
 		goto do_post_nat;
 
 	case CALI_CT_ESTABLISHED_BYPASS:
-		if (!is_tcp_syn(ctx)) {
+		/* BYPASS would replace the mark that downstream netfilter rules match on. */
+		if (!is_tcp_syn(ctx) && !via_host_stack) {
 			seen_mark = CALI_SKB_MARK_BYPASS;
 			CALI_DEBUG("marking CALI_SKB_MARK_BYPASS");
 		}

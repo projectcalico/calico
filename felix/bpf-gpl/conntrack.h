@@ -268,7 +268,7 @@ create:
 					ct_ctx->allow_return);
 		} else {
 			/* dst is to the EP, policy approved this side */
-			d2s_flags |= CALI_CT_LEG_APPROVED;
+			d2s_flags |= CALI_CT_LEG_APPROVED | (CALI_F_TO_WEP ? CALI_CT_LEG_WORKLOAD : 0);
 			CALI_DEBUG("CT-ALL approved dest side - to EP");
 		}
 	}
@@ -278,6 +278,16 @@ create:
 	dst_to_src->bits_word = d2s_flags;
 
 	err = cali_ct_update_elem(k, &ct_value, BPF_NOEXIST);
+
+	if (CALI_F_TO_WEP && err == -17 /* EEXIST */ && ct_ctx->type == CALI_CT_TYPE_NORMAL) {
+		/* Host traffic to an existing entry whose workload leg is unproven; policy just passed. */
+		struct calico_ct_value *v = cali_ct_lookup_elem(k);
+		if (v) {
+			ct_leg_set_flags(srcLTDest ? &v->b_to_a : &v->a_to_b,
+					CALI_CT_LEG_APPROVED | CALI_CT_LEG_WORKLOAD);
+			err = 0;
+		}
+	}
 
 	if (CALI_F_HEP && err == -17 /* EEXIST */) {
 		int i;
@@ -1082,8 +1092,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			result.rc = (tcp_header && !syn) ? CALI_CT_INVALID : CALI_CT_NEW;
 		}
 	} else if (CALI_F_FROM_HOST) {
+		/* A HEP approval of a workload leg does not count; TCP is exempt, its SYN always runs policy. */
+		bool dst_approved = ct_leg_flag(dst_to_src, CALI_CT_LEG_APPROVED) &&
+			(!CALI_F_TO_WEP || tcp_header || ct_leg_flag(dst_to_src, CALI_CT_LEG_WORKLOAD));
+
 		/* Dest of the packet is the endpoint, so check the dest approval flag. */
-		if (CALI_F_LO || ct_leg_flag(dst_to_src, CALI_CT_LEG_APPROVED) ||
+		if (CALI_F_LO || dst_approved ||
 				(related && ct_leg_flag(src_to_dst, CALI_CT_LEG_APPROVED))) {
 			// Packet was approved by the policy attached to this endpoint.
 			CALI_CT_VERB("Packet approved by this workload's policy.");
