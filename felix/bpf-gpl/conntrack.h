@@ -1084,8 +1084,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 	} else if (CALI_F_FROM_HOST) {
 		/* A HEP approval of a workload leg does not count. TCP SYNs and unseen host traffic skip it. */
 		bool dst_approved = ct_leg_flag(dst_to_src, CALI_CT_LEG_APPROVED) &&
-			(!CALI_F_TO_WEP || tcp_header || !skb_seen(ctx->skb) ||
-			 ct_leg_flag(dst_to_src, CALI_CT_LEG_WORKLOAD));
+			(!CALI_F_TO_WEP || tcp_header || ct_leg_flag(dst_to_src, CALI_CT_LEG_WORKLOAD) ||
+			 (!skb_seen(ctx->skb) && rt_addr_is_local_host(&ctx->state->ip_src)));
 
 		/* Dest of the packet is the endpoint, so check the dest approval flag. */
 		if (CALI_F_LO || dst_approved ||
