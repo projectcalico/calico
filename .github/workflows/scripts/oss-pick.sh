@@ -388,7 +388,7 @@ do_apply() {
   git config --global user.email "oss-pick-bot@users.noreply.github.com"
 
   # Idempotency + stranded-branch cleanup, now with the write token.
-  local prnum
+  local prnum stranded=""
   if git ls-remote --exit-code --heads "$tgt_url" "$BRANCH_NAME" >/dev/null 2>&1; then
     if ! prnum="$(gh pr list -R "$TARGET_REPO" --head "$BRANCH_NAME" --state all --json number --jq '.[0].number // empty')"; then
       echo "::error::cannot list PRs for ${BRANCH_NAME} on ${TARGET_REPO}; refusing to touch the branch"; exit 1
@@ -396,8 +396,8 @@ do_apply() {
     if [ -n "$prnum" ]; then
       echo "Branch $BRANCH_NAME already has PR #${prnum}; nothing to do."; emit "pr_url="; return 0
     fi
-    echo "::warning::Branch $BRANCH_NAME exists with no PR (stranded); deleting."
-    git push "$tgt_url" --delete "$BRANCH_NAME" || true
+    echo "::warning::Branch $BRANCH_NAME exists with no PR (stranded); overwriting it."
+    stranded=1
   fi
 
   git clone --depth=1 --branch "$TARGET_BRANCH" "$tgt_url" .
@@ -411,7 +411,9 @@ do_apply() {
 
   build_pr_text
 
-  git push "$tgt_url" "HEAD:${BRANCH_NAME}"
+  # A stranded branch has no PR, so only this bot uses it.
+  git push ${stranded:+--force} "$tgt_url" "HEAD:${BRANCH_NAME}"
+  emit "pushed=$BRANCH_NAME"
 
   local IFS=','; local l
   for l in $PR_LABELS_OUT; do
