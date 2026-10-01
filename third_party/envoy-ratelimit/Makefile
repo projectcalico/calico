@@ -7,7 +7,7 @@ BUILD_IMAGES ?= $(ENVOY_RATELIMIT_IMAGE)
 
 # For updating this version please see
 # operator/docs/common_tasks.md, "Updating the bundled version of Envoy Gateway".
-ENVOY_RATELIMIT_VERSION=8fe6ea421048bdb2a8873d5f676b3f6eac76a997
+ENVOY_RATELIMIT_VERSION=63c7e9cc9be81037bf65d515d6b84863f56674d2
 ENVOY_RATELIMIT_REPO=https://github.com/envoyproxy/ratelimit.git
 
 ##############################################################################
