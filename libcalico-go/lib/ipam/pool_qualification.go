@@ -33,7 +33,8 @@ type poolRequest struct {
 	requested []net.IPNet
 
 	// host names the requester in errors. The node's own name can be empty, depending on the datastore.
-	host         string
+	host string
+
 	node         internalapi.Node
 	namespace    *corev1.Namespace
 	use          v3.IPPoolAllowedUse
@@ -105,7 +106,7 @@ func qualifyPools(req poolRequest, enabledPools []v3.IPPool) (poolQualification,
 		return poolQualification{}, ErrNoQualifiedPool
 	}
 
-	var q poolQualification
+	var qualification poolQualification
 	if len(req.requested) > 0 {
 		for _, rp := range req.requested {
 			cidr := rp.Network()
@@ -113,7 +114,7 @@ func qualifyPools(req poolRequest, enabledPools []v3.IPPool) (poolQualification,
 			if !ok {
 				return poolQualification{}, fmt.Errorf("the given pool (%s) does not exist, or is not enabled", cidr.String())
 			}
-			q.add(pool, useRejection(pool, req.use))
+			qualification.add(pool, useRejection(pool, req.use))
 		}
 	} else {
 		// Unlike named pools, automatic selection doesn't check each pool's block size against maxPrefixLen.
@@ -125,17 +126,17 @@ func qualifyPools(req poolRequest, enabledPools []v3.IPPool) (poolQualification,
 			if reason == "" {
 				reason = useRejection(pool, req.use)
 			}
-			q.add(pool, reason)
+			qualification.add(pool, reason)
 		}
 	}
 
-	if len(q.selecting()) == 0 {
+	if len(qualification.selecting()) == 0 {
 		return poolQualification{}, fmt.Errorf("no configured Calico pools for node %s", req.host)
 	}
-	if len(q.qualified()) == 0 {
+	if len(qualification.qualified()) == 0 {
 		return poolQualification{}, fmt.Errorf("%w, no pools match the required use (%v)", ErrNoQualifiedPool, req.use)
 	}
-	return q, nil
+	return qualification, nil
 }
 
 // selectionRejection applies the rules that only automatic selection uses.
@@ -179,6 +180,5 @@ func qualifyPoolForIP(ip net.IP, pool v3.IPPool, use v3.IPPoolAllowedUse) error 
 	if use == "" || slices.Contains(pool.Spec.AllowedUses, use) {
 		return nil
 	}
-	return fmt.Errorf("IP address %s is in IP pool %q, which is not allowed for use %q (allowedUses: %v)",
-		ip, pool.Name, use, pool.Spec.AllowedUses)
+	return fmt.Errorf("IP address %s is in IP pool %q, which is not allowed for use %q (allowedUses: %v)", ip, pool.Name, use, pool.Spec.AllowedUses)
 }

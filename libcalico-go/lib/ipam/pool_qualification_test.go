@@ -187,6 +187,11 @@ var _ = DescribeTable("qualifyPools",
 		requested: []string{qualV4Pool1},
 		err:       "the given pool (10.0.0.0/24) does not exist, or is not enabled",
 	}),
+	Entry("a disabled pool named alongside an enabled one", qualificationCase{
+		pools:     []testPool{{cidr: qualV4Pool2}},
+		requested: []string{qualV4Pool2, qualV4Pool1},
+		err:       "the given pool (10.0.0.0/24) does not exist, or is not enabled",
+	}),
 	Entry("pool1 disabled, pool2 named", qualificationCase{
 		pools:     []testPool{{cidr: qualV4Pool2}},
 		requested: []string{qualV4Pool2},
@@ -236,7 +241,10 @@ var _ = DescribeTable("qualifyPools",
 			{cidr: "10.0.0.0/24", namespaceSelector: "environment == 'production' && tier == 'frontend'"},
 			{cidr: "10.1.0.0/24", namespaceSelector: "environment == 'production' && tier == 'backend'"},
 		},
-		namespace: testNamespace(map[string]string{"environment": "production", "tier": "frontend"}),
+		namespace: testNamespace(map[string]string{
+			"environment": "production",
+			"tier":        "frontend",
+		}),
 		qualified: []string{"10.0.0.0/24"},
 		selecting: []string{"10.0.0.0/24"},
 	}),
@@ -320,18 +328,12 @@ var _ = Describe("qualifyPools errors", func() {
 	node := internalapi.Node{}
 
 	It("returns ErrNoQualifiedPool when no pool's block size fits", func() {
-		_, err := qualifyPools(
-			poolRequest{node: node, use: v3.IPPoolAllowedUseWorkload, maxPrefixLen: 29},
-			buildPools([]testPool{{cidr: qualV4Pool1, blockSize: 31}}),
-		)
+		_, err := qualifyPools(poolRequest{node: node, use: v3.IPPoolAllowedUseWorkload, maxPrefixLen: 29}, buildPools([]testPool{{cidr: qualV4Pool1, blockSize: 31}}))
 		Expect(err).To(Equal(ErrNoQualifiedPool))
 	})
 
 	It("wraps ErrNoQualifiedPool when no pool allows the use", func() {
-		_, err := qualifyPools(
-			poolRequest{node: node, use: v3.IPPoolAllowedUseLoadBalancer, maxPrefixLen: 32},
-			buildPools([]testPool{{cidr: qualV4Pool1}}),
-		)
+		_, err := qualifyPools(poolRequest{node: node, use: v3.IPPoolAllowedUseLoadBalancer, maxPrefixLen: 32}, buildPools([]testPool{{cidr: qualV4Pool1}}))
 		Expect(err).To(MatchError(ErrNoQualifiedPool))
 	})
 
@@ -364,9 +366,5 @@ var _ = DescribeTable("qualifyPoolForIP",
 	},
 	Entry("use is allowed", v3.IPPoolAllowedUseWorkload, ""),
 	Entry("no use declared", v3.IPPoolAllowedUse(""), ""),
-	Entry(
-		"use isn't allowed",
-		v3.IPPoolAllowedUseTunnel,
-		`IP address 10.0.0.1 is in IP pool "10.0.0.0/24", which is not allowed for use "Tunnel" (allowedUses: [Workload])`,
-	),
+	Entry("use isn't allowed", v3.IPPoolAllowedUseTunnel, `IP address 10.0.0.1 is in IP pool "10.0.0.0/24", which is not allowed for use "Tunnel" (allowedUses: [Workload])`),
 )
