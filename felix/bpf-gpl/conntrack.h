@@ -268,7 +268,7 @@ create:
 					ct_ctx->allow_return);
 		} else {
 			/* dst is to the EP, policy approved this side */
-			d2s_flags |= CALI_CT_LEG_APPROVED;
+			d2s_flags |= CALI_CT_LEG_APPROVED | (CALI_F_TO_WEP ? CALI_CT_LEG_WORKLOAD : 0);
 			CALI_DEBUG("CT-ALL approved dest side - to EP");
 		}
 	}
@@ -1082,8 +1082,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			result.rc = (tcp_header && !syn) ? CALI_CT_INVALID : CALI_CT_NEW;
 		}
 	} else if (CALI_F_FROM_HOST) {
+		/* A HEP approval of a workload leg does not count. TCP SYNs and unseen host traffic skip it. */
+		bool dst_approved = ct_leg_flag(dst_to_src, CALI_CT_LEG_APPROVED) &&
+			(!CALI_F_TO_WEP || tcp_header || ct_leg_flag(dst_to_src, CALI_CT_LEG_WORKLOAD) ||
+			 (!skb_seen(ctx->skb) && rt_addr_is_local_host(&ctx->state->ip_src)));
+
 		/* Dest of the packet is the endpoint, so check the dest approval flag. */
-		if (CALI_F_LO || ct_leg_flag(dst_to_src, CALI_CT_LEG_APPROVED) ||
+		if (CALI_F_LO || dst_approved ||
 				(related && ct_leg_flag(src_to_dst, CALI_CT_LEG_APPROVED))) {
 			// Packet was approved by the policy attached to this endpoint.
 			CALI_CT_VERB("Packet approved by this workload's policy.");
