@@ -66,15 +66,20 @@ function import_linux_images() {
 }
 
 function import_windows_images() {
-  make -C "${CALICO_HOME}/node" image-windows WINDOWS_IMAGE=node-windows
-  make -C "${CALICO_HOME}/cni-plugin" image-windows WINDOWS_IMAGE=cni-windows
-
   if [[ ${WINDOWS_SERVER_VERSION} == "windows-2022" ]]; then
     CALICO_NODE_IMAGE="node-windows-${GIT_VERSION}-ltsc2022.tar"
     CALICO_CNI_IMAGE="cni-windows-${GIT_VERSION}-ltsc2022.tar"
   else # windows-2019
     CALICO_NODE_IMAGE="node-windows-${GIT_VERSION}-ltsc2019.tar"
     CALICO_CNI_IMAGE="cni-windows-${GIT_VERSION}-ltsc2019.tar"
+  fi
+
+  # CI can supply the tarballs from an earlier build of the same commit.
+  if [[ ! -f "${CALICO_HOME}/node/dist/windows/${CALICO_NODE_IMAGE}" ]]; then
+    make -C "${CALICO_HOME}/node" image-windows WINDOWS_IMAGE=node-windows
+  fi
+  if [[ ! -f "${CALICO_HOME}/cni-plugin/dist/windows/${CALICO_CNI_IMAGE}" ]]; then
+    make -C "${CALICO_HOME}/cni-plugin" image-windows WINDOWS_IMAGE=cni-windows
   fi
 
   ${ASO_DIR}/scp-to-windows.sh 0 "${CALICO_HOME}/node/dist/windows/${CALICO_NODE_IMAGE}" 'c:\calico-node-windows.tar'

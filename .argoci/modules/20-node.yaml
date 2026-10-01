@@ -46,14 +46,3 @@ steps:
       .argoci/scripts/load-nft-rpms.sh "${ARCH}"
       cd node
       make image ARCH=$ARCH
-
-  # Nothing else in CI builds these, so a break surfaces here or at release.
-  - name: node-build-windows
-    depends: [check-go]
-    requests: {cpu: 2000m, memory: 4Gi}
-    services:
-      - docker
-    commands: |
-      cd node
-      make build-windows-archive
-      make image-windows

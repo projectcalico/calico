@@ -12,7 +12,7 @@ defaults:
 
 steps:
   - name: e2e-gcp-kubeadm-local-binary
-    depends: [check-go]
+    depends: [check-go, build-e2e-binaries]
     requests: {cpu: 1250m, memory: 6Gi}
     # `bz destroy` alone takes about four minutes, the whole of the default.
     terminationGracePeriodSeconds: 600
@@ -60,6 +60,8 @@ steps:
     prologue: |
       source .argoci/scripts/global_prologue.sh
     commands: |
+      .argoci/scripts/load-e2e-binaries
+      export E2E_PREBUILT=true
       .argoci/scripts/body_standard.sh
     epilogue: |
       source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"

@@ -15,7 +15,8 @@ steps:
   - name: felix-build
     depends: [build-calico-image, check-go]
     timeout: 40m
-    requests: {cpu: 4000m, memory: 8Gi}
+    jobSize: large
+    requests: {cpu: 7000m, memory: 10Gi}
     services:
       - docker
     secretBundles:
@@ -192,17 +193,18 @@ steps:
       source felix/.semaphore/fv-epilogue
 
   - name: felix-build-windows
-    depends: [check-go]
-    requests: {cpu: 4250m, memory: 5.5Gi}
+    jobSize: large
+    requests: {cpu: 7000m, memory: 8Gi}
     services:
       - docker
     commands: |
       cd felix
       make bin/calico-felix.exe fv/win-fv.exe
+      artifact push workflow fv/win-fv.exe
 
   # Kubeadm on Azure VMs, installed from this commit's images.
   - name: felix-windows-fv
-    depends: [felix-build-windows, build-calico-image, build-node-image]
+    depends: [felix-build-windows, build-calico-image, build-node-image, build-operator-image, build-windows-images]
     timeout: 1h30m
     requests: {cpu: 3000m, memory: 6Gi}
     services:
@@ -232,6 +234,15 @@ steps:
       export REPORT_DIR="${CI_HOME}/${CI_GIT_DIR}/process/testing/winfv-felix/report"
       az login --service-principal -u "$AZ_SP_ID" -p "$AZ_SP_PASSWORD" --tenant "$AZ_TENANT_ID" --output none
       .argoci/scripts/load-cached-images calico node
+      # Touched: make would rebuild anything older than the checkout.
+      artifact pull workflow win-fv.exe --destination felix/fv/win-fv.exe
+      touch felix/fv/win-fv.exe
+      ( cd /tmp && artifact pull workflow operator-image-dockerio.tar.zst )
+      zstd -dc /tmp/operator-image-dockerio.tar.zst | docker load
+      export OPERATOR_PREBUILT=true
+      ( cd /tmp && artifact pull workflow windows-images.tar.zst )
+      tar --use-compress-program="zstd -d" -m -xf /tmp/windows-images.tar.zst
+      rm -f /tmp/operator-image-dockerio.tar.zst /tmp/windows-images.tar.zst
       # The driver can die before writing its own logs.
       set -o pipefail
       ./process/testing/winfv-felix/run-win-fv.sh 2>&1 | tee /tmp/winfv-console.log

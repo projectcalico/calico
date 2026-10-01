@@ -174,7 +174,8 @@ steps:
   - name: build-calico-image
     services: [docker]
     timeout: 1h
-    requests: {cpu: 5500m, memory: 5.5Gi}
+    jobSize: large
+    requests: {cpu: 7000m, memory: 8Gi}
     changes:
       dependsOn: [cmd]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
@@ -293,7 +294,8 @@ steps:
   - name: build-operator-image
     services: [docker]
     timeout: 1h
-    requests: {cpu: 2750m, memory: 5.25Gi}
+    jobSize: large
+    requests: {cpu: 7000m, memory: 8Gi}
     changes:
       dependsOn: [operator]
       in:
@@ -304,6 +306,30 @@ steps:
       docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
       zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/operator-image.tar
       artifact push workflow /tmp/operator-image.tar.zst
+      # Windows FV installs from docker.io refs rather than the kind registry.
+      DEV_IMAGE_REGISTRY=docker.io DEV_IMAGE_PATH=calico DEV_IMAGE_TAG=test-build \
+        hack/test/kind/infra/build-operator.sh
+      docker save calico/operator:test-build -o /tmp/operator-image-dockerio.tar
+      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/operator-image-dockerio.tar
+      artifact push workflow /tmp/operator-image-dockerio.tar.zst
+
+  # Windows FV installs these rather than building its own. Nothing else builds
+  # them, so this is also where a break in them shows up.
+  - name: build-windows-images
+    services: [docker]
+    timeout: 1h
+    jobSize: large
+    requests: {cpu: 7000m, memory: 8Gi}
+    changes:
+      dependsOn: [node, cni-plugin]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    commands: |
+      make -C node build-windows-archive
+      make -C node image-windows
+      make -C cni-plugin image-windows
+      tar --use-compress-program="zstd -3" -cf /tmp/windows-images.tar.zst \
+        node/dist/windows/*.tar cni-plugin/dist/windows/*.tar
+      artifact push workflow /tmp/windows-images.tar.zst
 
   # One tarball, since every kind lane wants all four.
   - name: build-third-party-images
@@ -335,7 +361,8 @@ steps:
   - name: build-e2e-binaries
     services: [docker]
     timeout: 1h
-    requests: {cpu: 5500m, memory: 6Gi}
+    jobSize: large
+    requests: {cpu: 7000m, memory: 8Gi}
     depends: [build-calico-image]
     changes:
       dependsOn: [e2e]
@@ -345,7 +372,8 @@ steps:
       tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
       make -C e2e build
       make bin/ginkgo
-      tar --use-compress-program="zstd -3" -cf /tmp/e2e-binaries.tar.zst e2e/bin bin/ginkgo
+      make -C e2e/images/rapidclient build
+      tar --use-compress-program="zstd -3" -cf /tmp/e2e-binaries.tar.zst e2e/bin bin/ginkgo e2e/images/rapidclient/bin
       artifact push workflow /tmp/e2e-binaries.tar.zst
 
   # The nightly repeats the CI module list; this catches the two drifting.
