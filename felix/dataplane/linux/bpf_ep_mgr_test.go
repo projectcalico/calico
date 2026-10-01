@@ -1336,6 +1336,55 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 	})
 
+	// Per-workload globals reach the dataplane only when the preamble is
+	// attached, so a ready workload must be re-attached when one changes.
+	DescribeTable("should re-attach a ready workload when a preamble global changes",
+		func(changed *proto.WorkloadEndpoint) {
+			newBpfEpMgr(true)
+			// A qdisc that already exists keeps the workload ready across passes.
+			dp.ensureQdiscFn = func(string) (bool, error) { return true, nil }
+			sendWEP := func(ep *proto.WorkloadEndpoint) {
+				ep.Name = "cali12345"
+				bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+					Id: &proto.WorkloadEndpointID{
+						OrchestratorId: "k8s",
+						WorkloadId:     ep.Name,
+						EndpointId:     ep.Name,
+					},
+					Endpoint: ep,
+				})
+				Expect(bpfEpMgr.CompleteDeferredWork()).To(Succeed())
+			}
+			expectAttaches := func(n int) {
+				ExpectWithOffset(1, dp.numOfAttaches("cali12345:ingress")).To(Equal(n))
+				ExpectWithOffset(1, dp.numOfAttaches("cali12345:egress")).To(Equal(n))
+			}
+
+			sendWEP(&proto.WorkloadEndpoint{})
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			expectAttaches(1)
+
+			sendWEP(&proto.WorkloadEndpoint{})
+			expectAttaches(1)
+
+			sendWEP(changed)
+			expectAttaches(2)
+
+			sendWEP(googleproto.Clone(changed).(*proto.WorkloadEndpoint))
+			expectAttaches(2)
+		},
+		Entry("ingress packet rate", &proto.WorkloadEndpoint{
+			QosControls: &proto.QoSControls{IngressPacketRate: 100, IngressPacketBurst: 10},
+		}),
+		Entry("egress connection limit", &proto.WorkloadEndpoint{
+			QosControls: &proto.QoSControls{EgressMaxConnections: 5},
+		}),
+		Entry("DSCP", &proto.WorkloadEndpoint{
+			QosPolicies: []*proto.QoSPolicy{{Dscp: 10}},
+		}),
+		Entry("istio ambient", &proto.WorkloadEndpoint{IsIstioAmbient: true}),
+	)
+
 	Context("with workload endpoints", func() {
 		JustBeforeEach(func() {
 			newBpfEpMgr(true)
