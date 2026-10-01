@@ -189,7 +189,7 @@ jobs:
             --allowedTools "Read,Grep,Glob"
             --allowedTools "Edit(/${{ github.workspace }}/**),Write(/${{ github.workspace }}/**),Edit(//tmp/**),Write(//tmp/**)"
             --allowedTools "Bash(git status),Bash(git diff)"
-            --disallowedTools "Edit(/${{ github.workspace }}/.git/**),Write(/${{ github.workspace }}/.git/**),Read(//proc/**)"
+            --disallowedTools "Edit(/${{ github.workspace }}/.git/**),Write(/${{ github.workspace }}/.git/**),Read(/${{ github.workspace }}/.git/**),Read(//proc/**)"
             --add-dir /tmp
             --max-turns 60
             --model claude-sonnet-5
