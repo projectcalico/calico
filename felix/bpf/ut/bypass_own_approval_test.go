@@ -122,52 +122,52 @@ func TestLocalWorkloadIgnoresHEPApproval(t *testing.T) {
 	srcRT := routes.NewKey(srcV4CIDR).AsBytes()
 	dstRT := routes.NewKey(dstV4CIDR).AsBytes()
 
-	for _, c := range []struct {
-		name     string
-		srcRoute []byte
-		srcLeg   conntrack.Leg
-		mark     uint32
-		canDeny  bool
-		opts     []testOption
-	}{
-		// Sent on by the source workload's program, which marked it seen.
-		{"from a local workload", localWEP, conntrack.Leg{Approved: true, Workload: true, Opener: true},
-			tcdefs.MarkSeen, true, nil},
-		// Sent by a host process: no earlier program, so no mark.
-		{"from a host process", localHost, conntrack.Leg{Opener: true}, 0, false, []testOption{withFromHost()}},
-	} {
-		t.Run(c.name+", policy denies", func(t *testing.T) {
-			if !c.canDeny {
-				t.Skip("host traffic to a local workload is always allowed")
-			}
-			resetRTMap(rtMap)
-			Expect(rtMap.Update(srcRT, c.srcRoute)).NotTo(HaveOccurred())
-			Expect(rtMap.Update(dstRT, localWEP)).NotTo(HaveOccurred())
-			plantHEPApprovedUDPEntry(ctKey, c.srcLeg, false)
+	wepLeg := conntrack.Leg{Approved: true, Workload: true, Opener: true}
 
-			skbMark = c.mark
-			runBpfTest(t, "calico_to_workload_ep", &denyAllRulesWorkloads, func(bpfrun bpfProgRunFn) {
-				res, err := bpfrun(pktBytes)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
-			}, c.opts...)
-		})
-
-		t.Run(c.name+", policy allows and records the workload approval", func(t *testing.T) {
-			resetRTMap(rtMap)
-			Expect(rtMap.Update(srcRT, c.srcRoute)).NotTo(HaveOccurred())
-			Expect(rtMap.Update(dstRT, localWEP)).NotTo(HaveOccurred())
-			plantHEPApprovedUDPEntry(ctKey, c.srcLeg, false)
-
-			skbMark = c.mark
-			runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
-				res, err := bpfrun(pktBytes)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
-				d := ctAuditLoadEntry(ctKey).Data()
-				Expect(d.B2A.Approved).To(BeTrue())
-				Expect(d.B2A.Workload).To(BeTrue())
-			}, c.opts...)
-		})
+	setup := func(srcRoute []byte, srcLeg conntrack.Leg) {
+		resetRTMap(rtMap)
+		Expect(rtMap.Update(srcRT, srcRoute)).NotTo(HaveOccurred())
+		Expect(rtMap.Update(dstRT, localWEP)).NotTo(HaveOccurred())
+		plantHEPApprovedUDPEntry(ctKey, srcLeg, false)
 	}
+
+	t.Run("from a local workload, policy denies", func(t *testing.T) {
+		setup(localWEP, wepLeg)
+
+		skbMark = tcdefs.MarkSeen
+		runBpfTest(t, "calico_to_workload_ep", &denyAllRulesWorkloads, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+		})
+	})
+
+	t.Run("from a local workload, policy allows and records the workload approval", func(t *testing.T) {
+		setup(localWEP, wepLeg)
+
+		skbMark = tcdefs.MarkSeen
+		runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
+			d := ctAuditLoadEntry(ctKey).Data()
+			Expect(d.B2A.Approved).To(BeTrue())
+			Expect(d.B2A.Workload).To(BeTrue())
+		})
+	})
+
+	// Unseen host traffic to a local workload is always allowed, so the entry is used as is.
+	t.Run("from a host process, accepted on the existing entry", func(t *testing.T) {
+		setup(localHost, conntrack.Leg{Opener: true})
+
+		skbMark = 0
+		runBpfTest(t, "calico_to_workload_ep", &denyAllRulesWorkloads, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
+			d := ctAuditLoadEntry(ctKey).Data()
+			Expect(d.B2A.Approved).To(BeTrue())
+			Expect(d.B2A.Workload).To(BeFalse())
+		}, withFromHost())
+	})
 }
