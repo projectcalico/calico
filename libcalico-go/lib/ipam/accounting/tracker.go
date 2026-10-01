@@ -320,12 +320,38 @@ func (t *Tracker) Allocations(name string) []Allocation {
 	return assigned(pool.blocks.inOrder())
 }
 
+// PoolBlocks is every block the pool owns, in address order. Nil when no pool of that name was added.
+func (t *Tracker) PoolBlocks(name string) []*model.AllocationBlock {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	pool, ok := t.pools[name]
+	if !ok {
+		return nil
+	}
+	return blocksOf(pool.blocks)
+}
+
 // NoPoolBlocks is every block no pool claimed, in address order.
 func (t *Tracker) NoPoolBlocks() []*model.AllocationBlock {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+	return blocksOf(t.blocksWithNoPool)
+}
+
+// BlockPool names the pool that owns the block. False when the block is unknown or no pool claims it.
+func (t *Tracker) BlockPool(cidr cnet.IPNet) (string, bool) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	block, ok := t.blocks[cidr.String()]
+	if !ok || block.pool == nil {
+		return "", false
+	}
+	return block.pool.ipPool.Name, true
+}
+
+func blocksOf(s *blockSet) []*model.AllocationBlock {
 	var out []*model.AllocationBlock
-	for _, block := range t.blocksWithNoPool.inOrder() {
+	for _, block := range s.inOrder() {
 		out = append(out, block.allocationBlock)
 	}
 	return out
