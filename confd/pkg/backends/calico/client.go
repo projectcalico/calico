@@ -751,29 +751,8 @@ func (c *client) updatePeersV1() {
 		}
 	}
 
-	// Now reconcile against the cache.
-	for k, value := range c.peeringCache {
-		newValue, ok := peersV1[k]
-		if !ok {
-			// This cache entry should be deleted.
-			delete(c.peeringCache, k)
-			c.keyUpdated(k)
-		} else if newValue != value {
-			// This cache entry should be updated.
-			c.peeringCache[k] = newValue
-			c.keyUpdated(k)
-			delete(peersV1, k)
-		} else {
-			// Value in cache is already correct.  Delete from peersV1 so that we
-			// don't generate a spurious keyUpdated for this key.
-			delete(peersV1, k)
-		}
-	}
-	// peersV1 now only contains peerings to add to the cache.
-	for k, newValue := range peersV1 {
-		c.peeringCache[k] = newValue
-		c.keyUpdated(k)
-	}
+	// Store the generated peer data so that `GetBirdBGPConfig` can read it.
+	c.peeringCache = peersV1
 }
 
 func automaticReversePeering(v3res *apiv3.BGPPeer) bool {
@@ -997,15 +976,14 @@ func (c *client) onUpdates(updates []api.Update, triggered bool) {
 
 		// confd now receives Nodes, BGPPeers and BGPConfig as v3 resources.
 		//
-		// For each Node, we save off the node's labels, then convert to v1 so that
-		// the same etcd key/value pairs appear as before (so that existing confd
-		// templates will continue to work).
+		// For each Node, we save off the node's labels, then convert to v1 key/value pairs
+		// in the confd cache.
 		//
 		// BGPPeers are saved off and then the whole set is processed to generate a
-		// corresponding set of v1 BGPPeers, bearing in mind (a) the possible use of
-		// v3 BGPPeer selector fields, and (b) that we fill in any reverse peerings
-		// that are needed for symmetry between Calico nodes.  Each v1 BGPPeer then
-		// generates etcd key/value pairs as expected by existing confd templates.
+		// corresponding set of v1 BGPPeers, bearing in mind (a) the possible use of v3
+		// BGPPeer selector fields, and (b) that we fill in any reverse peerings that are
+		// needed for symmetry between Calico nodes.  GetBirdBGPConfig then reads those v1
+		// BGPPeers when building its unified list of peers.
 		//
 		// For BGP configuration recalculate peers when we receive updates with AS number.
 		v3key, ok := u.Key.(model.ResourceKey)
@@ -1153,6 +1131,8 @@ func (c *client) onUpdates(updates []api.Update, triggered bool) {
 		if c.secretWatcher != nil {
 			c.secretWatcher.SweepStale()
 		}
+
+		c.keyUpdated("/calico/bgpconfig")
 	}
 
 	// If we need to update Service advertisement based on the updates, then do so.
@@ -1872,14 +1852,17 @@ func (c *client) keyUpdated(key string) {
 		if rev != c.cacheRevision && strings.HasPrefix(key, prefix) {
 			log.Debugf("Updating prefix to rev %d", c.cacheRevision)
 			c.revisionsByPrefix[prefix] = c.cacheRevision
-
-			// If this is a change to either the global log level, or the per-node
-			// log level, then configure confd's log level to match.
-			if strings.HasSuffix(key, "loglevel") {
-				log.WithField("key", key).Info("Potential log level configuration change on key")
-				c.updateLogLevel()
-			}
 		}
+	}
+
+	// If this is a change to either the global log level, or the per-node log level, then
+	// configure confd's log level to match.  This must not depend on the prefix loop above:
+	// confd's own log level matters whether or not any template watches a prefix covering the
+	// log level keys, and whether or not an earlier key in the same batch has already bumped
+	// the revision of such a prefix.
+	if strings.HasSuffix(key, "loglevel") {
+		log.WithField("key", key).Info("Potential log level configuration change on key")
+		c.updateLogLevel()
 	}
 }
 
