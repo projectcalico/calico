@@ -19,11 +19,12 @@ steps:
         - ^metadata\.mk$
         - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       make yaml-lint
 
+  # go vet fans out across every package, so it scales with the cores it gets.
   - name: check-go
-    requests: {cpu: 6250m, memory: 7.5Gi}
+    jobSize: large
+    requests: {cpu: 14000m, memory: 16Gi}
     services: [docker]
     changes:
       in:
@@ -37,16 +38,13 @@ steps:
         - ^\.argoci/depstree\.yaml$
         - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       make check-ginkgo-v2
       make check-go-mod
       make verify-go-mods
       make gen-deps-files
-      # Generated from the same import graph as deps.txt, so it goes stale here too.
-      make gen-semaphore-yaml
       make go-vet
-      # A merge has no PR to diff against, so it reformats everything.
-      if [ -n "$CI_GIT_PR_NUMBER" ]; then make fix-changed; else make fix-all; fi
+      # A cron or tag has no range to diff against, so it reformats everything.
+      if [ "${CI_GIT_REF_TYPE}" = PR ] || [ "${CI_GIT_REF_TYPE}" = MERGE ]; then make fix-changed; else make fix-all; fi
       make check-dirty
 
   - name: check-python
@@ -60,7 +58,6 @@ steps:
         - ^metadata\.mk$
         - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       make -C networking-calico fmtpy
       make -C networking-calico flake8
       make check-dirty
@@ -96,7 +93,6 @@ steps:
         - ^metadata\.mk$
         - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       make protobuf fix-changed
       make check-dirty
 
@@ -124,7 +120,6 @@ steps:
         - ^metadata\.mk$
         - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       make -C lib gen-files
       make -C api gen-files
       make -C libcalico-go gen-files
@@ -151,7 +146,6 @@ steps:
         - ^metadata\.mk$
         - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       make test-charts
 
   # Regenerating the patches must be a no-op. metadata.mk is in the trigger
@@ -174,7 +168,6 @@ steps:
         - (^|/)README\.md$
         - (^|/)LICENSE$
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       make check-thirdparty-dep-patches
       make check-dirty
 
@@ -186,7 +179,6 @@ steps:
       dependsOn: [cmd]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       make -C cmd/calico image
       # Shipped for the Felix FVs, which would otherwise build them per lane.
       make -C cmd/calico build-cgo build-race
@@ -224,7 +216,6 @@ steps:
         - '^hack/rpms/nftables/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       mkdir -p logs
       export BUILD_LOG="logs/build-nft-rpms-${ARCH}.log"
       .argoci/scripts/build-nft-rpms.sh "${ARCH}"
@@ -274,7 +265,6 @@ steps:
         - '^node/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
       # does not go back to the registry for it.
       .argoci/scripts/load-nft-rpms.sh amd64
@@ -293,7 +283,6 @@ steps:
         - '^whisker/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       make -C whisker image
       docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
       zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/whisker-image.tar
@@ -311,7 +300,6 @@ steps:
         - '^operator/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       make kind-operator-image
       docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
       zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/operator-image.tar
@@ -328,7 +316,6 @@ steps:
         - '^third_party/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       make -C third_party/envoy-gateway image
       make -C third_party/envoy-proxy image
       make -C third_party/envoy-ratelimit image
@@ -354,7 +341,6 @@ steps:
       dependsOn: [e2e]
       in: ['^\.argoci/modules/10-prerequisites\.yaml$']
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       ( cd /tmp && artifact pull workflow libbpf-amd64.tar.zst )
       tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
       make -C e2e build

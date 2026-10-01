@@ -4,7 +4,8 @@ set -eo pipefail
 pipelines_dir="${1:-.argoci/cron}"
 scripts_dir="${2:-.argoci/scripts}"
 
-wget -q https://github.com/mikefarah/yq/releases/download/v4.11.0/yq_linux_amd64 -O yq && chmod +x yq
+fetch_file="$(git rev-parse --show-toplevel)/hack/fetch-file"
+"$fetch_file" https://github.com/mikefarah/yq/releases/download/v4.11.0/yq_linux_amd64 yq && chmod +x yq
 echo [INFO] Checking pipeline file syntax
 FAILED="false"
 for file in "$pipelines_dir"/*
@@ -23,7 +24,7 @@ if [ $FAILED = "true" ]; then
 fi
 
 echo [INFO] Checking *.sh file syntax
-wget -q https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz -O shellcheck.tar.xz
+"$fetch_file" https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz shellcheck.tar.xz
 tar -xf shellcheck.tar.xz
 chmod +x shellcheck-v0.11.0/shellcheck
 

@@ -272,3 +272,55 @@ func TestParseArgoModuleKeepsOnlyLanesThatSelectSpecs(t *testing.T) {
 	Expect(lanes[0].Name).To(Equal("runs-the-suite"))
 	Expect(lanes[0].Config).To(Equal("e2e/config/gcp/bpf.yaml"))
 }
+
+const kindModuleFixture = `
+version: condensed-module
+steps:
+  - name: e2e-kind
+    matrix:
+      - name: defaulted
+        env:
+          - name: E2E_TARGET
+            value: e2e-test
+      - name: from-env
+        env:
+          - name: E2E_TARGET
+            value: e2e-test
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/kind/felix-routing.yaml
+      - name: other-binary
+        env:
+          - name: E2E_TARGET
+            value: e2e-test-clusternetworkpolicy
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/kind/felix-routing.yaml
+      - name: hardcoded
+        env:
+          - name: E2E_TARGET
+            value: e2e-test-bpf
+    commands: |
+      make ${E2E_TARGET}
+  - name: manifest-install
+    commands: |
+      make kind-manifest-install-test
+`
+
+// A kind step's make target picks its config, even when a matrix entry names
+// the target, and a step running some other binary is no lane.
+func TestParseArgoModuleResolvesKindTargets(t *testing.T) {
+	RegisterTestingT(t)
+
+	lanes, err := parseArgoModule("20-e2e.yaml", []byte(kindModuleFixture))
+	Expect(err).NotTo(HaveOccurred())
+
+	configs := map[string]string{}
+	for _, l := range lanes {
+		configs[l.Name] = l.Config
+	}
+	Expect(configs).To(Equal(map[string]string{
+		"e2e-kind [defaulted]": "e2e/config/kind/conformance.yaml",
+		"e2e-kind [from-env]":  "e2e/config/kind/felix-routing.yaml",
+		"e2e-kind [hardcoded]": "e2e/config/kind/bpf.yaml",
+		"manifest-install":     "e2e/config/kind/manifest-install.yaml",
+	}))
+}

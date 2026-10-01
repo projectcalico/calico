@@ -11,7 +11,6 @@ steps:
     depends: [check-go]
     requests: {cpu: 3750m, memory: 2Gi}
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       cd key-cert-provisioner
       make ci
     epilogue: |

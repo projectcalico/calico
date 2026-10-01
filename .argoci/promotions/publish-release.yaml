@@ -42,7 +42,8 @@ steps:
       - name: VAR_FILE
         value: /root/secrets/release.tfvars
     commands: |
-      if [ -n "${CI_GIT_PR_NUMBER}" ] && [ "${CI_GIT_PR_NUMBER}" != none ]; then
+      # Not the PR number: a merge build, and so its promotion, carries one too.
+      if [ "${CI_GIT_REF_TYPE}" = PR ]; then
         echo "refusing to publish a release from PR #${CI_GIT_PR_NUMBER}" >&2
         exit 1
       fi

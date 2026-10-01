@@ -18,9 +18,6 @@ steps:
     env:
       - name: COMPONENT
         value: node
-      # Same region as the artifact store the VM pulls from.
-      - name: REGION
-        value: us-central1
       # A capacity pool the fleets don't exhaust, and a family that takes a
       # hyperdisk boot disk.
       - name: VM_MACHINE_TYPE
@@ -36,8 +33,8 @@ steps:
       - name: JOB_TIMEOUT_MINUTES
         value: "120"
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       source .argoci/scripts/vm-fleet-setup.sh
+      export REGION="${ARGOCI_GCP_REGION}"
       export VM_PREFIX="argoci-${CI_GIT_REPO_NAME}-${SHORT_WORKFLOW_ID}-kind-"
       mkdir -p artifacts
       cd node

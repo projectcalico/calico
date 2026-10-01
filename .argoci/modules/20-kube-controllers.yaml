@@ -24,7 +24,6 @@ steps:
           - name: CALICO_API_GROUP
             value: projectcalico.org/v3
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       .argoci/scripts/load-cached-images calico
       cd kube-controllers
       make ${KC_TARGET}

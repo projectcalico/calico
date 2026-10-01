@@ -4,8 +4,6 @@
 #
 # Source it rather than running it; it exports.
 
-set -e
-
 if [ -z "${GCE_SERVICE_ACCOUNT_KEY:-}" ]; then
   echo "ERROR: the google-service-account-for-gce bundle is not mounted on this step." >&2
   return 1 2>/dev/null || exit 1
@@ -16,7 +14,7 @@ export CALICO_DIR_NAME="${CI_GIT_DIR}"
 
 # Not the artifact store: the VMs read this with their own service account,
 # which is scoped to this project.
-export GCS_BUILD_CACHE_BUCKET="${GCS_BUILD_CACHE_BUCKET:-calico-transient-build-artifacts-us-central1}"
+export GCS_BUILD_CACHE_BUCKET="${GCS_BUILD_CACHE_BUCKET:-calico-transient-build-artifacts-${ARGOCI_GCP_REGION:?the workflow must define it}}"
 export GCS_WORKFLOW_DIR="gs://${GCS_BUILD_CACHE_BUCKET}/workflow/${CI_WORKFLOW_NAME}"
 
 # The whole directory is copied onto every VM the fleet brings up, so anything
@@ -46,7 +44,8 @@ export SEMAPHORE_WORKFLOW_ID="${CI_WORKFLOW_NAME}"
 export SEMAPHORE_JOB_ID="${CI_STEP_NAME:-unknown}"
 export SEMAPHORE_GIT_BRANCH="${CI_GIT_BRANCH}"
 export SEMAPHORE_GIT_REF_TYPE="${CI_GIT_REF_TYPE}"
-export SEMAPHORE_GIT_PR_NUMBER="${CI_GIT_PR_NUMBER}"
+# Semaphore leaves it empty off a PR, where ArgoCI says "none".
+export SEMAPHORE_GIT_PR_NUMBER="${CI_GIT_PR_NUMBER/#none/}"
 export SEMAPHORE_GIT_SHA="${CI_GIT_SHA}"
 # GCP label values must be lowercase, and the fleet does not sanitise this one.
 CI_JOB_TYPE_LABEL=$(echo "${CI_GIT_REF_TYPE}" | tr '[:upper:]' '[:lower:]')

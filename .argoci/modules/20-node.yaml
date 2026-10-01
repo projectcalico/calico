@@ -20,7 +20,6 @@ steps:
     services:
       - docker
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       cd node
       make ut
     epilogue: |
@@ -42,7 +41,6 @@ steps:
       - name: s390x
         env: [{name: ARCH, value: s390x}]
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
       # does not go back to the registry for it.
       .argoci/scripts/load-nft-rpms.sh "${ARCH}"
@@ -56,7 +54,6 @@ steps:
     services:
       - docker
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       cd node
       make build-windows-archive
       make image-windows

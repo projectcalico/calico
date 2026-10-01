@@ -11,7 +11,6 @@ steps:
     depends: [check-manifests]
     requests: {cpu: 2750m, memory: 2.25Gi}
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       cd api
       make ci
     epilogue: |
@@ -22,7 +21,6 @@ steps:
     depends: [check-manifests]
     requests: {cpu: 3000m, memory: 2.25Gi}
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       cd test
       make ci
     epilogue: |

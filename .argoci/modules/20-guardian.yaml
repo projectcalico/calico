@@ -11,7 +11,6 @@ steps:
     depends: [check-go]
     requests: {cpu: 3000m, memory: 2Gi}
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       cd guardian
       make ci
     epilogue: |

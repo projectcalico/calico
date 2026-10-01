@@ -10,7 +10,6 @@ steps:
   - name: third-party-cni-plugins-ci
     requests: {cpu: 2000m, memory: 1.25Gi}
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       cd third_party/cni-plugins
       make ci
 
@@ -24,6 +23,5 @@ steps:
       - name: s390x
         env: [{name: ARCH, value: s390x}]
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       cd third_party/cni-plugins
       make build ARCH=$ARCH

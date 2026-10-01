@@ -11,6 +11,5 @@ steps:
   - name: check-operator-images
     requests: {cpu: 2250m, memory: 2Gi}
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       cd release
       make check-operator-images

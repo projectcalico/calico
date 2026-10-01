@@ -144,7 +144,7 @@ endif
 
 GO_DIRS=$(shell ./hack/list-go-sources.sh dirs)
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
-DEPS_SOURCES=go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./hack/list-go-sources.sh hack/cmd/deps/*
+DEPS_SOURCES:=go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./hack/list-go-sources.sh hack/cmd/deps/*
 
 # Regenerated with the deps.txt files, from the same import graph.
 ARGOCI_DEPS_FILE=.argoci/depstree.yaml
@@ -408,7 +408,7 @@ e2e-run: bin/ginkgo
 
 # Version from go.mod. Built with whichever of Go and docker the host has: the
 # kind lanes have only docker, the remote-cluster lanes only Go.
-bin/ginkgo:
+bin/ginkgo: go.mod
 	mkdir -p bin
 	@if command -v go >/dev/null 2>&1; then \
 	    set -x; CGO_ENABLED=0 go build -o $@ github.com/onsi/ginkgo/v2/ginkgo; \

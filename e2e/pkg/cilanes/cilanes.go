@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package cilanes resolves the test selection of every e2e lane under
-// .argoci/cron and .semaphore/semaphore.yml.d/blocks.
+// Package cilanes resolves the test selection of every e2e lane CI declares.
 package cilanes
 
 import (
@@ -230,20 +229,52 @@ type argoMatrix struct {
 	Env  []envVar `yaml:"env"`
 }
 
-// parseArgoModule keeps only the steps that select specs. A module is mostly
-// build and lint steps, which would otherwise default their way into lanes.
+// parseArgoModule keeps only the steps that run the e2e binary. A module is
+// mostly build and lint steps, which would otherwise default their way into
+// lanes, and its kind steps can take the make target from a matrix entry.
 func parseArgoModule(source string, data []byte) ([]Lane, error) {
-	lanes, err := parseArgo(source, data)
-	if err != nil {
+	var wf argoWorkflow
+	if err := yaml.Unmarshal(data, &wf); err != nil {
 		return nil, err
 	}
-	kept := lanes[:0]
-	for _, l := range lanes {
-		if l.Config != "" {
-			kept = append(kept, l)
+
+	var lanes []Lane
+	for _, step := range wf.Steps {
+		base := env{}.apply(step.Env)
+		entries := step.Matrix
+		if len(entries) == 0 {
+			entries = []argoMatrix{{}}
+		}
+		baseConfig, _ := moduleStepConfig(base, step.Commands)
+		for _, m := range entries {
+			e := base.apply(m.Env)
+			config, ok := moduleStepConfig(e, step.Commands)
+			if !ok {
+				continue
+			}
+			e[envConfig] = config
+			name := step.Name
+			if m.Name != "" && config != baseConfig {
+				name += " [" + m.Name + "]"
+			}
+			lanes = append(lanes, e.lanes(source, name, step.Commands)...)
 		}
 	}
-	return kept, nil
+	return dedupe(lanes), nil
+}
+
+// moduleStepConfig returns the config a module step runs the e2e binary with,
+// and false when it does not run the binary.
+func moduleStepConfig(e env, commands string) (string, bool) {
+	expanded := os.Expand(commands, func(name string) string { return e[name] })
+	if target, ok := e2eMakeTarget(expanded); ok {
+		config := kindConfig(target, e[envConfig])
+		return config, config != ""
+	}
+	if strings.Contains(commands, provisionedSuiteScript) && e[envConfig] != "" {
+		return e[envConfig], true
+	}
+	return "", false
 }
 
 func parseArgo(source string, data []byte) ([]Lane, error) {

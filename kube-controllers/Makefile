@@ -59,8 +59,14 @@ gen-files:
 ###############################################################################
 # Semaphore and ArgoCI spell the PR ref type differently.
 ifneq ($(filter pull-request PR,$(SEMAPHORE_GIT_REF_TYPE) $(CI_GIT_REF_TYPE)),)
-# Determine the tests to run using the test spider tool, which emits a list of impacted packages.
 SPIDER_COMMIT_RANGE:=$(or $(CI_GIT_COMMIT_RANGE),$(SEMAPHORE_GIT_COMMIT_RANGE))
+# A shallow clone can lack the range's base, and then there is nothing to diff.
+SPIDER_BASE:=$(firstword $(subst .., ,$(subst ..., ,$(SPIDER_COMMIT_RANGE))))
+SPIDER_BASE_PRESENT:=$(if $(SPIDER_BASE),$(shell git rev-parse -q --verify "$(SPIDER_BASE)^{commit}" >/dev/null && echo yes))
+endif
+
+ifneq ($(SPIDER_BASE_PRESENT),)
+# Determine the tests to run using the test spider tool, which emits a list of impacted packages.
 SPIDER_OUTPUT:=$(shell $(DOCKER_GO_BUILD) sh -c 'go run ../hack/test/spider -commit-range=$(SPIDER_COMMIT_RANGE) -filter-dir kube-controllers/')
 ifeq ($(filter __SPIDER_OK__,$(SPIDER_OUTPUT)),)
 $(error test spider did not complete - refusing to run zero tests. See its output above)

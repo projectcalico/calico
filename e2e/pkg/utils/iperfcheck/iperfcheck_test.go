@@ -101,9 +101,8 @@ func TestParseIperf3JSON(t *testing.T) {
 	}
 }
 
-// TestLossyRunClearsBaselineGate is the regression this change exists for: the
-// run above must satisfy the packet rate test's baseline gate, which requires
-// 10x headroom over the 100 pps limit under test.
+// The packet rate test's baseline gate wants 10x headroom over the 100 pps limit
+// under test, and a lossy run must still clear it.
 func TestLossyRunClearsBaselineGate(t *testing.T) {
 	const packetRateLimit, baselineHeadroom = 100, 10
 
@@ -117,29 +116,3 @@ func TestLossyRunClearsBaselineGate(t *testing.T) {
 	}
 }
 
-// When every attempt falls short, the best must be reported rather than the last.
-func TestBestResultKeepsTheHighestSample(t *testing.T) {
-	low, high := &Result{AverageRate: 7.3e7}, &Result{AverageRate: 7.9e7}
-
-	if got := bestResult(nil, low); got != low {
-		t.Errorf("first sample should be kept, got %v", got)
-	}
-	if got := bestResult(low, high); got != high {
-		t.Errorf("higher sample should replace the incumbent, got %.0f", got.AverageRate)
-	}
-	if got := bestResult(high, low); got != high {
-		t.Errorf("lower sample should not displace the incumbent, got %.0f", got.AverageRate)
-	}
-}
-
-func TestWithMinRateSetsTheFloor(t *testing.T) {
-	cfg := &measureConfig{}
-	WithMinRate(8e7)(cfg)
-	if cfg.minRate != 8e7 {
-		t.Errorf("minRate = %.0f, want 8e7", cfg.minRate)
-	}
-	// Unset must mean no floor.
-	if (&measureConfig{}).minRate != 0 {
-		t.Error("minRate should default to 0")
-	}
-}

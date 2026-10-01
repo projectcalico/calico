@@ -11,7 +11,6 @@ steps:
   - name: envoy-proxy-ci
     requests: {cpu: 1750m, memory: 1Gi}
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       cd third_party/envoy-proxy
       make ci
 
@@ -22,6 +21,5 @@ steps:
       - name: arm64
         env: [{name: ARCH, value: arm64}]
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       cd third_party/envoy-proxy
       make image ARCH=$ARCH

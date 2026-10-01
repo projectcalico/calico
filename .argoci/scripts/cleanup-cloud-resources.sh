@@ -152,7 +152,7 @@ delete_global() {
   gcloud --quiet ${kind} delete ${names} --project "${project}"
 }
 
-# One resource group per Windows lane, each named from the commit under test.
+# One resource group per Windows lane, each named from the run.
 sweep_azure() {
   if [ -z "${AZ_SP_ID:-}" ]; then
     echo "[INFO] no Azure credentials; skipping the resource group sweep"
@@ -164,13 +164,15 @@ sweep_azure() {
     return 1
   fi
 
-  local sha=${CI_GIT_SHA:0:4}
-  local pr=${CI_GIT_PR_NUMBER:-merge}
+  if [ -z "${CI_WORKFLOW_NAME:-}" ]; then
+    echo "[INFO] no workflow name; skipping the resource group sweep"
+    return 0
+  fi
   local rc=0 rg
   for rg in \
-      "${prefix}-win-felix-${sha}-pr${pr}-rg" \
-      "${prefix}-win-cni-${sha}-pr${pr}-overlay-rg" \
-      "${prefix}-win-cni-${sha}-pr${pr}-l2bridge-rg"; do
+      "${prefix}-win-felix-${CI_WORKFLOW_NAME}-rg" \
+      "${prefix}-win-cni-${CI_WORKFLOW_NAME}-overlay-rg" \
+      "${prefix}-win-cni-${CI_WORKFLOW_NAME}-l2bridge-rg"; do
     if ! az group show --name "${rg}" >/dev/null 2>&1; then
       continue
     fi

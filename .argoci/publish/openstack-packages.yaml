@@ -36,12 +36,18 @@ steps:
       - name: UBUNTU_REPO_OVERRIDE
         value: ftp.uni-stuttgart.de
     commands: |
+      # Only master's merges publish by themselves; the promotion is for any ref.
+      if [ -z "${CI_PROMOTION:-}" ] && [ "${CI_GIT_BRANCH}" != master ]; then
+        echo "[INFO] not publishing a merge to ${CI_GIT_BRANCH}"
+        exit 0
+      fi
       apt-get update -y && apt-get install -y --no-install-recommends devscripts moreutils patchelf jq
       git config --global user.email marvin@tigera.io
       git config --global user.name Marvin
       gcloud config set project tigera-wp-tcp-redirect
       gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
-      if [ -n "${CI_GIT_PR_NUMBER}" ] && [ "${CI_GIT_PR_NUMBER}" != none ]; then
+      # Not the PR number: a merge build carries one too.
+      if [ "${CI_GIT_REF_TYPE}" = PR ]; then
         make -C release/packaging release-publish VERSION="pr-${CI_GIT_PR_NUMBER}"
       else
         make -C release/packaging release-publish VERSION="${CI_GIT_BRANCH}"

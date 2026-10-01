@@ -15,6 +15,11 @@ defaults:
 steps:
   - name: publish-e2e-images
     requests: {cpu: 2000m, memory: 3Gi}
+    when: GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-'
+    changes:
+      in:
+        - ^e2e/images/
+        - ^\.argoci/publish/e2e-images\.yaml$
     commands: |
       echo "$QUAY_TOKEN" | docker login --username "$QUAY_USER" --password-stdin quay.io
       # What the image is tagged with. Unset, the Makefile falls back to the

@@ -10,7 +10,6 @@ steps:
     services:
       - docker
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       cd third_party/envoy-ratelimit
       make ci
 

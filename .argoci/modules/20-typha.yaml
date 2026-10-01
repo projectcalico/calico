@@ -15,7 +15,6 @@ steps:
     depends: [build-calico-image, check-go]
     commands: |
       sudo apt-get update -y && sudo apt-get install -y make
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       .argoci/scripts/load-cached-images calico
       cd typha
       make ci-no-prereqs
@@ -36,7 +35,6 @@ steps:
         value: "1"
     commands: |
       sudo apt-get update -y && sudo apt-get install -y make
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       make -C cmd/calico clean image
       cd typha
       make fv-no-prereqs

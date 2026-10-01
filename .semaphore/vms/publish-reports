@@ -42,16 +42,8 @@ if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
   if [ -f /tmp/junit.xml ]; then
     ( cd /tmp && artifact push job junit.xml --destination test-results/junit.xml ) || true
   fi
-  # A failed batch always has a -FAILED test log, even when its VM never ran a
-  # test, and then the configure log is the only record of why.
-  for conf in configure-vm-*.log; do
-    [ -e "$conf" ] || continue
-    batch="${conf#configure-vm-}"
-    batch="${batch%.log}"
-    if [ -e "test-${batch}-FAILED.log" ]; then
-      artifact push job "$conf" --destination "failed-batches/${conf}" || true
-    fi
-  done
+  # Semaphore's global epilogue publishes this directory; ArgoCI has none.
+  artifact push job . --destination artifacts || true
   exit 0
 fi
 

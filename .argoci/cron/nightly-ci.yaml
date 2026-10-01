@@ -13,6 +13,15 @@ globalPrologue: |
   mkdir -p /go/src/github.com/projectcalico
   ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
   export GOPROXY="${GOPROXY:-https://proxy.golang.org|direct}"
+  # Anonymous Docker Hub pulls are rate limited. The daemon is up by now on any
+  # step that has one.
+  if docker info >/dev/null 2>&1; then
+    for __attempt in 1 2 3; do
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin && break
+      [ "$__attempt" -lt 3 ] || exit 1
+      sleep 10
+    done
+  fi
 
 defaults:
   image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2
@@ -22,6 +31,9 @@ defaults:
   env:
     - name: ARGOCI_RESOURCE_PREFIX
       value: argoci
+    # Where the VM fleets run, next to the bucket their VMs pull builds from.
+    - name: ARGOCI_GCP_REGION
+      value: us-central1
   services:
     - goproxy
   secretBundles:

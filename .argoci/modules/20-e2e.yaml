@@ -70,7 +70,6 @@ steps:
       # The Makefiles call the kubectl they download by full path; the deploy
       # script and the tests' connection tester call it by name.
       export PATH="$(pwd)/hack/test/kind:${PATH}"
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       .argoci/scripts/load-cached-images calico node whisker
       .argoci/scripts/load-e2e-binaries
       export E2E_PREBUILT=true

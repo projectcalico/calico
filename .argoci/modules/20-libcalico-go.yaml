@@ -21,7 +21,6 @@ steps:
           - name: GINKGO_SKIP
             value: etcdv3 backend
     commands: |
-      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       cd libcalico-go
       make ci
     epilogue: |

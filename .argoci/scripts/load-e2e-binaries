@@ -6,5 +6,7 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 ( cd /tmp && artifact pull workflow e2e-binaries.tar.zst )
-tar --use-compress-program="zstd -d" -xf /tmp/e2e-binaries.tar.zst
+# -m: the checkout is newer than the binaries' build, and make would rebuild
+# whatever looks older than its sources.
+tar --use-compress-program="zstd -d" -m -xf /tmp/e2e-binaries.tar.zst
 rm -f /tmp/e2e-binaries.tar.zst
