@@ -51,15 +51,22 @@ const (
 	rejectUse               rejectReason = "allowed uses do not match"
 )
 
-// poolQualification holds every candidate pool, in preference order, with the reason each one was rejected.
+// poolCandidate is a pool considered for a request, with the reason it was rejected.
+type poolCandidate struct {
+	pool   v3.IPPool
+	reason rejectReason
+}
+
+// poolQualification holds every candidate pool in preference order.
 type poolQualification struct {
-	candidates []v3.IPPool
-	rejections []rejectReason
+	candidates []poolCandidate
 }
 
 func (q *poolQualification) add(pool v3.IPPool, reason rejectReason) {
-	q.candidates = append(q.candidates, pool)
-	q.rejections = append(q.rejections, reason)
+	if reason != "" {
+		log.Debugf("IP pool %s rejected: %s", pool.Name, reason)
+	}
+	q.candidates = append(q.candidates, poolCandidate{pool: pool, reason: reason})
 }
 
 // qualified returns the pools the request may allocate from.
@@ -75,9 +82,9 @@ func (q poolQualification) selecting() []v3.IPPool {
 
 func (q poolQualification) filter(keep func(rejectReason) bool) []v3.IPPool {
 	var pools []v3.IPPool
-	for i, pool := range q.candidates {
-		if keep(q.rejections[i]) {
-			pools = append(pools, pool)
+	for _, c := range q.candidates {
+		if keep(c.reason) {
+			pools = append(pools, c.pool)
 		}
 	}
 	return pools
@@ -114,17 +121,17 @@ func qualifyPools(req poolRequest, enabledPools []v3.IPPool) (poolQualification,
 			if !ok {
 				return poolQualification{}, fmt.Errorf("the given pool (%s) does not exist, or is not enabled", cidr.String())
 			}
-			qualification.add(pool, useRejection(pool, req.use))
+			qualification.add(pool, checkUse(pool, req.use))
 		}
 	} else {
 		// Unlike named pools, automatic selection doesn't check each pool's block size against maxPrefixLen.
 		for _, pool := range enabledPools {
-			reason, err := selectionRejection(pool, req)
+			reason, err := checkSelection(pool, req)
 			if err != nil {
 				return poolQualification{}, err
 			}
 			if reason == "" {
-				reason = useRejection(pool, req.use)
+				reason = checkUse(pool, req.use)
 			}
 			qualification.add(pool, reason)
 		}
@@ -139,8 +146,8 @@ func qualifyPools(req poolRequest, enabledPools []v3.IPPool) (poolQualification,
 	return qualification, nil
 }
 
-// selectionRejection applies the rules that only automatic selection uses.
-func selectionRejection(pool v3.IPPool, req poolRequest) (rejectReason, error) {
+// checkSelection applies the rules that only automatic selection uses.
+func checkSelection(pool v3.IPPool, req poolRequest) (rejectReason, error) {
 	if *pool.Spec.AssignmentMode != v3.Automatic {
 		return rejectAssignmentMode, nil
 	}
@@ -151,7 +158,6 @@ func selectionRejection(pool v3.IPPool, req poolRequest) (rejectReason, error) {
 		return "", err
 	}
 	if !nodeMatches {
-		log.Debugf("IP pool does not match this node: %s", pool.Name)
 		return rejectNodeSelector, nil
 	}
 
@@ -161,13 +167,12 @@ func selectionRejection(pool v3.IPPool, req poolRequest) (rejectReason, error) {
 		return "", err
 	}
 	if !namespaceMatches {
-		log.WithField("namespace", req.namespace).Debugf("IP pool does not match this namespace: %s", pool.Name)
 		return rejectNamespaceSelector, nil
 	}
 	return "", nil
 }
 
-func useRejection(pool v3.IPPool, use v3.IPPoolAllowedUse) rejectReason {
+func checkUse(pool v3.IPPool, use v3.IPPoolAllowedUse) rejectReason {
 	if slices.Contains(pool.Spec.AllowedUses, use) {
 		return ""
 	}

@@ -80,7 +80,7 @@ func buildPools(pools []testPool) []v3.IPPool {
 	return out
 }
 
-func poolCIDRs(pools []v3.IPPool) []string {
+func collectCIDRs(pools []v3.IPPool) []string {
 	cidrs := []string{}
 	for _, p := range pools {
 		cidrs = append(cidrs, p.Spec.CIDR)
@@ -88,7 +88,7 @@ func poolCIDRs(pools []v3.IPPool) []string {
 	return cidrs
 }
 
-func requestedPools(cidrs ...string) []cnet.IPNet {
+func parseRequestedPools(cidrs ...string) []cnet.IPNet {
 	var nets []cnet.IPNet
 	for _, c := range cidrs {
 		nets = append(nets, cnet.MustParseCIDR(c))
@@ -130,7 +130,7 @@ var _ = DescribeTable("qualifyPools",
 			nodeLabels = map[string]string{"foo": "bar"}
 		}
 		req := poolRequest{
-			requested:    requestedPools(tc.requested...),
+			requested:    parseRequestedPools(tc.requested...),
 			host:         "host1",
 			node:         internalapi.Node{ObjectMeta: metav1.ObjectMeta{Labels: nodeLabels}},
 			namespace:    tc.namespace,
@@ -145,8 +145,8 @@ var _ = DescribeTable("qualifyPools",
 			return
 		}
 		Expect(err).NotTo(HaveOccurred())
-		Expect(poolCIDRs(q.qualified())).To(Equal(tc.qualified))
-		Expect(poolCIDRs(q.selecting())).To(Equal(tc.selecting))
+		Expect(collectCIDRs(q.qualified())).To(Equal(tc.qualified))
+		Expect(collectCIDRs(q.selecting())).To(Equal(tc.selecting))
 	},
 
 	// Node selectors, with and without named pools. A disabled pool is one GetEnabledPools leaves out.
