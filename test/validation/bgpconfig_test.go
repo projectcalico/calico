@@ -161,8 +161,8 @@ func TestBGPConfiguration_Validation(t *testing.T) {
 	}
 }
 
-// libcalico-go range-checks each part of a community value; the schema pattern
-// alone only checks its shape.
+// The schema pattern range-checks each part of a community value, matching
+// libcalico-go's validator.
 func TestBGPConfiguration_CommunityValueRanges(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -178,7 +178,12 @@ func TestBGPConfiguration_CommunityValueRanges(t *testing.T) {
 		{name: "advertised community name is accepted", value: "100:200", advertise: "my-community"},
 		{name: "advertised literal community in range is accepted", value: "100:200", advertise: "65535:1"},
 		{name: "advertised literal community above 16 bits is rejected", value: "100:200", advertise: "65536:1", wantErr: "spec.prefixAdvertisements[0].communities[0]: Invalid value"},
-		{name: "advertised literal large community above 32 bits is rejected", value: "100:200", advertise: "1:1:4294967296", wantErr: "spec.prefixAdvertisements[0].communities[0]: Invalid value"},
+		{
+			name:      "advertised literal large community above 32 bits is rejected",
+			value:     "100:200",
+			advertise: "1:1:4294967296",
+			wantErr:   "spec.prefixAdvertisements[0].communities[0]: Invalid value",
+		},
 	}
 
 	for _, tt := range tests {

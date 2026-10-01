@@ -25,14 +25,14 @@ import (
 // type unset.
 func TestBlockAffinity_Type(t *testing.T) {
 	tests := []struct {
-		name    string
-		affType string
-		wantErr string
+		name         string
+		affinityType string
+		wantErr      string
 	}{
 		{name: "unset type is accepted"},
-		{name: "host type is accepted", affType: "host"},
-		{name: "virtual type is accepted", affType: "virtual"},
-		{name: "unknown type is rejected", affType: "bogus", wantErr: `Unsupported value: "bogus"`},
+		{name: "host type is accepted", affinityType: "host"},
+		{name: "virtual type is accepted", affinityType: "virtual"},
+		{name: "unknown type is rejected", affinityType: "bogus", wantErr: `Unsupported value: "bogus"`},
 	}
 
 	for _, tt := range tests {
@@ -42,7 +42,7 @@ func TestBlockAffinity_Type(t *testing.T) {
 				Spec: v3.BlockAffinitySpec{
 					State: v3.StateConfirmed,
 					Node:  "mynode",
-					Type:  tt.affType,
+					Type:  tt.affinityType,
 					CIDR:  "10.0.0.0/26",
 				},
 			}
