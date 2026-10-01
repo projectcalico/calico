@@ -14,8 +14,9 @@ globalPrologue: |
   ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
   export GOPROXY="${GOPROXY:-https://proxy.golang.org|direct}"
   # Anonymous Docker Hub pulls are rate limited. The daemon is up by now on any
-  # step that has one.
-  if docker info >/dev/null 2>&1; then
+  # step that has one. A VM step never gets the credentials: the bundle is loaded
+  # whole, so there is no key list to send to the machine.
+  if [ -n "${DOCKERHUB_USERNAME:-}" ] && docker info >/dev/null 2>&1; then
     for __attempt in 1 2 3; do
       echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin && break
       [ "$__attempt" -lt 3 ] || exit 1

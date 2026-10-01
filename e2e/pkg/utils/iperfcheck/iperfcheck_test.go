@@ -115,4 +115,3 @@ func TestLossyRunClearsBaselineGate(t *testing.T) {
 			got.DeliveredPacketsPerSecond, min)
 	}
 }
-
