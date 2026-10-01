@@ -303,6 +303,10 @@ func startCompactor(ctx context.Context, interval time.Duration) {
 	}
 }
 
+// componentName is what the API server records as the field manager on this
+// process's writes.
+const componentName = "calico-kube-controllers"
+
 func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, clientset.Interface, *rest.Config, error) {
 	apiCfg, err := apiconfig.LoadClientConfigFromEnvironment()
 	if err != nil {
@@ -310,6 +314,7 @@ func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, cli
 	}
 
 	apiCfg.Spec.K8sClientQPS = 500
+	apiCfg.Spec.UserAgent = apiconfig.UserAgentFor(componentName)
 
 	libcalicoClient, err := client.New(*apiCfg)
 	if err != nil {
@@ -323,6 +328,7 @@ func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, cli
 
 	k8sconfig.QPS = 100
 	k8sconfig.Burst = 200
+	k8sconfig.UserAgent = apiconfig.UserAgentFor(componentName)
 
 	k8sClientset, err := kubernetes.NewForConfig(k8sconfig)
 	if err != nil {
