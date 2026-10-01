@@ -3075,16 +3075,24 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	wg.Wait()
 
-	attachPreamble := false
-	if m.v6 != nil {
-		attachPreamble = v6Readiness != ifaceIsReady
-	}
-	if m.v4 != nil {
-		attachPreamble = v4Readiness != ifaceIsReady
-	}
+	// The preamble carries both families' jump tables, so either family's
+	// new programs need it re-attached.
+	attachPreamble := wepLoaded(v4Readiness, ingressAP4, egressAP4) ||
+		wepLoaded(v6Readiness, ingressAP6, egressAP6)
 
 	// Attach preamble TC program
 	if attachPreamble {
+		if m.v4 != nil && v4Readiness == ifaceIsReady {
+			if err := m.v4.wepLoadLayouts(ingressAP4, egressAP4); err != nil {
+				return state, err
+			}
+		}
+		if m.v6 != nil && v6Readiness == ifaceIsReady {
+			if err := m.v6.wepLoadLayouts(ingressAP6, egressAP6); err != nil {
+				return state, err
+			}
+		}
+
 		wg.Go(func() {
 			ingressAP := mergeAttachPoints(ingressAP4, ingressAP6)
 			if ingressAP != nil {
@@ -3347,6 +3355,26 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 	}
 
 	return ap, nil
+}
+
+// wepLoaded reports whether a family loaded its programs on this pass; a
+// failed load leaves no attach point.
+func wepLoaded(readiness ifaceReadiness, ingress, egress *tc.AttachPoint) bool {
+	return readiness != ifaceIsReady && (ingress != nil || egress != nil)
+}
+
+// wepLoadLayouts gives a family that skipped loading its jump tables, so
+// re-attaching the preamble keeps them.
+func (d *bpfEndpointManagerDataplane) wepLoadLayouts(aps ...*tc.AttachPoint) error {
+	for _, ap := range aps {
+		if ap == nil {
+			continue
+		}
+		if err := d.mgr.loadPrograms(ap, d.ipFamily); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *bpfEndpointManager) loadPrograms(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
