@@ -253,10 +253,12 @@ jobs:
             resolved everything, stop: later workflow steps stage the files,
             finish the cherry-pick, and open the PR.
 
-            Tools: Bash allows read-only git commands (`git status`, `diff`,
-            `log`, `show`); commands that change the repository, pipes, and
-            anything else are refused. Use Read, Grep and Glob to inspect files,
-            and Edit or Write to change them and to write the /tmp files below.
+            Tools: Bash allows only `git status` and `git diff`, exactly as
+            written; any argument, any other git command, pipes, and anything
+            else are refused. For history and each side of a conflict, read the
+            files in `/tmp/pick-context/`. Use Read, Grep and Glob to inspect
+            files, and Edit or Write to change them and to write the /tmp files
+            below.
 
             Then rate the resolution: write a single word to /tmp/pick-severity --
             `light` if the conflicts were straightforward and low-risk, or `heavy`
