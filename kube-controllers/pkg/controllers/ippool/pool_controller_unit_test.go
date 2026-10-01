@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/wait"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -638,19 +639,15 @@ func TestRun_WaitsForTheHandlersBeforeReconciling(t *testing.T) {
 	c.tracker.AddBlocks(allocatedBlock(t, "192.168.0.0/26", 1))
 	handlersSynced.Store(true)
 
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		pool, err := cli.ProjectcalicoV3().IPPools().Get(context.Background(), "pool-2", metav1.GetOptions{})
+	err := wait.PollUntilContextTimeout(context.Background(), 50*time.Millisecond, 5*time.Second, true, func(ctx context.Context) (bool, error) {
+		pool, err := cli.ProjectcalicoV3().IPPools().Get(ctx, "pool-2", metav1.GetOptions{})
 		if err != nil {
-			t.Fatalf("get pool-2: %v", err)
+			return false, err
 		}
-		if hasFinalizer(pool) {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("no reconcile ran after the handlers synced")
-		}
-		time.Sleep(50 * time.Millisecond)
+		return hasFinalizer(pool), nil
+	})
+	if err != nil {
+		t.Fatalf("no reconcile ran after the handlers synced: %v", err)
 	}
 	expectFinalizer(t, cli, "pool-1", true)
 }
