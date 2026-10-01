@@ -34,6 +34,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -236,6 +237,7 @@ func newTestController(cli *fake.Clientset, pools ...*v3.IPPool) (*IPPoolControl
 		cli:           cli,
 		poolInformer:  &fakeSharedIndexInformer{indexer: poolIndexer},
 		blockInformer: &fakeSharedIndexInformer{indexer: blockIndexer},
+		tracker:       accounting.NewTracker(),
 		ipam:          &fakeIPAM{},
 		queue:         &fakeRateLimitingQueue{},
 	}
