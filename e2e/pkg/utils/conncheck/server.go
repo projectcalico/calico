@@ -82,7 +82,6 @@ type PodServer struct {
 	podCustomizers []func(*v1.Pod)
 	svcCustomizers []func(*v1.Service)
 	autoCreateSvc  bool
-	echoServer     bool
 }
 
 func (s *PodServer) composedPodCustomizer() func(*v1.Pod) {
@@ -360,15 +359,6 @@ func WithPorts(ports ...int) ServerOption {
 func WithAutoCreateService(autoCreate bool) ServerOption {
 	return func(c *PodServer) error {
 		c.autoCreateSvc = autoCreate
-		return nil
-	}
-}
-
-// WithEchoServer switches the server image to agnhost netexec. Its /clientip
-// endpoint returns the client address, useful for SNAT detection.
-func WithEchoServer() ServerOption {
-	return func(c *PodServer) error {
-		c.echoServer = true
 		return nil
 	}
 }
