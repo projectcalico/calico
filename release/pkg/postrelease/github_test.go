@@ -61,9 +61,10 @@ func TestGitHubRelease(t *testing.T) {
 			fmt.Sprintf("calico-windows-%s.zip", releaseVersion),
 			fmt.Sprintf("release-%s.tgz", releaseVersion),
 			fmt.Sprintf("tigera-operator-%s.tgz", releaseVersion),
+			fmt.Sprintf("projectcalico.org.v3-%s.tgz", releaseVersion),
+			fmt.Sprintf("crd.projectcalico.org.v1-%s.tgz", releaseVersion),
 			"SHA256SUMS",
 			"ocp.tgz",
-			"LICENSE",
 		)
 		actualAssets := getAssets(release)
 		if diff := cmp.Diff(expectedAssets, actualAssets, cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
