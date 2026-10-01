@@ -12,12 +12,13 @@ export SUFFIX="${SUFFIX:=${USER}-aso}"
 export AZURE_LOCATION="${AZURE_LOCATION:="eastus2"}"
 export AZURE_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:=rg-winfv-${SUFFIX}}"
 
-# Windows Server 2022 (latest version as of Nov 2025)
-export AZURE_WINDOWS_IMAGE_SKU="${AZURE_WINDOWS_IMAGE_SKU:="2022-datacenter-core-g2"}"
-export AZURE_WINDOWS_IMAGE_VERSION="${AZURE_WINDOWS_IMAGE_VERSION:="20348.4405.251112"}"
+# Windows Server 2025 host (latest version as of Sep 2026)
+export AZURE_WINDOWS_IMAGE_SKU="${AZURE_WINDOWS_IMAGE_SKU:="2025-datacenter-core-g2"}"
+export AZURE_WINDOWS_IMAGE_VERSION="${AZURE_WINDOWS_IMAGE_VERSION:="26100.33438.260905"}"
+# Continue using the Windows Server 2022 Calico container images on this host.
 export WINDOWS_SERVER_VERSION="${WINDOWS_SERVER_VERSION:="windows-2022"}"
 
-# Windows Server 2019 (legacy, use if 2022 has issues)
+# Windows Server 2019 (legacy, use if 2025 has issues)
 #export AZURE_WINDOWS_IMAGE_SKU="${AZURE_WINDOWS_IMAGE_SKU:="2019-datacenter-core-g2"}"
 #export AZURE_WINDOWS_IMAGE_VERSION="${AZURE_WINDOWS_IMAGE_VERSION:="17763.5696.240406"}"
 #export WINDOWS_SERVER_VERSION="${WINDOWS_SERVER_VERSION:="windows-2019"}"
