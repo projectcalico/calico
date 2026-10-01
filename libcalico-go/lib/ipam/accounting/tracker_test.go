@@ -80,8 +80,16 @@ func TestSummarizeCounts(t *testing.T) {
 	}))
 
 	// The cooling address is not split by node, and the LoadBalancer address has no node to hold it.
-	Expect(counts.AssignedByNode).To(Equal(map[string]int{"node-a": 2, "node-b": 1, "node-c": 1, "": 1}))
-	Expect(counts.BorrowedByNode).To(Equal(map[string]int{"node-b": 1, "node-c": 1}))
+	Expect(counts.AssignedByNode).To(Equal(map[string]int{
+		"node-a": 2,
+		"node-b": 1,
+		"node-c": 1,
+		"":       1,
+	}))
+	Expect(counts.BorrowedByNode).To(Equal(map[string]int{
+		"node-b": 1,
+		"node-c": 1,
+	}))
 }
 
 func TestSummarizeNoPool(t *testing.T) {
@@ -99,7 +107,10 @@ func TestSummarizeNoPool(t *testing.T) {
 	Expect(counts.Total.Sign()).To(BeZero())
 	Expect(counts.BlocksInUse).To(Equal(1))
 	Expect(counts.BlocksByNode).To(Equal(map[string]int{"node-a": 1}))
-	Expect(counts.AssignedByNode).To(Equal(map[string]int{"node-a": 1, "node-b": 1}))
+	Expect(counts.AssignedByNode).To(Equal(map[string]int{
+		"node-a": 1,
+		"node-b": 1,
+	}))
 	Expect(counts.BorrowedByNode).To(Equal(map[string]int{"node-b": 1}))
 
 	tracker.AddPools(pool("q", "10.1.0.0/24", 26))

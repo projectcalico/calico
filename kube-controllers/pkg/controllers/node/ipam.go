@@ -737,7 +737,7 @@ func (c *IPAMController) updateMetrics() {
 		}
 		countsByPool[poolName] = counts
 	}
-	gcCandidatesByPool := c.gcCandidatesByPool()
+	gcCandidatesByPool := c.countGCCandidatesByPool()
 
 	for poolName, counts := range countsByPool {
 		// These counts track pool-based gauges by node for the current pool.
@@ -795,9 +795,9 @@ func (c *IPAMController) updateMetrics() {
 	log.Debug("IPAM metrics updated")
 }
 
-// gcCandidatesByPool counts candidate and confirmed leaks by pool label and node. Confirmed leaks are included in
+// countGCCandidatesByPool counts candidate and confirmed leaks by pool label and node. Confirmed leaks are included in
 // case something keeps them from being reclaimed as usual.
-func (c *IPAMController) gcCandidatesByPool() map[string]map[string]int {
+func (c *IPAMController) countGCCandidatesByPool() map[string]map[string]int {
 	out := map[string]map[string]int{}
 	c.allocationState.iter(func(_ string, allocations map[string]*allocation) {
 		for _, a := range allocations {
