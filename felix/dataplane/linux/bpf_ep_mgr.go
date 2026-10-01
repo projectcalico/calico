@@ -288,6 +288,9 @@ type bpfInterfaceState struct {
 	// change under a live interface, so the link type is not a stand-in for
 	// this — see useNetkitAttach.
 	netkitJumps bool
+	// preambleGlobals is what each hook's attached preamble was configured
+	// with, minus the jump tables.
+	preambleGlobals [hook.Count]libbpf.TcGlobalData
 }
 
 type bpfInterfaceJumpIndices struct {
@@ -3075,16 +3078,26 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	wg.Wait()
 
-	attachPreamble := false
-	if m.v6 != nil {
-		attachPreamble = v6Readiness != ifaceIsReady
-	}
-	if m.v4 != nil {
-		attachPreamble = v4Readiness != ifaceIsReady
-	}
+	// The preamble carries both families' jump tables, so either family's
+	// new programs need it re-attached. So do new per-workload globals.
+	globals := wepPreambleGlobals(ingressAP4, ingressAP6, egressAP4, egressAP6)
+	attachPreamble := wepLoaded(v4Readiness, ingressAP4, egressAP4) ||
+		wepLoaded(v6Readiness, ingressAP6, egressAP6) ||
+		globals != state.preambleGlobals
 
 	// Attach preamble TC program
 	if attachPreamble {
+		if m.v4 != nil && v4Readiness == ifaceIsReady {
+			if err := m.v4.wepLoadLayouts(ingressAP4, egressAP4); err != nil {
+				return state, err
+			}
+		}
+		if m.v6 != nil && v6Readiness == ifaceIsReady {
+			if err := m.v6.wepLoadLayouts(ingressAP6, egressAP6); err != nil {
+				return state, err
+			}
+		}
+
 		wg.Go(func() {
 			ingressAP := mergeAttachPoints(ingressAP4, ingressAP6)
 			if ingressAP != nil {
@@ -3106,6 +3119,9 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	if egressErr != nil {
 		return state, egressErr
+	}
+	if attachPreamble {
+		state.preambleGlobals = globals
 	}
 
 	if m.v6 != nil && err6 == nil {
@@ -3347,6 +3363,53 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 	}
 
 	return ap, nil
+}
+
+// wepLoaded reports whether a family loaded its programs on this pass; a
+// failed load leaves no attach point.
+func wepLoaded(readiness ifaceReadiness, ingress, egress *tc.AttachPoint) bool {
+	return readiness != ifaceIsReady && (ingress != nil || egress != nil)
+}
+
+// wepPreambleGlobals returns the globals each hook's preamble would be attached
+// with. Jump tables are left out: they are known only after loading.
+func wepPreambleGlobals(ingressAP4, ingressAP6, egressAP4, egressAP6 *tc.AttachPoint) [hook.Count]libbpf.TcGlobalData {
+	var globals [hook.Count]libbpf.TcGlobalData
+	for _, aps := range [][2]*tc.AttachPoint{{ingressAP4, ingressAP6}, {egressAP4, egressAP6}} {
+		merged := mergeAttachPoints(copyAttachPoint(aps[0]), copyAttachPoint(aps[1]))
+		if merged == nil {
+			continue
+		}
+		g := *merged.(*tc.AttachPoint).Configure()
+		g.Jumps = [len(g.Jumps)]uint32{}
+		g.JumpsV6 = [len(g.JumpsV6)]uint32{}
+		globals[merged.HookName()] = g
+	}
+	return globals
+}
+
+// copyAttachPoint protects the caller's attach point, since mergeAttachPoints
+// writes into its v4 argument.
+func copyAttachPoint(ap *tc.AttachPoint) *tc.AttachPoint {
+	if ap == nil {
+		return nil
+	}
+	c := *ap
+	return &c
+}
+
+// wepLoadLayouts gives a family that skipped loading its jump tables, so
+// re-attaching the preamble keeps them.
+func (d *bpfEndpointManagerDataplane) wepLoadLayouts(aps ...*tc.AttachPoint) error {
+	for _, ap := range aps {
+		if ap == nil {
+			continue
+		}
+		if err := d.mgr.loadPrograms(ap, d.ipFamily); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *bpfEndpointManager) loadPrograms(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {

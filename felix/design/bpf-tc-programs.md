@@ -154,6 +154,13 @@ must, since it bakes per-interface config (jump-map indices, host IP,
 flags) into `.rodata`, some of which changes without a restart. So the
 preamble is re-loaded, and re-verified, on every attach.
 
+A ready workload is not re-attached on every apply. Felix records the
+globals each hook's preamble was attached with (minus the jump tables,
+which follow the loaded programs) and re-attaches only when either IP
+family loads its programs or the globals it would now write differ —
+e.g. a WEP's QoS controls, DSCP or Istio membership changing. A family
+that failed to load is left out, so only that family retries.
+
 The preamble calls `bpf_trace_printk` on its drop/error paths
 regardless of `BPFLogLevel`. Under kernel `lockdown=confidentiality`
 ftrace is disabled, so every load makes the kernel log `could not
