@@ -119,6 +119,7 @@ func TestLocalWorkloadIgnoresHEPApproval(t *testing.T) {
 
 	localWEP := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
 	localHost := routes.NewValue(routes.FlagsLocalHost).AsBytes()
+	remoteHost := routes.NewValue(routes.FlagsRemoteHost).AsBytes()
 	srcRT := routes.NewKey(srcV4CIDR).AsBytes()
 	dstRT := routes.NewKey(dstV4CIDR).AsBytes()
 
@@ -154,6 +155,18 @@ func TestLocalWorkloadIgnoresHEPApproval(t *testing.T) {
 			Expect(d.B2A.Approved).To(BeTrue())
 			Expect(d.B2A.Workload).To(BeTrue())
 		})
+	})
+
+	// Unseen but remote, e.g. via an interface without Calico programs; withFromHost only waives the mark check.
+	t.Run("unseen from a remote source, policy denies", func(t *testing.T) {
+		setup(remoteHost, conntrack.Leg{Opener: true})
+
+		skbMark = 0
+		runBpfTest(t, "calico_to_workload_ep", &denyAllRulesWorkloads, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+		}, withFromHost())
 	})
 
 	// Unseen host traffic to a local workload is always allowed, so the entry is used as is.
