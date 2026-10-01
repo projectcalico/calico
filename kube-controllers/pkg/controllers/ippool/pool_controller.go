@@ -272,8 +272,8 @@ func (c *IPPoolController) reconcile() error {
 		errs = append(errs, err)
 	}
 
-	// The informer has yet to deliver the conditions just derived. Without them, a new pool sharing a Terminating pool's
-	// CIDR could win its blocks and let it finalize early.
+	// The informer has yet to deliver the conditions just derived to the tracker. Without them, it could hand a Terminating
+	// pool's blocks to a new pool sharing its CIDR, finalizing the old pool early.
 	c.tracker.AddPools(pools...)
 	if err := c.reconcileNearlyFull(c.ctx, pools); err != nil {
 		errs = append(errs, err)
@@ -536,7 +536,7 @@ func withoutFinalizer(p *v3.IPPool) []string {
 	return slices.DeleteFunc(slices.Clone(p.Finalizers), func(s string) bool { return s == IPPoolFinalizer })
 }
 
-// blocksInPool is whether the tracker attributes any block to the pool. A pool it has not seen may still have some.
+// blocksInPool is whether the tracker attributes any block to the pool. A pool the tracker has not seen reports true, since it may still own blocks.
 func (c *IPPoolController) blocksInPool(name string) bool {
 	counts, ok := c.tracker.Summarize(name)
 	return !ok || counts.BlocksInUse > 0
