@@ -120,9 +120,6 @@ func createPod(ctx context.Context, cs kubernetes.Interface, p *v1.Pod) (*v1.Pod
 var _ = Describe("IPAM controller UTs", func() {
 	var c *IPAMController
 	var dataFeed *utils.DataFeed
-
-	// deliver sends an update the way the syncer does: to the shared tracker first, then to the controller.
-	deliver := func(u bapi.Update) { dataFeed.OnUpdates([]bapi.Update{u}) }
 	var cli client.Interface
 	var cs kubernetes.Interface
 	var deferredInformers *kubevirt.DeferredInformers
@@ -131,6 +128,9 @@ var _ = Describe("IPAM controller UTs", func() {
 	var stopChan chan struct{}
 	var pods chan *v1.Pod
 	var nodes chan *v1.Node
+
+	// deliver sends an update the way the syncer does: to the shared tracker first, then to the controller.
+	deliver := func(u bapi.Update) { dataFeed.OnUpdates([]bapi.Update{u}) }
 
 	BeforeEach(func() {
 		// Create a fake clientset with nothing in it.
@@ -185,8 +185,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		cache.WaitForCacheSync(stopChan, podInformer.HasSynced)
 		cache.WaitForCacheSync(stopChan, nodeInformer.HasSynced)
 
-		// Create a new controller. We don't register with a data feed,
-		// as the tests themselves will drive the controller.
+		// Create a new controller. The data feed's syncer never starts; the tests feed it updates themselves.
 		dataFeed = utils.NewDataFeed(cli, "kubernetes")
 		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer(), deferredInformers, utils.NewIPAMFeed(dataFeed).Tracker())
 		c.RegisterWith(dataFeed)

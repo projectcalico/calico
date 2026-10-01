@@ -328,14 +328,14 @@ func (t *Tracker) PoolBlocks(name string) []*model.AllocationBlock {
 	if !ok {
 		return nil
 	}
-	return blocksOf(pool.blocks)
+	return toAllocationBlocks(pool.blocks)
 }
 
 // NoPoolBlocks is every block no pool claimed, in address order.
 func (t *Tracker) NoPoolBlocks() []*model.AllocationBlock {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	return blocksOf(t.blocksWithNoPool)
+	return toAllocationBlocks(t.blocksWithNoPool)
 }
 
 // BlockPool names the pool that owns the block. False when the block is unknown or no pool claims it.
@@ -349,7 +349,7 @@ func (t *Tracker) BlockPool(cidr cnet.IPNet) (string, bool) {
 	return block.pool.ipPool.Name, true
 }
 
-func blocksOf(s *blockSet) []*model.AllocationBlock {
+func toAllocationBlocks(s *blockSet) []*model.AllocationBlock {
 	var out []*model.AllocationBlock
 	for _, block := range s.inOrder() {
 		out = append(out, block.allocationBlock)
