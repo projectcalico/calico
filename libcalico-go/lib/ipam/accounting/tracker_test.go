@@ -78,6 +78,32 @@ func TestSummarizeCounts(t *testing.T) {
 		v3.IPPoolAllowedUseTunnel:       1,
 		v3.IPPoolAllowedUseLoadBalancer: 1,
 	}))
+
+	// The cooling address is not split by node, and the LoadBalancer address has no node to hold it.
+	Expect(counts.AssignedByNode).To(Equal(map[string]int{"node-a": 2, "node-b": 1, "node-c": 1, "": 1}))
+	Expect(counts.BorrowedByNode).To(Equal(map[string]int{"node-b": 1, "node-c": 1}))
+}
+
+func TestSummarizeNoPool(t *testing.T) {
+	RegisterTestingT(t)
+	orphan := testBlock("10.1.0.0/26", "host:node-a")
+	allocatePod(orphan, 0, "node-a")
+	allocatePod(orphan, 1, "node-b")
+	owned := testBlock("10.0.0.0/26", "host:node-a")
+	allocatePod(owned, 0, "node-a")
+
+	tracker := NewTracker()
+	tracker.AddPools(pool("p", "10.0.0.0/24", 26))
+	tracker.AddBlocks(orphan, owned)
+	counts := tracker.SummarizeNoPool()
+	Expect(counts.Total.Sign()).To(BeZero())
+	Expect(counts.BlocksInUse).To(Equal(1))
+	Expect(counts.BlocksByNode).To(Equal(map[string]int{"node-a": 1}))
+	Expect(counts.AssignedByNode).To(Equal(map[string]int{"node-a": 1, "node-b": 1}))
+	Expect(counts.BorrowedByNode).To(Equal(map[string]int{"node-b": 1}))
+
+	tracker.AddPools(pool("q", "10.1.0.0/24", 26))
+	Expect(tracker.SummarizeNoPool().BlocksInUse).To(BeZero(), "a pool that claims the block takes it out of the no-pool counts")
 }
 
 func TestSummarizeUnknownPool(t *testing.T) {

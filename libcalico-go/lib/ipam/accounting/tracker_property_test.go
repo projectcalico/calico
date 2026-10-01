@@ -242,6 +242,7 @@ func (in *trackerInputs) removeRef(r AddressRef) {
 func expectSameReads(got, want *Tracker, context string) {
 	Expect(normalizeAll(got.SummarizeAll())).To(Equal(normalizeAll(want.SummarizeAll())), context)
 	Expect(blockCIDRs(got.NoPoolBlocks())).To(Equal(blockCIDRs(want.NoPoolBlocks())), context)
+	Expect(normalizeAll(map[string]*Counts{"": got.SummarizeNoPool()})).To(Equal(normalizeAll(map[string]*Counts{"": want.SummarizeNoPool()})), context)
 	Expect(allocIPs(got.NoPoolUnreferenced())).To(Equal(allocIPs(want.NoPoolUnreferenced())), context)
 	for name := range want.SummarizeAll() {
 		Expect(allocIPs(got.Allocations(name))).To(Equal(allocIPs(want.Allocations(name))), context+" pool "+name)

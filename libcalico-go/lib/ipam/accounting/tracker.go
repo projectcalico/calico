@@ -82,6 +82,8 @@ type trackedBlock struct {
 	borrowed        int
 	inUseReserved   int
 	addressesByKind [numKinds]int
+	assignedByNode  map[string]int
+	borrowedByNode  map[string]int
 }
 
 type reservedState struct {
@@ -298,6 +300,18 @@ func (t *Tracker) Summarize(name string) (*Counts, bool) {
 	return pool.counts.clone(), true
 }
 
+// SummarizeNoPool adds up the blocks no pool claims. Total, Reserved and TotalBlocks are zero, since no pool CIDR
+// bounds them.
+func (t *Tracker) SummarizeNoPool() *Counts {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	counts := newCounts()
+	for _, block := range t.blocksWithNoPool.blocks {
+		t.addToCounts(counts, block)
+	}
+	return counts
+}
+
 // SummarizeAll returns a copy of every pool's counts.
 func (t *Tracker) SummarizeAll() map[string]*Counts {
 	t.mu.RLock()
@@ -395,7 +409,7 @@ func (t *Tracker) place(block *trackedBlock) {
 		return
 	}
 	block.pool.blocks.add(block)
-	t.addToCounts(block.pool, block)
+	t.addToCounts(block.pool.counts, block)
 }
 
 func (t *Tracker) unplace(block *trackedBlock) {
@@ -404,12 +418,11 @@ func (t *Tracker) unplace(block *trackedBlock) {
 		return
 	}
 	block.pool.blocks.remove(block)
-	t.removeFromCounts(block.pool, block)
+	t.removeFromCounts(block.pool.counts, block)
 }
 
-// addToCounts adds block's contribution to the pool's totals. removeFromCounts is its exact inverse.
-func (t *Tracker) addToCounts(pool *trackedPool, block *trackedBlock) {
-	counts := pool.counts
+// addToCounts adds block's contribution to counts. removeFromCounts is its exact inverse.
+func (t *Tracker) addToCounts(counts *Counts, block *trackedBlock) {
 	counts.BlocksInUse++
 	switch {
 	case block.allocationBlock.Affinity == nil:
@@ -429,10 +442,15 @@ func (t *Tracker) addToCounts(pool *trackedPool, block *trackedBlock) {
 	for i, n := range block.addressesByKind {
 		incrementBy(counts.AddressesByKind, trackedKinds[i], n)
 	}
+	for node, n := range block.assignedByNode {
+		incrementBy(counts.AssignedByNode, node, n)
+	}
+	for node, n := range block.borrowedByNode {
+		incrementBy(counts.BorrowedByNode, node, n)
+	}
 }
 
-func (t *Tracker) removeFromCounts(pool *trackedPool, block *trackedBlock) {
-	counts := pool.counts
+func (t *Tracker) removeFromCounts(counts *Counts, block *trackedBlock) {
 	counts.BlocksInUse--
 	switch {
 	case block.allocationBlock.Affinity == nil:
@@ -451,6 +469,12 @@ func (t *Tracker) removeFromCounts(pool *trackedPool, block *trackedBlock) {
 	counts.InUseReserved -= block.inUseReserved
 	for i, n := range block.addressesByKind {
 		decrementBy(counts.AddressesByKind, trackedKinds[i], n)
+	}
+	for node, n := range block.assignedByNode {
+		decrementBy(counts.AssignedByNode, node, n)
+	}
+	for node, n := range block.borrowedByNode {
+		decrementBy(counts.BorrowedByNode, node, n)
 	}
 }
 
@@ -478,19 +502,15 @@ func decrementBy[K comparable](m map[K]int, k K, n int) {
 // recountPool rebuilds the pool's totals from its CIDR and its blocks.
 func (t *Tracker) recountPool(pool *trackedPool) {
 	ones, bits := pool.net.Mask.Size()
-	pool.counts = &Counts{
-		Total:           new(big.Int).Lsh(big.NewInt(1), uint(bits-ones)),
-		Reserved:        big.NewInt(0),
-		TotalBlocks:     big.NewInt(1),
-		BlocksByNode:    make(map[string]int),
-		AddressesByKind: make(map[v3.IPPoolAllowedUse]int),
-	}
+	pool.counts = newCounts()
+	pool.counts.Total.Lsh(big.NewInt(1), uint(bits-ones))
+	pool.counts.TotalBlocks.SetInt64(1)
 	if bs := pool.blockSize; bs > ones {
 		pool.counts.TotalBlocks.Lsh(big.NewInt(1), uint(bs-ones))
 	}
 	t.countPoolReserved(pool)
 	for _, block := range pool.blocks.inOrder() {
-		t.addToCounts(pool, block)
+		t.addToCounts(pool.counts, block)
 	}
 }
 
@@ -602,7 +622,13 @@ func containsNet(outer, inner *net.IPNet) bool {
 
 // newTrackedBlock walks the block once, counting its reserved overlap against reserved.
 func newTrackedBlock(key string, b *model.AllocationBlock, reserved *ReservedIPs) *trackedBlock {
-	block := &trackedBlock{key: key, allocationBlock: b, base: blockBase(b)}
+	block := &trackedBlock{
+		key:             key,
+		allocationBlock: b,
+		base:            blockBase(b),
+		assignedByNode:  make(map[string]int),
+		borrowedByNode:  make(map[string]int),
+	}
 	block.node, _ = NodeAffinity(b)
 	block.virtual = b.Affinity != nil && b.AffinityType() == model.IPAMAffinityTypeVirtual
 	checkReserved := reserved.overlaps(b.CIDR.IPNet)
@@ -618,6 +644,7 @@ func newTrackedBlock(key string, b *model.AllocationBlock, reserved *ReservedIPs
 			block.cooling++
 			continue
 		}
+		block.assignedByNode[a.Node()]++
 		kind := a.Kind()
 		if kind == KindUnknown {
 			unknownTypes.Add(a.Attr.ActiveOwnerAttrs[model.IPAMBlockAttributeType])
@@ -625,6 +652,7 @@ func newTrackedBlock(key string, b *model.AllocationBlock, reserved *ReservedIPs
 		block.addressesByKind[kindIndex(kind)]++
 		if a.IsBorrowed() {
 			block.borrowed++
+			block.borrowedByNode[a.Node()]++
 		}
 	}
 	if malformed := countAllocated(b) - valid; malformed > 0 {

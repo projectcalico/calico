@@ -728,53 +728,45 @@ func (c *IPAMController) updateMetrics() {
 	legacyBorrowedIPsByNode := map[string]int{}
 
 	// The tracker decides which pool owns each block. A pool this controller has yet to see is skipped until it does.
-	blocksByPool := map[string][]*model.AllocationBlock{unknownPoolLabel: c.tracker.NoPoolBlocks()}
+	countsByPool := map[string]*accounting.Counts{unknownPoolLabel: c.tracker.SummarizeNoPool()}
 	for poolName := range c.pools.All() {
-		blocksByPool[poolName] = c.tracker.PoolBlocks(poolName)
+		counts, ok := c.tracker.Summarize(poolName)
+		if !ok {
+			// The tracker has applied a delete still queued here, so the pool has nothing left to report.
+			counts = &accounting.Counts{}
+		}
+		countsByPool[poolName] = counts
 	}
+	gcCandidatesByPool := c.gcCandidatesByPool()
 
-	// Iterate blocks to determine the correct metric values.
-	for poolName, poolBlocks := range blocksByPool {
+	for poolName, counts := range countsByPool {
 		// These counts track pool-based gauges by node for the current pool.
 		inUseAllocationsByNode := c.createZeroedMapForNodeValues(poolName)
 		borrowedAllocationsByNode := c.createZeroedMapForNodeValues(poolName)
 		gcCandidatesByNode := c.createZeroedMapForNodeValues(poolName)
 		blocksByNode := map[string]int{}
 
-		for _, b := range poolBlocks {
-			blockCIDR := b.CIDR.String()
-
-			affineNode := "no_affinity"
-			if b.Affinity != nil && strings.HasPrefix(*b.Affinity, "host:") {
-				affineNode = strings.TrimPrefix(*b.Affinity, "host:")
+		for node, n := range counts.BlocksByNode {
+			blocksByNode[node] = n
+		}
+		if n := counts.NoAffinity + counts.VirtualAffinity; n > 0 {
+			blocksByNode["no_affinity"] = n
+		}
+		for node, n := range blocksByNode {
+			legacyBlocksByNode[node] += n
+		}
+		for node, n := range counts.AssignedByNode {
+			if node == "" {
+				node = unknownNodeLabel
 			}
-
-			legacyBlocksByNode[affineNode]++
-			blocksByNode[affineNode]++
-
-			// Go through each IPAM allocation, check its attributes for the node it is assigned to.
-			for _, allocation := range c.allocationsByBlock[blockCIDR] {
-				// Track nodes based on IP allocations.
-				allocationNode := allocation.node()
-				if allocationNode == "" {
-					allocationNode = unknownNodeLabel
-				}
-
-				// Update metrics maps with this allocation.
-				inUseAllocationsByNode[allocationNode]++
-
-				if allocationNode != unknownNodeLabel && (b.Affinity == nil || allocationNode != affineNode) {
-					// If the allocation's node doesn't match the block's, then this is borrowed.
-					legacyBorrowedIPsByNode[allocationNode]++
-					borrowedAllocationsByNode[allocationNode]++
-				}
-
-				// Update candidate count. Include confirmed leaks as well, in case there is an issue keeping them
-				// from being immediately reclaimed as usual.
-				if allocation.isCandidateLeak() || allocation.isConfirmedLeak() {
-					gcCandidatesByNode[allocationNode]++
-				}
-			}
+			inUseAllocationsByNode[node] += n
+		}
+		for node, n := range counts.BorrowedByNode {
+			borrowedAllocationsByNode[node] += n
+			legacyBorrowedIPsByNode[node] += n
+		}
+		for node, n := range gcCandidatesByPool[poolName] {
+			gcCandidatesByNode[node] += n
 		}
 
 		// Update gauge values, resetting the values for the current pool
@@ -801,6 +793,29 @@ func (c *IPAMController) updateMetrics() {
 	c.updatePoolMetrics()
 
 	log.Debug("IPAM metrics updated")
+}
+
+// gcCandidatesByPool counts candidate and confirmed leaks by pool label and node. Confirmed leaks are included in
+// case something keeps them from being reclaimed as usual.
+func (c *IPAMController) gcCandidatesByPool() map[string]map[string]int {
+	out := map[string]map[string]int{}
+	c.allocationState.iter(func(_ string, allocations map[string]*allocation) {
+		for _, a := range allocations {
+			if !a.isCandidateLeak() && !a.isConfirmedLeak() {
+				continue
+			}
+			node := a.node()
+			if node == "" {
+				node = unknownNodeLabel
+			}
+			pool := c.poolLabel(a.block)
+			if out[pool] == nil {
+				out[pool] = map[string]int{}
+			}
+			out[pool][node]++
+		}
+	})
+	return out
 }
 
 // updatePoolMetrics publishes each pool's size and how much of it an IPReservation covers, including pool space no
