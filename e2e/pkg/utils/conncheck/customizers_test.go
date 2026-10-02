@@ -46,6 +46,27 @@ func TestAvoidNodes(t *testing.T) {
 		}
 	})
 
+	t.Run("empty term", func(t *testing.T) {
+		zone := corev1.NodeSelectorRequirement{Key: "zone", Operator: corev1.NodeSelectorOpIn, Values: []string{"a"}}
+		pod := &corev1.Pod{Spec: corev1.PodSpec{Affinity: &corev1.Affinity{NodeAffinity: &corev1.NodeAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{NodeSelectorTerms: []corev1.NodeSelectorTerm{
+				{MatchExpressions: []corev1.NodeSelectorRequirement{zone}},
+				{},
+			}},
+		}}}}
+		avoidNodes([]string{"cp-1", "cp-2"})(pod)
+		terms := pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
+		if len(terms) != 2 {
+			t.Fatalf("want the two existing terms, got %d", len(terms))
+		}
+		if len(terms[0].MatchFields) != 1 || terms[0].MatchFields[0].Key != excluded.Key {
+			t.Fatalf("want the zone term to exclude the nodes, got %+v", terms[0])
+		}
+		if len(terms[1].MatchExpressions) != 0 || len(terms[1].MatchFields) != 0 {
+			t.Fatalf("want the empty term left empty so it still matches no node, got %+v", terms[1])
+		}
+	})
+
 	t.Run("no nodes", func(t *testing.T) {
 		pod := &corev1.Pod{}
 		avoidNodes(nil)(pod)

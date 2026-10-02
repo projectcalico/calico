@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 )
@@ -86,21 +87,30 @@ func AvoidEachOther(pod *corev1.Pod) {
 // WithAvoidControlPlane returns a Pod customizer that keeps the pod off the nodes
 // serving kube-apiserver, for specs whose host-level policy would cut the API server
 // off. Control-plane nodes are the ones backing the default/kubernetes Service; a
-// cluster whose control plane is not in the node list, or has no other node, is left
-// to the scheduler.
+// cluster whose control plane is not in the node list, or has no other ready and
+// schedulable node, is left to the scheduler.
 func WithAvoidControlPlane(f *framework.Framework) func(*corev1.Pod) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	nodes, err := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	framework.ExpectNoError(err, "failed to list nodes")
+	schedulable, err := e2enode.GetReadySchedulableNodes(ctx, f.ClientSet)
+	framework.ExpectNoError(err, "failed to list ready schedulable nodes")
 
-	workers := sets.New(utils.GetNodesInfo(f, nodes, false).GetNames()...)
-	if workers.Len() == 0 {
+	nonControlPlane := sets.New(utils.GetNodesInfo(f, nodes, false).GetNames()...)
+	usable := false
+	for _, n := range schedulable.Items {
+		if nonControlPlane.Has(n.Name) {
+			usable = true
+			break
+		}
+	}
+	if !usable {
 		return func(*corev1.Pod) {}
 	}
 	var controlPlane []string
 	for _, n := range nodes.Items {
-		if !workers.Has(n.Name) {
+		if !nonControlPlane.Has(n.Name) {
 			controlPlane = append(controlPlane, n.Name)
 		}
 	}
@@ -131,12 +141,18 @@ func avoidNodes(names []string) func(*corev1.Pod) {
 		}
 		terms := na.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
 		if len(terms) == 0 {
-			terms = []corev1.NodeSelectorTerm{{}}
+			na.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = []corev1.NodeSelectorTerm{
+				{MatchFields: []corev1.NodeSelectorRequirement{notIn}},
+			}
+			return
 		}
-		// Terms are ORed, so every term must exclude the nodes.
+		// Terms are ORed, so every term must exclude the nodes. An empty term matches
+		// no node, so it is left alone rather than turned into one that matches.
 		for i := range terms {
+			if len(terms[i].MatchExpressions) == 0 && len(terms[i].MatchFields) == 0 {
+				continue
+			}
 			terms[i].MatchFields = append(terms[i].MatchFields, notIn)
 		}
-		na.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = terms
 	}
 }
