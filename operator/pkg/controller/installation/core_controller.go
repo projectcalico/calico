@@ -1092,6 +1092,17 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
+	// The kube-system webhook server rejects the operator's tiered policy writes
+	// after the migration, so it has to go before the render below can succeed.
+	var kubeSystemWebhooksPending bool
+	if !needsNamespaceMigration {
+		kubeSystemWebhooksPending, err = r.namespaceMigration.RemoveKubeSystemWebhooks(ctx, reqLogger)
+		if err != nil {
+			r.status.SetDegraded(operatorv1.ResourceMigrationError, "error removing the kube-system webhook server", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+	}
+
 	// Set any non-default FelixConfiguration values that we need. A field another writer owns
 	// is reported and skipped rather than fought over, so the reconcile carries on: freezing
 	// everything the operator manages does not win the field back.
@@ -1508,14 +1519,6 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 			r.status.SetDegraded(operatorv1.ResourceMigrationError, "error migrating resources to calico-system", err, reqLogger)
 			return reconcile.Result{}, err
 		}
-	}
-
-	// This runs on every reconcile rather than in Run, because the operator's own
-	// webhook server can come up long after the migration finishes.
-	kubeSystemWebhooksPending, err := r.namespaceMigration.RemoveKubeSystemWebhooks(ctx, reqLogger)
-	if err != nil {
-		r.status.SetDegraded(operatorv1.ResourceMigrationError, "error removing the kube-system webhook server", err, reqLogger)
-		return reconcile.Result{}, err
 	}
 
 	// Determine which MTU to use in the status fields.
