@@ -243,6 +243,62 @@ var _ = Describe("IPAM controller UTs", func() {
 		done()
 	})
 
+	It("should label an in-use address with no node as unknown_node only when its block has no host affinity", func() {
+		c.Start(stopChan)
+		resume := c.pause()
+		defer resume()
+
+		poolName := "unknown-node-test-pool"
+		poolKVP := model.KVPair{
+			Key: model.ResourceKey{Kind: apiv3.KindIPPool, Name: poolName},
+			Value: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: poolName},
+				Spec:       apiv3.IPPoolSpec{CIDR: "10.0.97.0/24"},
+			},
+		}
+		dataFeed.OnUpdates([]bapi.Update{{KVPair: poolKVP}})
+		c.handleUpdate(poolKVP)
+
+		// Neither address carries a node attribute. The LoadBalancer block has no host to fall back to, the other does.
+		handle := "unknown-node-test-handle"
+		lbAffinity := model.IPAMAffinityLoadBalancer
+		hostAffinity := "host:node-a"
+		ordinal := 0
+		blockWithOneAddress := func(cidr string, affinity *string) model.KVPair {
+			ipNet := net.MustParseCIDR(cidr)
+			return model.KVPair{
+				Key: model.BlockKey{CIDR: model.PrefixFromIPNet(ipNet)},
+				Value: &model.AllocationBlock{
+					CIDR:        ipNet,
+					Affinity:    affinity,
+					Allocations: []*int{&ordinal, nil, nil, nil},
+					Unallocated: []int{1, 2, 3},
+					Attributes: []model.AllocationAttribute{{
+						HandleID: &handle,
+						ActiveOwnerAttrs: map[string]string{
+							ipam.AttributePod:       "pod",
+							ipam.AttributeNamespace: "default",
+						},
+					}},
+				},
+			}
+		}
+		dataFeed.OnUpdates([]bapi.Update{
+			{KVPair: blockWithOneAddress("10.0.97.0/30", &lbAffinity)},
+			{KVPair: blockWithOneAddress("10.0.97.4/30", &hostAffinity)},
+		})
+
+		c.datastoreReady = true
+		c.syncStatus = bapi.InSync
+		c.updateMetrics()
+
+		inUse := func(node string) float64 {
+			return testutil.ToFloat64(inUseAllocationGauges[poolName].With(prometheus.Labels{"node": node}))
+		}
+		Expect(inUse(unknownNodeLabel)).To(Equal(1.0))
+		Expect(inUse("node-a")).To(Equal(1.0))
+	})
+
 	It("should count a reclamation against the pool even when the release deletes the block", func() {
 		c.Start(stopChan)
 		resume := c.pause()
