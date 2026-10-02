@@ -189,7 +189,7 @@ type bpfDataplane interface {
 	loadDefaultPolicies(hk hook.Hook) error
 	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
 	interfaceByIndex(int) (*net.Interface, error)
-	queryClassifier(string, string) bool
+	queryClassifier(ifaceName, tcHook string, netkit bool) bool
 	getIfaceLink(string) (netlink.Link, error)
 	getIfaceLinkByIndex(int) (netlink.Link, error)
 	netkitPinned(string) bool
@@ -2832,12 +2832,26 @@ func (m *bpfEndpointManager) dataIfaceStateFillJumps(ap *tc.AttachPoint, xdpMode
 	return nil
 }
 
-func (m *bpfEndpointManager) queryClassifier(ifaceName, tcHook string) bool {
-	tcProgs, err := tc.ListAttachedPrograms(ifaceName, tcHook, false)
-	if err != nil || len(tcProgs) == 0 {
+// queryClassifier reports whether our preamble is attached to the hook, asking
+// the mechanism that attached it: TCX and netkit links are not TC filters.
+func (m *bpfEndpointManager) queryClassifier(ifaceName, tcHook string, netkit bool) bool {
+	var names []string
+	var err error
+	switch {
+	case netkit:
+		names, err = tc.ListAttachedNetkitPrograms(ifaceName, tcHook)
+	case m.bpfAttachType == apiv3.BPFAttachOptionTCX:
+		names, err = tc.ListAttachedTcxPrograms(ifaceName, tcHook)
+	default:
+		tcProgs, err := tc.ListAttachedPrograms(ifaceName, tcHook, false)
+		return err == nil && len(tcProgs) > 0
+	}
+	if err != nil {
 		return false
 	}
-	return true
+	return slices.ContainsFunc(names, func(name string) bool {
+		return strings.Contains(name, "cali_tc_preambl")
+	})
 }
 
 // useNetkitAttach reports whether this interface should be driven through the
@@ -2938,11 +2952,11 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	v6Readiness := state.v6Readiness
 
 	if v4Readiness == ifaceIsReady || v6Readiness == ifaceIsReady {
-		if !m.dp.queryClassifier(ifaceName, hook.Ingress.String()) {
+		if !m.dp.queryClassifier(ifaceName, hook.Ingress.String(), netkitAttach) {
 			v4Readiness = ifaceNotReady
 			v6Readiness = ifaceNotReady
 		}
-		if !m.dp.queryClassifier(ifaceName, hook.Egress.String()) {
+		if !m.dp.queryClassifier(ifaceName, hook.Egress.String(), netkitAttach) {
 			v4Readiness = ifaceNotReady
 			v6Readiness = ifaceNotReady
 		}
