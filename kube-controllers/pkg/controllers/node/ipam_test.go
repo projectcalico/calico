@@ -243,6 +243,55 @@ var _ = Describe("IPAM controller UTs", func() {
 		done()
 	})
 
+	It("should count a reclamation against the pool even when the release deletes the block", func() {
+		c.Start(stopChan)
+		resume := c.pause()
+		defer resume()
+
+		poolName := "reclaim-test-pool"
+		poolKVP := model.KVPair{
+			Key: model.ResourceKey{Kind: apiv3.KindIPPool, Name: poolName},
+			Value: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: poolName},
+				Spec:       apiv3.IPPoolSpec{CIDR: "10.0.98.0/24"},
+			},
+		}
+		dataFeed.OnUpdates([]bapi.Update{{KVPair: poolKVP}})
+		c.handleUpdate(poolKVP)
+
+		// A tunnel address on a deleted node is a leak the GC confirms from the cache alone.
+		cidr := net.MustParseCIDR("10.0.98.0/30")
+		blockKey := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
+		handle := "reclaim-test-handle"
+		attrs := map[string]string{ipam.AttributeNode: "gone-node", ipam.AttributeType: ipam.AttributeTypeVXLAN}
+		ordinal := 0
+		dataFeed.OnUpdates([]bapi.Update{{KVPair: model.KVPair{
+			Key: blockKey,
+			Value: &model.AllocationBlock{
+				CIDR:        cidr,
+				Allocations: []*int{&ordinal, nil, nil, nil},
+				Unallocated: []int{1, 2, 3},
+				Attributes:  []model.AllocationAttribute{{HandleID: &handle, ActiveOwnerAttrs: attrs}},
+			},
+		}}})
+
+		a := &allocation{ip: "10.0.98.0", handle: handle, attrs: attrs, block: cidr.String()}
+		c.allBlocks[cidr.String()] = model.KVPair{}
+		c.assignAllocation(cidr.String(), a)
+		a.markConfirmedLeak()
+		c.confirmedLeaks[a.id()] = a
+
+		// Freeing the block's last address deletes the block, and the tracker hears about it mid-release.
+		fakeClient := cli.IPAM().(*fakeIPAMClient)
+		fakeClient.onRelease = func() {
+			dataFeed.OnUpdates([]bapi.Update{{KVPair: model.KVPair{Key: blockKey}}})
+		}
+		DeferCleanup(func() { fakeClient.onRelease = nil })
+
+		Expect(c.garbageCollectKnownLeaks()).To(Succeed())
+		Expect(testutil.ToFloat64(gcReclamationCounters[poolName].With(prometheus.Labels{"node": "gone-node"}))).To(Equal(1.0))
+	})
+
 	It("should publish the pool size and reserved-IP gauges from the shared tracker", func() {
 		c.Start(stopChan)
 		resume := c.pause()

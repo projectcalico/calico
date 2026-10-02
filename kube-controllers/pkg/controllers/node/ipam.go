@@ -1322,6 +1322,13 @@ func (c *IPAMController) syncIPAM() error {
 	return nil
 }
 
+// leakToRelease is a confirmed leak with its pool label taken before release. Releasing a block's last address deletes
+// the block, and the tracker can drop it before the metric is counted.
+type leakToRelease struct {
+	alloc *allocation
+	pool  string
+}
+
 // garbageCollectKnownLeaks checks all known allocations and garbage collects any confirmed leaks.
 func (c *IPAMController) garbageCollectKnownLeaks() error {
 	defer logIfSlow(time.Now(), "Leak GC complete")
@@ -1330,7 +1337,7 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 	maxBatchSize := 10000
 
 	var opts []ipam.ReleaseOptions
-	leaks := map[string]*allocation{}
+	leaks := map[string]leakToRelease{}
 	for id, a := range c.confirmedLeaks {
 		logc := log.WithFields(a.fields())
 
@@ -1351,7 +1358,7 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 		}
 
 		opts = append(opts, a.ReleaseOptions())
-		leaks[a.ReleaseOptions().Address] = a
+		leaks[a.ReleaseOptions().Address] = leakToRelease{alloc: a, pool: c.poolLabel(a.block)}
 
 		if len(opts) >= maxBatchSize {
 			break
@@ -1373,24 +1380,25 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 	// released, or were unallocated to begin with. In either case, we can mark them as released.
 	for _, opt := range releasedOpts {
 		// Find the allocation that matches these release options.
-		a, ok := leaks[opt.Address]
+		leak, ok := leaks[opt.Address]
 		if !ok {
 			log.WithField("opt", opt).Fatalf("BUG: unable to find allocation for release options: %+v", leaks)
 		}
+		a := leak.alloc
 		logc := log.WithFields(a.fields())
 
 		// No longer a leak. Update in-memory allocation tracking so we're not dependent on
 		// receiving the update from the syncer (which we will do eventually; this is just cleaner).
 		c.releaseAllocation(a)
-		c.incrementReclamationMetric(a.block, a.node())
+		incrementReclamationMetric(leak.pool, a.node())
 
 		logc.Info("Successfully garbage collected leaked IP address")
 		delete(leaks, opt.Address)
 	}
 
 	// Note any leaks that we couldn't release.
-	for _, a := range leaks {
-		logc := log.WithFields(a.fields())
+	for _, leak := range leaks {
+		logc := log.WithFields(leak.alloc.fields())
 		logc.Warn("Leaked IP address was not successfully garbage collected")
 	}
 
@@ -1564,8 +1572,7 @@ func (c *IPAMController) kubernetesNodeForCalico(cnode string) (string, error) {
 	return getK8sNodeName(*calicoNode)
 }
 
-func (c *IPAMController) incrementReclamationMetric(block string, node string) {
-	pool := c.poolLabel(block)
+func incrementReclamationMetric(pool, node string) {
 	if node == "" {
 		node = unknownNodeLabel
 	}
