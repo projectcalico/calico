@@ -15,6 +15,7 @@
 package images
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -25,6 +26,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
@@ -1233,7 +1235,7 @@ func TestResolve(t *testing.T) {
 		if err := Resolve(testRepoRoot, testVersion, oneStandardVariant("node"), alwaysResolves("sha256:aaa"), opts...); err != nil {
 			t.Fatalf("Resolve: %v", err)
 		}
-		if got := scans.Load(); got != 1 {
+		if got := len(scans.sent()); got != 1 {
 			t.Errorf("sent %d scan requests, want 1", got)
 		}
 	})
@@ -1245,7 +1247,7 @@ func TestResolve(t *testing.T) {
 		if err := Resolve(testRepoRoot, testVersion, oneStandardVariant("node"), alwaysResolves("sha256:aaa"), opts...); err != nil {
 			t.Fatalf("Resolve: %v", err)
 		}
-		if got := scans.Load(); got != 0 {
+		if got := len(scans.sent()); got != 0 {
 			t.Errorf("a dry run sent %d scan requests", got)
 		}
 	})
@@ -1256,8 +1258,36 @@ func TestResolve(t *testing.T) {
 		if err := Resolve(testRepoRoot, testVersion, oneStandardVariant("node"), absent(":"+testVersion), opts...); err == nil {
 			t.Fatal("expected the missing image to fail")
 		}
-		if got := scans.Load(); got != 0 {
+		if got := len(scans.sent()); got != 0 {
 			t.Errorf("sent %d scan requests for a run with a missing image", got)
+		}
+	})
+
+	t.Run("keeps lookups in flight under the limit", func(t *testing.T) {
+		var dirs []string
+		for i := range 30 {
+			dirs = append(dirs, fmt.Sprintf("dir%d", i))
+		}
+		var inFlight, peak atomic.Int32
+		resolve := func(string) (string, bool, error) {
+			n := inFlight.Add(1)
+			for {
+				p := peak.Load()
+				if n <= p || peak.CompareAndSwap(p, n) {
+					break
+				}
+			}
+			time.Sleep(2 * time.Millisecond)
+			inFlight.Add(-1)
+			return "sha256:aaa", true, nil
+		}
+		variants := []Variant{{Name: StandardVariant, Target: "release-publish", ReleaseDirs: dirs}}
+		if err := Resolve(testRepoRoot, testVersion, variants, resolve,
+			resolveOpts(&imageNameRunner{perDir: true}, &fakeRecorder{})...); err != nil {
+			t.Fatalf("Resolve: %v", err)
+		}
+		if got, limit := peak.Load(), int32(lookupLimit*lookupLimit); got > limit {
+			t.Errorf("%d lookups in flight, want at most %d", got, limit)
 		}
 	})
 
@@ -1270,11 +1300,28 @@ func TestResolve(t *testing.T) {
 	})
 }
 
-func scanServer(t *testing.T) (*ScanRequest, *atomic.Int32) {
+type scanLog struct {
+	mu    sync.Mutex
+	scans [][]string
+}
+
+func (l *scanLog) sent() [][]string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Clone(l.scans)
+}
+
+func scanServer(t *testing.T) (*ScanRequest, *scanLog) {
 	t.Helper()
-	var scans atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		scans.Add(1)
+	scans := &scanLog{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Images []string `json:"images"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		scans.mu.Lock()
+		scans.scans = append(scans.scans, body.Images)
+		scans.mu.Unlock()
 		_, _ = w.Write([]byte(`{"results_link": "http://example.com/results"}`))
 	}))
 	t.Cleanup(srv.Close)
@@ -1282,7 +1329,63 @@ func scanServer(t *testing.T) (*ScanRequest, *atomic.Int32) {
 		Config:    imagescanner.Config{APIURL: srv.URL, Token: "token", Scanner: "scanner"},
 		Images:    []string{"quay.io/calico/node:" + testVersion},
 		OutputDir: t.TempDir(),
-	}, &scans
+	}, scans
+}
+
+func TestWithDependencies(t *testing.T) {
+	const node, dependent = "quay.io/calico/node:" + testVersion, "quay.io/calico/dependent:" + testVersion
+	resolveOpts := func(f command.CommandRunner, rec steps.RefRecorder) []ResolveOption {
+		return []ResolveOption{WithRunner(f), WithRegistries("quay.io/calico"), WithRecord(rec)}
+	}
+	withDependent := func(t *testing.T) (*ScanRequest, *scanLog) {
+		scan, scans := scanServer(t)
+		scan.Images = []string{node, dependent}
+		return scan, scans
+	}
+
+	t.Run("a failed dependency fails the resolve after recording and holds the scan", func(t *testing.T) {
+		scan, scans := withDependent(t)
+		rec := &fakeRecorder{}
+		dep := func() ([]string, error) { return nil, fmt.Errorf("unauthorized") }
+		opts := append(resolveOpts(&imageNameRunner{images: "node"}, rec), WithScan(scan), WithDependencies(dep))
+		err := Resolve(testRepoRoot, testVersion, oneStandardVariant("node"), alwaysResolves("sha256:aaa"), opts...)
+		if err == nil || !strings.Contains(err.Error(), "unauthorized") {
+			t.Fatalf("got %v, want the dependency's error", err)
+		}
+		if len(rec.refs) == 0 {
+			t.Error("the images were not recorded")
+		}
+		if sent := scans.sent(); len(sent) != 0 {
+			t.Errorf("sent %v from a failed resolve", sent)
+		}
+	})
+
+	t.Run("a dependency leaves its unscanned refs out of the scan", func(t *testing.T) {
+		scan, scans := withDependent(t)
+		dep := func() ([]string, error) { return []string{dependent}, nil }
+		opts := append(resolveOpts(&imageNameRunner{images: "node"}, &fakeRecorder{}), WithScan(scan), WithDependencies(dep))
+		if err := Resolve(testRepoRoot, testVersion, oneStandardVariant("node"), alwaysResolves("sha256:aaa"), opts...); err != nil {
+			t.Fatalf("Resolve: %v", err)
+		}
+		if sent := scans.sent(); len(sent) != 1 || !slices.Equal(sent[0], []string{node}) {
+			t.Errorf("sent %v, want one scan of %s", sent, node)
+		}
+		if !slices.Equal(scan.Images, []string{node, dependent}) {
+			t.Errorf("the request was changed to %v", scan.Images)
+		}
+	})
+
+	t.Run("a failed dependency holds the publish scan", func(t *testing.T) {
+		scan, scans := withDependent(t)
+		dep := func() ([]string, error) { return nil, fmt.Errorf("unauthorized") }
+		opts := recordingOpts(&imageNameRunner{images: "node"}, &fakeRecorder{}, WithScan(scan), WithDependencies(dep))
+		if err := Publish(testRepoRoot, testVersion, oneStandardVariant("node"), true, alwaysResolves("sha256:aaa"), opts...); err == nil {
+			t.Fatal("expected the dependency's error to fail the publish")
+		}
+		if sent := scans.sent(); len(sent) != 0 {
+			t.Errorf("sent %v from a failed publish", sent)
+		}
+	})
 }
 
 func TestRecord(t *testing.T) {

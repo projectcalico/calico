@@ -16,6 +16,7 @@ package calico
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -873,7 +874,7 @@ func TestResolveContainerImages(t *testing.T) {
 		if err := m.uploads()[0].Handler.Publish(context.Background(), ""); err != nil {
 			t.Fatalf("images upload: %v", err)
 		}
-		if got := scans.Load(); got != 1 {
+		if got := len(scans.sent()); got != 1 {
 			t.Errorf("sent %d scan requests, want 1", got)
 		}
 	})
@@ -885,7 +886,7 @@ func TestResolveContainerImages(t *testing.T) {
 		if err := m.uploads()[0].Handler.Publish(context.Background(), ""); err != nil {
 			t.Fatalf("images upload: %v", err)
 		}
-		if got := scans.Load(); got != 0 {
+		if got := len(scans.sent()); got != 0 {
 			t.Errorf("a dry run sent %d scan requests", got)
 		}
 	})
@@ -925,25 +926,34 @@ func TestComponentImages(t *testing.T) {
 func TestResolveOperator(t *testing.T) {
 	newManager := func(t *testing.T, resolve func(string) (string, bool, error)) *CalicoManager {
 		m, _ := imageManager(t, newFakeRunner(), "")
+		m.images = false
 		m.isHashRelease = true
 		m.operator = false
 		m.operatorVersion = "v1.40.0"
 		m.resolveDigest = resolve
-		m.imageComponents = map[string]registry.Component{
-			"node":          {Image: "calico/node", Version: m.calicoVersion},
-			m.operatorImage: {Registry: m.operatorRegistry, Image: m.operatorImage, Version: m.operatorVersion},
-		}
 		return m
 	}
-	scanned := func(m *CalicoManager, component string) bool {
-		m.imageScanning = true
-		return slices.Contains(m.scanRequest().Images, m.componentImages()[component])
+	scanOperator := func(t *testing.T, m *CalicoManager) *scanLog {
+		t.Helper()
+		scans := enableScan(t, m)
+		m.imageComponents[m.operatorImage] = registry.Component{Registry: m.operatorRegistry, Image: m.operatorImage, Version: m.operatorVersion}
+		return scans
+	}
+	operatorRef := func(m *CalicoManager) string { return m.operatorComponent().String() }
+	missingOperator := func(m *CalicoManager) func(string) (string, bool, error) {
+		return func(image string) (string, bool, error) {
+			if strings.Contains(image, "/"+m.operatorImage+":") {
+				return "", false, nil
+			}
+			return "sha256:aaa", true, nil
+		}
 	}
 
 	t.Run("records an operator the run does not publish", func(t *testing.T) {
 		m := newManager(t, func(string) (string, bool, error) { return "sha256:aaa", true, nil })
-		if err := m.resolveOperator(); err != nil {
-			t.Fatalf("resolveOperator: %v", err)
+		unscanned, err := m.resolveOperator()
+		if err != nil || len(unscanned) != 0 {
+			t.Fatalf("resolveOperator() = %v, %v; want nothing left out", unscanned, err)
 		}
 		refs, err := outputs.ReadRefs(m.outputDir, operator.ResolveStep, m.calicoVersion)
 		if err != nil {
@@ -953,46 +963,57 @@ func TestResolveOperator(t *testing.T) {
 		if !slices.Contains(refs, want) {
 			t.Errorf("recorded %v, want %s", refs, want)
 		}
-		if !scanned(m, m.operatorImage) {
-			t.Error("a found operator left the scan")
-		}
 	})
 
 	t.Run("a missing operator only warns and leaves the scan", func(t *testing.T) {
-		m := newManager(t, func(string) (string, bool, error) { return "", false, nil })
-		if err := m.resolveOperator(); err != nil {
-			t.Fatalf("resolveOperator: %v", err)
+		m := newManager(t, nil)
+		m.resolveDigest = missingOperator(m)
+		scans := scanOperator(t, m)
+		if err := m.resolveContainerImages(); err != nil {
+			t.Fatalf("resolveContainerImages: %v", err)
 		}
-		if scanned(m, m.operatorImage) {
-			t.Error("a missing operator is still scanned")
-		}
-		if !scanned(m, "node") {
-			t.Error("the product image left the scan")
+		sent := scans.sent()
+		if len(sent) != 1 || slices.Contains(sent[0], operatorRef(m)) {
+			t.Errorf("sent %v, want one scan without %s", sent, operatorRef(m))
 		}
 	})
 
 	t.Run("a missing operator leaves the scan under an overridden registry", func(t *testing.T) {
-		m := newManager(t, func(string) (string, bool, error) { return "", false, nil })
+		m := newManager(t, nil)
+		m.resolveDigest = missingOperator(m)
+		scanOperator(t, m)
 		m.operatorRegistry = "quay.io/override"
-		if err := m.resolveOperator(); err != nil {
+		unscanned, err := m.resolveOperator()
+		if err != nil {
 			t.Fatalf("resolveOperator: %v", err)
 		}
-		if scanned(m, m.operatorImage) {
-			t.Error("the pinned operator is still scanned after the overridden one was missing")
+		if !slices.Equal(unscanned, []string{operatorRef(m)}) {
+			t.Errorf("left out %v, want %s", unscanned, operatorRef(m))
 		}
 	})
 
-	t.Run("a failed lookup fails and leaves the scan", func(t *testing.T) {
-		m := newManager(t, func(string) (string, bool, error) { return "", false, fmt.Errorf("unauthorized") })
-		if err := m.resolveOperator(); err == nil {
+	t.Run("a failed lookup holds the scan and still records the product", func(t *testing.T) {
+		m := newManager(t, nil)
+		m.resolveDigest = func(image string) (string, bool, error) {
+			if strings.Contains(image, "/"+m.operatorImage+":") {
+				return "", false, fmt.Errorf("unauthorized")
+			}
+			return "sha256:aaa", true, nil
+		}
+		scans := scanOperator(t, m)
+		if err := m.resolveContainerImages(); err == nil {
 			t.Fatal("expected the failed lookup to fail the run")
 		}
-		if scanned(m, m.operatorImage) {
-			t.Error("an unchecked operator is still scanned")
+		if sent := scans.sent(); len(sent) != 0 {
+			t.Errorf("sent %v from a failed attempt", sent)
+		}
+		refs, err := outputs.ReadRefs(m.outputDir, images.ResolveStep, m.calicoVersion)
+		if err != nil || len(refs) == 0 {
+			t.Errorf("the product images were not recorded: %v, %v", refs, err)
 		}
 	})
 
-	t.Run("a retry that finds the operator scans it", func(t *testing.T) {
+	t.Run("a retry that finds the operator scans it once", func(t *testing.T) {
 		var unavailable atomic.Bool
 		unavailable.Store(true)
 		m := newManager(t, func(string) (string, bool, error) {
@@ -1001,16 +1022,17 @@ func TestResolveOperator(t *testing.T) {
 			}
 			return "sha256:aaa", true, nil
 		})
-		attempt := m.withOperator(func() error { return nil })
-		if err := attempt(); err == nil {
+		scans := scanOperator(t, m)
+		if err := m.resolveContainerImages(); err == nil {
 			t.Fatal("expected the first attempt to fail")
 		}
 		unavailable.Store(false)
-		if err := attempt(); err != nil {
+		if err := m.resolveContainerImages(); err != nil {
 			t.Fatalf("retry: %v", err)
 		}
-		if !scanned(m, m.operatorImage) {
-			t.Error("the retry found the operator but the scan leaves it out")
+		sent := scans.sent()
+		if len(sent) != 1 || !slices.Contains(sent[0], operatorRef(m)) {
+			t.Errorf("sent %v, want one scan with %s", sent, operatorRef(m))
 		}
 	})
 
@@ -1021,34 +1043,37 @@ func TestResolveOperator(t *testing.T) {
 			return "", false, nil
 		})
 		m.operator = true
-		if err := m.resolveOperator(); err != nil {
+		if _, err := m.resolveOperator(); err != nil {
 			t.Fatalf("resolveOperator: %v", err)
 		}
 		if n := lookups.Load(); n != 0 {
 			t.Errorf("looked up %d images", n)
 		}
 	})
-
-	t.Run("runs before the images action", func(t *testing.T) {
-		m := newManager(t, func(string) (string, bool, error) { return "", false, nil })
-		var scannedFirst bool
-		if err := m.withOperator(func() error {
-			scannedFirst = scanned(m, m.operatorImage)
-			return nil
-		})(); err != nil {
-			t.Fatalf("withOperator: %v", err)
-		}
-		if scannedFirst {
-			t.Error("the images action ran before the operator left the scan")
-		}
-	})
 }
 
-func enableScan(t *testing.T, m *CalicoManager) *atomic.Int32 {
+type scanLog struct {
+	mu    sync.Mutex
+	scans [][]string
+}
+
+func (l *scanLog) sent() [][]string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Clone(l.scans)
+}
+
+func enableScan(t *testing.T, m *CalicoManager) *scanLog {
 	t.Helper()
-	var scans atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		scans.Add(1)
+	scans := &scanLog{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Images []string `json:"images"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		scans.mu.Lock()
+		scans.scans = append(scans.scans, body.Images)
+		scans.mu.Unlock()
 		_, _ = w.Write([]byte(`{"results_link": "http://example.com/results"}`))
 	}))
 	t.Cleanup(srv.Close)
@@ -1056,7 +1081,7 @@ func enableScan(t *testing.T, m *CalicoManager) *atomic.Int32 {
 	m.imageScanningConfig = imagescanner.Config{APIURL: srv.URL, Token: "token", Scanner: "scanner"}
 	m.imageComponents = map[string]registry.Component{"calico": {Image: "calico", Version: m.calicoVersion}}
 	m.tmpDir = t.TempDir()
-	return &scans
+	return scans
 }
 
 // Each image unit gets its own log file; concurrent units would otherwise

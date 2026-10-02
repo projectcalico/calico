@@ -41,6 +41,10 @@ const (
 	ResolveStep = "images-resolve"
 )
 
+// Caps units and each unit's lookups alike, so a registry sees at most its
+// square at once.
+const lookupLimit = 8
+
 const (
 	StandardVariant = "standard"
 
@@ -103,6 +107,9 @@ type ScanRequest struct {
 
 	DryRun bool
 }
+
+// Dependency resolves an image the scan sends that this package does not own.
+type Dependency func() (unscanned []string, err error)
 
 func VariantDirs(variants []Variant) []string {
 	seen := map[string]struct{}{}
@@ -173,6 +180,7 @@ type settings struct {
 
 	retag *retag
 	scan  *ScanRequest
+	deps  []Dependency
 	refs  steps.RefRecorder
 
 	// resolve reports a published tag's digest. Defaults to the registry.
@@ -307,6 +315,15 @@ func WithScan(req *ScanRequest) PublishResolveOption {
 			return fmt.Errorf("no scan request given")
 		}
 		s.scan = req
+		return nil
+	})
+}
+
+// The dependencies run first. Their failure fails the step after the images
+// are recorded, and holds the scan.
+func WithDependencies(deps ...Dependency) PublishResolveOption {
+	return publishResolveSetting(func(s *settings) error {
+		s.deps = deps
 		return nil
 	})
 }
@@ -617,7 +634,7 @@ func (c Image) resolveUnit(u unit, resolve steps.DigestResolver) (resolved, erro
 			}
 		}
 	}
-	results, lookupErr := steps.Go(lookups, func(l lookup) (*found, error) {
+	results, lookupErr := steps.GoLimit(lookups, lookupLimit, func(l lookup) (*found, error) {
 		image := fmt.Sprintf("%s/%s:%s", l.reg, l.name, l.tag)
 		digest, exists, err := resolve(image)
 		if err != nil {
@@ -668,7 +685,7 @@ func record(s settings, units []unit) error {
 	if s.refs == nil {
 		return nil
 	}
-	got, lookupErr := steps.Go(units, s.lookup)
+	got, lookupErr := steps.GoLimit(units, lookupLimit, s.lookup)
 	// Written even when a lookup failed: a partial publish is exactly the run
 	// whose record decides what a resume still owes.
 	return errors.Join(lookupErr, s.addRefs(got))

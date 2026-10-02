@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -158,13 +159,17 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 		s.refs = nil
 	}
 
+	unscanned, depErr := s.runDependencies()
 	units, err := pending(s, s.units(publishEnv(s)))
 	if err != nil {
-		return err
+		return errors.Join(depErr, err)
 	}
 	if len(units) == 0 {
 		s.Logger().Info("Every image is already published")
-		sendImagesToISS(s)
+		if depErr != nil {
+			return depErr
+		}
+		sendImagesToISS(s, unscanned)
 		return nil
 	}
 	s.Logger().WithField("images", len(units)).Info("Publishing container images")
@@ -173,14 +178,14 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 	// Record before reporting a failure: a partial publish is exactly the run
 	// whose record decides what a resume still has to do.
 	if err := record(s, units); err != nil {
-		return errors.Join(publishErr, err)
+		return errors.Join(depErr, publishErr, err)
 	}
-	if publishErr != nil {
-		return publishErr
+	if err := errors.Join(depErr, publishErr); err != nil {
+		return err
 	}
 	s.Logger().Info("Finished publishing container images")
 
-	sendImagesToISS(s)
+	sendImagesToISS(s, unscanned)
 	return nil
 }
 
@@ -200,11 +205,12 @@ func Resolve(repoRoot, version string, variants []Variant, resolve steps.DigestR
 
 	s.resolve = resolve
 
+	unscanned, depErr := s.runDependencies()
 	units := s.units(s.env())
 	s.Logger().WithField("images", len(units)).Info("Resolving container images")
-	got, lookupErr := steps.Go(units, s.lookup)
+	got, lookupErr := steps.GoLimit(units, lookupLimit, s.lookup)
 
-	var errs []error
+	errs := []error{depErr}
 	if lookupErr != nil {
 		errs = append(errs, s.Errorf("%w", lookupErr))
 	}
@@ -218,20 +224,35 @@ func Resolve(repoRoot, version string, variants []Variant, resolve steps.DigestR
 	if len(missing) > 0 {
 		errs = append(errs, s.Errorf("%w", &MissingError{Images: missing}))
 	}
-	if errs != nil {
-		return errors.Join(errs...)
+	if err := errors.Join(errs...); err != nil {
+		return err
 	}
 	s.Logger().Info("Finished resolving container images")
 
-	sendImagesToISS(s)
+	sendImagesToISS(s, unscanned)
 	return nil
 }
 
+func (s settings) runDependencies() (unscanned []string, err error) {
+	var errs []error
+	for _, dep := range s.deps {
+		refs, err := dep()
+		unscanned = append(unscanned, refs...)
+		errs = append(errs, err)
+	}
+	return unscanned, errors.Join(errs...)
+}
+
 // A scan failure must not fail the release: the images are already published.
-func sendImagesToISS(s settings) {
+func sendImagesToISS(s settings, unscanned []string) {
 	if s.scan == nil {
 		return
 	}
+	scan := *s.scan
+	scan.Images = slices.DeleteFunc(slices.Clone(scan.Images), func(image string) bool {
+		return slices.Contains(unscanned, image)
+	})
+	s.scan = &scan
 	if s.scan.DryRun {
 		s.Logger().WithFields(logrus.Fields{
 			"images":  s.scan.Images,
