@@ -245,8 +245,22 @@ jobs:
             code with no clear correct merge, the OSS change depends on
             code/context that does not exist in Enterprise, OR resolving it
             correctly would require a substantial refactor or porting a
-            non-trivial amount of code that is not present in Enterprise. In that
-            case explain precisely what a human must decide in
+            non-trivial amount of code that is not present in Enterprise.
+
+            A common escalation case is an unpicked dependency: the conflict
+            exists because the OSS change touches a function, test, or file that
+            is ABSENT from the Enterprise side (its `.theirs` has it, `.ours`
+            does not) and `enterprise-history.txt` shows NO Enterprise commit
+            that removed it -- so an earlier OSS PR that introduced it has not
+            been picked yet. That is an ordering problem, not a merge: escalate.
+            Do NOT reconstruct the missing code to make the change apply (that
+            silently ports the unpicked PR), and do NOT drop the OSS change to
+            clear the conflict. Name the missing code (and the earlier PR, if you
+            can identify it) in the report so a human can pick it first. (If
+            `enterprise-history.txt` instead shows Enterprise deliberately
+            removed the code, keeping it removed can be a valid resolution.)
+
+            When you escalate, explain precisely what a human must decide in
             /tmp/resolution-report.md, write an empty marker file
             `/tmp/pick-escalated` so the workflow knows a human must take over,
             and stop.
