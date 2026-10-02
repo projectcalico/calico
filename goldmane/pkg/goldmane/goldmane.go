@@ -281,7 +281,6 @@ func (a *Goldmane) run(startTime int64, ready chan<- struct{}) {
 		select {
 		case stream := <-a.streams.Backfills():
 			a.backfill(stream)
-			continue
 		default:
 		}
 
