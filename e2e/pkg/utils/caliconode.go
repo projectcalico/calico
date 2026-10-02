@@ -56,13 +56,18 @@ func DumpCalicoNodeLogs(clientset kubernetes.Interface, nodeName string, since t
 		logrus.Warnf("[DIAGS] No calico-node pod found on %s", nodeName)
 		return
 	}
-	sinceTime := since.UTC().Format(time.RFC3339)
-	out, err := e2ekubectl.RunKubectl(pod.Namespace, "logs", pod.Name, "-c", "calico-node", "--since-time="+sinceTime)
+	sinceTime := metav1.NewTime(since)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	out, err := clientset.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
+		Container: "calico-node",
+		SinceTime: &sinceTime,
+	}).DoRaw(ctx)
 	if err != nil {
 		logrus.WithError(err).Warnf("[DIAGS] Could not read %s/%s logs", pod.Namespace, pod.Name)
 		return
 	}
-	logrus.Infof("[DIAGS] %s/%s logs since %s:\n%s", pod.Namespace, pod.Name, sinceTime, out)
+	logrus.Infof("[DIAGS] %s/%s logs since %s:\n%s", pod.Namespace, pod.Name, since.UTC().Format(time.RFC3339), out)
 }
 
 // GetPodInterfaceName returns the host-side veth interface name for a workload
