@@ -19,9 +19,12 @@
 //   MODE             'picked' (default) | 'escalated'.
 //   ESCALATION_REASON short reason string (escalated mode).
 //   RUN_URL          workflow run URL (escalated mode; link for the human).
-//   REPORT_FILE      resolution report appended in escalated mode, if present.
+//   REPORT_FILE      resolution report (escalated mode). Posted as a threaded
+//                    reply under the notification (in both the DM and the
+//                    channel), so the main message stays short.
 //   ALERT_CHANNEL    Slack channel id; an escalation or failure is also posted
-//                    here, so an error is never invisible even when the author
+//                    here (short reason + run link, with the report in a thread
+//                    reply), so an error is never invisible even when the author
 //                    is unmapped or unknown. A noop or picked success only DMs.
 //   TARGET_LABEL     Human label for the target (e.g. "Enterprise").
 //   TARGET_BRANCH    Target branch (e.g. "master").
@@ -100,6 +103,11 @@ async function main() {
   // Line 1 carries no icon; the result icon sits on the status line below,
   // next to the resolution text.
   let text;
+  // The resolution report (escalated mode) can be long and names Enterprise
+  // internals, so the main message stays short (reason + run link) and the
+  // report is posted as a threaded reply under it -- in the DM and the channel
+  // alike -- keeping both main views short while the detail is one click away.
+  let report = '';
   if (env.MODE === 'escalated') {
     const reason = (env.ESCALATION_REASON || 'needs manual resolution').replace(/[<>|*]/g, '').trim();
     const lines = [
@@ -108,9 +116,8 @@ async function main() {
       `*Reason:*  ${reason}.`,
     ];
     if (env.RUN_URL) lines.push(`<${env.RUN_URL}|See the run>.`);
-    const report = readReport(env.REPORT_FILE);
-    if (report) lines.push('*Resolution report:*', '```', report, '```');
     text = lines.join('\n');
+    report = readReport(env.REPORT_FILE) || '';
   } else if (env.MODE === 'noop') {
     const lines = [
       `#${env.SRC_PR} ${osTag}${titlePart}`,
@@ -134,27 +141,41 @@ async function main() {
     text = lines.join('\n');
   }
 
-  async function post(channel, kind) {
+  async function post(channel, body, kind, threadTs) {
     try {
+      const payload = { channel, text: body, unfurl_links: false };
+      if (threadTs) payload.thread_ts = threadTs;
       const resp = await fetch('https://slack.com/api/chat.postMessage', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json; charset=utf-8',
         },
-        body: JSON.stringify({ channel, text, unfurl_links: false }),
+        body: JSON.stringify(payload),
         signal: AbortSignal.timeout(30000),
       });
       const data = await resp.json();
-      if (data && data.ok) console.log(`Slack ${kind} sent (${channel})`);
-      else console.log(`::warning::Slack ${kind} failed: ${(data && data.error) || 'unknown'}`);
+      if (data && data.ok) { console.log(`Slack ${kind} sent (${channel})`); return data; }
+      console.log(`::warning::Slack ${kind} failed: ${(data && data.error) || 'unknown'}`);
     } catch (err) {
       console.log(`::warning::Slack ${kind} request failed: ${err.message}`);
     }
+    return null;
   }
 
-  if (slackId) await post(slackId, `DM to ${author}`);
-  if (alertChannel) await post(alertChannel, 'channel alert');
+  // Post the short message, then (if there is a report) add it as a threaded
+  // reply under that same message -- the main view stays short in both the DM
+  // and the channel, with the detail one click away in the thread.
+  async function notify(channel, kind) {
+    const main = await post(channel, text, kind);
+    if (report && main && main.ts) {
+      // Reply in the same conversation (main.channel is the IM id for a DM).
+      await post(main.channel || channel, `*Resolution report:*\n\`\`\`\n${report}\n\`\`\``, `${kind} report`, main.ts);
+    }
+  }
+
+  if (slackId) await notify(slackId, `DM to ${author}`);
+  if (alertChannel) await notify(alertChannel, 'channel alert');
 }
 
 main().catch((err) => {
