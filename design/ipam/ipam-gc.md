@@ -13,7 +13,7 @@ You may obtain a copy of the License at
 The IPAM GC lives in [`kube-controllers/pkg/controllers/node/`](../../kube-controllers/pkg/controllers/node/), **not** `pkg/controllers/ipam/`. There is no `ipam` controller; if
 you came looking for the GC and didn't find it, look in `node`.
 
-Main file: `ipam.go` (~1600 lines). Supporting types in `ipam_allocation.go`. Pool / block mapping in `pool_manager.go`. Cross-component picture is in the [index](./DESIGN.md); the
+Main file: `ipam.go` (~1600 lines). Supporting types in `ipam_allocation.go`. Block-to-pool attribution and the per-pool counts come from the shared IPAM accounting tracker (`libcalico-go/lib/ipam/accounting`), which `utils.IPAMFeed` keeps current from the data feed. Cross-component picture is in the [index](./DESIGN.md); the
 block and handle state machines are defined in [`./ipam-datastore.md`](./ipam-datastore.md) and [`./ipam-core-library.md`](./ipam-core-library.md) - this file references them
 rather than restating.
 
@@ -211,15 +211,11 @@ Per-pool, per-node gauges, registered lazily as pools appear. The two metrics th
 `ipam_allocations_in_use`, `ipam_allocations_borrowed`, and `ipam_blocks` are trend metrics; their absolute values vary with pool size and pod count. Legacy single-dimension
 variants exist for backward compatibility.
 
-`updateMetrics` recomputes from scratch every sync - one walk over all blocks, no incremental state. The full-recompute *is* the consistency check; switching to incremental updates
-without a separate consistency check loses the protection.
+`updateMetrics` reads each pool's counts from the shared tracker rather than walking every block. The tracker is updated incrementally by `utils.IPAMFeed`, one instance shared across kube-controllers, and only read once the syncer is InSync. Its consistency check is `TestIncrementalMatchesRebuild` in [`tracker_property_test.go`](../../libcalico-go/lib/ipam/accounting/tracker_property_test.go), which compares the incremental tracker against one rebuilt from scratch after every random add and remove.
 
-`ipam_ippool_reserved` is the exception to that walk: reservations make addresses unassignable without allocating them, and can cover pool space no block has been carved from, so the
-number isn't in the block state the controller tracks. `IPReservation` is therefore a fourth kind on the controller's syncer, cached by name in `reservations`, and
-`updateReservedMetrics` counts the covered addresses per pool with `ipam.NumReservedIPsInCIDR` (see [ipam-core-library](./ipam-core-library.md#public-api-surface)). The arithmetic is
-the library's, so the gauge agrees with `calicoctl ipam show`; the input is the syncer's, so the sync loop makes no datastore request for it. Being per-pool rather than per-node, the
-gauge is labelled `ippool` only, like `ipam_ippool_size`. It may overlap `ipam_allocations_in_use`, so usable capacity is
-`ipam_ippool_size - ipam_allocations_in_use - ipam_ippool_reserved` only when no reserved address is also allocated.
+`ipam_ippool_reserved` comes from the same tracker. Reservations make addresses unassignable without allocating them, and can cover pool space no block has been carved from, so the tracker takes `IPReservation`s from the feed alongside pools and blocks and counts the covered addresses per pool, overlap counted once. The input is the syncer's, so the sync loop makes no datastore request for it. Being per-pool rather than per-node, the gauge is labelled `ippool` only, like `ipam_ippool_size`. It may overlap `ipam_allocations_in_use`, so usable capacity is `ipam_ippool_size - ipam_allocations_in_use - ipam_ippool_reserved` only when no reserved address is also allocated.
+
+The tracker is fed on the syncer goroutine, not the controller's, so a block can leave it between two reads in one GC pass. Releasing the last address in a block deletes the block, so `garbageCollectKnownLeaks` takes each leak's pool label before `ReleaseIPs` rather than after.
 
 Watching `IPReservation` needs `watch` in the kube-controllers ClusterRole, in the chart **and** in tigera/operator. With only `list` granted the List still succeeds and the syncer
 still reaches in-sync, so the symptom is a hot re-list of `IPReservation`s rather than a stalled controller - easy to miss in review, noisy in production.
@@ -228,7 +224,7 @@ still reaches in-sync, so the symptom is a hot re-list of `IPReservation`s rathe
 
 - `ipam_allocations_gc_candidates > 0` for extended periods is the canonical "GC is stuck" signal. Alert on it.
 - `ipam_allocations_gc_reclamations` rate is the canonical "we have a real leak somewhere" signal. Alert on it.
-- Don't switch `updateMetrics` to incremental updates without a separate consistency check. The current full-recompute is the consistency check.
+- Any change to the tracker's incremental indexes needs `TestIncrementalMatchesRebuild` in [`tracker_property_test.go`](../../libcalico-go/lib/ipam/accounting/tracker_property_test.go) to keep passing. It is the consistency check that the old full recompute used to be.
 - A metric is not a licence to add a datastore request to the sync loop. The loop shares a goroutine with leak GC, and past overload has clogged it; new inputs belong on the syncer.
   `ipam_ippool_reserved` was caught doing a LIST of every block per sync in review (https://github.com/projectcalico/calico/pull/13331).
 - The in-memory state maps must agree at all times. `assertConsistentState` in `ipam_test.go` is the canonical invariant check; any new map mutation needs a test that exercises it.
