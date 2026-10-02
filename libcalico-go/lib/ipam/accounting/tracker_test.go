@@ -44,6 +44,15 @@ func TestSummarizeCounts(t *testing.T) {
 	allocateTunnel(a, 2, "node-a")
 	allocateCooling(a, 3)
 
+	// A tunnel address from before handles and attributes still counts. It and a pod with no node attribute count
+	// against the block's affine node.
+	a.Attributes = append(a.Attributes, model.AllocationAttribute{})
+	a.Allocations[4] = ptr.To(len(a.Attributes) - 1)
+	allocate(a, 5, "k8s-pod-network.y", map[string]string{
+		model.IPAMBlockAttributePod:       "pod",
+		model.IPAMBlockAttributeNamespace: "default",
+	})
+
 	unaffined := testBlock("10.0.0.64/26", "")
 	allocatePod(unaffined, 0, "node-c")
 
@@ -61,10 +70,10 @@ func TestSummarizeCounts(t *testing.T) {
 	Expect(counts.BlocksInUse).To(Equal(3))
 
 	// Cooling is inside InUse, not beside it.
-	Expect(counts.InUse).To(Equal(6))
+	Expect(counts.InUse).To(Equal(8))
 	Expect(counts.Cooling).To(Equal(1))
-	Expect(counts.Assigned()).To(Equal(5))
-	Expect(counts.Free().String()).To(Equal("250"))
+	Expect(counts.Assigned()).To(Equal(7))
+	Expect(counts.Free().String()).To(Equal("248"))
 
 	// node-b borrows from node-a's block, and node-c holds an address in a block affine to no node.
 	Expect(counts.Borrowed).To(Equal(2))
@@ -74,10 +83,47 @@ func TestSummarizeCounts(t *testing.T) {
 	Expect(counts.VirtualAffinity).To(Equal(1))
 	Expect(counts.BlocksByNode).To(Equal(map[string]int{"node-a": 1}))
 	Expect(counts.AddressesByKind).To(Equal(map[v3.IPPoolAllowedUse]int{
-		v3.IPPoolAllowedUseWorkload:     3,
-		v3.IPPoolAllowedUseTunnel:       1,
+		v3.IPPoolAllowedUseWorkload:     4,
+		v3.IPPoolAllowedUseTunnel:       2,
 		v3.IPPoolAllowedUseLoadBalancer: 1,
 	}))
+
+	// The cooling address is not split by node, and the LoadBalancer address has no node to hold it.
+	Expect(counts.AssignedByNode).To(Equal(map[string]int{
+		"node-a": 4,
+		"node-b": 1,
+		"node-c": 1,
+		"":       1,
+	}))
+	Expect(counts.BorrowedByNode).To(Equal(map[string]int{
+		"node-b": 1,
+		"node-c": 1,
+	}))
+}
+
+func TestSummarizeNoPool(t *testing.T) {
+	RegisterTestingT(t)
+	orphan := testBlock("10.1.0.0/26", "host:node-a")
+	allocatePod(orphan, 0, "node-a")
+	allocatePod(orphan, 1, "node-b")
+	owned := testBlock("10.0.0.0/26", "host:node-a")
+	allocatePod(owned, 0, "node-a")
+
+	tracker := NewTracker()
+	tracker.AddPools(pool("p", "10.0.0.0/24", 26))
+	tracker.AddBlocks(orphan, owned)
+	counts := tracker.SummarizeNoPool()
+	Expect(counts.Total.Sign()).To(BeZero())
+	Expect(counts.BlocksInUse).To(Equal(1))
+	Expect(counts.BlocksByNode).To(Equal(map[string]int{"node-a": 1}))
+	Expect(counts.AssignedByNode).To(Equal(map[string]int{
+		"node-a": 1,
+		"node-b": 1,
+	}))
+	Expect(counts.BorrowedByNode).To(Equal(map[string]int{"node-b": 1}))
+
+	tracker.AddPools(pool("q", "10.1.0.0/24", 26))
+	Expect(tracker.SummarizeNoPool().BlocksInUse).To(BeZero(), "a pool that claims the block takes it out of the no-pool counts")
 }
 
 func TestSummarizeUnknownPool(t *testing.T) {
@@ -238,6 +284,35 @@ func TestNoPoolBlocksInAddressOrder(t *testing.T) {
 	low := testBlock("10.9.0.64/26", "")
 	tr.AddBlocks(high, testBlock("10.0.0.0/26", ""), low)
 	Expect(tr.NoPoolBlocks()).To(Equal([]*model.AllocationBlock{low, high}))
+}
+
+func TestPoolBlocksAndBlockPool(t *testing.T) {
+	RegisterTestingT(t)
+	tracker := NewTracker()
+	tracker.AddPools(pool("outer", "10.0.0.0/16", 26), pool("inner", "10.0.0.0/24", 26))
+	inner := testBlock("10.0.0.64/26", "")
+	outerHigh := testBlock("10.0.9.0/26", "")
+	outerLow := testBlock("10.0.5.0/26", "")
+	stray := testBlock("10.9.0.0/26", "")
+	tracker.AddBlocks(outerHigh, inner, stray, outerLow)
+
+	Expect(tracker.PoolBlocks("outer")).To(Equal([]*model.AllocationBlock{outerLow, outerHigh}))
+	Expect(tracker.PoolBlocks("inner")).To(Equal([]*model.AllocationBlock{inner}))
+	Expect(tracker.PoolBlocks("missing")).To(BeNil())
+
+	owner, ok := tracker.BlockPool(inner.CIDR)
+	Expect(ok).To(BeTrue())
+	Expect(owner).To(Equal("inner"))
+	_, ok = tracker.BlockPool(stray.CIDR)
+	Expect(ok).To(BeFalse(), "no pool claims the stray block")
+	_, ok = tracker.BlockPool(cnet.MustParseCIDR("10.0.7.0/26"))
+	Expect(ok).To(BeFalse(), "the tracker has no such block")
+
+	// The narrower pool's removal hands its block to the wider one.
+	tracker.RemovePool("inner")
+	owner, _ = tracker.BlockPool(inner.CIDR)
+	Expect(owner).To(Equal("outer"))
+	Expect(tracker.PoolBlocks("outer")).To(Equal([]*model.AllocationBlock{inner, outerLow, outerHigh}))
 }
 
 // TestIncrementalMatchesFresh reads between every change, then compares against a tracker given the end state at once.
