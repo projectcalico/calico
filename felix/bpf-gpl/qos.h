@@ -175,7 +175,7 @@ static CALI_BPF_INLINE bool qos_dscp_set(struct cali_tc_ctx *ctx, __s8 dscp)
 		return false;
 	}
 
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs_l4(ctx)) {
 		CALI_DEBUG("Too short");
 		deny_reason(ctx, CALI_REASON_SHORT);
 		return false;

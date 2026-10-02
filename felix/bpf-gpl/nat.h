@@ -240,7 +240,7 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx)
 	}
 
 	/* Revalidate the packet after the decap. */
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs_l4(ctx)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short");
 		goto deny;

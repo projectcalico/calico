@@ -44,7 +44,12 @@ const (
 	syncVerb  = "sync"
 	rsyncVerb = "rsync"
 
-	recursiveFlag = "--recursive"
+	recursiveFlag    = "--recursive"
+	cacheControlFlag = "--cache-control"
+	excludeFlag      = "--exclude"
+	includeFlag      = "--include"
+
+	MutableCachePolicy = "max-age=60, s-maxage=300, stale-while-revalidate=60"
 )
 
 var publicRead = []string{"--acl", "public-read"}
@@ -100,6 +105,11 @@ type S3 struct {
 
 	DryRun bool
 
+	CachePolicy string // Caching behaviour for the uploaded objects.
+
+	Exclude []string // Pattern matching for files or objects to exclude
+	Include []string // Pattern matching for files or objects to include.
+
 	Runner command.CommandRunner
 }
 
@@ -130,8 +140,18 @@ func (d S3) Publish(_ context.Context, src string) error {
 		}
 	}
 	args = append(args, p.src, p.dest)
+	// aws applies filters left to right, so an Include must follow its Exclude.
+	for _, pattern := range d.Exclude {
+		args = append(args, excludeFlag, pattern)
+	}
+	for _, pattern := range d.Include {
+		args = append(args, includeFlag, pattern)
+	}
 	if !d.Private {
 		args = append(args, publicRead...)
+	}
+	if d.CachePolicy != "" {
+		args = append(args, cacheControlFlag, d.CachePolicy)
 	}
 	if d.DryRun {
 		args = append(args, "--dryrun")

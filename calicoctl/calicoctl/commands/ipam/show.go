@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -208,18 +208,18 @@ func ShowBlockUtilization(ctx context.Context, ipamClient ipam.Interface, showBl
 	}
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
-	t.AppendHeader(table.Row{"GROUPING", "CIDR", "IPS TOTAL", "IPS IN USE", "IPS RESERVED", "IPS FREE"})
+	t.AppendHeader(table.Row{"GROUPING", "CIDR", "IPS TOTAL", "IPS IN USE", "IPS RESERVED", "IPS FREE", "IPS COOLING"})
 	t.SetColumnConfigs([]table.ColumnConfig{
 		{Name: "IPS TOTAL", Align: text.AlignRight},
 		{Name: "IPS IN USE", Align: text.AlignRight},
 		{Name: "IPS RESERVED", Align: text.AlignRight},
 		{Name: "IPS FREE", Align: text.AlignRight},
+		{Name: "IPS COOLING", Align: text.AlignRight},
 	})
-	// IN USE counts allocated IPs and RESERVED counts IPs that an IPReservation
-	// covers; an IP allocated before it was reserved falls into both, so the
-	// percentages need not add up to 100.  FREE counts the IPs that are neither,
-	// which is why it comes from the library rather than being derived here.
-	genRow := func(kind, cidr string, capacity, inUse, reserved, free int) table.Row {
+
+	// An IP allocated before it was reserved counts in both IN USE and RESERVED, so the percentages need not sum to 100.
+	// COOLING is the part of IN USE released and not yet reusable.
+	genRow := func(kind, cidr string, capacity, inUse, reserved, free, cooling int) table.Row {
 		withPercentage := func(n int) string {
 			return fmt.Sprintf("%.5g (%.f%%)", float64(n), 100*float64(n)/float64(capacity))
 		}
@@ -230,19 +230,18 @@ func ShowBlockUtilization(ctx context.Context, ipamClient ipam.Interface, showBl
 			withPercentage(inUse),
 			withPercentage(reserved),
 			withPercentage(free),
+			withPercentage(cooling),
 		}
 	}
 	for _, poolUse := range usage {
 		var blockRows []table.Row
 		for _, blockUse := range poolUse.Blocks {
-			blockRows = append(blockRows, genRow("Block", blockUse.CIDR.String(),
-				blockUse.Capacity, blockUse.InUse, blockUse.Reserved, blockUse.Available))
+			blockRows = append(blockRows, genRow("Block", blockUse.CIDR.String(), blockUse.Capacity, blockUse.InUse, blockUse.Reserved, blockUse.Free, blockUse.Cooling))
 		}
 		if ones, _ := poolUse.CIDR.Mask.Size(); ones > 0 {
 			// Only show the IP Pool row for a real IP Pool and not for the orphaned
 			// block case.
-			t.AppendRow(genRow("IP Pool", poolUse.CIDR.String(),
-				poolUse.Capacity, poolUse.InUse, poolUse.Reserved, poolUse.Available))
+			t.AppendRow(genRow("IP Pool", poolUse.CIDR.String(), poolUse.Capacity, poolUse.InUse, poolUse.Reserved, poolUse.Free, poolUse.Cooling))
 		}
 		if showBlocks {
 			t.AppendRows(blockRows)

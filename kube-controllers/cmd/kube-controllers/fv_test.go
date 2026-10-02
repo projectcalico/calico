@@ -242,12 +242,10 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 
 	It("should not expose pprof endpoints on the prometheus port", func() {
 		// By checking that prometheus metrics are available on the default port.
-		// The container is only started in JustBeforeEach, so the listener may
-		// not be up yet and the first connection is refused rather than failed.
 		metricsEndpoint := fmt.Sprintf("http://%s:9094", kubectrls.IP)
 		Eventually(func() error {
 			return get(metricsEndpoint, "/metrics")
-		}, 30*time.Second, 500*time.Millisecond).Should(Succeed())
+		}, 30*time.Second, 1*time.Second).Should(Succeed())
 
 		// By checking that pprof endpoints are not available on the prometheus port.
 		Expect(get(metricsEndpoint, "/debug/pprof/profile?seconds=1")).NotTo(Succeed())
