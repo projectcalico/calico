@@ -3095,24 +3095,12 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		return state, errors.Join(err4, err6)
 	}
 
-	// The preamble carries both families' jump tables and the workload's
-	// globals; re-attach it whenever they differ from what the kernel has.
 	globals := wepPreambleGlobals(ingressAP4, ingressAP6, egressAP4, egressAP6)
-	if globals != state.preambleGlobals {
-		wg.Go(func() {
-			ingressAP := mergeAttachPoints(ingressAP4, ingressAP6)
-			if ingressAP != nil {
-				m.loadFilterProgram(ingressAP)
-				ingressErr = m.dp.ensureProgramAttached(ingressAP)
-			}
-		})
-		egressAP := mergeAttachPoints(egressAP4, egressAP6)
-		if egressAP != nil {
-			m.loadFilterProgram(egressAP)
-			egressErr = m.dp.ensureProgramAttached(egressAP)
-		}
-		wg.Wait()
-	}
+	wg.Go(func() {
+		ingressErr = m.ensureWepPreamble(&state, globals, ingressAP4, ingressAP6)
+	})
+	egressErr = m.ensureWepPreamble(&state, globals, egressAP4, egressAP6)
+	wg.Wait()
 
 	if ingressErr != nil {
 		return state, ingressErr
@@ -3121,7 +3109,6 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	if egressErr != nil {
 		return state, egressErr
 	}
-	state.preambleGlobals = globals
 
 	if m.v6 != nil && err6 == nil {
 		state.v6Readiness = ifaceIsReady
@@ -3365,6 +3352,31 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 	}
 
 	return ap, nil
+}
+
+// ensureWepPreamble re-attaches one hook's preamble when the globals it carries,
+// jump tables included, differ from what the kernel has.
+func (m *bpfEndpointManager) ensureWepPreamble(
+	state *bpfInterfaceState,
+	globals [hook.Count]libbpf.TcGlobalData,
+	ap4, ap6 *tc.AttachPoint,
+) error {
+	ap := mergeAttachPoints(ap4, ap6)
+	if ap == nil {
+		return nil
+	}
+	h := ap.HookName()
+	if globals[h] == state.preambleGlobals[h] {
+		return nil
+	}
+	m.loadFilterProgram(ap)
+	if err := m.dp.ensureProgramAttached(ap); err != nil {
+		// The hook may hold the old or the new preamble.
+		state.preambleGlobals[h] = libbpf.TcGlobalData{}
+		return err
+	}
+	state.preambleGlobals[h] = globals[h]
+	return nil
 }
 
 // wepPreambleGlobals returns the globals each hook's preamble would be

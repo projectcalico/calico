@@ -46,6 +46,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/jump"
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
@@ -76,6 +77,7 @@ type mockDataplane struct {
 	lastProgID           int
 	progs                map[string]int
 	numAttaches          map[string]int
+	attachedGlobals      map[string]libbpf.TcGlobalData
 	policy               map[string]polprog.Rules
 	routes               map[ip.CIDR]struct{}
 	netlinkShim          netlinkshim.Interface
@@ -85,13 +87,14 @@ type mockDataplane struct {
 	// i.e. the interfaces a previous Felix left netkit-attached.
 	netkitPins map[string]bool
 
-	ensureStartedFn        func()
-	ensureQdiscFn          func(string) (bool, error)
-	queryClassifierFn      func(ifaceName, tcHook string) bool
-	ensureProgramLayoutFn  func(ap *tc.AttachPoint, ipFamily proto.IPVersion) error
-	interfaceByIndexFn     func(ifindex int) (*net.Interface, error)
-	ensureProgramLoadedFn  func(ap attachPoint, ipFamily proto.IPVersion) error
-	ensureProgramLoadedErr error // if set, ensureProgramLoaded returns this error
+	ensureStartedFn         func()
+	ensureQdiscFn           func(string) (bool, error)
+	queryClassifierFn       func(ifaceName, tcHook string) bool
+	ensureProgramLayoutFn   func(ap *tc.AttachPoint, ipFamily proto.IPVersion) error
+	ensureProgramAttachedFn func(ap attachPoint) error
+	interfaceByIndexFn      func(ifindex int) (*net.Interface, error)
+	ensureProgramLoadedFn   func(ap attachPoint, ipFamily proto.IPVersion) error
+	ensureProgramLoadedErr  error // if set, ensureProgramLoaded returns this error
 
 	jitHarden             bool
 	finalTrampolineStride int
@@ -105,13 +108,14 @@ func newMockDataplane() *mockDataplane {
 		log.Panicf("failed to create mock netlink dp %v", err)
 	}
 	return &mockDataplane{
-		lastProgID:  5,
-		progs:       map[string]int{},
-		numAttaches: map[string]int{},
-		policy:      map[string]polprog.Rules{},
-		routes:      map[ip.CIDR]struct{}{},
-		netlinkShim: netlinkShim,
-		netkitPins:  map[string]bool{},
+		lastProgID:      5,
+		progs:           map[string]int{},
+		numAttaches:     map[string]int{},
+		attachedGlobals: map[string]libbpf.TcGlobalData{},
+		policy:          map[string]polprog.Rules{},
+		routes:          map[ip.CIDR]struct{}{},
+		netlinkShim:     netlinkShim,
+		netkitPins:      map[string]bool{},
 	}
 }
 
@@ -145,8 +149,16 @@ func (m *mockDataplane) loadDefaultPolicies(hk hook.Hook) error {
 func (m *mockDataplane) ensureProgramAttached(ap attachPoint) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+	if m.ensureProgramAttachedFn != nil {
+		if err := m.ensureProgramAttachedFn(ap); err != nil {
+			return err
+		}
+	}
 	key := ap.IfaceName() + ":" + ap.HookName().String()
 	m.numAttaches[key] = m.numAttaches[key] + 1
+	if aptc, ok := ap.(*tc.AttachPoint); ok {
+		m.attachedGlobals[key] = *aptc.Configure()
+	}
 	return nil
 }
 
@@ -1352,6 +1364,13 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		newBpfEpMgr(true)
 		// A qdisc that already exists keeps the workload ready across passes.
 		dp.ensureQdiscFn = func(string) (bool, error) { return true, nil }
+		setLayout := func(ap *tc.AttachPoint, ipFamily proto.IPVersion) {
+			if ipFamily == proto.IPVersion_IPV6 {
+				ap.HookLayoutV6 = hook.Layout{hook.SubProgTCMain: 61}
+			} else {
+				ap.HookLayoutV4 = hook.Layout{hook.SubProgTCMain: 41}
+			}
+		}
 		v6Fails := true
 		v4Loads, v6Loads := 0, 0
 		dp.ensureProgramLoadedFn = func(ap attachPoint, ipFamily proto.IPVersion) error {
@@ -1360,9 +1379,14 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				if v6Fails {
 					return errors.New("injected v6 load failure")
 				}
-				return nil
+			} else {
+				v4Loads++
 			}
-			v4Loads++
+			setLayout(ap.(*tc.AttachPoint), ipFamily)
+			return nil
+		}
+		dp.ensureProgramLayoutFn = func(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
+			setLayout(ap, ipFamily)
 			return nil
 		}
 
@@ -1392,6 +1416,53 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		Expect(v4Loads).To(Equal(loadsV4))
 		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(attaches + 1))
 		Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(attaches + 1))
+		for _, key := range []string{"cali12345:ingress", "cali12345:egress"} {
+			g := dp.attachedGlobals[key]
+			Expect(g.Jumps[tcdefs.ProgIndexMain]).To(Equal(uint32(41)), key)
+			Expect(g.JumpsV6[tcdefs.ProgIndexMain]).To(Equal(uint32(61)), key)
+			Expect(g.Jumps[tcdefs.ProgIndexPolicy]).NotTo(Equal(uint32(0xffffffff)), key)
+			Expect(g.JumpsV6[tcdefs.ProgIndexPolicy]).NotTo(Equal(uint32(0xffffffff)), key)
+		}
+	})
+
+	It("should repair a hook whose preamble attach failed even if its globals revert", func() {
+		newBpfEpMgr(true)
+		// A qdisc that already exists keeps the workload ready across passes.
+		dp.ensureQdiscFn = func(string) (bool, error) { return true, nil }
+		sendWEP := func(ep *proto.WorkloadEndpoint) {
+			ep.Name = "cali12345"
+			bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+				Id: &proto.WorkloadEndpointID{
+					OrchestratorId: "k8s",
+					WorkloadId:     ep.Name,
+					EndpointId:     ep.Name,
+				},
+				Endpoint: ep,
+			})
+			_ = bpfEpMgr.CompleteDeferredWork()
+		}
+		sendWEP(&proto.WorkloadEndpoint{})
+		genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(1))
+		Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(1))
+
+		dp.ensureProgramAttachedFn = func(ap attachPoint) error {
+			if ap.HookName() == hook.Egress {
+				return errors.New("injected egress attach failure")
+			}
+			return nil
+		}
+		sendWEP(&proto.WorkloadEndpoint{QosPolicies: []*proto.QoSPolicy{{Dscp: 10}}})
+		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(2))
+		Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(1))
+
+		// Reverting the globals must still repair the hook left on the new ones.
+		dp.ensureProgramAttachedFn = nil
+		sendWEP(&proto.WorkloadEndpoint{})
+		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(3))
+		Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(2))
+		Expect(dp.attachedGlobals["cali12345:ingress"].DSCP).To(Equal(int8(-1)))
+		Expect(dp.attachedGlobals["cali12345:egress"].DSCP).To(Equal(int8(-1)))
 	})
 
 	// Per-workload globals reach the dataplane only when the preamble is
