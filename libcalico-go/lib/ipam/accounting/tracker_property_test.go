@@ -242,6 +242,7 @@ func (in *trackerInputs) removeRef(r AddressRef) {
 func expectSameReads(got, want *Tracker, context string) {
 	Expect(normalizeAll(got.SummarizeAll())).To(Equal(normalizeAll(want.SummarizeAll())), context)
 	Expect(blockCIDRs(got.NoPoolBlocks())).To(Equal(blockCIDRs(want.NoPoolBlocks())), context)
+	Expect(normalizeAll(map[string]*Counts{"": got.SummarizeNoPool()})).To(Equal(normalizeAll(map[string]*Counts{"": want.SummarizeNoPool()})), context)
 	Expect(allocIPs(got.NoPoolUnreferenced())).To(Equal(allocIPs(want.NoPoolUnreferenced())), context)
 	Expect(got.NoPoolBlockCounts()).To(Equal(want.NoPoolBlockCounts()), context)
 	for _, b := range want.NoPoolBlocks() {
@@ -253,6 +254,11 @@ func expectSameReads(got, want *Tracker, context string) {
 		Expect(got.PoolBlockCounts(name)).To(Equal(want.PoolBlockCounts(name)), context+" pool "+name)
 		Expect(allocIPs(got.Allocations(name))).To(Equal(allocIPs(want.Allocations(name))), context+" pool "+name)
 		Expect(allocIPs(got.Unreferenced(name))).To(Equal(allocIPs(want.Unreferenced(name))), context+" pool "+name)
+		Expect(blockCIDRs(got.PoolBlocks(name))).To(Equal(blockCIDRs(want.PoolBlocks(name))), context+" pool "+name)
+		for _, block := range want.PoolBlocks(name) {
+			owner, ok := got.BlockPool(block.CIDR)
+			Expect(ok && owner == name).To(BeTrue(), context+" block "+block.CIDR.String())
+		}
 	}
 }
 
