@@ -224,7 +224,7 @@ still reaches in-sync, so the symptom is a hot re-list of `IPReservation`s rathe
 
 - `ipam_allocations_gc_candidates > 0` for extended periods is the canonical "GC is stuck" signal. Alert on it.
 - `ipam_allocations_gc_reclamations` rate is the canonical "we have a real leak somewhere" signal. Alert on it.
-- Any change to the tracker's incremental indexes needs `TestIncrementalMatchesRebuild` in [`tracker_property_test.go`](../../libcalico-go/lib/ipam/accounting/tracker_property_test.go) to keep passing. It is the consistency check that the old full recompute used to be.
+- Any change to the tracker's incremental indexes needs `TestIncrementalMatchesRebuild` in [`tracker_property_test.go`](../../libcalico-go/lib/ipam/accounting/tracker_property_test.go) to keep passing. It is the only check that the incremental counts match the block state.
 - A metric is not a licence to add a datastore request to the sync loop. The loop shares a goroutine with leak GC, and past overload has clogged it; new inputs belong on the syncer.
   `ipam_ippool_reserved` was caught doing a LIST of every block per sync in review (https://github.com/projectcalico/calico/pull/13331).
 - The in-memory state maps must agree at all times. `assertConsistentState` in `ipam_test.go` is the canonical invariant check; any new map mutation needs a test that exercises it.

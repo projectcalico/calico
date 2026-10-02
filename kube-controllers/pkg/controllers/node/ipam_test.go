@@ -263,7 +263,10 @@ var _ = Describe("IPAM controller UTs", func() {
 		cidr := net.MustParseCIDR("10.0.98.0/30")
 		blockKey := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
 		handle := "reclaim-test-handle"
-		attrs := map[string]string{ipam.AttributeNode: "gone-node", ipam.AttributeType: ipam.AttributeTypeVXLAN}
+		attrs := map[string]string{
+			ipam.AttributeNode: "gone-node",
+			ipam.AttributeType: ipam.AttributeTypeVXLAN,
+		}
 		ordinal := 0
 		dataFeed.OnUpdates([]bapi.Update{{KVPair: model.KVPair{
 			Key: blockKey,
@@ -282,7 +285,8 @@ var _ = Describe("IPAM controller UTs", func() {
 		c.confirmedLeaks[a.id()] = a
 
 		// Freeing the block's last address deletes the block, and the tracker hears about it mid-release.
-		fakeClient := cli.IPAM().(*fakeIPAMClient)
+		fakeClient, ok := cli.IPAM().(*fakeIPAMClient)
+		Expect(ok).To(BeTrue())
 		fakeClient.onRelease = func() {
 			dataFeed.OnUpdates([]bapi.Update{{KVPair: model.KVPair{Key: blockKey}}})
 		}
