@@ -113,6 +113,11 @@ fi
 
 export CALICO_REPO_DIR="${CALICO_REPO_DIR:-/home/semaphore/calico}"
 
+# We will need send-perf-results below.
+pushd ${CALICO_REPO_DIR}
+make bin/send-perf-results
+popd
+
 if [ -z "${DEVSTACK_BRANCH}" ]; then
     DEVSTACK_BRANCH=$(./infer-openstack-branch.sh ${OPENSTACK_RELEASE} devstack)
 fi
@@ -337,7 +342,7 @@ if ${SCALE_ONLY:-false}; then
     # that nobody notices until the dashboard is next read.
     (
       cd ${CALICO_REPO_DIR} && \
-      go run ./hack/perf/cmd/send-perf-results \
+      ./bin/send-perf-results \
          --dir artifacts/perf \
          --templates hack/perf/index-templates \
          --require-publication
@@ -347,7 +352,7 @@ else
     # run must not fail because the trend store was briefly unreachable.
     (
       cd ${CALICO_REPO_DIR} && \
-      go run ./hack/perf/cmd/send-perf-results \
+      ./bin/send-perf-results \
          --dir artifacts/perf \
          --templates hack/perf/index-templates
     ) || true
