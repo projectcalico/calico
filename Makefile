@@ -287,9 +287,10 @@ kind-migration-test:
 	KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 $(MAKE) kind-up
 	$(REPO_ROOT)/hack/test/kind/migration/run_test.sh
 
-## Create a kind cluster, install Calico from the generated manifests, and run
-## the datapath and policy conformance specs against it. Every other kind lane
-## installs via the operator.
+## Create a kind cluster, install Calico from the generated manifests, run the
+## datapath and policy conformance specs against it, then upgrade the cluster to
+## the operator and run them again. Every other kind lane installs via the
+## operator from the start.
 .PHONY: kind-manifest-install-test
 kind-manifest-install-test:
 	$(MAKE) -C e2e build
@@ -303,6 +304,15 @@ kind-manifest-install-test:
 		KUBECONFIG=$(KIND_DIR)/kind-manifests-kubeconfig.yaml \
 		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind/manifest-install.yaml \
 		E2E_JUNIT_REPORT=e2e_manifest_install.xml
+	$(MAKE) -C $(REPO_ROOT) chart CALICO_API_GROUP=projectcalico.org/v3
+	REPO_ROOT=$(REPO_ROOT) GIT_VERSION=$(GIT_VERSION) \
+		KUBECONFIG=$(KIND_DIR)/kind-manifests-kubeconfig.yaml \
+		$(REPO_ROOT)/hack/test/kind/upgrade_to_operator.sh
+	$(MAKE) e2e-run \
+		KIND_NAME=kind-manifests \
+		KUBECONFIG=$(KIND_DIR)/kind-manifests-kubeconfig.yaml \
+		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind/manifest-install.yaml \
+		E2E_JUNIT_REPORT=e2e_operator_upgrade.xml
 
 ## Create a kind cluster and run the conformance e2e tests.
 e2e-test:
