@@ -32,6 +32,7 @@ const (
 	branchStep = "operator-publish-branch"
 
 	PublishStep = "operator-publish"
+	ResolveStep = "operator-resolve"
 )
 
 const (
@@ -145,6 +146,15 @@ func validateBuild(hashrelease bool) func(Operator) error {
 	}
 }
 
+// A resolve only looks the image up, so it needs no tree.
+var validateResolve = func(o Operator) error {
+	errs := []error{validateImage(o)}
+	if o.Version == "" {
+		errs = append(errs, fmt.Errorf("no version specified"))
+	}
+	return errors.Join(errs...)
+}
+
 var validatePublish = func(o Operator) error {
 	errs := []error{validate(o)}
 	errs = append(errs, validateImage(o))
@@ -213,10 +223,17 @@ type resume struct {
 type (
 	BuildOption   interface{ applyBuild(*settings) error }
 	PublishOption interface{ applyPublish(*settings) error }
+	ResolveOption interface{ applyResolve(*settings) error }
+
+	LookupOption interface {
+		PublishOption
+		ResolveOption
+	}
 
 	Option interface {
-		applyBuild(*settings) error
-		applyPublish(*settings) error
+		BuildOption
+		PublishOption
+		ResolveOption
 	}
 )
 
@@ -224,12 +241,14 @@ var (
 	_ Option        = setting(nil)
 	_ BuildOption   = buildSetting(nil)
 	_ PublishOption = publishSetting(nil)
+	_ LookupOption  = lookupSetting(nil)
 )
 
 type setting func(*settings) error
 
 func (f setting) applyBuild(s *settings) error   { return f(s) }
 func (f setting) applyPublish(s *settings) error { return f(s) }
+func (f setting) applyResolve(s *settings) error { return f(s) }
 
 type buildSetting func(*settings) error
 
@@ -238,6 +257,11 @@ func (f buildSetting) applyBuild(s *settings) error { return f(s) }
 type publishSetting func(*settings) error
 
 func (f publishSetting) applyPublish(s *settings) error { return f(s) }
+
+type lookupSetting func(*settings) error
+
+func (f lookupSetting) applyPublish(s *settings) error { return f(s) }
+func (f lookupSetting) applyResolve(s *settings) error { return f(s) }
 
 func WithRunner(r command.CommandRunner) Option {
 	return setting(func(s *settings) error {
@@ -275,8 +299,8 @@ func WithDryRun(dryRun bool) PublishOption {
 	})
 }
 
-func WithRecord(rec steps.RefRecorder) PublishOption {
-	return publishSetting(func(s *settings) error {
+func WithRecord(rec steps.RefRecorder) LookupOption {
+	return lookupSetting(func(s *settings) error {
 		if rec == nil {
 			return fmt.Errorf("no recorder given")
 		}
@@ -285,8 +309,8 @@ func WithRecord(rec steps.RefRecorder) PublishOption {
 	})
 }
 
-func WithResolver(resolve steps.DigestResolver) PublishOption {
-	return publishSetting(func(s *settings) error {
+func WithResolver(resolve steps.DigestResolver) LookupOption {
+	return lookupSetting(func(s *settings) error {
 		if resolve == nil {
 			return fmt.Errorf("no resolver given")
 		}
