@@ -96,6 +96,41 @@ func (c *component) SupportedOSType() rmeta.OSType {
 }
 
 func (c *component) Objects() ([]client.Object, []client.Object) {
+	return render.ObjectsWithOverrides(c)
+}
+
+var _ render.Overridable = (*component)(nil)
+
+func (c *component) OverrideTargets() []rcomp.OverrideTarget {
+	return []rcomp.OverrideTarget{
+		rcomp.Target[*appsv1.Deployment](WebhooksName, c.cfg.APIServer.CalicoWebhooksDeployment).After(func(obj client.Object) {
+			// Set DNSPolicy based on the final HostNetwork value (after overrides).
+			if dep, ok := obj.(*appsv1.Deployment); ok && dep.Spec.Template.Spec.HostNetwork {
+				dep.Spec.Template.Spec.DNSPolicy = corev1.DNSClusterFirstWithHostNet
+			}
+		}),
+	}
+}
+
+// hostNetwork is the HostNetwork the deployment ends up with once overrides apply.
+func (c *component) hostNetwork() bool {
+	if hn := rcomp.GetHostNetwork(c.cfg.APIServer.CalicoWebhooksDeployment); hn != nil {
+		return *hn
+	}
+	return render.HostNetworkRequired(c.cfg.Installation)
+}
+
+// containerPort is the port the webhook listens on once overrides apply.
+func (c *component) containerPort() int32 {
+	for _, ctr := range rcomp.GetContainers(c.cfg.APIServer.CalicoWebhooksDeployment) {
+		if ctr.Name == WebhooksName && len(ctr.Ports) > 0 {
+			return ctr.Ports[0].ContainerPort
+		}
+	}
+	return webhooksContainerPort
+}
+
+func (c *component) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {
 	// Create the ServiceAccount for the webhook.
 	sa := &corev1.ServiceAccount{
 		TypeMeta: metav1.TypeMeta{Kind: "ServiceAccount", APIVersion: "v1"},
@@ -105,7 +140,7 @@ func (c *component) Objects() ([]client.Object, []client.Object) {
 		},
 	}
 
-	// Create the Deployment for the webhook with defaults, then apply overrides.
+	// Create the Deployment for the webhook with defaults. The overrides go on later.
 	dep := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -177,17 +212,7 @@ func (c *component) Objects() ([]client.Object, []client.Object) {
 		dep.Spec.Template.Spec.Affinity = podaffinity.NewPodAntiAffinity(WebhooksName, []string{common.CalicoNamespace})
 	}
 
-	if overrides := c.cfg.APIServer.CalicoWebhooksDeployment; overrides != nil {
-		rcomp.ApplyDeploymentOverrides(dep, overrides)
-	}
-
-	// Set DNSPolicy based on the final HostNetwork value (after overrides).
-	if dep.Spec.Template.Spec.HostNetwork {
-		dep.Spec.Template.Spec.DNSPolicy = corev1.DNSClusterFirstWithHostNet
-	}
-
-	// Read the final container port from the deployment (after overrides) for use in the Service.
-	containerPort := dep.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort
+	containerPort := c.containerPort()
 	dep.Spec.Template.Spec.Containers[0].ReadinessProbe.HTTPGet.Port = intstr.FromInt32(containerPort)
 
 	// The binary picks its own listen port, so pass the final value rather than let it default.
@@ -199,7 +224,7 @@ func (c *component) Objects() ([]client.Object, []client.Object) {
 	// Network policy to allow traffic to/from the webhook pod. Skip if host networking is
 	// enabled, since network policy is ineffective for host-networked pods.
 	var np *v3.NetworkPolicy
-	if !dep.Spec.Template.Spec.HostNetwork {
+	if !c.hostNetwork() {
 		egressRules := networkpolicy.AppendDNSEgressRules(nil, c.cfg.OpenShift)
 		egressRules = append(egressRules,
 			v3.Rule{

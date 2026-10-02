@@ -33,6 +33,7 @@ import (
 	rcomp "github.com/projectcalico/calico/operator/pkg/render/common/components"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontext"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 const (
@@ -100,6 +101,16 @@ func (c *windowsComponent) SupportedOSType() rmeta.OSType {
 }
 
 func (c *windowsComponent) Objects() ([]client.Object, []client.Object) {
+	return ObjectsWithOverrides(c)
+}
+
+var _ Overridable = (*windowsComponent)(nil)
+
+func (c *windowsComponent) OverrideTargets() []rcomp.OverrideTarget {
+	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.DaemonSet](common.WindowsDaemonSetName, c.cfg.Installation.CalicoNodeWindowsDaemonSet)}
+}
+
+func (c *windowsComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {
 	// Clean up old windows upgrader daemonset if present
 	objsToDelete := []client.Object{
 		&corev1.ServiceAccount{
@@ -390,6 +401,19 @@ func (c *windowsComponent) uninstallContainer() corev1.Container {
 		SecurityContext: securitycontext.NewWindowsHostProcessContext(),
 		VolumeMounts:    uninstallVolumeMounts,
 	}
+}
+
+// WindowsKeyCertProvisioner is a keypair's certificate management init container
+// for a Windows node. It runs the provisioner from the calico.exe in image, as a
+// host process like the rest of the pod.
+func WindowsKeyCertProvisioner(kp certificatemanagement.KeyPairInterface, image string) corev1.Container {
+	ic := kp.InitContainer(common.CalicoNamespace, securitycontext.NewWindowsHostProcessContext())
+	ic.Image = image
+	ic.Command = []string{"$env:CONTAINER_SANDBOX_MOUNT_POINT/CalicoWindows/calico.exe", "component", "key-cert-provisioner"}
+	for i := range ic.VolumeMounts {
+		ic.VolumeMounts[i].MountPath = "c:" + ic.VolumeMounts[i].MountPath
+	}
+	return ic
 }
 
 // cniContainer creates the node's init container that installs CNI.
@@ -699,6 +723,9 @@ func (c *windowsComponent) windowsDaemonset(cniCfgMap *corev1.ConfigMap) *appsv1
 
 	// The uninstall-calico initContainer must be the first initContainer
 	initContainers := []corev1.Container{c.uninstallContainer()}
+	if c.cfg.TLS.NodeSecret.UseCertificateManagement() {
+		initContainers = append(initContainers, WindowsKeyCertProvisioner(c.cfg.TLS.NodeSecret, c.nodeImage))
+	}
 
 	annotations := c.cfg.TLS.TrustedBundle.HashAnnotations()
 
@@ -785,10 +812,6 @@ func (c *windowsComponent) windowsDaemonset(cniCfgMap *corev1.ConfigMap) *appsv1
 	}
 
 	SetNodeCriticalPod(&(ds.Spec.Template))
-
-	if overrides := c.cfg.Installation.CalicoNodeWindowsDaemonSet; overrides != nil {
-		rcomp.ApplyDaemonSetOverrides(&ds, overrides)
-	}
 
 	return &ds
 }

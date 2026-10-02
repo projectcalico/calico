@@ -110,15 +110,28 @@ func (c *typhaComponent) SupportedOSType() rmeta.OSType {
 }
 
 func (c *typhaComponent) Objects() ([]client.Object, []client.Object) {
-	pdb := c.typhaPodDisruptionBudget()
-	if overrides := c.cfg.Installation.TyphaPodDisruptionBudget; overrides != nil {
-		rcomp.ApplyPodDisruptionBudgetOverrides(pdb, overrides)
+	return ObjectsWithOverrides(c)
+}
+
+var _ Overridable = (*typhaComponent)(nil)
+
+func (c *typhaComponent) OverrideTargets() []rcomp.OverrideTarget {
+	return []rcomp.OverrideTarget{
+		rcomp.Target[*policyv1.PodDisruptionBudget](common.TyphaDeploymentName, c.cfg.Installation.TyphaPodDisruptionBudget),
+		rcomp.Target[*appsv1.Deployment](common.TyphaDeploymentName, c.cfg.Installation.TyphaDeployment).After(func(obj client.Object) {
+			if d, ok := obj.(*appsv1.Deployment); ok {
+				applyPostOverrideFixUps(d)
+			}
+		}),
 	}
+}
+
+func (c *typhaComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {
 	objs := []client.Object{
 		c.typhaServiceAccount(),
 		c.typhaRole(),
 		c.typhaRoleBinding(),
-		pdb,
+		c.typhaPodDisruptionBudget(),
 	}
 	objs = append(objs, c.typhaServices()...)
 
@@ -438,18 +451,12 @@ func (c *typhaComponent) typhaDeployment() []client.Object {
 		migration.SetTyphaAntiAffinity(deploy)
 	}
 
-	if overrides := c.cfg.Installation.TyphaDeployment; overrides != nil {
-		rcomp.ApplyDeploymentOverrides(deploy, overrides)
-	}
-
-	// ApplyDeploymentOverrides patches some fields that have consistency requirements elsewhere in the spec.
-	// fix up the other places.
-	c.applyPostOverrideFixUps(deploy)
-
 	return []client.Object{deploy}
 }
 
-func (c *typhaComponent) applyPostOverrideFixUps(d *appsv1.Deployment) {
+// applyPostOverrideFixUps updates the fields that have to agree with ones the
+// deployment overrides may have changed.
+func applyPostOverrideFixUps(d *appsv1.Deployment) {
 	// The deployment overrides may update the termination grace period and typha needs to know what the grace
 	// period is in order to calculate its shutdown disconnection rate.  Copy that over to an env var.
 	terminationGracePeriod := *d.Spec.Template.Spec.TerminationGracePeriodSeconds

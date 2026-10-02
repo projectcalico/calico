@@ -146,10 +146,12 @@ type (
 
 // calicoKubeControllers marks the calico-kube-controllers deployment as extendable.
 type calicoKubeControllers struct {
-	render.Component
+	render.Overridable
 
 	cfg *KubeControllersConfiguration
 }
+
+var _ render.Overridable = calicoKubeControllers{}
 
 func (c calicoKubeControllers) KubeControllersConfig() *KubeControllersConfiguration {
 	return c.cfg
@@ -207,7 +209,7 @@ func NewCalicoKubeControllers(cfg *KubeControllersConfiguration) render.Componen
 	cfg.Rules = KubeControllersRoleCommonRules(cfg)
 	cfg.EnabledControllers = []string{"node", "loadbalancer"}
 
-	return calicoKubeControllers{Component: NewKubeControllers(cfg), cfg: cfg}
+	return calicoKubeControllers{Overridable: &kubeControllersComponent{cfg: cfg}, cfg: cfg}
 }
 
 type kubeControllersComponent struct {
@@ -234,6 +236,16 @@ func (c *kubeControllersComponent) SupportedOSType() rmeta.OSType {
 }
 
 func (c *kubeControllersComponent) Objects() ([]client.Object, []client.Object) {
+	return render.ObjectsWithOverrides(c)
+}
+
+var _ render.Overridable = (*kubeControllersComponent)(nil)
+
+func (c *kubeControllersComponent) OverrideTargets() []rcomp.OverrideTarget {
+	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.Deployment](c.cfg.Name, c.cfg.Installation.CalicoKubeControllersDeployment)}
+}
+
+func (c *kubeControllersComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {
 	objectsToCreate := []client.Object{}
 	objectsToDelete := []client.Object{}
 
@@ -562,10 +574,6 @@ func (c *kubeControllersComponent) controllersDeployment() *appsv1.Deployment {
 	}
 
 	render.SetClusterCriticalPod(&d.Spec.Template)
-
-	if overrides := c.cfg.Installation.CalicoKubeControllersDeployment; overrides != nil {
-		rcomp.ApplyDeploymentOverrides(&d, overrides)
-	}
 	return &d
 }
 

@@ -706,7 +706,12 @@ var _ = Describe("windows-controller installation tests", func() {
 								components.CalicoImagePath,
 								components.ComponentCalicoNodeWindows.Image,
 								components.ComponentCalicoNodeWindows.Version)))
-						Expect(dsWin.Spec.Template.Spec.InitContainers).To(HaveLen(2))
+
+						// Certificate management is on, so the node certs provisioner runs too, from the node image.
+						Expect(dsWin.Spec.Template.Spec.InitContainers).To(HaveLen(3))
+						provisionerWin := test.GetContainer(dsWin.Spec.Template.Spec.InitContainers, "node-certs-key-cert-provisioner")
+						Expect(provisionerWin).ToNot(BeNil())
+						Expect(provisionerWin.Image).To(Equal(nodeWin.Image))
 						cniWin := test.GetContainer(dsWin.Spec.Template.Spec.InitContainers, "install-cni")
 						Expect(cniWin).ToNot(BeNil())
 						Expect(cniWin.Image).To(Equal(
@@ -778,7 +783,12 @@ var _ = Describe("windows-controller installation tests", func() {
 								components.CalicoImagePath,
 								components.ComponentCalicoNodeWindows.Image,
 								"sha256:tigeranodewindowshash")))
-						Expect(dsWin.Spec.Template.Spec.InitContainers).To(HaveLen(2))
+
+						// Certificate management is on, so the node certs provisioner runs too, from the node image.
+						Expect(dsWin.Spec.Template.Spec.InitContainers).To(HaveLen(3))
+						provisionerWin := test.GetContainer(dsWin.Spec.Template.Spec.InitContainers, "node-certs-key-cert-provisioner")
+						Expect(provisionerWin).ToNot(BeNil())
+						Expect(provisionerWin.Image).To(Equal(nodeWin.Image))
 						cniWin := test.GetContainer(dsWin.Spec.Template.Spec.InitContainers, "install-cni")
 						Expect(cniWin).ToNot(BeNil())
 						Expect(cniWin.Image).To(Equal(
