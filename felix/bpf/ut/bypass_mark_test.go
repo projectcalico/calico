@@ -26,7 +26,7 @@ import (
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
-// A fully approved flow that must go via the host stack keeps its SKIP_FIB / NAT_OUT mark.
+// A fully approved host-stack flow keeps its code: SKIP_FIB gains BYPASS, NAT_OUT stays plain.
 func TestBypassMarkKeepsHostStackMark(t *testing.T) {
 	RegisterTestingT(t)
 
@@ -56,13 +56,16 @@ func TestBypassMarkKeepsHostStackMark(t *testing.T) {
 		{"from-WEP, no flags", "calico_from_workload_ep", 0,
 			conntrack.Leg{Approved: true, Workload: true, Opener: true}, "TC_ACT_REDIRECT", tcdefs.MarkSeenBypass},
 		{"from-WEP, SKIP_FIB", "calico_from_workload_ep", v4.FlagSkipFIB,
-			conntrack.Leg{Approved: true, Workload: true, Opener: true}, "TC_ACT_UNSPEC", tcdefs.MarkSeenSkipFIB},
+			conntrack.Leg{Approved: true, Workload: true, Opener: true}, "TC_ACT_UNSPEC", tcdefs.MarkSeenSkipFIB | tcdefs.MarkSeenBypass},
 		{"from-WEP, NAT_OUT", "calico_from_workload_ep", v4.FlagNATOut,
 			conntrack.Leg{Approved: true, Workload: true, Opener: true}, "TC_ACT_UNSPEC", tcdefs.MarkSeenNATOutgoing},
 		{"from-HEP, no flags", "calico_from_host_ep", 0,
 			conntrack.Leg{Approved: true, Opener: true}, "TC_ACT_REDIRECT", tcdefs.MarkSeenBypass},
 		{"from-HEP, SKIP_FIB", "calico_from_host_ep", v4.FlagSkipFIB,
-			conntrack.Leg{Approved: true, Opener: true}, "TC_ACT_UNSPEC", tcdefs.MarkSeenSkipFIB},
+			conntrack.Leg{Approved: true, Opener: true}, "TC_ACT_UNSPEC", tcdefs.MarkSeenSkipFIB | tcdefs.MarkSeenBypass},
+		// A reply on an outgoing-NAT flow that was not SNATed, so host conntrack sees both directions.
+		{"from-HEP, NAT_OUT reply", "calico_from_host_ep", v4.FlagNATOut,
+			conntrack.Leg{Approved: true, Opener: true}, "TC_ACT_UNSPEC", tcdefs.MarkSeenNATOutgoing},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			resetCTMap(ctMap)
@@ -78,8 +81,8 @@ func TestBypassMarkKeepsHostStackMark(t *testing.T) {
 				res, err := bpfrun(pktBytes)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(res.RetvalStr()).To(Equal(c.retval))
-				Expect(skbMark).To(Equal(c.mark), "mark 0x%08x, want 0x%08x", skbMark, c.mark)
 			})
+			expectMark(int(c.mark))
 		})
 	}
 }
