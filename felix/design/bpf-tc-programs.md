@@ -154,10 +154,9 @@ must, since it bakes per-interface config (jump-map indices, host IP,
 flags) into `.rodata`, some of which changes without a restart. So the
 preamble is re-loaded, and re-verified, on every attach.
 
-A ready workload is not re-attached on every apply. Felix keeps, in
-memory, the globals (jump tables included) each hook's preamble was
-attached with, and re-attaches when the globals it would now write
-differ; a missing qdisc or classifier clears them.
+Felix keeps, in memory, the globals (jump tables included) each hook's
+workload preamble was attached with, and re-attaches when the globals
+it would now write differ or it finds no qdisc or attached classifier.
 
 The preamble calls `bpf_trace_printk` on its drop/error paths
 regardless of `BPFLogLevel`. Under kernel `lockdown=confidentiality`

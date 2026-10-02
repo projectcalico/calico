@@ -109,6 +109,7 @@ var (
 		Help: "Number of BPF endpoints that are successfully programmed.",
 	})
 	errApplyingPolicy = errors.New("error applying policy")
+	errLayoutLookup   = errors.New("error looking up program layout")
 )
 
 var (
@@ -3082,6 +3083,18 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	wg.Wait()
 
+	// Without its layout a ready family would drop out of the preamble, so keep
+	// the attached preamble and fully reload that family next time.
+	if errors.Is(err4, errLayoutLookup) || errors.Is(err6, errLayoutLookup) {
+		if errors.Is(err4, errLayoutLookup) {
+			state.v4Readiness = ifaceNotReady
+		}
+		if errors.Is(err6, errLayoutLookup) {
+			state.v6Readiness = ifaceNotReady
+		}
+		return state, errors.Join(err4, err6)
+	}
+
 	// The preamble carries both families' jump tables and the workload's
 	// globals; re-attach it whenever they differ from what the kernel has.
 	globals := wepPreambleGlobals(ingressAP4, ingressAP6, egressAP4, egressAP6)
@@ -3344,7 +3357,7 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 		ap.Log().Info("Attached programs to the WEP")
 	} else if err := d.mgr.dp.ensureProgramLayout(ap, d.ipFamily); err != nil {
 		// The preamble may be re-attached, and needs this family's jump tables.
-		return nil, fmt.Errorf("looking up wep program layout: %w", err)
+		return nil, fmt.Errorf("%w: %w", errLayoutLookup, err)
 	}
 
 	if err := d.wepApplyPolicy(ap, endpoint, polDirection); err != nil {

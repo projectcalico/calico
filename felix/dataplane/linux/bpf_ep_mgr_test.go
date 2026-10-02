@@ -88,6 +88,7 @@ type mockDataplane struct {
 	ensureStartedFn        func()
 	ensureQdiscFn          func(string) (bool, error)
 	queryClassifierFn      func(ifaceName, tcHook string) bool
+	ensureProgramLayoutFn  func(ap *tc.AttachPoint, ipFamily proto.IPVersion) error
 	interfaceByIndexFn     func(ifindex int) (*net.Interface, error)
 	ensureProgramLoadedFn  func(ap attachPoint, ipFamily proto.IPVersion) error
 	ensureProgramLoadedErr error // if set, ensureProgramLoaded returns this error
@@ -178,6 +179,9 @@ func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVer
 }
 
 func (m *mockDataplane) ensureProgramLayout(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
+	if m.ensureProgramLayoutFn != nil {
+		return m.ensureProgramLayoutFn(ap, ipFamily)
+	}
 	return nil
 }
 
@@ -1438,6 +1442,45 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}),
 		Entry("istio ambient", &proto.WorkloadEndpoint{IsIstioAmbient: true}),
 	)
+
+	It("should keep the preamble and reload a ready family whose layout lookup fails", func() {
+		newBpfEpMgr(true)
+		// A qdisc that already exists keeps the workload ready across passes.
+		dp.ensureQdiscFn = func(string) (bool, error) { return true, nil }
+		v6Loads := 0
+		dp.ensureProgramLoadedFn = func(ap attachPoint, ipFamily proto.IPVersion) error {
+			if ipFamily == proto.IPVersion_IPV6 {
+				v6Loads++
+			}
+			return nil
+		}
+		bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+			Id: &proto.WorkloadEndpointID{
+				OrchestratorId: "k8s",
+				WorkloadId:     "cali12345",
+				EndpointId:     "cali12345",
+			},
+			Endpoint: &proto.WorkloadEndpoint{Name: "cali12345"},
+		})
+		genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(1))
+		loadsV6 := v6Loads
+
+		dp.ensureProgramLayoutFn = func(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
+			if ipFamily == proto.IPVersion_IPV6 {
+				return errors.New("injected layout lookup failure")
+			}
+			return nil
+		}
+		bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345", State: ifacemonitor.StateUp, Index: 15})
+		_ = bpfEpMgr.CompleteDeferredWork()
+		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(1))
+		Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(1))
+
+		dp.ensureProgramLayoutFn = nil
+		Expect(bpfEpMgr.CompleteDeferredWork()).To(Succeed())
+		Expect(v6Loads).To(BeNumerically(">", loadsV6))
+	})
 
 	DescribeTable("should re-attach a ready workload whose preamble the kernel may have lost",
 		func(lose func()) {
