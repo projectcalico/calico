@@ -1477,6 +1477,10 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		}
 	}
 
+	if err = r.updateK8sAdmissionPolicies(ctx, defaulted, reqLogger); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// TODO: We handle too many components in this controller at the moment. Once we are done consolidating,
 	// we can have the CreateOrUpdate logic handle this for us.
 	r.status.AddDaemonsets([]types.NamespacedName{{Name: common.NodeDaemonSetName, Namespace: common.CalicoNamespace}})
@@ -1813,7 +1817,7 @@ func (r *ReconcileInstallation) updateMutatingAdmissionPolicies(ctx context.Cont
 	}
 
 	desired := admission.GetMutatingAdmissionPolicies(install.Spec.Variant, r.opts.UseV3CRDs, mapAPIVersion)
-	existingMAPs, existingMAPBs, err := admission.ListManaged(ctx, r.client, mapAPIVersion)
+	existingMAPs, existingMAPBs, err := admission.ListManaged(ctx, r.client, mapAPIVersion, admission.ManagedMAPLabelValue)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed MutatingAdmissionPolicy resources", err, log)
 		return err
@@ -1837,13 +1841,85 @@ func (r *ReconcileInstallation) updateValidatingAdmissionPolicies(ctx context.Co
 	}
 
 	desired := admission.GetValidatingAdmissionPolicies(install.Spec.Variant, r.opts.UseV3CRDs, vapAPIVersion)
-	existingVAPs, existingVAPBs, err := admission.ListManagedValidating(ctx, r.client, vapAPIVersion)
+	existingVAPs, existingVAPBs, err := admission.ListManagedValidating(ctx, r.client, vapAPIVersion, admission.ManagedVAPLabelValue)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed ValidatingAdmissionPolicy resources", err, log)
 		return err
 	}
 
 	return r.syncManagedAdmissionPolicies(ctx, install, log, desired, existingVAPs, existingVAPBs, admission.IsValidatingPolicyKind, admission.IsValidatingBindingKind, "Error syncing ValidatingAdmissionPolicy resources")
+}
+
+// k8sAdmissionPolicyKind is one kind of admission policy over built-in Kubernetes resources, with
+// what's needed to reconcile its policies and bindings.
+type k8sAdmissionPolicyKind struct {
+	kind                string
+	labelValue          string
+	desired             func(variant operatorv1.ProductVariant, apiVersion string) []client.Object
+	listManaged         func(ctx context.Context, c client.Client, apiVersion, labelValue string) (policies, bindings []client.Object, err error)
+	isPolicy, isBinding func(client.Object) bool
+
+	// notServedWarning makes sure an unserved kind is only warned about once, since the served
+	// versions are discovered once at start-up.
+	notServedWarning *utils.OnceFlag
+}
+
+// The validating policies come first, so the annotations are protected before any are stripped.
+var k8sAdmissionPolicyKinds = []k8sAdmissionPolicyKind{
+	{
+		kind:             admission.KindValidatingPolicy,
+		labelValue:       admission.ManagedK8sVAPLabelValue,
+		desired:          admission.GetK8sValidatingAdmissionPolicies,
+		listManaged:      admission.ListManagedValidating,
+		isPolicy:         admission.IsValidatingPolicyKind,
+		isBinding:        admission.IsValidatingBindingKind,
+		notServedWarning: &utils.OnceFlag{},
+	},
+	{
+		kind:             admission.KindPolicy,
+		labelValue:       admission.ManagedK8sMAPLabelValue,
+		desired:          admission.GetK8sMutatingAdmissionPolicies,
+		listManaged:      admission.ListManaged,
+		isPolicy:         admission.IsPolicyKind,
+		isBinding:        admission.IsBindingKind,
+		notServedWarning: &utils.OnceFlag{},
+	},
+}
+
+// updateK8sAdmissionPolicies reconciles the admission policies over built-in Kubernetes resources.
+// Kubernetes serves those resources whatever Calico API is installed, so unlike
+// updateValidatingAdmissionPolicies this does not depend on v3 CRDs or on the operator managing CRDs.
+// The policies protect the Calico CNI plugin's pod annotations, so none are installed when another
+// CNI plugin is in use. A kind the cluster doesn't serve is skipped without degrading: on clusters
+// without MutatingAdmissionPolicy, the validating policy still protects the annotations.
+func (r *ReconcileInstallation) updateK8sAdmissionPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger) error {
+	calicoCNI := install.Spec.CNI != nil && install.Spec.CNI.Type == operatorv1.PluginCalico
+
+	for _, k := range k8sAdmissionPolicyKinds {
+		apiVersion := r.opts.APIDiscovery.ServedVersion(admission.APIGroup, k.kind)
+		if apiVersion == "" {
+			if k.notServedWarning.TrySet() {
+				log.Info(fmt.Sprintf("[WARNING] Kubernetes cluster does not serve %s, skipping", k.kind))
+			}
+			continue
+		}
+
+		var desired []client.Object
+		if calicoCNI {
+			desired = k.desired(install.Spec.Variant, apiVersion)
+		}
+
+		existingPolicies, existingBindings, err := k.listManaged(ctx, r.client, apiVersion, k.labelValue)
+		if err != nil {
+			r.status.SetDegraded(operatorv1.ResourceReadError, fmt.Sprintf("Error listing managed %s resources", k.kind), err, log)
+			return err
+		}
+
+		if err := r.syncManagedAdmissionPolicies(ctx, install, log, desired, existingPolicies, existingBindings, k.isPolicy, k.isBinding, fmt.Sprintf("Error syncing %s resources", k.kind)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // syncManagedAdmissionPolicies creates or updates the desired admission policies and bindings and
