@@ -256,6 +256,16 @@ func ProgQueryTcx(ifindex int, ingress bool) ([64]uint32, [64]uint32, uint32, er
 	return progQuery(ifindex, attachType)
 }
 
+// ProgQueryNetkit lists the programs attached to a netkit device's peer or
+// primary side.
+func ProgQueryNetkit(ifindex int, peer bool) ([64]uint32, [64]uint32, uint32, error) {
+	attachType := C.BPF_NETKIT_PRIMARY
+	if peer {
+		attachType = C.BPF_NETKIT_PEER
+	}
+	return progQuery(ifindex, attachType)
+}
+
 func progQuery(ifindex, attachType int) ([64]uint32, [64]uint32, uint32, error) {
 	var progIds, attachFlags [64]uint32
 	progCnt := uint32(64)

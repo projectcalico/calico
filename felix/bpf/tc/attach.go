@@ -425,6 +425,24 @@ func ListAttachedTcxPrograms(iface, attachHook string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error querying program for %s:%s:%w", iface, attachHook, err)
 	}
+	return progNames(progId, progCnt), nil
+}
+
+// ListAttachedNetkitPrograms returns the names of the programs attached to a
+// netkit device's hook; ingress is the peer side, as in attachNetkitProgram.
+func ListAttachedNetkitPrograms(iface, attachHook string) ([]string, error) {
+	link, err := netlink.LinkByName(iface)
+	if err != nil {
+		return nil, fmt.Errorf("error getting link for %s:%w", iface, err)
+	}
+	progId, _, progCnt, err := libbpf.ProgQueryNetkit(link.Attrs().Index, attachHook == hook.Ingress.String())
+	if err != nil {
+		return nil, fmt.Errorf("error querying program for %s:%s:%w", iface, attachHook, err)
+	}
+	return progNames(progId, progCnt), nil
+}
+
+func progNames(progId [64]uint32, progCnt uint32) []string {
 	progNames := []string{}
 	for i := range progCnt {
 		name, err := libbpf.ProgName(progId[i])
@@ -433,7 +451,7 @@ func ListAttachedTcxPrograms(iface, attachHook string) ([]string, error) {
 		}
 		progNames = append(progNames, name)
 	}
-	return progNames, nil
+	return progNames
 }
 
 func ListAttachedPrograms(iface, hook string, includeLegacy bool) ([]attachedProg, error) {
