@@ -211,6 +211,27 @@ func (c *nodeComponent) SupportedOSType() rmeta.OSType {
 }
 
 func (c *nodeComponent) Objects() ([]client.Object, []client.Object) {
+	return ObjectsWithOverrides(c)
+}
+
+var _ Overridable = (*nodeComponent)(nil)
+
+func (c *nodeComponent) OverrideTargets() []rcomp.OverrideTarget {
+	overrides := c.cfg.Installation.CalicoNodeDaemonSet
+	if overrides != nil && overrides.Spec != nil && overrides.Spec.Template != nil && overrides.Spec.Template.Spec != nil {
+		// Rename the legacy mount-bpffs init container to ebpf-bootstrap, on a copy so
+		// the user's Installation is left alone.
+		overrides = overrides.DeepCopy()
+		for i, ic := range overrides.Spec.Template.Spec.InitContainers {
+			if ic.Name == "mount-bpffs" {
+				overrides.Spec.Template.Spec.InitContainers[i].Name = "ebpf-bootstrap"
+			}
+		}
+	}
+	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.DaemonSet](common.NodeDaemonSetName, overrides)}
+}
+
+func (c *nodeComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {
 	objs := []client.Object{
 		c.nodeServiceAccount(),
 		c.nodeRole(),
@@ -1052,15 +1073,6 @@ func (c *nodeComponent) nodeDaemonset(cniCfgMap *corev1.ConfigMap) *appsv1.Daemo
 		migration.LimitDaemonSetToMigratedNodes(&ds)
 	}
 
-	if overrides := c.cfg.Installation.CalicoNodeDaemonSet; overrides != nil {
-		// If the overrides specify the legacy mount-bpffs init container, then we rename it to the new value: ebpf-bootstrap.
-		for index := range rcomp.GetInitContainers(overrides) {
-			if overrides.Spec.Template.Spec.InitContainers[index].Name == "mount-bpffs" {
-				overrides.Spec.Template.Spec.InitContainers[index].Name = "ebpf-bootstrap"
-			}
-		}
-		rcomp.ApplyDaemonSetOverrides(&ds, overrides)
-	}
 	return &ds
 }
 

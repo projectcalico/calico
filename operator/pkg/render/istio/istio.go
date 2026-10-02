@@ -21,6 +21,7 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -238,6 +239,21 @@ func (c *IstioComponent) ResolveImages(is *operatorv1.ImageSet) error {
 
 // Objects implements the Component interface.
 func (c *IstioComponent) Objects() ([]client.Object, []client.Object) {
+	return render.ObjectsWithOverrides(c)
+}
+
+var _ render.Overridable = (*IstioComponent)(nil)
+
+func (c *IstioComponent) OverrideTargets() []rcomp.OverrideTarget {
+	res := c.resources
+	return []rcomp.OverrideTarget{
+		rcomp.Target[*appsv1.Deployment](res.IstiodDeployment.Name, c.cfg.Istio.Spec.IstiodDeployment),
+		rcomp.Target[*appsv1.DaemonSet](res.CNIDaemonSet.Name, c.cfg.Istio.Spec.IstioCNIDaemonset),
+		rcomp.Target[*appsv1.DaemonSet](res.ZTunnelDaemonSet.Name, c.cfg.Istio.Spec.ZTunnelDaemonset),
+	}
+}
+
+func (c *IstioComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {
 	res := c.resources
 
 	var objs, toDelete []client.Object
@@ -252,18 +268,6 @@ func (c *IstioComponent) Objects() ([]client.Object, []client.Object) {
 		networkpolicy.DeprecatedAllowTigeraNetworkPolicyObject("istio-cni-node", IstioNamespace),
 		networkpolicy.DeprecatedAllowTigeraNetworkPolicyObject("ztunnel", IstioNamespace),
 	)
-
-	if overrides := c.cfg.Istio.Spec.IstiodDeployment; overrides != nil {
-		rcomp.ApplyDeploymentOverrides(res.IstiodDeployment, overrides)
-	}
-
-	if overrides := c.cfg.Istio.Spec.IstioCNIDaemonset; overrides != nil {
-		rcomp.ApplyDaemonSetOverrides(res.CNIDaemonSet, overrides)
-	}
-
-	if overrides := c.cfg.Istio.Spec.ZTunnelDaemonset; overrides != nil {
-		rcomp.ApplyDaemonSetOverrides(res.ZTunnelDaemonSet, overrides)
-	}
 
 	// Set required configs
 	for i := range res.ZTunnelDaemonSet.Spec.Template.Spec.Containers {

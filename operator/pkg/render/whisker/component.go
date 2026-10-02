@@ -129,15 +129,20 @@ func (c *Component) SupportedOSType() rmeta.OSType {
 }
 
 func (c *Component) Objects() ([]client.Object, []client.Object) {
-	deployment := c.deployment()
-	if overrides := c.cfg.Whisker.Spec.WhiskerDeployment; overrides != nil {
-		rcomp.ApplyDeploymentOverrides(deployment, overrides)
-	}
+	return render.ObjectsWithOverrides(c)
+}
 
+var _ render.Overridable = (*Component)(nil)
+
+func (c *Component) OverrideTargets() []rcomp.OverrideTarget {
+	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.Deployment](WhiskerDeploymentName, c.cfg.Whisker.Spec.WhiskerDeployment)}
+}
+
+func (c *Component) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {
 	toCreate := []client.Object{
 		c.serviceAccount(),
 		c.nginxConfigMap(),
-		deployment,
+		c.deployment(),
 		c.whiskerService(),
 		c.networkPolicy(),
 	}

@@ -872,3 +872,41 @@ func ApplyEnvoyProxyOverrides(ep *envoyapi.EnvoyProxy, overrides any) {
 		}
 	}
 }
+
+// ApplyEnvoyProxyServiceOverrides applies the Service overrides to the given EnvoyProxy.
+func ApplyEnvoyProxyServiceOverrides(ep *envoyapi.EnvoyProxy, overrides *operator.GatewayService) {
+	if overrides == nil {
+		return
+	}
+	if ep.Spec.Provider.Kubernetes.EnvoyService == nil {
+		ep.Spec.Provider.Kubernetes.EnvoyService = &envoyapi.KubernetesServiceSpec{}
+	}
+	svc := ep.Spec.Provider.Kubernetes.EnvoyService
+	if overrides.Metadata != nil {
+		if len(overrides.Metadata.Labels) > 0 {
+			svc.Labels = common.MapExistsOrInitialize(svc.Labels)
+			common.MergeMaps(overrides.Metadata.Labels, svc.Labels)
+		}
+		if len(overrides.Metadata.Annotations) > 0 {
+			svc.Annotations = common.MapExistsOrInitialize(svc.Annotations)
+			common.MergeMaps(overrides.Metadata.Annotations, svc.Annotations)
+		}
+	}
+	if overrides.Spec != nil {
+		if overrides.Spec.LoadBalancerClass != nil {
+			svc.LoadBalancerClass = overrides.Spec.LoadBalancerClass
+		}
+		if overrides.Spec.AllocateLoadBalancerNodePorts != nil {
+			svc.AllocateLoadBalancerNodePorts = overrides.Spec.AllocateLoadBalancerNodePorts
+		}
+		if overrides.Spec.LoadBalancerSourceRanges != nil {
+			svc.LoadBalancerSourceRanges = overrides.Spec.LoadBalancerSourceRanges
+		}
+		if overrides.Spec.LoadBalancerIP != nil {
+			svc.LoadBalancerIP = overrides.Spec.LoadBalancerIP
+		}
+		if overrides.Spec.Patch != nil {
+			svc.Patch = overrides.Spec.Patch
+		}
+	}
+}
