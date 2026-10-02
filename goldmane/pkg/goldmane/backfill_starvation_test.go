@@ -64,9 +64,9 @@ func (m *busyStreamManager) Run(context.Context) {}
 func (m *busyStreamManager) Register(*proto.FlowStreamRequest, int) chan stream.Stream {
 	return nil
 }
-func (m *busyStreamManager) Backfills() <-chan stream.Stream          { return m.backfills }
-func (m *busyStreamManager) Receive(storage.FlowProvider, string)      {}
-func (m *busyStreamManager) GoLive(string, int64)                      { time.Sleep(time.Millisecond) }
+func (m *busyStreamManager) Backfills() <-chan stream.Stream      { return m.backfills }
+func (m *busyStreamManager) Receive(storage.FlowProvider, string) {}
+func (m *busyStreamManager) GoLive(string, int64)                 { time.Sleep(time.Millisecond) }
 
 type fakeStream struct{}
 
