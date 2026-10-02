@@ -1550,9 +1550,9 @@ deny:
 /* Returns true if the packet must go through the host stack with the mark set here. */
 static CALI_BPF_INLINE bool update_fib_mark(struct cali_tc_ctx *ctx, __u32 *seen_mark)
 {
-	if (CALI_F_FROM_WEP && (ctx->state->flags & CALI_ST_NAT_OUTGOING)) {
-		// We are going to SNAT this traffic, using iptables SNAT so set the mark
-		// to trigger that and leave the fib lookup disabled.
+	if (CALI_F_TO_HOST && (ctx->state->flags & CALI_ST_NAT_OUTGOING)) {
+		// iptables does the SNAT, so both directions go via the host stack,
+		// where its conntrack sees them. Leave the fib lookup disabled.
 		fwd_fib_set(&ctx->state->fwd, false);
 		*seen_mark = CALI_SKB_MARK_NAT_OUT;
 		CALI_DEBUG("Disabling FIB lookup due to outgoing SNAT");
@@ -1668,7 +1668,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 			 * rules are used by the host. So don't mess with it.
 			 */
 			ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_FIB;
-		} else if ((ctx->skb->mark & CALI_SKB_MARK_SKIP_FIB) == CALI_SKB_MARK_SKIP_FIB) {
+		} else if (skb_mark_equals(ctx->skb, CALI_SKB_MARK_CODE_MASK, CALI_SKB_MARK_SKIP_FIB)) {
 			/* Packets received at WEP with CALI_CT_FLAG_SKIP_FIB mark signal
 			 * that all traffic on this connection must flow via host
 			 * namespace as it was originally meant for host, but got
@@ -1961,10 +1961,14 @@ static CALI_BPF_INLINE void calico_tc_skb_accepted(struct cali_tc_ctx *ctx)
 		goto do_post_nat;
 
 	case CALI_CT_ESTABLISHED_BYPASS:
-		/* BYPASS would replace the mark that downstream netfilter rules match on. */
-		if (!is_tcp_syn(ctx) && !via_host_stack) {
-			seen_mark = CALI_SKB_MARK_BYPASS;
-			CALI_DEBUG("marking CALI_SKB_MARK_BYPASS");
+		if (!is_tcp_syn(ctx)) {
+			if (!via_host_stack) {
+				seen_mark = CALI_SKB_MARK_BYPASS;
+			} else if (seen_mark == CALI_SKB_MARK_SKIP_FIB) {
+				/* Netfilter matches the code, not the flag. NAT_OUT stays plain: HEP egress must see the SNAT. */
+				seen_mark |= CALI_SKB_MARK_BYPASS;
+			}
+			CALI_DEBUG("marking 0x%x", seen_mark);
 		}
 		// fall through
 	case CALI_CT_ESTABLISHED:
