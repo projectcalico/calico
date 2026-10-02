@@ -278,6 +278,15 @@ func (a *Goldmane) run(startTime int64, ready chan<- struct{}) {
 	close(ready)
 
 	for {
+		// A new stream gets no live data until its backfill runs, so handle pending backfills
+		// before anything else. Under heavy ingest the select below can leave them waiting for seconds.
+		select {
+		case stream := <-a.streams.Backfills():
+			a.backfill(stream)
+			continue
+		default:
+		}
+
 		select {
 		case f := <-a.recvChan:
 			a.handleFlowBatch(f)
@@ -385,6 +394,11 @@ func (a *Goldmane) queryStatistics(req *proto.StatisticsRequest) *statisticsResp
 
 // backfill fills a new Stream instance with historical Flow data based on the request.
 func (a *Goldmane) backfill(stream stream.Stream) {
+	// Capture the end before backfilling. Backfill and the next rollover both run on this loop,
+	// so the next live bucket starts exactly here.
+	liveFrom := a.flowStore.BackfillEndTime()
+	defer a.streams.GoLive(stream.ID(), liveFrom)
+
 	if stream.StartTimeGte() == 0 {
 		// If no start time is provided, we don't need to backfill any data
 		// to this stream.
