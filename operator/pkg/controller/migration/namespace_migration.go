@@ -526,10 +526,13 @@ func (m *CoreNamespaceMigration) RemoveKubeSystemWebhooks(ctx context.Context, l
 	if err := m.client.CoreV1().Services(kubeSystem).Delete(ctx, webhooksDeploymentName, metav1.DeleteOptions{}); err != nil && !apierrs.IsNotFound(err) {
 		return false, err
 	}
-	if err := m.client.AppsV1().Deployments(kubeSystem).Delete(ctx, webhooksDeploymentName, metav1.DeleteOptions{}); err != nil && !apierrs.IsNotFound(err) {
+	if err := m.client.CoreV1().ServiceAccounts(kubeSystem).Delete(ctx, webhooksDeploymentName, metav1.DeleteOptions{}); err != nil && !apierrs.IsNotFound(err) {
 		return false, err
 	}
-	if err := m.client.CoreV1().ServiceAccounts(kubeSystem).Delete(ctx, webhooksDeploymentName, metav1.DeleteOptions{}); err != nil && !apierrs.IsNotFound(err) {
+
+	// The Deployment goes last, since a later reconcile only retries the cleanup
+	// while it exists.
+	if err := m.client.AppsV1().Deployments(kubeSystem).Delete(ctx, webhooksDeploymentName, metav1.DeleteOptions{}); err != nil && !apierrs.IsNotFound(err) {
 		return false, err
 	}
 	log.Info("Removed the kube-system webhook server")
