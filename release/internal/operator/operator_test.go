@@ -26,6 +26,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -780,6 +781,66 @@ func (r *fakeRecorder) Add(refs ...string) error {
 	defer r.mu.Unlock()
 	r.refs = append(r.refs, refs...)
 	return nil
+}
+
+func TestResolve(t *testing.T) {
+	twoRegistries := func() Operator {
+		o := oneRegistryOperator()
+		o.Registries = []string{"quay.io/a", "quay.io/b"}
+		o.RepoRoot = ""
+		return o
+	}
+	variants := []Variant{{Name: standardVariant}, {Name: "alt", Image: "operator-alt"}}
+
+	t.Run("records what exists and needs only the first registry", func(t *testing.T) {
+		rec := &fakeRecorder{}
+		f := &fakeRunner{}
+		resolve := fakeResolver{
+			"quay.io/a/operator:v1.44.0":       "sha256:a",
+			"quay.io/a/operator:v1.44.0-arm64": "sha256:a-arm64",
+			"quay.io/a/operator-alt:v1.44.0":   "sha256:alt",
+		}
+		err := Resolve(twoRegistries(), variants, WithRunner(f), WithRecord(rec),
+			WithResolver(resolve.resolve), WithArches("arm64"))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := []string{"quay.io/a/operator@sha256:a", "quay.io/a/operator@sha256:a-arm64", "quay.io/a/operator-alt@sha256:alt"}
+		if diff := cmp.Diff(want, rec.refs); diff != "" {
+			t.Errorf("refs mismatch (-want +got):\n%s", diff)
+		}
+		if len(f.calls) != 0 {
+			t.Errorf("ran %v", f.targets())
+		}
+	})
+
+	t.Run("reports a missing release tag after recording the rest", func(t *testing.T) {
+		rec := &fakeRecorder{}
+		resolve := fakeResolver{"quay.io/a/operator-alt:v1.44.0": "sha256:alt"}
+		err := Resolve(twoRegistries(), variants, WithRecord(rec), WithResolver(resolve.resolve))
+		missing, ok := images.OnlyMissing(err)
+		if !ok {
+			t.Fatalf("got %v, want only missing images", err)
+		}
+		if diff := cmp.Diff([]string{"quay.io/a/operator:v1.44.0"}, missing); diff != "" {
+			t.Errorf("missing mismatch (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff([]string{"quay.io/a/operator-alt@sha256:alt"}, rec.refs); diff != "" {
+			t.Errorf("refs mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a failed lookup is not a missing image", func(t *testing.T) {
+		err := Resolve(twoRegistries(), oneVariant(), WithResolver(func(string) (string, bool, error) {
+			return "", false, fmt.Errorf("unauthorized")
+		}))
+		if err == nil {
+			t.Fatal("expected an error, got nil")
+		}
+		if _, ok := images.OnlyMissing(err); ok {
+			t.Errorf("a failed lookup reads as missing: %v", err)
+		}
+	})
 }
 
 func TestPublishBranchTag(t *testing.T) {
