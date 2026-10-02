@@ -2444,6 +2444,40 @@ class TestLiveMigration(TestPluginEtcdBase):
         # Should NOT have called notify_port_active_direct.
         self.db.nova_notifier.notify_port_active_direct.assert_not_called()
 
+    def test_nova_detach_removes_wep(self):
+        """Nova's interface detach must still remove the WEP.
+
+        ``_unbind_ports`` sends ``binding:host_id: None`` together with
+        ``device_id: ''`` and ``device_owner: ''`` in a single port update, so the
+        updated port is no longer an endpoint port *and* no longer names the WEP slot
+        that exists in etcd -- ``device_id`` is part of the key.
+
+        Both matter.  Returning early on the updated port leaves the WEP alone, and
+        reconciling with the updated port deletes a key that was never written, which
+        leaves the real WEP in place just as surely.  Either way Felix keeps routes and
+        policy programmed for an interface that has gone.
+        """
+        self._do_initial_resync()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        context = self._make_port_context()
+        context.original = copy.deepcopy(self.port)
+        context._port = copy.deepcopy(self.port)
+        context._port["binding:host_id"] = ""
+        context._port["device_id"] = ""
+        context._port["device_owner"] = ""
+
+        # The DB re-read inside sync_wep must see the detached port too.
+        self.osdb_ports[0]["binding:host_id"] = ""
+        self.osdb_ports[0]["device_id"] = ""
+        self.osdb_ports[0]["device_owner"] = ""
+
+        self.driver.update_port_postcommit(context)
+
+        # The WEP keyed on the pre-detach identity is the one that has to go.
+        self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_deletes)
+
     def test_resync_creates_missing_live_migration(self):
         """Resync creates LiveMigration and dest WEP for migrating port."""
         self._do_initial_resync()
