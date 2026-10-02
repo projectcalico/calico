@@ -1,9 +1,15 @@
-// Resolves the PR whose merge commit is the pushed MERGE_SHA; a direct push
-// has none. Writes outputs proceed/pr/sha/login/merger/trusted.
+// Resolves the merged PR to cherry-pick and writes outputs
+// proceed/pr/sha/login/merger/trusted. Two entry points:
+//   - MERGE_SHA  (automatic flow): find the PR whose merge commit is this pushed
+//                commit; a direct push has none.
+//   - PR_NUMBER  (manual dispatch): the PR is named directly, so skip the
+//                commit->PR lookup and validate that PR straight away.
+// Give exactly one. The same merged/base/skip-label/trusted checks run for both.
 //
 // Env:
 //   SOURCE_REPO       owner/name the PR lives in.
-//   MERGE_SHA         the pushed commit (github.sha).
+//   MERGE_SHA         the pushed commit (github.sha) -- automatic flow.
+//   PR_NUMBER         an already-merged PR number -- manual dispatch.
 //   BASE_REF          required base branch (default "master").
 //   GH_TOKEN          token for `gh` (set by the caller).
 //   MEMBER_ORG        org whose members count as trusted PR authors.
@@ -17,6 +23,7 @@ const fs = require('node:fs');
 const env = process.env;
 const SOURCE_REPO = env.SOURCE_REPO || '';
 const MERGE_SHA = env.MERGE_SHA || '';
+const PR_NUMBER = env.PR_NUMBER || '';
 const BASE_REF = env.BASE_REF || 'master';
 const RETRY_MS = Number(env.RESOLVE_RETRY_MS ?? 5000);
 
@@ -64,32 +71,44 @@ function isOrgMember(login) {
 }
 
 function main() {
-  if (!SOURCE_REPO || !MERGE_SHA) {
-    skip('SOURCE_REPO or MERGE_SHA unset');
+  if (!SOURCE_REPO) {
+    skip('SOURCE_REPO unset');
     return;
   }
 
-  // The commit->PR association can lag a few seconds behind a merge, and the API
-  // can blip; try again once on either an empty result or a failed lookup.
-  let prs = findPrs();
-  if (prs === null || !prs.length) {
-    sleepSync(RETRY_MS);
-    prs = findPrs();
-  }
-  if (prs === null) {
-    // The lookup failed (not "no PR"): fail loudly so a transient API error
-    // cannot silently drop a real merged PR.
-    console.log(`::error::could not look up the PR for commit ${MERGE_SHA}; failing rather than skipping`);
-    process.exit(1);
-  }
-  if (!prs.length) {
-    // A direct push (no PR) lands here too.
-    skip(`no PR merged as ${MERGE_SHA}`);
-    return;
+  // Determine the PR number: given directly on a manual dispatch, otherwise
+  // found from the pushed merge commit.
+  let pr;
+  if (PR_NUMBER) {
+    pr = String(PR_NUMBER);
+  } else {
+    if (!MERGE_SHA) {
+      skip('neither PR_NUMBER nor MERGE_SHA set');
+      return;
+    }
+    // The commit->PR association can lag a few seconds behind a merge, and the
+    // API can blip; try again once on either an empty result or a failed lookup.
+    let prs = findPrs();
+    if (prs === null || !prs.length) {
+      sleepSync(RETRY_MS);
+      prs = findPrs();
+    }
+    if (prs === null) {
+      // The lookup failed (not "no PR"): fail loudly so a transient API error
+      // cannot silently drop a real merged PR.
+      console.log(`::error::could not look up the PR for commit ${MERGE_SHA}; failing rather than skipping`);
+      process.exit(1);
+    }
+    if (!prs.length) {
+      // A direct push (no PR) lands here too.
+      skip(`no PR merged as ${MERGE_SHA}`);
+      return;
+    }
+    pr = String(prs[0].number);
   }
 
-  // The list endpoint omits merged/merged_by, so read the full PR.
-  const pr = String(prs[0].number);
+  // Read the full PR for merged/base/merge_commit_sha/author/labels (the list
+  // endpoint omits merged/merged_by).
   let j;
   try {
     j = JSON.parse(gh(['api', `repos/${SOURCE_REPO}/pulls/${pr}`]));
