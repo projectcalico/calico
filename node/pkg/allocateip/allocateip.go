@@ -102,14 +102,7 @@ func run(
 	}
 
 	// Daemon mode: create a long-running reconciler.
-	r := &reconciler{
-		nodename:       nodename,
-		cfg:            cfg,
-		client:         c,
-		ch:             make(chan struct{}),
-		data:           make(map[string]any),
-		felixEnvConfig: felixEnvConfig,
-	}
+	r := newReconciler(nodename, cfg, c, felixEnvConfig)
 
 	// Either create a typha syncclient or a local syncer depending on configuration. This calls back into the
 	// reconciler to trigger updates when necessary.
@@ -129,9 +122,24 @@ func run(
 	return r.run(ctx)
 }
 
+// newReconciler keeps one pending trigger while a reconcile is in progress.
+// A reconcile reads fresh datastore state, so multiple pending changes can be
+// coalesced, but the final change must not be discarded when the loop is busy.
+func newReconciler(
+	nodename string, cfg *apiconfig.CalicoAPIConfig, c client.Interface, felixEnvConfig *felixconfig.Config,
+) *reconciler {
+	return &reconciler{
+		nodename:       nodename,
+		cfg:            cfg,
+		client:         c,
+		ch:             make(chan struct{}, 1),
+		data:           make(map[string]any),
+		felixEnvConfig: felixEnvConfig,
+	}
+}
+
 func (r reconciler) run(ctx context.Context) error {
-	// Set while waiting for a node to come back; OnUpdates drops triggers that
-	// arrive mid-reconcile, so the retry cannot rely on one arriving.
+	// Retry while the node is absent, even if no further update arrives.
 	var retry <-chan time.Time
 	for {
 		select {
