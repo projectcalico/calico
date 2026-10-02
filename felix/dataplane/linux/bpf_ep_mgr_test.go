@@ -87,6 +87,8 @@ type mockDataplane struct {
 
 	ensureStartedFn        func()
 	ensureQdiscFn          func(string) (bool, error)
+	queryClassifierFn      func(ifaceName, tcHook string) bool
+	ensureProgramLayoutFn  func(ap *tc.AttachPoint, ipFamily proto.IPVersion) error
 	interfaceByIndexFn     func(ifindex int) (*net.Interface, error)
 	ensureProgramLoadedFn  func(ap attachPoint, ipFamily proto.IPVersion) error
 	ensureProgramLoadedErr error // if set, ensureProgramLoaded returns this error
@@ -173,6 +175,13 @@ func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVer
 	}
 	m.lastProgID += 1
 	m.progs[key] = m.lastProgID
+	return nil
+}
+
+func (m *mockDataplane) ensureProgramLayout(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
+	if m.ensureProgramLayoutFn != nil {
+		return m.ensureProgramLayoutFn(ap, ipFamily)
+	}
 	return nil
 }
 
@@ -369,7 +378,10 @@ func (m *mockDataplane) ruleMatchID(dir rules.RuleDir, action string, owner rule
 	return h.Sum64()
 }
 
-func (m *mockDataplane) queryClassifier(ifaceName, tcHook string) bool {
+func (m *mockDataplane) queryClassifier(ifaceName, tcHook string, netkit bool) bool {
+	if m.queryClassifierFn != nil {
+		return m.queryClassifierFn(ifaceName, tcHook)
+	}
 	return true
 }
 
@@ -1335,6 +1347,170 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 		})
 	})
+
+	It("should re-attach the preamble when a family that failed to load recovers", func() {
+		newBpfEpMgr(true)
+		// A qdisc that already exists keeps the workload ready across passes.
+		dp.ensureQdiscFn = func(string) (bool, error) { return true, nil }
+		v6Fails := true
+		v4Loads, v6Loads := 0, 0
+		dp.ensureProgramLoadedFn = func(ap attachPoint, ipFamily proto.IPVersion) error {
+			if ipFamily == proto.IPVersion_IPV6 {
+				v6Loads++
+				if v6Fails {
+					return errors.New("injected v6 load failure")
+				}
+				return nil
+			}
+			v4Loads++
+			return nil
+		}
+
+		bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+			Id: &proto.WorkloadEndpointID{
+				OrchestratorId: "k8s",
+				WorkloadId:     "cali12345",
+				EndpointId:     "cali12345",
+			},
+			Endpoint: &proto.WorkloadEndpoint{Name: "cali12345"},
+		})
+		genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+		attaches := dp.numOfAttaches("cali12345:ingress")
+		loadsV4 := v4Loads
+		Expect(v6Loads).NotTo(BeZero())
+
+		// Only the failing family retries.
+		_ = bpfEpMgr.CompleteDeferredWork()
+		retried := v6Loads
+		Expect(v4Loads).To(Equal(loadsV4))
+		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(attaches))
+
+		v6Fails = false
+		_ = bpfEpMgr.CompleteDeferredWork()
+		Expect(v6Loads).To(BeNumerically(">", retried))
+		// Loading would reset the ready family's policy to the default one.
+		Expect(v4Loads).To(Equal(loadsV4))
+		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(attaches + 1))
+		Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(attaches + 1))
+	})
+
+	// Per-workload globals reach the dataplane only when the preamble is
+	// attached, so a ready workload must be re-attached when one changes.
+	DescribeTable("should re-attach a ready workload when a preamble global changes",
+		func(changed *proto.WorkloadEndpoint) {
+			newBpfEpMgr(true)
+			// A qdisc that already exists keeps the workload ready across passes.
+			dp.ensureQdiscFn = func(string) (bool, error) { return true, nil }
+			sendWEP := func(ep *proto.WorkloadEndpoint) {
+				ep.Name = "cali12345"
+				bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+					Id: &proto.WorkloadEndpointID{
+						OrchestratorId: "k8s",
+						WorkloadId:     ep.Name,
+						EndpointId:     ep.Name,
+					},
+					Endpoint: ep,
+				})
+				Expect(bpfEpMgr.CompleteDeferredWork()).To(Succeed())
+			}
+			expectAttaches := func(n int) {
+				ExpectWithOffset(1, dp.numOfAttaches("cali12345:ingress")).To(Equal(n))
+				ExpectWithOffset(1, dp.numOfAttaches("cali12345:egress")).To(Equal(n))
+			}
+
+			sendWEP(&proto.WorkloadEndpoint{})
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			expectAttaches(1)
+
+			sendWEP(&proto.WorkloadEndpoint{})
+			expectAttaches(1)
+
+			sendWEP(changed)
+			expectAttaches(2)
+
+			sendWEP(googleproto.Clone(changed).(*proto.WorkloadEndpoint))
+			expectAttaches(2)
+		},
+		Entry("ingress packet rate", &proto.WorkloadEndpoint{
+			QosControls: &proto.QoSControls{IngressPacketRate: 100, IngressPacketBurst: 10},
+		}),
+		Entry("egress connection limit", &proto.WorkloadEndpoint{
+			QosControls: &proto.QoSControls{EgressMaxConnections: 5},
+		}),
+		Entry("DSCP", &proto.WorkloadEndpoint{
+			QosPolicies: []*proto.QoSPolicy{{Dscp: 10}},
+		}),
+		Entry("istio ambient", &proto.WorkloadEndpoint{IsIstioAmbient: true}),
+	)
+
+	It("should keep the preamble and reload a ready family whose layout lookup fails", func() {
+		newBpfEpMgr(true)
+		// A qdisc that already exists keeps the workload ready across passes.
+		dp.ensureQdiscFn = func(string) (bool, error) { return true, nil }
+		v6Loads := 0
+		dp.ensureProgramLoadedFn = func(ap attachPoint, ipFamily proto.IPVersion) error {
+			if ipFamily == proto.IPVersion_IPV6 {
+				v6Loads++
+			}
+			return nil
+		}
+		bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+			Id: &proto.WorkloadEndpointID{
+				OrchestratorId: "k8s",
+				WorkloadId:     "cali12345",
+				EndpointId:     "cali12345",
+			},
+			Endpoint: &proto.WorkloadEndpoint{Name: "cali12345"},
+		})
+		genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(1))
+		loadsV6 := v6Loads
+
+		dp.ensureProgramLayoutFn = func(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
+			if ipFamily == proto.IPVersion_IPV6 {
+				return errors.New("injected layout lookup failure")
+			}
+			return nil
+		}
+		bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345", State: ifacemonitor.StateUp, Index: 15})
+		_ = bpfEpMgr.CompleteDeferredWork()
+		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(1))
+		Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(1))
+
+		dp.ensureProgramLayoutFn = nil
+		Expect(bpfEpMgr.CompleteDeferredWork()).To(Succeed())
+		Expect(v6Loads).To(BeNumerically(">", loadsV6))
+	})
+
+	DescribeTable("should re-attach a ready workload whose preamble the kernel may have lost",
+		func(lose func()) {
+			newBpfEpMgr(true)
+			// A qdisc that already exists keeps the workload ready across passes.
+			dp.ensureQdiscFn = func(string) (bool, error) { return true, nil }
+			bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+				Id: &proto.WorkloadEndpointID{
+					OrchestratorId: "k8s",
+					WorkloadId:     "cali12345",
+					EndpointId:     "cali12345",
+				},
+				Endpoint: &proto.WorkloadEndpoint{Name: "cali12345"},
+			})
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(1))
+
+			lose()
+			bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345", State: ifacemonitor.StateUp, Index: 15})
+			Expect(bpfEpMgr.CompleteDeferredWork()).To(Succeed())
+			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(2))
+			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(2))
+		},
+		Entry("qdisc missing", func() {
+			dp.ensureQdiscFn = func(string) (bool, error) { return false, nil }
+		}),
+		Entry("classifier missing", func() {
+			dp.queryClassifierFn = func(string, string) bool { return false }
+		}),
+	)
 
 	Context("with workload endpoints", func() {
 		JustBeforeEach(func() {
