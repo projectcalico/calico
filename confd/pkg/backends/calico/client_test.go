@@ -16,8 +16,12 @@ package calico
 import (
 	"testing"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 func TestKeyUpdated_LogLevel(t *testing.T) {
@@ -73,4 +77,113 @@ func TestKeyUpdated_LogLevel(t *testing.T) {
 			assert.Equal(t, tt.expectedLevel, log.GetLevel())
 		})
 	}
+}
+
+func newTriggerTestClient() *client {
+	return &client{
+		cache:             map[string]string{},
+		nodeListenPorts:   map[string]uint16{},
+		revisionsByPrefix: map[string]uint64{"/calico/bgpconfig": 0},
+		cacheRevision:     1,
+	}
+}
+
+// bgpConfigUpdated returns whether /calico/bgpconfig has been marked updated at the current
+// revision, and then moves on to a new revision.
+func bgpConfigUpdated(c *client) bool {
+	updated := c.revisionsByPrefix["/calico/bgpconfig"] == c.cacheRevision
+	c.cacheRevision++
+	return updated
+}
+
+func TestUpdateBGPConfigCache_PerNode(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "node1"
+	defer func() { NodeName = originalNodeName }()
+
+	c := newTriggerTestClient()
+	update := func(name string, spec apiv3.BGPConfigurationSpec) (updatePeersV1 bool) {
+		res := apiv3.NewBGPConfiguration()
+		res.Name = name
+		res.Spec = spec
+		svcAdvertisement := false
+		var reasons []string
+		c.updateBGPConfigCache(name, res, &svcAdvertisement, &updatePeersV1, &reasons)
+		return
+	}
+
+	// A new listen port, for any node, affects the emitted peerings.
+	assert.True(t, update("node.node2", apiv3.BGPConfigurationSpec{ListenPort: 1790}))
+	// Don't assert bgpConfigUpdated here, because a peering change will always trigger
+	// keyUpdated("/calico/bgpconfig") at the next level up.  But still call it in order to bump
+	// the cache revision.
+	bgpConfigUpdated(c)
+
+	// The same listen port again does not.
+	assert.False(t, update("node.node2", apiv3.BGPConfigurationSpec{ListenPort: 1790}))
+	assert.False(t, bgpConfigUpdated(c))
+
+	// A log level change for another node affects nothing that we render.
+	assert.False(t, update("node.node2", apiv3.BGPConfigurationSpec{ListenPort: 1790, LogSeverityScreen: "Debug"}))
+	assert.False(t, bgpConfigUpdated(c))
+
+	// A log level change for this node affects GetBirdBGPConfig, but not the emitted peerings.
+	assert.False(t, update("node.node1", apiv3.BGPConfigurationSpec{LogSeverityScreen: "Debug"}))
+	assert.True(t, bgpConfigUpdated(c))
+	assert.False(t, update("node.node1", apiv3.BGPConfigurationSpec{LogSeverityScreen: "Debug"}))
+	assert.False(t, bgpConfigUpdated(c))
+
+	// Likewise a prefix advertisement change for this node.
+	prefixes := []apiv3.PrefixAdvertisement{{CIDR: "10.0.0.0/24", Communities: []string{"100:200"}}}
+	assert.False(t, update("node.node1", apiv3.BGPConfigurationSpec{LogSeverityScreen: "Debug", PrefixAdvertisements: prefixes}))
+	assert.True(t, bgpConfigUpdated(c))
+}
+
+func TestUpdateBGPConfigCache_Global(t *testing.T) {
+	c := newTriggerTestClient()
+	update := func(spec apiv3.BGPConfigurationSpec) (updatePeersV1 bool) {
+		res := apiv3.NewBGPConfiguration()
+		res.Name = globalConfigName
+		res.Spec = spec
+		svcAdvertisement := false
+		var reasons []string
+		c.updateBGPConfigCache(globalConfigName, res, &svcAdvertisement, &updatePeersV1, &reasons)
+		return
+	}
+
+	// A new global AS number affects the emitted peerings.
+	asNum := numorstring.ASNumber(64513)
+	assert.True(t, update(apiv3.BGPConfigurationSpec{ASNumber: &asNum}))
+	// Don't assert bgpConfigUpdated here, because a peering change will always trigger
+	// keyUpdated("/calico/bgpconfig") at the next level up.  But still call it in order to bump
+	// the cache revision.
+	bgpConfigUpdated(c)
+
+	// The same AS number again does not affect the emitted peerings, but a LogSeverityScreen
+	// change impacts GetBirdBGPConfig.
+	assert.False(t, update(apiv3.BGPConfigurationSpec{ASNumber: &asNum, LogSeverityScreen: "Debug"}))
+	assert.True(t, bgpConfigUpdated(c))
+}
+
+func TestNodeKeyAffectsPeers(t *testing.T) {
+	for name, expected := range map[string]bool{
+		"ip_addr_v4":        true,
+		"ip_addr_v6":        true,
+		"as_num":            true,
+		"rr_cluster_id":     true,
+		"network_v4":        false,
+		"network_v6":        false,
+		"wireguard_addr_v4": false,
+		"wireguard_addr_v6": false,
+	} {
+		assert.Equal(t, expected, nodeKeyAffectsPeers(model.NodeBGPConfigKey{Nodename: "node1", Name: name}), name)
+	}
+	assert.False(t, nodeKeyAffectsPeers(model.BlockAffinityKey{Host: "node1"}))
+}
+
+func TestAffectsBirdBGPConfig(t *testing.T) {
+	assert.True(t, affectsBirdBGPConfig(model.IPPoolKey{}))
+	assert.True(t, affectsBirdBGPConfig(model.ResourceKey{Kind: apiv3.KindBGPFilter, Name: "f1"}))
+	assert.False(t, affectsBirdBGPConfig(model.ResourceKey{Kind: apiv3.KindBGPPeer, Name: "p1"}))
+	assert.False(t, affectsBirdBGPConfig(model.BlockAffinityKey{}))
 }

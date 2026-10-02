@@ -832,6 +832,36 @@ func (c *client) nodeToBGPFields(nodeName string) (string, string, string, strin
 	return c.cache[ipv4Key], c.cache[ipv6Key], c.cache[asKey], c.cache[rrKey]
 }
 
+// nodeKeyAffectsPeers returns true if the given v1 key, from the conversion of a v3 Node resource,
+// is one of the per-node fields that nodeToBGPFields reads when computing BGP peerings.  The other
+// per-node fields (network_v4/6 and wireguard_addr_v4/6) only affect GetBirdBGPConfig.
+func nodeKeyAffectsPeers(key model.Key) bool {
+	nodeKey, ok := key.(model.NodeBGPConfigKey)
+	if !ok {
+		// The Node processor can also emit model.BlockAffinityKey KVPs.  These affect
+		// neither BGP peerings nor GetBirdBGPConfig.
+		return false
+	}
+	switch nodeKey.Name {
+	case "ip_addr_v4", "ip_addr_v6", "as_num", "rr_cluster_id":
+		return true
+	}
+	return false
+}
+
+// affectsBirdBGPConfig returns true if the given key, from a syncer update, is for data that
+// GetBirdBGPConfig reads directly from the cache.  (Node and BGPConfiguration resources are
+// handled separately, because they are converted to v1 keys first.)
+func affectsBirdBGPConfig(key model.Key) bool {
+	switch k := key.(type) {
+	case model.IPPoolKey:
+		return true
+	case model.ResourceKey:
+		return k.Kind == apiv3.KindBGPFilter
+	}
+	return false
+}
+
 func (c *client) globalAS() string {
 	asKey, _ := model.KeyToDefaultPath(model.GlobalBGPConfigKey{Name: "as_num"})
 	return c.cache[asKey]
@@ -960,9 +990,6 @@ func (c *client) onUpdates(updates []api.Update, triggered bool) {
 	// If triggered (by c.recheckPeerConfig), force recomputation of the set of BGP peers, and
 	// of the details that go into their rendering.
 	needUpdatePeersV1 := triggered
-	if triggered {
-		c.keyUpdated("/calico/bgpconfig")
-	}
 
 	// Track whether these updates require BGP peerings to be recomputed.
 	needUpdatePeersReasons := []string{}
@@ -1004,6 +1031,20 @@ func (c *client) onUpdates(updates []api.Update, triggered bool) {
 				log.Errorf("Problem converting Node resource: %v", err)
 				continue
 			}
+
+			// The node processor emits all of the per-node v1 keys on every update, but only
+			// some of them may have changed.  Track whether any key that affects BGP peerings
+			// has changed, and whether any other per-node BGP key has changed.  (When using
+			// pod CIDRs, it also emits block affinities, which affect neither.)
+			nodePeerKeyChanged, nodeOtherKeyChanged := false, false
+			noteChange := func(key model.Key) {
+				if nodeKeyAffectsPeers(key) {
+					nodePeerKeyChanged = true
+				} else if _, ok := key.(model.NodeBGPConfigKey); ok {
+					nodeOtherKeyChanged = true
+				}
+			}
+
 			for _, kvp := range kvps {
 				log.Debugf("KVP: %#v", kvp)
 				if kvp.Value == nil {
@@ -1014,8 +1055,7 @@ func (c *client) onUpdates(updates []api.Update, triggered bool) {
 
 					// Remove the node from our cache
 					if c.updateCache(api.UpdateTypeKVDeleted, kvp) {
-						needUpdatePeersV1 = true
-						needUpdatePeersReasons = append(needUpdatePeersReasons, fmt.Sprintf("%s deleted", kvp.Key.String()))
+						noteChange(kvp.Key)
 					}
 				} else {
 					// Check if the node already has IPs in our node IP cache.
@@ -1023,8 +1063,7 @@ func (c *client) onUpdates(updates []api.Update, triggered bool) {
 
 					// Add/update our information on the node in our cache
 					if c.updateCache(u.UpdateType, kvp) {
-						needUpdatePeersV1 = true
-						needUpdatePeersReasons = append(needUpdatePeersReasons, fmt.Sprintf("%s updated", kvp.Key.String()))
+						noteChange(kvp.Key)
 					}
 
 					// Add the node IPs to our node IP cache.
@@ -1046,6 +1085,17 @@ func (c *client) onUpdates(updates []api.Update, triggered bool) {
 						c.nodeIPs[nodeIPv6] = struct{}{}
 					}
 				}
+			}
+
+			if nodePeerKeyChanged {
+				needUpdatePeersV1 = true
+				if u.Value == nil {
+					needUpdatePeersReasons = append(needUpdatePeersReasons, fmt.Sprintf("Node %s deleted", v3key.Name))
+				} else {
+					needUpdatePeersReasons = append(needUpdatePeersReasons, fmt.Sprintf("Node %s BGP fields updated", v3key.Name))
+				}
+			} else if nodeOtherKeyChanged {
+				c.keyUpdated("/calico/bgpconfig")
 			}
 
 			// Update our cache of node labels.
@@ -1094,11 +1144,6 @@ func (c *client) onUpdates(updates []api.Update, triggered bool) {
 			needUpdatePeersV1 = true
 			needUpdatePeersReasons = append(needUpdatePeersReasons, "BGP peer updated or deleted")
 		}
-
-		if v3key.Kind == apiv3.KindBGPFilter {
-			needUpdatePeersV1 = true
-			needUpdatePeersReasons = append(needUpdatePeersReasons, "BGPFilter updated or deleted")
-		}
 	}
 
 	// Update our cache from each of the individual updates, and keep track of
@@ -1109,7 +1154,13 @@ func (c *client) onUpdates(updates []api.Update, triggered bool) {
 			v3res, _ := u.Value.(*apiv3.BGPConfiguration)
 			c.updateBGPConfigCache(v3key.Name, v3res, &needServiceAdvertisementUpdates, &needUpdatePeersV1, &needUpdatePeersReasons)
 		}
-		c.updateCache(u.UpdateType, &u.KVPair)
+
+		if c.updateCache(u.UpdateType, &u.KVPair) && affectsBirdBGPConfig(u.Key) {
+			// GetBirdBGPConfig reads the cached BGPFilters (when building import and export
+			// filters) and IP pools (for the IP pool filters).  Neither affects the BGP peerings
+			// that we emit.
+			c.keyUpdated("/calico/bgpconfig")
+		}
 	}
 
 	// If configuration relevant to BGP peerings has changed, recalculate the set of v1
@@ -1206,9 +1257,15 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 		// The name of a configuration resource has a strict format.  It is either "default"
 		// for the global default values, or "node.<nodename>" for the node specific vales.
 		nodeName := resName[len(perNodeConfigNamePrefix):]
-		c.getPrefixAdvertisementsKVPair(v3res, model.NodeBGPConfigKey{Nodename: nodeName})
+		prefixesChanged := c.getPrefixAdvertisementsKVPair(v3res, model.NodeBGPConfigKey{Nodename: nodeName})
 		c.getListenPortKVPair(v3res, model.NodeBGPConfigKey{Nodename: nodeName}, updatePeersV1, updateReasons)
-		c.getLogSeverityKVPair(v3res, model.NodeBGPConfigKey{Nodename: nodeName})
+		logLevelChanged := c.getLogSeverityKVPair(v3res, model.NodeBGPConfigKey{Nodename: nodeName})
+
+		// GetBirdBGPConfig uses the prefix advertisements and log level for this node only.  (A
+		// listen port change, for any node, sets updatePeersV1 instead.)
+		if nodeName == NodeName && (prefixesChanged || logLevelChanged) {
+			c.keyUpdated("/calico/bgpconfig")
+		}
 	} else {
 		log.Warningf("Bad value for BGPConfiguration resource name: %s.", resName)
 	}
@@ -1241,7 +1298,9 @@ func getKVPair(key model.Key, value ...string) *model.KVPair {
 	}
 }
 
-func (c *client) getPrefixAdvertisementsKVPair(v3res *apiv3.BGPConfiguration, key any) {
+// getPrefixAdvertisementsKVPair updates the cached prefix advertisements for the given global or
+// per-node key, and returns true if that changed the cache.
+func (c *client) getPrefixAdvertisementsKVPair(v3res *apiv3.BGPConfiguration, key any) bool {
 	ipv4Key := getBGPConfigKey("prefix_advertisements/ip_v4", key)
 	ipv6Key := getBGPConfigKey("prefix_advertisements/ip_v6", key)
 
@@ -1285,19 +1344,23 @@ func (c *client) getPrefixAdvertisementsKVPair(v3res *apiv3.BGPConfiguration, ke
 		if ok != nil {
 			log.Warningf("Error while marshalling BGP communities. %#v", ok)
 		}
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(ipv4Key, string(ipv4Communities)))
+		changedV4 := c.updateCache(api.UpdateTypeKVUpdated, getKVPair(ipv4Key, string(ipv4Communities)))
 
 		ipv6Communities, ok := json.Marshal(ipv6PrefixToAdvertise)
 		if ok != nil {
 			log.Warningf("Error while marshalling BGP communities. %#v", ok)
 		}
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(ipv6Key, string(ipv6Communities)))
-	} else {
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(ipv4Key))
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(ipv6Key))
+		changedV6 := c.updateCache(api.UpdateTypeKVUpdated, getKVPair(ipv6Key, string(ipv6Communities)))
+		return changedV4 || changedV6
 	}
+
+	changedV4 := c.updateCache(api.UpdateTypeKVDeleted, getKVPair(ipv4Key))
+	changedV6 := c.updateCache(api.UpdateTypeKVDeleted, getKVPair(ipv6Key))
+	return changedV4 || changedV6
 }
 
+// getListenPortKVPair updates the cached listen port for the given global or per-node key.  Listen
+// ports affect the ports of the BGP peerings that we emit, so a change sets updatePeersV1.
 func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key any, updatePeersV1 *bool, updateReasons *[]string) {
 	listenPortKey := getBGPConfigKey("listen_port", key)
 
@@ -1308,8 +1371,10 @@ func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key any, upd
 		case model.GlobalBGPConfigKey:
 			c.globalListenPort = v3res.Spec.ListenPort
 		}
-		*updateReasons = append(*updateReasons, "listenPort updated.")
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(listenPortKey, strconv.Itoa(int(v3res.Spec.ListenPort))))
+		if c.updateCache(api.UpdateTypeKVUpdated, getKVPair(listenPortKey, strconv.Itoa(int(v3res.Spec.ListenPort)))) {
+			*updatePeersV1 = true
+			*updateReasons = append(*updateReasons, "listenPort updated.")
+		}
 	} else {
 		switch k := key.(type) {
 		case model.NodeBGPConfigKey:
@@ -1317,22 +1382,27 @@ func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key any, upd
 		case model.GlobalBGPConfigKey:
 			c.globalListenPort = 0
 		}
-		*updateReasons = append(*updateReasons, "listenPort deleted.")
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(listenPortKey))
+		if c.updateCache(api.UpdateTypeKVDeleted, getKVPair(listenPortKey)) {
+			*updatePeersV1 = true
+			*updateReasons = append(*updateReasons, "listenPort deleted.")
+		}
 	}
-	*updatePeersV1 = true
 }
 
+// getASNumberKVPair updates the cached global AS number.  That is the AS number of every node that
+// does not have its own, so it affects the BGP peerings that we emit, and a change sets
+// updatePeersV1.
 func (c *client) getASNumberKVPair(v3res *apiv3.BGPConfiguration, key any, updatePeersV1 *bool, updateReasons *[]string) {
 	asNumberKey := getBGPConfigKey("as_num", key)
 	if v3res != nil && v3res.Spec.ASNumber != nil {
-		*updateReasons = append(*updateReasons, "AS number updated.")
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(asNumberKey, v3res.Spec.ASNumber.String()))
-	} else {
+		if c.updateCache(api.UpdateTypeKVUpdated, getKVPair(asNumberKey, v3res.Spec.ASNumber.String())) {
+			*updatePeersV1 = true
+			*updateReasons = append(*updateReasons, "AS number updated.")
+		}
+	} else if c.updateCache(api.UpdateTypeKVDeleted, getKVPair(asNumberKey)) {
+		*updatePeersV1 = true
 		*updateReasons = append(*updateReasons, "AS number deleted.")
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(asNumberKey))
 	}
-	*updatePeersV1 = true
 }
 
 func getServiceExternalIPs(v3res *apiv3.BGPConfiguration) (ipCidrs []string) {
@@ -1389,7 +1459,9 @@ func (c *client) getNodeToNodeMeshKVPair(v3res *apiv3.BGPConfiguration, key any)
 	}
 }
 
-func (c *client) getLogSeverityKVPair(v3res *apiv3.BGPConfiguration, key any) {
+// getLogSeverityKVPair updates the cached log level for the given global or per-node key, and
+// returns true if that changed the cache.
+func (c *client) getLogSeverityKVPair(v3res *apiv3.BGPConfiguration, key any) bool {
 	logLevelKey := getBGPConfigKey("loglevel", key)
 
 	if v3res != nil && v3res.Spec.LogSeverityScreen != "" {
@@ -1401,10 +1473,9 @@ func (c *client) getLogSeverityKVPair(v3res *apiv3.BGPConfiguration, key any) {
 		default:
 			l = "none"
 		}
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(logLevelKey, l))
-	} else {
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(logLevelKey))
+		return c.updateCache(api.UpdateTypeKVUpdated, getKVPair(logLevelKey, l))
 	}
+	return c.updateCache(api.UpdateTypeKVDeleted, getKVPair(logLevelKey))
 }
 
 func (c *client) getNodeMeshPassword(v3res *apiv3.BGPConfiguration) (password string) {
