@@ -17,7 +17,6 @@ package migration
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
@@ -26,52 +25,71 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/projectcalico/calico/operator/pkg/common"
 )
 
-func TestDeleteKubeSystemWebhooksRemovesTheManifestServer(t *testing.T) {
+func TestRemoveKubeSystemWebhooksRemovesTheManifestServer(t *testing.T) {
 	g := NewWithT(t)
 
-	m := &CoreNamespaceMigration{client: fake.NewClientset(
-		kubeSystemWebhooks(),
-		kubeSystemWebhooksService(),
-		kubeSystemWebhooksConfiguration(),
-		operatorWebhooks(1),
-	)}
+	m := &CoreNamespaceMigration{client: fake.NewClientset(append(kubeSystemWebhookObjects(), operatorWebhooks(1))...)}
 
-	g.Expect(m.deleteKubeSystemWebhooks(context.Background(), logr.Discard())).To(Succeed())
+	pending, err := m.RemoveKubeSystemWebhooks(context.Background(), logr.Discard())
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(pending).To(BeFalse())
 
-	_, err := m.client.AppsV1().Deployments(kubeSystem).Get(context.Background(), webhooksDeploymentName, metav1.GetOptions{})
+	_, err = m.client.AppsV1().Deployments(kubeSystem).Get(context.Background(), webhooksDeploymentName, metav1.GetOptions{})
 	g.Expect(apierrs.IsNotFound(err)).To(BeTrue(), "the kube-system deployment should be gone")
 	_, err = m.client.CoreV1().Services(kubeSystem).Get(context.Background(), webhooksDeploymentName, metav1.GetOptions{})
 	g.Expect(apierrs.IsNotFound(err)).To(BeTrue(), "the kube-system service should be gone")
+	_, err = m.client.CoreV1().ServiceAccounts(kubeSystem).Get(context.Background(), webhooksDeploymentName, metav1.GetOptions{})
+	g.Expect(apierrs.IsNotFound(err)).To(BeTrue(), "the kube-system service account should be gone")
 	_, err = m.client.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(context.Background(), webhooksDeploymentName, metav1.GetOptions{})
 	g.Expect(apierrs.IsNotFound(err)).To(BeTrue(), "the configuration pointing at it should be gone")
 }
 
 // Deleting the only server behind a webhook that fails closed would reject every
-// policy write, so a cluster without the operator's own server keeps this one.
-func TestDeleteKubeSystemWebhooksKeepsTheOnlyServer(t *testing.T) {
+// policy write, so the kube-system one stays until the operator's is available.
+func TestRemoveKubeSystemWebhooksWaitsForTheOperatorServer(t *testing.T) {
 	g := NewWithT(t)
 
-	m := &CoreNamespaceMigration{client: fake.NewClientset(
-		kubeSystemWebhooks(),
-		kubeSystemWebhooksService(),
-		kubeSystemWebhooksConfiguration(),
-		operatorWebhooks(0),
-	)}
+	m := &CoreNamespaceMigration{client: fake.NewClientset(append(kubeSystemWebhookObjects(), operatorWebhooks(0))...)}
 
-	// The deadline stands in for the wait this would otherwise sit through.
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	g.Expect(m.deleteKubeSystemWebhooks(ctx, logr.Discard())).To(Succeed())
+	pending, err := m.RemoveKubeSystemWebhooks(context.Background(), logr.Discard())
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(pending).To(BeTrue(), "the caller should try again once the operator's server is up")
+	expectKubeSystemWebhooksKept(g, m)
+}
 
+// A cluster without the Calico API server never gets the operator's server, so
+// there is nothing to wait for until one is created.
+func TestRemoveKubeSystemWebhooksKeepsTheOnlyServer(t *testing.T) {
+	g := NewWithT(t)
+
+	m := &CoreNamespaceMigration{client: fake.NewClientset(kubeSystemWebhookObjects()...)}
+
+	pending, err := m.RemoveKubeSystemWebhooks(context.Background(), logr.Discard())
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(pending).To(BeFalse())
+	expectKubeSystemWebhooksKept(g, m)
+}
+
+func expectKubeSystemWebhooksKept(g *WithT, m *CoreNamespaceMigration) {
 	_, err := m.client.AppsV1().Deployments(kubeSystem).Get(context.Background(), webhooksDeploymentName, metav1.GetOptions{})
 	g.Expect(err).ToNot(HaveOccurred(), "the kube-system deployment should still be there")
 	_, err = m.client.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(context.Background(), webhooksDeploymentName, metav1.GetOptions{})
 	g.Expect(err).ToNot(HaveOccurred(), "the configuration should still be there")
+}
+
+func kubeSystemWebhookObjects() []runtime.Object {
+	return []runtime.Object{
+		kubeSystemWebhooks(),
+		kubeSystemWebhooksService(),
+		kubeSystemWebhooksServiceAccount(),
+		kubeSystemWebhooksConfiguration(),
+	}
 }
 
 func kubeSystemWebhooks() *appsv1.Deployment {
@@ -85,6 +103,15 @@ func kubeSystemWebhooks() *appsv1.Deployment {
 
 func kubeSystemWebhooksService() *corev1.Service {
 	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      webhooksDeploymentName,
+			Namespace: kubeSystem,
+		},
+	}
+}
+
+func kubeSystemWebhooksServiceAccount() *corev1.ServiceAccount {
+	return &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      webhooksDeploymentName,
 			Namespace: kubeSystem,

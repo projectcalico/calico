@@ -1510,6 +1510,14 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		}
 	}
 
+	// This runs on every reconcile rather than in Run, because the operator's own
+	// webhook server can come up long after the migration finishes.
+	kubeSystemWebhooksPending, err := r.namespaceMigration.RemoveKubeSystemWebhooks(ctx, reqLogger)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceMigrationError, "error removing the kube-system webhook server", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+
 	// Determine which MTU to use in the status fields.
 	statusMTU := 0
 	if defaulted.Spec.CalicoNetwork != nil && defaulted.Spec.CalicoNetwork.MTU != nil {
@@ -1601,6 +1609,11 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	reqLogger.V(1).Info("Finished reconciling Installation")
+	if kubeSystemWebhooksPending {
+		// The operator's webhook server becoming available is a status change, which
+		// the Deployment watch filters out.
+		return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
+	}
 	return reconcile.Result{}, nil
 }
 
