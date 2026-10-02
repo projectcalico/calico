@@ -8,7 +8,6 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/spf13/cast"
 	"go.yaml.in/yaml/v3"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
@@ -18,11 +17,11 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-func chartURLs(githubOrg, githubRepo, version string) []string {
-	urls := []string{}
+func chartURLs(githubOrg, githubRepo, version string) map[string]string {
+	urls := map[string]string{}
 	for _, chart := range utils.AllReleaseCharts() {
 		u := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s-%s.tgz", githubOrg, githubRepo, version, chart, version)
-		urls = append(urls, u)
+		urls[chart] = u
 	}
 	return urls
 }
@@ -124,31 +123,45 @@ func TestHelmIndex(t *testing.T) {
 	if len(index.Entries) == 0 {
 		t.Fatalf("helm index is empty")
 	}
-	tigeraOperatorEntries, ok := index.Entries["tigera-operator"]
-	if !ok || len(tigeraOperatorEntries) == 0 {
-		t.Fatalf("helm index does not contain tigera-operator entries")
-	}
-	filteredEntries := slices.Collect(func(yield func(map[string]any) bool) {
-		for _, entry := range tigeraOperatorEntries {
-			if entry["version"].(string) == releaseVersion {
-				yield(entry)
+
+	for _, chartName := range utils.AllReleaseCharts() {
+		t.Run(chartName, func(t *testing.T) {
+			chartEntries, ok := index.Entries[chartName]
+			if !ok || len(chartEntries) == 0 {
+				t.Fatalf("helm index does not contain %s entries", chartName)
 			}
-		}
-	})
-	if len(filteredEntries) == 0 {
-		t.Fatalf("helm index does not contain tigera-operator entry for version %s", releaseVersion)
-	} else if len(filteredEntries) > 1 {
-		t.Fatalf("helm index contains multiple tigera-operator entries for version %s", releaseVersion)
-	}
-	helmEntry := filteredEntries[0]
-	urls, ok := helmEntry["urls"]
-	if !ok || len(urls.([]any)) == 0 {
-		t.Fatalf("helm index entry for version %s does not contain urls", releaseVersion)
+			filteredEntries := slices.Collect(func(yield func(map[string]any) bool) {
+				for _, entry := range chartEntries {
+					if entry["version"].(string) == releaseVersion {
+						yield(entry)
+					}
+				}
+			})
+			if len(filteredEntries) == 0 {
+				t.Fatalf("helm index does not contain %s entry for version %s", chartName, releaseVersion)
+			} else if len(filteredEntries) > 1 {
+				t.Fatalf("helm index contains multiple %s entries for version %s", chartName, releaseVersion)
+			}
+			helmEntry := filteredEntries[0]
+			var foundURLs []string
+			if urls, ok := helmEntry["urls"]; ok || len(urls.([]any)) == 0 {
+				for _, url := range urls.([]any) {
+					foundURLs = append(foundURLs, url.(string))
+				}
+			} else {
+				t.Fatalf("helm index entry for chart %s version %s does not contain urls", chartName, releaseVersion)
+			}
+
+			chartURLs := chartURLs(githubOrg, githubRepo, releaseVersion)
+			if chartURL, ok := chartURLs[chartName]; ok {
+				if !slices.Contains(foundURLs, chartURL) {
+					t.Fatalf("helm index entry for chart %s version %s does not contain expected URL %s", chartName, releaseVersion, chartURL)
+				}
+			} else {
+				t.Fatalf("could not find expected chart URL for chart %s version %s", chartName, releaseVersion)
+			}
+
+		})
 	}
 
-	for _, url := range chartURLs(githubOrg, githubRepo, releaseVersion) {
-		if !slices.Contains(cast.ToStringSlice(urls), url) {
-			t.Fatalf("helm index entry for version %s does not contain expected URL: %s", releaseVersion, url)
-		}
-	}
 }
