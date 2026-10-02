@@ -1,0 +1,40 @@
+kind: BGPConfiguration
+apiVersion: projectcalico.org/v3
+metadata:
+  name: default
+spec:
+  nodeToNodeMeshEnabled: true
+  asNumber: 64512
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    asNumber: 64513
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: global-peer
+spec:
+  peerIP: 10.225.0.4
+  asNumber: 65515

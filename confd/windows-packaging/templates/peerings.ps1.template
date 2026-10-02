@@ -1,73 +1,48 @@
 {{- $config := getBGPConfig 4 . -}}
 
-{{- $node_ip_key := printf "/host/%s/ip_addr_v4" $config.NodeName}}
-{{- $node_ip := getv $node_ip_key}}
-$local_ip = "{{$node_ip}}"
-
-{{- $bgp_id := $config.RouterID}}
-$bgp_id = "{{if ne "" ($bgp_id)}}{{$bgp_id}}{{else}}{{$node_ip}}{{end}}"
-
-{{- $node_as_key := printf "/host/%s/as_num" $config.NodeName}}
-$local_asn = {{if exists $node_as_key}}{{getv $node_as_key}}{{else}}{{getv "/global/as_num"}}{{end}}
+$local_ip = "{{$config.NodeIP}}"
+$bgp_id = "{{$config.RouterID}}"
+$local_asn = {{$config.ASNumber}}
 
 $peerings =
-{{- if eq "" ($node_ip)}}
+{{- if eq "" $config.NodeIP}}
     # IPv4 is disabled on this node.
 {{- else}}
     # IPv4 is enabled on this node.
 
     # ------------- Node-to-node mesh -------------
-    {{- if (json (getv "/global/node_mesh")).enabled}}
-        {{- range $host := lsdir "/host"}}
-            {{- $onode_as_key := printf "/host/%s/as_num" .}}
-            {{- $onode_ip_key := printf "/host/%s/ip_addr_v4" .}}
-    	{{- if exists $onode_ip_key}}
-                {{- $onode_ip := getv $onode_ip_key}}
-                {{- $nums := split $onode_ip "."}}{{$id := join $nums "_"}}
-    # For peer {{$onode_ip_key}}
-                {{- if eq $onode_ip ($node_ip) }}
-    # Skipping ourselves ({{$node_ip}})
-                {{- else if ne "" $onode_ip}}
-    @{ Name = "Mesh_{{$id}}"; IP = "{{$onode_ip}}"; AS = {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else}}{{getv "/global/as_num"}}{{end}} },
-                {{- end}}
-            {{- end}}
+    {{- $have_mesh_peers := false}}
+    {{- range $config.Peers}}
+        {{- if eq .Type "mesh"}}
+            {{- $have_mesh_peers = true}}
+    @{ Name = "{{.Name}}"; IP = "{{.IP}}"; AS = {{.ASNumber}} },
         {{- end}}
-    {{- else}}
-    # Node-to-node mesh disabled
+    {{- end}}
+    {{- if not $have_mesh_peers}}
+    # No node-to-node mesh peers.
     {{- end}}
 
     # ------------- Global peers -------------
-    {{- if ls "/global/peer_v4"}}
-        {{- range gets "/global/peer_v4/*"}}
-            {{- $data := json .Value}}
-            {{- $nums := split $data.ip "."}}
-            {{- $id := join $nums "_"}}
-    # For peer {{.Key}}
-            {{- if eq $data.ip ($node_ip) }}
-    # Skipping ourselves ({{$node_ip}})
-            {{- else}}
-    @{ Name = "Global_{{$id}}"; IP = "{{$data.ip}}"; AS = {{$data.as_num}} },
-            {{- end}}
+    {{- $have_global_peers := false}}
+    {{- range $config.Peers}}
+        {{- if eq .Type "global"}}
+            {{- $have_global_peers = true}}
+    @{ Name = "Global_{{join (split .IP ".") "_"}}"; IP = "{{.IP}}"; AS = {{.ASNumber}} },
         {{- end}}
-    {{- else}}
+    {{- end}}
+    {{- if not $have_global_peers}}
     # No global peers configured.
     {{- end}}
 
     # ------------- Node-specific peers -------------
-    {{- $node_peers_key := printf "/host/%s/peer_v4" $config.NodeName}}
-    {{- if ls $node_peers_key}}
-        {{- range gets (printf "%s/*" $node_peers_key)}}
-            {{- $data := json .Value}}
-            {{- $nums := split $data.ip "."}}
-            {{- $id := join $nums "_"}}
-    # For peer {{.Key}}
-            {{- if eq $data.ip ($node_ip) }}
-    # Skipping ourselves ({{$node_ip}})
-            {{- else}}
-    @{ Name = "Node_{{$id}}"; IP = "{{$data.ip}}"; AS = {{$data.as_num}} },
-            {{- end}}
+    {{- $have_node_peers := false}}
+    {{- range $config.Peers}}
+        {{- if eq .Type "node"}}
+            {{- $have_node_peers = true}}
+    @{ Name = "Node_{{join (split .IP ".") "_"}}"; IP = "{{.IP}}"; AS = {{.ASNumber}} },
         {{- end}}
-    {{- else}}
+    {{- end}}
+    {{- if not $have_node_peers}}
     # No node-specific peers configured.
     {{- end}}
 {{- end}}

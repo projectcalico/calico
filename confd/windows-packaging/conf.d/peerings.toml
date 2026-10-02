@@ -1,9 +1,8 @@
 [template]
 src = "peerings.ps1.template"
 dest = "peerings.ps1"
-prefix = "/calico/bgp/v1"
+prefix = "/calico"
 keys = [
-    "/host",
-    "/global",
+    "/bgpconfig",
 ]
 reload_cmd = ".\\config-bgp.ps1"
