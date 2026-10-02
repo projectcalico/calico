@@ -88,6 +88,10 @@ func (f *fakeNamespaceMigration) CleanupMigration(ctx context.Context, log logr.
 	return nil
 }
 
+func (f *fakeNamespaceMigration) RemoveKubeSystemWebhooks(ctx context.Context, log logr.Logger) (bool, error) {
+	return false, nil
+}
+
 var _ = Describe("Testing core-controller installation", func() {
 	var c client.Client
 	var ctx context.Context
