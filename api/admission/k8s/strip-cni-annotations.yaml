@@ -1,0 +1,48 @@
+# MutatingAdmissionPolicy that removes the pod annotations the Calico CNI plugin
+# writes when a pod is created. Their values describe a previous sandbox, so a
+# pod created with them (from a dumped manifest, say) would otherwise be refused
+# by protect-cni-annotations.projectcalico.org.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: strip-cni-annotations.projectcalico.org
+spec:
+  failurePolicy: Fail
+  reinvocationPolicy: Never
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+        operations: ["CREATE"]
+  matchConditions:
+    - name: has-annotations
+      expression: "has(object.metadata.annotations)"
+  variables:
+    # Must match protectedKeys in protect-cni-annotations.yaml.
+    - name: protectedKeys
+      expression: >-
+        object.metadata.annotations.filter(k,
+          k in [
+            'cni.projectcalico.org/podIP',
+            'cni.projectcalico.org/podIPs',
+            'cni.projectcalico.org/containerID',
+            'cni.projectcalico.org/podNetns',
+            'cni.projectcalico.org/network-status'
+          ] ||
+          (k.startsWith('cni.projectcalico.org/') && k.endsWith('.network-status')))
+  mutations:
+    - patchType: JSONPatch
+      jsonPatch:
+        expression: >-
+          variables.protectedKeys.map(k, JSONPatch{
+            op: "remove",
+            path: "/metadata/annotations/" + jsonpatch.escapeKey(k)
+          })
+---
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: strip-cni-annotations.projectcalico.org
+spec:
+  policyName: strip-cni-annotations.projectcalico.org
