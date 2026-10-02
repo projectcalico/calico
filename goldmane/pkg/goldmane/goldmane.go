@@ -279,6 +279,13 @@ func (a *Goldmane) run(startTime int64, ready chan<- struct{}) {
 
 	for {
 		select {
+		case stream := <-a.streams.Backfills():
+			a.backfill(stream)
+			continue
+		default:
+		}
+
+		select {
 		case f := <-a.recvChan:
 			a.handleFlowBatch(f)
 		case <-rolloverCh:
@@ -385,6 +392,9 @@ func (a *Goldmane) queryStatistics(req *proto.StatisticsRequest) *statisticsResp
 
 // backfill fills a new Stream instance with historical Flow data based on the request.
 func (a *Goldmane) backfill(stream stream.Stream) {
+	liveFrom := a.flowStore.BackfillEndTime()
+	defer a.streams.GoLive(stream.ID(), liveFrom)
+
 	if stream.StartTimeGte() == 0 {
 		// If no start time is provided, we don't need to backfill any data
 		// to this stream.
