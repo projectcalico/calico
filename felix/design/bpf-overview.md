@@ -192,6 +192,12 @@ Felix reserves the top three nibbles of the mark (`0x1FF00000`) for BPF
 use. `IptablesMarkMask` must include this range and leave room for any
 non-BPF `*tables` rules; Felix refuses to start if it does not.
 
+`CALI_SKB_MARK_BYPASS` is a flag; the `0x00f00000` nibble is a separate code, compared whole.
+`SKIP_FIB`, `NAT_OUT` and `MASQ` leave the decision to Linux, so `*tables` keeps them tracked;
+`BYPASS_FWD` and `BYPASS_XDP` are forwarded by BPF. BYPASS short-circuits the next program even
+for `MASQ`: after SNAT, pod→service→self cannot be policed by source, and `CALI_CT_FLAG_SVC_SELF`
+records that the pod is reaching itself.
+
 ### Review notes for this section
 
 - A PR that adds a new out-of-band signal between BPF and `*tables`
@@ -203,6 +209,9 @@ non-BPF `*tables` rules; Felix refuses to start if it does not.
   through the host stack must confirm that none of the "deferral"
   reasons above apply. In particular, bypassing the kernel on a flow
   that still needs SNAT will break the return path.
+- `CALI_SKB_MARK_BYPASS` never replaces a host-stack code, and never joins
+  `NAT_OUT`: HEP egress must run to see the post-SNAT tuple. A new matcher
+  on a code compares the whole nibble.
 
 
 
