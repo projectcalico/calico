@@ -228,18 +228,6 @@ int calico_tc_main(struct __sk_buff *skb)
 	 * For packets that are leaving the host namespace, routing has already been done. */
 	fwd_fib_set(&ctx->state->fwd, CALI_F_TO_HOST);
 
-	if (CALI_F_TO_HEP || CALI_F_TO_WEP) {
-		/* We're leaving the host namespace, check for other bypass mark bits.
-		 * These are a bit more complex to handle so we do it after creating the
-		 * context/state. */
-		switch (skb->mark & CALI_SKB_MARK_BYPASS_MASK) {
-		case CALI_SKB_MARK_BYPASS_FWD:
-			CALI_DEBUG("Packet approved for forward.");
-			counter_inc(ctx, CALI_REASON_BYPASS);
-			goto allow;
-		}
-	}
-
 	/* Parse the packet as far as the IP header; as a side-effect this validates the packet size
 	 * is large enough for UDP. */
 	switch (parse_packet_ip(ctx)) {
