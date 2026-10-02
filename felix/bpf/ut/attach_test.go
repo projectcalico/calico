@@ -31,6 +31,7 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
@@ -38,6 +39,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/jump"
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/qos"
@@ -1442,6 +1444,93 @@ func TestAttachNetkit(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	_, err = os.Stat(bpfdefs.NetkitPinDir + "/workloadep0_egress")
 	Expect(err).NotTo(HaveOccurred())
+}
+
+// A ready workload attached through a TCX or netkit link must not be
+// re-attached by an apply that changes nothing.
+func TestReadyLinkAttachmentIsKept(t *testing.T) {
+	for _, tcase := range []struct {
+		name       string
+		attachType v3.BPFAttachOption
+		netkit     bool
+	}{
+		{name: "tcx", attachType: v3.BPFAttachOptionTCX},
+		{name: "netkit", attachType: v3.BPFAttachOptionNetkit, netkit: true},
+	} {
+		t.Run(tcase.name, func(t *testing.T) {
+			RegisterTestingT(t)
+			if tcase.netkit && !tc.IsNetkitSupported() {
+				t.Skip("Netkit not supported on this kernel")
+			}
+
+			bpfmaps, err := bpfmap.CreateBPFMaps(false)
+			Expect(err).NotTo(HaveOccurred())
+			bpfEpMgr, err := newBPFTestEpMgr(
+				&linux.Config{
+					Hostname:            "uthost",
+					BPFLogLevel:         "off",
+					BPFDataIfacePattern: regexp.MustCompile("^hostep[12]"),
+					VXLANMTU:            1000,
+					VXLANPort:           1234,
+					RulesConfig: rules.Config{
+						EndpointToHostAction: "RETURN",
+					},
+					BPFPolicyDebugEnabled: true,
+					BPFAttachType:         tcase.attachType,
+				},
+				bpfmaps,
+				regexp.MustCompile("^workloadep[0123]"),
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			var workload0 netlink.Link
+			if tcase.netkit {
+				workload0 = createNetkitName("workloadep0")
+			} else {
+				workload0 = createVethName("workloadep0")
+			}
+			defer deleteLink(workload0)
+			ifindex := workload0.Attrs().Index
+
+			bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+			bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, ifindex))
+			bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
+			bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+				Id: &proto.WorkloadEndpointID{
+					OrchestratorId: "k8s",
+					WorkloadId:     "workloadep0",
+					EndpointId:     "workloadep0",
+				},
+				Endpoint: &proto.WorkloadEndpoint{Name: "workloadep0"},
+			})
+			Expect(bpfEpMgr.CompleteDeferredWork()).To(Succeed())
+			before := attachedLinkProgIDs(ifindex, tcase.netkit)
+			Expect(before[0]).NotTo(BeZero())
+			Expect(before[1]).NotTo(BeZero())
+
+			// An interface update marks the workload dirty without changing it.
+			bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, ifindex))
+			Expect(bpfEpMgr.CompleteDeferredWork()).To(Succeed())
+			Expect(attachedLinkProgIDs(ifindex, tcase.netkit)).To(Equal(before))
+		})
+	}
+}
+
+// attachedLinkProgIDs returns the IDs of the programs attached to the ingress
+// and egress hooks; a re-attach replaces them.
+func attachedLinkProgIDs(ifindex int, netkit bool) [2]uint32 {
+	var ids [2]uint32
+	for i, ingress := range []bool{true, false} {
+		query := libbpf.ProgQueryTcx
+		if netkit {
+			query = libbpf.ProgQueryNetkit
+		}
+		progIDs, _, cnt, err := query(ifindex, ingress)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		ExpectWithOffset(1, cnt).To(Equal(uint32(1)))
+		ids[i] = progIDs[0]
+	}
+	return ids
 }
 
 func TestLogFilters(t *testing.T) {
