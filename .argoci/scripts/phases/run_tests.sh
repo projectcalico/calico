@@ -91,11 +91,6 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # the container, and we prepend that to PATH inside the bash -c below.
   make kubectl
 
-  # e2e waits for every node to be schedulable; OpenShift taints control-plane nodes NoSchedule.
-  for _taint in node-role.kubernetes.io/master- node-role.kubernetes.io/control-plane-; do
-    KUBECONFIG="${BZ_LOCAL_DIR}/kubeconfig" ./hack/test/kind/kubectl taint nodes --all "${_taint}" || true
-  done
-
   # EKS kubeconfigs exec aws-iam-authenticator (PATH lookup), which the stock
   # golang image lacks, so client-go fails before any tests run. The aws-eks
   # provisioner installs it on the host; bind-mount it when present (no-op otherwise).
