@@ -1952,6 +1952,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						case "wireguard":
 							dev = "wireguard.cali"
 						}
+
+						// pktgen sends once, so wait for policy on both nodes. Probe before
+						// tcpdump starts; probes match its filters.
+						cc.ExpectSome(w[1][0], w[0][0])
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
+
 						tcpdump1 := tc.Felixes[1].AttachTCPDump(dev)
 						tcpdump1.SetLogEnabled(true)
 						tcpdump1.AddMatcher("udp-frags", regexp.MustCompile(
