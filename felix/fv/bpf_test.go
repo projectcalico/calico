@@ -2893,6 +2893,24 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
 					})
 
+					It("should police workload 0 reaching itself via a service by its own address", func() {
+						if testOpts.connTimeEnabled {
+							Skip("CTLB connects the workload to itself directly, never through its own endpoint")
+						}
+						pol.Spec.Ingress = append([]api.Rule{{
+							Action: "Deny",
+							Source: api.EntityRule{Selector: "name=='" + w[0][0].Name + "'"},
+						}}, pol.Spec.Ingress...)
+						pol = updatePolicy(pol)
+
+						ip := testSvc.Spec.ClusterIP
+						port := uint16(testSvc.Spec.Ports[0].Port)
+
+						cc.ExpectNone(w[0][0], TargetIP(ip), port)
+						cc.ExpectSome(w[0][1], TargetIP(ip), port)
+						cc.CheckConnectivity()
+					})
+
 					/* Below Context handles the following transitions.
 					   Cluster IP -> External IP
 					   External IP -> LoadBalancer
