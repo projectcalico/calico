@@ -113,28 +113,18 @@ jobs:
           done
           chmod +x "$RUNNER_TEMP/oss-pick.sh"
 
-      # 0. Find the PR whose merge commit is the pushed commit (a push has no PR
-      #    payload). resolve-merged-pr.js retries once for API lag, confirms the
-      #    PR merged to master, and writes the outputs
-      #    proceed/pr/sha/login/merger/trusted. trusted = author is a tigera
-      #    org member; only then may the agent read the author's text.
-      # A dispatch names a PR, not a commit; map it to its merge commit so the
-      # resolve step below applies the same checks as a push.
-      - name: Look up dispatched PR
-        id: dispatch
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          PR_INPUT: ${{ inputs.pr }}
-        run: |
-          [[ "$PR_INPUT" =~ ^[0-9]+$ ]] || { echo "::error::pr must be a number"; exit 1; }
-          sha="$(gh api "repos/${SOURCE_REPO}/pulls/${PR_INPUT}" --jq 'select(.merged) | .merge_commit_sha // empty')"
-          [ -n "$sha" ] || { echo "::error::PR #${PR_INPUT} is not merged"; exit 1; }
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
-
+      # 0. Resolve the PR to pick. The automatic flow passes the pushed MERGE_SHA
+      #    (a push has no PR payload) and resolve-merged-pr.js finds the PR from
+      #    it; a manual dispatch passes PR_NUMBER directly (it also validates the
+      #    number and rejects an unmerged PR). Exactly one is set -- the other
+      #    event's field is empty. It then confirms the PR merged to master and
+      #    writes proceed/pr/sha/login/merger/trusted. trusted = author is a
+      #    tigera org member; only then may the agent read the author's text.
       - name: Resolve merged PR
         id: resolve
         env:
-          MERGE_SHA: ${{ github.event.workflow_run.head_sha || steps.dispatch.outputs.sha }}
+          MERGE_SHA: ${{ github.event.workflow_run.head_sha }}
+          PR_NUMBER: ${{ inputs.pr }}
           BASE_REF: ${{ env.SOURCE_REF }}
           MEMBER_ORG: tigera
           MEMBER_TOKEN: ${{ secrets.TIGERA_BOT_PAT_READONLY }}
