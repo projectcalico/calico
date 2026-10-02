@@ -1169,8 +1169,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         port = context._port
         original = context.original
 
-        # Abort early if we're managing non-endpoint ports.
-        if not _port_is_endpoint_port(port):
+        # Abort early if we're managing non-endpoint ports.  We look at the original
+        # as well as the updated port, because Nova's interface detach clears
+        # ``device_owner`` in the same update that clears ``binding:host_id`` (see
+        # ``_unbind_ports`` in nova/network/neutron.py).  Keying this on the updated
+        # port alone would return here and leave the WEP -- and the routes and policy
+        # Felix programs from it -- in place until the next resync.
+        if not (_port_is_endpoint_port(port) or _port_is_endpoint_port(original)):
             return
 
         # If this port update is purely for a status change, don't do anything:
@@ -1200,6 +1205,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # ``@db_api.retry_if_session_inactive``-decorated and manages its own
         # transaction.  See ``create_port_postcommit`` for rationale and PR #12898 for
         # the regression history.
+        # That same detach also clears ``device_id``, which forms part of the WEP key,
+        # so the updated port no longer names the slot that exists in etcd.  Reconcile
+        # from the original port in that case.  ``sync_wep`` and ``sync_lm`` take the
+        # key from the port they are passed but re-read the Neutron DB for the
+        # present-or-absent decision, so this addresses the slot that is really there
+        # while still deciding correctly that it should go.
+        slot_port = port if _port_is_endpoint_port(port) else original
+
         plugin_context = context._plugin_context
         old_host = original.get("binding:host_id")
         new_host = port.get("binding:host_id")
@@ -1213,7 +1226,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # cleanup of an old one.
         for dest_host in dict.fromkeys([old_migrating_to, new_migrating_to]):
             if dest_host:
-                self.endpoint_syncer.sync_lm(port, dest_host, plugin_context)
+                self.endpoint_syncer.sync_lm(slot_port, dest_host, plugin_context)
 
         # Sync for every host that might own a WEP slot for this port.  The same
         # dedupe-preserve-order trick keeps ``new_host`` last so a stale slot at
@@ -1225,7 +1238,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             [old_host, old_migrating_to, new_migrating_to, new_host]
         ):
             if host:
-                self.endpoint_syncer.sync_wep(port, host, plugin_context)
+                self.endpoint_syncer.sync_wep(slot_port, host, plugin_context)
 
     def update_floatingip(self, plugin_context):
         """update_floatingip

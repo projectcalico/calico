@@ -545,11 +545,13 @@ class WorkloadEndpointSyncer(ResourceSyncer):
 
         The etcd key is ``endpoint_name(port_at_host)`` --
         ``<host>-openstack-<device_id>-<port_id>`` -- so the slot is identified by
-        ``(port_id, host, device_id)``.  In every callsite ``device_id`` is stable
-        across the sync (Calico does not support Nova hot-swapping a port between VMs in
-        place; detach + re-attach goes via separate update events where
-        ``_port_is_endpoint_port`` filters out the detached state), so the caller only
-        has to think about the (port, host) pair.
+        ``(port_id, host, device_id)``.  Callers must pass a port whose ``device_id``
+        still matches the slot they mean: Calico does not support Nova hot-swapping a
+        port between VMs in place, so ``device_id`` is stable for a live port, but an
+        interface detach clears it in the same update that unbinds the port, and
+        ``update_port_postcommit`` therefore reconciles from the original port rather
+        than the updated one.  Given that, the caller only has to think about the
+        (port, host) pair.
 
         A given port can own up to two WEP slots in etcd: one at its current
         ``binding:host_id`` (the "source" WEP, in the bound steady state) and one at its
