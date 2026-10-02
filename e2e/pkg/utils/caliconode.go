@@ -47,6 +47,24 @@ func GetCalicoNodePodOnNode(clientset kubernetes.Interface, nodeName string) *co
 	return nil
 }
 
+// DumpCalicoNodeLogs logs what the calico-node pod on nodeName wrote since the given
+// time. A busy node's log rotates before end-of-run diags collect it, so a spec that
+// depends on Felix's behaviour on one node can keep that window on failure.
+func DumpCalicoNodeLogs(clientset kubernetes.Interface, nodeName string, since time.Time) {
+	pod := GetCalicoNodePodOnNode(clientset, nodeName)
+	if pod == nil {
+		logrus.Warnf("[DIAGS] No calico-node pod found on %s", nodeName)
+		return
+	}
+	sinceTime := since.UTC().Format(time.RFC3339)
+	out, err := e2ekubectl.RunKubectl(pod.Namespace, "logs", pod.Name, "-c", "calico-node", "--since-time="+sinceTime)
+	if err != nil {
+		logrus.WithError(err).Warnf("[DIAGS] Could not read %s/%s logs", pod.Namespace, pod.Name)
+		return
+	}
+	logrus.Infof("[DIAGS] %s/%s logs since %s:\n%s", pod.Namespace, pod.Name, sinceTime, out)
+}
+
 // GetPodInterfaceName returns the host-side veth interface name for a workload
 // pod by looking up the calico-node pod on the same node and running
 // `ip route get <podIP>`. This is prefix-agnostic and works with cali, eni,

@@ -15,10 +15,16 @@
 package conncheck
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/kubernetes/test/e2e/framework"
+
+	"github.com/projectcalico/calico/e2e/pkg/utils"
 )
 
 // CombineCustomizers is a meta customizer that applies multiple Pod customizers
@@ -74,5 +80,63 @@ func AvoidEachOther(pod *corev1.Pod) {
 				},
 			},
 		},
+	}
+}
+
+// WithAvoidControlPlane returns a Pod customizer that keeps the pod off the nodes
+// serving kube-apiserver, for specs whose host-level policy would cut the API server
+// off. Control-plane nodes are the ones backing the default/kubernetes Service; a
+// cluster whose control plane is not in the node list, or has no other node, is left
+// to the scheduler.
+func WithAvoidControlPlane(f *framework.Framework) func(*corev1.Pod) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	nodes, err := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	framework.ExpectNoError(err, "failed to list nodes")
+
+	workers := sets.New(utils.GetNodesInfo(f, nodes, false).GetNames()...)
+	if workers.Len() == 0 {
+		return func(*corev1.Pod) {}
+	}
+	var controlPlane []string
+	for _, n := range nodes.Items {
+		if !workers.Has(n.Name) {
+			controlPlane = append(controlPlane, n.Name)
+		}
+	}
+	return avoidNodes(controlPlane)
+}
+
+// avoidNodes returns a Pod customizer that adds a required node affinity excluding
+// the named nodes, alongside any node affinity the pod already has.
+func avoidNodes(names []string) func(*corev1.Pod) {
+	if len(names) == 0 {
+		return func(*corev1.Pod) {}
+	}
+	notIn := corev1.NodeSelectorRequirement{
+		Key:      "metadata.name",
+		Operator: corev1.NodeSelectorOpNotIn,
+		Values:   names,
+	}
+	return func(pod *corev1.Pod) {
+		if pod.Spec.Affinity == nil {
+			pod.Spec.Affinity = &corev1.Affinity{}
+		}
+		if pod.Spec.Affinity.NodeAffinity == nil {
+			pod.Spec.Affinity.NodeAffinity = &corev1.NodeAffinity{}
+		}
+		na := pod.Spec.Affinity.NodeAffinity
+		if na.RequiredDuringSchedulingIgnoredDuringExecution == nil {
+			na.RequiredDuringSchedulingIgnoredDuringExecution = &corev1.NodeSelector{}
+		}
+		terms := na.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
+		if len(terms) == 0 {
+			terms = []corev1.NodeSelectorTerm{{}}
+		}
+		// Terms are ORed, so every term must exclude the nodes.
+		for i := range terms {
+			terms[i].MatchFields = append(terms[i].MatchFields, notIn)
+		}
+		na.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = terms
 	}
 }
