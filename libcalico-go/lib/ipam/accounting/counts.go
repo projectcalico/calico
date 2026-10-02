@@ -19,6 +19,8 @@ import (
 	"math/big"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 // Counts is what a pool's blocks add up to. Address counts cover every block the pool owns; Total and Reserved cover
@@ -87,4 +89,20 @@ func (c *Counts) clone() *Counts {
 	out.BlocksByNode = maps.Clone(c.BlocksByNode)
 	out.AddressesByKind = maps.Clone(c.AddressesByKind)
 	return &out
+}
+
+// BlockCounts is what one block's allocations add up to, using the same terms as Counts.
+type BlockCounts struct {
+	Block *model.AllocationBlock
+
+	Total         int
+	InUse         int
+	Cooling       int
+	Reserved      int
+	InUseReserved int
+}
+
+// Free is every address in the block that is neither in use nor reserved.
+func (c *BlockCounts) Free() int {
+	return max(c.Total-c.InUse-c.Reserved+c.InUseReserved, 0)
 }

@@ -51,8 +51,12 @@ func TestConcurrentReadsAndWrites(t *testing.T) {
 					tracker.Summarize(name)
 					tracker.Allocations(name)
 					tracker.Unreferenced(name)
+					for _, b := range tracker.PoolBlockCounts(name) {
+						tracker.BlockCounts(b.Block.CIDR)
+					}
 				}
 				tracker.NoPoolBlocks()
+				tracker.NoPoolBlockCounts()
 				tracker.NoPoolUnreferenced()
 				tracker.AllRefs()
 				tracker.Refs(net.ParseIP("10.0.0.1"))
