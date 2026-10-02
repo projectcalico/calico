@@ -15,6 +15,7 @@
 package accounting
 
 import (
+	"fmt"
 	"math"
 	"slices"
 	"testing"
@@ -25,6 +26,85 @@ import (
 
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
+
+// reservationsCovering returns one IPReservation per CIDR, which is the interesting
+// shape: reservations that overlap each other arrive as separate resources.
+func reservationsCovering(cidrs []string) []*v3.IPReservation {
+	var reservations []*v3.IPReservation
+	for i, cidr := range cidrs {
+		reservations = append(reservations, reservation(fmt.Sprintf("reservation-%d", i), cidr))
+	}
+	return reservations
+}
+
+type numReservedCase struct {
+	name         string
+	pool         string
+	reservations []string
+	wantReserved int
+}
+
+func TestNumReservedIPsInCIDR(t *testing.T) {
+	for _, tc := range []numReservedCase{
+		{
+			name: "no reservations",
+			pool: "10.0.0.0/24",
+		},
+		{
+			name:         "one reservation",
+			pool:         "10.0.0.0/24",
+			reservations: []string{"10.0.0.32/30"},
+			wantReserved: 4,
+		},
+		{
+			// The nested and duplicated CIDRs must not be counted more than once.
+			name:         "overlapping reservations",
+			pool:         "10.0.0.0/24",
+			reservations: []string{"10.0.0.0/25", "10.0.0.5/32", "10.0.0.64/26", "10.0.0.0/25"},
+			wantReserved: 128,
+		},
+		{
+			name:         "reservation covering the whole pool",
+			pool:         "10.0.0.0/24",
+			reservations: []string{"10.0.0.0/16"},
+			wantReserved: 256,
+		},
+		{
+			name:         "reservation outside the pool",
+			pool:         "10.0.0.0/24",
+			reservations: []string{"192.168.0.0/24", "fd00::/120"},
+		},
+		{
+			name:         "reservation over half the pool",
+			pool:         "10.0.0.0/24",
+			reservations: []string{"10.0.0.128/25"},
+			wantReserved: 128,
+		},
+		{
+			name:         "IPv6 pool",
+			pool:         "fd00::/120",
+			reservations: []string{"fd00::/126"},
+			wantReserved: 4,
+		},
+		{
+			// Bigger than validation allows, but the count must saturate rather than wrap.
+			name:         "reservation too big for an int",
+			pool:         "fd00::/8",
+			reservations: []string{"fd00::/8"},
+			wantReserved: math.MaxInt,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			numReserved, err := NumReservedIPsInCIDR(cnet.MustParseNetwork(tc.pool), reservationsCovering(tc.reservations))
+			if err != nil {
+				t.Fatalf("NumReservedIPsInCIDR returned an error: %v", err)
+			}
+			if numReserved != tc.wantReserved {
+				t.Errorf("NumReservedIPsInCIDR = %d, want %d", numReserved, tc.wantReserved)
+			}
+		})
+	}
+}
 
 type reservationCIDRsCase struct {
 	name     string

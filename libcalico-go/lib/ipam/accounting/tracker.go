@@ -81,6 +81,7 @@ type trackedBlock struct {
 	cooling         int
 	borrowed        int
 	inUseReserved   int
+	reserved        int
 	addressesByKind [numKinds]int
 	assignedByNode  map[string]int
 	borrowedByNode  map[string]int
@@ -343,6 +344,43 @@ func (t *Tracker) PoolBlocks(name string) []*model.AllocationBlock {
 		return nil
 	}
 	return toAllocationBlocks(pool.blocks)
+}
+
+// PoolBlockCounts returns the counts of each block the pool claimed, in address order.
+func (t *Tracker) PoolBlockCounts(name string) []*BlockCounts {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	pool, ok := t.pools[name]
+	if !ok {
+		return nil
+	}
+	var out []*BlockCounts
+	for _, block := range pool.blocks.inOrder() {
+		out = append(out, block.counts())
+	}
+	return out
+}
+
+// BlockCounts returns one block's counts, whether or not a pool claimed it. False when no block has that CIDR.
+func (t *Tracker) BlockCounts(cidr cnet.IPNet) (*BlockCounts, bool) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	block, ok := t.blocks[cidr.String()]
+	if !ok {
+		return nil, false
+	}
+	return block.counts(), true
+}
+
+// NoPoolBlockCounts is PoolBlockCounts for the blocks no pool claimed.
+func (t *Tracker) NoPoolBlockCounts() []*BlockCounts {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	var out []*BlockCounts
+	for _, block := range t.blocksWithNoPool.inOrder() {
+		out = append(out, block.counts())
+	}
+	return out
 }
 
 // NoPoolBlocks is every block no pool claimed, in address order.
@@ -632,6 +670,9 @@ func newTrackedBlock(key string, b *model.AllocationBlock, reserved *ReservedIPs
 	block.node, _ = NodeAffinity(b)
 	block.virtual = b.Affinity != nil && b.AffinityType() == model.IPAMAffinityTypeVirtual
 	checkReserved := reserved.overlaps(b.CIDR.IPNet)
+	if checkReserved {
+		block.reserved = countReservedIn(b, reserved)
+	}
 	unknownTypes := set.New[string]()
 	valid := 0
 	for a := range allocations(b) {
@@ -672,14 +713,36 @@ func newTrackedBlock(key string, b *model.AllocationBlock, reserved *ReservedIPs
 
 func (b *trackedBlock) countReserved(reserved *ReservedIPs) {
 	b.inUseReserved = 0
+	b.reserved = 0
 	if !reserved.overlaps(b.allocationBlock.CIDR.IPNet) {
 		return
 	}
+	b.reserved = countReservedIn(b.allocationBlock, reserved)
 	for a := range allocations(b.allocationBlock) {
 		if reserved.containsAddr(addrAt(b.base, a.Ordinal)) {
 			b.inUseReserved++
 		}
 	}
+}
+
+func (b *trackedBlock) counts() *BlockCounts {
+	return &BlockCounts{
+		Block:         b.allocationBlock,
+		Total:         b.allocationBlock.NumAddresses(),
+		InUse:         b.inUse,
+		Cooling:       b.cooling,
+		Reserved:      b.reserved,
+		InUseReserved: b.inUseReserved,
+	}
+}
+
+func countReservedIn(b *model.AllocationBlock, reserved *ReservedIPs) int {
+	n, err := reserved.countIn(b.CIDR.IPNet)
+	if err != nil {
+		logrus.WithError(err).WithField("block", b.CIDR.String()).Warn("Cannot count the reserved addresses in an IPAM block")
+		return 0
+	}
+	return ClampToInt(n)
 }
 
 // blockBase is the block's first address, IPv4 unmapped so it matches the keys refsByAddress uses.

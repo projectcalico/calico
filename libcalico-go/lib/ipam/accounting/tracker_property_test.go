@@ -244,7 +244,14 @@ func expectSameReads(got, want *Tracker, context string) {
 	Expect(blockCIDRs(got.NoPoolBlocks())).To(Equal(blockCIDRs(want.NoPoolBlocks())), context)
 	Expect(normalizeAll(map[string]*Counts{"": got.SummarizeNoPool()})).To(Equal(normalizeAll(map[string]*Counts{"": want.SummarizeNoPool()})), context)
 	Expect(allocIPs(got.NoPoolUnreferenced())).To(Equal(allocIPs(want.NoPoolUnreferenced())), context)
+	Expect(got.NoPoolBlockCounts()).To(Equal(want.NoPoolBlockCounts()), context)
+	for _, b := range want.NoPoolBlocks() {
+		gotCounts, _ := got.BlockCounts(b.CIDR)
+		wantCounts, _ := want.BlockCounts(b.CIDR)
+		Expect(gotCounts).To(Equal(wantCounts), context+" block "+b.CIDR.String())
+	}
 	for name := range want.SummarizeAll() {
+		Expect(got.PoolBlockCounts(name)).To(Equal(want.PoolBlockCounts(name)), context+" pool "+name)
 		Expect(allocIPs(got.Allocations(name))).To(Equal(allocIPs(want.Allocations(name))), context+" pool "+name)
 		Expect(allocIPs(got.Unreferenced(name))).To(Equal(allocIPs(want.Unreferenced(name))), context+" pool "+name)
 		Expect(blockCIDRs(got.PoolBlocks(name))).To(Equal(blockCIDRs(want.PoolBlocks(name))), context+" pool "+name)
