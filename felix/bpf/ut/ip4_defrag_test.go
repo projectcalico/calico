@@ -243,6 +243,10 @@ func TestIP4Defrag(t *testing.T) {
 func TestIP4FragShortTail(t *testing.T) {
 	RegisterTestingT(t)
 
+	// The default UDP tuple must not hit a NAT entry another test left behind.
+	resetMap(natMap)
+	resetMap(natBEMap)
+
 	defer resetCTMap(ctMap)
 	defer cleanupMap(ipfragsFwdMap)
 
