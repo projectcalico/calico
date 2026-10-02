@@ -51,7 +51,7 @@ Kubernetes Service on port `7443`):
 | `pkg/server/` | gRPC service implementations wrapping the Goldmane engine |
 | `pkg/client/` | Go client wrappers for the gRPC services |
 | `pkg/emitter/` | Pushes aggregated flows to an upstream HTTP endpoint via a rate-limited workqueue |
-| `pkg/stream/` | Stream management for live flow subscriptions |
+| `pkg/stream/` | Stream management for live flow subscriptions. A new stream gets no live buckets until its backfill runs. Then it only takes buckets that start at or after the backfill end. |
 | `pkg/types/` | Internal flow types (minified from proto) and filter logic |
 | `pkg/internal/` | Flow cache (the client's replay cache) and file-watching utilities |
 | `proto/` | Protobuf definitions and generated code |

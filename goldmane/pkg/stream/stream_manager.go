@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"math"
 	"sync"
 
 	"github.com/google/uuid"
@@ -40,13 +41,26 @@ type StreamManager interface {
 	Register(*proto.FlowStreamRequest, int) chan Stream
 	Backfills() <-chan Stream
 	Receive(storage.FlowProvider, string)
+
+	// GoLive lets the stream with the given ID accept live buckets that start at or after
+	// liveFrom. The aggregator calls it right after the stream's backfill, on the same loop
+	// that does rollovers, so no bucket falls in a gap or arrives twice.
+	GoLive(id string, liveFrom int64)
+}
+
+// liveItem is a bucket queued for the live fan-out, with its start time captured on the
+// aggregator loop at flush time. Buckets are reused as the ring wraps, so the start time
+// must not be read again later.
+type liveItem struct {
+	p     storage.FlowProvider
+	start int64
 }
 
 func NewStreamManager() *streamManager {
 	maxStreams := 100
 	return &streamManager{
 		streams:          streamCache{streams: make(map[string]*stream)},
-		in:               make(chan storage.FlowProvider, 500),
+		in:               make(chan liveItem, 500),
 		closedStreamsCh:  make(chan string, maxStreams),
 		streamRequests:   make(chan *streamRequest, 10),
 		backfillRequests: make(chan Stream, 10),
@@ -101,6 +115,14 @@ func (c *streamCache) sendToStream(id string, p storage.FlowProvider) {
 	s.receive(p)
 }
 
+func (c *streamCache) goLive(id string, liveFrom int64) {
+	c.Lock()
+	defer c.Unlock()
+	if s, ok := c.streams[id]; ok {
+		s.liveFrom.Store(liveFrom)
+	}
+}
+
 func (c *streamCache) size() int {
 	c.Lock()
 	defer c.Unlock()
@@ -139,7 +161,7 @@ type streamManager struct {
 	backfillRequests chan Stream
 
 	// in queues incoming data to be processed by worker threads and emitted to streams.
-	in chan storage.FlowProvider
+	in chan liveItem
 
 	// rl is used to rate limit log messages that may happen frequently.
 	rl *logrusr.RateLimitedLogger
@@ -189,7 +211,11 @@ func (m *streamManager) Receive(b storage.FlowProvider, id string) {
 	}
 
 	// No ID was given - send to all streams.
-	if err := chanutil.WriteWithDeadline(context.TODO(), m.in, b, 30*time.Second); err != nil {
+	item := liveItem{p: b, start: math.MinInt64}
+	if ab, ok := b.(*storage.AggregationBucket); ok {
+		item.start = ab.StartTime
+	}
+	if err := chanutil.WriteWithDeadline(context.TODO(), m.in, item, 30*time.Second); err != nil {
 		m.rl.WithError(err).Error("stream manager failed to handle flow(s), dropping")
 	}
 }
@@ -207,9 +233,11 @@ func (m *streamManager) processIncoming(ctx context.Context) {
 		case <-ctx.Done():
 			logrus.Debug("stream manager worker exiting")
 			return
-		case b := <-m.in:
+		case item := <-m.in:
 			m.streams.iter(func(s *stream) {
-				s.receive(b)
+				if s.acceptsLive(item.start) {
+					s.receive(item.p)
+				}
 			})
 		}
 	}
@@ -235,6 +263,7 @@ func (m *streamManager) register(req *streamRequest) *stream {
 			logrusr.OptInterval(15*time.Second),
 		),
 	}
+	stream.liveFrom.Store(math.MaxInt64)
 	go stream.run()
 
 	m.streams.add(stream)
@@ -242,6 +271,10 @@ func (m *streamManager) register(req *streamRequest) *stream {
 
 	logrus.WithField("id", stream.id).Debug("Registered new stream")
 	return stream
+}
+
+func (m *streamManager) GoLive(id string, liveFrom int64) {
+	m.streams.goLive(id, liveFrom)
 }
 
 // unregister removes a stream from the stream manager.

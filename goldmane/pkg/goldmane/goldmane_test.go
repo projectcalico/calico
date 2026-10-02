@@ -16,6 +16,7 @@ package goldmane_test
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -54,11 +55,20 @@ func setupTest(t *testing.T, opts ...goldmane.Option) func() {
 	// Register gomega with test.
 	RegisterTestingT(t)
 
+	// DEBUG logs every flow, which is slow enough under -race to time out the bigger tests.
+	level := os.Getenv("GOLDMANE_TEST_LOG_LEVEL")
+	if level == "" {
+		level = "INFO"
+	}
+
 	// Hook logrus into testing.T
-	utils.ConfigureLogging("DEBUG")
+	utils.ConfigureLogging(level)
 	logCancel := logrusr.RedirectLogrusToTestingT(t)
 	gm = goldmane.NewGoldmane(opts...)
 	return func() {
+		if t.Failed() && level != "DEBUG" {
+			t.Logf("logs were at %s. For a full trace, rerun: GOLDMANE_TEST_LOG_LEVEL=DEBUG go test -race -run '^%s$' ./pkg/goldmane/", level, t.Name())
+		}
 		gm.Stop()
 		gm = nil
 		c = nil
