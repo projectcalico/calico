@@ -127,8 +127,8 @@ jobs:
           PR_INPUT: ${{ inputs.pr }}
         run: |
           [[ "$PR_INPUT" =~ ^[0-9]+$ ]] || { echo "::error::pr must be a number"; exit 1; }
-          sha="$(gh api "repos/${SOURCE_REPO}/pulls/${PR_INPUT}" --jq '.merge_commit_sha // empty')"
-          [ -n "$sha" ] || { echo "::error::PR #${PR_INPUT} has no merge commit"; exit 1; }
+          sha="$(gh api "repos/${SOURCE_REPO}/pulls/${PR_INPUT}" --jq 'select(.merged) | .merge_commit_sha // empty')"
+          [ -n "$sha" ] || { echo "::error::PR #${PR_INPUT} is not merged"; exit 1; }
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Resolve merged PR
