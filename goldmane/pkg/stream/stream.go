@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 
 	"github.com/sirupsen/logrus"
 
@@ -35,6 +36,13 @@ type stream struct {
 
 	// rl is used to rate limit log messages that may happen frequently.
 	rl *logrusr.RateLimitedLogger
+
+	// liveFrom is the oldest live bucket start this stream accepts. MaxInt64 until backfill runs.
+	liveFrom atomic.Int64
+}
+
+func (s *stream) acceptsLive(start int64) bool {
+	return start >= s.liveFrom.Load()
 }
 
 // Close signals to the stream manager that this stream is done and should be closed.
