@@ -53,11 +53,15 @@ func TestKeyUpdated_LogLevel(t *testing.T) {
 			revisionsByPrefix: map[string]uint64{
 				"/calico/bgp/v1/host": 7,
 			},
-			cache:         map[string]string{nodeLogKey: "warning"},
+			cache:         map[string]string{nodeLogKey: "debug"},
 			key:           nodeLogKey,
-			expectedLevel: log.WarnLevel,
+			expectedLevel: log.DebugLevel,
 		},
 	}
+
+	// Note, the cached log level values are only ever "debug", "info" or "none", because
+	// getLogSeverityKVPair maps every other BGPConfiguration LogSeverityScreen value to "none".
+	// Each test starts at info level, so uses "debug" to show that the log level was updated.
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
