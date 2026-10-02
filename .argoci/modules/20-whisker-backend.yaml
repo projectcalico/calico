@@ -4,7 +4,7 @@ version: condensed-module
 defaults:
   timeout: 30m
   # In the build image directly, saving a nested container and a second pull.
-  image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
+  useGoBuild: true
 
 steps:
   - name: whisker-backend-ci

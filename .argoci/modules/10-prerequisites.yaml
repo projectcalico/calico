@@ -41,8 +41,17 @@ steps:
         - ^lib\.Makefile$
         - ^metadata\.mk$
         - ^\.argoci/depstree\.yaml$
+        - ^\.argoci/config\.yaml$
         - ^\.argoci/modules/10-prerequisites\.yaml$
     commands: |
+      # `useGoBuild` steps take their image tag from config.yaml rather than from
+      # the toolchain the Makefiles build with.
+      want=$(make --no-print-directory -s -f metadata.mk --eval 'print: ; @echo $(GO_BUILD_VER)' print)
+      have=$(awk '/^goBuildVersion:/ {print $2}' .argoci/config.yaml)
+      if [ "${want}" != "${have}" ]; then
+        echo "goBuildVersion in .argoci/config.yaml is ${have}, but metadata.mk builds with ${want}"
+        exit 1
+      fi
       make check-ginkgo-v2
       make check-go-mod
       make verify-go-mods
@@ -71,7 +80,7 @@ steps:
   - name: check-language-dockerfiles
     jobSize: small
     requests: {cpu: 2250m, memory: 548Mi}
-    image: calico/go-build:1.27.1-llvm21.1.8-k8s1.37.0-1
+    useGoBuild: true
     workspaceVolumes: none
     changes:
       in:
