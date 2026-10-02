@@ -24,6 +24,14 @@ on:
   workflow_run:
     workflows: ["Auto-pick OSS PR into Enterprise (trigger)"]
     types: [completed]
+  # Manual re-pick of an already merged master PR, e.g. one merged before this
+  # workflow existed. Only runs from master (gated on the pick job).
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Number of the merged master PR to pick into Enterprise"
+        required: true
+        type: string
 
 # Least privilege: every target write (push, gh pr create, labels) uses
 # TIGERA_BOT_PAT in Job B; github.token is read-only here (source reads, the
@@ -34,7 +42,7 @@ permissions:
 
 concurrency:
   # PR number is unknown until the resolve step; key on the triggering commit.
-  group: auto-pick-oss-${{ github.event.workflow_run.head_sha }}
+  group: auto-pick-oss-${{ github.event.workflow_run.head_sha || format('pr-{0}', inputs.pr) }}
   cancel-in-progress: false
 
 env:
@@ -51,14 +59,18 @@ jobs:
   # Job A: resolve + pick + Claude + export. READ-ONLY target token, no Slack.
   # =========================================================================
   pick:
-    # Only a successful push-triggered stage-1 run of master, and only on this
-    # repo (forks syncing master have no secrets).
+    # Only a successful push-triggered stage-1 run of master, or a manual
+    # dispatch of master's own workflow, and only on this repo (forks syncing
+    # master have no secrets).
     if: >
       github.repository == 'projectcalico/calico' &&
-      github.event.workflow_run.head_repository.full_name == github.repository &&
-      github.event.workflow_run.head_branch == 'master' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.conclusion == 'success'
+      ((github.event_name == 'workflow_run' &&
+        github.event.workflow_run.head_repository.full_name == github.repository &&
+        github.event.workflow_run.head_branch == 'master' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.conclusion == 'success') ||
+       (github.event_name == 'workflow_dispatch' &&
+        github.ref == 'refs/heads/master'))
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -106,10 +118,23 @@ jobs:
       #    PR merged to master, and writes the outputs
       #    proceed/pr/sha/login/merger/trusted. trusted = author is a tigera
       #    org member; only then may the agent read the author's text.
+      # A dispatch names a PR, not a commit; map it to its merge commit so the
+      # resolve step below applies the same checks as a push.
+      - name: Look up dispatched PR
+        id: dispatch
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          PR_INPUT: ${{ inputs.pr }}
+        run: |
+          [[ "$PR_INPUT" =~ ^[0-9]+$ ]] || { echo "::error::pr must be a number"; exit 1; }
+          sha="$(gh api "repos/${SOURCE_REPO}/pulls/${PR_INPUT}" --jq '.merge_commit_sha // empty')"
+          [ -n "$sha" ] || { echo "::error::PR #${PR_INPUT} has no merge commit"; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
       - name: Resolve merged PR
         id: resolve
         env:
-          MERGE_SHA: ${{ github.event.workflow_run.head_sha }}
+          MERGE_SHA: ${{ github.event.workflow_run.head_sha || steps.dispatch.outputs.sha }}
           BASE_REF: ${{ env.SOURCE_REF }}
           MEMBER_ORG: tigera
           MEMBER_TOKEN: ${{ secrets.TIGERA_BOT_PAT_READONLY }}
