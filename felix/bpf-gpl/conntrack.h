@@ -279,6 +279,16 @@ create:
 
 	err = cali_ct_update_elem(k, &ct_value, BPF_NOEXIST);
 
+	if (CALI_F_TO_WEP && err == -17 /* EEXIST */ && ct_ctx->type == CALI_CT_TYPE_NORMAL) {
+		/* Unseen packet on an entry lacking this workload's approval; policy just allowed it. */
+		struct calico_ct_value *v = cali_ct_lookup_elem(k);
+		if (v && v->type != CALI_CT_TYPE_NAT_FWD) {
+			ct_leg_set_flags(srcLTDest ? &v->b_to_a : &v->a_to_b,
+					CALI_CT_LEG_APPROVED | CALI_CT_LEG_WORKLOAD);
+			err = 0;
+		}
+	}
+
 	if (CALI_F_HEP && err == -17 /* EEXIST */) {
 		int i;
 

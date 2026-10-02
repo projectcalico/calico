@@ -169,6 +169,20 @@ func TestLocalWorkloadIgnoresHEPApproval(t *testing.T) {
 		}, withFromHost())
 	})
 
+	t.Run("unseen from a remote source, policy allows and records the workload approval", func(t *testing.T) {
+		setup(remoteHost, conntrack.Leg{Opener: true})
+
+		skbMark = 0
+		runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
+			d := ctAuditLoadEntry(ctKey).Data()
+			Expect(d.B2A.Approved).To(BeTrue())
+			Expect(d.B2A.Workload).To(BeTrue())
+		}, withFromHost())
+	})
+
 	// Unseen host traffic to a local workload is always allowed, so the entry is used as is.
 	t.Run("from a host process, accepted on the existing entry", func(t *testing.T) {
 		setup(localHost, conntrack.Leg{Opener: true})
