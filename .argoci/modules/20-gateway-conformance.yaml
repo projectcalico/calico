@@ -1,0 +1,28 @@
+# The upstream Gateway API conformance suite, run against Calico with Envoy
+# Gateway on a kind cluster.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: gateway-conformance
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    requests: {cpu: 3500m, memory: 7.5Gi}
+    depends:
+      - build-calico-image
+      - build-node-image
+      - build-whisker-image
+      - build-operator-image
+      - build-third-party-images
+    commands: |
+      # Marker files come with them, so make treats the images as already built.
+      .argoci/scripts/load-cached-images calico node whisker
+      make e2e-test-gateway-conformance
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job ./report/ --destination gateway-conformance-reports || true

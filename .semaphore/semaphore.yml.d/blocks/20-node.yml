@@ -58,7 +58,7 @@
           # Load the per-arch patched nftables RPMs producer image (built/cached
           # by "Build: nftables RPMs") so Dockerfile's FROM ${NFT_RPMS_IMAGE}
           # resolves locally without re-pulling from Docker Hub.
-          - ../.semaphore/scripts/load-nft-rpms.sh "${ARCH}"
+          - ../.argoci/scripts/load-nft-rpms.sh "${ARCH}"
           - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
       - name: "Node: build Windows archive"
         commands:
