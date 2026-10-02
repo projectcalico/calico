@@ -171,6 +171,21 @@ func (c *guardianComponent) SupportedOSType() rmeta.OSType {
 }
 
 func (c *guardianComponent) Objects() ([]client.Object, []client.Object) {
+	return ObjectsWithOverrides(c)
+}
+
+var _ Overridable = (*guardianComponent)(nil)
+
+func (c *guardianComponent) OverrideTargets() []rcomponents.OverrideTarget {
+	if c.cfg.ManagementClusterConnection == nil {
+		return nil
+	}
+	return []rcomponents.OverrideTarget{
+		rcomponents.Target[*appsv1.Deployment](GuardianDeploymentName, c.cfg.ManagementClusterConnection.Spec.GuardianDeployment),
+	}
+}
+
+func (c *guardianComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {
 	objs := []client.Object{
 		c.serviceAccount(),
 		c.clusterRole(),
@@ -325,12 +340,6 @@ func (c *guardianComponent) deployment() *appsv1.Deployment {
 				},
 			},
 		},
-	}
-
-	if c.cfg.ManagementClusterConnection != nil {
-		if overrides := c.cfg.ManagementClusterConnection.Spec.GuardianDeployment; overrides != nil {
-			rcomponents.ApplyDeploymentOverrides(d, overrides)
-		}
 	}
 	return d
 }
