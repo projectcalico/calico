@@ -500,8 +500,18 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         port has stopped migrating to ``dest_host`` raises ResourceGone, letting the
         resync skip the entry -- the next pass sees no matching dest-wep in neutron_map
         and the in-etcd-only branch deletes the orphan dest WEP.
+
+        Without ``dest_host`` this is the source-side WEP, and the reread verifies
+        instead that the port is still bound to the host the entry is keyed on, which
+        is the only thing that decides whether that WEP should exist.  A port that has
+        been unbound or moved in the meantime raises ResourceGone and is skipped the
+        same way.
         """
         if reread:
+            # The host this WEP is keyed on, captured before the re-read.  For the
+            # source-side WEP that is the port's own binding host; for the dest side it
+            # is ``dest_host``, which is checked separately below.
+            intended_host = port["binding:host_id"]
             try:
                 port = self.db.get_port(context, port["id"])
             except n_exc.PortNotFound:
@@ -510,6 +520,12 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 current_dest = port.get("binding:profile", {}).get("migrating_to")
                 if current_dest != dest_host:
                     raise ResourceGone()
+            elif port["binding:host_id"] != intended_host:
+                # The port has been unbound, or bound to another host, since the
+                # compare phase read it.  Writing now would create a WEP keyed on
+                # ``intended_host`` whose spec names a different node, and nothing
+                # would remove it until the next full resync.
+                raise ResourceGone()
         if dest_host is not None:
             port = {**port, "binding:host_id": dest_host}
         port_extra = self.get_extra_port_information(context, port)
