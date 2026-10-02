@@ -378,7 +378,7 @@ func (m *mockDataplane) ruleMatchID(dir rules.RuleDir, action string, owner rule
 	return h.Sum64()
 }
 
-func (m *mockDataplane) queryClassifier(ifaceName, tcHook string) bool {
+func (m *mockDataplane) queryClassifier(ifaceName, tcHook string, netkit bool) bool {
 	if m.queryClassifierFn != nil {
 		return m.queryClassifierFn(ifaceName, tcHook)
 	}
