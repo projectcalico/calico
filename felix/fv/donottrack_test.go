@@ -144,8 +144,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 
 		if BPFMode() {
 			expectFailSafeOnlyConnectivity(ExpectWithIPVersion(6))
-			By("Having no Linux IP sets")
-			Consistently(tc.Felixes[0].IPSetNames, "2s", "1s").Should(BeEmpty())
+			By("Having no Linux IP sets (other than the host-NAT steering sets)")
+			Consistently(ipSetNamesExceptHostNAT(tc.Felixes[0]), "2s", "1s").Should(BeEmpty())
 		}
 
 		host0Selector := fmt.Sprintf("name == '%s-%s'", iface, tc.Felixes[0].Name)

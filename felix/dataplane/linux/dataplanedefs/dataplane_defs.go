@@ -26,6 +26,13 @@ const (
 	BPFInDev  = "bpfin.cali"
 	BPFOutDev = "bpfout.cali"
 
+	// BPFHostNATRulePriority is the priority of the routing rule that steers
+	// fwmarked host traffic to services into the dedicated table whose default
+	// route points at BPFInDev (the CTLB workaround).  It sits just after
+	// Wireguard's default rule priority (99) so that encryption still takes
+	// precedence, and well before the main table lookup.
+	BPFHostNATRulePriority = 100
+
 	// FlowtableName is the name of the nftables flowtable used for offloading established
 	// flows. The rule renderer references it via "flow offload @<name>" and the nftables
 	// table programs the flowtable object under the same name; the two must stay in lockstep.
