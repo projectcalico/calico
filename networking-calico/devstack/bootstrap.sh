@@ -337,7 +337,7 @@ if ${SCALE_ONLY:-false}; then
     # that nobody notices until the dashboard is next read.
     (
       cd ${CALICO_REPO_DIR} && \
-      go run ./hack/perf/cmd/send-perf-results \
+      make bin/send-perf-results && bin/send-perf-results \
          --dir artifacts/perf \
          --templates hack/perf/index-templates \
          --require-publication
@@ -347,7 +347,7 @@ else
     # run must not fail because the trend store was briefly unreachable.
     (
       cd ${CALICO_REPO_DIR} && \
-      go run ./hack/perf/cmd/send-perf-results \
+      make bin/send-perf-results && bin/send-perf-results \
          --dir artifacts/perf \
          --templates hack/perf/index-templates
     ) || true

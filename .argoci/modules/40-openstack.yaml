@@ -35,6 +35,9 @@ steps:
       diskSize: 100GB
       provisionedIops: 6000
       provisionedThroughput: 200
+    # For building the perf results uploader, which publishes the benchmark.
+    services:
+      - docker
     secretBundles:
       - name: banzai-secrets
         keys:
@@ -42,6 +45,7 @@ steps:
           - name: LENS_ELASTICSEARCH_TOKEN
     commands: |
       sudo apt-get remove -y python3-wrapt || true
+      sudo apt-get update -y && sudo apt-get install -y make
       # The default is not where this checkout lands.
       export CALICO_REPO_DIR="${CI_HOME}/${CI_GIT_DIR}"
       cd networking-calico
