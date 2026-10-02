@@ -66,7 +66,7 @@ WINDOWS_DIST = dist/windows
 # The Windows HPC container version used as base for Calico Windows images
 WINDOWS_HPC_VERSION ?= v1.0.0
 # The Windows versions used as base for Calico Windows images
-WINDOWS_VERSIONS ?= ltsc2019 ltsc2022
+WINDOWS_VERSIONS ?= ltsc2019 ltsc2022 ltsc2025
 
 # The CNI plugin and flannel code that will be cloned and rebuilt with this repo's go-build image.
 # Pinned so the content-addressed third-party-cni-plugins image hash changes when these move.

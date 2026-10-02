@@ -66,16 +66,28 @@ function import_linux_images() {
 }
 
 function import_windows_images() {
-  make -C "${CALICO_HOME}/node" image-windows WINDOWS_IMAGE=node-windows
-  make -C "${CALICO_HOME}/cni-plugin" image-windows WINDOWS_IMAGE=cni-windows
+  local windows_base_version
+  case "${WINDOWS_SERVER_VERSION}" in
+    windows-2019)
+      windows_base_version="ltsc2019"
+      ;;
+    windows-2022)
+      windows_base_version="ltsc2022"
+      ;;
+    windows-2025)
+      windows_base_version="ltsc2025"
+      ;;
+    *)
+      echo "Unsupported Windows Server version: ${WINDOWS_SERVER_VERSION}" >&2
+      return 1
+      ;;
+  esac
 
-  if [[ ${WINDOWS_SERVER_VERSION} == "windows-2022" ]]; then
-    CALICO_NODE_IMAGE="node-windows-${GIT_VERSION}-ltsc2022.tar"
-    CALICO_CNI_IMAGE="cni-windows-${GIT_VERSION}-ltsc2022.tar"
-  else # windows-2019
-    CALICO_NODE_IMAGE="node-windows-${GIT_VERSION}-ltsc2019.tar"
-    CALICO_CNI_IMAGE="cni-windows-${GIT_VERSION}-ltsc2019.tar"
-  fi
+  make -C "${CALICO_HOME}/node" image-windows WINDOWS_IMAGE=node-windows WINDOWS_VERSIONS="${windows_base_version}"
+  make -C "${CALICO_HOME}/cni-plugin" image-windows WINDOWS_IMAGE=cni-windows WINDOWS_VERSIONS="${windows_base_version}"
+
+  CALICO_NODE_IMAGE="node-windows-${GIT_VERSION}-${windows_base_version}.tar"
+  CALICO_CNI_IMAGE="cni-windows-${GIT_VERSION}-${windows_base_version}.tar"
 
   ${ASO_DIR}/scp-to-windows.sh 0 "${CALICO_HOME}/node/dist/windows/${CALICO_NODE_IMAGE}" 'c:\calico-node-windows.tar'
   ${ASO_DIR}/scp-to-windows.sh 0 "${CALICO_HOME}/cni-plugin/dist/windows/${CALICO_CNI_IMAGE}" 'c:\calico-cni-plugin-windows.tar'
