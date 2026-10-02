@@ -1105,6 +1105,12 @@ type FelixConfigurationSpec struct {
 	// FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.
 	FlowLogsGoldmaneServer *string `json:"flowLogsGoldmaneServer,omitempty"`
 
+	// FlowLogsGoldmaneIncludeIPs controls whether flow data sent to Goldmane (and the local flow
+	// reporter) includes the source and destination IP addresses of the aggregated connections.
+	// [Default: Enabled]
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	FlowLogsGoldmaneIncludeIPs *string `json:"flowLogsGoldmaneIncludeIPs,omitempty"`
+
 	// FlowLogsLocalReporter configures local unix socket for reporting flow data from each node. [Default: Disabled]
 	// +kubebuilder:validation:Enum=Disabled;Enabled
 	FlowLogsLocalReporter *string `json:"flowLogsLocalReporter,omitempty"`

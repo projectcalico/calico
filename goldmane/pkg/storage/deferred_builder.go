@@ -34,11 +34,15 @@ type FlowBuilder interface {
 }
 
 func NewDeferredFlowBuilder(d *DiachronicFlow, s, e int64) FlowBuilder {
+	w := d.GetWindows(s, e)
+	srcIPs, dstIPs := d.ipsForWindows(w)
 	return &DeferredFlowBuilder{
-		d: d,
-		w: d.GetWindows(s, e),
-		s: s,
-		e: e,
+		d:      d,
+		w:      w,
+		s:      s,
+		e:      e,
+		srcIPs: srcIPs,
+		dstIPs: dstIPs,
 	}
 }
 
@@ -55,11 +59,17 @@ type DeferredFlowBuilder struct {
 	// Note: This is a bit of a hack, but it works for now. We can clean this up a lot by reconciling
 	// the Window and AggregationBucket objects, which fill similar roles.
 	w []*Window
+
+	// srcIPs and dstIPs are snapshotted at construction for the same reason: the DiachronicFlow's IP
+	// sets are mutated by the main loop.
+	srcIPs []string
+	dstIPs []string
 }
 
 func (f *DeferredFlowBuilder) BuildInto(filter *proto.Filter, res *proto.FlowResult) bool {
 	if f.d.Matches(filter, f.s, f.e) {
 		if tf := f.d.AggregateWindows(f.w); tf != nil {
+			tf.SourceIps, tf.DestIps = f.srcIPs, f.dstIPs
 			types.FlowIntoProto(tf, res.Flow)
 			res.Id = f.d.ID
 			return true
