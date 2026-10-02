@@ -194,9 +194,7 @@ non-BPF `*tables` rules; Felix refuses to start if it does not.
 
 `CALI_SKB_MARK_BYPASS` is a flag; the `0x00f00000` nibble is a separate code, compared whole.
 `SKIP_FIB`, `NAT_OUT` and `MASQ` leave the decision to Linux, so `*tables` keeps them tracked;
-`BYPASS_FWD` and `BYPASS_XDP` are forwarded by BPF. BYPASS short-circuits the next program even
-for `MASQ`: after SNAT, pod→service→self cannot be policed by source, and `CALI_CT_FLAG_SVC_SELF`
-records that the pod is reaching itself.
+`BYPASS_FWD` and `BYPASS_XDP` are forwarded by BPF.
 
 ### Review notes for this section
 

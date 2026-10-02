@@ -814,6 +814,11 @@ do_policy:
 	}
 #endif
 
+	if (CALI_F_TO_WEP && ctx->skb->mark == CALI_SKB_MARK_MASQ) {
+		CALI_DEBUG("MASQ to self - using dest as source for policy.");
+		ctx->state->ip_src_masq = ctx->state->ip_src;
+		ctx->state->ip_src = ctx->state->ip_dst;
+	}
 	CALI_DEBUG("About to jump to policy program.");
 	CALI_JUMP_TO_POLICY(ctx);
 	if (CALI_F_HEP) {
@@ -1392,6 +1397,11 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 
 	if (!policy_skipped) {
 		counter_inc(ctx, CALI_REASON_ACCEPTED_BY_POLICY);
+		if (CALI_F_TO_WEP && ctx->skb->mark == CALI_SKB_MARK_MASQ) {
+			/* Restore state->ip_src */
+			CALI_DEBUG("Accepted MASQ to self - restoring source for conntrack.");
+			ctx->state->ip_src = ctx->state->ip_src_masq;
+		}
 	}
 
 	if (CALI_F_HEP) {
