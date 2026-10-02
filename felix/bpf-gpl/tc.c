@@ -139,6 +139,8 @@ int calico_tc_main(struct __sk_buff *skb)
 	/* Optimisation: if another BPF program has already pre-approved the packet,
 	 * skip all processing. */
 	if (CALI_F_FROM_HOST && skb_mark_equals(skb, CALI_SKB_MARK_BYPASS, CALI_SKB_MARK_BYPASS) &&
+			/* MASQ to self still needs to-WEP policy, matched on the pod's own address. */
+			!skb_mark_equals(skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_MASQ) &&
 			/* If we are on tunnel and we do not have the key set, we cannot short-circuit */
 			!encap_needs_key(skb)) {
 		if  (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {

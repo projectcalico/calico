@@ -192,6 +192,9 @@ Felix reserves the top three nibbles of the mark (`0x1FF00000`) for BPF
 use. `IptablesMarkMask` must include this range and leave room for any
 non-BPF `*tables` rules; Felix refuses to start if it does not.
 
+`CALI_SKB_MARK_MASQ` carries the BYPASS bit but never short-circuits to-WEP: pod→service→self is
+policed there by the pod's own address, as with iptables.
+
 ### Review notes for this section
 
 - A PR that adds a new out-of-band signal between BPF and `*tables`
