@@ -1,0 +1,532 @@
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package main
+
+import (
+	"encoding/base64"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+const imageInspectOutput = `[
+  {
+    "Id": "sha256:0123",
+    "Created": "2026-01-02T03:04:05.678901234Z",
+    "RepoTags": ["quay.io/tigera/operator:v3.34.0"],
+    "RepoDigests": [
+      "some.other.registry/tigera/operator@sha256:aaa",
+      "quay.io/tigera/operator-foo@sha256:ccc",
+      "quay.io/tigera/operator@sha256:bbb"
+    ]
+  }
+]`
+
+const manifestInspectOutput = `{
+  "manifests": [
+    {"platform": {"architecture": "amd64", "os": "linux"}},
+    {"platform": {"architecture": "arm64", "os": "linux"}}
+  ]
+}`
+
+// TestParseImageInspect also covers that the inspection can be handed over
+// base64-encoded, as a caller passing it through the environment does.
+func TestParseImageInspect(t *testing.T) {
+	t.Parallel()
+
+	for _, content := range []string{imageInspectOutput, encode(imageInspectOutput)} {
+		img, err := parseImageInspect(content, "quay.io/tigera/operator")
+		if err != nil {
+			t.Fatalf("parseImageInspect: %v", err)
+		}
+		if want := "quay.io/tigera/operator@sha256:bbb"; img.digest != want {
+			t.Errorf("digest is %q, want %q", img.digest, want)
+		}
+		if want := "2026-01-02T03:04:05.678901234Z"; img.created != want {
+			t.Errorf("created is %q, want %q", img.created, want)
+		}
+	}
+}
+
+func TestParseImageInspectErrors(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		content string
+	}{
+		{name: "neither JSON nor base64", content: "not base64!"},
+		{name: "not JSON", content: "{"},
+		{name: "empty output", content: "[]"},
+		{
+			name:    "no operator digest",
+			content: `[{"Created": "2026-01-02T03:04:05Z", "RepoDigests": ["docker.io/library/busybox@sha256:aaa"]}]`,
+		},
+		{
+			name:    "only a repository the operator repository is a prefix of",
+			content: `[{"Created": "2026-01-02T03:04:05Z", "RepoDigests": ["quay.io/tigera/operator-foo@sha256:aaa"]}]`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if _, err := parseImageInspect(tc.content, "quay.io/tigera/operator"); err == nil {
+				t.Error("parseImageInspect succeeded, want an error")
+			}
+		})
+	}
+}
+
+func TestParseArchitectures(t *testing.T) {
+	t.Parallel()
+
+	for _, content := range []string{manifestInspectOutput, encode(manifestInspectOutput)} {
+		architectures, err := parseArchitectures(content)
+		if err != nil {
+			t.Fatalf("parseArchitectures: %v", err)
+		}
+		if got := strings.Join(architectures, ","); got != "amd64,arm64" {
+			t.Errorf("architectures are %q, want \"amd64,arm64\"", got)
+		}
+	}
+
+	if _, err := parseArchitectures(`{"manifests": []}`); err == nil {
+		t.Error("parseArchitectures of an empty manifest list succeeded, want an error")
+	}
+	// A single-architecture image has a plain manifest, and the error has to say
+	// so, since that is not obvious from an empty architecture list.
+	_, err := parseArchitectures(`{"schemaVersion": 2, "config": {"digest": "sha256:aaa"}}`)
+	if err == nil || !strings.Contains(err.Error(), "multi-arch") {
+		t.Errorf("parseArchitectures of a single-arch manifest returned %v, want an error naming the cause", err)
+	}
+}
+
+// TestInspectImageOverrides checks that passing both inspections in keeps docker
+// out of it, which is what lets this run with no registry to reach.
+func TestInspectImageOverrides(t *testing.T) {
+	t.Parallel()
+
+	img, err := inspectImage(t.Context(), "quay.io/tigera/operator", "quay.io/tigera/operator:v3.34.0",
+		imageInspectOutput, manifestInspectOutput)
+	if err != nil {
+		t.Fatalf("inspectImage: %v", err)
+	}
+	if want := "quay.io/tigera/operator@sha256:bbb"; img.digest != want {
+		t.Errorf("digest is %q, want %q", img.digest, want)
+	}
+	if got := strings.Join(img.architectures, ","); got != "amd64,arm64" {
+		t.Errorf("architectures are %q, want \"amd64,arm64\"", got)
+	}
+}
+
+func TestReleaseStream(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]string{
+		"3.34.0": "3.34",
+		"3.34":   "3",
+		"3":      "3",
+	}
+	for version, want := range cases {
+		if got := releaseStream(version); got != want {
+			t.Errorf("releaseStream(%q) is %q, want %q", version, got, want)
+		}
+	}
+}
+
+func TestUpdateDockerfile(t *testing.T) {
+	t.Parallel()
+
+	operatorDir := t.TempDir()
+	writeFile(t, filepath.Join(operatorDir, bundleDockerfile), `FROM scratch
+
+# Core bundle labels.
+LABEL operators.operatorframework.io.bundle.package.v1=tigera-operator
+LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.42.2
+LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
+
+# Labels for testing.
+LABEL operators.operatorframework.io.test.mediatype.v1=scorecard+v1
+LABEL operators.operatorframework.io.test.config.v1=tests/scorecard/
+
+# Copy files to locations specified by labels.
+COPY bundle/manifests /manifests/
+COPY bundle/metadata /metadata/
+`)
+	if err := os.MkdirAll(filepath.Join(operatorDir, bundleDir), 0o755); err != nil {
+		t.Fatalf("creating %s: %v", bundleDir, err)
+	}
+
+	if err := updateDockerfile(operatorDir, "3.34.0", "v4.19-v4.22"); err != nil {
+		t.Fatalf("updateDockerfile: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(operatorDir, bundleDockerfile)); !os.IsNotExist(err) {
+		t.Errorf("%s is still there, want it moved into %s", bundleDockerfile, bundleDir)
+	}
+	want := `FROM scratch
+# Core bundle labels.
+LABEL operators.operatorframework.io.bundle.package.v1=tigera-operator
+# Labels for testing.
+# Copy files to locations specified by labels.
+LABEL com.redhat.openshift.versions="v4.19-v4.22"
+LABEL com.redhat.delivery.backport=true
+LABEL com.redhat.delivery.operator.bundle=true
+COPY 3.34.0/manifests /manifests/
+COPY 3.34.0/metadata /metadata/
+`
+	if got := readFile(t, filepath.Join(operatorDir, bundleDir, "bundle-v3.34.0.Dockerfile")); got != want {
+		t.Errorf("Dockerfile is\n%s\nwant\n%s", got, want)
+	}
+}
+
+// TestUpdateAnnotations also covers a supported-versions annotation that is
+// already there, which must be replaced rather than duplicated - a duplicate
+// key would make the metadata invalid YAML.
+func TestUpdateAnnotations(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]string{
+		"adds the annotation": `annotations:
+  # Core bundle annotations.
+  operators.operatorframework.io.bundle.package.v1: tigera-operator
+
+  operators.operatorframework.io.metrics.builder: operator-sdk-v1.42.2
+  operators.operatorframework.io.test.config.v1: tests/scorecard/
+`,
+		"replaces an existing annotation": `annotations:
+  # Core bundle annotations.
+  operators.operatorframework.io.bundle.package.v1: tigera-operator
+  com.redhat.openshift.versions: v4.10-v4.12
+`,
+	}
+
+	const want = `annotations:
+  # Core bundle annotations.
+  operators.operatorframework.io.bundle.package.v1: tigera-operator
+  com.redhat.openshift.versions: v4.19-v4.22
+`
+
+	for name, content := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			path := filepath.Join(t.TempDir(), "annotations.yaml")
+			writeFile(t, path, content)
+
+			if err := updateAnnotations(path, "v4.19-v4.22"); err != nil {
+				t.Fatalf("updateAnnotations: %v", err)
+			}
+			if got := readFile(t, path); got != want {
+				t.Errorf("annotations are\n%s\nwant\n%s", got, want)
+			}
+		})
+	}
+}
+
+// TestUpdateCSV covers the build-time values as a whole, since which of them the
+// CSV ends up with depends on the previous version and the architectures built.
+func TestUpdateCSV(t *testing.T) {
+	t.Parallel()
+
+	const doc = `metadata:
+  name: tigera-operator.v0.0.0
+  annotations:
+    capabilities: Seamless Upgrades
+spec:
+  displayName: Tigera Operator
+  install:
+    spec:
+      deployments:
+        - name: tigera-operator
+          spec:
+            template:
+              spec:
+                containers:
+                  # Ordered ahead of the operator so that the digest landing on
+                  # the right container is not down to the position.
+                  - name: sidecar
+                    image: quay.io/tigera/sidecar:v0.0.0
+                  - name: tigera-operator
+                    image: quay.io/tigera/operator:v0.0.0
+      permissions: []
+  version: 3.34.0
+`
+	img := image{
+		digest:        "quay.io/tigera/operator@sha256:bbb",
+		created:       "2026-01-02T03:04:05Z",
+		architectures: []string{"amd64", "arm64"},
+	}
+
+	cases := []struct {
+		name        string
+		prevVersion string
+		absent      string
+		want        []string
+	}{
+		{
+			name:        "replaces the previous version",
+			prevVersion: "3.33.0",
+			want:        []string{"replaces: tigera-operator.v3.33.0"},
+		},
+		{
+			name:        "replaces nothing",
+			prevVersion: noPreviousVersion,
+			absent:      "replaces:",
+			want: []string{
+				"capabilities: Basic Install",
+				"containerImage: quay.io/tigera/operator@sha256:bbb",
+				`createdAt: "2026-01-02T03:04:05Z"`,
+				"olm.skipRange: <3.34.0",
+				"operatorframework.io/arch.amd64: supported",
+				"operatorframework.io/arch.arm64: supported",
+				"displayName: Tigera Operator v3.34",
+				"image: quay.io/tigera/operator@sha256:bbb",
+				"- name: tigera-operator\n      image: quay.io/tigera/operator@sha256:bbb",
+				// The sidecar keeps its own image.
+				"- name: sidecar\n                    image: quay.io/tigera/sidecar:v0.0.0",
+				"- name: tigera-operator\n                    image: quay.io/tigera/operator@sha256:bbb",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := filepath.Join(t.TempDir(), csvName)
+			writeFile(t, path, doc)
+
+			if err := updateCSV(path, "3.34.0", tc.prevVersion, "Basic Install", img); err != nil {
+				t.Fatalf("updateCSV: %v", err)
+			}
+
+			content := readFile(t, path)
+			for _, want := range tc.want {
+				assertContains(t, content, want)
+			}
+			if tc.absent != "" {
+				assertNotContains(t, content, tc.absent)
+			}
+			// Empty permissions fail CSV validation, so they are always dropped.
+			assertNotContains(t, content, "permissions:")
+			// The capability level is the certification claim, so whatever the
+			// base carried is replaced rather than merged with.
+			assertNotContains(t, content, "Seamless Upgrades")
+		})
+	}
+}
+
+// TestUpdateCSVWithNamespacedPermissions checks that permissions we did not
+// expect fail the build rather than being dropped with the key. Only
+// cluster-scoped RBAC is staged, so a namespaced Role that reaches the deploy
+// directory would otherwise be advertised nowhere in the CSV.
+func TestUpdateCSVWithNamespacedPermissions(t *testing.T) {
+	t.Parallel()
+
+	const doc = `spec:
+  install:
+    spec:
+      deployments:
+        - name: tigera-operator
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: tigera-operator
+                    image: quay.io/tigera/operator:v0.0.0
+      permissions:
+        - serviceAccountName: tigera-operator
+          rules:
+            - apiGroups: [""]
+              resources: ["secrets"]
+              verbs: ["get"]
+`
+
+	path := filepath.Join(t.TempDir(), csvName)
+	writeFile(t, path, doc)
+
+	err := updateCSV(path, "3.34.0", noPreviousVersion, "Basic Install", image{
+		digest:        "quay.io/tigera/operator@sha256:bbb",
+		created:       "2026-01-02T03:04:05Z",
+		architectures: []string{"amd64"},
+	})
+	if err == nil {
+		t.Fatal("updateCSV succeeded, want an error naming the permissions it did not expect")
+	}
+	if !strings.Contains(err.Error(), "spec.install.spec.permissions") {
+		t.Errorf("error is %q, want it to name spec.install.spec.permissions", err)
+	}
+}
+
+// TestUpdateCSVWithoutTheOperator checks that a CSV that does not hold the
+// operator deployment where we expect it fails the build, rather than having
+// one fabricated for it or the digest pinned onto something else.
+func TestUpdateCSVWithoutTheOperator(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		doc  string
+	}{
+		{
+			name: "no deployments",
+			doc: `spec:
+  install:
+    spec:
+      deployments:
+`,
+		},
+		{
+			name: "no operator deployment",
+			doc: `spec:
+  install:
+    spec:
+      deployments:
+        - name: something-else
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: tigera-operator
+                    image: quay.io/tigera/operator:v0.0.0
+`,
+		},
+		{
+			name: "no operator container",
+			doc: `spec:
+  install:
+    spec:
+      deployments:
+        - name: tigera-operator
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: sidecar
+                    image: quay.io/tigera/sidecar:v0.0.0
+`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := filepath.Join(t.TempDir(), csvName)
+			writeFile(t, path, tc.doc)
+
+			err := updateCSV(path, "3.34.0", noPreviousVersion, "Basic Install", image{
+				digest:        "quay.io/tigera/operator@sha256:bbb",
+				created:       "2026-01-02T03:04:05Z",
+				architectures: []string{"amd64"},
+			})
+			if err == nil {
+				t.Fatalf("updateCSV succeeded, want an error")
+			}
+			// The file is only written once every update has been applied, so a
+			// failure leaves it as it was.
+			assertNotContains(t, readFile(t, path), "sha256:bbb")
+		})
+	}
+}
+
+// TestUpdateBundle checks that the bundle is found and rearranged under
+// --operator-dir, rather than wherever update-bundle happens to be run from.
+func TestUpdateBundle(t *testing.T) {
+	t.Parallel()
+
+	operatorDir := t.TempDir()
+	for _, dir := range []string{"manifests", "metadata"} {
+		if err := os.MkdirAll(filepath.Join(operatorDir, bundleDir, dir), 0o755); err != nil {
+			t.Fatalf("creating %s: %v", dir, err)
+		}
+	}
+	writeFile(t, filepath.Join(operatorDir, bundleDir, "manifests", csvName), `spec:
+  install:
+    spec:
+      deployments:
+        - name: tigera-operator
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: tigera-operator
+                    image: quay.io/tigera/operator:v0.0.0
+`)
+	writeFile(t, filepath.Join(operatorDir, bundleDir, "metadata", "annotations.yaml"), "annotations:\n")
+	writeFile(t, filepath.Join(operatorDir, bundleDockerfile), "FROM scratch\nCOPY bundle/manifests /manifests/\n")
+
+	err := updateBundle(bundleConfig{
+		operatorDir:       operatorDir,
+		version:           "3.34.0",
+		prevVersion:       "3.33.0",
+		capabilities:      "Basic Install",
+		openShiftVersions: "v4.19-v4.22",
+	}, image{
+		digest:        "quay.io/tigera/operator@sha256:bbb",
+		created:       "2026-01-02T03:04:05Z",
+		architectures: []string{"amd64"},
+	})
+	if err != nil {
+		t.Fatalf("updateBundle: %v", err)
+	}
+
+	versionDir := filepath.Join(operatorDir, bundleDir, "3.34.0")
+	assertContains(t, readFile(t, filepath.Join(versionDir, "manifests", csvName)), "replaces: tigera-operator.v3.33.0")
+	assertContains(t, readFile(t, filepath.Join(versionDir, "metadata", "annotations.yaml")), "com.redhat.openshift.versions: v4.19-v4.22")
+	assertContains(t, readFile(t, filepath.Join(operatorDir, bundleDir, "bundle-v3.34.0.Dockerfile")), "COPY 3.34.0/manifests /manifests/")
+}
+
+func encode(content string) string {
+	return base64.StdEncoding.EncodeToString([]byte(content))
+}
+
+func writeFile(t *testing.T, path, content string) {
+	t.Helper()
+
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
+	}
+}
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading %s: %v", path, err)
+	}
+	return string(content)
+}
+
+func assertContains(t *testing.T, content, want string) {
+	t.Helper()
+
+	if !strings.Contains(content, want) {
+		t.Errorf("content does not contain %q:\n%s", want, content)
+	}
+}
+
+func assertNotContains(t *testing.T, content, unwanted string) {
+	t.Helper()
+
+	if strings.Contains(content, unwanted) {
+		t.Errorf("content contains %q:\n%s", unwanted, content)
+	}
+}
