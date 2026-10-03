@@ -318,7 +318,7 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		cidr := cnet.MustParseCIDR("10.0.0.4/30")
-		key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
+		key := model.BlockKey{CIDR: cidr}
 		aff := "virtual:load-balancer"
 		idx0 := 0
 		idx1 := 1
