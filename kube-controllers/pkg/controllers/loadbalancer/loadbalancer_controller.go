@@ -336,21 +336,27 @@ func (c *loadBalancerController) handleBlockUpdate(kvp model.KVPair) {
 
 	for i := range block.Allocations {
 		if block.Allocations[i] != nil {
-			if _, ok := block.Attributes[*block.Allocations[i]].AttrSecondary[ipam.AttributeNamespace]; !ok {
-				log.Warnf("no %s attribute found for block with handle %s", ipam.AttributeNamespace, *block.Attributes[*block.Allocations[i]].AttrPrimary)
+			attr := block.Attributes[*block.Allocations[i]]
+			if attr.AttrPrimary == nil {
+				log.WithFields(log.Fields{"block": key, "ip": block.OrdinalToIP(i)}).Warn("No handle found for load balancer allocation")
 				continue
 			}
 
-			if _, ok := block.Attributes[*block.Allocations[i]].AttrSecondary[ipam.AttributeService]; !ok {
-				log.Warnf("no %s attribute found for block with handle %s", ipam.AttributeService, *block.Attributes[*block.Allocations[i]].AttrPrimary)
+			if _, ok := attr.AttrSecondary[ipam.AttributeNamespace]; !ok {
+				log.Warnf("no %s attribute found for block with handle %s", ipam.AttributeNamespace, *attr.AttrPrimary)
+				continue
+			}
+
+			if _, ok := attr.AttrSecondary[ipam.AttributeService]; !ok {
+				log.Warnf("no %s attribute found for block with handle %s", ipam.AttributeService, *attr.AttrPrimary)
 				continue
 			}
 
 			ip := block.OrdinalToIP(i)
 			svcKey := serviceKey{
-				handle:    *block.Attributes[*block.Allocations[i]].AttrPrimary,
-				namespace: block.Attributes[*block.Allocations[i]].AttrSecondary[ipam.AttributeNamespace],
-				name:      block.Attributes[*block.Allocations[i]].AttrSecondary[ipam.AttributeService],
+				handle:    *attr.AttrPrimary,
+				namespace: attr.AttrSecondary[ipam.AttributeNamespace],
+				name:      attr.AttrSecondary[ipam.AttributeService],
 			}
 
 			c.allocationTracker.assignAddressToBlock(key, ip.String(), svcKey)
