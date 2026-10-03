@@ -4,16 +4,43 @@
 # 3. Check the contents of the code block to ensure it's not empty or 'TBD'; otherwise, fail
 # 4. Success!
 
-name: Validate Release Notes
+
+#
+# DO NOT EDIT THIS WORKFLOW IN ANY WAY
+#
+# THIS WORKFLOW USES pull_request_target, WHICH CAN BE A HUGE SECURITY GOTCHA
+# AND LEAD TO LEAKED CREDENTIALS OR SUPPLY CHAIN ATTACKS. IT IS VERY DIFFICULT
+# TO GUARANTEE SAFETY OF pull_request_target EVENTS.
+#
+# UNDER NO CIRCUMSTANCES DO ANY OF THE FOLLOWING:
+#
+# 1. ADD ANY OTHER SECRETS TO THIS JOB WHATSOEVER
+# 2. ADD ANY OTHER PERMISSIONS TO THIS JOB WHATSOEVER
+# 3. ADD ANY OTHER STEPS TO THIS JOB WHATSOEVER
+#
+# IF THERE IS ANYTHING THAT YOU THINK THIS WORKFLOW SHOULD ALSO DO, DO IT IN
+# ANOTHER WORKFLOW! DO NOT EDIT THIS ONE EVER EVER.
+#
+
+name: Validate Release notes
+
 on:
-  pull_request:
-    types: [labeled, unlabeled, edited, synchronize, ready_for_review]
+  pull_request_target:
+    types: [opened, reopened, edited, synchronize, labeled, unlabeled, ready_for_review]
+
+permissions:
+  checks: write
+
+concurrency:
+  group: release-notes-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
-  label:
+  release-notes:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
       - name: Validate Release Notes
         uses: tigera/check-release-notes@main
+        with:
+          label-name: release-note-required
+          github-token: ${{ secrets.GITHUB_TOKEN }}
