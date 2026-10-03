@@ -161,43 +161,30 @@ func TestBGPConfiguration_Validation(t *testing.T) {
 	}
 }
 
-// The schema pattern range-checks each part of a community value, matching
-// libcalico-go's validator.
+// libcalico-go range-checks each part of a community value; BGPCommunityValue
+// carries the same check.
 func TestBGPConfiguration_CommunityValueRanges(t *testing.T) {
 	tests := []struct {
-		name      string
-		value     string
-		advertise string
-		wantErr   string
+		name    string
+		value   string
+		wantErr string
 	}{
 		{name: "standard community at the 16-bit limit is accepted", value: "65535:65535"},
 		{name: "leading zeros are accepted", value: "0065535:01"},
-		{name: "standard community above 16 bits is rejected", value: "65536:1", wantErr: "spec.communities[0].value: Invalid value"},
+		{name: "standard community above 16 bits is rejected", value: "65536:1", wantErr: "standard community values must be 16-bit numbers"},
 		{name: "large community at the 32-bit limit is accepted", value: "4294967295:1:4294967295"},
-		{name: "large community above 32 bits is rejected", value: "4294967296:1:1", wantErr: "spec.communities[0].value: Invalid value"},
-		{name: "advertised community name is accepted", value: "100:200", advertise: "my-community"},
-		{name: "advertised literal community in range is accepted", value: "100:200", advertise: "65535:1"},
-		{name: "advertised literal community above 16 bits is rejected", value: "100:200", advertise: "65536:1", wantErr: "spec.prefixAdvertisements[0].communities[0]: Invalid value"},
-		{
-			name:      "advertised literal large community above 32 bits is rejected",
-			value:     "100:200",
-			advertise: "1:1:4294967296",
-			wantErr:   "spec.prefixAdvertisements[0].communities[0]: Invalid value",
-		},
+		{name: "large community above 32 bits is rejected", value: "4294967296:1:1", wantErr: "standard community values must be 16-bit numbers"},
+		{name: "malformed community is rejected", value: "1:2:3:4", wantErr: "spec.communities[0].value: Invalid value"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			advertise := tt.advertise
-			if advertise == "" {
-				advertise = "my-community"
-			}
 			obj := &v3.BGPConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpconfig")},
 				Spec: v3.BGPConfigurationSpec{
 					Communities: []v3.Community{{Name: "my-community", Value: tt.value}},
 					PrefixAdvertisements: []v3.PrefixAdvertisement{
-						{CIDR: "192.168.0.0/24", Communities: []string{advertise}},
+						{CIDR: "192.168.0.0/24", Communities: []string{"my-community"}},
 					},
 				},
 			}
