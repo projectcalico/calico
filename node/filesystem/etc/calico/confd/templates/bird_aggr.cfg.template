@@ -25,32 +25,26 @@ template static static_template {
    route {{$cidr}} blackhole;
 {{- end}}
 {{- end}}
-{{- $global_peers_key := "/bgp/v1/global/peer_v4"}}
-{{- if ls $global_peers_key}}
 {{- $run_once := true}}
-{{- range gets (printf "%s/*" $global_peers_key)}}{{$data := json .Value}}
-{{- if and $data.ip $data.reachable_by}}
+{{- range $config.Peers}}
+{{- if and .IP .ReachableBy (eq .Type "global")}}
 {{- if $run_once}}
 {{- $route_added = true}}
 {{- $run_once = false}}
    # Static routes needed for global BGP peers.
 {{- end}}
-   route {{$data.ip}}/32 via {{$data.reachable_by}};
+   route {{.IP}}/32 via {{.ReachableBy}};
 {{- end}}
 {{- end}}
-{{- end}}
-{{- $node_peers_key := printf "/bgp/v1/host/%s/peer_v4" $config.NodeName}}
-{{- if ls $node_peers_key}}
 {{- $run_once := true}}
-{{- range gets (printf "%s/*" $node_peers_key)}}{{$data := json .Value}}
-{{- if and $data.ip $data.reachable_by}}
+{{- range $config.Peers}}
+{{- if and .IP .ReachableBy (eq .Type "node")}}
 {{- if $run_once}}
 {{- $route_added = true}}
 {{- $run_once = false}}
    # Static routes needed for node specific BGP peers.
 {{- end}}
-   route {{$data.ip}}/32 via {{$data.reachable_by}};
-{{- end}}
+   route {{.IP}}/32 via {{.ReachableBy}};
 {{- end}}
 {{- end}}
 {{- if not $route_added}}
