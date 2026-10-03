@@ -55,7 +55,12 @@ global_job_config:
       - sudo apt-get install -y zstd s3cmd || true
       # Write the s3cmd config from the env so the cache restore/store steps in
       # this prologue can run before the working copy (and the .semaphore/s3-cmd
-      # wrapper) has been checked out.
+      # wrapper) has been checked out. Those steps therefore call bare `s3cmd`
+      # and are credentialed-only: without the secrets the keys here are empty
+      # and the restores below fail, which is tolerated — every one of them
+      # degrades to a fresh `git clone` and a cold build cache rather than
+      # failing the job. Anything running after the checkout should use
+      # .semaphore/s3-cmd, which adds the anonymous read-only path.
       - |-
         cat >"$HOME/.s3cfg" <<S3CFG
         [default]
@@ -152,7 +157,11 @@ global_job_config:
             else
               echo "Docker Hub pull failed for ${image}, falling back to S3 cache"
               cache_path="s3://${CALICO_S3_BUCKET}/${CALICO_S3_KEY_PREFIX}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
-              if s3cmd get --force "$cache_path" /tmp/go-build.tar.zst 2>/dev/null; then
+              # We are past the checkout here, so go through the wrapper rather
+              # than bare s3cmd: it falls back to an anonymous HTTPS read when
+              # the credentials are absent, so credential-less builds (forks)
+              # still get the fallback.
+              if .semaphore/s3-cmd cp "$cache_path" /tmp/go-build.tar.zst 2>/dev/null; then
                 echo "Loading ${image} from S3 cache"
                 zstd -d --rm -o /tmp/go-build.tar /tmp/go-build.tar.zst
                 docker load -i /tmp/go-build.tar
