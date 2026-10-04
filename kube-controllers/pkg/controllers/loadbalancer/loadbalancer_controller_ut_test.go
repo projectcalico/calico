@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -311,6 +311,39 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 
 		// The block should have been cleaned up from the tracker.
 		Expect(c.allocationTracker.ipsByBlock).To(BeEmpty())
+	})
+
+	It("should skip allocations without a handle and track the rest of the block", func() {
+		svcKey, err := serviceKeyFromService(&svc)
+		Expect(err).ToNot(HaveOccurred())
+
+		cidr := cnet.MustParseCIDR("10.0.0.4/30")
+		key := model.BlockKey{CIDR: cidr}
+		aff := "virtual:load-balancer"
+		idx0 := 0
+		idx1 := 1
+		block := model.AllocationBlock{
+			CIDR:        cidr,
+			Affinity:    &aff,
+			Allocations: []*int{&idx0, &idx1, nil, nil},
+			Unallocated: []int{2, 3},
+			Attributes: []model.AllocationAttribute{
+				{},
+				{
+					HandleID: &svcKey.handle,
+					ActiveOwnerAttrs: map[string]string{
+						ipam.AttributeService:   svc.Name,
+						ipam.AttributeType:      string(svc.Spec.Type),
+						ipam.AttributeNamespace: svc.Namespace,
+					},
+				},
+			},
+		}
+
+		Expect(func() {
+			c.handleBlockUpdate(model.KVPair{Key: key, Value: &block})
+		}).ToNot(Panic())
+		Expect(c.allocationTracker.servicesByIP).To(Equal(map[string]serviceKey{"10.0.0.5": *svcKey}))
 	})
 
 	It("should parse calico annotations", func() {
