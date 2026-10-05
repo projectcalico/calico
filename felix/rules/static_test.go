@@ -153,7 +153,7 @@ var _ = Describe("Static", func() {
 							},
 							{
 								Match:  iptables.Match().MarkSingleBitSet(0x40).RPFCheckFailed(),
-								Action: denyAction,
+								Action: iptables.DropAction{},
 							},
 							{
 								Match:  iptables.Match().MarkClear(0x40),
@@ -182,7 +182,7 @@ var _ = Describe("Static", func() {
 							},
 							{
 								Match:  iptables.Match().MarkSingleBitSet(0x40).RPFCheckFailed(),
-								Action: denyAction,
+								Action: iptables.DropAction{},
 							},
 							{
 								Match:  iptables.Match().MarkClear(0x40),
@@ -552,7 +552,7 @@ var _ = Describe("Static", func() {
 						},
 						{
 							Match:  iptables.Match().MarkSingleBitSet(0x40).RPFCheckFailed(),
-							Action: denyAction,
+							Action: iptables.DropAction{},
 						},
 						{
 							Match:  iptables.Match().MarkClear(0x40),
@@ -580,7 +580,7 @@ var _ = Describe("Static", func() {
 						},
 						{
 							Match:  iptables.Match().MarkSingleBitSet(0x40).RPFCheckFailed(),
-							Action: denyAction,
+							Action: iptables.DropAction{},
 						},
 						{
 							Match:  iptables.Match().MarkClear(0x40),
@@ -1127,7 +1127,7 @@ var _ = Describe("Static", func() {
 						Action: iptables.JumpAction{Target: ChainRpfSkip},
 					})
 
-					chain.Rules = append(chain.Rules, rr.RPFilter(4, markFromWorkload, markFromWorkload, rr.OpenStackSpecialCasesEnabled, rr.IptablesFilterDenyAction())...)
+					chain.Rules = append(chain.Rules, rr.RPFilter(4, markFromWorkload, markFromWorkload, rr.OpenStackSpecialCasesEnabled, rr.Drop())...)
 					chain.Rules = append(chain.Rules, generictables.Rule{
 						Match:  iptables.Match().MarkClear(markFromWorkload),
 						Action: iptables.JumpAction{Target: ChainDispatchFromHostEndpoint},
@@ -1275,7 +1275,7 @@ var _ = Describe("Static", func() {
 						Action: iptables.JumpAction{Target: ChainRpfSkip},
 					})
 
-					chain.Rules = append(chain.Rules, rr.RPFilter(6, markFromWorkload, markFromWorkload, rr.OpenStackSpecialCasesEnabled, rr.IptablesFilterDenyAction())...)
+					chain.Rules = append(chain.Rules, rr.RPFilter(6, markFromWorkload, markFromWorkload, rr.OpenStackSpecialCasesEnabled, rr.Drop())...)
 					chain.Rules = append(chain.Rules, generictables.Rule{
 						Match:  iptables.Match().MarkClear(markFromWorkload),
 						Action: iptables.JumpAction{Target: ChainDispatchFromHostEndpoint},

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
@@ -267,6 +268,74 @@ var _ = Describe("Policy manager IPv6", policyManagerTests(6, false))
 
 var _ = Describe("Policy manager IPv6 with flowlogs", policyManagerTests(6, true))
 
+var _ = Describe("Policy manager deny action per table", func() {
+	var (
+		rawTable    *mockTable
+		mangleTable *mockTable
+		filterTable *mockTable
+	)
+
+	setUp := func(filterDenyAction string) {
+		rawTable = newMockTable("raw")
+		mangleTable = newMockTable("mangle")
+		filterTable = newMockTable("filter")
+		ruleRenderer := rules.NewRenderer(rules.Config{
+			IPSetConfigV4:       ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+			IPSetConfigV6:       ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+			MarkAccept:          0x8,
+			MarkPass:            0x10,
+			MarkScratch0:        0x20,
+			MarkScratch1:        0x40,
+			MarkDrop:            0x80,
+			MarkEndpoint:        0xff00,
+			MarkNonCaliEndpoint: 0x0100,
+			FilterDenyAction:    filterDenyAction,
+		}, false)
+		policyMgr := newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, 4, false)
+		policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
+			Id: &proto.PolicyID{Name: "pol1", Kind: v3.KindGlobalNetworkPolicy},
+			Policy: &proto.Policy{
+				Tier:          "default",
+				InboundRules:  []*proto.Rule{{Action: "deny"}},
+				OutboundRules: []*proto.Rule{{Action: "deny"}},
+			},
+		})
+		policyMgr.OnUpdate(&proto.ActiveProfileUpdate{
+			Id: &proto.ProfileID{Name: "prof1"},
+			Profile: &proto.Profile{
+				OutboundRules: []*proto.Rule{{Action: "deny"}},
+			},
+		})
+	}
+
+	ruleActions := func(t *mockTable) []generictables.Action {
+		var actions []generictables.Action
+		for _, chain := range t.currentChains {
+			for _, rule := range chain.Rules {
+				actions = append(actions, rule.Action)
+			}
+		}
+		return actions
+	}
+
+	It("should render REJECT in the filter table but DROP in raw and mangle", func() {
+		setUp("REJECT")
+		Expect(ruleActions(filterTable)).To(ContainElement(iptables.RejectAction{}))
+		for _, t := range []*mockTable{rawTable, mangleTable} {
+			Expect(ruleActions(t)).To(ContainElement(iptables.DropAction{}), t.Table)
+			Expect(ruleActions(t)).NotTo(ContainElement(iptables.RejectAction{}), t.Table)
+		}
+	})
+
+	It("should render DROP in every table when the deny action is DROP", func() {
+		setUp("DROP")
+		for _, t := range []*mockTable{rawTable, mangleTable, filterTable} {
+			Expect(ruleActions(t)).To(ContainElement(iptables.DropAction{}), t.Table)
+			Expect(ruleActions(t)).NotTo(ContainElement(iptables.RejectAction{}), t.Table)
+		}
+	})
+})
+
 var _ = Describe("Raw egress policy manager", func() {
 	var (
 		policyMgr        *policyManager
@@ -446,6 +515,10 @@ func (r *mockPolRenderer) ProfileToIptablesChains(
 		Name: rules.ProfileChainName(rules.ProfileOutboundPfx, profID, false),
 	}
 	return
+}
+
+func (r *mockPolRenderer) NonFilterTableChains(chains []*generictables.Chain) []*generictables.Chain {
+	return chains
 }
 
 func newMockPolRenderer() *mockPolRenderer {

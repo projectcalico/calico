@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -223,6 +223,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withPolicies(gnpC),
 						forHostEndpoint(),
 						withPreDNATPolicies(),
+						withDenyAction(DropAction{}, "Drop"),
 					)
 					fromHostRules := newRuleBuilder(fromHostOpts...).build()
 					expected := []*generictables.Chain{
@@ -829,6 +830,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 						withPolicies(gnpC),
 						forHostEndpoint(),
 						withPreDNATPolicies(),
+						withDenyAction(DropAction{}, "Drop"),
 					)
 					fromHostRules := newRuleBuilder(fromHostOpts...).build()
 					expected := []*generictables.Chain{
