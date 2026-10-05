@@ -296,6 +296,25 @@ var _ = Describe("Istio Component Rendering", func() {
 				Value: "11",
 			}))
 		})
+
+		It("should use the default CNI bin directory when no platform is set", func() {
+			_, component, err := istio.Istio(cfg)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			objsToCreate, _ := component.Objects()
+
+			daemonset, err := rtest.GetResourceOfType[*appsv1.DaemonSet](objsToCreate, istio.IstioCNIDaemonSetName, istio.IstioNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			foundCNIBinVolume := false
+			for _, vol := range daemonset.Spec.Template.Spec.Volumes {
+				if vol.Name == "cni-bin-dir" && vol.HostPath != nil {
+					Expect(vol.HostPath.Path).To(Equal("/opt/cni/bin"))
+					foundCNIBinVolume = true
+				}
+			}
+			Expect(foundCNIBinVolume).To(BeTrue(), "Expected cni-bin-dir volume with default path /opt/cni/bin")
+		})
 	})
 
 	Describe("Pull Secrets", func() {
@@ -825,6 +844,23 @@ var _ = Describe("Istio Component Rendering", func() {
 				}
 			}
 			Expect(foundPlatformEnv).To(BeTrue(), "Expected PLATFORM=gke env var on istiod")
+		})
+
+		It("should use GKE CNI bin directory", func() {
+			objsToCreate, _ := component.Objects()
+
+			daemonset, err := rtest.GetResourceOfType[*appsv1.DaemonSet](objsToCreate, istio.IstioCNIDaemonSetName, istio.IstioNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			// /opt/cni/bin is read-only on GKE nodes; the writable CNI bin dir is /home/kubernetes/bin.
+			foundCNIBinVolume := false
+			for _, vol := range daemonset.Spec.Template.Spec.Volumes {
+				if vol.Name == "cni-bin-dir" && vol.HostPath != nil {
+					Expect(vol.HostPath.Path).To(Equal("/home/kubernetes/bin"))
+					foundCNIBinVolume = true
+				}
+			}
+			Expect(foundCNIBinVolume).To(BeTrue(), "Expected cni-bin-dir volume with GKE path /home/kubernetes/bin")
 		})
 	})
 

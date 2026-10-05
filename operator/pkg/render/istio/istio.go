@@ -159,6 +159,12 @@ func Istio(cfg *Configuration) (*IstioComponentCRDs, *IstioComponent, error) {
 		istioResOpts.IstioCNIOpts.Global.Platform = "gke"
 		istioResOpts.IstiodOpts.Global.Platform = "gke"
 		istioResOpts.ZTunnelOpts.Global.Platform = "gke"
+		// The chart's gke profile leaves cni.cniBinDir empty and detects GKE from
+		// .Capabilities.KubeVersion, which a client-only render never supplies,
+		// so the DaemonSet would mount /opt/cni/bin, which is read-only on GKE.
+		// The nested cni key is required: the chart copies the profile's empty
+		// cni.cniBinDir over the top-level cniBinDir when it descopes legacy values.
+		istioResOpts.IstioCNIOpts.CNI = &CNIConfig{CNIBinDir: "/home/kubernetes/bin"}
 	}
 	if cfg.Installation.KubernetesProvider.IsOpenShift() {
 		istioResOpts.IstioCNIOpts.Global.Platform = "openshift"
