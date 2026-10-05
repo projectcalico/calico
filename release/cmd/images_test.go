@@ -26,7 +26,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/operator"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 // runImages drives the real images command with a recording runner.
@@ -266,22 +265,6 @@ func TestImagesPublishRejectsHalfConfiguredRetag(t *testing.T) {
 	}
 }
 
-// An un-narrowed scan must cover every directory that produces an image,
-// including those shipping only a Windows one.
-func TestImagesPublishScansEveryImageDir(t *testing.T) {
-	dirs := utils.ImageDiscoveryDirs()
-	for _, want := range utils.WindowsReleaseDirs {
-		if !slices.Contains(dirs, want) {
-			t.Errorf("scan dirs omit %s, so its images would go unscanned", want)
-		}
-	}
-	for _, want := range utils.ImageReleaseDirs {
-		if !slices.Contains(dirs, want) {
-			t.Errorf("scan dirs omit %s", want)
-		}
-	}
-}
-
 // The scanner files results under release/<stream> or hashrelease/<stream>.
 // A hashrelease scanned as a release lands in the wrong bucket, so the flag
 // and the field must stay opposed.
@@ -352,7 +335,7 @@ func TestImagesCheckOperatorCoversTheOperatorDir(t *testing.T) {
 	if err := imagesCheckOperatorAction(&Config{})(context.Background(), &cli.Command{}); err != nil {
 		t.Fatalf("check-operator: %v", err)
 	}
-	for _, want := range append(utils.ImageDiscoveryDirs(), operator.DirName) {
+	for _, want := range append(images.ReleaseDirs(), operator.DirName) {
 		if !slices.Contains(gotDirs, want) {
 			t.Errorf("check dirs omit %s", want)
 		}

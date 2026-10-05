@@ -89,7 +89,7 @@ var (
 			dirs := c.StringSlice(imageReleaseDirsFlag.Name)
 			scanDirs := dirs
 			if len(scanDirs) == 0 {
-				scanDirs = utils.ImageDiscoveryDirs()
+				scanDirs = images.ReleaseDirs()
 			}
 			scan, err := scanRequest(c, cfg, scanDirs, ver.PrimaryStream(), utils.CalicoProductCode)
 			if err != nil {
@@ -150,7 +150,7 @@ var imagesCheckOperatorAction = func(cfg *Config) func(ctx context.Context, c *c
 
 		// The operator publishes to registries of its own, so it is named apart from the
 		// release directories rather than discovered with them.
-		dirs := append(utils.ImageDiscoveryDirs(), operator.DirName)
+		dirs := append(images.ReleaseDirs(), operator.DirName)
 		built, err := releaseImageList(cfg.RepoRootDir, dirs...)
 		if err != nil {
 			return err
