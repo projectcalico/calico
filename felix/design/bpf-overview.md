@@ -181,11 +181,12 @@ marks a reviewer encounters most often are:
 | Mark                          | Set by            | Meaning                                                            |
 | ----------------------------- | ----------------- | ------------------------------------------------------------------ |
 | `CALI_SKB_MARK_SEEN`          | Any BPF program   | At least one BPF program has already processed this packet.       |
-| `CALI_SKB_MARK_BYPASS`        | BPF after policy  | Packet is approved; downstream BPF does not need to re-validate.   |
+| `CALI_SKB_MARK_BYPASS`        | BPF after policy  | Packet is approved; downstream BPF skips it, except MASQ at to-WEP. |
 | `CALI_SKB_MARK_FALLTHROUGH`   | BPF on host ingress | No BPF CT entry — let `*tables` decide based on its CT state.    |
 | `CALI_SKB_MARK_CT_ESTABLISHED`| `*tables` rule    | `*tables` CT saw this as part of an established flow.             |
 | `CALI_SKB_MARK_SKIP_FIB`      | BPF or `*tables`  | Do not run the BPF FIB lookup; hand the packet to the host stack. |
-| `CALI_SKB_MARK_NAT_OUT` / `CALI_SKB_MARK_MASQ` | BPF | Flow needs SNAT; iptables MASQUERADE will handle it.    |
+| `CALI_SKB_MARK_NAT_OUT`       | BPF               | Outgoing-NAT flow, both directions; `*tables` SNATs it unless excluded. |
+| `CALI_SKB_MARK_MASQ`          | BPF               | Pod→service→self; `*tables` MASQUERADEs it.                         |
 | `CALI_SKB_MARK_FROM_NAT_IFACE_OUT` | BPF on `bpfnatout` egress | Packet has passed through the host-networking workaround veth. |
 
 Felix reserves the top three nibbles of the mark (`0x1FF00000`) for BPF
