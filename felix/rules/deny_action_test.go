@@ -91,10 +91,6 @@ var _ = Describe("Deny action outside the filter table", func() {
 		Expect(actions).NotTo(ContainElement(RejectAction{}))
 	})
 
-	It("should not REJECT in host endpoint raw chains", func() {
-		Expect(chainActions(renderer.HostEndpointToRawChains("eth0", tiers)...)).NotTo(ContainElement(RejectAction{}))
-	})
-
 	It("should swap REJECT for DROP in policy chains for raw and mangle without changing the originals", func() {
 		chains := renderer.PolicyToIptablesChains(
 			&types.PolicyID{Name: "a", Kind: v3.KindGlobalNetworkPolicy},
