@@ -633,20 +633,22 @@ func TestReconcile_ReplacementPoolDoesNotFinalizeATerminatingPool(t *testing.T) 
 // A nearly-full message moves with every percentage point, which must not read as a fresh transition.
 func TestSetConditionOnPool_KeepsTransitionTimeWhileTheStatusHolds(t *testing.T) {
 	pool := testPool("pool-1", "10.0.0.0/24")
-	if !setConditionOnPool(pool, metav1.Condition{Type: "AddressSpaceNearlyFull", Status: metav1.ConditionTrue, Reason: "ThresholdExceeded", Message: "81%"}) {
+	nearlyFull := metav1.Condition{Type: v3.IPPoolConditionAddressSpaceNearlyFull, Status: metav1.ConditionTrue, Reason: v3.IPPoolReasonThresholdExceeded, Message: "81%"}
+	if !setConditionOnPool(pool, nearlyFull) {
 		t.Fatal("expected the first condition to count as a change")
 	}
 	first := metav1.NewTime(time.Now().Add(-time.Hour))
 	pool.Status.Conditions[0].LastTransitionTime = first
 
-	if !setConditionOnPool(pool, metav1.Condition{Type: "AddressSpaceNearlyFull", Status: metav1.ConditionTrue, Reason: "ThresholdExceeded", Message: "93%"}) {
+	nearlyFull.Message = "93%"
+	if !setConditionOnPool(pool, nearlyFull) {
 		t.Fatal("expected a new message to count as a change")
 	}
 	if got := pool.Status.Conditions[0]; got.Message != "93%" || !got.LastTransitionTime.Equal(&first) {
 		t.Fatalf("expected message 93%% with the original transition time %v, got %q at %v", first, got.Message, got.LastTransitionTime)
 	}
 
-	setConditionOnPool(pool, metav1.Condition{Type: "AddressSpaceNearlyFull", Status: metav1.ConditionFalse, Reason: "BelowThreshold"})
+	setConditionOnPool(pool, metav1.Condition{Type: v3.IPPoolConditionAddressSpaceNearlyFull, Status: metav1.ConditionFalse, Reason: "BelowThreshold"})
 	if got := pool.Status.Conditions[0].LastTransitionTime; got.Equal(&first) {
 		t.Fatalf("expected a status change to move the transition time off %v", first)
 	}

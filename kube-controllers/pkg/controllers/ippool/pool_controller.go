@@ -544,10 +544,10 @@ func withoutFinalizer(p *v3.IPPool) []string {
 // blocksInPool is whether any block lies inside the CIDR, whichever pool the tracker credits it to. A narrower pool
 // inside a deleting one can win a block whose addresses are still in use.
 func (c *IPPoolController) blocksInPool(cidr cnet.IPNet) bool {
-	for _, i := range c.blockInformer.GetIndexer().List() {
-		block, ok := i.(*v3.IPAMBlock)
+	for _, obj := range c.blockInformer.GetIndexer().List() {
+		block, ok := obj.(*v3.IPAMBlock)
 		if !ok {
-			logrus.WithField("object", i).Errorf("Unexpected type %T in the IPAMBlock cache", i)
+			logrus.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in IPAMBlock cache")
 			continue
 		}
 		_, parsedNet, err := cnet.ParseCIDR(block.Spec.CIDR)
