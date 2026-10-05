@@ -17,6 +17,7 @@ package storage
 import (
 	"sort"
 	"strings"
+	"sync"
 	"unique"
 
 	"github.com/sirupsen/logrus"
@@ -31,6 +32,9 @@ import (
 type DiachronicFlow struct {
 	ID  int64
 	Key types.FlowKey
+
+	// mu guards Windows, which streams read off the aggregator goroutine.
+	mu sync.RWMutex
 
 	// Windows is a slice of time windows that the DiachronicFlow has statistics for. Each element in the slice
 	// represents a time window, and the statistics for that window are stored in the corresponding index
@@ -69,6 +73,9 @@ func NewDiachronicFlow(k *types.FlowKey, id int64) *DiachronicFlow {
 }
 
 func (d *DiachronicFlow) Rollover(limiter int64) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	// Windows are sorted oldest -> newest. Find the first window that is still valid and
 	// discard everything before it. Iterating forward finds the cut point on the first
 	// check in the common case (one expired window per rollover).
@@ -94,10 +101,15 @@ func (d *DiachronicFlow) Rollover(limiter int64) {
 }
 
 func (d *DiachronicFlow) Empty() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	return len(d.Windows) == 0
 }
 
 func (d *DiachronicFlow) AddFlow(flow *types.Flow, start, end int64) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
 			"flow":   flow,
@@ -209,6 +221,9 @@ func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *types.Flow {
 
 // GetWindows returns a slice of Windows that fall within the specified time range.
 func (d *DiachronicFlow) GetWindows(startGte, startLt int64) []*Window {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
 	// Find the Windows that fall within the specified time range.
 	windows := make([]*Window, 0)
 	for _, w := range d.Windows {
@@ -289,6 +304,9 @@ func (d *DiachronicFlow) Matches(filter *proto.Filter, startGte, startLt int64) 
 }
 
 func (d *DiachronicFlow) Within(startGte, startLt int64) bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
 	// Go through each window and return true if any of them
 	// fall within the start and end time.
 	for _, w := range d.Windows {
