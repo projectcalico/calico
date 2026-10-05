@@ -694,10 +694,10 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 	desiredMeta.SetAnnotations(mergedAnnotations)
 
 	// Merge labels by reconciling the ones that components expect, but leaving everything else
-	// as-is. Labels that the operator owns are not kept from the current object, so they are
-	// removed when the desired object does not set them.
+	// as-is. The pod security labels on a Namespace are the exception: the operator owns them, so
+	// they are removed when the desired Namespace does not set them.
 	currentLabels := maps.Clone(common.MapExistsOrInitialize(currentMeta.GetLabels()))
-	for _, key := range ownedLabels(desired) {
+	for _, key := range ownedPodSecurityLabels(desired) {
 		delete(currentLabels, key)
 	}
 	desiredLabels := common.MapExistsOrInitialize(desiredMeta.GetLabels())
@@ -830,9 +830,8 @@ func mergeState(desired client.Object, current runtime.Object) client.Object {
 	}
 }
 
-func ownedLabels(obj client.Object) []string {
-	switch obj.(type) {
-	case *v1.Namespace:
+func ownedPodSecurityLabels(obj client.Object) []string {
+	if _, ok := obj.(*v1.Namespace); ok {
 		return render.PodSecurityLabelKeys()
 	}
 	return nil
