@@ -12,7 +12,8 @@ steps:
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    requests: {cpu: 3500m, memory: 7.5Gi}
+    jobSize: large
+    requests: {cpu: 7000m, memory: 12Gi}
     depends:
       - build-calico-image
       - build-node-image

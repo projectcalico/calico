@@ -250,7 +250,7 @@ steps:
     timeout: 1h
     requests: {cpu: 1500m, memory: 1.5Gi}
     depends: [build-nft-rpms]
-    when: GIT_REF_TYPE == 'MERGE'
+    when: GIT_REF_TYPE == 'MERGE' && (GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-')
     matrix:
       - name: amd64
         env: [{name: ARCH, value: amd64}]

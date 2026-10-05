@@ -18,6 +18,7 @@ promotions:
   - name: push-images
     workflowFile: .argoci/promotions/push-images.yaml
     description: Republish one component's images at this commit
+    requires: none
     parameters:
       - name: COMPONENT
         description: Which component's images to push
@@ -37,10 +38,12 @@ promotions:
   - name: openstack-packages
     workflowFile: .argoci/publish/openstack-packages.yaml
     description: Build and publish the OpenStack packages for this ref
+    requires: none
 
   - name: hashrelease
     workflowFile: .argoci/promotions/hashrelease.yaml
     description: Build and publish a hashrelease from this build
+    requires: none
 
   - name: publish-release
     workflowFile: .argoci/promotions/publish-release.yaml
