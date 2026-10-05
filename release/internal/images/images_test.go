@@ -1087,6 +1087,15 @@ func TestResolve(t *testing.T) {
 		}
 	})
 
+	t.Run("a dir with no images of the variant names what it builds", func(t *testing.T) {
+		f := &imageNameRunner{images: "cni-windows"}
+		err := Resolve(testRepoRoot, testVersion, oneStandardVariant("cni-plugin"),
+			alwaysResolves("sha256:aaa"), resolveOpts(f, &fakeRecorder{})...)
+		if err == nil || !strings.Contains(err.Error(), `"cni-windows"`) {
+			t.Errorf("error should name the images build-images printed, got %v", err)
+		}
+	})
+
 	t.Run("a failed lookup is not reported as missing", func(t *testing.T) {
 		f := &imageNameRunner{images: "node"}
 		resolve := func(string) (string, bool, error) {
