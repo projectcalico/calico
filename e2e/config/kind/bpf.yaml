@@ -1,0 +1,30 @@
+# kind/bpf.yaml - test selection for the kind e2e CI job running the BPF
+# dataplane (values-bpf.yaml overlay).
+
+extends: ../base.yaml
+
+include:
+  - sig-calico
+
+exclude:
+  labels:
+    - label: RequiresAWS
+      reason: "requires AWS-specific infrastructure (VPC routing layout, etc.)"
+
+    - label: RequiresBGPMesh
+      reason: "requires a full BGP mesh, not configured on this cluster"
+
+    - label: NoEncap
+      reason: "requires non-encapsulated routing, not configured on this cluster"
+
+    - label: Feature:Istio
+      reason: "Calico policy not enforced with Istio ambient on BPF dataplane"
+
+    - label: RequiresXtables
+      reason: "requires iptables or nftables dataplane, but this cluster uses BPF"
+
+    - label: RequiresCalicoAPIServer
+      reason: "kind clusters run in v3 CRD mode without the aggregated Calico API server"
+
+    - label: Feature:KubeVirt
+      reason: "e2e infra integration with Banzai not ready, currently run manually"

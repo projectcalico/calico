@@ -29,9 +29,9 @@
       - name: RUN_LOCAL_TESTS
         value: "true"
       - name: E2E_TEST_CONFIG
-        # Test selection is driven by the config file; see gcp-bpf.yaml for the
+        # Test selection is driven by the config file; see gcp/bpf.yaml for the
         # include/exclude rationale.
-        value: "e2e/config/gcp-bpf.yaml"
+        value: "e2e/config/gcp/bpf.yaml"
       - name: USE_API_SERVER
         value: "false"
       - name: ENABLE_EXTERNAL_NODE

@@ -28,7 +28,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/nftables/arm64-wg.yaml
+        value: e2e/config/nftables/xtables-autohep.yaml
       - name: ENABLE_WIREGUARD
         value: "true"
       - name: GOOGLE_MACHINE_TYPE
@@ -62,7 +62,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/nftables/pipeline.yaml
+        value: e2e/config/nftables/xtables-encap-aws-autohep.yaml
       - name: ENCAPSULATION_TYPE
         value: VXLAN
       - name: PROVISIONER
@@ -82,7 +82,7 @@ steps:
       - name: CLUSTER_ROUTING_MODE
         value: Felix
       - name: E2E_TEST_CONFIG
-        value: e2e/config/nftables/native-v3-crds-gcp.yaml
+        value: e2e/config/nftables/xtables-encap-nobgp-v3crd-autohep.yaml
       # gcp-kubeadm uses the fixed semaphore-autotest VPC + reserved IPs, which
       # exist only in us-central1; pin region/zone (the load-spread randomisation
       # in the prologue can't apply to region-fixed jobs). See arm64-wg.
@@ -104,7 +104,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/nftables/native-v3-crds-aws.yaml
+        value: e2e/config/nftables/xtables-v3crd-aws-autohep.yaml
       - name: K8S_VERSION
         value: stable-3
       - name: PROVISIONER
@@ -119,7 +119,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/nftables/eks-aws-cni.yaml
+        value: e2e/config/nftables/eks-xtables-nobgp-aws-autohep.yaml
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -137,7 +137,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/nftables/eks-calico-cni.yaml
+        value: e2e/config/nftables/eks-xtables-aws-autohep.yaml
       - name: INSTALLER
         value: helmerator
       - name: IPAM_TEST_POOL_SUBNET
@@ -162,7 +162,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/nftables/pipeline.yaml
+        value: e2e/config/nftables/xtables-encap-autohep.yaml
       - name: ENABLE_DUAL_STACK
         value: "true"
       - name: ENCAPSULATION_TYPE
@@ -188,7 +188,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/nftables/pipeline.yaml
+        value: e2e/config/nftables/xtables-autohep.yaml
       - name: ENABLE_DUAL_STACK
         value: "true"
       - name: ENCAPSULATION_TYPE_V6
@@ -209,7 +209,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/gcp-kubevirt.yaml
+        value: e2e/config/gcp/kubevirt.yaml
       # gcp-kubeadm uses the fixed semaphore-autotest VPC + reserved IPs, which
       # exist only in us-central1; pin region/zone (the load-spread randomisation
       # in the prologue can't apply to region-fixed jobs). See arm64-wg.

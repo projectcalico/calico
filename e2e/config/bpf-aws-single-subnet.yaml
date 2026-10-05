@@ -1,8 +1,5 @@
 # bpf-aws-single-subnet.yaml - test selection for the AWS single-subnet BPF run.
 #
-# Standalone, not extending base.yaml: extends only ever adds, and base excludes
-# ExternalNode, which would drop this run's Maglev tests for good.
-#
 # This reproduces the set of tests the run selected back when it used a
 # --ginkgo.focus/--ginkgo.skip pair, expressed the way the config loader wants
 # it. Adding or removing entries here changes what that run covers.
@@ -16,6 +13,8 @@
 # excluded by label below. Requirements the cluster does meet are left in, so
 # tests labelled RequiresAWS, RequiresBGPMesh, NoEncap, ExternalNode,
 # RequiresGoldmane and RequiresCalicoAPIServer all still run.
+
+extends: base.yaml
 
 include:
   - sig-calico
