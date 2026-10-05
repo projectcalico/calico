@@ -335,7 +335,7 @@ func TestImagesCheckOperatorCoversTheOperatorDir(t *testing.T) {
 	if err := imagesCheckOperatorAction(&Config{})(context.Background(), &cli.Command{}); err != nil {
 		t.Fatalf("check-operator: %v", err)
 	}
-	for _, want := range append(images.ReleaseDirs(), operator.DirName) {
+	for _, want := range append(operatorCheckDirs(), operator.DirName) {
 		if !slices.Contains(gotDirs, want) {
 			t.Errorf("check dirs omit %s", want)
 		}
