@@ -1030,6 +1030,7 @@ type PersistentConnection struct {
 	Sleep                time.Duration
 	ProbeLoopFileTimeout time.Duration
 	SendRST              bool
+	NoKeepAlive          bool
 	connectionReset      bool
 
 	loopFile string
@@ -1097,6 +1098,9 @@ func (pc *PersistentConnection) Start() error {
 	}
 	if pc.SendRST {
 		args = append(args, "--send-rst")
+	}
+	if pc.NoKeepAlive {
+		args = append(args, "--no-keepalive")
 	}
 	runCmd := utils.Command(
 		"docker",

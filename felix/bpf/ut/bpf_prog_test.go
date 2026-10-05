@@ -2029,8 +2029,9 @@ func (pkt *Packet) handleL3() error {
 		} else {
 			pkt.ipv6.NextHeader = pkt.l4Protocol
 		}
-		pkt.length += 40
+		// payload_len excludes the 40-byte base header, unlike IPv4 tot_len.
 		pkt.ipv6.Length = uint16(pkt.length)
+		pkt.length += 40
 		pkt.layers = append(pkt.layers, pkt.ipv6)
 	default:
 		return fmt.Errorf("unrecognized l3 layer type %t", pkt.l3)
