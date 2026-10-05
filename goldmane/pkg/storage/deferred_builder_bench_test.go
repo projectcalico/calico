@@ -32,7 +32,7 @@ func BenchmarkDeferredFlowBuilder(b *testing.B) {
 	for _, windows := range []int{1, 20, 242} {
 		flows := make([]*storage.DiachronicFlow, numFlows)
 		for i := range flows {
-			flows[i], _ = builderTestFlow(windows)
+			flows[i], _ = newBuilderTestFlow(windows)
 		}
 		start, end := int64((windows-1)*builderInterval), int64(windows*builderInterval)
 

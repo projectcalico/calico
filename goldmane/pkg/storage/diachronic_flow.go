@@ -36,9 +36,7 @@ type DiachronicFlow struct {
 	// mu guards windows, which streams read off the aggregator goroutine.
 	mu sync.Mutex
 
-	// windows is a slice of time windows that the DiachronicFlow has statistics for. Each element in the slice
-	// represents a time window, and the statistics for that window are stored in the corresponding index
-	// in the other fields.
+	// windows holds the flow's statistics for each time window, sorted oldest to newest.
 	windows []Window
 }
 
@@ -63,6 +61,10 @@ func (w *Window) Within(startGte, startLt int64) bool {
 
 func (w *Window) Contains(t int64) bool {
 	return t >= w.start && t <= w.end
+}
+
+func (w *Window) inRange(startGte, startLt int64) bool {
+	return (startGte == 0 || w.start >= startGte) && (startLt == 0 || w.end <= startLt)
 }
 
 func NewDiachronicFlow(k *types.FlowKey, id int64) *DiachronicFlow {
@@ -237,10 +239,6 @@ func (d *DiachronicFlow) bucketWindow(startGte, startLt int64) (Window, bool) {
 		}
 	}
 	return Window{}, false
-}
-
-func (w *Window) inRange(startGte, startLt int64) bool {
-	return (startGte == 0 || w.start >= startGte) && (startLt == 0 || w.end <= startLt)
 }
 
 var emptyLabels = unique.Make("")

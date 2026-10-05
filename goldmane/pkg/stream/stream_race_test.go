@@ -36,15 +36,18 @@ func TestStreamReadRacesAddFlow(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	sm := stream.NewStreamManager()
-	go sm.Run(ctx)
+	streams := stream.NewStreamManager()
+	go streams.Run(ctx)
 
 	clk := func() time.Time { return time.Unix(now, 0) }
-	ring := storage.NewBucketRing(20, 1, now, storage.WithStreamReceiver(sm), storage.WithNowFunc(clk))
+	ring := storage.NewBucketRing(20, 1, now, storage.WithStreamReceiver(streams), storage.WithNowFunc(clk))
 
 	base := testutils.NewRandomFlow(now)
 	addFlow := func(start int64) {
-		fl := googleproto.Clone(base).(*proto.Flow)
+		fl, ok := googleproto.Clone(base).(*proto.Flow)
+		if !ok {
+			t.Fatal("cloned flow is not a *proto.Flow")
+		}
 		fl.StartTime = start
 		fl.EndTime = start + 1
 		ring.AddFlow(storage.FlowFromNode{Flow: types.ProtoToFlow(fl)})
@@ -53,14 +56,14 @@ func TestStreamReadRacesAddFlow(t *testing.T) {
 		addFlow(now - i)
 	}
 
-	s := <-sm.Register(&proto.FlowStreamRequest{StartTimeGte: now - 5}, 100)
-	if s == nil {
+	flowStream := <-streams.Register(&proto.FlowStreamRequest{StartTimeGte: now - 5}, 100)
+	if flowStream == nil {
 		t.Fatal("nil stream")
 	}
-	defer s.Close()
+	defer flowStream.Close()
 
-	bf := <-sm.Backfills()
-	ring.Backfill(sm, bf.ID(), bf.StartTimeGte())
+	bf := <-streams.Backfills()
+	ring.Backfill(streams, bf.ID(), bf.StartTimeGte())
 
 	for range 50 {
 		addFlow(now)
@@ -69,7 +72,7 @@ func TestStreamReadRacesAddFlow(t *testing.T) {
 	var got int
 	for {
 		select {
-		case b := <-s.Flows():
+		case b := <-flowStream.Flows():
 			if b.BuildInto(&proto.Filter{}, &proto.FlowResult{Flow: &proto.Flow{}}) {
 				got++
 			}
