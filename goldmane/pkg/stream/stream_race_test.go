@@ -69,18 +69,27 @@ func TestStreamReadRacesAddFlow(t *testing.T) {
 		addFlow(now)
 	}
 
+	// Backfill stops before the bucket that is still filling, so the newest of the five flows is not sent.
+	const wantBackfilled = 4
+
 	var got int
-	for {
+	deadline := time.After(10 * time.Second)
+	for got < wantBackfilled {
 		select {
 		case b := <-flowStream.Flows():
 			if b.BuildInto(&proto.Filter{}, &proto.FlowResult{Flow: &proto.Flow{}}) {
 				got++
 			}
-		case <-time.After(300 * time.Millisecond):
-			if got != 4 {
-				t.Errorf("expected 4 backfilled flows, got %d", got)
-			}
-			return
+		case <-deadline:
+			t.Fatalf("expected %d backfilled flows, got %d", wantBackfilled, got)
 		}
+	}
+
+	select {
+	case b := <-flowStream.Flows():
+		if b.BuildInto(&proto.Filter{}, &proto.FlowResult{Flow: &proto.Flow{}}) {
+			t.Errorf("expected only %d backfilled flows, got another", wantBackfilled)
+		}
+	case <-time.After(100 * time.Millisecond):
 	}
 }
