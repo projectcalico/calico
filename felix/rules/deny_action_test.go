@@ -115,11 +115,7 @@ var _ = Describe("Deny action outside the filter table", func() {
 
 	It("should return the same chains when the deny action is already DROP", func() {
 		renderer = NewRenderer(denyActionTestConfig("DROP"), false)
-		chains := renderer.PolicyToIptablesChains(
-			&types.PolicyID{Name: "a", Kind: v3.KindGlobalNetworkPolicy},
-			&proto.Policy{InboundRules: []*proto.Rule{{Action: "deny"}}},
-			4,
-		)
+		chains := renderer.PolicyToIptablesChains(&types.PolicyID{Name: "a", Kind: v3.KindGlobalNetworkPolicy}, &proto.Policy{InboundRules: []*proto.Rule{{Action: "deny"}}}, 4)
 		Expect(renderer.NonFilterTableChains(chains)).To(Equal(chains))
 	})
 })

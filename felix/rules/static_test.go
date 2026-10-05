@@ -92,11 +92,8 @@ var _ = Describe("Static", func() {
 	}
 
 	for _, trueOrFalse := range []bool{true, false} {
-		var denyAction generictables.Action
-		denyAction = iptables.DropAction{}
 		denyActionString := "DROP"
 		if trueOrFalse {
-			denyAction = iptables.RejectAction{}
 			denyActionString = "REJECT"
 		}
 
