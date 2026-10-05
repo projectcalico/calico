@@ -155,13 +155,30 @@ var _ = Describe("Namespace rendering tests", func() {
 		Entry("are not set when PodSecurityLabels is Disabled", ptr.To(operatorv1.PodSecurityLabelsDisabled), false),
 	)
 
-	It("should render a namespace for aks with control-plane label when PodSecurityLabels is Disabled", func() {
+	It("should render a namespace for aks without control-plane label when PodSecurityLabels is Disabled", func() {
 		cfg.Installation.KubernetesProvider = operatorv1.ProviderAKS
 		cfg.Installation.PodSecurityLabels = ptr.To(operatorv1.PodSecurityLabelsDisabled)
 		resources, _ := render.Namespaces(cfg).Objects()
 		namespace := rtest.GetResource(resources, "calico-system", "", "", "v1", "Namespace").(*corev1.Namespace)
 
 		Expect(namespace.Labels).NotTo(HaveKey("pod-security.kubernetes.io/enforce"))
-		Expect(namespace.Labels).To(HaveKeyWithValue("control-plane", "true"))
+		Expect(namespace.Labels).NotTo(HaveKey("control-plane"))
 	})
+
+	It("should create a namespace without pod security labels when the pod security standard is empty", func() {
+		namespace := render.CreateNamespace("test-namespace", operatorv1.ProviderNone, "", nil)
+
+		Expect(namespace.Labels).To(HaveKeyWithValue("name", "test-namespace"))
+		Expect(namespace.Labels).NotTo(HaveKey("pod-security.kubernetes.io/enforce"))
+		Expect(namespace.Labels).NotTo(HaveKey("pod-security.kubernetes.io/enforce-version"))
+	})
+
+	DescribeTable("PodSecurityStandardFor",
+		func(mode *operatorv1.PodSecurityLabelsMode, expected render.PodSecurityStandard) {
+			Expect(render.PodSecurityStandardFor(mode, render.PSSRestricted)).To(Equal(expected))
+		},
+		Entry("returns the standard when PodSecurityLabels is unset", nil, render.PodSecurityStandard(render.PSSRestricted)),
+		Entry("returns the standard when PodSecurityLabels is Enabled", ptr.To(operatorv1.PodSecurityLabelsEnabled), render.PodSecurityStandard(render.PSSRestricted)),
+		Entry("returns an empty standard when PodSecurityLabels is Disabled", ptr.To(operatorv1.PodSecurityLabelsDisabled), render.PodSecurityStandard("")),
+	)
 })

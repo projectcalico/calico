@@ -332,6 +332,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		RouteRequestTimeout: ptr.To("0s"),
 		Provider:            r.provider,
 		Azure:               installationSpec.Azure,
+		PodSecurityLabels:   installationSpec.PodSecurityLabels,
 		Extension:           r.gwExt,
 	})
 	// Clear finalizers on any access grant whose gateway resources are gone,

@@ -81,6 +81,10 @@ type Config struct {
 	// Azure-policy labels as other operator-created namespaces on AKS.
 	Azure *operatorv1.Azure
 
+	// PodSecurityLabels carries Installation.PodSecurityLabels so the gateway namespace
+	// gets the same pod security labels as other operator-created namespaces.
+	PodSecurityLabels *operatorv1.PodSecurityLabelsMode
+
 	// Extension supplies the variant's additions beside the proxy; nil adds none.
 	Extension extensions.UIGatewayExtension
 }
@@ -486,7 +490,7 @@ func (h *Helper) gatewayNamespaceObject(ctx context.Context, name string) (*core
 	if !errors.IsNotFound(err) {
 		return nil, err
 	}
-	ns := render.CreateNamespace(name, h.cfg.Provider, render.PSSPrivileged, h.cfg.Azure)
+	ns := render.CreateNamespace(name, h.cfg.Provider, render.PodSecurityStandardFor(h.cfg.PodSecurityLabels, render.PSSPrivileged), h.cfg.Azure)
 	ns.Labels[rgateway.GatewayNamespaceLabel] = "true"
 	return ns, nil
 }

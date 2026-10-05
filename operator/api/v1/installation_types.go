@@ -277,11 +277,13 @@ type InstallationSpec struct {
 	NetworkPolicy *NetworkPolicySpec `json:"networkPolicy,omitempty"`
 
 	// PodSecurityLabels controls whether the operator sets the Pod Security Admission labels on the
-	// calico-system namespace. When set to Enabled, the operator sets pod-security.kubernetes.io/enforce
-	// to privileged and pod-security.kubernetes.io/enforce-version to latest. When set to Disabled, the
-	// operator removes these two labels. The namespace must then still allow privileged pods, for example
-	// through a Pod Security Admission exemption, or new Calico pods are rejected. Other
-	// pod-security.kubernetes.io labels on the namespace are left as they are. Defaults to Enabled.
+	// namespaces it creates, such as calico-system. When set to Enabled, the operator sets
+	// pod-security.kubernetes.io/enforce to the pod security standard that each namespace needs, and
+	// pod-security.kubernetes.io/enforce-version to latest. When set to Disabled, the operator does not set
+	// these two labels, and removes them from the namespaces it keeps up to date, such as calico-system.
+	// The namespaces must then still allow the pods that Calico runs in them, for example through a Pod
+	// Security Admission exemption, or new Calico pods are rejected. Other pod-security.kubernetes.io
+	// labels are left as they are. Defaults to Enabled.
 	// +kubebuilder:default=Enabled
 	// +optional
 	PodSecurityLabels *PodSecurityLabelsMode `json:"podSecurityLabels,omitempty"`
@@ -304,7 +306,7 @@ const (
 )
 
 // PodSecurityLabelsMode specifies whether the operator manages the Pod Security Admission labels on the
-// calico-system namespace.
+// namespaces it creates.
 // +kubebuilder:validation:Enum=Enabled;Disabled
 type PodSecurityLabelsMode string
 

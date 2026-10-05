@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gapi "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -547,6 +548,32 @@ var _ = Describe("Cleanup helpers", func() {
 			// Matches every other operator-created namespace on AKS; without it
 			// Azure Policy differs for the gateway namespace.
 			Expect(ns.Labels).To(HaveKeyWithValue("control-plane", "true"))
+			Expect(ns.Labels).To(HaveKeyWithValue(rgateway.GatewayNamespaceLabel, "true"))
+		})
+
+		It("creates the gateway namespace with the pod security labels", func() {
+			build(gatewayAPI("tigera-gateway-class"))
+			components, err := h.Components(ctx, spec("ns-a"), keyPair())
+			Expect(err).NotTo(HaveOccurred())
+
+			ns := createdNamespace(components, "ns-a")
+			Expect(ns).NotTo(BeNil())
+			Expect(ns.Labels).To(HaveKeyWithValue("pod-security.kubernetes.io/enforce", "privileged"))
+			Expect(ns.Labels).To(HaveKeyWithValue("pod-security.kubernetes.io/enforce-version", "latest"))
+		})
+
+		It("creates the gateway namespace without the pod security labels when they are disabled", func() {
+			build(gatewayAPI("tigera-gateway-class"))
+			cfgDisabled := cfg
+			cfgDisabled.PodSecurityLabels = ptr.To(operatorv1.PodSecurityLabelsDisabled)
+			h = uigateway.NewHelper(cli, cfgDisabled)
+			components, err := h.Components(ctx, spec("ns-a"), keyPair())
+			Expect(err).NotTo(HaveOccurred())
+
+			ns := createdNamespace(components, "ns-a")
+			Expect(ns).NotTo(BeNil())
+			Expect(ns.Labels).NotTo(HaveKey("pod-security.kubernetes.io/enforce"))
+			Expect(ns.Labels).NotTo(HaveKey("pod-security.kubernetes.io/enforce-version"))
 			Expect(ns.Labels).To(HaveKeyWithValue(rgateway.GatewayNamespaceLabel, "true"))
 		})
 

@@ -55,7 +55,7 @@ func (p *SetUpComponent) ResolveImages(is *operatorv1.ImageSet) error {
 // rendering.
 func (p *SetUpComponent) Objects() (objsToCreate []client.Object, objsToDelete []client.Object) {
 	if p.cfg.CreateNamespace {
-		objsToCreate = append(objsToCreate, CreateNamespace(p.cfg.Namespace, p.cfg.Installation.KubernetesProvider, p.cfg.PSS, p.cfg.Installation.Azure))
+		objsToCreate = append(objsToCreate, CreateNamespace(p.cfg.Namespace, p.cfg.Installation.KubernetesProvider, PodSecurityStandardFor(p.cfg.Installation.PodSecurityLabels, p.cfg.PSS), p.cfg.Installation.Azure))
 	}
 
 	objsToCreate = append(objsToCreate, CreateOperatorSecretsRoleBinding(p.cfg.Namespace))

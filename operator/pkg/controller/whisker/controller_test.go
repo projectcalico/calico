@@ -274,6 +274,22 @@ var _ = Describe("whisker controller tests", func() {
 			Expect(cli.Get(ctx, types.NamespacedName{Name: gatewayName, Namespace: "ns-a"}, gw)).NotTo(HaveOccurred())
 		})
 
+		It("creates the gateway namespace without pod security labels when the Installation disables them", func() {
+			Expect(cli.Get(ctx, types.NamespacedName{Name: installation.Name}, installation)).NotTo(HaveOccurred())
+			installation.Status.Computed.PodSecurityLabels = ptr.To(operatorv1.PodSecurityLabelsDisabled)
+			Expect(cli.Status().Update(ctx, installation)).NotTo(HaveOccurred())
+			createGatewayAPI()
+			setIngressGateway(ptr.To("ns-a"))
+
+			_, err := doReconcile()
+			Expect(err).NotTo(HaveOccurred())
+
+			ns := &corev1.Namespace{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: "ns-a"}, ns)).NotTo(HaveOccurred())
+			Expect(ns.Labels).NotTo(HaveKey("pod-security.kubernetes.io/enforce"))
+			Expect(ns.Labels).NotTo(HaveKey("pod-security.kubernetes.io/enforce-version"))
+		})
+
 		It("degrades and requeues while the Gateway is unhealthy", func() {
 			createGatewayAPI()
 			setIngressGateway(nil)
