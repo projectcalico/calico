@@ -27,7 +27,7 @@ import (
 
 const builderInterval = 15
 
-func builderTestFlow(windows int) (*storage.DiachronicFlow, *types.Flow) {
+func newBuilderTestFlow(windows int) (*storage.DiachronicFlow, *types.Flow) {
 	k := types.NewFlowKey(
 		&types.FlowKeySource{SourceName: "src", SourceNamespace: "default"},
 		&types.FlowKeyDestination{DestName: "dst", DestNamespace: "default"},
@@ -55,7 +55,7 @@ func buildPackets(t *testing.T, fb storage.FlowBuilder) int64 {
 }
 
 func TestDeferredFlowBuilderSnapshotsWindow(t *testing.T) {
-	df, f := builderTestFlow(3)
+	df, f := newBuilderTestFlow(3)
 	start, end := int64(2*builderInterval), int64(3*builderInterval)
 
 	before := storage.NewDeferredFlowBuilder(df, start, end)
@@ -67,16 +67,15 @@ func TestDeferredFlowBuilderSnapshotsWindow(t *testing.T) {
 }
 
 func TestDeferredFlowBuilderNoWindowForBucket(t *testing.T) {
-	df, _ := builderTestFlow(3)
+	df, _ := newBuilderTestFlow(3)
 	fb := storage.NewDeferredFlowBuilder(df, 10*builderInterval, 11*builderInterval)
 	require.False(t, fb.BuildInto(nil, &proto.FlowResult{Flow: &proto.Flow{}}))
 }
 
-// Creating a builder must cost the same whether the flow has one window of history or a full ring.
 func TestDeferredFlowBuilderAllocsIndependentOfHistory(t *testing.T) {
 	allocs := map[int]float64{}
 	for _, windows := range []int{1, 242} {
-		df, _ := builderTestFlow(windows)
+		df, _ := newBuilderTestFlow(windows)
 		start, end := int64((windows-1)*builderInterval), int64(windows*builderInterval)
 		allocs[windows] = testing.AllocsPerRun(100, func() {
 			_ = storage.NewDeferredFlowBuilder(df, start, end)
