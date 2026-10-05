@@ -220,7 +220,7 @@ func (c *IPPoolController) Run(stopCh chan struct{}) {
 	logrus.Info("Starting IPPool controller")
 
 	// An informer syncs before its handlers have fed the tracker. Waiting on the handlers stops the first reconcile from
-	// seeing a Terminating pool with no blocks and dropping its finalizer.
+	// undercounting a pool and dropping its nearly-full condition.
 	logrus.Debug("Waiting to sync with Kubernetes API")
 	if !cache.WaitForNamedCacheSync("pools", stopCh, c.handlersSynced...) {
 		logrus.Info("Failed to sync resources, received signal for controller to shut down.")
@@ -280,9 +280,6 @@ func (c *IPPoolController) reconcile() error {
 		errs = append(errs, err)
 	}
 
-	// The informer has yet to deliver the conditions just derived to the tracker. Without them, it could hand a Terminating
-	// pool's blocks to a new pool sharing its CIDR, finalizing the old pool early.
-	c.tracker.AddPools(pools...)
 	if err := c.reconcileNearlyFull(c.ctx, pools); err != nil {
 		errs = append(errs, err)
 	}
@@ -518,7 +515,7 @@ func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logru
 	}
 
 	// If there are no IPAM blocks left in this pool, it is safe to remove our finalizer.
-	if c.blocksInPool(p.Name) {
+	if c.blocksInPool(*parsedNet) {
 		logCtx.Info("IPAM blocks still exist in pool, not removing finalizer")
 		return nil
 	}
@@ -544,10 +541,26 @@ func withoutFinalizer(p *v3.IPPool) []string {
 	return slices.DeleteFunc(slices.Clone(p.Finalizers), func(s string) bool { return s == IPPoolFinalizer })
 }
 
-// blocksInPool is whether the tracker attributes any block to the pool. A pool the tracker has not seen reports true, since it may still own blocks.
-func (c *IPPoolController) blocksInPool(name string) bool {
-	counts, ok := c.tracker.Summarize(name)
-	return !ok || counts.BlocksInUse > 0
+// blocksInPool is whether any block lies inside the CIDR, whichever pool the tracker credits it to. A narrower pool
+// inside a deleting one can win a block whose addresses are still in use.
+func (c *IPPoolController) blocksInPool(cidr cnet.IPNet) bool {
+	for _, i := range c.blockInformer.GetIndexer().List() {
+		block, ok := i.(*v3.IPAMBlock)
+		if !ok {
+			logrus.WithField("object", i).Errorf("Unexpected type %T in the IPAMBlock cache", i)
+			continue
+		}
+		_, parsedNet, err := cnet.ParseCIDR(block.Spec.CIDR)
+		if err != nil {
+			logrus.WithError(err).WithField("cidr", block.Spec.CIDR).Error("Failed to parse CIDR from IPAMBlock")
+			continue
+		}
+		if cidr.Contains(parsedNet.IP) {
+			logrus.WithField("cidr", cidr.String()).WithField("block", block.Spec.CIDR).Debug("Found IPAMBlock in pool")
+			return true
+		}
+	}
+	return false
 }
 
 func hasFinalizer(p *v3.IPPool) bool {
@@ -603,31 +616,7 @@ func removeCondition(ctx context.Context, cli clientset.Interface, p *v3.IPPool,
 // Returns true if the condition was changed and needs to be updated in the API, or false if the condition was already in the desired state.
 func setConditionOnPool(p *v3.IPPool, condition metav1.Condition) bool {
 	if p.Status == nil {
-		// If there is no status, we need to create one and add the condition to it.
-		condition.LastTransitionTime = metav1.Now()
-		p.Status = &v3.IPPoolStatus{
-			Conditions: []metav1.Condition{condition},
-		}
-		return true
+		p.Status = &v3.IPPoolStatus{}
 	}
-
-	conditions := p.Status.Conditions
-	for i, c := range conditions {
-		if c.Type == condition.Type {
-			if c.Status == condition.Status && c.Reason == condition.Reason && c.Message == condition.Message {
-				// No change, return false.
-				return false
-			}
-
-			// Update existing condition.
-			condition.LastTransitionTime = metav1.Now()
-			p.Status.Conditions[i] = condition
-			return true
-		}
-	}
-
-	// Condition not found, add it.
-	condition.LastTransitionTime = metav1.Now()
-	p.Status.Conditions = append(p.Status.Conditions, condition)
-	return true
+	return meta.SetStatusCondition(&p.Status.Conditions, condition)
 }
