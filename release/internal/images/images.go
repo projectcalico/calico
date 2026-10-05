@@ -509,7 +509,7 @@ func (c Image) imageNames(u unit) ([]string, error) {
 		}
 	}
 	if len(names) == 0 {
-		return nil, fmt.Errorf("no %s images found in %s", u.variant, u.dir)
+		return nil, fmt.Errorf("no %s images found in %s (build-images printed %q)", u.variant, u.dir, strings.TrimSpace(out))
 	}
 	return names, nil
 }
