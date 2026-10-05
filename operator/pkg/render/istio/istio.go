@@ -165,6 +165,11 @@ func Istio(cfg *Configuration) (*IstioComponentCRDs, *IstioComponent, error) {
 		istioResOpts.IstiodOpts.Global.Platform = "openshift"
 		istioResOpts.ZTunnelOpts.Global.Platform = "openshift"
 	}
+	// The nested cni key is required: the chart copies the profile's cni.cniBinDir
+	// over the top-level cniBinDir when it descopes legacy values.
+	if binDir := cniBinDir(cfg.Installation); binDir != "" {
+		istioResOpts.IstioCNIOpts.CNI = &CNIConfig{CNIBinDir: binDir}
+	}
 	resources, err := istioResOpts.GetResources(cfg.Scheme)
 	if err != nil {
 		return nil, nil, err
@@ -429,4 +434,22 @@ func (c *IstioComponentCRDs) ResolveImages(is *operatorv1.ImageSet) error {
 
 func (c *IstioComponentCRDs) SupportedOSType() rmeta.OSType {
 	return rmeta.OSTypeLinux
+}
+
+// cniBinDir returns the host directory the Istio CNI plugin is installed into.
+// It is the directory configured for calico-node on the Installation, which the
+// Installation controller defaults per provider, so a runtime with a custom CNI
+// bin dir finds the plugin. Without one, GKE still needs /home/kubernetes/bin:
+// the chart's gke profile leaves cni.cniBinDir empty and detects GKE from
+// .Capabilities.KubeVersion, which a client-only render never supplies, so the
+// chart would fall back to /opt/cni/bin, which is read-only on GKE nodes. An
+// empty result leaves the chart's own default in place.
+func cniBinDir(installation *operatorv1.InstallationSpec) string {
+	if installation.CNI != nil && installation.CNI.BinDir != nil && *installation.CNI.BinDir != "" {
+		return *installation.CNI.BinDir
+	}
+	if installation.KubernetesProvider.IsGKE() {
+		return "/home/kubernetes/bin"
+	}
+	return ""
 }
