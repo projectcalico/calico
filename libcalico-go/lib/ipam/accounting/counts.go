@@ -121,6 +121,10 @@ type BlockCounts struct {
 	Cooling       int
 	Reserved      int
 	InUseReserved int
+
+	// Borrowed is the part of InUse held by a node other than the block's affine node, so what that node lends. Every
+	// held address in an unaffined block is borrowed.
+	Borrowed int
 }
 
 // Free is every address in the block that is neither in use nor reserved.
