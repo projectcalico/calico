@@ -33,6 +33,10 @@ type DiachronicFlow struct {
 	ID  int64
 	Key types.FlowKey
 
+	// policyRules is derived from Key at construction and never changes, so buckets can add
+	// statistics without decoding the policy trace on every flow.
+	policyRules []policyRule
+
 	// mu guards windows, which streams read off the aggregator goroutine.
 	mu sync.Mutex
 
@@ -69,8 +73,9 @@ func (w *Window) inRange(startGte, startLt int64) bool {
 
 func NewDiachronicFlow(k *types.FlowKey, id int64) *DiachronicFlow {
 	return &DiachronicFlow{
-		ID:  id,
-		Key: *k,
+		ID:          id,
+		Key:         *k,
+		policyRules: policyRulesFor(k),
 	}
 }
 
