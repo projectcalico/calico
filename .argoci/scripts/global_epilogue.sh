@@ -65,19 +65,15 @@ if [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
   fi
 fi
 
-# The Lens uploader reads only the .xml files directly in REPORT_DIR, each one
-# separately, so every case must be in exactly one of them:
-#  - reports in subdirectories (openstack-e2e writes one xmlrunner file per test
-#    class under results/) are invisible to Lens, so merge them into junit.xml;
-#  - files already at the top (bz writes bz-install.xml there) must stay out of
-#    that merge, or Lens would count them twice.
+# Lens reads each top-level .xml in REPORT_DIR, so subdir reports go into
+# junit.xml and top-level ones stay out of it.
 _merge_junit="$(dirname "${BASH_SOURCE[0]}")/merge_junit.py"
 if [[ -d "${REPORT_DIR}" && ! -f "${REPORT_DIR}/junit.xml" ]]; then
   python3 "${_merge_junit}" --scope=subdirs "${REPORT_DIR}" "${REPORT_DIR}/junit.xml" || true
 fi
 
-# The viewer renders a single junit.xml, so when several reports sit at the top,
-# merge them into one OUTSIDE REPORT_DIR, where Lens doesn't look.
+# The viewer shows one junit.xml; build it outside REPORT_DIR so Lens doesn't
+# read it twice.
 _junit="${REPORT_DIR}/junit.xml"
 if [[ -d "${REPORT_DIR}" ]] && [[ -n "$(find "${REPORT_DIR}" -maxdepth 1 -name '*.xml' ! -name junit.xml -print -quit)" ]]; then
   _merged="${BZ_LOCAL_DIR:-/tmp}/junit-merged.xml"

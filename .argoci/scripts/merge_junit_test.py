@@ -126,8 +126,7 @@ class EpilogueTest(unittest.TestCase):
         self.assertEqual(lens, ["A", "bz install"])
         self.assertEqual(viewer, ["A", "bz install"])
 
-    # Several top-level reports and no junit.xml (e.g. scale-test) used to be
-    # merged into REPORT_DIR/junit.xml, which Lens then read alongside them.
+    # Top-level reports with no junit.xml (e.g. scale-test) must each reach Lens once.
     def test_top_level_reports_not_duplicated(self):
         lens, viewer = self.run_epilogue({"one.xml": suite("one"), "two.xml": suite("two")})
         self.assertEqual(lens, ["one", "two"])
