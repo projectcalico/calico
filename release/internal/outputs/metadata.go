@@ -15,9 +15,13 @@
 package outputs
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -73,6 +77,12 @@ type Metadata struct {
 	// Superseded by charts.version; kept for older readers.
 	ChartVersion string `yaml:"helmChartVersion"`
 
+	Source Source `yaml:"source"`
+
+	Charts *Charts `yaml:"charts,omitempty"`
+
+	Artifacts []Artifact `yaml:"artifacts,omitempty"`
+
 	Components map[string]Component `yaml:"components"`
 
 	Released []registry.Component `yaml:"-"`
@@ -84,13 +94,52 @@ type Component struct {
 	Digest  string `yaml:"digest,omitempty"`
 }
 
+// Tag is left out of a build that is not tagged, such as a hashrelease.
+type Source struct {
+	Repository string `yaml:"repository"`
+	Commit     string `yaml:"commit"`
+	Branch     string `yaml:"branch,omitempty"`
+	Tag        string `yaml:"tag,omitempty"`
+}
+
+// Charts mirrors the entries of a helm index, keyed by chart name.
+type Charts struct {
+	Version string           `yaml:"version"`
+	Index   string           `yaml:"index,omitempty"`
+	Entries map[string]Chart `yaml:"entries"`
+}
+
+type Chart struct {
+	Image  string `yaml:"image"`
+	Digest string `yaml:"digest,omitempty"`
+	URL    string `yaml:"url"`
+}
+
 func (r *Metadata) describe(d Describer) error {
-	components, err := d.describe(r.Released)
+	if d.Images.Resolve == nil {
+		return errors.New("no image resolver to describe with")
+	}
+	components, err := d.Images.describe(r.Released)
 	if err != nil {
 		return err
 	}
 	r.Components = components
-	return nil
+	if r.Artifacts, err = d.Artifacts.describe(); err != nil {
+		return err
+	}
+	if r.Charts == nil {
+		return nil
+	}
+	var errs []error
+	for _, name := range slices.Sorted(maps.Keys(r.Charts.Entries)) {
+		c := r.Charts.Entries[name]
+		if c.Digest, err = d.Images.digest(c.Image); err != nil {
+			errs = append(errs, fmt.Errorf("chart %s: %w", name, err))
+			continue
+		}
+		r.Charts.Entries[name] = c
+	}
+	return errors.Join(errs...)
 }
 
 func (r Metadata) attest() ([]byte, error) {
@@ -111,6 +160,19 @@ func (r Metadata) attested() (Metadata, error) {
 	}
 	if len(r.Components) == 0 {
 		errs = append(errs, fmt.Errorf("no components specified"))
+	}
+	if r.Source.Repository == "" || r.Source.Commit == "" {
+		errs = append(errs, fmt.Errorf("source: no repository or commit specified"))
+	}
+	if r.Charts != nil {
+		if err := r.Charts.validate(); err != nil {
+			errs = append(errs, fmt.Errorf("charts: %w", err))
+		}
+	}
+	for _, a := range r.Artifacts {
+		if err := a.validate(); err != nil {
+			errs = append(errs, fmt.Errorf("artifact %s: %w", a.Name, err))
+		}
 	}
 	r.Images = nil
 	for _, key := range slices.Sorted(maps.Keys(r.Components)) {
@@ -144,12 +206,62 @@ func (c Component) validate() error {
 	return nil
 }
 
+func (c Charts) validate() error {
+	var errs []error
+	if c.Version == "" {
+		errs = append(errs, fmt.Errorf("no version specified"))
+	}
+	if len(c.Entries) == 0 {
+		errs = append(errs, fmt.Errorf("no charts specified"))
+	}
+	for _, key := range slices.Sorted(maps.Keys(c.Entries)) {
+		if err := c.Entries[key].validate(); err != nil {
+			errs = append(errs, fmt.Errorf("chart %s: %w", key, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func (c Chart) validate() error {
+	var errs []error
+	if _, err := name.NewTag(c.Image, name.StrictValidation); err != nil {
+		errs = append(errs, fmt.Errorf("image %q: %w", c.Image, err))
+	}
+	if u, err := url.Parse(c.URL); err != nil || !u.IsAbs() {
+		errs = append(errs, fmt.Errorf("url %q is not absolute", c.URL))
+	}
+	return errors.Join(errs...)
+}
+
+type Artifact struct {
+	Name   string `yaml:"name"`
+	Size   int64  `yaml:"size"`
+	SHA256 string `yaml:"sha256"`
+	URL    string `yaml:"url"`
+}
+
+func (a Artifact) validate() error {
+	var errs []error
+	if a.SHA256 == "" {
+		errs = append(errs, fmt.Errorf("no sha256 specified"))
+	}
+	if u, err := url.Parse(a.URL); err != nil || !u.IsAbs() {
+		errs = append(errs, fmt.Errorf("url %q is not absolute", a.URL))
+	}
+	return errors.Join(errs...)
+}
+
 type Describer struct {
+	Images    ImageDescriber
+	Artifacts ArtifactDescriber
+}
+
+type ImageDescriber struct {
 	Sources []registry.DigestSource
 	Resolve registry.DigestResolver
 }
 
-func (d Describer) describe(released []registry.Component) (map[string]Component, error) {
+func (d ImageDescriber) describe(released []registry.Component) (map[string]Component, error) {
 	out := make(map[string]Component, len(released))
 	var errs []error
 	for _, c := range released {
@@ -168,7 +280,7 @@ func (d Describer) describe(released []registry.Component) (map[string]Component
 	return out, errors.Join(errs...)
 }
 
-func (d Describer) digest(ref string) (string, error) {
+func (d ImageDescriber) digest(ref string) (string, error) {
 	for _, src := range d.Sources {
 		if digest, ok := src.Digest(ref); ok {
 			return digest, nil
@@ -182,4 +294,36 @@ func (d Describer) digest(ref string) (string, error) {
 		logrus.WithField("image", ref).Debug("Not published, leaving its digest out")
 	}
 	return digest, nil
+}
+
+type ArtifactDescriber struct {
+	Files []ArtifactFile
+}
+
+type ArtifactFile struct {
+	Path string
+	URL  string
+}
+
+// The metadata file is left out because it cannot carry its own hash.
+func (d ArtifactDescriber) describe() ([]Artifact, error) {
+	var out []Artifact
+	for _, file := range d.Files {
+		name := filepath.Base(file.Path)
+		if name == metadataFileName {
+			continue
+		}
+		f, err := os.Open(file.Path)
+		if err != nil {
+			return nil, fmt.Errorf("artifact %s: %w", name, err)
+		}
+		h := sha256.New()
+		size, err := io.Copy(h, f)
+		_ = f.Close()
+		if err != nil {
+			return nil, fmt.Errorf("hashing artifact %s: %w", name, err)
+		}
+		out = append(out, Artifact{Name: name, Size: size, SHA256: hex.EncodeToString(h.Sum(nil)), URL: file.URL})
+	}
+	return out, nil
 }

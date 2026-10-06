@@ -85,18 +85,60 @@ func TestMetadataDescribe(t *testing.T) {
 
 	t.Run("fills components from what was released", func(t *testing.T) {
 		m := Metadata{Released: []registry.Component{node}}
-		require.NoError(t, m.describe(Describer{Resolve: resolveTo("sha256:res", true, nil)}))
+		require.NoError(t, m.describe(Describer{Images: ImageDescriber{Resolve: resolveTo("sha256:res", true, nil)}}))
 		require.Equal(t, map[string]Component{
 			"node": {Version: "v3.30.0", Image: "quay.io/calico/node:v3.30.0", Digest: "sha256:res"},
 		}, m.Components)
 	})
 
 	t.Run("keeps released out of the document", func(t *testing.T) {
-		m := Metadata{Version: "v3.30.0", OperatorVersion: "v1.38.0", Released: []registry.Component{node}}
-		require.NoError(t, m.describe(Describer{Resolve: resolveTo("", false, nil)}))
+		m := Metadata{
+			Version:         "v3.30.0",
+			OperatorVersion: "v1.38.0",
+			Source:          Source{Repository: "https://github.com/projectcalico/calico", Commit: "abc123"},
+			Released:        []registry.Component{node},
+		}
+		require.NoError(t, m.describe(Describer{Images: ImageDescriber{Resolve: resolveTo("", false, nil)}}))
 		bs, err := m.attest()
 		require.NoError(t, err)
 		require.NotContains(t, string(bs), "released")
+	})
+
+	t.Run("fills chart digests from the record before resolving", func(t *testing.T) {
+		recorded := registry.NewDigestSource(registry.DigestsByRepo([]string{
+			"quay.io/calico/charts/tigera-operator:v3.30.0@sha256:rec",
+		}))
+		m := Metadata{Charts: &Charts{Version: "v3.30.0", Entries: map[string]Chart{
+			"tigera-operator": {Image: "quay.io/calico/charts/tigera-operator:v3.30.0"},
+			"crds":            {Image: "quay.io/calico/charts/crds:v3.30.0"},
+		}}}
+		require.NoError(t, m.describe(Describer{Images: ImageDescriber{Sources: []registry.DigestSource{recorded}, Resolve: resolveTo("sha256:res", true, nil)}}))
+		require.Equal(t, "sha256:rec", m.Charts.Entries["tigera-operator"].Digest)
+		require.Equal(t, "sha256:res", m.Charts.Entries["crds"].Digest)
+	})
+
+	t.Run("fails on a chart resolve error", func(t *testing.T) {
+		m := Metadata{Charts: &Charts{Version: "v3.30.0", Entries: map[string]Chart{
+			"crds": {Image: "quay.io/calico/charts/crds:v3.30.0"},
+		}}}
+		require.ErrorContains(t, m.describe(Describer{Images: ImageDescriber{Resolve: resolveTo("", false, fmt.Errorf("unauthorized"))}}), "chart crds")
+	})
+
+	t.Run("fills artifacts from the files published", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "release.tgz")
+		require.NoError(t, os.WriteFile(path, []byte("hello"), 0o644))
+		m := Metadata{}
+		require.NoError(t, m.describe(Describer{
+			Images:    ImageDescriber{Resolve: resolveTo("", false, nil)},
+			Artifacts: ArtifactDescriber{Files: []ArtifactFile{{Path: path, URL: "https://example.com/release.tgz"}}},
+		}))
+		require.Len(t, m.Artifacts, 1)
+		require.Equal(t, "https://example.com/release.tgz", m.Artifacts[0].URL)
+	})
+
+	t.Run("fails with no image resolver", func(t *testing.T) {
+		m := Metadata{Released: []registry.Component{node}}
+		require.ErrorContains(t, m.describe(Describer{}), "no image resolver")
 	})
 }
 
@@ -105,6 +147,7 @@ func TestMetadataAttest(t *testing.T) {
 		return Metadata{
 			Version:         "v3.30.0",
 			OperatorVersion: "v1.38.0",
+			Source:          Source{Repository: "https://github.com/projectcalico/calico", Commit: "abc123", Branch: "release-v3.30", Tag: "v3.30.0"},
 			Components: map[string]Component{
 				"operator": {Version: "v1.38.0", Image: "quay.io/tigera/operator:v1.38.0", Digest: "sha256:aaa"},
 				"node":     {Version: "v3.30.0", Image: "quay.io/calico/node:v3.30.0"},
@@ -156,6 +199,77 @@ func TestMetadataAttest(t *testing.T) {
 		}
 	})
 
+	t.Run("leaves out the tag of an untagged build", func(t *testing.T) {
+		m := valid()
+		m.Source.Tag = ""
+		bs, err := m.attest()
+		require.NoError(t, err)
+		require.NotContains(t, string(bs), "tag:")
+	})
+
+	t.Run("rejects a source without a repository or commit", func(t *testing.T) {
+		for desc, src := range map[string]Source{
+			"no repository": {Commit: "abc123"},
+			"no commit":     {Repository: "https://github.com/projectcalico/calico"},
+		} {
+			t.Run(desc, func(t *testing.T) {
+				m := valid()
+				m.Source = src
+				_, err := m.attest()
+				require.ErrorContains(t, err, "source")
+			})
+		}
+	})
+
+	t.Run("leaves out charts when none were released", func(t *testing.T) {
+		bs, err := valid().attest()
+		require.NoError(t, err)
+		require.NotContains(t, string(bs), "charts:")
+	})
+
+	t.Run("renders charts", func(t *testing.T) {
+		m := valid()
+		m.Charts = &Charts{Version: "v3.30.0", Index: "https://example.com/charts", Entries: map[string]Chart{
+			"crds": {Image: "quay.io/calico/charts/crds:v3.30.0", Digest: "sha256:aaa", URL: "https://example.com/crds-v3.30.0.tgz"},
+		}}
+		bs, err := m.attest()
+		require.NoError(t, err)
+		var got Metadata
+		require.NoError(t, yaml.Unmarshal(bs, &got))
+		require.Equal(t, m.Charts, got.Charts)
+	})
+
+	t.Run("rejects incomplete charts", func(t *testing.T) {
+		chart := Chart{Image: "quay.io/calico/charts/crds:v3.30.0", URL: "https://example.com/crds-v3.30.0.tgz"}
+		for desc, c := range map[string]Charts{
+			"no version":   {Entries: map[string]Chart{"crds": chart}},
+			"no entries":   {Version: "v3.30.0"},
+			"no tag":       {Version: "v3.30.0", Entries: map[string]Chart{"crds": {Image: "quay.io/calico/charts/crds", URL: chart.URL}}},
+			"relative url": {Version: "v3.30.0", Entries: map[string]Chart{"crds": {Image: chart.Image, URL: "crds-v3.30.0.tgz"}}},
+		} {
+			t.Run(desc, func(t *testing.T) {
+				m := valid()
+				m.Charts = &c
+				_, err := m.attest()
+				require.ErrorContains(t, err, "charts")
+			})
+		}
+	})
+
+	t.Run("rejects an incomplete artifact", func(t *testing.T) {
+		for desc, a := range map[string]Artifact{
+			"no hash":      {Name: "release.tgz", URL: "https://example.com/release.tgz"},
+			"relative url": {Name: "release.tgz", SHA256: "abc", URL: "release.tgz"},
+		} {
+			t.Run(desc, func(t *testing.T) {
+				m := valid()
+				m.Artifacts = []Artifact{a}
+				_, err := m.attest()
+				require.ErrorContains(t, err, "artifact release.tgz")
+			})
+		}
+	})
+
 	t.Run("rejects a document with no components", func(t *testing.T) {
 		m := valid()
 		m.Components = nil
@@ -164,38 +278,72 @@ func TestMetadataAttest(t *testing.T) {
 	})
 }
 
-func TestDescriberDescribe(t *testing.T) {
+func TestArtifactDescriberDescribe(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) string {
+		path := filepath.Join(dir, name)
+		require.NoError(t, os.WriteFile(path, []byte(body), 0o644))
+		return path
+	}
+	describe := func(files ...ArtifactFile) ([]Artifact, error) {
+		return ArtifactDescriber{Files: files}.describe()
+	}
+
+	t.Run("records each file's size, hash and url", func(t *testing.T) {
+		got, err := describe(ArtifactFile{Path: write("release.tgz", "hello"), URL: "https://example.com/v3.30.0/release.tgz"})
+		require.NoError(t, err)
+		require.Equal(t, []Artifact{{
+			Name:   "release.tgz",
+			Size:   5,
+			SHA256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+			URL:    "https://example.com/v3.30.0/release.tgz",
+		}}, got)
+	})
+
+	t.Run("leaves out the metadata file", func(t *testing.T) {
+		got, err := describe(ArtifactFile{Path: write(metadataFileName, "version: v3.30.0"), URL: "https://example.com/" + metadataFileName})
+		require.NoError(t, err)
+		require.Empty(t, got)
+	})
+
+	t.Run("fails on a file it cannot read", func(t *testing.T) {
+		_, err := describe(ArtifactFile{Path: filepath.Join(dir, "missing.tgz"), URL: "https://example.com/missing.tgz"})
+		require.ErrorContains(t, err, "missing.tgz")
+	})
+}
+
+func TestImageDescriberDescribe(t *testing.T) {
 	node := registry.Component{Registry: "quay.io/calico", Image: "node", Version: "v3.30.0"}
 	recorded := registry.NewDigestSource(registry.DigestsByRepo([]string{
 		"quay.io/calico/node:v3.30.0@sha256:rec",
 	}))
 
 	t.Run("prefers a record to a resolve", func(t *testing.T) {
-		got, err := Describer{Sources: []registry.DigestSource{recorded}, Resolve: resolveTo("", false, fmt.Errorf("must not resolve"))}.describe([]registry.Component{node})
+		got, err := ImageDescriber{Sources: []registry.DigestSource{recorded}, Resolve: resolveTo("", false, fmt.Errorf("must not resolve"))}.describe([]registry.Component{node})
 		require.NoError(t, err)
 		require.Equal(t, Component{Version: "v3.30.0", Image: "quay.io/calico/node:v3.30.0", Digest: "sha256:rec"}, got["node"])
 	})
 
 	t.Run("resolves what no record holds", func(t *testing.T) {
-		got, err := Describer{Resolve: resolveTo("sha256:res", true, nil)}.describe([]registry.Component{node})
+		got, err := ImageDescriber{Resolve: resolveTo("sha256:res", true, nil)}.describe([]registry.Component{node})
 		require.NoError(t, err)
 		require.Equal(t, "sha256:res", got["node"].Digest)
 	})
 
 	t.Run("leaves out the digest of an unpublished image", func(t *testing.T) {
-		got, err := Describer{Resolve: resolveTo("", false, nil)}.describe([]registry.Component{node})
+		got, err := ImageDescriber{Resolve: resolveTo("", false, nil)}.describe([]registry.Component{node})
 		require.NoError(t, err)
 		require.Equal(t, Component{Version: "v3.30.0", Image: "quay.io/calico/node:v3.30.0"}, got["node"])
 	})
 
 	t.Run("fails on a resolve error", func(t *testing.T) {
-		_, err := Describer{Resolve: resolveTo("", false, fmt.Errorf("unauthorized"))}.describe([]registry.Component{node})
+		_, err := ImageDescriber{Resolve: resolveTo("", false, fmt.Errorf("unauthorized"))}.describe([]registry.Component{node})
 		require.ErrorContains(t, err, "quay.io/calico/node:v3.30.0")
 		require.ErrorContains(t, err, "unauthorized")
 	})
 
 	t.Run("rejects a component listed twice", func(t *testing.T) {
-		_, err := Describer{Resolve: resolveTo("sha256:res", true, nil)}.describe([]registry.Component{node, node})
+		_, err := ImageDescriber{Resolve: resolveTo("sha256:res", true, nil)}.describe([]registry.Component{node, node})
 		require.ErrorContains(t, err, "listed twice")
 	})
 }

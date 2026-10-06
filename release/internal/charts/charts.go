@@ -139,6 +139,11 @@ func (c Chart) Version() string {
 	return Version(c.ProductVersion, c.ChartVersion)
 }
 
+// Ref names the chart as pushed to one registry.
+func (c Chart) Ref(reg, name string) string {
+	return unit{chart: name, registry: reg}.repo() + ":" + c.Version()
+}
+
 // FileName is the file one chart is packaged into.
 func FileName(chart, chartVersion string) string {
 	name := chart

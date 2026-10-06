@@ -1688,3 +1688,89 @@ func TestChecksumsAreWrittenOnBothPaths(t *testing.T) {
 		})
 	}
 }
+
+func TestSourceMetadata(t *testing.T) {
+	const headSHA = "0123456789abcdef0123456789abcdef01234567"
+	newManager := func(branch string) *CalicoManager {
+		f := newFakeRunner()
+		f.on("git rev-parse --abbrev-ref HEAD", branch+"\n", nil)
+		f.on("git rev-parse HEAD", headSHA+"\n", nil)
+		return &CalicoManager{runner: f, githubOrg: "projectcalico", repo: "calico", calicoVersion: "v3.30.0"}
+	}
+
+	t.Run("a release records its branch and tag", func(t *testing.T) {
+		got, err := newManager("release-v3.30").sourceMetadata()
+		require.NoError(t, err)
+		require.Equal(t, outputs.Source{Repository: "projectcalico/calico", Commit: headSHA, Branch: "release-v3.30", Tag: "v3.30.0"}, got)
+	})
+
+	t.Run("a hashrelease records no tag", func(t *testing.T) {
+		r := newManager("master")
+		r.isHashRelease = true
+		got, err := r.sourceMetadata()
+		require.NoError(t, err)
+		require.Empty(t, got.Tag)
+		require.Equal(t, "master", got.Branch)
+	})
+
+	t.Run("a detached HEAD records no branch", func(t *testing.T) {
+		got, err := newManager("HEAD").sourceMetadata()
+		require.NoError(t, err)
+		require.Empty(t, got.Branch)
+		require.Equal(t, headSHA, got.Commit)
+	})
+
+	t.Run("fails when git cannot resolve HEAD", func(t *testing.T) {
+		r := &CalicoManager{runner: newFakeRunner().on("git rev-parse HEAD", "", fmt.Errorf("not a git repository"))}
+		_, err := r.sourceMetadata()
+		require.ErrorContains(t, err, "not a git repository")
+	})
+}
+
+func TestChartsMetadata(t *testing.T) {
+	newManager := func() *CalicoManager {
+		return &CalicoManager{
+			helmCharts:     true,
+			helmIndex:      true,
+			helmRepoURL:    "https://example.com/charts",
+			helmRegistries: []string{"quay.io/calico/charts", "docker.io/calico/charts"},
+			calicoVersion:  "v3.30.0",
+		}
+	}
+
+	t.Run("records each chart at the first registry", func(t *testing.T) {
+		got, err := newManager().chartsMetadata()
+		require.NoError(t, err)
+		require.Equal(t, "v3.30.0", got.Version)
+		require.Equal(t, "https://example.com/charts", got.Index)
+		require.Len(t, got.Entries, len(charts.All()))
+		for _, name := range charts.All() {
+			e := got.Entries[name]
+			require.Equal(t, "quay.io/calico/charts/"+name+":v3.30.0", e.Image)
+			require.True(t, strings.HasSuffix(e.URL, "/"+charts.FileName(name, "v3.30.0")), e.URL)
+		}
+	})
+
+	t.Run("leaves out the index when it is not built", func(t *testing.T) {
+		r := newManager()
+		r.helmIndex = false
+		got, err := r.chartsMetadata()
+		require.NoError(t, err)
+		require.Empty(t, got.Index)
+	})
+
+	t.Run("records nothing when charts are off", func(t *testing.T) {
+		r := newManager()
+		r.helmCharts = false
+		got, err := r.chartsMetadata()
+		require.NoError(t, err)
+		require.Nil(t, got)
+	})
+
+	t.Run("fails with no registry to name the charts by", func(t *testing.T) {
+		r := newManager()
+		r.helmRegistries = nil
+		_, err := r.chartsMetadata()
+		require.Error(t, err)
+	})
+}

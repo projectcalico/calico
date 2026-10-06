@@ -662,6 +662,22 @@ func TestFileName(t *testing.T) {
 	}
 }
 
+func TestChartRef(t *testing.T) {
+	t.Run("names the chart in the registry at its version", func(t *testing.T) {
+		c := Chart{ProductVersion: "v3.30.0"}
+		if got, want := c.Ref("quay.io/calico/charts", "chart-one"), "quay.io/calico/charts/chart-one:v3.30.0"; got != want {
+			t.Errorf("Ref = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("tags with the chart version, not the product version", func(t *testing.T) {
+		c := Chart{ProductVersion: "v3.30.0", ChartVersion: "1"}
+		if got, want := c.Ref("quay.io/calico/charts", "chart-one"), "quay.io/calico/charts/chart-one:v3.30.0-1"; got != want {
+			t.Errorf("Ref = %q, want %q", got, want)
+		}
+	})
+}
+
 func TestDir(t *testing.T) {
 	if got, want := Dir("out"), "out/charts"; got != want {
 		t.Errorf("Dir = %q, want %q", got, want)
