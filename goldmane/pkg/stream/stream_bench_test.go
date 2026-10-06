@@ -88,11 +88,24 @@ func benchFlow(i int, start int64) *types.Flow {
 // not the producer filters.
 type sentinel struct{}
 
-func (sentinel) BuildInto(*proto.Filter, *proto.FlowResult) bool { return false }
+var _ storage.FlowBuilder = sentinel{}
+
+func (sentinel) BuildInto(*proto.Filter, *proto.FlowResult) bool {
+	return false
+}
 
 type sentinelProvider struct{}
 
-func (sentinelProvider) Iter(_ *proto.Filter, fn func(storage.FlowBuilder) bool) { fn(sentinel{}) }
+var _ storage.FlowProvider = sentinelProvider{}
+
+func (sentinelProvider) Iter(_ *proto.Filter, fn func(storage.FlowBuilder) bool) {
+	fn(sentinel{})
+}
+
+type benchFilter struct {
+	name   string
+	filter *proto.Filter
+}
 
 type benchConsumer struct {
 	stream stream.Stream
@@ -130,10 +143,7 @@ func BenchmarkStreamEndToEnd(b *testing.B) {
 	const numFlows = 5000
 	bucketStart := int64(benchNow - 3)
 
-	filters := []struct {
-		name   string
-		filter *proto.Filter
-	}{
+	filters := []benchFilter{
 		{"nil", nil},
 		{"empty", &proto.Filter{}},
 		{"ns10pct", &proto.Filter{SourceNamespaces: []*proto.StringMatch{{Value: "ns-3", Type: proto.MatchType_Exact}}}},
@@ -145,19 +155,19 @@ func BenchmarkStreamEndToEnd(b *testing.B) {
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 
-				mgr := stream.NewStreamManager()
-				go mgr.Run(ctx)
+				streams := stream.NewStreamManager()
+				go streams.Run(ctx)
 
 				clk := func() time.Time { return time.Unix(benchNow, 0) }
-				ring := storage.NewBucketRing(20, 1, benchNow, storage.WithStreamReceiver(mgr), storage.WithNowFunc(clk))
+				ring := storage.NewBucketRing(20, 1, benchNow, storage.WithStreamReceiver(streams), storage.WithNowFunc(clk))
 				for i := range numFlows {
 					ring.AddFlow(storage.FlowFromNode{Flow: benchFlow(i, bucketStart)})
 				}
 
 				var consumers []*benchConsumer
 				for range numStreams {
-					s := <-mgr.Register(&proto.FlowStreamRequest{Filter: f.filter}, 484)
-					<-mgr.Backfills()
+					s := <-streams.Register(&proto.FlowStreamRequest{Filter: f.filter}, 484)
+					<-streams.Backfills()
 					c := &benchConsumer{stream: s, filter: f.filter, done: make(chan struct{}, 1)}
 					consumers = append(consumers, c)
 					go c.run(ctx)
@@ -173,8 +183,8 @@ func BenchmarkStreamEndToEnd(b *testing.B) {
 				for b.Loop() {
 					var wg sync.WaitGroup
 					for _, c := range consumers {
-						ring.Backfill(mgr, c.stream.ID(), bucketStart)
-						mgr.Receive(sentinelProvider{}, c.stream.ID())
+						ring.Backfill(streams, c.stream.ID(), bucketStart)
+						streams.Receive(sentinelProvider{}, c.stream.ID())
 						wg.Go(func() { <-c.done })
 					}
 					wg.Wait()
