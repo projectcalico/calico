@@ -1,4 +1,4 @@
-// Copimright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
 package storage
 
 import (
+	"iter"
+	"slices"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -30,14 +32,14 @@ type simpleLogAggregatorStub struct {
 	diachronics []*DiachronicFlow
 }
 
-func (l simpleLogAggregatorStub) FlowSet(startGt, startLt int64) set.Set[*DiachronicFlow] {
-	s := set.New[*DiachronicFlow]()
+func (l simpleLogAggregatorStub) FlowCandidates(startGt, startLt int64) (iter.Seq[*DiachronicFlow], int) {
+	var within []*DiachronicFlow
 	for _, d := range l.diachronics {
 		if d.Within(startGt, startLt) {
-			s.Add(d)
+			within = append(within, d)
 		}
 	}
-	return s
+	return slices.Values(within), len(within)
 }
 
 func setupTest(t *testing.T) func() {
@@ -569,7 +571,7 @@ func TestRingIndexPagination_General(t *testing.T) {
 				&types.FlowKeyMeta{},
 				&proto.PolicyTrace{},
 			),
-			Windows: []Window{},
+			windows: []Window{},
 		},
 		{
 			ID: 1,
