@@ -99,6 +99,13 @@ func TestRingListPartialBucket(t *testing.T) {
 	require.Equal(t, int64(1), flows[0].PacketsIn)
 }
 
+type candidateRangeCase struct {
+	name       string
+	gte        int64
+	wantOld    int
+	wantRecent int
+}
+
 // TestRingListCandidateRanges covers both ways the ring gathers candidates: walking the
 // buckets in a narrow range, and scanning every flow when the range's buckets hold most of them.
 func TestRingListCandidateRanges(t *testing.T) {
@@ -116,12 +123,7 @@ func TestRingListCandidateRanges(t *testing.T) {
 		}
 	}
 
-	for _, tc := range []struct {
-		name       string
-		gte        int64
-		wantOld    int
-		wantRecent int
-	}{
+	for _, tc := range []candidateRangeCase{
 		{name: "two buckets, walked", gte: newest - pagingInterval, wantRecent: 10},
 		{name: "six buckets, scanned and filtered by time", gte: newest - 5*pagingInterval, wantRecent: 10},
 		{name: "the whole ring", gte: old, wantOld: 10, wantRecent: 10},
