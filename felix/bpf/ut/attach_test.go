@@ -1446,8 +1446,8 @@ func TestAttachNetkit(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 }
 
-// A ready workload attached through a TCX or netkit link must not be
-// re-attached by an apply that changes nothing.
+// A ready workload attached through a TCX or netkit link is kept by an apply
+// that changes nothing, and repaired when one hook loses its link.
 func TestReadyLinkAttachmentIsKept(t *testing.T) {
 	for _, tcase := range []struct {
 		name       string
@@ -1461,6 +1461,9 @@ func TestReadyLinkAttachmentIsKept(t *testing.T) {
 			RegisterTestingT(t)
 			if tcase.netkit && !tc.IsNetkitSupported() {
 				t.Skip("Netkit not supported on this kernel")
+			}
+			if !tcase.netkit && !tc.IsTcxSupported() {
+				t.Skip("TCX not supported on this kernel")
 			}
 
 			bpfmaps, err := bpfmap.CreateBPFMaps(false)
@@ -1512,6 +1515,25 @@ func TestReadyLinkAttachmentIsKept(t *testing.T) {
 			bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, ifindex))
 			Expect(bpfEpMgr.CompleteDeferredWork()).To(Succeed())
 			Expect(attachedLinkProgIDs(ifindex, tcase.netkit)).To(Equal(before))
+
+			pinDir := bpfdefs.TcxPinDir
+			if tcase.netkit {
+				pinDir = bpfdefs.NetkitPinDir
+			}
+			for i, h := range []hook.Hook{hook.Ingress, hook.Egress} {
+				pin := path.Join(pinDir, "workloadep0_"+h.String())
+				link, err := libbpf.OpenLink(pin)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Detach()).To(Succeed())
+				link.Close()
+				Expect(os.Remove(pin)).To(Succeed())
+
+				bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, ifindex))
+				Expect(bpfEpMgr.CompleteDeferredWork()).To(Succeed())
+				after := attachedLinkProgIDs(ifindex, tcase.netkit)
+				Expect(after[i]).NotTo(Equal(before[i]), "%s preamble was not re-attached", h)
+				before = after
+			}
 		})
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 
@@ -98,6 +99,9 @@ type AttachPoint struct {
 // API — Felix sets Netkit=true on the AttachPoint when it detects a netkit
 // device and derives this string from that flag.
 const AttachOptionNetkit = "Netkit"
+
+// preambleProgName is the preamble's program name as the kernel truncates it.
+const preambleProgName = "cali_tc_preambl"
 
 // IsNetkit reports whether this attach point targets a netkit device.
 func (ap *AttachPoint) IsNetkit() bool {
@@ -428,18 +432,25 @@ func ListAttachedTcxPrograms(iface, attachHook string) ([]string, error) {
 	return progNames(progId, progCnt), nil
 }
 
-// ListAttachedNetkitPrograms returns the names of the programs attached to a
-// netkit device's hook; ingress is the peer side, as in attachNetkitProgram.
-func ListAttachedNetkitPrograms(iface, attachHook string) ([]string, error) {
-	link, err := netlink.LinkByName(iface)
-	if err != nil {
-		return nil, fmt.Errorf("error getting link for %s:%w", iface, err)
+// PreambleAttached reports whether the preamble is attached to ap's hook,
+// querying the mechanism AttachProgram uses.
+func (ap *AttachPoint) PreambleAttached() (bool, error) {
+	ingress := ap.Hook == hook.Ingress
+	query := libbpf.ProgQueryTcx
+	switch {
+	case ap.IsNetkit():
+		query = libbpf.ProgQueryNetkit // Ingress is the peer side.
+	case ap.AttachType != apiv3.BPFAttachOptionTCX:
+		progs, err := ListAttachedPrograms(ap.Iface, ap.Hook.String(), false)
+		return len(progs) > 0, err
 	}
-	progId, _, progCnt, err := libbpf.ProgQueryNetkit(link.Attrs().Index, attachHook == hook.Ingress.String())
+	progId, _, progCnt, err := query(ap.IfIndex, ingress)
 	if err != nil {
-		return nil, fmt.Errorf("error querying program for %s:%s:%w", iface, attachHook, err)
+		return false, fmt.Errorf("error querying programs for %s:%s: %w", ap.Iface, ap.Hook, err)
 	}
-	return progNames(progId, progCnt), nil
+	return slices.ContainsFunc(progNames(progId, progCnt), func(name string) bool {
+		return strings.Contains(name, preambleProgName)
+	}), nil
 }
 
 func progNames(progId [64]uint32, progCnt uint32) []string {
@@ -478,7 +489,7 @@ func ListAttachedPrograms(iface, hook string, includeLegacy bool) ([]attachedPro
 		if !ok {
 			continue
 		}
-		if strings.Contains(bpfFilter.Name, "cali_tc_preambl") || (includeLegacy && strings.Contains(bpfFilter.Name, "calico")) {
+		if strings.Contains(bpfFilter.Name, preambleProgName) || (includeLegacy && strings.Contains(bpfFilter.Name, "calico")) {
 			p := attachedProg{
 				Pref:   int(bpfFilter.Attrs().Priority),
 				Handle: bpfFilter.Attrs().Handle,
