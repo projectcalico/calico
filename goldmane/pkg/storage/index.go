@@ -97,18 +97,20 @@ func (idx *index[E]) SortValueSet(opts IndexFindOpts) ([]E, types.ListMeta) {
 	var matchedValues []E
 	var totalMatchedCount int
 	pageStart := int(opts.page * opts.pageSize)
-	var previousSortValue *E
+	var previousSortValue E
+	var seenAny bool
 
 	idx.diachronics.Ascend(func(diachronic *DiachronicFlow) bool {
 		if !idx.matches(diachronic, opts) {
 			return true
 		}
+
 		// Equal sort values are adjacent, so a value matching the previous one has already been counted.
 		sortValue := idx.sortValueFunc(&diachronic.Key)
-		if previousSortValue != nil && sortValue == *previousSortValue {
+		if seenAny && sortValue == previousSortValue {
 			return true
 		}
-		previousSortValue = &sortValue
+		previousSortValue, seenAny = sortValue, true
 		totalMatchedCount++
 		if totalMatchedCount > pageStart && (opts.pageSize == 0 || int64(len(matchedValues)) < opts.pageSize) {
 			matchedValues = append(matchedValues, sortValue)
