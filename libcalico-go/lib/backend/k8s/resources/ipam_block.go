@@ -382,14 +382,8 @@ func parseKey(k model.Key) (name, cidr string) {
 	return
 }
 
-// IPAMBlockV3toV1 is a helper function to convert a v3 IPAMBlock KVPair to a v1 KVPair.
-// It is only used in the remote cluster felix syncer, and for backwards compatibility always
-// uses the internalapi types.
-func IPAMBlockV1toV3(kvp *model.KVPair) *model.KVPair {
-	c := &ipamBlockClient{v3: false}
-	return c.IPAMBlockV1toV3(kvp)
-}
-
+// IPAMBlockV3toV1 converts an IPAMBlock KVPair to the v1 AllocationBlock model, for
+// callers that read blocks through an informer rather than the backend client.
 func IPAMBlockV3toV1(kvp *model.KVPair) (*model.KVPair, error) {
 	c := &ipamBlockClient{v3: false}
 	return c.IPAMBlockV3toV1(kvp)
