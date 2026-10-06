@@ -525,11 +525,11 @@ func TestVerbs(t *testing.T) {
 		}
 
 		want := []string{
-			"quay.io/a/operator@sha256:a",
-			"quay.io/a/operator@sha256:a-arm64",
-			"quay.io/b/operator@sha256:b",
-			"quay.io/a/operator-alt@sha256:alt",
-			"quay.io/b/operator-alt@sha256:alt-arm64",
+			"quay.io/a/operator:v1.44.0@sha256:a",
+			"quay.io/a/operator:v1.44.0-arm64@sha256:a-arm64",
+			"quay.io/b/operator:v1.44.0@sha256:b",
+			"quay.io/a/operator-alt:v1.44.0@sha256:alt",
+			"quay.io/b/operator-alt:v1.44.0-arm64@sha256:alt-arm64",
 		}
 		if diff := cmp.Diff(want, rec.refs); diff != "" {
 			t.Errorf("refs mismatch (-want +got):\n%s", diff)
@@ -544,7 +544,7 @@ func TestVerbs(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected an error, got nil")
 		}
-		if diff := cmp.Diff([]string{"quay.io/a/operator@sha256:a"}, rec.refs); diff != "" {
+		if diff := cmp.Diff([]string{"quay.io/a/operator:v1.44.0@sha256:a"}, rec.refs); diff != "" {
 			t.Errorf("refs mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -805,7 +805,7 @@ func TestResolve(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		want := []string{"quay.io/a/operator@sha256:a", "quay.io/a/operator@sha256:a-arm64", "quay.io/a/operator-alt@sha256:alt"}
+		want := []string{"quay.io/a/operator:v1.44.0@sha256:a", "quay.io/a/operator:v1.44.0-arm64@sha256:a-arm64", "quay.io/a/operator-alt:v1.44.0@sha256:alt"}
 		if diff := cmp.Diff(want, rec.refs); diff != "" {
 			t.Errorf("refs mismatch (-want +got):\n%s", diff)
 		}
@@ -825,7 +825,7 @@ func TestResolve(t *testing.T) {
 		if diff := cmp.Diff([]string{"quay.io/a/operator:v1.44.0"}, missing); diff != "" {
 			t.Errorf("missing mismatch (-want +got):\n%s", diff)
 		}
-		if diff := cmp.Diff([]string{"quay.io/a/operator-alt@sha256:alt"}, rec.refs); diff != "" {
+		if diff := cmp.Diff([]string{"quay.io/a/operator-alt:v1.44.0@sha256:alt"}, rec.refs); diff != "" {
 			t.Errorf("refs mismatch (-want +got):\n%s", diff)
 		}
 	})

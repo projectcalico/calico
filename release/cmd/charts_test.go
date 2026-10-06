@@ -241,7 +241,7 @@ func TestChartsPublishLocalPushesNothing(t *testing.T) {
 func TestChartsPublishLocalRecordsNothing(t *testing.T) {
 	_, cfg := runCharts(t, "publish", "--local", "--helm-registry", chartsCLIRegistry)
 
-	refs, err := outputs.ReadRefs(cfg.OutputDir, charts.PublishStep, chartsCLIChartVersion)
+	refs, err := outputs.ReadRefs(outputs.RecordsDir(cfg.OutputDir, chartsCLITestVersion), charts.PublishStep)
 	if err != nil {
 		t.Fatalf("reading refs: %v", err)
 	}
@@ -253,14 +253,14 @@ func TestChartsPublishLocalRecordsNothing(t *testing.T) {
 func TestChartsPublishRecordsWhatItPushed(t *testing.T) {
 	_, cfg := runCharts(t, "publish", "--helm-registry", chartsCLIRegistry)
 
-	refs, err := outputs.ReadRefs(cfg.OutputDir, charts.PublishStep, chartsCLIChartVersion)
+	refs, err := outputs.ReadRefs(outputs.RecordsDir(cfg.OutputDir, chartsCLITestVersion), charts.PublishStep)
 	if err != nil {
 		t.Fatalf("reading refs: %v", err)
 	}
 	if len(refs) != len(charts.All()) {
 		t.Fatalf("expected one ref per chart, got %d: %v", len(refs), refs)
 	}
-	want := chartsCLIRegistry + "/" + chartsCLIFirstChart(t) + "@" + chartsCLIDigest
+	want := chartsCLIRegistry + "/" + chartsCLIFirstChart(t) + ":" + chartsCLIChartVersion + "@" + chartsCLIDigest
 	if !slices.Contains(refs, want) {
 		t.Errorf("expected %q in the record, got %v", want, refs)
 	}
@@ -422,7 +422,7 @@ func TestHashreleaseChartDirMatchesTheHashreleaseFlow(t *testing.T) {
 }
 
 // A product may qualify its charts with a suffix, so the chart version and the
-// product version differ. The build stamps and the publish record must both
+// product version differ. The build stamps and the recorded tags must both
 // follow the resolved chart version, not the product one.
 func TestChartsFollowTheResolvedChartVersion(t *testing.T) {
 	const suffix = "0"
@@ -446,12 +446,16 @@ func TestChartsFollowTheResolvedChartVersion(t *testing.T) {
 	}
 
 	runChartsIn(t, cfg, "publish", "--helm-registry", chartsCLIRegistry)
-	// A missing record reads as empty rather than an error, so count the refs.
-	refs, err := outputs.ReadRefs(cfg.OutputDir, charts.PublishStep, resolved)
+	refs, err := outputs.ReadRefs(outputs.RecordsDir(cfg.OutputDir, chartsCLITestVersion), charts.PublishStep)
 	if err != nil {
 		t.Fatalf("reading refs: %v", err)
 	}
 	if len(refs) != len(charts.All()) {
-		t.Errorf("record under %s has %d refs, want %d", resolved, len(refs), len(charts.All()))
+		t.Errorf("record has %d refs, want %d", len(refs), len(charts.All()))
+	}
+	for _, ref := range refs {
+		if !strings.Contains(ref, ":"+resolved+"@") {
+			t.Errorf("ref %s is not tagged with the chart version %s", ref, resolved)
+		}
 	}
 }

@@ -25,7 +25,7 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"github.com/projectcalico/calico/release/internal/steps"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/yamledit"
 )
 
@@ -123,7 +123,7 @@ func hasEnv(env []string, want string) bool {
 }
 
 // A resolver answering every chart alike cannot catch a skip of the wrong one.
-func resolvesPerChart(digests map[string]string) steps.DigestResolver {
+func resolvesPerChart(digests map[string]string) registry.DigestResolver {
 	return func(ref string) (string, bool, error) {
 		for chart, digest := range digests {
 			if strings.Contains(ref, "/"+chart+":") {
@@ -551,8 +551,8 @@ func TestPublishRecordsWhatItPushed(t *testing.T) {
 	}
 
 	want := []string{
-		"quay.test/charts/chart-one@sha256:aaa",
-		"quay.test/charts/chart-two@sha256:bbb",
+		"quay.test/charts/chart-one:v3.30.0@sha256:aaa",
+		"quay.test/charts/chart-two:v3.30.0@sha256:bbb",
 	}
 	if !slices.Equal(rec.refs, want) {
 		t.Errorf("recorded refs:\n got %v\nwant %v", rec.refs, want)
@@ -662,6 +662,22 @@ func TestFileName(t *testing.T) {
 	}
 }
 
+func TestChartRef(t *testing.T) {
+	t.Run("names the chart in the registry at its version", func(t *testing.T) {
+		c := Chart{ProductVersion: "v3.30.0"}
+		if got, want := c.Ref("quay.io/calico/charts", "chart-one"), "quay.io/calico/charts/chart-one:v3.30.0"; got != want {
+			t.Errorf("Ref = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("tags with the chart version, not the product version", func(t *testing.T) {
+		c := Chart{ProductVersion: "v3.30.0", ChartVersion: "1"}
+		if got, want := c.Ref("quay.io/calico/charts", "chart-one"), "quay.io/calico/charts/chart-one:v3.30.0-1"; got != want {
+			t.Errorf("Ref = %q, want %q", got, want)
+		}
+	})
+}
+
 func TestDir(t *testing.T) {
 	if got, want := Dir("out"), "out/charts"; got != want {
 		t.Errorf("Dir = %q, want %q", got, want)
@@ -697,8 +713,8 @@ func TestPublishResumeJudgesEachChartByItsOwnDigest(t *testing.T) {
 			"chart-two": "sha256:zzz",
 		})),
 		WithResume([]string{
-			"quay.test/charts/chart-one@sha256:aaa",
-			"quay.test/charts/chart-two@sha256:bbb",
+			"quay.test/charts/chart-one:v3.30.0@sha256:aaa",
+			"quay.test/charts/chart-two:v3.30.0@sha256:bbb",
 		}, false))
 	if err == nil {
 		t.Fatal("expected chart-two's moved digest to fail the publish")
@@ -728,7 +744,7 @@ func TestPublishRecordsPartialRefsWhenALookupFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected the failed lookup to be reported")
 	}
-	want := "quay.test/charts/chart-one@sha256:aaa"
+	want := "quay.test/charts/chart-one:v3.30.0@sha256:aaa"
 	if !slices.Contains(rec.refs, want) {
 		t.Errorf("expected %q recorded despite the failure, got %v", want, rec.refs)
 	}

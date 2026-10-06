@@ -26,6 +26,8 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/docs"
 	"github.com/projectcalico/calico/release/internal/github"
+	"github.com/projectcalico/calico/release/internal/outputs"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/yamledit"
@@ -137,6 +139,11 @@ func (c Chart) Version() string {
 	return Version(c.ProductVersion, c.ChartVersion)
 }
 
+// Ref names the chart as pushed to one registry.
+func (c Chart) Ref(reg, name string) string {
+	return unit{chart: name, registry: reg}.repo() + ":" + c.Version()
+}
+
 // FileName is the file one chart is packaged into.
 func FileName(chart, chartVersion string) string {
 	name := chart
@@ -202,7 +209,7 @@ type settings struct {
 
 	refs steps.RefRecorder
 
-	resolve steps.DigestResolver
+	resolve registry.DigestResolver
 
 	// resume is the record an earlier run left, and how to check it.
 	resume *resume
@@ -325,7 +332,7 @@ func WithRecord(rec steps.RefRecorder) PublishOption {
 	})
 }
 
-func WithResolver(resolve steps.DigestResolver) PublishOption {
+func WithResolver(resolve registry.DigestResolver) PublishOption {
 	return publishSetting(func(s *settings) error {
 		if resolve == nil {
 			return fmt.Errorf("no resolver to read published digests")
@@ -370,4 +377,8 @@ var ValueEditsFor = func(productVersion, productRegistry, operatorImage, operato
 	return append(slices.Clone(calicoChartEdits(productVersion, productRegistry)),
 		operatorChartEdits(productVersion, productRegistry, operatorImage, operatorVersion, operatorRegistry)...,
 	)
+}
+
+func DigestSource(recordsDir string) (registry.DigestSource, error) {
+	return outputs.DigestSourceFor(recordsDir, PublishStep)
 }
