@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -34,9 +35,9 @@ import (
 
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/informerutil"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -63,15 +64,14 @@ const (
 type IPPoolController struct {
 	ctx context.Context
 
-	// For syncing node objects from the k8s API.
-	poolInformer        cache.SharedIndexInformer
-	blockInformer       cache.SharedIndexInformer
-	reservationInformer cache.SharedIndexInformer
+	poolInformer cache.SharedIndexInformer
 
-	// Per-pool utilization, kept current by the informer handlers.
+	// tracker is the process's shared IPAM accounting, kept current by the data feed. Its counts are partial until
+	// inSync.
 	tracker *accounting.Tracker
+	inSync  atomic.Bool
 
-	// handlersSynced reports when each handler has delivered its informer's initial list to the tracker.
+	// handlersSynced reports when the pool handler and the data feed have each delivered their initial state.
 	handlersSynced []cache.InformerSynced
 
 	cli   clientset.Interface
@@ -83,132 +83,69 @@ func NewController(
 	ctx context.Context,
 	cli clientset.Interface,
 	poolInformer cache.SharedIndexInformer,
-	blockInformer cache.SharedIndexInformer,
-	reservationInformer cache.SharedIndexInformer,
+	dataFeed *utils.DataFeed,
+	tracker *accounting.Tracker,
 	ipam ipam.Interface,
 ) controller.Controller {
 	c := &IPPoolController{
-		ctx:                 ctx,
-		cli:                 cli,
-		poolInformer:        poolInformer,
-		blockInformer:       blockInformer,
-		reservationInformer: reservationInformer,
-		tracker:             accounting.NewTracker(),
-		ipam:                ipam,
-		queue:               workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]()),
+		ctx:          ctx,
+		cli:          cli,
+		poolInformer: poolInformer,
+		tracker:      tracker,
+		ipam:         ipam,
+		queue:        workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]()),
 	}
 
 	poolReg, err := poolInformer.AddEventHandler(c.poolHandlers())
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to register event handler for IPPool")
 	}
-	blockReg, err := blockInformer.AddEventHandler(c.blockHandlers())
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to register event handler for IPAMBlock")
-	}
-	reservationReg, err := reservationInformer.AddEventHandler(c.reservationHandlers())
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to register event handler for IPReservation")
-	}
-	c.handlersSynced = []cache.InformerSynced{poolReg.HasSynced, blockReg.HasSynced, reservationReg.HasSynced}
+	dataFeed.RegisterForSyncStatus(c.onStatusUpdate)
+	dataFeed.RegisterForNotification(model.BlockKey{}, c.onBlockUpdate)
+	dataFeed.RegisterForNotification(model.ResourceKey{}, c.onResourceUpdate)
+	c.handlersSynced = []cache.InformerSynced{poolReg.HasSynced, c.inSync.Load}
 
 	return c
 }
 
-// poolHandlers keep the tracker current and enqueue the sentinel key, letting the workqueue collapse bursts into one pass.
+// poolHandlers enqueue the sentinel key, letting the workqueue collapse bursts into one pass.
 func (c *IPPoolController) poolHandlers() cache.ResourceEventHandlerFuncs {
-	add := func(obj any) {
-		if p, ok := obj.(*v3.IPPool); ok {
-			c.tracker.AddPools(p)
-		}
+	return cache.ResourceEventHandlerFuncs{
+		AddFunc:    func(any) { c.queue.Add(reconcileKey) },
+		UpdateFunc: func(_, _ any) { c.queue.Add(reconcileKey) },
+		DeleteFunc: func(any) { c.queue.Add(reconcileKey) },
+	}
+}
+
+// The data feed handlers run on the syncer goroutine, after the IPAMFeed has applied the same update to the tracker.
+func (c *IPPoolController) onStatusUpdate(status bapi.SyncStatus) {
+	c.inSync.Store(status == bapi.InSync)
+	if status == bapi.InSync {
 		c.queue.Add(reconcileKey)
 	}
-	return cache.ResourceEventHandlerFuncs{
-		AddFunc:    add,
-		UpdateFunc: func(_, newObj any) { add(newObj) },
-		DeleteFunc: func(obj any) {
-			if name, err := cache.DeletionHandlingObjectToName(obj); err != nil {
-				logrus.WithError(err).Error("Failed to get name of deleted IPPool")
-			} else {
-				c.tracker.RemovePool(name.Name)
-			}
-			c.queue.Add(reconcileKey)
-		},
-	}
 }
 
-func (c *IPPoolController) blockHandlers() cache.ResourceEventHandlerFuncs {
-	add := func(obj any) {
-		block, ok := toAllocationBlock(obj)
-		if !ok {
-			return
-		}
-		c.tracker.AddBlocks(block)
+func (c *IPPoolController) onBlockUpdate(update bapi.Update) {
+	if update.Value == nil {
+		// Block deletions can unblock finalization of a deleting pool, so reconcile straight away.
+		c.queue.Add(reconcileKey)
+		return
+	}
+	c.queue.AddAfter(reconcileKey, utilizationDelay)
+}
+
+func (c *IPPoolController) onResourceUpdate(update bapi.Update) {
+	key, ok := update.Key.(model.ResourceKey)
+	if !ok {
+		return
+	}
+	switch key.Kind {
+	case v3.KindIPPool:
+		// The tracker sees a pool's new status here, which can lag the informer's copy.
+		c.queue.Add(reconcileKey)
+	case v3.KindIPReservation:
 		c.queue.AddAfter(reconcileKey, utilizationDelay)
 	}
-	return cache.ResourceEventHandlerFuncs{
-		AddFunc:    add,
-		UpdateFunc: func(_, newObj any) { add(newObj) },
-		DeleteFunc: func(obj any) {
-			block, err := informerutil.DeletedObject[*v3.IPAMBlock](obj)
-			if err != nil {
-				logrus.WithError(err).Error("Skipping IPAMBlock delete event")
-				return
-			}
-			_, cidr, err := cnet.ParseCIDR(block.Spec.CIDR)
-			if err != nil {
-				logrus.WithError(err).WithField("cidr", block.Spec.CIDR).Error("Failed to parse CIDR from deleted IPAMBlock")
-				return
-			}
-			c.tracker.RemoveBlock(*cidr)
-
-			// Block deletions can unblock finalization of a deleting pool, so reconcile straight away.
-			c.queue.Add(reconcileKey)
-		},
-	}
-}
-
-func (c *IPPoolController) reservationHandlers() cache.ResourceEventHandlerFuncs {
-	add := func(obj any) {
-		reservation, ok := obj.(*v3.IPReservation)
-		if !ok {
-			return
-		}
-		c.tracker.AddReservations(reservation)
-		c.queue.AddAfter(reconcileKey, utilizationDelay)
-	}
-	return cache.ResourceEventHandlerFuncs{
-		AddFunc:    add,
-		UpdateFunc: func(_, newObj any) { add(newObj) },
-		DeleteFunc: func(obj any) {
-			name, err := cache.DeletionHandlingObjectToName(obj)
-			if err != nil {
-				logrus.WithError(err).Error("Failed to get name of deleted IPReservation")
-				return
-			}
-			c.tracker.RemoveReservation(name.Name)
-			c.queue.AddAfter(reconcileKey, utilizationDelay)
-		},
-	}
-}
-
-func toAllocationBlock(obj any) (*model.AllocationBlock, bool) {
-	block, ok := obj.(*v3.IPAMBlock)
-	if !ok {
-		logrus.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in IPAMBlock cache")
-		return nil, false
-	}
-	kvp, err := resources.IPAMBlockV3toV1(&model.KVPair{Value: block})
-	if err != nil {
-		logrus.WithError(err).WithField("block", block.Name).Error("Failed to convert IPAMBlock")
-		return nil, false
-	}
-	allocationBlock, ok := kvp.Value.(*model.AllocationBlock)
-	if !ok {
-		logrus.WithField("type", fmt.Sprintf("%T", kvp.Value)).Error("Unexpected IPAMBlock conversion result")
-		return nil, false
-	}
-	return allocationBlock, true
 }
 
 // Run starts the IP pool controller. It does start-of-day preparation
@@ -219,8 +156,8 @@ func (c *IPPoolController) Run(stopCh chan struct{}) {
 
 	logrus.Info("Starting IPPool controller")
 
-	// An informer syncs before its handlers have fed the tracker. Waiting on the handlers stops the first reconcile from
-	// undercounting a pool and dropping its nearly-full condition.
+	// The first reconcile waits for the tracker's full state, or it would undercount a pool and drop its nearly-full
+	// condition, or finalize a pool whose blocks it has yet to see.
 	logrus.Debug("Waiting to sync with Kubernetes API")
 	if !cache.WaitForNamedCacheSync("pools", stopCh, c.handlersSynced...) {
 		logrus.Info("Failed to sync resources, received signal for controller to shut down.")
@@ -280,9 +217,11 @@ func (c *IPPoolController) reconcile() error {
 		errs = append(errs, err)
 	}
 
-	// The tracker learns of a CIDROverlap change when the pool's status update reaches the informer, and until then
-	// credits blocks to the wrong pool. That update queues the next pass.
-	if overlapChanged {
+	if !c.inSync.Load() {
+		logrus.Debug("IPAM data feed not in sync; leaving AddressSpaceNearlyFull for now")
+	} else if overlapChanged {
+		// The tracker learns of a CIDROverlap change when the pool's status update reaches the data feed, and until
+		// then credits blocks to the wrong pool. That update queues the next pass.
 		logrus.Debug("CIDROverlap changed; leaving AddressSpaceNearlyFull to the next pass")
 	} else if err := c.reconcileNearlyFull(c.ctx, pools); err != nil {
 		errs = append(errs, err)
@@ -528,8 +467,13 @@ func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logru
 		return err
 	}
 
+	if !c.inSync.Load() {
+		logCtx.Info("IPAM data feed not in sync, not removing finalizer")
+		return nil
+	}
+
 	// If there are no IPAM blocks left in this pool, it is safe to remove our finalizer.
-	if c.blocksInPool(*parsedNet) {
+	if c.tracker.HasBlocksWithin(*parsedNet) {
 		logCtx.Info("IPAM blocks still exist in pool, not removing finalizer")
 		return nil
 	}
@@ -553,28 +497,6 @@ func (c *IPPoolController) updateFinalizers(ctx context.Context, p *v3.IPPool, f
 
 func withoutFinalizer(p *v3.IPPool) []string {
 	return slices.DeleteFunc(slices.Clone(p.Finalizers), func(s string) bool { return s == IPPoolFinalizer })
-}
-
-// blocksInPool is whether any block lies inside the CIDR, whichever pool the tracker credits it to. A narrower pool
-// inside a deleting one can win a block whose addresses are still in use.
-func (c *IPPoolController) blocksInPool(cidr cnet.IPNet) bool {
-	for _, obj := range c.blockInformer.GetIndexer().List() {
-		block, ok := obj.(*v3.IPAMBlock)
-		if !ok {
-			logrus.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in IPAMBlock cache")
-			continue
-		}
-		_, parsedNet, err := cnet.ParseCIDR(block.Spec.CIDR)
-		if err != nil {
-			logrus.WithError(err).WithField("cidr", block.Spec.CIDR).Error("Failed to parse CIDR from IPAMBlock")
-			continue
-		}
-		if cidr.Contains(parsedNet.IP) {
-			logrus.WithField("cidr", cidr.String()).WithField("block", block.Spec.CIDR).Debug("Found IPAMBlock in pool")
-			return true
-		}
-	}
-	return false
 }
 
 func hasFinalizer(p *v3.IPPool) bool {

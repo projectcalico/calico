@@ -401,6 +401,19 @@ func (t *Tracker) BlockPool(cidr cnet.IPNet) (string, bool) {
 	return block.pool.ipPool.Name, true
 }
 
+// HasBlocksWithin is whether any block lies inside cidr, whichever pool claims it. A narrower pool inside a deleting
+// one can win a block whose addresses are still in use.
+func (t *Tracker) HasBlocksWithin(cidr cnet.IPNet) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	for _, block := range t.blocks {
+		if containsNet(&cidr.IPNet, &block.allocationBlock.CIDR.IPNet) {
+			return true
+		}
+	}
+	return false
+}
+
 func toAllocationBlocks(s *blockSet) []*model.AllocationBlock {
 	var out []*model.AllocationBlock
 	for _, block := range s.inOrder() {
