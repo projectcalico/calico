@@ -67,11 +67,11 @@ func (e ValueV6) OtherNATKey() v4.KeyInterface {
 }
 
 func (e ValueV6) Timestamp() uint64 {
-	return binary.LittleEndian.Uint64(e[KeySize : KeySize+8])
+	return binary.LittleEndian.Uint64(e[KeyV6Size : KeyV6Size+8])
 }
 
 func (e ValueV6) RevTimestamp() uint64 {
-	return binary.LittleEndian.Uint64(e[KeySize+8:])
+	return binary.LittleEndian.Uint64(e[KeyV6Size+8:])
 }
 
 func NewValueV6(key []byte, ts, rev_ts uint64) ValueV6 {
