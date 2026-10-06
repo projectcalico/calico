@@ -63,7 +63,7 @@ func TestBackfillAfterSeedingSendsFlows(t *testing.T) {
 
 	var built int
 	for _, p := range recv.providers {
-		p.Iter(func(storage.FlowBuilder) bool {
+		p.Iter(nil, func(storage.FlowBuilder) bool {
 			built++
 			return false
 		})
