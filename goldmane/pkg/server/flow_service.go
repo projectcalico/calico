@@ -19,6 +19,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -59,7 +61,10 @@ func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_St
 
 	for {
 		select {
-		case flow := <-stream.Flows():
+		case flow, ok := <-stream.Flows():
+			if !ok {
+				return status.Error(codes.Aborted, "stream fell too far behind, reconnect to resume")
+			}
 			if flow.BuildInto(req.Filter, result) {
 				if err := server.Send(result); err != nil {
 					return err
