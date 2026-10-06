@@ -30,20 +30,20 @@ func TestStalledStreamDoesNotBlockAddFlow(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	mgr := stream.NewStreamManager()
-	go mgr.Run(ctx)
+	streams := stream.NewStreamManager()
+	go streams.Run(ctx)
 
 	clk := func() time.Time { return time.Unix(benchNow, 0) }
-	ring := storage.NewBucketRing(20, 1, benchNow, storage.WithStreamReceiver(mgr), storage.WithNowFunc(clk))
+	ring := storage.NewBucketRing(20, 1, benchNow, storage.WithStreamReceiver(streams), storage.WithNowFunc(clk))
 	bucketStart := int64(benchNow - 3)
 	for i := range 10 {
 		ring.AddFlow(storage.FlowFromNode{Flow: benchFlow(i, bucketStart)})
 	}
 
-	stalled := <-mgr.Register(&proto.FlowStreamRequest{}, 1)
+	stalled := <-streams.Register(&proto.FlowStreamRequest{}, 1)
 	defer stalled.Close()
-	<-mgr.Backfills()
-	ring.Backfill(mgr, stalled.ID(), bucketStart)
+	<-streams.Backfills()
+	ring.Backfill(streams, stalled.ID(), bucketStart)
 
 	// Once the one-slot output channel is full, the stream goroutine is parked mid-bucket.
 	deadline := time.Now().Add(10 * time.Second)

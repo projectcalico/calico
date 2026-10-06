@@ -350,7 +350,7 @@ func TestChanUtil_WriteWithDeadline(t *testing.T) {
 		}
 	})
 
-	t.Run("context cancelled before the write", func(t *testing.T) {
+	t.Run("context canceled before the write", func(t *testing.T) {
 		ch := make(chan string)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
@@ -360,7 +360,7 @@ func TestChanUtil_WriteWithDeadline(t *testing.T) {
 		}
 	})
 
-	t.Run("context cancelled while the channel is full", func(t *testing.T) {
+	t.Run("context canceled while the channel is full", func(t *testing.T) {
 		ch := make(chan string, 1)
 		ch <- "first"
 		ctx, cancel := context.WithCancel(context.Background())
