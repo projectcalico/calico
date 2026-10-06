@@ -33,7 +33,8 @@ const (
 )
 
 type simShape struct {
-	flows, life int
+	flows int
+	life  int
 }
 
 func (s simShape) String() string {
@@ -48,7 +49,7 @@ func (noopReceiver) Receive(FlowProvider, string) {}
 
 // ringSim drives a BucketRing at steady state: each bucket introduces rate new flow keys, and each key reports for life buckets.
 type ringSim struct {
-	r    *BucketRing
+	ring *BucketRing
 	now  int64
 	rate int
 	life int
@@ -62,7 +63,7 @@ func newRingSim(shape simShape) *ringSim {
 		rate: shape.flows / (simBuckets + shape.life - 1),
 		life: shape.life,
 	}
-	s.r = NewBucketRing(
+	s.ring = NewBucketRing(
 		simBuckets,
 		simInterval,
 		s.now,
@@ -77,7 +78,12 @@ func newRingSim(shape simShape) *ringSim {
 func (s *ringSim) newKey(id int) *types.FlowKey {
 	return types.NewFlowKey(
 		&types.FlowKeySource{SourceName: "src-" + strconv.Itoa(id%5000), SourceNamespace: "ns-" + strconv.Itoa(id%50), SourceType: proto.EndpointType_WorkloadEndpoint},
-		&types.FlowKeyDestination{DestName: "dst-" + strconv.Itoa(id), DestNamespace: "ns-" + strconv.Itoa(id%37), DestType: proto.EndpointType_WorkloadEndpoint, DestPort: int64(id % 1000)},
+		&types.FlowKeyDestination{
+			DestName:      "dst-" + strconv.Itoa(id),
+			DestNamespace: "ns-" + strconv.Itoa(id%37),
+			DestType:      proto.EndpointType_WorkloadEndpoint,
+			DestPort:      int64(id % 1000),
+		},
 		&types.FlowKeyMeta{Proto: "TCP", Reporter: proto.Reporter_Src, Action: proto.Action_Allow},
 		&proto.PolicyTrace{},
 	)
@@ -96,7 +102,7 @@ func (s *ringSim) fill() {
 	labels := unique.Make("app=a,env=prod")
 	for _, keys := range s.live {
 		for _, k := range keys {
-			s.r.AddFlow(FlowFromNode{Node: "node-1", Flow: &types.Flow{
+			s.ring.AddFlow(FlowFromNode{Node: "node-1", Flow: &types.Flow{
 				Key: k, StartTime: s.now, EndTime: s.now + simInterval,
 				PacketsIn: 10, PacketsOut: 10, BytesIn: 100, BytesOut: 100,
 				SourceLabels: labels, DestLabels: labels,
@@ -107,7 +113,7 @@ func (s *ringSim) fill() {
 }
 
 func (s *ringSim) advance() {
-	s.r.Rollover(nil)
+	s.ring.Rollover(nil)
 	s.now += simInterval
 }
 
@@ -140,9 +146,15 @@ func BenchmarkMainLoopRollover(b *testing.B) {
 				b.StartTimer()
 				s.advance()
 			}
-			b.ReportMetric(float64(len(s.r.diachronics)), "flows")
+			b.ReportMetric(float64(len(s.ring.diachronics)), "flows")
 		})
 	}
+}
+
+// mainLoopQuery is a named query whose run returns how many results it got.
+type mainLoopQuery struct {
+	name string
+	run  func() (int, error)
 }
 
 // BenchmarkMainLoopQuery measures the index-backed queries against a steady-state ring.
@@ -151,23 +163,19 @@ func BenchmarkMainLoopQuery(b *testing.B) {
 	sortByDest := []*proto.SortOption{{SortBy: proto.SortBy_DestName}}
 	for _, shape := range simShapes {
 		s := warmSim(shape)
-		r := s.r
-		gteAll, lt := r.BeginningOfHistory(), s.now
+		gteAll, lt := s.ring.BeginningOfHistory(), s.now
 		gte5m := s.now - 300
-		queries := []struct {
-			name string
-			run  func() (int, error)
-		}{
+		queries := []mainLoopQuery{
 			{"List_dest_all_p20", func() (int, error) {
-				f, _, err := r.List(&proto.FlowListRequest{StartTimeGte: gteAll, StartTimeLt: lt, PageSize: 20, SortBy: sortByDest})
+				f, _, err := s.ring.List(&proto.FlowListRequest{StartTimeGte: gteAll, StartTimeLt: lt, PageSize: 20, SortBy: sortByDest})
 				return len(f), err
 			}},
 			{"List_dest_5m_p20", func() (int, error) {
-				f, _, err := r.List(&proto.FlowListRequest{StartTimeGte: gte5m, StartTimeLt: lt, PageSize: 20, SortBy: sortByDest})
+				f, _, err := s.ring.List(&proto.FlowListRequest{StartTimeGte: gte5m, StartTimeLt: lt, PageSize: 20, SortBy: sortByDest})
 				return len(f), err
 			}},
 			{"Hints_destNS_all", func() (int, error) {
-				v, _, err := r.FilterHints(&proto.FilterHintsRequest{Type: proto.FilterType_FilterTypeDestNamespace, StartTimeGte: gteAll, StartTimeLt: lt})
+				v, _, err := s.ring.FilterHints(&proto.FilterHintsRequest{Type: proto.FilterType_FilterTypeDestNamespace, StartTimeGte: gteAll, StartTimeLt: lt})
 				return len(v), err
 			}},
 		}
