@@ -55,12 +55,12 @@ type queryBenchRing struct {
 var sharedQueryBenchRing = sync.OnceValue(newQueryBenchRing)
 
 func newQueryBenchRing() *queryBenchRing {
-	q := &queryBenchRing{now: 1_000_005 - 1_000_005%queryBenchInterval}
-	q.ring = storage.NewBucketRing(
+	bench := &queryBenchRing{now: 1_000_005 - 1_000_005%queryBenchInterval}
+	bench.ring = storage.NewBucketRing(
 		queryBenchBuckets,
 		queryBenchInterval,
-		q.now,
-		storage.WithNowFunc(func() time.Time { return time.Unix(q.now, 0) }),
+		bench.now,
+		storage.WithNowFunc(func() time.Time { return time.Unix(bench.now, 0) }),
 		storage.WithStreamReceiver(noopReceiver{}),
 	)
 
@@ -68,8 +68,21 @@ func newQueryBenchRing() *queryBenchRing {
 	for p := range 40 {
 		policies = append(policies, &proto.PolicyTrace{
 			EnforcedPolicies: []*proto.PolicyHit{
-				{Kind: proto.PolicyKind_CalicoNetworkPolicy, Namespace: fmt.Sprintf("ns-%d", p%20), Name: fmt.Sprintf("pol-%d", p), Tier: "default", Action: proto.Action_Allow, RuleIndex: int64(p % 3)},
-				{Kind: proto.PolicyKind_GlobalNetworkPolicy, Name: fmt.Sprintf("gnp-%d", p%7), Tier: "security", Action: proto.Action_Pass, PolicyIndex: 1},
+				{
+					Kind:      proto.PolicyKind_CalicoNetworkPolicy,
+					Namespace: fmt.Sprintf("ns-%d", p%20),
+					Name:      fmt.Sprintf("pol-%d", p),
+					Tier:      "default",
+					Action:    proto.Action_Allow,
+					RuleIndex: int64(p % 3),
+				},
+				{
+					Kind:        proto.PolicyKind_GlobalNetworkPolicy,
+					Name:        fmt.Sprintf("gnp-%d", p%7),
+					Tier:        "security",
+					Action:      proto.Action_Pass,
+					PolicyIndex: 1,
+				},
 			},
 		})
 	}
@@ -82,8 +95,17 @@ func newQueryBenchRing() *queryBenchRing {
 		for i := range batch {
 			id := step*rate + i
 			batch[i] = types.NewFlowKey(
-				&types.FlowKeySource{SourceName: "src-" + strconv.Itoa(id%5000), SourceNamespace: "ns-" + strconv.Itoa(id%50), SourceType: proto.EndpointType_WorkloadEndpoint},
-				&types.FlowKeyDestination{DestName: "dst-" + strconv.Itoa(id), DestNamespace: "ns-" + strconv.Itoa(id%37), DestType: proto.EndpointType_WorkloadEndpoint, DestPort: int64(id % 1000)},
+				&types.FlowKeySource{
+					SourceName:      "src-" + strconv.Itoa(id%5000),
+					SourceNamespace: "ns-" + strconv.Itoa(id%50),
+					SourceType:      proto.EndpointType_WorkloadEndpoint,
+				},
+				&types.FlowKeyDestination{
+					DestName:      "dst-" + strconv.Itoa(id),
+					DestNamespace: "ns-" + strconv.Itoa(id%37),
+					DestType:      proto.EndpointType_WorkloadEndpoint,
+					DestPort:      int64(id % 1000),
+				},
 				&types.FlowKeyMeta{Proto: "TCP", Reporter: proto.Reporter_Src, Action: proto.Action_Allow},
 				policies[id%len(policies)],
 			)
@@ -94,17 +116,23 @@ func newQueryBenchRing() *queryBenchRing {
 		}
 		for _, keys := range live {
 			for _, k := range keys {
-				q.ring.AddFlow(storage.FlowFromNode{Node: "node-1", Flow: &types.Flow{
-					Key: k, StartTime: q.now, EndTime: q.now + queryBenchInterval,
-					PacketsIn: 10, PacketsOut: 10, BytesIn: 100, BytesOut: 100,
-					SourceLabels: labels, DestLabels: labels,
+				bench.ring.AddFlow(storage.FlowFromNode{Node: "node-1", Flow: &types.Flow{
+					Key:          k,
+					StartTime:    bench.now,
+					EndTime:      bench.now + queryBenchInterval,
+					PacketsIn:    10,
+					PacketsOut:   10,
+					BytesIn:      100,
+					BytesOut:     100,
+					SourceLabels: labels,
+					DestLabels:   labels,
 				}})
 			}
 		}
-		q.ring.Rollover(nil)
-		q.now += queryBenchInterval
+		bench.ring.Rollover(nil)
+		bench.now += queryBenchInterval
 	}
-	return q
+	return bench
 }
 
 type queryBenchCase struct {
@@ -116,14 +144,14 @@ type queryBenchCase struct {
 // at the Info log level that Goldmane runs at by default.
 func BenchmarkRingQuery(b *testing.B) {
 	logrus.SetLevel(logrus.InfoLevel)
-	q := sharedQueryBenchRing()
-	r := q.ring
-	gteAll, lt := r.BeginningOfHistory(), q.now
-	gte5m := q.now - 300
+	bench := sharedQueryBenchRing()
+	ring := bench.ring
+	gteAll, startLt := ring.BeginningOfHistory(), bench.now
+	gte5m := bench.now - 300
 	nsFilter := &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns-3", Type: proto.MatchType_Exact}}}
 
 	list := func(req *proto.FlowListRequest) int {
-		flows, _, err := r.List(req)
+		flows, _, err := ring.List(req)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -131,16 +159,16 @@ func BenchmarkRingQuery(b *testing.B) {
 	}
 	for _, c := range []queryBenchCase{
 		{"List_time_all_p20", func() int {
-			return list(&proto.FlowListRequest{StartTimeGte: gteAll, StartTimeLt: lt, PageSize: 20})
+			return list(&proto.FlowListRequest{StartTimeGte: gteAll, StartTimeLt: startLt, PageSize: 20})
 		}},
 		{"List_time_5m_p20", func() int {
-			return list(&proto.FlowListRequest{StartTimeGte: gte5m, StartTimeLt: lt, PageSize: 20})
+			return list(&proto.FlowListRequest{StartTimeGte: gte5m, StartTimeLt: startLt, PageSize: 20})
 		}},
 		{"List_time_all_p20_nsfilter", func() int {
-			return list(&proto.FlowListRequest{StartTimeGte: gteAll, StartTimeLt: lt, PageSize: 20, Filter: nsFilter})
+			return list(&proto.FlowListRequest{StartTimeGte: gteAll, StartTimeLt: startLt, PageSize: 20, Filter: nsFilter})
 		}},
 		{"Hints_policyName_all", func() int {
-			values, _, err := r.FilterHints(&proto.FilterHintsRequest{Type: proto.FilterType_FilterTypePolicyName, StartTimeGte: gteAll, StartTimeLt: lt})
+			values, _, err := ring.FilterHints(&proto.FilterHintsRequest{Type: proto.FilterType_FilterTypePolicyName, StartTimeGte: gteAll, StartTimeLt: startLt})
 			if err != nil {
 				b.Fatal(err)
 			}
