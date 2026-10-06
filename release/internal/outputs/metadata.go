@@ -85,7 +85,9 @@ type Metadata struct {
 
 	Components map[string]Component `yaml:"components"`
 
-	Released []registry.Component `yaml:"-"`
+	// Released is keyed by component name. A component with no image is
+	// recorded by version alone.
+	Released map[string]registry.Component `yaml:"-"`
 }
 
 type Component struct {
@@ -261,12 +263,13 @@ type ImageDescriber struct {
 	Resolve registry.DigestResolver
 }
 
-func (d ImageDescriber) describe(released []registry.Component) (map[string]Component, error) {
+func (d ImageDescriber) describe(released map[string]registry.Component) (map[string]Component, error) {
 	out := make(map[string]Component, len(released))
 	var errs []error
-	for _, c := range released {
-		if _, dup := out[c.Image]; dup {
-			errs = append(errs, fmt.Errorf("component %s is listed twice", c.Image))
+	for _, name := range slices.Sorted(maps.Keys(released)) {
+		c := released[name]
+		if c.Image == "" {
+			out[name] = Component{Version: c.Version}
 			continue
 		}
 		ref := c.String()
@@ -275,7 +278,7 @@ func (d ImageDescriber) describe(released []registry.Component) (map[string]Comp
 			errs = append(errs, err)
 			continue
 		}
-		out[c.Image] = Component{Version: c.Version, Image: ref, Digest: digest}
+		out[name] = Component{Version: c.Version, Image: ref, Digest: digest}
 	}
 	return out, errors.Join(errs...)
 }

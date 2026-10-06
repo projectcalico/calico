@@ -97,7 +97,7 @@ func TestMetadataDescribe(t *testing.T) {
 	node := registry.Component{Registry: "quay.io/calico", Image: "node", Version: "v3.30.0"}
 
 	t.Run("fills components from what was released", func(t *testing.T) {
-		m := Metadata{Released: []registry.Component{node}}
+		m := Metadata{Released: map[string]registry.Component{"node": node}}
 		if err := m.describe(Describer{Images: ImageDescriber{Resolve: resolveTo("sha256:res", true, nil)}}); err != nil {
 			t.Fatal(err)
 		}
@@ -114,7 +114,7 @@ func TestMetadataDescribe(t *testing.T) {
 			Version:         "v3.30.0",
 			OperatorVersion: "v1.38.0",
 			Source:          Source{Repository: "https://github.com/projectcalico/calico", Commit: "abc123"},
-			Released:        []registry.Component{node},
+			Released:        map[string]registry.Component{"node": node},
 		}
 		if err := m.describe(Describer{Images: ImageDescriber{Resolve: resolveTo("", false, nil)}}); err != nil {
 			t.Fatal(err)
@@ -172,7 +172,7 @@ func TestMetadataDescribe(t *testing.T) {
 	})
 
 	t.Run("fails with no image resolver", func(t *testing.T) {
-		m := Metadata{Released: []registry.Component{node}}
+		m := Metadata{Released: map[string]registry.Component{"node": node}}
 		wantErrContains(t, m.describe(Describer{}), "no image resolver")
 	})
 }
@@ -389,12 +389,13 @@ func TestArtifactDescriberDescribe(t *testing.T) {
 
 func TestImageDescriberDescribe(t *testing.T) {
 	node := registry.Component{Registry: "quay.io/calico", Image: "node", Version: "v3.30.0"}
+	released := map[string]registry.Component{"node": node}
 	recorded := registry.NewDigestSource(registry.DigestsByRepo([]string{
 		"quay.io/calico/node:v3.30.0@sha256:rec",
 	}))
 
 	t.Run("prefers a record to a resolve", func(t *testing.T) {
-		got, err := ImageDescriber{Sources: []registry.DigestSource{recorded}, Resolve: resolveTo("", false, fmt.Errorf("must not resolve"))}.describe([]registry.Component{node})
+		got, err := ImageDescriber{Sources: []registry.DigestSource{recorded}, Resolve: resolveTo("", false, fmt.Errorf("must not resolve"))}.describe(released)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -405,7 +406,7 @@ func TestImageDescriberDescribe(t *testing.T) {
 	})
 
 	t.Run("resolves what no record holds", func(t *testing.T) {
-		got, err := ImageDescriber{Resolve: resolveTo("sha256:res", true, nil)}.describe([]registry.Component{node})
+		got, err := ImageDescriber{Resolve: resolveTo("sha256:res", true, nil)}.describe(released)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -415,7 +416,7 @@ func TestImageDescriberDescribe(t *testing.T) {
 	})
 
 	t.Run("leaves out the digest of an unpublished image", func(t *testing.T) {
-		got, err := ImageDescriber{Resolve: resolveTo("", false, nil)}.describe([]registry.Component{node})
+		got, err := ImageDescriber{Resolve: resolveTo("", false, nil)}.describe(released)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -426,14 +427,21 @@ func TestImageDescriberDescribe(t *testing.T) {
 	})
 
 	t.Run("fails on a resolve error", func(t *testing.T) {
-		_, err := ImageDescriber{Resolve: resolveTo("", false, fmt.Errorf("unauthorized"))}.describe([]registry.Component{node})
+		_, err := ImageDescriber{Resolve: resolveTo("", false, fmt.Errorf("unauthorized"))}.describe(released)
 		wantErrContains(t, err, "quay.io/calico/node:v3.30.0")
 		wantErrContains(t, err, "unauthorized")
 	})
 
-	t.Run("rejects a component listed twice", func(t *testing.T) {
-		_, err := ImageDescriber{Resolve: resolveTo("sha256:res", true, nil)}.describe([]registry.Component{node, node})
-		wantErrContains(t, err, "listed twice")
+	t.Run("records a component with no image by version alone", func(t *testing.T) {
+		got, err := ImageDescriber{Resolve: resolveTo("", false, fmt.Errorf("must not resolve"))}.describe(map[string]registry.Component{
+			"calico": {Version: "v3.30.0"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(Component{Version: "v3.30.0"}, got["calico"]); diff != "" {
+			t.Errorf("calico (-want +got):\n%s", diff)
+		}
 	})
 }
 
