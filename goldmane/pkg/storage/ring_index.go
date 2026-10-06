@@ -50,7 +50,7 @@ type RingIndex struct {
 // rankedFlow pairs a DiachronicFlow with the start time its aggregated flow sorts on.
 type rankedFlow struct {
 	start int64
-	d     *DiachronicFlow
+	flow  *DiachronicFlow
 }
 
 // policyValueFunc returns the filter hint values for a flow key's policy trace. Taking only the
@@ -71,17 +71,17 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 			continue
 		}
 		if start, ok := d.SortStartTime(opts.startTimeGt, opts.startTimeLt); ok {
-			ranked = append(ranked, rankedFlow{start: start, d: d})
+			ranked = append(ranked, rankedFlow{start: start, flow: d})
 		}
 	}
 
 	// Sort newer flows first. Start times are bucket-aligned, so ties are common, and breaking
 	// them on ID keeps the order, and so the pages, stable across requests.
-	slices.SortFunc(ranked, func(a, b rankedFlow) int {
-		if c := cmp.Compare(b.start, a.start); c != 0 {
+	slices.SortFunc(ranked, func(x, y rankedFlow) int {
+		if c := cmp.Compare(y.start, x.start); c != 0 {
 			return c
 		}
-		return cmp.Compare(b.d.ID, a.d.ID)
+		return cmp.Compare(y.flow.ID, x.flow.ID)
 	})
 
 	// Assign the total before the result is trimmed to match the page size and start page.
@@ -96,7 +96,7 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 
 	flows := make([]*types.Flow, 0, len(ranked))
 	for _, r := range ranked {
-		if f := r.d.Aggregate(opts.startTimeGt, opts.startTimeLt); f != nil {
+		if f := r.flow.Aggregate(opts.startTimeGt, opts.startTimeLt); f != nil {
 			flows = append(flows, f)
 		}
 	}
