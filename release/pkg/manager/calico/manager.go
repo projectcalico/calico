@@ -174,6 +174,8 @@ type CalicoManager struct {
 	// which we should read them for publishing.
 	outputDir string
 
+	recordsDir string
+
 	// tmpDir is the directory to which we should write temporary files.
 	tmpDir string
 
@@ -291,6 +293,9 @@ func (r *CalicoManager) Build() error {
 	var err error
 	if r.outputDir == "" {
 		return fmt.Errorf("no output directory specified")
+	}
+	if r.recordsDir == "" {
+		return fmt.Errorf("no records directory specified")
 	}
 	if r.validate {
 		if err := r.PreBuildValidation(); err != nil {
@@ -461,15 +466,15 @@ func (r *CalicoManager) chartsMetadata() (*outputs.Charts, error) {
 }
 
 func (r *CalicoManager) digestSources() ([]registry.DigestSource, error) {
-	imgs, err := images.DigestSource(r.outputDir, r.calicoVersion)
+	imgs, err := images.DigestSource(r.recordsDir)
 	if err != nil {
 		return nil, err
 	}
-	op, err := operator.DigestSource(r.outputDir, r.operatorVersion)
+	op, err := operator.DigestSource(r.recordsDir)
 	if err != nil {
 		return nil, err
 	}
-	chs, err := charts.DigestSource(r.outputDir, r.chart().Version())
+	chs, err := charts.DigestSource(r.recordsDir)
 	if err != nil {
 		return nil, err
 	}
@@ -879,6 +884,9 @@ func (r *CalicoManager) publishPrereqs() error {
 	if r.outputDir == "" {
 		return fmt.Errorf("no output directory specified")
 	}
+	if r.recordsDir == "" {
+		return fmt.Errorf("no records directory specified")
+	}
 	if !r.validate {
 		logrus.Warn("Skipping pre-publish validation")
 		return nil
@@ -1185,13 +1193,13 @@ func (r *CalicoManager) publishContainerImages() error {
 		logrus.Info("Skipping image publish")
 		return nil
 	}
-	refs, err := outputs.NewRefsWriter(r.outputDir, images.PublishStep, r.calicoVersion)
+	refs, err := outputs.NewRefsWriter(r.recordsDir, images.PublishStep)
 	if err != nil {
 		return fmt.Errorf("image publish refs writer: %w", err)
 	}
-	// An earlier run of this version records what it published, so a resume
+	// An earlier run of this release records what it published, so a resume
 	// skips the units already done.
-	published, err := outputs.ReadRefs(r.outputDir, images.PublishStep, r.calicoVersion)
+	published, err := outputs.ReadRefs(r.recordsDir, images.PublishStep)
 	if err != nil {
 		return fmt.Errorf("read published image refs: %w", err)
 	}
@@ -1239,7 +1247,7 @@ func (r *CalicoManager) resolveOperator() ([]string, error) {
 	if !r.isHashRelease || r.operator {
 		return nil, nil
 	}
-	refs, err := outputs.NewRefsWriter(r.outputDir, operator.ResolveStep, r.operatorVersion)
+	refs, err := outputs.NewRefsWriter(r.recordsDir, operator.ResolveStep)
 	if err != nil {
 		return nil, fmt.Errorf("operator resolve refs writer: %w", err)
 	}
@@ -1268,7 +1276,7 @@ func (r *CalicoManager) checkResolved(component string, included bool, err error
 }
 
 func (r *CalicoManager) resolveContainerImages() error {
-	refs, err := outputs.NewRefsWriter(r.outputDir, images.ResolveStep, r.calicoVersion)
+	refs, err := outputs.NewRefsWriter(r.recordsDir, images.ResolveStep)
 	if err != nil {
 		return fmt.Errorf("resolve image refs writer: %w", err)
 	}
@@ -1421,13 +1429,13 @@ func (r *CalicoManager) publishHelmCharts() error {
 		return nil
 	}
 	chart := r.chart()
-	refs, err := outputs.NewRefsWriter(r.outputDir, charts.PublishStep, chart.Version())
+	refs, err := outputs.NewRefsWriter(r.recordsDir, charts.PublishStep)
 	if err != nil {
 		return fmt.Errorf("chart publish refs writer: %w", err)
 	}
-	// An earlier run of this version records what it published, so a resume
+	// An earlier run of this release records what it published, so a resume
 	// skips the charts already done.
-	published, err := outputs.ReadRefs(r.outputDir, charts.PublishStep, chart.Version())
+	published, err := outputs.ReadRefs(r.recordsDir, charts.PublishStep)
 	if err != nil {
 		return fmt.Errorf("read published chart refs: %w", err)
 	}

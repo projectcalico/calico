@@ -16,6 +16,7 @@ package outputs
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,6 +28,9 @@ import (
 
 const refsFileName = "published.refs"
 
+// An empty dir would resolve against the working directory.
+var errNoRecordsDir = errors.New("no records directory specified")
+
 // RefsWriter records published digest refs, one per line, as
 // registry/repo:tag@sha256:hex.
 //
@@ -37,14 +41,19 @@ type RefsWriter struct {
 	path string
 }
 
-// RecordsDir is where a step's refs live: beside the upload directory.
-func RecordsDir(uploadDir, step, version string) string {
-	return filepath.Join(filepath.Dir(uploadDir), "records", step, version)
+// RecordsDir holds every step's refs for one release, outside the upload
+// directory so nothing recorded is published. Every run of the release shares
+// it, so the id must not change between reruns.
+func RecordsDir(outputDir, releaseID string) string {
+	return filepath.Join(outputDir, "records", releaseID)
 }
 
 // The refs file is never truncated.
-func NewRefsWriter(uploadDir, step, version string) (*RefsWriter, error) {
-	dir := RecordsDir(uploadDir, step, version)
+func NewRefsWriter(recordsDir, step string) (*RefsWriter, error) {
+	if recordsDir == "" {
+		return nil, errNoRecordsDir
+	}
+	dir := filepath.Join(recordsDir, step)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("creating refs dir: %w", err)
 	}
@@ -83,8 +92,11 @@ func (w *RefsWriter) Add(refs ...string) error {
 
 // ReadRefs returns a step's refs in publish order, without duplicates. A
 // missing file reports no refs and no error.
-func ReadRefs(uploadDir, step, version string) ([]string, error) {
-	f, err := os.Open(filepath.Join(RecordsDir(uploadDir, step, version), refsFileName))
+func ReadRefs(recordsDir, step string) ([]string, error) {
+	if recordsDir == "" {
+		return nil, errNoRecordsDir
+	}
+	f, err := os.Open(filepath.Join(recordsDir, step, refsFileName))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -113,10 +125,10 @@ func ReadRefs(uploadDir, step, version string) ([]string, error) {
 	return refs, nil
 }
 
-func DigestSourceFor(uploadDir, version string, steps ...string) (registry.DigestSource, error) {
+func DigestSourceFor(recordsDir string, steps ...string) (registry.DigestSource, error) {
 	records := make([]registry.RecordedDigests, 0, len(steps))
 	for _, step := range steps {
-		refs, err := ReadRefs(uploadDir, step, version)
+		refs, err := ReadRefs(recordsDir, step)
 		if err != nil {
 			return registry.DigestSource{}, fmt.Errorf("reading %s records: %w", step, err)
 		}

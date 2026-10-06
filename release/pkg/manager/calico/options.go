@@ -97,6 +97,13 @@ func WithOutputDir(outputDir string) Option {
 	}
 }
 
+func WithRecordsDir(dir string) Option {
+	return func(r *CalicoManager) error {
+		r.recordsDir = dir
+		return nil
+	}
+}
+
 func WithAWSProfile(profile string) Option {
 	return func(r *CalicoManager) error {
 		r.awsProfile = profile

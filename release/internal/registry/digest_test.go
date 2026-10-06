@@ -73,6 +73,13 @@ func TestDigestsByRepo(t *testing.T) {
 		}
 	})
 
+	t.Run("a tag recorded twice resolves to the last digest", func(t *testing.T) {
+		got := DigestsByRepo([]string{nodeV330, "quay.io/calico/node:v3.30.0@sha256:ddd"})
+		if digest, _ := got.Digest("quay.io/calico/node:v3.30.0"); digest != "sha256:ddd" {
+			t.Errorf("digest = %q, want sha256:ddd", digest)
+		}
+	})
+
 	t.Run("a ref with no digest records nothing", func(t *testing.T) {
 		got := DigestsByRepo([]string{"quay.io/calico/node:v3.30.0"})
 		if _, ok := got.Digest("quay.io/calico/node:v3.30.0"); ok {
