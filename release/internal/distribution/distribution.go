@@ -20,18 +20,15 @@ import (
 	"fmt"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 )
 
 // The name becomes the log directory, so it is qualified: a bare "publish"
 // would collide with another group's.
 const (
-	metadataStep     = "distribution-metadata"
-	sumsStep         = "distribution-sha256sums"
-	artifactsStep    = "distribution-publish-artifacts"
-	metadataFileName = "metadata.yaml"
-	sumsFileName     = "SHA256SUMS"
+	sumsStep      = "distribution-sha256sums"
+	artifactsStep = "distribution-publish-artifacts"
+	sumsFileName  = "SHA256SUMS"
 )
 
 type Handler interface {
@@ -78,72 +75,31 @@ func (u Upload) validate() error {
 	return nil
 }
 
-// A product embeds Release and adds its own fields; the whole value is written.
-type Attester interface {
-	Attest() ([]byte, error)
-}
-
-type Component struct {
-	registry.Component `json:",inline" yaml:",inline"`
-}
-
-// Rendered as the reference rather than its parts: consumers read this file
-// for something to pull.
-func (c Component) MarshalYAML() (any, error) {
-	return c.String(), nil
-}
-
 type settings struct {
 	pipeline []Upload
 
 	steps.Step
 }
 
-// A step's options. Option reaches every step; the per-step interfaces let a
-// setting that belongs to one verb be rejected at compile time by the others.
-type (
-	MetadataOption interface{ applyMetadata(*settings) error }
-	PublishOption  interface{ applyPublish(*settings) error }
-
-	Option interface {
-		applyMetadata(*settings) error
-		applyPublish(*settings) error
-	}
-)
-
-// Each adapter must satisfy the interfaces its options are returned as, so a
-// missing apply method fails here rather than at a call site.
-var (
-	_ Option        = setting(nil)
-	_ PublishOption = publishSetting(nil)
-)
-
-type setting func(*settings) error
-
-func (f setting) applyMetadata(s *settings) error { return f(s) }
-func (f setting) applyPublish(s *settings) error  { return f(s) }
-
-type publishSetting func(*settings) error
-
-func (f publishSetting) applyPublish(s *settings) error { return f(s) }
+type Option func(*settings) error
 
 func WithRunner(r command.CommandRunner) Option {
-	return setting(func(s *settings) error {
+	return func(s *settings) error {
 		s.Apply([]steps.Option{steps.WithRunner(r)})
 		return nil
-	})
+	}
 }
 
 func WithLogsDir(dir string) Option {
-	return setting(func(s *settings) error {
+	return func(s *settings) error {
 		s.Apply([]steps.Option{steps.WithLogsDir(dir)})
 		return nil
-	})
+	}
 }
 
 func WithDir(dir string) Option {
-	return setting(func(s *settings) error {
+	return func(s *settings) error {
 		s.Apply([]steps.Option{steps.WithDir(dir)})
 		return nil
-	})
+	}
 }

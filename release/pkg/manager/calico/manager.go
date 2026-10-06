@@ -27,7 +27,6 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"go.yaml.in/yaml/v3"
 
 	"github.com/projectcalico/calico/release/internal/archives"
 	"github.com/projectcalico/calico/release/internal/binaries"
@@ -357,35 +356,6 @@ func (r *CalicoManager) Build() error {
 	return nil
 }
 
-var _ distribution.Attester = metadata{}
-
-type metadata struct {
-	Version string `json:"version"`
-
-	OperatorVersion string `json:"operator_version" yaml:"operatorVersion"`
-
-	Images []distribution.Component `json:"images"`
-
-	ChartVersion string `json:"helm_chart_version" yaml:"helmChartVersion"`
-}
-
-func (r metadata) Attest() ([]byte, error) {
-	var errs []error
-	if r.Version == "" {
-		errs = append(errs, fmt.Errorf("no version specified"))
-	}
-	if r.OperatorVersion == "" {
-		errs = append(errs, fmt.Errorf("no operator version specified"))
-	}
-	if len(r.Images) == 0 {
-		errs = append(errs, fmt.Errorf("no images specified"))
-	}
-	if err := errors.Join(errs...); err != nil {
-		return nil, err
-	}
-	return yaml.Marshal(r)
-}
-
 func (r *CalicoManager) BuildMetadata(dir string) error {
 	reg, err := r.getRegistryFromManifests()
 	if err != nil {
@@ -396,17 +366,32 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to determine release images: %w", err)
 	}
-	components := []distribution.Component{{Component: r.operatorComponent()}}
+	released := []registry.Component{r.operatorComponent()}
 	for _, img := range imgs {
-		components = append(components, distribution.Component{Registry: reg, Image: img, Version: r.calicoVersion})
+		released = append(released, registry.Component{Registry: reg, Image: img, Version: r.calicoVersion})
 	}
-
-	return distribution.BuildMetadata(metadata{
+	sources, err := r.digestSources()
+	if err != nil {
+		return err
+	}
+	return outputs.BuildMetadata(&outputs.Metadata{
 		Version:         r.calicoVersion,
 		OperatorVersion: r.operatorVersion,
-		Images:          components,
 		ChartVersion:    r.chart().Version(),
-	}, dir, distribution.WithRunner(r.runner))
+		Released:        released,
+	}, outputs.Describer{Sources: sources, Resolve: r.digestResolver()}, dir)
+}
+
+func (r *CalicoManager) digestSources() ([]registry.DigestSource, error) {
+	imgs, err := images.DigestSource(r.outputDir, r.calicoVersion)
+	if err != nil {
+		return nil, err
+	}
+	op, err := operator.DigestSource(r.outputDir, r.operatorVersion)
+	if err != nil {
+		return nil, err
+	}
+	return []registry.DigestSource{imgs, op}, nil
 }
 
 // Fetch the registry from the calicoctl manifest file.

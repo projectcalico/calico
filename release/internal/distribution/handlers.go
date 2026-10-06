@@ -396,7 +396,7 @@ func SHA256Sums(dir string) error {
 }
 
 func sha256Sums(dir string, files []string) ([]string, error) {
-	s, err := newSettings[Option](sumsStep, nil)
+	s, err := newSettings(sumsStep, nil)
 	if err != nil {
 		return nil, err
 	}
