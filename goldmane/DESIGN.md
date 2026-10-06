@@ -155,8 +155,11 @@ is a contract change for dashboards and alerting; record it here.
   buffer depth.
 - `goldmane_aggr_flow_index_batch_size` — number of flows
   processed per batch.
-- `goldmane_aggr_flow_index_latency_ms` — time to index a single
-  flow.
+- `goldmane_aggr_flow_index_latency_seconds` — histogram of the
+  time to index a single flow. Replaced the
+  `goldmane_aggr_flow_index_latency_ms` summary, whose quantile
+  upkeep was a large share of aggregator CPU at one sample per
+  flow and whose millisecond samples were almost all 0.
 - `goldmane_aggr_rollover_duration_ms` — time spent performing
   bucket rollover.
 - `goldmane_aggr_rollover_latency_ms` — time between rollovers
