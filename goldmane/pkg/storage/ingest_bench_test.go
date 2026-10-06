@@ -33,13 +33,13 @@ func BenchmarkIngestAddFlowSteady(b *testing.B) {
 		b.Run(fmt.Sprintf("keys=%d", k), func(b *testing.B) {
 			defer setupBenchmark(b)()
 			pf := testutils.IngestFlows(k, ingestNow)
-			fl := make([]*types.Flow, k)
+			flows := make([]*types.Flow, k)
 			for i := range pf {
-				fl[i] = types.ProtoToFlow(pf[i])
+				flows[i] = types.ProtoToFlow(pf[i])
 			}
 			nowFunc := func() time.Time { return time.Unix(ingestNow, 0) }
 			ring := storage.NewBucketRing(242, 15, ingestNow, storage.WithNowFunc(nowFunc))
-			for _, f := range fl {
+			for _, f := range flows {
 				ring.AddFlow(storage.FlowFromNode{Flow: f, Node: "seed"})
 			}
 			nodes := []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"}
@@ -51,12 +51,12 @@ func BenchmarkIngestAddFlowSteady(b *testing.B) {
 				pass := i / k
 				if idx == 0 {
 					b.StopTimer()
-					for _, f := range fl {
+					for _, f := range flows {
 						f.EndTime = ingestNow + 15 + int64(pass)
 					}
 					b.StartTimer()
 				}
-				if ring.AddFlow(storage.FlowFromNode{Flow: fl[idx], Node: nodes[pass%len(nodes)]}) {
+				if ring.AddFlow(storage.FlowFromNode{Flow: flows[idx], Node: nodes[pass%len(nodes)]}) {
 					b.Fatal("flow was unexpectedly treated as a duplicate")
 				}
 			}

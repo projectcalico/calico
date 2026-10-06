@@ -29,7 +29,7 @@ import (
 // per-flow decoding implementation it replaced, and requires identical statistics.
 func TestStatisticsMatchReference(t *testing.T) {
 	rng := rand.New(rand.NewPCG(3, 4))
-	_, cache, b, cancel := setup(t)
+	_, cache, bucket, cancel := setup(t)
 	defer cancel()
 	ref := newStatisticsIndex()
 
@@ -48,13 +48,13 @@ func TestStatisticsMatchReference(t *testing.T) {
 			StartTime:          int64(i),
 		})
 		cache.add(f)
-		b.AddFlow(f)
+		bucket.AddFlow(f)
 		referenceAddFlow(ref, f)
 	}
 
 	require.NotEmpty(t, ref.policies)
-	require.Equal(t, ref.statistics, b.stats.statistics)
-	require.Equal(t, ref.policies, b.stats.policies)
+	require.Equal(t, ref.statistics, bucket.stats.statistics)
+	require.Equal(t, ref.policies, bucket.stats.policies)
 }
 
 func randomStatsHit(rng *rand.Rand, idx int) *proto.PolicyHit {
@@ -118,7 +118,7 @@ func referenceAddFlow(s *statisticsIndex, flow *types.Flow) {
 			Tier:      meta.Tier,
 			Action:    hit.Action,
 			RuleIndex: meta.PolicyIndex,
-			Direction: direction(flow),
+			Direction: direction(flow.Key),
 		}
 		pk := sk.policyID()
 		if _, ok := polToRules[pk]; !ok {
