@@ -534,6 +534,43 @@ func (b *PinnedMap) updateDeltaEntries() error {
 	return nil
 }
 
+// flushOldMap deletes all entries from a BPF map by its FD.
+// Use this to clear stale entries from the old conntrack map after a
+// resize so that BPF TC programs still referencing the old FD cannot
+// serve stale forward-NAT entries.
+func flushOldMap(fd FD, maxEntries, keySize, valueSize int) error {
+	if fd == 0 {
+		return nil
+	}
+	it, err := NewIterator(fd, keySize, valueSize, maxEntries, isBatchOpsSupported())
+	if err != nil {
+		return fmt.Errorf("failed to create iterator for old map flush: %w", err)
+	}
+	defer func() {
+		if err := it.Close(); err != nil {
+			log.WithError(err).Panic("Unexpected error from map iterator Close().")
+		}
+	}()
+
+	flushed := 0
+	for {
+		k, _, err := it.Next()
+		if err != nil {
+			return nil
+		}
+		if k == nil {
+			break
+		}
+		if err := DeleteMapEntry(fd, k); err != nil {
+			log.WithError(err).Debug("Failed to delete entry from old map during flush.")
+			continue
+		}
+		flushed++
+	}
+	log.WithField("entriesFlushed", flushed).Info("Flushed old BPF map entries after resize.")
+	return nil
+}
+
 func (b *PinnedMap) copyFromOldMap() error {
 	numEntriesCopied := 0
 	mapMem := make(map[string]struct{})
@@ -821,6 +858,16 @@ func (b *PinnedMap) EnsureExists() error {
 		// Data from old map to new map will be copied once all the bpf
 		// programs are installed with the new map.
 		if !b.UpdatedByBPF {
+			os.Remove(b.Path() + "_old")
+		} else {
+			// For BPF-updated maps (e.g. conntrack), the old map's FD may
+			// still be referenced by attached BPF TC programs during the
+			// restart window. Flush all entries from the old map so BPF
+			// programs cannot serve stale forward-NAT entries whose
+			// reverse-NAT counterparts now live in the new map.
+			if err := flushOldMap(b.oldfd, b.oldSize, b.KeySize, b.ValueSize); err != nil {
+				log.WithError(err).Warn("Failed to flush old map after data copy. Stale entries may persist.")
+			}
 			os.Remove(b.Path() + "_old")
 		}
 
