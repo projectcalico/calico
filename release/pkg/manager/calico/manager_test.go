@@ -1688,3 +1688,119 @@ func TestChecksumsAreWrittenOnBothPaths(t *testing.T) {
 		})
 	}
 }
+
+func TestSourceMetadata(t *testing.T) {
+	const headSHA = "0123456789abcdef0123456789abcdef01234567"
+	newManager := func(branch string) *CalicoManager {
+		f := newFakeRunner()
+		f.on("git rev-parse --abbrev-ref HEAD", branch+"\n", nil)
+		f.on("git rev-parse HEAD", headSHA+"\n", nil)
+		return &CalicoManager{runner: f, githubOrg: "projectcalico", repo: "calico", calicoVersion: "v3.30.0"}
+	}
+
+	t.Run("a release records its branch and tag", func(t *testing.T) {
+		got, err := newManager("release-v3.30").sourceMetadata()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := outputs.Source{Repository: "projectcalico/calico", Commit: headSHA, Branch: "release-v3.30", Tag: "v3.30.0"}
+		if got != want {
+			t.Errorf("source = %+v, want %+v", got, want)
+		}
+	})
+
+	t.Run("a hashrelease records no tag", func(t *testing.T) {
+		r := newManager("master")
+		r.isHashRelease = true
+		got, err := r.sourceMetadata()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Tag != "" || got.Branch != "master" {
+			t.Errorf("source = %+v, want branch master and no tag", got)
+		}
+	})
+
+	t.Run("a detached HEAD records no branch", func(t *testing.T) {
+		got, err := newManager("HEAD").sourceMetadata()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Branch != "" || got.Commit != headSHA {
+			t.Errorf("source = %+v, want commit %s and no branch", got, headSHA)
+		}
+	})
+
+	t.Run("fails when git cannot resolve HEAD", func(t *testing.T) {
+		r := &CalicoManager{runner: newFakeRunner().on("git rev-parse HEAD", "", fmt.Errorf("not a git repository"))}
+		if _, err := r.sourceMetadata(); err == nil || !strings.Contains(err.Error(), "not a git repository") {
+			t.Errorf("err = %v, want it to contain %q", err, "not a git repository")
+		}
+	})
+}
+
+func TestChartsMetadata(t *testing.T) {
+	newManager := func() *CalicoManager {
+		return &CalicoManager{
+			helmCharts:     true,
+			helmIndex:      true,
+			helmRepoURL:    "https://example.com/charts",
+			helmRegistries: []string{"quay.io/calico/charts", "docker.io/calico/charts"},
+			calicoVersion:  "v3.30.0",
+		}
+	}
+
+	t.Run("records each chart at the first registry", func(t *testing.T) {
+		got, err := newManager().chartsMetadata()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Version != "v3.30.0" || got.Index != "https://example.com/charts" {
+			t.Errorf("charts = %+v, want version v3.30.0 and index https://example.com/charts", got)
+		}
+		if len(got.Entries) != len(charts.All()) {
+			t.Errorf("entries = %d, want %d", len(got.Entries), len(charts.All()))
+		}
+		for _, name := range charts.All() {
+			e := got.Entries[name]
+			if want := "quay.io/calico/charts/" + name + ":v3.30.0"; e.Image != want {
+				t.Errorf("%s image = %q, want %q", name, e.Image, want)
+			}
+			if !strings.HasSuffix(e.URL, "/"+charts.FileName(name, "v3.30.0")) {
+				t.Errorf("%s url = %q, want it to end in the chart file", name, e.URL)
+			}
+		}
+	})
+
+	t.Run("leaves out the index when it is not built", func(t *testing.T) {
+		r := newManager()
+		r.helmIndex = false
+		got, err := r.chartsMetadata()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Index != "" {
+			t.Errorf("index = %q, want none", got.Index)
+		}
+	})
+
+	t.Run("records nothing when charts are off", func(t *testing.T) {
+		r := newManager()
+		r.helmCharts = false
+		got, err := r.chartsMetadata()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != nil {
+			t.Errorf("charts = %+v, want nil", got)
+		}
+	})
+
+	t.Run("fails with no registry to name the charts by", func(t *testing.T) {
+		r := newManager()
+		r.helmRegistries = nil
+		if _, err := r.chartsMetadata(); err == nil {
+			t.Error("recorded charts with no registry")
+		}
+	})
+}

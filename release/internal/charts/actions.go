@@ -291,7 +291,7 @@ func (s settings) published(u unit, recorded registry.RecordedDigests) (bool, er
 	if len(digests) == 0 {
 		return false, nil
 	}
-	ref := u.ref(s.Version())
+	ref := s.Ref(u.registry, u.chart)
 	got, exists, err := s.resolve(ref)
 	if err != nil {
 		return false, s.Errorf("resolving %s: %w", ref, err)
@@ -347,7 +347,7 @@ func (s settings) record(units []unit) error {
 		return nil
 	}
 	refs, lookupErr := steps.Go(units, func(u unit) (string, error) {
-		ref := u.ref(s.Version())
+		ref := s.Ref(u.registry, u.chart)
 		digest, exists, err := s.resolve(ref)
 		if err != nil {
 			return "", s.Errorf("recording published chart %s: %w", u.chart, err)
@@ -397,11 +397,6 @@ func (s settings) units() []unit {
 
 func (u unit) repo() string {
 	return u.registry + "/" + u.chart
-}
-
-// ref names the chart at one version, the form a digest is resolved from.
-func (u unit) ref(version string) string {
-	return u.repo() + ":" + version
 }
 
 // A chart goes to several registries, so the registry is in the name.

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -29,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -422,6 +424,22 @@ func sha256Sums(dir string, files []string) ([]string, error) {
 	}
 	s.Logger().WithField("files", len(files)).Info("Wrote checksums")
 	return append(files, path), nil
+}
+
+func ReleaseFiles(dir, baseURL string) ([]outputs.ArtifactFile, error) {
+	paths, err := topLevelFiles(dir)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]outputs.ArtifactFile, len(paths))
+	for i, path := range paths {
+		u, err := url.JoinPath(baseURL, filepath.Base(path))
+		if err != nil {
+			return nil, fmt.Errorf("url for %s: %w", path, err)
+		}
+		files[i] = outputs.ArtifactFile{Path: path, URL: u}
+	}
+	return files, nil
 }
 
 func topLevelFiles(dir string) ([]string, error) {

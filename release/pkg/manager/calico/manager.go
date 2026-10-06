@@ -374,12 +374,90 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 	if err != nil {
 		return err
 	}
+	source, err := r.sourceMetadata()
+	if err != nil {
+		return err
+	}
+	charts, err := r.chartsMetadata()
+	if err != nil {
+		return err
+	}
+	var base string
+	if r.isHashRelease {
+		base = r.hashrelease.URL()
+	} else if base, err = github.DownloadURL(r.githubOrg, r.repo, r.calicoVersion); err != nil {
+		return fmt.Errorf("artifacts URL: %w", err)
+	}
+	files, err := distribution.ReleaseFiles(dir, base)
+	if err != nil {
+		return err
+	}
 	return outputs.BuildMetadata(&outputs.Metadata{
 		Version:         r.calicoVersion,
 		OperatorVersion: r.operatorVersion,
 		ChartVersion:    r.chart().Version(),
+		Source:          source,
+		Charts:          charts,
 		Released:        released,
-	}, outputs.Describer{Sources: sources, Resolve: r.digestResolver()}, dir)
+	}, outputs.Describer{
+		Images:    outputs.ImageDescriber{Sources: sources, Resolve: r.digestResolver()},
+		Artifacts: outputs.ArtifactDescriber{Files: files},
+	}, dir)
+}
+
+// A detached HEAD, as CI often checks out, has no branch to record.
+func (r *CalicoManager) sourceMetadata() (outputs.Source, error) {
+	commit, err := r.git("rev-parse", "HEAD")
+	if err != nil {
+		return outputs.Source{}, fmt.Errorf("resolve HEAD: %w", err)
+	}
+	branch, err := r.git("rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return outputs.Source{}, fmt.Errorf("determining branch: %w", err)
+	}
+	src := outputs.Source{
+		Repository: github.Repo{Org: r.githubOrg, Name: r.repo}.String(),
+		Commit:     strings.TrimSpace(commit),
+	}
+	if b := strings.TrimSpace(branch); b != "HEAD" {
+		src.Branch = b
+	}
+	if !r.isHashRelease {
+		src.Tag = r.calicoVersion
+	}
+	return src, nil
+}
+
+// Each chart is recorded at the first registry it was published to.
+func (r *CalicoManager) chartsMetadata() (*outputs.Charts, error) {
+	if !r.helmCharts {
+		return nil, nil
+	}
+	if len(r.helmRegistries) == 0 {
+		return nil, fmt.Errorf("no helm chart registries specified")
+	}
+	chart := r.chart()
+	base, err := r.chartsURL()
+	if err != nil {
+		return nil, err
+	}
+	out := &outputs.Charts{Version: chart.Version(), Entries: map[string]outputs.Chart{}}
+	if r.helmIndex {
+		if out.Index, err = r.helmRepo(); err != nil {
+			return nil, fmt.Errorf("helm repo URL: %w", err)
+		}
+	}
+	for _, name := range chart.Names {
+		u, err := url.JoinPath(base, charts.FileName(name, chart.Version()))
+		if err != nil {
+			return nil, fmt.Errorf("chart %s URL: %w", name, err)
+		}
+		out.Entries[name] = outputs.Chart{
+			Image: chart.Ref(r.helmRegistries[0], name),
+			URL:   u,
+		}
+	}
+	return out, nil
 }
 
 func (r *CalicoManager) digestSources() ([]registry.DigestSource, error) {
@@ -391,7 +469,11 @@ func (r *CalicoManager) digestSources() ([]registry.DigestSource, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []registry.DigestSource{imgs, op}, nil
+	chs, err := charts.DigestSource(r.outputDir, r.chart().Version())
+	if err != nil {
+		return nil, err
+	}
+	return []registry.DigestSource{imgs, op, chs}, nil
 }
 
 // Fetch the registry from the calicoctl manifest file.
@@ -566,17 +648,11 @@ func (r *CalicoManager) BuildHelm() error {
 	chart := r.chart()
 	opts := []charts.BuildOption{charts.WithRunner(r.runner)}
 	if r.helmIndex {
-		var chartsURL, repoURL string
-		var err error
-		if r.isHashRelease {
-			chartsURL = r.hashrelease.URL()
-		} else {
-			chartsURL, err = charts.ChartsURL(chart)
-			if err != nil {
-				return fmt.Errorf("charts URL: %w", err)
-			}
+		chartsURL, err := r.chartsURL()
+		if err != nil {
+			return err
 		}
-		repoURL, err = r.helmRepo()
+		repoURL, err := r.helmRepo()
 		if err != nil {
 			return fmt.Errorf("helm repo URL: %w", err)
 		}
@@ -586,6 +662,17 @@ func (r *CalicoManager) BuildHelm() error {
 		opts = append(opts, charts.WithModifiedValues(charts.ValueEditsFor(r.calicoVersion, r.imageRegistries[0], r.operatorImage, r.operatorVersion, r.operatorRegistry)))
 	}
 	return charts.Build(chart, opts...)
+}
+
+func (r *CalicoManager) chartsURL() (string, error) {
+	if r.isHashRelease {
+		return r.hashrelease.URL(), nil
+	}
+	u, err := charts.ChartsURL(r.chart())
+	if err != nil {
+		return "", fmt.Errorf("charts URL: %w", err)
+	}
+	return u, nil
 }
 
 // chart identifies this release's charts to the charts package.

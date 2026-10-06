@@ -25,9 +25,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	ghapi "github.com/google/go-github/v53/github"
 
 	gh "github.com/projectcalico/calico/release/internal/github"
+	"github.com/projectcalico/calico/release/internal/outputs"
 )
 
 // fakeRunner records the command a destination built, so a test asserts on
@@ -543,4 +545,33 @@ func TestPublishIsIdempotent(t *testing.T) {
 			t.Errorf("a second run changed the sums file:\nfirst:\n%s\nsecond:\n%s", first, bs)
 		}
 	}
+}
+
+func TestReleaseFiles(t *testing.T) {
+	t.Run("links each top-level file under the base URL", func(t *testing.T) {
+		dir := t.TempDir()
+		for _, n := range []string{"release.tgz", sumsFileName, "charts/index.yaml"} {
+			path := filepath.Join(dir, n)
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(n), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		got, err := ReleaseFiles(dir, "https://example.com/v3.30.0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []outputs.ArtifactFile{{Path: filepath.Join(dir, "release.tgz"), URL: "https://example.com/v3.30.0/release.tgz"}}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("files (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("fails on a missing directory", func(t *testing.T) {
+		if _, err := ReleaseFiles(filepath.Join(t.TempDir(), "missing"), "https://example.com"); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("err = %v, want it to wrap os.ErrNotExist", err)
+		}
+	})
 }
