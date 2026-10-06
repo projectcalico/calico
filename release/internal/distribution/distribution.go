@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/steps"
 )
 
@@ -44,13 +45,36 @@ type Upload struct {
 
 	Name string
 
-	//  when the step that produces Source did not run.
+	// A skipped upload stays in the plan but does not run.
 	Skip bool
 }
 
 // A handler that finds its own content does not implement this.
 type validator interface {
 	Validate(u Upload) error
+}
+
+// Only a handler that publishes files where users download them lists them.
+type artifactLister interface {
+	artifacts(src string) ([]outputs.ArtifactFile, error)
+}
+
+// Artifacts lists the files the pipeline publishes for download, with the URL
+// each will be served at.
+func Artifacts(pipeline []Upload) ([]outputs.ArtifactFile, error) {
+	var files []outputs.ArtifactFile
+	for _, u := range pipeline {
+		l, ok := u.Handler.(artifactLister)
+		if u.Skip || !ok {
+			continue
+		}
+		f, err := l.artifacts(u.Source)
+		if err != nil {
+			return nil, fmt.Errorf("artifacts of %s: %w", u.label(), err)
+		}
+		files = append(files, f...)
+	}
+	return files, nil
 }
 
 // Falls back to the destination, so a log line reads without a Name.

@@ -366,9 +366,8 @@ func TestPublishGithubReleaseSkipped(t *testing.T) {
 		repo:          "calico",
 		outputDir:     t.TempDir(),
 	}
-	upload := r.githubReleaseUpload()
-	if upload != nil {
-		t.Errorf("expected no upload with the flag off, got %+v", upload)
+	if upload := r.githubReleaseUpload(); !upload.Skip {
+		t.Errorf("expected the upload skipped with the flag off, got %+v", upload)
 	}
 	if len(f.calls) != 0 {
 		t.Errorf("expected nothing run with the flag off, got %v", f.calls)
@@ -687,11 +686,7 @@ func TestReleaseNoteNamesTheArtifactsThroughTheirAccessors(t *testing.T) {
 		githubOrg:     "projectcalico",
 		repo:          "calico",
 	}
-	up := m.githubReleaseUpload()
-	if up == nil {
-		t.Fatal("githubReleaseUpload() = nil")
-	}
-	body := up.Handler.(distribution.GithubRelease).Body
+	body := m.githubReleaseUpload().Handler.(distribution.GithubRelease).Body
 
 	// Stated outright rather than computed from the accessors: the note tells a
 	// user what to download, so it has to match the published asset names that
