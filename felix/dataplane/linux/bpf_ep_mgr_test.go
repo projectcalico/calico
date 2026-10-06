@@ -86,10 +86,12 @@ type mockDataplane struct {
 	// netkitPins stands in for the netkit link pins under /sys/fs/bpf/netkit,
 	// i.e. the interfaces a previous Felix left netkit-attached.
 	netkitPins map[string]bool
+	// preambleQueries records the attach points preambleAttached was asked about.
+	preambleQueries []tc.AttachPoint
 
 	ensureStartedFn         func()
 	ensureQdiscFn           func(string) (bool, error)
-	queryClassifierFn       func(ifaceName, tcHook string) bool
+	preambleAttachedFn      func(ap *tc.AttachPoint, h hook.Hook) bool
 	ensureProgramLayoutFn   func(ap *tc.AttachPoint, ipFamily proto.IPVersion) error
 	ensureProgramAttachedFn func(ap attachPoint) error
 	interfaceByIndexFn      func(ifindex int) (*net.Interface, error)
@@ -390,11 +392,25 @@ func (m *mockDataplane) ruleMatchID(dir rules.RuleDir, action string, owner rule
 	return h.Sum64()
 }
 
-func (m *mockDataplane) queryClassifier(ifaceName, tcHook string) bool {
-	if m.queryClassifierFn != nil {
-		return m.queryClassifierFn(ifaceName, tcHook)
+func (m *mockDataplane) preambleAttached(ap *tc.AttachPoint, h hook.Hook) bool {
+	m.mutex.Lock()
+	q := *ap
+	q.Hook = h
+	m.preambleQueries = append(m.preambleQueries, q)
+	m.mutex.Unlock()
+	if m.preambleAttachedFn != nil {
+		return m.preambleAttachedFn(ap, h)
 	}
 	return true
+}
+
+// takePreambleQueries returns and clears the recorded preambleAttached queries.
+func (m *mockDataplane) takePreambleQueries() []tc.AttachPoint {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	q := m.preambleQueries
+	m.preambleQueries = nil
+	return q
 }
 
 var (
@@ -1579,7 +1595,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			dp.ensureQdiscFn = func(string) (bool, error) { return false, nil }
 		}),
 		Entry("classifier missing", func() {
-			dp.queryClassifierFn = func(string, string) bool { return false }
+			dp.preambleAttachedFn = func(*tc.AttachPoint, hook.Hook) bool { return false }
 		}),
 	)
 
@@ -1672,6 +1688,17 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(qdiscs).NotTo(ContainElement("calinkit0"))
 		})
 
+		It("should ask netkit whether a ready workload's preamble is attached", func() {
+			dp.takePreambleQueries()
+			genIfaceUpdate("calinkit0", ifacemonitor.StateUp, 50)()
+			queries := dp.takePreambleQueries()
+			Expect(queries).To(HaveLen(2))
+			for _, q := range queries {
+				Expect(q.IsNetkit()).To(BeTrue())
+				Expect(q.IfIndex).To(Equal(50))
+			}
+		})
+
 		It("should clean up netkit jump maps on interface removal", func() {
 			genIfaceUpdate("calinkit0", ifacemonitor.StateNotPresent, 50)()
 			genWLUpdateEpRemove("calinkit0")()
@@ -1702,6 +1729,18 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			It("should ensure a qdisc for it", func() {
 				// A netkit device never had one, but the TC attach path needs it.
 				Expect(qdiscs).To(ContainElement("calinkit0"))
+			})
+
+			It("should ask TC/TCX whether a ready workload's preamble is attached", func() {
+				dp.ensureQdiscFn = func(string) (bool, error) { return true, nil }
+				dp.takePreambleQueries()
+				genIfaceUpdate("calinkit0", ifacemonitor.StateUp, 50)()
+				queries := dp.takePreambleQueries()
+				Expect(queries).To(HaveLen(2))
+				for _, q := range queries {
+					Expect(q.IsNetkit()).To(BeFalse())
+					Expect(q.AttachType).To(Equal(bpfEpMgr.bpfAttachType))
+				}
 			})
 		})
 	})
