@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
 package storage
 
 import (
+	"cmp"
+	"slices"
 	"sort"
 
 	"github.com/sirupsen/logrus"
@@ -41,6 +43,12 @@ type RingIndex struct {
 	agg logAggregator
 }
 
+// idFlow pairs an aggregated flow with the ID of the DiachronicFlow it came from.
+type idFlow struct {
+	id   int64
+	flow *types.Flow
+}
+
 func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 	logrus.WithFields(logrus.Fields{
 		"opts": opts,
@@ -52,7 +60,7 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 	keys := a.agg.FlowSet(opts.startTimeGt, opts.startTimeLt)
 
 	// Aggregate the relevant DiachronicFlows across the time range.
-	flowsByKey := map[types.FlowKey]*types.Flow{}
+	var matched []idFlow
 	for d := range keys.All() {
 		logCtx := logrus.WithField("id", d.ID)
 		if logrus.IsLevelEnabled(logrus.DebugLevel) {
@@ -65,21 +73,23 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 			flow := d.Aggregate(opts.startTimeGt, opts.startTimeLt)
 			if flow != nil {
 				logCtx.Debug("Aggregated flow")
-				flowsByKey[*flow.Key] = flow
+				matched = append(matched, idFlow{id: d.ID, flow: flow})
 			}
 		}
 	}
 
-	// Convert the map to a slice.
-	flows := []*types.Flow{}
-	for _, flow := range flowsByKey {
-		flows = append(flows, flow)
-	}
-
-	// Sort the flows by start time, sorting newer flows first.
-	sort.Slice(flows, func(i, j int) bool {
-		return flows[i].StartTime > flows[j].StartTime
+	// Sort newer flows first. Start times are bucket-aligned, so ties are common, and breaking
+	// them on ID keeps the order, and so the pages, stable across requests.
+	slices.SortFunc(matched, func(a, b idFlow) int {
+		if c := cmp.Compare(b.flow.StartTime, a.flow.StartTime); c != 0 {
+			return c
+		}
+		return cmp.Compare(b.id, a.id)
 	})
+	flows := make([]*types.Flow, 0, len(matched))
+	for _, m := range matched {
+		flows = append(flows, m.flow)
+	}
 
 	// Assign the total before the result is trimmed to match the page size and start page.
 	totalFlows := len(flows)
