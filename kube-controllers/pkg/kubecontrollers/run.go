@@ -429,14 +429,15 @@ func (cc *controllerControl) initControllers(
 		calicoFactory := externalversions.NewSharedInformerFactory(v3c, 5*time.Minute)
 		poolInformer := calicoFactory.Projectcalico().V3().IPPools().Informer()
 		blockInformer := calicoFactory.Projectcalico().V3().IPAMBlocks().Informer()
+		reservationInformer := calicoFactory.Projectcalico().V3().IPReservations().Informer()
 
 		apiCfg, _ := apiconfig.LoadClientConfigFromEnvironment()
 		v3CRDs := k8s.UsingV3CRDs(&apiCfg.Spec)
 
 		if v3CRDs {
-			poolController := ippool.NewController(ctx, v3c, poolInformer, blockInformer, calicoClient.IPAM())
+			poolController := ippool.NewController(ctx, v3c, poolInformer, blockInformer, reservationInformer, calicoClient.IPAM())
 			cc.controllers["IPPool"] = poolController
-			cc.registerInformers(poolInformer, blockInformer)
+			cc.registerInformers(poolInformer, blockInformer, reservationInformer)
 
 			tierInformer := calicoFactory.Projectcalico().V3().Tiers().Informer()
 			gnpInformer := calicoFactory.Projectcalico().V3().GlobalNetworkPolicies().Informer()
