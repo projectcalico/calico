@@ -217,11 +217,11 @@ func (c *IPPoolController) reconcile() error {
 		errs = append(errs, err)
 	}
 
-	// The tracker learns of a CIDROverlap change when the pool's status update reaches the data feed, and until then
-	// credits blocks to the wrong pool. That update queues the next pass.
 	if !c.inSync.Load() {
 		logrus.Debug("IPAM data feed not in sync; leaving AddressSpaceNearlyFull for now")
 	} else if overlapChanged {
+		// The tracker learns of a CIDROverlap change when the pool's status update reaches the data feed, and until
+		// then credits blocks to the wrong pool. That update queues the next pass.
 		logrus.Debug("CIDROverlap changed; leaving AddressSpaceNearlyFull to the next pass")
 	} else if err := c.reconcileNearlyFull(c.ctx, pools); err != nil {
 		errs = append(errs, err)
@@ -467,11 +467,12 @@ func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logru
 		return err
 	}
 
-	// If there are no IPAM blocks left in this pool, it is safe to remove our finalizer.
 	if !c.inSync.Load() {
 		logCtx.Info("IPAM data feed not in sync, not removing finalizer")
 		return nil
 	}
+
+	// If there are no IPAM blocks left in this pool, it is safe to remove our finalizer.
 	if c.tracker.HasBlocksWithin(*parsedNet) {
 		logCtx.Info("IPAM blocks still exist in pool, not removing finalizer")
 		return nil
