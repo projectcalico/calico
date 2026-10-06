@@ -189,3 +189,53 @@ func TestRefsAreWrittenBesideTheUploadDirNotInIt(t *testing.T) {
 		t.Errorf("expected the ref back, got %v", got)
 	}
 }
+
+func TestDigestSourceFor(t *testing.T) {
+	const (
+		version = "v3.30.0"
+		node    = "quay.io/calico/node:v3.30.0"
+	)
+	record := func(t *testing.T, dir, step string, refs ...string) {
+		t.Helper()
+		w, err := NewRefsWriter(dir, step, version)
+		if err != nil {
+			t.Fatalf("NewRefsWriter: %v", err)
+		}
+		if err := w.Add(refs...); err != nil {
+			t.Fatalf("Add: %v", err)
+		}
+	}
+
+	t.Run("reads the steps in the order given", func(t *testing.T) {
+		dir := filepath.Join(t.TempDir(), "upload")
+		record(t, dir, "publish", node+"@sha256:aaa")
+		record(t, dir, "resolve", node+"@sha256:bbb")
+		src, err := DigestSourceFor(dir, version, "publish", "resolve")
+		if err != nil {
+			t.Fatalf("DigestSourceFor: %v", err)
+		}
+		if got, _ := src.Digest(node); got != "sha256:aaa" {
+			t.Errorf("Digest = %q, want the publish record's sha256:aaa", got)
+		}
+	})
+
+	t.Run("a step that has not run misses", func(t *testing.T) {
+		src, err := DigestSourceFor(t.TempDir(), version, "publish")
+		if err != nil {
+			t.Fatalf("DigestSourceFor: %v", err)
+		}
+		if got, ok := src.Digest(node); ok {
+			t.Errorf("Digest = %q, want a miss", got)
+		}
+	})
+
+	t.Run("an unreadable record fails", func(t *testing.T) {
+		dir := filepath.Join(t.TempDir(), "upload")
+		if err := os.MkdirAll(filepath.Join(RecordsDir(dir, "publish", version), refsFileName), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if _, err := DigestSourceFor(dir, version, "publish"); err == nil {
+			t.Error("expected an unreadable record to fail")
+		}
+	})
+}
