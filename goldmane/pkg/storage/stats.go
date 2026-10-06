@@ -227,6 +227,10 @@ type policyRule struct {
 	policyKey StatisticsKey
 	ruleKey   StatisticsKey
 	action    proto.Action
+
+	// countPolicy is set on the first rule for each policy and action, so the policy's totals
+	// count the flow once per action however many of its rules the flow hits.
+	countPolicy bool
 }
 
 // toPolicyRules decodes the key's enforced and pending policy hits into the deduplicated rules
@@ -258,7 +262,11 @@ func toPolicyRules(k *types.FlowKey) []policyRule {
 			if slices.ContainsFunc(rules, func(r policyRule) bool { return r.ruleKey == sk }) {
 				continue
 			}
-			rules = append(rules, policyRule{policyKey: sk.policyID(), ruleKey: sk, action: hit.Action})
+			pk := sk.policyID()
+			counted := slices.ContainsFunc(rules, func(r policyRule) bool {
+				return r.policyKey == pk && r.action == hit.Action
+			})
+			rules = append(rules, policyRule{policyKey: pk, ruleKey: sk, action: hit.Action, countPolicy: !counted})
 		}
 	}
 	return rules
@@ -278,8 +286,9 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow, rules []policyRule) {
 			s.policies[rule.policyKey] = ps
 		}
 
-		// Add the Flow's stats to the policy.
-		ps.add(flow, rule.action)
+		if rule.countPolicy {
+			ps.add(flow, rule.action)
+		}
 
 		// Add the Flow's stats to the rule within the policy.
 		rs, ok := ps.rules[rule.ruleKey]
