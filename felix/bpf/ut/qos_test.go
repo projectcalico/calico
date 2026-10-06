@@ -428,15 +428,15 @@ func TestQoSConnLimitEgressRecycleNotDoubleCounted(t *testing.T) {
 	// carry fin_seen so tcp_recycled() returns true. The leg ifindex is
 	// set on the opener leg (a) to match our pod interface, which is
 	// where qos_connlimit_decrement_for_ct will read it from.
+	legA := ctv4.Leg{SynSeen: true, AckSeen: true, FinSeen: true, Opener: true, Ifindex: ifIndex}
+	legB := ctv4.Leg{SynSeen: true, AckSeen: true, FinSeen: true}
+	// The CT key normalizes the A/B ordering; we use NewKey with
+	// proto/IPs/ports in our tuple's source-first order — internal
+	// normalization picks A and B based on src_lt_dest. The keys
+	// the BPF program looks up must match exactly, so we use the
+	// same constructor here that the BPF lookup uses logically.
+	k := ctv4.NewKey(6, srcIP, srcPort, dstIP, dstPort)
 	preloadCTEntry := func(flags uint32) {
-		legA := ctv4.Leg{SynSeen: true, AckSeen: true, FinSeen: true, Opener: true, Ifindex: ifIndex}
-		legB := ctv4.Leg{SynSeen: true, AckSeen: true, FinSeen: true}
-		// The CT key normalizes the A/B ordering; we use NewKey with
-		// proto/IPs/ports in our tuple's source-first order — internal
-		// normalization picks A and B based on src_lt_dest. The keys
-		// the BPF program looks up must match exactly, so we use the
-		// same constructor here that the BPF lookup uses logically.
-		k := ctv4.NewKey(6, srcIP, srcPort, dstIP, dstPort)
 		v := ctv4.NewValueNormal(time.Duration(0), flags, legA, legB)
 		Expect(ctMap.Update(k.AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
 	}
@@ -512,6 +512,33 @@ func TestQoSConnLimitEgressRecycleNotDoubleCounted(t *testing.T) {
 		// decrements 1 → 0; new_flow_entrypoint then increments 0 → 1.
 		// Without the fix: 1 + 1 = 2 (drift).
 		Expect(readQoSCount()).To(Equal(uint32(1)))
+	})
+
+	t.Run("recycle of never-decremented NAT reverse entry: counter stays at 1, not 2", func(t *testing.T) {
+		RegisterTestingT(t)
+		resetCTMap(ctMap)
+		resetQoSMap(qosConnMap)
+		defer resetCTMap(ctMap)
+		defer resetQoSMap(qosConnMap)
+
+		// A closed service connection to this backend left its reverse
+		// entry, still counted; the pod now connects to the backend directly.
+		v := ctv4.NewValueNATReverse(time.Duration(0), ctv4.FlagConnLimitOut, legA, legB,
+			nil, net.IPv4(10, 96, 0, 1), 80)
+		Expect(ctMap.Update(k.AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
+		seedQoSCount(1)
+
+		skbMark = 0
+		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+		}, withEgressQoSConnLimit())
+
+		Expect(readQoSCount()).To(Equal(uint32(1)))
+		b, err := ctMap.Get(k.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ctv4.ValueFromBytes(b).Type()).To(Equal(ctv4.TypeNormal))
 	})
 }
 
