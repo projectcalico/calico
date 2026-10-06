@@ -164,7 +164,7 @@ func (t *Tracker) AddPools(ipPools ...*v3.IPPool) {
 		ownBlocks := slices.Clone(pool.blocks.inOrder())
 		pool.ipPool, pool.net = ipPool, poolNet
 		pool.prefix, _ = poolNet.Mask.Size()
-		pool.blockSize, pool.lostOverlap = BlockSize(ipPool), lostOverlap(ipPool)
+		pool.blockSize, pool.lostOverlap = BlockSize(ipPool), LostOverlap(ipPool)
 		if !existed {
 			t.recountPool(pool)
 		}

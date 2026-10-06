@@ -100,17 +100,17 @@ func allocatedBlock(t *testing.T, cidr string, numAllocated int) *model.Allocati
 	return block
 }
 
-// Until the tracker sees a new CIDROverlap condition it credits a busy block to the narrower, losing pool, so the
-// pass that writes the condition must not judge either pool nearly full.
+// Until the tracker sees a new CIDROverlap condition it credits a busy block to the narrower, losing pool. The pass
+// writing the condition skips nearly-full; the next pass judges it correctly.
 func TestReconcile_NearlyFullWaitsForANewCIDROverlap(t *testing.T) {
-	wide := testPool("wide", "10.0.0.0/24")
+	wide := testPool("wide", "10.0.0.0/25")
 	wide.Status = &v3.IPPoolStatus{Conditions: []metav1.Condition{{
 		Type: v3.IPPoolConditionAllocatable, Status: metav1.ConditionTrue, Reason: v3.IPPoolReasonOK,
 	}}}
 	narrow := testPool("narrow", "10.0.0.0/26")
 	cli := fake.NewClientset(wide, narrow)
 	c, idx := newTestController(cli, wide, narrow)
-	c.tracker.AddBlocks(allocatedBlock(t, "10.0.0.0/26", 52))
+	c.tracker.AddBlocks(allocatedBlock(t, "10.0.0.0/26", 52), allocatedBlock(t, "10.0.0.64/26", 52))
 
 	if err := c.reconcile(); err != nil {
 		t.Fatalf("reconcile: %v", err)
@@ -119,14 +119,14 @@ func TestReconcile_NearlyFullWaitsForANewCIDROverlap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if !lostCIDROverlap(gotNarrow) {
+	if !accounting.LostOverlap(gotNarrow) {
 		t.Fatalf("expected the narrower, newer pool to lose the overlap, got %+v", gotNarrow.Status)
 	}
 	if hasCondition(gotNarrow, v3.IPPoolConditionAddressSpaceNearlyFull, metav1.ConditionTrue) {
 		t.Fatalf("narrow is nearly full on the pass that ruled it out, from a block it no longer owns: %+v", gotNarrow.Status)
 	}
 
-	// Deliver the status update the way the informer would. The block moves to wide: 52 of 256 is not nearly full.
+	// Deliver the status update the way the informer would. Both blocks move to wide: 104 of 128 is nearly full.
 	if err := idx.Update(gotNarrow); err != nil {
 		t.Fatalf("update cache: %v", err)
 	}
@@ -134,14 +134,19 @@ func TestReconcile_NearlyFullWaitsForANewCIDROverlap(t *testing.T) {
 	if err := c.reconcile(); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
-	for _, name := range []string{wide.Name, narrow.Name} {
-		got, err := cli.ProjectcalicoV3().IPPools().Get(c.ctx, name, metav1.GetOptions{})
-		if err != nil {
-			t.Fatalf("get: %v", err)
-		}
-		if hasCondition(got, v3.IPPoolConditionAddressSpaceNearlyFull, metav1.ConditionTrue) {
-			t.Errorf("%s: expected no AddressSpaceNearlyFull once the tracker credits the block to wide, got %+v", name, got.Status)
-		}
+	gotWide, err := cli.ProjectcalicoV3().IPPools().Get(c.ctx, wide.Name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if !hasCondition(gotWide, v3.IPPoolConditionAddressSpaceNearlyFull, metav1.ConditionTrue) {
+		t.Errorf("expected AddressSpaceNearlyFull on wide once it is credited with both blocks, got %+v", gotWide.Status)
+	}
+	gotNarrow, err = cli.ProjectcalicoV3().IPPools().Get(c.ctx, narrow.Name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if hasCondition(gotNarrow, v3.IPPoolConditionAddressSpaceNearlyFull, metav1.ConditionTrue) {
+		t.Errorf("expected no AddressSpaceNearlyFull on narrow, which owns no blocks, got %+v", gotNarrow.Status)
 	}
 }
 

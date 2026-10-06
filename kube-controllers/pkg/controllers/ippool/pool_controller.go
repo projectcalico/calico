@@ -321,7 +321,7 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) ([]*v3.IPPoo
 			continue
 		}
 		pools = append(pools, p.DeepCopy())
-		lostOverlapBefore[p.Name] = lostCIDROverlap(p)
+		lostOverlapBefore[p.Name] = accounting.LostOverlap(p)
 	}
 	slices.SortFunc(pools, poolSortFunc)
 
@@ -429,22 +429,12 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) ([]*v3.IPPoo
 
 	overlapChanged := false
 	for _, pool := range pools {
-		if lostCIDROverlap(pool) != lostOverlapBefore[pool.Name] {
+		if accounting.LostOverlap(pool) != lostOverlapBefore[pool.Name] {
 			overlapChanged = true
 			break
 		}
 	}
 	return pools, overlapChanged, utilerrors.NewAggregate(errs)
-}
-
-// lostCIDROverlap is whether the pool carries the CIDROverlap condition, which is what the tracker reads to rank a
-// pool last when attributing blocks.
-func lostCIDROverlap(p *v3.IPPool) bool {
-	if p.Status == nil {
-		return false
-	}
-	cond := meta.FindStatusCondition(p.Status.Conditions, v3.IPPoolConditionAllocatable)
-	return cond != nil && cond.Status == metav1.ConditionFalse && cond.Reason == v3.IPPoolReasonCIDROverlap
 }
 
 func poolSortFunc(poolA, poolB *v3.IPPool) int {
