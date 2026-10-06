@@ -79,7 +79,7 @@ func (s *stream) run() {
 				return
 			}
 
-			b.Iter(func(f storage.FlowBuilder) bool {
+			b.Iter(s.Req.GetFilter(), func(f storage.FlowBuilder) bool {
 				if err := chanutil.WriteWithDeadline(s.ctx, s.out, f, 60*time.Second); err != nil {
 					// If we hit an error, indicate that we should stop iteration.
 					s.rl.WithFields(logrus.Fields{"id": s.ID}).WithError(err).Debug("Error writing flow to stream output")
