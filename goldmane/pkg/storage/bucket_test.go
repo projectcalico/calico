@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,11 +16,13 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/time"
 )
 
@@ -90,7 +92,7 @@ func TestConcurrentAccess(t *testing.T) {
 				// Iterate the bucket, sending an indicator when we have started the first iteration.
 				// We'll then just wait for the context to expire and exit. If concurrent access does not function,
 				// we will block other readers.
-				b.Iter(func(b FlowBuilder) bool {
+				b.Iter(nil, func(b FlowBuilder) bool {
 					iterStarted <- true
 					<-ctx.Done()
 					return true // Indicates stop iteration.
@@ -135,7 +137,7 @@ func TestConcurrentAccess(t *testing.T) {
 				t.Errorf("Test timed out")
 				return
 			default:
-				b.Iter(func(FlowBuilder) bool {
+				b.Iter(nil, func(FlowBuilder) bool {
 					return false
 				})
 			}
@@ -153,8 +155,79 @@ func TestReady(t *testing.T) {
 
 	addFlows(b, cache, 100)
 	b.ready = false
-	b.Iter(func(_ FlowBuilder) bool {
+	b.Iter(nil, func(_ FlowBuilder) bool {
 		t.Errorf("Should not iterate!")
 		return true
 	})
+}
+
+// addNamespacedFlows adds n distinct flows from namespace ns to the bucket.
+func addNamespacedFlows(b *AggregationBucket, cache *diachronicCache, ns string, n int) {
+	for i := range n {
+		f := testutils.NewRandomFlow(now.Unix())
+		f.Key.SourceNamespace = ns
+		f.Key.SourceName = fmt.Sprintf("%s-client-%d", ns, i)
+		tf := types.ProtoToFlow(f)
+		cache.add(tf)
+		b.AddFlow(tf)
+	}
+	b.markReady()
+}
+
+func TestIterFilter(t *testing.T) {
+	_, cache, b, cancel := setup(t)
+	defer cancel()
+
+	addNamespacedFlows(b, cache, "match", 3)
+	addNamespacedFlows(b, cache, "other", 5)
+
+	count := func(filter *proto.Filter) int {
+		var n int
+		b.Iter(filter, func(FlowBuilder) bool {
+			n++
+			return false
+		})
+		return n
+	}
+
+	filter := &proto.Filter{SourceNamespaces: []*proto.StringMatch{{Value: "match", Type: proto.MatchType_Exact}}}
+	if got := count(filter); got != 3 {
+		t.Errorf("expected 3 flows matching the filter, got %d", got)
+	}
+	if got := count(nil); got != 8 {
+		t.Errorf("expected all 8 flows with no filter, got %d", got)
+	}
+	if got := count(&proto.Filter{}); got != 8 {
+		t.Errorf("expected all 8 flows with an empty filter, got %d", got)
+	}
+}
+
+// A consumer that stalls inside Iter must not hold up writes to the bucket.
+func TestIterDoesNotBlockAddFlow(t *testing.T) {
+	_, cache, b, cancel := setup(t)
+	defer cancel()
+
+	addFlows(b, cache, 10)
+
+	release := make(chan struct{})
+	defer close(release)
+	inIter := make(chan struct{})
+	go b.Iter(nil, func(FlowBuilder) bool {
+		close(inIter)
+		<-release
+		return true
+	})
+	<-inIter
+
+	added := make(chan struct{})
+	go func() {
+		addFlows(b, cache, 1)
+		close(added)
+	}()
+
+	select {
+	case <-added:
+	case <-time.After(5 * time.Second):
+		t.Fatal("AddFlow blocked while a consumer was stalled inside Iter")
+	}
 }
