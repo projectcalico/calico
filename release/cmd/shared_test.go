@@ -290,3 +290,36 @@ func TestRecordsDir(t *testing.T) {
 		}
 	})
 }
+
+func TestPinForRelease(t *testing.T) {
+	root := fakeRepo(t, "v3.30.0")
+	operatorManifest := filepath.Join(root, "manifests", "tigera-operator.yaml")
+	if err := os.WriteFile(operatorManifest, []byte("          image: quay.io/calico/operator:v1.38.0\n"), 0o644); err != nil {
+		t.Fatalf("write operator manifest: %v", err)
+	}
+	prev := loadPin
+	t.Cleanup(func() { loadPin = prev })
+
+	t.Run("takes the operator version from the manifests", func(t *testing.T) {
+		loadPin = func(*Config, *cli.Command) (*pinnedversion.Pin, error) {
+			return &pinnedversion.Pin{
+				ProductVersion: "v3.30.0",
+				Operator:       registry.Component{Image: registry.OperatorImage, Version: "v3.30.0"},
+			}, nil
+		}
+		pin, err := pinForRelease(&Config{RepoRootDir: root}, nil)
+		if err != nil {
+			t.Fatalf("pinForRelease: %v", err)
+		}
+		if pin.Operator.Version != "v1.38.0" {
+			t.Errorf("operator version = %q, want the manifests' v1.38.0", pin.Operator.Version)
+		}
+	})
+
+	t.Run("fails when the manifests name no operator", func(t *testing.T) {
+		loadPin = func(*Config, *cli.Command) (*pinnedversion.Pin, error) { return &pinnedversion.Pin{}, nil }
+		if _, err := pinForRelease(&Config{RepoRootDir: t.TempDir()}, nil); err == nil {
+			t.Error("pinForRelease succeeded without manifests")
+		}
+	})
+}

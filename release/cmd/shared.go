@@ -171,6 +171,21 @@ var (
 	pinForPublish = builtPin
 )
 
+// A generated pin versions the operator like the product; a release takes the
+// operator's own version from the manifests.
+func pinForRelease(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
+	pin, err := loadPin(cfg, c)
+	if err != nil {
+		return nil, err
+	}
+	_, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
+	if err != nil {
+		return nil, fmt.Errorf("operator version from manifests: %w", err)
+	}
+	pin.Operator.Version = operatorVer.FormattedString()
+	return pin, nil
+}
+
 // releaseVersion is the version being released. A hashrelease is versioned from git.
 var releaseVersion = func(cfg *Config, c *cli.Command) (*version.Version, error) {
 	if c.Bool(hashreleaseFlag.Name) {

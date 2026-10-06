@@ -187,6 +187,11 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
 				}
+				pin, err := pinForRelease(cfg, c)
+				if err != nil {
+					return err
+				}
+				opts = append(opts, calico.WithComponents(pin.Images()))
 				if reg := c.StringSlice(helmRegistryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithHelmRegistries(reg))
 				}
