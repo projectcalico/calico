@@ -275,12 +275,16 @@ func (c *IPPoolController) reconcile() error {
 	var errs []error
 
 	// Conditions first: whether a pool is allocatable decides whether it should carry a finalizer.
-	pools, err := c.reconcileConditions(c.ctx)
+	pools, overlapChanged, err := c.reconcileConditions(c.ctx)
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	if err := c.reconcileNearlyFull(c.ctx, pools); err != nil {
+	// The tracker learns of a CIDROverlap change from its status update, so until then it credits blocks to the
+	// wrong pool. That update queues the next pass, which sees the new attribution.
+	if overlapChanged {
+		logrus.Debug("CIDROverlap changed; leaving AddressSpaceNearlyFull to the next pass")
+	} else if err := c.reconcileNearlyFull(c.ctx, pools); err != nil {
 		errs = append(errs, err)
 	}
 
@@ -301,13 +305,15 @@ func (c *IPPoolController) reconcile() error {
 
 // reconcileConditions checks for various conditions that should be set on each IP pool. It returns
 // the pools with the derived conditions applied, so the finalizer pass acts on what we just wrote
-// rather than on the informer cache, which will not have caught up yet.
-func (c *IPPoolController) reconcileConditions(ctx context.Context) ([]*v3.IPPool, error) {
+// rather than on the informer cache, which will not have caught up yet. The bool is whether any
+// pool gained or lost CIDROverlap.
+func (c *IPPoolController) reconcileConditions(ctx context.Context) ([]*v3.IPPool, bool, error) {
 	// Copy up front. Objects in the indexer are shared with the informer and every other handler,
 	// so mutating one in place both races and leaves the cache asserting state the API server may
 	// have rejected, which would suppress every future write attempt.
 	objs := c.poolInformer.GetIndexer().List()
 	pools := make([]*v3.IPPool, 0, len(objs))
+	lostOverlapBefore := make(map[string]bool, len(objs))
 	for _, obj := range objs {
 		p, ok := obj.(*v3.IPPool)
 		if !ok {
@@ -315,6 +321,7 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) ([]*v3.IPPoo
 			continue
 		}
 		pools = append(pools, p.DeepCopy())
+		lostOverlapBefore[p.Name] = lostCIDROverlap(p)
 	}
 	slices.SortFunc(pools, poolSortFunc)
 
@@ -420,7 +427,24 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) ([]*v3.IPPoo
 		}
 	}
 
-	return pools, utilerrors.NewAggregate(errs)
+	overlapChanged := false
+	for _, pool := range pools {
+		if lostCIDROverlap(pool) != lostOverlapBefore[pool.Name] {
+			overlapChanged = true
+			break
+		}
+	}
+	return pools, overlapChanged, utilerrors.NewAggregate(errs)
+}
+
+// lostCIDROverlap is whether the pool carries the CIDROverlap condition, which is what the tracker reads to rank a
+// pool last when attributing blocks.
+func lostCIDROverlap(p *v3.IPPool) bool {
+	if p.Status == nil {
+		return false
+	}
+	cond := meta.FindStatusCondition(p.Status.Conditions, v3.IPPoolConditionAllocatable)
+	return cond != nil && cond.Status == metav1.ConditionFalse && cond.Reason == v3.IPPoolReasonCIDROverlap
 }
 
 func poolSortFunc(poolA, poolB *v3.IPPool) int {
