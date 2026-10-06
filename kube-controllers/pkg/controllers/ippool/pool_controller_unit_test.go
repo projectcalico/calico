@@ -36,6 +36,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -203,6 +205,18 @@ func (f *fakeSharedIndexInformer) GetIndexer() cache.Indexer {
 func (f *fakeSharedIndexInformer) GetStore() cache.Store {
 	return f.indexer
 }
+
+// AddEventHandler registers nothing, and reports the handler synced straight away.
+func (f *fakeSharedIndexInformer) AddEventHandler(cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error) {
+	return syncedRegistration{}, nil
+}
+
+// syncedRegistration implements only HasSynced, the one method the controller calls.
+type syncedRegistration struct {
+	cache.ResourceEventHandlerRegistration
+}
+
+func (syncedRegistration) HasSynced() bool { return true }
 
 // fakeIPAM stubs out the IPAM calls the finalizer path makes for a deleting pool.
 type fakeIPAM struct {
@@ -638,7 +652,7 @@ func TestSetConditionOnPool_KeepsTransitionTimeWhileTheStatusHolds(t *testing.T)
 	}
 }
 
-// pool-2 gaining a finalizer shows that a reconcile ran, and none may run while the handlers are still feeding the tracker.
+// pool-2 gaining a finalizer shows that a reconcile ran, and none may run before every handler has synced.
 func TestRun_WaitsForTheHandlersBeforeReconciling(t *testing.T) {
 	active := testPool("pool-2", "10.0.0.0/24")
 	cli := fake.NewClientset(active)
@@ -693,18 +707,21 @@ func TestReconcileFinalizer_KeepsTheFinalizerUntilInSync(t *testing.T) {
 	expectFinalizer(t, cli, "pool-1", false)
 }
 
+// Built through NewController, so it fails if the controller stops holding Run for the data feed.
 func TestRun_WaitsForTheDataFeedToSync(t *testing.T) {
 	active := testPool("pool-2", "10.0.0.0/24")
 	cli := fake.NewClientset(active)
-	c, _ := newTestController(cli, active)
-	c.queue = workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]())
-	c.inSync.Store(false)
-	c.handlersSynced = []cache.InformerSynced{c.inSync.Load}
+	poolIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	if err := poolIndexer.Add(active); err != nil {
+		t.Fatalf("cache pool: %v", err)
+	}
+	dataFeed := utils.NewDataFeed(node.NewFakeCalicoClient(), "kubernetes")
+	ctrl := NewController(context.Background(), cli, &fakeSharedIndexInformer{indexer: poolIndexer}, dataFeed, accounting.NewTracker(), &fakeIPAM{})
 
 	stop := make(chan struct{})
 	done := make(chan struct{})
 	go func() {
-		c.Run(stop)
+		ctrl.Run(stop)
 		close(done)
 	}()
 	defer func() {
@@ -712,11 +729,11 @@ func TestRun_WaitsForTheDataFeedToSync(t *testing.T) {
 		<-done
 	}()
 
-	c.onStatusUpdate(bapi.ResyncInProgress)
+	dataFeed.OnStatusUpdated(bapi.ResyncInProgress)
 	time.Sleep(500 * time.Millisecond)
 	expectFinalizer(t, cli, "pool-2", false)
 
-	c.onStatusUpdate(bapi.InSync)
+	dataFeed.OnStatusUpdated(bapi.InSync)
 	err := wait.PollUntilContextTimeout(context.Background(), 50*time.Millisecond, 5*time.Second, true, func(ctx context.Context) (bool, error) {
 		pool, err := cli.ProjectcalicoV3().IPPools().Get(ctx, "pool-2", metav1.GetOptions{})
 		if err != nil {
