@@ -1511,7 +1511,7 @@ var schemaYAML = typed.YAMLObject(`types:
         list:
           elementType:
             scalar: string
-          elementRelationship: associative
+          elementRelationship: atomic
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.HTTPMatch
   map:
     fields:
@@ -1987,7 +1987,7 @@ var schemaYAML = typed.YAMLObject(`types:
         list:
           elementType:
             scalar: string
-          elementRelationship: associative
+          elementRelationship: atomic
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.NodeControllerConfig
   map:
     fields:
