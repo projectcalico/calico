@@ -84,7 +84,7 @@ func TestMetadataDescribe(t *testing.T) {
 	node := registry.Component{Registry: "quay.io/calico", Image: "node", Version: "v3.30.0"}
 
 	t.Run("fills components from what was released", func(t *testing.T) {
-		m := Metadata{Released: []registry.Component{node}}
+		m := Metadata{Released: map[string]registry.Component{"node": node}}
 		require.NoError(t, m.describe(Describer{Images: ImageDescriber{Resolve: resolveTo("sha256:res", true, nil)}}))
 		require.Equal(t, map[string]Component{
 			"node": {Version: "v3.30.0", Image: "quay.io/calico/node:v3.30.0", Digest: "sha256:res"},
@@ -96,7 +96,7 @@ func TestMetadataDescribe(t *testing.T) {
 			Version:         "v3.30.0",
 			OperatorVersion: "v1.38.0",
 			Source:          Source{Repository: "https://github.com/projectcalico/calico", Commit: "abc123"},
-			Released:        []registry.Component{node},
+			Released:        map[string]registry.Component{"node": node},
 		}
 		require.NoError(t, m.describe(Describer{Images: ImageDescriber{Resolve: resolveTo("", false, nil)}}))
 		bs, err := m.attest()
@@ -137,7 +137,7 @@ func TestMetadataDescribe(t *testing.T) {
 	})
 
 	t.Run("fails with no image resolver", func(t *testing.T) {
-		m := Metadata{Released: []registry.Component{node}}
+		m := Metadata{Released: map[string]registry.Component{"node": node}}
 		require.ErrorContains(t, m.describe(Describer{}), "no image resolver")
 	})
 }
@@ -314,37 +314,41 @@ func TestArtifactDescriberDescribe(t *testing.T) {
 
 func TestImageDescriberDescribe(t *testing.T) {
 	node := registry.Component{Registry: "quay.io/calico", Image: "node", Version: "v3.30.0"}
+	released := map[string]registry.Component{"node": node}
 	recorded := registry.NewDigestSource(registry.DigestsByRepo([]string{
 		"quay.io/calico/node:v3.30.0@sha256:rec",
 	}))
 
 	t.Run("prefers a record to a resolve", func(t *testing.T) {
-		got, err := ImageDescriber{Sources: []registry.DigestSource{recorded}, Resolve: resolveTo("", false, fmt.Errorf("must not resolve"))}.describe([]registry.Component{node})
+		got, err := ImageDescriber{Sources: []registry.DigestSource{recorded}, Resolve: resolveTo("", false, fmt.Errorf("must not resolve"))}.describe(released)
 		require.NoError(t, err)
 		require.Equal(t, Component{Version: "v3.30.0", Image: "quay.io/calico/node:v3.30.0", Digest: "sha256:rec"}, got["node"])
 	})
 
 	t.Run("resolves what no record holds", func(t *testing.T) {
-		got, err := ImageDescriber{Resolve: resolveTo("sha256:res", true, nil)}.describe([]registry.Component{node})
+		got, err := ImageDescriber{Resolve: resolveTo("sha256:res", true, nil)}.describe(released)
 		require.NoError(t, err)
 		require.Equal(t, "sha256:res", got["node"].Digest)
 	})
 
 	t.Run("leaves out the digest of an unpublished image", func(t *testing.T) {
-		got, err := ImageDescriber{Resolve: resolveTo("", false, nil)}.describe([]registry.Component{node})
+		got, err := ImageDescriber{Resolve: resolveTo("", false, nil)}.describe(released)
 		require.NoError(t, err)
 		require.Equal(t, Component{Version: "v3.30.0", Image: "quay.io/calico/node:v3.30.0"}, got["node"])
 	})
 
 	t.Run("fails on a resolve error", func(t *testing.T) {
-		_, err := ImageDescriber{Resolve: resolveTo("", false, fmt.Errorf("unauthorized"))}.describe([]registry.Component{node})
+		_, err := ImageDescriber{Resolve: resolveTo("", false, fmt.Errorf("unauthorized"))}.describe(released)
 		require.ErrorContains(t, err, "quay.io/calico/node:v3.30.0")
 		require.ErrorContains(t, err, "unauthorized")
 	})
 
-	t.Run("rejects a component listed twice", func(t *testing.T) {
-		_, err := ImageDescriber{Resolve: resolveTo("sha256:res", true, nil)}.describe([]registry.Component{node, node})
-		require.ErrorContains(t, err, "listed twice")
+	t.Run("records a component with no image by version alone", func(t *testing.T) {
+		got, err := ImageDescriber{Resolve: resolveTo("", false, fmt.Errorf("must not resolve"))}.describe(map[string]registry.Component{
+			"calico": {Version: "v3.30.0"},
+		})
+		require.NoError(t, err)
+		require.Equal(t, Component{Version: "v3.30.0"}, got["calico"])
 	})
 }
 

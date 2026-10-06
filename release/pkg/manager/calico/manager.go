@@ -238,7 +238,7 @@ type CalicoManager struct {
 	// image scanning configuration.
 	imageScanning       bool
 	imageScanningConfig imagescanner.Config
-	imageComponents     map[string]registry.Component
+	components          map[string]registry.Component
 	// Resolved before the product images; a product adds its own.
 	imageDependencies []images.Dependency
 
@@ -362,19 +362,6 @@ func (r *CalicoManager) Build() error {
 }
 
 func (r *CalicoManager) BuildMetadata(dir string) error {
-	reg, err := r.getRegistryFromManifests()
-	if err != nil {
-		return fmt.Errorf("failed to get registry from manifests: %w", err)
-	}
-
-	imgs, err := utils.ReleaseImages()
-	if err != nil {
-		return fmt.Errorf("failed to determine release images: %w", err)
-	}
-	released := []registry.Component{r.operatorComponent()}
-	for _, img := range imgs {
-		released = append(released, registry.Component{Registry: reg, Image: img, Version: r.calicoVersion})
-	}
 	sources, err := r.digestSources()
 	if err != nil {
 		return err
@@ -403,7 +390,7 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 		ChartVersion:    r.chart().Version(),
 		Source:          source,
 		Charts:          charts,
-		Released:        released,
+		Released:        r.releasedComponents(),
 	}, outputs.Describer{
 		Images:    outputs.ImageDescriber{Sources: sources, Resolve: r.digestResolver()},
 		Artifacts: outputs.ArtifactDescriber{Files: files},
@@ -792,18 +779,28 @@ func (r *CalicoManager) releasePrereqs() error {
 }
 
 func (r *CalicoManager) componentImages() map[string]string {
-	components := map[string]string{}
-	for name, component := range r.imageComponents {
+	images := map[string]string{}
+	for name, component := range r.releasedComponents() {
+		if component.Image != "" {
+			images[name] = component.String()
+		}
+	}
+	return images
+}
+
+func (r *CalicoManager) releasedComponents() map[string]registry.Component {
+	released := make(map[string]registry.Component, len(r.components))
+	for name, component := range r.components {
 		if name == r.operatorImage {
 			// A registry flag can move the run's operator off the pin.
 			component = r.operatorComponent()
 		}
-		if component.Registry == "" {
+		if component.Image != "" && component.Registry == "" {
 			component.Registry = r.imageRegistries[0]
 		}
-		components[name] = component.String()
+		released[name] = component
 	}
-	return components
+	return released
 }
 
 // Check that the environment has the necessary prereqs for publishing hashrelease

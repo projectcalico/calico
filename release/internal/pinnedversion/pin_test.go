@@ -125,6 +125,38 @@ func TestWriteThenRead(t *testing.T) {
 	}
 }
 
+func TestReleased(t *testing.T) {
+	p := testPin()
+	for _, name := range noImageComponents {
+		p.Components[name] = registry.Component{Version: testProductVersion}
+	}
+	got := p.Released()
+
+	t.Run("keeps components that produce no image, without one", func(t *testing.T) {
+		for _, name := range noImageComponents {
+			c, ok := got[name]
+			if !ok {
+				t.Errorf("%s missing from the released components", name)
+			} else if c.Image != "" {
+				t.Errorf("%s produces no image but was given %q", name, c.Image)
+			}
+		}
+	})
+
+	t.Run("names the image of a component that produces one", func(t *testing.T) {
+		if got[testImageComponent].Image != componentImage(testImageComponent) {
+			t.Errorf("%s: want image %q, got %q", testImageComponent,
+				componentImage(testImageComponent), got[testImageComponent].Image)
+		}
+	})
+
+	t.Run("includes the operator", func(t *testing.T) {
+		if got[p.Operator.Image] != p.Operator {
+			t.Errorf("operator = %+v, want %+v", got[p.Operator.Image], p.Operator)
+		}
+	})
+}
+
 // Which components are excluded is a per-product list, so the expectation is
 // derived from it rather than restating one product's answer.
 func TestImages(t *testing.T) {

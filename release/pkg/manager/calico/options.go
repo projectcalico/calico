@@ -273,7 +273,7 @@ func WithImageScanning(scanning bool, cfg imagescanner.Config) Option {
 
 func WithComponents(components map[string]registry.Component) Option {
 	return func(r *CalicoManager) error {
-		r.imageComponents = components
+		r.components = components
 		return nil
 	}
 }

@@ -287,7 +287,7 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 		} else {
 			opts = append(opts, calico.WithImageScanning(c.Bool(imageScanFlag.Name), *imageScanningAPIConfig(c)))
 		}
-		opts = append(opts, calico.WithComponents(pin.Images()))
+		opts = append(opts, calico.WithComponents(pin.Released()))
 		if reg := c.StringSlice(helmRegistryFlag.Name); len(reg) > 0 {
 			opts = append(opts, calico.WithHelmRegistries(reg))
 		}

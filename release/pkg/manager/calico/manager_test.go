@@ -914,12 +914,36 @@ func TestComponentImages(t *testing.T) {
 		m, _ := imageManager(t, newFakeRunner(), "")
 		m.operatorRegistry = "quay.io/override"
 		m.operatorVersion = "v1.40.0"
-		m.imageComponents = map[string]registry.Component{
+		m.components = map[string]registry.Component{
 			m.operatorImage: {Registry: "quay.io/pinned", Image: m.operatorImage, Version: m.operatorVersion},
 		}
 		want := "quay.io/override/" + m.operatorImage + ":v1.40.0"
 		if got := m.componentImages()[m.operatorImage]; got != want {
 			t.Errorf("scans %s, want %s", got, want)
+		}
+	})
+}
+
+func TestReleasedComponents(t *testing.T) {
+	m, _ := imageManager(t, newFakeRunner(), "")
+	m.components = map[string]registry.Component{
+		"node":   {Image: "node", Version: m.calicoVersion},
+		"calico": {Version: m.calicoVersion},
+	}
+	got := m.releasedComponents()
+
+	t.Run("places an image the pin leaves unplaced at the run's registry", func(t *testing.T) {
+		if got["node"].Registry != m.imageRegistries[0] {
+			t.Errorf("node registry = %q, want %q", got["node"].Registry, m.imageRegistries[0])
+		}
+	})
+
+	t.Run("keeps a component with no image by version alone", func(t *testing.T) {
+		if want := (registry.Component{Version: m.calicoVersion}); got["calico"] != want {
+			t.Errorf("calico = %+v, want %+v", got["calico"], want)
+		}
+		if _, ok := m.componentImages()["calico"]; ok {
+			t.Error("a component with no image was scanned")
 		}
 	})
 }
@@ -937,7 +961,7 @@ func TestResolveOperator(t *testing.T) {
 	scanOperator := func(t *testing.T, m *CalicoManager) *scanLog {
 		t.Helper()
 		scans := enableScan(t, m)
-		m.imageComponents[m.operatorImage] = registry.Component{Registry: m.operatorRegistry, Image: m.operatorImage, Version: m.operatorVersion}
+		m.components[m.operatorImage] = registry.Component{Registry: m.operatorRegistry, Image: m.operatorImage, Version: m.operatorVersion}
 		return scans
 	}
 	operatorRef := func(m *CalicoManager) string { return m.operatorComponent().String() }
@@ -1080,7 +1104,7 @@ func enableScan(t *testing.T, m *CalicoManager) *scanLog {
 	t.Cleanup(srv.Close)
 	m.imageScanning = true
 	m.imageScanningConfig = imagescanner.Config{APIURL: srv.URL, Token: "token", Scanner: "scanner"}
-	m.imageComponents = map[string]registry.Component{"calico": {Image: "calico", Version: m.calicoVersion}}
+	m.components = map[string]registry.Component{"calico": {Image: "calico", Version: m.calicoVersion}}
 	m.tmpDir = t.TempDir()
 	return scans
 }
