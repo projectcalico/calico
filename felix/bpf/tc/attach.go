@@ -432,21 +432,21 @@ func ListAttachedTcxPrograms(iface, attachHook string) ([]string, error) {
 	return progNames(progId, progCnt), nil
 }
 
-// PreambleAttached reports whether the preamble is attached to ap's hook,
+// PreambleAttached reports whether the preamble is attached to hook h,
 // querying the mechanism AttachProgram uses.
-func (ap *AttachPoint) PreambleAttached() (bool, error) {
-	ingress := ap.Hook == hook.Ingress
+func (ap *AttachPoint) PreambleAttached(h hook.Hook) (bool, error) {
+	ingress := h == hook.Ingress
 	query := libbpf.ProgQueryTcx
 	switch {
 	case ap.IsNetkit():
 		query = libbpf.ProgQueryNetkit // Ingress is the peer side.
 	case ap.AttachType != apiv3.BPFAttachOptionTCX:
-		progs, err := ListAttachedPrograms(ap.Iface, ap.Hook.String(), false)
+		progs, err := ListAttachedPrograms(ap.Iface, h.String(), false)
 		return len(progs) > 0, err
 	}
 	progId, _, progCnt, err := query(ap.IfIndex, ingress)
 	if err != nil {
-		return false, fmt.Errorf("error querying programs for %s:%s: %w", ap.Iface, ap.Hook, err)
+		return false, fmt.Errorf("error querying programs for %s:%s: %w", ap.Iface, h, err)
 	}
 	return slices.ContainsFunc(progNames(progId, progCnt), func(name string) bool {
 		return strings.Contains(name, preambleProgName)

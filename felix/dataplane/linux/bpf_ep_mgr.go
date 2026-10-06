@@ -2838,14 +2838,15 @@ func (m *bpfEndpointManager) dataIfaceStateFillJumps(ap *tc.AttachPoint, xdpMode
 }
 
 func (m *bpfEndpointManager) preambleAttached(ap *tc.AttachPoint, h hook.Hook) bool {
-	hap := *ap
-	hap.Hook = h
-	attached, err := hap.PreambleAttached()
+	attached, err := ap.PreambleAttached(h)
 	if err != nil {
-		m.updateRateLimitedLog.WithError(err).WithFields(logrus.Fields{
-			"iface": hap.Iface,
-			"hook":  h,
-		}).Warn("Failed to query the preamble, re-attaching it.")
+		fields := logrus.Fields{"iface": ap.Iface, "hook": h}
+		// A device deleted under us; the attach that follows handles it.
+		if errors.Is(err, unix.ENODEV) || errors.As(err, &netlink.LinkNotFoundError{}) {
+			logrus.WithError(err).WithFields(fields).Debug("Device gone while querying the preamble.")
+		} else {
+			m.updateRateLimitedLog.WithError(err).WithFields(fields).Warn("Failed to query the preamble, re-attaching it.")
+		}
 	}
 	return attached
 }
