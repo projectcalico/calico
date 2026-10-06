@@ -2842,7 +2842,10 @@ func (m *bpfEndpointManager) preambleAttached(ap *tc.AttachPoint, h hook.Hook) b
 	hap.Hook = h
 	attached, err := hap.PreambleAttached()
 	if err != nil {
-		hap.Log().WithError(err).Debug("Failed to query the preamble.")
+		m.updateRateLimitedLog.WithError(err).WithFields(logrus.Fields{
+			"iface": hap.Iface,
+			"hook":  h,
+		}).Warn("Failed to query the preamble, re-attaching it.")
 	}
 	return attached
 }

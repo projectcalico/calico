@@ -1446,8 +1446,7 @@ func TestAttachNetkit(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 }
 
-// A ready workload attached through a TCX or netkit link is kept by an apply
-// that changes nothing, and repaired when one hook loses its link.
+// A ready TCX/netkit workload keeps its links on a no-op apply and regains a lost one.
 func TestReadyLinkAttachmentIsKept(t *testing.T) {
 	for _, tcase := range []struct {
 		name       string

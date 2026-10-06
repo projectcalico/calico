@@ -404,6 +404,15 @@ func (m *mockDataplane) preambleAttached(ap *tc.AttachPoint, h hook.Hook) bool {
 	return true
 }
 
+// takePreambleQueries returns and clears the recorded preambleAttached queries.
+func (m *mockDataplane) takePreambleQueries() []tc.AttachPoint {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	q := m.preambleQueries
+	m.preambleQueries = nil
+	return q
+}
+
 var (
 	fdCounterLock sync.Mutex
 	fdCounter     = uint32(1234)
@@ -1680,10 +1689,11 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 
 		It("should ask netkit whether a ready workload's preamble is attached", func() {
-			dp.preambleQueries = nil
+			dp.takePreambleQueries()
 			genIfaceUpdate("calinkit0", ifacemonitor.StateUp, 50)()
-			Expect(dp.preambleQueries).To(HaveLen(2))
-			for _, q := range dp.preambleQueries {
+			queries := dp.takePreambleQueries()
+			Expect(queries).To(HaveLen(2))
+			for _, q := range queries {
 				Expect(q.IsNetkit()).To(BeTrue())
 				Expect(q.IfIndex).To(Equal(50))
 			}
@@ -1723,10 +1733,11 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			It("should ask TC/TCX whether a ready workload's preamble is attached", func() {
 				dp.ensureQdiscFn = func(string) (bool, error) { return true, nil }
-				dp.preambleQueries = nil
+				dp.takePreambleQueries()
 				genIfaceUpdate("calinkit0", ifacemonitor.StateUp, 50)()
-				Expect(dp.preambleQueries).To(HaveLen(2))
-				for _, q := range dp.preambleQueries {
+				queries := dp.takePreambleQueries()
+				Expect(queries).To(HaveLen(2))
+				for _, q := range queries {
 					Expect(q.IsNetkit()).To(BeFalse())
 					Expect(q.AttachType).To(Equal(bpfEpMgr.bpfAttachType))
 				}
