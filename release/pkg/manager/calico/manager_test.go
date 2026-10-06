@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -42,6 +43,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/outputs"
+	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
 )
 
@@ -915,6 +917,22 @@ func TestComponentImages(t *testing.T) {
 		want := "quay.io/override/" + m.operatorImage + ":v1.40.0"
 		if got := m.componentImages()[m.operatorImage]; got != want {
 			t.Errorf("scans %s, want %s", got, want)
+		}
+	})
+
+	t.Run("scans the pin's images and nothing it records by version", func(t *testing.T) {
+		m, _ := imageManager(t, newFakeRunner(), "")
+		pin := pinnedversion.Pin{
+			Operator: registry.Component{Registry: m.operatorRegistry, Image: m.operatorImage, Version: m.operatorVersion},
+			Components: map[string]registry.Component{
+				"node":   {Version: m.calicoVersion},
+				"calico": {Version: m.calicoVersion},
+			},
+		}
+		m.components = pin.Released()
+		got := slices.Sorted(maps.Keys(m.componentImages()))
+		if want := slices.Sorted(maps.Keys(pin.Images())); !slices.Equal(got, want) {
+			t.Errorf("scans %v, want the pin's images %v", got, want)
 		}
 	})
 }
