@@ -77,11 +77,12 @@ func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 	pageStart := int(opts.page * opts.pageSize)
 
 	idx.diachronics.Ascend(func(diachronic *DiachronicFlow) bool {
-		if !idx.matches(diachronic, opts) {
+		if !diachronic.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
 			return true
 		}
 
 		// Every match counts toward the total, but only the page's flows are worth aggregating.
+		// A match is within the time range, so Aggregate never returns nil.
 		totalMatchedCount++
 		if totalMatchedCount > pageStart && (opts.pageSize == 0 || int64(len(matchedFlows)) < opts.pageSize) {
 			matchedFlows = append(matchedFlows, diachronic.Aggregate(opts.startTimeGt, opts.startTimeLt))
@@ -101,7 +102,7 @@ func (idx *index[E]) SortValueSet(opts IndexFindOpts) ([]E, types.ListMeta) {
 	var seenAny bool
 
 	idx.diachronics.Ascend(func(diachronic *DiachronicFlow) bool {
-		if !idx.matches(diachronic, opts) {
+		if !diachronic.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
 			return true
 		}
 
@@ -148,9 +149,4 @@ func (idx *index[E]) Remove(d *DiachronicFlow) {
 	if _, ok := idx.diachronics.Delete(d); !ok {
 		logrus.WithFields(d.Key.Fields()).Warn("Unable to remove flow - not found in index")
 	}
-}
-
-// matches is whether the flow has data in the time range and passes the filter. Aggregate never returns nil for such a flow.
-func (idx *index[E]) matches(c *DiachronicFlow, opts IndexFindOpts) bool {
-	return c.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt)
 }
