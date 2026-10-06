@@ -175,15 +175,15 @@ func addNamespacedFlows(b *AggregationBucket, cache *diachronicCache, ns string,
 }
 
 func TestIterFilter(t *testing.T) {
-	_, cache, b, cancel := setup(t)
+	_, cache, bucket, cancel := setup(t)
 	defer cancel()
 
-	addNamespacedFlows(b, cache, "match", 3)
-	addNamespacedFlows(b, cache, "other", 5)
+	addNamespacedFlows(bucket, cache, "match", 3)
+	addNamespacedFlows(bucket, cache, "other", 5)
 
 	count := func(filter *proto.Filter) int {
 		var n int
-		b.Iter(filter, func(FlowBuilder) bool {
+		bucket.Iter(filter, func(FlowBuilder) bool {
 			n++
 			return false
 		})
@@ -204,15 +204,15 @@ func TestIterFilter(t *testing.T) {
 
 // A consumer that stalls inside Iter must not hold up writes to the bucket.
 func TestIterDoesNotBlockAddFlow(t *testing.T) {
-	_, cache, b, cancel := setup(t)
+	_, cache, bucket, cancel := setup(t)
 	defer cancel()
 
-	addFlows(b, cache, 10)
+	addFlows(bucket, cache, 10)
 
 	release := make(chan struct{})
 	defer close(release)
 	inIter := make(chan struct{})
-	go b.Iter(nil, func(FlowBuilder) bool {
+	go bucket.Iter(nil, func(FlowBuilder) bool {
 		close(inIter)
 		<-release
 		return true
@@ -221,7 +221,7 @@ func TestIterDoesNotBlockAddFlow(t *testing.T) {
 
 	added := make(chan struct{})
 	go func() {
-		addFlows(b, cache, 1)
+		addFlows(bucket, cache, 1)
 		close(added)
 	}()
 
