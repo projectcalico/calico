@@ -53,6 +53,13 @@ function require_commands {
     check_bin dch || error_exit "This script requires the 'dch' command from the 'devscripts' package."
     check_bin patchelf || error_exit "This script requires the 'patchelf' command from the 'patchelf' package."
     check_bin jq || error_exit "This scruit requires the 'jq' command from the 'jq' package"
+    check_bin xz || error_exit "This script requires the 'xz' command from the 'xz-utils' package."
+
+    # make-packages.sh builds the .orig tarball on this host rather than in a
+    # build container, and asks dpkg for its default tar-ignore patterns while
+    # doing so.
+    perl -MDpkg::Source::Package -e 1 2>/dev/null ||
+        error_exit "This script requires the Dpkg::Source::Package Perl module from the 'libdpkg-perl' package."
 }
 
 function require_version {
@@ -205,7 +212,10 @@ function do_net_cal {
             DEB_EPOCH=3: \
             "${rootdir}/release/packaging/utils/make-packages.sh" rpm deb
     # Packages are produced in rootDir/ - move them to the output dir.
-    find ../ -type f -name 'networking-calico_*-*' -exec mv '{}' "$outputDir" \;
+    # The glob has no '-' in it because the shared .orig tarball is named
+    # after the upstream version alone, with no Debian revision.  -maxdepth
+    # keeps that looser glob from reaching down into the source tree.
+    find ../ -maxdepth 1 -type f -name 'networking-calico_*' -exec mv '{}' "$outputDir" \;
     # Revert the changes made to networking-calico as part of the package build.
     git checkout setup.py
     popd
@@ -240,7 +250,10 @@ function do_felix {
             "${rootdir}/release/packaging/utils/make-packages.sh" rpm deb
 
     # Packages are produced in rootDir/ - move them to the output dir.
-    find ../ -type f -name 'felix_*-*' -exec mv '{}' "$outputDir" \;
+    # The glob has no '-' in it because the shared .orig tarball is named
+    # after the upstream version alone, with no Debian revision.  -maxdepth
+    # keeps that looser glob from reaching down into the source tree.
+    find ../ -maxdepth 1 -type f -name 'felix_*' -exec mv '{}' "$outputDir" \;
     popd
 }
 
@@ -269,7 +282,10 @@ function do_calicoctl {
             "${rootdir}/release/packaging/utils/make-packages.sh" rpm deb
 
     # Packages are produced in rootDir/ - move them to the output dir.
-    find ../ -type f -name 'calicoctl_*-*' -exec mv '{}' "$outputDir" \;
+    # The glob has no '-' in it because the shared .orig tarball is named
+    # after the upstream version alone, with no Debian revision.  -maxdepth
+    # keeps that looser glob from reaching down into the source tree.
+    find ../ -maxdepth 1 -type f -name 'calicoctl_*' -exec mv '{}' "$outputDir" \;
     popd
 }
 

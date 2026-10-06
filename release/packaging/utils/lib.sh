@@ -67,6 +67,66 @@ function git_version_to_rpm {
     echo $1 | sed 's/\([0-9]\)-\?\(0.dev\)/\1_\2/' | sed 's/\([0-9]\)-python2/\1python2/'
 }
 
+# Strip one layer of surrounding single or double quotes from a string.
+function strip_quotes {
+    local s=$1
+    s=${s#\"}; s=${s%\"}
+    s=${s#\'}; s=${s%\'}
+    echo "${s}"
+}
+
+# Print the file exclusions that apply to a Debian source package, one per
+# line, in the --exclude form that tar expects.
+#
+# We need these because we now build the .orig tarball ourselves, instead of
+# letting dpkg-source tar up the whole working tree.  Two places declare
+# exclusions: the -I options that the caller passes in DPKG_EXCL, and the
+# tar-ignore lines in debian/source/options.  dpkg-source hands both of those
+# straight to tar, so --exclude means exactly the same thing to us as they
+# mean to it.
+#
+# Must be run with the package's source directory as the working directory.
+function deb_tar_excludes {
+    local -a opts
+    local opt pattern
+    local any_pattern=false
+
+    # dpkg-source -I options, as passed to us in DPKG_EXCL.  Use read -a
+    # rather than unquoted word splitting, so that patterns containing a
+    # wildcard are not expanded against the working directory.
+    read -r -a opts <<< "$1"
+    for opt in "${opts[@]}"; do
+        case "${opt}" in
+            -I?*)
+                pattern=$(strip_quotes "${opt#-I}")
+                printf -- '--exclude=%s\n' "${pattern}"
+                any_pattern=true
+                ;;
+        esac
+    done
+
+    # If the caller gave no -I pattern at all -- just a bare "-I", as the
+    # networking-calico build does -- dpkg-source would have fallen back to
+    # its own built-in ignore list (*.o, .gitignore, .git and so on), so we
+    # have to apply that list too or we would start shipping files that the
+    # old native tarball left out.  Ask dpkg for the list rather than
+    # hardcoding it here, so that it cannot drift.
+    if ! ${any_pattern}; then
+        perl -MDpkg::Source::Package \
+             -e 'printf "--exclude=%s\n", $_
+                     for Dpkg::Source::Package::get_default_tar_ignore_pattern();'
+    fi
+
+    # tar-ignore lines from debian/source/options.
+    if [ -r debian/source/options ]; then
+        sed -n 's/^[[:space:]]*tar-ignore[[:space:]]*=[[:space:]]*//p' \
+            debian/source/options |
+            while read -r pattern; do
+                printf -- '--exclude=%s\n' "$(strip_quotes "${pattern}")"
+            done
+    fi
+}
+
 # Check that version is valid.
 function validate_version {
     version=$1
