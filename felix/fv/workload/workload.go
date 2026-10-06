@@ -66,6 +66,7 @@ type Workload struct {
 	isRunning             bool
 	isSpoofing            bool
 	listenAnyIP           bool
+	noKeepAlive           bool
 	pid                   string
 
 	cleanupLock sync.Mutex
@@ -199,6 +200,14 @@ func WithListenAnyIP() Opt {
 	}
 }
 
+// WithoutTCPKeepAlive stops the server probing idle TCP connections, which
+// would otherwise keep their conntrack entries fresh.
+func WithoutTCPKeepAlive() Opt {
+	return func(w *Workload) {
+		w.noKeepAlive = true
+	}
+}
+
 // WithHostNetworked force the workload to be host-networked even if the listen IP is
 // different than the host IP.
 func WithHostNetworked() Opt {
@@ -304,6 +313,10 @@ func (w *Workload) Start(cleanupProvider CleanupProvider) error {
 
 	if w.listenAnyIP {
 		command += " --listen-any-ip"
+	}
+
+	if w.noKeepAlive {
+		command += " --no-keepalive"
 	}
 
 	w.runCmd = utils.Command("docker", "exec", w.C.Name, "sh", "-c", command)
@@ -706,6 +719,7 @@ type PersistentConnectionOpts struct {
 	MonitorConnectivity bool
 	Timeout             time.Duration
 	SendRST             bool
+	NoKeepAlive         bool
 }
 
 func (w *Workload) StartPersistentConnectionMayFail(
@@ -723,6 +737,7 @@ func (w *Workload) StartPersistentConnectionMayFail(
 		MonitorConnectivity: opts.MonitorConnectivity,
 		Timeout:             opts.Timeout,
 		SendRST:             opts.SendRST,
+		NoKeepAlive:         opts.NoKeepAlive,
 	}
 
 	err := pc.Start()
