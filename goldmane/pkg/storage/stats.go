@@ -84,7 +84,7 @@ func (s *statistics) add(flow *types.Flow, action proto.Action) {
 		s.packets.AllowedOut += flow.PacketsOut
 		s.bytes.AllowedIn += flow.BytesIn
 		s.bytes.AllowedOut += flow.BytesOut
-		switch direction(flow) {
+		switch direction(flow.Key) {
 		case "ingress":
 			s.connections.AllowedIn += flow.NumConnectionsLive
 		case "egress":
@@ -95,7 +95,7 @@ func (s *statistics) add(flow *types.Flow, action proto.Action) {
 		s.packets.DeniedOut += flow.PacketsOut
 		s.bytes.DeniedIn += flow.BytesIn
 		s.bytes.DeniedOut += flow.BytesOut
-		switch direction(flow) {
+		switch direction(flow.Key) {
 		case "ingress":
 			s.connections.DeniedIn += flow.NumConnectionsLive
 		case "egress":
@@ -106,7 +106,7 @@ func (s *statistics) add(flow *types.Flow, action proto.Action) {
 		s.packets.PassedOut += flow.PacketsOut
 		s.bytes.PassedIn += flow.BytesIn
 		s.bytes.PassedOut += flow.BytesOut
-		switch direction(flow) {
+		switch direction(flow.Key) {
 		case "ingress":
 			s.connections.PassedIn += flow.NumConnectionsLive
 		case "egress":
@@ -215,8 +215,8 @@ func (s *statisticsIndex) retrieve(k StatisticsKey, groupBy *proto.StatisticsGro
 	return nil
 }
 
-func direction(flow *types.Flow) string {
-	if flow.Key.Reporter() == proto.Reporter_Src {
+func direction(key *types.FlowKey) string {
+	if key.Reporter() == proto.Reporter_Src {
 		return "egress"
 	}
 	return "ingress"
@@ -224,19 +224,16 @@ func direction(flow *types.Flow) string {
 
 // policyRule is one (policy, rule, action) contribution a flow makes to the statistics.
 type policyRule struct {
-	policy StatisticsKey
-	rule   StatisticsKey
-	action proto.Action
+	policyKey StatisticsKey
+	ruleKey   StatisticsKey
+	action    proto.Action
 }
 
-// policyRulesFor decodes the key's enforced and pending policy hits into the deduplicated rules
-// they contribute to. The result depends only on the key, so a DiachronicFlow computes it once.
-func policyRulesFor(k *types.FlowKey) []policyRule {
+// toPolicyRules decodes the key's enforced and pending policy hits into the deduplicated rules
+// they contribute to.
+func toPolicyRules(k *types.FlowKey) []policyRule {
 	trace := types.CachedPolicyTrace(k.Policies())
-	dir := "ingress"
-	if k.Reporter() == proto.Reporter_Src {
-		dir = "egress"
-	}
+	dir := direction(k)
 
 	// Pending hits may duplicate the enforced ones, which the rule check below drops.
 	rules := make([]policyRule, 0, len(trace.EnforcedPolicies)+len(trace.PendingPolicies))
@@ -258,10 +255,10 @@ func policyRulesFor(k *types.FlowKey) []policyRule {
 				RuleIndex: meta.PolicyIndex,
 				Direction: dir,
 			}
-			if slices.ContainsFunc(rules, func(r policyRule) bool { return r.rule == sk }) {
+			if slices.ContainsFunc(rules, func(r policyRule) bool { return r.ruleKey == sk }) {
 				continue
 			}
-			rules = append(rules, policyRule{policy: sk.policyID(), rule: sk, action: hit.Action})
+			rules = append(rules, policyRule{policyKey: sk.policyID(), ruleKey: sk, action: hit.Action})
 		}
 	}
 	return rules
@@ -274,22 +271,22 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow, rules []policyRule) {
 	s.add(flow, flow.Key.Action())
 
 	for i := range rules {
-		r := &rules[i]
-		ps, ok := s.policies[r.policy]
+		rule := &rules[i]
+		ps, ok := s.policies[rule.policyKey]
 		if !ok {
 			ps = &policyStatistics{rules: make(map[StatisticsKey]*statistics)}
-			s.policies[r.policy] = ps
+			s.policies[rule.policyKey] = ps
 		}
 
-		// Add the Flow's stats the the policy.
-		ps.add(flow, r.action)
+		// Add the Flow's stats to the policy.
+		ps.add(flow, rule.action)
 
 		// Add the Flow's stats to the rule within the policy.
-		rs, ok := ps.rules[r.rule]
+		rs, ok := ps.rules[rule.ruleKey]
 		if !ok {
 			rs = &statistics{}
-			ps.rules[r.rule] = rs
+			ps.rules[rule.ruleKey] = rs
 		}
-		rs.add(flow, r.action)
+		rs.add(flow, rule.action)
 	}
 }

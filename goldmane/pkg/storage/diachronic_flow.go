@@ -75,7 +75,7 @@ func NewDiachronicFlow(k *types.FlowKey, id int64) *DiachronicFlow {
 	return &DiachronicFlow{
 		ID:          id,
 		Key:         *k,
-		policyRules: policyRulesFor(k),
+		policyRules: toPolicyRules(k),
 	}
 }
 
