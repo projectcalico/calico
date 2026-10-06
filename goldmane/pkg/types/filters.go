@@ -186,6 +186,7 @@ func StringMatchMatches(sm *proto.StringMatch, val string) bool {
 	if sm.Type == proto.MatchType_Exact {
 		return val == sm.Value
 	}
+
 	// Fuzzy match uses substring matching, consistent with stringMatches.
 	return strings.Contains(val, sm.Value)
 }
