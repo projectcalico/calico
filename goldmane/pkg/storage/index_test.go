@@ -759,12 +759,7 @@ func TestIndexListReturnsRequestedPage(t *testing.T) {
 		return k.DestName()
 	})
 	newDiachronic := func(id int64, name string, start int64) *DiachronicFlow {
-		k := types.NewFlowKey(
-			&types.FlowKeySource{},
-			&types.FlowKeyDestination{DestName: name},
-			&types.FlowKeyMeta{},
-			&proto.PolicyTrace{},
-		)
+		k := types.NewFlowKey(&types.FlowKeySource{}, &types.FlowKeyDestination{DestName: name}, &types.FlowKeyMeta{}, &proto.PolicyTrace{})
 		d := NewDiachronicFlow(k, id)
 		d.AddFlow(&types.Flow{Key: k, PacketsIn: 1}, start, start+15)
 		return d

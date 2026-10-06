@@ -28,8 +28,8 @@ import (
 
 var indexBenchSizes = []int{1_000, 10_000, 100_000}
 
-// benchDiachronics builds n flows with random names, so inserts land throughout the index rather than at the end.
-func benchDiachronics(n int, idOffset int64, rng *rand.Rand) []*DiachronicFlow {
+// buildDiachronicFlows builds n flows with random names, so inserts land throughout the index rather than at the end.
+func buildDiachronicFlows(n int, idOffset int64, rng *rand.Rand) []*DiachronicFlow {
 	out := make([]*DiachronicFlow, n)
 	for i := range n {
 		k := types.NewFlowKey(
@@ -45,9 +45,9 @@ func benchDiachronics(n int, idOffset int64, rng *rand.Rand) []*DiachronicFlow {
 	return out
 }
 
-func populatedIndex(n int, rng *rand.Rand) Index[string] {
+func buildIndex(n int, rng *rand.Rand) Index[string] {
 	idx := NewIndex(func(k *types.FlowKey) string { return k.DestName() })
-	for _, d := range benchDiachronics(n, 0, rng) {
+	for _, d := range buildDiachronicFlows(n, 0, rng) {
 		idx.Add(d)
 	}
 	return idx
@@ -59,8 +59,8 @@ func BenchmarkIndexChurn(b *testing.B) {
 	for _, n := range indexBenchSizes {
 		b.Run(fmt.Sprintf("%d_flows", n), func(b *testing.B) {
 			rng := rand.New(rand.NewPCG(1, 2))
-			idx := populatedIndex(n, rng)
-			extra := benchDiachronics(1_000, int64(n), rng)
+			idx := buildIndex(n, rng)
+			extra := buildDiachronicFlows(1_000, int64(n), rng)
 			b.ReportAllocs()
 			i := 0
 			for b.Loop() {
@@ -78,7 +78,7 @@ func BenchmarkIndexList(b *testing.B) {
 	logrus.SetLevel(logrus.WarnLevel)
 	for _, n := range indexBenchSizes {
 		b.Run(fmt.Sprintf("%d_flows", n), func(b *testing.B) {
-			idx := populatedIndex(n, rand.New(rand.NewPCG(1, 2)))
+			idx := buildIndex(n, rand.New(rand.NewPCG(1, 2)))
 			b.ReportAllocs()
 			for b.Loop() {
 				idx.List(IndexFindOpts{startTimeGt: 0, startTimeLt: 15, pageSize: 20})
@@ -92,7 +92,7 @@ func BenchmarkIndexSortValueSet(b *testing.B) {
 	logrus.SetLevel(logrus.WarnLevel)
 	for _, n := range indexBenchSizes {
 		b.Run(fmt.Sprintf("%d_flows", n), func(b *testing.B) {
-			idx := populatedIndex(n, rand.New(rand.NewPCG(1, 2)))
+			idx := buildIndex(n, rand.New(rand.NewPCG(1, 2)))
 			b.ReportAllocs()
 			for b.Loop() {
 				idx.SortValueSet(IndexFindOpts{startTimeGt: 0, startTimeLt: 15, pageSize: 20})
