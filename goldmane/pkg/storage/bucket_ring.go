@@ -129,7 +129,7 @@ func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *Bucket
 	oldestBucketEnd := time.Unix(oldestBucketStart.Unix()+int64(interval), 0)
 	ring.buckets[0] = NewAggregationBucket(oldestBucketStart, oldestBucketEnd)
 	for range n {
-		ring.Rollover(nil)
+		ring.rollover(nil, false)
 	}
 
 	// Tell each bucket its absolute index and initialize the lookup function.
@@ -198,7 +198,7 @@ func extractPolicyFieldsFromFlowKey(getField func(*proto.PolicyHit) string) func
 	return func(key *types.FlowKey) []string {
 		var values []string
 
-		policyTrace := types.FlowLogPolicyToProto(key.Policies())
+		policyTrace := types.CachedPolicyTrace(key.Policies())
 		for _, policyList := range [][]*proto.PolicyHit{policyTrace.EnforcedPolicies, policyTrace.PendingPolicies} {
 			for _, p := range policyList {
 				// Skip Profiles in hints, as these aren't a real kind in Kubernetes clusters - these are
@@ -290,6 +290,12 @@ func (r *BucketRing) FilterHints(req *proto.FilterHintsRequest) ([]string, *type
 // It also clears data from the bucket that is now the head. The start time of the newest bucket
 // is returned, as well as a set of DiachronicFlow objects that were in the now obsolete bucket.
 func (r *BucketRing) Rollover(sink Sink) int64 {
+	return r.rollover(sink, true)
+}
+
+// rollover is Rollover with control over streaming. Seeding marks buckets ready for backfill without
+// sending them, because a queued empty bucket is later reused for real flows.
+func (r *BucketRing) rollover(sink Sink, stream bool) int64 {
 	start := r.nowFunc()
 	defer func() {
 		if r.nowFunc().Sub(start) > 1*time.Second {
@@ -302,7 +308,11 @@ func (r *BucketRing) Rollover(sink Sink) int64 {
 	endTime := startTime + int64(r.interval)
 
 	// Send flows to the stream manager.
-	r.flushToStreams()
+	if stream {
+		r.flushToStreams()
+	} else {
+		r.streamingBucket().markReady()
+	}
 
 	// Move the head index to the next bucket.
 	r.headIndex = r.nextBucketIndex(r.headIndex)
@@ -327,9 +337,7 @@ func (r *BucketRing) Rollover(sink Sink) int64 {
 	// Find the oldest bucket's start time and remove any data from the DiachronicFlows that is older than that.
 	for d := range flows.All() {
 		// Rollover the DiachronicFlow. This will remove any expired data from it.
-		d.Rollover(r.BeginningOfHistory())
-
-		if d.Empty() {
+		if d.Rollover(r.BeginningOfHistory()) {
 			// If the DiachronicFlow is empty, we can remove it. This means it hasn't received any
 			// flow updates in a long time.
 			if logrus.IsLevelEnabled(logrus.DebugLevel) {
