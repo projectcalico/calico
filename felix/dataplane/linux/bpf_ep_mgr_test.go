@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1372,15 +1373,16 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			}
 		}
 		v6Fails := true
-		v4Loads, v6Loads := 0, 0
+		// Ingress and egress load in parallel.
+		var v4Loads, v6Loads atomic.Int32
 		dp.ensureProgramLoadedFn = func(ap attachPoint, ipFamily proto.IPVersion) error {
 			if ipFamily == proto.IPVersion_IPV6 {
-				v6Loads++
+				v6Loads.Add(1)
 				if v6Fails {
 					return errors.New("injected v6 load failure")
 				}
 			} else {
-				v4Loads++
+				v4Loads.Add(1)
 			}
 			setLayout(ap.(*tc.AttachPoint), ipFamily)
 			return nil
@@ -1400,20 +1402,20 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 		genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
 		attaches := dp.numOfAttaches("cali12345:ingress")
-		loadsV4 := v4Loads
-		Expect(v6Loads).NotTo(BeZero())
+		loadsV4 := v4Loads.Load()
+		Expect(v6Loads.Load()).NotTo(BeZero())
 
 		// Only the failing family retries.
 		_ = bpfEpMgr.CompleteDeferredWork()
-		retried := v6Loads
-		Expect(v4Loads).To(Equal(loadsV4))
+		retried := v6Loads.Load()
+		Expect(v4Loads.Load()).To(Equal(loadsV4))
 		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(attaches))
 
 		v6Fails = false
 		_ = bpfEpMgr.CompleteDeferredWork()
-		Expect(v6Loads).To(BeNumerically(">", retried))
+		Expect(v6Loads.Load()).To(BeNumerically(">", retried))
 		// Loading would reset the ready family's policy to the default one.
-		Expect(v4Loads).To(Equal(loadsV4))
+		Expect(v4Loads.Load()).To(Equal(loadsV4))
 		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(attaches + 1))
 		Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(attaches + 1))
 		for _, key := range []string{"cali12345:ingress", "cali12345:egress"} {
@@ -1518,10 +1520,11 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		newBpfEpMgr(true)
 		// A qdisc that already exists keeps the workload ready across passes.
 		dp.ensureQdiscFn = func(string) (bool, error) { return true, nil }
-		v6Loads := 0
+		// Ingress and egress load in parallel.
+		var v6Loads atomic.Int32
 		dp.ensureProgramLoadedFn = func(ap attachPoint, ipFamily proto.IPVersion) error {
 			if ipFamily == proto.IPVersion_IPV6 {
-				v6Loads++
+				v6Loads.Add(1)
 			}
 			return nil
 		}
@@ -1535,7 +1538,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 		genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
 		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(1))
-		loadsV6 := v6Loads
+		loadsV6 := v6Loads.Load()
 
 		dp.ensureProgramLayoutFn = func(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
 			if ipFamily == proto.IPVersion_IPV6 {
@@ -1550,7 +1553,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 		dp.ensureProgramLayoutFn = nil
 		Expect(bpfEpMgr.CompleteDeferredWork()).To(Succeed())
-		Expect(v6Loads).To(BeNumerically(">", loadsV6))
+		Expect(v6Loads.Load()).To(BeNumerically(">", loadsV6))
 	})
 
 	DescribeTable("should re-attach a ready workload whose preamble the kernel may have lost",
