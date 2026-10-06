@@ -19,9 +19,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/prometheus/client_golang/prometheus"
-	dto "github.com/prometheus/client_model/go"
-
 	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
@@ -40,15 +37,14 @@ func BenchmarkAggregatorThroughput(b *testing.B) {
 	<-gm.Run(now)
 	defer gm.Stop()
 
-	pf := testutils.IngestFlows(keys, now)
-	fl := make([]*types.Flow, keys)
-	for i := range pf {
-		fl[i] = types.ProtoToFlow(pf[i])
+	keyedFlows := make([]*types.Flow, keys)
+	for i, f := range testutils.IngestFlows(keys, now) {
+		keyedFlows[i] = types.ProtoToFlow(f)
 	}
 
 	// Warm every key so the benchmark measures updates to existing flows.
 	base := receivedFlows(b)
-	for _, f := range fl {
+	for _, f := range keyedFlows {
 		gm.Receive(f, "warm")
 	}
 	waitForReceived(b, base+keys)
@@ -58,11 +54,11 @@ func BenchmarkAggregatorThroughput(b *testing.B) {
 	b.ResetTimer()
 	start := time.Now()
 	var wg sync.WaitGroup
-	per := b.N / producers
+	perProducer := b.N / producers
 	for p := range producers {
-		n := per
+		n := perProducer
 		if p == producers-1 {
-			n = b.N - per*(producers-1)
+			n = b.N - perProducer*(producers-1)
 		}
 		wg.Go(func() {
 			node := ""
@@ -71,7 +67,7 @@ func BenchmarkAggregatorThroughput(b *testing.B) {
 				if i%keys == 0 {
 					node = fmt.Sprintf("10.%d.%d", p, i/keys)
 				}
-				gm.Receive(fl[(p*per+i)%keys], node)
+				gm.Receive(keyedFlows[(p*perProducer+i)%keys], node)
 			}
 		})
 	}
@@ -79,33 +75,4 @@ func BenchmarkAggregatorThroughput(b *testing.B) {
 	waitForReceived(b, base+float64(b.N))
 	b.StopTimer()
 	b.ReportMetric(float64(b.N)/time.Since(start).Seconds(), "flows/s")
-}
-
-// gatherMetric returns the default registry's family with the given name, or nil if
-// nothing by that name is registered.
-func gatherMetric(tb testing.TB, name string) *dto.MetricFamily {
-	mfs, err := prometheus.DefaultGatherer.Gather()
-	if err != nil {
-		tb.Fatalf("gathering metrics: %v", err)
-	}
-	for _, mf := range mfs {
-		if mf.GetName() == name {
-			return mf
-		}
-	}
-	return nil
-}
-
-func receivedFlows(tb testing.TB) float64 {
-	mf := gatherMetric(tb, "goldmane_aggr_received_flows_total")
-	if mf == nil {
-		tb.Fatal("goldmane_aggr_received_flows_total not registered")
-	}
-	return mf.GetMetric()[0].GetCounter().GetValue()
-}
-
-func waitForReceived(tb testing.TB, n float64) {
-	for receivedFlows(tb) < n {
-		time.Sleep(time.Millisecond)
-	}
 }
