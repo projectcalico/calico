@@ -461,26 +461,25 @@ func dedupWindowBuckets(interval, numBuckets int) int {
 // hold twice as many entries as there are flows, it yields every flow, unfiltered by time.
 func (r *BucketRing) FlowCandidates(startGt, startLt int64) (iter.Seq[*DiachronicFlow], int) {
 	var inRange []*AggregationBucket
-	entries, largest := 0, 0
+	numEntries, largestBucketLen := 0, 0
 	for _, b := range r.buckets {
 		if (startGt == 0 || b.StartTime >= startGt) &&
 			(startLt == 0 || b.StartTime <= startLt) {
 			inRange = append(inRange, b)
-			entries += b.Flows.Len()
-			largest = max(largest, b.Flows.Len())
+			numEntries += b.Flows.Len()
+			largestBucketLen = max(largestBucketLen, b.Flows.Len())
 		}
 	}
-	if entries >= 2*len(r.diachronics) {
+	if numEntries >= 2*len(r.diachronics) {
 		return maps.Values(r.diachronics), len(r.diachronics)
 	}
 
 	// The largest bucket is a lower bound on the flows yielded, unlike the entry total, which counts
 	// a flow once per bucket.
-	return r.uniqueFlows(inRange), largest
+	return r.uniqueFlows(inRange), largestBucketLen
 }
 
-// uniqueFlows yields each flow in the buckets once, marking flows with a per-walk epoch rather
-// than collecting them in a set. Only the main loop may call it.
+// uniqueFlows yields each flow in the buckets once. Only the main loop may call it.
 func (r *BucketRing) uniqueFlows(buckets []*AggregationBucket) iter.Seq[*DiachronicFlow] {
 	return func(yield func(*DiachronicFlow) bool) {
 		r.visitEpoch++
