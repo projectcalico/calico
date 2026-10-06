@@ -29,6 +29,7 @@ import (
 	ghapi "github.com/google/go-github/v53/github"
 
 	gh "github.com/projectcalico/calico/release/internal/github"
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/outputs"
 )
 
@@ -547,30 +548,63 @@ func TestPublishIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestReleaseFiles(t *testing.T) {
-	t.Run("links each top-level file under the base URL", func(t *testing.T) {
-		dir := t.TempDir()
-		for _, n := range []string{"release.tgz", sumsFileName, "charts/index.yaml"} {
-			path := filepath.Join(dir, n)
-			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(path, []byte(n), 0o644); err != nil {
-				t.Fatal(err)
-			}
+func TestArtifacts(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"release.tgz", sumsFileName, "charts/index.yaml"} {
+		path := filepath.Join(dir, n)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
 		}
-		got, err := ReleaseFiles(dir, "https://example.com/v3.30.0")
+		if err := os.WriteFile(path, []byte(n), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	release := filepath.Join(dir, "release.tgz")
+	githubRelease := GithubRelease{Repo: gh.Repo{Org: "projectcalico", Name: "calico"}, Tag: "v3.30.0"}
+	hashrelease := HashreleaseServer{Release: &hashreleaseserver.Hashrelease{Name: "2026-10-05-v3-30-0"}}
+
+	t.Run("lists a github release's top-level files at its download URL", func(t *testing.T) {
+		got, err := Artifacts([]Upload{{Source: dir, Handler: githubRelease}})
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := []outputs.ArtifactFile{{Path: filepath.Join(dir, "release.tgz"), URL: "https://example.com/v3.30.0/release.tgz"}}
+		url, err := gh.DownloadURL("projectcalico", "calico", "v3.30.0", "release.tgz")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff([]outputs.ArtifactFile{{Path: release, URL: url}}, got); diff != "" {
+			t.Errorf("files (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("lists a hashrelease's top-level files at its URL", func(t *testing.T) {
+		got, err := Artifacts([]Upload{{Source: dir, Handler: hashrelease}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []outputs.ArtifactFile{{Path: release, URL: hashreleaseserver.HashreleaseURL("2026-10-05-v3-30-0") + "/release.tgz"}}
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Errorf("files (-want +got):\n%s", diff)
 		}
 	})
 
-	t.Run("fails on a missing directory", func(t *testing.T) {
-		if _, err := ReleaseFiles(filepath.Join(t.TempDir(), "missing"), "https://example.com"); !errors.Is(err, os.ErrNotExist) {
+	t.Run("lists nothing for a skipped upload or one that serves no files", func(t *testing.T) {
+		got, err := Artifacts([]Upload{
+			{Source: dir, Handler: githubRelease, Skip: true},
+			{Source: dir, Handler: S3{URI: "s3://bucket/charts/"}},
+			{Handler: Preparer{Kind: "metadata"}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 0 {
+			t.Errorf("listed %v", got)
+		}
+	})
+
+	t.Run("fails on a missing source", func(t *testing.T) {
+		_, err := Artifacts([]Upload{{Source: filepath.Join(dir, "missing"), Handler: hashrelease}})
+		if !errors.Is(err, os.ErrNotExist) {
 			t.Errorf("err = %v, want it to wrap os.ErrNotExist", err)
 		}
 	})

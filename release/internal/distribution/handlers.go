@@ -309,6 +309,14 @@ func (d GithubRelease) Publish(ctx context.Context, src string) error {
 	return gh.Publish(ctx, d.Tag, latest)
 }
 
+func (d GithubRelease) artifacts(src string) ([]outputs.ArtifactFile, error) {
+	base, err := github.DownloadURL(d.Repo.Org, d.Repo.Name, d.Tag)
+	if err != nil {
+		return nil, fmt.Errorf("download URL: %w", err)
+	}
+	return filesAt(src, base)
+}
+
 func (d GithubRelease) makeLatest(ctx context.Context) (bool, error) {
 	gh, err := d.github()
 	if err != nil {
@@ -426,7 +434,7 @@ func sha256Sums(dir string, files []string) ([]string, error) {
 	return append(files, path), nil
 }
 
-func ReleaseFiles(dir, baseURL string) ([]outputs.ArtifactFile, error) {
+func filesAt(dir, baseURL string) ([]outputs.ArtifactFile, error) {
 	paths, err := topLevelFiles(dir)
 	if err != nil {
 		return nil, err
@@ -490,6 +498,10 @@ func (d HashreleaseServer) Publish(ctx context.Context, src string) error {
 		return nil
 	}
 	return hashreleaseserver.Record(d.ProductCode, d.Release, d.Config)
+}
+
+func (d HashreleaseServer) artifacts(src string) ([]outputs.ArtifactFile, error) {
+	return filesAt(src, d.Release.URL())
 }
 
 func (d HashreleaseServer) Validate(u Upload) error {

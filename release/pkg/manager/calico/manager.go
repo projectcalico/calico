@@ -374,13 +374,7 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 	if err != nil {
 		return err
 	}
-	var base string
-	if r.isHashRelease {
-		base = r.hashrelease.URL()
-	} else if base, err = github.DownloadURL(r.githubOrg, r.repo, r.calicoVersion); err != nil {
-		return fmt.Errorf("artifacts URL: %w", err)
-	}
-	files, err := distribution.ReleaseFiles(dir, base)
+	files, err := distribution.Artifacts(r.uploads())
 	if err != nil {
 		return err
 	}
@@ -694,15 +688,11 @@ func (r *CalicoManager) helmRepo() (string, error) {
 	return charts.RepoURL()
 }
 
-func (r *CalicoManager) hashreleaseUpload() []distribution.Upload {
-	if !r.publishHashrelease {
-		logrus.Info("Skipping publishing to hashrelease server")
-		return nil
-	}
-
-	return []distribution.Upload{{
+func (r *CalicoManager) hashreleaseUpload() distribution.Upload {
+	return distribution.Upload{
 		Name:   "hashrelease",
 		Source: r.uploadDir(),
+		Skip:   !r.publishHashrelease,
 		Handler: distribution.HashreleaseServer{
 			Release:     &r.hashrelease,
 			Config:      &r.hashreleaseConfig,
@@ -710,7 +700,7 @@ func (r *CalicoManager) hashreleaseUpload() []distribution.Upload {
 			DryRun:      r.dryRun,
 			Runner:      r.runner,
 		},
-	}}
+	}
 }
 
 func (r *CalicoManager) PublishRelease() error {
@@ -734,12 +724,9 @@ func (r *CalicoManager) uploads() []distribution.Upload {
 	)
 
 	if r.isHashRelease {
-		return append(uploads, r.hashreleaseUpload()...)
+		return append(uploads, r.hashreleaseUpload())
 	}
-	uploads = append(uploads, r.githubTagUpload())
-	if github := r.githubReleaseUpload(); github != nil {
-		uploads = append(uploads, *github)
-	}
+	uploads = append(uploads, r.githubTagUpload(), r.githubReleaseUpload())
 	// Last: the index it writes points at the github release's download URLs,
 	// which 404 until that release exists.
 	return append(uploads, r.helmIndexUpload())
@@ -1132,12 +1119,7 @@ func (r *CalicoManager) githubTagUpload() distribution.Upload {
 	return distribution.Upload{Handler: distribution.Preparer{Kind: "git tag", Action: r.publishGitTag}}
 }
 
-func (r *CalicoManager) githubReleaseUpload() *distribution.Upload {
-	if !r.githubRelease {
-		logrus.Info("Skipping github release")
-		return nil
-	}
-
+func (r *CalicoManager) githubReleaseUpload() distribution.Upload {
 	releaseNoteTemplate := `
 Release notes can be found [on GitHub](https://github.com/projectcalico/calico/blob/{branch}/release-notes/{version}-release-notes.md)
 
@@ -1172,9 +1154,10 @@ Additional links:
 	replacer := strings.NewReplacer(formatters...)
 	releaseNote := replacer.Replace(releaseNoteTemplate)
 
-	return &distribution.Upload{
+	return distribution.Upload{
 		Name:   "github release",
 		Source: r.uploadDir(),
+		Skip:   !r.githubRelease,
 		Handler: distribution.GithubRelease{
 			Repo:   github.Repo{Org: r.githubOrg, Name: r.repo},
 			Tag:    r.calicoVersion,
