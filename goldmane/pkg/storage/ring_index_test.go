@@ -16,7 +16,9 @@ package storage_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
+	"unique"
 
 	"github.com/stretchr/testify/require"
 
@@ -97,6 +99,106 @@ func TestRingListPartialBucket(t *testing.T) {
 	require.Equal(t, int64(1), flows[0].PacketsIn)
 }
 
+// TestRingListCandidateRanges covers both ways the ring gathers candidates: walking the
+// buckets in a narrow range, and scanning every flow when the range's buckets hold most of them.
+func TestRingListCandidateRanges(t *testing.T) {
+	ring := newPagingRing()
+	newest := ring.EndOfHistory() - 2*pagingInterval
+
+	// Old flows sit in one early bucket. Recent flows sit in each of the newest six.
+	old := newest - 20*pagingInterval
+	for i := range 10 {
+		ring.AddFlow(storage.FlowFromNode{Flow: pagingFlow(fmt.Sprintf("old-%d", i), old)})
+	}
+	for b := range 6 {
+		for i := range 10 {
+			ring.AddFlow(storage.FlowFromNode{Flow: pagingFlow(fmt.Sprintf("recent-%d", i), newest-int64(b)*pagingInterval)})
+		}
+	}
+
+	for _, tc := range []struct {
+		name       string
+		gte        int64
+		wantOld    int
+		wantRecent int
+	}{
+		{name: "two buckets, walked", gte: newest - pagingInterval, wantRecent: 10},
+		{name: "six buckets, scanned and filtered by time", gte: newest - 5*pagingInterval, wantRecent: 10},
+		{name: "the whole ring", gte: old, wantOld: 10, wantRecent: 10},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			flows, meta, err := ring.List(&proto.FlowListRequest{StartTimeGte: tc.gte, StartTimeLt: newest + pagingInterval})
+			require.NoError(t, err)
+			require.Equal(t, tc.wantOld+tc.wantRecent, meta.TotalResults)
+
+			counts := map[string]int{}
+			for _, name := range keyNames(flows) {
+				counts[name]++
+			}
+			require.Len(t, counts, tc.wantOld+tc.wantRecent, "a flow was returned twice")
+			var olds int
+			for name := range counts {
+				if strings.HasPrefix(name, "old-") {
+					olds++
+				}
+			}
+			require.Equal(t, tc.wantOld, olds)
+		})
+	}
+}
+
+// TestRingPolicyHintsSharedTrace checks that hints skip flows sharing an already-counted policy
+// trace, but not flows sharing a trace with a flow that failed the filter.
+func TestRingPolicyHintsSharedTrace(t *testing.T) {
+	ring := newPagingRing()
+	start := ring.EndOfHistory() - 2*pagingInterval
+
+	// Many filtered-out flows share the matching flow's trace, so it is almost never seen first.
+	for i := range 20 {
+		ring.AddFlow(storage.FlowFromNode{Flow: policyFlow(fmt.Sprintf("other-%d", i), "ns-other", "shared", start)})
+	}
+	ring.AddFlow(storage.FlowFromNode{Flow: policyFlow("match", "ns-match", "shared", start)})
+	ring.AddFlow(storage.FlowFromNode{Flow: policyFlow("match-2", "ns-match", "shared", start)})
+	ring.AddFlow(storage.FlowFromNode{Flow: policyFlow("unmatched", "ns-other", "excluded", start)})
+	ring.AddFlow(storage.FlowFromNode{Flow: policyFlow("own", "ns-match", "own", start)})
+
+	values, meta, err := ring.FilterHints(&proto.FilterHintsRequest{
+		Type:         proto.FilterType_FilterTypePolicyName,
+		StartTimeGte: start,
+		StartTimeLt:  start + pagingInterval,
+		Filter:       &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns-match", Type: proto.MatchType_Exact}}},
+	})
+	require.NoError(t, err)
+	require.Equal(t, []string{"own", "shared"}, values)
+	require.Equal(t, 2, meta.TotalResults)
+
+	// A range that holds none of the flows yields no hints.
+	values, _, err = ring.FilterHints(&proto.FilterHintsRequest{
+		Type:         proto.FilterType_FilterTypePolicyName,
+		StartTimeGte: start - 10*pagingInterval,
+		StartTimeLt:  start - 5*pagingInterval,
+	})
+	require.NoError(t, err)
+	require.Empty(t, values)
+}
+
+func policyFlow(dest, namespace, policy string, start int64) *types.Flow {
+	f := pagingFlow(dest, start)
+	f.Key = types.NewFlowKey(
+		&types.FlowKeySource{SourceName: "client", SourceNamespace: "ns", SourceType: proto.EndpointType_WorkloadEndpoint},
+		&types.FlowKeyDestination{DestName: dest, DestNamespace: namespace, DestType: proto.EndpointType_WorkloadEndpoint, DestPort: 80},
+		&types.FlowKeyMeta{Proto: "tcp", Reporter: proto.Reporter_Src, Action: proto.Action_Allow},
+		&proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{{
+			Kind:      proto.PolicyKind_CalicoNetworkPolicy,
+			Namespace: "policy-ns",
+			Name:      policy,
+			Tier:      "default",
+			Action:    proto.Action_Allow,
+		}}},
+	)
+	return f
+}
+
 func newPagingRing() *storage.BucketRing {
 	nowFunc := func() time.Time { return time.Unix(pagingRingStart, 0) }
 	return storage.NewBucketRing(242, pagingInterval, pagingRingStart, storage.WithNowFunc(nowFunc))
@@ -110,9 +212,11 @@ func pagingFlow(dest string, start int64) *types.Flow {
 			&types.FlowKeyMeta{Proto: "tcp", Reporter: proto.Reporter_Src, Action: proto.Action_Allow},
 			&proto.PolicyTrace{},
 		),
-		StartTime: start,
-		EndTime:   start + pagingInterval,
-		PacketsIn: 1,
+		StartTime:    start,
+		EndTime:      start + pagingInterval,
+		PacketsIn:    1,
+		SourceLabels: unique.Make("app=client"),
+		DestLabels:   unique.Make("app=server"),
 	}
 }
 
