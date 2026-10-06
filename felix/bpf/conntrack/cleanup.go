@@ -220,6 +220,15 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 
 			return ScanVerdictOK, lastSeen
 		}
+		if revEntry.Type() != TypeNATReverse {
+			// A new flow recycled the reverse entry's key. Returning our own
+			// lastSeen deletes only this entry, not the new flow's.
+			l.reasonCounterInc("no reverse for forward")
+			if debug {
+				log.WithField("k", ctKey).Debug("Deleting forward NAT conntrack entry whose reverse key holds another entry type.")
+			}
+			return ScanVerdictDelete, lastSeen
+		}
 		if reason, expired := l.expired(now, ctVal.ReverseNATKey(), revEntry); expired {
 			if debug {
 				log.WithFields(log.Fields{

@@ -169,6 +169,15 @@ func init() {
 			ExpectedDeletions: []conntrack.Key{tcpFwdKey},
 		},
 		CTCleanupTest{
+			Description: "forward NAT entry whose reverse key holds a live normal entry",
+			KVs: map[conntrack.Key]conntrack.Value{
+				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
+				tcpRevKey: conntrack.NewValueNormal(Now-1*time.Minute, 0,
+					conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}, conntrack.Leg{SynSeen: true, AckSeen: true}),
+			},
+			ExpectedDeletions: []conntrack.Key{tcpFwdKey},
+		},
+		CTCleanupTest{
 			Description: "forward NAT entry without reverse out of grace period",
 			KVs: map[conntrack.Key]conntrack.Value{
 				tcpFwdKey: conntrack.NewValueNATForward(Now-11*time.Second, 0, tcpRevKey),

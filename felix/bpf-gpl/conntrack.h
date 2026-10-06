@@ -686,6 +686,13 @@ static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_valu
 	}
 }
 
+/* ct_recycle releases a closed entry's connlimit slot and deletes it, so a new SYN can reuse the tuple. */
+static CALI_BPF_INLINE void ct_recycle(struct calico_ct_value *tracking_v, struct calico_ct_key *k)
+{
+	qos_connlimit_decrement_for_ct(tracking_v);
+	cali_ct_delete_elem(k);
+}
+
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_ctx *ctx)
 {
 	struct ct_lookup_ctx ct_lookup_ctx = {
@@ -842,23 +849,17 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		// reverse entry, we need to do a second lookup.
 		CALI_CT_DEBUG("Hit! NAT FWD entry, doing secondary lookup.");
 		tracking_v = cali_ct_lookup_elem(&v->nat_rev_key);
-		if (!tracking_v) {
-			// The secondary entry might have been deleted because of LRU.
-			// Hence it is better to delete the fwd entry.
+		if (!tracking_v || tracking_v->type != CALI_CT_TYPE_NAT_REV) {
+			// The reverse entry is gone (LRU, recycle) or its key now belongs
+			// to another flow, so this forward entry is stale.
 			cali_ct_delete_elem(&k);
-			CALI_CT_DEBUG("Miss when looking for secondary entry.");
+			CALI_CT_DEBUG("No reverse entry for forward entry.");
 			goto out_lookup_fail;
 		}
 		if (tcp_recycled(syn, tracking_v)) {
 			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.");
-			/* Decrement the connlimit counter before deleting so the
-			 * upcoming check_and_increment in new_flow_entrypoint
-			 * stays net-neutral. The helper is idempotent — bails if
-			 * CONNLIMIT_DEC is already set by the close-time path.
-			 */
-			qos_connlimit_decrement_for_ct(tracking_v);
+			ct_recycle(tracking_v, &v->nat_rev_key);
 			cali_ct_delete_elem(&k);
-			cali_ct_delete_elem(&v->nat_rev_key);
 			goto out_lookup_fail;
 		}
 
@@ -934,8 +935,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 
 		break;
 	case CALI_CT_TYPE_NAT_REV:
-		// N.B. we do not check for tcp_recycled because this cannot be the first
-		// SYN that is opening a new connection. This must be returning traffic.
+		// A SYN that never passed the forward entry, e.g. straight to the backend,
+		// can hit a closed reverse entry.
+		if (tcp_recycled(syn, v)) {
+			CALI_CT_DEBUG("TCP SYN recycles NAT REV entry, NEW flow.");
+			ct_recycle(v, &k);
+			goto out_lookup_fail;
+		}
 		if (srcLTDest) {
 			CALI_VERB("CT-ALL REV src_to_dst A->B");
 			src_to_dst = &v->a_to_b;
@@ -1004,13 +1010,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		CALI_CT_DEBUG("Hit! NORMAL entry.");
 		if (tcp_recycled(syn, v)) {
 			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.");
-			/* Decrement the connlimit counter before deleting so the
-			 * upcoming check_and_increment in new_flow_entrypoint
-			 * stays net-neutral. The helper is idempotent — bails if
-			 * CONNLIMIT_DEC is already set by the close-time path.
-			 */
-			qos_connlimit_decrement_for_ct(v);
-			cali_ct_delete_elem(&k);
+			ct_recycle(v, &k);
 			goto out_lookup_fail;
 		}
 		if (tcp_header) {
@@ -1276,7 +1276,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 	return result;
 
 out_lookup_fail:
+	/* The result may hold state of an entry we just recycled or discarded. */
 	result.rc = CALI_CT_NEW;
+	result.flags = 0;
+	result.ifindex_created = CT_INVALID_IFINDEX;
 	CALI_CT_DEBUG("result: NEW.");
 	return result;
 out_invalid:
