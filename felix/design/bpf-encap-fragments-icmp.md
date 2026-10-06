@@ -50,6 +50,31 @@ A flow-based device is incompatible with a fixed-VNI device. If Felix
 detects a mismatched existing device on startup, it recreates it
 (`vxlanLinksIncompat` in `vxlan_mgr.go`).
 
+### VNI filter
+
+A plain flow-based device accepts every VNI, so no other VXLAN device
+can bind its UDP port. When the kernel supports it, Felix creates the
+device with `vnifilter` and admits only the overlay VNI (`VXLANVNI`)
+and the NodePort VNI `0xca11c0`. Other flow-based `vnifilter` devices
+(for example, an EVPN device) can then share the port with disjoint
+VNIs. Sending is not filtered: BPF may still set any VNI in the
+tunnel key.
+
+- Support is probed, not inferred from the kernel version, because
+  distros backport it (upstream 5.18; RHEL 9 has it on 5.14). The
+  probe creates a throwaway `cali-vnif-probe` device that is never set
+  up, and checks that `vnifilter` took effect: older kernels ignore
+  the attribute silently. The result is the `VXLANVNIFilter` feature,
+  so `FeatureDetectOverride` can turn it off.
+- The kernel cannot toggle `vnifilter` on an existing device. An
+  upgrade on a supporting kernel therefore recreates `vxlan.calico`
+  once, through `vxlanLinksIncompat`.
+- The route manager keeps the filter equal to the desired VNI set
+  (`ensureVNIFilter` in `route_mgr.go`), removing VNIs it did not add.
+- A classic (fixed-VNI) VXLAN device can never share a port with a
+  flow-based one, with or without `vnifilter`: the kernel shares a UDP
+  socket only between devices with identical receive flags.
+
 ### Single device for dualstack
 
 Kernel VXLAN in flow-based mode ties a device to an IP family
@@ -115,6 +140,8 @@ than pinned to a specific device.
   a matching entry in `vxlanLinksIncompat` so that a mismatched
   existing device is detected and recreated; otherwise the BPF
   programs and the device disagree on how tunnel keys are set.
+- A new VNI that BPF must receive on `vxlan.calico` must be added to
+  the VNI filter (`vxlanMgrWithVNIFilter`), or the kernel drops it.
 - Dualstack work on the VXLAN device must respect the "only one
   device" invariant — setting up a second `vxlan-v6.calico` device
   in BPF mode breaks tunnel-key resolution.

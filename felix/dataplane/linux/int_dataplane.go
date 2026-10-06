@@ -894,6 +894,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	dataplaneFeatures := featureDetector.GetFeatures()
 
+	var bpfVXLANOpts []vxlanMgrOption
+	if config.BPFEnabled && dataplaneFeatures.VXLANVNIFilter {
+		bpfVXLANOpts = append(bpfVXLANOpts, vxlanMgrWithVNIFilter())
+	}
+
 	if config.RulesConfig.VXLANEnabled {
 		var fdbOpts []vxlanfdb.Option
 		if config.BPFEnabled {
@@ -911,6 +916,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.VXLANMTU,
 			config,
 			dp.loopSummarizer,
+			bpfVXLANOpts...,
 		)
 		dp.vxlanParentIfaceC = make(chan string, 1)
 		vxlanMTU := config.VXLANMTU
@@ -1507,6 +1513,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			if config.BPFEnabled {
 				// BPF mode uses the same device for both V4 and V6
 				vxlanName = dataplanedefs.VXLANIfaceNameV4
+				vxlanMgrOps = append(vxlanMgrOps, bpfVXLANOpts...)
 				if dp.vxlanManager != nil {
 					vxlanMgrOps = append(vxlanMgrOps, vxlanMgrWithDualStack())
 				}

@@ -58,6 +58,7 @@ type vxlanManager struct {
 	vxlanPort   int
 	ipVersion   uint8
 	mtu         int
+	vniFilter   bool
 
 	// Indicates if configuration has changed since the last apply.
 	vtepsDirty        bool
@@ -74,6 +75,18 @@ type vxlanMgrOption func(m *vxlanManager)
 func vxlanMgrWithDualStack() vxlanMgrOption {
 	return func(m *vxlanManager) {
 		m.routeMgr.maintainIPOnly = true
+	}
+}
+
+// bpfNATTunnelVNI must match CALI_VXLAN_VNI in bpf-gpl/nat_types.h.
+const bpfNATTunnelVNI = 0xca11c0
+
+// vxlanMgrWithVNIFilter makes the flow-based BPF device accept only Calico's VNIs, so
+// other VXLAN devices can share its port.
+func vxlanMgrWithVNIFilter() vxlanMgrOption {
+	return func(m *vxlanManager) {
+		m.vniFilter = true
+		m.routeMgr.tunnelVNIs = []uint32{uint32(m.vxlanID), bpfNATTunnelVNI}
 	}
 }
 
@@ -333,6 +346,7 @@ func (m *vxlanManager) device(parent netlink.Link) (netlink.Link, string, error)
 
 	if m.dpConfig.BPFEnabled {
 		vxlan.FlowBased = true
+		vxlan.VniFilter = m.vniFilter
 		if !m.dpConfig.BPFOverlayIPOnDevice {
 			// BPF dataplane handles encap/decap and source IP selection itself,
 			// so it doesn't need an IP assigned to the overlay device.
@@ -362,6 +376,11 @@ func vxlanLinksIncompat(l1, l2 netlink.Link) string {
 	// Switching between iptables and eBPF dataplanes requires recreating the device.
 	if v1.FlowBased != v2.FlowBased {
 		return fmt.Sprintf("flow-based mode: %v vs %v", v1.FlowBased, v2.FlowBased)
+	}
+
+	// The kernel cannot toggle VNI filtering on an existing device.
+	if v1.VniFilter != v2.VniFilter {
+		return fmt.Sprintf("vni filter: %v vs %v", v1.VniFilter, v2.VniFilter)
 	}
 
 	if v1.VxlanId != v2.VxlanId {

@@ -28,6 +28,7 @@ import (
 	"sync"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
@@ -78,6 +79,7 @@ type FeatureDetector struct {
 
 	newNetlinkHandle            func() (netlinkshim.Interface, error)
 	cachedNetlinkSupportsStrict *bool
+	cachedVXLANVNIFilter        *bool
 }
 
 type Option func(detector *FeatureDetector)
@@ -142,6 +144,7 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 		NFLogSize:                kerV.Compare(v4Dot8Dot0) >= 0,
 		KernelHasUDPGSOFix:       kerV.Compare(v6Dot16Dot0) >= 0,
 		NFTablesSupported:        true,
+		VXLANVNIFilter:           d.vxlanSupportsVNIFilter(),
 	}
 
 	for k, v := range d.featureOverride {
@@ -316,6 +319,56 @@ func (d *FeatureDetector) netlinkSupportsStrict() (bool, error) {
 	log.WithError(err).Warn("Kernel returned unexpected error when trying to detect if " +
 		"netlink supports strict mode.  Assuming no support (this may result in higher CPU usage).")
 	return false, nil
+}
+
+const vniFilterProbeDevice = "cali-vnif-probe"
+
+// vxlanSupportsVNIFilter probes by creating a VXLAN device, since distros backport vnifilter (upstream 5.18).
+func (d *FeatureDetector) vxlanSupportsVNIFilter() bool {
+	if d.cachedVXLANVNIFilter != nil {
+		return *d.cachedVXLANVNIFilter
+	}
+	result, err := d.probeVXLANVNIFilter()
+	if err != nil {
+		log.WithError(err).Info("Failed to probe for VXLAN VNI filter support; assuming none.")
+		result = false
+	}
+	log.WithField("supported", result).Debug("Probed for VXLAN VNI filter support")
+	d.cachedVXLANVNIFilter = &result
+	return result
+}
+
+func (d *FeatureDetector) probeVXLANVNIFilter() (bool, error) {
+	h, err := d.newNetlinkHandle()
+	if err != nil {
+		return false, fmt.Errorf("failed to open netlink handle: %w", err)
+	}
+	defer h.Delete()
+
+	if old, err := h.LinkByName(vniFilterProbeDevice); err == nil {
+		_ = h.LinkDel(old)
+	}
+
+	la := netlink.NewLinkAttrs()
+	la.Name = vniFilterProbeDevice
+	// The device is never set up, so it never binds the VXLAN UDP port.
+	probe := &netlink.Vxlan{LinkAttrs: la, FlowBased: true, VniFilter: true}
+	if err := h.LinkAdd(probe); err != nil {
+		return false, fmt.Errorf("failed to create probe device: %w", err)
+	}
+	defer func() {
+		if err := h.LinkDel(probe); err != nil {
+			log.WithError(err).Warn("Failed to delete VXLAN VNI filter probe device")
+		}
+	}()
+
+	// Kernels without vnifilter ignore the attribute, so check that it took effect.
+	link, err := h.LinkByName(vniFilterProbeDevice)
+	if err != nil {
+		return false, fmt.Errorf("failed to read back probe device: %w", err)
+	}
+	vx, ok := link.(*netlink.Vxlan)
+	return ok && vx.VniFilter, nil
 }
 
 func countRulesInIptableOutput(in []byte) int {
