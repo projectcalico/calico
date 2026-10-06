@@ -36,15 +36,18 @@ func TestStreamReadRacesAddFlow(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	sm := stream.NewStreamManager()
-	go sm.Run(ctx)
+	streams := stream.NewStreamManager()
+	go streams.Run(ctx)
 
 	clk := func() time.Time { return time.Unix(now, 0) }
-	ring := storage.NewBucketRing(20, 1, now, storage.WithStreamReceiver(sm), storage.WithNowFunc(clk))
+	ring := storage.NewBucketRing(20, 1, now, storage.WithStreamReceiver(streams), storage.WithNowFunc(clk))
 
 	base := testutils.NewRandomFlow(now)
 	addFlow := func(start int64) {
-		fl := googleproto.Clone(base).(*proto.Flow)
+		fl, ok := googleproto.Clone(base).(*proto.Flow)
+		if !ok {
+			t.Fatal("cloned flow is not a *proto.Flow")
+		}
 		fl.StartTime = start
 		fl.EndTime = start + 1
 		ring.AddFlow(storage.FlowFromNode{Flow: types.ProtoToFlow(fl)})
@@ -53,31 +56,40 @@ func TestStreamReadRacesAddFlow(t *testing.T) {
 		addFlow(now - i)
 	}
 
-	s := <-sm.Register(&proto.FlowStreamRequest{StartTimeGte: now - 5}, 100)
-	if s == nil {
+	flowStream := <-streams.Register(&proto.FlowStreamRequest{StartTimeGte: now - 5}, 100)
+	if flowStream == nil {
 		t.Fatal("nil stream")
 	}
-	defer s.Close()
+	defer flowStream.Close()
 
-	bf := <-sm.Backfills()
-	ring.Backfill(sm, bf.ID(), bf.StartTimeGte())
+	bf := <-streams.Backfills()
+	ring.Backfill(streams, bf.ID(), bf.StartTimeGte())
 
 	for range 50 {
 		addFlow(now)
 	}
 
+	// Backfill stops before the bucket that is still filling, so the newest of the five flows is not sent.
+	const wantBackfilled = 4
+
 	var got int
-	for {
+	deadline := time.After(10 * time.Second)
+	for got < wantBackfilled {
 		select {
-		case b := <-s.Flows():
+		case b := <-flowStream.Flows():
 			if b.BuildInto(&proto.Filter{}, &proto.FlowResult{Flow: &proto.Flow{}}) {
 				got++
 			}
-		case <-time.After(300 * time.Millisecond):
-			if got != 4 {
-				t.Errorf("expected 4 backfilled flows, got %d", got)
-			}
-			return
+		case <-deadline:
+			t.Fatalf("expected %d backfilled flows, got %d", wantBackfilled, got)
 		}
+	}
+
+	select {
+	case b := <-flowStream.Flows():
+		if b.BuildInto(&proto.Filter{}, &proto.FlowResult{Flow: &proto.Flow{}}) {
+			t.Errorf("expected only %d backfilled flows, got another", wantBackfilled)
+		}
+	case <-time.After(100 * time.Millisecond):
 	}
 }
