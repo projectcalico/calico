@@ -55,7 +55,7 @@ func TestPolicyStatisticsCountFlowOncePerAction(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			np := func(idx int64, action proto.Action) *proto.PolicyHit {
+			npHit := func(idx int64, action proto.Action) *proto.PolicyHit {
 				return &proto.PolicyHit{
 					Kind:        proto.PolicyKind_NetworkPolicy,
 					Name:        "np",
@@ -80,8 +80,8 @@ func TestPolicyStatisticsCountFlowOncePerAction(t *testing.T) {
 					Reporter:   proto.Reporter_Dst,
 					Action:     proto.Action_Allow,
 					Policies: &proto.PolicyTrace{
-						EnforcedPolicies: []*proto.PolicyHit{np(0, proto.Action_Allow)},
-						PendingPolicies:  []*proto.PolicyHit{staged, np(1, tc.pendingAction)},
+						EnforcedPolicies: []*proto.PolicyHit{npHit(0, proto.Action_Allow)},
+						PendingPolicies:  []*proto.PolicyHit{staged, npHit(1, tc.pendingAction)},
 					},
 				},
 				StartTime: dedupRingStart,
