@@ -36,8 +36,24 @@ func IngestFlows(n int, start int64) []*proto.Flow {
 		dstApp := fmt.Sprintf("server-%d", (i/7)%300)
 		hits := func() []*proto.PolicyHit {
 			return []*proto.PolicyHit{
-				{Kind: proto.PolicyKind_CalicoNetworkPolicy, Tier: "security", Name: "allow-dns", Namespace: polNs, Action: proto.Action_Pass, PolicyIndex: 0, RuleIndex: 1},
-				{Kind: proto.PolicyKind_NetworkPolicy, Tier: "default", Name: fmt.Sprintf("np-%d", i%40), Namespace: polNs, Action: proto.Action_Allow, PolicyIndex: 1, RuleIndex: int64(i % 3)},
+				{
+					Kind:        proto.PolicyKind_CalicoNetworkPolicy,
+					Tier:        "security",
+					Name:        "allow-dns",
+					Namespace:   polNs,
+					Action:      proto.Action_Pass,
+					PolicyIndex: 0,
+					RuleIndex:   1,
+				},
+				{
+					Kind:        proto.PolicyKind_NetworkPolicy,
+					Tier:        "default",
+					Name:        fmt.Sprintf("np-%d", i%40),
+					Namespace:   polNs,
+					Action:      proto.Action_Allow,
+					PolicyIndex: 1,
+					RuleIndex:   int64(i % 3),
+				},
 			}
 		}
 		out[i] = &proto.Flow{

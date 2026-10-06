@@ -78,7 +78,7 @@ func TestCachedPolicyTraceChurn(t *testing.T) {
 // TestReadPathsLeaveCachedTraceIntact runs every consumer of the shared trace and checks the
 // cached copy still matches a fresh decode afterwards.
 func TestReadPathsLeaveCachedTraceIntact(t *testing.T) {
-	f := types.ProtoToFlow(&proto.Flow{
+	flow := types.ProtoToFlow(&proto.Flow{
 		Key: &proto.FlowKey{
 			SourceName: "client",
 			DestName:   "server",
@@ -88,10 +88,10 @@ func TestReadPathsLeaveCachedTraceIntact(t *testing.T) {
 		},
 		SourceLabels: []string{"b=2", "a=1"},
 	})
-	h := f.Key.Policies()
+	h := flow.Key.Policies()
 
 	pf := &proto.Flow{}
-	types.FlowIntoProto(f, pf)
+	types.FlowIntoProto(flow, pf)
 	require.Same(t, types.CachedPolicyTrace(h), pf.Key.Policies, "FlowIntoProto did not share the cached trace")
 
 	_, err := googleproto.Marshal(pf)
@@ -99,8 +99,8 @@ func TestReadPathsLeaveCachedTraceIntact(t *testing.T) {
 	require.True(t, types.Matches(&proto.Filter{
 		PendingActions: []proto.Action{proto.Action_Allow},
 		Policies:       []*proto.PolicyMatch{{Name: &proto.StringMatch{Value: "staged", Type: proto.MatchType_Fuzzy}}},
-	}, f.Key))
-	types.FlowIntoProto(f, pf)
+	}, flow.Key))
+	types.FlowIntoProto(flow, pf)
 
 	require.True(t, googleproto.Equal(types.FlowLogPolicyToProto(h), types.CachedPolicyTrace(h)), "a read path modified the shared trace")
 }
@@ -167,13 +167,13 @@ func TestFlowIntoProtoOverwritesEveryField(t *testing.T) {
 func fillMessage(m protoreflect.Message, depth int) {
 	fields := m.Descriptor().Fields()
 	for i := range fields.Len() {
-		fd := fields.Get(i)
+		field := fields.Get(i)
 		switch {
-		case fd.IsMap():
-			panic(fmt.Sprintf("fillMessage does not handle map field %s", fd.FullName()))
-		case fd.IsList():
-			l := m.Mutable(fd).List()
-			if fd.Kind() == protoreflect.MessageKind {
+		case field.IsMap():
+			panic(fmt.Sprintf("fillMessage does not handle map field %s", field.FullName()))
+		case field.IsList():
+			l := m.Mutable(field).List()
+			if field.Kind() == protoreflect.MessageKind {
 				if depth > 0 {
 					e := l.NewElement()
 					fillMessage(e.Message(), depth-1)
@@ -181,27 +181,27 @@ func fillMessage(m protoreflect.Message, depth int) {
 				}
 				continue
 			}
-			l.Append(staleScalar(fd))
-		case fd.Kind() == protoreflect.MessageKind:
+			l.Append(staleScalar(field))
+		case field.Kind() == protoreflect.MessageKind:
 			if depth > 0 {
-				fillMessage(m.Mutable(fd).Message(), depth-1)
+				fillMessage(m.Mutable(field).Message(), depth-1)
 			}
 		default:
-			m.Set(fd, staleScalar(fd))
+			m.Set(field, staleScalar(field))
 		}
 	}
 }
 
-func staleScalar(fd protoreflect.FieldDescriptor) protoreflect.Value {
-	switch fd.Kind() {
+func staleScalar(field protoreflect.FieldDescriptor) protoreflect.Value {
+	switch field.Kind() {
 	case protoreflect.StringKind:
-		return protoreflect.ValueOfString("stale-" + string(fd.Name()))
+		return protoreflect.ValueOfString("stale-" + string(field.Name()))
 	case protoreflect.BytesKind:
 		return protoreflect.ValueOfBytes([]byte("stale"))
 	case protoreflect.BoolKind:
 		return protoreflect.ValueOfBool(true)
 	case protoreflect.EnumKind:
-		vals := fd.Enum().Values()
+		vals := field.Enum().Values()
 		return protoreflect.ValueOfEnum(vals.Get(vals.Len() - 1).Number())
 	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind:
 		return protoreflect.ValueOfInt32(99)
@@ -216,7 +216,7 @@ func staleScalar(fd protoreflect.FieldDescriptor) protoreflect.Value {
 	case protoreflect.DoubleKind:
 		return protoreflect.ValueOfFloat64(99)
 	}
-	panic(fmt.Sprintf("staleScalar does not handle kind %s", fd.Kind()))
+	panic(fmt.Sprintf("staleScalar does not handle kind %s", field.Kind()))
 }
 
 func requireAllFieldsSet(t *testing.T, m protoreflect.Message) {
