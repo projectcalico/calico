@@ -380,7 +380,11 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 			obj += "to_"
 		}
 
-		if strings.Contains(section, "host") {
+		if strings.Contains(section, "host") && topts.ifaceEncaps {
+			// Encapsulation is a compile-time flag here, so load the vxlan object.
+			obj += "vxlan_"
+			topts.progLog = "HEP"
+		} else if strings.Contains(section, "host") {
 			obj += "hep_"
 			topts.progLog = "HEP"
 		} else if strings.Contains(section, "nat") {
@@ -439,7 +443,7 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		ipFamily += " debug"
 	}
 
-	hasMaglev := strings.Contains(obj, "from_hep")
+	hasMaglev := strings.Contains(obj, "from_hep") || strings.Contains(obj, "from_vxlan")
 	obj += ".o"
 	o, err := objLoad(obj, bpfFsDir, ipFamily, topts, rules != nil, true, hasMaglev, useIngressProgMap)
 	Expect(err).NotTo(HaveOccurred())
@@ -1306,6 +1310,7 @@ type testOpts struct {
 	objname                       string
 	flowLogsEnabled               bool
 	natOutExcludeHosts            bool
+	ifaceEncaps                   bool
 	ingressQoSPacketRate          bool
 	egressQoSPacketRate           bool
 	ingressQoSConnLimit           bool
@@ -1374,6 +1379,12 @@ func withFlowLogs() testOption {
 func withNATOutExcludeHosts() testOption {
 	return func(o *testOpts) {
 		o.natOutExcludeHosts = true
+	}
+}
+
+func withIfaceEncaps() testOption {
+	return func(o *testOpts) {
+		o.ifaceEncaps = true
 	}
 }
 
