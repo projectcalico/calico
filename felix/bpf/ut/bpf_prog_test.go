@@ -906,6 +906,9 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 				if topts.natOutExcludeHosts {
 					globals.Flags |= libbpf.GlobalsNATOutgoingExcludeHosts
 				}
+				if topts.ifaceEncaps {
+					globals.Flags |= libbpf.GlobalsIfaceEncaps
+				}
 
 				if topts.ingressQoSPacketRate {
 					globals.Flags |= libbpf.GlobalsIngressPacketRateConfigured
@@ -1306,6 +1309,7 @@ type testOpts struct {
 	objname                       string
 	flowLogsEnabled               bool
 	natOutExcludeHosts            bool
+	ifaceEncaps                   bool
 	ingressQoSPacketRate          bool
 	egressQoSPacketRate           bool
 	ingressQoSConnLimit           bool
@@ -1374,6 +1378,12 @@ func withFlowLogs() testOption {
 func withNATOutExcludeHosts() testOption {
 	return func(o *testOpts) {
 		o.natOutExcludeHosts = true
+	}
+}
+
+func withIfaceEncaps() testOption {
+	return func(o *testOpts) {
+		o.ifaceEncaps = true
 	}
 }
 
