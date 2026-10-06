@@ -31012,7 +31012,7 @@ spec:
                     type: string
                   maxItems: 100000
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                   x-kubernetes-validations:
                     - message: nets entries must be IP addresses or CIDRs
                       reason: FieldValueInvalid
@@ -33810,7 +33810,7 @@ spec:
                     type: string
                   maxItems: 100000
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                   x-kubernetes-validations:
                     - message: nets entries must be IP addresses or CIDRs
                       reason: FieldValueInvalid
