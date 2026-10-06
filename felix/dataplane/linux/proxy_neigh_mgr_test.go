@@ -776,7 +776,76 @@ var _ = Describe("Proxy neighbor manager - LoadBalancer IPs", func() {
 		}
 		Expect(answering).To(Equal(1)) // exactly one node owns the VIP
 	})
+
+	It("drops a node from the election when it loses its address in the family", func() {
+		const vip = "10.0.0.100"
+		nodes := newLBNodes("node-a", "node-b", "node-c")
+		defer nodes.stop()
+		for i, host := range nodes.hosts {
+			nodes.send(&proto.HostMetadataUpdate{Hostname: host, Ipv4Addr: fmt.Sprintf("1.1.1.%d", i+1)})
+		}
+		nodes.send(svcUpdate("my-svc", "default", "LoadBalancer", vip))
+		owners := nodes.owners(vip)
+		Expect(owners).To(HaveLen(1))
+
+		// The owner's Node keeps only an IPv6 address, so it can no longer own
+		// IPv4 VIPs and another node must take over.
+		nodes.send(&proto.HostMetadataUpdate{Hostname: owners[0], Ipv6Addr: "fd00::1"})
+		newOwners := nodes.owners(vip)
+		Expect(newOwners).To(HaveLen(1))
+		Expect(newOwners[0]).NotTo(Equal(owners[0]))
+	})
 })
+
+// lbNodes simulates the IPv4 proxy-neighbour managers of several nodes that all
+// receive the same updates, so a spec can ask which of them claims a VIP.
+type lbNodes struct {
+	hosts []string
+	mgrs  map[string]*proxyNeighManager
+	arp   map[string]*mockARPClient
+}
+
+func newLBNodes(hosts ...string) *lbNodes {
+	n := &lbNodes{
+		hosts: hosts,
+		mgrs:  map[string]*proxyNeighManager{},
+		arp:   map[string]*mockARPClient{},
+	}
+	for i, host := range hosts {
+		nl := newMockNetlinkForProxyNeigh()
+		n.arp[host] = newMockARPClient(net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, byte(i + 1)})
+		n.mgrs[host] = newTestProxyNeighManagerWithHostname(nl, map[string]*mockARPClient{"eth0": n.arp[host]}, host)
+		setIfaceAddr(nl, "eth0", "10.0.0.1/24")
+		sendIfaceAddrsUpdate(n.mgrs[host], "eth0", "10.0.0.1")
+	}
+	return n
+}
+
+// send delivers msg to every node's manager.
+func (n *lbNodes) send(msg any) {
+	for _, mgr := range n.mgrs {
+		mgr.OnUpdate(msg)
+	}
+}
+
+// owners completes every manager's deferred work and returns the nodes whose
+// eth0 listener answers for ip.
+func (n *lbNodes) owners(ip string) []string {
+	var owners []string
+	for _, host := range n.hosts {
+		ExpectWithOffset(1, n.mgrs[host].CompleteDeferredWork()).To(Succeed())
+		if d := getDesiredIPs(n.mgrs[host], "eth0"); d != nil && d.Contains(ip) {
+			owners = append(owners, host)
+		}
+	}
+	return owners
+}
+
+func (n *lbNodes) stop() {
+	for _, mgr := range n.mgrs {
+		mgr.Stop()
+	}
+}
 
 var _ = Describe("Proxy NDP manager (IPv6)", func() {
 	var (

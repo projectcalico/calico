@@ -355,14 +355,15 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 		}
 
 	case *proto.HostMetadataUpdate:
-		// Skip nodes that have no address for this manager's IP version —
-		// they can't host pods/VIPs in our family, so they shouldn't be in
-		// the hash ring.
+		// Nodes that have no address for this manager's IP version can't
+		// host pods/VIPs in our family, so they don't belong in the hash
+		// ring — including a node whose address has just been removed.
 		addr := msg.Ipv4Addr
 		if m.ipVersion == 6 {
 			addr = msg.Ipv6Addr
 		}
 		if addr == "" {
+			m.removeRingNode(msg.Hostname)
 			return
 		}
 		before := m.nodeRing.Len()
@@ -373,12 +374,7 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 		}
 
 	case *proto.HostMetadataRemove:
-		before := m.nodeRing.Len()
-		m.nodeRing.Remove(msg.Hostname)
-		if m.nodeRing.Len() != before {
-			logrus.WithField("hostname", msg.Hostname).Debug("Proxy neighbor manager received HostMetadataRemove")
-			m.dirty = true
-		}
+		m.removeRingNode(msg.Hostname)
 
 	case *proto.IPAMPoolUpdate:
 		pool := msg.GetPool()
@@ -407,6 +403,16 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 			delete(m.noEncapPools, msg.Id)
 			m.dirty = true
 		}
+	}
+}
+
+// removeRingNode takes hostname out of the hash ring, if it is there.
+func (m *proxyNeighManager) removeRingNode(hostname string) {
+	before := m.nodeRing.Len()
+	m.nodeRing.Remove(hostname)
+	if m.nodeRing.Len() != before {
+		logrus.WithField("hostname", hostname).Debug("Proxy neighbor manager removed node from the hash ring")
+		m.dirty = true
 	}
 }
 
