@@ -260,7 +260,7 @@ func TestChartsPublishRecordsWhatItPushed(t *testing.T) {
 	if len(refs) != len(charts.All()) {
 		t.Fatalf("expected one ref per chart, got %d: %v", len(refs), refs)
 	}
-	want := chartsCLIRegistry + "/" + chartsCLIFirstChart(t) + "@" + chartsCLIDigest
+	want := chartsCLIRegistry + "/" + chartsCLIFirstChart(t) + ":" + chartsCLIChartVersion + "@" + chartsCLIDigest
 	if !slices.Contains(refs, want) {
 		t.Errorf("expected %q in the record, got %v", want, refs)
 	}

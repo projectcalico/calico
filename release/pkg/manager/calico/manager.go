@@ -43,7 +43,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
@@ -170,7 +169,7 @@ type CalicoManager struct {
 	// directories. Empty means all of them.
 	imageReleaseDirs []string
 
-	resolveDigest steps.DigestResolver
+	resolveDigest registry.DigestResolver
 
 	// outputDir is the directory to which we should write release artifacts, and from
 	// which we should read them for publishing.
@@ -1168,7 +1167,7 @@ func (r *CalicoManager) resolveOperator() ([]string, error) {
 	if !r.isHashRelease || r.operator {
 		return nil, nil
 	}
-	refs, err := outputs.NewRefsWriter(r.outputDir, operator.ResolveStep, r.calicoVersion)
+	refs, err := outputs.NewRefsWriter(r.outputDir, operator.ResolveStep, r.operatorVersion)
 	if err != nil {
 		return nil, fmt.Errorf("operator resolve refs writer: %w", err)
 	}
@@ -1225,7 +1224,7 @@ func (r *CalicoManager) resolveContainerImages() error {
 
 // digestResolver reports a published tag's digest, defaulting to the registry.
 // Tests substitute one so they never reach the network.
-func (r *CalicoManager) digestResolver() steps.DigestResolver {
+func (r *CalicoManager) digestResolver() registry.DigestResolver {
 	if r.resolveDigest != nil {
 		return r.resolveDigest
 	}

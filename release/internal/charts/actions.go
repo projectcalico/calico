@@ -266,7 +266,7 @@ func (s settings) pending() ([]unit, error) {
 		return units, nil
 	}
 
-	recorded := steps.DigestsByRepo(s.resume.published)
+	recorded := registry.DigestsByRepo(s.resume.published)
 
 	done, err := steps.Go(units, func(u unit) (bool, error) {
 		return s.published(u, recorded)
@@ -286,9 +286,9 @@ func (s settings) pending() ([]unit, error) {
 	return out, nil
 }
 
-func (s settings) published(u unit, recorded steps.RecordedDigests) (bool, error) {
-	digests, ok := recorded[u.repo()]
-	if !ok {
+func (s settings) published(u unit, recorded registry.RecordedDigests) (bool, error) {
+	digests := recorded.Digests(u.repo())
+	if len(digests) == 0 {
 		return false, nil
 	}
 	ref := u.ref(s.Version())
@@ -356,7 +356,7 @@ func (s settings) record(units []unit) error {
 			s.Logger().WithField("chart", ref).Debug("Published chart absent, not recording")
 			return "", nil
 		}
-		return fmt.Sprintf("%s@%s", u.repo(), digest), nil
+		return registry.PublishedRef(ref, digest), nil
 	})
 
 	errs := []error{lookupErr}

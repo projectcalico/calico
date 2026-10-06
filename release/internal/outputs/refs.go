@@ -21,20 +21,17 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/projectcalico/calico/release/internal/registry"
 )
 
 const refsFileName = "published.refs"
 
 // RefsWriter records published digest refs, one per line, as
-// registry/repo@sha256:hex — the form signing tools read.
+// registry/repo:tag@sha256:hex.
 //
 // Refs are appended as they are published, so an interrupted run still records
 // what reached the registry. ReadRefs drops the duplicates a resumed run adds.
-//
-// A ref names a repo and a digest, never the tag it was published under, so a
-// repo reads back as a set of digests. That is enough to tell whether a digest
-// came from this release, but not which tag carried it: anything asserting
-// per-tag provenance needs more than this file holds.
 type RefsWriter struct {
 	mu   sync.Mutex
 	path string
@@ -114,4 +111,16 @@ func ReadRefs(uploadDir, step, version string) ([]string, error) {
 		return nil, fmt.Errorf("reading refs file: %w", err)
 	}
 	return refs, nil
+}
+
+func DigestSourceFor(uploadDir, version string, steps ...string) (registry.DigestSource, error) {
+	records := make([]registry.RecordedDigests, 0, len(steps))
+	for _, step := range steps {
+		refs, err := ReadRefs(uploadDir, step, version)
+		if err != nil {
+			return registry.DigestSource{}, fmt.Errorf("reading %s records: %w", step, err)
+		}
+		records = append(records, registry.DigestsByRepo(refs))
+	}
+	return registry.NewDigestSource(records...), nil
 }

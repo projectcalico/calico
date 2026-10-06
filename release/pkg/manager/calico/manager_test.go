@@ -955,11 +955,11 @@ func TestResolveOperator(t *testing.T) {
 		if err != nil || len(unscanned) != 0 {
 			t.Fatalf("resolveOperator() = %v, %v; want nothing left out", unscanned, err)
 		}
-		refs, err := outputs.ReadRefs(m.outputDir, operator.ResolveStep, m.calicoVersion)
+		refs, err := outputs.ReadRefs(m.outputDir, operator.ResolveStep, m.operatorVersion)
 		if err != nil {
 			t.Fatalf("ReadRefs: %v", err)
 		}
-		want := m.operatorRegistry + "/" + m.operatorImage + "@sha256:aaa"
+		want := m.operatorRegistry + "/" + m.operatorImage + ":" + m.operatorVersion + "@sha256:aaa"
 		if !slices.Contains(refs, want) {
 			t.Errorf("recorded %v, want %s", refs, want)
 		}

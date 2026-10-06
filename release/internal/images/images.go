@@ -28,6 +28,8 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/outputs"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -184,7 +186,7 @@ type settings struct {
 	refs  steps.RefRecorder
 
 	// resolve reports a published tag's digest. Defaults to the registry.
-	resolve steps.DigestResolver
+	resolve registry.DigestResolver
 
 	// resume is the record an earlier run left, and how to check it.
 	resume *resume
@@ -529,7 +531,7 @@ func (c Image) tagPrefix(u unit) (string, error) {
 // unitState reads the record rather than the registry: the record already names
 // what landed, and a local read costs nothing. done is true when every ref the
 // unit publishes is recorded at the digest the registry currently serves.
-func unitState(s settings, u unit, recorded steps.RecordedDigests) (done bool, err error) {
+func unitState(s settings, u unit, recorded registry.RecordedDigests) (done bool, err error) {
 	if s.resume == nil {
 		return false, nil
 	}
@@ -545,8 +547,8 @@ func unitState(s settings, u unit, recorded steps.RecordedDigests) (done bool, e
 	for _, reg := range s.Registries {
 		for _, name := range names {
 			repo := fmt.Sprintf("%s/%s", reg, name)
-			digests, ok := recorded[repo]
-			if !ok {
+			digests := recorded.Digests(repo)
+			if len(digests) == 0 {
 				return false, nil
 			}
 			for _, tag := range tags {
@@ -611,7 +613,13 @@ type resolved struct {
 	missing []string
 }
 
-func (c Image) resolveUnit(u unit, resolve steps.DigestResolver) (resolved, error) {
+type lookup struct{ reg, name, tag string }
+
+func (l lookup) ref() string {
+	return l.reg + "/" + l.name + ":" + l.tag
+}
+
+func (c Image) resolveUnit(u unit, resolve registry.DigestResolver) (resolved, error) {
 	names, err := c.imageNames(u)
 	if err != nil {
 		return resolved{}, err
@@ -621,7 +629,6 @@ func (c Image) resolveUnit(u unit, resolve steps.DigestResolver) (resolved, erro
 		return resolved{}, err
 	}
 
-	type lookup struct{ reg, name, tag string }
 	type found struct {
 		digest string
 		exists bool
@@ -635,10 +642,9 @@ func (c Image) resolveUnit(u unit, resolve steps.DigestResolver) (resolved, erro
 		}
 	}
 	results, lookupErr := steps.GoLimit(lookups, lookupLimit, func(l lookup) (*found, error) {
-		image := fmt.Sprintf("%s/%s:%s", l.reg, l.name, l.tag)
-		digest, exists, err := resolve(image)
+		digest, exists, err := resolve(l.ref())
 		if err != nil {
-			return nil, fmt.Errorf("resolving %s: %w", image, err)
+			return nil, fmt.Errorf("resolving %s: %w", l.ref(), err)
 		}
 		return &found{digest: digest, exists: exists}, nil
 	})
@@ -648,13 +654,13 @@ func (c Image) resolveUnit(u unit, resolve steps.DigestResolver) (resolved, erro
 		switch f := results[i]; {
 		case f == nil:
 		case f.exists:
-			out.refs = append(out.refs, fmt.Sprintf("%s/%s@%s", l.reg, l.name, f.digest))
+			out.refs = append(out.refs, registry.PublishedRef(l.ref(), f.digest))
 		// Charts and manifests name only the first registry, so only its
 		// release tag must exist.
 		case l.reg == c.Registries[0] && l.tag == tags[0]:
-			out.missing = append(out.missing, fmt.Sprintf("%s/%s:%s", l.reg, l.name, l.tag))
+			out.missing = append(out.missing, l.ref())
 		default:
-			logrus.WithField("image", fmt.Sprintf("%s/%s:%s", l.reg, l.name, l.tag)).Debug("Published tag absent, not recording")
+			logrus.WithField("image", l.ref()).Debug("Published tag absent, not recording")
 		}
 	}
 	return out, lookupErr
@@ -733,4 +739,8 @@ func save(s settings, image, out string) error {
 		return s.Errorf("%w", err)
 	}
 	return nil
+}
+
+func DigestSource(uploadDir, version string) (registry.DigestSource, error) {
+	return outputs.DigestSourceFor(uploadDir, version, PublishStep, ResolveStep)
 }
