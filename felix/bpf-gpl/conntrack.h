@@ -934,8 +934,17 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 
 		break;
 	case CALI_CT_TYPE_NAT_REV:
-		// N.B. we do not check for tcp_recycled because this cannot be the first
-		// SYN that is opening a new connection. This must be returning traffic.
+		if (tcp_recycled(syn, v)) {
+			CALI_CT_DEBUG("TCP SYN recycles NAT REV entry, NEW flow.");
+			/* Decrement the connlimit counter before deleting so the
+			 * upcoming check_and_increment in new_flow_entrypoint
+			 * stays net-neutral. The helper is idempotent — bails if
+			 * CONNLIMIT_DEC is already set by the close-time path.
+			 */
+			qos_connlimit_decrement_for_ct(v);
+			cali_ct_delete_elem(&k);
+			goto out_lookup_fail;
+		}
 		if (srcLTDest) {
 			CALI_VERB("CT-ALL REV src_to_dst A->B");
 			src_to_dst = &v->a_to_b;
