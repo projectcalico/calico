@@ -33,6 +33,9 @@ type DiachronicFlow struct {
 	ID  int64
 	Key types.FlowKey
 
+	// visited holds the BucketRing walk that last yielded this flow. Only the main loop touches it.
+	visited uint64
+
 	// mu guards windows, which streams read off the aggregator goroutine.
 	mu sync.Mutex
 
@@ -211,20 +214,51 @@ func (d *DiachronicFlow) appendWindow(flow *types.Flow, start, end int64) {
 
 // Aggregate aggregates the statistics from the DiachronicFlow into a new Flow object over the specified time range.
 func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *types.Flow {
-	if !d.Within(startGte, startLt) {
-		return nil
-	}
-
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
+	ws := d.windowsStarting(startGte, startLt)
+	if len(ws) == 0 {
+		return nil
+	}
 	f := newAggregateFlow(d)
-	for i := range d.windows {
-		if w := &d.windows[i]; w.inRange(startGte, startLt) {
-			d.aggregateWindow(f, w)
+	for i := range ws {
+		if ws[i].inRange(startGte, startLt) {
+			d.aggregateWindow(f, &ws[i])
 		}
 	}
 	return f
+}
+
+// SortStartTime returns the StartTime that Aggregate would give the flow, without building it,
+// and whether the flow is Within the range at all.
+func (d *DiachronicFlow) SortStartTime(startGte, startLt int64) (int64, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	ws := d.windowsStarting(startGte, startLt)
+	if len(ws) == 0 {
+		return 0, false
+	}
+
+	// Ends rise with starts, so if the first window ends past the range, every window does.
+	if ws[0].inRange(startGte, startLt) {
+		return ws[0].start, true
+	}
+	return 0, true
+}
+
+// windowsStarting returns the windows that start in [startGte, startLt), a zero bound being
+// open. Every window that inRange accepts is among them. Callers must hold mu.
+func (d *DiachronicFlow) windowsStarting(startGte, startLt int64) []Window {
+	lo, hi := 0, len(d.windows)
+	if startGte != 0 {
+		lo = sort.Search(hi, func(i int) bool { return d.windows[i].start >= startGte })
+	}
+	if startLt != 0 {
+		hi = lo + sort.Search(hi-lo, func(i int) bool { return d.windows[lo+i].start >= startLt })
+	}
+	return d.windows[lo:hi]
 }
 
 // bucketWindow returns a copy of the window for the given bucket. A bucket maps to exactly one
@@ -303,13 +337,8 @@ func (d *DiachronicFlow) Within(startGte, startLt int64) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	// Go through each window and return true if any of them
-	// fall within the start and end time.
-	for _, w := range d.windows {
-		if (startGte == 0 || w.start >= startGte) &&
-			(startLt == 0 || w.start < startLt) {
-			return true
-		}
+	if len(d.windowsStarting(startGte, startLt)) > 0 {
+		return true
 	}
 
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
