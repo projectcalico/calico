@@ -121,6 +121,7 @@ type BlockCounts struct {
 	Cooling       int
 	Reserved      int
 	InUseReserved int
+	Borrowed      int
 }
 
 // Free is every address in the block that is neither in use nor reserved.
