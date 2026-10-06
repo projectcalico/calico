@@ -34,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/lib/logrusr"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 type routeManager struct {
@@ -78,6 +79,9 @@ type routeManager struct {
 	// created and maintained by the V4 manager and the V6 manager is
 	// responsible only for assigning the right V6 IP to the device.
 	maintainIPOnly bool
+
+	// tunnelVNIs, if set, is the exact VNI filter of a VNI-filtering VXLAN device.
+	tunnelVNIs []uint32
 }
 
 func newRouteManager(
@@ -655,6 +659,12 @@ func (m *routeManager) configureTunnelDevice(
 		}
 	}
 
+	if len(m.tunnelVNIs) > 0 {
+		if err := m.ensureVNIFilter(link); err != nil {
+			return fmt.Errorf("failed to set VNI filter: %w", err)
+		}
+	}
+
 	// Make sure the MTU is set correctly.
 	attrs := link.Attrs()
 	oldMTU := attrs.MTU
@@ -691,6 +701,42 @@ func (m *routeManager) configureTunnelDevice(
 		logCtx.Info("Set tunnel admin up")
 	}
 
+	return nil
+}
+
+// ensureVNIFilter makes the device's VNI filter exactly tunnelVNIs, leaving other VNIs on its port free.
+func (m *routeManager) ensureVNIFilter(link netlink.Link) error {
+	all, err := m.nlHandle.BridgeVniList()
+	if err != nil {
+		return fmt.Errorf("failed to list VNI filters: %w", err)
+	}
+	current := set.New[uint32]()
+	for _, info := range all[int32(link.Attrs().Index)] {
+		end := max(info.VniEnd, info.Vni)
+		for vni := info.Vni; vni <= end; vni++ {
+			current.Add(vni)
+		}
+	}
+
+	desired := set.FromArray(m.tunnelVNIs)
+	for vni := range desired.All() {
+		if current.Contains(vni) {
+			continue
+		}
+		m.logCtx.WithField("vni", vni).Info("Adding VNI to tunnel device filter")
+		if err := m.nlHandle.BridgeVniAdd(link, vni); err != nil {
+			return fmt.Errorf("failed to add VNI %d: %w", vni, err)
+		}
+	}
+	for vni := range current.All() {
+		if desired.Contains(vni) {
+			continue
+		}
+		m.logCtx.WithField("vni", vni).Info("Removing stale VNI from tunnel device filter")
+		if err := m.nlHandle.BridgeVniDel(link, vni); err != nil {
+			return fmt.Errorf("failed to remove VNI %d: %w", vni, err)
+		}
+	}
 	return nil
 }
 

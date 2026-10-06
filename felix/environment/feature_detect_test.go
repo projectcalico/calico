@@ -55,6 +55,7 @@ func TestFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 		},
 		{
@@ -67,6 +68,7 @@ func TestFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 		},
 		{
@@ -79,6 +81,7 @@ func TestFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 		},
 		{
@@ -91,6 +94,7 @@ func TestFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 		},
 		{
@@ -103,6 +107,7 @@ func TestFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 		},
 		{
@@ -115,6 +120,7 @@ func TestFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 		},
 		{
@@ -127,6 +133,7 @@ func TestFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 		},
 		{
@@ -139,6 +146,7 @@ func TestFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 		},
 		{
@@ -152,6 +160,7 @@ func TestFeatureDetection(t *testing.T) {
 				NFLogSize:                true,
 				KernelSideRouteFiltering: true,
 				NFTablesSupported:        true,
+				VXLANVNIFilter:           true,
 			},
 		},
 		{
@@ -164,6 +173,7 @@ func TestFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 		},
 		{
@@ -176,6 +186,7 @@ func TestFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				NFLogSize:             true,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 		},
 		{
@@ -188,6 +199,7 @@ func TestFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				NFLogSize:             true,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 		},
 		{
@@ -202,6 +214,7 @@ func TestFeatureDetection(t *testing.T) {
 				IPIPDeviceIsL3:           false,
 				KernelSideRouteFiltering: false,
 				NFTablesSupported:        true,
+				VXLANVNIFilter:           true,
 			},
 		},
 	} {
@@ -254,6 +267,7 @@ func TestFeatureDetectionOverride(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 			map[string]string{},
 		},
@@ -267,6 +281,7 @@ func TestFeatureDetectionOverride(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 			map[string]string{
 				"RestoreSupportsLock": "true",
@@ -282,6 +297,7 @@ func TestFeatureDetectionOverride(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				NFLogSize:             true,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 			map[string]string{
 				"RestoreSupportsLock":   "true",
@@ -607,6 +623,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				IPIPDeviceIsL3:        false,
 				ChecksumOffloadBroken: false,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 			map[string]string{},
 		},
@@ -617,6 +634,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				IPIPDeviceIsL3:        true,
 				ChecksumOffloadBroken: false,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 			map[string]string{},
 		},
@@ -627,6 +645,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				IPIPDeviceIsL3:        true,
 				ChecksumOffloadBroken: false,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 			map[string]string{},
 		},
@@ -637,6 +656,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				IPIPDeviceIsL3:        true,
 				ChecksumOffloadBroken: false,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "true",
@@ -649,6 +669,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				IPIPDeviceIsL3:        false,
 				ChecksumOffloadBroken: false,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "false",
@@ -661,6 +682,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				IPIPDeviceIsL3:        false,
 				ChecksumOffloadBroken: false,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "false",
@@ -673,6 +695,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				IPIPDeviceIsL3:        false,
 				NFLogSize:             true,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 			map[string]string{},
 		},
@@ -683,6 +706,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				IPIPDeviceIsL3:        true,
 				NFLogSize:             true,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 			map[string]string{},
 		},
@@ -693,6 +717,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				IPIPDeviceIsL3:        true,
 				NFLogSize:             true,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 			map[string]string{},
 		},
@@ -703,6 +728,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				IPIPDeviceIsL3:        true,
 				NFLogSize:             true,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "true",
@@ -715,6 +741,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				IPIPDeviceIsL3:        false,
 				NFLogSize:             true,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "false",
@@ -727,6 +754,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				IPIPDeviceIsL3:        false,
 				NFLogSize:             true,
 				NFTablesSupported:     true,
+				VXLANVNIFilter:        true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "false",
@@ -739,6 +767,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				IPIPDeviceIsL3:     true,
 				KernelHasUDPGSOFix: false,
 				NFTablesSupported:  true,
+				VXLANVNIFilter:     true,
 			},
 			map[string]string{},
 		},
@@ -749,6 +778,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				IPIPDeviceIsL3:     true,
 				KernelHasUDPGSOFix: true,
 				NFTablesSupported:  true,
+				VXLANVNIFilter:     true,
 			},
 			map[string]string{},
 		},
@@ -781,4 +811,32 @@ type mockKernelVersion struct {
 
 func (kv mockKernelVersion) GetKernelVersionReader() (io.Reader, error) {
 	return bytes.NewBufferString(kv.kernelVersion), nil
+}
+
+func TestVXLANVNIFilterDetection(t *testing.T) {
+	for _, tst := range []struct {
+		name     string
+		setup    func(nl *mocknetlink.MockNetlinkDataplane)
+		expected bool
+	}{
+		{"kernel supports vnifilter", func(nl *mocknetlink.MockNetlinkDataplane) {}, true},
+		{"kernel ignores vnifilter", func(nl *mocknetlink.MockNetlinkDataplane) { nl.KernelLacksVniFilter = true }, false},
+		{"probe device creation fails", func(nl *mocknetlink.MockNetlinkDataplane) {
+			nl.FailuresToSimulate = mocknetlink.FailNextLinkAdd
+		}, false},
+	} {
+		t.Run(tst.name, func(t *testing.T) {
+			RegisterTestingT(t)
+			dataplane := testutils.NewMockDataplane("filter", map[string][]string{}, "legacy")
+			dataplane.KernelVersion = "Linux version 6.8.0"
+			mockNL := mocknetlink.New()
+			tst.setup(mockNL)
+			featureDetector := NewFeatureDetector(nil, WithNetlinkOverride(mockNL.NewMockNetlink))
+			featureDetector.NewCmd = dataplane.NewCmd
+			featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
+
+			Expect(featureDetector.GetFeatures().VXLANVNIFilter).To(Equal(tst.expected))
+			Expect(mockNL.NameToLink).NotTo(HaveKey("cali-vnif-probe"), "probe device should be cleaned up")
+		})
+	}
 }
