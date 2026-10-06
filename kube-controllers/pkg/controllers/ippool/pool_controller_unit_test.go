@@ -17,8 +17,8 @@ package ippool
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"slices"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -36,6 +36,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -223,9 +225,8 @@ func (f *fakeRateLimitingQueue) AddRateLimited(item string)  { f.rateLimitedAdds
 func (f *fakeRateLimitingQueue) Forget(item string)          { f.forgets++ }
 func (f *fakeRateLimitingQueue) NumRequeues(item string) int { return f.requeues }
 
-// newTestController builds a controller whose pool informer is seeded with the given pools and
-// whose block informer is empty. The returned indexer is the same one the controller reads, so
-// tests can assert on whether the controller mutated the objects it was handed.
+// newTestController builds a synced controller holding the given pools and no blocks. It returns the pool indexer the
+// controller reads, so tests can check whether the controller mutated the objects it was handed.
 func newTestController(cli *fake.Clientset, pools ...*v3.IPPool) (*IPPoolController, cache.Indexer) {
 	poolIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 	for _, p := range pools {
@@ -233,19 +234,18 @@ func newTestController(cli *fake.Clientset, pools ...*v3.IPPool) (*IPPoolControl
 			panic(err)
 		}
 	}
-	blockIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 	tracker := accounting.NewTracker()
 	tracker.AddPools(pools...)
 
 	c := &IPPoolController{
-		ctx:           context.Background(),
-		cli:           cli,
-		poolInformer:  &fakeSharedIndexInformer{indexer: poolIndexer},
-		blockInformer: &fakeSharedIndexInformer{indexer: blockIndexer},
-		tracker:       tracker,
-		ipam:          &fakeIPAM{},
-		queue:         &fakeRateLimitingQueue{},
+		ctx:          context.Background(),
+		cli:          cli,
+		poolInformer: &fakeSharedIndexInformer{indexer: poolIndexer},
+		tracker:      tracker,
+		ipam:         &fakeIPAM{},
+		queue:        &fakeRateLimitingQueue{},
 	}
+	c.inSync.Store(true)
 	return c, poolIndexer
 }
 
@@ -563,33 +563,19 @@ func expectFinalizer(t *testing.T, cli *fake.Clientset, name string, want bool) 
 	}
 }
 
-// cacheBlock puts a block in the controller's IPAMBlock cache, where the finalizer looks for blocks.
-func cacheBlock(t *testing.T, c *IPPoolController, cidr string) *v3.IPAMBlock {
-	t.Helper()
-	block := &v3.IPAMBlock{
-		ObjectMeta: metav1.ObjectMeta{Name: strings.NewReplacer(".", "-", "/", "-").Replace(cidr)},
-		Spec:       v3.IPAMBlockSpec{CIDR: cidr},
-	}
-	if err := c.blockInformer.GetIndexer().Add(block); err != nil {
-		t.Fatalf("cache block %s: %v", cidr, err)
-	}
-	return block
-}
-
 func TestReconcileFinalizer_WaitsForTheLastBlock(t *testing.T) {
 	pool := terminatingPool("pool-1", "192.168.0.0/24", time.Now())
 	cli := fake.NewClientset(pool)
 	c, _ := newTestController(cli, pool)
-	block := cacheBlock(t, c, "192.168.0.0/26")
+	block := allocatedBlock(t, "192.168.0.0/26", 0)
+	c.tracker.AddBlocks(block)
 
 	if err := c.reconcileFinalizer(c.ctx, logEntry(), pool); err != nil {
 		t.Fatalf("reconcileFinalizer failed: %v", err)
 	}
 	expectFinalizer(t, cli, "pool-1", true)
 
-	if err := c.blockInformer.GetIndexer().Delete(block); err != nil {
-		t.Fatalf("uncache block: %v", err)
-	}
+	c.tracker.RemoveBlock(block.CIDR)
 	if err := c.reconcileFinalizer(c.ctx, logEntry(), pool); err != nil {
 		t.Fatalf("reconcileFinalizer failed: %v", err)
 	}
@@ -604,7 +590,6 @@ func TestReconcile_ANarrowerPoolDoesNotFinalizeTheTerminatingPoolAroundIt(t *tes
 	narrow.Spec.Disabled = true
 	cli := fake.NewClientset(wide, narrow)
 	c, _ := newTestController(cli, wide, narrow)
-	cacheBlock(t, c, "192.168.1.0/26")
 	c.tracker.AddBlocks(allocatedBlock(t, "192.168.1.0/26", 1))
 
 	if err := c.reconcile(); err != nil {
@@ -621,7 +606,6 @@ func TestReconcile_ReplacementPoolDoesNotFinalizeATerminatingPool(t *testing.T) 
 	replacement.CreationTimestamp = metav1.NewTime(created.Add(time.Minute))
 	cli := fake.NewClientset(old, replacement)
 	c, _ := newTestController(cli, old, replacement)
-	cacheBlock(t, c, "192.168.0.0/26")
 	c.tracker.AddBlocks(allocatedBlock(t, "192.168.0.0/26", 1))
 
 	if err := c.reconcile(); err != nil {
@@ -687,5 +671,79 @@ func TestRun_WaitsForTheHandlersBeforeReconciling(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("no reconcile ran after the handlers synced: %v", err)
+	}
+}
+
+// Before the data feed is in sync the tracker may be missing the pool's blocks, so it cannot vouch that none are left.
+func TestReconcileFinalizer_KeepsTheFinalizerUntilInSync(t *testing.T) {
+	pool := terminatingPool("pool-1", "192.168.0.0/24", time.Now())
+	cli := fake.NewClientset(pool)
+	c, _ := newTestController(cli, pool)
+	c.inSync.Store(false)
+
+	if err := c.reconcileFinalizer(c.ctx, logEntry(), pool); err != nil {
+		t.Fatalf("reconcileFinalizer failed: %v", err)
+	}
+	expectFinalizer(t, cli, "pool-1", true)
+
+	c.inSync.Store(true)
+	if err := c.reconcileFinalizer(c.ctx, logEntry(), pool); err != nil {
+		t.Fatalf("reconcileFinalizer failed: %v", err)
+	}
+	expectFinalizer(t, cli, "pool-1", false)
+}
+
+func TestRun_WaitsForTheDataFeedToSync(t *testing.T) {
+	active := testPool("pool-2", "10.0.0.0/24")
+	cli := fake.NewClientset(active)
+	c, _ := newTestController(cli, active)
+	c.queue = workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]())
+	c.inSync.Store(false)
+	c.handlersSynced = []cache.InformerSynced{c.inSync.Load}
+
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		c.Run(stop)
+		close(done)
+	}()
+	defer func() {
+		close(stop)
+		<-done
+	}()
+
+	c.onStatusUpdate(bapi.ResyncInProgress)
+	time.Sleep(500 * time.Millisecond)
+	expectFinalizer(t, cli, "pool-2", false)
+
+	c.onStatusUpdate(bapi.InSync)
+	err := wait.PollUntilContextTimeout(context.Background(), 50*time.Millisecond, 5*time.Second, true, func(ctx context.Context) (bool, error) {
+		pool, err := cli.ProjectcalicoV3().IPPools().Get(ctx, "pool-2", metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return hasFinalizer(pool), nil
+	})
+	if err != nil {
+		t.Fatalf("no reconcile ran after the data feed synced: %v", err)
+	}
+}
+
+// A block change waits out utilizationDelay, but a block deletion can free a deleting pool and reconciles at once.
+func TestOnBlockUpdate_ReconcilesADeletionAtOnce(t *testing.T) {
+	c, _ := newTestController(fake.NewClientset())
+	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]())
+	defer queue.ShutDown()
+	c.queue = queue
+	key := model.BlockKey{CIDR: netip.MustParsePrefix("10.0.0.0/26")}
+
+	c.onBlockUpdate(bapi.Update{KVPair: model.KVPair{Key: key, Value: allocatedBlock(t, "10.0.0.0/26", 1)}})
+	if queue.Len() != 0 {
+		t.Fatalf("expected a block change to wait for the utilization delay, got %d queued", queue.Len())
+	}
+
+	c.onBlockUpdate(bapi.Update{KVPair: model.KVPair{Key: key}})
+	if queue.Len() != 1 {
+		t.Fatalf("expected a block deletion to queue a reconcile at once, got %d queued", queue.Len())
 	}
 }

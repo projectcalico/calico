@@ -315,6 +315,21 @@ func TestPoolBlocksAndBlockPool(t *testing.T) {
 	Expect(tracker.PoolBlocks("outer")).To(Equal([]*model.AllocationBlock{inner, outerLow, outerHigh}))
 }
 
+func TestHasBlocksWithin(t *testing.T) {
+	RegisterTestingT(t)
+	tracker := NewTracker()
+	tracker.AddPools(pool("outer", "10.0.0.0/16", 26), pool("inner", "10.0.0.0/24", 26))
+	inner := testBlock("10.0.0.64/26", "")
+	tracker.AddBlocks(inner, testBlock("10.9.0.0/26", ""))
+
+	Expect(tracker.HasBlocksWithin(cnet.MustParseCIDR("10.0.0.0/16"))).To(BeTrue(), "the inner pool's block still lies in the outer CIDR")
+	Expect(tracker.HasBlocksWithin(cnet.MustParseCIDR("10.1.0.0/16"))).To(BeFalse())
+	Expect(tracker.HasBlocksWithin(cnet.MustParseCIDR("10.0.0.64/27"))).To(BeFalse(), "a CIDR narrower than the block does not hold it")
+
+	tracker.RemoveBlock(inner.CIDR)
+	Expect(tracker.HasBlocksWithin(cnet.MustParseCIDR("10.0.0.0/16"))).To(BeFalse())
+}
+
 // TestIncrementalMatchesFresh reads between every change, then compares against a tracker given the end state at once.
 func TestIncrementalMatchesFresh(t *testing.T) {
 	RegisterTestingT(t)
