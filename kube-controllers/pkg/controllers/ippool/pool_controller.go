@@ -280,8 +280,8 @@ func (c *IPPoolController) reconcile() error {
 		errs = append(errs, err)
 	}
 
-	// The tracker learns of a CIDROverlap change from its status update, so until then it credits blocks to the
-	// wrong pool. That update queues the next pass, which sees the new attribution.
+	// The tracker learns of a CIDROverlap change when the pool's status update reaches the informer, and until then
+	// credits blocks to the wrong pool. That update queues the next pass.
 	if overlapChanged {
 		logrus.Debug("CIDROverlap changed; leaving AddressSpaceNearlyFull to the next pass")
 	} else if err := c.reconcileNearlyFull(c.ctx, pools); err != nil {
