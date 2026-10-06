@@ -198,7 +198,7 @@ func extractPolicyFieldsFromFlowKey(getField func(*proto.PolicyHit) string) func
 	return func(key *types.FlowKey) []string {
 		var values []string
 
-		policyTrace := types.FlowLogPolicyToProto(key.Policies())
+		policyTrace := types.CachedPolicyTrace(key.Policies())
 		for _, policyList := range [][]*proto.PolicyHit{policyTrace.EnforcedPolicies, policyTrace.PendingPolicies} {
 			for _, p := range policyList {
 				// Skip Profiles in hints, as these aren't a real kind in Kubernetes clusters - these are
@@ -327,9 +327,7 @@ func (r *BucketRing) Rollover(sink Sink) int64 {
 	// Find the oldest bucket's start time and remove any data from the DiachronicFlows that is older than that.
 	for d := range flows.All() {
 		// Rollover the DiachronicFlow. This will remove any expired data from it.
-		d.Rollover(r.BeginningOfHistory())
-
-		if d.Empty() {
+		if d.Rollover(r.BeginningOfHistory()) {
 			// If the DiachronicFlow is empty, we can remove it. This means it hasn't received any
 			// flow updates in a long time.
 			if logrus.IsLevelEnabled(logrus.DebugLevel) {
