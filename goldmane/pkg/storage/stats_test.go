@@ -98,7 +98,7 @@ func randomStatsKey(rng *rand.Rand) *proto.FlowKey {
 }
 
 // referenceAddFlow is statisticsIndex.AddFlow from before policy rules were cached on the
-// DiachronicFlow, kept as an oracle.
+// DiachronicFlow, kept as an oracle. Its policy totals count each action once, not once per rule.
 func referenceAddFlow(s *statisticsIndex, flow *types.Flow) {
 	s.add(flow, flow.Key.Action())
 
@@ -135,8 +135,12 @@ func referenceAddFlow(s *statisticsIndex, flow *types.Flow) {
 			ps = &policyStatistics{rules: make(map[StatisticsKey]*statistics)}
 			s.policies[pk] = ps
 		}
+		counted := map[proto.Action]bool{}
 		for k, action := range rules {
-			ps.add(flow, action)
+			if !counted[action] {
+				ps.add(flow, action)
+				counted[action] = true
+			}
 			rs, ok := ps.rules[k]
 			if !ok {
 				rs = &statistics{}
