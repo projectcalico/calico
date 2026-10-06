@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 
 	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
@@ -80,22 +81,31 @@ func BenchmarkAggregatorThroughput(b *testing.B) {
 	b.ReportMetric(float64(b.N)/time.Since(start).Seconds(), "flows/s")
 }
 
-func receivedFlows(b *testing.B) float64 {
+// gatherMetric returns the default registry's family with the given name, or nil if
+// nothing by that name is registered.
+func gatherMetric(tb testing.TB, name string) *dto.MetricFamily {
 	mfs, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
-		b.Fatalf("gathering metrics: %v", err)
+		tb.Fatalf("gathering metrics: %v", err)
 	}
 	for _, mf := range mfs {
-		if mf.GetName() == "goldmane_aggr_received_flows_total" {
-			return mf.GetMetric()[0].GetCounter().GetValue()
+		if mf.GetName() == name {
+			return mf
 		}
 	}
-	b.Fatal("goldmane_aggr_received_flows_total not registered")
-	return 0
+	return nil
 }
 
-func waitForReceived(b *testing.B, n float64) {
-	for receivedFlows(b) < n {
+func receivedFlows(tb testing.TB) float64 {
+	mf := gatherMetric(tb, "goldmane_aggr_received_flows_total")
+	if mf == nil {
+		tb.Fatal("goldmane_aggr_received_flows_total not registered")
+	}
+	return mf.GetMetric()[0].GetCounter().GetValue()
+}
+
+func waitForReceived(tb testing.TB, n float64) {
+	for receivedFlows(tb) < n {
 		time.Sleep(time.Millisecond)
 	}
 }
