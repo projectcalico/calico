@@ -46,8 +46,8 @@ publish_vpp_copy() {
     gsutil cp "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" \
               "${VPP_RESULTS_PREFIX}/${DIAGS_ARCHIVE_FILENAME}" || true
   fi
-  if [[ -f "${REPORT_DIR}/junit.xml" ]]; then
-    gsutil cp "${REPORT_DIR}/junit.xml" "${VPP_RESULTS_PREFIX}/junit.xml" || true
+  if [[ -f "${_junit}" ]]; then
+    gsutil cp "${_junit}" "${VPP_RESULTS_PREFIX}/junit.xml" || true
   fi
   publish_vpp_logs
 }
@@ -65,17 +65,31 @@ if [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
   fi
 fi
 
-# Suites that emit a tree of JUnit files rather than a single junit.xml (e.g.
-# openstack-e2e writes one xmlrunner file per test class under results/) get
-# them merged into ${REPORT_DIR}/junit.xml, so the publish below uploads one
-# test report that the ArgoCI viewer renders with collapsible suites.
-if [[ ! -f "${REPORT_DIR}/junit.xml" && -d "${REPORT_DIR}" ]]; then
-  python3 "$(dirname "${BASH_SOURCE[0]}")/merge_junit.py" "${REPORT_DIR}" "${REPORT_DIR}/junit.xml" || true
+# The Lens uploader reads only the .xml files directly in REPORT_DIR, each one
+# separately, so every case must be in exactly one of them:
+#  - reports in subdirectories (openstack-e2e writes one xmlrunner file per test
+#    class under results/) are invisible to Lens, so merge them into junit.xml;
+#  - files already at the top (bz writes bz-install.xml there) must stay out of
+#    that merge, or Lens would count them twice.
+_merge_junit="$(dirname "${BASH_SOURCE[0]}")/merge_junit.py"
+if [[ -d "${REPORT_DIR}" && ! -f "${REPORT_DIR}/junit.xml" ]]; then
+  python3 "${_merge_junit}" --scope=subdirs "${REPORT_DIR}" "${REPORT_DIR}/junit.xml" || true
+fi
+
+# The viewer renders a single junit.xml, so when several reports sit at the top,
+# merge them into one OUTSIDE REPORT_DIR, where Lens doesn't look.
+_junit="${REPORT_DIR}/junit.xml"
+if [[ -d "${REPORT_DIR}" ]] && [[ -n "$(find "${REPORT_DIR}" -maxdepth 1 -name '*.xml' ! -name junit.xml -print -quit)" ]]; then
+  _merged="${BZ_LOCAL_DIR:-/tmp}/junit-merged.xml"
+  rm -f "${_merged}"
+  python3 "${_merge_junit}" --scope=top "${REPORT_DIR}" "${_merged}" || true
+  # merge_junit.py writes nothing when no file parses as JUnit.
+  [[ -f "${_merged}" ]] && _junit="${_merged}"
 fi
 
 # Publish JUnit + logs.
-if [[ -f "${REPORT_DIR}/junit.xml" ]]; then
-  artifact push job "${REPORT_DIR}/junit.xml" -f || true
+if [[ -f "${_junit}" ]]; then
+  artifact push job "${_junit}" -d junit.xml -f || true
 fi
 artifact push job "${BZ_LOGS_DIR}" -d logs -f || true
 publish_vpp_copy
