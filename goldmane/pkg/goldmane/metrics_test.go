@@ -17,6 +17,7 @@ package goldmane_test
 import (
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 
 	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
@@ -26,7 +27,6 @@ import (
 )
 
 func TestFlowIndexLatencyHistogram(t *testing.T) {
-	const name = "goldmane_aggr_flow_index_latency_seconds"
 	const flows = 10
 
 	gm := goldmane.NewGoldmane()
@@ -34,13 +34,13 @@ func TestFlowIndexLatencyHistogram(t *testing.T) {
 	<-gm.Run(now)
 	defer gm.Stop()
 
-	before := indexLatency(t, name)
+	before := indexLatency(t)
 	base := receivedFlows(t)
 	for _, f := range testutils.IngestFlows(flows, now) {
 		gm.Receive(types.ProtoToFlow(f), "node")
 	}
 	waitForReceived(t, base+flows)
-	after := indexLatency(t, name)
+	after := indexLatency(t)
 
 	if got := after.GetSampleCount() - before.GetSampleCount(); got != flows {
 		t.Errorf("expected %d new samples, got %d", flows, got)
@@ -56,7 +56,9 @@ func TestFlowIndexLatencyHistogram(t *testing.T) {
 	}
 }
 
-func indexLatency(t *testing.T, name string) *dto.Histogram {
+func indexLatency(t *testing.T) *dto.Histogram {
+	t.Helper()
+	const name = "goldmane_aggr_flow_index_latency_seconds"
 	mf := gatherMetric(t, name)
 	if mf == nil {
 		t.Fatalf("%s not registered", name)
@@ -65,4 +67,41 @@ func indexLatency(t *testing.T, name string) *dto.Histogram {
 		t.Fatalf("expected %s to be a histogram, got %v", name, mf.GetType())
 	}
 	return mf.GetMetric()[0].GetHistogram()
+}
+
+// gatherMetric returns the default registry's family with the given name, or nil if
+// nothing by that name is registered.
+func gatherMetric(tb testing.TB, name string) *dto.MetricFamily {
+	tb.Helper()
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		tb.Fatalf("gathering metrics: %v", err)
+	}
+	for _, mf := range mfs {
+		if mf.GetName() == name {
+			return mf
+		}
+	}
+	return nil
+}
+
+func receivedFlows(tb testing.TB) float64 {
+	tb.Helper()
+	mf := gatherMetric(tb, "goldmane_aggr_received_flows_total")
+	if mf == nil {
+		tb.Fatal("goldmane_aggr_received_flows_total not registered")
+	}
+	return mf.GetMetric()[0].GetCounter().GetValue()
+}
+
+// waitForReceived gives up after a deadline, since a dropped flow never reaches the counter.
+func waitForReceived(tb testing.TB, target float64) {
+	tb.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for receivedFlows(tb) < target {
+		if time.Now().After(deadline) {
+			tb.Fatalf("timed out waiting for the aggregator to index flows: %v of %v", receivedFlows(tb), target)
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
