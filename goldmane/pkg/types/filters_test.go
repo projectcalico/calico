@@ -135,7 +135,7 @@ func randomFilter(rng *rand.Rand) *proto.Filter {
 		return nil
 	}
 
-	f := &proto.Filter{
+	filter := &proto.Filter{
 		SourceNames:      strs(),
 		DestNames:        strs(),
 		SourceNamespaces: strs(),
@@ -143,23 +143,23 @@ func randomFilter(rng *rand.Rand) *proto.Filter {
 		Protocols:        strs(),
 	}
 	if set() {
-		f.Actions = []proto.Action{pick(rng, filterActions[1:])}
+		filter.Actions = []proto.Action{pick(rng, filterActions[1:])}
 	}
 	if set() {
-		f.PendingActions = []proto.Action{pick(rng, filterActions[1:]), pick(rng, filterActions[1:])}
+		filter.PendingActions = []proto.Action{pick(rng, filterActions[1:]), pick(rng, filterActions[1:])}
 	}
 	if set() {
-		f.Reporter = pick(rng, []proto.Reporter{proto.Reporter_Src, proto.Reporter_Dst})
+		filter.Reporter = pick(rng, []proto.Reporter{proto.Reporter_Src, proto.Reporter_Dst})
 	}
 	if set() {
-		f.DestPorts = []*proto.PortMatch{{Port: pick(rng, []int64{0, 80, 8080})}}
+		filter.DestPorts = []*proto.PortMatch{{Port: pick(rng, []int64{0, 80, 8080})}}
 	}
 	switch rng.IntN(6) {
 	case 0:
-		f.Policies = []*proto.PolicyMatch{}
+		filter.Policies = []*proto.PolicyMatch{}
 	case 1, 2:
 		for range 1 + rng.IntN(2) {
-			f.Policies = append(f.Policies, &proto.PolicyMatch{
+			filter.Policies = append(filter.Policies, &proto.PolicyMatch{
 				Name:      optStr(),
 				Namespace: optStr(),
 				Tier:      optStr(),
@@ -168,7 +168,7 @@ func randomFilter(rng *rand.Rand) *proto.Filter {
 			})
 		}
 	}
-	return f
+	return filter
 }
 
 // referenceMatches is the Matches implementation from before the policy trace cache, kept as
