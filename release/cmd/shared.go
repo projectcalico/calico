@@ -201,15 +201,28 @@ var outputDir = func(cfg *Config, c *cli.Command, version string) (string, error
 	return releaseOutputDir(cfg.RepoRootDir, version), nil
 }
 
-func publishRecord(uploadDir, step, version string, confirm bool) ([]string, *outputs.RefsWriter, error) {
-	published, err := outputs.ReadRefs(uploadDir, step, version)
+// recordsDir is keyed like outputDir, so a step run on its own records into the
+// same release as the manager.
+func recordsDir(cfg *Config, c *cli.Command, pin pinned, version string) (string, error) {
+	if !c.Bool(hashreleaseFlag.Name) {
+		return outputs.RecordsDir(cfg.OutputDir, version), nil
+	}
+	p, err := pin(cfg, c)
+	if err != nil {
+		return "", err
+	}
+	return outputs.RecordsDir(cfg.OutputDir, p.Hash), nil
+}
+
+func publishRecord(recordsDir, step string, confirm bool) ([]string, *outputs.RefsWriter, error) {
+	published, err := outputs.ReadRefs(recordsDir, step)
 	if err != nil {
 		return nil, nil, err
 	}
 	if !confirm {
 		return published, nil, nil
 	}
-	w, err := outputs.NewRefsWriter(uploadDir, step, version)
+	w, err := outputs.NewRefsWriter(recordsDir, step)
 	if err != nil {
 		return nil, nil, err
 	}

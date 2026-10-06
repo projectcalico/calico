@@ -741,6 +741,6 @@ func save(s settings, image, out string) error {
 	return nil
 }
 
-func DigestSource(uploadDir, version string) (registry.DigestSource, error) {
-	return outputs.DigestSourceFor(uploadDir, version, PublishStep, ResolveStep)
+func DigestSource(recordsDir string) (registry.DigestSource, error) {
+	return outputs.DigestSourceFor(recordsDir, PublishStep, ResolveStep)
 }

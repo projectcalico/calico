@@ -379,6 +379,6 @@ var ValueEditsFor = func(productVersion, productRegistry, operatorImage, operato
 	)
 }
 
-func DigestSource(uploadDir, chartVersion string) (registry.DigestSource, error) {
-	return outputs.DigestSourceFor(uploadDir, chartVersion, PublishStep)
+func DigestSource(recordsDir string) (registry.DigestSource, error) {
+	return outputs.DigestSourceFor(recordsDir, PublishStep)
 }

@@ -26,7 +26,7 @@ import (
 
 func TestRefsWriterAppends(t *testing.T) {
 	base := t.TempDir()
-	w, err := NewRefsWriter(base, "images-publish", "v3.30.0")
+	w, err := NewRefsWriter(base, "images-publish")
 	if err != nil {
 		t.Fatalf("NewRefsWriter: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestRefsWriterAppends(t *testing.T) {
 		t.Fatalf("Add: %v", err)
 	}
 
-	got, err := ReadRefs(base, "images-publish", "v3.30.0")
+	got, err := ReadRefs(base, "images-publish")
 	if err != nil {
 		t.Fatalf("ReadRefs: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestRefsWriterAppends(t *testing.T) {
 // A resumed run must add to the record, not replace it.
 func TestRefsWriterSurvivesReopen(t *testing.T) {
 	base := t.TempDir()
-	first, err := NewRefsWriter(base, "images-publish", "v3.30.0")
+	first, err := NewRefsWriter(base, "images-publish")
 	if err != nil {
 		t.Fatalf("NewRefsWriter: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestRefsWriterSurvivesReopen(t *testing.T) {
 		t.Fatalf("Add: %v", err)
 	}
 
-	second, err := NewRefsWriter(base, "images-publish", "v3.30.0")
+	second, err := NewRefsWriter(base, "images-publish")
 	if err != nil {
 		t.Fatalf("NewRefsWriter (resumed): %v", err)
 	}
@@ -70,7 +70,7 @@ func TestRefsWriterSurvivesReopen(t *testing.T) {
 		t.Fatalf("Add: %v", err)
 	}
 
-	got, err := ReadRefs(base, "images-publish", "v3.30.0")
+	got, err := ReadRefs(base, "images-publish")
 	if err != nil {
 		t.Fatalf("ReadRefs: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestRefsWriterSurvivesReopen(t *testing.T) {
 // A resumed run re-appends refs it already published.
 func TestReadRefsDropsDuplicates(t *testing.T) {
 	base := t.TempDir()
-	w, err := NewRefsWriter(base, "images-publish", "v3.30.0")
+	w, err := NewRefsWriter(base, "images-publish")
 	if err != nil {
 		t.Fatalf("NewRefsWriter: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestReadRefsDropsDuplicates(t *testing.T) {
 		}
 	}
 
-	got, err := ReadRefs(base, "images-publish", "v3.30.0")
+	got, err := ReadRefs(base, "images-publish")
 	if err != nil {
 		t.Fatalf("ReadRefs: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestReadRefsDropsDuplicates(t *testing.T) {
 // Components publish concurrently; interleaved writes must not corrupt lines.
 func TestRefsWriterConcurrent(t *testing.T) {
 	base := t.TempDir()
-	w, err := NewRefsWriter(base, "images-publish", "v3.30.0")
+	w, err := NewRefsWriter(base, "images-publish")
 	if err != nil {
 		t.Fatalf("NewRefsWriter: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestRefsWriterConcurrent(t *testing.T) {
 	}
 	wg.Wait()
 
-	got, err := ReadRefs(base, "images-publish", "v3.30.0")
+	got, err := ReadRefs(base, "images-publish")
 	if err != nil {
 		t.Fatalf("ReadRefs: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestRefsWriterConcurrent(t *testing.T) {
 
 // A step that has not run is not an error.
 func TestReadRefsMissingFile(t *testing.T) {
-	got, err := ReadRefs(t.TempDir(), "images-publish", "v3.30.0")
+	got, err := ReadRefs(t.TempDir(), "images-publish")
 	if err != nil {
 		t.Fatalf("ReadRefs: %v", err)
 	}
@@ -150,54 +150,64 @@ func TestReadRefsMissingFile(t *testing.T) {
 	}
 }
 
-// Everything under the upload directory is published, so a refs file inside it
-// ships to the hashrelease server as a stray dir/<version>/published.refs.
-func TestRefsAreWrittenBesideTheUploadDirNotInIt(t *testing.T) {
-	root := t.TempDir()
-	uploadDir := filepath.Join(root, "upload")
-	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-
-	w, err := NewRefsWriter(uploadDir, "images-publish", "v3.30.0")
-	if err != nil {
-		t.Fatalf("NewRefsWriter: %v", err)
-	}
-	if err := w.Add("quay.io/calico/node@sha256:aaa"); err != nil {
-		t.Fatalf("Add: %v", err)
-	}
-
-	if err := filepath.WalkDir(uploadDir, func(path string, d fs.DirEntry, err error) error {
+func TestRecordsDir(t *testing.T) {
+	out := t.TempDir()
+	record := func(t *testing.T, id string) {
+		t.Helper()
+		w, err := NewRefsWriter(RecordsDir(out, id), "images-publish")
 		if err != nil {
-			return err
+			t.Fatalf("NewRefsWriter: %v", err)
 		}
-		if !d.IsDir() && d.Name() == refsFileName {
-			rel, _ := filepath.Rel(uploadDir, path)
-			t.Errorf("%s is under the upload dir at %s, so it would be published", refsFileName, rel)
+		if err := w.Add("quay.io/calico/node:v3.30.0@sha256:aaa"); err != nil {
+			t.Fatalf("Add: %v", err)
 		}
-		return nil
-	}); err != nil {
-		t.Fatalf("walk: %v", err)
 	}
 
-	// Still readable from the same arguments, so resume keeps working.
-	got, err := ReadRefs(uploadDir, "images-publish", "v3.30.0")
-	if err != nil {
-		t.Fatalf("ReadRefs: %v", err)
-	}
-	if len(got) != 1 {
-		t.Errorf("expected the ref back, got %v", got)
-	}
+	t.Run("keeps records out of the upload dir", func(t *testing.T) {
+		uploadDir := filepath.Join(out, "release", "v3.30.0")
+		if err := os.MkdirAll(uploadDir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		record(t, "v3.30.0")
+		if err := filepath.WalkDir(uploadDir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if !d.IsDir() && d.Name() == refsFileName {
+				t.Errorf("%s is under the upload dir, so it would be published", path)
+			}
+			return nil
+		}); err != nil {
+			t.Fatalf("walk: %v", err)
+		}
+	})
+
+	t.Run("rejects an empty dir", func(t *testing.T) {
+		if _, err := ReadRefs("", "images-publish"); err == nil {
+			t.Error("ReadRefs: expected an empty records dir to fail")
+		}
+		if _, err := NewRefsWriter("", "images-publish"); err == nil {
+			t.Error("NewRefsWriter: expected an empty records dir to fail")
+		}
+	})
+
+	t.Run("keeps each release's records apart", func(t *testing.T) {
+		record(t, "hash-a")
+		got, err := ReadRefs(RecordsDir(out, "hash-b"), "images-publish")
+		if err != nil {
+			t.Fatalf("ReadRefs: %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("another release's records leaked in: %v", got)
+		}
+	})
 }
 
 func TestDigestSourceFor(t *testing.T) {
-	const (
-		version = "v3.30.0"
-		node    = "quay.io/calico/node:v3.30.0"
-	)
+	const node = "quay.io/calico/node:v3.30.0"
 	record := func(t *testing.T, dir, step string, refs ...string) {
 		t.Helper()
-		w, err := NewRefsWriter(dir, step, version)
+		w, err := NewRefsWriter(dir, step)
 		if err != nil {
 			t.Fatalf("NewRefsWriter: %v", err)
 		}
@@ -210,7 +220,7 @@ func TestDigestSourceFor(t *testing.T) {
 		dir := filepath.Join(t.TempDir(), "upload")
 		record(t, dir, "publish", node+"@sha256:aaa")
 		record(t, dir, "resolve", node+"@sha256:bbb")
-		src, err := DigestSourceFor(dir, version, "publish", "resolve")
+		src, err := DigestSourceFor(dir, "publish", "resolve")
 		if err != nil {
 			t.Fatalf("DigestSourceFor: %v", err)
 		}
@@ -220,7 +230,7 @@ func TestDigestSourceFor(t *testing.T) {
 	})
 
 	t.Run("a step that has not run misses", func(t *testing.T) {
-		src, err := DigestSourceFor(t.TempDir(), version, "publish")
+		src, err := DigestSourceFor(t.TempDir(), "publish")
 		if err != nil {
 			t.Fatalf("DigestSourceFor: %v", err)
 		}
@@ -231,10 +241,10 @@ func TestDigestSourceFor(t *testing.T) {
 
 	t.Run("an unreadable record fails", func(t *testing.T) {
 		dir := filepath.Join(t.TempDir(), "upload")
-		if err := os.MkdirAll(filepath.Join(RecordsDir(dir, "publish", version), refsFileName), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(dir, "publish", refsFileName), 0o755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
-		if _, err := DigestSourceFor(dir, version, "publish"); err == nil {
+		if _, err := DigestSourceFor(dir, "publish"); err == nil {
 			t.Error("expected an unreadable record to fail")
 		}
 	})

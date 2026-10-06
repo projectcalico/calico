@@ -772,6 +772,7 @@ func imageManager(t *testing.T, f *fakeRunner, logsDir string) (*CalicoManager, 
 		operator:            true,
 		logsDir:             logsDir,
 		outputDir:           t.TempDir(),
+		recordsDir:          t.TempDir(),
 		releaseBranchPrefix: "release",
 		resolveDigest: func(string) (string, bool, error) {
 			return "sha256:aaa", true, nil
@@ -813,7 +814,7 @@ func TestResolveContainerImages(t *testing.T) {
 	}
 	readRefs := func(t *testing.T, m *CalicoManager, step string) []string {
 		t.Helper()
-		refs, err := outputs.ReadRefs(m.outputDir, step, m.calicoVersion)
+		refs, err := outputs.ReadRefs(m.recordsDir, step)
 		if err != nil {
 			t.Fatalf("ReadRefs(%s): %v", step, err)
 		}
@@ -955,7 +956,7 @@ func TestResolveOperator(t *testing.T) {
 		if err != nil || len(unscanned) != 0 {
 			t.Fatalf("resolveOperator() = %v, %v; want nothing left out", unscanned, err)
 		}
-		refs, err := outputs.ReadRefs(m.outputDir, operator.ResolveStep, m.operatorVersion)
+		refs, err := outputs.ReadRefs(m.recordsDir, operator.ResolveStep)
 		if err != nil {
 			t.Fatalf("ReadRefs: %v", err)
 		}
@@ -1007,7 +1008,7 @@ func TestResolveOperator(t *testing.T) {
 		if sent := scans.sent(); len(sent) != 0 {
 			t.Errorf("sent %v from a failed attempt", sent)
 		}
-		refs, err := outputs.ReadRefs(m.outputDir, images.ResolveStep, m.calicoVersion)
+		refs, err := outputs.ReadRefs(m.recordsDir, images.ResolveStep)
 		if err != nil || len(refs) == 0 {
 			t.Errorf("the product images were not recorded: %v, %v", refs, err)
 		}
@@ -1435,6 +1436,7 @@ func TestPublishHelmChartsRecordsWhatItPushed(t *testing.T) {
 		repoRoot:       "/repo",
 		calicoVersion:  "v3.30.0",
 		outputDir:      filepath.Join(out, "release", "v3.30.0"),
+		recordsDir:     t.TempDir(),
 		helmCharts:     true,
 		helmRegistries: []string{"quay.test/charts"},
 		resolveDigest:  func(string) (string, bool, error) { return "sha256:aaa", true, nil },
@@ -1453,7 +1455,7 @@ func TestPublishHelmChartsRecordsWhatItPushed(t *testing.T) {
 		t.Fatalf("publishHelmCharts: %v", err)
 	}
 
-	refs, err := outputs.ReadRefs(r.outputDir, charts.PublishStep, "v3.30.0")
+	refs, err := outputs.ReadRefs(r.recordsDir, charts.PublishStep)
 	if err != nil {
 		t.Fatal(err)
 	}

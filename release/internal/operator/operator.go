@@ -327,6 +327,6 @@ func WithResume(published []string, force bool) PublishOption {
 	})
 }
 
-func DigestSource(uploadDir, version string) (registry.DigestSource, error) {
-	return outputs.DigestSourceFor(uploadDir, version, PublishStep, ResolveStep)
+func DigestSource(recordsDir string) (registry.DigestSource, error) {
+	return outputs.DigestSourceFor(recordsDir, PublishStep, ResolveStep)
 }
