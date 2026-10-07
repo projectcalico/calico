@@ -66,8 +66,9 @@ tunnel key.
   filtered device is never downgraded. Otherwise the probe creates a
   throwaway `cali-vnif-<pid>` device that is never set up, and checks
   that `vnifilter` took effect: older kernels ignore the attribute
-  silently. The result is the `VXLANVNIFilter` feature,
-  so `FeatureDetectOverride` can turn it off.
+  silently. The result is the `VXLANVNIFilter` feature.
+  Felix probes only when eBPF and VXLAN are both enabled, and never
+  when `FeatureDetectOverride` sets `VXLANVNIFilter`.
 - The kernel cannot toggle `vnifilter` on an existing device. An
   upgrade on a supporting kernel therefore recreates `vxlan.calico`
   once, through `vxlanLinksIncompat`.
