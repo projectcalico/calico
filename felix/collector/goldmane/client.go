@@ -68,7 +68,12 @@ func (g *GoldmaneReporter) Report(logSlice any) error {
 			logrus.WithField("num", len(logs)).Debug("Dispatching flow logs to goldmane")
 		}
 		for _, l := range logs {
-			g.client.Push(ConvertFlowlogToGoldmane(l))
+			f, err := ConvertFlowlogToGoldmane(l)
+			if err != nil {
+				logrus.WithError(err).WithField("flowLog", l).Warn("Dropping invalid flow log")
+				continue
+			}
+			g.client.Push(f)
 		}
 	default:
 		logrus.Panic("Unexpected kind of log dispatcher")
@@ -93,30 +98,36 @@ func convertType(t endpoint.Type) proto.EndpointType {
 	return pt
 }
 
-func convertReporter(r flowlog.ReporterType) proto.Reporter {
+func convertReporter(r flowlog.ReporterType) (proto.Reporter, error) {
 	switch r {
 	case flowlog.ReporterSrc:
-		return proto.Reporter_Src
+		return proto.Reporter_Src, nil
 	case flowlog.ReporterDst:
-		return proto.Reporter_Dst
+		return proto.Reporter_Dst, nil
 	}
-	logrus.WithField("reporter", r).Fatal("BUG: Unexpected reporter")
-	return proto.Reporter_Dst
+	return 0, fmt.Errorf("unexpected reporter %q", r)
 }
 
-func convertAction(a flowlog.Action) proto.Action {
+func convertAction(a flowlog.Action) (proto.Action, error) {
 	switch a {
 	case flowlog.ActionAllow:
-		return proto.Action_Allow
+		return proto.Action_Allow, nil
 	case flowlog.ActionDeny:
-		return proto.Action_Deny
-	default:
-		logrus.WithField("action", a).Fatal("BUG: Unexpected action")
+		return proto.Action_Deny, nil
 	}
-	return proto.Action_ActionUnspecified
+	return proto.Action_ActionUnspecified, fmt.Errorf("unexpected action %q", a)
 }
 
-func ConvertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
+// ConvertFlowlogToGoldmane returns an error if the flow log has no valid reporter or action.
+func ConvertFlowlogToGoldmane(fl *flowlog.FlowLog) (*types.Flow, error) {
+	reporter, err := convertReporter(fl.Reporter)
+	if err != nil {
+		return nil, err
+	}
+	action, err := convertAction(fl.Action)
+	if err != nil {
+		return nil, err
+	}
 	return &types.Flow{
 		Key: types.NewFlowKey(
 			&types.FlowKeySource{
@@ -136,8 +147,8 @@ func ConvertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
 			},
 			&types.FlowKeyMeta{
 				Proto:    utils.ProtoToString(fl.Tuple.Proto),
-				Reporter: convertReporter(fl.Reporter),
-				Action:   convertAction(fl.Action),
+				Reporter: reporter,
+				Action:   action,
 			},
 			&proto.PolicyTrace{
 				EnforcedPolicies: toPolicyHits(fl.FlowEnforcedPolicySet),
@@ -158,7 +169,7 @@ func ConvertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
 
 		SourceLabels: ensureLabels(fl.SrcLabels),
 		DestLabels:   ensureLabels(fl.DstLabels),
-	}
+	}, nil
 }
 
 func ConvertGoldmaneToFlowlog(gl *proto.Flow) flowlog.FlowLog {
