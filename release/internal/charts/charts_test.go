@@ -447,10 +447,10 @@ func TestPublishPushesEveryChartToEveryRegistry(t *testing.T) {
 	}
 
 	want := []string{
-		"chart-one-v3.30.0.tgz oci://docker.test/charts",
-		"chart-one-v3.30.0.tgz oci://quay.test/charts",
-		"chart-two-v3.30.0.tgz oci://docker.test/charts",
-		"chart-two-v3.30.0.tgz oci://quay.test/charts",
+		"chart-one-3.30.0.tgz oci://docker.test/charts",
+		"chart-one-3.30.0.tgz oci://quay.test/charts",
+		"chart-two-3.30.0.tgz oci://docker.test/charts",
+		"chart-two-3.30.0.tgz oci://quay.test/charts",
 	}
 	if got := f.pushes(); !slices.Equal(got, want) {
 		t.Errorf("pushes:\n got %v\nwant %v", got, want)
@@ -459,7 +459,7 @@ func TestPublishPushesEveryChartToEveryRegistry(t *testing.T) {
 
 func TestPublishRetriesAFailedPush(t *testing.T) {
 	c := publishable(t)
-	f := &fakeRunner{failures: map[string]int{"chart-one-v3.30.0.tgz oci://quay.test/charts": 1}}
+	f := &fakeRunner{failures: map[string]int{"chart-one-3.30.0.tgz oci://quay.test/charts": 1}}
 
 	if err := Publish(c, []string{"quay.test/charts"}, true, WithRunner(f)); err != nil {
 		t.Fatalf("expected the retry to recover the push: %v", err)
@@ -471,7 +471,7 @@ func TestPublishRetriesAFailedPush(t *testing.T) {
 
 func TestPublishReportsFailureAfterRetriesExhausted(t *testing.T) {
 	c := publishable(t)
-	f := &fakeRunner{failures: map[string]int{"chart-one-v3.30.0.tgz oci://quay.test/charts": 99}}
+	f := &fakeRunner{failures: map[string]int{"chart-one-3.30.0.tgz oci://quay.test/charts": 99}}
 
 	err := Publish(c, []string{"quay.test/charts"}, true, WithRunner(f))
 	if err == nil {
@@ -480,7 +480,7 @@ func TestPublishReportsFailureAfterRetriesExhausted(t *testing.T) {
 	if !strings.Contains(err.Error(), "chart-one") {
 		t.Errorf("expected the failing chart to be named, got %v", err)
 	}
-	if !slices.Contains(f.pushes(), "chart-two-v3.30.0.tgz oci://quay.test/charts") {
+	if !slices.Contains(f.pushes(), "chart-two-3.30.0.tgz oci://quay.test/charts") {
 		t.Error("expected the other chart to be published despite the failure")
 	}
 }
@@ -594,7 +594,7 @@ func TestPublishResumeSkipsChartsAlreadyPublished(t *testing.T) {
 
 	// Only chart-two is left. A resolver answering every chart alike could not
 	// tell this from skipping the wrong one.
-	want := []string{"chart-two-v3.30.0.tgz oci://quay.test/charts"}
+	want := []string{"chart-two-3.30.0.tgz oci://quay.test/charts"}
 	if got := f.pushes(); !slices.Equal(got, want) {
 		t.Errorf("pushes:\n got %v\nwant %v", got, want)
 	}
@@ -633,7 +633,7 @@ func TestPublishResumeForceRepublishesOverAMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Publish with force: %v", err)
 	}
-	if !slices.Contains(f.pushes(), "chart-one-v3.30.0.tgz oci://quay.test/charts") {
+	if !slices.Contains(f.pushes(), "chart-one-3.30.0.tgz oci://quay.test/charts") {
 		t.Error("expected force to republish the mismatched chart")
 	}
 }
@@ -656,8 +656,8 @@ func TestPublishResumePublishesUnrecordedCharts(t *testing.T) {
 
 // Pinned to a literal: deriving it from FileName would pass for any format.
 func TestFileName(t *testing.T) {
-	const want = "chart-one-v3.30.0.tgz"
-	if got := FileName("chart-one", "v3.30.0"); got != want {
+	const want = "chart-one-3.30.0.tgz"
+	if got := FileName("chart-one", "3.30.0"); got != want {
 		t.Errorf("FileName = %q, want %q", got, want)
 	}
 }
@@ -802,11 +802,17 @@ func TestBuildModifiesValuesWhenAsked(t *testing.T) {
 // An empty suffix means the charts share the product version; a suffix means
 // they rev separately from it.
 func TestVersion(t *testing.T) {
-	if got := Version("v3.30.0", ""); got != "v3.30.0" {
-		t.Errorf("Version without a suffix = %q, want v3.30.0", got)
+	if got := Version("v3.30.0", ""); got != "3.30.0" {
+		t.Errorf("Version without a suffix = %q, want 3.30.0", got)
 	}
-	if got := Version("v3.30.0", "2"); got != "v3.30.0-2" {
-		t.Errorf("Version with a suffix = %q, want v3.30.0-2", got)
+	if got := Version("v3.30.0", "2"); got != "3.30.0-2" {
+		t.Errorf("Version with a suffix = %q, want 3.30.0-2", got)
+	}
+	if got := AppVersion("v3.30.0", ""); got != "v3.30.0" {
+		t.Errorf("AppVersion without a suffix = %q, want v3.30.0", got)
+	}
+	if got := AppVersion("v3.30.0", "2"); got != "v3.30.0-2" {
+		t.Errorf("AppVersion with a suffix = %q, want v3.30.0-2", got)
 	}
 }
 
@@ -879,7 +885,8 @@ func TestBuildWithAChartVersionSuffix(t *testing.T) {
 			}
 		}
 		for _, name := range c.Names {
-			_ = os.WriteFile(filepath.Join(c.BaseDir, FileName(name, gitVersion)), []byte("chart"), 0o644)
+			// The target derives the semver chart version by dropping the "v".
+			_ = os.WriteFile(filepath.Join(c.BaseDir, FileName(name, strings.TrimPrefix(gitVersion, "v"))), []byte("chart"), 0o644)
 		}
 	}
 	f.onRun = stage
@@ -887,7 +894,7 @@ func TestBuildWithAChartVersionSuffix(t *testing.T) {
 	if err := Build(c, WithRunner(f)); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if want := c.Version(); gitVersion != want {
+	if want := c.AppVersion(); gitVersion != want {
 		t.Errorf("GIT_VERSION = %q, want %q", gitVersion, want)
 	}
 }

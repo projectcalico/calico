@@ -1440,7 +1440,7 @@ func TestPublishHelmChartsRecordsWhatItPushed(t *testing.T) {
 		resolveDigest:  func(string) (string, bool, error) { return "sha256:aaa", true, nil },
 	}
 	for _, name := range charts.All() {
-		path := filepath.Join(r.chart().BaseDir, charts.FileName(name, "v3.30.0"))
+		path := filepath.Join(r.chart().BaseDir, charts.FileName(name, r.chart().Version()))
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -1453,7 +1453,7 @@ func TestPublishHelmChartsRecordsWhatItPushed(t *testing.T) {
 		t.Fatalf("publishHelmCharts: %v", err)
 	}
 
-	refs, err := outputs.ReadRefs(r.outputDir, charts.PublishStep, "v3.30.0")
+	refs, err := outputs.ReadRefs(r.outputDir, charts.PublishStep, r.chart().Version())
 	if err != nil {
 		t.Fatal(err)
 	}

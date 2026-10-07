@@ -58,8 +58,11 @@ fi
 INFRA_DIR=${REPO_ROOT}/hack/test/kind/infra
 ARCH=${ARCH:-amd64}
 GIT_VERSION=${GIT_VERSION:-$(git -C "${REPO_ROOT}" describe --tags --dirty --always --abbrev=12)}
+# Helm chart versions must be valid semver, so the chart archive is named without
+# the leading "v" that GIT_VERSION carries.
+CHART_VERSION=${CHART_VERSION:-${GIT_VERSION#v}}
 HELM=${REPO_ROOT}/bin/helm
-CHART=${REPO_ROOT}/bin/tigera-operator-${GIT_VERSION}.tgz
+CHART=${REPO_ROOT}/bin/tigera-operator-${CHART_VERSION}.tgz
 VALUES_FILE=${VALUES_FILE:-${INFRA_DIR}/values.yaml}
 
 : ${kubectl:=${REPO_ROOT}/hack/test/kind/kubectl}

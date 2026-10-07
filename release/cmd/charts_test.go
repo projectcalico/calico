@@ -137,7 +137,7 @@ func writeFakeCharts(t *testing.T, cfg *Config) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	for _, name := range charts.All() {
-		path := filepath.Join(dir, charts.FileName(name, chartsCLIChartVersion))
+		path := filepath.Join(dir, charts.FileName(name, charts.Version(chartsCLIChartVersion, "")))
 		if err := os.WriteFile(path, []byte("chart"), 0o644); err != nil {
 			t.Fatalf("write %s: %v", path, err)
 		}
@@ -221,7 +221,7 @@ func TestChartsPublishPushesEveryChart(t *testing.T) {
 	r, _ := runCharts(t, "publish", "--helm-registry", chartsCLIRegistry)
 
 	for _, name := range charts.All() {
-		if !r.ran("push", charts.FileName(name, chartsCLIChartVersion)) {
+		if !r.ran("push", charts.FileName(name, charts.Version(chartsCLIChartVersion, ""))) {
 			t.Errorf("expected %s to be pushed", name)
 		}
 	}
@@ -241,7 +241,7 @@ func TestChartsPublishLocalPushesNothing(t *testing.T) {
 func TestChartsPublishLocalRecordsNothing(t *testing.T) {
 	_, cfg := runCharts(t, "publish", "--local", "--helm-registry", chartsCLIRegistry)
 
-	refs, err := outputs.ReadRefs(cfg.OutputDir, charts.PublishStep, chartsCLIChartVersion)
+	refs, err := outputs.ReadRefs(cfg.OutputDir, charts.PublishStep, charts.Version(chartsCLIChartVersion, ""))
 	if err != nil {
 		t.Fatalf("reading refs: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestChartsPublishLocalRecordsNothing(t *testing.T) {
 func TestChartsPublishRecordsWhatItPushed(t *testing.T) {
 	_, cfg := runCharts(t, "publish", "--helm-registry", chartsCLIRegistry)
 
-	refs, err := outputs.ReadRefs(cfg.OutputDir, charts.PublishStep, chartsCLIChartVersion)
+	refs, err := outputs.ReadRefs(cfg.OutputDir, charts.PublishStep, charts.Version(chartsCLIChartVersion, ""))
 	if err != nil {
 		t.Fatalf("reading refs: %v", err)
 	}
@@ -447,7 +447,7 @@ func TestChartsFollowTheResolvedChartVersion(t *testing.T) {
 
 	runChartsIn(t, cfg, "publish", "--helm-registry", chartsCLIRegistry)
 	// A missing record reads as empty rather than an error, so count the refs.
-	refs, err := outputs.ReadRefs(cfg.OutputDir, charts.PublishStep, resolved)
+	refs, err := outputs.ReadRefs(cfg.OutputDir, charts.PublishStep, charts.Version(resolved, ""))
 	if err != nil {
 		t.Fatalf("reading refs: %v", err)
 	}
