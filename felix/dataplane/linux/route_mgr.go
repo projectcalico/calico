@@ -713,17 +713,30 @@ func (m *routeManager) ensureVNIFilter(link netlink.Link) error {
 	if err != nil {
 		return fmt.Errorf("failed to list VNI filters: %w", err)
 	}
-	current := set.New[uint32]()
+	desired := set.FromArray(m.tunnelVNIs)
+	present := set.New[uint32]()
 	for _, info := range all[int32(link.Attrs().Index)] {
-		end := max(info.VniEnd, info.Vni)
-		for vni := info.Vni; vni <= end; vni++ {
-			current.Add(vni)
+		start, end := info.Vni, max(info.VniEnd, info.Vni)
+		if allDesired(start, end, desired) {
+			for vni := start; vni <= end; vni++ {
+				present.Add(vni)
+			}
+			continue
+		}
+		m.logCtx.WithFields(logrus.Fields{"start": start, "end": end}).Info("Removing stale VNIs from tunnel device filter")
+		var err error
+		if end > start {
+			err = m.nlHandle.BridgeVniDelRange(link, start, end)
+		} else {
+			err = m.nlHandle.BridgeVniDel(link, start)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to remove VNIs %d-%d: %w", start, end, err)
 		}
 	}
 
-	desired := set.FromArray(m.tunnelVNIs)
 	for vni := range desired.All() {
-		if current.Contains(vni) {
+		if present.Contains(vni) {
 			continue
 		}
 		m.logCtx.WithField("vni", vni).Info("Adding VNI to tunnel device filter")
@@ -731,16 +744,20 @@ func (m *routeManager) ensureVNIFilter(link netlink.Link) error {
 			return fmt.Errorf("failed to add VNI %d: %w", vni, err)
 		}
 	}
-	for vni := range current.All() {
-		if desired.Contains(vni) {
-			continue
-		}
-		m.logCtx.WithField("vni", vni).Info("Removing stale VNI from tunnel device filter")
-		if err := m.nlHandle.BridgeVniDel(link, vni); err != nil {
-			return fmt.Errorf("failed to remove VNI %d: %w", vni, err)
+	return nil
+}
+
+// allDesired reports whether every VNI in [start, end] is desired; a range longer than the set cannot be.
+func allDesired(start, end uint32, desired set.Set[uint32]) bool {
+	if end-start >= uint32(desired.Len()) {
+		return false
+	}
+	for vni := start; vni <= end; vni++ {
+		if !desired.Contains(vni) {
+			return false
 		}
 	}
-	return nil
+	return true
 }
 
 // ensureAddressOnLink reconciles the Calico-managed address on the tunnel device so that the desired

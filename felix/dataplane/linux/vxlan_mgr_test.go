@@ -873,6 +873,27 @@ var _ = Describe("VXLANManager in BPF mode", func() {
 		Expect(ml.VNIs.Slice()).To(ConsistOf(uint32(4096), uint32(0xca11c0)))
 	})
 
+	It("removes a stale VNI range in one call", func() {
+		addExistingDevice(true, 4096)
+		vx := dataplane.NameToLink[dataplanedefs.VXLANIfaceNameV4].ConcreteLink
+		Expect(dataplane.BridgeVniAddRange(vx, 1, 100000)).To(Succeed())
+		dataplane.ResetDeltas()
+
+		Expect(configureDevice(vxlanMgrWithVNIFilter())).To(Succeed())
+		Expect(dataplane.NumBridgeVniDelCalls).To(Equal(1))
+		_, ml := vxlanDevice()
+		Expect(ml.VNIs.Slice()).To(ConsistOf(uint32(4096), uint32(0xca11c0)))
+	})
+
+	It("keeps a range that holds only wanted VNIs", func() {
+		dpConfig.RulesConfig.VXLANVNI = 0xca11bf
+		addExistingDevice(true, 0xca11bf, 0xca11c0)
+		Expect(configureDevice(vxlanMgrWithVNIFilter())).To(Succeed())
+		Expect(dataplane.NumBridgeVniDelCalls).To(Equal(0))
+		_, ml := vxlanDevice()
+		Expect(ml.VNIs.Slice()).To(ConsistOf(uint32(0xca11bf), uint32(0xca11c0)))
+	})
+
 	It("reconciles the VNI filter only when the device is new", func() {
 		mgr := newMgr(vxlanMgrWithVNIFilter())
 		Expect(configure(mgr)).To(Succeed())

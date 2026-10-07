@@ -20,6 +20,7 @@ import (
 	"maps"
 	"net"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -320,6 +321,7 @@ type MockNetlinkDataplane struct {
 	NumRuleAddCalls             int
 	NumRuleDelCalls             int
 	NumBridgeVniListCalls       int
+	NumBridgeVniDelCalls        int
 	WireguardConfigUpdated      bool
 	HitRouteListFilteredNoDev   bool
 	HitRouteListFilteredNoTable bool
@@ -382,6 +384,7 @@ func (d *MockNetlinkDataplane) ResetDeltas() {
 	d.NumRuleAddCalls = 0
 	d.NumRuleDelCalls = 0
 	d.NumBridgeVniListCalls = 0
+	d.NumBridgeVniDelCalls = 0
 	d.AddedRules = nil
 	d.DeletedRules = nil
 	d.WireguardConfigUpdated = false
@@ -620,14 +623,23 @@ func (d *MockNetlinkDataplane) LinkDel(link netlink.Link) error {
 }
 
 func (d *MockNetlinkDataplane) BridgeVniAdd(link netlink.Link, vni uint32) error {
-	return d.bridgeVniModify(link, vni, true)
+	return d.bridgeVniModify(link, vni, vni, true)
+}
+
+// BridgeVniAddRange is a test helper; Felix itself never adds VNI ranges.
+func (d *MockNetlinkDataplane) BridgeVniAddRange(link netlink.Link, vniStart, vniEnd uint32) error {
+	return d.bridgeVniModify(link, vniStart, vniEnd, true)
 }
 
 func (d *MockNetlinkDataplane) BridgeVniDel(link netlink.Link, vni uint32) error {
-	return d.bridgeVniModify(link, vni, false)
+	return d.bridgeVniModify(link, vni, vni, false)
 }
 
-func (d *MockNetlinkDataplane) bridgeVniModify(link netlink.Link, vni uint32, add bool) error {
+func (d *MockNetlinkDataplane) BridgeVniDelRange(link netlink.Link, vniStart, vniEnd uint32) error {
+	return d.bridgeVniModify(link, vniStart, vniEnd, false)
+}
+
+func (d *MockNetlinkDataplane) bridgeVniModify(link netlink.Link, vniStart, vniEnd uint32, add bool) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	defer ginkgo.GinkgoRecover()
@@ -635,6 +647,9 @@ func (d *MockNetlinkDataplane) bridgeVniModify(link netlink.Link, vni uint32, ad
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextBridgeVni) {
 		return ErrSimulated
+	}
+	if !add {
+		d.NumBridgeVniDelCalls++
 	}
 	ml, ok := d.NameToLink[link.Attrs().Name]
 	if !ok {
@@ -646,10 +661,12 @@ func (d *MockNetlinkDataplane) bridgeVniModify(link netlink.Link, vni uint32, ad
 	if ml.VNIs == nil {
 		ml.VNIs = set.New[uint32]()
 	}
-	if add {
-		ml.VNIs.Add(vni)
-	} else {
-		ml.VNIs.Discard(vni)
+	for vni := vniStart; vni <= vniEnd; vni++ {
+		if add {
+			ml.VNIs.Add(vni)
+		} else {
+			ml.VNIs.Discard(vni)
+		}
 	}
 	return nil
 }
@@ -670,8 +687,19 @@ func (d *MockNetlinkDataplane) BridgeVniList() (map[int32][]*nl.BridgeVniInfo, e
 			continue
 		}
 		idx := int32(ml.LinkAttrs.Index)
-		for vni := range ml.VNIs.All() {
-			out[idx] = append(out[idx], &nl.BridgeVniInfo{Vni: vni})
+		vnis := ml.VNIs.Slice()
+		slices.Sort(vnis)
+		for i := 0; i < len(vnis); {
+			j := i
+			for j+1 < len(vnis) && vnis[j+1] == vnis[j]+1 {
+				j++
+			}
+			info := &nl.BridgeVniInfo{Vni: vnis[i]}
+			if j > i {
+				info.VniEnd = vnis[j]
+			}
+			out[idx] = append(out[idx], info)
+			i = j + 1
 		}
 	}
 	return out, nil
