@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"slices"
 	"sync"
 	"time"
 
@@ -26,6 +27,8 @@ import (
 	"github.com/mdlayher/ndp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
+	logrustest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/net/ipv6"
 
@@ -382,10 +385,11 @@ func sendIfaceAddrsUpdate(mgr *proxyNeighManager, name string, addrs ...string) 
 	})
 }
 
-func sendHostMetadata(mgr *proxyNeighManager, hostname, ipv4Addr string) {
+func sendHostMetadata(mgr *proxyNeighManager, hostname, ipv4Addr string, ifaceCIDRs ...string) {
 	mgr.OnUpdate(&proto.HostMetadataUpdate{
-		Hostname: hostname,
-		Ipv4Addr: ipv4Addr,
+		Hostname:       hostname,
+		Ipv4Addr:       ipv4Addr,
+		InterfaceCidrs: ifaceCIDRs,
 	})
 }
 
@@ -754,9 +758,9 @@ var _ = Describe("Proxy neighbor manager - LoadBalancer IPs", func() {
 				"eth0": newMockARPClient(net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0x01}),
 			}
 			mgr := newTestProxyNeighManagerWithHostname(nl, arpClients, host)
-			sendHostMetadata(mgr, "node-a", "1.1.1.1")
-			sendHostMetadata(mgr, "node-b", "1.1.1.2")
-			sendHostMetadata(mgr, "node-c", "1.1.1.3")
+			sendHostMetadata(mgr, "node-a", "1.1.1.1", "10.0.0.1/24")
+			sendHostMetadata(mgr, "node-b", "1.1.1.2", "10.0.0.2/24")
+			sendHostMetadata(mgr, "node-c", "1.1.1.3", "10.0.0.3/24")
 			setIfaceAddr(nl, "eth0", "10.0.0.1/24")
 			sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
 			mgr.OnUpdate(svcUpdate("my-svc", "default", "LoadBalancer", vip))
@@ -781,9 +785,7 @@ var _ = Describe("Proxy neighbor manager - LoadBalancer IPs", func() {
 		const vip = "10.0.0.100"
 		nodes := newLBNodes("node-a", "node-b", "node-c")
 		defer nodes.stop()
-		for i, host := range nodes.hosts {
-			nodes.send(&proto.HostMetadataUpdate{Hostname: host, Ipv4Addr: fmt.Sprintf("1.1.1.%d", i+1)})
-		}
+		nodes.sendNodes()
 		nodes.send(svcUpdate("my-svc", "default", "LoadBalancer", vip))
 		owners := nodes.owners(vip)
 		Expect(owners).To(HaveLen(1))
@@ -795,7 +797,207 @@ var _ = Describe("Proxy neighbor manager - LoadBalancer IPs", func() {
 		Expect(newOwners).To(HaveLen(1))
 		Expect(newOwners[0]).NotTo(Equal(owners[0]))
 	})
+
+	Describe("restricted to nodes with an interface in the VIP's subnet", func() {
+		const (
+			vip            = "10.0.0.100"
+			unannouncedMsg = "No node reports an interface in the subnet of this LoadBalancer IP, so no node will answer ARP/NDP for it"
+		)
+		var nodes *lbNodes
+
+		// withCIDRs is host's update with the given interface CIDRs instead.
+		withCIDRs := func(host string, cidrs ...string) *proto.HostMetadataUpdate {
+			u := nodes.nodeUpdate(host)
+			u.InterfaceCidrs = cidrs
+			return u
+		}
+
+		BeforeEach(func() {
+			nodes = newLBNodes("node-a", "node-b", "node-c")
+		})
+
+		AfterEach(func() {
+			nodes.stop()
+		})
+
+		It("moves a VIP off a node that leaves its subnet, and back once the node returns", func() {
+			nodes.sendNodes()
+			nodes.send(svcUpdate("my-svc", "default", "LoadBalancer", vip))
+			owners := nodes.owners(vip)
+			Expect(owners).To(HaveLen(1))
+			owner := owners[0]
+
+			nodes.send(withCIDRs(owner, "192.168.5.1/24"))
+			owners = nodes.owners(vip)
+			Expect(owners).To(HaveLen(1))
+			Expect(owners[0]).NotTo(Equal(owner))
+			// The new owner announces itself with a gratuitous ARP.
+			Eventually(func() int {
+				return len(nodes.arp[owners[0]].getWrites())
+			}).Should(BeNumerically(">=", 1))
+
+			nodes.send(nodes.nodeUpdate(owner))
+			Expect(nodes.owners(vip)).To(Equal([]string{owner}))
+		})
+
+		It("leaves a VIP on its owner when another node leaves its subnet", func() {
+			nodes.sendNodes()
+			nodes.send(svcUpdate("my-svc", "default", "LoadBalancer", vip))
+			owners := nodes.owners(vip)
+			Expect(owners).To(HaveLen(1))
+			other := nodes.hosts[0]
+			if other == owners[0] {
+				other = nodes.hosts[1]
+			}
+
+			nodes.send(withCIDRs(other, "192.168.5.1/24"))
+			Expect(nodes.owners(vip)).To(Equal(owners))
+		})
+
+		It("gives a VIP only to a node that reports an interface in its subnet", func() {
+			// node-a reports no interfaces, and node-b only an IPv6 one.
+			nodes.send(withCIDRs("node-a"))
+			nodes.send(withCIDRs("node-b", "fd00::2/64"))
+			nodes.send(nodes.nodeUpdate("node-c"))
+			nodes.send(svcUpdate("my-svc", "default", "LoadBalancer", vip))
+			Expect(nodes.owners(vip)).To(Equal([]string{"node-c"}))
+		})
+
+		It("re-runs the election when a node starts reporting the VIP's subnet", func() {
+			for _, host := range nodes.hosts {
+				nodes.send(withCIDRs(host))
+			}
+			nodes.send(svcUpdate("my-svc", "default", "LoadBalancer", vip))
+			Expect(nodes.owners(vip)).To(BeEmpty())
+
+			nodes.send(nodes.nodeUpdate("node-b"))
+			Expect(nodes.owners(vip)).To(Equal([]string{"node-b"}))
+		})
+
+		It("announces a VIP from no node when no node has an interface in its subnet, and logs it once", func() {
+			logs := captureLogs()
+			for _, host := range nodes.hosts {
+				nodes.send(withCIDRs(host, "192.168.5.1/24"))
+			}
+			nodes.send(svcUpdate("my-svc", "default", "LoadBalancer", vip))
+			Expect(nodes.owners(vip)).To(BeEmpty())
+			Expect(countLogs(logs, logrus.InfoLevel, unannouncedMsg)).To(Equal(len(nodes.hosts)))
+
+			// A node update re-runs the election without changing why the VIP has
+			// no owner.
+			nodes.send(withCIDRs("node-a", "192.168.5.1/24"))
+			Expect(nodes.owners(vip)).To(BeEmpty())
+			Expect(countLogs(logs, logrus.InfoLevel, unannouncedMsg)).To(Equal(len(nodes.hosts)))
+		})
+
+		It("doesn't log a VIP while the ring is empty", func() {
+			logs := captureLogs()
+			nodes.send(svcUpdate("my-svc", "default", "LoadBalancer", vip))
+			Expect(nodes.owners(vip)).To(BeEmpty())
+			Expect(countLogs(logs, logrus.InfoLevel, unannouncedMsg)).To(BeZero())
+		})
+
+		It("doesn't log a VIP outside every no-encap pool", func() {
+			logs := captureLogs()
+			nodes.sendNodes()
+			nodes.send(svcUpdate("my-svc", "default", "LoadBalancer", "172.16.0.100"))
+			Expect(nodes.owners("172.16.0.100")).To(BeEmpty())
+			Expect(countLogs(logs, logrus.InfoLevel, unannouncedMsg)).To(BeZero())
+		})
+
+		It("doesn't re-run the election on a pod update", func() {
+			nodes.sendNodes()
+			nodes.send(svcUpdate("my-svc", "default", "LoadBalancer", vip))
+			owners := nodes.owners(vip)
+			Expect(owners).To(HaveLen(1))
+
+			nodes.send(proxyNeighWepUpdate("k8s", "default/pod1", "eth0", "10.0.0.50/32"))
+			for host, mgr := range nodes.mgrs {
+				Expect(mgr.lbElectionDirty).To(BeFalse(), "election marked dirty on %s", host)
+			}
+			Expect(nodes.owners(vip)).To(Equal(owners))
+		})
+
+		It("stops announcing a VIP once its pool is encapsulated", func() {
+			nodes.sendNodes()
+			nodes.send(svcUpdate("my-svc", "default", "LoadBalancer", vip))
+			Expect(nodes.owners(vip)).To(HaveLen(1))
+
+			nodes.send(&proto.IPAMPoolUpdate{
+				Id:   "default-test-pool",
+				Pool: &proto.IPAMPool{Cidr: "10.0.0.0/8", IpipMode: "Never", VxlanMode: "Always"},
+			})
+			Expect(nodes.owners(vip)).To(BeEmpty())
+		})
+	})
 })
+
+var _ = Describe("Proxy NDP manager (IPv6) - LoadBalancer IPs", func() {
+	const vip = "fd00::100"
+	var (
+		mgr      *proxyNeighManager
+		ndpConns map[string]*mockNDPConn
+	)
+
+	BeforeEach(func() {
+		nl := newMockNetlinkForProxyNeigh()
+		ndpConns = map[string]*mockNDPConn{"eth0": newMockNDPConn()}
+		mgr = newTestProxyNDPManager(nl, ndpConns)
+		mgr.hostname = "node-a"
+		setIfaceAddr(nl, "eth0", "fd00::1/64")
+		sendIfaceAddrsUpdate(mgr, "eth0", "fd00::1")
+	})
+
+	AfterEach(func() {
+		mgr.Stop()
+	})
+
+	It("answers for a VIP in the subnet of an interface the node reports", func() {
+		mgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname:       "node-a",
+			Ipv6Addr:       "fd00::1",
+			InterfaceCidrs: []string{"10.0.0.1/24", "fd00::1/64"},
+		})
+		mgr.OnUpdate(svcUpdate("my-svc", "default", "LoadBalancer", vip))
+		Expect(mgr.CompleteDeferredWork()).To(Succeed())
+		desired := getDesiredIPs(mgr, "eth0")
+		Expect(desired).NotTo(BeNil())
+		Expect(desired.Contains(vip)).To(BeTrue())
+		// It announces the VIP with an unsolicited NA.
+		Eventually(func() int {
+			return len(ndpConns["eth0"].getWrites())
+		}).Should(BeNumerically(">=", 1))
+	})
+
+	It("doesn't answer for a VIP when the node reports only IPv4 interfaces", func() {
+		mgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname:       "node-a",
+			Ipv6Addr:       "fd00::1",
+			InterfaceCidrs: []string{"10.0.0.1/24"},
+		})
+		mgr.OnUpdate(svcUpdate("my-svc", "default", "LoadBalancer", vip))
+		Expect(mgr.CompleteDeferredWork()).To(Succeed())
+		Expect(getDesiredIPs(mgr, "eth0")).To(BeNil())
+	})
+})
+
+// captureLogs records what the standard logger logs for the rest of the spec.
+func captureLogs() *logrustest.Hook {
+	old := logrus.StandardLogger().ReplaceHooks(make(logrus.LevelHooks))
+	DeferCleanup(func() { logrus.StandardLogger().ReplaceHooks(old) })
+	return logrustest.NewGlobal()
+}
+
+// countLogs returns how many entries hook recorded at level with message msg.
+func countLogs(hook *logrustest.Hook, level logrus.Level, msg string) int {
+	n := 0
+	for _, e := range hook.AllEntries() {
+		if e.Level == level && e.Message == msg {
+			n++
+		}
+	}
+	return n
+}
 
 // lbNodes simulates the IPv4 proxy-neighbour managers of several nodes that all
 // receive the same updates, so a spec can ask which of them claims a VIP.
@@ -812,11 +1014,19 @@ func newLBNodes(hosts ...string) *lbNodes {
 		arp:   map[string]*mockARPClient{},
 	}
 	for i, host := range hosts {
+		hwAddr := net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, byte(i + 1)}
 		nl := newMockNetlinkForProxyNeigh()
-		n.arp[host] = newMockARPClient(net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, byte(i + 1)})
-		n.mgrs[host] = newTestProxyNeighManagerWithHostname(nl, map[string]*mockARPClient{"eth0": n.arp[host]}, host)
+		mgr := newTestProxyNeighManagerWithHostname(nl, nil, host)
+		// Hand out a fresh mock each time a listener starts, as the real factory
+		// does.
+		mgr.arpFactory = func(string) (arpClient, net.HardwareAddr, error) {
+			c := newMockARPClient(hwAddr)
+			n.arp[host] = c
+			return c, hwAddr, nil
+		}
 		setIfaceAddr(nl, "eth0", "10.0.0.1/24")
-		sendIfaceAddrsUpdate(n.mgrs[host], "eth0", "10.0.0.1")
+		sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
+		n.mgrs[host] = mgr
 	}
 	return n
 }
@@ -825,6 +1035,24 @@ func newLBNodes(hosts ...string) *lbNodes {
 func (n *lbNodes) send(msg any) {
 	for _, mgr := range n.mgrs {
 		mgr.OnUpdate(msg)
+	}
+}
+
+// sendNodes sends every node's nodeUpdate.
+func (n *lbNodes) sendNodes() {
+	for _, host := range n.hosts {
+		n.send(n.nodeUpdate(host))
+	}
+}
+
+// nodeUpdate is host's HostMetadataUpdate, with a fixed IPv4 address and an
+// interface in 10.0.0.0/24.
+func (n *lbNodes) nodeUpdate(host string) *proto.HostMetadataUpdate {
+	i := slices.Index(n.hosts, host) + 1
+	return &proto.HostMetadataUpdate{
+		Hostname:       host,
+		Ipv4Addr:       fmt.Sprintf("1.1.1.%d", i),
+		InterfaceCidrs: []string{fmt.Sprintf("10.0.0.%d/24", i)},
 	}
 }
 

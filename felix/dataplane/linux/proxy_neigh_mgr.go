@@ -21,6 +21,7 @@ import (
 	"net"
 	"net/netip"
 	"regexp"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -58,6 +59,17 @@ const (
 type serviceID struct {
 	Namespace string
 	Name      string
+}
+
+// lbNode is a node in the LoadBalancer VIP hash ring.
+type lbNode struct {
+	hostname string
+	// subnets are the subnets of the node's interfaces, from its Node resource.
+	subnets []net.IPNet
+}
+
+func (n lbNode) hasSubnetContaining(ip net.IP) bool {
+	return slices.ContainsFunc(n.subnets, func(s net.IPNet) bool { return s.Contains(ip) })
 }
 
 // arpClient abstracts the mdlayher/arp.Client for testing.
@@ -125,9 +137,18 @@ type proxyNeighManager struct {
 	// lbServiceIPs maps service ID to LoadBalancer ingress IP strings.
 	lbServiceIPs map[serviceID][]string
 
-	// nodeRing is a consistent hash ring of the cluster's hostnames, used to
-	// pick the single node that answers ARP/NDP for each LoadBalancer VIP.
-	nodeRing *hashring.Ring[string]
+	// nodeRing is a consistent hash ring of nodes, keyed by hostname, that picks
+	// the node answering for each LoadBalancer VIP.
+	nodeRing *hashring.Ring[lbNode]
+
+	// ownedLBIPs holds the LoadBalancer IPs this node won. electLBIPs recomputes
+	// it when lbElectionDirty is set.
+	ownedLBIPs      []string
+	lbElectionDirty bool
+
+	// unannouncedLBIPs holds the LoadBalancer IPs outside every node's interface
+	// subnets.
+	unannouncedLBIPs set.Set[string]
 
 	// noEncapPools maps IPPool ID to the pool's parsed CIDR.
 	noEncapPools map[string]net.IPNet
@@ -249,7 +270,8 @@ func newProxyNeighManagerWithShims(
 		hostIfaceToCIDRs: make(map[string][]net.IPNet),
 		localWorkloadIPs: make(map[types.WorkloadEndpointID][]string),
 		lbServiceIPs:     make(map[serviceID][]string),
-		nodeRing:         hashring.New[string](hashring.WithReplicas(100)),
+		nodeRing:         hashring.New[lbNode](hashring.WithReplicas(100)),
+		unannouncedLBIPs: set.New[string](),
 		noEncapPools:     make(map[string]net.IPNet),
 		listeners:        make(map[string]*ifaceListener),
 		nlHandle:         nl,
@@ -321,7 +343,7 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 		if v1.ServiceType(msg.Type) != v1.ServiceTypeLoadBalancer {
 			if _, ok := m.lbServiceIPs[svcKey]; ok {
 				delete(m.lbServiceIPs, svcKey)
-				m.dirty = true
+				m.markElectionDirty()
 			}
 			return
 		}
@@ -340,10 +362,10 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 		}).Debug("Proxy neighbor manager received ServiceUpdate")
 		if len(lbIPs) > 0 {
 			m.lbServiceIPs[svcKey] = lbIPs
-			m.dirty = true
+			m.markElectionDirty()
 		} else if _, ok := m.lbServiceIPs[svcKey]; ok {
 			delete(m.lbServiceIPs, svcKey)
-			m.dirty = true
+			m.markElectionDirty()
 		}
 
 	case *proto.ServiceRemove:
@@ -351,7 +373,7 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 		if _, ok := m.lbServiceIPs[svcKey]; ok {
 			logrus.WithField("service", svcKey).Debug("Proxy neighbor manager received ServiceRemove")
 			delete(m.lbServiceIPs, svcKey)
-			m.dirty = true
+			m.markElectionDirty()
 		}
 
 	case *proto.HostMetadataUpdate:
@@ -366,12 +388,13 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 			m.removeRingNode(msg.Hostname)
 			return
 		}
-		before := m.nodeRing.Len()
-		m.nodeRing.Insert(msg.Hostname, msg.Hostname)
-		if m.nodeRing.Len() != before {
-			logrus.WithField("hostname", msg.Hostname).Debug("Proxy neighbor manager received HostMetadataUpdate")
-			m.dirty = true
-		}
+		node := lbNode{hostname: msg.Hostname, subnets: parseSubnets(msg.InterfaceCidrs)}
+		logrus.WithFields(logrus.Fields{
+			"hostname": msg.Hostname,
+			"subnets":  node.subnets,
+		}).Debug("Proxy neighbor manager received HostMetadataUpdate")
+		m.nodeRing.Insert(msg.Hostname, node)
+		m.markElectionDirty()
 
 	case *proto.HostMetadataRemove:
 		m.removeRingNode(msg.Hostname)
@@ -395,13 +418,13 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 		} else {
 			delete(m.noEncapPools, msg.Id)
 		}
-		m.dirty = true
+		m.markElectionDirty()
 
 	case *proto.IPAMPoolRemove:
 		if _, ok := m.noEncapPools[msg.Id]; ok {
 			logrus.WithField("poolID", msg.Id).Debug("Proxy neighbor manager received IPAMPoolRemove")
 			delete(m.noEncapPools, msg.Id)
-			m.dirty = true
+			m.markElectionDirty()
 		}
 	}
 }
@@ -412,8 +435,26 @@ func (m *proxyNeighManager) removeRingNode(hostname string) {
 	m.nodeRing.Remove(hostname)
 	if m.nodeRing.Len() != before {
 		logrus.WithField("hostname", hostname).Debug("Proxy neighbor manager removed node from the hash ring")
-		m.dirty = true
+		m.markElectionDirty()
 	}
+}
+
+// markElectionDirty schedules a new LoadBalancer election and a reconcile.
+func (m *proxyNeighManager) markElectionDirty() {
+	m.lbElectionDirty = true
+	m.dirty = true
+}
+
+// parseSubnets returns the subnets of the given CIDRs, skipping any that don't
+// parse.
+func parseSubnets(cidrs []string) []net.IPNet {
+	var subnets []net.IPNet
+	for _, c := range cidrs {
+		if _, subnet, err := net.ParseCIDR(c); err == nil {
+			subnets = append(subnets, *subnet)
+		}
+	}
+	return subnets
 }
 
 func (m *proxyNeighManager) CompleteDeferredWork() error {
@@ -422,10 +463,16 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 	}
 	m.dirty = false
 
+	if m.lbElectionDirty {
+		m.ownedLBIPs = m.electLBIPs()
+		m.lbElectionDirty = false
+	}
+
 	logrus.WithFields(logrus.Fields{
 		"numWorkloads":  len(m.localWorkloadIPs),
 		"numHostIfaces": len(m.hostIfaceToCIDRs),
 		"numLBServices": len(m.lbServiceIPs),
+		"numOwnedLBIPs": len(m.ownedLBIPs),
 		"numNodes":      m.nodeRing.Len(),
 	}).Debug("Proxy neighbor manager CompleteDeferredWork")
 
@@ -470,12 +517,21 @@ func (m *proxyNeighManager) buildDesiredState() map[string]set.Set[string] {
 		}
 	}
 
-	// LoadBalancer IPs: hash-based node selection picks one node per IP.
+	// LoadBalancer IPs: the ones this node won the election for.
+	for _, ipStr := range m.ownedLBIPs {
+		m.addMatchingIPs(desiredByIface, net.ParseIP(ipStr))
+	}
+
+	return desiredByIface
+}
+
+// electLBIPs returns the LoadBalancer IPs in no-encap pools that the hash ring
+// assigns to this node.
+func (m *proxyNeighManager) electLBIPs() []string {
+	var owned []string
+	unannounced := set.New[string]()
 	for _, lbIPs := range m.lbServiceIPs {
 		for _, ipStr := range lbIPs {
-			if !m.selectNodeForIP(ipStr) {
-				continue
-			}
 			lbIP := net.ParseIP(ipStr)
 			if lbIP == nil {
 				continue
@@ -483,11 +539,43 @@ func (m *proxyNeighManager) buildDesiredState() map[string]set.Set[string] {
 			if !m.isInNoEncapPool(lbIP) {
 				continue
 			}
-			m.addMatchingIPs(desiredByIface, lbIP)
+			owner, ok := m.lbIPOwner(ipStr, lbIP)
+			if !ok {
+				if m.nodeRing.Len() > 0 {
+					unannounced.Add(ipStr)
+				}
+				continue
+			}
+			if owner != m.hostname {
+				continue
+			}
+			logrus.WithField("ip", ipStr).Debug("This node owns the LoadBalancer IP")
+			owned = append(owned, ipStr)
 		}
 	}
+	m.logUnannounced(unannounced)
+	return owned
+}
 
-	return desiredByIface
+// lbIPOwner returns the hash ring's owner of ip among nodes with an interface
+// in its subnet, if any.
+func (m *proxyNeighManager) lbIPOwner(ipStr string, ip net.IP) (string, bool) {
+	owner, ok := m.nodeRing.LookupFunc(ipStr, func(node lbNode) bool {
+		return node.hasSubnetContaining(ip)
+	})
+	return owner.hostname, ok
+}
+
+// logUnannounced logs each IP in ips that wasn't in the previous call's ips,
+// then remembers ips.
+func (m *proxyNeighManager) logUnannounced(ips set.Set[string]) {
+	for ip := range ips.All() {
+		if !m.unannouncedLBIPs.Contains(ip) {
+			logrus.WithField("ip", ip).Info(
+				"No node reports an interface in the subnet of this LoadBalancer IP, so no node will answer ARP/NDP for it")
+		}
+	}
+	m.unannouncedLBIPs = ips
 }
 
 // addMatchingIPs adds the IP to the desired set for every host interface whose subnet
@@ -994,18 +1082,6 @@ func solicitedNodeGroup(ipStr string) (netip.Addr, error) {
 		return netip.Addr{}, err
 	}
 	return ndp.SolicitedNodeMulticast(ip)
-}
-
-// selectNodeForIP reports whether this node is the one the hash ring assigns to
-// answer ARP/NDP for the given LoadBalancer IP. The ring assigns each IP to
-// exactly one live node, spreading VIPs evenly across the cluster.
-func (m *proxyNeighManager) selectNodeForIP(ipStr string) bool {
-	owner, ok := m.nodeRing.Lookup(ipStr)
-	selected := ok && owner == m.hostname
-	if selected {
-		logrus.WithField("ip", ipStr).Debug("This node owns the LoadBalancer IP")
-	}
-	return selected
 }
 
 func (m *proxyNeighManager) isMatchingIPVersion(ipStr string) bool {
