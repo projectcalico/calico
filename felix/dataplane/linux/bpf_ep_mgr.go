@@ -110,6 +110,8 @@ var (
 	})
 	errApplyingPolicy = errors.New("error applying policy")
 	errLayoutLookup   = errors.New("error looking up program layout")
+	// errIPIPDeviceNotL3 is permanent: the l3 program cannot parse the L2 frames of a pre-5.14 IPIP device.
+	errIPIPDeviceNotL3 = errors.New("the kernel's IPIP device is not an L3 device (needs kernel 5.14+ or RHEL 4.18.0-330+)")
 )
 
 var (
@@ -2202,7 +2204,11 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		}
 	})
 
-	if m.permanentBPFErr != nil {
+	if errors.Is(m.permanentBPFErr, errIPIPDeviceNotL3) {
+		m.reportHealth(false,
+			"IPIP is not supported by the eBPF dataplane on this kernel: "+errIPIPDeviceNotL3.Error()+
+				". Use VXLAN encapsulation or upgrade the kernel.")
+	} else if m.permanentBPFErr != nil {
 		m.reportHealth(false,
 			"BPF program load failed: program rejected by kernel BPF verifier. "+
 				"Calico eBPF dataplane requires kernel 5.10+. See Felix logs for details.")
@@ -2327,16 +2333,18 @@ func hostIPAbsenceDetail(family string, since time.Time) string {
 
 func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string, xdpMode XDPMode) (bpfInterfaceState, error) {
 	var (
-		err     error
-		up      bool
-		ifIndex int
-		state   bpfInterfaceState
+		err       error
+		up        bool
+		ifIndex   int
+		ifaceType IfaceType
+		state     bpfInterfaceState
 	)
 
 	m.ifacesLock.Lock()
 	m.withIface(iface, func(iface *bpfInterface) bool {
 		up = iface.info.ifaceIsUp()
 		ifIndex = iface.info.ifIndex
+		ifaceType = iface.info.ifaceType
 		state = iface.dpState
 		return false
 	})
@@ -2344,6 +2352,9 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 	if !up {
 		logrus.WithField("iface", iface).Debug("Ignoring interface that is down")
 		return state, nil
+	}
+	if ifaceType == IfaceTypeIPIP && !m.features.IPIPDeviceIsL3 {
+		return state, errIPIPDeviceNotL3
 	}
 
 	hepIface := iface
@@ -2578,6 +2589,11 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				logrus.WithField("iface", iface).WithError(err).Error(
 					"BPF program load failed permanently (kernel BPF verifier rejected the program). " +
 						"Calico eBPF dataplane requires kernel 5.10+. See logs above for verifier output.")
+				m.permanentBPFErr = err
+				m.dirtyIfaceNames.Discard(iface)
+			} else if errors.Is(err, errIPIPDeviceNotL3) {
+				logrus.WithField("iface", iface).WithError(err).Error(
+					"Not attaching BPF programs to the IPIP device. Use VXLAN encapsulation or upgrade the kernel.")
 				m.permanentBPFErr = err
 				m.dirtyIfaceNames.Discard(iface)
 			} else if isLinkNotFoundError(err) {
