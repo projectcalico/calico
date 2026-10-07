@@ -13188,6 +13188,9 @@ spec:
               value: node,loadbalancer
             - name: DATASTORE_TYPE
               value: kubernetes
+            # Name of the DaemonSet whose rollout the policy name migrator waits for.
+            - name: CALICO_NODE_DAEMONSET_NAME
+              value: canal
           livenessProbe:
             exec:
               command:
