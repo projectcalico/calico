@@ -60,6 +60,12 @@ and the NodePort VNI `0xca11c0`. Other flow-based `vnifilter` devices
 VNIs. Sending is not filtered: BPF may still set any VNI in the
 tunnel key.
 
+`0xca11c0` packets never reach the device: BPF decaps them on the host
+endpoint (`vxlan_attempt_decap` in `nat.h`). The filter holds the VNI
+only as a reservation, so the kernel refuses any other device that
+tries to use it, instead of that device silently clashing with
+NodePort forwarding.
+
 - Support is probed, not inferred from the kernel version, because
   distros backport it (upstream 5.18; RHEL 9 has it on 5.14). Any
   existing VXLAN device that reports `vnifilter` proves support, so a

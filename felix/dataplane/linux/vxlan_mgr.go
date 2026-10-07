@@ -78,7 +78,7 @@ func vxlanMgrWithDualStack() vxlanMgrOption {
 	}
 }
 
-// bpfNATTunnelVNI must match CALI_VXLAN_VNI in bpf-gpl/nat_types.h.
+// bpfNATTunnelVNI must match CALI_VXLAN_VNI. BPF decaps it on host endpoints; the filter only reserves it.
 const bpfNATTunnelVNI = 0xca11c0
 
 // vxlanMgrWithVNIFilter makes the flow-based BPF device accept only Calico's VNIs, so
