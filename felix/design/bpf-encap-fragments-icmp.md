@@ -61,10 +61,12 @@ VNIs. Sending is not filtered: BPF may still set any VNI in the
 tunnel key.
 
 - Support is probed, not inferred from the kernel version, because
-  distros backport it (upstream 5.18; RHEL 9 has it on 5.14). The
-  probe creates a throwaway `cali-vnif-probe` device that is never set
-  up, and checks that `vnifilter` took effect: older kernels ignore
-  the attribute silently. The result is the `VXLANVNIFilter` feature,
+  distros backport it (upstream 5.18; RHEL 9 has it on 5.14). Any
+  existing VXLAN device that reports `vnifilter` proves support, so a
+  filtered device is never downgraded. Otherwise the probe creates a
+  throwaway `cali-vnif-<pid>` device that is never set up, and checks
+  that `vnifilter` took effect: older kernels ignore the attribute
+  silently. The result is the `VXLANVNIFilter` feature,
   so `FeatureDetectOverride` can turn it off.
 - The kernel cannot toggle `vnifilter` on an existing device. An
   upgrade on a supporting kernel therefore recreates `vxlan.calico`

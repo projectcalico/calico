@@ -321,19 +321,20 @@ func (d *FeatureDetector) netlinkSupportsStrict() (bool, error) {
 	return false, nil
 }
 
-const vniFilterProbeDevice = "cali-vnif-probe"
+const vniFilterProbePrefix = "cali-vnif-"
 
-// vxlanSupportsVNIFilter probes by creating a VXLAN device, since distros backport vnifilter (upstream 5.18).
+// vxlanSupportsVNIFilter probes the kernel, since distros backport vnifilter (upstream 5.18).
 func (d *FeatureDetector) vxlanSupportsVNIFilter() bool {
 	if d.cachedVXLANVNIFilter != nil {
 		return *d.cachedVXLANVNIFilter
 	}
 	result, err := d.probeVXLANVNIFilter()
 	if err != nil {
-		log.WithError(err).Info("Failed to probe for VXLAN VNI filter support; assuming none.")
+		log.WithError(err).Warn("Failed to probe for VXLAN VNI filter support; assuming none. " +
+			"Other VXLAN devices will not be able to share Calico's VXLAN port.")
 		result = false
 	}
-	log.WithField("supported", result).Debug("Probed for VXLAN VNI filter support")
+	log.WithField("supported", result).Info("Detected VXLAN VNI filter support")
 	d.cachedVXLANVNIFilter = &result
 	return result
 }
@@ -345,12 +346,22 @@ func (d *FeatureDetector) probeVXLANVNIFilter() (bool, error) {
 	}
 	defer h.Delete()
 
-	if old, err := h.LinkByName(vniFilterProbeDevice); err == nil {
-		_ = h.LinkDel(old)
+	links, err := h.LinkList()
+	if err != nil {
+		return false, fmt.Errorf("failed to list links: %w", err)
+	}
+	for _, link := range links {
+		if vx, ok := link.(*netlink.Vxlan); ok && vx.VniFilter {
+			log.WithField("device", vx.Name).Debug("Found existing VNI-filtering VXLAN device")
+			return true, nil
+		}
+		if strings.HasPrefix(link.Attrs().Name, vniFilterProbePrefix) {
+			_ = h.LinkDel(link)
+		}
 	}
 
 	la := netlink.NewLinkAttrs()
-	la.Name = vniFilterProbeDevice
+	la.Name = fmt.Sprintf("%s%d", vniFilterProbePrefix, os.Getpid())
 	// The device is never set up, so it never binds the VXLAN UDP port.
 	probe := &netlink.Vxlan{LinkAttrs: la, FlowBased: true, VniFilter: true}
 	if err := h.LinkAdd(probe); err != nil {
@@ -363,7 +374,7 @@ func (d *FeatureDetector) probeVXLANVNIFilter() (bool, error) {
 	}()
 
 	// Kernels without vnifilter ignore the attribute, so check that it took effect.
-	link, err := h.LinkByName(vniFilterProbeDevice)
+	link, err := h.LinkByName(la.Name)
 	if err != nil {
 		return false, fmt.Errorf("failed to read back probe device: %w", err)
 	}
