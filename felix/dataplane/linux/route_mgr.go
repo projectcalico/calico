@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"reflect"
@@ -740,7 +741,10 @@ func (m *routeManager) ensureVNIFilter(link netlink.Link) error {
 			continue
 		}
 		m.logCtx.WithField("vni", vni).Info("Adding VNI to tunnel device filter")
-		if err := m.nlHandle.BridgeVniAdd(link, vni); err != nil {
+		if err := m.nlHandle.BridgeVniAdd(link, vni); errors.Is(err, syscall.EEXIST) {
+			return fmt.Errorf("VNI %d is already used by another VXLAN device on port %d; "+
+				"change VXLANVNI or the other device's VNI: %w", vni, m.dpConfig.RulesConfig.VXLANPort, err)
+		} else if err != nil {
 			return fmt.Errorf("failed to add VNI %d: %w", vni, err)
 		}
 	}

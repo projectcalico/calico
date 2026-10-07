@@ -661,6 +661,9 @@ func (d *MockNetlinkDataplane) bridgeVniModify(link netlink.Link, vniStart, vniE
 	if ml.VNIs == nil {
 		ml.VNIs = set.New[uint32]()
 	}
+	if add && d.vniInUseLockHeld(ml, vniStart, vniEnd) {
+		return unix.EEXIST
+	}
 	for vni := vniStart; vni <= vniEnd; vni++ {
 		if add {
 			ml.VNIs.Add(vni)
@@ -669,6 +672,23 @@ func (d *MockNetlinkDataplane) bridgeVniModify(link netlink.Link, vniStart, vniE
 		}
 	}
 	return nil
+}
+
+// vniInUseLockHeld mimics the kernel: VNI-filtering devices on one port need disjoint VNIs.
+func (d *MockNetlinkDataplane) vniInUseLockHeld(ml *MockLink, vniStart, vniEnd uint32) bool {
+	port := ml.ConcreteLink.(*netlink.Vxlan).Port
+	for _, other := range d.NameToLink {
+		ovx, ok := other.ConcreteLink.(*netlink.Vxlan)
+		if other == ml || !ok || !ovx.VniFilter || ovx.Port != port || other.VNIs == nil {
+			continue
+		}
+		for vni := vniStart; vni <= vniEnd; vni++ {
+			if other.VNIs.Contains(vni) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (d *MockNetlinkDataplane) BridgeVniList() (map[int32][]*nl.BridgeVniInfo, error) {
