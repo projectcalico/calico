@@ -25,6 +25,13 @@ scriptdir=$(dirname "$(realpath $0)")
 . ${scriptdir}/lib.sh
 rootdir=$(git_repo_root)
 
+# Build date to stamp into the Felix and calicoctl binaries, in place of the
+# current time that the Makefiles would otherwise use.  Those binaries go into
+# the .orig tarball that make-packages.sh generates, and that tarball has to be
+# identical every time we build the same commit; see the comment there.  The
+# format matches DATE in lib.Makefile.
+build_date=$(date -u -d "@$(git log -1 --format=%ct)" +'%FT%T%z')
+
 # Directory to copy package build output to. Ensure it exists
 # and is empty before each build.
 outputDir=${rootdir}/release/packaging/output/
@@ -228,7 +235,7 @@ function do_felix {
     # content, because it's infeasible to work out a set of Debian and
     # RPM golang build dependencies that is exactly equivalent to our
     # containerized builds.
-    make bin/calico-felix
+    make bin/calico-felix DATE="${build_date}"
     # Remove all the files that were added by that build, except for the
     # bin/calico-felix binary.
     rm -f bin/calico-felix-amd64
@@ -267,7 +274,7 @@ function do_calicoctl {
     # equivalent to our containerized builds.  Unlike Felix, calicoctl
     # is statically linked (CGO_ENABLED=0), so it needs no patchelf
     # fixups and has no shared library dependencies.
-    make bin/calicoctl
+    make bin/calicoctl DATE="${build_date}"
 
     # Remove the arch-suffixed binary that the build also creates,
     # keeping just bin/calicoctl.

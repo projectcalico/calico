@@ -19,9 +19,8 @@ version=${FORCE_VERSION:-$(git_auto_version)}
 version=$(strip_v ${version})
 sha=$(git_commit_id)
 
-# Timestamp of the current Git commit.  Used below to give the .orig tarball
-# that we generate a fixed mtime, so that building the same commit twice
-# produces the same tarball.
+# Timestamp of the current Git commit.  Used below in place of the current
+# time, so that building the same commit twice produces the same .orig tarball.
 source_date_epoch=$(git log -1 --format=%ct)
 
 DOCKER_RUN_RM="docker run --rm --user $(id -u):$(id -g) -v $rpmDir:/rpm -v $(dirname "$(pwd)"):/code -w /code/$(basename "$(pwd)")"
@@ -69,11 +68,15 @@ for package_type in "$@"; do
         # near-identical per-series copies of it cost.
         #
         # Build that .orig tarball here, once, from the same working tree that
-        # the per-series builds below package up.  --sort, --mtime and the
-        # ownership options make it byte-for-byte reproducible, so that
-        # re-running this job for a version that is already partly published
-        # regenerates an identical file, rather than one that Launchpad would
-        # reject as a conflicting upload of a file it already has.
+        # the per-series builds below package up.  It must be byte-for-byte
+        # reproducible, so that re-running this job for a version that is
+        # already partly published regenerates an identical file, rather than
+        # one that Launchpad would reject as a conflicting upload of a file it
+        # already has.  --sort, --mtime and the ownership options take care of
+        # the tar metadata.  The content is reproducible because nothing that
+        # goes into it records the time of the build: the RPM changelog stanza
+        # below is dated from the commit, and create-update-packages.sh builds
+        # the binaries that we ship with DATE set from the commit as well.
         pkg_dir=$(basename "$(pwd)")
         orig_tarball=../${PKG_NAME}_${debver}.orig.tar.xz
         mapfile -t tar_excludes < <(deb_tar_excludes "${excludes}")
@@ -165,8 +168,10 @@ EOF
         sed -i "s/^Version:.*$/Version:        ${rpmver#*:}/" "${rpm_spec}"
         sed -i "s/^Release:.*$/Release:        ${rpmrel}%{?dist}/" "${rpm_spec}"
 
-        # Add a stanza to the %changelog section.
-        timestamp=$(date "+%a %b %d %Y")
+        # Add a stanza to the %changelog section.  Date it from the commit
+        # rather than the current time: the generated spec ends up in the
+        # Debian .orig tarball too, which must be reproducible.
+        timestamp=$(date -d "@${source_date_epoch}" "+%a %b %d %Y")
         {
             cat <<EOF
 * ${timestamp} Daniel Fox<dan.fox@tigera.io> ${rpmver}-${rpmrel}
