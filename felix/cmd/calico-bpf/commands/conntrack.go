@@ -242,11 +242,12 @@ func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.Va
 		}
 	}
 
-	if h := legFwdHint(d.A2B); h != "" {
-		cmd.Printf(" fwd-hint[A2B: %s]", h)
+	srcToDst, dstToSrc := orientedLegs(v)
+	if h := legFwdHint(srcToDst); h != "" {
+		cmd.Printf(" fwd-hint[src->dst: %s]", h)
 	}
-	if h := legFwdHint(d.B2A); h != "" {
-		cmd.Printf(" fwd-hint[B2A: %s]", h)
+	if h := legFwdHint(dstToSrc); h != "" {
+		cmd.Printf(" fwd-hint[dst->src: %s]", h)
 	}
 
 	cmd.Printf("\n")
@@ -315,18 +316,18 @@ func legFwdHintJSONOf(leg v4.Leg) *legFwdHintJSON {
 // ctConnectionJSON is a logical connection in pretty JSON mode.
 // For NAT connections, forward and reverse entries are grouped.
 type ctConnectionJSON struct {
-	Type        string          `json:"type"`
-	Proto       string          `json:"proto"`
-	Src         string          `json:"src"`
-	Dst         string          `json:"dst"`
-	OrigDst     string          `json:"orig_dst,omitempty"`
-	TunnelIP    string          `json:"tunnel_ip,omitempty"`
-	OrigSrcPort uint16          `json:"orig_src_port,omitempty"`
-	Flags       []string        `json:"flags"`
-	FwdHintA2B  *legFwdHintJSON `json:"fwd_hint_a2b,omitempty"`
-	FwdHintB2A  *legFwdHintJSON `json:"fwd_hint_b2a,omitempty"`
-	ActiveAgo   string          `json:"active_ago"`
-	TCPState    string          `json:"tcp_state,omitempty"`
+	Type          string          `json:"type"`
+	Proto         string          `json:"proto"`
+	Src           string          `json:"src"`
+	Dst           string          `json:"dst"`
+	OrigDst       string          `json:"orig_dst,omitempty"`
+	TunnelIP      string          `json:"tunnel_ip,omitempty"`
+	OrigSrcPort   uint16          `json:"orig_src_port,omitempty"`
+	Flags         []string        `json:"flags"`
+	FwdHintSrcDst *legFwdHintJSON `json:"fwd_hint_src_dst,omitempty"`
+	FwdHintDstSrc *legFwdHintJSON `json:"fwd_hint_dst_src,omitempty"`
+	ActiveAgo     string          `json:"active_ago"`
+	TCPState      string          `json:"tcp_state,omitempty"`
 }
 
 func ctTypeStr(t uint8) string {
@@ -451,17 +452,17 @@ func (cmd *conntrackDumpCmd) dumpPrettyJSON(
 	for _, e := range normals {
 		k, v := e.key, e.val
 		src, dst := orientedAddrs(k, v)
-		d := v.Data()
+		srcToDst, dstToSrc := orientedLegs(v)
 		connections = append(connections, ctConnectionJSON{
-			Type:       "normal",
-			Proto:      protoStr(k.Proto()),
-			Src:        src,
-			Dst:        dst,
-			Flags:      v4.FlagNames(v.Flags()),
-			FwdHintA2B: legFwdHintJSONOf(d.A2B),
-			FwdHintB2A: legFwdHintJSONOf(d.B2A),
-			ActiveAgo:  time.Duration(now - v.LastSeen()).String(),
-			TCPState:   tcpStateStr(k, v),
+			Type:          "normal",
+			Proto:         protoStr(k.Proto()),
+			Src:           src,
+			Dst:           dst,
+			Flags:         v4.FlagNames(v.Flags()),
+			FwdHintSrcDst: legFwdHintJSONOf(srcToDst),
+			FwdHintDstSrc: legFwdHintJSONOf(dstToSrc),
+			ActiveAgo:     time.Duration(now - v.LastSeen()).String(),
+			TCPState:      tcpStateStr(k, v),
 		})
 	}
 
@@ -470,19 +471,20 @@ func (cmd *conntrackDumpCmd) dumpPrettyJSON(
 		k, v := e.key, e.val
 		d := v.Data()
 		src, dst := orientedAddrs(k, v)
+		srcToDst, dstToSrc := orientedLegs(v)
 		origDst := net.JoinHostPort(d.OrigDst.String(), fmt.Sprint(d.OrigPort))
 
 		conn := ctConnectionJSON{
-			Type:       "nat",
-			Proto:      protoStr(k.Proto()),
-			Src:        src,
-			OrigDst:    origDst,
-			Dst:        dst,
-			Flags:      v4.FlagNames(v.Flags()),
-			FwdHintA2B: legFwdHintJSONOf(d.A2B),
-			FwdHintB2A: legFwdHintJSONOf(d.B2A),
-			ActiveAgo:  time.Duration(now - v.LastSeen()).String(),
-			TCPState:   tcpStateStr(k, v),
+			Type:          "nat",
+			Proto:         protoStr(k.Proto()),
+			Src:           src,
+			OrigDst:       origDst,
+			Dst:           dst,
+			Flags:         v4.FlagNames(v.Flags()),
+			FwdHintSrcDst: legFwdHintJSONOf(srcToDst),
+			FwdHintDstSrc: legFwdHintJSONOf(dstToSrc),
+			ActiveAgo:     time.Duration(now - v.LastSeen()).String(),
+			TCPState:      tcpStateStr(k, v),
 		}
 
 		if (cmd.ipv6 && !d.TunIP.Equal(voidIP6)) || (!cmd.ipv6 && !d.TunIP.Equal(voidIP4)) {
@@ -498,6 +500,16 @@ func (cmd *conntrackDumpCmd) dumpPrettyJSON(
 	enc := json.NewEncoder(cmd.OutOrStdout())
 	enc.SetIndent("", "  ")
 	return enc.Encode(connections)
+}
+
+// orientedLegs returns the legs in the order the addresses are printed, so a
+// hint is labelled by the direction it serves rather than by key order.
+func orientedLegs(v conntrack.ValueInterface) (srcToDst, dstToSrc v4.Leg) {
+	d := v.Data()
+	if v.Flags()&v4.FlagSrcDstBA != 0 {
+		return d.B2A, d.A2B
+	}
+	return d.A2B, d.B2A
 }
 
 // orientedAddrs returns src and dst as "ip:port" strings, respecting
