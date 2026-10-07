@@ -319,6 +319,7 @@ type MockNetlinkDataplane struct {
 	NumRuleListCalls            int
 	NumRuleAddCalls             int
 	NumRuleDelCalls             int
+	NumBridgeVniListCalls       int
 	WireguardConfigUpdated      bool
 	HitRouteListFilteredNoDev   bool
 	HitRouteListFilteredNoTable bool
@@ -380,6 +381,7 @@ func (d *MockNetlinkDataplane) ResetDeltas() {
 	d.NumRuleListCalls = 0
 	d.NumRuleAddCalls = 0
 	d.NumRuleDelCalls = 0
+	d.NumBridgeVniListCalls = 0
 	d.AddedRules = nil
 	d.DeletedRules = nil
 	d.WireguardConfigUpdated = false
@@ -657,6 +659,7 @@ func (d *MockNetlinkDataplane) BridgeVniList() (map[int32][]*nl.BridgeVniInfo, e
 	defer d.mutex.Unlock()
 	defer ginkgo.GinkgoRecover()
 
+	d.NumBridgeVniListCalls++
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextBridgeVni) {
 		return nil, ErrSimulated
