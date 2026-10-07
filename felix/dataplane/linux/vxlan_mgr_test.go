@@ -910,6 +910,17 @@ var _ = Describe("VXLANManager in BPF mode", func() {
 		Expect(ml.VNIs.Slice()).To(ConsistOf(uint32(4096), uint32(0xca11c0)))
 	})
 
+	It("names the conflict when another device on the port owns the overlay VNI", func() {
+		la := netlink.NewLinkAttrs()
+		la.Name = "vxlan-other"
+		other := &netlink.Vxlan{LinkAttrs: la, FlowBased: true, VniFilter: true, Port: 4789}
+		Expect(dataplane.LinkAdd(other)).To(Succeed())
+		Expect(dataplane.BridgeVniAdd(other, 4096)).To(Succeed())
+
+		Expect(configureDevice(vxlanMgrWithVNIFilter())).To(MatchError(
+			ContainSubstring("VNI 4096 is already used by another VXLAN device on port 4789")))
+	})
+
 	It("returns an error if the VNI filter cannot be listed", func() {
 		dataplane.FailuresToSimulate = mocknetlink.FailNextBridgeVni
 		Expect(configureDevice(vxlanMgrWithVNIFilter())).To(MatchError(ContainSubstring("VNI filter")))
