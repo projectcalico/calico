@@ -36,10 +36,10 @@ const FlowLogDetails: React.FC<FlowLogDetailsProps> = ({ flowLog, height }) => {
         end_time: end_time.toLocaleTimeString(),
         source_namespace,
         source_name,
-        ...(source_ips ? { source_ips } : {}),
+        ...(source_ips && { source_ips }),
         dest_namespace,
         dest_name,
-        ...(dest_ips ? { dest_ips } : {}),
+        ...(dest_ips && { dest_ips }),
         action,
         policies,
         ...rest,
@@ -47,10 +47,8 @@ const FlowLogDetails: React.FC<FlowLogDetailsProps> = ({ flowLog, height }) => {
 
     const tableData = {
         ...jsonData,
-        ...(source_ips
-            ? { source_ips: <IpAddressList ips={source_ips} /> }
-            : {}),
-        ...(dest_ips ? { dest_ips: <IpAddressList ips={dest_ips} /> } : {}),
+        ...(source_ips && { source_ips: <IpAddressList ips={source_ips} /> }),
+        ...(dest_ips && { dest_ips: <IpAddressList ips={dest_ips} /> }),
         action: <FlowLogActionIndicator action={action} />,
         policies: JSON.stringify(policies),
         ...(rest.service && { service: formatService(rest.service) }),
