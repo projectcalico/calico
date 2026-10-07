@@ -530,3 +530,99 @@ func TestTCPRecycleNeedsFINsBothWays(t *testing.T) {
 		})
 	}
 }
+
+// TestTCPNATCreateOverForwardEntry checks a NAT'd SYN whose post-NAT key holds another flow's forward entry.
+func TestTCPNATCreateOverForwardEntry(t *testing.T) {
+	RegisterTestingT(t)
+
+	defer func() { bpfIfaceName = "" }()
+
+	natIP := net.IPv4(8, 8, 8, 8).To4()
+	natPort := uint16(666)
+	otherBackendIP := net.IPv4(9, 9, 9, 9).To4()
+	otherBackendPort := uint16(999)
+
+	tcpSyn := &layers.TCP{
+		SrcPort:    54321,
+		DstPort:    7890,
+		SYN:        true,
+		DataOffset: 5,
+	}
+	_, ipv4, l4, _, synPkt, err := testPacketV4(nil, nil, tcpSyn, nil)
+	Expect(err).NotTo(HaveOccurred())
+	tcp := l4.(*layers.TCP)
+
+	Expect(natMap.Update(
+		nat.NewNATKey(ipv4.DstIP, uint16(tcp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 0).AsBytes(),
+	)).NotTo(HaveOccurred())
+	defer resetMap(natMap)
+	Expect(natBEMap.Update(
+		nat.NewNATBackendKey(0, 0).AsBytes(),
+		nat.NewNATBackendValue(natIP, natPort).AsBytes(),
+	)).NotTo(HaveOccurred())
+	defer resetMap(natBEMap)
+
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	defer resetRTMap(rtMap)
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+
+	// Another flow used natIP:natPort as its service, so its forward entry sits at our post-NAT key.
+	postNATKey := conntrack.NewKey(uint8(ipv4.Protocol), srcIP, 54321, natIP, natPort)
+	otherRevKey := conntrack.NewKey(uint8(ipv4.Protocol), srcIP, 54321, otherBackendIP, otherBackendPort)
+	otherFwd := conntrack.NewValueNATForward(0, 0, otherRevKey)
+	otherRev := func(fin bool) conntrack.Value {
+		return conntrack.NewValueNATReverse(0, 0,
+			conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: fin, Opener: true, Approved: true},
+			conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: fin, Approved: true},
+			nil, natIP, natPort)
+	}
+
+	closedRev, liveRev := otherRev(true), otherRev(false)
+
+	for _, tc := range []struct {
+		name       string
+		rev        *conntrack.Value
+		expCreated bool
+	}{
+		{name: "stale forward entry", expCreated: true},
+		{name: "closed connection", rev: &closedRev, expCreated: true},
+		{name: "live connection", rev: &liveRev},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			RegisterTestingT(t)
+			resetCTMap(ctMap)
+			defer resetCTMap(ctMap)
+
+			Expect(ctMap.Update(postNATKey.AsBytes(), otherFwd.AsBytes())).NotTo(HaveOccurred())
+			if tc.rev != nil {
+				Expect(ctMap.Update(otherRevKey.AsBytes(), tc.rev.AsBytes())).NotTo(HaveOccurred())
+			}
+
+			bpfIfaceName = "NcF1"
+			skbMark = 0
+			runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+				res, err := bpfrun(synPkt)
+				Expect(err).NotTo(HaveOccurred())
+				if tc.expCreated {
+					Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+				} else {
+					Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+				}
+			})
+
+			ct, err := conntrack.LoadMapMem(ctMap)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ct).To(HaveKey(postNATKey))
+			if tc.expCreated {
+				Expect(ct[postNATKey].Type()).To(Equal(conntrack.TypeNATReverse))
+				Expect(ct[postNATKey].OrigPort()).To(Equal(uint16(7890)))
+				Expect(ct).NotTo(HaveKey(otherRevKey))
+			} else {
+				Expect(ct).To(HaveKeyWithValue(postNATKey, otherFwd))
+				Expect(ct).To(HaveKeyWithValue(otherRevKey, *tc.rev))
+			}
+		})
+	}
+}

@@ -182,6 +182,24 @@ static CALI_BPF_INLINE void ct_recycle(struct calico_ct_value *tracking_v, struc
 	cali_ct_delete_elem(k);
 }
 
+/* ct_fwd_matches_rev reports whether rev belongs to the forward entry keyed fk: its service end is rev's original destination. */
+static CALI_BPF_INLINE bool ct_fwd_matches_rev(struct calico_ct_key *fk, struct calico_ct_value *rev)
+{
+	return (ip_equal(fk->addr_a, rev->orig_ip) && fk->port_a == rev->orig_port) ||
+		(ip_equal(fk->addr_b, rev->orig_ip) && fk->port_b == rev->orig_port);
+}
+
+/* ct_fwd_tracking returns the reverse entry that forward entry fwd, keyed fk, tracks, or NULL if fwd is stale. */
+static CALI_BPF_INLINE struct calico_ct_value *ct_fwd_tracking(struct calico_ct_key *fk, struct calico_ct_value *fwd)
+{
+	struct calico_ct_value *rev = cali_ct_lookup_elem(&fwd->nat_rev_key);
+
+	if (!rev || rev->type != CALI_CT_TYPE_NAT_REV || !ct_fwd_matches_rev(fk, rev)) {
+		return NULL;
+	}
+	return rev;
+}
+
 static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 							struct ct_create_ctx *ct_ctx,
 							struct calico_ct_key *k)
@@ -364,7 +382,20 @@ create:
 	/* A NAT'd SYN never looked up the post-NAT key, so a closed entry there was not recycled yet. */
 	if (err == -17 /* EEXIST */ && ct_ctx->type == CALI_CT_TYPE_NAT_REV && syn && !ack) {
 		struct calico_ct_value *old = cali_ct_lookup_elem(k);
-		if (old && tcp_recycled(true, old)) {
+		if (old && old->type == CALI_CT_TYPE_NAT_FWD) {
+			/* Another flow's forward entry: judge the connection it tracks. */
+			struct calico_ct_value *trk = ct_fwd_tracking(k, old);
+			if (!trk) {
+				CALI_DEBUG("CT-ALL deleting stale forward entry at the post-NAT key");
+				cali_ct_delete_elem(k);
+				err = cali_ct_update_elem(k, &ct_value, BPF_NOEXIST);
+			} else if (tcp_recycled(true, trk)) {
+				CALI_DEBUG("CT-ALL recycling closed NAT connection at the post-NAT key");
+				ct_recycle(trk, &old->nat_rev_key);
+				cali_ct_delete_elem(k);
+				err = cali_ct_update_elem(k, &ct_value, BPF_NOEXIST);
+			}
+		} else if (old && tcp_recycled(true, old)) {
 			CALI_DEBUG("CT-ALL recycling closed entry at the post-NAT key");
 			ct_recycle(old, k);
 			err = cali_ct_update_elem(k, &ct_value, BPF_NOEXIST);
@@ -702,13 +733,6 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct cali_tc_ctx *ctx,
 	}
 }
 
-/* ct_fwd_matches_rev reports whether rev belongs to the forward entry keyed fk: its service end is rev's original destination. */
-static CALI_BPF_INLINE bool ct_fwd_matches_rev(struct calico_ct_key *fk, struct calico_ct_value *rev)
-{
-	return (ip_equal(fk->addr_a, rev->orig_ip) && fk->port_a == rev->orig_port) ||
-		(ip_equal(fk->addr_b, rev->orig_ip) && fk->port_b == rev->orig_port);
-}
-
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_ctx *ctx)
 {
 	struct ct_lookup_ctx ct_lookup_ctx = {
@@ -864,9 +888,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		// This is a forward NAT entry; since we do the bookkeeping on the
 		// reverse entry, we need to do a second lookup.
 		CALI_CT_DEBUG("Hit! NAT FWD entry, doing secondary lookup.");
-		tracking_v = cali_ct_lookup_elem(&v->nat_rev_key);
-		if (!tracking_v || tracking_v->type != CALI_CT_TYPE_NAT_REV ||
-				!ct_fwd_matches_rev(&k, tracking_v)) {
+		tracking_v = ct_fwd_tracking(&k, v);
+		if (!tracking_v) {
 			// The reverse entry is gone or its key now belongs to another flow.
 			cali_ct_delete_elem(&k);
 			CALI_CT_DEBUG("No reverse entry for forward entry.");
