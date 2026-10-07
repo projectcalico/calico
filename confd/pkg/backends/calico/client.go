@@ -380,6 +380,10 @@ type client struct {
 	// Cached value of the default BGP configuration for node to node mesh BGP password lookup.
 	globalBGPConfig *apiv3.BGPConfiguration
 
+	// The node to node mesh BGP password that we last read from its secret.  The mesh peerings
+	// are not in peeringCache, so we need this to detect when a secret change affects them.
+	nodeMeshPassword string
+
 	// Service load balancer aggregation setting
 	serviceLoadBalancerAggregation apiv3.ServiceLoadBalancerAggregation
 }
@@ -502,7 +506,7 @@ func (c *client) getPassword(v3res *apiv3.BGPPeer) *string {
 	return nil
 }
 
-func (c *client) updatePeersV1() {
+func (c *client) updatePeersV1() bool {
 	// A map that will contain the v1 peerings that should exist, with the same key and
 	// value form as c.peeringCache.
 	peersV1 := make(map[string]string)
@@ -751,8 +755,13 @@ func (c *client) updatePeersV1() {
 		}
 	}
 
+	// Determine if the set of peerings is changing at all.
+	peeringsChanged := !maps.Equal(peersV1, c.peeringCache)
+
 	// Store the generated peer data so that `GetBirdBGPConfig` can read it.
 	c.peeringCache = peersV1
+
+	return peeringsChanged
 }
 
 func automaticReversePeering(v3res *apiv3.BGPPeer) bool {
@@ -1094,7 +1103,12 @@ func (c *client) onUpdates(updates []api.Update, triggered bool) {
 				} else {
 					needUpdatePeersReasons = append(needUpdatePeersReasons, fmt.Sprintf("Node %s BGP fields updated", v3key.Name))
 				}
-			} else if nodeOtherKeyChanged {
+			}
+
+			if nodePeerKeyChanged || nodeOtherKeyChanged {
+				// GetBirdBGPConfig reads the per-node keys directly, including those that affect
+				// peerings, when building the mesh peers and the WireGuard peer filter.  Those are
+				// not in peeringCache, so updatePeersV1 would not see the change.
 				c.keyUpdated("/calico/bgpconfig")
 			}
 
@@ -1173,17 +1187,20 @@ func (c *client) onUpdates(updates []api.Update, triggered bool) {
 		}
 
 		log.Info("Recompute BGP peerings: " + strings.Join(needUpdatePeersReasons, "; "))
-		c.updatePeersV1()
+		peeringsChanged := c.updatePeersV1()
 
-		// Re-reference the BGPConfiguration mesh password, if any.
-		c.getNodeMeshPassword(c.globalBGPConfig)
+		// Re-reference the BGPConfiguration mesh password, if any.  This also detects a change
+		// to the mesh password's secret, which GetBirdBGPConfig renders into every mesh peering.
+		meshPasswordChanged := c.updateNodeMeshPassword()
+
+		if peeringsChanged || meshPasswordChanged {
+			c.keyUpdated("/calico/bgpconfig")
+		}
 
 		// Clean up any secrets that are no longer of interest.
 		if c.secretWatcher != nil {
 			c.secretWatcher.SweepStale()
 		}
-
-		c.keyUpdated("/calico/bgpconfig")
 	}
 
 	// If we need to update Service advertisement based on the updates, then do so.
@@ -1253,17 +1270,26 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 
 		// Cache the updated BGP configuration
 		c.globalBGPConfig = v3res
+
+		// Keep our record of the mesh password in step with the configuration, so that a later
+		// change to its secret is compared against the password that we will render now.
+		c.updateNodeMeshPassword()
 	} else if strings.HasPrefix(resName, perNodeConfigNamePrefix) {
 		// The name of a configuration resource has a strict format.  It is either "default"
 		// for the global default values, or "node.<nodename>" for the node specific vales.
 		nodeName := resName[len(perNodeConfigNamePrefix):]
 		prefixesChanged := c.getPrefixAdvertisementsKVPair(v3res, model.NodeBGPConfigKey{Nodename: nodeName})
-		c.getListenPortKVPair(v3res, model.NodeBGPConfigKey{Nodename: nodeName}, updatePeersV1, updateReasons)
+		listenPortChanged := false
+		c.getListenPortKVPair(v3res, model.NodeBGPConfigKey{Nodename: nodeName}, &listenPortChanged, updateReasons)
+		if listenPortChanged {
+			*updatePeersV1 = true
+		}
 		logLevelChanged := c.getLogSeverityKVPair(v3res, model.NodeBGPConfigKey{Nodename: nodeName})
 
-		// GetBirdBGPConfig uses the prefix advertisements and log level for this node only.  (A
-		// listen port change, for any node, sets updatePeersV1 instead.)
-		if nodeName == NodeName && (prefixesChanged || logLevelChanged) {
+		// GetBirdBGPConfig uses the prefix advertisements and log level for this node only.  It
+		// also reads the listen port of any node directly, as the port of that node's mesh peering,
+		// which is not in peeringCache.
+		if listenPortChanged || (nodeName == NodeName && (prefixesChanged || logLevelChanged)) {
 			c.keyUpdated("/calico/bgpconfig")
 		}
 	} else {
@@ -1490,6 +1516,15 @@ func (c *client) getNodeMeshPassword(v3res *apiv3.BGPConfiguration) (password st
 		}
 	}
 	return
+}
+
+// updateNodeMeshPassword reads the node to node mesh password again, and returns whether it differs
+// from the one that we last read.
+func (c *client) updateNodeMeshPassword() bool {
+	password := c.getNodeMeshPassword(c.globalBGPConfig)
+	changed := password != c.nodeMeshPassword
+	c.nodeMeshPassword = password
+	return changed
 }
 
 func getNodeName(nodeName string) string {
