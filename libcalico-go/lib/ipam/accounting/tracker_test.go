@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -313,6 +314,21 @@ func TestPoolBlocksAndBlockPool(t *testing.T) {
 	owner, _ = tracker.BlockPool(inner.CIDR)
 	Expect(owner).To(Equal("outer"))
 	Expect(tracker.PoolBlocks("outer")).To(Equal([]*model.AllocationBlock{inner, outerLow, outerHigh}))
+}
+
+func TestHasBlocksWithin(t *testing.T) {
+	RegisterTestingT(t)
+	tracker := NewTracker()
+	tracker.AddPools(pool("outer", "10.0.0.0/16", 26), pool("inner", "10.0.0.0/24", 26))
+	inner := testBlock("10.0.0.64/26", "")
+	tracker.AddBlocks(inner, testBlock("10.9.0.0/26", ""))
+
+	Expect(tracker.HasBlocksWithin(cnet.MustParseCIDR("10.0.0.0/16"))).To(BeTrue(), "the inner pool's block still lies in the outer CIDR")
+	Expect(tracker.HasBlocksWithin(cnet.MustParseCIDR("10.1.0.0/16"))).To(BeFalse())
+	Expect(tracker.HasBlocksWithin(cnet.MustParseCIDR("10.0.0.64/27"))).To(BeFalse(), "a CIDR narrower than the block does not hold it")
+
+	tracker.RemoveBlock(inner.CIDR)
+	Expect(tracker.HasBlocksWithin(cnet.MustParseCIDR("10.0.0.0/16"))).To(BeFalse())
 }
 
 // TestIncrementalMatchesFresh reads between every change, then compares against a tracker given the end state at once.
@@ -626,6 +642,28 @@ func TestAllRefsInOrder(t *testing.T) {
 	Expect(got).To(Equal([]string{"10.0.0.9 node/a", "10.0.0.10 a", "10.0.0.10 b"}))
 	Expect(tr.Refs(net.ParseIP("10.0.0.11"))).To(BeEmpty())
 	Expect(tr.Refs(net.ParseIP("10.0.0.10"))).To(HaveLen(2))
+}
+
+func TestPoolLostOverlap(t *testing.T) {
+	RegisterTestingT(t)
+	tracker := NewTracker()
+	p := pool("p", "10.0.0.0/24", 26)
+	tracker.AddPools(p)
+
+	lost, ok := tracker.PoolLostOverlap("p")
+	Expect(ok).To(BeTrue())
+	Expect(lost).To(BeFalse())
+
+	p = p.DeepCopy()
+	p.Status = &v3.IPPoolStatus{Conditions: []metav1.Condition{{
+		Type: v3.IPPoolConditionAllocatable, Status: metav1.ConditionFalse, Reason: v3.IPPoolReasonCIDROverlap,
+	}}}
+	tracker.AddPools(p)
+	lost, _ = tracker.PoolLostOverlap("p")
+	Expect(lost).To(BeTrue())
+
+	_, ok = tracker.PoolLostOverlap("missing")
+	Expect(ok).To(BeFalse())
 }
 
 func TestBlockCountsBorrowed(t *testing.T) {
