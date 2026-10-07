@@ -85,6 +85,39 @@ We build and publish packages for these platforms:
    at binaries.projectcalico.org (for example
    http://binaries.projectcalico.org/rpm/calico-3.8/).
 
+## Debian source packages and versioning
+
+Our Debian source packages are `3.0 (quilt)` format: a `.orig` tarball holding
+the upstream content, plus a small `.debian` tarball holding `debian/`.  The
+`.orig` tarball is not a real upstream release; `make-packages.sh` generates it
+from the working tree, once per build, just before building the per-series
+source packages.
+
+Each Ubuntu series needs its own package version, because Launchpad will not
+accept a second upload of a version that the archive already holds.  The series
+therefore goes in the *Debian revision*, giving versions like
+`3:3.34.0~rc0.post5329-noble`, and leaving the upstream version -- and so the
+name of the `.orig` tarball -- the same for all three series.
+
+That split matters for the PPA size quota.  Launchpad charges the quota for
+every file it still holds, including superseded ones it has not yet garbage
+collected, and it counts a given filename only once.  One `.orig` tarball
+shared by three series therefore costs a third of what three per-series copies
+of it cost, which for Felix is the difference between 56MiB and 168MiB on every
+snapshot build.  Before this scheme the series was part of the upstream
+version, so each series got its own near-identical copy, and the `master` PPA
+regularly exceeded its 8GiB quota and started rejecting uploads.
+
+Two ordering properties are deliberate, and worth preserving if you change the
+scheme:
+
+-  A newer Ubuntu series sorts above an older one, because `focal` < `jammy` <
+   `noble` alphabetically.
+
+-  There is no `~` in the revision.  `~` sorts *before* the thing it is
+   attached to, which once made a release package compare as older than the
+   pre-release it was meant to replace; see commit 1499c035ee.
+
 ## Public PPAs and RPM repositories
 
 There is a PPA and RPM repo, named `calico-X.Y`, for each Calico X.Y
