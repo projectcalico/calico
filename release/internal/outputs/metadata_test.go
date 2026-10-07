@@ -275,6 +275,18 @@ func TestMetadataAttest(t *testing.T) {
 		}
 	})
 
+	t.Run("marks superseded keys", func(t *testing.T) {
+		bs, err := valid().attest()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for key, comment := range deprecatedKeys {
+			if want := "# " + comment + "\n" + key + ":"; !strings.Contains(string(bs), want) {
+				t.Errorf("document lacks %q:\n%s", want, bs)
+			}
+		}
+	})
+
 	t.Run("leaves out charts when none were released", func(t *testing.T) {
 		bs, err := valid().attest()
 		if err != nil {
@@ -424,6 +436,11 @@ func TestImageDescriberDescribe(t *testing.T) {
 		if diff := cmp.Diff(want, got["node"]); diff != "" {
 			t.Errorf("node (-want +got):\n%s", diff)
 		}
+	})
+
+	t.Run("fails on an unpublished image when digests are required", func(t *testing.T) {
+		_, err := ImageDescriber{Resolve: resolveTo("", false, nil), RequireDigests: true}.describe(released)
+		wantErrContains(t, err, "quay.io/calico/node:v3.30.0 is not published")
 	})
 
 	t.Run("fails on a resolve error", func(t *testing.T) {

@@ -35,10 +35,10 @@ import (
 
 const metadataFileName = "metadata.yaml"
 
-// attest validates the record before marshalling it, so an invalid record is
-// never written.
 type Record interface {
 	describe(Describer) error
+	// attest validates the record before marshalling it, so an invalid record
+	// is never written.
 	attest() ([]byte, error)
 }
 
@@ -69,12 +69,10 @@ var _ Record = (*Metadata)(nil)
 type Metadata struct {
 	Version string `yaml:"version"`
 
-	// Superseded by components.operator.version; kept for older readers.
 	OperatorVersion string `yaml:"operatorVersion"`
 
 	Images []string `yaml:"images"`
 
-	// Superseded by charts.version; kept for older readers.
 	ChartVersion string `yaml:"helmChartVersion"`
 
 	Source Source `yaml:"source"`
@@ -144,12 +142,28 @@ func (r *Metadata) describe(d Describer) error {
 	return errors.Join(errs...)
 }
 
+// Older readers still parse these keys, so they stay, marked for new readers.
+var deprecatedKeys = map[string]string{
+	"operatorVersion":  "Deprecated, use components.operator.version instead.",
+	"images":           "Deprecated, use components instead.",
+	"helmChartVersion": "Deprecated, use charts.version instead.",
+}
+
 func (r Metadata) attest() ([]byte, error) {
 	m, err := r.attested()
 	if err != nil {
 		return nil, err
 	}
-	return yaml.Marshal(m)
+	var doc yaml.Node
+	if err := doc.Encode(m); err != nil {
+		return nil, fmt.Errorf("encoding metadata: %w", err)
+	}
+	for i := 0; i+1 < len(doc.Content); i += 2 {
+		if c, ok := deprecatedKeys[doc.Content[i].Value]; ok {
+			doc.Content[i].HeadComment = c
+		}
+	}
+	return yaml.Marshal(&doc)
 }
 
 func (r Metadata) attested() (Metadata, error) {
@@ -261,6 +275,9 @@ type Describer struct {
 type ImageDescriber struct {
 	Sources []registry.DigestSource
 	Resolve registry.DigestResolver
+
+	// RequireDigests makes an unpublished image an error rather than a warning.
+	RequireDigests bool
 }
 
 func (d ImageDescriber) describe(released map[string]registry.Component) (map[string]Component, error) {
@@ -294,7 +311,10 @@ func (d ImageDescriber) digest(ref string) (string, error) {
 		return "", fmt.Errorf("resolving %s: %w", ref, err)
 	}
 	if !exists {
-		logrus.WithField("image", ref).Debug("Not published, leaving its digest out")
+		if d.RequireDigests {
+			return "", fmt.Errorf("%s is not published", ref)
+		}
+		logrus.WithField("image", ref).Warn("Not published, leaving its digest out")
 	}
 	return digest, nil
 }

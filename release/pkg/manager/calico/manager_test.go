@@ -1734,7 +1734,7 @@ func TestSourceMetadata(t *testing.T) {
 		f := newFakeRunner()
 		f.on("git rev-parse --abbrev-ref HEAD", branch+"\n", nil)
 		f.on("git rev-parse HEAD", headSHA+"\n", nil)
-		return &CalicoManager{runner: f, githubOrg: "projectcalico", repo: "calico", calicoVersion: "v3.30.0"}
+		return &CalicoManager{runner: f, githubOrg: "projectcalico", repo: "calico", calicoVersion: "v3.30.0", gitRef: true}
 	}
 
 	t.Run("a release records its branch and tag", func(t *testing.T) {
@@ -1757,6 +1757,18 @@ func TestSourceMetadata(t *testing.T) {
 		}
 		if got.Tag != "" || got.Branch != "master" {
 			t.Errorf("source = %+v, want branch master and no tag", got)
+		}
+	})
+
+	t.Run("a release that pushes no tag records none", func(t *testing.T) {
+		r := newManager("release-v3.30")
+		r.gitRef = false
+		got, err := r.sourceMetadata()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Tag != "" {
+			t.Errorf("tag = %q, want none", got.Tag)
 		}
 	})
 
@@ -1820,6 +1832,19 @@ func TestChartsMetadata(t *testing.T) {
 		}
 		if got.Index != "" {
 			t.Errorf("index = %q, want none", got.Index)
+		}
+	})
+
+	t.Run("points a hashrelease at the index it serves", func(t *testing.T) {
+		r := newManager()
+		r.isHashRelease = true
+		r.hashrelease = hashreleaseserver.Hashrelease{Name: "hr"}
+		got, err := r.chartsMetadata()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := r.hashrelease.URL() + "/charts"; got.Index != want {
+			t.Errorf("index = %q, want %q", got.Index, want)
 		}
 	})
 

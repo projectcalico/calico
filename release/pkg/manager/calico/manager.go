@@ -386,7 +386,11 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 		Charts:          charts,
 		Released:        r.releasedComponents(),
 	}, outputs.Describer{
-		Images:    outputs.ImageDescriber{Sources: sources, Resolve: r.digestResolver()},
+		Images: outputs.ImageDescriber{
+			Sources:        sources,
+			Resolve:        r.digestResolver(),
+			RequireDigests: !r.isHashRelease,
+		},
 		Artifacts: outputs.ArtifactDescriber{Files: files},
 	}, dir)
 }
@@ -408,7 +412,7 @@ func (r *CalicoManager) sourceMetadata() (outputs.Source, error) {
 	if b := strings.TrimSpace(branch); b != "HEAD" {
 		src.Branch = b
 	}
-	if !r.isHashRelease {
+	if !r.isHashRelease && r.gitRef {
 		src.Tag = r.calicoVersion
 	}
 	return src, nil
@@ -428,7 +432,13 @@ func (r *CalicoManager) chartsMetadata() (*outputs.Charts, error) {
 		return nil, err
 	}
 	out := &outputs.Charts{Version: chart.Version(), Entries: map[string]outputs.Chart{}}
-	if r.helmIndex {
+	switch {
+	case !r.helmIndex:
+	case r.isHashRelease:
+		if out.Index, err = charts.RepoURLAt(r.hashrelease.URL()); err != nil {
+			return nil, err
+		}
+	default:
 		if out.Index, err = r.helmRepo(); err != nil {
 			return nil, fmt.Errorf("helm repo URL: %w", err)
 		}

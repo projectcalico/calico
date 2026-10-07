@@ -63,7 +63,12 @@ const (
 )
 
 var RepoURL = func() (string, error) {
-	url, err := url.JoinPath(docs.BaseURL, docs.ProductSlug, chartsDirName)
+	return RepoURLAt(docs.BaseURL + "/" + docs.ProductSlug)
+}
+
+// RepoURLAt is the Helm repository a site serves under base.
+func RepoURLAt(base string) (string, error) {
+	url, err := url.JoinPath(base, chartsDirName)
 	if err != nil {
 		return "", fmt.Errorf("charts repo URL: %w", err)
 	}
