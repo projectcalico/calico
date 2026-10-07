@@ -272,3 +272,62 @@ func TestDenyAggregatorDrains_MatchDataSwapProfileFlip(t *testing.T) {
 	ageOut(t, c, tup)
 	assertDenyAggDrains(t, cap)
 }
+
+// A newly applied tier whose policy ends in a pass rule takes the match index
+// of the flow's previous verdict (the profile allow moves up one index). The
+// pass hit overwrites the verdict slot; the trace must not then report the pass
+// rule as its verdict, which yields a flow log with no action.
+func TestPassRuleOverwritingVerdictIsNotReported(t *testing.T) {
+	c, cap := newZombieTestCollector(t)
+	tup := tuple.Make(remoteIp1, localIp1, proto_udp, srcPort, dstPort)
+
+	setMatchData := func(md *calc.MatchData) {
+		c.luc.SetMockData(map[[16]byte]calc.EndpointData{
+			localIp1: &calc.LocalEndpointData{
+				CommonEndpointData: calc.CalculateCommonEndpointData(zombieDstKey, localWlEp1),
+				Ingress:            md,
+				Egress:             md,
+			},
+			remoteIp1: zombieSrcEp,
+		}, nil, nil, nil)
+	}
+	report := func() {
+		ripenForReport(c.epStats[tup])
+		c.checkEpStats()
+	}
+
+	// No tiers apply: the profile is at index 0.
+	setMatchData(&calc.MatchData{
+		PolicyMatches:     map[calc.PolicyID]int{},
+		TierData:          map[string]*calc.TierData{},
+		ProfileMatchIndex: 0,
+	})
+	c.applyPacketInfo(ingressHit(tup, zombieProfileAllow))
+	report()
+
+	// A tier applies with a policy at index 0 whose last rule passes; the profile moves to index 1.
+	passRule := calc.NewRuleID(v3.KindNetworkPolicy, "tier1", "pass-policy", "default",
+		1, rules.RuleDirIngress, rules.RuleActionPass)
+	eotDeny := calc.NewRuleID(v3.KindNetworkPolicy, "tier1", "pass-policy", "default",
+		calc.RuleIndexTierDefaultAction, rules.RuleDirIngress, rules.RuleActionDeny)
+	setMatchData(&calc.MatchData{
+		PolicyMatches: map[calc.PolicyID]int{passRule.PolicyID: 0},
+		TierData: map[string]*calc.TierData{
+			"tier1": {TierDefaultActionRuleID: eotDeny, EndOfTierMatchIndex: 0},
+		},
+		ProfileMatchIndex: 1,
+	})
+	c.applyPacketInfo(ingressHit(tup, passRule))
+	report()
+	c.applyPacketInfo(ingressHit(tup, zombieProfileAllow))
+	report()
+
+	for i, mu := range cap.updates {
+		if a := mu.GetLastRuleID().Action; a != rules.RuleActionAllow && a != rules.RuleActionDeny {
+			t.Errorf("update %d reported non-verdict rule %v as its verdict", i, mu.GetLastRuleID())
+		}
+	}
+	if last := cap.updates[len(cap.updates)-1].GetLastRuleID(); !last.Equals(zombieProfileAllow) {
+		t.Errorf("final update verdict = %v, want %v", last, zombieProfileAllow)
+	}
+}
