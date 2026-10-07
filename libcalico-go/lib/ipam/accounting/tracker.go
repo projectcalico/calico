@@ -401,6 +401,18 @@ func (t *Tracker) BlockPool(cidr cnet.IPNet) (string, bool) {
 	return block.pool.ipPool.Name, true
 }
 
+// PoolLostOverlap reports whether the tracker's copy of the pool has lost a CIDR overlap. The second result is false
+// when no pool of that name was added.
+func (t *Tracker) PoolLostOverlap(name string) (bool, bool) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	pool, ok := t.pools[name]
+	if !ok {
+		return false, false
+	}
+	return pool.lostOverlap, true
+}
+
 // HasBlocksWithin is whether any block lies inside cidr, whichever pool claims it. A narrower pool inside a deleting
 // one can win a block whose addresses are still in use.
 func (t *Tracker) HasBlocksWithin(cidr cnet.IPNet) bool {

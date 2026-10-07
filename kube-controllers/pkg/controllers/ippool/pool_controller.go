@@ -212,17 +212,17 @@ func (c *IPPoolController) reconcile() error {
 	var errs []error
 
 	// Conditions first: whether a pool is allocatable decides whether it should carry a finalizer.
-	pools, overlapChanged, err := c.reconcileConditions(c.ctx)
+	pools, err := c.reconcileConditions(c.ctx)
 	if err != nil {
 		errs = append(errs, err)
 	}
 
 	if !c.inSync.Load() {
 		logrus.Debug("IPAM data feed not in sync; leaving AddressSpaceNearlyFull for now")
-	} else if overlapChanged {
-		// The tracker learns of a CIDROverlap change when the pool's status update reaches the data feed, and until
-		// then credits blocks to the wrong pool. That update queues the next pass.
-		logrus.Debug("CIDROverlap changed; leaving AddressSpaceNearlyFull to the next pass")
+	} else if !c.trackerAgreesOnOverlap(pools) {
+		// The tracker learns of a CIDROverlap change from the data feed, which can lag the informer, and until then
+		// credits blocks to the wrong pool. The feed's update queues the next pass.
+		logrus.Debug("Tracker has yet to see a CIDROverlap change; leaving AddressSpaceNearlyFull to the next pass")
 	} else if err := c.reconcileNearlyFull(c.ctx, pools); err != nil {
 		errs = append(errs, err)
 	}
@@ -244,15 +244,13 @@ func (c *IPPoolController) reconcile() error {
 
 // reconcileConditions checks for various conditions that should be set on each IP pool. It returns
 // the pools with the derived conditions applied, so the finalizer pass acts on what we just wrote
-// rather than on the informer cache, which will not have caught up yet. The bool is whether any
-// pool gained or lost CIDROverlap.
-func (c *IPPoolController) reconcileConditions(ctx context.Context) ([]*v3.IPPool, bool, error) {
+// rather than on the informer cache, which will not have caught up yet.
+func (c *IPPoolController) reconcileConditions(ctx context.Context) ([]*v3.IPPool, error) {
 	// Copy up front. Objects in the indexer are shared with the informer and every other handler,
 	// so mutating one in place both races and leaves the cache asserting state the API server may
 	// have rejected, which would suppress every future write attempt.
 	objs := c.poolInformer.GetIndexer().List()
 	pools := make([]*v3.IPPool, 0, len(objs))
-	lostOverlapBefore := make(map[string]bool, len(objs))
 	for _, obj := range objs {
 		p, ok := obj.(*v3.IPPool)
 		if !ok {
@@ -260,7 +258,6 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) ([]*v3.IPPoo
 			continue
 		}
 		pools = append(pools, p.DeepCopy())
-		lostOverlapBefore[p.Name] = accounting.LostOverlap(p)
 	}
 	slices.SortFunc(pools, poolSortFunc)
 
@@ -366,14 +363,17 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) ([]*v3.IPPoo
 		}
 	}
 
-	overlapChanged := false
-	for _, pool := range pools {
-		if accounting.LostOverlap(pool) != lostOverlapBefore[pool.Name] {
-			overlapChanged = true
-			break
+	return pools, utilerrors.NewAggregate(errs)
+}
+
+// trackerAgreesOnOverlap is whether the tracker has seen the CIDROverlap state just derived for every pool it knows.
+func (c *IPPoolController) trackerAgreesOnOverlap(pools []*v3.IPPool) bool {
+	for _, p := range pools {
+		if lost, ok := c.tracker.PoolLostOverlap(p.Name); ok && lost != accounting.LostOverlap(p) {
+			return false
 		}
 	}
-	return pools, overlapChanged, utilerrors.NewAggregate(errs)
+	return true
 }
 
 func poolSortFunc(poolA, poolB *v3.IPPool) int {

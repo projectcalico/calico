@@ -221,3 +221,55 @@ func TestReconcileNearlyFull_WaitsForInSync(t *testing.T) {
 		t.Fatalf("expected AddressSpaceNearlyFull once in sync, got %+v", got.Status)
 	}
 }
+
+// The informer can deliver a new CIDROverlap condition before the data feed does. Until the tracker sees it, no pass
+// judges nearly-full, or the losing pool would carry the condition for the winner's blocks.
+func TestReconcile_NearlyFullWaitsForTheTrackerToSeeCIDROverlap(t *testing.T) {
+	wide := testPool("wide", "10.0.0.0/25")
+	wide.Status = &v3.IPPoolStatus{Conditions: []metav1.Condition{{
+		Type: v3.IPPoolConditionAllocatable, Status: metav1.ConditionTrue, Reason: v3.IPPoolReasonOK,
+	}}}
+	narrow := testPool("narrow", "10.0.0.0/26")
+	cli := fake.NewClientset(wide, narrow)
+	c, idx := newTestController(cli, wide, narrow)
+	c.tracker.AddBlocks(allocatedBlock(t, "10.0.0.0/26", 52), allocatedBlock(t, "10.0.0.64/26", 52))
+	get := func(name string) *v3.IPPool {
+		t.Helper()
+		p, err := cli.ProjectcalicoV3().IPPools().Get(c.ctx, name, metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("get %s: %v", name, err)
+		}
+		return p
+	}
+
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	gotNarrow := get(narrow.Name)
+	if !accounting.LostOverlap(gotNarrow) {
+		t.Fatalf("expected narrow to lose the overlap, got %+v", gotNarrow.Status)
+	}
+
+	// Only the informer has caught up.
+	if err := idx.Update(gotNarrow); err != nil {
+		t.Fatalf("update cache: %v", err)
+	}
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if hasCondition(get(narrow.Name), v3.IPPoolConditionAddressSpaceNearlyFull, metav1.ConditionTrue) {
+		t.Fatalf("narrow is nearly full before the tracker saw it lose the overlap")
+	}
+
+	// The data feed catches up.
+	c.tracker.AddPools(gotNarrow)
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if !hasCondition(get(wide.Name), v3.IPPoolConditionAddressSpaceNearlyFull, metav1.ConditionTrue) {
+		t.Errorf("expected AddressSpaceNearlyFull on wide once the tracker credits it with both blocks")
+	}
+	if hasCondition(get(narrow.Name), v3.IPPoolConditionAddressSpaceNearlyFull, metav1.ConditionTrue) {
+		t.Errorf("expected no AddressSpaceNearlyFull on narrow")
+	}
+}

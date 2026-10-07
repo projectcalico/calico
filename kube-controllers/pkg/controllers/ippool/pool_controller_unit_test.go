@@ -320,7 +320,7 @@ func TestReconcileConditions_FailedStatusUpdateDoesNotPoisonCache(t *testing.T) 
 
 	c, idx := newTestController(cli, pool)
 
-	if _, _, err := c.reconcileConditions(c.ctx); err == nil {
+	if _, err := c.reconcileConditions(c.ctx); err == nil {
 		t.Fatal("expected reconcileConditions to surface the failed status write")
 	}
 	if attempts != 1 {
@@ -333,7 +333,7 @@ func TestReconcileConditions_FailedStatusUpdateDoesNotPoisonCache(t *testing.T) 
 	}
 
 	// And the next pass must retry rather than short-circuit on the poisoned cache.
-	if _, _, err := c.reconcileConditions(c.ctx); err == nil {
+	if _, err := c.reconcileConditions(c.ctx); err == nil {
 		t.Fatal("expected second reconcileConditions to surface the failed status write")
 	}
 	if attempts != 2 {
@@ -361,12 +361,12 @@ func TestReconcileConditions_RecoversOnceWriteSucceeds(t *testing.T) {
 
 	c, _ := newTestController(cli, pool)
 
-	if _, _, err := c.reconcileConditions(c.ctx); err == nil {
+	if _, err := c.reconcileConditions(c.ctx); err == nil {
 		t.Fatal("expected first pass to fail")
 	}
 
 	fail = false
-	if _, _, err := c.reconcileConditions(c.ctx); err != nil {
+	if _, err := c.reconcileConditions(c.ctx); err != nil {
 		t.Fatalf("expected second pass to succeed, got %v", err)
 	}
 	if attempts != 2 {
