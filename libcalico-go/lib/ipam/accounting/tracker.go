@@ -733,6 +733,7 @@ func (b *trackedBlock) counts() *BlockCounts {
 		Cooling:       b.cooling,
 		Reserved:      b.reserved,
 		InUseReserved: b.inUseReserved,
+		Borrowed:      b.borrowed,
 	}
 }
 
