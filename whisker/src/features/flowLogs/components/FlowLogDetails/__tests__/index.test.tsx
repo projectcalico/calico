@@ -56,4 +56,24 @@ describe('FlowLogDetails', () => {
         expect(screen.getByText('start_time')).toBeInTheDocument();
         expect(screen.getByText('source_labels')).toBeInTheDocument();
     });
+
+    it('should show the destination service as text', () => {
+        render(
+            <FlowLogDetails
+                flowLog={{
+                    ...flowLog,
+                    service: {
+                        name: 'kube-dns',
+                        namespace: 'kube-system',
+                        port: 53,
+                        port_name: 'dns',
+                    },
+                }}
+            />,
+        );
+        expect(screen.getByText('service')).toBeInTheDocument();
+        expect(
+            screen.getByText('kube-system/kube-dns:53 (dns)'),
+        ).toBeInTheDocument();
+    });
 });

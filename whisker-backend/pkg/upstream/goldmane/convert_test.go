@@ -3,6 +3,7 @@
 package goldmane
 
 import (
+	"fmt"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -104,10 +105,18 @@ func TestProtoToFlow_Service(t *testing.T) {
 }
 
 func TestProtoToFlow_ServiceAbsent(t *testing.T) {
-	RegisterTestingT(t)
+	for _, name := range []string{"", "-"} {
+		t.Run(fmt.Sprintf("name=%q", name), func(t *testing.T) {
+			RegisterTestingT(t)
 
-	resp := protoToFlow(&proto.Flow{Key: &proto.FlowKey{}})
-	Expect(resp.Service).To(BeNil())
+			resp := protoToFlow(&proto.Flow{Key: &proto.FlowKey{
+				DestServiceName:      name,
+				DestServiceNamespace: "-",
+				DestServicePortName:  "-",
+			}})
+			Expect(resp.Service).To(BeNil())
+		})
+	}
 }
 
 func TestProtoToFlow_NameAndNamespaceSpecialCases(t *testing.T) {
