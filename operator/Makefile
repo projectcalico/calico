@@ -213,14 +213,14 @@ run-fvs: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 # The FV's in-process operator resolves its components here, stamped into the test
 # binary the same way a real build stamps the operator. kind-cluster-create points the
 # cluster's nodes at the same registry.
-FV_LDFLAGS = -ldflags "-X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(KIND_TEST_BUILD_TAG) \
+FV_LDFLAGS ?= -ldflags "-X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(KIND_TEST_BUILD_TAG) \
 	-X $(PACKAGE_NAME)/pkg/components.calicoRegistry=$(KIND_IMAGE_REGISTRY) \
 	-X $(PACKAGE_NAME)/pkg/components.calicoImagePath=$(KIND_IMAGE_PATH)"
 
 # Every component the FV's operator installs has to be in the registry, including the
 # cni-plugins init container, or calico-node never leaves Init. FV_MARKER_<name> names
 # the build marker for an image that does not use <name>/.image.created-<arch>.
-FV_IMAGES = calico node whisker third-party-cni-plugins
+FV_IMAGES ?= calico node whisker third-party-cni-plugins
 FV_MARKER_calico                  = cmd/calico/.image.created-$(ARCH)
 FV_MARKER_third-party-cni-plugins = third_party/cni-plugins/.cni-plugins.created-$(ARCH)
 
@@ -228,11 +228,11 @@ FV_MARKER_third-party-cni-plugins = third_party/cni-plugins/.cni-plugins.created
 push-fv-images: kind-registry-up $(addprefix push-fv-image-,$(FV_IMAGES))
 
 # Prefer the image built from this commit, which CI restores from its cache before the
-# FV runs, and build one for a local run that has none.
+# FV runs, and build one for a local run that has none. Images build under the kind path.
 push-fv-image-%:
-	@docker image inspect calico/$*:latest-$(ARCH) >/dev/null 2>&1 || \
+	@docker image inspect $(KIND_IMAGE_PATH)/$*:latest-$(ARCH) >/dev/null 2>&1 || \
 		$(MAKE) $(REPO_ROOT)/$(or $(FV_MARKER_$*),$*/.image.created-$(ARCH))
-	docker tag calico/$*:latest-$(ARCH) $(KIND_IMAGE_REGISTRY)/$(KIND_IMAGE_PATH)/$*:$(KIND_TEST_BUILD_TAG)
+	docker tag $(KIND_IMAGE_PATH)/$*:latest-$(ARCH) $(KIND_IMAGE_REGISTRY)/$(KIND_IMAGE_PATH)/$*:$(KIND_TEST_BUILD_TAG)
 	docker push $(KIND_IMAGE_REGISTRY)/$(KIND_IMAGE_PATH)/$*:$(KIND_TEST_BUILD_TAG)
 
 ## Deploy the CRDs the FVs need on top of the ones kind-cluster-create installs:
