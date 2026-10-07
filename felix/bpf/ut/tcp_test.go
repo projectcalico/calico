@@ -220,3 +220,313 @@ func TestTCPRecycleClosedConnNAT(t *testing.T) {
 	Expect(v.A2B.FinSeen).To(BeFalse())
 	Expect(v.B2A.FinSeen).To(BeFalse())
 }
+
+// TestTCPRecycleClosedNATReverse covers a SYN sent straight to the backend that hits a closed service connection's reverse entry.
+func TestTCPRecycleClosedNATReverse(t *testing.T) {
+	RegisterTestingT(t)
+
+	defer func() { bpfIfaceName = "" }()
+	bpfIfaceName = "RcR1"
+
+	resetCTMap(ctMap)
+	defer resetCTMap(ctMap)
+
+	natIP := net.IPv4(8, 8, 8, 8).To4()
+	natPort := uint16(666)
+
+	tcpSyn := &layers.TCP{
+		SrcPort:    54321,
+		DstPort:    7890,
+		SYN:        true,
+		DataOffset: 5,
+	}
+
+	_, ipv4, l4, _, svcSynPkt, err := testPacketV4(nil, nil, tcpSyn, nil)
+	Expect(err).NotTo(HaveOccurred())
+	tcp := l4.(*layers.TCP)
+	svcIP := ipv4.DstIP
+
+	err = natMap.Update(
+		nat.NewNATKey(svcIP, uint16(tcp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 0).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+	defer resetMap(natMap)
+	err = natBEMap.Update(
+		nat.NewNATBackendKey(0, 0).AsBytes(),
+		nat.NewNATBackendValue(natIP, natPort).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+	defer resetMap(natBEMap)
+
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	defer resetRTMap(rtMap)
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+
+	fwdKey := conntrack.NewKey(uint8(ipv4.Protocol), srcIP, 54321, svcIP, 7890)
+	revKey := conntrack.NewKey(uint8(ipv4.Protocol), srcIP, 54321, natIP, natPort)
+
+	// Open the service connection, then close it in both directions.
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(svcSynPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+	})
+
+	ct, err := conntrack.LoadMapMem(ctMap)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(ct).To(HaveKey(fwdKey))
+	Expect(ct).To(HaveKey(revKey))
+	revVal := ct[revKey]
+	Expect(revVal.Type()).To(Equal(conntrack.TypeNATReverse))
+
+	v := revVal.Data()
+	v.A2B.FinSeen = true
+	v.A2B.AckSeen = true
+	revVal.SetLegA2B(v.A2B)
+	v.B2A.FinSeen = true
+	v.B2A.AckSeen = true
+	revVal.SetLegB2A(v.B2A)
+	Expect(ctMap.Update(revKey.AsBytes(), revVal.AsBytes())).NotTo(HaveOccurred())
+
+	// A new SYN straight to the backend recycles the closed reverse entry.
+	directIP := *ipv4Default
+	directIP.DstIP = natIP
+	directSyn := *tcpSyn
+	directSyn.DstPort = layers.TCPPort(natPort)
+	_, _, _, _, directSynPkt, err := testPacketV4(nil, &directIP, &directSyn, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	bpfIfaceName = "RcR2"
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(directSynPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+	})
+
+	ct, err = conntrack.LoadMapMem(ctMap)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(ct).To(HaveKey(revKey))
+	Expect(ct[revKey].Type()).To(Equal(conntrack.TypeNormal),
+		"the SYN must open a new connection, not reuse the closed NAT reverse entry")
+	Expect(ct[revKey].Data().FINsSeen()).To(BeFalse())
+	newConn := ct[revKey]
+
+	// The old forward entry names the new connection's key; its packets must not ride that connection.
+	svcAck := *tcpSyn
+	svcAck.SYN = false
+	svcAck.ACK = true
+	_, _, _, _, svcAckPkt, err := testPacketV4(nil, nil, &svcAck, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	bpfIfaceName = "RcR3"
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(svcAckPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+	})
+
+	ct, err = conntrack.LoadMapMem(ctMap)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(ct).NotTo(HaveKey(fwdKey))
+	Expect(ct).To(HaveKeyWithValue(revKey, newConn))
+
+	// Once the direct connection closes, the pod can use the service again from the same port.
+	v = newConn.Data()
+	v.A2B.FinSeen = true
+	newConn.SetLegA2B(v.A2B)
+	v.B2A.FinSeen = true
+	v.B2A.AckSeen = true
+	newConn.SetLegB2A(v.B2A)
+	Expect(ctMap.Update(revKey.AsBytes(), newConn.AsBytes())).NotTo(HaveOccurred())
+
+	bpfIfaceName = "RcR4"
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(svcSynPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+	})
+
+	ct, err = conntrack.LoadMapMem(ctMap)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(ct).To(HaveKey(fwdKey))
+	Expect(ct).To(HaveKey(revKey))
+	Expect(ct[revKey].Type()).To(Equal(conntrack.TypeNATReverse))
+	Expect(ct[revKey].Data().FINsSeen()).To(BeFalse())
+}
+
+// TestTCPRecycleClosedNATReverseOtherService checks that a SYN to another service with the same backend recycles a closed reverse entry.
+func TestTCPRecycleClosedNATReverseOtherService(t *testing.T) {
+	RegisterTestingT(t)
+
+	defer func() { bpfIfaceName = "" }()
+	bpfIfaceName = "RcS1"
+
+	resetCTMap(ctMap)
+	defer resetCTMap(ctMap)
+
+	natIP := net.IPv4(8, 8, 8, 8).To4()
+	natPort := uint16(666)
+	svc1Port := uint16(7890)
+	svc2Port := uint16(7891)
+
+	tcpSyn := &layers.TCP{
+		SrcPort:    54321,
+		DstPort:    layers.TCPPort(svc1Port),
+		SYN:        true,
+		DataOffset: 5,
+	}
+	_, ipv4, _, _, svc1SynPkt, err := testPacketV4(nil, nil, tcpSyn, nil)
+	Expect(err).NotTo(HaveOccurred())
+	svc2Syn := *tcpSyn
+	svc2Syn.DstPort = layers.TCPPort(svc2Port)
+	_, _, _, _, svc2SynPkt, err := testPacketV4(nil, nil, &svc2Syn, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	defer resetMap(natMap)
+	defer resetMap(natBEMap)
+	for id, port := range []uint16{svc1Port, svc2Port} {
+		Expect(natMap.Update(
+			nat.NewNATKey(ipv4.DstIP, port, uint8(ipv4.Protocol)).AsBytes(),
+			nat.NewNATValue(uint32(id), 1, 0, 0).AsBytes(),
+		)).NotTo(HaveOccurred())
+		Expect(natBEMap.Update(
+			nat.NewNATBackendKey(uint32(id), 0).AsBytes(),
+			nat.NewNATBackendValue(natIP, natPort).AsBytes(),
+		)).NotTo(HaveOccurred())
+	}
+
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	defer resetRTMap(rtMap)
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+
+	revKey := conntrack.NewKey(uint8(ipv4.Protocol), srcIP, 54321, natIP, natPort)
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(svc1SynPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+	})
+
+	ct, err := conntrack.LoadMapMem(ctMap)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(ct).To(HaveKey(revKey))
+	revVal := ct[revKey]
+	Expect(revVal.OrigPort()).To(Equal(svc1Port))
+
+	v := revVal.Data()
+	v.A2B.FinSeen = true
+	v.A2B.AckSeen = true
+	revVal.SetLegA2B(v.A2B)
+	v.B2A.FinSeen = true
+	v.B2A.AckSeen = true
+	revVal.SetLegB2A(v.B2A)
+	Expect(ctMap.Update(revKey.AsBytes(), revVal.AsBytes())).NotTo(HaveOccurred())
+
+	bpfIfaceName = "RcS2"
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(svc2SynPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+	})
+
+	ct, err = conntrack.LoadMapMem(ctMap)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(ct).To(HaveKey(revKey))
+	Expect(ct[revKey].Type()).To(Equal(conntrack.TypeNATReverse))
+	Expect(ct[revKey].OrigPort()).To(Equal(svc2Port))
+	Expect(ct[revKey].Data().FINsSeen()).To(BeFalse())
+	svc2Rev := ct[revKey]
+
+	// The first service's forward entry is left behind; its packets must not ride the new connection.
+	svc1Fwd := conntrack.NewKey(uint8(ipv4.Protocol), srcIP, 54321, ipv4.DstIP, svc1Port)
+	svc2Fwd := conntrack.NewKey(uint8(ipv4.Protocol), srcIP, 54321, ipv4.DstIP, svc2Port)
+	Expect(ct).To(HaveKey(svc1Fwd))
+
+	svc1Ack := *tcpSyn
+	svc1Ack.SYN = false
+	svc1Ack.ACK = true
+	_, _, _, _, svc1AckPkt, err := testPacketV4(nil, nil, &svc1Ack, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	bpfIfaceName = "RcS3"
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(svc1AckPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+	})
+
+	ct, err = conntrack.LoadMapMem(ctMap)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(ct).NotTo(HaveKey(svc1Fwd))
+	Expect(ct).To(HaveKey(svc2Fwd))
+	Expect(ct).To(HaveKeyWithValue(revKey, svc2Rev))
+}
+
+// TestTCPRecycleNeedsFINsBothWays checks that only FINs both ways let a SYN recycle an entry; RST-closed ones are left to GC.
+func TestTCPRecycleNeedsFINsBothWays(t *testing.T) {
+	RegisterTestingT(t)
+
+	defer func() { bpfIfaceName = "" }()
+
+	tcpSyn := &layers.TCP{
+		SrcPort:    54321,
+		DstPort:    7890,
+		SYN:        true,
+		DataOffset: 5,
+	}
+	_, ipv4, _, _, synPkt, err := testPacketV4(nil, nil, tcpSyn, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	defer resetRTMap(rtMap)
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+
+	key := conntrack.NewKey(uint8(ipv4.Protocol), srcIP, 54321, dstIP, 7890)
+
+	for _, tc := range []struct {
+		name           string
+		finA, finB     bool
+		rstA, rstB     bool
+		expectRecycled bool
+	}{
+		{name: "FIN both ways", finA: true, finB: true, expectRecycled: true},
+		{name: "FIN and RST", finA: true, rstB: true},
+		{name: "RST both ways", rstA: true, rstB: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			RegisterTestingT(t)
+			resetCTMap(ctMap)
+			defer resetCTMap(ctMap)
+
+			old := conntrack.NewValueNormal(0, 0,
+				conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: tc.finA, RstSeen: tc.rstA, Opener: true, Approved: true},
+				conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: tc.finB, RstSeen: tc.rstB, Approved: true})
+			Expect(ctMap.Update(key.AsBytes(), old.AsBytes())).NotTo(HaveOccurred())
+
+			bpfIfaceName = "RcF1"
+			skbMark = 0
+			runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+				res, err := bpfrun(synPkt)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+			})
+
+			ct, err := conntrack.LoadMapMem(ctMap)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ct).To(HaveKey(key))
+			// A recycled entry is new: the responder has not ACKed yet.
+			Expect(ct[key].Data().B2A.AckSeen).To(Equal(!tc.expectRecycled))
+		})
+	}
+}

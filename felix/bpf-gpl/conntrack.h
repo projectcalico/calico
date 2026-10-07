@@ -101,6 +101,87 @@ static CALI_BPF_INLINE void dump_ct_key(struct cali_tc_ctx *ctx, struct calico_c
 	CALI_VERB("CT-ALL   key B=" IP_FMT ":%d size=%d", debug_ip(k->addr_b), k->port_b, (int)sizeof(struct calico_ct_key));
 }
 
+static CALI_BPF_INLINE bool tcp_recycled(bool syn, struct calico_ct_value *v)
+{
+	struct calico_ct_leg *a, *b;
+
+	a = &v->a_to_b;
+	b = &v->b_to_a;
+
+	/* Only FINs both ways prove both ends closed; an unverified RST could be spoofed, so GC handles those. */
+	return syn && ct_leg_flag(a, CALI_CT_LEG_FIN_SEEN) && ct_leg_flag(b, CALI_CT_LEG_FIN_SEEN);
+}
+
+/* qos_connlimit_decrement_for_ct decrements the per-pod connlimit counter(s)
+ * for a CT entry that is closing or being purged. Reads the entry's
+ * CONNLIMIT_* flags and the per-leg ifindex fields to pick the right
+ * (ifindex, direction) pair(s). Decrements exactly once: atomically claims the
+ * CONNLIMIT_DEC flag and only the caller that wins the claim decrements, so
+ * concurrent callers on other CPUs (the CT entry is in a shared, non-per-CPU
+ * map) bail.
+ *
+ * Called from the packet path on FIN-FIN / RST close, and from
+ * conntrack_cleanup when an idle entry is purged with no close packet.
+ */
+static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_value *v)
+{
+	__u32 cl_flags = ct_value_get_flags(v);
+	if (!(cl_flags & (CALI_CT_FLAG_CONNLIMIT_INGRESS | CALI_CT_FLAG_CONNLIMIT_EGRESS))) {
+		return;
+	}
+	/* Atomically set CONNLIMIT_DEC and bail if it was already set: this is the
+	 * exactly-once claim, replacing a non-atomic read/test/set that let two
+	 * CPUs both pass the check and both decrement. The bit lives in flags3,
+	 * but BPF atomics require a 4-byte-aligned target, so we OR into
+	 * type_flags_word, the __u32 overlaying type|flags|flags3|flags4. On the
+	 * little-endian BPF dataplane arches (amd64/arm64) the mask's single bit
+	 * lands in flags3, leaving type/flags/flags4 untouched -- same bit the old
+	 * ct_value_set_flags(v, CONNLIMIT_DEC) set. (s390x builds bpfeb where the
+	 * bit lands elsewhere, but the BPF dataplane does not run there.) */
+	if (__sync_fetch_and_or(&v->type_flags_word, CALI_CT_FLAG_CONNLIMIT_DEC) & CALI_CT_FLAG_CONNLIMIT_DEC) {
+		return;
+	}
+
+	/* Skip the ingress decrement if the entry was rejected by the
+	 * ingress limit check.
+	 */
+	/* CT entries are family-typed (v4 BPF programs only see v4 CT entries,
+	 * v6 only sees v6), so the family is known at compile time via IPVER6.
+	 */
+#ifdef IPVER6
+	const __u16 family = 6;
+#else
+	const __u16 family = 4;
+#endif
+
+	if ((cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS) &&
+			!(cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED)) {
+		/* Ingress: pod is the responder (non-opener). */
+		__u32 pod_ifindex = ct_leg_flag(&v->a_to_b, CALI_CT_LEG_OPENER)
+			? v->b_to_a.ifindex
+			: v->a_to_b.ifindex;
+		if (pod_ifindex != CT_INVALID_IFINDEX) {
+			qos_connlimit_decrement(pod_ifindex, 1, family);
+		}
+	}
+	if (cl_flags & CALI_CT_FLAG_CONNLIMIT_EGRESS) {
+		/* Egress: pod is the opener. */
+		__u32 pod_ifindex = ct_leg_flag(&v->a_to_b, CALI_CT_LEG_OPENER)
+			? v->a_to_b.ifindex
+			: v->b_to_a.ifindex;
+		if (pod_ifindex != CT_INVALID_IFINDEX) {
+			qos_connlimit_decrement(pod_ifindex, 0, family);
+		}
+	}
+}
+
+/* ct_recycle releases a closed entry's connlimit slot and deletes it, so a new SYN can reuse the tuple. */
+static CALI_BPF_INLINE void ct_recycle(struct calico_ct_value *tracking_v, struct calico_ct_key *k)
+{
+	qos_connlimit_decrement_for_ct(tracking_v);
+	cali_ct_delete_elem(k);
+}
+
 static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 							struct ct_create_ctx *ct_ctx,
 							struct calico_ct_key *k)
@@ -112,12 +193,13 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 
 
 	__be32 seq = 0;
-	bool syn = false;
+	bool syn = false, ack = false;
 	__u64 now;
 
 	if (ct_ctx->proto == IPPROTO_TCP && !(ctx->state->flags & CALI_ST_NO_L4_HDR)) {
 		seq = tcp_hdr(ctx)->seq;
 		syn = tcp_hdr(ctx)->syn;
+		ack = tcp_hdr(ctx)->ack;
 	}
 
 	CALI_DEBUG("CT-ALL packet mark is: 0x%x", ctx->skb->mark);
@@ -278,6 +360,16 @@ create:
 	dst_to_src->bits_word = d2s_flags;
 
 	err = cali_ct_update_elem(k, &ct_value, BPF_NOEXIST);
+
+	/* A NAT'd SYN never looked up the post-NAT key, so a closed entry there was not recycled yet. */
+	if (err == -17 /* EEXIST */ && ct_ctx->type == CALI_CT_TYPE_NAT_REV && syn && !ack) {
+		struct calico_ct_value *old = cali_ct_lookup_elem(k);
+		if (old && tcp_recycled(true, old)) {
+			CALI_DEBUG("CT-ALL recycling closed entry at the post-NAT key");
+			ct_recycle(old, k);
+			err = cali_ct_update_elem(k, &ct_value, BPF_NOEXIST);
+		}
+	}
 
 	if (CALI_F_HEP && err == -17 /* EEXIST */) {
 		int i;
@@ -610,80 +702,11 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct cali_tc_ctx *ctx,
 	}
 }
 
-static CALI_BPF_INLINE bool tcp_recycled(bool syn, struct calico_ct_value *v)
+/* ct_fwd_matches_rev reports whether rev belongs to the forward entry keyed fk: its service end is rev's original destination. */
+static CALI_BPF_INLINE bool ct_fwd_matches_rev(struct calico_ct_key *fk, struct calico_ct_value *rev)
 {
-	struct calico_ct_leg *a, *b;
-
-	a = &v->a_to_b;
-	b = &v->b_to_a;
-
-	/* When we see a SYN for a connection that has seen FIN or RST in both direction,
-	 * a new connection with the same tuple is trying to recycle this entry.
-	 */
-	return syn && ct_leg_flag(a, CALI_CT_LEG_CLOSED) && ct_leg_flag(b, CALI_CT_LEG_CLOSED);
-}
-
-/* qos_connlimit_decrement_for_ct decrements the per-pod connlimit counter(s)
- * for a CT entry that is closing or being purged. Reads the entry's
- * CONNLIMIT_* flags and the per-leg ifindex fields to pick the right
- * (ifindex, direction) pair(s). Decrements exactly once: atomically claims the
- * CONNLIMIT_DEC flag and only the caller that wins the claim decrements, so
- * concurrent callers on other CPUs (the CT entry is in a shared, non-per-CPU
- * map) bail.
- *
- * Called from the packet path on FIN-FIN / RST close, and from
- * conntrack_cleanup when an idle entry is purged with no close packet.
- */
-static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_value *v)
-{
-	__u32 cl_flags = ct_value_get_flags(v);
-	if (!(cl_flags & (CALI_CT_FLAG_CONNLIMIT_INGRESS | CALI_CT_FLAG_CONNLIMIT_EGRESS))) {
-		return;
-	}
-	/* Atomically set CONNLIMIT_DEC and bail if it was already set: this is the
-	 * exactly-once claim, replacing a non-atomic read/test/set that let two
-	 * CPUs both pass the check and both decrement. The bit lives in flags3,
-	 * but BPF atomics require a 4-byte-aligned target, so we OR into
-	 * type_flags_word, the __u32 overlaying type|flags|flags3|flags4. On the
-	 * little-endian BPF dataplane arches (amd64/arm64) the mask's single bit
-	 * lands in flags3, leaving type/flags/flags4 untouched -- same bit the old
-	 * ct_value_set_flags(v, CONNLIMIT_DEC) set. (s390x builds bpfeb where the
-	 * bit lands elsewhere, but the BPF dataplane does not run there.) */
-	if (__sync_fetch_and_or(&v->type_flags_word, CALI_CT_FLAG_CONNLIMIT_DEC) & CALI_CT_FLAG_CONNLIMIT_DEC) {
-		return;
-	}
-
-	/* Skip the ingress decrement if the entry was rejected by the
-	 * ingress limit check.
-	 */
-	/* CT entries are family-typed (v4 BPF programs only see v4 CT entries,
-	 * v6 only sees v6), so the family is known at compile time via IPVER6.
-	 */
-#ifdef IPVER6
-	const __u16 family = 6;
-#else
-	const __u16 family = 4;
-#endif
-
-	if ((cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS) &&
-			!(cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED)) {
-		/* Ingress: pod is the responder (non-opener). */
-		__u32 pod_ifindex = ct_leg_flag(&v->a_to_b, CALI_CT_LEG_OPENER)
-			? v->b_to_a.ifindex
-			: v->a_to_b.ifindex;
-		if (pod_ifindex != CT_INVALID_IFINDEX) {
-			qos_connlimit_decrement(pod_ifindex, 1, family);
-		}
-	}
-	if (cl_flags & CALI_CT_FLAG_CONNLIMIT_EGRESS) {
-		/* Egress: pod is the opener. */
-		__u32 pod_ifindex = ct_leg_flag(&v->a_to_b, CALI_CT_LEG_OPENER)
-			? v->a_to_b.ifindex
-			: v->b_to_a.ifindex;
-		if (pod_ifindex != CT_INVALID_IFINDEX) {
-			qos_connlimit_decrement(pod_ifindex, 0, family);
-		}
-	}
+	return (ip_equal(fk->addr_a, rev->orig_ip) && fk->port_a == rev->orig_port) ||
+		(ip_equal(fk->addr_b, rev->orig_ip) && fk->port_b == rev->orig_port);
 }
 
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_ctx *ctx)
@@ -842,23 +865,20 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		// reverse entry, we need to do a second lookup.
 		CALI_CT_DEBUG("Hit! NAT FWD entry, doing secondary lookup.");
 		tracking_v = cali_ct_lookup_elem(&v->nat_rev_key);
-		if (!tracking_v) {
-			// The secondary entry might have been deleted because of LRU.
-			// Hence it is better to delete the fwd entry.
+		if (!tracking_v || tracking_v->type != CALI_CT_TYPE_NAT_REV ||
+				!ct_fwd_matches_rev(&k, tracking_v)) {
+			// The reverse entry is gone or its key now belongs to another flow.
 			cali_ct_delete_elem(&k);
-			CALI_CT_DEBUG("Miss when looking for secondary entry.");
+			CALI_CT_DEBUG("No reverse entry for forward entry.");
+			if (related) {
+				goto out_invalid;
+			}
 			goto out_lookup_fail;
 		}
 		if (tcp_recycled(syn, tracking_v)) {
 			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.");
-			/* Decrement the connlimit counter before deleting so the
-			 * upcoming check_and_increment in new_flow_entrypoint
-			 * stays net-neutral. The helper is idempotent — bails if
-			 * CONNLIMIT_DEC is already set by the close-time path.
-			 */
-			qos_connlimit_decrement_for_ct(tracking_v);
+			ct_recycle(tracking_v, &v->nat_rev_key);
 			cali_ct_delete_elem(&k);
-			cali_ct_delete_elem(&v->nat_rev_key);
 			goto out_lookup_fail;
 		}
 
@@ -934,8 +954,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 
 		break;
 	case CALI_CT_TYPE_NAT_REV:
-		// N.B. we do not check for tcp_recycled because this cannot be the first
-		// SYN that is opening a new connection. This must be returning traffic.
+		// A SYN that never passed the forward entry, e.g. straight to the backend,
+		// can hit a closed reverse entry.
+		if (tcp_recycled(syn, v)) {
+			CALI_CT_DEBUG("TCP SYN recycles NAT REV entry, NEW flow.");
+			ct_recycle(v, &k);
+			goto out_lookup_fail;
+		}
 		if (srcLTDest) {
 			CALI_VERB("CT-ALL REV src_to_dst A->B");
 			src_to_dst = &v->a_to_b;
@@ -1004,13 +1029,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		CALI_CT_DEBUG("Hit! NORMAL entry.");
 		if (tcp_recycled(syn, v)) {
 			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.");
-			/* Decrement the connlimit counter before deleting so the
-			 * upcoming check_and_increment in new_flow_entrypoint
-			 * stays net-neutral. The helper is idempotent — bails if
-			 * CONNLIMIT_DEC is already set by the close-time path.
-			 */
-			qos_connlimit_decrement_for_ct(v);
-			cali_ct_delete_elem(&k);
+			ct_recycle(v, &k);
 			goto out_lookup_fail;
 		}
 		if (tcp_header) {
@@ -1276,7 +1295,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 	return result;
 
 out_lookup_fail:
+	/* The result may hold state of an entry we just recycled or discarded. */
 	result.rc = CALI_CT_NEW;
+	result.flags = 0;
+	result.ifindex_created = CT_INVALID_IFINDEX;
 	CALI_CT_DEBUG("result: NEW.");
 	return result;
 out_invalid:
