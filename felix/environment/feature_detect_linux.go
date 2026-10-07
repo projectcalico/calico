@@ -28,6 +28,7 @@ import (
 	"sync"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
@@ -78,9 +79,18 @@ type FeatureDetector struct {
 
 	newNetlinkHandle            func() (netlinkshim.Interface, error)
 	cachedNetlinkSupportsStrict *bool
+	cachedVXLANVNIFilter        *bool
+	vniFilterProbeEnabled       bool
 }
 
 type Option func(detector *FeatureDetector)
+
+// WithVXLANVNIFilterProbe enables the VXLANVNIFilter probe, which creates a throwaway VXLAN device.
+func WithVXLANVNIFilterProbe() Option {
+	return func(detector *FeatureDetector) {
+		detector.vniFilterProbeEnabled = true
+	}
+}
 
 func WithNetlinkOverride(f func() (netlinkshim.Interface, error)) Option {
 	return func(detector *FeatureDetector) {
@@ -142,6 +152,7 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 		NFLogSize:                kerV.Compare(v4Dot8Dot0) >= 0,
 		KernelHasUDPGSOFix:       kerV.Compare(v6Dot16Dot0) >= 0,
 		NFTablesSupported:        true,
+		VXLANVNIFilter:           d.vxlanSupportsVNIFilter(),
 	}
 
 	for k, v := range d.featureOverride {
@@ -316,6 +327,70 @@ func (d *FeatureDetector) netlinkSupportsStrict() (bool, error) {
 	log.WithError(err).Warn("Kernel returned unexpected error when trying to detect if " +
 		"netlink supports strict mode.  Assuming no support (this may result in higher CPU usage).")
 	return false, nil
+}
+
+const vniFilterProbePrefix = "cali-vnif-"
+
+// vxlanSupportsVNIFilter probes the kernel, since distros backport vnifilter (upstream 5.18).
+func (d *FeatureDetector) vxlanSupportsVNIFilter() bool {
+	if d.cachedVXLANVNIFilter != nil {
+		return *d.cachedVXLANVNIFilter
+	}
+	if _, overridden := d.featureOverride["VXLANVNIFilter"]; overridden || !d.vniFilterProbeEnabled {
+		return false
+	}
+	result, err := d.probeVXLANVNIFilter()
+	if err != nil {
+		log.WithError(err).Warn("Failed to probe for VXLAN VNI filter support; assuming none. " +
+			"Other VXLAN devices will not be able to share Calico's VXLAN port.")
+		result = false
+	}
+	log.WithField("supported", result).Info("Detected VXLAN VNI filter support")
+	d.cachedVXLANVNIFilter = &result
+	return result
+}
+
+func (d *FeatureDetector) probeVXLANVNIFilter() (bool, error) {
+	h, err := d.newNetlinkHandle()
+	if err != nil {
+		return false, fmt.Errorf("failed to open netlink handle: %w", err)
+	}
+	defer h.Delete()
+
+	links, err := h.LinkList()
+	if err != nil {
+		return false, fmt.Errorf("failed to list links: %w", err)
+	}
+	for _, link := range links {
+		if vx, ok := link.(*netlink.Vxlan); ok && vx.VniFilter {
+			log.WithField("device", vx.Name).Debug("Found existing VNI-filtering VXLAN device")
+			return true, nil
+		}
+		if strings.HasPrefix(link.Attrs().Name, vniFilterProbePrefix) {
+			_ = h.LinkDel(link)
+		}
+	}
+
+	la := netlink.NewLinkAttrs()
+	la.Name = fmt.Sprintf("%s%d", vniFilterProbePrefix, os.Getpid())
+	// The device is never set up, so it never binds the VXLAN UDP port.
+	probe := &netlink.Vxlan{LinkAttrs: la, FlowBased: true, VniFilter: true}
+	if err := h.LinkAdd(probe); err != nil {
+		return false, fmt.Errorf("failed to create probe device: %w", err)
+	}
+	defer func() {
+		if err := h.LinkDel(probe); err != nil {
+			log.WithError(err).Warn("Failed to delete VXLAN VNI filter probe device")
+		}
+	}()
+
+	// Kernels without vnifilter ignore the attribute, so check that it took effect.
+	link, err := h.LinkByName(la.Name)
+	if err != nil {
+		return false, fmt.Errorf("failed to read back probe device: %w", err)
+	}
+	vx, ok := link.(*netlink.Vxlan)
+	return ok && vx.VniFilter, nil
 }
 
 func countRulesInIptableOutput(in []byte) int {

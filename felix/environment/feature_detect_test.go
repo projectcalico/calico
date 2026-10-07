@@ -19,12 +19,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
 	. "github.com/projectcalico/calico/felix/environment"
@@ -781,4 +783,76 @@ type mockKernelVersion struct {
 
 func (kv mockKernelVersion) GetKernelVersionReader() (io.Reader, error) {
 	return bytes.NewBufferString(kv.kernelVersion), nil
+}
+
+func TestVXLANVNIFilterDetection(t *testing.T) {
+	addVXLAN := func(nl *mocknetlink.MockNetlinkDataplane, name string, vniFilter bool) {
+		la := netlink.NewLinkAttrs()
+		la.Name = name
+		Expect(nl.LinkAdd(&netlink.Vxlan{LinkAttrs: la, FlowBased: true, VniFilter: vniFilter})).To(Succeed())
+	}
+	for _, tst := range []struct {
+		name          string
+		setup         func(nl *mocknetlink.MockNetlinkDataplane)
+		expected      bool
+		expectedProbe bool
+		override      map[string]string
+	}{
+		{"kernel supports vnifilter", func(nl *mocknetlink.MockNetlinkDataplane) {}, true, true, nil},
+		{"kernel ignores vnifilter", func(nl *mocknetlink.MockNetlinkDataplane) { nl.KernelLacksVniFilter = true }, false, true, nil},
+		{"probe device creation fails", func(nl *mocknetlink.MockNetlinkDataplane) {
+			nl.FailuresToSimulate = mocknetlink.FailNextLinkAdd
+		}, false, false, nil},
+		{"existing VNI-filtering device proves support", func(nl *mocknetlink.MockNetlinkDataplane) {
+			addVXLAN(nl, "vxlan.calico", true)
+			nl.KernelLacksVniFilter = true // Would fail if probed.
+		}, true, false, nil},
+		{"leftover probe device is replaced", func(nl *mocknetlink.MockNetlinkDataplane) {
+			addVXLAN(nl, fmt.Sprintf("cali-vnif-%d", os.Getpid()), false)
+		}, true, true, nil},
+		{"override skips the probe", func(nl *mocknetlink.MockNetlinkDataplane) {}, false, false, map[string]string{"VXLANVNIFilter": "false"}},
+		{"override can force it on without probing", func(nl *mocknetlink.MockNetlinkDataplane) {
+			nl.KernelLacksVniFilter = true
+		}, true, false, map[string]string{"VXLANVNIFilter": "true"}},
+	} {
+		t.Run(tst.name, func(t *testing.T) {
+			RegisterTestingT(t)
+			dataplane := testutils.NewMockDataplane("filter", map[string][]string{}, "legacy")
+			dataplane.KernelVersion = "Linux version 6.8.0"
+			mockNL := mocknetlink.New()
+			_, err := mockNL.NewMockNetlink()
+			Expect(err).NotTo(HaveOccurred())
+			tst.setup(mockNL)
+			mockNL.ResetDeltas()
+			mockNL.Delete()
+			featureDetector := NewFeatureDetector(tst.override, WithNetlinkOverride(mockNL.NewMockNetlink), WithVXLANVNIFilterProbe())
+			featureDetector.NewCmd = dataplane.NewCmd
+			featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
+
+			Expect(featureDetector.GetFeatures().VXLANVNIFilter).To(Equal(tst.expected))
+			probed := false
+			for name := range mockNL.AddedLinks.All() {
+				if strings.HasPrefix(name, "cali-vnif-") {
+					probed = true
+				}
+			}
+			Expect(probed).To(Equal(tst.expectedProbe))
+			for name := range mockNL.NameToLink {
+				Expect(name).NotTo(HavePrefix("cali-vnif-"), "probe device should be cleaned up")
+			}
+		})
+	}
+}
+
+func TestVXLANVNIFilterNotProbedByDefault(t *testing.T) {
+	RegisterTestingT(t)
+	dataplane := testutils.NewMockDataplane("filter", map[string][]string{}, "legacy")
+	dataplane.KernelVersion = "Linux version 6.8.0"
+	mockNL := mocknetlink.New()
+	featureDetector := NewFeatureDetector(nil, WithNetlinkOverride(mockNL.NewMockNetlink))
+	featureDetector.NewCmd = dataplane.NewCmd
+	featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
+
+	Expect(featureDetector.GetFeatures().VXLANVNIFilter).To(BeFalse())
+	Expect(mockNL.NumLinkAddCalls).To(BeZero())
 }
