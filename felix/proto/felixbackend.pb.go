@@ -4291,14 +4291,15 @@ func (*DataplaneInSync) Descriptor() ([]byte, []int) {
 }
 
 type HostMetadataUpdate struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Hostname      string                 `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	Ipv4Addr      string                 `protobuf:"bytes,2,opt,name=ipv4_addr,json=ipv4Addr,proto3" json:"ipv4_addr,omitempty"`
-	Ipv6Addr      string                 `protobuf:"bytes,3,opt,name=ipv6_addr,json=ipv6Addr,proto3" json:"ipv6_addr,omitempty"`
-	Asnumber      string                 `protobuf:"bytes,4,opt,name=asnumber,proto3" json:"asnumber,omitempty"`
-	Labels        map[string]string      `protobuf:"bytes,5,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Hostname       string                 `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	Ipv4Addr       string                 `protobuf:"bytes,2,opt,name=ipv4_addr,json=ipv4Addr,proto3" json:"ipv4_addr,omitempty"`
+	Ipv6Addr       string                 `protobuf:"bytes,3,opt,name=ipv6_addr,json=ipv6Addr,proto3" json:"ipv6_addr,omitempty"`
+	Asnumber       string                 `protobuf:"bytes,4,opt,name=asnumber,proto3" json:"asnumber,omitempty"`
+	Labels         map[string]string      `protobuf:"bytes,5,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	InterfaceCidrs []string               `protobuf:"bytes,6,rep,name=interface_cidrs,json=interfaceCidrs,proto3" json:"interface_cidrs,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *HostMetadataUpdate) Reset() {
@@ -4362,6 +4363,13 @@ func (x *HostMetadataUpdate) GetAsnumber() string {
 func (x *HostMetadataUpdate) GetLabels() map[string]string {
 	if x != nil {
 		return x.Labels
+	}
+	return nil
+}
+
+func (x *HostMetadataUpdate) GetInterfaceCidrs() []string {
+	if x != nil {
+		return x.InterfaceCidrs
 	}
 	return nil
 }
@@ -6546,13 +6554,14 @@ const file_felixbackend_proto_rawDesc = "" +
 	"public_key\x18\x01 \x01(\tR\tpublicKey\x12/\n" +
 	"\n" +
 	"ip_version\x18\x02 \x01(\x0e2\x10.felix.IPVersionR\tipVersion\"\x11\n" +
-	"\x0fDataplaneInSync\"\x80\x02\n" +
+	"\x0fDataplaneInSync\"\xa9\x02\n" +
 	"\x12HostMetadataUpdate\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x1b\n" +
 	"\tipv4_addr\x18\x02 \x01(\tR\bipv4Addr\x12\x1b\n" +
 	"\tipv6_addr\x18\x03 \x01(\tR\bipv6Addr\x12\x1a\n" +
 	"\basnumber\x18\x04 \x01(\tR\basnumber\x12=\n" +
-	"\x06labels\x18\x05 \x03(\v2%.felix.HostMetadataUpdate.LabelsEntryR\x06labels\x1a9\n" +
+	"\x06labels\x18\x05 \x03(\v2%.felix.HostMetadataUpdate.LabelsEntryR\x06labels\x12'\n" +
+	"\x0finterface_cidrs\x18\x06 \x03(\tR\x0einterfaceCidrs\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"M\n" +
