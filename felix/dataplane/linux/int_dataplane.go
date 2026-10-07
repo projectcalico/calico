@@ -613,10 +613,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		log.WithError(err).Error("Failed to write MTU file, pod MTU may not be properly set")
 	}
 
-	featureDetector := environment.NewFeatureDetector(
-		config.FeatureDetectOverrides,
-		environment.WithFeatureGates(config.FeatureGates),
-	)
+	featureDetectorOpts := []environment.Option{environment.WithFeatureGates(config.FeatureGates)}
+	if config.BPFEnabled && (config.RulesConfig.VXLANEnabled || config.RulesConfig.VXLANEnabledV6) {
+		featureDetectorOpts = append(featureDetectorOpts, environment.WithVXLANVNIFilterProbe())
+	}
+	featureDetector := environment.NewFeatureDetector(config.FeatureDetectOverrides, featureDetectorOpts...)
 
 	// Determine the action set and new match function based on the underlying generictables implementation.
 	actionSet := iptables.Actions()

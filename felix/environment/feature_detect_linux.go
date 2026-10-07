@@ -80,9 +80,17 @@ type FeatureDetector struct {
 	newNetlinkHandle            func() (netlinkshim.Interface, error)
 	cachedNetlinkSupportsStrict *bool
 	cachedVXLANVNIFilter        *bool
+	vniFilterProbeEnabled       bool
 }
 
 type Option func(detector *FeatureDetector)
+
+// WithVXLANVNIFilterProbe enables the VXLANVNIFilter probe, which creates a throwaway VXLAN device.
+func WithVXLANVNIFilterProbe() Option {
+	return func(detector *FeatureDetector) {
+		detector.vniFilterProbeEnabled = true
+	}
+}
 
 func WithNetlinkOverride(f func() (netlinkshim.Interface, error)) Option {
 	return func(detector *FeatureDetector) {
@@ -327,6 +335,9 @@ const vniFilterProbePrefix = "cali-vnif-"
 func (d *FeatureDetector) vxlanSupportsVNIFilter() bool {
 	if d.cachedVXLANVNIFilter != nil {
 		return *d.cachedVXLANVNIFilter
+	}
+	if _, overridden := d.featureOverride["VXLANVNIFilter"]; overridden || !d.vniFilterProbeEnabled {
+		return false
 	}
 	result, err := d.probeVXLANVNIFilter()
 	if err != nil {
