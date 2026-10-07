@@ -72,8 +72,9 @@ tunnel key.
 - The kernel cannot toggle `vnifilter` on an existing device. An
   upgrade on a supporting kernel therefore recreates `vxlan.calico`
   once, through `vxlanLinksIncompat`.
-- The route manager keeps the filter equal to the desired VNI set
-  (`ensureVNIFilter` in `route_mgr.go`), removing VNIs it did not add.
+- The route manager sets the filter to exactly the desired VNI set
+  (`ensureVNIFilter` in `route_mgr.go`) once per device, after Felix
+  starts or recreates it. It does not repair later manual changes.
 - A classic (fixed-VNI) VXLAN device can never share a port with a
   flow-based one, with or without `vnifilter`: the kernel shares a UDP
   socket only between devices with identical receive flags.

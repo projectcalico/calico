@@ -786,7 +786,7 @@ var _ = Describe("VXLANManager in BPF mode", func() {
 		}
 	})
 
-	configureDevice := func(opts ...vxlanMgrOption) error {
+	newMgr := func(opts ...vxlanMgrOption) *vxlanManager {
 		mgr := newVXLANManagerWithShims(
 			dpsets.NewMockIPSets(),
 			&mockRouteTable{currentRoutes: map[string][]routetable.Target{}},
@@ -806,11 +806,19 @@ var _ = Describe("VXLANManager in BPF mode", func() {
 			ParentDeviceIp: "172.0.0.2",
 		})
 		mgr.routeMgr.OnParentDeviceUpdate("eth0")
+		return mgr
+	}
+
+	configure := func(mgr *vxlanManager) error {
 		parent, err := mgr.routeMgr.detectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		link, addr, err := mgr.device(parent)
 		Expect(err).NotTo(HaveOccurred())
 		return mgr.routeMgr.configureTunnelDevice(link, addr, 0, false)
+	}
+
+	configureDevice := func(opts ...vxlanMgrOption) error {
+		return configure(newMgr(opts...))
 	}
 
 	vxlanDevice := func() (*netlink.Vxlan, *mocknetlink.MockLink) {
@@ -861,6 +869,22 @@ var _ = Describe("VXLANManager in BPF mode", func() {
 		addExistingDevice(true, 4096, 7777)
 		Expect(configureDevice(vxlanMgrWithVNIFilter())).To(Succeed())
 		Expect(dataplane.NumLinkDeleteCalls).To(Equal(0))
+		_, ml := vxlanDevice()
+		Expect(ml.VNIs.Slice()).To(ConsistOf(uint32(4096), uint32(0xca11c0)))
+	})
+
+	It("reconciles the VNI filter only when the device is new", func() {
+		mgr := newMgr(vxlanMgrWithVNIFilter())
+		Expect(configure(mgr)).To(Succeed())
+		Expect(dataplane.NumBridgeVniListCalls).To(Equal(1))
+
+		Expect(configure(mgr)).To(Succeed())
+		Expect(dataplane.NumBridgeVniListCalls).To(Equal(1), "unchanged device should not be re-checked")
+
+		By("recreating the device")
+		Expect(dataplane.LinkDel(dataplane.NameToLink[dataplanedefs.VXLANIfaceNameV4])).To(Succeed())
+		Expect(configure(mgr)).To(Succeed())
+		Expect(dataplane.NumBridgeVniListCalls).To(Equal(2))
 		_, ml := vxlanDevice()
 		Expect(ml.VNIs.Slice()).To(ConsistOf(uint32(4096), uint32(0xca11c0)))
 	})

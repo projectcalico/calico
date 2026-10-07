@@ -82,6 +82,8 @@ type routeManager struct {
 
 	// tunnelVNIs, if set, is the exact VNI filter of a VNI-filtering VXLAN device.
 	tunnelVNIs []uint32
+	// vniFilterIfIndex is the device whose VNI filter was last reconciled; a new device starts empty.
+	vniFilterIfIndex int
 }
 
 func newRouteManager(
@@ -659,10 +661,11 @@ func (m *routeManager) configureTunnelDevice(
 		}
 	}
 
-	if len(m.tunnelVNIs) > 0 {
+	if len(m.tunnelVNIs) > 0 && link.Attrs().Index != m.vniFilterIfIndex {
 		if err := m.ensureVNIFilter(link); err != nil {
 			return fmt.Errorf("failed to set VNI filter: %w", err)
 		}
+		m.vniFilterIfIndex = link.Attrs().Index
 	}
 
 	// Make sure the MTU is set correctly.
