@@ -65,9 +65,9 @@ func admissionDir() string {
 	return filepath.Join(testutils.FindRepoRoot(), "api", "admission")
 }
 
-// k8sAdmissionDir returns the path to api/admission/k8s/.
-func k8sAdmissionDir() string {
-	return filepath.Join(admissionDir(), "k8s")
+// cniAnnotationsAdmissionDir returns the path to api/admission/cni-annotations/.
+func cniAnnotationsAdmissionDir() string {
+	return filepath.Join(admissionDir(), "cni-annotations")
 }
 
 // envtestSupportsMAP checks if the envtest kube-apiserver binary serves
@@ -272,8 +272,8 @@ func TestMain(m *testing.M) {
 	skipUnserved := func(obj *unstructured.Unstructured) bool {
 		return !admissionPoliciesEnabled && strings.HasPrefix(obj.GetKind(), "MutatingAdmissionPolicy")
 	}
-	if err := installAdmissionPolicies(testClient, k8sAdmissionDir(), skipUnserved); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to install admission policies over Kubernetes resources: %v\n", err)
+	if err := installAdmissionPolicies(testClient, cniAnnotationsAdmissionDir(), skipUnserved); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to install the CNI annotation admission policies: %v\n", err)
 		return
 	}
 

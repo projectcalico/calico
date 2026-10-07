@@ -96,7 +96,7 @@ const (
 // policySetDirs maps each PolicySet to the directory of the policy files that hold it.
 var policySetDirs = map[PolicySet]string{
 	PolicySetV3CRDs:         ".",
-	PolicySetCNIAnnotations: "k8s",
+	PolicySetCNIAnnotations: "cni-annotations",
 }
 
 // policyParseFunc parses a single YAML document into a typed admission policy object at the given

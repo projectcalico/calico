@@ -234,7 +234,7 @@ var _ = Describe("MutatingAdmissionPolicies", func() {
 	})
 
 	Describe("GetValidatingAdmissionPolicies for the CNI annotation set", func() {
-		It("returns the policies over Kubernetes resources, labeled apart from the v3 ones", func() {
+		It("returns the CNI annotation policies, labeled apart from the v3 ones", func() {
 			objs := GetValidatingAdmissionPolicies(opv1.Calico, PolicySetCNIAnnotations, VersionV1)
 			Expect(objs).To(HaveLen(2))
 

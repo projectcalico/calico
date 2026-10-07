@@ -14,7 +14,7 @@
 {{- end }}
 {{- /* On etcd the CNI plugin keeps workload endpoints in etcd, not in these pod annotations. */}}
 {{- if eq .Values.datastore "kubernetes" }}
-{{ range $path, $_ := .Files.Glob "admission/k8s/*.yaml" }}
+{{ range $path, $_ := .Files.Glob "admission/cni-annotations/*.yaml" }}
 ---
 {{ $.Files.Get $path | replace "admissionregistration.k8s.io/v1beta1" $apiVersion }}
 {{- end }}

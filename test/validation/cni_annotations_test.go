@@ -94,7 +94,7 @@ const (
 
 // cniAnnotationPolicyPath returns the path of the shipped validating policy.
 func cniAnnotationPolicyPath() string {
-	return filepath.Join(testutils.FindRepoRoot(), "api", "admission", "k8s", "protect-cni-annotations.yaml")
+	return filepath.Join(testutils.FindRepoRoot(), "api", "admission", "cni-annotations", "protect-cni-annotations.yaml")
 }
 
 // TestProtectCNIAnnotations_PolicyShape checks the shipped YAML.
@@ -703,7 +703,7 @@ func awaitAccess(user string, attrs *authorizationv1.ResourceAttributes, want bo
 
 // cniStripPolicyPath returns the path of the shipped mutating policy.
 func cniStripPolicyPath() string {
-	return filepath.Join(testutils.FindRepoRoot(), "api", "admission", "k8s", "strip-cni-annotations.yaml")
+	return filepath.Join(testutils.FindRepoRoot(), "api", "admission", "cni-annotations", "strip-cni-annotations.yaml")
 }
 
 // TestStripCNIAnnotations_PolicyShape checks the shipped YAML of the mutating policy.

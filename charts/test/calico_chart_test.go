@@ -76,7 +76,7 @@ func TestCalicoWebhooksInvokesTheNestedWebhookCommand(t *testing.T) {
 	}))
 }
 
-// The policies over built-in Kubernetes resources apply whichever Calico API the manifest serves.
+// The CNI annotation policies apply whichever Calico API the manifest serves.
 func TestCalicoRendersTheCNIAnnotationPolicy(t *testing.T) {
 	const name = "protect-cni-annotations.projectcalico.org"
 

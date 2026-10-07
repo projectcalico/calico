@@ -1693,8 +1693,8 @@ ifeq ($(CALICO_API_GROUP),projectcalico.org/v3)
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/api/admission/; do echo "Waiting for mutating admission policies to be created"; sleep 2; done
 endif
 
-	# Install the admission policies over built-in Kubernetes resources, which apply whatever the API group.
-	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/api/admission/k8s/; do echo "Waiting for admission policies to be created"; sleep 2; done
+	# Install the CNI annotation admission policies, which apply whatever the API group.
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/api/admission/cni-annotations/; do echo "Waiting for admission policies to be created"; sleep 2; done
 
 	touch $@
 
