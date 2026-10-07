@@ -272,3 +272,62 @@ func TestDenyAggregatorDrains_MatchDataSwapProfileFlip(t *testing.T) {
 	ageOut(t, c, tup)
 	assertDenyAggDrains(t, cap)
 }
+
+// A denied source retries, and each retry goes through policy again. Between
+// retries a new tier applies whose policy ends in a pass rule; it takes match
+// index 0 from the default tier's end-of-tier deny, which moves to index 1. The
+// retry's pass hit overwrites the verdict slot; the trace must not then report
+// the pass rule as its verdict, which yields a flow log with no action.
+func TestPassRuleOverwritingVerdictIsNotReported(t *testing.T) {
+	c, cap := newZombieTestCollector(t)
+	tup := tuple.Make(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
+	denyThenReport(t, c, tup)
+
+	passRule := calc.NewRuleID(v3.KindNetworkPolicy, "tier1", "pass-policy", "default",
+		1, rules.RuleDirIngress, rules.RuleActionPass)
+	tier1EOTDeny := calc.NewRuleID(v3.KindNetworkPolicy, "tier1", "pass-policy", "default",
+		calc.RuleIndexTierDefaultAction, rules.RuleDirIngress, rules.RuleActionDeny)
+	defaultEOTDeny := calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "policy2", "",
+		calc.RuleIndexTierDefaultAction, rules.RuleDirIngress, rules.RuleActionDeny)
+	md := &calc.MatchData{
+		PolicyMatches: map[calc.PolicyID]int{
+			passRule.PolicyID: 0,
+			{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}: 1,
+			{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}: 1,
+		},
+		TierData: map[string]*calc.TierData{
+			"tier1":   {TierDefaultActionRuleID: tier1EOTDeny, EndOfTierMatchIndex: 0},
+			"default": {TierDefaultActionRuleID: defaultEOTDeny, EndOfTierMatchIndex: 1},
+		},
+		ProfileMatchIndex: 2,
+	}
+	c.luc.SetMockData(map[[16]byte]calc.EndpointData{
+		localIp1: &calc.LocalEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(zombieDstKey, localWlEp1),
+			Ingress:            md,
+			Egress:             md,
+		},
+		remoteIp1: zombieSrcEp,
+	}, nil, nil, nil)
+
+	// The retry passes tier1 and is denied by the default tier.
+	c.applyPacketInfo(types.PacketInfo{
+		Tuple:     tup,
+		Direction: rules.RuleDirIngress,
+		RuleHits: []types.RuleHit{
+			{RuleID: passRule, Hits: 1, Bytes: 60},
+			{RuleID: zombieEOTDenyHit, Hits: 1, Bytes: 60},
+		},
+	})
+	ripenForReport(c.epStats[tup])
+	c.checkEpStats()
+
+	for i, mu := range cap.updates {
+		if a := mu.GetLastRuleID().Action; a != rules.RuleActionAllow && a != rules.RuleActionDeny {
+			t.Errorf("update %d reported non-verdict rule %v as its verdict", i, mu.GetLastRuleID())
+		}
+	}
+	if last := cap.updates[len(cap.updates)-1].GetLastRuleID(); !last.Equals(defaultEOTDeny) {
+		t.Errorf("final update verdict = %v, want %v", last, defaultEOTDeny)
+	}
+}
