@@ -129,7 +129,9 @@ generate_v3_bundle() {
 	local out=$1
 	local map_version=$2
 	echo "# projectcalico.org/v3 and operator.tigera.io/v1 APIs" > $out
-	for FILE in $(ls ../charts/projectcalico.org.v3/templates/*.yaml | xargs -n1 basename); do
+
+	# The chart links the operator CRDs in for Helm installs; append_operator_crds adds them here.
+	for FILE in $(ls ../charts/projectcalico.org.v3/templates/*.yaml | xargs -n1 basename | grep -v '^operator\.tigera\.io_'); do
 		${HELM} template \
 			--show-only templates/$FILE \
 			--set version=$CALICO_VERSION \
