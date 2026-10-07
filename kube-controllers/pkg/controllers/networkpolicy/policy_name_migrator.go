@@ -246,7 +246,7 @@ func (c *policyMigrator) waitForCalicoNodeRollout() error {
 			// Rate limit checks to once every 5 seconds.
 			ds, err := c.cs.AppsV1().DaemonSets(c.namespace).Get(c.ctx, c.nodeDaemonSet, metav1.GetOptions{})
 			if err != nil {
-				logrus.WithError(err).WithField("daemonset", c.nodeDaemonSet).Error("Error getting calico-node DaemonSet")
+				logrus.WithError(err).WithField("daemonset", c.nodeDaemonSet).Error("Error getting DaemonSet")
 				continue
 			}
 			if ds.Status.ObservedGeneration != ds.Generation {
