@@ -702,6 +702,13 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct cali_tc_ctx *ctx,
 	}
 }
 
+/* ct_fwd_matches_rev reports whether rev belongs to the forward entry keyed fk: its service end is rev's original destination. */
+static CALI_BPF_INLINE bool ct_fwd_matches_rev(struct calico_ct_key *fk, struct calico_ct_value *rev)
+{
+	return (ip_equal(fk->addr_a, rev->orig_ip) && fk->port_a == rev->orig_port) ||
+		(ip_equal(fk->addr_b, rev->orig_ip) && fk->port_b == rev->orig_port);
+}
+
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_ctx *ctx)
 {
 	struct ct_lookup_ctx ct_lookup_ctx = {
@@ -858,9 +865,9 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		// reverse entry, we need to do a second lookup.
 		CALI_CT_DEBUG("Hit! NAT FWD entry, doing secondary lookup.");
 		tracking_v = cali_ct_lookup_elem(&v->nat_rev_key);
-		if (!tracking_v || tracking_v->type != CALI_CT_TYPE_NAT_REV) {
-			// The reverse entry is gone (LRU, recycle) or its key now belongs
-			// to another flow, so this forward entry is stale.
+		if (!tracking_v || tracking_v->type != CALI_CT_TYPE_NAT_REV ||
+				!ct_fwd_matches_rev(&k, tracking_v)) {
+			// The reverse entry is gone or its key now belongs to another flow.
 			cali_ct_delete_elem(&k);
 			CALI_CT_DEBUG("No reverse entry for forward entry.");
 			goto out_lookup_fail;

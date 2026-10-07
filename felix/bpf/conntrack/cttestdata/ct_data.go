@@ -119,7 +119,7 @@ func init() {
 				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
 				tcpRevKey: conntrack.NewValueNATReverse(Now-59*time.Minute, 0,
 					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true},
-					nil, nil, 5555),
+					nil, ipSvc, 80),
 			},
 		},
 
@@ -131,7 +131,7 @@ func init() {
 				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
 				tcpRevKey: conntrack.NewValueNATReverse(Now-2*time.Hour, 0,
 					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true},
-					nil, nil, 5555),
+					nil, ipSvc, 80),
 			},
 			ExpectedDeletions: []conntrack.Key{tcpFwdKey, tcpRevKey},
 		},
@@ -144,7 +144,7 @@ func init() {
 				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
 				tcpRevKey: conntrack.NewValueNATReverse(Now-59*time.Minute, v4.FlagNATFwdDsr,
 					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: false, AckSeen: false},
-					nil, nil, 5555),
+					nil, ipSvc, 80),
 			},
 		},
 
@@ -156,7 +156,7 @@ func init() {
 				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
 				tcpRevKey: conntrack.NewValueNATReverse(Now-2*time.Hour, v4.FlagNATFwdDsr,
 					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: false, AckSeen: false},
-					nil, nil, 5555),
+					nil, ipSvc, 80),
 			},
 			ExpectedDeletions: []conntrack.Key{tcpFwdKey, tcpRevKey},
 		},
@@ -178,6 +178,16 @@ func init() {
 			ExpectedDeletions: []conntrack.Key{tcpFwdKey},
 		},
 		CTCleanupTest{
+			Description: "forward NAT entry whose reverse key holds another service's live reverse entry",
+			KVs: map[conntrack.Key]conntrack.Value{
+				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
+				tcpRevKey: conntrack.NewValueNATReverse(Now-1*time.Minute, 0,
+					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true},
+					nil, ipSvc, 81),
+			},
+			ExpectedDeletions: []conntrack.Key{tcpFwdKey},
+		},
+		CTCleanupTest{
 			Description: "forward NAT entry without reverse out of grace period",
 			KVs: map[conntrack.Key]conntrack.Value{
 				tcpFwdKey: conntrack.NewValueNATForward(Now-11*time.Second, 0, tcpRevKey),
@@ -191,7 +201,7 @@ func init() {
 				// Note: last seen time on the forward entry should be ignored in
 				// favour of the last-seen time on the reverse entry.
 				udpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, udpRevKey),
-				udpRevKey: conntrack.NewValueNATReverse(Now-time.Second, 0, conntrack.Leg{}, conntrack.Leg{}, nil, nil, 5555),
+				udpRevKey: conntrack.NewValueNATReverse(Now-time.Second, 0, conntrack.Leg{}, conntrack.Leg{}, nil, ipSvc, 53),
 			},
 		},
 	)

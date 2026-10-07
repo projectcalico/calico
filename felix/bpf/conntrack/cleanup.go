@@ -220,12 +220,12 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 
 			return ScanVerdictOK, lastSeen
 		}
-		if revEntry.Type() != TypeNATReverse {
-			// A new flow recycled the reverse entry's key. Returning our own
-			// lastSeen deletes only this entry, not the new flow's.
+		if revEntry.Type() != TypeNATReverse || !fwdMatchesRev(ctKey, revEntry) {
+			// Another flow now owns the reverse key. Returning our own lastSeen
+			// deletes only this entry, not that flow's.
 			l.reasonCounterInc("no reverse for forward")
 			if debug {
-				log.WithField("k", ctKey).Debug("Deleting forward NAT conntrack entry whose reverse key holds another entry type.")
+				log.WithField("k", ctKey).Debug("Deleting forward NAT conntrack entry whose reverse key belongs to another flow.")
 			}
 			return ScanVerdictDelete, lastSeen
 		}
@@ -271,6 +271,14 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 		}).Warn("Unknown conntrack entry type!")
 	}
 	return ScanVerdictOK, lastSeen
+}
+
+// fwdMatchesRev reports whether rev belongs to the forward entry keyed fwdKey:
+// its service end is rev's original destination.
+func fwdMatchesRev(fwdKey KeyInterface, rev ValueInterface) bool {
+	origIP, origPort := rev.OrigIP(), rev.OrigPort()
+	return (fwdKey.AddrA().Equal(origIP) && fwdKey.PortA() == origPort) ||
+		(fwdKey.AddrB().Equal(origIP) && fwdKey.PortB() == origPort)
 }
 
 // expired is EntryExpired, except that an RST reap of a connlimit entry waits
