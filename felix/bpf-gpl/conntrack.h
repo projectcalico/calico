@@ -108,7 +108,7 @@ static CALI_BPF_INLINE bool tcp_recycled(bool syn, struct calico_ct_value *v)
 	a = &v->a_to_b;
 	b = &v->b_to_a;
 
-	/* Only FINs both ways prove both ends closed; an unverified RST could be spoofed, so GC handles those. */
+	/* Recycle only after a graceful close: FINs both ways. RST-closed entries are left to GC. */
 	return syn && ct_leg_flag(a, CALI_CT_LEG_FIN_SEEN) && ct_leg_flag(b, CALI_CT_LEG_FIN_SEEN);
 }
 
