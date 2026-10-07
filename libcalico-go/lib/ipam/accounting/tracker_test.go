@@ -665,3 +665,30 @@ func TestPoolLostOverlap(t *testing.T) {
 	_, ok = tracker.PoolLostOverlap("missing")
 	Expect(ok).To(BeFalse())
 }
+
+func TestBlockCountsBorrowed(t *testing.T) {
+	RegisterTestingT(t)
+	affine := testBlock("10.0.0.0/26", "host:node-a")
+	allocatePod(affine, 0, "node-a")
+	allocatePod(affine, 1, "node-b")
+	allocatePod(affine, 2, "node-c")
+	allocateCooling(affine, 3)
+	unaffined := testBlock("10.0.0.64/26", "")
+	allocatePod(unaffined, 0, "node-b")
+
+	tracker := NewTracker()
+	tracker.AddPools(pool("p", "10.0.0.0/24", 26))
+	tracker.AddBlocks(affine, unaffined)
+
+	counts, ok := tracker.BlockCounts(affine.CIDR)
+	Expect(ok).To(BeTrue())
+	Expect(counts.Borrowed).To(Equal(2), "node-a's own address and the cooling one are not lent")
+	counts, _ = tracker.BlockCounts(unaffined.CIDR)
+	Expect(counts.Borrowed).To(Equal(1))
+
+	var sum int
+	for _, c := range tracker.PoolBlockCounts("p") {
+		sum += c.Borrowed
+	}
+	Expect(sum).To(Equal(mustSummarize(tracker, "p").Borrowed), "the blocks add up to the pool")
+}
