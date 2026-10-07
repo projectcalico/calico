@@ -27,6 +27,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/sirupsen/logrus"
 	"go.yaml.in/yaml/v3"
 
@@ -1606,7 +1607,7 @@ func (r *CalicoManager) publishHelmCharts() error {
 	}
 	for _, reg := range r.helmRegistries {
 		for _, chart := range utils.AllReleaseCharts() {
-			if err := r.publishHelmChart(filepath.Join(r.uploadDir(), fmt.Sprintf("%s-%s.tgz", chart, r.helmChartVersion())), reg); err != nil {
+			if err := r.publishHelmChart(chart, reg); err != nil {
 				return err
 			}
 		}
@@ -1614,12 +1615,16 @@ func (r *CalicoManager) publishHelmCharts() error {
 	return nil
 }
 
+// publishHelmChart pushes the packaged chart to an OCI registry, then makes sure
+// the pushed chart also carries a valid semver tag.
 func (r *CalicoManager) publishHelmChart(chart, registry string) error {
+	tarball := filepath.Join(r.uploadDir(), fmt.Sprintf("%s-%s.tgz", chart, r.helmChartVersion()))
+
 	// We allow for a certain number of retries when publishing each chart to a registry, since
 	// network flakes can occasionally result in images failing to push.
 	maxRetries := 1
 	attempt := 0
-	args := []string{"push", chart, fmt.Sprintf("oci://%s", registry)}
+	args := []string{"push", tarball, fmt.Sprintf("oci://%s", registry)}
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		args = append(args, "--debug")
 	}
@@ -1631,11 +1636,46 @@ func (r *CalicoManager) publishHelmChart(chart, registry string) error {
 				attempt++
 				continue
 			}
-			return fmt.Errorf("publish %s to %s: %s", chart, registry, err)
+			return fmt.Errorf("publish %s to %s: %s", tarball, registry, err)
 		}
 		break
 	}
+	return r.tagHelmChartSemver(chart, registry)
+}
+
+// tagHelmChartSemver copies an already-pushed chart to its normalized semver tag.
+//
+// helm push tags the chart in the registry with the chart's own version, which
+// for Calico is prefixed with a "v" (e.g. v3.33.3). That prefix is not valid
+// semver, so helm cannot resolve the chart by version from an OCI registry.
+// Copying the tag to its normalized form (3.33.3) makes the chart resolvable;
+// the original tag is left in place.
+func (r *CalicoManager) tagHelmChartSemver(chart, registry string) error {
+	ver := r.helmChartVersion()
+	normalized, err := normalizedVersion(ver)
+	if err != nil {
+		return fmt.Errorf("normalize chart version %s: %s", ver, err)
+	}
+	if normalized == ver {
+		return nil
+	}
+	src := fmt.Sprintf("%s/%s:%s", registry, chart, ver)
+	dst := fmt.Sprintf("%s/%s:%s", registry, chart, normalized)
+	logrus.WithFields(logrus.Fields{"src": src, "dst": dst}).Info("Adding semver tag to helm chart")
+	if _, err := r.runner.RunInDir(r.repoRoot, "./bin/crane", []string{"copy", src, dst}, nil); err != nil {
+		return fmt.Errorf("copy %s to %s: %s", src, dst, err)
+	}
 	return nil
+}
+
+// normalizedVersion parses ver permissively and returns its canonical semver
+// string - e.g. "v3.33.3" becomes "3.33.3".
+func normalizedVersion(ver string) (string, error) {
+	v, err := semver.NewVersion(ver)
+	if err != nil {
+		return "", err
+	}
+	return v.String(), nil
 }
 
 func (r *CalicoManager) updateHelmChartIndex() error {
