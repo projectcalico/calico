@@ -307,9 +307,12 @@ func (t *RuleTrace) replaceRuleID(rid *calc.RuleID, matchIdx, numPkts, numBytes 
 	}
 }
 
-// isVerdictRule returns true if rid is a final allow or deny, i.e. an enforced rule that does not pass.
+// isVerdictRule returns true if rid is an enforced (non-staged) allow or deny.
 func isVerdictRule(rid *calc.RuleID) bool {
-	return rid != nil && !model.KindIsStaged(rid.Kind) && rid.Action != rules.RuleActionPass
+	if rid == nil || model.KindIsStaged(rid.Kind) {
+		return false
+	}
+	return rid.Action == rules.RuleActionAllow || rid.Action == rules.RuleActionDeny
 }
 
 // maybeResizePath may resize the tier array based on the index of the tier.
