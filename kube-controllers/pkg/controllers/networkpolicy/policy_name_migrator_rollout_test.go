@@ -27,15 +27,15 @@ import (
 
 var _ = Describe("policy name migrator rollout wait", func() {
 	var (
-		ctx    context.Context
-		cancel context.CancelFunc
-		m      *policyMigrator
+		ctx      context.Context
+		cancel   context.CancelFunc
+		migrator *policyMigrator
 	)
 
 	BeforeEach(func() {
 		// One poll interval is 5s, so leave room for a single successful check.
 		ctx, cancel = context.WithTimeout(context.Background(), 8*time.Second)
-		DeferCleanup(func() { cancel() })
+		DeferCleanup(cancel)
 
 		canal := &appsv1.DaemonSet{
 			ObjectMeta: metav1.ObjectMeta{Name: "canal", Namespace: "kube-system", Generation: 1},
@@ -46,7 +46,7 @@ var _ = Describe("policy name migrator rollout wait", func() {
 				UpdatedNumberScheduled: 1,
 			},
 		}
-		m = &policyMigrator{
+		migrator = &policyMigrator{
 			ctx:       ctx,
 			cs:        fake.NewClientset(canal),
 			namespace: "kube-system",
@@ -54,12 +54,12 @@ var _ = Describe("policy name migrator rollout wait", func() {
 	})
 
 	It("should finish once the configured DaemonSet has rolled out", func() {
-		m.nodeDaemonSet = "canal"
-		Expect(m.waitForCalicoNodeRollout()).To(Succeed())
+		migrator.nodeDaemonSet = "canal"
+		Expect(migrator.waitForCalicoNodeRollout()).To(Succeed())
 	})
 
 	It("should keep waiting when the configured DaemonSet does not exist", func() {
-		m.nodeDaemonSet = "calico-node"
-		Expect(m.waitForCalicoNodeRollout()).To(MatchError(context.DeadlineExceeded))
+		migrator.nodeDaemonSet = "calico-node"
+		Expect(migrator.waitForCalicoNodeRollout()).To(MatchError(context.DeadlineExceeded))
 	})
 })
