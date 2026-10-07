@@ -273,8 +273,8 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 	return ScanVerdictOK, lastSeen
 }
 
-// fwdMatchesRev reports whether rev belongs to the forward entry keyed fwdKey:
-// its service end is rev's original destination.
+// fwdMatchesRev mirrors ct_fwd_matches_rev in conntrack.h (keep in sync): rev's
+// original destination is fwdKey's service end.
 func fwdMatchesRev(fwdKey KeyInterface, rev ValueInterface) bool {
 	origIP, origPort := rev.OrigIP(), rev.OrigPort()
 	return (fwdKey.AddrA().Equal(origIP) && fwdKey.PortA() == origPort) ||

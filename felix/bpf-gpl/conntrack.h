@@ -182,7 +182,7 @@ static CALI_BPF_INLINE void ct_recycle(struct calico_ct_value *tracking_v, struc
 	cali_ct_delete_elem(k);
 }
 
-/* ct_fwd_matches_rev reports whether rev belongs to the forward entry keyed fk: its service end is rev's original destination. */
+/* ct_fwd_matches_rev reports whether rev's original destination is fk's service end. Mirrored by fwdMatchesRev in cleanup.go. */
 static CALI_BPF_INLINE bool ct_fwd_matches_rev(struct calico_ct_key *fk, struct calico_ct_value *rev)
 {
 	return (ip_equal(fk->addr_a, rev->orig_ip) && fk->port_a == rev->orig_port) ||
