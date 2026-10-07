@@ -617,10 +617,8 @@ static CALI_BPF_INLINE bool tcp_recycled(bool syn, struct calico_ct_value *v)
 	a = &v->a_to_b;
 	b = &v->b_to_a;
 
-	/* When we see a SYN for a connection that has seen FIN or RST in both direction,
-	 * a new connection with the same tuple is trying to recycle this entry.
-	 */
-	return syn && ct_leg_flag(a, CALI_CT_LEG_CLOSED) && ct_leg_flag(b, CALI_CT_LEG_CLOSED);
+	/* Only FINs both ways prove both ends closed; an unverified RST could be spoofed, so GC handles those. */
+	return syn && ct_leg_flag(a, CALI_CT_LEG_FIN_SEEN) && ct_leg_flag(b, CALI_CT_LEG_FIN_SEEN);
 }
 
 /* qos_connlimit_decrement_for_ct decrements the per-pod connlimit counter(s)

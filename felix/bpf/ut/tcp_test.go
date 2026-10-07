@@ -335,3 +335,62 @@ func TestTCPRecycleClosedNATReverse(t *testing.T) {
 	Expect(ct).NotTo(HaveKey(fwdKey))
 	Expect(ct).To(HaveKeyWithValue(revKey, newConn))
 }
+
+// TestTCPRecycleNeedsFINsBothWays checks that only FINs both ways let a SYN recycle an entry; RST-closed ones are left to GC.
+func TestTCPRecycleNeedsFINsBothWays(t *testing.T) {
+	RegisterTestingT(t)
+
+	defer func() { bpfIfaceName = "" }()
+
+	tcpSyn := &layers.TCP{
+		SrcPort:    54321,
+		DstPort:    7890,
+		SYN:        true,
+		DataOffset: 5,
+	}
+	_, ipv4, _, _, synPkt, err := testPacketV4(nil, nil, tcpSyn, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	defer resetRTMap(rtMap)
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+
+	key := conntrack.NewKey(uint8(ipv4.Protocol), srcIP, 54321, dstIP, 7890)
+
+	for _, tc := range []struct {
+		name           string
+		finA, finB     bool
+		rstA, rstB     bool
+		expectRecycled bool
+	}{
+		{name: "FIN both ways", finA: true, finB: true, expectRecycled: true},
+		{name: "FIN and RST", finA: true, rstB: true},
+		{name: "RST both ways", rstA: true, rstB: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			RegisterTestingT(t)
+			resetCTMap(ctMap)
+			defer resetCTMap(ctMap)
+
+			old := conntrack.NewValueNormal(0, 0,
+				conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: tc.finA, RstSeen: tc.rstA, Opener: true, Approved: true},
+				conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: tc.finB, RstSeen: tc.rstB, Approved: true})
+			Expect(ctMap.Update(key.AsBytes(), old.AsBytes())).NotTo(HaveOccurred())
+
+			bpfIfaceName = "RcF1"
+			skbMark = 0
+			runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+				res, err := bpfrun(synPkt)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+			})
+
+			ct, err := conntrack.LoadMapMem(ctMap)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ct).To(HaveKey(key))
+			// A recycled entry is new: the responder has not ACKed yet.
+			Expect(ct[key].Data().B2A.AckSeen).To(Equal(!tc.expectRecycled))
+		})
+	}
+}

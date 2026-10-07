@@ -66,9 +66,6 @@ enum cali_ct_type {
 #define CALI_CT_LEG_OPENER	(1U << 5)
 #define CALI_CT_LEG_WORKLOAD	(1U << 6) /* This leg was created from workload */
 
-/* This leg has seen the connection close, one way or the other. */
-#define CALI_CT_LEG_CLOSED	(CALI_CT_LEG_FIN_SEEN | CALI_CT_LEG_RST_SEEN)
-
 struct calico_ct_leg {
 	__u64 bytes;
 	__u32 packets;
