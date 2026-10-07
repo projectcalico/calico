@@ -38,6 +38,7 @@ type Interface interface {
 	LinkSetNoMaster(link netlink.Link) error
 	BridgeVniAdd(link netlink.Link, vni uint32) error
 	BridgeVniDel(link netlink.Link, vni uint32) error
+	BridgeVniDelRange(link netlink.Link, vniStart, vniEnd uint32) error
 	BridgeVniList() (map[int32][]*nl.BridgeVniInfo, error)
 	RouteListFiltered(family int, filter *netlink.Route, filterMask uint64) ([]netlink.Route, error)
 	RouteListFilteredIter(family int, filter *netlink.Route, filterMask uint64, f func(netlink.Route) (cont bool)) error
@@ -131,6 +132,10 @@ func (r *RealNetlink) BridgeVniAdd(link netlink.Link, vni uint32) error {
 
 func (r *RealNetlink) BridgeVniDel(link netlink.Link, vni uint32) error {
 	return r.nlHandle.BridgeVniDel(link, vni)
+}
+
+func (r *RealNetlink) BridgeVniDelRange(link netlink.Link, vniStart, vniEnd uint32) error {
+	return r.nlHandle.BridgeVniDelRange(link, vniStart, vniEnd)
 }
 
 func (r *RealNetlink) BridgeVniList() (map[int32][]*nl.BridgeVniInfo, error) {
