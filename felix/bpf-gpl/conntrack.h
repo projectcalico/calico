@@ -870,6 +870,9 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			// The reverse entry is gone or its key now belongs to another flow.
 			cali_ct_delete_elem(&k);
 			CALI_CT_DEBUG("No reverse entry for forward entry.");
+			if (related) {
+				goto out_invalid;
+			}
 			goto out_lookup_fail;
 		}
 		if (tcp_recycled(syn, tracking_v)) {
