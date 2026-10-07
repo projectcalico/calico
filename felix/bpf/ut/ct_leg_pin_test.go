@@ -24,6 +24,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	ctv4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
+	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ip"
@@ -50,6 +51,7 @@ const (
 type ctPinFixture struct {
 	tunl  netlink.Link // the device kernel routes resolve to
 	phys  netlink.Link // a second device to seed "wrong device" hints with
+	phys2 netlink.Link // a non-encap device for kernel routes to resolve to
 	ctMap maps.Map
 }
 
@@ -82,6 +84,16 @@ func setupCtPinFixture(t *testing.T, name string) ctPinFixture {
 	t.Cleanup(func() { _ = netlink.LinkDel(phys) })
 	Expect(netlink.LinkSetUp(phys)).NotTo(HaveOccurred())
 
+	// The validator claims TUNNEL only on a device ifstate shows as
+	// encapsulating, as the endpoint manager publishes it.
+	phys2 := createHostIf("ctp_phys1")
+	t.Cleanup(func() { _ = netlink.LinkDel(phys2) })
+	Expect(netlink.LinkSetUp(phys2)).NotTo(HaveOccurred())
+
+	ctPinIfState(t, tunl, ifstate.FlgVxlan)
+	ctPinIfState(t, phys, ifstate.FlgHEP)
+	ctPinIfState(t, phys2, ifstate.FlgHEP)
+
 	ctMap := conntrack.Map()
 	Expect(ctMap.EnsureExists()).NotTo(HaveOccurred())
 	resetCTMap(ctMap)
@@ -95,7 +107,16 @@ func setupCtPinFixture(t *testing.T, name string) ctPinFixture {
 	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, ctPinWlIfindex).AsBytes()
 	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
 
-	return ctPinFixture{tunl: tunl, phys: phys, ctMap: ctMap}
+	return ctPinFixture{tunl: tunl, phys: phys, phys2: phys2, ctMap: ctMap}
+}
+
+// ctPinIfState publishes link in the ifstate map with the given type flags.
+func ctPinIfState(t *testing.T, link netlink.Link, flags uint32) {
+	k := ifstate.NewKey(uint32(link.Attrs().Index))
+	v := ifstate.NewValue(flags|ifstate.FlgIPv4Ready, link.Attrs().Name,
+		-1, -1, -1, -1, -1, -1, -1, -1)
+	Expect(ifstateMap.Update(k.AsBytes(), v.AsBytes())).NotTo(HaveOccurred())
+	t.Cleanup(func() { _ = ifstateMap.Delete(k.AsBytes()) })
 }
 
 // kernelRoute installs a kernel route for cidr via the given device so
@@ -223,6 +244,53 @@ func TestCtLegPinValidator(t *testing.T) {
 			Expect(leg.Tunnel).To(BeTrue(),
 				"a pinned tunnel egress must get the kind claim the loose arm deferred to the validator")
 			Expect(leg.Checked).To(BeTrue())
+		})
+	})
+
+	// bpf_route_mgr flags every remote-workload route tunneled while WireGuard
+	// is enabled, whatever the peer's key state, so the BPF route can want encap
+	// while the kernel still routes the peer over a physical NIC. Claiming
+	// TUNNEL beside that NIC would cache a device that emits the inner frame
+	// raw, and nothing re-validates a checked leg.
+	t.Run("does not pin an encap dest to a device that cannot encap", func(t *testing.T) {
+		f := setupCtPinFixture(t, "PIN2C")
+		f.tunneledCaliRoute(t, ctPinDstCIDR())
+		f.kernelRoute(t, ctPinDstCIDR(), f.phys2)
+		key := normalEntry(f, uint32(f.phys.Attrs().Index))
+
+		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			_, err := bpfrun(pkt)
+			Expect(err).NotTo(HaveOccurred())
+
+			leg := f.leg(t, key, true)
+			Expect(leg.Ifindex).To(Equal(uint32(f.phys.Attrs().Index)), "hint should be untouched")
+			Expect(leg.Tunnel).To(BeFalse())
+			Expect(leg.Pinned).To(BeFalse())
+			Expect(leg.Checked).To(BeFalse(),
+				"a leg left unclaimed must re-validate once the kernel agrees")
+		})
+	})
+
+	t.Run("does not complete a tunnel claim on a device that cannot encap", func(t *testing.T) {
+		f := setupCtPinFixture(t, "PIN2D")
+		f.tunneledCaliRoute(t, ctPinDstCIDR())
+		f.kernelRoute(t, ctPinDstCIDR(), f.phys)
+		key := ctv4.NewKey(17, srcIP, srcPort, dstIP, dstPort)
+		legSrcToDst := ctv4.Leg{SynSeen: true, AckSeen: true, Approved: true, Opener: true,
+			Workload: true, Ifindex: ctPinWlIfindex}
+		legDstToSrc := ctv4.Leg{SynSeen: true, AckSeen: true, Approved: true,
+			Pinned: true, Ifindex: uint32(f.phys.Attrs().Index)}
+		val := ctv4.NewValueNormal(0, 0, legSrcToDst, legDstToSrc)
+		Expect(f.ctMap.Update(key.AsBytes(), val.AsBytes())).NotTo(HaveOccurred())
+
+		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			_, err := bpfrun(pkt)
+			Expect(err).NotTo(HaveOccurred())
+
+			leg := f.leg(t, key, true)
+			Expect(leg.Tunnel).To(BeFalse(),
+				"the FIB agreeing does not make a physical NIC a tunnel egress")
+			Expect(leg.Checked).To(BeFalse())
 		})
 	})
 

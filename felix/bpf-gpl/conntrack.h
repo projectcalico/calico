@@ -18,6 +18,7 @@
 #include "counters.h"
 #include "globals.h"
 #include "icmp.h"
+#include "ifstate.h"
 #include "ip_addr.h"
 #include "log.h"
 #include "nat.h"
@@ -804,13 +805,20 @@ static CALI_BPF_INLINE void ct_leg_validate_fwd(struct cali_tc_ctx *ctx,
 		return;
 	}
 
+	if (!iface_can_encap(fib_params.ifindex)) {
+		/* The route wants encap but the kernel resolved a device that
+		 * cannot; leave the leg alone rather than cache the disagreement.
+		 */
+		CALI_CT_DEBUG("fwd hint validation: dev %d cannot encap", fib_params.ifindex);
+		return;
+	}
+
 	if (fib_params.ifindex == leg->ifindex) {
 		if (ct_leg_flag(leg, CALI_CT_LEG_PINNED)) {
 			/* A leg the loose arm pinned to this egress, leaving the
-			 * kind to us: we reached here only for an encap dest and
-			 * the FIB resolved this ifindex for it, so it is a tunnel
-			 * egress - complete the claim. No program is attached to a
-			 * pinned leg, so nothing competes to flap it.
+			 * kind to us; the device encapsulates, so complete the
+			 * claim. No program is attached to a pinned leg, so
+			 * nothing competes to flap it.
 			 */
 			ct_leg_set_flags(leg, CALI_CT_LEG_TUNNEL | CALI_CT_LEG_CHECKED);
 			return;
