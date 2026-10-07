@@ -18,13 +18,40 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var nameCounter atomic.Int64
+
+var (
+	impersonatedClientsLock sync.Mutex
+	impersonatedClients     = map[string]client.Client{}
+)
+
+// clientAs returns a client that impersonates username.
+func clientAs(t *testing.T, username string) client.Client {
+	t.Helper()
+
+	impersonatedClientsLock.Lock()
+	defer impersonatedClientsLock.Unlock()
+	if c, ok := impersonatedClients[username]; ok {
+		return c
+	}
+
+	cfg := rest.CopyConfig(testCfg)
+	cfg.Impersonate = rest.ImpersonationConfig{UserName: username}
+	c, err := client.New(cfg, client.Options{Scheme: testScheme})
+	if err != nil {
+		t.Fatalf("failed to build a client impersonating %q: %v", username, err)
+	}
+	impersonatedClients[username] = c
+	return c
+}
 
 // uniqueName returns a unique name for a test object to avoid collisions between subtests.
 func uniqueName(prefix string) string {
