@@ -276,13 +276,10 @@ func TestDenyAggregatorDrains_MatchDataSwapProfileFlip(t *testing.T) {
 // A denied source retries, and each retry goes through policy again. Between
 // retries a new tier applies whose policy ends in a pass rule; it takes match
 // index 0 from the default tier's end-of-tier deny, which moves to index 1. The
-// retry's pass hit overwrites the verdict slot; the trace must not then report
-// the pass rule as its verdict, which yields a flow log with no action.
+// retry's pass hit overwrites the verdict slot. The trace must not then report
+// the pass rule as its verdict (which yields a flow log with no action), and the
+// previously reported deny must still drain.
 func TestPassRuleOverwritingVerdictIsNotReported(t *testing.T) {
-	c, cap := newZombieTestCollector(t)
-	tup := tuple.Make(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
-	denyThenReport(t, c, tup)
-
 	passRule := calc.NewRuleID(v3.KindNetworkPolicy, "tier1", "pass-policy", "default",
 		1, rules.RuleDirIngress, rules.RuleActionPass)
 	tier1EOTDeny := calc.NewRuleID(v3.KindNetworkPolicy, "tier1", "pass-policy", "default",
@@ -301,33 +298,55 @@ func TestPassRuleOverwritingVerdictIsNotReported(t *testing.T) {
 		},
 		ProfileMatchIndex: 2,
 	}
-	c.luc.SetMockData(map[[16]byte]calc.EndpointData{
-		localIp1: &calc.LocalEndpointData{
-			CommonEndpointData: calc.CalculateCommonEndpointData(zombieDstKey, localWlEp1),
-			Ingress:            md,
-			Egress:             md,
-		},
-		remoteIp1: zombieSrcEp,
-	}, nil, nil, nil)
 
-	// The retry passes tier1 and is denied by the default tier.
-	c.applyPacketInfo(types.PacketInfo{
-		Tuple:     tup,
-		Direction: rules.RuleDirIngress,
-		RuleHits: []types.RuleHit{
-			{RuleID: passRule, Hits: 1, Bytes: 60},
-			{RuleID: zombieEOTDenyHit, Hits: 1, Bytes: 60},
-		},
-	})
-	ripenForReport(c.epStats[tup])
-	c.checkEpStats()
+	for _, tc := range []struct {
+		name string
+		// Whether the retry's pass and deny hits arrive in separate batches with a report in between.
+		reportBetweenHits bool
+	}{
+		{name: "hits in one batch"},
+		{name: "report between hits", reportBetweenHits: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, cap := newZombieTestCollector(t)
+			tup := tuple.Make(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
+			denyThenReport(t, c, tup)
 
-	for i, mu := range cap.updates {
-		if a := mu.GetLastRuleID().Action; a != rules.RuleActionAllow && a != rules.RuleActionDeny {
-			t.Errorf("update %d reported non-verdict rule %v as its verdict", i, mu.GetLastRuleID())
-		}
-	}
-	if last := cap.updates[len(cap.updates)-1].GetLastRuleID(); !last.Equals(defaultEOTDeny) {
-		t.Errorf("final update verdict = %v, want %v", last, defaultEOTDeny)
+			c.luc.SetMockData(map[[16]byte]calc.EndpointData{
+				localIp1: &calc.LocalEndpointData{
+					CommonEndpointData: calc.CalculateCommonEndpointData(zombieDstKey, localWlEp1),
+					Ingress:            md,
+					Egress:             md,
+				},
+				remoteIp1: zombieSrcEp,
+			}, nil, nil, nil)
+
+			// The retry passes tier1 and is denied by the default tier.
+			passHit := types.RuleHit{RuleID: passRule, Hits: 1, Bytes: 60}
+			denyHit := types.RuleHit{RuleID: zombieEOTDenyHit, Hits: 1, Bytes: 60}
+			retry := func(hits ...types.RuleHit) {
+				c.applyPacketInfo(types.PacketInfo{Tuple: tup, Direction: rules.RuleDirIngress, RuleHits: hits})
+				ripenForReport(c.epStats[tup])
+				c.checkEpStats()
+			}
+			if tc.reportBetweenHits {
+				retry(passHit)
+				retry(denyHit)
+			} else {
+				retry(passHit, denyHit)
+			}
+
+			for i, mu := range cap.updates {
+				if a := mu.GetLastRuleID().Action; a != rules.RuleActionAllow && a != rules.RuleActionDeny {
+					t.Errorf("update %d reported non-verdict rule %v as its verdict", i, mu.GetLastRuleID())
+				}
+			}
+			if last := cap.updates[len(cap.updates)-1].GetLastRuleID(); !last.Equals(defaultEOTDeny) {
+				t.Errorf("final update verdict = %v, want %v", last, defaultEOTDeny)
+			}
+
+			ageOut(t, c, tup)
+			assertDenyAggDrains(t, cap)
+		})
 	}
 }
