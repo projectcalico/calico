@@ -50,7 +50,6 @@ var FlannelComponent = registry.Component{
 // noImageComponents are pinned components that do not produce an image.
 var noImageComponents = []string{
 	apiComponentName,
-	calicoComponentName,
 	networkingCalicoComponentName,
 }
 

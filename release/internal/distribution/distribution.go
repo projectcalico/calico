@@ -20,18 +20,16 @@ import (
 	"fmt"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/steps"
 )
 
 // The name becomes the log directory, so it is qualified: a bare "publish"
 // would collide with another group's.
 const (
-	metadataStep     = "distribution-metadata"
-	sumsStep         = "distribution-sha256sums"
-	artifactsStep    = "distribution-publish-artifacts"
-	metadataFileName = "metadata.yaml"
-	sumsFileName     = "SHA256SUMS"
+	sumsStep      = "distribution-sha256sums"
+	artifactsStep = "distribution-publish-artifacts"
+	sumsFileName  = "SHA256SUMS"
 )
 
 type Handler interface {
@@ -47,13 +45,36 @@ type Upload struct {
 
 	Name string
 
-	//  when the step that produces Source did not run.
+	// A skipped upload stays in the plan but does not run.
 	Skip bool
 }
 
 // A handler that finds its own content does not implement this.
 type validator interface {
 	Validate(u Upload) error
+}
+
+// Only a handler that publishes files where users download them lists them.
+type artifactLister interface {
+	artifacts(src string) ([]outputs.ArtifactFile, error)
+}
+
+// Artifacts lists the files the pipeline publishes for download, with the URL
+// each will be served at.
+func Artifacts(pipeline []Upload) ([]outputs.ArtifactFile, error) {
+	var files []outputs.ArtifactFile
+	for _, u := range pipeline {
+		l, ok := u.Handler.(artifactLister)
+		if u.Skip || !ok {
+			continue
+		}
+		f, err := l.artifacts(u.Source)
+		if err != nil {
+			return nil, fmt.Errorf("artifacts of %s: %w", u.label(), err)
+		}
+		files = append(files, f...)
+	}
+	return files, nil
 }
 
 // Falls back to the destination, so a log line reads without a Name.
@@ -78,72 +99,31 @@ func (u Upload) validate() error {
 	return nil
 }
 
-// A product embeds Release and adds its own fields; the whole value is written.
-type Attester interface {
-	Attest() ([]byte, error)
-}
-
-type Component struct {
-	registry.Component `json:",inline" yaml:",inline"`
-}
-
-// Rendered as the reference rather than its parts: consumers read this file
-// for something to pull.
-func (c Component) MarshalYAML() (any, error) {
-	return c.String(), nil
-}
-
 type settings struct {
 	pipeline []Upload
 
 	steps.Step
 }
 
-// A step's options. Option reaches every step; the per-step interfaces let a
-// setting that belongs to one verb be rejected at compile time by the others.
-type (
-	MetadataOption interface{ applyMetadata(*settings) error }
-	PublishOption  interface{ applyPublish(*settings) error }
-
-	Option interface {
-		applyMetadata(*settings) error
-		applyPublish(*settings) error
-	}
-)
-
-// Each adapter must satisfy the interfaces its options are returned as, so a
-// missing apply method fails here rather than at a call site.
-var (
-	_ Option        = setting(nil)
-	_ PublishOption = publishSetting(nil)
-)
-
-type setting func(*settings) error
-
-func (f setting) applyMetadata(s *settings) error { return f(s) }
-func (f setting) applyPublish(s *settings) error  { return f(s) }
-
-type publishSetting func(*settings) error
-
-func (f publishSetting) applyPublish(s *settings) error { return f(s) }
+type Option func(*settings) error
 
 func WithRunner(r command.CommandRunner) Option {
-	return setting(func(s *settings) error {
+	return func(s *settings) error {
 		s.Apply([]steps.Option{steps.WithRunner(r)})
 		return nil
-	})
+	}
 }
 
 func WithLogsDir(dir string) Option {
-	return setting(func(s *settings) error {
+	return func(s *settings) error {
 		s.Apply([]steps.Option{steps.WithLogsDir(dir)})
 		return nil
-	})
+	}
 }
 
 func WithDir(dir string) Option {
-	return setting(func(s *settings) error {
+	return func(s *settings) error {
 		s.Apply([]steps.Option{steps.WithDir(dir)})
 		return nil
-	})
+	}
 }
