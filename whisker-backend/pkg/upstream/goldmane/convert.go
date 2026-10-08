@@ -166,7 +166,8 @@ func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
 		BytesOut:   flow.BytesOut,
 	}
 
-	if flow.Key.DestServiceName != "" {
+	// Felix reports "-" when the destination is not a service.
+	if flow.Key.DestServiceName != "" && flow.Key.DestServiceName != "-" {
 		resp.Service = &whiskerv1.ServiceRef{
 			Name:      flow.Key.DestServiceName,
 			Namespace: flow.Key.DestServiceNamespace,
