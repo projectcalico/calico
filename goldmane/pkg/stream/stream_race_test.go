@@ -47,7 +47,7 @@ func TestStreamReadRacesAddFlow(t *testing.T) {
 		fl := googleproto.Clone(base).(*proto.Flow)
 		fl.StartTime = start
 		fl.EndTime = start + 1
-		ring.AddFlow(storage.FlowFromNode{Flow: types.ProtoToFlow(fl)})
+		ring.AddFlow(types.ProtoToFlow(fl))
 	}
 	for i := int64(1); i <= 5; i++ {
 		addFlow(now - i)
