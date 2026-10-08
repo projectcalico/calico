@@ -97,6 +97,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   esac
   mkdir -p "${go_cache}"
 
+  # OpenShift keeps the legacy master taint on control-plane nodes, which otherwise blocks startup.
   echo "[INFO] starting e2e tests (ginkgo, K8S_E2E_FLAGS=${K8S_E2E_FLAGS:-<none>})..."
   # --junit-report writes report/junit.xml for the epilogue to publish. (v3.32's
   # Semaphore relied on bz for JUnit; the local-binary path emits it directly.)
@@ -142,7 +143,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
       mkdir -p report && \
       go run github.com/onsi/ginkgo/v2/ginkgo -procs="${E2E_PROCS:-4}" \
         --junit-report=junit.xml --output-dir=report/ \
-        ./e2e/bin/k8s/e2e.test -- ${K8S_E2E_FLAGS}' \
+        ./e2e/bin/k8s/e2e.test -- --non-blocking-taints=node-role.kubernetes.io/control-plane,node-role.kubernetes.io/master ${K8S_E2E_FLAGS}' \
     |& tee "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" || e2e_rc=$?
 
   # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.
