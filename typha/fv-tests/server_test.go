@@ -1408,8 +1408,11 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 				client.Finished.Wait()
 			}()
 
-			// Wait until the snapshot is read.
-			Eventually(recorder.Len, time.Second).Should(BeNumerically("==", initialSnapshotSize))
+			// Wait until the snapshot is read.  Building the 10k-KV zstd
+			// snapshot alone can take about a second under the race detector.
+			// The grace period starts only once the snapshot is sent, so a
+			// longer wait here does not change what the test checks.
+			Eventually(recorder.Len, 10*time.Second).Should(BeNumerically("==", initialSnapshotSize))
 
 			// Send a lot of updates.
 
