@@ -129,15 +129,6 @@ func describeBPFOverlayTunnelAddrTests(tunnel string) bool {
 			ensureAllNodesBPFProgramsAttached(tc.Felixes)
 		})
 
-		AfterEach(func() {
-			for ii := range numNodes {
-				w[ii].Stop()
-				hostW[ii].Stop()
-			}
-			tc.Stop()
-			infra.Stop()
-		})
-
 		It("should have host-networked connectivity to remote workloads and hosts", func() {
 			// Host -> remote workload is the key scenario: BPF uses HOST_TUNNEL_IP
 			// for SNAT conflict resolution when host-networked traffic hits a remote

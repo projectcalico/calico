@@ -1244,21 +1244,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 				felix.Exec("wg")
 			}
 		}
-
-		for _, wl := range wls {
-			wl.Stop()
-		}
-
 		for _, tcpdump := range tcpdumps {
 			tcpdump.Stop()
 		}
-
-		tc.Stop()
-
-		if CurrentSpecReport().Failed() {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
 	})
 
 	It("Workload with borrowed IP should be 'handled' on felix 0 and 1", func() {
