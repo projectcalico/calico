@@ -30,7 +30,7 @@ One manifest is generated, but not from `charts/`:
 Some of these manifests are not automatically generated. To edit these, modify the manifests directly and
 commit your changes. **The following manifests are not auto generated:**
 
-- alp/istio-inject-configmap-X.yaml
+- alp/istio-app-layer-policy-envoy-v3.yaml
 - apiserver.yaml
 - calicoctl-etcd.yaml
 - calicoctl.yaml
