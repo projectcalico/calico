@@ -104,3 +104,83 @@ func TestDiachronicFlow(t *testing.T) {
 	af = df.Aggregate(0, 400)
 	require.Nil(t, af)
 }
+
+// TestDiachronicFlowRangeMatchesLinearScan checks the searched range lookups against a scan of
+// the windows the flow was given, across gapped histories and open, empty or partial ranges.
+func TestDiachronicFlowRangeMatchesLinearScan(t *testing.T) {
+	k := types.NewFlowKey(&types.FlowKeySource{}, &types.FlowKeyDestination{}, &types.FlowKeyMeta{}, &proto.PolicyTrace{})
+	labels := unique.Make("")
+	var withinCases, outsideCases int
+	for seed := range 2000 {
+		diachronic := storage.NewDiachronicFlow(k, 1)
+		var added []scanWindow
+		for b := range 30 {
+			if (seed*7+b*13)%3 == 0 {
+				continue
+			}
+			w := scanWindow{start: int64(1000 + b*15), end: int64(1015 + b*15), packets: int64(b + 1)}
+			diachronic.AddFlow(&types.Flow{Key: k, PacketsIn: w.packets, SourceLabels: labels, DestLabels: labels}, w.start, w.end)
+			added = append(added, w)
+		}
+		var startGte, startLt int64
+		if seed%5 != 0 {
+			startGte = int64(990 + (seed*31)%480)
+		}
+		if seed%7 != 0 {
+			startLt = startGte + int64((seed*17)%500)
+		}
+
+		want := scanRange(added, startGte, startLt)
+		if want.within {
+			withinCases++
+		} else {
+			outsideCases++
+		}
+
+		start, within := diachronic.SortStartTime(startGte, startLt)
+		require.Equal(t, want.within, within, "seed %d [%d, %d): SortStartTime", seed, startGte, startLt)
+		require.Equal(t, want.within, diachronic.Within(startGte, startLt), "seed %d [%d, %d): Within", seed, startGte, startLt)
+		require.Equal(t, want.start, start, "seed %d [%d, %d): start", seed, startGte, startLt)
+
+		f := diachronic.Aggregate(startGte, startLt)
+		if !want.within {
+			require.Nil(t, f, "seed %d [%d, %d)", seed, startGte, startLt)
+			continue
+		}
+		require.NotNil(t, f, "seed %d [%d, %d)", seed, startGte, startLt)
+		require.Equal(t, want.start, f.StartTime, "seed %d [%d, %d): aggregated start", seed, startGte, startLt)
+		require.Equal(t, want.packets, f.PacketsIn, "seed %d [%d, %d): packets", seed, startGte, startLt)
+	}
+	require.NotZero(t, withinCases)
+	require.NotZero(t, outsideCases)
+}
+
+type scanWindow struct {
+	start   int64
+	end     int64
+	packets int64
+}
+
+type scanResult struct {
+	within  bool
+	start   int64
+	packets int64
+}
+
+// scanRange applies Within's rule (a window starts in the range) and Aggregate's rule (a window
+// lies wholly in it) to every window, a zero bound being open.
+func scanRange(windows []scanWindow, startGte, startLt int64) scanResult {
+	var r scanResult
+	for _, w := range windows {
+		if (startGte == 0 || w.start >= startGte) && (startLt == 0 || w.start < startLt) {
+			r.within = true
+		}
+		if (startGte == 0 || w.start >= startGte) && (startLt == 0 || w.end <= startLt) {
+			if r.start == 0 {
+				r.start = w.start
+			}
+			r.packets += w.packets
+		}
+	}
+	return r
+}
