@@ -55,7 +55,7 @@ func TestBackfillAfterSeedingSendsFlows(t *testing.T) {
 	for start := int64(seedNow - 5); start < seedNow; start++ {
 		f := testutils.NewRandomFlow(start)
 		f.StartTime, f.EndTime = start, start+1
-		ring.AddFlow(storage.FlowFromNode{Flow: types.ProtoToFlow(f)})
+		ring.AddFlow(types.ProtoToFlow(f))
 	}
 
 	recv := &recordingReceiver{}
