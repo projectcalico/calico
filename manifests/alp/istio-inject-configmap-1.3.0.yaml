@@ -327,21 +327,27 @@ data:
         - mountPath: /var/run/dikastes
           name: dikastes-sock
       - name: dikastes
-        image: quay.io/calico/dikastes:master
-        args: ["server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket"]
+        image: quay.io/calico/calico:v3.33.0
+        args: ["component", "dikastes", "server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket"]
         securityContext:
           allowPrivilegeEscalation: false
         livenessProbe:
           exec:
             command:
-            - /healthz
+            - /usr/bin/calico
+            - component
+            - dikastes
+            - health
             - liveness
           initialDelaySeconds: 3
           periodSeconds: 3
         readinessProbe:
           exec:
             command:
-            - /healthz
+            - /usr/bin/calico
+            - component
+            - dikastes
+            - health
             - readiness
           initialDelaySeconds: 3
           periodSeconds: 3
