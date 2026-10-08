@@ -164,12 +164,18 @@ func (m *mockDataplane) ensureProgramAttached(ap attachPoint) error {
 }
 
 func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
+	// The hook runs unlocked so that it can call ensureProgramLoadedDefault; a
+	// hook that touches shared state must take m.mutex itself. Loads for the
+	// XDP, ingress and egress hooks run in parallel.
 	if m.ensureProgramLoadedFn != nil {
 		return m.ensureProgramLoadedFn(ap, ipFamily)
 	}
+	return m.ensureProgramLoadedDefault(ap, ipFamily)
+}
+
+func (m *mockDataplane) ensureProgramLoadedDefault(ap attachPoint, ipFamily proto.IPVersion) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
 	if m.ensureProgramLoadedErr != nil {
 		return m.ensureProgramLoadedErr
@@ -3900,21 +3906,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 						bpfEpMgr.recordSkippedOptional([]hook.OptionalSubProgInfo{*info})
 					}
 				}
-
-				if apxdp, ok := ap.(*xdp.AttachPoint); ok {
-					apxdp.HookLayoutV4 = hook.Layout{
-						hook.SubProgXDPAllowed: 123,
-						hook.SubProgXDPDrop:    456,
-					}
-				}
-
-				key := ap.IfaceName() + ":" + ap.HookName().String()
-				if _, exists := dp.progs[key]; exists {
-					return nil
-				}
-				dp.lastProgID += 1
-				dp.progs[key] = dp.lastProgID
-				return nil
+				return dp.ensureProgramLoadedDefault(ap, ipFamily)
 			}
 		})
 
