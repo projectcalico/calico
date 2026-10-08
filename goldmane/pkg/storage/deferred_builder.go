@@ -20,7 +20,7 @@ import (
 )
 
 type FlowProvider interface {
-	Iter(func(FlowBuilder) bool)
+	Iter(*proto.Filter, func(FlowBuilder) bool)
 }
 
 type Receiver interface {
