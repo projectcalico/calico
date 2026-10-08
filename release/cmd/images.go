@@ -89,7 +89,7 @@ var (
 			dirs := c.StringSlice(imageReleaseDirsFlag.Name)
 			scanDirs := dirs
 			if len(scanDirs) == 0 {
-				scanDirs = utils.ImageDiscoveryDirs()
+				scanDirs = images.ReleaseDirs()
 			}
 			scan, err := scanRequest(c, cfg, scanDirs, ver.PrimaryStream(), utils.CalicoProductCode)
 			if err != nil {
@@ -148,13 +148,17 @@ func imagesPublishCommand(cfg *Config) *cli.Command {
 // releaseImageList runs make in every release directory, so a test replaces it.
 var releaseImageList = utils.BuildReleaseImageList
 
+// operatorCheckDirs lists the directories whose images the operator in this
+// repo must deploy.
+var operatorCheckDirs = images.ReleaseDirs
+
 var imagesCheckOperatorAction = func(cfg *Config) func(ctx context.Context, c *cli.Command) error {
 	return func(_ context.Context, _ *cli.Command) error {
 		configureLogging("images-check-operator.log")
 
 		// The operator publishes to registries of its own, so it is named apart from the
 		// release directories rather than discovered with them.
-		dirs := append(utils.ImageDiscoveryDirs(), operator.DirName)
+		dirs := append(operatorCheckDirs(), operator.DirName)
 		built, err := releaseImageList(cfg.RepoRootDir, dirs...)
 		if err != nil {
 			return err

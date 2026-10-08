@@ -815,7 +815,7 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 func (r *CalicoManager) assertImageVersions() error {
 	logrus.Info("Checking built images exists with the correct version")
 	buildInfoVersionRegex := regexp.MustCompile(`(?m)^Version:\s+(.*)$`)
-	imgs, err := utils.ReleaseImages()
+	imgs, err := images.ReleaseImages()
 	if err != nil {
 		return fmt.Errorf("failed to determine release images: %w", err)
 	}

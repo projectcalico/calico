@@ -27,6 +27,7 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
@@ -328,7 +329,7 @@ func releaseValidationSubCommand(cfg *Config) *cli.Command {
 				return err
 			}
 
-			imgs, err := utils.ReleaseImages()
+			imgs, err := images.ReleaseImages()
 			if err != nil {
 				return err
 			}

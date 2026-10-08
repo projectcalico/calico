@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 
@@ -81,6 +82,32 @@ var (
 		},
 	}
 )
+
+// ReleaseDirs returns every directory that publishes an image, whatever the
+// variant.
+func ReleaseDirs() []string {
+	return VariantDirs(PublishVariants)
+}
+
+var releaseImages = sync.OnceValues(func() ([]string, error) {
+	rootDir, err := command.GitDir()
+	if err != nil {
+		return nil, fmt.Errorf("determining root git dir: %w", err)
+	}
+	dirs := ReleaseDirs()
+	imgs, err := utils.BuildReleaseImageList(rootDir, dirs...)
+	if err != nil {
+		return nil, fmt.Errorf("building release images list for release dirs[%s]: %w", strings.Join(dirs, ","), err)
+	}
+	return imgs, nil
+})
+
+// ReleaseImages returns every image the release publishes. The list is
+// resolved once by running make in each release directory.
+func ReleaseImages() ([]string, error) {
+	imgs, err := releaseImages()
+	return slices.Clone(imgs), err
+}
 
 // Variant is one kind of image and the directories that ship it.
 type Variant struct {
