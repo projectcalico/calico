@@ -276,7 +276,7 @@ func NewValueNATReverse(created, lastSeen time.Duration, flags uint16, legA, leg
 func NewValueNATReverseSNAT(created, lastSeen time.Duration, flags uint16, legA, legB Leg,
 	tunnelIP, origIP, origSrcIP net.IP, origPort uint16) Value {
 	v := NewValueNATReverse(created, lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
-	copy(v[voOrigSIP:voOrigSIP+4], origIP.To4())
+	copy(v[voOrigSIP:voOrigSIP+4], origSrcIP.To4())
 
 	return v
 }
