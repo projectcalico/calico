@@ -1,0 +1,32 @@
+#!/bin/bash
+#
+# Print a PEP 440 version derived from the current git state.
+#
+# Usage: git-auto-version            (run from inside the repo)
+#
+# If VERSION is set in the environment and there is a tag of that name at HEAD,
+# that tag wins even when other tags point at the same commit.  Otherwise the
+# version is the last tag, plus a .postN suffix counting the commits since it.
+#
+# Note the use of `git rev-list --count` rather than `git cherry`: cherry skips
+# merge commits, and so undercounts relative to `git describe`.
+
+set -eu -o pipefail
+
+if [ -n "${VERSION:-}" ] && git tag -l "${VERSION}" --points-at HEAD | grep -q .; then
+    echo "${VERSION}"
+    exit 0
+fi
+
+last_tag=$(git describe --tags --abbrev=0)
+commits_since=$(git rev-list --count "${last_tag}..HEAD")
+
+# PEP 440 allows only [N!]N(.N)*[{a|b|rc}N][.postN][.devN], so a development
+# tag like 'v3.31.0-0.dev' becomes 'v3.31.0rc0'.
+if [ "${commits_since}" -eq 0 ]; then
+    version=${last_tag}
+else
+    version=${last_tag}.post${commits_since}
+fi
+
+echo "${version/-0.dev/rc0}"
