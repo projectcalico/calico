@@ -23,6 +23,9 @@ import (
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/common/model"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -106,17 +109,13 @@ func NewMetricScraper(f *framework.Framework, nodeIP string, metricsPort int) (s
 }
 
 // Metric returns a func which can be repeatedly-called to poll a metric
-// on the given endpoint.
+// on the given endpoint. It only matches an unlabelled series; use MetricSum
+// for a metric that carries labels.
 func (scraper *MetricScraper) Metric(metricName string) func() (float64, error) {
 	return func() (float64, error) {
-		errOutFile := fmt.Sprintf("metrics-err-%s-%d", metricName, time.Now().UnixNano())
-		url := "http://" + net.JoinHostPort(scraper.metricsEPIP, strconv.Itoa(scraper.metricsEPPort)) + "/metrics"
-		output, err := conncheck.ExecInPod(scraper.pod, "sh", "-c",
-			fmt.Sprintf("wget -qO- %s 2>/tmp/%s", url, errOutFile))
+		output, url, err := scraper.scrape(metricName)
 		if err != nil {
-			catCmd := fmt.Sprintf("cat /tmp/%s", errOutFile)
-			errmsg, _ := conncheck.ExecInPod(scraper.pod, "sh", "-c", catCmd)
-			return 0, fmt.Errorf("failed to scrape metrics at %s: %w: %s", url, err, errmsg)
+			return 0, err
 		}
 
 		for _, line := range strings.Split(output, "\n") {
@@ -130,4 +129,93 @@ func (scraper *MetricScraper) Metric(metricName string) func() (float64, error) 
 
 		return 0, fmt.Errorf("metric %s not found in response from %s", metricName, url)
 	}
+}
+
+// MetricSum returns a func which can be repeatedly-called to poll the sum of
+// every series of a metric, across all label values.
+func (scraper *MetricScraper) MetricSum(metricName string) func() (float64, error) {
+	return scraper.MetricSumWhere(metricName, nil)
+}
+
+// MetricSumWhere is MetricSum restricted to the series whose labels satisfy
+// match. It errors when no series matches, naming the ones it skipped.
+func (scraper *MetricScraper) MetricSumWhere(metricName string, match func(labels map[string]string) bool) func() (float64, error) {
+	return func() (float64, error) {
+		output, url, err := scraper.scrape(metricName)
+		if err != nil {
+			return 0, err
+		}
+
+		series, err := parseSeries(output, metricName)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse %s from %s: %w", metricName, url, err)
+		}
+		return sumSeries(metricName, series, match, url)
+	}
+}
+
+func sumSeries(metricName string, series []*dto.Metric, match func(labels map[string]string) bool, url string) (float64, error) {
+	found := false
+	var sum float64
+	var skipped []string
+	for _, m := range series {
+		labels := model.LabelSet{}
+		for _, lp := range m.GetLabel() {
+			labels[model.LabelName(lp.GetName())] = model.LabelValue(lp.GetValue())
+		}
+		if match != nil && !match(labelMap(labels)) {
+			skipped = append(skipped, metricName+labels.String())
+			continue
+		}
+		sum += m.GetUntyped().GetValue()
+		found = true
+	}
+
+	if !found {
+		if len(skipped) > 0 {
+			return 0, fmt.Errorf("no series of %s from %s matched; skipped %s", metricName, url, strings.Join(skipped, ", "))
+		}
+		return 0, fmt.Errorf("metric %s not found in response from %s", metricName, url)
+	}
+	return sum, nil
+}
+
+// parseSeries keeps only metricName's sample lines before parsing, so a quirk
+// elsewhere in the scrape can't fail the strict parser. Without their # TYPE
+// line the samples parse as untyped.
+func parseSeries(output, metricName string) ([]*dto.Metric, error) {
+	var b strings.Builder
+	for _, line := range strings.Split(output, "\n") {
+		if strings.HasPrefix(line, metricName+" ") || strings.HasPrefix(line, metricName+"{") {
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
+	}
+	parser := expfmt.NewTextParser(model.UTF8Validation)
+	families, err := parser.TextToMetricFamilies(strings.NewReader(b.String()))
+	if err != nil {
+		return nil, err
+	}
+	return families[metricName].GetMetric(), nil
+}
+
+func labelMap(ls model.LabelSet) map[string]string {
+	m := make(map[string]string, len(ls))
+	for k, v := range ls {
+		m[string(k)] = string(v)
+	}
+	return m
+}
+
+func (scraper *MetricScraper) scrape(metricName string) (output, url string, err error) {
+	errOutFile := fmt.Sprintf("metrics-err-%s-%d", metricName, time.Now().UnixNano())
+	url = "http://" + net.JoinHostPort(scraper.metricsEPIP, strconv.Itoa(scraper.metricsEPPort)) + "/metrics"
+	output, err = conncheck.ExecInPod(scraper.pod, "sh", "-c",
+		fmt.Sprintf("wget -qO- %s 2>/tmp/%s", url, errOutFile))
+	if err != nil {
+		catCmd := fmt.Sprintf("cat /tmp/%s", errOutFile)
+		errmsg, _ := conncheck.ExecInPod(scraper.pod, "sh", "-c", catCmd)
+		return "", url, fmt.Errorf("failed to scrape metrics at %s: %w: %s", url, err, errmsg)
+	}
+	return output, url, nil
 }
