@@ -313,6 +313,23 @@ var _ = Describe("kube-controllers rendering tests", func() {
 		Expect(d.Spec.Template.Spec.Tolerations).To(ConsistOf(rmeta.TolerateCriticalAddonsAndControlPlane))
 	})
 
+	It("should host-network the deployment while a migration is active", func() {
+		cfg.MigrationActive = true
+		component := kubecontrollers.NewCalicoKubeControllers(&cfg)
+		resources, _ := component.Objects()
+		d := rtest.GetResource(resources, kubecontrollers.KubeController, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
+		Expect(d.Spec.Template.Spec.HostNetwork).To(BeTrue())
+		Expect(d.Spec.Template.Spec.DNSPolicy).To(Equal(corev1.DNSClusterFirstWithHostNet))
+	})
+
+	It("should not host-network the deployment when no migration is active", func() {
+		component := kubecontrollers.NewCalicoKubeControllers(&cfg)
+		resources, _ := component.Objects()
+		d := rtest.GetResource(resources, kubecontrollers.KubeController, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
+		Expect(d.Spec.Template.Spec.HostNetwork).To(BeFalse())
+		Expect(d.Spec.Template.Spec.DNSPolicy).To(BeEmpty())
+	})
+
 	It("should render resourcerequirements", func() {
 		rr := &corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{

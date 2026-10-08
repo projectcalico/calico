@@ -3,6 +3,7 @@ applyTo:
   - "libcalico-go/lib/ipam/**"
   - "libcalico-go/lib/backend/**/ipam*"
   - "libcalico-go/lib/backend/**/block_affinity*"
+  - "libcalico-go/lib/backend/model/block.go"
   - "cni-plugin/pkg/ipamplugin/**"
   - "cni-plugin/pkg/k8s/**"
   - "node/cmd/calico-ipam/**"

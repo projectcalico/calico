@@ -15,6 +15,7 @@
 package render_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -210,6 +211,19 @@ var _ = Describe("Node rendering tests", func() {
 					Verbs:     []string{"get"},
 				}))
 
+				// The permission protect-cni-annotations.projectcalico.org checks for, so the CNI
+				// plugin's own pods/status patch is let through.
+				Expect(cniRole.Rules).To(ContainElement(rbacv1.PolicyRule{
+					APIGroups: []string{"projectcalico.org"},
+					Resources: []string{"cniannotations"},
+					Verbs:     []string{"write"},
+				}))
+				// calico-node never writes these annotations, so its role must not carry it.
+				nodeRole := rtest.GetResource(resources, "calico-node", "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
+				for _, rule := range nodeRole.Rules {
+					Expect(rule.Resources).NotTo(ContainElement("cniannotations"))
+				}
+
 				// Check CNI configmap.
 				cniCmResource := rtest.GetResource(resources, "cni-config", "calico-system", "", "v1", "ConfigMap")
 				Expect(cniCmResource).ToNot(BeNil())
@@ -338,7 +352,6 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "policysync", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/nodeagent", Type: &dirOrCreate}}},
 					{Name: "sys-fs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs", Type: &dirOrCreate}}},
 					{Name: "bpffs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs/bpf", Type: &dirMustExist}}},
-					{Name: "sys-kernel-security", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/kernel/security"}}},
 					{Name: "nodeproc", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/proc"}}},
 					{
 						Name: "tigera-ca-bundle",
@@ -375,7 +388,6 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/var/log/calico", Name: "var-log-calico"},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
-					{MountPath: "/sys/kernel/security", Name: "sys-kernel-security", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -532,7 +544,6 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "cni-plugins-stage", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 					{Name: "sys-fs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs", Type: &dirOrCreate}}},
 					{Name: "bpffs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs/bpf", Type: &dirMustExist}}},
-					{Name: "sys-kernel-security", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/kernel/security"}}},
 					{Name: "nodeproc", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/proc"}}},
 					{Name: "policysync", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/nodeagent", Type: &dirOrCreate}}},
 					{
@@ -570,7 +581,6 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/var/log/calico", Name: "var-log-calico"},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
-					{MountPath: "/sys/kernel/security", Name: "sys-kernel-security", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -827,7 +837,6 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "policysync", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/nodeagent", Type: &dirOrCreate}}},
 					{Name: "sys-fs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs", Type: &dirOrCreate}}},
 					{Name: "bpffs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs/bpf", Type: &dirMustExist}}},
-					{Name: "sys-kernel-security", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/kernel/security"}}},
 					{Name: "nodeproc", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/proc"}}},
 					{
 						Name: "tigera-ca-bundle",
@@ -864,7 +873,6 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/var/log/calico", Name: "var-log-calico"},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
-					{MountPath: "/sys/kernel/security", Name: "sys-kernel-security", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -967,7 +975,6 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "policysync", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/nodeagent", Type: &dirOrCreate}}},
 					{Name: "sys-fs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs", Type: &dirOrCreate}}},
 					{Name: "bpffs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs/bpf", Type: &dirMustExist}}},
-					{Name: "sys-kernel-security", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/kernel/security"}}},
 					{Name: "nodeproc", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/proc"}}},
 					{
 						Name: "tigera-ca-bundle",
@@ -1003,7 +1010,6 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/etc/pki/tls/certs", Name: "tigera-ca-bundle", ReadOnly: true},
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
-					{MountPath: "/sys/kernel/security", Name: "sys-kernel-security", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -1238,7 +1244,6 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "policysync", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/nodeagent", Type: &dirOrCreate}}},
 					{Name: "sys-fs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs", Type: &dirOrCreate}}},
 					{Name: "bpffs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs/bpf", Type: &dirMustExist}}},
-					{Name: "sys-kernel-security", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/kernel/security"}}},
 					{Name: "nodeproc", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/proc"}}},
 					{
 						Name: "tigera-ca-bundle",
@@ -1275,7 +1280,6 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/var/log/calico", Name: "var-log-calico"},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
-					{MountPath: "/sys/kernel/security", Name: "sys-kernel-security", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -1375,7 +1379,6 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "policysync", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/nodeagent", Type: &dirOrCreate}}},
 					{Name: "sys-fs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs", Type: &dirOrCreate}}},
 					{Name: "bpffs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs/bpf", Type: &dirMustExist}}},
-					{Name: "sys-kernel-security", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/kernel/security"}}},
 					{Name: "nodeproc", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/proc"}}},
 					{
 						Name: "tigera-ca-bundle",
@@ -1411,7 +1414,6 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/etc/pki/tls/certs", Name: "tigera-ca-bundle", ReadOnly: true},
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
-					{MountPath: "/sys/kernel/security", Name: "sys-kernel-security", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -1492,7 +1494,6 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "flexvol-driver-host", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/etc/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds", Type: &dirOrCreate}}},
 					{Name: "sys-fs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs", Type: &dirOrCreate}}},
 					{Name: "bpffs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs/bpf", Type: &dirMustExist}}},
-					{Name: "sys-kernel-security", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/kernel/security"}}},
 					{Name: "nodeproc", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/proc"}}},
 					{
 						Name: "tigera-ca-bundle",
@@ -3318,4 +3319,107 @@ func verifyInitContainers(ds *appsv1.DaemonSet, instance *operatorv1.Installatio
 	} else {
 		Expect(flexvolContainer).To(BeNil())
 	}
+}
+
+var _ = Describe("Node CNI address family selection", func() {
+	const l2Workload = operatorv1.IPPoolAllowedUse("L2Workload")
+
+	var cfg render.NodeConfiguration
+	var instance *operatorv1.InstallationSpec
+
+	// ipamConfig renders the CNI config map and returns the ipam block of the calico plugin.
+	ipamConfig := func() map[string]any {
+		component := render.Node(&cfg)
+		Expect(component.ResolveImages(nil)).To(BeNil())
+		resources, _ := component.Objects()
+
+		cm, ok := rtest.GetResource(resources, "cni-config", "calico-system", "", "v1", "ConfigMap").(*corev1.ConfigMap)
+		Expect(ok).To(BeTrue())
+
+		var parsed cniNetworkConfig
+		Expect(json.Unmarshal([]byte(cm.Data["config"]), &parsed)).NotTo(HaveOccurred())
+		Expect(parsed.Plugins).NotTo(BeEmpty())
+		return parsed.Plugins[0].IPAM
+	}
+
+	BeforeEach(func() {
+		ff := true
+		instance = &operatorv1.InstallationSpec{
+			CNI: &operatorv1.CNISpec{
+				Type: operatorv1.PluginCalico,
+				IPAM: &operatorv1.IPAMSpec{Type: operatorv1.IPAMPluginCalico},
+			},
+			CalicoNetwork: &operatorv1.CalicoNetworkSpec{
+				BGP:                        &bgpEnabled,
+				IPPools:                    []operatorv1.IPPool{{CIDR: "192.168.0.0/16"}},
+				NodeAddressAutodetectionV4: &operatorv1.NodeAddressAutodetection{FirstFound: &ff},
+			},
+		}
+		defaultCNIConfDir, defaultCNIBinDir := render.DefaultCNIDirectories(instance.KubernetesProvider)
+		instance.CNI.ConfDir, instance.CNI.BinDir = &defaultCNIConfDir, &defaultCNIBinDir
+
+		scheme := runtime.NewScheme()
+		Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
+		cli := ctrlrfake.DefaultFakeClientBuilder(scheme).Build()
+		certificateManager, err := certificatemanager.Create(cli, nil, clusterDomain, common.OperatorNamespace(), certificatemanager.AllowCACreation())
+		Expect(err).NotTo(HaveOccurred())
+
+		cfg = render.NodeConfiguration{
+			K8sServiceEp:       k8sapi.ServiceEndpoint{},
+			Installation:       instance,
+			TLS:                getTyphaNodeTLS(cli, certificateManager),
+			ClusterDomain:      clusterDomain,
+			FelixConfiguration: &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)}},
+			IPPools:            instance.CalicoNetwork.IPPools,
+		}
+	})
+
+	It("should not enable IPv6 assignment for a pool that doesn't allow workloads", func() {
+		cfg.IPPools = append(cfg.IPPools, operatorv1.IPPool{
+			CIDR:        "2001:db8:1::/122",
+			AllowedUses: []operatorv1.IPPoolAllowedUse{l2Workload},
+		})
+		ipam := ipamConfig()
+		Expect(ipam).To(HaveKeyWithValue("assign_ipv4", "true"))
+		Expect(ipam).To(HaveKeyWithValue("assign_ipv6", "false"))
+	})
+
+	It("should enable IPv6 assignment for a pool that allows workloads", func() {
+		cfg.IPPools = append(cfg.IPPools, operatorv1.IPPool{
+			CIDR:        "2001:db8:1::/122",
+			AllowedUses: []operatorv1.IPPoolAllowedUse{l2Workload, operatorv1.IPPoolAllowedUseWorkload},
+		})
+		Expect(ipamConfig()).To(HaveKeyWithValue("assign_ipv6", "true"))
+	})
+
+	It("should enable IPv6 assignment for a pool with no allowed uses set", func() {
+		cfg.IPPools = append(cfg.IPPools, operatorv1.IPPool{CIDR: "2001:db8:1::/122"})
+		Expect(ipamConfig()).To(HaveKeyWithValue("assign_ipv6", "true"))
+	})
+
+	It("should disable IPv4 assignment when the only IPv4 pool is tunnel-only", func() {
+		cfg.IPPools = []operatorv1.IPPool{{
+			CIDR:        "192.168.0.0/16",
+			AllowedUses: []operatorv1.IPPoolAllowedUse{operatorv1.IPPoolAllowedUseTunnel},
+		}}
+		Expect(ipamConfig()).To(HaveKeyWithValue("assign_ipv4", "false"))
+	})
+
+	It("should render host-local as single-stack when the IPv6 pool doesn't allow workloads", func() {
+		instance.CNI.IPAM.Type = operatorv1.IPAMPluginHostLocal
+		cfg.IPPools = append(cfg.IPPools, operatorv1.IPPool{
+			CIDR:        "2001:db8:1::/122",
+			AllowedUses: []operatorv1.IPPoolAllowedUse{l2Workload},
+		})
+		Expect(ipamConfig()).To(Equal(map[string]any{"type": "host-local", "subnet": "usePodCidr"}))
+	})
+})
+
+// cniNetworkConfig mirrors the parts of the rendered CNI network config the tests assert on.
+type cniNetworkConfig struct {
+	Plugins []cniPluginConfig `json:"plugins"`
+}
+
+type cniPluginConfig struct {
+	IPAM map[string]any `json:"ipam"`
 }

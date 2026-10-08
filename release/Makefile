@@ -74,10 +74,10 @@ hashrelease: hashrelease-build hashrelease-publish
 ../bin/helm:
 	@$(MAKE) -C ../ helm
 
-hashrelease-build: bin/release var-require-all-GITHUB_TOKEN
+hashrelease-build: bin/release
 	@bin/release hashrelease build
 
-hashrelease-publish: bin/release var-require-all-GITHUB_TOKEN ../bin/helm
+hashrelease-publish: bin/release ../bin/helm
 	@bin/release hashrelease publish
 
 hashrelease-svr-gc: bin/release

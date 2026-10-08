@@ -37,6 +37,8 @@ import (
 	"github.com/projectcalico/calico/app-policy/proto"
 	"github.com/projectcalico/calico/app-policy/syncher"
 	"github.com/projectcalico/calico/app-policy/uds"
+	"github.com/projectcalico/calico/lib/logrusr"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -47,6 +49,12 @@ const (
 // RunServer starts the dikastes authorization server. It listens on the given Unix domain
 // socket path, syncs policy from the given dial target, and blocks until a signal is received.
 func RunServer(listenPath, dialTarget string) {
+	// Point the lib/std/log facade at the logrus standard logger, which main has configured, so
+	// code written against the facade lands in the same output at the same level. The facade
+	// defaults to discarding everything until a backend is registered, so without this any facade
+	// logging in the code this server runs - policy evaluation included - would silently go nowhere.
+	log.SetDefaultLogger(logrusr.New(logrus.StandardLogger()))
+
 	_, err := os.Stat(listenPath)
 	if !os.IsNotExist(err) {
 		if err := os.Remove(listenPath); err != nil {

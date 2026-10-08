@@ -116,6 +116,9 @@
           - make fix-changed
           - make check-ocp-no-crds
           - make check-dirty
+      - name: Check helm charts
+        commands:
+          - make test-charts
 - name: Store working copy
   run:
     when: "branch =~ '.*'"
@@ -358,10 +361,10 @@
   # without its stamp would fail the consumer's untolerated gcloud cp.
   #
   # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)", "E2E tests:
-  # Gateway API Conformance") list this block in their `dependencies:`, so
-  # CHANGE_IN_WITH_DEPENDENTS() folds their triggers into the arg below — this
-  # block's own inputs, the operator's Go closure plus everything else under
-  # operator/.
+  # Gateway API Conformance", "Manifest install (KIND)") list this block in
+  # their `dependencies:`, so CHANGE_IN_WITH_DEPENDENTS() folds their triggers
+  # into the arg below — this block's own inputs, the operator's Go closure plus
+  # everything else under operator/.
   run:
     when: "${CHANGE_IN_WITH_DEPENDENTS(operator,non-go:/operator/)}"
   dependencies: []
@@ -386,9 +389,10 @@
   # because no lane wants a subset of them.
   #
   # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)", "E2E tests:
-  # Gateway API Conformance") list this block in their `dependencies:`, so
-  # CHANGE_IN_WITH_DEPENDENTS() folds their triggers into the arg below, which
-  # is this block's own input: everything under third_party/.
+  # Gateway API Conformance", "Manifest install (KIND)") list this block in
+  # their `dependencies:`, so CHANGE_IN_WITH_DEPENDENTS() folds their triggers
+  # into the arg below, which is this block's own input: everything under
+  # third_party/.
   run:
     when: "${CHANGE_IN_WITH_DEPENDENTS(non-go:/third_party/)}"
   dependencies: []

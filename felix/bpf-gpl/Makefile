@@ -79,7 +79,7 @@ UT_OBJS+=ut/tcp_rst_v6.o
 
 XDP_MAP_HEADERS := jump.h
 COMMON_MAP_HEADERS := counters.h ifstate.h ringbuf.h profiling.h rule_counters.h qos.h ctlb_map.h $(XDP_MAP_HEADERS)
-IP_MAP_HEADERS := arp.h conntrack_cleanup.h conntrack_types.h failsafe.h nat_types.h policy.h routes.h sendrecv.h
+IP_MAP_HEADERS := allowsources.h arp.h conntrack_cleanup.h conntrack_types.h failsafe.h nat_types.h policy.h routes.h sendrecv.h
 IPV4_MAP_HEADERS := $(IP_MAP_HEADERS) ip_v4_fragment.h
 IPV6_MAP_HEADERS := $(IP_MAP_HEADERS)
 
@@ -90,7 +90,7 @@ MAP_CFLAGS := $(subst -emit-llvm,,$(CFLAGS))
 
 # Generate _map_stub.c
 define generate_stub
-	echo '#include "bpf.h"' > $@; \
+	echo '#include "cali_bpf.h"' > $@; \
 	for header in $^; do \
 		echo "#include \"$${header}\"" >> $@; \
 	done; \
@@ -143,6 +143,12 @@ C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_v46.c connect_ba
 all: $(OBJS)
 ut-objs: $(UT_OBJS)
 map-objs: $(MAP_OBJS)
+
+# Check that every header compiles on its own under each build variant it is
+# meant for, i.e. that no header relies on its includer's include order.
+.PHONY: check-headers
+check-headers:
+	./check-headers $(CC) $(CFLAGS)
 
 libbpf: $(LIBBPF_FILE_CREATED)
 # A plain clone, not hack/fetch-repo: this directory ships as the GPL source
@@ -253,7 +259,7 @@ conntrack_cleanup_v6.d: conntrack_cleanup.c
 
 # LLVM 21 added TrapUnreachable=true to the BPF backend (llvm/llvm-project#131731).
 # This causes llc to emit a trap instruction (call to __bpf_trap kfunc) after
-# every __builtin_unreachable().  Our bpf_exit() helper (bpf.h) uses inline asm
+# every __builtin_unreachable().  Our bpf_exit() helper (cali_bpf.h) uses inline asm
 # to emit a BPF "exit" instruction followed by __builtin_unreachable() to tell
 # the compiler the path is dead.  With TrapUnreachable, llc inserts a trap
 # instruction after the exit; the kernel BPF verifier sees it as unreachable

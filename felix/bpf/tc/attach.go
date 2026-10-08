@@ -70,6 +70,7 @@ type AttachPoint struct {
 	NATOutgoingExcludeHosts       bool
 	UDPOnly                       bool
 	RedirectPeer                  bool
+	IfaceEncaps                   bool
 	FlowLogsEnabled               bool
 	OverlayTunnelID               uint32
 	AttachType                    apiv3.BPFAttachOption
@@ -636,6 +637,10 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 
 	if ap.RedirectPeer {
 		globalData.Flags |= libbpf.GlobalsRedirectPeer
+	}
+
+	if ap.IfaceEncaps {
+		globalData.Flags |= libbpf.GlobalsIfaceEncaps
 	}
 
 	if ap.FlowLogsEnabled {

@@ -5,6 +5,8 @@
 #ifndef __CALI_IFSTATE_H__
 #define __CALI_IFSTATE_H__
 
+#include "cali_bpf.h"
+
 struct ifstate_val {
 	__u32 flags;
 	char  name[16];

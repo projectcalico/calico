@@ -31,6 +31,9 @@ here. A few methods carry design-relevant constraints worth calling out:
 - **`ReleaseIPs`** takes `ReleaseOptions` with a sequence number; every release path must plumb it through (see [CAS retry and sequence numbers](#cas-retry-and-sequence-numbers)).
 - **`SetOwnerAttributes`** is KubeVirt-only and swaps owner attributes under preconditions, without releasing and re-allocating. Felix's live-migration monitor is the only non-CNI
   caller.
+- **`MoveIPToHandle`** re-points an allocated address at a different handle in one block CAS, without releasing it, so the address is never unowned and never enters cooldown.
+  `ExpectedOwner` is required and has to name a namespace and a pod, so only the address's current owner can move it; handing an address to a different workload is a release and a
+  fresh assignment.
 - **`GetIPAMConfig` / `SetIPAMConfig`** read and write the v1 `IPAMConfig` / v3 `IPAMConfiguration` singleton. Field-level bounds are enforced by the CRD schema in k8s mode, but the
   cross-field rules live only in `SetIPAMConfig` - a direct CRD write can persist a config that violates them, which the library rejects on read (see [IPAMConfig](#ipamconfig)).
 
@@ -42,8 +45,9 @@ here. A few methods carry design-relevant constraints worth calling out:
 - `AutoAssign` returning block-masked CIDRs is load-bearing for the CNI plugin's routing. Don't quietly switch to `/32`.
 - Anything that makes an address unassignable has to be discounted by `GetUtilization` as well as by the allocation path, or the reporting surfaces over-count free addresses. The
   two must be fed from the same set of reserved CIDRs: allocation and the per-block counts share the `addrFilter`, and the pool-level counts use the same CIDRs as a set.
-- There is one implementation of the reserved-set arithmetic, in [`reserved.go`](../../libcalico-go/lib/ipam/reserved.go). `GetUtilization` and `NumReservedIPsInCIDR` are both thin
-  callers of it. Don't grow a second copy in a consumer - a reporting surface that disagrees with `calicoctl ipam show` is worse than no surface.
+- There is one implementation of the reserved-set arithmetic, in [`accounting/reserved.go`](../../libcalico-go/lib/ipam/accounting/reserved.go), beside the shared pool counts,
+  block attribution and leak predicate. `GetUtilization` and `NumReservedIPsInCIDR` are both thin callers of it. Don't grow a second copy in a consumer - a reporting
+  surface that disagrees with `calicoctl ipam show` is worse than no surface.
 
 ## AutoAssign and host affinity
 
@@ -146,7 +150,7 @@ Conventions in use:
 | Caller | Handle ID format |
 |---|---|
 | CNI workload (default) | `<network-name>.<container-id>` via `cni-plugin/internal/pkg/utils.GetHandleID`. For the default network, `<network-name>` is `k8s-pod-network`. |
-| CNI workload (KubeVirt persistent) | `<network-name>.<namespace>-<vm-name>` so live-migrated VMs keep the same handle. |
+| CNI workload (KubeVirt persistent) | `<network-name>.vmi.<namespace>.<vm-name>` via `vmipam.CreateVMHandleID`, so live-migrated VMs keep the same handle. Hashed if it would exceed 128 characters. |
 | IPIP tunnel | `ipip-tunnel-addr-<node>` |
 | VXLAN tunnel | `vxlan-tunnel-addr-<node>`; IPv6 variant is `vxlan-v6-tunnel-addr-<node>` (note the `-v6-` infix, not a suffix) |
 | WireGuard tunnel | `wireguard-tunnel-addr-<node>`; IPv6 variant is `wireguard-v6-tunnel-addr-<node>` |
@@ -164,6 +168,8 @@ found - see [`./ipam-cni.md`](./ipam-cni.md).
   handles on node rename. That parser's prefix list is v4-only today (`ipip-tunnel-addr-`, `vxlan-tunnel-addr-`, `wireguard-tunnel-addr-`), so it already skips the `*-v6-tunnel-addr-`
   handles - add v6 prefixes there if you touch it.
 - Skipping the workload-ID release on CNI DEL leaks IPs whose container-ID changed under CRI. Don't drop the second release call.
+- Every change to an allocation's `(handle, active owner, alternate owner)` tuple goes through `updateAllocationOwnership`, which re-points the ordinal at a new attribute entry.
+  Editing an entry in place rewrites the ownership of every other address sharing it, since `findOrAddAttribute` de-duplicates entries by value.
 
 ## IPAMConfig
 

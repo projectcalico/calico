@@ -42,6 +42,8 @@ const (
 // +kubebuilder:validation:XValidation:rule="(!has(self.protocol) || (self.protocol != 'ICMPv6' && self.protocol != 58)) || !has(self.ipVersion) || self.ipVersion == 6",message="protocol ICMPv6 requires ipVersion 6",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="(!has(self.notProtocol) || (self.notProtocol != 'ICMP' && self.notProtocol != 1)) || !has(self.ipVersion) || self.ipVersion == 4",message="protocol ICMP requires ipVersion 4",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="(!has(self.notProtocol) || (self.notProtocol != 'ICMPv6' && self.notProtocol != 58)) || !has(self.ipVersion) || self.ipVersion == 6",message="protocol ICMPv6 requires ipVersion 6",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.protocol) || (type(self.protocol) == int ? self.protocol >= 1 && self.protocol <= 255 : self.protocol in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])",message="protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP, UDPLite) or a number in 1-255",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.notProtocol) || (type(self.notProtocol) == int ? self.notProtocol >= 1 && self.notProtocol <= 255 : self.notProtocol in ['TCP', 'UDP', 'ICMP', 'ICMPv6', 'SCTP', 'UDPLite'])",message="protocol must be a name (TCP, UDP, ICMP, ICMPv6, SCTP, UDPLite) or a number in 1-255",reason=FieldValueInvalid
 type Rule struct {
 	Action Action `json:"action"`
 

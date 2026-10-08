@@ -28,6 +28,7 @@ import (
 	"github.com/openshift/library-go/pkg/crypto"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/stretchr/testify/mock"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,13 +37,24 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/testing"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operator "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
+)
+
+const (
+	operatorNamespace      = "tigera-operator"
+	operatorServiceAccount = "tigera-operator"
+
+	// operatorTokenSeconds outlives the longest FV, since nothing refreshes it.
+	operatorTokenSeconds = int64(2 * 60 * 60)
 )
 
 // ExpectResourceCreated asserts that the given object is created,
@@ -89,6 +101,36 @@ func GetContainer(containers []corev1.Container, name string) *corev1.Container 
 		}
 	}
 	return nil
+}
+
+// AdminConfig returns the suite's own config. The FV keeps it at admin so specs can
+// set up and tear down what the operator under test has no permission to touch.
+func AdminConfig() *rest.Config {
+	cfg, err := config.GetConfig()
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	return cfg
+}
+
+// OperatorConfig returns admin's config re-authenticated as the tigera-operator
+// ServiceAccount, so an operator built from it is bound by the RBAC the chart grants
+// rather than by the admin kubeconfig the suite runs under.
+func OperatorConfig(admin *rest.Config) *rest.Config {
+	cs, err := kubernetes.NewForConfig(admin)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+	token, err := cs.CoreV1().ServiceAccounts(operatorNamespace).CreateToken(
+		context.Background(),
+		operatorServiceAccount,
+		&authenticationv1.TokenRequest{
+			Spec: authenticationv1.TokenRequestSpec{ExpirationSeconds: ptr.To(operatorTokenSeconds)},
+		},
+		metav1.CreateOptions{},
+	)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "the FV cluster needs the operator RBAC applied; see deploy-operator-rbac")
+
+	cfg := rest.AnonymousClientConfig(admin)
+	cfg.BearerToken = token.Status.Token
+	return cfg
 }
 
 // RunOperator runs the provided operator manager in a separate goroutine so that

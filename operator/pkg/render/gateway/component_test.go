@@ -109,6 +109,17 @@ var _ = Describe("Gateway component render", func() {
 			Expect(gw.Labels).To(HaveKeyWithValue(gateway.GatewayLabel, prefix))
 		})
 
+		It("stamps the access grants with the cleanup finalizer", func() {
+			for _, name := range []string{prefix + "-ingressgateway-access", prefix + "-ingressgateway-backend-access"} {
+				role := findObject[*rbacv1.Role](toCreate, name, bkNS)
+				Expect(role).NotTo(BeNil(), "expected access Role "+name)
+				Expect(role.Finalizers).To(ConsistOf(gateway.RBACFinalizer))
+				binding := findObject[*rbacv1.RoleBinding](toCreate, name, bkNS)
+				Expect(binding).NotTo(BeNil(), "expected access RoleBinding "+name)
+				Expect(binding.Finalizers).To(ConsistOf(gateway.RBACFinalizer))
+			}
+		})
+
 		It("renders a Gateway with the correct listener", func() {
 			gw := findObject[*gapi.Gateway](toCreate, prefix+"-gateway", gwNS)
 			Expect(gw).NotTo(BeNil())

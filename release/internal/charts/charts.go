@@ -24,6 +24,7 @@ import (
 	"slices"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/docs"
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -57,13 +58,10 @@ const (
 	CalicoChart              = "calico"
 	ProjectCalicoV1CRDsChart = "crd.projectcalico.org.v1"
 	ProjectCalicoV3CRDsChart = "projectcalico.org.v3"
-
-	// docsURL is the base URL for the docs site
-	docsURL = "https://docs.tigera.io"
 )
 
 var RepoURL = func() (string, error) {
-	url, err := url.JoinPath(docsURL, "calico", chartsDirName)
+	url, err := url.JoinPath(docs.BaseURL, docs.ProductSlug, chartsDirName)
 	if err != nil {
 		return "", fmt.Errorf("charts repo URL: %w", err)
 	}
@@ -86,6 +84,10 @@ var All = func() []string {
 		ProjectCalicoV1CRDsChart,
 		ProjectCalicoV3CRDsChart,
 	}
+}
+
+func IndexFilePath(baseDir string) string {
+	return filepath.Join(baseDir, indexFileName)
 }
 
 // Version qualifies the product version when the charts rev separately from
@@ -144,9 +146,19 @@ func FileName(chart, chartVersion string) string {
 	return fmt.Sprintf("%s.tgz", name)
 }
 
-// Dir is where a release's charts or their index sit under outputDir.
-func Dir(outputDir string) string {
+// Dir returns the output dir with the charts directory appended.
+var Dir = func(outputDir string) string {
 	return filepath.Join(outputDir, chartsDirName)
+}
+
+// OutputDir is where a release's charts are built under outputDir.
+var OutputDir = func(outputDir string) string {
+	return outputDir
+}
+
+// IndexDir is where a chart index sit under outputDir.
+var IndexDir = func(outputDir string) string {
+	return Dir(outputDir)
 }
 
 // versionedDir keeps one release's charts apart from another's, for a directory
@@ -346,6 +358,7 @@ func calicoChartEdits(productVersion, productRegistry string) []ValueEdit {
 	return []ValueEdit{
 		{Chart: CalicoChart, Edit: yamledit.Edit{Key: "version", To: productVersion}},
 		{Chart: CalicoChart, Edit: yamledit.Edit{Key: "calico.registry", To: productRegistry}},
+		{Chart: CalicoChart, Edit: yamledit.Edit{Key: "cniPlugins.registry", To: productRegistry}},
 		{Chart: CalicoChart, Edit: yamledit.Edit{Key: "node.registry", To: productRegistry}},
 		{Chart: CalicoChart, Edit: yamledit.Edit{Key: "flannelMigration.registry", To: productRegistry}},
 	}

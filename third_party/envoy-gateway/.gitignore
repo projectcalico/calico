@@ -1,3 +1,4 @@
+.envoy-gateway.fetched
 .envoy-gateway.downloaded
 .envoy-gateway.created-*
 envoy-gateway/

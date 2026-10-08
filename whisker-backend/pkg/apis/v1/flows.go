@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -268,6 +268,22 @@ type FlowResponse struct {
 	PacketsOut      int64       `json:"packets_out"`
 	BytesIn         int64       `json:"bytes_in"`
 	BytesOut        int64       `json:"bytes_out"`
+
+	// Service is the destination service the flow targets, if any.
+	Service *ServiceRef `json:"service,omitempty"`
+
+	// Endpoint types for source and destination, named as Goldmane's EndpointType
+	// enum does: WorkloadEndpoint, HostEndpoint, NetworkSet, Network. Omitted
+	// when the upstream did not report one.
+	SourceType string `json:"source_type,omitempty"`
+	DestType   string `json:"dest_type,omitempty"`
+}
+
+type ServiceRef struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Port      int64  `json:"port"`
+	PortName  string `json:"port_name,omitempty"`
 }
 
 type PolicyTrace struct {

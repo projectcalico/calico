@@ -31,7 +31,10 @@ if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
 elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
   # Scheduled CI: download the pre-built e2e binary from the hashrelease.
   echo "[INFO] downloading e2e binary from hashrelease..."
-  HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${RELEASE_STREAM}.txt")
+  # Upgrade runs set RELEASE_STREAM to the downlevel version they install
+  # first, but the tests run against the uplevel version.
+  E2E_STREAM=${UPLEVEL_RELEASE_STREAM:-${RELEASE_STREAM}}
+  HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${E2E_STREAM}.txt")
   echo "[INFO] hashrelease URL: ${HASHREL_URL}"
   ARCH=$(uname -m); [[ "$ARCH" == "x86_64" ]] && ARCH=amd64; [[ "$ARCH" == "aarch64" ]] && ARCH=arm64
   mkdir -p "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s"
@@ -107,6 +110,17 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     run_as_root_env=(-e RUN_AS_ROOT=true)
   fi
 
+  # Resolve the Go build cache the way lib.Makefile does, so the host-side
+  # `make -C e2e build` above and this container share one cache rather than
+  # compiling from cold in each: LOCAL_GO_PKG_CACHE, then GOCACHE when the Go
+  # tools resolve it to an absolute path, then the repo-local default.
+  go_cache="${LOCAL_GO_PKG_CACHE:-$(go env GOCACHE 2>/dev/null || true)}"
+  case "${go_cache}" in
+    /*) ;;
+    *) go_cache="$(pwd)/.go-pkg-cache" ;;
+  esac
+  mkdir -p "${go_cache}"
+
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
   e2e_rc=0
@@ -117,11 +131,12 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     -e GOPATH=/go \
     -e KUBECONFIG=/kubeconfig \
     -e PRODUCT=${PRODUCT:-calico} \
+    -e WINDOWS_OS \
     ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
     "${auth_mount[@]}" \
     "${aws_cred_env[@]}" \
     -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
-    -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
+    -v "${go_cache}":/go-cache:rw \
     -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
     -w /go/src/github.com/projectcalico/calico \
     "${RUN_IMAGE}" \

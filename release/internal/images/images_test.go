@@ -15,15 +15,21 @@
 package images
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"path"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/steps"
 )
 
@@ -230,6 +236,40 @@ func TestPublishRetagVersusPush(t *testing.T) {
 	})
 }
 
+func TestPublishEnv(t *testing.T) {
+	t.Run("is replaceable", func(t *testing.T) {
+		restore := publishEnv
+		t.Cleanup(func() { publishEnv = restore })
+		publishEnv = func(s settings) []string {
+			return append(slices.DeleteFunc(restore(s), func(e string) bool {
+				return strings.HasPrefix(e, "RELEASE=")
+			}), "REPLACED=true")
+		}
+
+		for _, tc := range []struct {
+			name  string
+			extra []PublishOption
+		}{
+			{name: "push"},
+			{name: "retag", extra: []PublishOption{WithRetag("gcr.io/unique-caldron/hashrelease", "v3.30.0-abcdef", false)}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				f := &fakeRunner{}
+				if err := publish(f, sharedTargetVariants(), tc.extra...); err != nil {
+					t.Fatalf("Publish: %v", err)
+				}
+				env := f.envFor("cmd/calico", "publish-image")
+				if !hasEnv(env, "REPLACED=true") {
+					t.Errorf("env missing the added variable, got %v", env)
+				}
+				if hasEnv(env, "RELEASE=true") {
+					t.Errorf("env still carries the dropped RELEASE, got %v", env)
+				}
+			})
+		}
+	})
+}
+
 // A publish latches CONFIRM; a dry run latches DRYRUN and pushes nothing.
 func TestPublishConfirmLatch(t *testing.T) {
 	for _, tc := range []struct {
@@ -365,6 +405,31 @@ func TestValidate(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("reports every invalid input at once", func(t *testing.T) {
+		declared := []Variant{
+			{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}, Images: []string{"whisker"}},
+			{Name: "alt", Target: "release-publish", ReleaseDirs: []string{"node"}, Images: []string{"whisker"}},
+		}
+		err := Publish("", testVersion, declared, true, alwaysResolves("sha256:aaa"), recordingOpts(&imageNameRunner{}, &fakeRecorder{})...)
+		for _, want := range []string{"no repository root", `variant "standard" declares`, `variant "alt" declares`} {
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("got %v, want it to contain %q", err, want)
+			}
+		}
+	})
+
+	t.Run("other steps reject declared images", func(t *testing.T) {
+		declared := []Variant{{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}, Images: []string{"whisker"}}}
+		f := &imageNameRunner{images: "node"}
+		err := Publish(testRepoRoot, testVersion, declared, true, alwaysResolves("sha256:aaa"), recordingOpts(f, &fakeRecorder{})...)
+		if err == nil || !strings.Contains(err.Error(), "declares its images") {
+			t.Errorf("expected a publish of declared images to fail, got %v", err)
+		}
+		if slices.Contains(f.targetsFor("node"), "release-publish") {
+			t.Error("the publish ran its target anyway")
+		}
+	})
 }
 
 func TestNarrowVariants(t *testing.T) {
@@ -657,15 +722,12 @@ func TestPrefixedVariantRecordsPrefixedRefs(t *testing.T) {
 	}
 }
 
-// Archiving saves every image a variant ships, not a hardcoded pair.
-func TestArchiveSavesEveryVariantsImages(t *testing.T) {
+// The tarball ships what a user deploys: standard images only, since the
+// Windows images have an archive of their own.
+func TestArchiveSavesStandardImagesOnly(t *testing.T) {
 	f := &imageNameRunner{images: "node node-windows"}
 	dir := t.TempDir()
-	err := Archive(testRepoRoot, testVersion, []Variant{
-		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
-		{Name: WindowsVariant, Target: "release-windows", ReleaseDirs: []string{"node"}},
-	}, dir, archiveOpts(f)...)
-	if err != nil {
+	if err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...).Contribute(dir); err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
 	var saved []string
@@ -675,7 +737,7 @@ func TestArchiveSavesEveryVariantsImages(t *testing.T) {
 		}
 	}
 	slices.Sort(saved)
-	want := []string{testRegistry + "/node-windows:" + testVersion, testRegistry + "/node:" + testVersion}
+	want := []string{testRegistry + "/node:" + testVersion}
 	if !slices.Equal(saved, want) {
 		t.Errorf("archived\n got %v\nwant %v", saved, want)
 	}
@@ -685,9 +747,7 @@ func TestArchiveSavesEveryVariantsImages(t *testing.T) {
 func TestArchivePullsWhenAsked(t *testing.T) {
 	f := &imageNameRunner{images: "node"}
 	f.failures = map[string]int{"inspect": 9}
-	err := Archive(testRepoRoot, testVersion, oneStandardVariant("node"), t.TempDir(),
-		archiveOpts(f, WithPull(true))...)
-	if err != nil {
+	if err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f, WithPull(true))...).Contribute(t.TempDir()); err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
 	var pulled bool
@@ -703,7 +763,7 @@ func TestArchivePullsWhenAsked(t *testing.T) {
 
 func TestArchiveRejectsNoDir(t *testing.T) {
 	f := &imageNameRunner{images: "node"}
-	if err := Archive(testRepoRoot, testVersion, oneStandardVariant("node"), "", archiveOpts(f)...); err == nil {
+	if err := Archive(testRepoRoot, testVersion, []string{"node"}, archiveOpts(f)...).Contribute(""); err == nil {
 		t.Fatal("expected an error when no archive directory is given")
 	}
 }
@@ -712,7 +772,7 @@ func TestArchiveRejectsNoDir(t *testing.T) {
 // than indexed into.
 func TestArchiveRejectsNoRegistry(t *testing.T) {
 	f := &imageNameRunner{images: "node"}
-	err := Archive(testRepoRoot, testVersion, oneStandardVariant("node"), t.TempDir(), WithRunner(f))
+	err := Archive(testRepoRoot, testVersion, []string{"node"}, WithRunner(f)).Contribute(t.TempDir())
 	if err == nil {
 		t.Fatal("expected an error when no registry is given")
 	}
@@ -913,4 +973,438 @@ func TestResumeKeepsPendingUnitsInOrder(t *testing.T) {
 	if slices.Contains(f.targetsFor("whisker"), "release-publish") {
 		t.Error("whisker was already recorded, so it should have been skipped")
 	}
+}
+
+func TestOnlyMissing(t *testing.T) {
+	missing := func(images ...string) error { return &MissingError{Images: images} }
+	for _, tc := range []struct {
+		name   string
+		err    error
+		want   []string
+		wantOK bool
+	}{
+		{name: "nil", err: nil},
+		{name: "missing", err: missing("a"), want: []string{"a"}, wantOK: true},
+		{name: "wrapped", err: fmt.Errorf("step: %w", missing("a")), want: []string{"a"}, wantOK: true},
+		{name: "joined", err: errors.Join(missing("a"), fmt.Errorf("x: %w", missing("b"))), want: []string{"a", "b"}, wantOK: true},
+		{name: "joined with a lookup error", err: errors.Join(missing("a"), errors.New("unauthorized"))},
+		{name: "a lookup error", err: errors.New("unauthorized")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := OnlyMissing(tc.err)
+			if ok != tc.wantOK || !slices.Equal(got, tc.want) {
+				t.Errorf("OnlyMissing() = %v, %v; want %v, %v", got, ok, tc.want, tc.wantOK)
+			}
+		})
+	}
+}
+
+func TestResolve(t *testing.T) {
+	resolveOpts := func(f command.CommandRunner, rec steps.RefRecorder) []ResolveOption {
+		return []ResolveOption{
+			WithRunner(f),
+			WithRegistries("quay.io/calico"),
+			WithArches("amd64", "arm64"),
+			WithRecord(rec),
+		}
+	}
+	absent := func(suffix string) steps.DigestResolver {
+		return func(image string) (string, bool, error) {
+			if strings.HasSuffix(image, suffix) {
+				return "", false, nil
+			}
+			return "sha256:aaa", true, nil
+		}
+	}
+
+	t.Run("records the release tag and each arch tag", func(t *testing.T) {
+		f := &imageNameRunner{images: "node"}
+		rec := &fakeRecorder{}
+		if err := Resolve(testRepoRoot, testVersion, oneStandardVariant("node"),
+			alwaysResolves("sha256:aaa"), resolveOpts(f, rec)...); err != nil {
+			t.Fatalf("Resolve: %v", err)
+		}
+		if len(rec.refs) != 3 {
+			t.Errorf("expected 3 refs (index + 2 arches), got %v", rec.refs)
+		}
+	})
+
+	t.Run("pushes nothing", func(t *testing.T) {
+		f := &imageNameRunner{images: "node"}
+		if err := Resolve(testRepoRoot, testVersion, oneStandardVariant("node"),
+			alwaysResolves("sha256:aaa"), resolveOpts(f, &fakeRecorder{})...); err != nil {
+			t.Fatalf("Resolve: %v", err)
+		}
+		if slices.Contains(f.targetsFor("node"), "release-publish") {
+			t.Error("Resolve ran the publish target")
+		}
+	})
+
+	t.Run("a missing image fails after the rest are recorded", func(t *testing.T) {
+		f := &imageNameRunner{perDir: true}
+		rec := &fakeRecorder{}
+		err := Resolve(testRepoRoot, testVersion,
+			[]Variant{{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node", "typha", "whisker"}}},
+			absent("/typha:"+testVersion), resolveOpts(f, rec)...)
+		if err == nil {
+			t.Fatal("expected a missing image to fail the run")
+		}
+		if !strings.Contains(err.Error(), "quay.io/calico/typha:"+testVersion) {
+			t.Errorf("error should name the missing image, got %q", err)
+		}
+		for _, repo := range []string{"quay.io/calico/node@", "quay.io/calico/whisker@"} {
+			if !slices.ContainsFunc(rec.refs, func(r string) bool { return strings.HasPrefix(r, repo) }) {
+				t.Errorf("%s was not recorded before the failure: %v", repo, rec.refs)
+			}
+		}
+	})
+
+	t.Run("every missing image is named", func(t *testing.T) {
+		f := &imageNameRunner{perDir: true}
+		err := Resolve(testRepoRoot, testVersion,
+			[]Variant{{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node", "typha"}}},
+			absent(":"+testVersion), resolveOpts(f, &fakeRecorder{})...)
+		missing, ok := OnlyMissing(err)
+		if !ok {
+			t.Fatalf("got %v, want only missing images", err)
+		}
+		for _, image := range []string{"quay.io/calico/node:" + testVersion, "quay.io/calico/typha:" + testVersion} {
+			if !slices.Contains(missing, image) {
+				t.Errorf("missing should name %s, got %v", image, missing)
+			}
+		}
+	})
+
+	t.Run("an absent arch tag is not missing", func(t *testing.T) {
+		f := &imageNameRunner{images: "node"}
+		rec := &fakeRecorder{}
+		if err := Resolve(testRepoRoot, testVersion, oneStandardVariant("node"),
+			absent("-arm64"), resolveOpts(f, rec)...); err != nil {
+			t.Fatalf("Resolve: %v", err)
+		}
+		if len(rec.refs) != 2 {
+			t.Errorf("expected the arm64 tag to be skipped, got %v", rec.refs)
+		}
+	})
+
+	t.Run("a failed lookup is not reported as missing", func(t *testing.T) {
+		f := &imageNameRunner{images: "node"}
+		resolve := func(string) (string, bool, error) {
+			return "", false, fmt.Errorf("network is unreachable")
+		}
+		err := Resolve(testRepoRoot, testVersion, oneStandardVariant("node"),
+			resolve, resolveOpts(f, &fakeRecorder{})...)
+		if err == nil {
+			t.Fatal("expected a failed lookup to fail the run")
+		}
+		if !strings.Contains(err.Error(), "network is unreachable") {
+			t.Errorf("error should carry the cause, got %q", err)
+		}
+		if _, ok := OnlyMissing(err); ok {
+			t.Errorf("a failed lookup was reported as a missing image: %q", err)
+		}
+	})
+
+	t.Run("a failed lookup keeps what the others found", func(t *testing.T) {
+		f := &imageNameRunner{perDir: true}
+		rec := &fakeRecorder{}
+		failing := []string{"quay.io/calico/node:" + testVersion + "-amd64", "quay.io/calico/typha:" + testVersion}
+		resolve := func(image string) (string, bool, error) {
+			if slices.Contains(failing, image) {
+				return "", false, fmt.Errorf("network is unreachable")
+			}
+			return "sha256:aaa", true, nil
+		}
+		err := Resolve(testRepoRoot, testVersion,
+			[]Variant{{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node", "typha"}}},
+			resolve, resolveOpts(f, rec)...)
+		for _, image := range failing {
+			if err == nil || !strings.Contains(err.Error(), image) {
+				t.Errorf("error should name %s, got %v", image, err)
+			}
+		}
+		want := []string{
+			"quay.io/calico/node@sha256:aaa", "quay.io/calico/node@sha256:aaa",
+			"quay.io/calico/typha@sha256:aaa", "quay.io/calico/typha@sha256:aaa",
+		}
+		if !slices.Equal(rec.refs, want) {
+			t.Errorf("refs %v, want %v", rec.refs, want)
+		}
+	})
+
+	t.Run("only the first registry must have the release tag", func(t *testing.T) {
+		for _, tc := range []struct {
+			name        string
+			absent      string
+			wantMissing bool
+			wantRefs    []string
+		}{
+			{
+				name:     "absent from a later registry",
+				absent:   "docker.io/calico/node:" + testVersion,
+				wantRefs: []string{"quay.io/calico/node@sha256:aaa"},
+			},
+			{
+				name:        "absent from the first registry",
+				absent:      "quay.io/calico/node:" + testVersion,
+				wantMissing: true,
+				wantRefs:    []string{"docker.io/calico/node@sha256:aaa"},
+			},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				rec := &fakeRecorder{}
+				resolve := func(image string) (string, bool, error) {
+					if image == tc.absent {
+						return "", false, nil
+					}
+					return "sha256:aaa", true, nil
+				}
+				opts := []ResolveOption{
+					WithRunner(&imageNameRunner{images: "node"}),
+					WithRegistries("quay.io/calico", "docker.io/calico"),
+					WithRecord(rec),
+				}
+				err := Resolve(testRepoRoot, testVersion, oneStandardVariant("node"), resolve, opts...)
+				if got := err != nil && strings.Contains(err.Error(), tc.absent); got != tc.wantMissing {
+					t.Errorf("reported %s missing = %v, want %v (err: %v)", tc.absent, got, tc.wantMissing, err)
+				}
+				if !slices.Equal(rec.refs, tc.wantRefs) {
+					t.Errorf("refs %v, want %v", rec.refs, tc.wantRefs)
+				}
+			})
+		}
+	})
+
+	t.Run("a declared variant reads only its tag prefix", func(t *testing.T) {
+		f := &imageNameRunner{prefix: "alt", envKey: "ALT_VARIANT=true"}
+		rec := &fakeRecorder{}
+		variants := []Variant{
+			{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}, Images: []string{"whisker"}},
+			{Name: "alt", Target: "release-publish", Env: []string{"ALT_VARIANT=true"}, ReleaseDirs: []string{"node"}, Images: []string{"whisker"}},
+		}
+		var mu sync.Mutex
+		var asked []string
+		resolve := func(image string) (string, bool, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			asked = append(asked, image)
+			return "sha256:aaa", true, nil
+		}
+		if err := Resolve(testRepoRoot, testVersion, variants, resolve, resolveOpts(f, rec)...); err != nil {
+			t.Fatalf("Resolve: %v", err)
+		}
+		if slices.Contains(f.targetsFor("node"), "build-images") {
+			t.Error("a declared variant read its image names from make")
+		}
+		for _, image := range []string{
+			"quay.io/calico/whisker:" + testVersion,
+			"quay.io/calico/whisker:" + testVersion + "-arm64",
+			"quay.io/calico/whisker:alt-" + testVersion,
+			"quay.io/calico/whisker:alt-" + testVersion + "-amd64",
+		} {
+			if !slices.Contains(asked, image) {
+				t.Errorf("did not resolve %s; asked for %v", image, asked)
+			}
+		}
+		if len(rec.refs) != 6 {
+			t.Errorf("expected 6 refs (2 variants x index + 2 arches), got %v", rec.refs)
+		}
+	})
+
+	t.Run("a failed lookup names the declared image, not its dir", func(t *testing.T) {
+		declared := []Variant{{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}, Images: []string{"whisker"}}}
+		resolve := func(string) (string, bool, error) { return "", false, fmt.Errorf("network is unreachable") }
+		err := Resolve(testRepoRoot, testVersion, declared, resolve, resolveOpts(&imageNameRunner{}, &fakeRecorder{})...)
+		if err == nil || !strings.Contains(err.Error(), "resolving images for whisker:") {
+			t.Errorf("got %v, want it to name whisker", err)
+		}
+	})
+
+	t.Run("needs a checkout", func(t *testing.T) {
+		declared := []Variant{{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}, Images: []string{"whisker"}}}
+		err := Resolve("", testVersion, declared,
+			alwaysResolves("sha256:aaa"), resolveOpts(&imageNameRunner{}, &fakeRecorder{})...)
+		if err == nil || !strings.Contains(err.Error(), "no repository root") {
+			t.Errorf("expected a missing repository root to fail, got %v", err)
+		}
+	})
+
+	t.Run("scans once every image is found", func(t *testing.T) {
+		scan, scans := scanServer(t)
+		opts := append(resolveOpts(&imageNameRunner{images: "node"}, &fakeRecorder{}), WithScan(scan))
+		if err := Resolve(testRepoRoot, testVersion, oneStandardVariant("node"), alwaysResolves("sha256:aaa"), opts...); err != nil {
+			t.Fatalf("Resolve: %v", err)
+		}
+		if got := len(scans.sent()); got != 1 {
+			t.Errorf("sent %d scan requests, want 1", got)
+		}
+	})
+
+	t.Run("a dry-run scan sends nothing", func(t *testing.T) {
+		scan, scans := scanServer(t)
+		scan.DryRun = true
+		opts := append(resolveOpts(&imageNameRunner{images: "node"}, &fakeRecorder{}), WithScan(scan))
+		if err := Resolve(testRepoRoot, testVersion, oneStandardVariant("node"), alwaysResolves("sha256:aaa"), opts...); err != nil {
+			t.Fatalf("Resolve: %v", err)
+		}
+		if got := len(scans.sent()); got != 0 {
+			t.Errorf("a dry run sent %d scan requests", got)
+		}
+	})
+
+	t.Run("does not scan when an image is missing", func(t *testing.T) {
+		scan, scans := scanServer(t)
+		opts := append(resolveOpts(&imageNameRunner{images: "node"}, &fakeRecorder{}), WithScan(scan))
+		if err := Resolve(testRepoRoot, testVersion, oneStandardVariant("node"), absent(":"+testVersion), opts...); err == nil {
+			t.Fatal("expected the missing image to fail")
+		}
+		if got := len(scans.sent()); got != 0 {
+			t.Errorf("sent %d scan requests for a run with a missing image", got)
+		}
+	})
+
+	t.Run("keeps lookups in flight under the limit", func(t *testing.T) {
+		var dirs []string
+		for i := range 30 {
+			dirs = append(dirs, fmt.Sprintf("dir%d", i))
+		}
+		var inFlight, peak atomic.Int32
+		resolve := func(string) (string, bool, error) {
+			n := inFlight.Add(1)
+			for {
+				p := peak.Load()
+				if n <= p || peak.CompareAndSwap(p, n) {
+					break
+				}
+			}
+			time.Sleep(2 * time.Millisecond)
+			inFlight.Add(-1)
+			return "sha256:aaa", true, nil
+		}
+		variants := []Variant{{Name: StandardVariant, Target: "release-publish", ReleaseDirs: dirs}}
+		if err := Resolve(testRepoRoot, testVersion, variants, resolve,
+			resolveOpts(&imageNameRunner{perDir: true}, &fakeRecorder{})...); err != nil {
+			t.Fatalf("Resolve: %v", err)
+		}
+		if got, limit := peak.Load(), int32(lookupLimit*lookupLimit); got > limit {
+			t.Errorf("%d lookups in flight, want at most %d", got, limit)
+		}
+	})
+
+	t.Run("needs a registry", func(t *testing.T) {
+		err := Resolve(testRepoRoot, testVersion, oneStandardVariant("node"),
+			alwaysResolves("sha256:aaa"), WithRunner(&imageNameRunner{images: "node"}))
+		if err == nil {
+			t.Error("expected no registries to fail")
+		}
+	})
+}
+
+type scanLog struct {
+	mu    sync.Mutex
+	scans [][]string
+}
+
+func (l *scanLog) sent() [][]string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Clone(l.scans)
+}
+
+func scanServer(t *testing.T) (*ScanRequest, *scanLog) {
+	t.Helper()
+	scans := &scanLog{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Images []string `json:"images"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		scans.mu.Lock()
+		scans.scans = append(scans.scans, body.Images)
+		scans.mu.Unlock()
+		_, _ = w.Write([]byte(`{"results_link": "http://example.com/results"}`))
+	}))
+	t.Cleanup(srv.Close)
+	return &ScanRequest{
+		Config:    imagescanner.Config{APIURL: srv.URL, Token: "token", Scanner: "scanner"},
+		Images:    []string{"quay.io/calico/node:" + testVersion},
+		OutputDir: t.TempDir(),
+	}, scans
+}
+
+func TestWithDependencies(t *testing.T) {
+	const node, dependent = "quay.io/calico/node:" + testVersion, "quay.io/calico/dependent:" + testVersion
+	resolveOpts := func(f command.CommandRunner, rec steps.RefRecorder) []ResolveOption {
+		return []ResolveOption{WithRunner(f), WithRegistries("quay.io/calico"), WithRecord(rec)}
+	}
+	withDependent := func(t *testing.T) (*ScanRequest, *scanLog) {
+		scan, scans := scanServer(t)
+		scan.Images = []string{node, dependent}
+		return scan, scans
+	}
+
+	t.Run("a failed dependency fails the resolve after recording and holds the scan", func(t *testing.T) {
+		scan, scans := withDependent(t)
+		rec := &fakeRecorder{}
+		dep := func() ([]string, error) { return nil, fmt.Errorf("unauthorized") }
+		opts := append(resolveOpts(&imageNameRunner{images: "node"}, rec), WithScan(scan), WithDependencies(dep))
+		err := Resolve(testRepoRoot, testVersion, oneStandardVariant("node"), alwaysResolves("sha256:aaa"), opts...)
+		if err == nil || !strings.Contains(err.Error(), "unauthorized") {
+			t.Fatalf("got %v, want the dependency's error", err)
+		}
+		if len(rec.refs) == 0 {
+			t.Error("the images were not recorded")
+		}
+		if sent := scans.sent(); len(sent) != 0 {
+			t.Errorf("sent %v from a failed resolve", sent)
+		}
+	})
+
+	t.Run("a dependency leaves its unscanned refs out of the scan", func(t *testing.T) {
+		scan, scans := withDependent(t)
+		dep := func() ([]string, error) { return []string{dependent}, nil }
+		opts := append(resolveOpts(&imageNameRunner{images: "node"}, &fakeRecorder{}), WithScan(scan), WithDependencies(dep))
+		if err := Resolve(testRepoRoot, testVersion, oneStandardVariant("node"), alwaysResolves("sha256:aaa"), opts...); err != nil {
+			t.Fatalf("Resolve: %v", err)
+		}
+		if sent := scans.sent(); len(sent) != 1 || !slices.Equal(sent[0], []string{node}) {
+			t.Errorf("sent %v, want one scan of %s", sent, node)
+		}
+		if !slices.Equal(scan.Images, []string{node, dependent}) {
+			t.Errorf("the request was changed to %v", scan.Images)
+		}
+	})
+
+	t.Run("a failed dependency holds the publish scan", func(t *testing.T) {
+		scan, scans := withDependent(t)
+		dep := func() ([]string, error) { return nil, fmt.Errorf("unauthorized") }
+		opts := recordingOpts(&imageNameRunner{images: "node"}, &fakeRecorder{}, WithScan(scan), WithDependencies(dep))
+		if err := Publish(testRepoRoot, testVersion, oneStandardVariant("node"), true, alwaysResolves("sha256:aaa"), opts...); err == nil {
+			t.Fatal("expected the dependency's error to fail the publish")
+		}
+		if sent := scans.sent(); len(sent) != 0 {
+			t.Errorf("sent %v from a failed publish", sent)
+		}
+	})
+}
+
+func TestRecord(t *testing.T) {
+	t.Run("keeps what a unit found before a lookup failed", func(t *testing.T) {
+		f := &imageNameRunner{images: "node"}
+		rec := &fakeRecorder{}
+		resolve := func(image string) (string, bool, error) {
+			if strings.HasSuffix(image, "-amd64") {
+				return "", false, fmt.Errorf("network is unreachable")
+			}
+			return "sha256:aaa", true, nil
+		}
+		err := Publish(testRepoRoot, testVersion, oneStandardVariant("node"), true, resolve, recordingOpts(f, rec)...)
+		if err == nil || !strings.Contains(err.Error(), "network is unreachable") {
+			t.Fatalf("expected the failed lookup to be reported, got %v", err)
+		}
+		want := []string{"quay.io/calico/node@sha256:aaa", "quay.io/calico/node@sha256:aaa"}
+		if !slices.Equal(rec.refs, want) {
+			t.Errorf("refs %v, want %v", rec.refs, want)
+		}
+	})
 }

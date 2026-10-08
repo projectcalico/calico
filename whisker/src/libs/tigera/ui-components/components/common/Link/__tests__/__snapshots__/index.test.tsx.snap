@@ -18,6 +18,7 @@ exports[`<Link/> it renders with to (internal url) 1`] = `
 <DocumentFragment>
   <a
     class="chakra-link css-1i7mui0"
+    data-discover="true"
     href="/test"
     tabindex="0"
   />

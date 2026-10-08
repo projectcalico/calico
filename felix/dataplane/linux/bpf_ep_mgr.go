@@ -109,6 +109,7 @@ var (
 		Help: "Number of BPF endpoints that are successfully programmed.",
 	})
 	errApplyingPolicy = errors.New("error applying policy")
+	errLayoutLookup   = errors.New("error looking up program layout")
 )
 
 var (
@@ -144,6 +145,8 @@ const (
 	IfaceTypeBond
 	IfaceTypeBondSlave
 	IfaceTypeNetkit
+	IfaceTypeBridge
+	IfaceTypeBridgeSlave
 	IfaceTypeUnknown
 )
 
@@ -173,6 +176,7 @@ type bpfDataplane interface {
 	ensureStarted()
 	ensureProgramAttached(attachPoint) error
 	ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error
+	ensureProgramLayout(ap *tc.AttachPoint, ipFamily proto.IPVersion) error
 	ensureNoProgram(attachPoint) error
 	ensureQdisc(iface string) (bool, error)
 	ensureBPFDevices() error
@@ -189,6 +193,7 @@ type bpfDataplane interface {
 	interfaceByIndex(int) (*net.Interface, error)
 	queryClassifier(string, string) bool
 	getIfaceLink(string) (netlink.Link, error)
+	getIfaceLinkByIndex(int) (netlink.Link, error)
 	netkitPinned(string) bool
 }
 
@@ -285,6 +290,9 @@ type bpfInterfaceState struct {
 	// change under a live interface, so the link type is not a stand-in for
 	// this — see useNetkitAttach.
 	netkitJumps bool
+	// preambleGlobals is what each hook's attached preamble was configured
+	// with; zero means unknown.
+	preambleGlobals [hook.Count]libbpf.TcGlobalData
 }
 
 type bpfInterfaceJumpIndices struct {
@@ -329,9 +337,11 @@ type bpfEndpointManager struct {
 	// when the kernel is running with lockdown=confidentiality (ftrace
 	// disabled), where loading a preamble that references bpf_trace_printk
 	// spams the kernel log on every attach.
-	bpfNoTracePrintk        bool
-	hostname                string
-	dataIfaceRegex          *regexp.Regexp
+	bpfNoTracePrintk bool
+	hostname         string
+	dataIfaceRegex   *regexp.Regexp
+	// encapIfaces holds Calico's own encapsulating devices, by name.
+	encapIfaces             set.Set[string]
 	l3IfaceRegex            *regexp.Regexp
 	workloadIfaceRegex      *regexp.Regexp
 	epToHostAction          string
@@ -603,6 +613,7 @@ func NewBPFEndpointManager(
 		policiesToWorkloads:     map[types.PolicyID]set.Set[any]{},
 		profilesToWorkloads:     map[types.ProfileID]set.Set[any]{},
 		dirtyIfaceNames:         set.New[string](),
+		encapIfaces:             set.New[string](),
 		hostIfaceTrees:          make(bpfIfaceTrees),
 		bpfLogLevel:             bpfLogLevel,
 		bpfNoTracePrintk:        bpfNoTracePrintk,
@@ -683,18 +694,23 @@ func NewBPFEndpointManager(
 	specialInterfaces := []string{"egress.calico"}
 	if config.RulesConfig.IPIPEnabled {
 		specialInterfaces = append(specialInterfaces, dataplanedefs.IPIPIfaceName)
+		m.encapIfaces.Add(dataplanedefs.IPIPIfaceName)
 	}
 	if config.RulesConfig.VXLANEnabled {
 		specialInterfaces = append(specialInterfaces, dataplanedefs.VXLANIfaceNameV4)
+		m.encapIfaces.Add(dataplanedefs.VXLANIfaceNameV4)
 	}
 	if config.RulesConfig.VXLANEnabledV6 {
 		specialInterfaces = append(specialInterfaces, dataplanedefs.VXLANIfaceNameV6)
+		m.encapIfaces.Add(dataplanedefs.VXLANIfaceNameV6)
 	}
 	if config.RulesConfig.WireguardEnabled {
 		specialInterfaces = append(specialInterfaces, config.RulesConfig.WireguardInterfaceName)
+		m.encapIfaces.Add(config.RulesConfig.WireguardInterfaceName)
 	}
 	if config.RulesConfig.WireguardEnabledV6 {
 		specialInterfaces = append(specialInterfaces, config.RulesConfig.WireguardInterfaceNameV6)
+		m.encapIfaces.Add(config.RulesConfig.WireguardInterfaceNameV6)
 	}
 
 	if config.RulesConfig.IPIPEnabled || config.RulesConfig.WireguardEnabled || config.RulesConfig.WireguardEnabledV6 {
@@ -1473,7 +1489,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			// update the ifaceType, master ifindex if bond slave.
 			link, err := m.dp.getIfaceLink(update.Name)
 			if err != nil {
-				logrus.Errorf("Failed to get interface information via netlink '%s'", update.Name)
+				logrus.WithError(err).Errorf("Failed to get interface information via netlink '%s'", update.Name)
 				curIfaceType = IfaceTypeL3
 				if m.isDataIface(update.Name) {
 					curIfaceType = IfaceTypeData
@@ -2907,6 +2923,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 			// attached. Do the full attach!
 			state.v4Readiness = ifaceNotReady
 			state.v6Readiness = ifaceNotReady
+			state.preambleGlobals = [hook.Count]libbpf.TcGlobalData{}
 		}
 	}
 
@@ -2930,10 +2947,12 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		if !m.dp.queryClassifier(ifaceName, hook.Ingress.String()) {
 			v4Readiness = ifaceNotReady
 			v6Readiness = ifaceNotReady
+			state.preambleGlobals = [hook.Count]libbpf.TcGlobalData{}
 		}
 		if !m.dp.queryClassifier(ifaceName, hook.Egress.String()) {
 			v4Readiness = ifaceNotReady
 			v6Readiness = ifaceNotReady
+			state.preambleGlobals = [hook.Count]libbpf.TcGlobalData{}
 		}
 	}
 
@@ -3064,30 +3083,24 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	wg.Wait()
 
-	attachPreamble := false
-	if m.v6 != nil {
-		attachPreamble = v6Readiness != ifaceIsReady
-	}
-	if m.v4 != nil {
-		attachPreamble = v4Readiness != ifaceIsReady
+	// Without its layout a ready family would drop out of the preamble, so keep
+	// the attached preamble and fully reload that family next time.
+	if errors.Is(err4, errLayoutLookup) || errors.Is(err6, errLayoutLookup) {
+		if errors.Is(err4, errLayoutLookup) {
+			state.v4Readiness = ifaceNotReady
+		}
+		if errors.Is(err6, errLayoutLookup) {
+			state.v6Readiness = ifaceNotReady
+		}
+		return state, errors.Join(err4, err6)
 	}
 
-	// Attach preamble TC program
-	if attachPreamble {
-		wg.Go(func() {
-			ingressAP := mergeAttachPoints(ingressAP4, ingressAP6)
-			if ingressAP != nil {
-				m.loadFilterProgram(ingressAP)
-				ingressErr = m.dp.ensureProgramAttached(ingressAP)
-			}
-		})
-		egressAP := mergeAttachPoints(egressAP4, egressAP6)
-		if egressAP != nil {
-			m.loadFilterProgram(egressAP)
-			egressErr = m.dp.ensureProgramAttached(egressAP)
-		}
-		wg.Wait()
-	}
+	globals := wepPreambleGlobals(ingressAP4, ingressAP6, egressAP4, egressAP6)
+	wg.Go(func() {
+		ingressErr = m.ensureWepPreamble(&state, globals, ingressAP4, ingressAP6)
+	})
+	egressErr = m.ensureWepPreamble(&state, globals, egressAP4, egressAP6)
+	wg.Wait()
 
 	if ingressErr != nil {
 		return state, ingressErr
@@ -3329,6 +3342,9 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 			return nil, fmt.Errorf("attaching program to wep: %w", err)
 		}
 		ap.Log().Info("Attached programs to the WEP")
+	} else if err := d.mgr.dp.ensureProgramLayout(ap, d.ipFamily); err != nil {
+		// The preamble may be re-attached, and needs this family's jump tables.
+		return nil, fmt.Errorf("%w: %w", errLayoutLookup, err)
 	}
 
 	if err := d.wepApplyPolicy(ap, endpoint, polDirection); err != nil {
@@ -3336,6 +3352,55 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 	}
 
 	return ap, nil
+}
+
+// ensureWepPreamble re-attaches one hook's preamble when the globals it carries,
+// jump tables included, differ from what the kernel has.
+func (m *bpfEndpointManager) ensureWepPreamble(
+	state *bpfInterfaceState,
+	globals [hook.Count]libbpf.TcGlobalData,
+	ap4, ap6 *tc.AttachPoint,
+) error {
+	ap := mergeAttachPoints(ap4, ap6)
+	if ap == nil {
+		return nil
+	}
+	h := ap.HookName()
+	if globals[h] == state.preambleGlobals[h] {
+		return nil
+	}
+	m.loadFilterProgram(ap)
+	if err := m.dp.ensureProgramAttached(ap); err != nil {
+		// The hook may hold the old or the new preamble.
+		state.preambleGlobals[h] = libbpf.TcGlobalData{}
+		return err
+	}
+	state.preambleGlobals[h] = globals[h]
+	return nil
+}
+
+// wepPreambleGlobals returns the globals each hook's preamble would be
+// attached with. A family that failed to load contributes nothing.
+func wepPreambleGlobals(ingressAP4, ingressAP6, egressAP4, egressAP6 *tc.AttachPoint) [hook.Count]libbpf.TcGlobalData {
+	var globals [hook.Count]libbpf.TcGlobalData
+	for _, aps := range [][2]*tc.AttachPoint{{ingressAP4, ingressAP6}, {egressAP4, egressAP6}} {
+		merged := mergeAttachPoints(copyAttachPoint(aps[0]), copyAttachPoint(aps[1]))
+		if merged == nil {
+			continue
+		}
+		globals[merged.HookName()] = *merged.(*tc.AttachPoint).Configure()
+	}
+	return globals
+}
+
+// copyAttachPoint protects the caller's attach point, since mergeAttachPoints
+// writes into its v4 argument.
+func copyAttachPoint(ap *tc.AttachPoint) *tc.AttachPoint {
+	if ap == nil {
+		return nil
+	}
+	c := *ap
+	return &c
 }
 
 func (m *bpfEndpointManager) loadPrograms(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
@@ -3648,10 +3713,7 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 	ifaceType := m.nameToIface[ifaceName].info.ifaceType
 	m.ifacesLock.Unlock()
 	switch ifaceType {
-	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond, IfaceTypeBondSlave, IfaceTypeNetkit:
-		if ifaceName == "vxlan.calico" || ifaceName == "vxlan-v6.calico" {
-			return tcdefs.EpTypeVXLAN
-		}
+	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond, IfaceTypeBondSlave, IfaceTypeNetkit, IfaceTypeBridge, IfaceTypeBridgeSlave:
 		if ifaceName == "lo" {
 			return tcdefs.EpTypeLO
 		}
@@ -3672,6 +3734,13 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 	return tcdefs.EpTypeHost
 }
 
+// ifaceEncaps reports whether this is one of Calico's own encapsulating
+// devices. The endpoint type cannot answer it: wireguard and a plain
+// L3-classified NIC both compile as EpTypeL3Device.
+func (m *bpfEndpointManager) ifaceEncaps(ifaceName string) bool {
+	return m.encapIfaces.Contains(ifaceName)
+}
+
 func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.AttachPoint {
 	ap := &tc.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
@@ -3682,6 +3751,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	}
 
 	ap.Type = m.getEndpointType(ifaceName)
+	ap.IfaceEncaps = m.ifaceEncaps(ifaceName)
 
 	if ap.Type == tcdefs.EpTypeLO && m.hostNetworkedNATMode == hostNetworkedNATUDPOnly {
 		ap.UDPOnly = true
@@ -3701,7 +3771,9 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	}
 
 	ap.ToHostDrop = (m.epToHostAction == "DROP")
-	ap.DSR = m.dsrEnabled
+	// ProgFilename gives EpTypeHost a DSR variant; an overlay device has no
+	// DSR return path and must not get one.
+	ap.DSR = m.dsrEnabled && !ap.IfaceEncaps
 	ap.DSROptoutCIDRs = m.dsrOptoutCidrs
 	ap.LogLevel, ap.LogFilter = m.apLogFilter(ap, ifaceName)
 	ap.VXLANPort = m.vxlanPort
@@ -4445,37 +4517,52 @@ func (m *bpfEndpointManager) failedOptionalProgFeatureNames() []string {
 }
 
 // Ensure TC/XDP program is attached to the specified interface.
+// ensureProgramLayout fills in ap's jump tables for ipFamily, loading the
+// generic programs only if they are not loaded yet.
+func (m *bpfEndpointManager) ensureProgramLayout(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
+	// Derive the program attach type from the attach point. For netkit
+	// devices this will be "Netkit", otherwise it comes from the global config.
+	progAttachType := string(ap.AttachType)
+	if ap.IsNetkit() {
+		progAttachType = tc.AttachOptionNetkit
+	}
+
+	layout, err := m.loadTCObj(tcHookAttachType(ap, ipFamily), ap.ProgramsMap.(*hook.ProgramsMap), progAttachType)
+	if err != nil {
+		return fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
+	}
+	if ipFamily == proto.IPVersion_IPV6 {
+		ap.HookLayoutV6 = layout
+	} else {
+		ap.HookLayoutV4 = layout
+	}
+	return nil
+}
+
+func tcHookAttachType(ap *tc.AttachPoint, ipFamily proto.IPVersion) hook.AttachType {
+	return hook.AttachType{
+		Hook:       ap.HookName(),
+		Family:     int(ipFamily),
+		Type:       ap.Type,
+		LogLevel:   ap.LogLevel,
+		ToHostDrop: ap.ToHostDrop,
+		DSR:        ap.DSR,
+	}
+}
+
 func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error {
 	var err error
 
 	if aptc, ok := ap.(*tc.AttachPoint); ok {
-		// Derive the program attach type from the attach point. For netkit
-		// devices this will be "Netkit", otherwise it comes from the global config.
-		progAttachType := string(aptc.AttachType)
-		if aptc.IsNetkit() {
-			progAttachType = tc.AttachOptionNetkit
-		}
-
-		at := hook.AttachType{
-			Hook:       aptc.HookName(),
-			Family:     int(ipFamily),
-			Type:       aptc.Type,
-			LogLevel:   aptc.LogLevel,
-			ToHostDrop: aptc.ToHostDrop,
-			DSR:        aptc.DSR,
-		}
+		at := tcHookAttachType(aptc, ipFamily)
 
 		policyIdx := aptc.PolicyIdxV4
 		ap.Log().Debugf("ensureProgramLoaded %d", ipFamily)
+		if err := m.ensureProgramLayout(aptc, ipFamily); err != nil {
+			return err
+		}
 		if ipFamily == proto.IPVersion_IPV6 {
-			if aptc.HookLayoutV6, err = m.loadTCObj(at, aptc.ProgramsMap.(*hook.ProgramsMap), progAttachType); err != nil {
-				return fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
-			}
 			policyIdx = aptc.PolicyIdxV6
-		} else {
-			if aptc.HookLayoutV4, err = m.loadTCObj(at, aptc.ProgramsMap.(*hook.ProgramsMap), progAttachType); err != nil {
-				return fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
-			}
 		}
 
 		jmpMap := m.commonMaps.JumpMaps[aptc.Hook]
@@ -4490,7 +4577,7 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 			denyFDs = m.policyNetkitDenyFDs
 		}
 		// Load default policy before the real policy is created and loaded.
-		switch at.DefaultPolicy() {
+		switch at.DefaultPolicy(aptc.IfaceEncaps) {
 		case hook.DefPolicyAllow:
 			err = maps.UpdateMapEntry(jmpMap.MapFD(),
 				jump.Key(policyIdx), jump.Value(allowFDs[aptc.Hook].FD()))
@@ -5292,6 +5379,10 @@ func (m *bpfEndpointManager) getIfaceLink(name string) (netlink.Link, error) {
 	return link, nil
 }
 
+func (m *bpfEndpointManager) getIfaceLinkByIndex(index int) (netlink.Link, error) {
+	return netlink.LinkByIndex(index)
+}
+
 func (m *bpfEndpointManager) netkitPinned(name string) bool {
 	return netkitPinned(name)
 }
@@ -5306,6 +5397,12 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 		return IfaceTypeBondSlave
 	}
 
+	if attrs.MasterIndex != 0 {
+		if master, err := m.dp.getIfaceLinkByIndex(attrs.MasterIndex); err == nil && master.Type() == "bridge" {
+			return IfaceTypeBridgeSlave
+		}
+	}
+
 	switch link.Type() {
 	case "netkit":
 		return IfaceTypeNetkit
@@ -5317,6 +5414,8 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 		return IfaceTypeVXLAN
 	case "bond":
 		return IfaceTypeBond
+	case "bridge":
+		return IfaceTypeBridge
 	case "tuntap":
 		if link.(*netlink.Tuntap).Mode == netlink.TUNTAP_MODE_TUN {
 			return IfaceTypeL3
@@ -5576,50 +5675,76 @@ func (trees bpfIfaceTrees) addIfaceStandAlone(intf *bpfIfaceNode) {
 
 // addIfaceWithMaster handles adding slave interface to the tree.
 func (trees bpfIfaceTrees) addIfaceWithMaster(intf *bpfIfaceNode, masterIndex int) {
-	// If the interface is already in the correct position in the tree,
-	// don't add it.
-	val := trees.findIfaceByIndex(intf.index)
-	if val != nil {
-		if val.parentIface != nil && val.parentIface.index == masterIndex {
+	masterIface := trees.findIfaceByIndex(masterIndex)
+
+	// Already a child of this master: nothing to move.
+	if masterIface != nil {
+		if _, ok := masterIface.children[intf.index]; ok {
 			return
 		}
 	}
-	// Now the interface is a slave interface, perhaps with a different master.
-	// So delete the interface and add it again.
-	trees.deleteIface(intf.name)
-	// Master interface is already there in the tree. Add the slave interface as a child.
-	masterIface := trees.findIfaceByIndex(masterIndex)
-	if masterIface != nil {
-		masterIface.children[intf.index] = intf
-	} else {
-		// If the master interface is not there in the tree. Add the master interface to the
-		// tree and the slave interface as its child.
-		masterIface = &bpfIfaceNode{index: masterIndex, children: make(map[int]*bpfIfaceNode)}
+
+	// Reuse the node already in the tree so its subtree comes along; detach it
+	// from wherever it currently sits.
+	node := intf
+	if val := trees.findIfaceByIndex(intf.index); val != nil {
+		if val.parentIface != nil {
+			delete(val.parentIface.children, val.index) // unlink from old parent
+		} else {
+			delete(trees, val.index) // was a root: drop only the root entry
+		}
+		val.name = intf.name
+		val.masterIndex = masterIndex
+		node = val // val still holds the bond0 -> eth0 subtree
 	}
-	intf.parentIface = masterIface
-	masterIface.children[intf.index] = intf
-	trees[masterIndex] = masterIface
+
+	// Master not seen yet: add it as a placeholder root that its own update
+	// later fills in (name) without clobbering these children.
+	if masterIface == nil {
+		masterIface = &bpfIfaceNode{index: masterIndex, children: make(map[int]*bpfIfaceNode)}
+		trees[masterIndex] = masterIface
+	}
+
+	node.parentIface = masterIface
+	masterIface.children[node.index] = node
 }
 
-// addIfaceWithChild add in-tree parent of the childIdx interface.
 func (trees bpfIfaceTrees) addIfaceWithChild(intf *bpfIfaceNode, childIdx int) {
-	// Check if the interface with childIdx is in the tree. If so,
-	// add this interface as a parent.
-	val := trees.findIfaceByIndex(childIdx)
-	if val != nil {
-		val.parentIface = intf
-		intf.children[val.index] = val
-		delete(trees, childIdx)
-	} else {
-		// If the child interface is not in the tree, add a new interface with
-		// childIdx as a child of intf.
-		intf.children[childIdx] = &bpfIfaceNode{
-			index:       childIdx,
-			parentIface: intf,
-			children:    make(map[int]*bpfIfaceNode),
+	// Resolve/detach the child (bond0) first, while the forest is still intact —
+	// detaching self below would hide it from the lookup. It ends up a child of
+	// self (not a root), so it must be unlinked from wherever it currently sits:
+	// an old parent's children, or the root map.
+	child := trees.findIfaceByIndex(childIdx)
+	if child != nil {
+		if child.parentIface != nil {
+			delete(child.parentIface.children, child.index)
+		} else {
+			delete(trees, child.index)
 		}
+	} else {
+		child = &bpfIfaceNode{index: childIdx, children: make(map[int]*bpfIfaceNode)}
 	}
-	trees[intf.index] = intf
+
+	// Reuse self (bond0.100) if it already exists — e.g. it was a bridge member
+	// and just had its master unset, so its node is still under br0. Reusing
+	// keeps its subtree and leaves no stale duplicate. Only unlink it here if it
+	// is currently a child; if it is a root, the final rooting re-writes the
+	// same entry, so no delete is needed.
+	node := intf
+	if val := trees.findIfaceByIndex(intf.index); val != nil {
+		if val.parentIface != nil {
+			delete(val.parentIface.children, val.index)
+		}
+		val.name = intf.name
+		val.masterIndex = intf.masterIndex
+		node = val
+	}
+	node.parentIface = nil
+
+	// Hang the child (bond0) under self (bond0.100); a VLAN tops its own stack.
+	child.parentIface = node
+	node.children[child.index] = child
+	trees[node.index] = node
 }
 
 // addHostIface adds host interface to hostIfaceTrees tree.
@@ -5643,6 +5768,15 @@ func (trees bpfIfaceTrees) addIface(link netlink.Link) {
 	}
 
 	if attrs.MasterIndex != 0 {
+		// A device can be both a VLAN sub-device (ParentIndex — its lower
+		// device) and enslaved (MasterIndex — a bridge/bond). Wire the
+		// lower-device subtree first so self becomes a root carrying it, then
+		// move that whole stack under the master; addIfaceWithMaster reuses the
+		// node, so the subtree travels with it. Without this, a VLAN that first
+		// appears already bridged (e.g. its update arrives last) loses its stack.
+		if attrs.ParentIndex != 0 && !isVethLike {
+			trees.addIfaceWithChild(intf, attrs.ParentIndex)
+		}
 		trees.addIfaceWithMaster(intf, attrs.MasterIndex)
 	} else if attrs.ParentIndex != 0 && !isVethLike {
 		trees.addIfaceWithChild(intf, attrs.ParentIndex)
@@ -5652,32 +5786,24 @@ func (trees bpfIfaceTrees) addIface(link netlink.Link) {
 }
 
 func (trees bpfIfaceTrees) deleteIface(name string) {
-	// Interface not in the tree.
 	node := trees.findIfaceByName(name)
 	if node == nil {
 		return
 	}
 
-	// Interface is a root interface.
-	if node.parentIface == nil {
-		for _, child := range node.children {
-			child.parentIface = nil
-			trees[child.index] = child
-		}
-		delete(trees, node.index)
+	// Unlink the node from wherever it sits: its parent's children map (a child
+	// or middle node) or the top-level root map. A middle node must NOT delete
+	// its parent — the parent (e.g. a bridge) still exists.
+	if node.parentIface != nil {
+		delete(node.parentIface.children, node.index)
 	} else {
-		// Interface is not a root and not a leaf. Add each child node
-		// as a separate tree and delete this tree.
-		if len(node.children) > 0 {
-			for _, child := range node.children {
-				child.parentIface = nil
-				trees[child.index] = child
-			}
-			delete(trees, node.parentIface.index)
-		} else {
-			// Interface is a leaf.
-			delete(node.parentIface.children, node.index)
-		}
+		delete(trees, node.index)
+	}
+
+	// Promote each child to the root of its own surviving tree.
+	for _, child := range node.children {
+		child.parentIface = nil
+		trees[child.index] = child
 	}
 }
 

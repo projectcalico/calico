@@ -926,7 +926,6 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: bpfLogLevel
       type:
         scalar: string
-      default: ""
     - name: bpfMaglevMaxEndpointsPerService
       type:
         scalar: numeric

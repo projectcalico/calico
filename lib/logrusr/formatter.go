@@ -49,6 +49,7 @@ const (
 	logrusPackage  = "github.com/sirupsen/logrus."
 	logrusrPackage = "github.com/projectcalico/calico/lib/logrusr."
 	stdlogPackage  = "github.com/projectcalico/calico/lib/std/log."
+	runtimePackage = "runtime."
 	maxCallerDepth = 32
 )
 
@@ -349,6 +350,13 @@ func GetFileInfo(entry *log.Entry) (string, int) {
 // lookupCaller walks the stack and returns the first frame whose
 // function is not in logrus, lib/logrusr or lib/std/log — i.e. the
 // user code that actually issued the log call.
+//
+// A line can also be written from a goroutine the logging code owns, with
+// no user code below it: a logger that batches or aggregates and writes
+// what it held when a timer fires.  There the walk finds only logging
+// frames and then the runtime frame the goroutine was started at, which
+// names an assembly file and tells a reader nothing.  Fall back to the
+// outermost logging frame instead — the logging code that wrote the line.
 func lookupCaller() (string, int) {
 	pcsPtr := pcsPool.Get().(*[]uintptr)
 	defer pcsPool.Put(pcsPtr)
@@ -360,17 +368,26 @@ func lookupCaller() (string, int) {
 		return FileNameUnknown, 0
 	}
 	frames := runtime.CallersFrames(pcs[:n])
+	var lastLogging *runtime.Frame
 	for {
 		frame, more := frames.Next()
 		fn := frame.Function
-		if !strings.HasPrefix(fn, logrusPackage) &&
-			!strings.HasPrefix(fn, logrusrPackage) &&
-			!strings.HasPrefix(fn, stdlogPackage) {
+		switch {
+		case strings.HasPrefix(fn, logrusPackage),
+			strings.HasPrefix(fn, logrusrPackage),
+			strings.HasPrefix(fn, stdlogPackage):
+			lastLogging = &frame
+		case strings.HasPrefix(fn, runtimePackage):
+			// Where a goroutine was started, never who logged.
+		default:
 			return path.Base(frame.File), frame.Line
 		}
 		if !more {
 			break
 		}
+	}
+	if lastLogging != nil {
+		return path.Base(lastLogging.File), lastLogging.Line
 	}
 	return FileNameUnknown, 0
 }

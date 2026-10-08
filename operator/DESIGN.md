@@ -42,7 +42,7 @@ API design principles and the Go/kubebuilder coding conventions for `api/v1` CRD
 
 ## Component Versions and Publishing
 
-- **The versions the operator deploys are build inputs, not source.** `CALICO_VERSION`, `CALICO_REGISTRY` and `CALICO_IMAGE_PATH` are stamped into `pkg/components` at link time. Nothing in the tree records the tag a build resolves, so a component list must never grow a version literal alongside its image names.
+- **The versions the operator deploys are build inputs, not source.** `CALICO_VERSION`, `CALICO_REGISTRY` and `CALICO_IMAGE_PATH`, and `OPERATOR_IMAGE_REGISTRY` and `OPERATOR_IMAGE_PATH` for the operator's own image, are stamped into `pkg/components` at link time. Nothing in the tree records the tag a build resolves, so a component list must never grow a version literal alongside its image names.
 - **The operator ships as a Calico component image.** It publishes as `calico/operator` to the same registries as the rest, on the Calico version stream, and a Calico release builds it rather than retagging one built for a different set of component versions.
 - **A release names the version it deploys.** The operator's own tag and the versions it resolves are separate inputs. An operator-only release carries its own tag while still deploying the components of the release it patches, so a release that leaves `CALICO_VERSION` unset is refused rather than defaulted.
 - **A build that names no version resolves the branch tag.** Development and release-branch builds fall back to the tag CI publishes for the branch, so an operator built from a checkout deploys images that exist.

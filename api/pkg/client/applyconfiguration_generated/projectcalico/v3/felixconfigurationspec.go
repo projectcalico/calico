@@ -162,12 +162,13 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the
 	// transition: "-est" when the first reply packet is seen, "-rst" when the response is a TCP
 	// RST (connection refused), or "-icmp-err" when the response is a related ICMP error (e.g.
-	// port unreachable). The log body is the standard kernel packet log of the response packet,
-	// so the flow is identified by its 5-tuple and can be correlated with the original policy Log
-	// line (with source and destination swapped). A logged connection with no follow-up log never
-	// received a response. Connections whose initial log was suppressed by LogActionRateLimit get
-	// no follow-up log either, so every follow-up log pairs with an initial one. Enabling this
-	// consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+	// port unreachable). The log body is the standard kernel packet log of the response packet.
+	// For "-est" and "-rst" its 5-tuple is the original policy Log line's with source and
+	// destination swapped; for "-icmp-err" the bracketed inner header carries the original
+	// 5-tuple unswapped. A logged connection with no follow-up log never received a response.
+	// Connections whose initial log was suppressed by LogActionRateLimit get no follow-up log
+	// either, so every follow-up log pairs with an initial one. Enabling this consumes one bit
+	// from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
 	// [Default: Disabled]
 	LogConnectionTransitions *projectcalicov3.LogConnectionTransitionsMode `json:"logConnectionTransitions,omitempty"`
 	// LogConnectionTransitionsPrefix is the log prefix used for the logs emitted when

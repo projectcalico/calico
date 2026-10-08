@@ -433,6 +433,22 @@ func (c client) ensureClusterInformation(ctx context.Context, calicoVersion, clu
 // is created. A error is returned if there is any error other than when the
 // tier resource already exists, or when creating tiers is not allowed.
 func (c client) ensureTierExists(ctx context.Context, name string, defaultAction v3.Action, order float64) error {
+	// Get first so that the repeated calls from health checks don't write to the datastore
+	// on every pass.
+	_, err := c.Tiers().Get(ctx, name, options.GetOptions{})
+	switch err.(type) {
+	case nil:
+		log.Debugf("Tier %v already exists.", name)
+		return nil
+	case cerrors.ErrorResourceDoesNotExist:
+		// Fall through and create it.
+	case cerrors.ErrorConnectionUnauthorized:
+		log.WithError(err).Warnf("Unauthorized to read tier %v.", name)
+		return nil
+	default:
+		return err
+	}
+
 	tier := v3.NewTier()
 	tier.ObjectMeta = metav1.ObjectMeta{Name: name}
 	tier.Spec = v3.TierSpec{

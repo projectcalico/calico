@@ -62,4 +62,77 @@ func TestURLEncodedJSONDecoding(t *testing.T) {
 	param, err := codec.DecodeAndValidateRequestParams[params](apicontext.NewRequestContext(req), NoopURLVarsFunc, req)
 	Expect(err).Should(Not(HaveOccurred()))
 	Expect(param).Should(Equal(&params{Filter: filter{Name: "foo"}}))
+
+	special := url.QueryEscape(testutil.MustMarshal(t, filter{Name: "100% a+b"}))
+	req, err = http.NewRequest("GET", fmt.Sprintf("http://example.com?filter=%s", special), nil)
+	Expect(err).NotTo(HaveOccurred())
+	param, err = codec.DecodeAndValidateRequestParams[params](apicontext.NewRequestContext(req), NoopURLVarsFunc, req)
+	Expect(err).Should(Not(HaveOccurred()))
+	Expect(param).Should(Equal(&params{Filter: filter{Name: "100% a+b"}}))
+}
+
+func TestStrictURLEncodedJSONDecoding(t *testing.T) {
+	setupTest(t)
+
+	type strictFilter struct {
+		Name string `json:"name"`
+	}
+
+	type params struct {
+		Filter strictFilter `urlQuery:"filter"`
+	}
+
+	codec.RegisterStrictURLQueryJSONType[strictFilter]()
+
+	known := url.QueryEscape(`{"name":"foo"}`)
+	req, err := http.NewRequest("GET", fmt.Sprintf("http://example.com?filter=%s", known), nil)
+	Expect(err).NotTo(HaveOccurred())
+	param, err := codec.DecodeAndValidateRequestParams[params](apicontext.NewRequestContext(req), NoopURLVarsFunc, req)
+	Expect(err).ShouldNot(HaveOccurred())
+	Expect(param).Should(Equal(&params{Filter: strictFilter{Name: "foo"}}))
+
+	percent := url.QueryEscape(`{"name":"100%"}`)
+	req, err = http.NewRequest("GET", fmt.Sprintf("http://example.com?filter=%s", percent), nil)
+	Expect(err).NotTo(HaveOccurred())
+	param, err = codec.DecodeAndValidateRequestParams[params](apicontext.NewRequestContext(req), NoopURLVarsFunc, req)
+	Expect(err).ShouldNot(HaveOccurred())
+	Expect(param).Should(Equal(&params{Filter: strictFilter{Name: "100%"}}))
+
+	unknown := url.QueryEscape(`{"nmae":"foo"}`)
+	req, err = http.NewRequest("GET", fmt.Sprintf("http://example.com?filter=%s", unknown), nil)
+	Expect(err).NotTo(HaveOccurred())
+	_, err = codec.DecodeAndValidateRequestParams[params](apicontext.NewRequestContext(req), NoopURLVarsFunc, req)
+	Expect(err).Should(HaveOccurred())
+
+	trailing := url.QueryEscape(`{"name":"foo"}{"name":"bar"}`)
+	req, err = http.NewRequest("GET", fmt.Sprintf("http://example.com?filter=%s", trailing), nil)
+	Expect(err).NotTo(HaveOccurred())
+	_, err = codec.DecodeAndValidateRequestParams[params](apicontext.NewRequestContext(req), NoopURLVarsFunc, req)
+	Expect(err).Should(HaveOccurred())
+
+	req, err = http.NewRequest("GET", "http://example.com?filter=", nil)
+	Expect(err).NotTo(HaveOccurred())
+	param, err = codec.DecodeAndValidateRequestParams[params](apicontext.NewRequestContext(req), NoopURLVarsFunc, req)
+	Expect(err).ShouldNot(HaveOccurred())
+	Expect(param).Should(Equal(&params{}))
+}
+
+func TestStrictURLEncodedJSONErrorNamesTheTrailingData(t *testing.T) {
+	setupTest(t)
+
+	type trailingFilter struct {
+		Name string `json:"name"`
+	}
+	type params struct {
+		Filter trailingFilter `urlQuery:"filter"`
+	}
+	codec.RegisterStrictURLQueryJSONType[trailingFilter]()
+
+	req, err := http.NewRequest("GET", fmt.Sprintf("http://example.com?filter=%s",
+		url.QueryEscape(`{"name":"foo"} tail`)), nil)
+	Expect(err).NotTo(HaveOccurred())
+	_, err = codec.DecodeAndValidateRequestParams[params](apicontext.NewRequestContext(req), NoopURLVarsFunc, req)
+	Expect(err).To(HaveOccurred())
+	Expect(err.Error()).To(ContainSubstring("unexpected data after the JSON value"))
+	Expect(err.Error()).NotTo(Equal("unexpected data after the JSON value"))
 }

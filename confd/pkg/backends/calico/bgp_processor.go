@@ -369,11 +369,11 @@ func (c *client) processMeshPeers(pc *processorContext, config *types.BirdBGPCon
 			continue
 		}
 
-		// Get peer's AS number
-		peerASKey := fmt.Sprintf("/calico/bgp/v1/host/%s/as_num", host)
-		peerAS, err := c.GetValue(peerASKey)
+		// Get peer's AS number: its own per-node AS if it has one, otherwise the global AS.
+		// Note, not this node's AS, which may be a per-node AS that the peer does not share.
+		peerAS, err := c.getNodeOrGlobalValue(host, "as_num")
 		if err != nil {
-			peerAS = config.ASNumber // Use global AS
+			peerAS = config.ASNumber
 		}
 
 		// Get peer's listen port

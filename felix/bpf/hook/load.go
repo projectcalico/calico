@@ -113,13 +113,19 @@ const (
 	DefPolicyAllow DefPolicy = 1
 )
 
-func (at AttachType) DefaultPolicy() DefPolicy {
-	if at.Hook == XDP || at.Type == tcdefs.EpTypeHost || at.Type == tcdefs.EpTypeNAT || at.Type == tcdefs.EpTypeLO {
+// DefaultPolicy seeds the attach point's own policy jump slot, so it takes the
+// device's encapsulation, which the endpoint type no longer carries.
+func (at AttachType) DefaultPolicy(ifaceEncaps bool) DefPolicy {
+	if at.Hook == XDP {
 		return DefPolicyNone
 	}
 
-	if at.Type == tcdefs.EpTypeIPIP || at.Type == tcdefs.EpTypeL3Device || at.Type == tcdefs.EpTypeVXLAN {
+	if ifaceEncaps || at.Type == tcdefs.EpTypeIPIP || at.Type == tcdefs.EpTypeL3Device {
 		return DefPolicyAllow
+	}
+
+	if at.Type == tcdefs.EpTypeHost || at.Type == tcdefs.EpTypeNAT || at.Type == tcdefs.EpTypeLO {
+		return DefPolicyNone
 	}
 
 	return DefPolicyDeny
@@ -155,7 +161,6 @@ func initObjectFiles() {
 					tcdefs.EpTypeL3Device,
 					tcdefs.EpTypeNAT,
 					tcdefs.EpTypeLO,
-					tcdefs.EpTypeVXLAN,
 				}
 				for _, epType := range epTypes {
 					for _, hook := range []Hook{Ingress, Egress} {

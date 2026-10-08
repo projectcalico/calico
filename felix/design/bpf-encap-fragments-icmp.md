@@ -134,7 +134,10 @@ Fragments are hostile to stateless BPF programs. Only the first
 fragment carries L4 headers, so only the first fragment can be keyed
 against conntrack. Fragments may arrive out of order, so even the
 first fragment may arrive second. BPF cannot pause a packet waiting
-for more; it must allow, drop or modify immediately.
+for more; it must allow, drop or modify immediately. A non-first
+fragment's payload can be shorter than any L4 header, so no program it
+can reach may demand one (`skb_refresh_validate_ptrs_l4()` in `skb.h`). Nor may
+anything read one, conntrack included (`CALI_ST_NO_L4_HDR`).
 
 ### HEP-only defrag
 
@@ -157,6 +160,9 @@ The algorithm:
   ports and the disposition reached by policy. Subsequent fragments
   match on `(src_ip, dst_ip, ip_id)` and are allowed through without
   policy re-evaluation.
+  This holds for every protocol, ICMP included. An ICMP error or TCP
+  RST that BPF sends in reply clears `CALI_ST_FIRST_FRAG`, so it
+  records no entry of its own.
 - If fragments arrive out of order, the program stores each fragment
   in the **fragment-reassembly** map (`cali_v4_frags`). Once all
   fragments are in, the program reassembles the packet in place and
@@ -262,7 +268,7 @@ where an error is actually needed.
 
 ### Cases
 
-- **TTL exceeded.** `ip_ttl_exceeded` in `bpf.h` tests for TTL==1
+- **TTL exceeded.** `ip_ttl_exceeded` in `cali_bpf.h` tests for TTL==1
   (IPv4) / hop-limit==1 (IPv6) on a host-egress path. If that
   holds and the packet would have been forwarded, the program
   generates an ICMP Time Exceeded and drops the packet instead.

@@ -33,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
@@ -295,6 +296,35 @@ var _ = Describe("Istio Component Rendering", func() {
 				Name:  "MAGIC_DSCP_MARK",
 				Value: "11",
 			}))
+		})
+
+		It("should use the default CNI bin directory when no platform is set", func() {
+			_, component, err := istio.Istio(cfg)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			objsToCreate, _ := component.Objects()
+
+			daemonset, err := rtest.GetResourceOfType[*appsv1.DaemonSet](objsToCreate, istio.IstioCNIDaemonSetName, istio.IstioNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			foundCNIBinVolume := false
+			for _, vol := range daemonset.Spec.Template.Spec.Volumes {
+				if vol.Name == "cni-bin-dir" && vol.HostPath != nil {
+					Expect(vol.HostPath.Path).To(Equal("/opt/cni/bin"))
+					foundCNIBinVolume = true
+				}
+			}
+			Expect(foundCNIBinVolume).To(BeTrue(), "Expected cni-bin-dir volume with default path /opt/cni/bin")
+		})
+
+		It("should use the configured CNI bin directory", func() {
+			cfg.Installation.CNI = &operatorv1.CNISpec{BinDir: ptr.To("/custom/cni/bin")}
+
+			_, component, err := istio.Istio(cfg)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			objsToCreate, _ := component.Objects()
+			Expect(cniBinDirHostPath(objsToCreate)).To(Equal("/custom/cni/bin"))
 		})
 	})
 
@@ -826,6 +856,33 @@ var _ = Describe("Istio Component Rendering", func() {
 			}
 			Expect(foundPlatformEnv).To(BeTrue(), "Expected PLATFORM=gke env var on istiod")
 		})
+
+		It("should use GKE CNI bin directory", func() {
+			objsToCreate, _ := component.Objects()
+
+			daemonset, err := rtest.GetResourceOfType[*appsv1.DaemonSet](objsToCreate, istio.IstioCNIDaemonSetName, istio.IstioNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			// /opt/cni/bin is read-only on GKE nodes; the writable CNI bin dir is /home/kubernetes/bin.
+			foundCNIBinVolume := false
+			for _, vol := range daemonset.Spec.Template.Spec.Volumes {
+				if vol.Name == "cni-bin-dir" && vol.HostPath != nil {
+					Expect(vol.HostPath.Path).To(Equal("/home/kubernetes/bin"))
+					foundCNIBinVolume = true
+				}
+			}
+			Expect(foundCNIBinVolume).To(BeTrue(), "Expected cni-bin-dir volume with GKE path /home/kubernetes/bin")
+		})
+
+		It("should prefer the configured CNI bin directory over the GKE default", func() {
+			cfg.Installation.CNI = &operatorv1.CNISpec{BinDir: ptr.To("/custom/cni/bin")}
+
+			_, component, err := istio.Istio(cfg)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			objsToCreate, _ := component.Objects()
+			Expect(cniBinDirHostPath(objsToCreate)).To(Equal("/custom/cni/bin"))
+		})
 	})
 
 	Describe("OpenShift Platform Configuration", func() {
@@ -982,3 +1039,16 @@ var _ = Describe("Istio Component Rendering", func() {
 		})
 	})
 })
+
+// cniBinDirHostPath returns the hostPath of the istio-cni-node cni-bin-dir volume.
+func cniBinDirHostPath(objs []client.Object) string {
+	daemonset, err := rtest.GetResourceOfType[*appsv1.DaemonSet](objs, istio.IstioCNIDaemonSetName, istio.IstioNamespace)
+	Expect(err).ShouldNot(HaveOccurred())
+	for _, vol := range daemonset.Spec.Template.Spec.Volumes {
+		if vol.Name == "cni-bin-dir" && vol.HostPath != nil {
+			return vol.HostPath.Path
+		}
+	}
+	Fail("istio-cni-node has no cni-bin-dir hostPath volume")
+	return ""
+}

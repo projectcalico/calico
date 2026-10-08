@@ -2,8 +2,10 @@
 // Copyright (c) 2024 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#ifndef __CALI_BPF_PROFILING_H__
-#define __CALI_BPF_PROFILING_H__
+#ifndef __CALI_PROFILING_H__
+#define __CALI_PROFILING_H__
+
+#include "cali_bpf.h"
 
 struct prof_key {
 	__u32 ifindex;
@@ -44,4 +46,4 @@ static CALI_BPF_INLINE void prof_record_sample(__u32 ifindex, __u32 kind, __u64 
 	}
 }
 
-#endif /* __CALI_BPF_PROFILING_H__ */
+#endif /* __CALI_PROFILING_H__ */

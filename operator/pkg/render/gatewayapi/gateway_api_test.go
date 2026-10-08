@@ -442,8 +442,10 @@ var _ = Describe("Gateway API rendering tests", func() {
 					Provider: &envoyapi.EnvoyGatewayProvider{
 						Type: envoyapi.ProviderTypeKubernetes,
 						Kubernetes: &envoyapi.EnvoyGatewayKubernetesProvider{
-							RateLimitDeployment: &envoyapi.KubernetesDeploymentSpec{
-								Name: &customName,
+							EnvoyGatewayKubernetesInfrastructureConfiguration: envoyapi.EnvoyGatewayKubernetesInfrastructureConfiguration{
+								RateLimitDeployment: &envoyapi.KubernetesDeploymentSpec{
+									Name: &customName,
+								},
 							},
 						},
 					},

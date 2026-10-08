@@ -16,7 +16,6 @@ package main
 
 import (
 	"context"
-	"path/filepath"
 
 	cli "github.com/urfave/cli/v3"
 
@@ -38,7 +37,7 @@ func chartsCommand(cfg *Config) *cli.Command {
 }
 
 var chartsBuildFlags = []cli.Flag{
-	registryFlag, operatorRegistryFlag, operatorImageFlag,
+	registryFlag, operatorRegistryFlag,
 	helmIndexFlag(envBuildHelmIndex), hashreleaseFlag, releaseBranchPrefixFlag,
 }
 
@@ -88,7 +87,7 @@ var chartsPublishAction = func(cfg *Config) func(context.Context, *cli.Command) 
 			charts.WithLogsDir(cfg.LogsDir),
 			charts.WithResolver(registryDigestResolver),
 		}
-		published, w, err := publishRecord(cfg, charts.PublishStep, chart.Version(), confirm)
+		published, w, err := publishRecord(cfg.OutputDir, charts.PublishStep, chart.Version(), confirm)
 		if err != nil {
 			return err
 		}
@@ -120,7 +119,7 @@ var pinnedChart = func(cfg *Config, c *cli.Command, pin pinned) (*charts.Chart, 
 			ProductVersion: p.ProductVersion,
 			ChartVersion:   p.ChartVersion,
 			Names:          charts.All(),
-			BaseDir:        charts.Dir(p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false).Source),
+			BaseDir:        charts.OutputDir(p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false).Source),
 		}, nil
 	}
 	ver, _, err := version.VersionsFromManifests(cfg.RepoRootDir)
@@ -131,7 +130,7 @@ var pinnedChart = func(cfg *Config, c *cli.Command, pin pinned) (*charts.Chart, 
 		RepoRoot:       cfg.RepoRootDir,
 		ProductVersion: ver.FormattedString(),
 		Names:          charts.All(),
-		BaseDir:        charts.Dir(filepath.Join(cfg.OutputDir, ver.FormattedString())),
+		BaseDir:        charts.OutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
 	}, nil
 }
 
@@ -139,6 +138,7 @@ var pinnedChart = func(cfg *Config, c *cli.Command, pin pinned) (*charts.Chart, 
 // themselves. A hashrelease pins its own versions and serves its own charts.
 var chartsBuildOptions = func(cfg *Config, c *cli.Command, chart charts.Chart, pin pinned, withIndex bool) ([]charts.BuildOption, error) {
 	var opts []charts.BuildOption
+	outputDir := releaseOutputDir(cfg.RepoRootDir, chart.ProductVersion)
 	chartURL, err := charts.ChartsURL(chart)
 	if err != nil {
 		return nil, err
@@ -148,6 +148,7 @@ var chartsBuildOptions = func(cfg *Config, c *cli.Command, chart charts.Chart, p
 		if err != nil {
 			return nil, err
 		}
+		outputDir = p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false).Source
 		opts = append(opts, charts.WithModifiedValues(charts.ValueEditsFor(p.ProductVersion, p.ProductRegistry, p.Operator.Image, p.Operator.Version, p.Operator.Registry)))
 		chartURL = hashreleaseserver.HashreleaseURL(p.ReleaseName)
 	}
@@ -156,7 +157,7 @@ var chartsBuildOptions = func(cfg *Config, c *cli.Command, chart charts.Chart, p
 		if err != nil {
 			return nil, err
 		}
-		opts = append(opts, charts.WithIndex(repoURL, chartURL, chart.BaseDir, cfg.TmpDir))
+		opts = append(opts, charts.WithIndex(repoURL, chartURL, charts.IndexDir(outputDir), cfg.TmpDir))
 	}
 	return opts, nil
 }

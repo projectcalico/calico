@@ -23,8 +23,13 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 )
 
-// One retry: pushes fail on network flakes often enough to save a run.
-const MaxRetries = 1
+const (
+	// One retry: pushes fail on network flakes often enough to save a run.
+	MaxRetries = 1
+
+	// Limit the concurrency of step executions.
+	MaxConcurrency = 4
+)
 
 // Step holds what every release step needs. Embedding keeps these unexported,
 // so a zero-value config still runs real commands.

@@ -60,6 +60,10 @@ type IPPool struct {
 const (
 	// IPPoolConditionReady indicates whether the pool is ready to be used for IP address assignment.
 	IPPoolConditionAllocatable = "Allocatable"
+
+	// IPPoolConditionAddressSpaceNearlyFull is present while at least 80% of a pool's addresses are in use or reserved.
+	// Pools of 32 addresses or fewer never carry it.
+	IPPoolConditionAddressSpaceNearlyFull = "AddressSpaceNearlyFull"
 )
 
 const (
@@ -74,6 +78,9 @@ const (
 
 	// IPPoolReasonOK indicates that the pool is ready to be used for IP address assignment.
 	IPPoolReasonOK = "OK"
+
+	// IPPoolReasonThresholdExceeded indicates that the pool has crossed the AddressSpaceNearlyFull threshold.
+	IPPoolReasonThresholdExceeded = "ThresholdExceeded"
 )
 
 type IPPoolStatus struct {
@@ -101,15 +108,17 @@ type IPPoolSpec struct {
 	// The pool CIDR.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Format=cidr
-	// +kubebuilder:validation:MaxLength=48
+	// +kubebuilder:validation:MaxLength=49
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="CIDR cannot be changed; follow IP pool migration guide to avoid corruption.",reason=FieldValueInvalid
 	CIDR string `json:"cidr" validate:"net"`
 
 	// Contains configuration for VXLAN tunneling for this pool.
+	// +kubebuilder:default=Never
 	VXLANMode VXLANMode `json:"vxlanMode,omitempty"`
 
 	// Contains configuration for IPIP tunneling for this pool.
 	// For IPv6 pools, IPIP tunneling must be disabled.
+	// +kubebuilder:default=Never
 	IPIPMode IPIPMode `json:"ipipMode,omitempty"`
 
 	// When natOutgoing is true, packets sent from Calico networked containers in

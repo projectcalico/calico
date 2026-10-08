@@ -149,6 +149,7 @@ var _ = Describe("whisker controller tests", func() {
 				provider: operatorv1.ProviderNone,
 				status:   mockStatus,
 				ext:      extensions.Extensions{}.Whisker(),
+				gwExt:    extensions.Extensions{}.UIGateway(),
 			}
 			_, err := reconciler.Reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: "default", Namespace: "calico-system"}})
 			Expect(err).ShouldNot(HaveOccurred())
@@ -164,6 +165,7 @@ var _ = Describe("whisker controller tests", func() {
 				provider: operatorv1.ProviderNone,
 				status:   mockStatus,
 				ext:      extensions.Extensions{}.Whisker(),
+				gwExt:    extensions.Extensions{}.UIGateway(),
 			}
 			_, err := reconciler.Reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: "default", Namespace: "calico-system"}})
 			Expect(err).ShouldNot(HaveOccurred())
@@ -213,6 +215,7 @@ var _ = Describe("whisker controller tests", func() {
 				provider: operatorv1.ProviderNone,
 				status:   mockStatus,
 				ext:      extensions.Extensions{}.Whisker(),
+				gwExt:    extensions.Extensions{}.UIGateway(),
 			}
 		})
 

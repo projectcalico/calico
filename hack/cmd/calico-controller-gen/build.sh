@@ -59,7 +59,12 @@ mkdir -p "$(dirname "$OUT")"
 
 SRC=$(mktemp -d)
 TARBALL=$(mktemp)
-trap 'rm -rf "$SRC" "$TARBALL"' EXIT
+# Created by mktemp in $OUT's own directory, which is the shared Go build
+# cache: O_EXCL there is what makes the name unique between concurrent builds.
+# $$ would not — each build runs in its own container, and those PID namespaces
+# hand out the same few PIDs, so it collides exactly when $OUT is contended.
+TMP_OUT=$(mktemp "$OUT.tmp.XXXXXXXX")
+trap 'rm -rf "$SRC" "$TARBALL" "$TMP_OUT"' EXIT
 
 echo "Fetching controller-tools $VERSION ..."
 curl -fL --retry 5 --retry-all-errors --silent --show-error -o "$TARBALL" \
@@ -74,8 +79,16 @@ done
 echo "Building $OUT ..."
 # GOFLAGS is reset so a parent -mod=vendor/-mod=mod does not leak into this
 # standalone module build. The tarball ships its own go.mod/go.sum.
-(cd "$SRC" && CGO_ENABLED=0 GOFLAGS= go build -o "$OUT" -v -buildvcs=false \
+(cd "$SRC" && CGO_ENABLED=0 GOFLAGS= go build -o "$TMP_OUT" -v -buildvcs=false \
     -ldflags "-X sigs.k8s.io/controller-tools/pkg/version.version=${VERSION} -s -w" \
     ./cmd/controller-gen)
+
+# mktemp created $TMP_OUT at 0600 and `go build -o` keeps an existing file's
+# mode, so the bit that makes it a binary has to be put back by hand.
+chmod 0755 "$TMP_OUT"
+
+# Renamed rather than built in place: concurrent builds share $OUT, and writing
+# it directly truncates a binary another container may be executing.
+mv -f "$TMP_OUT" "$OUT"
 
 echo "Built calico-controller-gen ($VERSION) at $OUT"

@@ -15,8 +15,6 @@
 package installation
 
 import (
-	"strconv"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -29,81 +27,6 @@ import (
 )
 
 var _ = Describe("BPF functional tests", func() {
-	Context("Annotations validation tests", func() {
-		var fc *v3.FelixConfiguration
-		var textTrue, textFalse string
-		var enabled, notEnabled bool
-
-		textTrue = strconv.FormatBool(true)
-		textFalse = strconv.FormatBool(false)
-
-		enabled = true
-		notEnabled = false
-
-		BeforeEach(func() {
-			fc = &v3.FelixConfiguration{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        "default",
-					Annotations: map[string]string{"foo": "bar"},
-				},
-				Spec: v3.FelixConfigurationSpec{},
-			}
-		})
-
-		It("should return error if the value is not a boolean", func() {
-			fc.Annotations[render.BPFOperatorAnnotation] = "NotBoolean"
-			err := bpfValidateAnnotations(fc)
-			Expect(err).Should(HaveOccurred())
-		})
-
-		It("should return error if the annotation is nil and the spec field is not", func() {
-			fc.Annotations = nil
-			fc.Spec.BPFEnabled = &enabled
-			err := bpfValidateAnnotations(fc)
-			Expect(err).Should(HaveOccurred())
-		})
-
-		It("should return error if the annotation is not nil and the spec field is", func() {
-			fc.Annotations[render.BPFOperatorAnnotation] = textFalse
-			err := bpfValidateAnnotations(fc)
-			Expect(err).Should(HaveOccurred())
-		})
-
-		It("should return error if the annotation is true and the spec field is false", func() {
-			fc.Annotations[render.BPFOperatorAnnotation] = textTrue
-			fc.Spec.BPFEnabled = &notEnabled
-			err := bpfValidateAnnotations(fc)
-			Expect(err).Should(HaveOccurred())
-		})
-
-		It("should return error if the annotation is false and the spec field is true", func() {
-			fc.Annotations[render.BPFOperatorAnnotation] = textFalse
-			fc.Spec.BPFEnabled = &enabled
-			err := bpfValidateAnnotations(fc)
-			Expect(err).Should(HaveOccurred())
-		})
-
-		It("should return valid if both annotation and the spec field are nil", func() {
-			fc.Annotations = nil
-			err := bpfValidateAnnotations(fc)
-			Expect(err).ShouldNot(HaveOccurred())
-		})
-
-		It("should return valid if the annotation is false and the spec field is false", func() {
-			fc.Annotations[render.BPFOperatorAnnotation] = textFalse
-			fc.Spec.BPFEnabled = &notEnabled
-			err := bpfValidateAnnotations(fc)
-			Expect(err).ShouldNot(HaveOccurred())
-		})
-
-		It("should return valid if the annotation is true and the spec field is true", func() {
-			fc.Annotations[render.BPFOperatorAnnotation] = textTrue
-			fc.Spec.BPFEnabled = &enabled
-			err := bpfValidateAnnotations(fc)
-			Expect(err).ShouldNot(HaveOccurred())
-		})
-	})
-
 	Context("Daemonset rollout completion tests", func() {
 		var ds *appsv1.DaemonSet
 		var bpfVolume corev1.Volume
@@ -249,64 +172,4 @@ var _ = Describe("BPF functional tests", func() {
 		})
 	})
 
-	Context("setBPFEnabledOnFelixConfiguration tests", func() {
-		var fc *v3.FelixConfiguration
-
-		BeforeEach(func() {
-			fc = &v3.FelixConfiguration{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "default",
-				},
-				Spec: v3.FelixConfigurationSpec{},
-			}
-		})
-
-		It("should return error if annotation validation failed", func() {
-			fc.Annotations = make(map[string]string)
-			fc.Annotations[render.BPFOperatorAnnotation] = "NotBoolean"
-			err := bpfValidateAnnotations(fc)
-			Expect(err).Should(HaveOccurred())
-			err = setBPFEnabledOnFelixConfiguration(fc, true)
-			Expect(err).Should(HaveOccurred())
-		})
-
-		It("should set correct annotation", func() {
-			err := setBPFEnabledOnFelixConfiguration(fc, true)
-			Expect(err).ShouldNot(HaveOccurred())
-
-			annotations := fc.Annotations[render.BPFOperatorAnnotation]
-			Expect(annotations).To(Equal("true"))
-			Expect(*fc.Spec.BPFEnabled).To(Equal(true))
-
-			err = setBPFEnabledOnFelixConfiguration(fc, false)
-			Expect(err).ShouldNot(HaveOccurred())
-
-			annotations = fc.Annotations[render.BPFOperatorAnnotation]
-			Expect(annotations).To(Equal("false"))
-			Expect(*fc.Spec.BPFEnabled).To(Equal(false))
-		})
-	})
-
-	Context("disableBPFKubeProxyHealthz tests", func() {
-		It("should set BPFKubeProxyHealthzPort to 0", func() {
-			fc := &v3.FelixConfiguration{
-				ObjectMeta: metav1.ObjectMeta{Name: "default"},
-				Spec:       v3.FelixConfigurationSpec{},
-			}
-			disableBPFKubeProxyHealthz(fc)
-			Expect(fc.Spec.BPFKubeProxyHealthzPort).ShouldNot(BeNil())
-			Expect(*fc.Spec.BPFKubeProxyHealthzPort).To(Equal(0))
-		})
-
-		It("should overwrite an existing value", func() {
-			existing := 12345
-			fc := &v3.FelixConfiguration{
-				ObjectMeta: metav1.ObjectMeta{Name: "default"},
-				Spec:       v3.FelixConfigurationSpec{BPFKubeProxyHealthzPort: &existing},
-			}
-			disableBPFKubeProxyHealthz(fc)
-			Expect(fc.Spec.BPFKubeProxyHealthzPort).ShouldNot(BeNil())
-			Expect(*fc.Spec.BPFKubeProxyHealthzPort).To(Equal(0))
-		})
-	})
 })

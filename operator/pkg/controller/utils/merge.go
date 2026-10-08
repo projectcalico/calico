@@ -162,6 +162,11 @@ func OverrideInstallationSpec(cfg, override operatorv1.InstallationSpec) operato
 		inst.TLSCipherSuites = override.TLSCipherSuites
 	}
 
+	switch compareFields(inst.TLSMinVersion, override.TLSMinVersion) {
+	case BOnlySet, Different:
+		inst.TLSMinVersion = override.TLSMinVersion
+	}
+
 	switch compareFields(inst.NonPrivileged, override.NonPrivileged) {
 	case BOnlySet, Different:
 		inst.NonPrivileged = override.NonPrivileged

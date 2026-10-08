@@ -78,10 +78,17 @@ $(BINDIR)/node-driver-registrar-%: clone-registrar-upstream
 clone-registrar-upstream:
 	$(call fetch_repo,$(UPSTREAM_REGISTRAR_REPO),$(UPSTREAM_REGISTRAR_TAG),$(REGISTRAR_IMAGE))
 	rm -rf ./$(REGISTRAR_IMAGE)/vendor
-	# Reset go.mod/go.sum to the pinned commit and (re-)apply the CVE dependency
-	# patch. The reset keeps this idempotent across repeated incremental builds.
+	# Reset first so re-applying is idempotent.
 	cd $(REGISTRAR_IMAGE) && git checkout -- go.mod go.sum
-	patch -d $(REGISTRAR_IMAGE) -p1 < node-driver-registrar-patches/0001-CVE-dependency-fixes.patch
+	# One directory per class, applied in name order. No dep-pins.txt here, so
+	# the dependency patch stays hand-maintained -- the generator would read the
+	# missing pin file as "no pins" and delete it.
+	found=; \
+	for patch in node-driver-registrar-patches/*/*.patch; do \
+		[ -f "$$patch" ] || continue; found=1; \
+		patch -d $(REGISTRAR_IMAGE) -p1 -F0 < "$$patch" || exit 1; \
+	done; \
+	[ -n "$$found" ] || { echo "error: no patches in node-driver-registrar-patches/" >&2; exit 1; }
 
 clean-registrar:
 	rm -rf ./$(REGISTRAR_IMAGE)

@@ -16,6 +16,9 @@ package outputs
 
 import (
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"slices"
 	"sync"
 	"testing"
@@ -144,5 +147,45 @@ func TestReadRefsMissingFile(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Errorf("expected no refs, got %v", got)
+	}
+}
+
+// Everything under the upload directory is published, so a refs file inside it
+// ships to the hashrelease server as a stray dir/<version>/published.refs.
+func TestRefsAreWrittenBesideTheUploadDirNotInIt(t *testing.T) {
+	root := t.TempDir()
+	uploadDir := filepath.Join(root, "upload")
+	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	w, err := NewRefsWriter(uploadDir, "images-publish", "v3.30.0")
+	if err != nil {
+		t.Fatalf("NewRefsWriter: %v", err)
+	}
+	if err := w.Add("quay.io/calico/node@sha256:aaa"); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+
+	if err := filepath.WalkDir(uploadDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && d.Name() == refsFileName {
+			rel, _ := filepath.Rel(uploadDir, path)
+			t.Errorf("%s is under the upload dir at %s, so it would be published", refsFileName, rel)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+
+	// Still readable from the same arguments, so resume keeps working.
+	got, err := ReadRefs(uploadDir, "images-publish", "v3.30.0")
+	if err != nil {
+		t.Fatalf("ReadRefs: %v", err)
+	}
+	if len(got) != 1 {
+		t.Errorf("expected the ref back, got %v", got)
 	}
 }

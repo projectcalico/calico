@@ -23,6 +23,8 @@ import (
 	"sync"
 	"testing"
 
+	"sigs.k8s.io/yaml"
+
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/yamledit"
 )
@@ -924,6 +926,38 @@ func TestModifyValuesFailsWhenAKeyIsMissing(t *testing.T) {
 	}}, WithRunner(&fakeRunner{}))
 	if err == nil {
 		t.Fatal("expected a missing key to fail")
+	}
+}
+
+// An image added to the chart without a registry edit here would be pulled from
+// the chart's default registry during a release, while everything else came
+// from the release registry.
+func TestCalicoChartEditsRewriteEveryImageRegistry(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", chartsDirName, CalicoChart, valuesFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := map[string]any{}
+	if err := yaml.Unmarshal(raw, &values); err != nil {
+		t.Fatal(err)
+	}
+
+	edited := map[string]bool{}
+	for _, edit := range calicoChartEdits("v3.30.0", "example.com/calico") {
+		edited[edit.Key] = true
+	}
+
+	for name, value := range values {
+		section, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		if _, ok := section["registry"]; !ok {
+			continue
+		}
+		if key := name + ".registry"; !edited[key] {
+			t.Errorf("calicoChartEdits does not rewrite %s", key)
+		}
 	}
 }
 

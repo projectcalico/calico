@@ -49,6 +49,10 @@ GENERATED_DOCS_FILES=docs/config-params.json docs/config-params.md
 FV_SRC_FILES:=$(shell find fv -type f -name '*.go' -print)
 EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/calico/pod2daemon:rw
 
+# Extra static-checks prerequisites; must be set before the include because
+# lib.Makefile's static-checks rule expands it when it is parsed.
+LOCAL_CHECKS = check-bpf-headers
+
 ###############################################################################
 # Download and include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -205,6 +209,12 @@ PROD_BPF_PROGS=$(PROD_BPF_APACHE_PROGS) $(PROD_BPF_GPL_PROGS)
 .PHONY: build-bpf clean-bpf
 build-bpf: $(LIBBPF_A) $(PROD_BPF_PROGS) $(BPF_GPL_UT_O_FILES)
 
+# Checks that every bpf-gpl header compiles on its own, i.e. that no header
+# relies on its includer's include order.
+.PHONY: check-bpf-headers
+check-bpf-headers: $(LIBBPF_FILE_CREATED)
+	$(DOCKER_GO_BUILD) make -C bpf-gpl ARCH=$(ARCH) check-headers
+
 $(PROD_BPF_PROGS) &: $(BPF_APACHE_O_FILES) $(BPF_GPL_O_FILES)
 	rm -rf bin/bpf
 	mkdir -p bin/bpf
@@ -291,7 +301,9 @@ UT_PACKAGES_TO_SKIP?=fv,k8sfv,bpf/ut
 .PHONY: ut
 ut combined.coverprofile: $(SRC_FILES) $(LIBBPF_A) $(BPF_APACHE_O_FILES)
 	@echo Running Go UTs.
-	$(DOCKER_RUN) $(CALICO_BUILD) ./utils/run-coverage -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	# run-coverage runs ginkgo with the race detector enabled, which requires
+	# CGO, so use the CGO build container.
+	$(DOCKER_GO_BUILD_CGO) ./utils/run-coverage -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 ###############################################################################
 # FV Tests

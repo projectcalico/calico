@@ -58,6 +58,7 @@ var (
 	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
 	HostAddressRegexp   = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
 	LogActionRateRegexp = regexp.MustCompile(`^([1-9]\d{0,3}/(?:second|minute|hour|day))?$`)
+	LogPrefixRegexp     = regexp.MustCompile(`^[a-zA-Z0-9%: /_-]*$`)
 )
 
 // Source of a config value.  Values from higher-numbered sources override
@@ -347,7 +348,7 @@ type Config struct {
 	LogActionRateLimit             string `config:"log-rate;"`
 	LogActionRateLimitBurst        int    `config:"int(0,9999);5"`
 	LogConnectionTransitions       string `config:"oneof(Disabled,FirstResponseAfterLog);Disabled"`
-	LogConnectionTransitionsPrefix string `config:"string;calico-response"`
+	LogConnectionTransitionsPrefix string `config:"log-prefix;calico-response"`
 
 	LogFilePath string `config:"file;/var/log/calico/felix.log;die-on-fail"`
 
@@ -1132,6 +1133,11 @@ func ParamForField(fieldName string, tag string) (param Param, defaultStr, flags
 		param = &RegexpParam{
 			Regexp: LogActionRateRegexp,
 			Msg:    "invalid log rate limit",
+		}
+	case "log-prefix":
+		param = &RegexpParam{
+			Regexp: LogPrefixRegexp,
+			Msg:    "invalid log prefix",
 		}
 	case "regexp":
 		param = &RegexpPatternParam{

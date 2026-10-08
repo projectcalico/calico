@@ -58,6 +58,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
 	"github.com/projectcalico/calico/operator/pkg/controller/ippool"
 	"github.com/projectcalico/calico/operator/pkg/controller/k8sapi"
+	"github.com/projectcalico/calico/operator/pkg/controller/managedfields"
 	"github.com/projectcalico/calico/operator/pkg/controller/migration"
 	"github.com/projectcalico/calico/operator/pkg/controller/migration/convert"
 	"github.com/projectcalico/calico/operator/pkg/controller/migration/datastoremigration"
@@ -114,7 +115,12 @@ var (
 	log                    = logf.Log.WithName("controller_installation")
 	openshiftNetworkConfig = "cluster"
 
-	warnOnce = utils.OnceFlag{}
+	bpfBootstrapWarnOnce = utils.OnceFlag{}
+
+	// The served admission policy versions are discovered once at start-up, so an unserved kind is
+	// only warned about once.
+	mapNotServedWarnOnce = utils.OnceFlag{}
+	vapNotServedWarnOnce = utils.OnceFlag{}
 )
 
 // Add creates a new Installation Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -265,24 +271,61 @@ func newReconciler(mgr manager.Manager, opts options.ControllerOptions) (*Reconc
 	// Create a Typha autoscaler.
 	typhaScaler := typhaautoscaler.New(mgr.GetClient(), common.TyphaDeploymentName, typhaautoscaler.NodeReplicaCounter, statusManager)
 
-	r := &ReconcileInstallation{
-		config:              mgr.GetConfig(),
-		client:              mgr.GetClient(),
-		scheme:              mgr.GetScheme(),
-		watches:             make(map[runtime.Object]struct{}),
-		status:              statusManager,
-		typhaAutoscaler:     typhaScaler,
-		namespaceMigration:  nm,
-		tierWatchReady:      &utils.ReadyFlag{},
-		migrationWatchReady: &utils.ReadyFlag{},
-		newComponentHandler: utils.NewComponentHandler,
-		opts:                opts,
-		ext:                 opts.Extensions.Installation(),
-	}
+	r := NewReconciler(ReconcilerOptions{
+		Config:             mgr.GetConfig(),
+		Client:             mgr.GetClient(),
+		Scheme:             mgr.GetScheme(),
+		Status:             statusManager,
+		TyphaAutoscaler:    typhaScaler,
+		NamespaceMigration: nm,
+		Options:            opts,
+	})
 	r.status.Run(opts.ShutdownContext)
 	r.typhaAutoscaler.Start(opts.ShutdownContext)
 
 	return r, nil
+}
+
+// ReconcilerOptions is what the Installation reconciler needs to run.
+type ReconcilerOptions struct {
+	Config              *rest.Config
+	Client              client.Client
+	Scheme              *runtime.Scheme
+	Status              status.StatusManager
+	TyphaAutoscaler     *typhaautoscaler.Autoscaler
+	NamespaceMigration  migration.NamespaceMigration
+	TierWatchReady      *utils.ReadyFlag
+	MigrationWatchReady *utils.ReadyFlag
+	Options             options.ControllerOptions
+}
+
+// NewReconciler returns an Installation reconciler a caller can drive without a manager.
+func NewReconciler(o ReconcilerOptions) *ReconcileInstallation {
+	tierWatchReady := o.TierWatchReady
+	if tierWatchReady == nil {
+		tierWatchReady = &utils.ReadyFlag{}
+	}
+
+	migrationWatchReady := o.MigrationWatchReady
+	if migrationWatchReady == nil {
+		migrationWatchReady = &utils.ReadyFlag{}
+	}
+
+	return &ReconcileInstallation{
+		config:              o.Config,
+		client:              o.Client,
+		scheme:              o.Scheme,
+		watches:             make(map[runtime.Object]struct{}),
+		status:              o.Status,
+		typhaAutoscaler:     o.TyphaAutoscaler,
+		namespaceMigration:  o.NamespaceMigration,
+		tierWatchReady:      tierWatchReady,
+		migrationWatchReady: migrationWatchReady,
+		newComponentHandler: utils.NewComponentHandler,
+		opts:                o.Options,
+		ext:                 o.Options.Extensions.Installation(),
+		fieldManager:        managedfields.New(o.Client),
+	}
 }
 
 // secondaryResources returns a list of the secondary resources that this controller
@@ -329,6 +372,7 @@ type ReconcileInstallation struct {
 	migrationWatchReady *utils.ReadyFlag
 	opts                options.ControllerOptions
 	ext                 extensions.InstallationExtension
+	fieldManager        *managedfields.FieldManager
 
 	// newComponentHandler returns a new component handler. Useful stub for unit testing.
 	newComponentHandler func(log logr.Logger, client client.Client, scheme *runtime.Scheme, cr metav1.Object, opts ...utils.ComponentHandlerOption) utils.ComponentHandler
@@ -911,12 +955,14 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
-	if err = r.updateMutatingAdmissionPolicies(ctx, defaulted, reqLogger); err != nil {
-		return reconcile.Result{}, err
-	}
+	if r.managesV3AdmissionPolicies() {
+		if err = r.updateMutatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetV3CRDs); err != nil {
+			return reconcile.Result{}, err
+		}
 
-	if err = r.updateValidatingAdmissionPolicies(ctx, defaulted, reqLogger); err != nil {
-		return reconcile.Result{}, err
+		if err = r.updateValidatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetV3CRDs); err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 
 	// Now that migrated config is stored in the installation resource, we no longer need
@@ -1053,54 +1099,47 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
-	// Set any non-default FelixConfiguration values that we need.
-	felixConfiguration, err := utils.PatchFelixConfiguration(ctx, r.client, func(fc *v3.FelixConfiguration) (bool, error) {
-		// Configure defaults.
-		u, err := r.setDefaultsOnFelixConfiguration(ctx, defaulted, fc, reqLogger, needsNamespaceMigration)
+	// The kube-system webhook server rejects the operator's tiered policy writes
+	// after the migration, so it has to go before the render below can succeed.
+	var kubeSystemWebhooksPending bool
+	if !needsNamespaceMigration {
+		kubeSystemWebhooksPending, err = r.namespaceMigration.RemoveKubeSystemWebhooks(ctx, reqLogger)
 		if err != nil {
-			return false, err
+			r.status.SetDegraded(operatorv1.ResourceMigrationError, "error removing the kube-system webhook server", err, reqLogger)
+			return reconcile.Result{}, err
 		}
-
-		// Configure nftables mode.
-		u2, err := r.setNftablesMode(ctx, defaulted, fc, reqLogger)
-		if err != nil {
-			return false, err
-		}
-
-		// Configure cluster routing mode.
-		u3, err := setClusterRoutingOnFelixConfiguration(defaulted, fc, reqLogger)
-		if err != nil {
-			return false, err
-		}
-
-		updated := u || u2 || u3
-		return updated, nil
-	})
-	if err != nil {
-		return reconcile.Result{}, err
 	}
 
-	// Provide the extension a chance to default any fields it needs.
-	if err := r.ext.DefaultFelixConfiguration(ctx, r.client, &defaulted.Spec); err != nil {
-		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error defaulting FelixConfiguration for the variant", err, reqLogger)
-		return reconcile.Result{}, err
+	// Set any non-default FelixConfiguration values that we need. A field another writer owns
+	// is reported and skipped rather than fought over, so the reconcile carries on: freezing
+	// everything the operator manages does not win the field back.
+	var fieldConflicts []error
+	if _, err := r.fieldManager.Apply(ctx, r.declareFelixConfiguration(ctx, defaulted, needsNamespaceMigration)); err != nil {
+		if !managedfields.IsFieldConflict(err) {
+			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+		fieldConflicts = append(fieldConflicts, err)
+	}
+
+	// The return carries both writes, so the render below sees the health port and cgroup path
+	// a user may have kept.
+	felixConfiguration, err := r.fieldManager.Apply(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration))
+	if err != nil {
+		if !managedfields.IsFieldConflict(err) {
+			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating FelixConfiguration", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+		fieldConflicts = append(fieldConflicts, err)
 	}
 
 	// Set any non-default BGPConfiguration values that we need.
-	_, err = utils.PatchBGPConfiguration(ctx, r.client, func(bgpConfig *v3.BGPConfiguration) (bool, error) {
-		// Configure cluster routing mode.
-		u, err := setClusterRoutingOnBGPConfiguration(defaulted, bgpConfig, reqLogger)
-		if err != nil {
-			return false, err
+	if _, err := r.fieldManager.Apply(ctx, r.declareBGPConfiguration(defaulted)); err != nil {
+		if !managedfields.IsFieldConflict(err) {
+			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating BGPConfiguration", err, reqLogger)
+			return reconcile.Result{}, err
 		}
-
-		return u, nil
-	})
-	if err != nil {
-		// Since, programClusterRoutes in FelixConfiguration is already updated earlier,
-		// failure in updating programClusterRouting in BGPConfiguration, essentially results in inconsistency
-		// between the configuration of BIRD and Felix in programming cluster routes, until the next reconcile convergence
-		return reconcile.Result{}, err
+		fieldConflicts = append(fieldConflicts, err)
 	}
 
 	calicoVersion := r.ext.ProductVersion(&instance.Spec)
@@ -1373,7 +1412,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		if !defaulted.Spec.KubernetesProvider.IsNone() {
 			// Warn once about potential issues with API server connectivity.
 			// This lock is necessary to prevent multiple warnings, since this Reconcile is called by multiple workers.
-			if warnOnce.TrySet() {
+			if bpfBootstrapWarnOnce.TrySet() {
 				reqLogger.Info(fmt.Sprintf("[WARNING] Auto bootstrapping BPF network may result in unexpected behavior in %s. ", defaulted.Spec.KubernetesProvider) +
 					"If you experience API server communication issues, disable 'bpfBootstrapNetworking' in the Installation CR " +
 					"and follow the eBPF installation guide at https://docs.tigera.io.")
@@ -1382,7 +1421,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	if !defaulted.Spec.BPFNetworkBootstrapEnabled() {
-		warnOnce.Reset()
+		bpfBootstrapWarnOnce.Reset()
 	}
 
 	components = append(components, render.Node(&nodeCfg))
@@ -1405,6 +1444,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		Namespace:              common.CalicoNamespace,
 		BindingNamespaces:      []string{common.CalicoNamespace},
 		Image:                  r.ext.KubeControllersImage(),
+		MigrationActive:        migrationExists,
 	}
 	components = append(components, kubecontrollers.NewCalicoKubeControllers(&kubeControllersCfg))
 
@@ -1455,19 +1495,30 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		}
 	}
 
+	// The CNI plugin's ClusterRole, rendered above, carries the permission these policies check, so
+	// they go in only after it. The CRD-only manifests don't carry them, so they're installed whether
+	// or not the operator manages CRDs.
+	if err = r.updateValidatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetCNIAnnotations); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	if err = r.updateMutatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetCNIAnnotations); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// TODO: We handle too many components in this controller at the moment. Once we are done consolidating,
 	// we can have the CreateOrUpdate logic handle this for us.
 	r.status.AddDaemonsets([]types.NamespacedName{{Name: common.NodeDaemonSetName, Namespace: common.CalicoNamespace}})
 	r.status.AddDeployments([]types.NamespacedName{{Name: common.KubeControllersDeploymentName, Namespace: common.CalicoNamespace}})
 	certificateManager.AddToStatusManager(r.status, common.CalicoNamespace)
 
-	// If eBPF is enabled in the operator API, patch FelixConfiguration to enable it within Felix.
-	_, err = utils.PatchFelixConfiguration(ctx, r.client, func(fc *v3.FelixConfiguration) (bool, error) {
-		return r.setBPFUpdatesOnFelixConfiguration(ctx, defaulted, fc, reqLogger)
-	})
-	if err != nil {
-		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating resource", err, reqLogger)
-		return reconcile.Result{}, err
+	// Re-check whether eBPF can be enabled within Felix once calico-node has rolled out.
+	if _, err := r.fieldManager.Apply(ctx, r.declareBPFEnabled(ctx, defaulted, needsNamespaceMigration)); err != nil {
+		if !managedfields.IsFieldConflict(err) {
+			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating resource", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+		fieldConflicts = append(fieldConflicts, err)
 	}
 
 	// Run this after we have rendered our components so the new (operator created)
@@ -1549,6 +1600,12 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	// We can clear the degraded state now since as far as we know everything is in order.
 	r.status.ClearDegraded()
 
+	// Except for fields another writer owns, which the reconcile stepped over rather than
+	// failed on. Re-report them here so a successful pass does not clear the news.
+	if conflict := managedfields.JoinFieldConflicts(fieldConflicts); conflict != nil {
+		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Shared configuration modified outside the operator", conflict, reqLogger)
+	}
+
 	if !r.status.IsAvailable() {
 		// Schedule a kick to check again in the near future. Hopefully by then
 		// things will be available.
@@ -1573,6 +1630,11 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	reqLogger.V(1).Info("Finished reconciling Installation")
+	if kubeSystemWebhooksPending {
+		// The operator's webhook server becoming available is a status change, which
+		// the Deployment watch filters out.
+		return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
+	}
 	return reconcile.Result{}, nil
 }
 
@@ -1595,175 +1657,6 @@ func calicoDirectoryExists() bool {
 	return err == nil
 }
 
-func (r *ReconcileInstallation) setNftablesMode(_ context.Context, install *operatorv1.Installation, fc *v3.FelixConfiguration, reqLogger logr.Logger) (bool, error) {
-	updated := false
-
-	// Set the FelixConfiguration nftables dataplane mode based on the operator configuration. We do this unconditonally because
-	// we don't need to handle upgrades from versions that were previously FelixConfiguration only - nftables mode has always
-	// been controlled by the operator.
-	if install.Spec.CalicoNetwork.LinuxDataplane != nil {
-		nftablesMode := v3.NFTablesModeDisabled
-		if install.Spec.IsNftables() {
-			// The operator is configured to use the nftables dataplane.
-			if install.Spec.BPFEnabled() {
-				// For BPF mode, we always use nftables, as we don't use the upstream kube-proxy and so don't need to
-				// worry about compatibility with its mode of operation.
-				nftablesMode = v3.NFTablesModeEnabled
-			} else {
-				// Otherwise, kube-proxy is running - configure Felix to auto-detect whether it should use nftables or iptables on
-				// a per-node basis, allowing for smoother upgrades.
-				nftablesMode = v3.NFTablesModeAuto
-			}
-		}
-		updated = fc.Spec.NFTablesMode == nil || *fc.Spec.NFTablesMode != nftablesMode
-		fc.Spec.NFTablesMode = &nftablesMode
-	}
-	if updated {
-		reqLogger.Info("Patching nftables mode", "nftablesMode", *fc.Spec.NFTablesMode)
-	}
-	return updated, nil
-}
-
-// setDefaultOnFelixConfiguration will take the passed in fc and add any defaulting needed
-// based on the install config.
-func (r *ReconcileInstallation) setDefaultsOnFelixConfiguration(ctx context.Context, install *operatorv1.Installation, fc *v3.FelixConfiguration, reqLogger logr.Logger, needNsMigration bool) (bool, error) {
-	updated := false
-
-	switch install.Spec.CNI.Type {
-	// If we're using the AWS CNI plugin we need to ensure the route tables that calico-node
-	// uses do not conflict with the ones the AWS CNI plugin uses so default them
-	// in the FelixConfiguration if they are not already set.
-	case operatorv1.PluginAmazonVPC:
-		if fc.Spec.RouteTableRange == nil {
-			updated = true
-			// Defaulting based on that AWS might be using the following:
-			// - The ENI device number + 1
-			//   Currently the max number of ENIs for any host is 15.
-			//   p4d.24xlarge is reported to support 4x15 ENI but it uses 4 cards
-			//   and AWS CNI only uses ENIs on card 0.
-			// - The VLAN table ID + 100 (there is doubt if this is true)
-			fc.Spec.RouteTableRange = &v3.RouteTableRange{
-				Min: 65,
-				Max: 99,
-			}
-		}
-	case operatorv1.PluginGKE:
-		if fc.Spec.RouteTableRange == nil {
-			updated = true
-			// Don't conflict with the GKE CNI plugin's routes.
-			fc.Spec.RouteTableRange = &v3.RouteTableRange{
-				Min: 10,
-				Max: 250,
-			}
-		}
-	}
-
-	// Determine the felix health port to use. Prefer the configuration from FelixConfiguration,
-	// but default to 9099 (or 9199 on OpenShift). We will also write back whatever we select to FelixConfiguration.
-	felixHealthPort := render.DefaultFelixHealthPort
-	if install.Spec.KubernetesProvider.IsOpenShift() {
-		felixHealthPort = 9199
-	}
-	if fc.Spec.HealthPort == nil {
-		fc.Spec.HealthPort = &felixHealthPort
-		updated = true
-	}
-	vxlanVNI := 4096
-	vxlanPort := 4789
-	// MKE uses a vxlanVNI:4096 and vxlanPort:4789 for its docker swarm vxlan.
-	// This results in a conflict with calico's VXLAN and the vxlan.calico interface
-	// gets deleted. To fix this we change the vxlanVNI to 10000 as recommended by
-	// MKE docs (https://docs.mirantis.com/mke/3.7/cli-ref/mke-cli-install.html).
-	if install.Spec.KubernetesProvider == operatorv1.ProviderDockerEE {
-		vxlanVNI = 10000
-		// We are using a flow based VXLAN device for
-		// ebpf dataplane. This requires changing the default VXLAN port to
-		// 8472 to avoid conflict with the host's VXLAN interface.
-		if install.Spec.BPFEnabled() {
-			vxlanPort = 8472
-		}
-	}
-
-	if fc.Spec.VXLANVNI == nil {
-		fc.Spec.VXLANVNI = &vxlanVNI
-		updated = true
-	}
-
-	if fc.Spec.VXLANPort == nil {
-		fc.Spec.VXLANPort = &vxlanPort
-		updated = true
-	}
-
-	if install.Spec.KubernetesProvider == operatorv1.ProviderDockerEE {
-		// Set bpfHostConntrackBypass to false for eBPF dataplane to work with MKE
-		if install.Spec.BPFEnabled() && fc.Spec.BPFHostConntrackBypass == nil {
-			disableBPFHostConntrackBypass(fc)
-			updated = true
-		}
-	}
-
-	// Whether a calico-node DaemonSet is already running decides both what version is out
-	// there and how bpfEnabled has to be derived, below.
-	ds := &appsv1.DaemonSet{}
-	nodeDSExists := true
-	if err := r.client.Get(ctx, types.NamespacedName{Namespace: common.CalicoNamespace, Name: common.NodeDaemonSetName}, ds); err != nil {
-		if !apierrors.IsNotFound(err) {
-			reqLogger.Error(err, "An error occurred when getting the Daemonset resource")
-			return false, err
-		}
-		nodeDSExists = false
-	}
-
-	// When BPF is enabled but the operator is not managing kube-proxy (e.g. on AKS, where
-	// the platform owns the kube-proxy DaemonSet), the platform's kube-proxy keeps the
-	// default healthz port (10256), and Felix's BPF kube-proxy healthz server would fail
-	// to bind. Default the port to 0 (disabled) so calico-node starts cleanly. Users can
-	// still override by setting BPFKubeProxyHealthzPort explicitly on FelixConfiguration.
-	//
-	// 0 is only a valid port for Calico >= v3.32.0 and Enterprise >= v3.23.0-2.0, so hold
-	// the write until every node can accept it.
-	if allNodesRunTargetVersion(install, needNsMigration, nodeDSExists, r.ext.ProductVersion(&install.Spec)) &&
-		install.Spec.BPFEnabled() && !install.Spec.KubeProxyManagementEnabled() && fc.Spec.BPFKubeProxyHealthzPort == nil {
-		disableBPFKubeProxyHealthz(fc)
-		updated = true
-	}
-
-	// If BPF is enabled, but not set on FelixConfiguration, do so here. This could happen when an older
-	// version of operator is replaced by the new one. Older versions of the operator used an
-	// environment variable to enable BPF, but we no longer do so. In order to prevent disruption
-	// when the environment variable is removed by the render code of the new operator, make sure
-	// FelixConfiguration has the correct value set.
-
-	// If calico-node daemonset exists, we need to check the ENV VAR and set FelixConfiguration accordingly.
-	// Otherwise, this is a fresh install in eBPF mode, set the felix config.
-	if !nodeDSExists {
-		if !needNsMigration && install.Spec.BPFEnabled() {
-			err := setBPFEnabledOnFelixConfiguration(fc, true)
-			if err != nil {
-				reqLogger.Error(err, "Unable to enable eBPF data plane with a fresh install")
-				return false, err
-			}
-			updated = true
-		}
-	} else {
-		bpfEnabledOnDaemonsetWithEnvVar, err := bpfEnabledOnDaemonsetWithEnvVar(ds)
-		if err != nil {
-			reqLogger.Error(err, "An error occurred when querying the Daemonset resource")
-			return false, err
-		} else if bpfEnabledOnDaemonsetWithEnvVar && !bpfEnabledOnFelixConfig(fc) {
-			err = setBPFEnabledOnFelixConfiguration(fc, true)
-			if err != nil {
-				reqLogger.Error(err, "Unable to enable eBPF data plane")
-				return false, err
-			} else {
-				updated = true
-			}
-		}
-	}
-
-	return updated, nil
-}
-
 // allNodesRunTargetVersion reports whether every calico-node runs targetVersion. Gate
 // FelixConfiguration writes that older nodes' validators reject on it.
 func allNodesRunTargetVersion(install *operatorv1.Installation, needNsMigration, nodeDSExists bool, targetVersion string) bool {
@@ -1775,55 +1668,10 @@ func allNodesRunTargetVersion(install *operatorv1.Installation, needNsMigration,
 		// Fresh install: nothing is running yet.
 		return true
 	}
+
 	// Written together, and only once the stack was seen available on that version. A status
 	// reporting neither fails this too, which is what we want.
 	return install.Status.Variant == install.Spec.Variant && install.Status.CalicoVersion == targetVersion
-}
-
-// setClusterRoutingOnFelixConfiguration sets programClusterRoutes in the FelixConfiguration resource
-// based on the value of clusterRoutingMode in the install config.
-func setClusterRoutingOnFelixConfiguration(
-	install *operatorv1.Installation,
-	fc *v3.FelixConfiguration,
-	reqLogger logr.Logger,
-) (bool, error) {
-	if install.Spec.CalicoNetwork == nil || install.Spec.CalicoNetwork.ClusterRoutingMode == nil {
-		return false, nil
-	}
-
-	updated := false
-	desiredValue := felixProgramClusterRoutesValue(*install.Spec.CalicoNetwork.ClusterRoutingMode)
-
-	if fc.Spec.ProgramClusterRoutes == nil || *fc.Spec.ProgramClusterRoutes != desiredValue {
-		fc.Spec.ProgramClusterRoutes = &desiredValue
-		updated = true
-		reqLogger.Info("Patching FelixConfiguration", "programClusterRoutes", desiredValue)
-	}
-
-	return updated, nil
-}
-
-// setClusterRoutingOnBGPConfiguration sets programClusterRoutes in the BGPConfiguration resource
-// based on the value of clusterRoutingMode in the install config.
-func setClusterRoutingOnBGPConfiguration(
-	install *operatorv1.Installation,
-	bgpConfig *v3.BGPConfiguration,
-	reqLogger logr.Logger,
-) (bool, error) {
-	if install.Spec.CalicoNetwork == nil || install.Spec.CalicoNetwork.ClusterRoutingMode == nil {
-		return false, nil
-	}
-
-	updated := false
-	desiredValue := birdProgramClusterRoutesValue(*install.Spec.CalicoNetwork.ClusterRoutingMode)
-
-	if bgpConfig.Spec.ProgramClusterRoutes == nil || *bgpConfig.Spec.ProgramClusterRoutes != desiredValue {
-		bgpConfig.Spec.ProgramClusterRoutes = &desiredValue
-		updated = true
-		reqLogger.Info("Patching BGPConfiguration", "programClusterRoutes", desiredValue)
-	}
-
-	return updated, nil
 }
 
 // felixProgramClusterRoutesValue and birdProgramClusterRoutesValue map a cluster routing mode onto
@@ -1877,7 +1725,7 @@ func felixProgramsNoEncapClusterRoutes(install *operatorv1.Installation) bool {
 //
 // This is deliberately not used to decide whether to *write* programClusterRoutes into
 // FelixConfiguration and BGPConfiguration.  Those writes stay gated on the field being explicitly
-// set (see setClusterRoutingOnFelixConfiguration and setClusterRoutingOnBGPConfiguration), so that
+// set (see declareFelixConfiguration and declareBGPConfiguration), so that
 // leaving it unset continues to mean "whatever Calico's defaults are" rather than pinning today's
 // defaults into the datastore.
 func clusterRoutingMode(install *operatorv1.Installation) operatorv1.ClusterRoutingMode {
@@ -1885,42 +1733,6 @@ func clusterRoutingMode(install *operatorv1.Installation) operatorv1.ClusterRout
 		return operatorv1.ClusterRoutingModeFelixIPIPOnly
 	}
 	return *install.Spec.CalicoNetwork.ClusterRoutingMode
-}
-
-// setBPFUpdatesOnFelixConfiguration will take the passed in fc and update any BPF properties needed
-// based on the install config and the daemonset.
-func (r *ReconcileInstallation) setBPFUpdatesOnFelixConfiguration(ctx context.Context, install *operatorv1.Installation, fc *v3.FelixConfiguration, reqLogger logr.Logger) (bool, error) {
-	updated := false
-
-	bpfEnabledOnInstall := install.Spec.BPFEnabled()
-	if bpfEnabledOnInstall {
-		ds := &appsv1.DaemonSet{}
-		err := r.client.Get(ctx, types.NamespacedName{Namespace: common.CalicoNamespace, Name: common.NodeDaemonSetName}, ds)
-		if err != nil {
-			return false, err
-		}
-		if !bpfEnabledOnFelixConfig(fc) && isRolloutCompleteWithBPFVolumes(ds) {
-			err := setBPFEnabledOnFelixConfiguration(fc, bpfEnabledOnInstall)
-			if err != nil {
-				reqLogger.Error(err, "Unable to enable eBPF data plane")
-				return false, err
-			} else {
-				updated = true
-			}
-		}
-	} else {
-		if fc.Spec.BPFEnabled == nil || *fc.Spec.BPFEnabled {
-			err := setBPFEnabledOnFelixConfiguration(fc, bpfEnabledOnInstall)
-			if err != nil {
-				reqLogger.Error(err, "Unable to disable eBPF data plane")
-				return false, err
-			} else {
-				updated = true
-			}
-		}
-	}
-
-	return updated, nil
 }
 
 // serviceIPsAndPorts extracts the service IPs and ports from the Service and returns them as a slice of k8sapi.ServiceEndpoint.
@@ -2021,21 +1833,30 @@ func (r *ReconcileInstallation) updateCRDs(ctx context.Context, variant operator
 	return nil
 }
 
-func (r *ReconcileInstallation) updateMutatingAdmissionPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger) error {
-	if !r.opts.ManageCRDs || !r.opts.UseV3CRDs {
-		return nil
-	}
+// managesV3AdmissionPolicies reports whether the operator installs the admission policies for v3
+// CRDs: only when the cluster uses them and the operator manages CRDs.
+func (r *ReconcileInstallation) managesV3AdmissionPolicies() bool {
+	return r.opts.ManageCRDs && r.opts.UseV3CRDs
+}
 
+// updateMutatingAdmissionPolicies reconciles the operator's MutatingAdmissionPolicies in the given set.
+func (r *ReconcileInstallation) updateMutatingAdmissionPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger, set admission.PolicySet) error {
 	// MutatingAdmissionPolicy served version was discovered once at startup (v1 was promoted to GA
 	// in k8s 1.36 and v1beta1 (introduced in 1.32) is scheduled for removal in 1.37).
 	mapAPIVersion := r.opts.APIDiscovery.ServedVersion(admission.APIGroup, admission.KindPolicy)
 	if mapAPIVersion == "" {
-		r.status.SetDegraded(operatorv1.ResourceNotReady, "Kubernetes cluster does not serve MutatingAdmissionPolicy (requires v1.32+); policy defaulting will not be available", nil, log)
+		// v3 resources rely on their policies for defaulting. The CNI annotations are still
+		// protected by the validating policy without theirs.
+		if set == admission.PolicySetV3CRDs {
+			r.status.SetDegraded(operatorv1.ResourceNotReady, "Kubernetes cluster does not serve MutatingAdmissionPolicy (requires v1.32+); policy defaulting will not be available", nil, log)
+		} else if mapNotServedWarnOnce.TrySet() {
+			log.Info("[WARNING] Kubernetes cluster does not serve MutatingAdmissionPolicy, skipping")
+		}
 		return nil
 	}
 
-	desired := admission.GetMutatingAdmissionPolicies(install.Spec.Variant, r.opts.UseV3CRDs, mapAPIVersion)
-	existingMAPs, existingMAPBs, err := admission.ListManaged(ctx, r.client, mapAPIVersion)
+	desired := admission.GetMutatingAdmissionPolicies(install.Spec.Variant, set, mapAPIVersion)
+	existingMAPs, existingMAPBs, err := admission.ListManaged(ctx, r.client, mapAPIVersion, set)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed MutatingAdmissionPolicy resources", err, log)
 		return err
@@ -2044,22 +1865,22 @@ func (r *ReconcileInstallation) updateMutatingAdmissionPolicies(ctx context.Cont
 	return r.syncManagedAdmissionPolicies(ctx, install, log, desired, existingMAPs, existingMAPBs, admission.IsPolicyKind, admission.IsBindingKind, "Error syncing MutatingAdmissionPolicy resources")
 }
 
-func (r *ReconcileInstallation) updateValidatingAdmissionPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger) error {
-	if !r.opts.ManageCRDs || !r.opts.UseV3CRDs {
-		return nil
-	}
-
+// updateValidatingAdmissionPolicies reconciles the operator's ValidatingAdmissionPolicies in the given
+// set.
+func (r *ReconcileInstallation) updateValidatingAdmissionPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger, set admission.PolicySet) error {
 	// ValidatingAdmissionPolicy reached GA (v1) well before MutatingAdmissionPolicy, so it has its own
 	// served version and is reconciled independently of whether the cluster serves MAPs. If the cluster
 	// doesn't serve it at all there's nothing to do, so skip rather than degrade.
 	vapAPIVersion := r.opts.APIDiscovery.ServedVersion(admission.APIGroup, admission.KindValidatingPolicy)
 	if vapAPIVersion == "" {
-		log.Info("Kubernetes cluster does not serve ValidatingAdmissionPolicy, skipping")
+		if vapNotServedWarnOnce.TrySet() {
+			log.Info("[WARNING] Kubernetes cluster does not serve ValidatingAdmissionPolicy, skipping")
+		}
 		return nil
 	}
 
-	desired := admission.GetValidatingAdmissionPolicies(install.Spec.Variant, r.opts.UseV3CRDs, vapAPIVersion)
-	existingVAPs, existingVAPBs, err := admission.ListManagedValidating(ctx, r.client, vapAPIVersion)
+	desired := admission.GetValidatingAdmissionPolicies(install.Spec.Variant, set, vapAPIVersion)
+	existingVAPs, existingVAPBs, err := admission.ListManagedValidating(ctx, r.client, vapAPIVersion, set)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed ValidatingAdmissionPolicy resources", err, log)
 		return err

@@ -21,6 +21,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/apis"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	rgateway "github.com/projectcalico/calico/operator/pkg/render/gateway"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
@@ -168,11 +171,15 @@ var _ = Describe("Cleanup helpers", func() {
 		Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
 		mapper := apimeta.NewDefaultRESTMapper(nil)
 		mapper.Add(schema.GroupVersionKind{Group: gapi.GroupName, Version: "v1", Kind: "Gateway"}, apimeta.RESTScopeNamespace)
+		mapper.Add(schema.GroupVersionKind{Group: gapi.GroupName, Version: "v1", Kind: "HTTPRoute"}, apimeta.RESTScopeNamespace)
+		mapper.Add(schema.GroupVersionKind{Group: "gateway.envoyproxy.io", Version: "v1alpha1", Kind: "Backend"}, apimeta.RESTScopeNamespace)
+		mapper.Add(schema.GroupVersionKind{Group: "gateway.networking.k8s.io", Version: "v1beta1", Kind: "ReferenceGrant"}, apimeta.RESTScopeNamespace)
 		cli = ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(objs...).WithRESTMapper(mapper).Build()
 		cfg = uigateway.Config{
 			ResourcePrefix:   prefix,
 			TLSSecretName:    prefix + "-gateway-tls",
 			BackendNamespace: backendNS,
+			Extension:        extensions.NoopUIGateway{},
 		}
 		h = uigateway.NewHelper(cli, cfg)
 	}
@@ -252,6 +259,140 @@ var _ = Describe("Cleanup helpers", func() {
 			components, err := h.StaleComponents(ctx, backendNS)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(components).To(BeEmpty())
+		})
+	})
+
+	Describe("UIGateway extension", func() {
+		It("feeds the extension's proxy objects into the backend namespace's teardown", func() {
+			build(labeledGateway(prefix+"-gateway", backendNS))
+			ext := &fakeUIGatewayExt{objs: []client.Object{
+				&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "waf-http-filter", Namespace: backendNS}},
+			}}
+			cfg.Extension = ext
+			h = uigateway.NewHelper(cli, cfg)
+
+			components, err := h.Teardown(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ext.seenPrefix).To(Equal(prefix))
+
+			var deleted []string
+			for _, c := range components {
+				_, toDelete := c.Objects()
+				for _, obj := range toDelete {
+					if sa, ok := obj.(*corev1.ServiceAccount); ok {
+						deleted = append(deleted, sa.Namespace+"/"+sa.Name)
+					}
+				}
+			}
+			Expect(deleted).To(ConsistOf(backendNS+"/waf-http-filter"),
+				"only the backend namespace's component deletes the extension objects")
+		})
+	})
+
+	Describe("access grant finalizers", func() {
+		accessName := prefix + "-ingressgateway-access"
+		backendAccessName := prefix + "-ingressgateway-backend-access"
+
+		grant := func(name, ns string) (*rbacv1.Role, *rbacv1.RoleBinding) {
+			objMeta := func() metav1.ObjectMeta {
+				return metav1.ObjectMeta{
+					Name:       name,
+					Namespace:  ns,
+					Labels:     map[string]string{rgateway.GatewayLabel: prefix},
+					Finalizers: []string{rgateway.RBACFinalizer},
+				}
+			}
+			return &rbacv1.Role{ObjectMeta: objMeta()}, &rbacv1.RoleBinding{ObjectMeta: objMeta()}
+		}
+		accessGrant := func(ns string) (*rbacv1.Role, *rbacv1.RoleBinding) { return grant(accessName, ns) }
+		newBackend := func(ns string) *envoyapi.Backend {
+			return &envoyapi.Backend{ObjectMeta: metav1.ObjectMeta{Name: rgateway.BackendName(prefix), Namespace: ns}}
+		}
+
+		It("completes a marked grant's deletion once the gateway resources are gone", func() {
+			role, binding := accessGrant("ns-a")
+			build(role, binding)
+			Expect(cli.Delete(ctx, role)).To(Succeed())
+			Expect(cli.Delete(ctx, binding)).To(Succeed())
+
+			err := h.ClearRBACFinalizers(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(kerrors.IsNotFound(cli.Get(ctx, types.NamespacedName{Name: accessName, Namespace: "ns-a"}, &rbacv1.Role{}))).To(BeTrue(),
+				"the finalizer should be cleared so the pending delete finishes")
+			Expect(kerrors.IsNotFound(cli.Get(ctx, types.NamespacedName{Name: accessName, Namespace: "ns-a"}, &rbacv1.RoleBinding{}))).To(BeTrue())
+		})
+
+		It("holds a marked grant while its Gateway remains", func() {
+			role, binding := accessGrant("ns-a")
+			build(role, binding, labeledGateway(rgateway.GatewayName(prefix), "ns-a"))
+			Expect(cli.Delete(ctx, role)).To(Succeed())
+			Expect(cli.Delete(ctx, binding)).To(Succeed())
+
+			err := h.ClearRBACFinalizers(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			got := &rbacv1.Role{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: accessName, Namespace: "ns-a"}, got)).To(Succeed())
+			Expect(got.Finalizers).To(ContainElement(rgateway.RBACFinalizer),
+				"the grant must keep the operator's write access until the Gateway is gone")
+		})
+
+		It("leaves a grant that is not marked for deletion alone", func() {
+			role, binding := accessGrant("ns-a")
+			build(role, binding)
+
+			err := h.ClearRBACFinalizers(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			got := &rbacv1.Role{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: accessName, Namespace: "ns-a"}, got)).To(Succeed())
+			Expect(got.DeletionTimestamp.IsZero()).To(BeTrue())
+			Expect(got.Finalizers).To(ContainElement(rgateway.RBACFinalizer))
+		})
+
+		It("clears finalizers per namespace, keeping one whose Gateway remains", func() {
+			goneRole, goneBinding := accessGrant("ns-a")
+			heldRole, heldBinding := accessGrant("ns-b")
+			build(goneRole, goneBinding, heldRole, heldBinding, labeledGateway(rgateway.GatewayName(prefix), "ns-b"))
+			for _, o := range []client.Object{goneRole, goneBinding, heldRole, heldBinding} {
+				Expect(cli.Delete(ctx, o)).To(Succeed())
+			}
+
+			Expect(h.ClearRBACFinalizers(ctx)).To(Succeed())
+
+			Expect(kerrors.IsNotFound(cli.Get(ctx, types.NamespacedName{Name: accessName, Namespace: "ns-a"}, &rbacv1.Role{}))).To(BeTrue(),
+				"ns-a's grant should clear: its gateway resources are gone")
+			held := &rbacv1.Role{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: accessName, Namespace: "ns-b"}, held)).To(Succeed())
+			Expect(held.Finalizers).To(ContainElement(rgateway.RBACFinalizer),
+				"ns-b's grant must stay while its Gateway remains")
+		})
+
+		It("clears a gateway grant even when a Backend shares its namespace", func() {
+			role, binding := accessGrant(backendNS)
+			build(role, binding, newBackend(backendNS))
+			Expect(cli.Delete(ctx, role)).To(Succeed())
+			Expect(cli.Delete(ctx, binding)).To(Succeed())
+
+			Expect(h.ClearRBACFinalizers(ctx)).To(Succeed())
+
+			Expect(kerrors.IsNotFound(cli.Get(ctx, types.NamespacedName{Name: accessName, Namespace: backendNS}, &rbacv1.Role{}))).To(BeTrue(),
+				"the gateway grant covers only the Gateway and HTTPRoute, so a co-located Backend must not hold it")
+		})
+
+		It("holds a backend grant while its Backend remains", func() {
+			role, binding := grant(backendAccessName, backendNS)
+			build(role, binding, newBackend(backendNS))
+			Expect(cli.Delete(ctx, role)).To(Succeed())
+			Expect(cli.Delete(ctx, binding)).To(Succeed())
+
+			Expect(h.ClearRBACFinalizers(ctx)).To(Succeed())
+
+			held := &rbacv1.Role{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: backendAccessName, Namespace: backendNS}, held)).To(Succeed())
+			Expect(held.Finalizers).To(ContainElement(rgateway.RBACFinalizer),
+				"the backend grant must stay while its Backend remains")
 		})
 	})
 
@@ -494,4 +635,15 @@ func (c noGatewayKindClient) List(ctx context.Context, list client.ObjectList, o
 		return &apimeta.NoKindMatchError{GroupKind: schema.GroupKind{Group: "gateway.networking.k8s.io", Kind: "Gateway"}}
 	}
 	return c.Client.List(ctx, list, opts...)
+}
+
+// fakeUIGatewayExt supplies fixed proxy objects and records the prefix asked for.
+type fakeUIGatewayExt struct {
+	objs       []client.Object
+	seenPrefix string
+}
+
+func (f *fakeUIGatewayExt) ProxyObjects(resourcePrefix, _ string) []client.Object {
+	f.seenPrefix = resourcePrefix
+	return f.objs
 }

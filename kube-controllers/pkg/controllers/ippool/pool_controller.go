@@ -19,11 +19,13 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -33,7 +35,11 @@ import (
 
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -47,6 +53,9 @@ const (
 	// reconcileKey is the single workqueue key this controller uses. Overlap detection is global
 	// across all pools, so there is nothing to gain from per-pool keys.
 	reconcileKey = "reconcile"
+
+	// utilizationDelay collapses block and reservation churn into at most one reconcile per interval.
+	utilizationDelay = 5 * time.Second
 )
 
 // IPPoolController is responsible for watching IPPool and IPAMBlock resources and managing the finalization / deletion
@@ -55,9 +64,15 @@ const (
 type IPPoolController struct {
 	ctx context.Context
 
-	// For syncing node objects from the k8s API.
-	poolInformer  cache.SharedIndexInformer
-	blockInformer cache.SharedIndexInformer
+	poolInformer cache.SharedIndexInformer
+
+	// tracker is the process's shared IPAM accounting, kept current by the data feed. Its counts are partial until
+	// inSync.
+	tracker *accounting.Tracker
+	inSync  atomic.Bool
+
+	// handlersSynced reports when the pool handler and the data feed have each delivered their initial state.
+	handlersSynced []cache.InformerSynced
 
 	cli   clientset.Interface
 	ipam  ipam.Interface
@@ -68,38 +83,69 @@ func NewController(
 	ctx context.Context,
 	cli clientset.Interface,
 	poolInformer cache.SharedIndexInformer,
-	blockInformer cache.SharedIndexInformer,
+	dataFeed *utils.DataFeed,
+	tracker *accounting.Tracker,
 	ipam ipam.Interface,
 ) controller.Controller {
 	c := &IPPoolController{
-		ctx:           ctx,
-		cli:           cli,
-		poolInformer:  poolInformer,
-		blockInformer: blockInformer,
-		ipam:          ipam,
-		queue:         workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]()),
+		ctx:          ctx,
+		cli:          cli,
+		poolInformer: poolInformer,
+		tracker:      tracker,
+		ipam:         ipam,
+		queue:        workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]()),
 	}
 
-	// Every pool event triggers the same global reconcile, so the handlers just enqueue the
-	// sentinel key and let the workqueue collapse bursts into a single pass.
-	poolHandlers := cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj any) { c.queue.Add(reconcileKey) },
-		UpdateFunc: func(oldObj, newObj any) { c.queue.Add(reconcileKey) },
-		DeleteFunc: func(obj any) { c.queue.Add(reconcileKey) },
-	}
-	if _, err := poolInformer.AddEventHandler(poolHandlers); err != nil {
+	poolReg, err := poolInformer.AddEventHandler(c.poolHandlers())
+	if err != nil {
 		logrus.WithError(err).Fatal("Failed to register event handler for IPPool")
 	}
-
-	// Block deletions can unblock finalization of a deleting pool, so they need a reconcile too.
-	blockHandlers := cache.ResourceEventHandlerFuncs{
-		DeleteFunc: func(obj any) { c.queue.Add(reconcileKey) },
-	}
-	if _, err := blockInformer.AddEventHandler(blockHandlers); err != nil {
-		logrus.WithError(err).Fatal("Failed to register event handler for IPAMBlock")
-	}
+	dataFeed.RegisterForSyncStatus(c.onStatusUpdate)
+	dataFeed.RegisterForNotification(model.BlockKey{}, c.onBlockUpdate)
+	dataFeed.RegisterForNotification(model.ResourceKey{}, c.onResourceUpdate)
+	c.handlersSynced = []cache.InformerSynced{poolReg.HasSynced, c.inSync.Load}
 
 	return c
+}
+
+// poolHandlers enqueue the sentinel key, letting the workqueue collapse bursts into one pass.
+func (c *IPPoolController) poolHandlers() cache.ResourceEventHandlerFuncs {
+	return cache.ResourceEventHandlerFuncs{
+		AddFunc:    func(any) { c.queue.Add(reconcileKey) },
+		UpdateFunc: func(_, _ any) { c.queue.Add(reconcileKey) },
+		DeleteFunc: func(any) { c.queue.Add(reconcileKey) },
+	}
+}
+
+// The data feed handlers run on the syncer goroutine, after the IPAMFeed has applied the same update to the tracker.
+func (c *IPPoolController) onStatusUpdate(status bapi.SyncStatus) {
+	c.inSync.Store(status == bapi.InSync)
+	if status == bapi.InSync {
+		c.queue.Add(reconcileKey)
+	}
+}
+
+func (c *IPPoolController) onBlockUpdate(update bapi.Update) {
+	if update.Value == nil {
+		// Block deletions can unblock finalization of a deleting pool, so reconcile straight away.
+		c.queue.Add(reconcileKey)
+		return
+	}
+	c.queue.AddAfter(reconcileKey, utilizationDelay)
+}
+
+func (c *IPPoolController) onResourceUpdate(update bapi.Update) {
+	key, ok := update.Key.(model.ResourceKey)
+	if !ok {
+		return
+	}
+	switch key.Kind {
+	case v3.KindIPPool:
+		// The tracker sees a pool's new status here, which can lag the informer's copy.
+		c.queue.Add(reconcileKey)
+	case v3.KindIPReservation:
+		c.queue.AddAfter(reconcileKey, utilizationDelay)
+	}
 }
 
 // Run starts the IP pool controller. It does start-of-day preparation
@@ -110,9 +156,10 @@ func (c *IPPoolController) Run(stopCh chan struct{}) {
 
 	logrus.Info("Starting IPPool controller")
 
-	// Wait till k8s cache is synced
+	// The first reconcile waits for the tracker's full state, or it would undercount a pool and drop its nearly-full
+	// condition, or finalize a pool whose blocks it has yet to see.
 	logrus.Debug("Waiting to sync with Kubernetes API")
-	if !cache.WaitForNamedCacheSync("pools", stopCh, c.poolInformer.HasSynced, c.blockInformer.HasSynced) {
+	if !cache.WaitForNamedCacheSync("pools", stopCh, c.handlersSynced...) {
 		logrus.Info("Failed to sync resources, received signal for controller to shut down.")
 		return
 	}
@@ -167,6 +214,16 @@ func (c *IPPoolController) reconcile() error {
 	// Conditions first: whether a pool is allocatable decides whether it should carry a finalizer.
 	pools, err := c.reconcileConditions(c.ctx)
 	if err != nil {
+		errs = append(errs, err)
+	}
+
+	if !c.inSync.Load() {
+		logrus.Debug("IPAM data feed not in sync; leaving AddressSpaceNearlyFull for now")
+	} else if !c.trackerAgreesOnOverlap(pools) {
+		// The tracker learns of a CIDROverlap change from the data feed, which can lag the informer, and until then
+		// credits blocks to the wrong pool. The feed's update queues the next pass.
+		logrus.Debug("Tracker has yet to see a CIDROverlap change; leaving AddressSpaceNearlyFull to the next pass")
+	} else if err := c.reconcileNearlyFull(c.ctx, pools); err != nil {
 		errs = append(errs, err)
 	}
 
@@ -309,6 +366,16 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) ([]*v3.IPPoo
 	return pools, utilerrors.NewAggregate(errs)
 }
 
+// trackerAgreesOnOverlap is whether the tracker has seen the CIDROverlap state just derived for every pool it knows.
+func (c *IPPoolController) trackerAgreesOnOverlap(pools []*v3.IPPool) bool {
+	for _, p := range pools {
+		if lost, ok := c.tracker.PoolLostOverlap(p.Name); ok && lost != accounting.LostOverlap(p) {
+			return false
+		}
+	}
+	return true
+}
+
 func poolSortFunc(poolA, poolB *v3.IPPool) int {
 	aCat := poolSortCategory(poolA)
 	bCat := poolSortCategory(poolB)
@@ -400,8 +467,13 @@ func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logru
 		return err
 	}
 
+	if !c.inSync.Load() {
+		logCtx.Info("IPAM data feed not in sync, not removing finalizer")
+		return nil
+	}
+
 	// If there are no IPAM blocks left in this pool, it is safe to remove our finalizer.
-	if c.blocksInPool(*parsedNet) {
+	if c.tracker.HasBlocksWithin(*parsedNet) {
 		logCtx.Info("IPAM blocks still exist in pool, not removing finalizer")
 		return nil
 	}
@@ -425,24 +497,6 @@ func (c *IPPoolController) updateFinalizers(ctx context.Context, p *v3.IPPool, f
 
 func withoutFinalizer(p *v3.IPPool) []string {
 	return slices.DeleteFunc(slices.Clone(p.Finalizers), func(s string) bool { return s == IPPoolFinalizer })
-}
-
-func (c *IPPoolController) blocksInPool(cidr cnet.IPNet) bool {
-	// Go through all of the IPAM blocks and check if any of them are in this pool.
-	// TODO: We should be able to optimize this by using better data structures instead of iterating through all blocks.
-	for _, i := range c.blockInformer.GetIndexer().List() {
-		block := i.(*v3.IPAMBlock)
-		_, parsedNet, err := cnet.ParseCIDR(block.Spec.CIDR)
-		if err != nil {
-			logrus.WithError(err).WithField("cidr", block.Spec.CIDR).Error("Failed to parse CIDR from IPAMBlock")
-			continue
-		}
-		if cidr.Contains(parsedNet.IP) {
-			logrus.WithField("cidr", cidr.String()).WithField("block", block.Spec.CIDR).Debug("Found IPAMBlock in pool")
-			return true
-		}
-	}
-	return false
 }
 
 func hasFinalizer(p *v3.IPPool) bool {
@@ -479,35 +533,26 @@ func updateCondition(ctx context.Context, cli clientset.Interface, p *v3.IPPool,
 	return nil
 }
 
+// removeCondition drops the condition type from the IP pool and writes its status, if the pool carries it. It mutates p.
+func removeCondition(ctx context.Context, cli clientset.Interface, p *v3.IPPool, conditionType string) error {
+	if p.Status == nil || !meta.RemoveStatusCondition(&p.Status.Conditions, conditionType) {
+		return nil
+	}
+
+	logrus.WithField("pool", p.Name).Infof("Removing condition %s", conditionType)
+	updated, err := cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, p, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("update status of IPPool %s: %w", p.Name, err)
+	}
+	*p = *updated
+	return nil
+}
+
 // setConditionOnPool sets the given condition on the IP pool, replacing any existing condition of the same type.
 // Returns true if the condition was changed and needs to be updated in the API, or false if the condition was already in the desired state.
 func setConditionOnPool(p *v3.IPPool, condition metav1.Condition) bool {
 	if p.Status == nil {
-		// If there is no status, we need to create one and add the condition to it.
-		condition.LastTransitionTime = metav1.Now()
-		p.Status = &v3.IPPoolStatus{
-			Conditions: []metav1.Condition{condition},
-		}
-		return true
+		p.Status = &v3.IPPoolStatus{}
 	}
-
-	conditions := p.Status.Conditions
-	for i, c := range conditions {
-		if c.Type == condition.Type {
-			if c.Status == condition.Status && c.Reason == condition.Reason && c.Message == condition.Message {
-				// No change, return false.
-				return false
-			}
-
-			// Update existing condition.
-			condition.LastTransitionTime = metav1.Now()
-			p.Status.Conditions[i] = condition
-			return true
-		}
-	}
-
-	// Condition not found, add it.
-	condition.LastTransitionTime = metav1.Now()
-	p.Status.Conditions = append(p.Status.Conditions, condition)
-	return true
+	return meta.SetStatusCondition(&p.Status.Conditions, condition)
 }

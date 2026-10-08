@@ -185,35 +185,29 @@ spec:
 
 ## Updating the bundled version of Envoy Gateway
 
-1. In `go.mod`, update the version for `github.com/envoyproxy/gateway`.
+1. In the repo root `go.mod`, update `github.com/envoyproxy/gateway`, and `sigs.k8s.io/gateway-api` (plus `/conformance`) to the version that Envoy Gateway release requires. Run `make mod-tidy`. If the new version needs a newer Go than `GO_BUILD_VER` in `metadata.mk` provides, that has to move first.
 
-1. Run `make mod-tidy`.  If this indicates needing other changes, e.g. bumping the go-build version, do that.  (For example, for a possible move to Envoy Gateway v1.3.2 - not yet committed - I needed to update `GO_BUILD_VER` from `v0.95` to `1.23.6-llvm18.1.8-k8s1.31.5`, because Envoy Gateway v1.3.2 requires golang v1.23.6.)
+1. In `operator/Makefile`, update `ENVOY_GATEWAY_VERSION`.
 
-1. In `Makefile`, update `ENVOY_GATEWAY_VERSION`.
+1. Delete `operator/pkg/render/gatewayapi/gateway-helm.tgz`. It is gitignored and only downloaded when absent, so a stale chart is otherwise reused silently.
 
-1. Delete `pkg/render/gatewayapi/gateway-helm.tgz`.
+1. Run `make -C operator build` and `make -C operator ut`, and address any issues. The chart is embedded in the binary and rendered at runtime using the Helm SDK.
 
-1. Run `make build`.  This will download the new version of the Envoy Gateway helm chart and build the operator image.  The chart is embedded in the binary and rendered at runtime using the Helm SDK.
+1. Identify the matching `proxy` and `ratelimit` images. Read them from `charts/gateway-helm/values.tmpl.yaml` in the envoyproxy/gateway repo at the exact tag you are moving to; the [compatibility matrix](https://gateway.envoyproxy.io/news/releases/matrix/) can lag behind patch releases.
 
-1. Address build issues if there are any.
+1. Update `third_party/` at the repo root to build those images:
 
-1. Run `make ut`, and address issues if there are any.
+   - `third_party/envoy-gateway/Makefile`: `ENVOY_GATEWAY_VERSION`.
 
-1. Identify the corresponding new versions of the `gateway`, `proxy` and `ratelimit` images.
+   - `third_party/envoy-ratelimit/Makefile`: `ENVOY_RATELIMIT_VERSION`, as a full commit SHA.
 
-   - The `gateway` version can be found in the Envoy Gateway release notes ([for example](https://github.com/envoyproxy/gateway/releases/tag/v1.3.2)).  It should be the same as the nominal Envoy Gateway version that you're updating to.
+   - `third_party/envoy-proxy/Makefile`: `ENVOYBINARY_IMAGE`. This is built from tigera/envoybinary, so a new Envoy version must be merged and published there first.
 
-   - The `proxy` version can be found in the Envoy Gateway release notes, or by referring to [this compatibility matrix](https://gateway.envoyproxy.io/news/releases/matrix/).
+   - Review each component's `patches/01-custom-patches/` and drop any patch that landed upstream. Do not hand-edit `patches/02-auto-gen-patches/`; run `make -C third_party/<component> regen-dep-patches` and commit whatever it produces.
 
-   - The `ratelimit` version can be found in the Envoy Gateway release notes.
+1. If the Gateway API bundle adds CRDs, add them to the operator's RBAC in `charts/tigera-operator/templates/tigera-operator/02-role-tigera-operator.yaml` and run `make gen-manifests`. Check `envoyGatewayCuratedSet` in `e2e/cmd/gateway/e2e_test.go` against the new tag's `test/conformance/suite.go`.
 
-1. Update the code under `third_party/envoy-{gateway,proxy,ratelimit}` at the repo root to build those new image versions.  In each case:
-
-   - Update the relevant version (e.g. `ENVOY_GATEWAY_VERSION`) in `Makefile`.
-
-   - Review if any existing patches are still required, and remove them if not.
-
-   - Review if any existing patches still apply cleanly, and update them if not.
+1. Run `make gen-deps-files`.
 
 1. Commit everything and post as a single PR.
 

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	goerrors "errors"
 	"fmt"
+	"maps"
 	"os"
 	"strings"
 	"time"
@@ -62,6 +63,10 @@ const (
 	// This is for development and testing purposes only. Do not use this annotation
 	// for production, as this will cause problems with upgrade.
 	unsupportedIgnoreAnnotation = "unsupported.operator.tigera.io/ignore"
+
+	// v3MetadataAnnotation is where libcalico-go stashes the v3 labels and annotations of a
+	// CRD-backed resource when in aggregated API server mode.
+	v3MetadataAnnotation = "projectcalico.org/metadata"
 )
 
 var log = logf.Log.WithName("utils")
@@ -999,20 +1004,40 @@ func AllPodsTerminated(ctx context.Context, c client.Client, obj client.Object) 
 	return len(podList.Items) == 0, nil
 }
 
+// RestoreV3Metadata rewrites obj's labels and annotations the way libcalico-go presents them on
+// the projectcalico.org/v3 API: the ones stored on the CRD, with the stashed v3 metadata on top.
 func RestoreV3Metadata(obj client.Object) error {
-	if v3metaJSON, ok := obj.GetAnnotations()["projectcalico.org/metadata"]; ok {
-		v3meta := metav1.ObjectMeta{}
-		err := json.Unmarshal([]byte(v3metaJSON), &v3meta)
-		if err != nil {
-			return err
-		}
-
-		// Restore the v3 metadata we care about.
-		obj.SetLabels(v3meta.Labels)
-		obj.SetAnnotations(v3meta.Annotations)
-		log.V(1).Info("Restored v3 resource metadata", "labels", v3meta.Labels, "annotations", v3meta.Annotations)
+	v3metaJSON, ok := obj.GetAnnotations()[v3MetadataAnnotation]
+	if !ok {
+		return nil
 	}
+	v3meta := metav1.ObjectMeta{}
+	if err := json.Unmarshal([]byte(v3metaJSON), &v3meta); err != nil {
+		return err
+	}
+
+	labels := mergeStrings(obj.GetLabels(), v3meta.Labels)
+	annotations := mergeStrings(obj.GetAnnotations(), v3meta.Annotations)
+
+	// The stash itself is not part of the v3 view, and dropping it keeps a patch diffed against
+	// this object from touching it.
+	delete(annotations, v3MetadataAnnotation)
+
+	obj.SetLabels(labels)
+	obj.SetAnnotations(annotations)
+	log.V(1).Info("Restored v3 resource metadata", "labels", labels, "annotations", annotations)
 	return nil
+}
+
+// mergeStrings overlays overrides onto a copy of base.
+func mergeStrings(base, overrides map[string]string) map[string]string {
+	if len(base) == 0 && len(overrides) == 0 {
+		return nil
+	}
+	merged := make(map[string]string, len(base)+len(overrides))
+	maps.Copy(merged, base)
+	maps.Copy(merged, overrides)
+	return merged
 }
 
 // getMatchLabels extracts the matchLabels from the given workload object.

@@ -54,14 +54,14 @@ var _ = Describe("IPPool FV tests", func() {
 
 		// We need a v3 client as well.
 		var err error
-		clientv3, err = utils.V3Client(mgr.GetConfig())
+		clientv3, err = utils.V3Client(AdminConfig())
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Cleaning up resources before the test")
-		cleanupResources(c)
+		CleanupResources(c)
 
 		By("Verifying CRDs are installed")
-		verifyCRDsExist(c, operator.CalicoEnterprise)
+		VerifyCRDsExist(c, operator.CalicoEnterprise)
 
 		By("Creating the tigera-operator namespace, if it doesn't exist")
 		ns := &corev1.Namespace{
@@ -98,12 +98,12 @@ var _ = Describe("IPPool FV tests", func() {
 		}()
 
 		By("Cleaning up resources after the test")
-		cleanupResources(c)
+		CleanupResources(c)
 
 		// Clean up Calico data that might be left behind.
 		By("Cleaning up Node annotations after test")
 		Eventually(func() error {
-			cs := kubernetes.NewForConfigOrDie(mgr.GetConfig())
+			cs := kubernetes.NewForConfigOrDie(AdminConfig())
 			nodes, err := cs.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 			if err != nil {
 				return err
@@ -129,7 +129,7 @@ var _ = Describe("IPPool FV tests", func() {
 	})
 
 	It("Should install default IP pools", func() {
-		operatorDone = createInstallation(c, mgr, shutdownContext, nil)
+		operatorDone = CreateInstallation(c, mgr, shutdownContext, nil)
 		verifyCalicoHasDeployed(c)
 
 		// Get IP pools installed in the cluster.
@@ -179,7 +179,7 @@ var _ = Describe("IPPool FV tests", func() {
 				},
 			},
 		}
-		operatorDone = createInstallation(c, mgr, shutdownContext, &spec)
+		operatorDone = CreateInstallation(c, mgr, shutdownContext, &spec)
 		verifyCalicoHasDeployed(c)
 
 		// Get IP pools installed in the cluster.
@@ -236,7 +236,7 @@ var _ = Describe("IPPool FV tests", func() {
 				},
 			},
 		}
-		operatorDone = createInstallation(c, mgr, shutdownContext, &spec)
+		operatorDone = CreateInstallation(c, mgr, shutdownContext, &spec)
 		verifyCalicoHasDeployed(c)
 
 		// Query the Installation and verify the IP pool name has been defaulted.
@@ -344,7 +344,7 @@ var _ = Describe("IPPool FV tests", func() {
 				},
 			},
 		}
-		operatorDone = createInstallation(c, mgr, shutdownContext, &spec)
+		operatorDone = CreateInstallation(c, mgr, shutdownContext, &spec)
 		verifyCalicoHasDeployed(c)
 
 		// Query the Installation and verify the IP pool name has been defaulted.
@@ -418,7 +418,7 @@ var _ = Describe("IPPool FV tests", func() {
 	// The operator applies its IP pool list under its own field manager, so these tests cover what
 	// happens when a second manager writes to the same field against a real API server.
 	It("should share the IP pool list with another field manager", func() {
-		operatorDone = createInstallation(c, mgr, shutdownContext, nil)
+		operatorDone = CreateInstallation(c, mgr, shutdownContext, nil)
 		verifyCalicoHasDeployed(c)
 
 		instance := &operator.Installation{}
@@ -458,7 +458,7 @@ var _ = Describe("IPPool FV tests", func() {
 	})
 
 	It("should restore the pools it owns when the list is removed from the spec", func() {
-		operatorDone = createInstallation(c, mgr, shutdownContext, nil)
+		operatorDone = CreateInstallation(c, mgr, shutdownContext, nil)
 		verifyCalicoHasDeployed(c)
 
 		instance := &operator.Installation{}

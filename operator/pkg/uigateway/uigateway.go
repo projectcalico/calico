@@ -25,8 +25,10 @@ import (
 	"fmt"
 	"slices"
 
+	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,12 +38,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	gapi "sigs.k8s.io/gateway-api/apis/v1"
+	gapiv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller/gatewayapi"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	rgateway "github.com/projectcalico/calico/operator/pkg/render/gateway"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
@@ -71,14 +75,14 @@ type Config struct {
 	// it for a component that streams, where the default would cut the stream.
 	RouteRequestTimeout *string
 
-	// ExtraProxyObjects are the variant's additions beside the proxy, or nil.
-	ExtraProxyObjects []client.Object
-
 	Provider operatorv1.Provider
 
 	// Azure carries Installation.Azure so the gateway namespace gets the same
 	// Azure-policy labels as other operator-created namespaces on AKS.
 	Azure *operatorv1.Azure
+
+	// Extension supplies the variant's additions beside the proxy; nil adds none.
+	Extension extensions.UIGatewayExtension
 }
 
 // Helper renders and cleans up one UI component's gateway resources.
@@ -155,7 +159,7 @@ func (h *Helper) Components(
 		BackendCABundleConfigMapName: h.cfg.BackendCABundleConfigMapName,
 		TLSKeyPair:                   keyPair,
 		ResourcePrefix:               h.cfg.ResourcePrefix,
-		ExtraProxyObjects:            h.cfg.ExtraProxyObjects,
+		ExtraProxyObjects:            h.cfg.Extension.ProxyObjects(h.cfg.ResourcePrefix, h.cfg.BackendNamespace),
 		OpenShift:                    h.cfg.Provider.IsOpenShift(),
 		RouteRequestTimeout:          h.cfg.RouteRequestTimeout,
 	})), nil
@@ -210,6 +214,7 @@ func (h *Helper) StaleComponents(ctx context.Context, desiredNS string) ([]rende
 	if err != nil {
 		return nil, err
 	}
+	extraProxyObjects := h.cfg.Extension.ProxyObjects(h.cfg.ResourcePrefix, h.cfg.BackendNamespace)
 	var components []render.Component
 	for _, ns := range strays {
 		if ns == desiredNS {
@@ -224,7 +229,7 @@ func (h *Helper) StaleComponents(ctx context.Context, desiredNS string) ([]rende
 			StaleNamespace:    ns,
 			BackendNamespace:  h.cfg.BackendNamespace,
 			TLSSecretName:     h.cfg.TLSSecretName,
-			ExtraProxyObjects: h.cfg.ExtraProxyObjects,
+			ExtraProxyObjects: extraProxyObjects,
 			DeleteNamespace:   deletable,
 			TargetNamespace:   desiredNS,
 		}))
@@ -247,6 +252,7 @@ func (h *Helper) Teardown(ctx context.Context) ([]render.Component, error) {
 	if !slices.Contains(namespaces, h.cfg.BackendNamespace) {
 		namespaces = append(namespaces, h.cfg.BackendNamespace)
 	}
+	extraProxyObjects := h.cfg.Extension.ProxyObjects(h.cfg.ResourcePrefix, h.cfg.BackendNamespace)
 	var components []render.Component
 	for _, ns := range namespaces {
 		deletable, err := h.namespaceDeletable(ctx, ns)
@@ -258,11 +264,107 @@ func (h *Helper) Teardown(ctx context.Context) ([]render.Component, error) {
 			StaleNamespace:    ns,
 			BackendNamespace:  h.cfg.BackendNamespace,
 			TLSSecretName:     h.cfg.TLSSecretName,
-			ExtraProxyObjects: h.cfg.ExtraProxyObjects,
+			ExtraProxyObjects: extraProxyObjects,
 			DeleteNamespace:   deletable,
 		}))
 	}
 	return components, nil
+}
+
+// ClearRBACFinalizers removes our finalizer from every RBAC resource we own
+// that is marked for deletion and is no longer needed, i.e. once the gateway
+// resources it covers are gone. The reconciler calls it once per reconcile,
+// before rendering, so it runs regardless of whether the gateway is enabled.
+//
+// The finalizer keeps the operator's write grant in place, so teardown does not
+// depend on delete order.
+func (h *Helper) ClearRBACFinalizers(ctx context.Context) error {
+	byLabel := client.MatchingLabels{rgateway.GatewayLabel: h.cfg.ResourcePrefix}
+	roles := &rbacv1.RoleList{}
+	if err := h.cli.List(ctx, roles, byLabel); err != nil {
+		return err
+	}
+	bindings := &rbacv1.RoleBindingList{}
+	if err := h.cli.List(ctx, bindings, byLabel); err != nil {
+		return err
+	}
+	// Group the grants marked for deletion that still carry our finalizer by
+	// name and namespace. A grant's authorized resources live in its own
+	// namespace, and which resources depends on the grant, so the Role and
+	// RoleBinding of one grant share a check while the two grant kinds do not.
+	markedByGrant := map[types.NamespacedName][]client.Object{}
+	mark := func(grant client.Object) {
+		if grant.GetDeletionTimestamp().IsZero() || !slices.Contains(grant.GetFinalizers(), rgateway.RBACFinalizer) {
+			return
+		}
+		key := types.NamespacedName{Namespace: grant.GetNamespace(), Name: grant.GetName()}
+		markedByGrant[key] = append(markedByGrant[key], grant)
+	}
+	for i := range roles.Items {
+		mark(&roles.Items[i])
+	}
+	for i := range bindings.Items {
+		mark(&bindings.Items[i])
+	}
+
+	for _, marked := range markedByGrant {
+		gone, err := h.gatewayResourcesGone(ctx, marked[0])
+		if err != nil {
+			return err
+		}
+		if !gone {
+			continue
+		}
+		for _, grant := range marked {
+			grant.SetFinalizers(slices.DeleteFunc(grant.GetFinalizers(), func(f string) bool {
+				return f == rgateway.RBACFinalizer
+			}))
+			if err := h.cli.Update(ctx, grant); err != nil && !errors.IsNotFound(err) {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// gatewayResourcesGone reports whether the gateway resources an access grant
+// authorizes are gone from the grant's namespace — the point at which the grant
+// has nothing left to cover. Each grant waits only on the resources it
+// authorizes, so a gateway grant does not linger behind a Backend that a
+// co-located backend grant still covers. A kind the cluster does not serve
+// counts as gone.
+func (h *Helper) gatewayResourcesGone(ctx context.Context, grant client.Object) (bool, error) {
+	for name, obj := range h.authorizedResources(grant.GetName()) {
+		err := h.cli.Get(ctx, types.NamespacedName{Name: name, Namespace: grant.GetNamespace()}, obj)
+		if err == nil {
+			return false, nil
+		}
+		if !errors.IsNotFound(err) && !apimeta.IsNoMatchError(err) {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+// authorizedResources returns the gateway resources an access grant authorizes,
+// keyed by object name. The gateway grant covers the Gateway and HTTPRoute; the
+// backend grant covers the Backend and ReferenceGrant. An unrecognized name
+// authorizes nothing, so its finalizer clears.
+func (h *Helper) authorizedResources(grantName string) map[string]client.Object {
+	prefix := h.cfg.ResourcePrefix
+	switch grantName {
+	case rgateway.GatewayAccessName(prefix):
+		return map[string]client.Object{
+			rgateway.GatewayName(prefix): &gapi.Gateway{},
+			rgateway.RouteName(prefix):   &gapi.HTTPRoute{},
+		}
+	case rgateway.BackendAccessName(prefix):
+		return map[string]client.Object{
+			rgateway.BackendName(prefix):        &envoyapi.Backend{},
+			rgateway.ReferenceGrantName(prefix): &gapiv1b1.ReferenceGrant{},
+		}
+	}
+	return nil
 }
 
 // UnhealthyReason returns why the Gateway or HTTPRoute is not ready, or ""

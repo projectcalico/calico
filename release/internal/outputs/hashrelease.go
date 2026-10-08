@@ -25,6 +25,8 @@ import (
 	"github.com/projectcalico/calico/release/internal/slack"
 )
 
+const FilesDirName = "files"
+
 var hashreleaseOutputFileName = "hashrelease.yaml"
 
 // PublishedHashrelease represents the output of a hashrelease publication.
