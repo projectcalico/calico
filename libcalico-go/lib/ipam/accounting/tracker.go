@@ -167,7 +167,7 @@ func (t *Tracker) AddPools(ipPools ...*v3.IPPool) {
 		ownBlocks := slices.Clone(pool.blocks.inOrder())
 		pool.ipPool, pool.net = ipPool, poolNet
 		pool.prefix, _ = poolNet.Mask.Size()
-		pool.blockSize, pool.lostOverlap = BlockSize(ipPool), lostOverlap(ipPool)
+		pool.blockSize, pool.lostOverlap = BlockSize(ipPool), LostOverlap(ipPool)
 		if !existed {
 			t.recountPool(pool)
 		}
@@ -399,6 +399,31 @@ func (t *Tracker) BlockPool(cidr cnet.IPNet) (string, bool) {
 		return "", false
 	}
 	return block.pool.ipPool.Name, true
+}
+
+// PoolLostOverlap reports whether the tracker's copy of the pool has lost a CIDR overlap. The second result is false
+// when no pool of that name was added.
+func (t *Tracker) PoolLostOverlap(name string) (bool, bool) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	pool, ok := t.pools[name]
+	if !ok {
+		return false, false
+	}
+	return pool.lostOverlap, true
+}
+
+// HasBlocksWithin is whether any block lies inside cidr, whichever pool claims it. A narrower pool inside a deleting
+// one can win a block whose addresses are still in use.
+func (t *Tracker) HasBlocksWithin(cidr cnet.IPNet) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	for _, block := range t.blocks {
+		if containsNet(&cidr.IPNet, &block.allocationBlock.CIDR.IPNet) {
+			return true
+		}
+	}
+	return false
 }
 
 func toAllocationBlocks(s *blockSet) []*model.AllocationBlock {
@@ -733,6 +758,7 @@ func (b *trackedBlock) counts() *BlockCounts {
 		Cooling:       b.cooling,
 		Reserved:      b.reserved,
 		InUseReserved: b.inUseReserved,
+		Borrowed:      b.borrowed,
 	}
 }
 

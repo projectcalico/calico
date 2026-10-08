@@ -246,14 +246,13 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 			}
 		}
 
-		// Push the operator hashrelease first before validation.
-		// This is because validation checks all images exists and sends to Image Scan Service
 		o := pinnedOperator(cfg, c, hashrel.Operator, hashrel.ProductVersion)
 		if c.Bool(operatorFlagName) {
 			opts, err := operatorPublishOptions(c, o.Version, hashrel.Source, filepath.Join(cfg.LogsDir, hashrel.ProductVersion))
 			if err != nil {
 				return fmt.Errorf("operator publish options: %w", err)
 			}
+			// Before PublishRelease: its scan sends the operator to ISS.
 			if err := operator.Publish(o, operatorVariants(c), true, opts...); err != nil {
 				return fmt.Errorf("operator publish: %w", err)
 			}

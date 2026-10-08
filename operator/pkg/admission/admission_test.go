@@ -29,7 +29,7 @@ import (
 var _ = Describe("MutatingAdmissionPolicies", func() {
 	Describe("GetMutatingAdmissionPolicies", func() {
 		It("returns Calico v1beta1 MAPs when v3=true", func() {
-			objs := GetMutatingAdmissionPolicies(opv1.Calico, true, VersionV1Beta1)
+			objs := GetMutatingAdmissionPolicies(opv1.Calico, PolicySetV3CRDs, VersionV1Beta1)
 			Expect(objs).To(HaveLen(6))
 
 			var mapCount, mapbCount int
@@ -47,7 +47,7 @@ var _ = Describe("MutatingAdmissionPolicies", func() {
 		})
 
 		It("returns Calico v1 MAPs when discovered version is v1", func() {
-			objs := GetMutatingAdmissionPolicies(opv1.Calico, true, VersionV1)
+			objs := GetMutatingAdmissionPolicies(opv1.Calico, PolicySetV3CRDs, VersionV1)
 			Expect(objs).To(HaveLen(6))
 
 			var mapCount, mapbCount int
@@ -67,7 +67,7 @@ var _ = Describe("MutatingAdmissionPolicies", func() {
 		})
 
 		It("returns Calico v1alpha1 MAPs when discovered version is v1alpha1", func() {
-			objs := GetMutatingAdmissionPolicies(opv1.Calico, true, VersionV1Alpha1)
+			objs := GetMutatingAdmissionPolicies(opv1.Calico, PolicySetV3CRDs, VersionV1Alpha1)
 			Expect(objs).To(HaveLen(6))
 
 			var mapCount, mapbCount int
@@ -92,26 +92,30 @@ var _ = Describe("MutatingAdmissionPolicies", func() {
 			})
 			DeferCleanup(func() { RegisterVariantPolicies(opv1.CalicoEnterprise, nil) })
 
-			objs := GetMutatingAdmissionPolicies(opv1.CalicoEnterprise, true, VersionV1)
+			objs := GetMutatingAdmissionPolicies(opv1.CalicoEnterprise, PolicySetV3CRDs, VersionV1)
 			Expect(objs).To(HaveLen(1))
 			Expect(objs[0].GetLabels()).To(HaveKeyWithValue(ManagedMAPLabel, ManagedMAPLabelValue))
 		})
 
 		It("returns nothing for a variant whose policies this build does not ship", func() {
-			Expect(GetMutatingAdmissionPolicies(opv1.CalicoEnterprise, true, VersionV1)).To(BeEmpty())
+			Expect(GetMutatingAdmissionPolicies(opv1.CalicoEnterprise, PolicySetV3CRDs, VersionV1)).To(BeEmpty())
 		})
 
-		It("returns empty when v3=false", func() {
-			Expect(GetMutatingAdmissionPolicies(opv1.Calico, false, VersionV1)).To(BeEmpty())
-			Expect(GetMutatingAdmissionPolicies(opv1.CalicoEnterprise, false, VersionV1)).To(BeEmpty())
+		It("labels each one managed and in the v3 CRD set", func() {
+			objs := GetMutatingAdmissionPolicies(opv1.Calico, PolicySetV3CRDs, VersionV1)
+			Expect(objs).NotTo(BeEmpty())
+			for _, obj := range objs {
+				Expect(obj.GetLabels()).To(HaveKeyWithValue(ManagedMAPLabel, ManagedMAPLabelValue))
+				Expect(obj.GetLabels()).To(HaveKeyWithValue(PolicySetLabel, string(PolicySetV3CRDs)))
+			}
 		})
 
 		It("returns empty when apiVersion is empty", func() {
-			Expect(GetMutatingAdmissionPolicies(opv1.Calico, true, "")).To(BeEmpty())
+			Expect(GetMutatingAdmissionPolicies(opv1.Calico, PolicySetV3CRDs, "")).To(BeEmpty())
 		})
 
 		It("parses MAP names correctly", func() {
-			objs := GetMutatingAdmissionPolicies(opv1.Calico, true, VersionV1)
+			objs := GetMutatingAdmissionPolicies(opv1.Calico, PolicySetV3CRDs, VersionV1)
 			for _, obj := range objs {
 				Expect(obj.GetName()).ToNot(BeEmpty())
 			}
@@ -120,7 +124,7 @@ var _ = Describe("MutatingAdmissionPolicies", func() {
 
 	Describe("GetValidatingAdmissionPolicies", func() {
 		It("returns Calico v1 VAPs when discovered version is v1", func() {
-			objs := GetValidatingAdmissionPolicies(opv1.Calico, true, VersionV1)
+			objs := GetValidatingAdmissionPolicies(opv1.Calico, PolicySetV3CRDs, VersionV1)
 			Expect(objs).To(HaveLen(2))
 
 			var vapCount, vapbCount int
@@ -141,7 +145,7 @@ var _ = Describe("MutatingAdmissionPolicies", func() {
 		})
 
 		It("returns Calico v1beta1 VAPs when discovered version is v1beta1", func() {
-			objs := GetValidatingAdmissionPolicies(opv1.Calico, true, VersionV1Beta1)
+			objs := GetValidatingAdmissionPolicies(opv1.Calico, PolicySetV3CRDs, VersionV1Beta1)
 			Expect(objs).To(HaveLen(2))
 
 			var vapCount, vapbCount int
@@ -159,7 +163,7 @@ var _ = Describe("MutatingAdmissionPolicies", func() {
 		})
 
 		It("returns Calico v1alpha1 VAPs when discovered version is v1alpha1", func() {
-			objs := GetValidatingAdmissionPolicies(opv1.Calico, true, VersionV1Alpha1)
+			objs := GetValidatingAdmissionPolicies(opv1.Calico, PolicySetV3CRDs, VersionV1Alpha1)
 			Expect(objs).To(HaveLen(2))
 
 			var vapCount, vapbCount int
@@ -177,16 +181,96 @@ var _ = Describe("MutatingAdmissionPolicies", func() {
 		})
 
 		It("returns nothing for a variant whose policies this build does not ship", func() {
-			Expect(GetValidatingAdmissionPolicies(opv1.CalicoEnterprise, true, VersionV1)).To(BeEmpty())
+			Expect(GetValidatingAdmissionPolicies(opv1.CalicoEnterprise, PolicySetV3CRDs, VersionV1)).To(BeEmpty())
 		})
 
-		It("returns empty when v3=false", func() {
-			Expect(GetValidatingAdmissionPolicies(opv1.Calico, false, VersionV1)).To(BeEmpty())
-			Expect(GetValidatingAdmissionPolicies(opv1.CalicoEnterprise, false, VersionV1)).To(BeEmpty())
+		It("labels each one managed and in the v3 CRD set", func() {
+			objs := GetValidatingAdmissionPolicies(opv1.Calico, PolicySetV3CRDs, VersionV1)
+			Expect(objs).NotTo(BeEmpty())
+			for _, obj := range objs {
+				Expect(obj.GetLabels()).To(HaveKeyWithValue(ManagedVAPLabel, ManagedVAPLabelValue))
+				Expect(obj.GetLabels()).To(HaveKeyWithValue(PolicySetLabel, string(PolicySetV3CRDs)))
+			}
 		})
 
 		It("returns empty when apiVersion is empty", func() {
-			Expect(GetValidatingAdmissionPolicies(opv1.Calico, true, "")).To(BeEmpty())
+			Expect(GetValidatingAdmissionPolicies(opv1.Calico, PolicySetV3CRDs, "")).To(BeEmpty())
+		})
+	})
+
+	Describe("GetMutatingAdmissionPolicies for the CNI annotation set", func() {
+		for _, version := range []string{VersionV1, VersionV1Beta1, VersionV1Alpha1} {
+			It("returns the policy that strips the CNI annotations at "+version, func() {
+				objs := GetMutatingAdmissionPolicies(opv1.Calico, PolicySetCNIAnnotations, version)
+				Expect(objs).To(HaveLen(2))
+
+				var mapCount, mapbCount int
+				for _, obj := range objs {
+					switch {
+					case IsPolicyKind(obj):
+						mapCount++
+					case IsBindingKind(obj):
+						mapbCount++
+					}
+					Expect(obj.GetName()).To(Equal("strip-cni-annotations.projectcalico.org"))
+					Expect(obj.GetObjectKind().GroupVersionKind().Version).To(Equal(version))
+					Expect(obj.GetLabels()).To(HaveKeyWithValue(ManagedMAPLabel, ManagedMAPLabelValue))
+					Expect(obj.GetLabels()).To(HaveKeyWithValue(PolicySetLabel, string(PolicySetCNIAnnotations)))
+				}
+				Expect(mapCount).To(Equal(1))
+				Expect(mapbCount).To(Equal(1))
+			})
+		}
+
+		It("does not return it among the v3 policies", func() {
+			for _, obj := range GetMutatingAdmissionPolicies(opv1.Calico, PolicySetV3CRDs, VersionV1) {
+				Expect(obj.GetName()).NotTo(Equal("strip-cni-annotations.projectcalico.org"))
+			}
+		})
+
+		It("returns empty when apiVersion is empty", func() {
+			Expect(GetMutatingAdmissionPolicies(opv1.Calico, PolicySetCNIAnnotations, "")).To(BeEmpty())
+		})
+	})
+
+	Describe("GetValidatingAdmissionPolicies for the CNI annotation set", func() {
+		It("returns the CNI annotation policies, labeled apart from the v3 ones", func() {
+			objs := GetValidatingAdmissionPolicies(opv1.Calico, PolicySetCNIAnnotations, VersionV1)
+			Expect(objs).To(HaveLen(2))
+
+			var vapCount, vapbCount int
+			for _, obj := range objs {
+				switch obj.(type) {
+				case *admissionregistrationv1.ValidatingAdmissionPolicy:
+					vapCount++
+				case *admissionregistrationv1.ValidatingAdmissionPolicyBinding:
+					vapbCount++
+				}
+				Expect(obj.GetName()).To(Equal("protect-cni-annotations.projectcalico.org"))
+				Expect(obj.GetLabels()).To(HaveKeyWithValue(ManagedVAPLabel, ManagedVAPLabelValue))
+				Expect(obj.GetLabels()).To(HaveKeyWithValue(PolicySetLabel, string(PolicySetCNIAnnotations)))
+			}
+			Expect(vapCount).To(Equal(1))
+			Expect(vapbCount).To(Equal(1))
+		})
+
+		It("does not return them among the v3 policies", func() {
+			for _, obj := range GetValidatingAdmissionPolicies(opv1.Calico, PolicySetV3CRDs, VersionV1) {
+				Expect(obj.GetName()).NotTo(Equal("protect-cni-annotations.projectcalico.org"))
+			}
+		})
+
+		It("returns nothing for a variant that registers none", func() {
+			RegisterVariantPolicies(opv1.CalicoEnterprise, fstest.MapFS{
+				"policy.yaml": &fstest.MapFile{Data: []byte(enterpriseMAP)},
+			})
+			DeferCleanup(func() { RegisterVariantPolicies(opv1.CalicoEnterprise, nil) })
+
+			Expect(GetValidatingAdmissionPolicies(opv1.CalicoEnterprise, PolicySetCNIAnnotations, VersionV1)).To(BeEmpty())
+		})
+
+		It("returns empty when apiVersion is empty", func() {
+			Expect(GetValidatingAdmissionPolicies(opv1.Calico, PolicySetCNIAnnotations, "")).To(BeEmpty())
 		})
 	})
 })

@@ -2,13 +2,15 @@
   # Every other kind lane installs Calico through the operator, which renders
   # its own DaemonSet. Only this lane applies the generated manifests, so it is
   # the one that catches a manifest missing a piece the operator supplies. It
-  # then runs the datapath and policy specs to say the cluster works.
+  # then upgrades that cluster to the operator, which is the one place the
+  # migration out of kube-system runs against the manifests we ship.
   run:
-    when: "${CHANGE_IN(third_party/cni-plugins,cni-plugin,non-go:/manifests/,non-go:/charts/calico/,non-go:/hack/test/kind/,non-go:/e2e/config/,non-go:/Makefile)}"
+    when: "${CHANGE_IN(third_party/cni-plugins,cni-plugin,non-go:/manifests/,non-go:/charts/calico/,non-go:/charts/tigera-operator/,non-go:/hack/test/kind/,non-go:/e2e/config/,non-go:/operator/pkg/controller/migration/,non-go:/Makefile)}"
   dependencies:
     - Prerequisites
     - "Build: calico image"
     - "Build: node image"
+    - "Build: operator image"
     - "Build: third-party images"
   task:
     env_vars:

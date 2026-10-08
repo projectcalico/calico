@@ -239,6 +239,8 @@ type CalicoManager struct {
 	imageScanning       bool
 	imageScanningConfig imagescanner.Config
 	imageComponents     map[string]registry.Component
+	// Resolved before the product images; a product adds its own.
+	imageDependencies []images.Dependency
 
 	// Unified step flags.
 	manifests      bool
@@ -391,7 +393,7 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 		return fmt.Errorf("failed to get registry from manifests: %w", err)
 	}
 
-	imgs, err := utils.ReleaseImages()
+	imgs, err := images.ReleaseImages()
 	if err != nil {
 		return fmt.Errorf("failed to determine release images: %w", err)
 	}
@@ -658,7 +660,7 @@ func (r *CalicoManager) PublishRelease() error {
 func (r *CalicoManager) uploads() []distribution.Upload {
 	// The registries go first: metadata records the digests they produce
 	uploads := []distribution.Upload{
-		{Handler: distribution.Publisher{Kind: "images", Action: r.publishContainerImages}},
+		{Handler: distribution.Publisher{Kind: "images", Action: r.imagesAction()}},
 		{Handler: distribution.Publisher{Kind: chartsDir, Action: r.publishHelmCharts}},
 	}
 	uploads = append(uploads,
@@ -672,9 +674,7 @@ func (r *CalicoManager) uploads() []distribution.Upload {
 		return append(uploads, r.hashreleaseUpload()...)
 	}
 	uploads = append(uploads, r.githubTagUpload())
-	github := r.githubReleaseUpload()
-	// nil when the github release is disabled.
-	if github != nil {
+	if github := r.githubReleaseUpload(); github != nil {
 		uploads = append(uploads, *github)
 	}
 	// Last: the index it writes points at the github release's download URLs,
@@ -715,16 +715,13 @@ func (r *CalicoManager) releasePrereqs() error {
 	return nil
 }
 
-type imageExistsResult struct {
-	name   string
-	image  string
-	exists bool
-	err    error
-}
-
 func (r *CalicoManager) componentImages() map[string]string {
 	components := map[string]string{}
 	for name, component := range r.imageComponents {
+		if name == r.operatorImage {
+			// A registry flag can move the run's operator off the pin.
+			component = r.operatorComponent()
+		}
 		if component.Registry == "" {
 			component.Registry = r.imageRegistries[0]
 		}
@@ -733,71 +730,22 @@ func (r *CalicoManager) componentImages() map[string]string {
 	return components
 }
 
-// checkHashreleaseImagesPublished checks that the images required for the hashrelease exist in the specified registries.
-func (r *CalicoManager) checkHashreleaseImagesPublished() error {
-	logrus.Info("Checking images required for hashrelease have already been published")
-	componentImages := r.componentImages()
-	numOfComponents := len(componentImages)
-	if numOfComponents == 0 {
-		logrus.Error("No images to check")
-		return fmt.Errorf("no images to check")
-	}
-
-	resultsCh := make(chan imageExistsResult, numOfComponents)
-
-	for name, image := range componentImages {
-		go func(name string, image string, ch chan imageExistsResult) {
-			exists, err := registry.CheckImage(image)
-			resultsCh <- imageExistsResult{
-				name:   name,
-				image:  image,
-				exists: exists,
-				err:    err,
-			}
-		}(name, image, resultsCh)
-	}
-
-	var resultsErr error
-	missingImages := []string{}
-	for range componentImages {
-		result := <-resultsCh
-		if result.err != nil {
-			resultsErr = errors.Join(resultsErr, fmt.Errorf("error checking %s: %w", result.image, result.err))
-		} else if !result.exists {
-			missingImages = append(missingImages, result.image)
-		}
-	}
-	if len(missingImages) > 0 {
-		return errors.Join(fmt.Errorf("the following images required for hashrelease have not been published: %s", strings.Join(missingImages, ", ")), resultsErr)
-	}
-	return resultsErr
-}
-
 // Check that the environment has the necessary prereqs for publishing hashrelease
 func (r *CalicoManager) hashreleasePrereqs() error {
-	if r.publishHashrelease {
-		if !r.hashreleaseConfig.Valid() {
-			return fmt.Errorf("missing hashrelease server configuration")
-		}
+	if r.publishHashrelease && !r.hashreleaseConfig.Valid() {
+		return fmt.Errorf("missing hashrelease server configuration")
 	}
-
-	if r.images {
-		return r.assertImageVersions()
-	} else {
-		if err := r.checkHashreleaseImagesPublished(); err != nil {
-			return err
-		}
-		logrus.Info("All images required for hashrelease have been published")
+	if !r.images {
+		return nil
 	}
-
-	return nil
+	return r.assertImageVersions()
 }
 
 // Check that the images exists with the correct version.
 func (r *CalicoManager) assertImageVersions() error {
 	logrus.Info("Checking built images exists with the correct version")
 	buildInfoVersionRegex := regexp.MustCompile(`(?m)^Version:\s+(.*)$`)
-	imgs, err := utils.ReleaseImages()
+	imgs, err := images.ReleaseImages()
 	if err != nil {
 		return fmt.Errorf("failed to determine release images: %w", err)
 	}
@@ -1166,13 +1114,13 @@ func (r *CalicoManager) publishContainerImages() error {
 		logrus.Info("Skipping image publish")
 		return nil
 	}
-	refs, err := outputs.NewRefsWriter(r.outputDir, "images-publish", r.calicoVersion)
+	refs, err := outputs.NewRefsWriter(r.outputDir, images.PublishStep, r.calicoVersion)
 	if err != nil {
 		return fmt.Errorf("image publish refs writer: %w", err)
 	}
 	// An earlier run of this version records what it published, so a resume
 	// skips the units already done.
-	published, err := outputs.ReadRefs(r.outputDir, "images-publish", r.calicoVersion)
+	published, err := outputs.ReadRefs(r.outputDir, images.PublishStep, r.calicoVersion)
 	if err != nil {
 		return fmt.Errorf("read published image refs: %w", err)
 	}
@@ -1182,6 +1130,7 @@ func (r *CalicoManager) publishContainerImages() error {
 		images.WithArches(r.architectures...),
 		images.WithLogsDir(r.logsDir),
 		images.WithRecord(refs),
+		images.WithDependencies(r.dependencies()...),
 	}
 	if scan := r.scanRequest(); scan != nil {
 		opts = append(opts, images.WithScan(scan))
@@ -1200,6 +1149,78 @@ func (r *CalicoManager) publishContainerImages() error {
 		return fmt.Errorf("publish images: %w", err)
 	}
 	return r.publishBranchTag()
+}
+
+func (r *CalicoManager) imagesAction() func() error {
+	if r.images {
+		return r.publishContainerImages
+	}
+	return r.resolveContainerImages
+}
+
+func (r *CalicoManager) dependencies() []images.Dependency {
+	return append([]images.Dependency{r.resolveOperator}, r.imageDependencies...)
+}
+
+// A hashrelease hands out the pinned operator even when this run did not
+// publish it, as an earlier run may have.
+func (r *CalicoManager) resolveOperator() ([]string, error) {
+	if !r.isHashRelease || r.operator {
+		return nil, nil
+	}
+	refs, err := outputs.NewRefsWriter(r.outputDir, operator.ResolveStep, r.calicoVersion)
+	if err != nil {
+		return nil, fmt.Errorf("operator resolve refs writer: %w", err)
+	}
+	err = operator.Resolve(r.operatorConfig(), operator.Variants(),
+		operator.WithRunner(r.runner),
+		operator.WithArches(r.architectures...),
+		operator.WithLogsDir(r.logsDir),
+		operator.WithResolver(r.digestResolver()),
+		operator.WithRecord(refs),
+	)
+	return r.checkResolved(r.operatorImage, false, err)
+}
+
+// checkResolved lets an excluded component's missing images pass, and leaves
+// the missing ones out of the scan.
+func (r *CalicoManager) checkResolved(component string, included bool, err error) ([]string, error) {
+	missing, onlyMissing := images.OnlyMissing(err)
+	if !onlyMissing || included {
+		return nil, err
+	}
+	logrus.WithField("images", missing).Warn("Images this run does not publish are missing")
+	if ref := r.componentImages()[component]; slices.Contains(missing, ref) {
+		return []string{ref}, nil
+	}
+	return nil, nil
+}
+
+func (r *CalicoManager) resolveContainerImages() error {
+	refs, err := outputs.NewRefsWriter(r.outputDir, images.ResolveStep, r.calicoVersion)
+	if err != nil {
+		return fmt.Errorf("resolve image refs writer: %w", err)
+	}
+	opts := []images.ResolveOption{
+		images.WithRunner(r.runner),
+		images.WithRegistries(r.imageRegistries...),
+		images.WithArches(r.architectures...),
+		images.WithLogsDir(r.logsDir),
+		images.WithRecord(refs),
+		images.WithDependencies(r.dependencies()...),
+	}
+	if scan := r.scanRequest(); scan != nil {
+		opts = append(opts, images.WithScan(scan))
+	}
+	if err := images.Resolve(
+		r.repoRoot, r.calicoVersion,
+		images.NarrowVariants(images.PublishVariants, r.imageReleaseDirs),
+		r.digestResolver(),
+		opts...,
+	); err != nil {
+		return fmt.Errorf("resolve images: %w", err)
+	}
+	return nil
 }
 
 // digestResolver reports a published tag's digest, defaulting to the registry.
@@ -1225,6 +1246,7 @@ func (r *CalicoManager) scanRequest() *images.ScanRequest {
 		Stream:      ver.PrimaryStream(),
 		Release:     !r.isHashRelease,
 		OutputDir:   r.tmpDir,
+		DryRun:      r.dryRun,
 	}
 }
 

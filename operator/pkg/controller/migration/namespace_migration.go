@@ -56,6 +56,7 @@ const (
 	typhaDeploymentName          = "calico-typha"
 	nodeDaemonSetName            = "calico-node"
 	kubeControllerDeploymentName = "calico-kube-controllers"
+	webhooksDeploymentName       = "calico-webhooks"
 	calicoNodeMigrationName      = "calico-node-migration"
 
 	k8sServicesEndpointConfigMap = "kubernetes-services-endpoint"
@@ -70,6 +71,7 @@ type NamespaceMigration interface {
 	Run(ctx context.Context, log logr.Logger) error
 	NeedCleanup() bool
 	CleanupMigration(ctx context.Context, log logr.Logger) error
+	RemoveKubeSystemWebhooks(ctx context.Context, log logr.Logger) (bool, error)
 }
 
 type CoreNamespaceMigration struct {
@@ -487,6 +489,54 @@ func (m *CoreNamespaceMigration) deleteKubeSystemCalicoNode(ctx context.Context)
 		return err
 	}
 	return nil
+}
+
+// RemoveKubeSystemWebhooks removes the webhook server, and the configuration
+// aimed at it, that a manifest install leaves behind in kube-system. It returns
+// true while the operator's own server is still rolling out.
+func (m *CoreNamespaceMigration) RemoveKubeSystemWebhooks(ctx context.Context, log logr.Logger) (bool, error) {
+	if _, err := m.client.AppsV1().Deployments(kubeSystem).Get(ctx, webhooksDeploymentName, metav1.GetOptions{}); err != nil {
+		if apierrs.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	// The configuration fails closed, so deleting the only server behind it would
+	// reject every policy write.
+	operatorWebhooks, err := m.client.AppsV1().Deployments(common.CalicoNamespace).Get(ctx, webhooksDeploymentName, metav1.GetOptions{})
+	if err != nil {
+		if apierrs.IsNotFound(err) {
+			// Without the Calico API server there is no operator server to wait for.
+			// Creating one triggers a reconcile.
+			return false, nil
+		}
+		return false, err
+	}
+	if operatorWebhooks.Status.AvailableReplicas == 0 {
+		log.Info("Waiting for the operator's webhook server before removing the kube-system one")
+		return true, nil
+	}
+
+	// The configuration goes first: between its deletion and the server's, calls
+	// to a server that is already gone would fail closed.
+	if err := m.client.AdmissionregistrationV1().ValidatingWebhookConfigurations().Delete(ctx, webhooksDeploymentName, metav1.DeleteOptions{}); err != nil && !apierrs.IsNotFound(err) {
+		return false, err
+	}
+	if err := m.client.CoreV1().Services(kubeSystem).Delete(ctx, webhooksDeploymentName, metav1.DeleteOptions{}); err != nil && !apierrs.IsNotFound(err) {
+		return false, err
+	}
+	if err := m.client.CoreV1().ServiceAccounts(kubeSystem).Delete(ctx, webhooksDeploymentName, metav1.DeleteOptions{}); err != nil && !apierrs.IsNotFound(err) {
+		return false, err
+	}
+
+	// The Deployment goes last, since a later reconcile only retries the cleanup
+	// while it exists.
+	if err := m.client.AppsV1().Deployments(kubeSystem).Delete(ctx, webhooksDeploymentName, metav1.DeleteOptions{}); err != nil && !apierrs.IsNotFound(err) {
+		return false, err
+	}
+	log.Info("Removed the kube-system webhook server")
+	return false, nil
 }
 
 // waitForOperatorTyphaDeploymentReady waits until the 'new' typha deployment in
