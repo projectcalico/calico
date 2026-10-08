@@ -45,6 +45,12 @@ func NewMigratorController(ctx context.Context, cs kubernetes.Interface, cli cli
 		namespace = []byte("calico-system")
 	}
 
+	// Manifest installs name the DaemonSet differently, e.g. "canal".
+	nodeDaemonSet := os.Getenv("CALICO_NODE_DAEMONSET_NAME")
+	if nodeDaemonSet == "" {
+		nodeDaemonSet = "calico-node"
+	}
+
 	c := &policyMigrator{
 		ctx:           ctx,
 		cli:           cli,
@@ -56,6 +62,7 @@ func NewMigratorController(ctx context.Context, cs kubernetes.Interface, cli cli
 		updates:       make(chan bapi.Update, utils.BatchUpdateSize),
 		statusUpdates: make(chan bapi.SyncStatus),
 		namespace:     string(namespace),
+		nodeDaemonSet: nodeDaemonSet,
 		skipRollout:   os.Getenv("FV_TEST") == "true",
 	}
 	c.RegisterWith(feed)
@@ -80,7 +87,8 @@ type policyMigrator struct {
 	statusUpdates chan bapi.SyncStatus
 
 	// Configuration.
-	namespace string
+	namespace     string
+	nodeDaemonSet string
 
 	// For FV testing - allows skipping the calico-node rollout wait.
 	skipRollout bool
@@ -234,9 +242,9 @@ func (c *policyMigrator) waitForCalicoNodeRollout() error {
 			return c.ctx.Err()
 		case <-time.After(5 * time.Second):
 			// Rate limit checks to once every 5 seconds.
-			ds, err := c.cs.AppsV1().DaemonSets(c.namespace).Get(c.ctx, "calico-node", metav1.GetOptions{})
+			ds, err := c.cs.AppsV1().DaemonSets(c.namespace).Get(c.ctx, c.nodeDaemonSet, metav1.GetOptions{})
 			if err != nil {
-				logrus.Errorf("Error getting calico-node DaemonSet: %v", err)
+				logrus.WithError(err).WithField("daemonset", c.nodeDaemonSet).Error("Error getting DaemonSet")
 				continue
 			}
 			if ds.Status.ObservedGeneration != ds.Generation {
