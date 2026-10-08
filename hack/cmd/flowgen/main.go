@@ -59,6 +59,7 @@ func main() {
 		overrideDst = flag.String("override-dst", "", "send every flow to this address instead of the generated one (lab use)")
 		dryRun      = flag.Bool("dry-run", false, "draw the flows without sending")
 		tcpTimeout  = flag.Duration("tcp-timeout", 5*time.Millisecond, "how long a TCP connection attempt waits before it is abandoned")
+		spread      = flag.Bool("spread-source", true, "with -direction ingress: send flows whose generated source is the shared TEST-NET address from across its /24 instead, as many clients would; verdicts are unchanged because no rule names those addresses")
 		direction   = flag.String("direction", "egress", "egress: flows leave this pod for the generated destinations. ingress: flows go to -override-dst (a pod the policies select) from the generated source addresses, which needs workload source spoofing allowed for this pod")
 	)
 	flag.Parse()
@@ -107,7 +108,7 @@ func main() {
 	}
 
 	sampler := fx.NewSampler(*seed, policyscale.FlowModel{Direction: dir, MissFraction: *miss, RepeatFraction: *repeat})
-	send := sender(*protocol, override, *tcpTimeout, *dryRun, dir == policyscale.Ingress)
+	send := sender(*protocol, override, *tcpTimeout, *dryRun, dir == policyscale.Ingress, *spread)
 
 	var (
 		opened, failed atomic.Uint64
@@ -118,7 +119,9 @@ func main() {
 		wg.Go(func() {
 			for f := range work {
 				if err := send(f); err != nil {
-					failed.Add(1)
+					if failed.Add(1) == 1 {
+						fmt.Fprintf(os.Stderr, "flowgen: first failure: %v\n", err)
+					}
 				} else {
 					opened.Add(1)
 				}
@@ -175,7 +178,7 @@ run:
 }
 
 // sender returns the function that opens one flow.
-func sender(protocol string, override net.IP, tcpTimeout time.Duration, dryRun, spoofSource bool) func(*policyscale.Flow) error {
+func sender(protocol string, override net.IP, tcpTimeout time.Duration, dryRun, spoofSource, spread bool) func(*policyscale.Flow) error {
 	if dryRun {
 		return func(*policyscale.Flow) error { return nil }
 	}
@@ -202,17 +205,32 @@ func sender(protocol string, override net.IP, tcpTimeout time.Duration, dryRun, 
 	}
 	if spoofSource {
 		// Ingress: the connection comes from the flow's generated source address, which is not
-		// this pod's. IP_FREEBIND lets the socket bind it; the reply goes to that address, not
+		// this pod's. IP_FREEBIND and IP_TRANSPARENT let the socket bind and route it; the reply goes to that address, not
 		// back here, so the attempt times out locally while the node still sees the whole
 		// exchange.
+		shared := net.ParseIP(policyscale.SourceIP).To4()
+		var next atomic.Uint32
 		return func(f *policyscale.Flow) error {
+			src := f.SrcIP
+			if spread && src.Equal(shared) {
+				// 192.0.2.1-254, skipping the shared address itself.
+				n := next.Add(1)%253 + 1
+				if n >= uint32(shared[3]) {
+					n++
+				}
+				src = net.IPv4(shared[0], shared[1], shared[2], byte(n))
+			}
 			d := net.Dialer{
 				Timeout:   tcpTimeout,
-				LocalAddr: &net.TCPAddr{IP: f.SrcIP},
+				LocalAddr: &net.TCPAddr{IP: src},
 				Control: func(_, _ string, c syscall.RawConn) error {
 					var serr error
 					if err := c.Control(func(fd uintptr) {
-						serr = syscall.SetsockoptInt(int(fd), syscall.SOL_IP, syscall.IP_FREEBIND, 1)
+						// IP_FREEBIND allows the bind; IP_TRANSPARENT lets the route lookup accept a
+						// source that isn't local (it needs CAP_NET_ADMIN).
+						if serr = syscall.SetsockoptInt(int(fd), syscall.SOL_IP, syscall.IP_FREEBIND, 1); serr == nil {
+							serr = syscall.SetsockoptInt(int(fd), syscall.SOL_IP, syscall.IP_TRANSPARENT, 1)
+						}
 					}); err != nil {
 						return err
 					}
