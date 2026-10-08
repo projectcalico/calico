@@ -1167,7 +1167,7 @@ func (h *connection) bindCompressionMetrics() {
 func (h *connection) sendDecoderRestartAndWaitForAck(message string) error {
 	// Nothing else writes during this phase of the protocol, and we write
 	// nothing more until the ACK arrives.
-	err := h.sendMsgWithoutFlush(syncproto.MsgDecoderRestart{
+	err := h.sendMsg(syncproto.MsgDecoderRestart{
 		Message:              message,
 		CompressionAlgorithm: h.chosenCompression,
 	})
@@ -1223,17 +1223,6 @@ func (h *connection) restartEncoder() error {
 // sendMsg sends a message to the client and flushes it through to the
 // connection.  It may be called from multiple goroutines.
 func (h *connection) sendMsg(msg any) error {
-	return h.sendMsgMaybeFlush(msg, true)
-}
-
-// sendMsgWithoutFlush sends a message to the client, leaving it pending in
-// the writer.  Used only for the final message of a stream, which the caller
-// pushes out by closing the writer (see sendDecoderRestartAndWaitForAck).
-func (h *connection) sendMsgWithoutFlush(msg any) error {
-	return h.sendMsgMaybeFlush(msg, false)
-}
-
-func (h *connection) sendMsgMaybeFlush(msg any, flush bool) error {
 	if h.cxt.Err() != nil {
 		// Optimisation, don't bother to send if we're being torn down.
 		return h.cxt.Err()
@@ -1259,11 +1248,9 @@ func (h *connection) sendMsgMaybeFlush(msg any, flush bool) error {
 		h.logCxt.WithError(err).Info("Failed to write to client")
 		return err
 	}
-	if flush {
-		if err := h.writer.Flush(); err != nil {
-			h.logCxt.WithError(err).Info("Failed to flush write to client")
-			return err
-		}
+	if err := h.writer.Flush(); err != nil {
+		h.logCxt.WithError(err).Info("Failed to flush write to client")
+		return err
 	}
 	h.summaryWriteLatency.Observe(time.Since(startTime).Seconds())
 	return nil

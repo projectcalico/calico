@@ -302,11 +302,12 @@ func TestCompressionBlockAlignedBoundary(t *testing.T) {
 	}
 }
 
-// TestCompressionCloseIdempotent verifies that closing an already-closed
-// Compressor succeeds and writes nothing more.  Typha's connection teardown
-// closes the writer unconditionally, and the protocol may have closed it
-// already at a restart boundary.
-func TestCompressionCloseIdempotent(t *testing.T) {
+// TestCompressionCloseAfterFlush verifies that Close writes nothing once
+// Flush has pushed the data out, so a stream ends on its last flushed byte.
+// It also checks that Close is idempotent: Typha's connection teardown closes
+// the writer unconditionally, and the protocol may have closed it already at
+// a restart boundary.
+func TestCompressionCloseAfterFlush(t *testing.T) {
 	constructors := map[string]func(CompressionAlgorithm, io.Writer) (Compressor, error){
 		"stream":   NewStreamCompressor,
 		"snapshot": NewSnapshotCompressor,
@@ -321,13 +322,16 @@ func TestCompressionCloseIdempotent(t *testing.T) {
 				Expect(err).NotTo(HaveOccurred())
 				_, err = c.Write([]byte("some data"))
 				Expect(err).NotTo(HaveOccurred())
-				Expect(c.Close()).To(Succeed())
-				closedLen := buf.Len()
+				Expect(c.Flush()).To(Succeed())
+				flushedLen := buf.Len()
+				Expect(flushedLen).To(BeNumerically(">", 0))
 
 				Expect(c.Close()).To(Succeed())
-				Expect(buf.Len()).To(Equal(closedLen))
+				Expect(buf.Len()).To(Equal(flushedLen))
+				Expect(c.Close()).To(Succeed())
+				Expect(buf.Len()).To(Equal(flushedLen))
 				Expect(c.Flush()).To(MatchError(ErrCompressorClosed))
-				Expect(buf.Len()).To(Equal(closedLen))
+				Expect(buf.Len()).To(Equal(flushedLen))
 			})
 		}
 	}
