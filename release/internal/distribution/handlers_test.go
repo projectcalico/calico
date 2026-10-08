@@ -572,7 +572,7 @@ func TestArtifacts(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if diff := cmp.Diff([]outputs.ArtifactFile{{Path: release, URL: url}}, got); diff != "" {
+		if diff := cmp.Diff([]outputs.ArtifactFile{{Name: "release.tgz", Path: release, URL: url}}, got); diff != "" {
 			t.Errorf("files (-want +got):\n%s", diff)
 		}
 	})
@@ -582,7 +582,7 @@ func TestArtifacts(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := []outputs.ArtifactFile{{Path: release, URL: hashreleaseserver.HashreleaseURL("2026-10-05-v3-30-0") + "/release.tgz"}}
+		want := []outputs.ArtifactFile{{Name: "release.tgz", Path: release, URL: hashreleaseserver.HashreleaseURL("2026-10-05-v3-30-0") + "/release.tgz"}}
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Errorf("files (-want +got):\n%s", diff)
 		}

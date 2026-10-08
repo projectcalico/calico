@@ -445,7 +445,7 @@ func filesAt(dir, baseURL string) ([]outputs.ArtifactFile, error) {
 		if err != nil {
 			return nil, fmt.Errorf("url for %s: %w", path, err)
 		}
-		files[i] = outputs.ArtifactFile{Path: path, URL: u}
+		files[i] = outputs.ArtifactFile{Name: filepath.Base(path), Path: path, URL: u}
 	}
 	return files, nil
 }

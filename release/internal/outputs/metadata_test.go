@@ -162,7 +162,7 @@ func TestMetadataDescribe(t *testing.T) {
 		m := Metadata{}
 		if err := m.describe(Describer{
 			Images:    ImageDescriber{Resolve: resolveTo("", false, nil)},
-			Artifacts: ArtifactDescriber{Files: []ArtifactFile{{Path: path, URL: "https://example.com/release.tgz"}}},
+			Artifacts: ArtifactDescriber{Files: []ArtifactFile{{Name: "release.tgz", Path: path, URL: "https://example.com/release.tgz"}}},
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -368,7 +368,7 @@ func TestArtifactDescriberDescribe(t *testing.T) {
 	}
 
 	t.Run("records each file's size, hash and url", func(t *testing.T) {
-		got, err := describe(ArtifactFile{Path: write("release.tgz", "hello"), URL: "https://example.com/v3.30.0/release.tgz"})
+		got, err := describe(ArtifactFile{Name: "release.tgz", Path: write("release.tgz", "hello"), URL: "https://example.com/v3.30.0/release.tgz"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -383,8 +383,21 @@ func TestArtifactDescriberDescribe(t *testing.T) {
 		}
 	})
 
+	t.Run("names a file in a folder by its path below the upload", func(t *testing.T) {
+		if err := os.MkdirAll(filepath.Join(dir, "ocp"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		got, err := describe(ArtifactFile{Name: "ocp/crs.yaml", Path: write("ocp/crs.yaml", "hello"), URL: "https://example.com/ocp/crs.yaml"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 || got[0].Name != "ocp/crs.yaml" {
+			t.Errorf("artifacts = %+v, want one named ocp/crs.yaml", got)
+		}
+	})
+
 	t.Run("leaves out the metadata file", func(t *testing.T) {
-		got, err := describe(ArtifactFile{Path: write(metadataFileName, "version: v3.30.0"), URL: "https://example.com/" + metadataFileName})
+		got, err := describe(ArtifactFile{Name: metadataFileName, Path: write(metadataFileName, "version: v3.30.0"), URL: "https://example.com/" + metadataFileName})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -394,7 +407,7 @@ func TestArtifactDescriberDescribe(t *testing.T) {
 	})
 
 	t.Run("fails on a file it cannot read", func(t *testing.T) {
-		_, err := describe(ArtifactFile{Path: filepath.Join(dir, "missing.tgz"), URL: "https://example.com/missing.tgz"})
+		_, err := describe(ArtifactFile{Name: "missing.tgz", Path: filepath.Join(dir, "missing.tgz"), URL: "https://example.com/missing.tgz"})
 		wantErrContains(t, err, "missing.tgz")
 	})
 }

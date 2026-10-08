@@ -323,7 +323,9 @@ type ArtifactDescriber struct {
 	Files []ArtifactFile
 }
 
+// Name keeps any folders below the uploaded folder, so it is unique in a release.
 type ArtifactFile struct {
+	Name string
 	Path string
 	URL  string
 }
@@ -332,7 +334,7 @@ type ArtifactFile struct {
 func (d ArtifactDescriber) describe() ([]Artifact, error) {
 	var out []Artifact
 	for _, file := range d.Files {
-		name := filepath.Base(file.Path)
+		name := file.Name
 		if name == metadataFileName {
 			continue
 		}
