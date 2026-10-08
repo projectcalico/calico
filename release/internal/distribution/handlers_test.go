@@ -548,7 +548,7 @@ func TestPublishIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestArtifacts(t *testing.T) {
+func TestArtifactFiles(t *testing.T) {
 	dir := t.TempDir()
 	for _, n := range []string{"release.tgz", sumsFileName, "charts/index.yaml"} {
 		path := filepath.Join(dir, n)
@@ -564,7 +564,7 @@ func TestArtifacts(t *testing.T) {
 	hashrelease := HashreleaseServer{Release: &hashreleaseserver.Hashrelease{Name: "2026-10-05-v3-30-0"}}
 
 	t.Run("lists a github release's top-level files at its download URL", func(t *testing.T) {
-		got, err := Artifacts([]Upload{{Source: dir, Handler: githubRelease}})
+		got, err := artifactFiles([]Upload{{Source: dir, Handler: githubRelease}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -578,7 +578,7 @@ func TestArtifacts(t *testing.T) {
 	})
 
 	t.Run("lists a hashrelease's top-level files at its URL", func(t *testing.T) {
-		got, err := Artifacts([]Upload{{Source: dir, Handler: hashrelease}})
+		got, err := artifactFiles([]Upload{{Source: dir, Handler: hashrelease}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -589,7 +589,7 @@ func TestArtifacts(t *testing.T) {
 	})
 
 	t.Run("lists nothing for a skipped upload or one that serves no files", func(t *testing.T) {
-		got, err := Artifacts([]Upload{
+		got, err := artifactFiles([]Upload{
 			{Source: dir, Handler: githubRelease, Skip: true},
 			{Source: dir, Handler: S3{URI: "s3://bucket/charts/"}},
 			{Handler: Preparer{Kind: "metadata"}},
@@ -603,9 +603,35 @@ func TestArtifacts(t *testing.T) {
 	})
 
 	t.Run("fails on a missing source", func(t *testing.T) {
-		_, err := Artifacts([]Upload{{Source: filepath.Join(dir, "missing"), Handler: hashrelease}})
+		_, err := artifactFiles([]Upload{{Source: filepath.Join(dir, "missing"), Handler: hashrelease}})
 		if !errors.Is(err, os.ErrNotExist) {
 			t.Errorf("err = %v, want it to wrap os.ErrNotExist", err)
+		}
+	})
+}
+
+func TestMetadata(t *testing.T) {
+	dir := t.TempDir()
+	for name, body := range map[string]string{"release.tgz": "hello", "metadata.yaml": "version: v3.30.0"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hashrelease := HashreleaseServer{Release: &hashreleaseserver.Hashrelease{Name: "2026-10-05-v3-30-0"}}
+
+	t.Run("hashes each published file except the metadata", func(t *testing.T) {
+		got, err := Metadata([]Upload{{Source: dir, Handler: hashrelease}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []outputs.Artifact{{
+			Name:   "release.tgz",
+			Size:   5,
+			SHA256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+			URL:    hashreleaseserver.HashreleaseURL("2026-10-05-v3-30-0") + "/release.tgz",
+		}}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("artifacts (-want +got):\n%s", diff)
 		}
 	})
 }

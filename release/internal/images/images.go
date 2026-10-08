@@ -771,3 +771,12 @@ func save(s settings, image, out string) error {
 func DigestSource(recordsDir string) (registry.DigestSource, error) {
 	return outputs.DigestSourceFor(recordsDir, PublishStep, ResolveStep)
 }
+
+// Metadata is the images' section of the release metadata.
+func Metadata(recordsDir string, components map[string]registry.Component, d outputs.Digests) (map[string]outputs.Component, error) {
+	src, err := DigestSource(recordsDir)
+	if err != nil {
+		return nil, err
+	}
+	return outputs.DescribeComponents(src, components, d)
+}

@@ -1791,8 +1791,10 @@ func TestSourceMetadata(t *testing.T) {
 }
 
 func TestChartsMetadata(t *testing.T) {
+	unpublished := outputs.Digests{Resolve: func(string) (string, bool, error) { return "", false, nil }}
 	newManager := func() *CalicoManager {
 		return &CalicoManager{
+			recordsDir:     t.TempDir(),
 			helmCharts:     true,
 			helmIndex:      true,
 			helmRepoURL:    "https://example.com/charts",
@@ -1802,7 +1804,7 @@ func TestChartsMetadata(t *testing.T) {
 	}
 
 	t.Run("records each chart at the first registry", func(t *testing.T) {
-		got, err := newManager().chartsMetadata()
+		got, err := newManager().chartsMetadata(unpublished)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1826,7 +1828,7 @@ func TestChartsMetadata(t *testing.T) {
 	t.Run("leaves out the index when it is not built", func(t *testing.T) {
 		r := newManager()
 		r.helmIndex = false
-		got, err := r.chartsMetadata()
+		got, err := r.chartsMetadata(unpublished)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1839,7 +1841,7 @@ func TestChartsMetadata(t *testing.T) {
 		r := newManager()
 		r.isHashRelease = true
 		r.hashrelease = hashreleaseserver.Hashrelease{Name: "hr"}
-		got, err := r.chartsMetadata()
+		got, err := r.chartsMetadata(unpublished)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1851,7 +1853,7 @@ func TestChartsMetadata(t *testing.T) {
 	t.Run("records nothing when charts are off", func(t *testing.T) {
 		r := newManager()
 		r.helmCharts = false
-		got, err := r.chartsMetadata()
+		got, err := r.chartsMetadata(unpublished)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1863,7 +1865,7 @@ func TestChartsMetadata(t *testing.T) {
 	t.Run("fails with no registry to name the charts by", func(t *testing.T) {
 		r := newManager()
 		r.helmRegistries = nil
-		if _, err := r.chartsMetadata(); err == nil {
+		if _, err := r.chartsMetadata(unpublished); err == nil {
 			t.Error("recorded charts with no registry")
 		}
 	})

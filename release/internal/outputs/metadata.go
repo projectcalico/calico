@@ -36,21 +36,17 @@ import (
 const metadataFileName = "metadata.yaml"
 
 type Record interface {
-	describe(Describer) error
 	// attest validates the record before marshalling it, so an invalid record
 	// is never written.
 	attest() ([]byte, error)
 }
 
-func BuildMetadata(r Record, d Describer, dir string) error {
+func BuildMetadata(r Record, dir string) error {
 	if r == nil {
 		return errors.New("metadata: no release to describe")
 	}
 	if dir == "" {
 		return errors.New("metadata: no directory to write to")
-	}
-	if err := r.describe(d); err != nil {
-		return fmt.Errorf("metadata: %w", err)
 	}
 	bs, err := r.attest()
 	if err != nil {
@@ -82,10 +78,6 @@ type Metadata struct {
 	Artifacts []Artifact `yaml:"artifacts,omitempty"`
 
 	Components map[string]Component `yaml:"components"`
-
-	// Released is keyed by component name. A component with no image is
-	// recorded by version alone.
-	Released map[string]registry.Component `yaml:"-"`
 }
 
 type Component struct {
@@ -113,33 +105,6 @@ type Chart struct {
 	Image  string `yaml:"image"`
 	Digest string `yaml:"digest,omitempty"`
 	URL    string `yaml:"url"`
-}
-
-func (r *Metadata) describe(d Describer) error {
-	if d.Images.Resolve == nil {
-		return errors.New("no image resolver to describe with")
-	}
-	components, err := d.Images.describe(r.Released)
-	if err != nil {
-		return err
-	}
-	r.Components = components
-	if r.Artifacts, err = d.Artifacts.describe(); err != nil {
-		return err
-	}
-	if r.Charts == nil {
-		return nil
-	}
-	var errs []error
-	for _, name := range slices.Sorted(maps.Keys(r.Charts.Entries)) {
-		c := r.Charts.Entries[name]
-		if c.Digest, err = d.Images.digest(c.Image); err != nil {
-			errs = append(errs, fmt.Errorf("chart %s: %w", name, err))
-			continue
-		}
-		r.Charts.Entries[name] = c
-	}
-	return errors.Join(errs...)
 }
 
 // Older readers still parse these keys, so they stay, marked for new readers.
@@ -271,20 +236,37 @@ func (a Artifact) validate() error {
 	return errors.Join(errs...)
 }
 
-type Describer struct {
-	Images    ImageDescriber
-	Artifacts ArtifactDescriber
-}
-
-type ImageDescriber struct {
-	Sources []registry.DigestSource
+// Digests finds the digest an image was published at: from a step's record,
+// else from the registry.
+type Digests struct {
 	Resolve registry.DigestResolver
 
-	// RequireDigests makes an unpublished image an error rather than a warning.
-	RequireDigests bool
+	// Require makes an unpublished image an error rather than a warning.
+	Require bool
 }
 
-func (d ImageDescriber) describe(released map[string]registry.Component) (map[string]Component, error) {
+func (d Digests) Of(src registry.DigestSource, ref string) (string, error) {
+	if digest, ok := src.Digest(ref); ok {
+		return digest, nil
+	}
+	if d.Resolve == nil {
+		return "", fmt.Errorf("no resolver to find the digest of %s", ref)
+	}
+	digest, exists, err := d.Resolve(ref)
+	if err != nil {
+		return "", fmt.Errorf("resolving %s: %w", ref, err)
+	}
+	if !exists {
+		if d.Require {
+			return "", fmt.Errorf("%s is not published", ref)
+		}
+		logrus.WithField("image", ref).Warn("Not published, leaving its digest out")
+	}
+	return digest, nil
+}
+
+// DescribeComponents records a component with no image by version alone.
+func DescribeComponents(src registry.DigestSource, released map[string]registry.Component, d Digests) (map[string]Component, error) {
 	out := make(map[string]Component, len(released))
 	var errs []error
 	for _, name := range slices.Sorted(maps.Keys(released)) {
@@ -294,7 +276,7 @@ func (d ImageDescriber) describe(released map[string]registry.Component) (map[st
 			continue
 		}
 		ref := c.String()
-		digest, err := d.digest(ref)
+		digest, err := d.Of(src, ref)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -304,29 +286,6 @@ func (d ImageDescriber) describe(released map[string]registry.Component) (map[st
 	return out, errors.Join(errs...)
 }
 
-func (d ImageDescriber) digest(ref string) (string, error) {
-	for _, src := range d.Sources {
-		if digest, ok := src.Digest(ref); ok {
-			return digest, nil
-		}
-	}
-	digest, exists, err := d.Resolve(ref)
-	if err != nil {
-		return "", fmt.Errorf("resolving %s: %w", ref, err)
-	}
-	if !exists {
-		if d.RequireDigests {
-			return "", fmt.Errorf("%s is not published", ref)
-		}
-		logrus.WithField("image", ref).Warn("Not published, leaving its digest out")
-	}
-	return digest, nil
-}
-
-type ArtifactDescriber struct {
-	Files []ArtifactFile
-}
-
 // Name keeps any folders below the uploaded folder, so it is unique in a release.
 type ArtifactFile struct {
 	Name string
@@ -334,10 +293,11 @@ type ArtifactFile struct {
 	URL  string
 }
 
-// The metadata file is left out because it cannot carry its own hash.
-func (d ArtifactDescriber) describe() ([]Artifact, error) {
+// DescribeArtifacts leaves out the metadata file, because it cannot carry its
+// own hash.
+func DescribeArtifacts(files []ArtifactFile) ([]Artifact, error) {
 	var out []Artifact
-	for _, file := range d.Files {
+	for _, file := range files {
 		name := file.Name
 		if name == metadataFileName {
 			continue

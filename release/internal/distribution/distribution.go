@@ -59,9 +59,18 @@ type artifactLister interface {
 	artifacts(src string) ([]outputs.ArtifactFile, error)
 }
 
-// Artifacts lists the files the pipeline publishes for download, with the URL
-// each will be served at.
-func Artifacts(pipeline []Upload) ([]outputs.ArtifactFile, error) {
+// Metadata is the artifacts' section of the release metadata.
+func Metadata(pipeline []Upload) ([]outputs.Artifact, error) {
+	files, err := artifactFiles(pipeline)
+	if err != nil {
+		return nil, err
+	}
+	return outputs.DescribeArtifacts(files)
+}
+
+// artifactFiles lists the files the pipeline publishes for download, with the
+// URL each will be served at.
+func artifactFiles(pipeline []Upload) ([]outputs.ArtifactFile, error) {
 	var files []outputs.ArtifactFile
 	for _, u := range pipeline {
 		l, ok := u.Handler.(artifactLister)

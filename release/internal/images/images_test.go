@@ -30,6 +30,7 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 )
@@ -1411,6 +1412,41 @@ func TestRecord(t *testing.T) {
 		}
 		if !slices.Equal(rec.refs, want) {
 			t.Errorf("refs %v, want %v", rec.refs, want)
+		}
+	})
+}
+
+func TestMetadata(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	node := registry.Component{Registry: "quay.io/calico", Image: "node", Version: "v3.30.0"}
+	mustNotResolve := outputs.Digests{Resolve: func(string) (string, bool, error) {
+		return "", false, errors.New("must not resolve")
+	}}
+
+	for _, step := range []string{PublishStep, ResolveStep} {
+		t.Run("reads the digest "+step+" recorded", func(t *testing.T) {
+			dir := t.TempDir()
+			w, err := outputs.NewRefsWriter(dir, step)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := w.Add("quay.io/calico/node:v3.30.0@" + digest); err != nil {
+				t.Fatal(err)
+			}
+			got, err := Metadata(dir, map[string]registry.Component{"node": node}, mustNotResolve)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := outputs.Component{Version: "v3.30.0", Image: "quay.io/calico/node:v3.30.0", Digest: digest}
+			if got["node"] != want {
+				t.Errorf("node = %+v, want %+v", got["node"], want)
+			}
+		})
+	}
+
+	t.Run("fails with no records dir", func(t *testing.T) {
+		if _, err := Metadata("", map[string]registry.Component{"node": node}, mustNotResolve); err == nil {
+			t.Error("described images with no records dir")
 		}
 	})
 }

@@ -361,20 +361,30 @@ func (r *CalicoManager) Build() error {
 	return nil
 }
 
+// Each step that ran describes its own section; the manager adds the source.
 func (r *CalicoManager) BuildMetadata(dir string) error {
-	sources, err := r.digestSources()
+	d := outputs.Digests{Resolve: r.digestResolver(), Require: !r.isHashRelease}
+	released := r.releasedComponents()
+	op, hasOperator := released[r.operatorImage]
+	delete(released, r.operatorImage)
+	components, err := images.Metadata(r.recordsDir, released, d)
+	if err != nil {
+		return err
+	}
+	if hasOperator {
+		if components[r.operatorImage], err = operator.Metadata(r.recordsDir, op, d); err != nil {
+			return err
+		}
+	}
+	charts, err := r.chartsMetadata(d)
+	if err != nil {
+		return err
+	}
+	artifacts, err := distribution.Metadata(r.uploads())
 	if err != nil {
 		return err
 	}
 	source, err := r.sourceMetadata()
-	if err != nil {
-		return err
-	}
-	charts, err := r.chartsMetadata()
-	if err != nil {
-		return err
-	}
-	files, err := distribution.Artifacts(r.uploads())
 	if err != nil {
 		return err
 	}
@@ -384,14 +394,8 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 		ChartVersion:    r.chart().Version(),
 		Source:          source,
 		Charts:          charts,
-		Released:        r.releasedComponents(),
-	}, outputs.Describer{
-		Images: outputs.ImageDescriber{
-			Sources:        sources,
-			Resolve:        r.digestResolver(),
-			RequireDigests: !r.isHashRelease,
-		},
-		Artifacts: outputs.ArtifactDescriber{Files: files},
+		Artifacts:       artifacts,
+		Components:      components,
 	}, dir)
 }
 
@@ -419,57 +423,30 @@ func (r *CalicoManager) sourceMetadata() (outputs.Source, error) {
 }
 
 // Each chart is recorded at the first registry it was published to.
-func (r *CalicoManager) chartsMetadata() (*outputs.Charts, error) {
+func (r *CalicoManager) chartsMetadata(d outputs.Digests) (*outputs.Charts, error) {
 	if !r.helmCharts {
 		return nil, nil
 	}
 	if len(r.helmRegistries) == 0 {
 		return nil, fmt.Errorf("no helm chart registries specified")
 	}
-	chart := r.chart()
-	base, err := r.chartsURL()
-	if err != nil {
+	at := charts.Published{Registry: r.helmRegistries[0]}
+	var err error
+	if at.DownloadURL, err = r.chartsURL(); err != nil {
 		return nil, err
 	}
-	out := &outputs.Charts{Version: chart.Version(), Entries: map[string]outputs.Chart{}}
 	switch {
 	case !r.helmIndex:
 	case r.isHashRelease:
-		if out.Index, err = charts.RepoURLAt(r.hashrelease.URL()); err != nil {
+		if at.Index, err = charts.RepoURLAt(r.hashrelease.URL()); err != nil {
 			return nil, err
 		}
 	default:
-		if out.Index, err = r.helmRepo(); err != nil {
+		if at.Index, err = r.helmRepo(); err != nil {
 			return nil, fmt.Errorf("helm repo URL: %w", err)
 		}
 	}
-	for _, name := range chart.Names {
-		u, err := url.JoinPath(base, charts.FileName(name, chart.Version()))
-		if err != nil {
-			return nil, fmt.Errorf("chart %s URL: %w", name, err)
-		}
-		out.Entries[name] = outputs.Chart{
-			Image: chart.Ref(r.helmRegistries[0], name),
-			URL:   u,
-		}
-	}
-	return out, nil
-}
-
-func (r *CalicoManager) digestSources() ([]registry.DigestSource, error) {
-	imgs, err := images.DigestSource(r.recordsDir)
-	if err != nil {
-		return nil, err
-	}
-	op, err := operator.DigestSource(r.recordsDir)
-	if err != nil {
-		return nil, err
-	}
-	chs, err := charts.DigestSource(r.recordsDir)
-	if err != nil {
-		return nil, err
-	}
-	return []registry.DigestSource{imgs, op, chs}, nil
+	return charts.Metadata(r.recordsDir, r.chart(), at, d)
 }
 
 // Fetch the registry from the calicoctl manifest file.

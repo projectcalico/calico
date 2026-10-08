@@ -330,3 +330,17 @@ func WithResume(published []string, force bool) PublishOption {
 func DigestSource(recordsDir string) (registry.DigestSource, error) {
 	return outputs.DigestSourceFor(recordsDir, PublishStep, ResolveStep)
 }
+
+// Metadata is the operator's section of the release metadata.
+func Metadata(recordsDir string, c registry.Component, d outputs.Digests) (outputs.Component, error) {
+	src, err := DigestSource(recordsDir)
+	if err != nil {
+		return outputs.Component{}, err
+	}
+	ref := c.String()
+	digest, err := d.Of(src, ref)
+	if err != nil {
+		return outputs.Component{}, err
+	}
+	return outputs.Component{Version: c.Version, Image: ref, Digest: digest}, nil
+}

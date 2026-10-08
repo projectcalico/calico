@@ -30,28 +30,18 @@ import (
 )
 
 type record struct {
-	body        []byte
-	describeErr error
-	attestErr   error
-	described   bool
-}
-
-func (r *record) describe(Describer) error {
-	r.described = true
-	return r.describeErr
+	body      []byte
+	attestErr error
 }
 
 func (r *record) attest() ([]byte, error) {
-	if !r.described {
-		return nil, errors.New("attested before describing")
-	}
 	return r.body, r.attestErr
 }
 
 func TestBuildMetadata(t *testing.T) {
-	t.Run("writes the bytes the record produced once described", func(t *testing.T) {
+	t.Run("writes the bytes the record produced", func(t *testing.T) {
 		dir := t.TempDir()
-		if err := BuildMetadata(&record{body: []byte("version: v3.30.0\n")}, Describer{}, dir); err != nil {
+		if err := BuildMetadata(&record{body: []byte("version: v3.30.0\n")}, dir); err != nil {
 			t.Fatal(err)
 		}
 		got, err := os.ReadFile(filepath.Join(dir, metadataFileName))
@@ -68,12 +58,11 @@ func TestBuildMetadata(t *testing.T) {
 		rec  *record
 		want string
 	}{
-		{"writes nothing when describing fails", &record{describeErr: errors.New("unauthorized")}, "unauthorized"},
 		{"writes nothing when the record fails", &record{attestErr: errors.New("no version specified")}, "no version specified"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
-			wantErrContains(t, BuildMetadata(tc.rec, Describer{}, dir), tc.want)
+			wantErrContains(t, BuildMetadata(tc.rec, dir), tc.want)
 			if _, err := os.Stat(filepath.Join(dir, metadataFileName)); !errors.Is(err, os.ErrNotExist) {
 				t.Errorf("stat metadata = %v, want it not to exist", err)
 			}
@@ -81,99 +70,15 @@ func TestBuildMetadata(t *testing.T) {
 	}
 
 	t.Run("needs a directory", func(t *testing.T) {
-		if err := BuildMetadata(&record{body: []byte("x")}, Describer{}, ""); err == nil {
+		if err := BuildMetadata(&record{body: []byte("x")}, ""); err == nil {
 			t.Error("built metadata with no directory")
 		}
 	})
 
 	t.Run("needs a record", func(t *testing.T) {
-		if err := BuildMetadata(nil, Describer{}, t.TempDir()); err == nil {
+		if err := BuildMetadata(nil, t.TempDir()); err == nil {
 			t.Error("built metadata with no record")
 		}
-	})
-}
-
-func TestMetadataDescribe(t *testing.T) {
-	node := registry.Component{Registry: "quay.io/calico", Image: "node", Version: "v3.30.0"}
-
-	t.Run("fills components from what was released", func(t *testing.T) {
-		m := Metadata{Released: map[string]registry.Component{"node": node}}
-		if err := m.describe(Describer{Images: ImageDescriber{Resolve: resolveTo("sha256:res", true, nil)}}); err != nil {
-			t.Fatal(err)
-		}
-		want := map[string]Component{
-			"node": {Version: "v3.30.0", Image: "quay.io/calico/node:v3.30.0", Digest: "sha256:res"},
-		}
-		if diff := cmp.Diff(want, m.Components); diff != "" {
-			t.Errorf("components (-want +got):\n%s", diff)
-		}
-	})
-
-	t.Run("keeps released out of the document", func(t *testing.T) {
-		m := Metadata{
-			Version:         "v3.30.0",
-			OperatorVersion: "v1.38.0",
-			Source:          Source{Repository: "https://github.com/projectcalico/calico", Commit: "abc123"},
-			Released:        map[string]registry.Component{"node": node},
-		}
-		if err := m.describe(Describer{Images: ImageDescriber{Resolve: resolveTo("", false, nil)}}); err != nil {
-			t.Fatal(err)
-		}
-		bs, err := m.attest()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if strings.Contains(string(bs), "released") {
-			t.Errorf("document holds released:\n%s", bs)
-		}
-	})
-
-	t.Run("fills chart digests from the record before resolving", func(t *testing.T) {
-		recorded := registry.NewDigestSource(registry.DigestsByRepo([]string{
-			"quay.io/calico/charts/tigera-operator:v3.30.0@sha256:rec",
-		}))
-		m := Metadata{Charts: &Charts{Version: "v3.30.0", Entries: map[string]Chart{
-			"tigera-operator": {Image: "quay.io/calico/charts/tigera-operator:v3.30.0"},
-			"crds":            {Image: "quay.io/calico/charts/crds:v3.30.0"},
-		}}}
-		if err := m.describe(Describer{Images: ImageDescriber{Sources: []registry.DigestSource{recorded}, Resolve: resolveTo("sha256:res", true, nil)}}); err != nil {
-			t.Fatal(err)
-		}
-		if got := m.Charts.Entries["tigera-operator"].Digest; got != "sha256:rec" {
-			t.Errorf("tigera-operator digest = %q, want sha256:rec", got)
-		}
-		if got := m.Charts.Entries["crds"].Digest; got != "sha256:res" {
-			t.Errorf("crds digest = %q, want sha256:res", got)
-		}
-	})
-
-	t.Run("fails on a chart resolve error", func(t *testing.T) {
-		m := Metadata{Charts: &Charts{Version: "v3.30.0", Entries: map[string]Chart{
-			"crds": {Image: "quay.io/calico/charts/crds:v3.30.0"},
-		}}}
-		wantErrContains(t, m.describe(Describer{Images: ImageDescriber{Resolve: resolveTo("", false, fmt.Errorf("unauthorized"))}}), "chart crds")
-	})
-
-	t.Run("fills artifacts from the files published", func(t *testing.T) {
-		path := filepath.Join(t.TempDir(), "release.tgz")
-		if err := os.WriteFile(path, []byte("hello"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		m := Metadata{}
-		if err := m.describe(Describer{
-			Images:    ImageDescriber{Resolve: resolveTo("", false, nil)},
-			Artifacts: ArtifactDescriber{Files: []ArtifactFile{{Name: "release.tgz", Path: path, URL: "https://example.com/release.tgz"}}},
-		}); err != nil {
-			t.Fatal(err)
-		}
-		if len(m.Artifacts) != 1 || m.Artifacts[0].URL != "https://example.com/release.tgz" {
-			t.Errorf("artifacts = %+v, want one at https://example.com/release.tgz", m.Artifacts)
-		}
-	})
-
-	t.Run("fails with no image resolver", func(t *testing.T) {
-		m := Metadata{Released: map[string]registry.Component{"node": node}}
-		wantErrContains(t, m.describe(Describer{}), "no image resolver")
 	})
 }
 
@@ -358,7 +263,7 @@ func TestMetadataAttest(t *testing.T) {
 	})
 }
 
-func TestArtifactDescriberDescribe(t *testing.T) {
+func TestDescribeArtifacts(t *testing.T) {
 	dir := t.TempDir()
 	write := func(name, body string) string {
 		path := filepath.Join(dir, name)
@@ -368,7 +273,7 @@ func TestArtifactDescriberDescribe(t *testing.T) {
 		return path
 	}
 	describe := func(files ...ArtifactFile) ([]Artifact, error) {
-		return ArtifactDescriber{Files: files}.describe()
+		return DescribeArtifacts(files)
 	}
 
 	t.Run("records each file's size, hash and url", func(t *testing.T) {
@@ -416,15 +321,16 @@ func TestArtifactDescriberDescribe(t *testing.T) {
 	})
 }
 
-func TestImageDescriberDescribe(t *testing.T) {
+func TestDescribeComponents(t *testing.T) {
 	node := registry.Component{Registry: "quay.io/calico", Image: "node", Version: "v3.30.0"}
 	released := map[string]registry.Component{"node": node}
 	recorded := registry.NewDigestSource(registry.DigestsByRepo([]string{
 		"quay.io/calico/node:v3.30.0@sha256:rec",
 	}))
+	none := registry.NewDigestSource()
 
 	t.Run("prefers a record to a resolve", func(t *testing.T) {
-		got, err := ImageDescriber{Sources: []registry.DigestSource{recorded}, Resolve: resolveTo("", false, fmt.Errorf("must not resolve"))}.describe(released)
+		got, err := DescribeComponents(recorded, released, Digests{Resolve: resolveTo("", false, fmt.Errorf("must not resolve"))})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -435,7 +341,7 @@ func TestImageDescriberDescribe(t *testing.T) {
 	})
 
 	t.Run("resolves what no record holds", func(t *testing.T) {
-		got, err := ImageDescriber{Resolve: resolveTo("sha256:res", true, nil)}.describe(released)
+		got, err := DescribeComponents(none, released, Digests{Resolve: resolveTo("sha256:res", true, nil)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -445,7 +351,7 @@ func TestImageDescriberDescribe(t *testing.T) {
 	})
 
 	t.Run("leaves out the digest of an unpublished image", func(t *testing.T) {
-		got, err := ImageDescriber{Resolve: resolveTo("", false, nil)}.describe(released)
+		got, err := DescribeComponents(none, released, Digests{Resolve: resolveTo("", false, nil)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -456,20 +362,25 @@ func TestImageDescriberDescribe(t *testing.T) {
 	})
 
 	t.Run("fails on an unpublished image when digests are required", func(t *testing.T) {
-		_, err := ImageDescriber{Resolve: resolveTo("", false, nil), RequireDigests: true}.describe(released)
+		_, err := DescribeComponents(none, released, Digests{Resolve: resolveTo("", false, nil), Require: true})
 		wantErrContains(t, err, "quay.io/calico/node:v3.30.0 is not published")
 	})
 
 	t.Run("fails on a resolve error", func(t *testing.T) {
-		_, err := ImageDescriber{Resolve: resolveTo("", false, fmt.Errorf("unauthorized"))}.describe(released)
+		_, err := DescribeComponents(none, released, Digests{Resolve: resolveTo("", false, fmt.Errorf("unauthorized"))})
 		wantErrContains(t, err, "quay.io/calico/node:v3.30.0")
 		wantErrContains(t, err, "unauthorized")
 	})
 
+	t.Run("fails with no resolver for what no record holds", func(t *testing.T) {
+		_, err := DescribeComponents(none, released, Digests{})
+		wantErrContains(t, err, "no resolver")
+	})
+
 	t.Run("records a component with no image by version alone", func(t *testing.T) {
-		got, err := ImageDescriber{Resolve: resolveTo("", false, fmt.Errorf("must not resolve"))}.describe(map[string]registry.Component{
+		got, err := DescribeComponents(none, map[string]registry.Component{
 			"calico": {Version: "v3.30.0"},
-		})
+		}, Digests{Resolve: resolveTo("", false, fmt.Errorf("must not resolve"))})
 		if err != nil {
 			t.Fatal(err)
 		}

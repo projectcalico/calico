@@ -387,3 +387,37 @@ var ValueEditsFor = func(productVersion, productRegistry, operatorImage, operato
 func DigestSource(recordsDir string) (registry.DigestSource, error) {
 	return outputs.DigestSourceFor(recordsDir, PublishStep)
 }
+
+// Published is where a release's charts went. Index is empty when no index
+// was published.
+type Published struct {
+	Registry    string
+	DownloadURL string
+	Index       string
+}
+
+// Metadata is the charts' section of the release metadata. Each chart is
+// recorded at the registry in at.
+func Metadata(recordsDir string, c Chart, at Published, d outputs.Digests) (*outputs.Charts, error) {
+	src, err := DigestSource(recordsDir)
+	if err != nil {
+		return nil, err
+	}
+	out := &outputs.Charts{Version: c.Version(), Index: at.Index, Entries: map[string]outputs.Chart{}}
+	var errs []error
+	for _, name := range c.Names {
+		u, err := url.JoinPath(at.DownloadURL, FileName(name, c.Version()))
+		if err != nil {
+			errs = append(errs, fmt.Errorf("chart %s URL: %w", name, err))
+			continue
+		}
+		ref := c.Ref(at.Registry, name)
+		digest, err := d.Of(src, ref)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("chart %s: %w", name, err))
+			continue
+		}
+		out.Entries[name] = outputs.Chart{Image: ref, Digest: digest, URL: u}
+	}
+	return out, errors.Join(errs...)
+}
