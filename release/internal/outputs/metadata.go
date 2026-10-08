@@ -149,13 +149,9 @@ var deprecatedKeys = map[string]string{
 	"helmChartVersion": "Deprecated, use charts.version instead.",
 }
 
-func (r Metadata) attest() ([]byte, error) {
-	m, err := r.attested()
-	if err != nil {
-		return nil, err
-	}
+func marshalMarked(v any) ([]byte, error) {
 	var doc yaml.Node
-	if err := doc.Encode(m); err != nil {
+	if err := doc.Encode(v); err != nil {
 		return nil, fmt.Errorf("encoding metadata: %w", err)
 	}
 	for i := 0; i+1 < len(doc.Content); i += 2 {
@@ -164,6 +160,14 @@ func (r Metadata) attest() ([]byte, error) {
 		}
 	}
 	return yaml.Marshal(&doc)
+}
+
+func (r Metadata) attest() ([]byte, error) {
+	m, err := r.attested()
+	if err != nil {
+		return nil, err
+	}
+	return marshalMarked(m)
 }
 
 func (r Metadata) attested() (Metadata, error) {
