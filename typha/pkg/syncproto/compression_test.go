@@ -17,10 +17,12 @@ package syncproto
 import (
 	"bytes"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/klauspost/compress/zstd"
 	. "github.com/onsi/gomega"
@@ -49,6 +51,14 @@ func TestCompressionRestartBoundaries(t *testing.T) {
 				_ = pr.Close()
 				_ = pw.Close()
 			}()
+			// A bug that stalls either side would otherwise hang the test.
+			// Closing the pipe unblocks any pending Read or Write on it.
+			watchdog := time.AfterFunc(10*time.Second, func() {
+				err := errors.New("test timed out")
+				_ = pr.CloseWithError(err)
+				_ = pw.CloseWithError(err)
+			})
+			defer watchdog.Stop()
 
 			// Buffered, and closed on exit, so that neither side can stay
 			// blocked on the other if an assertion fails first.
@@ -86,7 +96,7 @@ func TestCompressionRestartBoundaries(t *testing.T) {
 			Expect(err).To(MatchError(expectedEndOfStreamErr(alg)))
 			Expect(hostnames).To(Equal(expectedHostnames(2)))
 
-			Expect(<-writerErr).NotTo(HaveOccurred())
+			Eventually(writerErr, "10s").Should(Receive(BeNil()))
 		})
 	}
 }
