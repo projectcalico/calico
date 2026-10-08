@@ -54,6 +54,7 @@ func (f *DeferredFlowBuilder) BuildInto(filter *proto.Filter, res *proto.FlowRes
 	}
 	tf := newAggregateFlow(f.d)
 	f.d.aggregateWindow(tf, &f.w)
+	tf.SourceIps, tf.DestIps = f.d.windowIPs(&f.w)
 	types.FlowIntoProto(tf, res.Flow)
 	res.Id = f.d.ID
 	return true
