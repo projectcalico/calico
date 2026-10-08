@@ -629,12 +629,15 @@ func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, ms
 // swapDecompressor closes the current decompressor (if any) and installs a
 // fresh one reading from the connection, along with a fresh gob decoder.
 func (s *SyncerClient) swapDecompressor(algorithm syncproto.CompressionAlgorithm) error {
+	// Close the old decompressor first so that at most one decompressor ever
+	// holds the connection's reader.
+	if s.decompressor != nil {
+		s.decompressor.Close()
+		s.decompressor = nil
+	}
 	d, err := syncproto.NewDecompressor(algorithm, s.connR)
 	if err != nil {
 		return err
-	}
-	if s.decompressor != nil {
-		s.decompressor.Close()
 	}
 	s.decompressor = d
 	s.decoder = gob.NewDecoder(d)
