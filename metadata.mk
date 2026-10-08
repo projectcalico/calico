@@ -65,8 +65,11 @@ WINDOWS_DIST = dist/windows
 # FIXME: Use WINDOWS_HPC_VERSION and remove WINDOWS_VERSIONS when containerd v1.6 is EOL'd
 # The Windows HPC container version used as base for Calico Windows images
 WINDOWS_HPC_VERSION ?= v1.0.0
-# The Windows versions used as base for Calico Windows images
-WINDOWS_VERSIONS ?= ltsc2019 ltsc2022 ltsc2025
+# The Windows architectures and versions used as base for Calico Windows images.
+WINDOWS_ARCHES ?= amd64 arm64
+WINDOWS_AMD64_VERSIONS ?= ltsc2019 ltsc2022 ltsc2025
+WINDOWS_ARM64_VERSIONS ?= ltsc2025
+WINDOWS_VERSIONS ?= $(if $(filter arm64,$(WINDOWS_ARCH)),$(WINDOWS_ARM64_VERSIONS),$(WINDOWS_AMD64_VERSIONS))
 
 # The CNI plugin and flannel code that will be cloned and rebuilt with this repo's go-build image.
 # Pinned so the content-addressed third-party-cni-plugins image hash changes when these move.

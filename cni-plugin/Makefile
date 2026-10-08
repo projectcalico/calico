@@ -32,20 +32,22 @@ clean: clean-windows
 	rm -rf flannel-cni-plugin .flannel-cni-plugin-*
 
 clean-windows: clean-windows-builder
-	rm -rf $(WINDOWS_BIN) $(WINDOWS_DIST)
+	rm -rf bin/windows bin/windows-* $(WINDOWS_DIST)
 
 ###############################################################################
 # Building the binary
 ###############################################################################
 # Only the Windows image is built standalone here; Linux ships in calico/calico.
-.PHONY: build
+.PHONY: build build-windows
 build:
 ifeq ($(ARCH),amd64)
-# Go only supports amd64 for Windows builds.
-WINDOWS_BIN=bin/windows
-# calico-ipam.exe is not built: "calico.exe component cni install" stages calico.exe under both names on the host.
-build: $(WINDOWS_BIN)/calico.exe
+build: build-windows
 endif
+
+# amd64 keeps the original bin/windows directory; other architectures use a sibling directory.
+WINDOWS_BIN=bin/windows$(if $(filter amd64,$(WINDOWS_ARCH)),,-$(WINDOWS_ARCH))
+# calico-ipam.exe is not built: "calico.exe component cni install" stages calico.exe under both names on the host.
+build-windows: $(WINDOWS_BIN)/calico.exe
 
 # calico.exe is the combined Windows binary (cmd/calico-windows), the same one
 # shipped in the node image. The operator runs it as "calico.exe component cni
@@ -65,7 +67,8 @@ protobuf pkg/dataplane/grpc/proto/cnibackend.pb.go: pkg/dataplane/grpc/proto/cni
 # image. These must be added as reqs to 'image-windows' (originally defined in
 # lib.Makefile) on the specific package Makefile otherwise they are not correctly
 # recognized.
-WINDOWS_IMAGE_REQS := Dockerfile.windows build build-win-cni-bins bin/LICENSE
+WINDOWS_IMAGE_REQS := Dockerfile.windows build-windows build-win-cni-bins bin/LICENSE
+WINDOWS_BUILD_ARGS = --build-arg WINDOWS_BIN=$(WINDOWS_BIN)
 image-windows: $(WINDOWS_IMAGE_REQS)
 
 bin/LICENSE: ../LICENSE.md
@@ -104,9 +107,9 @@ $(WINDOWS_BIN)/flannel.exe: $(FLANNEL_CNI_PLUGIN_CLONED)
 		-v $(CURDIR)/flannel-cni-plugin:/go/src/github.com/flannel-io/cni-plugin:z \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/flannel-io/cni-plugin --rm $(CALICO_BUILD) \
 		/bin/sh -xe -c ' \
-			ARCH=$(ARCH) VERSION=$(FLANNEL_VERSION) make build_windows'
+			ARCH=$(WINDOWS_ARCH) VERSION=$(FLANNEL_VERSION) make build_windows'
 	-mkdir -p $(WINDOWS_BIN)
-	cp flannel-cni-plugin/dist/flannel-$(ARCH).exe $(WINDOWS_BIN)/flannel.exe
+	cp flannel-cni-plugin/dist/flannel-$(WINDOWS_ARCH).exe $(WINDOWS_BIN)/flannel.exe
 
 .PHONY: build-win-cni-bins
 build-win-cni-bins: $(WINDOWS_BIN)/flannel.exe

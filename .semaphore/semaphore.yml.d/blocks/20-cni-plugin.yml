@@ -16,6 +16,9 @@
       - name: "CNI Plugin: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci-no-prereqs
+      - name: "CNI Plugin: build Windows images"
+        commands:
+          - ../.semaphore/run-and-monitor build-windows-image.log make image-windows-all
     epilogue:
       always:
         commands:

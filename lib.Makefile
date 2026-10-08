@@ -52,6 +52,14 @@ ifeq ($(ARCH),x86_64)
 	override ARCH=amd64
 endif
 
+# WINDOWS_ARCH is the target architecture for Windows binaries and images.  It
+# remains separate from ARCH, which controls Linux builds in this repository.
+WINDOWS_ARCH ?= amd64
+
+# windows-base-image selects the Microsoft nanoserver base image for a Windows
+# version (arm64 uses the "-arm64" tag suffix), unless WINDOWS_BASE_IMAGE is set.
+windows-base-image = $(if $(WINDOWS_BASE_IMAGE),$(WINDOWS_BASE_IMAGE),mcr.microsoft.com/windows/nanoserver:$(1)$(if $(filter arm64,$(WINDOWS_ARCH)),-arm64,))
+
 # detect the local outbound ip address (only used by FV/etcd targets that don't run on Windows)
 ifneq ($(OS),Windows_NT)
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
@@ -213,7 +221,7 @@ endef
 define build_windows_binary
 	$(DOCKER_RUN) \
 		-e CGO_ENABLED=0 \
-		-e GOARCH=amd64 \
+		-e GOARCH=$(WINDOWS_ARCH) \
 		-e GOOS=windows \
 		$(CALICO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS) -s -w" $(1)'
@@ -2083,11 +2091,14 @@ help:
 ###############################################################################
 
 DOCKER_MANIFEST_CMD := docker manifest
+DOCKER_IMAGETOOLS_CMD := docker buildx imagetools
 
 ifdef CONFIRM
 DOCKER_MANIFEST = $(DOCKER_MANIFEST_CMD)
+DOCKER_IMAGETOOLS = $(DOCKER_IMAGETOOLS_CMD)
 else
 DOCKER_MANIFEST = echo [DRY RUN] $(DOCKER_MANIFEST_CMD)
+DOCKER_IMAGETOOLS = echo [DRY RUN] $(DOCKER_IMAGETOOLS_CMD)
 endif
 
 # Named per component so two components' Windows builds do not remove each other's.
@@ -2103,7 +2114,7 @@ clean-windows-builder:
 # Set up the docker builder used to create Windows image tarballs.
 .PHONY: setup-windows-builder
 setup-windows-builder: clean-windows-builder
-	docker buildx create --name=$(WINDOWS_BUILDER) --platform windows/amd64
+	docker buildx create --name=$(WINDOWS_BUILDER) --platform windows/$(WINDOWS_ARCH)
 
 # FIXME: Use WINDOWS_HPC_VERSION and image instead of nanoserver and WINDOWS_VERSIONS when containerd v1.6 is EOL'd
 # .PHONY: image-windows release-windows
@@ -2143,20 +2154,21 @@ setup-windows-builder: clean-windows-builder
 #
 # The resulting image tarball is then pushed to registries during cd/release.
 # The image tarballs are located in WINDOWS_DIST and have files names
-# with the format 'node-windows-v3.21.0-2-abcdef-20H2.tar'.
+# with the format 'node-windows-v3.21.0-2-abcdef-20H2-amd64.tar'.
 #
 # In addition to pushing the individual images, we also create the manifest
 # directly using 'docker manifest'. This is possible because Semaphore is using
 # a recent enough docker CLI version (20.10.0)
 #
-# - Create the manifest with 'docker manifest create' using the list of all images.
-# - For each windows version, 'docker manifest annotate' its image with "os.image: <windows_version>".
-#   <windows_version> is the version string that looks like, e.g. 10.0.19041.1288.
-#   Setting os.image in the manifest is required for Windows hosts to load the
-#   correct image in manifest.
-# - Finally we push the manifest, "purging" the local manifest.
+# - For each architecture, create a manifest list of the Windows version images
+#   and push it as '<tag>-windows-<arch>'. 'docker manifest create' copies each
+#   entry's os, architecture and os.version from the image config, which the
+#   build inherits from the base image. Windows hosts use os.version to select
+#   a compatible image.
+# - Combine the per-architecture lists into the user-facing '<tag>' manifest
+#   list with imagetools.
 
-$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-%.tar: windows-sub-image-$*
+$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-%-$(WINDOWS_ARCH).tar: windows-sub-image-$*
 
 # NOTE: WINDOWS_IMAGE_REQS must be defined with the requirements to build the windows
 # image. These must be added as reqs to 'image-windows' (originally defined in
@@ -2167,56 +2179,93 @@ windows-sub-image-%: var-require-all-GIT_VERSION-WINDOWS_IMAGE-WINDOWS_DIST-WIND
 	-mkdir -p $(WINDOWS_DIST)
 	docker buildx build \
 		--builder $(WINDOWS_BUILDER) \
-		--platform windows/amd64 \
-		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-$*.tar \
+		--platform windows/$(WINDOWS_ARCH) \
+		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-$*-$(WINDOWS_ARCH).tar \
 		$(DOCKER_PULL) \
-		-t $(WINDOWS_IMAGE):latest \
+		-t $(WINDOWS_IMAGE):latest-$(WINDOWS_ARCH) \
 		--build-arg GIT_VERSION=$(GIT_VERSION) \
 		--build-arg=WINDOWS_VERSION=$* \
+		--build-arg WINDOWS_BASE_IMAGE=$(call windows-base-image,$*) \
+		$(WINDOWS_BUILD_ARGS) \
 		-f Dockerfile.windows .
 
-.PHONY: image-windows release-windows release-windows-with-tag retag-windows-image-with-registries
+.PHONY: image-windows image-windows-all release-windows release-windows-with-tag retag-windows-image-with-registries
+.PHONY: release-windows-arch-with-tag push-windows-manifest-with-tag
 image-windows: setup-windows-builder var-require-all-WINDOWS_VERSIONS
+	set -e; \
 	for version in $(WINDOWS_VERSIONS); do \
 		$(MAKE) windows-sub-image-$${version}; \
 	done;
 
-release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAGETAG-DEV_REGISTRIES image-windows bin/crane
+# Build the Windows images for all WINDOWS_ARCHES. Architectures are built one at
+# a time because they share the component's buildx builder.
+image-windows-all: var-require-all-WINDOWS_ARCHES
+	set -e; \
+	for arch in $(WINDOWS_ARCHES); do \
+		$(MAKE) image-windows WINDOWS_ARCH=$${arch}; \
+	done;
+
+release-windows-arch-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAGETAG-DEV_REGISTRIES-WINDOWS_IMAGE-WINDOWS_ARCH image-windows bin/crane
+	set -e; \
 	for registry in $(DEV_REGISTRIES); do \
 		echo Pushing Windows images to $${registry}; \
 		all_images=""; \
-		manifest_image="$${registry}/$(WINDOWS_IMAGE):$(IMAGETAG)"; \
+		pids=""; \
+		manifest_image="$${registry}/$(WINDOWS_IMAGE):$(IMAGETAG)-windows-$(WINDOWS_ARCH)"; \
 		for win_ver in $(WINDOWS_VERSIONS); do \
-			image_tar="$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-$${win_ver}.tar"; \
-			image="$${registry}/$(WINDOWS_IMAGE):$(IMAGETAG)-windows-$${win_ver}"; \
+			image_tar="$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-$${win_ver}-$(WINDOWS_ARCH).tar"; \
+			image="$${registry}/$(WINDOWS_IMAGE):$(IMAGETAG)-windows-$${win_ver}-$(WINDOWS_ARCH)"; \
 			echo Pushing image $${image} ...; \
 			$(CRANE) push $${image_tar} $${image} & \
+			pids="$${pids} $$!"; \
 			all_images="$${all_images} $${image}"; \
 		done; \
-		wait; \
+		for pid in $${pids}; do wait $${pid}; done; \
 		$(DOCKER_MANIFEST) create --amend $${manifest_image} $${all_images}; \
-		for win_ver in $(WINDOWS_VERSIONS); do \
-			version=$$(docker manifest inspect mcr.microsoft.com/windows/nanoserver:$${win_ver} | grep "os.version" | head -n 1 | awk -F\" '{print $$4}'); \
-			image="$${registry}/$(WINDOWS_IMAGE):$(IMAGETAG)-windows-$${win_ver}"; \
-			$(DOCKER_MANIFEST) annotate --os windows --arch amd64 --os-version $${version} $${manifest_image} $${image}; \
-		done; \
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
 		$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $${manifest_image} $${all_images} || true; \
 	done;
 
+push-windows-manifest-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAGETAG-DEV_REGISTRIES-WINDOWS_IMAGE-WINDOWS_ARCHES
+	set -e; \
+	for registry in $(DEV_REGISTRIES); do \
+		manifest_image="$${registry}/$(WINDOWS_IMAGE):$(IMAGETAG)"; \
+		arch_images=""; \
+		for arch in $(WINDOWS_ARCHES); do \
+			arch_images="$${arch_images} $${registry}/$(WINDOWS_IMAGE):$(IMAGETAG)-windows-$${arch}"; \
+		done; \
+		$(DOCKER_IMAGETOOLS) create --tag $${manifest_image} $${arch_images}; \
+		$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $${manifest_image} $${arch_images} || true; \
+	done;
+
+release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAGETAG-DEV_REGISTRIES-WINDOWS_IMAGE-WINDOWS_ARCHES
+	set -e; \
+	for arch in $(WINDOWS_ARCHES); do \
+		$(MAKE) release-windows-arch-with-tag IMAGETAG=$(IMAGETAG) WINDOWS_ARCH=$${arch}; \
+	done; \
+	$(MAKE) push-windows-manifest-with-tag IMAGETAG=$(IMAGETAG);
+
 # retag-windows-image-with-registries copies the Windows image from DEV_TAG to
-# IMAGETAG in each registry. Windows images are single-arch manifests built by
-# buildx, so they have no local per-arch images to retag.
+# IMAGETAG in each registry. The Windows image is a manifest list pushed by
+# release-windows, so there are no local per-arch images to retag.
 retag-windows-image-with-registries: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE-DEV_TAG-IMAGETAG bin/crane
+	set -e; \
 	for registry in $(DEV_REGISTRIES); do \
 		$(CRANE) cp $${registry}/$(WINDOWS_IMAGE):$(DEV_TAG) $${registry}/$(WINDOWS_IMAGE):$(IMAGETAG); \
 	done;
 
+# release-windows copies the merged Windows images from the git describe tag to the
+# release tag. The per-arch tags let release-publish-windows tell a complete
+# release from an older amd64-only one, so the bare tag is written last.
 release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE var-require-one-of-VERSION-BRANCH_NAME bin/crane
+	set -e; \
 	describe_tag=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(shell git describe --tags --dirty --long --always --abbrev=12); \
 	release_tag=$(if $(VERSION),$(VERSION),$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME)); \
 	$(MAKE) release-windows-with-tag IMAGETAG=$${describe_tag}; \
 	for registry in $(DEV_REGISTRIES); do \
+		for arch in $(WINDOWS_ARCHES); do \
+			$(CRANE) cp $${registry}/$(WINDOWS_IMAGE):$${describe_tag}-windows-$${arch} $${registry}/$(WINDOWS_IMAGE):$${release_tag}-windows-$${arch}; \
+		done; \
 		$(CRANE) cp $${registry}/$(WINDOWS_IMAGE):$${describe_tag} $${registry}/$(WINDOWS_IMAGE):$${release_tag}; \
 	done;
 

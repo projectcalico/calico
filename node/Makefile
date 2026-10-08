@@ -66,7 +66,8 @@ TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
 # Variables controlling the image
 NODE_CONTAINER_CREATED=.calico_node.created-$(ARCH)
-WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico.exe
+WINDOWS_BIN_DIR = dist/bin/windows/$(WINDOWS_ARCH)
+WINDOWS_BINARY = $(WINDOWS_BIN_DIR)/calico.exe
 TOOLS_MOUNTNS_BINARY = $(NODE_CONTAINER_BIN_DIR)/mountns-$(ARCH)
 
 WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
@@ -169,7 +170,8 @@ clean: clean-windows
 	-docker image rm -f $$(docker images $(TEST_CONTAINER_NAME) -a -q)
 
 clean-windows: clean-windows-builder
-	rm -f $(WINDOWS_ARCHIVE) $(WINDOWS_ARCHIVE_BINARY) $(WINDOWS_BINARY)
+	rm -f $(WINDOWS_ARCHIVE) $(WINDOWS_ARCHIVE_BINARY)
+	rm -rf $(NODE_CONTAINER_BIN_DIR)/windows
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/cni/*.exe
@@ -445,7 +447,7 @@ release-publish-linux: release-prereqs bin/crane
 	fi
 
 release-publish-windows: release-prereqs bin/crane
-	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(WINDOWS_IMAGE)" "$(VERSION)"; then \
+	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(WINDOWS_IMAGE)" "$(VERSION)" "$(addprefix windows-,$(WINDOWS_ARCHES))"; then \
 		echo "$(WINDOWS_IMAGE):$(VERSION) is already published, skipping"; \
 	else \
 		$(MAKE) release-windows IMAGETAG=$(VERSION) CONFIRM=$(CONFIRM); \
@@ -502,6 +504,13 @@ windows-packaging/nssm.exe: windows-packaging/nssm.zip
 
 $(WINDOWS_ARCHIVE): build-windows-archive
 
+# The Windows ZIP archive is only published for amd64; arm64 is supported through the images.
+ifneq ($(WINDOWS_ARCH),amd64)
+ifneq ($(filter build-windows-archive release-windows-archive $(WINDOWS_ARCHIVE),$(MAKECMDGOALS)),)
+$(error The Windows ZIP archive only supports WINDOWS_ARCH=amd64)
+endif
+endif
+
 .PHONY: build-windows-archive
 build-windows-archive: $(WINDOWS_ARCHIVE_FILES) windows-packaging/nssm.zip
 	# To be as atomic as possible, we re-do work like unpacking NSSM here.
@@ -549,5 +558,6 @@ WINDOWS_IMAGE_REQS := \
 	$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/peerings.toml \
 	$(WINDOWS_ARCHIVE_ROOT)/confd/templates/blocks.ps1.template \
 	$(WINDOWS_ARCHIVE_ROOT)/confd/templates/peerings.ps1.template \
-	windows-packaging/nssm.exe
+	$(if $(filter amd64,$(WINDOWS_ARCH)),windows-packaging/nssm.exe)
+WINDOWS_BUILD_ARGS = --build-arg WINDOWS_BIN=$(WINDOWS_BIN_DIR)
 image-windows: $(WINDOWS_IMAGE_REQS)
