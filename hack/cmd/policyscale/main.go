@@ -31,6 +31,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 
 	"github.com/projectcalico/calico/app-policy/policyscale"
@@ -47,6 +48,7 @@ func main() {
 		direction = flag.String("direction", "egress", "direction of the printed flows: ingress or egress")
 		miss      = flag.Float64("miss-fraction", 0.1, "fraction of printed flows that match no rule")
 		repeat    = flag.Float64("repeat-fraction", 0.5, "fraction of printed flows that repeat an earlier one with a new source port")
+		overDst   = flag.String("override-dst", "", "with -flows: replace each flow's destination with this address before working out its expected verdict, matching flowgen -override-dst")
 	)
 	flag.Parse()
 
@@ -102,6 +104,9 @@ func main() {
 		s := fx.NewSampler(*seed, policyscale.FlowModel{Direction: dir, MissFraction: *miss, RepeatFraction: *repeat})
 		for i := 0; i < *flows; i++ {
 			f := s.Next()
+			if *overDst != "" {
+				f.DstIP = net.ParseIP(*overDst)
+			}
 			fmt.Fprintf(bw, "%d\t%s\t%d\t%s\t%d\t%v\n", f.Protocol, f.SrcIP, f.SrcPort, f.DstIP, f.DstPort, fx.Expect(dir, f))
 		}
 		return
