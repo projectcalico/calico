@@ -280,8 +280,12 @@ func TestMetadataAttest(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for key, comment := range deprecatedKeys {
-			if want := "# " + comment + "\n" + key + ":"; !strings.Contains(string(bs), want) {
+		for _, want := range []string{
+			"# Deprecated, use components.operator.version instead.\noperatorVersion:",
+			"# Deprecated, use components instead.\nimages:",
+			"# Deprecated, use charts.version instead.\nhelmChartVersion:",
+		} {
+			if !strings.Contains(string(bs), want) {
 				t.Errorf("document lacks %q:\n%s", want, bs)
 			}
 		}
