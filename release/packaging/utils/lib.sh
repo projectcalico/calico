@@ -82,8 +82,14 @@ function strip_quotes {
 # letting dpkg-source tar up the whole working tree.  Two places declare
 # exclusions: the -I options that the caller passes in DPKG_EXCL, and the
 # tar-ignore lines in debian/source/options.  dpkg-source hands both of those
-# straight to tar, so --exclude means exactly the same thing to us as they
-# mean to it.
+# straight to tar, so --exclude means the same thing to us as they mean to it.
+#
+# One deliberate difference: we strip the quotes from DPKG_EXCL values such as
+# -I'*.d'.  make-packages.sh has always expanded DPKG_EXCL unquoted, which does
+# not remove quotes, so dpkg-source received them literally and those patterns
+# never matched anything.  Applying them as their author intended drops felix's
+# .d and .ll build intermediates from the source package.  Nothing that we ship
+# changes, because the packaging installs only the compiled .o files.
 #
 # Must be run with the package's source directory as the working directory.
 function deb_tar_excludes {

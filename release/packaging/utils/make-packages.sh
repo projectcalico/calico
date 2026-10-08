@@ -170,8 +170,10 @@ EOF
 
         # Add a stanza to the %changelog section.  Date it from the commit
         # rather than the current time: the generated spec ends up in the
-        # Debian .orig tarball too, which must be reproducible.
-        timestamp=$(date -d "@${source_date_epoch}" "+%a %b %d %Y")
+        # Debian .orig tarball too, which must be reproducible.  For the same
+        # reason, render it in UTC and the C locale, so that the result does
+        # not depend on the build host's timezone or language settings.
+        timestamp=$(LC_ALL=C date -u -d "@${source_date_epoch}" "+%a %b %d %Y")
         {
             cat <<EOF
 * ${timestamp} Daniel Fox<dan.fox@tigera.io> ${rpmver}-${rpmrel}
