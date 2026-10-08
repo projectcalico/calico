@@ -46,6 +46,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("Wireguard"),
 	describe.WithCategory(describe.Networking),
+	describe.WithSerial(),
 	"WireGuard tests",
 	func() {
 		var cli ctrlclient.Client
