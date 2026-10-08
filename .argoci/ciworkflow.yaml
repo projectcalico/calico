@@ -9,6 +9,11 @@ generateName: calico-
 # Catches a hang outside any step's own timeout.
 timeout: 4h
 
+notifications:
+  slack:
+    channel: ci-notifications-os
+    when: changed
+
 # Generated from the Go import graph; every `dependsOn:` name resolves here.
 dependencies: .argoci/depstree.yaml
 
@@ -463,8 +468,10 @@ includes:
       in:
         - ^manifests/
         - ^charts/calico/
+        - ^charts/tigera-operator/
         - ^hack/test/kind/
         - ^e2e/config/
+        - ^operator/pkg/controller/migration/
         - ^Makefile$
         - ^\.argoci/modules/20-manifest-install\.yaml$
 

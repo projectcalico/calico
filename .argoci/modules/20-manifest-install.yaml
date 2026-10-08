@@ -1,6 +1,7 @@
 # Installs Calico from the generated manifests rather than the operator, which
-# catches a manifest missing a piece the operator supplies. On a VM for the
-# kernel modules the datapath specs need.
+# catches a manifest missing a piece the operator supplies, then upgrades to the
+# operator, the one place the migration out of kube-system runs against the
+# manifests we ship. On a VM for the kernel modules the datapath specs need.
 version: condensed-module
 
 defaults:
@@ -22,6 +23,7 @@ steps:
     depends:
       - build-calico-image
       - build-node-image
+      - build-operator-image
       - build-third-party-images
       - build-e2e-binaries
       - check-go
