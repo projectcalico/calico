@@ -68,6 +68,10 @@ const (
 
 	OSTypeLinux   = "lin"
 	OSTypeWindows = "win"
+
+	// ComponentName is what the API server records as the field manager on the
+	// defaults this package writes.
+	ComponentName = "calico-node-startup"
 )
 
 var (
@@ -113,7 +117,7 @@ func Run(opts ...RunOpt) {
 	log.Infof("Starting node %s with version %s", nodeName, buildinfo.Version)
 
 	// Create the Calico API cli.
-	cfg, cli := calicoclient.CreateClient()
+	cfg, cli := calicoclient.CreateClient(ComponentName)
 
 	ctx := context.Background()
 
@@ -442,7 +446,7 @@ func configureAndCheckIPAddressSubnetsErr(ctx context.Context, cli client.Interf
 // MonitorIPAddressSubnets for use when running as a goroutine in a
 // consolidated process.
 func MonitorIPAddressSubnetsWithContext(ctx context.Context) error {
-	_, cli := calicoclient.CreateClient()
+	_, cli := calicoclient.CreateClient(ComponentName)
 	nodeName := utils.DetermineNodeName()
 	pollInterval := getMonitorPollInterval()
 
