@@ -3,6 +3,11 @@ version: condensed
 generateName: fossa-scan-
 timeout: 1h
 
+notifications:
+  slack:
+    channel: ci-notifications-os
+    when: changed
+
 defaults:
   timeout: 1h
   secretBundles:

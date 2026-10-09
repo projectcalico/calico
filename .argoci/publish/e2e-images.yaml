@@ -4,6 +4,11 @@ version: condensed
 generateName: e2e-images-
 timeout: 30m
 
+notifications:
+  slack:
+    channel: ci-notifications-os
+    when: changed
+
 defaults:
   timeout: 30m
   services:
