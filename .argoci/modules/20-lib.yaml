@@ -1,0 +1,22 @@
+# lib/ `make ci`.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+
+  # In the build image directly, saving a nested container and a second pull.
+  useGoBuild: true
+
+steps:
+  - name: lib-ci
+    requests: {cpu: 4250m, memory: 1.5Gi}
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    commands: |
+      cd lib
+      # Empty wrappers run each recipe here rather than in a nested container.
+      make ci DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
+    epilogue: |
+      # Epilogues don't inherit the commands' `cd` or exports.
+      cd "${CI_HOME}/${CI_GIT_DIR}/lib"
+      artifact push job report --destination test-results || true

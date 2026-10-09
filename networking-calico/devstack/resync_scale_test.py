@@ -58,7 +58,9 @@ Cleanup between scales is not optional: each scale has to start from a known
 state.  The *last* scale's cleanup is different -- every measurement is already
 recorded by then, so on a machine that is about to be destroyed it is pure cost.
 At 10,000 ports it took 28 minutes of an 89-minute run.  RESYNC_SKIP_FINAL_CLEANUP
-skips it.  Do not set it where the cloud resources outlive the run.
+skips it.  Do not set it where the cloud resources outlive the run, nor where
+anything else uses the cluster afterwards: the fake agent rows left behind have
+no host to bind to, and instance networking fails against them.
 """
 
 import argparse

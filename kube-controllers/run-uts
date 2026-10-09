@@ -45,7 +45,7 @@ for PKG in "$@"; do
 					--junitfile report/${REPORT_NAME}.xml \
 					--format testname \
 					--raw-command -- \
-					go tool test2json -t -p ${PKG} || ((RC++))
+					${TEST2JSON:-go tool test2json} -t -p ${PKG} || ((RC++))
 			set +o pipefail
 		fi
 	else

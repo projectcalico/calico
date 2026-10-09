@@ -54,11 +54,12 @@ var _ = testutils.E2eDatastoreDescribe("Common resource tests", testutils.Datast
 			be.Clean()
 
 			By("Creating a new IPPool with name1/spec1 and expecting CreationTimestamp nanoseconds to be stripped off")
-			now := time.Now()
+			before := time.Now()
 			res1, outError := c.IPPools().Create(ctx, &apiv3.IPPool{
-				ObjectMeta: metav1.ObjectMeta{Name: name1, CreationTimestamp: metav1.Time{Time: now}},
+				ObjectMeta: metav1.ObjectMeta{Name: name1, CreationTimestamp: metav1.Time{Time: before}},
 				Spec:       spec1,
 			}, options.SetOptions{})
+			after := time.Now()
 			Expect(outError).NotTo(HaveOccurred())
 
 			// The assignment mode will be set to Automatic by the API server, we need to update the spec before comparison
@@ -66,15 +67,12 @@ var _ = testutils.E2eDatastoreDescribe("Common resource tests", testutils.Datast
 			spec1.AssignmentMode = &automatic
 
 			Expect(res1).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name1, spec1))
-			// Make sure that the timestamp is the same except for the inclusion of nanoseconds
+			// The API server ignores the timestamp we sent and sets its own, so we can
+			// only check that it falls within the Create call.
 			timestamp := res1.GetObjectMeta().GetCreationTimestamp()
-			Expect(timestamp.Day()).To(Equal(now.Day()))
-			Expect(timestamp.Hour()).To(Equal(now.Hour()))
-			Expect(timestamp.Minute()).To(Equal(now.Minute()))
-			Expect(timestamp.Month()).To(Equal(now.Month()))
 			Expect(timestamp.Nanosecond()).To(Equal(0))
-			Expect(timestamp.Second()).To(Equal(now.Second()))
-			Expect(timestamp.Year()).To(Equal(now.Year()))
+			Expect(timestamp.Time).To(BeTemporally(">=", before.Truncate(time.Second)))
+			Expect(timestamp.Time).To(BeTemporally("<=", after))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion

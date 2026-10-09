@@ -44,6 +44,9 @@ steps:
       diskType: pd-ssd
       diskSize: 200GB
       runAsNonRoot: true
+    # For building the perf results uploader, whose publish is this run's point.
+    services:
+      - docker
     secretBundles:
       - {name: banzai-secrets, keys: [{name: LENS_ELASTICSEARCH_TOKEN}, {name: LENS_ELASTICSEARCH_USER}]}
 
@@ -92,17 +95,7 @@ steps:
       # where it is whatever the step checked out this week.
       export NC_PLUGIN_REF="$(git -C "${CALICO_REPO_DIR}" rev-parse HEAD)"
 
-      # bootstrap.sh publishes the results with `go run ./hack/perf/...`,
-      # inside a `( ... ) || true` guard -- so a missing or too-old Go
-      # toolchain would silently skip publishing, which is the entire point of
-      # this run.  Install the version the repo pins and fail here if that
-      # does not work, rather than discovering an empty index later.
-      GO_VERSION=$(awk -F= '/^GO_VERSION=/{print $2}' "${CALICO_REPO_DIR}/metadata.mk")
-      curl -sSLo /tmp/go.tgz "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"
-      sudo rm -rf /usr/local/go
-      sudo tar -C /usr/local -xzf /tmp/go.tgz
-      export PATH=/usr/local/go/bin:${PATH}
-      go version
+      sudo apt-get update -y && sudo apt-get install -y make
 
       # Publish to the same Lens index as the per-PR Semaphore runs.
       export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200

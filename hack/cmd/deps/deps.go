@@ -47,6 +47,8 @@ Usage:
 
   deps [options] generate-semaphore-yamls          # Generate Semaphore pipeline YAMLs
 
+  deps [options] gen-argoci-deps <package>... # Print the ArgoCI component path table
+
 Options:
 
   --pretty            # Pretty-print the output (only applies to sem-change-in).
@@ -98,7 +100,10 @@ func main() {
 
 	cmd := args[0]
 	var pkg string
-	if cmd != "generate-semaphore-yamls" {
+	switch cmd {
+	case "generate-semaphore-yamls", "gen-argoci-deps":
+		// Variadic: no package at all, or every component in one pass.
+	default:
 		if len(args) != 2 {
 			logrus.Warnf("Incorrect number of arguments for %s: %v", cmd, args)
 			printUsageAndExit()
@@ -121,6 +126,8 @@ func main() {
 		printSemChangeIn(pkg, *pretty)
 	case "generate-semaphore-yamls":
 		generateSemaphoreYamls()
+	case "gen-argoci-deps":
+		generateArgoCIDeps(args[1:])
 	default:
 		printUsageAndExit()
 	}
@@ -221,7 +228,8 @@ func calculateDeps(packages set.Set[string]) map[string]*Deps {
 
 	var lock sync.Mutex
 	var eg errgroup.Group
-	eg.SetLimit(runtime.NumCPU())
+	// NumCPU ignores GOMAXPROCS, which is how CI says what it was given.
+	eg.SetLimit(runtime.GOMAXPROCS(0))
 	for pkg := range deps {
 		eg.Go(func() error {
 			repl, err := calculateSemDeps(pkg)
@@ -699,6 +707,154 @@ func formatSemList(s set.Set[string]) string {
 		quoted = append(quoted, fmt.Sprintf("'%s'", s))
 	}
 	return "[" + strings.Join(quoted, ",") + "]"
+}
+
+// So a consumer meeting a format it does not know can say so, rather than
+// silently gating on nothing.
+const argoCIDepsVersion = "argoci-dependencies"
+
+const argoCIDepsHeader = `# !!! GENERATED FILE, DO NOT EDIT !!!
+# Run 'make gen-deps-files' to regenerate.
+#
+# Each Go component's import closure as anchored path regexes, for ArgoCI's
+# changes.dependsOn.
+#
+`
+
+type argoCIDepsFile struct {
+	Version    string                     `yaml:"version"`
+	Components map[string]argoCIComponent `yaml:"components"`
+}
+
+// The shape of a workflow's `changes:` block.
+type argoCIComponent struct {
+	In      []string `yaml:"in"`
+	Exclude []string `yaml:"exclude,omitempty"`
+}
+
+// generateArgoCIDeps renders each component alone, so a workflow can union
+// entries freely: that may over-fire slightly but never under-fires.
+func generateArgoCIDeps(pkgs []string) {
+	if len(pkgs) == 0 {
+		logrus.Warn("gen-argoci-deps needs at least one package")
+		printUsageAndExit()
+	}
+
+	out := argoCIDepsFile{
+		Version:    argoCIDepsVersion,
+		Components: map[string]argoCIComponent{},
+	}
+	for pkg, deps := range calculateDeps(set.From(pkgs...)) {
+		inclusions, err := globsToRegexps(dropSubsumedInclusions(deps.Inclusions))
+		if err != nil {
+			logrus.Fatalf("Failed to convert inclusions for package %s: %v", pkg, err)
+		}
+		exclusions, err := globsToRegexps(deps.Exclusions)
+		if err != nil {
+			logrus.Fatalf("Failed to convert exclusions for package %s: %v", pkg, err)
+		}
+		out.Components[pkg] = argoCIComponent{In: inclusions, Exclude: exclusions}
+	}
+
+	_, _ = fmt.Print(argoCIDepsHeader)
+	encoder := yaml.NewEncoder(os.Stdout)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(out); err != nil {
+		logrus.Fatalln("Failed to marshal ArgoCI dependencies:", err)
+	}
+	if err := encoder.Close(); err != nil {
+		logrus.Fatalln("Failed to write ArgoCI dependencies:", err)
+	}
+}
+
+// globsToRegexps sorts, since the generated file is diffed against the
+// committed copy.
+func globsToRegexps(globs set.Set[string]) ([]string, error) {
+	items := globs.Slice()
+	sort.Strings(items)
+
+	// Two globs can collapse to one regex — a directory and that directory with a
+	// trailing slash both become the same prefix match.
+	seen := set.New[string]()
+	out := make([]string, 0, len(items))
+	for _, glob := range items {
+		re, err := globToRegexp(glob)
+		if err != nil {
+			return nil, err
+		}
+		if seen.Contains(re) {
+			continue
+		}
+		seen.Add(re)
+		out = append(out, re)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// Rejected rather than escaped: a class turned literal would match nothing.
+const globMetachars = "?[]{}"
+
+// globToRegexp asks the working tree whether a bare path is a file or a
+// directory.
+func globToRegexp(glob string) (string, error) {
+	rest, ok := strings.CutPrefix(glob, "/")
+	if !ok || rest == "" {
+		return "", fmt.Errorf("glob %q must be an absolute repo path", glob)
+	}
+	if i := strings.IndexAny(rest, globMetachars); i >= 0 {
+		return "", fmt.Errorf("glob %q contains unsupported %q", glob, rest[i])
+	}
+
+	// A trailing "/**" and a trailing "/" both mean everything below the
+	// directory, which is a prefix match rather than a whole-path one.
+	prefix := false
+	if cut, ok := strings.CutSuffix(rest, "/**"); ok {
+		rest, prefix = cut, true
+	} else if cut, ok := strings.CutSuffix(rest, "/"); ok {
+		rest, prefix = cut, true
+	} else if !strings.ContainsRune(rest, '*') {
+		info, err := os.Stat(rest)
+		switch {
+		case err != nil:
+			logrus.Warnf("Dependency %q is not in the working tree; it matches nothing", glob)
+			// Both readings, so a path that comes back later still triggers.
+			return "^" + regexp.QuoteMeta(rest) + "(?:/|$)", nil
+		case info.IsDir():
+			prefix = true
+		}
+	}
+
+	var segments []string
+	for _, segment := range strings.Split(rest, "/") {
+		if segment == "**" {
+			// Any depth, including none, so "/**/x" also matches "x" at the root.
+			segments = append(segments, "(?:[^/]+/)*")
+			continue
+		}
+		if strings.Contains(segment, "**") {
+			return "", fmt.Errorf("glob %q has ** inside a path segment", glob)
+		}
+		segments = append(segments, regexpQuoteGlobSegment(segment)+"/")
+	}
+
+	// A prefix match keeps its trailing separator: that is what stops it reaching
+	// a sibling whose name merely starts the same way.
+	body := strings.Join(segments, "")
+	if prefix {
+		return "^" + body, nil
+	}
+	return "^" + strings.TrimSuffix(body, "/") + "$", nil
+}
+
+// A glob's single star must not widen into a regex's greedy one: it stops at a
+// separator.
+func regexpQuoteGlobSegment(segment string) string {
+	parts := strings.Split(segment, "*")
+	for i, part := range parts {
+		parts[i] = regexp.QuoteMeta(part)
+	}
+	return strings.Join(parts, "[^/]*")
 }
 
 func printLocalDirs(pkg string, mainsOnly bool) {
