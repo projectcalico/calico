@@ -19,11 +19,14 @@ import (
 	"github.com/projectcalico/calico/release/internal/registry"
 )
 
+// chartURLs returns the GitHub release download URLs for every released chart.
+// The release tag keeps the "v" prefix; the chart archive names use the semver
+// chart version, which does not.
 func chartURLs(t testing.TB, githubOrg, githubRepo, version string) []string {
 	t.Helper()
 	urls := []string{}
 	for _, name := range charts.All() {
-		u, err := github.DownloadURL(githubOrg, githubRepo, version, charts.FileName(name, version))
+		u, err := github.DownloadURL(githubOrg, githubRepo, version, charts.FileName(name, charts.Version(version, "")))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -69,15 +72,16 @@ func TestHelmChart(t *testing.T) {
 					t.Run(chart, func(t *testing.T) {
 						t.Parallel()
 						dir := t.TempDir()
+						chartVersion := charts.Version(releaseVersion, "")
 						args := []string{
 							"pull", fmt.Sprintf("oci://%s/%s", reg, chart),
-							"--version", releaseVersion,
+							"--version", chartVersion,
 						}
 						out, err := command.RunInDir(dir, "helm", args)
 						if err != nil {
-							t.Fatalf("pull %s %s helm chart from %s: %v\nOutput: %s", chart, releaseVersion, reg, err, out)
+							t.Fatalf("pull %s %s helm chart from %s: %v\nOutput: %s", chart, chartVersion, reg, err, out)
 						}
-						chart, err := loader.Load(filepath.Join(dir, fmt.Sprintf("%s-%s.tgz", chart, releaseVersion)))
+						chart, err := loader.Load(filepath.Join(dir, charts.FileName(chart, chartVersion)))
 						if err != nil {
 							t.Fatalf("load helm chart from %s: %v", reg, err)
 						}
@@ -95,6 +99,11 @@ func validateChart(t testing.TB, chart *chart.Chart) {
 	t.Helper()
 	if err := chart.Validate(); err != nil {
 		t.Fatalf("invalid helm chart: %v", err)
+	}
+	// The chart version is semver, so it carries no "v" prefix, while the
+	// appVersion names the Calico release and does.
+	if want := charts.Version(releaseVersion, ""); chart.Metadata.Version != want {
+		t.Fatalf("expected helm chart version %s, got %s", want, chart.Metadata.Version)
 	}
 	if chart.AppVersion() != releaseVersion {
 		t.Fatalf("expected helm chart app version %s, got %s", releaseVersion, chart.AppVersion())
@@ -129,6 +138,9 @@ func TestHelmIndex(t *testing.T) {
 		t.Fatalf("failed to decode helm index: %v", err)
 	}
 
+	// The index is keyed by chart version, which is semver and so has no "v" prefix.
+	chartVersion := charts.Version(releaseVersion, "")
+
 	// Each chart has its own entry, carrying only its own download url.
 	for _, name := range charts.All() {
 		entries, ok := index.Entries[name]
@@ -138,21 +150,21 @@ func TestHelmIndex(t *testing.T) {
 		}
 		matching := slices.Collect(func(yield func(map[string]any) bool) {
 			for _, entry := range entries {
-				if entry["version"] == releaseVersion {
+				if entry["version"] == chartVersion {
 					yield(entry)
 				}
 			}
 		})
 		if len(matching) != 1 {
-			t.Errorf("helm index has %d %s entries for %s, want 1", len(matching), name, releaseVersion)
+			t.Errorf("helm index has %d %s entries for %s, want 1", len(matching), name, chartVersion)
 			continue
 		}
-		want, err := github.DownloadURL(githubOrg, githubRepo, releaseVersion, charts.FileName(name, releaseVersion))
+		want, err := github.DownloadURL(githubOrg, githubRepo, releaseVersion, charts.FileName(name, chartVersion))
 		if err != nil {
 			t.Fatal(err)
 		}
 		if urls := cast.ToStringSlice(matching[0]["urls"]); !slices.Contains(urls, want) {
-			t.Errorf("%s entry for %s has urls %v, want %q", name, releaseVersion, urls, want)
+			t.Errorf("%s entry for %s has urls %v, want %q", name, chartVersion, urls, want)
 		}
 	}
 }

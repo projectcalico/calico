@@ -62,7 +62,7 @@ func TestGitHubRelease(t *testing.T) {
 			"LICENSE",
 		)
 		for _, name := range charts.All() {
-			expectedAssets = append(expectedAssets, charts.FileName(name, releaseVersion))
+			expectedAssets = append(expectedAssets, charts.FileName(name, charts.Version(releaseVersion, "")))
 		}
 		actualAssets := getAssets(release)
 		if diff := cmp.Diff(expectedAssets, actualAssets, cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {

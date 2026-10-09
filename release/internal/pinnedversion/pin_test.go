@@ -199,8 +199,8 @@ func TestHelmChartVersion(t *testing.T) {
 		chartVersion string
 		want         string
 	}{
-		{"empty shares the product version", "", "v3.31.0"},
-		{"non-empty qualifies it", "2", "v3.31.0-2"},
+		{"empty shares the product version", "", "3.31.0"},
+		{"non-empty qualifies it", "2", "3.31.0-2"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := testPin()
@@ -584,8 +584,8 @@ func TestPinCarriesChartVersion(t *testing.T) {
 	if p.ChartVersion != "3" {
 		t.Errorf("chart version lost on read: got %q", p.ChartVersion)
 	}
-	if got := p.HelmChartVersion(); got != "v3.22.0-3" {
-		t.Errorf("HelmChartVersion: got %q, want v3.22.0-3", got)
+	if got := p.HelmChartVersion(); got != "3.22.0-3" {
+		t.Errorf("HelmChartVersion: got %q, want 3.22.0-3", got)
 	}
 }
 

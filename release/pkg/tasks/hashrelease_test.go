@@ -61,7 +61,7 @@ type reformat struct {
 // want is every path the reformat must produce: the unversioned charts it
 // serves, the versioned ones the build left, and the files it relocates.
 func (r reformat) want() []string {
-	out := append(chartPaths(charts.Dir(""), ""), chartPaths(charts.OutputDir(""), reformatVersion)...)
+	out := append(chartPaths(charts.Dir(""), ""), chartPaths(charts.OutputDir(""), charts.Version(reformatVersion, ""))...)
 	return append(out, r.wantFiles...)
 }
 
@@ -78,7 +78,7 @@ func (r reformat) stage(t *testing.T) string {
 		t.Fatal(err)
 	}
 	for _, name := range charts.All() {
-		writeFile(t, filepath.Join(charts.OutputDir(dir), charts.FileName(name, reformatVersion)))
+		writeFile(t, filepath.Join(charts.OutputDir(dir), charts.FileName(name, charts.Version(reformatVersion, ""))))
 	}
 	return dir
 }
@@ -123,7 +123,7 @@ func TestReformatFailsWhenAChartIsMissing(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := tc.stage(t)
 			missing := charts.All()[0]
-			if err := os.Remove(filepath.Join(charts.OutputDir(dir), charts.FileName(missing, reformatVersion))); err != nil {
+			if err := os.Remove(filepath.Join(charts.OutputDir(dir), charts.FileName(missing, charts.Version(reformatVersion, "")))); err != nil {
 				t.Fatal(err)
 			}
 

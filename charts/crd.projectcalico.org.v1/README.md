@@ -17,3 +17,7 @@ helm template calico-crds projectcalico/crd.projectcalico.org.v1 | kubectl apply
 ```
 
 `helm template | kubectl apply --server-side` is used rather than `helm install` because some Calico CRDs exceed the size limit for client-side apply.
+
+To pin a particular release, pass `--version`. Chart versions are semver, so they have
+no leading `v` — use `--version 3.32.0`, not `--version v3.32.0`. The chart's
+`appVersion` is the Calico release it belongs to, and does keep the `v` prefix.

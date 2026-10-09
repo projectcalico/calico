@@ -65,6 +65,10 @@ Install so any Calico resources you care about (for example a
    helm install calico projectcalico/tigera-operator --namespace tigera-operator
    ```
 
+   To pin a particular release, pass `--version`. Chart versions are semver, so they
+   have no leading `v` — use `--version 3.32.0`, not `--version v3.32.0`. The chart's
+   `appVersion` is the Calico release it installs, and does keep the `v` prefix.
+
 > **Note:** `defaultFelixConfiguration` in `values.yaml` is deprecated. Prefer
 > applying a `FelixConfiguration` in step 3 above. The chart field remains for a
 > deprecation window so existing values files keep working.
@@ -117,7 +121,7 @@ Starting in Calico v3.28, a change in the way UIDs are generated for projectcali
 1. Install the helm chart in the `tigera-operator` namespace.
 
    ```
-   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title}} --namespace tigera-operator
+   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title | remove_first: "v"}} --namespace tigera-operator
    ```
 
 1. Once the install has succeeded, you can delete any old releases in the `default` namespace.
