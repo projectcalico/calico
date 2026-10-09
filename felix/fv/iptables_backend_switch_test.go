@@ -68,10 +68,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ iptables backend switch cle
 			tc.Felixes[0].Exec("iptables-legacy-save")
 			tc.Felixes[0].Exec("iptables-nft-save")
 		}
-		tc.Stop()
-		if infra != nil {
-			infra.Stop()
-		}
 	})
 
 	Describe("switching from legacy iptables -> nft iptables", func() {

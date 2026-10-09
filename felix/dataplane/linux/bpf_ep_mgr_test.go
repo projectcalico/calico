@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -163,12 +164,18 @@ func (m *mockDataplane) ensureProgramAttached(ap attachPoint) error {
 }
 
 func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
+	// The hook runs unlocked so that it can call ensureProgramLoadedDefault; a
+	// hook that touches shared state must take m.mutex itself. Loads for the
+	// XDP, ingress and egress hooks run in parallel.
 	if m.ensureProgramLoadedFn != nil {
 		return m.ensureProgramLoadedFn(ap, ipFamily)
 	}
+	return m.ensureProgramLoadedDefault(ap, ipFamily)
+}
+
+func (m *mockDataplane) ensureProgramLoadedDefault(ap attachPoint, ipFamily proto.IPVersion) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
 	if m.ensureProgramLoadedErr != nil {
 		return m.ensureProgramLoadedErr
@@ -1372,15 +1379,16 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			}
 		}
 		v6Fails := true
-		v4Loads, v6Loads := 0, 0
+		// Ingress and egress load in parallel.
+		var v4Loads, v6Loads atomic.Int32
 		dp.ensureProgramLoadedFn = func(ap attachPoint, ipFamily proto.IPVersion) error {
 			if ipFamily == proto.IPVersion_IPV6 {
-				v6Loads++
+				v6Loads.Add(1)
 				if v6Fails {
 					return errors.New("injected v6 load failure")
 				}
 			} else {
-				v4Loads++
+				v4Loads.Add(1)
 			}
 			setLayout(ap.(*tc.AttachPoint), ipFamily)
 			return nil
@@ -1400,20 +1408,20 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 		genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
 		attaches := dp.numOfAttaches("cali12345:ingress")
-		loadsV4 := v4Loads
-		Expect(v6Loads).NotTo(BeZero())
+		loadsV4 := v4Loads.Load()
+		Expect(v6Loads.Load()).NotTo(BeZero())
 
 		// Only the failing family retries.
 		_ = bpfEpMgr.CompleteDeferredWork()
-		retried := v6Loads
-		Expect(v4Loads).To(Equal(loadsV4))
+		retried := v6Loads.Load()
+		Expect(v4Loads.Load()).To(Equal(loadsV4))
 		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(attaches))
 
 		v6Fails = false
 		_ = bpfEpMgr.CompleteDeferredWork()
-		Expect(v6Loads).To(BeNumerically(">", retried))
+		Expect(v6Loads.Load()).To(BeNumerically(">", retried))
 		// Loading would reset the ready family's policy to the default one.
-		Expect(v4Loads).To(Equal(loadsV4))
+		Expect(v4Loads.Load()).To(Equal(loadsV4))
 		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(attaches + 1))
 		Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(attaches + 1))
 		for _, key := range []string{"cali12345:ingress", "cali12345:egress"} {
@@ -1518,10 +1526,11 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		newBpfEpMgr(true)
 		// A qdisc that already exists keeps the workload ready across passes.
 		dp.ensureQdiscFn = func(string) (bool, error) { return true, nil }
-		v6Loads := 0
+		// Ingress and egress load in parallel.
+		var v6Loads atomic.Int32
 		dp.ensureProgramLoadedFn = func(ap attachPoint, ipFamily proto.IPVersion) error {
 			if ipFamily == proto.IPVersion_IPV6 {
-				v6Loads++
+				v6Loads.Add(1)
 			}
 			return nil
 		}
@@ -1535,7 +1544,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 		genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
 		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(1))
-		loadsV6 := v6Loads
+		loadsV6 := v6Loads.Load()
 
 		dp.ensureProgramLayoutFn = func(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
 			if ipFamily == proto.IPVersion_IPV6 {
@@ -1550,7 +1559,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 		dp.ensureProgramLayoutFn = nil
 		Expect(bpfEpMgr.CompleteDeferredWork()).To(Succeed())
-		Expect(v6Loads).To(BeNumerically(">", loadsV6))
+		Expect(v6Loads.Load()).To(BeNumerically(">", loadsV6))
 	})
 
 	DescribeTable("should re-attach a ready workload whose preamble the kernel may have lost",
@@ -1821,7 +1830,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			err = dp.createIface("wg0", 11, "wireguard")
 			Expect(err).NotTo(HaveOccurred())
 
-			dataIfacePattern = "^eth|bond|vxlan|wg*"
+			err = dp.createIface("tunl0", 15, "ipip")
+			Expect(err).NotTo(HaveOccurred())
+
+			dataIfacePattern = "^eth|bond|vxlan|wg*|tunl0"
 			newBpfEpMgr(false)
 		})
 		It("should detect the correct type of iface", func() {
@@ -1836,6 +1848,33 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(dp.programAttached("wg0:ingress")).To(BeTrue())
 			Expect(dp.programAttached("wg0:egress")).To(BeTrue())
 			checkIfState(11, "wg0", ifstate.FlgIPv4Ready|ifstate.FlgWireguard)
+		})
+
+		It("should attach the l3 program to an L3 IPIP device", func() {
+			features := *bpfEpMgr.features
+			features.IPIPDeviceIsL3 = true
+			bpfEpMgr.features = &features
+
+			genIfaceUpdate("tunl0", ifacemonitor.StateUp, 15)()
+
+			Expect(dp.programAttached("tunl0:ingress")).To(BeTrue())
+			Expect(dp.programAttached("tunl0:egress")).To(BeTrue())
+			Expect(bpfEpMgr.permanentBPFErr).To(BeNil())
+			checkIfState(15, "tunl0", ifstate.FlgIPv4Ready|ifstate.FlgIPIP)
+		})
+
+		It("should refuse an IPIP device that is not L3", func() {
+			features := *bpfEpMgr.features
+			features.IPIPDeviceIsL3 = false
+			bpfEpMgr.features = &features
+
+			genIfaceUpdate("tunl0", ifacemonitor.StateUp, 15)()
+
+			Expect(dp.programAttached("tunl0:ingress")).To(BeFalse())
+			Expect(dp.programAttached("tunl0:egress")).To(BeFalse())
+			Expect(bpfEpMgr.permanentBPFErr).To(MatchError(errIPIPDeviceNotL3))
+			Expect(bpfEpMgr.dirtyIfaceNames.Contains("tunl0")).To(BeFalse(),
+				"a permanent failure must not be retried")
 		})
 
 		It("should attach to iface even if netlink fails", func() {
@@ -3897,21 +3936,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 						bpfEpMgr.recordSkippedOptional([]hook.OptionalSubProgInfo{*info})
 					}
 				}
-
-				if apxdp, ok := ap.(*xdp.AttachPoint); ok {
-					apxdp.HookLayoutV4 = hook.Layout{
-						hook.SubProgXDPAllowed: 123,
-						hook.SubProgXDPDrop:    456,
-					}
-				}
-
-				key := ap.IfaceName() + ":" + ap.HookName().String()
-				if _, exists := dp.progs[key]; exists {
-					return nil
-				}
-				dp.lastProgID += 1
-				dp.progs[key] = dp.lastProgID
-				return nil
+				return dp.ensureProgramLoadedDefault(ap, ipFamily)
 			}
 		})
 

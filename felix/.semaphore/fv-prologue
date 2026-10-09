@@ -89,6 +89,6 @@ export TEST_REPORT_NAME
 SHORT_WORKFLOW_ID=$(echo "${SEMAPHORE_WORKFLOW_ID}" | sha256sum | cut -c -8)
 export SHORT_WORKFLOW_ID
 export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
-mkdir artifacts
+mkdir -p artifacts
 
 echo "Calculated: JOB_TAG=${JOB_TAG}; TEST_REPORT_NAME=${TEST_REPORT_NAME}; RUN_UT=${RUN_UT}; VM_PREFIX=${VM_PREFIX}"
