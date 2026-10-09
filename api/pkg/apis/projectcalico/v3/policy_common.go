@@ -74,11 +74,11 @@ type Rule struct {
 
 	// Source contains the match criteria that apply to source entity.
 	// +optional
-	Source EntityRule `json:"source,omitzero" validate:"omitempty"`
+	Source EntityRule `json:"source,omitempty" validate:"omitempty"`
 
 	// Destination contains the match criteria that apply to destination entity.
 	// +optional
-	Destination EntityRule `json:"destination,omitzero" validate:"omitempty"`
+	Destination EntityRule `json:"destination,omitempty" validate:"omitempty"`
 
 	// HTTP contains match criteria that apply to HTTP requests.
 	HTTP *HTTPMatch `json:"http,omitempty" validate:"omitempty"`
