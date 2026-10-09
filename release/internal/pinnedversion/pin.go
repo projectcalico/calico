@@ -157,16 +157,14 @@ func (p *Pin) ReleaseBranch(releaseBranchPrefix string) string {
 	return releaseBranch(releaseBranchPrefix, p.ProductVersion)
 }
 
-// Images returns the pinned components that produce images, keyed by
-// component name. The image name defaults to the component name.
-func (p *Pin) Images() map[string]registry.Component {
-	components := make(map[string]registry.Component)
+// Released returns every pinned component and the operator, keyed by component
+// name. A component that produces an image has its image name, which defaults
+// to the component name; the rest carry only a version.
+func (p *Pin) Released() map[string]registry.Component {
+	components := make(map[string]registry.Component, len(p.Components)+1)
 	for name, c := range p.Components {
-		if slices.Contains(noImageComponents, name) {
-			continue
-		}
 		// A component that names its own image keeps it, e.g. coreos/flannel.
-		if c.Image == "" {
+		if c.Image == "" && !slices.Contains(noImageComponents, name) {
 			c.Image = componentImage(name)
 		}
 		components[name] = c
@@ -174,6 +172,15 @@ func (p *Pin) Images() map[string]registry.Component {
 	if p.Operator.Image != "" {
 		components[p.Operator.Image] = p.Operator
 	}
+	return components
+}
+
+// Images returns the released components that produce images.
+func (p *Pin) Images() map[string]registry.Component {
+	components := p.Released()
+	maps.DeleteFunc(components, func(name string, _ registry.Component) bool {
+		return slices.Contains(noImageComponents, name)
+	})
 	return components
 }
 
