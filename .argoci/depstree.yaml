@@ -1601,6 +1601,7 @@ components:
     in:
       - ^api/admission/[^/]*\.go$
       - ^api/admission/[^/]*\.yaml$
+      - ^api/admission/cni-annotations/[^/]*\.yaml$
       - ^api/config/crd/[^/]*\.go$
       - ^api/config/crd/[^/]*\.yaml$
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
