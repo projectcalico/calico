@@ -80,18 +80,23 @@ if ("$env:CNI_PLUGIN_TYPE" -eq "Calico") {
     }
 }
 
-Write-Host "Stopping and removing Calico services if they are present..."
-Remove-CalicoService CalicoConfd
-Remove-CalicoService CalicoFelix
-Remove-CalicoService CalicoNode
-Remove-CalicoService CalicoUpgrade
+# NSSM-managed services are only installed from the amd64 zip archive, so the
+# arm64 image does not include NSSM and has no such services to remove.
+if (Test-Path $NSSMPath)
+{
+    Write-Host "Stopping and removing Calico services if they are present..."
+    Remove-CalicoService CalicoConfd
+    Remove-CalicoService CalicoFelix
+    Remove-CalicoService CalicoNode
+    Remove-CalicoService CalicoUpgrade
 
-# Only remove kube-proxy service if using Calico CNI (the recommended kube-proxy
-# daemonset from sig-windows only supports Calico CNI)
-if ("$env:CNI_PLUGIN_TYPE" -eq "Calico") {
-    Write-Host "Stopping and removing kube-proxy service if it is present..."
-    Write-Host "It is recommended to run kube-proxy as kubernetes daemonset instead"
-    Remove-CalicoService kube-proxy
+    # Only remove kube-proxy service if using Calico CNI (the recommended kube-proxy
+    # daemonset from sig-windows only supports Calico CNI)
+    if ("$env:CNI_PLUGIN_TYPE" -eq "Calico") {
+        Write-Host "Stopping and removing kube-proxy service if it is present..."
+        Write-Host "It is recommended to run kube-proxy as kubernetes daemonset instead"
+        Remove-CalicoService kube-proxy
+    }
 }
 
 Write-Host "Logging containerd CNI bin and conf dir paths:"

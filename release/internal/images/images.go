@@ -63,7 +63,7 @@ var (
 		},
 		{
 			Name:        WindowsVariant,
-			Target:      "image-windows",
+			Target:      "image-windows-all",
 			ReleaseDirs: slices.Clone(utils.WindowsReleaseDirs),
 		},
 	}

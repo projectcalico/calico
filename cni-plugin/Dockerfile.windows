@@ -15,11 +15,13 @@
 # FIXME: Use WINDOWS_HPC_VERSION and image instead of nanoserver and WINDOWS_VERSIONS when containerd v1.6 is EOL'd
 # ARG WINDOWS_HPC_VERSION
 ARG WINDOWS_VERSION
+ARG WINDOWS_BASE_IMAGE
 
 # FROM mcr.microsoft.com/oss/kubernetes/windows-host-process-containers-base-image:${WINDOWS_HPC_VERSION}
-FROM mcr.microsoft.com/windows/nanoserver:${WINDOWS_VERSION}
+FROM ${WINDOWS_BASE_IMAGE}
 
 ARG GIT_VERSION=unknown
+ARG WINDOWS_BIN
 
 LABEL org.opencontainers.image.description="Calico Networking for CNI includes a CNI networking plugin and CNI IPAM plugin"
 LABEL org.opencontainers.image.authors="maintainers@tigera.io"
@@ -31,7 +33,7 @@ LABEL org.opencontainers.image.licenses='Apache-2.0'
 
 COPY bin/LICENSE /licenses/LICENSE
 
-COPY bin/windows /opt/cni/bin/
+COPY ${WINDOWS_BIN} /opt/cni/bin/
 
 ENV PATH=$PATH;/opt/cni/bin
 WORKDIR /opt/cni/bin

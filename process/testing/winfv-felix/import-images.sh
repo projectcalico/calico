@@ -86,19 +86,19 @@ function import_windows_images() {
   make -C "${CALICO_HOME}/node" image-windows WINDOWS_IMAGE=node-windows WINDOWS_VERSIONS="${windows_base_version}"
   make -C "${CALICO_HOME}/cni-plugin" image-windows WINDOWS_IMAGE=cni-windows WINDOWS_VERSIONS="${windows_base_version}"
 
-  CALICO_NODE_IMAGE="node-windows-${GIT_VERSION}-${windows_base_version}.tar"
-  CALICO_CNI_IMAGE="cni-windows-${GIT_VERSION}-${windows_base_version}.tar"
+  CALICO_NODE_IMAGE="node-windows-${GIT_VERSION}-${windows_base_version}-amd64.tar"
+  CALICO_CNI_IMAGE="cni-windows-${GIT_VERSION}-${windows_base_version}-amd64.tar"
 
   ${ASO_DIR}/scp-to-windows.sh 0 "${CALICO_HOME}/node/dist/windows/${CALICO_NODE_IMAGE}" 'c:\calico-node-windows.tar'
   ${ASO_DIR}/scp-to-windows.sh 0 "${CALICO_HOME}/cni-plugin/dist/windows/${CALICO_CNI_IMAGE}" 'c:\calico-cni-plugin-windows.tar'
 
-  # The tarballs carry the ref <name>:latest, so ctr imports them under
+  # The tarballs carry the ref <name>:latest-amd64, so ctr imports them under
   # docker.io/library/. Re-tag to calico/<name>:${DEV_IMAGE_TAG} to match what
   # the operator renders.
   ${WINDOWS_CONNECT_COMMAND} 'c:\bin\ctr.exe --namespace k8s.io images import c:\calico-node-windows.tar --all-platforms'
   ${WINDOWS_CONNECT_COMMAND} 'c:\bin\ctr.exe --namespace k8s.io images import c:\calico-cni-plugin-windows.tar --all-platforms'
-  ${WINDOWS_CONNECT_COMMAND} "c:\\bin\\ctr.exe --namespace k8s.io images tag docker.io/library/node-windows:latest docker.io/calico/node-windows:${DEV_IMAGE_TAG}"
-  ${WINDOWS_CONNECT_COMMAND} "c:\\bin\\ctr.exe --namespace k8s.io images tag docker.io/library/cni-windows:latest docker.io/calico/cni-windows:${DEV_IMAGE_TAG}"
+  ${WINDOWS_CONNECT_COMMAND} "c:\\bin\\ctr.exe --namespace k8s.io images tag docker.io/library/node-windows:latest-amd64 docker.io/calico/node-windows:${DEV_IMAGE_TAG}"
+  ${WINDOWS_CONNECT_COMMAND} "c:\\bin\\ctr.exe --namespace k8s.io images tag docker.io/library/cni-windows:latest-amd64 docker.io/calico/cni-windows:${DEV_IMAGE_TAG}"
   echo "Imported Windows images onto ${WINDOWS_EIP}"
 }
 

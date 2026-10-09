@@ -15,11 +15,13 @@
 # FIXME: Use WINDOWS_HPC_VERSION and image instead of nanoserver and WINDOWS_VERSIONS when containerd v1.6 is EOL'd
 # ARG WINDOWS_HPC_VERSION
 ARG WINDOWS_VERSION
+ARG WINDOWS_BASE_IMAGE
 
 #FROM mcr.microsoft.com/oss/kubernetes/windows-host-process-containers-base-image:${WINDOWS_HPC_VERSION}
-FROM mcr.microsoft.com/windows/nanoserver:${WINDOWS_VERSION}
+FROM ${WINDOWS_BASE_IMAGE} AS base
 
 ARG GIT_VERSION=unknown
+ARG WINDOWS_BIN
 
 # Required labels for certification
 LABEL org.opencontainers.image.description="Calico node handles networking and policy for Calico"
@@ -32,14 +34,13 @@ LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 COPY dist/LICENSE /licenses/LICENSE
 
-COPY dist/bin/calico.exe /CalicoWindows/calico.exe
+COPY ${WINDOWS_BIN}/calico.exe /CalicoWindows/calico.exe
 COPY windows-packaging/CalicoWindows/felix/felix-service.ps1 /CalicoWindows/felix-service.ps1
 COPY windows-packaging/CalicoWindows/node/node-service.ps1 /CalicoWindows/node-service.ps1
 COPY windows-packaging/CalicoWindows/confd /CalicoWindows/confd
 COPY windows-packaging/CalicoWindows/config-hpc.ps1 /CalicoWindows/config.ps1
 COPY windows-packaging/CalicoWindows/libs/calico/calico.psm1 /CalicoWindows/libs/calico/calico.psm1
 COPY windows-packaging/CalicoWindows/libs/hns/hns.psm1 /CalicoWindows/libs/hns/hns.psm1
-COPY windows-packaging/nssm.exe /nssm.exe
 COPY windows-packaging/CalicoWindows/uninstall-calico-hpc.ps1 /uninstall-calico.ps1
 
 ENV PATH="$PATH;C:\CalicoWindows;C:\Windows\System32;C:\Windows;C:\Windows\System32\WindowsPowerShell\v1.0;C:\Program Files\PowerShell"
@@ -47,3 +48,11 @@ WORKDIR /CalicoWindows
 # The nanoserver image does not have powershell but this works because
 # this container will be running on the host.
 ENTRYPOINT ["powershell"]
+
+# NSSM is amd64-only and is only needed to remove legacy services installed from the amd64 zip archive.
+FROM base AS base-amd64
+COPY windows-packaging/nssm.exe /nssm.exe
+
+FROM base AS base-arm64
+
+FROM base-${TARGETARCH}
