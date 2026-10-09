@@ -47,15 +47,31 @@ check-copyright:
 ###############################################################################
 .PHONY: gen-files
 gen-files:
+	# Prune stale CRDs so one whose Go type is gone leaves the tree too.
+	rm -f pkg/apis/migration/v1/crd/*.yaml
 	$(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(CALICO_CONTROLLER_GEN) crd paths=./pkg/controllers/migration/... output:crd:dir=pkg/controllers/migration/crd/'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(CALICO_CONTROLLER_GEN) crd paths=./pkg/apis/migration/... output:crd:dir=pkg/apis/migration/v1/crd/'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(CALICO_CONTROLLER_GEN) object paths=./pkg/apis/migration/...'
+	$(MAKE) fix-changed
 
 ###############################################################################
 # Tests
 ###############################################################################
-ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
+# Semaphore and ArgoCI spell the PR ref type differently.
+ifneq ($(filter pull-request PR,$(SEMAPHORE_GIT_REF_TYPE) $(CI_GIT_REF_TYPE)),)
+SPIDER_COMMIT_RANGE:=$(or $(CI_GIT_COMMIT_RANGE),$(SEMAPHORE_GIT_COMMIT_RANGE))
+# A shallow clone can lack the range's base, and then there is nothing to diff.
+SPIDER_BASE:=$(firstword $(subst .., ,$(subst ..., ,$(SPIDER_COMMIT_RANGE))))
+SPIDER_BASE_PRESENT:=$(if $(SPIDER_BASE),$(shell git rev-parse -q --verify "$(SPIDER_BASE)^{commit}" >/dev/null && echo yes))
+endif
+
+ifneq ($(SPIDER_BASE_PRESENT),)
 # Determine the tests to run using the test spider tool, which emits a list of impacted packages.
-MAYBE_WHAT=$(shell $(DOCKER_GO_BUILD) sh -c 'go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir kube-controllers/')
+SPIDER_OUTPUT:=$(shell $(DOCKER_GO_BUILD) sh -c 'go run ../hack/test/spider -commit-range=$(SPIDER_COMMIT_RANGE) -filter-dir kube-controllers/')
+ifeq ($(filter __SPIDER_OK__,$(SPIDER_OUTPUT)),)
+$(error test spider did not complete - refusing to run zero tests. See its output above)
+endif
+MAYBE_WHAT:=$(filter-out __SPIDER_OK__,$(SPIDER_OUTPUT))
 else
 # By default, run all tests.
 MAYBE_WHAT=.
@@ -78,6 +94,11 @@ TEST_BINARIES=$(addsuffix /ut.test,$(WHAT))
 bin/gotestsum:
 	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
+# gotestsum converts test output with this, and the host it runs on has no Go
+# toolchain to reach `go tool test2json` in.
+bin/test2json:
+	$(DOCKER_RUN) $(CALICO_BUILD) go build -o /go/src/$(PACKAGE_NAME)/bin/test2json cmd/test2json
+
 ## Run the unit tests in a container.
 # kube-controllers tests use the combined calico/calico image (loaded from the
 # calico-image prerequisite in CI, or built locally via the marker rule in
@@ -91,7 +112,7 @@ ut fv: ut-prereqs
 
 ut-prereqs: $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
 
-ut-no-prereqs: $(TEST_BINARIES) setup-envtest bin/gotestsum
+ut-no-prereqs: $(TEST_BINARIES) setup-envtest bin/gotestsum bin/test2json
 	KUBE_IMAGE=$(CALICO_BUILD) \
 		   ETCD_IMAGE=$(ETCD_IMAGE) \
 		   CALICO_API_GROUP=$(CALICO_API_GROUP) \
@@ -100,6 +121,7 @@ ut-no-prereqs: $(TEST_BINARIES) setup-envtest bin/gotestsum
 		   CERTS_PATH=$(CERTS_PATH) \
 		   KUBEBUILDER_ASSETS=$$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1) \
 		   GOTESTSUM=$(abspath bin/gotestsum) \
+		   TEST2JSON=$(abspath bin/test2json) \
 		   ./run-uts $(WHAT)
 
 # Produce test binaries for each package that needs them.

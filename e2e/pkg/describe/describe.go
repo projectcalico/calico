@@ -74,8 +74,11 @@ var features = map[string]bool{
 	"Pods":            true,
 	"QoS":             true,
 	"Datapath":        true,
+	"IngressGateway":  true,
 	"Istio":           true,
 	"KubeVirt":        true,
+	"Wireguard":       true,
+	"Flow-Logs":       true,
 }
 
 // RequiresRealKubeVirt marks tests that need a real KubeVirt installation with
@@ -129,6 +132,39 @@ func RequiresBGPMesh() any {
 	return framework.WithLabel("RequiresBGPMesh")
 }
 
+// RequiresBGP marks tests that need Calico to be doing BGP at all, i.e. BIRD is
+// running and programming routes. Weaker than RequiresBGPMesh, which additionally
+// needs the node-to-node mesh to be the *only* routing path.
+//
+// Clusters that fail this: Felix routing (no BIRD), and managed clusters using
+// their provider's CNI (AzureVNET, AmazonVPC), where Calico runs policy-only.
+// Carry this rather than leaving each config to know which spec files are
+// BGP-shaped -- that knowledge was previously spread across every lane.
+func RequiresBGP() any {
+	return framework.WithLabel("RequiresBGP")
+}
+
+// RequiresOperator marks tests that need tigera-operator running to reconcile a CR
+// they create. Manifest-installed clusters (INSTALLER=manual/packaged, i.e. a
+// MANIFEST_FILE like calico.yaml) have no operator, so such a test blocks until its
+// wait times out rather than skipping.
+func RequiresOperator() any {
+	return framework.WithLabel("RequiresOperator")
+}
+
+// RequiresCalicoIPAM marks tests that need Calico to be the IPAM plugin. Clusters
+// running a provider's CNI and IPAM (AWS VPC, Azure, GKE host-local) keep no
+// Calico IPAM state for these specs to read.
+func RequiresCalicoIPAM() any {
+	return framework.WithLabel("RequiresCalicoIPAM")
+}
+
+// RequiresCalicoCNI marks tests that need Calico as the CNI plugin, not a provider's
+// (AWS VPC, Azure, GKE).
+func RequiresCalicoCNI() any {
+	return framework.WithLabel("RequiresCalicoCNI")
+}
+
 // WithFeature marks tests as verifying a specific feature.
 func WithFeature(feature string) any {
 	if !features[feature] {
@@ -163,10 +199,6 @@ func RequiresAWS() any {
 // and additional configuration passed to the e2e code in order to run commands on that node.
 func WithExternalNode() any {
 	return framework.WithLabel("ExternalNode")
-}
-
-func RequiresExternalNode() any {
-	return framework.WithLabel("RequiresExternalNode")
 }
 
 // RequiresAzureIPAM marks tests that require a cluster with Azure IPAM.

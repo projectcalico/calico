@@ -30,6 +30,6 @@ func init() {
 func TestIntdataplane(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../report/felix_dataplane_linux_suite.xml"
+	testutils.RegisterJUnitReporter("felix_dataplane_linux_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/dataplane/linux", suiteConfig, reporterConfig)
 }

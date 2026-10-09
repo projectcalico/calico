@@ -1,6 +1,7 @@
 import React from 'react';
 import { jsonTabStyles, tableStyles } from './styles';
 import { FlowLog } from '@/types/render';
+import { ServiceRef } from '@/types/api';
 import FlowLogActionIndicator from '@/components/common/FlowLogActionIndicator';
 import { LogDetailsView } from '@/libs/tigera/ui-components/components/common';
 import PoliciesLogDetails from '../PoliciesLogDetails';
@@ -43,6 +44,7 @@ const FlowLogDetails: React.FC<FlowLogDetailsProps> = ({ flowLog, height }) => {
         ...jsonData,
         action: <FlowLogActionIndicator action={action} />,
         policies: JSON.stringify(policies),
+        ...(rest.service && { service: formatService(rest.service) }),
     };
 
     return (
@@ -66,5 +68,8 @@ const FlowLogDetails: React.FC<FlowLogDetailsProps> = ({ flowLog, height }) => {
         />
     );
 };
+
+const formatService = ({ namespace, name, port, port_name }: ServiceRef) =>
+    `${namespace}/${name}:${port_name ? `${port} (${port_name})` : port}`;
 
 export default FlowLogDetails;

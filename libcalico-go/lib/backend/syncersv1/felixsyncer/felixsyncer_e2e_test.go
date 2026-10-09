@@ -25,6 +25,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
+	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
 
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -51,8 +53,17 @@ const (
 
 // calculateDefaultFelixSyncerEntries determines the expected set of Felix configuration for the currently configured
 // cluster.
-func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.DatastoreType) (expected []model.KVPair) {
+func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, cfg apiconfig.CalicoAPIConfig) (expected []model.KVPair) {
+	dt := cfg.Spec.DatastoreType
 	defaultProfileRules := []model.Rule{{Action: "allow"}}
+
+	// Backend Clean() deliberately leaves the protected built-in tiers behind - they cannot
+	// be deleted (see KubeClient.Clean), so for KDD whichever of them have already been
+	// created against this cluster are still there and the syncer reports them. Which ones
+	// exist depends on what else has run against the cluster, so discover them rather than
+	// assuming the datastore has none.
+	expected = append(expected, existingTierEntries(cfg)...)
+
 	// Add 2 for the default-allow profile that is always there.
 	// However, no profile labels are in the list because the
 	// default-allow profile doesn't specify labels.
@@ -198,6 +209,31 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 	return
 }
 
+// existingTierEntries returns the felix syncer entries for the Tiers that are currently in the
+// datastore. Used to account for the protected built-in tiers, which survive a backend Clean().
+func existingTierEntries(cfg apiconfig.CalicoAPIConfig) (expected []model.KVPair) {
+	c, err := clientv3.New(cfg)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	tiers, err := c.Tiers().List(context.Background(), options.ListOptions{})
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	for _, tier := range tiers.Items {
+		// List() defaults Order and DefaultAction, matching what the syncer's update
+		// processor sees. Any action other than Pass is reported as Deny.
+		action := apiv3.Deny
+		if *tier.Spec.DefaultAction == apiv3.Pass {
+			action = apiv3.Pass
+		}
+		expected = append(expected, model.KVPair{
+			Key:   model.TierKey{Name: tier.Name},
+			Value: &model.Tier{Order: tier.Spec.Order, DefaultAction: action},
+		})
+	}
+
+	return
+}
+
 var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 	var ctx context.Context
 	var c clientv3.Interface
@@ -254,7 +290,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			syncTester.ExpectStatusUpdate(api.InSync)
 
 			By("Checking updates match those expected.")
-			defaultCacheEntries := calculateDefaultFelixSyncerEntries(cs, config.Spec.DatastoreType)
+			defaultCacheEntries := calculateDefaultFelixSyncerEntries(cs, config)
 			expectedCacheSize += len(defaultCacheEntries)
 			for _, r := range defaultCacheEntries {
 				// Expect the correct cache values.
@@ -753,6 +789,85 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests (passive mode)", test
 		syncTester.ExpectValueMatches(
 			model.GlobalConfigKey{Name: "Variant"},
 			MatchRegexp("Calico"),
+		)
+	})
+})
+
+var _ = testutils.E2eDatastoreDescribe("Felix syncer tests (ClusterNetworkPolicy)", testutils.DatastoreK8s, func(config apiconfig.CalicoAPIConfig) {
+	const kcnpName = "felixsyncer-test-kcnp"
+
+	var be api.Client
+	var syncTester *testutils.SyncerTester
+	var kcnpClient *netpolicyclient.PolicyV1alpha2Client
+	var err error
+
+	BeforeEach(func() {
+		// Create the backend client to obtain a syncer interface.
+		be, err = backend.NewClient(config)
+		Expect(err).NotTo(HaveOccurred())
+		be.Clean()
+
+		// ClusterNetworkPolicies are upstream Kubernetes resources, so they are created
+		// through their own client rather than the Calico one.
+		cfg, err := clientcmd.BuildConfigFromFlags("", "/kubeconfig.yaml")
+		Expect(err).NotTo(HaveOccurred())
+		kcnpClient, err = netpolicyclient.NewForConfig(cfg)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create a SyncerTester to receive the syncer callback events and to allow us
+		// to assert state.
+		syncTester = testutils.NewSyncerTester()
+	})
+
+	AfterEach(func() {
+		if kcnpClient != nil {
+			_ = kcnpClient.ClusterNetworkPolicies().Delete(context.Background(), kcnpName, metav1.DeleteOptions{})
+		}
+	})
+
+	It("should send ClusterNetworkPolicy updates over the syncer", func() {
+		syncer := felixsyncer.New(be, config.Spec, syncTester, true)
+		syncer.Start()
+		defer syncer.Stop()
+
+		syncTester.ExpectStatusUpdate(api.WaitForDatastore)
+		syncTester.ExpectStatusUpdate(api.ResyncInProgress)
+		syncTester.ExpectStatusUpdate(api.InSync)
+
+		By("Creating a ClusterNetworkPolicy in the admin tier")
+		_, err = kcnpClient.ClusterNetworkPolicies().Create(
+			context.Background(),
+			&clusternetpol.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: kcnpName},
+				Spec: clusternetpol.ClusterNetworkPolicySpec{
+					Priority: 100,
+					Tier:     clusternetpol.AdminTier,
+					Subject: clusternetpol.ClusterNetworkPolicySubject{
+						Namespaces: &metav1.LabelSelector{},
+					},
+					Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{{
+						Name:   "deny-all-ingress",
+						Action: clusternetpol.ClusterNetworkPolicyRuleActionDeny,
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{{
+							Namespaces: &metav1.LabelSelector{},
+						}},
+					}},
+				},
+			},
+			metav1.CreateOptions{},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Checking the policy is sent over the syncer in the kube-admin tier")
+		syncTester.ExpectValueMatches(
+			model.PolicyKey{Name: kcnpName, Kind: model.KindKubernetesClusterNetworkPolicy},
+			WithTransform(func(v any) string {
+				policy, ok := v.(*model.Policy)
+				if !ok {
+					return ""
+				}
+				return policy.Tier
+			}, Equal(names.KubeAdminTierName)),
 		)
 	})
 })

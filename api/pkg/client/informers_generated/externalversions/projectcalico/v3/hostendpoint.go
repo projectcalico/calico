@@ -20,11 +20,39 @@ import (
 )
 
 // HostEndpointInformer provides access to a shared informer and lister for
-// HostEndpoints.
+// HostEndpoints. Prefer using the type-safe variant (see [TypedHostEndpointInformer]).
 type HostEndpointInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.HostEndpointLister
 }
+
+// TypedHostEndpointInformer provides access to a shared informer and lister for
+// HostEndpoints, including the type-safe TypedInformer variant.
+// It is a superset of HostEndpointInformer.
+type TypedHostEndpointInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() HostEndpointIndexInformer
+	Lister() projectcalicov3.HostEndpointLister
+}
+
+// HostEndpointIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type HostEndpointIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.HostEndpoint]
+
+// HostEndpointHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for HostEndpoint.
+type HostEndpointHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.HostEndpoint]
+
+// HostEndpointDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for HostEndpoint.
+type HostEndpointDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.HostEndpoint]
+
+// HostEndpointFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for HostEndpoint.
+type HostEndpointFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.HostEndpoint]
+
+// HostEndpointIndexers is a specialization of [cache.TypedIndexers] for HostEndpoint.
+type HostEndpointIndexers = cache.TypedIndexers[*apisprojectcalicov3.HostEndpoint]
+
+// DeletedHostEndpoint is a specialization of [cache.DeletedObject] for HostEndpoint.
+type DeletedHostEndpoint = cache.DeletedObject[*apisprojectcalicov3.HostEndpoint]
 
 type hostEndpointInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,25 +62,49 @@ type hostEndpointInformer struct {
 // NewHostEndpointInformer constructs a new informer for HostEndpoint type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedHostEndpointInformer]).
 func NewHostEndpointInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewHostEndpointInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedHostEndpointInformer constructs a new informer for HostEndpoint type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedHostEndpointInformer(client clientset.Interface, resyncPeriod time.Duration, indexers HostEndpointIndexers) HostEndpointIndexInformer {
+	return NewTypedHostEndpointInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredHostEndpointInformer constructs a new informer for HostEndpoint type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredHostEndpointInformer]).
 func NewFilteredHostEndpointInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewHostEndpointInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedHostEndpointInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredHostEndpointInformer constructs a new informer for HostEndpoint type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredHostEndpointInformer(client clientset.Interface, resyncPeriod time.Duration, indexers HostEndpointIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) HostEndpointIndexInformer {
+	return NewTypedHostEndpointInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewHostEndpointInformerWithOptions constructs a new informer for HostEndpoint type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedHostEndpointInformerWithOptions]).
 func NewHostEndpointInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedHostEndpointInformerWithOptions(client, options)
+}
+
+// NewTypedHostEndpointInformerWithOptions constructs a new informer for HostEndpoint type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedHostEndpointInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) HostEndpointIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "hostendpoints"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.HostEndpoint](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -85,17 +137,57 @@ func NewHostEndpointInformerWithOptions(client clientset.Interface, options inte
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *hostEndpointInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewHostEndpointInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedHostEndpointInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *hostEndpointInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.HostEndpoint{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *hostEndpointInformer) TypedInformer() HostEndpointIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.HostEndpoint](f.factory.InformerFor(&apisprojectcalicov3.HostEndpoint{}, f.defaultInformer))
 }
 
 func (f *hostEndpointInformer) Lister() projectcalicov3.HostEndpointLister {
 	return projectcalicov3.NewHostEndpointLister(f.Informer().GetIndexer())
+}
+
+// ToTypedHostEndpointInformer converts an untyped informer into a TypedHostEndpointInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *HostEndpoint. If that is not the case, calling type-safe methods of the returned
+// TypedHostEndpointInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedHostEndpointInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedHostEndpointInformer(informer HostEndpointInformer) TypedHostEndpointInformer {
+	if informer, ok := informer.(TypedHostEndpointInformer); ok {
+		return informer
+	}
+	return &hostEndpointTypedInformerAdapter{informer}
+}
+
+type hostEndpointTypedInformerAdapter struct {
+	HostEndpointInformer
+}
+
+func (a *hostEndpointTypedInformerAdapter) TypedInformer() HostEndpointIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.HostEndpoint](a.Informer())
+}
+
+// ToHostEndpointIndexInformer converts an untyped informer into a HostEndpointIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *HostEndpoint. If that is not the case, calling type-safe methods of the returned
+// HostEndpointIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a HostEndpointIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToHostEndpointIndexInformer(informer cache.SharedIndexInformer) HostEndpointIndexInformer {
+	if informer, ok := informer.(HostEndpointIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.HostEndpoint](informer)
 }

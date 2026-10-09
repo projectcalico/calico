@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/go-github/v53/github"
 
+	"github.com/projectcalico/calico/release/internal/charts"
+	igithub "github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
@@ -33,13 +36,7 @@ func calicoctlBinaryList() []string {
 	return binaries
 }
 
-func githubClient() *github.Client {
-	cli := github.NewClient(http.DefaultClient)
-	if githubToken != "" {
-		cli = github.NewTokenClient(context.Background(), githubToken)
-	}
-	return cli
-}
+var githubClient = sync.OnceValue(igithub.Client)
 
 func TestGitHubRelease(t *testing.T) {
 	t.Parallel()
@@ -60,11 +57,13 @@ func TestGitHubRelease(t *testing.T) {
 			"install-calico-windows.ps1",
 			fmt.Sprintf("calico-windows-%s.zip", releaseVersion),
 			fmt.Sprintf("release-%s.tgz", releaseVersion),
-			fmt.Sprintf("tigera-operator-%s.tgz", releaseVersion),
 			"SHA256SUMS",
 			"ocp.tgz",
 			"LICENSE",
 		)
+		for _, name := range charts.All() {
+			expectedAssets = append(expectedAssets, charts.FileName(name, releaseVersion))
+		}
 		actualAssets := getAssets(release)
 		if diff := cmp.Diff(expectedAssets, actualAssets, cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
 			t.Errorf("release assets mismatch (-expected +actual):\n%s", diff)

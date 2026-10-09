@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,8 +23,8 @@ import (
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	v1v "github.com/projectcalico/calico/libcalico-go/lib/validator/v1"
 	v3v "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
+	v1v "github.com/projectcalico/calico/typha/pkg/validator/v1"
 )
 
 func NewValidationFilter(sink api.SyncerCallbacks, felixConfig *config.Config) *ValidationFilter {
@@ -73,7 +73,9 @@ func (v *ValidationFilter) OnUpdates(updates []api.Update) {
 			if val.Kind() == reflect.Pointer {
 				elem := val.Elem()
 				if elem.Kind() == reflect.Struct {
-					if err := validatorFunc(elem.Interface()); err != nil {
+					// Validate the pointer: the CRD schema and CEL checks only run
+					// for a runtime.Object, which the dereferenced struct is not.
+					if err := validatorFunc(val.Interface()); err != nil {
 						logCxt.WithError(err).Warn("Validation failed; treating as missing")
 						update.Value = nil
 					}

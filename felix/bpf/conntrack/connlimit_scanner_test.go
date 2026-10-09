@@ -15,12 +15,14 @@
 package conntrack
 
 import (
+	"encoding/binary"
 	"net"
 	"testing"
 	"time"
 
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	ctv4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/qos"
 )
@@ -72,16 +74,30 @@ func (f *fakeQoSMap) BatchUpdate(ks, vs [][]byte, flags uint64) (int, error) {
 // reads or writes.
 func (f *fakeQoSMap) seed(t *testing.T, ifindex uint32, direction uint16, maxConn, current uint32) {
 	t.Helper()
-	k := qos.NewKey(ifindex, direction, qos.IPFamilyV4).AsBytes()
-	v := qos.NewConnValue(maxConn, current).AsBytes()
-	f.contents[string(k)] = v[:]
+	f.seedFamily(t, ifindex, direction, qos.IPFamilyV4, maxConn, current)
 }
 
 func (f *fakeQoSMap) currentCount(t *testing.T, ifindex uint32, direction uint16) uint32 {
 	t.Helper()
-	bytes, err := f.Get(qos.NewKey(ifindex, direction, qos.IPFamilyV4).AsBytes())
+	return f.currentCountFamily(t, ifindex, direction, qos.IPFamilyV4)
+}
+
+// seedFamily is seed for an explicit IP family. v4 and v6 share one
+// cali_qos_conn map and are separated only by the family field of the key, so
+// tests that care about that separation must address the two entries
+// explicitly.
+func (f *fakeQoSMap) seedFamily(t *testing.T, ifindex uint32, direction, family uint16, maxConn, current uint32) {
+	t.Helper()
+	k := qos.NewKey(ifindex, direction, family).AsBytes()
+	v := qos.NewConnValue(maxConn, current).AsBytes()
+	f.contents[string(k)] = v[:]
+}
+
+func (f *fakeQoSMap) currentCountFamily(t *testing.T, ifindex uint32, direction, family uint16) uint32 {
+	t.Helper()
+	bytes, err := f.Get(qos.NewKey(ifindex, direction, family).AsBytes())
 	if err != nil {
-		t.Fatalf("fake Get for (%d,%d) failed: %v", ifindex, direction, err)
+		t.Fatalf("fake Get for (%d,%d,v%d) failed: %v", ifindex, direction, family, err)
 	}
 	return qos.ConnValueFromBytes(bytes).CurrentCount()
 }
@@ -105,8 +121,17 @@ func TestConnLimitScannerCheckNoPodsIsNoOp(t *testing.T) {
 }
 
 // established creates a Leg with SYN+ACK seen (3-way handshake complete).
-func established(opener bool) Leg {
-	return Leg{SynSeen: true, AckSeen: true, Opener: opener}
+// podIfIndex is the limited pod's veth. remoteIfIndex is the data interface an
+// off-node peer arrives on.
+const (
+	podIfIndex    uint32 = 9
+	remoteIfIndex uint32 = 2
+)
+
+// established builds one leg of an established connection. A zero ifindex marks
+// a host-originated leg.
+func established(opener bool, ifindex uint32) Leg {
+	return Leg{SynSeen: true, AckSeen: true, Opener: opener, Ifindex: ifindex}
 }
 
 // makeKey creates a TCP CT key for the given IPs and ports.
@@ -114,27 +139,50 @@ func makeKey(ipA, ipB string, portA, portB uint16) Key {
 	return NewKey(6, net.ParseIP(ipA).To4(), portA, net.ParseIP(ipB).To4(), portB)
 }
 
+// makeKeyV6 creates a TCP CT key for the given IPv6 addresses and ports.
+func makeKeyV6(ipA, ipB string, portA, portB uint16) KeyV6 {
+	return NewKeyV6(6, net.ParseIP(ipA).To16(), portA, net.ParseIP(ipB).To16(), portB)
+}
+
+// makeEstablishedValueV6 is makeEstablishedValue for an IPv6 flow. Leg is
+// shared between families, so only the value constructor differs.
+func makeEstablishedValueV6() ValueV6 {
+	return NewValueV6Normal(time.Duration(0), 0,
+		established(true, remoteIfIndex), // A is opener
+		established(false, podIfIndex),   // B is responder
+	)
+}
+
 // makeEstablishedValue creates a NORMAL CT value with both legs established.
 // legA is the opener (egress initiator).
 func makeEstablishedValue() Value {
 	return NewValueNormal(time.Duration(0), 0,
-		established(true),  // A is opener
-		established(false), // B is responder
+		established(true, remoteIfIndex), // A is opener
+		established(false, podIfIndex),   // B is responder
 	)
 }
 
-// makeEstablishedValueWithFIN creates an established value with a FIN on one leg.
-func makeEstablishedValueWithFIN() Value {
-	legA := established(true)
+// makeHalfClosedValue creates an established value with a FIN on one leg only.
+func makeHalfClosedValue() Value {
+	legA := established(true, remoteIfIndex)
 	legA.FinSeen = true
-	return NewValueNormal(time.Duration(0), 0, legA, established(false))
+	return NewValueNormal(time.Duration(0), 0, legA, established(false, podIfIndex))
+}
+
+// makeBothFINsValue creates the close both endpoints agreed on.
+func makeBothFINsValue() Value {
+	legA := established(true, remoteIfIndex)
+	legA.FinSeen = true
+	legB := established(false, podIfIndex)
+	legB.FinSeen = true
+	return NewValueNormal(time.Duration(0), 0, legA, legB)
 }
 
 // makeEstablishedValueWithRST creates an established value with RST seen.
 func makeEstablishedValueWithRST() Value {
-	legA := established(true)
+	legA := established(true, remoteIfIndex)
 	legA.RstSeen = true
-	return NewValueNormal(time.Duration(0), 0, legA, established(false))
+	return NewValueNormal(time.Duration(0), 0, legA, established(false, podIfIndex))
 }
 
 // makeSYNOnlyValue creates a value where only SYN was seen (not established).
@@ -215,31 +263,114 @@ func TestConnLimitScannerCountsEgressConnection(t *testing.T) {
 	}
 }
 
-func TestConnLimitScannerSkipsFINSeen(t *testing.T) {
+// TestConnLimitScannerV6WritesBackToItsOwnFamily verifies that a v6 scanner
+// counts a v6 flow and writes the result to the v6 cali_qos_conn entry,
+// leaving the v4 entry for the same (ifindex, direction) untouched.
+//
+// v4 and v6 share a single cali_qos_conn map, separated only by the family
+// field of the key, and each family runs its own scanner — NewConnLimitScanner
+// takes the family and prepareUpdate builds its write key from it. Getting
+// that wrong would send one stack's recount to the other stack's counter,
+// silently, and only on dual-stack clusters. The family dimension in the key
+// exists precisely to prevent that overwrite, so it is worth pinning: a test
+// that only ever exercises one family would pass even if the dimension were
+// dropped entirely.
+func TestConnLimitScannerV6WritesBackToItsOwnFamily(t *testing.T) {
+	podIP := "dead:beef::2"
+	remoteIP := "dead:beef::3"
+
+	fake := newFakeQoSMap()
+	// A dual-stack pod: same ifindex and direction, one entry per family. The
+	// v4 side is mid-flight with four connections of its own.
+	fake.seedFamily(t, 9, 1, qos.IPFamilyV4, 5, 4)
+	fake.seedFamily(t, 9, 1, qos.IPFamilyV6, 5, 0)
+
+	scanner := NewConnLimitScanner(fake, func() map[string]ConnLimitPodInfo {
+		return map[string]ConnLimitPodInfo{
+			string(net.ParseIP(podIP).To16()): podInfo(9, true, false),
+		}
+	}, qos.IPFamilyV6)
+
+	// Pod is AddrB (responder), remote is AddrA (opener), so this counts
+	// against the pod's ingress limit.
+	scanner.IterationStart()
+	verdict, _ := scanner.Check(makeKeyV6(remoteIP, podIP, 54321, 8080), makeEstablishedValueV6(), nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
+	scanner.IterationEnd()
+
+	if got := fake.currentCountFamily(t, 9, 1, qos.IPFamilyV6); got != 1 {
+		t.Errorf("v6 ingress counter: expected 1, got %d", got)
+	}
+	if got := fake.currentCountFamily(t, 9, 1, qos.IPFamilyV4); got != 4 {
+		t.Errorf("v4 counter must be untouched by a v6 scanner: expected 4, got %d", got)
+	}
+}
+
+// A half-closed connection is still live: shutdown(SHUT_WR) must not hide it
+// from the recount (CORE-13478 Failure.6).
+func TestConnLimitScannerCountsHalfClosedConnection(t *testing.T) {
 	podIP := "10.65.0.2"
 	remoteIP := "10.65.1.3"
 
-	scanner := &ConnLimitScanner{
-		family: qos.IPFamilyV4,
-		counts: make(map[connlimitKey]uint32),
-		podInfo: map[string]ConnLimitPodInfo{
-			string(net.ParseIP(podIP).To4()): podInfo(9, true, false),
-		},
-	}
+	scanner := limitedPodScanner(podIP)
 
 	key := makeKey(remoteIP, podIP, 54321, 8080)
-	val := makeEstablishedValueWithFIN()
+	val := makeHalfClosedValue()
 
 	verdict, _ := scanner.Check(key, val, nil)
 	if verdict != ScanVerdictOK {
 		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
 	}
-	if len(scanner.counts) != 0 {
-		t.Errorf("expected no counts for FIN connection, got %v", scanner.counts)
+	expected := connlimitKey{ifindex: podIfIndex, direction: 1}
+	if scanner.counts[expected] != 1 {
+		t.Errorf("one FIN hid a live connection from the recount, so the pod "+
+			"can hold unbounded connections; got %v", scanner.counts)
 	}
 }
 
-func TestConnLimitScannerSkipsRSTSeen(t *testing.T) {
+// Both FINs is the close the fast path already decremented.
+func TestConnLimitScannerSkipsBothFINsSeen(t *testing.T) {
+	podIP := "10.65.0.2"
+	remoteIP := "10.65.1.3"
+
+	scanner := limitedPodScanner(podIP)
+
+	verdict, _ := scanner.Check(makeKey(remoteIP, podIP, 54321, 8080),
+		makeBothFINsValue(), nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
+	if len(scanner.counts) != 0 {
+		t.Errorf("expected no counts for a both-FIN close, got %v", scanner.counts)
+	}
+}
+
+// On DSR the return leg never reaches this hook, so one FIN is the whole close.
+func TestConnLimitScannerSkipsSingleFINOnDSR(t *testing.T) {
+	podIP := "10.65.0.2"
+	remoteIP := "10.65.1.3"
+
+	scanner := limitedPodScanner(podIP)
+
+	legA := established(true, remoteIfIndex)
+	legA.FinSeen = true
+	val := NewValueNormal(time.Duration(0), ctv4.FlagNATFwdDsr,
+		legA, established(false, podIfIndex))
+
+	verdict, _ := scanner.Check(makeKey(remoteIP, podIP, 54321, 8080), val, nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
+	if len(scanner.counts) != 0 {
+		t.Errorf("expected no counts for a DSR half-close, got %v", scanner.counts)
+	}
+}
+
+// TestConnLimitScannerCountsRSTSeenConnection pins the absence of an RST skip:
+// a pod emits RSTs at will and must not hide behind one.
+func TestConnLimitScannerCountsRSTSeenConnection(t *testing.T) {
 	podIP := "10.65.0.2"
 	remoteIP := "10.65.1.3"
 
@@ -258,8 +389,9 @@ func TestConnLimitScannerSkipsRSTSeen(t *testing.T) {
 	if verdict != ScanVerdictOK {
 		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
 	}
-	if len(scanner.counts) != 0 {
-		t.Errorf("expected no counts for RST connection, got %v", scanner.counts)
+	if n := scanner.counts[connlimitKey{ifindex: 9, direction: 1}]; n != 1 {
+		t.Errorf("an RST let a live connection hide from the recount: "+
+			"expected ingress count 1 for ifindex 9, got counts: %v", scanner.counts)
 	}
 }
 
@@ -357,6 +489,85 @@ func TestConnLimitScannerSkipsUnlimitedPods(t *testing.T) {
 	}
 }
 
+// limitedPodScanner returns a scanner where podIP holds an ingress limit.
+func limitedPodScanner(podIP string) *ConnLimitScanner {
+	return &ConnLimitScanner{
+		family: qos.IPFamilyV4,
+		counts: make(map[connlimitKey]uint32),
+		podInfo: map[string]ConnLimitPodInfo{
+			string(net.ParseIP(podIP).To4()): podInfo(podIfIndex, true, false),
+		},
+	}
+}
+
+// podResponder builds the limited pod's leg, which carries its veth ifindex.
+func podResponder() Leg {
+	leg := established(false, podIfIndex)
+	leg.Workload = true
+	return leg
+}
+
+// Covers CORE-13478 Failure.4: to-wep stamps HOST_ORIGIN when it skips the
+// ingress limit, so the recount must not charge it.
+func TestConnLimitScannerSkipsHostOriginatedConnection(t *testing.T) {
+	podIP := "10.65.0.2"
+	hostIP := "172.17.0.5"
+
+	scanner := limitedPodScanner(podIP)
+
+	val := NewValueNormal(time.Duration(0), ctv4.FlagHostOrigin,
+		established(true, 0), podResponder())
+
+	verdict, _ := scanner.Check(makeKey(hostIP, podIP, 54321, 8080), val, nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
+	if len(scanner.counts) != 0 {
+		t.Errorf("expected no counts for host-origin connection, got %v", scanner.counts)
+	}
+}
+
+// An unflagged entry counts even with a zeroed ifindex, which CT RPF failure
+// causes on a pod leg.
+func TestConnLimitScannerCountsPodOriginWithInvalidatedIfindex(t *testing.T) {
+	podIP := "10.65.0.2"
+	peerIP := "10.65.0.7"
+
+	scanner := limitedPodScanner(podIP)
+
+	opener := established(true, 0)
+	opener.Workload = true
+	val := NewValueNormal(time.Duration(0), 0, opener, podResponder())
+
+	verdict, _ := scanner.Check(makeKey(peerIP, podIP, 54321, 8080), val, nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
+	expected := connlimitKey{ifindex: podIfIndex, direction: 1}
+	if scanner.counts[expected] != 1 {
+		t.Errorf("expected ingress count 1 for RPF-invalidated pod, got %v", scanner.counts)
+	}
+}
+
+// An unflagged entry from an off-node pod must still count.
+func TestConnLimitScannerCountsRemoteWorkloadOrigin(t *testing.T) {
+	podIP := "10.65.0.2"
+	remoteIP := "10.65.1.3"
+
+	scanner := limitedPodScanner(podIP)
+
+	val := NewValueNormal(time.Duration(0), 0, established(true, remoteIfIndex), podResponder())
+
+	verdict, _ := scanner.Check(makeKey(remoteIP, podIP, 54321, 8080), val, nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
+	expected := connlimitKey{ifindex: podIfIndex, direction: 1}
+	if scanner.counts[expected] != 1 {
+		t.Errorf("expected ingress count 1 for remote pod, got %v", scanner.counts)
+	}
+}
+
 func TestConnLimitScannerMultipleConnections(t *testing.T) {
 	podIP := "10.65.0.2"
 
@@ -418,7 +629,58 @@ func TestConnLimitScannerBothPodsLimited(t *testing.T) {
 	}
 }
 
-func TestConnLimitScannerSkipsConnLimitDec(t *testing.T) {
+// makeRSTClosedValue builds the shape an RST-closed connection presents: the
+// dataplane clears the per-leg bits on the RST itself, leaving only the stamp.
+func makeRSTClosedValue(flags uint32, rstSeen, lastSeen time.Duration) Value {
+	v := NewValueNormal(lastSeen, flags,
+		established(true, remoteIfIndex), // A is opener
+		established(false, podIfIndex),   // B is responder
+	)
+	binary.LittleEndian.PutUint64(v[ctv4.VoRSTSeen:ctv4.VoRSTSeen+8], uint64(rstSeen))
+	return v
+}
+
+// An RST-closed flow reaches entryDone with only the stamp set, so the
+// two-minute residual window is what decides its dwell.
+func TestEntryDoneReapsRSTClosedConnectionAtResidualWindow(t *testing.T) {
+	to := timeouts.DefaultTimeouts()
+	// entryDone's window for an RST that may have been spurious.
+	const residual = 2 * time.Minute
+	rstAt := 10 * time.Second
+
+	val := makeRSTClosedValue(ctv4.FlagConnLimitIn, rstAt, rstAt+5*time.Millisecond)
+	lastSeen := val.LastSeen()
+
+	if reason, done := entryDone(to, lastSeen+int64(to.TCPResetSeen)+1, ProtoTCP, val, false); done {
+		t.Errorf("entry reaped at TCPResetSeen; the RST may yet prove spurious, "+
+			"so it has to stay for the residual window (reason %q)", reason)
+	}
+	if reason, done := entryDone(to, lastSeen+int64(residual)+1, ProtoTCP, val, false); !done {
+		t.Errorf("RST-closed entry outlived the residual window; it holds a "+
+			"connlimit slot until it is reaped (reason %q)", reason)
+	}
+}
+
+// Reaping needs silence, not just an RST, or a forged one would tear down a
+// live connection.
+func TestEntryDoneKeepsRSTHitConnectionWhileTrafficFlows(t *testing.T) {
+	to := timeouts.DefaultTimeouts()
+
+	// The RST is five minutes stale; the flow kept running afterwards.
+	rstAt := 10 * time.Second
+	val := makeRSTClosedValue(ctv4.FlagConnLimitIn, rstAt, rstAt+5*time.Minute)
+	lastSeen := val.LastSeen()
+
+	// Age is measured from LastSeen, so traffic alone keeps the entry.
+	if reason, done := entryDone(to, lastSeen+int64(time.Second), ProtoTCP, val, false); done {
+		t.Errorf("live connection reaped one second after its last packet "+
+			"because an RST had been seen (reason %q)", reason)
+	}
+}
+
+// TestConnLimitScannerCountsLiveConnectionLongAfterRST pins the other side of
+// the predicate: continued use keeps a connection counted.
+func TestConnLimitScannerCountsLiveConnectionLongAfterRST(t *testing.T) {
 	podIP := "10.65.0.2"
 	remoteIP := "10.65.1.3"
 
@@ -430,21 +692,75 @@ func TestConnLimitScannerSkipsConnLimitDec(t *testing.T) {
 		},
 	}
 
-	// Established connection with CONNLIMIT_DEC flag set — the BPF fast
-	// path already decremented the counter for this connection. The scanner
-	// must skip it to avoid recounting and overwriting the decremented value.
+	// Traffic 30s after the RST: the connection demonstrably continued.
+	rstAt := 10 * time.Second
 	key := makeKey(remoteIP, podIP, 54321, 8080)
-	val := NewValueNormal(time.Duration(0), ctv4.FlagConnLimitDec,
-		established(true),
-		established(false),
+	val := makeRSTClosedValue(ctv4.FlagConnLimitIn, rstAt, rstAt+30*time.Second)
+
+	verdict, _ := scanner.Check(key, val, nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
+
+	if n := scanner.counts[connlimitKey{ifindex: 9, direction: 1}]; n != 1 {
+		t.Errorf("live connection was excluded from the recount after a spurious "+
+			"RST: expected ingress count 1 for ifindex 9, got counts: %v", scanner.counts)
+	}
+}
+
+// TestConnLimitScannerRecountsLiveConnectionAfterSpuriousRST verifies that a
+// live, established connection is included in the recount even though the BPF
+// fast path already decremented the counter for it and claimed
+// CALI_CT_FLAG_CONNLIMIT_DEC.
+//
+// The fast path decrements on any RST: conntrack.h reads tcp_header->rst
+// directly, nothing validates the sequence number, and the spurious-RST
+// reasoning alongside it can only reach a verdict two minutes later, in
+// hindsight. A spurious RST — out of window, ignored by both peers — therefore
+// decrements a connection that is still up. That much is recoverable on its
+// own, because the per-leg RST bits clear as soon as traffic resumes
+// (conntrack.h:571-576) and the entry becomes countable again.
+//
+// What was not recoverable was CONNLIMIT_DEC, which nothing ever clears. While
+// this scanner skipped entries carrying it, such a connection was excluded
+// from every future recount — and since the recount is the only mechanism that
+// can give a slot back, the under-count became permanent. N spurious RSTs
+// against N live connections parked current_count at 0 with all N still up,
+// letting the pod open N more.
+//
+// An established entry with no FIN and no RST is live, so it must be counted,
+// whatever CONNLIMIT_DEC says.
+func TestConnLimitScannerRecountsLiveConnectionAfterSpuriousRST(t *testing.T) {
+	podIP := "10.65.0.2"
+	remoteIP := "10.65.1.3"
+
+	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
+		counts: make(map[connlimitKey]uint32),
+		podInfo: map[string]ConnLimitPodInfo{
+			string(net.ParseIP(podIP).To4()): podInfo(9, true, false),
+		},
+	}
+
+	// Pod is AddrB (responder), remote is AddrA (opener), so this counts
+	// against the pod's ingress limit. Both legs established, no FIN and no
+	// RST bit — the shape a busy connection presents once the transient RST
+	// marks have cleared — but CONNLIMIT_DEC is set from the earlier RST.
+	key := makeKey(remoteIP, podIP, 54321, 8080)
+	val := NewValueNormal(time.Duration(0), ctv4.FlagConnLimitIn|ctv4.FlagConnLimitDec,
+		established(true, remoteIfIndex),
+		established(false, podIfIndex),
 	)
 
 	verdict, _ := scanner.Check(key, val, nil)
 	if verdict != ScanVerdictOK {
 		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
 	}
-	if len(scanner.counts) != 0 {
-		t.Errorf("expected no counts for CONNLIMIT_DEC connection, got %v", scanner.counts)
+
+	expected := connlimitKey{ifindex: 9, direction: 1}
+	if scanner.counts[expected] != 1 {
+		t.Errorf("live established connection was excluded from the recount: "+
+			"expected ingress count 1 for ifindex 9, got counts: %v", scanner.counts)
 	}
 }
 

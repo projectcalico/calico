@@ -1,0 +1,7 @@
+apiVersion: operator.tigera.io/v1
+kind: TigeraStatus
+metadata:
+  name: tigerastatus-sample
+spec:
+  # Add fields here
+  foo: bar

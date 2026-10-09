@@ -15,14 +15,48 @@
 package validation_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// The complement of the FelixConfiguration default: BIRD takes the unencapsulated cluster routes
+// that Felix leaves alone.
+func TestBGPConfiguration_ProgramClusterRoutesDefault(t *testing.T) {
+	defaulted := uniqueName("bgpconfig-cluster-routes")
+	mustCreate(t, &v3.BGPConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: defaulted},
+		Spec:       v3.BGPConfigurationSpec{},
+	})
+
+	got := &v3.BGPConfiguration{}
+	if err := testClient.Get(context.Background(), client.ObjectKey{Name: defaulted}, got); err != nil {
+		t.Fatalf("failed to get config: %v", err)
+	}
+	if got.Spec.ProgramClusterRoutes == nil || *got.Spec.ProgramClusterRoutes != v3.EnabledNoEncapOnly {
+		t.Errorf("expected spec.programClusterRoutes=%q, got %v", v3.EnabledNoEncapOnly, got.Spec.ProgramClusterRoutes)
+	}
+
+	explicit := uniqueName("bgpconfig-cluster-routes")
+	mustCreate(t, &v3.BGPConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: explicit},
+		Spec:       v3.BGPConfigurationSpec{ProgramClusterRoutes: ptr.To(v3.Enabled)},
+	})
+
+	got = &v3.BGPConfiguration{}
+	if err := testClient.Get(context.Background(), client.ObjectKey{Name: explicit}, got); err != nil {
+		t.Fatalf("failed to get config: %v", err)
+	}
+	if got.Spec.ProgramClusterRoutes == nil || *got.Spec.ProgramClusterRoutes != v3.Enabled {
+		t.Errorf("expected spec.programClusterRoutes=%q, got %v", v3.Enabled, got.Spec.ProgramClusterRoutes)
+	}
+}
 
 func TestBGPConfiguration_Validation(t *testing.T) {
 	dur := metav1.Duration{Duration: 120 * time.Second}
@@ -125,4 +159,38 @@ func TestBGPConfiguration_Validation(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestBGPConfiguration_ASNumberBounds covers the 4-byte AS number space defined
+// by RFC 4893. AS numbers above INT32_MAX used to be rejected by the generated
+// CRD schema, which rendered the uint32 ASNumber type as "format: int32".
+func TestBGPConfiguration_ASNumberBounds(t *testing.T) {
+	// An asNumber outside the uint32 range cannot be expressed through the typed
+	// API, so build the object the way a raw manifest would.
+	newConfig := func(asNumber int64) *unstructured.Unstructured {
+		return &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "projectcalico.org/v3",
+				"kind":       "BGPConfiguration",
+				"metadata":   map[string]interface{}{"name": uniqueName("bgpconfig")},
+				"spec": map[string]interface{}{
+					"asNumber": asNumber,
+				},
+			},
+		}
+	}
+
+	t.Run("below minimum", func(t *testing.T) {
+		expectCreateFails(t, newConfig(-1), "asNumber")
+	})
+	t.Run("above maximum", func(t *testing.T) {
+		expectCreateFails(t, newConfig(4294967296), "asNumber")
+	})
+	t.Run("4-byte AS number above INT32_MAX", func(t *testing.T) {
+		expectCreateSucceeds(t, newConfig(4200000001))
+	})
+	t.Run("at the bounds", func(t *testing.T) {
+		expectCreateSucceeds(t, newConfig(0))
+		expectCreateSucceeds(t, newConfig(4294967295))
+	})
 }

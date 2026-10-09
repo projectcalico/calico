@@ -56,6 +56,8 @@ branch_label="${SEMAPHORE_GIT_BRANCH:-unknown}"
 branch_label="$(echo "$branch_label" | tr '[:upper:]' '[:lower:]')"
 branch_label="${branch_label//[^a-z0-9_-]/-}"
 labels="ci-runner=true"
+# Lets each CI system's sweeper find only its own VMs in the shared project.
+labels+=",ci-system=${CI_SYSTEM:-semaphore}"
 labels+=",ci-job-type=${CI_JOB_TYPE_LABEL:-${SEMAPHORE_GIT_REF_TYPE:-unknown}}"
 labels+=",ci-group=${CI_GROUP_LABEL:-unknown}"
 labels+=",ci-job=${CI_JOB_LABEL:-unknown}"
@@ -82,23 +84,29 @@ fi
 # We pass --region (not --zone) with --target-distribution-shape=any so that
 # GCP spreads the VMs across the zones of the region according to available
 # capacity.  This avoids a single zone filling up and failing the whole job.
+#
+# Shared with the replacement for a VM that fails to configure.
+# shellcheck disable=SC2054 # the commas are gcloud's metadata separator
+vm_create_args=(
+       --service-account="semaphore-v2-gcr@unique-caldron-775.iam.gserviceaccount.com"
+       --scopes="https://www.googleapis.com/auth/cloud-platform"
+       --machine-type="${VM_MACHINE_TYPE}"
+       --image-family="${IMAGE_FAMILY}"
+       --image-project=ubuntu-os-cloud
+       --boot-disk-size="$disk_size"
+       --boot-disk-type=hyperdisk-balanced
+       --max-run-duration="${MAX_RUN_DURATION}"
+       --instance-termination-action=DELETE
+       --labels="${labels}"
+       --metadata-from-file startup-script="$my_dir/vm-bootstrap.sh"
+       --metadata block-project-ssh-keys=TRUE,ssh-keys="ubuntu:$(ssh-keygen -y -f "$HOME/.ssh/id_rsa")",enable-guest-attributes=TRUE
+)
 echo "Creating test VMs in bulk across region ${region}..."
 gcloud --quiet compute instances bulk create \
-       --service-account="semaphore-v2-gcr@unique-caldron-775.iam.gserviceaccount.com" \
-       --scopes="https://www.googleapis.com/auth/cloud-platform" \
        --predefined-names="$names" \
-       --region=${region} \
+       --region="${region}" \
        --target-distribution-shape=any \
-       --machine-type=${VM_MACHINE_TYPE} \
-       --image-family=${IMAGE_FAMILY} \
-       --image-project=ubuntu-os-cloud \
-       --boot-disk-size=$disk_size \
-       --boot-disk-type=hyperdisk-balanced \
-       --max-run-duration="${MAX_RUN_DURATION}" \
-       --instance-termination-action=DELETE \
-       --labels="${labels}" \
-       --metadata-from-file startup-script="$my_dir/vm-bootstrap.sh" \
-       --metadata block-project-ssh-keys=TRUE,ssh-keys="ubuntu:$(ssh-keygen -y -f $HOME/.ssh/id_rsa)",enable-guest-attributes=TRUE
+       "${vm_create_args[@]}"
 
 # Since the VMs are spread across the region's zones, we can no longer assume a
 # single zone for the downstream describe/ssh/delete commands.  Build a
@@ -213,9 +221,31 @@ for batch in "${batches[@]}"; do
     rm -f "$done_marker"
     trap 'touch "$done_marker"' EXIT
 
+    # A VM that fails to boot is usually a bad instance, so a fresh one gets a
+    # second try. It keeps the name and zone, which everything else tracks it by.
+    : "${VM_CONFIGURE_ATTEMPTS:=2}"
     conf_log_file="$artifacts_dir/configure-vm-$batch_formatted.log"
-    echo "$prefix Configuring test VM $vm_name. Redirecting log to $conf_log_file."
-    if env ZONE="$zone" "${my_dir}/configure-test-vm" "$vm_name" >& "$conf_log_file"; then
+    : > "$conf_log_file"
+    configured=false
+    for attempt in $(seq 1 "$VM_CONFIGURE_ATTEMPTS"); do
+      echo "$prefix Configuring test VM $vm_name (attempt $attempt). Redirecting log to $conf_log_file."
+      if env ZONE="$zone" "${my_dir}/configure-test-vm" "$vm_name" >> "$conf_log_file" 2>&1; then
+        configured=true
+        break
+      fi
+      [ "$attempt" -lt "$VM_CONFIGURE_ATTEMPTS" ] || break
+      echo "$prefix Configuration of VM $vm_name FAILED; replacing it with a fresh VM."
+      echo "===== attempt $attempt failed; replacing $vm_name =====" >> "$conf_log_file"
+      gcloud --quiet beta compute instances delete "$vm_name" --zone="$zone" --no-graceful-shutdown >> "$conf_log_file" 2>&1
+      if ! gcloud --quiet compute instances create "$vm_name" --zone="$zone" "${vm_create_args[@]}" >> "$conf_log_file" 2>&1; then
+        echo "$prefix Could not create a replacement for $vm_name."
+        break
+      fi
+      # vm-ip caches by name and zone, both of which the replacement reuses.
+      rm -f "/tmp/vm_ip_${vm_name}_${zone}"
+      vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")"
+    done
+    if [ "$configured" = true ]; then
       echo "$prefix Configuration of VM $vm_name SUCCEEDED."
     else
       echo "$prefix Configuration of VM $vm_name FAILED.  Log file will be uploaded as artifact $conf_log_file. "
@@ -230,6 +260,7 @@ for batch in "${batches[@]}"; do
     else
       mv "$log_file" "$failed_log_file"
       echo "$prefix Test batch $batch FAILED.  Log file will be uploaded as artifact $failed_log_file."
+      # Upload alongside the fv-artifacts in GCS (GCS_WORKFLOW_DIR), via gcloud.
       if [ -n "${GCS_WORKFLOW_DIR:-}" ] && [ -n "${COMPONENT:-}" ]; then
         failed_log_upload_dir="${GCS_WORKFLOW_DIR}/${COMPONENT}/failed-fv-logs"
         if [ -n "${JOB_TAG:-}" ]; then
@@ -394,7 +425,26 @@ for i in "${!batches[@]}"; do
     batch_formatted="$(format_batch_for_log "$batch")"
     failed_summary_log="$artifacts_dir/test-$batch_formatted-FAILED.log"
     if [ ! -f "$failed_summary_log" ] && [ -f "$artifacts_dir/test-$batch_formatted.log" ]; then
-      failed_summary_log="$artifacts_dir/test-$batch_formatted.log"
+      # The batch failed without renaming its own log.  A batch the watchdog
+      # kills never reaches that rename, because the kill takes out the process
+      # group that would have done it.  Rename it here instead: the -FAILED
+      # suffix is how analyze-test-failures discovers which batches to analyse,
+      # so a log left under its running name gets no fv-tests-guru diagnosis and
+      # no DIAGS artifact, and the failure reaches CI reporting as nothing but
+      # the summary line below.  Safe at this point: we are past `wait`, so the
+      # batch is finished and nothing is still writing to the log.
+      mv "$artifacts_dir/test-$batch_formatted.log" "$failed_summary_log" ||
+        failed_summary_log="$artifacts_dir/test-$batch_formatted.log"
+      # Reaching here means the batch never ran its own failure handler, so the
+      # log stops wherever the batch was killed.  Say so in the log itself: it
+      # is now an input to fv-tests-guru, and a truncated transcript otherwise
+      # reads as a test that simply stopped emitting.  Best-effort under the
+      # script's `set -e`: a full disk is one of the things that gets a batch
+      # killed in the first place, and losing the marker must not cost us the
+      # summary, the failure exit code, or the watchdog cleanup below.
+      printf '\n===== Batch %s did not complete: killed before it could finish, so this log is truncated mid-run =====\n' \
+        "$batch" >> "$failed_summary_log" ||
+        echo "  Could not mark $failed_summary_log as truncated (rc=$?)"
     fi
     summary+=( "Test batch $batch FAILED; Log file will be uploaded as artifact $failed_summary_log" )
     final_result=1

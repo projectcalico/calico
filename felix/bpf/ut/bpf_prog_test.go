@@ -73,6 +73,12 @@ func init() {
 	logrusr.ConfigureEarlyLoggingFromEnv("felix")
 	log.SetLevel(log.DebugLevel)
 
+	// These tests use port 666 as an arbitrary NAT backend port and expect
+	// gopacket to leave the UDP payload opaque. gopacket v1.6.1 started
+	// dissecting port 666 as AGUE, which leaves the packet with no
+	// application layer.
+	layers.RegisterUDPPortLayerType(666, gopacket.LayerTypePayload)
+
 	fd := environment.NewFeatureDetector(make(map[string]string))
 	if ok, err := fd.KernelIsAtLeast("5.9.0"); err == nil && ok {
 		canTestMarks = true
@@ -365,10 +371,6 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	Expect(err).NotTo(HaveOccurred())
 	defer os.RemoveAll(bpfFsDir)
 
-	err = os.Mkdir(bpfFsDir+"_v6", os.ModePerm)
-	Expect(err).NotTo(HaveOccurred())
-	defer os.RemoveAll(bpfFsDir + "v6")
-
 	obj := "../../bpf-gpl/bin/test_xdp_debug"
 	if !topts.xdp {
 		obj = "../../bpf-gpl/bin/test_"
@@ -539,15 +541,20 @@ func runBpfTest(t *testing.T, section string, rules *polprog.Rules, testFn func(
 
 	ctxIn := make([]byte, 18*4)
 	binary.LittleEndian.PutUint32(ctxIn[2*4:3*4], skbMark)
-	if xdp {
-		// XDP tests cannot take context and would fail.
-		ctxIn = nil
-	}
 
 	topts := testOpts{}
 
 	for _, o := range opts {
 		o(&topts)
+	}
+
+	if topts.ingressIfindex != 0 {
+		// __sk_buff.ingress_ifindex; BPF_PROG_RUN copies it to skb->skb_iif.
+		binary.LittleEndian.PutUint32(ctxIn[9*4:10*4], topts.ingressIfindex)
+	}
+	if xdp {
+		// XDP tests cannot take context and would fail.
+		ctxIn = nil
 	}
 
 	cllr := caller(2)
@@ -904,6 +911,9 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 				if topts.natOutExcludeHosts {
 					globals.Flags |= libbpf.GlobalsNATOutgoingExcludeHosts
 				}
+				if topts.ifaceEncaps {
+					globals.Flags |= libbpf.GlobalsIfaceEncaps
+				}
 
 				if topts.ingressQoSPacketRate {
 					globals.Flags |= libbpf.GlobalsIngressPacketRateConfigured
@@ -927,6 +937,14 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 				if topts.redirectPeer {
 					globals.Flags |= libbpf.GlobalsRedirectPeer
+				}
+
+				if topts.rpfEnabled {
+					globals.Flags |= libbpf.GlobalsRPFOptionEnabled
+				}
+				if topts.rpfStrict {
+					globals.Flags |= libbpf.GlobalsRPFOptionEnabled |
+						libbpf.GlobalsRPFOptionStrict
 				}
 
 				globals.DSCP = -1
@@ -1304,6 +1322,7 @@ type testOpts struct {
 	objname                       string
 	flowLogsEnabled               bool
 	natOutExcludeHosts            bool
+	ifaceEncaps                   bool
 	ingressQoSPacketRate          bool
 	egressQoSPacketRate           bool
 	ingressQoSConnLimit           bool
@@ -1314,9 +1333,32 @@ type testOpts struct {
 	ipfragTimeout                 uint32
 	wgPort                        uint16
 	redirectPeer                  bool
+	rpfEnabled                    bool
+	rpfStrict                     bool
+	ingressIfindex                uint32
 }
 
 type testOption func(opts *testOpts)
+
+func withRPFEnabled() testOption {
+	return func(o *testOpts) {
+		o.rpfEnabled = true
+	}
+}
+
+func withRPFStrict() testOption {
+	return func(o *testOpts) {
+		o.rpfStrict = true
+	}
+}
+
+// withIngressIfindex sets __sk_buff.ingress_ifindex for the test run, which is
+// what hep_rpf_check compares the reverse route's device against.
+func withIngressIfindex(ifindex uint32) testOption {
+	return func(o *testOpts) {
+		o.ingressIfindex = ifindex
+	}
+}
 
 func withSubtests(v bool) testOption {
 	return func(o *testOpts) {
@@ -1372,6 +1414,12 @@ func withFlowLogs() testOption {
 func withNATOutExcludeHosts() testOption {
 	return func(o *testOpts) {
 		o.natOutExcludeHosts = true
+	}
+}
+
+func withIfaceEncaps() testOption {
+	return func(o *testOpts) {
+		o.ifaceEncaps = true
 	}
 }
 
@@ -2027,8 +2075,9 @@ func (pkt *Packet) handleL3() error {
 		} else {
 			pkt.ipv6.NextHeader = pkt.l4Protocol
 		}
-		pkt.length += 40
+		// payload_len excludes the 40-byte base header, unlike IPv4 tot_len.
 		pkt.ipv6.Length = uint16(pkt.length)
+		pkt.length += 40
 		pkt.layers = append(pkt.layers, pkt.ipv6)
 	default:
 		return fmt.Errorf("unrecognized l3 layer type %t", pkt.l3)

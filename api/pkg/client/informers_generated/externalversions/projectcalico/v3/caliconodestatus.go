@@ -20,11 +20,39 @@ import (
 )
 
 // CalicoNodeStatusInformer provides access to a shared informer and lister for
-// CalicoNodeStatuses.
+// CalicoNodeStatuses. Prefer using the type-safe variant (see [TypedCalicoNodeStatusInformer]).
 type CalicoNodeStatusInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.CalicoNodeStatusLister
 }
+
+// TypedCalicoNodeStatusInformer provides access to a shared informer and lister for
+// CalicoNodeStatuses, including the type-safe TypedInformer variant.
+// It is a superset of CalicoNodeStatusInformer.
+type TypedCalicoNodeStatusInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() CalicoNodeStatusIndexInformer
+	Lister() projectcalicov3.CalicoNodeStatusLister
+}
+
+// CalicoNodeStatusIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type CalicoNodeStatusIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.CalicoNodeStatus]
+
+// CalicoNodeStatusHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for CalicoNodeStatus.
+type CalicoNodeStatusHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.CalicoNodeStatus]
+
+// CalicoNodeStatusDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for CalicoNodeStatus.
+type CalicoNodeStatusDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.CalicoNodeStatus]
+
+// CalicoNodeStatusFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for CalicoNodeStatus.
+type CalicoNodeStatusFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.CalicoNodeStatus]
+
+// CalicoNodeStatusIndexers is a specialization of [cache.TypedIndexers] for CalicoNodeStatus.
+type CalicoNodeStatusIndexers = cache.TypedIndexers[*apisprojectcalicov3.CalicoNodeStatus]
+
+// DeletedCalicoNodeStatus is a specialization of [cache.DeletedObject] for CalicoNodeStatus.
+type DeletedCalicoNodeStatus = cache.DeletedObject[*apisprojectcalicov3.CalicoNodeStatus]
 
 type calicoNodeStatusInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,25 +62,49 @@ type calicoNodeStatusInformer struct {
 // NewCalicoNodeStatusInformer constructs a new informer for CalicoNodeStatus type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedCalicoNodeStatusInformer]).
 func NewCalicoNodeStatusInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewCalicoNodeStatusInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedCalicoNodeStatusInformer constructs a new informer for CalicoNodeStatus type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedCalicoNodeStatusInformer(client clientset.Interface, resyncPeriod time.Duration, indexers CalicoNodeStatusIndexers) CalicoNodeStatusIndexInformer {
+	return NewTypedCalicoNodeStatusInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredCalicoNodeStatusInformer constructs a new informer for CalicoNodeStatus type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredCalicoNodeStatusInformer]).
 func NewFilteredCalicoNodeStatusInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewCalicoNodeStatusInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedCalicoNodeStatusInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredCalicoNodeStatusInformer constructs a new informer for CalicoNodeStatus type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredCalicoNodeStatusInformer(client clientset.Interface, resyncPeriod time.Duration, indexers CalicoNodeStatusIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) CalicoNodeStatusIndexInformer {
+	return NewTypedCalicoNodeStatusInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewCalicoNodeStatusInformerWithOptions constructs a new informer for CalicoNodeStatus type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedCalicoNodeStatusInformerWithOptions]).
 func NewCalicoNodeStatusInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedCalicoNodeStatusInformerWithOptions(client, options)
+}
+
+// NewTypedCalicoNodeStatusInformerWithOptions constructs a new informer for CalicoNodeStatus type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedCalicoNodeStatusInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) CalicoNodeStatusIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "caliconodestatuses"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.CalicoNodeStatus](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -85,17 +137,57 @@ func NewCalicoNodeStatusInformerWithOptions(client clientset.Interface, options 
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *calicoNodeStatusInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewCalicoNodeStatusInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedCalicoNodeStatusInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *calicoNodeStatusInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.CalicoNodeStatus{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *calicoNodeStatusInformer) TypedInformer() CalicoNodeStatusIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.CalicoNodeStatus](f.factory.InformerFor(&apisprojectcalicov3.CalicoNodeStatus{}, f.defaultInformer))
 }
 
 func (f *calicoNodeStatusInformer) Lister() projectcalicov3.CalicoNodeStatusLister {
 	return projectcalicov3.NewCalicoNodeStatusLister(f.Informer().GetIndexer())
+}
+
+// ToTypedCalicoNodeStatusInformer converts an untyped informer into a TypedCalicoNodeStatusInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *CalicoNodeStatus. If that is not the case, calling type-safe methods of the returned
+// TypedCalicoNodeStatusInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedCalicoNodeStatusInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedCalicoNodeStatusInformer(informer CalicoNodeStatusInformer) TypedCalicoNodeStatusInformer {
+	if informer, ok := informer.(TypedCalicoNodeStatusInformer); ok {
+		return informer
+	}
+	return &calicoNodeStatusTypedInformerAdapter{informer}
+}
+
+type calicoNodeStatusTypedInformerAdapter struct {
+	CalicoNodeStatusInformer
+}
+
+func (a *calicoNodeStatusTypedInformerAdapter) TypedInformer() CalicoNodeStatusIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.CalicoNodeStatus](a.Informer())
+}
+
+// ToCalicoNodeStatusIndexInformer converts an untyped informer into a CalicoNodeStatusIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *CalicoNodeStatus. If that is not the case, calling type-safe methods of the returned
+// CalicoNodeStatusIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a CalicoNodeStatusIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToCalicoNodeStatusIndexInformer(informer cache.SharedIndexInformer) CalicoNodeStatusIndexInformer {
+	if informer, ok := informer.(CalicoNodeStatusIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.CalicoNodeStatus](informer)
 }

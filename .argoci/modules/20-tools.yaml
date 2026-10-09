@@ -1,0 +1,18 @@
+# In-repo tooling (hack/) `make ci`.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: tools-ci
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    depends: [check-go]
+    requests: {cpu: 3750m, memory: 2.25Gi}
+    commands: |
+      cd hack
+      make ci

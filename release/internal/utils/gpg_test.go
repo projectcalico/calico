@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -218,6 +219,66 @@ func TestSignRPMFilesNoFiles(t *testing.T) {
 func TestSignRPMFilesAllFiltered(t *testing.T) {
 	if err := SignRPMFiles("SOMEKEYID", []string{t.TempDir()}); err == nil {
 		t.Error("SignRPMFiles: expected an error when no regular files remain, got nil")
+	}
+}
+
+// TestSignArgs verifies the rpmsign invocation works on both rpm generations:
+// the key is named by the macro each one reads, and --rpmv4 is passed only where
+// it exists. rpm gained that option in 6.0, and passing it to rpm 4 fails the
+// whole signing step with "unknown option". The probe is replaced here so both
+// cases are covered whatever rpm this machine has.
+func TestSignArgs(t *testing.T) {
+	original := rpmsignSupportsRPMV4
+	t.Cleanup(func() { rpmsignSupportsRPMV4 = original })
+
+	for _, tc := range []struct {
+		name      string
+		supported bool
+	}{
+		{name: "rpmsign accepts --rpmv4", supported: true},
+		{name: "rpmsign rejects --rpmv4", supported: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rpmsignSupportsRPMV4 = func() bool { return tc.supported }
+			args := signArgs("SOMEKEYID", []string{"one.rpm", "two.rpm"})
+
+			if got := slices.Contains(args, "--rpmv4"); got != tc.supported {
+				t.Errorf("--rpmv4 present = %v, want %v, in: %v", got, tc.supported, args)
+			}
+			// Whichever rpm runs this, one of the two key macros is the one it
+			// reads, so both must be defined, and the rest of the invocation and
+			// the packages it signs are the same either way.
+			for _, want := range []string{
+				"--resign",
+				"%_gpg_name SOMEKEYID",
+				"%_openpgp_sign_id SOMEKEYID",
+			} {
+				if !slices.Contains(args, want) {
+					t.Errorf("expected %q in args, got: %v", want, args)
+				}
+			}
+			if files := args[len(args)-2:]; !slices.Equal(files, []string{"one.rpm", "two.rpm"}) {
+				t.Errorf("expected the packages last, got: %v", files)
+			}
+		})
+	}
+}
+
+// TestSignArgsOverridesGPGPath verifies rpmsign is pointed at the gpg that is
+// installed. rpm 4 on Debian and Ubuntu defaults %__gpg to /usr/bin/gpg2, which
+// their gnupg package does not ship, and signing dies trying to exec it.
+func TestSignArgsOverridesGPGPath(t *testing.T) {
+	original := rpmsignSupportsRPMV4
+	t.Cleanup(func() { rpmsignSupportsRPMV4 = original })
+	rpmsignSupportsRPMV4 = func() bool { return false }
+
+	gpgPath, err := exec.LookPath("gpg")
+	if err != nil {
+		t.Skip("gpg not on PATH; nothing to point rpmsign at")
+	}
+	args := signArgs("SOMEKEYID", []string{"one.rpm"})
+	if want := "%__gpg " + gpgPath; !slices.Contains(args, want) {
+		t.Errorf("expected %q in args, got: %v", want, args)
 	}
 }
 

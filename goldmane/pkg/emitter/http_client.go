@@ -58,11 +58,9 @@ func newHTTPClient(caCert, clientKey, clientCert, serverName string) (*http.Clie
 	// If we can't connect to the server within 10 seconds, something is up.
 	// Note: this is not the same as the request timeout, which is handled via the
 	// provided context on a per-request basis.
-	dialWithTimeout := func(network, addr string) (net.Conn, error) {
-		return net.DialTimeout(network, addr, 10*time.Second)
-	}
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	httpTransport := &http.Transport{
-		Dial:            dialWithTimeout,
+		DialContext:     dialer.DialContext,
 		TLSClientConfig: tlsConfig,
 	}
 

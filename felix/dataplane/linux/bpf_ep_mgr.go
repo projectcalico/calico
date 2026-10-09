@@ -109,6 +109,9 @@ var (
 		Help: "Number of BPF endpoints that are successfully programmed.",
 	})
 	errApplyingPolicy = errors.New("error applying policy")
+	errLayoutLookup   = errors.New("error looking up program layout")
+	// errIPIPDeviceNotL3 is permanent: the l3 program cannot parse the L2 frames of a pre-5.14 IPIP device.
+	errIPIPDeviceNotL3 = errors.New("the kernel's IPIP device is not an L3 device (needs kernel 5.14+ or RHEL 4.18.0-330+)")
 )
 
 var (
@@ -144,6 +147,8 @@ const (
 	IfaceTypeBond
 	IfaceTypeBondSlave
 	IfaceTypeNetkit
+	IfaceTypeBridge
+	IfaceTypeBridgeSlave
 	IfaceTypeUnknown
 )
 
@@ -173,6 +178,7 @@ type bpfDataplane interface {
 	ensureStarted()
 	ensureProgramAttached(attachPoint) error
 	ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error
+	ensureProgramLayout(ap *tc.AttachPoint, ipFamily proto.IPVersion) error
 	ensureNoProgram(attachPoint) error
 	ensureQdisc(iface string) (bool, error)
 	ensureBPFDevices() error
@@ -189,6 +195,8 @@ type bpfDataplane interface {
 	interfaceByIndex(int) (*net.Interface, error)
 	queryClassifier(string, string) bool
 	getIfaceLink(string) (netlink.Link, error)
+	getIfaceLinkByIndex(int) (netlink.Link, error)
+	netkitPinned(string) bool
 }
 
 type hasLoadPolicyProgram interface {
@@ -217,6 +225,19 @@ func (i *bpfInterfaceState) clearJumps() {
 	i.v4.clearJumps()
 	i.v6.clearJumps()
 	i.filterIdx = [hook.Count]int{-1, -1, -1}
+}
+
+// hasJumps reports whether any jump map index is currently held by this
+// interface, i.e. whether netkitJumps names an allocator that owes something.
+// Only workload interfaces ever change attach mechanism, and they never hold an
+// XDP index — that allocator serves data interfaces — so XDP is not checked.
+func (i *bpfInterfaceState) hasJumps() bool {
+	for _, h := range []hook.Hook{hook.Ingress, hook.Egress} {
+		if i.v4.policyIdx[h] >= 0 || i.v6.policyIdx[h] >= 0 || i.filterIdx[h] >= 0 {
+			return true
+		}
+	}
+	return false
 }
 
 var zeroIface bpfInterface = func() bpfInterface {
@@ -264,6 +285,16 @@ type bpfInterfaceState struct {
 	filterIdx   [hook.Count]int
 	v4Readiness ifaceReadiness
 	v6Readiness ifaceReadiness
+	// netkitJumps records which of the two jump map allocators the indices
+	// above came from: netkit-attached interfaces allocate from
+	// netkitJumpMapAllocs, everything else from jumpMapAllocs, and an index
+	// must go back to the allocator that issued it. The attach mechanism can
+	// change under a live interface, so the link type is not a stand-in for
+	// this — see useNetkitAttach.
+	netkitJumps bool
+	// preambleGlobals is what each hook's attached preamble was configured
+	// with; zero means unknown.
+	preambleGlobals [hook.Count]libbpf.TcGlobalData
 }
 
 type bpfInterfaceJumpIndices struct {
@@ -308,9 +339,11 @@ type bpfEndpointManager struct {
 	// when the kernel is running with lockdown=confidentiality (ftrace
 	// disabled), where loading a preamble that references bpf_trace_printk
 	// spams the kernel log on every attach.
-	bpfNoTracePrintk        bool
-	hostname                string
-	dataIfaceRegex          *regexp.Regexp
+	bpfNoTracePrintk bool
+	hostname         string
+	dataIfaceRegex   *regexp.Regexp
+	// encapIfaces holds Calico's own encapsulating devices, by name.
+	encapIfaces             set.Set[string]
 	l3IfaceRegex            *regexp.Regexp
 	workloadIfaceRegex      *regexp.Regexp
 	epToHostAction          string
@@ -384,10 +417,15 @@ type bpfEndpointManager struct {
 	// Service routes
 	hostNetworkedNATMode hostNetworkedNATMode
 
-	bpfPolicyDebugEnabled  bool
-	bpfOverlayIPOnDevice   bool
-	bpfRedirectToPeer      string
+	bpfPolicyDebugEnabled bool
+	bpfOverlayIPOnDevice  bool
+	bpfRedirectToPeer     string
+	// bpfAttachType is the mechanism used for every attach point that is not
+	// netkit-attached; it only ever holds TC or TCX. The netkit option is
+	// resolved into netkitAttachAllowed + TCX at startup so that the rest of
+	// the manager keeps dealing with a two-valued enum.
 	bpfAttachType          apiv3.BPFAttachOption
+	netkitAttachAllowed    bool
 	policyTrampolineStride atomic.Int32
 
 	routeTableV4       *routetable.ClassView
@@ -577,6 +615,7 @@ func NewBPFEndpointManager(
 		policiesToWorkloads:     map[types.PolicyID]set.Set[any]{},
 		profilesToWorkloads:     map[types.ProfileID]set.Set[any]{},
 		dirtyIfaceNames:         set.New[string](),
+		encapIfaces:             set.New[string](),
 		hostIfaceTrees:          make(bpfIfaceTrees),
 		bpfLogLevel:             bpfLogLevel,
 		bpfNoTracePrintk:        bpfNoTracePrintk,
@@ -657,18 +696,23 @@ func NewBPFEndpointManager(
 	specialInterfaces := []string{"egress.calico"}
 	if config.RulesConfig.IPIPEnabled {
 		specialInterfaces = append(specialInterfaces, dataplanedefs.IPIPIfaceName)
+		m.encapIfaces.Add(dataplanedefs.IPIPIfaceName)
 	}
 	if config.RulesConfig.VXLANEnabled {
 		specialInterfaces = append(specialInterfaces, dataplanedefs.VXLANIfaceNameV4)
+		m.encapIfaces.Add(dataplanedefs.VXLANIfaceNameV4)
 	}
 	if config.RulesConfig.VXLANEnabledV6 {
 		specialInterfaces = append(specialInterfaces, dataplanedefs.VXLANIfaceNameV6)
+		m.encapIfaces.Add(dataplanedefs.VXLANIfaceNameV6)
 	}
 	if config.RulesConfig.WireguardEnabled {
 		specialInterfaces = append(specialInterfaces, config.RulesConfig.WireguardInterfaceName)
+		m.encapIfaces.Add(config.RulesConfig.WireguardInterfaceName)
 	}
 	if config.RulesConfig.WireguardEnabledV6 {
 		specialInterfaces = append(specialInterfaces, config.RulesConfig.WireguardInterfaceNameV6)
+		m.encapIfaces.Add(config.RulesConfig.WireguardInterfaceNameV6)
 	}
 
 	if config.RulesConfig.IPIPEnabled || config.RulesConfig.WireguardEnabled || config.RulesConfig.WireguardEnabledV6 {
@@ -732,11 +776,14 @@ func NewBPFEndpointManager(
 		m.hostNetworkedNATMode = hostNetworkedNATEnabled
 	}
 
-	if m.bpfAttachType == apiv3.BPFAttachOptionTCX {
-		if !tc.IsTcxSupported() {
-			logrus.Infof("tcx is not supported. Falling back to tc")
-			m.bpfAttachType = apiv3.BPFAttachOptionTC
-		}
+	// Netkit is not a mechanism that can be used on every interface, only on
+	// workload interfaces that are netkit devices. Resolve it into "netkit is
+	// allowed where it applies, TCX everywhere else" so that bpfAttachType is
+	// only ever TC or TCX from here on.
+	configuredAttachType := m.bpfAttachType
+	m.bpfAttachType, m.netkitAttachAllowed = tc.ResolveAttachType(configuredAttachType)
+	if configuredAttachType != apiv3.BPFAttachOptionTC && m.bpfAttachType == apiv3.BPFAttachOptionTC {
+		logrus.Infof("tcx is not supported. Falling back to tc")
 	}
 	m.v4 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV4, bpfmaps.V4, iptablesFilterTableV4, ipSetIDAllocV4, workloadRemoveChanV4, m)
 
@@ -1173,12 +1220,12 @@ func (d *bpfEndpointManagerDataplane) updateIfaceIP(update *ifaceAddrsUpdate) bo
 	return isDirty
 }
 
-func (m *bpfEndpointManager) reclaimPolicyIdx(name string, ipFamily int, iface *bpfInterface) {
-	idx := &iface.dpState.v4
+func (m *bpfEndpointManager) reclaimPolicyIdx(name string, ipFamily int, state *bpfInterfaceState) {
+	idx := &state.v4
 	if ipFamily == 6 {
-		idx = &iface.dpState.v6
+		idx = &state.v6
 	}
-	isNetkit := iface.info.ifaceType == IfaceTypeNetkit
+	isNetkit := state.netkitJumps
 	for _, attachHook := range []hook.Hook{hook.XDP, hook.Ingress, hook.Egress} {
 		// XDP is never netkit-attached; only ingress/egress use netkit jump maps.
 		useNetkit := isNetkit && attachHook != hook.XDP
@@ -1195,20 +1242,20 @@ func (m *bpfEndpointManager) reclaimPolicyIdx(name string, ipFamily int, iface *
 	}
 }
 
-func (m *bpfEndpointManager) reclaimFilterIdx(name string, iface *bpfInterface) {
-	isNetkit := iface.info.ifaceType == IfaceTypeNetkit
+func (m *bpfEndpointManager) reclaimFilterIdx(name string, state *bpfInterfaceState) {
+	isNetkit := state.netkitJumps
 	allocs := m.jumpMapAllocs
 	if isNetkit {
 		allocs = m.netkitJumpMapAllocs
 	}
 	for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
-		if err := m.jumpMapDelete(attachHook, iface.dpState.filterIdx[attachHook], isNetkit); err != nil {
+		if err := m.jumpMapDelete(attachHook, state.filterIdx[attachHook], isNetkit); err != nil {
 			logrus.WithError(err).Warn("Filter program may leak.")
 		}
-		if err := allocs[attachHook].Put(iface.dpState.filterIdx[attachHook], name); err != nil {
+		if err := allocs[attachHook].Put(state.filterIdx[attachHook], name); err != nil {
 			logrus.WithError(err).Errorf("Filter hook %s", attachHook)
 		}
-		iface.dpState.filterIdx[attachHook] = -1
+		state.filterIdx[attachHook] = -1
 	}
 }
 
@@ -1273,12 +1320,12 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 		m.ifStateMap.Desired().Set(k, v)
 	} else {
 		if m.v4 != nil {
-			m.reclaimPolicyIdx(name, 4, iface)
+			m.reclaimPolicyIdx(name, 4, &iface.dpState)
 		}
 		if m.v6 != nil {
-			m.reclaimPolicyIdx(name, 6, iface)
+			m.reclaimPolicyIdx(name, 6, &iface.dpState)
 		}
-		m.reclaimFilterIdx(name, iface)
+		m.reclaimFilterIdx(name, &iface.dpState)
 		m.ifStateMap.Desired().Delete(k)
 		iface.dpState.clearJumps()
 	}
@@ -1336,6 +1383,25 @@ func cleanupNetkitPins(iface string) {
 		}
 		os.Remove(ap.NetkitProgPinPath())
 	}
+}
+
+// netkitPinned reports whether a netkit link is pinned for this interface. The
+// pin is the record of which mechanism the previous Felix used, which is what
+// start-of-day resync needs; the interface being a netkit *device* says nothing
+// about how it was attached (see useNetkitAttach).
+func netkitPinned(iface string) bool {
+	for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
+		ap := tc.AttachPoint{
+			AttachPoint: bpf.AttachPoint{
+				Iface: iface,
+				Hook:  attachHook,
+			},
+		}
+		if _, err := os.Stat(ap.NetkitProgPinPath()); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *bpfEndpointManager) cleanupOldTcAttach(iface string) error {
@@ -1425,7 +1491,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			// update the ifaceType, master ifindex if bond slave.
 			link, err := m.dp.getIfaceLink(update.Name)
 			if err != nil {
-				logrus.Errorf("Failed to get interface information via netlink '%s'", update.Name)
+				logrus.WithError(err).Errorf("Failed to get interface information via netlink '%s'", update.Name)
 				curIfaceType = IfaceTypeL3
 				if m.isDataIface(update.Name) {
 					curIfaceType = IfaceTypeData
@@ -1515,6 +1581,12 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			iface.info.ifIndex = 0
 			iface.info.masterIfIndex = 0
 			iface.info.ifaceType = 0
+			// The interface is gone, so every scrap of state we derived from
+			// it is stale; drop it wholesale rather than field by field.
+			// withIface only forgets an interface once its bpfInterface is
+			// back to the zero value, so a field left set here would leak the
+			// entry for the lifetime of the process.
+			iface.dpState = zeroIface.dpState
 		}
 		// Capture the WEP binding + (possibly zero) ifIndex so we can
 		// refresh the connlimit pod info snapshot after the withIface
@@ -1575,7 +1647,11 @@ func (m *bpfEndpointManager) onWorkloadEndpointRemove(msg *proto.WorkloadEndpoin
 	}
 
 	m.withIface(oldWEP.Name, func(iface *bpfInterface) bool {
+		// Clear everything we learned from the endpoint, not just its ID:
+		// withIface only forgets an interface once its bpfInterface is back
+		// to the zero value.
 		iface.info.endpointID = nil
+		iface.info.hasIstioDSCP = false
 		return false
 	})
 	// Remove policy debug info if any
@@ -1734,7 +1810,6 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 		if err != nil {
 			// "net" does not export the strings or err types :(
 			if strings.Contains(err.Error(), "no such network interface") {
-				m.ifStateMap.Desired().Delete(k)
 				// Device does not exist anymore so delete all associated policies we know
 				// about as we will not hear about that device again.
 				for _, fn := range []func() int{
@@ -1772,9 +1847,6 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 			}
 		} else if m.isDataIface(netiface.Name) || m.isWorkloadIface(netiface.Name) || m.isL3Iface(netiface.Name) {
 			// We only add iface that we still manage as configuration could have changed.
-
-			m.ifStateMap.Desired().Set(k, v)
-
 			m.withIface(netiface.Name, func(iface *bpfInterface) bool {
 				if netiface.Flags&net.FlagUp != 0 {
 					iface.info.ifIndex = netiface.Index
@@ -1786,23 +1858,28 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 						iface.dpState.v6Readiness = ifaceIsReadyNotAssured
 					}
 				}
-				// Workload interfaces backed by netkit allocate their jump map
+				// Netkit-attached workload interfaces allocate their jump map
 				// indices from netkitJumpMapAllocs rather than jumpMapAllocs (see
-				// allocJumpIndicesForWEP / wepStateFillJumps). Determine the type
-				// here so that we reclaim each persisted index from the same
-				// allocator the apply path will use. If a netkit WEP's index were
-				// reclaimed into the regular allocator, the netkit allocator would
-				// believe that index is free and later hand it to another WEP,
-				// leaving two endpoints sharing one jump map slot and corrupting
-				// one of their policy programs.
+				// allocJumpIndicesForWEP / wepStateFillJumps), so each persisted
+				// index has to be reclaimed by the allocator that issued it. If a
+				// netkit WEP's index were reclaimed into the regular allocator, the
+				// netkit allocator would believe that index is free and later hand
+				// it to another WEP, leaving two endpoints sharing one jump map
+				// slot and corrupting one of their policy programs.
+				//
+				// What the previous Felix attached is recorded by the netkit link
+				// pin, not by the device type: BPFAttachType may have changed to
+				// TC/TCX across the restart, in which case a netkit device now
+				// carries — and from here on allocates — TC/TCX state.
 				isNetkit := false
 				if m.isWorkloadIface(netiface.Name) {
 					if link, err := m.dp.getIfaceLink(netiface.Name); err == nil {
 						if t := m.getIfaceTypeFromLink(link); t != IfaceTypeUnknown {
 							iface.info.ifaceType = t
-							isNetkit = t == IfaceTypeNetkit
 						}
 					}
+					isNetkit = m.dp.netkitPinned(netiface.Name)
+					iface.dpState.netkitJumps = isNetkit
 				}
 				checkAndReclaimIdx := func(idx int, h hook.Hook, indexMap []int) {
 					if idx < 0 {
@@ -1849,9 +1926,6 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 				// the new jump maps!
 				return true
 			})
-		} else {
-			// We no longer manage this device
-			m.ifStateMap.Desired().Delete(k)
 		}
 	})
 }
@@ -2130,7 +2204,11 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		}
 	})
 
-	if m.permanentBPFErr != nil {
+	if errors.Is(m.permanentBPFErr, errIPIPDeviceNotL3) {
+		m.reportHealth(false,
+			"IPIP is not supported by the eBPF dataplane on this kernel: "+errIPIPDeviceNotL3.Error()+
+				". Use VXLAN encapsulation or upgrade the kernel.")
+	} else if m.permanentBPFErr != nil {
 		m.reportHealth(false,
 			"BPF program load failed: program rejected by kernel BPF verifier. "+
 				"Calico eBPF dataplane requires kernel 5.10+. See Felix logs for details.")
@@ -2255,16 +2333,18 @@ func hostIPAbsenceDetail(family string, since time.Time) string {
 
 func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string, xdpMode XDPMode) (bpfInterfaceState, error) {
 	var (
-		err     error
-		up      bool
-		ifIndex int
-		state   bpfInterfaceState
+		err       error
+		up        bool
+		ifIndex   int
+		ifaceType IfaceType
+		state     bpfInterfaceState
 	)
 
 	m.ifacesLock.Lock()
 	m.withIface(iface, func(iface *bpfInterface) bool {
 		up = iface.info.ifaceIsUp()
 		ifIndex = iface.info.ifIndex
+		ifaceType = iface.info.ifaceType
 		state = iface.dpState
 		return false
 	})
@@ -2272,6 +2352,9 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 	if !up {
 		logrus.WithField("iface", iface).Debug("Ignoring interface that is down")
 		return state, nil
+	}
+	if ifaceType == IfaceTypeIPIP && !m.features.IPIPDeviceIsL3 {
+		return state, errIPIPDeviceNotL3
 	}
 
 	hepIface := iface
@@ -2508,6 +2591,11 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 						"Calico eBPF dataplane requires kernel 5.10+. See logs above for verifier output.")
 				m.permanentBPFErr = err
 				m.dirtyIfaceNames.Discard(iface)
+			} else if errors.Is(err, errIPIPDeviceNotL3) {
+				logrus.WithField("iface", iface).WithError(err).Error(
+					"Not attaching BPF programs to the IPIP device. Use VXLAN encapsulation or upgrade the kernel.")
+				m.permanentBPFErr = err
+				m.dirtyIfaceNames.Discard(iface)
 			} else if isLinkNotFoundError(err) {
 				logrus.WithField("iface", iface).Debug(
 					"Tried to apply BPF program to interface but the interface wasn't present.  " +
@@ -2660,6 +2748,28 @@ func (m *bpfEndpointManager) wepStateFillJumps(ap *tc.AttachPoint, state *bpfInt
 
 	isNetkit := ap.IsNetkit()
 
+	// The attach mechanism changed under this interface, so the indices we hold
+	// were issued by the other allocator. Hand them back before allocating
+	// replacements; keeping them would leave both allocators believing they own
+	// the same slot, and two endpoints would end up sharing a jump map entry.
+	if isNetkit != state.netkitJumps {
+		if state.hasJumps() {
+			logrus.WithFields(logrus.Fields{
+				"iface":  ap.IfaceName(),
+				"netkit": isNetkit,
+			}).Info("Attach mechanism changed, reallocating jump map indices.")
+			if m.v4 != nil {
+				m.reclaimPolicyIdx(ap.IfaceName(), 4, state)
+			}
+			if m.v6 != nil {
+				m.reclaimPolicyIdx(ap.IfaceName(), 6, state)
+			}
+			m.reclaimFilterIdx(ap.IfaceName(), state)
+			state.clearJumps()
+		}
+		state.netkitJumps = isNetkit
+	}
+
 	// Allocate indices for IPv4
 	if m.v4 != nil {
 		err = m.allocJumpIndicesForWEP(ap.IfaceName(), isNetkit, &state.v4)
@@ -2751,6 +2861,18 @@ func (m *bpfEndpointManager) queryClassifier(ifaceName, tcHook string) bool {
 	return true
 }
 
+// useNetkitAttach reports whether this interface should be driven through the
+// netkit attach API rather than TC/TCX. Only workload interfaces are ours to
+// manage that way — other netkit devices (host/data interfaces) are not ours.
+// Selecting TC or TCX explicitly opts a node out, which is how an existing
+// netkit device is migrated onto TC/TCX without recreating its pod.
+func (m *bpfEndpointManager) useNetkitAttach(ifaceName string, ifaceType IfaceType) bool {
+	return m.netkitAttachAllowed &&
+		ifaceType == IfaceTypeNetkit &&
+		m.isWorkloadIface(ifaceName) &&
+		tc.IsNetkitSupported()
+}
+
 func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState, error) {
 	startTime := time.Now()
 
@@ -2787,8 +2909,20 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	// datastore.  If we don't have an endpoint then we'll attach a program to block traffic and we'll
 	// get the jump map ready to insert the policy if the endpoint shows up.
 
-	// Netkit devices don't need a qdisc — only legacy TC does.
-	if ifaceType != IfaceTypeNetkit {
+	netkitAttach := m.useNetkitAttach(ifaceName, ifaceType)
+
+	// Switching an interface between netkit and TC/TCX changes both the programs
+	// that must be attached and the jump map they index into, so nothing we
+	// carried over from the previous mechanism can be reused. Drop back to a
+	// full attach; wepStateFillJumps then reallocates the indices.
+	if netkitAttach != state.netkitJumps && state.hasJumps() {
+		state.v4Readiness = ifaceNotReady
+		state.v6Readiness = ifaceNotReady
+	}
+
+	// Netkit-attached devices don't need a qdisc — only legacy TC does. A netkit
+	// device that we drive with TC/TCX still needs one.
+	if !netkitAttach {
 		// Attach the qdisc first; it is shared between the directions.
 		existed, err := m.dp.ensureQdisc(ifaceName)
 		if err != nil {
@@ -2805,6 +2939,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 			// attached. Do the full attach!
 			state.v4Readiness = ifaceNotReady
 			state.v6Readiness = ifaceNotReady
+			state.preambleGlobals = [hook.Count]libbpf.TcGlobalData{}
 		}
 	}
 
@@ -2828,10 +2963,12 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		if !m.dp.queryClassifier(ifaceName, hook.Ingress.String()) {
 			v4Readiness = ifaceNotReady
 			v6Readiness = ifaceNotReady
+			state.preambleGlobals = [hook.Count]libbpf.TcGlobalData{}
 		}
 		if !m.dp.queryClassifier(ifaceName, hook.Egress.String()) {
 			v4Readiness = ifaceNotReady
 			v6Readiness = ifaceNotReady
+			state.preambleGlobals = [hook.Count]libbpf.TcGlobalData{}
 		}
 	}
 
@@ -2839,9 +2976,8 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	ap.IfIndex = ifindex
 
 	// For workload netkit devices, override the attachment mechanism to use native
-	// netkit BPF attachment instead of TC/TCX. Only workload interfaces are ours to
-	// manage this way — other netkit devices (host/data interfaces) are not ours.
-	if ifaceType == IfaceTypeNetkit && m.isWorkloadIface(ifaceName) && tc.IsNetkitSupported() {
+	// netkit BPF attachment instead of TC/TCX.
+	if netkitAttach {
 		ap.Netkit = true
 		// Netkit programs have a different expected_attach_type and cannot
 		// share prog_array maps with TC/TCX programs. Use separate maps.
@@ -2963,30 +3099,24 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	wg.Wait()
 
-	attachPreamble := false
-	if m.v6 != nil {
-		attachPreamble = v6Readiness != ifaceIsReady
-	}
-	if m.v4 != nil {
-		attachPreamble = v4Readiness != ifaceIsReady
+	// Without its layout a ready family would drop out of the preamble, so keep
+	// the attached preamble and fully reload that family next time.
+	if errors.Is(err4, errLayoutLookup) || errors.Is(err6, errLayoutLookup) {
+		if errors.Is(err4, errLayoutLookup) {
+			state.v4Readiness = ifaceNotReady
+		}
+		if errors.Is(err6, errLayoutLookup) {
+			state.v6Readiness = ifaceNotReady
+		}
+		return state, errors.Join(err4, err6)
 	}
 
-	// Attach preamble TC program
-	if attachPreamble {
-		wg.Go(func() {
-			ingressAP := mergeAttachPoints(ingressAP4, ingressAP6)
-			if ingressAP != nil {
-				m.loadFilterProgram(ingressAP)
-				ingressErr = m.dp.ensureProgramAttached(ingressAP)
-			}
-		})
-		egressAP := mergeAttachPoints(egressAP4, egressAP6)
-		if egressAP != nil {
-			m.loadFilterProgram(egressAP)
-			egressErr = m.dp.ensureProgramAttached(egressAP)
-		}
-		wg.Wait()
-	}
+	globals := wepPreambleGlobals(ingressAP4, ingressAP6, egressAP4, egressAP6)
+	wg.Go(func() {
+		ingressErr = m.ensureWepPreamble(&state, globals, ingressAP4, ingressAP6)
+	})
+	egressErr = m.ensureWepPreamble(&state, globals, egressAP4, egressAP6)
+	wg.Wait()
 
 	if ingressErr != nil {
 		return state, ingressErr
@@ -3228,6 +3358,9 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 			return nil, fmt.Errorf("attaching program to wep: %w", err)
 		}
 		ap.Log().Info("Attached programs to the WEP")
+	} else if err := d.mgr.dp.ensureProgramLayout(ap, d.ipFamily); err != nil {
+		// The preamble may be re-attached, and needs this family's jump tables.
+		return nil, fmt.Errorf("%w: %w", errLayoutLookup, err)
 	}
 
 	if err := d.wepApplyPolicy(ap, endpoint, polDirection); err != nil {
@@ -3235,6 +3368,55 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 	}
 
 	return ap, nil
+}
+
+// ensureWepPreamble re-attaches one hook's preamble when the globals it carries,
+// jump tables included, differ from what the kernel has.
+func (m *bpfEndpointManager) ensureWepPreamble(
+	state *bpfInterfaceState,
+	globals [hook.Count]libbpf.TcGlobalData,
+	ap4, ap6 *tc.AttachPoint,
+) error {
+	ap := mergeAttachPoints(ap4, ap6)
+	if ap == nil {
+		return nil
+	}
+	h := ap.HookName()
+	if globals[h] == state.preambleGlobals[h] {
+		return nil
+	}
+	m.loadFilterProgram(ap)
+	if err := m.dp.ensureProgramAttached(ap); err != nil {
+		// The hook may hold the old or the new preamble.
+		state.preambleGlobals[h] = libbpf.TcGlobalData{}
+		return err
+	}
+	state.preambleGlobals[h] = globals[h]
+	return nil
+}
+
+// wepPreambleGlobals returns the globals each hook's preamble would be
+// attached with. A family that failed to load contributes nothing.
+func wepPreambleGlobals(ingressAP4, ingressAP6, egressAP4, egressAP6 *tc.AttachPoint) [hook.Count]libbpf.TcGlobalData {
+	var globals [hook.Count]libbpf.TcGlobalData
+	for _, aps := range [][2]*tc.AttachPoint{{ingressAP4, ingressAP6}, {egressAP4, egressAP6}} {
+		merged := mergeAttachPoints(copyAttachPoint(aps[0]), copyAttachPoint(aps[1]))
+		if merged == nil {
+			continue
+		}
+		globals[merged.HookName()] = *merged.(*tc.AttachPoint).Configure()
+	}
+	return globals
+}
+
+// copyAttachPoint protects the caller's attach point, since mergeAttachPoints
+// writes into its v4 argument.
+func copyAttachPoint(ap *tc.AttachPoint) *tc.AttachPoint {
+	if ap == nil {
+		return nil
+	}
+	c := *ap
+	return &c
 }
 
 func (m *bpfEndpointManager) loadPrograms(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
@@ -3547,10 +3729,7 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 	ifaceType := m.nameToIface[ifaceName].info.ifaceType
 	m.ifacesLock.Unlock()
 	switch ifaceType {
-	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond, IfaceTypeBondSlave, IfaceTypeNetkit:
-		if ifaceName == "vxlan.calico" || ifaceName == "vxlan-v6.calico" {
-			return tcdefs.EpTypeVXLAN
-		}
+	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond, IfaceTypeBondSlave, IfaceTypeNetkit, IfaceTypeBridge, IfaceTypeBridgeSlave:
 		if ifaceName == "lo" {
 			return tcdefs.EpTypeLO
 		}
@@ -3558,17 +3737,19 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 			return tcdefs.EpTypeNAT
 		}
 		return tcdefs.EpTypeHost
-	case IfaceTypeWireguard, IfaceTypeL3:
+	case IfaceTypeWireguard, IfaceTypeL3, IfaceTypeIPIP:
 		return tcdefs.EpTypeL3Device
-	case IfaceTypeIPIP:
-		if m.features.IPIPDeviceIsL3 {
-			return tcdefs.EpTypeL3Device
-		}
-		return tcdefs.EpTypeIPIP
 	default:
 		logrus.Panicf("Unsupported ifaceName %v", ifaceName)
 	}
 	return tcdefs.EpTypeHost
+}
+
+// ifaceEncaps reports whether this is one of Calico's own encapsulating
+// devices. The endpoint type cannot answer it: wireguard and a plain
+// L3-classified NIC both compile as EpTypeL3Device.
+func (m *bpfEndpointManager) ifaceEncaps(ifaceName string) bool {
+	return m.encapIfaces.Contains(ifaceName)
 }
 
 func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.AttachPoint {
@@ -3581,6 +3762,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	}
 
 	ap.Type = m.getEndpointType(ifaceName)
+	ap.IfaceEncaps = m.ifaceEncaps(ifaceName)
 
 	if ap.Type == tcdefs.EpTypeLO && m.hostNetworkedNATMode == hostNetworkedNATUDPOnly {
 		ap.UDPOnly = true
@@ -3600,7 +3782,9 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	}
 
 	ap.ToHostDrop = (m.epToHostAction == "DROP")
-	ap.DSR = m.dsrEnabled
+	// ProgFilename gives EpTypeHost a DSR variant; an overlay device has no
+	// DSR return path and must not get one.
+	ap.DSR = m.dsrEnabled && !ap.IfaceEncaps
 	ap.DSROptoutCIDRs = m.dsrOptoutCidrs
 	ap.LogLevel, ap.LogFilter = m.apLogFilter(ap, ifaceName)
 	ap.VXLANPort = m.vxlanPort
@@ -3616,7 +3800,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.WorkloadSrcSpoofingConfigured = m.workloadSourceSpoofing
 	if m.bpfRedirectToPeer == "Disabled" {
 		ap.RedirectPeer = false
-	} else if (ap.Type == tcdefs.EpTypeIPIP || ap.Type == tcdefs.EpTypeL3Device) && m.bpfRedirectToPeer == "L2Only" {
+	} else if ap.Type == tcdefs.EpTypeL3Device && m.bpfRedirectToPeer == "L2Only" {
 		ap.RedirectPeer = false
 	}
 
@@ -4344,37 +4528,52 @@ func (m *bpfEndpointManager) failedOptionalProgFeatureNames() []string {
 }
 
 // Ensure TC/XDP program is attached to the specified interface.
+// ensureProgramLayout fills in ap's jump tables for ipFamily, loading the
+// generic programs only if they are not loaded yet.
+func (m *bpfEndpointManager) ensureProgramLayout(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
+	// Derive the program attach type from the attach point. For netkit
+	// devices this will be "Netkit", otherwise it comes from the global config.
+	progAttachType := string(ap.AttachType)
+	if ap.IsNetkit() {
+		progAttachType = tc.AttachOptionNetkit
+	}
+
+	layout, err := m.loadTCObj(tcHookAttachType(ap, ipFamily), ap.ProgramsMap.(*hook.ProgramsMap), progAttachType)
+	if err != nil {
+		return fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
+	}
+	if ipFamily == proto.IPVersion_IPV6 {
+		ap.HookLayoutV6 = layout
+	} else {
+		ap.HookLayoutV4 = layout
+	}
+	return nil
+}
+
+func tcHookAttachType(ap *tc.AttachPoint, ipFamily proto.IPVersion) hook.AttachType {
+	return hook.AttachType{
+		Hook:       ap.HookName(),
+		Family:     int(ipFamily),
+		Type:       ap.Type,
+		LogLevel:   ap.LogLevel,
+		ToHostDrop: ap.ToHostDrop,
+		DSR:        ap.DSR,
+	}
+}
+
 func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error {
 	var err error
 
 	if aptc, ok := ap.(*tc.AttachPoint); ok {
-		// Derive the program attach type from the attach point. For netkit
-		// devices this will be "Netkit", otherwise it comes from the global config.
-		progAttachType := string(aptc.AttachType)
-		if aptc.IsNetkit() {
-			progAttachType = tc.AttachOptionNetkit
-		}
-
-		at := hook.AttachType{
-			Hook:       aptc.HookName(),
-			Family:     int(ipFamily),
-			Type:       aptc.Type,
-			LogLevel:   aptc.LogLevel,
-			ToHostDrop: aptc.ToHostDrop,
-			DSR:        aptc.DSR,
-		}
+		at := tcHookAttachType(aptc, ipFamily)
 
 		policyIdx := aptc.PolicyIdxV4
 		ap.Log().Debugf("ensureProgramLoaded %d", ipFamily)
+		if err := m.ensureProgramLayout(aptc, ipFamily); err != nil {
+			return err
+		}
 		if ipFamily == proto.IPVersion_IPV6 {
-			if aptc.HookLayoutV6, err = m.loadTCObj(at, aptc.ProgramsMap.(*hook.ProgramsMap), progAttachType); err != nil {
-				return fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
-			}
 			policyIdx = aptc.PolicyIdxV6
-		} else {
-			if aptc.HookLayoutV4, err = m.loadTCObj(at, aptc.ProgramsMap.(*hook.ProgramsMap), progAttachType); err != nil {
-				return fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
-			}
 		}
 
 		jmpMap := m.commonMaps.JumpMaps[aptc.Hook]
@@ -4389,7 +4588,7 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 			denyFDs = m.policyNetkitDenyFDs
 		}
 		// Load default policy before the real policy is created and loaded.
-		switch at.DefaultPolicy() {
+		switch at.DefaultPolicy(aptc.IfaceEncaps) {
 		case hook.DefPolicyAllow:
 			err = maps.UpdateMapEntry(jmpMap.MapFD(),
 				jump.Key(policyIdx), jump.Value(allowFDs[aptc.Hook].FD()))
@@ -5191,6 +5390,14 @@ func (m *bpfEndpointManager) getIfaceLink(name string) (netlink.Link, error) {
 	return link, nil
 }
 
+func (m *bpfEndpointManager) getIfaceLinkByIndex(index int) (netlink.Link, error) {
+	return netlink.LinkByIndex(index)
+}
+
+func (m *bpfEndpointManager) netkitPinned(name string) bool {
+	return netkitPinned(name)
+}
+
 func (m *bpfEndpointManager) getNumEPs() int {
 	return len(m.nameToIface)
 }
@@ -5199,6 +5406,12 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 	attrs := link.Attrs()
 	if attrs.Slave != nil && attrs.Slave.SlaveType() == "bond" {
 		return IfaceTypeBondSlave
+	}
+
+	if attrs.MasterIndex != 0 {
+		if master, err := m.dp.getIfaceLinkByIndex(attrs.MasterIndex); err == nil && master.Type() == "bridge" {
+			return IfaceTypeBridgeSlave
+		}
 	}
 
 	switch link.Type() {
@@ -5212,6 +5425,8 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 		return IfaceTypeVXLAN
 	case "bond":
 		return IfaceTypeBond
+	case "bridge":
+		return IfaceTypeBridge
 	case "tuntap":
 		if link.(*netlink.Tuntap).Mode == netlink.TUNTAP_MODE_TUN {
 			return IfaceTypeL3
@@ -5471,50 +5686,76 @@ func (trees bpfIfaceTrees) addIfaceStandAlone(intf *bpfIfaceNode) {
 
 // addIfaceWithMaster handles adding slave interface to the tree.
 func (trees bpfIfaceTrees) addIfaceWithMaster(intf *bpfIfaceNode, masterIndex int) {
-	// If the interface is already in the correct position in the tree,
-	// don't add it.
-	val := trees.findIfaceByIndex(intf.index)
-	if val != nil {
-		if val.parentIface != nil && val.parentIface.index == masterIndex {
+	masterIface := trees.findIfaceByIndex(masterIndex)
+
+	// Already a child of this master: nothing to move.
+	if masterIface != nil {
+		if _, ok := masterIface.children[intf.index]; ok {
 			return
 		}
 	}
-	// Now the interface is a slave interface, perhaps with a different master.
-	// So delete the interface and add it again.
-	trees.deleteIface(intf.name)
-	// Master interface is already there in the tree. Add the slave interface as a child.
-	masterIface := trees.findIfaceByIndex(masterIndex)
-	if masterIface != nil {
-		masterIface.children[intf.index] = intf
-	} else {
-		// If the master interface is not there in the tree. Add the master interface to the
-		// tree and the slave interface as its child.
-		masterIface = &bpfIfaceNode{index: masterIndex, children: make(map[int]*bpfIfaceNode)}
+
+	// Reuse the node already in the tree so its subtree comes along; detach it
+	// from wherever it currently sits.
+	node := intf
+	if val := trees.findIfaceByIndex(intf.index); val != nil {
+		if val.parentIface != nil {
+			delete(val.parentIface.children, val.index) // unlink from old parent
+		} else {
+			delete(trees, val.index) // was a root: drop only the root entry
+		}
+		val.name = intf.name
+		val.masterIndex = masterIndex
+		node = val // val still holds the bond0 -> eth0 subtree
 	}
-	intf.parentIface = masterIface
-	masterIface.children[intf.index] = intf
-	trees[masterIndex] = masterIface
+
+	// Master not seen yet: add it as a placeholder root that its own update
+	// later fills in (name) without clobbering these children.
+	if masterIface == nil {
+		masterIface = &bpfIfaceNode{index: masterIndex, children: make(map[int]*bpfIfaceNode)}
+		trees[masterIndex] = masterIface
+	}
+
+	node.parentIface = masterIface
+	masterIface.children[node.index] = node
 }
 
-// addIfaceWithChild add in-tree parent of the childIdx interface.
 func (trees bpfIfaceTrees) addIfaceWithChild(intf *bpfIfaceNode, childIdx int) {
-	// Check if the interface with childIdx is in the tree. If so,
-	// add this interface as a parent.
-	val := trees.findIfaceByIndex(childIdx)
-	if val != nil {
-		val.parentIface = intf
-		intf.children[val.index] = val
-		delete(trees, childIdx)
-	} else {
-		// If the child interface is not in the tree, add a new interface with
-		// childIdx as a child of intf.
-		intf.children[childIdx] = &bpfIfaceNode{
-			index:       childIdx,
-			parentIface: intf,
-			children:    make(map[int]*bpfIfaceNode),
+	// Resolve/detach the child (bond0) first, while the forest is still intact —
+	// detaching self below would hide it from the lookup. It ends up a child of
+	// self (not a root), so it must be unlinked from wherever it currently sits:
+	// an old parent's children, or the root map.
+	child := trees.findIfaceByIndex(childIdx)
+	if child != nil {
+		if child.parentIface != nil {
+			delete(child.parentIface.children, child.index)
+		} else {
+			delete(trees, child.index)
 		}
+	} else {
+		child = &bpfIfaceNode{index: childIdx, children: make(map[int]*bpfIfaceNode)}
 	}
-	trees[intf.index] = intf
+
+	// Reuse self (bond0.100) if it already exists — e.g. it was a bridge member
+	// and just had its master unset, so its node is still under br0. Reusing
+	// keeps its subtree and leaves no stale duplicate. Only unlink it here if it
+	// is currently a child; if it is a root, the final rooting re-writes the
+	// same entry, so no delete is needed.
+	node := intf
+	if val := trees.findIfaceByIndex(intf.index); val != nil {
+		if val.parentIface != nil {
+			delete(val.parentIface.children, val.index)
+		}
+		val.name = intf.name
+		val.masterIndex = intf.masterIndex
+		node = val
+	}
+	node.parentIface = nil
+
+	// Hang the child (bond0) under self (bond0.100); a VLAN tops its own stack.
+	child.parentIface = node
+	node.children[child.index] = child
+	trees[node.index] = node
 }
 
 // addHostIface adds host interface to hostIfaceTrees tree.
@@ -5538,6 +5779,15 @@ func (trees bpfIfaceTrees) addIface(link netlink.Link) {
 	}
 
 	if attrs.MasterIndex != 0 {
+		// A device can be both a VLAN sub-device (ParentIndex — its lower
+		// device) and enslaved (MasterIndex — a bridge/bond). Wire the
+		// lower-device subtree first so self becomes a root carrying it, then
+		// move that whole stack under the master; addIfaceWithMaster reuses the
+		// node, so the subtree travels with it. Without this, a VLAN that first
+		// appears already bridged (e.g. its update arrives last) loses its stack.
+		if attrs.ParentIndex != 0 && !isVethLike {
+			trees.addIfaceWithChild(intf, attrs.ParentIndex)
+		}
 		trees.addIfaceWithMaster(intf, attrs.MasterIndex)
 	} else if attrs.ParentIndex != 0 && !isVethLike {
 		trees.addIfaceWithChild(intf, attrs.ParentIndex)
@@ -5547,32 +5797,24 @@ func (trees bpfIfaceTrees) addIface(link netlink.Link) {
 }
 
 func (trees bpfIfaceTrees) deleteIface(name string) {
-	// Interface not in the tree.
 	node := trees.findIfaceByName(name)
 	if node == nil {
 		return
 	}
 
-	// Interface is a root interface.
-	if node.parentIface == nil {
-		for _, child := range node.children {
-			child.parentIface = nil
-			trees[child.index] = child
-		}
-		delete(trees, node.index)
+	// Unlink the node from wherever it sits: its parent's children map (a child
+	// or middle node) or the top-level root map. A middle node must NOT delete
+	// its parent — the parent (e.g. a bridge) still exists.
+	if node.parentIface != nil {
+		delete(node.parentIface.children, node.index)
 	} else {
-		// Interface is not a root and not a leaf. Add each child node
-		// as a separate tree and delete this tree.
-		if len(node.children) > 0 {
-			for _, child := range node.children {
-				child.parentIface = nil
-				trees[child.index] = child
-			}
-			delete(trees, node.parentIface.index)
-		} else {
-			// Interface is a leaf.
-			delete(node.parentIface.children, node.index)
-		}
+		delete(trees, node.index)
+	}
+
+	// Promote each child to the root of its own surviving tree.
+	for _, child := range node.children {
+		child.parentIface = nil
+		trees[child.index] = child
 	}
 }
 

@@ -926,7 +926,6 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: bpfLogLevel
       type:
         scalar: string
-      default: ""
     - name: bpfMaglevMaxEndpointsPerService
       type:
         scalar: numeric
@@ -1068,6 +1067,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: flowLogsFlushInterval
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
+    - name: flowLogsGoldmaneIncludeIPs
+      type:
+        scalar: string
     - name: flowLogsGoldmaneServer
       type:
         scalar: string
@@ -1194,6 +1196,12 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: logActionRateLimitBurst
       type:
         scalar: numeric
+    - name: logConnectionTransitions
+      type:
+        scalar: string
+    - name: logConnectionTransitionsPrefix
+      type:
+        scalar: string
     - name: logDebugFilenameRegex
       type:
         scalar: string
@@ -1854,6 +1862,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ControllersConfig
       default: {}
+    - name: debugProfileHost
+      type:
+        scalar: string
     - name: debugProfilePort
       type:
         scalar: numeric

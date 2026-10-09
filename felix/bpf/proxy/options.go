@@ -133,6 +133,17 @@ func WithExcludedCIDRs(cidrs []string) Option {
 	})
 }
 
+// WithCTLBUDPAffinityTimeout tells the syncer how long the connect-time load
+// balancer keeps its affinity entries for unconnected UDP sockets alive, so that
+// the syncer's affinity map cleanup does not delete entries that the CTLB still
+// considers valid. Pass 0 when the CTLB does not handle UDP.
+func WithCTLBUDPAffinityTimeout(timeo time.Duration) Option {
+	return makeKubeProxyOption(func(kp *KubeProxy) error {
+		kp.ctlbUDPAffinityTimeo = timeo
+		return nil
+	})
+}
+
 func WithHealthCheck(hc Healthcheck) Option {
 	return makeOption(func(p *proxy) error {
 		if hc != nil {

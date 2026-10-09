@@ -2,25 +2,9 @@
 // Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#include <linux/types.h>
-#include <linux/bpf.h>
-#include <linux/pkt_cls.h>
-#include <linux/ip.h>
-#include <linux/tcp.h>
-#include <linux/in.h>
-#include <linux/udp.h>
-#include <linux/if_ether.h>
-#include <iproute2/bpf_elf.h>
-
-// stdbool.h has no deps so it's OK to include; stdint.h pulls in parts
-// of the std lib that aren't compatible with BPF.
-#include <stdbool.h>
-
-
-#include "bpf.h"
-
+/* Log prefix for this program.  log.h only defines CALI_LOG if it is not
+ * already set, so this must come before any include. */
 #define CALI_IFACE_LOG(fmt, ...) bpf_log("%s" fmt, ctx->globals->data.iface_name, ## __VA_ARGS__)
-
 #define CALI_LOG(fmt, ...) do { \
 	if (((CALI_COMPILE_FLAGS) & CALI_TC_HOST_EP) && ((CALI_COMPILE_FLAGS) & CALI_TC_INGRESS)) { \
 		CALI_IFACE_LOG("-I: " fmt, ## __VA_ARGS__);	\
@@ -33,38 +17,51 @@
 	}							\
 } while (0)
 
-#include "types.h"
-#include "counters.h"
-#include "skb.h"
-#include "policy.h"
+#include <linux/icmp.h>
+#include <linux/icmpv6.h>
+#include <linux/if_ether.h>
+#include <linux/in.h>
+#include <linux/ip.h>
+#include <linux/ipv6.h>
+#include <linux/tcp.h>
+#include <linux/udp.h>
+
+#include "arp.h"
+#include "cali_bpf.h"
 #include "conntrack.h"
+#include "conntrack_types.h"
+#include "counters.h"
+#include "events.h"
+#include "failsafe.h"
+#include "fib.h"
+#include "globals.h"
+#include "icmp.h"
+#include "ip_addr.h"
+#include "jump.h"
+#include "log.h"
+#include "maglev.h"
+#include "metadata.h"
 #include "nat.h"
 #include "nat_lookup.h"
-#include "routes.h"
-#include "jump.h"
-#include "reasons.h"
-#include "icmp.h"
-#include "arp.h"
-#include "sendrecv.h"
-#include "events.h"
-#include "fib.h"
-#include "rpf.h"
+#include "nat_types.h"
 #include "parsing.h"
-#include "failsafe.h"
-#include "metadata.h"
-#include "bpf_helpers.h"
-#include "rule_counters.h"
+#include "parsing_types.h"
+#include "policy.h"
 #include "qos.h"
-#include "maglev.h"
-
-#ifndef IPVER6
+#include "reasons.h"
+#include "routes.h"
+#include "rpf.h"
+#include "rule_counters.h"
+#include "sendrecv.h"
+#include "skb.h"
+#include "tc.h"
+#include "types.h"
+#ifdef IPVER6
+#include "tcp6.h"
+#else
 #include "ip_v4_fragment.h"
 #include "tcp4.h"
-#else
-#include "tcp6.h"
 #endif
-
-#include "tc.h"
 
 #define HAS_HOST_CONFLICT_PROG CALI_F_TO_HEP
 
@@ -87,6 +84,8 @@ static CALI_BPF_INLINE int state_fill_from_l4(struct cali_tc_ctx *ctx, bool deca
 		if (!ip_is_first_frag(ip_hdr(ctx))) {
 			struct frags4_fwd_value *frag_ct_val = frags4_lookup_ct(ctx);
 			if (frag_ct_val) {
+				/* No L4 header; clear what the previous packet left. */
+				__builtin_memset(ctx->scratch->l4, 0, TCP_SIZE);
 				ctx->state->sport = frag_ct_val->sport;
 				ctx->state->dport = frag_ct_val->dport;
 				CALI_DEBUG("IP FRAG: hit ports %d -> %d", ctx->state->sport, ctx->state->dport);
@@ -94,7 +93,7 @@ static CALI_BPF_INLINE int state_fill_from_l4(struct cali_tc_ctx *ctx, bool deca
 				if (!CALI_F_FROM_HEP && ip_is_last_frag(ip_hdr(ctx))) {
 					frags4_remove_ct(ctx);
 				}
-				ctx->state->flags |= CALI_ST_NO_L4_NAT;
+				ctx->state->flags |= CALI_ST_NO_L4_HDR;
 				return PARSING_OK;
 			} else {
 				CALI_DEBUG("IP FRAG: no first fragment");
@@ -106,6 +105,24 @@ static CALI_BPF_INLINE int state_fill_from_l4(struct cali_tc_ctx *ctx, bool deca
 #endif
 
 	return tc_state_fill_from_nexthdr(ctx, decap);
+}
+
+/* True on an encapsulating device whose packet still needs its tunnel key set.
+ * Reads the globals directly: the fast path below has no ctx yet.
+ */
+static CALI_BPF_INLINE bool encap_needs_key(struct __sk_buff *skb)
+{
+	if (!CALI_F_HEP) {
+		return false;
+	}
+
+	struct cali_tc_globals *gl = state_get_globals_tc();
+
+	if (!gl || !(gl->data.flags & CALI_GLOBALS_IFACE_ENCAPS)) {
+		return false;
+	}
+
+	return !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET);
 }
 
 /* calico_tc_main is the main function used in all of the tc programs.  It is specialised
@@ -122,8 +139,10 @@ int calico_tc_main(struct __sk_buff *skb)
 	/* Optimisation: if another BPF program has already pre-approved the packet,
 	 * skip all processing. */
 	if (CALI_F_FROM_HOST && skb_mark_equals(skb, CALI_SKB_MARK_BYPASS, CALI_SKB_MARK_BYPASS) &&
+			/* MASQ to self still needs to-WEP policy, matched on the pod's own address. */
+			!(CALI_F_TO_WEP && skb_mark_equals(skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_MASQ)) &&
 			/* If we are on tunnel and we do not have the key set, we cannot short-circuit */
-			!(CALI_F_TUNNEL &&  !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET))) {
+			!encap_needs_key(skb)) {
 		if  (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
 			/* This generates a bit more richer output for logging */
 			DECLARE_TC_CTX(_ctx,
@@ -209,18 +228,6 @@ int calico_tc_main(struct __sk_buff *skb)
 	 * For packets that are leaving the host namespace, routing has already been done. */
 	fwd_fib_set(&ctx->state->fwd, CALI_F_TO_HOST);
 
-	if (CALI_F_TO_HEP || CALI_F_TO_WEP) {
-		/* We're leaving the host namespace, check for other bypass mark bits.
-		 * These are a bit more complex to handle so we do it after creating the
-		 * context/state. */
-		switch (skb->mark & CALI_SKB_MARK_BYPASS_MASK) {
-		case CALI_SKB_MARK_BYPASS_FWD:
-			CALI_DEBUG("Packet approved for forward.");
-			counter_inc(ctx, CALI_REASON_BYPASS);
-			goto allow;
-		}
-	}
-
 	/* Parse the packet as far as the IP header; as a side-effect this validates the packet size
 	 * is large enough for UDP. */
 	switch (parse_packet_ip(ctx)) {
@@ -246,7 +253,7 @@ int calico_tc_main(struct __sk_buff *skb)
 		goto finalize;
 	}
 
-	if (CALI_F_TUNNEL && CALI_F_TO_HEP
+	if (IFACE_ENCAPS && CALI_F_TO_HEP
 			&& skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS, CALI_SKB_MARK_BYPASS)) {
 		/* In case we are on tunnel device, CALI_SKB_MARK_BYPASS is set we only got
 		 * here because CALI_SKB_MARK_TUNNEL_KEY_SET wasn't set. This happens when
@@ -567,7 +574,7 @@ syn_force_policy:
 
 			ctx->state->ip_proto != IPPROTO_ICMPV6 &&
 #endif
-			(hep_rpf_check(ctx) == RPF_RES_FAIL)) {
+			(hep_rpf_check(ctx, NULL) == RPF_RES_FAIL)) {
 			goto deny;
 		}
 	}
@@ -589,6 +596,7 @@ syn_force_policy:
 		 * seen by another program since it must have come in via another interface.
 		 */
 		CALI_DEBUG("Packet is from the host: ACCEPT");
+		ctx->state->flags |= CALI_ST_HOST_ORIGIN;
 		goto skip_policy;
 	}
 
@@ -642,7 +650,7 @@ syn_force_policy:
 	/* [SMC] I had to add this revalidation when refactoring the conntrack code to use the context and
 	 * adding possible packet pulls in the VXLAN logic.  I believe it is spurious but the verifier is
 	 * not clever enough to spot that we'd have already bailed out if one of the pulls failed. */
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs_l4(ctx)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short");
 		goto deny;
@@ -810,7 +818,7 @@ do_policy:
 	}
 #endif
 
-	if (CALI_F_TO_WEP && ctx->skb->mark == CALI_SKB_MARK_MASQ) {
+	if (CALI_F_TO_WEP && skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_MASQ)) {
 		CALI_DEBUG("MASQ to self - using dest as source for policy.");
 		ctx->state->ip_src_masq = ctx->state->ip_src;
 		ctx->state->ip_src = ctx->state->ip_dst;
@@ -994,7 +1002,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 		ip_hdr_set_ip(ctx, saddr, STATE->ct_result.nat_sip);
 		ip_hdr_set_ip(ctx, daddr, STATE->post_nat_ip_dst);
 
-		if (STATE->flags & CALI_ST_NO_L4_NAT) {
+		if (STATE->flags & CALI_ST_NO_L4_HDR) {
 			CALI_DEBUG("Skipping L4 DNAT");
 			goto skip_l4_dnat;
 		}
@@ -1133,7 +1141,7 @@ skip_l4_dnat:
 		ip_hdr_set_ip(ctx, saddr, STATE->ct_result.nat_ip);
 		ip_hdr_set_ip(ctx, daddr, STATE->ct_result.nat_sip);
 
-		if (STATE->flags & CALI_ST_NO_L4_NAT) {
+		if (STATE->flags & CALI_ST_NO_L4_HDR) {
 			CALI_DEBUG("Skipping L4 DNAT");
 			goto skip_l4_snat;
 		}
@@ -1393,7 +1401,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 
 	if (!policy_skipped) {
 		counter_inc(ctx, CALI_REASON_ACCEPTED_BY_POLICY);
-		if (CALI_F_TO_WEP && ctx->skb->mark == CALI_SKB_MARK_MASQ) {
+		if (CALI_F_TO_WEP && skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_MASQ)) {
 			/* Restore state->ip_src */
 			CALI_DEBUG("Accepted MASQ to self - restoring source for conntrack.");
 			ctx->state->ip_src = ctx->state->ip_src_masq;
@@ -1408,7 +1416,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		}
 	}
 
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs_l4(ctx)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short");
 		goto deny;
@@ -1465,9 +1473,10 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 			!(ctx->state->ct_result.flags & CALI_CT_FLAG_CONNLIMIT_INGRESS)) {
 		/* First SYN OR retransmission of a previously-rejected SYN. */
 		struct calico_ct_key ck;
+		bool rst_src_lt_dest = src_lt_dest(&ctx->state->ip_src, &ctx->state->ip_dst,
+						ctx->state->sport, ctx->state->dport);
 		fill_ct_key(&ck,
-				src_lt_dest(&ctx->state->ip_src, &ctx->state->ip_dst,
-						ctx->state->sport, ctx->state->dport),
+				rst_src_lt_dest,
 				ctx->state->ip_proto,
 				&ctx->state->ip_src, &ctx->state->ip_dst,
 				ctx->state->sport, ctx->state->dport);
@@ -1477,6 +1486,11 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 			CALI_DEBUG("Ingress connection limit exceeded, rejecting with TCP RST");
 			if (cv) {
 				ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED);
+				/* The RST leaves via CALI_RES_REDIR_BACK, which returns it
+				 * through from-wep on every device type. Approve that leg
+				 * so conntrack admits it there. */
+				ct_leg_set_flags(rst_src_lt_dest ? &cv->b_to_a : &cv->a_to_b,
+						CALI_CT_LEG_APPROVED);
 			}
 			ctx->state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
 			CALI_JUMP_TO(ctx, PROG_INDEX_TCP_RST);
@@ -1525,21 +1539,25 @@ deny:
 	return TC_ACT_SHOT;
 }
 
-static CALI_BPF_INLINE void update_fib_mark(struct cali_tc_ctx *ctx, __u32 *seen_mark)
+/* Returns true if the packet must go through the host stack with the mark set here. */
+static CALI_BPF_INLINE bool update_fib_mark(struct cali_tc_ctx *ctx, __u32 *seen_mark)
 {
-	if (CALI_F_FROM_WEP && (ctx->state->flags & CALI_ST_NAT_OUTGOING)) {
-		// We are going to SNAT this traffic, using iptables SNAT so set the mark
-		// to trigger that and leave the fib lookup disabled.
+	if (CALI_F_TO_HOST && (ctx->state->flags & CALI_ST_NAT_OUTGOING)) {
+		// iptables does the SNAT, so both directions go via the host stack,
+		// where its conntrack sees them. Leave the fib lookup disabled.
 		fwd_fib_set(&ctx->state->fwd, false);
 		*seen_mark = CALI_SKB_MARK_NAT_OUT;
 		CALI_DEBUG("Disabling FIB lookup due to outgoing SNAT");
+		return true;
 	} else {
 		if (ctx->state->flags & CALI_ST_SKIP_FIB) {
 			fwd_fib_set(&ctx->state->fwd, false);
 			*seen_mark = CALI_SKB_MARK_SKIP_FIB;
 			CALI_DEBUG("Disabling FIB lookup due to SKIP_FIB flag");
+			return true;
 		}
 	}
+	return false;
 }
 
 SEC("tc")
@@ -1570,12 +1588,20 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	/* Check egress connection limit for new TCP connections from WEP.
 	 * Atomically check the limit and increment the counter in the QoS map.
 	 * The Go-side CT scanner periodically recounts and corrects drift.
+	 *
+	 * Gated on EGRESS_CONN_LIMIT_CONFIGURED to match the CONNLIMIT_EGRESS
+	 * stamp below and the ingress check. Felix writes the cali_qos_conn
+	 * entry before the program is reattached with the new global, so
+	 * without this a connection opened in that window is counted but not
+	 * stamped, and nothing can decrement it until the next recount.
 	 */
 	if (CALI_F_FROM_WEP && state->ip_proto == IPPROTO_TCP &&
+			EGRESS_CONN_LIMIT_CONFIGURED &&
 			!(state->flags & CALI_ST_SUPPRESS_CT_STATE)) {
 		if (qos_connlimit_check_and_increment(ctx) < 0) {
 			CALI_DEBUG("Egress connection limit exceeded, rejecting with TCP RST");
 			ctx->state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
+			ctx->state->flags |= CALI_ST_RST_NO_CT;
 			CALI_JUMP_TO(ctx, PROG_INDEX_TCP_RST);
 			goto deny;
 		}
@@ -1621,6 +1647,11 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	if (CALI_F_FROM_WEP && state->ip_proto == IPPROTO_TCP && EGRESS_CONN_LIMIT_CONFIGURED) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_CONNLIMIT_EGRESS;
 	}
+	/* Not gated on INGRESS_CONN_LIMIT_CONFIGURED: a limit added later must
+	 * still find the connection marked. */
+	if (CALI_F_TO_WEP && (state->flags & CALI_ST_HOST_ORIGIN)) {
+		ct_ctx_nat->flags |= CALI_CT_FLAG_HOST_ORIGIN;
+	}
 	if (CALI_F_TO_WEP) {
 		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN)) {
 			/* If the packet wasn't seen, must come from host. There is no
@@ -1629,7 +1660,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 			 * rules are used by the host. So don't mess with it.
 			 */
 			ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_FIB;
-		} else if ((ctx->skb->mark & CALI_SKB_MARK_SKIP_FIB) == CALI_SKB_MARK_SKIP_FIB) {
+		} else if (skb_mark_equals(ctx->skb, CALI_SKB_MARK_CODE_MASK, CALI_SKB_MARK_SKIP_FIB)) {
 			/* Packets received at WEP with CALI_CT_FLAG_SKIP_FIB mark signal
 			 * that all traffic on this connection must flow via host
 			 * namespace as it was originally meant for host, but got
@@ -1673,7 +1704,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 		}
 	}
 
-	if (state->ip_proto == IPPROTO_TCP) {
+	if (state->ip_proto == IPPROTO_TCP && !(state->flags & CALI_ST_NO_L4_HDR)) {
 		if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short for TCP: DROP");
@@ -1730,7 +1761,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	}
 
 	/* Only do the refresh if we get here */
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs_l4(ctx)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short");
 		goto deny;
@@ -1790,7 +1821,7 @@ static CALI_BPF_INLINE void calico_tc_skb_accepted(struct cali_tc_ctx *ctx)
 		state->post_nat_dport = 0;
 	}
 
-	update_fib_mark(ctx, &seen_mark);
+	bool via_host_stack = update_fib_mark(ctx, &seen_mark);
 
 	/* We check the ttl here to avoid needing complicated handling of
 	 * related traffic back from the host if we let the host to handle it.
@@ -1923,8 +1954,13 @@ static CALI_BPF_INLINE void calico_tc_skb_accepted(struct cali_tc_ctx *ctx)
 
 	case CALI_CT_ESTABLISHED_BYPASS:
 		if (!is_tcp_syn(ctx)) {
-			seen_mark = CALI_SKB_MARK_BYPASS;
-			CALI_DEBUG("marking CALI_SKB_MARK_BYPASS");
+			if (!via_host_stack) {
+				seen_mark = CALI_SKB_MARK_BYPASS;
+			} else if (seen_mark == CALI_SKB_MARK_SKIP_FIB) {
+				/* Netfilter matches the code, not the flag. NAT_OUT stays plain: HEP egress must see the SNAT. */
+				seen_mark |= CALI_SKB_MARK_BYPASS;
+			}
+			CALI_DEBUG("marking 0x%x", seen_mark);
 		}
 		// fall through
 	case CALI_CT_ESTABLISHED:
@@ -2130,7 +2166,17 @@ int calico_tc_skb_send_tcp_rst(struct __sk_buff *skb)
 	if (ret) {
 		ctx->state->fwd.res = TC_ACT_SHOT;
 	} else {
+		if (ctx->state->flags & CALI_ST_RST_NO_CT) {
+			/* Without an entry the destination would drop this as a
+			 * mid-flow miss. */
+			ctx->state->fwd.mark = CALI_SKB_MARK_BYPASS_FWD;
+		}
 		fwd_fib_set(&ctx->state->fwd, true);
+		if (CALI_F_TO_WEP) {
+			/* REDIR_BACK never writes fwd.mark to the skb; the ingress
+			 * reject approved the CT leg this RST returns on instead. */
+			ctx->state->fwd.res = CALI_RES_REDIR_BACK;
+		}
 	}
 
 	if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
@@ -2140,6 +2186,9 @@ int calico_tc_skb_send_tcp_rst(struct __sk_buff *skb)
 	}
 
 	tc_state_fill_from_iphdr(ctx);
+	/* The reply is not a fragment even if the packet it answers was. */
+	ctx->state->flags &= ~CALI_ST_FIRST_FRAG;
+
 	return forward_or_drop(ctx);
 }
 
@@ -2188,6 +2237,8 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 
 	tc_state_fill_from_iphdr(ctx);
 	ctx->state->sport = ctx->state->dport = 0;
+	/* The reply is not a fragment even if the packet it answers was. */
+	ctx->state->flags &= ~CALI_ST_FIRST_FRAG;
 	return forward_or_drop(ctx);
 deny:
 	(void)fib_flags;
@@ -2346,7 +2397,7 @@ int calico_tc_skb_ipv4_frag(struct __sk_buff *skb)
 	CALI_DEBUG("Entering calico_tc_skb_ipv4_frag");
 	CALI_DEBUG("iphdr_offset %d ihl %d", skb_iphdr_offset(ctx), ctx->ipheader_len);
 
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs_l4(ctx)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short");
 		goto deny;
@@ -2393,7 +2444,7 @@ int calico_tc_maglev(struct __sk_buff *skb)
 
 	CALI_DEBUG("Entering calico_tc_maglev");
 
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs_l4(ctx)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short");
 		goto deny;

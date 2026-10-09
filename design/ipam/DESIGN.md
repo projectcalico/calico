@@ -65,9 +65,9 @@ Per-topic design docs in this directory. A PR that touches files across multiple
 | Topic | Applies to | Status |
 |---|---|---|
 | [ipam-core-library](./ipam-core-library.md) | `libcalico-go/lib/ipam/**` (excluding `vmipam/`) | ✅ exists |
-| [ipam-datastore](./ipam-datastore.md) | `libcalico-go/lib/backend/**/ipam*`, `libcalico-go/lib/backend/**/block_affinity*` | ✅ exists |
+| [ipam-datastore](./ipam-datastore.md) | `libcalico-go/lib/backend/**/ipam*`, `libcalico-go/lib/backend/**/block_affinity*`, `libcalico-go/lib/backend/model/block.go` | ✅ exists |
 | [ipam-cni](./ipam-cni.md) | `cni-plugin/pkg/ipamplugin/**`, `cni-plugin/pkg/k8s/**`, `node/cmd/calico-ipam/**` | ✅ exists |
-| [ipam-gc](./ipam-gc.md) | `kube-controllers/pkg/controllers/node/ipam*.go`, `kube-controllers/pkg/controllers/node/pool_manager.go`, `kube-controllers/pkg/controllers/node/ipam_allocation.go` | ✅ exists |
+| [ipam-gc](./ipam-gc.md) | `kube-controllers/pkg/controllers/node/ipam*.go`, `kube-controllers/pkg/controllers/node/ipam_allocation.go`, `kube-controllers/pkg/controllers/utils/ipam_feed.go` | ✅ exists |
 | [ipam-other-callers](./ipam-other-callers.md) | `node/pkg/allocateip/**`, `calicoctl/calicoctl/commands/ipam/**`, `calicoctl/calicoctl/commands/datastore/migrate/**`, `kube-controllers/pkg/controllers/loadbalancer/**`, `kube-controllers/pkg/controllers/flannelmigration/**`, `libcalico-go/lib/ipam/vmipam/**`, Felix IPAM read paths | ✅ exists |
 
 A missing sub-design means the area's invariants have not been written down yet - not that the area has no constraints. Treat absence as "read the code and ask"; don't assume
@@ -81,10 +81,9 @@ anything goes.
   the glob doesn't list narrowly. When in doubt, pull the topic-relevant sub-design.
 - **Review notes are the checklist.** Each sub-design embeds per-section review notes describing the invariants a PR must respect. At write-time, respect them; at review-time,
   apply them.
-- **Update rule.** A change to how IPAM works in a given area must update the relevant sub-design in this directory in the same PR. This index is also updated when the
-  sub-design table, an `applies to` scope, or §1's architecture overview changes. Exemptions: (a) a bug fix that restores behavior the doc already describes, (b) a mechanical
-  refactor with no observable change, (c) comment or log-message edits, (d) dependency bumps. If in doubt, update. The path-scoped
-  [`.github/instructions/ipam.instructions.md`](../../.github/instructions/ipam.instructions.md) file wires this rule into Copilot's automated review.
+- **Update rule.** A warranted edit goes in the sub-design covering the area; this index is edited when the sub-design table, an `applies to` scope, or §1's architecture
+  overview changes. The path-scoped [`.github/instructions/ipam.instructions.md`](../../.github/instructions/ipam.instructions.md) file wires the rule into Copilot's automated
+  review.
 
 ## 4. Cross-cutting review rubric
 

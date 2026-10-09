@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2025 Tigera, Inc. All rights reserved.
+Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -73,10 +73,7 @@ var _ = describe.CalicoDescribe(
 
 		BeforeEach(func() {
 			// Initialize external node for testing
-			extNode = externalnode.NewClient()
-			if extNode == nil {
-				Skip("External node not available - required for Maglev testing")
-			}
+			extNode = externalnode.MustNewClient()
 
 			// Get available nodes for pod distribution
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -588,10 +585,9 @@ func (m *MaglevTests) sendRequestsAndGatherStats(extNode *externalnode.Client, u
 	uniqueBackends := make(map[string]int)
 	totalRequests := m.maglevConfig.NumberOfRequests
 
-	// The external node runs this image via plain `docker run`; on gcp-kubeadm PR
-	// CI it was side-loaded into the external node's docker (RAPIDCLIENT_TAG),
-	// otherwise docker pulls the published :latest.
-	rapidClient, _ := images.RapidClientImage()
+	// The external node runs this image via plain `docker run`, so docker pulls it
+	// unless load_images.sh already loaded it there.
+	rapidClient := images.RapidClient
 
 	for i := range totalRequests {
 		// Use external node to run rapidclient with netexec endpoint to get hostname

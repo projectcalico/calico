@@ -20,11 +20,39 @@ import (
 )
 
 // IPPoolInformer provides access to a shared informer and lister for
-// IPPools.
+// IPPools. Prefer using the type-safe variant (see [TypedIPPoolInformer]).
 type IPPoolInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.IPPoolLister
 }
+
+// TypedIPPoolInformer provides access to a shared informer and lister for
+// IPPools, including the type-safe TypedInformer variant.
+// It is a superset of IPPoolInformer.
+type TypedIPPoolInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() IPPoolIndexInformer
+	Lister() projectcalicov3.IPPoolLister
+}
+
+// IPPoolIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type IPPoolIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.IPPool]
+
+// IPPoolHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for IPPool.
+type IPPoolHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.IPPool]
+
+// IPPoolDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for IPPool.
+type IPPoolDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.IPPool]
+
+// IPPoolFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for IPPool.
+type IPPoolFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.IPPool]
+
+// IPPoolIndexers is a specialization of [cache.TypedIndexers] for IPPool.
+type IPPoolIndexers = cache.TypedIndexers[*apisprojectcalicov3.IPPool]
+
+// DeletedIPPool is a specialization of [cache.DeletedObject] for IPPool.
+type DeletedIPPool = cache.DeletedObject[*apisprojectcalicov3.IPPool]
 
 type iPPoolInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,25 +62,49 @@ type iPPoolInformer struct {
 // NewIPPoolInformer constructs a new informer for IPPool type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedIPPoolInformer]).
 func NewIPPoolInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewIPPoolInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedIPPoolInformer constructs a new informer for IPPool type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedIPPoolInformer(client clientset.Interface, resyncPeriod time.Duration, indexers IPPoolIndexers) IPPoolIndexInformer {
+	return NewTypedIPPoolInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredIPPoolInformer constructs a new informer for IPPool type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredIPPoolInformer]).
 func NewFilteredIPPoolInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewIPPoolInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedIPPoolInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredIPPoolInformer constructs a new informer for IPPool type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredIPPoolInformer(client clientset.Interface, resyncPeriod time.Duration, indexers IPPoolIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) IPPoolIndexInformer {
+	return NewTypedIPPoolInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewIPPoolInformerWithOptions constructs a new informer for IPPool type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedIPPoolInformerWithOptions]).
 func NewIPPoolInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedIPPoolInformerWithOptions(client, options)
+}
+
+// NewTypedIPPoolInformerWithOptions constructs a new informer for IPPool type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedIPPoolInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) IPPoolIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "ippools"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPPool](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -85,17 +137,57 @@ func NewIPPoolInformerWithOptions(client clientset.Interface, options internalin
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *iPPoolInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewIPPoolInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedIPPoolInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *iPPoolInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.IPPool{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *iPPoolInformer) TypedInformer() IPPoolIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPPool](f.factory.InformerFor(&apisprojectcalicov3.IPPool{}, f.defaultInformer))
 }
 
 func (f *iPPoolInformer) Lister() projectcalicov3.IPPoolLister {
 	return projectcalicov3.NewIPPoolLister(f.Informer().GetIndexer())
+}
+
+// ToTypedIPPoolInformer converts an untyped informer into a TypedIPPoolInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *IPPool. If that is not the case, calling type-safe methods of the returned
+// TypedIPPoolInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedIPPoolInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedIPPoolInformer(informer IPPoolInformer) TypedIPPoolInformer {
+	if informer, ok := informer.(TypedIPPoolInformer); ok {
+		return informer
+	}
+	return &iPPoolTypedInformerAdapter{informer}
+}
+
+type iPPoolTypedInformerAdapter struct {
+	IPPoolInformer
+}
+
+func (a *iPPoolTypedInformerAdapter) TypedInformer() IPPoolIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPPool](a.Informer())
+}
+
+// ToIPPoolIndexInformer converts an untyped informer into a IPPoolIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *IPPool. If that is not the case, calling type-safe methods of the returned
+// IPPoolIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a IPPoolIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToIPPoolIndexInformer(informer cache.SharedIndexInformer) IPPoolIndexInformer {
+	if informer, ok := informer.(IPPoolIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPPool](informer)
 }

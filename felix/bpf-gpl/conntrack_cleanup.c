@@ -2,16 +2,17 @@
 // Copyright (c) 2024 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#include <linux/types.h>
-#include <linux/bpf.h>
-#include <linux/pkt_cls.h>
-
-#include <stdbool.h>
-
+/* Log prefix for this program.  log.h only defines CALI_LOG if it is not
+ * already set, so this must come before any include. */
 #define CALI_LOG(fmt, ...) bpf_log("CT-CLEANER------: " fmt, ## __VA_ARGS__)
-#include "log.h"
 
+#include "cali_bpf.h"
+#include "conntrack.h"
 #include "conntrack_cleanup.h"
+#include "conntrack_types.h"
+#include "globals.h"
+#include "log.h"
+#include "qos.h"
 
 const volatile struct cali_ct_cleanup_globals __globals;
 

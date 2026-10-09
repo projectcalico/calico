@@ -23,6 +23,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/generictables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 )
 
 func NewTableLayer(name string, table generictables.Table) generictables.Table {
@@ -65,10 +66,10 @@ func (t *tableLayer) namespaceRules(rules []generictables.Rule) []generictables.
 	newRules := make([]generictables.Rule, len(rules))
 	for i, r := range rules {
 		newRule := r
-		if n, ok := r.Action.(namespaceable); ok {
+		if n, ok := r.Action.(nftrender.Namespaceable); ok {
 			newRule.Action = n.Namespace(t.name)
 		}
-		if n, ok := r.Match.(NFTMatchCriteria); ok {
+		if n, ok := r.Match.(nftrender.NFTMatchCriteria); ok {
 			newRule.Match = n.SetLayer(t.name)
 		}
 		newRules[i] = newRule
@@ -186,4 +187,8 @@ func (t *tableLayer) FinishMapUpdates(updates *MapUpdates) {
 
 func (t *tableLayer) LoadDataplaneState(ctx context.Context, mapNames []string) error {
 	return t.maps.LoadDataplaneState(ctx, mapNames)
+}
+
+func (t *tableLayer) InvalidateMapsCache() {
+	t.maps.InvalidateMapsCache()
 }

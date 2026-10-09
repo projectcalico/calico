@@ -51,14 +51,15 @@ pause-for-debug
 
 # Get results and logs
 ls -ltr ./report
-mkdir -p /home/semaphore/fv.log
-cp setupfv.log /home/semaphore/fv.log/ || true
-cp ./report/*.log /home/semaphore/fv.log/ || true
+logs_dir="${LOGS_DIR:-/home/semaphore/fv.log}"
+mkdir -p "${logs_dir}"
+cp setupfv.log "${logs_dir}"/ || true
+cp ./report/*.log "${logs_dir}"/ || true
 
 # Print relevant snippets from logs
 log_regexps='(?<!Decode)Failure|SUCCESS|FV-TEST-START'
-compgen -G /home/semaphore/fv.log/*.log > /dev/null && \
-for log_file in /home/semaphore/fv.log/*.log; do
+compgen -G "${logs_dir}"/*.log > /dev/null && \
+for log_file in "${logs_dir}"/*.log; do
     prefix="[$(basename ${log_file})]"
     cat ${log_file} | iconv -f UTF-16 -t UTF-8 | sed 's/\r$//g' | grep --line-buffered --perl ${log_regexps} -B 2 -A 15 | sed 's/.*/'"${prefix}"' &/g'
 done;

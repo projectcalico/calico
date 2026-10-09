@@ -1,0 +1,22 @@
+# pod2daemon `make ci`.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: pod2daemon-ci
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    depends: [check-go]
+    requests: {cpu: 2750m, memory: 2Gi}
+    commands: |
+      cd pod2daemon
+      make ci
+    epilogue: |
+      # Epilogues don't inherit the commands' `cd` or exports.
+      cd "${CI_HOME}/${CI_GIT_DIR}/pod2daemon"
+      artifact push job report --destination test-results || true

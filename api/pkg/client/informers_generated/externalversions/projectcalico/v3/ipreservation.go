@@ -20,11 +20,39 @@ import (
 )
 
 // IPReservationInformer provides access to a shared informer and lister for
-// IPReservations.
+// IPReservations. Prefer using the type-safe variant (see [TypedIPReservationInformer]).
 type IPReservationInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.IPReservationLister
 }
+
+// TypedIPReservationInformer provides access to a shared informer and lister for
+// IPReservations, including the type-safe TypedInformer variant.
+// It is a superset of IPReservationInformer.
+type TypedIPReservationInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() IPReservationIndexInformer
+	Lister() projectcalicov3.IPReservationLister
+}
+
+// IPReservationIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type IPReservationIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.IPReservation]
+
+// IPReservationHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for IPReservation.
+type IPReservationHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.IPReservation]
+
+// IPReservationDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for IPReservation.
+type IPReservationDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.IPReservation]
+
+// IPReservationFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for IPReservation.
+type IPReservationFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.IPReservation]
+
+// IPReservationIndexers is a specialization of [cache.TypedIndexers] for IPReservation.
+type IPReservationIndexers = cache.TypedIndexers[*apisprojectcalicov3.IPReservation]
+
+// DeletedIPReservation is a specialization of [cache.DeletedObject] for IPReservation.
+type DeletedIPReservation = cache.DeletedObject[*apisprojectcalicov3.IPReservation]
 
 type iPReservationInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,25 +62,49 @@ type iPReservationInformer struct {
 // NewIPReservationInformer constructs a new informer for IPReservation type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedIPReservationInformer]).
 func NewIPReservationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewIPReservationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedIPReservationInformer constructs a new informer for IPReservation type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedIPReservationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers IPReservationIndexers) IPReservationIndexInformer {
+	return NewTypedIPReservationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredIPReservationInformer constructs a new informer for IPReservation type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredIPReservationInformer]).
 func NewFilteredIPReservationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewIPReservationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedIPReservationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredIPReservationInformer constructs a new informer for IPReservation type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredIPReservationInformer(client clientset.Interface, resyncPeriod time.Duration, indexers IPReservationIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) IPReservationIndexInformer {
+	return NewTypedIPReservationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewIPReservationInformerWithOptions constructs a new informer for IPReservation type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedIPReservationInformerWithOptions]).
 func NewIPReservationInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedIPReservationInformerWithOptions(client, options)
+}
+
+// NewTypedIPReservationInformerWithOptions constructs a new informer for IPReservation type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedIPReservationInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) IPReservationIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "ipreservations"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPReservation](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -85,17 +137,57 @@ func NewIPReservationInformerWithOptions(client clientset.Interface, options int
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *iPReservationInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewIPReservationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedIPReservationInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *iPReservationInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.IPReservation{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *iPReservationInformer) TypedInformer() IPReservationIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPReservation](f.factory.InformerFor(&apisprojectcalicov3.IPReservation{}, f.defaultInformer))
 }
 
 func (f *iPReservationInformer) Lister() projectcalicov3.IPReservationLister {
 	return projectcalicov3.NewIPReservationLister(f.Informer().GetIndexer())
+}
+
+// ToTypedIPReservationInformer converts an untyped informer into a TypedIPReservationInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *IPReservation. If that is not the case, calling type-safe methods of the returned
+// TypedIPReservationInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedIPReservationInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedIPReservationInformer(informer IPReservationInformer) TypedIPReservationInformer {
+	if informer, ok := informer.(TypedIPReservationInformer); ok {
+		return informer
+	}
+	return &iPReservationTypedInformerAdapter{informer}
+}
+
+type iPReservationTypedInformerAdapter struct {
+	IPReservationInformer
+}
+
+func (a *iPReservationTypedInformerAdapter) TypedInformer() IPReservationIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPReservation](a.Informer())
+}
+
+// ToIPReservationIndexInformer converts an untyped informer into a IPReservationIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *IPReservation. If that is not the case, calling type-safe methods of the returned
+// IPReservationIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a IPReservationIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToIPReservationIndexInformer(informer cache.SharedIndexInformer) IPReservationIndexInformer {
+	if informer, ok := informer.(IPReservationIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPReservation](informer)
 }

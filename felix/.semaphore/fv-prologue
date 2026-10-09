@@ -22,9 +22,10 @@ export NUM_FV_BATCHES=8
 JOB_TAG=""
 TEST_REPORT_NAME=""
 
-# In BPF runs, only run BPF-SAFE tagged tests
+# In BPF runs, only run tests tagged for BPF mode: _BPF-SAFE_ (shared FV) or _BPF_ (BPF-specific).
+# (The full BPF job treats _BPF_ as implying _BPF-SAFE_ via the focus regex.)
 if [[ $FELIX_TEST_GROUP =~ bpf ]]; then
-  export FV_FOCUS=BPF-SAFE
+  export FV_FOCUS='BPF-SAFE|_BPF_'
   JOB_TAG+="bpf"
   TEST_REPORT_NAME+="BPF/"
   FV_NO_PREREQ_TARGET=fv-bpf-no-prereqs
@@ -88,6 +89,6 @@ export TEST_REPORT_NAME
 SHORT_WORKFLOW_ID=$(echo "${SEMAPHORE_WORKFLOW_ID}" | sha256sum | cut -c -8)
 export SHORT_WORKFLOW_ID
 export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${JOB_TAG}-
-mkdir artifacts
+mkdir -p artifacts
 
 echo "Calculated: JOB_TAG=${JOB_TAG}; TEST_REPORT_NAME=${TEST_REPORT_NAME}; RUN_UT=${RUN_UT}; VM_PREFIX=${VM_PREFIX}"

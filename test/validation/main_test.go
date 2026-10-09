@@ -28,11 +28,13 @@ import (
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
@@ -41,11 +43,12 @@ import (
 
 var (
 	testClient client.Client
+	testCfg    *rest.Config
+	testScheme *k8sruntime.Scheme
 	testEnvObj *envtest.Environment
 
-	// admissionPoliciesEnabled is true when the envtest API server supports
-	// MutatingAdmissionPolicy (K8s >= 1.32). Admission tests should skip
-	// when this is false.
+	// admissionPoliciesEnabled is true when the API server serves
+	// MutatingAdmissionPolicy at v1beta1. Admission tests skip when false.
 	admissionPoliciesEnabled bool
 )
 
@@ -62,8 +65,13 @@ func admissionDir() string {
 	return filepath.Join(testutils.FindRepoRoot(), "api", "admission")
 }
 
-// envtestSupportsMAP checks if the envtest kube-apiserver binary supports
-// MutatingAdmissionPolicy (requires K8s >= 1.32).
+// cniAnnotationsAdmissionDir returns the path to api/admission/cni-annotations/.
+func cniAnnotationsAdmissionDir() string {
+	return filepath.Join(admissionDir(), "cni-annotations")
+}
+
+// envtestSupportsMAP checks if the envtest kube-apiserver binary serves
+// MutatingAdmissionPolicy at v1beta1, which K8s 1.34 is the first to do.
 func envtestSupportsMAP() bool {
 	assets := os.Getenv("KUBEBUILDER_ASSETS")
 	if assets == "" {
@@ -86,12 +94,13 @@ func envtestSupportsMAP() bool {
 	if _, err := fmt.Sscanf(parts[1], "%d", &minor); err != nil {
 		return false
 	}
-	return minor >= 32
+	return minor >= 34
 }
 
-// installAdmissionPolicies applies all YAML files in the admission directory to the envtest cluster.
-func installAdmissionPolicies(c client.Client) error {
-	entries, err := os.ReadDir(admissionDir())
+// installAdmissionPolicies applies all YAML files in dir to the envtest cluster, leaving out any
+// object skip returns true for.
+func installAdmissionPolicies(c client.Client, dir string, skip func(*unstructured.Unstructured) bool) error {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("reading admission dir: %w", err)
 	}
@@ -99,7 +108,7 @@ func installAdmissionPolicies(c client.Client) error {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(admissionDir(), entry.Name()))
+		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
 		if err != nil {
 			return fmt.Errorf("reading %s: %w", entry.Name(), err)
 		}
@@ -116,7 +125,7 @@ func installAdmissionPolicies(c client.Client) error {
 				}
 				return fmt.Errorf("decoding %s: %w", entry.Name(), err)
 			}
-			if len(obj.Object) == 0 {
+			if len(obj.Object) == 0 || skip(obj) {
 				continue
 			}
 			if err := c.Create(context.Background(), obj); err != nil {
@@ -127,10 +136,46 @@ func installAdmissionPolicies(c client.Client) error {
 	return nil
 }
 
-// waitForCRDsReady polls until Calico CRDs are fully usable after admission policy
-// installation. The MAPs target NetworkPolicy, so we verify by doing a create+delete
-// round-trip rather than just a List (which can succeed before the admission chain is ready).
-func waitForCRDsReady(c client.Client) error {
+// grantPodWrites lets authenticated identities write Pods, so impersonated
+// clients are refused by admission rather than RBAC.
+func grantPodWrites(c client.Client) error {
+	ctx := context.Background()
+	role := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{Name: "validation-test-pod-writer"},
+		Rules: []rbacv1.PolicyRule{{
+			APIGroups: []string{""},
+			Resources: []string{"pods", "pods/status", "pods/binding"},
+			Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+		}},
+	}
+	if err := c.Create(ctx, role); err != nil {
+		return fmt.Errorf("creating ClusterRole: %w", err)
+	}
+	binding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: "validation-test-pod-writer"},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name:     role.Name,
+		},
+		Subjects: []rbacv1.Subject{{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "Group",
+			Name:     "system:authenticated",
+		}},
+	}
+	if err := c.Create(ctx, binding); err != nil {
+		return fmt.Errorf("creating ClusterRoleBinding: %w", err)
+	}
+	return nil
+}
+
+// waitForAPIReady waits for the CRDs to be served and, where admission policies are
+// installed, for them to be mutating.
+//
+// A successful create proves only the former: an unbound policy mutates nothing, so
+// the suite could start early and its mutation tests flake.
+func waitForAPIReady(c client.Client) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	for {
@@ -142,12 +187,20 @@ func waitForCRDsReady(c client.Client) error {
 			Spec: v3.NetworkPolicySpec{Selector: "all()"},
 		}
 		if err := c.Create(ctx, probe); err == nil {
+			mutated := true
+			if admissionPoliciesEnabled {
+				got := &v3.NetworkPolicy{}
+				mutated = c.Get(ctx, client.ObjectKeyFromObject(probe), got) == nil &&
+					got.Spec.Tier == "default"
+			}
 			_ = c.Delete(ctx, probe)
-			return nil
+			if mutated {
+				return nil
+			}
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("timed out waiting for CRDs to become ready")
+			return fmt.Errorf("timed out waiting for the API server to become ready")
 		case <-time.After(500 * time.Millisecond):
 		}
 	}
@@ -163,8 +216,8 @@ func TestMain(m *testing.M) {
 		CRDDirectoryPaths: []string{crdDir()},
 	}
 
-	// MutatingAdmissionPolicy requires K8s >= 1.32. Only enable on supported versions
-	// so the test suite still works on older envtest binaries (e.g., ut-validation-min-k8s).
+	// Older API servers refuse to start with this runtime-config, so leave it
+	// off for the ut-validation-min-k8s lane.
 	admissionPoliciesEnabled = envtestSupportsMAP()
 	if admissionPoliciesEnabled {
 		testEnvObj.ControlPlane.GetAPIServer().Configure().
@@ -197,24 +250,39 @@ func TestMain(m *testing.M) {
 		return
 	}
 
+	testCfg = cfg
+	testScheme = scheme
+
 	testClient, err = client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
 		return
 	}
 
+	if err := grantPodWrites(testClient); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to grant Pod writes to authenticated users: %v\n", err)
+		return
+	}
+
 	if admissionPoliciesEnabled {
-		if err := installAdmissionPolicies(testClient); err != nil {
+		if err := installAdmissionPolicies(testClient, admissionDir(), func(*unstructured.Unstructured) bool { return false }); err != nil {
 			fmt.Fprintf(os.Stderr, "failed to install admission policies: %v\n", err)
 			return
 		}
 
-		// After installing admission policies, the API server may briefly make CRDs
-		// unavailable while reloading. Wait for a known CRD to be usable.
-		if err := waitForCRDsReady(testClient); err != nil {
-			fmt.Fprintf(os.Stderr, "CRDs not ready after admission policy install: %v\n", err)
+		if err := waitForAPIReady(testClient); err != nil {
+			fmt.Fprintf(os.Stderr, "API server not ready after admission policy install: %v\n", err)
 			return
 		}
+	}
+
+	// Mutating policies are only served where admissionPoliciesEnabled is set.
+	skipUnserved := func(obj *unstructured.Unstructured) bool {
+		return !admissionPoliciesEnabled && strings.HasPrefix(obj.GetKind(), "MutatingAdmissionPolicy")
+	}
+	if err := installAdmissionPolicies(testClient, cniAnnotationsAdmissionDir(), skipUnserved); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to install the CNI annotation admission policies: %v\n", err)
+		return
 	}
 
 	code = m.Run()

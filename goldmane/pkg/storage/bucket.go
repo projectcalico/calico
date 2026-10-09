@@ -53,6 +53,10 @@ type AggregationBucket struct {
 	// Tracker for statistics within this bucket.
 	stats *statisticsIndex
 
+	// emissions records what each node has already reported into this bucket, so a
+	// replayed cache is not counted twice. Nil once no client can replay this far back.
+	emissions map[emissionKey]struct{}
+
 	// ready is set when this bucket is sent to any stream, and cleared when this bucket is reset.
 	// It can thus be used to determine when a bucket is rolled over between Goldmane deciding to stream it,
 	// and the bucket actually being emited. In this case, we should skip streaming the bucket as its contents
@@ -95,7 +99,40 @@ func NewAggregationBucket(start, end time.Time) *AggregationBucket {
 		EndTime:   end.Unix(),
 		Flows:     set.New[*DiachronicFlow](),
 		stats:     newStatisticsIndex(),
+		emissions: map[emissionKey]struct{}{},
 	}
+}
+
+// emissionKey identifies one Felix flow log within a bucket. Felix emits on its own window,
+// which does not align with the bucket, so a bucket can hold several emissions of one flow.
+type emissionKey struct {
+	flowID int64
+	start  int64
+	end    int64
+	node   uint32
+}
+
+// claimEmission records an emission and reports whether it had not been seen before.
+func (b *AggregationBucket) claimEmission(k emissionKey) bool {
+	b.Lock()
+	defer b.Unlock()
+
+	if b.emissions == nil {
+		return true
+	}
+	if _, seen := b.emissions[k]; seen {
+		return false
+	}
+	b.emissions[k] = struct{}{}
+	return true
+}
+
+// forgetEmissions drops the dedup state for a bucket old enough that no client will replay
+// into it.
+func (b *AggregationBucket) forgetEmissions() {
+	b.Lock()
+	defer b.Unlock()
+	b.emissions = nil
 }
 
 func (b *AggregationBucket) Fields() logrus.Fields {
@@ -115,6 +152,7 @@ func (b *AggregationBucket) Reset(start, end int64) {
 	b.pushed = false
 	b.ready = false
 	b.stats = newStatisticsIndex()
+	b.emissions = map[emissionKey]struct{}{}
 
 	if b.Flows == nil {
 		b.Flows = set.New[*DiachronicFlow]()

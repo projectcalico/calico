@@ -1,0 +1,15 @@
+version: "2"
+linters:
+  settings:
+    staticcheck:
+      # The FV suite dot imports Ginkgo and Gomega, including from its non-test helper files.
+      dot-import-whitelist:
+        - github.com/onsi/ginkgo/v2
+        - github.com/onsi/gomega
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling

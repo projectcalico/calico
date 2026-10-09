@@ -120,6 +120,25 @@ func (m matchCriteria) NotMarkMatchesWithMask(mark, mask uint32) generictables.M
 	return append(m, fmt.Sprintf("-m mark ! --mark %#x/%#x", mark, mask))
 }
 
+func (m matchCriteria) ConnMarkMatchesWithMask(mark, mask uint32) generictables.MatchCriteria {
+	logCxt := log.WithFields(log.Fields{
+		"mark": mark,
+		"mask": mask,
+	})
+	if mask == 0 {
+		logCxt.Panic("Bug: mask is 0.")
+	}
+	if mark&mask != mark {
+		logCxt.Panic("Bug: mark is not contained in mask")
+	}
+	return append(m, fmt.Sprintf("-m connmark --mark %#x/%#x", mark, mask))
+}
+
+func (m matchCriteria) TCPFlagsSet(flags string) generictables.MatchCriteria {
+	// Use the same long-form fragment that iptables-save renders so that our rules round-trip.
+	return append(m, fmt.Sprintf("-p tcp -m tcp --tcp-flags %s %s", flags, flags))
+}
+
 func (m matchCriteria) InInterface(ifaceMatch string) generictables.MatchCriteria {
 	return append(m, fmt.Sprintf("--in-interface %s", ifaceMatch))
 }

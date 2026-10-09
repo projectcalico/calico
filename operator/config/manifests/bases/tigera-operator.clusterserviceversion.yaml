@@ -1,0 +1,145 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Seamless Upgrades
+    categories: Logging & Tracing, Monitoring, Networking, Security
+    description: An operator which manages the lifecycle of a Calico or Calico Enterprise installation on Kubernetes or OpenShift.
+    marketplace.openshift.io/action-text: Install-time Instructions
+    marketplace.openshift.io/remote-workflow: https://docs.projectcalico.org/getting-started/openshift/installation
+    operators.operatorframework.io/builder: operator-sdk-v1.1.0
+    operators.operatorframework.io/internal-objects: '["blockaffinities.crd.projectcalico.org","clusterinformations.crd.projectcalico.org","ipamblocks.crd.projectcalico.org","ipamconfigs.crd.projectcalico.org","ipamhandles.crd.projectcalico.org"]'
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v2
+    repository: https://github.com/tigera/operator
+    support: Tigera
+    certified: "true"
+  name: operator
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+      - description: BGPConfiguration represents BGP specific configuration options for the cluster or a specific node.
+        displayName: BGPConfiguration
+        kind: BGPConfiguration
+        name: bgpconfigurations.crd.projectcalico.org
+        version: v1
+      - description: BGPPeer represents a remote BGP peer with which the node(s) in a Calico cluster will peer. Configuring BGP peers allows you to peer a Calico network with your datacenter fabric (e.g. ToR).
+        displayName: BGPPeer
+        kind: BGPPeer
+        name: bgppeers.crd.projectcalico.org
+        version: v1
+      - description: BlockAffinity maintains a block affinity's state.
+        displayName: BlockAffinity
+        kind: BlockAffinity
+        name: blockaffinities.crd.projectcalico.org
+        version: v1
+      - description: ClusterInformation contains the cluster specific information.
+        displayName: ClusterInformation
+        kind: ClusterInformation
+        name: clusterinformations.crd.projectcalico.org
+        version: v1
+      - description: FelixConfiguration represents Felix configuration options for the cluster.
+        displayName: FelixConfiguration
+        kind: FelixConfiguration
+        name: felixconfigurations.crd.projectcalico.org
+        version: v1
+      - description: GlobalNetworkPolicy represents an ordered set of rules which are applied to a collection of endpoints that match a label selector.
+        displayName: GlobalNetworkPolicy
+        kind: GlobalNetworkPolicy
+        name: globalnetworkpolicies.crd.projectcalico.org
+        version: v1
+      - description: GlobalNetworkSet represents an arbitrary set of IP subnetworks/CIDRs, allowing it to be matched by Calico policy. Network sets are useful for applying policy to traffic coming from (or going to) external, non-Calico, networks.
+        displayName: GlobalNetworkSet
+        kind: GlobalNetworkSet
+        name: globalnetworksets.crd.projectcalico.org
+        version: v1
+      - description: HostEndpoint represents one or more real or virtual interfaces attached to a host that is running Calico. It enforces Calico policy on the traffic that is entering or leaving the host’s default network namespace through those interfaces.
+        displayName: HostEndpoint
+        kind: HostEndpoint
+        name: hostendpoints.crd.projectcalico.org
+        version: v1
+      - description: Installation configures an installation of Calico or Calico Enterprise. At most one instance of this resource is supported. It must be named "default". The Installation API installs core networking and network policy components, and provides general install-time configuration.
+        displayName: Installation
+        kind: Installation
+        name: installations.operator.tigera.io
+        version: v1
+      - description: IPAMBlock contains information about a block for IP address assignment.
+        displayName: IPAMBlock
+        kind: IPAMBlock
+        name: ipamblocks.crd.projectcalico.org
+        version: v1
+      - description: IPAMConfig contains information about a block for IP address assignment.
+        displayName: IPAMConfig
+        kind: IPAMConfig
+        name: ipamconfigs.crd.projectcalico.org
+        version: v1
+      - description: IPAMHandle contains information about an IPAMHandle resource.
+        displayName: IPAMHandle
+        kind: IPAMHandle
+        name: ipamhandles.crd.projectcalico.org
+        version: v1
+      - description: IPPool represents a collection of IP addresses from which Calico expects endpoint IPs to be assigned.
+        displayName: IPPool
+        kind: IPPool
+        name: ippools.crd.projectcalico.org
+        version: v1
+      - description: KubeControllersConfiguration represents configuration options for the Calico Kubernetes controllers.
+        displayName: KubeControllersConfiguration
+        kind: KubeControllersConfiguration
+        name: kubecontrollersconfigurations.crd.projectcalico.org
+        version: v1
+      - description: NetworkPolicy represents an ordered set of rules which are applied to a collection of endpoints that match a label selector.
+        displayName: NetworkPolicy
+        kind: NetworkPolicy
+        name: networkpolicies.crd.projectcalico.org
+        version: v1
+      - description: NetworkSet represents an arbitrary set of IP subnetworks/CIDRs, allowing it to be matched by Calico policy. Network sets are useful for applying policy to traffic coming from (or going to) external, non-Calico, networks.
+        displayName: NetworkSet
+        kind: NetworkSet
+        name: networksets.crd.projectcalico.org
+        version: v1
+      - description: TigeraStatus represents the most recently observed status for Calico or a Calico Enterprise functional area.
+        displayName: TigeraStatus
+        kind: TigeraStatus
+        name: tigerastatuses.operator.tigera.io
+        version: v1
+  description: 'An operator which manages the lifecycle of a Calico or Calico Enterprise installation on Kubernetes or OpenShift. Its goal is to make installation, upgrades, and ongoing lifecycle management of Calico and Calico Enterprise as simple and reliable as possible. **Important**: this operator should only be installed if the cluster was already provisioned with Calico.'
+  displayName: Tigera Operator
+  icon:
+    - base64data: PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyB2ZXJzaW9uPSIxLjEiIHZpZXdCb3g9IjAgMCAxMTMuMSAxMTMuMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayI+CjxkZWZzPgo8c3R5bGU+LmNscy0xe2ZpbGw6dXJsKCNiKTt9LmNscy0ye2ZpbGw6I2ZmZjt9LmNscy0ze2ZpbGw6I2E4NzU0YTt9LmNscy00e2ZpbGw6IzIzMWYyMDt9PC9zdHlsZT4KPGxpbmVhckdyYWRpZW50IGlkPSJiIiB4Mj0iMTA0LjA1IiB5MT0iNTYuNTUiIHkyPSI1Ni41NSIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPgo8c3RvcCBzdG9wLWNvbG9yPSJvcmFuZ2UiIG9mZnNldD0iMCIvPgo8c3RvcCBzdG9wLWNvbG9yPSIjZTc2ZDJjIiBvZmZzZXQ9IjEiLz4KPC9saW5lYXJHcmFkaWVudD4KPGxpbmVhckdyYWRpZW50IGlkPSJhIiB4Mj0iMTA0LjA1IiB5MT0iNTYuNTUiIHkyPSI1Ni41NSIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiIHhsaW5rOmhyZWY9IiNiIi8+CjwvZGVmcz4KPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNC41MjI3KSI+CjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKC4wMjU5ODQgNC4yNjE0ZS01KSIgZGF0YS1uYW1lPSJMYXllciAyIj4KPGcgZGF0YS1uYW1lPSJMYXllciAxIj4KPHBhdGggY2xhc3M9ImNscy0xIiBkPSJtMTA0IDI5LjUzYTMgMyAwIDAgMC0xLjU0LTIuNTNsLTQ5LjAxLTI2LjY0YTMgMyAwIDAgMC0yLjg1IDBsLTQ5LjAxIDI2LjY0YTMgMyAwIDAgMC0xLjU5IDIuNTNjLTAuNCAyMC43MSAzLjgyIDM4LjI4IDEyLjU0IDUyLjIzIDguNDUgMTMuNTQgMjEuMzQgMjQgMzguMyAzMS4xYTIuOSAyLjkgMCAwIDAgMi4zMSAwYzE3LTcuMSAyOS44NS0xNy41NiAzOC4zLTMxLjEgOC43NS0xMy45NSAxMi45Ny0zMS41MiAxMi41NS01Mi4yM3ptLTI1LjczIDI4LjA5YTI0LjQxIDI0LjQxIDAgMCAxLTI0LjM4IDI0LjM4aC0zLjczYTI0LjQxIDI0LjQxIDAgMCAxLTI0LjM4LTI0LjM4di0yNi41MmwxMC42OSA3LjQ1YTIuMzUgMi4zNSAwIDAgMCAxLjM1IDAuNDNoMC40OGEyLjM4IDIuMzggMCAwIDAgMS0wLjIgMzIuNjggMzIuNjggMCAwIDEgMjUuNTUgMCAyLjM4IDIuMzggMCAwIDAgMSAwLjJoMC40OGEyLjM1IDIuMzUgMCAwIDAgMS4zNS0wLjQzbDEwLjU5LTcuNDV6IiBmaWxsPSJ1cmwoI2EpIi8+CjxwYXRoIGNsYXNzPSJjbHMtMiIgZD0ibTc4LjI3IDMxLjEtMTAuNjkgNy40NWEyLjM1IDIuMzUgMCAwIDEtMS4zNSAwLjQzaC0wLjQ4YTIuMzggMi4zOCAwIDAgMS0xLTAuMiAzMi42OCAzMi42OCAwIDAgMC0yNS41NSAwIDIuMzggMi4zOCAwIDAgMS0xIDAuMmgtMC40OGEyLjM1IDIuMzUgMCAwIDEtMS4zNS0wLjQzbC0xMC41OS03LjQ1djI2LjUyYTI0LjQxIDI0LjQxIDAgMCAwIDI0LjM4IDI0LjM4aDMuNzNhMjQuNDEgMjQuNDEgMCAwIDAgMjQuMzgtMjQuMzh6Ii8+CjxwYXRoIGNsYXNzPSJjbHMtMyIgZD0ibTUxLjc0IDM2LjE5YTMxLjc4IDMxLjc4IDAgMCAwLTEyLjQ5IDIuNTkgMi4zOCAyLjM4IDAgMCAxLTEgMC4yaC0wLjQ4YTIuMzUgMi4zNSAwIDAgMS0xLjM1LTAuNDNsLTEwLjY0LTcuNDV2MjYuNTJjMCAwLjU3IDAgMS4xNCAwLjA5IDEuNzFhMTkuMDcgMTkuMDcgMCAwIDAgMjUuODctOS45NXoiLz4KPHBhdGggY2xhc3M9ImNscy00IiBkPSJtNjYuMjMgMzloLTAuNDhhMi4zOCAyLjM4IDAgMCAxLTEtMC4yIDMyLjE1IDMyLjE1IDAgMCAwLTEyLjc1LTIuNjJoLTAuMjh2MTIuODJhMTkuMDYgMTkuMDYgMCAwIDAgMjYuNDYgMTAuMzFjMC0wLjU2IDAuMDktMS4xMiAwLjA5LTEuNjl2LTI2LjUybC0xMC42OSA3LjQ1YTIuMzUgMi4zNSAwIDAgMS0xLjM1IDAuNDV6Ii8+CjwvZz4KPC9nPgo8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSguMDI1OTg0IDQuMjYxNGUtNSkiIGRhdGEtbmFtZT0iTGF5ZXIgMiI+CjxnIGRhdGEtbmFtZT0iTGF5ZXIgMSI+CjxwYXRoIGNsYXNzPSJjbHMtMSIgZD0ibTEwNCAyOS41M2EzIDMgMCAwIDAtMS41NC0yLjUzbC00OS4wMS0yNi42NGEzIDMgMCAwIDAtMi44NSAwbC00OS4wMSAyNi42NGEzIDMgMCAwIDAtMS41OSAyLjUzYy0wLjQgMjAuNzEgMy44MiAzOC4yOCAxMi41NCA1Mi4yMyA4LjQ1IDEzLjU0IDIxLjM0IDI0IDM4LjMgMzEuMWEyLjkgMi45IDAgMCAwIDIuMzEgMGMxNy03LjEgMjkuODUtMTcuNTYgMzguMy0zMS4xIDguNzUtMTMuOTUgMTIuOTctMzEuNTIgMTIuNTUtNTIuMjN6bS0yNS43MyAyOC4wOWEyNC40MSAyNC40MSAwIDAgMS0yNC4zOCAyNC4zOGgtMy43M2EyNC40MSAyNC40MSAwIDAgMS0yNC4zOC0yNC4zOHYtMjYuNTJsMTAuNjkgNy40NWEyLjM1IDIuMzUgMCAwIDAgMS4zNSAwLjQzaDAuNDhhMi4zOCAyLjM4IDAgMCAwIDEtMC4yIDMyLjY4IDMyLjY4IDAgMCAxIDI1LjU1IDAgMi4zOCAyLjM4IDAgMCAwIDEgMC4yaDAuNDhhMi4zNSAyLjM1IDAgMCAwIDEuMzUtMC40M2wxMC41OS03LjQ1eiIgZmlsbD0idXJsKCNhKSIvPgo8cGF0aCBjbGFzcz0iY2xzLTIiIGQ9Im03OC4yNyAzMS4xLTEwLjY5IDcuNDVhMi4zNSAyLjM1IDAgMCAxLTEuMzUgMC40M2gtMC40OGEyLjM4IDIuMzggMCAwIDEtMS0wLjIgMzIuNjggMzIuNjggMCAwIDAtMjUuNTUgMCAyLjM4IDIuMzggMCAwIDEtMSAwLjJoLTAuNDhhMi4zNSAyLjM1IDAgMCAxLTEuMzUtMC40M2wtMTAuNTktNy40NXYyNi41MmEyNC40MSAyNC40MSAwIDAgMCAyNC4zOCAyNC4zOGgzLjczYTI0LjQxIDI0LjQxIDAgMCAwIDI0LjM4LTI0LjM4eiIvPgo8cGF0aCBjbGFzcz0iY2xzLTMiIGQ9Im01MS43NCAzNi4xOWEzMS43OCAzMS43OCAwIDAgMC0xMi40OSAyLjU5IDIuMzggMi4zOCAwIDAgMS0xIDAuMmgtMC40OGEyLjM1IDIuMzUgMCAwIDEtMS4zNS0wLjQzbC0xMC42NC03LjQ1djI2LjUyYzAgMC41NyAwIDEuMTQgMC4wOSAxLjcxYTE5LjA3IDE5LjA3IDAgMCAwIDI1Ljg3LTkuOTV6Ii8+CjxwYXRoIGNsYXNzPSJjbHMtNCIgZD0ibTY2LjIzIDM5aC0wLjQ4YTIuMzggMi4zOCAwIDAgMS0xLTAuMiAzMi4xNSAzMi4xNSAwIDAgMC0xMi43NS0yLjYyaC0wLjI4djEyLjgyYTE5LjA2IDE5LjA2IDAgMCAwIDI2LjQ2IDEwLjMxYzAtMC41NiAwLjA5LTEuMTIgMC4wOS0xLjY5di0yNi41MmwtMTAuNjkgNy40NWEyLjM1IDIuMzUgMCAwIDEtMS4zNSAwLjQ1eiIvPgo8L2c+CjwvZz4KPC9nPgo8L3N2Zz4K
+      mediatype: image/svg+xml
+  install:
+    spec:
+      clusterPermissions: null
+      deployments: null
+    strategy: ""
+  installModes:
+    - supported: true
+      type: OwnNamespace
+    - supported: true
+      type: SingleNamespace
+    - supported: false
+      type: MultiNamespace
+    - supported: true
+      type: AllNamespaces
+  keywords:
+    - tigera-operator
+    - networking
+    - security
+    - monitoring
+  links:
+    - name: Tigera
+      url: https://tigera.io/
+    - name: Calico Introduction
+      url: https://docs.tigera.io/calico/latest/about/
+    - name: Install an OpenShift 4 cluster with Calico
+      url: https://docs.tigera.io/calico/latest/getting-started/kubernetes/openshift/installation
+  maintainers:
+    - email: maintainers@tigera.io
+      name: Project Calico Maintainers
+  maturity: stable
+  provider:
+    name: Tigera
+  version: 0.0.0

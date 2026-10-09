@@ -35,6 +35,19 @@ func TestFelixClusterRoutingTemplates(t *testing.T) {
 	})
 }
 
+// TestClusterRoutesTemplates walks BGPConfiguration.programClusterRoutes over the rest of its enum
+// against the same set of IP Pools (IPIP Always, IPIP CrossSubnet, unencapsulated v4 and v6), so
+// the golden bird_ipam.cfg files show exactly which pools BIRD is left programming.  Disabled is
+// covered by TestFelixClusterRoutingTemplates above.
+func TestClusterRoutesTemplates(t *testing.T) {
+	runOneshotTests(t, []oneshotTestCase{
+		{name: "default", goldenDir: "cluster_routes/default"},
+		{name: "enabled", goldenDir: "cluster_routes/enabled"},
+		{name: "ipip-only", goldenDir: "cluster_routes/ipip-only"},
+		{name: "noencap-only", goldenDir: "cluster_routes/noencap-only"},
+	})
+}
+
 func TestNextHopModeTemplates(t *testing.T) {
 	runOneshotTests(t, []oneshotTestCase{
 		{name: "global_peers", goldenDir: "next_hop_mode/global_peers"},

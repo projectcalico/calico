@@ -95,7 +95,7 @@ func BenchmarkGoldmaneReceive(b *testing.B) {
 	runtime.GC()
 
 	for b.Loop() {
-		gm.Receive(flows[idx])
+		gm.Receive(flows[idx], "")
 
 		idx++
 		if idx == flowCount {
@@ -148,7 +148,7 @@ func BenchmarkGoldmaneReceiveParallel(b *testing.B) {
 		idx := rand.IntN(flowCount)
 
 		for pb.Next() {
-			gm.Receive(flows[idx])
+			gm.Receive(flows[idx], "")
 
 			idx++
 			if idx == flowCount {

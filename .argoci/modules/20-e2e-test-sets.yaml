@@ -1,0 +1,17 @@
+# Fails when the suites and the e2e config disagree on which test sets exist.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  services:
+    - docker
+
+steps:
+  - name: e2e-test-set-drift
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    depends: [check-go]
+    requests: {cpu: 5500m, memory: 5.5Gi}
+    commands: |
+      make -C e2e check-test-set

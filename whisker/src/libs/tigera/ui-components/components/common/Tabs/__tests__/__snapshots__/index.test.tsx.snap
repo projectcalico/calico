@@ -12,6 +12,7 @@ exports[`<Tabs/> it renders 1`] = `
     >
       <a
         class="chakra-link css-1i7mui0"
+        data-discover="true"
         href="/some-link"
         tabindex="0"
       >

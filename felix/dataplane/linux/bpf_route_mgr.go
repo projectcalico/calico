@@ -143,6 +143,13 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVe
 		dirtyCIDRs.Add(cidr)
 	}
 
+	// Wireguard is configured per address family; a route only belongs to the
+	// family this manager serves, so consult that family's setting alone.
+	wgEnabled := config.Wireguard.Enabled
+	if ipFamily == proto.IPVersion_IPV6 {
+		wgEnabled = config.Wireguard.EnabledV6
+	}
+
 	m := &bpfRouteManager{
 		myNodename:        config.Hostname,
 		cidrToRoute:       map[ip.CIDR]*proto.RouteUpdate{},
@@ -165,7 +172,7 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVe
 
 		opReporter: opReporter,
 
-		wgEnabled:         config.Wireguard.Enabled || config.Wireguard.EnabledV6,
+		wgEnabled:         wgEnabled,
 		ipFamily:          ipFamily,
 		svcLoopPrevention: config.ServiceLoopPrevention,
 	}

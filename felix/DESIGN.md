@@ -167,10 +167,13 @@ mode: an nftables-mode kube-proxy selects the nftables dataplane.
 That signal is about coexistence — Felix must use the same
 netfilter generation as kube-proxy — not host capability, so it
 must not be replaced by a capability probe on cluster hosts. See
-`useNftables()` in `dataplane/linux/int_dataplane.go`. The
-per-host escape hatch is `NFTablesMode=Disabled`/`Enabled` set
-locally (env var or config file), which overrides any
-datastore-inherited value.
+`nftables.Enabled()`, which the daemon calls at startup and
+records in `Config.NFTablesEnabled`; everything that varies by
+dataplane keys off that resolved bool rather than the
+`NFTablesMode` string, so `Auto` behaves like the mode it
+resolved to. The per-host escape hatch is
+`NFTablesMode=Disabled`/`Enabled` set locally (env var or config
+file), which overrides any datastore-inherited value.
 
 The `iptables` and `nftables` backends share a common rule-
 generation layer in `felix/rules/` and a common table-abstraction
@@ -180,6 +183,24 @@ generation: `dispatch.go` (per-endpoint dispatch chains),
 chain setup), `static.go` (boilerplate filter/NAT/mangle chains),
 `nat.go`. A PR adding policy semantics usually touches
 `felix/rules/` and needs matching changes on both backends.
+
+The nftables backend is two packages.
+`felix/nftables/nftrender/` holds the rule-rendering primitives —
+the match builder, the action types, the naming helpers.
+`felix/nftables/` holds the driver that programs tables, sets and
+maps through `sigs.k8s.io/knftables`.
+
+They are separate because Felix also builds for Windows.
+`felix/rules/` needs the nftables primitives to render rules, so it
+must build everywhere; the driver cannot, because knftables reaches
+Linux-only netlink code. Hence the invariant: **code that builds
+for Windows imports `nftrender`, never `felix/nftables`.** Nothing
+local flags a violation — `go build` and the unit tests are Linux —
+so it surfaces as a cross-compile failure in the "Felix: Build
+Windows binaries" and node Windows-image jobs, reported against
+`github.com/google/nftables` rather than the offending import. The
+iptables backend needs no equivalent split; it shells out to
+`iptables-restore` instead of linking a netlink library.
 
 ### Shared networking subsystems
 
@@ -202,6 +223,17 @@ netlink-level design (resync grace periods, conntrack cleanup on
 IP moves) is reserved for a future `route-sync.md` sub-design.
 `flow-logs-collector.md` is likewise still to be written.
 
+### Cross-component designs Felix takes part in
+
+Some subsystems are split between Felix and another component, so
+their design lives at the repo level rather than under
+`felix/design/`:
+
+| Design | What it covers in Felix |
+|---|---|
+| [`design/cluster-route-programming/DESIGN.md`](../design/cluster-route-programming/DESIGN.md) | Whether Felix or confd/BIRD programs the routes to workloads on other nodes, per encapsulation type. Covers `ipipManager`, `noEncapManager`, `EncapsulationResolver.NoEncapNeeded`, and the `ProgramClusterRoutes` config parameter. |
+| [`design/ipam/DESIGN.md`](../design/ipam/DESIGN.md) | Felix is a read-only consumer of IPAM state (IPAM blocks feed the `L3RouteResolver`). |
+
 ## 2. Sub-design index
 
 Per-topic design docs under [`felix/design/`](./design/). Each is
@@ -221,7 +253,7 @@ cost rule, cross-cutting review notes); the others have tight
 `applyTo` globs scoped to their topic. **Load each of them either
 when you touch a matched file or when you're working on the
 related topic** — the globs cover the common cases, but a change
-in a central file (e.g. `tc.c`, `bpf.h`) may legitimately need a
+in a central file (e.g. `tc.c`, `cali_bpf.h`) may legitimately need a
 sub-design even if the immediate edit site doesn't match its glob
 narrowly, and conversely a PR description that says "this fixes
 the conntrack scanner" should pull `bpf-conntrack-flowstate.md`
@@ -232,7 +264,7 @@ large enough to bloat AI-tool context.
 | Topic | Applies to | Status |
 |---|---|---|
 | [bpf-overview](./design/bpf-overview.md) | `felix/bpf/**`, `felix/bpf-gpl/**`, `felix/dataplane/linux/bpf_*.go`, `felix/dataplane/linux/vxlan_mgr.go` (umbrella — pulled by every BPF change) | ✅ exists |
-| [bpf-tc-programs](./design/bpf-tc-programs.md) | `felix/bpf-gpl/tc.c`, `tc_preamble.c`, `xdp_preamble.c`, `jump.h`, `bpf.h`, `globals.h`, `types.h`, `felix/bpf/hook/**`, `felix/bpf/tc/**`, `felix/bpf/jump/**`, `felix/bpf/ifstate/**` | ✅ exists |
+| [bpf-tc-programs](./design/bpf-tc-programs.md) | `felix/bpf-gpl/tc.c`, `tc_preamble.c`, `xdp_preamble.c`, `jump.h`, `cali_bpf.h`, `globals.h`, `types.h`, `felix/bpf/hook/**`, `felix/bpf/tc/**`, `felix/bpf/jump/**`, `felix/bpf/ifstate/**` | ✅ exists |
 | [bpf-xdp](./design/bpf-xdp.md) | `felix/bpf-gpl/xdp.c`, `xdp_preamble.c`, `metadata.h`, `felix/bpf/xdp/**` | ✅ exists |
 | [bpf-services](./design/bpf-services.md) | `felix/bpf/proxy/**`, `felix/bpf/nat/**`, `felix/bpf/consistenthash/**`, `felix/bpf-gpl/connect*.{c,h}`, `nat*.h`, `nat_lookup.h`, `maglev.h`, `ctlb*.h`, `sendrecv.h`, `felix/dataplane/linux/bpf_ep_mgr.go` | ✅ exists |
 | [bpf-host-networking](./design/bpf-host-networking.md) | `felix/dataplane/linux/bpf_ep_mgr.go`, `dataplanedefs/dataplane_defs.go`, `felix/bpf-gpl/fib_co_re.h` | ✅ exists |
@@ -242,6 +274,7 @@ large enough to bloat AI-tool context.
 | [bpf-tests](./design/bpf-tests.md) | `felix/bpf/ut/**`, `felix/fv/bpf_*_test.go` | ✅ exists |
 | [dataplane](./design/dataplane.md) | `felix/dataplane/linux/**` (the shared loop/manager/resync architecture, all modes — BPF-specific files here are *also* matched by the `bpf-*` rows, intentionally), `felix/iptables/**`, `felix/nftables/**`, `felix/generictables/**`, `felix/ipsets/**`, `felix/markbits/**`, `felix/rules/**`; also the manager/driver architecture & resync doctrine for `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` | ✅ exists |
 | [calc-graph](./design/calc-graph.md) | `felix/calc/**`, `felix/labelindex/**`, `felix/dispatcher/**` | ✅ exists |
+| [neighbour-discovery](./design/neighbour-discovery.md) | `felix/dataplane/linux/proxy_neigh_mgr.go`; the proxy-ARP sysctl and live-migration ARP-suppression parts of `felix/dataplane/linux/endpoint_mgr.go` (that file's manager architecture is [dataplane](./design/dataplane.md)'s). Depends on, and is invalidated by changes to, `cni-plugin/pkg/dataplane/linux/dataplane_linux.go` and `networking-calico/networking_calico/agent/linux/dhcp.py` | ✅ exists |
 | route-sync (deep netlink design only) | `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` — *architecture covered by [dataplane.md](./design/dataplane.md); this row reserved for the deeper netlink-level resync design* | *not yet written* |
 | flow-logs-collector | `felix/collector/**` | *not yet written* |
 | config-engine | `felix/config/**` | *not yet written* |
@@ -269,18 +302,12 @@ absence as "read the code and ask"; do not assume anything goes.
   per-section review notes describing the invariants a PR must
   respect. At write-time, respect them; at review-time, apply
   them.
-- **Update rule.** A change to how Felix works in a given area
-  must update the relevant file under
-  [`felix/design/`](./design/) in the same PR — typically the
-  sub-design covering the area. This index
-  (`felix/DESIGN.md`) is also updated when the sub-design
-  table, a `applies to` scope, or §1's architecture overview
-  changes. Exemptions: (a) a bug fix that restores behaviour
-  the doc already describes, (b) a mechanical refactor with no
-  observable change, (c) comment or log-message edits, (d)
-  dependency bumps. If in doubt, update. The path-scoped
+- **Update rule.** A warranted edit goes in the sub-design covering
+  the area; this index is edited when the sub-design table, an
+  `applies to` scope, or §1's architecture overview changes. The
+  path-scoped
   [`.github/instructions/*.instructions.md`](../.github/instructions/)
-  files wire this rule into Copilot's automated review.
+  files wire the rule into Copilot's automated review.
 
 ## 4. Adding a new sub-design
 

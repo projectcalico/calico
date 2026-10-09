@@ -26,17 +26,10 @@ listed in [`felix/DESIGN.md`](../DESIGN.md).
 
 ## Debug log filters
 
-### The problem
-
-With `BPFLogLevel = debug`, BPF programs emit a log line at every
-interesting point in the packet path. That is indispensable when
-diagnosing a rare issue and catastrophic when run blindly on a loaded
-cluster — the log stream overwhelms the ring buffer, packets hit
-slower code, and the signal is drowned by noise.
-
-BPFLogFilters let an operator target debug logging to a small,
-specific subset of packets ("only TCP to port 80 on these two
-pods") so the cost is paid only for traffic that matters.
+With `BPFLogLevel = debug` every program logs at every interesting
+point in the packet path, which overwhelms a loaded node. BPFLogFilters
+target debug logging at a pcap-selected subset of packets, so only
+that traffic pays the cost.
 
 ### Fast path and debug path
 
@@ -135,9 +128,6 @@ per-interface.
   which goes up to 8) — a debug log filter does not need to follow every
   chain to the end. Raise it only with a concrete need.
 
-
-
-
 ## Flow logs & event ring buffer
 
 ### What it is, and what it is not
@@ -155,14 +145,13 @@ They are distinct from:
 - **BPF counters**, which produce aggregate counts, not
   per-flow records.
 
-The names are similar — both come with "logs" in the config —
-but the mechanisms share nothing. A reviewer touching one
-should not assume changes propagate to the other.
+The mechanisms share nothing, so a change to one does not reach the
+others.
 
 ### Enablement
 
 Flow logs are gated globally by the `FLOWLOGS_ENABLED` flag
-(`felix/bpf-gpl/bpf.h` / `globals.h`, bit
+(`felix/bpf-gpl/cali_bpf.h` / `globals.h`, bit
 `CALI_GLOBALS_FLOWLOGS_ENABLED`). Set per-attach-type through
 the `FlowLogsEnabled` field on the AttachPoint. When the flag
 is off, the emission paths in the BPF programs are compiled to
@@ -189,23 +178,9 @@ Events are written to a **BPF ring buffer**
 conntrack flags at the time of the event, packet and byte
 counters, timestamps and a verdict code.
 
-### Why ring buffer, not perf buffer
-
-BPF ring buffer (`BPF_MAP_TYPE_RINGBUF`, kernel 5.8+) is
-preferred over the older per-CPU perf-event buffer for this
-use because it is MPSC (multi-producer, single-consumer), so
-the userspace side does not need to fan in from `nCPU`
-readers, and it has the correct backpressure semantics
-— drops are explicit and countable rather than per-CPU
-reorderings. Calico's minimum kernel (5.10) supports it.
-
-### Fast-path discipline
-
-The emission sites are on the flow-creation path, not on every
-packet of an established flow, so the per-packet fast-path cost
-([bpf-overview.md → Fast-path performance discipline](./bpf-overview.md)) is unaffected when flow logs are on. The `FLOWLOGS_ENABLED`
-branch that guards emission is also a single mark-style load,
-which is acceptable on the fast path.
+A ring buffer (`BPF_MAP_TYPE_RINGBUF`) rather than a per-CPU perf
+buffer: it is multi-producer single-consumer, so userspace reads one
+stream, and its drops are explicit and countable.
 
 ### Review notes
 
@@ -220,12 +195,11 @@ which is acceptable on the fast path.
   `FLOWLOGS_ENABLED` so an operator who disables the feature
   does not pay for it.
 - Do **not** emit events on every packet of an established
-  flow. That turns a cheap feature into a fast-path regression
-  ([bpf-overview.md → Fast-path performance discipline](./bpf-overview.md)). The established-flow path already does not, and it
-  should stay that way.
-
-
-
+  flow. Emission lives on the flow-creation path, and the
+  `FLOWLOGS_ENABLED` guard is a single load, so flow logs cost the
+  fast path nothing
+  ([bpf-overview.md → Fast-path performance discipline](./bpf-overview.md));
+  keep it that way.
 
 ## QoS
 
@@ -254,8 +228,7 @@ Packet-rate and connection-limit state live in two separate BPF maps
 that share the same key shape but have disjoint values. Splitting
 them is what allows the userspace `ConnLimitScanner` to write
 `current_count` back without clobbering the BPF dataplane's running
-token-bucket state — see PR #13009 for the lost-update bug the split
-fixes.
+token-bucket state.
 
 Shared key (`felix/bpf/qos/map.go`):
 
@@ -339,10 +312,32 @@ on connection close.
   purges (LRU eviction, idle TCPEstablished) don't leak slots.
 - **Decrement (safety net)**: a userspace `ConnLimitScanner`
   (`felix/bpf/conntrack/connlimit_scanner.go`) recounts established
-  TCP CT entries every ~30s and overwrites `current_count` in
-  `cali_qos_conn` via `BPF_F_LOCK` batch updates. It corrects any
-  residual drift the fast/cleanup paths missed and skips entries
-  with `CONNLIMIT_DEC` already set so it doesn't double-count.
+  TCP CT entries once per CT scan and overwrites `current_count` in
+  `cali_qos_conn` via `BPF_F_LOCK` batch updates. It skips a close
+  both endpoints agreed on — either FIN bit — which the fast path has
+  already accounted for, and nothing else.
+
+**An RST releases no slot.** One RST is a single packet from either
+side, so a pod holding only `CAP_NET_RAW` could forge one per
+connection and admit an extra; two FINs cannot be forged by one party.
+An RST-closed connection keeps its slot until its entry is purged — at
+`TCPResetSeen`, or at the two-minute residual window if a packet crossed
+the close — and the next recount rebases. That purge waits while Linux
+conntrack still carries the flow before close, as it can for a flow that
+crosses netfilter (nat-outgoing): the entry must outlive the connection,
+never the reverse, or it runs uncounted. Idling past `TCPEstablished`
+still purges it.
+
+For the same reason the recount skips no RST state, and no other
+signal a pod can refresh at will: anything it honours is something a
+pod can hide its live connections behind.
+
+Host-originated traffic — including from host-networked pods — is
+exempt from the ingress limit: it takes the `skip_policy` path in
+`tc.c` and the admission check is gated on `!policy_skipped`, so it is
+neither counted nor limited. Same in iptables/nftables, where the
+connlimit rule sits in `cali-tw-<iface>`, a chain host-origin traffic
+never reaches.
 
 The per-direction `INGRESS_CONN_LIMIT_CONFIGURED` /
 `EGRESS_CONN_LIMIT_CONFIGURED` flags gate the BPF connlimit code
@@ -368,7 +363,7 @@ annotation on a HEP or WEP. The value is carried in BPF globals as
 
 The ECN bits are preserved in both address families. Istio's DSCP
 hook (for L7 mesh identification at connection setup) uses a second
-global, `ISTIO_DSCP`; see Istio ambient mode integration for the integration.
+global, `ISTIO_DSCP`; see Istio ambient mode integration below.
 
 ### Review notes for this section
 
@@ -388,10 +383,27 @@ global, `ISTIO_DSCP`; see Istio ambient mode integration for the integration.
   decision is part of the atomic section. Dropping outside the lock
   allows overshoot.
 - Any change to connlimit decrement paths must preserve the
-  `CONNLIMIT_DEC` idempotence flag — both the fast path (FIN/RST in
+  `CONNLIMIT_DEC` idempotence flag — both the fast path (both FINs in
   `calico_ct_lookup`) and the cleanup path (BPF conntrack cleanup
-  scanner) set it before decrementing, and the Go scanner skips
-  entries that carry it. Without that, drift accumulates upward.
+  scanner) set it before decrementing. It is what stops the same
+  close being counted twice when both paths see one entry.
+- `CONNLIMIT_DEC` is an idempotence latch, **not** a statement that
+  the connection is gone. Do not gate the userspace recount on it,
+  and do not add any other long-lived "already handled" marker that
+  the recount honours. The recount is the only path that can return
+  a slot, so anything it skips unconditionally is leaked for the
+  life of the entry. Keep the skip conditions to state that clears
+  itself or dies with the entry: the per-leg FIN/RST bits.
+- Where `calico_ct_lookup` releases the latch (when it clears
+  `v->rst_seen` after two minutes of continued traffic), release it
+  with an atomic AND on `type_flags_word`, mirroring the claim: a
+  byte-wide `ct_value_clear_flags()` would race with a concurrent
+  claim on another CPU.
+- When choosing between holding a slot too long and releasing one
+  too early, hold. Over-counting fails closed — a pod is briefly
+  refused a connection it could have had. Under-counting fails open:
+  the limit stops being a limit, and if the under-count is permanent
+  an unauthenticated packet defeats it outright.
 - ep_mgr writes to `cali_qos` / `cali_qos_conn` must skip the
   UpdateWithFlags when the configured fields match the existing
   entry. The dataplane owns the dynamic fields between configuration
@@ -402,9 +414,6 @@ global, `ISTIO_DSCP`; see Istio ambient mode integration for the integration.
   based on the CT flag, _not_ on the globals alone — globals are a
   per-attach-point configuration, not a per-flow decision. The CT
   flag is what records the per-flow policy decision.
-
-
-
 
 ## Istio ambient mode integration
 
@@ -432,7 +441,7 @@ the main program in `tc.c` does:
    a mesh member.
 4. On match, `qos_dscp_set(ctx, ISTIO_DSCP)` rewrites the DSCP
    bits in the IPv4 TOS / IPv6 traffic-class byte — same
-   mechanics as QoS QoS DSCP.
+   mechanics as QoS DSCP.
 
 The `ALL_ISTIO_WEPS_ID` IP set is populated by Felix with every
 mesh WEP in the cluster (local and remote); it lives in the
@@ -474,22 +483,11 @@ a convention shared with Istio ztunnel).
   changes on the other.
 - BPF unit test: `felix/bpf/ut/istio_test.go`.
 
-
-
-
 ---
 
-## Keep this doc in sync with the code
+## Cross-cutting rules
 
-A change to how the BPF dataplane works in the area this file
-covers must update the relevant section in the same PR — new
-mechanism, new flag, new map field, new config knob, or any
-change to the packet path. Exemptions: (a) bug fix restoring
-documented behaviour, (b) mechanical refactor with no observable
-change, (c) comment / log-message edits, (d) dependency bumps.
-If in doubt, update.
-
-Cross-cutting rules that apply to **every** BPF change (map
-versioning, mark discipline, sub-program registration, kernel-
-version sensitivity) live in
+Rules that apply to **every** BPF change (map versioning, mark
+discipline, sub-program registration, kernel-version sensitivity)
+live in
 [`bpf-overview.md` → Cross-cutting review notes](./bpf-overview.md).

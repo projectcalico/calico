@@ -596,7 +596,7 @@ func (buf *EventSequencer) OnEncapUpdate(encap config.Encapsulation) {
 		"IPIPEnabled":    encap.IPIPEnabled,
 		"VXLANEnabled":   encap.VXLANEnabled,
 		"VXLANEnabledV6": encap.VXLANEnabledV6,
-		"NoEncapEnabled": encap.NoEncapEnabled,
+		"NoEncapNeeded":  encap.NoEncapNeeded,
 	}).Debug("Encapsulation update")
 	buf.pendingEncapUpdate = &encap
 }
@@ -607,7 +607,10 @@ func (buf *EventSequencer) flushEncapUpdate() {
 			IpipEnabled:    buf.pendingEncapUpdate.IPIPEnabled,
 			VxlanEnabled:   buf.pendingEncapUpdate.VXLANEnabled,
 			VxlanEnabledV6: buf.pendingEncapUpdate.VXLANEnabledV6,
-			NoEncapEnabled: buf.pendingEncapUpdate.NoEncapEnabled,
+			// Note, "NoEncapEnabled" should have been named "NoEncapNeeded", but we
+			// can't change this now in the proto API, as 3rd parties might be relying
+			// on it.
+			NoEncapEnabled: buf.pendingEncapUpdate.NoEncapNeeded,
 		})
 		buf.pendingEncapUpdate = nil
 	}

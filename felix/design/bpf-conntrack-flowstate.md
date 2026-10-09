@@ -129,6 +129,62 @@ Creating a NAT'd flow means creating both. Destroying a NAT'd flow
 means destroying both — atomically enough that BPF never sees only
 one side. The cleanup pipeline is built around this requirement.
 
+The forward entry is a **stub**: `calico_ct_create_nat_fwd()` fills in
+only the type, the timestamp, the reverse key, and any source-port
+rewrite. All connection state — the TCP legs, the flags, the RST
+timestamp — lives on the reverse entry, which is why it is also called
+the **tracking** entry, and is the single source of truth for the flow.
+Readers and writers alike have to reach it: a `NAT_FWD` hit gives
+`calico_ct_lookup()` the stub, so it redirects
+`src_to_dst`/`dst_to_src` into the tracking entry's legs and uses
+`tracking_v` for the fields hanging off the value itself.
+
+### The forwarding hint on a leg
+
+Each leg records the ifindex where that direction's packets ingress, and
+the *opposite* direction reads it as an egress hint
+(`result.ifindex_fwd`) so it can `bpf_redirect` without a FIB lookup.
+That equivalence holds only while a flow is symmetric.
+
+Two flags (`CALI_CT_LEG_*` in `conntrack_types.h`) make the hint
+self-describing rather than assumed:
+
+- **`TUNNEL`** — the recorded device is a validated egress for this
+  flow's encap-flagged destinations. A hint without it must not be used
+  for an encap destination: `bpf_redirect` writes no headers, so a
+  physical device ignores the tunnel key and puts the raw inner frame on
+  the wire. The consumer pairs `cali_rt_needs_tunnel_egress` (does this
+  destination need encap right now?) with this flag (can the recorded
+  device perform it?). Only whoever has authority over the device writes
+  it: the program attached to it for an ingress record, the validator
+  for a leg it pinned. An attached program reads the device's nature
+  from its own `IFACE_ENCAPS` global; the compiled object cannot say,
+  since wireguard and a plain L3-classified NIC share the `l3` object.
+- **`PINNED`** — the ifindex is a resolved egress for the opposite
+  direction, not this direction's ingress record.
+
+A hint is repaired at two points, both while the entry is held. From the
+reply side, once per leg generation (`CALI_CT_LEG_CHECKED`): where the
+destination needs encapsulation and the hint is not a tunnel, the egress
+is resolved by FIB and pinned, but only onto a device that encapsulates
+(per its ifstate flags). That is the asymmetrically-routed flow —
+natively-routed forward, tunneled reply — whose reply would otherwise
+leave a physical NIC raw; NAT'd flows validate against the post-NAT
+destination. From the forward side, in the loose-RPF arm: `hep_rpf_check`
+has just computed the device that reaches the packet's source, so it is
+recorded rather than discarded.
+
+Neither writer names a device on a `tun_ip` flow's leg: that hint is half
+of the `{tun_ip, ifindex}` ARP-map key of the return-encap fast path, so
+route inference must not write it. The loose arm still discards a record
+the packet contradicts.
+
+Stale state heals from packets: a route move re-pins via the loose arm,
+and a packet confirming the recorded ingress refreshes the leg's claims
+from the program's own provenance. A flow whose forward traffic has
+stopped never re-enters the reconcile, so only a userspace scanner can
+repair it.
+
 ### Cleanup: three layers
 
 #### 1. Userspace scanners
@@ -210,6 +266,11 @@ and the Go-side reader must agree on units and reference clock.
   (`cali_v4_ct`/`cali_v6_ct` have `Version: 4` at the time of
   writing). The kernel refuses to pin two layouts under the same
   name, and older Felixes reading a newer map will misparse.
+- A flag change on a *live* conntrack entry must be an atomic set
+  or clear, never a read-modify-write: both directions of a flow,
+  and parallel packets on other CPUs, write the same per-leg and
+  per-value flag words. The create path is exempt, as it fills the
+  entry on the stack and publishes it in one update.
 - A new scanner should return the smallest verdict that does the job
   (`ScanVerdictOK` for no-op) and should be idempotent across
   iterations. Scanners may be called once or many times per sweep
@@ -219,6 +280,11 @@ and the Go-side reader must agree on units and reference clock.
   BPF cleaner path (insert into `cali_ct_cleanup`) or accept the
   race (and document why it is safe) — never delete a single side
   from userspace.
+- Connection state read or written through a conntrack **value** in
+  `calico_ct_lookup()` must go via `tracking_v`, not `v` — on a `NAT_FWD` hit
+  `v` is the forward stub, and state put there is silently never read.
+  Test such a change in the client→service direction; the reverse
+  direction hits the tracking entry directly and passes either way.
 - Do not rely on LRU eviction to keep the table healthy. A PR that
   produces more conntrack entries per second than the cleanup
   pipeline removes will silently lose active flows once the map
@@ -254,7 +320,7 @@ unambiguously a mid-flow packet. BPF and `*tables` cooperate to let
 it through:
 
 - On host ingress, a BPF program that sees a mid-flow TCP miss sets
-  `CALI_SKB_MARK_FALLTHROUGH` on the packet (`bpf.h` enum
+  `CALI_SKB_MARK_FALLTHROUGH` on the packet (`cali_bpf.h` enum
   `calico_skb_mark`) and returns `TC_ACT_UNSPEC`, letting the packet
   continue into netfilter.
 - Felix installs a rule
@@ -366,7 +432,7 @@ comment: "Mark traffic towards the host - it is TRACKed"
 
 The mark is `tcdefs.MarkSeenSkipFIB`, which equals
 `CALI_SKB_MARK_SKIP_FIB` on the BPF side
-(see `felix/bpf-gpl/bpf.h` `enum calico_skb_mark`). Because this
+(see `felix/bpf-gpl/cali_bpf.h` `enum calico_skb_mark`). Because this
 happens in raw-PREROUTING, it runs _before_ any DNAT chain, so the
 destination is still the host IP at match time.
 
@@ -407,17 +473,9 @@ What this buys:
 
 ---
 
-## Keep this doc in sync with the code
+## Cross-cutting rules
 
-A change to how the BPF dataplane works in the area this file
-covers must update the relevant section in the same PR — new
-mechanism, new flag, new map field, new config knob, or any
-change to the packet path. Exemptions: (a) bug fix restoring
-documented behaviour, (b) mechanical refactor with no observable
-change, (c) comment / log-message edits, (d) dependency bumps.
-If in doubt, update.
-
-Cross-cutting rules that apply to **every** BPF change (map
-versioning, mark discipline, sub-program registration, kernel-
-version sensitivity) live in
+Rules that apply to **every** BPF change (map versioning, mark
+discipline, sub-program registration, kernel-version sensitivity)
+live in
 [`bpf-overview.md` → Cross-cutting review notes](./bpf-overview.md).

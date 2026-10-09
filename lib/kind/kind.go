@@ -73,6 +73,12 @@ type Config struct {
 	// KubeadmConfigPatches is forwarded to kind. Use this for kubeadm-level
 	// tweaks (e.g. extra apiServer certSANs).
 	KubeadmConfigPatches []string
+	// ControlPlaneExtraMounts is applied to the control-plane node. Each
+	// Mount is host→node; combined with an apiServer extraVolumes entry
+	// in KubeadmConfigPatches this lets a caller drop a file
+	// (AuthenticationConfiguration, audit policy, etc.) at a known path
+	// in the kube-apiserver container before boot.
+	ControlPlaneExtraMounts []v1alpha4.Mount
 }
 
 // Cluster is a brought-up kind cluster the test suite owns.
@@ -129,8 +135,12 @@ func Up(ctx context.Context, c Config) (*Cluster, error) {
 	prov := cluster.NewProvider(cluster.ProviderWithLogger(kindLoggerAdapter{logger: logger}))
 
 	kc := &v1alpha4.Cluster{
-		Networking:              networking,
-		Nodes:                   []v1alpha4.Node{{Role: v1alpha4.ControlPlaneRole, Image: nodeImage}},
+		Networking: networking,
+		Nodes: []v1alpha4.Node{{
+			Role:        v1alpha4.ControlPlaneRole,
+			Image:       nodeImage,
+			ExtraMounts: c.ControlPlaneExtraMounts,
+		}},
 		ContainerdConfigPatches: c.ContainerdConfigPatches,
 		KubeadmConfigPatches:    c.KubeadmConfigPatches,
 	}

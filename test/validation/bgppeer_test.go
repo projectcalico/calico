@@ -20,6 +20,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -178,4 +179,67 @@ func TestBGPPeer_Validation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBGPPeer_PeerIPValidation(t *testing.T) {
+	const wantErr = "peerIP must be an IP address"
+
+	tests := []struct {
+		name    string
+		peerIP  string
+		wantErr string
+	}{
+		{name: "IPv4 address", peerIP: "10.0.0.1"},
+		{name: "IPv6 address", peerIP: "fd00::1"},
+		{name: "IPv4 with port", peerIP: "10.0.0.1:179"},
+		{name: "bracketed IPv6 with port", peerIP: "[fd00::1]:179"},
+		{name: "not an IP at all", peerIP: "not-an-ip", wantErr: wantErr},
+		{name: "out of range IPv4 octets", peerIP: "999.999.999.999", wantErr: wantErr},
+		{name: "unbracketed IPv6 that looks like host:port", peerIP: "fd00::1:179"},
+		{name: "port zero", peerIP: "10.0.0.1:0", wantErr: wantErr},
+		{name: "port above 65535", peerIP: "10.0.0.1:99999", wantErr: wantErr},
+		{name: "bracketed IPv6 with port zero", peerIP: "[fd00::1]:0", wantErr: wantErr},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			peer := &v3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgppeer")},
+				Spec: v3.BGPPeerSpec{
+					PeerIP:   tt.peerIP,
+					ASNumber: numorstring.ASNumber(64512),
+				},
+			}
+			if tt.wantErr != "" {
+				expectCreateFails(t, peer, tt.wantErr)
+			} else {
+				expectCreateSucceeds(t, peer)
+			}
+		})
+	}
+}
+
+// TestBGPPeer_ASNumberBounds checks that the 4-byte AS number range applies to
+// BGPPeer too, which shares the ASNumber type with BGPConfiguration.
+func TestBGPPeer_ASNumberBounds(t *testing.T) {
+	newPeer := func(asNumber int64) *unstructured.Unstructured {
+		return &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "projectcalico.org/v3",
+				"kind":       "BGPPeer",
+				"metadata":   map[string]interface{}{"name": uniqueName("bgppeer")},
+				"spec": map[string]interface{}{
+					"peerIP":   "10.0.0.1",
+					"asNumber": asNumber,
+				},
+			},
+		}
+	}
+
+	t.Run("above maximum", func(t *testing.T) {
+		expectCreateFails(t, newPeer(4294967296), "asNumber")
+	})
+	t.Run("4-byte AS number above INT32_MAX", func(t *testing.T) {
+		expectCreateSucceeds(t, newPeer(4200000001))
+	})
 }

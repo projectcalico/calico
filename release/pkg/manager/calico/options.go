@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,10 @@
 package calico
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/registry"
@@ -59,7 +61,14 @@ func WithVersion(version string) Option {
 	}
 }
 
-func WithOperator(registry, image, version string) Option {
+func WithOperator(enabled bool) Option {
+	return func(r *CalicoManager) error {
+		r.operator = enabled
+		return nil
+	}
+}
+
+func WithOperatorImage(registry, image, version string) Option {
 	return func(r *CalicoManager) error {
 		if image == "" {
 			return fmt.Errorf("operator image cannot be blank")
@@ -70,15 +79,6 @@ func WithOperator(registry, image, version string) Option {
 		r.operatorImage = image
 		r.operatorVersion = version
 		r.operatorRegistry = registry
-		return nil
-	}
-}
-
-func WithOperatorGit(org, repo, branch string) Option {
-	return func(r *CalicoManager) error {
-		r.operatorGithubOrg = org
-		r.operatorRepo = repo
-		r.operatorBranch = branch
 		return nil
 	}
 }
@@ -135,6 +135,14 @@ func WithGitRef(enabled bool) Option {
 func WithGithubRelease(enabled bool) Option {
 	return func(r *CalicoManager) error {
 		r.githubRelease = enabled
+		return nil
+	}
+}
+
+// WithDraftRelease determines whether the GitHub release is published in draft mode.
+func WithDraftRelease(draft bool) Option {
+	return func(r *CalicoManager) error {
+		r.draftRelease = draft
 		return nil
 	}
 }
@@ -263,13 +271,6 @@ func WithComponents(components map[string]registry.Component) Option {
 	}
 }
 
-func WithGithubToken(token string) Option {
-	return func(r *CalicoManager) error {
-		r.githubToken = token
-		return nil
-	}
-}
-
 func WithArchiveImages(archive bool) Option {
 	return func(r *CalicoManager) error {
 		r.archiveImages = archive
@@ -277,9 +278,16 @@ func WithArchiveImages(archive bool) Option {
 	}
 }
 
-func WithOperatorBranch(branch string) Option {
+func WithMainBranch(branch string) Option {
 	return func(r *CalicoManager) error {
-		r.operatorBranch = branch
+		r.mainBranch = branch
+		return nil
+	}
+}
+
+func WithDevTagIdentifier(devTag string) Option {
+	return func(r *CalicoManager) error {
+		r.devTagIdentifier = devTag
 		return nil
 	}
 }
@@ -309,5 +317,41 @@ func WithTarball(enabled bool) Option {
 	return func(r *CalicoManager) error {
 		r.tarball = enabled
 		return nil
+	}
+}
+
+// WithBranchCutOptions sets the CLI-supplied inputs for a branch cut, read by
+// CutBranch.
+func WithBranchCutOptions(opts branch.CutOptions) Option {
+	return func(r *CalicoManager) error {
+		r.cutOptions = opts
+		return nil
+	}
+}
+
+// WithImageReleaseDirs limits image building and publishing to dirs.
+func WithImageReleaseDirs(dirs []string) Option {
+	return func(r *CalicoManager) error {
+		r.imageReleaseDirs = dirs
+		return nil
+	}
+}
+
+func WithRetagImages(fromRegistry, fromTag string) Option {
+	return func(r *CalicoManager) error {
+		var err error
+		if fromRegistry == "" {
+			err = errors.Join(err, fmt.Errorf("fromRegistry cannot be blank"))
+		}
+		if fromTag == "" {
+			err = errors.Join(err, fmt.Errorf("fromTag cannot be blank"))
+		}
+		if err != nil {
+			return err
+		}
+		r.retagImages = true
+		r.fromRegistry = fromRegistry
+		r.fromTag = fromTag
+		return err
 	}
 }

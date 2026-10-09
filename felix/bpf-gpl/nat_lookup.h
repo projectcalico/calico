@@ -5,14 +5,17 @@
 #ifndef __CALI_NAT_LOOKUP_H__
 #define __CALI_NAT_LOOKUP_H__
 
-#include <stddef.h>
+#include <linux/in.h>
 
-#include <linux/if_ether.h>
-#include <linux/udp.h>
-
-#include "bpf.h"
-#include "routes.h"
+#include "cali_bpf.h"
+#include "ip_addr.h"
+#include "log.h"
 #include "nat_types.h"
+#include "routes.h"
+#if !(CALI_F_XDP) && !(CALI_F_CGROUP)
+/* Only the skb-based programs pass a cali_tc_ctx (see below). */
+#include "types.h"
+#endif
 
 static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *ip_src,
 								 ipv46_addr_t *ip_dst,
@@ -174,15 +177,23 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 	affkey.nat_key = nat_data;
 	affkey.client_ip = *ip_src;
 
-	CALI_DEBUG("NAT: backend affinity %d seconds", nat_lv1_val->affinity_timeo ? : affinity_always_timeo);
+	/* The service's own session affinity and the caller's enforced affinity (the
+	 * CTLB's, for unconnected UDP) can both apply. Honour whichever lasts
+	 * longer; picking the shorter would break the promise the other one made.
+	 */
+	int aff_timeo = nat_lv1_val->affinity_timeo;
+	if (affinity_always_timeo > aff_timeo) {
+		aff_timeo = affinity_always_timeo;
+	}
+
+	CALI_DEBUG("NAT: backend affinity %d seconds", aff_timeo);
 
 	struct calico_nat_affinity_val *affval;
 
 	now = bpf_ktime_get_ns();
 	affval = cali_nat_aff_lookup_elem(&affkey);
 	if (affval) {
-		int timeo = (affinity_always_timeo ? : nat_lv1_val->affinity_timeo);
-		if (now - affval->ts <= timeo  * 1000000000ULL) {
+		if (now - affval->ts <= aff_timeo * 1000000000ULL) {
 			CALI_DEBUG("NAT: using affinity backend " IP_FMT ":%d",
 					debug_ip(affval->nat_dest.addr), affval->nat_dest.port);
 			if (affinity_tmr_update) {

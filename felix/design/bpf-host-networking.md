@@ -52,7 +52,7 @@ namespace:
 - `bpfout.cali` (C-side identifier: `natout_idx`)
 
 See `felix/dataplane/linux/dataplanedefs/dataplane_defs.go` for the
-Go-side constants, and `felix/bpf-gpl/globals.h` / `bpf.h` for the
+Go-side constants, and `felix/bpf-gpl/globals.h` / `cali_bpf.h` for the
 C-side configurables. (The reference design document refers to these
 as `bpfnatin`/`bpfnatout`; the implementation names are slightly
 different.)
@@ -168,17 +168,9 @@ the redirect path.
 
 ---
 
-## Keep this doc in sync with the code
+## Cross-cutting rules
 
-A change to how the BPF dataplane works in the area this file
-covers must update the relevant section in the same PR — new
-mechanism, new flag, new map field, new config knob, or any
-change to the packet path. Exemptions: (a) bug fix restoring
-documented behaviour, (b) mechanical refactor with no observable
-change, (c) comment / log-message edits, (d) dependency bumps.
-If in doubt, update.
-
-Cross-cutting rules that apply to **every** BPF change (map
-versioning, mark discipline, sub-program registration, kernel-
-version sensitivity) live in
+Rules that apply to **every** BPF change (map versioning, mark
+discipline, sub-program registration, kernel-version sensitivity)
+live in
 [`bpf-overview.md` → Cross-cutting review notes](./bpf-overview.md).

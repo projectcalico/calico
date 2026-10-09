@@ -49,6 +49,7 @@ const (
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("IPAM"),
+	describe.RequiresCalicoIPAM(),
 	describe.WithSerial(), // Modifies global IPAMConfiguration state.
 	describe.WithCategory(describe.Networking),
 	"IPAM StrictAffinity",

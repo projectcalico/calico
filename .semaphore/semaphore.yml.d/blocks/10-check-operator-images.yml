@@ -1,0 +1,15 @@
+- name: Check operator images
+  # An image built here but absent from the operator's component list is published
+  # and then never deployed. BUILD_IMAGES lives in the component Makefiles, so they
+  # are triggers too.
+  run:
+    when: "${CHANGE_IN(release,non-go:/**/Makefile)}"
+  dependencies: []
+  task:
+    prologue:
+      commands:
+        - cd release
+    jobs:
+      - name: Check operator images
+        commands:
+          - ../.semaphore/run-and-monitor check-operator-images.log make check-operator-images

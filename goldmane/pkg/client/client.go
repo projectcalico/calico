@@ -28,8 +28,8 @@ import (
 )
 
 const (
-	FlowCacheExpiry  = 5 * time.Minute
-	FlowCacheCleanup = 30 * time.Second
+	FlowCacheExpiry  = flowcache.Expiry
+	FlowCacheCleanup = flowcache.CleanupInterval
 )
 
 // NewFlowClient creates a new client to the goldmane grpc API. It creates the initial grpcClient connection to verify

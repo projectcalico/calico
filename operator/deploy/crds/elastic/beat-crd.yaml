@@ -1,0 +1,307 @@
+# Elasticsearch operator CRDs
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.10.0
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/instance: 'elastic-operator'
+    app.kubernetes.io/name: 'eck-operator-crds'
+    app.kubernetes.io/version: '2.6.1'
+  name: beats.beat.k8s.elastic.co
+spec:
+  group: beat.k8s.elastic.co
+  names:
+    categories:
+      - elastic
+    kind: Beat
+    listKind: BeatList
+    plural: beats
+    shortNames:
+      - beat
+    singular: beat
+  scope: Namespaced
+  versions:
+    - additionalPrinterColumns:
+        - jsonPath: .status.health
+          name: health
+          type: string
+        - description: Available nodes
+          jsonPath: .status.availableNodes
+          name: available
+          type: integer
+        - description: Expected nodes
+          jsonPath: .status.expectedNodes
+          name: expected
+          type: integer
+        - description: Beat type
+          jsonPath: .spec.type
+          name: type
+          type: string
+        - description: Beat version
+          jsonPath: .status.version
+          name: version
+          type: string
+        - jsonPath: .metadata.creationTimestamp
+          name: age
+          type: date
+      name: v1beta1
+      schema:
+        openAPIV3Schema:
+          description: Beat is the Schema for the Beats API.
+          properties:
+            apiVersion:
+              description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+              type: string
+            kind:
+              description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+              type: string
+            metadata:
+              type: object
+            spec:
+              description: BeatSpec defines the desired state of a Beat.
+              properties:
+                config:
+                  description: Config holds the Beat configuration. At most one of [`Config`, `ConfigRef`] can be specified.
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                configRef:
+                  description: ConfigRef contains a reference to an existing Kubernetes Secret holding the Beat configuration. Beat settings must be specified as yaml, under a single "beat.yml" entry. At most one of [`Config`, `ConfigRef`] can be specified.
+                  properties:
+                    secretName:
+                      description: SecretName is the name of the secret.
+                      type: string
+                  type: object
+                daemonSet:
+                  description: DaemonSet specifies the Beat should be deployed as a DaemonSet, and allows providing its spec. Cannot be used along with `deployment`. If both are absent a default for the Type is used.
+                  properties:
+                    podTemplate:
+                      description: PodTemplateSpec describes the data a pod should have when created from a template
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    updateStrategy:
+                      description: DaemonSetUpdateStrategy is a struct used to control the update strategy for a DaemonSet.
+                      properties:
+                        rollingUpdate:
+                          description: 'Rolling update config params. Present only if type = "RollingUpdate". --- TODO: Update this to follow our convention for oneOf, whatever we decide it to be. Same as Deployment `strategy.rollingUpdate`. See https://github.com/kubernetes/kubernetes/issues/35345'
+                          properties:
+                            maxSurge:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              description: 'The maximum number of nodes with an existing available DaemonSet pod that can have an updated DaemonSet pod during during an update. Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%). This can not be 0 if MaxUnavailable is 0. Absolute number is calculated from percentage by rounding up to a minimum of 1. Default value is 0. Example: when this is set to 30%, at most 30% of the total number of nodes that should be running the daemon pod (i.e. status.desiredNumberScheduled) can have their a new pod created before the old pod is marked as deleted. The update starts by launching new pods on 30% of nodes. Once an updated pod is available (Ready for at least minReadySeconds) the old DaemonSet pod on that node is marked deleted. If the old pod becomes unavailable for any reason (Ready transitions to false, is evicted, or is drained) an updated pod is immediatedly created on that node without considering surge limits. Allowing surge implies the possibility that the resources consumed by the daemonset on any given node can double if the readiness check fails, and so resource intensive daemonsets should take into account that they may cause evictions during disruption.'
+                              x-kubernetes-int-or-string: true
+                            maxUnavailable:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              description: 'The maximum number of DaemonSet pods that can be unavailable during the update. Value can be an absolute number (ex: 5) or a percentage of total number of DaemonSet pods at the start of the update (ex: 10%). Absolute number is calculated from percentage by rounding up. This cannot be 0 if MaxSurge is 0 Default value is 1. Example: when this is set to 30%, at most 30% of the total number of nodes that should be running the daemon pod (i.e. status.desiredNumberScheduled) can have their pods stopped for an update at any given time. The update starts by stopping at most 30% of those DaemonSet pods and then brings up new DaemonSet pods in their place. Once the new pods are available, it then proceeds onto other DaemonSet pods, thus ensuring that at least 70% of original number of DaemonSet pods are available at all times during the update.'
+                              x-kubernetes-int-or-string: true
+                          type: object
+                        type:
+                          description: Type of daemon set update. Can be "RollingUpdate" or "OnDelete". Default is RollingUpdate.
+                          type: string
+                      type: object
+                  type: object
+                deployment:
+                  description: Deployment specifies the Beat should be deployed as a Deployment, and allows providing its spec. Cannot be used along with `daemonSet`. If both are absent a default for the Type is used.
+                  properties:
+                    podTemplate:
+                      description: PodTemplateSpec describes the data a pod should have when created from a template
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    replicas:
+                      format: int32
+                      type: integer
+                    strategy:
+                      description: DeploymentStrategy describes how to replace existing pods with new ones.
+                      properties:
+                        rollingUpdate:
+                          description: 'Rolling update config params. Present only if DeploymentStrategyType = RollingUpdate. --- TODO: Update this to follow our convention for oneOf, whatever we decide it to be.'
+                          properties:
+                            maxSurge:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              description: 'The maximum number of pods that can be scheduled above the desired number of pods. Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%). This can not be 0 if MaxUnavailable is 0. Absolute number is calculated from percentage by rounding up. Defaults to 25%. Example: when this is set to 30%, the new ReplicaSet can be scaled up immediately when the rolling update starts, such that the total number of old and new pods do not exceed 130% of desired pods. Once old pods have been killed, new ReplicaSet can be scaled up further, ensuring that total number of pods running at any time during the update is at most 130% of desired pods.'
+                              x-kubernetes-int-or-string: true
+                            maxUnavailable:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              description: 'The maximum number of pods that can be unavailable during the update. Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%). Absolute number is calculated from percentage by rounding down. This can not be 0 if MaxSurge is 0. Defaults to 25%. Example: when this is set to 30%, the old ReplicaSet can be scaled down to 70% of desired pods immediately when the rolling update starts. Once new pods are ready, old ReplicaSet can be scaled down further, followed by scaling up the new ReplicaSet, ensuring that the total number of pods available at all times during the update is at least 70% of desired pods.'
+                              x-kubernetes-int-or-string: true
+                          type: object
+                        type:
+                          description: Type of deployment. Can be "Recreate" or "RollingUpdate". Default is RollingUpdate.
+                          type: string
+                      type: object
+                  type: object
+                elasticsearchRef:
+                  description: ElasticsearchRef is a reference to an Elasticsearch cluster running in the same Kubernetes cluster.
+                  properties:
+                    name:
+                      description: Name of an existing Kubernetes object corresponding to an Elastic resource managed by ECK.
+                      type: string
+                    namespace:
+                      description: Namespace of the Kubernetes object. If empty, defaults to the current namespace.
+                      type: string
+                    secretName:
+                      description: 'SecretName is the name of an existing Kubernetes secret that contains connection information for associating an Elastic resource not managed by the operator. The referenced secret must contain the following: - `url`: the URL to reach the Elastic resource - `username`: the username of the user to be authenticated to the Elastic resource - `password`: the password of the user to be authenticated to the Elastic resource - `ca.crt`: the CA certificate in PEM format (optional). This field cannot be used in combination with the other fields name, namespace or serviceName.'
+                      type: string
+                    serviceName:
+                      description: ServiceName is the name of an existing Kubernetes service which is used to make requests to the referenced object. It has to be in the same namespace as the referenced resource. If left empty, the default HTTP service of the referenced resource is used.
+                      type: string
+                  type: object
+                image:
+                  description: Image is the Beat Docker image to deploy. Version and Type have to match the Beat in the image.
+                  type: string
+                kibanaRef:
+                  description: KibanaRef is a reference to a Kibana instance running in the same Kubernetes cluster. It allows automatic setup of dashboards and visualizations.
+                  properties:
+                    name:
+                      description: Name of an existing Kubernetes object corresponding to an Elastic resource managed by ECK.
+                      type: string
+                    namespace:
+                      description: Namespace of the Kubernetes object. If empty, defaults to the current namespace.
+                      type: string
+                    secretName:
+                      description: 'SecretName is the name of an existing Kubernetes secret that contains connection information for associating an Elastic resource not managed by the operator. The referenced secret must contain the following: - `url`: the URL to reach the Elastic resource - `username`: the username of the user to be authenticated to the Elastic resource - `password`: the password of the user to be authenticated to the Elastic resource - `ca.crt`: the CA certificate in PEM format (optional). This field cannot be used in combination with the other fields name, namespace or serviceName.'
+                      type: string
+                    serviceName:
+                      description: ServiceName is the name of an existing Kubernetes service which is used to make requests to the referenced object. It has to be in the same namespace as the referenced resource. If left empty, the default HTTP service of the referenced resource is used.
+                      type: string
+                  type: object
+                monitoring:
+                  description: Monitoring enables you to collect and ship logs and metrics for this Beat. Metricbeat and/or Filebeat sidecars are configured and send monitoring data to an Elasticsearch monitoring cluster running in the same Kubernetes cluster.
+                  properties:
+                    logs:
+                      description: Logs holds references to Elasticsearch clusters which receive log data from an associated resource.
+                      properties:
+                        elasticsearchRefs:
+                          description: ElasticsearchRefs is a reference to a list of monitoring Elasticsearch clusters running in the same Kubernetes cluster. Due to existing limitations, only a single Elasticsearch cluster is currently supported.
+                          items:
+                            description: ObjectSelector defines a reference to a Kubernetes object which can be an Elastic resource managed by the operator or a Secret describing an external Elastic resource not managed by the operator.
+                            properties:
+                              name:
+                                description: Name of an existing Kubernetes object corresponding to an Elastic resource managed by ECK.
+                                type: string
+                              namespace:
+                                description: Namespace of the Kubernetes object. If empty, defaults to the current namespace.
+                                type: string
+                              secretName:
+                                description: 'SecretName is the name of an existing Kubernetes secret that contains connection information for associating an Elastic resource not managed by the operator. The referenced secret must contain the following: - `url`: the URL to reach the Elastic resource - `username`: the username of the user to be authenticated to the Elastic resource - `password`: the password of the user to be authenticated to the Elastic resource - `ca.crt`: the CA certificate in PEM format (optional). This field cannot be used in combination with the other fields name, namespace or serviceName.'
+                                type: string
+                              serviceName:
+                                description: ServiceName is the name of an existing Kubernetes service which is used to make requests to the referenced object. It has to be in the same namespace as the referenced resource. If left empty, the default HTTP service of the referenced resource is used.
+                                type: string
+                            type: object
+                          type: array
+                      type: object
+                    metrics:
+                      description: Metrics holds references to Elasticsearch clusters which receive monitoring data from this resource.
+                      properties:
+                        elasticsearchRefs:
+                          description: ElasticsearchRefs is a reference to a list of monitoring Elasticsearch clusters running in the same Kubernetes cluster. Due to existing limitations, only a single Elasticsearch cluster is currently supported.
+                          items:
+                            description: ObjectSelector defines a reference to a Kubernetes object which can be an Elastic resource managed by the operator or a Secret describing an external Elastic resource not managed by the operator.
+                            properties:
+                              name:
+                                description: Name of an existing Kubernetes object corresponding to an Elastic resource managed by ECK.
+                                type: string
+                              namespace:
+                                description: Namespace of the Kubernetes object. If empty, defaults to the current namespace.
+                                type: string
+                              secretName:
+                                description: 'SecretName is the name of an existing Kubernetes secret that contains connection information for associating an Elastic resource not managed by the operator. The referenced secret must contain the following: - `url`: the URL to reach the Elastic resource - `username`: the username of the user to be authenticated to the Elastic resource - `password`: the password of the user to be authenticated to the Elastic resource - `ca.crt`: the CA certificate in PEM format (optional). This field cannot be used in combination with the other fields name, namespace or serviceName.'
+                                type: string
+                              serviceName:
+                                description: ServiceName is the name of an existing Kubernetes service which is used to make requests to the referenced object. It has to be in the same namespace as the referenced resource. If left empty, the default HTTP service of the referenced resource is used.
+                                type: string
+                            type: object
+                          type: array
+                      type: object
+                  type: object
+                revisionHistoryLimit:
+                  description: RevisionHistoryLimit is the number of revisions to retain to allow rollback in the underlying DaemonSet or Deployment.
+                  format: int32
+                  type: integer
+                secureSettings:
+                  description: SecureSettings is a list of references to Kubernetes Secrets containing sensitive configuration options for the Beat. Secrets data can be then referenced in the Beat config using the Secret's keys or as specified in `Entries` field of each SecureSetting.
+                  items:
+                    description: SecretSource defines a data source based on a Kubernetes Secret.
+                    properties:
+                      entries:
+                        description: Entries define how to project each key-value pair in the secret to filesystem paths. If not defined, all keys will be projected to similarly named paths in the filesystem. If defined, only the specified keys will be projected to the corresponding paths.
+                        items:
+                          description: KeyToPath defines how to map a key in a Secret object to a filesystem path.
+                          properties:
+                            key:
+                              description: Key is the key contained in the secret.
+                              type: string
+                            path:
+                              description: Path is the relative file path to map the key to. Path must not be an absolute file path and must not contain any ".." components.
+                              type: string
+                          required:
+                            - key
+                          type: object
+                        type: array
+                      secretName:
+                        description: SecretName is the name of the secret.
+                        type: string
+                    required:
+                      - secretName
+                    type: object
+                  type: array
+                serviceAccountName:
+                  description: ServiceAccountName is used to check access from the current resource to Elasticsearch resource in a different namespace. Can only be used if ECK is enforcing RBAC on references.
+                  type: string
+                type:
+                  description: Type is the type of the Beat to deploy (filebeat, metricbeat, heartbeat, auditbeat, journalbeat, packetbeat, and so on). Any string can be used, but well-known types will have the image field defaulted and have the appropriate Elasticsearch roles created automatically. It also allows for dashboard setup when combined with a `KibanaRef`.
+                  maxLength: 20
+                  pattern: '[a-zA-Z0-9-]+'
+                  type: string
+                version:
+                  description: Version of the Beat.
+                  type: string
+              required:
+                - type
+                - version
+              type: object
+            status:
+              description: BeatStatus defines the observed state of a Beat.
+              properties:
+                availableNodes:
+                  format: int32
+                  type: integer
+                elasticsearchAssociationStatus:
+                  description: AssociationStatus is the status of an association resource.
+                  type: string
+                expectedNodes:
+                  format: int32
+                  type: integer
+                health:
+                  type: string
+                kibanaAssociationStatus:
+                  description: AssociationStatus is the status of an association resource.
+                  type: string
+                monitoringAssociationStatus:
+                  additionalProperties:
+                    description: AssociationStatus is the status of an association resource.
+                    type: string
+                  description: AssociationStatusMap is the map of association's namespaced name string to its AssociationStatus. For resources that have a single Association of a given type (for ex. single ES reference), this map contains a single entry.
+                  type: object
+                observedGeneration:
+                  description: ObservedGeneration represents the .metadata.generation that the status is based upon. It corresponds to the metadata generation, which is updated on mutation by the API Server. If the generation observed in status diverges from the generation in metadata, the Beats controller has not yet processed the changes contained in the Beats specification.
+                  format: int64
+                  type: integer
+                version:
+                  description: 'Version of the stack resource currently running. During version upgrades, multiple versions may run in parallel: this value specifies the lowest version currently running.'
+                  type: string
+              type: object
+          type: object
+      served: true
+      storage: true
+      subresources:
+        status: {}

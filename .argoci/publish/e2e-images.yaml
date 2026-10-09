@@ -1,0 +1,28 @@
+# Publishes the e2e suites' helper images. On merge rather than a promotion,
+# since it builds from source and reads nothing a run produced.
+version: condensed
+generateName: e2e-images-
+timeout: 30m
+
+defaults:
+  timeout: 30m
+  services:
+    - docker
+  # quay.io/tigeradev needs its own credential.
+  secretBundles:
+    - quay-tigeradev-hashrelease
+
+steps:
+  - name: publish-e2e-images
+    requests: {cpu: 2000m, memory: 3Gi}
+    when: GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-'
+    changes:
+      in:
+        - ^e2e/images/
+        - ^\.argoci/publish/e2e-images\.yaml$
+    commands: |
+      echo "$QUAY_TOKEN" | docker login --username "$QUAY_USER" --password-stdin quay.io
+      # What the image is tagged with. Unset, the Makefile falls back to the
+      # current branch, which is a detached HEAD here and would push ":".
+      export BRANCH_NAME="${CI_GIT_BRANCH}"
+      make -C e2e publish-test-images CONFIRM=true

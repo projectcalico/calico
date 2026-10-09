@@ -277,7 +277,57 @@ func CombinedFieldInfo() ([]*FieldInfo, error) {
 		return 0
 	})
 
+	if err := checkEnumMarkers(params); err != nil {
+		return nil, err
+	}
+
 	return params, nil
+}
+
+// fieldsAllowedWithoutYAMLEnum lists closed-set string parameters that
+// intentionally do not (yet) expose their values as a FelixConfiguration CRD
+// enum.  Keep this list as short as possible; each entry is a field whose docs
+// do not list its allowed values.
+var fieldsAllowedWithoutYAMLEnum = map[string]bool{
+	// The parser reports a single accepted value ("all") for bpfCTLBLogFilter,
+	// but it is unclear whether the field is genuinely a closed set or also
+	// accepts free-form filter strings.  Excluded until that is confirmed.
+	"bpfCTLBLogFilter": true,
+}
+
+// checkEnumMarkers fails the build if a parameter that Felix's parser restricts
+// to a closed set of string values ("One of: ...") does not expose those values
+// as a FelixConfiguration CRD enum.  When the enum is missing, the reference
+// docs show a bare "String." instead of the allowed values.  The usual cause is
+// a missing or mis-cased (`enum` instead of `Enum`) +kubebuilder:validation:Enum
+// marker on the Go type or field.
+func checkEnumMarkers(params []*FieldInfo) error {
+	var problems []string
+	for _, pm := range params {
+		if pm.NameYAML == "" {
+			continue // Not exposed in the FelixConfiguration CRD.
+		}
+		if !strings.HasPrefix(pm.StringSchema, "One of:") {
+			continue // Parser does not restrict to a closed set of strings.
+		}
+		if len(pm.YAMLEnumValues) > 0 {
+			continue // Values are correctly exposed as a CRD enum.
+		}
+		if fieldsAllowedWithoutYAMLEnum[pm.NameYAML] {
+			continue
+		}
+		problems = append(problems, fmt.Sprintf(
+			"%s: parser accepts a closed set of values (%s) but the "+
+				"FelixConfiguration CRD exposes no enum; check for a missing or "+
+				"mis-cased (`enum` vs `Enum`) +kubebuilder:validation:Enum marker "+
+				"on the %s type or field.",
+			pm.NameYAML, pm.StringSchema, pm.NameGoAPI))
+	}
+	if len(problems) > 0 {
+		return fmt.Errorf("FelixConfiguration enum marker problems detected:\n  - %s",
+			strings.Join(problems, "\n  - "))
+	}
+	return nil
 }
 
 var backtickRegex = regexp.MustCompile("`([^`]+)`")
@@ -451,6 +501,7 @@ func loadV3APIMetadata() (map[string]YAMLInfo, error) {
 		return nil, fmt.Errorf("not supported: CRD should have single version")
 	}
 	spec := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"]
+	var nestedEnumFields []string
 	for yamlName, prop := range spec.Properties {
 		si, ok := yamlNameToStructInfo[yamlName]
 		if !ok {
@@ -480,11 +531,44 @@ func loadV3APIMetadata() (map[string]YAMLInfo, error) {
 		}
 		info.Schema, info.EnumValues = v3TypesToDescription(si, prop)
 
+		if crdFieldHasNestedEnum(prop) {
+			nestedEnumFields = append(nestedEnumFields, yamlName)
+		}
+
 		out[info.V1Name] = info
 		out[yamlName] = info
 	}
 
+	if len(nestedEnumFields) > 0 {
+		sort.Strings(nestedEnumFields)
+		return nil, fmt.Errorf(
+			"FelixConfiguration CRD fields carry their enum nested under `allOf` "+
+				"instead of a single top-level `enum` (the config docs generator only "+
+				"reads a top-level enum, so the allowed values are dropped); this is "+
+				"usually a +kubebuilder:validation:Enum marker duplicated on both the Go "+
+				"type and the struct field, so put it on only one. Affected fields: %s",
+			strings.Join(nestedEnumFields, ", "))
+	}
+
 	return out, nil
+}
+
+// crdFieldHasNestedEnum reports whether a CRD property carries its enum values
+// nested under `allOf` rather than at the top level.  controller-gen emits this
+// shape (`allOf: [{enum: [...]}, {enum: [...]}]`) when a
+// +kubebuilder:validation:Enum marker is set on both the named Go type and the
+// struct field that uses it.  The docs generator only reads the top-level enum,
+// so such fields silently lose their allowed values.
+func crdFieldHasNestedEnum(prop v1.JSONSchemaProps) bool {
+	if len(prop.Enum) > 0 {
+		return false
+	}
+	for _, sub := range prop.AllOf {
+		if len(sub.Enum) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // Regex to extract enum constants from the standard enum regex. Example: ^(?i)(Drop|Accept|Return)?$

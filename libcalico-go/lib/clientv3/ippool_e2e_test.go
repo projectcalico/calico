@@ -369,7 +369,13 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			}
 			outKVP, outError := bc.Create(ctx, kvp)
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outKVP.Value).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name3, spec3))
+
+			// Only KDD has a CRD schema to default the encapsulations, so etcdv3 stores them empty.
+			storedSpec := spec3
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				storedSpec = spec3_1
+			}
+			Expect(outKVP.Value).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name3, storedSpec))
 
 			// Verify Get() on the IPPool sets the encapsulations to "Never"
 			res, outError = c.IPPools().Get(ctx, name3, options.GetOptions{})
@@ -442,11 +448,16 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			outRes3, err := c.IPPools().Delete(ctx, name1, options.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Checking for three events, create res2 and disable and delete res1")
+			By("Checking for four events, create and mark res2, and disable and delete res1")
 			testWatcher1.ExpectEvents(apiv3.KindIPPool, []watch.Event{
 				{
 					Type:   watch.Added,
-					Object: outRes2,
+					Object: beforeStatus(outRes2),
+				},
+				{
+					Type:     watch.Modified,
+					Object:   outRes2,
+					Previous: beforeStatus(outRes2),
 				},
 				{
 					Type:     watch.Modified,
@@ -479,11 +490,21 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			testWatcher2.ExpectEvents(apiv3.KindIPPool, []watch.Event{
 				{
 					Type:   watch.Added,
-					Object: outRes1,
+					Object: beforeStatus(outRes1),
+				},
+				{
+					Type:     watch.Modified,
+					Object:   outRes1,
+					Previous: beforeStatus(outRes1),
 				},
 				{
 					Type:   watch.Added,
-					Object: outRes2,
+					Object: beforeStatus(outRes2),
+				},
+				{
+					Type:     watch.Modified,
+					Object:   outRes2,
+					Previous: beforeStatus(outRes2),
 				},
 				{
 					Type:     watch.Modified,
@@ -512,7 +533,12 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 				testWatcher2_1.ExpectEvents(apiv3.KindIPPool, []watch.Event{
 					{
 						Type:   watch.Added,
-						Object: outRes1,
+						Object: beforeStatus(outRes1),
+					},
+					{
+						Type:     watch.Modified,
+						Object:   outRes1,
+						Previous: beforeStatus(outRes1),
 					},
 					{
 						Type:     watch.Modified,
@@ -528,6 +554,8 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			}
 
 			By("Starting a watcher not specifying a rev - expect the current snapshot")
+			stored2, err := c.IPPools().Get(ctx, name2, options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
 			w, err = c.IPPools().Watch(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			testWatcher3 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
@@ -535,7 +563,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			testWatcher3.ExpectEvents(apiv3.KindIPPool, []watch.Event{
 				{
 					Type:   watch.Added,
-					Object: outRes4,
+					Object: stored2,
 				},
 			})
 			testWatcher3.Stop()
@@ -562,7 +590,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 				},
 				{
 					Type:   watch.Added,
-					Object: outRes4,
+					Object: stored2,
 				},
 			})
 			testWatcher4.Stop()
@@ -885,6 +913,62 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(err.Error()).To(ContainSubstring("IPPool CIDR cannot be modified"))
 		})
 
+		It("should mark a newly created pool allocatable", func() {
+			By("Creating a pool")
+			pool, err := c.IPPools().Create(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR: "1.2.3.0/24",
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pool.Status).NotTo(BeNil())
+			Expect(pool.Status.Conditions).To(ContainElement(SatisfyAll(
+				HaveField("Type", apiv3.IPPoolConditionAllocatable),
+				HaveField("Status", metav1.ConditionTrue),
+			)))
+
+			By("Checking the condition survived the write")
+			pool, err = c.IPPools().Get(ctx, "ippool1", options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pool.Status).NotTo(BeNil())
+			Expect(pool.Status.Conditions).To(HaveLen(1))
+		})
+
+		It("should not mark a disabled pool allocatable", func() {
+			pool, err := c.IPPools().Create(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:     "1.2.3.0/24",
+					Disabled: true,
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			if pool.Status != nil {
+				Expect(pool.Status.Conditions).To(BeEmpty())
+			}
+
+			By("Checking the stored pool carries no condition either")
+			pool, err = c.IPPools().Get(ctx, "ippool1", options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			if pool.Status != nil {
+				Expect(pool.Status.Conditions).To(BeEmpty())
+			}
+		})
+
+		It("should not mark a pool created through UnsafeCreate, which skips the overlap check", func() {
+			pool, err := c.IPPools().UnsafeCreate(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR: "1.2.3.0/24",
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			if pool.Status != nil {
+				Expect(pool.Status.Conditions).To(BeEmpty())
+			}
+		})
+
 		It("should prevent the creation of a pool with an identical or overlapping CIDR", func() {
 			By("Creating a pool")
 			_, err := c.IPPools().Create(ctx, &apiv3.IPPool{
@@ -973,6 +1057,17 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		})
 
 		It("should prevent pools from being created with bad block sizes", func() {
+			// The block size range is a CEL rule on the CRD, which with KDD is enforced by the apiserver.
+			expectRejected := func(err error) {
+				Expect(err).To(HaveOccurred())
+				if config.Spec.DatastoreType == apiconfig.EtcdV3 {
+					Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
+				} else {
+					Expect(err).To(BeAssignableToTypeOf(errors.ErrorDatastoreError{}))
+				}
+				Expect(err.Error()).To(ContainSubstring("blockSize must be between"))
+			}
+
 			_, err := c.IPPools().Create(ctx, &apiv3.IPPool{
 				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
 				Spec: apiv3.IPPoolSpec{
@@ -980,9 +1075,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 					BlockSize: 19,
 				},
 			}, options.SetOptions{})
-			Expect(err).To(HaveOccurred())
-			Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
-			Expect(err.Error()).To(ContainSubstring("block size must be between"))
+			expectRejected(err)
 
 			_, err = c.IPPools().Create(ctx, &apiv3.IPPool{
 				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
@@ -991,9 +1084,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 					BlockSize: 33,
 				},
 			}, options.SetOptions{})
-			Expect(err).To(HaveOccurred())
-			Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
-			Expect(err.Error()).To(ContainSubstring("block size must be between"))
+			expectRejected(err)
 		})
 
 		It("should prevent the creation of a pool with an identical or overlapping CIDR using block sizes", func() {
@@ -1238,3 +1329,11 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests (etcd only)", testutils.Dat
 		})
 	})
 })
+
+// beforeStatus returns the pool as it was stored before Create marked it allocatable, which is
+// what the create's watch event carries.
+func beforeStatus(pool *apiv3.IPPool) *apiv3.IPPool {
+	out := pool.DeepCopy()
+	out.Status = nil
+	return out
+}

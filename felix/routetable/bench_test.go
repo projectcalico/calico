@@ -74,6 +74,7 @@ func benchResyncNumRoutes(b *testing.B, numRoutes int) {
 			88,
 			[]string{"testcali"},
 			false,
+			false,
 		),
 		4,
 		5*time.Second,

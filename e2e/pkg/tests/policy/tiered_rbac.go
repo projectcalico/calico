@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,9 +52,14 @@ const (
 	rbacWatchNoTierUser  = "e2e-rbac-watch-no-tier"
 	rbacBareNameUser     = "e2e-rbac-bare-name"
 	rbacPrefixedNameUser = "e2e-rbac-prefixed-name"
+	rbacNamespacedUser   = "e2e-rbac-namespaced"
 
 	// Common prefix for RBAC resources created by these tests.
 	rbacResourcePrefix = "e2e-tiered-rbac-"
+
+	// Passthrough ClusterRole rendered by the operator, which grants every authenticated
+	// user the bare policy verbs that the tiered admission webhook then authorizes.
+	tieredPolicyPassthroughRole = "calico-tiered-policy-passthrough"
 )
 
 // DESCRIPTION: Verify tiered RBAC correctly enforces tier-based access control
@@ -77,15 +83,18 @@ var _ = describe.CalicoDescribe(
 		f := utils.NewDefaultFramework("tiered-rbac")
 
 		var (
-			adminCli  ctrlclient.Client
-			ctx       context.Context
-			cancel    context.CancelFunc
-			testTier  string
-			otherTier string
-			suffix    string
+			adminCli          ctrlclient.Client
+			ctx               context.Context
+			cancel            context.CancelFunc
+			testTier          string
+			otherTier         string
+			suffix            string
+			expectPassthrough bool
 		)
 
 		// newImpersonatedClient creates a controller-runtime client that impersonates the given user.
+		// It must not fall back to calicoctl, which would run as its own service account and
+		// make every RBAC assertion here meaningless.
 		newImpersonatedClient := func(username string) ctrlclient.Client {
 			cfg := rest.CopyConfig(f.ClientConfig())
 			cfg.Impersonate = rest.ImpersonationConfig{
@@ -107,6 +116,8 @@ var _ = describe.CalicoDescribe(
 			suffix = utils.GenerateRandomName("rbac")
 			testTier = "e2e-rbac-test-" + suffix
 			otherTier = "e2e-rbac-other-" + suffix
+
+			expectPassthrough = hasOperator(ctx, f.ClientSet) || hasTieredPolicyWebhook(ctx, f.ClientSet)
 
 			By("Creating test tiers")
 			for _, t := range []struct {
@@ -137,7 +148,7 @@ var _ = describe.CalicoDescribe(
 			}
 
 			By("Creating RBAC resources for test users")
-			setup := buildTieredRBACResources(testTier, otherTier, suffix)
+			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name, expectPassthrough)
 			for i := range setup.roles {
 				_, err := f.ClientSet.RbacV1().ClusterRoles().Create(ctx, &setup.roles[i], metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -162,6 +173,20 @@ var _ = describe.CalicoDescribe(
 					}
 				})
 			}
+
+			// The namespaced grants live in the framework namespace, which is torn down
+			// with the spec, so they need no cleanup of their own.
+			for i := range setup.nsRoles {
+				_, err := f.ClientSet.RbacV1().Roles(f.Namespace.Name).Create(ctx, &setup.nsRoles[i], metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred(), "failed to create Role %s", setup.nsRoles[i].Name)
+			}
+			for i := range setup.nsBindings {
+				_, err := f.ClientSet.RbacV1().RoleBindings(f.Namespace.Name).Create(ctx, &setup.nsBindings[i], metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred(), "failed to create RoleBinding %s", setup.nsBindings[i].Name)
+			}
+
+			By("Waiting for the RBAC grants to take effect")
+			waitForTieredRBAC(ctx, f.ClientSet, setup)
 		})
 
 		Context("NetworkPolicy", func() {
@@ -675,6 +700,212 @@ var _ = describe.CalicoDescribe(
 				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden, got: %v", err)
 			})
 		})
+
+		// Staged policies are tiered in the same way their enforced counterparts are, and the
+		// admission webhook covers them, so they must authorize identically.
+		Context("staged policies", func() {
+			framework.ConformanceIt("should allow staged policy writes by a user with full tier RBAC", func() {
+				cli := newImpersonatedClient(rbacTierAdminUser)
+
+				By("Creating a StagedNetworkPolicy in the permitted tier")
+				snp := v3.NewStagedNetworkPolicy()
+				snp.Name = "rbac-test-staged-allow"
+				snp.Namespace = f.Namespace.Name
+				snp.Spec.Tier = testTier
+				snp.Spec.StagedAction = v3.StagedActionSet
+				snp.Spec.Order = ptr.To(100.0)
+				snp.Spec.Selector = "all()"
+				snp.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+				Expect(cli.Create(ctx, snp)).To(Succeed(), "tier admin should be able to create a staged policy in its tier")
+
+				By("Updating the StagedNetworkPolicy")
+				snp.Spec.Order = ptr.To(200.0)
+				Expect(cli.Update(ctx, snp)).To(Succeed(), "tier admin should be able to update a staged policy in its tier")
+
+				By("Deleting the StagedNetworkPolicy")
+				Expect(cli.Delete(ctx, snp)).To(Succeed(), "tier admin should be able to delete a staged policy in its tier")
+			})
+
+			framework.ConformanceIt("should deny staged policy creation by a user without tier GET access", func() {
+				cli := newImpersonatedClient(rbacNoTierGetUser)
+
+				snp := v3.NewStagedNetworkPolicy()
+				snp.Name = "rbac-test-staged-deny"
+				snp.Namespace = f.Namespace.Name
+				snp.Spec.Tier = testTier
+				snp.Spec.StagedAction = v3.StagedActionSet
+				snp.Spec.Order = ptr.To(100.0)
+				snp.Spec.Selector = "all()"
+				snp.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+
+				err := cli.Create(ctx, snp)
+				Expect(err).To(HaveOccurred(), "staged policy creation should be denied without tier GET")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
+				Expect(err.Error()).To(ContainSubstring("tier"))
+			})
+
+			It("should allow staged global policy writes by a user with full tier RBAC", func() {
+				cli := newImpersonatedClient(rbacTierAdminUser)
+
+				sgnp := v3.NewStagedGlobalNetworkPolicy()
+				sgnp.Name = testTier + ".rbac-test-staged-global-" + suffix
+				sgnp.Spec.Tier = testTier
+				sgnp.Spec.StagedAction = v3.StagedActionSet
+				sgnp.Spec.Order = ptr.To(100.0)
+				sgnp.Spec.NamespaceSelector = "kubernetes.io/metadata.name == '" + f.Namespace.Name + "'"
+				sgnp.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+
+				Expect(cli.Create(ctx, sgnp)).To(Succeed(), "tier admin should be able to create a staged global policy in its tier")
+				DeferCleanup(func(ctx context.Context) {
+					Expect(ctrlclient.IgnoreNotFound(adminCli.Delete(ctx, sgnp))).To(Succeed())
+				})
+
+				Expect(cli.Delete(ctx, sgnp)).To(Succeed(), "tier admin should be able to delete a staged global policy in its tier")
+			})
+
+			It("should deny staged global policy creation by a user without tier GET access", func() {
+				cli := newImpersonatedClient(rbacNoTierGetUser)
+
+				sgnp := v3.NewStagedGlobalNetworkPolicy()
+				sgnp.Name = testTier + ".rbac-test-staged-global-deny-" + suffix
+				sgnp.Spec.Tier = testTier
+				sgnp.Spec.StagedAction = v3.StagedActionSet
+				sgnp.Spec.Order = ptr.To(100.0)
+				sgnp.Spec.NamespaceSelector = "kubernetes.io/metadata.name == '" + f.Namespace.Name + "'"
+				sgnp.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+
+				err := cli.Create(ctx, sgnp)
+				Expect(err).To(HaveOccurred(), "staged global policy creation should be denied without tier GET")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
+			})
+		})
+
+		// A tier grant made through a Role rather than a ClusterRole should confine the user to
+		// that Role's namespace, since the webhook authorizes with the request's namespace.
+		Context("namespace-scoped tier access", func() {
+			framework.ConformanceIt("should confine a namespaced tier grant to its own namespace", func() {
+				cli := newImpersonatedClient(rbacNamespacedUser)
+
+				By("Creating a policy in the granted namespace")
+				np := v3.NewNetworkPolicy()
+				np.Name = "rbac-test-namespaced"
+				np.Namespace = f.Namespace.Name
+				np.Spec.Tier = testTier
+				np.Spec.Order = ptr.To(100.0)
+				np.Spec.Selector = "all()"
+				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+				Expect(cli.Create(ctx, np)).To(Succeed(), "namespaced user should be able to write in its own namespace")
+				DeferCleanup(func(ctx context.Context) {
+					Expect(ctrlclient.IgnoreNotFound(adminCli.Delete(ctx, np))).To(Succeed())
+				})
+
+				By("Creating a second namespace the user holds no grant in")
+				otherNS, err := f.CreateNamespace(ctx, f.BaseName+"-other", nil)
+				Expect(err).NotTo(HaveOccurred(), "failed to create the second namespace")
+
+				By("Creating the same policy in the second namespace")
+				outsideNP := v3.NewNetworkPolicy()
+				outsideNP.Name = "rbac-test-namespaced-outside"
+				outsideNP.Namespace = otherNS.Name
+				outsideNP.Spec.Tier = testTier
+				outsideNP.Spec.Order = ptr.To(100.0)
+				outsideNP.Spec.Selector = "all()"
+				outsideNP.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+
+				err = cli.Create(ctx, outsideNP)
+				Expect(err).To(HaveOccurred(), "namespaced user should not be able to write outside its namespace")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
+			})
+		})
+
+		// A collection delete carries no policy name of its own, so the tier check depends on
+		// the API server fanning it out into a per-object admission review.
+		Context("collection delete", func() {
+			var policies []*v3.NetworkPolicy
+
+			BeforeEach(func() {
+				By("Creating two policies in the test tier as admin")
+				policies = nil
+				for _, name := range []string{"rbac-test-collection-a", "rbac-test-collection-b"} {
+					np := v3.NewNetworkPolicy()
+					np.Name = name
+					np.Namespace = f.Namespace.Name
+					np.Spec.Tier = testTier
+					np.Spec.Order = ptr.To(100.0)
+					np.Spec.Selector = "all()"
+					np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+					Expect(adminCli.Create(ctx, np)).To(Succeed(), "failed to create policy %s", name)
+					policies = append(policies, np)
+
+					DeferCleanup(func(ctx context.Context) {
+						Expect(ctrlclient.IgnoreNotFound(adminCli.Delete(ctx, np))).To(Succeed())
+					})
+				}
+			})
+
+			framework.ConformanceIt("should deny a collection delete by a user without tier policy access", func() {
+				cli := newImpersonatedClient(rbacNoPolicyUser)
+
+				err := cli.DeleteAllOf(ctx, v3.NewNetworkPolicy(), ctrlclient.InNamespace(f.Namespace.Name))
+				Expect(err).To(HaveOccurred(), "collection delete should be denied without tier policy access")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
+
+				By("Confirming both policies survived")
+				for _, np := range policies {
+					Expect(adminCli.Get(ctx, ctrlclient.ObjectKeyFromObject(np), v3.NewNetworkPolicy())).To(Succeed(),
+						"policy %s should not have been deleted", np.Name)
+				}
+			})
+
+			It("should allow a collection delete by a user with full tier RBAC", func() {
+				cli := newImpersonatedClient(rbacTierAdminUser)
+
+				Expect(cli.DeleteAllOf(ctx, v3.NewNetworkPolicy(), ctrlclient.InNamespace(f.Namespace.Name))).To(Succeed(),
+					"tier admin should be able to delete the collection in its own tier")
+
+				By("Confirming both policies are gone")
+				for _, np := range policies {
+					err := adminCli.Get(ctx, ctrlclient.ObjectKeyFromObject(np), v3.NewNetworkPolicy())
+					Expect(apierrors.IsNotFound(err)).To(BeTrue(), "expected policy %s to be deleted, got: %v", np.Name, err)
+				}
+			})
+		})
+
+		// The passthrough is what grants tiered policy verbs to every authenticated user, so its
+		// verb list is the boundary between what the webhook gates and what plain RBAC gates.
+		framework.Context("operator-rendered passthrough", describe.RequiresOperator(), func() {
+			It("should grant the tiered policy write verbs and no read verbs in v3 CRD mode", func() {
+				cr, ok := tieredPolicyPassthrough(ctx, f.ClientSet)
+				Expect(ok).To(BeTrue(), "expected the operator to render the %s ClusterRole", tieredPolicyPassthroughRole)
+
+				var resources, verbs []string
+				for _, rule := range cr.Rules {
+					resources = append(resources, rule.Resources...)
+					verbs = append(verbs, rule.Verbs...)
+				}
+
+				By("Checking the tiered policy resources are covered")
+				Expect(resources).To(ConsistOf("networkpolicies", "globalnetworkpolicies", "stagednetworkpolicies", "stagedglobalnetworkpolicies"),
+					"the passthrough should cover exactly the tiered policy types")
+
+				By("Checking every verb the admission webhook intercepts is granted")
+				Expect(verbs).To(ContainElements("create", "update", "delete", "deletecollection"),
+					"the passthrough must grant the write verbs the webhook authorizes")
+
+				if hasCalicoAPIServer(ctx, f.ClientSet) {
+					By("Checking reads pass through, since the aggregated API server authorizes them")
+					Expect(verbs).To(ContainElements("get", "list", "watch"))
+					return
+				}
+
+				// No webhook covers reads, so a passthrough that granted them would hand every
+				// authenticated user read access to all policy in every tier.
+				By("Checking reads are left to ordinary RBAC in v3 CRD mode")
+				Expect(verbs).NotTo(ContainElement("get"))
+				Expect(verbs).NotTo(ContainElement("list"))
+				Expect(verbs).NotTo(ContainElement("watch"))
+			})
+		})
 	},
 )
 
@@ -682,6 +913,10 @@ var _ = describe.CalicoDescribe(
 type tieredRBACSetup struct {
 	roles    []rbacv1.ClusterRole
 	bindings []rbacv1.ClusterRoleBinding
+
+	// Namespaced grants, for the user whose tier access is confined to one namespace.
+	nsRoles    []rbacv1.Role
+	nsBindings []rbacv1.RoleBinding
 }
 
 // buildTieredRBACResources constructs the ClusterRoles and ClusterRoleBindings needed for the
@@ -693,13 +928,14 @@ type tieredRBACSetup struct {
 //   - rbacNoPolicyUser: has tier GET but NO tier policy access
 //   - rbacOtherTierUser: full access but only for a different tier
 //   - rbacReadOnlyUser: read-only access (get/list/watch) on tier policies
+//   - rbacNamespacedUser: tier access granted through a Role in a single namespace
 //
 // testTier, otherTier, and suffix are passed in so each spec can use
 // per-run random names. That way a previous spec that crashed mid-flight
 // (e.g. the calico-apiserver briefly went unavailable) and left resources
 // behind cannot 409 the next spec's creates, and parallel specs don't
 // collide on cluster-scoped resources.
-func buildTieredRBACResources(testTier, otherTier, suffix string) tieredRBACSetup {
+func buildTieredRBACResources(testTier, otherTier, suffix, namespace string, expectPassthrough bool) tieredRBACSetup {
 	setup := tieredRBACSetup{}
 
 	addRoleAndBinding := func(name, user string, rules []rbacv1.PolicyRule) {
@@ -725,15 +961,53 @@ func buildTieredRBACResources(testTier, otherTier, suffix string) tieredRBACSetu
 		})
 	}
 
-	// baseRules returns the standard API server RBAC rules that all test users need.
+	addNamespacedRoleAndBinding := func(name, user string, rules []rbacv1.PolicyRule) {
+		fullName := rbacResourcePrefix + name + "-" + suffix
+		setup.nsRoles = append(setup.nsRoles, rbacv1.Role{
+			ObjectMeta: metav1.ObjectMeta{Name: fullName, Namespace: namespace},
+			Rules:      rules,
+		})
+		setup.nsBindings = append(setup.nsBindings, rbacv1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{Name: fullName, Namespace: namespace},
+			RoleRef: rbacv1.RoleRef{
+				APIGroup: "rbac.authorization.k8s.io",
+				Kind:     "Role",
+				Name:     fullName,
+			},
+			Subjects: []rbacv1.Subject{
+				{
+					APIGroup: "rbac.authorization.k8s.io",
+					Kind:     "User",
+					Name:     user,
+				},
+			},
+		})
+	}
+
+	// baseRules returns the non-tiered policy RBAC that all test users need. Writes are
+	// left out where a passthrough is expected, so the write path depends on it instead.
 	baseRules := func() []rbacv1.PolicyRule {
-		return []rbacv1.PolicyRule{
+		resources := []string{
+			"networkpolicies",
+			"globalnetworkpolicies",
+			"stagednetworkpolicies",
+			"stagedglobalnetworkpolicies",
+		}
+		rules := []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{"projectcalico.org"},
-				Resources: []string{"networkpolicies", "globalnetworkpolicies"},
-				Verbs:     []string{"create", "update", "delete", "get", "list", "watch"},
+				Resources: resources,
+				Verbs:     []string{"get", "list", "watch"},
 			},
 		}
+		if !expectPassthrough {
+			rules = append(rules, rbacv1.PolicyRule{
+				APIGroups: []string{"projectcalico.org"},
+				Resources: resources,
+				Verbs:     []string{"create", "update", "delete", "deletecollection"},
+			})
+		}
+		return rules
 	}
 
 	// Tier admin: has GET on the test tier + wildcard policy access for the test tier.
@@ -745,9 +1019,14 @@ func buildTieredRBACResources(testTier, otherTier, suffix string) tieredRBACSetu
 			ResourceNames: []string{testTier},
 		},
 		rbacv1.PolicyRule{
-			APIGroups:     []string{"projectcalico.org"},
-			Resources:     []string{"tier.networkpolicies", "tier.globalnetworkpolicies"},
-			Verbs:         []string{"create", "update", "delete", "get"},
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{
+				"tier.networkpolicies",
+				"tier.globalnetworkpolicies",
+				"tier.stagednetworkpolicies",
+				"tier.stagedglobalnetworkpolicies",
+			},
+			Verbs:         []string{"create", "update", "delete", "deletecollection", "get"},
 			ResourceNames: []string{testTier + ".*"},
 		},
 	))
@@ -756,8 +1035,13 @@ func buildTieredRBACResources(testTier, otherTier, suffix string) tieredRBACSetu
 	// RBAC should deny because tier GET is required alongside policy access.
 	addRoleAndBinding("no-tier-get", rbacNoTierGetUser, append(baseRules(),
 		rbacv1.PolicyRule{
-			APIGroups:     []string{"projectcalico.org"},
-			Resources:     []string{"tier.networkpolicies", "tier.globalnetworkpolicies"},
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{
+				"tier.networkpolicies",
+				"tier.globalnetworkpolicies",
+				"tier.stagednetworkpolicies",
+				"tier.stagedglobalnetworkpolicies",
+			},
 			Verbs:         []string{"create", "update", "delete", "get"},
 			ResourceNames: []string{testTier + ".*"},
 		},
@@ -905,7 +1189,161 @@ func buildTieredRBACResources(testTier, otherTier, suffix string) tieredRBACSetu
 		},
 	})
 
+	// Namespaced user: tier GET has to be cluster-scoped because tiers are, but the
+	// tier-scoped policy grant is a Role, which should confine writes to one namespace.
+	addRoleAndBinding("namespaced-tier-get", rbacNamespacedUser, []rbacv1.PolicyRule{
+		{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tiers"},
+			Verbs:         []string{"get"},
+			ResourceNames: []string{testTier},
+		},
+	})
+
+	namespacedRules := []rbacv1.PolicyRule{
+		{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tier.networkpolicies", "tier.stagednetworkpolicies"},
+			Verbs:         []string{"create", "update", "delete", "get"},
+			ResourceNames: []string{testTier + ".*"},
+		},
+		{
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{"networkpolicies", "stagednetworkpolicies"},
+			Verbs:     []string{"get", "list", "watch"},
+		},
+	}
+	if !expectPassthrough {
+		namespacedRules = append(namespacedRules, rbacv1.PolicyRule{
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{"networkpolicies", "stagednetworkpolicies"},
+			Verbs:     []string{"create", "update", "delete"},
+		})
+	}
+	addNamespacedRoleAndBinding("namespaced", rbacNamespacedUser, namespacedRules)
+
 	return setup
+}
+
+// waitForTieredRBAC blocks until the API server's authorizer honours every
+// binding in setup.
+func waitForTieredRBAC(ctx context.Context, cs kubernetes.Interface, setup tieredRBACSetup) {
+	probes := tieredRBACProbes(setup)
+	Eventually(func() error {
+		return checkTieredRBACProbes(ctx, cs, probes)
+	}, 30*time.Second, 250*time.Millisecond).Should(Succeed(), "tiered RBAC grants did not take effect")
+}
+
+// tieredRBACProbes returns one SubjectAccessReview per binding subject in
+// setup, each asking for a rule of the bound role. Specs run in parallel and
+// all impersonate the same fixed user names, so another process may already
+// hold a binding for the same user with the same base rules; only the per-spec
+// tier names in ResourceNames prove that this spec's own role and binding have
+// reached the authorizer. A role with no named rule falls back to its first
+// rule.
+func tieredRBACProbes(setup tieredRBACSetup) []*authorizationv1.SubjectAccessReview {
+	rules := make(map[rbacv1.RoleRef][]rbacv1.PolicyRule, len(setup.roles)+len(setup.nsRoles))
+	for _, r := range setup.roles {
+		rules[rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: r.Name}] = r.Rules
+	}
+	for _, r := range setup.nsRoles {
+		rules[rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: r.Name}] = r.Rules
+	}
+
+	var probes []*authorizationv1.SubjectAccessReview
+	for _, b := range setup.bindings {
+		for _, s := range b.Subjects {
+			if p := tieredRBACProbe(s, "", rules[b.RoleRef]); p != nil {
+				probes = append(probes, p)
+			}
+		}
+	}
+	for _, b := range setup.nsBindings {
+		for _, s := range b.Subjects {
+			if p := tieredRBACProbe(s, b.Namespace, rules[b.RoleRef]); p != nil {
+				probes = append(probes, p)
+			}
+		}
+	}
+	return probes
+}
+
+// tieredRBACProbe builds a SubjectAccessReview asking whether subject may
+// exercise one of rules. It returns nil when there is nothing to ask.
+func tieredRBACProbe(subject rbacv1.Subject, namespace string, rules []rbacv1.PolicyRule) *authorizationv1.SubjectAccessReview {
+	if len(rules) == 0 {
+		return nil
+	}
+	rule := rules[0]
+	for _, r := range rules {
+		if len(r.ResourceNames) > 0 {
+			rule = r
+			break
+		}
+	}
+	attrs := &authorizationv1.ResourceAttributes{
+		Namespace: namespace,
+		Verb:      rule.Verbs[0],
+		Group:     rule.APIGroups[0],
+		Resource:  rule.Resources[0],
+	}
+	if len(rule.ResourceNames) > 0 {
+		attrs.Name = rule.ResourceNames[0]
+	}
+	return &authorizationv1.SubjectAccessReview{
+		Spec: authorizationv1.SubjectAccessReviewSpec{
+			ResourceAttributes: attrs,
+			User:               subject.Name,
+		},
+	}
+}
+
+// checkTieredRBACProbes returns an error with the first probe the authorizer still denies,
+// or nil once every probe is allowed.
+func checkTieredRBACProbes(ctx context.Context, cs kubernetes.Interface, probes []*authorizationv1.SubjectAccessReview) error {
+	for _, p := range probes {
+		res, err := cs.AuthorizationV1().SubjectAccessReviews().Create(ctx, p, metav1.CreateOptions{})
+		if err != nil {
+			return err
+		}
+		if !res.Status.Allowed {
+			a := p.Spec.ResourceAttributes
+			return fmt.Errorf("user %s may not yet %s %s %q in namespace %q: %s",
+				p.Spec.User, a.Verb, a.Resource, a.Name, a.Namespace, res.Status.Reason)
+		}
+	}
+	return nil
+}
+
+// hasTieredPolicyWebhook reports whether the tiered policy admission webhook is installed. A
+// manifest install in v3 CRD mode ships it alongside the passthrough ClusterRole.
+func hasTieredPolicyWebhook(ctx context.Context, cs kubernetes.Interface) bool {
+	_, err := cs.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(ctx, "api.projectcalico.org", metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false
+	}
+	Expect(err).NotTo(HaveOccurred(), "failed to look up the api.projectcalico.org webhook configuration")
+	return true
+}
+
+// hasOperator reports whether Calico is operator-managed, as opposed to a manifest install.
+func hasOperator(ctx context.Context, cs kubernetes.Interface) bool {
+	deployments, err := cs.AppsV1().Deployments("").List(ctx, metav1.ListOptions{
+		LabelSelector: "k8s-app=tigera-operator",
+	})
+	Expect(err).NotTo(HaveOccurred(), "failed to list tigera-operator deployments")
+	return len(deployments.Items) > 0
+}
+
+// tieredPolicyPassthrough returns the tiered policy passthrough ClusterRole, and whether it
+// exists at all.
+func tieredPolicyPassthrough(ctx context.Context, cs kubernetes.Interface) (*rbacv1.ClusterRole, bool) {
+	cr, err := cs.RbacV1().ClusterRoles().Get(ctx, tieredPolicyPassthroughRole, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil, false
+	}
+	Expect(err).NotTo(HaveOccurred(), "failed to look up the %s ClusterRole", tieredPolicyPassthroughRole)
+	return cr, true
 }
 
 // DESCRIPTION: Verify tiered RBAC using tier-prefixed policy names (e.g., "tier.policyname"),
@@ -922,12 +1360,13 @@ var _ = describe.CalicoDescribe(
 		f := utils.NewDefaultFramework("tiered-rbac-prefixed")
 
 		var (
-			adminCli  ctrlclient.Client
-			ctx       context.Context
-			cancel    context.CancelFunc
-			testTier  string
-			otherTier string
-			suffix    string
+			adminCli          ctrlclient.Client
+			ctx               context.Context
+			cancel            context.CancelFunc
+			testTier          string
+			otherTier         string
+			suffix            string
+			expectPassthrough bool
 		)
 
 		BeforeEach(func() {
@@ -936,6 +1375,8 @@ var _ = describe.CalicoDescribe(
 
 			adminCli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
+
+			expectPassthrough = hasOperator(ctx, f.ClientSet) || hasTieredPolicyWebhook(ctx, f.ClientSet)
 
 			suffix = utils.GenerateRandomName("rbac")
 			testTier = "e2e-rbac-test-" + suffix
@@ -949,7 +1390,10 @@ var _ = describe.CalicoDescribe(
 			Expect(adminCli.Create(ctx, tier)).To(Succeed())
 
 			By("Creating RBAC resources for test users")
-			setup := buildTieredRBACResources(testTier, otherTier, suffix)
+			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name, expectPassthrough)
+			// This suite grants only the cluster-scoped roles, so the namespaced
+			// grants must not be created or waited for.
+			setup.nsRoles, setup.nsBindings = nil, nil
 			for i := range setup.roles {
 				_, err := f.ClientSet.RbacV1().ClusterRoles().Create(ctx, &setup.roles[i], metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -958,6 +1402,9 @@ var _ = describe.CalicoDescribe(
 				_, err := f.ClientSet.RbacV1().ClusterRoleBindings().Create(ctx, &setup.bindings[i], metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			}
+
+			By("Waiting for the RBAC grants to take effect")
+			waitForTieredRBAC(ctx, f.ClientSet, setup)
 		})
 
 		AfterEach(func() {
@@ -965,7 +1412,7 @@ var _ = describe.CalicoDescribe(
 			var errOccurred bool
 
 			By("Cleaning up RBAC resources")
-			setup := buildTieredRBACResources(testTier, otherTier, suffix)
+			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name, expectPassthrough)
 			for _, binding := range setup.bindings {
 				if err := f.ClientSet.RbacV1().ClusterRoleBindings().Delete(ctx, binding.Name, metav1.DeleteOptions{}); err != nil {
 					logrus.WithError(err).WithField("name", binding.Name).Error("Failed to delete ClusterRoleBinding")
@@ -1036,17 +1483,23 @@ var _ = describe.CalicoDescribe(
 // mutating operations. Tests that verify read-path tier RBAC enforcement
 // must call this in a BeforeEach so they fail immediately with a clear
 // message when the API server is absent.
+// hasCalicoAPIServer reports whether the aggregated Calico API server is serving the v3 API,
+// as opposed to the API being served through CRDs.
+func hasCalicoAPIServer(ctx context.Context, cs kubernetes.Interface) bool {
+	pods, err := cs.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+		LabelSelector: "k8s-app=calico-apiserver",
+	})
+	Expect(err).NotTo(HaveOccurred(), "failed to list calico-apiserver pods")
+	return len(pods.Items) > 0
+}
+
 func requireCalicoAPIServer(cfg *rest.Config) {
 	cs, err := kubernetes.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	pods, err := cs.CoreV1().Pods("").List(ctx, metav1.ListOptions{
-		LabelSelector: "k8s-app=calico-apiserver",
-	})
-	Expect(err).NotTo(HaveOccurred())
-	if len(pods.Items) == 0 {
+	if !hasCalicoAPIServer(ctx, cs) {
 		Fail(fmt.Sprintf(
 			"This test requires the aggregated Calico API server (calico-apiserver), " +
 				"but no calico-apiserver pods were found. In v3 CRD mode, GET/LIST/WATCH " +

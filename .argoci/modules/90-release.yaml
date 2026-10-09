@@ -1,0 +1,36 @@
+# Release tooling CI, and the release binary the promotions use.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  useGoBuild: true
+
+steps:
+  - name: release-ci
+    depends: [check-go]
+    requests: {cpu: 4000m, memory: 2Gi}
+    # The image ships tools under /go/bin, which the default /go volume hides.
+    workspaceVolumes: none
+    commands: |
+      # A fork carries no tags, and the tests parse a version from them.
+      git fetch --tags --quiet "https://github.com/${CI_GIT_REPO_SLUG}.git" || true
+      cd release
+      make ci DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=
+    epilogue: |
+      # Epilogues don't inherit the commands' `cd` or exports.
+      cd "${CI_HOME}/${CI_GIT_DIR}/release"
+      artifact push job report --destination test-results || true
+
+  # Needs docker: `bin/release` splices its own flags into a nested `docker run`.
+  - name: release-build
+    depends: [check-go]
+    requests: {cpu: 2750m, memory: 2Gi}
+    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2
+    services:
+      - docker
+    commands: |
+      cd release
+      make build
+      # A promotion is a separate run with its own artifact namespace, so the
+      # commit is what ties the two together.
+      artifact cache store "release-${CI_GIT_SHA}" bin

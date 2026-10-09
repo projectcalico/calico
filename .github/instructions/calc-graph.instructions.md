@@ -40,17 +40,19 @@ resources.
 
 ## Doc update rule
 
-The repo-wide doc-update rule and its exemptions
+The repo-wide rule
 ([`.github/copilot-instructions.md` → Documentation map](../copilot-instructions.md),
-mirrored in [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md)) apply.
-For the calc graph, "changes how it works" means: a new calculation
-node or rewiring; a new emitted message type or a change to the
-`EventSequencer` flush order; a change to a label index or other
-refcounting structure; or a change to how the graph treats
-inconsistency, in-sync, or the upstream contract. Update the
-relevant section of
-[`calc-graph.md`](../../felix/design/calc-graph.md) in the same PR
-(and `dataplane.md` if the output contract changes), and update the
-hand-maintained node diagram in
+mirrored in [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md)) applies;
+**the default is no edit**. For the calc graph the usual candidates
+for it are a new node or rewiring, a new emitted message type or a
+change to the `EventSequencer` flush order, a change to a label index
+or other refcounting structure, or a change to how the graph treats
+inconsistency, in-sync, or the upstream contract — candidates, not
+triggers on their own. A warranted edit goes in
+[`calc-graph.md`](../../felix/design/calc-graph.md) in the same PR,
+and in `dataplane.md` too if the output contract changes.
+
+The hand-maintained node diagram in
 [`felix/docs/calc-graph-diagram.md`](../../felix/docs/calc-graph-diagram.md)
-when you add or rewire a node.
+is a separate case: it must be updated whenever you add or rewire a
+node, since it is a picture of the wiring rather than prose about it.

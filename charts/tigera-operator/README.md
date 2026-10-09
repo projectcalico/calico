@@ -18,6 +18,9 @@ Calico’s flexible architecture supports a wide range of deployment options, us
 
 # Installing
 
+Install so any Calico resources you care about (for example a
+`FelixConfiguration`) exist before the operator starts reconciling:
+
 1. Add the projectcalico helm repository.
 
    ```
@@ -30,6 +33,26 @@ Calico’s flexible architecture supports a wide range of deployment options, us
    helm template calico-crds projectcalico/crd.projectcalico.org.v1 | kubectl apply --server-side -f -
    ```
 
+1. (Optional) Apply any Calico custom resources you want in place before the
+   operator runs. Helm sorts unknown kinds last, so resources created by this
+   chart can land after the operator Deployment is already up. Applying them
+   yourself here guarantees order. Example:
+
+   ```
+   kubectl apply -f - <<EOF
+   apiVersion: projectcalico.org/v3
+   kind: FelixConfiguration
+   metadata:
+     name: default
+   spec:
+     usageReportingEnabled: false
+   EOF
+   ```
+
+   Use `projectcalico.org/v3` when the v3 API is available (for example after
+   installing the Calico API server); otherwise use the CRD group
+   `crd.projectcalico.org/v1`.
+
 1. Create the tigera-operator namespace.
 
    ```
@@ -41,6 +64,10 @@ Calico’s flexible architecture supports a wide range of deployment options, us
    ```
    helm install calico projectcalico/tigera-operator --namespace tigera-operator
    ```
+
+> **Note:** `defaultFelixConfiguration` in `values.yaml` is deprecated. Prefer
+> applying a `FelixConfiguration` in step 3 above. The chart field remains for a
+> deprecation window so existing values files keep working.
 
 # Custom Resource Definitions
 
@@ -170,12 +197,25 @@ certs:
 resources: {}
 
 # Tolerations for the tigera/operator pod itself.
-# By default, will schedule on all possible place.
+# By default, will schedule on nodes that are not yet ready, but not on cordoned nodes.
 tolerations:
-- effect: NoExecute
+- key: CriticalAddonsOnly
   operator: Exists
-- effect: NoSchedule
+- key: node-role.kubernetes.io/master
   operator: Exists
+  effect: NoSchedule
+- key: node-role.kubernetes.io/control-plane
+  operator: Exists
+  effect: NoSchedule
+- key: node.kubernetes.io/not-ready
+  operator: Exists
+  effect: NoSchedule
+- key: node.kubernetes.io/network-unavailable
+  operator: Exists
+  effect: NoSchedule
+- key: node.cloudprovider.kubernetes.io/uninitialized
+  operator: Exists
+  effect: NoSchedule
 
 # NodeSelector for the tigera/operator pod itself.
 nodeSelector:
@@ -187,9 +227,20 @@ podAnnotations: {}
 # Custom labels for the tigera/operator pod itself
 podLabels: {}
 
+# Security context applied to all containers in the tigera-operator deployment.
+# By default no security context is set; override to harden the operator pod.
+# Example hardened config:
+#   containerSecurityContext:
+#     allowPrivilegeEscalation: false
+#     runAsNonRoot: true
+#     runAsUser: 10000
+#     runAsGroup: 10000
+#     readOnlyRootFilesystem: true
+containerSecurityContext: {}
+
 # Configuration for the tigera operator images to deploy.
 tigeraOperator:
-  image: tigera/operator
+  image: calico/operator
   registry: quay.io
 calicoctl:
   image: quay.io/calico/calico

@@ -138,7 +138,7 @@ func (c ipamClient) SetOwnerAttributes(ctx context.Context, ip cnet.IP, handleID
 		}
 
 		block := blockFromBackend(cfg, obj.Value.(*model.AllocationBlock))
-		err = block.setOwnerAttributes(ip, handleID, updates, preconditions)
+		err = block.setOwnerAttributes(cfg, ip, handleID, updates, preconditions)
 		if err != nil {
 			logCtx.WithError(err).Error("Failed to set owner attributes")
 			return err
