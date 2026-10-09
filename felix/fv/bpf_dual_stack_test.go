@@ -569,11 +569,6 @@ func describeBPFDualStackProxyHealthTests() bool {
 			k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 		})
 
-		AfterEach(func() {
-			tc.Stop()
-			infra.Stop()
-		})
-
 		It("should have kube-proxy health check working over both IPv4 and IPv6", func() {
 			felix := tc.Felixes[0]
 
@@ -664,11 +659,6 @@ func describeBPFProxyHealthDisabledTests() bool {
 			opts.BPFProxyHealthzPort = 0
 
 			tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
-		})
-
-		AfterEach(func() {
-			tc.Stop()
-			infra.Stop()
 		})
 
 		It("should not listen on the kube-proxy health check port", func() {

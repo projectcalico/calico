@@ -96,6 +96,7 @@ type K8sDatastoreInfra struct {
 	cleanups        cleanupStack
 	felixes         []*Felix
 	bpfLogByteLimit int
+	diagsDumped     bool
 }
 
 var (
@@ -216,6 +217,7 @@ func (kds *K8sDatastoreInfra) PerTestSetup(index K8sInfraIndex) {
 		kds.bpfLog = RunBPFLog(kds, kds.bpfLogByteLimit)
 	}
 	K8sInfra[index].runningTest = ginkgo.CurrentSpecReport().FullText()
+	K8sInfra[index].diagsDumped = false
 }
 
 type CleanupProvider interface {
@@ -992,6 +994,11 @@ func (kds *K8sDatastoreInfra) AddDefaultDeny() error {
 }
 
 func (kds *K8sDatastoreInfra) DumpErrorData() {
+	// Once per test: DatastoreDescribe dumps before teardown, so later calls would only hit stopped containers.
+	if kds.diagsDumped {
+		return
+	}
+	kds.diagsDumped = true
 	// Per-Felix diagnostics first for context.
 	for _, f := range kds.felixes {
 		if f != nil {
