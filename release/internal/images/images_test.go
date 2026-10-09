@@ -30,6 +30,8 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/outputs"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 )
 
@@ -534,13 +536,13 @@ func (r *imageNameRunner) RunInDir(dir, _ string, args, env []string) (string, e
 // alwaysResolves answers every image with the same digest. Suitable for asking
 // whether anything was recorded, but NOT for anything comparing digests: it
 // cannot tell a repo's tags apart. Use resolvesPerTag for that.
-func alwaysResolves(digest string) steps.DigestResolver {
+func alwaysResolves(digest string) registry.DigestResolver {
 	return func(string) (string, bool, error) { return digest, true, nil }
 }
 
 // resolvesPerTag gives each tag its own digest, as a registry does, so a repo
 // carrying a manifest list and its arch tags holds several distinct digests.
-func resolvesPerTag() steps.DigestResolver {
+func resolvesPerTag() registry.DigestResolver {
 	return func(image string) (string, bool, error) {
 		_, tag, _ := strings.Cut(image, ":")
 		return "sha256:" + strings.Repeat(fmt.Sprintf("%x", len(tag))[:1], 64), true, nil
@@ -573,13 +575,13 @@ func TestPublishRecordsIndexAndArchRefs(t *testing.T) {
 		t.Fatalf("Publish: %v", err)
 	}
 	// One manifest list plus one tag per architecture.
-	if len(rec.refs) != 3 {
-		t.Fatalf("expected 3 refs (index + 2 arches), got %v", rec.refs)
+	want := []string{
+		"quay.io/calico/node:" + testVersion + "@sha256:aaa",
+		"quay.io/calico/node:" + testVersion + "-amd64@sha256:aaa",
+		"quay.io/calico/node:" + testVersion + "-arm64@sha256:aaa",
 	}
-	for _, ref := range rec.refs {
-		if ref != "quay.io/calico/node@sha256:aaa" {
-			t.Errorf("unexpected ref %s", ref)
-		}
+	if !slices.Equal(rec.refs, want) {
+		t.Errorf("refs\n got %v\nwant %v", rec.refs, want)
 	}
 }
 
@@ -594,7 +596,7 @@ func TestPublishRecordsWindowsIndexOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
-	want := []string{"quay.io/calico/node-windows@sha256:bbb"}
+	want := []string{"quay.io/calico/node-windows:" + testVersion + "@sha256:bbb"}
 	if !slices.Equal(rec.refs, want) {
 		t.Errorf("refs\n got %v\nwant %v", rec.refs, want)
 	}
@@ -932,7 +934,7 @@ func TestPublishRecordsInUnitOrder(t *testing.T) {
 	// must first mention the directories in the order the units were given.
 	var seen []string
 	for _, ref := range rec.refs {
-		name := path.Base(strings.SplitN(ref, "@", 2)[0])
+		name := path.Base(strings.SplitN(strings.SplitN(ref, "@", 2)[0], ":", 2)[0])
 		if len(seen) == 0 || seen[len(seen)-1] != name {
 			seen = append(seen, name)
 		}
@@ -1008,7 +1010,7 @@ func TestResolve(t *testing.T) {
 			WithRecord(rec),
 		}
 	}
-	absent := func(suffix string) steps.DigestResolver {
+	absent := func(suffix string) registry.DigestResolver {
 		return func(image string) (string, bool, error) {
 			if strings.HasSuffix(image, suffix) {
 				return "", false, nil
@@ -1052,7 +1054,7 @@ func TestResolve(t *testing.T) {
 		if !strings.Contains(err.Error(), "quay.io/calico/typha:"+testVersion) {
 			t.Errorf("error should name the missing image, got %q", err)
 		}
-		for _, repo := range []string{"quay.io/calico/node@", "quay.io/calico/whisker@"} {
+		for _, repo := range []string{"quay.io/calico/node:", "quay.io/calico/whisker:"} {
 			if !slices.ContainsFunc(rec.refs, func(r string) bool { return strings.HasPrefix(r, repo) }) {
 				t.Errorf("%s was not recorded before the failure: %v", repo, rec.refs)
 			}
@@ -1124,8 +1126,10 @@ func TestResolve(t *testing.T) {
 			}
 		}
 		want := []string{
-			"quay.io/calico/node@sha256:aaa", "quay.io/calico/node@sha256:aaa",
-			"quay.io/calico/typha@sha256:aaa", "quay.io/calico/typha@sha256:aaa",
+			"quay.io/calico/node:" + testVersion + "@sha256:aaa",
+			"quay.io/calico/node:" + testVersion + "-arm64@sha256:aaa",
+			"quay.io/calico/typha:" + testVersion + "-amd64@sha256:aaa",
+			"quay.io/calico/typha:" + testVersion + "-arm64@sha256:aaa",
 		}
 		if !slices.Equal(rec.refs, want) {
 			t.Errorf("refs %v, want %v", rec.refs, want)
@@ -1142,13 +1146,13 @@ func TestResolve(t *testing.T) {
 			{
 				name:     "absent from a later registry",
 				absent:   "docker.io/calico/node:" + testVersion,
-				wantRefs: []string{"quay.io/calico/node@sha256:aaa"},
+				wantRefs: []string{"quay.io/calico/node:" + testVersion + "@sha256:aaa"},
 			},
 			{
 				name:        "absent from the first registry",
 				absent:      "quay.io/calico/node:" + testVersion,
 				wantMissing: true,
-				wantRefs:    []string{"docker.io/calico/node@sha256:aaa"},
+				wantRefs:    []string{"docker.io/calico/node:" + testVersion + "@sha256:aaa"},
 			},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
@@ -1402,9 +1406,47 @@ func TestRecord(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "network is unreachable") {
 			t.Fatalf("expected the failed lookup to be reported, got %v", err)
 		}
-		want := []string{"quay.io/calico/node@sha256:aaa", "quay.io/calico/node@sha256:aaa"}
+		want := []string{
+			"quay.io/calico/node:" + testVersion + "@sha256:aaa",
+			"quay.io/calico/node:" + testVersion + "-arm64@sha256:aaa",
+		}
 		if !slices.Equal(rec.refs, want) {
 			t.Errorf("refs %v, want %v", rec.refs, want)
+		}
+	})
+}
+
+func TestMetadata(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	node := registry.Component{Registry: "quay.io/calico", Image: "node", Version: "v3.30.0"}
+	mustNotResolve := outputs.Digests{Resolve: func(string) (string, bool, error) {
+		return "", false, errors.New("must not resolve")
+	}}
+
+	for _, step := range []string{PublishStep, ResolveStep} {
+		t.Run("reads the digest "+step+" recorded", func(t *testing.T) {
+			dir := t.TempDir()
+			w, err := outputs.NewRefsWriter(dir, step)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := w.Add("quay.io/calico/node:v3.30.0@" + digest); err != nil {
+				t.Fatal(err)
+			}
+			got, err := Metadata(dir, map[string]registry.Component{"node": node}, mustNotResolve)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := outputs.Component{Version: "v3.30.0", Image: "quay.io/calico/node:v3.30.0", Digest: digest}
+			if got["node"] != want {
+				t.Errorf("node = %+v, want %+v", got["node"], want)
+			}
+		})
+	}
+
+	t.Run("fails with no records dir", func(t *testing.T) {
+		if _, err := Metadata("", map[string]registry.Component{"node": node}, mustNotResolve); err == nil {
+			t.Error("described images with no records dir")
 		}
 	})
 }

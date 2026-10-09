@@ -26,6 +26,7 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/archives"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -140,7 +141,7 @@ var publishEnv = func(s settings) []string {
 
 // confirm latches the push: without it the make targets run as a dry run, so it
 // is an argument rather than an option a caller can forget.
-func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve steps.DigestResolver, opts ...PublishOption) error {
+func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve registry.DigestResolver, opts ...PublishOption) error {
 	s, err := newSettings(PublishStep, repoRoot, version, variants, opts)
 	if err != nil {
 		return err
@@ -191,7 +192,7 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 
 // Resolve records already published images a release uses.
 // A missing image fails only once the rest are recorded.
-func Resolve(repoRoot, version string, variants []Variant, resolve steps.DigestResolver, opts ...ResolveOption) error {
+func Resolve(repoRoot, version string, variants []Variant, resolve registry.DigestResolver, opts ...ResolveOption) error {
 	s, err := newSettings(ResolveStep, repoRoot, version, variants, opts)
 	if err != nil {
 		return err
@@ -307,7 +308,7 @@ func applyTo(opt any, s *settings) error {
 }
 
 // unitStateAgainst binds one record, so every unit is judged against the same.
-func (s settings) unitStateAgainst(recorded steps.RecordedDigests) func(unit) (bool, error) {
+func (s settings) unitStateAgainst(recorded registry.RecordedDigests) func(unit) (bool, error) {
 	return func(u unit) (bool, error) { return unitState(s, u, recorded) }
 }
 
@@ -317,7 +318,7 @@ func pending(s settings, units []unit) ([]unit, error) {
 	if s.resume == nil {
 		return units, nil
 	}
-	recorded := steps.DigestsByRepo(s.resume.published)
+	recorded := registry.DigestsByRepo(s.resume.published)
 	done, err := steps.Go(units, s.unitStateAgainst(recorded))
 	if err != nil {
 		return nil, err

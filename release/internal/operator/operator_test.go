@@ -15,6 +15,7 @@
 package operator
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -27,6 +28,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/projectcalico/calico/release/internal/images"
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -525,11 +527,11 @@ func TestVerbs(t *testing.T) {
 		}
 
 		want := []string{
-			"quay.io/a/operator@sha256:a",
-			"quay.io/a/operator@sha256:a-arm64",
-			"quay.io/b/operator@sha256:b",
-			"quay.io/a/operator-alt@sha256:alt",
-			"quay.io/b/operator-alt@sha256:alt-arm64",
+			"quay.io/a/operator:v1.44.0@sha256:a",
+			"quay.io/a/operator:v1.44.0-arm64@sha256:a-arm64",
+			"quay.io/b/operator:v1.44.0@sha256:b",
+			"quay.io/a/operator-alt:v1.44.0@sha256:alt",
+			"quay.io/b/operator-alt:v1.44.0-arm64@sha256:alt-arm64",
 		}
 		if diff := cmp.Diff(want, rec.refs); diff != "" {
 			t.Errorf("refs mismatch (-want +got):\n%s", diff)
@@ -544,7 +546,7 @@ func TestVerbs(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected an error, got nil")
 		}
-		if diff := cmp.Diff([]string{"quay.io/a/operator@sha256:a"}, rec.refs); diff != "" {
+		if diff := cmp.Diff([]string{"quay.io/a/operator:v1.44.0@sha256:a"}, rec.refs); diff != "" {
 			t.Errorf("refs mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -805,7 +807,7 @@ func TestResolve(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		want := []string{"quay.io/a/operator@sha256:a", "quay.io/a/operator@sha256:a-arm64", "quay.io/a/operator-alt@sha256:alt"}
+		want := []string{"quay.io/a/operator:v1.44.0@sha256:a", "quay.io/a/operator:v1.44.0-arm64@sha256:a-arm64", "quay.io/a/operator-alt:v1.44.0@sha256:alt"}
 		if diff := cmp.Diff(want, rec.refs); diff != "" {
 			t.Errorf("refs mismatch (-want +got):\n%s", diff)
 		}
@@ -825,7 +827,7 @@ func TestResolve(t *testing.T) {
 		if diff := cmp.Diff([]string{"quay.io/a/operator:v1.44.0"}, missing); diff != "" {
 			t.Errorf("missing mismatch (-want +got):\n%s", diff)
 		}
-		if diff := cmp.Diff([]string{"quay.io/a/operator-alt@sha256:alt"}, rec.refs); diff != "" {
+		if diff := cmp.Diff([]string{"quay.io/a/operator-alt:v1.44.0@sha256:alt"}, rec.refs); diff != "" {
 			t.Errorf("refs mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -938,4 +940,54 @@ func verbs() []struct {
 			return PublishBranchTag(o, oneVariant(), "release-v3.33", WithRunner(f))
 		}},
 	}
+}
+
+func TestMetadata(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	op := registry.Component{Registry: "quay.io/tigera", Image: "operator", Version: "v1.38.0"}
+	mustNotResolve := outputs.Digests{Resolve: func(string) (string, bool, error) {
+		return "", false, errors.New("must not resolve")
+	}}
+
+	for _, step := range []string{PublishStep, ResolveStep} {
+		t.Run("reads the digest "+step+" recorded", func(t *testing.T) {
+			dir := t.TempDir()
+			w, err := outputs.NewRefsWriter(dir, step)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := w.Add("quay.io/tigera/operator:v1.38.0@" + digest); err != nil {
+				t.Fatal(err)
+			}
+			got, err := Metadata(dir, op, mustNotResolve)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := outputs.Component{Version: "v1.38.0", Image: "quay.io/tigera/operator:v1.38.0", Digest: digest}
+			if got != want {
+				t.Errorf("operator = %+v, want %+v", got, want)
+			}
+		})
+	}
+
+	t.Run("falls back to the registry when nothing was recorded", func(t *testing.T) {
+		got, err := Metadata(t.TempDir(), op, outputs.Digests{Resolve: func(string) (string, bool, error) {
+			return digest, true, nil
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Digest != digest {
+			t.Errorf("digest = %q, want %q", got.Digest, digest)
+		}
+	})
+
+	t.Run("fails on an unpublished operator when digests are required", func(t *testing.T) {
+		_, err := Metadata(t.TempDir(), op, outputs.Digests{Require: true, Resolve: func(string) (string, bool, error) {
+			return "", false, nil
+		}})
+		if err == nil || !strings.Contains(err.Error(), "quay.io/tigera/operator:v1.38.0 is not published") {
+			t.Errorf("err = %v, want the operator to be unpublished", err)
+		}
+	})
 }
