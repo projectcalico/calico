@@ -31,7 +31,9 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/projectcalico/calico/release/internal/binaries"
 	"github.com/projectcalico/calico/release/internal/charts"
@@ -940,8 +942,8 @@ func TestComponentImages(t *testing.T) {
 func TestReleasedComponents(t *testing.T) {
 	m, _ := imageManager(t, newFakeRunner(), "")
 	m.components = map[string]registry.Component{
-		"node":   {Image: "node", Version: m.calicoVersion},
-		"calico": {Version: m.calicoVersion},
+		"node": {Image: "node", Version: m.calicoVersion},
+		"api":  {Version: m.calicoVersion},
 	}
 	got := m.releasedComponents()
 
@@ -952,10 +954,10 @@ func TestReleasedComponents(t *testing.T) {
 	})
 
 	t.Run("keeps a component with no image by version alone", func(t *testing.T) {
-		if want := (registry.Component{Version: m.calicoVersion}); got["calico"] != want {
-			t.Errorf("calico = %+v, want %+v", got["calico"], want)
+		if want := (registry.Component{Version: m.calicoVersion}); got["api"] != want {
+			t.Errorf("api = %+v, want %+v", got["api"], want)
 		}
-		if _, ok := m.componentImages()["calico"]; ok {
+		if _, ok := m.componentImages()["api"]; ok {
 			t.Error("a component with no image was scanned")
 		}
 	})
@@ -1726,6 +1728,99 @@ func TestChecksumsAreWrittenOnBothPaths(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBuildMetadata(t *testing.T) {
+	const (
+		nodeDigest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+		opDigest   = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+	)
+	nodeRef := registry.DefaultProductRegistry + "/node:v3.30.0"
+	opRef := registry.DefaultOperatorRegistry + "/" + registry.OperatorImage + ":v1.38.0"
+	record := func(t *testing.T, dir, step, ref string) {
+		t.Helper()
+		w, err := outputs.NewRefsWriter(dir, step)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := w.Add(ref); err != nil {
+			t.Fatal(err)
+		}
+	}
+	newManager := func(t *testing.T) *CalicoManager {
+		f := newFakeRunner()
+		f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30\n", nil)
+		f.on("git rev-parse HEAD", "0123456789abcdef0123456789abcdef01234567\n", nil)
+		records := t.TempDir()
+		record(t, records, operator.PublishStep, opRef+"@"+opDigest)
+		return &CalicoManager{
+			runner:           f,
+			githubOrg:        "projectcalico",
+			repo:             "calico",
+			calicoVersion:    "v3.30.0",
+			operatorVersion:  "v1.38.0",
+			operatorImage:    registry.OperatorImage,
+			operatorRegistry: registry.DefaultOperatorRegistry,
+			imageRegistries:  []string{registry.DefaultProductRegistry},
+			outputDir:        t.TempDir(),
+			recordsDir:       records,
+			components: map[string]registry.Component{
+				"node":                 {Image: "node", Version: "v3.30.0"},
+				registry.OperatorImage: {Image: registry.OperatorImage, Version: "v1.38.0"},
+			},
+			resolveDigest: func(string) (string, bool, error) { return "", false, nil },
+		}
+	}
+	build := func(t *testing.T, r *CalicoManager) (outputs.Metadata, error) {
+		t.Helper()
+		dir := t.TempDir()
+		if err := r.BuildMetadata(dir); err != nil {
+			return outputs.Metadata{}, err
+		}
+		b, err := os.ReadFile(filepath.Join(dir, "metadata.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var md outputs.Metadata
+		if err := yaml.Unmarshal(b, &md); err != nil {
+			t.Fatal(err)
+		}
+		return md, nil
+	}
+
+	t.Run("describes each component from the step that published it", func(t *testing.T) {
+		r := newManager(t)
+		record(t, r.recordsDir, images.PublishStep, nodeRef+"@"+nodeDigest)
+		got, err := build(t, r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := map[string]outputs.Component{
+			"node":                 {Version: "v3.30.0", Image: nodeRef, Digest: nodeDigest},
+			registry.OperatorImage: {Version: "v1.38.0", Image: opRef, Digest: opDigest},
+		}
+		if diff := cmp.Diff(want, got.Components); diff != "" {
+			t.Errorf("components (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a release fails on an unpublished image", func(t *testing.T) {
+		if _, err := build(t, newManager(t)); err == nil || !strings.Contains(err.Error(), nodeRef) {
+			t.Errorf("err = %v, want it to name %s", err, nodeRef)
+		}
+	})
+
+	t.Run("a hashrelease leaves an unpublished digest out", func(t *testing.T) {
+		r := newManager(t)
+		r.isHashRelease = true
+		got, err := build(t, r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := (outputs.Component{Version: "v3.30.0", Image: nodeRef}); got.Components["node"] != want {
+			t.Errorf("node = %+v, want %+v", got.Components["node"], want)
+		}
+	})
 }
 
 func TestSourceMetadata(t *testing.T) {

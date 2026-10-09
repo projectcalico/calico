@@ -361,7 +361,6 @@ func (r *CalicoManager) Build() error {
 	return nil
 }
 
-// Each step that ran describes its own section; the manager adds the source.
 func (r *CalicoManager) BuildMetadata(dir string) error {
 	d := outputs.Digests{Resolve: r.digestResolver(), Require: !r.isHashRelease}
 	released := r.releasedComponents()
@@ -369,11 +368,11 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 	delete(released, r.operatorImage)
 	components, err := images.Metadata(r.recordsDir, released, d)
 	if err != nil {
-		return err
+		return fmt.Errorf("images metadata: %w", err)
 	}
 	if hasOperator {
 		if components[r.operatorImage], err = operator.Metadata(r.recordsDir, op, d); err != nil {
-			return err
+			return fmt.Errorf("operator metadata: %w", err)
 		}
 	}
 	charts, err := r.chartsMetadata(d)

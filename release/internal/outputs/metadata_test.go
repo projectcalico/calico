@@ -351,7 +351,7 @@ func TestDescribeComponents(t *testing.T) {
 	})
 
 	t.Run("leaves out the digest of an unpublished image", func(t *testing.T) {
-		got, err := DescribeComponents(none, released, Digests{Resolve: resolveTo("", false, nil)})
+		got, err := DescribeComponents(none, released, Digests{Resolve: resolveTo("sha256:stale", false, nil)})
 		if err != nil {
 			t.Fatal(err)
 		}

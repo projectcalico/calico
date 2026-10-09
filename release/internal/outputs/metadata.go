@@ -261,6 +261,7 @@ func (d Digests) Of(src registry.DigestSource, ref string) (string, error) {
 			return "", fmt.Errorf("%s is not published", ref)
 		}
 		logrus.WithField("image", ref).Warn("Not published, leaving its digest out")
+		return "", nil
 	}
 	return digest, nil
 }
@@ -286,7 +287,6 @@ func DescribeComponents(src registry.DigestSource, released map[string]registry.
 	return out, errors.Join(errs...)
 }
 
-// Name keeps any folders below the uploaded folder, so it is unique in a release.
 type ArtifactFile struct {
 	Name string
 	Path string
