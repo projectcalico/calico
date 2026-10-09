@@ -16,6 +16,7 @@ package polprog
 
 import (
 	"fmt"
+	"math/rand"
 	"strings"
 	"testing"
 
@@ -363,5 +364,138 @@ func TestFormatRuleMatch(t *testing.T) {
 			RegisterTestingT(t)
 			Expect(formatRuleMatch(tc.rule, tc.srcSets, tc.notSrcSets, tc.dstSets, tc.notDstSets)).To(Equal(tc.expected))
 		})
+	}
+}
+
+// TestProgramSplitReachability moves the split point across every rule
+// boundary, including after unconditional jumps.
+func TestProgramSplitReachability(t *testing.T) {
+	RegisterTestingT(t)
+
+	var policy Policy
+	for i := range 20 {
+		policy.Rules = append(policy.Rules, Rule{
+			Rule:    &proto.Rule{Action: "Allow", SrcNet: []string{fmt.Sprintf("10.0.0.%d/32", i)}},
+			MatchID: uint64(i + 1),
+		})
+	}
+	policy.Rules = append(policy.Rules, Rule{Rule: &proto.Rule{Action: "Log"}, MatchID: 100})
+	rules := Rules{
+		Tiers: []Tier{
+			{Name: "pass", Policies: []Policy{{Rules: []Rule{{Rule: &proto.Rule{Action: "Pass"}, MatchID: 101}}}}, EndAction: TierEndDeny},
+			{Name: "default", Policies: []Policy{policy}, EndAction: TierEndDeny},
+		},
+		Profiles: []Profile{
+			{Name: "kns", Rules: []Rule{{Rule: &proto.Rule{Action: "Allow"}, MatchID: 102}}},
+			{Name: "ksa"},
+		},
+	}
+
+	sawUnreachableRest := false
+	for limit := 1; limit < 120; limit++ {
+		pg := NewBuilder(idalloc.New(), 1, 2, 3, 4,
+			WithAllowDenyJumps(666, 777),
+			WithPolicyMapIndexAndStride(15, 1000),
+			WithFlowLogs(),
+		)
+		pg.maxJumpsPerProgram = limit
+		progs, err := pg.Instructions(rules)
+		Expect(err).NotTo(HaveOccurred(), "limit %d", limit)
+		expectValidSubPrograms(progs, 15, 1000, fmt.Sprintf("limit %d", limit))
+		sawUnreachableRest = sawUnreachableRest || pg.restUnreachable
+	}
+	Expect(sawUnreachableRest).To(BeTrue(), "no limit put the split after unconditional code")
+}
+
+// TestProgramSplitRandomPolicies checks random policy shapes, split points and
+// trampoline strides for code the verifier would reject.
+func TestProgramSplitRandomPolicies(t *testing.T) {
+	RegisterTestingT(t)
+
+	r := rand.New(rand.NewSource(1))
+	actions := []string{"Allow", "Deny", "Pass", "Log"}
+	for iter := range 500 {
+		alloc := idalloc.New()
+		setID := func(id string) string {
+			alloc.GetOrAlloc(id)
+			return id
+		}
+		randomRule := func() *proto.Rule {
+			rule := &proto.Rule{Action: actions[r.Intn(len(actions))]}
+			if r.Intn(2) == 0 {
+				rule.Protocol = &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 6}}
+			}
+			if r.Intn(2) == 0 {
+				rule.SrcIpSetIds = []string{setID(fmt.Sprintf("s:%d", r.Intn(1000)))}
+			}
+			if r.Intn(3) == 0 {
+				for range r.Intn(40) {
+					rule.SrcNet = append(rule.SrcNet, fmt.Sprintf("10.%d.0.0/16", r.Intn(255)))
+				}
+			}
+			if r.Intn(3) == 0 {
+				rule.DstIpSetIds = []string{setID(fmt.Sprintf("s:%d", r.Intn(1000)))}
+			}
+			if r.Intn(2) == 0 {
+				for range r.Intn(100) {
+					first := int32(r.Intn(65000))
+					pr := &proto.PortRange{First: first, Last: first + int32(r.Intn(2)*r.Intn(100))}
+					if r.Intn(4) == 0 {
+						rule.NotDstPorts = append(rule.NotDstPorts, pr)
+					} else {
+						rule.DstPorts = append(rule.DstPorts, pr)
+					}
+				}
+				if r.Intn(3) == 0 {
+					rule.DstNamedPortIpSetIds = []string{setID(fmt.Sprintf("n:%d", r.Intn(1000)))}
+				}
+			}
+			return rule
+		}
+
+		var tiers []Tier
+		for ti := range 1 + r.Intn(3) {
+			tier := Tier{Name: fmt.Sprint("tier", ti), EndAction: []TierEndAction{TierEndDeny, TierEndPass}[r.Intn(2)]}
+			for range 1 + r.Intn(10) {
+				var pol Policy
+				for range 1 + r.Intn(10) {
+					pol.Rules = append(pol.Rules, Rule{Rule: randomRule(), MatchID: r.Uint64()})
+				}
+				tier.Policies = append(tier.Policies, pol)
+			}
+			tiers = append(tiers, tier)
+		}
+		rules := Rules{
+			Tiers:    tiers,
+			Profiles: []Profile{{Name: "kns", Rules: []Rule{{Rule: &proto.Rule{Action: "Allow"}}}}},
+		}
+
+		opts := []Option{
+			WithAllowDenyJumps(666, 777),
+			WithPolicyMapIndexAndStride(15, 1000),
+			WithTrampolineStride([]int{asm.TrampolineStrideDefault, 1000 + r.Intn(3000)}[r.Intn(2)]),
+		}
+		if r.Intn(2) == 0 {
+			opts = append(opts, WithFlowLogs())
+		}
+		pg := NewBuilder(alloc, 1, 2, 3, 4, opts...)
+		pg.maxJumpsPerProgram = 20 + r.Intn(1000)
+		progs, err := pg.Instructions(rules)
+		Expect(err).NotTo(HaveOccurred(), "iteration %d", iter)
+		expectValidSubPrograms(progs, 15, 1000, fmt.Sprintf("iteration %d", iter))
+	}
+}
+
+// expectValidSubPrograms checks that no sub-program has unreachable code and
+// that each one tail-calls the next.
+func expectValidSubPrograms(progs []asm.Insns, polMapIdx, stride int, desc string) {
+	for i, p := range progs {
+		ExpectWithOffset(1, asm.UnreachableInsns(p)).To(BeEmpty(), "%s: sub-program %d of %d", desc, i, len(progs))
+		if i == len(progs)-1 {
+			continue
+		}
+		next := int32(SubProgramJumpIdx(polMapIdx, i+1, stride))
+		ExpectWithOffset(1, p).To(ContainElement(asm.MakeInsn(asm.MovImm64, asm.R3, 0, 0, next)),
+			"%s: sub-program %d does not tail-call sub-program %d", desc, i, i+1)
 	}
 }

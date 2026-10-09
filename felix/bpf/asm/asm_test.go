@@ -129,6 +129,61 @@ func TestSkipUnreachable(t *testing.T) {
 	}))
 }
 
+func TestSkipUnreachableReusedLabel(t *testing.T) {
+	RegisterTestingT(t)
+	b := NewBlock(false)
+
+	b.JumpEq64(R1, R2, "exit")
+	b.Jump("end")
+	// Reachable: the JumpEq64 targets it.
+	b.LabelNextInsn("exit")
+	b.Exit()
+	// Reachable: the Jump targets it.
+	b.LabelNextInsn("end")
+	b.Exit()
+	// Unreachable: "exit" was used before but nothing jumps here now.
+	b.LabelNextInsn("exit")
+	b.MovImm64(R0, 2)
+	b.Exit()
+
+	insns, err := b.Assemble()
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(insns).To(Equal(Insns{
+		MakeInsn(JumpEq64, 1, 2, 1, 0),
+		MakeInsn(JumpA, 0, 0, 1, 0),
+		MakeInsn(Exit, 0, 0, 0, 0),
+		MakeInsn(Exit, 0, 0, 0, 0),
+	}))
+}
+
+func TestReusedLabelWithPendingJump(t *testing.T) {
+	RegisterTestingT(t)
+	b := NewBlock(false)
+
+	b.JumpEq64(R1, R2, "target")
+	b.Exit()
+	b.LabelNextInsn("target")
+	b.JumpEq64(R1, R2, "target")
+	b.Exit()
+	// Reachable: the second JumpEq64 targets this placement of the label.
+	Expect(b.HasPendingJumps("target")).To(BeTrue())
+	b.LabelNextInsn("target")
+	Expect(b.HasPendingJumps("target")).To(BeFalse())
+	b.Exit()
+
+	insns, err := b.Assemble()
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(insns).To(Equal(Insns{
+		MakeInsn(JumpEq64, 1, 2, 1, 0),
+		MakeInsn(Exit, 0, 0, 0, 0),
+		MakeInsn(JumpEq64, 1, 2, 1, 0),
+		MakeInsn(Exit, 0, 0, 0, 0),
+		MakeInsn(Exit, 0, 0, 0, 0),
+	}))
+}
+
 func TestLongJump(t *testing.T) {
 	RegisterTestingT(t)
 
@@ -496,4 +551,20 @@ func logSummarisingNoOps(t *testing.T, insns Insns) {
 		}
 		t.Log(fmt.Sprintf("%d:", i), insn)
 	}
+}
+
+func TestUnreachableInsns(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(UnreachableInsns(Insns{
+		MakeInsn(JumpEq64, 1, 2, 2, 0),
+		MakeInsn(LoadImm64, 1, 0, 0, 0),
+		MakeInsn(LoadImm64Pt2, 0, 0, 0, 0),
+		MakeInsn(Call, 0, 0, 0, 12),
+		MakeInsn(JumpA, 0, 0, 1, 0),
+		MakeInsn(MovImm64, 0, 0, 0, 2),
+		MakeInsn(Exit, 0, 0, 0, 0),
+		MakeInsn(MovImm64, 0, 0, 0, 2),
+		MakeInsn(Exit, 0, 0, 0, 0),
+	})).To(Equal([]int{5, 7, 8}))
 }
