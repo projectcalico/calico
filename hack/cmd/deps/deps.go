@@ -1194,26 +1194,8 @@ func generateSemaphoreYamls() {
 		return strings.Compare(templates[i].filename, templates[j].filename) < 0
 	})
 
-	// Next, collect all the CHANGE_IN placeholders and do the heavy-lift
-	// calculation to figure out the dependencies.
-	placeholders := extractChangeInPlaceholders(templates)
-	deps := calculateDeps(placeholders)
-
-	// Resolve the ${CHANGE_IN_WITH_DEPENDENTS(...)} macros now that every plain
-	// CHANGE_IN clause has been resolved: each macro merges the producer's own
-	// spec with the resolved change_in of every block that depends on it.
-	macroDeps, err := calculateDependentMacroDeps(graph, deps)
-	if err != nil {
-		logrus.Fatalf("Failed to calculate CHANGE_IN_WITH_DEPENDENTS dependencies: %v", err)
-	}
-
-	// Build the main file, which is triggered by PRs and uses the calculated
-	// dependencies.
-	mainFile := filepath.Join(semaphoreDir, "semaphore.yml")
-	err = buildSemaphoreYAML(mainFile, templates, globalExtraDeps, deps, macroDeps, graph, false, defaultBranchStanza)
-	if err != nil {
-		logrus.Fatalf("Failed to build semaphore YAML: %v", err)
-	}
+	// The main (push/PR) pipeline, semaphore.yml, is no longer generated: CI
+	// has moved to ArgoCI and it is now a hand-written no-op.
 
 	// Build the scheduled file, which builds all our code, but not slow
 	// third-party builds.
@@ -1382,17 +1364,6 @@ func mustReadFile(path string) []byte {
 		logrus.Fatalf("Failed to read %s: %v", path, err)
 	}
 	return b
-}
-
-func extractChangeInPlaceholders(templates []templateData) set.Set[string] {
-	out := set.New[string]()
-	for _, t := range templates {
-		matches := changeInRe.FindAllStringSubmatch(t.content, -1)
-		for _, m := range matches {
-			out.Add(m[1])
-		}
-	}
-	return out
 }
 
 func validateChangeInClauses(semaphoreDir string) error {
