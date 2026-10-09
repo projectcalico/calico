@@ -29,6 +29,7 @@ defaults:
 
 steps:
   - name: openstack-packages
+    services: [docker]
     requests: {cpu: 2000m, memory: 4Gi}
     env:
       - name: GOOGLE_APPLICATION_CREDENTIALS

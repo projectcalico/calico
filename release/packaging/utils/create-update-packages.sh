@@ -170,7 +170,7 @@ function precheck_dnsmasq {
 function precheck_pub_debs {
     # Check the PPA exists.
     require_repo_name
-    curl -fsSL -I "https://launchpad.net/~project-calico/+archive/ubuntu/${REPO_NAME}" > /dev/null
+    curl -fsSL -I --retry 3 --connect-timeout 30 "https://launchpad.net/~project-calico/+archive/ubuntu/${REPO_NAME}" > /dev/null
     if [[ $? != 0 ]]; then
             cat <<EOF
 
