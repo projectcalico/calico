@@ -52,8 +52,11 @@ build: $(BINDIR)/calico-$(ARCH)
 build-cgo: $(BINDIR)/calico-cgo-$(ARCH)
 build-race: $(BINDIR)/calico-race-$(ARCH)
 
-$(BINDIR)/calico-$(ARCH): $(SRC_FILES)
-	$(call build_binary, ./, $@)
+$(LIBBPF_A):
+	$(MAKE) -C $(REPO_ROOT)/felix libbpf ARCH=$(ARCH)
+
+$(BINDIR)/calico-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
+	$(call build_cgo_binary, ./, $@)
 
 $(BINDIR)/calico-cgo-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 	$(call build_cgo_binary, ./, $@)
