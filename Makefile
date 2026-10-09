@@ -83,6 +83,11 @@ check-mockery-config:
 check-ginkgo-v2:
 	./hack/check-ginkgo-v2.sh
 
+# Exported so the script sees make's fully expanded value.
+check-argoci-image: export GO_BUILD_VER := $(GO_BUILD_VER)
+check-argoci-image:
+	./hack/check-argoci-image.sh
+
 check-ocp-no-crds:
 	@echo "Checking for files in manifests/ocp with CustomResourceDefinitions"
 	@CRD_FILES_IN_OCP_DIR=$$(grep "^kind: CustomResourceDefinition" manifests/ocp/* -l || true); if [ ! -z "$$CRD_FILES_IN_OCP_DIR" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$$CRD_FILES_IN_OCP_DIR"; exit 1; fi
@@ -128,18 +133,33 @@ operator-charts:
 	$(MAKE) -C operator embedded_charts
 
 gen-semaphore-yaml: operator-charts
+ifdef CI_WORKFLOW_NAME
+	@echo "Skipping Semaphore config generation under ArgoCI"
+else
 	$(DOCKER_GO_BUILD) sh -c "DEFAULT_BRANCH_OVERRIDE=$(DEFAULT_BRANCH_OVERRIDE) \
 	                          SEMAPHORE_GIT_BRANCH=$(SEMAPHORE_GIT_BRANCH) \
 	                          RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) \
 	                          go run ./hack/cmd/deps $(DEPS_ARGS) generate-semaphore-yamls"
+endif
 
 GO_DIRS=$(shell ./hack/list-go-sources.sh dirs)
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
+DEPS_SOURCES:=go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./hack/list-go-sources.sh hack/cmd/deps/*
 
+# Regenerated with the deps.txt files, from the same import graph.
+ARGOCI_DEPS_FILE=.argoci/depstree.yaml
+
+# Subpackages a CI lane gates on by themselves, narrower than their component.
+# They get a depstree entry but no deps.txt.
+ARGOCI_DEPS_SUBPACKAGES=felix/nftables test-tools/mocknode
+
+# Each job starts its own go-build container, so it is sized from the CPU a CI
+# step was given where there is one; nproc counts the node's cores instead.
 gen-deps-files: operator-charts
-	$(MAKE) -j$$(nproc) $(DEP_FILES)
+	$(MAKE) -j$(or $(GOMAXPROCS),$$(nproc)) $(DEP_FILES)
+	$(MAKE) $(ARGOCI_DEPS_FILE)
 
-$(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./hack/list-go-sources.sh hack/cmd/deps/*
+$(DEP_FILES): $(DEPS_SOURCES)
 	@{ \
 	  echo "!!! GENERATED FILE, DO NOT EDIT !!!" && \
 	  echo "Run 'make gen-deps-files' to regenerate." && \
@@ -147,6 +167,12 @@ $(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./
 	  grep '^go' go.mod && \
 	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps combined $(patsubst %/,%,$(dir $@))"; \
 	} > $@
+
+# One invocation for every component, since each is a whole-repo `go list` pass.
+# Via a temporary, because a truncated file would silently gate nothing.
+$(ARGOCI_DEPS_FILE): $(DEPS_SOURCES)
+	@$(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps gen-argoci-deps $(GO_DIRS) $(ARGOCI_DEPS_SUBPACKAGES)" > $@.tmp \
+	  && mv $@.tmp $@ || { rm -f $@.tmp; exit 1; }
 
 # The pin file is what onboards a component: one without it is left out,
 # because the generator treats an absent pin file as "no pins" and would delete
@@ -273,6 +299,11 @@ RAPIDCLIENT_TAG := latest
 RAPIDCLIENT_IMAGE := quay.io/tigeradev/rapidclient
 EXTERNAL_NODE_NAME ?= kind-external-node
 
+# Set where the e2e binaries arrive already built: rebuilding them downloads
+# most of Kubernetes, which a host without a module proxy pays for every time.
+E2E_PREBUILT ?=
+E2E_BUILD = $(if $(E2E_PREBUILT),@echo "Using the prebuilt e2e binaries",$(MAKE) -C e2e build)
+
 ## Build all test images, create a kind cluster, and deploy Calico on it.
 .PHONY: kind-up
 kind-up:
@@ -287,12 +318,13 @@ kind-migration-test:
 	KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 $(MAKE) kind-up
 	$(REPO_ROOT)/hack/test/kind/migration/run_test.sh
 
-## Create a kind cluster, install Calico from the generated manifests, and run
-## the datapath and policy conformance specs against it. Every other kind lane
-## installs via the operator.
+## Create a kind cluster, install Calico from the generated manifests, run the
+## datapath and policy conformance specs against it, then upgrade the cluster to
+## the operator and run them again. Every other kind lane installs via the
+## operator from the start.
 .PHONY: kind-manifest-install-test
 kind-manifest-install-test:
-	$(MAKE) -C e2e build
+	$(E2E_BUILD)
 	$(MAKE) -j$(NUM_BUILD_JOBS) kind-build-images
 	$(MAKE) kind-cluster-create KIND_CONFIG=$(KIND_DIR)/kind-manifests.config CALICO_API_GROUP=projectcalico.org/v3
 	REPO_ROOT=$(REPO_ROOT) KIND=$(KIND) KIND_NAME=kind-manifests \
@@ -303,10 +335,19 @@ kind-manifest-install-test:
 		KUBECONFIG=$(KIND_DIR)/kind-manifests-kubeconfig.yaml \
 		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind/manifest-install.yaml \
 		E2E_JUNIT_REPORT=e2e_manifest_install.xml
+	$(MAKE) -C $(REPO_ROOT) chart CALICO_API_GROUP=projectcalico.org/v3
+	REPO_ROOT=$(REPO_ROOT) GIT_VERSION=$(GIT_VERSION) \
+		KUBECONFIG=$(KIND_DIR)/kind-manifests-kubeconfig.yaml \
+		$(REPO_ROOT)/hack/test/kind/upgrade_to_operator.sh
+	$(MAKE) e2e-run \
+		KIND_NAME=kind-manifests \
+		KUBECONFIG=$(KIND_DIR)/kind-manifests-kubeconfig.yaml \
+		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind/manifest-install.yaml \
+		E2E_JUNIT_REPORT=e2e_operator_upgrade.xml
 
 ## Create a kind cluster and run the conformance e2e tests.
 e2e-test:
-	$(MAKE) -C e2e build
+	$(E2E_BUILD)
 	$(MAKE) kind-up
 	$(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
 
@@ -316,7 +357,7 @@ e2e-test:
 ## ipvs kube-proxy) while keeping the cluster named "kind" so values.yaml's
 ## control-plane nodeSelector still matches.
 e2e-test-bpf:
-	$(MAKE) -C e2e build
+	$(E2E_BUILD)
 	$(MAKE) kind-up KIND_NAME=kind KIND_CONFIG=$(KIND_DIR)/kind-bpf.config EXTRA_VALUES_FILES=$(KIND_INFRA_DIR)/values-bpf.yaml
 	$(MAKE) kind-load-rapidclient KIND_NAME=kind
 	$(KIND_DIR)/external-node.sh up
@@ -353,7 +394,7 @@ external-node-load-rapidclient:
 
 ## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
 e2e-test-clusternetworkpolicy:
-	$(MAKE) -C e2e build
+	$(E2E_BUILD)
 	$(MAKE) kind-up
 	$(MAKE) e2e-run-cnp KUBECONFIG=$(KIND_KUBECONFIG)
 
@@ -362,17 +403,36 @@ e2e-test-clusternetworkpolicy:
 ## Selection comes from E2E_TEST_CONFIG. E2E_GINKGO_ARGS passes extra ginkgo flags for
 ## an ad-hoc local run; it expands in the shell so its regex metacharacters survive.
 ## --fail-on-empty fails a run that selects no specs instead of passing it.
-e2e-run:
+## OpenShift keeps the legacy master taint on control-plane nodes, which otherwise blocks startup.
+#
+# In CI, keep a failed suite's namespaces for the diagnostics collected after;
+# locally they would just be left behind.
+ifdef CI
+E2E_KEEP_FAILED := --delete-namespace-on-failure=false
+CNP_KEEP_FAILED := -cleanup-base-resources=false
+endif
+
+e2e-run: bin/ginkgo
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
 	mkdir -p $(E2E_OUTPUT_DIR)
-	KUBECONFIG=$(KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- $${E2E_GINKGO_ARGS} $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
+	KUBECONFIG=$(KUBECONFIG) ./bin/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --non-blocking-taints=node-role.kubernetes.io/control-plane,node-role.kubernetes.io/master $${E2E_GINKGO_ARGS} $(E2E_KEEP_FAILED) $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
+
+# Version from go.mod. Built with whichever of Go and docker the host has: the
+# kind lanes have only docker, the remote-cluster lanes only Go.
+bin/ginkgo: go.mod
+	mkdir -p bin
+	@if command -v go >/dev/null 2>&1; then \
+	    set -x; CGO_ENABLED=0 go build -o $@ github.com/onsi/ginkgo/v2/ginkgo; \
+	else \
+	    set -x; $(DOCKER_GO_BUILD) sh -c "CGO_ENABLED=0 go build -o $@ github.com/onsi/ginkgo/v2/ginkgo"; \
+	fi
 
 ## Run the ClusterNetworkPolicy specific e2e tests against the cluster at $KUBECONFIG.
 e2e-run-cnp:
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run-cnp: KUBECONFIG must be set"; exit 1; fi
 	KUBECONFIG=$(KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test \
 	  -exempt-features=$(K8S_NETPOL_UNSUPPORTED_FEATURES) \
-	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
+	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES) $(CNP_KEEP_FAILED)
 
 ###############################################################################
 # Gateway API conformance

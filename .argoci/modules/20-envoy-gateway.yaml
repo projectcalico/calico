@@ -1,0 +1,31 @@
+# envoy-gateway CI and cross-architecture builds.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+
+steps:
+  - name: envoy-gateway-ci
+    requests: {cpu: 3750m, memory: 3.5Gi}
+    services:
+      - docker
+    commands: |
+      cd third_party/envoy-gateway
+      make ci
+
+  # Cross-compiles only, so it needs no daemon.
+  - name: envoy-gateway-build
+    requests: {cpu: 5250m, memory: 4.5Gi}
+    useGoBuild: true
+    workspaceVolumes: none
+    matrix:
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    commands: |
+      cd third_party/envoy-gateway
+      # Empty wrappers run each recipe here rather than in a nested container.
+      make build ARCH=$ARCH DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=

@@ -1,0 +1,92 @@
+# Kubernetes e2e suites on a kind cluster, one lane per routing mode and suite.
+# On a VM because the suites exercise SCTP, which the pod nodes' image lacks.
+version: condensed-module
+
+defaults:
+  # Longer than the default hour: a cluster plus a conformance suite.
+  timeout: 1h30m
+  runOn: vm
+  services:
+    - docker
+
+steps:
+  - name: e2e-kind
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    vm:
+      # Hyperdisk needs a third-generation family.
+      machineType: c3-standard-8
+      # The artifact store's region, in any zone: c3 capacity runs out zone by
+      # zone.
+      zone: us-central1
+      # kind wants tens of thousands of IOPS, which pd-ssd only reaches at about
+      # a terabyte.
+      diskType: hyperdisk-balanced
+      diskSize: 200GB
+      provisionedIops: 10000
+      provisionedThroughput: 200
+    depends:
+      - build-calico-image
+      - build-node-image
+      - build-whisker-image
+      - build-operator-image
+      - build-third-party-images
+      - build-e2e-binaries
+      - check-go
+    matrix:
+      # Pinned rather than defaulted: from v3.33 the default gives Felix the
+      # IPIP routes, and these tests need BGP to be the only routing mechanism.
+      - name: conformance-bird
+        env:
+          - name: E2E_TARGET
+            value: e2e-test
+          - name: EXTRA_VALUES_FILES
+            value: hack/test/kind/infra/values-bird-routing.yaml
+      - name: conformance-felix
+        env:
+          - name: E2E_TARGET
+            value: e2e-test
+          - name: EXTRA_VALUES_FILES
+            value: hack/test/kind/infra/values-felix-routing.yaml
+          - name: KIND_CALICO_API_GROUP
+            value: crd.projectcalico.org/v1
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/kind/felix-routing.yaml
+      - name: clusternetworkpolicy-felix
+        env:
+          - name: E2E_TARGET
+            value: e2e-test-clusternetworkpolicy
+          - name: EXTRA_VALUES_FILES
+            value: hack/test/kind/infra/values-felix-routing.yaml
+          - name: KIND_CALICO_API_GROUP
+            value: projectcalico.org/v3
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/kind/felix-routing.yaml
+      - name: sig-calico-bpf
+        env:
+          - name: E2E_TARGET
+            value: e2e-test-bpf
+    commands: |
+      sudo apt-get update -y && sudo apt-get install -y make
+      sudo modprobe sctp
+      # The Makefiles call the kubectl they download by full path; the deploy
+      # script and the tests' connection tester call it by name.
+      export PATH="$(pwd)/hack/test/kind:${PATH}"
+      .argoci/scripts/load-cached-images calico node whisker
+      .argoci/scripts/load-e2e-binaries
+      export E2E_PREBUILT=true
+      make ${E2E_TARGET}
+    epilogue: |
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/report" report || true
+      artifact push job report --destination test-results || true
+      if [ "$CI_STEP_EXIT_CODE" != 0 ]; then
+        # Collected where the cluster is; the script pushes its own bundle.
+        sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && .semaphore/collect-kind-diags' || true
+        # The snapshot tool is only in the CI image, and the VM has no registry
+        # credentials of its own.
+        sshOnVirtualMachine 'docker login -u _json_key --password-stdin https://gcr.io < "${CI_ARTIFACT_SA_KEY_FILE}"' || true
+        sshOnVirtualMachine 'cd "${CI_HOME}/${CI_GIT_DIR}" && docker run --rm --network host -v "$PWD:/w" -w /w gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2 kubectl-snapshot create --kubeconfig hack/test/kind/kind-kubeconfig.yaml -o kind-snapshot.tar.gz' || true
+        copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/kind-snapshot.tar.gz" kind-snapshot.tar.gz || true
+        artifact push job kind-snapshot.tar.gz --destination kind-snapshot.tar.gz || true
+      fi

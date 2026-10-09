@@ -24,6 +24,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -72,6 +73,37 @@ func Publish(o Operator, variants []Variant, hashrelease bool, opts ...PublishOp
 		// Recorded even when the push failed, so a resume knows what landed.
 		return errors.Join(s.run(publishTarget, v, hashrelease, env), s.record(v))
 	})
+}
+
+// Resolve records an operator an earlier run published. Only the first
+// registry must hold each variant's release tag.
+func Resolve(o Operator, variants []Variant, opts ...ResolveOption) error {
+	s, err := newSettings(ResolveStep, o, validateResolve, opts)
+	if err != nil {
+		return err
+	}
+	if s.resolve == nil {
+		s.resolve = registry.ResolveDigest
+	}
+	var refs, missing []string
+	var errs []error
+	for _, v := range variants {
+		found, absent, err := s.lookup(v)
+		refs = append(refs, found...)
+		errs = append(errs, err)
+		if release := s.tags(v)[0].ref(); slices.Contains(absent, release) {
+			missing = append(missing, release)
+		}
+	}
+	if s.refs != nil {
+		if err := s.refs.Add(refs...); err != nil {
+			errs = append(errs, s.Errorf("recording operator images: %w", err))
+		}
+	}
+	if len(missing) > 0 {
+		errs = append(errs, s.Errorf("%w", &images.MissingError{Images: missing}))
+	}
+	return errors.Join(errs...)
 }
 
 func PublishBranchTag(o Operator, variants []Variant, branch string, opts ...PublishOption) error {
@@ -190,24 +222,29 @@ func (s settings) record(v Variant) error {
 	if s.refs == nil {
 		return nil
 	}
-	var refs []string
+	refs, _, err := s.lookup(v)
+	if addErr := s.refs.Add(refs...); addErr != nil {
+		err = errors.Join(err, s.Errorf("recording %s: %w", v.Name, addErr))
+	}
+	return err
+}
+
+func (s settings) lookup(v Variant) (refs, absent []string, err error) {
 	var errs []error
 	for _, t := range s.tags(v) {
 		digest, exists, err := s.resolve(t.ref())
 		if err != nil {
-			errs = append(errs, s.Errorf("recording %s: %w", t.ref(), err))
+			errs = append(errs, s.Errorf("resolving %s: %w", t.ref(), err))
 			continue
 		}
 		if !exists {
-			s.Logger().WithField("image", t.ref()).Debug("Published tag absent, not recording")
+			s.Logger().WithField("image", t.ref()).Debug("Tag absent, not recording")
+			absent = append(absent, t.ref())
 			continue
 		}
 		refs = append(refs, t.repo+"@"+digest)
 	}
-	if err := s.refs.Add(refs...); err != nil {
-		errs = append(errs, s.Errorf("recording %s: %w", v.Name, err))
-	}
-	return errors.Join(errs...)
+	return refs, absent, errors.Join(errs...)
 }
 
 func (s settings) published(v Variant, recorded steps.RecordedDigests) (bool, error) {
@@ -297,6 +334,8 @@ func applyTo(opt any, s *settings) error {
 		return o.applyBuild(s)
 	case PublishOption:
 		return o.applyPublish(s)
+	case ResolveOption:
+		return o.applyResolve(s)
 	default:
 		return fmt.Errorf("unknown option type %T", opt)
 	}

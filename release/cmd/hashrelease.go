@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 
@@ -245,14 +246,13 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 			}
 		}
 
-		// Push the operator hashrelease first before validation.
-		// This is because validation checks all images exists and sends to Image Scan Service
 		o := pinnedOperator(cfg, c, hashrel.Operator, hashrel.ProductVersion)
 		if c.Bool(operatorFlagName) {
 			opts, err := operatorPublishOptions(c, o.Version, hashrel.Source, filepath.Join(cfg.LogsDir, hashrel.ProductVersion))
 			if err != nil {
 				return fmt.Errorf("operator publish options: %w", err)
 			}
+			// Before PublishRelease: its scan sends the operator to ISS.
 			if err := operator.Publish(o, operatorVariants(c), true, opts...); err != nil {
 				return fmt.Errorf("operator publish: %w", err)
 			}
@@ -351,7 +351,8 @@ var validateHashreleaseBuildFlags = func(c *cli.Command) error {
 			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s is set",
 				hashreleaseServerBucketFlag.Name)
 		}
-		if c.String(ciTokenFlag.Name) == "" {
+		// Only the image promotions check reads it, and that is Semaphore's alone.
+		if c.String(ciTokenFlag.Name) == "" && os.Getenv("CI_WORKFLOW_NAME") == "" {
 			return fmt.Errorf("%s API token must be set when running on CI, either set \"SEMAPHORE_API_TOKEN\" or use %s flag", semaphoreCI, ciTokenFlag.Name)
 		}
 	} else {
@@ -408,12 +409,14 @@ var validateHashreleasePublishFlags = func(c *cli.Command) error {
 	return nil
 }
 
-// ciJobURL returns the URL to the CI job if the command is running on CI.
+// ciJobURL returns the URL to the CI job if the command is running on CI. An
+// unidentified job loses the link, not the announcement.
 func ciJobURL(c *cli.Command) string {
-	if !c.Bool(ciFlag.Name) {
+	orgURL, jobID := c.String(ciBaseURLFlag.Name), c.String(ciJobIDFlag.Name)
+	if !c.Bool(ciFlag.Name) || orgURL == "" || jobID == "" {
 		return ""
 	}
-	return fmt.Sprintf("%s/jobs/%s", c.String(ciBaseURLFlag.Name), c.String(ciJobIDFlag.Name))
+	return fmt.Sprintf("%s/jobs/%s", orgURL, jobID)
 }
 
 func hashreleaseServerConfig(c *cli.Command) *hashreleaseserver.Config {
@@ -434,6 +437,10 @@ func validateCIBuildRequirements(c *cli.Command, repoRootDir string) error {
 	if !c.Bool(ciFlag.Name) {
 		return nil
 	}
+	if os.Getenv("CI_WORKFLOW_NAME") != "" {
+		logrus.Info("Not running on Semaphore, skipping images promotions check...")
+		return nil
+	}
 	if c.Bool(imagesFlagName) {
 		logrus.Info("Building images in hashrelease, skipping images promotions check...")
 		return nil
@@ -441,6 +448,9 @@ func validateCIBuildRequirements(c *cli.Command, repoRootDir string) error {
 	orgURL := c.String(ciBaseURLFlag.Name)
 	token := c.String(ciTokenFlag.Name)
 	pipelineID := c.String(ciPipelineIDFlag.Name)
+	if orgURL == "" || pipelineID == "" {
+		return fmt.Errorf("checking image promotions requires --%s and --%s", ciBaseURLFlag.Name, ciPipelineIDFlag.Name)
+	}
 	promotionsDone, err := ci.EvaluateImagePromotions(repoRootDir, orgURL, pipelineID, token)
 	if err != nil {
 		return err

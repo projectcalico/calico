@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -46,6 +47,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/jump"
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
@@ -76,6 +78,7 @@ type mockDataplane struct {
 	lastProgID           int
 	progs                map[string]int
 	numAttaches          map[string]int
+	attachedGlobals      map[string]libbpf.TcGlobalData
 	policy               map[string]polprog.Rules
 	routes               map[ip.CIDR]struct{}
 	netlinkShim          netlinkshim.Interface
@@ -85,11 +88,14 @@ type mockDataplane struct {
 	// i.e. the interfaces a previous Felix left netkit-attached.
 	netkitPins map[string]bool
 
-	ensureStartedFn        func()
-	ensureQdiscFn          func(string) (bool, error)
-	interfaceByIndexFn     func(ifindex int) (*net.Interface, error)
-	ensureProgramLoadedFn  func(ap attachPoint, ipFamily proto.IPVersion) error
-	ensureProgramLoadedErr error // if set, ensureProgramLoaded returns this error
+	ensureStartedFn         func()
+	ensureQdiscFn           func(string) (bool, error)
+	queryClassifierFn       func(ifaceName, tcHook string) bool
+	ensureProgramLayoutFn   func(ap *tc.AttachPoint, ipFamily proto.IPVersion) error
+	ensureProgramAttachedFn func(ap attachPoint) error
+	interfaceByIndexFn      func(ifindex int) (*net.Interface, error)
+	ensureProgramLoadedFn   func(ap attachPoint, ipFamily proto.IPVersion) error
+	ensureProgramLoadedErr  error // if set, ensureProgramLoaded returns this error
 
 	jitHarden             bool
 	finalTrampolineStride int
@@ -103,13 +109,14 @@ func newMockDataplane() *mockDataplane {
 		log.Panicf("failed to create mock netlink dp %v", err)
 	}
 	return &mockDataplane{
-		lastProgID:  5,
-		progs:       map[string]int{},
-		numAttaches: map[string]int{},
-		policy:      map[string]polprog.Rules{},
-		routes:      map[ip.CIDR]struct{}{},
-		netlinkShim: netlinkShim,
-		netkitPins:  map[string]bool{},
+		lastProgID:      5,
+		progs:           map[string]int{},
+		numAttaches:     map[string]int{},
+		attachedGlobals: map[string]libbpf.TcGlobalData{},
+		policy:          map[string]polprog.Rules{},
+		routes:          map[ip.CIDR]struct{}{},
+		netlinkShim:     netlinkShim,
+		netkitPins:      map[string]bool{},
 	}
 }
 
@@ -143,18 +150,32 @@ func (m *mockDataplane) loadDefaultPolicies(hk hook.Hook) error {
 func (m *mockDataplane) ensureProgramAttached(ap attachPoint) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+	if m.ensureProgramAttachedFn != nil {
+		if err := m.ensureProgramAttachedFn(ap); err != nil {
+			return err
+		}
+	}
 	key := ap.IfaceName() + ":" + ap.HookName().String()
 	m.numAttaches[key] = m.numAttaches[key] + 1
+	if aptc, ok := ap.(*tc.AttachPoint); ok {
+		m.attachedGlobals[key] = *aptc.Configure()
+	}
 	return nil
 }
 
 func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
+	// The hook runs unlocked so that it can call ensureProgramLoadedDefault; a
+	// hook that touches shared state must take m.mutex itself. Loads for the
+	// XDP, ingress and egress hooks run in parallel.
 	if m.ensureProgramLoadedFn != nil {
 		return m.ensureProgramLoadedFn(ap, ipFamily)
 	}
+	return m.ensureProgramLoadedDefault(ap, ipFamily)
+}
+
+func (m *mockDataplane) ensureProgramLoadedDefault(ap attachPoint, ipFamily proto.IPVersion) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
 	if m.ensureProgramLoadedErr != nil {
 		return m.ensureProgramLoadedErr
@@ -173,6 +194,13 @@ func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVer
 	}
 	m.lastProgID += 1
 	m.progs[key] = m.lastProgID
+	return nil
+}
+
+func (m *mockDataplane) ensureProgramLayout(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
+	if m.ensureProgramLayoutFn != nil {
+		return m.ensureProgramLayoutFn(ap, ipFamily)
+	}
 	return nil
 }
 
@@ -370,6 +398,9 @@ func (m *mockDataplane) ruleMatchID(dir rules.RuleDir, action string, owner rule
 }
 
 func (m *mockDataplane) queryClassifier(ifaceName, tcHook string) bool {
+	if m.queryClassifierFn != nil {
+		return m.queryClassifierFn(ifaceName, tcHook)
+	}
 	return true
 }
 
@@ -1336,6 +1367,231 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 	})
 
+	It("should re-attach the preamble when a family that failed to load recovers", func() {
+		newBpfEpMgr(true)
+		// A qdisc that already exists keeps the workload ready across passes.
+		dp.ensureQdiscFn = func(string) (bool, error) { return true, nil }
+		setLayout := func(ap *tc.AttachPoint, ipFamily proto.IPVersion) {
+			if ipFamily == proto.IPVersion_IPV6 {
+				ap.HookLayoutV6 = hook.Layout{hook.SubProgTCMain: 61}
+			} else {
+				ap.HookLayoutV4 = hook.Layout{hook.SubProgTCMain: 41}
+			}
+		}
+		v6Fails := true
+		// Ingress and egress load in parallel.
+		var v4Loads, v6Loads atomic.Int32
+		dp.ensureProgramLoadedFn = func(ap attachPoint, ipFamily proto.IPVersion) error {
+			if ipFamily == proto.IPVersion_IPV6 {
+				v6Loads.Add(1)
+				if v6Fails {
+					return errors.New("injected v6 load failure")
+				}
+			} else {
+				v4Loads.Add(1)
+			}
+			setLayout(ap.(*tc.AttachPoint), ipFamily)
+			return nil
+		}
+		dp.ensureProgramLayoutFn = func(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
+			setLayout(ap, ipFamily)
+			return nil
+		}
+
+		bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+			Id: &proto.WorkloadEndpointID{
+				OrchestratorId: "k8s",
+				WorkloadId:     "cali12345",
+				EndpointId:     "cali12345",
+			},
+			Endpoint: &proto.WorkloadEndpoint{Name: "cali12345"},
+		})
+		genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+		attaches := dp.numOfAttaches("cali12345:ingress")
+		loadsV4 := v4Loads.Load()
+		Expect(v6Loads.Load()).NotTo(BeZero())
+
+		// Only the failing family retries.
+		_ = bpfEpMgr.CompleteDeferredWork()
+		retried := v6Loads.Load()
+		Expect(v4Loads.Load()).To(Equal(loadsV4))
+		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(attaches))
+
+		v6Fails = false
+		_ = bpfEpMgr.CompleteDeferredWork()
+		Expect(v6Loads.Load()).To(BeNumerically(">", retried))
+		// Loading would reset the ready family's policy to the default one.
+		Expect(v4Loads.Load()).To(Equal(loadsV4))
+		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(attaches + 1))
+		Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(attaches + 1))
+		for _, key := range []string{"cali12345:ingress", "cali12345:egress"} {
+			g := dp.attachedGlobals[key]
+			Expect(g.Jumps[tcdefs.ProgIndexMain]).To(Equal(uint32(41)), key)
+			Expect(g.JumpsV6[tcdefs.ProgIndexMain]).To(Equal(uint32(61)), key)
+			Expect(g.Jumps[tcdefs.ProgIndexPolicy]).NotTo(Equal(uint32(0xffffffff)), key)
+			Expect(g.JumpsV6[tcdefs.ProgIndexPolicy]).NotTo(Equal(uint32(0xffffffff)), key)
+		}
+	})
+
+	It("should repair a hook whose preamble attach failed even if its globals revert", func() {
+		newBpfEpMgr(true)
+		// A qdisc that already exists keeps the workload ready across passes.
+		dp.ensureQdiscFn = func(string) (bool, error) { return true, nil }
+		sendWEP := func(ep *proto.WorkloadEndpoint) {
+			ep.Name = "cali12345"
+			bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+				Id: &proto.WorkloadEndpointID{
+					OrchestratorId: "k8s",
+					WorkloadId:     ep.Name,
+					EndpointId:     ep.Name,
+				},
+				Endpoint: ep,
+			})
+			_ = bpfEpMgr.CompleteDeferredWork()
+		}
+		sendWEP(&proto.WorkloadEndpoint{})
+		genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(1))
+		Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(1))
+
+		dp.ensureProgramAttachedFn = func(ap attachPoint) error {
+			if ap.HookName() == hook.Egress {
+				return errors.New("injected egress attach failure")
+			}
+			return nil
+		}
+		sendWEP(&proto.WorkloadEndpoint{QosPolicies: []*proto.QoSPolicy{{Dscp: 10}}})
+		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(2))
+		Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(1))
+
+		// Reverting the globals must still repair the hook left on the new ones.
+		dp.ensureProgramAttachedFn = nil
+		sendWEP(&proto.WorkloadEndpoint{})
+		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(3))
+		Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(2))
+		Expect(dp.attachedGlobals["cali12345:ingress"].DSCP).To(Equal(int8(-1)))
+		Expect(dp.attachedGlobals["cali12345:egress"].DSCP).To(Equal(int8(-1)))
+	})
+
+	// Per-workload globals reach the dataplane only when the preamble is
+	// attached, so a ready workload must be re-attached when one changes.
+	DescribeTable("should re-attach a ready workload when a preamble global changes",
+		func(changed *proto.WorkloadEndpoint) {
+			newBpfEpMgr(true)
+			// A qdisc that already exists keeps the workload ready across passes.
+			dp.ensureQdiscFn = func(string) (bool, error) { return true, nil }
+			sendWEP := func(ep *proto.WorkloadEndpoint) {
+				ep.Name = "cali12345"
+				bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+					Id: &proto.WorkloadEndpointID{
+						OrchestratorId: "k8s",
+						WorkloadId:     ep.Name,
+						EndpointId:     ep.Name,
+					},
+					Endpoint: ep,
+				})
+				Expect(bpfEpMgr.CompleteDeferredWork()).To(Succeed())
+			}
+			expectAttaches := func(n int) {
+				ExpectWithOffset(1, dp.numOfAttaches("cali12345:ingress")).To(Equal(n))
+				ExpectWithOffset(1, dp.numOfAttaches("cali12345:egress")).To(Equal(n))
+			}
+
+			sendWEP(&proto.WorkloadEndpoint{})
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			expectAttaches(1)
+
+			sendWEP(&proto.WorkloadEndpoint{})
+			expectAttaches(1)
+
+			sendWEP(changed)
+			expectAttaches(2)
+
+			sendWEP(googleproto.Clone(changed).(*proto.WorkloadEndpoint))
+			expectAttaches(2)
+		},
+		Entry("ingress packet rate", &proto.WorkloadEndpoint{
+			QosControls: &proto.QoSControls{IngressPacketRate: 100, IngressPacketBurst: 10},
+		}),
+		Entry("egress connection limit", &proto.WorkloadEndpoint{
+			QosControls: &proto.QoSControls{EgressMaxConnections: 5},
+		}),
+		Entry("DSCP", &proto.WorkloadEndpoint{
+			QosPolicies: []*proto.QoSPolicy{{Dscp: 10}},
+		}),
+		Entry("istio ambient", &proto.WorkloadEndpoint{IsIstioAmbient: true}),
+	)
+
+	It("should keep the preamble and reload a ready family whose layout lookup fails", func() {
+		newBpfEpMgr(true)
+		// A qdisc that already exists keeps the workload ready across passes.
+		dp.ensureQdiscFn = func(string) (bool, error) { return true, nil }
+		// Ingress and egress load in parallel.
+		var v6Loads atomic.Int32
+		dp.ensureProgramLoadedFn = func(ap attachPoint, ipFamily proto.IPVersion) error {
+			if ipFamily == proto.IPVersion_IPV6 {
+				v6Loads.Add(1)
+			}
+			return nil
+		}
+		bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+			Id: &proto.WorkloadEndpointID{
+				OrchestratorId: "k8s",
+				WorkloadId:     "cali12345",
+				EndpointId:     "cali12345",
+			},
+			Endpoint: &proto.WorkloadEndpoint{Name: "cali12345"},
+		})
+		genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(1))
+		loadsV6 := v6Loads.Load()
+
+		dp.ensureProgramLayoutFn = func(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
+			if ipFamily == proto.IPVersion_IPV6 {
+				return errors.New("injected layout lookup failure")
+			}
+			return nil
+		}
+		bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345", State: ifacemonitor.StateUp, Index: 15})
+		_ = bpfEpMgr.CompleteDeferredWork()
+		Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(1))
+		Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(1))
+
+		dp.ensureProgramLayoutFn = nil
+		Expect(bpfEpMgr.CompleteDeferredWork()).To(Succeed())
+		Expect(v6Loads.Load()).To(BeNumerically(">", loadsV6))
+	})
+
+	DescribeTable("should re-attach a ready workload whose preamble the kernel may have lost",
+		func(lose func()) {
+			newBpfEpMgr(true)
+			// A qdisc that already exists keeps the workload ready across passes.
+			dp.ensureQdiscFn = func(string) (bool, error) { return true, nil }
+			bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+				Id: &proto.WorkloadEndpointID{
+					OrchestratorId: "k8s",
+					WorkloadId:     "cali12345",
+					EndpointId:     "cali12345",
+				},
+				Endpoint: &proto.WorkloadEndpoint{Name: "cali12345"},
+			})
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(1))
+
+			lose()
+			bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345", State: ifacemonitor.StateUp, Index: 15})
+			Expect(bpfEpMgr.CompleteDeferredWork()).To(Succeed())
+			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(2))
+			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(2))
+		},
+		Entry("qdisc missing", func() {
+			dp.ensureQdiscFn = func(string) (bool, error) { return false, nil }
+		}),
+		Entry("classifier missing", func() {
+			dp.queryClassifierFn = func(string, string) bool { return false }
+		}),
+	)
+
 	Context("with workload endpoints", func() {
 		JustBeforeEach(func() {
 			newBpfEpMgr(true)
@@ -1574,7 +1830,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			err = dp.createIface("wg0", 11, "wireguard")
 			Expect(err).NotTo(HaveOccurred())
 
-			dataIfacePattern = "^eth|bond|vxlan|wg*"
+			err = dp.createIface("tunl0", 15, "ipip")
+			Expect(err).NotTo(HaveOccurred())
+
+			dataIfacePattern = "^eth|bond|vxlan|wg*|tunl0"
 			newBpfEpMgr(false)
 		})
 		It("should detect the correct type of iface", func() {
@@ -1589,6 +1848,33 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(dp.programAttached("wg0:ingress")).To(BeTrue())
 			Expect(dp.programAttached("wg0:egress")).To(BeTrue())
 			checkIfState(11, "wg0", ifstate.FlgIPv4Ready|ifstate.FlgWireguard)
+		})
+
+		It("should attach the l3 program to an L3 IPIP device", func() {
+			features := *bpfEpMgr.features
+			features.IPIPDeviceIsL3 = true
+			bpfEpMgr.features = &features
+
+			genIfaceUpdate("tunl0", ifacemonitor.StateUp, 15)()
+
+			Expect(dp.programAttached("tunl0:ingress")).To(BeTrue())
+			Expect(dp.programAttached("tunl0:egress")).To(BeTrue())
+			Expect(bpfEpMgr.permanentBPFErr).To(BeNil())
+			checkIfState(15, "tunl0", ifstate.FlgIPv4Ready|ifstate.FlgIPIP)
+		})
+
+		It("should refuse an IPIP device that is not L3", func() {
+			features := *bpfEpMgr.features
+			features.IPIPDeviceIsL3 = false
+			bpfEpMgr.features = &features
+
+			genIfaceUpdate("tunl0", ifacemonitor.StateUp, 15)()
+
+			Expect(dp.programAttached("tunl0:ingress")).To(BeFalse())
+			Expect(dp.programAttached("tunl0:egress")).To(BeFalse())
+			Expect(bpfEpMgr.permanentBPFErr).To(MatchError(errIPIPDeviceNotL3))
+			Expect(bpfEpMgr.dirtyIfaceNames.Contains("tunl0")).To(BeFalse(),
+				"a permanent failure must not be retried")
 		})
 
 		It("should attach to iface even if netlink fails", func() {
@@ -3650,21 +3936,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 						bpfEpMgr.recordSkippedOptional([]hook.OptionalSubProgInfo{*info})
 					}
 				}
-
-				if apxdp, ok := ap.(*xdp.AttachPoint); ok {
-					apxdp.HookLayoutV4 = hook.Layout{
-						hook.SubProgXDPAllowed: 123,
-						hook.SubProgXDPDrop:    456,
-					}
-				}
-
-				key := ap.IfaceName() + ":" + ap.HookName().String()
-				if _, exists := dp.progs[key]; exists {
-					return nil
-				}
-				dp.lastProgID += 1
-				dp.progs[key] = dp.lastProgID
-				return nil
+				return dp.ensureProgramLoadedDefault(ap, ipFamily)
 			}
 		})
 

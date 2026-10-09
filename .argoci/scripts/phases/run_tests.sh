@@ -22,10 +22,13 @@ for _var in BZ_LOCAL_DIR BZ_LOGS_DIR HOME REPORT_DIR TEST_TYPE; do
 done
 
 if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
-  # Per-PR CI: build the e2e binary from the local source tree.
-  echo "[INFO] building e2e binary from local source..."
   pushd "${CI_HOME}/${CI_GIT_DIR}" || exit
-  make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-build.log.gz")
+  if [[ -n "${E2E_PREBUILT:-}" ]]; then
+    echo "[INFO] using the prebuilt e2e binary"
+  else
+    echo "[INFO] building e2e binary from local source..."
+    make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-build.log.gz")
+  fi
   E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test
   popd || exit
 elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then

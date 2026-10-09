@@ -63,6 +63,18 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 			}
 			body(wrappedFactory)
 
+			// JustAfterEach runs before every AfterEach, so this dumps diags before a test's own teardown stops Felix.
+			ginkgo.JustAfterEach(func() {
+				if !ginkgo.CurrentSpecReport().Failed() {
+					return
+				}
+				for _, inf := range currentInfra {
+					if inf != nil {
+						inf.DumpErrorData()
+					}
+				}
+			})
+
 			ginkgo.AfterEach(func() {
 				// Always stop the infra after each test (collects diags on failure and cleans up).
 				logrus.WithField("test", ginkgo.CurrentSpecReport().FullText).Info("DatastoreDescribe AfterEach: stopping infrastructure.")

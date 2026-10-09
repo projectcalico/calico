@@ -1,0 +1,10 @@
+# Fails when a manifest references an image tag that was never published.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+
+steps:
+  - name: check-images
+    commands: |
+      make check-images-availability
