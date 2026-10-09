@@ -124,11 +124,6 @@ var _ = infrastructure.DatastoreDescribe(
 				infrastructure.ExtClientOpts{Image: utils.Config.FelixImage, IPv6Enabled: true})
 		})
 
-		AfterEach(func() {
-			tc.Stop()
-			infra.Stop()
-		})
-
 		// A workload whose IP lives in the host subnet must be reachable from an
 		// L2-adjacent client that has no route to it. The client ARPs (v4) or
 		// sends a Neighbor Solicitation (v6) for the pod IP; that is only
