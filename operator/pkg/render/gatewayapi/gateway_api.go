@@ -423,6 +423,41 @@ func (pr *gatewayAPIImplementationComponent) Ready() bool {
 }
 
 func (pr *gatewayAPIImplementationComponent) Objects() ([]client.Object, []client.Object) {
+	return render.ObjectsWithOverrides(pr)
+}
+
+var _ render.Overridable = (*gatewayAPIImplementationComponent)(nil)
+
+func (pr *gatewayAPIImplementationComponent) OverrideTargets() []rcomp.OverrideTarget {
+	spec := pr.cfg.GatewayAPI.Spec
+	targets := []rcomp.OverrideTarget{
+		rcomp.Target[*appsv1.Deployment](pr.chart.controllerDeployment.Name, spec.GatewayControllerDeployment),
+		rcomp.Target[*batchv1.Job](pr.chart.certgenJob.Name, spec.GatewayCertgenJob),
+	}
+	for i := range spec.GatewayClasses {
+		class := &spec.GatewayClasses[i]
+		var workload any = class.GatewayDeployment
+		if envoyProxyIsDaemonSet(pr.cfg.CustomEnvoyProxies[class.Name], class) {
+			workload = class.GatewayDaemonSet
+		}
+		targets = append(targets, rcomp.Target[*envoyapi.EnvoyProxy](class.Name, workload), rcomp.Target[*envoyapi.EnvoyProxy](class.Name, class.GatewayService))
+	}
+	return targets
+}
+
+// envoyProxyIsDaemonSet reports whether a class's gateways run as a DaemonSet. A
+// custom EnvoyProxy that names its own kind wins over the class's GatewayKind.
+func envoyProxyIsDaemonSet(custom *envoyapi.EnvoyProxy, classSpec *operatorv1.GatewayClassSpec) bool {
+	if custom != nil && custom.Spec.Provider != nil && custom.Spec.Provider.Kubernetes != nil {
+		k := custom.Spec.Provider.Kubernetes
+		if k.EnvoyDaemonSet != nil || k.EnvoyDeployment != nil {
+			return k.EnvoyDaemonSet != nil
+		}
+	}
+	return classSpec.GatewayKind != nil && *classSpec.GatewayKind == operatorv1.GatewayKindDaemonSet
+}
+
+func (pr *gatewayAPIImplementationComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {
 	var objs, objsToDelete []client.Object
 	openShift := pr.cfg.Installation.KubernetesProvider.IsOpenShift()
 
@@ -715,7 +750,6 @@ func (pr *gatewayAPIImplementationComponent) controllerObjects() []client.Object
 		}
 	}
 
-	rcomp.ApplyDeploymentOverrides(controllerDeployment, pr.cfg.GatewayAPI.Spec.GatewayControllerDeployment)
 	objs = append(objs, controllerDeployment)
 
 	// Certgen Job.
@@ -728,7 +762,6 @@ func (pr *gatewayAPIImplementationComponent) controllerObjects() []client.Object
 		certgenJob.Spec.Template.Labels = map[string]string{}
 	}
 	certgenJob.Spec.Template.Labels["k8s-app"] = GatewayCertgenLabel
-	rcomp.ApplyJobOverrides(certgenJob, pr.cfg.GatewayAPI.Spec.GatewayCertgenJob)
 	objs = append(objs, certgenJob)
 
 	return objs
@@ -768,14 +801,8 @@ func (pr *gatewayAPIImplementationComponent) envoyProxyConfig(className, ns stri
 		envoyProxy.Spec.Provider.Kubernetes = &envoyapi.EnvoyProxyKubernetesProvider{}
 	}
 
-	// If the EnvoyProxy itself doesn't already indicate DaemonSet or Deployment, and our
-	// customization structs indicate deploying as a DaemonSet, set that up.
-	if envoyProxy.Spec.Provider.Kubernetes.EnvoyDaemonSet == nil && envoyProxy.Spec.Provider.Kubernetes.EnvoyDeployment == nil {
-		if classSpec.GatewayKind != nil {
-			if *classSpec.GatewayKind == operatorv1.GatewayKindDaemonSet {
-				envoyProxy.Spec.Provider.Kubernetes.EnvoyDaemonSet = &envoyapi.KubernetesDaemonSetSpec{}
-			}
-		}
+	if envoyProxy.Spec.Provider.Kubernetes.EnvoyDaemonSet == nil && envoyProxyIsDaemonSet(envoyProxy, classSpec) {
+		envoyProxy.Spec.Provider.Kubernetes.EnvoyDaemonSet = &envoyapi.KubernetesDaemonSetSpec{}
 	}
 
 	// Add EnvoyProxy config that will apply our image configuration, pull secrets and overrides
@@ -823,14 +850,6 @@ func (pr *gatewayAPIImplementationComponent) envoyProxyConfig(className, ns stri
 		}
 	}
 
-	// Apply overrides.
-	if envoyProxy.Spec.Provider.Kubernetes.EnvoyDaemonSet != nil {
-		rcomp.ApplyEnvoyProxyOverrides(envoyProxy, classSpec.GatewayDaemonSet)
-	} else {
-		rcomp.ApplyEnvoyProxyOverrides(envoyProxy, classSpec.GatewayDeployment)
-	}
-	applyEnvoyProxyServiceOverrides(envoyProxy, classSpec.GatewayService)
-
 	return envoyProxy
 }
 
@@ -860,43 +879,6 @@ type GatewayAPIImplementationConfigInterface interface {
 
 func (pr *gatewayAPIImplementationComponent) GetConfig() *GatewayAPIImplementationConfig {
 	return pr.cfg
-}
-
-// applyEnvoyProxyServiceOverrides applies the overrides to the given EnvoyProxy.
-// Note: overrides must not be nil pointer.
-func applyEnvoyProxyServiceOverrides(ep *envoyapi.EnvoyProxy, overrides *operatorv1.GatewayService) {
-	if overrides != nil {
-		if ep.Spec.Provider.Kubernetes.EnvoyService == nil {
-			ep.Spec.Provider.Kubernetes.EnvoyService = &envoyapi.KubernetesServiceSpec{}
-		}
-		if overrides.Metadata != nil {
-			if len(overrides.Metadata.Labels) > 0 {
-				ep.Spec.Provider.Kubernetes.EnvoyService.Labels = common.MapExistsOrInitialize(ep.Spec.Provider.Kubernetes.EnvoyService.Labels)
-				common.MergeMaps(overrides.Metadata.Labels, ep.Spec.Provider.Kubernetes.EnvoyService.Labels)
-			}
-			if len(overrides.Metadata.Annotations) > 0 {
-				ep.Spec.Provider.Kubernetes.EnvoyService.Annotations = common.MapExistsOrInitialize(ep.Spec.Provider.Kubernetes.EnvoyService.Annotations)
-				common.MergeMaps(overrides.Metadata.Annotations, ep.Spec.Provider.Kubernetes.EnvoyService.Annotations)
-			}
-		}
-		if overrides.Spec != nil {
-			if overrides.Spec.LoadBalancerClass != nil {
-				ep.Spec.Provider.Kubernetes.EnvoyService.LoadBalancerClass = overrides.Spec.LoadBalancerClass
-			}
-			if overrides.Spec.AllocateLoadBalancerNodePorts != nil {
-				ep.Spec.Provider.Kubernetes.EnvoyService.AllocateLoadBalancerNodePorts = overrides.Spec.AllocateLoadBalancerNodePorts
-			}
-			if overrides.Spec.LoadBalancerSourceRanges != nil {
-				ep.Spec.Provider.Kubernetes.EnvoyService.LoadBalancerSourceRanges = overrides.Spec.LoadBalancerSourceRanges
-			}
-			if overrides.Spec.LoadBalancerIP != nil {
-				ep.Spec.Provider.Kubernetes.EnvoyService.LoadBalancerIP = overrides.Spec.LoadBalancerIP
-			}
-			if overrides.Spec.Patch != nil {
-				ep.Spec.Provider.Kubernetes.EnvoyService.Patch = overrides.Spec.Patch
-			}
-		}
-	}
 }
 
 // gatewayAPIControllerPolicy allows the controller + certgen to reach kube-apiserver and DNS.
