@@ -412,6 +412,15 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 		ct_result_set_rc(ctx->state->ct_result.rc, CALI_CT_ESTABLISHED);
 	}
 
+	/* Bypass a local workload only if its own program approved its leg. TCP is exempt: its SYNs run policy. */
+	if (CALI_F_TO_HOST && ctx->state->ip_proto != IPPROTO_TCP &&
+			ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
+			!ct_result_is_to_workload(ctx->state->ct_result.rc) &&
+			cali_rt_flags_local_workload(cali_rt_lookup_flags(&ctx->state->ip_dst))) {
+		CALI_DEBUG("Local workload has not approved this flow, no bypass");
+		ct_result_set_rc(ctx->state->ct_result.rc, CALI_CT_ESTABLISHED);
+	}
+
 	if (ct_result_rpf_failed(ctx->state->ct_result.rc)) {
 		goto deny;
 	}
