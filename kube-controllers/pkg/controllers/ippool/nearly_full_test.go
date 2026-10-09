@@ -126,7 +126,7 @@ func TestReconcile_NearlyFullWaitsForANewCIDROverlap(t *testing.T) {
 		t.Fatalf("narrow is nearly full on the pass that ruled it out, from a block it no longer owns: %+v", gotNarrow.Status)
 	}
 
-	// Deliver the status update the way the informer would. Both blocks move to wide: 104 of 128 is nearly full.
+	// Deliver the status update the way the informer and data feed would. Both blocks move to wide: 104 of 128 is nearly full.
 	if err := idx.Update(gotNarrow); err != nil {
 		t.Fatalf("update cache: %v", err)
 	}
@@ -187,5 +187,89 @@ func TestReconcileNearlyFull_SetsAndClears(t *testing.T) {
 	}
 	if !hasCondition(got, v3.IPPoolConditionAllocatable, metav1.ConditionTrue) {
 		t.Fatalf("expected Allocatable to survive the removal, got %+v", got.Status.Conditions)
+	}
+}
+
+// Before the data feed is in sync the tracker may hold only some of a pool's blocks, so it sets nothing.
+func TestReconcileNearlyFull_WaitsForInSync(t *testing.T) {
+	pool := testPool("pool-1", "10.0.0.0/26")
+	cli := fake.NewClientset(pool)
+	c, _ := newTestController(cli, pool)
+	c.tracker.AddBlocks(allocatedBlock(t, "10.0.0.0/26", 52))
+	c.inSync.Store(false)
+
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	got, err := cli.ProjectcalicoV3().IPPools().Get(c.ctx, pool.Name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if hasCondition(got, v3.IPPoolConditionAddressSpaceNearlyFull, metav1.ConditionTrue) {
+		t.Fatalf("expected no AddressSpaceNearlyFull before the feed is in sync, got %+v", got.Status)
+	}
+
+	c.inSync.Store(true)
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	got, err = cli.ProjectcalicoV3().IPPools().Get(c.ctx, pool.Name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if !hasCondition(got, v3.IPPoolConditionAddressSpaceNearlyFull, metav1.ConditionTrue) {
+		t.Fatalf("expected AddressSpaceNearlyFull once in sync, got %+v", got.Status)
+	}
+}
+
+// The informer can deliver a new CIDROverlap condition before the data feed does. Until the tracker sees it, no pass
+// judges nearly-full, or the losing pool would carry the condition for the winner's blocks.
+func TestReconcile_NearlyFullWaitsForTheTrackerToSeeCIDROverlap(t *testing.T) {
+	wide := testPool("wide", "10.0.0.0/25")
+	wide.Status = &v3.IPPoolStatus{Conditions: []metav1.Condition{{
+		Type: v3.IPPoolConditionAllocatable, Status: metav1.ConditionTrue, Reason: v3.IPPoolReasonOK,
+	}}}
+	narrow := testPool("narrow", "10.0.0.0/26")
+	cli := fake.NewClientset(wide, narrow)
+	c, idx := newTestController(cli, wide, narrow)
+	c.tracker.AddBlocks(allocatedBlock(t, "10.0.0.0/26", 52), allocatedBlock(t, "10.0.0.64/26", 52))
+	get := func(name string) *v3.IPPool {
+		t.Helper()
+		p, err := cli.ProjectcalicoV3().IPPools().Get(c.ctx, name, metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("get %s: %v", name, err)
+		}
+		return p
+	}
+
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	gotNarrow := get(narrow.Name)
+	if !accounting.LostOverlap(gotNarrow) {
+		t.Fatalf("expected narrow to lose the overlap, got %+v", gotNarrow.Status)
+	}
+
+	// Only the informer has caught up.
+	if err := idx.Update(gotNarrow); err != nil {
+		t.Fatalf("update cache: %v", err)
+	}
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if hasCondition(get(narrow.Name), v3.IPPoolConditionAddressSpaceNearlyFull, metav1.ConditionTrue) {
+		t.Fatalf("narrow is nearly full before the tracker saw it lose the overlap")
+	}
+
+	// The data feed catches up.
+	c.tracker.AddPools(gotNarrow)
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if !hasCondition(get(wide.Name), v3.IPPoolConditionAddressSpaceNearlyFull, metav1.ConditionTrue) {
+		t.Errorf("expected AddressSpaceNearlyFull on wide once the tracker credits it with both blocks")
+	}
+	if hasCondition(get(narrow.Name), v3.IPPoolConditionAddressSpaceNearlyFull, metav1.ConditionTrue) {
+		t.Errorf("expected no AddressSpaceNearlyFull on narrow")
 	}
 }

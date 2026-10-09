@@ -58,10 +58,15 @@ type IstiodOpts struct {
 	TrustedZtunnelNamespace string          `json:"trustedZtunnelNamespace,omitempty"`
 }
 
+type CNIConfig struct {
+	CNIBinDir string `json:"cniBinDir,omitempty"`
+}
+
 type IstioCNIOpts struct {
 	Image   string         `json:"image,omitempty"`
 	Global  *GlobalConfig  `json:"global,omitempty"`
 	Ambient *AmbientConfig `json:"ambient,omitempty"`
+	CNI     *CNIConfig     `json:"cni,omitempty"`
 }
 
 type ZTunnelOpts struct {

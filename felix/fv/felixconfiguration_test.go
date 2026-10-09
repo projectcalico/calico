@@ -47,11 +47,6 @@ var _ = infrastructure.DatastoreDescribe(
 			tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
 		})
 
-		AfterEach(func() {
-			tc.Stop()
-			infra.Stop()
-		})
-
 		setNodeLabels := func(felixIdx int, labels map[string]string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()

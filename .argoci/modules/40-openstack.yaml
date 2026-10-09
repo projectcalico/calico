@@ -1,0 +1,74 @@
+# Calico's OpenStack integration: the plugin's own tests, and a mainline run
+# against a DevStack the job builds from scratch.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+
+steps:
+  - name: openstack-tox
+    depends: [check-python]
+    requests: {cpu: 1000m, memory: 1Gi}
+    services:
+      - docker
+    commands: |
+      cd networking-calico
+      # Separate invocations: named as two targets, a parallel make would run
+      # them at once and have both tox runs share one .tox/ tree.
+      make tox-caracal
+      make tox-fv-caracal
+
+  # DevStack installs OpenStack over the machine it runs on — uninstalling
+  # system packages as it goes — so it gets one of its own.
+  - name: openstack-devstack
+    depends: [check-python]
+    runOn: vm
+    # Longer than the default hour: DevStack installs the whole control plane.
+    timeout: 2h
+    # Building the control plane is mostly package installs, which is CPU and
+    # small-file IO an e2 with a pd-balanced disk is slow at.
+    vm:
+      machineType: c3-standard-8
+      # c3 capacity runs out zone by zone.
+      zone: us-central1
+      diskType: hyperdisk-balanced
+      diskSize: 100GB
+      provisionedIops: 6000
+      provisionedThroughput: 200
+    # For building the perf results uploader, which publishes the benchmark.
+    services:
+      - docker
+    secretBundles:
+      - name: banzai-secrets
+        keys:
+          - name: LENS_ELASTICSEARCH_USER
+          - name: LENS_ELASTICSEARCH_TOKEN
+    commands: |
+      sudo apt-get remove -y python3-wrapt || true
+      sudo apt-get update -y && sudo apt-get install -y make
+      # The default is not where this checkout lands.
+      export CALICO_REPO_DIR="${CI_HOME}/${CI_GIT_DIR}"
+      cd networking-calico
+      # DevStack installs the plugin from a ref, so the commit under test needs
+      # to be one rather than a detached head.
+      git checkout -b devstack-test
+      export NC_PLUGIN_REPO=$(dirname $(pwd))
+      export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
+      sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
+      # A single-node setup does not need BGP, and ours logs errors without it.
+      export CALICO_BGP_MODE=none
+      # Enough rungs to show scaling is still linear; the nightly runs more.
+      export RESYNC_SCALES=100,1000
+      # RESYNC_SKIP_FINAL_CLEANUP does not belong here: Tempest runs against
+      # this same DevStack afterwards, and the fake agents the benchmark leaves
+      # behind break instance networking for it.
+      # The user comes from the secret too, so rotating to another account keeps
+      # publishing.
+      export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
+      export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
+      export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
+      TEMPEST=true OPENSTACK_RELEASE=caracal ./devstack/bootstrap.sh
+    epilogue: |
+      sshOnVirtualMachine 'mkdir -p ~/logs && sudo journalctl > ~/logs/journalctl.txt'
+      copyFromVirtualMachine '~/logs' logs
+      artifact push job logs || true
