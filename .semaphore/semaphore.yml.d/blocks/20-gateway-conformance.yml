@@ -21,7 +21,7 @@
         # Match the other kind lanes: free the /var/lib/docker space the
         # pre-loaded images hold before loading the ones this lane needs.
         - docker system prune -af
-        - .semaphore/load-cached-images calico node whisker
+        - .argoci/scripts/load-cached-images calico node whisker
     jobs:
       - name: "Gateway API: Conformance Tests"
         commands:

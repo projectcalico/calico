@@ -2,5 +2,6 @@
 
 felix/.semaphore/analyze-test-failures || true
 
-.semaphore/vms/publish-reports "${TEST_REPORT_NAME}"
+# Under errexit a failed publish would otherwise skip the cleanup.
+.semaphore/vms/publish-reports "${TEST_REPORT_NAME}" || true
 .semaphore/vms/clean-up-vms ${VM_PREFIX}

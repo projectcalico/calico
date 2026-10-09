@@ -3,6 +3,7 @@
 package goldmane
 
 import (
+	"fmt"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -29,6 +30,8 @@ func TestProtoToFlow_BasicFields(t *testing.T) {
 		},
 		SourceLabels: []string{"app=frontend", "env=prod"},
 		DestLabels:   []string{"app=backend"},
+		SourceIps:    []string{"10.0.0.1", "10.0.0.2"},
+		DestIps:      []string{"192.168.0.1"},
 		PacketsIn:    12,
 		PacketsOut:   14,
 		BytesIn:      4321,
@@ -49,6 +52,8 @@ func TestProtoToFlow_BasicFields(t *testing.T) {
 	Expect(resp.Reporter).To(Equal(whiskerv1.Reporter(proto.Reporter_Src)))
 	Expect(resp.SourceLabels).To(Equal("app=frontend | env=prod"))
 	Expect(resp.DestLabels).To(Equal("app=backend"))
+	Expect(resp.SourceIPs).To(Equal([]string{"10.0.0.1", "10.0.0.2"}))
+	Expect(resp.DestIPs).To(Equal([]string{"192.168.0.1"}))
 	Expect(resp.PacketsIn).To(Equal(int64(12)))
 	Expect(resp.PacketsOut).To(Equal(int64(14)))
 	Expect(resp.BytesIn).To(Equal(int64(4321)))
@@ -104,10 +109,18 @@ func TestProtoToFlow_Service(t *testing.T) {
 }
 
 func TestProtoToFlow_ServiceAbsent(t *testing.T) {
-	RegisterTestingT(t)
+	for _, name := range []string{"", "-"} {
+		t.Run(fmt.Sprintf("name=%q", name), func(t *testing.T) {
+			RegisterTestingT(t)
 
-	resp := protoToFlow(&proto.Flow{Key: &proto.FlowKey{}})
-	Expect(resp.Service).To(BeNil())
+			resp := protoToFlow(&proto.Flow{Key: &proto.FlowKey{
+				DestServiceName:      name,
+				DestServiceNamespace: "-",
+				DestServicePortName:  "-",
+			}})
+			Expect(resp.Service).To(BeNil())
+		})
+	}
 }
 
 func TestProtoToFlow_NameAndNamespaceSpecialCases(t *testing.T) {

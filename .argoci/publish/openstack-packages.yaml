@@ -1,0 +1,62 @@
+# Builds and publishes the OpenStack packages: debs to a Launchpad PPA, and RPMs
+# to binaries-projectcalico-org.
+#
+# Publishing is automatic only for merges to master. For other branches, and for
+# PRs, it is available but not automatic: a developer can build and publish
+# release-branch or pre-merge packages with the "openstack-packages" promotion
+# button on a run. Packages built from master go to the "master" PPA, from any
+# other branch to the "testing" PPA, and from a PR to the "pr-<number>" PPA, which
+# must have been created by hand first. A PR that needs packaging must use a
+# branch on github.com/projectcalico/calico rather than a fork, because packaging
+# needs secrets that we do not (and should not!) expose to fork PRs.
+version: condensed
+generateName: openstack-packages-
+timeout: 1h
+
+defaults:
+  timeout: 1h
+  secretBundles:
+    - name: google-service-account-for-tigera-infra
+      keys:
+        - name: tigera-infra-access.json
+          as: TIGERA_INFRA_SA_KEY
+          localFile: /root/secrets/tigera-infra-access.json
+    - name: launchpad-secret-key
+      keys:
+        - name: marvin.txt
+          as: LAUNCHPAD_SECRET_KEY
+          localFile: /root/secrets/marvin.txt
+
+steps:
+  - name: openstack-packages
+    services: [docker]
+    requests: {cpu: 2000m, memory: 4Gi}
+    env:
+      - name: GOOGLE_APPLICATION_CREDENTIALS
+        value: /root/secrets/tigera-infra-access.json
+      - name: SECRET_KEY
+        value: /root/secrets/marvin.txt
+      - name: GCLOUD_ARGS
+        value: --zone us-east1-c --project tigera-wp-tcp-redirect
+      - name: HOST
+        value: ubuntu@binaries-projectcalico-org
+      # For the containers being built, not the machine running the build.
+      - name: UBUNTU_REPO_OVERRIDE
+        value: ftp.uni-stuttgart.de
+    commands: |
+      # Only master's merges publish by themselves; the promotion is for any ref.
+      if [ -z "${CI_PROMOTION:-}" ] && [ "${CI_GIT_BRANCH}" != master ]; then
+        echo "[INFO] not publishing a merge to ${CI_GIT_BRANCH}"
+        exit 0
+      fi
+      apt-get update -y && apt-get install -y --no-install-recommends devscripts moreutils patchelf jq
+      git config --global user.email marvin@tigera.io
+      git config --global user.name Marvin
+      gcloud config set project tigera-wp-tcp-redirect
+      gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
+      # Check the ref type, not the PR number, because a merge build also carries a PR number.
+      if [ "${CI_GIT_REF_TYPE}" = PR ]; then
+        make -C release/packaging release-publish VERSION="pr-${CI_GIT_PR_NUMBER}"
+      else
+        make -C release/packaging release-publish VERSION="${CI_GIT_BRANCH}"
+      fi

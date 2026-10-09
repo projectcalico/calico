@@ -1,0 +1,74 @@
+# Builds and publishes a hashrelease from the promoted run's commit.
+version: condensed
+generateName: hashrelease-
+timeout: 6h
+
+defaults:
+  timeout: 6h
+  jobSize: medium
+  # A promotion inherits nothing from the CI workflow's defaults.
+  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2
+  services:
+    - docker
+  secretBundles:
+    - docker-hub
+    - name: oss-release-secrets
+      keys:
+        - name: GITHUB_TOKEN
+        - name: AWS_PROFILE
+        - name: S3_BUCKET
+        - name: aws-config
+          localFile: /root/.aws/config
+        - name: aws-credentials
+          localFile: /root/.aws/credentials
+        - name: git_ssh_rsa
+          localFile: /root/.keys/git_ssh_rsa
+    - name: private-repo
+      keys:
+        - name: private-repo
+          localFile: /root/.keys/private-repo
+    - quay-hashrelease
+    - docker
+    - iss-image-scanning
+    - releasebot-slack
+    # Writes the release into the hashrelease server's bucket, and only there.
+    - name: argoci-hashrelease-publisher
+      keys:
+        - name: argoci-hashrelease-publisher.json
+          as: HASHRELEASE_PUBLISHER_KEY
+          localFile: /root/secrets/hashrelease-publisher.json
+
+  env:
+    - name: HASHRELEASE_SERVER_BUCKET
+      value: hashreleaseserver-static
+    - name: GOOGLE_APPLICATION_CREDENTIALS
+      value: /root/secrets/hashrelease-publisher.json
+
+steps:
+  - name: hashrelease
+    requests: {cpu: 3500m, memory: 8Gi}
+    commands: |
+      # Prefer marvin's token for its higher rate limit.
+      export GITHUB_TOKEN="${MARVIN_GITHUB_TOKEN:-$GITHUB_TOKEN}"
+      export LOGS_DIR="${CI_HOME}/${CI_GIT_DIR}/release/_logs"
+
+      chmod 0600 /root/.keys/* || true
+      eval "$(ssh-agent -s)" >/dev/null
+      ssh-add /root/.keys/* 2>/dev/null || true
+
+      echo "$DOCKER_TOKEN" | docker login --username "$DOCKER_USER" --password-stdin
+      echo "$QUAY_TOKEN" | docker login --username "$QUAY_USER" --password-stdin quay.io
+
+      # Helm keeps its own credential store, and comes from ./bin rather than
+      # the image.
+      make -C "${CI_HOME}/${CI_GIT_DIR}" helm
+      echo "$QUAY_TOKEN" | "${CI_HOME}/${CI_GIT_DIR}/bin/helm" registry login \
+        --username "$QUAY_USER" --password-stdin quay.io
+
+      gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
+
+      cd release
+      make hashrelease
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job release/_logs --destination hashrelease-logs || true

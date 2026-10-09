@@ -661,6 +661,10 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	FlowLogsCollectorDebugTrace *bool `json:"flowLogsCollectorDebugTrace,omitempty"`
 	// FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.
 	FlowLogsGoldmaneServer *string `json:"flowLogsGoldmaneServer,omitempty"`
+	// FlowLogsGoldmaneIncludeIPs controls whether flow data sent to Goldmane (and the local flow
+	// reporter) includes the source and destination IP addresses of the aggregated connections.
+	// [Default: Enabled]
+	FlowLogsGoldmaneIncludeIPs *string `json:"flowLogsGoldmaneIncludeIPs,omitempty"`
 	// FlowLogsLocalReporter configures local unix socket for reporting flow data from each node. [Default: Disabled]
 	FlowLogsLocalReporter *string `json:"flowLogsLocalReporter,omitempty"`
 	// BPFProfiling controls profiling of BPF programs. At the monent, it can be
@@ -2067,6 +2071,14 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithFlowLogsCollectorDebugTra
 // If called multiple times, the FlowLogsGoldmaneServer field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithFlowLogsGoldmaneServer(value string) *FelixConfigurationSpecApplyConfiguration {
 	b.FlowLogsGoldmaneServer = &value
+	return b
+}
+
+// WithFlowLogsGoldmaneIncludeIPs sets the FlowLogsGoldmaneIncludeIPs field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the FlowLogsGoldmaneIncludeIPs field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithFlowLogsGoldmaneIncludeIPs(value string) *FelixConfigurationSpecApplyConfiguration {
+	b.FlowLogsGoldmaneIncludeIPs = &value
 	return b
 }
 

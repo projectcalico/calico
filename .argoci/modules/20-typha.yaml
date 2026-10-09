@@ -1,0 +1,50 @@
+# Typha CI, and its FVs again on a UBI-minimal base. On VMs because the k8sfv
+# run loads ip6_tables, which a pod cannot.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  runOn: vm
+  services:
+    - docker
+
+steps:
+  - name: typha-ci
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    vm:
+      machineType: e2-standard-8
+    depends: [build-calico-image, check-go]
+    commands: |
+      sudo apt-get update -y && sudo apt-get install -y make
+      .argoci/scripts/load-cached-images calico
+      cd typha
+      make ci-no-prereqs
+    epilogue: |
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/typha/report" typha-report || true
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/felix/report" felix-report || true
+      artifact push job typha-report --destination test-results || true
+      artifact push job felix-report --destination test-results-felix || true
+
+  # Depends on the producer only to skip a commit whose first build failed;
+  # `clean` discards the cached image anyway.
+  - name: typha-fv-ubi
+    vm:
+      machineType: e2-standard-8
+    depends: [build-calico-image, check-go]
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+      - name: USE_UBI_AS_CALICO_BASE
+        value: "1"
+    commands: |
+      sudo apt-get update -y && sudo apt-get install -y make
+      make -C cmd/calico clean image
+      cd typha
+      make fv-no-prereqs
+    epilogue: |
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/typha/report" typha-report || true
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/felix/report" felix-report || true
+      artifact push job typha-report --destination test-results-ubi || true
+      artifact push job felix-report --destination test-results-ubi-felix || true
