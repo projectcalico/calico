@@ -13,6 +13,11 @@ version: condensed
 generateName: openstack-packages-
 timeout: 1h
 
+notifications:
+  slack:
+    channel: ci-notifications-os
+    when: changed
+
 defaults:
   timeout: 1h
   secretBundles:
@@ -49,7 +54,7 @@ steps:
         echo "[INFO] not publishing a merge to ${CI_GIT_BRANCH}"
         exit 0
       fi
-      apt-get update -y && apt-get install -y --no-install-recommends devscripts moreutils patchelf jq
+      apt-get update -y && apt-get install -y --no-install-recommends devscripts moreutils patchelf jq rpm
       git config --global user.email marvin@tigera.io
       git config --global user.name Marvin
       gcloud config set project tigera-wp-tcp-redirect
