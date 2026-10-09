@@ -1821,7 +1821,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			err = dp.createIface("wg0", 11, "wireguard")
 			Expect(err).NotTo(HaveOccurred())
 
-			dataIfacePattern = "^eth|bond|vxlan|wg*"
+			err = dp.createIface("tunl0", 15, "ipip")
+			Expect(err).NotTo(HaveOccurred())
+
+			dataIfacePattern = "^eth|bond|vxlan|wg*|tunl0"
 			newBpfEpMgr(false)
 		})
 		It("should detect the correct type of iface", func() {
@@ -1836,6 +1839,33 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(dp.programAttached("wg0:ingress")).To(BeTrue())
 			Expect(dp.programAttached("wg0:egress")).To(BeTrue())
 			checkIfState(11, "wg0", ifstate.FlgIPv4Ready|ifstate.FlgWireguard)
+		})
+
+		It("should attach the l3 program to an L3 IPIP device", func() {
+			features := *bpfEpMgr.features
+			features.IPIPDeviceIsL3 = true
+			bpfEpMgr.features = &features
+
+			genIfaceUpdate("tunl0", ifacemonitor.StateUp, 15)()
+
+			Expect(dp.programAttached("tunl0:ingress")).To(BeTrue())
+			Expect(dp.programAttached("tunl0:egress")).To(BeTrue())
+			Expect(bpfEpMgr.permanentBPFErr).To(BeNil())
+			checkIfState(15, "tunl0", ifstate.FlgIPv4Ready|ifstate.FlgIPIP)
+		})
+
+		It("should refuse an IPIP device that is not L3", func() {
+			features := *bpfEpMgr.features
+			features.IPIPDeviceIsL3 = false
+			bpfEpMgr.features = &features
+
+			genIfaceUpdate("tunl0", ifacemonitor.StateUp, 15)()
+
+			Expect(dp.programAttached("tunl0:ingress")).To(BeFalse())
+			Expect(dp.programAttached("tunl0:egress")).To(BeFalse())
+			Expect(bpfEpMgr.permanentBPFErr).To(MatchError(errIPIPDeviceNotL3))
+			Expect(bpfEpMgr.dirtyIfaceNames.Contains("tunl0")).To(BeFalse(),
+				"a permanent failure must not be retried")
 		})
 
 		It("should attach to iface even if netlink fails", func() {
