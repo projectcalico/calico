@@ -98,7 +98,7 @@ require (
 	github.com/tchap/go-patricia/v2 v2.3.3
 	github.com/termie/go-shutil v0.0.0-20140729215957-bcacb06fecae
 	github.com/urfave/cli/v3 v3.10.0
-	github.com/vishvananda/netlink v1.3.1
+	github.com/vishvananda/netlink v1.3.2-0.20260206161744-ab2b1904dc37
 	go.etcd.io/etcd/api/v3 v3.7.0
 	go.etcd.io/etcd/client/pkg/v3 v3.7.0
 	go.etcd.io/etcd/client/v2 v2.305.31

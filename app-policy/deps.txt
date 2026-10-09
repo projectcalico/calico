@@ -72,7 +72,7 @@ github.com/spf13/pflag v1.0.10
 github.com/stretchr/objx v0.5.3
 github.com/stretchr/testify v1.12.1
 github.com/tchap/go-patricia/v2 v2.3.3
-github.com/vishvananda/netlink v1.3.1
+github.com/vishvananda/netlink v1.3.2-0.20260206161744-ab2b1904dc37
 github.com/vishvananda/netns v0.0.5
 github.com/x448/float16 v0.8.4
 go.etcd.io/etcd/api/v3 v3.7.0
