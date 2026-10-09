@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
-	"slices"
 	"sort"
 	"strings"
 
@@ -376,6 +375,7 @@ type Block struct {
 	insnIdxToLabels    map[int][]string
 	insnIdxToComments  map[int][]string
 	inUseJumpTargets   set.Set[string]
+	jumpTargetIdxs     set.Set[int]
 	policyDebugEnabled bool
 	trampolinesEnabled bool
 	trampolineIdx      int
@@ -390,6 +390,7 @@ func NewBlock(policyDebugEnabled bool) *Block {
 		labelToInsnIdx:     map[string]int{},
 		insnIdxToLabels:    map[int][]string{},
 		inUseJumpTargets:   set.New[string](),
+		jumpTargetIdxs:     set.New[int](),
 		insnIdxToComments:  map[int][]string{},
 		policyDebugEnabled: policyDebugEnabled,
 		fixUps:             map[string][]fixUp{},
@@ -787,6 +788,12 @@ func (b *Block) TargetIsUsed(label string) bool {
 	return b.inUseJumpTargets.Contains(label)
 }
 
+// HasPendingJumps returns true if a jump to label is waiting for the label to
+// be placed.
+func (b *Block) HasPendingJumps(label string) bool {
+	return len(b.fixUps[label]) > 0
+}
+
 // UnresolvedJumpTargets returns a slice containing the names of all target
 // labels that have been used in a jump but don't currently have a labeled
 // instruction to jump to.
@@ -851,6 +858,9 @@ func (b *Block) applyFixUps(targetLabel string) error {
 func (b *Block) LabelNextInsn(label string) {
 	b.labelToInsnIdx[label] = len(b.insns)
 	b.insnIdxToLabels[len(b.insns)] = append(b.insnIdxToLabels[len(b.insns)], label)
+	if len(b.fixUps[label]) > 0 {
+		b.jumpTargetIdxs.Add(len(b.insns))
+	}
 
 	// Eagerly apply fixUps now so that we can re-use the same label names
 	// when making trampolines.
@@ -887,9 +897,9 @@ func (b *Block) nextInsnReachable() bool {
 	lastInsn := b.insns[len(b.insns)-1]
 	lastOpCode := lastInsn.OpCode()
 	if lastOpCode == JumpA /*Unconditional jump*/ || lastOpCode == Exit {
-		// Previous instruction doesn't fall through to this one, need
-		// to check if something else jumps here...
-		return slices.ContainsFunc(b.insnIdxToLabels[len(b.insns)], b.inUseJumpTargets.Contains)
+		// No fall-through.  Label names can be reused, so only a jump
+		// resolved to this index makes it reachable.
+		return b.jumpTargetIdxs.Contains(len(b.insns))
 	}
 	return true
 }
@@ -911,4 +921,43 @@ func (b *Block) SetTrampolineStride(s int) {
 	if s > 0 && s < (1<<14) {
 		b.trampolineStride = s
 	}
+}
+
+// UnreachableInsns returns the indexes of instructions that no path from the
+// first instruction reaches.  The kernel verifier rejects such programs.
+func UnreachableInsns(insns Insns) []int {
+	seen := make([]bool, len(insns))
+	stack := []int{0}
+	for len(stack) > 0 {
+		i := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if i < 0 || i >= len(insns) || seen[i] {
+			continue
+		}
+		seen[i] = true
+		next := i + 1
+		target := i + 1 + int(insns[i].Off())
+		cls := insns[i].OpClass()
+		switch op := insns[i].OpCode(); {
+		case op == Exit:
+		case op == JumpA:
+			stack = append(stack, target)
+		case op == LoadImm64:
+			if next < len(insns) {
+				seen[next] = true
+			}
+			stack = append(stack, next+1)
+		case (cls == OpClassJump64 || cls == OpClassJump32) && op != Call:
+			stack = append(stack, next, target)
+		default:
+			stack = append(stack, next)
+		}
+	}
+	var out []int
+	for i, s := range seen {
+		if !s {
+			out = append(out, i)
+		}
+	}
+	return out
 }

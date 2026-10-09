@@ -60,6 +60,7 @@ type Builder struct {
 	useJmps            bool
 	maxJumpsPerProgram int
 	numRulesInProgram  int
+	restUnreachable    bool
 	xdp                bool
 	flowLogsEnabled    bool
 	trampolineStride   int
@@ -416,6 +417,10 @@ func (p *Builder) writeProgramFooter() {
 
 func (p *Builder) writeExitTarget() {
 	p.b.LabelNextInsn("exit")
+	p.writeDrop()
+}
+
+func (p *Builder) writeDrop() {
 	if p.xdp {
 		p.b.MovImm64(asm.R0, 1 /* XDP_DROP */)
 	} else {
@@ -1150,7 +1155,7 @@ func (p *Builder) maybeSplitProgram() bool {
 	// the bytecode (taken or not).  Since our code falls through to the next
 	// rule by default, to first approximation, all our jumps are on the same
 	// path.
-	if p.b.NumJumps < p.maxJumpsPerProgram {
+	if p.restUnreachable || p.b.NumJumps < p.maxJumpsPerProgram {
 		return false
 	}
 	if p.policyMapStride == 0 {
@@ -1194,6 +1199,14 @@ func (p *Builder) maybeSplitProgram() bool {
 			p.b.Jump("next-program")
 		}
 	}
+	if len(targets) == 0 && !p.b.HasPendingJumps("next-program") {
+		// Nothing reaches the next program.  Write the remaining rules to a
+		// block that is never assembled.
+		log.Debug("Remaining policy is unreachable, not adding a sub-program")
+		p.restUnreachable = true
+		p.b = asm.NewBlock(p.policyDebugEnabled)
+		return true
+	}
 	p.b.LabelNextInsn("next-program")
 	// Stash the trampoline offset in the policy result so the next program
 	// can pick it up.
@@ -1210,7 +1223,7 @@ func (p *Builder) maybeSplitProgram() bool {
 	p.b.AddCommentF(fmt.Sprintf("Tail call to policy program at index %d * %d + %d = %d", p.policyMapStride, len(p.blocks), p.policyMapIndex, jumpIdx))
 	p.b.MovImm64(asm.R3, int32(jumpIdx)) // Third arg is index to jump to.
 	p.b.Call(asm.HelperTailCall)
-	p.writeExitTarget() // Drop if tail call fails.
+	p.writeDrop() // Drop if tail call fails.
 
 	// Now start the new program...
 	p.numRulesInProgram = 0
@@ -1299,6 +1312,14 @@ func WithIPv6() Option {
 func WithFlowLogs() Option {
 	return func(p *Builder) {
 		p.flowLogsEnabled = true
+	}
+}
+
+// WithMaxJumpsPerProgram overrides the number of jumps after which the program
+// is split.
+func WithMaxJumpsPerProgram(n int) Option {
+	return func(p *Builder) {
+		p.maxJumpsPerProgram = n
 	}
 }
 
