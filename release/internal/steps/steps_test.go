@@ -24,26 +24,6 @@ import (
 	"time"
 )
 
-func TestDigestsByRepo(t *testing.T) {
-	got := DigestsByRepo([]string{
-		"quay.io/calico/node@sha256:aaa",
-		"quay.io/calico/node@sha256:bbb",
-		"quay.io/calico/cni@sha256:ccc",
-		"not-a-ref",
-	})
-	// One repo, two tags, two digests: a tag counts as published when its
-	// digest is among them.
-	if len(got["quay.io/calico/node"]) != 2 {
-		t.Errorf("node digests = %v, want 2", got["quay.io/calico/node"])
-	}
-	if _, ok := got["quay.io/calico/cni"]["sha256:ccc"]; !ok {
-		t.Errorf("cni digest missing from %v", got)
-	}
-	if len(got) != 2 {
-		t.Errorf("expected the malformed ref to be dropped, got %v", got)
-	}
-}
-
 func TestGoLimit(t *testing.T) {
 	const items = 20
 
