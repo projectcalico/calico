@@ -110,6 +110,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					calico.WithVersion(o.ProductVersion),
 					calico.WithOperatorImage(operator.Registry(*o), o.Image, o.Version),
 					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, o.ProductVersion)),
+					calico.WithRecordsDir(outputs.RecordsDir(cfg.OutputDir, o.ProductVersion)),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithLogsDir(filepath.Join(cfg.LogsDir, o.ProductVersion)),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
@@ -168,6 +169,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					calico.WithOperatorImage(operator.Registry(*o), o.Image, o.Version),
 					calico.WithOperator(c.Bool(operatorFlagName)),
 					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, o.ProductVersion)),
+					calico.WithRecordsDir(outputs.RecordsDir(cfg.OutputDir, o.ProductVersion)),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithLogsDir(filepath.Join(cfg.LogsDir, o.ProductVersion)),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
@@ -186,6 +188,11 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
 				}
+				pin, err := pinForRelease(cfg, c)
+				if err != nil {
+					return err
+				}
+				opts = append(opts, calico.WithComponents(pin.Released()))
 				if reg := c.StringSlice(helmRegistryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithHelmRegistries(reg))
 				}
@@ -196,7 +203,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					opts = append(opts, calico.WithS3Bucket(v))
 				}
 				if c.Bool(operatorFlagName) {
-					oOpts, err := operatorPublishOptions(c, o.Version, releaseOutputDir(cfg.RepoRootDir, o.ProductVersion), filepath.Join(cfg.LogsDir, o.ProductVersion))
+					oOpts, err := operatorPublishOptions(c, outputs.RecordsDir(cfg.OutputDir, o.ProductVersion), filepath.Join(cfg.LogsDir, o.ProductVersion))
 					if err != nil {
 						return fmt.Errorf("operator publish options: %w", err)
 					}

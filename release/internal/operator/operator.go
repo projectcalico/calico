@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 )
@@ -208,7 +209,7 @@ type settings struct {
 
 	refs steps.RefRecorder
 
-	resolve steps.DigestResolver
+	resolve registry.DigestResolver
 
 	resume *resume
 
@@ -309,7 +310,7 @@ func WithRecord(rec steps.RefRecorder) LookupOption {
 	})
 }
 
-func WithResolver(resolve steps.DigestResolver) LookupOption {
+func WithResolver(resolve registry.DigestResolver) LookupOption {
 	return lookupSetting(func(s *settings) error {
 		if resolve == nil {
 			return fmt.Errorf("no resolver given")
@@ -324,4 +325,22 @@ func WithResume(published []string, force bool) PublishOption {
 		s.resume = &resume{published: published, force: force}
 		return nil
 	})
+}
+
+func DigestSource(recordsDir string) (registry.DigestSource, error) {
+	return outputs.DigestSourceFor(recordsDir, PublishStep, ResolveStep)
+}
+
+// Metadata is the operator's section of the release metadata.
+func Metadata(recordsDir string, c registry.Component, d outputs.Digests) (outputs.Component, error) {
+	src, err := DigestSource(recordsDir)
+	if err != nil {
+		return outputs.Component{}, err
+	}
+	ref := c.String()
+	digest, err := d.Of(src, ref)
+	if err != nil {
+		return outputs.Component{}, err
+	}
+	return outputs.Component{Version: c.Version, Image: ref, Digest: digest}, nil
 }

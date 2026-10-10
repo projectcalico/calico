@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -29,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -307,6 +309,14 @@ func (d GithubRelease) Publish(ctx context.Context, src string) error {
 	return gh.Publish(ctx, d.Tag, latest)
 }
 
+func (d GithubRelease) artifacts(src string) ([]outputs.ArtifactFile, error) {
+	base, err := github.DownloadURL(d.Repo.Org, d.Repo.Name, d.Tag)
+	if err != nil {
+		return nil, fmt.Errorf("download URL: %w", err)
+	}
+	return filesAt(src, base)
+}
+
 func (d GithubRelease) makeLatest(ctx context.Context) (bool, error) {
 	gh, err := d.github()
 	if err != nil {
@@ -396,7 +406,7 @@ func SHA256Sums(dir string) error {
 }
 
 func sha256Sums(dir string, files []string) ([]string, error) {
-	s, err := newSettings[Option](sumsStep, nil)
+	s, err := newSettings(sumsStep, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -422,6 +432,22 @@ func sha256Sums(dir string, files []string) ([]string, error) {
 	}
 	s.Logger().WithField("files", len(files)).Info("Wrote checksums")
 	return append(files, path), nil
+}
+
+func filesAt(dir, baseURL string) ([]outputs.ArtifactFile, error) {
+	paths, err := topLevelFiles(dir)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]outputs.ArtifactFile, len(paths))
+	for i, path := range paths {
+		u, err := url.JoinPath(baseURL, filepath.Base(path))
+		if err != nil {
+			return nil, fmt.Errorf("url for %s: %w", path, err)
+		}
+		files[i] = outputs.ArtifactFile{Name: filepath.Base(path), Path: path, URL: u}
+	}
+	return files, nil
 }
 
 func topLevelFiles(dir string) ([]string, error) {
@@ -472,6 +498,10 @@ func (d HashreleaseServer) Publish(ctx context.Context, src string) error {
 		return nil
 	}
 	return hashreleaseserver.Record(d.ProductCode, d.Release, d.Config)
+}
+
+func (d HashreleaseServer) artifacts(src string) ([]outputs.ArtifactFile, error) {
+	return filesAt(src, d.Release.URL())
 }
 
 func (d HashreleaseServer) Validate(u Upload) error {
