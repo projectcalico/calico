@@ -1700,6 +1700,7 @@ components:
       - ^libcalico-go/lib/namespace/[^/]*\.go$
       - ^libcalico-go/lib/net/[^/]*\.go$
       - ^libcalico-go/lib/readlogger/[^/]*\.go$
+      - ^libcalico-go/lib/set/[^/]*\.go$
       - ^libcalico-go/lib/winutils/[^/]*\.go$
       - ^metadata\.mk$
       - ^pkg/buildinfo/[^/]*\.go$
@@ -1743,6 +1744,7 @@ components:
       - ^libcalico-go/lib/namespace/[^/]*\.go$
       - ^libcalico-go/lib/net/[^/]*\.go$
       - ^libcalico-go/lib/readlogger/[^/]*\.go$
+      - ^libcalico-go/lib/set/[^/]*\.go$
       - ^libcalico-go/lib/winutils/[^/]*\.go$
       - ^metadata\.mk$
       - ^pkg/buildinfo/[^/]*\.go$
