@@ -44,6 +44,9 @@ const (
 	externalNodeIP       = "EXT_IP"
 	externalNodeSSHKey   = "EXT_KEY"
 	externalNodeUsername = "EXT_USER"
+
+	// KubeVirt-specific configuration.
+	kubevirtTestVMImage = "KUBEVIRT_TEST_VM_IMAGE"
 )
 
 var allConfigOptions = map[string]*configOption{
@@ -74,6 +77,12 @@ var allConfigOptions = map[string]*configOption{
 		helpText:     "The IP address of the external node.",
 		defaultValue: "",
 	},
+
+	kubevirtTestVMImage: {
+		envVarName:   kubevirtTestVMImage,
+		helpText:     "Override the containerDisk image used for KubeVirt e2e VM-based tests. When empty, the test package picks its own digest-pinned default.",
+		defaultValue: "",
+	},
 }
 
 func RemoteClusterKubeconfig() string {
@@ -90,6 +99,10 @@ func ExtNodeSSHKey() string {
 
 func ExtNodeIP() string {
 	return allConfigOptions[externalNodeIP].actualValue
+}
+
+func KubeVirtTestVMImage() string {
+	return allConfigOptions[kubevirtTestVMImage].actualValue
 }
 
 func init() {
