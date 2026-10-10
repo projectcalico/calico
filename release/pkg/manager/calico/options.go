@@ -97,6 +97,13 @@ func WithOutputDir(outputDir string) Option {
 	}
 }
 
+func WithRecordsDir(dir string) Option {
+	return func(r *CalicoManager) error {
+		r.recordsDir = dir
+		return nil
+	}
+}
+
 func WithAWSProfile(profile string) Option {
 	return func(r *CalicoManager) error {
 		r.awsProfile = profile
@@ -266,7 +273,7 @@ func WithImageScanning(scanning bool, cfg imagescanner.Config) Option {
 
 func WithComponents(components map[string]registry.Component) Option {
 	return func(r *CalicoManager) error {
-		r.imageComponents = components
+		r.components = components
 		return nil
 	}
 }

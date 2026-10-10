@@ -155,6 +155,7 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 			calico.WithVersion(pin.ProductVersion),
 			calico.WithOperatorImage(operator.Registry(o), o.Image, o.Version),
 			calico.WithOutputDir(hashrel.Source),
+			calico.WithRecordsDir(outputs.RecordsDir(cfg.OutputDir, hashrel.Hash)),
 			calico.WithTmpDir(cfg.TmpDir),
 			calico.WithLogsDir(filepath.Join(cfg.LogsDir, pin.ProductVersion)),
 			calico.WithGithubOrg(c.String(orgFlag.Name)),
@@ -248,7 +249,7 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 
 		o := pinnedOperator(cfg, c, hashrel.Operator, hashrel.ProductVersion)
 		if c.Bool(operatorFlagName) {
-			opts, err := operatorPublishOptions(c, o.Version, hashrel.Source, filepath.Join(cfg.LogsDir, hashrel.ProductVersion))
+			opts, err := operatorPublishOptions(c, outputs.RecordsDir(cfg.OutputDir, hashrel.Hash), filepath.Join(cfg.LogsDir, hashrel.ProductVersion))
 			if err != nil {
 				return fmt.Errorf("operator publish options: %w", err)
 			}
@@ -266,6 +267,7 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 			calico.WithOperatorImage(operator.Registry(o), o.Image, o.Version),
 			calico.WithOperator(c.Bool(operatorFlagName)),
 			calico.WithOutputDir(hashrel.Source),
+			calico.WithRecordsDir(outputs.RecordsDir(cfg.OutputDir, hashrel.Hash)),
 			calico.WithTmpDir(cfg.TmpDir),
 			calico.WithLogsDir(filepath.Join(cfg.LogsDir, hashrel.ProductVersion)),
 			calico.WithGithubOrg(c.String(orgFlag.Name)),
@@ -286,7 +288,7 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 		} else {
 			opts = append(opts, calico.WithImageScanning(c.Bool(imageScanFlag.Name), *imageScanningAPIConfig(c)))
 		}
-		opts = append(opts, calico.WithComponents(pin.Images()))
+		opts = append(opts, calico.WithComponents(pin.Released()))
 		if reg := c.StringSlice(helmRegistryFlag.Name); len(reg) > 0 {
 			opts = append(opts, calico.WithHelmRegistries(reg))
 		}
