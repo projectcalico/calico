@@ -1184,21 +1184,6 @@ components:
       - ^felix/(?:[^/]+/)*[^/]*_test\.go$
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$
       - ^libcalico-go/(?:[^/]+/)*[^/]*_test\.go$
-  istio:
-    in:
-      - ^hack/test/certs/
-      - ^istio/
-      - ^lib\.Makefile$
-      - ^metadata\.mk$
-    exclude:
-      - ^(?:[^/]+/)*AUTHORS[^/]*$
-      - ^(?:[^/]+/)*CONTRIBUTING[^/]*$
-      - ^(?:[^/]+/)*DEVELOPER_GUIDE[^/]*$
-      - ^(?:[^/]+/)*LICENSE[^/]*$
-      - ^(?:[^/]+/)*README[^/]*$
-      - ^(?:[^/]+/)*SECURITY\.md$
-      - ^(?:[^/]+/)*[^/]*\.md$
-      - ^(?:[^/]+/)*\.gitignore$
   key-cert-provisioner:
     in:
       - ^hack/test/certs/
