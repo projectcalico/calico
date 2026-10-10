@@ -57,9 +57,12 @@ var (
 		Help: "Total number of flows received by Goldmane aggregator.",
 	})
 
-	flowIndexLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "goldmane_aggr_flow_index_latency_ms",
-		Help: "Summary measuring the time taken to index a flow.",
+	// flowIndexLatency is observed once per flow on the main loop. A Summary's quantile
+	// upkeep there costs more than indexing the flow, so this is a Histogram.
+	flowIndexLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "goldmane_aggr_flow_index_latency_seconds",
+		Help:    "Histogram of the time taken to index a flow, in seconds.",
+		Buckets: prometheus.ExponentialBuckets(1e-6, 4, 11),
 	})
 
 	flowIndexBatchSize = cprometheus.NewSummary(prometheus.SummaryOpts{
@@ -493,7 +496,9 @@ batchLoop:
 			break batchLoop
 		}
 	}
-	logrus.WithField("num", numHandled).Debug("Processed flow batch")
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.WithField("num", numHandled).Debug("Processed flow batch")
+	}
 
 	// Set the number of unique flows in the aggregator based on the number of DiachronicFlows.
 	numUniqueFlows.Set(float64(a.flowStore.Size()))
@@ -503,7 +508,9 @@ batchLoop:
 
 func (a *Goldmane) indexFlow(f storage.FlowFromNode) {
 	flowStart := time.Now()
-	logrus.WithField("flow", f.Flow).Debug("Received Flow")
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.WithField("flow", f.Flow).Debug("Received Flow")
+	}
 
 	// Increment the received flow counter.
 	receivedFlowCounter.Inc()
@@ -514,5 +521,5 @@ func (a *Goldmane) indexFlow(f storage.FlowFromNode) {
 	}
 
 	// Record time taken to process the flow.
-	flowIndexLatency.Observe(float64(time.Since(flowStart).Milliseconds()))
+	flowIndexLatency.Observe(time.Since(flowStart).Seconds())
 }
