@@ -1704,6 +1704,21 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 		}
 	}
 
+	/* In HostAddress mode (no tunnel-device IP) a host-networked client's request to a
+	 * local workload arrives over the overlay with the client node IP as inner source;
+	 * the reply targets a bare node IP (CALI_RT_HOST, not tunneled) and would leave
+	 * un-encapsulated with a pod source, which source-checking fabrics (e.g. GCP) drop.
+	 * Mark the flow so fib_co_re.h re-encapsulates the reply to that node.  Scoped to
+	 * ingress on a Calico-owned encapsulating device (IFACE_ENCAPS) with a remote-host
+	 * source, which excludes tunnel=none.  ip_void(HOST_TUNNEL_IP) selects HostAddress
+	 * mode: it is void only for IPIP/VXLAN without a device IP, and set for
+	 * TunnelAddress and for WireGuard, so both are excluded. */
+	if (ip_void(HOST_TUNNEL_IP) && IFACE_ENCAPS && CALI_F_FROM_HEP &&
+			rt_addr_is_remote_host(&state->ip_src)) {
+		ct_ctx_nat->flags |= CALI_CT_FLAG_OVERLAY_REPLY;
+		CALI_DEBUG("CALI_CT_FLAG_OVERLAY_REPLY");
+	}
+
 	if (state->ip_proto == IPPROTO_TCP && !(state->flags & CALI_ST_NO_L4_HDR)) {
 		if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
