@@ -16,9 +16,11 @@ package validation_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
@@ -219,6 +221,93 @@ func TestFelixConfiguration_Validation(t *testing.T) {
 			},
 			wantErr: "min must not be greater than max",
 		},
+		{
+			name: "routeTableIDRange max above 32 bits is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{RouteTableRanges: &v3.RouteTableRanges{{Min: 4294967000, Max: 4294967296}}},
+			},
+			wantErr: "max must be <= 4294967295",
+		},
+		{
+			name: "routeTableRanges targeting 65535 tables is accepted",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{RouteTableRanges: &v3.RouteTableRanges{{Min: 1, Max: 252}, {Min: 256, Max: 65538}}},
+			},
+		},
+		{
+			name: "routeTableRanges targeting more than 65535 tables is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{RouteTableRanges: &v3.RouteTableRanges{{Min: 1, Max: 252}, {Min: 256, Max: 65539}}},
+			},
+			wantErr: "routeTableRanges must target at most 65535 tables in total",
+		},
+		{
+			name: "kubeNodePortRanges with numeric ports and ranges is accepted",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec: v3.FelixConfigurationSpec{KubeNodePortRanges: &[]numorstring.Port{
+					numorstring.SinglePort(30000),
+					{MinPort: 30001, MaxPort: 32767},
+				}},
+			},
+		},
+		{
+			name: "kubeNodePortRanges with a named port is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{KubeNodePortRanges: &[]numorstring.Port{{PortName: "http"}}},
+			},
+			wantErr: "kubeNodePortRanges must not contain named ports",
+		},
+		{
+			name: "externalNodesList with IPv4 CIDRs and addresses is accepted",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{ExternalNodesCIDRList: &[]string{"10.0.0.0/24", "192.168.1.1"}},
+			},
+		},
+		{
+			name: "externalNodesList with an IPv6 CIDR is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{ExternalNodesCIDRList: &[]string{"fd00::/64"}},
+			},
+			wantErr: "externalNodesList entries must be IPv4 CIDRs or IPv4 addresses",
+		},
+		{
+			name: "externalNodesList with an invalid CIDR is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{ExternalNodesCIDRList: &[]string{"10.0.0.0/33"}},
+			},
+			wantErr: "externalNodesList entries must be IPv4 CIDRs or IPv4 addresses",
+		},
+		{
+			name: "openstackRegion that is a DNS label is accepted",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{OpenstackRegion: strings.Repeat("r", 46)},
+			},
+		},
+		{
+			name: "openstackRegion longer than 46 characters is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{OpenstackRegion: strings.Repeat("r", 47)},
+			},
+			wantErr: "spec.openstackRegion: Too long",
+		},
+		{
+			name: "openstackRegion that is not a DNS label is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{OpenstackRegion: "Region_One"},
+			},
+			wantErr: "spec.openstackRegion: Invalid value",
+		},
 	}
 
 	for _, tt := range tests {
@@ -275,6 +364,39 @@ func TestFelixConfiguration_NumericBounds(t *testing.T) {
 		t.Run(b.field+" at the bounds", func(t *testing.T) {
 			expectCreateSucceeds(t, newConfig(b.field, b.min))
 			expectCreateSucceeds(t, newConfig(b.field, b.max))
+		})
+	}
+}
+
+// Felix compiles these with regexp.Compile. The schema rule evaluates each value
+// as a regexp, so the rejection carries the parse error rather than a rule message.
+func TestFelixConfiguration_RegexpFields(t *testing.T) {
+	fields := []string{
+		"logDebugFilenameRegex",
+		"nftablesFlowTableDataIfacePattern",
+		"bpfDataIfacePattern",
+		"bpfL3IfacePattern",
+		"bpfDisableGROForIfaces",
+		"mtuIfacePattern",
+	}
+
+	newConfig := func(field, value string) *unstructured.Unstructured {
+		return &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "projectcalico.org/v3",
+				"kind":       "FelixConfiguration",
+				"metadata":   map[string]interface{}{"name": uniqueName("felixconfig")},
+				"spec":       map[string]interface{}{field: value},
+			},
+		}
+	}
+
+	for _, field := range fields {
+		t.Run(field+" valid regexp", func(t *testing.T) {
+			expectCreateSucceeds(t, newConfig(field, "^(en.*|eth[0-9]+)$"))
+		})
+		t.Run(field+" invalid regexp", func(t *testing.T) {
+			expectCreateFails(t, newConfig(field, "eth["), "error parsing regexp")
 		})
 	}
 }

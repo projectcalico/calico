@@ -333,7 +333,10 @@ type FelixConfigurationSpec struct {
 	// OpenstackRegion is the name of the region that a particular Felix belongs to. In a multi-region
 	// Calico/OpenStack deployment, this must be configured somehow for each Felix (here in the datamodel,
 	// or in felix.cfg or the environment on each compute node), and must match the [calico]
-	// openstack_region value configured in neutron.conf on each node. [Default: Empty]
+	// openstack_region value configured in neutron.conf on each node. The region is used in a
+	// namespace name, so it must be a DNS label of at most 46 characters. [Default: Empty]
+	// +kubebuilder:validation:MaxLength=46
+	// +kubebuilder:validation:Pattern=`^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$`
 	OpenstackRegion string `json:"openstackRegion,omitempty"`
 
 	// InterfacePrefix is the interface name prefix that identifies workload endpoints and so distinguishes
@@ -455,6 +458,8 @@ type FelixConfigurationSpec struct {
 	// LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
 	// Only logs from files with names that match the given regular expression are included.  The filter only applies
 	// to Debug level logs.
+	// +kubebuilder:validation:MaxLength=1024
+	// +kubebuilder:validation:XValidation:rule="type('x'.matches(self)) == bool",message="must be a valid regular expression",reason=FieldValueInvalid
 	LogDebugFilenameRegex string `json:"logDebugFilenameRegex,omitempty" validate:"omitempty,regexp"`
 
 	// IPIPEnabled overrides whether Felix should configure an IPIP interface on the host. Optional as Felix
@@ -605,6 +610,7 @@ type FelixConfigurationSpec struct {
 	// KubeNodePortRanges holds list of port ranges used for service node ports. Only used if felix detects kube-proxy running in ipvs mode.
 	// Felix uses these ranges to separate host and workload traffic. [Default: 30000:32767].
 	// +kubebuilder:validation:MaxItems=7
+	// +kubebuilder:validation:XValidation:rule="self.all(p, type(p) == int || p.matches('^[0-9:]+$'))",message="kubeNodePortRanges must not contain named ports",reason=FieldValueInvalid
 	KubeNodePortRanges *[]numorstring.Port `json:"kubeNodePortRanges,omitempty" validate:"omitempty,dive"`
 
 	// PolicySyncPathPrefix is used to by Felix to communicate policy changes to external services,
@@ -696,6 +702,10 @@ type FelixConfigurationSpec struct {
 
 	// ExternalNodesCIDRList is a list of CIDR's of external, non-Calico nodes from which VXLAN/IPIP overlay traffic
 	// will be allowed.  By default, external tunneled traffic is blocked to reduce attack surface.
+	// Entries must be IPv4 CIDRs or IPv4 addresses.
+	// +kubebuilder:validation:MaxItems=10000
+	// +kubebuilder:validation:items:MaxLength=49
+	// +kubebuilder:validation:XValidation:rule="self.all(c, isCIDR(c) ? cidr(c).ip().family() == 4 : (isIP(c) && ip(c).family() == 4))",message="externalNodesList entries must be IPv4 CIDRs or IPv4 addresses",reason=FieldValueInvalid
 	ExternalNodesCIDRList *[]string `json:"externalNodesList,omitempty"`
 
 	// DebugMemoryProfilePath is the path to write the memory profile to when triggered by signal.
@@ -770,6 +780,8 @@ type FelixConfigurationSpec struct {
 	// interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
 	// offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
 	// is not Disabled. [Default: ""]
+	// +kubebuilder:validation:MaxLength=1024
+	// +kubebuilder:validation:XValidation:rule="type('x'.matches(self)) == bool",message="must be a valid regular expression",reason=FieldValueInvalid
 	NFTablesFlowTableDataIfacePattern string `json:"nftablesFlowTableDataIfacePattern,omitempty" validate:"omitempty,regexp"`
 
 	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]
@@ -889,11 +901,15 @@ type FelixConfigurationSpec struct {
 	// flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the
 	// cluster.  It should not match the workload interfaces (usually named cali...) or any other special device managed
 	// by Calico itself (e.g., tunnels).
+	// +kubebuilder:validation:MaxLength=1024
+	// +kubebuilder:validation:XValidation:rule="type('x'.matches(self)) == bool",message="must be a valid regular expression",reason=FieldValueInvalid
 	BPFDataIfacePattern string `json:"bpfDataIfacePattern,omitempty" validate:"omitempty,regexp"`
 
 	// BPFL3IfacePattern is a regular expression that allows to list tunnel devices like wireguard or vxlan (i.e., L3 devices)
 	// in addition to BPFDataIfacePattern. That is, tunnel interfaces not created by Calico, that Calico workload traffic flows
 	// over as well as any interfaces that handle incoming traffic to nodeports and services from outside the cluster.
+	// +kubebuilder:validation:MaxLength=1024
+	// +kubebuilder:validation:XValidation:rule="type('x'.matches(self)) == bool",message="must be a valid regular expression",reason=FieldValueInvalid
 	BPFL3IfacePattern string `json:"bpfL3IfacePattern,omitempty" validate:"omitempty,regexp"`
 
 	// BPFConnectTimeLoadBalancingEnabled when in BPF mode, controls whether Felix installs the connection-time load
@@ -1042,6 +1058,8 @@ type FelixConfigurationSpec struct {
 
 	// BPFDisableGROForIfaces is a regular expression that controls which interfaces Felix should disable the
 	// Generic Receive Offload [GRO] option.  It should not match the workload interfaces (usually named cali...).
+	// +kubebuilder:validation:MaxLength=1024
+	// +kubebuilder:validation:XValidation:rule="type('x'.matches(self)) == bool",message="must be a valid regular expression",reason=FieldValueInvalid
 	BPFDisableGROForIfaces string `json:"bpfDisableGROForIfaces,omitempty" validate:"omitempty,regexp"`
 
 	// BPFExcludeCIDRsFromNAT is a list of CIDRs that are to be excluded from NAT
@@ -1128,7 +1146,8 @@ type FelixConfigurationSpec struct {
 
 	// Calico programs additional Linux route tables for various purposes.
 	// RouteTableRanges specifies a set of table index ranges that Calico should use.
-	// Deprecates`RouteTableRange`, overrides `RouteTableRange`.
+	// Deprecates`RouteTableRange`, overrides `RouteTableRange`. The ranges may target at most 65535
+	// tables in total.
 	RouteTableRanges *RouteTableRanges `json:"routeTableRanges,omitempty" validate:"omitempty,dive"`
 
 	// Deprecated in favor of RouteTableRanges.
@@ -1240,6 +1259,8 @@ type FelixConfigurationSpec struct {
 	// to calculate the host's MTU.
 	// This should not match workload interfaces (usually named cali...).
 	// +optional
+	// +kubebuilder:validation:MaxLength=1024
+	// +kubebuilder:validation:XValidation:rule="type('x'.matches(self)) == bool",message="must be a valid regular expression",reason=FieldValueInvalid
 	MTUIfacePattern string `json:"mtuIfacePattern,omitempty" validate:"omitempty,regexp"`
 
 	// FloatingIPs configures whether or not Felix will program non-OpenStack floating IP addresses.  (OpenStack-derived
@@ -1342,11 +1363,14 @@ type RouteTableRange struct {
 
 // +kubebuilder:validation:XValidation:rule="self.min >= 1",message="min must be >= 1",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="self.min <= self.max",message="min must not be greater than max",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="self.max <= 4294967295",message="max must be <= 4294967295",reason=FieldValueInvalid
 type RouteTableIDRange struct {
 	Min int `json:"min"`
 	Max int `json:"max"`
 }
 
+// +kubebuilder:validation:MaxItems=100
+// +kubebuilder:validation:XValidation:rule="self.map(r, r.max - r.min + 1).sum() <= 65535",message="routeTableRanges must target at most 65535 tables in total",reason=FieldValueInvalid
 type RouteTableRanges []RouteTableIDRange
 
 func (r RouteTableRanges) NumDesignatedTables() int {
