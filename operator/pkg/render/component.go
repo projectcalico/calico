@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	rcomp "github.com/projectcalico/calico/operator/pkg/render/common/components"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 )
 
@@ -39,6 +40,26 @@ type Component interface {
 	// The "componentHandler" converts the returned OSTypes to a node selectors for the "kubernetes.io/os" label on client.Objects
 	// that create pods. Return OSTypeAny means that no node selector should be set for the "kubernetes.io/os" label.
 	SupportedOSType() rmeta.OSType
+}
+
+// Overridable is a component whose workloads take user overrides. A variant's
+// modifier works on ObjectsBeforeOverrides, so the overrides land after its
+// changes rather than before them.
+type Overridable interface {
+	Component
+
+	// ObjectsBeforeOverrides is Objects without the user overrides applied.
+	ObjectsBeforeOverrides() (objsToCreate, objsToDelete []client.Object)
+
+	// OverrideTargets names each object that takes overrides, with its overrides.
+	OverrideTargets() []rcomp.OverrideTarget
+}
+
+// ObjectsWithOverrides is the Objects every Overridable component shares.
+func ObjectsWithOverrides(c Overridable) ([]client.Object, []client.Object) {
+	create, del := c.ObjectsBeforeOverrides()
+	rcomp.ApplyOverrides(create, c.OverrideTargets())
+	return create, del
 }
 
 // A component that exposes an extension point hands a variant the config it rendered

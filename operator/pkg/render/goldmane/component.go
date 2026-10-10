@@ -98,18 +98,23 @@ func (c *Component) SupportedOSType() rmeta.OSType {
 }
 
 func (c *Component) Objects() ([]client.Object, []client.Object) {
-	deployment := c.deployment()
-	if overrides := c.cfg.Goldmane.Spec.GoldmaneDeployment; overrides != nil {
-		rcomp.ApplyDeploymentOverrides(deployment, overrides)
-	}
+	return render.ObjectsWithOverrides(c)
+}
 
+var _ render.Overridable = (*Component)(nil)
+
+func (c *Component) OverrideTargets() []rcomp.OverrideTarget {
+	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.Deployment](GoldmaneDeploymentName, c.cfg.Goldmane.Spec.GoldmaneDeployment)}
+}
+
+func (c *Component) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {
 	objs := []client.Object{
 		c.serviceAccount(),
 		c.role(),
 		c.roleBinding(),
 		c.hotReloadConfigMap(),
 		c.goldmaneService(),
-		deployment,
+		c.deployment(),
 		c.networkPolicy(),
 	}
 

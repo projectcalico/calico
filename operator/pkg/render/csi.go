@@ -314,10 +314,6 @@ func (c *csiComponent) csiDaemonset() *appsv1.DaemonSet {
 		Spec:       dsSpec,
 	}
 
-	if overrides := c.cfg.Installation.CSINodeDriverDaemonSet; overrides != nil {
-		rcomp.ApplyDaemonSetOverrides(&ds, overrides)
-	}
-
 	return &ds
 }
 
@@ -381,6 +377,16 @@ func (c *csiComponent) ResolveImages(is *operatorv1.ImageSet) error {
 }
 
 func (c *csiComponent) Objects() (objsToCreate, objsToDelete []client.Object) {
+	return ObjectsWithOverrides(c)
+}
+
+var _ Overridable = (*csiComponent)(nil)
+
+func (c *csiComponent) OverrideTargets() []rcomp.OverrideTarget {
+	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.DaemonSet](CSIDaemonSetName, c.cfg.Installation.CSINodeDriverDaemonSet)}
+}
+
+func (c *csiComponent) ObjectsBeforeOverrides() (objsToCreate, objsToDelete []client.Object) {
 	objs := []client.Object{
 		c.csiDriver(),
 		c.csiDaemonset(),
