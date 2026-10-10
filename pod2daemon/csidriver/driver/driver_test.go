@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"strings"
 	"testing"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	. "github.com/onsi/gomega"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Compile-time assertions that the driver satisfies the CSI server interfaces.
@@ -119,3 +122,97 @@ func createRealTempJSONFile(name, contents string) error {
 
 // For testing file-not-exists error handling.
 func dontCreateCredsFile(_, _ string) error { return nil }
+
+// TestValidateVolumeID covers the CSI spec requirement that VolumeId be set.
+// Format is deliberately not constrained — see the function's godoc.
+// Path-traversal protection is independently covered by TestJoinUnderBase.
+func TestValidateVolumeID(t *testing.T) {
+	t.Run("reject/empty", func(t *testing.T) {
+		g := NewWithT(t)
+		err := validateVolumeID("")
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(status.Code(err)).To(Equal(codes.InvalidArgument))
+	})
+
+	// Anything non-empty passes — kubelet's current sha256-hex shape, future
+	// shapes, weird characters, traversal segments. Safety is provided by
+	// joinUnderBase at the FS-op sites, not here.
+	accepted := []string{
+		"csi-5136cc95849bc789e7f53a2466693a5e63189a8e99e3223706f1f7b804624e32",
+		".",
+		"..",
+		"foo/bar",
+		"with space",
+		"with\nnewline",
+		strings.Repeat("a", 1024),
+	}
+	for _, vid := range accepted {
+		t.Run(fmt.Sprintf("accept/%q", vid), func(t *testing.T) {
+			g := NewWithT(t)
+			g.Expect(validateVolumeID(vid)).To(Succeed())
+		})
+	}
+}
+
+// TestJoinUnderBase covers the path-traversal safety property: paths that
+// resolve outside base are rejected, paths that stay under base are returned
+// joined.
+func TestJoinUnderBase(t *testing.T) {
+	const base = "/var/run/nodeagent/mount"
+
+	rejected := []struct {
+		name string
+		in   string
+	}{
+		{"empty", ""},
+		{"dot", "."},
+		{"dotdot", ".."},
+		{"single-traversal", "../etc/poc"},
+		{"deep-traversal", "../../../../etc/poc"},
+	}
+	for _, tc := range rejected {
+		t.Run("reject/"+tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+			_, err := joinUnderBase(base, tc.in)
+			g.Expect(err).To(HaveOccurred(), "expected rejection for %q", tc.in)
+			g.Expect(status.Code(err)).To(Equal(codes.InvalidArgument))
+		})
+	}
+
+	accepted := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"flat-name", "csi-abc", "/var/run/nodeagent/mount/csi-abc"},
+		{"with-suffix", "csi-abc.json", "/var/run/nodeagent/mount/csi-abc.json"},
+	}
+	for _, tc := range accepted {
+		t.Run("accept/"+tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+			got, err := joinUnderBase(base, tc.in)
+			g.Expect(err).NotTo(HaveOccurred(), "unexpected rejection of %q", tc.in)
+			g.Expect(got).To(Equal(tc.want))
+		})
+	}
+
+	// RetrieveConfig() assembles base paths via string concatenation, so a
+	// base with a trailing slash or duplicate separator can reach here. The
+	// function must normalize base before the prefix check.
+	nonNormalized := []string{
+		"/var/run/nodeagent/mount/",
+		"/var/run/nodeagent//mount",
+		"/var/run/nodeagent/mount///",
+	}
+	for _, b := range nonNormalized {
+		t.Run(fmt.Sprintf("normalizes-base/%q", b), func(t *testing.T) {
+			g := NewWithT(t)
+			got, err := joinUnderBase(b, "csi-abc")
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(got).To(Equal("/var/run/nodeagent/mount/csi-abc"))
+
+			_, err = joinUnderBase(b, "..")
+			g.Expect(err).To(HaveOccurred(), "traversal must still be rejected after normalization")
+		})
+	}
+}
