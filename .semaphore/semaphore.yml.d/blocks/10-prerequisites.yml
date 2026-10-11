@@ -166,7 +166,9 @@
               # branch — gate on SEMAPHORE_GIT_PR_NUMBER being empty to detect
               # an actual branch build before pushing.
               if [[ -z "${SEMAPHORE_GIT_PR_NUMBER}" && ( "$SEMAPHORE_GIT_BRANCH" == "master" || "$SEMAPHORE_GIT_BRANCH" == release-* ) ]]; then
-                docker push "$NFT_RPMS_IMAGE"
+                # Best-effort registry cache push; the GCS tarball below is the
+                # authoritative cache, so a push failure must not fail the block.
+                docker push "$NFT_RPMS_IMAGE" || echo "WARNING: push of $NFT_RPMS_IMAGE failed (non-fatal); relying on GCS cache"
               fi
             fi
           - docker save "$NFT_RPMS_IMAGE" -o /tmp/nft-rpms.tar
