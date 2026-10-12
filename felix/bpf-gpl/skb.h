@@ -70,14 +70,8 @@ static CALI_BPF_INLINE void skb_refresh_start_end(struct cali_tc_ctx *ctx) {
  */
 static CALI_BPF_INLINE long skb_iphdr_offset(struct cali_tc_ctx *ctx)
 {
-	if (CALI_F_IPIP_ENCAPPED) {
-		// Ingress on an IPIP tunnel: skb is [ether|outer IP|inner IP|payload]
-		// TODO: we need to consider different types of IPIP tunnels like 4in6 or 6in4
-		// XXX no support for ip options in ipip header
-		return sizeof(struct ethhdr) + IP_SIZE;
-	} else if (CALI_F_L3) {
-		// Egress on an IPIP tunnel, or any other l3 devices (wireguard) both directions:
-		// skb is [inner IP|payload]
+	if (CALI_F_L3) {
+		// L3 device (IPIP, wireguard), both directions: skb is [IP|payload]
 		return 0;
 	} else {
 		// Normal L2 interface: skb is [ether|IP|payload]
@@ -174,6 +168,23 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 	ctx->ip_header =  ctx->data_start + skb_iphdr_offset(ctx);
 
 	return 0;
+}
+
+/* skb_refresh_validate_ptrs_l4 is skb_refresh_validate_ptrs for UDP_SIZE bytes of
+ * the next header, except for a non-first IPv4 fragment. That carries no L4 header,
+ * only a piece of the payload that can be shorter than any L4 header, so only the
+ * IP header is validated.
+ */
+static CALI_BPF_INLINE int skb_refresh_validate_ptrs_l4(struct cali_tc_ctx *ctx)
+{
+#ifndef IPVER6
+	int err = skb_refresh_validate_ptrs(ctx, 0);
+
+	if (err || ip_is_nonfirst_frag(ip_hdr(ctx))) {
+		return err;
+	}
+#endif
+	return skb_refresh_validate_ptrs(ctx, UDP_SIZE);
 }
 
 /* bpf_load_bytes copies len bytes of packet data at offset into buf, using the
@@ -276,6 +287,29 @@ static CALI_BPF_INLINE void skb_log(struct cali_tc_ctx *ctx, bool accepted)
 			bpf_log("DENIED");
 		}
 	}
+}
+
+/* tcp_seq_space returns the sequence numbers this segment consumes: its payload
+ * plus one for each of SYN and FIN. */
+static CALI_BPF_INLINE __u32 tcp_seq_space(struct cali_tc_ctx *ctx, struct tcphdr *tcp_header)
+{
+	/* The IP header, not skb->len: the latter can include Ethernet padding
+	 * on a small frame, which would over-advance snd_nxt. */
+	int hdrs = ctx->ipheader_len + tcp_header->doff * 4;
+
+#ifdef IPVER6
+	/* state->ip_size is payload_len, which excludes the base header that
+	 * ipheader_len counts. */
+	hdrs -= IP_SIZE;
+#endif
+
+	int payload = (int)bpf_ntohs(ctx->state->ip_size) - hdrs;
+
+	if (payload < 0) {
+		payload = 0;
+	}
+
+	return (__u32)payload + (tcp_header->syn ? 1 : 0) + (tcp_header->fin ? 1 : 0);
 }
 
 #endif /* __CALI_SKB_H__ */

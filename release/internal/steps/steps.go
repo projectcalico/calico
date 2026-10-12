@@ -17,7 +17,6 @@ package steps
 
 import (
 	"errors"
-	"strings"
 	"sync"
 )
 
@@ -25,37 +24,33 @@ type RefRecorder interface {
 	Add(refs ...string) error
 }
 
-// DigestResolver reports the manifest digest of a tag. exists is false with a
-// nil error when the tag is absent; auth and network failures return an error.
-type DigestResolver func(ref string) (digest string, exists bool, err error)
-
-// A repo publishes several tags at different digests, so it maps to a set.
-type RecordedDigests map[string]map[string]struct{}
-
-func DigestsByRepo(refs []string) RecordedDigests {
-	out := make(RecordedDigests, len(refs))
-	for _, ref := range refs {
-		repo, digest, ok := strings.Cut(ref, "@")
-		if !ok {
-			continue
-		}
-		if out[repo] == nil {
-			out[repo] = map[string]struct{}{}
-		}
-		out[repo][digest] = struct{}{}
-	}
-	return out
-}
-
 // Go runs fn over every item at once and waits for all of them, so fn must be
 // safe to call concurrently. Results come back in the order the items were
 // given, whatever order they finished in.
 func Go[U, T any](items []U, fn func(U) (T, error)) ([]T, error) {
+	return GoLimit(items, 0, fn)
+}
+
+// GoLimit runs fn over every item, at most limit in flight.
+// A limit of zero or less runs everything at once.
+func GoLimit[U, T any](items []U, limit int, fn func(U) (T, error)) ([]T, error) {
 	var wg sync.WaitGroup
 	out := make([]T, len(items))
 	errs := make([]error, len(items))
+	var tokens chan struct{}
+	if limit > 0 {
+		tokens = make(chan struct{}, limit)
+	}
 	for i, item := range items {
-		wg.Go(func() { out[i], errs[i] = fn(item) })
+		if tokens != nil {
+			tokens <- struct{}{}
+		}
+		wg.Go(func() {
+			if tokens != nil {
+				defer func() { <-tokens }()
+			}
+			out[i], errs[i] = fn(item)
+		})
 	}
 	wg.Wait()
 	return out, errors.Join(errs...)

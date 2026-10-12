@@ -8,7 +8,7 @@ BUILD_IMAGES ?= $(ENVOY_PROXY_IMAGE)
 # For updating this version please see
 # operator/docs/common_tasks.md, "Updating the bundled version of Envoy Gateway".
 # See https://gateway.envoyproxy.io/news/releases/matrix/ for version compatibility.
-ENVOYBINARY_IMAGE ?= quay.io/tigera/envoybinary:v1.38.3-a1e8aefd3a
+ENVOYBINARY_IMAGE ?= quay.io/tigera/envoybinary:v1.39.1-9408962881
 
 # Only amd64 and arm64 are supported. `=` (not `?=`) so env-provided ARCHES
 # from the release manager doesn't override the allowlist.

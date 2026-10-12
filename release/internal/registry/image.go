@@ -25,8 +25,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 )
 
-// OperatorImage is the operator's image name, which the registry it publishes to
-// already carries the calico/ path for.
+// OperatorImage is the operator's image name
 const OperatorImage = "operator"
 
 // ResolveDigest returns the manifest digest of image, authenticating with the

@@ -1,0 +1,106 @@
+# Nightly run of every CI lane, whatever changed: a cron ignores its modules'
+# gates. The includes repeat the CI workflow's, since a cron cannot include a
+# workflow, and a check fails the build when the two drift.
+version: condensed
+generateName: calico-nightly-
+
+# Off the hour, so it does not land with every other repo's.
+schedule: 30 0 * * *
+
+timeout: 6h
+
+globalPrologue: |
+  mkdir -p /go/src/github.com/projectcalico
+  ln -sfn "${CI_HOME}/${CI_GIT_DIR}" /go/src/github.com/projectcalico/calico
+  export GOPROXY="${GOPROXY:-https://proxy.golang.org|direct}"
+  # Anonymous Docker Hub pulls are rate limited. The daemon is up by now on any
+  # step that has one. A VM step never gets the credentials: the bundle is loaded
+  # whole, so there is no key list to send to the machine.
+  if [ -n "${DOCKERHUB_USERNAME:-}" ] && docker info >/dev/null 2>&1; then
+    for __attempt in 1 2 3; do
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin && break
+      [ "$__attempt" -lt 3 ] || exit 1
+      sleep 10
+    done
+  fi
+  # One place for the Go build cache, whether a build runs in docker or on the
+  # host, so what is restored is what the build reads.
+  export LOCAL_GO_PKG_CACHE="${CI_HOME}/${CI_GIT_DIR}/.go-pkg-cache"
+  export GOCACHE="${LOCAL_GO_PKG_CACHE}"
+  # Keyed on the target branch, so a PR builds on what its branch last built. A
+  # miss just builds cold.
+  if [ -n "${BUILD_CACHE_GROUP:-}" ]; then
+    ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache restore "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" ) || true
+  fi
+
+# Only a passing branch build is worth handing to the next run; a PR's cache
+# would only ever be read by that PR.
+globalEpilogue: |
+  if [ "${STORE_BUILD_CACHE:-}" = true ] && [ "${CI_STEP_EXIT_CODE:-1}" = 0 ] &&
+     [ "${CI_POD_STOPPED:-false}" != true ] && [ "${CI_GIT_REF_TYPE}" != PR ] && [ "${CI_GIT_REF_TYPE}" != TAG ]; then
+    ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache store "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" .go-pkg-cache ) || true
+  fi
+
+defaults:
+  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2
+  jobSize: medium
+  requests: {cpu: 1500m, memory: 2Gi}
+  timeout: 1h
+  env:
+    - name: ARGOCI_RESOURCE_PREFIX
+      value: argoci
+    # Where the VM fleets run, next to the bucket their VMs pull builds from.
+    - name: ARGOCI_GCP_REGION
+      value: us-central1
+  services:
+    - goproxy
+  secretBundles:
+    - docker-hub
+
+includes:
+  - path: .argoci/modules/10-prerequisites.yaml
+  - path: .argoci/modules/99-cleanup.yaml
+  - path: .argoci/modules/20-lib.yaml
+  - path: .argoci/modules/20-api.yaml
+  - path: .argoci/modules/20-calicoctl.yaml
+  - path: .argoci/modules/20-confd.yaml
+  - path: .argoci/modules/20-pod2daemon.yaml
+  - path: .argoci/modules/20-app-policy.yaml
+  - path: .argoci/modules/20-goldmane.yaml
+  - path: .argoci/modules/20-guardian.yaml
+  - path: .argoci/modules/20-libcalico-go.yaml
+  - path: .argoci/modules/20-apiserver.yaml
+  - path: .argoci/modules/20-whisker-backend.yaml
+  - path: .argoci/modules/20-webhooks.yaml
+  - path: .argoci/modules/20-tools.yaml
+  - path: .argoci/modules/20-whisker.yaml
+  - path: .argoci/modules/20-cmd-calico.yaml
+  - path: .argoci/modules/20-e2e-ut.yaml
+  - path: .argoci/modules/20-e2e-test-sets.yaml
+  - path: .argoci/modules/20-e2e-validation.yaml
+  - path: .argoci/modules/30-key-cert-provisioner.yaml
+  - path: .argoci/modules/60-mock-node.yaml
+  - path: .argoci/modules/90-release.yaml
+  - path: .argoci/modules/20-envoy-gateway.yaml
+  - path: .argoci/modules/20-envoy-proxy.yaml
+  - path: .argoci/modules/20-envoy-ratelimit.yaml
+  - path: .argoci/modules/20-third-party-cni-plugins.yaml
+  - path: .argoci/modules/20-e2e-images.yaml
+  - path: .argoci/modules/10-check-images.yaml
+  - path: .argoci/modules/20-operator.yaml
+  - path: .argoci/modules/20-node.yaml
+  - path: .argoci/modules/20-node-kind.yaml
+  - path: .argoci/modules/45-nft-bench.yaml
+  - path: .argoci/modules/20-gateway-conformance.yaml
+  - path: .argoci/modules/20-felix.yaml
+  - path: .argoci/modules/40-openstack.yaml
+  - path: .argoci/modules/20-e2e-gcp.yaml
+  - path: .argoci/modules/20-kube-controllers.yaml
+  - path: .argoci/modules/20-typha.yaml
+  - path: .argoci/modules/20-cni-plugin.yaml
+  - path: .argoci/modules/20-cni-plugin-windows.yaml
+  - path: .argoci/modules/20-istio.yaml
+  - path: .argoci/modules/10-check-operator-images.yaml
+  - path: .argoci/modules/20-e2e.yaml
+  - path: .argoci/modules/20-manifest-install.yaml
+  - path: .argoci/modules/20-kubevirt-live-migration.yaml

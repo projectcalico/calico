@@ -1,0 +1,25 @@
+# envoy-proxy CI. It repackages an upstream image, so there is no binary to
+# cross-build.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+  services:
+    - docker
+
+steps:
+  - name: envoy-proxy-ci
+    requests: {cpu: 1750m, memory: 1Gi}
+    commands: |
+      cd third_party/envoy-proxy
+      make ci
+
+  # The CI step already builds amd64.
+  - name: envoy-proxy-image
+    requests: {cpu: 1000m, memory: 1.5Gi}
+    matrix:
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+    commands: |
+      cd third_party/envoy-proxy
+      make image ARCH=$ARCH

@@ -303,6 +303,7 @@ spec:
                   type: array
                   x-kubernetes-list-type: atomic
                 programClusterRoutes:
+                  default: EnabledNoEncapOnly
                   description: |-
                     ProgramClusterRoutes controls which "cluster routes" are programmed by Calico's BGP
                     stack, i.e. the routes that a node needs in order to reach workloads on other nodes.  It
@@ -2911,6 +2912,15 @@ spec:
                     Felix exports flow logs.
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
+                flowLogsGoldmaneIncludeIPs:
+                  description: |-
+                    FlowLogsGoldmaneIncludeIPs controls whether flow data sent to Goldmane (and the local flow
+                    reporter) includes the source and destination IP addresses of the aggregated connections.
+                    [Default: Enabled]
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 flowLogsGoldmaneServer:
                   description:
                     FlowLogGoldmaneServer is the flow server endpoint to
@@ -3458,6 +3468,7 @@ spec:
                     like Application layer policy. [Default: Empty]
                   type: string
                 programClusterRoutes:
+                  default: EnabledIPIPOnly
                   description: |-
                     ProgramClusterRoutes controls which "cluster routes" Felix programs, i.e. the routes that
                     a node needs in order to reach workloads on other nodes.  It only applies to IP Pools
@@ -5394,6 +5405,8 @@ spec:
             - metadata
             - spec
           type: object
+      selectableFields:
+        - jsonPath: .spec.node
       served: true
       storage: true
       subresources: {}
@@ -12982,6 +12995,15 @@ rules:
     verbs:
       - create
       - update
+  # calico/node creates the default IPAMConfiguration at startup, even when
+  # Calico IPAM is not in use.
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
+    resources:
+      - ipamconfigurations
+      - ipamconfigs
+    verbs:
+      - get
+      - create
   # These permissions are required for Calico CNI to perform IPAM allocations.
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
@@ -12994,15 +13016,6 @@ rules:
       - create
       - update
       - delete
-  # The CNI plugin and calico/node need to be able to create a default
-  # IPAMConfiguration
-  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
-    resources:
-      - ipamconfigurations
-      - ipamconfigs
-    verbs:
-      - get
-      - create
   # Block affinities must also be watchable by confd for route aggregation.
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
@@ -13044,6 +13057,13 @@ rules:
       - pods/status
     verbs:
       - patch
+  # Lets the CNI plugin's pods/status patch through protect-cni-annotations.projectcalico.org.
+  # Nothing serves this resource; it exists only to be granted.
+  - apiGroups: ["projectcalico.org"]
+    resources:
+      - cniannotations
+    verbs:
+      - write
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - blockaffinities
@@ -13302,6 +13322,17 @@ spec:
           securityContext:
             privileged: true
             runAsUser: 0
+        # This container stages the upstream CNI plugins that the CNI config
+        # references (portmap, host-local, loopback, tuning, flannel) for
+        # install-cni to copy onto the host.
+        - name: cni-plugins
+          image: quay.io/calico/third-party-cni-plugins:master
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - mountPath: /stage
+              name: cni-plugins-stage
+          securityContext:
+            runAsUser: 0
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
@@ -13342,6 +13373,8 @@ spec:
               name: cni-bin-dir
             - mountPath: /host/etc/cni/net.d
               name: cni-net-dir
+            - mountPath: /opt/cni/bin
+              name: cni-plugins-stage
           securityContext:
             privileged: true
             runAsUser: 0
@@ -13510,13 +13543,6 @@ spec:
             # parent directory.
             - name: bpffs
               mountPath: /sys/fs/bpf
-            # Felix reads /sys/kernel/security/lockdown to detect kernel
-            # lockdown=confidentiality; under it, ftrace is disabled and Felix
-            # loads trace-printk-free BPF program variants. securityfs is a
-            # separate filesystem from /sys/fs, so it needs its own mount.
-            - name: sys-kernel-security
-              mountPath: /sys/kernel/security
-              readOnly: true
             - name: cni-log-dir
               mountPath: /var/log/calico/cni
               readOnly: true
@@ -13545,12 +13571,6 @@ spec:
           hostPath:
             path: /sys/fs/bpf
             type: Directory
-        # securityfs, read by Felix to detect kernel lockdown=confidentiality.
-        # No type set (like nodeproc below) so nodes without securityfs still
-        # start; Felix treats an unreadable lockdown file as "not locked down".
-        - name: sys-kernel-security
-          hostPath:
-            path: /sys/kernel/security
         # mount /proc at /nodeproc to be used by ebpf-bootstrap initContainer to mount root cgroup2 fs.
         - name: nodeproc
           hostPath:
@@ -13560,6 +13580,10 @@ spec:
           hostPath:
             path: /opt/cni/bin
             type: DirectoryOrCreate
+        # Staging area for the upstream CNI plugins, written by cni-plugins and
+        # read by install-cni.
+        - name: cni-plugins-stage
+          emptyDir: {}
         - name: cni-net-dir
           hostPath:
             path: /etc/cni/net.d
@@ -13622,7 +13646,7 @@ spec:
         - name: calico-kube-controllers
           image: quay.io/calico/calico:master
           imagePullPolicy: IfNotPresent
-          args: ["component", "kube-controllers"]
+          args: ["component", "kube-controllers", "--health-port=9440"]
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
@@ -13633,10 +13657,9 @@ spec:
             exec:
               command:
                 - /usr/bin/calico
-                - component
-                - kube-controllers
-                - kube-controllers-health
-                - -l
+                - health
+                - --port=9440
+                - --type=liveness
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
@@ -13645,10 +13668,9 @@ spec:
             exec:
               command:
                 - /usr/bin/calico
-                - component
-                - kube-controllers
-                - kube-controllers-health
-                - -r
+                - health
+                - --port=9440
+                - --type=readiness
             periodSeconds: 10
           securityContext:
             runAsNonRoot: true
@@ -13895,6 +13917,49 @@ spec:
             ]
 ---
 # Source: calico/templates/admission-policies.yaml
+# MutatingAdmissionPolicy that removes the pod annotations the Calico CNI plugin
+# writes when a pod is created. Their values describe a previous sandbox, so a
+# pod created with them (from a dumped manifest, say) would otherwise be refused
+# by protect-cni-annotations.projectcalico.org.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: strip-cni-annotations.projectcalico.org
+spec:
+  failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+        operations: ["CREATE"]
+  matchConditions:
+    - name: has-annotations
+      expression: "has(object.metadata.annotations)"
+  variables:
+    # Must match protectedKeys in protect-cni-annotations.yaml.
+    - name: protectedKeys
+      expression: >-
+        object.metadata.annotations.filter(k,
+          k in [
+            'cni.projectcalico.org/podIP',
+            'cni.projectcalico.org/podIPs',
+            'cni.projectcalico.org/containerID',
+            'cni.projectcalico.org/podNetns',
+            'cni.projectcalico.org/network-status'
+          ] ||
+          (k.startsWith('cni.projectcalico.org/') && k.endsWith('.network-status')))
+  mutations:
+    - patchType: JSONPatch
+      jsonPatch:
+        expression: >-
+          variables.protectedKeys.map(k, JSONPatch{
+            op: "remove",
+            path: "/metadata/annotations/" + jsonpatch.escapeKey(k)
+          })
+---
+# Source: calico/templates/admission-policies.yaml
 # This MutatingAdmissionPolicyBinding binds the IP pool defaulting policy to IP pools.
 apiVersion: admissionregistration.k8s.io/v1beta1
 kind: MutatingAdmissionPolicyBinding
@@ -13950,6 +14015,14 @@ spec:
           - stagedglobalnetworkpolicies
 ---
 # Source: calico/templates/admission-policies.yaml
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: strip-cni-annotations.projectcalico.org
+spec:
+  policyName: strip-cni-annotations.projectcalico.org
+---
+# Source: calico/templates/admission-policies.yaml
 # ValidatingAdmissionPolicy that prevents deletion of the built-in Calico tiers
 # (default, kube-admin, kube-baseline). These tiers are required for correct
 # operation and should never be deleted.
@@ -13970,6 +14043,77 @@ spec:
       messageExpression: "'The built-in tier ' + oldObject.metadata.name + ' cannot be deleted'"
 ---
 # Source: calico/templates/admission-policies.yaml
+# ValidatingAdmissionPolicy that allows only Calico to set, change or remove the
+# pod annotations the Calico CNI plugin writes. Felix programs the dataplane
+# from these, so they must not be writable by whoever can update the pod.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: protect-cni-annotations.projectcalico.org
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      # Annotations are writable through pods/status too, and a pods/binding create
+      # copies its own annotations onto the pod. Don't widen this to pods/*:
+      # pods/exec carries no metadata, so kubectl exec would be denied.
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods", "pods/status", "pods/binding"]
+        operations: ["CREATE", "UPDATE"]
+  variables:
+    - name: newAnn
+      expression: "has(object.metadata.annotations) ? object.metadata.annotations : {}"
+    # oldObject is null on CREATE.
+    - name: oldAnn
+      expression: >-
+        request.operation == 'UPDATE'
+          ? (has(oldObject.metadata.annotations) ? oldObject.metadata.annotations : {})
+          : {}
+    - name: perInterfaceKeys
+      expression: >-
+        variables.newAnn.filter(k,
+          k.startsWith('cni.projectcalico.org/') && k.endsWith('.network-status')) +
+        variables.oldAnn.filter(k,
+          k.startsWith('cni.projectcalico.org/') && k.endsWith('.network-status') &&
+          !(k in variables.newAnn))
+    - name: protectedKeys
+      expression: >-
+        [
+          'cni.projectcalico.org/podIP',
+          'cni.projectcalico.org/podIPs',
+          'cni.projectcalico.org/containerID',
+          'cni.projectcalico.org/podNetns',
+          'cni.projectcalico.org/network-status'
+        ] + variables.perInterfaceKeys
+    # Keys this write adds, changes or removes.
+    - name: changed
+      expression: >-
+        variables.protectedKeys.filter(k,
+          k in variables.newAnn
+            ? !(k in variables.oldAnn) || variables.oldAnn[k] != variables.newAnn[k]
+            : k in variables.oldAnn)
+    - name: canWriteCNIAnnotations
+      expression: >-
+        authorizer.group('projectcalico.org')
+          .resource('cniannotations')
+          .check('write').allowed()
+    # Anyone who may delete this policy could remove it anyway, so they are not refused.
+    - name: canDeletePolicy
+      expression: >-
+        authorizer.group('admissionregistration.k8s.io')
+          .resource('validatingadmissionpolicies')
+          .name('protect-cni-annotations.projectcalico.org')
+          .check('delete').allowed()
+  validations:
+    - expression: "variables.changed.size() == 0 || variables.canWriteCNIAnnotations || variables.canDeletePolicy"
+      reason: Forbidden
+      message: "Only identities allowed to write cniannotations.projectcalico.org, or to delete this policy, may set, change or remove these pod annotations"
+      messageExpression: >-
+        'Only identities allowed to write cniannotations.projectcalico.org, or to delete this policy, may set, change or remove these pod annotations: ' +
+        variables.changed.join(', ')
+---
+# Source: calico/templates/admission-policies.yaml
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
@@ -13978,6 +14122,15 @@ spec:
   policyName: protect-builtin-tiers.projectcalico.org
   validationActions:
     - Deny
+---
+# Source: calico/templates/admission-policies.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: protect-cni-annotations.projectcalico.org
+spec:
+  policyName: protect-cni-annotations.projectcalico.org
+  validationActions: [Deny]
 ---
 # Source: calico/templates/calico-webhooks.yaml
 apiVersion: admissionregistration.k8s.io/v1

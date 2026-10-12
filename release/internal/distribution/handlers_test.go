@@ -25,9 +25,12 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	ghapi "github.com/google/go-github/v53/github"
 
 	gh "github.com/projectcalico/calico/release/internal/github"
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/outputs"
 )
 
 // fakeRunner records the command a destination built, so a test asserts on
@@ -162,6 +165,59 @@ func TestS3ProfileOnlyWhenSet(t *testing.T) {
 	}
 }
 
+func TestS3CachePolicy(t *testing.T) {
+	t.Run("absent when unset", func(t *testing.T) {
+		f := &fakeRunner{}
+		if err := (S3{URI: "s3://b/x/", Runner: f}).Publish(context.Background(), srcPath(t, false)); err != nil {
+			t.Fatalf("Publish: %v", err)
+		}
+		if f.has(cacheControlFlag) {
+			t.Errorf("expected no %s when unset, got %v", cacheControlFlag, f.args)
+		}
+	})
+
+	t.Run("sent when set", func(t *testing.T) {
+		f := &fakeRunner{}
+		d := S3{URI: "s3://b/x/", CachePolicy: MutableCachePolicy, Runner: f}
+		if err := d.Publish(context.Background(), srcPath(t, false)); err != nil {
+			t.Fatalf("Publish: %v", err)
+		}
+		if got := f.valueAfter(cacheControlFlag); got != MutableCachePolicy {
+			t.Errorf("%s = %q, want %q", cacheControlFlag, got, MutableCachePolicy)
+		}
+	})
+}
+
+func TestS3Filters(t *testing.T) {
+	t.Run("absent when unset", func(t *testing.T) {
+		f := &fakeRunner{}
+		if err := (S3{URI: "s3://b/x/", Runner: f}).Publish(context.Background(), srcPath(t, true)); err != nil {
+			t.Fatalf("Publish: %v", err)
+		}
+		if f.has(excludeFlag) || f.has(includeFlag) {
+			t.Errorf("args = %v, want no filters", f.args)
+		}
+	})
+
+	t.Run("exclude precedes include", func(t *testing.T) {
+		f := &fakeRunner{}
+		d := S3{URI: "s3://b/x/", Sync: true, Exclude: []string{"*"}, Include: []string{"dists/*"}, Runner: f}
+		if err := d.Publish(context.Background(), srcPath(t, true)); err != nil {
+			t.Fatalf("Publish: %v", err)
+		}
+		e, i := slices.Index(f.args, excludeFlag), slices.Index(f.args, includeFlag)
+		if e < 0 || i < 0 {
+			t.Fatalf("args = %v, want both filters", f.args)
+		}
+		if e > i {
+			t.Errorf("args = %v, want %s before %s", f.args, excludeFlag, includeFlag)
+		}
+		if got := f.valueAfter(includeFlag); got != "dists/*" {
+			t.Errorf("%s = %q, want dists/*", includeFlag, got)
+		}
+	})
+}
+
 func TestGCSSyncDeletesWhatTheSourceDropped(t *testing.T) {
 	f := &fakeRunner{}
 	d := GCS{URI: "gs://bucket/hash", Sync: true, Runner: f}
@@ -283,6 +339,7 @@ type fakeReleaseService struct {
 
 	mu       sync.Mutex
 	uploaded []string
+	attached []*ghapi.ReleaseAsset
 }
 
 func (f *fakeReleaseService) GetReleaseByTag(context.Context, string, string, string) (*ghapi.RepositoryRelease, *ghapi.Response, error) {
@@ -298,13 +355,27 @@ func (f *fakeReleaseService) CreateRelease(_ context.Context, _, _ string, r *gh
 }
 
 func (f *fakeReleaseService) ListReleaseAssets(context.Context, string, string, int64, *ghapi.ListOptions) ([]*ghapi.ReleaseAsset, *ghapi.Response, error) {
-	return nil, &ghapi.Response{}, nil
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.attached), &ghapi.Response{}, nil
 }
 
-func (f *fakeReleaseService) UploadReleaseAsset(_ context.Context, _, _ string, _ int64, opts *ghapi.UploadOptions, _ *os.File) (*ghapi.ReleaseAsset, *ghapi.Response, error) {
+// Records what it received the way GitHub would, so a second Publish sees the
+// assets the first one attached.
+func (f *fakeReleaseService) UploadReleaseAsset(_ context.Context, _, _ string, _ int64, opts *ghapi.UploadOptions, file *os.File) (*ghapi.ReleaseAsset, *ghapi.Response, error) {
+	info, err := file.Stat()
+	if err != nil {
+		return nil, nil, err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.uploaded = append(f.uploaded, opts.Name)
+	f.attached = append(f.attached, &ghapi.ReleaseAsset{
+		ID:    ghapi.Int64(int64(len(f.attached) + 1)),
+		Name:  ghapi.String(opts.Name),
+		State: ghapi.String("uploaded"),
+		Size:  ghapi.Int(int(info.Size())),
+	})
 	return nil, nil, nil
 }
 
@@ -432,16 +503,19 @@ func TestPublishIsIdempotent(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// One service across both runs, so the second sees what the first attached.
+	svc := &fakeReleaseService{draft: &ghapi.RepositoryRelease{ID: ghapi.Int64(1), Draft: ghapi.Bool(true)}}
+	rels, err := gh.NewReleases(gh.Repo{Org: "projectcalico", Name: "calico"}, svc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	var first string
 	for run := range 2 {
 		if err := SHA256Sums(dir); err != nil {
 			t.Fatalf("run %d: SHA256Sums: %v", run, err)
 		}
-		svc := &fakeReleaseService{draft: &ghapi.RepositoryRelease{ID: ghapi.Int64(1), Draft: ghapi.Bool(true)}}
-		rels, err := gh.NewReleases(gh.Repo{Org: "projectcalico", Name: "calico"}, svc)
-		if err != nil {
-			t.Fatal(err)
-		}
+		svc.uploaded = nil
 		d := GithubRelease{releases: rels, Tag: "v3.30.0", Draft: true}
 		if err := d.Publish(context.Background(), dir); err != nil {
 			t.Fatalf("run %d: Publish: %v", run, err)
@@ -450,7 +524,12 @@ func TestPublishIsIdempotent(t *testing.T) {
 		if got := slices.Compact(slices.Clone(svc.uploaded)); len(got) != len(svc.uploaded) {
 			t.Errorf("run %d: an asset was uploaded twice: %v", run, svc.uploaded)
 		}
-		want := []string{sumsFileName, "metadata.yaml", "release.tgz"}
+		// The first run uploads everything; the second finds it all attached
+		// and complete, so it resends nothing.
+		var want []string
+		if run == 0 {
+			want = []string{sumsFileName, "metadata.yaml", "release.tgz"}
+		}
 		if !slices.Equal(svc.uploaded, want) {
 			t.Errorf("run %d: uploaded %v, want %v", run, svc.uploaded, want)
 		}
@@ -467,4 +546,92 @@ func TestPublishIsIdempotent(t *testing.T) {
 			t.Errorf("a second run changed the sums file:\nfirst:\n%s\nsecond:\n%s", first, bs)
 		}
 	}
+}
+
+func TestArtifactFiles(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"release.tgz", sumsFileName, "charts/index.yaml"} {
+		path := filepath.Join(dir, n)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(n), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	release := filepath.Join(dir, "release.tgz")
+	githubRelease := GithubRelease{Repo: gh.Repo{Org: "projectcalico", Name: "calico"}, Tag: "v3.30.0"}
+	hashrelease := HashreleaseServer{Release: &hashreleaseserver.Hashrelease{Name: "2026-10-05-v3-30-0"}}
+
+	t.Run("lists a github release's top-level files at its download URL", func(t *testing.T) {
+		got, err := artifactFiles([]Upload{{Source: dir, Handler: githubRelease}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		url, err := gh.DownloadURL("projectcalico", "calico", "v3.30.0", "release.tgz")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff([]outputs.ArtifactFile{{Name: "release.tgz", Path: release, URL: url}}, got); diff != "" {
+			t.Errorf("files (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("lists a hashrelease's top-level files at its URL", func(t *testing.T) {
+		got, err := artifactFiles([]Upload{{Source: dir, Handler: hashrelease}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []outputs.ArtifactFile{{Name: "release.tgz", Path: release, URL: hashreleaseserver.HashreleaseURL("2026-10-05-v3-30-0") + "/release.tgz"}}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("files (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("lists nothing for a skipped upload or one that serves no files", func(t *testing.T) {
+		got, err := artifactFiles([]Upload{
+			{Source: dir, Handler: githubRelease, Skip: true},
+			{Source: dir, Handler: S3{URI: "s3://bucket/charts/"}},
+			{Handler: Preparer{Kind: "metadata"}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 0 {
+			t.Errorf("listed %v", got)
+		}
+	})
+
+	t.Run("fails on a missing source", func(t *testing.T) {
+		_, err := artifactFiles([]Upload{{Source: filepath.Join(dir, "missing"), Handler: hashrelease}})
+		if !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("err = %v, want it to wrap os.ErrNotExist", err)
+		}
+	})
+}
+
+func TestMetadata(t *testing.T) {
+	dir := t.TempDir()
+	for name, body := range map[string]string{"release.tgz": "hello", "metadata.yaml": "version: v3.30.0"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hashrelease := HashreleaseServer{Release: &hashreleaseserver.Hashrelease{Name: "2026-10-05-v3-30-0"}}
+
+	t.Run("hashes each published file except the metadata", func(t *testing.T) {
+		got, err := Metadata([]Upload{{Source: dir, Handler: hashrelease}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []outputs.Artifact{{
+			Name:   "release.tgz",
+			Size:   5,
+			SHA256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+			URL:    hashreleaseserver.HashreleaseURL("2026-10-05-v3-30-0") + "/release.tgz",
+		}}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("artifacts (-want +got):\n%s", diff)
+		}
+	})
 }

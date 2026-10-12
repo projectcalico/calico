@@ -16,8 +16,16 @@ package components
 
 import "github.com/projectcalico/calico/operator/version"
 
+// Stamped at link time, like the Calico components; empty falls back to the variant.
+var (
+	operatorRegistry  = ""
+	operatorImagePath = ""
+)
+
 var ComponentOperatorInit = Component{
-	Version: version.VERSION,
-	Image:   "operator",
-	Variant: operatorVariant,
+	Version:   version.VERSION,
+	Image:     "operator",
+	Registry:  operatorRegistry,
+	ImagePath: operatorImagePath,
+	Variant:   operatorVariant,
 }

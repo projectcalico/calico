@@ -61,7 +61,14 @@ func WithVersion(version string) Option {
 	}
 }
 
-func WithOperator(registry, image, version string) Option {
+func WithOperator(enabled bool) Option {
+	return func(r *CalicoManager) error {
+		r.operator = enabled
+		return nil
+	}
+}
+
+func WithOperatorImage(registry, image, version string) Option {
 	return func(r *CalicoManager) error {
 		if image == "" {
 			return fmt.Errorf("operator image cannot be blank")
@@ -86,6 +93,13 @@ func WithOperatorVersion(version string) Option {
 func WithOutputDir(outputDir string) Option {
 	return func(r *CalicoManager) error {
 		r.outputDir = outputDir
+		return nil
+	}
+}
+
+func WithRecordsDir(dir string) Option {
+	return func(r *CalicoManager) error {
+		r.recordsDir = dir
 		return nil
 	}
 }
@@ -259,14 +273,7 @@ func WithImageScanning(scanning bool, cfg imagescanner.Config) Option {
 
 func WithComponents(components map[string]registry.Component) Option {
 	return func(r *CalicoManager) error {
-		r.imageComponents = components
-		return nil
-	}
-}
-
-func WithGithubToken(token string) Option {
-	return func(r *CalicoManager) error {
-		r.githubToken = token
+		r.components = components
 		return nil
 	}
 }

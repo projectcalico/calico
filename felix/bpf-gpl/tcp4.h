@@ -25,7 +25,9 @@ static CALI_BPF_INLINE int tcp_v4_rst(struct cali_tc_ctx *ctx) {
 	}
 	struct iphdr ip_orig = *ip_hdr(ctx);
 	struct tcphdr th_orig = *tcp_hdr(ctx);
-	int original_len = ctx->skb->len;
+	/* Must be read before the trim below, while the context still
+	 * describes the incoming packet. */
+	__u32 seq_space = tcp_seq_space(ctx, &th_orig);
 
 	/* Trim to minimum size */
 	__u32 len = skb_iphdr_offset(ctx) + IP_SIZE + TCP_SIZE /* max IP len */;
@@ -49,7 +51,9 @@ static CALI_BPF_INLINE int tcp_v4_rst(struct cali_tc_ctx *ctx) {
 	ip_hdr(ctx)->saddr = ip_orig.daddr;
 	ip_hdr(ctx)->daddr = ip_orig.saddr;
 	ip_hdr(ctx)->check = 0;
-	ip_hdr(ctx)->tot_len = bpf_htons(len - (CALI_F_L3_DEV ? 0 : ETH_SIZE));
+	/* Header plus payload, independent of what precedes the IP header in
+	 * the skb: len includes the L2 header on some attach points. */
+	ip_hdr(ctx)->tot_len = bpf_htons(IP_SIZE + TCP_SIZE);
 	ctx->ipheader_len = 20;
 
 	struct tcphdr *th = ((void *)ip_hdr(ctx)) + IP_SIZE;
@@ -63,8 +67,7 @@ static CALI_BPF_INLINE int tcp_v4_rst(struct cali_tc_ctx *ctx) {
 	if (th_orig.ack) {
 		th->seq = th_orig.ack_seq;
 	} else {
-		th->ack_seq = bpf_htonl(bpf_ntohl(th_orig.seq) + th_orig.syn + th_orig.fin + 
-				original_len - (th_orig.doff << 2));
+		th->ack_seq = bpf_htonl(bpf_ntohl(th_orig.seq) + seq_space);
 		th->ack = 1;
 	}
 	th->check = 0;

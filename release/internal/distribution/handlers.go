@@ -16,7 +16,9 @@ package distribution
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -28,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -43,7 +46,12 @@ const (
 	syncVerb  = "sync"
 	rsyncVerb = "rsync"
 
-	recursiveFlag = "--recursive"
+	recursiveFlag    = "--recursive"
+	cacheControlFlag = "--cache-control"
+	excludeFlag      = "--exclude"
+	includeFlag      = "--include"
+
+	MutableCachePolicy = "max-age=60, s-maxage=300, stale-while-revalidate=60"
 )
 
 var publicRead = []string{"--acl", "public-read"}
@@ -99,6 +107,11 @@ type S3 struct {
 
 	DryRun bool
 
+	CachePolicy string // Caching behaviour for the uploaded objects.
+
+	Exclude []string // Pattern matching for files or objects to exclude
+	Include []string // Pattern matching for files or objects to include.
+
 	Runner command.CommandRunner
 }
 
@@ -129,8 +142,18 @@ func (d S3) Publish(_ context.Context, src string) error {
 		}
 	}
 	args = append(args, p.src, p.dest)
+	// aws applies filters left to right, so an Include must follow its Exclude.
+	for _, pattern := range d.Exclude {
+		args = append(args, excludeFlag, pattern)
+	}
+	for _, pattern := range d.Include {
+		args = append(args, includeFlag, pattern)
+	}
 	if !d.Private {
 		args = append(args, publicRead...)
+	}
+	if d.CachePolicy != "" {
+		args = append(args, cacheControlFlag, d.CachePolicy)
 	}
 	if d.DryRun {
 		args = append(args, "--dryrun")
@@ -260,10 +283,18 @@ func (d GithubRelease) Publish(ctx context.Context, src string) error {
 		return fmt.Errorf("create draft: %w", err)
 	}
 
-	// Collected rather than stopped at: one asset failing must not hide the
-	// rest, and a retry needs to know everything still outstanding.
-	_, err = steps.Go(files, func(path string) (struct{}, error) {
-		return struct{}{}, d.upload(ctx, rel.GetID(), path)
+	assets, err := steps.Go(files, github.NewAsset)
+	if err != nil {
+		return fmt.Errorf("release assets: %w", err)
+	}
+	missing, err := gh.SyncAssets(ctx, rel.GetID(), assets)
+	if err != nil {
+		return fmt.Errorf("check existing assets: %w", err)
+	}
+	d.log().WithFields(logrus.Fields{"upload": len(missing), "attached": len(files) - len(missing)}).Info("Release assets")
+
+	_, err = steps.GoLimit(missing, steps.MaxConcurrency, func(a github.Asset) (struct{}, error) {
+		return struct{}{}, d.upload(ctx, gh, rel.GetID(), a)
 	})
 	if err != nil {
 		return fmt.Errorf("upload assets: %w", err)
@@ -276,6 +307,14 @@ func (d GithubRelease) Publish(ctx context.Context, src string) error {
 		return fmt.Errorf("make latest: %w", err)
 	}
 	return gh.Publish(ctx, d.Tag, latest)
+}
+
+func (d GithubRelease) artifacts(src string) ([]outputs.ArtifactFile, error) {
+	base, err := github.DownloadURL(d.Repo.Org, d.Repo.Name, d.Tag)
+	if err != nil {
+		return nil, fmt.Errorf("download URL: %w", err)
+	}
+	return filesAt(src, base)
 }
 
 func (d GithubRelease) makeLatest(ctx context.Context) (bool, error) {
@@ -306,23 +345,28 @@ func (d GithubRelease) semver(tag string) (*semver.Version, error) {
 	return semver.NewVersion(strings.TrimPrefix(tag, "v"))
 }
 
-func (d GithubRelease) upload(ctx context.Context, releaseID int64, path string) error {
-	log := d.log().WithField("asset", filepath.Base(path))
-	gh, err := d.github()
-	if err != nil {
-		return fmt.Errorf("github client: %w", err)
-	}
+func (d GithubRelease) upload(ctx context.Context, gh *github.Releases, releaseID int64, a github.Asset) error {
+	log := d.log().WithField("asset", a.Name())
 	for attempt := 0; ; attempt++ {
-		err := gh.UploadAsset(ctx, releaseID, path)
+		err := gh.UploadAsset(ctx, releaseID, a.Path)
 		if err == nil {
 			log.Debug("Attached release asset")
 			return nil
 		}
-		if attempt < steps.MaxRetries {
-			log.WithError(err).WithField("attempt", attempt).Warn("Asset upload failed, retrying")
-			continue
+		if attempt >= steps.MaxRetries {
+			return fmt.Errorf("upload %s: %w", a.Path, err)
 		}
-		return fmt.Errorf("upload %s: %w", path, err)
+		log.WithError(err).WithField("attempt", attempt).Warn("Asset upload failed, retrying")
+		// The failure may have been a lost response rather than a lost
+		// upload, which would leave the name taken and reject the retry.
+		complete, stateErr := gh.AssetState(ctx, releaseID, a)
+		if stateErr != nil {
+			return fmt.Errorf("upload %s: %w", a.Path, errors.Join(err, stateErr))
+		}
+		if complete {
+			log.Debug("Asset already landed")
+			return nil
+		}
 	}
 }
 
@@ -362,7 +406,7 @@ func SHA256Sums(dir string) error {
 }
 
 func sha256Sums(dir string, files []string) ([]string, error) {
-	s, err := newSettings[Option](sumsStep, nil)
+	s, err := newSettings(sumsStep, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -388,6 +432,22 @@ func sha256Sums(dir string, files []string) ([]string, error) {
 	}
 	s.Logger().WithField("files", len(files)).Info("Wrote checksums")
 	return append(files, path), nil
+}
+
+func filesAt(dir, baseURL string) ([]outputs.ArtifactFile, error) {
+	paths, err := topLevelFiles(dir)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]outputs.ArtifactFile, len(paths))
+	for i, path := range paths {
+		u, err := url.JoinPath(baseURL, filepath.Base(path))
+		if err != nil {
+			return nil, fmt.Errorf("url for %s: %w", path, err)
+		}
+		files[i] = outputs.ArtifactFile{Name: filepath.Base(path), Path: path, URL: u}
+	}
+	return files, nil
 }
 
 func topLevelFiles(dir string) ([]string, error) {
@@ -438,6 +498,10 @@ func (d HashreleaseServer) Publish(ctx context.Context, src string) error {
 		return nil
 	}
 	return hashreleaseserver.Record(d.ProductCode, d.Release, d.Config)
+}
+
+func (d HashreleaseServer) artifacts(src string) ([]outputs.ArtifactFile, error) {
+	return filesAt(src, d.Release.URL())
 }
 
 func (d HashreleaseServer) Validate(u Upload) error {

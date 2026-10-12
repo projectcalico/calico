@@ -27,7 +27,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/utils"
-	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 var globalFlags = append([]cli.Flag{debugFlag}, append(ciFlags, slackFlags...)...)
@@ -165,7 +164,7 @@ var (
 	forceFlag = &cli.BoolFlag{
 		Name:     "force",
 		Category: stepControlCategory,
-		Usage:    "Republish artifacts whose published digest differs from the record.",
+		Usage:    "Ignore safety check and force the action to proceed",
 		Sources:  cli.EnvVars("FORCE"),
 	}
 )
@@ -300,28 +299,21 @@ var (
 // Operator flags are flags used to interact with Tigera operator repository
 var (
 	operatorBuildCommandFlags = []cli.Flag{
-		operatorRegistryFlag, operatorImageFlag,
+		operatorRegistryFlag,
 		operatorFlag(envBuildOperator, envReleaseOperator),
 	}
 
 	operatorPublishCommandFlags = []cli.Flag{
+		operatorRegistryFlag,
 		operatorFlag(envPublishOperator, envReleaseOperator),
 	}
 
 	// Container image flags
-	operatorRegistryFlag = &cli.StringFlag{
+	operatorRegistryFlag = &cli.StringSliceFlag{
 		Name:     "operator-registry",
 		Category: operatorCategory,
-		Usage:    "The registry to use for Tigera operator release",
-		Sources:  cli.EnvVars("OPERATOR_REGISTRY"),
-		Value:    operator.DefaultRegistries[0],
-	}
-	operatorImageFlag = &cli.StringFlag{
-		Name:     "operator-image",
-		Category: operatorCategory,
-		Usage:    "The image name to use for Tigera operator release",
-		Sources:  cli.EnvVars("OPERATOR_IMAGE"),
-		Value:    operator.DefaultImage,
+		Usage:    "The registry to use for operator, repeat for multiple registries. If not set, the default registries will be used.",
+		Sources:  cli.EnvVars("OPERATOR_REGISTRY", "OPERATOR_REGISTRIES"),
 	}
 
 	operatorFlagName   = "operator"
@@ -350,12 +342,6 @@ var (
 		Usage:    "Run in a continuous integration (CI) environment",
 		Sources:  cli.EnvVars("CI"),
 		Value:    false,
-		Action: func(_ context.Context, c *cli.Command, b bool) error {
-			if b && (c.String(ciBaseURLFlag.Name) == "" || c.String(ciJobIDFlag.Name) == "") {
-				return fmt.Errorf("CI requires %s and %s flags to be set", ciBaseURLFlag.Name, ciJobIDFlag.Name)
-			}
-			return nil
-		},
 	}
 	ciBaseURLFlag = &cli.StringFlag{
 		Name:     "ci-url",
@@ -454,22 +440,6 @@ var (
 					logrus.Warn("Image scanning configuration is incomplete")
 				}
 				return fmt.Errorf("invalid configuration for image scanning. Either set --%s and --%s or set --%s", imageScannerAPIFlag.Name, imageScannerTokenFlag.Name, inverseFlagName(imageScanFlagName))
-			}
-			return nil
-		},
-	}
-
-	// GitHub API flags
-	githubTokenFlag = &cli.StringFlag{
-		Name:    "github-token",
-		Usage:   "The GitHub token to use when interacting with the GitHub API",
-		Sources: cli.EnvVars(github.TokenEnvVars...),
-		Action: func(_ context.Context, c *cli.Command, s string) error {
-			if s == "" {
-				if c.Bool(ciFlag.Name) {
-					return fmt.Errorf("GitHub token is required")
-				}
-				logrus.Warn("This command requires a GitHub token")
 			}
 			return nil
 		},
@@ -682,6 +652,18 @@ var (
 		Usage:    "Generate release notes",
 		Sources:  cli.EnvVars(envBuildReleaseNotes, envReleaseNotes),
 		Value:    true,
+		Action: func(_ context.Context, c *cli.Command, b bool) error {
+			if !b || !c.Bool(validationFlag.Name) {
+				return nil
+			}
+			if c.String(orgFlag.Name) != utils.ProjectCalicoOrg || c.String(repoFlag.Name) != utils.CalicoRepoName {
+				return fmt.Errorf("release notes can only be generated from %s/%s", utils.ProjectCalicoOrg, utils.CalicoRepoName)
+			}
+			if !github.Authenticated() {
+				return fmt.Errorf("release notes need GitHub authentication")
+			}
+			return nil
+		},
 	}
 	manifestsFlag = &cli.BoolWithInverseFlag{
 		Name:     "manifests",
@@ -733,9 +715,12 @@ var (
 		Usage:    "Publish the GitHub release",
 		Sources:  cli.EnvVars(envPublishGithubRelease, envReleaseGithub, envReleaseGithubRelease),
 		Value:    true,
-		Action: func(_ context.Context, c *cli.Command, b bool) error {
-			if b && c.String(githubTokenFlag.Name) == "" {
-				return fmt.Errorf("GitHub token is required to publish release")
+		Action: func(_ context.Context, _ *cli.Command, b bool) error {
+			if !b {
+				return nil
+			}
+			if !github.Authenticated() {
+				return fmt.Errorf("publishing a release needs GitHub authentication")
 			}
 			return nil
 		},

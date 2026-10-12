@@ -1067,6 +1067,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: flowLogsFlushInterval
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
+    - name: flowLogsGoldmaneIncludeIPs
+      type:
+        scalar: string
     - name: flowLogsGoldmaneServer
       type:
         scalar: string

@@ -188,30 +188,25 @@ endif
 endif
 endif
 
+# The build macros below use $(DOCKER_GO_BUILD_RECURSIVE) (defined with DOCKER_RUN, further down)
+# as their container prefix; they keep their env and mkdir inside the sh -c so it is the
+# only container-vs-native difference.
+
 # Use this when building binaries that need cgo (e.g. for libbpf).
 define build_cgo_binary
-	$(DOCKER_RUN) \
-		-e CGO_ENABLED=1 \
-		$(if $(CROSS_CC),-e CC="$(CROSS_CC)") \
-		-e CGO_CFLAGS=$(CGO_CFLAGS) \
-		-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
-		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
+	$(DOCKER_GO_BUILD_RECURSIVE) \
+		sh -c '$(GIT_CONFIG_SSH) mkdir -p $(dir $(2)) && CGO_ENABLED=1 $(if $(CROSS_CC),CC="$(CROSS_CC)") CGO_CFLAGS=$(CGO_CFLAGS) CGO_LDFLAGS=$(CGO_LDFLAGS) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
 endef
 
 # For binaries that do not require cgo.
 define build_binary
-	$(DOCKER_RUN) \
-		-e CGO_ENABLED=0 \
-		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
+	$(DOCKER_GO_BUILD_RECURSIVE) \
+		sh -c '$(GIT_CONFIG_SSH) mkdir -p $(dir $(2)) && CGO_ENABLED=0 go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
 endef
 
 define build_binary_dir
-	$(DOCKER_RUN) \
-		-e CGO_ENABLED=0 \
-		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -C $(1) -o $(3) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(2)'
+	$(DOCKER_GO_BUILD_RECURSIVE) \
+		sh -c '$(GIT_CONFIG_SSH) mkdir -p $(1)/$(dir $(3)) && CGO_ENABLED=0 go build -C $(1) -o $(3) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(2)'
 endef
 
 # For windows builds that do not require cgo.
@@ -340,6 +335,11 @@ endif
 ifneq ($(GOMAXPROCS),)
 EXTRA_DOCKER_ARGS += -e GOMAXPROCS=$(GOMAXPROCS)
 endif
+# By name, so docker reads the value from the environment: a proxy list can hold
+# a `|`, which spliced into the recipe would reach the shell as a pipe.
+ifneq ($(GOPROXY),)
+EXTRA_DOCKER_ARGS += -e GOPROXY
+endif
 ifneq ($(DOCKER_MEMORY),)
 EXTRA_DOCKER_ARGS += --memory=$(DOCKER_MEMORY) --memory-swap=$(if $(DOCKER_MEMORY_SWAP),$(DOCKER_MEMORY_SWAP),$(DOCKER_MEMORY))
 endif
@@ -455,7 +455,29 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 
 DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 
+# Prefix for targets anchored at the repo root (the kind install's GOBIN, fix-all, ...).
+# Immediate (:=) so a sub-Makefile that overrides DOCKER_RUN after this include (api/Makefile)
+# can't change it -- those targets must keep the repo-root mount.
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
+
+# Prefix for the build_* macros. Recursive (=) so it honors a sub-Makefile's DOCKER_RUN
+# override -- api/Makefile mounts itself as .../api for its own local builds (e.g. list-gnp).
+DOCKER_GO_BUILD_RECURSIVE = $(DOCKER_RUN) $(CALICO_BUILD)
+
+# NATIVE_GO_BUILD=true (already inside calico/go-build, e.g. a CI go-build pod): null the
+# go-build prefixes so those recipes run on the host, and export the Go env the container
+# used to pass via -e. Targets that spell out their own docker invocation keep
+# DOCKER_RUN/CALICO_BUILD.
+ifeq ($(NATIVE_GO_BUILD),true)
+DOCKER_GO_BUILD :=
+DOCKER_GO_BUILD_RECURSIVE :=
+export GOARCH := $(ARCH)
+export GOOS := $(BUILDOS)
+export GOFLAGS := $(GOFLAGS)
+ifeq ($(ARCH),amd64)
+export GOAMD64 := v2
+endif
+endif
 
 # Cross-compile env for Rust + cc-rs / bindgen. Same gate as the Go side.
 # Key suffixes use the long Rust triple (cc-rs convention); extend for ppc64le.
@@ -871,18 +893,24 @@ REPO_REL_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else
 
 .PHONY: fix-changed go-fmt-changed goimports-changed
 # Format changed files only.
+# The parent-branch probe needs an upstream remote, which a fork's clone lacks,
+# so skip it when CI supplies the range.
 fix-changed go-fmt-changed goimports-changed:
 	if [ "$(SKIP_FIX_CHANGED)" != "true" ]; then \
-	  parent_branch=`release_prefix=$(RELEASE_BRANCH_PREFIX)-v git_repo_slug=$(GIT_REPO_SLUG) $(REPO_REL_DIR)/hack/find-parent-release-branch.sh`; \
+	  if [ -z "$(CI_GIT_COMMIT_RANGE)" ]; then \
+	    parent_branch=`release_prefix=$(RELEASE_BRANCH_PREFIX)-v git_repo_slug=$(GIT_REPO_SLUG) $(REPO_REL_DIR)/hack/find-parent-release-branch.sh`; \
+	  fi; \
 	  $(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
 	                -e git_repo_slug=$(GIT_REPO_SLUG) \
 	                -e parent_branch=$$parent_branch \
+	                -e CI_GIT_COMMIT_RANGE=$(CI_GIT_COMMIT_RANGE) \
 	                $(CALICO_BUILD) $(REPO_REL_DIR)/hack/format-changed-files.sh; \
 	fi
 
 .PHONY: fix-all go-fmt-all goimports-all
+# $(DOCKER_GO_BUILD) is empty under NATIVE_GO_BUILD, so this runs the formatter directly.
 fix-all go-fmt-all goimports-all:
-	$(DOCKER_RUN) $(CALICO_BUILD) $(REPO_REL_DIR)/hack/format-all-files.sh
+	$(DOCKER_GO_BUILD) $(REPO_REL_DIR)/hack/format-all-files.sh
 
 GOMODDER=$(REPO_REL_DIR)/hack/cmd/gomodder/main.go
 
@@ -1675,6 +1703,9 @@ ifeq ($(CALICO_API_GROUP),projectcalico.org/v3)
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/api/admission/; do echo "Waiting for mutating admission policies to be created"; sleep 2; done
 endif
 
+	# Install the CNI annotation admission policies, which apply whatever the API group.
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/api/admission/cni-annotations/; do echo "Waiting for admission policies to be created"; sleep 2; done
+
 	touch $@
 
 kind-cluster-destroy kind-down: $(KIND) $(KUBECTL)
@@ -2015,6 +2046,7 @@ $(ENVTEST_MIN_ASSETS_MARKER):
 .PHONY: run-etcd stop-etcd
 run-etcd:
 	@if ! docker inspect calico-etcd >/dev/null 2>&1; then \
+		$(call retry_docker_cmd,pull $(ETCD_IMAGE),docker pull -q $(ETCD_IMAGE),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY)); \
 		docker run --detach \
 			--net=host \
 			--entrypoint=/usr/local/bin/etcd \

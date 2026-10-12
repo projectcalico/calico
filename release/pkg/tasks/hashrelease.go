@@ -50,9 +50,11 @@ func HashreleasePublished(cfg *hashreleaseserver.Config, hash string, ci bool) (
 // Specifically, we need to do the following:
 // - Copy the windows zip file to files/windows/calico-windows-<ver>.zip
 // - Copy all release Helm charts to charts/<chart>.tgz (without the version in the filename)
-// - Additionally keep an unversioned tigera-operator.tgz at the hashrelease root for compatibility
 // - Copy ocp.tgz to manifests/ocp.tgz
-func ReformatHashrelease(pin *pinnedversion.Pin, hashreleaseOutputDir string) error {
+//
+// helmCharts is false when the build was told to skip them, and there is
+// nothing to relocate.
+func ReformatHashrelease(pin *pinnedversion.Pin, hashreleaseOutputDir string, helmCharts bool) error {
 	logrus.Info("Modifying hashrelease output to match legacy format")
 
 	windowsDir := archives.WindowsHashreleaseDir(hashreleaseOutputDir)
@@ -72,26 +74,24 @@ func ReformatHashrelease(pin *pinnedversion.Pin, hashreleaseOutputDir string) er
 		return err
 	}
 
-	// Add copy of charts with no version in name
-	chartsDir := filepath.Join(hashreleaseOutputDir, "charts")
-	if err := os.MkdirAll(chartsDir, 0o755); err != nil {
+	if !helmCharts {
+		logrus.Info("Skipping helm chart reformat")
+		return nil
+	}
+	return unversionedCharts(pin, charts.OutputDir(hashreleaseOutputDir), charts.Dir(hashreleaseOutputDir))
+}
+
+// A chart the build was asked to produce is not optional
+func unversionedCharts(pin *pinnedversion.Pin, srcDir, dstDir string) error {
+	if err := os.MkdirAll(dstDir, utils.DirPerms); err != nil {
 		return err
 	}
 	for _, chart := range charts.All() {
-		versioned := charts.FileName(chart, pin.HelmChartVersion())
-		unversioned := charts.FileName(chart, "")
-		chartTarball := filepath.Join(hashreleaseOutputDir, versioned)
-		chartTarballDst := filepath.Join(chartsDir, unversioned)
-		if err := copyIfExists(chartTarball, chartTarballDst); err != nil {
-			return err
+		src := filepath.Join(srcDir, charts.FileName(chart, pin.HelmChartVersion()))
+		dst := filepath.Join(dstDir, charts.FileName(chart, ""))
+		if err := utils.CopyFile(src, dst); err != nil {
+			return fmt.Errorf("copying %s chart: %w", chart, err)
 		}
-	}
-
-	// Keep copy of the Tigera operator chart without version in name in root dir
-	operatorTarball := filepath.Join(hashreleaseOutputDir, charts.FileName(charts.TigeraOperatorChart, pin.HelmChartVersion()))
-	operatorTarballDst := filepath.Join(hashreleaseOutputDir, charts.FileName(charts.TigeraOperatorChart, ""))
-	if err := copyIfExists(operatorTarball, operatorTarballDst); err != nil {
-		return err
 	}
 	return nil
 }

@@ -63,6 +63,19 @@ rules:
       - pods/status
     verbs:
       - update
+  # calicoctl ipam check reads LoadBalancer Services and KubeVirt VMs to find
+  # what holds each address.
+  - apiGroups: [""]
+    resources:
+      - services
+    verbs:
+      - list
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      - virtualmachines
+      - virtualmachineinstances
+    verbs:
+      - list
   - apiGroups: ["crd.projectcalico.org"]
     resources:
       - bgppeers

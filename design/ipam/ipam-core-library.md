@@ -45,8 +45,9 @@ here. A few methods carry design-relevant constraints worth calling out:
 - `AutoAssign` returning block-masked CIDRs is load-bearing for the CNI plugin's routing. Don't quietly switch to `/32`.
 - Anything that makes an address unassignable has to be discounted by `GetUtilization` as well as by the allocation path, or the reporting surfaces over-count free addresses. The
   two must be fed from the same set of reserved CIDRs: allocation and the per-block counts share the `addrFilter`, and the pool-level counts use the same CIDRs as a set.
-- There is one implementation of the reserved-set arithmetic, in [`reserved.go`](../../libcalico-go/lib/ipam/reserved.go). `GetUtilization` and `NumReservedIPsInCIDR` are both thin
-  callers of it. Don't grow a second copy in a consumer - a reporting surface that disagrees with `calicoctl ipam show` is worse than no surface.
+- There is one implementation of the reserved-set arithmetic, in [`accounting/reserved.go`](../../libcalico-go/lib/ipam/accounting/reserved.go), beside the shared pool counts,
+  block attribution and leak predicate. `GetUtilization` and `NumReservedIPsInCIDR` are both thin callers of it. Don't grow a second copy in a consumer - a reporting
+  surface that disagrees with `calicoctl ipam show` is worse than no surface.
 
 ## AutoAssign and host affinity
 

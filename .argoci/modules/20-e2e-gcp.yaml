@@ -1,0 +1,67 @@
+# e2e on a GCP kubeadm cluster, testing binaries built from the PR rather than a
+# hashrelease. The cluster is provisioned externally, so this runs in a pod.
+version: condensed-module
+
+defaults:
+  timeout: 3h
+  # The e2e scripts drive `bz` and the cloud CLIs, which the workflow's own
+  # default image does not carry.
+  image: gcr.io/tigera-cc-dev/ci-base/ubuntu-cloud-providers:v0.106
+  secretBundles:
+    - banzai-secrets
+
+steps:
+  - name: e2e-gcp-kubeadm-local-binary
+    depends: [check-go, build-e2e-binaries]
+    requests: {cpu: 1250m, memory: 6Gi}
+    # `bz destroy` alone takes about four minutes, the whole of the default.
+    terminationGracePeriodSeconds: 600
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: TEST_TYPE
+        value: k8s-e2e
+      - name: PRODUCT
+        value: calico
+      # Lens keys this lane's history on the value, so it must not change.
+      - name: FUNCTIONAL_AREA
+        value: e2e-gcp.yml
+      - name: PROVISIONER
+        value: gcp-kubeadm
+      - name: K8S_VERSION
+        value: stable
+      - name: INSTALLER
+        value: operator
+      - name: DATAPLANE
+        value: CalicoBPF
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/gcp/bpf.yaml
+      # Builds the e2e binary and the rapidclient image from PR source rather
+      # than pulling the published ones.
+      - name: RUN_LOCAL_TESTS
+        value: "true"
+      - name: USE_PRIVATE_REGISTRY
+        value: "true"
+      - name: PRIVATE_REGISTRY
+        value: "quay.io/"
+      - name: USE_API_SERVER
+        value: "false"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      # Resolved by the controller, so they have to arrive as env rather than be
+      # derived in the commands.
+      - name: ARGO_WORKFLOW_NAME
+        value: "{{workflow.name}}"
+      - name: ARGO_WORKFLOW_UID
+        value: "{{workflow.uid}}"
+    # A prologue, because the epilogue's teardown needs `bz` on PATH and only
+    # prologue exports reach it.
+    prologue: |
+      source .argoci/scripts/global_prologue.sh
+    commands: |
+      .argoci/scripts/load-e2e-binaries
+      export E2E_PREBUILT=true
+      .argoci/scripts/body_standard.sh
+    epilogue: |
+      source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"

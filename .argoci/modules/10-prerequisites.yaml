@@ -1,0 +1,411 @@
+# Pre-flight checks, and the artifacts later lanes consume. Each step gates
+# itself, and a lane that runs brings back any producer it depends on, so a
+# producer gates only on what makes it interesting in its own right.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+
+steps:
+  - name: check-yaml
+    jobSize: small
+    requests: {cpu: 1500m, memory: 548Mi}
+    services: [docker]
+    changes:
+      in:
+        - ^.*\.ya?ml$
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      make yaml-lint
+
+  # go vet fans out across every package, so it scales with the cores it gets.
+  - name: check-go
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: preflight-go-checks
+      - name: STORE_BUILD_CACHE
+        value: "true"
+    jobSize: large
+    requests: {cpu: 14000m, memory: 16Gi}
+    services: [docker]
+    changes:
+      in:
+        - ^go\.mod$
+        - ^go\.sum$
+        - ^.*\.go$
+        - ^.*deps\.txt$
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/depstree\.yaml$
+        - ^\.argoci/config\.yaml$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      # `useGoBuild` steps take their image tag from config.yaml rather than from
+      # the toolchain the Makefiles build with.
+      want=$(make --no-print-directory -s -f metadata.mk --eval 'print: ; @echo $(GO_BUILD_VER)' print)
+      have=$(awk '/^goBuildVersion:/ {print $2}' .argoci/config.yaml)
+      if [ "${want}" != "${have}" ]; then
+        echo "goBuildVersion in .argoci/config.yaml is ${have}, but metadata.mk builds with ${want}"
+        exit 1
+      fi
+      make check-ginkgo-v2
+      make check-go-mod
+      make verify-go-mods
+      make gen-deps-files
+      make go-vet
+      # A cron or tag has no range to diff against, so it reformats everything.
+      if [ "${CI_GIT_REF_TYPE}" = PR ] || [ "${CI_GIT_REF_TYPE}" = MERGE ]; then make fix-changed; else make fix-all; fi
+      make check-dirty
+
+  - name: check-python
+    jobSize: small
+    requests: {cpu: 2000m, memory: 0.75Gi}
+    services: [docker]
+    changes:
+      in:
+        - ^networking-calico/
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      make -C networking-calico fmtpy
+      make -C networking-calico flake8
+      make check-dirty
+
+  # Grep-speed checks, so one step rather than three.
+  - name: check-language-dockerfiles
+    jobSize: small
+    requests: {cpu: 2250m, memory: 548Mi}
+    useGoBuild: true
+    workspaceVolumes: none
+    changes:
+      in:
+        - ^.*$
+      # Listed rather than `^\.`, which would exclude this module's own file too.
+      exclude:
+        - ^libbpf/
+        - ^\.git
+        - ^\.claude/
+    commands: |
+      make check-language
+      make check-dockerfiles
+      make check-mockery-config
+
+  - name: check-protobufs
+    requests: {cpu: 1500m, memory: 1Gi}
+    services: [docker]
+    changes:
+      in:
+        - ^.*\.pb\.go$
+        - ^.*\.proto$
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      make protobuf fix-changed
+      make check-dirty
+
+  - name: check-manifests
+    requests: {cpu: 2750m, memory: 2.5Gi}
+    services: [docker]
+    changes:
+      in:
+        - ^api/
+        - ^manifests/
+        - ^charts/
+        - ^libcalico-go/lib/apis/
+        - ^libcalico-go/config/
+        - ^libcalico-go/Makefile$
+        - ^felix/config/
+        - ^felix/docs/
+        - ^felix/Makefile$
+        - ^goldmane/
+        - ^kube-controllers/pkg/apis/migration/
+        - ^operator/api/
+        - ^operator/pkg/crds/
+        - ^operator/pkg/admission/
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      make -C lib gen-files
+      make -C api gen-files
+      make -C libcalico-go gen-files
+      make -C felix gen-files
+      make -C goldmane gen-files
+      make -C kube-controllers gen-files
+      make -C operator gen-files
+      make gen-manifests
+      make fix-changed
+      make check-ocp-no-crds
+      make check-dirty
+
+  # A chart can change what it renders without any committed manifest changing,
+  # which a diff of the tree cannot see.
+  - name: check-helm-charts
+    jobSize: small
+    requests: {cpu: 2000m, memory: 1Gi}
+    services: [docker]
+    changes:
+      in:
+        - ^charts/
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+    commands: |
+      make test-charts
+
+  # Regenerating the patches must be a no-op. metadata.mk is in the trigger
+  # because `go mod tidy`'s output depends on the toolchain.
+  - name: check-thirdparty-dep-patches
+    requests: {cpu: 2000m, memory: 2Gi}
+    services: [docker]
+    changes:
+      in:
+        - ^hack/thirdparty/
+        - ^istio/
+        - ^third_party/envoy-gateway/
+        - ^third_party/envoy-ratelimit/
+        - ^Makefile$
+        - ^lib\.Makefile$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-prerequisites\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$
+    commands: |
+      make check-thirdparty-dep-patches
+      make check-dirty
+
+  - name: build-calico-image
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+      - name: STORE_BUILD_CACHE
+        value: "true"
+    services: [docker]
+    timeout: 1h
+    jobSize: large
+    requests: {cpu: 7000m, memory: 8Gi}
+    changes:
+      dependsOn: [cmd]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    commands: |
+      make -C cmd/calico image
+      # Shipped for the Felix FVs, which would otherwise build them per lane.
+      make -C cmd/calico build-cgo build-race
+      docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
+      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/calico-image.tar
+      artifact push workflow /tmp/calico-image.tar.zst
+      artifact push workflow cmd/calico/bin/calico-cgo-amd64
+      artifact push workflow cmd/calico/bin/calico-race-amd64
+      # Shipped so no Felix lane clones libbpf; the cgo build has usually made it.
+      test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || make -C felix libbpf
+      LIBBPF_VERSION=$(grep -E '^LIBBPF_VERSION[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
+      # tar only warns on a missing path.
+      test -d felix/bpf-gpl/libbpf || { echo "libbpf clone missing at felix/bpf-gpl/libbpf" >&2; exit 1; }
+      test -f "felix/bpf-gpl/.libbpf-${LIBBPF_VERSION}" || { echo "libbpf version marker felix/bpf-gpl/.libbpf-${LIBBPF_VERSION} missing" >&2; exit 1; }
+      tar --use-compress-program="zstd -3" -cf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
+      artifact push workflow /tmp/libbpf-amd64.tar.zst
+
+  # Tagged by a hash of the recipe, so an unchanged one is a pull rather than a
+  # ~20 minute emulated build.
+  - name: build-nft-rpms
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 2000m, memory: 1Gi}
+    matrix:
+      - name: amd64
+        env: [{name: ARCH, value: amd64}]
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    changes:
+      in:
+        - '^hack/rpms/nftables/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      mkdir -p logs
+      export BUILD_LOG="logs/build-nft-rpms-${ARCH}.log"
+      .argoci/scripts/build-nft-rpms.sh "${ARCH}"
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job logs --destination logs || true
+
+  # Published on merge because later builds pull it. A step here rather than a
+  # workflow of its own because it reads this workflow's cached build.
+  - name: push-nft-rpms
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 1500m, memory: 1.5Gi}
+    depends: [build-nft-rpms]
+    when: GIT_REF_TYPE == 'MERGE' && (GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-')
+    matrix:
+      - name: amd64
+        env: [{name: ARCH, value: amd64}]
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    changes:
+      in:
+        - '^hack/rpms/nftables/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      export DOCKER_USER="$DOCKERHUB_USERNAME"
+      export DOCKER_TOKEN="$DOCKERHUB_PASSWORD"
+      mkdir -p logs
+      export BUILD_LOG="logs/push-nft-rpms-${ARCH}.log"
+      .argoci/scripts/push-nft-rpms.sh "${ARCH}"
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      artifact push job logs --destination logs || true
+
+  - name: build-node-image
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 4000m, memory: 5Gi}
+    depends: [build-nft-rpms]
+    changes:
+      dependsOn: [node]
+      in:
+        - '^node/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      # Resolves the Dockerfile's nft-rpms build context locally, so BuildKit
+      # does not go back to the registry for it.
+      .argoci/scripts/load-nft-rpms.sh amd64
+      make -C node image
+      docker save calico/node:latest-amd64 -o /tmp/node-image.tar
+      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/node-image.tar
+      artifact push workflow /tmp/node-image.tar.zst
+
+  # TypeScript, so there is no Go import graph to gate on.
+  - name: build-whisker-image
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 2000m, memory: 1.75Gi}
+    changes:
+      in:
+        - '^whisker/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      make -C whisker image
+      docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
+      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/whisker-image.tar
+      artifact push workflow /tmp/whisker-image.tar.zst
+
+  # Built through the same target its consumers run, so the refs it bakes in
+  # (localhost:5000/calico/<name>:test-build) are the ones they install.
+  - name: build-operator-image
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    services: [docker]
+    timeout: 1h
+    jobSize: large
+    requests: {cpu: 7000m, memory: 8Gi}
+    changes:
+      dependsOn: [operator]
+      in:
+        - '^operator/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      make kind-operator-image
+      docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
+      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/operator-image.tar
+      artifact push workflow /tmp/operator-image.tar.zst
+      # Windows FV installs from docker.io refs rather than the kind registry.
+      DEV_IMAGE_REGISTRY=docker.io DEV_IMAGE_PATH=calico DEV_IMAGE_TAG=test-build \
+        hack/test/kind/infra/build-operator.sh
+      docker save calico/operator:test-build -o /tmp/operator-image-dockerio.tar
+      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/operator-image-dockerio.tar
+      artifact push workflow /tmp/operator-image-dockerio.tar.zst
+
+  # Windows FV installs these rather than building its own. Nothing else builds
+  # them, so this is also where a break in them shows up.
+  - name: build-windows-images
+    services: [docker]
+    timeout: 1h
+    jobSize: large
+    requests: {cpu: 7000m, memory: 8Gi}
+    changes:
+      dependsOn: [node, cni-plugin]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    commands: |
+      make -C node build-windows-archive
+      make -C node image-windows
+      make -C cni-plugin image-windows
+      tar --use-compress-program="zstd -3" -cf /tmp/windows-images.tar.zst \
+        node/dist/windows/*.tar cni-plugin/dist/windows/*.tar
+      artifact push workflow /tmp/windows-images.tar.zst
+
+  # One tarball, since every kind lane wants all four.
+  - name: build-third-party-images
+    services: [docker]
+    timeout: 1h
+    requests: {cpu: 3500m, memory: 3.5Gi}
+    changes:
+      dependsOn: [third_party]
+      in:
+        - '^third_party/'
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+    commands: |
+      make -C third_party/envoy-gateway image
+      make -C third_party/envoy-proxy image
+      make -C third_party/envoy-ratelimit image
+      make -C third_party/cni-plugins image
+      docker save \
+        calico/envoy-gateway:latest-amd64 \
+        calico/envoy-proxy:latest-amd64 \
+        calico/envoy-ratelimit:latest-amd64 \
+        calico/third-party-cni-plugins:latest-amd64 \
+        -o /tmp/third-party-images.tar
+      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/third-party-images.tar
+      artifact push workflow /tmp/third-party-images.tar.zst
+
+  # Built here for the VM lanes, which have no module proxy: the binaries import
+  # most of Kubernetes, and a VM downloads all of it from the public proxy. libbpf
+  # comes from the calico image's build rather than a clone from GitHub.
+  - name: build-e2e-binaries
+    services: [docker]
+    timeout: 1h
+    jobSize: large
+    requests: {cpu: 7000m, memory: 8Gi}
+    depends: [build-calico-image]
+    changes:
+      dependsOn: [e2e]
+      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+    commands: |
+      ( cd /tmp && artifact pull workflow libbpf-amd64.tar.zst )
+      tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
+      make -C e2e build
+      make bin/ginkgo
+      make -C e2e/images/rapidclient build
+      tar --use-compress-program="zstd -3" -cf /tmp/e2e-binaries.tar.zst e2e/bin bin/ginkgo e2e/images/rapidclient/bin
+      artifact push workflow /tmp/e2e-binaries.tar.zst
+
+  # The nightly repeats the CI module list; this catches the two drifting.
+  - name: check-cron-coverage
+    jobSize: small
+    requests: {cpu: 1500m, memory: 548Mi}
+    changes:
+      in:
+        - ^\.argoci/ciworkflow\.yaml$
+        - ^\.argoci/cron/nightly-ci\.yaml$
+        - ^\.argoci/scripts/test_scripts/check-cron-coverage\.sh$
+    commands: |
+      ./.argoci/scripts/test_scripts/check-cron-coverage.sh

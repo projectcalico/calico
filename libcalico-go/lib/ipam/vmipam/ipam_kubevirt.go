@@ -38,6 +38,9 @@ var (
 	ErrAlternateOwnerMismatch = errors.New("AlternateOwnerAttrs doesn't match expected target owner")
 )
 
+// VMHandleInfix separates a VM handle's network name from its namespace and VM name.
+const VMHandleInfix = ".vmi."
+
 // CreateVMHandleID generates a consistent handle ID for a KubeVirt VM allocation.
 // This ensures both CNI plugin and Felix use the same handle format.
 //
@@ -71,7 +74,7 @@ func CreateVMHandleID(networkName, namespace, vmName string) string {
 	suffix := fmt.Sprintf("%s.%s", namespace, vmName)
 
 	// Build prefix: networkName.vmi.
-	prefix := fmt.Sprintf("%s.vmi.", networkName)
+	prefix := networkName + VMHandleInfix
 
 	// Use GetLengthLimitedID with max length 128
 	// This will keep the suffix unhashed if it fits, otherwise hash and truncate

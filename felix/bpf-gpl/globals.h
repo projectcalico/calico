@@ -53,6 +53,9 @@ struct cali_tc_preamble_globals {
 };
 
 enum cali_globals_flags {
+	/* Set on an attach point whose device encapsulates traffic: a vxlan,
+	 * ipip or wireguard device. */
+	CALI_GLOBALS_IFACE_ENCAPS                         = 0x00000001,
 	CALI_GLOBALS_RESERVED1                            = 0x00000002,
 	CALI_GLOBALS_RESERVED2                            = 0x00000004,
 	CALI_GLOBALS_RESERVED3                            = 0x00000008,
@@ -72,6 +75,8 @@ enum cali_globals_flags {
 	CALI_GLOBALS_WORKLOAD_SRC_SPOOFING_CONFIGURED     = 0x00020000,
 	CALI_GLOBALS_INGRESS_CONN_LIMIT_CONFIGURED        = 0x00040000,
 	CALI_GLOBALS_EGRESS_CONN_LIMIT_CONFIGURED         = 0x00080000,
+	CALI_GLOBALS_RESERVED21                           = 0x00100000,
+	CALI_GLOBALS_RESERVED22                           = 0x00200000,
 };
 
 struct cali_ctlb_globals {

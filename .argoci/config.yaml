@@ -1,21 +1,36 @@
-# ArgoCI config. Scheduled e2e suites are CronWorkflows in .argoci/cron/*.yaml,
-# registered on merge to the default branch; the one per-PR workflow below is
-# the ported Semaphore gcp-kubeadm gate (see .argoci/ciworkflow.yaml).
+# Which workflows run on which events. The crons in .argoci/cron/ register on
+# merge to the default branch.
 version: v2
-# Fork PRs from non-writers have CI withheld everywhere, and that is not
-# configurable. Without this the withholding is silent, so on a repo whose PRs
-# are mostly community forks the gate would look like it had simply vanished;
-# with it, a maintainer gets a per-commit checkbox to release the run.
+
+# Fork PRs from non-writers get no CI either way; this gives a maintainer a
+# per-commit checkbox to release the run rather than withholding it silently.
 requireApproval: true
+
+# The calico/go-build tag `useGoBuild` steps run. It must match the GO_BUILD_VER
+# metadata.mk resolves to, and CI fails when the two differ.
+goBuildVersion: 1.27.1-llvm21.1.8-k8s1.37.1
+
 workflows:
-  - name: e2e-pr-gcp
+  # Always runs, so its status can be a required check; gating happens inside.
+  - name: calico
     workflowFile: .argoci/ciworkflow.yaml
     runWhen:
-      changes:
-        in:
-          - ^e2e\/.*
-          - ^\.argoci\/scripts\/.*
-          - ^\.argoci\/ciworkflow\.yaml$
-        exclude:
-          - ^.*\/README\.md$
-          - ^.*\/DESIGN\.md$
+      alwaysRunOnPR: true
+      alwaysRunOnMerge: true
+
+  # Separate workflows, so a publish failing doesn't colour the build's status.
+  - name: fossa-scan
+    workflowFile: .argoci/publish/fossa-scan.yaml
+    runWhen:
+      alwaysRunOnMerge: true
+
+  # Also a promotion button, for packaging a branch or PR.
+  - name: openstack-packages
+    workflowFile: .argoci/publish/openstack-packages.yaml
+    runWhen:
+      alwaysRunOnMerge: true
+
+  - name: e2e-images
+    workflowFile: .argoci/publish/e2e-images.yaml
+    runWhen:
+      alwaysRunOnMerge: true

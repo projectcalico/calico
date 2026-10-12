@@ -19,9 +19,9 @@ import "fmt"
 // Environment variables the component Makefiles read. A typo in one of these is
 // silent: make treats an unknown variable as empty rather than failing.
 const (
-	// EnvConfirm and EnvDryRun are the publish latch. Exactly one is set.
 	EnvConfirm = "CONFIRM"
 	EnvDryRun  = "DRYRUN"
+	EnvDebug   = "DEBUG"
 
 	EnvRelease       = "RELEASE"
 	EnvReleaseBranch = "RELEASE_BRANCH"
@@ -46,6 +46,12 @@ const (
 	EnvOperatorRegistryOverride = "OPERATOR_REGISTRY_OVERRIDE"
 	EnvOperatorImageOverride    = "OPERATOR_IMAGE_OVERRIDE"
 	EnvRegistry                 = "REGISTRY"
+
+	EnvCalicoRegistry        = "CALICO_REGISTRY"
+	EnvCalicoImagePath       = "CALICO_IMAGE_PATH"
+	EnvCalicoVersion         = "CALICO_VERSION"
+	EnvOperatorImageRegistry = "OPERATOR_IMAGE_REGISTRY"
+	EnvOperatorImagePath     = "OPERATOR_IMAGE_PATH"
 
 	EnvChartDestination = "CHART_DESTINATION"
 	EnvTZ               = "TZ" // EnvTZ fixes the timezone helm stamps index entries with.

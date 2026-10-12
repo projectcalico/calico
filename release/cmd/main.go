@@ -78,6 +78,7 @@ func Commands(cfg *Config) []*cli.Command {
 		imagesCommand(cfg),
 		chartsCommand(cfg),
 		manifestsCommand(cfg),
+		operatorCommand(cfg),
 	}
 }
 

@@ -154,6 +154,10 @@ must, since it bakes per-interface config (jump-map indices, host IP,
 flags) into `.rodata`, some of which changes without a restart. So the
 preamble is re-loaded, and re-verified, on every attach.
 
+Felix keeps, in memory, the globals (jump tables included) each hook's
+workload preamble was attached with, and re-attaches when the globals
+it would now write differ or it finds no qdisc or attached classifier.
+
 The preamble calls `bpf_trace_printk` on its drop/error paths
 regardless of `BPFLogLevel`. Under kernel `lockdown=confidentiality`
 ftrace is disabled, so every load makes the kernel log `could not
@@ -161,7 +165,12 @@ enable bpf_trace_printk events`. Felix detects this at startup
 (`bpf.KernelLockdownConfidentiality`) and instead loads
 trace-printk-free preamble variants (`*_notrace.o`,
 `AttachPoint.NoTracePrintk`), forcing `BPFLogLevel: Debug` off on such
-nodes.
+nodes. The lockdown state lives on securityfs, which Felix mounts
+read-only into its own mount namespace for that one read rather than
+taking it as a host mount — a host mount would make `CONFIG_SECURITYFS`
+a hard requirement for starting `calico-node` at all. The mount needs
+`CAP_SYS_ADMIN` in the initial user namespace; when it fails, Felix
+assumes the kernel is not locked down.
 
 The main programs avoid `_notrace` duplicates (which would double the
 program matrix): each carries a `struct prog_flags` in its own frozen
@@ -223,6 +232,10 @@ ingress/egress or XDP), whether the interface is a WEP, HEP, tunnel,
 DSR-enabled, cgroup, etc. `LoadObj` loads the object at most once per
 `AttachType` and returns a `Layout` that maps every sub-program to the
 jump-map index it was placed at.
+
+Whether the device encapsulates is deliberately *not* part of it. It is
+per-attach-point runtime state (the `IFACE_ENCAPS` global), so Calico's
+own overlay devices share the host object rather than each needing one.
 
 `GetApplicableSubProgs` filters the list based on capability: the
 host-CT-conflict helper is only loaded for HEP egress, the Maglev

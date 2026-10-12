@@ -107,9 +107,14 @@ func (n *LocalSocketReporter) Report(logSlice any) error {
 			logrus.WithField("num", len(logs)).Debug("Dispatching flow logs to local socket")
 		}
 		for _, l := range logs {
+			f, err := goldmane.ConvertFlowlogToGoldmane(l)
+			if err != nil {
+				logrus.WithError(err).WithField("flowLog", l).Warn("Dropping invalid flow log")
+				continue
+			}
 			n.clientLock.RLock()
 			if n.client != nil {
-				n.client.Push(goldmane.ConvertFlowlogToGoldmane(l))
+				n.client.Push(f)
 			}
 			n.clientLock.RUnlock()
 		}

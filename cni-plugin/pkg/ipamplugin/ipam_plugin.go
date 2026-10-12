@@ -25,7 +25,6 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -48,6 +47,7 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -391,7 +391,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			rsvdAttrWindows := &ipam.HostReservedAttr{
 				StartOfBlock: 3,
 				EndOfBlock:   1,
-				Handle:       ipam.WindowsReservedHandle,
+				Handle:       accounting.WindowsReservedHandle,
 				Note:         "windows host rsvd",
 			}
 			assignArgs.HostReservedAttrIPv4s = rsvdAttrWindows
@@ -635,10 +635,8 @@ func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *l
 		return nil, nil
 	}
 
-	// Quick pre-filter: skip API server queries for pods that are clearly not virt-launcher pods.
-	// KubeVirt hardcodes the "virt-launcher-" prefix in pod GenerateName when creating virt-launcher pods.
-	// This avoids unnecessary API server queries for normal (non-VM) pods on the CNI hot path.
-	if !strings.HasPrefix(epIDs.Pod, "virt-launcher-") {
+	// Skip the API server query for pods that are clearly not virt-launcher pods.
+	if !kubevirt.MaybeVirtLauncherPod(epIDs.Pod) {
 		return nil, nil
 	}
 

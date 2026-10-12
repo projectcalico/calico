@@ -32,12 +32,12 @@ func PatchFelixConfiguration(ctx context.Context, c client.Client, patchFn func(
 		return nil, fmt.Errorf("unable to read FelixConfiguration: %w", err)
 	}
 
-	// Create a base state for the upcoming patch operation.
-	patchFrom := client.MergeFrom(fc.DeepCopy())
-
 	if err = RestoreV3Metadata(fc); err != nil {
 		return nil, err
 	}
+
+	// Diff against the restored object, so the patch leaves the v3 metadata stash alone.
+	patchFrom := client.MergeFrom(fc.DeepCopy())
 
 	// Apply desired changes to the FelixConfiguration.
 	updated, err := patchFn(fc)

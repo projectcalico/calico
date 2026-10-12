@@ -15,17 +15,25 @@
 package calico
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path"
 	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/projectcalico/calico/release/internal/binaries"
 	"github.com/projectcalico/calico/release/internal/charts"
@@ -33,9 +41,12 @@ import (
 	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/images"
+	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/manifests"
+	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/outputs"
-	"github.com/projectcalico/calico/release/pkg/manager/operator"
+	"github.com/projectcalico/calico/release/internal/pinnedversion"
+	"github.com/projectcalico/calico/release/internal/registry"
 )
 
 // fakeResult is the canned response for a matched command.
@@ -359,9 +370,8 @@ func TestPublishGithubReleaseSkipped(t *testing.T) {
 		repo:          "calico",
 		outputDir:     t.TempDir(),
 	}
-	upload := r.githubReleaseUpload()
-	if upload != nil {
-		t.Errorf("expected no upload with the flag off, got %+v", upload)
+	if upload := r.githubReleaseUpload(); !upload.Skip {
+		t.Errorf("expected the upload skipped with the flag off, got %+v", upload)
 	}
 	if len(f.calls) != 0 {
 		t.Errorf("expected nothing run with the flag off, got %v", f.calls)
@@ -680,11 +690,7 @@ func TestReleaseNoteNamesTheArtifactsThroughTheirAccessors(t *testing.T) {
 		githubOrg:     "projectcalico",
 		repo:          "calico",
 	}
-	up := m.githubReleaseUpload()
-	if up == nil {
-		t.Fatal("githubReleaseUpload() = nil")
-	}
-	body := up.Handler.(distribution.GithubRelease).Body
+	body := m.githubReleaseUpload().Handler.(distribution.GithubRelease).Body
 
 	// Stated outright rather than computed from the accessors: the note tells a
 	// user what to download, so it has to match the published asset names that
@@ -758,16 +764,25 @@ func imageManager(t *testing.T, f *fakeRunner, logsDir string) (*CalicoManager, 
 		runner:              f,
 		repoRoot:            root,
 		calicoVersion:       "v3.30.0",
-		imageRegistries:     []string{"quay.io/tigera"},
+		imageRegistries:     []string{registry.DefaultProductRegistry},
 		images:              true,
+		operatorImage:       registry.OperatorImage,
+		operatorRegistry:    registry.DefaultOperatorRegistry,
+		operator:            true,
 		logsDir:             logsDir,
 		outputDir:           t.TempDir(),
+		recordsDir:          t.TempDir(),
 		releaseBranchPrefix: "release",
 		resolveDigest: func(string) (string, bool, error) {
 			return "sha256:aaa", true, nil
 		},
 	}, root
 }
+
+// What the image tests below expect of this release.
+var (
+	imagePublishTarget = "release-publish"
+)
 
 // A publish must latch CONFIRM; DRYRUN pushes nothing and still reports
 // success.
@@ -777,8 +792,8 @@ func TestPublishContainerImagesConfirms(t *testing.T) {
 	if err := m.publishContainerImages(); err != nil {
 		t.Fatalf("publishContainerImages: %v", err)
 	}
-	if !f.ran("make -C " + root + "/cmd/calico release-publish") {
-		t.Errorf("publish did not run release-publish in cmd/calico, calls: %v", f.calls)
+	if !f.ran("make -C " + root + "/cmd/calico " + imagePublishTarget) {
+		t.Errorf("publish did not run %s in cmd/calico, calls: %v", imagePublishTarget, f.calls)
 	}
 	env := f.envForDir(root + "/cmd/calico ")
 	if !slices.Contains(env, "CONFIRM=true") {
@@ -787,6 +802,326 @@ func TestPublishContainerImagesConfirms(t *testing.T) {
 	if slices.Contains(env, "DRYRUN=true") {
 		t.Error("publish env should not carry DRYRUN=true")
 	}
+}
+
+func TestResolveContainerImages(t *testing.T) {
+	withoutImages := func(t *testing.T, f *fakeRunner) *CalicoManager {
+		m, _ := imageManager(t, f, "")
+		m.images = false
+		m.isHashRelease = true
+		return m
+	}
+	readRefs := func(t *testing.T, m *CalicoManager, step string) []string {
+		t.Helper()
+		refs, err := outputs.ReadRefs(m.recordsDir, step)
+		if err != nil {
+			t.Fatalf("ReadRefs(%s): %v", step, err)
+		}
+		return refs
+	}
+
+	t.Run("records the images as resolved", func(t *testing.T) {
+		f := newFakeRunner()
+		m := withoutImages(t, f)
+		if err := m.resolveContainerImages(); err != nil {
+			t.Fatalf("resolveContainerImages: %v", err)
+		}
+		if len(readRefs(t, m, images.ResolveStep)) == 0 {
+			t.Errorf("nothing recorded under %s", images.ResolveStep)
+		}
+		if refs := readRefs(t, m, "images-publish"); len(refs) != 0 {
+			t.Errorf("a resolve wrote the publish record: %v", refs)
+		}
+		for _, c := range f.calls {
+			if strings.HasSuffix(c, " "+imagePublishTarget) {
+				t.Errorf("a resolve ran the publish target: %s", c)
+			}
+		}
+	})
+
+	t.Run("a missing image fails after the rest are recorded", func(t *testing.T) {
+		m := withoutImages(t, newFakeRunner())
+		missing := registry.DefaultProductRegistry + "/calico:" + m.calicoVersion
+		m.resolveDigest = func(image string) (string, bool, error) {
+			if image == missing {
+				return "", false, nil
+			}
+			return "sha256:aaa", true, nil
+		}
+		err := m.resolveContainerImages()
+		if err == nil || !strings.Contains(err.Error(), missing) {
+			t.Fatalf("got %v, want an error naming %s", err, missing)
+		}
+		if len(readRefs(t, m, images.ResolveStep)) == 0 {
+			t.Error("the images that exist were not recorded")
+		}
+	})
+
+	t.Run("runs first, before metadata", func(t *testing.T) {
+		var kinds []string
+		for _, u := range withoutImages(t, newFakeRunner()).uploads() {
+			kinds = append(kinds, u.Handler.Name())
+		}
+		resolve, meta := slices.Index(kinds, "images"), slices.Index(kinds, metadataKey)
+		if resolve != 0 || meta < resolve {
+			t.Errorf("uploads %v: images must come first, before metadata", kinds)
+		}
+	})
+
+	t.Run("the images upload scans once every image is found", func(t *testing.T) {
+		m := withoutImages(t, newFakeRunner())
+		scans := enableScan(t, m)
+		if err := m.uploads()[0].Handler.Publish(context.Background(), ""); err != nil {
+			t.Fatalf("images upload: %v", err)
+		}
+		if got := len(scans.sent()); got != 1 {
+			t.Errorf("sent %d scan requests, want 1", got)
+		}
+	})
+
+	t.Run("a dry run does not scan", func(t *testing.T) {
+		m := withoutImages(t, newFakeRunner())
+		scans := enableScan(t, m)
+		m.dryRun = true
+		if err := m.uploads()[0].Handler.Publish(context.Background(), ""); err != nil {
+			t.Fatalf("images upload: %v", err)
+		}
+		if got := len(scans.sent()); got != 0 {
+			t.Errorf("a dry run sent %d scan requests", got)
+		}
+	})
+
+	t.Run("the prereqs look nothing up", func(t *testing.T) {
+		m := withoutImages(t, newFakeRunner())
+		m.operator = false
+		var lookups int
+		m.resolveDigest = func(string) (string, bool, error) {
+			lookups++
+			return "", false, nil
+		}
+		if err := m.hashreleasePrereqs(); err != nil {
+			t.Fatalf("hashreleasePrereqs: %v", err)
+		}
+		if lookups != 0 {
+			t.Errorf("the prereqs resolved %d images", lookups)
+		}
+	})
+}
+
+func TestComponentImages(t *testing.T) {
+	t.Run("scans the operator at the registry the run uses", func(t *testing.T) {
+		m, _ := imageManager(t, newFakeRunner(), "")
+		m.operatorRegistry = "quay.io/override"
+		m.operatorVersion = "v1.40.0"
+		m.components = map[string]registry.Component{
+			m.operatorImage: {Registry: "quay.io/pinned", Image: m.operatorImage, Version: m.operatorVersion},
+		}
+		want := "quay.io/override/" + m.operatorImage + ":v1.40.0"
+		if got := m.componentImages()[m.operatorImage]; got != want {
+			t.Errorf("scans %s, want %s", got, want)
+		}
+	})
+
+	t.Run("scans the pin's images and nothing it records by version", func(t *testing.T) {
+		m, _ := imageManager(t, newFakeRunner(), "")
+		pin := pinnedversion.Pin{
+			Operator: registry.Component{Registry: m.operatorRegistry, Image: m.operatorImage, Version: m.operatorVersion},
+			Components: map[string]registry.Component{
+				"node":   {Version: m.calicoVersion},
+				"calico": {Version: m.calicoVersion},
+			},
+		}
+		m.components = pin.Released()
+		got := slices.Sorted(maps.Keys(m.componentImages()))
+		if want := slices.Sorted(maps.Keys(pin.Images())); !slices.Equal(got, want) {
+			t.Errorf("scans %v, want the pin's images %v", got, want)
+		}
+	})
+}
+
+func TestReleasedComponents(t *testing.T) {
+	m, _ := imageManager(t, newFakeRunner(), "")
+	m.components = map[string]registry.Component{
+		"node": {Image: "node", Version: m.calicoVersion},
+		"api":  {Version: m.calicoVersion},
+	}
+	got := m.releasedComponents()
+
+	t.Run("places an image the pin leaves unplaced at the run's registry", func(t *testing.T) {
+		if got["node"].Registry != m.imageRegistries[0] {
+			t.Errorf("node registry = %q, want %q", got["node"].Registry, m.imageRegistries[0])
+		}
+	})
+
+	t.Run("keeps a component with no image by version alone", func(t *testing.T) {
+		if want := (registry.Component{Version: m.calicoVersion}); got["api"] != want {
+			t.Errorf("api = %+v, want %+v", got["api"], want)
+		}
+		if _, ok := m.componentImages()["api"]; ok {
+			t.Error("a component with no image was scanned")
+		}
+	})
+}
+
+func TestResolveOperator(t *testing.T) {
+	newManager := func(t *testing.T, resolve func(string) (string, bool, error)) *CalicoManager {
+		m, _ := imageManager(t, newFakeRunner(), "")
+		m.images = false
+		m.isHashRelease = true
+		m.operator = false
+		m.operatorVersion = "v1.40.0"
+		m.resolveDigest = resolve
+		return m
+	}
+	scanOperator := func(t *testing.T, m *CalicoManager) *scanLog {
+		t.Helper()
+		scans := enableScan(t, m)
+		m.components[m.operatorImage] = registry.Component{Registry: m.operatorRegistry, Image: m.operatorImage, Version: m.operatorVersion}
+		return scans
+	}
+	operatorRef := func(m *CalicoManager) string { return m.operatorComponent().String() }
+	missingOperator := func(m *CalicoManager) func(string) (string, bool, error) {
+		return func(image string) (string, bool, error) {
+			if strings.Contains(image, "/"+m.operatorImage+":") {
+				return "", false, nil
+			}
+			return "sha256:aaa", true, nil
+		}
+	}
+
+	t.Run("records an operator the run does not publish", func(t *testing.T) {
+		m := newManager(t, func(string) (string, bool, error) { return "sha256:aaa", true, nil })
+		unscanned, err := m.resolveOperator()
+		if err != nil || len(unscanned) != 0 {
+			t.Fatalf("resolveOperator() = %v, %v; want nothing left out", unscanned, err)
+		}
+		refs, err := outputs.ReadRefs(m.recordsDir, operator.ResolveStep)
+		if err != nil {
+			t.Fatalf("ReadRefs: %v", err)
+		}
+		want := m.operatorRegistry + "/" + m.operatorImage + ":" + m.operatorVersion + "@sha256:aaa"
+		if !slices.Contains(refs, want) {
+			t.Errorf("recorded %v, want %s", refs, want)
+		}
+	})
+
+	t.Run("a missing operator only warns and leaves the scan", func(t *testing.T) {
+		m := newManager(t, nil)
+		m.resolveDigest = missingOperator(m)
+		scans := scanOperator(t, m)
+		if err := m.resolveContainerImages(); err != nil {
+			t.Fatalf("resolveContainerImages: %v", err)
+		}
+		sent := scans.sent()
+		if len(sent) != 1 || slices.Contains(sent[0], operatorRef(m)) {
+			t.Errorf("sent %v, want one scan without %s", sent, operatorRef(m))
+		}
+	})
+
+	t.Run("a missing operator leaves the scan under an overridden registry", func(t *testing.T) {
+		m := newManager(t, nil)
+		m.resolveDigest = missingOperator(m)
+		scanOperator(t, m)
+		m.operatorRegistry = "quay.io/override"
+		unscanned, err := m.resolveOperator()
+		if err != nil {
+			t.Fatalf("resolveOperator: %v", err)
+		}
+		if !slices.Equal(unscanned, []string{operatorRef(m)}) {
+			t.Errorf("left out %v, want %s", unscanned, operatorRef(m))
+		}
+	})
+
+	t.Run("a failed lookup holds the scan and still records the product", func(t *testing.T) {
+		m := newManager(t, nil)
+		m.resolveDigest = func(image string) (string, bool, error) {
+			if strings.Contains(image, "/"+m.operatorImage+":") {
+				return "", false, fmt.Errorf("unauthorized")
+			}
+			return "sha256:aaa", true, nil
+		}
+		scans := scanOperator(t, m)
+		if err := m.resolveContainerImages(); err == nil {
+			t.Fatal("expected the failed lookup to fail the run")
+		}
+		if sent := scans.sent(); len(sent) != 0 {
+			t.Errorf("sent %v from a failed attempt", sent)
+		}
+		refs, err := outputs.ReadRefs(m.recordsDir, images.ResolveStep)
+		if err != nil || len(refs) == 0 {
+			t.Errorf("the product images were not recorded: %v, %v", refs, err)
+		}
+	})
+
+	t.Run("a retry that finds the operator scans it once", func(t *testing.T) {
+		var unavailable atomic.Bool
+		unavailable.Store(true)
+		m := newManager(t, func(string) (string, bool, error) {
+			if unavailable.Load() {
+				return "", false, fmt.Errorf("unavailable")
+			}
+			return "sha256:aaa", true, nil
+		})
+		scans := scanOperator(t, m)
+		if err := m.resolveContainerImages(); err == nil {
+			t.Fatal("expected the first attempt to fail")
+		}
+		unavailable.Store(false)
+		if err := m.resolveContainerImages(); err != nil {
+			t.Fatalf("retry: %v", err)
+		}
+		sent := scans.sent()
+		if len(sent) != 1 || !slices.Contains(sent[0], operatorRef(m)) {
+			t.Errorf("sent %v, want one scan with %s", sent, operatorRef(m))
+		}
+	})
+
+	t.Run("skips an operator the run publishes", func(t *testing.T) {
+		var lookups atomic.Int32
+		m := newManager(t, func(string) (string, bool, error) {
+			lookups.Add(1)
+			return "", false, nil
+		})
+		m.operator = true
+		if _, err := m.resolveOperator(); err != nil {
+			t.Fatalf("resolveOperator: %v", err)
+		}
+		if n := lookups.Load(); n != 0 {
+			t.Errorf("looked up %d images", n)
+		}
+	})
+}
+
+type scanLog struct {
+	mu    sync.Mutex
+	scans [][]string
+}
+
+func (l *scanLog) sent() [][]string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Clone(l.scans)
+}
+
+func enableScan(t *testing.T, m *CalicoManager) *scanLog {
+	t.Helper()
+	scans := &scanLog{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Images []string `json:"images"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		scans.mu.Lock()
+		scans.scans = append(scans.scans, body.Images)
+		scans.mu.Unlock()
+		_, _ = w.Write([]byte(`{"results_link": "http://example.com/results"}`))
+	}))
+	t.Cleanup(srv.Close)
+	m.imageScanning = true
+	m.imageScanningConfig = imagescanner.Config{APIURL: srv.URL, Token: "token", Scanner: "scanner"}
+	m.components = map[string]registry.Component{"calico": {Image: "calico", Version: m.calicoVersion}}
+	m.tmpDir = t.TempDir()
+	return scans
 }
 
 // Each image unit gets its own log file; concurrent units would otherwise
@@ -825,143 +1160,186 @@ func TestImageStepsWriteLogFiles(t *testing.T) {
 	}
 }
 
-func TestPublishContainerImagesBranchTag(t *testing.T) {
-	tests := []struct {
-		name          string
-		version       string
-		images        bool
-		isHashRelease bool
-		wantPublish   bool
-		wantBranchTag bool
-		wantTag       string
-		prefix        string
-		wantErr       bool
-	}{
-		{
-			name:          "hashrelease also pushes the branch tag",
-			version:       "v3.33.0-0.dev-1-gabcdef123456",
-			images:        true,
-			isHashRelease: true,
-			wantPublish:   true,
-			wantBranchTag: true,
-			wantTag:       "release-v3.33",
-		},
-		{
-			name:          "early preview keeps its stream suffix",
-			version:       "v3.33.0-1.0-0.dev-1-gabcdef123456",
-			images:        true,
-			isHashRelease: true,
-			wantPublish:   true,
-			wantBranchTag: true,
-			wantTag:       "release-v3.33-1",
-		},
-		{
-			name:          "an official release moves it too",
-			version:       "v3.33.0",
-			images:        true,
-			isHashRelease: false,
-			wantPublish:   true,
-			wantBranchTag: true,
-			wantTag:       "release-v3.33",
-		},
-		{
-			// An unset prefix would silently tag images "-v3.33".
-			name:          "missing branch prefix is an error",
-			version:       "v3.33.0-0.dev-1-gabcdef123456",
-			images:        true,
-			isHashRelease: true,
-			prefix:        "",
-			wantPublish:   true,
-			wantErr:       true,
-		},
-		{
-			name:          "images disabled publishes nothing",
-			version:       "v3.33.0-0.dev-1-gabcdef123456",
-			images:        false,
-			isHashRelease: true,
-			wantPublish:   false,
-			wantBranchTag: false,
-		},
-	}
+func TestPublishBranchTag(t *testing.T) {
+	t.Run("moves the tag", func(t *testing.T) {
+		tests := []struct {
+			name          string
+			version       string
+			images        bool
+			isHashRelease bool
+			wantPublish   bool
+			wantBranchTag bool
+			wantTag       string
+			prefix        string
+			wantErr       bool
+		}{
+			{
+				name:          "hashrelease also pushes the branch tag",
+				version:       "v3.33.0-0.dev-1-gabcdef123456",
+				images:        true,
+				isHashRelease: true,
+				wantPublish:   true,
+				wantBranchTag: true,
+				wantTag:       "release-v3.33",
+			},
+			{
+				name:          "early preview keeps its stream suffix",
+				version:       "v3.33.0-1.0-0.dev-1-gabcdef123456",
+				images:        true,
+				isHashRelease: true,
+				wantPublish:   true,
+				wantBranchTag: true,
+				wantTag:       "release-v3.33-1",
+			},
+			{
+				name:          "an official release moves it too",
+				version:       "v3.33.0",
+				images:        true,
+				isHashRelease: false,
+				wantPublish:   true,
+				wantBranchTag: true,
+				wantTag:       "release-v3.33",
+			},
+			{
+				// An unset prefix would silently tag images "-v3.33".
+				name:          "missing branch prefix is an error",
+				version:       "v3.33.0-0.dev-1-gabcdef123456",
+				images:        true,
+				isHashRelease: true,
+				prefix:        "",
+				wantPublish:   true,
+				wantErr:       true,
+			},
+			{
+				name:          "images disabled publishes nothing",
+				version:       "v3.33.0-0.dev-1-gabcdef123456",
+				images:        false,
+				isHashRelease: true,
+				wantPublish:   false,
+				wantBranchTag: false,
+			},
+		}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			f := newFakeRunner()
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				f := newFakeRunner()
 
-			prefix := tt.prefix
-			if prefix == "" && !tt.wantErr {
-				prefix = "release"
-			}
-			r, root := imageManager(t, f, "")
-			r.images = tt.images
-			r.isHashRelease = tt.isHashRelease
-			// A hashrelease reads its registry from its own source tree.
-			r.hashrelease.Source = root
-			r.calicoVersion = tt.version
-			r.releaseBranchPrefix = prefix
-
-			err := r.publishContainerImages()
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("publishContainerImages() = nil, want error")
+				prefix := tt.prefix
+				if prefix == "" && !tt.wantErr {
+					prefix = "release"
 				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("publishContainerImages() unexpected error: %v", err)
-			}
+				r, root := imageManager(t, f, "")
+				r.images = tt.images
+				r.isHashRelease = tt.isHashRelease
+				// A hashrelease reads its registry from its own source tree.
+				r.hashrelease.Source = root
+				r.calicoVersion = tt.version
+				r.releaseBranchPrefix = prefix
 
-			if got := f.ran("make -C " + root + "/cmd/calico release-publish"); got != tt.wantPublish {
-				t.Errorf("release-publish ran = %v, want %v (calls: %v)", got, tt.wantPublish, f.calls)
-			}
-			if got := f.ran("make -C " + root + "/cmd/calico " + branchTagTarget); got != tt.wantBranchTag {
-				t.Errorf("branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
-			}
-			if tt.wantBranchTag {
-				if got := f.envFor("make -C " + root + "/cmd/calico " + branchTagTarget); !slices.Contains(got, "IMAGETAG="+tt.wantTag) {
-					t.Errorf("branch tag env = %v, want IMAGETAG=%s", got, tt.wantTag)
+				err := r.publishContainerImages()
+				if tt.wantErr {
+					if err == nil {
+						t.Fatalf("publishContainerImages() = nil, want error")
+					}
+					return
 				}
-			}
-
-			// The operator carries the branch tag too, published to its own registries.
-			opTarget := "make -C " + root + "/operator retag-build-images-with-registries"
-			if got := f.ran(opTarget); got != tt.wantBranchTag {
-				t.Errorf("operator branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
-			}
-			if tt.wantBranchTag {
-				env := f.envFor(opTarget)
-				if !slices.Contains(env, "IMAGETAG="+tt.wantTag) {
-					t.Errorf("operator branch tag env = %v, want IMAGETAG=%s", env, tt.wantTag)
+				if err != nil {
+					t.Fatalf("publishContainerImages() unexpected error: %v", err)
 				}
-				want := "DEV_REGISTRIES=" + strings.Join(operator.DefaultRegistries, " ")
-				if !slices.Contains(env, want) {
-					t.Errorf("operator branch tag env = %v, want %s", env, want)
+
+				if got := f.ran("make -C " + root + "/cmd/calico " + imagePublishTarget); got != tt.wantPublish {
+					t.Errorf("%s ran = %v, want %v (calls: %v)", imagePublishTarget, got, tt.wantPublish, f.calls)
 				}
-			}
-		})
-	}
-}
+				if got := f.ran("make -C " + root + "/cmd/calico " + branchTagTarget); got != tt.wantBranchTag {
+					t.Errorf("branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
+				}
+				if tt.wantBranchTag {
+					if got := f.envFor("make -C " + root + "/cmd/calico " + branchTagTarget); !slices.Contains(got, "IMAGETAG="+tt.wantTag) {
+						t.Errorf("branch tag env = %v, want IMAGETAG=%s", got, tt.wantTag)
+					}
+				}
 
-// cni-plugin ships only a Windows image, so the standard branch tag target
-// there retags arch images that were never built.
-func TestPublishBranchTagSplitsWindowsFromStandard(t *testing.T) {
-	f := newFakeRunner()
-	m, root := imageManager(t, f, "")
-	if err := m.publishContainerImages(); err != nil {
-		t.Fatalf("publishContainerImages: %v", err)
-	}
-	if got := "make -C " + root + "/cni-plugin " + branchTagTarget; f.ran(got) {
-		t.Errorf("branch tag ran %q, which has no arch images to retag (calls: %v)", got, f.calls)
-	}
-	want := "make -C " + root + "/cni-plugin " + windowsBranchTagTarget
-	if !f.ran(want) {
-		t.Errorf("did not run %q, ran: %v", want, f.calls)
-	}
+				// The operator carries the branch tag too, published to its own registries.
+				opTarget := "make -C " + root + "/operator retag-build-images-with-registries"
+				if got := f.ran(opTarget); got != tt.wantBranchTag {
+					t.Errorf("operator branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
+				}
+				if tt.wantBranchTag {
+					env := f.envFor(opTarget)
+					if !slices.Contains(env, "IMAGETAG="+tt.wantTag) {
+						t.Errorf("operator branch tag env = %v, want IMAGETAG=%s", env, tt.wantTag)
+					}
+					// These targets iterate DEV_REGISTRIES, so it names the
+					// destination rather than a retag source.
+					want := "DEV_REGISTRIES=" + r.operatorRegistry
+					if !slices.Contains(env, want) {
+						t.Errorf("operator branch tag env = %v, want %s", env, want)
+					}
+				}
+			})
+		}
+	})
 
-	// The copy is registry side, so it needs the tag it copies from.
-	if env := f.envFor(want); !slices.Contains(env, "DEV_TAG=v3.30.0") {
-		t.Errorf("windows branch tag env = %v, want DEV_TAG=v3.30.0", env)
-	}
+	// The branch tag is a release-channel convention, so a build aimed at some
+	// other registry must not push one there. The operator is gated separately
+	// because it publishes to registries of its own.
+	t.Run("skipped for a non-default product registry", func(t *testing.T) {
+		f := newFakeRunner()
+		r, root := imageManager(t, f, "")
+		r.imageRegistries = []string{"quay.io/somewhere-else"}
+		if err := r.publishContainerImages(); err != nil {
+			t.Fatalf("publishContainerImages: %v", err)
+		}
+		if got := "make -C " + root + "/cmd/calico " + branchTagTarget; f.ran(got) {
+			t.Errorf("ran %q for a registry outside the default (calls: %v)", got, f.calls)
+		}
+	})
+
+	t.Run("skipped when the operator is off", func(t *testing.T) {
+		f := newFakeRunner()
+		r, root := imageManager(t, f, "")
+		r.operator = false
+		if err := r.publishContainerImages(); err != nil {
+			t.Fatalf("publishContainerImages: %v", err)
+		}
+		if got := "make -C " + root + "/operator " + branchTagTarget; f.ran(got) {
+			t.Errorf("ran %q with the operator off (calls: %v)", got, f.calls)
+		}
+	})
+
+	t.Run("skipped for a non-default operator registry", func(t *testing.T) {
+		f := newFakeRunner()
+		r, root := imageManager(t, f, "")
+		r.operatorRegistry = "quay.io/somewhere-else"
+		if err := r.publishContainerImages(); err != nil {
+			t.Fatalf("publishContainerImages: %v", err)
+		}
+		if got := "make -C " + root + "/operator " + branchTagTarget; f.ran(got) {
+			t.Errorf("ran %q for a registry outside the defaults (calls: %v)", got, f.calls)
+		}
+	})
+
+	// cni-plugin ships only a Windows image, so the standard branch tag target
+	// there retags arch images that were never built.
+	t.Run("windows split from standard", func(t *testing.T) {
+		f := newFakeRunner()
+		m, root := imageManager(t, f, "")
+		if err := m.publishContainerImages(); err != nil {
+			t.Fatalf("publishContainerImages: %v", err)
+		}
+		if got := "make -C " + root + "/cni-plugin " + branchTagTarget; f.ran(got) {
+			t.Errorf("branch tag ran %q, which has no arch images to retag (calls: %v)", got, f.calls)
+		}
+		want := "make -C " + root + "/cni-plugin " + windowsBranchTagTarget
+		if !f.ran(want) {
+			t.Errorf("did not run %q, ran: %v", want, f.calls)
+		}
+
+		// The copy is registry side, so it needs the tag it copies from.
+		if env := f.envFor(want); !slices.Contains(env, "DEV_TAG=v3.30.0") {
+			t.Errorf("windows branch tag env = %v, want DEV_TAG=v3.30.0", env)
+		}
+	})
 }
 
 // Narrowing must scope the manager's image steps the same way the CLI does.
@@ -1000,7 +1378,7 @@ func TestImageStepsUnnarrowedByDefault(t *testing.T) {
 		t.Fatalf("publishContainerImages: %v", err)
 	}
 	want := len(images.VariantDirs([]images.Variant{images.PublishVariants[0]}))
-	if got := len(unitCalls(f, "release-publish")); got != want {
+	if got := len(unitCalls(f, imagePublishTarget)); got != want {
 		t.Errorf("published %d dirs, want every one of %d: %v", got, want, f.calls)
 	}
 }
@@ -1033,7 +1411,7 @@ func TestOutputDirRequiredEvenWithoutValidation(t *testing.T) {
 	}
 }
 
-func TestChartsAndIndexShareADirectory(t *testing.T) {
+func TestChartsAndIndexLocation(t *testing.T) {
 	out := t.TempDir()
 	for _, tt := range []struct {
 		name        string
@@ -1045,9 +1423,12 @@ func TestChartsAndIndexShareADirectory(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := filepath.Join(out, "release", "v3.30.0")
 			r := &CalicoManager{outputDir: dir, calicoVersion: "v3.30.0", isHashRelease: tt.hashrelease}
-			want := filepath.Join(dir, "charts")
-			if got := r.chart().BaseDir; got != want {
+			if got, want := r.chart().BaseDir, charts.OutputDir(dir); got != want {
 				t.Errorf("chart().BaseDir = %q, want %q", got, want)
+			}
+			want := filepath.Join(dir, "charts")
+			if got := charts.IndexDir(dir); got != want {
+				t.Errorf("IndexDir = %q, want %q", got, want)
 			}
 		})
 	}
@@ -1094,6 +1475,7 @@ func TestPublishHelmChartsRecordsWhatItPushed(t *testing.T) {
 		repoRoot:       "/repo",
 		calicoVersion:  "v3.30.0",
 		outputDir:      filepath.Join(out, "release", "v3.30.0"),
+		recordsDir:     t.TempDir(),
 		helmCharts:     true,
 		helmRegistries: []string{"quay.test/charts"},
 		resolveDigest:  func(string) (string, bool, error) { return "sha256:aaa", true, nil },
@@ -1112,7 +1494,7 @@ func TestPublishHelmChartsRecordsWhatItPushed(t *testing.T) {
 		t.Fatalf("publishHelmCharts: %v", err)
 	}
 
-	refs, err := outputs.ReadRefs(r.outputDir, charts.PublishStep, "v3.30.0")
+	refs, err := outputs.ReadRefs(r.recordsDir, charts.PublishStep)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1190,6 +1572,17 @@ func TestHelmIndexUploadTargetsTheChartsPrefix(t *testing.T) {
 	}
 	if want := "s3://bucket/charts/"; got.URI != want {
 		t.Errorf("URI = %q, want %q", got.URI, want)
+	}
+}
+
+func TestHelmIndexUploadSetsCachePolicy(t *testing.T) {
+	r := &CalicoManager{helmCharts: true, helmIndex: true, s3Bucket: "bucket", outputDir: t.TempDir()}
+	got, ok := r.helmIndexUpload().Handler.(distribution.S3)
+	if !ok {
+		t.Fatalf("handler is %T, want distribution.S3", r.helmIndexUpload().Handler)
+	}
+	if got.CachePolicy != distribution.MutableCachePolicy {
+		t.Errorf("CachePolicy = %q, want %q", got.CachePolicy, distribution.MutableCachePolicy)
 	}
 }
 
@@ -1335,4 +1728,240 @@ func TestChecksumsAreWrittenOnBothPaths(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBuildMetadata(t *testing.T) {
+	const (
+		nodeDigest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+		opDigest   = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+	)
+	nodeRef := registry.DefaultProductRegistry + "/node:v3.30.0"
+	opRef := registry.DefaultOperatorRegistry + "/" + registry.OperatorImage + ":v1.38.0"
+	record := func(t *testing.T, dir, step, ref string) {
+		t.Helper()
+		w, err := outputs.NewRefsWriter(dir, step)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := w.Add(ref); err != nil {
+			t.Fatal(err)
+		}
+	}
+	newManager := func(t *testing.T) *CalicoManager {
+		f := newFakeRunner()
+		f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30\n", nil)
+		f.on("git rev-parse HEAD", "0123456789abcdef0123456789abcdef01234567\n", nil)
+		records := t.TempDir()
+		record(t, records, operator.PublishStep, opRef+"@"+opDigest)
+		return &CalicoManager{
+			runner:           f,
+			githubOrg:        "projectcalico",
+			repo:             "calico",
+			calicoVersion:    "v3.30.0",
+			operatorVersion:  "v1.38.0",
+			operatorImage:    registry.OperatorImage,
+			operatorRegistry: registry.DefaultOperatorRegistry,
+			imageRegistries:  []string{registry.DefaultProductRegistry},
+			outputDir:        t.TempDir(),
+			recordsDir:       records,
+			components: map[string]registry.Component{
+				"node":                 {Image: "node", Version: "v3.30.0"},
+				registry.OperatorImage: {Image: registry.OperatorImage, Version: "v1.38.0"},
+			},
+			resolveDigest: func(string) (string, bool, error) { return "", false, nil },
+		}
+	}
+	build := func(t *testing.T, r *CalicoManager) (outputs.Metadata, error) {
+		t.Helper()
+		dir := t.TempDir()
+		if err := r.BuildMetadata(dir); err != nil {
+			return outputs.Metadata{}, err
+		}
+		b, err := os.ReadFile(filepath.Join(dir, "metadata.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var md outputs.Metadata
+		if err := yaml.Unmarshal(b, &md); err != nil {
+			t.Fatal(err)
+		}
+		return md, nil
+	}
+
+	t.Run("describes each component from the step that published it", func(t *testing.T) {
+		r := newManager(t)
+		record(t, r.recordsDir, images.PublishStep, nodeRef+"@"+nodeDigest)
+		got, err := build(t, r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := map[string]outputs.Component{
+			"node":                 {Version: "v3.30.0", Image: nodeRef, Digest: nodeDigest},
+			registry.OperatorImage: {Version: "v1.38.0", Image: opRef, Digest: opDigest},
+		}
+		if diff := cmp.Diff(want, got.Components); diff != "" {
+			t.Errorf("components (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a release fails on an unpublished image", func(t *testing.T) {
+		if _, err := build(t, newManager(t)); err == nil || !strings.Contains(err.Error(), nodeRef) {
+			t.Errorf("err = %v, want it to name %s", err, nodeRef)
+		}
+	})
+
+	t.Run("a hashrelease leaves an unpublished digest out", func(t *testing.T) {
+		r := newManager(t)
+		r.isHashRelease = true
+		got, err := build(t, r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := (outputs.Component{Version: "v3.30.0", Image: nodeRef}); got.Components["node"] != want {
+			t.Errorf("node = %+v, want %+v", got.Components["node"], want)
+		}
+	})
+}
+
+func TestSourceMetadata(t *testing.T) {
+	const headSHA = "0123456789abcdef0123456789abcdef01234567"
+	newManager := func(branch string) *CalicoManager {
+		f := newFakeRunner()
+		f.on("git rev-parse --abbrev-ref HEAD", branch+"\n", nil)
+		f.on("git rev-parse HEAD", headSHA+"\n", nil)
+		return &CalicoManager{runner: f, githubOrg: "projectcalico", repo: "calico", calicoVersion: "v3.30.0", gitRef: true}
+	}
+
+	t.Run("a release records its branch and tag", func(t *testing.T) {
+		got, err := newManager("release-v3.30").sourceMetadata()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := outputs.Source{Repository: "projectcalico/calico", Commit: headSHA, Branch: "release-v3.30", Tag: "v3.30.0"}
+		if got != want {
+			t.Errorf("source = %+v, want %+v", got, want)
+		}
+	})
+
+	t.Run("a hashrelease records no tag", func(t *testing.T) {
+		r := newManager("master")
+		r.isHashRelease = true
+		got, err := r.sourceMetadata()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Tag != "" || got.Branch != "master" {
+			t.Errorf("source = %+v, want branch master and no tag", got)
+		}
+	})
+
+	t.Run("a release that pushes no tag records none", func(t *testing.T) {
+		r := newManager("release-v3.30")
+		r.gitRef = false
+		got, err := r.sourceMetadata()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Tag != "" {
+			t.Errorf("tag = %q, want none", got.Tag)
+		}
+	})
+
+	t.Run("a detached HEAD records no branch", func(t *testing.T) {
+		got, err := newManager("HEAD").sourceMetadata()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Branch != "" || got.Commit != headSHA {
+			t.Errorf("source = %+v, want commit %s and no branch", got, headSHA)
+		}
+	})
+
+	t.Run("fails when git cannot resolve HEAD", func(t *testing.T) {
+		r := &CalicoManager{runner: newFakeRunner().on("git rev-parse HEAD", "", fmt.Errorf("not a git repository"))}
+		if _, err := r.sourceMetadata(); err == nil || !strings.Contains(err.Error(), "not a git repository") {
+			t.Errorf("err = %v, want it to contain %q", err, "not a git repository")
+		}
+	})
+}
+
+func TestChartsMetadata(t *testing.T) {
+	unpublished := outputs.Digests{Resolve: func(string) (string, bool, error) { return "", false, nil }}
+	newManager := func() *CalicoManager {
+		return &CalicoManager{
+			recordsDir:     t.TempDir(),
+			helmCharts:     true,
+			helmIndex:      true,
+			helmRepoURL:    "https://example.com/charts",
+			helmRegistries: []string{"quay.io/calico/charts", "docker.io/calico/charts"},
+			calicoVersion:  "v3.30.0",
+		}
+	}
+
+	t.Run("records each chart at the first registry", func(t *testing.T) {
+		got, err := newManager().chartsMetadata(unpublished)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Version != "v3.30.0" || got.Index != "https://example.com/charts" {
+			t.Errorf("charts = %+v, want version v3.30.0 and index https://example.com/charts", got)
+		}
+		if len(got.Entries) != len(charts.All()) {
+			t.Errorf("entries = %d, want %d", len(got.Entries), len(charts.All()))
+		}
+		for _, name := range charts.All() {
+			e := got.Entries[name]
+			if want := "quay.io/calico/charts/" + name + ":v3.30.0"; e.Image != want {
+				t.Errorf("%s image = %q, want %q", name, e.Image, want)
+			}
+			if !strings.HasSuffix(e.URL, "/"+charts.FileName(name, "v3.30.0")) {
+				t.Errorf("%s url = %q, want it to end in the chart file", name, e.URL)
+			}
+		}
+	})
+
+	t.Run("leaves out the index when it is not built", func(t *testing.T) {
+		r := newManager()
+		r.helmIndex = false
+		got, err := r.chartsMetadata(unpublished)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Index != "" {
+			t.Errorf("index = %q, want none", got.Index)
+		}
+	})
+
+	t.Run("points a hashrelease at the index it serves", func(t *testing.T) {
+		r := newManager()
+		r.isHashRelease = true
+		r.hashrelease = hashreleaseserver.Hashrelease{Name: "hr"}
+		got, err := r.chartsMetadata(unpublished)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := r.hashrelease.URL() + "/charts"; got.Index != want {
+			t.Errorf("index = %q, want %q", got.Index, want)
+		}
+	})
+
+	t.Run("records nothing when charts are off", func(t *testing.T) {
+		r := newManager()
+		r.helmCharts = false
+		got, err := r.chartsMetadata(unpublished)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != nil {
+			t.Errorf("charts = %+v, want nil", got)
+		}
+	})
+
+	t.Run("fails with no registry to name the charts by", func(t *testing.T) {
+		r := newManager()
+		r.helmRegistries = nil
+		if _, err := r.chartsMetadata(unpublished); err == nil {
+			t.Error("recorded charts with no registry")
+		}
+	})
 }

@@ -151,9 +151,12 @@ bin/calico-felix: bin/calico-felix-$(ARCH)
 libbpf: $(LIBBPF_A)
 clone-libbpf: $(LIBBPF_FILE_CREATED)
 
+# nproc counts the node's cores in a CI pod, not the CPU the step was given.
+BPF_MAKE_JOBS = $(or $(GOMAXPROCS),$$(nproc))
+
 $(LIBBPF_FILE_CREATED):
 	@echo Cloning libbpf
-	$(DOCKER_RUN) $(if $(GITHUB_TOKEN),-e GITHUB_TOKEN) $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl libbpf LIBBPF_VERSION=$(LIBBPF_VERSION)"
+	$(DOCKER_RUN) $(if $(GITHUB_TOKEN),-e GITHUB_TOKEN) $(CALICO_BUILD) sh -c "make -j$(BPF_MAKE_JOBS) -C bpf-gpl libbpf LIBBPF_VERSION=$(LIBBPF_VERSION)"
 
 $(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -not -path 'bpf-gpl/libbpf/src/$(ARCH)*' -not -path 'bpf-gpl/libbpf/.git*')
 	mkdir -p bpf-gpl/libbpf/src/$(ARCH)
@@ -162,7 +165,7 @@ $(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -not -pa
 	# either a PDE or a PIE executable. The combined calico binary pulls in
 	# Go packages that cause the linker to emit -Wl,-z,nocopyreloc, which
 	# rejects libbpf's non-PIC references to glibc symbols like stderr.
-	$(DOCKER_RUN) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH) EXTRA_CFLAGS=-fPIC"
+	$(DOCKER_RUN) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") $(CALICO_BUILD) sh -c "make -j$(BPF_MAKE_JOBS) -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH) EXTRA_CFLAGS=-fPIC"
 
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=1 $(if $(CROSS_CC),-e CC="$(CROSS_CC)") -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 
@@ -221,11 +224,11 @@ $(PROD_BPF_PROGS) &: $(BPF_APACHE_O_FILES) $(BPF_GPL_O_FILES)
 	cp $(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES) bin/bpf
 
 $(BPF_APACHE_O_FILES) &: $(shell find bpf-apache -name '*.[ch]') bpf-apache/Makefile
-	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-apache ARCH=$(ARCH) all
+	$(DOCKER_GO_BUILD) make -j$(BPF_MAKE_JOBS) -C bpf-apache ARCH=$(ARCH) all
 	touch -c $@
 
 $(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES) &: $(shell find bpf-gpl -name '*.[ch]') bpf-gpl/Makefile
-	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-gpl ARCH=$(ARCH) all ut-objs map-objs
+	$(DOCKER_GO_BUILD) make -j$(BPF_MAKE_JOBS) -C bpf-gpl ARCH=$(ARCH) all ut-objs map-objs
 	touch -c $@
 
 # This is the only bpf-gpl make that runs on the host rather than in the
@@ -237,8 +240,8 @@ bpf-gpl/%_map_stub.c: bpf-gpl/Makefile
 
 clean-bpf:
 	rm -rf bpf-gpl/*.d bpf-apache/*.d bin/bpf
-	$(DOCKER_GO_BUILD) sh -c "make -j$$(nproc) -C bpf-apache clean && \
-	                          make -j$$(nproc) -C bpf-gpl clean"
+	$(DOCKER_GO_BUILD) sh -c "make -j$(BPF_MAKE_JOBS) -C bpf-apache clean && \
+	                          make -j$(BPF_MAKE_JOBS) -C bpf-gpl clean"
 
 bpf/asm/opcode_string.go: bpf/asm/asm.go
 	$(DOCKER_GO_BUILD) go generate ./bpf/asm/
