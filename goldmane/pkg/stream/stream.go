@@ -2,7 +2,6 @@ package stream
 
 import (
 	"context"
-	"errors"
 
 	"github.com/sirupsen/logrus"
 
@@ -29,7 +28,6 @@ type stream struct {
 	id     string
 	in     chan storage.FlowProvider
 	out    chan storage.FlowBuilder
-	done   chan<- string
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -37,13 +35,9 @@ type stream struct {
 	rl *logrusr.RateLimitedLogger
 }
 
-// Close signals to the stream manager that this stream is done and should be closed.
+// Close stops the stream. The stream manager drops it from its registry on its next pass.
 func (s *stream) Close() {
-	// Cancel the stream context - this will trigger any clients writing to the stream to stop.
 	s.cancel()
-
-	// Queue unregistration of the stream, and cleanup of its resources.
-	s.done <- s.id
 }
 
 func (s *stream) Ctx() context.Context {
@@ -88,20 +82,6 @@ func (s *stream) run() {
 				// If we didn't hit an error, continue iteration.
 				return false
 			})
-		}
-	}
-}
-
-// receive tells the Stream about a newly learned source of flows and queues it for processing.
-// Note that emission of the individual Flow objects to the Stream's output channel is asynchronous.
-func (s *stream) receive(b storage.FlowProvider) {
-	// It's important that we don't block here, as this is called from the main loop.
-	logrus.WithFields(logrus.Fields{"id": s.id}).Debug("Sending FlowProvider to stream")
-
-	// Send the flow to the output channel. If the channel is full, wait for a bit before giving up.
-	if err := chanutil.WriteWithDeadline(s.ctx, s.in, b, 1*time.Second); err != nil {
-		if !errors.Is(err, context.Canceled) {
-			s.rl.WithField("id", s.id).WithError(err).Error("error writing flow provider to stream input")
 		}
 	}
 }
