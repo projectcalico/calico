@@ -16,7 +16,6 @@ package goldmane_test
 
 import (
 	"fmt"
-	"reflect"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -39,6 +38,7 @@ const (
 )
 
 type streamBench struct {
+	tb     testing.TB
 	gm     *goldmane.Goldmane
 	roller *rolloverController
 	clock  *clock
@@ -54,12 +54,15 @@ func newStreamBench(b *testing.B) *streamBench {
 	)
 	<-gm.Run(c.Now().Unix())
 	b.Cleanup(gm.Stop)
-	return &streamBench{gm: gm, roller: roller, clock: c}
+	return &streamBench{tb: b, gm: gm, roller: roller, clock: c}
 }
 
-// fence returns once the main loop has handled everything queued before it.
+// fence returns once the main loop has handled everything queued before it. It sends an
+// inverted time range, which the main loop rejects without touching any flows.
 func (s *streamBench) fence() {
-	_, _ = s.gm.Statistics(&proto.StatisticsRequest{StartTimeGte: 10, StartTimeLt: 5})
+	if _, err := s.gm.Statistics(&proto.StatisticsRequest{StartTimeGte: 10, StartTimeLt: 5}); err == nil {
+		s.tb.Fatal("fence request was not rejected")
+	}
 }
 
 func (s *streamBench) rollover() {
@@ -68,10 +71,10 @@ func (s *streamBench) rollover() {
 	s.roller.ch <- now
 }
 
-// openStream hides master's typed-nil stream at the max-streams limit.
+// openStream returns nil when the stream is rejected, so churn benchmarks can count rejections.
 func (s *streamBench) openStream(start int64) stream.Stream {
 	st, err := s.gm.Stream(&proto.FlowStreamRequest{StartTimeGte: start})
-	if err != nil || st == nil || reflect.ValueOf(st).IsNil() {
+	if err != nil {
 		return nil
 	}
 	return st
@@ -163,7 +166,10 @@ func BenchmarkStreamRegisterBackfill(b *testing.B) {
 			s.fill(perBucket)
 			start := s.clock.Now().Unix() - benchHistory*benchBucketSec
 
-			probe, _ := s.gm.Stream(&proto.FlowStreamRequest{StartTimeGte: start})
+			probe, err := s.gm.Stream(&proto.FlowStreamRequest{StartTimeGte: start})
+			if err != nil {
+				b.Fatal(err)
+			}
 			want := countBackfill(probe)
 			probe.Close()
 			if want == 0 {

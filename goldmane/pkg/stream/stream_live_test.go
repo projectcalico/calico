@@ -37,7 +37,8 @@ func newLiveRing(sm stream.StreamManager) *storage.BucketRing {
 
 	base := testutils.NewRandomFlow(liveNow)
 	for i := int64(1); i <= 5; i++ {
-		fl := googleproto.Clone(base).(*proto.Flow)
+		fl := &proto.Flow{}
+		googleproto.Merge(fl, base)
 		fl.StartTime = liveNow - i
 		fl.EndTime = liveNow - i + 1
 		ring.AddFlow(storage.FlowFromNode{Flow: types.ProtoToFlow(fl)})
