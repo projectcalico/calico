@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2025 Tigera, Inc. All rights reserved.
+# Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -73,5 +73,21 @@ if [ "$COMPONENT" = "felix" ]; then
     artifact push workflow report.json -d test-results/${SEMAPHORE_PIPELINE_ID}/${SEMAPHORE_JOB_ID}.json || true
   fi
 else
-  find . -name '*.xml' -print0 | xargs -r -0 test-results publish --name "$job_tag"
+  # run-tests-on-vms copies each batch's artifacts into a directory named after
+  # the batch, so one report per directory says which VM a result came from.
+  json_files=()
+  for batch_dir in */; do
+    [ -d "$batch_dir" ] || continue
+    batch="${batch_dir%/}"
+    mapfile -t report_names < <(find "$batch" -name '*.xml')
+    if [ ${#report_names[@]} -ne 0 ]; then
+      test-results compile --suite-prefix "$batch" --name "$job_tag ($batch)" "${report_names[@]}" "report-${batch}.json"
+      json_files+=("report-${batch}.json")
+    fi
+  done
+  if [ ${#json_files[@]} -ne 0 ]; then
+    test-results combine "${json_files[@]}" report.json
+    artifact push job report.json -d test-results/junit.json || true
+    artifact push workflow report.json -d test-results/${SEMAPHORE_PIPELINE_ID}/${SEMAPHORE_JOB_ID}.json || true
+  fi
 fi
