@@ -340,10 +340,12 @@ func (a *Goldmane) Stream(req *proto.FlowStreamRequest) (stream.Stream, error) {
 	return s, nil
 }
 
+// openStream runs on the main loop. It registers the stream and queues its backfill before any
+// later rollover can reach it, and returns nil when the stream limit has been reached.
 func (a *Goldmane) openStream(req *proto.FlowStreamRequest) stream.Stream {
 	if req.StartTimeGte != 0 {
-		// For stream requests, 0 means "now" rather than "beginning of history", so we only
-		// resolve non-zero start times.
+		// For stream requests, 0 means the current time rather than the beginning of history, so
+		// only non-zero start times are resolved.
 		req.StartTimeGte, _ = a.normalizeTimeRange(req.StartTimeGte, 0)
 	}
 	s := a.streams.Register(req, 2*numBuckets)
