@@ -448,6 +448,7 @@ func StartDataplaneDriver(
 			BPFCgroupV2:                        configParams.DebugBPFCgroupV2,
 			CRISocketPath:                      configParams.CRISocketPath,
 			ProcRootPath:                       configParams.ProcRootPath,
+			PodNetnsAnnotationEnabled:          configParams.PodNetnsAnnotationEnabled(),
 			KubeProxyMinSyncPeriod:             configParams.BPFKubeProxyMinSyncPeriod,
 			KubeProxyHealtzPort:                configParams.BPFKubeProxyHealthzPort,
 			BPFPSNATPorts:                      configParams.BPFPSNATPorts,

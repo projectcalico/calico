@@ -563,6 +563,13 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// the host procfs (typically at /host/proc) and points Felix at it here.
 	// [Default: /proc]
 	ProcRootPath *string `json:"procRootPath,omitempty"`
+	// PodNetnsAnnotation controls whether Felix trusts the
+	// cni.projectcalico.org/podNetns pod annotation when resolving a local
+	// pod's network namespace. Enable it only where the annotation is
+	// protected by the protect-cni-annotations.projectcalico.org policy;
+	// when Disabled, Felix falls back to the CRI and /proc lookups.
+	// [Default: Disabled]
+	PodNetnsAnnotation *string `json:"podNetnsAnnotation,omitempty"`
 	// BPFMapSizeNATFrontend sets the size for NAT front end map.
 	// FrontendMap should be large enough to hold an entry for each nodeport,
 	// external IP and each port in each service.
@@ -1881,6 +1888,14 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithCRISocketPath(value strin
 // If called multiple times, the ProcRootPath field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithProcRootPath(value string) *FelixConfigurationSpecApplyConfiguration {
 	b.ProcRootPath = &value
+	return b
+}
+
+// WithPodNetnsAnnotation sets the PodNetnsAnnotation field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the PodNetnsAnnotation field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithPodNetnsAnnotation(value string) *FelixConfigurationSpecApplyConfiguration {
+	b.PodNetnsAnnotation = &value
 	return b
 }
 

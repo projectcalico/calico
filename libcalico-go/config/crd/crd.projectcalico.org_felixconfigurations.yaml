@@ -1258,6 +1258,18 @@ spec:
                     or in felix.cfg or the environment on each compute node), and must match the [calico]
                     openstack_region value configured in neutron.conf on each node. [Default: Empty]
                   type: string
+                podNetnsAnnotation:
+                  description: |-
+                    PodNetnsAnnotation controls whether Felix trusts the
+                    cni.projectcalico.org/podNetns pod annotation when resolving a local
+                    pod's network namespace. Enable it only where the annotation is
+                    protected by the protect-cni-annotations.projectcalico.org policy;
+                    when Disabled, Felix falls back to the CRI and /proc lookups.
+                    [Default: Disabled]
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 policySyncPathPrefix:
                   description: |-
                     PolicySyncPathPrefix is used to by Felix to communicate policy changes to external services,

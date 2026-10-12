@@ -1277,6 +1277,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: openstackRegion
       type:
         scalar: string
+    - name: podNetnsAnnotation
+      type:
+        scalar: string
     - name: policySyncPathPrefix
       type:
         scalar: string

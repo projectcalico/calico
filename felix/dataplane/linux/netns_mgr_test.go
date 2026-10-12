@@ -52,7 +52,7 @@ func stubCookieReader(byPath map[string]uint64) netnsCookieReader {
 }
 
 func newNetnsManagerForTest(byPath map[string]uint64, byUID map[string]string) *netnsManager {
-	m := newNetnsManager("/proc", nil, nil)
+	m := newNetnsManager("/proc", true, nil, nil)
 	m.resolveCookieByPath = stubCookieReader(byPath)
 	m.resolveCookieDirect = stubCookieReader(byPath)
 	m.resolveProcPaths = stubBatchResolver(byUID)
@@ -96,6 +96,32 @@ func TestNetnsMgr_Tier1_CNIPathWins(t *testing.T) {
 	got, ok := m.CookieForWEP(upd.Id)
 	if !ok || got != 0xabcd {
 		t.Fatalf("CookieForWEP: got (%#x, %v), want (0xabcd, true)", got, ok)
+	}
+}
+
+func TestNetnsMgr_Tier1_DisabledFallsThrough(t *testing.T) {
+	// With the annotation untrusted, a populated netns path is ignored and
+	// the WEP resolves through the deeper tiers instead.
+	const uid = "uid-1d"
+	const annPath = "/var/run/netns/cni-forged"
+	const t3path = "/proc/4321/ns/net"
+	m := newNetnsManagerForTest(
+		map[string]uint64{annPath: 0xbad, t3path: 0x900d},
+		map[string]string{uid: t3path},
+	)
+	m.trustAnnotation = false
+	m.resolveCookieByPath = func(string) (uint64, error) {
+		t.Fatal("Tier 1 must not run when the annotation is untrusted")
+		return 0, nil
+	}
+
+	upd := netnsWepUpdate("k8s", "ns/p", "eth0", uid, annPath)
+	m.OnUpdate(upd)
+	m.resolveDeepBatch()
+
+	got, ok := m.CookieForWEP(upd.Id)
+	if !ok || got != 0x900d {
+		t.Fatalf("CookieForWEP got (%#x, %v); want (0x900d, true)", got, ok)
 	}
 }
 

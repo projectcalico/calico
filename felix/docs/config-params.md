@@ -1281,6 +1281,23 @@ routes, rules, and other kernel objects.
 | `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `10s` |
 
+### `PodNetnsAnnotation` (config file) / `podNetnsAnnotation` (YAML)
+
+Controls whether Felix trusts the
+cni.projectcalico.org/podNetns pod annotation when resolving a local
+pod's network namespace. Enable it only where the annotation is
+protected by the protect-cni-annotations.projectcalico.org policy;
+when Disabled, Felix falls back to the CRI and /proc lookups.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_PodNetnsAnnotation` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> |
+| Default value (above encoding) | `Disabled` |
+| `FelixConfiguration` field | `podNetnsAnnotation` (YAML) `PodNetnsAnnotation` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Disabled` |
+
 ### `PolicySyncPathPrefix` (config file) / `policySyncPathPrefix` (YAML)
 
 Used to by Felix to communicate policy changes to external services,

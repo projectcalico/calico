@@ -78,7 +78,8 @@ type resolvedNetns struct {
 // pod's netns path + cookie and caches them for any consumer. Resolution
 // walks a three-tier fallback chain, first hit wins:
 //
-//  1. CNI-set netns path on the WEP (cni.projectcalico.org/podNetns).
+//  1. CNI-set netns path on the WEP (cni.projectcalico.org/podNetns);
+//     only if trustAnnotation is set (FelixConfiguration.PodNetnsAnnotation).
 //  2. CRI runtime lookup by pod UID (felix/cri); only if a resolver was
 //     provided at construction.
 //  3. /proc-cgroup UID scan (felix/netns).
@@ -102,6 +103,10 @@ type netnsManager struct {
 	resolveProcPaths    netnsBatchResolver
 	resolveNetnsViaCRI  netnsCRIResolver
 	openNetns           netnsOpener
+
+	// trustAnnotation enables Tier 1. Off unless the podNetns annotation is
+	// protected by the CNI-annotation admission policy.
+	trustAnnotation bool
 
 	// wakeupC wakes the main apply loop after the background resolver
 	// caches a new result, so consumer managers' CompleteDeferredWork
@@ -129,11 +134,12 @@ type netnsManager struct {
 
 // newNetnsManager builds a netnsManager. procRoot is where the Tier-3
 // /proc-cgroup scan reads (FelixConfiguration.ProcRootPath, default
-// /proc). criResolver may be nil (Tier 2 disabled). wakeupC (owned by
-// int_dataplane, buffered size 1) is used to wake the apply loop when the
-// background resolver produces a result; it may be nil in tests. Call
-// Start once before use to launch the background resolver goroutine.
-func newNetnsManager(procRoot string, criResolver netnsCRIResolver, wakeupC chan<- struct{}) *netnsManager {
+// /proc). trustAnnotation enables Tier 1. criResolver may be nil (Tier 2
+// disabled). wakeupC (owned by int_dataplane, buffered size 1) is used to
+// wake the apply loop when the background resolver produces a result; it
+// may be nil in tests. Call Start once before use to launch the background
+// resolver goroutine.
+func newNetnsManager(procRoot string, trustAnnotation bool, criResolver netnsCRIResolver, wakeupC chan<- struct{}) *netnsManager {
 	return &netnsManager{
 		resolveCookieByPath: func(p string) (uint64, error) {
 			return netns.ResolveCookieByPath(procRoot, p)
@@ -144,6 +150,7 @@ func newNetnsManager(procRoot string, criResolver netnsCRIResolver, wakeupC chan
 		},
 		resolveNetnsViaCRI: criResolver,
 		openNetns:          ns.GetNS,
+		trustAnnotation:    trustAnnotation,
 		wakeupC:            wakeupC,
 		kickC:              make(chan struct{}, 1),
 		stopC:              make(chan struct{}),
@@ -193,7 +200,7 @@ func (m *netnsManager) onWepUpdate(id *proto.WorkloadEndpointID, ep *proto.Workl
 	key := wepKey(id)
 
 	// Tier 1: CNI-set netns path on the WEP. Cheap enough to run inline.
-	if path := ep.GetNetnsPath(); path != "" {
+	if path := ep.GetNetnsPath(); m.trustAnnotation && path != "" {
 		cookie, err := m.resolveCookieByPath(path)
 		if err != nil {
 			// The annotation named a path we can't read a cookie from
