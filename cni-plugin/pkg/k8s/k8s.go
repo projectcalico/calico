@@ -40,6 +40,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/cni-plugin/pkg/wait"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	k8sresources "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
@@ -86,6 +87,10 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		return nil, err
 	}
 	logger.WithField("client", client).Debug("Created Kubernetes client")
+
+	// Held until the endpoint is written, so a later ADD that waited here sees this one's result.
+	unlockPod := acquirePodLock(epIDs.Namespace, epIDs.Pod, logger)
+	defer unlockPod()
 
 	var routes []*net.IPNet
 	if conf.IPAM.Type == "host-local" {
@@ -306,6 +311,16 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 				args.StdinData = newData
 				logger.Debug("Updated stdin data")
 			}
+		}
+	}
+
+	priorContainerID, err := checkNotSuperseded(ctx, calicoClient, conf, epIDs, endpoint, annot, logger)
+	if err != nil {
+		return nil, err
+	}
+	if conf.IPAM.Type == "calico-ipam" {
+		if args.StdinData, err = withPriorContainerID(args.StdinData, priorContainerID); err != nil {
+			return nil, err
 		}
 	}
 
@@ -744,6 +759,87 @@ func priorSandboxIPs(conf types.NetConf, epIDs utils.WEPIdentifiers, endpoint *i
 		ips = append(ips, ip)
 	}
 	return ips
+}
+
+// checkNotSuperseded fails a stale ADD: one that waited while another sandbox of the same
+// pod was networked. That sandbox is the live one, and carrying on would delete its
+// interface and take its address. It returns the container the endpoint named when the
+// plugin first read it, which the IPAM plugin needs to make the same check.
+func checkNotSuperseded(
+	ctx context.Context,
+	calicoClient calicoclient.Interface,
+	conf types.NetConf,
+	epIDs utils.WEPIdentifiers,
+	endpoint *internalapi.WorkloadEndpoint,
+	podAnnotations map[string]string,
+	logger *logrus.Entry,
+) (string, error) {
+	var prior string
+	if endpoint != nil {
+		prior = endpoint.Spec.ContainerID
+	}
+
+	current, err := currentContainerID(ctx, calicoClient, conf, epIDs, podAnnotations)
+	if err != nil {
+		return "", fmt.Errorf("failed to re-read the pod's endpoint: %w", err)
+	}
+
+	// A duplicate ADD for this same sandbox may have finished first; that is not a takeover.
+	if current == prior || current == epIDs.ContainerID {
+		return prior, nil
+	}
+
+	logger.WithFields(logrus.Fields{
+		"priorContainerID":   prior,
+		"currentContainerID": current,
+	}).Warn("Another sandbox networked the pod while this ADD waited, failing the stale ADD")
+	return "", fmt.Errorf("pod was networked by sandbox %s while the ADD for sandbox %s waited", current, epIDs.ContainerID)
+}
+
+// currentContainerID returns the sandbox the pod's endpoint names at the time of the call,
+// or empty when there is no endpoint. In KDD the endpoint lives in the pod's annotations,
+// which CmdAddK8s has already fetched with k8s policy, so that case needs no extra API call.
+func currentContainerID(
+	ctx context.Context,
+	calicoClient calicoclient.Interface,
+	conf types.NetConf,
+	epIDs utils.WEPIdentifiers,
+	podAnnotations map[string]string,
+) (string, error) {
+	if conf.Policy.PolicyType == "k8s" {
+		cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+		if err != nil {
+			return "", err
+		}
+		if cfg.Spec.DatastoreType == apiconfig.Kubernetes {
+			return podAnnotations[k8sconversion.AnnotationContainerID], nil
+		}
+	}
+
+	wep, err := calicoClient.WorkloadEndpoints().Get(ctx, epIDs.Namespace, epIDs.WEPName, options.GetOptions{})
+	if errors.As(err, new(cerrors.ErrorResourceDoesNotExist)) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return wep.Spec.ContainerID, nil
+}
+
+// withPriorContainerID adds the sandbox the endpoint named at the start of this ADD to the
+// IPAM config. The IPAM plugin only moves a requested address off that sandbox's handle,
+// which stops an orphaned IPAM call from taking the address of a newer sandbox.
+func withPriorContainerID(stdinData []byte, prior string) ([]byte, error) {
+	var stdin map[string]any
+	if err := json.Unmarshal(stdinData, &stdin); err != nil {
+		return nil, err
+	}
+	ipamConf, ok := stdin["ipam"].(map[string]any)
+	if !ok {
+		return nil, errors.New("data on stdin was of unexpected type")
+	}
+	ipamConf["prior_container_id"] = prior
+	return json.Marshal(stdin)
 }
 
 // assignRequestedIPs calls the configured IPAM plugin once per address, asking for that

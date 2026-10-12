@@ -25,6 +25,9 @@ Invariants:
   for the next CNI invocation to trip on.
 - **Lock then clock.** The 90s allocation timeout starts *after* the host-wide IPAM lock is acquired (see [The IPAM lock](#the-ipam-lock)). Otherwise lock contention burns the
   budget before any allocation work runs.
+- **A stale ADD changes nothing.** ADDs for one pod are serialized by a per-pod lock, and an ADD that finds another sandbox networked the pod since it first read the endpoint fails
+  before touching IPAM or the dataplane. A requested address moves only off the handle of the sandbox the endpoint named when the ADD started, so an orphaned `calico-ipam` cannot
+  take it from a newer one.
 
 `cmdAdd` in [`cni-plugin/pkg/ipamplugin/ipam_plugin.go`](../../cni-plugin/pkg/ipamplugin/ipam_plugin.go) is the entry point. The flow is straightforward client construction →
 pool resolution → lock → `AutoAssign` → return. The design-relevant steps are:

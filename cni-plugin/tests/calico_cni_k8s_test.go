@@ -13,7 +13,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -21,6 +23,7 @@ import (
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	cnitestutils "github.com/containernetworking/plugins/pkg/testutils"
+	"github.com/gofrs/flock"
 	"github.com/mcuadros/go-version"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -35,11 +38,13 @@ import (
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
+	cnik8s "github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	apiconfig "github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
+	k8sresources "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -71,6 +76,32 @@ func ensureNamespace(clientset *kubernetes.Clientset, name string) {
 		return
 	}
 	Expect(err).NotTo(HaveOccurred())
+}
+
+// waitForFlockWaiter blocks until a process is queued for the flock held on path. The CNI
+// plugin queues only after reading the pod's endpoint, so the test can then change what that
+// read saw, the way a newer sandbox would while the plugin waited.
+func waitForFlockWaiter(path string) {
+	info, err := os.Stat(path)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	ExpectWithOffset(1, ok).To(BeTrue())
+	inodeSuffix := ":" + strconv.FormatUint(stat.Ino, 10)
+
+	EventuallyWithOffset(1, func() bool {
+		locks, err := os.ReadFile("/proc/locks")
+		if err != nil {
+			return false
+		}
+		for line := range strings.SplitSeq(string(locks), "\n") {
+			// A waiter reads "N: -> FLOCK ADVISORY WRITE <pid> <maj:min:inode> <start> <end>".
+			fields := strings.Fields(line)
+			if len(fields) >= 7 && fields[1] == "->" && strings.HasSuffix(fields[6], inodeSuffix) {
+				return true
+			}
+		}
+		return false
+	}, 10*time.Second, 50*time.Millisecond).Should(BeTrue(), "nothing queued for the lock on %s", path)
 }
 
 func ensurePodCreated(clientset *kubernetes.Clientset, namespace string, pod *v1.Pod) *v1.Pod {
@@ -2823,6 +2854,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Now create a K8s pod.
 			clientset = getKubernetesClient()
+			ensureNamespace(clientset, testutils.K8S_TEST_NS)
 			ensurePodCreated(clientset, testutils.K8S_TEST_NS,
 				&v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
@@ -2946,6 +2978,153 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), testPodName, testutils.K8S_TEST_NS, "new-container-id")
 			Expect(err).ShouldNot(HaveOccurred())
+		})
+
+		Context("when an ADD for an older sandbox waits while a newer one networks the pod", func() {
+			const staleContainerID = "stale-container-id"
+			const newContainerID = "new-container-id"
+
+			var liveIP cnet.IP
+			var liveHandle, ipamLockPath string
+			var staleNs ns.NetNS
+
+			BeforeEach(func() {
+				liveIP = cnet.IP{IP: net.ParseIP(strings.TrimSuffix(endpointSpec.IPNetworks[0], "/32"))}
+				liveHandle = utils.GetHandleID("calico-uts", containerID, workloadName)
+				ipamLockPath = filepath.Join(GinkgoT().TempDir(), "ipam.lock")
+
+				var err error
+				staleNs, _, err = testutils.CreateContainerNamespace()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			// netconfWith gives the plugin its own IPAM lock file, so the test can hold it.
+			netconfWith := func(lockPath string, priorContainerID *string) string {
+				conf := nc
+				conf.IPAMLockFile = lockPath
+				conf.IPAM.PriorContainerID = priorContainerID
+				b, err := json.Marshal(conf)
+				Expect(err).NotTo(HaveOccurred())
+				return string(b)
+			}
+
+			holdFlock := func(path string) *flock.Flock {
+				Expect(os.MkdirAll(filepath.Dir(path), 0o755)).To(Succeed())
+				lock := flock.New(path)
+				Expect(lock.Lock()).To(Succeed())
+				DeferCleanup(lock.Unlock)
+				return lock
+			}
+
+			startStaleAdd := func() chan error {
+				done := make(chan error, 1)
+				go func() {
+					defer GinkgoRecover()
+					_, _, _, _, err := testutils.RunCNIPluginWithId(netconfWith(ipamLockPath, nil), testPodName, testutils.K8S_TEST_NS, "", staleContainerID, "eth0", staleNs)
+					done <- err
+				}()
+				return done
+			}
+
+			startOrphanedIPAM := func() chan int {
+				prior := containerID
+				ipamArgs := fmt.Sprintf("IgnoreUnknown=1;IP=%s;K8S_POD_NAME=%s;K8S_POD_NAMESPACE=%s", liveIP, testPodName, testutils.K8S_TEST_NS)
+				done := make(chan int, 1)
+				go func() {
+					defer GinkgoRecover()
+					_, _, exitCode := testutils.RunIPAMPlugin(netconfWith(ipamLockPath, &prior), "ADD", ipamArgs, staleContainerID, cniVersion)
+					done <- exitCode
+				}()
+				return done
+			}
+
+			// takeOver does to the pod what a newer sandbox's ADD does: moves the address onto
+			// its own handle and records itself on the endpoint.
+			takeOver := func() {
+				attrs, err := calicoClient.IPAM().GetAssignmentAttributes(ctx, liveIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(calicoClient.IPAM().MoveIPToHandle(ctx, liveIP, ipam.MoveOptions{
+					ToHandle:       utils.GetHandleID("calico-uts", newContainerID, workloadName),
+					Attrs:          attrs.ActiveOwnerAttrs,
+					ExpectedHandle: liveHandle,
+					ExpectedOwner:  &ipam.AttributeOwner{Namespace: testutils.K8S_TEST_NS, Name: testPodName},
+				})).To(Succeed())
+
+				wep, err := calicoClient.WorkloadEndpoints().Get(ctx, testutils.K8S_TEST_NS, workloadName, options.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				wep.Spec.ContainerID = newContainerID
+				_, err = utils.CreateOrUpdate(k8sresources.ContextWithPatchMode(ctx, k8sresources.PatchModeCNI), calicoClient, wep)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			expectAddressHeldBy := func(holderContainerID string) {
+				attrs, err := calicoClient.IPAM().GetAssignmentAttributes(ctx, liveIP)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), "the pod's address was released")
+				ExpectWithOffset(1, attrs.HandleID).NotTo(BeNil())
+				ExpectWithOffset(1, *attrs.HandleID).To(Equal(utils.GetHandleID("calico-uts", holderContainerID, workloadName)))
+			}
+
+			It("fails the stale ADD and leaves the newer sandbox's address and interface alone", func() {
+				podLock := holdFlock(cnik8s.PodLockPath(testutils.K8S_TEST_NS, testPodName))
+				done := startStaleAdd()
+				waitForFlockWaiter(podLock.Path())
+				takeOver()
+				Expect(podLock.Unlock()).To(Succeed())
+
+				Expect(<-done).To(MatchError(ContainSubstring("networked by sandbox " + newContainerID)))
+				expectAddressHeldBy(newContainerID)
+				wep, err := calicoClient.WorkloadEndpoints().Get(ctx, testutils.K8S_TEST_NS, workloadName, options.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(wep.Spec.ContainerID).To(Equal(newContainerID))
+				_, err = netlink.LinkByName(endpointSpec.InterfaceName)
+				Expect(err).NotTo(HaveOccurred(), "the stale ADD removed the pod's host interface")
+
+				// kubelet's DEL for the stale sandbox follows its failed ADD.
+				_, err = testutils.DeleteContainerWithId(netconfWith(ipamLockPath, nil), staleNs.Path(), testPodName, testutils.K8S_TEST_NS, staleContainerID)
+				Expect(err).NotTo(HaveOccurred())
+				expectAddressHeldBy(newContainerID)
+			})
+
+			It("lets the waiting ADD take the address when no newer sandbox appeared", func() {
+				podLock := holdFlock(cnik8s.PodLockPath(testutils.K8S_TEST_NS, testPodName))
+				done := startStaleAdd()
+				waitForFlockWaiter(podLock.Path())
+				Expect(podLock.Unlock()).To(Succeed())
+
+				Expect(<-done).NotTo(HaveOccurred())
+				expectAddressHeldBy(staleContainerID)
+
+				_, err := testutils.DeleteContainerWithId(netconfWith(ipamLockPath, nil), staleNs.Path(), testPodName, testutils.K8S_TEST_NS, staleContainerID)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("stops an orphaned IPAM call from taking the newer sandbox's address", func() {
+				// calico-ipam outlives a calico plugin the runtime killed at its deadline, and
+				// the runtime's cleanup DEL for that sandbox can finish before it does.
+				ipamLock := holdFlock(ipamLockPath)
+				done := startOrphanedIPAM()
+				waitForFlockWaiter(ipamLockPath)
+				takeOver()
+
+				delArgs := fmt.Sprintf("IgnoreUnknown=1;K8S_POD_NAME=%s;K8S_POD_NAMESPACE=%s", testPodName, testutils.K8S_TEST_NS)
+				otherLockPath := filepath.Join(GinkgoT().TempDir(), "ipam.lock")
+				_, _, exitCode := testutils.RunIPAMPlugin(netconfWith(otherLockPath, nil), "DEL", delArgs, staleContainerID, cniVersion)
+				Expect(exitCode).To(Equal(0))
+				Expect(ipamLock.Unlock()).To(Succeed())
+
+				Expect(<-done).NotTo(Equal(0))
+				expectAddressHeldBy(newContainerID)
+			})
+
+			It("lets an orphaned IPAM call take the address from the sandbox the endpoint named", func() {
+				ipamLock := holdFlock(ipamLockPath)
+				done := startOrphanedIPAM()
+				waitForFlockWaiter(ipamLockPath)
+				Expect(ipamLock.Unlock()).To(Succeed())
+
+				Expect(<-done).To(Equal(0))
+				expectAddressHeldBy(staleContainerID)
+			})
 		})
 
 		Context("with networking rigged to fail", func() {

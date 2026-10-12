@@ -281,7 +281,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 					return err
 				}
 
-				if terr := transferFromPriorSandbox(ctx, calicoClient.IPAM(), ipamArgs.IP, handleID, attrs, conf.Name, epIDs, logger); terr != nil {
+				if terr := transferFromPriorSandbox(ctx, calicoClient.IPAM(), ipamArgs.IP, handleID, attrs, conf.Name, conf.IPAM.PriorContainerID, epIDs, logger); terr != nil {
 					return fmt.Errorf("%w: %w", terr, err)
 				}
 			}
@@ -504,6 +504,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 // transferFromPriorSandbox hands an address the pod already holds to this sandbox's handle.
 // It performs the necessary precondition checks and errors if the allocation cannot be transferred.
+// priorContainerID, when set, names the only sandbox the address may be taken from: the one
+// the endpoint named when the ADD started, so a stale ADD cannot take it from a newer one.
 func transferFromPriorSandbox(
 	ctx context.Context,
 	ipamClient ipam.Interface,
@@ -511,6 +513,7 @@ func transferFromPriorSandbox(
 	toHandle string,
 	attrs map[string]string,
 	netName string,
+	priorContainerID *string,
 	epIDs *utils.WEPIdentifiers,
 	logger *logrus.Entry,
 ) error {
@@ -532,6 +535,14 @@ func transferFromPriorSandbox(
 	if !ok {
 		logger.WithField("fromHandle", currentHandle).Info("Requested address is not held by a pod sandbox")
 		return fmt.Errorf("address %s is not held by a pod sandbox and cannot be transferred", ip)
+	}
+
+	if priorContainerID != nil && parsed.ContainerID != *priorContainerID {
+		logger.WithFields(logrus.Fields{
+			"fromHandle":         currentHandle,
+			"allowedContainerID": *priorContainerID,
+		}).Warn("Requested address is held by a newer sandbox of this pod, not transferring it")
+		return fmt.Errorf("address %s is held by sandbox %s, which networked the pod after this ADD started", ip, parsed.ContainerID)
 	}
 
 	logger.WithFields(logrus.Fields{
