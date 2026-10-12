@@ -53,12 +53,14 @@ func benchFlow() *types.Flow {
 	})
 }
 
+type matchesBenchCase struct {
+	name   string
+	filter *proto.Filter
+}
+
 func BenchmarkMatches(b *testing.B) {
 	f := benchFlow()
-	filters := []struct {
-		name   string
-		filter *proto.Filter
-	}{
+	filters := []matchesBenchCase{
 		{"empty", &proto.Filter{}},
 		{"ns", &proto.Filter{SourceNamespaces: []*proto.StringMatch{{Value: "ns-3", Type: proto.MatchType_Exact}}}},
 		{"policy", &proto.Filter{Policies: []*proto.PolicyMatch{{Name: &proto.StringMatch{Value: "staged", Type: proto.MatchType_Exact}}}}},
