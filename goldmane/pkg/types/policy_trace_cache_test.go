@@ -62,7 +62,7 @@ func TestCachedPolicyTrace(t *testing.T) {
 // TestCachedPolicyTraceChurn pushes past the cache bound and checks every lookup still returns
 // its own trace, before and after the cache clears, and that the clears are counted.
 func TestCachedPolicyTraceChurn(t *testing.T) {
-	const n = 70000
+	const n = types.MaxCachedPolicyTraces + 1000
 	handles := make([]unique.Handle[string], n)
 	for i := range n {
 		handles[i] = types.ProtoToFlowLogPolicy(cacheTestTrace(fmt.Sprintf("churn-%d", i)))
@@ -75,7 +75,7 @@ func TestCachedPolicyTraceChurn(t *testing.T) {
 		}
 	}
 	require.Greater(t, types.PolicyTraceCacheResets(), resetsBefore, "churn past the bound was not counted")
-	require.LessOrEqual(t, types.PolicyTraceCacheSize(), int64(65536))
+	require.LessOrEqual(t, types.PolicyTraceCacheSize(), int64(types.MaxCachedPolicyTraces))
 }
 
 // TestCachedPolicyTraceHitsDoNotReset checks that lookups of a cached trace neither grow the

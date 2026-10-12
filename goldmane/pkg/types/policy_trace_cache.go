@@ -39,8 +39,8 @@ func PolicyTraceCacheSize() int64 {
 	return policyTraceCacheSize.Load()
 }
 
-// PolicyTraceCacheResets returns how many times the cache has filled and been cleared. A count
-// that keeps rising means the working set of traces is larger than the cache.
+// PolicyTraceCacheResets returns how many times the cache has filled and been cleared, for
+// metrics.
 func PolicyTraceCacheResets() uint64 {
 	return policyTraceCacheResets.Load()
 }
