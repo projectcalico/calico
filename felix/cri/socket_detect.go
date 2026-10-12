@@ -29,7 +29,7 @@ import (
 // Order matters: containerd first (by far the most common), then
 // CRI-O, then distro-specific layouts (k3s, RKE2, microk8s). We
 // deliberately do NOT list /var/run/* duplicates here — the probe
-// resolves /var/run -> /run via SecureJoin against /host/proc/1/root,
+// resolves /var/run -> /run via SecureJoin against /nodeproc/1/root,
 // so /run/* covers both layouts.
 var wellKnownSocketPaths = []string{
 	"/run/containerd/containerd.sock",
@@ -44,7 +44,7 @@ var wellKnownSocketPaths = []string{
 // paths and returns the first one present on the host filesystem.
 //
 // Paths are resolved through host PID-1's root in procRoot's procfs
-// (hostMountRoot, /host/proc/1/root in production) with SecureJoin, so
+// (hostMountRoot, /nodeproc/1/root in production) with SecureJoin, so
 // symlinks like /var/run -> /run are followed against the host's view
 // rather than the container's, even though calico-node does not
 // bind-mount the runtime socket dir.

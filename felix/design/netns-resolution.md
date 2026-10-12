@@ -59,15 +59,20 @@ netnsManager        → three-tier resolve → { wepKey → path, wepKey → coo
 
 **Review note.** The annotation is a **trust anchor**: Felix opens the
 path and reads a cookie from it, so a user able to overwrite it could
-redirect Felix into an arbitrary netns. It is protected by a
-`ValidatingAdmissionPolicy`
-(`api/admission/cniannotations.validatingadmissionpolicy*.yaml`) that
-diffs old vs new and rejects any add/change/remove of the four
-Calico-managed output annotations (`podIP`, `podIPs`, `containerID`,
-`podNetns`) on `pods`/`pods/status`, CREATE/UPDATE, except from Calico
-SAs (on `/status`) and `system:masters` (break-glass). A change to the
-managed-key set or the exemptions must be mirrored in the operator's
-embedded copy — see the sync tail.
+redirect Felix into an arbitrary netns. It is protected by the
+`protect-cni-annotations.projectcalico.org` `ValidatingAdmissionPolicy`
+(`api/admission/cni-annotations/`), which rejects any add/change/remove
+of the Calico CNI plugin's annotations (`podNetns` among them) on
+`pods`, `pods/status` and `pods/binding` unless the caller may write
+`cniannotations.projectcalico.org` or delete the policy. Its companion
+`MutatingAdmissionPolicy` strips those keys from new pods.
+
+Felix only trusts the annotation when `FelixConfiguration.PodNetnsAnnotation`
+is `Enabled` (default `Disabled`); otherwise Tier 1 is skipped and the
+CRI and `/proc` tiers resolve the pod. The operator enables it when the
+CNI plugin is Calico and the policy and its binding exist, and clears it
+when either goes away. The manifests set `FELIX_PODNETNSANNOTATION=Enabled`
+on the Kubernetes datastore, where they install the policy.
 
 ## Execution model
 
@@ -115,8 +120,8 @@ namespaces, so the resolution tiers reach host state two different ways.
 **Pid-based netns paths (Tiers 2 and 3)** live in the procfs of the host
 PID namespace the pods run in. Felix reads that procfs at `procRoot`,
 configured by `FelixConfiguration.ProcRootPath` (default `/proc`); when
-calico-node lacks `hostPID`, the operator bind-mounts the host procfs
-(e.g. `/host/proc`) and sets `ProcRootPath` to it. Both tiers build
+calico-node lacks `hostPID`, the operator and manifests bind-mount the
+host procfs at `/nodeproc` and point `ProcRootPath` at it. Both tiers build
 `<procRoot>/<pid>/ns/net`, which Felix can open directly because it reads
 `procRoot` directly (`felix/netns`'s `CookieByPath`, `felix/cri`'s path
 built under the client's `procRoot`).
@@ -127,7 +132,7 @@ host's **mount** namespace, which calico-node does not bind-mount. Felix
 reaches them through `<procRoot>/1/root` — host PID-1's root in the same
 `procRoot` procfs, i.e. the host mount namespace — regardless of which PID
 namespace calico-node runs in, so this does **not** depend on `hostPID=true`
-(`/host/proc/1/root` in production, `/proc/1/root` when `procRoot` is
+(`/nodeproc/1/root` in production, `/proc/1/root` when `procRoot` is
 `/proc`). Absolute symlink targets along that path (e.g. `/var/run` →
 `/run`) are resolved against the host view with `filepath-securejoin`'s
 `SecureJoin` rooted there (`felix/cri`'s `viaHostRoot`, `felix/netns`'s
@@ -175,26 +180,25 @@ registration moves out of the BPF branch if a non-BPF consumer arrives.
   `ErrNetnsUnresolved`, cookie-change-on-path-change, drop-on-remove,
   drop-and-retry-on-failed-open, the batched single scan, and the wakeup.
 - Per-platform behaviour (CRI `Info` shape, socket path, whether the
-  `/host/proc` mount is permitted) is caught by an automated regression
+  `/nodeproc` mount is permitted) is caught by an automated regression
   E2E across the supported platform matrix — the risk here is
   overwhelmingly per-platform and unit tests can't reach it.
 
 ## Keep this in sync
 
-- The VAP is the source of truth in
-  `api/admission/cniannotations.validatingadmissionpolicy*.yaml`; the
-  operator ships a copy in
-  `pkg/imports/admission/{calico,enterprise}/cniannotations.yaml`,
-  reconciled via its managed-admission-policy machinery and gated by the
-  `Installation.spec.cniAnnotationsPolicy` toggle. A change to the managed
-  keys or exemptions must update **both** repos.
-- The `/host/proc` bind-mount is added by the operator
-  (`pkg/render/node.go`), which must also set `FelixConfiguration.ProcRootPath`
-  (or `FELIX_ProcRootPath`) to that mount so Felix reads the host procfs
-  there; the default `/proc` only suits calico-node sharing the host PID
-  namespace. Removing the operator's remaining `hostPID=true` usage
-  (process-path collection) is a coordinated follow-up because the consumer
-  is Enterprise-only.
+- The VAP and MAP live in `api/admission/cni-annotations/`, and both the
+  operator and the manifests install them from there. A change to the
+  protected keys or exemptions only needs that one edit.
+- The operator's `PodNetnsAnnotation` gate checks for the policy by name
+  (`admission.ProtectCNIAnnotationsName`); renaming the policy must update it.
+- The operator (`pkg/render/node.go`) and the manifests bind-mount the
+  host procfs into calico-node at `/nodeproc`, reusing the `nodeproc`
+  volume the `ebpf-bootstrap` init container already mounts there, and set
+  `FELIX_PROCROOTPATH=/nodeproc` so Felix reads the host procfs there; the
+  default `/proc` only suits calico-node sharing the host PID namespace.
+  Removing the operator's remaining `hostPID=true` usage (process-path
+  collection) is a coordinated follow-up because the consumer is
+  Enterprise-only.
 - The proto contract (`felix/proto/felixbackend.proto`,
   `WorkloadEndpoint.uid = 20`, `netns_path = 21`) and its plumbing through
   `libcalico-go` are part of this design; a change to what's carried

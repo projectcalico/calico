@@ -31,7 +31,7 @@ import (
 // hostMountRoot returns the path, from inside calico-node, of the host
 // mount namespace's root: PID-1's root within the procfs at procRoot.
 // In production procRoot is the operator's host-procfs bind-mount, so
-// this is /host/proc/1/root; with procRoot=/proc (calico-node in the host
+// this is /nodeproc/1/root; with procRoot=/proc (calico-node in the host
 // PID namespace) it is /proc/1/root. Either way it walks host PID-1's
 // mount namespace, so connect()/open() finds a host inode the same way an
 // on-host caller would (this does NOT depend on hostPID=true). The CRI
@@ -57,7 +57,7 @@ type Client struct {
 // New opens a CRI gRPC connection to the local container runtime at
 // socketPath.  socketPath is a host-absolute path (typically
 // /run/containerd/containerd.sock or /var/run/crio/crio.sock); we
-// rewrite it to go through /host/proc/1/root so the dial finds the
+// rewrite it to go through /nodeproc/1/root so the dial finds the
 // socket in the host's mount namespace.
 //
 // procRoot is the procfs the sandbox PID lives in (/proc when Felix

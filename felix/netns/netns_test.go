@@ -194,7 +194,7 @@ func TestHostPath(t *testing.T) {
 	// (<procRoot>/1/root) using SecureJoin. With no symlinks present under
 	// that (non-existent, in tests) root, SecureJoin yields the same clean
 	// result as a naive prefix, so we assert against that.
-	const procRoot = "/host/proc"
+	const procRoot = "/nodeproc"
 	root := hostMountRoot(procRoot)
 	cases := []struct {
 		in, want string

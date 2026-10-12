@@ -94,7 +94,7 @@ type resolvedNetns struct {
 // See felix/design/netns-resolution.md for the full model.
 type netnsManager struct {
 	// resolveCookieByPath reads the cookie for the host-absolute annotation
-	// path (Tier 1), re-rooting it via /host/proc/1/root.
+	// path (Tier 1), re-rooting it via /nodeproc/1/root.
 	resolveCookieByPath netnsCookieReader
 	// resolveCookieDirect reads the cookie for a path Felix can already
 	// reach: the CRI (Tier 2) and /proc-scan (Tier 3) results, both built

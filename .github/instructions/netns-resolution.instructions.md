@@ -23,7 +23,7 @@ Before writing code (Copilot coding agent) or reviewing a PR
    Tiers 2/3 on the background resolver with a single batched `/proc`
    walk — never on the main loop); the locking of `paths`/`cookies`/
    `pendingDeep` and the "still pending?" store race; the wakeup case
-   that **must** set `dataplaneNeedsSync`; the `/host/proc/1/root`
+   that **must** set `dataplaneNeedsSync`; the `/nodeproc/1/root`
    host-root mechanism with `SecureJoin` (no `hostPID` dependency); and
    that the `cni.projectcalico.org/podNetns` annotation is a trust
    anchor protected by the VAP.

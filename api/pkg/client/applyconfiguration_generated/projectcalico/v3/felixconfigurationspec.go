@@ -560,7 +560,7 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// ProcRootPath is the path at which Felix reads the procfs of the host
 	// the pods run on, when resolving a local pod's network namespace. When
 	// Felix does not share the host PID namespace, the operator bind-mounts
-	// the host procfs (typically at /host/proc) and points Felix at it here.
+	// the host procfs (typically at /nodeproc) and points Felix at it here.
 	// [Default: /proc]
 	ProcRootPath *string `json:"procRootPath,omitempty"`
 	// PodNetnsAnnotation controls whether Felix trusts the

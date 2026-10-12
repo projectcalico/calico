@@ -33,7 +33,7 @@ import (
 //
 // procRoot is where Felix can read the procfs the pod's process lives in:
 // "/proc" when Felix shares the host PID namespace, or the operator's
-// host-procfs bind-mount (e.g. "/host/proc") otherwise. The result is
+// host-procfs bind-mount (e.g. "/nodeproc") otherwise. The result is
 // directly openable because Felix reads procRoot directly.
 //
 // Works regardless of cgroup version because it keys off the pod UID
@@ -157,7 +157,7 @@ func findPodPIDs(procRoot string, podUIDs []string) map[string]int {
 // hostMountRoot returns the path, from inside calico-node, of the host
 // mount namespace's root: PID-1's root within the procfs at procRoot. In
 // production procRoot is the operator's host-procfs bind-mount, so this is
-// /host/proc/1/root; with procRoot=/proc (calico-node in the host PID
+// /nodeproc/1/root; with procRoot=/proc (calico-node in the host PID
 // namespace) it is /proc/1/root. Either way it resolves through host
 // PID-1's mount namespace, regardless of calico-node's PID namespace (this
 // does NOT depend on hostPID=true).
@@ -207,7 +207,7 @@ func CookieByPath(netnsPath string) (uint64, error) {
 }
 
 // hostPath rewrites an absolute host path so it resolves through host
-// PID-1's mount namespace (hostMountRoot(procRoot), /host/proc/1/root in
+// PID-1's mount namespace (hostMountRoot(procRoot), /nodeproc/1/root in
 // production) from inside the calico-node container. Already-prefixed or
 // non-absolute paths are returned unchanged.
 //
