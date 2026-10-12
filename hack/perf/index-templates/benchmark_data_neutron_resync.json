@@ -21,6 +21,9 @@
         "scale_sgs":        {"type": "integer"},
         "scale_hosts":      {"type": "integer"},
 
+        "cpu_model":        {"type": "keyword"},
+        "cpu_platform":     {"type": "keyword"},
+
         "total_ms":         {"type": "double"},
 
         "expand_total_ms":         {"type": "double"},
