@@ -2770,8 +2770,12 @@ class InvalidData(TestBase):
         '  spec:\n'
         '    egress:\n'
         '    - action: Allow\n'
+        '      destination: {}\n'
+        '      source: {}\n'
         '    ingress:\n'
         '    - action: Allow\n'
+        '      destination: {}\n'
+        '      source: {}\n'
         'kind: %sList\n'
         'metadata:\n'
         '  resourceVersion: ' % (API_VERSION, API_VERSION, testdata['kind'], testdata['kind'])
