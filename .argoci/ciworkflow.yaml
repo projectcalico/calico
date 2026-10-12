@@ -104,7 +104,7 @@ globalEpilogue: |
 defaults:
   # Only the host tooling steps shell out to, since every step pulls it. A step
   # working in-process names the build image instead.
-  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.2
+  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.3
 
   jobSize: medium
 

@@ -97,8 +97,12 @@ check-ocp-no-crds:
 test-charts: bin/helm
 	$(DOCKER_GO_BUILD) sh -c 'PATH=$$PWD/bin::$$PATH go test -count=1 ./charts/test/...'
 	
+# yamllint is single-threaded, so the files are split across cores. Parsable
+# output keeps each problem on one line, so parallel runs can't garble it.
 yaml-lint:
-	@docker run --rm $$(tty -s && echo "-it" || echo) -v $(PWD):/data cytopia/yamllint:latest .
+	@docker run --rm -v $(PWD):/data -w /data --entrypoint sh cytopia/yamllint:latest -c \
+	  'find . -name .git -prune -o -type f \( -name "*.yaml" -o -name "*.yml" -o -name .yamllint \) -print0 | \
+	   xargs -0 -r -P $(or $(GOMAXPROCS),$$(nproc)) -n 50 yamllint -f parsable'
 
 protobuf:
 	$(MAKE) -C app-policy protobuf
