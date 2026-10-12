@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -85,6 +85,10 @@ type NetConf struct {
 		AssignIpv6 *string  `json:"assign_ipv6"`
 		IPv4Pools  []string `json:"ipv4_pools,omitempty"`
 		IPv6Pools  []string `json:"ipv6_pools,omitempty"`
+
+		// PriorContainerID is the sandbox the pod's endpoint named when the calico plugin
+		// started this ADD; empty means none. Nil means the caller did not say.
+		PriorContainerID *string `json:"prior_container_id,omitempty"`
 	} `json:"ipam"`
 	QPS                  int               `json:"qps,omitempty"`
 	Burst                int               `json:"burst,omitempty"`
