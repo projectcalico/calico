@@ -310,6 +310,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "FELIX_DEFAULTENDPOINTTOHOSTACTION", Value: "ACCEPT"},
 					{Name: "FELIX_HEALTHENABLED", Value: "true"},
 					{Name: "FELIX_HEALTHPORT", Value: "9099"},
+					{Name: "FELIX_PROCROOTPATH", Value: "/nodeproc"},
 					{
 						Name: "NODENAME",
 						ValueFrom: &corev1.EnvVarSource{
@@ -388,6 +389,7 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/var/log/calico", Name: "var-log-calico"},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
+					{MountPath: "/nodeproc", Name: "nodeproc", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -503,6 +505,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "FELIX_DEFAULTENDPOINTTOHOSTACTION", Value: "ACCEPT"},
 					{Name: "FELIX_HEALTHENABLED", Value: "true"},
 					{Name: "FELIX_HEALTHPORT", Value: "9099"},
+					{Name: "FELIX_PROCROOTPATH", Value: "/nodeproc"},
 					{
 						Name: "NODENAME",
 						ValueFrom: &corev1.EnvVarSource{
@@ -581,6 +584,7 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/var/log/calico", Name: "var-log-calico"},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
+					{MountPath: "/nodeproc", Name: "nodeproc", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -795,6 +799,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "FELIX_DEFAULTENDPOINTTOHOSTACTION", Value: "ACCEPT"},
 					{Name: "FELIX_HEALTHENABLED", Value: "true"},
 					{Name: "FELIX_HEALTHPORT", Value: "9099"},
+					{Name: "FELIX_PROCROOTPATH", Value: "/nodeproc"},
 					{
 						Name: "NODENAME",
 						ValueFrom: &corev1.EnvVarSource{
@@ -873,6 +878,7 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/var/log/calico", Name: "var-log-calico"},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
+					{MountPath: "/nodeproc", Name: "nodeproc", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -932,6 +938,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "FELIX_IPV6SUPPORT", Value: "false"},
 					{Name: "FELIX_HEALTHENABLED", Value: "true"},
 					{Name: "FELIX_HEALTHPORT", Value: "9099"},
+					{Name: "FELIX_PROCROOTPATH", Value: "/nodeproc"},
 					{
 						Name: "NODENAME",
 						ValueFrom: &corev1.EnvVarSource{
@@ -1010,6 +1017,7 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/etc/pki/tls/certs", Name: "tigera-ca-bundle", ReadOnly: true},
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
+					{MountPath: "/nodeproc", Name: "nodeproc", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -1203,6 +1211,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "FELIX_DEFAULTENDPOINTTOHOSTACTION", Value: "ACCEPT"},
 					{Name: "FELIX_HEALTHENABLED", Value: "true"},
 					{Name: "FELIX_HEALTHPORT", Value: "9099"},
+					{Name: "FELIX_PROCROOTPATH", Value: "/nodeproc"},
 					{
 						Name: "NODENAME",
 						ValueFrom: &corev1.EnvVarSource{
@@ -1280,6 +1289,7 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/var/log/calico", Name: "var-log-calico"},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
+					{MountPath: "/nodeproc", Name: "nodeproc", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -1336,6 +1346,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "FELIX_IPV6SUPPORT", Value: "false"},
 					{Name: "FELIX_HEALTHENABLED", Value: "true"},
 					{Name: "FELIX_HEALTHPORT", Value: "9099"},
+					{Name: "FELIX_PROCROOTPATH", Value: "/nodeproc"},
 					{
 						Name: "NODENAME",
 						ValueFrom: &corev1.EnvVarSource{
@@ -1414,6 +1425,7 @@ var _ = Describe("Node rendering tests", func() {
 					{MountPath: "/etc/pki/tls/certs", Name: "tigera-ca-bundle", ReadOnly: true},
 					{MountPath: "/node-certs", Name: render.NodeTLSSecretName, ReadOnly: true},
 					{MountPath: "/sys/fs/bpf", Name: "bpffs"},
+					{MountPath: "/nodeproc", Name: "nodeproc", ReadOnly: true},
 				}
 				Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ConsistOf(expectedNodeVolumeMounts))
 
@@ -1528,6 +1540,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "FELIX_DEFAULTENDPOINTTOHOSTACTION", Value: "ACCEPT"},
 					{Name: "FELIX_HEALTHENABLED", Value: "true"},
 					{Name: "FELIX_HEALTHPORT", Value: "9199"},
+					{Name: "FELIX_PROCROOTPATH", Value: "/nodeproc"},
 					{
 						Name: "NODENAME",
 						ValueFrom: &corev1.EnvVarSource{
@@ -2676,6 +2689,7 @@ var _ = Describe("Node rendering tests", func() {
 					{Name: "FELIX_DEFAULTENDPOINTTOHOSTACTION", Value: "ACCEPT"},
 					{Name: "FELIX_HEALTHENABLED", Value: "true"},
 					{Name: "FELIX_HEALTHPORT", Value: "9099"},
+					{Name: "FELIX_PROCROOTPATH", Value: "/nodeproc"},
 					{
 						Name: "NODENAME",
 						ValueFrom: &corev1.EnvVarSource{

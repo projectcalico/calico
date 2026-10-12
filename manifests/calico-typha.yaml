@@ -2622,6 +2622,12 @@ spec:
                     [Default: insert]
                   pattern: ^(?i)(Insert|Append)?$
                   type: string
+                criSocketPath:
+                  description: |-
+                    CRISocketPath is the path to the local container-runtime CRI socket
+                    (e.g. /run/containerd/containerd.sock). When empty, Felix probes a
+                    small set of well-known paths at startup.
+                  type: string
                 dataplaneDriver:
                   description: |-
                     DataplaneDriver filename of the external dataplane driver to use.  Only used if UseInternalDataplaneDriver
@@ -3364,10 +3370,30 @@ spec:
                     or in felix.cfg or the environment on each compute node), and must match the [calico]
                     openstack_region value configured in neutron.conf on each node. [Default: Empty]
                   type: string
+                podNetnsAnnotation:
+                  description: |-
+                    PodNetnsAnnotation controls whether Felix trusts the
+                    cni.projectcalico.org/podNetns pod annotation when resolving a local
+                    pod's network namespace. Enable it only where the annotation is
+                    protected by the protect-cni-annotations admission policy;
+                    when Disabled, Felix falls back to the CRI and /proc lookups.
+                    [Default: Disabled]
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 policySyncPathPrefix:
                   description: |-
                     PolicySyncPathPrefix is used to by Felix to communicate policy changes to external services,
                     like Application layer policy. [Default: Empty]
+                  type: string
+                procRootPath:
+                  description: |-
+                    ProcRootPath is the path at which Felix reads the procfs of the host
+                    the pods run on, when resolving a local pod's network namespace. When
+                    Felix does not share the host PID namespace, the operator bind-mounts
+                    the host procfs (typically at /nodeproc) and points Felix at it here.
+                    [Default: /proc]
                   type: string
                 programClusterRoutes:
                   default: EnabledIPIPOnly
@@ -13082,6 +13108,12 @@ spec:
               value: "false"
             - name: FELIX_HEALTHENABLED
               value: "true"
+            # Read the host's procfs, mounted below, to resolve pod network namespaces.
+            - name: FELIX_PROCROOTPATH
+              value: "/nodeproc"
+            # The protect-cni-annotations policy guards the podNetns annotation, so Felix can trust it.
+            - name: FELIX_PODNETNSANNOTATION
+              value: "Enabled"
           securityContext:
             privileged: true
           resources:
@@ -13145,6 +13177,9 @@ spec:
             - name: cni-log-dir
               mountPath: /var/log/calico/cni
               readOnly: true
+            - name: nodeproc
+              mountPath: /nodeproc
+              readOnly: true
       volumes:
         # Used by calico-node.
         - name: lib-modules
@@ -13170,7 +13205,8 @@ spec:
           hostPath:
             path: /sys/fs/bpf
             type: Directory
-        # mount /proc at /nodeproc to be used by ebpf-bootstrap initContainer to mount root cgroup2 fs.
+        # mount /proc at /nodeproc to be used by ebpf-bootstrap initContainer to mount root cgroup2 fs,
+        # and by Felix to resolve pod network namespaces.
         - name: nodeproc
           hostPath:
             path: /proc
