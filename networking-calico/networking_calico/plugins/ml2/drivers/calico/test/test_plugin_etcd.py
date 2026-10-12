@@ -2298,6 +2298,22 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.assertIn(self._ep_key(self.DEST_HOST), self.recent_writes)
         self.assertIn(self._lm_key(self.DEST_HOST), self.recent_writes)
 
+    def test_resync_ignores_port_without_host(self):
+        """A resync gives a hostless port no WEP either."""
+        self._do_initial_resync()
+
+        # The port loses its binding, as it would on detach or for a shelved instance.
+        self.osdb_ports[0]["binding:host_id"] = ""
+        self.osdb_ports[0]["binding:vif_type"] = "unbound"
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        self._trigger_resync()
+
+        # The WEP at the old host goes, and nothing is written in its place.
+        self.assertEtcdWrites({})
+        self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_deletes)
+
     def test_live_migration_succeeded(self):
         """After migration succeeds, source WEP deleted, dest WEP kept."""
         self._do_initial_resync()
