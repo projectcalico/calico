@@ -29,6 +29,8 @@ type StreamManager interface {
 	Receive(storage.FlowProvider, string)
 }
 
+var _ StreamManager = &streamManager{}
+
 func NewStreamManager() *streamManager {
 	return &streamManager{
 		streams:    make(map[string]*stream),
@@ -62,7 +64,7 @@ func (m *streamManager) Register(req *proto.FlowStreamRequest, channelSize int) 
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &stream{
+	newStream := &stream{
 		Req:    req,
 		id:     uuid.NewString(),
 		in:     make(chan storage.FlowProvider, 500),
@@ -74,38 +76,38 @@ func (m *streamManager) Register(req *proto.FlowStreamRequest, channelSize int) 
 			logrusr.OptInterval(15*time.Second),
 		),
 	}
-	go s.run()
+	go newStream.run()
 
-	m.streams[s.id] = s
+	m.streams[newStream.id] = newStream
 	numStreams.Set(float64(len(m.streams)))
 
-	logrus.WithField("id", s.id).Debug("Registered new stream")
-	return s
+	logrus.WithField("id", newStream.id).Debug("Registered new stream")
+	return newStream
 }
 
-// Receive queues b for the stream with the given ID, or for every stream if the ID is empty.
-func (m *streamManager) Receive(b storage.FlowProvider, id string) {
+// Receive queues provider for the stream with the given ID, or for every stream if the ID is empty.
+func (m *streamManager) Receive(provider storage.FlowProvider, id string) {
 	if id != "" {
 		if s, ok := m.streams[id]; ok {
-			m.send(s, b)
+			m.send(s, provider)
 		}
 		return
 	}
 	for _, s := range m.streams {
-		m.send(s, b)
+		m.send(s, provider)
 	}
 	numStreams.Set(float64(len(m.streams)))
 }
 
 // send never blocks the main loop. A stream whose queue is full has fallen hours behind, so we
 // close it and let the client reconnect with a fresh backfill.
-func (m *streamManager) send(s *stream, b storage.FlowProvider) {
+func (m *streamManager) send(s *stream, provider storage.FlowProvider) {
 	if s.ctx.Err() != nil {
 		delete(m.streams, s.id)
 		return
 	}
 	select {
-	case s.in <- b:
+	case s.in <- provider:
 	default:
 		m.rl.WithField("id", s.id).Warn("Stream queue full, closing stream")
 		s.cancel()

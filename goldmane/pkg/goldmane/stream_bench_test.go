@@ -48,10 +48,7 @@ func newStreamBench(b *testing.B) *streamBench {
 	logrus.SetLevel(logrus.ErrorLevel)
 	c := newClock(benchNow)
 	roller := &rolloverController{ch: make(chan time.Time), clock: c, aggregationWindowSecs: benchBucketSec}
-	gm := goldmane.NewGoldmane(
-		goldmane.WithRolloverFunc(roller.After),
-		goldmane.WithNowFunc(c.Now),
-	)
+	gm := goldmane.NewGoldmane(goldmane.WithRolloverFunc(roller.After), goldmane.WithNowFunc(c.Now))
 	<-gm.Run(c.Now().Unix())
 	b.Cleanup(gm.Stop)
 	return &streamBench{tb: b, gm: gm, roller: roller, clock: c}
@@ -65,6 +62,8 @@ func (s *streamBench) fence() {
 	}
 }
 
+// rollover fires the main loop's rollover timer with the current time, then advances the clock
+// one bucket.
 func (s *streamBench) rollover() {
 	now := s.clock.Now()
 	s.clock.Advance(benchBucketSec * time.Second)
@@ -91,17 +90,16 @@ func (s *streamBench) fill(perBucket int) {
 	s.fence()
 }
 
-func (s *streamBench) openDrained(b *testing.B, start int64) stream.Stream {
+// openDrained opens a stream and builds every flow it emits on a background goroutine, so the
+// stream never falls behind. The goroutine exits when the stream closes.
+func (s *streamBench) openDrained(start int64) stream.Stream {
 	st, err := s.gm.Stream(&proto.FlowStreamRequest{StartTimeGte: start})
 	if err != nil {
-		b.Fatal(err)
+		s.tb.Fatal(err)
 	}
 	go func() {
 		res := &proto.FlowResult{Flow: &proto.Flow{}}
 		for f := range st.Flows() {
-			if f == nil {
-				return
-			}
 			f.BuildInto(nil, res)
 		}
 	}()
@@ -127,6 +125,8 @@ func drainCount(b *testing.B, st stream.Stream, n int) time.Duration {
 	return first
 }
 
+// countBackfill counts the flows st emits until it goes quiet for 300ms, which sizes a full
+// backfill for the timed runs.
 func countBackfill(st stream.Stream) int {
 	n := 0
 	for {
@@ -143,16 +143,16 @@ func countBackfill(st stream.Stream) int {
 func BenchmarkStreamRolloverFanout(b *testing.B) {
 	for _, n := range []int{0, 1, 10, 100} {
 		b.Run(fmt.Sprintf("streams=%d", n), func(b *testing.B) {
-			s := newStreamBench(b)
+			bench := newStreamBench(b)
 			for range n {
-				st := s.openDrained(b, 0)
+				st := bench.openDrained(0)
 				b.Cleanup(st.Close)
 			}
-			s.fence()
+			bench.fence()
 			b.ReportAllocs()
 			for b.Loop() {
-				s.rollover()
-				s.fence()
+				bench.rollover()
+				bench.fence()
 			}
 		})
 	}
@@ -162,11 +162,11 @@ func BenchmarkStreamRolloverFanout(b *testing.B) {
 func BenchmarkStreamRegisterBackfill(b *testing.B) {
 	for _, perBucket := range []int{10, 100} {
 		b.Run(fmt.Sprintf("flowsPerBucket=%d", perBucket), func(b *testing.B) {
-			s := newStreamBench(b)
-			s.fill(perBucket)
-			start := s.clock.Now().Unix() - benchHistory*benchBucketSec
+			bench := newStreamBench(b)
+			bench.fill(perBucket)
+			start := bench.clock.Now().Unix() - benchHistory*benchBucketSec
 
-			probe, err := s.gm.Stream(&proto.FlowStreamRequest{StartTimeGte: start})
+			probe, err := bench.gm.Stream(&proto.FlowStreamRequest{StartTimeGte: start})
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -179,7 +179,7 @@ func BenchmarkStreamRegisterBackfill(b *testing.B) {
 			var firstTotal time.Duration
 			b.ReportAllocs()
 			for b.Loop() {
-				st, err := s.gm.Stream(&proto.FlowStreamRequest{StartTimeGte: start})
+				st, err := bench.gm.Stream(&proto.FlowStreamRequest{StartTimeGte: start})
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -197,9 +197,9 @@ func BenchmarkStreamRegisterBackfill(b *testing.B) {
 func BenchmarkStreamChurnMainLoopLatency(b *testing.B) {
 	for _, churners := range []int{0, 4, 16} {
 		b.Run(fmt.Sprintf("churners=%d", churners), func(b *testing.B) {
-			s := newStreamBench(b)
-			s.fill(100)
-			start := s.clock.Now().Unix() - benchHistory*benchBucketSec
+			bench := newStreamBench(b)
+			bench.fill(100)
+			start := bench.clock.Now().Unix() - benchHistory*benchBucketSec
 
 			stop := make(chan struct{})
 			var wg sync.WaitGroup
@@ -212,7 +212,7 @@ func BenchmarkStreamChurnMainLoopLatency(b *testing.B) {
 							return
 						default:
 						}
-						st := s.openStream(start)
+						st := bench.openStream(start)
 						if st == nil {
 							rejected.Add(1)
 							continue
@@ -228,19 +228,19 @@ func BenchmarkStreamChurnMainLoopLatency(b *testing.B) {
 				})
 			}
 
-			var lat []time.Duration
+			var latencies []time.Duration
 			b.ReportAllocs()
 			for b.Loop() {
 				t := time.Now()
-				s.fence()
-				lat = append(lat, time.Since(t))
+				bench.fence()
+				latencies = append(latencies, time.Since(t))
 			}
 			close(stop)
 			wg.Wait()
 
-			slices.Sort(lat)
-			b.ReportMetric(float64(lat[len(lat)*99/100].Nanoseconds()), "p99-ns")
-			b.ReportMetric(float64(lat[len(lat)-1].Nanoseconds()), "max-ns")
+			slices.Sort(latencies)
+			b.ReportMetric(float64(latencies[len(latencies)*99/100].Nanoseconds()), "p99-ns")
+			b.ReportMetric(float64(latencies[len(latencies)-1].Nanoseconds()), "max-ns")
 			b.ReportMetric(float64(opened.Load())/float64(b.N), "opens/op")
 			b.ReportMetric(float64(rejected.Load()), "rejected")
 		})
@@ -251,11 +251,11 @@ func BenchmarkStreamChurnMainLoopLatency(b *testing.B) {
 func BenchmarkReceiveWithStreamChurn(b *testing.B) {
 	for _, churners := range []int{0, 4, 16} {
 		b.Run(fmt.Sprintf("churners=%d", churners), func(b *testing.B) {
-			s := newStreamBench(b)
-			now := s.clock.Now().Unix()
-			fl := make([]*types.Flow, 1000)
-			for i := range fl {
-				fl[i] = types.ProtoToFlow(testutils.NewRandomFlow(now))
+			bench := newStreamBench(b)
+			now := bench.clock.Now().Unix()
+			flows := make([]*types.Flow, 1000)
+			for i := range flows {
+				flows[i] = types.ProtoToFlow(testutils.NewRandomFlow(now))
 			}
 
 			stop := make(chan struct{})
@@ -269,12 +269,13 @@ func BenchmarkReceiveWithStreamChurn(b *testing.B) {
 							return
 						default:
 						}
-						if st := s.openStream(now - 60); st != nil {
-							opened.Add(1)
-							st.Close()
-						} else {
+						st := bench.openStream(now - 60)
+						if st == nil {
 							rejected.Add(1)
+							continue
 						}
+						opened.Add(1)
+						st.Close()
 					}
 				})
 			}
@@ -282,10 +283,10 @@ func BenchmarkReceiveWithStreamChurn(b *testing.B) {
 			i := 0
 			b.ReportAllocs()
 			for b.Loop() {
-				s.gm.Receive(fl[i], "")
-				i = (i + 1) % len(fl)
+				bench.gm.Receive(flows[i], "")
+				i = (i + 1) % len(flows)
 			}
-			s.fence()
+			bench.fence()
 			close(stop)
 			wg.Wait()
 			b.ReportMetric(float64(opened.Load())/float64(b.N), "opens/op")

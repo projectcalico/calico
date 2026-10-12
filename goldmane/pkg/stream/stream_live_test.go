@@ -30,7 +30,7 @@ import (
 
 const liveNow = 1000
 
-// newLiveRing builds a ring wired to sm with one flow in each bucket from now-5 to now-1.
+// newLiveRing builds a ring wired to sm with one flow in each bucket from liveNow-5 to liveNow-1.
 func newLiveRing(sm stream.StreamManager) *storage.BucketRing {
 	clk := func() time.Time { return time.Unix(liveNow, 0) }
 	ring := storage.NewBucketRing(20, 1, liveNow, storage.WithStreamReceiver(sm), storage.WithNowFunc(clk))
@@ -129,4 +129,6 @@ func (twoFlows) Iter(f func(storage.FlowBuilder) bool) {
 
 type nopBuilder struct{}
 
-func (nopBuilder) BuildInto(*proto.Filter, *proto.FlowResult) bool { return false }
+func (nopBuilder) BuildInto(*proto.Filter, *proto.FlowResult) bool {
+	return false
+}
