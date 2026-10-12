@@ -171,6 +171,8 @@ func convertWorkloadEndpointV2ToV1Value(val any) (any, error) {
 	v1value := &model.WorkloadEndpoint{
 		State:                      "active",
 		Name:                       v3res.Spec.InterfaceName,
+		UID:                        string(v3res.UID),
+		NetnsPath:                  v3res.GetAnnotations()[conversion.AnnotationPodNetns],
 		Mac:                        cmac,
 		ProfileIDs:                 v3res.Spec.Profiles,
 		IPv4Nets:                   ipv4Nets,
