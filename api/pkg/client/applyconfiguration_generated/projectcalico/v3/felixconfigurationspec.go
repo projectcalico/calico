@@ -566,7 +566,7 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// PodNetnsAnnotation controls whether Felix trusts the
 	// cni.projectcalico.org/podNetns pod annotation when resolving a local
 	// pod's network namespace. Enable it only where the annotation is
-	// protected by the protect-cni-annotations.projectcalico.org policy;
+	// protected by the protect-cni-annotations admission policy;
 	// when Disabled, Felix falls back to the CRI and /proc lookups.
 	// [Default: Disabled]
 	PodNetnsAnnotation *string `json:"podNetnsAnnotation,omitempty"`

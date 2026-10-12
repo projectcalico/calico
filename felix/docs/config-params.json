@@ -2352,8 +2352,8 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Controls whether Felix trusts the\ncni.projectcalico.org/podNetns pod annotation when resolving a local\npod's network namespace. Enable it only where the annotation is\nprotected by the protect-cni-annotations.projectcalico.org policy;\nwhen Disabled, Felix falls back to the CRI and /proc lookups.",
-          "DescriptionHTML": "<p>Controls whether Felix trusts the\ncni.projectcalico.org/podNetns pod annotation when resolving a local\npod's network namespace. Enable it only where the annotation is\nprotected by the protect-cni-annotations.projectcalico.org policy;\nwhen Disabled, Felix falls back to the CRI and /proc lookups.</p>",
+          "Description": "Controls whether Felix trusts the\ncni.projectcalico.org/podNetns pod annotation when resolving a local\npod's network namespace. Enable it only where the annotation is\nprotected by the protect-cni-annotations admission policy;\nwhen Disabled, Felix falls back to the CRI and /proc lookups.",
+          "DescriptionHTML": "<p>Controls whether Felix trusts the\ncni.projectcalico.org/podNetns pod annotation when resolving a local\npod's network namespace. Enable it only where the annotation is\nprotected by the protect-cni-annotations admission policy;\nwhen Disabled, Felix falls back to the CRI and /proc lookups.</p>",
           "UserEditable": true,
           "GoType": "*string"
         },
