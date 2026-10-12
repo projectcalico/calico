@@ -79,8 +79,16 @@ globalPrologue: |
   export GOCACHE="${LOCAL_GO_PKG_CACHE}"
   # Keyed on the target branch, so a PR builds on what its branch last built. A
   # miss just builds cold.
+  #
+  # Modules are cached relative to GOPATH because $HOME differs between pods and
+  # VMs, and it must be the directory the docker builds mount modules from.
+  GO_MOD_ROOT="${GOPATH:-${HOME}/go}"
+  export GO_MOD_ROOT="${GO_MOD_ROOT%%:*}"
   if [ -n "${BUILD_CACHE_GROUP:-}" ]; then
-    ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache restore "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" ) || true
+    mkdir -p "${GO_MOD_ROOT}"
+    ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache restore "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" ) & build=$!
+    ( cd "${GO_MOD_ROOT}" && artifact cache restore "go-mod-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" ) & mods=$!
+    wait "$build" "$mods" || true
   fi
 
 # Only a passing branch build is worth handing to the next run; a PR's cache
@@ -88,7 +96,9 @@ globalPrologue: |
 globalEpilogue: |
   if [ "${STORE_BUILD_CACHE:-}" = true ] && [ "${CI_STEP_EXIT_CODE:-1}" = 0 ] &&
      [ "${CI_POD_STOPPED:-false}" != true ] && [ "${CI_GIT_REF_TYPE}" != PR ] && [ "${CI_GIT_REF_TYPE}" != TAG ]; then
-    ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache store "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" .go-pkg-cache ) || true
+    ( cd "${CI_HOME}/${CI_GIT_DIR}" && artifact cache store "go-build-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" .go-pkg-cache ) & build=$!
+    ( cd "${GO_MOD_ROOT}" && artifact cache store "go-mod-${CI_GIT_BRANCH}-${BUILD_CACHE_GROUP}" pkg/mod ) & mods=$!
+    wait "$build" "$mods" || true
   fi
 
 defaults:
