@@ -59,20 +59,36 @@ func TestCachedPolicyTrace(t *testing.T) {
 	require.Empty(t, empty.PendingPolicies)
 }
 
-// TestCachedPolicyTraceChurn pushes well past the cache bound and checks every lookup still
-// returns its own trace, before and after the cache clears.
+// TestCachedPolicyTraceChurn pushes past the cache bound and checks every lookup still returns
+// its own trace, before and after the cache clears, and that the clears are counted.
 func TestCachedPolicyTraceChurn(t *testing.T) {
-	const n = 10000
+	const n = 70000
 	handles := make([]unique.Handle[string], n)
 	for i := range n {
 		handles[i] = types.ProtoToFlowLogPolicy(cacheTestTrace(fmt.Sprintf("churn-%d", i)))
 	}
+	resetsBefore := types.PolicyTraceCacheResets()
 	for pass := range 2 {
 		for i, h := range handles {
 			got := types.CachedPolicyTrace(h)
 			require.Equal(t, fmt.Sprintf("churn-%d-first", i), got.EnforcedPolicies[0].Name, "pass %d", pass)
 		}
 	}
+	require.Greater(t, types.PolicyTraceCacheResets(), resetsBefore, "churn past the bound was not counted")
+	require.LessOrEqual(t, types.PolicyTraceCacheSize(), int64(65536))
+}
+
+// TestCachedPolicyTraceHitsDoNotReset checks that lookups of a cached trace neither grow the
+// cache nor count as a reset.
+func TestCachedPolicyTraceHitsDoNotReset(t *testing.T) {
+	h := types.ProtoToFlowLogPolicy(cacheTestTrace("hits"))
+	types.CachedPolicyTrace(h)
+	size, resets := types.PolicyTraceCacheSize(), types.PolicyTraceCacheResets()
+	for range 100000 {
+		types.CachedPolicyTrace(h)
+	}
+	require.Equal(t, size, types.PolicyTraceCacheSize())
+	require.Equal(t, resets, types.PolicyTraceCacheResets())
 }
 
 // TestReadPathsLeaveCachedTraceIntact runs every consumer of the shared trace and checks the
@@ -140,10 +156,7 @@ func TestFlowIntoProtoOverwritesEveryField(t *testing.T) {
 		NumConnectionsLive:      7,
 	}
 
-	for _, tc := range []struct {
-		name string
-		flow *proto.Flow
-	}{
+	for _, tc := range []flowIntoProtoCase{
 		{name: "all fields set", flow: full},
 		{name: "only an empty key", flow: &proto.Flow{Key: &proto.FlowKey{}}},
 	} {
@@ -160,6 +173,12 @@ func TestFlowIntoProtoOverwritesEveryField(t *testing.T) {
 			require.True(t, googleproto.Equal(want, stale), "reused message differs from a fresh conversion:\nwant %v\ngot  %v", want, stale)
 		})
 	}
+}
+
+// flowIntoProtoCase is a flow to convert into a reused message that starts fully populated.
+type flowIntoProtoCase struct {
+	name string
+	flow *proto.Flow
 }
 
 // fillMessage sets every field of m to a non-zero value, descending depth levels into nested

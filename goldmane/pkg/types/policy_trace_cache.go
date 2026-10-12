@@ -22,14 +22,28 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
-// maxCachedPolicyTraces bounds the decoded trace cache. A cluster has one trace per distinct
-// path through its policies, usually hundreds, and a decoded trace is a few hundred bytes.
-const maxCachedPolicyTraces = 4096
+// maxCachedPolicyTraces bounds the decoded trace cache at a few tens of MB. A cluster has one
+// trace per distinct path through its policies, and large clusters with per-namespace policies
+// reach tens of thousands.
+const maxCachedPolicyTraces = 65536
 
 var (
-	policyTraceCache     sync.Map
-	policyTraceCacheSize atomic.Int64
+	policyTraceCache       sync.Map
+	policyTraceCacheSize   atomic.Int64
+	policyTraceCacheResets atomic.Uint64
 )
+
+// PolicyTraceCacheSize returns the number of decoded traces currently cached, for metrics.
+// Concurrent misses can briefly overcount it by the number of racing goroutines.
+func PolicyTraceCacheSize() int64 {
+	return policyTraceCacheSize.Load()
+}
+
+// PolicyTraceCacheResets returns how many times the cache has filled and been cleared. A count
+// that keeps rising means the working set of traces is larger than the cache.
+func PolicyTraceCacheResets() uint64 {
+	return policyTraceCacheResets.Load()
+}
 
 // CachedPolicyTrace returns the decoded, sorted policy trace for h, decoding it at most once
 // while it stays cached. The result is shared between callers and goroutines, so callers must
@@ -48,6 +62,7 @@ func CachedPolicyTrace(h unique.Handle[string]) *proto.PolicyTrace {
 	if policyTraceCacheSize.Add(1) > maxCachedPolicyTraces {
 		policyTraceCache.Clear()
 		policyTraceCacheSize.Store(1)
+		policyTraceCacheResets.Add(1)
 	}
 	policyTraceCache.Store(h, p)
 	return p
