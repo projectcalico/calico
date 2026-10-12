@@ -164,7 +164,10 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         #                       the same reason as dest-wep.
         neutron_map = {}
         for port in endpoint_ports:
-            neutron_map["wep " + endpoint_name(port)] = port
+            # A port with no binding host should have no source-side WEP slot.
+            if port.get("binding:host_id"):
+                neutron_map["wep " + endpoint_name(port)] = port
+
             # binding:profile may carry migrating_to=None (or be missing entirely) after
             # a migration completes or is cancelled.  Only generate destination-side
             # entries when migrating_to is a truthy host string - calling endpoint_name
