@@ -86,6 +86,10 @@ type BucketRing struct {
 }
 
 func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *BucketRing {
+	if n >= windowSlots {
+		// Each live window needs its own bit in the per-IP window bitmap.
+		panic(fmt.Sprintf("NewBucketRing: %d buckets exceeds the IP window bitmap (max %d)", n, windowSlots-1))
+	}
 	ring := &BucketRing{
 		buckets:     make([]*AggregationBucket, n),
 		headIndex:   0,

@@ -95,7 +95,11 @@ var (
 			if err != nil {
 				return err
 			}
-			published, w, err := publishRecord(cfg.OutputDir, images.PublishStep, ver.FormattedString(), !c.Bool(localFlag.Name))
+			records, err := recordsDir(cfg, c, oncePin(pinForPublish), ver.FormattedString())
+			if err != nil {
+				return err
+			}
+			published, w, err := publishRecord(records, images.PublishStep, !c.Bool(localFlag.Name))
 			if err != nil {
 				return err
 			}

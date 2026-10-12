@@ -26,7 +26,7 @@
 #endif
 
 /* An encapsulating device never adds another layer of its own. */
-#define dnat_on_plain_dev() (!CALI_F_IPIP && !CALI_F_L3_DEV && !CALI_F_NAT_IF && !IFACE_ENCAPS)
+#define dnat_on_plain_dev() (!CALI_F_L3_DEV && !CALI_F_NAT_IF && !IFACE_ENCAPS)
 
 #define dnat_should_encap() (CALI_F_FROM_HEP && dnat_on_plain_dev())
 #define dnat_return_should_encap() (CALI_F_FROM_WEP && dnat_on_plain_dev())

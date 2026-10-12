@@ -76,4 +76,29 @@ describe('FlowLogDetails', () => {
             screen.getByText('kube-system/kube-dns:53 (dns)'),
         ).toBeInTheDocument();
     });
+
+    it('should list the source and destination IPs', () => {
+        render(
+            <FlowLogDetails
+                flowLog={{
+                    ...flowLog,
+                    source_ips: ['10.0.0.1', '10.0.0.2'],
+                    dest_ips: ['10.96.0.10'],
+                }}
+            />,
+        );
+
+        expect(screen.getByText('source_ips')).toBeInTheDocument();
+        expect(screen.getByText('dest_ips')).toBeInTheDocument();
+        expect(screen.getByText('10.0.0.1')).toBeInTheDocument();
+        expect(screen.getByText('10.0.0.2')).toBeInTheDocument();
+        expect(screen.getByText('10.96.0.10')).toBeInTheDocument();
+    });
+
+    it('should leave out the IP rows when the flow has no IPs', () => {
+        render(<FlowLogDetails flowLog={flowLog} />);
+
+        expect(screen.queryByText('source_ips')).not.toBeInTheDocument();
+        expect(screen.queryByText('dest_ips')).not.toBeInTheDocument();
+    });
 });

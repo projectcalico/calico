@@ -110,6 +110,8 @@ var (
 	})
 	errApplyingPolicy = errors.New("error applying policy")
 	errLayoutLookup   = errors.New("error looking up program layout")
+	// errIPIPDeviceNotL3 is permanent: the l3 program cannot parse the L2 frames of a pre-5.14 IPIP device.
+	errIPIPDeviceNotL3 = errors.New("the kernel's IPIP device is not an L3 device (needs kernel 5.14+ or RHEL 4.18.0-330+)")
 )
 
 var (
@@ -191,7 +193,7 @@ type bpfDataplane interface {
 	loadDefaultPolicies(hk hook.Hook) error
 	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
 	interfaceByIndex(int) (*net.Interface, error)
-	queryClassifier(string, string) bool
+	preambleAttached(ap *tc.AttachPoint, h hook.Hook) bool
 	getIfaceLink(string) (netlink.Link, error)
 	getIfaceLinkByIndex(int) (netlink.Link, error)
 	netkitPinned(string) bool
@@ -2202,7 +2204,11 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		}
 	})
 
-	if m.permanentBPFErr != nil {
+	if errors.Is(m.permanentBPFErr, errIPIPDeviceNotL3) {
+		m.reportHealth(false,
+			"IPIP is not supported by the eBPF dataplane on this kernel: "+errIPIPDeviceNotL3.Error()+
+				". Use VXLAN encapsulation or upgrade the kernel.")
+	} else if m.permanentBPFErr != nil {
 		m.reportHealth(false,
 			"BPF program load failed: program rejected by kernel BPF verifier. "+
 				"Calico eBPF dataplane requires kernel 5.10+. See Felix logs for details.")
@@ -2327,16 +2333,18 @@ func hostIPAbsenceDetail(family string, since time.Time) string {
 
 func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string, xdpMode XDPMode) (bpfInterfaceState, error) {
 	var (
-		err     error
-		up      bool
-		ifIndex int
-		state   bpfInterfaceState
+		err       error
+		up        bool
+		ifIndex   int
+		ifaceType IfaceType
+		state     bpfInterfaceState
 	)
 
 	m.ifacesLock.Lock()
 	m.withIface(iface, func(iface *bpfInterface) bool {
 		up = iface.info.ifaceIsUp()
 		ifIndex = iface.info.ifIndex
+		ifaceType = iface.info.ifaceType
 		state = iface.dpState
 		return false
 	})
@@ -2344,6 +2352,9 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 	if !up {
 		logrus.WithField("iface", iface).Debug("Ignoring interface that is down")
 		return state, nil
+	}
+	if ifaceType == IfaceTypeIPIP && !m.features.IPIPDeviceIsL3 {
+		return state, errIPIPDeviceNotL3
 	}
 
 	hepIface := iface
@@ -2578,6 +2589,11 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				logrus.WithField("iface", iface).WithError(err).Error(
 					"BPF program load failed permanently (kernel BPF verifier rejected the program). " +
 						"Calico eBPF dataplane requires kernel 5.10+. See logs above for verifier output.")
+				m.permanentBPFErr = err
+				m.dirtyIfaceNames.Discard(iface)
+			} else if errors.Is(err, errIPIPDeviceNotL3) {
+				logrus.WithField("iface", iface).WithError(err).Error(
+					"Not attaching BPF programs to the IPIP device. Use VXLAN encapsulation or upgrade the kernel.")
 				m.permanentBPFErr = err
 				m.dirtyIfaceNames.Discard(iface)
 			} else if isLinkNotFoundError(err) {
@@ -2837,12 +2853,18 @@ func (m *bpfEndpointManager) dataIfaceStateFillJumps(ap *tc.AttachPoint, xdpMode
 	return nil
 }
 
-func (m *bpfEndpointManager) queryClassifier(ifaceName, tcHook string) bool {
-	tcProgs, err := tc.ListAttachedPrograms(ifaceName, tcHook, false)
-	if err != nil || len(tcProgs) == 0 {
-		return false
+func (m *bpfEndpointManager) preambleAttached(ap *tc.AttachPoint, h hook.Hook) bool {
+	attached, err := ap.PreambleAttached(h)
+	if err != nil {
+		fields := logrus.Fields{"iface": ap.Iface, "hook": h}
+		// A device deleted under us; the attach that follows handles it.
+		if errors.Is(err, unix.ENODEV) || errors.As(err, &netlink.LinkNotFoundError{}) {
+			logrus.WithError(err).WithFields(fields).Debug("Device gone while querying the preamble.")
+		} else {
+			m.updateRateLimitedLog.WithError(err).WithFields(fields).Warn("Failed to query the preamble, re-attaching it.")
+		}
 	}
-	return true
+	return attached
 }
 
 // useNetkitAttach reports whether this interface should be driven through the
@@ -2943,19 +2965,6 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	v4Readiness := state.v4Readiness
 	v6Readiness := state.v6Readiness
 
-	if v4Readiness == ifaceIsReady || v6Readiness == ifaceIsReady {
-		if !m.dp.queryClassifier(ifaceName, hook.Ingress.String()) {
-			v4Readiness = ifaceNotReady
-			v6Readiness = ifaceNotReady
-			state.preambleGlobals = [hook.Count]libbpf.TcGlobalData{}
-		}
-		if !m.dp.queryClassifier(ifaceName, hook.Egress.String()) {
-			v4Readiness = ifaceNotReady
-			v6Readiness = ifaceNotReady
-			state.preambleGlobals = [hook.Count]libbpf.TcGlobalData{}
-		}
-	}
-
 	ap := m.calculateTCAttachPoint(ifaceName)
 	ap.IfIndex = ifindex
 
@@ -2974,6 +2983,15 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		// FIB path uses plain bpf_redirect instead.
 		ap.RedirectPeer = false
 	}
+
+	if v4Readiness == ifaceIsReady || v6Readiness == ifaceIsReady {
+		if !m.dp.preambleAttached(ap, hook.Ingress) || !m.dp.preambleAttached(ap, hook.Egress) {
+			v4Readiness = ifaceNotReady
+			v6Readiness = ifaceNotReady
+			state.preambleGlobals = [hook.Count]libbpf.TcGlobalData{}
+		}
+	}
+
 	if wep != nil && wep.QosControls != nil {
 		// QoSControls are present, update state
 
@@ -3721,13 +3739,8 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 			return tcdefs.EpTypeNAT
 		}
 		return tcdefs.EpTypeHost
-	case IfaceTypeWireguard, IfaceTypeL3:
+	case IfaceTypeWireguard, IfaceTypeL3, IfaceTypeIPIP:
 		return tcdefs.EpTypeL3Device
-	case IfaceTypeIPIP:
-		if m.features.IPIPDeviceIsL3 {
-			return tcdefs.EpTypeL3Device
-		}
-		return tcdefs.EpTypeIPIP
 	default:
 		logrus.Panicf("Unsupported ifaceName %v", ifaceName)
 	}
@@ -3789,7 +3802,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.WorkloadSrcSpoofingConfigured = m.workloadSourceSpoofing
 	if m.bpfRedirectToPeer == "Disabled" {
 		ap.RedirectPeer = false
-	} else if (ap.Type == tcdefs.EpTypeIPIP || ap.Type == tcdefs.EpTypeL3Device) && m.bpfRedirectToPeer == "L2Only" {
+	} else if ap.Type == tcdefs.EpTypeL3Device && m.bpfRedirectToPeer == "L2Only" {
 		ap.RedirectPeer = false
 	}
 

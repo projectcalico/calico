@@ -73,11 +73,16 @@ var operatorPublishFlags = []cli.Flag{
 var operatorPublishAction = func(cfg *Config) func(context.Context, *cli.Command) error {
 	return func(_ context.Context, c *cli.Command) error {
 		configureLogging("operator-publish.log")
-		o, err := operatorFor(cfg, c, oncePin(pinForPublish))
+		pin := oncePin(pinForPublish)
+		o, err := operatorFor(cfg, c, pin)
 		if err != nil {
 			return err
 		}
-		opts, err := operatorPublishOptions(c, o.Version, cfg.OutputDir, filepath.Join(cfg.LogsDir, o.ProductVersion))
+		records, err := recordsDir(cfg, c, pin, o.ProductVersion)
+		if err != nil {
+			return err
+		}
+		opts, err := operatorPublishOptions(c, records, filepath.Join(cfg.LogsDir, o.ProductVersion))
 		if err != nil {
 			return err
 		}
@@ -103,7 +108,7 @@ var operatorBuildOptions = func(c *cli.Command, logsDir string) []operator.Build
 	}
 }
 
-var operatorPublishOptions = func(c *cli.Command, version, uploadDir, logsDir string) ([]operator.PublishOption, error) {
+var operatorPublishOptions = func(c *cli.Command, recordsDir, logsDir string) ([]operator.PublishOption, error) {
 	opts := []operator.PublishOption{
 		operator.WithRunner(commandRunner),
 		operator.WithLogsDir(logsDir),
@@ -111,7 +116,7 @@ var operatorPublishOptions = func(c *cli.Command, version, uploadDir, logsDir st
 		operator.WithDryRun(c.Bool(localFlag.Name)),
 		operator.WithResolver(registryDigestResolver),
 	}
-	published, w, err := publishRecord(uploadDir, operator.PublishStep, version, !c.Bool(localFlag.Name))
+	published, w, err := publishRecord(recordsDir, operator.PublishStep, !c.Bool(localFlag.Name))
 	if err != nil {
 		return nil, err
 	}

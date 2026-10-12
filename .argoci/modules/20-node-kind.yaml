@@ -1,0 +1,53 @@
+# calico/node system tests on a kind cluster on a GCE VM.
+version: condensed-module
+
+defaults:
+  timeout: 2h15m
+
+steps:
+  - name: node-kind-cluster-tests
+    depends: [build-calico-image, build-node-image, build-whisker-image, check-go]
+    requests: {cpu: 2000m, memory: 4Gi}
+    services:
+      - docker
+    secretBundles:
+      - name: google-service-account-for-gce
+        keys:
+          - name: google-service-account-for-gce-key.json
+            as: GCE_SERVICE_ACCOUNT_KEY
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+      - name: COMPONENT
+        value: node
+      # A capacity pool the fleets don't exhaust, and a family that takes a
+      # hyperdisk boot disk.
+      - name: VM_MACHINE_TYPE
+        value: c3-standard-4
+      - name: VM_DISK_SIZE
+        value: 80GB
+      - name: CI_GROUP_LABEL
+        value: calico
+      - name: CI_JOB_LABEL
+        value: kind-cluster-tests
+      # The fleet's watchdog, which captures a hung VM's console; the step
+      # timeout leaves it room.
+      - name: JOB_TIMEOUT_MINUTES
+        value: "120"
+    commands: |
+      source .argoci/scripts/vm-fleet-setup.sh
+      export REGION="${ARGOCI_GCP_REGION}"
+      export VM_PREFIX="argoci-${CI_GIT_REPO_NAME}-${SHORT_WORKFLOW_ID}-kind-"
+      mkdir -p artifacts
+      cd node
+      ./.semaphore/cache-test-artifacts
+      cd ..
+      .semaphore/vms/run-tests-on-vms "${VM_PREFIX}"
+    epilogue: |
+      # The epilogue sees nothing the commands set, VM_PREFIX included.
+      cd "${CI_HOME}/${CI_GIT_DIR}"
+      source .argoci/scripts/vm-fleet-setup.sh
+      export VM_PREFIX="argoci-${CI_GIT_REPO_NAME}-${SHORT_WORKFLOW_ID}-kind-"
+      export COMPONENT=node
+      .semaphore/vms/publish-reports "Node: KinD STs" || true
+      .semaphore/vms/clean-up-vms "${VM_PREFIX}" || true

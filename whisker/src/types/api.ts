@@ -31,9 +31,11 @@ export type FlowLog = {
     source_name: string;
     source_namespace: string;
     source_labels: string;
+    source_ips?: string[];
     dest_name: string;
     dest_namespace: string;
     dest_labels: string;
+    dest_ips?: string[];
     protocol: string;
     dest_port: string;
     reporter: string;

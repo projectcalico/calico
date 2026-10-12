@@ -6,6 +6,11 @@ HELM_VERSION?=v3.16.3
 GOMPLATE_VERSION?=v3.11.7
 CRANE_VERSION?=v0.21.2
 
+# Plain `curl --retry` gives up on a reset connection, which GitHub hands out
+# under load; this retries every error.
+REPO_ROOT:=$(abspath $(dir $(lastword $(MAKEFILE_LIST)))/../../..)
+fetch_file = $(REPO_ROOT)/hack/fetch-file $(1) $(2)
+
 KIND_CLUSTER_NAME?=kind
 
 ###############################################################################
@@ -83,39 +88,39 @@ HELPERS = ssh-node-linux.sh ssh-node-windows.sh scp-from-windows.sh scp-to-windo
 
 $(BINDIR)/kind:
 	mkdir -p $(@D)
-	curl -sSf -L --retry 5 https://kind.sigs.k8s.io/dl/$(KIND_VERSION)/kind-linux-$(ARCH) -o $@
+	$(call fetch_file,https://kind.sigs.k8s.io/dl/$(KIND_VERSION)/kind-linux-$(ARCH),$@)
 	chmod +x $@
 	touch $@
 
 $(BINDIR)/kubectl:
 	mkdir -p $(@D)
 	@echo "Downloading kubectl version: $(KUBE_VERSION)"
-	curl -sSf -L --retry 5 https://dl.k8s.io/release/$(KUBE_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
+	$(call fetch_file,https://dl.k8s.io/release/$(KUBE_VERSION)/bin/linux/$(ARCH)/kubectl,$@)
 	chmod +x $@
 	touch $@
 
 $(BINDIR)/cmctl:
 	mkdir -p $(@D)
-	curl -sSf -L --retry 5 https://github.com/cert-manager/cmctl/releases/latest/download/cmctl_linux_$(ARCH) -o $@
+	$(call fetch_file,https://github.com/cert-manager/cmctl/releases/latest/download/cmctl_linux_$(ARCH),$@)
 	chmod +x $@
 	touch $@
 
 $(BINDIR)/asoctl:
 	mkdir -p $(@D)
-	curl -sSf -L --retry 5 https://github.com/Azure/azure-service-operator/releases/latest/download/asoctl-linux-$(ARCH).gz -o $(BINDIR)/asoctl.gz
+	$(call fetch_file,https://github.com/Azure/azure-service-operator/releases/latest/download/asoctl-linux-$(ARCH).gz,$(BINDIR)/asoctl.gz)
 	gunzip $(BINDIR)/asoctl.gz
 	chmod +x $@
 	touch $@
 
 $(BINDIR)/gomplate:
 	mkdir -p $(@D)
-	curl -sSf -L --retry 5 https://github.com/hairyhenderson/gomplate/releases/download/$(GOMPLATE_VERSION)/gomplate_linux-$(ARCH) -o $@
+	$(call fetch_file,https://github.com/hairyhenderson/gomplate/releases/download/$(GOMPLATE_VERSION)/gomplate_linux-$(ARCH),$@)
 	chmod +x $@
 	touch $@
 
 $(BINDIR)/helm:
 	mkdir -p $(@D)
-	curl -sSf -L --retry 5 https://get.helm.sh/helm-$(HELM_VERSION)-linux-$(ARCH).tar.gz -o $(BINDIR)/helm.tar.gz
+	$(call fetch_file,https://get.helm.sh/helm-$(HELM_VERSION)-linux-$(ARCH).tar.gz,$(BINDIR)/helm.tar.gz)
 	tar -xzf $(BINDIR)/helm.tar.gz -C $(BINDIR) --strip-components=1 linux-$(ARCH)/helm
 	rm $(BINDIR)/helm.tar.gz
 	chmod +x $@
@@ -124,7 +129,7 @@ $(BINDIR)/helm:
 CRANE_ARCH = $(subst amd64,x86_64,$(ARCH))
 $(BINDIR)/crane:
 	mkdir -p $(@D)
-	curl -sSfL --retry 5 -o /tmp/crane.tar.gz https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/go-containerregistry_Linux_$(CRANE_ARCH).tar.gz
+	$(call fetch_file,https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/go-containerregistry_Linux_$(CRANE_ARCH).tar.gz,/tmp/crane.tar.gz)
 	tar xz -C $(@D) -f /tmp/crane.tar.gz crane && rm -f /tmp/crane.tar.gz
 	touch $@
 

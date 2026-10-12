@@ -2912,6 +2912,15 @@ spec:
                     Felix exports flow logs.
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
+                flowLogsGoldmaneIncludeIPs:
+                  description: |-
+                    FlowLogsGoldmaneIncludeIPs controls whether flow data sent to Goldmane (and the local flow
+                    reporter) includes the source and destination IP addresses of the aggregated connections.
+                    [Default: Enabled]
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 flowLogsGoldmaneServer:
                   description:
                     FlowLogGoldmaneServer is the flow server endpoint to

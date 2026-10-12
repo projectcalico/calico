@@ -335,6 +335,11 @@ endif
 ifneq ($(GOMAXPROCS),)
 EXTRA_DOCKER_ARGS += -e GOMAXPROCS=$(GOMAXPROCS)
 endif
+# By name, so docker reads the value from the environment: a proxy list can hold
+# a `|`, which spliced into the recipe would reach the shell as a pipe.
+ifneq ($(GOPROXY),)
+EXTRA_DOCKER_ARGS += -e GOPROXY
+endif
 ifneq ($(DOCKER_MEMORY),)
 EXTRA_DOCKER_ARGS += --memory=$(DOCKER_MEMORY) --memory-swap=$(if $(DOCKER_MEMORY_SWAP),$(DOCKER_MEMORY_SWAP),$(DOCKER_MEMORY))
 endif
@@ -888,12 +893,17 @@ REPO_REL_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else
 
 .PHONY: fix-changed go-fmt-changed goimports-changed
 # Format changed files only.
+# The parent-branch probe needs an upstream remote, which a fork's clone lacks,
+# so skip it when CI supplies the range.
 fix-changed go-fmt-changed goimports-changed:
 	if [ "$(SKIP_FIX_CHANGED)" != "true" ]; then \
-	  parent_branch=`release_prefix=$(RELEASE_BRANCH_PREFIX)-v git_repo_slug=$(GIT_REPO_SLUG) $(REPO_REL_DIR)/hack/find-parent-release-branch.sh`; \
+	  if [ -z "$(CI_GIT_COMMIT_RANGE)" ]; then \
+	    parent_branch=`release_prefix=$(RELEASE_BRANCH_PREFIX)-v git_repo_slug=$(GIT_REPO_SLUG) $(REPO_REL_DIR)/hack/find-parent-release-branch.sh`; \
+	  fi; \
 	  $(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
 	                -e git_repo_slug=$(GIT_REPO_SLUG) \
 	                -e parent_branch=$$parent_branch \
+	                -e CI_GIT_COMMIT_RANGE=$(CI_GIT_COMMIT_RANGE) \
 	                $(CALICO_BUILD) $(REPO_REL_DIR)/hack/format-changed-files.sh; \
 	fi
 
@@ -2036,6 +2046,7 @@ $(ENVTEST_MIN_ASSETS_MARKER):
 .PHONY: run-etcd stop-etcd
 run-etcd:
 	@if ! docker inspect calico-etcd >/dev/null 2>&1; then \
+		$(call retry_docker_cmd,pull $(ETCD_IMAGE),docker pull -q $(ETCD_IMAGE),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY)); \
 		docker run --detach \
 			--net=host \
 			--entrypoint=/usr/local/bin/etcd \

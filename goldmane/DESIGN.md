@@ -92,6 +92,10 @@ Felix (per-node) --gRPC--> FlowCollector --> Goldmane main loop --> BucketRing
 - **Emitter** — batches aggregated flows and pushes them to an
   upstream endpoint over HTTPS with mTLS. Tracks progress in a
   `ConfigMap` (`flow-emitter-state` in `calico-system`).
+- **IP sets** — distinct source / destination IPs ride on `Flow`, never on
+  `FlowKey` (that would explode key cardinality), as a best-effort set per
+  `DiachronicFlow` capped at `MaxIPsPerFlow`. Each IP's window bitmap has
+  `windowSlots` bits, so history (`numBuckets`) must stay below that.
 
 ### Review notes
 

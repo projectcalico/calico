@@ -1,0 +1,12 @@
+# Parses every e2e workflow and shellchecks the scripts they run.
+version: condensed-module
+
+defaults:
+  timeout: 5m
+
+steps:
+  - name: e2e-validation
+    jobSize: small
+    requests: {cpu: 1750m, memory: 548Mi}
+    commands: |
+      ./.argoci/scripts/test_scripts/e2e-validation.sh

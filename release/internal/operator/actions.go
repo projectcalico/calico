@@ -57,9 +57,9 @@ func Publish(o Operator, variants []Variant, hashrelease bool, opts ...PublishOp
 	}
 	env := []string{s.latch()}
 
-	var recorded steps.RecordedDigests
+	var recorded registry.RecordedDigests
 	if s.resume != nil {
-		recorded = steps.DigestsByRepo(s.resume.published)
+		recorded = registry.DigestsByRepo(s.resume.published)
 	}
 	return eachVariant(variants, func(v Variant) error {
 		done, err := s.published(v, recorded)
@@ -242,18 +242,18 @@ func (s settings) lookup(v Variant) (refs, absent []string, err error) {
 			absent = append(absent, t.ref())
 			continue
 		}
-		refs = append(refs, t.repo+"@"+digest)
+		refs = append(refs, registry.PublishedRef(t.ref(), digest))
 	}
 	return refs, absent, errors.Join(errs...)
 }
 
-func (s settings) published(v Variant, recorded steps.RecordedDigests) (bool, error) {
-	if len(recorded) == 0 {
+func (s settings) published(v Variant, recorded registry.RecordedDigests) (bool, error) {
+	if recorded.Empty() {
 		return false, nil
 	}
 	for _, t := range s.tags(v) {
-		digests, ok := recorded[t.repo]
-		if !ok {
+		digests := recorded.Digests(t.repo)
+		if len(digests) == 0 {
 			return false, nil
 		}
 		got, exists, err := s.resolve(t.ref())
