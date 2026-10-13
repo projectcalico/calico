@@ -72,6 +72,9 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
         self.recent_writes = {}
         self.recent_deletes = set()
 
+        # Unlike the two above, records the order of writes and deletes.
+        self.etcd_ops = []
+
         # Reset the counter for when we'll reset the etcd database.
         self.reset_etcd_after = None
         self.assert_etcd_writes_deletes = True
@@ -113,6 +116,7 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
 
         _log.info("etcd write: %s = %s", key, value)
         self.etcd_data[key] = value
+        self.etcd_ops.append(("put", key))
         try:
             self.recent_writes[key] = json.loads(value)
         except ValueError:
@@ -158,6 +162,7 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
             except KeyError:
                 raise lib.EtcdKeyNotFound()
             self.recent_deletes.add(key)
+            self.etcd_ops.append(("delete", key))
 
     def assertEtcdWrites(self, expected):
         if self.assert_etcd_writes_deletes:
@@ -530,13 +535,13 @@ class TestPluginEtcdBase(_TestEtcdBase):
             "/calico/resources/v3/projectcalico.org/workloadendpoints/"
             + self.namespace
             + "/felix--host--1-openstack-"
-            + "instance--1-DEADBEEF--1234--5678"
+            + "DEADBEEF--1234--5678-DEADBEEF--1234--5678"
         )
         ep_facebeef_key_v3 = (
             "/calico/resources/v3/projectcalico.org/workloadendpoints/"
             + self.namespace
             + "/felix--host--1-openstack-"
-            + "instance--2-FACEBEEF--1234--5678"
+            + "FACEBEEF--1234--5678-FACEBEEF--1234--5678"
         )
         ep_deadbeef_value_v3 = {
             "apiVersion": "projectcalico.org/v3",
@@ -546,7 +551,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
                     "openstack.projectcalico.org/network-id": "calico-network-id"
                 },
                 "name": (
-                    "felix--host--1-openstack-instance" + "--1-DEADBEEF--1234--5678"
+                    "felix--host--1-openstack-DEADBEEF--1234--5678-DEADBEEF--1234--5678"
                 ),
                 "namespace": self.namespace,
                 "labels": {
@@ -581,7 +586,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
                     "openstack.projectcalico.org/network-id": "calico-network-id"
                 },
                 "name": (
-                    "felix--host--1-openstack-instance" + "--2-FACEBEEF--1234--5678"
+                    "felix--host--1-openstack-FACEBEEF--1234--5678-FACEBEEF--1234--5678"
                 ),
                 "namespace": self.namespace,
                 "labels": {
@@ -716,8 +721,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         ep_hello_key_v3 = (
             "/calico/resources/v3/projectcalico.org/workloadendpoints/"
             + self.namespace
-            + "/felix--host--2-openstack-"
-            + "instance--3-HELLO--1234--5678"
+            + "/felix--host--2-openstack-HELLO--1234--5678-HELLO--1234--5678"
         )
         ep_hello_value_v3 = {
             "apiVersion": "projectcalico.org/v3",
@@ -726,7 +730,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
                 "annotations": {
                     "openstack.projectcalico.org/network-id": "calico-network-id"
                 },
-                "name": ("felix--host--2-openstack-instance" + "--3-HELLO--1234--5678"),
+                "name": "felix--host--2-openstack-HELLO--1234--5678-HELLO--1234--5678",
                 "namespace": self.namespace,
                 "labels": {
                     "sg.projectcalico.org/openstack-SGID-default": "My_default_SG",
@@ -2100,7 +2104,7 @@ class TestLiveMigration(TestPluginEtcdBase):
             + "/"
             + escape_dashes(host)
             + "-openstack-"
-            + escape_dashes(lib.port1["device_id"])
+            + escape_dashes(lib.port1["id"])
             + "-"
             + escape_dashes(lib.port1["id"])
         )
@@ -2114,7 +2118,7 @@ class TestLiveMigration(TestPluginEtcdBase):
         name = (
             escape_dashes(host)
             + "-openstack-"
-            + escape_dashes(lib.port1["device_id"])
+            + escape_dashes(lib.port1["id"])
             + "-"
             + escape_dashes(lib.port1["id"])
         )
@@ -2173,10 +2177,20 @@ class TestLiveMigration(TestPluginEtcdBase):
         return (
             escape_dashes(host)
             + "-openstack-"
-            + escape_dashes(lib.port1["device_id"])
+            + escape_dashes(lib.port1["id"])
             + "-"
             + escape_dashes(lib.port1["id"])
         )
+
+    def _wep_workload_id(self, host):
+        """The WorkloadID that libcalico-go parses out of port1's WEP name at host.
+
+        Felix matches a LiveMigration's workloadID against this, so deriving the
+        expectation from the name, rather than from the port, catches the two drifting
+        apart.
+        """
+        parts = self._ep_name(host).replace("--", "\0").split("-")
+        return self.namespace + "/" + parts[2].replace("\0", "-")
 
     def _lm_value(self, source_host, dest_host):
         """Build expected LiveMigration value."""
@@ -2192,7 +2206,7 @@ class TestLiveMigration(TestPluginEtcdBase):
                     "workloadEndpoint": {
                         "hostname": source_host,
                         "orchestratorID": "openstack",
-                        "workloadID": self.namespace + "/" + lib.port1["device_id"],
+                        "workloadID": self._wep_workload_id(source_host),
                         "endpointID": lib.port1["id"],
                     },
                 },
@@ -2200,7 +2214,7 @@ class TestLiveMigration(TestPluginEtcdBase):
                     "workloadEndpoint": {
                         "hostname": dest_host,
                         "orchestratorID": "openstack",
-                        "workloadID": self.namespace + "/" + lib.port1["device_id"],
+                        "workloadID": self._wep_workload_id(source_host),
                         "endpointID": lib.port1["id"],
                     },
                 },
@@ -2490,6 +2504,53 @@ class TestLiveMigration(TestPluginEtcdBase):
         # host-c``, and nothing would remove it until the next full resync.
         self.assertNotIn(self._ep_key("host-b"), self.recent_writes)
 
+    def test_resync_renames_wep_and_lm_keyed_on_device_id(self):
+        """Resync moves WEPs and LMs from device_id-keyed names to port-ID ones.
+
+        After an upgrade, every existing resource is under a name with the VM's
+        device_id in the workload segment.  Each must be recreated under its new name
+        before the old one is deleted, so that Felix never sees the port's interface
+        without a WorkloadEndpoint.
+        """
+        self._do_initial_resync()
+        self.osdb_ports[0]["binding:profile"] = {"migrating_to": self.DEST_HOST}
+        self._trigger_resync()
+
+        def escape_dashes(s):
+            return s.replace("-", "--")
+
+        # A device_id that sorts before the port ID, so that a resync that simply
+        # processed names in order would delete each old name before creating the new
+        # one.
+        new_segment = "-openstack-" + escape_dashes(lib.port1["id"]) + "-"
+        old_segment = "-openstack-" + escape_dashes("AAAA-vm") + "-"
+        new_keys = [
+            self._ep_key(self.SOURCE_HOST),
+            self._ep_key(self.DEST_HOST),
+            self._lm_key(self.DEST_HOST),
+        ]
+        old_keys = []
+        for new_key in new_keys:
+            old_key = new_key.replace(new_segment, old_segment, 1)
+            value = json.loads(self.etcd_data.pop(new_key))
+            value["metadata"]["name"] = old_key.rsplit("/", 1)[-1]
+            self.etcd_data[old_key] = json.dumps(value)
+            old_keys.append(old_key)
+        self.recent_writes = {}
+        self.recent_deletes = set()
+        self.etcd_ops = []
+
+        self._trigger_resync()
+
+        for new_key, old_key in zip(new_keys, old_keys):
+            self.assertIn(new_key, self.recent_writes)
+            self.assertIn(old_key, self.recent_deletes)
+            self.assertLess(
+                self.etcd_ops.index(("put", new_key)),
+                self.etcd_ops.index(("delete", old_key)),
+                new_key,
+            )
+
     def test_resync_creates_missing_live_migration(self):
         """Resync creates LiveMigration and dest WEP for migrating port."""
         self._do_initial_resync()
@@ -2707,25 +2768,25 @@ class TestLiveMigration(TestPluginEtcdBase):
     def test_endpoint_name_without_host_with_openstack_in_host(self):
         """endpoint_name_without_host strips host even when it contains 'openstack'.
 
-        The function relies on the leading '-openstack-' delimiter being
-        unambiguous, which holds because device_id and port id are UUIDs
-        (no 'openstack' substring) and any literal hyphens in host_id are
-        doubled by escape_dashes before being joined with single hyphens.
+        The function relies on the leading '-openstack-' delimiter being unambiguous,
+        which holds because port id is a UUID (no 'openstack' substring) and any literal
+        hyphens in host_id are doubled by escape_dashes before being joined with single
+        hyphens.
         """
         from networking_calico.plugins.ml2.drivers.calico.endpoints import (
             endpoint_name_without_host,
         )
 
-        expected = "openstack-vm--id-port--id"
+        expected = "openstack-port--id-port--id"
         cases = [
             # Plain host_id with hyphens (typical case).
-            "felix--host--1-openstack-vm--id-port--id",
+            "felix--host--1-openstack-port--id-port--id",
             # host_id starts with 'openstack', e.g. 'openstack-ctrl-1'.
-            "openstack--ctrl--1-openstack-vm--id-port--id",
+            "openstack--ctrl--1-openstack-port--id-port--id",
             # host_id ends with 'openstack', e.g. 'host-openstack'.
-            "host--openstack-openstack-vm--id-port--id",
+            "host--openstack-openstack-port--id-port--id",
             # host_id is the literal 'openstack'.
-            "openstack-openstack-vm--id-port--id",
+            "openstack-openstack-port--id-port--id",
         ]
         for full_name in cases:
             self.assertEqual(endpoint_name_without_host(full_name), expected, full_name)
