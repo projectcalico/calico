@@ -2806,6 +2806,31 @@ class TestLiveMigration(TestPluginEtcdBase):
             host=self.DEST_HOST,
         )
 
+    def test_source_deletion_during_cutover_rebind_leaves_port_active(self):
+        """Status owners are the hosts with a WEP, even mid-rebind.
+
+        At the cutover's intermediate commit ``binding:host_id`` is already the dest,
+        ``migrating_to`` has gone, and ``vif_type`` is transiently "unbound".  The dest
+        WEP stays in place throughout, so the dest is still an owner, and a source
+        deletion landing then re-asserts the dest's status.
+        """
+        self._do_initial_resync()
+        self._pre_migrate()
+        self._complete_migration()
+        self.osdb_ports[0]["binding:vif_type"] = "unbound"
+        self.driver._port_status_cache[(self.DEST_HOST, self.port["id"])] = (
+            datamodel_v1.ENDPOINT_STATUS_UP
+        )
+
+        m_update = self._report_status(self.SOURCE_HOST, self.port["id"])
+
+        m_update.assert_called_once_with(
+            mock.ANY,
+            self.port["id"],
+            mech_calico.constants.PORT_STATUS_ACTIVE,
+            host=self.SOURCE_HOST,
+        )
+
     def test_deletion_at_owning_host_still_reports_error(self):
         """A port still bound here, with no Calico endpoint, is a genuine error."""
         self._do_initial_resync()
