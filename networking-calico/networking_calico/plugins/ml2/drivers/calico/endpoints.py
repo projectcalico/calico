@@ -164,8 +164,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         #                       the same reason as dest-wep.
         neutron_map = {}
         for port in endpoint_ports:
-            # A port with no binding host should have no source-side WEP slot.
-            if port.get("binding:host_id"):
+            if self._wep_desired_present(port, port.get("binding:host_id")):
                 neutron_map["wep " + endpoint_name(port)] = port
 
             # binding:profile may carry migrating_to=None (or be missing entirely) after
@@ -496,38 +495,26 @@ class WorkloadEndpointSyncer(ResourceSyncer):
     def neutron_to_port_etcd_write_data(self, port, context, reread, dest_host=None):
         """Build the etcd write-data tuple for a WEP from a Neutron port.
 
-        If ``dest_host`` is given, this is the destination-side WEP of a live migration;
-        on reread we additionally verify the migration is still in progress to that
-        host, and overlay ``dest_host`` onto the (possibly rereaded) port so
+        If ``dest_host`` is given, this is the destination-side WEP of a live migration,
+        and we overlay ``dest_host`` onto the (possibly re-read) port so
         endpoint_spec/labels/annotations see the dest binding.  A reread that finds the
-        port has stopped migrating to ``dest_host`` raises ResourceGone, letting the
+        port no longer wants a WEP at ``dest_host`` raises ResourceGone, letting the
         resync skip the entry -- the next pass sees no matching dest-wep in neutron_map
         and the in-etcd-only branch deletes the orphan dest WEP.
 
-        Without ``dest_host`` this is the source-side WEP, and the reread verifies
-        instead that the port is still bound to the host the entry is keyed on, which
-        is the only thing that decides whether that WEP should exist.  A port that has
-        been unbound or moved in the meantime raises ResourceGone and is skipped the
-        same way.
+        Without ``dest_host`` this is the source-side WEP.  Either way, the reread
+        applies the same ``_wep_desired_present`` test that ``sync_wep`` does, to the
+        host the entry is keyed on: a port that has been unbound or moved in the
+        meantime raises ResourceGone and is skipped the same way.
         """
         if reread:
-            # The host this WEP is keyed on, captured before the re-read.  For the
-            # source-side WEP that is the port's own binding host; for the dest side it
-            # is ``dest_host``, which is checked separately below.
-            intended_host = port["binding:host_id"]
+            # Captured before the re-read, because it is what the entry is keyed on.
+            intended_host = dest_host or port.get("binding:host_id")
             try:
                 port = self.db.get_port(context, port["id"])
             except n_exc.PortNotFound:
                 raise ResourceGone()
-            if dest_host is not None:
-                current_dest = port.get("binding:profile", {}).get("migrating_to")
-                if current_dest != dest_host:
-                    raise ResourceGone()
-            elif port["binding:host_id"] != intended_host:
-                # The port has been unbound, or bound to another host, since the
-                # compare phase read it.  Writing now would create a WEP keyed on
-                # ``intended_host`` whose spec names a different node, and nothing
-                # would remove it until the next full resync.
+            if not self._wep_desired_present(port, intended_host):
                 raise ResourceGone()
         if dest_host is not None:
             port = {**port, "binding:host_id": dest_host}
@@ -553,8 +540,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 port = self.db.get_port(context, port["id"])
             except n_exc.PortNotFound:
                 raise ResourceGone()
-            current_dest = port.get("binding:profile", {}).get("migrating_to")
-            if current_dest != dest_host:
+            if not self._lm_desired_present(port, dest_host):
                 raise ResourceGone()
         dest_port = {**port, "binding:host_id": dest_host}
         return live_migration_spec(self.namespace, port, dest_port)
@@ -572,14 +558,17 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         differ in which host's binding the spec describes.  ``sync_wep`` is therefore
         agnostic as to "source" vs "dest" -- the caller passes the host they want
         synced, and the function decides whether that slot should hold a WEP based on a
-        re-read of the port from the Neutron DB.
+        re-read of the port from the Neutron DB.  An empty ``host`` names no slot, so
+        there is nothing to do.
 
         Each CAS attempt:
           1. Read the slot's mod_revision (KeyNotFound -> 0).
           2. Re-read the port from the Neutron DB.  PortNotFound -> the
              slot's desired state is "absent".
-          3. Desired present iff the DB port is bound at ``host`` (source
-             role) OR migrating to ``host`` (dest role).
+          3. Desired present iff ``_wep_desired_present``: the DB port's
+             ``binding:host_id`` is ``host`` (source role) or its
+             ``migrating_to`` is ``host`` (dest role).  ``binding:vif_type``
+             is deliberately not consulted.
           4a. Absent: CAS-delete at the observed mod_revision (a no-op if
              mod_revision == 0; mandatory CAS otherwise, else a re-created
              WEP could be clobbered).
@@ -590,6 +579,9 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         On CAS conflict, retry from step 1.  After ``MAX_CAS_ATTEMPTS`` log a warning
         and return None; persistent drift is repaired by the next resync.
         """
+        if not host:
+            return True
+
         port_id = port["id"]
 
         # Overlay binding:host_id=host before computing the etcd name so the caller can
@@ -688,6 +680,9 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         before invoking ``sync_lm`` (for end-of-migration logs, where the UID will be
         lost once the LM is deleted) or after (for start-of-migration logs).
         """
+        if not dest_host:
+            return True
+
         port_id = port["id"]
         name = endpoint_name({**port, "binding:host_id": dest_host})
         for attempt in range(MAX_CAS_ATTEMPTS):
@@ -703,12 +698,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             except n_exc.PortNotFound:
                 db_port = None
 
-            desired_present = (
-                db_port is not None
-                and db_port.get("binding:profile", {}).get("migrating_to") == dest_host
-            )
-
-            if not desired_present:
+            if not self._lm_desired_present(db_port, dest_host):
                 if mod_revision == 0:
                     return True
                 if datamodel_v3.delete(
@@ -752,28 +742,48 @@ class WorkloadEndpointSyncer(ResourceSyncer):
 
     @staticmethod
     def _wep_desired_present(db_port, host):
-        """Decide whether a WEP slot at ``host`` should exist for ``db_port``."""
-        if db_port is None:
-            return False
-        migrating_to = db_port.get("binding:profile", {}).get("migrating_to")
+        """Decide whether a WEP slot at ``host`` should exist for ``db_port``.
 
-        # Source role: port is bound at this host.  Consider it bound if either
-        # ``vif_type != "unbound"``, or the port is undergoing live migration -- setting
-        # ``binding:profile.migrating_to`` triggers Neutron to rebind the port for the
-        # destination, and during that rebind ``vif_type`` flips transiently to
-        # "unbound" while ``binding:host_id`` stays at the source.  The VM is still
-        # running at the source throughout this window, so the source WEP must stay in
-        # place.  Without the ``or migrating_to`` clause we'd delete the source WEP
-        # mid-migration and drop traffic to the VM until Nova's actual cutover
-        # completes.
-        if db_port["binding:host_id"] == host and (
-            db_port.get("binding:vif_type") != "unbound" or migrating_to
-        ):
+        Every path that decides whether a WEP exists -- the dynamic hooks via
+        ``sync_wep``, and the resync's map and re-read -- goes through here, so that
+        they cannot disagree.
+        """
+        if db_port is None or not host:
+            return False
+
+        # ``binding:host_id`` specifies the host that a port should exist on in steady
+        # state, or - during a live migration - the host that the port is initially on
+        # (and migrating away from).  In both of those cases a WEP should exist on
+        # ``binding:host_id``.
+        #
+        # We intentionally do not also check ``binding:vif_type``, because Neutron
+        # rebinds the port whenever a binding attribute changes - notably both when a
+        # live migration operation begins, and when it completes - and during that
+        # rebind it commits ``vif_type = "unbound"`` in one transaction and the new
+        # binding in a second one (see ``_process_port_binding`` in ML2's plugin.py).
+        # We definitely do not want ``update_port_postcommit`` for the first commit to
+        # briefly delete the WEP, even if a second quickly following
+        # ``update_port_postcommit`` call will recreate it again.
+        #
+        # A genuine persistent unbind would also clear ``binding:host_id``, and then we
+        # would correctly delete the WEP from its old host.
+        if db_port.get("binding:host_id") == host:
             return True
-        # Dest role: port is migrating to this host.
-        if migrating_to == host:
+
+        # During a live migration, ``port["binding:profile"]["migrating_to"]`` specifies
+        # the host that the port is migrating to.  In this case a WEP should also exist
+        # on that destination host.
+        if db_port.get("binding:profile", {}).get("migrating_to") == host:
             return True
+
         return False
+
+    @staticmethod
+    def _lm_desired_present(db_port, dest_host):
+        """Decide whether a LiveMigration to ``dest_host`` should exist for ``db_port``."""
+        if db_port is None or not dest_host:
+            return False
+        return db_port.get("binding:profile", {}).get("migrating_to") == dest_host
 
     def add_port_interface_name(self, port, port_extra):
         port_extra.interface_name = "tap" + port["id"][:11]
@@ -1145,6 +1155,8 @@ def endpoint_name(port):
 
     The VM ID is in the WEP's ``spec.workload`` for anything that needs it.
     """
+
+    assert port["binding:host_id"], "No WEP name without a host: %s" % port["id"]
 
     def escape_dashes(s):
         return s.replace("-", "--")
