@@ -271,20 +271,17 @@ func updateCSV(path, version, prevVersion, capabilities string, img image) error
 	}
 
 	// Drop the permissions if operator-sdk left an empty one behind, since CSV
-	// validation fails on that. Only cluster-scoped RBAC is staged, so anything
-	// in there means a namespaced Role reached the deploy directory: its rules
-	// belong in the CSV rather than being dropped along with the key, so say so
-	// instead of shipping an operator that cannot do what the Role granted.
+	// validation fails on that. Non-empty ones are the operator's grant in its own
+	// namespace and stay.
 	permissions := []any{"spec", "install", "spec", "permissions"}
 	empty, err := csv.isEmpty(permissions...)
 	if err != nil {
 		return fmt.Errorf("updating %s: %w", path, err)
 	}
-	if !empty {
-		return fmt.Errorf("updating %s: %s is not empty, but the bundle stages only cluster-scoped RBAC", path, pathString(permissions))
-	}
-	if err := csv.delete(permissions...); err != nil {
-		return fmt.Errorf("updating %s: %w", path, err)
+	if empty {
+		if err := csv.delete(permissions...); err != nil {
+			return fmt.Errorf("updating %s: %w", path, err)
+		}
 	}
 
 	logrus.Infof("Updated %s", path)

@@ -44,6 +44,11 @@ const (
 	// operatorCRDDir holds the committed operator CRDs. 'make gen-files' and the
 	// CI dirty-check keep them current, so the bundle ships them as they are.
 	operatorCRDDir = "operator/pkg/crds/operator"
+
+	// secretsRole and secretsRoleBinding grant the operator write access to
+	// secrets, relative to ocpManifestDir.
+	secretsRole        = "ocp/02-role-tigera-operator-secrets.yaml"
+	secretsRoleBinding = "ocp/02-rolebinding-tigera-operator-secrets.yaml"
 )
 
 // calicoResources are the Calico CRDs the bundle ships. Keep this list, the
@@ -142,10 +147,86 @@ func copyOperatorManifests(repoRoot, deployDir string) error {
 		// service accounts. The resulting permissions is set to the CSV's
 		// spec.install.clusterPermissions field.
 		{"ocp/02-rolebinding-tigera-operator.yaml", "rolebinding-tigera-operator.yaml"},
+		// Unbound, so operator-sdk ships it as a standalone ClusterRole that OLM
+		// creates under this name. The operator binds it by name in every
+		// namespace it writes secrets to - see CreateOperatorSecretsRoleBinding.
+		{secretsRole, "role-tigera-operator-secrets.yaml"},
 	}
 	for _, m := range manifests {
 		if err := copyFile(filepath.Join(repoRoot, ocpManifestDir, m.path), filepath.Join(deployDir, m.name)); err != nil {
 			return err
+		}
+	}
+	return copyOperatorSecretsRole(repoRoot, deployDir)
+}
+
+// copyOperatorSecretsRole stages the grant that lets the operator write secrets
+// in its own namespace, which the manifests make by binding the
+// tigera-operator-secrets ClusterRole there. Staged as is, that binding would
+// claim the ClusterRole: operator-sdk folds a bound role into the CSV's
+// permissions and no longer ships it, and OLM names the rules it creates from
+// those itself. So the binding is staged against a namespaced Role with the
+// same rules instead, which becomes the CSV's permissions and leaves the
+// ClusterRole standalone. operator-sdk matches roles to bindings by name alone,
+// so the Role needs a name of its own as well as its own kind.
+func copyOperatorSecretsRole(repoRoot, deployDir string) error {
+	const name, namespacedName = "  name: tigera-operator-secrets", "  name: tigera-operator-secrets-namespaced"
+	stages := []struct {
+		path, name string
+		edits      []lineEdit
+	}{
+		{secretsRole, "role-tigera-operator-secrets-namespaced.yaml", []lineEdit{
+			{"kind: ClusterRole", "kind: Role", 1},
+			{name, namespacedName, 1},
+		}},
+		// The binding's own name and its roleRef's are the same line.
+		{secretsRoleBinding, "rolebinding-tigera-operator-secrets.yaml", []lineEdit{
+			{"  kind: ClusterRole", "  kind: Role", 1},
+			{name, namespacedName, 2},
+		}},
+	}
+	for _, s := range stages {
+		dst := filepath.Join(deployDir, s.name)
+		if err := copyFile(filepath.Join(repoRoot, ocpManifestDir, s.path), dst); err != nil {
+			return err
+		}
+		if err := replaceLines(dst, s.edits...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// lineEdit replaces every line that is exactly from, of which there must be
+// count.
+type lineEdit struct {
+	from, to string
+	count    int
+}
+
+// replaceLines applies the edits to a file. An edit that does not match the
+// number of lines it expects means the file no longer looks the way the caller
+// expects, so it is an error rather than a silent no-op.
+func replaceLines(path string, edits ...lineEdit) error {
+	replaced := make([]int, len(edits))
+	err := editLines(path, func(lines []string) []string {
+		for i, line := range lines {
+			for j, e := range edits {
+				if line == e.from {
+					lines[i] = e.to
+					replaced[j]++
+					break
+				}
+			}
+		}
+		return lines
+	})
+	if err != nil {
+		return err
+	}
+	for j, e := range edits {
+		if replaced[j] != e.count {
+			return fmt.Errorf("editing %s: want %d %q lines, found %d", path, e.count, e.from, replaced[j])
 		}
 	}
 	return nil

@@ -332,10 +332,9 @@ spec:
 	}
 }
 
-// TestUpdateCSVWithNamespacedPermissions checks that permissions we did not
-// expect fail the build rather than being dropped with the key. Only
-// cluster-scoped RBAC is staged, so a namespaced Role that reaches the deploy
-// directory would otherwise be advertised nowhere in the CSV.
+// TestUpdateCSVWithNamespacedPermissions checks that non-empty permissions - the
+// operator's grant to write secrets in its own namespace - survive, rather than
+// being dropped along with an empty key.
 func TestUpdateCSVWithNamespacedPermissions(t *testing.T) {
 	t.Parallel()
 
@@ -355,7 +354,7 @@ func TestUpdateCSVWithNamespacedPermissions(t *testing.T) {
           rules:
             - apiGroups: [""]
               resources: ["secrets"]
-              verbs: ["get"]
+              verbs: ["create"]
 `
 
 	path := filepath.Join(t.TempDir(), csvName)
@@ -366,12 +365,12 @@ func TestUpdateCSVWithNamespacedPermissions(t *testing.T) {
 		created:       "2026-01-02T03:04:05Z",
 		architectures: []string{"amd64"},
 	})
-	if err == nil {
-		t.Fatal("updateCSV succeeded, want an error naming the permissions it did not expect")
+	if err != nil {
+		t.Fatalf("updateCSV: %v", err)
 	}
-	if !strings.Contains(err.Error(), "spec.install.spec.permissions") {
-		t.Errorf("error is %q, want it to name spec.install.spec.permissions", err)
-	}
+	content := readFile(t, path)
+	assertContains(t, content, "permissions:")
+	assertContains(t, content, `verbs: ["create"]`)
 }
 
 // TestUpdateCSVWithoutTheOperator checks that a CSV that does not hold the

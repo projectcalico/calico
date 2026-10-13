@@ -93,6 +93,7 @@ tree, so a bundle carries the manifests it was built alongside:
 |---|---|
 | `deploy/operator.yaml` | `manifests/ocp-tigera-operator-no-resource-loading.yaml` |
 | `deploy/role.yaml`, `deploy/rolebinding-tigera-operator.yaml` | `manifests/ocp/` |
+| `deploy/*tigera-operator-secrets*.yaml` | `manifests/ocp/`; the binding is re-pointed at a namespaced copy of the ClusterRole, so the ClusterRole ships standalone — see `copyOperatorSecretsRole` |
 | `deploy/` sample CRs | `manifests/ocp/03-cr-installation.yaml`, `operator/config/samples/operator_v1_imageset.yaml` |
 | `crds/` operator CRDs | `operator/pkg/crds/operator/` |
 | `crds/` Calico CRDs | `libcalico-go/config/crd/` |
