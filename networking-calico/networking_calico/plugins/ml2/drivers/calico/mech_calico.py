@@ -1069,9 +1069,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         LOG.info("Update %d port(s) for %s", len(ports), reason)
         for p in ports:
             if _port_is_endpoint_port(p):
-                host = p.get("binding:host_id")
-                if host:
-                    self.endpoint_syncer.sync_wep(p, host, plugin_context)
+                self.endpoint_syncer.sync_wep(
+                    p, p.get("binding:host_id"), plugin_context
+                )
 
     def handle_qos_policy_update(self, context, policy_id):
         TrackTask("HANDLE_QOS_POLICY_UPDATE")
@@ -1148,10 +1148,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if not _port_is_endpoint_port(port):
             return
 
-        # Ignore if the port binding VIF type is 'unbound'; then this port doesn't need
-        # to be networked yet.  ``sync_wep`` would correctly short-circuit here too (the
-        # re-read would say "absent" and the slot would not exist), but skipping saves
-        # the DB round-trip.
+        # ML2 binds the port straight after this, in the same API call, and the bind's
+        # ``update_port_postcommit`` writes the WEP.  Writing it here as well would
+        # double the per-port cost of mass boots.
         if port["binding:vif_type"] == "unbound":
             LOG.info("Creating unbound port: no work required.")
             return
@@ -1169,8 +1168,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         port = context._port
         original = context.original
 
-        # Abort early if we're managing non-endpoint ports.
-        if not _port_is_endpoint_port(port):
+        # Nova's detach of a pre-existing port clears ``device_owner`` in the same
+        # update that clears ``binding:host_id``, so the old host still needs
+        # reconciling when only the original was an endpoint port.
+        if not (_port_is_endpoint_port(port) or _port_is_endpoint_port(original)):
             return
 
         # If this port update is purely for a status change, don't do anything:
@@ -1212,20 +1213,16 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # to dedupe while preserving order, so the new destination is written after any
         # cleanup of an old one.
         for dest_host in dict.fromkeys([old_migrating_to, new_migrating_to]):
-            if dest_host:
-                self.endpoint_syncer.sync_lm(port, dest_host, plugin_context)
+            self.endpoint_syncer.sync_lm(port, dest_host, plugin_context)
 
         # Sync for every host that might own a WEP slot for this port.  The same
         # dedupe-preserve-order trick keeps ``new_host`` last so a stale slot at
         # ``old_host`` (cold-migration) is cleared before the canonical WEP at the new
-        # host is written.  Truthy check (not ``is not None``) so an empty-string host
-        # -- typical for an unbound port -- doesn't fall through and incur a wasted DB
-        # re-read on a slot that cannot exist.
+        # host is written.
         for host in dict.fromkeys(
             [old_host, old_migrating_to, new_migrating_to, new_host]
         ):
-            if host:
-                self.endpoint_syncer.sync_wep(port, host, plugin_context)
+            self.endpoint_syncer.sync_wep(port, host, plugin_context)
 
     def update_floatingip(self, plugin_context):
         """update_floatingip
@@ -1242,9 +1239,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         # Sync the WEP slot for this port at its current binding host.  ``sync_wep``
         # will CAS-write or CAS-delete based on a re-read of the port from Neutron.
-        host = port.get("binding:host_id")
-        if host:
-            self.endpoint_syncer.sync_wep(port, host, plugin_context)
+        self.endpoint_syncer.sync_wep(port, port.get("binding:host_id"), plugin_context)
 
     def delete_port_postcommit(self, context):
         """delete_port_postcommit
@@ -1267,19 +1262,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         plugin_context = context._plugin_context
         migrating_to = port.get("binding:profile", {}).get("migrating_to")
-        host = port.get("binding:host_id")
 
         # If a live migration was in progress, sync the LiveMigration and dest WEP at
         # the migration target (both will be CAS-deleted, since the port no longer
         # exists in the DB).
-        if migrating_to:
-            self.endpoint_syncer.sync_lm(port, migrating_to, plugin_context)
-            self.endpoint_syncer.sync_wep(port, migrating_to, plugin_context)
+        self.endpoint_syncer.sync_lm(port, migrating_to, plugin_context)
+        self.endpoint_syncer.sync_wep(port, migrating_to, plugin_context)
 
-        # Sync the source WEP slot.  Skipped if the port had no host binding (an unbound
-        # port never had a WEP).
-        if host:
-            self.endpoint_syncer.sync_wep(port, host, plugin_context)
+        self.endpoint_syncer.sync_wep(port, port.get("binding:host_id"), plugin_context)
 
     def security_groups_updated(self, context):
         """Called whenever security group rules, membership or existence change."""
