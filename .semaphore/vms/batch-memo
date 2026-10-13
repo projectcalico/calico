@@ -1,0 +1,96 @@
+# Batch memoization for the VM fleets: a batch that passed on an earlier run
+# with the same cache key is skipped, and its reports are restored in place of
+# a re-run.  The keys come from the plan that .argoci/scripts/felix-fv-plan
+# publishes.
+#
+# Source it.  batch_memo_init sets BATCH_MEMO_PREFIX, which run-tests-on-vms
+# keys on; with it unset, every batch runs and nothing is recorded.
+
+# batch_memo_init <lane id> sets BATCH_MEMO_PREFIX and BATCH_MEMO_LANE_HIT for
+# this lane from the published plan.
+batch_memo_init() {
+  local lane_id="$1" plan_dir scope key state
+  BATCH_MEMO_PREFIX=""
+  BATCH_MEMO_LANE_HIT=false
+  plan_dir="$(mktemp -d)"
+  if ! ( cd "$plan_dir" && artifact pull workflow felix-fv-plan ) >/dev/null; then
+    echo "Batch memo: no plan was published; running every batch."
+  else
+    scope="$(cat "$plan_dir/felix-fv-plan/scope")"
+    read -r key state < <(awk -v id="$lane_id" '$1 == id { print $3, $4 }' "$plan_dir/felix-fv-plan/lanes") || true
+    if [ -n "$scope" ] && [ -n "$key" ]; then
+      BATCH_MEMO_PREFIX="$scope/$key"
+      [ "$state" = hit ] && BATCH_MEMO_LANE_HIT=true
+    fi
+    echo "Batch memo: lane ${lane_id} key=${key:-none} state=${state:-none} prefix=${BATCH_MEMO_PREFIX:-none}"
+  fi
+  rm -rf "$plan_dir"
+  export BATCH_MEMO_PREFIX BATCH_MEMO_LANE_HIT
+}
+
+# batch_memo_restore_lane <artifacts dir> puts back every batch's reports from
+# the run that passed the whole lane.
+batch_memo_restore_lane() {
+  local artifacts_dir="$1"
+  mkdir -p "$artifacts_dir"
+  echo "Every batch of this lane passed on an earlier run of this PR with the same inputs; restoring its reports instead of running it."
+  ( cd "$artifacts_dir" && artifact cache restore "$BATCH_MEMO_PREFIX/lane" )
+  cat "$artifacts_dir"/*/batch-memo-source 2>/dev/null | sort -u | sed 's/^/  passed in: /'
+}
+
+# batch_memo_skip_cached <artifacts dir> drops from the `batches` array every
+# batch that already passed, restoring its reports into <artifacts dir>.
+batch_memo_skip_cached() {
+  local artifacts_dir="$1" batch remaining=() hits=0
+  local results; results="$(mktemp -d)"
+  mkdir -p "$artifacts_dir"
+  # One lookup per batch, in parallel: a lane has up to 61.
+  for batch in "${batches[@]}"; do
+    (
+      if artifact cache has_key "$BATCH_MEMO_PREFIX/batch-$batch" >/dev/null; then
+        ( cd "$artifacts_dir" && artifact cache restore "$BATCH_MEMO_PREFIX/batch-$batch" ) >/dev/null &&
+          touch "$results/$batch"
+      fi
+    ) &
+  done
+  wait
+  for batch in "${batches[@]}"; do
+    if [ -e "$results/$batch" ]; then
+      echo "Batch memo: batch $batch passed on an earlier run ($(cat "$artifacts_dir/$batch/batch-memo-source" 2>/dev/null)); skipping it."
+      hits=$((hits + 1))
+    else
+      remaining+=( "$batch" )
+    fi
+  done
+  rm -rf "$results"
+  echo "Batch memo: $hits of ${#batches[@]} batches cached; running ${#remaining[@]}."
+  batches=( "${remaining[@]}" )
+}
+
+# batch_memo_record <artifacts dir> <batch> records that <batch> passed, along
+# with its reports.
+batch_memo_record() {
+  local artifacts_dir="$1" batch="$2"
+  mkdir -p "$artifacts_dir/$batch"
+  batch_memo_source > "$artifacts_dir/$batch/batch-memo-source"
+  ( cd "$artifacts_dir" && artifact cache store "$BATCH_MEMO_PREFIX/batch-$batch" "$batch" ) >/dev/null ||
+    echo "Batch memo: could not record batch $batch (not fatal)."
+}
+
+# batch_memo_record_lane <artifacts dir> <batch>... records that the whole lane
+# passed, with every batch's reports, so the next run can skip it without
+# creating a pod's worth of lookups.
+batch_memo_record_lane() {
+  local artifacts_dir="$1" batch dirs=()
+  shift
+  for batch in "$@"; do
+    [ -d "$artifacts_dir/$batch" ] && dirs+=( "$batch" )
+  done
+  [ ${#dirs[@]} -gt 0 ] || return 0
+  ( cd "$artifacts_dir" && artifact cache store "$BATCH_MEMO_PREFIX/lane" "${dirs[@]}" ) >/dev/null ||
+    echo "Batch memo: could not record the lane (not fatal)."
+}
+
+batch_memo_source() {
+  echo "${CI_WORKFLOW_NAME:-unknown} at ${CI_GIT_SHA:-unknown}"
+}
