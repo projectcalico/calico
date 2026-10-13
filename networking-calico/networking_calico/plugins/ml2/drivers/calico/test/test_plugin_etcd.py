@@ -2288,6 +2288,22 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.assertIn(self._ep_key(self.DEST_HOST), self.recent_writes)
         self.assertIn(self._lm_key(self.DEST_HOST), self.recent_writes)
 
+    def test_resync_ignores_port_without_host(self):
+        """A resync gives a hostless port no WEP either."""
+        self._do_initial_resync()
+
+        # The port loses its binding, as it would on detach or for a shelved instance.
+        self.osdb_ports[0]["binding:host_id"] = ""
+        self.osdb_ports[0]["binding:vif_type"] = "unbound"
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        self._trigger_resync()
+
+        # The WEP at the old host goes, and nothing is written in its place.
+        self.assertEtcdWrites({})
+        self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_deletes)
+
     def test_live_migration_succeeded(self):
         """After migration succeeds, source WEP deleted, dest WEP kept."""
         self._do_initial_resync()
@@ -2433,6 +2449,36 @@ class TestLiveMigration(TestPluginEtcdBase):
 
         # Should NOT have called notify_port_active_direct.
         self.db.nova_notifier.notify_port_active_direct.assert_not_called()
+
+    def test_resync_skips_port_that_moved_during_the_pass(self):
+        """A port that moves between the compare phase and the write is skipped.
+
+        ``get_from_neutron`` keys each entry on the binding host it read, and the write
+        path re-reads the port.  If the port has been unbound or bound elsewhere in
+        between, writing anyway would create a WEP keyed on the old host whose spec
+        names a different node, and nothing would remove it until the next full resync.
+
+        Not a live-migration case -- it lives here for the resync fixtures -- but it is
+        the source-side counterpart of the ``migrating_to`` re-check that
+        ``neutron_to_port_etcd_write_data`` already performs for the dest side.
+        """
+        self._do_initial_resync()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        # ``get_from_neutron`` reads the port freshly bound to "host-b", and etcd has
+        # no WEP for that host, so the resync takes the create branch -- the one that
+        # re-reads.  By the time it does, the port has moved on to "host-c".
+        self.osdb_ports[0]["binding:host_id"] = "host-b"
+        moved_again = copy.deepcopy(self.osdb_ports[0])
+        moved_again["binding:host_id"] = "host-c"
+
+        with mock.patch.object(self.db, "get_port", return_value=moved_again):
+            self._trigger_resync()
+
+        # No WEP is created at host-b.  Writing one would give it ``spec.node:
+        # host-c``, and nothing would remove it until the next full resync.
+        self.assertNotIn(self._ep_key("host-b"), self.recent_writes)
 
     def test_resync_creates_missing_live_migration(self):
         """Resync creates LiveMigration and dest WEP for migrating port."""
