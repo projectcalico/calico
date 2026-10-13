@@ -203,7 +203,6 @@ func parseCIDR(s string) (string, bool) {
 }
 
 func kubernetesServiceToProto(s *kapiv1.Service) *proto.ServiceUpdate {
-	const noEndpointsActionAnnotation = "lb.projectcalico.org/no-endpoints-action"
 	up := &proto.ServiceUpdate{
 		Name:              s.Name,
 		Namespace:         s.Namespace,
@@ -211,7 +210,7 @@ func kubernetesServiceToProto(s *kapiv1.Service) *proto.ServiceUpdate {
 		ClusterIps:        s.Spec.ClusterIPs,
 		LoadbalancerIp:    s.Spec.LoadBalancerIP,
 		ExternalIps:       s.Spec.ExternalIPs,
-		NoEndpointsAction: s.Annotations[noEndpointsActionAnnotation],
+		NoEndpointsAction: s.Annotations[proto.NoEndpointsActionAnnotation],
 	}
 
 	// Extract LoadBalancer ingress IPs from Status (the actual assigned IPs).

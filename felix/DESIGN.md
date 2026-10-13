@@ -126,6 +126,7 @@ Managers are registered via `RegisterManager()`. Key managers:
 | `floatingIPManager` | Floating-IP NAT |
 | `dscpManager` | DSCP marking |
 | `serviceLoopManager` | Service-loop prevention |
+| `lbNoEndpointsManager` | LoadBalancer no-endpoints exceptions |
 | `failsafeMgr` | BPF failsafe port programming |
 
 IPv4 and IPv6 each get their own manager instances.
@@ -155,7 +156,10 @@ generation: `dispatch.go` (per-endpoint dispatch chains),
 `policy.go` (policy chain generation), `endpoints.go` (endpoint
 chain setup), `static.go` (boilerplate filter/NAT/mangle chains),
 `nat.go`. A PR adding policy semantics usually touches
-`felix/rules/` and needs matching changes on both backends.
+`felix/rules/` and needs matching changes on both backends. The
+`lbNoEndpointsManager` maintains the no-endpoints chain for LoadBalancer
+services explicitly annotated to continue routing when they have no local
+endpoints.
 
 ### Shared networking subsystems
 

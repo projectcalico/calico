@@ -46,8 +46,6 @@ struct __attribute__((__packed__)) calico_nat_key {
 // This is used as a special ID along with count=0 to drop a packet at nat level1 lookup
 #define NAT_FE_DROP_COUNT  0xffffffff
 
-#define NAT_FLG_NO_BACKEND_FORWARD 0x10
-
 struct calico_nat_value {
 	__u32 id;
 	__u32 count;
@@ -60,6 +58,7 @@ struct calico_nat_value {
 #define NAT_FLG_INTERNAL_LOCAL	0x2
 #define NAT_FLG_NAT_EXCLUDE	0x4
 #define NAT_FLG_MAGLEV		0X8
+#define NAT_FLG_NO_BACKEND_FORWARD	0x10
 
 #ifdef IPVER6
 CALI_MAP_NAMED(cali_v6_nat_fe, cali_nat_fe, 3,

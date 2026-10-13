@@ -243,7 +243,7 @@ var _ = Describe("NAT", func() {
 	It("should render only Forward no-endpoints LoadBalancer VIP ports", func() {
 		chains := renderer.LBNoEndpointServicesToIptablesChains([]*proto.ServiceUpdate{
 			{
-				Name: "ntp", Namespace: "default", NoEndpointsAction: "Forward",
+				Name: "ntp", Namespace: "default", NoEndpointsAction: proto.NoEndpointsActionForward,
 				ClusterIps: []string{"10.96.0.1"}, ExternalIps: []string{"192.0.2.1"},
 				LoadbalancerIngressIps: []string{"1.2.3.4", "2001:db8::1"},
 				Ports: []*proto.ServicePort{{Protocol: "UDP", Port: 123}},
@@ -253,11 +253,38 @@ var _ = Describe("NAT", func() {
 				LoadbalancerIngressIps: []string{"5.6.7.8"},
 				Ports:                   []*proto.ServicePort{{Protocol: "TCP", Port: 80}},
 			},
+			{
+				Name: "default-action", Namespace: "default",
+				LoadbalancerIngressIps: []string{"9.9.9.9"},
+				Ports:                   []*proto.ServicePort{{Protocol: "TCP", Port: 80}},
+			},
+			{
+				Name: "garbage-action", Namespace: "default", NoEndpointsAction: "garbage",
+				LoadbalancerIngressIps: []string{"8.8.8.8"},
+				Ports:                   []*proto.ServicePort{{Protocol: "TCP", Port: 80}},
+			},
 		}, 4)
 		Expect(chains).To(Equal([]*generictables.Chain{{
 			Name: ChainLBNoEndpoints,
 			Rules: []generictables.Rule{{
 				Match:  Match().Protocol("udp").DestNet("1.2.3.4").DestPorts(123),
+				Action: AcceptAction{},
+			}},
+		}}))
+	})
+
+	It("should render only IPv6 Forward no-endpoints LoadBalancer VIP ports", func() {
+		chains := renderer.LBNoEndpointServicesToIptablesChains([]*proto.ServiceUpdate{
+			{
+				Name: "ntp", Namespace: "default", NoEndpointsAction: proto.NoEndpointsActionForward,
+				LoadbalancerIngressIps: []string{"192.0.2.1", "2001:db8::1"},
+				Ports:                   []*proto.ServicePort{{Protocol: "UDP", Port: 123}},
+			},
+		}, 6)
+		Expect(chains).To(Equal([]*generictables.Chain{{
+			Name: ChainLBNoEndpoints,
+			Rules: []generictables.Rule{{
+				Match:  Match().Protocol("udp").DestNet("2001:db8::1").DestPorts(123),
 				Action: AcceptAction{},
 			}},
 		}}))

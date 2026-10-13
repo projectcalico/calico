@@ -40,7 +40,7 @@ func (m *lbNoEndpointsManager) OnUpdate(msg any) {
 	switch update := msg.(type) {
 	case *proto.ServiceUpdate:
 		id := lbNoEndpointsServiceID{namespace: update.GetNamespace(), name: update.GetName()}
-		if strings.EqualFold(update.GetNoEndpointsAction(), "Forward") {
+		if strings.EqualFold(update.GetNoEndpointsAction(), proto.NoEndpointsActionForward) {
 			m.services[id] = update
 		} else {
 			delete(m.services, id)

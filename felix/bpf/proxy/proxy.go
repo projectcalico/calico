@@ -464,13 +464,13 @@ const (
 	ReapTerminatingUDPImmediatelly = "TerminatingImmediately"
 
 	ExcludeServiceAnnotation          = "projectcalico.org/natExcludeService"
-	NoEndpointsActionAnnotation       = "lb.projectcalico.org/no-endpoints-action"
+	NoEndpointsActionAnnotation       = proto.NoEndpointsActionAnnotation
 	ExternalTrafficStrategyAnnotation = "lb.projectcalico.org/external-traffic-strategy"
 )
 
 var (
 	ExternalTrafficStrategyMaglev = "maglev"
-	NoEndpointsActionForward      = "Forward"
+	NoEndpointsActionForward      = proto.NoEndpointsActionForward
 )
 
 type ServiceAnnotations interface {

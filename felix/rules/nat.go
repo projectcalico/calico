@@ -183,7 +183,7 @@ func (r *DefaultRuleRenderer) BlockedCIDRsToIptablesChains(cidrs []string, ipVer
 func (r *DefaultRuleRenderer) LBNoEndpointServicesToIptablesChains(services []*proto.ServiceUpdate, ipVersion uint8) []*generictables.Chain {
 	var rendered []generictables.Rule
 	for _, service := range services {
-		if !strings.EqualFold(service.GetNoEndpointsAction(), "Forward") {
+		if !strings.EqualFold(service.GetNoEndpointsAction(), proto.NoEndpointsActionForward) {
 			continue
 		}
 		for _, vip := range service.GetLoadbalancerIngressIps() {
