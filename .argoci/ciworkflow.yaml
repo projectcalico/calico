@@ -395,6 +395,8 @@ includes:
       in:
         - ^\.semaphore/vms/
         - ^\.argoci/scripts/vm-fleet-setup\.sh$
+        - ^\.argoci/scripts/felix-fv-plan$
+        - ^hack/cmd/felix-fv-memo/
         - ^process/testing/aso/
         - ^process/testing/util/
         - ^process/testing/winfv-felix/
