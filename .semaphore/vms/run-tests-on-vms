@@ -56,6 +56,8 @@ branch_label="${SEMAPHORE_GIT_BRANCH:-unknown}"
 branch_label="$(echo "$branch_label" | tr '[:upper:]' '[:lower:]')"
 branch_label="${branch_label//[^a-z0-9_-]/-}"
 labels="ci-runner=true"
+# Lets each CI system's sweeper find only its own VMs in the shared project.
+labels+=",ci-system=${CI_SYSTEM:-semaphore}"
 labels+=",ci-job-type=${CI_JOB_TYPE_LABEL:-${SEMAPHORE_GIT_REF_TYPE:-unknown}}"
 labels+=",ci-group=${CI_GROUP_LABEL:-unknown}"
 labels+=",ci-job=${CI_JOB_LABEL:-unknown}"
@@ -82,23 +84,29 @@ fi
 # We pass --region (not --zone) with --target-distribution-shape=any so that
 # GCP spreads the VMs across the zones of the region according to available
 # capacity.  This avoids a single zone filling up and failing the whole job.
+#
+# Shared with the replacement for a VM that fails to configure.
+# shellcheck disable=SC2054 # the commas are gcloud's metadata separator
+vm_create_args=(
+       --service-account="semaphore-v2-gcr@unique-caldron-775.iam.gserviceaccount.com"
+       --scopes="https://www.googleapis.com/auth/cloud-platform"
+       --machine-type="${VM_MACHINE_TYPE}"
+       --image-family="${IMAGE_FAMILY}"
+       --image-project=ubuntu-os-cloud
+       --boot-disk-size="$disk_size"
+       --boot-disk-type=hyperdisk-balanced
+       --max-run-duration="${MAX_RUN_DURATION}"
+       --instance-termination-action=DELETE
+       --labels="${labels}"
+       --metadata-from-file startup-script="$my_dir/vm-bootstrap.sh"
+       --metadata block-project-ssh-keys=TRUE,ssh-keys="ubuntu:$(ssh-keygen -y -f "$HOME/.ssh/id_rsa")",enable-guest-attributes=TRUE
+)
 echo "Creating test VMs in bulk across region ${region}..."
 gcloud --quiet compute instances bulk create \
-       --service-account="semaphore-v2-gcr@unique-caldron-775.iam.gserviceaccount.com" \
-       --scopes="https://www.googleapis.com/auth/cloud-platform" \
        --predefined-names="$names" \
-       --region=${region} \
+       --region="${region}" \
        --target-distribution-shape=any \
-       --machine-type=${VM_MACHINE_TYPE} \
-       --image-family=${IMAGE_FAMILY} \
-       --image-project=ubuntu-os-cloud \
-       --boot-disk-size=$disk_size \
-       --boot-disk-type=hyperdisk-balanced \
-       --max-run-duration="${MAX_RUN_DURATION}" \
-       --instance-termination-action=DELETE \
-       --labels="${labels}" \
-       --metadata-from-file startup-script="$my_dir/vm-bootstrap.sh" \
-       --metadata block-project-ssh-keys=TRUE,ssh-keys="ubuntu:$(ssh-keygen -y -f $HOME/.ssh/id_rsa)",enable-guest-attributes=TRUE
+       "${vm_create_args[@]}"
 
 # Since the VMs are spread across the region's zones, we can no longer assume a
 # single zone for the downstream describe/ssh/delete commands.  Build a
@@ -213,9 +221,31 @@ for batch in "${batches[@]}"; do
     rm -f "$done_marker"
     trap 'touch "$done_marker"' EXIT
 
+    # A VM that fails to boot is usually a bad instance, so a fresh one gets a
+    # second try. It keeps the name and zone, which everything else tracks it by.
+    : "${VM_CONFIGURE_ATTEMPTS:=2}"
     conf_log_file="$artifacts_dir/configure-vm-$batch_formatted.log"
-    echo "$prefix Configuring test VM $vm_name. Redirecting log to $conf_log_file."
-    if env ZONE="$zone" "${my_dir}/configure-test-vm" "$vm_name" >& "$conf_log_file"; then
+    : > "$conf_log_file"
+    configured=false
+    for attempt in $(seq 1 "$VM_CONFIGURE_ATTEMPTS"); do
+      echo "$prefix Configuring test VM $vm_name (attempt $attempt). Redirecting log to $conf_log_file."
+      if env ZONE="$zone" "${my_dir}/configure-test-vm" "$vm_name" >> "$conf_log_file" 2>&1; then
+        configured=true
+        break
+      fi
+      [ "$attempt" -lt "$VM_CONFIGURE_ATTEMPTS" ] || break
+      echo "$prefix Configuration of VM $vm_name FAILED; replacing it with a fresh VM."
+      echo "===== attempt $attempt failed; replacing $vm_name =====" >> "$conf_log_file"
+      gcloud --quiet beta compute instances delete "$vm_name" --zone="$zone" --no-graceful-shutdown >> "$conf_log_file" 2>&1
+      if ! gcloud --quiet compute instances create "$vm_name" --zone="$zone" "${vm_create_args[@]}" >> "$conf_log_file" 2>&1; then
+        echo "$prefix Could not create a replacement for $vm_name."
+        break
+      fi
+      # vm-ip caches by name and zone, both of which the replacement reuses.
+      rm -f "/tmp/vm_ip_${vm_name}_${zone}"
+      vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")"
+    done
+    if [ "$configured" = true ]; then
       echo "$prefix Configuration of VM $vm_name SUCCEEDED."
     else
       echo "$prefix Configuration of VM $vm_name FAILED.  Log file will be uploaded as artifact $conf_log_file. "

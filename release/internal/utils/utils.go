@@ -20,7 +20,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 
 	"github.com/sirupsen/logrus"
 
@@ -93,8 +92,6 @@ func FilterDirs(have, want []string) []string {
 	return out
 }
 
-var once sync.Once
-
 var (
 	// ImageReleaseDirs enumerates the component directories whose Makefiles
 	// publish standalone images via release-build/release-publish.
@@ -122,51 +119,7 @@ var (
 		"cni-plugin",
 		"node",
 	}
-
-	releaseImages    = []string{}
-	releaseImagesErr error
 )
-
-// ImageDiscoveryDirs returns every directory that produces an image.
-func ImageDiscoveryDirs() []string {
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(ImageReleaseDirs)+len(WindowsReleaseDirs))
-	for _, dirs := range [][]string{ImageReleaseDirs, WindowsReleaseDirs} {
-		for _, d := range dirs {
-			if _, ok := seen[d]; ok {
-				continue
-			}
-			seen[d] = struct{}{}
-			out = append(out, d)
-		}
-	}
-	return out
-}
-
-func initReleaseImages() {
-	rootDir, err := command.GitDir()
-	if err != nil {
-		releaseImagesErr = fmt.Errorf("determining root git dir: %w", err)
-		return
-	}
-	dirs := ImageDiscoveryDirs()
-	images, err := BuildReleaseImageList(rootDir, dirs...)
-	if err != nil {
-		releaseImagesErr = fmt.Errorf("building release images list for release dirs[%s]: %w", strings.Join(dirs, ","), err)
-		return
-	}
-	releaseImages = images
-}
-
-// ReleaseImages returns every image the release publishes. The list is
-// resolved once by running make in each release directory.
-func ReleaseImages() ([]string, error) {
-	once.Do(initReleaseImages)
-	if releaseImagesErr != nil {
-		return nil, releaseImagesErr
-	}
-	return slices.Clone(releaseImages), nil
-}
 
 // buildImages returns the list of images built by the given directory.
 // It does this by calling a make target that returns the values of BUILD_IMAGES and WINDOWS_IMAGE (if set).

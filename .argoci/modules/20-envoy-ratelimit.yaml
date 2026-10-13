@@ -1,0 +1,31 @@
+# envoy-ratelimit CI and cross-architecture builds.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+
+steps:
+  - name: envoy-ratelimit-ci
+    requests: {cpu: 2000m, memory: 1.25Gi}
+    services:
+      - docker
+    commands: |
+      cd third_party/envoy-ratelimit
+      make ci
+
+  # Cross-compiles only, so it needs no daemon.
+  - name: envoy-ratelimit-build
+    requests: {cpu: 2500m, memory: 1Gi}
+    useGoBuild: true
+    workspaceVolumes: none
+    matrix:
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    commands: |
+      cd third_party/envoy-ratelimit
+      # Empty wrappers run each recipe here rather than in a nested container.
+      make build ARCH=$ARCH DOCKER_GO_BUILD= DOCKER_RUN= CALICO_BUILD=

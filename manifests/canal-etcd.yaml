@@ -902,6 +902,9 @@ spec:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
               value: policy,namespace,serviceaccount,workloadendpoint,node,loadbalancer
+            # Name of the DaemonSet whose rollout the policy name migrator waits for.
+            - name: CALICO_NODE_DAEMONSET_NAME
+              value: canal-node
           volumeMounts:
             # Mount in the etcd TLS secrets.
             - mountPath: /calico-secrets

@@ -211,6 +211,19 @@ var _ = Describe("Node rendering tests", func() {
 					Verbs:     []string{"get"},
 				}))
 
+				// The permission protect-cni-annotations.projectcalico.org checks for, so the CNI
+				// plugin's own pods/status patch is let through.
+				Expect(cniRole.Rules).To(ContainElement(rbacv1.PolicyRule{
+					APIGroups: []string{"projectcalico.org"},
+					Resources: []string{"cniannotations"},
+					Verbs:     []string{"write"},
+				}))
+				// calico-node never writes these annotations, so its role must not carry it.
+				nodeRole := rtest.GetResource(resources, "calico-node", "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
+				for _, rule := range nodeRole.Rules {
+					Expect(rule.Resources).NotTo(ContainElement("cniannotations"))
+				}
+
 				// Check CNI configmap.
 				cniCmResource := rtest.GetResource(resources, "cni-config", "calico-system", "", "v1", "ConfigMap")
 				Expect(cniCmResource).ToNot(BeNil())

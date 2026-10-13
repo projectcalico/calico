@@ -1440,7 +1440,7 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 
 		bpfUntrackedFlowRules = append(bpfUntrackedFlowRules,
 			generictables.Rule{
-				Match:   r.NewMatch().MarkMatchesWithMask(tcdefs.MarkSeenSkipFIB, tcdefs.MarkSeenSkipFIB),
+				Match:   r.NewMatch().MarkMatchesWithMask(tcdefs.MarkSeenSkipFIB, tcdefs.MarkSeenCodeMask),
 				Action:  r.Return(),
 				Comment: []string{"MarkSeenSkipFIB Mark"},
 			},

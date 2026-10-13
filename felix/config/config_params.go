@@ -448,6 +448,7 @@ type Config struct {
 	FlowLogsFlushInterval        time.Duration `config:"seconds;300"`
 	FlowLogsCollectorDebugTrace  bool          `config:"bool;false"`
 	FlowLogsGoldmaneServer       string        `config:"string;"`
+	FlowLogsGoldmaneIncludeIPs   string        `config:"oneof(Enabled,Disabled);Enabled"`
 	FlowLogsLocalReporter        string        `config:"oneof(Enabled,Disabled);Disabled"`
 	FlowLogsPolicyEvaluationMode string        `config:"oneof(None,Continuous);Continuous"`
 
@@ -601,6 +602,10 @@ func (config *Config) TableRefreshInterval() time.Duration {
 
 func (config *Config) FlowLogsLocalReporterEnabled() bool {
 	return config.FlowLogsLocalReporter == "Enabled"
+}
+
+func (config *Config) FlowLogsGoldmaneIncludeIPsEnabled() bool {
+	return config.FlowLogsGoldmaneIncludeIPs == "Enabled"
 }
 
 func (config *Config) FlowLogsEnabled() bool {

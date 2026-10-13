@@ -112,6 +112,7 @@ func TestClusterRouteOwnership(t *testing.T) {
 	nsName := e2eutils.GenerateRandomName("cluster-routes")
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}
 	g.Expect(cli.Create(ctx, ns)).To(Succeed(), "creating namespace")
+	utils.WaitForDefaultServiceAccount(t, nsName)
 	t.Cleanup(func() { _ = cli.Delete(context.Background(), ns) })
 
 	server := routeOwnerPod(nsName, "server", serverNode, pool.Name, true)
@@ -194,6 +195,7 @@ func TestFelixClusterRoutesNotReadvertised(t *testing.T) {
 	nsName := e2eutils.GenerateRandomName("route-exports")
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}
 	g.Expect(cli.Create(ctx, ns)).To(Succeed(), "creating namespace")
+	utils.WaitForDefaultServiceAccount(t, nsName)
 	t.Cleanup(func() { _ = cli.Delete(context.Background(), ns) })
 
 	// One pod per worker, pinned to the test pool, which is what makes each of those nodes take a

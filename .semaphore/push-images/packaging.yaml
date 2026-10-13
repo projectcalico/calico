@@ -33,11 +33,11 @@ global_job_config:
       - install-package --no-install-recommends devscripts moreutils patchelf jq
       - ssh-add ~/.ssh/id_rsa
 blocks:
-  # This promotion is only _automatic_ for the master branch.  For other
-  # branches, and PRs, it is available but not automatic.  This means a
-  # developer can trigger the building and publishing of release branch and
-  # pre-merge packages by clicking the "Publish openstack packages" button in
-  # the Semaphore UI.  When building from the master branch, packages are
+  # This promotion is never automatic: ArgoCI publishes master's packages on
+  # merge.  It is available for other branches and PRs, so a developer can
+  # trigger the building and publishing of release branch and pre-merge
+  # packages by clicking the "Publish openstack packages" button in the
+  # Semaphore UI.  When building from the master branch, packages are
   # published to the "master" PPA.  When building from any other branch,
   # packages are published to the "testing" PPA.  When building from a PR,
   # packages are published to the "pr-${SEMAPHORE_GIT_PR_NUMBER}" PPA, and that

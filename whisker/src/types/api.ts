@@ -17,6 +17,13 @@ export type PoliciesLogEntries = {
     [key: string]: Policy[];
 };
 
+export type ServiceRef = {
+    name: string;
+    namespace: string;
+    port: number;
+    port_name?: string;
+};
+
 export type FlowLog = {
     start_time: string;
     end_time: string;
@@ -24,9 +31,11 @@ export type FlowLog = {
     source_name: string;
     source_namespace: string;
     source_labels: string;
+    source_ips?: string[];
     dest_name: string;
     dest_namespace: string;
     dest_labels: string;
+    dest_ips?: string[];
     protocol: string;
     dest_port: string;
     reporter: string;
@@ -35,6 +44,9 @@ export type FlowLog = {
     bytes_in: string;
     bytes_out: string;
     policies: PoliciesLogEntries;
+    service?: ServiceRef;
+    source_type?: string;
+    dest_type?: string;
 };
 
 export type ApiError = {

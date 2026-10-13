@@ -106,6 +106,40 @@ func TestQoSPacketRate(t *testing.T) {
 	}, withEgressQoSPacketRate())
 }
 
+// The ingress packet-rate limit counts established traffic whatever host-stack code rides with BYPASS.
+func TestQoSPacketRateIgnoresBypass(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "HWvwl"
+	defer func() { bpfIfaceName = "" }()
+	_, _, _, _, pktBytes, err := testPacketUDPDefault()
+	Expect(err).NotTo(HaveOccurred())
+
+	resetCTMap(ctMap)
+	defer resetCTMap(ctMap)
+	resetQoSMap(qosMap)
+	defer resetQoSMap(qosMap)
+
+	for _, mark := range []uint32{
+		tcdefs.MarkSeenBypass,
+		tcdefs.MarkSeenSkipFIB | tcdefs.MarkSeenBypass,
+		tcdefs.MarkSeenNATOutgoing,
+	} {
+		// 1 packet/s with a burst of 1: only the first packet fits.
+		Expect(qosMap.Update(qos.NewKey(1, 1, qos.IPFamilyV4).AsBytes(),
+			qos.NewValue(1, 1, -1, 0).AsBytes())).NotTo(HaveOccurred())
+
+		skbMark = mark
+		runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			for i, want := range []string{"TC_ACT_UNSPEC", "TC_ACT_SHOT"} {
+				res, err := bpfrun(pktBytes)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(res.RetvalStr()).To(Equal(want), "mark 0x%08x packet %d", mark, i+1)
+			}
+		}, withIngressQoSPacketRate())
+	}
+}
+
 type dscpTestCase struct {
 	progName        string
 	expectedSKBMark uint32

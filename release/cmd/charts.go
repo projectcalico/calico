@@ -72,7 +72,8 @@ var chartsPublishFlags = []cli.Flag{helmRegistryFlag, localFlag, forceFlag, hash
 var chartsPublishAction = func(cfg *Config) func(context.Context, *cli.Command) error {
 	return func(_ context.Context, c *cli.Command) error {
 		configureLogging("charts-publish.log")
-		chart, err := pinnedChart(cfg, c, pinForPublish)
+		pin := oncePin(pinForPublish)
+		chart, err := pinnedChart(cfg, c, pin)
 		if err != nil {
 			return err
 		}
@@ -87,7 +88,11 @@ var chartsPublishAction = func(cfg *Config) func(context.Context, *cli.Command) 
 			charts.WithLogsDir(cfg.LogsDir),
 			charts.WithResolver(registryDigestResolver),
 		}
-		published, w, err := publishRecord(cfg.OutputDir, charts.PublishStep, chart.Version(), confirm)
+		records, err := recordsDir(cfg, c, pin, chart.ProductVersion)
+		if err != nil {
+			return err
+		}
+		published, w, err := publishRecord(records, charts.PublishStep, confirm)
 		if err != nil {
 			return err
 		}

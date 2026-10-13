@@ -424,19 +424,27 @@ func (cc *controllerControl) initControllers(
 	serviceInformer := factory.Core().V1().Services().Informer()
 	namespaceInformer := factory.Core().V1().Namespaces().Informer()
 
+	// One tracker for every controller that reads IPAM state, built on first use.
+	var ipamFeed *utils.IPAMFeed
+	sharedIPAMFeed := func() *utils.IPAMFeed {
+		if ipamFeed == nil {
+			ipamFeed = utils.NewIPAMFeed(dataFeed)
+		}
+		return ipamFeed
+	}
+
 	if v3c != nil {
 		// The resync period doubles as the recovery path for controllers that drop work after max retries.
 		calicoFactory := externalversions.NewSharedInformerFactory(v3c, 5*time.Minute)
 		poolInformer := calicoFactory.Projectcalico().V3().IPPools().Informer()
-		blockInformer := calicoFactory.Projectcalico().V3().IPAMBlocks().Informer()
 
 		apiCfg, _ := apiconfig.LoadClientConfigFromEnvironment()
 		v3CRDs := k8s.UsingV3CRDs(&apiCfg.Spec)
 
 		if v3CRDs {
-			poolController := ippool.NewController(ctx, v3c, poolInformer, blockInformer, calicoClient.IPAM())
+			poolController := ippool.NewController(ctx, v3c, poolInformer, dataFeed, sharedIPAMFeed().Tracker(), calicoClient.IPAM())
 			cc.controllers["IPPool"] = poolController
-			cc.registerInformers(poolInformer, blockInformer)
+			cc.registerInformers(poolInformer)
 
 			tierInformer := calicoFactory.Projectcalico().V3().Tiers().Informer()
 			gnpInformer := calicoFactory.Projectcalico().V3().GlobalNetworkPolicies().Informer()
@@ -465,7 +473,17 @@ func (cc *controllerControl) initControllers(
 	}
 	if cfg.Controllers.Node != nil {
 		deferredInformers := kubevirt.NewDeferredInformers(kubevirt.NewIndexerFunc(k8sconfig, 5*time.Minute), 30*time.Second, cc.stop)
-		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer, dataFeed, deferredInformers)
+		nodeController := node.NewNodeController(
+			ctx,
+			k8sClientset,
+			calicoClient,
+			*cfg.Controllers.Node,
+			nodeInformer,
+			podInformer,
+			dataFeed,
+			sharedIPAMFeed().Tracker(),
+			deferredInformers,
+		)
 		cc.controllers["Node"] = nodeController
 		cc.registerInformers(podInformer, nodeInformer)
 	}

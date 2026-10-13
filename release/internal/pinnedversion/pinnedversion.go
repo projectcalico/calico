@@ -27,8 +27,8 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -50,7 +50,6 @@ var FlannelComponent = registry.Component{
 // noImageComponents are pinned components that do not produce an image.
 var noImageComponents = []string{
 	apiComponentName,
-	calicoComponentName,
 	networkingCalicoComponentName,
 }
 
@@ -135,9 +134,9 @@ var operatorComponent = func(cfg Config, productVer string) registry.Component {
 var componentImage = func(component string) string { return component }
 
 // releaseImages lists the images this product releases. Each product supplies
-// it, because their utils differ on whether the lookup can fail.
+// it, because the products differ on whether the lookup can fail.
 var releaseImages = func() ([]string, error) {
-	return utils.ReleaseImages()
+	return images.ReleaseImages()
 }
 
 // productComponents contributes the product's own pinned components. A build

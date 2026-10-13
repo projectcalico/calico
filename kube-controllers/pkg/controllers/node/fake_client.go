@@ -322,6 +322,9 @@ type fakeIPAMClient struct {
 	coldGCErrors map[string]error
 	// coldGCSeen records the cold IPs passed to GarbageCollectColdIPs.
 	coldGCSeen map[string]bool
+
+	// onRelease runs inside ReleaseIPs, standing in for the syncer events a real release triggers.
+	onRelease func()
 }
 
 // gcBlocks returns the CIDRs of the blocks GarbageCollectColdIPs was called with.
@@ -374,6 +377,9 @@ func (f *fakeIPAMClient) ReleaseIPs(ctx context.Context, opts ...ipam.ReleaseOpt
 
 	for _, opt := range opts {
 		f.handlesReleased[opt.Handle] = true
+	}
+	if f.onRelease != nil {
+		f.onRelease()
 	}
 	return nil, opts, nil
 }

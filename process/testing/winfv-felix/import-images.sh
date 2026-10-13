@@ -83,11 +83,16 @@ function import_windows_images() {
       ;;
   esac
 
-  make -C "${CALICO_HOME}/node" image-windows WINDOWS_IMAGE=node-windows WINDOWS_VERSIONS="${windows_base_version}"
-  make -C "${CALICO_HOME}/cni-plugin" image-windows WINDOWS_IMAGE=cni-windows WINDOWS_VERSIONS="${windows_base_version}"
-
   CALICO_NODE_IMAGE="node-windows-${GIT_VERSION}-${windows_base_version}.tar"
   CALICO_CNI_IMAGE="cni-windows-${GIT_VERSION}-${windows_base_version}.tar"
+
+  # CI can supply the tarballs from an earlier build of the same commit.
+  if [[ ! -f "${CALICO_HOME}/node/dist/windows/${CALICO_NODE_IMAGE}" ]]; then
+    make -C "${CALICO_HOME}/node" image-windows WINDOWS_IMAGE=node-windows WINDOWS_VERSIONS="${windows_base_version}"
+  fi
+  if [[ ! -f "${CALICO_HOME}/cni-plugin/dist/windows/${CALICO_CNI_IMAGE}" ]]; then
+    make -C "${CALICO_HOME}/cni-plugin" image-windows WINDOWS_IMAGE=cni-windows WINDOWS_VERSIONS="${windows_base_version}"
+  fi
 
   ${ASO_DIR}/scp-to-windows.sh 0 "${CALICO_HOME}/node/dist/windows/${CALICO_NODE_IMAGE}" 'c:\calico-node-windows.tar'
   ${ASO_DIR}/scp-to-windows.sh 0 "${CALICO_HOME}/cni-plugin/dist/windows/${CALICO_CNI_IMAGE}" 'c:\calico-cni-plugin-windows.tar'
