@@ -90,12 +90,11 @@ var _ = Describe("GetLengthLimitedID", func() {
 		Expect(GetLengthLimitedID("felix", "", 10)).To(Equal("felix_"))
 	})
 	It("should return the whole hash when the limit leaves more room than the hash needs", func() {
-		// The KubeVirt VM handle case: a 128-character limit with a short prefix.
-		id := GetLengthLimitedID("k8s-pod-network.vmi.", strings.Repeat("v", 120), 128)
-		Expect(id).To(HavePrefix("k8s-pod-network.vmi._"))
+		id := GetLengthLimitedID("felix", strings.Repeat("v", 130), 128)
+		Expect(id).To(HavePrefix("felix_"))
 
 		// A SHA-256 hash is 43 characters in unpadded base64.
-		Expect(id).To(HaveLen(len("k8s-pod-network.vmi._") + 43))
+		Expect(id).To(HaveLen(len("felix_") + 43))
 	})
 	It("should panic when maxLength is too small to hold prefix + shortened hash", func() {
 		Expect(func() {
