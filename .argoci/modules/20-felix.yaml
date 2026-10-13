@@ -188,8 +188,9 @@ steps:
       # Both after the prologue, which sets its own.
       export REGION="${ARGOCI_GCP_REGION}"
       # A capacity pool sixty-at-once doesn't empty, and a family that takes a
-      # hyperdisk boot disk.
-      export VM_MACHINE_TYPE=c3-highcpu-4
+      # hyperdisk boot disk.  2026-10-13: C3 was working well; N4 hit stockouts.
+      # Trying C4D as cheaper and faster than C3.
+      export VM_MACHINE_TYPE=c4d-highcpu-4
       if [ -n "${FV_BATCHES_OVERRIDE:-}" ]; then
         export NUM_FV_BATCHES="${FV_BATCHES_OVERRIDE}"
       fi
