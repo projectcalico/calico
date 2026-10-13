@@ -347,6 +347,21 @@ includes:
         - ^charts/tigera-operator/
         - ^\.argoci/modules/20-operator\.yaml$
 
+  # The bundle is assembled from manifests and CRDs outside the operator, and
+  # from YAML that no Go file imports, so those are listed by hand.
+  - path: .argoci/modules/20-operator-bundle.yaml
+    changes:
+      in:
+        - ^operator/hack/gen-bundle/
+        - ^operator/config/manifests/
+        - ^operator/config/samples/
+        - ^operator/pkg/crds/operator/
+        - ^operator/Makefile$
+        - ^manifests/ocp/
+        - ^manifests/ocp-tigera-operator-no-resource-loading\.yaml$
+        - ^libcalico-go/config/crd/
+        - ^\.argoci/modules/20-operator-bundle\.yaml$
+
   - path: .argoci/modules/20-node.yaml
     changes:
       dependsOn: [node]

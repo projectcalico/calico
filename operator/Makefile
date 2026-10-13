@@ -576,6 +576,15 @@ ifndef VERSION
 endif
 	docker build -f bundle/bundle-v$(VERSION).Dockerfile -t tigera-operator-bundle:$(VERSION) bundle/
 
+# Build and validate a bundle the way a release does, for CI. The inspections
+# stand in for an operator image, since a PR has no published one to pin.
+BUNDLE_CHECK_DIGEST = sha256:0000000000000000000000000000000000000000000000000000000000000000
+.PHONY: bundle-check
+bundle-check:
+	$(MAKE) bundle VERSION=3.99.0 PREV_VERSION=3.98.0 CHANNEL=release-v3.99 \
+		BUNDLE_OPERATOR_IMAGE_INSPECT='[{"Created":"2026-01-01T00:00:00Z","RepoDigests":["$(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME)@$(BUNDLE_CHECK_DIGEST)"]}]' \
+		BUNDLE_OPERATOR_MANIFEST_INSPECT='{"manifests":[{"platform":{"architecture":"amd64"}},{"platform":{"architecture":"arm64"}}]}'
+
 
 .PHONY: test-crds
 test-crds: test-calico-crds

@@ -33,6 +33,10 @@ bundle/<VERSION>/metadata/            # annotations.yaml
 `make bundle` pulls and inspects the operator image, so it runs docker on the
 host — the build container has no docker-in-docker.
 
+`make bundle-check` builds and validates a throwaway `3.99.0` bundle against a
+stand-in image, with no pull. CI runs it on any change to what a bundle is
+built from.
+
 ## The catalog decides the upgrade graph, not the bundle
 
 Each `catalog-templates/v4.XX.yaml` in the certified-operators repo is an
