@@ -314,7 +314,7 @@ foss-checks:
 # Not `test`, which lib.Makefile defines as `ut fv st`. The FV block runs the
 # kind suite on its own. amd64 only here; the "Operator: multi-arch build"
 # block covers the other arches.
-ci: clean format-check static-checks image fmt vet ut gen-files fix-changed dirty-check test-crds
+ci: clean format-check static-checks image fmt vet ut hack/gen-bundle/ut gen-files fix-changed dirty-check test-crds
 
 ## Deploys images to registry
 cd: image-all cd-common
@@ -386,33 +386,6 @@ $(OPERATOR_SDK_BARE): $(OPERATOR_SDK)
 ## Generating code after API changes.
 gen-files: manifests generate
 
-.PHONY: prepull-image
-prepull-image:
-	@echo Pulling operator image...
-	docker pull $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):v$(VERSION)
-
-# Get the digest for the image. This target runs docker commands on the host since the
-# build container doesn't have docker-in-docker. 'docker inspect' returns output like the example
-# below. RepoDigests may have more than one entry so we need to filter.
-# [
-#     {
-#         "Id": "sha256:34a1114040c03830da0a8d57f8d999deba26d8e31bda353aed201a375f68870b",
-#         "RepoTags": [
-#             "quay.io/calico/operator:v3.32.0",
-#             "..."
-#         ],
-#         "RepoDigests": [
-#             "quay.io/calico/operator@sha256:5e1d551b5a711592472f4a3cc4645698d5f826da4253f0d47cfa5d5b641a2e1a",
-#             "..."
-#         ],
-#         ...
-#     }
-# ]
-.PHONY: get-digest
-get-digest: prepull-image
-	@echo Getting operator image digest...
-	$(eval OPERATOR_IMAGE_INSPECT=$(shell sh -c "docker image inspect $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):v$(VERSION) | base64 -w 0"))
-	$(eval OPERATOR_MANIFEST_INSPECT=$(shell sh -c "docker manifest inspect $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):v$(VERSION) | base64 -w 0"))
 
 #####################################
 #####################################
@@ -489,13 +462,20 @@ $(KUSTOMIZE): $(HACK_BIN)
 
 # Options for 'bundle-build'
 
-# Set the channels to the current release branch, unless
-# we got another one passed to us. Channel should be
-# release-vX.YY
-CHANNEL ?= $(shell git branch --show-current)
+# Set the channel to the current release branch, unless we got another one
+# passed to us. Channel should be release-v3.YY.
+#
+# The match is a prefix match rather than a substring one: branches like
+# 'auto-pick-of-#12612-upstream-release-v3.31' contain a release branch name
+# without being one, and would otherwise be published as a channel. A branch
+# that is not a release branch leaves CHANNEL empty, so building a bundle from
+# one means passing CHANNEL explicitly.
+RELEASE_BRANCH_PATTERN := release-v3.%
+CURRENT_BRANCH := $(shell git branch --show-current)
+CHANNEL ?= $(filter $(RELEASE_BRANCH_PATTERN),$(CURRENT_BRANCH))
 BUNDLE_CHANNEL = --channels=$(if \
-		 $(findstring release-v1,$(CHANNEL)),$(CHANNEL),\
-		 $(error Channel for bundle should be a release branch of the format 'release-vX.YY', not '$(CHANNEL)'))
+		 $(filter $(RELEASE_BRANCH_PATTERN),$(CHANNEL)),$(CHANNEL),\
+		 $(error Channel for bundle should be a release branch of the format 'release-v3.YY', not '$(CHANNEL)'))
 
 # We only specify one channel so we don't need to set a
 # default, but if we have one then include it.
@@ -511,39 +491,44 @@ BUNDLE_CRD_DIR ?= $(BUNDLE_BASE_DIR)/crds
 BUNDLE_DEPLOY_DIR ?= $(BUNDLE_BASE_DIR)/deploy
 
 ## Create an operator bundle image.
-# E.g., make bundle VERSION=1.13.1 PREV_VERSION=1.13.0 CHANNELS=release-v1.13 DEFAULT_CHANNEL=release-v1.13
+# E.g., make bundle VERSION=3.34.0 PREV_VERSION=3.33.0 CHANNEL=release-v3.34 DEFAULT_CHANNEL=release-v3.34
+#
+# Each step depends on the one before it, rather than being listed here in
+# order, so that the steps still run in order under 'make -j'.
 .PHONY: bundle
-bundle: bundle-generate bundle-crd-clean update-bundle bundle-validate bundle-image
+bundle: bundle-image
 
-.PHONY: bundle-crd-clean
-bundle-crd-clean:
-	git checkout -- pkg/crds/operator
-
+# Validate against the full Operator Framework suite, not just the required
+# checks, since this bundle is built to be certified.
 .PHONY: bundle-validate
-bundle-validate: $(OPERATOR_SDK_BARE)
-	$(OPERATOR_SDK_BARE) bundle validate bundle/$(VERSION)
-
-# The Calico release the bundle's manifests come from. GIT_VERSION cannot serve
-# here: the bundle fetches manifests by git ref, and a describe of an untagged
-# commit is not one.
-BUNDLE_CALICO_VERSION ?= $(shell git describe --tags --abbrev=0)
+bundle-validate: $(OPERATOR_SDK_BARE) update-bundle
+	$(OPERATOR_SDK_BARE) bundle validate bundle/$(VERSION) --select-optional suite=operatorframework
 
 .PHONY: bundle-manifests
-bundle-manifests:
+bundle-manifests: $(BINDIR)/gen-bundle
 ifndef VERSION
 	$(error VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
 endif
 ifndef PREV_VERSION
 	$(error PREV_VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
 endif
-	$(eval EXTRA_DOCKER_ARGS += -e BUNDLE_CRD_DIR=$(BUNDLE_CRD_DIR) -e BUNDLE_DEPLOY_DIR=$(BUNDLE_DEPLOY_DIR) -e CALICO_VERSION=$(BUNDLE_CALICO_VERSION))
-	$(DOCKER_GO_BUILD) "hack/gen-bundle/get-manifests.sh"
+	$(BINDIR)/gen-bundle get-manifests \
+		--repo-root "$(REPO_ROOT)" \
+		--crd-dir "$(BUNDLE_CRD_DIR)" \
+		--deploy-dir "$(BUNDLE_DEPLOY_DIR)"
 
+# Generate the bundle from the staged manifests. The static half of the CSV comes
+# from --kustomize-dir; note that operator-sdk only picks that base up if its
+# metadata.name is "tigera-operator.v<semver>", matching --package.
+#
+# This uses the CRDs committed under pkg/crds/operator rather than regenerating
+# them, which 'make gen-files' and the CI dirty-check already keep current.
 .PHONY: bundle-generate
-bundle-generate: manifests $(KUSTOMIZE) $(OPERATOR_SDK_BARE) bundle-manifests
+bundle-generate: $(OPERATOR_SDK_BARE) bundle-manifests
 	$(OPERATOR_SDK_BARE) generate bundle \
 		--crds-dir $(BUNDLE_CRD_DIR) \
 		--deploy-dir $(BUNDLE_DEPLOY_DIR) \
+		--kustomize-dir config/manifests \
 		--version $(VERSION) \
 		--verbose \
 		--manifests \
@@ -551,15 +536,41 @@ bundle-generate: manifests $(KUSTOMIZE) $(OPERATOR_SDK_BARE) bundle-manifests
 		--metadata \
 		$(BUNDLE_METADATA_OPTS)
 
-# Update a generated bundle so that it can be certified.
+# Apply the build-time values to a generated bundle so that it can be certified.
+# gen-bundle pulls and inspects the operator image itself, which is why it runs
+# on the host: the build container has no docker-in-docker.
 .PHONY: update-bundle
-update-bundle: $(OPERATOR_SDK_BARE) get-digest
-	$(eval EXTRA_DOCKER_ARGS += -e OPERATOR_IMAGE_INSPECT="$(OPERATOR_IMAGE_INSPECT)" -e OPERATOR_MANIFEST_INSPECT="$(OPERATOR_MANIFEST_INSPECT)" -e VERSION=$(VERSION) -e PREV_VERSION=$(PREV_VERSION))
-	$(DOCKER_GO_BUILD) hack/gen-bundle/update-bundle.sh
+update-bundle: $(BINDIR)/gen-bundle bundle-generate
+ifndef VERSION
+	$(error VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
+endif
+ifndef PREV_VERSION
+	$(error PREV_VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
+endif
+	$(BINDIR)/gen-bundle update-bundle \
+		--operator-dir "$(CURDIR)" \
+		--version "$(VERSION)" \
+		--prev-version "$(PREV_VERSION)" \
+		--image "$(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME)"
+
+$(BINDIR)/gen-bundle: $(wildcard hack/gen-bundle/*)
+	mkdir -p $(BINDIR)
+	$(DOCKER_GO_BUILD) \
+	sh -c '$(GIT_CONFIG_SSH) \
+	go build -buildvcs=false -o $(BINDIR)/gen-bundle ./hack/gen-bundle'
+
+.PHONY: hack/gen-bundle/ut
+hack/gen-bundle/ut:
+	mkdir -p report
+	# Flat, like report/operator_ut.xml: the Semaphore epilogue publishes
+	# ./report/*.xml, so a report in a subdirectory is never collected.
+	$(DOCKER_GO_BUILD) \
+	sh -c '$(GIT_CONFIG_SSH) \
+	gotestsum --format=testname --junitfile report/gen_bundle_ut.xml $(PACKAGE_NAME)/hack/gen-bundle/...'
 
 # Build the bundle image.
-.PHONY: bundle-build
-bundle-image:
+.PHONY: bundle-image
+bundle-image: bundle-validate
 ifndef VERSION
 	$(error VERSION is undefined - run using make $@ VERSION=X.Y.Z)
 endif
