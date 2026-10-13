@@ -23,8 +23,6 @@ global_job_config:
   env_vars:
     - name: CREATE_WINDOWS_NODES
       value: "true"
-    - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[sig-calico\].*\[RunsOnWindows\]) --ginkgo.skip=(\[LinuxOnly\])
     - name: FUNCTIONAL_AREA
       value: "windows.yml"
     - name: USE_PRIVATE_REGISTRY
@@ -62,6 +60,8 @@ blocks:
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
+            - name: E2E_TEST_CONFIG
+              value: e2e/config/windows/xtables-encap.yaml
             - name: PROVISIONER
               value: azr-aso
             - name: K8S_VERSION
@@ -79,6 +79,8 @@ blocks:
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
+            - name: E2E_TEST_CONFIG
+              value: e2e/config/windows/aks-xtables-nobgp.yaml
             - name: PROVISIONER
               value: azr-aks
             - name: K8S_VERSION

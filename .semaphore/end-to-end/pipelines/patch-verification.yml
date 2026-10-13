@@ -21,12 +21,6 @@ global_job_config:
     - name: marvin-github-ssh-private-key
     - name: banzai-secrets
   env_vars:
-    # The intent here is to run a representative set of tests that cover the main functionality of Calico
-    # Using tests that usually pass.
-    # So we're running the Conformance tests, some RBAC tests, and some Observe tests.
-    # and skipping the slow, disruptive, and some other tests that are not relevant to Calico OSS
-    - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise)
     - name: K8S_VERSION
       value: "stable-3"
     - name: FUNCTIONAL_AREA
@@ -108,6 +102,8 @@ blocks:
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/patch-verification/xtables.yaml"
             - name: CNI_PLUGIN
               value: "Calico"
             - name: K8S_VERSION
@@ -126,8 +122,6 @@ blocks:
               value: ""
             - name: INSTALLER
               value: "helmerator"
-            - name: ENABLE_AUTO_HEP # autohep
-              value: "true"
 
   - name: "Manifests"
     dependencies: []
@@ -145,6 +139,8 @@ blocks:
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_flannel-migration.sh
           env_vars:
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/patch-verification/xtables-encap-manifest.yaml"
             - name: DOWNLEVEL_MANIFEST
               value: "https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
             - name: K8S_VERSION
@@ -188,6 +184,8 @@ blocks:
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/patch-verification/xtables-manifest.yaml"
             - name: MANIFEST_FILE
               value: "canal.yaml"
             - name: K8S_VERSION
@@ -216,6 +214,8 @@ blocks:
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_flannel-migration.sh
           env_vars:
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/patch-verification/xtables-manifest.yaml"
             - name: DOWNLEVEL_MANIFEST
               value: "https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/canal.yaml"
             - name: K8S_VERSION
@@ -245,6 +245,8 @@ blocks:
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/patch-verification/xtables-encap-manifest.yaml"
             - name: MANIFEST_FILE
               value: "calico-etcd.yaml"
             - name: INSTALL_ETCD_POD
@@ -279,6 +281,8 @@ blocks:
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/patch-verification/xtables-encap-manifest.yaml"
             - name: MANIFEST_FILE
               value: "calico.yaml"
             - name: K8S_VERSION
@@ -321,6 +325,8 @@ blocks:
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/patch-verification/aks-xtables-nobgp.yaml"
             - name: NETWORK_PLUGIN_MODE
               value: "overlay"
             - name: CNI_PLUGIN
@@ -349,6 +355,8 @@ blocks:
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/patch-verification/eks-bpf-encap-aws.yaml"
             - name: ENCAPSULATION_TYPE
               value: "VXLAN"
             - name: PROVISIONER
@@ -376,9 +384,6 @@ blocks:
               value: "true"
             - name: ENABLE_NODE_LOCAL_DNS_CACHE # nodelocaldns
               value: "true"
-              # The extra skip here is for the upstream DNS tests.  They require access to pods via the control plane, and with Calico CNI, the EKS control plane can't access pods.
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|DNS.should.........DNS)
 
         # operator, awscni, stable-1, amd64, bpf, ipv4, EKS, kdd, amazonlinux2, no-kube-proxy,
         - name: EKS w/ aws CNI
@@ -387,6 +392,8 @@ blocks:
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/patch-verification/eks-bpf-nobgp-aws.yaml"
             - name: PROVISIONER
               value: "aws-eks"
             - name: INSTALLER
@@ -427,14 +434,14 @@ blocks:
               value: "Calico"
             - name: IP_FAMILY
               value: ipv4
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/patch-verification/bpf-encap-aws.yaml"
             - name: WINDOWS_OS_VERSION
               value: "2022"
             - name: WINDOWS_CONTAINER_RUNTIME
               value: "containerd:2.1.1"
             - name: ENCAPSULATION_TYPE
               value: "VXLAN"
-            - name: ENABLE_AUTO_HEP
-              value: "true"
 
         # operator, calicocni, stable-3, amd64, nftables, ipv4, aws-kubeadm, kdd, windows 1809, docker, ubuntu2204, autohep, none encap, nftables-kube-proxy
         - name: windows - aws-kubeadm - docker
@@ -455,20 +462,18 @@ blocks:
               value: "Calico"
             - name: IP_FAMILY
               value: ipv4
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/patch-verification/xtables-aws.yaml"
             - name: WINDOWS_OS_VERSION
               value: "1809"
             - name: ENCAPSULATION_TYPE
               value: "None"
             - name: VPC_SUBNETS
               value: '["172.16.101.0/24"]' # single subnet because no encapsulation is being used
-            - name: ENABLE_AUTO_HEP
-              value: "true"
             - name: KUBE_PROXY_MODE
               value: nftables
             - name: CLUSTER_IMAGE
               value: "jammy-22.04"
-            - name: ENABLE_AUTO_HEP
-              value: "true"
 
           # operator, calicocni, stable-1, amd64, bpf, ipv4, gcp-rke2, kdd, ubuntu2204, autohep, vxlan encap, nodelocaldns
         - name: RKE2
@@ -479,6 +484,8 @@ blocks:
           env_vars:
             - name: INSTALLER
               value: "operator"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/patch-verification/bpf-encap.yaml"
             - name: PROVISIONER
               value: gcp-rke2
             - name: K8S_VERSION
@@ -493,8 +500,6 @@ blocks:
               value: "VXLAN"
             - name: CLUSTER_IMAGE
               value: "ubuntu-2204-lts"
-            - name: ENABLE_AUTO_HEP
-              value: "true"
             # - name: ENABLE_NODE_LOCAL_DNS_CACHE # nodelocaldns - doesn't appear to work with RKE2
             #   value: "true"
 
@@ -518,7 +523,7 @@ blocks:
         - name: NUM_KUBEVIRT_VMS
           value: "2"
         - name: E2E_TEST_CONFIG
-          value: "e2e/config/gcp-kubevirt.yaml"
+          value: "e2e/config/gcp/kubevirt.yaml"
 
   # operator, calicocni, 4.18, amd64, bpf, ipv4, openshift, RHCOS, kdd, n/a, no-kube-proxy, autohep
   # Openshift needs f1-standard-2 (more disk) so it lives in its own block.
@@ -536,6 +541,8 @@ blocks:
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/patch-verification/bpf-aws.yaml"
             - name: OPENSHIFT_VERSION
               value: "4.18.17"
             - name: PROVISIONER
