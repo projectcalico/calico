@@ -874,39 +874,24 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
     @staticmethod
     def _owning_hosts(port):
-        """Return the hosts that currently own a Calico endpoint for ``port``.
+        """Return the hosts that currently have a Calico endpoint for ``port``.
 
-        This mirrors ``EndpointSyncer._wep_desired_present``: a host owns an endpoint
-        either because the port is bound to it, or because the port is live migrating to
-        it.  During a migration both hold at once -- the VM keeps running at the source
-        until Nova's cutover, while the destination already has a WEP so that Felix can
-        program the dataplane ahead of time.
-
-        The binding host comes first, so that a caller wanting a single answer gets the
-        host Neutron considers canonical.
-
-        This deliberately duplicates the ``endpoints.py`` predicate instead of calling
-        it, so that the logic here stays self-contained and backports unchanged to
-        branches where ``EndpointSyncer`` has a different shape.
+        These are exactly the hosts where ``_wep_desired_present`` puts a WEP, so that
+        status and WEP existence cannot disagree.  During a live migration that is both
+        the source and the destination.  The binding host comes first, so that a caller
+        wanting a single answer gets the host Neutron considers canonical.
         """
-        migrating_to = port.get("binding:profile", {}).get("migrating_to")
-        host = port.get("binding:host_id")
-        owners = []
-
-        # Source role.  The port has to be bound here: an unbound port has no endpoint
-        # anywhere, and treating its host as an owner would reinstate the very ERROR
-        # this function exists to suppress -- on an ordinary interface detach rather
-        # than on a migration.  The ``or migrating_to`` exception covers the rebind
-        # window, where ``vif_type`` flips transiently to "unbound" while
-        # ``binding:host_id`` stays at the source and the VM keeps running there.
-        if host and (port.get("binding:vif_type") != "unbound" or migrating_to):
-            owners.append(host)
-
-        # Destination role.
-        if migrating_to and migrating_to != host:
-            owners.append(migrating_to)
-
-        return owners
+        candidates = [
+            port.get("binding:host_id"),
+            port.get("binding:profile", {}).get("migrating_to"),
+        ]
+        return [
+            host
+            for host in candidates
+            if WorkloadEndpointSyncer._wep_desired_present(
+                port, host, port.get("device_id")
+            )
+        ]
 
     def _neutron_status_for_port(self, port, port_id, hostname):
         """Work out the Neutron status to write for ``port``.
