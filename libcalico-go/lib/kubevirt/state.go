@@ -15,6 +15,7 @@
 package kubevirt
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -27,6 +28,22 @@ type kvIndexers struct {
 	vmi cache.Indexer
 }
 
+type kvInformers struct {
+	vm  cache.SharedIndexInformer
+	vmi cache.SharedIndexInformer
+}
+
+// EventHandlers are attached to the KubeVirt informers once they exist.
+type EventHandlers struct {
+	// VM and VMI may each be nil.
+	VM, VMI cache.ResourceEventHandler
+	// Synced is called once, after the indexers are published and the handlers
+	// are attached. It is never called while DeferredInformers holds a lock.
+	// It can run before client-go delivers the replayed add events to the
+	// handlers, so read the indexers instead of counting on handler delivery.
+	Synced func()
+}
+
 // GetIndexInformerFunc creates KubeVirt VM and VMI informers.
 // Returns (nil, nil, nil) when KubeVirt is not installed.
 type GetIndexInformerFunc func() (cache.SharedIndexInformer, cache.SharedIndexInformer, error)
@@ -36,6 +53,10 @@ type GetIndexInformerFunc func() (cache.SharedIndexInformer, cache.SharedIndexIn
 // It is safe for concurrent reads and a single writer (the init goroutine).
 type DeferredInformers struct {
 	indexers atomic.Pointer[kvIndexers]
+
+	mu        sync.Mutex
+	informers *kvInformers
+	pending   []EventHandlers
 }
 
 // NewDeferredInformers creates a DeferredInformers and starts a background
@@ -66,6 +87,38 @@ func (d *DeferredInformers) VMInstanceIndexer() cache.Indexer {
 		return nil
 	}
 	return idx.vmi
+}
+
+// AddEventHandlers registers handlers for the VM and VMI informers. If the
+// informers already run, the handlers attach at once and client-go replays the
+// existing objects as adds. Otherwise they attach when the informers sync.
+func (d *DeferredInformers) AddEventHandlers(h EventHandlers) {
+	d.mu.Lock()
+	inf := d.informers
+	if inf == nil {
+		d.pending = append(d.pending, h)
+	}
+	d.mu.Unlock()
+	if inf != nil {
+		attach(inf, h)
+		if h.Synced != nil {
+			h.Synced()
+		}
+	}
+}
+
+func attach(inf *kvInformers, h EventHandlers) {
+	for _, p := range []struct {
+		i cache.SharedIndexInformer
+		h cache.ResourceEventHandler
+	}{{inf.vm, h.VM}, {inf.vmi, h.VMI}} {
+		if p.h == nil {
+			continue
+		}
+		if _, err := p.i.AddEventHandler(p.h); err != nil {
+			log.WithError(err).Error("Failed to add a KubeVirt event handler")
+		}
+	}
 }
 
 // NewDeferredInformersWithIndexers creates a DeferredInformers pre-populated
@@ -117,4 +170,17 @@ func (d *DeferredInformers) initInformers(createInformers GetIndexInformerFunc, 
 	}
 	d.setIndexers(vmInf.GetIndexer(), vmiInf.GetIndexer())
 	log.Info("KubeVirt informers synced, VM-aware IPAM GC enabled")
+
+	inf := &kvInformers{vm: vmInf, vmi: vmiInf}
+	d.mu.Lock()
+	d.informers = inf
+	pending := d.pending
+	d.pending = nil
+	d.mu.Unlock()
+	for _, h := range pending {
+		attach(inf, h)
+		if h.Synced != nil {
+			h.Synced()
+		}
+	}
 }

@@ -16,11 +16,14 @@ package kubevirt_test
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
@@ -133,5 +136,109 @@ var _ = Describe("NewDeferredInformers", func() {
 
 		Eventually(func() cache.Indexer { return di.VMIndexer() }, 5*time.Second).ShouldNot(BeNil())
 		Expect(di.VMInstanceIndexer()).NotTo(BeNil())
+	})
+})
+
+var _ = Describe("DeferredInformers.AddEventHandlers", func() {
+	var stop chan struct{}
+
+	BeforeEach(func() {
+		stop = make(chan struct{})
+	})
+
+	AfterEach(func() {
+		close(stop)
+	})
+
+	// seededFactory returns informers over a clientset holding one ConfigMap
+	// (VM) and two Secrets (VMI). It blocks until release is closed.
+	seededFactory := func(release <-chan struct{}) kubevirt.GetIndexInformerFunc {
+		cs := fake.NewClientset(
+			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "vm1", Namespace: "default"}},
+			&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "vmi1", Namespace: "default"}},
+			&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "vmi2", Namespace: "default"}},
+		)
+		factory := informers.NewSharedInformerFactory(cs, 0)
+		return func() (cache.SharedIndexInformer, cache.SharedIndexInformer, error) {
+			<-release
+			return factory.Core().V1().ConfigMaps().Informer(), factory.Core().V1().Secrets().Informer(), nil
+		}
+	}
+
+	type counts struct {
+		mu     sync.Mutex
+		vm     int
+		vmi    int
+		synced int
+	}
+	newHandlers := func(c *counts) kubevirt.EventHandlers {
+		return kubevirt.EventHandlers{
+			VM: cache.ResourceEventHandlerFuncs{AddFunc: func(any) {
+				c.mu.Lock()
+				defer c.mu.Unlock()
+				c.vm++
+			}},
+			VMI: cache.ResourceEventHandlerFuncs{AddFunc: func(any) {
+				c.mu.Lock()
+				defer c.mu.Unlock()
+				c.vmi++
+			}},
+			Synced: func() {
+				c.mu.Lock()
+				defer c.mu.Unlock()
+				c.synced++
+			}}
+	}
+	get := func(c *counts) (int, int, int) {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		return c.vm, c.vmi, c.synced
+	}
+
+	It("attaches handlers registered before the informers start", func() {
+		release := make(chan struct{})
+		di := kubevirt.NewDeferredInformers(seededFactory(release), 10*time.Millisecond, stop)
+		c := &counts{}
+		di.AddEventHandlers(newHandlers(c))
+
+		close(release)
+
+		Eventually(func() []int {
+			vm, vmi, synced := get(c)
+			return []int{vm, vmi, synced}
+		}, 5*time.Second).Should(Equal([]int{1, 2, 1}))
+		Consistently(func() int { _, _, s := get(c); return s }, 100*time.Millisecond).Should(Equal(1))
+	})
+
+	It("attaches handlers registered after the informers start", func() {
+		release := make(chan struct{})
+		close(release)
+		di := kubevirt.NewDeferredInformers(seededFactory(release), 10*time.Millisecond, stop)
+		Eventually(di.VMIndexer, 5*time.Second).ShouldNot(BeNil())
+
+		c := &counts{}
+		di.AddEventHandlers(newHandlers(c))
+
+		Eventually(func() []int {
+			vm, vmi, synced := get(c)
+			return []int{vm, vmi, synced}
+		}, 5*time.Second).Should(Equal([]int{1, 2, 1}))
+		Consistently(func() int { _, _, s := get(c); return s }, 100*time.Millisecond).Should(Equal(1))
+	})
+
+	It("never calls Synced when KubeVirt is absent", func() {
+		localStop := make(chan struct{})
+		var polls atomic.Int32
+		factory := func() (cache.SharedIndexInformer, cache.SharedIndexInformer, error) {
+			polls.Add(1)
+			return nil, nil, nil
+		}
+		di := kubevirt.NewDeferredInformers(factory, 10*time.Millisecond, localStop)
+		c := &counts{}
+		di.AddEventHandlers(newHandlers(c))
+
+		Eventually(polls.Load, 5*time.Second).Should(BeNumerically(">=", 2))
+		close(localStop)
+		Consistently(func() int { _, _, s := get(c); return s }, 100*time.Millisecond).Should(Equal(0))
 	})
 })
