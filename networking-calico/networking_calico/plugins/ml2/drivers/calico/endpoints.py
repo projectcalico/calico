@@ -359,10 +359,10 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             return etcd_map
 
         # Narrow port scope.  WEP and LM etcd names can't be synthesised from a port_id
-        # alone (the name also encodes host and device_id), so we filter the scanned
-        # entries by trailing port_id rather than fetching by name.  This also
-        # automatically picks up any stale WEPs at old binding hosts or stale LMs from
-        # cancelled migrations, which would otherwise be invisible to a narrow resync.
+        # alone (the name also encodes host), so we filter the scanned entries by
+        # trailing port_id rather than fetching by name.  This also automatically picks
+        # up any stale WEPs at old binding hosts or stale LMs from cancelled migrations,
+        # which would otherwise be invisible to a narrow resync.
         escaped_port_ids = {pid.replace("-", "--") for pid in scope.ids()}
 
         def _key_matches_scope(key):
@@ -562,13 +562,8 @@ class WorkloadEndpointSyncer(ResourceSyncer):
     def sync_wep(self, port, host, context):
         """Sync the WorkloadEndpoint for this port at ``host`` to etcd.
 
-        The etcd key is ``endpoint_name(port_at_host)`` --
-        ``<host>-openstack-<device_id>-<port_id>`` -- so the slot is identified by
-        ``(port_id, host, device_id)``.  In every callsite ``device_id`` is stable
-        across the sync (Calico does not support Nova hot-swapping a port between VMs in
-        place; detach + re-attach goes via separate update events where
-        ``_port_is_endpoint_port`` filters out the detached state), so the caller only
-        has to think about the (port, host) pair.
+        The etcd key is ``<host>-openstack-<port_id>-<port_id>``, so the slot is
+        identified by ``port_id`` and ``host``.
 
         A given port can own up to two WEP slots in etcd: one at its current
         ``binding:host_id`` (the "source" WEP, in the bound steady state) and one at its
@@ -599,10 +594,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
 
         # Overlay binding:host_id=host before computing the etcd name so the caller can
         # pass either ``port`` or ``original`` -- the slot is identified by (port_id,
-        # host, device_id) and the caller-provided dict's ``binding:host_id`` does not
-        # matter.  ``device_id`` does have to match the slot we are targeting, but every
-        # callsite passes a dict whose ``device_id`` is stable across the update (see
-        # docstring).
+        # host) and the caller-provided dict's ``binding:host_id`` does not matter.
         name = endpoint_name({**port, "binding:host_id": host})
         for attempt in range(MAX_CAS_ATTEMPTS):
             try:
@@ -674,12 +666,10 @@ class WorkloadEndpointSyncer(ResourceSyncer):
     def sync_lm(self, port, dest_host, context):
         """Sync the LiveMigration resource for this port at ``dest_host`` to etcd.
 
-        Like ``sync_wep``, the etcd key is
-        ``<dest_host>-openstack-<device_id>-<port_id>`` so the slot is identified by
-        ``(port_id, dest_host, device_id)``; see ``sync_wep`` for why ``device_id`` is
-        stable across the sync at every callsite.  The slot shares its key shape (and
-        resource name) with the dest-side WEP at the same host, though the two are
-        stored as different resource types.
+        Like ``sync_wep``, the etcd key is ``<dest_host>-openstack-<port_id>-<port_id>``
+        so the slot is identified by ``port_id`` and ``dest_host``.  The slot shares its
+        key shape (and resource name) with the dest-side WEP at the same host, though
+        the two are stored as different resource types.
 
         Each CAS attempt:
           1. Read the slot's mod_revision (KeyNotFound -> 0).
@@ -1144,19 +1134,30 @@ def remove_prefix(s, prefix):
 
 
 def endpoint_name(port):
+    """WEP and LiveMigration name: ``<host>-openstack-<port_id>-<port_id>``.
+
+    The third segment would normally identify the workload (the VM), but a port can be
+    detached and reattached to a different VM without its host changing, so a VM ID
+    there would make the name of an unchanged slot move.  Nothing in Felix needs VM
+    identity for OpenStack, so the port ID fills that segment, and host plus port ID
+    are enough to find the slot.  The segment can't be empty: "--" is an escaped dash,
+    so "<host>-openstack--<port_id>" would parse as two segments, not four.
+
+    The VM ID is in the WEP's ``spec.workload`` for anything that needs it.
+    """
+
     def escape_dashes(s):
         return s.replace("-", "--")
 
     return "%s-openstack-%s-%s" % (
         escape_dashes(port["binding:host_id"]),
-        escape_dashes(port["device_id"]),
+        escape_dashes(port["id"]),
         escape_dashes(port["id"]),
     )
 
 
 def endpoint_name_without_host(name):
-    # The `device_id` and `id` parts of the name are UUIDs and so cannot contain
-    # "openstack".  Hence...
+    # The `id` parts of the name are UUIDs and so cannot contain "openstack".  Hence...
     parts = name.split("-")
     try:
         openstack_pos = len(parts) - 1 - parts[::-1].index("openstack")
@@ -1316,7 +1317,7 @@ def make_keystone_client():
 def live_migration_spec(namespace, source_port, dest_port):
     wep_id_fields = {
         "orchestratorID": "openstack",
-        "workloadID": namespace + "/" + source_port["device_id"],
+        "workloadID": namespace + "/" + source_port["id"],
         "endpointID": source_port["id"],
     }
     return {

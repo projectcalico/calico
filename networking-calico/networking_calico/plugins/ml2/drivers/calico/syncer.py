@@ -192,14 +192,18 @@ class ResourceSyncer(object):
         n_deleted = 0
         n_created = 0
 
-        # Process "lm <name>" entries before everything else so that, when a
-        # mid-migration port is being created from scratch in etcd, Felix sees the
-        # LiveMigration resource before the destination WorkloadEndpoint -- matching the
-        # ordering the dynamic postcommit path uses on migration start.  The key is a
-        # no-op for resource kinds that don't have "lm " prefixed names; the secondary
-        # sort by name keeps the order deterministic across runs.
+        # Deletes go last.  When a resource's etcd name changes, the resync sees the old
+        # name as etcd-only and the new one as Neutron-only; creating the new one first
+        # means Felix never sees the interface without a WorkloadEndpoint.
+        #
+        # Within each phase, "lm <name>" entries go first so that, when a mid-migration
+        # port is being created from scratch in etcd, Felix sees the LiveMigration
+        # resource before the destination WorkloadEndpoint -- matching the ordering the
+        # dynamic postcommit path uses on migration start.  That is a no-op for resource
+        # kinds that don't have "lm " prefixed names; the final sort by name keeps the
+        # order deterministic across runs.
         def _iter_order(n):
-            return (0 if n.startswith("lm ") else 1, n)
+            return (n not in neutron_map, 0 if n.startswith("lm ") else 1, n)
 
         # Compare-loop marker.  The resync-concurrency test (CORE-12037) waits
         # for this line in the resync log before firing its in-resync burst, so
