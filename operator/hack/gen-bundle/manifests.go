@@ -45,8 +45,7 @@ const (
 	// CI dirty-check keep them current, so the bundle ships them as they are.
 	operatorCRDDir = "operator/pkg/crds/operator"
 
-	// secretsRole and secretsRoleBinding grant the operator write access to
-	// secrets, relative to ocpManifestDir.
+	// Relative to ocpManifestDir.
 	secretsRole        = "ocp/02-role-tigera-operator-secrets.yaml"
 	secretsRoleBinding = "ocp/02-rolebinding-tigera-operator-secrets.yaml"
 )
@@ -147,9 +146,8 @@ func copyOperatorManifests(repoRoot, deployDir string) error {
 		// service accounts. The resulting permissions is set to the CSV's
 		// spec.install.clusterPermissions field.
 		{"ocp/02-rolebinding-tigera-operator.yaml", "rolebinding-tigera-operator.yaml"},
-		// Unbound, so operator-sdk ships it as a standalone ClusterRole that OLM
-		// creates under this name. The operator binds it by name in every
-		// namespace it writes secrets to - see CreateOperatorSecretsRoleBinding.
+		// Staged unbound so that it ships as a standalone ClusterRole under this
+		// name, which the operator binds by name wherever it writes secrets.
 		{secretsRole, "role-tigera-operator-secrets.yaml"},
 	}
 	for _, m := range manifests {
@@ -160,15 +158,14 @@ func copyOperatorManifests(repoRoot, deployDir string) error {
 	return copyOperatorSecretsRole(repoRoot, deployDir)
 }
 
-// copyOperatorSecretsRole stages the grant that lets the operator write secrets
-// in its own namespace, which the manifests make by binding the
-// tigera-operator-secrets ClusterRole there. Staged as is, that binding would
-// claim the ClusterRole: operator-sdk folds a bound role into the CSV's
-// permissions and no longer ships it, and OLM names the rules it creates from
-// those itself. So the binding is staged against a namespaced Role with the
-// same rules instead, which becomes the CSV's permissions and leaves the
+// copyOperatorSecretsRole stages the operator's grant to write secrets in its own
+// namespace.
+//
+// Staged as is, the binding would claim the ClusterRole: operator-sdk folds a
+// bound role into the CSV's permissions instead of shipping it, and OLM names
+// what it creates from those itself. Binding a namespaced copy instead leaves the
 // ClusterRole standalone. operator-sdk matches roles to bindings by name alone,
-// so the Role needs a name of its own as well as its own kind.
+// so the copy needs its own name as well as its own kind.
 func copyOperatorSecretsRole(repoRoot, deployDir string) error {
 	const name, namespacedName = "  name: tigera-operator-secrets", "  name: tigera-operator-secrets-namespaced"
 	stages := []struct {
@@ -204,9 +201,10 @@ type lineEdit struct {
 	count    int
 }
 
-// replaceLines applies the edits to a file. An edit that does not match the
-// number of lines it expects means the file no longer looks the way the caller
-// expects, so it is an error rather than a silent no-op.
+// replaceLines applies the edits to a file.
+//
+// A miscount means the source has changed shape, which would otherwise ship a
+// binding that silently still claims the ClusterRole.
 func replaceLines(path string, edits ...lineEdit) error {
 	replaced := make([]int, len(edits))
 	err := editLines(path, func(lines []string) []string {
