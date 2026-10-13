@@ -39,6 +39,7 @@ spec:
               description: IstioSpec defines the desired state of Istio
               properties:
                 dscpMark:
+                  default: 23
                   description: |-
                     DSCPMark define the value of the DSCP mark done by Felix and recognised by Istio CNI for Transparent
                     NetworkPolicies.

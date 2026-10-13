@@ -15,6 +15,7 @@
 package charts
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,9 +24,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"sigs.k8s.io/yaml"
 
-	"github.com/projectcalico/calico/release/internal/steps"
+	"github.com/projectcalico/calico/release/internal/outputs"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/yamledit"
 )
 
@@ -123,7 +126,7 @@ func hasEnv(env []string, want string) bool {
 }
 
 // A resolver answering every chart alike cannot catch a skip of the wrong one.
-func resolvesPerChart(digests map[string]string) steps.DigestResolver {
+func resolvesPerChart(digests map[string]string) registry.DigestResolver {
 	return func(ref string) (string, bool, error) {
 		for chart, digest := range digests {
 			if strings.Contains(ref, "/"+chart+":") {
@@ -551,8 +554,8 @@ func TestPublishRecordsWhatItPushed(t *testing.T) {
 	}
 
 	want := []string{
-		"quay.test/charts/chart-one@sha256:aaa",
-		"quay.test/charts/chart-two@sha256:bbb",
+		"quay.test/charts/chart-one:v3.30.0@sha256:aaa",
+		"quay.test/charts/chart-two:v3.30.0@sha256:bbb",
 	}
 	if !slices.Equal(rec.refs, want) {
 		t.Errorf("recorded refs:\n got %v\nwant %v", rec.refs, want)
@@ -662,6 +665,22 @@ func TestFileName(t *testing.T) {
 	}
 }
 
+func TestChartRef(t *testing.T) {
+	t.Run("names the chart in the registry at its version", func(t *testing.T) {
+		c := Chart{ProductVersion: "v3.30.0"}
+		if got, want := c.Ref("quay.io/calico/charts", "chart-one"), "quay.io/calico/charts/chart-one:v3.30.0"; got != want {
+			t.Errorf("Ref = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("tags with the chart version, not the product version", func(t *testing.T) {
+		c := Chart{ProductVersion: "v3.30.0", ChartVersion: "1"}
+		if got, want := c.Ref("quay.io/calico/charts", "chart-one"), "quay.io/calico/charts/chart-one:v3.30.0-1"; got != want {
+			t.Errorf("Ref = %q, want %q", got, want)
+		}
+	})
+}
+
 func TestDir(t *testing.T) {
 	if got, want := Dir("out"), "out/charts"; got != want {
 		t.Errorf("Dir = %q, want %q", got, want)
@@ -697,8 +716,8 @@ func TestPublishResumeJudgesEachChartByItsOwnDigest(t *testing.T) {
 			"chart-two": "sha256:zzz",
 		})),
 		WithResume([]string{
-			"quay.test/charts/chart-one@sha256:aaa",
-			"quay.test/charts/chart-two@sha256:bbb",
+			"quay.test/charts/chart-one:v3.30.0@sha256:aaa",
+			"quay.test/charts/chart-two:v3.30.0@sha256:bbb",
 		}, false))
 	if err == nil {
 		t.Fatal("expected chart-two's moved digest to fail the publish")
@@ -728,7 +747,7 @@ func TestPublishRecordsPartialRefsWhenALookupFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected the failed lookup to be reported")
 	}
-	want := "quay.test/charts/chart-one@sha256:aaa"
+	want := "quay.test/charts/chart-one:v3.30.0@sha256:aaa"
 	if !slices.Contains(rec.refs, want) {
 		t.Errorf("expected %q recorded despite the failure, got %v", want, rec.refs)
 	}
@@ -972,4 +991,63 @@ func writeChartValues(t *testing.T, root, chart, content string) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+func TestMetadata(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	c := Chart{ProductVersion: "v3.30.0", Names: []string{TigeraOperatorChart}}
+	at := Published{
+		Registry:    "quay.io/calico/charts",
+		DownloadURL: "https://example.com/v3.30.0",
+		Index:       "https://example.com/charts",
+	}
+	unpublished := outputs.Digests{Resolve: func(string) (string, bool, error) { return "", false, nil }}
+
+	t.Run("records each chart at the registry and download URL it was published to", func(t *testing.T) {
+		dir := t.TempDir()
+		w, err := outputs.NewRefsWriter(dir, PublishStep)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := w.Add("quay.io/calico/charts/tigera-operator:v3.30.0@" + digest); err != nil {
+			t.Fatal(err)
+		}
+		got, err := Metadata(dir, c, at, outputs.Digests{Resolve: func(string) (string, bool, error) {
+			return "", false, errors.New("must not resolve")
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := &outputs.Charts{Version: "v3.30.0", Index: "https://example.com/charts", Entries: map[string]outputs.Chart{
+			TigeraOperatorChart: {
+				Image:  "quay.io/calico/charts/tigera-operator:v3.30.0",
+				Digest: digest,
+				URL:    "https://example.com/v3.30.0/" + FileName(TigeraOperatorChart, "v3.30.0"),
+			},
+		}}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("charts (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("names the chart version in its suffix", func(t *testing.T) {
+		withSuffix := c
+		withSuffix.ChartVersion = "1"
+		got, err := Metadata(t.TempDir(), withSuffix, at, unpublished)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Version != "v3.30.0-1" || got.Entries[TigeraOperatorChart].Image != "quay.io/calico/charts/tigera-operator:v3.30.0-1" {
+			t.Errorf("charts = %+v, want version v3.30.0-1", got)
+		}
+	})
+
+	t.Run("fails on an unpublished chart when digests are required", func(t *testing.T) {
+		required := unpublished
+		required.Require = true
+		_, err := Metadata(t.TempDir(), c, at, required)
+		if err == nil || !strings.Contains(err.Error(), "chart tigera-operator") {
+			t.Errorf("err = %v, want it to name the chart", err)
+		}
+	})
 }

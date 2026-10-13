@@ -45,8 +45,16 @@ var (
 	// Where a build leaves the packaged charts. A product that writes them
 	// somewhere other than a per-version directory replaces this.
 	chartsCLIChartDir = func(cfg *Config) string {
-		return filepath.Join(cfg.OutputDir, chartsCLITestVersion)
+		return charts.OutputDir(releaseOutputDir(cfg.RepoRootDir, chartsCLITestVersion))
 	}
+
+	// Where a build leaves the chart index. A product that keeps it beside the
+	// charts replaces this.
+	chartsCLIIndexDir = func(cfg *Config) string { return charts.Dir(chartsCLIChartDir(cfg)) }
+
+	// Where a hashrelease build leaves the packaged charts, given the
+	// hashrelease's own directory. A product that nests them replaces this.
+	chartsCLIHashreleaseChartDir = func(hashreleaseDir string) string { return hashreleaseDir }
 
 	// The make target that packages every chart.
 	chartsCLITarget = "chart"
@@ -178,8 +186,7 @@ func TestChartsBuildBuildsTheIndexByDefault(t *testing.T) {
 	if repo := chartsCLIRepoURL(t); !r.ran(repo) {
 		t.Errorf("expected the index at %q to be downloaded", repo)
 	}
-	// The index is served from charts/
-	indexDir := charts.Dir(chartsCLIChartDir(cfg))
+	indexDir := chartsCLIIndexDir(cfg)
 	if _, err := os.Stat(filepath.Join(indexDir, "index.yaml")); err != nil {
 		t.Errorf("expected the index in %q: %v", indexDir, err)
 	}
@@ -234,7 +241,7 @@ func TestChartsPublishLocalPushesNothing(t *testing.T) {
 func TestChartsPublishLocalRecordsNothing(t *testing.T) {
 	_, cfg := runCharts(t, "publish", "--local", "--helm-registry", chartsCLIRegistry)
 
-	refs, err := outputs.ReadRefs(cfg.OutputDir, charts.PublishStep, chartsCLIChartVersion)
+	refs, err := outputs.ReadRefs(outputs.RecordsDir(cfg.OutputDir, chartsCLITestVersion), charts.PublishStep)
 	if err != nil {
 		t.Fatalf("reading refs: %v", err)
 	}
@@ -246,14 +253,14 @@ func TestChartsPublishLocalRecordsNothing(t *testing.T) {
 func TestChartsPublishRecordsWhatItPushed(t *testing.T) {
 	_, cfg := runCharts(t, "publish", "--helm-registry", chartsCLIRegistry)
 
-	refs, err := outputs.ReadRefs(cfg.OutputDir, charts.PublishStep, chartsCLIChartVersion)
+	refs, err := outputs.ReadRefs(outputs.RecordsDir(cfg.OutputDir, chartsCLITestVersion), charts.PublishStep)
 	if err != nil {
 		t.Fatalf("reading refs: %v", err)
 	}
 	if len(refs) != len(charts.All()) {
 		t.Fatalf("expected one ref per chart, got %d: %v", len(refs), refs)
 	}
-	want := chartsCLIRegistry + "/" + chartsCLIFirstChart(t) + "@" + chartsCLIDigest
+	want := chartsCLIRegistry + "/" + chartsCLIFirstChart(t) + ":" + chartsCLIChartVersion + "@" + chartsCLIDigest
 	if !slices.Contains(refs, want) {
 		t.Errorf("expected %q in the record, got %v", want, refs)
 	}
@@ -361,7 +368,7 @@ func TestChartsBuildForAHashrelease(t *testing.T) {
 	prevVer, prevDir := chartsCLIChartVersion, chartsCLIChartDir
 	chartsCLIChartVersion = pinned
 	chartsCLIChartDir = func(cfg *Config) string {
-		return filepath.Join(baseHashreleaseOutputDir(cfg.RepoRootDir), "abc123")
+		return chartsCLIHashreleaseChartDir(filepath.Join(baseHashreleaseOutputDir(cfg.RepoRootDir), "abc123"))
 	}
 	t.Cleanup(func() { chartsCLIChartVersion, chartsCLIChartDir = prevVer, prevDir })
 
@@ -408,14 +415,14 @@ func TestHashreleaseChartDirMatchesTheHashreleaseFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pinnedChart: %v", err)
 	}
-	want := pin.Hashrelease(baseHashreleaseOutputDir(root), false).Source
+	want := chartsCLIHashreleaseChartDir(pin.Hashrelease(baseHashreleaseOutputDir(root), false).Source)
 	if chart.BaseDir != want {
 		t.Errorf("BaseDir = %q, want %q", chart.BaseDir, want)
 	}
 }
 
 // A product may qualify its charts with a suffix, so the chart version and the
-// product version differ. The build stamps and the publish record must both
+// product version differ. The build stamps and the recorded tags must both
 // follow the resolved chart version, not the product one.
 func TestChartsFollowTheResolvedChartVersion(t *testing.T) {
 	const suffix = "0"
@@ -439,12 +446,16 @@ func TestChartsFollowTheResolvedChartVersion(t *testing.T) {
 	}
 
 	runChartsIn(t, cfg, "publish", "--helm-registry", chartsCLIRegistry)
-	// A missing record reads as empty rather than an error, so count the refs.
-	refs, err := outputs.ReadRefs(cfg.OutputDir, charts.PublishStep, resolved)
+	refs, err := outputs.ReadRefs(outputs.RecordsDir(cfg.OutputDir, chartsCLITestVersion), charts.PublishStep)
 	if err != nil {
 		t.Fatalf("reading refs: %v", err)
 	}
 	if len(refs) != len(charts.All()) {
-		t.Errorf("record under %s has %d refs, want %d", resolved, len(refs), len(charts.All()))
+		t.Errorf("record has %d refs, want %d", len(refs), len(charts.All()))
+	}
+	for _, ref := range refs {
+		if !strings.Contains(ref, ":"+resolved+"@") {
+			t.Errorf("ref %s is not tagged with the chart version %s", ref, resolved)
+		}
 	}
 }

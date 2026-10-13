@@ -255,6 +255,10 @@ func ProgQueryTcx(ifindex int, ingress bool) ([64]uint32, [64]uint32, uint32, er
 	panic("LIBBPF syscall stub")
 }
 
+func ProgQueryNetkit(ifindex int, peer bool) ([64]uint32, [64]uint32, uint32, error) {
+	panic("LIBBPF syscall stub")
+}
+
 func ProgName(id uint32) (string, error) {
 	panic("LIBBPF syscall stub")
 }

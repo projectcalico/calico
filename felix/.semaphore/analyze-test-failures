@@ -297,7 +297,20 @@ fi
 
 echo "analyze-test-failures: Found $batch_count failed batch(es), running fv-tests-guru-sem-integration..."
 
-job_url="${SEMAPHORE_ORGANIZATION_URL}/jobs/${SEMAPHORE_JOB_ID}"
+if [ -n "${CI_WORKFLOW_NAME:-}" ]; then
+    # ArgoCI links runs, not steps.
+    job_url="https://argoci-viewer.dev.calicocloud.io/public/wf/${CI_WORKFLOW_NAME}"
+    workflow_id="${CI_WORKFLOW_NAME}"
+    git_branch="${CI_GIT_PR_BRANCH:-$CI_GIT_BRANCH}"
+    git_url="${CI_GIT_URL}"
+    pr_title="${CI_GIT_PR_TITLE/#none/}"
+else
+    job_url="${SEMAPHORE_ORGANIZATION_URL}/jobs/${SEMAPHORE_JOB_ID}"
+    workflow_id="${SEMAPHORE_WORKFLOW_ID:-}"
+    git_branch="${SEMAPHORE_GIT_WORKING_BRANCH:-$SEMAPHORE_GIT_BRANCH}"
+    git_url="${SEMAPHORE_GIT_URL}"
+    pr_title="${SEMAPHORE_GIT_PR_NAME:-}"
+fi
 
 printf '{
   "calico_repo": %s,
@@ -311,9 +324,9 @@ printf '{
   "pr_title": %s,
   "batches": [%s]
 }' "$(json_escape "$CALICO_REPO")" "$UT_MODE" "$(json_escape "$job_url")" \
-  "$(json_escape "${SEMAPHORE_WORKFLOW_ID:-}")" \
-  "$(json_escape "${SEMAPHORE_GIT_WORKING_BRANCH:-$SEMAPHORE_GIT_BRANCH}")" "$(json_escape "$SEMAPHORE_GIT_URL")" \
-  "$(json_escape "${SEMAPHORE_GIT_PR_NAME:-}")" "$batches_json" \
+  "$(json_escape "$workflow_id")" \
+  "$(json_escape "$git_branch")" "$(json_escape "$git_url")" \
+  "$(json_escape "$pr_title")" "$batches_json" \
   | timeout 660 fv-tests-guru-sem-integration || true
 
 echo "analyze-test-failures: Done."

@@ -3218,7 +3218,8 @@ func startBPFDataplaneComponents(
 	bpfRTMgr := newBPFRouteManager(config, maps, ipFamily, dp.loopSummarizer)
 	dp.RegisterManager(bpfRTMgr)
 
-	livenessScanner := bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled)
+	livenessScanner := bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled,
+		bpfconntrack.WithLinuxConntrack(bpfconntrack.LinuxHoldsTCPFlow))
 	ctLogLevel := bpfconntrack.BPFLogLevelNone
 	// The debug cleanup program references bpf_trace_printk; skip it under
 	// lockdown=confidentiality where that would spam the kernel log on load.

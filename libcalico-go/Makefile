@@ -136,7 +136,18 @@ GINKGO_SKIP?=
 ut:
 	mkdir -p report
 	$(DOCKER_RUN) --privileged $(CALICO_BUILD) \
-		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=libcalico_go_ut.xml --output-dir=report/ -skip "\[Datastore\]" -focus="$(GINKGO_FOCUS)" $(WHAT)'
+		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=libcalico_go_ut.xml --output-dir=report/ --skip "\[Datastore\]" --focus="$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)'
+
+BENCH?=.
+BENCHTIME?=1s
+BENCHCOUNT?=1
+BENCHARGS?=
+
+.PHONY:benchmark
+## Run Go benchmarks in a container, e.g. make benchmark WHAT=./lib/ipam/accounting/ BENCHCOUNT=10. BENCHARGS passes extra go test flags, such as -memprofile.
+benchmark:
+	$(DOCKER_RUN) $(CALICO_BUILD) \
+		sh -c 'cd /go/src/$(PACKAGE_NAME) && go test -run=^$$ -bench="$(BENCH)" -benchmem -benchtime=$(BENCHTIME) -count=$(BENCHCOUNT) $(BENCHARGS) $(WHAT)'
 
 .PHONY:fv
 ## Run functional tests against a real datastore in a container.

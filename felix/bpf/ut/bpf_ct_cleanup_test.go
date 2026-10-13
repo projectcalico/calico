@@ -15,7 +15,9 @@
 package ut_test
 
 import (
+	"net"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 
@@ -33,6 +35,34 @@ func TestBPFProgCleaner(t *testing.T) {
 			runCTCleanupTest(t, tc)
 		})
 	}
+	t.Run("IPv6 expired orphan NAT reverse", func(t *testing.T) {
+		runCTCleanupV6ExpiredOrphanNATReverseTest(t)
+	})
+}
+
+func runCTCleanupV6ExpiredOrphanNATReverseTest(t *testing.T) {
+	RegisterTestingT(t)
+	scanner := setUpConntrackV6ScanTest(t)
+	revKey := conntrack.NewKeyV6(
+		conntrack.ProtoTCP,
+		net.ParseIP("2001:db8::1"), 5555,
+		net.ParseIP("2001:db8::2"), 8080,
+	)
+	revVal := conntrack.NewValueV6NATReverse(
+		cttestdata.Now-31*time.Second,
+		0,
+		conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true},
+		conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true},
+		nil, nil, 5555,
+	)
+	err := ctMapV6.Update(revKey.AsBytes(), revVal.AsBytes())
+	Expect(err).NotTo(HaveOccurred())
+	scanner.Scan()
+	_, err = ctMapV6.Get(revKey.AsBytes())
+	Expect(maps.IsNotExists(err)).To(BeTrue(), "expired IPv6 orphan NAT reverse entry should be deleted")
+	cleanUpMapMem, err := cleanupv1.LoadMapMemV6(ctCleanupMapV6)
+	Expect(err).NotTo(HaveOccurred(), "Failed to load IPv6 ct cleanup map")
+	Expect(len(cleanUpMapMem)).To(Equal(0))
 }
 
 func runCTCleanupTest(t *testing.T, tc cttestdata.CTCleanupTest) {
@@ -71,6 +101,28 @@ func setUpConntrackScanTest(t *testing.T) *conntrack.Scanner {
 	clearCTMap := func() {
 		resetMap(ctMap)
 		resetMap(ctCleanupMap)
+	}
+	clearCTMap()          // Make sure we start with an empty map.
+	t.Cleanup(clearCTMap) // Make sure we leave a clean map.
+	return scanner
+}
+
+func setUpConntrackV6ScanTest(t *testing.T) *conntrack.Scanner {
+	RegisterTestingT(t)
+	lc := conntrack.NewLivenessScanner(timeouts.DefaultTimeouts(), true, conntrack.WithTimeShim(mocktime.New()))
+	cleaner, err := conntrack.NewBPFProgCleaner(6, timeouts.DefaultTimeouts(), conntrack.BPFLogLevelDebug)
+	Expect(err).NotTo(HaveOccurred(), "Failed to create IPv6 BPFCleaner")
+	scanner := conntrack.NewScanner(ctMapV6, conntrack.KeyV6FromBytes,
+		conntrack.ValueV6FromBytes,
+		nil, "Disabled", ctCleanupMapV6.(maps.MapWithExistsCheck), 6,
+		cleaner, lc)
+	t.Cleanup(func() {
+		scanner.Close()
+	})
+
+	clearCTMap := func() {
+		resetMap(ctMapV6)
+		resetMap(ctCleanupMapV6)
 	}
 	clearCTMap()          // Make sure we start with an empty map.
 	t.Cleanup(clearCTMap) // Make sure we leave a clean map.

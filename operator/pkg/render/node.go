@@ -609,6 +609,13 @@ func (c *nodeComponent) cniPluginRole() *rbacv1.ClusterRole {
 				Verbs:     []string{"patch"},
 			},
 			{
+				// Lets the CNI plugin's pods/status patch through protect-cni-annotations.projectcalico.org.
+				// Nothing serves this resource; it exists only to be granted.
+				APIGroups: []string{"projectcalico.org"},
+				Resources: []string{"cniannotations"},
+				Verbs:     []string{"write"},
+			},
+			{
 				// Most IPAM resources need full CRUD permissions so we can allocate and
 				// release IP addresses for pods.
 				APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
@@ -1084,10 +1091,6 @@ func (c *nodeComponent) nodeVolumes() []corev1.Volume {
 		{Name: "sys-fs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs", Type: &dirOrCreate}}},
 		// Volume for the bpffs itself, used by the main node container.
 		{Name: "bpffs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs/bpf", Type: &dirMustExist}}},
-		// securityfs, read by Felix to detect kernel lockdown=confidentiality. No
-		// Type set (like nodeproc) so nodes without securityfs still start; Felix
-		// treats an unreadable lockdown file as "not locked down".
-		{Name: "sys-kernel-security", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/kernel/security"}}},
 		// Volume used by mount-cgroupv2 init container to access root cgroup name space of node.
 		{Name: "nodeproc", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/proc"}}},
 	}
@@ -1395,9 +1398,6 @@ func (c *nodeComponent) nodeVolumeMounts() []corev1.VolumeMount {
 		corev1.VolumeMount{MountPath: "/var/run/calico", Name: "var-run-calico"},
 		corev1.VolumeMount{MountPath: "/var/lib/calico", Name: "var-lib-calico"},
 		corev1.VolumeMount{MountPath: "/sys/fs/bpf", Name: BPFVolumeName},
-		// Read-only so Felix can detect kernel lockdown=confidentiality via
-		// /sys/kernel/security/lockdown (securityfs is separate from /sys/fs).
-		corev1.VolumeMount{MountPath: "/sys/kernel/security", Name: "sys-kernel-security", ReadOnly: true},
 		c.cfg.TLS.NodeSecret.VolumeMount(c.SupportedOSType()),
 	)
 

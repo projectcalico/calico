@@ -23,6 +23,9 @@ import (
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/common/model"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -143,62 +146,65 @@ func (scraper *MetricScraper) MetricSumWhere(metricName string, match func(label
 			return 0, err
 		}
 
-		found := false
-		var sum float64
-		var skipped []string
-		for _, line := range strings.Split(output, "\n") {
-			if !strings.HasPrefix(line, metricName+" ") && !strings.HasPrefix(line, metricName+"{") {
-				continue
-			}
-			parts := strings.Fields(line)
-			if len(parts) < 2 {
-				continue
-			}
-			if match != nil && !match(parseLabels(line)) {
-				skipped = append(skipped, parts[0])
-				continue
-			}
-			v, err := strconv.ParseFloat(parts[len(parts)-1], 64)
-			if err != nil {
-				return 0, fmt.Errorf("failed to parse %q from %s: %w", line, url, err)
-			}
-			sum += v
-			found = true
+		series, err := parseSeries(output, metricName)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse %s from %s: %w", metricName, url, err)
 		}
-
-		if !found {
-			if len(skipped) > 0 {
-				return 0, fmt.Errorf("no series of %s from %s matched; skipped %s", metricName, url, strings.Join(skipped, ", "))
-			}
-			return 0, fmt.Errorf("metric %s not found in response from %s", metricName, url)
-		}
-		return sum, nil
+		return sumSeries(metricName, series, match, url)
 	}
 }
 
-// parseLabels pulls the label set out of one Prometheus text-format series.
-func parseLabels(line string) map[string]string {
-	start := strings.Index(line, "{")
-	end := strings.LastIndex(line, "}")
-	if start < 0 || end < start {
-		return nil
+func sumSeries(metricName string, series []*dto.Metric, match func(labels map[string]string) bool, url string) (float64, error) {
+	found := false
+	var sum float64
+	var skipped []string
+	for _, m := range series {
+		labels := model.LabelSet{}
+		for _, lp := range m.GetLabel() {
+			labels[model.LabelName(lp.GetName())] = model.LabelValue(lp.GetValue())
+		}
+		if match != nil && !match(labelMap(labels)) {
+			skipped = append(skipped, metricName+labels.String())
+			continue
+		}
+		sum += m.GetUntyped().GetValue()
+		found = true
 	}
 
-	labels := map[string]string{}
-	rest := line[start+1 : end]
-	for rest != "" {
-		name, after, ok := strings.Cut(rest, `="`)
-		if !ok {
-			break
+	if !found {
+		if len(skipped) > 0 {
+			return 0, fmt.Errorf("no series of %s from %s matched; skipped %s", metricName, url, strings.Join(skipped, ", "))
 		}
-		value, after, ok := strings.Cut(after, `"`)
-		if !ok {
-			break
-		}
-		labels[strings.TrimLeft(name, ", ")] = value
-		rest = after
+		return 0, fmt.Errorf("metric %s not found in response from %s", metricName, url)
 	}
-	return labels
+	return sum, nil
+}
+
+// parseSeries keeps only metricName's sample lines before parsing, so a quirk
+// elsewhere in the scrape can't fail the strict parser. Without their # TYPE
+// line the samples parse as untyped.
+func parseSeries(output, metricName string) ([]*dto.Metric, error) {
+	var b strings.Builder
+	for _, line := range strings.Split(output, "\n") {
+		if strings.HasPrefix(line, metricName+" ") || strings.HasPrefix(line, metricName+"{") {
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
+	}
+	parser := expfmt.NewTextParser(model.UTF8Validation)
+	families, err := parser.TextToMetricFamilies(strings.NewReader(b.String()))
+	if err != nil {
+		return nil, err
+	}
+	return families[metricName].GetMetric(), nil
+}
+
+func labelMap(ls model.LabelSet) map[string]string {
+	m := make(map[string]string, len(ls))
+	for k, v := range ls {
+		m[string(k)] = string(v)
+	}
+	return m
 }
 
 func (scraper *MetricScraper) scrape(metricName string) (output, url string, err error) {

@@ -74,6 +74,7 @@ var features = map[string]bool{
 	"Pods":            true,
 	"QoS":             true,
 	"Datapath":        true,
+	"IngressGateway":  true,
 	"Istio":           true,
 	"KubeVirt":        true,
 	"Wireguard":       true,

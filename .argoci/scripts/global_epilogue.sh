@@ -19,6 +19,33 @@ cd "${BZ_HOME}" 2>/dev/null || echo "[WARN] could not cd to BZ_HOME=${BZ_HOME}"
 # variable, falling back to CI_EXIT_CODE then 0.
 CI_EXIT_CODE=${CI_STEP_EXIT_CODE:-${CI_EXIT_CODE:-0}}
 
+# bz is Go, which restores SIGTERM's default even though this shell ignores it,
+# so the repeated SIGTERMs of a stop kill whatever bz is running. Its own session
+# keeps them off.
+destroy_cluster() {
+  if ! command -v bz >/dev/null 2>&1; then
+    echo "[INFO] bz never installed, so there is no cluster to destroy"
+    return 0
+  fi
+  echo "[INFO] destroying cluster ${CLUSTER_NAME}"
+  if command -v setsid >/dev/null 2>&1; then
+    setsid --wait bz destroy |& tee "${BZ_LOGS_DIR}/destroy.log" || true
+  else
+    bz destroy |& tee "${BZ_LOGS_DIR}/destroy.log" || true
+  fi
+  if [[ -f "${BZ_LOGS_DIR}/destroy.log" ]]; then
+    artifact push job "${BZ_LOGS_DIR}/destroy.log" -d logs/destroy.log -f || true
+  fi
+}
+
+# A stopped run has nothing worth diagnosing, and the destroy alone takes most of
+# the grace period, so it goes first and the slow extras are skipped.
+stopped=false
+if [[ "${CI_POD_STOPPED:-false}" == "true" ]]; then
+  stopped=true
+  destroy_cluster
+fi
+
 # The viewer lists artifacts under CI_ARTIFACT_STEP_STORAGE, which is where
 # `artifact push job` publishes.
 echo "[INFO] publishing artifacts to ${CI_ARTIFACT_STEP_STORAGE}"
@@ -46,14 +73,14 @@ publish_vpp_copy() {
     gsutil cp "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" \
               "${VPP_RESULTS_PREFIX}/${DIAGS_ARCHIVE_FILENAME}" || true
   fi
-  if [[ -f "${REPORT_DIR}/junit.xml" ]]; then
-    gsutil cp "${REPORT_DIR}/junit.xml" "${VPP_RESULTS_PREFIX}/junit.xml" || true
+  if [[ -f "${_junit}" ]]; then
+    gsutil cp "${_junit}" "${VPP_RESULTS_PREFIX}/junit.xml" || true
   fi
   publish_vpp_logs
 }
 
 # Capture diags on failure (or always for cert runs).
-if [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
+if [[ "${stopped}" == "false" ]] && [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
   echo "[INFO] capturing diags"
   bz diags |& tee "${BZ_LOGS_DIR}/diagnostic.log" || true
   artifact push job "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" -d diags.tgz -f || true
@@ -65,23 +92,33 @@ if [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
   fi
 fi
 
-# Suites that emit a tree of JUnit files rather than a single junit.xml (e.g.
-# openstack-e2e writes one xmlrunner file per test class under results/) get
-# them merged into ${REPORT_DIR}/junit.xml, so the publish below uploads one
-# test report that the ArgoCI viewer renders with collapsible suites.
-if [[ ! -f "${REPORT_DIR}/junit.xml" && -d "${REPORT_DIR}" ]]; then
-  python3 "$(dirname "${BASH_SOURCE[0]}")/merge_junit.py" "${REPORT_DIR}" "${REPORT_DIR}/junit.xml" || true
+# Lens reads each top-level .xml in REPORT_DIR, so subdir reports go into
+# junit.xml and top-level ones stay out of it.
+_merge_junit="$(dirname "${BASH_SOURCE[0]}")/merge_junit.py"
+if [[ -d "${REPORT_DIR}" && ! -f "${REPORT_DIR}/junit.xml" ]]; then
+  python3 "${_merge_junit}" --scope=subdirs "${REPORT_DIR}" "${REPORT_DIR}/junit.xml" || true
+fi
+
+# The viewer shows one junit.xml; build it outside REPORT_DIR so Lens doesn't
+# read it twice.
+_junit="${REPORT_DIR}/junit.xml"
+if [[ -d "${REPORT_DIR}" ]] && [[ -n "$(find "${REPORT_DIR}" -maxdepth 1 -name '*.xml' ! -name junit.xml -print -quit)" ]]; then
+  _merged="${BZ_LOCAL_DIR:-/tmp}/junit-merged.xml"
+  rm -f "${_merged}"
+  python3 "${_merge_junit}" --scope=top "${REPORT_DIR}" "${_merged}" || true
+  # merge_junit.py writes nothing when no file parses as JUnit.
+  [[ -f "${_merged}" ]] && _junit="${_merged}"
 fi
 
 # Publish JUnit + logs.
-if [[ -f "${REPORT_DIR}/junit.xml" ]]; then
-  artifact push job "${REPORT_DIR}/junit.xml" -f || true
+if [[ -f "${_junit}" ]]; then
+  artifact push job "${_junit}" -d junit.xml -f || true
 fi
 artifact push job "${BZ_LOGS_DIR}" -d logs -f || true
 publish_vpp_copy
 
 # Upload results to Lens (best-effort; token from banzai-secrets).
-if [[ -n "${GITHUB_ACCESS_TOKEN:-}" ]]; then
+if [[ "${stopped}" == "false" && -n "${GITHUB_ACCESS_TOKEN:-}" ]]; then
   curl --retry 3 -fsSL -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
     -H "Accept: application/vnd.github.v3.raw" \
     -o /tmp/run-lens.sh \
@@ -89,14 +126,9 @@ if [[ -n "${GITHUB_ACCESS_TOKEN:-}" ]]; then
     chmod +x /tmp/run-lens.sh && /tmp/run-lens.sh || true
 fi
 
-# Tear the cluster down.
-echo "[INFO] destroying cluster ${CLUSTER_NAME}"
-bz destroy |& tee "${BZ_LOGS_DIR}/destroy.log" || true
-
-# destroy.log only exists now, after the logs push above. Pushing it separately
-# rather than moving that push keeps logs for runs where destroy hangs.
-if [[ -f "${BZ_LOGS_DIR}/destroy.log" ]]; then
-  artifact push job "${BZ_LOGS_DIR}/destroy.log" -d logs/destroy.log -f || true
+# Last otherwise, so the logs above are pushed even when destroy hangs.
+if [[ "${stopped}" == "false" ]]; then
+  destroy_cluster
 fi
 publish_vpp_logs
 

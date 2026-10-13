@@ -15,8 +15,6 @@
 package utils
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/projectcalico/calico/release/internal/command"
@@ -29,23 +27,6 @@ const (
 	// DefaultRemote is the default remote for the repository.
 	DefaultRemote = "origin"
 )
-
-// Clone clones the repository at the given branch as the given directory.
-func Clone(repo, branch, dir string) error {
-	parentDir := filepath.Dir(dir)
-	if err := os.MkdirAll(parentDir, DirPerms); err != nil {
-		return err
-	}
-	if _, err := os.Stat(dir); !os.IsNotExist(err) {
-		_, err := command.GitInDir(dir, "checkout", branch)
-		if err == nil {
-			_, err = command.GitInDir(dir, "pull")
-			return err
-		}
-	}
-	_, err := command.GitInDir(parentDir, "clone", repo, "--branch", branch, filepath.Base(dir))
-	return err
-}
 
 // GitBranch returns the current git branch of the repository.
 func GitBranch(dir string) (string, error) {

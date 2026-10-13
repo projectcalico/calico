@@ -320,6 +320,37 @@ func TestInverseFlagName(t *testing.T) {
 	}
 }
 
+// A subcommand that reads no CI metadata must still run under --ci without it.
+func TestCIWithoutJobIdentityIsNotAnError(t *testing.T) {
+	assertRun(t, ciFlags, []string{"--ci"}, "")
+}
+
+// A job link that cannot be built is dropped rather than failing the command.
+func TestCIJobURLEmptyWithoutJobIdentity(t *testing.T) {
+	var got string
+	cmd := &cli.Command{
+		Name:  "test",
+		Flags: ciFlags,
+		Action: func(_ context.Context, c *cli.Command) error {
+			got = ciJobURL(c)
+			return nil
+		},
+	}
+	if err := cmd.Run(context.Background(), []string{"test", "--ci"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "" {
+		t.Errorf("ciJobURL() = %q, want empty when the job is unidentified", got)
+	}
+
+	if err := cmd.Run(context.Background(), []string{"test", "--ci", "--ci-url", "https://ci.example", "--ci-job-id", "42"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "https://ci.example/jobs/42"; got != want {
+		t.Errorf("ciJobURL() = %q, want %q", got, want)
+	}
+}
+
 func TestReleaseNotesFlag(t *testing.T) {
 	flags := []cli.Flag{releaseNotesFlag, orgFlag, repoFlag, validationFlag, branchCheckFlag}
 	calico := func(rest ...string) []string {

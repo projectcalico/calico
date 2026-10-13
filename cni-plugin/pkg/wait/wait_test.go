@@ -98,4 +98,66 @@ var _ = Describe("k8s-wait", func() {
 			Expect(err).NotTo(HaveOccurred(), "Polling thread returned an error.")
 		})
 	})
+
+	Context("ForFileWithTimeout", func() {
+		var dir string
+
+		BeforeEach(func() {
+			dir = GinkgoT().TempDir()
+		})
+
+		waitInBackground := func(path string, timeout time.Duration) chan error {
+			exit := make(chan error, 1)
+			go func() {
+				exit <- ForFileWithTimeout(path, timeout)
+			}()
+			return exit
+		}
+
+		It("should return immediately if the file already exists", func() {
+			path := filepath.Join(dir, "nodename")
+			Expect(os.WriteFile(path, []byte("node-1"), 0o644)).To(Succeed())
+
+			var err error
+			Eventually(waitInBackground(path, 3*time.Second), "1s").Should(Receive(&err))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should return an error after the timeout if the file never appears", func() {
+			exit := waitInBackground(filepath.Join(dir, "nodename"), 2*time.Second)
+			Consistently(exit, "1s").ShouldNot(Receive(), "Returned before the timeout.")
+
+			var err error
+			Eventually(exit, "3s").Should(Receive(&err))
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("should return once the file is created", func() {
+			path := filepath.Join(dir, "nodename")
+			exit := waitInBackground(path, 10*time.Second)
+			Consistently(exit, "1s").ShouldNot(Receive(), "Returned before the file was created.")
+
+			Expect(os.WriteFile(path, []byte("node-1"), 0o644)).To(Succeed())
+
+			var err error
+			Eventually(exit, "2s").Should(Receive(&err))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should return once the file is created in a directory that did not exist at the start", func() {
+			// On node boot /var/lib/calico may not exist until calico/node creates it,
+			// so the watch cannot be set up and the wait must fall back to polling.
+			subDir := filepath.Join(dir, "calico")
+			path := filepath.Join(subDir, "nodename")
+			exit := waitInBackground(path, 10*time.Second)
+			Consistently(exit, "1s").ShouldNot(Receive(), "Returned before the file was created.")
+
+			Expect(os.MkdirAll(subDir, 0o755)).To(Succeed())
+			Expect(os.WriteFile(path, []byte("node-1"), 0o644)).To(Succeed())
+
+			var err error
+			Eventually(exit, "3s").Should(Receive(&err))
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
 })

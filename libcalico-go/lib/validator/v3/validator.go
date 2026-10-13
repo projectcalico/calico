@@ -142,9 +142,16 @@ func Validate(current any) error {
 				if name == "" || name == "<nil>" {
 					name = resolveKind(rObj)
 				}
+
+				// Duplicate and required errors carry no detail, so fall back
+				// to the rendered body to keep the message meaningful.
+				reason := e.Detail
+				if reason == "" {
+					reason = e.ErrorBody()
+				}
 				verr.ErroredFields = append(verr.ErroredFields, errors.ErroredField{
 					Name:   name,
-					Reason: e.Detail,
+					Reason: reason,
 				})
 			}
 		}

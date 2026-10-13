@@ -26,6 +26,8 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/docs"
 	"github.com/projectcalico/calico/release/internal/github"
+	"github.com/projectcalico/calico/release/internal/outputs"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/yamledit"
@@ -61,7 +63,12 @@ const (
 )
 
 var RepoURL = func() (string, error) {
-	url, err := url.JoinPath(docs.BaseURL, docs.ProductSlug, chartsDirName)
+	return RepoURLAt(docs.BaseURL + "/" + docs.ProductSlug)
+}
+
+// RepoURLAt is the Helm repository a site serves under base.
+func RepoURLAt(base string) (string, error) {
+	url, err := url.JoinPath(base, chartsDirName)
 	if err != nil {
 		return "", fmt.Errorf("charts repo URL: %w", err)
 	}
@@ -137,6 +144,11 @@ func (c Chart) Version() string {
 	return Version(c.ProductVersion, c.ChartVersion)
 }
 
+// Ref names the chart as pushed to one registry.
+func (c Chart) Ref(reg, name string) string {
+	return unit{chart: name, registry: reg}.repo() + ":" + c.Version()
+}
+
 // FileName is the file one chart is packaged into.
 func FileName(chart, chartVersion string) string {
 	name := chart
@@ -202,7 +214,7 @@ type settings struct {
 
 	refs steps.RefRecorder
 
-	resolve steps.DigestResolver
+	resolve registry.DigestResolver
 
 	// resume is the record an earlier run left, and how to check it.
 	resume *resume
@@ -325,7 +337,7 @@ func WithRecord(rec steps.RefRecorder) PublishOption {
 	})
 }
 
-func WithResolver(resolve steps.DigestResolver) PublishOption {
+func WithResolver(resolve registry.DigestResolver) PublishOption {
 	return publishSetting(func(s *settings) error {
 		if resolve == nil {
 			return fmt.Errorf("no resolver to read published digests")
@@ -370,4 +382,42 @@ var ValueEditsFor = func(productVersion, productRegistry, operatorImage, operato
 	return append(slices.Clone(calicoChartEdits(productVersion, productRegistry)),
 		operatorChartEdits(productVersion, productRegistry, operatorImage, operatorVersion, operatorRegistry)...,
 	)
+}
+
+func DigestSource(recordsDir string) (registry.DigestSource, error) {
+	return outputs.DigestSourceFor(recordsDir, PublishStep)
+}
+
+// Published is where a release's charts went. Index is empty when no index
+// was published.
+type Published struct {
+	Registry    string
+	DownloadURL string
+	Index       string
+}
+
+// Metadata is the charts' section of the release metadata. Each chart is
+// recorded at the registry in at.
+func Metadata(recordsDir string, c Chart, at Published, d outputs.Digests) (*outputs.Charts, error) {
+	src, err := DigestSource(recordsDir)
+	if err != nil {
+		return nil, err
+	}
+	out := &outputs.Charts{Version: c.Version(), Index: at.Index, Entries: map[string]outputs.Chart{}}
+	var errs []error
+	for _, name := range c.Names {
+		u, err := url.JoinPath(at.DownloadURL, FileName(name, c.Version()))
+		if err != nil {
+			errs = append(errs, fmt.Errorf("chart %s URL: %w", name, err))
+			continue
+		}
+		ref := c.Ref(at.Registry, name)
+		digest, err := d.Of(src, ref)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("chart %s: %w", name, err))
+			continue
+		}
+		out.Entries[name] = outputs.Chart{Image: ref, Digest: digest, URL: u}
+	}
+	return out, errors.Join(errs...)
 }

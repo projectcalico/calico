@@ -120,7 +120,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 	}
 
 #ifndef IPVER6
-        if (ctx->state->ip_proto != IPPROTO_ICMP_46 && ctx->state->flags & CALI_ST_FIRST_FRAG) {
+	if (ctx->state->flags & CALI_ST_FIRST_FRAG) {
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
@@ -150,7 +150,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		}
 
 		/* Revalidate the access to the packet */
-		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+		if (skb_refresh_validate_ptrs_l4(ctx)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short");
 			goto deny;
@@ -228,6 +228,23 @@ skip_redir_ifindex:
 			goto skip_fib;
 		}
 
+		if (state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX &&
+				!(state->ct_result.fwd_flags & CT_FWD_FLAG_TUNNEL) &&
+				cali_rt_needs_tunnel_egress(dest_rt)) {
+			/* The hint is the opposite direction's ingress device - a
+			 * valid egress for an encap destination only if it is the
+			 * tunnel itself; redirecting to a physical device would emit
+			 * the raw inner frame there. Conntrack normally replaces such
+			 * a hint on the flow's first reply; reaching here means it
+			 * could not (no route yet, failed lookup, entry predating the
+			 * tunnel bit). Resolve the slow way for this packet.
+			 */
+			CALI_DEBUG("Tunneled dest " IP_FMT " but fwd hint dev %d is not a tunnel,"
+					" resolving by FIB",
+					debug_ip(state->ip_dst), state->ct_result.ifindex_fwd);
+			state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
+		}
+
 		if (state->ct_result.ifindex_fwd == CT_INVALID_IFINDEX) {
 			CALI_DEBUG("ifindex_fwd is CT_INVALID_IFINDEX, doing FIB lookup");
 			__u32 __fib_ifindex = ctx->skb->ifindex;
@@ -281,7 +298,7 @@ skip_redir_ifindex:
 			if ((rc = try_redirect_to_peer(ctx)) == TC_ACT_REDIRECT) {
 				goto skip_fib;
 			}
-		} else if ((cali_rt_is_tunneled(dest_rt) && !cali_rt_is_same_subnet(dest_rt))) {
+		} else if (cali_rt_needs_tunnel_egress(dest_rt)) {
 			struct bpf_tunnel_key key = {
 				.tunnel_id = OVERLAY_TUNNEL_ID,
 			};
@@ -372,7 +389,7 @@ try_fib_external:
 	// Try a short-circuit FIB lookup.
 	if (fwd_fib(&ctx->state->fwd)) {
 		/* Revalidate the access to the packet */
-		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+		if (skb_refresh_validate_ptrs_l4(ctx)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short");
 			goto deny;

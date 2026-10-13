@@ -378,13 +378,8 @@ var _ = Describe("Istio controller tests", func() {
 			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
 			Expect(err).ShouldNot(HaveOccurred())
 
-			// Verify DSCPMark was set to 23
-			updatedIstio := &operatorv1.Istio{}
-			Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, updatedIstio)).NotTo(HaveOccurred())
-			Expect(updatedIstio.Spec.DSCPMark).NotTo(BeNil())
-			Expect(updatedIstio.Spec.DSCPMark.ToUint8()).To(Equal(uint8(23)))
-
-			// Verify FelixConfiguration was patched
+			// The default reaches FelixConfiguration. The spec is defaulted by the CRD
+			// schema, which the fake client does not apply.
 			updatedFC := &v3.FelixConfiguration{}
 			Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, updatedFC)).NotTo(HaveOccurred())
 			Expect(updatedFC.Spec.IstioAmbientMode).NotTo(BeNil())

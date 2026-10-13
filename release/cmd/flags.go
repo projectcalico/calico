@@ -164,7 +164,7 @@ var (
 	forceFlag = &cli.BoolFlag{
 		Name:     "force",
 		Category: stepControlCategory,
-		Usage:    "Republish artifacts whose published digest differs from the record.",
+		Usage:    "Ignore safety check and force the action to proceed",
 		Sources:  cli.EnvVars("FORCE"),
 	}
 )
@@ -342,12 +342,6 @@ var (
 		Usage:    "Run in a continuous integration (CI) environment",
 		Sources:  cli.EnvVars("CI"),
 		Value:    false,
-		Action: func(_ context.Context, c *cli.Command, b bool) error {
-			if b && (c.String(ciBaseURLFlag.Name) == "" || c.String(ciJobIDFlag.Name) == "") {
-				return fmt.Errorf("CI requires %s and %s flags to be set", ciBaseURLFlag.Name, ciJobIDFlag.Name)
-			}
-			return nil
-		},
 	}
 	ciBaseURLFlag = &cli.StringFlag{
 		Name:     "ci-url",

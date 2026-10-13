@@ -47,6 +47,12 @@ const (
 	EnvOperatorImageOverride    = "OPERATOR_IMAGE_OVERRIDE"
 	EnvRegistry                 = "REGISTRY"
 
+	EnvCalicoRegistry        = "CALICO_REGISTRY"
+	EnvCalicoImagePath       = "CALICO_IMAGE_PATH"
+	EnvCalicoVersion         = "CALICO_VERSION"
+	EnvOperatorImageRegistry = "OPERATOR_IMAGE_REGISTRY"
+	EnvOperatorImagePath     = "OPERATOR_IMAGE_PATH"
+
 	EnvChartDestination = "CHART_DESTINATION"
 	EnvTZ               = "TZ" // EnvTZ fixes the timezone helm stamps index entries with.
 )
