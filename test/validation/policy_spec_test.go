@@ -48,8 +48,8 @@ func policyKinds(ingress, egress []v3.Rule) map[string]client.Object {
 // A global policy has no namespace of its own to resolve a service name in.
 func TestGlobalPolicy_ServicesNamespace(t *testing.T) {
 	const wantErr = "services in a global policy must specify a namespace"
-	named := &v3.ServiceMatch{Name: "my-svc", Namespace: "default"}
-	bare := &v3.ServiceMatch{Name: "my-svc"}
+	withNamespace := &v3.ServiceMatch{Name: "my-svc", Namespace: "default"}
+	withoutNamespace := &v3.ServiceMatch{Name: "my-svc"}
 
 	for _, tt := range []struct {
 		name    string
@@ -59,17 +59,17 @@ func TestGlobalPolicy_ServicesNamespace(t *testing.T) {
 	}{
 		{
 			name:    "namespace set",
-			ingress: []v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: named}}},
-			egress:  []v3.Rule{{Action: v3.Allow, Destination: v3.EntityRule{Services: named}}},
+			ingress: []v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: withNamespace}}},
+			egress:  []v3.Rule{{Action: v3.Allow, Destination: v3.EntityRule{Services: withNamespace}}},
 		},
 		{
 			name:    "egress destination without namespace",
-			egress:  []v3.Rule{{Action: v3.Allow, Destination: v3.EntityRule{Services: bare}}},
+			egress:  []v3.Rule{{Action: v3.Allow, Destination: v3.EntityRule{Services: withoutNamespace}}},
 			wantErr: wantErr,
 		},
 		{
 			name:    "ingress source without namespace",
-			ingress: []v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: bare}}},
+			ingress: []v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: withoutNamespace}}},
 			wantErr: wantErr,
 		},
 	} {
@@ -86,7 +86,7 @@ func TestGlobalPolicy_ServicesNamespace(t *testing.T) {
 	}
 
 	// A namespaced policy falls back to its own namespace.
-	expectCreateSucceeds(t, policyKinds([]v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: bare}}}, nil)["NetworkPolicy"])
+	expectCreateSucceeds(t, policyKinds([]v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: withoutNamespace}}}, nil)["NetworkPolicy"])
 }
 
 // A service match names the far end of the connection, so it only makes sense
