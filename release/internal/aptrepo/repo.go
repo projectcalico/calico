@@ -56,7 +56,7 @@ type Repo struct {
 var repoDistributionsTemplate string
 
 // NewRepo creates a new Repo instance with the appropriate fields populated
-func NewRepo(tempDir, outputDir string, repoConfig RepoConfig, url string, r command.CommandRunner) (*Repo, error) {
+func NewRepo(tempDir, outputDir string, repoConfig RepoConfig, url string, runner command.CommandRunner) (*Repo, error) {
 	if outputDir == "" {
 		outputDir = filepath.Join(tempDir, "_apt_output_dir")
 	}
@@ -66,7 +66,7 @@ func NewRepo(tempDir, outputDir string, repoConfig RepoConfig, url string, r com
 		OutputDirectory: outputDir,
 		Config:          repoConfig,
 		PublishingURL:   url,
-		runner:          r,
+		runner:          runner,
 	}
 	return &repo, nil
 }
@@ -205,7 +205,7 @@ func (repo *Repo) IncludeDeb(component, debFile string) error {
 // RecursiveAddDebsFromDirectories takes a list of paths to search and finds all debian packages
 // under those paths, gets their suite/component name, and adds them to the repo
 func (repo *Repo) RecursiveAddDebsFromDirectories(searchPaths []string) error {
-	debsBySuite, err := repo.getRecursiveDebsBySuite(searchPaths)
+	debsBySuite, err := getRecursiveDebsBySuite(repo.runner, searchPaths)
 	if err != nil {
 		return fmt.Errorf("could not scan for debian packages: %w", err)
 	}

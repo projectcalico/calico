@@ -33,12 +33,12 @@ import (
 )
 
 // PubKey takes a GPG key ID and fetches the ascii-armored GPG public key
-func PubKey(r command.CommandRunner, gpgKeyID string) (string, error) {
+func PubKey(runner command.CommandRunner, gpgKeyID string) (string, error) {
 	logrus.Debugf("Getting ascii-armored public key for GPG key %s", gpgKeyID)
 
 	cmdArgs := []string{"--armor", "--export", gpgKeyID}
 	logrus.Debugf("Running gpg with args %s", strings.Join(cmdArgs, " "))
-	gpgOut, err := r.Run("gpg", cmdArgs, nil)
+	gpgOut, err := runner.Run("gpg", cmdArgs, nil)
 	if err != nil {
 		return "", fmt.Errorf("exporting gpg key: %w", err)
 	}
@@ -54,15 +54,15 @@ func PubKey(r command.CommandRunner, gpgKeyID string) (string, error) {
 // the gpgkey URL in their .repo file, and mirrors and CDNs cache by URL, so a
 // changed-in-place key file is both a cache hazard and indistinguishable from
 // tampering.
-func ExportPubKeyFile(r command.CommandRunner, gpgKeyID, dir, prefix string) (string, error) {
-	pubKey, err := PubKey(r, gpgKeyID)
+func ExportPubKeyFile(runner command.CommandRunner, gpgKeyID, dir, prefix string) (string, error) {
+	pubKey, err := PubKey(runner, gpgKeyID)
 	if err != nil {
 		return "", fmt.Errorf("unable to export public key for GPG key %s: %w", gpgKeyID, err)
 	}
 	if !strings.Contains(pubKey, "BEGIN PGP PUBLIC KEY BLOCK") {
 		return "", fmt.Errorf("gpg has no public key for %s: check the key ID given by --gpg-key-id / GPG_KEY_ID", gpgKeyID)
 	}
-	created, err := KeyCreationDate(r, gpgKeyID)
+	created, err := KeyCreationDate(runner, gpgKeyID)
 	if err != nil {
 		return "", err
 	}
@@ -82,9 +82,9 @@ func ExportPubKeyFile(r command.CommandRunner, gpgKeyID, dir, prefix string) (st
 
 // KeyCreationDate returns when the GPG key was created, taken from the
 // machine-readable key listing.
-func KeyCreationDate(r command.CommandRunner, gpgKeyID string) (time.Time, error) {
+func KeyCreationDate(runner command.CommandRunner, gpgKeyID string) (time.Time, error) {
 	cmdArgs := []string{"--list-keys", "--with-colons", gpgKeyID}
-	gpgOut, err := r.Run("gpg", cmdArgs, nil)
+	gpgOut, err := runner.Run("gpg", cmdArgs, nil)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("unable to list GPG key %s: %w", gpgKeyID, err)
 	}
@@ -124,7 +124,7 @@ func parseGPGDate(field string) (time.Time, error) {
 // detached signature to "<filePath>.asc" and returning that path. The signature
 // is verified before returning, so a signature that cannot be checked fails here
 // rather than in a client's package manager.
-func DetachSign(r command.CommandRunner, gpgKeyID, filePath string) (string, error) {
+func DetachSign(runner command.CommandRunner, gpgKeyID, filePath string) (string, error) {
 	sigPath := filePath + ".asc"
 	logrus.Infof("Signing %s with GPG key %s", filePath, gpgKeyID)
 	cmdArgs := []string{
@@ -138,10 +138,10 @@ func DetachSign(r command.CommandRunner, gpgKeyID, filePath string) (string, err
 		"--output", sigPath,
 		filePath,
 	}
-	if _, err := r.Run("gpg", cmdArgs, nil); err != nil {
+	if _, err := runner.Run("gpg", cmdArgs, nil); err != nil {
 		return "", fmt.Errorf("unable to sign %s with GPG key %s: %w", filePath, gpgKeyID, err)
 	}
-	if _, err := r.Run("gpg", []string{"--batch", "--verify", sigPath, filePath}, nil); err != nil {
+	if _, err := runner.Run("gpg", []string{"--batch", "--verify", sigPath, filePath}, nil); err != nil {
 		return "", fmt.Errorf("signed %s but its signature %s could not be verified: %w", filePath, sigPath, err)
 	}
 	return sigPath, nil
@@ -168,14 +168,14 @@ type RPMKeyring struct {
 // should be a scratch directory (e.g. under the release tmp directory) rather
 // than the host's RPM database. The database files themselves are created by
 // the first rpm command that writes to it, so there is no initdb step.
-func NewRPMKeyring(r command.CommandRunner, dbPath string) (*RPMKeyring, error) {
+func NewRPMKeyring(runner command.CommandRunner, dbPath string) (*RPMKeyring, error) {
 	if err := os.MkdirAll(dbPath, utils.DirPerms); err != nil {
 		return nil, fmt.Errorf("unable to create RPM database directory %s: %w", dbPath, err)
 	}
 	logrus.Debugf("Using private RPM database at %s", dbPath)
-	k := &RPMKeyring{dbPath: dbPath, runner: r}
-	k.supportsRPMV4 = sync.OnceValue(k.rpmsignSupportsRPMV4)
-	return k, nil
+	keyring := &RPMKeyring{dbPath: dbPath, runner: runner}
+	keyring.supportsRPMV4 = sync.OnceValue(keyring.rpmsignSupportsRPMV4)
+	return keyring, nil
 }
 
 // rpmArgs prefixes command arguments with the macro definition that redirects an

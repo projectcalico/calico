@@ -11,6 +11,8 @@ import (
 	"text/template"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/release/internal/command"
 )
 
 // A brief note on Ubuntu/Debian/apt repo terminology:
@@ -100,9 +102,9 @@ func (asd *aptSourcesData) writeAptSourcesFile(rootPath string) error {
 	return nil
 }
 
-func (repo *Repo) getVersionFromDebfile(debfilePath string) (string, error) {
+func getVersionFromDebfile(runner command.CommandRunner, debfilePath string) (string, error) {
 	logrus.WithField("debfile", debfilePath).Debug("Getting version information from debian package")
-	out, err := repo.runner.Run("dpkg-deb", []string{"--show", "--showformat", "${Version}", "--", debfilePath}, nil)
+	out, err := runner.Run("dpkg-deb", []string{"--show", "--showformat", "${Version}", "--", debfilePath}, nil)
 	if err != nil {
 		return "", fmt.Errorf("getting version for %s: %w", debfilePath, err)
 	}
@@ -116,8 +118,8 @@ func getComponentNameFromVersion(version string) (string, error) {
 	return "", fmt.Errorf("version %s does not contain a tilde separator", version)
 }
 
-func (repo *Repo) getSuiteNameFromDebFile(debfilePath string) (string, error) {
-	version, err := repo.getVersionFromDebfile(debfilePath)
+func getSuiteNameFromDebFile(runner command.CommandRunner, debfilePath string) (string, error) {
+	version, err := getVersionFromDebfile(runner, debfilePath)
 	if err != nil {
 		return "", fmt.Errorf("getting version for %s: %w", debfilePath, err)
 	}
@@ -155,7 +157,7 @@ func formatGPGKeyForSourcesFile(gpgKey string) string {
 	return processedKey.String()
 }
 
-func (repo *Repo) getRecursiveDebsBySuite(searchPaths []string) (map[string][]string, error) {
+func getRecursiveDebsBySuite(runner command.CommandRunner, searchPaths []string) (map[string][]string, error) {
 	debsBySuite := make(map[string][]string, 0)
 
 	files, err := getRecursiveDebs(searchPaths)
@@ -165,7 +167,7 @@ func (repo *Repo) getRecursiveDebsBySuite(searchPaths []string) (map[string][]st
 
 	logrus.Debugf("Found %d debian package files to process", len(files))
 	for _, debFile := range files {
-		suite, err := repo.getSuiteNameFromDebFile(debFile)
+		suite, err := getSuiteNameFromDebFile(runner, debFile)
 		if err != nil {
 			return map[string][]string{}, fmt.Errorf("getting suite name for %s: %w", debFile, err)
 		}
