@@ -46,7 +46,8 @@ func newLiveRing(sm stream.StreamManager) *storage.BucketRing {
 	return ring
 }
 
-// collect reads n flow start times from s.
+// collect reads n flow start times from s, and fails if they don't arrive within 2s or another
+// flow follows within 100ms.
 func collect(t *testing.T, s stream.Stream, n int) []int64 {
 	t.Helper()
 	var got []int64

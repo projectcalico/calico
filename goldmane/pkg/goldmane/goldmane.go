@@ -319,7 +319,8 @@ func (a *Goldmane) Receive(f *types.Flow, node string) {
 	}
 }
 
-// streamRequest is an internal helper used to synchronously open a stream on the main loop.
+// streamRequest carries a Stream call onto the main loop, which opens the stream and replies on
+// respCh with it, or with nil when the stream limit has been reached.
 type streamRequest struct {
 	respCh chan stream.Stream
 	req    *proto.FlowStreamRequest

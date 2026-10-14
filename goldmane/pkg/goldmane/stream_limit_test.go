@@ -28,26 +28,26 @@ import (
 
 // Streams past the limit are rejected with an error, and a closed stream frees its slot.
 func TestStreamLimit(t *testing.T) {
-	gm := goldmane.NewGoldmane(goldmane.WithRolloverTime(time.Hour))
-	<-gm.Run(time.Now().Unix())
-	defer gm.Stop()
+	aggregator := goldmane.NewGoldmane(goldmane.WithRolloverTime(time.Hour))
+	<-aggregator.Run(time.Now().Unix())
+	defer aggregator.Stop()
 
 	var streams []stream.Stream
 	for range 100 {
-		s, err := gm.Stream(&proto.FlowStreamRequest{})
+		s, err := aggregator.Stream(&proto.FlowStreamRequest{})
 		if err != nil {
 			t.Fatalf("stream %d: %v", len(streams), err)
 		}
 		streams = append(streams, s)
 	}
 
-	s, err := gm.Stream(&proto.FlowStreamRequest{})
+	s, err := aggregator.Stream(&proto.FlowStreamRequest{})
 	if status.Code(err) != codes.ResourceExhausted || s != nil {
 		t.Fatalf("got stream %v, err %v; want ResourceExhausted", s, err)
 	}
 
 	streams[0].Close()
-	s, err = gm.Stream(&proto.FlowStreamRequest{})
+	s, err = aggregator.Stream(&proto.FlowStreamRequest{})
 	if err != nil {
 		t.Fatalf("stream after close: %v", err)
 	}
