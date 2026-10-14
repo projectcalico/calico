@@ -52,7 +52,14 @@ RUN go list -f '{{if or .GoFiles .CgoFiles}}{{.ImportPath}}{{end}}' ./... > /tmp
 RUN go test -count=1 \
       ./libcalico-go/lib/selector/... \
       ./libcalico-go/lib/backend/syncersv1/updateprocessors/... \
+      ./felix/calc/... \
       ./felix/rules/... \
       ./felix/bpf/polprog/... \
+      ./felix/iptables/... \
+      ./felix/nftables/... \
       ./apiserver/pkg/registry/projectcalico/authorizer/... \
-      ./app-policy/checker/...
+      ./webhooks/pkg/rbac/... \
+      ./app-policy/checker/... \
+      ./operator/pkg/controller/csr/... \
+      ./typha/pkg/... \
+      ./goldmane/pkg/...

@@ -54,7 +54,7 @@ A Go panic reachable from untrusted input counts as denial of service, not memor
 
 - Binaries: `/usr/local/bin/calico` (daemons run as `calico component <name>`; `calico component --help` lists them), `calicoctl` and `calico-ipam` (symlinks that dispatch on their own name), `calico-bpf`, and `operator`.
 - BPF objects are compiled into `felix/bpf-gpl/bin/` (inspect with `llvm-objdump -d`). The tests in `felix/bpf/ut/` run these programs against crafted packets, but need root and a BPF-capable kernel.
-- Unit tests that run offline with plain `go test`: `libcalico-go/lib/selector/...`, `libcalico-go/lib/backend/syncersv1/updateprocessors/...`, `felix/calc/...`, `felix/rules/...`, `felix/bpf/polprog/...`, `felix/iptables/...`, `felix/nftables/...`, `apiserver/pkg/registry/projectcalico/authorizer/...`, `webhooks/pkg/rbac/...`, `app-policy/checker/...`, `operator/pkg/controller/csr/...`, `typha/...`, `goldmane/...`.
+- Unit tests that run offline with plain `go test`, and that the image build runs: `libcalico-go/lib/selector/...`, `libcalico-go/lib/backend/syncersv1/updateprocessors/...`, `felix/calc/...`, `felix/rules/...`, `felix/bpf/polprog/...`, `felix/iptables/...`, `felix/nftables/...`, `apiserver/pkg/registry/projectcalico/authorizer/...`, `webhooks/pkg/rbac/...`, `app-policy/checker/...`, `operator/pkg/controller/csr/...`, `typha/pkg/...`, `goldmane/pkg/...`.
 - Tests that will not run in the scan: `libcalico-go/lib/ipam` (needs etcd or a Kubernetes API server), `cni-plugin/tests` and the other `fv` suites (need root, network namespaces or a cluster).
 
 ## Reports and patches
