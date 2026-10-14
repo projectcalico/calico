@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -59,7 +61,10 @@ func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_St
 
 	for {
 		select {
-		case flow := <-stream.Flows():
+		case flow, ok := <-stream.Flows():
+			if !ok {
+				return status.Error(codes.Aborted, "stream closed after falling too far behind")
+			}
 			if flow.BuildInto(req.Filter, result) {
 				if err := server.Send(result); err != nil {
 					return err

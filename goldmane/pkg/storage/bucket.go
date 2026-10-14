@@ -25,9 +25,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// AggregationBucket is a FlowProvider that represents a bucket of aggregated flows.
-var _ FlowProvider = &AggregationBucket{}
-
 // An aggregation bucket represents a bucket of aggregated flows across a time range.
 type AggregationBucket struct {
 	// The mutex is used to protect access to the bucket's Flows set, which may be
@@ -56,12 +53,6 @@ type AggregationBucket struct {
 	// emissions records what each node has already reported into this bucket, so a
 	// replayed cache is not counted twice. Nil once no client can replay this far back.
 	emissions map[emissionKey]struct{}
-
-	// ready is set when this bucket is sent to any stream, and cleared when this bucket is reset.
-	// It can thus be used to determine when a bucket is rolled over between Goldmane deciding to stream it,
-	// and the bucket actually being emited. In this case, we should skip streaming the bucket as its contents
-	// are no longer valid.
-	ready bool
 }
 
 func (b *AggregationBucket) AddFlow(flow *types.Flow) {
@@ -150,7 +141,6 @@ func (b *AggregationBucket) Reset(start, end int64) {
 	b.StartTime = start
 	b.EndTime = end
 	b.pushed = false
-	b.ready = false
 	b.stats = newStatisticsIndex()
 	b.emissions = map[emissionKey]struct{}{}
 
@@ -161,23 +151,33 @@ func (b *AggregationBucket) Reset(start, end int64) {
 	}
 }
 
-// markReady marks this bucket as ready to be consumed by a stream.
-func (b *AggregationBucket) markReady() {
-	b.Lock()
-	defer b.Unlock()
-	b.ready = true
+// bucketInterval is the FlowProvider the ring queues for streams. A slow stream can still hold
+// it after the ring reuses the bucket, so it remembers which interval it was queued for.
+type bucketInterval struct {
+	bucket *AggregationBucket
+	start  int64
 }
 
-func (b *AggregationBucket) Iter(fn func(FlowBuilder) bool) {
+var _ FlowProvider = bucketInterval{}
+
+// newBucketInterval returns a provider for the interval b currently covers. Only the main loop
+// may call it, since that is the only goroutine that resets buckets.
+func newBucketInterval(b *AggregationBucket) bucketInterval {
+	return bucketInterval{bucket: b, start: b.StartTime}
+}
+
+// Iter yields the bucket's flows if it still covers the queued interval, and nothing once the
+// ring has reset it for a later one. Reset always moves StartTime forward, so a matching start
+// means the contents are the ones that were queued.
+func (i bucketInterval) Iter(fn func(FlowBuilder) bool) {
+	b := i.bucket
 	b.RLock()
 	defer b.RUnlock()
 
-	if !b.ready {
-		// Bucket has been reset since it was streamed. Skip it.
-		logrus.WithFields(b.Fields()).Info("Skipping bucket that has since rolled over")
+	if b.StartTime != i.start {
+		logrus.WithFields(b.Fields()).WithField("queued_start", i.start).Info("Skipping bucket that has since been reused")
 		return
 	}
-
 	for d := range b.Flows.All() {
 		if fn(NewDeferredFlowBuilder(d, b.StartTime, b.EndTime)) {
 			break
