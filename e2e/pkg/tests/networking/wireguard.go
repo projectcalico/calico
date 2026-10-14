@@ -59,10 +59,8 @@ var _ = describe.CalicoDescribe(
 		f := utils.NewDefaultFramework("wireguard")
 
 		ginkgo.BeforeEach(func() {
-			// Skip rather than fail: this branch's lanes select [sig-calico] without
-			// excluding this spec, so it also runs on clusters without WireGuard.
 			if windows.ClusterIsWindows() {
-				ginkgo.Skip("WireGuard tests are not implemented on Windows")
+				framework.Failf("WireGuard tests are not implemented on Windows")
 			}
 
 			var err error
@@ -72,9 +70,8 @@ var _ = describe.CalicoDescribe(
 			felixConfig := &v3.FelixConfiguration{}
 			err = cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, felixConfig)
 			Expect(err).NotTo(HaveOccurred(), "Error querying FelixConfiguration")
-			if felixConfig.Spec.WireguardEnabled == nil || !*felixConfig.Spec.WireguardEnabled {
-				ginkgo.Skip("WireGuard is not enabled in the cluster")
-			}
+			Expect(felixConfig.Spec.WireguardEnabled).NotTo(BeNil(), "WireGuard is not enabled in the cluster")
+			Expect(*felixConfig.Spec.WireguardEnabled).To(BeTrue(), "WireGuard is not enabled in the cluster")
 
 			// The client and server must land on different nodes for their traffic
 			// to cross a WireGuard tunnel at all.
