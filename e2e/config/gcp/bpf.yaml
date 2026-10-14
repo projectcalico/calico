@@ -1,7 +1,5 @@
-# gcp/bpf.yaml - GCP kubeadm with BPF dataplane.
-#
-# Used by the in-repo e2e CI block (20-e2e-gcp.yml). Runs sig-calico tests
-# on a VXLAN cluster with the BPF dataplane.
+# gcp/bpf.yaml - test selection for the GCP kubeadm lane: sig-calico on a
+# VXLAN cluster running the BPF dataplane.
 
 extends: ../base.yaml
 

@@ -408,16 +408,6 @@ includes:
         - ^lib\.Makefile$
         - ^\.argoci/modules/40-openstack\.yaml$
 
-  - path: .argoci/modules/20-e2e-gcp.yaml
-    changes:
-      dependsOn: [e2e]
-      in:
-        - ^\.argoci/scripts/
-        - ^\.argoci/modules/20-e2e-gcp\.yaml$
-      exclude:
-        - (^|/)README\.md$
-        - (^|/)DESIGN\.md$
-
   - path: .argoci/modules/20-kube-controllers.yaml
     changes:
       dependsOn: [kube-controllers]
