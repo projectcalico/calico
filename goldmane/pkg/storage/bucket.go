@@ -171,7 +171,24 @@ func (b *AggregationBucket) markReady() {
 func (b *AggregationBucket) Iter(fn func(FlowBuilder) bool) {
 	b.RLock()
 	defer b.RUnlock()
+	b.iterLocked(fn)
+}
 
+// iterInterval is Iter for a provider queued while the bucket covered the interval beginning at
+// start. It yields nothing once the ring has reset the bucket for a later interval, even if that
+// interval has since been marked ready.
+func (b *AggregationBucket) iterInterval(start int64, fn func(FlowBuilder) bool) {
+	b.RLock()
+	defer b.RUnlock()
+
+	if b.StartTime != start {
+		logrus.WithFields(b.Fields()).WithField("queued_start", start).Info("Skipping bucket that has since been reused")
+		return
+	}
+	b.iterLocked(fn)
+}
+
+func (b *AggregationBucket) iterLocked(fn func(FlowBuilder) bool) {
 	if !b.ready {
 		// Bucket has been reset since it was streamed. Skip it.
 		logrus.WithFields(b.Fields()).Info("Skipping bucket that has since rolled over")
@@ -183,6 +200,26 @@ func (b *AggregationBucket) Iter(fn func(FlowBuilder) bool) {
 			break
 		}
 	}
+}
+
+// bucketInterval is the FlowProvider the ring queues for streams. A slow stream can still hold
+// it after the ring reuses the bucket, so it remembers which interval it was queued for.
+type bucketInterval struct {
+	bucket *AggregationBucket
+	start  int64
+}
+
+var _ FlowProvider = bucketInterval{}
+
+// newBucketInterval returns a provider for the interval b currently covers. Only the main loop
+// may call it, since that is the only goroutine that resets buckets.
+func newBucketInterval(b *AggregationBucket) bucketInterval {
+	return bucketInterval{bucket: b, start: b.StartTime}
+}
+
+// Iter yields the bucket's flows if it still covers the queued interval, and nothing otherwise.
+func (i bucketInterval) Iter(fn func(FlowBuilder) bool) {
+	i.bucket.iterInterval(i.start, fn)
 }
 
 func (b *AggregationBucket) QueryStatistics(q *proto.StatisticsRequest) map[StatisticsKey]*counts {
