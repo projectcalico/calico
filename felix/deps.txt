@@ -237,6 +237,7 @@ local:felix/bpf/xdp
 local:felix/cachingmap
 local:felix/calc
 local:felix/cmd/calico-bpf
+local:felix/cmd/calico-bpf-policy-check
 local:felix/cmd/calico-bpf/commands
 local:felix/cmd/calico-felix
 local:felix/cmd/calico-felix-docgen
