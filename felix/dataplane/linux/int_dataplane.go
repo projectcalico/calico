@@ -1235,6 +1235,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				conntrackInfoReaderV4 := bpfconntrack.NewInfoReader(
 					config.BPFConntrackTimeouts,
 					config.BPFNodePortDSREnabled,
+					4,
 					nil,
 					collectorCtInfoReader,
 				)
@@ -1244,6 +1245,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				conntrackInfoReaderV6 := bpfconntrack.NewInfoReader(
 					config.BPFConntrackTimeouts,
 					config.BPFNodePortDSREnabled,
+					6,
 					nil,
 					collectorCtInfoReader,
 				)

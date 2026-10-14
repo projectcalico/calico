@@ -18,22 +18,28 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/mock"
+	"github.com/projectcalico/calico/felix/timeshim/mocktime"
 )
 
 // On a dual-stack node the v4 and v6 scanners must not overwrite each other's metrics.
 func TestScannerMetricsPerIPFamily(t *testing.T) {
+	now := mocktime.StartKTime
+
 	v4Params := conntrack.MapParams
 	v4Params.MaxEntries = 1000
 	v4Map := mock.NewMockMap(v4Params)
-	for i := range 3 {
+	// Three live entries and one expired one.
+	for i, lastSeen := range []time.Duration{now, now, now, now - time.Hour} {
 		k := conntrack.NewKey(conntrack.ProtoUDP, net.ParseIP("10.0.0.1").To4(), uint16(1000+i),
 			net.ParseIP("10.0.0.2").To4(), 53)
-		v := conntrack.NewValueNormal(0, 0, conntrack.Leg{}, conntrack.Leg{})
+		v := conntrack.NewValueNormal(lastSeen, 0, conntrack.Leg{}, conntrack.Leg{})
 		if err := v4Map.Update(k.AsBytes(), v.AsBytes()); err != nil {
 			t.Fatal(err)
 		}
@@ -43,28 +49,47 @@ func TestScannerMetricsPerIPFamily(t *testing.T) {
 	v6Params.MaxEntries = 2000
 	v6Map := mock.NewMockMap(v6Params)
 	k6 := conntrack.NewKeyV6(conntrack.ProtoUDP, net.ParseIP("fd00::1"), 1000, net.ParseIP("fd00::2"), 53)
-	v6 := conntrack.NewValueV6Normal(0, 0, conntrack.Leg{}, conntrack.Leg{})
+	v6 := conntrack.NewValueV6Normal(now, 0, conntrack.Leg{}, conntrack.Leg{})
 	if err := v6Map.Update(k6.AsBytes(), v6.AsBytes()); err != nil {
 		t.Fatal(err)
 	}
 
+	lc := conntrack.NewLivenessScanner(timeouts.DefaultTimeouts(), false, 4,
+		conntrack.WithTimeShim(mocktime.New()))
 	s4 := conntrack.NewScanner(v4Map, conntrack.KeyFromBytes, conntrack.ValueFromBytes,
-		nil, "Disabled", nil, 4, nil)
+		nil, "Disabled", nil, 4, nil, lc)
 	s6 := conntrack.NewScanner(v6Map, conntrack.KeyV6FromBytes, conntrack.ValueV6FromBytes,
 		nil, "Disabled", nil, 6, nil)
+
+	// Counters are process-global and other tests in this binary scan too, so compare deltas.
+	before := gatherByFamily(t)
 	s4.Scan()
 	s6.Scan()
+	after := gatherByFamily(t)
 
-	expect := map[string]float64{
-		"felix_bpf_conntrack_used/4":        3,
+	gauges := map[string]float64{
+		"felix_bpf_conntrack_used/4":        4,
 		"felix_bpf_conntrack_used/6":        1,
+		"felix_bpf_conntrack_cleaned/4":     1,
+		"felix_bpf_conntrack_cleaned/6":     0,
+		"felix_bpf_conntrack_expired/4":     1,
 		"felix_bpf_conntrack_max_entries/4": 1000,
 		"felix_bpf_conntrack_max_entries/6": 2000,
 	}
-	got := gatherByFamily(t)
-	for name, want := range expect {
-		if v, ok := got[name]; !ok || v != want {
+	for name, want := range gauges {
+		if v, ok := after[name]; !ok || v != want {
 			t.Errorf("%s = %v (present %v), want %v", name, v, ok, want)
+		}
+	}
+	counterDeltas := map[string]float64{
+		"felix_bpf_conntrack_sweeps/4":        1,
+		"felix_bpf_conntrack_sweeps/6":        1,
+		"felix_bpf_conntrack_cleaned_total/4": 1,
+		"felix_bpf_conntrack_cleaned_total/6": 0,
+	}
+	for name, want := range counterDeltas {
+		if d := after[name] - before[name]; d != want {
+			t.Errorf("%s increased by %v, want %v", name, d, want)
 		}
 	}
 }
@@ -78,8 +103,15 @@ func gatherByFamily(t *testing.T) map[string]float64 {
 	for _, mf := range mfs {
 		for _, m := range mf.GetMetric() {
 			for _, l := range m.GetLabel() {
-				if l.GetName() == "ip_family" && m.GetGauge() != nil {
-					out[fmt.Sprintf("%s/%s", mf.GetName(), l.GetValue())] = m.GetGauge().GetValue()
+				if l.GetName() != "ip_family" {
+					continue
+				}
+				name := fmt.Sprintf("%s/%s", mf.GetName(), l.GetValue())
+				switch {
+				case m.GetGauge() != nil:
+					out[name] = m.GetGauge().GetValue()
+				case m.GetCounter() != nil:
+					out[name] = m.GetCounter().GetValue()
 				}
 			}
 		}

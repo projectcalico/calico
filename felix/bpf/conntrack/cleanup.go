@@ -16,7 +16,6 @@ package conntrack
 
 import (
 	"net"
-	"strconv"
 	"sync"
 	"time"
 
@@ -151,7 +150,7 @@ type LivenessScanner struct {
 }
 
 func NewLivenessScanner(timeouts timeouts.Timeouts, dsr bool, ipFamily int, opts ...LivenessScannerOpt) *LivenessScanner {
-	family := strconv.Itoa(ipFamily)
+	family := ipFamilyLabel(ipFamily)
 	ls := &LivenessScanner{
 		timeouts:       timeouts,
 		dsr:            dsr,
@@ -328,7 +327,7 @@ type StaleNATScanner struct {
 // existing NAT entries using the provided NATChecker and if not, it deletes
 // them.
 func NewStaleNATScanner(frontendHasBackend NATChecker, ipFamily int) *StaleNATScanner {
-	family := strconv.Itoa(ipFamily)
+	family := ipFamilyLabel(ipFamily)
 	return &StaleNATScanner{
 		natChecker:      frontendHasBackend,
 		staleNATGauge:   conntrackGaugeStaleNAT.WithLabelValues(family),

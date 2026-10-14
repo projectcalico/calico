@@ -193,7 +193,7 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 		}
 	}
 
-	family := strconv.Itoa(s.ipFamily)
+	family := ipFamilyLabel(s.ipFamily)
 	s.conntrackCounterSweeps = conntrackCounterSweeps.WithLabelValues(family)
 	s.conntrackGaugeUsed = conntrackGaugeUsed.WithLabelValues(family)
 	s.conntrackGaugeCleaned = conntrackGaugeCleaned.WithLabelValues(family)
@@ -408,6 +408,7 @@ func (s *Scanner) Scan() {
 
 	if err != nil {
 		log.WithError(err).Warn("Failed to iterate over conntrack map")
+		s.conntrackCounterCleaned.Add(float64(cleaned))
 		return
 	}
 
@@ -576,6 +577,14 @@ func (s *Scanner) AddUnlocked(scanner EntryScanner) {
 // the first scanner to be called.
 func (s *Scanner) AddFirstUnlocked(scanner EntryScanner) {
 	s.scanners = append([]EntryScanner{scanner}, s.scanners...)
+}
+
+// ipFamilyLabel returns the ip_family metric label value for ipFamily.
+func ipFamilyLabel(ipFamily int) string {
+	if ipFamily != 4 && ipFamily != 6 {
+		log.Panicf("Invalid IP family %d", ipFamily)
+	}
+	return strconv.Itoa(ipFamily)
 }
 
 type Cleaner interface {
