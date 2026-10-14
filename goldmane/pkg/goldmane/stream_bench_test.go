@@ -91,6 +91,28 @@ func (s *streamBench) fill(perBucket int) {
 	s.fence()
 }
 
+// addLiveFlow adds a flow to the bucket holding the current time and waits until the main loop
+// has stored it, so the bucket is complete before a rollover streams it.
+func (s *streamBench) addLiveFlow() {
+	now := s.clock.Now().Unix()
+	s.gm.Receive(types.ProtoToFlow(testutils.NewRandomFlow(now)), "")
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		res, err := s.gm.List(&proto.FlowListRequest{StartTimeGte: now, StartTimeLt: now + benchBucketSec})
+		if err != nil {
+			s.tb.Fatal(err)
+		}
+		if len(res.Flows) > 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			s.tb.Fatalf("flow at %d was never stored", now)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 // openDrained opens a stream and builds every flow it emits on a background goroutine, so the
 // stream never falls behind. The goroutine exits when the stream closes.
 func (s *streamBench) openDrained(start int64) stream.Stream {
