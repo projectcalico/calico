@@ -1,0 +1,31 @@
+{{- /* Shipped wherever protect-cni-annotations.projectcalico.org is, see admission-policies.yaml. */}}
+{{- if eq .Values.datastore "kubernetes" }}
+# Lets the AWS VPC CNI write its pod IP annotation through protect-cni-annotations.projectcalico.org.
+# Nothing serves this resource; it exists only to be granted. Bind this ClusterRole to anyone else
+# who must edit that annotation.
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: calico-aws-vpc-annotations
+rules:
+  - apiGroups: ["projectcalico.org"]
+    resources:
+      - awsvpcannotations
+    verbs:
+      - write
+---
+# aws-node is the account AWS's own manifests and docs run the AWS VPC CNI under. Binding it on a
+# cluster without the AWS VPC CNI grants nothing.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-aws-vpc-annotations
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-aws-vpc-annotations
+subjects:
+  - kind: ServiceAccount
+    name: aws-node
+    namespace: kube-system
+{{- end }}
