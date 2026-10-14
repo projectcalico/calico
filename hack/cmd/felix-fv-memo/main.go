@@ -380,16 +380,11 @@ func matchesAny(files map[string]bool, pathOrDir string) bool {
 }
 
 func fileSHA256(path string) (string, error) {
-	f, err := os.Open(path)
+	content, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
+	return fmt.Sprintf("%x", sha256.Sum256(content)), nil
 }
 
 // hashOf hashes its parts, separated so that ("ab", "c") and ("a", "bc")
