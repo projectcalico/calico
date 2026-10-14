@@ -32,6 +32,8 @@ RUN arch="$(go env GOARCH)" \
  && make -C felix/bpf-gpl/libbpf/src -j"$(nproc)" BUILD_STATIC_ONLY=1 OBJDIR="$arch" EXTRA_CFLAGS=-fPIC \
  && make -C felix/bpf-gpl -j"$(nproc)" ARCH="$arch" all
 
+RUN make -C operator embedded_charts
+
 RUN go build -buildvcs=false -o /usr/local/bin/calico ./cmd/calico \
  && go build -buildvcs=false -o /usr/local/bin/calico-bpf ./felix/cmd/calico-bpf \
  && go build -buildvcs=false -o /usr/local/bin/operator ./operator/cmd \
