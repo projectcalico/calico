@@ -76,7 +76,7 @@ steps:
       make -C networking-calico flake8
       make check-dirty
 
-  # Grep-speed checks, so they share one step.
+  # Grep-speed checks, so one step rather than three.
   - name: check-language-dockerfiles
     jobSize: small
     requests: {cpu: 2250m, memory: 548Mi}
