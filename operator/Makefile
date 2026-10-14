@@ -486,6 +486,11 @@ endif
 # Collate our metadata
 BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNEL) $(BUNDLE_DEFAULT_CHANNEL)
 
+# The repository the bundle pins the operator image from. Certification needs a
+# fully qualified reference, which a Docker Hub short name like DEV_REGISTRY's
+# default is not.
+BUNDLE_OPERATOR_IMAGE ?= quay.io/calico/$(OPERATOR_IMAGE_NAME)
+
 BUNDLE_BASE_DIR ?= $(BUILD_DIR)/bundle/$(VERSION)
 BUNDLE_CRD_DIR ?= $(BUNDLE_BASE_DIR)/crds
 BUNDLE_DEPLOY_DIR ?= $(BUNDLE_BASE_DIR)/deploy
@@ -551,13 +556,15 @@ endif
 		--operator-dir "$(CURDIR)" \
 		--version "$(VERSION)" \
 		--prev-version "$(PREV_VERSION)" \
-		--image "$(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME)"
+		--image "$(BUNDLE_OPERATOR_IMAGE)"
 
-$(BINDIR)/gen-bundle: $(wildcard hack/gen-bundle/*)
+# Built for the host, which runs it, so cgo is off to keep it from linking
+# against the build container's libc.
+$(BINDIR)/gen-bundle: $(wildcard hack/gen-bundle/*) $(REPO_ROOT)/go.mod $(REPO_ROOT)/go.sum
 	mkdir -p $(BINDIR)
 	$(DOCKER_GO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
-	go build -buildvcs=false -o $(BINDIR)/gen-bundle ./hack/gen-bundle'
+	CGO_ENABLED=0 go build -buildvcs=false -o $(BINDIR)/gen-bundle ./hack/gen-bundle'
 
 .PHONY: hack/gen-bundle/ut
 hack/gen-bundle/ut:
@@ -582,7 +589,7 @@ BUNDLE_CHECK_DIGEST = sha256:000000000000000000000000000000000000000000000000000
 .PHONY: bundle-check
 bundle-check:
 	$(MAKE) bundle VERSION=3.99.0 PREV_VERSION=3.98.0 CHANNEL=release-v3.99 \
-		BUNDLE_OPERATOR_IMAGE_INSPECT='[{"Created":"2026-01-01T00:00:00Z","RepoDigests":["$(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME)@$(BUNDLE_CHECK_DIGEST)"]}]' \
+		BUNDLE_OPERATOR_IMAGE_INSPECT='[{"Created":"2026-01-01T00:00:00Z","RepoDigests":["$(BUNDLE_OPERATOR_IMAGE)@$(BUNDLE_CHECK_DIGEST)"]}]' \
 		BUNDLE_OPERATOR_MANIFEST_INSPECT='{"manifests":[{"platform":{"architecture":"amd64"}},{"platform":{"architecture":"arm64"}}]}'
 
 

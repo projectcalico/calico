@@ -332,6 +332,71 @@ spec:
 	}
 }
 
+// TestUpdateCSVKeepsOtherRelatedImages checks that the operator's digest is
+// written to its own relatedImages entry, leaving any image operator-sdk listed
+// ahead of it alone.
+func TestUpdateCSVKeepsOtherRelatedImages(t *testing.T) {
+	t.Parallel()
+
+	img := image{
+		digest:        "quay.io/tigera/operator@sha256:bbb",
+		created:       "2026-01-02T03:04:05Z",
+		architectures: []string{"amd64"},
+	}
+	const deployments = `  install:
+    spec:
+      deployments:
+        - name: tigera-operator
+          spec:
+            template:
+              spec:
+                containers:
+                  - name: tigera-operator
+                    image: quay.io/tigera/operator:v0.0.0
+`
+
+	cases := []struct {
+		name          string
+		relatedImages string
+	}{
+		{
+			name: "no operator entry",
+			relatedImages: `  relatedImages:
+    - name: other
+      image: quay.io/tigera/other@sha256:aaa
+`,
+		},
+		{
+			name: "operator entry second",
+			relatedImages: `  relatedImages:
+    - name: other
+      image: quay.io/tigera/other@sha256:aaa
+    - name: tigera-operator
+      image: quay.io/tigera/operator:v0.0.0
+`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := filepath.Join(t.TempDir(), csvName)
+			writeFile(t, path, "spec:\n"+deployments+tc.relatedImages)
+
+			if err := updateCSV(path, "3.34.0", noPreviousVersion, "Basic Install", img); err != nil {
+				t.Fatalf("updateCSV: %v", err)
+			}
+			content := readFile(t, path)
+			assertContains(t, content, "- name: other\n      image: quay.io/tigera/other@sha256:aaa\n"+
+				"    - name: tigera-operator\n      image: quay.io/tigera/operator@sha256:bbb\n")
+			if n := strings.Count(content, "- name: tigera-operator\n      image:"); n != 1 {
+				t.Errorf("%d tigera-operator relatedImages entries, want 1:\n%s", n, content)
+			}
+		})
+	}
+}
+
 // TestUpdateCSVWithNamespacedPermissions checks that non-empty permissions - the
 // operator's grant to write secrets in its own namespace - survive, rather than
 // being dropped along with an empty key.

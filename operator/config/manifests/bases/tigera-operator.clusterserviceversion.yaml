@@ -2,8 +2,8 @@
 # static field of the shipped CSV belongs here: `operator-sdk generate bundle`
 # reads this file and overlays the generated deployment, RBAC and CRD data onto
 # it. Only values that cannot be known until build time (image digests, version,
-# replaces, createdAt, architecture labels) are applied afterwards by
-# hack/gen-bundle/update.go.
+# replaces, createdAt, architecture labels) are applied afterwards, when the
+# bundle is built.
 #
 # IMPORTANT: metadata.name must be "<package>.v<semver>", where <package> matches
 # the --package argument of `operator-sdk generate bundle` (tigera-operator).
@@ -15,8 +15,8 @@ kind: ClusterServiceVersion
 metadata:
   annotations:
     alm-examples: '[]'
-    # capabilities is deliberately not set here: hack/gen-bundle/update.go writes
-    # it, defaulting to "Basic Install", so that raising the level we are
+    # capabilities is deliberately not set here: the bundle build writes it,
+    # defaulting to "Basic Install", so that raising the level we are
     # certified against is an explicit --capabilities/BUNDLE_CAPABILITIES choice.
     categories: Logging & Tracing, Monitoring, Networking, Security
     certified: "true"
@@ -186,6 +186,6 @@ spec:
     name: Tigera
     url: https://tigera.io/
   # relatedImages is required for a certified bundle, but it cannot be set here:
-  # operator-sdk does not carry the list over from this base. gen-bundle writes
-  # it, so an image that has to be listed goes in hack/gen-bundle/update.go.
+  # operator-sdk does not carry the list over from this base, so the bundle build
+  # writes it.
   version: 0.0.0

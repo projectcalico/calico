@@ -15,11 +15,11 @@ make -C operator bundle VERSION=3.34.0 PREV_VERSION=3.33.0 CHANNEL=release-v3.34
 
 | Variable | Meaning |
 |---|---|
-| `VERSION` | The operator version to publish, `X.Y.Z`. The bundle pins `$(DEV_REGISTRY)/operator:v$(VERSION)` by digest, so that tag must already be pushed. |
+| `VERSION` | The operator version to publish, `X.Y.Z`. The bundle pins `$(BUNDLE_OPERATOR_IMAGE):v$(VERSION)` by digest, so that tag must already be pushed. |
 | `PREV_VERSION` | The version this one replaces, `X.Y.Z`, or `0.0.0` for none. |
 | `CHANNEL` | The OperatorHub channel, which must be a `release-v3.YY` branch name. Defaults to the current branch when that branch is one; from any other branch, pass it explicitly. |
 | `DEFAULT_CHANNEL` | Optional. Only set it when the channel should become the package default. |
-| `DEV_REGISTRY` | Optional. The registry the operator image is pinned from. Defaults to `calico` (Docker Hub); pass `DEV_REGISTRY=quay.io/calico` to pin the Quay image. |
+| `BUNDLE_OPERATOR_IMAGE` | Optional. The fully qualified repository the operator image is pinned from. Defaults to `quay.io/calico/operator`. |
 | `BUNDLE_OPENSHIFT_VERSIONS` | Optional. The `com.redhat.openshift.versions` range, e.g. `v4.19-v4.22`. The default in `gen-bundle` moves with each release; a bundle only reaches the catalog of an OpenShift version inside this range. |
 
 Output:

@@ -213,6 +213,50 @@ func TestDocumentFind(t *testing.T) {
 		}
 	})
 
+	t.Run("findOrNext finds an element by name", func(t *testing.T) {
+		t.Parallel()
+
+		d := writeDocument(t, doc)
+		i, err := d.findOrNext(containers, "name", "tigera-operator")
+		if err != nil {
+			t.Fatalf("findOrNext: %v", err)
+		}
+		if i != 1 {
+			t.Errorf("index is %d, want 1", i)
+		}
+	})
+
+	t.Run("findOrNext appends past the end", func(t *testing.T) {
+		t.Parallel()
+
+		for _, tc := range []struct {
+			doc  string
+			want int
+		}{
+			{doc: doc, want: 2},
+			{doc: "spec:\n  containers:\n", want: 0},
+			{doc: "spec: {}\n", want: 0},
+		} {
+			d := writeDocument(t, tc.doc)
+			i, err := d.findOrNext(containers, "name", "typha")
+			if err != nil {
+				t.Fatalf("findOrNext(%q): %v", tc.doc, err)
+			}
+			if i != tc.want {
+				t.Errorf("findOrNext(%q) is %d, want %d", tc.doc, i, tc.want)
+			}
+		}
+	})
+
+	t.Run("findOrNext rejects a non-sequence", func(t *testing.T) {
+		t.Parallel()
+
+		d := writeDocument(t, "spec:\n  containers: {}\n")
+		if _, err := d.findOrNext(containers, "name", "typha"); err == nil {
+			t.Fatalf("findOrNext succeeded, want an error")
+		}
+	})
+
 	cases := []struct {
 		name  string
 		doc   string

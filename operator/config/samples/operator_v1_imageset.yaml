@@ -1,7 +1,7 @@
 # This sample is also the ImageSet entry in the OpenShift bundle's alm-examples
-# annotation (see hack/gen-bundle/manifests.go), so OperatorHub offers it as a
-# "Create instance" form. It is deliberately inert: the name below matches no
-# variant the operator looks for, and the digests are placeholders.
+# annotation, so OperatorHub offers it as a "Create instance" form. It is
+# deliberately inert: the name below matches no variant the operator looks for,
+# and the digests are placeholders.
 #
 # A real ImageSet is named "<variant>-<release>", where <variant> is "calico" or
 # "enterprise" and <release> is the version of that variant the operator

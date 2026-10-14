@@ -25,11 +25,9 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-// The manifests and Calico CRDs the bundle ships were downloaded from the
-// Calico repository back when the operator was a repository of its own. They are
-// read from the working tree now that the operator builds out of Calico, so a
-// bundle carries the manifests it was built alongside rather than whatever a
-// pinned release published. Every path below is relative to the repository root
+// The manifests and Calico CRDs the bundle ships are read from the working tree,
+// so a bundle carries the manifests it was built alongside rather than whatever
+// a pinned release published. Every path below is relative to the repository root
 // that --repo-root names, so none of them depend on the directory gen-bundle
 // happens to be run from.
 const (
@@ -141,10 +139,9 @@ func copyOperatorManifests(repoRoot, deployDir string) error {
 	manifests := []struct{ path, name string }{
 		{"ocp-tigera-operator-no-resource-loading.yaml", "operator.yaml"},
 		{"ocp/02-role-tigera-operator.yaml", "role.yaml"},
-		// The binding is required unlike in earlier bundle generation. The
-		// 'operator-sdk generate bundle' command combines clusterroles bound to
-		// service accounts. The resulting permissions is set to the CSV's
-		// spec.install.clusterPermissions field.
+		// 'operator-sdk generate bundle' only turns a ClusterRole into the CSV's
+		// spec.install.clusterPermissions when a binding ties it to a service
+		// account, so the binding has to be staged too.
 		{"ocp/02-rolebinding-tigera-operator.yaml", "rolebinding-tigera-operator.yaml"},
 		// Staged unbound so that it ships as a standalone ClusterRole under this
 		// name, which the operator binds by name wherever it writes secrets.

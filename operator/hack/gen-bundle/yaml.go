@@ -133,12 +133,42 @@ func (d *document) find(path []any, key, value string) (int, error) {
 	if node.Kind != yaml.SequenceNode {
 		return 0, fmt.Errorf("%s: not a sequence", pathString(path))
 	}
-	for i, element := range node.Content {
-		if found := mapValue(element, key); found != nil && found.Value == value {
-			return i, nil
-		}
+	if i := indexOf(node, key, value); i >= 0 {
+		return i, nil
 	}
 	return 0, fmt.Errorf("%s: no element whose %s is %q", pathString(path), key, value)
+}
+
+// findOrNext is find for a sequence that we fill in ourselves: with no matching
+// element it returns the index one past the end, so that a set there appends
+// one rather than overwriting whatever else the sequence holds. A missing or
+// null sequence counts as an empty one.
+func (d *document) findOrNext(path []any, key, value string) (int, error) {
+	node, err := d.lookup(path, false)
+	if err != nil {
+		return 0, err
+	}
+	if node == nil || node.Tag == "!!null" {
+		return 0, nil
+	}
+	if node.Kind != yaml.SequenceNode {
+		return 0, fmt.Errorf("%s: not a sequence", pathString(path))
+	}
+	if i := indexOf(node, key, value); i >= 0 {
+		return i, nil
+	}
+	return len(node.Content), nil
+}
+
+// indexOf returns the index of the element of a sequence node whose value for
+// key is value, or -1.
+func indexOf(node *yaml.Node, key, value string) int {
+	for i, element := range node.Content {
+		if found := mapValue(element, key); found != nil && found.Value == value {
+			return i
+		}
+	}
+	return -1
 }
 
 // isEmpty reports whether the node at path holds nothing: either the key is

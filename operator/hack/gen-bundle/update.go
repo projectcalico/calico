@@ -245,11 +245,16 @@ func updateCSV(path, version, prevVersion, capabilities string, img image) error
 	}
 
 	// Pin the operator image by digest in the 'relatedImages' list that a
-	// certified bundle must carry. Neither the base nor operator-sdk writes the
-	// list, so this creates it.
+	// certified bundle must carry. The entry is found by name, since operator-sdk
+	// lists other images there when the deployment has RELATED_IMAGE_ variables.
+	relatedImages := []any{"spec", "relatedImages"}
+	related, err := csv.findOrNext(relatedImages, "name", operatorName)
+	if err != nil {
+		return fmt.Errorf("updating %s: %w", path, err)
+	}
 	updates = append(updates,
-		csvUpdate{[]any{"spec", "relatedImages", 0, "name"}, operatorName},
-		csvUpdate{[]any{"spec", "relatedImages", 0, "image"}, img.digest},
+		csvUpdate{append(slices.Clone(relatedImages), related, "name"), operatorName},
+		csvUpdate{append(slices.Clone(relatedImages), related, "image"), img.digest},
 	)
 
 	for _, u := range updates {
