@@ -10,13 +10,28 @@ defaults:
       value: "true"
 
 steps:
+  # On a PR, decides which FV lanes an earlier run already passed with the same
+  # inputs (see hack/cmd/felix-fv-memo); felix-build and the lanes skip what it
+  # says passed.  FELIX_FV_MEMO=off runs everything.
+  - name: felix-fv-plan
+    useGoBuild: true
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+      - name: FELIX_FV_MEMO
+        value: "on"
+    timeout: 20m
+    requests: {cpu: 4000m, memory: 4Gi}
+    commands: |
+      .argoci/scripts/felix-fv-plan
+
   # Every FV VM unpacks this step's output, so a lane whose batches all fail to
   # configure usually broke here.
   - name: felix-build
     env:
       - name: BUILD_CACHE_GROUP
         value: calico
-    depends: [build-calico-image, check-go]
+    depends: [build-calico-image, check-go, felix-fv-plan]
     timeout: 40m
     jobSize: large
     requests: {cpu: 7000m, memory: 10Gi}
@@ -28,14 +43,19 @@ steps:
           - name: google-service-account-for-gce-key.json
             as: GCE_SERVICE_ACCOUNT_KEY
     commands: |
-      source .argoci/scripts/vm-fleet-setup.sh
-      .argoci/scripts/load-cached-images calico
-      .semaphore/scripts/load-felix-prereqs.sh
-      cd felix
-      # REMOTE_DEPS= reuses the cached image. Not `make build`, which also
-      # cross-compiles the Windows binary.
-      make REMOTE_DEPS= bin/calico-felix image ut-bpf-prereqs fv-prereqs
-      ./.semaphore/cache-test-artifacts
+      artifact pull workflow felix-fv-plan
+      if [ "$(cat felix-fv-plan/build)" = skip ]; then
+        echo "Every FV lane passed on an earlier run of this PR with the same inputs; nothing to build."
+      else
+        source .argoci/scripts/vm-fleet-setup.sh
+        .argoci/scripts/load-cached-images calico
+        .semaphore/scripts/load-felix-prereqs.sh
+        cd felix
+        # REMOTE_DEPS= reuses the cached image. Not `make build`, which also
+        # cross-compiles the Windows binary.
+        make REMOTE_DEPS= bin/calico-felix image ut-bpf-prereqs fv-prereqs
+        ./.semaphore/cache-test-artifacts
+      fi
 
   - name: felix-static-checks
     env:
@@ -197,7 +217,13 @@ steps:
       if [ -n "${FV_FOCUS_OVERRIDE:-}" ]; then
         export FV_FOCUS="${FV_FOCUS_OVERRIDE}"
       fi
-      .semaphore/vms/run-tests-on-vms "${VM_PREFIX}"
+      source .semaphore/vms/batch-memo
+      batch_memo_init "${FELIX_TEST_GROUP}"
+      if [ "${BATCH_MEMO_LANE_HIT}" = true ]; then
+        batch_memo_restore_lane artifacts
+      else
+        .semaphore/vms/run-tests-on-vms "${VM_PREFIX}"
+      fi
     epilogue: |
       # The epilogue sees nothing the commands set, VM_PREFIX included.
       cd "${CI_HOME}/${CI_GIT_DIR}"
