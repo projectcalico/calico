@@ -128,28 +128,54 @@ type ipamArgs struct {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
+	configureLogging(args)
+	result, err := add(args)
+	if err != nil {
+		return err
+	}
+	return result.Print()
+}
+
+func cmdDel(args *skel.CmdArgs) error {
+	configureLogging(args)
+	return del(args)
+}
+
+// configureLogging sets up logging from the netconf when calico-ipam runs as its own binary.
+// In-process, the calico plugin has already done this from the same netconf, and a second
+// call would open another writer on its log file.
+func configureLogging(args *skel.CmdArgs) {
 	conf := types.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
-		return fmt.Errorf("failed to load netconf: %v", err)
+		// add and del report the parse error.
+		return
+	}
+	utils.ConfigureLogging(conf)
+}
+
+// add assigns the sandbox's addresses and returns the result in the netconf's CNI version,
+// leaving the caller to print it or use it in-process.
+func add(args *skel.CmdArgs) (cnitypes.Result, error) {
+	conf := types.NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return nil, fmt.Errorf("failed to load netconf: %w", err)
 	}
 
 	nodename := utils.DetermineNodename(conf)
 
-	utils.ConfigureLogging(conf)
-
 	calicoClient, err := utils.CreateClient(conf)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	epIDs, err := utils.GetIdentifiers(args, nodename)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	epIDs.WEPName, err = epIDs.CalculateWorkloadEndpointName(false)
 	if err != nil {
-		return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
+		return nil, fmt.Errorf("error constructing WorkloadEndpoint name: %w", err)
 	}
 
 	logger := logrus.WithFields(logrus.Fields{
@@ -160,7 +186,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// Always detect VMI info so we can reject migration targets when persistence is disabled.
 	vmiInfo, err := getVMIInfoForPod(conf, epIDs, logger)
 	if err != nil {
-		return fmt.Errorf("failed to get VMI info: %w", err)
+		return nil, fmt.Errorf("failed to get VMI info: %w", err)
 	}
 
 	// Combined flag: VMI pod with persistence enabled.
@@ -170,7 +196,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if vmiInfo != nil && vmiInfo.IsMigrationTarget() {
 		if !ipPersistenceEnabledForVM {
 			logger.Error("Live migration target pod rejected: KubeVirtVMAddressPersistence is disabled")
-			return fmt.Errorf("live migration target pod is not allowed when KubeVirtVMAddressPersistence is disabled")
+			return nil, errors.New("live migration target pod is not allowed when KubeVirtVMAddressPersistence is disabled")
 		}
 	}
 
@@ -196,7 +222,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	ipamArgs := ipamArgs{}
 	if err = cnitypes.LoadArgs(args.Args, &ipamArgs); err != nil {
-		return err
+		return nil, err
 	}
 
 	// We attach important attributes to the allocation.
@@ -225,12 +251,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// - Source pod: reuses IPs from a previous pod with the same VM (pod recreation).
 		//   If no IPs exist, falls through to normal AutoAssign.
 		// - Migration target: IPs must exist (allocated by the source pod).
-		reuseExistingIPs, err := handleVirtLauncherPod(calicoClient, handleID, attrs, conf, logger, isMigrationTarget)
+		reused, err := handleVirtLauncherPod(calicoClient, handleID, attrs, logger, isMigrationTarget)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if reuseExistingIPs {
-			return nil
+		if reused != nil {
+			return reused.GetAsVersion(conf.CNIVersion)
 		}
 		// Source pod with no existing IPs - fall through to normal allocation
 	}
@@ -289,7 +315,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 		err := assignIPWithLock()
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		var ipNetwork net.IPNet
@@ -332,7 +358,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			defer cancel()
 			v4pools, err = utils.ResolvePools(ctx, calicoClient, conf.IPAM.IPv4Pools, true)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 		{
@@ -340,7 +366,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			defer cancel()
 			v6pools, err = utils.ResolvePools(ctx, calicoClient, conf.IPAM.IPv6Pools, false)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 
@@ -363,7 +389,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			namespaceObj, err = getNamespace(conf, namespace, logger)
 			if err != nil {
 				logger.WithError(err).Errorf("Failed to get namespace for %s", namespace)
-				return fmt.Errorf("failed to get namespace %s: %w", namespace, err)
+				return nil, fmt.Errorf("failed to get namespace %s: %w", namespace, err)
 			}
 			logger.Debugf("Got namespace for %s: %v", namespace, namespaceObj.Labels)
 		}
@@ -422,7 +448,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 		logger.Infof("Calico CNI IPAM assigned addresses IPv4=%v IPv6=%v", v4ips, v6ips)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// Check if IPv4 address assignment fails but IPv6 address assignment succeeds. Release IPs for the successful IPv6 address assignment.
@@ -467,7 +493,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		if num4 == 1 {
 			if err := v4Assignments.PartialFulfillmentError(); err != nil {
-				return fmt.Errorf("failed to request IPv4 addresses: %w", err)
+				return nil, fmt.Errorf("failed to request IPv4 addresses: %w", err)
 			}
 			ipV4Network := net.IPNet{IP: v4Assignments.IPs[0].IP, Mask: v4Assignments.IPs[0].Mask}
 			r.IPs = append(r.IPs, &cniv1.IPConfig{
@@ -477,7 +503,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		if num6 == 1 {
 			if err := v6Assignments.PartialFulfillmentError(); err != nil {
-				return fmt.Errorf("failed to request IPv6 addresses: %w", err)
+				return nil, fmt.Errorf("failed to request IPv6 addresses: %w", err)
 			}
 			ipV6Network := net.IPNet{IP: v6Assignments.IPs[0].IP, Mask: v6Assignments.IPs[0].Mask}
 			r.IPs = append(r.IPs, &cniv1.IPConfig{
@@ -498,8 +524,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	logger.WithField("routes", r.Routes).Debug("Added routes to result")
 
-	// Print result to stdout, in the format defined by the requested cniVersion.
-	return cnitypes.PrintResult(r, conf.CNIVersion)
+	return r.GetAsVersion(conf.CNIVersion)
 }
 
 // transferFromPriorSandbox hands an address the pod already holds to this sandbox's handle.
@@ -700,13 +725,12 @@ func getKubeVirtVMAddressPersistence(calicoClient client.Interface) bool {
 	return *ipamConfig.Spec.KubeVirtVMAddressPersistence != v3.VMAddressPersistenceDisabled
 }
 
-func cmdDel(args *skel.CmdArgs) error {
+// del releases the sandbox's addresses.
+func del(args *skel.CmdArgs) error {
 	conf := types.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
-
-	utils.ConfigureLogging(conf)
 
 	calicoClient, err := utils.CreateClient(conf)
 	if err != nil {
@@ -988,15 +1012,15 @@ func getNamespace(conf types.NetConf, namespace string, logger *logrus.Entry) (*
 // if IPs are already allocated to the VM handle and reusing them.
 //
 // For source pods (isMigrationTarget=false):
-//   - If existing IPs found: reuses them and sets ActiveOwnerAttrs. Returns (true, nil).
-//   - If no existing IPs: returns (false, nil) so the caller proceeds with normal AutoAssign.
+//   - If existing IPs found: reuses them, sets ActiveOwnerAttrs and returns them.
+//   - If no existing IPs: returns a nil result so the caller proceeds with normal AutoAssign.
 //
 // For migration target pods (isMigrationTarget=true):
 //   - Existing IPs must already be allocated by the source pod.
 //   - Sets AlternateOwnerAttrs (unconditionally, to handle back-to-back migrations).
 //   - Returns empty routes so CNI skips host-side route programming.
-//   - Returns (true, nil) on success, (false, error) if IPs are missing.
-func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs map[string]string, conf types.NetConf, logger *logrus.Entry, isMigrationTarget bool) (bool, error) {
+//   - Returns an error if IPs are missing.
+func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs map[string]string, logger *logrus.Entry, isMigrationTarget bool) (*cniv1.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -1005,18 +1029,18 @@ func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			// Communication or unexpected error - don't fall through to new allocation.
 			logger.WithError(err).Error("Failed to get existing IPs for VM handle")
-			return false, fmt.Errorf("failed to get existing IPs for VM handle %s: %w", handleID, err)
+			return nil, fmt.Errorf("failed to get existing IPs for VM handle %s: %w", handleID, err)
 		}
 	}
 	if len(existingIPs) == 0 {
 		if isMigrationTarget {
 			// Migration target requires existing IPs allocated by the source pod.
 			logger.Error("Migration target pod but VM handle has no allocated IPs")
-			return false, fmt.Errorf("migration target pod but no IP allocated to VM handle %s", handleID)
+			return nil, fmt.Errorf("migration target pod but no IP allocated to VM handle %s", handleID)
 		}
 		// Source pod with no existing IPs - fall through to normal AutoAssign.
 		logger.WithError(err).Info("No existing IPs for VM handle, proceeding with new allocation")
-		return false, nil
+		return nil, nil
 	}
 
 	logger.WithFields(logrus.Fields{
@@ -1055,7 +1079,7 @@ func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs
 		err = calicoClient.IPAM().SetOwnerAttributes(ctx, ip, handleID, updates, nil)
 		if err != nil {
 			logger.WithError(err).Errorf("Failed to set owner attributes for IP %s", ip)
-			return false, fmt.Errorf("failed to set owner attributes for IP %s: %w", ip, err)
+			return nil, fmt.Errorf("failed to set owner attributes for IP %s: %w", ip, err)
 		}
 	}
 
@@ -1075,5 +1099,5 @@ func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs
 		logger.Info("Source pod: returning existing IPs with routes")
 	}
 
-	return true, cnitypes.PrintResult(r, conf.CNIVersion)
+	return r, nil
 }
