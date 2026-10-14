@@ -456,7 +456,9 @@ func unmarshalResource(tm unstructured.Unstructured, b []byte) ([]runtime.Object
 		return nil, err
 	}
 
-	log.Infof("Type of unpacked data: %v. Unpacked %+v", reflect.TypeOf(unpacked), unpacked)
+	// Log only safe metadata to avoid exposing sensitive data (e.g., Secret contents)
+	meta := unpacked.(v1.Object)
+	log.Infof("Resource: kind=%s, name=%s, namespace=%s", reflect.TypeOf(unpacked), meta.GetName(), meta.GetNamespace())
 
 	return []runtime.Object{unpacked}, nil
 }
@@ -482,7 +484,8 @@ func unmarshalSliceOfResources(tml []unstructured.Unstructured, b []byte) ([]run
 		return nil, err
 	}
 
-	log.Infof("Unpacked: %+v", unpacked)
+	// Log only safe metadata to avoid exposing sensitive data (e.g., Secret contents)
+	log.Infof("Processed list with %d resources", len(unpacked))
 
 	return unpacked, nil
 }
