@@ -242,7 +242,7 @@ func (c *kubeControllersComponent) Objects() ([]client.Object, []client.Object) 
 var _ render.Overridable = (*kubeControllersComponent)(nil)
 
 func (c *kubeControllersComponent) OverrideTargets() []rcomp.OverrideTarget {
-	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.Deployment](c.cfg.Name, c.cfg.Installation.CalicoKubeControllersDeployment)}
+	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.Deployment](c.cfg.Namespace, c.cfg.Name, c.cfg.Installation.CalicoKubeControllersDeployment)}
 }
 
 func (c *kubeControllersComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {

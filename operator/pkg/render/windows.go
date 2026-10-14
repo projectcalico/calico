@@ -107,7 +107,7 @@ func (c *windowsComponent) Objects() ([]client.Object, []client.Object) {
 var _ Overridable = (*windowsComponent)(nil)
 
 func (c *windowsComponent) OverrideTargets() []rcomp.OverrideTarget {
-	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.DaemonSet](common.WindowsDaemonSetName, c.cfg.Installation.CalicoNodeWindowsDaemonSet)}
+	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.DaemonSet](common.CalicoNamespace, common.WindowsDaemonSetName, c.cfg.Installation.CalicoNodeWindowsDaemonSet)}
 }
 
 func (c *windowsComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {
@@ -412,6 +412,13 @@ func WindowsKeyCertProvisioner(kp certificatemanagement.KeyPairInterface, image 
 	ic.Command = []string{"$env:CONTAINER_SANDBOX_MOUNT_POINT/CalicoWindows/calico.exe", "component", "key-cert-provisioner"}
 	for i := range ic.VolumeMounts {
 		ic.VolumeMounts[i].MountPath = "c:" + ic.VolumeMounts[i].MountPath
+	}
+
+	// Point the provisioner at the same path it's mounted on, so it writes into the volume.
+	for i := range ic.Env {
+		if ic.Env[i].Name == "CERTIFICATE_PATH" {
+			ic.Env[i].Value = "c:" + certificatemanagement.CSRCMountPath + "/"
+		}
 	}
 	return ic
 }

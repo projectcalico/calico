@@ -203,7 +203,7 @@ func (c *apiServerComponent) Objects() ([]client.Object, []client.Object) {
 var _ Overridable = (*apiServerComponent)(nil)
 
 func (c *apiServerComponent) OverrideTargets() []rcomp.OverrideTarget {
-	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.Deployment](APIServerName, c.cfg.APIServer.APIServerDeployment)}
+	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.Deployment](APIServerNamespace, APIServerName, c.cfg.APIServer.APIServerDeployment)}
 }
 
 func (c *apiServerComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {

@@ -104,7 +104,7 @@ func (c *Component) Objects() ([]client.Object, []client.Object) {
 var _ render.Overridable = (*Component)(nil)
 
 func (c *Component) OverrideTargets() []rcomp.OverrideTarget {
-	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.Deployment](GoldmaneDeploymentName, c.cfg.Goldmane.Spec.GoldmaneDeployment)}
+	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.Deployment](GoldmaneNamespace, GoldmaneDeploymentName, c.cfg.Goldmane.Spec.GoldmaneDeployment)}
 }
 
 func (c *Component) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {

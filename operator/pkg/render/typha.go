@@ -117,8 +117,8 @@ var _ Overridable = (*typhaComponent)(nil)
 
 func (c *typhaComponent) OverrideTargets() []rcomp.OverrideTarget {
 	return []rcomp.OverrideTarget{
-		rcomp.Target[*policyv1.PodDisruptionBudget](common.TyphaDeploymentName, c.cfg.Installation.TyphaPodDisruptionBudget),
-		rcomp.Target[*appsv1.Deployment](common.TyphaDeploymentName, c.cfg.Installation.TyphaDeployment).After(func(obj client.Object) {
+		rcomp.Target[*policyv1.PodDisruptionBudget](common.CalicoNamespace, common.TyphaDeploymentName, c.cfg.Installation.TyphaPodDisruptionBudget),
+		rcomp.Target[*appsv1.Deployment](common.CalicoNamespace, common.TyphaDeploymentName, c.cfg.Installation.TyphaDeployment).After(func(obj client.Object) {
 			if d, ok := obj.(*appsv1.Deployment); ok {
 				applyPostOverrideFixUps(d)
 			}

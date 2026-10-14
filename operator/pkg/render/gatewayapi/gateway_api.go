@@ -431,8 +431,8 @@ var _ render.Overridable = (*gatewayAPIImplementationComponent)(nil)
 func (pr *gatewayAPIImplementationComponent) OverrideTargets() []rcomp.OverrideTarget {
 	spec := pr.cfg.GatewayAPI.Spec
 	targets := []rcomp.OverrideTarget{
-		rcomp.Target[*appsv1.Deployment](pr.chart.controllerDeployment.Name, spec.GatewayControllerDeployment),
-		rcomp.Target[*batchv1.Job](pr.chart.certgenJob.Name, spec.GatewayCertgenJob),
+		rcomp.Target[*appsv1.Deployment](pr.chart.controllerDeployment.Namespace, pr.chart.controllerDeployment.Name, spec.GatewayControllerDeployment),
+		rcomp.Target[*batchv1.Job](pr.chart.certgenJob.Namespace, pr.chart.certgenJob.Name, spec.GatewayCertgenJob),
 	}
 	for i := range spec.GatewayClasses {
 		class := &spec.GatewayClasses[i]
@@ -440,7 +440,7 @@ func (pr *gatewayAPIImplementationComponent) OverrideTargets() []rcomp.OverrideT
 		if envoyProxyIsDaemonSet(pr.cfg.CustomEnvoyProxies[class.Name], class) {
 			workload = class.GatewayDaemonSet
 		}
-		targets = append(targets, rcomp.Target[*envoyapi.EnvoyProxy](class.Name, workload), rcomp.Target[*envoyapi.EnvoyProxy](class.Name, class.GatewayService))
+		targets = append(targets, rcomp.Target[*envoyapi.EnvoyProxy](common.CalicoNamespace, class.Name, workload), rcomp.Target[*envoyapi.EnvoyProxy](common.CalicoNamespace, class.Name, class.GatewayService))
 	}
 	return targets
 }

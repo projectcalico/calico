@@ -878,6 +878,12 @@ func ApplyEnvoyProxyServiceOverrides(ep *envoyapi.EnvoyProxy, overrides *operato
 	if overrides == nil {
 		return
 	}
+	if ep.Spec.Provider == nil {
+		ep.Spec.Provider = &envoyapi.EnvoyProxyProvider{Type: envoyapi.EnvoyProxyProviderTypeKubernetes}
+	}
+	if ep.Spec.Provider.Kubernetes == nil {
+		ep.Spec.Provider.Kubernetes = &envoyapi.EnvoyProxyKubernetesProvider{}
+	}
 	if ep.Spec.Provider.Kubernetes.EnvoyService == nil {
 		ep.Spec.Provider.Kubernetes.EnvoyService = &envoyapi.KubernetesServiceSpec{}
 	}

@@ -181,7 +181,7 @@ func (c *guardianComponent) OverrideTargets() []rcomponents.OverrideTarget {
 		return nil
 	}
 	return []rcomponents.OverrideTarget{
-		rcomponents.Target[*appsv1.Deployment](GuardianDeploymentName, c.cfg.ManagementClusterConnection.Spec.GuardianDeployment),
+		rcomponents.Target[*appsv1.Deployment](GuardianNamespace, GuardianDeploymentName, c.cfg.ManagementClusterConnection.Spec.GuardianDeployment),
 	}
 }
 

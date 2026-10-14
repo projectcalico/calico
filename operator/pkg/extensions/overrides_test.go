@@ -64,7 +64,7 @@ func (overridableComponent) OverrideTargets() []rcomp.OverrideTarget {
 			},
 		},
 	}
-	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.Deployment](workloadName, overrides)}
+	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.Deployment]("", workloadName, overrides)}
 }
 
 func (c overridableComponent) Objects() ([]client.Object, []client.Object) {

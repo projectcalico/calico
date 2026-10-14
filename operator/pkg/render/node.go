@@ -228,7 +228,7 @@ func (c *nodeComponent) OverrideTargets() []rcomp.OverrideTarget {
 			}
 		}
 	}
-	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.DaemonSet](common.NodeDaemonSetName, overrides)}
+	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.DaemonSet](common.CalicoNamespace, common.NodeDaemonSetName, overrides)}
 }
 
 func (c *nodeComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {

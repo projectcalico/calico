@@ -383,7 +383,7 @@ func (c *csiComponent) Objects() (objsToCreate, objsToDelete []client.Object) {
 var _ Overridable = (*csiComponent)(nil)
 
 func (c *csiComponent) OverrideTargets() []rcomp.OverrideTarget {
-	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.DaemonSet](CSIDaemonSetName, c.cfg.Installation.CSINodeDriverDaemonSet)}
+	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.DaemonSet](CSIDaemonSetNamespace, CSIDaemonSetName, c.cfg.Installation.CSINodeDriverDaemonSet)}
 }
 
 func (c *csiComponent) ObjectsBeforeOverrides() (objsToCreate, objsToDelete []client.Object) {

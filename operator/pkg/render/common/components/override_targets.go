@@ -31,15 +31,17 @@ import (
 // OverrideTarget names a rendered object and the user overrides for it.
 type OverrideTarget struct {
 	kind      reflect.Type
+	namespace string
 	name      string
 	overrides any
 
 	after func(obj client.Object)
 }
 
-// Target declares that overrides apply to the rendered T with the given name.
-func Target[T client.Object](name string, overrides any) OverrideTarget {
-	return OverrideTarget{kind: reflect.TypeFor[T](), name: name, overrides: overrides}
+// Target declares that overrides apply to the rendered T with the given
+// namespace and name. Pass an empty namespace for a cluster-scoped object.
+func Target[T client.Object](namespace, name string, overrides any) OverrideTarget {
+	return OverrideTarget{kind: reflect.TypeFor[T](), namespace: namespace, name: name, overrides: overrides}
 }
 
 // After returns t with fn set to run on the object once the overrides are on it,
@@ -52,12 +54,12 @@ func (t OverrideTarget) After(fn func(obj client.Object)) OverrideTarget {
 
 // Matches reports whether obj is the object t names.
 func (t OverrideTarget) Matches(obj client.Object) bool {
-	return reflect.TypeOf(obj) == t.kind && obj.GetName() == t.name
+	return reflect.TypeOf(obj) == t.kind && obj.GetNamespace() == t.namespace && obj.GetName() == t.name
 }
 
 // String names the target in test failures and logs.
 func (t OverrideTarget) String() string {
-	return fmt.Sprintf("%s %s", t.kind, t.name)
+	return fmt.Sprintf("%s %s/%s", t.kind, t.namespace, t.name)
 }
 
 // ApplyOverrides applies each target's overrides to the object in objs it names,

@@ -135,7 +135,7 @@ func (c *Component) Objects() ([]client.Object, []client.Object) {
 var _ render.Overridable = (*Component)(nil)
 
 func (c *Component) OverrideTargets() []rcomp.OverrideTarget {
-	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.Deployment](WhiskerDeploymentName, c.cfg.Whisker.Spec.WhiskerDeployment)}
+	return []rcomp.OverrideTarget{rcomp.Target[*appsv1.Deployment](WhiskerNamespace, WhiskerDeploymentName, c.cfg.Whisker.Spec.WhiskerDeployment)}
 }
 
 func (c *Component) ObjectsBeforeOverrides() ([]client.Object, []client.Object) {

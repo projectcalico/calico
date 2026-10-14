@@ -252,9 +252,9 @@ var _ render.Overridable = (*IstioComponent)(nil)
 func (c *IstioComponent) OverrideTargets() []rcomp.OverrideTarget {
 	res := c.resources
 	return []rcomp.OverrideTarget{
-		rcomp.Target[*appsv1.Deployment](res.IstiodDeployment.Name, c.cfg.Istio.Spec.IstiodDeployment),
-		rcomp.Target[*appsv1.DaemonSet](res.CNIDaemonSet.Name, c.cfg.Istio.Spec.IstioCNIDaemonset),
-		rcomp.Target[*appsv1.DaemonSet](res.ZTunnelDaemonSet.Name, c.cfg.Istio.Spec.ZTunnelDaemonset),
+		rcomp.Target[*appsv1.Deployment](res.IstiodDeployment.Namespace, res.IstiodDeployment.Name, c.cfg.Istio.Spec.IstiodDeployment),
+		rcomp.Target[*appsv1.DaemonSet](res.CNIDaemonSet.Namespace, res.CNIDaemonSet.Name, c.cfg.Istio.Spec.IstioCNIDaemonset),
+		rcomp.Target[*appsv1.DaemonSet](res.ZTunnelDaemonSet.Namespace, res.ZTunnelDaemonSet.Name, c.cfg.Istio.Spec.ZTunnelDaemonset),
 	}
 }
 

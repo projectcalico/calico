@@ -103,7 +103,7 @@ var _ render.Overridable = (*component)(nil)
 
 func (c *component) OverrideTargets() []rcomp.OverrideTarget {
 	return []rcomp.OverrideTarget{
-		rcomp.Target[*appsv1.Deployment](WebhooksName, c.cfg.APIServer.CalicoWebhooksDeployment).After(func(obj client.Object) {
+		rcomp.Target[*appsv1.Deployment](common.CalicoNamespace, WebhooksName, c.cfg.APIServer.CalicoWebhooksDeployment).After(func(obj client.Object) {
 			// Set DNSPolicy based on the final HostNetwork value (after overrides).
 			if dep, ok := obj.(*appsv1.Deployment); ok && dep.Spec.Template.Spec.HostNetwork {
 				dep.Spec.Template.Spec.DNSPolicy = corev1.DNSClusterFirstWithHostNet
