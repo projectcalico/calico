@@ -109,6 +109,21 @@ func TestLegacyKeyUpgrade(t *testing.T) {
 	Expect(upd.Value.(*model.Policy).Tier).To(Equal("mytier"))
 }
 
+// Older Typhas stream v1 profile labels, which this version drops without logging.
+func TestProfileLabelsKeyIsObsolete(t *testing.T) {
+	RegisterTestingT(t)
+
+	su := SerializedUpdate{
+		Key:        "/calico/v1/policy/profile/kns.default/labels",
+		Value:      []byte(`{"pcns.projectcalico.org/name":"default"}`),
+		Revision:   "20",
+		UpdateType: api.UpdateTypeKVNew,
+	}
+
+	_, err := su.ToUpdate()
+	Expect(err).To(Equal(ErrObsoleteKey))
+}
+
 func TestCompressionAlgorithmMetricLabelValue(t *testing.T) {
 	RegisterTestingT(t)
 
