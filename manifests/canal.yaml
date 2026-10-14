@@ -13322,11 +13322,9 @@ spec:
   policyName: strip-cni-annotations.projectcalico.org
 ---
 # Source: calico/templates/admission-policies.yaml
-# ValidatingAdmissionPolicy that allows only the CNI plugins that write them to
-# set, change or remove the pod annotations Calico reads a pod's network from:
-# the Calico CNI plugin's, and the AWS VPC CNI's pod IP annotation. Felix
-# programs the dataplane from these, so they must not be writable by whoever can
-# update the pod.
+# ValidatingAdmissionPolicy that protects CNI-written Pod annotations. Since
+# Felix uses these annotations when programming the dataplane, they should not be
+# editable by anyone but the CNI by default.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
