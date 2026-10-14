@@ -482,6 +482,55 @@ func TestRule_ProtocolValidation(t *testing.T) {
 	}
 }
 
+// Only TCP, UDP and SCTP carry ports, and without a protocol a rule can only
+// match a named port, whose protocol comes from the endpoint. A port range is a
+// string, and telling it from a name costs more than the CEL budget allows on
+// Kubernetes 1.32, so ranges are left to libcalico-go.
+func TestRule_PortsRequireProtocol(t *testing.T) {
+	const (
+		wantProtocol = "rules that specify ports must set protocol to TCP or UDP or SCTP"
+		wantNumeric  = "rules with a numeric port must set protocol to TCP or UDP or SCTP"
+	)
+	named := numorstring.Port{PortName: "http"}
+	single := numorstring.SinglePort(80)
+	portRange := numorstring.Port{MinPort: 80, MaxPort: 90}
+
+	for _, tt := range []struct {
+		name     string
+		protocol *numorstring.Protocol
+		source   v3.EntityRule
+		dest     v3.EntityRule
+		wantErr  string
+	}{
+		{name: "TCP with ports", protocol: ptr.To(numorstring.ProtocolFromString("TCP")), dest: v3.EntityRule{Ports: []numorstring.Port{single}}},
+		{name: "numeric UDP with ports", protocol: ptr.To(numorstring.ProtocolFromInt(17)), dest: v3.EntityRule{Ports: []numorstring.Port{portRange}}},
+		{name: "ICMP with ports", protocol: ptr.To(numorstring.ProtocolFromString("ICMP")), dest: v3.EntityRule{Ports: []numorstring.Port{single}}, wantErr: wantProtocol},
+		{name: "UDPLite with source notPorts", protocol: ptr.To(numorstring.ProtocolFromString("UDPLite")), source: v3.EntityRule{NotPorts: []numorstring.Port{named}}, wantErr: wantProtocol},
+		{name: "ICMP without ports", protocol: ptr.To(numorstring.ProtocolFromString("ICMP"))},
+		{name: "no protocol with a named port", dest: v3.EntityRule{Ports: []numorstring.Port{named}}},
+		{name: "no protocol with a numeric port", dest: v3.EntityRule{Ports: []numorstring.Port{single}}, wantErr: wantNumeric},
+		{name: "no protocol with a port range", source: v3.EntityRule{Ports: []numorstring.Port{named, portRange}}},
+		{name: "no protocol with a numeric notPort", dest: v3.EntityRule{NotPorts: []numorstring.Port{single}}, wantErr: wantNumeric},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			np := &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np-ports"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{Ingress: []v3.Rule{{
+					Action:      v3.Allow,
+					Protocol:    tt.protocol,
+					Source:      tt.source,
+					Destination: tt.dest,
+				}}},
+			}
+			if tt.wantErr != "" {
+				expectCreateFails(t, np, tt.wantErr)
+			} else {
+				expectCreateSucceeds(t, np)
+			}
+		})
+	}
+}
+
 // libcalico-go holds a named port to the Kubernetes limit of 15 characters.
 func TestRule_PortLength(t *testing.T) {
 	for _, tt := range []struct {
