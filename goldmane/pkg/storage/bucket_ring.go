@@ -784,7 +784,7 @@ func (r *BucketRing) flushToStreams() {
 
 func (r *BucketRing) streamBucket(b *AggregationBucket, s Receiver) {
 	b.markReady()
-	s.Receive(b, "")
+	s.Receive(newBucketInterval(b), "")
 }
 
 // streamingBucket returns the bucket currently slated to be sent to the stream manager.
@@ -848,10 +848,17 @@ func (r *BucketRing) NumFlows(start, end int64) int {
 	return count
 }
 
+// Backfill sends recv the buckets from start up to BackfillEndTime, tagged with the stream ID.
+// A start at or after BackfillEndTime has nothing to backfill, because the following rollovers
+// stream those buckets as they complete.
 func (r *BucketRing) Backfill(recv Receiver, id string, start int64) {
-	// Backfill the stream with any buckets that match its time range.
-	_ = r.iterBucketsTime(start, r.BackfillEndTime(), func(b *AggregationBucket) error {
-		recv.Receive(b, id)
+	end := r.BackfillEndTime()
+	if start >= end {
+		// Otherwise iterBuckets would wrap the whole ring from start round to end.
+		return
+	}
+	_ = r.iterBucketsTime(start, end, func(b *AggregationBucket) error {
+		recv.Receive(newBucketInterval(b), id)
 		return nil
 	})
 }

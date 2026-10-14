@@ -35,10 +35,6 @@ func NewStreamManager() *streamManager {
 	return &streamManager{
 		streams:    make(map[string]*stream),
 		maxStreams: 100,
-		rl: logrusr.NewRateLimitedLogger(
-			logrusr.OptBurst(1),
-			logrusr.OptInterval(15*time.Second),
-		),
 	}
 }
 
@@ -50,9 +46,6 @@ type streamManager struct {
 	// maxStreams configured the maximum number of concurrent streams that can be active.
 	// If this limit is reached, new streams will be rejected.
 	maxStreams int
-
-	// rl is used to rate limit log messages that may happen frequently.
-	rl *logrusr.RateLimitedLogger
 }
 
 // Register creates a stream, or returns nil if the stream limit has been reached.
@@ -79,7 +72,7 @@ func (m *streamManager) Register(req *proto.FlowStreamRequest, channelSize int) 
 	go newStream.run()
 
 	m.streams[newStream.id] = newStream
-	numStreams.Set(float64(len(m.streams)))
+	numStreams.Inc()
 
 	logrus.WithField("id", newStream.id).Debug("Registered new stream")
 	return newStream
@@ -96,7 +89,6 @@ func (m *streamManager) Receive(provider storage.FlowProvider, id string) {
 	for _, s := range m.streams {
 		m.send(s, provider)
 	}
-	numStreams.Set(float64(len(m.streams)))
 }
 
 // send never blocks the main loop. A stream whose queue is full has fallen hours behind, so we
@@ -109,8 +101,8 @@ func (m *streamManager) send(s *stream, provider storage.FlowProvider) {
 	select {
 	case s.in <- provider:
 	default:
-		m.rl.WithField("id", s.id).Warn("Stream queue full, closing stream")
-		s.cancel()
+		s.rl.WithField("id", s.id).Warn("Stream queue full, closing stream")
+		s.Close()
 		delete(m.streams, s.id)
 	}
 }
@@ -122,5 +114,4 @@ func (m *streamManager) prune() {
 			delete(m.streams, id)
 		}
 	}
-	numStreams.Set(float64(len(m.streams)))
 }

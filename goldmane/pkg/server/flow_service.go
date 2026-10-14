@@ -63,7 +63,7 @@ func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_St
 		select {
 		case flow, ok := <-stream.Flows():
 			if !ok {
-				return status.Error(codes.Aborted, "stream fell too far behind, reconnect to resume")
+				return status.Error(codes.Aborted, "stream closed after falling too far behind")
 			}
 			// The stream applied req.Filter before sending, so don't match each flow a second time.
 			if flow.BuildInto(nil, result) {

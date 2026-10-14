@@ -44,14 +44,14 @@ type streamBench struct {
 	clock  *clock
 }
 
-func newStreamBench(b *testing.B) *streamBench {
+func newStreamBench(tb testing.TB) *streamBench {
 	logrus.SetLevel(logrus.ErrorLevel)
 	c := newClock(benchNow)
 	roller := &rolloverController{ch: make(chan time.Time), clock: c, aggregationWindowSecs: benchBucketSec}
 	gm := goldmane.NewGoldmane(goldmane.WithRolloverFunc(roller.After), goldmane.WithNowFunc(c.Now))
 	<-gm.Run(c.Now().Unix())
-	b.Cleanup(gm.Stop)
-	return &streamBench{tb: b, gm: gm, roller: roller, clock: c}
+	tb.Cleanup(gm.Stop)
+	return &streamBench{tb: tb, gm: gm, roller: roller, clock: c}
 }
 
 // fence returns once the main loop has handled everything queued before it. It sends an
@@ -62,8 +62,9 @@ func (s *streamBench) fence() {
 	}
 }
 
-// rollover fires the main loop's rollover timer with the current time, then advances the clock
-// one bucket.
+// rollover advances the clock one bucket before firing the main loop's rollover timer, so the
+// rollover reads the advanced clock. rolloverAndAdvanceClock advances after the send, which races
+// the main loop's read.
 func (s *streamBench) rollover() {
 	now := s.clock.Now()
 	s.clock.Advance(benchBucketSec * time.Second)
