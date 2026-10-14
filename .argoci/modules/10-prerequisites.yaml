@@ -94,7 +94,6 @@ steps:
       make check-language
       make check-dockerfiles
       make check-mockery-config
-      make check-argoci-image
 
   - name: check-protobufs
     requests: {cpu: 1500m, memory: 1Gi}

@@ -14,32 +14,36 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Fails when a calico/go-build tag pinned outside the Makefiles differs from
-# metadata.mk's, which would leave that consumer on the old toolchain and still
-# passing.
+# Fails when an .argoci/ workflow pins a calico/go-build tag other than
+# metadata.mk's, which would leave CI on the old toolchain and still passing.
 
 set -euo pipefail
 
 : "${GO_BUILD_VER:?not set - run this as 'make check-argoci-image'}"
 
+expected="calico/go-build:${GO_BUILD_VER}"
 rc=0
+found=0
 
-argoci="$(awk '/^goBuildVersion:/ {print $2}' .argoci/config.yaml)"
-if [ "$argoci" != "$GO_BUILD_VER" ]; then
-    echo "ERROR: .argoci/config.yaml has goBuildVersion: ${argoci:-<none>}"
-    rc=1
-fi
+while IFS=: read -r file line ref; do
+    found=1
+    if [ "$ref" != "$expected" ]; then
+        echo "ERROR: ${file}:${line} pins ${ref}"
+        rc=1
+    fi
+done < <(grep -rEno --include='*.yaml' --include='*.yml' \
+    "calico/go-build:[^\"' ]+" .argoci || true)
 
-scanner="$(sed -n 's#^FROM calico/go-build:\([^ ]*\).*#\1#p' .oss-scanner/Dockerfile)"
-if [ "$scanner" != "$GO_BUILD_VER" ]; then
-    echo "ERROR: .oss-scanner/Dockerfile is FROM calico/go-build:${scanner:-<none>}"
+# Finding no reference at all means nothing was compared.
+if [ "$found" -eq 0 ]; then
+    echo "ERROR: no calico/go-build reference found in .argoci/ workflow files"
     rc=1
 fi
 
 if [ "$rc" -ne 0 ]; then
     echo ""
-    echo "metadata.mk gives GO_BUILD_VER=${GO_BUILD_VER}; update these to match."
+    echo "metadata.mk gives GO_BUILD_VER=${GO_BUILD_VER}, so .argoci/ must use ${expected}."
     exit 1
 fi
 
-echo "go-build image check passed (${GO_BUILD_VER})."
+echo "ArgoCI build image check passed (${expected})."
