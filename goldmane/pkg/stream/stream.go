@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 
@@ -31,13 +32,21 @@ type stream struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
+	// closeOnce makes Close idempotent, so numStreams drops once per stream however many
+	// times the client and the manager close it.
+	closeOnce sync.Once
+
 	// rl is used to rate limit log messages that may happen frequently.
 	rl *logrusr.RateLimitedLogger
 }
 
-// Close stops the stream. The stream manager drops it from its registry on its next pass.
+// Close stops the stream and removes it from the numStreams gauge. The stream manager drops it
+// from its registry on its next pass.
 func (s *stream) Close() {
-	s.cancel()
+	s.closeOnce.Do(func() {
+		s.cancel()
+		numStreams.Dec()
+	})
 }
 
 func (s *stream) Ctx() context.Context {
@@ -67,12 +76,7 @@ func (s *stream) run() {
 		case <-s.ctx.Done():
 			logrus.WithField("id", s.id).Debug("Stream context done")
 			return
-		case b, ok := <-s.in:
-			if !ok {
-				logrus.WithField("id", s.id).Debug("Stream input channel closed")
-				return
-			}
-
+		case b := <-s.in:
 			b.Iter(func(f storage.FlowBuilder) bool {
 				if err := chanutil.WriteWithDeadline(s.ctx, s.out, f, 60*time.Second); err != nil {
 					// If we hit an error, indicate that we should stop iteration.

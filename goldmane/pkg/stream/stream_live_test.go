@@ -70,8 +70,9 @@ func collect(t *testing.T, s stream.Stream, n int) []int64 {
 	return got
 }
 
-// Buckets flushed before the stream registered never reach it, and the first rollover after
-// backfill sends the next bucket exactly once.
+// Backfill sends history up to the streaming bucket, and the first rollover after it sends that
+// bucket exactly once. TestStreamOpenedDuringRolloversSeesEachBucketOnce covers rollovers racing
+// the open.
 func TestBackfillThenLive(t *testing.T) {
 	sm := stream.NewStreamManager()
 	ring := newLiveRing(sm)
