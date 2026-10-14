@@ -17,6 +17,7 @@ package ipamplugin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,9 +65,9 @@ func (e *inProcessExec) ExecPlugin(ctx context.Context, pluginPath string, stdin
 		}
 		return json.Marshal(result)
 	case "DEL":
-		return nil, cmdDel(args)
+		return nil, del(args)
 	default:
-		return e.DefaultExec.ExecPlugin(ctx, pluginPath, stdinData, environ)
+		return nil, fmt.Errorf("calico-ipam does not support %s in-process", env["CNI_COMMAND"])
 	}
 }
 

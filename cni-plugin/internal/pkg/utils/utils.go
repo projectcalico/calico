@@ -132,7 +132,7 @@ func CreateOrUpdate(ctx context.Context, client client.Interface, wep *internala
 	return client.WorkloadEndpoints().Create(ctx, wep, options.SetOptions{})
 }
 
-// IPAMExec runs the IPAM plugin for ExecIPAMAdd and ExecIPAMDel. Nil execs the plugin binary,
+// IPAMExec runs the IPAM plugin for ExecIPAMAdd and execIPAMDel. Nil execs the plugin binary,
 // which is the CNI library's default.
 var IPAMExec invoke.Exec
 
@@ -141,8 +141,8 @@ func ExecIPAMAdd(plugin string, netconf []byte) (cnitypes.Result, error) {
 	return invoke.DelegateAdd(context.TODO(), plugin, netconf, IPAMExec)
 }
 
-// ExecIPAMDel runs a DEL on the named IPAM plugin with IPAMExec.
-func ExecIPAMDel(plugin string, netconf []byte) error {
+// execIPAMDel runs a DEL on the named IPAM plugin with IPAMExec.
+func execIPAMDel(plugin string, netconf []byte) error {
 	return invoke.DelegateDel(context.TODO(), plugin, netconf, IPAMExec)
 }
 
@@ -275,7 +275,7 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 	}
 
 	// Call the CNI plugin.
-	err := ExecIPAMDel(conf.IPAM.Type, args.StdinData)
+	err := execIPAMDel(conf.IPAM.Type, args.StdinData)
 	if err != nil {
 		logger.Error(err)
 	} else if ae != nil {

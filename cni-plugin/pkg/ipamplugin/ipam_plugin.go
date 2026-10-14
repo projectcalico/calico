@@ -128,6 +128,7 @@ type ipamArgs struct {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
+	configureLogging(args)
 	result, err := add(args)
 	if err != nil {
 		return err
@@ -135,8 +136,25 @@ func cmdAdd(args *skel.CmdArgs) error {
 	return result.Print()
 }
 
-// add assigns the sandbox's addresses and returns them in the netconf's CNI version. It is
-// cmdAdd without the printing, so the calico plugin can run it without exec'ing calico-ipam.
+func cmdDel(args *skel.CmdArgs) error {
+	configureLogging(args)
+	return del(args)
+}
+
+// configureLogging sets up logging from the netconf when calico-ipam runs as its own binary.
+// In-process, the calico plugin has already done this from the same netconf, and a second
+// call would open another writer on its log file.
+func configureLogging(args *skel.CmdArgs) {
+	conf := types.NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		// add and del report the parse error.
+		return
+	}
+	utils.ConfigureLogging(conf)
+}
+
+// add assigns the sandbox's addresses and returns the result in the netconf's CNI version,
+// leaving the caller to print it or use it in-process.
 func add(args *skel.CmdArgs) (cnitypes.Result, error) {
 	conf := types.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
@@ -144,8 +162,6 @@ func add(args *skel.CmdArgs) (cnitypes.Result, error) {
 	}
 
 	nodename := utils.DetermineNodename(conf)
-
-	utils.ConfigureLogging(conf)
 
 	calicoClient, err := utils.CreateClient(conf)
 	if err != nil {
@@ -180,7 +196,7 @@ func add(args *skel.CmdArgs) (cnitypes.Result, error) {
 	if vmiInfo != nil && vmiInfo.IsMigrationTarget() {
 		if !ipPersistenceEnabledForVM {
 			logger.Error("Live migration target pod rejected: KubeVirtVMAddressPersistence is disabled")
-			return nil, fmt.Errorf("live migration target pod is not allowed when KubeVirtVMAddressPersistence is disabled")
+			return nil, errors.New("live migration target pod is not allowed when KubeVirtVMAddressPersistence is disabled")
 		}
 	}
 
@@ -709,13 +725,12 @@ func getKubeVirtVMAddressPersistence(calicoClient client.Interface) bool {
 	return *ipamConfig.Spec.KubeVirtVMAddressPersistence != v3.VMAddressPersistenceDisabled
 }
 
-func cmdDel(args *skel.CmdArgs) error {
+// del releases the sandbox's addresses.
+func del(args *skel.CmdArgs) error {
 	conf := types.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
-
-	utils.ConfigureLogging(conf)
 
 	calicoClient, err := utils.CreateClient(conf)
 	if err != nil {

@@ -2982,7 +2982,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 		It("runs IPAM with no calico-ipam binary on CNI_PATH", func() {
 			binDir := GinkgoT().TempDir()
-			Expect(os.Symlink(filepath.Join(os.Getenv("BIN"), "calico"), filepath.Join(binDir, "calico"))).To(Succeed())
+			plugin := os.Getenv("PLUGIN")
+			Expect(os.Symlink(filepath.Join(os.Getenv("BIN"), plugin), filepath.Join(binDir, plugin))).To(Succeed())
 			GinkgoT().Setenv("BIN", binDir)
 
 			resultSecondAdd, _, _, _, err := testutils.RunCNIPluginWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", "new-container-id", "eth0", contNs)
@@ -3031,7 +3032,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				return lock
 			}
 
-			startStaleAdd := func(ctx context.Context) chan error {
+			startStaleAdd := func(ctx context.Context) <-chan error {
 				done := make(chan error, 1)
 				go func() {
 					defer GinkgoRecover()
