@@ -1495,8 +1495,8 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		}
 	}
 
-	// The CNI plugin's ClusterRole, rendered above, carries the permission these policies check, so
-	// they go in only after it. The CRD-only manifests don't carry them, so they're installed whether
+	// The CNI plugin's ClusterRole, and the AWS VPC CNI's calico-aws-vpc-annotations ClusterRole,
+	// both rendered above, carry the permissions these policies check, so they go in only after them. The CRD-only manifests don't carry them, so they're installed whether
 	// or not the operator manages CRDs.
 	if err = r.updateValidatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetCNIAnnotations); err != nil {
 		return reconcile.Result{}, err
