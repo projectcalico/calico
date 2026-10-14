@@ -45,6 +45,30 @@ func policyKinds(ingress, egress []v3.Rule) map[string]client.Object {
 	}
 }
 
+// Application layer policy is enforced on the receiving side only.
+func TestPolicy_EgressHTTP(t *testing.T) {
+	http := &v3.HTTPMatch{Methods: []string{"GET"}}
+	for _, tt := range []struct {
+		name    string
+		ingress []v3.Rule
+		egress  []v3.Rule
+		wantErr string
+	}{
+		{name: "ingress", ingress: []v3.Rule{{Action: v3.Allow, HTTP: http}}},
+		{name: "egress", egress: []v3.Rule{{Action: v3.Allow, HTTP: http}}, wantErr: "HTTP match is not allowed in egress rules"},
+	} {
+		for kind, obj := range policyKinds(tt.ingress, tt.egress) {
+			t.Run(tt.name+" "+kind, func(t *testing.T) {
+				if tt.wantErr != "" {
+					expectCreateFails(t, obj, tt.wantErr)
+				} else {
+					expectCreateSucceeds(t, obj)
+				}
+			})
+		}
+	}
+}
+
 // A global policy has no namespace of its own to resolve a service name in.
 func TestGlobalPolicy_ServicesNamespace(t *testing.T) {
 	const wantErr = "services in a global policy must specify a namespace"
