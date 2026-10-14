@@ -16,13 +16,14 @@ package vmipam
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 
 	log "github.com/sirupsen/logrus"
 
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/hash"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -38,11 +39,18 @@ var (
 	ErrAlternateOwnerMismatch = errors.New("AlternateOwnerAttrs doesn't match expected target owner")
 )
 
+// VMHandleInfix separates a VM handle's network name from its namespace and VM name.
+const VMHandleInfix = ".vmi."
+
+// maxVMHandleLength is the longest handle ID that keeps its namespace and VM name readable.
+const maxVMHandleLength = 128
+
 // CreateVMHandleID generates a consistent handle ID for a KubeVirt VM allocation.
 // This ensures both CNI plugin and Felix use the same handle format.
 //
-// The handle ID is constructed with a prefix and suffix, and is length-limited to 128
-// characters. If the full ID would exceed this limit, the suffix is hashed and truncated.
+// The handle ID is constructed with a prefix and suffix. If the full ID would exceed 128
+// characters, the suffix is replaced with its hex-encoded SHA-256 hash, which keeps the
+// ID a valid IPAMHandle CRD name on the Kubernetes datastore.
 //
 // Parameters:
 //   - networkName: The Calico network name (from annotation "projectcalico.org/network").
@@ -51,12 +59,13 @@ var (
 //   - vmName: The name of the VirtualMachine (VM and VMI share the same name).
 //
 // Returns:
-//   - Handle ID in format: "{networkName}.vmi.{namespace}.{vmName}" (length-limited to 128 chars)
+//   - Handle ID in format: "{networkName}.vmi.{namespace}.{vmName}", or
+//     "{networkName}.vmi.{sha256 hex}" when that would exceed 128 chars
 //
 // Examples:
 //   - CreateVMHandleID("", "default", "vm1") -> "k8s-pod-network.vmi.default.vm1"
 //   - CreateVMHandleID("multus-net1", "default", "vm1") -> "multus-net1.vmi.default.vm1"
-//   - CreateVMHandleID("net", "ns", "very-long-name...") -> "net.vmi._<hash>" (if exceeds 128 chars)
+//   - CreateVMHandleID("net", "ns", "very-long-name...") -> "net.vmi.<64 hex chars>"
 func CreateVMHandleID(networkName, namespace, vmName string) string {
 	if networkName == "" {
 		networkName = "k8s-pod-network"
@@ -73,9 +82,14 @@ func CreateVMHandleID(networkName, namespace, vmName string) string {
 	// Build prefix: networkName.vmi.
 	prefix := fmt.Sprintf("%s.vmi.", networkName)
 
-	// Use GetLengthLimitedID with max length 128
-	// This will keep the suffix unhashed if it fits, otherwise hash and truncate
-	return hash.GetLengthLimitedID(prefix, suffix, 128)
+	if len(prefix)+len(suffix) <= maxVMHandleLength {
+		return prefix + suffix
+	}
+
+	// Lowercase hex survives the CRD name's ToLower and has no '.', so it can't collide
+	// with an unhashed suffix, which always contains the namespace/name '.'.
+	sum := sha256.Sum256([]byte(suffix))
+	return prefix + hex.EncodeToString(sum[:])
 }
 
 // EnsureActiveVMOwnerAttrs atomically verifies the target pod is in AlternateOwnerAttrs
