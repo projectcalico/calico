@@ -482,15 +482,15 @@ func TestRule_ProtocolValidation(t *testing.T) {
 	}
 }
 
-// numorstring caps a named port at 128 characters.
+// libcalico-go holds a named port to the Kubernetes limit of 15 characters.
 func TestRule_PortLength(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
 		length  int
 		wantErr string
 	}{
-		{name: "128 characters is accepted", length: 128},
-		{name: "129 characters is rejected", length: 129, wantErr: "Too long"},
+		{name: "15 characters is accepted", length: 15},
+		{name: "16 characters is rejected", length: 16, wantErr: "Too long"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			np := &v3.NetworkPolicy{

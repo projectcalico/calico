@@ -40,8 +40,8 @@ index fd2a663..e40fa52 100644
 +			{Type: "string"},
 +		},
 +		Pattern: "^.*",
-+		// Bounds CEL rules over port strings; 128 is the longest named port.
-+		MaxLength: func() *int64 { l := int64(128); return &l }(),
++		// Bounds CEL rules over port strings: a port name is at most 15 characters.
++		MaxLength: func() *int64 { l := int64(15); return &l }(),
 +	}
 +	p.Schemata[TypeIdent{Name: "DSCP", Package: pkg}] = apiext.JSONSchemaProps{
 +		XIntOrString: true,

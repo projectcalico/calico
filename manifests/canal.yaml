@@ -2606,7 +2606,7 @@ spec:
                     32768–60999, while others mostly use the IANA defined range 49152–65535. It is not necessarily
                     a problem if this range overlaps with the operating systems. Both ends of the range are
                     inclusive. [Default: 20000:29999]
-                  maxLength: 128
+                  maxLength: 15
                   pattern: ^.*
                   x-kubernetes-int-or-string: true
                 bpfPolicyDebugEnabled:
@@ -3137,7 +3137,7 @@ spec:
                     anyOf:
                       - type: integer
                       - type: string
-                    maxLength: 128
+                    maxLength: 15
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
                   maxItems: 7
@@ -3318,7 +3318,7 @@ spec:
                   description: |-
                     NATPortRange specifies the range of ports that is used for port mapping when doing outgoing NAT. When unset the default behavior of the
                     network stack is used.
-                  maxLength: 128
+                  maxLength: 15
                   pattern: ^.*
                   x-kubernetes-int-or-string: true
                 netlinkTimeout:
@@ -3921,7 +3921,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -3945,7 +3945,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -4232,7 +4232,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -4256,7 +4256,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -4497,7 +4497,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -4521,7 +4521,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -4808,7 +4808,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -4832,7 +4832,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -6609,7 +6609,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -6633,7 +6633,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -6920,7 +6920,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -6944,7 +6944,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -7185,7 +7185,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -7209,7 +7209,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -7496,7 +7496,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -7520,7 +7520,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -7975,7 +7975,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -7999,7 +7999,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -8286,7 +8286,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -8310,7 +8310,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -8551,7 +8551,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -8575,7 +8575,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -8862,7 +8862,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -8886,7 +8886,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -9845,7 +9845,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -9869,7 +9869,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -10156,7 +10156,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -10180,7 +10180,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -10421,7 +10421,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -10445,7 +10445,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -10732,7 +10732,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
@@ -10756,7 +10756,7 @@ spec:
                               anyOf:
                                 - type: integer
                                 - type: string
-                              maxLength: 128
+                              maxLength: 15
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             maxItems: 50
