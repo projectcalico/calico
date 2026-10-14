@@ -43,7 +43,7 @@ func NewInProcessExec() invoke.Exec {
 
 // ExecPlugin implements invoke.Exec.
 func (e *inProcessExec) ExecPlugin(ctx context.Context, pluginPath string, stdinData []byte, environ []string) ([]byte, error) {
-	if name := filepath.Base(pluginPath); name != "calico-ipam" && name != "calico-ipam.exe" {
+	if !isCalicoIPAM(filepath.Base(pluginPath)) {
 		return e.DefaultExec.ExecPlugin(ctx, pluginPath, stdinData, environ)
 	}
 
@@ -68,6 +68,19 @@ func (e *inProcessExec) ExecPlugin(ctx context.Context, pluginPath string, stdin
 	default:
 		return e.DefaultExec.ExecPlugin(ctx, pluginPath, stdinData, environ)
 	}
+}
+
+// FindInPath implements invoke.Exec. calico-ipam resolves without a lookup, since it runs in
+// this process and its binary need not be on CNI_PATH.
+func (e *inProcessExec) FindInPath(plugin string, paths []string) (string, error) {
+	if isCalicoIPAM(plugin) {
+		return plugin, nil
+	}
+	return e.DefaultExec.FindInPath(plugin, paths)
+}
+
+func isCalicoIPAM(name string) bool {
+	return name == "calico-ipam" || name == "calico-ipam.exe"
 }
 
 // envMap indexes a KEY=VALUE environment. A later entry wins, as it does for exec.

@@ -2980,6 +2980,22 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 		})
 
+		It("runs IPAM with no calico-ipam binary on CNI_PATH", func() {
+			binDir := GinkgoT().TempDir()
+			Expect(os.Symlink(filepath.Join(os.Getenv("BIN"), "calico"), filepath.Join(binDir, "calico"))).To(Succeed())
+			GinkgoT().Setenv("BIN", binDir)
+
+			resultSecondAdd, _, _, _, err := testutils.RunCNIPluginWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", "new-container-id", "eth0", contNs)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resultSecondAdd.IPs).To(Equal(result.IPs))
+			checkIPAMReservationFor("new-container-id")
+
+			_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), testPodName, testutils.K8S_TEST_NS, "new-container-id")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = calicoClient.IPAM().IPsByHandle(ctx, utils.GetHandleID("calico-uts", "new-container-id", workloadName))
+			Expect(err).To(HaveOccurred(), "the DEL did not release the address")
+		})
+
 		Context("when the runtime kills an ADD that is waiting on the IPAM lock", func() {
 			const staleContainerID = "stale-container-id"
 			const newContainerID = "new-container-id"
