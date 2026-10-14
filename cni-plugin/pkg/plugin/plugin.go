@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2015-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,7 +33,6 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
-	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/mcuadros/go-version"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -43,6 +42,7 @@ import (
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane"
+	"github.com/projectcalico/calico/cni-plugin/pkg/ipamplugin"
 	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	calicowait "github.com/projectcalico/calico/cni-plugin/pkg/wait"
@@ -434,7 +434,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 				"type":  conf.IPAM.Type,
 			}).Debug("Looking for IPAM plugin in paths")
 			var ipamResult cnitypes.Result
-			ipamResult, err = ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+			ipamResult, err = utils.ExecIPAMAdd(conf.IPAM.Type, args.StdinData)
 			logger.WithField("IPAM result", ipamResult).Info("Got result from IPAM plugin")
 			if err != nil {
 				return
@@ -785,6 +785,8 @@ func Main(version string) {
 		_ = cniError.Print()
 		os.Exit(1)
 	}
+
+	utils.IPAMExec = ipamplugin.NewInProcessExec()
 
 	funcs := skel.CNIFuncs{
 		Add:   cmdAdd,

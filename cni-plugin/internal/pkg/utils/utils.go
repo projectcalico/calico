@@ -28,10 +28,10 @@ import (
 	"strings"
 
 	"github.com/DeRuina/timberjack"
+	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/azure"
@@ -132,6 +132,20 @@ func CreateOrUpdate(ctx context.Context, client client.Interface, wep *internala
 	return client.WorkloadEndpoints().Create(ctx, wep, options.SetOptions{})
 }
 
+// IPAMExec runs the IPAM plugin for ExecIPAMAdd and ExecIPAMDel. Nil execs the plugin binary,
+// which is the CNI library's default.
+var IPAMExec invoke.Exec
+
+// ExecIPAMAdd runs an ADD on the named IPAM plugin with IPAMExec.
+func ExecIPAMAdd(plugin string, netconf []byte) (cnitypes.Result, error) {
+	return invoke.DelegateAdd(context.TODO(), plugin, netconf, IPAMExec)
+}
+
+// ExecIPAMDel runs a DEL on the named IPAM plugin with IPAMExec.
+func ExecIPAMDel(plugin string, netconf []byte) error {
+	return invoke.DelegateDel(context.TODO(), plugin, netconf, IPAMExec)
+}
+
 // AddIPAM calls through to the configured IPAM plugin.
 // It also contains IPAM plugin specific logic based on the configured plugin.
 func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
@@ -152,7 +166,7 @@ func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cni
 
 	// Actually call the IPAM plugin.
 	logger.Debugf("Calling IPAM plugin %s", conf.IPAM.Type)
-	ipamResult, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+	ipamResult, err := ExecIPAMAdd(conf.IPAM.Type, args.StdinData)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +275,7 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 	}
 
 	// Call the CNI plugin.
-	err := ipam.ExecDel(conf.IPAM.Type, args.StdinData)
+	err := ExecIPAMDel(conf.IPAM.Type, args.StdinData)
 	if err != nil {
 		logger.Error(err)
 	} else if ae != nil {
