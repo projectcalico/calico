@@ -478,8 +478,11 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             self, datamodel_v2.subnet_dir(self.region_string)
         )
 
-        # Cache of current local endpoint IDs.
-        self.local_endpoint_ids = set()
+        # Map from each current local endpoint ID to the name of the WEP that last set
+        # it.  The cache below holds one port per ID, but a port's WEP name can change
+        # (the name includes the VM's ID), and the old name's deletion can arrive after
+        # the new name's creation.
+        self.local_endpoint_names = {}
 
     def start(self):
         eventlet.spawn(self.dnsmasq_updater.start)
@@ -632,11 +635,11 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # Report this at INFO level if it is a new port.  Note, we
         # come through this code periodically for existing ports also,
         # because of how we watch the etcd DB for changes.
-        if endpoint_id not in self.local_endpoint_ids:
+        if endpoint_id not in self.local_endpoint_names:
             LOG.info("New port: %s", port)
-            self.local_endpoint_ids.add(endpoint_id)
         else:
             LOG.debug("Refresh already known port: %s", port)
+        self.local_endpoint_names[endpoint_id] = name
 
         # Add this port into the NetModel.
         self.agent.cache.put_port(dhcp.DictModel(port))
@@ -756,10 +759,21 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             LOG.warning("Unexpected form for endpoint name: %s", name)
             return
 
+        # Ignore the deletion of a WEP name that no longer backs this port.
+        current_name = self.local_endpoint_names.get(endpoint_id)
+        if current_name is not None and current_name != name:
+            LOG.info(
+                "Ignoring deletion of %s: port %s is now served by %s",
+                name,
+                endpoint_id,
+                current_name,
+            )
+            return
+
         # Remove endpoint ID from our cache.  Note, it might not be
         # there because we haven't checked whether the endpoint just
-        # deleted is a local one; hence 'discard' instead of 'remove'.
-        self.local_endpoint_ids.discard(endpoint_id)
+        # deleted is a local one; hence 'pop' with a default.
+        self.local_endpoint_names.pop(endpoint_id, None)
 
         # Find the corresponding port in the DHCP agent's cache.
         port = self.agent.cache.get_port_by_id(endpoint_id)

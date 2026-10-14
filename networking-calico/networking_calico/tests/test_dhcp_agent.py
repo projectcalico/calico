@@ -43,8 +43,8 @@ LOG = logging.getLogger(__name__)
 EtcdResponse = namedtuple("EtcdResponse", ["value"])
 
 
-def make_endpoint_name(endpoint_id):
-    parts = [socket.gethostname(), "openstack", "workload-ignored", endpoint_id]
+def make_endpoint_name(endpoint_id, workload_id="workload-ignored"):
+    parts = [socket.gethostname(), "openstack", workload_id, endpoint_id]
     return "-".join([p.replace("-", "--") for p in parts])
 
 
@@ -241,6 +241,50 @@ class TestDhcpAgent(base.BaseTestCase):
         # Check DHCP driver was asked to restart.
         agent.etcd.dnsmasq_updater.update_network.assert_called()
         agent.etcd.dnsmasq_updater.update_network.reset_mock()
+
+    def test_stale_name_deletion_keeps_port(self):
+        """Deleting an old WEP name for a port doesn't remove the port.
+
+        When a port moves to another VM, its WEP is recreated under a name with the new
+        VM's ID, and the old name's deletion can arrive after the new name's creation.
+        """
+        agent = CalicoDhcpAgent()
+        agent.etcd.mtu_watcher = mock.Mock()
+        agent.etcd.mtu_watcher.get_mtu.return_value = 1500
+        agent.etcd.dnsmasq_updater = mock.Mock()
+        agent.etcd.subnet_watcher.on_subnet_set(
+            EtcdResponse(
+                value=json.dumps({"cidr": "10.28.0.0/24", "gateway_ip": "10.28.0.1"})
+            ),
+            "v4subnet-1",
+        )
+        endpoint = EtcdResponse(
+            value=json.dumps(
+                {
+                    "spec": {
+                        "interfaceName": "tap1234",
+                        "mac": "fe:16:65:12:33:44",
+                        "ipNetworks": ["10.28.0.2/32"],
+                        "ipv4Gateway": "10.28.0.1",
+                    }
+                }
+            )
+        )
+        old_name = make_endpoint_name("endpoint-1", "vm-1")
+        new_name = make_endpoint_name("endpoint-1", "vm-2")
+        agent.etcd.on_endpoint_set(endpoint, old_name)
+        agent.etcd.on_endpoint_set(endpoint, new_name)
+        agent.etcd.dnsmasq_updater.update_network.reset_mock()
+
+        agent.etcd.on_endpoint_delete(None, old_name)
+
+        self.assertIsNotNone(agent.cache.get_port_by_id("endpoint-1"))
+        agent.etcd.dnsmasq_updater.update_network.assert_not_called()
+
+        agent.etcd.on_endpoint_delete(None, new_name)
+
+        self.assertIsNone(agent.cache.get_port_by_id("endpoint-1"))
+        agent.etcd.dnsmasq_updater.update_network.assert_called()
 
     def test_initial_snapshot(self):
         # Create the DHCP agent.

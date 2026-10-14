@@ -72,6 +72,9 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
         self.recent_writes = {}
         self.recent_deletes = set()
 
+        # Unlike the two above, records the order of writes and deletes.
+        self.etcd_ops = []
+
         # Reset the counter for when we'll reset the etcd database.
         self.reset_etcd_after = None
         self.assert_etcd_writes_deletes = True
@@ -113,6 +116,7 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
 
         _log.info("etcd write: %s = %s", key, value)
         self.etcd_data[key] = value
+        self.etcd_ops.append(("put", key))
         try:
             self.recent_writes[key] = json.loads(value)
         except ValueError:
@@ -158,6 +162,7 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
             except KeyError:
                 raise lib.EtcdKeyNotFound()
             self.recent_deletes.add(key)
+            self.etcd_ops.append(("delete", key))
 
     def assertEtcdWrites(self, expected):
         if self.assert_etcd_writes_deletes:
@@ -643,6 +648,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # with each other and being handled on different Neutron servers or on different
         # threads of the same server.  The key point is that the update shouldn't
         # accidentally recreate an etcd resource that has just been deleted.
+        context.original = lib.port1
         self.driver.update_port_postcommit(context)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
@@ -2261,12 +2267,15 @@ class TestLiveMigration(TestPluginEtcdBase):
         In a real deployment, setting ``binding:profile.migrating_to`` on a port
         triggers Neutron to rebind the port for the destination host.  During that
         rebind ``binding:vif_type`` transiently flips from ``tap`` to ``unbound`` while
-        ``binding:host_id`` stays at the source.  If the driver's
-        ``_wep_desired_present`` treats ``vif_type == "unbound"`` as "port not bound at
-        this host" without considering the concurrent ``migrating_to`` state,
-        ``update_port_postcommit`` would delete the source-host WEP even though the VM
-        is still running there -- Felix at the source would then tear down its
-        programming and traffic would drop until Nova's actual cutover completed.
+        ``binding:host_id`` stays at the source.  The VM is still running there --
+        Nova's cutover happens later -- so deleting the source WEP here would tear down
+        Felix's programming and drop traffic until the cutover completed.
+
+        ``_wep_desired_present`` keys on ``binding:host_id`` alone, so the source
+        survives on its own account; see
+        ``test_live_migration_complete_transient_vif_unbound`` for the same rebind at
+        the other end of the migration, where ``migrating_to`` has already gone and
+        there is nothing else to fall back on.
 
         This case did not fire in ``test_pre_live_migration`` above because
         ``_pre_migrate`` only sets ``migrating_to`` without touching
@@ -2298,6 +2307,83 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.assertIn(self._ep_key(self.DEST_HOST), self.recent_writes)
         self.assertIn(self._lm_key(self.DEST_HOST), self.recent_writes)
 
+    def test_live_migration_complete_transient_vif_unbound(self):
+        """Dest WEP must survive the transient ``vif_type=unbound`` at cutover.
+
+        Nova completes a live migration with a single port update that both moves
+        ``binding:host_id`` to the destination and drops ``migrating_to`` from the
+        binding profile.  Neutron handles that as a rebind, committing
+        ``vif_type = "unbound"`` first and the new binding second, and firing
+        ``update_port_postcommit`` in between.
+
+        At that intermediate point ``migrating_to`` has already gone, so a
+        ``vif_type``-based test finds neither host bound and deletes both WEPs,
+        leaving the port with no WEP anywhere in the middle of a migration that is
+        supposed to be seamless.  ``test_live_migration_succeeded`` below does not
+        catch this because it models only the settled end state.
+        """
+        self._do_initial_resync()
+
+        self._pre_migrate()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        context = self._make_port_context()
+
+        # The original still carries migrating_to, from the start of the migration.
+        context.original = copy.deepcopy(self.port)
+        context.original["binding:profile"] = {"migrating_to": self.DEST_HOST}
+
+        # Intermediate state as Neutron actually commits it: host already moved to the
+        # destination, migrating_to already gone, vif_type transiently unbound.
+        context._port = copy.deepcopy(self.port)
+        context._port["binding:host_id"] = self.DEST_HOST
+        context._port["binding:profile"] = {}
+        context._port["binding:vif_type"] = "unbound"
+
+        # The DB re-read inside sync_wep must return the same shape.
+        self.osdb_ports[0]["binding:host_id"] = self.DEST_HOST
+        self.osdb_ports[0]["binding:profile"] = {}
+        self.osdb_ports[0]["binding:vif_type"] = "unbound"
+
+        self.driver.update_port_postcommit(context)
+
+        # The destination WEP must NOT be deleted -- the VM is running there now -- and
+        # it is rewritten as the port's steady-state WEP, describing the dest host.
+        self.assertNotIn(self._ep_key(self.DEST_HOST), self.recent_deletes)
+        self.assertEqual(
+            self.recent_writes[self._ep_key(self.DEST_HOST)]["spec"]["node"],
+            self.DEST_HOST,
+        )
+        # The source WEP and the LiveMigration are deleted: the VM has left.
+        self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_deletes)
+        self.assertIn(self._lm_key(self.DEST_HOST), self.recent_deletes)
+
+    def test_genuine_unbind_removes_wep(self):
+        """A real unbind still removes the WEP.
+
+        Tolerating the transient ``vif_type = "unbound"`` above must not keep a WEP
+        alive for a port Neutron has actually detached.  Neutron clears
+        ``binding:host_id`` in that case, and that is what ``_wep_desired_present``
+        keys on.
+        """
+        self._do_initial_resync()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        context = self._make_port_context()
+        context.original = copy.deepcopy(self.port)
+        context._port = copy.deepcopy(self.port)
+        context._port["binding:host_id"] = ""
+        context._port["binding:vif_type"] = "unbound"
+
+        self.osdb_ports[0]["binding:host_id"] = ""
+        self.osdb_ports[0]["binding:vif_type"] = "unbound"
+
+        self.driver.update_port_postcommit(context)
+
+        self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_deletes)
+
     def test_resync_ignores_port_without_host(self):
         """A resync gives a hostless port no WEP either."""
         self._do_initial_resync()
@@ -2313,6 +2399,148 @@ class TestLiveMigration(TestPluginEtcdBase):
         # The WEP at the old host goes, and nothing is written in its place.
         self.assertEtcdWrites({})
         self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_deletes)
+
+    def test_resync_ignores_port_without_active_binding(self):
+        """A port with no ``binding:host_id`` key at all is treated as hostless.
+
+        ML2 only adds the binding attributes when the port has an ACTIVE binding.
+        """
+        self._do_initial_resync()
+
+        del self.osdb_ports[0]["binding:host_id"]
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        self._trigger_resync()
+
+        self.assertEtcdWrites({})
+        self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_deletes)
+
+    def test_create_unbound_port_writes_nothing(self):
+        """The create hook leaves an unbound port to the bind that follows it."""
+        self._do_initial_resync()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        context = self._make_port_context()
+        context._port = copy.deepcopy(self.port)
+        context._port["binding:vif_type"] = "unbound"
+        self.osdb_ports[0]["binding:vif_type"] = "unbound"
+
+        with mock.patch.object(self.driver.endpoint_syncer, "sync_wep") as sync_wep:
+            self.driver.create_port_postcommit(context)
+        sync_wep.assert_not_called()
+
+    def test_nova_detach_removes_wep(self):
+        """Nova's interface detach removes the WEP.
+
+        ``_unbind_ports`` sends ``binding:host_id: None`` together with ``device_id:
+        ''`` and ``device_owner: ''`` in a single port update, so the updated port is no
+        longer an endpoint port.  The old host still has to be reconciled.
+        """
+        self._do_initial_resync()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        context = self._make_port_context()
+        context.original = copy.deepcopy(self.port)
+        context._port = copy.deepcopy(self.port)
+        detached = {"binding:host_id": None, "device_id": "", "device_owner": ""}
+        context._port.update(detached)
+        self.osdb_ports[0].update(detached)
+
+        self.driver.update_port_postcommit(context)
+
+        self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_deletes)
+
+    def test_nova_detach_then_reattach_on_same_host(self):
+        """A reattach that overtakes the detach's sync leaves only the new VM's WEP.
+
+        If the port is reattached to another VM on the same host before the detach's
+        ``sync_wep`` re-reads it, the re-read finds the host still set, but with a
+        different ``device_id`` from the slot's.  The old VM's slot must still go; the
+        reattach's own update writes the new VM's slot.
+        """
+        self._do_initial_resync()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+        attached = copy.deepcopy(self.port)
+        reattached = {**attached, "device_id": "other-vm"}
+
+        # The detach's update, processed after the reattach has already committed.
+        self.osdb_ports[0].update(reattached)
+        context = self._make_port_context()
+        context.original = attached
+        context._port = {
+            **attached,
+            "binding:host_id": None,
+            "device_id": "",
+            "device_owner": "",
+        }
+        self.driver.update_port_postcommit(context)
+
+        wep_writes = [k for k in self.recent_writes if "/workloadendpoints/" in k]
+        self.assertEqual(wep_writes, [])
+        self.assertEqual(self.recent_deletes, {self._ep_key(self.SOURCE_HOST)})
+
+        # The reattach's own update.
+        self.recent_deletes = set()
+        context.original = context._port
+        context._port = reattached
+        self.driver.update_port_postcommit(context)
+
+        new_key = self._ep_key(self.SOURCE_HOST).replace(
+            "-openstack-instance--1-", "-openstack-other--vm-"
+        )
+        wep_writes = [k for k in self.recent_writes if "/workloadendpoints/" in k]
+        self.assertEqual(wep_writes, [new_key])
+        self.assertEqual(self.recent_writes[new_key]["spec"]["workload"], "other-vm")
+        self.assertEqual(self.recent_deletes, set())
+
+    def test_cold_migration_breaks_before_making(self):
+        """A port moving host is removed from the old one before the new one gets it.
+
+        The two WEPs would have the same IPs on different nodes, with no LiveMigration
+        to say which is which.
+        """
+        self._do_initial_resync()
+        old_key = self._ep_key(self.SOURCE_HOST)
+        new_key = self._ep_key(self.DEST_HOST)
+        self.recent_writes = {}
+        self.recent_deletes = set()
+        self.etcd_ops = []
+
+        context = self._make_port_context()
+        context.original = copy.deepcopy(self.port)
+        context._port = {**self.port, "binding:host_id": self.DEST_HOST}
+        self.osdb_ports[0]["binding:host_id"] = self.DEST_HOST
+        self.driver.update_port_postcommit(context)
+
+        self.assertLess(
+            self.etcd_ops.index(("delete", old_key)),
+            self.etcd_ops.index(("put", new_key)),
+        )
+
+    def test_device_id_change_on_same_host_makes_before_breaking(self):
+        """An update that moves a port to another VM on the same host writes first."""
+        self._do_initial_resync()
+        old_key = self._ep_key(self.SOURCE_HOST)
+        new_key = old_key.replace("-openstack-instance--1-", "-openstack-other--vm-")
+        self.recent_writes = {}
+        self.recent_deletes = set()
+        self.etcd_ops = []
+
+        context = self._make_port_context()
+        context.original = copy.deepcopy(self.port)
+        context._port = {**self.port, "device_id": "other-vm"}
+        self.osdb_ports[0]["device_id"] = "other-vm"
+        self.driver.update_port_postcommit(context)
+
+        self.assertEqual(self.recent_deletes, {old_key})
+        self.assertLess(
+            self.etcd_ops.index(("put", new_key)),
+            self.etcd_ops.index(("delete", old_key)),
+        )
 
     def test_live_migration_succeeded(self):
         """After migration succeeds, source WEP deleted, dest WEP kept."""
@@ -2489,6 +2717,63 @@ class TestLiveMigration(TestPluginEtcdBase):
         # No WEP is created at host-b.  Writing one would give it ``spec.node:
         # host-c``, and nothing would remove it until the next full resync.
         self.assertNotIn(self._ep_key("host-b"), self.recent_writes)
+
+    def test_resync_skips_port_attached_elsewhere_during_the_pass(self):
+        """A port attached to another VM between compare and write is skipped.
+
+        The entry's name embeds the ``device_id`` that ``get_from_neutron`` read, so
+        writing it after the port has moved to another VM would leave a WEP named for a
+        VM the port no longer belongs to.
+        """
+        self._do_initial_resync()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        self.osdb_ports[0]["device_id"] = "vm-b"
+        moved_again = copy.deepcopy(self.osdb_ports[0])
+        moved_again["device_id"] = "vm-c"
+
+        with mock.patch.object(self.db, "get_port", return_value=moved_again):
+            self._trigger_resync()
+
+        wep_writes = [k for k in self.recent_writes if "/workloadendpoints/" in k]
+        self.assertEqual(wep_writes, [])
+
+    def test_resync_creates_before_deleting_on_device_id_change(self):
+        """When a port's ``device_id`` changes, resync makes before it breaks.
+
+        Each WEP and LiveMigration is recreated under its new name before the old name
+        is deleted, so that Felix never sees the port's interface without a
+        WorkloadEndpoint.
+        """
+        self._do_initial_resync()
+        self.osdb_ports[0]["binding:profile"] = {"migrating_to": self.DEST_HOST}
+        self._trigger_resync()
+        old_keys = [
+            self._ep_key(self.SOURCE_HOST),
+            self._ep_key(self.DEST_HOST),
+            self._lm_key(self.DEST_HOST),
+        ]
+
+        # A device_id that sorts after the old one, so that a resync that simply
+        # processed names in order would delete each old name before creating the new
+        # one.
+        self.osdb_ports[0]["device_id"] = "zzz-vm"
+        self.recent_writes = {}
+        self.recent_deletes = set()
+        self.etcd_ops = []
+
+        self._trigger_resync()
+
+        for old_key in old_keys:
+            new_key = old_key.replace("-openstack-instance--1-", "-openstack-zzz--vm-")
+            self.assertIn(new_key, self.recent_writes)
+            self.assertIn(old_key, self.recent_deletes)
+            self.assertLess(
+                self.etcd_ops.index(("put", new_key)),
+                self.etcd_ops.index(("delete", old_key)),
+                new_key,
+            )
 
     def test_resync_creates_missing_live_migration(self):
         """Resync creates LiveMigration and dest WEP for migrating port."""
