@@ -54,8 +54,10 @@ write_plan() { # <scope> then "<group> <class> <key> <state>" lines on stdin
 
 echo "== batch_memo_init"
 rm -rf "$STUB_WORKFLOW/felix-fv-plan"
-batch_memo_init 22.04-ipt >/dev/null
+out="$work/out"
+batch_memo_init 22.04-ipt >"$out"
 check "no plan: memo off" [ -z "$BATCH_MEMO_PREFIX" ]
+check "no plan: logged" grep -qE '^FV-MEMO-LANE lane=22.04-ipt outcome=off .*reason=no-plan' "$out"
 
 write_plan felix-fv-memo/pr-1 <<'EOF'
 22.04-ipt nonbpf k1 miss
@@ -86,21 +88,25 @@ done
 
 run2="$work/run2/artifacts"
 batches=(ut 1 2 3)
-batch_memo_skip_cached "$run2" >/dev/null
+batch_memo_skip_cached "$run2" >"$out"
 check "cached batches are skipped" [ "${batches[*]}" = "1 3" ]
+check "partial hit: logged" grep -qE '^FV-MEMO-LANE .* outcome=partial batches=4 cached=2 ran=2 ' "$out"
+check "each skipped batch: logged" [ "$(grep -c '^FV-MEMO-BATCH .* cached-from=calico-1-pr-abcde@0123abc$' "$out")" = 2 ]
 check "a skipped batch's report is restored" [ -f "$run2/2/report/felix_fv_2.xml" ]
 check "a skipped batch says where it passed" grep -q "$CI_WORKFLOW_NAME" "$run2/ut/batch-memo-source"
 
 batches=(4 5)
-batch_memo_skip_cached "$run2" >/dev/null
+batch_memo_skip_cached "$run2" >"$out"
 check "nothing cached: every batch runs" [ "${batches[*]}" = "4 5" ]
+check "miss: logged" grep -qE '^FV-MEMO-LANE .* outcome=miss batches=2 cached=0 ran=2 ' "$out"
 
 for b in 1 3; do
   mkdir -p "$run2/$b/report" && echo "<testsuites/>" >"$run2/$b/report/felix_fv_$b.xml"
 done
 batch_memo_record_lane "$run2" ut 1 2 3 >/dev/null
 run3="$work/run3/artifacts"
-batch_memo_restore_lane "$run3" >/dev/null
+batch_memo_restore_lane "$run3" >"$out"
+check "lane hit: logged" grep -qE '^FV-MEMO-LANE .* outcome=lane batches=4 cached=4 ran=0 ' "$out"
 for b in ut 1 2 3; do
   check "a lane hit restores batch $b" [ -f "$run3/$b/report/felix_fv_$b.xml" ]
 done

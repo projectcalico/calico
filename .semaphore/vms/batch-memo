@@ -5,43 +5,57 @@
 #
 # Source it.  batch_memo_init sets BATCH_MEMO_PREFIX, which run-tests-on-vms
 # keys on; with it unset, every batch runs and nothing is recorded.
+#
+# Every lane logs exactly one FV-MEMO-LANE line, and each skipped batch one
+# FV-MEMO-BATCH line, as space-separated key=value pairs for mining the logs:
+#
+#   FV-MEMO-LANE lane=<id> outcome=<off|miss|partial|all-batches|lane>
+#     batches=<n> cached=<n> ran=<n> key=<key> pr=<n> workflow=<name> [reason=<why off>]
+#   FV-MEMO-BATCH lane=<id> batch=<b> cached-from=<workflow>@<sha>
 
 # batch_memo_init <lane id> sets BATCH_MEMO_PREFIX and BATCH_MEMO_LANE_HIT for
 # this lane from the published plan.
 batch_memo_init() {
-  local lane_id="$1" plan_dir scope key state
+  local plan_dir scope key state
+  BATCH_MEMO_LANE="$1"
+  BATCH_MEMO_KEY=""
   BATCH_MEMO_PREFIX=""
   BATCH_MEMO_LANE_HIT=false
   plan_dir="$(mktemp -d)"
   if ! ( cd "$plan_dir" && artifact pull workflow felix-fv-plan ) >/dev/null; then
-    echo "Batch memo: no plan was published; running every batch."
+    batch_memo_log_lane off 0 0 reason=no-plan
   else
     scope="$(cat "$plan_dir/felix-fv-plan/scope")"
-    read -r key state < <(awk -v id="$lane_id" '$1 == id { print $3, $4 }' "$plan_dir/felix-fv-plan/lanes") || true
-    if [ -n "$scope" ] && [ -n "$key" ]; then
+    read -r key state < <(awk -v id="$BATCH_MEMO_LANE" '$1 == id { print $3, $4 }' "$plan_dir/felix-fv-plan/lanes") || true
+    BATCH_MEMO_KEY="$key"
+    if [ -z "$scope" ]; then
+      batch_memo_log_lane off 0 0 reason=no-scope
+    elif [ -z "$key" ]; then
+      batch_memo_log_lane off 0 0 reason=lane-not-in-plan
+    else
       BATCH_MEMO_PREFIX="$scope/$key"
       [ "$state" = hit ] && BATCH_MEMO_LANE_HIT=true
     fi
-    echo "Batch memo: lane ${lane_id} key=${key:-none} state=${state:-none} prefix=${BATCH_MEMO_PREFIX:-none}"
   fi
   rm -rf "$plan_dir"
-  export BATCH_MEMO_PREFIX BATCH_MEMO_LANE_HIT
+  export BATCH_MEMO_LANE BATCH_MEMO_KEY BATCH_MEMO_PREFIX BATCH_MEMO_LANE_HIT
 }
 
 # batch_memo_restore_lane <artifacts dir> puts back every batch's reports from
 # the run that passed the whole lane.
 batch_memo_restore_lane() {
-  local artifacts_dir="$1"
+  local artifacts_dir="$1" restored
   mkdir -p "$artifacts_dir"
   echo "Every batch of this lane passed on an earlier run of this PR with the same inputs; restoring its reports instead of running it."
-  ( cd "$artifacts_dir" && artifact cache restore "$BATCH_MEMO_PREFIX/lane" )
-  cat "$artifacts_dir"/*/batch-memo-source 2>/dev/null | sort -u | sed 's/^/  passed in: /'
+  ( cd "$artifacts_dir" && artifact cache restore "$BATCH_MEMO_PREFIX/lane" ) >/dev/null
+  restored="$(find "$artifacts_dir" -mindepth 1 -maxdepth 1 -type d | wc -l)"
+  batch_memo_log_lane lane "$restored" "$restored"
 }
 
 # batch_memo_skip_cached <artifacts dir> drops from the `batches` array every
 # batch that already passed, restoring its reports into <artifacts dir>.
 batch_memo_skip_cached() {
-  local artifacts_dir="$1" batch remaining=() hits=0
+  local artifacts_dir="$1" batch remaining=() hits=0 outcome
   local results; results="$(mktemp -d)"
   mkdir -p "$artifacts_dir"
   # One lookup per batch, in parallel: a lane has up to 61.
@@ -56,14 +70,21 @@ batch_memo_skip_cached() {
   wait
   for batch in "${batches[@]}"; do
     if [ -e "$results/$batch" ]; then
-      echo "Batch memo: batch $batch passed on an earlier run ($(cat "$artifacts_dir/$batch/batch-memo-source" 2>/dev/null)); skipping it."
+      echo "FV-MEMO-BATCH lane=${BATCH_MEMO_LANE} batch=${batch} cached-from=$(cat "$artifacts_dir/$batch/batch-memo-source" 2>/dev/null)"
       hits=$((hits + 1))
     else
       remaining+=( "$batch" )
     fi
   done
   rm -rf "$results"
-  echo "Batch memo: $hits of ${#batches[@]} batches cached; running ${#remaining[@]}."
+  if [ "$hits" -eq 0 ]; then
+    outcome=miss
+  elif [ ${#remaining[@]} -eq 0 ]; then
+    outcome=all-batches
+  else
+    outcome=partial
+  fi
+  batch_memo_log_lane "$outcome" "${#batches[@]}" "$hits"
   batches=( "${remaining[@]}" )
 }
 
@@ -91,6 +112,15 @@ batch_memo_record_lane() {
     echo "Batch memo: could not record the lane (not fatal)."
 }
 
+# batch_memo_log_lane <outcome> <batches> <cached> [key=value...]
+batch_memo_log_lane() {
+  local outcome="$1" total="$2" cached="$3"
+  shift 3
+  echo "FV-MEMO-LANE lane=${BATCH_MEMO_LANE} outcome=${outcome} batches=${total} cached=${cached}" \
+    "ran=$((total - cached)) key=${BATCH_MEMO_KEY:-none} pr=${CI_GIT_PR_NUMBER:-none}" \
+    "workflow=${CI_WORKFLOW_NAME:-unknown}" "$@"
+}
+
 batch_memo_source() {
-  echo "${CI_WORKFLOW_NAME:-unknown} at ${CI_GIT_SHA:-unknown}"
+  echo "${CI_WORKFLOW_NAME:-unknown}@${CI_GIT_SHA:-unknown}"
 }

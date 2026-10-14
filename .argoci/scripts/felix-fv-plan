@@ -23,8 +23,10 @@ fi
 git config --global --add safe.directory '*'
 # A broken key tool must not take Felix CI down with it: without keys, every
 # lane just runs in full.
+keys_ok=true
 if ! GOFLAGS=-buildvcs=false go run ./hack/cmd/felix-fv-memo .argoci/modules/20-felix.yaml > "$plan/keys"; then
   echo "WARNING: could not compute the FV cache keys; every lane will run in full." >&2
+  keys_ok=false
   scope=""
   : > "$plan/keys"
 fi
@@ -47,6 +49,10 @@ echo "$build" > "$plan/build"
 echo "Cache scope: ${scope:-none (not a PR, or disabled)}"
 echo "Lanes (group class key state):"
 sed 's/^/  /' "$plan/lanes"
-echo "felix-build: $build"
+# One line per run for mining the logs; see .semaphore/vms/batch-memo for the
+# per-lane lines.
+echo "FV-MEMO-PLAN felix-build=${build} lanes=$(wc -l < "$plan/lanes")" \
+  "lanes-hit=$(awk '$4 == "hit"' "$plan/lanes" | wc -l) keys=${keys_ok}" \
+  "pr=${CI_GIT_PR_NUMBER:-none} workflow=${CI_WORKFLOW_NAME:-unknown}"
 
 artifact push workflow "$plan"
