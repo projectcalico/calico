@@ -18,9 +18,9 @@ package asm
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
-	"slices"
 	"sort"
 	"strings"
 
@@ -375,7 +375,7 @@ type Block struct {
 	labelToInsnIdx     map[string]int
 	insnIdxToLabels    map[int][]string
 	insnIdxToComments  map[int][]string
-	inUseJumpTargets   set.Set[string]
+	jumpTargetIdxs     set.Set[int]
 	policyDebugEnabled bool
 	trampolinesEnabled bool
 	trampolineIdx      int
@@ -389,7 +389,7 @@ func NewBlock(policyDebugEnabled bool) *Block {
 	return &Block{
 		labelToInsnIdx:     map[string]int{},
 		insnIdxToLabels:    map[int][]string{},
-		inUseJumpTargets:   set.New[string](),
+		jumpTargetIdxs:     set.New[int](),
 		insnIdxToComments:  map[int][]string{},
 		policyDebugEnabled: policyDebugEnabled,
 		fixUps:             map[string][]fixUp{},
@@ -773,7 +773,6 @@ func (b *Block) addInsnWithOffsetFixupNoTrampoline(insn Insn, targetLabel string
 		if b.policyDebugEnabled {
 			b.insns[len(b.insns)-1].Annotation = fmt.Sprintf("goto %s", targetLabel)
 		}
-		b.inUseJumpTargets.Add(targetLabel)
 		b.fixUps[targetLabel] = append(b.fixUps[targetLabel], fixUp{origInsnIdx: len(b.insns) - 1})
 	}
 	if insn.OpClass() == OpClassJump64 || insn.OpClass() == OpClassJump32 {
@@ -783,8 +782,10 @@ func (b *Block) addInsnWithOffsetFixupNoTrampoline(insn Insn, targetLabel string
 	}
 }
 
-func (b *Block) TargetIsUsed(label string) bool {
-	return b.inUseJumpTargets.Contains(label)
+// HasPendingJumps returns true if a jump to label is waiting for the label to
+// be placed.
+func (b *Block) HasPendingJumps(label string) bool {
+	return len(b.fixUps[label]) > 0
 }
 
 // UnresolvedJumpTargets returns a slice containing the names of all target
@@ -851,6 +852,9 @@ func (b *Block) applyFixUps(targetLabel string) error {
 func (b *Block) LabelNextInsn(label string) {
 	b.labelToInsnIdx[label] = len(b.insns)
 	b.insnIdxToLabels[len(b.insns)] = append(b.insnIdxToLabels[len(b.insns)], label)
+	if len(b.fixUps[label]) > 0 {
+		b.jumpTargetIdxs.Add(len(b.insns))
+	}
 
 	// Eagerly apply fixUps now so that we can re-use the same label names
 	// when making trampolines.
@@ -887,9 +891,9 @@ func (b *Block) nextInsnReachable() bool {
 	lastInsn := b.insns[len(b.insns)-1]
 	lastOpCode := lastInsn.OpCode()
 	if lastOpCode == JumpA /*Unconditional jump*/ || lastOpCode == Exit {
-		// Previous instruction doesn't fall through to this one, need
-		// to check if something else jumps here...
-		return slices.ContainsFunc(b.insnIdxToLabels[len(b.insns)], b.inUseJumpTargets.Contains)
+		// No fall-through.  Label names can be reused, so only a jump
+		// resolved to this index makes it reachable.
+		return b.jumpTargetIdxs.Contains(len(b.insns))
 	}
 	return true
 }
@@ -911,4 +915,75 @@ func (b *Block) SetTrampolineStride(s int) {
 	if s > 0 && s < (1<<14) {
 		b.trampolineStride = s
 	}
+}
+
+// CheckCFG reports what the kernel's check_cfg rejects: jumps out of range or into a LoadImm64,
+// falling off the end, and unreachable instructions.
+func CheckCFG(insns Insns) error {
+	if len(insns) == 0 {
+		return errors.New("empty program")
+	}
+	var errs []error
+	ldImmPt2 := make([]bool, len(insns))
+	for i := 0; i < len(insns); i++ {
+		if insns[i].OpCode() != LoadImm64 {
+			continue
+		}
+		if i+1 == len(insns) {
+			errs = append(errs, fmt.Errorf("truncated LoadImm64 insn %d", i))
+		} else {
+			ldImmPt2[i+1] = true
+		}
+		i++
+	}
+
+	seen := make([]bool, len(insns))
+	stack := []int{0}
+	push := func(from, to int) {
+		switch {
+		case to < 0 || to >= len(insns):
+			errs = append(errs, fmt.Errorf("jump out of range from insn %d to %d", from, to))
+		case ldImmPt2[to]:
+			errs = append(errs, fmt.Errorf("jump from insn %d into the middle of LoadImm64 insn %d", from, to-1))
+		default:
+			stack = append(stack, to)
+		}
+	}
+	for len(stack) > 0 {
+		i := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if seen[i] {
+			continue
+		}
+		seen[i] = true
+		next := i + 1
+		target := i + 1 + int(insns[i].Off())
+		cls := insns[i].OpClass()
+		switch op := insns[i].OpCode(); {
+		case op == Exit:
+		case op == JumpA:
+			push(i, target)
+		case op == LoadImm64:
+			if next < len(insns) {
+				seen[next] = true
+			}
+			push(i, next+1)
+		case (cls == OpClassJump64 || cls == OpClassJump32) && op != Call:
+			push(i, next)
+			push(i, target)
+		default:
+			push(i, next)
+		}
+	}
+
+	var unreachable []int
+	for i, s := range seen {
+		if !s && !ldImmPt2[i] {
+			unreachable = append(unreachable, i)
+		}
+	}
+	if len(unreachable) > 0 {
+		errs = append(errs, fmt.Errorf("unreachable insns %v", unreachable))
+	}
+	return errors.Join(errs...)
 }

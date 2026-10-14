@@ -15,6 +15,7 @@
 package polprog
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/bits"
@@ -60,6 +61,7 @@ type Builder struct {
 	useJmps            bool
 	maxJumpsPerProgram int
 	numRulesInProgram  int
+	restUnreachable    bool
 	xdp                bool
 	flowLogsEnabled    bool
 	trampolineStride   int
@@ -243,7 +245,26 @@ func (p *Builder) Instructions(rules Rules) ([]asm.Insns, error) {
 	p.b.SetTrampolineStride(p.trampolineStride)
 	p.blocks = append(p.blocks, p.b)
 	p.writeProgramHeader()
+	p.writeRules(rules)
+	if !p.restUnreachable {
+		// Otherwise the split already wrote the last sub-program's footer.
+		p.writeProgramFooter()
+	}
 
+	var progs []asm.Insns
+	for i, b := range p.blocks {
+		insns, err := b.Assemble()
+		if err != nil {
+			return nil, fmt.Errorf("failed to assemble policy program %d: %w", i, err)
+		}
+		progs = append(progs, insns)
+	}
+	return progs, nil
+}
+
+// writeRules writes all the policy.  It returns early once maybeSplitProgram finds the rest
+// unreachable, as does every writer it calls.
+func (p *Builder) writeRules(rules Rules) {
 	if p.xdp {
 		// For an XDP program HostNormalTiers continues the untracked policy to enforce;
 		// other fields are unused.
@@ -253,6 +274,9 @@ func (p *Builder) Instructions(rules Rules) ([]asm.Insns, error) {
 	// Pre-DNAT policy: on a host interface, or host-* policy on a workload interface.  Traffic
 	// is allowed to continue if there is no applicable pre-DNAT policy.
 	p.writeTiers(rules.HostPreDnatTiers, legDestPreNAT, "allowed_by_host_policy")
+	if p.restUnreachable {
+		return
+	}
 
 	// If traffic is to or from the local host, skip over any apply-on-forward policy.  Note
 	// that this case can be:
@@ -278,6 +302,9 @@ func (p *Builder) Instructions(rules Rules) ([]asm.Insns, error) {
 	// Apply-On-Forward policy: on a host interface, or host-* policy on a workload interface.
 	// Traffic is allowed to continue if there is no applicable AoF policy.
 	p.writeTiers(rules.HostForwardTiers, legDest, "allowed_by_host_policy")
+	if p.restUnreachable {
+		return
+	}
 
 	// Now skip over normal host policy and jump to where we apply possible workload policy.
 	p.b.Jump("allowed_by_host_policy")
@@ -288,10 +315,19 @@ normalPolicy:
 		p.b.LabelNextInsn("to_or_from_host")
 		if rules.ForXDP {
 			p.writeTiers(rules.HostNormalTiers, legDestPreNAT, "allowed_by_host_policy")
+			if p.restUnreachable {
+				return
+			}
 			p.b.Jump("xdp_pass")
 		} else {
 			p.writeTiers(rules.HostNormalTiers, legDest, "allowed_by_host_policy")
+			if p.restUnreachable {
+				return
+			}
 			p.writeProfiles(rules.HostProfiles, rules.NoProfileMatchID, "allowed_by_host_policy")
+			if p.restUnreachable {
+				return
+			}
 		}
 	}
 
@@ -304,20 +340,11 @@ normalPolicy:
 	} else {
 		// Workload policy.
 		p.writeTiers(rules.Tiers, legDest, "allow")
+		if p.restUnreachable {
+			return
+		}
 		p.writeProfiles(rules.Profiles, rules.NoProfileMatchID, "allow")
 	}
-
-	p.writeProgramFooter()
-
-	var progs []asm.Insns
-	for i, b := range p.blocks {
-		insns, err := b.Assemble()
-		if err != nil {
-			return nil, fmt.Errorf("failed to assemble policy program %d: %w", i, err)
-		}
-		progs = append(progs, insns)
-	}
-	return progs, nil
 }
 
 // writeProgramHeader emits instructions to load the state from the state map, leaving
@@ -386,7 +413,7 @@ func (p *Builder) writeProgramFooter() {
 		p.b.Exit()
 	}
 
-	if p.b.TargetIsUsed("allow") {
+	if p.b.HasPendingJumps("allow") {
 		p.b.LabelNextInsn("allow")
 		// Store the policy result in the state for the next program to see.
 		p.b.MovImm32(asm.R1, int32(state.PolicyAllow))
@@ -416,6 +443,10 @@ func (p *Builder) writeProgramFooter() {
 
 func (p *Builder) writeExitTarget() {
 	p.b.LabelNextInsn("exit")
+	p.writeDrop()
+}
+
+func (p *Builder) writeDrop() {
 	if p.xdp {
 		p.b.MovImm64(asm.R0, 1 /* XDP_DROP */)
 	} else {
@@ -509,6 +540,9 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 		p.b.AddCommentF("Start of tier %s", tier.Name)
 		for _, pol := range tier.Policies {
 			p.writePolicy(pol, actionLabels, destLeg)
+			if p.restUnreachable {
+				return
+			}
 		}
 
 		// End of tier rule.
@@ -522,6 +556,9 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 			Rule:    &proto.Rule{},
 			MatchID: tier.EndRuleID,
 		}, actionLabels[string(action)], destLeg)
+		if p.restUnreachable {
+			return
+		}
 		p.b.LabelNextInsn(endOfTierLabel)
 		p.tierID++
 	}
@@ -531,6 +568,9 @@ func (p *Builder) writeProfiles(profiles []Policy, noProfileMatchID uint64, allo
 	log.Debugf("Start of profiles")
 	for idx, prof := range profiles {
 		p.writeProfile(prof, idx, allowLabel)
+		if p.restUnreachable {
+			return
+		}
 	}
 
 	log.Debugf("End of profiles drop")
@@ -564,6 +604,9 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 		p.b.AddCommentF("Rule MatchID: %d", rule.MatchID)
 		action := strings.ToLower(rule.Action)
 		p.writeRule(rule, actionLabels[action], destLeg)
+		if p.restUnreachable {
+			return
+		}
 		log.Debugf("End of rule %s %d", policy.NamespacedName(), ruleIdx)
 		p.b.AddCommentF("End of rule %s %s", policy.NamespacedName(), rule.RuleId)
 	}
@@ -579,6 +622,9 @@ func (p *Builder) writePolicy(policy Policy, actionLabels map[string]string, des
 	log.Debugf("Start of %s", cmtID)
 
 	p.writePolicyRules(policy, actionLabels, destLeg)
+	if p.restUnreachable {
+		return
+	}
 
 	log.Debugf("End of %s", cmtID)
 	p.b.AddCommentF("End of %s", cmtID)
@@ -594,6 +640,9 @@ func (p *Builder) writeProfile(profile Profile, idx int, allowLabel string) {
 	}
 	log.Debugf("Start of profile %q %d", profile.Name, idx)
 	p.writePolicyRules(profile, actionLabels, legDest)
+	if p.restUnreachable {
+		return
+	}
 	log.Debugf("End of profile %q %d", profile.Name, idx)
 	p.policyID++
 }
@@ -649,6 +698,9 @@ func (p *Builder) ipVersion() uint8 {
 
 func (p *Builder) writeRule(r Rule, actionLabel string, destLeg matchLeg) {
 	p.maybeSplitProgram()
+	if p.restUnreachable {
+		return
+	}
 
 	if actionLabel == "" {
 		log.Panic("empty action label")
@@ -1150,7 +1202,7 @@ func (p *Builder) maybeSplitProgram() bool {
 	// the bytecode (taken or not).  Since our code falls through to the next
 	// rule by default, to first approximation, all our jumps are on the same
 	// path.
-	if p.b.NumJumps < p.maxJumpsPerProgram {
+	if p.restUnreachable || p.b.NumJumps < p.maxJumpsPerProgram {
 		return false
 	}
 	if p.policyMapStride == 0 {
@@ -1194,6 +1246,14 @@ func (p *Builder) maybeSplitProgram() bool {
 			p.b.Jump("next-program")
 		}
 	}
+	if len(targets) == 0 && !p.b.HasPendingJumps("next-program") {
+		// Nothing reaches the next program.  The writers stop; the spare block catches any
+		// stray writes.
+		log.Debug("Remaining policy is unreachable, not adding a sub-program")
+		p.restUnreachable = true
+		p.b = asm.NewBlock(p.policyDebugEnabled)
+		return true
+	}
 	p.b.LabelNextInsn("next-program")
 	// Stash the trampoline offset in the policy result so the next program
 	// can pick it up.
@@ -1210,7 +1270,7 @@ func (p *Builder) maybeSplitProgram() bool {
 	p.b.AddCommentF(fmt.Sprintf("Tail call to policy program at index %d * %d + %d = %d", p.policyMapStride, len(p.blocks), p.policyMapIndex, jumpIdx))
 	p.b.MovImm64(asm.R3, int32(jumpIdx)) // Third arg is index to jump to.
 	p.b.Call(asm.HelperTailCall)
-	p.writeExitTarget() // Drop if tail call fails.
+	p.writeDrop() // Drop if tail call fails.
 
 	// Now start the new program...
 	p.numRulesInProgram = 0
@@ -1240,6 +1300,32 @@ func (p *Builder) TrampolineStride() int {
 
 func SubProgramJumpIdx(polProgIdx, subProgIdx, stride int) int {
 	return polProgIdx + subProgIdx*stride
+}
+
+// CheckSubPrograms reports sub-programs that the verifier's CFG check rejects or that do not
+// tail-call the next one.
+func CheckSubPrograms(progs []asm.Insns, polProgIdx, stride int) error {
+	var errs []error
+	for i, p := range progs {
+		if err := asm.CheckCFG(p); err != nil {
+			errs = append(errs, fmt.Errorf("sub-program %d of %d: %w", i, len(progs), err))
+		}
+		if i == len(progs)-1 {
+			continue
+		}
+		next := asm.MakeInsn(asm.MovImm64, asm.R3, 0, 0, int32(SubProgramJumpIdx(polProgIdx, i+1, stride)))
+		found := false
+		for _, in := range p {
+			if in.Instruction == next.Instruction {
+				found = true
+				break
+			}
+		}
+		if !found {
+			errs = append(errs, fmt.Errorf("sub-program %d does not tail-call sub-program %d", i, i+1))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func protocolToNumber(protocol *proto.Protocol) uint8 {
@@ -1299,6 +1385,14 @@ func WithIPv6() Option {
 func WithFlowLogs() Option {
 	return func(p *Builder) {
 		p.flowLogsEnabled = true
+	}
+}
+
+// WithMaxJumpsPerProgram overrides the number of jumps after which the program
+// is split.
+func WithMaxJumpsPerProgram(n int) Option {
+	return func(p *Builder) {
+		p.maxJumpsPerProgram = n
 	}
 }
 
