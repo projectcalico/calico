@@ -27525,6 +27525,9 @@ spec:
                   type: string
                 type:
                   description: The type of affinity.
+                  enum:
+                    - host
+                    - virtual
                   type: string
               required:
                 - cidr
