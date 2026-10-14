@@ -15,6 +15,9 @@
 # Keep in step with GO_BUILD_VER in metadata.mk.
 FROM calico/go-build:1.27.1-llvm21.1.8-k8s1.37.1
 
+# go-build's entrypoint switches to UID 9001, which cannot write /src or use root's build cache.
+ENTRYPOINT []
+
 # A go.mod newer than the image fetches its toolchain here, while the network is up, instead of failing.
 ENV GOTOOLCHAIN=auto
 
@@ -30,9 +33,10 @@ RUN for mod in $(find . -name go.mod -not -path './node_modules/*' -not -path '*
 RUN arch="$(go env GOARCH)" \
  && make -C felix/bpf-gpl libbpf LIBBPF_VERSION="$(sed -n 's/^LIBBPF_VERSION=//p' metadata.mk)" \
  && make -C felix/bpf-gpl/libbpf/src -j"$(nproc)" BUILD_STATIC_ONLY=1 OBJDIR="$arch" EXTRA_CFLAGS=-fPIC \
- && make -C felix/bpf-gpl -j"$(nproc)" ARCH="$arch" all
+ && make -C felix/bpf-gpl -j"$(nproc)" ARCH="$arch" all ut-objs map-objs
 
-RUN make -C operator embedded_charts
+RUN make -C operator embedded_charts \
+ && make -C release internal/defaults/metadata.mk
 
 RUN go build -buildvcs=false -o /usr/local/bin/calico ./cmd/calico \
  && go build -buildvcs=false -o /usr/local/bin/calico-bpf ./felix/cmd/calico-bpf \
@@ -40,12 +44,15 @@ RUN go build -buildvcs=false -o /usr/local/bin/calico ./cmd/calico \
  && ln -s calico /usr/local/bin/calicoctl \
  && ln -s calico /usr/local/bin/calico-ipam
 
-RUN go build ./... || echo "WARNING: go build ./... reported failures"
+# ./... skips test-only packages, but naming one fails, so list only packages with sources.
+# felix/k8sfv is a package main with no main(); it only builds as a test binary.
+RUN go list -f '{{if or .GoFiles .CgoFiles}}{{.ImportPath}}{{end}}' ./... > /tmp/packages \
+ && go build -buildvcs=false $(grep -v '/felix/k8sfv$' /tmp/packages)
+
 RUN go test -count=1 \
       ./libcalico-go/lib/selector/... \
       ./libcalico-go/lib/backend/syncersv1/updateprocessors/... \
       ./felix/rules/... \
       ./felix/bpf/polprog/... \
       ./apiserver/pkg/registry/projectcalico/authorizer/... \
-      ./app-policy/checker/... \
-    || echo "WARNING: unit tests reported failures"
+      ./app-policy/checker/...

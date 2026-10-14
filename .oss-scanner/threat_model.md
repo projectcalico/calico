@@ -37,7 +37,7 @@ A namespace user must not be able to affect traffic, IP assignment, routing or p
 - That a node can read the cluster's policy and endpoint state. Felix needs it.
 - Kubernetes semantics: traffic to an endpoint that no policy selects is allowed.
 - Vulnerabilities in third-party dependencies, unless Calico's own code makes them reachable. Tigera publishes its analysis of these at https://github.com/tigera/vex.
-- Upstream code: `third_party/`, `istio/`, and libbpf (cloned into `felix/bpf-gpl/libbpf` at build time). Report those upstream.
+- Upstream projects that Calico packages: Istio, ztunnel, Envoy, Envoy Gateway, the CNI plugins, and libbpf (cloned into `felix/bpf-gpl/libbpf` at build time). Report those upstream. Our patches to them (`istio/patches/`, `istio/ztunnel-patches/`) and our installer in `third_party/cni-plugins/cmd/install/` are in scope.
 - Tests, test harnesses and build or release tooling: `e2e/`, `test/`, `test-tools/`, `*/fv/`, `felix/k8sfv/`, `*/tests/`, `hack/`, `release/`, `devstack/`, `docker/`, `lib/kind/`.
 - Generated output: `manifests/` is generated from `charts/`. RBAC or pod security settings there are in scope only with a concrete escalation.
 
