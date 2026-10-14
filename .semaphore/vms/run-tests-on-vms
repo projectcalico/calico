@@ -38,11 +38,15 @@ source "$my_dir/ssh-options"
 source "$repo_dir/$COMPONENT/.semaphore/batches.sh"
 
 all_batches=( "${batches[@]}" )
-if [ -n "${BATCH_MEMO_PREFIX:-}" ]; then
+# Set by batch_memo_init, even when it found nothing to skip.
+if [ -n "${BATCH_MEMO_LANE:-}" ]; then
   source "$my_dir/batch-memo"
+fi
+if [ -n "${BATCH_MEMO_PREFIX:-}" ]; then
   batch_memo_skip_cached "$artifacts_dir"
   if [ ${#batches[@]} -eq 0 ]; then
     batch_memo_record_lane "$artifacts_dir" "${all_batches[@]}"
+    batch_memo_report "$artifacts_dir" "${#all_batches[@]}" 0
     echo "===== Every batch passed on an earlier run with the same inputs; exiting with RC=0 ====="
     exit 0
   fi
@@ -487,6 +491,9 @@ echo
 
 if [ $final_result = 0 ] && [ -n "${BATCH_MEMO_PREFIX:-}" ]; then
   batch_memo_record_lane "$artifacts_dir" "${all_batches[@]}"
+fi
+if [ -n "${BATCH_MEMO_LANE:-}" ]; then
+  batch_memo_report "$artifacts_dir" "${#all_batches[@]}" "$final_result"
 fi
 
 echo "===== Done, exiting with RC=$final_result ====="
