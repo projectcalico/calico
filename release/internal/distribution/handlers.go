@@ -122,10 +122,20 @@ func (d S3) Publish(_ context.Context, src string) error {
 	if err != nil {
 		return err
 	}
+	err = p.run(d.Runner, awsCmd, d.Args(p.src, p.dest, p.dir))
+	if err != nil {
+		return fmt.Errorf("%s %s: %w", awsCmd, s3Cmd, err)
+	}
+	return nil
+}
+
+// Args returns the aws arguments that copy src to dest, in either direction.
+// dir says whether src is a tree rather than one object.
+func (d S3) Args(src, dest string, dir bool) []string {
 	// A destination without the slash names one object rather than a prefix,
 	// so a directory upload would collapse into a single file.
-	if p.dir {
-		p.src, p.dest = addTrailingSlash(p.src), addTrailingSlash(p.dest)
+	if dir {
+		src, dest = addTrailingSlash(src), addTrailingSlash(dest)
 	}
 
 	args := []string{s3Cmd}
@@ -137,11 +147,11 @@ func (d S3) Publish(_ context.Context, src string) error {
 		args = append(args, syncVerb)
 	} else {
 		args = append(args, cpVerb)
-		if p.dir {
+		if dir {
 			args = append(args, recursiveFlag)
 		}
 	}
-	args = append(args, p.src, p.dest)
+	args = append(args, src, dest)
 	// aws applies filters left to right, so an Include must follow its Exclude.
 	for _, pattern := range d.Exclude {
 		args = append(args, excludeFlag, pattern)
@@ -161,11 +171,7 @@ func (d S3) Publish(_ context.Context, src string) error {
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		args = append(args, "--debug")
 	}
-	err = p.run(d.Runner, awsCmd, args)
-	if err != nil {
-		return fmt.Errorf("%s %s: %w", awsCmd, s3Cmd, err)
-	}
-	return nil
+	return args
 }
 
 func (d S3) Validate(u Upload) error {
