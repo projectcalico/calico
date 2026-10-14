@@ -160,10 +160,10 @@ var releaseOperator = func(cfg *Config, c *cli.Command) (*operator.Operator, err
 	}
 	return &operator.Operator{
 		RepoRoot:        cfg.RepoRootDir,
-		Version:         operatorVer.FormattedString(),
+		Version:         operatorVer.String(),
 		Image:           registry.OperatorImage,
 		Registries:      operatorRegistries(c),
-		ProductVersion:  ver.FormattedString(),
+		ProductVersion:  ver.String(),
 		ProductRegistry: productRegistry(c),
 	}, nil
 }

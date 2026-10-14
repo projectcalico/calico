@@ -53,7 +53,7 @@ var (
 				return err
 			}
 			return images.Build(
-				cfg.RepoRootDir, ver.FormattedString(),
+				cfg.RepoRootDir, ver.String(),
 				images.NarrowVariants(images.BuildVariants, c.StringSlice(imageReleaseDirsFlag.Name)),
 				images.WithRunner(commandRunner),
 				images.WithRegistries(c.StringSlice(registryFlag.Name)...),
@@ -95,7 +95,7 @@ var (
 			if err != nil {
 				return err
 			}
-			records, err := recordsDir(cfg, c, oncePin(pinForPublish), ver.FormattedString())
+			records, err := recordsDir(cfg, c, oncePin(pinForPublish), ver.String())
 			if err != nil {
 				return err
 			}
@@ -128,7 +128,7 @@ var (
 			}
 
 			return images.Publish(
-				cfg.RepoRootDir, ver.FormattedString(),
+				cfg.RepoRootDir, ver.String(),
 				images.NarrowVariants(images.PublishVariants, dirs),
 				!c.Bool(localFlag.Name), registryDigestResolver, opts...,
 			)

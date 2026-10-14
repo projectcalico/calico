@@ -209,3 +209,11 @@ func TestPreBuildValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestWithVersion(t *testing.T) {
+	t.Run("rejects a non-semver version", func(t *testing.T) {
+		if _, err := NewManager(append(requiredOpts(), WithVersion("release-v3.99"))...); err == nil {
+			t.Error("want an error")
+		}
+	})
+}

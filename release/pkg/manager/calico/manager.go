@@ -155,7 +155,7 @@ type CalicoManager struct {
 	validateBranch bool
 
 	// calicoVersion is the version of calico to release.
-	calicoVersion string
+	calicoVersion version.Version
 
 	// chartVersion is the version of the helm chart to build.
 	chartVersion string
@@ -262,7 +262,7 @@ type CalicoManager struct {
 
 func (r *CalicoManager) PreBuildValidation() error {
 	var errStack error
-	if r.calicoVersion == "" {
+	if r.calicoVersion.String() == "" {
 		errStack = errors.Join(errStack, fmt.Errorf("no calico version specified"))
 	}
 	if r.outputDir == "" {
@@ -281,7 +281,7 @@ func (r *CalicoManager) PreBuildValidation() error {
 	if errStack != nil {
 		return errStack
 	}
-	logrus.WithField("version", r.calicoVersion).Info("Using product version")
+	logrus.WithField("version", r.calicoVersion.String()).Info("Using product version")
 	logrus.WithField("operatorVersion", r.operatorVersion).Info("Using operator version")
 	logrus.WithField("registries", r.imageRegistries).Info("Using image registries for release")
 	if r.isHashRelease {
@@ -325,7 +325,7 @@ func (r *CalicoManager) Build() error {
 		defer func() {
 			if err != nil {
 				logrus.WithError(err).Warn("Failed to release, cleaning up tag")
-				if err := r.DeleteTag(r.calicoVersion); err != nil {
+				if err := r.DeleteTag(r.calicoVersion.String()); err != nil {
 					logrus.WithError(err).Error("Failed to clean up tag")
 				}
 			}
@@ -389,7 +389,7 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 		return err
 	}
 	return outputs.BuildMetadata(&outputs.Metadata{
-		Version:         r.calicoVersion,
+		Version:         r.calicoVersion.String(),
 		OperatorVersion: r.operatorVersion,
 		ChartVersion:    r.chart().Version(),
 		Source:          source,
@@ -417,7 +417,7 @@ func (r *CalicoManager) sourceMetadata() (outputs.Source, error) {
 		src.Branch = b
 	}
 	if !r.isHashRelease && r.gitRef {
-		src.Tag = r.calicoVersion
+		src.Tag = r.calicoVersion.String()
 	}
 	return src, nil
 }
@@ -538,7 +538,7 @@ func (r *CalicoManager) PreReleaseValidate() error {
 	}
 
 	// Assert that release notes are present.
-	err = r.assertReleaseNotesPresent(r.calicoVersion)
+	err = r.assertReleaseNotesPresent(r.calicoVersion.String())
 	if err != nil {
 		return err
 	}
@@ -555,7 +555,7 @@ func (r *CalicoManager) DeleteTag(ver string) error {
 }
 
 func (r *CalicoManager) TagRelease() error {
-	ver := r.calicoVersion
+	ver := r.calicoVersion.String()
 	branch, err := r.determineBranch()
 	if err != nil {
 		return fmt.Errorf("failed to determine branch: %w", err)
@@ -590,7 +590,7 @@ func (r *CalicoManager) tagState() *tagCheck {
 		return r.tagAtHEAD
 	}
 	tc := &tagCheck{}
-	tagCommit, err := r.git("rev-parse", "-q", "--verify", "refs/tags/"+r.calicoVersion+"^{commit}")
+	tagCommit, err := r.git("rev-parse", "-q", "--verify", "refs/tags/"+r.calicoVersion.String()+"^{commit}")
 	if err != nil || strings.TrimSpace(tagCommit) == "" {
 		r.tagAtHEAD = tc
 		return tc
@@ -604,7 +604,7 @@ func (r *CalicoManager) tagState() *tagCheck {
 	}
 	headCommit = strings.TrimSpace(headCommit)
 	if tagCommit != headCommit {
-		tc.err = fmt.Errorf("tag %s already exists at %s but HEAD is %s", r.calicoVersion, tagCommit, headCommit)
+		tc.err = fmt.Errorf("tag %s already exists at %s but HEAD is %s", r.calicoVersion.String(), tagCommit, headCommit)
 		r.tagAtHEAD = tc
 		return tc
 	}
@@ -632,7 +632,7 @@ func (r *CalicoManager) BuildHelm() error {
 		opts = append(opts, charts.WithIndex(repoURL, chartsURL, charts.IndexDir(r.uploadDir()), r.tmpDir))
 	}
 	if r.isHashRelease {
-		opts = append(opts, charts.WithModifiedValues(charts.ValueEditsFor(r.calicoVersion, r.imageRegistries[0], r.operatorImage, r.operatorVersion, r.operatorRegistry)))
+		opts = append(opts, charts.WithModifiedValues(charts.ValueEditsFor(r.calicoVersion.String(), r.imageRegistries[0], r.operatorImage, r.operatorVersion, r.operatorRegistry)))
 	}
 	return charts.Build(chart, opts...)
 }
@@ -652,7 +652,7 @@ func (r *CalicoManager) chartsURL() (string, error) {
 func (r *CalicoManager) chart() charts.Chart {
 	return charts.Chart{
 		RepoRoot:       r.repoRoot,
-		ProductVersion: r.calicoVersion,
+		ProductVersion: r.calicoVersion.String(),
 		ChartVersion:   r.chartVersion,
 		Names:          charts.All(),
 		BaseDir:        charts.OutputDir(r.uploadDir()),
@@ -660,10 +660,10 @@ func (r *CalicoManager) chart() charts.Chart {
 }
 
 // modifyHelmChartsValues rewrites the chart values in the tree.
-func (r *CalicoManager) modifyHelmChartsValues() error {
+func (r *CalicoManager) modifyHelmChartsValues(calicoVersion, operatorVersion string) error {
 	return charts.ModifyValues(charts.Values{
 		RepoRoot: r.repoRoot,
-		Edits:    charts.ValueEditsFor(r.calicoVersion, r.imageRegistries[0], r.operatorImage, r.operatorVersion, r.operatorRegistry),
+		Edits:    charts.ValueEditsFor(calicoVersion, r.imageRegistries[0], r.operatorImage, operatorVersion, r.operatorRegistry),
 	}, charts.WithRunner(r.runner))
 }
 
@@ -746,7 +746,7 @@ func (r *CalicoManager) releasePrereqs() error {
 
 	// Check if the tag exist and that it does not point at a different commit.
 	if tc := r.tagState(); tc.err != nil {
-		return fmt.Errorf("checking %s tag matches HEAD: %w", r.calicoVersion, tc.err)
+		return fmt.Errorf("checking %s tag matches HEAD: %w", r.calicoVersion.String(), tc.err)
 	}
 
 	return nil
@@ -800,31 +800,31 @@ func (r *CalicoManager) assertImageVersions() error {
 		switch img {
 		case "calico":
 			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion), "version"}, nil)
+				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion.String()), "version"}, nil)
 				if err != nil {
 					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
 				} else if len(buildInfoVersionRegex.FindStringSubmatch(out)) == 0 {
-					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
+					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion.String())
 				}
 			}
 		case "cni-windows", "node-windows":
 			// Skip windows images
 		case "third-party-cni-plugins", "envoy-gateway", "envoy-proxy", "envoy-ratelimit", "istio-install-cni", "istio-pilot", "istio-proxyv2", "istio-ztunnel", "whisker":
 			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion)}, nil)
+				out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion.String())}, nil)
 				if err != nil {
 					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
-				} else if !strings.Contains(out, r.calicoVersion) {
-					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
+				} else if !strings.Contains(out, r.calicoVersion.String()) {
+					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion.String())
 				}
 			}
 		case "node":
 			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion), "versions"}, nil)
+				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion.String()), "versions"}, nil)
 				if err != nil {
 					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
 				} else if len(buildInfoVersionRegex.FindStringSubmatch(out)) == 0 {
-					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
+					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion.String())
 				}
 			}
 		default:
@@ -863,7 +863,7 @@ func (r *CalicoManager) publishPrereqs() error {
 		return nil
 	}
 	var errStack error
-	if r.calicoVersion == "" {
+	if r.calicoVersion.String() == "" {
 		errStack = errors.Join(errStack, fmt.Errorf("no calico version specified"))
 	}
 	if r.outputDir == "" {
@@ -886,7 +886,7 @@ func (r *CalicoManager) publishPrereqs() error {
 	if errStack != nil {
 		return errStack
 	}
-	logrus.WithField("version", r.calicoVersion).Info("Using product version")
+	logrus.WithField("version", r.calicoVersion.String()).Info("Using product version")
 	logrus.WithField("registries", r.imageRegistries).Info("Using image registries for publishing")
 	if r.isHashRelease {
 		return r.hashreleasePrereqs()
@@ -901,7 +901,7 @@ func (r *CalicoManager) publishPrereqs() error {
 func (r *CalicoManager) archive() archives.Archive {
 	return archives.Archive{
 		RepoRoot:        r.repoRoot,
-		Version:         r.calicoVersion,
+		Version:         r.calicoVersion.String(),
 		OperatorVersion: r.operatorVersion,
 		OutputDir:       r.uploadDir(),
 		Sources:         r.archiveSources(),
@@ -940,7 +940,7 @@ func (r *CalicoManager) buildManifests() error {
 func (r *CalicoManager) manifestValues() manifests.Manifests {
 	return manifests.Manifests{
 		RepoRoot:  r.repoRoot,
-		Version:   r.calicoVersion,
+		Version:   r.calicoVersion.String(),
 		Operator:  r.operatorComponent(),
 		Registry:  r.imageRegistries[0],
 		OutputDir: r.uploadDir(),
@@ -979,7 +979,7 @@ func (r *CalicoManager) buildReleaseTar() error {
 func (r *CalicoManager) archiveSources() []archives.Contributor {
 	var sources []archives.Contributor
 	if r.archiveImages {
-		sources = append(sources, images.Archive(r.repoRoot, r.calicoVersion, r.imageReleaseDirs,
+		sources = append(sources, images.Archive(r.repoRoot, r.calicoVersion.String(), r.imageReleaseDirs,
 			images.WithRunner(r.runner),
 			images.WithRegistries(r.imageRegistries...),
 			images.WithArches(r.architectures...),
@@ -1015,7 +1015,7 @@ func (r *CalicoManager) buildBinaries() error {
 		logrus.Info("Skip building binaries")
 		return nil
 	}
-	if err := binaries.Build(r.repoRoot, r.calicoVersion,
+	if err := binaries.Build(r.repoRoot, r.calicoVersion.String(),
 		builders,
 		binaries.WithRunner(r.runner),
 		binaries.WithLogsDir(r.logsDir),
@@ -1031,7 +1031,7 @@ func (r *CalicoManager) buildContainerImages() error {
 		return nil
 	}
 	err := images.Build(
-		r.repoRoot, r.calicoVersion,
+		r.repoRoot, r.calicoVersion.String(),
 		images.NarrowVariants(images.BuildVariants, r.imageReleaseDirs),
 		images.WithRunner(r.runner),
 		images.WithRegistries(r.imageRegistries...),
@@ -1050,24 +1050,24 @@ func (r *CalicoManager) publishGitTag() error {
 		return nil
 	}
 
-	lsRemote, err := r.git("ls-remote", "--tags", r.remote, "refs/tags/"+r.calicoVersion)
+	lsRemote, err := r.git("ls-remote", "--tags", r.remote, "refs/tags/"+r.calicoVersion.String())
 	if err != nil {
 		return fmt.Errorf("query remote tag: %w", err)
 	}
-	if remoteSHA := remoteTagCommit(lsRemote, r.calicoVersion); remoteSHA != "" {
-		localSHA, err := r.git("rev-list", "-n1", r.calicoVersion)
+	if remoteSHA := remoteTagCommit(lsRemote, r.calicoVersion.String()); remoteSHA != "" {
+		localSHA, err := r.git("rev-list", "-n1", r.calicoVersion.String())
 		if err != nil {
-			return fmt.Errorf("resolve local tag %s: %w", r.calicoVersion, err)
+			return fmt.Errorf("resolve local tag %s: %w", r.calicoVersion.String(), err)
 		}
 		localSHA = strings.TrimSpace(localSHA)
 		if remoteSHA == localSHA {
-			logrus.WithField("version", r.calicoVersion).Info("Remote tag already exists and matches, skipping push")
+			logrus.WithField("version", r.calicoVersion.String()).Info("Remote tag already exists and matches, skipping push")
 			return nil
 		}
-		return fmt.Errorf("remote tag %s already exists at %s but local tag is %s", r.calicoVersion, remoteSHA, localSHA)
+		return fmt.Errorf("remote tag %s already exists at %s but local tag is %s", r.calicoVersion.String(), remoteSHA, localSHA)
 	}
 
-	args := []string{"push", r.remote, r.calicoVersion}
+	args := []string{"push", r.remote, r.calicoVersion.String()}
 
 	if r.dryRun {
 		args = append(args, "--dry-run")
@@ -1124,19 +1124,18 @@ Additional links:
 - [VPP data plane release information](https://github.com/projectcalico/vpp-dataplane/blob/master/RELEASE_NOTES.md)
 
 `
-	ver := version.New(r.calicoVersion)
-	sv := ver.Semver()
+	sv := r.calicoVersion.Semver()
 	formatters := []string{
 		// Alternating placeholder / filler. We can't use backticks in the multiline string above,
 		// so we replace anything that needs to be backticked into it here.
-		"{version}", r.calicoVersion,
+		"{version}", r.calicoVersion.String(),
 		"{branch}", fmt.Sprintf("release-v%d.%d", sv.Major(), sv.Minor()),
 		"{release_stream}", fmt.Sprintf("v%d.%d", sv.Major(), sv.Minor()),
 		"{release_tar}", fmt.Sprintf("`%s`", archives.ArchiveFileName(r.archive())),
-		"{calico_windows_zip}", fmt.Sprintf("`%s`", archives.WindowsFileName(r.calicoVersion)),
-		"{helm_chart}", fmt.Sprintf("`%s-%s.tgz`", charts.TigeraOperatorChart, r.calicoVersion),
-		"{helm_v1_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", charts.ProjectCalicoV1CRDsChart, r.calicoVersion),
-		"{helm_v3_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", charts.ProjectCalicoV3CRDsChart, r.calicoVersion),
+		"{calico_windows_zip}", fmt.Sprintf("`%s`", archives.WindowsFileName(r.calicoVersion.String())),
+		"{helm_chart}", fmt.Sprintf("`%s-%s.tgz`", charts.TigeraOperatorChart, r.calicoVersion.String()),
+		"{helm_v1_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", charts.ProjectCalicoV1CRDsChart, r.calicoVersion.String()),
+		"{helm_v3_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", charts.ProjectCalicoV3CRDsChart, r.calicoVersion.String()),
 	}
 	replacer := strings.NewReplacer(formatters...)
 	releaseNote := replacer.Replace(releaseNoteTemplate)
@@ -1147,7 +1146,7 @@ Additional links:
 		Skip:   !r.githubRelease,
 		Handler: distribution.GithubRelease{
 			Repo:   github.Repo{Org: r.githubOrg, Name: r.repo},
-			Tag:    r.calicoVersion,
+			Tag:    r.calicoVersion.String(),
 			Body:   releaseNote,
 			Draft:  r.draftRelease,
 			DryRun: r.dryRun,
@@ -1188,7 +1187,7 @@ func (r *CalicoManager) publishContainerImages() error {
 		opts = append(opts, images.WithRetag(r.fromRegistry, r.fromTag, !r.gitRef))
 	}
 	if err := images.Publish(
-		r.repoRoot, r.calicoVersion,
+		r.repoRoot, r.calicoVersion.String(),
 		images.NarrowVariants(images.PublishVariants, r.imageReleaseDirs),
 		!r.dryRun, r.digestResolver(), opts...,
 	); err != nil {
@@ -1259,7 +1258,7 @@ func (r *CalicoManager) resolveContainerImages() error {
 		opts = append(opts, images.WithScan(scan))
 	}
 	if err := images.Resolve(
-		r.repoRoot, r.calicoVersion,
+		r.repoRoot, r.calicoVersion.String(),
 		images.NarrowVariants(images.PublishVariants, r.imageReleaseDirs),
 		r.digestResolver(),
 		opts...,
@@ -1284,12 +1283,11 @@ func (r *CalicoManager) scanRequest() *images.ScanRequest {
 	if !r.imageScanning {
 		return nil
 	}
-	ver := version.Version(r.calicoVersion)
 	return &images.ScanRequest{
 		Config:      r.imageScanningConfig,
 		ProductCode: r.productCode,
 		Images:      slices.Collect(maps.Values(r.componentImages())),
-		Stream:      ver.PrimaryStream(),
+		Stream:      r.calicoVersion.PrimaryStream(),
 		Release:     !r.isHashRelease,
 		OutputDir:   r.tmpDir,
 		DryRun:      r.dryRun,
@@ -1300,8 +1298,7 @@ var releaseBranch = func(r *CalicoManager) (string, error) {
 	if r.releaseBranchPrefix == "" {
 		return "", fmt.Errorf("release branch prefix is not set")
 	}
-	ver := version.Version(r.calicoVersion)
-	return fmt.Sprintf("%s-%s", r.releaseBranchPrefix, ver.Stream()), nil
+	return fmt.Sprintf("%s-%s", r.releaseBranchPrefix, r.calicoVersion.Stream()), nil
 }
 
 // publishBranchTag moves the branch-named tag (e.g. release-v3.33) onto the
@@ -1350,7 +1347,7 @@ func (r *CalicoManager) publishBranchTag() error {
 		images.WithArches(r.architectures...),
 		images.WithLogsDir(r.logsDir),
 		images.WithStepName("images-publish-branch"),
-		images.WithRetag(reg, r.calicoVersion, true),
+		images.WithRetag(reg, r.calicoVersion.String(), true),
 	); err != nil {
 		return fmt.Errorf("publish branch %s tag images: %w", branch, err)
 	}
@@ -1574,7 +1571,10 @@ func (r *CalicoManager) cutPlan() (*branch.CutPlan, error) {
 	if err != nil {
 		return nil, fmt.Errorf("determining %s version: %w", r.mainBranch, err)
 	}
-	cur := version.New(strings.TrimSpace(mainVersion))
+	cur, err := version.New(strings.TrimSpace(mainVersion))
+	if err != nil {
+		return nil, err
+	}
 	nextBranch := cur.NextBranchVersion()
 	derived := r.releaseBranchPrefix + "-" + cur.Stream()
 	return &branch.CutPlan{
@@ -1582,7 +1582,7 @@ func (r *CalicoManager) cutPlan() (*branch.CutPlan, error) {
 		Source:  r.mainBranch,
 		Remote:  r.remote,
 		TagTargets: []branch.TagTarget{
-			{Branch: r.mainBranch, DevTag: nextBranch.FormattedString() + "-" + r.devTagIdentifier},
+			{Branch: r.mainBranch, DevTag: nextBranch.String() + "-" + r.devTagIdentifier},
 		},
 	}, nil
 }
@@ -1607,14 +1607,8 @@ func (r *CalicoManager) prepareDerived(derived string) ([]string, error) {
 
 	// The operator ships on Calico's version stream, so a pre-release branch
 	// pins both to the derived branch.
-	r.calicoVersion = derived
-	r.operatorVersion = derived
-
-	logrus.WithFields(logrus.Fields{
-		"calico_version":   r.calicoVersion,
-		"operator_version": r.operatorVersion,
-	}).Debug("Updating versions in helm charts to release branches")
-	if err := r.modifyHelmChartsValues(); err != nil {
+	logrus.WithField("version", derived).Debug("Updating versions in helm charts to release branches")
+	if err := r.modifyHelmChartsValues(derived, derived); err != nil {
 		return nil, err
 	}
 
@@ -1655,7 +1649,7 @@ func (r *CalicoManager) PrepareRelease() (string, error) {
 		return "", err
 	}
 
-	ver := version.New(r.calicoVersion)
+	ver := r.calicoVersion
 	baseBranch, err := r.determineBranch()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to determine current branch, will use default branch for release preparation")
@@ -1689,7 +1683,7 @@ func (r *CalicoManager) switchToPrepBranch(prepBranch string) error {
 
 // updateAndCommitPrep updates charts and manifests, then stages and commits.
 func (r *CalicoManager) updateAndCommitPrep() error {
-	if err := r.modifyHelmChartsValues(); err != nil {
+	if err := r.modifyHelmChartsValues(r.calicoVersion.String(), r.operatorVersion); err != nil {
 		return fmt.Errorf("failed to update chart versions: %w", err)
 	}
 	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate"); err != nil {
@@ -1703,7 +1697,7 @@ func (r *CalicoManager) updateAndCommitPrep() error {
 	); err != nil {
 		return fmt.Errorf("failed to stage files: %w", err)
 	}
-	if _, err := r.git("commit", "-m", fmt.Sprintf("build: %s release", r.calicoVersion)); err != nil {
+	if _, err := r.git("commit", "-m", fmt.Sprintf("build: %s release", r.calicoVersion.String())); err != nil {
 		return fmt.Errorf("failed to commit changes: %w", err)
 	}
 	return nil
@@ -1809,7 +1803,7 @@ func (r *CalicoManager) prepPrereqs() error {
 	}
 
 	// Check that the release notes are present for this version.
-	if err := r.assertReleaseNotesPresent(r.calicoVersion); err != nil {
+	if err := r.assertReleaseNotesPresent(r.calicoVersion.String()); err != nil {
 		return err
 	}
 
@@ -1819,8 +1813,8 @@ func (r *CalicoManager) prepPrereqs() error {
 		return fmt.Errorf("operator version (%s) is not a release version", r.operatorVersion)
 	}
 	versionRegex = regexp.MustCompile(`^v\d+\.\d+\.\d+(-\d+\.\d+)?$`)
-	if !versionRegex.MatchString(r.calicoVersion) {
-		return fmt.Errorf("version (%s) is not a release version", r.calicoVersion)
+	if !versionRegex.MatchString(r.calicoVersion.String()) {
+		return fmt.Errorf("version (%s) is not a release version", r.calicoVersion.String())
 	}
 
 	return nil
