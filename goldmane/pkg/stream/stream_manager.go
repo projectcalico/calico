@@ -92,8 +92,10 @@ func (m *streamManager) Receive(provider storage.FlowProvider, id string) {
 }
 
 // send never blocks the main loop. A stream whose queue is full has fallen hours behind, so we
-// close it and let the client reconnect with a fresh backfill.
+// close it, and its client gets Aborted.
 func (m *streamManager) send(s *stream, provider storage.FlowProvider) {
+	// This only prunes early. A Close racing past it leaves one provider in s.in, which nothing
+	// reads, since run exits on the canceled context.
 	if s.ctx.Err() != nil {
 		delete(m.streams, s.id)
 		return
