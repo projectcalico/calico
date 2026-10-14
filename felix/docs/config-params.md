@@ -2567,7 +2567,8 @@ In most cases this should not need to be changed .
 The name of the region that a particular Felix belongs to. In a multi-region
 Calico/OpenStack deployment, this must be configured somehow for each Felix (here in the datamodel,
 or in felix.cfg or the environment on each compute node), and must match the [calico]
-openstack_region value configured in neutron.conf on each node.
+openstack_region value configured in neutron.conf on each node. The region is used in a
+namespace name, so it must be a DNS label of at most 46 characters.
 
 | Detail |   |
 | --- | --- |
@@ -2575,7 +2576,7 @@ openstack_region value configured in neutron.conf on each node.
 | Encoding (env var/config file) | OpenStack region name (must be a valid DNS label) |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `openstackRegion` (YAML) `OpenstackRegion` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | String matching the regular expression <code>^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$</code>. |
 | Default value (YAML) | none |
 | Notes | Felix will exit if the value is invalid. | 
 
