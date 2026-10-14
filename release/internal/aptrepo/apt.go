@@ -6,7 +6,6 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -101,14 +100,13 @@ func (asd *aptSourcesData) writeAptSourcesFile(rootPath string) error {
 	return nil
 }
 
-func getVersionFromDebfile(debfilePath string) (string, error) {
+func (repo *Repo) getVersionFromDebfile(debfilePath string) (string, error) {
 	logrus.WithField("debfile", debfilePath).Debug("Getting version information from debian package")
-	cmd := exec.Command("dpkg-deb", "--show", "--showformat", "${Version}", "--", debfilePath)
-	out, err := cmd.Output()
+	out, err := repo.runner.Run("dpkg-deb", []string{"--show", "--showformat", "${Version}", "--", debfilePath}, nil)
 	if err != nil {
 		return "", fmt.Errorf("getting version for %s: %w", debfilePath, err)
 	}
-	return string(out), nil
+	return out, nil
 }
 
 func getComponentNameFromVersion(version string) (string, error) {
@@ -118,8 +116,8 @@ func getComponentNameFromVersion(version string) (string, error) {
 	return "", fmt.Errorf("version %s does not contain a tilde separator", version)
 }
 
-func getSuiteNameFromDebFile(debfilePath string) (string, error) {
-	version, err := getVersionFromDebfile(debfilePath)
+func (repo *Repo) getSuiteNameFromDebFile(debfilePath string) (string, error) {
+	version, err := repo.getVersionFromDebfile(debfilePath)
 	if err != nil {
 		return "", fmt.Errorf("getting version for %s: %w", debfilePath, err)
 	}
@@ -157,7 +155,7 @@ func formatGPGKeyForSourcesFile(gpgKey string) string {
 	return processedKey.String()
 }
 
-func getRecursiveDebsBySuite(searchPaths []string) (map[string][]string, error) {
+func (repo *Repo) getRecursiveDebsBySuite(searchPaths []string) (map[string][]string, error) {
 	debsBySuite := make(map[string][]string, 0)
 
 	files, err := getRecursiveDebs(searchPaths)
@@ -167,7 +165,7 @@ func getRecursiveDebsBySuite(searchPaths []string) (map[string][]string, error) 
 
 	logrus.Debugf("Found %d debian package files to process", len(files))
 	for _, debFile := range files {
-		suite, err := getSuiteNameFromDebFile(debFile)
+		suite, err := repo.getSuiteNameFromDebFile(debFile)
 		if err != nil {
 			return map[string][]string{}, fmt.Errorf("getting suite name for %s: %w", debFile, err)
 		}

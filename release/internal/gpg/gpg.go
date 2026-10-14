@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package utils
+package gpg
 
 import (
 	"errors"
@@ -29,22 +29,23 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-// GetGPGPubKey takes a GPG key ID and fetches the ascii-armored GPG public key
-func GetGPGPubKey(gpgKeyID string) (string, error) {
+// PubKey takes a GPG key ID and fetches the ascii-armored GPG public key
+func PubKey(r command.CommandRunner, gpgKeyID string) (string, error) {
 	logrus.Debugf("Getting ascii-armored public key for GPG key %s", gpgKeyID)
 
 	cmdArgs := []string{"--armor", "--export", gpgKeyID}
 	logrus.Debugf("Running gpg with args %s", strings.Join(cmdArgs, " "))
-	gpgOut, err := command.Run("gpg", cmdArgs)
+	gpgOut, err := r.Run("gpg", cmdArgs, nil)
 	if err != nil {
 		return "", fmt.Errorf("exporting gpg key: %w", err)
 	}
-	return string(gpgOut), nil
+	return gpgOut, nil
 }
 
-// ExportGPGPubKeyFile writes the ascii-armored public key for gpgKeyID into dir
+// ExportPubKeyFile writes the ascii-armored public key for gpgKeyID into dir
 // as "<prefix>-<YYYY-MM-DD>.asc", dated by the key's creation date, and returns
 // the file name.
 //
@@ -53,15 +54,15 @@ func GetGPGPubKey(gpgKeyID string) (string, error) {
 // the gpgkey URL in their .repo file, and mirrors and CDNs cache by URL, so a
 // changed-in-place key file is both a cache hazard and indistinguishable from
 // tampering.
-func ExportGPGPubKeyFile(gpgKeyID, dir, prefix string) (string, error) {
-	pubKey, err := GetGPGPubKey(gpgKeyID)
+func ExportPubKeyFile(r command.CommandRunner, gpgKeyID, dir, prefix string) (string, error) {
+	pubKey, err := PubKey(r, gpgKeyID)
 	if err != nil {
 		return "", fmt.Errorf("unable to export public key for GPG key %s: %w", gpgKeyID, err)
 	}
 	if !strings.Contains(pubKey, "BEGIN PGP PUBLIC KEY BLOCK") {
 		return "", fmt.Errorf("gpg has no public key for %s: check the key ID given by --gpg-key-id / GPG_KEY_ID", gpgKeyID)
 	}
-	created, err := GPGKeyCreationDate(gpgKeyID)
+	created, err := KeyCreationDate(r, gpgKeyID)
 	if err != nil {
 		return "", err
 	}
@@ -79,11 +80,11 @@ func ExportGPGPubKeyFile(gpgKeyID, dir, prefix string) (string, error) {
 	return fileName, nil
 }
 
-// GPGKeyCreationDate returns when the GPG key was created, taken from the
+// KeyCreationDate returns when the GPG key was created, taken from the
 // machine-readable key listing.
-func GPGKeyCreationDate(gpgKeyID string) (time.Time, error) {
+func KeyCreationDate(r command.CommandRunner, gpgKeyID string) (time.Time, error) {
 	cmdArgs := []string{"--list-keys", "--with-colons", gpgKeyID}
-	gpgOut, err := command.Run("gpg", cmdArgs)
+	gpgOut, err := r.Run("gpg", cmdArgs, nil)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("unable to list GPG key %s: %w", gpgKeyID, err)
 	}
@@ -119,11 +120,11 @@ func parseGPGDate(field string) (time.Time, error) {
 	return parsed.UTC(), nil
 }
 
-// GPGDetachSign signs a file with the given GPG key, writing an ascii-armored
+// DetachSign signs a file with the given GPG key, writing an ascii-armored
 // detached signature to "<filePath>.asc" and returning that path. The signature
 // is verified before returning, so a signature that cannot be checked fails here
 // rather than in a client's package manager.
-func GPGDetachSign(gpgKeyID, filePath string) (string, error) {
+func DetachSign(r command.CommandRunner, gpgKeyID, filePath string) (string, error) {
 	sigPath := filePath + ".asc"
 	logrus.Infof("Signing %s with GPG key %s", filePath, gpgKeyID)
 	cmdArgs := []string{
@@ -137,10 +138,10 @@ func GPGDetachSign(gpgKeyID, filePath string) (string, error) {
 		"--output", sigPath,
 		filePath,
 	}
-	if _, err := command.Run("gpg", cmdArgs); err != nil {
+	if _, err := r.Run("gpg", cmdArgs, nil); err != nil {
 		return "", fmt.Errorf("unable to sign %s with GPG key %s: %w", filePath, gpgKeyID, err)
 	}
-	if _, err := command.Run("gpg", []string{"--batch", "--verify", sigPath, filePath}); err != nil {
+	if _, err := r.Run("gpg", []string{"--batch", "--verify", sigPath, filePath}, nil); err != nil {
 		return "", fmt.Errorf("signed %s but its signature %s could not be verified: %w", filePath, sigPath, err)
 	}
 	return sigPath, nil
@@ -158,18 +159,23 @@ func GPGDetachSign(gpgKeyID, filePath string) (string, error) {
 // public key was never imported. ImportGPGKey bridges the two.
 type RPMKeyring struct {
 	dbPath string
+	runner command.CommandRunner
+
+	supportsRPMV4 func() bool
 }
 
 // NewRPMKeyring returns a keyring backed by a database under dbPath, which
 // should be a scratch directory (e.g. under the release tmp directory) rather
 // than the host's RPM database. The database files themselves are created by
 // the first rpm command that writes to it, so there is no initdb step.
-func NewRPMKeyring(dbPath string) (*RPMKeyring, error) {
-	if err := os.MkdirAll(dbPath, DirPerms); err != nil {
+func NewRPMKeyring(r command.CommandRunner, dbPath string) (*RPMKeyring, error) {
+	if err := os.MkdirAll(dbPath, utils.DirPerms); err != nil {
 		return nil, fmt.Errorf("unable to create RPM database directory %s: %w", dbPath, err)
 	}
 	logrus.Debugf("Using private RPM database at %s", dbPath)
-	return &RPMKeyring{dbPath: dbPath}, nil
+	k := &RPMKeyring{dbPath: dbPath, runner: r}
+	k.supportsRPMV4 = sync.OnceValue(k.rpmsignSupportsRPMV4)
+	return k, nil
 }
 
 // rpmArgs prefixes command arguments with the macro definition that redirects an
@@ -184,7 +190,7 @@ func (k *RPMKeyring) rpmArgs(args ...string) []string {
 // that signatures made with that key can be verified. Call it before
 // CheckRPMSigs; without it every package verifies as NOKEY.
 func (k *RPMKeyring) ImportGPGKey(gpgKeyID string) error {
-	pubKey, err := GetGPGPubKey(gpgKeyID)
+	pubKey, err := PubKey(k.runner, gpgKeyID)
 	if err != nil {
 		return fmt.Errorf("unable to export public key for GPG key %s: %w", gpgKeyID, err)
 	}
@@ -200,7 +206,7 @@ func (k *RPMKeyring) ImportGPGKey(gpgKeyID string) error {
 		return fmt.Errorf("unable to write public key for GPG key %s to %s: %w", gpgKeyID, keyFile, err)
 	}
 	logrus.Infof("Importing public key for GPG key %s into RPM database %s", gpgKeyID, k.dbPath)
-	if _, err := command.Run("rpmkeys", k.rpmArgs("--import", keyFile)); err != nil {
+	if _, err := k.runner.Run("rpmkeys", k.rpmArgs("--import", keyFile), nil); err != nil {
 		return fmt.Errorf("unable to import public key for GPG key %s into RPM database %s: %w", gpgKeyID, k.dbPath, err)
 	}
 	return nil
@@ -212,7 +218,7 @@ func (k *RPMKeyring) SignRPMFiles(gpgKeyID string, rpmFiles []string) error {
 	if len(rpmFiles) == 0 {
 		return fmt.Errorf("list of RPM files to sign is empty")
 	}
-	filteredRpmFiles, err := FilterRegularFiles(rpmFiles)
+	filteredRpmFiles, err := utils.FilterRegularFiles(rpmFiles)
 	if err != nil {
 		logrus.Error("Sanitizing RPM files list failed")
 		return fmt.Errorf("unable to sanitize RPM file list: %w", err)
@@ -225,7 +231,7 @@ func (k *RPMKeyring) SignRPMFiles(gpgKeyID string, rpmFiles []string) error {
 	logrus.Infof("Signing RPM files with GPG key %s", gpgKeyID)
 	cmdArgs := k.signArgs(gpgKeyID, filteredRpmFiles)
 	logrus.Debugf("Running rpmsign with args %s", strings.Join(cmdArgs, " "))
-	if _, err := command.Run("rpmsign", cmdArgs); err != nil {
+	if _, err := k.runner.Run("rpmsign", cmdArgs, nil); err != nil {
 		return fmt.Errorf("unable to sign RPM files: %w", err)
 	}
 	return nil
@@ -251,7 +257,7 @@ func (k *RPMKeyring) signArgs(gpgKeyID string, rpmFiles []string) []string {
 	// --rpmv4 keeps signatures backwards compatible on rpm 6, which otherwise
 	// writes v6 header signatures. Only rpm 6 has the option; 4.17 and 4.20 reject
 	// it outright and write v4 signatures anyway.
-	if rpmsignSupportsRPMV4() {
+	if k.supportsRPMV4() {
 		args = append(args, "--rpmv4")
 	}
 	return append(args, rpmFiles...)
@@ -259,10 +265,9 @@ func (k *RPMKeyring) signArgs(gpgKeyID string, rpmFiles []string) []string {
 
 // rpmsignSupportsRPMV4 reports whether the installed rpmsign accepts --rpmv4. It
 // asks rpmsign rather than comparing versions, so a version that gains or loses
-// the option needs no change here. Held in a var so tests can replace it, and
-// resolved once because it cannot change while the release runs.
-var rpmsignSupportsRPMV4 = sync.OnceValue(func() bool {
-	out, err := command.Run("rpmsign", []string{"--help"})
+// the option needs no change here.
+func (k *RPMKeyring) rpmsignSupportsRPMV4() bool {
+	out, err := k.runner.Run("rpmsign", []string{"--help"}, nil)
 	if err != nil {
 		// Signing itself reports a usable error if rpmsign is missing or broken;
 		// here, assume the option is absent rather than fail the help probe.
@@ -270,7 +275,7 @@ var rpmsignSupportsRPMV4 = sync.OnceValue(func() bool {
 		return false
 	}
 	return strings.Contains(out, "--rpmv4")
-})
+}
 
 // RPMSigCheckError reports that one RPM package failed signature validation.
 // It keeps the individual problems and the raw rpmkeys output rather than only
@@ -333,7 +338,7 @@ func (k *RPMKeyring) CheckRPMSig(rpmFile string) error {
 	if _, err := os.Lstat(rpmFile); err != nil {
 		return fmt.Errorf("could not validate rpm file exists: %w", err)
 	}
-	rpmOut, runErr := command.Run("rpmkeys", k.rpmArgs("--checksig", "--verbose", rpmFile))
+	rpmOut, runErr := k.runner.Run("rpmkeys", k.rpmArgs("--checksig", "--verbose", rpmFile), nil)
 	logrus.WithField("file", rpmFile).Debugf("rpmkeys --checksig -v output:\n%s", rpmOut)
 
 	checks := parseRPMSigChecks(rpmOut)
@@ -375,7 +380,7 @@ func (k *RPMKeyring) checkSigCommand(rpmFile string) string {
 }
 
 // rpmkeysExitDetail renders how rpmkeys exited, for inclusion in a problem's
-// detail. command.Run already appends stderr to the error, which is empty for
+// detail. The runner already appends stderr to the error, which is empty for
 // a plain check failure, so trim it back to something readable.
 func rpmkeysExitDetail(runErr error) string {
 	if runErr == nil {

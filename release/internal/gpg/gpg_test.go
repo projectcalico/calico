@@ -12,20 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package utils
+package gpg
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/projectcalico/calico/release/internal/command"
 )
 
+var realRunner = &command.RealCommandRunner{}
+
 // The functions under test shell out to gpg / rpmbuild / rpmsign / rpmkeys and
-// inherit the process environment (command.Run passes a nil env, so the child
+// inherit the process environment (the runner gets a nil env, so the child
 // process sees os.Environ()). We exploit that to run everything inside a
 // sandbox: GNUPGHOME is redirected to a throwaway GPG keyring. RPMKeyring
 // already isolates the RPM side by construction, so the tests point one at a
@@ -91,7 +96,7 @@ func newSigningEnv(t *testing.T) *signingEnv {
 // a test can compare one keyring against another.
 func (e *signingEnv) newKeyring(t *testing.T, name string) *RPMKeyring {
 	t.Helper()
-	keyring, err := NewRPMKeyring(filepath.Join(e.base, name))
+	keyring, err := NewRPMKeyring(realRunner, filepath.Join(e.base, name))
 	if err != nil {
 		t.Fatalf("NewRPMKeyring(%s): %v", name, err)
 	}
@@ -181,13 +186,13 @@ func (e *signingEnv) buildTestRPM(t *testing.T, name string) string {
 	return rpmPath
 }
 
-func TestGetGPGPubKey(t *testing.T) {
+func TestPubKey(t *testing.T) {
 	env := newSigningEnv(t)
 
 	t.Run("returns ascii-armored public key", func(t *testing.T) {
-		key, err := GetGPGPubKey(env.keyID)
+		key, err := PubKey(realRunner, env.keyID)
 		if err != nil {
-			t.Fatalf("GetGPGPubKey: unexpected error: %v", err)
+			t.Fatalf("PubKey: unexpected error: %v", err)
 		}
 		if !strings.Contains(key, "BEGIN PGP PUBLIC KEY BLOCK") ||
 			!strings.Contains(key, "END PGP PUBLIC KEY BLOCK") {
@@ -197,10 +202,10 @@ func TestGetGPGPubKey(t *testing.T) {
 
 	t.Run("unknown key yields no key material", func(t *testing.T) {
 		// gpg exits 0 when asked to export an unknown key, returning nothing,
-		// so GetGPGPubKey reports no error and an empty result.
-		key, err := GetGPGPubKey("DEADBEEFDEADBEEF")
+		// so PubKey reports no error and an empty result.
+		key, err := PubKey(realRunner, "DEADBEEFDEADBEEF")
 		if err != nil {
-			t.Fatalf("GetGPGPubKey: unexpected error: %v", err)
+			t.Fatalf("PubKey: unexpected error: %v", err)
 		}
 		if strings.Contains(key, "BEGIN PGP") {
 			t.Errorf("expected no key material for unknown key, got:\n%s", key)
@@ -208,24 +213,24 @@ func TestGetGPGPubKey(t *testing.T) {
 	})
 }
 
-func TestGPGKeyCreationDate(t *testing.T) {
+func TestKeyCreationDate(t *testing.T) {
 	env := newSigningEnv(t)
 
 	t.Run("reads the creation date from the key", func(t *testing.T) {
 		keyID := genGPGKey(t, filepath.Join(env.base, "keyparams-dated"),
 			"Calico Release Dated Key", "release-dated@example.com", "Creation-Date: 20200102T030405")
-		created, err := GPGKeyCreationDate(keyID)
+		created, err := KeyCreationDate(realRunner, keyID)
 		if err != nil {
-			t.Fatalf("GPGKeyCreationDate: unexpected error: %v", err)
+			t.Fatalf("KeyCreationDate: unexpected error: %v", err)
 		}
 		if got := created.UTC().Format("20060102"); got != "20200102" {
-			t.Errorf("GPGKeyCreationDate = %s, want 20200102", got)
+			t.Errorf("KeyCreationDate = %s, want 20200102", got)
 		}
 	})
 
 	t.Run("errors for a key gpg does not have", func(t *testing.T) {
-		if _, err := GPGKeyCreationDate("DEADBEEFDEADBEEF"); err == nil {
-			t.Error("GPGKeyCreationDate: expected an error for an unknown key, got nil")
+		if _, err := KeyCreationDate(realRunner, "DEADBEEFDEADBEEF"); err == nil {
+			t.Error("KeyCreationDate: expected an error for an unknown key, got nil")
 		}
 	})
 }
@@ -264,7 +269,7 @@ func TestParseGPGDate(t *testing.T) {
 	}
 }
 
-func TestExportGPGPubKeyFile(t *testing.T) {
+func TestExportPubKeyFile(t *testing.T) {
 	env := newSigningEnv(t)
 
 	t.Run("names the file after the key's creation date", func(t *testing.T) {
@@ -272,12 +277,12 @@ func TestExportGPGPubKeyFile(t *testing.T) {
 			"Calico Release Export Key", "release-export@example.com", "Creation-Date: 20200102T030405")
 		dir := t.TempDir()
 
-		name, err := ExportGPGPubKeyFile(keyID, dir, "calico-signing-key")
+		name, err := ExportPubKeyFile(realRunner, keyID, dir, "calico-signing-key")
 		if err != nil {
-			t.Fatalf("ExportGPGPubKeyFile: unexpected error: %v", err)
+			t.Fatalf("ExportPubKeyFile: unexpected error: %v", err)
 		}
 		if want := "calico-signing-key-2020-01-02.asc"; name != want {
-			t.Errorf("ExportGPGPubKeyFile returned %q, want %q", name, want)
+			t.Errorf("ExportPubKeyFile returned %q, want %q", name, want)
 		}
 		contents, err := os.ReadFile(filepath.Join(dir, name))
 		if err != nil {
@@ -298,13 +303,13 @@ func TestExportGPGPubKeyFile(t *testing.T) {
 			"Calico Release New Key", "release-new@example.com", "Creation-Date: 20260101T000000")
 		dir := t.TempDir()
 
-		olderName, err := ExportGPGPubKeyFile(older, dir, "key")
+		olderName, err := ExportPubKeyFile(realRunner, older, dir, "key")
 		if err != nil {
-			t.Fatalf("ExportGPGPubKeyFile(older): %v", err)
+			t.Fatalf("ExportPubKeyFile(older): %v", err)
 		}
-		newerName, err := ExportGPGPubKeyFile(newer, dir, "key")
+		newerName, err := ExportPubKeyFile(realRunner, newer, dir, "key")
 		if err != nil {
-			t.Fatalf("ExportGPGPubKeyFile(newer): %v", err)
+			t.Fatalf("ExportPubKeyFile(newer): %v", err)
 		}
 		if olderName == newerName {
 			t.Errorf("expected distinct file names for keys created on different dates, got %q twice", olderName)
@@ -318,13 +323,13 @@ func TestExportGPGPubKeyFile(t *testing.T) {
 	})
 
 	t.Run("errors when gpg has no such key", func(t *testing.T) {
-		if _, err := ExportGPGPubKeyFile("DEADBEEFDEADBEEF", t.TempDir(), "key"); err == nil {
-			t.Error("ExportGPGPubKeyFile: expected an error for an unknown key, got nil")
+		if _, err := ExportPubKeyFile(realRunner, "DEADBEEFDEADBEEF", t.TempDir(), "key"); err == nil {
+			t.Error("ExportPubKeyFile: expected an error for an unknown key, got nil")
 		}
 	})
 }
 
-func TestGPGDetachSign(t *testing.T) {
+func TestDetachSign(t *testing.T) {
 	env := newSigningEnv(t)
 
 	// Stand in for a repository's repomd.xml.
@@ -340,12 +345,12 @@ func TestGPGDetachSign(t *testing.T) {
 	t.Run("writes a verifiable detached signature", func(t *testing.T) {
 		path := writeFile(t, "<repomd/>\n")
 
-		sigPath, err := GPGDetachSign(env.keyID, path)
+		sigPath, err := DetachSign(realRunner, env.keyID, path)
 		if err != nil {
-			t.Fatalf("GPGDetachSign: unexpected error: %v", err)
+			t.Fatalf("DetachSign: unexpected error: %v", err)
 		}
 		if sigPath != path+".asc" {
-			t.Errorf("GPGDetachSign returned %q, want %q", sigPath, path+".asc")
+			t.Errorf("DetachSign returned %q, want %q", sigPath, path+".asc")
 		}
 		sig, err := os.ReadFile(sigPath)
 		if err != nil {
@@ -354,7 +359,7 @@ func TestGPGDetachSign(t *testing.T) {
 		if !strings.Contains(string(sig), "BEGIN PGP SIGNATURE") {
 			t.Errorf("expected an ascii-armored detached signature, got:\n%s", sig)
 		}
-		// Verified independently of the check inside GPGDetachSign.
+		// Verified independently of the check inside DetachSign.
 		runSetup(t, "gpg", "--batch", "--verify", sigPath, path)
 	})
 
@@ -363,29 +368,29 @@ func TestGPGDetachSign(t *testing.T) {
 		// the published repository can arrive with a stale signature alongside it,
 		// so signing has to overwrite rather than refuse.
 		path := writeFile(t, "<repomd>first</repomd>\n")
-		if _, err := GPGDetachSign(env.keyID, path); err != nil {
-			t.Fatalf("GPGDetachSign (first): %v", err)
+		if _, err := DetachSign(realRunner, env.keyID, path); err != nil {
+			t.Fatalf("DetachSign (first): %v", err)
 		}
 		if err := os.WriteFile(path, []byte("<repomd>second</repomd>\n"), 0o644); err != nil {
 			t.Fatalf("rewrite %s: %v", path, err)
 		}
-		if _, err := GPGDetachSign(env.keyID, path); err != nil {
-			t.Fatalf("GPGDetachSign (second): unexpected error: %v", err)
+		if _, err := DetachSign(realRunner, env.keyID, path); err != nil {
+			t.Fatalf("DetachSign (second): unexpected error: %v", err)
 		}
 		runSetup(t, "gpg", "--batch", "--verify", path+".asc", path)
 	})
 
 	t.Run("errors for a key gpg cannot sign with", func(t *testing.T) {
 		path := writeFile(t, "<repomd/>\n")
-		if _, err := GPGDetachSign("DEADBEEFDEADBEEF", path); err == nil {
-			t.Error("GPGDetachSign: expected an error for an unknown key, got nil")
+		if _, err := DetachSign(realRunner, "DEADBEEFDEADBEEF", path); err == nil {
+			t.Error("DetachSign: expected an error for an unknown key, got nil")
 		}
 	})
 
 	t.Run("errors for a missing file", func(t *testing.T) {
 		missing := filepath.Join(t.TempDir(), "absent.xml")
-		if _, err := GPGDetachSign(env.keyID, missing); err == nil {
-			t.Error("GPGDetachSign: expected an error for a missing file, got nil")
+		if _, err := DetachSign(realRunner, env.keyID, missing); err == nil {
+			t.Error("DetachSign: expected an error for a missing file, got nil")
 		}
 	})
 }
@@ -461,7 +466,7 @@ func TestSignRPMFilesNoFiles(t *testing.T) {
 // short-circuit before running any rpm command.
 func newTestKeyring(t *testing.T) *RPMKeyring {
 	t.Helper()
-	keyring, err := NewRPMKeyring(filepath.Join(t.TempDir(), "rpmdb"))
+	keyring, err := NewRPMKeyring(realRunner, filepath.Join(t.TempDir(), "rpmdb"))
 	if err != nil {
 		t.Fatalf("NewRPMKeyring: %v", err)
 	}
@@ -481,22 +486,21 @@ func TestSignRPMFilesAllFiltered(t *testing.T) {
 // TestSignArgs verifies the rpmsign invocation works on both rpm generations:
 // the key is named by the macro each one reads, and --rpmv4 is passed only where
 // it exists. rpm gained that option in 6.0, and passing it to the 4.17 on the
-// release agents fails the whole signing step with "unknown option". The probe is
-// replaced here so both cases are covered whatever rpm this machine has.
+// release agents fails the whole signing step with "unknown option".
 func TestSignArgs(t *testing.T) {
-	keyring := newTestKeyring(t)
-	original := rpmsignSupportsRPMV4
-	t.Cleanup(func() { rpmsignSupportsRPMV4 = original })
-
 	for _, tc := range []struct {
 		name      string
+		help      string
 		supported bool
 	}{
-		{name: "rpmsign accepts --rpmv4", supported: true},
-		{name: "rpmsign rejects --rpmv4", supported: false},
+		{name: "rpmsign accepts --rpmv4", help: "  --rpmv4   create rpm v4 signatures", supported: true},
+		{name: "rpmsign rejects --rpmv4", help: "  --resign   sign packages", supported: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			rpmsignSupportsRPMV4 = func() bool { return tc.supported }
+			keyring, err := NewRPMKeyring(&helpRunner{out: tc.help}, filepath.Join(t.TempDir(), "rpmdb"))
+			if err != nil {
+				t.Fatalf("NewRPMKeyring: %v", err)
+			}
 			args := keyring.signArgs("SOMEKEYID", []string{"one.rpm", "two.rpm"})
 
 			if got := slices.Contains(args, "--rpmv4"); got != tc.supported {
@@ -519,6 +523,50 @@ func TestSignArgs(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewRPMKeyring(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		help string
+		err  error
+		want bool
+	}{
+		{name: "rpmsign lists --rpmv4", help: "  --rpmv4   create rpm v4 signatures", want: true},
+		{name: "rpmsign does not list it", help: "  --resign   sign packages", want: false},
+		{name: "rpmsign fails", err: errors.New("not found"), want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &helpRunner{out: tc.help, err: tc.err}
+			keyring, err := NewRPMKeyring(r, filepath.Join(t.TempDir(), "rpmdb"))
+			if err != nil {
+				t.Fatalf("NewRPMKeyring: %v", err)
+			}
+			for range 2 {
+				if got := keyring.supportsRPMV4(); got != tc.want {
+					t.Errorf("supportsRPMV4() = %v, want %v", got, tc.want)
+				}
+			}
+			if r.calls != 1 {
+				t.Errorf("rpmsign --help ran %d times, want 1", r.calls)
+			}
+		})
+	}
+}
+
+type helpRunner struct {
+	command.RealCommandRunner
+	out   string
+	err   error
+	calls int
+}
+
+func (r *helpRunner) Run(name string, args, _ []string) (string, error) {
+	if name != "rpmsign" || !slices.Equal(args, []string{"--help"}) {
+		return "", fmt.Errorf("unexpected command %s %v", name, args)
+	}
+	r.calls++
+	return r.out, r.err
 }
 
 // TestSignArgsOverridesGPGPath verifies rpmsign is pointed at the gpg that is
