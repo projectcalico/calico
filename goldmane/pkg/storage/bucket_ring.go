@@ -297,8 +297,8 @@ func (r *BucketRing) Rollover(sink Sink) int64 {
 	return r.rollover(sink, true)
 }
 
-// rollover is Rollover with control over streaming. Seeding marks buckets ready for backfill without
-// sending them, because a queued empty bucket is later reused for real flows.
+// rollover is Rollover with control over streaming. Seeding rolls over without streaming, since the
+// seed buckets are empty.
 func (r *BucketRing) rollover(sink Sink, stream bool) int64 {
 	start := r.nowFunc()
 	defer func() {
@@ -314,8 +314,6 @@ func (r *BucketRing) rollover(sink Sink, stream bool) int64 {
 	// Send flows to the stream manager.
 	if stream {
 		r.flushToStreams()
-	} else {
-		r.streamingBucket().markReady()
 	}
 
 	// Move the head index to the next bucket.
@@ -783,7 +781,6 @@ func (r *BucketRing) flushToStreams() {
 }
 
 func (r *BucketRing) streamBucket(b *AggregationBucket, s Receiver) {
-	b.markReady()
 	s.Receive(newBucketInterval(b), "")
 }
 
