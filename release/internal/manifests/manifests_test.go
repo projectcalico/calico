@@ -397,6 +397,19 @@ func TestAssertVersions(t *testing.T) {
 	})
 }
 
+func TestS3Excludes(t *testing.T) {
+	patterns := S3Excludes()
+	for _, name := range excluded {
+		t.Run(name, func(t *testing.T) {
+			for _, want := range []string{name, "*/" + name} {
+				if !slices.Contains(patterns, want) {
+					t.Errorf("%q missing from %v", want, patterns)
+				}
+			}
+		})
+	}
+}
+
 func TestPaths(t *testing.T) {
 	t.Run("the output directory is named once", func(t *testing.T) {
 		if got, want := Dir("/out"), filepath.Join("/out", DirName); got != want {
