@@ -536,6 +536,33 @@ func TestRule_PortsRequireProtocol(t *testing.T) {
 	}
 }
 
+// libcalico-go parses rule nets with ParseCIDR, so a bare IP is rejected too.
+func TestEntityRule_NetsFormat(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		entity  v3.EntityRule
+		wantErr string
+	}{
+		{name: "IPv4 CIDR", entity: v3.EntityRule{Nets: []string{"10.0.0.0/24"}}},
+		{name: "IPv6 CIDR in notNets", entity: v3.EntityRule{NotNets: []string{"fd00::/64"}}},
+		{name: "prefix longer than 32 bits", entity: v3.EntityRule{Nets: []string{"10.0.0.0/33"}}, wantErr: "nets entries must be CIDRs"},
+		{name: "bare address", entity: v3.EntityRule{Nets: []string{"10.0.0.1"}}, wantErr: "nets entries must be CIDRs"},
+		{name: "not an address", entity: v3.EntityRule{NotNets: []string{"not-a-net"}}, wantErr: "notNets entries must be CIDRs"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			gnp := &v3.GlobalNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("gnp-nets")},
+				Spec:       v3.GlobalNetworkPolicySpec{Egress: []v3.Rule{{Action: v3.Allow, Destination: tt.entity}}},
+			}
+			if tt.wantErr != "" {
+				expectCreateFails(t, gnp, tt.wantErr)
+			} else {
+				expectCreateSucceeds(t, gnp)
+			}
+		})
+	}
+}
+
 // libcalico-go holds a named port to the Kubernetes limit of 15 characters.
 func TestRule_PortLength(t *testing.T) {
 	for _, tt := range []struct {
