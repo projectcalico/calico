@@ -13,7 +13,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -21,6 +23,7 @@ import (
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	cnitestutils "github.com/containernetworking/plugins/pkg/testutils"
+	"github.com/gofrs/flock"
 	"github.com/mcuadros/go-version"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -40,6 +43,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
+	k8sresources "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -71,6 +75,33 @@ func ensureNamespace(clientset *kubernetes.Clientset, name string) {
 		return
 	}
 	Expect(err).NotTo(HaveOccurred())
+}
+
+// waitForFlockWaiter blocks until a process is queued for the flock held on path.
+func waitForFlockWaiter(path string) {
+	EventuallyWithOffset(1, func() int { return flockWaiters(path) }, 10*time.Second, 50*time.Millisecond).
+		Should(BeNumerically(">", 0), "nothing queued for the lock on %s", path)
+}
+
+// flockWaiters counts the processes queued for the flock held on path.
+func flockWaiters(path string) int {
+	info, err := os.Stat(path)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	ExpectWithOffset(1, ok).To(BeTrue())
+	inodeSuffix := ":" + strconv.FormatUint(stat.Ino, 10)
+
+	locks, err := os.ReadFile("/proc/locks")
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	waiters := 0
+	for line := range strings.SplitSeq(string(locks), "\n") {
+		// A waiter reads "N: -> FLOCK ADVISORY WRITE <pid> <maj:min:inode> <start> <end>".
+		fields := strings.Fields(line)
+		if len(fields) >= 7 && fields[1] == "->" && strings.HasSuffix(fields[6], inodeSuffix) {
+			waiters++
+		}
+	}
+	return waiters
 }
 
 func ensurePodCreated(clientset *kubernetes.Clientset, namespace string, pod *v1.Pod) *v1.Pod {
@@ -2823,6 +2854,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Now create a K8s pod.
 			clientset = getKubernetesClient()
+			ensureNamespace(clientset, testutils.K8S_TEST_NS)
 			ensurePodCreated(clientset, testutils.K8S_TEST_NS,
 				&v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
@@ -2946,6 +2978,127 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), testPodName, testutils.K8S_TEST_NS, "new-container-id")
 			Expect(err).ShouldNot(HaveOccurred())
+		})
+
+		It("runs IPAM with no calico-ipam binary on CNI_PATH", func() {
+			binDir := GinkgoT().TempDir()
+			Expect(os.Symlink(filepath.Join(os.Getenv("BIN"), "calico"), filepath.Join(binDir, "calico"))).To(Succeed())
+			GinkgoT().Setenv("BIN", binDir)
+
+			resultSecondAdd, _, _, _, err := testutils.RunCNIPluginWithId(netconf, testPodName, testutils.K8S_TEST_NS, "", "new-container-id", "eth0", contNs)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resultSecondAdd.IPs).To(Equal(result.IPs))
+			checkIPAMReservationFor("new-container-id")
+
+			_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), testPodName, testutils.K8S_TEST_NS, "new-container-id")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = calicoClient.IPAM().IPsByHandle(ctx, utils.GetHandleID("calico-uts", "new-container-id", workloadName))
+			Expect(err).To(HaveOccurred(), "the DEL did not release the address")
+		})
+
+		Context("when the runtime kills an ADD that is waiting on the IPAM lock", func() {
+			const staleContainerID = "stale-container-id"
+			const newContainerID = "new-container-id"
+
+			var liveIP cnet.IP
+			var originalHandle, ipamLockPath string
+			var staleNs ns.NetNS
+
+			BeforeEach(func() {
+				liveIP = cnet.IP{IP: net.ParseIP(strings.TrimSuffix(endpointSpec.IPNetworks[0], "/32"))}
+				originalHandle = utils.GetHandleID("calico-uts", containerID, workloadName)
+				ipamLockPath = filepath.Join(GinkgoT().TempDir(), "ipam.lock")
+
+				var err error
+				staleNs, _, err = testutils.CreateContainerNamespace()
+				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(staleNs.Close)
+			})
+
+			// marshalNetconf gives the plugin its own IPAM lock file, so the test can hold it.
+			marshalNetconf := func(lockPath string) string {
+				conf := nc
+				conf.IPAMLockFile = lockPath
+				b, err := json.Marshal(conf)
+				Expect(err).NotTo(HaveOccurred())
+				return string(b)
+			}
+
+			holdFlock := func(path string) *flock.Flock {
+				lock := flock.New(path)
+				Expect(lock.Lock()).To(Succeed())
+				DeferCleanup(lock.Unlock)
+				return lock
+			}
+
+			startStaleAdd := func(ctx context.Context) chan error {
+				done := make(chan error, 1)
+				go func() {
+					defer GinkgoRecover()
+					_, _, _, _, err := testutils.RunCNIPluginWithIdContext(ctx, marshalNetconf(ipamLockPath), testPodName, testutils.K8S_TEST_NS, "", staleContainerID, "eth0", staleNs)
+					done <- err
+				}()
+				return done
+			}
+
+			// takeOver does to the pod what a newer sandbox's ADD does: moves the address onto
+			// its own handle and records itself on the endpoint.
+			takeOver := func() {
+				attrs, err := calicoClient.IPAM().GetAssignmentAttributes(ctx, liveIP)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(calicoClient.IPAM().MoveIPToHandle(ctx, liveIP, ipam.MoveOptions{
+					ToHandle:       utils.GetHandleID("calico-uts", newContainerID, workloadName),
+					Attrs:          attrs.ActiveOwnerAttrs,
+					ExpectedHandle: originalHandle,
+					ExpectedOwner:  &ipam.AttributeOwner{Namespace: testutils.K8S_TEST_NS, Name: testPodName},
+				})).To(Succeed())
+
+				wep, err := calicoClient.WorkloadEndpoints().Get(ctx, testutils.K8S_TEST_NS, workloadName, options.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				wep.Spec.ContainerID = newContainerID
+				_, err = utils.CreateOrUpdate(k8sresources.ContextWithPatchMode(ctx, k8sresources.PatchModeCNI), calicoClient, wep)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			expectAddressHeldBy := func(holderContainerID string) {
+				attrs, err := calicoClient.IPAM().GetAssignmentAttributes(ctx, liveIP)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), "the pod's address was released")
+				ExpectWithOffset(1, attrs.HandleID).NotTo(BeNil())
+				ExpectWithOffset(1, *attrs.HandleID).To(Equal(utils.GetHandleID("calico-uts", holderContainerID, workloadName)))
+			}
+
+			It("leaves nothing running to take the newer sandbox's address", func() {
+				ipamLock := holdFlock(ipamLockPath)
+				addCtx, kill := context.WithCancel(context.Background())
+				done := startStaleAdd(addCtx)
+				waitForFlockWaiter(ipamLockPath)
+
+				// containerd kills the plugin when kubelet's sandbox deadline passes.
+				kill()
+				Expect(<-done).To(HaveOccurred())
+				Eventually(func() int { return flockWaiters(ipamLockPath) }, 5*time.Second, 50*time.Millisecond).
+					Should(BeZero(), "an IPAM call outlived the plugin the runtime killed")
+
+				// kubelet builds a newer sandbox, and the runtime cleans up the one it killed.
+				takeOver()
+				Expect(ipamLock.Unlock()).To(Succeed())
+				_, err := testutils.DeleteContainerWithId(marshalNetconf(ipamLockPath), staleNs.Path(), testPodName, testutils.K8S_TEST_NS, staleContainerID)
+				Expect(err).NotTo(HaveOccurred())
+				expectAddressHeldBy(newContainerID)
+			})
+
+			It("lets an ADD that is not killed take the address once it gets the lock", func() {
+				ipamLock := holdFlock(ipamLockPath)
+				done := startStaleAdd(context.Background())
+				waitForFlockWaiter(ipamLockPath)
+				Expect(ipamLock.Unlock()).To(Succeed())
+
+				Expect(<-done).NotTo(HaveOccurred())
+				expectAddressHeldBy(staleContainerID)
+
+				_, err := testutils.DeleteContainerWithId(marshalNetconf(ipamLockPath), staleNs.Path(), testPodName, testutils.K8S_TEST_NS, staleContainerID)
+				Expect(err).NotTo(HaveOccurred())
+			})
 		})
 
 		Context("with networking rigged to fail", func() {

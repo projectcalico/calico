@@ -28,7 +28,6 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -805,7 +804,7 @@ func callIPAMWithIP(ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger *l
 
 	// Run the IPAM plugin.
 	logger.Debugf("Calling IPAM plugin %s", conf.IPAM.Type)
-	r, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+	r, err := utils.ExecIPAMAdd(conf.IPAM.Type, args.StdinData)
 	if err != nil {
 		// Restore the CNI_ARGS ENV var to it's original value,
 		// so the subsequent calls don't get polluted by the old IP value.
