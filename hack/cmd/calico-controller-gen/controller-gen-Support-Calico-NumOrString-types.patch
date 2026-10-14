@@ -4,14 +4,14 @@ Date: Fri, 6 Dec 2024 15:35:46 -0800
 Subject: [PATCH] Support Calico NumOrString types
 
 ---
- pkg/crd/known_types.go | 43 ++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 43 insertions(+)
+ pkg/crd/known_types.go | 45 ++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 45 insertions(+)
 
 diff --git a/pkg/crd/known_types.go b/pkg/crd/known_types.go
 index fd2a663..e40fa52 100644
 --- a/pkg/crd/known_types.go
 +++ b/pkg/crd/known_types.go
-@@ -21,6 +21,43 @@ import (
+@@ -21,6 +21,45 @@ import (
  	"sigs.k8s.io/controller-tools/pkg/loader"
  )
  
@@ -40,6 +40,8 @@ index fd2a663..e40fa52 100644
 +			{Type: "string"},
 +		},
 +		Pattern: "^.*",
++		// Bounds CEL rules over port strings; 128 is the longest named port.
++		MaxLength: func() *int64 { l := int64(128); return &l }(),
 +	}
 +	p.Schemata[TypeIdent{Name: "DSCP", Package: pkg}] = apiext.JSONSchemaProps{
 +		XIntOrString: true,
@@ -55,7 +57,7 @@ index fd2a663..e40fa52 100644
  // KnownPackages overrides types in some comment packages that have custom validation
  // but don't have validation markers on them (since they're from core Kubernetes).
  var KnownPackages = map[string]PackageOverride{
-@@ -49,6 +86,12 @@ var KnownPackages = map[string]PackageOverride{
+@@ -49,6 +88,12 @@ var KnownPackages = map[string]PackageOverride{
  		p.AddPackage(pkg) // get the rest of the types
  	},
  

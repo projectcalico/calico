@@ -16,6 +16,7 @@ package validation_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -478,6 +479,34 @@ func TestRule_ProtocolValidation(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// numorstring caps a named port at 128 characters.
+func TestRule_PortLength(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		length  int
+		wantErr string
+	}{
+		{name: "128 characters is accepted", length: 128},
+		{name: "129 characters is rejected", length: 129, wantErr: "Too long"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			np := &v3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("np-port"), Namespace: "default"},
+				Spec: v3.NetworkPolicySpec{Ingress: []v3.Rule{{
+					Action:      v3.Allow,
+					Protocol:    ptr.To(numorstring.ProtocolFromString("TCP")),
+					Destination: v3.EntityRule{Ports: []numorstring.Port{{PortName: strings.Repeat("p", tt.length)}}},
+				}}},
+			}
+			if tt.wantErr != "" {
+				expectCreateFails(t, np, tt.wantErr)
+			} else {
+				expectCreateSucceeds(t, np)
+			}
+		})
 	}
 }
 
