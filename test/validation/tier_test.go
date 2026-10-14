@@ -128,8 +128,8 @@ func TestTier_Validation(t *testing.T) {
 	}
 }
 
-// Policy lookup by tier goes through a label, so a tier name has to fit in a
-// label value.
+// Policy lookup by tier goes through a label value, which caps a tier name at
+// 63 characters. calicoctl has never accepted a dot in a tier name.
 func TestTier_Name(t *testing.T) {
 	const wantErr = "tier name must be a DNS label of at most 63 characters, with no dots"
 	for _, tt := range []struct {
