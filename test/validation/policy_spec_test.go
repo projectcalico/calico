@@ -45,6 +45,50 @@ func policyKinds(ingress, egress []v3.Rule) map[string]client.Object {
 	}
 }
 
+// A global policy has no namespace of its own to resolve a service name in.
+func TestGlobalPolicy_ServicesNamespace(t *testing.T) {
+	const wantErr = "services in a global policy must specify a namespace"
+	named := &v3.ServiceMatch{Name: "my-svc", Namespace: "default"}
+	bare := &v3.ServiceMatch{Name: "my-svc"}
+
+	for _, tt := range []struct {
+		name    string
+		ingress []v3.Rule
+		egress  []v3.Rule
+		wantErr string
+	}{
+		{
+			name:    "namespace set",
+			ingress: []v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: named}}},
+			egress:  []v3.Rule{{Action: v3.Allow, Destination: v3.EntityRule{Services: named}}},
+		},
+		{
+			name:    "egress destination without namespace",
+			egress:  []v3.Rule{{Action: v3.Allow, Destination: v3.EntityRule{Services: bare}}},
+			wantErr: wantErr,
+		},
+		{
+			name:    "ingress source without namespace",
+			ingress: []v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: bare}}},
+			wantErr: wantErr,
+		},
+	} {
+		objs := policyKinds(tt.ingress, tt.egress)
+		for _, kind := range []string{"GlobalNetworkPolicy", "StagedGlobalNetworkPolicy"} {
+			t.Run(tt.name+" "+kind, func(t *testing.T) {
+				if tt.wantErr != "" {
+					expectCreateFails(t, objs[kind], tt.wantErr)
+				} else {
+					expectCreateSucceeds(t, objs[kind])
+				}
+			})
+		}
+	}
+
+	// A namespaced policy falls back to its own namespace.
+	expectCreateSucceeds(t, policyKinds([]v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: bare}}}, nil)["NetworkPolicy"])
+}
+
 // A service match names the far end of the connection, so it only makes sense
 // as an egress destination or an ingress source.
 func TestPolicy_ServicesDirection(t *testing.T) {
