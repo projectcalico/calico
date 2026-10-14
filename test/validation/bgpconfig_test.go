@@ -173,7 +173,7 @@ func TestBGPConfiguration_CommunityValueRanges(t *testing.T) {
 		{name: "leading zeros are accepted", value: "0065535:01"},
 		{name: "standard community above 16 bits is rejected", value: "65536:1", wantErr: "standard community values must be 16-bit numbers"},
 		{name: "large community at the 32-bit limit is accepted", value: "4294967295:1:4294967295"},
-		{name: "large community above 32 bits is rejected", value: "4294967296:1:1", wantErr: "standard community values must be 16-bit numbers"},
+		{name: "large community above 32 bits is rejected", value: "4294967296:1:1", wantErr: "large community values 32-bit numbers"},
 		{name: "malformed community is rejected", value: "1:2:3:4", wantErr: "spec.communities[0].value: Invalid value"},
 	}
 
