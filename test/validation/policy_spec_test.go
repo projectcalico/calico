@@ -45,7 +45,7 @@ func policyKinds(ingress, egress []v3.Rule) map[string]client.Object {
 	}
 }
 
-// Policy names keep the single dot that a tier prefix used to take.
+// A policy name may carry one dot, the tier.policy form older clients wrote.
 func TestPolicy_Names(t *testing.T) {
 	const wantErr = "policy name must be a DNS label, optionally with one dot"
 	for _, tt := range []struct {
@@ -75,6 +75,8 @@ func TestPolicy_Names(t *testing.T) {
 
 	// Kubernetes and OpenStack policies keep their full name after the prefix.
 	expectCreateSucceeds(t, &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "ossg.default.group.v2", Namespace: "default"}})
+	expectCreateSucceeds(t, &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "knp.default.group.v2", Namespace: "default"}})
+	expectCreateSucceeds(t, &v3.StagedNetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "ossg.default.group.v2", Namespace: "default"}})
 	expectCreateFails(t, &v3.GlobalNetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "ossg.default.group.v2"}}, wantErr)
 }
 
