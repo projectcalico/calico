@@ -32,10 +32,10 @@ import (
 
 var (
 	registerOnce           sync.Once
-	summaryCleanerExecTime = prometheus.NewSummary(prometheus.SummaryOpts{
+	summaryCleanerExecTime = prometheus.NewSummaryVec(prometheus.SummaryOpts{
 		Name: "felix_bpf_conntrack_cleaner_seconds",
 		Help: "Time taken to run the conntrack cleaner BPF program.",
-	})
+	}, []string{"ip_family"})
 )
 
 func registerConntrackMetrics() {
@@ -64,6 +64,7 @@ type BPFProgCleaner struct {
 	ipVersion int
 	timeouts  timeouts.Timeouts
 	logLevel  BPFLogLevel
+	execTime  prometheus.Observer
 
 	bpfExpiryProgram *libbpf.Obj
 }
@@ -83,6 +84,7 @@ func NewBPFProgCleaner(
 		ipVersion: ipVersion,
 		timeouts:  timeouts,
 		logLevel:  bpfLogLevel,
+		execTime:  summaryCleanerExecTime.WithLabelValues(ipFamilyLabel(ipVersion)),
 	}
 	_, err := s.ensureBPFExpiryProgram()
 	if err != nil {
@@ -179,7 +181,7 @@ func (s *BPFProgCleaner) Run(opts ...RunOpt) (*CleanupContext, error) {
 		"stats":     cr,
 	}).Debug("Conntrack cleanup result.")
 
-	summaryCleanerExecTime.Observe(result.Duration.Seconds())
+	s.execTime.Observe(result.Duration.Seconds())
 	return &cr, nil
 }
 
