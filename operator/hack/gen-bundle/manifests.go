@@ -49,11 +49,10 @@ const (
 	secretsRoleBinding = "ocp/02-rolebinding-tigera-operator-secrets.yaml"
 )
 
-// calicoResources are the Calico CRDs the bundle ships. Keep this list in sync
-// with the owned CRDs and the internal-objects annotation in the CSV base: a CRD
-// listed here but not described there generates a bundle-validation warning, and a CRD
-// described there but not listed here is advertised by the CSV without being
-// installed.
+// calicoResources are the Calico CRDs the bundle ships. The CSV base has to own
+// exactly the CRDs staged from here and operatorCRDs, which a unit test checks:
+// a CRD staged but not described only raises a validation warning, and one
+// described but not staged is advertised without being installed.
 var calicoResources = []string{
 	"bgpconfigurations",
 	"bgppeers",

@@ -143,9 +143,10 @@ var (
 		Name:  "image",
 		Usage: "The operator image repository the bundle pins its digest from. The tag comes from --version",
 		// Not OPERATOR_IMAGE, which conventionally names a reference that
-		// includes the tag.
+		// includes the tag. Required rather than defaulted, so that the
+		// repository a release pins from is set in one place.
 		Sources:   cli.EnvVars("BUNDLE_OPERATOR_IMAGE"),
-		Value:     "quay.io/calico/operator",
+		Required:  true,
 		Validator: nonEmpty("image"),
 	}
 	imageInspectFlag = &cli.StringFlag{

@@ -79,7 +79,8 @@ any one of them runs the steps ahead of it too:
 unit tests run by `make -C operator hack/gen-bundle/ut` (and by `make ci`). Both
 of its commands take their paths from flags (`--repo-root`, `--operator-dir`)
 that default to running from `operator/`, so pass them when running it by hand
-from anywhere else.
+from anywhere else. `update-bundle` also needs `--image`, which the Makefile
+fills in from `BUNDLE_OPERATOR_IMAGE`.
 
 ## Where each piece comes from
 

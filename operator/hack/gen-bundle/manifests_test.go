@@ -15,10 +15,14 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
+
+	"go.yaml.in/yaml/v3"
 )
 
 // TestGetManifests stages from a fake repository in which every source file
@@ -97,6 +101,62 @@ func TestGetManifestsWithMissingSource(t *testing.T) {
 	err := getManifests(t.TempDir(), filepath.Join(staging, "crds"), filepath.Join(staging, "deploy"))
 	if err == nil {
 		t.Fatal("getManifests from an empty repository succeeded, want an error")
+	}
+}
+
+// TestCSVBaseOwnsTheStagedCRDs checks the CSV base against the CRDs the bundle
+// stages, since nothing else ties the two together and bundle validation only
+// warns about one direction of a mismatch.
+func TestCSVBaseOwnsTheStagedCRDs(t *testing.T) {
+	t.Parallel()
+
+	var base struct {
+		Metadata struct {
+			Annotations map[string]string `yaml:"annotations"`
+		} `yaml:"metadata"`
+		Spec struct {
+			CustomResourceDefinitions struct {
+				Owned []struct {
+					Name string `yaml:"name"`
+				} `yaml:"owned"`
+			} `yaml:"customresourcedefinitions"`
+		} `yaml:"spec"`
+	}
+	path := filepath.Join("..", "..", "config", "manifests", "bases", csvName)
+	if err := yaml.Unmarshal([]byte(readFile(t, path)), &base); err != nil {
+		t.Fatalf("parsing %s: %v", path, err)
+	}
+
+	var owned []string
+	for _, crd := range base.Spec.CustomResourceDefinitions.Owned {
+		owned = append(owned, crd.Name)
+	}
+	var staged []string
+	for _, resource := range calicoResources {
+		staged = append(staged, resource+".crd.projectcalico.org")
+	}
+	for _, file := range operatorCRDs {
+		// operator.tigera.io_installations.yaml names installations.operator.tigera.io.
+		group, plural, ok := strings.Cut(strings.TrimSuffix(file, ".yaml"), "_")
+		if !ok {
+			t.Fatalf("operator CRD file %q is not <group>_<plural>.yaml", file)
+		}
+		staged = append(staged, plural+"."+group)
+	}
+	slices.Sort(owned)
+	slices.Sort(staged)
+	if !slices.Equal(owned, staged) {
+		t.Errorf("the CSV base owns\n  %v\nbut the bundle stages\n  %v", owned, staged)
+	}
+
+	var internal []string
+	if err := json.Unmarshal([]byte(base.Metadata.Annotations["operators.operatorframework.io/internal-objects"]), &internal); err != nil {
+		t.Fatalf("parsing the internal-objects annotation: %v", err)
+	}
+	for _, name := range internal {
+		if !slices.Contains(owned, name) {
+			t.Errorf("internal-objects lists %s, which the CSV base does not own", name)
+		}
 	}
 }
 

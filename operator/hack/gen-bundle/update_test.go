@@ -76,6 +76,11 @@ func TestParseImageInspectErrors(t *testing.T) {
 			content: `[{"Created": "2026-01-02T03:04:05Z", "RepoDigests": ["docker.io/library/busybox@sha256:aaa"]}]`,
 		},
 		{
+			// Docker does not order RepoDigests, so either could be the stale one.
+			name:    "more than one operator digest",
+			content: `[{"Created": "2026-01-02T03:04:05Z", "RepoDigests": ["quay.io/tigera/operator@sha256:aaa", "quay.io/tigera/operator@sha256:bbb"]}]`,
+		},
+		{
 			name:    "only a repository the operator repository is a prefix of",
 			content: `[{"Created": "2026-01-02T03:04:05Z", "RepoDigests": ["quay.io/tigera/operator-foo@sha256:aaa"]}]`,
 		},
@@ -182,6 +187,8 @@ LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
 LABEL operators.operatorframework.io.test.mediatype.v1=scorecard+v1
 LABEL operators.operatorframework.io.test.config.v1=tests/scorecard/
 
+LABEL com.redhat.openshift.versions="v4.1"
+
 # Copy files to locations specified by labels.
 COPY bundle/manifests /manifests/
 COPY bundle/metadata /metadata/
@@ -198,10 +205,7 @@ COPY bundle/metadata /metadata/
 		t.Errorf("%s is still there, want it moved into %s", bundleDockerfile, bundleDir)
 	}
 	want := `FROM scratch
-# Core bundle labels.
 LABEL operators.operatorframework.io.bundle.package.v1=tigera-operator
-# Labels for testing.
-# Copy files to locations specified by labels.
 LABEL com.redhat.openshift.versions="v4.19-v4.22"
 LABEL com.redhat.delivery.backport=true
 LABEL com.redhat.delivery.operator.bundle=true

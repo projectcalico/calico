@@ -470,7 +470,7 @@ $(KUSTOMIZE): $(HACK_BIN)
 # without being one. A branch that is not a release branch leaves CHANNEL empty,
 # so building a bundle from one means passing CHANNEL explicitly.
 RELEASE_BRANCH_PATTERN := release-v3.%
-CURRENT_BRANCH := $(shell git branch --show-current)
+CURRENT_BRANCH = $(shell git branch --show-current)
 CHANNEL ?= $(filter $(RELEASE_BRANCH_PATTERN),$(CURRENT_BRANCH))
 BUNDLE_CHANNEL = --channels=$(if \
 		 $(filter $(RELEASE_BRANCH_PATTERN),$(CHANNEL)),$(CHANNEL),\
@@ -502,20 +502,26 @@ BUNDLE_DEPLOY_DIR ?= $(BUNDLE_BASE_DIR)/deploy
 .PHONY: bundle
 bundle: bundle-image
 
+# Every step after this one needs the same arguments, and the channel is
+# otherwise only checked once the build and staging are done.
+.PHONY: bundle-args
+bundle-args:
+ifndef VERSION
+	$(error VERSION is undefined - run using make bundle VERSION=X.Y.Z PREV_VERSION=D.E.F)
+endif
+ifndef PREV_VERSION
+	$(error PREV_VERSION is undefined - run using make bundle VERSION=X.Y.Z PREV_VERSION=D.E.F)
+endif
+	@: $(BUNDLE_METADATA_OPTS)
+
 # Validate against the full Operator Framework suite, not just the required
 # checks, since this bundle is built to be certified.
 .PHONY: bundle-validate
-bundle-validate: $(OPERATOR_SDK_BARE) update-bundle
+bundle-validate: update-bundle $(OPERATOR_SDK_BARE)
 	$(OPERATOR_SDK_BARE) bundle validate bundle/$(VERSION) --select-optional suite=operatorframework
 
 .PHONY: bundle-manifests
-bundle-manifests: $(BINDIR)/gen-bundle
-ifndef VERSION
-	$(error VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
-endif
-ifndef PREV_VERSION
-	$(error PREV_VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
-endif
+bundle-manifests: bundle-args $(BINDIR)/gen-bundle
 	$(BINDIR)/gen-bundle get-manifests \
 		--repo-root "$(REPO_ROOT)" \
 		--crd-dir "$(BUNDLE_CRD_DIR)" \
@@ -531,7 +537,7 @@ endif
 # operator-sdk adds to whatever an interrupted run left in its output rather
 # than replacing it, so that is cleared first.
 .PHONY: bundle-generate
-bundle-generate: $(OPERATOR_SDK_BARE) bundle-manifests
+bundle-generate: bundle-manifests $(OPERATOR_SDK_BARE)
 	rm -rf bundle/manifests bundle/metadata bundle.Dockerfile
 	$(OPERATOR_SDK_BARE) generate bundle \
 		--crds-dir $(BUNDLE_CRD_DIR) \
@@ -548,13 +554,7 @@ bundle-generate: $(OPERATOR_SDK_BARE) bundle-manifests
 # gen-bundle pulls and inspects the operator image itself, which is why it runs
 # on the host: the build container has no docker-in-docker.
 .PHONY: update-bundle
-update-bundle: $(BINDIR)/gen-bundle bundle-generate
-ifndef VERSION
-	$(error VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
-endif
-ifndef PREV_VERSION
-	$(error PREV_VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
-endif
+update-bundle: bundle-generate $(BINDIR)/gen-bundle
 	$(BINDIR)/gen-bundle update-bundle \
 		--operator-dir "$(CURDIR)" \
 		--version "$(VERSION)" \
@@ -579,9 +579,6 @@ hack/gen-bundle/ut:
 # Build the bundle image.
 .PHONY: bundle-image
 bundle-image: bundle-validate
-ifndef VERSION
-	$(error VERSION is undefined - run using make $@ VERSION=X.Y.Z)
-endif
 	docker build -f bundle/bundle-v$(VERSION).Dockerfile -t tigera-operator-bundle:$(VERSION) bundle/
 
 # Build and validate a bundle the way a release does, for CI. The inspections

@@ -63,6 +63,10 @@ var unwantedAnnotation = regexp.MustCompile(`operators\.operatorframework\.io\.(
 // duplicated.
 var openShiftVersionsAnnotation = regexp.MustCompile(`^\s*com\.redhat\.openshift\.versions\s*:`)
 
+// openShiftVersionsLabel matches the Dockerfile form of the same key, for the
+// same reason.
+var openShiftVersionsLabel = regexp.MustCompile(`^LABEL\s+com\.redhat\.openshift\.versions=`)
+
 // bundleCopy matches the COPY directives that point at the pre-rearrange bundle
 // layout, which are replaced with ones pointing at the versioned directories.
 var bundleCopy = regexp.MustCompile(`^COPY bundle/(manifests|metadata)`)
@@ -112,16 +116,13 @@ type image struct {
 // without a registry, and how the command can be run by hand against an image
 // docker cannot pull.
 func inspectImage(ctx context.Context, repository, ref, imageInspect, manifestInspect string) (image, error) {
-	// Both inspections read the image as the registry holds it, so pull it first
-	// unless everything we need was passed in.
-	if imageInspect == "" || manifestInspect == "" {
+	// 'docker image inspect' reads the local copy, so that has to be pulled
+	// first; 'docker manifest inspect' asks the registry itself.
+	if imageInspect == "" {
 		logrus.Infof("Pulling operator image %s", ref)
 		if _, err := docker(ctx, "pull", ref); err != nil {
 			return image{}, err
 		}
-	}
-
-	if imageInspect == "" {
 		logrus.Infof("Getting operator image digest from %s", ref)
 		out, err := docker(ctx, "image", "inspect", ref)
 		if err != nil {
@@ -326,21 +327,20 @@ func releaseStream(version string) string {
 func updateDockerfile(operatorDir, version, openShiftVersions string) error {
 	src := filepath.Join(operatorDir, bundleDockerfile)
 	err := editLines(src, func(lines []string) []string {
-		lines = append(lines,
+		// The COPYs point at the layout before rearrangeBundle, so they are
+		// replaced rather than edited. operator-sdk's comments are dropped too,
+		// since they head sections that the edits leave empty or reorder.
+		lines = filterLines(lines, func(line string) bool {
+			return line == "" || strings.HasPrefix(line, "#") || unwantedAnnotation.MatchString(line) ||
+				bundleCopy.MatchString(line) || openShiftVersionsLabel.MatchString(line)
+		})
+		return append(lines,
 			fmt.Sprintf("LABEL com.redhat.openshift.versions=%q", openShiftVersions),
 			"LABEL com.redhat.delivery.backport=true",
 			"LABEL com.redhat.delivery.operator.bundle=true",
-		)
-		// The COPYs point at the layout before rearrangeBundle, so they are
-		// replaced rather than edited.
-		lines = filterLines(lines, func(line string) bool {
-			return unwantedAnnotation.MatchString(line) || bundleCopy.MatchString(line)
-		})
-		lines = append(lines,
 			fmt.Sprintf("COPY %s/manifests /manifests/", version),
 			fmt.Sprintf("COPY %s/metadata /metadata/", version),
 		)
-		return filterLines(lines, func(line string) bool { return line == "" })
 	})
 	if err != nil {
 		return err
@@ -406,12 +406,23 @@ func parseImageInspect(content, repository string) (image, error) {
 	if len(inspected) == 0 {
 		return image{}, fmt.Errorf("image inspect output is empty")
 	}
+	var digests []string
 	for _, digest := range inspected[0].RepoDigests {
-		if repo, _, found := strings.Cut(digest, "@"); found && repo == repository {
-			return image{digest: digest, created: inspected[0].Created}, nil
+		if repo, _, found := strings.Cut(digest, "@"); found && repo == repository && !slices.Contains(digests, digest) {
+			digests = append(digests, digest)
 		}
 	}
-	return image{}, fmt.Errorf("no %s digest in image inspect output", repository)
+	switch len(digests) {
+	case 0:
+		return image{}, fmt.Errorf("no %s digest in image inspect output", repository)
+	case 1:
+		return image{digest: digests[0], created: inspected[0].Created}, nil
+	default:
+		// Docker does not order RepoDigests, and nothing here says which one the
+		// tag points at now, so picking one could pin a stale index.
+		return image{}, fmt.Errorf("%s has more than one digest in image inspect output (%s); remove the local image and pull it again",
+			repository, strings.Join(digests, ", "))
+	}
 }
 
 // parseArchitectures lists the architectures the image was built for, from
