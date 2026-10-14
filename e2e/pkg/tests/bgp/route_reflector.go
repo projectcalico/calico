@@ -39,7 +39,6 @@ import (
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("BGPPeer"),
-	describe.RequiresBGP(),
 	describe.WithCategory(describe.Networking),
 	describe.RequiresBGP(),
 	describe.WithDisruptive(),
