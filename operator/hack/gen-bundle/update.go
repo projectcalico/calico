@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -240,7 +240,6 @@ func updateCSV(path, version, prevVersion, capabilities string, img image) error
 	// distinguishable in OperatorHub, e.g. "Tigera Operator v3.34" for 3.34.0.
 	updates = append(updates, csvUpdate{[]any{"spec", "displayName"}, "Tigera Operator v" + releaseStream(version)})
 
-	// Set the previous version of the operator that this version replaces.
 	if prevVersion != noPreviousVersion {
 		updates = append(updates, csvUpdate{[]any{"spec", "replaces"}, "tigera-operator.v" + prevVersion})
 	}
@@ -327,13 +326,13 @@ func releaseStream(version string) string {
 func updateDockerfile(operatorDir, version, openShiftVersions string) error {
 	src := filepath.Join(operatorDir, bundleDockerfile)
 	err := editLines(src, func(lines []string) []string {
-		// Add in required labels.
 		lines = append(lines,
 			fmt.Sprintf("LABEL com.redhat.openshift.versions=%q", openShiftVersions),
 			"LABEL com.redhat.delivery.backport=true",
 			"LABEL com.redhat.delivery.operator.bundle=true",
 		)
-		// Remove unneeded labels, and fix the bundle path.
+		// The COPYs point at the layout before rearrangeBundle, so they are
+		// replaced rather than edited.
 		lines = filterLines(lines, func(line string) bool {
 			return unwantedAnnotation.MatchString(line) || bundleCopy.MatchString(line)
 		})
@@ -341,14 +340,12 @@ func updateDockerfile(operatorDir, version, openShiftVersions string) error {
 			fmt.Sprintf("COPY %s/manifests /manifests/", version),
 			fmt.Sprintf("COPY %s/metadata /metadata/", version),
 		)
-		// Remove unneeded empty lines.
 		return filterLines(lines, func(line string) bool { return line == "" })
 	})
 	if err != nil {
 		return err
 	}
 
-	// Lastly move the dockerfile to the bundle dir, renaming it with the version.
 	dst := filepath.Join(operatorDir, bundleDir, fmt.Sprintf("bundle-v%s.Dockerfile", version))
 	if err := os.Rename(src, dst); err != nil {
 		return fmt.Errorf("moving %s to %s: %w", src, dst, err)
@@ -432,7 +429,13 @@ func parseArchitectures(content string) ([]string, error) {
 	}
 	architectures := make([]string, 0, len(inspected.Manifests))
 	for _, manifest := range inspected.Manifests {
-		architectures = append(architectures, manifest.Platform.Architecture)
+		// Build attestations sit in the list as platform unknown/unknown, and
+		// would otherwise be claimed as a supported architecture.
+		arch := manifest.Platform.Architecture
+		if arch == "" || arch == "unknown" {
+			continue
+		}
+		architectures = append(architectures, arch)
 	}
 	if len(architectures) == 0 {
 		// A single-architecture image has a plain manifest rather than a list,

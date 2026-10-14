@@ -527,8 +527,12 @@ endif
 #
 # This uses the committed operator CRDs as they are rather than regenerating
 # them, since CI already fails a PR that leaves them stale.
+#
+# operator-sdk adds to whatever an interrupted run left in its output rather
+# than replacing it, so that is cleared first.
 .PHONY: bundle-generate
 bundle-generate: $(OPERATOR_SDK_BARE) bundle-manifests
+	rm -rf bundle/manifests bundle/metadata bundle.Dockerfile
 	$(OPERATOR_SDK_BARE) generate bundle \
 		--crds-dir $(BUNDLE_CRD_DIR) \
 		--deploy-dir $(BUNDLE_DEPLOY_DIR) \
@@ -563,7 +567,7 @@ $(BINDIR)/gen-bundle: $(wildcard hack/gen-bundle/*) $(REPO_ROOT)/go.mod $(REPO_R
 	mkdir -p $(BINDIR)
 	$(DOCKER_GO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
-	CGO_ENABLED=0 go build -buildvcs=false -o $(BINDIR)/gen-bundle ./hack/gen-bundle'
+	CGO_ENABLED=0 GOOS=$(BUILDOS) GOARCH=$(BUILDARCH) go build -buildvcs=false -o $(BINDIR)/gen-bundle ./hack/gen-bundle'
 
 .PHONY: hack/gen-bundle/ut
 hack/gen-bundle/ut:

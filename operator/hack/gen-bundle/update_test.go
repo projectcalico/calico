@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -105,12 +105,28 @@ func TestParseArchitectures(t *testing.T) {
 		}
 	}
 
+	// Attestations are listed as platform unknown/unknown, and are not an
+	// architecture the image runs on.
+	withAttestations := `{"manifests": [
+		{"platform": {"architecture": "amd64", "os": "linux"}},
+		{"platform": {"architecture": "unknown", "os": "unknown"}},
+		{"platform": {"architecture": "arm64", "os": "linux"}},
+		{"platform": {"architecture": "unknown", "os": "unknown"}}
+	]}`
+	architectures, err := parseArchitectures(withAttestations)
+	if err != nil {
+		t.Fatalf("parseArchitectures: %v", err)
+	}
+	if got := strings.Join(architectures, ","); got != "amd64,arm64" {
+		t.Errorf("architectures are %q, want \"amd64,arm64\"", got)
+	}
+
 	if _, err := parseArchitectures(`{"manifests": []}`); err == nil {
 		t.Error("parseArchitectures of an empty manifest list succeeded, want an error")
 	}
 	// A single-architecture image has a plain manifest, and the error has to say
 	// so, since that is not obvious from an empty architecture list.
-	_, err := parseArchitectures(`{"schemaVersion": 2, "config": {"digest": "sha256:aaa"}}`)
+	_, err = parseArchitectures(`{"schemaVersion": 2, "config": {"digest": "sha256:aaa"}}`)
 	if err == nil || !strings.Contains(err.Error(), "multi-arch") {
 		t.Errorf("parseArchitectures of a single-arch manifest returned %v, want an error naming the cause", err)
 	}
