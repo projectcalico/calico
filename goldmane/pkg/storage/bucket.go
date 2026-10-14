@@ -25,9 +25,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// AggregationBucket is a FlowProvider that represents a bucket of aggregated flows.
-var _ FlowProvider = &AggregationBucket{}
-
 // An aggregation bucket represents a bucket of aggregated flows across a time range.
 type AggregationBucket struct {
 	// The mutex is used to protect access to the bucket's Flows set, which may be
@@ -56,10 +53,6 @@ type AggregationBucket struct {
 	// emissions records what each node has already reported into this bucket, so a
 	// replayed cache is not counted twice. Nil once no client can replay this far back.
 	emissions map[emissionKey]struct{}
-
-	// ready is set when the bucket is sent to a stream and cleared on reset. Iter checks it only
-	// while copying the flow list, so a reset after the copy does not stop that send.
-	ready bool
 }
 
 func (b *AggregationBucket) AddFlow(flow *types.Flow) {
@@ -148,7 +141,6 @@ func (b *AggregationBucket) Reset(start, end int64) {
 	b.StartTime = start
 	b.EndTime = end
 	b.pushed = false
-	b.ready = false
 	b.stats = newStatisticsIndex()
 	b.emissions = map[emissionKey]struct{}{}
 
@@ -157,64 +149,6 @@ func (b *AggregationBucket) Reset(start, end int64) {
 	} else {
 		b.Flows.Clear()
 	}
-}
-
-// markReady marks this bucket as ready to be consumed by a stream.
-func (b *AggregationBucket) markReady() {
-	b.Lock()
-	defer b.Unlock()
-	b.ready = true
-}
-
-// Iter calls fn with a builder for each flow in the bucket that matches filter, stopping when
-// fn returns true. A nil filter matches every flow. Matching and fn both run without the bucket
-// lock, so neither a slow consumer nor the match pass blocks AddFlow.
-func (b *AggregationBucket) Iter(filter *proto.Filter, fn func(FlowBuilder) bool) {
-	flows, start, end := b.snapshot()
-	for _, d := range flows {
-		// The key is immutable, so matching it needs no lock.
-		if !types.Matches(filter, &d.Key) {
-			continue
-		}
-		if fn(NewDeferredFlowBuilder(d, start, end)) {
-			return
-		}
-	}
-}
-
-// snapshot copies the bucket's flows and time range under the read lock, or returns nothing if
-// the bucket has been reset since it was marked ready.
-func (b *AggregationBucket) snapshot() ([]*DiachronicFlow, int64, int64) {
-	b.RLock()
-	defer b.RUnlock()
-	b.iterLocked(fn)
-}
-
-// iterInterval is Iter for a provider queued while the bucket covered the interval beginning at
-// start. It yields nothing once the ring has reset the bucket for a later interval, even if that
-// interval has since been marked ready.
-func (b *AggregationBucket) iterInterval(start int64, fn func(FlowBuilder) bool) {
-	b.RLock()
-	defer b.RUnlock()
-
-	if b.StartTime != start {
-		logrus.WithFields(b.Fields()).WithField("queued_start", start).Info("Skipping bucket that has since been reused")
-		return
-	}
-	b.iterLocked(fn)
-}
-
-func (b *AggregationBucket) iterLocked(fn func(FlowBuilder) bool) {
-	if !b.ready {
-		logrus.WithFields(b.Fields()).Info("Skipping bucket that has since rolled over")
-		return nil, 0, 0
-	}
-
-	flows := make([]*DiachronicFlow, 0, b.Flows.Len())
-	for d := range b.Flows.All() {
-		flows = append(flows, d)
-	}
-	return flows, b.StartTime, b.EndTime
 }
 
 // bucketInterval is the FlowProvider the ring queues for streams. A slow stream can still hold
@@ -232,9 +166,40 @@ func newBucketInterval(b *AggregationBucket) bucketInterval {
 	return bucketInterval{bucket: b, start: b.StartTime}
 }
 
-// Iter yields the bucket's flows if it still covers the queued interval, and nothing otherwise.
-func (i bucketInterval) Iter(fn func(FlowBuilder) bool) {
-	i.bucket.iterInterval(i.start, fn)
+// Iter calls fn with a builder for each flow in the queued interval that matches filter, stopping
+// when fn returns true. A nil filter matches every flow. Matching and fn both run without the
+// bucket lock, so neither a slow consumer nor the match pass blocks AddFlow.
+func (i bucketInterval) Iter(filter *proto.Filter, fn func(FlowBuilder) bool) {
+	flows, start, end := i.snapshot()
+	for _, d := range flows {
+		// The key is immutable, so matching it needs no lock.
+		if !types.Matches(filter, &d.Key) {
+			continue
+		}
+		if fn(NewDeferredFlowBuilder(d, start, end)) {
+			return
+		}
+	}
+}
+
+// snapshot copies the bucket's flows and time range under the read lock, or returns nothing once
+// the ring has reset the bucket for a later interval. Reset always moves StartTime forward, so a
+// matching start means the contents are the ones that were queued.
+func (i bucketInterval) snapshot() ([]*DiachronicFlow, int64, int64) {
+	b := i.bucket
+	b.RLock()
+	defer b.RUnlock()
+
+	if b.StartTime != i.start {
+		logrus.WithFields(b.Fields()).WithField("queued_start", i.start).Info("Skipping bucket that has since been reused")
+		return nil, 0, 0
+	}
+
+	flows := make([]*DiachronicFlow, 0, b.Flows.Len())
+	for d := range b.Flows.All() {
+		flows = append(flows, d)
+	}
+	return flows, b.StartTime, b.EndTime
 }
 
 func (b *AggregationBucket) QueryStatistics(q *proto.StatisticsRequest) map[StatisticsKey]*counts {
