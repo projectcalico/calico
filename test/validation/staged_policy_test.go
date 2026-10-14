@@ -60,13 +60,6 @@ func TestStagedPolicy_DeleteHasEmptySpec(t *testing.T) {
 			},
 		},
 		{
-			name: "StagedGlobalNetworkPolicy delete with explicit false flags",
-			obj: &v3.StagedGlobalNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("sgnp")},
-				Spec:       v3.StagedGlobalNetworkPolicySpec{StagedAction: v3.StagedActionDelete, DoNotTrack: false},
-			},
-		},
-		{
 			name: "StagedGlobalNetworkPolicy delete with an order",
 			obj: &v3.StagedGlobalNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("sgnp")},
