@@ -49,6 +49,8 @@ type NetworkPolicy struct {
 
 // +kubebuilder:validation:XValidation:rule="!has(self.selector) || !self.selector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.egress) || self.egress.all(r, !has(r.source) || !has(r.source.services))",message="services are not allowed in an egress rule source",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.ingress) || self.ingress.all(r, !has(r.destination) || !has(r.destination.services))",message="services are not allowed in an ingress rule destination",reason=FieldValueForbidden
 type NetworkPolicySpec struct {
 	// The name of the tier that this policy belongs to.  If this is omitted, the default
 	// tier (name is "default") is assumed.  The specified tier must exist in order to create
