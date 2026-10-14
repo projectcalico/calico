@@ -1340,6 +1340,24 @@ func TestPublishBranchTag(t *testing.T) {
 			t.Errorf("windows branch tag env = %v, want DEV_TAG=v3.30.0", env)
 		}
 	})
+
+	t.Run("no windows dirs skips the windows tag", func(t *testing.T) {
+		orig := windowsBranchTagDirs
+		t.Cleanup(func() { windowsBranchTagDirs = orig })
+		windowsBranchTagDirs = nil
+
+		f := newFakeRunner()
+		m, root := imageManager(t, f, "")
+		if err := m.publishContainerImages(); err != nil {
+			t.Fatalf("publishContainerImages: %v", err)
+		}
+		if got := "make -C " + root + "/cni-plugin " + windowsBranchTagTarget; f.ran(got) {
+			t.Errorf("ran %q with no windows dirs (calls: %v)", got, f.calls)
+		}
+		if got := "make -C " + root + "/cmd/calico " + branchTagTarget; !f.ran(got) {
+			t.Errorf("did not run %q, ran: %v", got, f.calls)
+		}
+	})
 }
 
 // Narrowing must scope the manager's image steps the same way the CLI does.
