@@ -58,9 +58,8 @@ var debugFlag = &cli.BoolFlag{
 }
 
 // repoRootFlag anchors the manifests and CRDs that the bundle ships, so that
-// staging them does not depend on where gen-bundle was run from. The Makefile
-// passes the root that git reported; the default covers running it by hand from
-// the operator directory.
+// staging them does not depend on where gen-bundle was run from. The default
+// covers running it by hand from the operator directory.
 var repoRootFlag = &cli.StringFlag{
 	Name:      "repo-root",
 	Usage:     "Root of the Calico repository to stage the manifests and CRDs from",

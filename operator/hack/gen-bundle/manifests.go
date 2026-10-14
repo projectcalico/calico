@@ -28,8 +28,7 @@ import (
 )
 
 // The manifests and Calico CRDs the bundle ships are read from the working tree,
-// so a bundle carries the manifests it was built alongside rather than whatever
-// a pinned release published. Every path below is relative to the repository root
+// so a bundle carries the manifests it was built alongside. Every path below is relative to the repository root
 // that --repo-root names, so none of them depend on the directory gen-bundle
 // happens to be run from.
 const (
@@ -50,10 +49,9 @@ const (
 	secretsRoleBinding = "ocp/02-rolebinding-tigera-operator-secrets.yaml"
 )
 
-// calicoResources are the Calico CRDs the bundle ships. Keep this list, the
-// owned CRDs in config/manifests/bases/tigera-operator.clusterserviceversion.yaml,
-// and the internal-objects annotation in that same file in sync: a CRD listed
-// here but not described there generates a bundle-validation warning, and a CRD
+// calicoResources are the Calico CRDs the bundle ships. Keep this list in sync
+// with the owned CRDs and the internal-objects annotation in the CSV base: a CRD
+// listed here but not described there generates a bundle-validation warning, and a CRD
 // described there but not listed here is advertised by the CSV without being
 // installed.
 var calicoResources = []string{
