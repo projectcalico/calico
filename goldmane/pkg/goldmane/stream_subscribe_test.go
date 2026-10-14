@@ -15,6 +15,7 @@
 package goldmane_test
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 
@@ -105,7 +106,7 @@ func TestStreamOpenedDuringRolloversSeesEachBucketOnce(t *testing.T) {
 
 	last := want[len(want)-1]
 	for i, starts := range got {
-		checkContiguous(t, "stream", starts)
+		checkContiguous(t, fmt.Sprintf("stream %d", i), starts)
 		if starts[len(starts)-1] != last {
 			t.Fatalf("stream %d ends at bucket %d, reference ends at %d", i, starts[len(starts)-1], last)
 		}
