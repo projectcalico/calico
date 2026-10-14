@@ -40,7 +40,7 @@ index fd2a663..e40fa52 100644
 +			{Type: "string"},
 +		},
 +		Pattern: "^.*",
-+		// Bounds CEL rules over port strings: a port name is at most 15 characters.
++		// Kubernetes caps a port name at 15 characters, and a range string is shorter.
 +		MaxLength: func() *int64 { l := int64(15); return &l }(),
 +	}
 +	p.Schemata[TypeIdent{Name: "DSCP", Package: pkg}] = apiext.JSONSchemaProps{
