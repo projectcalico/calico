@@ -138,9 +138,11 @@ func TestReleaseStream(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]string{
-		"3.34.0": "3.34",
-		"3.34":   "3",
-		"3":      "3",
+		"3.34.0":       "3.34",
+		"3.34.10":      "3.34",
+		"3.34.0-rc.1":  "3.34",
+		"3.34.0-1.0":   "3.34",
+		"3.34.0+build": "3.34",
 	}
 	for version, want := range cases {
 		if got := releaseStream(version); got != want {

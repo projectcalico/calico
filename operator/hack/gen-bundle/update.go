@@ -27,6 +27,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
@@ -313,12 +314,14 @@ func pinOperatorImage(csv *document, digest string) error {
 	return csv.mustSet(digest, imagePath...)
 }
 
-// releaseStream returns the X.Y stream that an X.Y.Z version belongs to.
+// releaseStream returns the X.Y stream that a version belongs to. A prerelease
+// such as 3.34.0-rc.1 belongs to 3.34 too.
 func releaseStream(version string) string {
-	if i := strings.LastIndex(version, "."); i >= 0 {
-		return version[:i]
+	v, err := semver.StrictNewVersion(version)
+	if err != nil {
+		return version
 	}
-	return version
+	return fmt.Sprintf("%d.%d", v.Major(), v.Minor())
 }
 
 func updateDockerfile(operatorDir, version, openShiftVersions string) error {

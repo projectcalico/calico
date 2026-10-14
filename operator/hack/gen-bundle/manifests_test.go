@@ -100,6 +100,36 @@ func TestGetManifestsWithMissingSource(t *testing.T) {
 	}
 }
 
+// TestGetManifestsWontClearASourceTree checks that a staging directory holding
+// anything get-manifests would not have staged is left alone.
+func TestGetManifestsWontClearASourceTree(t *testing.T) {
+	t.Parallel()
+
+	for name, entry := range map[string]string{
+		"a non-YAML file": "main.go",
+		"a subdirectory":  "pkg/crd.yaml",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			staging := t.TempDir()
+			deployDir := filepath.Join(staging, "deploy")
+			kept := filepath.Join(deployDir, entry)
+			if err := os.MkdirAll(filepath.Dir(kept), 0o755); err != nil {
+				t.Fatalf("creating %s: %v", filepath.Dir(kept), err)
+			}
+			writeFile(t, kept, "not ours")
+
+			if err := getManifests(t.TempDir(), filepath.Join(staging, "crds"), deployDir); err == nil {
+				t.Fatal("getManifests succeeded, want an error")
+			}
+			if _, err := os.Stat(kept); err != nil {
+				t.Errorf("%s was removed: %v", kept, err)
+			}
+		})
+	}
+}
+
 // TestReplaceLines checks that a file which no longer looks the way the secrets
 // RBAC staging expects fails the build, rather than staging a binding that
 // still claims the ClusterRole.

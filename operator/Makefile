@@ -460,16 +460,15 @@ $(KUSTOMIZE): $(HACK_BIN)
 	@chmod a+x $(KUSTOMIZE)
 
 
-# Options for 'bundle-build'
+# Options for 'bundle'
 
 # Set the channel to the current release branch, unless we got another one
 # passed to us. Channel should be release-v3.YY.
 #
-# The match is a prefix match rather than a substring one: branches like
+# The match is anchored at the start, since branches like
 # 'auto-pick-of-#12612-upstream-release-v3.31' contain a release branch name
-# without being one, and would otherwise be published as a channel. A branch
-# that is not a release branch leaves CHANNEL empty, so building a bundle from
-# one means passing CHANNEL explicitly.
+# without being one. A branch that is not a release branch leaves CHANNEL empty,
+# so building a bundle from one means passing CHANNEL explicitly.
 RELEASE_BRANCH_PATTERN := release-v3.%
 CURRENT_BRANCH := $(shell git branch --show-current)
 CHANNEL ?= $(filter $(RELEASE_BRANCH_PATTERN),$(CURRENT_BRANCH))
@@ -526,8 +525,8 @@ endif
 # from --kustomize-dir; note that operator-sdk only picks that base up if its
 # metadata.name is "tigera-operator.v<semver>", matching --package.
 #
-# This uses the CRDs committed under pkg/crds/operator rather than regenerating
-# them, which 'make gen-files' and the CI dirty-check already keep current.
+# This uses the committed operator CRDs as they are rather than regenerating
+# them, since CI already fails a PR that leaves them stale.
 .PHONY: bundle-generate
 bundle-generate: $(OPERATOR_SDK_BARE) bundle-manifests
 	$(OPERATOR_SDK_BARE) generate bundle \
@@ -569,8 +568,6 @@ $(BINDIR)/gen-bundle: $(wildcard hack/gen-bundle/*) $(REPO_ROOT)/go.mod $(REPO_R
 .PHONY: hack/gen-bundle/ut
 hack/gen-bundle/ut:
 	mkdir -p report
-	# Flat, like report/operator_ut.xml: the Semaphore epilogue publishes
-	# ./report/*.xml, so a report in a subdirectory is never collected.
 	$(DOCKER_GO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
 	gotestsum --format=testname --junitfile report/gen_bundle_ut.xml $(PACKAGE_NAME)/hack/gen-bundle/...'

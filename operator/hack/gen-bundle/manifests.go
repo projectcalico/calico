@@ -16,7 +16,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,12 +37,12 @@ const (
 	// charts/ by 'make gen-manifests' at the repository root and committed.
 	ocpManifestDir = "manifests"
 
-	// calicoCRDDir holds the Calico CRDs, the same directory the operator embeds
-	// them from at runtime - see the libcalico-go/config/crd import in pkg/crds.
+	// calicoCRDDir holds the Calico CRDs, the same ones the operator embeds and
+	// installs at runtime.
 	calicoCRDDir = "libcalico-go/config/crd"
 
-	// operatorCRDDir holds the committed operator CRDs. 'make gen-files' and the
-	// CI dirty-check keep them current, so the bundle ships them as they are.
+	// operatorCRDDir holds the committed operator CRDs. CI fails a PR that
+	// leaves them stale, so the bundle ships them as they are.
 	operatorCRDDir = "operator/pkg/crds/operator"
 
 	// Relative to ocpManifestDir.
@@ -109,11 +111,8 @@ func getManifests(repoRoot, crdDir, deployDir string) error {
 	// otherwise be picked up by operator-sdk and end up in the bundle - for
 	// example a CRD that has since been dropped from calicoResources.
 	for _, dir := range []string{crdDir, deployDir} {
-		if err := os.RemoveAll(dir); err != nil {
-			return fmt.Errorf("clearing %s: %w", dir, err)
-		}
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return fmt.Errorf("creating %s: %w", dir, err)
+		if err := resetStagingDir(dir); err != nil {
+			return err
 		}
 	}
 
@@ -129,6 +128,29 @@ func getManifests(repoRoot, crdDir, deployDir string) error {
 		return err
 	}
 	return copyCalicoCRDs(repoRoot, crdDir)
+}
+
+// resetStagingDir empties a staging directory. The directory comes from a flag
+// or the environment, so it is only cleared if it looks like one we staged -
+// flat YAML files and nothing else - and a mis-set path fails rather than
+// deleting a source tree.
+func resetStagingDir(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("reading %s: %w", dir, err)
+	}
+	for _, entry := range entries {
+		if !entry.Type().IsRegular() || filepath.Ext(entry.Name()) != ".yaml" {
+			return fmt.Errorf("not clearing %s: %s is not a staged manifest, so it may not be a staging directory", dir, entry.Name())
+		}
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return fmt.Errorf("clearing %s: %w", dir, err)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("creating %s: %w", dir, err)
+	}
+	return nil
 }
 
 // copyOperatorManifests stages the OpenShift manifests that the CSV's install

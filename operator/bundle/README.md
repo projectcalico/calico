@@ -130,8 +130,6 @@ level.
 - **`relatedImages` cannot live in the base** — `operator-sdk` does not carry it
   over. Any image that has to be listed goes in
   [`../hack/gen-bundle/update.go`](../hack/gen-bundle/update.go).
-- **`config/samples/kustomization.yaml` must only list files that exist**, or
-  `kustomize build config/samples` fails and takes bundle generation with it.
 - **`operator_v1_imageset.yaml` is deliberately inert.** It is a published
   example, so its name must not match a variant the operator looks for — see the
   comment at the top of that file.

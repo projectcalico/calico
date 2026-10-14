@@ -143,8 +143,8 @@ var (
 	imageFlag = &cli.StringFlag{
 		Name:  "image",
 		Usage: "The operator image repository the bundle pins its digest from. The tag comes from --version",
-		// Not OPERATOR_IMAGE: the operator Makefile already uses that for a
-		// reference that includes the tag.
+		// Not OPERATOR_IMAGE, which conventionally names a reference that
+		// includes the tag.
 		Sources:   cli.EnvVars("BUNDLE_OPERATOR_IMAGE"),
 		Value:     "quay.io/calico/operator",
 		Validator: nonEmpty("image"),
