@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/version"
 )
 
 type Option func(*CalicoManager) error
@@ -54,9 +55,13 @@ func WithReleaseBranchValidation(validate bool) Option {
 	}
 }
 
-func WithVersion(version string) Option {
+func WithVersion(ver string) Option {
 	return func(r *CalicoManager) error {
-		r.calicoVersion = version
+		v, err := version.New(ver)
+		if err != nil {
+			return err
+		}
+		r.calicoVersion = v
 		return nil
 	}
 }

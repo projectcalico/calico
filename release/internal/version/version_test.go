@@ -1,4 +1,4 @@
-// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,12 +16,29 @@ package version
 
 import (
 	"testing"
-
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 )
 
-func TestVersionStream(t *testing.T) {
+func TestNew(t *testing.T) {
+	t.Run("adds a missing v", func(t *testing.T) {
+		if got := mustNew(t, "3.29.0").String(); got != "v3.29.0" {
+			t.Errorf("String() = %q, want %q", got, "v3.29.0")
+		}
+	})
+
+	t.Run("zero value prints empty", func(t *testing.T) {
+		if got := (Version{}).String(); got != "" {
+			t.Errorf("String() = %q, want empty", got)
+		}
+	})
+
+	t.Run("rejects a non-semver version", func(t *testing.T) {
+		if _, err := New("release-v3.29"); err == nil {
+			t.Error("want an error")
+		}
+	})
+}
+
+func TestStream(t *testing.T) {
 	for _, tc := range []struct {
 		version string
 		want    string
@@ -34,73 +51,77 @@ func TestVersionStream(t *testing.T) {
 		{"v3.27.0-2.0-0.dev-424-gfd40f1838223", "v3.27"},
 	} {
 		t.Run(tc.version, func(t *testing.T) {
-			v := New(tc.version)
-			require.Equal(t, tc.want, v.Stream())
+			if got := mustNew(t, tc.version).Stream(); got != tc.want {
+				t.Errorf("Stream() = %q, want %q", got, tc.want)
+			}
 		})
 	}
 }
 
-func TestVersionNextBranchVersion(t *testing.T) {
+func TestNextBranchVersion(t *testing.T) {
 	for _, tc := range []struct {
 		version string
-		want    Version
+		want    string
 	}{
-		{"v3.29.0", New("v3.30.0")},
-		{"v3.29.0-0.dev-424-gfd40f1838223", New("v3.30.0")},
-		{"v3.28.0-1.0", New("v3.28.0-2.0")},
-		{"v3.27.0-2.0", New("v3.28.0-1.0")},
+		{"v3.29.0", "v3.30.0"},
+		{"v3.29.0-0.dev-424-gfd40f1838223", "v3.30.0"},
+		{"v3.28.0-1.0", "v3.28.0-2.0"},
+		{"v3.27.0-2.0", "v3.28.0-1.0"},
 	} {
 		t.Run(tc.version, func(t *testing.T) {
-			v := New(tc.version)
-			got := v.NextBranchVersion()
-			require.Equal(t, tc.want.String(), got.String())
+			if got := mustNew(t, tc.version).NextBranchVersion().String(); got != tc.want {
+				t.Errorf("NextBranchVersion() = %q, want %q", got, tc.want)
+			}
 		})
 	}
 }
 
-func TestVersionNextReleaseVersion(t *testing.T) {
+func TestNextReleaseVersion(t *testing.T) {
 	for _, tc := range []struct {
 		version string
-		want    Version
+		want    string
 	}{
-		{"v3.29.0", New("v3.29.1")},
-		{"v3.29.0-0.dev-424-gfd40f1838223", New("v3.29.0")},
-		{"v3.28.0-1.0", New("v3.28.0-1.1")},
-		{"v3.28.0-1.0-0.dev-424-gfd40f1838223", New("v3.28.0-1.1")},
-		{"v3.27.0-2.0", New("v3.27.1")},
-		{"v3.27.0-2.0-0.dev-424-gfd40f1838223", New("v3.27.1")},
+		{"v3.29.0", "v3.29.1"},
+		{"v3.29.0-0.dev-424-gfd40f1838223", "v3.29.0"},
+		{"v3.28.0-1.0", "v3.28.0-1.1"},
+		{"v3.28.0-1.0-0.dev-424-gfd40f1838223", "v3.28.0-1.1"},
+		{"v3.27.0-2.0", "v3.27.1"},
+		{"v3.27.0-2.0-0.dev-424-gfd40f1838223", "v3.27.1"},
 	} {
 		t.Run(tc.version, func(t *testing.T) {
-			v := New(tc.version)
-			got, err := v.NextReleaseVersion()
-			require.NoError(t, err)
-			require.Equal(t, tc.want.String(), got.String())
+			got, err := mustNew(t, tc.version).NextReleaseVersion()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.String() != tc.want {
+				t.Errorf("NextReleaseVersion() = %q, want %q", got, tc.want)
+			}
 		})
 	}
 }
 
 func TestDetermineReleaseVersion(t *testing.T) {
-	expectations := map[string]string{
-		// Simple base case - increment the patch number if cutting from an existing tag.
+	for current, want := range map[string]string{
 		"v3.20.0":  "v3.20.1",
 		"v3.20.1":  "v3.20.2",
 		"v3.22.0":  "v3.22.1",
 		"v3.22.10": "v3.22.11",
 		"v3.0.0":   "v3.0.1",
 
-		// A dev tag leading up to a minor release should return the minor release number.
 		"v3.29.0-0.dev-424-gfd40f1838223": "v3.29.0",
 
-		// Previous tag was a patch release, should increment the patch number.
 		"v3.15.0-12-gfd40f1838223": "v3.15.1",
 		"v3.15.1-15-gfd40f1838223": "v3.15.2",
-	}
-
-	for current, next := range expectations {
-		logrus.Infof("Test current version = %v", current)
-		actual, err := DetermineReleaseVersion(New(current), "0.dev")
-		require.NoError(t, err)
-		require.Equal(t, next, actual.FormattedString())
+	} {
+		t.Run(current, func(t *testing.T) {
+			got, err := DetermineReleaseVersion(mustNew(t, current), "0.dev")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.String() != want {
+				t.Errorf("DetermineReleaseVersion() = %q, want %q", got.String(), want)
+			}
+		})
 	}
 }
 
@@ -113,8 +134,29 @@ func TestDeterminePublishStream(t *testing.T) {
 		{"release-v3.29", "v3.29.0", "v3.29"},
 		{"master", "v3.29.0-0.dev-424-gfd40f1838223", "master"},
 	} {
-		t.Run(tc.version, func(t *testing.T) {
-			require.Equal(t, tc.want, DeterminePublishStream(tc.branch, tc.version))
+		t.Run(tc.branch, func(t *testing.T) {
+			got, err := DeterminePublishStream(tc.branch, tc.version)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Errorf("DeterminePublishStream() = %q, want %q", got, tc.want)
+			}
 		})
 	}
+
+	t.Run("rejects a non-semver version", func(t *testing.T) {
+		if _, err := DeterminePublishStream("release-v3.29", "not-a-version"); err == nil {
+			t.Error("want an error")
+		}
+	})
+}
+
+func mustNew(t *testing.T, s string) Version {
+	t.Helper()
+	v, err := New(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v
 }

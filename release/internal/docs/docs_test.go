@@ -22,7 +22,11 @@ import (
 )
 
 func site(v string) Site {
-	return Site{Version: version.Version(v)}
+	ver, err := version.New(v)
+	if err != nil {
+		panic(err)
+	}
+	return Site{Version: ver}
 }
 
 func TestURL(t *testing.T) {

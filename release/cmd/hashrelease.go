@@ -145,7 +145,10 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 		}
 
 		// Extract the pinned version as a hashrelease.
-		hashrel := pin.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false)
+		hashrel, err := pin.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false)
+		if err != nil {
+			return err
+		}
 
 		opts := []calico.Option{
 			calico.IsHashRelease(),
@@ -193,7 +196,11 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 		} else if c.String(orgFlag.Name) != utils.ProjectCalicoOrg || c.String(repoFlag.Name) != utils.CalicoRepoName {
 			logrus.Warn("Release notes are not supported for non-Calico releases, skipping...")
 		} else {
-			releaseVersion, err := version.DetermineReleaseVersion(version.New(pin.ProductVersion), c.String(devTagSuffixFlag.Name))
+			pinVer, err := version.New(pin.ProductVersion)
+			if err != nil {
+				return err
+			}
+			releaseVersion, err := version.DetermineReleaseVersion(pinVer, c.String(devTagSuffixFlag.Name))
 			if err != nil {
 				return fmt.Errorf("failed to determine release version: %v", err)
 			}
@@ -230,7 +237,10 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 		if err != nil {
 			return err
 		}
-		hashrel := pin.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), c.Bool(latestFlag.Name))
+		hashrel, err := pin.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), c.Bool(latestFlag.Name))
+		if err != nil {
+			return err
+		}
 
 		// Check if the hashrelease has already been published.
 		serverCfg := hashreleaseServerConfig(c)

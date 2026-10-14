@@ -182,7 +182,7 @@ func pinForRelease(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
 	if err != nil {
 		return nil, fmt.Errorf("operator version from manifests: %w", err)
 	}
-	pin.Operator.Version = operatorVer.FormattedString()
+	pin.Operator.Version = operatorVer.String()
 	return pin, nil
 }
 
@@ -193,7 +193,10 @@ var releaseVersion = func(cfg *Config, c *cli.Command) (*version.Version, error)
 		if err != nil {
 			return nil, fmt.Errorf("git version: %w", err)
 		}
-		ver := version.New(v)
+		ver, err := version.New(v)
+		if err != nil {
+			return nil, err
+		}
 		return &ver, nil
 	}
 	ver, _, err := version.VersionsFromManifests(cfg.RepoRootDir)
@@ -211,7 +214,11 @@ var outputDir = func(cfg *Config, c *cli.Command, version string) (string, error
 		if err != nil {
 			return "", err
 		}
-		return p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false).Source, nil
+		h, err := p.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false)
+		if err != nil {
+			return "", err
+		}
+		return h.Source, nil
 	}
 	return releaseOutputDir(cfg.RepoRootDir, version), nil
 }

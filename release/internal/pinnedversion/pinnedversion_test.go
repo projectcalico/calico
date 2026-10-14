@@ -203,7 +203,11 @@ func TestReleaseBranch(t *testing.T) {
 		{"v3.31.0-1.0", "release-v3.31-1"},
 	} {
 		t.Run(tc.productVer, func(t *testing.T) {
-			if got := releaseBranch("release", tc.productVer); got != tc.want {
+			got, err := releaseBranch("release", tc.productVer)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
 				t.Errorf("want %q, got %q", tc.want, got)
 			}
 		})
@@ -226,7 +230,7 @@ func TestPinRecoversBranch(t *testing.T) {
 		}
 		// The stream is derived from the branch, so recovering it is what
 		// this checks; how a product maps branch to stream is its own rule.
-		if stream := got.Hashrelease("", false).Stream; stream == "" {
+		if stream := publishStream(t, got); stream == "" {
 			t.Errorf("%s: no stream resolved from branch %q", name, got.branch)
 		}
 	}

@@ -146,10 +146,14 @@ var productComponents = func(cfg Config, productVer string) (map[string]registry
 	if cfg.ReleaseBranchPrefix == "" {
 		return nil, fmt.Errorf("release branch prefix is required to generate a pin")
 	}
+	networkingCalico, err := releaseBranch(cfg.ReleaseBranchPrefix, productVer)
+	if err != nil {
+		return nil, err
+	}
 	components := map[string]registry.Component{
 		apiComponentName:              {Version: productVer},
 		calicoComponentName:           {Version: productVer},
-		networkingCalicoComponentName: {Version: releaseBranch(cfg.ReleaseBranchPrefix, productVer)},
+		networkingCalicoComponentName: {Version: networkingCalico},
 		flannelComponentName:          FlannelComponent,
 	}
 	imgs, err := releaseImages()
@@ -163,9 +167,12 @@ var productComponents = func(cfg Config, productVer string) (map[string]registry
 }
 
 // releaseBranch returns the release branch for a product version.
-var releaseBranch = func(prefix, productVer string) string {
-	v := version.New(productVer)
-	return fmt.Sprintf("%s-%s", prefix, v.Stream())
+var releaseBranch = func(prefix, productVer string) (string, error) {
+	v, err := version.New(productVer)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s-%s", prefix, v.Stream()), nil
 }
 
 // productVersion returns the git-describe version of the product repository.
@@ -224,12 +231,13 @@ var hash = func(productVer string, repoComponents map[string]registry.Component)
 	return h
 }
 
-var releaseName = func(branch, productVer string) string {
-	name := fmt.Sprintf("%s-%s-%s",
-		time.Now().Format("2006-01-02"),
-		version.DeterminePublishStream(branch, productVer),
-		RandomWord())
-	return strings.ReplaceAll(name, ".", "-")
+var releaseName = func(branch, productVer string) (string, error) {
+	stream, err := version.DeterminePublishStream(branch, productVer)
+	if err != nil {
+		return "", err
+	}
+	name := fmt.Sprintf("%s-%s-%s", time.Now().Format("2006-01-02"), stream, RandomWord())
+	return strings.ReplaceAll(name, ".", "-"), nil
 }
 
 var hashreleaseNote = func(releaseName, branch string, repos []Repo) string {
