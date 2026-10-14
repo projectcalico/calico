@@ -1,0 +1,7 @@
+# Smoke check run before a flannel or canal migration starts, while the cluster
+# is still on the old CNI. Calico is not installed yet, so the labelled suites
+# do not apply; this picks the one upstream service spec by name.
+include:
+  namePatterns:
+    - pattern: 'should serve a basic endpoint from pods'
+      reason: 'confirms the pre-migration CNI carries pod traffic'
