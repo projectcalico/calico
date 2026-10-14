@@ -45,6 +45,41 @@ func policyKinds(ingress, egress []v3.Rule) map[string]client.Object {
 	}
 }
 
+// A policy name may carry one dot, the tier.policy form older clients wrote.
+func TestPolicy_Names(t *testing.T) {
+	const wantErr = "policy name must be a DNS label, optionally with one dot"
+	for _, tt := range []struct {
+		name    string
+		wantErr string
+	}{
+		{name: "web"},
+		{name: "team.web"},
+		{name: "team.web.v2", wantErr: wantErr},
+	} {
+		objs := map[string]client.Object{
+			"NetworkPolicy":             &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: tt.name, Namespace: "default"}},
+			"GlobalNetworkPolicy":       &v3.GlobalNetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: tt.name}},
+			"StagedNetworkPolicy":       &v3.StagedNetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: tt.name, Namespace: "default"}},
+			"StagedGlobalNetworkPolicy": &v3.StagedGlobalNetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: tt.name}},
+		}
+		for kind, obj := range objs {
+			t.Run(tt.name+" "+kind, func(t *testing.T) {
+				if tt.wantErr != "" {
+					expectCreateFails(t, obj, tt.wantErr)
+				} else {
+					expectCreateSucceeds(t, obj)
+				}
+			})
+		}
+	}
+
+	// Kubernetes and OpenStack policies keep their full name after the prefix.
+	expectCreateSucceeds(t, &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "ossg.default.group.v2", Namespace: "default"}})
+	expectCreateSucceeds(t, &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "knp.default.group.v2", Namespace: "default"}})
+	expectCreateSucceeds(t, &v3.StagedNetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "ossg.default.group.v2", Namespace: "default"}})
+	expectCreateFails(t, &v3.GlobalNetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "ossg.default.group.v2"}}, wantErr)
+}
+
 // Application layer policy is enforced on the receiving side only.
 func TestPolicy_EgressHTTP(t *testing.T) {
 	http := &v3.HTTPMatch{Methods: []string{"GET"}}

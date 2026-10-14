@@ -1500,6 +1500,11 @@ spec:
             - metadata
             - spec
           type: object
+          x-kubernetes-validations:
+            - message: policy name must be a DNS label, optionally with one dot
+              optionalOldSelf: true
+              reason: FieldValueInvalid
+              rule: oldSelf.hasValue() || size(self.metadata.name.split('.')) <= 2
       selectableFields:
         - jsonPath: .spec.tier
       served: true
