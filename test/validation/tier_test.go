@@ -128,6 +128,31 @@ func TestTier_Validation(t *testing.T) {
 	}
 }
 
+// Policy lookup by tier goes through a label, so a tier name has to fit in a
+// label value.
+func TestTier_Name(t *testing.T) {
+	const wantErr = "tier name must be a DNS label of at most 63 characters, with no dots"
+	for _, tt := range []struct {
+		name    string
+		tier    string
+		wantErr string
+	}{
+		{name: "DNS label", tier: uniqueName("tier")},
+		{name: "63 characters", tier: strings.Repeat("t", 63)},
+		{name: "64 characters", tier: strings.Repeat("t", 64), wantErr: wantErr},
+		{name: "dotted name", tier: "team.tier", wantErr: wantErr},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tier := &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: tt.tier}, Spec: v3.TierSpec{Order: ptr.To(100.0)}}
+			if tt.wantErr != "" {
+				expectCreateFails(t, tier, tt.wantErr)
+			} else {
+				expectCreateSucceeds(t, tier)
+			}
+		})
+	}
+}
+
 func TestTier_Defaults(t *testing.T) {
 	name := uniqueName("tier-dflt")
 	tier := &v3.Tier{
