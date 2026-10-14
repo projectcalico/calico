@@ -56,7 +56,7 @@ func TestPolicy_ServicesDirection(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "egress destination",
+			name:    "egress destination and ingress source",
 			egress:  []v3.Rule{{Action: v3.Allow, Destination: v3.EntityRule{Services: svc}}},
 			ingress: []v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Services: svc}}},
 		},
