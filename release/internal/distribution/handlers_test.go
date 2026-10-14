@@ -218,6 +218,42 @@ func TestS3Filters(t *testing.T) {
 	})
 }
 
+func TestS3Args(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		d    S3
+		src  string
+		dest string
+		dir  bool
+		want []string
+	}{
+		{
+			name: "a tree from a remote prefix",
+			d:    S3{Private: true, Exclude: []string{"*.rpm"}},
+			src:  "s3://b/rpms/v1.2", dest: "/out/rpms", dir: true,
+			want: []string{"s3", "cp", "--recursive", "s3://b/rpms/v1.2/", "/out/rpms/", "--exclude", "*.rpm"},
+		},
+		{
+			name: "a synced tree with a profile",
+			d:    S3{Sync: true, Private: true, Profile: "release", DryRun: true},
+			src:  "s3://b/debs/v1.2/repodb/", dest: "/db/", dir: true,
+			want: []string{"s3", "--profile", "release", "sync", "s3://b/debs/v1.2/repodb/", "/db/", "--dryrun"},
+		},
+		{
+			name: "one public object",
+			d:    S3{CachePolicy: MutableCachePolicy},
+			src:  "/out/a.tgz", dest: "s3://b/archives/",
+			want: []string{"s3", "cp", "/out/a.tgz", "s3://b/archives/", "--acl", "public-read", "--cache-control", MutableCachePolicy},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(tc.want, tc.d.Args(tc.src, tc.dest, tc.dir)); diff != "" {
+				t.Errorf("Args (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestGCSSyncDeletesWhatTheSourceDropped(t *testing.T) {
 	f := &fakeRunner{}
 	d := GCS{URI: "gs://bucket/hash", Sync: true, Runner: f}
