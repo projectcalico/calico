@@ -7,3 +7,5 @@ calico-vxlan.yaml    linguist-generated=true
 crds.yaml            linguist-generated=true
 operator-crds.yaml   linguist-generated=true
 tigera-operator.yaml linguist-generated=true
+v3_projectcalico_org-v1beta1.yaml linguist-generated=true
+calico-v3-crds-v1beta1.yaml       linguist-generated=true
