@@ -505,7 +505,12 @@ func TestRule_PortsRequireProtocol(t *testing.T) {
 		{name: "TCP with ports", protocol: ptr.To(numorstring.ProtocolFromString("TCP")), dest: v3.EntityRule{Ports: []numorstring.Port{single}}},
 		{name: "numeric UDP with ports", protocol: ptr.To(numorstring.ProtocolFromInt(17)), dest: v3.EntityRule{Ports: []numorstring.Port{portRange}}},
 		{name: "ICMP with ports", protocol: ptr.To(numorstring.ProtocolFromString("ICMP")), dest: v3.EntityRule{Ports: []numorstring.Port{single}}, wantErr: wantProtocol},
-		{name: "UDPLite with source notPorts", protocol: ptr.To(numorstring.ProtocolFromString("UDPLite")), source: v3.EntityRule{NotPorts: []numorstring.Port{named}}, wantErr: wantProtocol},
+		{
+			name:     "UDPLite with source notPorts",
+			protocol: ptr.To(numorstring.ProtocolFromString("UDPLite")),
+			source:   v3.EntityRule{NotPorts: []numorstring.Port{named}},
+			wantErr:  wantProtocol,
+		},
 		{name: "ICMP without ports", protocol: ptr.To(numorstring.ProtocolFromString("ICMP"))},
 		{name: "no protocol with a named port", dest: v3.EntityRule{Ports: []numorstring.Port{named}}},
 		{name: "no protocol with a numeric port", dest: v3.EntityRule{Ports: []numorstring.Port{single}}, wantErr: wantNumeric},
