@@ -209,12 +209,15 @@ type bucketInterval struct {
 	start  int64
 }
 
-// newBucketInterval returns a provider for the interval b covers now. Only the main loop may
-// call it, since that is the only goroutine that resets buckets.
+var _ FlowProvider = bucketInterval{}
+
+// newBucketInterval returns a provider for the interval b currently covers. Only the main loop
+// may call it, since that is the only goroutine that resets buckets.
 func newBucketInterval(b *AggregationBucket) bucketInterval {
 	return bucketInterval{bucket: b, start: b.StartTime}
 }
 
+// Iter yields the bucket's flows if it still covers the queued interval, and nothing otherwise.
 func (i bucketInterval) Iter(fn func(FlowBuilder) bool) {
 	i.bucket.iterInterval(i.start, fn)
 }

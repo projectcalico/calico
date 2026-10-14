@@ -19,8 +19,6 @@ import (
 	"testing"
 
 	"github.com/projectcalico/calico/goldmane/pkg/stream"
-	"github.com/projectcalico/calico/goldmane/pkg/testutils"
-	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/time"
 )
@@ -29,28 +27,6 @@ const (
 	interleaveRollovers = 30
 	interleaveBackfill  = 5
 )
-
-// addLiveFlow adds a flow to the bucket holding the current time and waits until the main loop
-// has stored it, so the bucket is complete before a rollover streams it.
-func (s *streamBench) addLiveFlow() {
-	now := s.clock.Now().Unix()
-	s.gm.Receive(types.ProtoToFlow(testutils.NewRandomFlow(now)), "")
-
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		res, err := s.gm.List(&proto.FlowListRequest{StartTimeGte: now, StartTimeLt: now + benchBucketSec})
-		if err != nil {
-			s.tb.Fatal(err)
-		}
-		if len(res.Flows) > 0 {
-			return
-		}
-		if time.Now().After(deadline) {
-			s.tb.Fatalf("flow at %d was never stored", now)
-		}
-		time.Sleep(time.Millisecond)
-	}
-}
 
 // bucketStarts reads st until it goes quiet and returns the bucket start time of each flow.
 func bucketStarts(st stream.Stream) []int64 {
@@ -83,8 +59,8 @@ func checkContiguous(t *testing.T, name string, starts []int64) {
 }
 
 // Streams opened while rollovers fire must see each bucket once, in order, through to the last
-// bucket streamed. Registering and backfilling in separate main loop steps let a rollover in
-// between send a bucket twice or skip it.
+// bucket streamed. A rollover landing between registration and backfill would send a bucket
+// twice or skip it.
 func TestStreamOpenedDuringRolloversSeesEachBucketOnce(t *testing.T) {
 	bench := newStreamBench(t)
 	bench.fill(1)

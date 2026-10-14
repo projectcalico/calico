@@ -44,13 +44,7 @@ func countBuilders(p storage.FlowProvider) int {
 // A provider queued for a slow stream must not yield a later interval's flows once the ring
 // has reused its bucket, even though that bucket is marked ready again.
 func TestQueuedBucketSkipsAfterReuse(t *testing.T) {
-	ring := storage.NewBucketRing(
-		backfillRingSize,
-		1,
-		seedNow,
-		storage.WithStreamReceiver(&recordingReceiver{}),
-		storage.WithNowFunc(seedClock),
-	)
+	ring := storage.NewBucketRing(backfillRingSize, 1, seedNow, storage.WithStreamReceiver(&recordingReceiver{}), storage.WithNowFunc(seedClock))
 	addFlowAt(ring, seedNow-3)
 
 	recv := &recordingReceiver{}
@@ -82,7 +76,8 @@ type backfillCase struct {
 }
 
 // With 1s buckets at seedNow, the next bucket to stream starts at seedNow-1, so backfill covers
-// [start, seedNow-1). Starts in the filling or head bucket used to wrap the whole ring.
+// [start, seedNow-1). Starts in the streaming, filling, or head bucket backfill nothing rather
+// than wrapping the whole ring.
 func TestBackfillStopsAtStreamingBucket(t *testing.T) {
 	cases := []backfillCase{
 		{name: "history", start: seedNow - 3, want: 2},

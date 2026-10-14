@@ -857,10 +857,13 @@ func (r *BucketRing) Backfill(recv Receiver, id string, start int64) {
 		// Otherwise iterBuckets would wrap the whole ring from start round to end.
 		return
 	}
-	_ = r.iterBucketsTime(start, end, func(b *AggregationBucket) error {
+	err := r.iterBucketsTime(start, end, func(b *AggregationBucket) error {
 		recv.Receive(newBucketInterval(b), id)
 		return nil
 	})
+	if err != nil {
+		logrus.WithError(err).WithField("id", id).Warn("Failed to backfill stream")
+	}
 }
 
 // IterFlows iterates through all of the Flows in the given time range.
