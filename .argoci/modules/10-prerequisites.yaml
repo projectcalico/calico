@@ -76,7 +76,7 @@ steps:
       make -C networking-calico flake8
       make check-dirty
 
-  # Grep-speed checks, so one step rather than three.
+  # Grep-speed checks, so they share one step.
   - name: check-language-dockerfiles
     jobSize: small
     requests: {cpu: 2250m, memory: 548Mi}
@@ -94,6 +94,7 @@ steps:
       make check-language
       make check-dockerfiles
       make check-mockery-config
+      make check-argoci-image
 
   - name: check-protobufs
     requests: {cpu: 1500m, memory: 1Gi}
