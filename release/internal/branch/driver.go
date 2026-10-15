@@ -134,6 +134,10 @@ func (d *Driver) CutReleaseBranch(plan *CutPlan) error {
 	if plan.Source == plan.Derived {
 		return fmt.Errorf("source %q cannot be the same as derived %q branch", plan.Source, plan.Derived)
 	}
+	// The main check is skipped for a tag source, so a tag cut must not advance main.
+	if t, ok := plan.mainTarget(); ok && strings.HasPrefix(plan.Source, tagRefPrefix) {
+		return fmt.Errorf("a cut from %s cannot advance %s", strings.TrimPrefix(plan.Source, tagRefPrefix), t.Branch)
+	}
 	g := gitIn(d.RepoRoot)
 	if d.Plan {
 		logPlan(plan)

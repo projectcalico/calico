@@ -108,6 +108,29 @@ func TestCheckTagOnRemote(t *testing.T) {
 	require.ErrorContains(t, checkTagOnRemote(g, "v3.23.1", "no-such-remote", true), "checking refs/tags/v3.23.1 on no-such-remote")
 }
 
+// A cut from a tag never advances main, so a plan that would is rejected.
+func TestCutFromTagRejectsMainTarget(t *testing.T) {
+	root := initGitRepo(t)
+	initGitRemote(t, root)
+	tagReleased(t, root, "v3.23.1", true)
+	mainBefore, err := command.GitInDir(root, "rev-parse", "master")
+	require.NoError(t, err)
+
+	d := newTestDriver(t, Driver{RepoRoot: root, Validate: true, Publish: true})
+	err = d.CutReleaseBranch(&CutPlan{
+		Derived:    "release-v3.23.1-hotfix",
+		Source:     TagSource("v3.23.1"),
+		Remote:     "origin",
+		TagTargets: []TagTarget{{Branch: "master", DevTag: "v3.24.0-0.dev"}},
+	})
+	require.ErrorContains(t, err, "a cut from v3.23.1 cannot advance master")
+
+	require.False(t, localBranchExists(gitIn(root), "release-v3.23.1-hotfix"))
+	mainAfter, err := command.GitInDir(root, "rev-parse", "master")
+	require.NoError(t, err)
+	require.Equal(t, mainBefore, mainAfter)
+}
+
 // A plan-mode preview of a cut from an unreleased tag warns and makes no branch.
 func TestCutFromTagPlan(t *testing.T) {
 	root := initGitRepo(t)
