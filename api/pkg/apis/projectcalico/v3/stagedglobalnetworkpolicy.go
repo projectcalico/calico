@@ -33,7 +33,6 @@ const (
 // +kubebuilder:printcolumn:name="Order",type=number,JSONPath=`.spec.order`
 
 // StagedGlobalNetworkPolicy is a staged GlobalNetworkPolicy.
-// +kubebuilder:validation:XValidation:rule="oldSelf.hasValue() || size(self.metadata.name.split('.')) <= 2",message="policy name must be a DNS label, optionally with one dot",reason=FieldValueInvalid,optionalOldSelf=true
 type StagedGlobalNetworkPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`

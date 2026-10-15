@@ -40,7 +40,6 @@ type NetworkPolicyList struct {
 // +kubebuilder:printcolumn:name="Tier",type=string,JSONPath=`.spec.tier`
 // +kubebuilder:printcolumn:name="Order",type=number,JSONPath=`.spec.order`
 
-// +kubebuilder:validation:XValidation:rule="oldSelf.hasValue() || size(self.metadata.name.split('.')) <= 2 || self.metadata.name.startsWith('knp.default.') || self.metadata.name.startsWith('ossg.default.')",message="policy name must be a DNS label, optionally with one dot",reason=FieldValueInvalid,optionalOldSelf=true
 type NetworkPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
