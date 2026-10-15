@@ -1129,7 +1129,7 @@ Additional links:
 		// Alternating placeholder / filler. We can't use backticks in the multiline string above,
 		// so we replace anything that needs to be backticked into it here.
 		"{version}", r.calicoVersion.String(),
-		"{branch}", fmt.Sprintf("release-v%d.%d", sv.Major(), sv.Minor()),
+		"{branch}", version.NewReleaseBranch(r.releaseBranchPrefix, r.calicoVersion).String(),
 		"{release_stream}", fmt.Sprintf("v%d.%d", sv.Major(), sv.Minor()),
 		"{release_tar}", fmt.Sprintf("`%s`", archives.ArchiveFileName(r.archive())),
 		"{calico_windows_zip}", fmt.Sprintf("`%s`", archives.WindowsFileName(r.calicoVersion.String())),
@@ -1294,19 +1294,12 @@ func (r *CalicoManager) scanRequest() *images.ScanRequest {
 	}
 }
 
-var releaseBranch = func(r *CalicoManager) (string, error) {
-	if r.releaseBranchPrefix == "" {
-		return "", fmt.Errorf("release branch prefix is not set")
-	}
-	return fmt.Sprintf("%s-%s", r.releaseBranchPrefix, r.calicoVersion.Stream()), nil
-}
-
 // publishBranchTag moves the branch-named tag (e.g. release-v3.33) onto the
 // images just published, so the branch always has a pullable tag between
 // official releases.
 func (r *CalicoManager) publishBranchTag() error {
 	reg := r.imageRegistries[0]
-	branch, err := releaseBranch(r)
+	branch, err := r.releaseBranch()
 	if err != nil {
 		return fmt.Errorf("release branch: %w", err)
 	}
@@ -1352,6 +1345,28 @@ func (r *CalicoManager) publishBranchTag() error {
 		return fmt.Errorf("publish branch %s tag images: %w", branch, err)
 	}
 	return r.publishOperatorBranchTag(branch)
+}
+
+// releaseBranch returns "" for a hashrelease off a release branch, since its
+// version names a branch that may not be cut yet. An official release
+// publishes from its build branch, so its release branch comes from the version.
+func (r *CalicoManager) releaseBranch() (string, error) {
+	if r.releaseBranchPrefix == "" {
+		return "", fmt.Errorf("release branch prefix is not set")
+	}
+	if !r.isHashRelease {
+		return version.NewReleaseBranch(r.releaseBranchPrefix, r.calicoVersion).String(), nil
+	}
+	branch, err := r.determineBranch()
+	if err != nil {
+		return "", err
+	}
+	rb, ok := version.ParseReleaseBranch(r.releaseBranchPrefix, branch)
+	if !ok {
+		logrus.WithField("branch", branch).Info("Not on a release branch, skipping branch tag publish")
+		return "", nil
+	}
+	return rb.String(), nil
 }
 
 func (r *CalicoManager) publishOperatorBranchTag(branch string) error {
@@ -1576,9 +1591,8 @@ func (r *CalicoManager) cutPlan() (*branch.CutPlan, error) {
 		return nil, err
 	}
 	nextBranch := cur.NextBranchVersion()
-	derived := r.releaseBranchPrefix + "-" + cur.Stream()
 	return &branch.CutPlan{
-		Derived: derived,
+		Derived: version.NewReleaseBranch(r.releaseBranchPrefix, cur).String(),
 		Source:  r.mainBranch,
 		Remote:  r.remote,
 		TagTargets: []branch.TagTarget{
@@ -1599,8 +1613,11 @@ func derivedBranchEdits(derived, stream string) []branch.Edit {
 // prepareDerived is the PrepareDerived hook: on a fresh branch it applies the
 // edits, rewrites helm values, and runs code generation, returning changed files.
 func (r *CalicoManager) prepareDerived(derived string) ([]string, error) {
-	stream := strings.TrimPrefix(derived, r.releaseBranchPrefix+"-")
-	written, _, err := branch.ApplyEdits(r.repoRoot, derivedBranchEdits(derived, stream))
+	rb, ok := version.ParseReleaseBranch(r.releaseBranchPrefix, derived)
+	if !ok {
+		return nil, fmt.Errorf("%s is not a %s release branch", derived, r.releaseBranchPrefix)
+	}
+	written, _, err := branch.ApplyEdits(r.repoRoot, derivedBranchEdits(derived, rb.Stream))
 	if err != nil {
 		return nil, err
 	}
@@ -1653,7 +1670,7 @@ func (r *CalicoManager) PrepareRelease() (string, error) {
 	baseBranch, err := r.determineBranch()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to determine current branch, will use default branch for release preparation")
-		baseBranch = fmt.Sprintf("%s-%s", r.releaseBranchPrefix, ver.Stream())
+		baseBranch = version.NewReleaseBranch(r.releaseBranchPrefix, ver).String()
 		logrus.WithField("baseBranch", baseBranch).Info("Using default branch for release preparation")
 	}
 	prepBranch := fmt.Sprintf("build-%s", ver)

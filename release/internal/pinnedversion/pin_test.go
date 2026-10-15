@@ -791,7 +791,7 @@ func TestLocalLoaderSourceErrorWritesNothing(t *testing.T) {
 		t.Fatalf("git root: %v", err)
 	}
 	original := productComponents
-	productComponents = func(Config, string) (map[string]registry.Component, error) {
+	productComponents = func(Config, string, string) (map[string]registry.Component, error) {
 		return nil, os.ErrInvalid
 	}
 	defer func() { productComponents = original }()

@@ -501,6 +501,19 @@ func TestCutPlanAdvancesMain(t *testing.T) {
 	require.Equal(t, "v3.34.0-0.dev", mainTag, "main advances to the next minor")
 }
 
+func TestPrepareDerived(t *testing.T) {
+	t.Run("rejects a branch that is not a release branch", func(t *testing.T) {
+		f := newFakeRunner()
+		r := &CalicoManager{runner: f, repoRoot: t.TempDir(), releaseBranchPrefix: "release"}
+		if _, err := r.prepareDerived("master"); err == nil {
+			t.Fatal("want an error")
+		}
+		if len(f.calls) > 0 {
+			t.Errorf("ran %v before rejecting the branch", f.calls)
+		}
+	})
+}
+
 func TestRequireOnMainBranch(t *testing.T) {
 	root := t.TempDir()
 	run := func(args ...string) {
@@ -1166,6 +1179,7 @@ func TestPublishBranchTag(t *testing.T) {
 		tests := []struct {
 			name          string
 			version       string
+			branch        string
 			images        bool
 			isHashRelease bool
 			wantPublish   bool
@@ -1177,6 +1191,7 @@ func TestPublishBranchTag(t *testing.T) {
 			{
 				name:          "hashrelease also pushes the branch tag",
 				version:       "v3.33.0-0.dev-1-gabcdef123456",
+				branch:        "release-v3.33",
 				images:        true,
 				isHashRelease: true,
 				wantPublish:   true,
@@ -1186,11 +1201,21 @@ func TestPublishBranchTag(t *testing.T) {
 			{
 				name:          "early preview keeps its stream suffix",
 				version:       "v3.33.0-1.0-0.dev-1-gabcdef123456",
+				branch:        "release-v3.33-1",
 				images:        true,
 				isHashRelease: true,
 				wantPublish:   true,
 				wantBranchTag: true,
 				wantTag:       "release-v3.33-1",
+			},
+			{
+				name:          "hashrelease off a release branch has no branch tag",
+				version:       "v3.34.0-0.dev-1-gabcdef123456",
+				branch:        "master",
+				images:        true,
+				isHashRelease: true,
+				wantPublish:   true,
+				wantBranchTag: false,
 			},
 			{
 				name:          "an official release moves it too",
@@ -1224,6 +1249,7 @@ func TestPublishBranchTag(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				f := newFakeRunner()
+				f.on("git rev-parse --abbrev-ref HEAD", tt.branch+"\n", nil)
 
 				prefix := tt.prefix
 				if prefix == "" && !tt.wantErr {
