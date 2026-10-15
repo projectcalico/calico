@@ -25,6 +25,7 @@
 # as `calico-dhcp-agent`) does the monkey_patch *before* importing this
 # module, so all the imports below still happen under the patched socket /
 # threading machinery in production.
+import collections
 import logging
 import os
 import re
@@ -478,11 +479,11 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             self, datamodel_v2.subnet_dir(self.region_string)
         )
 
-        # Map from each current local endpoint ID to the name of the WEP that last set
-        # it.  The cache below holds one port per ID, but a port's WEP name can change
-        # (the name includes the VM's ID), and the old name's deletion can arrive after
-        # the new name's creation.
-        self.local_endpoint_names = {}
+        # Map from each local endpoint ID to the names of the WEPs in etcd for it.  The
+        # cache below holds one port per ID, but a port's WEP name includes the VM's ID,
+        # so while a port moves to another VM there can briefly be a WEP under each
+        # name, and their sets and deletions can arrive in any order.
+        self.local_endpoint_names = collections.defaultdict(set)
 
     def start(self):
         eventlet.spawn(self.dnsmasq_updater.start)
@@ -639,7 +640,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             LOG.info("New port: %s", port)
         else:
             LOG.debug("Refresh already known port: %s", port)
-        self.local_endpoint_names[endpoint_id] = name
+        self.local_endpoint_names[endpoint_id].add(name)
 
         # Add this port into the NetModel.
         self.agent.cache.put_port(dhcp.DictModel(port))
@@ -759,21 +760,21 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             LOG.warning("Unexpected form for endpoint name: %s", name)
             return
 
-        # Ignore the deletion of a WEP name that no longer backs this port.
-        current_name = self.local_endpoint_names.get(endpoint_id)
-        if current_name is not None and current_name != name:
-            LOG.info(
-                "Ignoring deletion of %s: port %s is now served by %s",
-                name,
-                endpoint_id,
-                current_name,
-            )
-            return
-
-        # Remove endpoint ID from our cache.  Note, it might not be
-        # there because we haven't checked whether the endpoint just
-        # deleted is a local one; hence 'pop' with a default.
-        self.local_endpoint_names.pop(endpoint_id, None)
+        # Keep the port while any other WEP name for it still exists.  Note, the
+        # endpoint might not be in our map at all, because we haven't checked whether
+        # the endpoint just deleted is a local one.
+        names = self.local_endpoint_names.get(endpoint_id)
+        if names is not None:
+            names.discard(name)
+            if names:
+                LOG.info(
+                    "Deleted %s, but port %s is still served by %s",
+                    name,
+                    endpoint_id,
+                    names,
+                )
+                return
+            del self.local_endpoint_names[endpoint_id]
 
         # Find the corresponding port in the DHCP agent's cache.
         port = self.agent.cache.get_port_by_id(endpoint_id)
@@ -790,6 +791,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # Dnsmasqs if no longer needed.  Also remove all port and subnet
         # information.
         LOG.debug("Reset cache for new snapshot")
+        self.local_endpoint_names.clear()
         for network_id in list(self.agent.cache.get_network_ids()):
             self.dirty_networks.add(network_id)
             _fix_network_cache_port_lookup(self.agent, network_id)
