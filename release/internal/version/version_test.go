@@ -125,31 +125,111 @@ func TestDetermineReleaseVersion(t *testing.T) {
 	}
 }
 
-func TestDeterminePublishStream(t *testing.T) {
+func TestNewReleaseBranch(t *testing.T) {
 	for _, tc := range []struct {
-		branch  string
 		version string
 		want    string
 	}{
-		{"release-v3.29", "v3.29.0", "v3.29"},
-		{"master", "v3.29.0-0.dev-424-gfd40f1838223", "master"},
+		{"v3.29.0", "release-v3.29"},
+		{"v3.29.0-0.dev-424-gfd40f1838223", "release-v3.29"},
+		{"v3.28.0-1.0", "release-v3.28-1"},
+	} {
+		t.Run(tc.version, func(t *testing.T) {
+			if got := NewReleaseBranch("release", mustNew(t, tc.version)).String(); got != tc.want {
+				t.Errorf("NewReleaseBranch().String() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseReleaseBranch(t *testing.T) {
+	for _, tc := range []struct {
+		prefix string
+		branch string
+		want   string
+	}{
+		{"release", "release-v3.29", "v3.29"},
+		{"release", "release-v3.29-2", "v3.29-2"},
+		{"release", "release-v3.29.2", "v3.29.2"},
+		{"release", "release-v3.29-hotfix.1", "v3.29-hotfix.1"},
+		{"release-x", "release-x-v3.29", "v3.29"},
 	} {
 		t.Run(tc.branch, func(t *testing.T) {
-			got, err := DeterminePublishStream(tc.branch, tc.version)
-			if err != nil {
-				t.Fatal(err)
+			b, ok := ParseReleaseBranch(tc.prefix, tc.branch)
+			if !ok {
+				t.Fatalf("ParseReleaseBranch(%q, %q) is not a release branch", tc.prefix, tc.branch)
 			}
-			if got != tc.want {
-				t.Errorf("DeterminePublishStream() = %q, want %q", got, tc.want)
+			if b.Stream != tc.want {
+				t.Errorf("Stream = %q, want %q", b.Stream, tc.want)
+			}
+			if b.String() != tc.branch {
+				t.Errorf("String() = %q, want %q", b.String(), tc.branch)
 			}
 		})
 	}
 
-	t.Run("rejects a non-semver version", func(t *testing.T) {
-		if _, err := DeterminePublishStream("release-v3.29", "not-a-version"); err == nil {
-			t.Error("want an error")
-		}
-	})
+	for _, tc := range []struct {
+		prefix string
+		branch string
+	}{
+		{"release", "master"},
+		{"release", "release-v3"},
+		{"release", "release-foo"},
+		{"release", "build-v3.29.0"},
+		{"release", "release-x-v3.29"},
+		{"", "v3.29"},
+	} {
+		t.Run(tc.branch+" is not a release branch", func(t *testing.T) {
+			if _, ok := ParseReleaseBranch(tc.prefix, tc.branch); ok {
+				t.Errorf("ParseReleaseBranch(%q, %q) is a release branch", tc.prefix, tc.branch)
+			}
+		})
+	}
+}
+
+func TestEPLine(t *testing.T) {
+	for _, tc := range []struct {
+		stream string
+		want   int
+	}{
+		{"v3.29", 0},
+		{"v3.29-1", 1},
+		{"v3.29-2", 2},
+		{"v3.29.2", 0},
+		{"v3.29.2-2", 0},
+		{"v3.29-hotfix.1", 0},
+	} {
+		t.Run(tc.stream, func(t *testing.T) {
+			if got := (ReleaseBranch{prefix: "release", Stream: tc.stream}).EPLine(); got != tc.want {
+				t.Errorf("EPLine() = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPublishStream(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		branch  string
+		version string
+		want    string
+	}{
+		{"release branch", "release-v3.29", "v3.29.0", "v3.29"},
+		{"default branch", "master", "v3.29.0-0.dev-424-gfd40f1838223", "master"},
+		{"prefix with a dash", "release-x-v3.29", "v3.29.0", "v3.29"},
+		{"EP1 version on a plain branch", "release-x-v3.29", "v3.29.0-1.0", "v3.29-1"},
+		{"EP2 version on an EP2 line", "release-x-v3.29-2", "v3.29.0-2.0", "v3.29-2"},
+		{"dev build on an EP2 line", "release-x-v3.29-2", "v3.29.0-2.0-0.dev-4-gfd40f1838223", "v3.29-2"},
+		{"custom tail", "release-x-v3.29-hotfix.1", "v3.29.1", "v3.29"},
+		{"patch branch", "release-x-v3.29.2", "v3.29.2", "v3.29"},
+		{"not a release branch", "build-v3.29.0", "v3.29.0", "v3.29"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := PublishStream(tc.branch, mustNew(t, tc.version)); got != tc.want {
+				t.Errorf("PublishStream(%q, %q) = %q, want %q", tc.branch, tc.version, got, tc.want)
+			}
+		})
+	}
 }
 
 func mustNew(t *testing.T, s string) Version {

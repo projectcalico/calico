@@ -193,25 +193,31 @@ func TestNote(t *testing.T) {
 	})
 }
 
-func TestReleaseBranch(t *testing.T) {
+func TestProductComponents(t *testing.T) {
 	for _, tc := range []struct {
-		productVer string
-		want       string
+		branch string
+		want   string
 	}{
-		{"v3.31.0", "release-v3.31"},
-		{"v3.31.5", "release-v3.31"},
-		{"v3.31.0-1.0", "release-v3.31-1"},
+		{"master", "master"},
+		{"release-v3.31", "release-v3.31"},
+		{"release-v3.31-1", "release-v3.31-1"},
 	} {
-		t.Run(tc.productVer, func(t *testing.T) {
-			got, err := releaseBranch("release", tc.productVer)
+		t.Run("networking-calico on "+tc.branch, func(t *testing.T) {
+			got, err := productComponents(Config{ReleaseBranchPrefix: "release"}, tc.branch, "v3.31.0-0.dev-4-gfd40f1838223")
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got != tc.want {
-				t.Errorf("want %q, got %q", tc.want, got)
+			if v := got[networkingCalicoComponentName].Version; v != tc.want {
+				t.Errorf("networking-calico version = %q, want %q", v, tc.want)
 			}
 		})
 	}
+
+	t.Run("requires a release branch prefix", func(t *testing.T) {
+		if _, err := productComponents(Config{}, "master", "v3.31.0"); err == nil {
+			t.Error("want an error")
+		}
+	})
 }
 
 // The branch decides the publish stream, so a pin read from a file has to

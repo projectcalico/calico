@@ -210,26 +210,57 @@ func DetermineReleaseVersion(v Version, devTagSuffix string) (Version, error) {
 	}
 }
 
-// epBranchStreamSuffix returns the stream suffix (e.g. "-2") for a release
-// branch that carries one. The default returns "" so the stream comes from the
-// version alone; a build can override it to key the stream off the branch name.
-var epBranchStreamSuffix = func(branch string) string { return "" }
+type ReleaseBranch struct {
+	prefix string
+	Stream string
+}
 
-// DeterminePublishStream returns the stream for a given branch and version.
-// If the branch is the default branch i.e. master, the stream is master.
-// Otherwise, the stream is the major and minor version of the version. When the
-// branch carries a stream suffix (see epBranchStreamSuffix), that suffix is
-// used instead of any suffix the version would give.
-func DeterminePublishStream(branch string, version string) (string, error) {
-	if branch == utils.DefaultBranch {
-		return branch, nil
+var (
+	streamRe = regexp.MustCompile(`^v\d+\.\d+([.-].*)?$`)
+	epLineRe = regexp.MustCompile(`^v\d+\.\d+-(\d+)$`)
+)
+
+func NewReleaseBranch(prefix string, v Version) ReleaseBranch {
+	return ReleaseBranch{prefix: prefix, Stream: v.Stream()}
+}
+
+// ParseReleaseBranch returns false for the default branch and any branch that is not
+// "<prefix>-vX.Y...".
+func ParseReleaseBranch(prefix, branch string) (ReleaseBranch, bool) {
+	stream, ok := strings.CutPrefix(branch, prefix+"-")
+	if !ok || !streamRe.MatchString(stream) {
+		return ReleaseBranch{}, false
 	}
-	ver, err := New(version)
+	return ReleaseBranch{prefix: prefix, Stream: stream}, true
+}
+
+func (b ReleaseBranch) String() string {
+	return b.prefix + "-" + b.Stream
+}
+
+// EPLine returns N for a "vX.Y-N" stream, and 0 for any other stream.
+func (b ReleaseBranch) EPLine() int {
+	m := epLineRe.FindStringSubmatch(b.Stream)
+	if m == nil {
+		return 0
+	}
+	n, err := strconv.Atoi(m[1])
 	if err != nil {
-		return "", err
+		return 0
 	}
-	if suffix := epBranchStreamSuffix(branch); suffix != "" {
-		return ver.PrimaryStream() + suffix, nil
+	return n
+}
+
+// PublishStream returns the stream a build of v on branch publishes to.
+// Early preview line number comes from the branch.
+func PublishStream(branch string, v Version) string {
+	if branch == utils.DefaultBranch {
+		return branch
 	}
-	return ver.Stream(), nil
+	if i := strings.LastIndex(branch, "-v"); i > 0 {
+		if rb, ok := ParseReleaseBranch(branch[:i], branch); ok && rb.EPLine() > 0 {
+			return fmt.Sprintf("%s-%d", v.PrimaryStream(), rb.EPLine())
+		}
+	}
+	return v.Stream()
 }

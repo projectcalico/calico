@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -141,14 +142,14 @@ var releaseImages = func() ([]string, error) {
 
 // productComponents contributes the product's own pinned components. A build
 // with more of them replaces this.
-var productComponents = func(cfg Config, productVer string) (map[string]registry.Component, error) {
+var productComponents = func(cfg Config, branch, productVer string) (map[string]registry.Component, error) {
 	// Only a generated pin derives a branch; a reused one never gets here.
 	if cfg.ReleaseBranchPrefix == "" {
 		return nil, fmt.Errorf("release branch prefix is required to generate a pin")
 	}
-	networkingCalico, err := releaseBranch(cfg.ReleaseBranchPrefix, productVer)
-	if err != nil {
-		return nil, err
+	networkingCalico := utils.DefaultBranch
+	if rb, ok := version.ParseReleaseBranch(cfg.ReleaseBranchPrefix, branch); ok {
+		networkingCalico = rb.String()
 	}
 	components := map[string]registry.Component{
 		apiComponentName:              {Version: productVer},
@@ -164,15 +165,6 @@ var productComponents = func(cfg Config, productVer string) (map[string]registry
 		components[img] = registry.Component{Version: productVer}
 	}
 	return components, nil
-}
-
-// releaseBranch returns the release branch for a product version.
-var releaseBranch = func(prefix, productVer string) (string, error) {
-	v, err := version.New(productVer)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%s-%s", prefix, v.Stream()), nil
 }
 
 // productVersion returns the git-describe version of the product repository.
@@ -232,11 +224,11 @@ var hash = func(productVer string, repoComponents map[string]registry.Component)
 }
 
 var releaseName = func(branch, productVer string) (string, error) {
-	stream, err := version.DeterminePublishStream(branch, productVer)
+	v, err := version.New(productVer)
 	if err != nil {
 		return "", err
 	}
-	name := fmt.Sprintf("%s-%s-%s", time.Now().Format("2006-01-02"), stream, RandomWord())
+	name := fmt.Sprintf("%s-%s-%s", time.Now().Format("2006-01-02"), version.PublishStream(branch, v), RandomWord())
 	return strings.ReplaceAll(name, ".", "-"), nil
 }
 
