@@ -22,7 +22,6 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/version"
 )
 
 func manifestsCommand(cfg *Config) *cli.Command {
@@ -93,7 +92,7 @@ var pinnedManifests = func(cfg *Config, c *cli.Command, pin pinned) (*manifests.
 			OutputDir: h.Source,
 		}, nil
 	}
-	ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
+	ver, operatorVer, err := manifests.Versions(cfg.RepoRootDir)
 	if err != nil {
 		return nil, err
 	}

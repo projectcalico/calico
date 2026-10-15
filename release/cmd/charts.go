@@ -21,8 +21,8 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/version"
 )
 
 func chartsCommand(cfg *Config) *cli.Command {
@@ -131,7 +131,7 @@ var pinnedChart = func(cfg *Config, c *cli.Command, pin pinned) (*charts.Chart, 
 			BaseDir:        charts.OutputDir(h.Source),
 		}, nil
 	}
-	ver, _, err := version.VersionsFromManifests(cfg.RepoRootDir)
+	ver, _, err := manifests.Versions(cfg.RepoRootDir)
 	if err != nil {
 		return nil, err
 	}

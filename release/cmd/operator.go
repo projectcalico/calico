@@ -20,9 +20,9 @@ import (
 
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/version"
 )
 
 func operatorCommand(cfg *Config) *cli.Command {
@@ -154,7 +154,7 @@ var operatorFor = func(cfg *Config, c *cli.Command, pin pinned) (*operator.Opera
 }
 
 var releaseOperator = func(cfg *Config, c *cli.Command) (*operator.Operator, error) {
-	ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
+	ver, operatorVer, err := manifests.Versions(cfg.RepoRootDir)
 	if err != nil {
 		return nil, err
 	}
