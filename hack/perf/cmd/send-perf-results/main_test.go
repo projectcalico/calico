@@ -45,9 +45,14 @@ type recordedRequest struct {
 	body         []byte
 }
 
-// fakeES records every request and answers each path with the status in statuses,
-// or 200 for a path it does not list.
-func fakeES(t *testing.T, statuses map[string]int) (*httptest.Server, func() []recordedRequest) {
+type fakeResponse struct {
+	status int
+	body   string
+}
+
+// fakeES records every request and answers each "METHOD /path" with its entry in responses,
+// or 200 and an empty object for one it does not list.
+func fakeES(t *testing.T, responses map[string]fakeResponse) (*httptest.Server, func() []recordedRequest) {
 	t.Helper()
 	var mu sync.Mutex
 	var reqs []recordedRequest
@@ -56,10 +61,12 @@ func fakeES(t *testing.T, statuses map[string]int) (*httptest.Server, func() []r
 		mu.Lock()
 		reqs = append(reqs, recordedRequest{r.Method, r.URL.Path, body})
 		mu.Unlock()
-		if code, ok := statuses[r.URL.Path]; ok {
-			w.WriteHeader(code)
+		resp, ok := responses[r.Method+" "+r.URL.Path]
+		if !ok {
+			resp = fakeResponse{http.StatusOK, "{}"}
 		}
-		_, _ = w.Write([]byte("{}"))
+		w.WriteHeader(resp.status)
+		_, _ = w.Write([]byte(resp.body))
 	}))
 	t.Cleanup(srv.Close)
 	return srv, func() []recordedRequest {
@@ -89,8 +96,8 @@ func captureLog(t *testing.T) *bytes.Buffer {
 func TestApplyTemplatesPutsMappingsToLiveIndex(t *testing.T) {
 	// The template PUT is refused, as it is for a writer without the cluster
 	// privilege; the live mapping must still be applied.
-	srv, requests := fakeES(t, map[string]int{
-		"/_index_template/benchmark_data_fam": http.StatusForbidden,
+	srv, requests := fakeES(t, map[string]fakeResponse{
+		"PUT /_index_template/benchmark_data_fam": {http.StatusForbidden, "{}"},
 	})
 	logs := captureLog(t)
 
@@ -124,8 +131,8 @@ func TestApplyTemplatesPutsMappingsToLiveIndex(t *testing.T) {
 }
 
 func TestApplyTemplatesSkipsMissingIndex(t *testing.T) {
-	srv, _ := fakeES(t, map[string]int{
-		"/benchmark_data_fam_2026/_mapping": http.StatusNotFound,
+	srv, _ := fakeES(t, map[string]fakeResponse{
+		"PUT /benchmark_data_fam_2026/_mapping": {http.StatusNotFound, "{}"},
 	})
 	logs := captureLog(t)
 
@@ -142,8 +149,8 @@ func TestApplyTemplatesSkipsMissingIndex(t *testing.T) {
 }
 
 func TestApplyTemplatesWarnsOnMappingConflict(t *testing.T) {
-	srv, _ := fakeES(t, map[string]int{
-		"/benchmark_data_fam_2026/_mapping": http.StatusBadRequest,
+	srv, _ := fakeES(t, map[string]fakeResponse{
+		"PUT /benchmark_data_fam_2026/_mapping": {http.StatusBadRequest, "{}"},
 	})
 	logs := captureLog(t)
 
@@ -169,6 +176,127 @@ func TestApplyTemplatesWithoutMappings(t *testing.T) {
 		if strings.HasSuffix(r.path, "/_mapping") {
 			t.Errorf("unexpected mapping PUT for a template with no mappings: %s", r.path)
 		}
+	}
+}
+
+func writeDoc(t *testing.T, doc string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "benchmark_data_fam"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "benchmark_data_fam", "doc.json"), []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// postedDocs returns the bodies POSTed as documents.
+func postedDocs(t *testing.T, reqs []recordedRequest) []map[string]any {
+	t.Helper()
+	var docs []map[string]any
+	for _, r := range reqs {
+		if r.method == http.MethodPost && strings.HasSuffix(r.path, "/_doc") {
+			var doc map[string]any
+			if err := json.Unmarshal(r.body, &doc); err != nil {
+				t.Fatalf("posted body is not JSON: %v", err)
+			}
+			docs = append(docs, doc)
+		}
+	}
+	return docs
+}
+
+func schemaChanges(reqs []recordedRequest) []string {
+	var paths []string
+	for _, r := range reqs {
+		if r.method == http.MethodPut {
+			paths = append(paths, r.path)
+		}
+	}
+	return paths
+}
+
+var prMetadata = map[string]any{fieldPRNumber: "1234"}
+
+func TestPRRunHoldsBackUnmappedFields(t *testing.T) {
+	index := "benchmark_data_fam_" + indexYear()
+	srv, requests := fakeES(t, map[string]fakeResponse{
+		"GET /" + index + "/_mapping": {http.StatusOK,
+			`{"` + index + `": {"mappings": {"properties": {"total_ms": {"type": "double"}, "pr_number": {"type": "keyword"}}}}}`},
+	})
+	logs := captureLog(t)
+
+	sent, failed, err := publish(srv.Client(), srv.URL, "", writeDoc(t, `{"total_ms": 5, "cpu_model": "x"}`),
+		writeTemplate(t, testTemplate), prMetadata, false)
+	if err != nil || sent != 1 || failed != 0 {
+		t.Fatalf("publish = (%d, %d, %v), want (1, 0, nil)", sent, failed, err)
+	}
+
+	if puts := schemaChanges(requests()); len(puts) != 0 {
+		t.Errorf("a PR run changed the schema: %v", puts)
+	}
+	want := map[string]any{"total_ms": 5.0, "pr_number": "1234"}
+	if docs := postedDocs(t, requests()); len(docs) != 1 || !reflect.DeepEqual(docs[0], want) {
+		t.Errorf("posted %v, want only the mapped fields %v", docs, want)
+	}
+	if !strings.Contains(logs.String(), "held back fields not yet mapped, until a run after merge: cpu_model") {
+		t.Errorf("held-back field not logged; log:\n%s", logs)
+	}
+}
+
+func TestPRRunWithoutIndexKeepsTemplateFields(t *testing.T) {
+	srv, requests := fakeES(t, map[string]fakeResponse{
+		"GET /benchmark_data_fam_" + indexYear() + "/_mapping": {http.StatusNotFound, "{}"},
+	})
+	captureLog(t)
+
+	if _, _, err := publish(srv.Client(), srv.URL, "", writeDoc(t, `{"cpu_model": "x", "undeclared": 1}`),
+		writeTemplate(t, testTemplate), prMetadata, false); err != nil {
+		t.Fatal(err)
+	}
+
+	if puts := schemaChanges(requests()); len(puts) != 0 {
+		t.Errorf("a PR run changed the schema: %v", puts)
+	}
+	want := map[string]any{"cpu_model": "x"}
+	if docs := postedDocs(t, requests()); len(docs) != 1 || !reflect.DeepEqual(docs[0], want) {
+		t.Errorf("posted %v, want only the template's fields %v", docs, want)
+	}
+}
+
+func TestPRRunWithUnreadableMappingSendsNothing(t *testing.T) {
+	srv, requests := fakeES(t, map[string]fakeResponse{
+		"GET /benchmark_data_fam_" + indexYear() + "/_mapping": {http.StatusInternalServerError, "{}"},
+	})
+	captureLog(t)
+
+	sent, failed, err := publish(srv.Client(), srv.URL, "", writeDoc(t, `{"cpu_model": "x"}`),
+		writeTemplate(t, testTemplate), prMetadata, false)
+	if err != nil || sent != 0 || failed != 1 {
+		t.Fatalf("publish = (%d, %d, %v), want (0, 1, nil)", sent, failed, err)
+	}
+	if docs := postedDocs(t, requests()); len(docs) != 0 {
+		t.Errorf("posted %v without knowing what is mapped", docs)
+	}
+}
+
+func TestNonPRRunAppliesSchemaAndSendsEveryField(t *testing.T) {
+	srv, requests := fakeES(t, nil)
+	captureLog(t)
+
+	if _, _, err := publish(srv.Client(), srv.URL, "", writeDoc(t, `{"cpu_model": "x", "undeclared": 1}`),
+		writeTemplate(t, testTemplate), map[string]any{}, false); err != nil {
+		t.Fatal(err)
+	}
+
+	wantPuts := []string{"/_index_template/benchmark_data_fam", "/benchmark_data_fam_" + indexYear() + "/_mapping"}
+	if puts := schemaChanges(requests()); !reflect.DeepEqual(puts, wantPuts) {
+		t.Errorf("schema PUTs = %v, want %v", puts, wantPuts)
+	}
+	want := map[string]any{"cpu_model": "x", "undeclared": 1.0}
+	if docs := postedDocs(t, requests()); len(docs) != 1 || !reflect.DeepEqual(docs[0], want) {
+		t.Errorf("posted %v, want every field %v", docs, want)
 	}
 }
 

@@ -84,7 +84,9 @@ On each invocation, in order:
    live `<family>_<UTC year>/_mapping` (skipped if that index does not exist
    yet).  Both are idempotent -- see
    [When does the PUT have effect?](#when-does-the-put-have-effect) for what
-   they are and aren't buying.
+   they are and aren't buying.  A PR run (one with a `pr_number`) skips both,
+   and instead drops from its documents any field the live index has not
+   mapped yet -- see [Adding a field](#adding-a-field).
 2. **Walk `artifacts/perf/<family>/*.json`** for every `<family>` subdirectory.
 3. **Augment each doc** with CI metadata (`@timestamp`, `git_commit`,
    `git_branch`, `code_version`, `ci_run_id`, `pr_number`, `env`) unless the
@@ -131,14 +133,22 @@ HTTP per family per CI job, effectively free, and (b) the self-heal property
 in case (4) is worth more than the cost.
 
 Mid-year, the mapping PUT is what carries a template edit to the live index,
-and ES only lets it *add* fields.  An added field gets the template's type
-from the first run that knows about it -- which is the PR's own CI run, so get
-the type right before pushing: once a document has been indexed, the type is
-fixed until the next year's index.  A removed field still appears in old docs'
+and ES only lets it *add* fields.  A removed field still appears in old docs'
 `_source` and the live index's mapping.  A type change is rejected (logged as
 a warning) and takes effect only when the next year's index rolls over; for
 one that cannot wait, reindex into a renamed index (`_2026_v2`) rather than
 fighting the existing mapping.
+
+### Adding a field
+
+Declare it in `index-templates/<family>.json` in the same PR that starts
+producing it.  Once a field is mapped its type is fixed for the rest of the
+year, so a PR's own CI runs never map anything: they publish only the fields
+the live index already has, and log the ones they held back.  The first run
+after merge applies the reviewed template and publishes the new field.  If
+the live index's mapping cannot be read, a PR run sends nothing for that
+family; if the index does not exist yet, it keeps just the template's
+fields.
 
 ## Schema: what makes a good datapoint
 
