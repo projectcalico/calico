@@ -462,6 +462,17 @@ func (r *CalicoManager) getRegistryFromManifests() (string, error) {
 	return manifests.Registry(root)
 }
 
+// Release branch and version patterns. A fork with its own branch or version
+// scheme overrides them from an init function.
+var (
+	// releaseBranchTail matches what follows "<prefix>-" on a release branch.
+	releaseBranchTail = `v\d+\.\d+(?:-\d+)?`
+
+	// releaseVersionRe and operatorReleaseVersionRe match the versions a release may carry.
+	releaseVersionRe         = regexp.MustCompile(`^v\d+\.\d+\.\d+(-\d+\.\d+)?$`)
+	operatorReleaseVersionRe = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
+)
+
 func (r *CalicoManager) PreHashreleaseValidate() error {
 	var errStack error
 	if r.validateBranch {
@@ -469,7 +480,7 @@ func (r *CalicoManager) PreHashreleaseValidate() error {
 		if err != nil {
 			return fmt.Errorf("failed to determine branch: %s", err)
 		}
-		match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, r.releaseBranchPrefix)
+		match := fmt.Sprintf(`^(%s|%s-%s)$`, utils.DefaultBranch, r.releaseBranchPrefix, releaseBranchTail)
 		re := regexp.MustCompile(match)
 		if !re.MatchString(branch) {
 			errStack = errors.Join(errStack, fmt.Errorf("calico checkout is not on a release branch"))
@@ -504,7 +515,7 @@ func (r *CalicoManager) PreReleaseValidate() error {
 			return fmt.Errorf("failed to determine branch: %s", err)
 		}
 		// releases can only be cut from a release branch (i.e release-vX.Y) or build version branch (i.e. build-vX.Y.Z)
-		match := fmt.Sprintf(`^(%s-v\d+\.\d+(?:-\d+)?|build-v\d+\.\d+\.\d+)$`, r.releaseBranchPrefix)
+		match := fmt.Sprintf(`^(%s-%s|build-v\d+\.\d+\.\d+)$`, r.releaseBranchPrefix, releaseBranchTail)
 		re := regexp.MustCompile(match)
 		if !re.MatchString(branch) {
 			return fmt.Errorf("current branch (%s) is not a release branch", branch)
@@ -1812,12 +1823,10 @@ func (r *CalicoManager) prepPrereqs() error {
 	}
 
 	// Check that the versions are release version.
-	versionRegex := regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
-	if !versionRegex.MatchString(r.operatorVersion) {
+	if !operatorReleaseVersionRe.MatchString(r.operatorVersion) {
 		return fmt.Errorf("operator version (%s) is not a release version", r.operatorVersion)
 	}
-	versionRegex = regexp.MustCompile(`^v\d+\.\d+\.\d+(-\d+\.\d+)?$`)
-	if !versionRegex.MatchString(r.calicoVersion) {
+	if !releaseVersionRe.MatchString(r.calicoVersion) {
 		return fmt.Errorf("version (%s) is not a release version", r.calicoVersion)
 	}
 
