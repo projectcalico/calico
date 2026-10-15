@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 var (
@@ -24,9 +24,9 @@ func init() {
 	flag.StringVar(&releaseVersion, "release-version", "", "Version for the release")
 	flag.StringVar(&operatorVersion, "operator-version", "", "Version for Tigera operator")
 	flag.StringVar(&flannelVersion, "flannel-version", "", "Version for flannel")
-	flag.StringVar(&githubOrg, "github-org", utils.ProjectCalicoOrg, "GitHub organization")
-	flag.StringVar(&githubRepo, "github-repo", utils.CalicoRepoName, "GitHub repository")
-	flag.StringVar(&githubRemote, "github-repo-remote", utils.DefaultRemote, "GitHub repository remote")
+	flag.StringVar(&githubOrg, "github-org", defaults.ProjectCalicoOrg, "GitHub organization")
+	flag.StringVar(&githubRepo, "github-repo", defaults.CalicoRepoName, "GitHub repository")
+	flag.StringVar(&githubRemote, "github-repo-remote", defaults.Remote(), "GitHub repository remote")
 	flag.StringVar(&images, "images", "", "List of images to check")
 }
 

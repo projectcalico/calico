@@ -26,10 +26,10 @@ import (
 	"time"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -149,7 +149,7 @@ func calicoComponents(cfg Config, branch, productVer string) (map[string]registr
 	if cfg.ReleaseBranchPrefix == "" {
 		return nil, fmt.Errorf("release branch prefix is required to generate a pin")
 	}
-	networkingCalico := utils.DefaultBranch
+	networkingCalico := defaults.Branch
 	if rb, ok := version.ParseReleaseBranch(cfg.ReleaseBranchPrefix, branch); ok {
 		networkingCalico = rb.String()
 	}

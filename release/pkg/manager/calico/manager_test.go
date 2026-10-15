@@ -39,6 +39,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/binaries"
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/images"
@@ -48,7 +49,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -952,7 +952,7 @@ func imageManager(t *testing.T, f *fakeRunner, logsDir string) (*CalicoManager, 
 		logsDir:             logsDir,
 		outputDir:           t.TempDir(),
 		recordsDir:          t.TempDir(),
-		releaseBranchPrefix: "release",
+		releaseBranchPrefix: defaults.ReleaseBranchPrefix(),
 		resolveDigest: func(string) (string, bool, error) {
 			return "sha256:aaa", true, nil
 		},
@@ -1342,7 +1342,7 @@ func TestImageStepsWriteLogFiles(t *testing.T) {
 
 func TestPublishBranchTag(t *testing.T) {
 	t.Run("moves the tag", func(t *testing.T) {
-		prefix, dev := utils.ReleaseBranchPrefix(), utils.DevTagSuffix()
+		prefix, dev := defaults.ReleaseBranchPrefix(), defaults.DevTagSuffix()
 		tests := []struct {
 			name          string
 			version       string

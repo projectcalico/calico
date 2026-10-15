@@ -19,6 +19,8 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 // setValues replaces the cached loader with one that returns v. Tests defer
@@ -69,36 +71,32 @@ func TestParseMetadataIgnoresPreExistingVars(t *testing.T) {
 	}
 }
 
-func TestAccessorsWithInjectedValues(t *testing.T) {
-	t.Cleanup(resetValues)
-	setValues(map[string]string{
-		KeyOrganization:        "o",
-		KeyGitRepo:             "r",
-		KeyGitRemote:           "rem",
-		KeyReleaseBranchPrefix: "rp",
-		KeyDevTagSuffix:        "ds",
-	})
-	if got := Organization(); got != "o" {
-		t.Errorf("Organization: got %q, want %q", got, "o")
+func TestAccessors(t *testing.T) {
+	type values struct{ org, repo, remote, prefix, suffix string }
+	get := func() values {
+		return values{Organization(), Repo(), Remote(), ReleaseBranchPrefix(), DevTagSuffix()}
 	}
-	if got := Repo(); got != "r" {
-		t.Errorf("Repo: got %q, want %q", got, "r")
-	}
-	if got := Remote(); got != "rem" {
-		t.Errorf("Remote: got %q, want %q", got, "rem")
-	}
-	if got := ReleaseBranchPrefix(); got != "rp" {
-		t.Errorf("ReleaseBranchPrefix: got %q, want %q", got, "rp")
-	}
-	if got := DevTagSuffix(); got != "ds" {
-		t.Errorf("DevTagSuffix: got %q, want %q", got, "ds")
-	}
-}
 
-func TestAccessorsEmptyWhenUnset(t *testing.T) {
-	t.Cleanup(resetValues)
-	setValues(map[string]string{})
-	if got := Organization(); got != "" {
-		t.Errorf("Organization with empty map: got %q, want empty", got)
-	}
+	t.Run("metadata set", func(t *testing.T) {
+		t.Cleanup(resetValues)
+		setValues(map[string]string{
+			KeyOrganization:        "o",
+			KeyGitRepo:             "r",
+			KeyGitRemote:           "rem",
+			KeyReleaseBranchPrefix: "rp",
+			KeyDevTagSuffix:        "ds",
+		})
+		if diff := cmp.Diff(values{"o", "r", "rem", "rp", "ds"}, get(), cmp.AllowUnexported(values{})); diff != "" {
+			t.Errorf("accessors (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("metadata unset", func(t *testing.T) {
+		t.Cleanup(resetValues)
+		setValues(map[string]string{})
+		want := values{organization, repo, remote, releaseBranchPrefix, devTagSuffix}
+		if diff := cmp.Diff(want, get(), cmp.AllowUnexported(values{})); diff != "" {
+			t.Errorf("accessors (-want +got):\n%s", diff)
+		}
+	})
 }

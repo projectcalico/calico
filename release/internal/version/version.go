@@ -24,7 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/defaults"
 )
 
 // Version is a parsed semver version. Build one with New; the zero value is
@@ -57,7 +57,7 @@ func (v Version) String() string {
 // Milestone returns the GitHub milestone name which corresponds with this version.
 func (v Version) Milestone(prefix string) string {
 	if prefix == "" {
-		prefix = utils.ProductName
+		prefix = defaults.ProductName
 	}
 	return fmt.Sprintf("%s v%d.%d.%d", prefix, v.sv.Major(), v.sv.Minor(), v.sv.Patch())
 }
@@ -254,7 +254,7 @@ func (b ReleaseBranch) EPLine() int {
 // PublishStream returns the stream a build of v on branch publishes to.
 // Early preview line number comes from the branch.
 func PublishStream(branch string, v Version) string {
-	if branch == utils.DefaultBranch {
+	if branch == defaults.Branch {
 		return branch
 	}
 	if i := strings.LastIndex(branch, "-v"); i > 0 {

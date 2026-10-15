@@ -20,6 +20,7 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/operatorimages"
@@ -91,7 +92,7 @@ var (
 			if len(scanDirs) == 0 {
 				scanDirs = images.ReleaseDirs()
 			}
-			scan, err := scanRequest(c, cfg, scanDirs, ver.PrimaryStream(), utils.CalicoProductCode)
+			scan, err := scanRequest(c, cfg, scanDirs, ver.PrimaryStream(), defaults.ProductCode)
 			if err != nil {
 				return err
 			}

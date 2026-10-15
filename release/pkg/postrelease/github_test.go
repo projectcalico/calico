@@ -13,9 +13,9 @@ import (
 	"github.com/google/go-github/v53/github"
 
 	"github.com/projectcalico/calico/release/internal/charts"
+	"github.com/projectcalico/calico/release/internal/defaults"
 	igithub "github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/outputs"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -109,8 +109,8 @@ func TestGitHubMilestone(t *testing.T) {
 		milestone      string
 		expectedStated string
 	}{
-		{milestone: fmt.Sprintf("%s %s", utils.ProductName, ver.String()), expectedStated: "closed"},
-		{milestone: fmt.Sprintf("%s %s", utils.ProductName, nextVer.String()), expectedStated: "open"},
+		{milestone: fmt.Sprintf("%s %s", defaults.ProductName, ver.String()), expectedStated: "closed"},
+		{milestone: fmt.Sprintf("%s %s", defaults.ProductName, nextVer.String()), expectedStated: "open"},
 	} {
 		t.Run(tt.milestone, func(t *testing.T) {
 			milestones, resp, err := githubClient().Issues.ListMilestones(context.Background(), githubOrg, githubRepo, &github.MilestoneListOptions{

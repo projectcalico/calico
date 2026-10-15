@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/charts"
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
@@ -59,9 +60,7 @@ var (
 	// Default defaultRegistries to which all release images are pushed.
 	defaultRegistries = registry.DefaultCalicoRegistries
 
-	defaultOrg    = utils.ProjectCalicoOrg
-	defaultRepo   = utils.CalicoRepoName
-	defaultBranch = utils.DefaultBranch
+	defaultBranch = defaults.Branch
 
 	branchTagTarget = "retag-build-images-with-registries push-images-to-registries push-manifests"
 
@@ -75,7 +74,7 @@ func NewManager(opts ...Option) (*CalicoManager, error) {
 	// Configure defaults here.
 	b := &CalicoManager{
 		runner:           &command.RealCommandRunner{},
-		productCode:      utils.CalicoProductCode,
+		productCode:      defaults.ProductCode,
 		validate:         true,
 		validateBranch:   true,
 		manifests:        true,
@@ -477,7 +476,7 @@ func (r *CalicoManager) PreHashreleaseValidate() error {
 		if err != nil {
 			return fmt.Errorf("failed to determine branch: %s", err)
 		}
-		match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, r.releaseBranchPrefix)
+		match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, defaults.Branch, r.releaseBranchPrefix)
 		re := regexp.MustCompile(match)
 		if !re.MatchString(branch) {
 			errStack = errors.Join(errStack, fmt.Errorf("calico checkout is not on a release branch"))
@@ -743,7 +742,7 @@ func (r *CalicoManager) releasePrereqs() error {
 	}
 
 	// If we are releasing to projectcalico/calico, make sure we are releasing to the default registries.
-	if r.githubOrg == defaultOrg && r.repo == defaultRepo {
+	if r.githubOrg == defaults.Organization() && r.repo == defaults.Repo() {
 		if !reflect.DeepEqual(r.imageRegistries, defaultRegistries) {
 			return fmt.Errorf("image registries cannot be different from default registries for a release")
 		}
@@ -1784,7 +1783,7 @@ func (r *CalicoManager) createPrepPR(baseBranch, prepBranch string) error {
 		"--base", baseBranch,
 		"--head", prepBranch,
 	}
-	if r.githubOrg == defaultOrg && r.repo == defaultRepo {
+	if r.githubOrg == defaults.Organization() && r.repo == defaults.Repo() {
 		args = append(args, []string{
 			"--reviewer", fmt.Sprintf("%s/release-team", r.githubOrg),
 			"--label", "release-note-not-required,docs-not-required",
