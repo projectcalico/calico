@@ -87,6 +87,7 @@ func NewManager(opts ...Option) (*CalicoManager, error) {
 		operator:         true,
 		helmIndex:        true,
 		e2eBinaries:      true,
+		releaseNotes:     true,
 		dryRun:           false,
 		gitRef:           true,
 		githubRelease:    true,
@@ -224,6 +225,9 @@ type CalicoManager struct {
 	// releaseBranchPrefix is the prefix for the release branch.
 	releaseBranchPrefix string
 
+	// beforePrep runs on the base branch, after the prep checks pass.
+	beforePrep func() error
+
 	// cutOptions holds the branch-cut inputs
 	cutOptions branch.CutOptions
 
@@ -254,6 +258,7 @@ type CalicoManager struct {
 	operator       bool
 	helmIndex      bool
 	e2eBinaries    bool
+	releaseNotes   bool
 
 	retagImages  bool
 	fromRegistry string
@@ -537,9 +542,7 @@ func (r *CalicoManager) PreReleaseValidate() error {
 		return err
 	}
 
-	// Assert that release notes are present.
-	err = r.assertReleaseNotesPresent(r.calicoVersion.String())
-	if err != nil {
+	if err := r.assertReleaseNotesPresent(r.calicoVersion.String()); err != nil {
 		return err
 	}
 
@@ -1450,9 +1453,12 @@ func (r *CalicoManager) s3URI(path ...string) string {
 	return fmt.Sprintf("s3://%s/%s/", r.s3Bucket, strings.Join(path, "/"))
 }
 
+// Validate that the release notes for this version are present if release notes are enabled,
+// fail if not.
 func (r *CalicoManager) assertReleaseNotesPresent(ver string) error {
-	// Validate that the release notes for this version are present,
-	// fail if not.
+	if !r.releaseNotes {
+		return nil
+	}
 	releaseNotesPath := outputs.ReleaseNoteFilePath(r.repoRoot, ver)
 	releaseNotesStat, err := os.Stat(releaseNotesPath)
 	if err != nil {
@@ -1677,6 +1683,12 @@ func (r *CalicoManager) PrepareRelease() (string, error) {
 
 	defer r.prepareReleaseCleanup(baseBranch, prepBranch)
 
+	if r.beforePrep != nil {
+		if err := r.beforePrep(); err != nil {
+			return "", err
+		}
+	}
+
 	if err := r.switchToPrepBranch(prepBranch); err != nil {
 		return "", err
 	}
@@ -1698,6 +1710,14 @@ func (r *CalicoManager) switchToPrepBranch(prepBranch string) error {
 	return nil
 }
 
+var prepStagedPaths = func(repoRoot string) []string {
+	return []string{
+		filepath.Join(repoRoot, chartsDir),
+		manifests.Dir(repoRoot),
+		filepath.Join(repoRoot, outputs.ReleaseNotesDir),
+	}
+}
+
 // updateAndCommitPrep updates charts and manifests, then stages and commits.
 func (r *CalicoManager) updateAndCommitPrep() error {
 	if err := r.modifyHelmChartsValues(r.calicoVersion.String(), r.operatorVersion); err != nil {
@@ -1707,11 +1727,7 @@ func (r *CalicoManager) updateAndCommitPrep() error {
 		return fmt.Errorf("failed to run make generate: %w", err)
 	}
 
-	if _, err := r.git("add",
-		filepath.Join(r.repoRoot, chartsDir),
-		manifests.Dir(r.repoRoot),
-		filepath.Join(r.repoRoot, outputs.ReleaseNotesDir),
-	); err != nil {
+	if _, err := r.git(append([]string{"add"}, prepStagedPaths(r.repoRoot)...)...); err != nil {
 		return fmt.Errorf("failed to stage files: %w", err)
 	}
 	if _, err := r.git("commit", "-m", fmt.Sprintf("build: %s release", r.calicoVersion.String())); err != nil {
@@ -1783,7 +1799,6 @@ func (r *CalicoManager) switchToBaseBranch(baseBranch string) error {
 	return nil
 }
 
-// prepPrereqs validates that the repo is in a suitable state for release preparation.
 func (r *CalicoManager) prepPrereqs() error {
 	if !r.validate {
 		logrus.Warn("Skipping release preparation validation")
@@ -1819,7 +1834,6 @@ func (r *CalicoManager) prepPrereqs() error {
 		}
 	}
 
-	// Check that the release notes are present for this version.
 	if err := r.assertReleaseNotesPresent(r.calicoVersion.String()); err != nil {
 		return err
 	}

@@ -17,6 +17,7 @@ package calico
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"maps"
@@ -512,6 +513,59 @@ func TestPrepareDerived(t *testing.T) {
 			t.Errorf("ran %v before rejecting the branch", f.calls)
 		}
 	})
+}
+
+func TestPrepareRelease(t *testing.T) {
+	t.Run("beforePrep runs on the base branch and its error stops the prep", func(t *testing.T) {
+		f := newFakeRunner()
+		f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30\n", nil)
+		r := &CalicoManager{runner: f, repoRoot: t.TempDir(), calicoVersion: testVersion("v3.30.0"), releaseBranchPrefix: "release"}
+		r.beforePrep = func() error {
+			if f.ran("git switch") {
+				t.Errorf("switched branch before beforePrep (calls: %v)", f.calls)
+			}
+			return os.ErrInvalid
+		}
+		if _, err := r.PrepareRelease(); !errors.Is(err, os.ErrInvalid) {
+			t.Fatalf("PrepareRelease() = %v, want beforePrep's error", err)
+		}
+		if f.ran("git switch") {
+			t.Errorf("switched branch after beforePrep failed (calls: %v)", f.calls)
+		}
+	})
+}
+
+func TestAssertReleaseNotesPresent(t *testing.T) {
+	const ver = "v3.99.0"
+	for _, tc := range []struct {
+		name         string
+		releaseNotes bool
+		notes        string
+		writeNotes   bool
+		wantErr      bool
+	}{
+		{name: "present", releaseNotes: true, writeNotes: true, notes: "notes"},
+		{name: "missing", releaseNotes: true, wantErr: true},
+		{name: "empty", releaseNotes: true, writeNotes: true, wantErr: true},
+		{name: "missing with release notes off", releaseNotes: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if tc.writeNotes {
+				path := outputs.ReleaseNoteFilePath(root, ver)
+				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(tc.notes), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			r := &CalicoManager{repoRoot: root, releaseNotes: tc.releaseNotes}
+			if err := r.assertReleaseNotesPresent(ver); (err != nil) != tc.wantErr {
+				t.Errorf("assertReleaseNotesPresent() = %v, want error %v", err, tc.wantErr)
+			}
+		})
+	}
 }
 
 func TestRequireOnMainBranch(t *testing.T) {
