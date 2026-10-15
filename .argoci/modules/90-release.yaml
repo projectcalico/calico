@@ -25,7 +25,7 @@ steps:
   - name: release-build
     depends: [check-go]
     requests: {cpu: 2750m, memory: 2Gi}
-    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.3
+    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
     services:
       - docker
     commands: |
