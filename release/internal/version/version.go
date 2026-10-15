@@ -16,7 +16,6 @@ package version
 
 import (
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -25,9 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/utils"
-	"github.com/projectcalico/calico/release/internal/yamledit"
 )
 
 // Version is a parsed semver version. Build one with New; the zero value is
@@ -213,22 +210,6 @@ func DetermineReleaseVersion(v Version, devTagSuffix string) (Version, error) {
 	}
 }
 
-// used to determine the version in manifests.
-var productImage = "calico/calico"
-
-// VersionsFromManifests returns the versions of the product and operator from manifests.
-func VersionsFromManifests(repoRoot string) (Version, Version, error) {
-	productVersion, err := versionFromManifest(repoRoot, "ocp/02-tigera-operator.yaml", productImage)
-	if err != nil {
-		return Version{}, Version{}, err
-	}
-	operatorVersion, err := versionFromManifest(repoRoot, "tigera-operator.yaml", "operator")
-	if err != nil {
-		return Version{}, Version{}, err
-	}
-	return productVersion, operatorVersion, nil
-}
-
 // epBranchStreamSuffix returns the stream suffix (e.g. "-2") for a release
 // branch that carries one. The default returns "" so the stream comes from the
 // version alone; a build can override it to key the stream off the branch name.
@@ -251,26 +232,4 @@ func DeterminePublishStream(branch string, version string) (string, error) {
 		return ver.PrimaryStream() + suffix, nil
 	}
 	return ver.Stream(), nil
-}
-
-// versionFromManifest returns the version of the image matching the given match string from the given manifest.
-func versionFromManifest(repoRoot, manifest, imgMatch string) (Version, error) {
-	imgs, err := yamledit.Read(filepath.Join(manifests.Dir(repoRoot), manifest), "image")
-	if err != nil {
-		return Version{}, fmt.Errorf("read %s image from manifest %s: %w", imgMatch, manifest, err)
-	}
-
-	for _, i := range imgs {
-		if strings.Contains(i, imgMatch) {
-			splits := strings.SplitAfter(i, ":")
-			ver := splits[len(splits)-1]
-			// On the default branch the image is tagged "master", which is not a
-			// valid semver; treat it as the v0.0.0 dev version.
-			if ver == utils.DefaultBranch {
-				ver = "v0.0.0"
-			}
-			return New(ver)
-		}
-	}
-	return Version{}, fmt.Errorf("no images matching %s in manifest %s", imgMatch, manifest)
 }

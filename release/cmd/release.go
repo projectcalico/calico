@@ -28,6 +28,7 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/images"
+	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
@@ -336,7 +337,7 @@ func releaseValidationSubCommand(cfg *Config) *cli.Command {
 		Action: func(_ context.Context, c *cli.Command) error {
 			configureLogging("postrelease-validation.log")
 
-			ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
+			ver, operatorVer, err := manifests.Versions(cfg.RepoRootDir)
 			if err != nil {
 				return err
 			}

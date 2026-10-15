@@ -28,6 +28,7 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/manifests"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
@@ -178,7 +179,7 @@ func pinForRelease(cfg *Config, c *cli.Command) (*pinnedversion.Pin, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
+	_, operatorVer, err := manifests.Versions(cfg.RepoRootDir)
 	if err != nil {
 		return nil, fmt.Errorf("operator version from manifests: %w", err)
 	}
@@ -199,7 +200,7 @@ var releaseVersion = func(cfg *Config, c *cli.Command) (*version.Version, error)
 		}
 		return &ver, nil
 	}
-	ver, _, err := version.VersionsFromManifests(cfg.RepoRootDir)
+	ver, _, err := manifests.Versions(cfg.RepoRootDir)
 	if err != nil {
 		return nil, fmt.Errorf("version from manifest: %w", err)
 	}
