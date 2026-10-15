@@ -481,6 +481,11 @@ endif
 
 # Cross-compile env for Rust + cc-rs / bindgen. Same gate as the Go side.
 # Key suffixes use the long Rust triple (cc-rs convention); extend for ppc64le.
+#
+# Build scripts reuse CFLAGS to link probe programs. -B points clang at the
+# cross binutils for those links; unlike -fuse-ld, it is not reported unused on
+# compile-only calls, where that warning fails -Werror feature probes such as
+# those in aws-lc-sys.
 ifeq ($(BUILDARCH),amd64)
 ifneq ($(ARCH),amd64)
 RUST_CROSS_ENV := \
@@ -489,8 +494,8 @@ RUST_CROSS_ENV := \
 	-e CC_aarch64_unknown_linux_gnu=clang \
 	-e CXX_aarch64_unknown_linux_gnu=clang++ \
 	-e AR_aarch64_unknown_linux_gnu=$(CROSS_TRIPLE)-ar \
-	-e CFLAGS_aarch64_unknown_linux_gnu="--sysroot=$(CROSS_SYSROOT) -fuse-ld=lld" \
-	-e CXXFLAGS_aarch64_unknown_linux_gnu="--sysroot=$(CROSS_SYSROOT) -fuse-ld=lld" \
+	-e CFLAGS_aarch64_unknown_linux_gnu="--sysroot=$(CROSS_SYSROOT) -B/usr/bin/$(CROSS_TRIPLE)-" \
+	-e CXXFLAGS_aarch64_unknown_linux_gnu="--sysroot=$(CROSS_SYSROOT) -B/usr/bin/$(CROSS_TRIPLE)-" \
 	-e BINDGEN_EXTRA_CLANG_ARGS_aarch64_unknown_linux_gnu="--target=$(CROSS_TRIPLE) --sysroot=$(CROSS_SYSROOT) -I$(CROSS_SYSROOT)/usr/include"
 endif
 endif
