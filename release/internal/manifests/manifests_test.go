@@ -484,7 +484,7 @@ func TestVersions(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
-			writeManifest(t, root, "ocp/02-tigera-operator.yaml", "quay.io/calico/calico:"+tc.productTag)
+			writeManifest(t, root, "ocp/02-tigera-operator.yaml", "quay.io/"+productImage+":"+tc.productTag)
 			writeManifest(t, root, "tigera-operator.yaml", "quay.io/tigera/operator:v1.38.2")
 
 			product, operator, err := Versions(root)

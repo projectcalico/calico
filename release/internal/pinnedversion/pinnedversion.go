@@ -142,7 +142,9 @@ var releaseImages = func() ([]string, error) {
 
 // productComponents contributes the product's own pinned components. A build
 // with more of them replaces this.
-var productComponents = func(cfg Config, branch, productVer string) (map[string]registry.Component, error) {
+var productComponents = calicoComponents
+
+func calicoComponents(cfg Config, branch, productVer string) (map[string]registry.Component, error) {
 	// Only a generated pin derives a branch; a reused one never gets here.
 	if cfg.ReleaseBranchPrefix == "" {
 		return nil, fmt.Errorf("release branch prefix is required to generate a pin")
