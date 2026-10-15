@@ -22,7 +22,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
-var matchProfile = regexp.MustCompile("^/?calico/v1/policy/profile/([^/]+)/rules$")
+var matchProfile = regexp.MustCompile("^/?calico/v1/policy/profile/([^/]+)/(rules|labels)$")
 
 // ProfileKey is the common parent of a profile's v1 entries.  It is not a key in its own right.
 type ProfileKey struct {
@@ -69,6 +69,32 @@ func (key ProfileRulesKey) parseValue(rawData []byte) (any, error) {
 
 func (key ProfileRulesKey) String() string {
 	return fmt.Sprintf("ProfileRules(name=%s)", key.Name)
+}
+
+// ProfileLabelsKey is the key for a profile's labels.
+//
+// Deprecated: Typha v3.33 and earlier stream these keys, but nothing consumes them.  The type
+// remains only so that a newer Felix can parse them during an upgrade, instead of logging an error
+// for each one.
+type ProfileLabelsKey struct {
+	ProfileKey
+}
+
+func (key ProfileLabelsKey) defaultPath() (string, error) {
+	e, err := key.ProfileKey.defaultPath()
+	return e + "/labels", err
+}
+
+func (key ProfileLabelsKey) valueType() (reflect.Type, error) {
+	return reflect.TypeFor[map[string]string](), nil
+}
+
+func (key ProfileLabelsKey) parseValue(rawData []byte) (any, error) {
+	return parseJSONValue[map[string]string](key, rawData)
+}
+
+func (key ProfileLabelsKey) String() string {
+	return fmt.Sprintf("ProfileLabels(name=%s)", key.Name)
 }
 
 type ProfileRules struct {

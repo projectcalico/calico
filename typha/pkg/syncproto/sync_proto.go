@@ -422,17 +422,9 @@ type SerializedUpdate struct {
 
 var ErrBadKey = errors.New("unable to parse key")
 
-// ErrObsoleteKey is returned for a key that an older Typha may still send, but that this version
-// has no use for.  Callers should drop the update silently.
-var ErrObsoleteKey = errors.New("obsolete key")
-
 var kvRLL = logrusr.NewRateLimitedLogger()
 
 func (s SerializedUpdate) ToUpdate() (api.Update, error) {
-	if isObsoleteKey(s.Key) {
-		return api.Update{}, ErrObsoleteKey
-	}
-
 	// Parse the key.
 	parsedKey := model.KeyFromDefaultPath(s.Key)
 	if parsedKey == nil {
@@ -479,12 +471,6 @@ func (s SerializedUpdate) ToUpdate() (api.Update, error) {
 		},
 		UpdateType: s.UpdateType,
 	}, nil
-}
-
-// isObsoleteKey matches the v1 profile labels keys that Typha v3.33 and earlier stream alongside the
-// v3 Profile.
-func isObsoleteKey(key string) bool {
-	return strings.HasPrefix(key, "/calico/v1/policy/profile/") && strings.HasSuffix(key, "/labels")
 }
 
 // WouldBeNoOp returns true if this update would be a no-op given that previous has already been sent.

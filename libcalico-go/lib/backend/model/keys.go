@@ -346,8 +346,11 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 				}
 			case "profile":
 				pk := unescapeName(parts[4])
-				if parts[5] == "rules" {
+				switch parts[5] {
+				case "rules":
 					return ProfileRulesKey{ProfileKey: ProfileKey{pk}}
+				case "labels":
+					return ProfileLabelsKey{ProfileKey: ProfileKey{pk}}
 				}
 			default:
 				// Policy key of form /calico/v1/policy/<Kind>/<Namespace>/<Name>
@@ -538,8 +541,17 @@ func OldKeyFromDefaultPath(path string) Key {
 			Name:      unescapeName(m[3]),
 		}
 	} else if m := matchProfile.FindStringSubmatch(path); m != nil {
-		log.Debugf("Path is profile rules: %v", path)
-		return ProfileRulesKey{ProfileKey: ProfileKey{unescapeName(m[1])}}
+		log.Debugf("Path is a profile: %v (%v)", path, m[2])
+		pk := ProfileKey{unescapeName(m[1])}
+		switch m[2] {
+		case "rules":
+			log.Debugf("Profile rules")
+			return ProfileRulesKey{ProfileKey: pk}
+		case "labels":
+			log.Debugf("Profile labels")
+			return ProfileLabelsKey{ProfileKey: pk}
+		}
+		return nil
 	} else if m := matchTier.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a policy tier: %v", path)
 		return TierKey{Name: m[1]}

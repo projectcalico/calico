@@ -566,9 +566,6 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 			}
 			for _, kv := range msg.KVs {
 				update, err := kv.ToUpdate()
-				if errors.Is(err, syncproto.ErrObsoleteKey) {
-					continue
-				}
 				if err != nil {
 					logCxt.WithError(err).Error("Failed to deserialize update, skipping.")
 					continue
