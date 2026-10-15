@@ -51,6 +51,8 @@ const (
 	binDir      = "bin"
 	chartsDir   = "charts"
 	metadataKey = "metadata"
+
+	gitTrailerReleaseBranch = "Release-branch"
 )
 
 var (
@@ -1361,19 +1363,28 @@ func (r *CalicoManager) publishBranchTag() error {
 	return r.publishOperatorBranchTag(branch)
 }
 
-// releaseBranch returns "" for a hashrelease off a release branch, since its
-// version names a branch that may not be cut yet. An official release
-// publishes from its build branch, so its release branch comes from the version.
+// releaseBranch returns "" for a branch with no branch tag. An official release
+// runs on its prep branch, so it takes the release branch prep recorded.
 func (r *CalicoManager) releaseBranch() (string, error) {
 	if r.releaseBranchPrefix == "" {
 		return "", fmt.Errorf("release branch prefix is not set")
 	}
-	if !r.isHashRelease {
-		return version.NewReleaseBranch(r.releaseBranchPrefix, r.calicoVersion).String(), nil
-	}
 	branch, err := r.determineBranch()
 	if err != nil {
 		return "", err
+	}
+	if branch == defaultBranch {
+		return branch, nil
+	}
+	if branch == r.prepBranchName() {
+		out, err := r.git("log", "-1", "-i", "--grep=^"+gitTrailerReleaseBranch+": ",
+			"--format=%(trailers:key="+gitTrailerReleaseBranch+",valueonly)")
+		if err != nil {
+			return "", fmt.Errorf("read %s trailer: %w", gitTrailerReleaseBranch, err)
+		}
+		if branch, _, _ = strings.Cut(strings.TrimSpace(out), "\n"); branch == "" {
+			return "", fmt.Errorf("no %s trailer on %s", gitTrailerReleaseBranch, r.prepBranchName())
+		}
 	}
 	rb, ok := version.ParseReleaseBranch(r.releaseBranchPrefix, branch)
 	if !ok {
@@ -1690,7 +1701,7 @@ func (r *CalicoManager) PrepareRelease() (string, error) {
 		baseBranch = version.NewReleaseBranch(r.releaseBranchPrefix, ver).String()
 		logrus.WithField("baseBranch", baseBranch).Info("Using default branch for release preparation")
 	}
-	prepBranch := fmt.Sprintf("build-%s", ver)
+	prepBranch := r.prepBranchName()
 
 	defer r.prepareReleaseCleanup(baseBranch, prepBranch)
 
@@ -1704,11 +1715,15 @@ func (r *CalicoManager) PrepareRelease() (string, error) {
 		return "", err
 	}
 
-	if err := r.updateAndCommitPrep(); err != nil {
+	if err := r.updateAndCommitPrep(baseBranch); err != nil {
 		return "", err
 	}
 
 	return prepBranch, r.pushPrepBranch(baseBranch, prepBranch)
+}
+
+func (r *CalicoManager) prepBranchName() string {
+	return "build-" + r.calicoVersion.String()
 }
 
 // switchToPrepBranch records the current branch for cleanup, then creates
@@ -1730,7 +1745,7 @@ var prepStagedPaths = func(repoRoot string) []string {
 }
 
 // updateAndCommitPrep updates charts and manifests, then stages and commits.
-func (r *CalicoManager) updateAndCommitPrep() error {
+func (r *CalicoManager) updateAndCommitPrep(baseBranch string) error {
 	if err := r.modifyHelmChartsValues(r.calicoVersion.String(), r.operatorVersion); err != nil {
 		return fmt.Errorf("failed to update chart versions: %w", err)
 	}
@@ -1741,7 +1756,8 @@ func (r *CalicoManager) updateAndCommitPrep() error {
 	if _, err := r.git(append([]string{"add"}, prepStagedPaths(r.repoRoot)...)...); err != nil {
 		return fmt.Errorf("failed to stage files: %w", err)
 	}
-	if _, err := r.git("commit", "-m", fmt.Sprintf("build: %s release", r.calicoVersion.String())); err != nil {
+	if _, err := r.git("commit", "-m", fmt.Sprintf("build: %s release", r.calicoVersion.String()),
+		"--trailer", gitTrailerReleaseBranch+": "+baseBranch); err != nil {
 		return fmt.Errorf("failed to commit changes: %w", err)
 	}
 	return nil

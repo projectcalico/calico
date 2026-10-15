@@ -533,6 +533,40 @@ func TestPrepareRelease(t *testing.T) {
 			t.Errorf("switched branch after beforePrep failed (calls: %v)", f.calls)
 		}
 	})
+
+	t.Run("records the base branch in the prep commit", func(t *testing.T) {
+		f := newFakeRunner()
+		f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30\n", nil)
+		root := t.TempDir()
+		values, err := filepath.Glob("../../../../charts/*/values.yaml")
+		if err != nil || len(values) == 0 {
+			t.Fatalf("find chart values: %v", err)
+		}
+		for _, src := range values {
+			b, err := os.ReadFile(src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			dst := filepath.Join(root, "charts", filepath.Base(filepath.Dir(src)), "values.yaml")
+			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(dst, b, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		r := &CalicoManager{
+			runner: f, repoRoot: root, calicoVersion: testVersion("v3.30.0"),
+			releaseBranchPrefix: "release", imageRegistries: []string{"quay.io/calico"},
+			operatorImage: "tigera/operator", operatorVersion: "v1.38.0", operatorRegistry: "quay.io",
+		}
+		if _, err := r.PrepareRelease(); err != nil {
+			t.Fatalf("PrepareRelease() unexpected error: %v", err)
+		}
+		if want := "git commit -m build: v3.30.0 release --trailer Release-branch: release-v3.30"; !f.ran(want) {
+			t.Errorf("did not run %q (calls: %v)", want, f.calls)
+		}
+	})
 }
 
 func TestAssertReleaseNotesPresent(t *testing.T) {
@@ -827,6 +861,9 @@ func imageManager(t *testing.T, f *fakeRunner, logsDir string) (*CalicoManager, 
 	for _, dir := range images.VariantDirs(images.PublishVariants) {
 		base := path.Base(dir)
 		f.on(fmt.Sprintf("make -C %s/%s -s build-images", root, dir), base+" "+base+"-windows", nil)
+	}
+	if _, ok := f.responses["git rev-parse --abbrev-ref HEAD"]; !ok {
+		f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30\n", nil)
 	}
 	return &CalicoManager{
 		runner:              f,
@@ -1234,6 +1271,7 @@ func TestPublishBranchTag(t *testing.T) {
 			name          string
 			version       string
 			branch        string
+			trailer       string
 			images        bool
 			isHashRelease bool
 			wantPublish   bool
@@ -1263,22 +1301,54 @@ func TestPublishBranchTag(t *testing.T) {
 				wantTag:       "release-v3.33-1",
 			},
 			{
-				name:          "hashrelease off a release branch has no branch tag",
+				name:          "hashrelease on the default branch tags it",
 				version:       "v3.34.0-0.dev-1-gabcdef123456",
 				branch:        "master",
+				images:        true,
+				isHashRelease: true,
+				wantPublish:   true,
+				wantBranchTag: true,
+				wantTag:       "master",
+			},
+			{
+				name:          "hashrelease on any other branch has no branch tag",
+				version:       "v3.34.0-0.dev-1-gabcdef123456",
+				branch:        "fix-foo",
 				images:        true,
 				isHashRelease: true,
 				wantPublish:   true,
 				wantBranchTag: false,
 			},
 			{
-				name:          "an official release moves it too",
-				version:       "v3.33.0",
+				name:          "official release on its prep branch tags the recorded branch",
+				version:       "v3.33.1",
+				branch:        "build-v3.33.1",
+				trailer:       "release-v3.33-2\n",
+				images:        true,
+				isHashRelease: false,
+				wantPublish:   true,
+				wantBranchTag: true,
+				wantTag:       "release-v3.33-2",
+			},
+			{
+				name:          "official release on a release branch tags it",
+				version:       "v3.33.1",
+				branch:        "release-v3.33",
 				images:        true,
 				isHashRelease: false,
 				wantPublish:   true,
 				wantBranchTag: true,
 				wantTag:       "release-v3.33",
+			},
+			{
+				name:          "official release on a prep branch with no recorded branch is an error",
+				version:       "v3.33.1",
+				branch:        "build-v3.33.1",
+				prefix:        "release",
+				images:        true,
+				isHashRelease: false,
+				wantPublish:   true,
+				wantErr:       true,
 			},
 			{
 				// An unset prefix would silently tag images "-v3.33".
@@ -1304,6 +1374,7 @@ func TestPublishBranchTag(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				f := newFakeRunner()
 				f.on("git rev-parse --abbrev-ref HEAD", tt.branch+"\n", nil)
+				f.on("git log -1 -i --grep=^Release-branch: ", tt.trailer, nil)
 
 				prefix := tt.prefix
 				if prefix == "" && !tt.wantErr {
