@@ -134,6 +134,10 @@ func (d *Driver) CutReleaseBranch(plan *CutPlan) error {
 	if plan.Source == plan.Derived {
 		return fmt.Errorf("source %q cannot be the same as derived %q branch", plan.Source, plan.Derived)
 	}
+	// The main check is skipped for a tag source, so a tag cut must not advance main.
+	if t, ok := plan.mainTarget(); ok && strings.HasPrefix(plan.Source, tagRefPrefix) {
+		return fmt.Errorf("a cut from %s cannot advance %s", strings.TrimPrefix(plan.Source, tagRefPrefix), t.Branch)
+	}
 	g := gitIn(d.RepoRoot)
 	if d.Plan {
 		logPlan(plan)
@@ -181,6 +185,11 @@ func (d *Driver) validateFreshCut(g git, p *CutPlan) error {
 // checkBases verifies each base is current with its remote. Main is always
 // required (its upstream is .git/config); the source only under BranchCheck.
 func (d *Driver) checkBases(g git, p *CutPlan) error {
+	// A cut from a tag never touches main; the tag just has to be the one the
+	// remote released.
+	if tagName, ok := strings.CutPrefix(p.Source, tagRefPrefix); ok {
+		return checkTagOnRemote(g, tagName, p.Remote, d.Plan)
+	}
 	mainFix := fmt.Sprintf("run `git checkout %s && git pull` before cutting", d.MainBranch)
 	if err := checkBranchCurrent(g, d.MainBranch, "", true, d.Plan, mainFix); err != nil {
 		return fmt.Errorf("check %s is current: %w", d.MainBranch, err)
