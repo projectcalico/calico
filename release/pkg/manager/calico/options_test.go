@@ -58,6 +58,7 @@ func TestNewManagerStepDefaults(t *testing.T) {
 		{"e2eBinaries", m.e2eBinaries},
 		{"gitRef", m.gitRef},
 		{"githubRelease", m.githubRelease},
+		{"releaseNotes", m.releaseNotes},
 	}
 	for _, tc := range cases {
 		if !tc.got {

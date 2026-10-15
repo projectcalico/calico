@@ -27,6 +27,13 @@ import (
 
 type Option func(*CalicoManager) error
 
+func WithReleaseNotes(enabled bool) Option {
+	return func(r *CalicoManager) error {
+		r.releaseNotes = enabled
+		return nil
+	}
+}
+
 func WithRepoRoot(root string) Option {
 	return func(r *CalicoManager) error {
 		r.repoRoot = root
