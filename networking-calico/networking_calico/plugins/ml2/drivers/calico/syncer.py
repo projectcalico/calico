@@ -192,18 +192,11 @@ class ResourceSyncer(object):
         n_deleted = 0
         n_created = 0
 
-        # Deletes go last.  When a resource's etcd name changes, the resync sees the old
-        # name as etcd-only and the new one as Neutron-only; creating the new one first
-        # means Felix never sees the interface without a WorkloadEndpoint.
-        #
-        # Within each phase, "lm <name>" entries go first so that, when a mid-migration
-        # port is being created from scratch in etcd, Felix sees the LiveMigration
-        # resource before the destination WorkloadEndpoint -- matching the ordering the
-        # dynamic postcommit path uses on migration start.  That is a no-op for resource
-        # kinds that don't have "lm " prefixed names; the final sort by name keeps the
-        # order deterministic across runs.
+        # The final sort by name keeps the order deterministic across runs.
+        order_key = self.compare_order_key_fn(neutron_map)
+
         def _iter_order(n):
-            return (n not in neutron_map, 0 if n.startswith("lm ") else 1, n)
+            return (order_key(n), n)
 
         # Compare-loop marker.  The resync-concurrency test (CORE-12037) waits
         # for this line in the resync log before firing its in-resync burst, so
@@ -349,6 +342,14 @@ class ResourceSyncer(object):
         source-side WEPs.
         """
         return etcd_map
+
+    def compare_order_key_fn(self, neutron_map):
+        """Optional hook for subclasses to order the compare loop.
+
+        Returns a function from a name to a sort key; names are processed in key order,
+        then by name.  The default processes everything by name.
+        """
+        return lambda name: ()
 
     def delete_legacy_etcd_data(self):
         # By default this is a no-op, but subclasses may override.

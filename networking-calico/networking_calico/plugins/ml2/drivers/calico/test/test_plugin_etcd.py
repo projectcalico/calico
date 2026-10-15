@@ -2760,6 +2760,27 @@ class TestLiveMigration(TestPluginEtcdBase):
         wep_writes = [k for k in self.recent_writes if "/workloadendpoints/" in k]
         self.assertEqual(wep_writes, [])
 
+    def test_resync_deletes_before_creating_on_host_change(self):
+        """A port found on a new host is removed from the old one first.
+
+        As for a cold migration on the dynamic path: the two WEPs would have the same
+        IPs on different nodes.
+        """
+        self._do_initial_resync()
+        old_key = self._ep_key(self.SOURCE_HOST)
+        new_key = self._ep_key(self.DEST_HOST)
+        self.osdb_ports[0]["binding:host_id"] = self.DEST_HOST
+        self.recent_writes = {}
+        self.recent_deletes = set()
+        self.etcd_ops = []
+
+        self._trigger_resync()
+
+        self.assertLess(
+            self.etcd_ops.index(("delete", old_key)),
+            self.etcd_ops.index(("put", new_key)),
+        )
+
     def test_resync_creates_before_deleting_on_device_id_change(self):
         """When a port's ``device_id`` changes, resync makes before it breaks.
 
@@ -2805,12 +2826,18 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.osdb_ports[0]["binding:profile"] = {
             "migrating_to": self.DEST_HOST,
         }
+        self.etcd_ops = []
 
         self._trigger_resync()
 
-        # The resync should have created the LiveMigration and dest WEP.
+        # The resync should have created the LiveMigration and dest WEP, in that order,
+        # so that Felix knows the dest WEP is a migration target as soon as it sees it.
         self.assertIn(self._lm_key(self.DEST_HOST), self.recent_writes)
         self.assertIn(self._ep_key(self.DEST_HOST), self.recent_writes)
+        self.assertLess(
+            self.etcd_ops.index(("put", self._lm_key(self.DEST_HOST))),
+            self.etcd_ops.index(("put", self._ep_key(self.DEST_HOST))),
+        )
 
     def test_resync_deletes_stale_live_migration(self):
         """Resync deletes orphaned LiveMigration with no migrating port."""

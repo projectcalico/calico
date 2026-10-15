@@ -390,6 +390,31 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         if self.namespace != datamodel_v3.NO_REGION_NAMESPACE:
             datamodel_v3.delete_legacy("WorkloadEndpoint", "")
 
+    def compare_order_key_fn(self, neutron_map):
+        # A stale slot is deleted before the creates when nothing replaces it on the
+        # same host, because a WEP for the same port on another node has the same IPs
+        # (break first, as for a cold migration).  It is deleted after them when a new
+        # name replaces it on the same host, because that is the same interface, which
+        # must not be left without a WEP (make first, as for a ``device_id`` change).
+        replaced = {_slot_kind_host_port(name) for name in neutron_map}
+        replaced.discard(None)
+
+        def order_key(name):
+            if name in neutron_map:
+                phase = 1
+            elif _slot_kind_host_port(name) in replaced:
+                phase = 2
+            else:
+                phase = 0
+
+            # Within a phase, LiveMigrations go first so that, when a mid-migration port
+            # is being created from scratch in etcd, Felix sees the LiveMigration before
+            # the destination WEP -- matching the dynamic postcommit path's ordering on
+            # migration start.
+            return (phase, 0 if name.startswith("lm ") else 1)
+
+        return order_key
+
     # The following methods differ from those for other resources for two reasons.
     #
     # 1. For endpoints we need to read, compare and write labels and annotations as well
@@ -1177,6 +1202,20 @@ def endpoint_name(port):
         escape_dashes(port["device_id"]),
         escape_dashes(port["id"]),
     )
+
+
+def _slot_kind_host_port(name):
+    """Map a "wep ", "dest-wep " or "lm " name to (kind, escaped host, escaped port).
+
+    Returns None for a name not in our format, such as a legacy or hand-edited one.
+    """
+    kind, wep_name = name.split(" ", 1)
+    rest = endpoint_name_without_host(wep_name)
+    port = re.search(r"(?<!-)-((?:[^-]|--)+)$", rest)
+    if rest == wep_name or port is None:
+        return None
+    host = wep_name[: -len(rest) - 1]
+    return ("lm" if kind == "lm" else "wep", host, port.group(1))
 
 
 def endpoint_name_without_host(name):
