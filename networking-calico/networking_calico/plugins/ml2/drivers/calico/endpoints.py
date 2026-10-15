@@ -782,7 +782,9 @@ class WorkloadEndpointSyncer(ResourceSyncer):
 
         Every path that decides whether a WEP exists -- the dynamic hooks via
         ``sync_wep``, and the resync's map and re-read -- goes through here, so that
-        they cannot disagree.
+        they cannot disagree.  The one shortcut is ``create_port_postcommit``, which
+        leaves an unbound port to the bind's ``update_port_postcommit`` that follows in
+        the same API call, and to the resync if that is lost.
         """
         if db_port is None or not host or not device_id:
             return False
