@@ -184,7 +184,7 @@ func (d *Driver) checkBases(g git, p *CutPlan) error {
 	// A cut from a tag never touches main; the tag just has to be the one the
 	// remote released.
 	if tagName, ok := strings.CutPrefix(p.Source, tagRefPrefix); ok {
-		return checkTagOnRemote(g, tagName, p.Remote)
+		return checkTagOnRemote(g, tagName, p.Remote, d.Plan)
 	}
 	mainFix := fmt.Sprintf("run `git checkout %s && git pull` before cutting", d.MainBranch)
 	if err := checkBranchCurrent(g, d.MainBranch, "", true, d.Plan, mainFix); err != nil {

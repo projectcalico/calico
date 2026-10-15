@@ -18,6 +18,8 @@ import (
 	"cmp"
 	"fmt"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 )
 
 // tagRefPrefix marks a cut source that is a tag rather than a branch.
@@ -28,21 +30,37 @@ func TagSource(tagName string) string {
 	return tagRefPrefix + tagName
 }
 
-// checkTagOnRemote verifies tagName exists locally and on remote at the same commit.
-func checkTagOnRemote(g git, tagName, remote string) error {
+// checkTagOnRemote verifies tagName exists locally and on remote at the same
+// commit. Under report (plan mode) a mismatch is a warning; a failed remote
+// query is always an error.
+func checkTagOnRemote(g git, tagName, remote string, report bool) error {
 	ref := tagRefPrefix + tagName
-	local, err := g("rev-parse", "--verify", "--quiet", ref+"^{commit}")
-	if err != nil {
-		return fmt.Errorf("tag %s does not exist locally; fetch it with `git fetch %s tag %s`", tagName, remote, tagName)
-	}
 	// ls-remote lists an annotated tag's peeled commit under "<ref>^{}".
 	out, err := g("ls-remote", remote, ref, ref+"^{}")
 	if err != nil {
 		return fmt.Errorf("checking %s on %s: %w", ref, remote, err)
 	}
+	problem := tagMismatch(g, tagName, remote, out)
+	if problem == nil {
+		return nil
+	}
+	if report {
+		logrus.Warnf("%v; a cut will error unless resolved", problem)
+		return nil
+	}
+	return problem
+}
+
+// tagMismatch compares the local tag with the remote's, given its ls-remote output.
+func tagMismatch(g git, tagName, remote, lsRemote string) error {
+	ref := tagRefPrefix + tagName
+	local, err := g("rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	if err != nil {
+		return fmt.Errorf("tag %s does not exist locally; fetch it with `git fetch %s tag %s`", tagName, remote, tagName)
+	}
 	want := strings.TrimSpace(local)
 	commits := map[string]string{}
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+	for _, line := range strings.Split(strings.TrimSpace(lsRemote), "\n") {
 		if f := strings.Fields(line); len(f) == 2 {
 			commits[f[1]] = f[0]
 		}

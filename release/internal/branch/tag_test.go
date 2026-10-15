@@ -89,15 +89,32 @@ func TestCheckTagOnRemote(t *testing.T) {
 	g := gitIn(root)
 
 	tagReleased(t, root, "v3.23.1", true)
-	require.NoError(t, checkTagOnRemote(g, "v3.23.1", "origin"))
+	require.NoError(t, checkTagOnRemote(g, "v3.23.1", "origin", false))
 
-	require.ErrorContains(t, checkTagOnRemote(g, "v3.23.9", "origin"), "does not exist locally")
+	require.ErrorContains(t, checkTagOnRemote(g, "v3.23.9", "origin", false), "does not exist locally")
 
 	tagReleased(t, root, "v3.23.2", false)
-	require.ErrorContains(t, checkTagOnRemote(g, "v3.23.2", "origin"), "is not on origin")
+	require.ErrorContains(t, checkTagOnRemote(g, "v3.23.2", "origin", false), "is not on origin")
+	// Plan mode previews the cut with a warning instead.
+	require.NoError(t, checkTagOnRemote(g, "v3.23.2", "origin", true))
 
 	// A local tag that moved from what was released is rejected.
 	_, err := command.GitInDir(root, "tag", "-f", "-a", "v3.23.1", "-m", "moved")
 	require.NoError(t, err)
-	require.ErrorContains(t, checkTagOnRemote(g, "v3.23.1", "origin"), "does not match")
+	require.ErrorContains(t, checkTagOnRemote(g, "v3.23.1", "origin", false), "does not match")
+	require.NoError(t, checkTagOnRemote(g, "v3.23.1", "origin", true))
+
+	// A remote that cannot be queried fails even in plan mode.
+	require.ErrorContains(t, checkTagOnRemote(g, "v3.23.1", "no-such-remote", true), "checking refs/tags/v3.23.1 on no-such-remote")
+}
+
+// A plan-mode preview of a cut from an unreleased tag warns and makes no branch.
+func TestCutFromTagPlan(t *testing.T) {
+	root := initGitRepo(t)
+	initGitRemote(t, root)
+	tagReleased(t, root, "v3.23.2", false)
+
+	d := newTestDriver(t, Driver{RepoRoot: root, Validate: true, Plan: true})
+	require.NoError(t, d.CutReleaseBranch(&CutPlan{Derived: "release-v3.23.2-hotfix", Source: TagSource("v3.23.2"), Remote: "origin"}))
+	require.False(t, localBranchExists(gitIn(root), "release-v3.23.2-hotfix"))
 }
