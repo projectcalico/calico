@@ -56,14 +56,13 @@ func (pup *profileUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 
 	// Deletion events will have a value of nil. Do not convert anything for a deletion event.
 	if kvp.Value != nil {
-		rules, err := convertProfileV3ToV1Rules(kvp.Value)
-		if err != nil {
-			// Currently treat any errors as a deletion event.
+		if profile, ok := kvp.Value.(*apiv3.Profile); ok {
+			ruleskvp.Value = ProfileRulesAPIV3ToBackend(profile)
+			ruleskvp.Revision = kvp.Revision
+		} else {
+			// Treat a value of the wrong type as a deletion.
 			log.WithField("Resource", kvp.Key).Warn("Unable to process resource data - treating as deleted")
 			v3kvp.Value = nil
-		} else {
-			ruleskvp.Value = rules
-			ruleskvp.Revision = kvp.Revision
 		}
 	}
 
@@ -74,24 +73,19 @@ func (pup *profileUpdateProcessor) OnSyncerStarting() {
 	// Do nothing
 }
 
-func convertProfileV3ToV1Rules(val any) (*model.ProfileRules, error) {
-	v3res, ok := val.(*apiv3.Profile)
-	if !ok {
-		return nil, errors.New("Value is not a valid Profile resource value")
-	}
-
+func ProfileRulesAPIV3ToBackend(profile *apiv3.Profile) *model.ProfileRules {
 	var irules []model.Rule
-	for _, irule := range v3res.Spec.Ingress {
+	for _, irule := range profile.Spec.Ingress {
 		irules = append(irules, RuleAPIV3ToBackend(irule, ""))
 	}
 
 	var erules []model.Rule
-	for _, erule := range v3res.Spec.Egress {
+	for _, erule := range profile.Spec.Egress {
 		erules = append(erules, RuleAPIV3ToBackend(erule, ""))
 	}
 
 	return &model.ProfileRules{
 		InboundRules:  irules,
 		OutboundRules: erules,
-	}, nil
+	}
 }
