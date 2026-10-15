@@ -21,8 +21,8 @@ import (
 
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/github"
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 // runFlags builds a *cli.Command with the given flags and runs it with args.
@@ -354,7 +354,7 @@ func TestCIJobURLEmptyWithoutJobIdentity(t *testing.T) {
 func TestReleaseNotesFlag(t *testing.T) {
 	flags := []cli.Flag{releaseNotesFlag, orgFlag, repoFlag, validationFlag, branchCheckFlag}
 	calico := func(rest ...string) []string {
-		return append(rest, "--org", utils.ProjectCalicoOrg, "--repo", utils.CalicoRepoName)
+		return append(rest, "--org", defaults.ProjectCalicoOrg, "--repo", defaults.CalicoRepoName)
 	}
 	for _, tc := range []struct {
 		name    string

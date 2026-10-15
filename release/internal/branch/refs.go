@@ -169,8 +169,12 @@ func remoteRefMatches(g git, remote, ref, localSha string) (present, matches boo
 }
 
 // pushRefs pushes the given refs to remote.
-func pushRefs(g git, remote string, refs ...string) error {
-	args := append([]string{"push", remote}, refs...)
+func pushRefs(g git, remote string, dryRun bool, refs ...string) error {
+	args := []string{"push", remote}
+	if dryRun {
+		args = append(args, "--dry-run")
+	}
+	args = append(args, refs...)
 	_, err := g(args...)
 	return err
 }
