@@ -37,6 +37,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
@@ -129,7 +130,7 @@ type ipamArgs struct {
 
 func cmdAdd(args *skel.CmdArgs) error {
 	configureLogging(args)
-	result, err := add(args)
+	result, err := add(context.Background(), args)
 	if err != nil {
 		return err
 	}
@@ -138,7 +139,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 func cmdDel(args *skel.CmdArgs) error {
 	configureLogging(args)
-	return del(args)
+	return del(context.Background(), args)
 }
 
 // configureLogging sets up logging from the netconf when calico-ipam runs as its own binary.
@@ -155,7 +156,7 @@ func configureLogging(args *skel.CmdArgs) {
 
 // add assigns the sandbox's addresses and returns the result in the netconf's CNI version,
 // leaving the caller to print it or use it in-process.
-func add(args *skel.CmdArgs) (cnitypes.Result, error) {
+func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 	// Read before the IPAM lock wait, so any claim stamped later than this came from a sandbox
 	// the runtime created after this one.
 	started := time.Now()
@@ -166,8 +167,9 @@ func add(args *skel.CmdArgs) (cnitypes.Result, error) {
 	}
 
 	nodename := utils.DetermineNodename(conf)
+	lookups := utils.SandboxLookupsFrom(ctx)
 
-	calicoClient, err := utils.CreateClient(conf)
+	calicoClient, err := calicoClientFor(lookups, conf)
 	if err != nil {
 		return nil, err
 	}
@@ -188,13 +190,13 @@ func add(args *skel.CmdArgs) (cnitypes.Result, error) {
 	})
 
 	// Always detect VMI info so we can reject migration targets when persistence is disabled.
-	vmiInfo, err := getVMIInfoForPod(conf, epIDs, logger)
+	vmiInfo, err := getVMIInfoForPod(ctx, conf, epIDs, lookups, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get VMI info: %w", err)
 	}
 
 	// Combined flag: VMI pod with persistence enabled.
-	ipPersistenceEnabledForVM := vmiInfo != nil && getKubeVirtVMAddressPersistence(calicoClient)
+	ipPersistenceEnabledForVM := vmiInfo != nil && getKubeVirtVMAddressPersistence(ctx, calicoClient)
 
 	// Reject migration target pods when persistence is disabled.
 	if vmiInfo != nil && vmiInfo.IsMigrationTarget() {
@@ -255,7 +257,7 @@ func add(args *skel.CmdArgs) (cnitypes.Result, error) {
 		// - Source pod: reuses IPs from a previous pod with the same VM (pod recreation).
 		//   If no IPs exist, falls through to normal AutoAssign.
 		// - Migration target: IPs must exist (allocated by the source pod).
-		reused, err := handleVirtLauncherPod(calicoClient, handleID, attrs, logger, isMigrationTarget)
+		reused, err := handleVirtLauncherPod(ctx, calicoClient, handleID, attrs, logger, isMigrationTarget)
 		if err != nil {
 			return nil, err
 		}
@@ -292,7 +294,7 @@ func add(args *skel.CmdArgs) (cnitypes.Result, error) {
 
 			// Only start the timeout after we get the lock. When there's a
 			// thundering herd of new pods, acquiring the lock can take a while.
-			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+			ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 			defer cancel()
 
 			if err := maybeUpgradeIPAM(ctx, calicoClient.IPAM(), nodename); err != nil {
@@ -358,7 +360,7 @@ func add(args *skel.CmdArgs) (cnitypes.Result, error) {
 
 		var v4pools, v6pools []cnet.IPNet
 		{
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			defer cancel()
 			v4pools, err = utils.ResolvePools(ctx, calicoClient, conf.IPAM.IPv4Pools, true)
 			if err != nil {
@@ -366,7 +368,7 @@ func add(args *skel.CmdArgs) (cnitypes.Result, error) {
 			}
 		}
 		{
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			defer cancel()
 			v6pools, err = utils.ResolvePools(ctx, calicoClient, conf.IPAM.IPv6Pools, false)
 			if err != nil {
@@ -390,7 +392,7 @@ func add(args *skel.CmdArgs) (cnitypes.Result, error) {
 		if (conf.Kubernetes.Kubeconfig != "" || conf.Policy.PolicyType == "k8s") && namespace != "" {
 			logger.Debugf("Getting namespace for: %s", namespace)
 
-			namespaceObj, err = getNamespace(conf, namespace, logger)
+			namespaceObj, err = getNamespace(ctx, conf, namespace, lookups, logger)
 			if err != nil {
 				logger.WithError(err).Errorf("Failed to get namespace for %s", namespace)
 				return nil, fmt.Errorf("failed to get namespace %s: %w", namespace, err)
@@ -437,7 +439,7 @@ func add(args *skel.CmdArgs) (cnitypes.Result, error) {
 
 			// Only start the timeout after we get the lock. When there's a
 			// thundering herd of new pods, acquiring the lock can take a while.
-			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+			ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 			defer cancel()
 
 			return calicoClient.IPAM().AutoAssign(ctx, assignArgs)
@@ -466,7 +468,7 @@ func add(args *skel.CmdArgs) (cnitypes.Result, error) {
 				}
 
 				// Fresh timeout for cleanup.
-				cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 				defer cancel()
 				_, _, err := calicoClient.IPAM().ReleaseIPs(cleanupCtx, v6IPs...)
 				if err != nil {
@@ -486,7 +488,7 @@ func add(args *skel.CmdArgs) (cnitypes.Result, error) {
 				}
 
 				// Fresh timeout for cleanup.
-				cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 				defer cancel()
 				_, _, err := calicoClient.IPAM().ReleaseIPs(cleanupCtx, v4IPs...)
 				if err != nil {
@@ -672,6 +674,22 @@ func acquireIPAMLockBestEffort(path string) unlockFn {
 	}
 }
 
+// calicoClientFor returns the Calico client the caller shared, or builds one from the netconf.
+func calicoClientFor(lookups utils.SandboxLookups, conf types.NetConf) (client.Interface, error) {
+	if lookups.CalicoClient != nil {
+		return lookups.CalicoClient, nil
+	}
+	return utils.CreateClient(conf)
+}
+
+// k8sClientFor returns the Kubernetes client the caller shared, or builds one from the netconf.
+func k8sClientFor(lookups utils.SandboxLookups, conf types.NetConf, logger *logrus.Entry) (kubernetes.Interface, error) {
+	if lookups.K8sClient != nil {
+		return lookups.K8sClient, nil
+	}
+	return k8s.NewK8sClient(conf, logger)
+}
+
 // errPodNotFound is returned by getVMIInfoForPod when the pod has been deleted
 // from the API server (e.g., due to parallel CNI DEL calls during live migration).
 var errPodNotFound = fmt.Errorf("pod not found")
@@ -680,7 +698,7 @@ var errPodNotFound = fmt.Errorf("pod not found")
 // Returns (vmiInfo, nil) if the pod is a valid virt-launcher pod.
 // Returns (nil, nil) if the pod is not a virt-launcher pod.
 // Returns (nil, error) if there was an error retrieving or validating VMI information.
-func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *logrus.Entry) (*kubevirt.PodVMIInfo, error) {
+func getVMIInfoForPod(ctx context.Context, conf types.NetConf, epIDs *utils.WEPIdentifiers, lookups utils.SandboxLookups, logger *logrus.Entry) (*kubevirt.PodVMIInfo, error) {
 	// Only check for VMI info in Kubernetes orchestrator
 	if epIDs.Orchestrator != "k8s" || epIDs.Pod == "" || epIDs.Namespace == "" {
 		return nil, nil
@@ -691,22 +709,23 @@ func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *l
 		return nil, nil
 	}
 
-	// Create Kubernetes client
-	k8sClient, err := k8s.NewK8sClient(conf, logger)
-	if err != nil {
-		logger.WithError(err).Error("Failed to create Kubernetes client for VMI detection")
-		return nil, err
-	}
-
-	// Get the pod
-	pod, err := k8sClient.CoreV1().Pods(epIDs.Namespace).Get(context.Background(), epIDs.Pod, metav1.GetOptions{})
-	if err != nil {
-		if kerrors.IsNotFound(err) {
-			logger.Info("Pod not found, it may have been deleted")
-			return nil, errPodNotFound
+	pod := lookups.Pod
+	if pod == nil {
+		k8sClient, err := k8sClientFor(lookups, conf, logger)
+		if err != nil {
+			logger.WithError(err).Error("Failed to create Kubernetes client for VMI detection")
+			return nil, err
 		}
-		logger.WithError(err).Error("Failed to get pod for VMI detection")
-		return nil, err
+
+		pod, err = k8sClient.CoreV1().Pods(epIDs.Namespace).Get(ctx, epIDs.Pod, metav1.GetOptions{})
+		if err != nil {
+			if kerrors.IsNotFound(err) {
+				logger.Info("Pod not found, it may have been deleted")
+				return nil, errPodNotFound
+			}
+			logger.WithError(err).Error("Failed to get pod for VMI detection")
+			return nil, err
+		}
 	}
 
 	// Check ownerReferences before creating the KubeVirt client.
@@ -734,8 +753,8 @@ func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *l
 
 // getKubeVirtVMAddressPersistence retrieves the KubeVirtVMAddressPersistence setting from IPAMConfig.
 // Returns true if VM address persistence is enabled (the default), false if explicitly disabled.
-func getKubeVirtVMAddressPersistence(calicoClient client.Interface) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+func getKubeVirtVMAddressPersistence(ctx context.Context, calicoClient client.Interface) bool {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	ipamConfig, err := calicoClient.IPAMConfiguration().Get(ctx, "default", options.GetOptions{})
@@ -752,13 +771,14 @@ func getKubeVirtVMAddressPersistence(calicoClient client.Interface) bool {
 }
 
 // del releases the sandbox's addresses.
-func del(args *skel.CmdArgs) error {
+func del(ctx context.Context, args *skel.CmdArgs) error {
 	conf := types.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
+	lookups := utils.SandboxLookupsFrom(ctx)
 
-	calicoClient, err := utils.CreateClient(conf)
+	calicoClient, err := calicoClientFor(lookups, conf)
 	if err != nil {
 		return err
 	}
@@ -782,7 +802,7 @@ func del(args *skel.CmdArgs) error {
 	})
 
 	// Always detect VMI info for logging, but only use VM-based handle when persistence is enabled.
-	vmiInfo, err := getVMIInfoForPod(conf, epIDs, logger)
+	vmiInfo, err := getVMIInfoForPod(ctx, conf, epIDs, lookups, logger)
 	if err != nil {
 		if errors.Is(err, errPodNotFound) {
 			// During parallel CNI DEL calls (e.g., live migration), the pod may already
@@ -795,7 +815,7 @@ func del(args *skel.CmdArgs) error {
 	}
 
 	// Combined flag: VMI pod with persistence enabled.
-	ipPersistenceEnabledForVM := vmiInfo != nil && getKubeVirtVMAddressPersistence(calicoClient)
+	ipPersistenceEnabledForVM := vmiInfo != nil && getKubeVirtVMAddressPersistence(ctx, calicoClient)
 
 	// Use VM-based handle ID only when both vmiInfo is present and persistence is enabled.
 	var handleID string
@@ -831,7 +851,6 @@ func del(args *skel.CmdArgs) error {
 	unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
 	defer unlock()
 
-	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 
@@ -1013,20 +1032,23 @@ func del(args *skel.CmdArgs) error {
 	return nil
 }
 
-// getNamespace retrieves namespace object using Kubernetes clientset
-func getNamespace(conf types.NetConf, namespace string, logger *logrus.Entry) (*corev1.Namespace, error) {
+// getNamespace returns the named namespace, or nil for an empty name. It uses the namespace the
+// calling plugin already fetched when there is one, and otherwise reads it from the Kubernetes API.
+func getNamespace(ctx context.Context, conf types.NetConf, namespace string, lookups utils.SandboxLookups, logger *logrus.Entry) (*corev1.Namespace, error) {
 	if namespace == "" {
 		return nil, nil
 	}
+	if lookups.Namespace != nil {
+		return lookups.Namespace, nil
+	}
 
-	// Create Kubernetes clientset
-	k8sClient, err := k8s.NewK8sClient(conf, logger)
+	k8sClient, err := k8sClientFor(lookups, conf, logger)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get namespace directly from Kubernetes API
-	ns, err := k8sClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
+	ns, err := k8sClient.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -1046,8 +1068,15 @@ func getNamespace(conf types.NetConf, namespace string, logger *logrus.Entry) (*
 //   - Sets AlternateOwnerAttrs (unconditionally, to handle back-to-back migrations).
 //   - Returns empty routes so CNI skips host-side route programming.
 //   - Returns an error if IPs are missing.
-func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs map[string]string, logger *logrus.Entry, isMigrationTarget bool) (*cniv1.Result, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+func handleVirtLauncherPod(
+	ctx context.Context,
+	calicoClient client.Interface,
+	handleID string,
+	attrs map[string]string,
+	logger *logrus.Entry,
+	isMigrationTarget bool,
+) (*cniv1.Result, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	existingIPs, err := calicoClient.IPAM().IPsByHandle(ctx, handleID)

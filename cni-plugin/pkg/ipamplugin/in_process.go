@@ -59,13 +59,13 @@ func (e *inProcessExec) ExecPlugin(ctx context.Context, pluginPath string, stdin
 	}
 	switch env["CNI_COMMAND"] {
 	case "ADD":
-		result, err := add(args)
+		result, err := add(ctx, args)
 		if err != nil {
 			return nil, err
 		}
 		return json.Marshal(result)
 	case "DEL":
-		return nil, del(args)
+		return nil, del(ctx, args)
 	default:
 		return nil, fmt.Errorf("calico-ipam does not support %s in-process", env["CNI_COMMAND"])
 	}

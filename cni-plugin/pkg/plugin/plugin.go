@@ -247,7 +247,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := utils.WithSandboxLookups(context.Background(), utils.SandboxLookups{CalicoClient: calicoClient})
 	ci, err := calicoClient.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
 		err = fmt.Errorf("error getting ClusterInformation: %v", err)
@@ -434,7 +434,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 				"type":  conf.IPAM.Type,
 			}).Debug("Looking for IPAM plugin in paths")
 			var ipamResult cnitypes.Result
-			ipamResult, err = utils.ExecIPAMAdd(conf.IPAM.Type, args.StdinData)
+			ipamResult, err = utils.ExecIPAMAdd(ctx, conf.IPAM.Type, args.StdinData)
 			logger.WithField("IPAM result", ipamResult).Info("Got result from IPAM plugin")
 			if err != nil {
 				return
@@ -446,12 +446,12 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			// See CNI Spec doc for more details.
 			result, err = cniv1.NewResultFromResult(ipamResult)
 			if err != nil {
-				utils.ReleaseIPAllocation(logger, conf, args)
+				utils.ReleaseIPAllocation(ctx, logger, conf, args)
 				return
 			}
 
 			if len(result.IPs) == 0 {
-				utils.ReleaseIPAllocation(logger, conf, args)
+				utils.ReleaseIPAllocation(ctx, logger, conf, args)
 				err = errors.New("IPAM plugin returned no IP addresses in result")
 				return
 			}
@@ -485,7 +485,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			logger.WithField("endpoint", endpoint).Debug("Populated endpoint (without nets)")
 			if err = utils.PopulateEndpointNets(endpoint, result); err != nil {
 				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(logger, conf, args)
+				utils.ReleaseIPAllocation(ctx, logger, conf, args)
 				return
 			}
 			logger.WithField("endpoint", endpoint).Info("Populated endpoint (with nets)")
@@ -506,7 +506,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 				ctx, calicoClient, args, result, desiredVethName, utils.DefaultRoutes, endpoint, map[string]string{}, false)
 			if err != nil {
 				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(logger, conf, args)
+				utils.ReleaseIPAllocation(ctx, logger, conf, args)
 				return
 			}
 
@@ -524,7 +524,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			if !endpointAlreadyExisted {
 				// Only clean up the IP allocation if this was a new endpoint.  Otherwise,
 				// we'd release the IP that is already attached to the existing endpoint.
-				utils.ReleaseIPAllocation(logger, conf, args)
+				utils.ReleaseIPAllocation(ctx, logger, conf, args)
 			}
 			return
 		}
@@ -562,7 +562,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 				exists = false
 			} else {
 				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(logger, conf, args)
+				utils.ReleaseIPAllocation(ctx, logger, conf, args)
 				return
 			}
 		}
@@ -594,7 +594,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 
 			if _, err = calicoClient.Profiles().Create(ctx, profile, options.SetOptions{}); err != nil {
 				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(logger, conf, args)
+				utils.ReleaseIPAllocation(ctx, logger, conf, args)
 				return
 			}
 		}
@@ -658,7 +658,7 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := utils.WithSandboxLookups(context.Background(), utils.SandboxLookups{CalicoClient: calicoClient})
 	var ci *api.ClusterInformation
 	ci, err = calicoClient.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
@@ -693,7 +693,7 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 	}
 
 	// Release the IP address by calling the configured IPAM plugin.
-	ipamErr := utils.DeleteIPAM(conf, args, logger)
+	ipamErr := utils.DeleteIPAM(ctx, conf, args, logger)
 
 	// Delete the WorkloadEndpoint object from the datastore.
 	if _, err = calicoClient.WorkloadEndpoints().Delete(ctx, epIDs.Namespace, epIDs.WEPName, options.DeleteOptions{}); err != nil {
