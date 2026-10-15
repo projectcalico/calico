@@ -152,11 +152,6 @@ func (p *Pin) HelmChartVersion() string {
 	return charts.Version(p.ProductVersion, p.ChartVersion)
 }
 
-// ReleaseBranch returns the release branch for the pinned product version.
-func (p *Pin) ReleaseBranch(releaseBranchPrefix string) string {
-	return releaseBranch(releaseBranchPrefix, p.ProductVersion)
-}
-
 // Released returns every pinned component and the operator, keyed by component
 // name. A component that produces an image has its image name, which defaults
 // to the component name; the rest carry only a version.
@@ -196,7 +191,12 @@ func (p *Pin) ImageNames() []string {
 }
 
 // Hashrelease describes the pin as a hashrelease.
-func (p *Pin) Hashrelease(srcBaseDir string, latest bool) *hashreleaseserver.Hashrelease {
+func (p *Pin) Hashrelease(srcBaseDir string, latest bool) (*hashreleaseserver.Hashrelease, error) {
+	v, err := version.New(p.ProductVersion)
+	if err != nil {
+		return nil, err
+	}
+	stream := version.PublishStream(p.branch, v)
 	source := srcBaseDir
 	if source != "" {
 		source = filepath.Join(srcBaseDir, p.Hash)
@@ -205,14 +205,14 @@ func (p *Pin) Hashrelease(srcBaseDir string, latest bool) *hashreleaseserver.Has
 		Name:           p.ReleaseName,
 		Hash:           p.Hash,
 		Note:           p.Note,
-		Stream:         version.DeterminePublishStream(p.branch, p.ProductVersion),
+		Stream:         stream,
 		ProductVersion: p.ProductVersion,
 		ChartVersion:   p.ChartVersion,
 		Operator:       p.Operator,
 		Components:     maps.Clone(p.Components),
 		Source:         source,
 		Latest:         latest,
-	}
+	}, nil
 }
 
 // SetBranch records the product branch, which decides the publish stream.
@@ -366,7 +366,7 @@ func (l LocalLoader) source() (*Pin, error) {
 	if err != nil {
 		return nil, err
 	}
-	components, err := productComponents(l.Config, productVer)
+	components, err := productComponents(l.Config, branch, productVer)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +376,10 @@ func (l LocalLoader) source() (*Pin, error) {
 	}
 	maps.Copy(components, repos)
 
-	name := releaseName(branch, productVer)
+	name, err := releaseName(branch, productVer)
+	if err != nil {
+		return nil, err
+	}
 	return &Pin{
 		ReleaseName:     name,
 		Hash:            hash(productVer, repos),

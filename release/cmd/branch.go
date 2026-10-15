@@ -21,7 +21,7 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/branch"
-	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
 )
 
@@ -40,7 +40,7 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 		// Cut a new release branch
 		{
 			Name:  "cut",
-			Usage: fmt.Sprintf("Cut a new release branch from %s", utils.DefaultBranch),
+			Usage: fmt.Sprintf("Cut a new release branch from %s", defaults.Branch),
 			Flags: []cli.Flag{
 				orgFlag,
 				repoFlag,
@@ -65,7 +65,7 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 					calico.WithMainBranch(c.String(mainBranchFlag.Name)),
 					calico.WithDevTagIdentifier(c.String(devTagSuffixFlag.Name)),
 					calico.WithValidation(c.Bool(validationFlag.Name)),
-					calico.WithGitRef(!c.Bool(localFlag.Name)),
+					calico.WithDryRun(c.Bool(localFlag.Name)),
 					calico.WithBranchCutOptions(calico.CutOptions{
 						Plan:        c.Bool(planFlag.Name),
 						Skip:        skipSet(c.StringSlice(skipFlagName)),

@@ -24,61 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/defaults"
 )
-
-const (
-	// ProductName is used in the release process to identify the product.
-	ProductName = CalicoProductName
-
-	// Calico is the product name for projectcalico.
-	Calico = "calico"
-
-	// CalicoRepoName is the name of the projectcalico repo.
-	CalicoRepoName = Calico
-
-	// BirdRepoName is the name of the bird repo.
-	BirdRepoName = "bird"
-
-	// CalicoProductCode is the code for projectcalico.
-	CalicoProductCode = "os"
-
-	// CalicoProductName is the name of the projectcalico product.
-	CalicoProductName = "Calico"
-
-	// ProjectCalicoOrg is the name of the Project Calico organization.
-	ProjectCalicoOrg = "projectcalico"
-
-	// TigeraOrg is the name of the Tigera organization.
-	TigeraOrg = "tigera"
-
-	// TigeraCompany is the short-form human-facing name of the company, for freeform text fields or branding
-	TigeraCompany = "Tigera"
-
-	// ReleaseBranchPrefix is the prefix for release branches.
-	DefaultReleaseBranchPrefix = "release"
-
-	// DevTagSuffix is the suffix for dev tags.
-	DefaultDevTagSuffix = "0.dev"
-)
-
-func Organization() string { return FirstNonEmpty(defaults.Organization(), ProjectCalicoOrg) }
-func Repo() string         { return FirstNonEmpty(defaults.Repo(), CalicoRepoName) }
-func Remote() string       { return FirstNonEmpty(defaults.Remote(), DefaultRemote) }
-func ReleaseBranchPrefix() string {
-	return FirstNonEmpty(defaults.ReleaseBranchPrefix(), DefaultReleaseBranchPrefix)
-}
-func DevTagSuffix() string { return FirstNonEmpty(defaults.DevTagSuffix(), DefaultDevTagSuffix) }
-
-// FirstNonEmpty returns the first non-empty string from values, or "".
-func FirstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
-}
 
 // FilterDirs keeps the entries of want that appear in have, in their original
 // order.
