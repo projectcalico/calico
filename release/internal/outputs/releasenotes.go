@@ -209,7 +209,7 @@ func ReleaseNotes(owner, repoRootDir, outputDir string, ver version.Version) (st
 		owner = utils.ProjectCalicoOrg
 	}
 
-	logrus.Infof("Generating release notes for %s", ver.FormattedString())
+	logrus.Infof("Generating release notes for %s", ver.String())
 	milestone := ver.Milestone(utils.ProductName)
 	githubClient := igithub.Client()
 	releaseNoteDataList := []*ReleaseNoteIssueData{}
@@ -260,7 +260,7 @@ func ReleaseNotes(owner, repoRootDir, outputDir string, ver version.Version) (st
 	if len(releaseNoteDataList) == 0 {
 		logrus.WithField("milestone", milestone).Warn("No closed issues requiring release notes found in milestone")
 	}
-	releaseNoteFilePath := releaseNoteFilePathFromDir(outputDir, ver.FormattedString())
+	releaseNoteFilePath := releaseNoteFilePathFromDir(outputDir, ver.String())
 	if err := outputReleaseNotes(releaseNoteDataList, releaseNoteFilePath); err != nil {
 		logrus.WithError(err).Error("Failed to output release notes")
 		return "", err

@@ -145,7 +145,10 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 		}
 
 		// Extract the pinned version as a hashrelease.
-		hashrel := pin.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false)
+		hashrel, err := pin.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), false)
+		if err != nil {
+			return err
+		}
 
 		opts := []calico.Option{
 			calico.IsHashRelease(),
@@ -174,6 +177,7 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 			calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
 			calico.WithValidation(c.Bool(validationFlag.Name)),
 			calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
+			calico.WithDryRun(c.Bool(localFlag.Name)),
 		}
 		if len(productRegistriesFromFlag) > 0 {
 			opts = append(opts, calico.WithImageRegistries(productRegistriesFromFlag))
@@ -193,7 +197,11 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 		} else if c.String(orgFlag.Name) != utils.ProjectCalicoOrg || c.String(repoFlag.Name) != utils.CalicoRepoName {
 			logrus.Warn("Release notes are not supported for non-Calico releases, skipping...")
 		} else {
-			releaseVersion, err := version.DetermineReleaseVersion(version.New(pin.ProductVersion), c.String(devTagSuffixFlag.Name))
+			pinVer, err := version.New(pin.ProductVersion)
+			if err != nil {
+				return err
+			}
+			releaseVersion, err := version.DetermineReleaseVersion(pinVer, c.String(devTagSuffixFlag.Name))
 			if err != nil {
 				return fmt.Errorf("failed to determine release version: %v", err)
 			}
@@ -230,7 +238,10 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 		if err != nil {
 			return err
 		}
-		hashrel := pin.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), c.Bool(latestFlag.Name))
+		hashrel, err := pin.Hashrelease(baseHashreleaseOutputDir(cfg.RepoRootDir), c.Bool(latestFlag.Name))
+		if err != nil {
+			return err
+		}
 
 		// Check if the hashrelease has already been published.
 		serverCfg := hashreleaseServerConfig(c)
@@ -279,6 +290,7 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 			calico.WithValidation(c.Bool(validationFlag.Name)),
 			calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
 			calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
+			calico.WithDryRun(c.Bool(localFlag.Name)),
 		}
 		if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 			opts = append(opts,
@@ -313,7 +325,7 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 		}
 
 		// Send a slack message to notify that the hashrelease has been published.
-		if c.Bool(publishHashreleaseFlag.Name) && c.Bool(notifyFlag.Name) {
+		if c.Bool(publishHashreleaseFlag.Name) && c.Bool(notifyFlag.Name) && !c.Bool(localFlag.Name) {
 			if _, err := tasks.AnnounceHashrelease(slackConfig(c), hashrel, ciJobURL(c)); err != nil {
 				logrus.WithError(err).Warn("Failed to send hashrelease announcement to Slack")
 			}
@@ -331,7 +343,8 @@ var hashreleaseBuildFlags = func() []cli.Flag {
 	f = append(f, operatorBuildCommandFlags...)
 	f = append(f,
 		branchCheckFlag,
-		validationFlag)
+		validationFlag,
+		localFlag)
 	return f
 }
 
@@ -382,6 +395,7 @@ var hashreleasePublishFlags = func() []cli.Flag {
 		latestFlag,
 		branchCheckFlag,
 		validationFlag,
+		localFlag,
 	)
 	f = append(f, operatorPublishCommandFlags...)
 	f = append(f, imageScanFlags...)

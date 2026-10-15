@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -141,15 +142,21 @@ var releaseImages = func() ([]string, error) {
 
 // productComponents contributes the product's own pinned components. A build
 // with more of them replaces this.
-var productComponents = func(cfg Config, productVer string) (map[string]registry.Component, error) {
+var productComponents = calicoComponents
+
+func calicoComponents(cfg Config, branch, productVer string) (map[string]registry.Component, error) {
 	// Only a generated pin derives a branch; a reused one never gets here.
 	if cfg.ReleaseBranchPrefix == "" {
 		return nil, fmt.Errorf("release branch prefix is required to generate a pin")
 	}
+	networkingCalico := utils.DefaultBranch
+	if rb, ok := version.ParseReleaseBranch(cfg.ReleaseBranchPrefix, branch); ok {
+		networkingCalico = rb.String()
+	}
 	components := map[string]registry.Component{
 		apiComponentName:              {Version: productVer},
 		calicoComponentName:           {Version: productVer},
-		networkingCalicoComponentName: {Version: releaseBranch(cfg.ReleaseBranchPrefix, productVer)},
+		networkingCalicoComponentName: {Version: networkingCalico},
 		flannelComponentName:          FlannelComponent,
 	}
 	imgs, err := releaseImages()
@@ -160,12 +167,6 @@ var productComponents = func(cfg Config, productVer string) (map[string]registry
 		components[img] = registry.Component{Version: productVer}
 	}
 	return components, nil
-}
-
-// releaseBranch returns the release branch for a product version.
-var releaseBranch = func(prefix, productVer string) string {
-	v := version.New(productVer)
-	return fmt.Sprintf("%s-%s", prefix, v.Stream())
 }
 
 // productVersion returns the git-describe version of the product repository.
@@ -224,12 +225,13 @@ var hash = func(productVer string, repoComponents map[string]registry.Component)
 	return h
 }
 
-var releaseName = func(branch, productVer string) string {
-	name := fmt.Sprintf("%s-%s-%s",
-		time.Now().Format("2006-01-02"),
-		version.DeterminePublishStream(branch, productVer),
-		RandomWord())
-	return strings.ReplaceAll(name, ".", "-")
+var releaseName = func(branch, productVer string) (string, error) {
+	v, err := version.New(productVer)
+	if err != nil {
+		return "", err
+	}
+	name := fmt.Sprintf("%s-%s-%s", time.Now().Format("2006-01-02"), version.PublishStream(branch, v), RandomWord())
+	return strings.ReplaceAll(name, ".", "-"), nil
 }
 
 var hashreleaseNote = func(releaseName, branch string, repos []Repo) string {

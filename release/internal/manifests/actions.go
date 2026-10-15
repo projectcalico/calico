@@ -22,8 +22,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/internal/yamledit"
 )
 
@@ -203,4 +205,43 @@ func applyTo(opt any, s *settings) error {
 	default:
 		return fmt.Errorf("unknown option type %T", opt)
 	}
+}
+
+var (
+	productImage     = "calico/calico"
+	productManifest  = "ocp/02-tigera-operator.yaml"
+	operatorManifest = "tigera-operator.yaml"
+)
+
+// Versions returns the product and operator versions the manifests in the tree are at.
+func Versions(repoRoot string) (version.Version, version.Version, error) {
+	productVersion, err := versionFromManifest(repoRoot, productManifest, productImage)
+	if err != nil {
+		return version.Version{}, version.Version{}, err
+	}
+	operatorVersion, err := versionFromManifest(repoRoot, operatorManifest, registry.OperatorImage)
+	if err != nil {
+		return version.Version{}, version.Version{}, err
+	}
+	return productVersion, operatorVersion, nil
+}
+
+func versionFromManifest(repoRoot, manifest, imgMatch string) (version.Version, error) {
+	imgs, err := yamledit.Read(filepath.Join(Dir(repoRoot), manifest), imageKey)
+	if err != nil {
+		return version.Version{}, fmt.Errorf("read %s image from manifest %s: %w", imgMatch, manifest, err)
+	}
+	for _, i := range imgs {
+		if strings.Contains(i, imgMatch) {
+			splits := strings.SplitAfter(i, ":")
+			ver := splits[len(splits)-1]
+			// On the default branch the image is tagged "master", which is not a
+			// valid semver; treat it as the v0.0.0 dev version.
+			if ver == utils.DefaultBranch {
+				ver = "v0.0.0"
+			}
+			return version.New(ver)
+		}
+	}
+	return version.Version{}, fmt.Errorf("no images matching %s in manifest %s", imgMatch, manifest)
 }

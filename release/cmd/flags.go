@@ -127,7 +127,7 @@ var (
 var (
 	localFlag = &cli.BoolFlag{
 		Name:    "local",
-		Usage:   "Run all actions locally without remote changes",
+		Usage:   "Run local actions as normal and remote changes as dry runs",
 		Sources: cli.EnvVars("LOCAL"),
 		Value:   false,
 	}
