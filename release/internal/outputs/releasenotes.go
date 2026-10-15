@@ -29,6 +29,7 @@ import (
 	"github.com/google/go-github/v53/github"
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/defaults"
 	igithub "github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
@@ -46,7 +47,7 @@ const (
 var (
 	//go:embed templates/release-note.md.gotmpl
 	releaseNoteTemplate string
-	repos               = []string{utils.CalicoRepoName, utils.BirdRepoName}
+	repos               = []string{defaults.CalicoRepoName, defaults.BirdRepoName}
 	newlinePattern      = regexp.MustCompile(`\r\n|[\r\n\v\f\x{0085}\x{2028}\x{2029}]`)
 	releaseNotePattern  = regexp.MustCompile("(?s)```release-note\\s(.*?)\\s```")
 )
@@ -204,13 +205,13 @@ func ReleaseNotes(owner, repoRootDir, outputDir string, ver version.Version) (st
 	if outputDir == "" {
 		outputDir = releaseNoteDirPath(repoRootDir)
 	}
-	if owner != utils.ProjectCalicoOrg {
-		logrus.WithField("org", owner).Warnf("generating release notes outside of %s GitHub organization is not supported, switching back to %s", utils.ProjectCalicoOrg, utils.ProjectCalicoOrg)
-		owner = utils.ProjectCalicoOrg
+	if owner != defaults.ProjectCalicoOrg {
+		logrus.WithField("org", owner).Warnf("generating release notes outside of %s GitHub organization is not supported, switching back to %s", defaults.ProjectCalicoOrg, defaults.ProjectCalicoOrg)
+		owner = defaults.ProjectCalicoOrg
 	}
 
 	logrus.Infof("Generating release notes for %s", ver.String())
-	milestone := ver.Milestone(utils.ProductName)
+	milestone := ver.Milestone(defaults.ProductName)
 	githubClient := igithub.Client()
 	releaseNoteDataList := []*ReleaseNoteIssueData{}
 	opts := &github.MilestoneListOptions{

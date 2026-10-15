@@ -26,13 +26,13 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/ci"
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
 	"github.com/projectcalico/calico/release/pkg/tasks"
@@ -194,7 +194,7 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 		// For hash releases, generate a set of release notes and add them to the hashrelease directory.
 		if !c.Bool(releaseNotesFlag.Name) {
 			logrus.Info("Skipping release notes generation")
-		} else if c.String(orgFlag.Name) != utils.ProjectCalicoOrg || c.String(repoFlag.Name) != utils.CalicoRepoName {
+		} else if c.String(orgFlag.Name) != defaults.ProjectCalicoOrg || c.String(repoFlag.Name) != defaults.CalicoRepoName {
 			logrus.Warn("Release notes are not supported for non-Calico releases, skipping...")
 		} else {
 			pinVer, err := version.New(pin.ProductVersion)
@@ -205,7 +205,7 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 			if err != nil {
 				return fmt.Errorf("failed to determine release version: %v", err)
 			}
-			if _, err := outputs.ReleaseNotes(utils.ProjectCalicoOrg, cfg.RepoRootDir, filepath.Join(hashrel.Source, outputs.ReleaseNotesDir), releaseVersion); err != nil {
+			if _, err := outputs.ReleaseNotes(defaults.ProjectCalicoOrg, cfg.RepoRootDir, filepath.Join(hashrel.Source, outputs.ReleaseNotesDir), releaseVersion); err != nil {
 				return err
 			}
 		}
