@@ -18,7 +18,10 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -393,4 +396,57 @@ func TestARC_ComputedSelector_DoesNotCreatePolicyEntries(t *testing.T) {
 	if arc.policyIDToEndpointKeys.Len() != 0 {
 		t.Errorf("expected policyIDToEndpointKeys to be empty, got len=%d", arc.policyIDToEndpointKeys.Len())
 	}
+}
+
+// recordingRuleScanner records the rules of each active profile.
+type recordingRuleScanner struct {
+	noopRuleScanner
+	profileRules map[string]*model.ProfileRules
+}
+
+func (r *recordingRuleScanner) OnProfileActive(key model.ProfileRulesKey, rules *model.ProfileRules) {
+	r.profileRules[key.Name] = rules
+}
+
+func (r *recordingRuleScanner) OnProfileInactive(key model.ProfileRulesKey) {
+	delete(r.profileRules, key.Name)
+}
+
+func TestARC_ProfileRulesComeFromV3Profile(t *testing.T) {
+	RegisterTestingT(t)
+
+	arc := NewActiveRulesCalculator()
+	scanner := &recordingRuleScanner{profileRules: map[string]*model.ProfileRules{}}
+	arc.RuleScanner = scanner
+	allUpdDispatcher := dispatcher.NewDispatcher()
+	arc.RegisterWith(dispatcher.NewDispatcher(), allUpdDispatcher)
+	arc.OnStatusUpdate(api.InSync)
+
+	arc.OnUpdate(api.Update{KVPair: model.KVPair{
+		Key:   model.WorkloadEndpointKey{Hostname: "host1", OrchestratorID: "orch", WorkloadID: "wl1", EndpointID: "ep1"},
+		Value: &model.WorkloadEndpoint{ProfileIDs: []string{"prof-1"}},
+	}})
+	profileKey := model.ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}
+	allUpdDispatcher.OnUpdate(api.Update{KVPair: model.KVPair{
+		Key: profileKey,
+		Value: &v3.Profile{
+			ObjectMeta: metav1.ObjectMeta{Name: "prof-1"},
+			Spec: v3.ProfileSpec{
+				Ingress: []v3.Rule{{Action: v3.Allow, Source: v3.EntityRule{Selector: "a == 'b'"}}},
+			},
+		},
+	}})
+	Expect(scanner.profileRules).To(HaveKey("prof-1"))
+	Expect(scanner.profileRules["prof-1"].InboundRules).To(HaveLen(1))
+	Expect(scanner.profileRules["prof-1"].InboundRules[0].SrcSelector).To(Equal("a == 'b'"))
+
+	// Typha still streams v1 profile rules, which must not override those from the v3 Profile.
+	allUpdDispatcher.OnUpdate(api.Update{KVPair: model.KVPair{
+		Key:   model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "prof-1"}},
+		Value: &model.ProfileRules{},
+	}})
+	Expect(scanner.profileRules["prof-1"].InboundRules).To(HaveLen(1))
+
+	allUpdDispatcher.OnUpdate(api.Update{KVPair: model.KVPair{Key: profileKey}})
+	Expect(scanner.profileRules["prof-1"]).To(Equal(&DummyDropRules))
 }
