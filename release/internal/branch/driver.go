@@ -181,6 +181,11 @@ func (d *Driver) validateFreshCut(g git, p *CutPlan) error {
 // checkBases verifies each base is current with its remote. Main is always
 // required (its upstream is .git/config); the source only under BranchCheck.
 func (d *Driver) checkBases(g git, p *CutPlan) error {
+	// A cut from a tag never touches main; the tag just has to be the one the
+	// remote released.
+	if tagName, ok := strings.CutPrefix(p.Source, tagRefPrefix); ok {
+		return checkTagOnRemote(g, tagName, p.Remote, d.Plan)
+	}
 	mainFix := fmt.Sprintf("run `git checkout %s && git pull` before cutting", d.MainBranch)
 	if err := checkBranchCurrent(g, d.MainBranch, "", true, d.Plan, mainFix); err != nil {
 		return fmt.Errorf("check %s is current: %w", d.MainBranch, err)
