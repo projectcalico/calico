@@ -20,6 +20,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -28,6 +29,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -73,18 +75,7 @@ func main() {
 	client := &http.Client{Timeout: 30 * time.Second}
 	metadata := ciMetadata()
 
-	// Apply index templates first.  ES treats PUT _index_template/<name>
-	// as an upsert, so committing template changes auto-propagates the next
-	// time the tool runs.  Failures here are warnings -- a missing template
-	// means new fields will get default mappings, which is a Kibana
-	// inconvenience, not a data-loss event.
-	if !*dryRun {
-		if err := applyTemplates(client, esURL, auth, *tmplDir); err != nil {
-			log.Printf("warning: applying templates failed: %v", err)
-		}
-	}
-
-	sent, failed, err := walkAndSend(client, esURL, auth, *dir, metadata, *dryRun)
+	sent, failed, err := publish(client, esURL, auth, *dir, *tmplDir, metadata, *dryRun)
 	if err != nil {
 		// Observability failures should not propagate into CI (see README) --
 		// except for a caller that exists to publish, where a green run that
@@ -188,9 +179,97 @@ func ciMetadata() map[string]any {
 	return m
 }
 
-// applyTemplates PUTs each <family>.json in tmplDir to ES at
-// /_index_template/<family>.
-func applyTemplates(client *http.Client, esURL, auth, tmplDir string) error {
+// publish applies the index templates and sends every document under dir, returning the
+// totals from walkAndSend.
+//
+// A PR run must not change the schema: a field's type is fixed once it is first mapped, and a
+// PR is still being iterated on.  So a PR run leaves templates and mappings alone, and holds
+// back any field the live index has not mapped yet.  The first run after merge applies the
+// reviewed template and publishes the new fields.
+func publish(client *http.Client, esURL, auth, dir, tmplDir string, metadata map[string]any, dryRun bool) (int, int, error) {
+	_, prRun := metadata[fieldPRNumber]
+	year := indexYear()
+	var fields fieldFilter
+	switch {
+	case dryRun:
+	case prRun:
+		log.Printf("PR run: leaving index templates and mappings unchanged")
+		fields = func(family string) (map[string]bool, error) {
+			return mappedFields(client, esURL, auth, tmplDir, family, year)
+		}
+	default:
+		// Failures here are warnings -- a missing mapping means new fields get default
+		// mappings, which is a Kibana inconvenience, not a data-loss event.
+		if err := applyTemplates(client, esURL, auth, tmplDir, year); err != nil {
+			log.Printf("warning: applying templates failed: %v", err)
+		}
+	}
+	return walkAndSend(client, esURL, auth, dir, year, metadata, fields, dryRun)
+}
+
+// fieldFilter returns the set of fields a family's documents may carry, or nil for no limit.
+type fieldFilter func(family string) (map[string]bool, error)
+
+// mappedFields returns the top-level fields that the family's index for year has mapped.  An
+// index that does not exist yet falls back to the fields the committed template declares, so
+// that a PR run creating the index cannot add anything the template does not.
+func mappedFields(client *http.Client, esURL, auth, tmplDir, family, year string) (map[string]bool, error) {
+	index := family + "_" + year
+	endpoint := fmt.Sprintf("%s/%s/_mapping", strings.TrimRight(esURL, "/"), url.PathEscape(index))
+	body, err := esGet(client, endpoint, auth)
+	var httpErr *esHTTPError
+	switch {
+	case err == nil:
+		// Keyed by concrete index name, which differs from the one asked for if that is
+		// an alias.
+		var resp map[string]struct {
+			Mappings mappingProperties `json:"mappings"`
+		}
+		if err := json.Unmarshal(body, &resp); err != nil {
+			return nil, fmt.Errorf("parse mapping of %s: %w", index, err)
+		}
+		fields := map[string]bool{}
+		for _, idx := range resp {
+			for name := range idx.Mappings.Properties {
+				fields[name] = true
+			}
+		}
+		return fields, nil
+	case errors.As(err, &httpErr) && httpErr.status == http.StatusNotFound:
+		raw, rerr := os.ReadFile(filepath.Join(tmplDir, family+".json"))
+		if rerr != nil {
+			return nil, fmt.Errorf("index %s does not exist and its template is unreadable: %w", index, rerr)
+		}
+		var tmpl struct {
+			Template struct {
+				Mappings mappingProperties `json:"mappings"`
+			} `json:"template"`
+		}
+		if err := json.Unmarshal(raw, &tmpl); err != nil {
+			return nil, fmt.Errorf("parse template %s: %w", family, err)
+		}
+		fields := map[string]bool{}
+		for name := range tmpl.Template.Mappings.Properties {
+			fields[name] = true
+		}
+		return fields, nil
+	default:
+		return nil, err
+	}
+}
+
+type mappingProperties struct {
+	Properties map[string]json.RawMessage `json:"properties"`
+}
+
+// applyTemplates PUTs each <family>.json in tmplDir to ES at /_index_template/<family>, and its
+// mappings to the live <family>_<year> index.
+//
+// A template only shapes an index when the index is created, but fields are added part-way through
+// a year.  Without the live-index PUT, a new field's first document would fix its type by inference
+// -- a string becomes text plus .keyword -- and next year's index, built from the template, would
+// disagree with this year's.
+func applyTemplates(client *http.Client, esURL, auth, tmplDir, year string) error {
 	entries, err := os.ReadDir(tmplDir)
 	if err != nil {
 		// A missing templates directory is not fatal: a deployment might
@@ -215,18 +294,59 @@ func applyTemplates(client *http.Client, esURL, auth, tmplDir string) error {
 		endpoint := fmt.Sprintf("%s/_index_template/%s", strings.TrimRight(esURL, "/"), url.PathEscape(family))
 		if err := esRequest(client, "PUT", endpoint, auth, body); err != nil {
 			log.Printf("warning: PUT template %s: %v", family, err)
-			continue
+		} else {
+			log.Printf("applied template %s", family)
 		}
-		log.Printf("applied template %s", family)
+
+		// Independent of the template PUT: putting a template needs a cluster privilege
+		// that a writer of documents may lack, while extending an index's mapping is an
+		// index privilege.
+		applyLiveMapping(client, esURL, auth, family, year, body)
 	}
 	return nil
+}
+
+// applyLiveMapping PUTs the mappings from a template body to the family's index for year.  Adding
+// a field is allowed on a live index; changing an existing field's type is not, and ES rejects the
+// whole PUT, which is logged here as a warning.
+func applyLiveMapping(client *http.Client, esURL, auth, family, year string, templateBody []byte) {
+	var tmpl struct {
+		Template struct {
+			Mappings json.RawMessage `json:"mappings"`
+		} `json:"template"`
+	}
+	if err := json.Unmarshal(templateBody, &tmpl); err != nil {
+		log.Printf("warning: parse template %s: %v", family, err)
+		return
+	}
+	if len(tmpl.Template.Mappings) == 0 {
+		return
+	}
+	index := family + "_" + year
+	endpoint := fmt.Sprintf("%s/%s/_mapping", strings.TrimRight(esURL, "/"), url.PathEscape(index))
+	err := esRequest(client, "PUT", endpoint, auth, tmpl.Template.Mappings)
+	var httpErr *esHTTPError
+	switch {
+	case err == nil:
+		log.Printf("applied mappings to %s", index)
+	case errors.As(err, &httpErr) && httpErr.status == http.StatusNotFound:
+		// The year's first document will create the index from the template.
+		log.Printf("index %s does not exist yet; it will be created from the template", index)
+	default:
+		log.Printf("warning: PUT mappings to %s: %v", index, err)
+	}
+}
+
+// indexYear is the suffix of the indices this run writes to.
+func indexYear() string {
+	return time.Now().UTC().Format("2006")
 }
 
 // walkAndSend processes every <dir>/<family>/*.json file, augmenting and
 // POSTing to <family>_<UTC year>.  It returns the totals across all families
 // as well as an error: everything short of "the directory could not be read"
 // is a warning here, so a caller gating on the outcome has to read the counts.
-func walkAndSend(client *http.Client, esURL, auth, dir string, metadata map[string]any, dryRun bool) (int, int, error) {
+func walkAndSend(client *http.Client, esURL, auth, dir, year string, metadata map[string]any, fields fieldFilter, dryRun bool) (int, int, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -236,7 +356,6 @@ func walkAndSend(client *http.Client, esURL, auth, dir string, metadata map[stri
 		return 0, 0, fmt.Errorf("read dir %s: %w", dir, err)
 	}
 	totalSent, totalFailed := 0, 0
-	year := time.Now().UTC().Format("2006")
 	for _, e := range entries {
 		if !e.IsDir() {
 			// Stray files at the top level are not part of the convention.
@@ -247,7 +366,18 @@ func walkAndSend(client *http.Client, esURL, auth, dir string, metadata map[stri
 		}
 		family := e.Name()
 		familyDir := filepath.Join(dir, family)
-		sent, failed, ferr := sendFamily(client, esURL, auth, familyDir, family, year, metadata, dryRun)
+		var allowed map[string]bool
+		if fields != nil {
+			var aerr error
+			if allowed, aerr = fields(family); aerr != nil {
+				// Sending without knowing what is mapped could add fields to the
+				// schema.
+				log.Printf("warning: family %s: not sent, could not tell which fields are mapped: %v", family, aerr)
+				totalFailed++
+				continue
+			}
+		}
+		sent, failed, ferr := sendFamily(client, esURL, auth, familyDir, family, year, metadata, allowed, dryRun)
 		if ferr != nil {
 			log.Printf("warning: family %s: %v", family, ferr)
 			// A family that could not be walked published nothing, and has no
@@ -263,8 +393,9 @@ func walkAndSend(client *http.Client, esURL, auth, dir string, metadata map[stri
 }
 
 // sendFamily handles one <family> subdirectory: walks all *.json under it,
-// augments with metadata, and POSTs to <family>_<year>.
-func sendFamily(client *http.Client, esURL, auth, familyDir, family, year string, metadata map[string]any, dryRun bool) (sent, failed int, err error) {
+// augments with metadata, and POSTs to <family>_<year>.  A non-nil allowed
+// drops every field not in it.
+func sendFamily(client *http.Client, esURL, auth, familyDir, family, year string, metadata map[string]any, allowed map[string]bool, dryRun bool) (sent, failed int, err error) {
 	files, err := filepath.Glob(filepath.Join(familyDir, "*.json"))
 	if err != nil {
 		return 0, 0, fmt.Errorf("glob %s: %w", familyDir, err)
@@ -274,6 +405,17 @@ func sendFamily(client *http.Client, esURL, auth, familyDir, family, year string
 		url.PathEscape(family),
 		year,
 	)
+	heldBack := map[string]bool{}
+	defer func() {
+		if len(heldBack) > 0 {
+			names := make([]string, 0, len(heldBack))
+			for name := range heldBack {
+				names = append(names, name)
+			}
+			sort.Strings(names)
+			log.Printf("family %s: held back fields not yet mapped, until a run after merge: %s", family, strings.Join(names, ", "))
+		}
+	}()
 	for _, f := range files {
 		raw, rerr := os.ReadFile(f)
 		if rerr != nil {
@@ -293,6 +435,14 @@ func sendFamily(client *http.Client, esURL, auth, familyDir, family, year string
 				doc[k] = v
 			}
 		}
+		if allowed != nil {
+			for k := range doc {
+				if !allowed[k] {
+					delete(doc, k)
+					heldBack[k] = true
+				}
+			}
+		}
 		body, _ := json.Marshal(doc)
 		if dryRun {
 			log.Printf("dry-run: would POST %s\n  %s", endpoint, string(body))
@@ -309,13 +459,34 @@ func sendFamily(client *http.Client, esURL, auth, familyDir, family, year string
 	return sent, failed, nil
 }
 
+// esHTTPError is a non-2xx response from ES.
+type esHTTPError struct {
+	method, endpoint string
+	status           int
+	body             string
+}
+
+func (e *esHTTPError) Error() string {
+	return fmt.Sprintf("%s %s: HTTP %d: %s", e.method, e.endpoint, e.status, e.body)
+}
+
 // esRequest performs a single HTTP request to ES with the given method,
 // endpoint, auth header, and JSON body.  Returns an error on transport
-// failure or any non-2xx response.
+// failure, or an *esHTTPError on any non-2xx response.
 func esRequest(client *http.Client, method, endpoint, auth string, body []byte) error {
+	_, err := esDo(client, method, endpoint, auth, body)
+	return err
+}
+
+// esGet is esRequest for a GET, returning the response body.
+func esGet(client *http.Client, endpoint, auth string) ([]byte, error) {
+	return esDo(client, "GET", endpoint, auth, nil)
+}
+
+func esDo(client *http.Client, method, endpoint, auth string, body []byte) ([]byte, error) {
 	req, err := http.NewRequest(method, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if auth != "" {
@@ -323,13 +494,12 @@ func esRequest(client *http.Client, method, endpoint, auth string, body []byte) 
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("%s %s: HTTP %d: %s", method, endpoint, resp.StatusCode, strings.TrimSpace(string(respBody)))
+		return nil, &esHTTPError{method: method, endpoint: endpoint, status: resp.StatusCode, body: strings.TrimSpace(string(respBody))}
 	}
-	_, _ = io.Copy(io.Discard, resp.Body)
-	return nil
+	return io.ReadAll(resp.Body)
 }
