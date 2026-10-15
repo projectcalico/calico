@@ -193,7 +193,7 @@ func TestNote(t *testing.T) {
 	})
 }
 
-func TestProductComponents(t *testing.T) {
+func TestCalicoComponents(t *testing.T) {
 	for _, tc := range []struct {
 		branch string
 		want   string
@@ -203,7 +203,7 @@ func TestProductComponents(t *testing.T) {
 		{"release-v3.31-1", "release-v3.31-1"},
 	} {
 		t.Run("networking-calico on "+tc.branch, func(t *testing.T) {
-			got, err := productComponents(Config{ReleaseBranchPrefix: "release"}, tc.branch, "v3.31.0-0.dev-4-gfd40f1838223")
+			got, err := calicoComponents(Config{ReleaseBranchPrefix: "release"}, tc.branch, "v3.31.0-0.dev-4-gfd40f1838223")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -214,7 +214,7 @@ func TestProductComponents(t *testing.T) {
 	}
 
 	t.Run("requires a release branch prefix", func(t *testing.T) {
-		if _, err := productComponents(Config{}, "master", "v3.31.0"); err == nil {
+		if _, err := calicoComponents(Config{}, "master", "v3.31.0"); err == nil {
 			t.Error("want an error")
 		}
 	})
