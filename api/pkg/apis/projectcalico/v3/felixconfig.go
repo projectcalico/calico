@@ -458,6 +458,8 @@ type FelixConfigurationSpec struct {
 	// LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
 	// Only logs from files with names that match the given regular expression are included.  The filter only applies
 	// to Debug level logs.
+	// +kubebuilder:validation:MaxLength=1024
+	// +kubebuilder:validation:XValidation:rule="type('x'.matches(self)) == bool",message="must be a valid regular expression",reason=FieldValueInvalid
 	LogDebugFilenameRegex string `json:"logDebugFilenameRegex,omitempty" validate:"omitempty,regexp"`
 
 	// IPIPEnabled overrides whether Felix should configure an IPIP interface on the host. Optional as Felix
@@ -778,6 +780,8 @@ type FelixConfigurationSpec struct {
 	// interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
 	// offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
 	// is not Disabled. [Default: ""]
+	// +kubebuilder:validation:MaxLength=1024
+	// +kubebuilder:validation:XValidation:rule="type('x'.matches(self)) == bool",message="must be a valid regular expression",reason=FieldValueInvalid
 	NFTablesFlowTableDataIfacePattern string `json:"nftablesFlowTableDataIfacePattern,omitempty" validate:"omitempty,regexp"`
 
 	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]
@@ -897,11 +901,15 @@ type FelixConfigurationSpec struct {
 	// flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the
 	// cluster.  It should not match the workload interfaces (usually named cali...) or any other special device managed
 	// by Calico itself (e.g., tunnels).
+	// +kubebuilder:validation:MaxLength=1024
+	// +kubebuilder:validation:XValidation:rule="type('x'.matches(self)) == bool",message="must be a valid regular expression",reason=FieldValueInvalid
 	BPFDataIfacePattern string `json:"bpfDataIfacePattern,omitempty" validate:"omitempty,regexp"`
 
 	// BPFL3IfacePattern is a regular expression that allows to list tunnel devices like wireguard or vxlan (i.e., L3 devices)
 	// in addition to BPFDataIfacePattern. That is, tunnel interfaces not created by Calico, that Calico workload traffic flows
 	// over as well as any interfaces that handle incoming traffic to nodeports and services from outside the cluster.
+	// +kubebuilder:validation:MaxLength=1024
+	// +kubebuilder:validation:XValidation:rule="type('x'.matches(self)) == bool",message="must be a valid regular expression",reason=FieldValueInvalid
 	BPFL3IfacePattern string `json:"bpfL3IfacePattern,omitempty" validate:"omitempty,regexp"`
 
 	// BPFConnectTimeLoadBalancingEnabled when in BPF mode, controls whether Felix installs the connection-time load
@@ -1050,6 +1058,8 @@ type FelixConfigurationSpec struct {
 
 	// BPFDisableGROForIfaces is a regular expression that controls which interfaces Felix should disable the
 	// Generic Receive Offload [GRO] option.  It should not match the workload interfaces (usually named cali...).
+	// +kubebuilder:validation:MaxLength=1024
+	// +kubebuilder:validation:XValidation:rule="type('x'.matches(self)) == bool",message="must be a valid regular expression",reason=FieldValueInvalid
 	BPFDisableGROForIfaces string `json:"bpfDisableGROForIfaces,omitempty" validate:"omitempty,regexp"`
 
 	// BPFExcludeCIDRsFromNAT is a list of CIDRs that are to be excluded from NAT
@@ -1249,6 +1259,8 @@ type FelixConfigurationSpec struct {
 	// to calculate the host's MTU.
 	// This should not match workload interfaces (usually named cali...).
 	// +optional
+	// +kubebuilder:validation:MaxLength=1024
+	// +kubebuilder:validation:XValidation:rule="type('x'.matches(self)) == bool",message="must be a valid regular expression",reason=FieldValueInvalid
 	MTUIfacePattern string `json:"mtuIfacePattern,omitempty" validate:"omitempty,regexp"`
 
 	// FloatingIPs configures whether or not Felix will program non-OpenStack floating IP addresses.  (OpenStack-derived
