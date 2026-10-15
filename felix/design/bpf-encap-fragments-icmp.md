@@ -114,10 +114,12 @@ two optional fields:
 - The same range is also pushed onto the kernel-managed VXLAN
   device as `PortLow` / `PortHigh` (`vxlan_mgr.go`) so that the
   iptables/nftables dataplane behaves consistently. The
-  `vxlanLinksIncompat` check only fires when both sides report a
-  non-zero range, following the same "zero means unset / don't
-  care" idiom that the function already uses for `Group`, `Port`,
-  and the VTEP MAC.
+  `vxlanLinksIncompat` check compares the existing range whenever
+  the desired range is configured, including when the existing
+  device reports `0/0` for the kernel default. A mismatch recreates
+  the device so the configured bounds take effect. An unset desired
+  range remains "don't care", so removing the bounds does not reset
+  a range already present on the device.
 
 ### FDB
 

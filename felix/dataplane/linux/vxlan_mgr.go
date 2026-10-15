@@ -394,7 +394,8 @@ func vxlanLinksIncompat(l1, l2 netlink.Link) string {
 		return fmt.Sprintf("port: %v vs %v", v1.Port, v2.Port)
 	}
 
-	if (v1.PortLow != 0 || v1.PortHigh != 0) && (v2.PortLow != 0 || v2.PortHigh != 0) {
+	// Only the desired range is don't-care when unset; an existing 0/0 range is the kernel default.
+	if v1.PortLow != 0 || v1.PortHigh != 0 {
 		if v1.PortLow != v2.PortLow || v1.PortHigh != v2.PortHigh {
 			return fmt.Sprintf("source port range: [%d,%d] vs [%d,%d]",
 				v1.PortLow, v1.PortHigh, v2.PortLow, v2.PortHigh)
