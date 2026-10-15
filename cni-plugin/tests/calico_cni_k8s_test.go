@@ -15,7 +15,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -30,6 +29,7 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -89,7 +89,10 @@ func flockWaiters(path string) int {
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	ExpectWithOffset(1, ok).To(BeTrue())
-	inodeSuffix := ":" + strconv.FormatUint(stat.Ino, 10)
+
+	// The kernel prints the device as hex major:minor, so the inode alone could match a file on
+	// another filesystem.
+	fileID := fmt.Sprintf("%02x:%02x:%d", unix.Major(uint64(stat.Dev)), unix.Minor(uint64(stat.Dev)), stat.Ino)
 
 	locks, err := os.ReadFile("/proc/locks")
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -97,7 +100,7 @@ func flockWaiters(path string) int {
 	for line := range strings.SplitSeq(string(locks), "\n") {
 		// A waiter reads "N: -> FLOCK ADVISORY WRITE <pid> <maj:min:inode> <start> <end>".
 		fields := strings.Fields(line)
-		if len(fields) >= 7 && fields[1] == "->" && strings.HasSuffix(fields[6], inodeSuffix) {
+		if len(fields) >= 7 && fields[1] == "->" && fields[6] == fileID {
 			waiters++
 		}
 	}
