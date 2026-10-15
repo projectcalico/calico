@@ -28,7 +28,6 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -712,8 +711,15 @@ func assignPodIPs(
 
 		// IPAM can return a partial success. Release any IPs that we just assigned to this
 		// sandbox before attempting to allocate a fresh one.
-		logger.WithError(err).Warn("Could not reuse the endpoint's addresses, assigning new ones")
 		utils.ReleaseIPAllocation(logger, conf, args)
+
+		// A newer sandbox owns the pod's network. Networking this one, even with a fresh
+		// address, would replace the live sandbox's host interface.
+		var cniErr *cnitypes.Error
+		if errors.As(err, &cniErr) && cniErr.Code == types.ErrCodeSandboxSuperseded {
+			return nil, false, err
+		}
+		logger.WithError(err).Warn("Could not reuse the endpoint's addresses, assigning new ones")
 	}
 
 	// Assign a fresh IP address via the IPAM plugin.
@@ -805,7 +811,7 @@ func callIPAMWithIP(ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger *l
 
 	// Run the IPAM plugin.
 	logger.Debugf("Calling IPAM plugin %s", conf.IPAM.Type)
-	r, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+	r, err := utils.ExecIPAMAdd(conf.IPAM.Type, args.StdinData)
 	if err != nil {
 		// Restore the CNI_ARGS ENV var to it's original value,
 		// so the subsequent calls don't get polluted by the old IP value.
