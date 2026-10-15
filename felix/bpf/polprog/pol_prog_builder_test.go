@@ -397,6 +397,7 @@ func TestProgramSplitReachability(t *testing.T) {
 			WithAllowDenyJumps(666, 777),
 			WithPolicyMapIndexAndStride(15, 1000),
 			WithFlowLogs(),
+			WithPolicyDebugEnabled(),
 			WithMaxJumpsPerProgram(limit),
 		)
 		progs, err := pg.Instructions(rules)
@@ -404,7 +405,9 @@ func TestProgramSplitReachability(t *testing.T) {
 		expectValidSubPrograms(progs, 15, 1000, fmt.Sprintf("limit %d", limit))
 		if pg.restUnreachable {
 			sawUnreachableRest = true
-			Expect(pg.b.NumJumps).To(BeZero(), "limit %d: rules written after the rest became unreachable", limit)
+			last := progs[len(progs)-1]
+			Expect(last).To(ContainElement(HaveField("Comments", ContainElement("Rest of the policy is unreachable and is not built"))),
+				"limit %d", limit)
 		}
 	}
 	Expect(sawUnreachableRest).To(BeTrue(), "no limit put the split after unconditional code")
@@ -523,9 +526,6 @@ func TestProgramSplitRandomPolicies(t *testing.T) {
 		progs, err := pg.Instructions(rules)
 		Expect(err).NotTo(HaveOccurred(), "iteration %d", iter)
 		expectValidSubPrograms(progs, 15, 1000, fmt.Sprintf("iteration %d", iter))
-		if pg.restUnreachable {
-			Expect(pg.b.NumJumps).To(BeZero(), "iteration %d: rules written after the rest became unreachable", iter)
-		}
 	}
 }
 

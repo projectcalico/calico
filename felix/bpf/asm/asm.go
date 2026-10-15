@@ -876,6 +876,19 @@ func (b *Block) AddComment(comment string) {
 	b.insnIdxToComments[len(b.insns)] = append(b.insnIdxToComments[len(b.insns)], comment)
 }
 
+// NextInsnIdx returns the index the next instruction will get, for use with AddCommentAt.
+func (b *Block) NextInsnIdx() int {
+	return len(b.insns)
+}
+
+// AddCommentAt adds a comment to the instruction at idx, which may already be written.
+func (b *Block) AddCommentAt(idx int, comment string) {
+	if !b.policyDebugEnabled {
+		return
+	}
+	b.insnIdxToComments[idx] = append(b.insnIdxToComments[idx], comment)
+}
+
 func (b *Block) AddCommentF(comment string, args ...any) {
 	if !b.policyDebugEnabled {
 		return

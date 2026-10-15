@@ -245,7 +245,7 @@ func (p *Builder) Instructions(rules Rules) ([]asm.Insns, error) {
 	p.b.SetTrampolineStride(p.trampolineStride)
 	p.blocks = append(p.blocks, p.b)
 	p.writeProgramHeader()
-	p.writeRules(rules)
+	p.writeRulesUntilUnreachable(rules)
 	if !p.restUnreachable {
 		// Otherwise the split already wrote the last sub-program's footer.
 		p.writeProgramFooter()
@@ -262,8 +262,21 @@ func (p *Builder) Instructions(rules Rules) ([]asm.Insns, error) {
 	return progs, nil
 }
 
-// writeRules writes all the policy.  It returns early once maybeSplitProgram finds the rest
-// unreachable, as does every writer it calls.
+// restUnreachableSignal is panicked by maybeSplitProgram, and recovered by
+// writeRulesUntilUnreachable, to stop writing policy that nothing can reach.
+type restUnreachableSignal struct{}
+
+func (p *Builder) writeRulesUntilUnreachable(rules Rules) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(restUnreachableSignal); !ok {
+				panic(r)
+			}
+		}
+	}()
+	p.writeRules(rules)
+}
+
 func (p *Builder) writeRules(rules Rules) {
 	if p.xdp {
 		// For an XDP program HostNormalTiers continues the untracked policy to enforce;
@@ -274,9 +287,6 @@ func (p *Builder) writeRules(rules Rules) {
 	// Pre-DNAT policy: on a host interface, or host-* policy on a workload interface.  Traffic
 	// is allowed to continue if there is no applicable pre-DNAT policy.
 	p.writeTiers(rules.HostPreDnatTiers, legDestPreNAT, "allowed_by_host_policy")
-	if p.restUnreachable {
-		return
-	}
 
 	// If traffic is to or from the local host, skip over any apply-on-forward policy.  Note
 	// that this case can be:
@@ -302,9 +312,6 @@ func (p *Builder) writeRules(rules Rules) {
 	// Apply-On-Forward policy: on a host interface, or host-* policy on a workload interface.
 	// Traffic is allowed to continue if there is no applicable AoF policy.
 	p.writeTiers(rules.HostForwardTiers, legDest, "allowed_by_host_policy")
-	if p.restUnreachable {
-		return
-	}
 
 	// Now skip over normal host policy and jump to where we apply possible workload policy.
 	p.b.Jump("allowed_by_host_policy")
@@ -315,19 +322,10 @@ normalPolicy:
 		p.b.LabelNextInsn("to_or_from_host")
 		if rules.ForXDP {
 			p.writeTiers(rules.HostNormalTiers, legDestPreNAT, "allowed_by_host_policy")
-			if p.restUnreachable {
-				return
-			}
 			p.b.Jump("xdp_pass")
 		} else {
 			p.writeTiers(rules.HostNormalTiers, legDest, "allowed_by_host_policy")
-			if p.restUnreachable {
-				return
-			}
 			p.writeProfiles(rules.HostProfiles, rules.NoProfileMatchID, "allowed_by_host_policy")
-			if p.restUnreachable {
-				return
-			}
 		}
 	}
 
@@ -340,9 +338,6 @@ normalPolicy:
 	} else {
 		// Workload policy.
 		p.writeTiers(rules.Tiers, legDest, "allow")
-		if p.restUnreachable {
-			return
-		}
 		p.writeProfiles(rules.Profiles, rules.NoProfileMatchID, "allow")
 	}
 }
@@ -540,9 +535,6 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 		p.b.AddCommentF("Start of tier %s", tier.Name)
 		for _, pol := range tier.Policies {
 			p.writePolicy(pol, actionLabels, destLeg)
-			if p.restUnreachable {
-				return
-			}
 		}
 
 		// End of tier rule.
@@ -556,9 +548,6 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 			Rule:    &proto.Rule{},
 			MatchID: tier.EndRuleID,
 		}, actionLabels[string(action)], destLeg)
-		if p.restUnreachable {
-			return
-		}
 		p.b.LabelNextInsn(endOfTierLabel)
 		p.tierID++
 	}
@@ -568,9 +557,6 @@ func (p *Builder) writeProfiles(profiles []Policy, noProfileMatchID uint64, allo
 	log.Debugf("Start of profiles")
 	for idx, prof := range profiles {
 		p.writeProfile(prof, idx, allowLabel)
-		if p.restUnreachable {
-			return
-		}
 	}
 
 	log.Debugf("End of profiles drop")
@@ -604,9 +590,6 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 		p.b.AddCommentF("Rule MatchID: %d", rule.MatchID)
 		action := strings.ToLower(rule.Action)
 		p.writeRule(rule, actionLabels[action], destLeg)
-		if p.restUnreachable {
-			return
-		}
 		log.Debugf("End of rule %s %d", policy.NamespacedName(), ruleIdx)
 		p.b.AddCommentF("End of rule %s %s", policy.NamespacedName(), rule.RuleId)
 	}
@@ -622,9 +605,6 @@ func (p *Builder) writePolicy(policy Policy, actionLabels map[string]string, des
 	log.Debugf("Start of %s", cmtID)
 
 	p.writePolicyRules(policy, actionLabels, destLeg)
-	if p.restUnreachable {
-		return
-	}
 
 	log.Debugf("End of %s", cmtID)
 	p.b.AddCommentF("End of %s", cmtID)
@@ -640,9 +620,6 @@ func (p *Builder) writeProfile(profile Profile, idx int, allowLabel string) {
 	}
 	log.Debugf("Start of profile %q %d", profile.Name, idx)
 	p.writePolicyRules(profile, actionLabels, legDest)
-	if p.restUnreachable {
-		return
-	}
 	log.Debugf("End of profile %q %d", profile.Name, idx)
 	p.policyID++
 }
@@ -698,9 +675,6 @@ func (p *Builder) ipVersion() uint8 {
 
 func (p *Builder) writeRule(r Rule, actionLabel string, destLeg matchLeg) {
 	p.maybeSplitProgram()
-	if p.restUnreachable {
-		return
-	}
 
 	if actionLabel == "" {
 		log.Panic("empty action label")
@@ -1202,7 +1176,7 @@ func (p *Builder) maybeSplitProgram() bool {
 	// the bytecode (taken or not).  Since our code falls through to the next
 	// rule by default, to first approximation, all our jumps are on the same
 	// path.
-	if p.restUnreachable || p.b.NumJumps < p.maxJumpsPerProgram {
+	if p.b.NumJumps < p.maxJumpsPerProgram {
 		return false
 	}
 	if p.policyMapStride == 0 {
@@ -1212,6 +1186,7 @@ func (p *Builder) maybeSplitProgram() bool {
 	}
 
 	p.b.SetTrampolinesEnabled(false) // We're about to write a special trampoline...
+	splitIdx := p.b.NextInsnIdx()
 	p.b.AddCommentF("Splitting program after %d jumps", p.b.NumJumps)
 	p.b.MovImm64(asm.R0, 0)
 	p.b.Jump("next-program")
@@ -1247,12 +1222,10 @@ func (p *Builder) maybeSplitProgram() bool {
 		}
 	}
 	if len(targets) == 0 && !p.b.HasPendingJumps("next-program") {
-		// Nothing reaches the next program.  The writers stop; the spare block catches any
-		// stray writes.
 		log.Debug("Remaining policy is unreachable, not adding a sub-program")
+		p.b.AddCommentAt(splitIdx, "Rest of the policy is unreachable and is not built")
 		p.restUnreachable = true
-		p.b = asm.NewBlock(p.policyDebugEnabled)
-		return true
+		panic(restUnreachableSignal{})
 	}
 	p.b.LabelNextInsn("next-program")
 	// Stash the trampoline offset in the policy result so the next program
