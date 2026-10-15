@@ -48,6 +48,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -567,6 +568,80 @@ func TestPrepareRelease(t *testing.T) {
 			t.Errorf("did not run %q (calls: %v)", want, f.calls)
 		}
 	})
+}
+
+func TestPrepPrereqs(t *testing.T) {
+	root := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q", "-b", "release-v3.30"},
+		{"-c", "user.email=test@example.com", "-c", "user.name=test", "-c", "commit.gpgsign=false",
+			"commit", "-q", "--allow-empty", "-m", "initial"},
+	} {
+		if _, err := command.GitInDir(root, args...); err != nil {
+			t.Fatalf("git %v: %v", args, err)
+		}
+	}
+	for _, tc := range []struct {
+		name           string
+		remote         string
+		validateBranch bool
+		wantErr        bool
+	}{
+		{name: "main repo", remote: "git@github.com:projectcalico/calico.git", validateBranch: true},
+		{name: "fork", remote: "git@github.com:someone/calico.git", validateBranch: true, wantErr: true},
+		{name: "fork with the branch check off", remote: "git@github.com:someone/calico.git"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeRunner()
+			f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30\n", nil)
+			f.on("git config --get remote.origin.url", tc.remote+"\n", nil)
+			r := &CalicoManager{
+				runner: f, repoRoot: root, remote: "origin", githubOrg: "projectcalico",
+				calicoVersion: testVersion("v3.30.0"), operatorVersion: "v1.38.0",
+				releaseBranchPrefix: "release", validate: true, validateBranch: tc.validateBranch,
+				gitRef: true, dryRun: true,
+			}
+			err := r.prepPrereqs()
+			if got := err != nil && strings.Contains(err.Error(), "expected to be from"); got != tc.wantErr {
+				t.Errorf("prepPrereqs() = %v, want fork error %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestPushPrepBranch(t *testing.T) {
+	const push = "git push --force-with-lease origin build-v3.30.0"
+	for _, tc := range []struct {
+		name     string
+		gitRef   bool
+		dryRun   bool
+		wantPush string
+		wantPR   bool
+	}{
+		{name: "pushes and opens a PR", gitRef: true, wantPush: push, wantPR: true},
+		{name: "dry run checks the push and opens no PR", gitRef: true, dryRun: true, wantPush: push + " --dry-run"},
+		{name: "no git ref pushes nothing", dryRun: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeRunner()
+			r := &CalicoManager{runner: f, remote: "origin", gitRef: tc.gitRef, dryRun: tc.dryRun}
+			if err := r.pushPrepBranch("release-v3.30", "build-v3.30.0"); err != nil {
+				t.Fatalf("pushPrepBranch() unexpected error: %v", err)
+			}
+			if got := slices.ContainsFunc(f.calls, func(c string) bool { return strings.HasPrefix(c, "git push") }); got != (tc.wantPush != "") {
+				t.Errorf("pushed = %v, want %v (calls: %v)", got, tc.wantPush != "", f.calls)
+			}
+			if tc.wantPush != "" && !slices.Contains(f.calls, tc.wantPush) {
+				t.Errorf("did not run %q (calls: %v)", tc.wantPush, f.calls)
+			}
+			if got := f.ran("./bin/gh pr create"); got != tc.wantPR {
+				t.Errorf("opened a PR = %v, want %v (calls: %v)", got, tc.wantPR, f.calls)
+			}
+			if want := "git switch -f release-v3.30"; !f.ran(want) {
+				t.Errorf("did not switch back to the base branch (calls: %v)", f.calls)
+			}
+		})
+	}
 }
 
 func TestAssertReleaseNotesPresent(t *testing.T) {
@@ -1267,6 +1342,7 @@ func TestImageStepsWriteLogFiles(t *testing.T) {
 
 func TestPublishBranchTag(t *testing.T) {
 	t.Run("moves the tag", func(t *testing.T) {
+		prefix, dev := utils.ReleaseBranchPrefix(), utils.DevTagSuffix()
 		tests := []struct {
 			name          string
 			version       string
@@ -1282,27 +1358,27 @@ func TestPublishBranchTag(t *testing.T) {
 		}{
 			{
 				name:          "hashrelease also pushes the branch tag",
-				version:       "v3.33.0-0.dev-1-gabcdef123456",
-				branch:        "release-v3.33",
+				version:       "v3.33.0-" + dev + "-1-gabcdef123456",
+				branch:        prefix + "-v3.33",
 				images:        true,
 				isHashRelease: true,
 				wantPublish:   true,
 				wantBranchTag: true,
-				wantTag:       "release-v3.33",
+				wantTag:       prefix + "-v3.33",
 			},
 			{
 				name:          "early preview keeps its stream suffix",
-				version:       "v3.33.0-1.0-0.dev-1-gabcdef123456",
-				branch:        "release-v3.33-1",
+				version:       "v3.33.0-1.0-" + dev + "-1-gabcdef123456",
+				branch:        prefix + "-v3.33-1",
 				images:        true,
 				isHashRelease: true,
 				wantPublish:   true,
 				wantBranchTag: true,
-				wantTag:       "release-v3.33-1",
+				wantTag:       prefix + "-v3.33-1",
 			},
 			{
 				name:          "hashrelease on the default branch tags it",
-				version:       "v3.34.0-0.dev-1-gabcdef123456",
+				version:       "v3.34.0-" + dev + "-1-gabcdef123456",
 				branch:        "master",
 				images:        true,
 				isHashRelease: true,
@@ -1312,7 +1388,7 @@ func TestPublishBranchTag(t *testing.T) {
 			},
 			{
 				name:          "hashrelease on any other branch has no branch tag",
-				version:       "v3.34.0-0.dev-1-gabcdef123456",
+				version:       "v3.34.0-" + dev + "-1-gabcdef123456",
 				branch:        "fix-foo",
 				images:        true,
 				isHashRelease: true,
@@ -1323,28 +1399,28 @@ func TestPublishBranchTag(t *testing.T) {
 				name:          "official release on its prep branch tags the recorded branch",
 				version:       "v3.33.1",
 				branch:        "build-v3.33.1",
-				trailer:       "release-v3.33-2\n",
+				trailer:       prefix + "-v3.33-2\n",
 				images:        true,
 				isHashRelease: false,
 				wantPublish:   true,
 				wantBranchTag: true,
-				wantTag:       "release-v3.33-2",
+				wantTag:       prefix + "-v3.33-2",
 			},
 			{
 				name:          "official release on a release branch tags it",
 				version:       "v3.33.1",
-				branch:        "release-v3.33",
+				branch:        prefix + "-v3.33",
 				images:        true,
 				isHashRelease: false,
 				wantPublish:   true,
 				wantBranchTag: true,
-				wantTag:       "release-v3.33",
+				wantTag:       prefix + "-v3.33",
 			},
 			{
 				name:          "official release on a prep branch with no recorded branch is an error",
 				version:       "v3.33.1",
 				branch:        "build-v3.33.1",
-				prefix:        "release",
+				prefix:        prefix,
 				images:        true,
 				isHashRelease: false,
 				wantPublish:   true,
@@ -1353,7 +1429,7 @@ func TestPublishBranchTag(t *testing.T) {
 			{
 				// An unset prefix would silently tag images "-v3.33".
 				name:          "missing branch prefix is an error",
-				version:       "v3.33.0-0.dev-1-gabcdef123456",
+				version:       "v3.33.0-" + dev + "-1-gabcdef123456",
 				images:        true,
 				isHashRelease: true,
 				prefix:        "",
@@ -1362,7 +1438,7 @@ func TestPublishBranchTag(t *testing.T) {
 			},
 			{
 				name:          "images disabled publishes nothing",
-				version:       "v3.33.0-0.dev-1-gabcdef123456",
+				version:       "v3.33.0-" + dev + "-1-gabcdef123456",
 				images:        false,
 				isHashRelease: true,
 				wantPublish:   false,
@@ -1376,9 +1452,9 @@ func TestPublishBranchTag(t *testing.T) {
 				f.on("git rev-parse --abbrev-ref HEAD", tt.branch+"\n", nil)
 				f.on("git log -1 -i --grep=^Release-branch: ", tt.trailer, nil)
 
-				prefix := tt.prefix
-				if prefix == "" && !tt.wantErr {
-					prefix = "release"
+				branchPrefix := tt.prefix
+				if branchPrefix == "" && !tt.wantErr {
+					branchPrefix = prefix
 				}
 				r, root := imageManager(t, f, "")
 				r.images = tt.images
@@ -1386,7 +1462,7 @@ func TestPublishBranchTag(t *testing.T) {
 				// A hashrelease reads its registry from its own source tree.
 				r.hashrelease.Source = root
 				r.calicoVersion = testVersion(tt.version)
-				r.releaseBranchPrefix = prefix
+				r.releaseBranchPrefix = branchPrefix
 
 				err := r.publishContainerImages()
 				if tt.wantErr {

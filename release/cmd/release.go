@@ -138,6 +138,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
 					calico.WithValidation(c.Bool(validationFlag.Name)),
 					calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
+					calico.WithDryRun(c.Bool(localFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
@@ -193,6 +194,7 @@ var releaseSubCommands = func(cfg *Config) []*cli.Command {
 					calico.WithDraftRelease(c.Bool(draftGithubReleaseFlag.Name)),
 					calico.WithValidation(c.Bool(validationFlag.Name)),
 					calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
+					calico.WithDryRun(c.Bool(localFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
@@ -278,7 +280,7 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 				calico.WithTmpDir(cfg.TmpDir),
 				calico.WithValidation(c.Bool(validationFlag.Name)),
 				calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
-				calico.WithGitRef(!c.Bool(localFlag.Name)),
+				calico.WithDryRun(c.Bool(localFlag.Name)),
 			}
 			r, err := calico.NewManager(opts...)
 			if err != nil {
@@ -304,7 +306,8 @@ func releaseBuildFlags() []cli.Flag {
 	f = append(f, operatorBuildCommandFlags...)
 	f = append(f,
 		branchCheckFlag,
-		validationFlag)
+		validationFlag,
+		localFlag)
 	return f
 }
 
@@ -320,6 +323,7 @@ func releasePublishFlags() []cli.Flag {
 		s3BucketFlag,
 		branchCheckFlag,
 		validationFlag,
+		localFlag,
 	)
 	return f
 }

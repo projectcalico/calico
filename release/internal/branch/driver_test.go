@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
 	"github.com/projectcalico/calico/release/internal/command"
@@ -598,7 +599,7 @@ func TestPostPushStepIsLastSkippableAndPlanned(t *testing.T) {
 	require.NoError(t, skipD.runSteps([]Step{findStep(t, skipD.steps(skipG, p), "post-push")}))
 	require.Equal(t, 0, ran)
 
-	// local run (Publish false): still runs the hook, which honors local mode itself.
+	// Publish false still runs the hook, which checks dry-run itself.
 	localD, localG := stepDriver(t.TempDir(), (&fakeRunner{}).fn(), false, nil)
 	localD.PostDerivedPush = post
 	require.NoError(t, localD.runSteps([]Step{findStep(t, localD.steps(localG, p), "post-push")}))
@@ -622,6 +623,32 @@ func TestPushRefsCheckMissingLocalRefIsNotDone(t *testing.T) {
 	done, err := findStep(t, d.steps(g.fn(), p), "push-refs").Done()
 	require.NoError(t, err, "a missing local ref must not error the check")
 	require.False(t, done)
+}
+
+func TestPushRefsStep(t *testing.T) {
+	derived := utils.ReleaseBranchPrefix() + "-v3.33"
+	p := &CutPlan{Derived: derived, Remote: "origin"}
+	for _, tc := range []struct {
+		name    string
+		publish bool
+		dryRun  bool
+		want    [][]string
+	}{
+		{name: "publishes", publish: true, want: [][]string{{"push", "origin", derived}}},
+		{name: "dry run checks the push", publish: true, dryRun: true, want: [][]string{{"push", "origin", "--dry-run", derived}}},
+		{name: "publish off pushes nothing", dryRun: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &gitRec{}
+			d := &Driver{Remote: "origin", Publish: tc.publish, DryRun: tc.dryRun}
+			if err := findStep(t, d.steps(g.fn(), p), "push-refs").Do(); err != nil {
+				t.Fatalf("push-refs Do() unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(tc.want, g.runs); diff != "" {
+				t.Errorf("git calls (-want +got):\n%s", diff)
+			}
+		})
+	}
 }
 
 // A nil PostPush hook makes the step report done, so it never runs.

@@ -144,6 +144,13 @@ func WithHelmCharts(enabled bool) Option {
 	}
 }
 
+func WithDryRun(enabled bool) Option {
+	return func(r *CalicoManager) error {
+		r.dryRun = enabled
+		return nil
+	}
+}
+
 func WithGitRef(enabled bool) Option {
 	return func(r *CalicoManager) error {
 		r.gitRef = enabled

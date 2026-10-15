@@ -218,3 +218,24 @@ func TestWithVersion(t *testing.T) {
 		}
 	})
 }
+
+func TestWithDryRun(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		opts []Option
+		want bool
+	}{
+		{name: "off by default"},
+		{name: "on", opts: []Option{WithDryRun(true)}, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, err := NewManager(append(requiredOpts(), tc.opts...)...)
+			if err != nil {
+				t.Fatalf("NewManager: %v", err)
+			}
+			if m.dryRun != tc.want {
+				t.Errorf("dryRun = %v, want %v", m.dryRun, tc.want)
+			}
+		})
+	}
+}

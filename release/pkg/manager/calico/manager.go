@@ -1548,6 +1548,7 @@ func (r *CalicoManager) CutBranch() error {
 		ReleaseBranchPrefix: r.releaseBranchPrefix,
 		Validate:            r.validate,
 		Publish:             r.gitRef,
+		DryRun:              r.dryRun,
 		Plan:                r.cutOptions.OnlyPlan(),
 		BranchCheck:         r.cutOptions.CheckBranch(),
 		Skip:                r.cutOptions.SkipSteps(),
@@ -1759,8 +1760,16 @@ func (r *CalicoManager) pushPrepBranch(baseBranch, prepBranch string) error {
 		return r.switchToBaseBranch(baseBranch)
 	}
 
-	if _, err := r.git("push", "--force-with-lease", r.remote, prepBranch); err != nil {
+	args := []string{"push", "--force-with-lease", r.remote, prepBranch}
+	if r.dryRun {
+		args = append(args, "--dry-run")
+	}
+	if _, err := r.git(args...); err != nil {
 		return fmt.Errorf("failed to push %q branch: %w", prepBranch, err)
+	}
+	if r.dryRun {
+		logrus.WithField("branch", prepBranch).Warn("Dry run: skipping PR creation")
+		return r.switchToBaseBranch(baseBranch)
 	}
 	logrus.WithField("branch", prepBranch).Info("Pushed preparation branch to remote")
 
@@ -1840,7 +1849,7 @@ func (r *CalicoManager) prepPrereqs() error {
 	}
 
 	// If publishing, check that we are not on a fork branch. We want to ensure releases are always cut from the main repo
-	if r.gitRef {
+	if r.gitRef && r.validateBranch {
 		owner, err := r.remoteOwner()
 		if err != nil {
 			return err
