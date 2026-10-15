@@ -146,9 +146,10 @@ producing it.  Once a field is mapped its type is fixed for the rest of the
 year, so a PR's own CI runs never map anything: they publish only the fields
 the live index already has, and log the ones they held back.  The first run
 after merge applies the reviewed template and publishes the new field.  If
-the live index's mapping cannot be read, a PR run sends nothing for that
-family; if the index does not exist yet, it keeps just the template's
-fields.
+the live index's mapping cannot be read, or the year's index does not exist
+yet, a PR run sends nothing for that family: creating the index would build
+it from whatever template ES holds, and map any field that lacks by
+inference.
 
 ## Schema: what makes a good datapoint
 

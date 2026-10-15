@@ -245,23 +245,26 @@ func TestPRRunHoldsBackUnmappedFields(t *testing.T) {
 	}
 }
 
-func TestPRRunWithoutIndexKeepsTemplateFields(t *testing.T) {
+func TestPRRunWithoutIndexSendsNothing(t *testing.T) {
 	srv, requests := fakeES(t, map[string]fakeResponse{
 		"GET /benchmark_data_fam_" + indexYear() + "/_mapping": {http.StatusNotFound, "{}"},
 	})
-	captureLog(t)
+	logs := captureLog(t)
 
-	if _, _, err := publish(srv.Client(), srv.URL, "", writeDoc(t, `{"cpu_model": "x", "undeclared": 1}`),
-		writeTemplate(t, testTemplate), prMetadata, false); err != nil {
-		t.Fatal(err)
+	sent, failed, err := publish(srv.Client(), srv.URL, "", writeDoc(t, `{"cpu_model": "x"}`),
+		writeTemplate(t, testTemplate), prMetadata, false)
+	if err != nil || sent != 0 || failed != 0 {
+		t.Fatalf("publish = (%d, %d, %v), want (0, 0, nil)", sent, failed, err)
 	}
 
 	if puts := schemaChanges(requests()); len(puts) != 0 {
 		t.Errorf("a PR run changed the schema: %v", puts)
 	}
-	want := map[string]any{"cpu_model": "x"}
-	if docs := postedDocs(t, requests()); len(docs) != 1 || !reflect.DeepEqual(docs[0], want) {
-		t.Errorf("posted %v, want only the template's fields %v", docs, want)
+	if docs := postedDocs(t, requests()); len(docs) != 0 {
+		t.Errorf("a PR run posted %v, which would create the index", docs)
+	}
+	if !strings.Contains(logs.String(), "is not created yet") {
+		t.Errorf("skip not logged; log:\n%s", logs)
 	}
 }
 
