@@ -28,8 +28,8 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -194,14 +194,21 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	// if the policy type has been set to "k8s". This allows users to
 	// run the plugin under Kubernetes without needing it to access the
 	// Kubernetes API
+	var pod *corev1.Pod
+	var namespace *corev1.Namespace
 	if conf.Policy.PolicyType == "k8s" {
-		annotNS, err := getK8sNSInfo(client, epIDs.Namespace)
+		namespace, err = getK8sNamespace(ctx, client, epIDs.Namespace)
 		if err != nil {
 			return nil, err
 		}
+		annotNS := namespace.Annotations
 		logger.WithField("NS Annotations", annotNS).Debug("Fetched K8s namespace annotations")
 
-		labels, annot, ports, profiles, generateName, serviceAccount, err = getK8sPodInfo(client, epIDs.Pod, epIDs.Namespace)
+		pod, err = getK8sPod(ctx, client, epIDs.Pod, epIDs.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		labels, annot, ports, profiles, generateName, serviceAccount, err = k8sPodInfo(pod)
 		if err != nil {
 			return nil, err
 		}
@@ -309,6 +316,13 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		}
 	}
 
+	ctx = utils.WithSandboxLookups(ctx, utils.SandboxLookups{
+		CalicoClient: calicoClient,
+		K8sClient:    client,
+		Pod:          pod,
+		Namespace:    namespace,
+	})
+
 	ipAddrsNoIpam := annot["cni.projectcalico.org/ipAddrsNoIpam"]
 	ipAddrs := annot["cni.projectcalico.org/ipAddrs"]
 
@@ -319,7 +333,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	// Switch based on which annotations are passed or not passed.
 	switch {
 	case ipAddrs == "" && ipAddrsNoIpam == "":
-		result, reusedIPs, err = assignPodIPs(conf, args, epIDs, endpoint, logger)
+		result, reusedIPs, err = assignPodIPs(ctx, conf, args, epIDs, endpoint, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -371,7 +385,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 		// When ipAddrs annotation is set, we call out to the configured IPAM plugin
 		// requesting the specific IP addresses included in the annotation.
-		result, err = ipAddrsResult(ipAddrs, conf, args, logger)
+		result, err = ipAddrsResult(ctx, ipAddrs, conf, args, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -407,7 +421,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	// Populate the endpoint with the output from the IPAM plugin.
 	if err = utils.PopulateEndpointNets(endpoint, result); err != nil {
 		// Cleanup IP allocation and return the error.
-		utils.ReleaseIPAllocation(logger, conf, args)
+		utils.ReleaseIPAllocation(ctx, logger, conf, args)
 		return nil, err
 	}
 	logger.WithField("endpoint", endpoint).Info("Populated endpoint")
@@ -423,7 +437,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		}
 
 		logger.WithField("endpointIPs", endpoint.Spec.IPNetworks).Info("Releasing IPAM allocation(s) after failure")
-		utils.ReleaseIPAllocation(logger, conf, args)
+		utils.ReleaseIPAllocation(ctx, logger, conf, args)
 	}
 
 	// Check if IPAM returned empty routes (migration target pod case)
@@ -667,7 +681,7 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 
 	// Release the IP address for this container by calling the configured IPAM plugin.
 	logger.Info("Releasing IP address(es)")
-	err = utils.DeleteIPAM(conf, args, logger)
+	err = utils.DeleteIPAM(ctx, conf, args, logger)
 	if err != nil {
 		return err
 	}
@@ -679,7 +693,7 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 // ipAddrsResult parses the ipAddrs annotation and calls the configured IPAM plugin for
 // each IP passed to it by setting the IP field in CNI_ARGS, and returns the result of calling the IPAM plugin.
 // Example annotation value string: "[\"10.0.0.1\", \"2001:db8::1\"]"
-func ipAddrsResult(ipAddrs string, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
+func ipAddrsResult(ctx context.Context, ipAddrs string, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
 	logger.Infof("Parsing annotation \"cni.projectcalico.org/ipAddrs\":%s", ipAddrs)
 
 	// We need to make sure there is only one IPv4 and/or one IPv6
@@ -689,13 +703,14 @@ func ipAddrsResult(ipAddrs string, conf types.NetConf, args *skel.CmdArgs, logge
 		return nil, err
 	}
 
-	return assignRequestedIPs(ipList, conf, args, logger)
+	return assignRequestedIPs(ctx, ipList, conf, args, logger)
 }
 
 // assignPodIPs allocates this pod's addresses, preferring the ones its existing endpoint
 // already holds. Reuse lets an in-place sandbox rebuild succeed in a pool that has no
 // spare capacity for a second allocation.
 func assignPodIPs(
+	ctx context.Context,
 	conf types.NetConf,
 	args *skel.CmdArgs,
 	epIDs utils.WEPIdentifiers,
@@ -705,19 +720,26 @@ func assignPodIPs(
 	priorIPs := priorSandboxIPs(conf, epIDs, endpoint, logger)
 	if len(priorIPs) != 0 {
 		logger.WithField("ips", priorIPs).Info("Reassigning existing IP to new sandbox")
-		result, err := assignRequestedIPs(priorIPs, conf, args, logger)
+		result, err := assignRequestedIPs(ctx, priorIPs, conf, args, logger)
 		if err == nil {
 			return result, true, nil
 		}
 
 		// IPAM can return a partial success. Release any IPs that we just assigned to this
 		// sandbox before attempting to allocate a fresh one.
+		utils.ReleaseIPAllocation(ctx, logger, conf, args)
+
+		// A newer sandbox owns the pod's network. Networking this one, even with a fresh
+		// address, would replace the live sandbox's host interface.
+		var cniErr *cnitypes.Error
+		if errors.As(err, &cniErr) && cniErr.Code == types.ErrCodeSandboxSuperseded {
+			return nil, false, err
+		}
 		logger.WithError(err).Warn("Could not reuse the endpoint's addresses, assigning new ones")
-		utils.ReleaseIPAllocation(logger, conf, args)
 	}
 
 	// Assign a fresh IP address via the IPAM plugin.
-	result, err := utils.AddIPAM(conf, args, logger)
+	result, err := utils.AddIPAM(ctx, conf, args, logger)
 	return result, false, err
 }
 
@@ -748,13 +770,13 @@ func priorSandboxIPs(conf types.NetConf, epIDs utils.WEPIdentifiers, endpoint *i
 
 // assignRequestedIPs calls the configured IPAM plugin once per address, asking for that
 // specific address instead of letting IPAM choose.
-func assignRequestedIPs(ips []net.IP, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
+func assignRequestedIPs(ctx context.Context, ips []net.IP, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
 	result := cniv1.Result{
 		CNIVersion: cniv1.ImplementedSpecVersion,
 	}
 
 	for _, ip := range ips {
-		r, err := callIPAMWithIP(ip, conf, args, logger)
+		r, err := callIPAMWithIP(ctx, ip, conf, args, logger)
 		if err != nil {
 			return nil, fmt.Errorf("error getting IP from IPAM: %w", err)
 		}
@@ -774,7 +796,7 @@ func assignRequestedIPs(ips []net.IP, conf types.NetConf, args *skel.CmdArgs, lo
 // callIPAMWithIP sets CNI_ARGS with the IP and calls the IPAM plugin with it
 // to get current.Result and then it unsets the IP field from CNI_ARGS ENV var,
 // so it doesn't pollute the subsequent requests.
-func callIPAMWithIP(ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
+func callIPAMWithIP(ctx context.Context, ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
 	// Save the original value of the CNI_ARGS ENV var for backup.
 	originalArgs := os.Getenv("CNI_ARGS")
 	logger.Debugf("Original CNI_ARGS=%s", originalArgs)
@@ -805,7 +827,7 @@ func callIPAMWithIP(ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger *l
 
 	// Run the IPAM plugin.
 	logger.Debugf("Calling IPAM plugin %s", conf.IPAM.Type)
-	r, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+	rawResult, err := utils.ExecIPAMAdd(ctx, conf.IPAM.Type, args.StdinData)
 	if err != nil {
 		// Restore the CNI_ARGS ENV var to it's original value,
 		// so the subsequent calls don't get polluted by the old IP value.
@@ -814,13 +836,13 @@ func callIPAMWithIP(ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger *l
 		}
 		return nil, err
 	}
-	logger.Debugf("IPAM plugin returned: %+v", r)
+	logger.Debugf("IPAM plugin returned: %+v", rawResult)
 
 	// Restore the CNI_ARGS ENV var to it's original value,
 	// so the subsequent calls don't get polluted by the old IP value.
 	if err := os.Setenv("CNI_ARGS", originalArgs); err != nil {
 		// Need to clean up IP allocation if this step doesn't succeed.
-		utils.ReleaseIPAllocation(logger, conf, args)
+		utils.ReleaseIPAllocation(ctx, logger, conf, args)
 		logger.Errorf("Error setting CNI_ARGS environment variable: %v", err)
 		return nil, err
 	}
@@ -829,7 +851,7 @@ func callIPAMWithIP(ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger *l
 	// IPAM result has a bunch of fields that are optional for an IPAM plugin
 	// but required for a CNI plugin, so this is to populate those fields.
 	// See CNI Spec doc for more details.
-	ipamResult, err := cniv1.NewResultFromResult(r)
+	ipamResult, err := cniv1.NewResultFromResult(rawResult)
 	if err != nil {
 		return nil, err
 	}
@@ -1016,24 +1038,30 @@ func NewKubeVirtClient(conf types.NetConf, logger *logrus.Entry) (kubevirt.VirtC
 	return kubevirt.NewVirtClient(config)
 }
 
-func getK8sNSInfo(client *kubernetes.Clientset, podNamespace string) (annotations map[string]string, err error) {
-	ns, err := client.CoreV1().Namespaces().Get(context.Background(), podNamespace, metav1.GetOptions{})
+func getK8sNamespace(ctx context.Context, client *kubernetes.Clientset, podNamespace string) (*corev1.Namespace, error) {
+	ns, err := client.CoreV1().Namespaces().Get(ctx, podNamespace, metav1.GetOptions{})
 	// Do not log the full Namespace object — annotations may carry operator tokens or sensitive state.
 	logrus.WithField("namespace", podNamespace).Debug("Pod namespace")
-	if err != nil {
-		return nil, err
-	}
-	return ns.Annotations, nil
+	return ns, err
 }
 
-func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (labels map[string]string, annotations map[string]string, ports []internalapi.WorkloadEndpointPort, profiles []string, generateName, serviceAccount string, err error) {
-	pod, err := client.CoreV1().Pods(string(podNamespace)).Get(context.Background(), podName, metav1.GetOptions{})
+func getK8sPod(ctx context.Context, client *kubernetes.Clientset, podName, podNamespace string) (*corev1.Pod, error) {
+	pod, err := client.CoreV1().Pods(podNamespace).Get(ctx, podName, metav1.GetOptions{})
 	// Do not log the full Pod object — env vars may contain literal credentials.
 	logrus.WithFields(logrus.Fields{"name": podName, "namespace": podNamespace}).Debug("Pod info")
-	if err != nil {
-		return nil, nil, nil, nil, "", "", err
-	}
+	return pod, err
+}
 
+// k8sPodInfo derives the workload endpoint fields that come from the pod.
+func k8sPodInfo(pod *corev1.Pod) (
+	labels map[string]string,
+	annotations map[string]string,
+	ports []internalapi.WorkloadEndpointPort,
+	profiles []string,
+	generateName string,
+	serviceAccount string,
+	err error,
+) {
 	c := k8sconversion.NewConverter()
 	kvps, err := c.PodToWorkloadEndpoints(pod)
 	if err != nil {
