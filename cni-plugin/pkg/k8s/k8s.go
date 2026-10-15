@@ -711,8 +711,15 @@ func assignPodIPs(
 
 		// IPAM can return a partial success. Release any IPs that we just assigned to this
 		// sandbox before attempting to allocate a fresh one.
-		logger.WithError(err).Warn("Could not reuse the endpoint's addresses, assigning new ones")
 		utils.ReleaseIPAllocation(logger, conf, args)
+
+		// A newer sandbox owns the pod's network. Networking this one, even with a fresh
+		// address, would replace the live sandbox's host interface.
+		var cniErr *cnitypes.Error
+		if errors.As(err, &cniErr) && cniErr.Code == types.ErrCodeSandboxSuperseded {
+			return nil, false, err
+		}
+		logger.WithError(err).Warn("Could not reuse the endpoint's addresses, assigning new ones")
 	}
 
 	// Assign a fresh IP address via the IPAM plugin.

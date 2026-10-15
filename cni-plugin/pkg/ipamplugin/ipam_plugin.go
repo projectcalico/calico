@@ -156,6 +156,10 @@ func configureLogging(args *skel.CmdArgs) {
 // add assigns the sandbox's addresses and returns the result in the netconf's CNI version,
 // leaving the caller to print it or use it in-process.
 func add(args *skel.CmdArgs) (cnitypes.Result, error) {
+	// Read before the IPAM lock wait, so any claim stamped later than this came from a sandbox
+	// the runtime created after this one.
+	started := time.Now()
+
 	conf := types.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return nil, fmt.Errorf("failed to load netconf: %w", err)
@@ -228,7 +232,7 @@ func add(args *skel.CmdArgs) (cnitypes.Result, error) {
 	// We attach important attributes to the allocation.
 	attrs := map[string]string{
 		ipam.AttributeNode:      nodename,
-		ipam.AttributeTimestamp: time.Now().UTC().String(),
+		ipam.AttributeTimestamp: time.Now().UTC().Format(allocationTimestampLayout),
 	}
 	if epIDs.Pod != "" {
 		attrs[ipam.AttributePod] = epIDs.Pod
@@ -307,7 +311,7 @@ func add(args *skel.CmdArgs) (cnitypes.Result, error) {
 					return err
 				}
 
-				if terr := transferFromPriorSandbox(ctx, calicoClient.IPAM(), ipamArgs.IP, handleID, attrs, conf.Name, epIDs, logger); terr != nil {
+				if terr := transferFromPriorSandbox(ctx, calicoClient.IPAM(), ipamArgs.IP, handleID, attrs, conf.Name, epIDs, started, logger); terr != nil {
 					return fmt.Errorf("%w: %w", terr, err)
 				}
 			}
@@ -529,6 +533,8 @@ func add(args *skel.CmdArgs) (cnitypes.Result, error) {
 
 // transferFromPriorSandbox hands an address the pod already holds to this sandbox's handle.
 // It performs the necessary precondition checks and errors if the allocation cannot be transferred.
+// It refuses an address claimed after started: only a newer sandbox could have claimed it, and
+// moving it here would let this abandoned sandbox's DEL free the address the live one uses.
 func transferFromPriorSandbox(
 	ctx context.Context,
 	ipamClient ipam.Interface,
@@ -537,6 +543,7 @@ func transferFromPriorSandbox(
 	attrs map[string]string,
 	netName string,
 	epIDs *utils.WEPIdentifiers,
+	started time.Time,
 	logger *logrus.Entry,
 ) error {
 	attr, err := ipamClient.GetAssignmentAttributes(ctx, cnet.IP{IP: ip})
@@ -559,6 +566,12 @@ func transferFromPriorSandbox(
 		return fmt.Errorf("address %s is not held by a pod sandbox and cannot be transferred", ip)
 	}
 
+	if claimedAfter(attr.ActiveOwnerAttrs, started) {
+		logger.WithField("fromHandle", currentHandle).Warn("A newer sandbox of this pod claimed the address while this ADD waited, refusing to take it")
+		msg := fmt.Sprintf("address %s was claimed by a newer sandbox of this pod after this ADD started", ip)
+		return cnitypes.NewError(types.ErrCodeSandboxSuperseded, msg, "")
+	}
+
 	logger.WithFields(logrus.Fields{
 		"fromHandle":       currentHandle,
 		"priorContainerID": parsed.ContainerID,
@@ -577,6 +590,19 @@ func transferFromPriorSandbox(
 		return fmt.Errorf("address %s is already allocated and cannot be transferred to this pod", ip)
 	}
 	return nil
+}
+
+// allocationTimestampLayout is the layout of an allocation's timestamp attribute. It matches
+// time.Time's String output for a UTC time, which older releases and other IPAM clients write, so
+// their stamps parse too.
+const allocationTimestampLayout = "2006-01-02 15:04:05.999999999 -0700 MST"
+
+// claimedAfter reports whether an allocation was stamped later than t. Every claim, including a
+// transfer, restamps the address. A missing or unparsable stamp counts as earlier, so the check
+// never blocks a transfer it can't judge.
+func claimedAfter(attrs map[string]string, t time.Time) bool {
+	claimed, err := time.Parse(allocationTimestampLayout, attrs[ipam.AttributeTimestamp])
+	return err == nil && claimed.After(t)
 }
 
 const ipamUpgradedFilePath = "/var/run/calico/cni/ipam_upgraded"

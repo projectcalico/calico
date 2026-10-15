@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"math/rand"
 	"net"
 	"net/http"
@@ -3000,7 +3001,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).To(HaveOccurred(), "the DEL did not release the address")
 		})
 
-		Context("when the runtime kills an ADD that is waiting on the IPAM lock", func() {
+		Context("when an ADD for an abandoned sandbox is waiting on the IPAM lock", func() {
 			const staleContainerID = "stale-container-id"
 			const newContainerID = "new-container-id"
 
@@ -3046,13 +3047,15 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}
 
 			// takeOver does to the pod what a newer sandbox's ADD does: moves the address onto
-			// its own handle and records itself on the endpoint.
+			// its own handle with a fresh timestamp, and records itself on the endpoint.
 			takeOver := func() {
 				attrs, err := calicoClient.IPAM().GetAssignmentAttributes(ctx, liveIP)
 				Expect(err).NotTo(HaveOccurred())
+				newAttrs := maps.Clone(attrs.ActiveOwnerAttrs)
+				newAttrs[ipam.AttributeTimestamp] = time.Now().UTC().String()
 				Expect(calicoClient.IPAM().MoveIPToHandle(ctx, liveIP, ipam.MoveOptions{
 					ToHandle:       utils.GetHandleID("calico-uts", newContainerID, workloadName),
-					Attrs:          attrs.ActiveOwnerAttrs,
+					Attrs:          newAttrs,
 					ExpectedHandle: originalHandle,
 					ExpectedOwner:  &ipam.AttributeOwner{Namespace: testutils.K8S_TEST_NS, Name: testPodName},
 				})).To(Succeed())
@@ -3091,7 +3094,24 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				expectAddressHeldBy(newContainerID)
 			})
 
-			It("lets an ADD that is not killed take the address once it gets the lock", func() {
+			It("fails an ADD that is not killed once a newer sandbox has taken the address", func() {
+				ipamLock := holdFlock(ipamLockPath)
+				done := startStaleAdd(context.Background())
+				waitForFlockWaiter(ipamLockPath)
+
+				// Under a meta-plugin such as Multus, the runtime kills the meta-plugin and calico
+				// keeps waiting while kubelet builds a newer sandbox.
+				takeOver()
+				Expect(ipamLock.Unlock()).To(Succeed())
+				Expect(<-done).To(MatchError(ContainSubstring("claimed by a newer sandbox")))
+				expectAddressHeldBy(newContainerID)
+
+				_, err := testutils.DeleteContainerWithId(marshalNetconf(ipamLockPath), staleNs.Path(), testPodName, testutils.K8S_TEST_NS, staleContainerID)
+				Expect(err).NotTo(HaveOccurred())
+				expectAddressHeldBy(newContainerID)
+			})
+
+			It("lets an ADD take the address once it gets the lock if no newer sandbox has", func() {
 				ipamLock := holdFlock(ipamLockPath)
 				done := startStaleAdd(context.Background())
 				waitForFlockWaiter(ipamLockPath)
