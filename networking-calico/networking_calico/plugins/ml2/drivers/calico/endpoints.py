@@ -171,8 +171,11 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             # The dest-side names come from a transient copy with the dest host
             # overlaid.  We don't keep the copy - the neutron_map value is (port,
             # dest_host) so the dest_host survives a reread inside the update path.
+            # At cutover ``migrating_to`` can already equal the binding host, and then
+            # the dest-side WEP is the same slot as the source-side one above.
             dest_host = port.get("binding:profile", {}).get("migrating_to")
-            if self._wep_desired_present(port, dest_host, device_id):
+            same_slot = dest_host == port.get("binding:host_id")
+            if not same_slot and self._wep_desired_present(port, dest_host, device_id):
                 dest_wep_name = endpoint_name({**port, "binding:host_id": dest_host})
                 neutron_map["dest-wep " + dest_wep_name] = (port, dest_host)
             if self._lm_desired_present(port, dest_host, device_id):

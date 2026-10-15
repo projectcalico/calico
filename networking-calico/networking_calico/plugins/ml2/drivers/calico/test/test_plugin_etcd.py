@@ -2827,6 +2827,24 @@ class TestLiveMigration(TestPluginEtcdBase):
                 new_key,
             )
 
+    def test_resync_at_cutover_with_dest_equal_to_binding_host(self):
+        """A port whose ``migrating_to`` is its binding host has one WEP slot there.
+
+        If the resync listed it as both a source-side and a dest-side WEP, the etcd
+        entry would match only one of them, and every resync would try, and fail, to
+        create the other.
+        """
+        self._do_initial_resync()
+        self.osdb_ports[0]["binding:profile"] = {"migrating_to": self.SOURCE_HOST}
+        self._trigger_resync()
+
+        syncer = self.driver.endpoint_syncer
+        with mock.patch.object(
+            syncer, "create_in_etcd", wraps=syncer.create_in_etcd
+        ) as create:
+            self._trigger_resync()
+        create.assert_not_called()
+
     def test_resync_creates_missing_live_migration(self):
         """Resync creates LiveMigration and dest WEP for migrating port."""
         self._do_initial_resync()
