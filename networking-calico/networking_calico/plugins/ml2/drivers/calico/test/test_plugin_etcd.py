@@ -2697,6 +2697,16 @@ class TestLiveMigration(TestPluginEtcdBase):
             mock_db_port
         )
 
+    def test_vif_plug_no_notification_for_detached_port(self):
+        """Felix 'up' on the dest of a port detached mid-migration is harmless."""
+        self._do_initial_resync()
+        self._pre_migrate()
+        self.osdb_ports[0]["device_id"] = ""
+
+        self._call_try_to_update_port_status(self.DEST_HOST, self.port["id"])
+
+        self.db.nova_notifier.notify_port_active_direct.assert_not_called()
+
     def test_vif_plug_no_notification_for_non_migration(self):
         """Felix 'up' on source host does NOT trigger Nova notification."""
         self._do_initial_resync()

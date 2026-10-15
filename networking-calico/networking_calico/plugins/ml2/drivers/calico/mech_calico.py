@@ -926,7 +926,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             if calico_status == datamodel_v1.ENDPOINT_STATUS_UP:
                 port = self.db.get_port(admin_context, port_id)
                 migrating_to = port.get("binding:profile", {}).get("migrating_to")
-                if migrating_to == hostname:
+
+                # A port detached mid-migration has no device_id, and so no
+                # LiveMigration to name; nor is there a VM for Nova to plug.
+                if migrating_to == hostname and port.get("device_id"):
                     dest_port = port.copy()
                     dest_port["binding:host_id"] = migrating_to
                     dest_wep_name = endpoint_name(dest_port)
