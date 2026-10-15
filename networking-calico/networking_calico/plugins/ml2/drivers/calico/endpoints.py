@@ -759,6 +759,11 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         if db_port is None or not host or not device_id:
             return False
 
+        # The resync only considers endpoint ports, and the dynamic hooks can see a
+        # port that has just stopped being one.
+        if not _port_is_endpoint_port(db_port):
+            return False
+
         # ``device_id`` is part of the WEP name, so a slot named for one VM must not
         # hold the port once it is attached to another one.
         if db_port.get("device_id") != device_id:
@@ -795,6 +800,8 @@ class WorkloadEndpointSyncer(ResourceSyncer):
     def _lm_desired_present(db_port, dest_host, device_id):
         """Decide whether the LiveMigration slot at ``dest_host`` should exist."""
         if db_port is None or not dest_host or not device_id:
+            return False
+        if not _port_is_endpoint_port(db_port):
             return False
         if db_port.get("device_id") != device_id:
             return False

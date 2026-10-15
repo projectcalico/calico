@@ -2453,6 +2453,27 @@ class TestLiveMigration(TestPluginEtcdBase):
 
         self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_deletes)
 
+    def test_port_that_stops_being_an_endpoint_port_loses_its_wep(self):
+        """A port whose ``device_owner`` is no longer a VM's has no WEP.
+
+        ``update_port_postcommit`` still proceeds when only the original port was an
+        endpoint port, and the resync doesn't consider non-endpoint ports at all, so
+        the two would otherwise disagree about the WEP.
+        """
+        self._do_initial_resync()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        context = self._make_port_context()
+        context.original = copy.deepcopy(self.port)
+        context._port = {**self.port, "device_owner": "network:dhcp"}
+        self.osdb_ports[0]["device_owner"] = "network:dhcp"
+        self.driver.update_port_postcommit(context)
+
+        wep_writes = [k for k in self.recent_writes if "/workloadendpoints/" in k]
+        self.assertEqual(wep_writes, [])
+        self.assertEqual(self.recent_deletes, {self._ep_key(self.SOURCE_HOST)})
+
     def test_nova_detach_then_reattach_on_same_host(self):
         """A reattach that overtakes the detach's sync leaves only the new VM's WEP.
 
