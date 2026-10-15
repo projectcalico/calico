@@ -370,7 +370,7 @@ func (s State) NumPolicies() int {
 	}
 }
 
-func (s State) NumProfileRules() int {
+func (s State) NumProfiles() int {
 	n := 0
 	for k := range s.ActiveKeys(model.ResourceKey{}).All() {
 		if k.(model.ResourceKey).Kind == v3.KindProfile {
