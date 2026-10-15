@@ -15,7 +15,7 @@ include ../../lib.Makefile
 ##############################################################################
 # Upstream sources
 ##############################################################################
-# The four plugins we copy from projectcalico/containernetworking-plugins.
+# The four plugins we copy from containernetworking/plugins.
 # bandwidth is intentionally excluded — Calico has its own QoS support.
 CN_FILES := host-local portmap loopback tuning
 

@@ -96,14 +96,18 @@ jobs:
             git checkout -- .
           fi
 
-          # cni: pin behind upstream. Capture the target SHA here so the bump
-          # step doesn't have to query again (and can't race a moving upstream).
-          repo=projectcalico/containernetworking-plugins
-          db=$(gh api "repos/$repo" -q .default_branch)
-          cni_sha=$(gh api "repos/$repo/commits/$db" -q .sha)
-          cur=$(grep '^CNI_VERSION=' metadata.mk | cut -d= -f2)
-          if [ "$force" = true ] || [ "$cni_sha" != "$cur" ]; then
-            cni=true
+          # cni: pin behind the fork. Capture the target SHA here so the bump
+          # step doesn't have to query again (and can't race a moving fork).
+          # Branches that build from upstream containernetworking/plugins pin
+          # CNI_VERSION by hand, so skip them.
+          if ! grep -q '^CONTAINERNETWORKING_PLUGINS_REPO=https://github.com/containernetworking/plugins.git$' metadata.mk; then
+            repo=projectcalico/containernetworking-plugins
+            db=$(gh api "repos/$repo" -q .default_branch)
+            cni_sha=$(gh api "repos/$repo/commits/$db" -q .sha)
+            cur=$(grep '^CNI_VERSION=' metadata.mk | cut -d= -f2)
+            if [ "$force" = true ] || [ "$cni_sha" != "$cur" ]; then
+              cni=true
+            fi
           fi
 
           echo "drift: recent=$recent operator=$operator cni=$cni"
