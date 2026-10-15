@@ -52,7 +52,7 @@ globalEpilogue: |
   fi
 
 defaults:
-  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.3
+  image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
   jobSize: medium
   requests: {cpu: 1500m, memory: 2Gi}
   timeout: 1h
