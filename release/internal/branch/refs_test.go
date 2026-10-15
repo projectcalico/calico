@@ -19,6 +19,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -96,9 +97,25 @@ func TestRemoteRefMatches(t *testing.T) {
 }
 
 func TestPushRefs(t *testing.T) {
-	g := &gitRec{}
-	require.NoError(t, pushRefs(g.fn(), "origin", utils.ReleaseBranchPrefix()+"-v3.33-2", "v3.33.0-2.0-"+utils.DevTagSuffix()))
-	require.Equal(t, []string{"push", "origin", utils.ReleaseBranchPrefix() + "-v3.33-2", "v3.33.0-2.0-" + utils.DevTagSuffix()}, g.runs[0])
+	branch, tag := utils.ReleaseBranchPrefix()+"-v3.33-2", "v3.33.0-2.0-"+utils.DevTagSuffix()
+	for _, tc := range []struct {
+		name   string
+		dryRun bool
+		want   []string
+	}{
+		{name: "pushes the refs", want: []string{"push", "origin", branch, tag}},
+		{name: "dry run", dryRun: true, want: []string{"push", "origin", "--dry-run", branch, tag}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &gitRec{}
+			if err := pushRefs(g.fn(), "origin", tc.dryRun, branch, tag); err != nil {
+				t.Fatalf("pushRefs() unexpected error: %v", err)
+			}
+			if diff := cmp.Diff([][]string{tc.want}, g.runs); diff != "" {
+				t.Errorf("git calls (-want +got):\n%s", diff)
+			}
+		})
+	}
 }
 
 // gitScriptRec matches scripted responses by the full joined command and

@@ -65,7 +65,7 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 					calico.WithMainBranch(c.String(mainBranchFlag.Name)),
 					calico.WithDevTagIdentifier(c.String(devTagSuffixFlag.Name)),
 					calico.WithValidation(c.Bool(validationFlag.Name)),
-					calico.WithGitRef(!c.Bool(localFlag.Name)),
+					calico.WithDryRun(c.Bool(localFlag.Name)),
 					calico.WithBranchCutOptions(calico.CutOptions{
 						Plan:        c.Bool(planFlag.Name),
 						Skip:        skipSet(c.StringSlice(skipFlagName)),

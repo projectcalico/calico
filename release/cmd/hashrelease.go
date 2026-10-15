@@ -177,6 +177,7 @@ var hashreleaseBuildAction = func(cfg *Config) func(_ context.Context, c *cli.Co
 			calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
 			calico.WithValidation(c.Bool(validationFlag.Name)),
 			calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
+			calico.WithDryRun(c.Bool(localFlag.Name)),
 		}
 		if len(productRegistriesFromFlag) > 0 {
 			opts = append(opts, calico.WithImageRegistries(productRegistriesFromFlag))
@@ -289,6 +290,7 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 			calico.WithValidation(c.Bool(validationFlag.Name)),
 			calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
 			calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
+			calico.WithDryRun(c.Bool(localFlag.Name)),
 		}
 		if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 			opts = append(opts,
@@ -323,7 +325,7 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 		}
 
 		// Send a slack message to notify that the hashrelease has been published.
-		if c.Bool(publishHashreleaseFlag.Name) && c.Bool(notifyFlag.Name) {
+		if c.Bool(publishHashreleaseFlag.Name) && c.Bool(notifyFlag.Name) && !c.Bool(localFlag.Name) {
 			if _, err := tasks.AnnounceHashrelease(slackConfig(c), hashrel, ciJobURL(c)); err != nil {
 				logrus.WithError(err).Warn("Failed to send hashrelease announcement to Slack")
 			}
@@ -341,7 +343,8 @@ var hashreleaseBuildFlags = func() []cli.Flag {
 	f = append(f, operatorBuildCommandFlags...)
 	f = append(f,
 		branchCheckFlag,
-		validationFlag)
+		validationFlag,
+		localFlag)
 	return f
 }
 
@@ -392,6 +395,7 @@ var hashreleasePublishFlags = func() []cli.Flag {
 		latestFlag,
 		branchCheckFlag,
 		validationFlag,
+		localFlag,
 	)
 	f = append(f, operatorPublishCommandFlags...)
 	f = append(f, imageScanFlags...)
