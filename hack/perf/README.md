@@ -80,9 +80,11 @@ artifacts -- useful for post-mortem when a number looks off.
 On each invocation, in order:
 
 1. **Apply index templates.**  For every `hack/perf/index-templates/<family>.json`,
-   PUT it to `/_index_template/<family>` in ES.  Idempotent upsert -- see
+   PUT it to `/_index_template/<family>` in ES, and PUT its `mappings` to the
+   live `<family>_<UTC year>/_mapping` (skipped if that index does not exist
+   yet).  Both are idempotent -- see
    [When does the PUT have effect?](#when-does-the-put-have-effect) for what
-   this is and isn't buying.
+   they are and aren't buying.
 2. **Walk `artifacts/perf/<family>/*.json`** for every `<family>` subdirectory.
 3. **Augment each doc** with CI metadata (`@timestamp`, `git_commit`,
    `git_branch`, `code_version`, `ci_run_id`, `pr_number`, `env`) unless the
@@ -100,8 +102,9 @@ malformed JSON, mapping conflicts -- all log a warning and continue.  A
 `--require-publication` flag flips that default for a caller whose whole
 purpose is publishing: absent credentials, a document that failed to send, and
 finding nothing to send at all all become hard failures.
-Index-template PUTs stay warnings even then -- a stale template costs new
-fields their mapping, which is a Kibana inconvenience rather than data loss.
+Template and mapping PUTs stay warnings even then -- a stale template costs
+new fields their mapping, which is a Kibana inconvenience rather than data
+loss.
 The weekly OpenStack resync scale run is the one caller that sets it.
 
 ### When does the PUT have effect?
@@ -127,13 +130,15 @@ the PUT is a no-op.  We do it on every run anyway because (a) it's a single
 HTTP per family per CI job, effectively free, and (b) the self-heal property
 in case (4) is worth more than the cost.
 
-Mid-year template *edits* (adding/removing/renaming a field, changing a type)
-do not affect the live index.  An added field gets dynamic-mapping inference
-on first sight; a removed field still appears in old docs' `_source` and the
-live index's mapping; a type change risks a write rejection (mapping
-conflict) until the next year's index rolls over with the new template.  For
-type changes that need to take effect mid-year, reindex into a renamed index
-(`_2026_v2`) rather than fighting the existing mapping.
+Mid-year, the mapping PUT is what carries a template edit to the live index,
+and ES only lets it *add* fields.  An added field gets the template's type
+from the first run that knows about it -- which is the PR's own CI run, so get
+the type right before pushing: once a document has been indexed, the type is
+fixed until the next year's index.  A removed field still appears in old docs'
+`_source` and the live index's mapping.  A type change is rejected (logged as
+a warning) and takes effect only when the next year's index rolls over; for
+one that cannot wait, reindex into a renamed index (`_2026_v2`) rather than
+fighting the existing mapping.
 
 ## Schema: what makes a good datapoint
 

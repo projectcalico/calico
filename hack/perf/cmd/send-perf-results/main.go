@@ -20,6 +20,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -73,13 +74,12 @@ func main() {
 	client := &http.Client{Timeout: 30 * time.Second}
 	metadata := ciMetadata()
 
-	// Apply index templates first.  ES treats PUT _index_template/<name>
-	// as an upsert, so committing template changes auto-propagates the next
-	// time the tool runs.  Failures here are warnings -- a missing template
-	// means new fields will get default mappings, which is a Kibana
-	// inconvenience, not a data-loss event.
+	// Apply index templates, and their mappings to this year's live indices, before any
+	// document can introduce a field with an inferred type.  Failures here are warnings -- a
+	// missing mapping means new fields get default mappings, which is a Kibana inconvenience,
+	// not a data-loss event.
 	if !*dryRun {
-		if err := applyTemplates(client, esURL, auth, *tmplDir); err != nil {
+		if err := applyTemplates(client, esURL, auth, *tmplDir, indexYear()); err != nil {
 			log.Printf("warning: applying templates failed: %v", err)
 		}
 	}
@@ -188,9 +188,14 @@ func ciMetadata() map[string]any {
 	return m
 }
 
-// applyTemplates PUTs each <family>.json in tmplDir to ES at
-// /_index_template/<family>.
-func applyTemplates(client *http.Client, esURL, auth, tmplDir string) error {
+// applyTemplates PUTs each <family>.json in tmplDir to ES at /_index_template/<family>, and its
+// mappings to the live <family>_<year> index.
+//
+// A template only shapes an index when the index is created, but fields are added part-way through
+// a year.  Without the live-index PUT, a new field's first document would fix its type by inference
+// -- a string becomes text plus .keyword -- and next year's index, built from the template, would
+// disagree with this year's.
+func applyTemplates(client *http.Client, esURL, auth, tmplDir, year string) error {
 	entries, err := os.ReadDir(tmplDir)
 	if err != nil {
 		// A missing templates directory is not fatal: a deployment might
@@ -215,11 +220,52 @@ func applyTemplates(client *http.Client, esURL, auth, tmplDir string) error {
 		endpoint := fmt.Sprintf("%s/_index_template/%s", strings.TrimRight(esURL, "/"), url.PathEscape(family))
 		if err := esRequest(client, "PUT", endpoint, auth, body); err != nil {
 			log.Printf("warning: PUT template %s: %v", family, err)
-			continue
+		} else {
+			log.Printf("applied template %s", family)
 		}
-		log.Printf("applied template %s", family)
+
+		// Independent of the template PUT: putting a template needs a cluster privilege
+		// that a writer of documents may lack, while extending an index's mapping is an
+		// index privilege.
+		applyLiveMapping(client, esURL, auth, family, year, body)
 	}
 	return nil
+}
+
+// applyLiveMapping PUTs the mappings from a template body to the family's index for year.  Adding
+// a field is allowed on a live index; changing an existing field's type is not, and ES rejects the
+// whole PUT, which is logged here as a warning.
+func applyLiveMapping(client *http.Client, esURL, auth, family, year string, templateBody []byte) {
+	var tmpl struct {
+		Template struct {
+			Mappings json.RawMessage `json:"mappings"`
+		} `json:"template"`
+	}
+	if err := json.Unmarshal(templateBody, &tmpl); err != nil {
+		log.Printf("warning: parse template %s: %v", family, err)
+		return
+	}
+	if len(tmpl.Template.Mappings) == 0 {
+		return
+	}
+	index := family + "_" + year
+	endpoint := fmt.Sprintf("%s/%s/_mapping", strings.TrimRight(esURL, "/"), url.PathEscape(index))
+	err := esRequest(client, "PUT", endpoint, auth, tmpl.Template.Mappings)
+	var httpErr *esHTTPError
+	switch {
+	case err == nil:
+		log.Printf("applied mappings to %s", index)
+	case errors.As(err, &httpErr) && httpErr.status == http.StatusNotFound:
+		// The year's first document will create the index from the template.
+		log.Printf("index %s does not exist yet; it will be created from the template", index)
+	default:
+		log.Printf("warning: PUT mappings to %s: %v", index, err)
+	}
+}
+
+// indexYear is the suffix of the indices this run writes to.
+func indexYear() string {
+	return time.Now().UTC().Format("2006")
 }
 
 // walkAndSend processes every <dir>/<family>/*.json file, augmenting and
@@ -236,7 +282,7 @@ func walkAndSend(client *http.Client, esURL, auth, dir string, metadata map[stri
 		return 0, 0, fmt.Errorf("read dir %s: %w", dir, err)
 	}
 	totalSent, totalFailed := 0, 0
-	year := time.Now().UTC().Format("2006")
+	year := indexYear()
 	for _, e := range entries {
 		if !e.IsDir() {
 			// Stray files at the top level are not part of the convention.
@@ -309,9 +355,20 @@ func sendFamily(client *http.Client, esURL, auth, familyDir, family, year string
 	return sent, failed, nil
 }
 
+// esHTTPError is a non-2xx response from ES.
+type esHTTPError struct {
+	method, endpoint string
+	status           int
+	body             string
+}
+
+func (e *esHTTPError) Error() string {
+	return fmt.Sprintf("%s %s: HTTP %d: %s", e.method, e.endpoint, e.status, e.body)
+}
+
 // esRequest performs a single HTTP request to ES with the given method,
 // endpoint, auth header, and JSON body.  Returns an error on transport
-// failure or any non-2xx response.
+// failure, or an *esHTTPError on any non-2xx response.
 func esRequest(client *http.Client, method, endpoint, auth string, body []byte) error {
 	req, err := http.NewRequest(method, endpoint, bytes.NewReader(body))
 	if err != nil {
@@ -328,7 +385,7 @@ func esRequest(client *http.Client, method, endpoint, auth string, body []byte) 
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("%s %s: HTTP %d: %s", method, endpoint, resp.StatusCode, strings.TrimSpace(string(respBody)))
+		return &esHTTPError{method: method, endpoint: endpoint, status: resp.StatusCode, body: strings.TrimSpace(string(respBody))}
 	}
 	_, _ = io.Copy(io.Discard, resp.Body)
 	return nil
