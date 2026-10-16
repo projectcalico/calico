@@ -39,6 +39,10 @@ func SetMapSize(size int) {
 	maps.SetSize(curVer.MapParamsV6.VersionedName(), size)
 }
 
+func SetMapSizeV6(size int) {
+	maps.SetSize(curVer.MapParamsV6.VersionedName(), size)
+}
+
 func SetCleanupMapSize(size int) {
 	maps.SetSize(curVerCleanup.MapParams.VersionedName(), size)
 	maps.SetSize(curVerCleanup.MapParamsV6.VersionedName(), size)
