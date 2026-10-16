@@ -338,6 +338,7 @@ type RuleRenderer interface {
 	WireguardIncomingMarkChain() *generictables.Chain
 
 	IptablesFilterDenyAction() generictables.Action
+	NonFilterTableChains(chains []*generictables.Chain) []*generictables.Chain
 
 	FilterInputChainAllowWG(ipVersion uint8, c Config, allowAction generictables.Action) []generictables.Rule
 	ICMPv6Filter(action generictables.Action) []generictables.Rule
@@ -369,6 +370,32 @@ type DefaultRuleRenderer struct {
 
 func (r *DefaultRuleRenderer) IptablesFilterDenyAction() generictables.Action {
 	return r.iptablesFilterDenyAction
+}
+
+// NonFilterTableChains returns the chains with the deny action swapped for DROP, for programming
+// into the raw and mangle tables, where REJECT is not a valid target.
+func (r *DefaultRuleRenderer) NonFilterTableChains(chains []*generictables.Chain) []*generictables.Chain {
+	drop := r.Drop()
+	if r.iptablesFilterDenyAction == drop {
+		return chains
+	}
+	out := make([]*generictables.Chain, 0, len(chains))
+	for _, chain := range chains {
+		if chain == nil {
+			out = append(out, nil)
+			continue
+		}
+		c := *chain
+		c.Rules = make([]generictables.Rule, len(chain.Rules))
+		for i, rule := range chain.Rules {
+			if rule.Action == r.iptablesFilterDenyAction {
+				rule.Action = drop
+			}
+			c.Rules[i] = rule
+		}
+		out = append(out, &c)
+	}
+	return out
 }
 
 func (r *DefaultRuleRenderer) ipSetConfig(ipVersion uint8) *ipsets.IPVersionConfig {
