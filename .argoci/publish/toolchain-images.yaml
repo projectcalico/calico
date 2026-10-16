@@ -1,0 +1,287 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Publishes the toolchain images on merge. A step builds only a tag that is not
+# published yet. Each arch is pushed from the job that built it, then one job
+# joins them, so no job waits on an emulated build it did not run.
+#
+# calico/base is published by .argoci/cron/toolchain-base.yaml instead: it
+# tracks UBI, not this repo.
+version: condensed
+generateName: toolchain-images-
+timeout: 2h
+
+notifications:
+  slack:
+    channel: ci-notifications-os
+    when: changed
+
+defaults:
+  timeout: 1h
+  services: [docker]
+  requests: {cpu: 3500m, memory: 4Gi}
+  secretBundles:
+    - docker-hub
+
+steps:
+  # First, because the emulated builds below register it.
+  - name: publish-binfmt
+    when: GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-'
+    changes:
+      in:
+        - ^toolchain/images/binfmt/
+        - ^toolchain/cmd/binfmt/
+        - ^toolchain/internal/archutil/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/publish/toolchain-images\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      cd toolchain/images/binfmt
+      state=$(make -s check-published)
+      if [ "${state}" = published ]; then exit 0; fi
+      make image test push push-manifest ARCH=amd64 CONFIRM=true
+
+  - name: publish-go-build
+    depends: [publish-binfmt]
+    when: GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-'
+    matrix:
+      - name: amd64
+        env: [{name: ARCH, value: amd64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    changes:
+      in:
+        - ^toolchain/images/go-build/
+        - ^toolchain/cmd/artifact/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/publish/toolchain-images\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      cd toolchain/images/go-build
+      state=$(make -s check-published)
+      if [ "${state}" = published ]; then exit 0; fi
+      make register image test push ARCH=$ARCH CONFIRM=true
+
+  # Native, because every RUN would otherwise be emulated on amd64.
+  - name: publish-go-build-arm64
+    when: GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-'
+    runOn: arm
+    # The default image is amd64 only.
+    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
+    changes:
+      in:
+        - ^toolchain/images/go-build/
+        - ^toolchain/cmd/artifact/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/publish/toolchain-images\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      cd toolchain/images/go-build
+      state=$(make -s check-published)
+      if [ "${state}" = published ]; then exit 0; fi
+      make image test push ARCH=arm64 CONFIRM=true
+
+  - name: publish-go-build-manifest
+    depends: [publish-go-build, publish-go-build-arm64]
+    timeout: 10m
+    when: GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-'
+    changes:
+      in:
+        - ^toolchain/images/go-build/
+        - ^toolchain/cmd/artifact/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/publish/toolchain-images\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      cd toolchain/images/go-build
+      state=$(make -s check-published)
+      if [ "${state}" = published ]; then exit 0; fi
+      make push-manifest CONFIRM=true
+      if [ "${CI_GIT_BRANCH}" = master ]; then make push-moving MOVING_TAGS="latest master" CONFIRM=true; fi
+
+  # Both bake or cache calico/go-build, so they follow its publish. Each names
+  # its image after the go-build tag and the commit, so a rerun is a no-op.
+  - name: publish-ci-base-vm-image
+    depends: [publish-go-build-manifest]
+    timeout: 45m
+    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
+    when: GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-'
+    changes:
+      in:
+        - ^toolchain/images/go-build/
+        - ^toolchain/vm-images/
+        - ^toolchain/hack/
+        - ^toolchain/cmd/artifact/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/publish/toolchain-images\.yaml$
+    secretBundles:
+      - name: google-service-account-for-gce
+        keys:
+          - name: google-service-account-for-gce-key.json
+            as: GCE_SERVICE_ACCOUNT_KEY
+    env:
+      - name: PROJECT
+        value: unique-caldron-775
+      - name: CLOUDSDK_CORE_DISABLE_PROMPTS
+        value: "1"
+    commands: |
+      key="$(mktemp)"; printf '%s' "${GCE_SERVICE_ACCOUNT_KEY}" > "${key}"
+      export GOOGLE_APPLICATION_CREDENTIALS="${key}"
+      gcloud auth activate-service-account --key-file="${key}"
+      bash toolchain/vm-images/ci-base/build-image.sh
+
+  - name: publish-preload-disk
+    depends: [publish-go-build-manifest]
+    timeout: 45m
+    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
+    when: GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-'
+    changes:
+      in:
+        - ^toolchain/images/go-build/
+        - ^toolchain/preload-disks/
+        - ^toolchain/hack/
+        - ^toolchain/cmd/disk-image-builder/
+        - ^toolchain/internal/imager/
+        - ^toolchain/cmd/artifact/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/publish/toolchain-images\.yaml$
+    secretBundles:
+      - name: google-service-account-for-gce
+        keys:
+          - name: google-service-account-for-gce-key.json
+            as: GCE_SERVICE_ACCOUNT_KEY
+    env:
+      - name: PROJECT
+        value: tigera-cc-dev
+      - name: GCS_PATH
+        value: gs://gke-argo-disk-images-cc-dev
+      - name: CLOUDSDK_CORE_DISABLE_PROMPTS
+        value: "1"
+    commands: |
+      key="$(mktemp)"; printf '%s' "${GCE_SERVICE_ACCOUNT_KEY}" > "${key}"
+      export GOOGLE_APPLICATION_CREDENTIALS="${key}"
+      gcloud auth activate-service-account --key-file="${key}"
+      bash toolchain/preload-disks/ci-cache/build-preload-disk.sh
+
+  - name: publish-rust-build
+    depends: [publish-binfmt]
+    when: GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-'
+    matrix:
+      - name: amd64
+        env: [{name: ARCH, value: amd64}]
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    changes:
+      in:
+        - ^toolchain/images/rust-build/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/publish/toolchain-images\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      cd toolchain/images/rust-build
+      state=$(make -s check-published)
+      if [ "${state}" = published ]; then exit 0; fi
+      make register image test push ARCH=$ARCH CONFIRM=true
+
+  - name: publish-rust-build-manifest
+    depends: [publish-rust-build]
+    timeout: 10m
+    when: GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-'
+    changes:
+      in:
+        - ^toolchain/images/rust-build/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/publish/toolchain-images\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      cd toolchain/images/rust-build
+      state=$(make -s check-published)
+      if [ "${state}" = published ]; then exit 0; fi
+      make push-manifest CONFIRM=true
+
+  - name: publish-tinygo
+    depends: [publish-binfmt]
+    when: GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-'
+    matrix:
+      - name: amd64
+        env: [{name: ARCH, value: amd64}]
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+    changes:
+      in:
+        - ^toolchain/images/tinygo/
+        - ^toolchain/(lib|go)\.mk$
+        - ^\.argoci/publish/toolchain-images\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      cd toolchain/images/tinygo
+      state=$(make -s check-published)
+      if [ "${state}" = published ]; then exit 0; fi
+      make register image test push ARCH=$ARCH CONFIRM=true
+
+  - name: publish-tinygo-manifest
+    depends: [publish-tinygo]
+    timeout: 10m
+    when: GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-'
+    changes:
+      in:
+        - ^toolchain/images/tinygo/
+        - ^toolchain/(lib|go)\.mk$
+        - ^\.argoci/publish/toolchain-images\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      cd toolchain/images/tinygo
+      state=$(make -s check-published)
+      if [ "${state}" = published ]; then exit 0; fi
+      make push-manifest CONFIRM=true
+
+  # amd64 only, so each pushes its manifest in the same job.
+  - name: publish-amd64-images
+    when: GIT_BRANCH == 'master' || GIT_BRANCH =~ '^release-'
+    matrix:
+      - name: scratch-utils
+        env: [{name: TOOLCHAIN_IMAGE, value: scratch-utils}]
+      - name: signing-tools
+        env: [{name: TOOLCHAIN_IMAGE, value: signing-tools}]
+    changes:
+      in:
+        - ^toolchain/images/(scratch-utils|signing-tools)/
+        - ^toolchain/cmd/
+        - ^toolchain/internal/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/publish/toolchain-images\.yaml$
+    commands: |
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      cd "toolchain/images/${TOOLCHAIN_IMAGE}"
+      state=$(make -s check-published)
+      if [ "${state}" = published ]; then exit 0; fi
+      make image test push push-manifest ARCH=amd64 CONFIRM=true
+      if [ "${CI_GIT_BRANCH}" = master ] && [ "${TOOLCHAIN_IMAGE}" = scratch-utils ]; then
+        make push-moving MOVING_TAGS="latest master" CONFIRM=true
+      fi

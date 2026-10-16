@@ -1,3 +1,17 @@
+# Copyright (c) 2015-2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/calicoctl
@@ -87,7 +101,7 @@ fv: bin/calicoctl-linux-$(ARCH) version-helper
 	$(MAKE) run-kubernetes-control-plane KUBE_APISERVER_PORT=6444 KUBE_MOCK_NODE_MANIFEST=mock-node-second.yaml
 
 	# Ensure anonymous is permitted to be admin.
-	while ! docker exec st-apiserver-6443 kubectl --server=https://127.0.0.1:6443 create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do sleep 2; done
+	while ! docker exec st-apiserver-6443 $(K8S_BIN_MOUNT)/kubectl --server=https://127.0.0.1:6443 create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do sleep 2; done
 
 	# Run the tests
 	mkdir -p report
@@ -133,15 +147,16 @@ st: bin/calicoctl-linux-$(ARCH) version-helper
 # TODO: Commonize this with the functions in lib.Makefile.
 # For now, these tests do something special and launch two apiserver on different ports, so it makes sense
 # to keep them separate.
-run-kubernetes-control-plane: stop-kubernetes-control-plane
+run-kubernetes-control-plane: stop-kubernetes-control-plane $(K8S_BIN_FILES)
 	# Run a Kubernetes apiserver using Docker.
 	docker run --net=host --detach \
 		--name st-apiserver-${KUBE_APISERVER_PORT} \
 		-v $(CURDIR):/code \
 		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico \
 		-v $(CERTS_PATH):/home/user/certs \
+		$(K8S_BIN_VOLUME) \
 		-e KUBECONFIG=/home/user/certs/kubeconfig \
-		${CALICO_BUILD} kube-apiserver \
+		${CALICO_BUILD} $(K8S_BIN_MOUNT)/kube-apiserver \
 			--secure-port=${KUBE_APISERVER_PORT} \
 			--admission-control=NamespaceLifecycle,LimitRanger,DefaultStorageClass,ResourceQuota \
 			--etcd-servers=http://$(LOCAL_IP_ENV):2379 \
@@ -160,13 +175,14 @@ run-kubernetes-control-plane: stop-kubernetes-control-plane
 
 
 	# Wait until the apiserver is accepting requests.
-	while ! docker exec st-apiserver-${KUBE_APISERVER_PORT} kubectl --server=https://127.0.0.1:${KUBE_APISERVER_PORT} get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
+	while ! docker exec st-apiserver-${KUBE_APISERVER_PORT} $(K8S_BIN_MOUNT)/kubectl --server=https://127.0.0.1:${KUBE_APISERVER_PORT} get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
 
 	# And run the controller manager.
 	docker run --detach --net=host \
 	  --name st-controller-manager-${KUBE_APISERVER_PORT} \
 	  -v $(CERTS_PATH):/home/user/certs \
-	  $(CALICO_BUILD) kube-controller-manager \
+	  $(K8S_BIN_VOLUME) \
+	  $(CALICO_BUILD) $(K8S_BIN_MOUNT)/kube-controller-manager \
 	    --master=https://127.0.0.1:${KUBE_APISERVER_PORT} \
             --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
             --min-resync-period=3m \
@@ -177,26 +193,26 @@ run-kubernetes-control-plane: stop-kubernetes-control-plane
             --root-ca-file=/home/user/certs/ca.pem
 
 	# Create a Node in the API for the tests to use.
-	while ! docker exec st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+	while ! docker exec st-apiserver-${KUBE_APISERVER_PORT} $(K8S_BIN_MOUNT)/kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		apply -f /code/tests/st/manifests/${KUBE_MOCK_NODE_MANIFEST}; \
 		do echo "Waiting for node to apply successfully..."; sleep 2; done
 
 	# Apply CRDs because the tests require them.
-	while ! docker exec st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+	while ! docker exec st-apiserver-${KUBE_APISERVER_PORT} $(K8S_BIN_MOUNT)/kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		apply -f /go/src/github.com/projectcalico/calico/$(CALICO_CRD_PATH); \
 		do echo "Waiting for Calico CRDs to apply successfully..."; sleep 2; done
 
 	# Create a namespace in the API for the tests to use.
-	-docker exec st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+	-docker exec st-apiserver-${KUBE_APISERVER_PORT} $(K8S_BIN_MOUNT)/kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		create namespace test
 
 ## Stop the local kubernetes control plane.
 stop-kubernetes-control-plane:
 	# Delete the cluster role binding.
-	-docker exec st-apiserver-${KUBE_APISERVER_PORT} kubectl delete clusterrolebinding anonymous-admin
+	-docker exec st-apiserver-${KUBE_APISERVER_PORT} $(K8S_BIN_MOUNT)/kubectl delete clusterrolebinding anonymous-admin
 
 	# Stop control plane components.
 	-docker rm -f st-apiserver-${KUBE_APISERVER_PORT} st-controller-manager-${KUBE_APISERVER_PORT}

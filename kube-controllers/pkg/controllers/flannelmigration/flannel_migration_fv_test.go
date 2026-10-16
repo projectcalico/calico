@@ -151,7 +151,7 @@ var _ = Describe("flannel-migration-controller FV test", Ordered, ContinueOnFail
 
 		It("Should report nothing to do if Flannel daemonset not exists", func() {
 			// remove flannel daemonset
-			_, err := apiserver.ExecOutput("kubectl", "delete", "daemonset", flannelDs, "-n", "kube-system")
+			_, err := apiserver.ExecOutput(testutils.Kubectl, "delete", "daemonset", flannelDs, "-n", "kube-system")
 			Expect(err).ShouldNot(HaveOccurred())
 
 			startController()
@@ -163,7 +163,7 @@ var _ = Describe("flannel-migration-controller FV test", Ordered, ContinueOnFail
 
 		It("Should report error if Flannel daemonset has addon manager label", func() {
 			// add addon manager label
-			_, err := apiserver.ExecOutput("kubectl", "label", "daemonset", flannelDs, "-n", "kube-system", "addonmanager.kubernetes.io/mode=EnsureExists")
+			_, err := apiserver.ExecOutput(testutils.Kubectl, "label", "daemonset", flannelDs, "-n", "kube-system", "addonmanager.kubernetes.io/mode=EnsureExists")
 			Expect(err).ShouldNot(HaveOccurred())
 
 			startController()
@@ -216,7 +216,7 @@ var _ = Describe("flannel-migration-controller FV test", Ordered, ContinueOnFail
 			Expect(err).NotTo(HaveOccurred())
 
 			// Remove flannel daemonset, add Canal daemonset.
-			_, err = apiserver.ExecOutput("kubectl", "delete", "daemonset", flannelDs, "-n", "kube-system")
+			_, err = apiserver.ExecOutput(testutils.Kubectl, "delete", "daemonset", flannelDs, "-n", "kube-system")
 			Expect(err).ShouldNot(HaveOccurred())
 			flannelCluster.AddCanalDaemonset("canal")
 
@@ -246,7 +246,7 @@ var _ = Describe("flannel-migration-controller FV test", Ordered, ContinueOnFail
 
 		BeforeEach(func() {
 			flannelCluster.AddFlannelNode("node-3", "192.168.4.0/24", "vxlan", "8e:74:9a:30:24:04", "172.16.0.4", emptyLabel, false)
-			logKubectl("kubectl", "get", "node")
+			logKubectl(testutils.Kubectl, "get", "node")
 		})
 
 		AfterEach(func() {

@@ -26,6 +26,7 @@
   "postUpdateOptions": ["gomodTidy"],
   "customManagers": [
     {
+      "description": "Release branches only: master's metadata.mk derives GO_VERSION from go.mod, so this matches nothing there",
       "customType": "regex",
       "managerFilePatterns": ["/^metadata\\.mk$/"],
       "matchStrings": ["GO_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
@@ -40,6 +41,7 @@
       "datasourceTemplate": "golang-version"
     },
     {
+      "description": "Release branches only: master's metadata.mk derives K8S_VERSION from go.mod's k8s.io/kubernetes, which gomod updates",
       "customType": "regex",
       "managerFilePatterns": ["/^metadata\\.mk$/"],
       "matchStrings": ["K8S_VERSION=v(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
@@ -151,6 +153,15 @@
       "postUpgradeTasks": {
         "commands": ["make gen-deps-files"],
         "fileFilters": ["**/deps.txt"],
+        "executionMode": "branch"
+      }
+    },
+    {
+      "description": "On master a Go bump also needs new tarball checksums for calico/go-build and the new tag in .argoci/config.yaml. Repeats gen-deps-files because this rule's commands replace the rule above",
+      "matchBaseBranches": ["master"],
+      "postUpgradeTasks": {
+        "commands": ["make gen-deps-files", "make -C toolchain/images/go-build update-pins"],
+        "fileFilters": ["**/deps.txt", "toolchain/images/go-build/go.sha256", ".argoci/config.yaml"],
         "executionMode": "branch"
       }
     },

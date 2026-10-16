@@ -203,7 +203,8 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   PRE_RUN=":"
   if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
     GO_BUILD_VER=$(make --no-print-directory -f ./metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
-    RUN_IMAGE="calico/go-build:${GO_BUILD_VER}"
+    # A run that built its own go-build names it in CALICO_BUILD.
+    RUN_IMAGE="${CALICO_BUILD:-calico/go-build:${GO_BUILD_VER}}"
   else
     GO_VERSION=$(make --no-print-directory -f ./metadata.mk -f - <<<'print:; @echo $(GO_VERSION)' print)
     RUN_IMAGE="golang:${GO_VERSION}-bookworm"

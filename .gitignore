@@ -42,6 +42,7 @@ hack/test/kind/*kubeconfig.yaml
 hack/test/kind/external-node-key*
 hack/test/kind/external-node-ip
 hack/test/envtest/
+hack/test/k8s/
 pod2daemon/node-driver-registrar/
 
 /networking-calico/upper-constraints*.txt
