@@ -841,7 +841,7 @@ func realGetKubernetesService(namespace, svcName string) (*v1.Service, error) {
 	// FIXME: get rid of this and call rest.InClusterConfig() directly when containerd v1.6 is EOL'd
 	k8scfg, err := winutils.GetInClusterConfig()
 	if err != nil {
-		log.WithError(err).Info("Unable to create in-cluster Kubernetes config, attemping environments instead")
+		log.WithError(err).Info("Unable to create in-cluster Kubernetes config, attempting environments instead")
 
 		cfgFile := os.Getenv("KUBECONFIG")
 		// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot

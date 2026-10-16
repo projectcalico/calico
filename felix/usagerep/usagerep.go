@@ -167,7 +167,9 @@ func (u *UsageReporter) reportUsage(clusterGUID, clusterType, calicoVersion stri
 			"Failed to decode report server response")
 		return
 	} else {
-		log.WithField("json", jsonResp).Debug("Response")
+		// Log only non-sensitive fields from API response
+		statusCode := resp.StatusCode
+		log.WithField("status_code", statusCode).Debug("Response")
 	}
 	if warn, ok := jsonResp["usage_warning"]; ok {
 		log.Warnf("Usage warning: %v", warn)
