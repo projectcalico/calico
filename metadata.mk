@@ -70,9 +70,8 @@ WINDOWS_VERSIONS ?= ltsc2019 ltsc2022
 
 # The CNI plugin and flannel code that will be cloned and rebuilt with this repo's go-build image.
 # Pinned so the content-addressed third-party-cni-plugins image hash changes when these move.
-# CNI_VERSION is a commit SHA because the fork has no release tag at the toolchain we build with;
-# bump it to pick up upstream changes.
-CNI_VERSION=9ffe547cb3b66f80dd32a00fc69a6d0082b55321
+# CNI_VERSION is a commit SHA on upstream main; bump it to pick up upstream changes.
+CNI_VERSION=268232e54c89bae2bf2b1548e03ff183a7a6f9e9
 FLANNEL_VERSION=v1.2.0-flannel2-go1.22.7
 
 # The libbpf version to use
