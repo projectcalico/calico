@@ -261,6 +261,29 @@ func TestFelixConfiguration_Validation(t *testing.T) {
 			},
 			wantErr: "kubeNodePortRanges must not contain named ports",
 		},
+		{
+			name: "externalNodesList with IPv4 CIDRs and addresses is accepted",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{ExternalNodesCIDRList: &[]string{"10.0.0.0/24", "192.168.1.1"}},
+			},
+		},
+		{
+			name: "externalNodesList with an IPv6 CIDR is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{ExternalNodesCIDRList: &[]string{"fd00::/64"}},
+			},
+			wantErr: "externalNodesList entries must be IPv4 CIDRs or IPv4 addresses",
+		},
+		{
+			name: "externalNodesList with an invalid CIDR is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{ExternalNodesCIDRList: &[]string{"10.0.0.0/33"}},
+			},
+			wantErr: "externalNodesList entries must be IPv4 CIDRs or IPv4 addresses",
+		},
 	}
 
 	for _, tt := range tests {
