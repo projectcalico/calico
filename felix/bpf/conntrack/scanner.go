@@ -35,27 +35,30 @@ import (
 )
 
 var (
-	conntrackCounterSweeps = prometheus.NewCounter(prometheus.CounterOpts{
+	conntrackCounterSweeps = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "felix_bpf_conntrack_sweeps",
 		Help: "Number of contrack table sweeps made so far",
-	})
-	conntrackGaugeUsed = prometheus.NewGauge(prometheus.GaugeOpts{
+	}, []string{"ip_family"})
+	conntrackGaugeUsed = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_used",
 		Help: "Number of used entries visited during a conntrack table sweep",
-	})
-	conntrackGaugeCleaned = prometheus.NewGauge(prometheus.GaugeOpts{
+	}, []string{"ip_family"})
+	conntrackGaugeCleaned = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_cleaned",
 		Help: "Number of entries cleaned during a conntrack table sweep",
-	})
-	conntrackCounterCleaned = prometheus.NewGauge(prometheus.GaugeOpts{
+	}, []string{"ip_family"})
+	conntrackCounterCleaned = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "felix_bpf_conntrack_cleaned_total",
-		Help: "Total number of entries cleaned during conntrack table sweeps, " +
-			"incremented for each clean individualy",
-	})
-	conntrackGaugeSweepDuration = prometheus.NewGauge(prometheus.GaugeOpts{
+		Help: "Total number of entries cleaned during conntrack table sweeps",
+	}, []string{"ip_family"})
+	conntrackGaugeSweepDuration = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_sweep_duration",
 		Help: "Conntrack sweep execution time (ns)",
-	})
+	}, []string{"ip_family"})
+	conntrackGaugeMaxEntries = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_bpf_conntrack_max_entries",
+		Help: "Capacity of the conntrack table; compare with used minus cleaned to get how full it is",
+	}, []string{"ip_family"})
 	conntrackGaugeMaglevTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_maglev_entries_total",
 		Help: "Total number of Maglev entries in conntrack table broken down by IP version, and, whether destination backend is remote (we're acting as a frontend) or local (we're the backend node).",
@@ -70,6 +73,7 @@ func init() {
 	prometheus.MustRegister(conntrackGaugeCleaned)
 	prometheus.MustRegister(conntrackCounterCleaned)
 	prometheus.MustRegister(conntrackGaugeSweepDuration)
+	prometheus.MustRegister(conntrackGaugeMaxEntries)
 	prometheus.MustRegister(conntrackGaugeMaglevTotal)
 }
 
@@ -127,6 +131,11 @@ type Scanner struct {
 	revNATKeyToFwdNATInfo        map[KeyInterface]cleanupv1.ValueInterface
 	ipFamily                     int
 
+	conntrackCounterSweeps              prometheus.Counter
+	conntrackGaugeUsed                  prometheus.Gauge
+	conntrackGaugeCleaned               prometheus.Gauge
+	conntrackCounterCleaned             prometheus.Counter
+	conntrackGaugeSweepDuration         prometheus.Gauge
 	conntrackGaugeMaglevToLocalBackend  prometheus.Gauge
 	conntrackGaugeMaglevToRemoteBackend prometheus.Gauge
 
@@ -184,14 +193,22 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 		}
 	}
 
+	family := ipFamilyLabel(s.ipFamily)
+	s.conntrackCounterSweeps = conntrackCounterSweeps.WithLabelValues(family)
+	s.conntrackGaugeUsed = conntrackGaugeUsed.WithLabelValues(family)
+	s.conntrackGaugeCleaned = conntrackGaugeCleaned.WithLabelValues(family)
+	s.conntrackCounterCleaned = conntrackCounterCleaned.WithLabelValues(family)
+	s.conntrackGaugeSweepDuration = conntrackGaugeSweepDuration.WithLabelValues(family)
+	conntrackGaugeMaxEntries.WithLabelValues(family).Set(float64(s.maxEntries))
+
 	var err error
 
-	s.conntrackGaugeMaglevToLocalBackend, err = conntrackGaugeMaglevTotal.GetMetricWithLabelValues("local", strconv.Itoa(s.ipFamily))
+	s.conntrackGaugeMaglevToLocalBackend, err = conntrackGaugeMaglevTotal.GetMetricWithLabelValues("local", family)
 	if err != nil {
 		log.WithError(err).Panic("Couldn't init (local) Maglev conntrack metric gauge")
 	}
 
-	s.conntrackGaugeMaglevToRemoteBackend, err = conntrackGaugeMaglevTotal.GetMetricWithLabelValues("remote", strconv.Itoa(s.ipFamily))
+	s.conntrackGaugeMaglevToRemoteBackend, err = conntrackGaugeMaglevTotal.GetMetricWithLabelValues("remote", family)
 	if err != nil {
 		log.WithError(err).Panic("Couldn't get (remote) Maglev conntrack metric gauge")
 	}
@@ -273,7 +290,6 @@ func (s *Scanner) Scan() {
 		ctFlags := ctVal.Flags()
 
 		used++
-		conntrackCounterCleaned.Inc()
 
 		if debug {
 			log.WithFields(log.Fields{
@@ -392,6 +408,7 @@ func (s *Scanner) Scan() {
 
 	if err != nil {
 		log.WithError(err).Warn("Failed to iterate over conntrack map")
+		s.conntrackCounterCleaned.Add(float64(cleaned))
 		return
 	}
 
@@ -416,10 +433,11 @@ func (s *Scanner) Scan() {
 	log.WithField("value", maglevEntriesToRemote).Debug("Setting remote maglev conntrack entries gauge")
 	s.conntrackGaugeMaglevToRemoteBackend.Set(float64(maglevEntriesToRemote))
 
-	conntrackCounterSweeps.Inc()
-	conntrackGaugeUsed.Set(float64(used))
-	conntrackGaugeCleaned.Set(float64(cleaned))
-	conntrackGaugeSweepDuration.Set(float64(time.Since(start)))
+	s.conntrackCounterSweeps.Inc()
+	s.conntrackGaugeUsed.Set(float64(used))
+	s.conntrackGaugeCleaned.Set(float64(cleaned))
+	s.conntrackCounterCleaned.Add(float64(cleaned))
+	s.conntrackGaugeSweepDuration.Set(float64(time.Since(start)))
 	if !s.autoScale {
 		return
 	}
@@ -559,6 +577,14 @@ func (s *Scanner) AddUnlocked(scanner EntryScanner) {
 // the first scanner to be called.
 func (s *Scanner) AddFirstUnlocked(scanner EntryScanner) {
 	s.scanners = append([]EntryScanner{scanner}, s.scanners...)
+}
+
+// ipFamilyLabel returns the ip_family metric label value for ipFamily.
+func ipFamilyLabel(ipFamily int) string {
+	if ipFamily != 4 && ipFamily != 6 {
+		log.Panicf("Invalid IP family %d", ipFamily)
+	}
+	return strconv.Itoa(ipFamily)
 }
 
 type Cleaner interface {
