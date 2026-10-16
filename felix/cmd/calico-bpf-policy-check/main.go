@@ -20,6 +20,9 @@
 //	CGO_ENABLED=0 go run ./felix/cmd/calico-bpf-policy-check \
 //	  -resources ./bundle/ -pod my-ns/my-pod
 //
+// Calico resources may be projectcalico.org/v3 or the crd.projectcalico.org/v1 CRDs that a bundle
+// records when the Calico API server is not running.
+//
 // Host endpoint policy is not modelled.
 package main
 
@@ -29,8 +32,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -52,6 +57,7 @@ import (
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
+	k8sresources "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
@@ -90,6 +96,11 @@ func main() {
 	objs, err := loadResources(strings.Split(*resources, ","))
 	if err != nil {
 		fatalf("%v", err)
+	}
+	fmt.Printf("Loaded %d tiers, %d GlobalNetworkPolicies, %d NetworkPolicies, %d Kubernetes NetworkPolicies, %d namespaces, %d pods\n",
+		len(objs.tiers), len(objs.gnps), len(objs.nps), len(objs.knps), len(objs.nss), len(objs.pods))
+	for _, kind := range slices.Sorted(maps.Keys(objs.ignoredCalico)) {
+		fmt.Fprintf(os.Stderr, "Not used: %d Calico %s resources\n", objs.ignoredCalico[kind], kind)
 	}
 	wl, err := pickWorkload(objs)
 	if err != nil {
@@ -131,13 +142,14 @@ func fatalf(format string, args ...any) {
 
 // objects holds the resources that affect a workload's policy program.
 type objects struct {
-	tiers     []apiv3.Tier
-	gnps      []apiv3.GlobalNetworkPolicy
-	nps       []apiv3.NetworkPolicy
-	knps      []networkingv1.NetworkPolicy
-	nss       []kapiv1.Namespace
-	pods      []kapiv1.Pod
-	numIgnore int
+	tiers []apiv3.Tier
+	gnps  []apiv3.GlobalNetworkPolicy
+	nps   []apiv3.NetworkPolicy
+	knps  []networkingv1.NetworkPolicy
+	nss   []kapiv1.Namespace
+	pods  []kapiv1.Pod
+	// Calico kinds the tool does not use, by kind, so a missing policy kind is noticed.
+	ignoredCalico map[string]int
 }
 
 func loadResources(paths []string) (*objects, error) {
@@ -207,24 +219,48 @@ func (o *objects) add(doc []byte) error {
 		return nil
 	}
 	group, _, _ := strings.Cut(tm.APIVersion, "/")
+	calico := group == "projectcalico.org" || group == "crd.projectcalico.org"
+	v1CRD := group == "crd.projectcalico.org"
 	var err error
 	switch {
-	case group == "projectcalico.org" && tm.Kind == "Tier":
-		err = appendDecoded(doc, &o.tiers)
-	case group == "projectcalico.org" && tm.Kind == "GlobalNetworkPolicy":
-		err = appendDecoded(doc, &o.gnps)
-	case group == "projectcalico.org" && tm.Kind == "NetworkPolicy":
-		err = appendDecoded(doc, &o.nps)
+	case calico && tm.Kind == "Tier":
+		err = appendCalico(doc, v1CRD, &o.tiers)
+	case calico && tm.Kind == "GlobalNetworkPolicy":
+		err = appendCalico(doc, v1CRD, &o.gnps)
+	case calico && tm.Kind == "NetworkPolicy":
+		err = appendCalico(doc, v1CRD, &o.nps)
 	case group == "networking.k8s.io" && tm.Kind == "NetworkPolicy":
 		err = appendDecoded(doc, &o.knps)
 	case tm.APIVersion == "v1" && tm.Kind == "Namespace":
 		err = appendDecoded(doc, &o.nss)
 	case tm.APIVersion == "v1" && tm.Kind == "Pod":
 		err = appendDecoded(doc, &o.pods)
-	default:
-		o.numIgnore++
+	case calico:
+		if o.ignoredCalico == nil {
+			o.ignoredCalico = map[string]int{}
+		}
+		o.ignoredCalico[tm.Kind]++
 	}
 	return err
+}
+
+// appendCalico decodes a Calico resource, converting a crd.projectcalico.org/v1 CRD the way
+// libcalico-go's CRD client does.
+func appendCalico[T any, PT interface {
+	*T
+	k8sresources.Resource
+}](doc []byte, v1CRD bool, out *[]T) error {
+	var v T
+	if err := yaml.Unmarshal(doc, &v); err != nil {
+		return err
+	}
+	if v1CRD {
+		if err := k8sresources.ConvertK8sResourceToCalicoResource(PT(&v)); err != nil {
+			return err
+		}
+	}
+	*out = append(*out, v)
+	return nil
 }
 
 func appendDecoded[T any](doc []byte, out *[]T) error {
