@@ -193,31 +193,34 @@ var _ = Describe("Convert network tests", func() {
 			Expect(cfg.Spec.CNI.IPAM.Type).To(Equal(operatorv1.IPAMPluginCalico))
 			Expect(*cfg.Spec.CalicoNetwork.BGP).To(Equal(operatorv1.BGPDisabled))
 		})
-		DescribeTable("CALICO_IPAM_TYPE must match the CNI IPAM plugin", func(cniIPAM, backend string, envVars []corev1.EnvVar, expectErr bool) {
-			ds := emptyNodeSpec()
-			ds.Spec.Template.Spec.InitContainers[0].Env = []corev1.EnvVar{{
-				Name:  "CNI_NETWORK_CONFIG",
-				Value: fmt.Sprintf(`{"type": "calico", "name": "k8s-pod-network", "ipam": {"type": "%s"}}`, cniIPAM),
-			}}
-			ds.Spec.Template.Spec.Containers[0].Env = append(envVars, corev1.EnvVar{
-				Name:  "CALICO_NETWORKING_BACKEND",
-				Value: backend,
-			})
-			c := ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(ds, emptyKubeControllerSpec(), v4pool, emptyFelixConfig()).Build()
-			_, err := Convert(ctx, c)
-			if expectErr {
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("CALICO_IPAM_TYPE=%s is not supported", envVars[0].Value))
-			} else {
+		DescribeTable(
+			"CALICO_IPAM_TYPE must match the CNI IPAM plugin",
+			func(cniIPAM, backend, ipamTypeEnv string, expectErr bool) {
+				ds := emptyNodeSpec()
+				ds.Spec.Template.Spec.InitContainers[0].Env = []corev1.EnvVar{{
+					Name:  "CNI_NETWORK_CONFIG",
+					Value: fmt.Sprintf(`{"type": "calico", "name": "k8s-pod-network", "ipam": {"type": "%s"}}`, cniIPAM),
+				}}
+				env := []corev1.EnvVar{{Name: "CALICO_NETWORKING_BACKEND", Value: backend}}
+				if ipamTypeEnv != "" {
+					env = append(env, corev1.EnvVar{Name: "CALICO_IPAM_TYPE", Value: ipamTypeEnv})
+				}
+				ds.Spec.Template.Spec.Containers[0].Env = env
+				c := ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(ds, emptyKubeControllerSpec(), v4pool, emptyFelixConfig()).Build()
+				_, err := Convert(ctx, c)
+				if expectErr {
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("CALICO_IPAM_TYPE=%s is not supported", ipamTypeEnv))
+					return
+				}
 				Expect(err).NotTo(HaveOccurred())
-			}
-		},
-			Entry("calico-ipam with Calico", "calico-ipam", "bird", []corev1.EnvVar{{Name: "CALICO_IPAM_TYPE", Value: "Calico"}}, false),
-			Entry("host-local with HostLocal", "host-local", "none", []corev1.EnvVar{{Name: "CALICO_IPAM_TYPE", Value: "HostLocal"}}, false),
-			Entry("host-local with lowercase hostlocal", "host-local", "none", []corev1.EnvVar{{Name: "CALICO_IPAM_TYPE", Value: "hostlocal"}}, false),
-			Entry("calico-ipam with CALICO_IPAM_TYPE unset", "calico-ipam", "bird", nil, false),
-			Entry("calico-ipam with HostLocal", "calico-ipam", "bird", []corev1.EnvVar{{Name: "CALICO_IPAM_TYPE", Value: "HostLocal"}}, true),
-			Entry("host-local with Calico", "host-local", "none", []corev1.EnvVar{{Name: "CALICO_IPAM_TYPE", Value: "Calico"}}, true),
+			},
+			Entry("calico-ipam with Calico", "calico-ipam", "bird", "Calico", false),
+			Entry("host-local with HostLocal", "host-local", "none", "HostLocal", false),
+			Entry("host-local with lowercase hostlocal", "host-local", "none", "hostlocal", false),
+			Entry("calico-ipam with CALICO_IPAM_TYPE unset", "calico-ipam", "bird", "", false),
+			Entry("calico-ipam with HostLocal", "calico-ipam", "bird", "HostLocal", true),
+			Entry("host-local with Calico", "host-local", "none", "Calico", true),
 		)
 		It("migrate default with IPv6 explicitly disabled", func() {
 			ds := emptyNodeSpec()
