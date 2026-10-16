@@ -60,6 +60,12 @@ func (s *Set[T]) Coalesced() iter.Seq2[T, T] {
 	}
 }
 
+// NumIntervals returns the number of intervals that Coalesced yields.
+func (s *Set[T]) NumIntervals() int {
+	s.coalesce()
+	return len(s.intervals)
+}
+
 // coalesce sorts and merges the intervals in place.
 func (s *Set[T]) coalesce() {
 	if !s.dirty {

@@ -574,13 +574,12 @@ func SimplifyPorts(ports []numorstring.Port) []numorstring.Port {
 	if len(ports) <= 1 {
 		return ports
 	}
-	outputPorts := make([]numorstring.Port, 0, len(ports))
 	var numericPorts intervals.Set[uint16]
+	numNamedPorts := 0
 	numPortsCovered := 0
 	for _, p := range ports {
 		if p.PortName != "" {
-			// Pass named ports through immediately, there's nothing to be done for them.
-			outputPorts = append(outputPorts, p)
+			numNamedPorts++
 			continue
 		}
 		numericPorts.Add(p.MinPort, p.MaxPort)
@@ -592,6 +591,15 @@ func SimplifyPorts(ports []numorstring.Port) []numorstring.Port {
 		return ports
 	}
 
+	// Coalescing usually shrinks the numeric ports a lot, so size the output
+	// after coalescing rather than to len(ports).
+	outputPorts := make([]numorstring.Port, 0, numNamedPorts+numericPorts.NumIntervals())
+	for _, p := range ports {
+		if p.PortName != "" {
+			// Pass named ports through, there's nothing to be done for them.
+			outputPorts = append(outputPorts, p)
+		}
+	}
 	for minPort, maxPort := range numericPorts.Coalesced() {
 		outputPorts = append(outputPorts, numorstring.Port{MinPort: minPort, MaxPort: maxPort})
 	}

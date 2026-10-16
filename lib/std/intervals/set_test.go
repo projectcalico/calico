@@ -54,6 +54,9 @@ func TestCoalesced(t *testing.T) {
 			for _, p := range tt.in {
 				s.Add(p[0], p[1])
 			}
+			if n := s.NumIntervals(); n != len(tt.want) {
+				t.Errorf("NumIntervals() of %v = %d, want %d", tt.in, n, len(tt.want))
+			}
 			if got := collect(&s); !slices.Equal(got, tt.want) {
 				t.Errorf("Coalesced() of %v = %v, want %v", tt.in, got, tt.want)
 			}
