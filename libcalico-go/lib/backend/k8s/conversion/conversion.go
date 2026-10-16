@@ -583,6 +583,8 @@ func SimplifyPorts(ports []numorstring.Port) []numorstring.Port {
 			numNamedPorts++
 			continue
 		}
+		// Add panics if MinPort > MaxPort, but callers build ports with the
+		// numorstring constructors, which reject that.
 		numericPorts.Add(p.MinPort, p.MaxPort)
 		numPortsCovered += int(p.MaxPort) - int(p.MinPort) + 1
 	}
