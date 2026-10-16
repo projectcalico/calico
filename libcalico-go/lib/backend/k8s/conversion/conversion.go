@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
 
+	"github.com/projectcalico/calico/lib/std/intervals"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -573,67 +574,37 @@ func SimplifyPorts(ports []numorstring.Port) []numorstring.Port {
 	if len(ports) <= 1 {
 		return ports
 	}
-	var numericPorts []int
-	var outputPorts []numorstring.Port
+	var numericPorts intervals.Set[uint16]
+	numericPorts.Grow(len(ports))
+	numNamedPorts := 0
+	numPortsCovered := 0
 	for _, p := range ports {
 		if p.PortName != "" {
-			// Pass named ports through immediately, there's nothing to be done for them.
-			outputPorts = append(outputPorts, p)
-		} else {
-			// Work with ints to avoid overflow with the uint16 port type.
-			// In practice, we currently only get single ports here so this
-			// loop should run exactly once.
-			for i := int(p.MinPort); i <= int(p.MaxPort); i++ {
-				numericPorts = append(numericPorts, i)
-			}
+			numNamedPorts++
+			continue
 		}
+		numericPorts.Add(p.MinPort, p.MaxPort)
+		numPortsCovered += int(p.MaxPort) - int(p.MinPort) + 1
 	}
 
-	if len(numericPorts) <= 1 {
+	if numPortsCovered <= 1 {
 		// We have nothing to combine, short-circuit.
 		return ports
 	}
 
-	// Sort the ports so it will be easy to find ranges.
-	sort.Ints(numericPorts)
-
-	// Each pass around this outer loop extracts one port range from the sorted slice
-	// and it moves the slice along to the start of the next range.
-	for len(numericPorts) > 0 {
-		// Initialise the next range to the contain only the first port in the slice.
-		firstPortInRange := numericPorts[0]
-		lastPortInRange := firstPortInRange
-
-		// Scan ahead, looking for ports that can be combined into this range.
-		numericPorts = numericPorts[1:]
-		for len(numericPorts) > 0 {
-			nextPort := numericPorts[0]
-			if nextPort > lastPortInRange+1 {
-				// This port can't be coalesced with the existing range, break out so
-				// that we record the range; then we'll loop again and pick up this
-				// port as the start of a new range.
-				break
-			}
-			// The next port is either equal to the last port (due to a duplicate port
-			// in the input) or it is exactly one greater.  Extend the range to include
-			// it.
-			lastPortInRange = nextPort
-			numericPorts = numericPorts[1:]
+	// Coalescing usually shrinks the numeric ports a lot, so size the output
+	// after coalescing rather than to len(ports).
+	outputPorts := make([]numorstring.Port, 0, numNamedPorts+numericPorts.NumIntervals())
+	for _, p := range ports {
+		if p.PortName != "" {
+			// Pass named ports through, there's nothing to be done for them.
+			outputPorts = append(outputPorts, p)
 		}
-
-		// Record the port.
-		outputPorts = appendPortRange(outputPorts, firstPortInRange, lastPortInRange)
 	}
-
+	for minPort, maxPort := range numericPorts.Coalesced() {
+		outputPorts = append(outputPorts, numorstring.Port{MinPort: minPort, MaxPort: maxPort})
+	}
 	return outputPorts
-}
-
-func appendPortRange(ports []numorstring.Port, first, last int) []numorstring.Port {
-	portRange, err := numorstring.PortFromRange(uint16(first), uint16(last))
-	if err != nil {
-		log.WithError(err).Panic("Failed to make port range from ports that should have been pre-validated.")
-	}
-	return append(ports, portRange)
 }
 
 func (c converter) k8sPortToCalicoFields(port *networkingv1.NetworkPolicyPort) (protocol *numorstring.Protocol, dstPorts []numorstring.Port, err error) {
