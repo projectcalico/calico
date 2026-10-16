@@ -55,7 +55,7 @@ func simplifyPortsBenchCases(sizes ...int) []simplifyPortsBenchCase {
 }
 
 func BenchmarkSimplifyPorts(b *testing.B) {
-	for _, c := range simplifyPortsBenchCases(1000, 100_000) {
+	for _, c := range simplifyPortsBenchCases(5, 25, 1000, 100_000) {
 		b.Run(c.name, func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {

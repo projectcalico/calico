@@ -37,6 +37,11 @@ type interval[T Unsigned] struct {
 	min, max T
 }
 
+// Grow ensures space for another n calls to Add without reallocating.
+func (s *Set[T]) Grow(n int) {
+	s.intervals = slices.Grow(s.intervals, n)
+}
+
 // Add adds the closed interval [min, max] to the set.  Panics if min > max.
 func (s *Set[T]) Add(min, max T) {
 	if min > max {

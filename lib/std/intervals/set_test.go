@@ -95,6 +95,20 @@ func TestCoalescedEarlyBreak(t *testing.T) {
 	}
 }
 
+func TestGrowAvoidsReallocation(t *testing.T) {
+	allocs := testing.AllocsPerRun(10, func() {
+		var s Set[uint16]
+		s.Grow(100)
+		for i := range uint16(100) {
+			s.Add(i*2, i*2)
+		}
+		s.NumIntervals()
+	})
+	if allocs != 1 {
+		t.Errorf("Grow(100) then 100 Adds made %v allocations, want 1", allocs)
+	}
+}
+
 func TestAddInvalidPanics(t *testing.T) {
 	defer func() {
 		if recover() == nil {

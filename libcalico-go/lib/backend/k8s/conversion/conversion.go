@@ -575,6 +575,7 @@ func SimplifyPorts(ports []numorstring.Port) []numorstring.Port {
 		return ports
 	}
 	var numericPorts intervals.Set[uint16]
+	numericPorts.Grow(len(ports))
 	numNamedPorts := 0
 	numPortsCovered := 0
 	for _, p := range ports {
