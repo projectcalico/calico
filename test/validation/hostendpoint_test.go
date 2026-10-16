@@ -69,6 +69,29 @@ func TestHostEndpoint_Validation(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "profile names in the resource name format are accepted",
+			obj: &v3.HostEndpoint{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("hep")},
+				Spec: v3.HostEndpointSpec{
+					Node:          "mynode",
+					InterfaceName: "eth0",
+					Profiles:      []string{"projectcalico-default-allow", "kns.default"},
+				},
+			},
+		},
+		{
+			name: "profile name outside the resource name format is rejected",
+			obj: &v3.HostEndpoint{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("hep")},
+				Spec: v3.HostEndpointSpec{
+					Node:          "mynode",
+					InterfaceName: "eth0",
+					Profiles:      []string{"Not Valid!"},
+				},
+			},
+			wantErr: "spec.profiles[0]: Invalid value",
+		},
 	}
 
 	for _, tt := range tests {
