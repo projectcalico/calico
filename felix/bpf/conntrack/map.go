@@ -32,11 +32,11 @@ import (
 
 func init() {
 	SetMapSize(MaxEntries)
+	SetMapSizeV6(MaxEntries)
 }
 
 func SetMapSize(size int) {
 	maps.SetSize(curVer.MapParams.VersionedName(), size)
-	maps.SetSize(curVer.MapParamsV6.VersionedName(), size)
 }
 
 func SetMapSizeV6(size int) {
