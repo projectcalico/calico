@@ -218,7 +218,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 
 		val := conntrack.NewValueNormal(now, 0, leg, leg).AsBytes()
 		c := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile(
-			`.*Overriding bpfMapSizeConntrack \(10000\) with map size growth \(20000\) for IPv4`))
+			`Using IPv4 conntrack map size 20000 recorded by BPFMapSizeConntrackScaling instead of the configured 10000`))
 
 		fillCtMap(tc.Felixes[0], conntrack.Map(), 20000, func(i int) []byte {
 			return conntrack.NewKey(6 /* TCP */, srcIP, uint16(i), dstIP, uint16(i)).AsBytes()
@@ -266,7 +266,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf dual-stack conntr
 			Eventually(getMapSizeFn(felix, other), "30s", "1s").Should(Equal(10000))
 
 			c := felix.WatchStdoutFor(regexp.MustCompile(
-				`.*Overriding bpfMapSizeConntrack \(10000\) with map size growth \(20000\) for ` + family))
+				`Using ` + family + ` conntrack map size 20000 recorded by BPFMapSizeConntrackScaling instead of the configured 10000`))
 			fill()
 
 			Eventually(c, "60s", "1s").Should(BeClosed())

@@ -3279,8 +3279,8 @@ func conntrackMapSizes(configured int) (int, int) {
 	}
 	pick := func(grown, ipVersion int) int {
 		if grown > configured {
-			log.Infof("Overriding bpfMapSizeConntrack (%d) with map size growth (%d) for IPv%d",
-				configured, grown, ipVersion)
+			log.Infof("Using IPv%d conntrack map size %d recorded by BPFMapSizeConntrackScaling instead of the configured %d",
+				ipVersion, grown, configured)
 			return grown
 		}
 		return configured
