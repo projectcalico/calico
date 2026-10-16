@@ -72,3 +72,8 @@ steps:
       sshOnVirtualMachine 'mkdir -p ~/logs && sudo journalctl > ~/logs/journalctl.txt'
       copyFromVirtualMachine '~/logs' logs
       artifact push job logs || true
+
+      # The perf documents are written on the machine, which is deleted after this step.  Keep
+      # them even when Lens did not get them, or got them with fields a PR run holds back.
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/artifacts/perf" perf || true
+      artifact push job perf -d perf -f || true
