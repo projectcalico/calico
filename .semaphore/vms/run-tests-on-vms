@@ -28,7 +28,7 @@ artifacts_dir="$repo_dir/artifacts"
 # VM actually lands in is discovered after creation (see below).
 region=${REGION:-europe-west3}
 # Space-separated, in priority order.
-: "${VM_MACHINE_TYPES:=${VM_MACHINE_TYPE:-n4-standard-4}}"
+: "${VM_MACHINE_TYPES:=n4-standard-4}"
 : "${IMAGE_FAMILY:=ubuntu-minimal-2404-lts-amd64}"
 : "${MAX_RUN_DURATION:=4h}"
 disk_size=${VM_DISK_SIZE:-20GB}
