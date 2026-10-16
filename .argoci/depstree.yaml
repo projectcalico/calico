@@ -1932,6 +1932,7 @@ components:
       - ^libcalico-go/lib/backend/encap/[^/]*\.go$
       - ^libcalico-go/lib/backend/model/[^/]*\.go$
       - ^libcalico-go/lib/errors/[^/]*\.go$
+      - ^libcalico-go/lib/health/[^/]*\.go$
       - ^libcalico-go/lib/namespace/[^/]*\.go$
       - ^libcalico-go/lib/net/[^/]*\.go$
       - ^metadata\.mk$
