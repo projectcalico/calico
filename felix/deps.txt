@@ -325,6 +325,7 @@ local:goldmane/proto
 local:lib/datastructures/hashring
 local:lib/logrusr
 local:lib/std/chanutil
+local:lib/std/intervals
 local:lib/std/log
 local:lib/std/time
 local:lib/std/uniquelabels

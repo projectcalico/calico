@@ -3767,6 +3767,17 @@ var _ = DescribeTable("Test port simplification",
 	simpleEntry("81:90,4,2,80:81,3,1,9090", "1:4,80:90,9090"),
 	simpleEntry("81:90,4,2,foo,80:81,3,1,9090,http", "foo,http,1:4,80:90,9090"),
 	simpleEntry("foo", "foo"),
+	simpleEntry("80,80,80", "80"),
+	simpleEntry("80:90,80:90", "80:90"),
+	simpleEntry("foo,80,http", "foo,80,http"),
+	simpleEntry("foo,1:2,bar", "foo,bar,1:2"),
+	simpleEntry("1:10,5:15,12:20", "1:20"),
+	simpleEntry("100:200,150,120:130", "100:200"),
+	simpleEntry("0:65535,80", "0:65535"),
+	simpleEntry("80,0:65535,65535,http", "http,0:65535"),
+	simpleEntry("1:65535,0", "0:65535"),
+	simpleEntry("65535,65534", "65534:65535"),
+	simpleEntry("65530:65535,65533:65535,65535", "65530:65535"),
 )
 
 func simpleEntry(in, out string) TableEntry {

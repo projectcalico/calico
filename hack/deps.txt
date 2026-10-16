@@ -123,6 +123,7 @@ local:hack/cmd/ipam-hammer
 local:hack/perf/cmd/send-perf-results
 local:hack/test/spider
 local:lib/logrusr
+local:lib/std/intervals
 local:lib/std/log
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
