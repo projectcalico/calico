@@ -21,7 +21,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	v1mocks "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1/mocks"
+	"github.com/projectcalico/calico/whisker-backend/pkg/config"
 	v1 "github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
 )
 
@@ -44,4 +46,16 @@ func TestWithMiddleware_AppliesToEveryEndpoint(t *testing.T) {
 	for i, ep := range got {
 		Expect(ep.Middleware).To(HaveLen(before[i]+2), ep.Path)
 	}
+}
+
+func TestNewHealthAggregator_LiveThenReady(t *testing.T) {
+	RegisterTestingT(t)
+
+	agg := newHealthAggregator(&config.Config{HealthEnabled: false})
+	Expect(agg.Summary().Live).To(BeTrue())
+	Expect(agg.Summary().Ready).To(BeFalse())
+
+	agg.Report(healthReporterName, &health.HealthReport{Live: true, Ready: true})
+	Expect(agg.Summary().Live).To(BeTrue())
+	Expect(agg.Summary().Ready).To(BeTrue())
 }
