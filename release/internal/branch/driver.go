@@ -67,6 +67,9 @@ type Driver struct {
 	// Publish pushes the branch changes to the remote.
 	Publish bool
 
+	// DryRun pushes with --dry-run, so the remote is checked but not changed.
+	DryRun bool
+
 	// Plan prints what each step would do without acting.
 	Plan bool
 
@@ -296,9 +299,9 @@ func (d *Driver) steps(g git, p *CutPlan) []Step {
 		{
 			Name: stepPushRefs,
 			Done: func() (bool, error) {
-				// A local run pushes nothing, so there is nothing to probe: report done.
+				// With publishing off nothing is pushed, so there is nothing to probe.
 				if !d.Publish {
-					logrus.WithField("step", stepPushRefs).Info("skipping push (local run)")
+					logrus.WithField("step", stepPushRefs).Info("skipping push (publish off)")
 					return true, nil
 				}
 				// Done only when every ref is on the remote at the local sha. A stale
@@ -323,15 +326,15 @@ func (d *Driver) steps(g git, p *CutPlan) []Step {
 			},
 			Do: func() error {
 				if !d.Publish {
-					logrus.WithField("step", stepPushRefs).Info("skipping push (local run)")
+					logrus.WithField("step", stepPushRefs).Info("skipping push (publish off)")
 					return nil
 				}
-				return pushRefs(g, p.Remote, d.pushRefs(p)...)
+				return pushRefs(g, p.Remote, d.DryRun, d.pushRefs(p)...)
 			},
 		},
 		{
 			Name: stepPostPush,
-			// Local runs still run the hook, which honors dry-run itself.
+			// The hook runs even when nothing was pushed; it checks dry-run itself.
 			Done: func() (bool, error) {
 				if d.PostDerivedPush == nil {
 					logrus.WithField("step", stepPostPush).Info("skipping post-push (no hook)")
