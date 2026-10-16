@@ -22,7 +22,6 @@ import (
 	"os"
 	"reflect"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1049,17 +1048,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		bpfMapSizeConntrack = config.BPFMapSizePerCPUConntrack * bpfmaps.NumPossibleCPUs()
 	}
 
-	bpfMapSizeConntrackResizeSize, _ := conntrackMapSizeFromFile()
-	if bpfMapSizeConntrackResizeSize > bpfMapSizeConntrack {
-		log.Infof("Overriding bpfMapSizeConntrack (%d) with map size growth (%d)",
-			bpfMapSizeConntrack, bpfMapSizeConntrackResizeSize)
-		bpfMapSizeConntrack = bpfMapSizeConntrackResizeSize
-	}
-
 	bpfipsets.SetMapSize(config.BPFMapSizeIPSets)
 	bpfnat.SetMapSizes(config.BPFMapSizeNATFrontend, config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity, config.BPFMapSizeMaglev)
 	bpfroutes.SetMapSize(config.BPFMapSizeRoute)
-	bpfconntrack.SetMapSize(bpfMapSizeConntrack)
+	ctMapSizeV4, ctMapSizeV6 := bpfMapSizeConntrack, bpfMapSizeConntrack
+	if config.BPFEnabled {
+		ctMapSizeV4, ctMapSizeV6 = conntrackMapSizes(bpfMapSizeConntrack)
+	}
+	bpfconntrack.SetMapSize(ctMapSizeV4)
+	bpfconntrack.SetMapSizeV6(ctMapSizeV6)
 	bpfconntrack.SetCleanupMapSize(config.BPFMapSizeConntrackCleanupQueue)
 	bpfifstate.SetMapSize(config.BPFMapSizeIfState)
 	ringBufSize := calcRingBufSize(config.BPFExportBufferSizeMB)
@@ -3272,19 +3269,23 @@ func startBPFDataplaneComponents(
 	return conntrackScanner, workloadRemoveChan
 }
 
-func conntrackMapSizeFromFile() (int, error) {
-	filename := "/var/lib/calico/bpf_ct_map_size"
-	data, err := os.ReadFile(filename)
+// conntrackMapSizes returns the IPv4 and IPv6 conntrack map sizes: the
+// configured size, or the size the map grew to if larger.
+func conntrackMapSizes(configured int) (int, int) {
+	grownV4, grownV6, err := bpfconntrack.GrownMapSizes()
 	if err != nil {
-		if os.IsNotExist(err) {
-			// File doesn't exist, return zero.
-			log.Infof("File %s does not exist", filename)
-			return 0, nil
-		}
-		log.WithError(err).Errorf("Failed to read %s", filename)
-		return 0, err
+		log.WithError(err).Error("Failed to read the grown conntrack map sizes.")
+		return configured, configured
 	}
-	return strconv.Atoi(strings.TrimSpace(string(data)))
+	pick := func(grown, ipVersion int) int {
+		if grown > configured {
+			log.Infof("Using IPv%d conntrack map size %d recorded by BPFMapSizeConntrackScaling instead of the configured %d",
+				ipVersion, grown, configured)
+			return grown
+		}
+		return configured
+	}
+	return pick(grownV4, 4), pick(grownV6, 6)
 }
 
 // calcRingBufSize computes the ring buffer size in bytes. It scales

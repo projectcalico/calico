@@ -15,9 +15,7 @@
 package conntrack
 
 import (
-	"fmt"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -425,7 +423,7 @@ func (s *Scanner) Scan() {
 	}
 
 	newLiveEntries := int(used - cleaned)
-	if s.liveEntries > newLiveEntries {
+	if newLiveEntries > s.liveEntries {
 		s.higherCount++
 	} else {
 		s.higherCount = 0
@@ -468,20 +466,7 @@ func (s *Scanner) runBPFCleaner() int {
 }
 
 func (s *Scanner) writeNewSizeFile() error {
-	// Make sure directory exists.
-	if err := os.MkdirAll("/var/lib/calico", os.ModePerm); err != nil {
-		return fmt.Errorf("failed to create directory /var/lib/calico: %s", err)
-	}
-
-	newSize := 2 * s.ctMap.Size()
-
-	// Write the new map size to disk so that restarts will pick it up.
-	filename := "/var/lib/calico/bpf_ct_map_size"
-	log.Debugf("Writing %d to "+filename, newSize)
-	if err := os.WriteFile(filename, fmt.Appendf(nil, "%d", newSize), 0o644); err != nil {
-		return fmt.Errorf("unable to write to %s: %w", filename, err)
-	}
-	return nil
+	return recordGrowth(s.ipFamily, 2*s.ctMap.Size())
 }
 
 func (s *Scanner) get(k KeyInterface) (ValueInterface, error) {
