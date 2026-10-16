@@ -254,64 +254,6 @@ func TestS3Args(t *testing.T) {
 	}
 }
 
-func TestGCSSyncDeletesWhatTheSourceDropped(t *testing.T) {
-	f := &fakeRunner{}
-	d := GCS{URI: "gs://bucket/hash", Sync: true, Runner: f}
-	if err := d.Publish(context.Background(), srcPath(t, true)); err != nil {
-		t.Fatalf("Publish: %v", err)
-	}
-	if f.name != "gcloud" {
-		t.Errorf("ran %q, want gcloud", f.name)
-	}
-	// gcloud's uploads live under a "storage" subcommand; without it the
-	// argv is not a valid command at all.
-	if len(f.args) < 2 || f.args[0] != "storage" || f.args[1] != "rsync" {
-		t.Errorf("args = %v, want them to start with storage rsync", f.args)
-	}
-	for _, want := range []string{"--recursive", "--delete-unmatched-destination-objects"} {
-		if !f.has(want) {
-			t.Errorf("expected %s in %v", want, f.args)
-		}
-	}
-}
-
-// A dry run reports what would change rather than doing nothing: rsync
-// --dry-run lists the writes, and the deletions the sync would make.
-func TestGCSDryRunPreviewsWithRsync(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		sync bool
-		dir  bool
-	}{
-		// A single file has no rsync preview, so it reports instead.
-		{name: "a tree that would be copied", dir: true},
-		{name: "a tree that would be synced", sync: true, dir: true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := &fakeRunner{}
-			d := GCS{URI: "gs://bucket/x", Sync: tc.sync, DryRun: true, Runner: f}
-			if err := d.Publish(context.Background(), srcPath(t, tc.dir)); err != nil {
-				t.Fatalf("Publish: %v", err)
-			}
-			// cp has no dry run of its own, so both paths preview with rsync.
-			if !f.has(rsyncVerb) || !f.has("--dry-run") {
-				t.Errorf("args = %v, want an rsync --dry-run preview", f.args)
-			}
-		})
-	}
-}
-
-func TestGCSDryRunReportsASingleFileInsteadOfCopyingIt(t *testing.T) {
-	f := &fakeRunner{}
-	d := GCS{URI: "gs://bucket/archive.zip", DryRun: true, Runner: f}
-	if err := d.Publish(context.Background(), srcPath(t, false)); err != nil {
-		t.Fatalf("Publish: %v", err)
-	}
-	if f.name != "" || f.args != nil {
-		t.Errorf("ran %q %v, want a dry run to copy nothing", f.name, f.args)
-	}
-}
-
 func TestDestinationNames(t *testing.T) {
 	if got := (S3{URI: "s3://b/k/"}).Name(); got != "s3://b/k/" {
 		t.Errorf("S3 name = %q", got)
@@ -422,50 +364,15 @@ func (f *fakeReleaseService) GetLatestRelease(context.Context, string, string) (
 	return f.latest, nil, nil
 }
 
-// Every gcloud invocation is a "storage" subcommand, whichever verb it uses.
-func TestGCSAlwaysUsesTheStorageSubcommand(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		sync bool
-		dir  bool
-	}{
-		{name: "copying a file"},
-		{name: "copying a directory", dir: true},
-		{name: "syncing a tree", sync: true, dir: true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := &fakeRunner{}
-			d := GCS{URI: "gs://bucket/x", Sync: tc.sync, Runner: f}
-			if err := d.Publish(context.Background(), srcPath(t, tc.dir)); err != nil {
-				t.Fatalf("Publish: %v", err)
-			}
-			if len(f.args) == 0 || f.args[0] != "storage" {
-				t.Errorf("args = %v, want the storage subcommand first", f.args)
-			}
-		})
-	}
-}
-
-// The two CLIs disagree about the trailing slash: aws needs one on the
-// destination or a directory upload collapses into a single object, while
-// gcloud takes bare paths. Sharing the rule would break one of them.
-func TestTrailingSlashIsPerCLI(t *testing.T) {
-	dir := srcPath(t, true)
-
+// aws needs a trailing slash on the destination, or a directory upload
+// collapses into a single object.
+func TestS3DirectoryDestinationGetsATrailingSlash(t *testing.T) {
 	f := &fakeRunner{}
-	if err := (S3{URI: "s3://bucket/charts", Runner: f}).Publish(context.Background(), dir); err != nil {
+	if err := (S3{URI: "s3://bucket/charts", Runner: f}).Publish(context.Background(), srcPath(t, true)); err != nil {
 		t.Fatalf("S3 Publish: %v", err)
 	}
 	if !f.has("s3://bucket/charts/") {
 		t.Errorf("aws args = %v, want the destination to carry a trailing slash", f.args)
-	}
-
-	f = &fakeRunner{}
-	if err := (GCS{URI: "gs://bucket/hash", Runner: f}).Publish(context.Background(), dir); err != nil {
-		t.Fatalf("GCS Publish: %v", err)
-	}
-	if !f.has("gs://bucket/hash") {
-		t.Errorf("gcloud args = %v, want the destination left alone", f.args)
 	}
 }
 
@@ -479,7 +386,7 @@ func TestPublishErrorNamesTheDestination(t *testing.T) {
 		want string
 	}{
 		{"s3", S3{URI: "s3://bucket/charts/", Runner: &fakeRunner{err: errors.New("denied")}}, "s3://bucket/charts/"},
-		{"gcs", GCS{URI: "gs://bucket/hash", Runner: &fakeRunner{err: errors.New("denied")}}, "gs://bucket/hash"},
+		{"gcs", GCS{URI: "gs://bucket/hash", store: &memStore{err: errors.New("denied")}}, "gs://bucket/hash"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.h.Publish(context.Background(), dir)

@@ -17,9 +17,6 @@ BUILD_IMAGES ?= $(ISTIO_CNI_IMAGE) $(ISTIO_PILOT_IMAGE) $(ISTIO_PROXYV2_IMAGE) $
 # from the release manager doesn't override the allowlist.
 ARCHES = amd64 arm64
 
-# Upstream version (configurable)
-ISTIO_VERSION ?= 1.29.4
-
 ##############################################################################
 # Include lib.Makefile before anything else
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since

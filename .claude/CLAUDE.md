@@ -21,8 +21,10 @@ This file is **operational guidance** for agents working in this repo: build com
 
 ## Essential Build Commands
 
-Builds run in Docker via `calico/go-build`; tool and base-image versions are
-pinned in `metadata.mk`. Run `make help` for the full target list.
+Builds run in Docker via `calico/go-build`, which is built from
+[`toolchain/`](../toolchain/README.md). The Go and Kubernetes versions come from
+the root `go.mod`; other tool and base-image versions are pinned in
+`metadata.mk`. Run `make help` for the full target list.
 
 ```bash
 make -C <component> build   # 2-5 minutes — the usual way to build

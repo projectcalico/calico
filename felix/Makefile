@@ -1,3 +1,17 @@
+# Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 include ../metadata.mk
 
 # This Makefile builds Felix and releases it in various forms:
@@ -68,6 +82,7 @@ SRC_FILES += $(shell find bpf/ -name '*.[ch]')
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
 FV_TYPHAIMAGE?=calico/calico:latest-$(BUILDARCH)
 FV_K8SIMAGE=$(CALICO_BUILD)
+FV_K8SBINDIR?=$(K8S_BIN_DIR)
 FV_FELIXIMAGE?=$(FELIX_IMAGE):latest-$(ARCH)
 
 # Total number of batches to split the tests into.  In CI we set this to say 5 batches,
@@ -357,7 +372,8 @@ fv-prereqs: $(REMOTE_DEPS) \
             bin/calico-bpf \
             bin/pktgen \
             build-bpf \
-            fv/fv.test
+            fv/fv.test \
+            $(K8S_BIN_FILES)
 
 # FV bind-mounts $(FV_BINARY) (built by ../cmd/calico, either calico-race or
 # calico-cgo depending on FV_RACE_DETECTOR_ENABLED) into the felix-test
@@ -385,6 +401,7 @@ build-fv-env: build fv-prereqs
 	@echo "FV_ETCDIMAGE=$(ETCD_IMAGE)-$(ARCH)" >> .env
 	@echo "FV_TYPHAIMAGE=$(FV_TYPHAIMAGE)" >> .env
 	@echo "FV_K8SIMAGE=$(FV_K8SIMAGE)" >> .env
+	@echo "FV_K8SBINDIR=$(FV_K8SBINDIR)" >> .env
 	@echo "CERTS_PATH=$(CERTS_PATH)" >> .env
 	@echo "PRIVATE_KEY=`pwd`/private.key" >> .env
 
@@ -406,13 +423,14 @@ fv fv/latency.log fv/data-races.log: fv-prereqs
 	$(MAKE) fv-no-prereqs
 
 # The semaphore job runs this target directly to avoid accidental rebuilds.
-fv-no-prereqs:
+fv-no-prereqs: $(K8S_BIN_FILES)
 	rm -f fv/data-races.log fv/latency.log
 	cd fv && \
 	  FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	  FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
 	  FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
 	  FV_K8SIMAGE=$(FV_K8SIMAGE) \
+	  FV_K8SBINDIR=$(FV_K8SBINDIR) \
 	  FV_NUM_BATCHES=$(FV_NUM_BATCHES) \
 	  FV_BATCHES_TO_RUN="$(FV_BATCHES_TO_RUN)" \
 	  FV_FELIX_LOG_LEVEL="$(FV_FELIX_LOG_LEVEL)" \
@@ -483,11 +501,12 @@ K8SFV_GO_FILES:=$(shell find ./$(K8SFV_DIR) -name prometheus -prune -o -type f -
 # e.g.
 #       $(MAKE) k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
 #       $(MAKE) k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
-k8sfv-test: $(REMOTE_DEPS) $(FELIX_CONTAINER_CREATED) $(FV_BINARY) bin/k8sfv.test
+k8sfv-test: $(REMOTE_DEPS) $(FELIX_CONTAINER_CREATED) $(FV_BINARY) bin/k8sfv.test $(K8S_BIN_FILES)
 	FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
 	FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
 	FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	FV_K8SIMAGE=$(FV_K8SIMAGE) \
+	FV_K8SBINDIR=$(FV_K8SBINDIR) \
 	FV_BINARY=$(FV_BINARY) \
 	FELIX_FV_NFTABLES=$(FELIX_FV_NFTABLES) \
 	CERTS_PATH=$(CERTS_PATH) \

@@ -32,7 +32,7 @@ UNIT_TEST_PACKAGES	:= $(shell go list ./... | grep -v $(POSTRELEASE_TEST_PACKAGE
 ifdef TESTS_NO_DOCKER
 ut:
 	@mkdir -p report
-	@gotestsum --junitfile report/unit-tests.xml \
+	@go tool gotestsum --junitfile report/unit-tests.xml \
 		-- -coverprofile=report/coverage.out $(UNIT_TEST_PACKAGES)
 else
 ut:

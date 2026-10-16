@@ -1,0 +1,303 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Builds the toolchain images under toolchain/ when their source changes.
+#
+# A tag not yet published is pushed to the CI registry instead, and the
+# `toolchain` step hands those images to the rest of the run:
+# .argoci/config.yaml names it in `toolchainFrom`, so every other step waits on
+# it and gets its outputs (useGoBuild steps run in its go-build image). When no
+# toolchain source changed, `toolchain` is gated out and nothing waits.
+#
+# A Go bump gates go-build in through go.sha256, which update-pins rewrites; a
+# go.mod change alone is a dependency bump, which no image is built from.
+#
+# check-published fails a PR that changes an image without moving its tag,
+# because a published tag never changes. Publishing to Docker Hub is
+# .argoci/publish/toolchain-images.yaml's, on merge.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services: [docker]
+  requests: {cpu: 3500m, memory: 4Gi}
+  env:
+    - name: TOOLCHAIN_CI_REGISTRY
+      value: gcr.io/unique-caldron-775/toolchain
+
+steps:
+  # The images the rest of the run builds with. Each pushes what it built to
+  # the CI registry and leaves an env fragment for `toolchain`; a published tag
+  # needs neither.
+  - name: toolchain-binfmt
+    secretBundles:
+      - name: google-service-account-for-gcr
+        keys:
+          - name: google-service-account-for-gcr-key.json
+            as: GCR_SERVICE_ACCOUNT_KEY
+    changes:
+      in:
+        - ^toolchain/images/binfmt/
+        - ^toolchain/cmd/binfmt/
+        - ^toolchain/internal/archutil/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-toolchain\.yaml$
+    commands: |
+      source .argoci/scripts/toolchain-ci.sh
+      toolchain_build binfmt amd64
+      toolchain_manifest binfmt BINFMT_IMAGE
+
+  - name: toolchain-go-build
+    secretBundles:
+      - name: google-service-account-for-gcr
+        keys:
+          - name: google-service-account-for-gcr-key.json
+            as: GCR_SERVICE_ACCOUNT_KEY
+    changes:
+      in:
+        - ^toolchain/images/go-build/
+        - ^toolchain/cmd/artifact/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-toolchain\.yaml$
+    commands: |
+      source .argoci/scripts/toolchain-ci.sh
+      toolchain_build go-build amd64
+
+  # Native, because every RUN would otherwise be emulated on amd64.
+  - name: toolchain-go-build-arm64
+    runOn: arm
+    # The default image is amd64 only.
+    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
+    secretBundles:
+      - name: google-service-account-for-gcr
+        keys:
+          - name: google-service-account-for-gcr-key.json
+            as: GCR_SERVICE_ACCOUNT_KEY
+    changes:
+      in:
+        - ^toolchain/images/go-build/
+        - ^toolchain/cmd/artifact/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-toolchain\.yaml$
+    commands: |
+      source .argoci/scripts/toolchain-ci.sh
+      toolchain_build go-build arm64
+
+  - name: toolchain-go-build-manifest
+    depends: [toolchain-go-build, toolchain-go-build-arm64]
+    timeout: 10m
+    secretBundles:
+      - name: google-service-account-for-gcr
+        keys:
+          - name: google-service-account-for-gcr-key.json
+            as: GCR_SERVICE_ACCOUNT_KEY
+    changes:
+      in:
+        - ^toolchain/images/go-build/
+        - ^toolchain/cmd/artifact/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-toolchain\.yaml$
+    commands: |
+      source .argoci/scripts/toolchain-ci.sh
+      toolchain_manifest go-build CALICO_BUILD
+
+  - name: toolchain-rust-build
+    secretBundles:
+      - name: google-service-account-for-gcr
+        keys:
+          - name: google-service-account-for-gcr-key.json
+            as: GCR_SERVICE_ACCOUNT_KEY
+    changes:
+      in:
+        - ^toolchain/images/rust-build/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-toolchain\.yaml$
+    commands: |
+      source .argoci/scripts/toolchain-ci.sh
+      toolchain_build rust-build amd64
+
+  - name: toolchain-rust-build-arm64
+    runOn: arm
+    # The default image is amd64 only.
+    image: gcr.io/tigera-cc-dev/ci-base/calico-ci:v0.4
+    secretBundles:
+      - name: google-service-account-for-gcr
+        keys:
+          - name: google-service-account-for-gcr-key.json
+            as: GCR_SERVICE_ACCOUNT_KEY
+    changes:
+      in:
+        - ^toolchain/images/rust-build/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-toolchain\.yaml$
+    commands: |
+      source .argoci/scripts/toolchain-ci.sh
+      toolchain_build rust-build arm64
+
+  - name: toolchain-rust-build-manifest
+    depends: [toolchain-rust-build, toolchain-rust-build-arm64]
+    timeout: 10m
+    secretBundles:
+      - name: google-service-account-for-gcr
+        keys:
+          - name: google-service-account-for-gcr-key.json
+            as: GCR_SERVICE_ACCOUNT_KEY
+    changes:
+      in:
+        - ^toolchain/images/rust-build/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-toolchain\.yaml$
+    commands: |
+      source .argoci/scripts/toolchain-ci.sh
+      toolchain_manifest rust-build CALICO_RUST_BUILD
+
+  # Hands the run the images built above. Gated on everything they build from,
+  # so a run that changed none of it has no toolchain step and nothing waits.
+  - name: toolchain
+    depends: [toolchain-binfmt, toolchain-go-build-manifest, toolchain-rust-build-manifest]
+    timeout: 10m
+    requests: {cpu: 500m, memory: 1Gi}
+    outputParameters:
+      - name: goBuildImage
+        path: /tmp/go-build-image
+      - name: toolchainEnv
+        path: /tmp/toolchain-env
+        optional: true
+    changes:
+      in:
+        - ^toolchain/images/(binfmt|go-build|rust-build)/
+        - ^toolchain/cmd/(artifact|binfmt)/
+        - ^toolchain/internal/archutil/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-toolchain\.yaml$
+    commands: |
+      source .argoci/scripts/toolchain-ci.sh
+      toolchain_collect /tmp/toolchain-env /tmp/go-build-image
+
+  # The rest only test. They wait on `toolchain` like every other step, so the
+  # emulated ones register this run's binfmt.
+  - name: toolchain-go-build-emulated
+    matrix:
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    changes:
+      in:
+        - ^toolchain/images/go-build/
+        - ^toolchain/cmd/artifact/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-toolchain\.yaml$
+    commands: |
+      state=$(make -s -C toolchain/images/go-build check-published)
+      if [ "${state}" = published ]; then exit 0; fi
+      time make -C toolchain/images/go-build register image test ARCH=$ARCH
+
+  - name: toolchain-rust-build-emulated
+    matrix:
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    changes:
+      in:
+        - ^toolchain/images/rust-build/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-toolchain\.yaml$
+    commands: |
+      state=$(make -s -C toolchain/images/rust-build check-published)
+      if [ "${state}" = published ]; then exit 0; fi
+      time make -C toolchain/images/rust-build register image test ARCH=$ARCH
+
+  - name: toolchain-tinygo
+    matrix:
+      - name: amd64
+        env: [{name: ARCH, value: amd64}]
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+    changes:
+      in:
+        - ^toolchain/images/tinygo/
+        - ^toolchain/(lib|go)\.mk$
+        - ^\.argoci/modules/10-toolchain\.yaml$
+    commands: |
+      state=$(make -s -C toolchain/images/tinygo check-published)
+      if [ "${state}" = published ]; then exit 0; fi
+      time make -C toolchain/images/tinygo register image test ARCH=$ARCH
+
+  # base has no fixed tag to check: each publish is stamped with its time. The
+  # nightly ignores gates, and .argoci/cron/toolchain-base.yaml covers it there.
+  - name: toolchain-base
+    when: GIT_REF_TYPE != 'CRON'
+    matrix:
+      - name: amd64
+        env: [{name: ARCH, value: amd64}]
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    changes:
+      in:
+        - ^toolchain/images/base/
+        - ^toolchain/(lib|go)\.mk$
+        - ^\.argoci/modules/10-toolchain\.yaml$
+    commands: |
+      time make -C toolchain/images/base register image test ARCH=$ARCH
+
+  # The images below ship amd64 only.
+  - name: toolchain-amd64-images
+    matrix:
+      - name: scratch-utils
+        env: [{name: TOOLCHAIN_IMAGE, value: scratch-utils}]
+      - name: signing-tools
+        env: [{name: TOOLCHAIN_IMAGE, value: signing-tools}]
+    changes:
+      in:
+        - ^toolchain/images/(scratch-utils|signing-tools)/
+        - ^toolchain/cmd/scratch-utils/
+        - ^toolchain/internal/scratchutils/
+        - ^toolchain/(lib|go)\.mk$
+        - ^metadata\.mk$
+        - ^\.argoci/modules/10-toolchain\.yaml$
+    commands: |
+      state=$(make -s -C "toolchain/images/${TOOLCHAIN_IMAGE}" check-published)
+      echo "${TOOLCHAIN_IMAGE}: ${state}"
+      if [ "${state}" = published ]; then exit 0; fi
+      time make -C "toolchain/images/${TOOLCHAIN_IMAGE}" image test ARCH=amd64
+
+  # The disk builder's own tests. Building a disk needs GCP, so that waits for
+  # the publish workflow.
+  - name: toolchain-preload-disk
+    changes:
+      in:
+        - ^toolchain/preload-disks/
+        - ^toolchain/cmd/disk-image-builder/
+        - ^toolchain/internal/imager/
+        - ^toolchain/(lib|go)\.mk$
+        - ^\.argoci/modules/10-toolchain\.yaml$
+    commands: |
+      make -C toolchain/preload-disks/ci-cache test bin/disk-image-builder
+      PROJECT=dry-run GCS_PATH=gs://dry-run DRY_RUN=true bash toolchain/preload-disks/ci-cache/build-preload-disk.sh

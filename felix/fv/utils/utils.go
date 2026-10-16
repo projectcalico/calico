@@ -50,6 +50,9 @@ type EnvConfig struct {
 	K8sImage     string `default:"calico/go-build:latest"`
 	TyphaImage   string `default:"calico/calico:latest"`
 	BusyboxImage string `default:"busybox:latest"`
+	// K8sBinDir is the host directory holding kube-apiserver,
+	// kube-controller-manager and kubectl for K8sImage containers.
+	K8sBinDir string
 }
 
 // TyphaCmd is the subcommand used to launch typha inside the combined

@@ -82,7 +82,7 @@ const (
 )
 
 // gatewayAPIResources defines all of the resources that we expect to read from the rendered Envoy Gateway
-// helm chart (as of the version indicated by `ENVOY_GATEWAY_VERSION` in `Makefile`).
+// helm chart (as of the github.com/envoyproxy/gateway version in the root go.mod).
 type gatewayAPIResources struct {
 	k8sCRDs                           []*apiextenv1.CustomResourceDefinition
 	envoyCRDs                         []*apiextenv1.CustomResourceDefinition
