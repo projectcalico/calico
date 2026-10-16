@@ -234,7 +234,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 	})
 })
 
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf IPv6 conntrack table dynamic resize",
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf dual-stack conntrack table dynamic resize",
 	[]apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 		if !BPFMode() {
@@ -257,27 +257,45 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf IPv6 conntrack ta
 			tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
 		})
 
-		It("should resize only the IPv6 ct map when it is full", func() {
+		now := func() time.Duration { return time.Duration(timeshim.RealTime().KTimeNanos()) }
+		leg := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
+
+		expectResizeOnlyOf := func(full, other maps.Map, family string, fill func()) {
 			felix := tc.Felixes[0]
-			Eventually(getMapSizeFn(felix, conntrack.Map()), "30s", "1s").Should(Equal(10000))
-			Eventually(getMapSizeFn(felix, conntrack.MapV6()), "30s", "1s").Should(Equal(10000))
+			Eventually(getMapSizeFn(felix, full), "30s", "1s").Should(Equal(10000))
+			Eventually(getMapSizeFn(felix, other), "30s", "1s").Should(Equal(10000))
 
 			c := felix.WatchStdoutFor(regexp.MustCompile(
-				`.*Overriding bpfMapSizeConntrack \(10000\) with map size growth \(20000\) for IPv6`))
+				`.*Overriding bpfMapSizeConntrack \(10000\) with map size growth \(20000\) for ` + family))
+			fill()
 
-			now := time.Duration(timeshim.RealTime().KTimeNanos())
-			leg := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
-			val := conntrack.NewValueV6Normal(now, 0, leg, leg).AsBytes()
+			Eventually(c, "60s", "1s").Should(BeClosed())
+			Eventually(getMapSizeFn(felix, full), "30s", "1s").Should(Equal(20000))
+			Expect(getMapSize(felix, other)).To(Equal(10000))
+		}
+
+		It("should resize only the IPv6 ct map when it is full", func() {
+			val := conntrack.NewValueV6Normal(now(), 0, leg, leg).AsBytes()
 			srcIP := net.ParseIP("dead:beef::123")
 			dstIP := net.ParseIP("dead:beef::121")
 
-			fillCtMap(felix, conntrack.MapV6(), 20000, func(i int) []byte {
-				return conntrack.NewKeyV6(17 /* UDP */, srcIP, uint16(i), dstIP, 53).AsBytes()
-			}, val)
+			expectResizeOnlyOf(conntrack.MapV6(), conntrack.Map(), "IPv6", func() {
+				fillCtMap(tc.Felixes[0], conntrack.MapV6(), 20000, func(i int) []byte {
+					return conntrack.NewKeyV6(17 /* UDP */, srcIP, uint16(i), dstIP, 53).AsBytes()
+				}, val)
+			})
+		})
 
-			Eventually(c, "60s", "1s").Should(BeClosed())
-			Eventually(getMapSizeFn(felix, conntrack.MapV6()), "30s", "1s").Should(Equal(20000))
-			Expect(getMapSize(felix, conntrack.Map())).To(Equal(10000))
+		It("should resize only the IPv4 ct map when it is full", func() {
+			val := conntrack.NewValueNormal(now(), 0, leg, leg).AsBytes()
+			srcIP := net.IPv4(123, 123, 123, 123)
+			dstIP := net.IPv4(121, 121, 121, 121)
+
+			expectResizeOnlyOf(conntrack.Map(), conntrack.MapV6(), "IPv4", func() {
+				fillCtMap(tc.Felixes[0], conntrack.Map(), 20000, func(i int) []byte {
+					return conntrack.NewKey(17 /* UDP */, srcIP, uint16(i), dstIP, 53).AsBytes()
+				}, val)
+			})
 		})
 	})
 

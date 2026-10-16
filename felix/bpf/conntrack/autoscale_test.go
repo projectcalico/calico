@@ -48,7 +48,7 @@ var _ = Describe("BPF Conntrack map autoscaling", func() {
 		return string(data)
 	}
 
-	sizeFiles := map[int]string{4: "bpf_ct_map_size", 6: "bpf_ct6_map_size"}
+	sizeFiles := map[int]string{4: "bpf_ct4_map_size", 6: "bpf_ct6_map_size"}
 
 	// sweep scans once per liveEntries element and returns the 1-based sweep
 	// that requested a resize, or 0.
@@ -102,8 +102,10 @@ var _ = Describe("BPF Conntrack map autoscaling", func() {
 				Expect(readFile(sizeFiles[other])).To(BeEmpty(), "resize must not touch the other IP family")
 				if expectResizeAt == 0 {
 					Expect(readFile(sizeFiles[ipVersion])).To(BeEmpty())
+					Expect(readFile("bpf_ct_map_size")).To(BeEmpty())
 				} else {
 					Expect(readFile(sizeFiles[ipVersion])).To(Equal("200"))
+					Expect(readFile("bpf_ct_map_size")).To(Equal("200"), "older Felix must not shrink the map")
 				}
 			},
 			Entry("below 85%", "DoubleIfFull", []int{80, 84, 84, 84}, 0),
@@ -115,41 +117,49 @@ var _ = Describe("BPF Conntrack map autoscaling", func() {
 		)
 	}
 
-	Describe("MapSizeFromFile", func() {
+	Describe("GrownMapSizes", func() {
 		writeFile := func(name, content string) {
 			Expect(os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644)).To(Succeed())
 		}
 
-		expectSize := func(ipVersion, size int) {
-			got, err := conntrack.MapSizeFromFile(ipVersion)
+		expectSizes := func(v4, v6 int) {
+			gotV4, gotV6, err := conntrack.GrownMapSizes()
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
-			ExpectWithOffset(1, got).To(Equal(size))
+			ExpectWithOffset(1, []int{gotV4, gotV6}).To(Equal([]int{v4, v6}))
 		}
 
-		It("returns 0 for a map that never grew", func() {
-			expectSize(4, 0)
-			expectSize(6, 0)
+		It("returns 0 for maps that never grew", func() {
+			expectSizes(0, 0)
 		})
 
 		It("keeps the families apart", func() {
-			writeFile("bpf_ct6_map_size", "1024000")
-			expectSize(4, 0)
-			expectSize(6, 1024000)
+			writeFile("bpf_ct4_map_size", "1024000")
+			writeFile("bpf_ct_map_size", "1024000")
+			expectSizes(1024000, 0)
 		})
 
-		It("adopts the shared size file for IPv6 once", func() {
+		It("migrates the shared file to both families", func() {
 			writeFile("bpf_ct_map_size", "1024000")
-			expectSize(6, 1024000)
+			expectSizes(1024000, 1024000)
+			Expect(readFile("bpf_ct4_map_size")).To(Equal("1024000"))
 			Expect(readFile("bpf_ct6_map_size")).To(Equal("1024000"))
 
+			// IPv4 grows after the migration; IPv6 must not follow it.
+			writeFile("bpf_ct4_map_size", "2048000")
 			writeFile("bpf_ct_map_size", "2048000")
-			expectSize(4, 2048000)
-			expectSize(6, 1024000)
+			expectSizes(2048000, 1024000)
+		})
+
+		It("adopts growth an older Felix recorded after a downgrade", func() {
+			writeFile("bpf_ct4_map_size", "1024000")
+			writeFile("bpf_ct6_map_size", "1024000")
+			writeFile("bpf_ct_map_size", "2048000")
+			expectSizes(2048000, 2048000)
 		})
 
 		It("fails on a corrupt file", func() {
-			writeFile("bpf_ct_map_size", "garbage")
-			_, err := conntrack.MapSizeFromFile(4)
+			writeFile("bpf_ct6_map_size", "garbage")
+			_, _, err := conntrack.GrownMapSizes()
 			Expect(err).To(HaveOccurred())
 		})
 	})

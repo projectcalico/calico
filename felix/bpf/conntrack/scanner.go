@@ -466,7 +466,7 @@ func (s *Scanner) runBPFCleaner() int {
 }
 
 func (s *Scanner) writeNewSizeFile() error {
-	return writeMapSizeFile(s.ipFamily, 2*s.ctMap.Size())
+	return recordGrowth(s.ipFamily, 2*s.ctMap.Size())
 }
 
 func (s *Scanner) get(k KeyInterface) (ValueInterface, error) {

@@ -1051,8 +1051,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	bpfipsets.SetMapSize(config.BPFMapSizeIPSets)
 	bpfnat.SetMapSizes(config.BPFMapSizeNATFrontend, config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity, config.BPFMapSizeMaglev)
 	bpfroutes.SetMapSize(config.BPFMapSizeRoute)
-	bpfconntrack.SetMapSize(conntrackMapSize(bpfMapSizeConntrack, 4))
-	bpfconntrack.SetMapSizeV6(conntrackMapSize(bpfMapSizeConntrack, 6))
+	ctMapSizeV4, ctMapSizeV6 := bpfMapSizeConntrack, bpfMapSizeConntrack
+	if config.BPFEnabled {
+		ctMapSizeV4, ctMapSizeV6 = conntrackMapSizes(bpfMapSizeConntrack)
+	}
+	bpfconntrack.SetMapSize(ctMapSizeV4)
+	bpfconntrack.SetMapSizeV6(ctMapSizeV6)
 	bpfconntrack.SetCleanupMapSize(config.BPFMapSizeConntrackCleanupQueue)
 	bpfifstate.SetMapSize(config.BPFMapSizeIfState)
 	ringBufSize := calcRingBufSize(config.BPFExportBufferSizeMB)
@@ -3265,20 +3269,23 @@ func startBPFDataplaneComponents(
 	return conntrackScanner, workloadRemoveChan
 }
 
-// conntrackMapSize returns the configured size, or the size the map grew to
-// under BPFMapSizeConntrackScaling if that is larger.
-func conntrackMapSize(configured, ipVersion int) int {
-	grown, err := bpfconntrack.MapSizeFromFile(ipVersion)
+// conntrackMapSizes returns the IPv4 and IPv6 conntrack map sizes: the
+// configured size, or the size the map grew to if larger.
+func conntrackMapSizes(configured int) (int, int) {
+	grownV4, grownV6, err := bpfconntrack.GrownMapSizes()
 	if err != nil {
-		log.WithError(err).Errorf("Failed to read the grown IPv%d conntrack map size.", ipVersion)
+		log.WithError(err).Error("Failed to read the grown conntrack map sizes.")
+		return configured, configured
+	}
+	pick := func(grown, ipVersion int) int {
+		if grown > configured {
+			log.Infof("Overriding bpfMapSizeConntrack (%d) with map size growth (%d) for IPv%d",
+				configured, grown, ipVersion)
+			return grown
+		}
 		return configured
 	}
-	if grown > configured {
-		log.Infof("Overriding bpfMapSizeConntrack (%d) with map size growth (%d) for IPv%d",
-			configured, grown, ipVersion)
-		return grown
-	}
-	return configured
+	return pick(grownV4, 4), pick(grownV6, 6)
 }
 
 // calcRingBufSize computes the ring buffer size in bytes. It scales

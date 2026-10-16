@@ -27,35 +27,61 @@ import (
 // MapSizeDir holds the files that record conntrack map growth across Felix restarts.
 var MapSizeDir = "/var/lib/calico"
 
-func mapSizeFile(ipVersion int) string {
+const (
+	sizeFileV4 = "bpf_ct4_map_size"
+	sizeFileV6 = "bpf_ct6_map_size"
+	// Read by older Felix for both families; kept at the larger size so a downgrade never shrinks a map.
+	sizeFileShared = "bpf_ct_map_size"
+)
+
+func sizeFile(ipVersion int) string {
 	if ipVersion == 6 {
-		return filepath.Join(MapSizeDir, "bpf_ct6_map_size")
+		return sizeFileV6
 	}
-	return filepath.Join(MapSizeDir, "bpf_ct_map_size")
+	return sizeFileV4
 }
 
-// MapSizeFromFile returns the grown conntrack map size recorded for the IP
-// family, or 0 if the map has not grown.
-func MapSizeFromFile(ipVersion int) (int, error) {
-	size, err := readMapSizeFile(mapSizeFile(ipVersion))
-	if err != nil || size != 0 || ipVersion != 6 {
-		return size, err
+// GrownMapSizes returns the IPv4 and IPv6 conntrack map sizes recorded by
+// autoscaling, 0 for a family that never grew.
+func GrownMapSizes() (v4, v6 int, err error) {
+	if v4, err = readMapSizeFile(sizeFileV4); err != nil {
+		return 0, 0, err
+	}
+	if v6, err = readMapSizeFile(sizeFileV6); err != nil {
+		return 0, 0, err
+	}
+	shared, err := readMapSizeFile(sizeFileShared)
+	if err != nil {
+		return 0, 0, err
+	}
+	if shared <= max(v4, v6) {
+		return v4, v6, nil
 	}
 
-	// Older Felix sized both families from the v4 file; copy it so v6 neither
-	// shrinks nor follows v4.
-	size, err = readMapSizeFile(mapSizeFile(4))
-	if err != nil || size == 0 {
-		return size, err
+	// Only an older Felix grows the shared file past both; it sized both families from it.
+	for _, f := range []string{sizeFileV4, sizeFileV6} {
+		if err := writeMapSizeFile(f, shared); err != nil {
+			log.WithError(err).Warn("Failed to record the conntrack map size.")
+		}
 	}
-	if err := writeMapSizeFile(6, size); err != nil {
-		log.WithError(err).Warn("Failed to record the IPv6 conntrack map size.")
-	}
-	return size, nil
+	return shared, shared, nil
 }
 
-func readMapSizeFile(filename string) (int, error) {
-	data, err := os.ReadFile(filename)
+// recordGrowth records a family's new map size, keeping the shared file at the
+// larger of the family sizes.
+func recordGrowth(ipVersion, size int) error {
+	if err := writeMapSizeFile(sizeFile(ipVersion), size); err != nil {
+		return err
+	}
+	shared, err := readMapSizeFile(sizeFileShared)
+	if err != nil || shared < size {
+		return writeMapSizeFile(sizeFileShared, size)
+	}
+	return nil
+}
+
+func readMapSizeFile(name string) (int, error) {
+	data, err := os.ReadFile(filepath.Join(MapSizeDir, name))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return 0, nil
@@ -65,12 +91,12 @@ func readMapSizeFile(filename string) (int, error) {
 	return strconv.Atoi(strings.TrimSpace(string(data)))
 }
 
-func writeMapSizeFile(ipVersion, size int) error {
+func writeMapSizeFile(name string, size int) error {
 	if err := os.MkdirAll(MapSizeDir, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", MapSizeDir, err)
 	}
 
-	filename := mapSizeFile(ipVersion)
+	filename := filepath.Join(MapSizeDir, name)
 	log.Debugf("Writing %d to %s", size, filename)
 	if err := os.WriteFile(filename, fmt.Appendf(nil, "%d", size), 0o644); err != nil {
 		return fmt.Errorf("unable to write to %s: %w", filename, err)
