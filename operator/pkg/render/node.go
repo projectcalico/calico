@@ -71,6 +71,7 @@ const (
 	NodePrometheusTLSServerSecret = "calico-node-prometheus-server-tls"
 	CalicoNodeObjectName          = "calico-node"
 	CalicoCNIPluginObjectName     = "calico-cni-plugin"
+	AWSVPCAnnotationsObjectName   = "calico-aws-vpc-annotations"
 	BPFVolumeName                 = "bpffs"
 
 	InstallCNIContainerName = "install-cni"
@@ -239,6 +240,8 @@ func (c *nodeComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Obje
 		c.cniPluginServiceAccount(),
 		c.cniPluginRole(),
 		c.cniPluginRoleBinding(),
+		c.awsVPCAnnotationsRole(),
+		c.awsVPCAnnotationsRoleBinding(),
 	}
 
 	// These are objects to keep even when we're terminating. They will be deleted by the Kubernetes
@@ -397,6 +400,44 @@ func (c *nodeComponent) cniPluginRoleBinding() *rbacv1.ClusterRoleBinding {
 		migration.AddBindingForKubeSystemCNIPlugin(crb)
 	}
 	return crb
+}
+
+// awsVPCAnnotationsRole lets the AWS VPC CNI write its pod IP annotation through
+// protect-cni-annotations.projectcalico.org. Binding it to anyone else lets them edit that annotation too.
+func (c *nodeComponent) awsVPCAnnotationsRole() *rbacv1.ClusterRole {
+	return &rbacv1.ClusterRole{
+		TypeMeta:   metav1.TypeMeta{Kind: "ClusterRole", APIVersion: "rbac.authorization.k8s.io/v1"},
+		ObjectMeta: metav1.ObjectMeta{Name: AWSVPCAnnotationsObjectName},
+		Rules: []rbacv1.PolicyRule{
+			{
+				// Nothing serves this resource; it exists only to be granted.
+				APIGroups: []string{"projectcalico.org"},
+				Resources: []string{"awsvpcannotations"},
+				Verbs:     []string{"write"},
+			},
+		},
+	}
+}
+
+// awsVPCAnnotationsRoleBinding grants awsVPCAnnotationsRole to aws-node, the account AWS's own
+// manifests and docs run the AWS VPC CNI under. On a cluster without the AWS VPC CNI it grants nothing.
+func (c *nodeComponent) awsVPCAnnotationsRoleBinding() *rbacv1.ClusterRoleBinding {
+	return &rbacv1.ClusterRoleBinding{
+		TypeMeta:   metav1.TypeMeta{Kind: "ClusterRoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"},
+		ObjectMeta: metav1.ObjectMeta{Name: AWSVPCAnnotationsObjectName},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     AWSVPCAnnotationsObjectName,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      "aws-node",
+				Namespace: "kube-system",
+			},
+		},
+	}
 }
 
 // nodeRole creates the clusterrole containing policy rules that allow the node daemonset to operate normally.

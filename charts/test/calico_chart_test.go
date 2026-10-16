@@ -219,8 +219,32 @@ func TestCalicoGrantsTheCNIPluginItsAnnotationPermission(t *testing.T) {
 	}
 }
 
+// The AWS VPC CNI is let through protect-cni-annotations.projectcalico.org on its pod IP annotation by
+// a permission Calico grants to the account AWS runs it under, whichever CNI Calico is installed with.
+func TestCalicoGrantsTheAWSVPCCNIItsAnnotationPermission(t *testing.T) {
+	for _, network := range []string{"calico", "flannel"} {
+		t.Run(network, func(t *testing.T) {
+			g := NewWithT(t)
+			values := map[string]string{"datastore": "kubernetes", "network": network}
+
+			var role rbacv1.ClusterRole
+			renderCalicoResourceWith(t, values, "templates/calico-aws-vpc-annotations-rbac.yaml", "ClusterRole", "calico-aws-vpc-annotations", &role)
+			g.Expect(role.Rules).To(ConsistOf(rbacv1.PolicyRule{
+				APIGroups: []string{"projectcalico.org"},
+				Resources: []string{"awsvpcannotations"},
+				Verbs:     []string{"write"},
+			}))
+
+			var binding rbacv1.ClusterRoleBinding
+			renderCalicoResourceWith(t, values, "templates/calico-aws-vpc-annotations-rbac.yaml", "ClusterRoleBinding", "calico-aws-vpc-annotations", &binding)
+			g.Expect(binding.RoleRef.Name).To(Equal("calico-aws-vpc-annotations"))
+			g.Expect(binding.Subjects).To(ConsistOf(rbacv1.Subject{Kind: "ServiceAccount", Name: "aws-node", Namespace: "kube-system"}))
+		})
+	}
+}
+
 // On etcd the CNI plugin writes workload endpoints to etcd, not to these pod annotations, so neither
-// policy is rendered.
+// policy, nor the AWS VPC CNI's grant, is rendered.
 func TestCalicoOmitsTheCNIAnnotationPoliciesOnEtcd(t *testing.T) {
 	g := NewWithT(t)
 	if _, err := exec.LookPath("helm"); err != nil {
@@ -235,6 +259,7 @@ func TestCalicoOmitsTheCNIAnnotationPoliciesOnEtcd(t *testing.T) {
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(output).NotTo(ContainSubstring("protect-cni-annotations.projectcalico.org"), network)
 		g.Expect(output).NotTo(ContainSubstring("strip-cni-annotations.projectcalico.org"), network)
+		g.Expect(output).NotTo(ContainSubstring("calico-aws-vpc-annotations"), network)
 	}
 }
 
