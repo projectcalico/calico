@@ -27,12 +27,14 @@ artifacts_dir="$repo_dir/artifacts"
 # capacity no longer blocks the job.  REGION selects the region; the zone each
 # VM actually lands in is discovered after creation (see below).
 region=${REGION:-europe-west3}
-: "${VM_MACHINE_TYPE:=n4-standard-4}"
+# Space-separated, in priority order.
+: "${VM_MACHINE_TYPES:=${VM_MACHINE_TYPE:-n4-standard-4}}"
 : "${IMAGE_FAMILY:=ubuntu-minimal-2404-lts-amd64}"
 : "${MAX_RUN_DURATION:=4h}"
 disk_size=${VM_DISK_SIZE:-20GB}
 
 source "$my_dir/ssh-options"
+source "$my_dir/bulk-create-vms"
 
 # shellcheck source=../../felix/.semaphore/batches.sh
 source "$repo_dir/$COMPONENT/.semaphore/batches.sh"
@@ -79,18 +81,15 @@ else
   labels+=",ci-scheduled=false"
 fi
 
-# Do a bulk create; this is faster and it saves API quota.
-#
-# We pass --region (not --zone) with --target-distribution-shape=any so that
-# GCP spreads the VMs across the zones of the region according to available
-# capacity.  This avoids a single zone filling up and failing the whole job.
+# Do a bulk create; this is faster and it saves API quota.  bulk_create_vms
+# spreads the VMs across the region's zones by available capacity and picks the
+# machine type.
 #
 # Shared with the replacement for a VM that fails to configure.
 # shellcheck disable=SC2054 # the commas are gcloud's metadata separator
 vm_create_args=(
        --service-account="semaphore-v2-gcr@unique-caldron-775.iam.gserviceaccount.com"
        --scopes="https://www.googleapis.com/auth/cloud-platform"
-       --machine-type="${VM_MACHINE_TYPE}"
        --image-family="${IMAGE_FAMILY}"
        --image-project=ubuntu-os-cloud
        --boot-disk-size="$disk_size"
@@ -101,18 +100,14 @@ vm_create_args=(
        --metadata-from-file startup-script="$my_dir/vm-bootstrap.sh"
        --metadata block-project-ssh-keys=TRUE,ssh-keys="ubuntu:$(ssh-keygen -y -f "$HOME/.ssh/id_rsa")",enable-guest-attributes=TRUE
 )
-echo "Creating test VMs in bulk across region ${region}..."
-gcloud --quiet compute instances bulk create \
-       --predefined-names="$names" \
-       --region="${region}" \
-       --target-distribution-shape=any \
-       "${vm_create_args[@]}"
+bulk_create_vms "$names" "$region" "${vm_create_args[@]}"
+vm_create_args+=( --machine-type="$vm_machine_type" )
 
 # Since the VMs are spread across the region's zones, we can no longer assume a
 # single zone for the downstream describe/ssh/delete commands.  Build a
 # name->zone map by listing the instances we just created, filtered by our
-# workflow-unique name prefix.  bulk create is synchronous, so the instances
-# already exist by the time it returns.
+# workflow-unique name prefix.  bulk_create_vms waits for the instances to
+# exist.
 echo "Discovering which zone each VM landed in..."
 declare -A vm_zone
 while IFS=, read -r name vm_z; do
@@ -466,6 +461,7 @@ for pid in "${monitor_pids[@]}"; do
 done
 
 echo "===== Results summary ====="
+echo "  ${vm_create_summary}"
 for s in "${summary[@]}"; do
   echo "  $s"
 done
