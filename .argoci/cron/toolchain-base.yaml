@@ -1,0 +1,82 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Republishes calico/base when UBI or its source has moved since the newest
+# published tag. base exists to carry UBI's package updates, so it follows UBI
+# rather than this repo; Renovate then moves CALICO_BASE_VER to the new tag.
+version: condensed
+generateName: toolchain-base-
+
+# Off the hour, so it does not land with every other repo's.
+schedule: 40 3 * * *
+
+timeout: 2h
+
+notifications:
+  slack:
+    channel: ci-notifications-os
+    when: changed
+
+defaults:
+  timeout: 1h
+  services: [docker]
+  requests: {cpu: 2000m, memory: 3Gi}
+  secretBundles:
+    - docker-hub
+
+steps:
+  # Every arch and UBI version must carry the same tag, so the epoch is fixed
+  # once here and handed on.
+  - name: base-decide
+    timeout: 10m
+    when: GIT_BRANCH == 'master'
+    commands: |
+      cd toolchain/images/base
+      latest=$(make -s latest-published)
+      decision=$(make -s needs-rebuild BASE_PUBLISHED_VER="${latest}")
+      echo "newest published ${latest}: ${decision}"
+      printf 'DECISION=%s\nBASE_EPOCH=%s\n' "${decision}" "$(date +%s)" > /tmp/base-publish.env
+      artifact push workflow /tmp/base-publish.env --destination base-publish.env
+
+  - name: base-publish
+    depends: [base-decide]
+    when: GIT_BRANCH == 'master'
+    matrix:
+      - name: amd64
+        env: [{name: ARCH, value: amd64}]
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    commands: |
+      artifact pull workflow base-publish.env --destination /tmp/base-publish.env
+      . /tmp/base-publish.env
+      if [ "${DECISION}" != build ]; then exit 0; fi
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      cd toolchain/images/base
+      make register image test push ARCH=$ARCH BASE_EPOCH=${BASE_EPOCH} CONFIRM=true
+
+  - name: base-publish-manifest
+    depends: [base-publish]
+    when: GIT_BRANCH == 'master'
+    timeout: 10m
+    commands: |
+      artifact pull workflow base-publish.env --destination /tmp/base-publish.env
+      . /tmp/base-publish.env
+      if [ "${DECISION}" != build ]; then exit 0; fi
+      echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      cd toolchain/images/base
+      make push-manifest BASE_EPOCH=${BASE_EPOCH} CONFIRM=true

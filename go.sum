@@ -42,6 +42,8 @@ github.com/DATA-DOG/go-sqlmock v1.5.2 h1:OcvFkGmslmlZibjAjaHm3L//6LiuBgolP7Oputl
 github.com/DATA-DOG/go-sqlmock v1.5.2/go.mod h1:88MAG/4G7SMwSE3CeA0ZKzrT5CiOU3OJ+JlNzwDqpNU=
 github.com/DeRuina/timberjack v1.4.5 h1:F/kms5MPNAXUeWdOILt5ALC6iDHWNRPevaeIVH7tqYU=
 github.com/DeRuina/timberjack v1.4.5/go.mod h1:RLoeQrwrCGIEF8gO5nV5b/gMD0QIy7bzQhBUgpp1EqE=
+github.com/GoogleCloudPlatform/compute-daisy v0.0.0-20230929171844-6a3c47dc7a4f h1:fHLga6U5ibwILQYGom/Fta6xJpn8DJ/XbIRmVaySLjA=
+github.com/GoogleCloudPlatform/compute-daisy v0.0.0-20230929171844-6a3c47dc7a4f/go.mod h1:zr7ug08Bz1pQZzWmiKYTHuF/+KbbuSFiP74D2pPukGE=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.33.0 h1:l7+6kwRMJNwdCvYdDl7Eax+wzEYHSnNY7zrrfbhDdTA=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.33.0/go.mod h1:pJTkW8hEUIIi3Pf65lPZOnn4Y81yCllX6IWk2jNXdkM=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.55.0 h1:UnDZ/zFfG1JhH/DqxIZYU/1CUAlTUScoXD/LcM2Ykk8=
@@ -206,6 +208,8 @@ github.com/containerd/errdefs/pkg v0.3.0 h1:9IKJ06FvyNlexW690DXuQNx2KA2cUJXx151X
 github.com/containerd/errdefs/pkg v0.3.0/go.mod h1:NJw6s9HwNuRhnjJhM7pylWwMyAkmCQvQ4GpJHEqRLVk=
 github.com/containerd/log v0.1.0 h1:TCJt7ioM2cr/tfR8GPbGf9/VRAX8D2B4PjzCpfX540I=
 github.com/containerd/log v0.1.0/go.mod h1:VRRf09a7mHDIRezVKTRCrOq78v577GXq3bSa3EhrzVo=
+github.com/containerd/platforms v1.0.0-rc.1 h1:83KIq4yy1erSRgOVHNk1HYdPvzdJ5CnsWaRoJX4C41E=
+github.com/containerd/platforms v1.0.0-rc.1/go.mod h1:J71L7B+aiM5SdIEqmd9wp6THLVRzJGXfNuWCZCllLA4=
 github.com/containerd/ttrpc v1.2.9 h1:ha0ak962T0s3CA/RoZ6S6xiWZQF24GrBaEpiGX1uihg=
 github.com/containerd/ttrpc v1.2.9/go.mod h1:jjtQRwXm4DL3KsHKW8vDiUOV6wO0hi6IPhmJhxU7aEs=
 github.com/containerd/typeurl/v2 v2.3.0 h1:HZHPhRWo5XMy3QGQoPrUzbW/2ckwjfweHmOwlkIrPAQ=
@@ -925,6 +929,8 @@ github.com/tklauser/numcpus v0.12.0 h1:NR85qdvHA9pFse3x3weVZ0r0ST8R6l5RHbZrlRaqo
 github.com/tklauser/numcpus v0.12.0/go.mod h1:ABHeXzJnr/qqwguhClkZKT1/8VABcYrsyUiUGobwWJg=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20220101234140-673ab2c3ae75 h1:6fotK7otjonDflCTK0BCfls4SPy3NcCVb5dqqmbRknE=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20220101234140-673ab2c3ae75/go.mod h1:KO6IkyS8Y3j8OdNO85qEYBsRPuteD+YciPomcXdrMnk=
+github.com/tonistiigi/go-archvariant v1.0.0 h1:5LC1eDWiBNflnTF1prCiX09yfNHIxDC/aukdhCdTyb0=
+github.com/tonistiigi/go-archvariant v1.0.0/go.mod h1:TxFmO5VS6vMq2kvs3ht04iPXtu2rUT/erOnGFYfk5Ho=
 github.com/urfave/cli v1.22.2/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
 github.com/urfave/cli v1.22.16 h1:MH0k6uJxdwdeWQTwhSO42Pwr4YLrNLwBtg1MRgTqPdQ=
 github.com/urfave/cli v1.22.16/go.mod h1:EeJR6BKodywf4zciqrdw6hpCPk68JO9z5LazXZMn5Po=

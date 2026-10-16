@@ -1,3 +1,17 @@
+# Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # Disable built-in rules
 .SUFFIXES:
 
@@ -77,9 +91,11 @@ endif
 # Marked .PHONY since it produces no file; use as an order-only prerequisite
 # (| register) to avoid triggering unnecessary rebuilds.
 .PHONY: register
+# CI points this at a PR's own build while the tag is unpublished.
+BINFMT_IMAGE ?= calico/binfmt:$(BINFMT_VER)
 register:
 ifneq ($(BUILDARCH),$(ARCH))
-	docker run --privileged --rm calico/binfmt:qemu-v10.2.2 --install all || true
+	docker run --privileged --rm $(BINFMT_IMAGE) --install all || true
 endif
 
 # If this is a release, also tag and push additional images.
@@ -146,10 +162,11 @@ NUM_BUILD_JOBS ?= 4
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
 GO_BUILD_IMAGE ?= calico/go-build
-CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
+# CI points this at a PR's own build of the image while the tag is unpublished.
+CALICO_BUILD    ?= $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
 
 RUST_BUILD_IMAGE ?= calico/rust-build
-CALICO_RUST_BUILD = $(RUST_BUILD_IMAGE):$(RUST_BUILD_VER)
+CALICO_RUST_BUILD ?= $(RUST_BUILD_IMAGE):$(RUST_BUILD_VER)
 
 # On amd64 we build with CGO enabled (libbpf and other cgo deps require it);
 # other architectures default to pure-Go builds.
@@ -501,27 +518,22 @@ endif
 # CRD generation uses a controller-gen with Calico-specific patches (see the
 # *.patch files under //hack/cmd/calico-controller-gen): NumOrString/Port/
 # Protocol/DSCP int-or-string union schemas, and nullable slice-of-pointer
-# elements. The projectcalico/toolchain repo bakes a (NumOrString-only) patched
-# binary into the calico/go-build image; we build our own patched binary
-# in-repo instead (download tarball -> apply patches -> go build), so CRD
-# generation owns its patches and does not depend on the image's controller-gen.
+# elements. It is built in-repo (download tarball, apply patches, go build), and
+# every component's controller-gen run uses it.
 #
 # The controller-tools version is pinned inside build.sh (its VERSION line, the
-# single source of truth). build.sh checks it against the controller-gen baked
-# into the calico/go-build image and, on a mismatch, rewrites that line and
-# fails so the bump is committed deliberately. We read the pin here cheaply (no
-# container) for the cache key.
+# single source of truth). We read the pin here cheaply (no container) for the
+# cache key.
 CONTROLLER_TOOLS_VERSION := $(shell sed -n 's/^VERSION="\(v[0-9][0-9.]*\)".*/\1/p' $(REPO_ROOT)/hack/cmd/calico-controller-gen/build.sh | head -1)
 CONTROLLER_TOOLS_VERSION := $(or $(CONTROLLER_TOOLS_VERSION),v0.18.0)
 
 # The binary is built into the shared Go build cache (mounted as /go-cache in
 # every component container, including api/'s isolated mount). It is stamped
 # with the go-build image version, the controller-tools version, and a hash of
-# build.sh and the patches: bumping the image (which may carry a new
-# controller-gen), the pinned version, or editing either file yields a new path
-# and triggers a rebuild — and a rebuild re-runs the image-vs-pin check in
-# build.sh. build.sh is hashed because checkouts sharing the cache share the
-# output file, which defeats Make's prerequisite check.
+# build.sh and the patches: bumping the image (whose Go builds it), the pinned
+# version, or editing either file yields a new path and triggers a rebuild.
+# build.sh is hashed because checkouts sharing the cache share the output file,
+# which defeats Make's prerequisite check.
 CALICO_CONTROLLER_GEN_HASH := $(shell cat $(REPO_ROOT)/hack/cmd/calico-controller-gen/build.sh $(REPO_ROOT)/hack/cmd/calico-controller-gen/*.patch 2>/dev/null | sha256sum | cut -c1-12)
 CALICO_CONTROLLER_GEN_STAMP := $(GO_BUILD_VER)-$(CONTROLLER_TOOLS_VERSION)-$(CALICO_CONTROLLER_GEN_HASH)
 # Two views of the same file: the host path Make uses as a build target, and
@@ -549,6 +561,28 @@ $(CALICO_CONTROLLER_GEN_BIN): | hack/cmd/calico-controller-gen/build.sh
 	@# such a stamp just rebuilds it.
 	@find $(dir $(CALICO_CONTROLLER_GEN_BIN)) -maxdepth 1 -type f \
 		-name 'calico-controller-gen-*' -mtime +30 -delete 2>/dev/null || true
+
+# The k8s.io/code-generator tools and openapi-gen, at the versions go.mod pins,
+# so generated code always matches the client libraries it compiles against.
+# They parse Go source, so they are rebuilt with each Go release as well.
+K8S_CODEGEN_VERSION := $(K8S_VERSION:v1.%=v0.%)
+KUBE_OPENAPI_VERSION := $(shell awk '$$1 == "k8s.io/kube-openapi" && $$2 == "=>" {print $$4; exit}' $(REPO_ROOT)/go.mod)
+K8S_CODEGEN_STAMP := $(GO_VERSION)-$(K8S_CODEGEN_VERSION)-$(KUBE_OPENAPI_VERSION)
+K8S_CODEGEN_TOOLS := applyconfiguration-gen client-gen conversion-gen deepcopy-gen defaulter-gen informer-gen lister-gen
+# Host and in-container views of the same directory, as for controller-gen.
+# Callers put it on PATH, so codegen scripts keep calling the tools by name.
+K8S_CODEGEN_BIN := $(LOCAL_GO_PKG_CACHE)/bin/k8s-codegen-$(K8S_CODEGEN_STAMP)
+K8S_CODEGEN_DIR := /go-cache/bin/k8s-codegen-$(K8S_CODEGEN_STAMP)
+
+$(K8S_CODEGEN_BIN)/.installed:
+	$(DOCKER_GO_BUILD) sh -c 'set -e; \
+		for t in $(K8S_CODEGEN_TOOLS); do \
+			GOBIN=$(K8S_CODEGEN_DIR) go install -trimpath -ldflags="-s -w" k8s.io/code-generator/cmd/$$t@$(K8S_CODEGEN_VERSION); \
+		done; \
+		GOBIN=$(K8S_CODEGEN_DIR) go install -trimpath -ldflags="-s -w" k8s.io/kube-openapi/cmd/openapi-gen@$(KUBE_OPENAPI_VERSION); \
+		touch $(K8S_CODEGEN_DIR)/.installed'
+	@find $(LOCAL_GO_PKG_CACHE)/bin -maxdepth 1 -type d \
+		-name 'k8s-codegen-*' -mtime +30 -exec rm -rf {} + 2>/dev/null || true
 
 DOCKER_RUST_BUILD := mkdir -p bin && \
 	docker run --rm \
@@ -1565,11 +1599,39 @@ $(REPO_ROOT)/bin/crane:
 		mv "$$tmp/crane" "$@"
 
 ###############################################################################
+# Kubernetes release binaries for tests.
+###############################################################################
+# Tests mount these read-only at K8S_BIN_MOUNT in a $(CALICO_BUILD) container.
+# The registry.k8s.io images cannot stand in: they are distroless, so there is
+# no shell or kubectl to docker exec into.
+K8S_TEST_BINARIES := kube-apiserver kube-controller-manager kubectl
+K8S_BIN_URL := https://dl.k8s.io/release/$(K8S_VERSION)/bin/linux/$(BUILDARCH)
+K8S_BIN_DIR := $(REPO_ROOT)/hack/test/k8s/$(K8S_VERSION)-linux-$(BUILDARCH)
+K8S_BIN_MOUNT := /usr/local/k8s/bin
+K8S_BIN_VOLUME := -v $(K8S_BIN_DIR):$(K8S_BIN_MOUNT):ro
+K8S_BIN_FILES := $(addprefix $(K8S_BIN_DIR)/,$(K8S_TEST_BINARIES))
+
+## Download kube-apiserver, kube-controller-manager and kubectl for K8S_VERSION.
+.PHONY: k8s-test-binaries
+k8s-test-binaries: $(K8S_BIN_FILES)
+
+$(K8S_BIN_FILES): $(K8S_BIN_DIR)/%:
+	$(call fetch_file,$(K8S_BIN_URL)/$*,$@.unverified)
+	$(call fetch_file,$(K8S_BIN_URL)/$*.sha256,$@.sha256)
+	echo "$$(cat $@.sha256)  $@.unverified" | sha256sum -c -
+	rm -f $@.sha256
+	chmod 755 $@.unverified
+	mv $@.unverified $@
+	@# Other K8S_VERSIONs' binaries accumulate otherwise; a checkout still on
+	@# one just fetches it again.
+	@find $(dir $(K8S_BIN_DIR)) -mindepth 1 -maxdepth 1 -type d ! -path '$(K8S_BIN_DIR)' -mtime +30 -exec rm -rf {} + 2>/dev/null || true
+
+###############################################################################
 # Common functions for launching a local Kubernetes control plane.
 ###############################################################################
 ## Kubernetes apiserver used for tests
 APISERVER_NAME := calico-local-apiserver
-run-k8s-apiserver: run-etcd
+run-k8s-apiserver: run-etcd $(K8S_BIN_FILES)
 	@if docker inspect $(APISERVER_NAME) >/dev/null 2>&1; then \
 		echo "$(APISERVER_NAME) already running"; \
 	else \
@@ -1577,8 +1639,9 @@ run-k8s-apiserver: run-etcd
 			--name $(APISERVER_NAME) \
 			-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico \
 			-v $(CERTS_PATH):/home/user/certs \
+			$(K8S_BIN_VOLUME) \
 			-e KUBECONFIG=/home/user/certs/kubeconfig \
-			$(CALICO_BUILD) kube-apiserver \
+			$(CALICO_BUILD) $(K8S_BIN_MOUNT)/kube-apiserver \
 			--etcd-servers=http://$(LOCAL_IP_ENV):2379 \
 			--service-cluster-ip-range=10.101.0.0/16,fd00:96::/112 \
 			--authorization-mode=RBAC \
@@ -1600,15 +1663,15 @@ run-k8s-apiserver: run-etcd
 			--requestheader-extra-headers-prefix=X-Remote-Extra- \
 			--proxy-client-cert-file=/home/user/certs/kubernetes.pem \
 			--proxy-client-key-file=/home/user/certs/kubernetes-key.pem; \
-		while ! docker exec $(APISERVER_NAME) kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done; \
-		while ! docker exec $(APISERVER_NAME) kubectl create \
+		while ! docker exec $(APISERVER_NAME) $(K8S_BIN_MOUNT)/kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done; \
+		while ! docker exec $(APISERVER_NAME) $(K8S_BIN_MOUNT)/kubectl create \
 			clusterrolebinding anonymous-admin \
 			--clusterrole=cluster-admin \
 			--user=system:anonymous 2>/dev/null; \
 			do echo "Waiting for $(APISERVER_NAME) to come up"; \
 			sleep 1; \
 			done; \
-		while ! docker exec $(APISERVER_NAME) kubectl \
+		while ! docker exec $(APISERVER_NAME) $(K8S_BIN_MOUNT)/kubectl \
 			apply -f /go/src/github.com/projectcalico/calico/$(CALICO_CRD_PATH); \
 			do echo "Trying to create CRDs"; \
 			sleep 1; \
@@ -1628,7 +1691,8 @@ run-k8s-controller-manager: run-k8s-apiserver
 		docker run --detach --net=host \
 			--name $(CONTROLLER_MANAGER_NAME) \
 			-v $(CERTS_PATH):/home/user/certs \
-			$(CALICO_BUILD) kube-controller-manager \
+			$(K8S_BIN_VOLUME) \
+			$(CALICO_BUILD) $(K8S_BIN_MOUNT)/kube-controller-manager \
 			--master=https://127.0.0.1:6443 \
 			--kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
 			--min-resync-period=3m \
@@ -1734,10 +1798,9 @@ kind: $(KIND)
 	@echo "kind: $(KIND)"
 $(KIND): $(KIND_DIR)/.kind-updated-$(KIND_VERSION)
 
-$(KUBECTL)-$(K8S_VERSION):
+$(KUBECTL)-$(K8S_VERSION): $(K8S_BIN_DIR)/kubectl
 	mkdir -p $(KIND_DIR)
-	curl -fsSL --retry 5 https://dl.k8s.io/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
-	chmod +x $@
+	cp $< $@
 
 $(KIND_DIR)/.kubectl-updated-$(K8S_VERSION): $(KUBECTL)-$(K8S_VERSION)
 	rm -f $(KIND_DIR)/.kubectl-updated-*

@@ -1,3 +1,17 @@
+# Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/libcalico-go
@@ -62,24 +76,24 @@ gen-crds:
 	# Run prettier to fix indentation
 	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml "/work/config/crd/*.yaml"
 
-./lib/apis/internalapi/zz_generated.deepcopy.go: $(APIS_SRCS)
-	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
+./lib/apis/internalapi/zz_generated.deepcopy.go: $(APIS_SRCS) | $(K8S_CODEGEN_BIN)/.installed
+	$(DOCKER_GO_BUILD) sh -c 'PATH=$(K8S_CODEGEN_DIR):$$PATH deepcopy-gen \
 		--v 1 --logtostderr \
 		--go-header-file "./docs/boilerplate.go.txt" \
 		--output-file zz_generated.deepcopy.go \
 		"$(PACKAGE_NAME)/lib/apis/internalapi"'
 
-./lib/backend/model/zz_generated.deepcopy.go: $(MODEL_SRCS)
-	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
+./lib/backend/model/zz_generated.deepcopy.go: $(MODEL_SRCS) | $(K8S_CODEGEN_BIN)/.installed
+	$(DOCKER_GO_BUILD) sh -c 'PATH=$(K8S_CODEGEN_DIR):$$PATH deepcopy-gen \
 		--v 1 --logtostderr \
 		--go-header-file "./docs/boilerplate.go.txt" \
 		--output-file zz_generated.deepcopy.go \
 		"$(PACKAGE_NAME)/lib/backend/model"'
 
 # Generate OpenAPI spec
-./lib/apis/internalapi/generated.openapi.go: $(APIS_SRCS)
+./lib/apis/internalapi/generated.openapi.go: $(APIS_SRCS) | $(K8S_CODEGEN_BIN)/.installed
 	$(DOCKER_GO_BUILD) \
-           sh -c 'openapi-gen \
+           sh -c 'PATH=$(K8S_CODEGEN_DIR):$$PATH openapi-gen \
                 --v 1 --logtostderr \
                 --go-header-file "./docs/boilerplate.go.txt" \
 				--output-dir "./lib/apis/internalapi" \
@@ -88,7 +102,7 @@ gen-crds:
 				"$(PACKAGE_NAME)/lib/apis/v1"'
 
 	$(DOCKER_GO_BUILD) \
-           sh -c 'openapi-gen \
+           sh -c 'PATH=$(K8S_CODEGEN_DIR):$$PATH openapi-gen \
                 --v 1 --logtostderr \
                 --go-header-file "./docs/boilerplate.go.txt" \
 				--output-dir "./lib/apis/v1" \

@@ -12,7 +12,8 @@ migrated off Semaphore's scheduled e2e builds.
   CLIs come from the runner image). `global_prologue.sh` → `body_standard.sh`
   (dispatches to `phases/*`) → `global_epilogue.sh`.
 - `cron/*.yaml` — one condensed ArgoCI workflow per e2e suite, each carrying the
-  jobs and schedule of the Semaphore pipeline it replaced.
+  jobs and schedule of the Semaphore pipeline it replaced, plus
+  `toolchain-base.yaml`, which republishes `calico/base` when UBI moves.
   `cc-argoci-handler` expands each into a full CronWorkflow (checkout,
   secret loading, node placement, dind, exit handler, notifications, labels,
   metrics), picked up automatically on merge to the default branch. The one

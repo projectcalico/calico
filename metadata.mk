@@ -1,25 +1,52 @@
+# Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 #################################################################################################
 # This file contains Makefile configuration parameters and metadata for this branch.
 #################################################################################################
-# The project Go version
-GO_VERSION=1.27.1
-# Version of Kubernetes to use for dependencies, tests, registry.k8s.io/kubectl, and kubectl binary release.
-K8S_VERSION=v1.37.1
+# The Go and Kubernetes versions are set in the root go.mod: its `go` line and
+# its k8s.io/kubernetes requirement. Kubernetes is used for tests,
+# registry.k8s.io/kubectl and the kubectl binary release. Both are empty when
+# this file is read without the repo around it, as the release binary does.
+METADATA_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
+GO_VERSION := $(shell awk '$$1 == "go" {print $$2; exit}' $(METADATA_DIR)go.mod 2>/dev/null)
+K8S_VERSION := $(shell awk '$$1 == "k8s.io/kubernetes" {print $$2; exit}' $(METADATA_DIR)go.mod 2>/dev/null)
 # The version of LLVM to use for go-build and calico/base images.
 LLVM_VERSION=21.1.8
-# Calico toolchain versions and the calico/base image to use.
-# Set when go-build is rebuilt for the same Go/LLVM/Kubernetes versions, which is
-# published as -1, -2 and so on. Empty for a normal tag; clear it whenever any of
-# those three versions moves.
-GO_BUILD_VER_SUFFIX=
-GO_BUILD_VER=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)$(GO_BUILD_VER_SUFFIX)
-RUST_BUILD_VER=1.96.0
+# A rebuild of calico/go-build that moves neither Go nor LLVM is published as
+# <tag>-1, -2 and so on. GO_BUILD_REV names that full tag, and applies only
+# while its prefix is the current Go and LLVM, so a version bump needs no reset.
+GO_BUILD_REV=
+GO_BUILD_BASE_VER := $(GO_VERSION)-llvm$(LLVM_VERSION)
+GO_BUILD_VER := $(if $(filter $(GO_BUILD_BASE_VER)-%,$(GO_BUILD_REV)),$(GO_BUILD_REV),$(GO_BUILD_BASE_VER))
+# calico/rust-build is tagged with its Rust version. RUST_BUILD_REV works as
+# GO_BUILD_REV does.
+RUST_VERSION=1.96.0
+RUST_BUILD_REV=1.96.0-1
+RUST_BUILD_VER := $(if $(filter $(RUST_VERSION)-%,$(RUST_BUILD_REV)),$(RUST_BUILD_REV),$(RUST_VERSION))
+# calico/binfmt is tagged with the Fedora qemu-user-static version it ships.
+# BINFMT_REV works as GO_BUILD_REV does.
+QEMU_VERSION=10.2.2
+BINFMT_REV=qemu-v10.2.2-1
+BINFMT_BASE_VER := qemu-v$(QEMU_VERSION)
+BINFMT_VER := $(if $(filter $(BINFMT_BASE_VER)-%,$(BINFMT_REV)),$(BINFMT_REV),$(BINFMT_BASE_VER))
 
 CALICO_BASE_VER=ubi9-1790725174
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
-CRANE_VERSION=v0.21.6
+CRANE_VERSION=v0.21.9
 ETCD_VERSION=v3.5.31
 GHR_VERSION=v0.18.3
 GITHUB_CLI_VERSION=2.94.0

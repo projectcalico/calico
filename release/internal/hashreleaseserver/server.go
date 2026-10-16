@@ -16,16 +16,19 @@ package hashreleaseserver
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
+	"net/http"
+	"path"
 	"strings"
 	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/api/googleapi"
 
 	"github.com/projectcalico/calico/release/internal/registry"
 )
@@ -112,31 +115,24 @@ func Record(productCode string, h *Hashrelease, cfg *Config) error {
 
 func HasHashrelease(hash string, cfg *Config) (bool, error) {
 	logrus.WithField("hash", hash).Debug("Checking if hashrelease exists")
-	bucket, err := cfg.Bucket()
+	objs, err := cfg.objects()
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get bucket handler for hashrelease server")
 		return false, fmt.Errorf("failed to get bucket handler for hashrelease server: %w", err)
 	}
-	reader, err := bucket.Object(releaseLibFileName).NewReader(context.Background())
+	library, _, err := objs.Read(context.Background(), releaseLibFileName)
 	if err != nil {
-		if errors.Is(err, storage.ErrObjectNotExist) {
-			logrus.Debug("Hashrelease library does not exist")
-			return false, nil // No hashreleases published yet
-		}
-		logrus.WithError(err).Error("Failed to read hashrelease library from bucket")
 		return false, fmt.Errorf("failed to read hashrelease library from bucket: %w", err)
 	}
-	defer func() { _ = reader.Close() }()
-	scanner := bufio.NewScanner(reader)
+	// Each entry is "<hash> - <note>". A hash is a dash-joined list of versions,
+	// so a substring test would also match a longer hash, or a note.
+	scanner := bufio.NewScanner(bytes.NewReader(library))
 	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.Contains(line, hash) {
+		if fields := strings.Fields(scanner.Text()); len(fields) > 0 && fields[0] == hash {
 			logrus.WithField("hash", hash).Debug("Found hashrelease in library")
 			return true, nil
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		logrus.WithError(err).Error("Failed to scan hashrelease library")
 		return false, fmt.Errorf("failed to scan hashrelease library: %w", err)
 	}
 	return false, nil
@@ -149,15 +145,12 @@ func setHashreleaseAsLatest(rel Hashrelease, productCode string, cfg *Config) er
 		"stream":      rel.Stream,
 		"productCode": productCode,
 	}).Info("Setting hashrelease as latest for stream")
-	content := rel.URL() + "/"
-	relFilePath := filepath.Join("latest-"+productCode, rel.Stream+".txt")
-	bucket, err := cfg.Bucket()
+	objs, err := cfg.objects()
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get bucket handler for hashrelease server")
 		return fmt.Errorf("failed to get bucket handler for hashrelease publishing: %w", err)
 	}
-	if err := updateBucketTextFile(bucket, relFilePath, content, false); err != nil {
-		logrus.WithError(err).Errorf("Failed to write to latest hashrelease file for %s %s in bucket", productCode, rel.Stream)
+	name := path.Join("latest-"+productCode, rel.Stream+".txt")
+	if err := objs.Write(context.Background(), name, []byte(rel.URL()+"/"), anyGeneration); err != nil {
 		return fmt.Errorf("failed to update latest hashrelease file in bucket: %w", err)
 	}
 	return nil
@@ -165,57 +158,102 @@ func setHashreleaseAsLatest(rel Hashrelease, productCode string, cfg *Config) er
 
 func addToHashreleaseLibrary(rel Hashrelease, cfg *Config) error {
 	logrus.WithField("hashrelease", rel.Name).WithField("hash", rel.Hash).Info("Adding hashrelease to library")
-	content := fmt.Sprintf("%s - %s ", rel.Hash, rel.Note)
-	bucket, err := cfg.Bucket()
+	objs, err := cfg.objects()
 	if err != nil {
-		// For now if we can't get the bucket, do not fail the operation
-		logrus.WithError(err).Error("Failed to get bucket for hashrelease server")
 		return fmt.Errorf("failed to get bucket for hashrelease publishing: %w", err)
 	}
-	if err := updateBucketTextFile(bucket, releaseLibFileName, content, true); err != nil {
-		logrus.WithError(err).Error("Failed to write to hashrelease library in bucket")
+	if err := appendLine(context.Background(), objs, releaseLibFileName, fmt.Sprintf("%s - %s ", rel.Hash, rel.Note)); err != nil {
 		return fmt.Errorf("failed to update hashrelease library in bucket: %w", err)
 	}
 	return nil
 }
 
-func updateBucketTextFile(bucket *storage.BucketHandle, filePath, content string, appendContent bool) error {
-	ctx := context.Background()
-	obj := bucket.Object(filePath)
+// Publishes can run at once, so an append writes only over the generation it
+// read and starts again when another writer got there first.
+const maxAppendAttempts = 5
+
+func appendLine(ctx context.Context, objs textObjects, name, line string) error {
+	for attempt := 1; ; attempt++ {
+		existing, generation, err := objs.Read(ctx, name)
+		if err != nil {
+			return err
+		}
+		updated := line + "\n"
+		if trimmed := strings.TrimRight(string(existing), "\n"); trimmed != "" {
+			updated = trimmed + "\n" + updated
+		}
+		err = objs.Write(ctx, name, []byte(updated), generation)
+		if !errors.Is(err, errChanged) {
+			return err
+		}
+		if attempt == maxAppendAttempts {
+			return fmt.Errorf("%s changed under %d attempts to append to it: %w", name, attempt, err)
+		}
+		logrus.WithField("object", name).Debug("Object changed since it was read, retrying")
+	}
+}
+
+var errChanged = errors.New("object changed since it was read")
+
+// anyGeneration makes a Write unconditional.
+const anyGeneration int64 = -1
+
+// textObjects is the part of the bucket the library and the latest pointers use.
+type textObjects interface {
+	// Read returns an object and its generation. A missing object reads as
+	// empty at generation 0.
+	Read(ctx context.Context, name string) ([]byte, int64, error)
+	// Write replaces an object only while it is at generation, where 0 means it
+	// must not exist yet, and returns errChanged otherwise.
+	Write(ctx context.Context, name string, data []byte, generation int64) error
+}
+
+type bucketObjects struct {
+	bucket *storage.BucketHandle
+}
+
+func (b bucketObjects) Read(ctx context.Context, name string) ([]byte, int64, error) {
+	r, err := b.bucket.Object(name).NewReader(ctx)
+	if errors.Is(err, storage.ErrObjectNotExist) {
+		return nil, 0, nil
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { _ = r.Close() }()
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, 0, err
+	}
+	return data, r.Attrs.Generation, nil
+}
+
+func (b bucketObjects) Write(ctx context.Context, name string, data []byte, generation int64) error {
+	obj := b.bucket.Object(name)
+	switch {
+	case generation == 0:
+		obj = obj.If(storage.Conditions{DoesNotExist: true})
+	case generation > 0:
+		obj = obj.If(storage.Conditions{GenerationMatch: generation})
+	}
+	// Closing a writer commits whatever it holds, so a failed write cancels
+	// the context instead to leave the object as it was.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	w := obj.NewWriter(ctx)
 	w.ContentType = "text/plain"
 	w.Metadata = map[string]string{
 		"updated-by": "hashreleaseserver",
 		"updated-at": time.Now().Format(time.RFC3339),
 	}
-	defer func() {
-		if err := w.Close(); err != nil {
-			logrus.WithError(err).Errorf("Failed to close writer for bucket: %s", filePath)
-		}
-	}()
-	// If the file already exists and we are not appending, we will overwrite it
-	updatedContent := content
-	if appendContent {
-		// If we are appending, we need to read the existing content first
-		existingReader, err := obj.NewReader(ctx)
-		if err != nil {
-			if !errors.Is(err, storage.ErrObjectNotExist) {
-				logrus.WithError(err).Errorf("Failed to read existing content from bucket: %s", filePath)
-				return fmt.Errorf("failed to read existing content from bucket %s: %w", filePath, err)
-			}
-		} else {
-			defer func() { _ = existingReader.Close() }()
-			existingContent, err := io.ReadAll(existingReader)
-			if err != nil {
-				logrus.WithError(err).Errorf("Failed to read existing content from bucket: %s", filePath)
-				return fmt.Errorf("failed to read existing content from bucket %s: %w", filePath, err)
-			}
-			updatedContent = strings.TrimRight(string(existingContent), "\n") + "\n" + content + "\n"
-		}
+	if _, err := w.Write(data); err != nil {
+		cancel()
+		return err
 	}
-	if _, err := w.Write([]byte(updatedContent)); err != nil {
-		logrus.WithError(err).Errorf("Failed to write content to bucket: %s", filePath)
-		return fmt.Errorf("failed to write content to bucket %s: %w", filePath, err)
+	err := w.Close()
+	var apiErr *googleapi.Error
+	if errors.As(err, &apiErr) && apiErr.Code == http.StatusPreconditionFailed {
+		return errChanged
 	}
-	return nil
+	return err
 }
