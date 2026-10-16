@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
@@ -241,6 +242,24 @@ func TestFelixConfiguration_Validation(t *testing.T) {
 				Spec:       v3.FelixConfigurationSpec{RouteTableRanges: &v3.RouteTableRanges{{Min: 1, Max: 252}, {Min: 256, Max: 65539}}},
 			},
 			wantErr: "routeTableRanges must target at most 65535 tables in total",
+		},
+		{
+			name: "kubeNodePortRanges with numeric ports and ranges is accepted",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec: v3.FelixConfigurationSpec{KubeNodePortRanges: &[]numorstring.Port{
+					numorstring.SinglePort(30000),
+					{MinPort: 30001, MaxPort: 32767},
+				}},
+			},
+		},
+		{
+			name: "kubeNodePortRanges with a named port is rejected",
+			obj: &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("felixconfig")},
+				Spec:       v3.FelixConfigurationSpec{KubeNodePortRanges: &[]numorstring.Port{{PortName: "http"}}},
+			},
+			wantErr: "kubeNodePortRanges must not contain named ports",
 		},
 	}
 
