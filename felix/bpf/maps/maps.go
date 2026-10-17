@@ -493,6 +493,7 @@ func (b *PinnedMap) updateDeltaEntries() error {
 		return fmt.Errorf("failed to create BPF map iterator: %w", err)
 	}
 	log.WithField("name", b.Name).Debugf("updateDeltaEntries iterator over fd %d", b.oldfd)
+	w := b.newCopyWriter()
 	defer func() {
 		err := it.Close()
 		if err != nil {
@@ -520,13 +521,14 @@ func (b *PinnedMap) updateDeltaEntries() error {
 			numEntriesCopied++
 			continue
 		}
-		err = b.Update(k, v)
-		if err != nil {
-			return fmt.Errorf("error copying data from the old map")
+		if err := w.add(k, v); err != nil {
+			return err
 		}
-		log.Debugf("copied data from old map to new map key=%v, value=%v", k, v)
 		mapMem[string(k)] = struct{}{}
 		numEntriesCopied++
+	}
+	if err := w.flush(); err != nil {
+		return err
 	}
 
 	log.WithField("name", b.Name).Debugf("updateDeltaEntries copied %d", numEntriesCopied)
@@ -548,12 +550,13 @@ func (b *PinnedMap) copyFromOldMap() error {
 		}
 	}()
 
+	w := b.newCopyWriter()
 	for {
 		k, v, err := it.Next()
 
 		if err != nil {
 			if err == ErrIterationFinished {
-				return nil
+				return w.flush()
 			}
 			return fmt.Errorf("iterating the old map failed: %s", err)
 		}
@@ -565,14 +568,74 @@ func (b *PinnedMap) copyFromOldMap() error {
 			continue
 		}
 
-		err = b.Update(k, v)
-		if err != nil {
-			return fmt.Errorf("error copying data from the old map")
+		if err := w.add(k, v); err != nil {
+			return err
 		}
-		log.WithField("name", b.Name).Debugf("copied data from old map to new map key=%v, value=%v", k, v)
 		mapMem[string(k)] = struct{}{}
 		numEntriesCopied++
 	}
+}
+
+// copyBatchSize bounds the buffer a copyWriter holds; 1000 conntrack entries are about 100KB.
+const copyBatchSize = 1000
+
+// copyWriter buffers entries copied from an old map and writes them to the new map in batches.
+type copyWriter struct {
+	m     *PinnedMap
+	batch bool
+	keys  []byte
+	vals  []byte
+	n     int
+}
+
+func (b *PinnedMap) newCopyWriter() *copyWriter {
+	w := &copyWriter{m: b, batch: isBatchOpsSupported() && !b.perCPU}
+	if w.batch {
+		w.keys = make([]byte, 0, copyBatchSize*b.KeySize)
+		w.vals = make([]byte, 0, copyBatchSize*b.ValueSize)
+	}
+	return w
+}
+
+func (w *copyWriter) add(k, v []byte) error {
+	if !w.batch {
+		return w.update(k, v)
+	}
+	w.keys = append(w.keys, k...)
+	w.vals = append(w.vals, v...)
+	w.n++
+	if w.n == copyBatchSize {
+		return w.flush()
+	}
+	return nil
+}
+
+func (w *copyWriter) flush() error {
+	if w.n == 0 {
+		return nil
+	}
+	defer func() {
+		w.keys, w.vals, w.n = w.keys[:0], w.vals[:0], 0
+	}()
+	_, err := w.m.BatchUpdateRaw(w.keys, w.vals, w.n, 0)
+	if err == nil {
+		return nil
+	}
+	log.WithError(err).WithField("name", w.m.Name).Debug("Batch update failed, copying entries one by one.")
+	ks, vs := w.m.KeySize, w.m.ValueSize
+	for i := range w.n {
+		if err := w.update(w.keys[i*ks:(i+1)*ks], w.vals[i*vs:(i+1)*vs]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (w *copyWriter) update(k, v []byte) error {
+	if err := w.m.Update(k, v); err != nil {
+		return fmt.Errorf("error copying data from the old map: %w", err)
+	}
+	return nil
 }
 
 func (b *PinnedMap) Open() error {
