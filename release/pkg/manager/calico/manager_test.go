@@ -33,6 +33,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/require"
 	"go.yaml.in/yaml/v3"
 
@@ -1052,6 +1053,28 @@ func TestResolveContainerImages(t *testing.T) {
 		}
 		if len(readRefs(t, m, images.ResolveStep)) == 0 {
 			t.Error("the images that exist were not recorded")
+		}
+	})
+
+	t.Run("a dry run with missing images still reports its scan", func(t *testing.T) {
+		m := withoutImages(t, newFakeRunner())
+		scans := enableScan(t, m)
+		m.dryRun = true
+		m.resolveDigest = func(string) (string, bool, error) { return "", false, nil }
+		hook := logtest.NewGlobal()
+		t.Cleanup(hook.Reset)
+		if err := m.resolveContainerImages(); err != nil {
+			t.Fatalf("resolveContainerImages: %v", err)
+		}
+		if got := len(scans.sent()); got != 0 {
+			t.Errorf("a dry run sent %d scan requests", got)
+		}
+		var reported bool
+		for _, e := range hook.AllEntries() {
+			reported = reported || e.Message == "Dry run: would send images to ISS"
+		}
+		if !reported {
+			t.Error("the dry run did not report its scan")
 		}
 	})
 
