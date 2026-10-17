@@ -544,6 +544,9 @@ spec:
               value: "false"
             - name: FELIX_HEALTHENABLED
               value: "true"
+            # Read the host's procfs, mounted below, to resolve pod network namespaces.
+            - name: FELIX_PROCROOTPATH
+              value: "/nodeproc"
           securityContext:
             privileged: true
           resources:
@@ -609,6 +612,9 @@ spec:
             - name: cni-log-dir
               mountPath: /var/log/calico/cni
               readOnly: true
+            - name: nodeproc
+              mountPath: /nodeproc
+              readOnly: true
       volumes:
         # Used by calico-node.
         - name: lib-modules
@@ -634,7 +640,8 @@ spec:
           hostPath:
             path: /sys/fs/bpf
             type: Directory
-        # mount /proc at /nodeproc to be used by ebpf-bootstrap initContainer to mount root cgroup2 fs.
+        # mount /proc at /nodeproc to be used by ebpf-bootstrap initContainer to mount root cgroup2 fs,
+        # and by Felix to resolve pod network namespaces.
         - name: nodeproc
           hostPath:
             path: /proc
