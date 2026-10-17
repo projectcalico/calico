@@ -121,6 +121,14 @@ run_batch() {
     )
   fi
   
+  # A run that built toolchain images names them in CI_TOOLCHAIN_ENV, as NAME=image
+  # lines make takes as overrides; the VM must build and test with the same ones.
+  if [ -n "${CI_TOOLCHAIN_ENV:-}" ]; then
+    while IFS= read -r kv; do
+      [ -n "$kv" ] && cmd+=("$kv")
+    done <<< "${CI_TOOLCHAIN_ENV}"
+  fi
+
   local cmd_quot=""
   local first=true
   for part in "${cmd[@]}"; do

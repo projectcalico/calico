@@ -1,3 +1,17 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # Which workflows run on which events. The crons in .argoci/cron/ register on
 # merge to the default branch.
 version: v2
@@ -8,7 +22,11 @@ requireApproval: true
 
 # The calico/go-build tag `useGoBuild` steps run. It must match the GO_BUILD_VER
 # metadata.mk resolves to, and CI fails when the two differ.
-goBuildVersion: 1.27.1-llvm21.1.8-k8s1.37.1
+goBuildVersion: 1.27.2-llvm21.1.8
+
+# The step that hands a run the toolchain images it built, when a PR changes
+# them before their tags are published. See .argoci/modules/10-toolchain.yaml.
+toolchainFrom: toolchain
 
 workflows:
   # Always runs, so its status can be a required check; gating happens inside.
@@ -32,5 +50,11 @@ workflows:
 
   - name: e2e-images
     workflowFile: .argoci/publish/e2e-images.yaml
+    runWhen:
+      alwaysRunOnMerge: true
+
+  # Each step builds only a tag not yet published.
+  - name: toolchain-images
+    workflowFile: .argoci/publish/toolchain-images.yaml
     runWhen:
       alwaysRunOnMerge: true

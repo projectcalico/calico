@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# install-build-tools DIR
+#
+# Installs the tools builds call by name into DIR, for the platform it runs
+# on: the root go.mod's tool lines, plus the golangci-lint and protoc releases
+# metadata.mk names. lib.Makefile runs it in the build container, or straight
+# in a go-build CI pod, and puts DIR first on PATH.
+
+set -euo pipefail
+
+if [ $# -ne 1 ]; then
+  echo "usage: $0 <dir>" >&2
+  exit 1
+fi
+: "${GOLANGCI_LINT_VERSION:?}" "${PROTOC_VERSION:?}"
+
+root=$(cd "$(dirname "$0")/.." && pwd)
+final=$1
+mkdir -p "$(dirname "$final")"
+# Parallel builds may install the same set at once, so each fills its own
+# directory and renames it into place. DIR/.installed marks a whole set.
+dir=$(mktemp -d "$final.XXXXXX")
+chmod 755 "$dir"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp" "$dir"' EXIT
+
+# verify FILE CHECKSUMS_URL: checks FILE against its line in a release's
+# checksum list.
+verify() {
+  local want
+  "$root/hack/fetch-file" "$2" "$tmp/checksums"
+  want=$(awk -v f="$(basename "$1")" '$2 == f {print $1}' "$tmp/checksums")
+  [ -n "$want" ] || { echo "no checksum for $(basename "$1") at $2" >&2; return 1; }
+  echo "$want  $1" | sha256sum -c --quiet -
+}
+
+install_golangci_lint() {
+  local v=${GOLANGCI_LINT_VERSION#v} url tgz
+  url=https://github.com/golangci/golangci-lint/releases/download/v$v
+  tgz=golangci-lint-$v-linux-$goarch.tar.gz
+  "$root/hack/fetch-file" "$url/$tgz" "$tmp/$tgz"
+  verify "$tmp/$tgz" "$url/golangci-lint-$v-checksums.txt"
+  tar -xzf "$tmp/$tgz" -C "$tmp" "golangci-lint-$v-linux-$goarch/golangci-lint"
+  mv "$tmp/golangci-lint-$v-linux-$goarch/golangci-lint" "$dir/"
+}
+
+# protoc finds the well-known types in the include directory next to it.
+# Upstream publishes no checksums for it.
+install_protoc() {
+  local v=${PROTOC_VERSION#v} zip arch
+  case "$goarch" in
+    amd64) arch=x86_64 ;;
+    arm64) arch=aarch_64 ;;
+    ppc64le) arch=ppcle_64 ;;
+    s390x) arch=s390_64 ;;
+    *) echo "no protoc release for $goarch" >&2; return 1 ;;
+  esac
+  zip=protoc-$v-linux-$arch.zip
+  "$root/hack/fetch-file" "https://github.com/protocolbuffers/protobuf/releases/download/v$v/$zip" "$tmp/$zip"
+  mkdir "$tmp/protoc"
+  if command -v bsdtar >/dev/null; then
+    bsdtar -xf "$tmp/$zip" -C "$tmp/protoc" bin/protoc include
+  else
+    unzip -q "$tmp/$zip" bin/protoc 'include/*' -d "$tmp/protoc"
+  fi
+  mv "$tmp/protoc/bin/protoc" "$tmp/protoc/include" "$dir/"
+  chmod +x "$dir/protoc"
+}
+
+# crane and kind run on the host, so their make targets build them for the
+# host's OS rather than this one.
+host_tools='github.com/google/go-containerregistry/cmd/crane|sigs.k8s.io/kind'
+(cd "$root" && GOBIN="$dir" go install $(go list tool | grep -vxE "$host_tools"))
+
+goos=$(go env GOOS)
+goarch=$(go env GOARCH)
+if [ "$goos" = linux ]; then
+  install_golangci_lint
+  install_protoc
+else
+  echo "install-build-tools: no $goos release binaries here; golangci-lint and protoc come from PATH" >&2
+fi
+
+touch "$dir/.installed"
+if [ -d "$final" ] && [ ! -f "$final/.installed" ]; then
+  rm -rf "$final"
+fi
+# Fails when another build got there first, with the same set.
+mv -T "$dir" "$final" 2>/dev/null || true

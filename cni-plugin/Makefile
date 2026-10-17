@@ -1,3 +1,17 @@
+# Copyright (c) 2015-2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/cni-plugin
@@ -126,7 +140,7 @@ fv:
 .PHONY: install-kubevirt-crds
 install-kubevirt-crds:
 	@echo "Installing KubeVirt CRDs for testing..."
-	@while ! docker exec calico-local-apiserver kubectl \
+	@while ! docker exec $(APISERVER_NAME) $(K8S_BIN_MOUNT)/kubectl \
 		apply -f /go/src/github.com/projectcalico/calico/cni-plugin/tests/kubevirt-test-crds.yaml; \
 		do echo "Waiting to install KubeVirt CRDs..."; \
 		sleep 1; \
@@ -137,7 +151,7 @@ install-kubevirt-crds:
 .PHONY: remove-kubevirt-crds
 remove-kubevirt-crds:
 	@echo "Removing KubeVirt CRDs..."
-	@docker exec calico-local-apiserver kubectl \
+	@docker exec $(APISERVER_NAME) $(K8S_BIN_MOUNT)/kubectl \
 		delete -f /go/src/github.com/projectcalico/calico/cni-plugin/tests/kubevirt-test-crds.yaml 2>/dev/null || \
 		echo "KubeVirt CRDs already removed or not present"
 

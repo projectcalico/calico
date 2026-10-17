@@ -1,0 +1,23 @@
+# Wasm output is architecture-agnostic, but the *toolchain* benefits from
+# running native — building on an arm64 host with an arm64 image avoids
+# qemu emulation. TinyGo upstream ships amd64 + arm64 Linux tarballs only
+# (no ppc64le/s390x), so the matrix here matches the upstream coverage.
+tinygo:
+  version: 0.34.0
+  checksum:
+    sha256:
+      amd64: 8acd27a39090e1e5c3ca341e81350f813ec6a02bf8090c4fc7c4b1afd4186341
+      arm64: a84b5134dc5144a494e3b7e78579536aca34c77951ddd0b19c300209d8b541e1
+# TinyGo 0.34 caps the host `go` invocation at 1.23.x. Pin Go directly to
+# 1.23.12 (latest compatible patch on the stable channel) instead of
+# bundling a newer Go and forcing GOTOOLCHAIN switching at build time —
+# the latter requires write access to GOPATH/pkg/sumdb which downstream
+# consumers (e.g. gateway/coraza-wasm) cannot reliably provide when the
+# tinygo container runs as the host user via `--user $(id -u):$(id -g)`.
+# When TinyGo relaxes its host-Go upper bound, bump in lockstep.
+golang:
+  version: 1.23.12
+  checksum:
+    sha256:
+      amd64: d3847fef834e9db11bf64e3fb34db9c04db14e068eeb064f49af747010454f90
+      arm64: 52ce172f96e21da53b1ae9079808560d49b02ac86cecfa457217597f9bc28ab3

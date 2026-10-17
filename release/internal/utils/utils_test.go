@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ import (
 )
 
 func TestReleaseDirsImages(t *testing.T) {
+	// What a parent `make -C release ut` passes down.
+	t.Setenv("MAKEFLAGS", "w")
 	repoRoot, err := command.GitDir()
 	if err != nil {
 		t.Fatalf("failed to get repo root dir: %v", err)

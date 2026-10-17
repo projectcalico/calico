@@ -26,6 +26,7 @@
   "postUpdateOptions": ["gomodTidy"],
   "customManagers": [
     {
+      "description": "Release branches only: master's metadata.mk derives GO_VERSION from go.mod, so this matches nothing there",
       "customType": "regex",
       "managerFilePatterns": ["/^metadata\\.mk$/"],
       "matchStrings": ["GO_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
@@ -40,6 +41,7 @@
       "datasourceTemplate": "golang-version"
     },
     {
+      "description": "Release branches only: master's metadata.mk derives K8S_VERSION from go.mod's k8s.io/kubernetes, which gomod updates",
       "customType": "regex",
       "managerFilePatterns": ["/^metadata\\.mk$/"],
       "matchStrings": ["K8S_VERSION=v(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
@@ -57,9 +59,24 @@
     },
     {
       "customType": "regex",
-      "managerFilePatterns": ["/^third_party\\/envoy-gateway\\/Makefile$/"],
-      "matchStrings": ["ENVOY_GATEWAY_VERSION=v(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
-      "depNameTemplate": "envoyproxy/gateway",
+      "managerFilePatterns": ["/^metadata\\.mk$/"],
+      "matchStrings": ["GOLANGCI_LINT_VERSION=(?<currentValue>v\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "golangci/golangci-lint",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^metadata\\.mk$/"],
+      "matchStrings": ["GITHUB_CLI_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "cli/cli",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^metadata\\.mk$/"],
+      "matchStrings": ["PROTOC_VERSION=(?<currentValue>\\d+\\.\\d+)"],
+      "depNameTemplate": "protocolbuffers/protobuf",
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^v(?<version>.*)$"
     },
@@ -81,8 +98,8 @@
     },
     {
       "customType": "regex",
-      "managerFilePatterns": ["/^istio\\/Makefile$/"],
-      "matchStrings": ["ISTIO_VERSION \\?= (?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "managerFilePatterns": ["/^metadata\\.mk$/"],
+      "matchStrings": ["ISTIO_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
       "depNameTemplate": "istio/istio",
       "datasourceTemplate": "github-releases"
     }
@@ -112,12 +129,12 @@
     },
     {
       "description": "Bundled third-party images: off by default, so a new release branch never picks them up implicitly. No matchUpdateTypes here or in the rule below: enabled is resolved before lookup, so an update-type gate stops the rule ever applying",
-      "matchDepNames": ["envoyproxy/gateway", "quay.io/tigera/envoybinary", "https://github.com/envoyproxy/ratelimit", "istio/istio"],
+      "matchDepNames": ["quay.io/tigera/envoybinary", "https://github.com/envoyproxy/ratelimit", "istio/istio"],
       "enabled": false
     },
     {
       "description": "Bundled third-party images: on for master only. A bump on a release branch is a backport risk decision, so it stays with hack/cherry-pick-pull",
-      "matchDepNames": ["envoyproxy/gateway", "quay.io/tigera/envoybinary", "https://github.com/envoyproxy/ratelimit", "istio/istio"],
+      "matchDepNames": ["quay.io/tigera/envoybinary", "https://github.com/envoyproxy/ratelimit", "istio/istio"],
       "matchBaseBranches": ["master"],
       "enabled": true
     },
@@ -155,8 +172,17 @@
       }
     },
     {
+      "description": "On master a Go bump also needs new tarball checksums for calico/go-build and the new tag in .argoci/config.yaml. Repeats gen-deps-files because this rule's commands replace the rule above",
+      "matchBaseBranches": ["master"],
+      "postUpgradeTasks": {
+        "commands": ["make gen-deps-files", "make -C toolchain/images/go-build update-pins"],
+        "fileFilters": ["**/deps.txt", "toolchain/images/go-build/go.sha256", ".argoci/config.yaml"],
+        "executionMode": "branch"
+      }
+    },
+    {
       "description": "Bundled third-party images: one PR, and rebuild the derived dependency patches on the branch. Sets no enabled key -- after the block above, that would undo it",
-      "matchDepNames": ["envoyproxy/gateway", "quay.io/tigera/envoybinary", "https://github.com/envoyproxy/ratelimit", "istio/istio"],
+      "matchDepNames": ["quay.io/tigera/envoybinary", "https://github.com/envoyproxy/ratelimit", "istio/istio"],
       "matchBaseBranches": ["master"],
       "groupName": "third-party-images",
       "postUpgradeTasks": {

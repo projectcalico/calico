@@ -18,10 +18,19 @@ func NewSessionDialer(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *SessionDialer {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &SessionDialer{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -74,7 +83,7 @@ type SessionDialer_Dial_Call struct {
 
 // Dial is a helper method to define mock.On call
 //   - ctx context.Context
-func (_e *SessionDialer_Expecter) Dial(ctx interface{}) *SessionDialer_Dial_Call {
+func (_e *SessionDialer_Expecter) Dial(ctx any) *SessionDialer_Dial_Call {
 	return &SessionDialer_Dial_Call{Call: _e.mock.On("Dial", ctx)}
 }
 

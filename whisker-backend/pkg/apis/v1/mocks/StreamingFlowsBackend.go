@@ -19,10 +19,19 @@ func NewStreamingFlowsBackend(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *StreamingFlowsBackend {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &StreamingFlowsBackend{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -32,25 +41,12 @@ type StreamingFlowsBackend struct {
 	mock.Mock
 }
 
-// List provides a mock function for the type StreamingFlowsBackend
-func (_mock *StreamingFlowsBackend) List(ctx context.Context, params v1.ListFlowsParams) (apiutil.ListMeta, []v1.FlowResponse, error) {
-	ret := _mock.Called(ctx, params)
+type StreamingFlowsBackend_Expecter struct {
+	mock *mock.Mock
+}
 
-	if len(ret) == 0 {
-		panic("no return value specified for List")
-	}
-
-	var r0 apiutil.ListMeta
-	if ret.Get(0) != nil {
-		r0 = ret.Get(0).(apiutil.ListMeta)
-	}
-
-	var r1 []v1.FlowResponse
-	if ret.Get(1) != nil {
-		r1 = ret.Get(1).([]v1.FlowResponse)
-	}
-
-	return r0, r1, ret.Error(2)
+func (_m *StreamingFlowsBackend) EXPECT() *StreamingFlowsBackend_Expecter {
+	return &StreamingFlowsBackend_Expecter{mock: &_m.Mock}
 }
 
 // FilterHints provides a mock function for the type StreamingFlowsBackend
@@ -62,16 +58,149 @@ func (_mock *StreamingFlowsBackend) FilterHints(ctx context.Context, params v1.F
 	}
 
 	var r0 apiutil.ListMeta
-	if ret.Get(0) != nil {
+	var r1 []v1.FlowFilterHintResponse
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v1.FlowFilterHintsRequest, v1.FlowFilterFunc) (apiutil.ListMeta, []v1.FlowFilterHintResponse, error)); ok {
+		return returnFunc(ctx, params, includeFlow)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v1.FlowFilterHintsRequest, v1.FlowFilterFunc) apiutil.ListMeta); ok {
+		r0 = returnFunc(ctx, params, includeFlow)
+	} else {
 		r0 = ret.Get(0).(apiutil.ListMeta)
 	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v1.FlowFilterHintsRequest, v1.FlowFilterFunc) []v1.FlowFilterHintResponse); ok {
+		r1 = returnFunc(ctx, params, includeFlow)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).([]v1.FlowFilterHintResponse)
+		}
+	}
+	if returnFunc, ok := ret.Get(2).(func(context.Context, v1.FlowFilterHintsRequest, v1.FlowFilterFunc) error); ok {
+		r2 = returnFunc(ctx, params, includeFlow)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
 
-	var r1 []v1.FlowFilterHintResponse
-	if ret.Get(1) != nil {
-		r1 = ret.Get(1).([]v1.FlowFilterHintResponse)
+// StreamingFlowsBackend_FilterHints_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FilterHints'
+type StreamingFlowsBackend_FilterHints_Call struct {
+	*mock.Call
+}
+
+// FilterHints is a helper method to define mock.On call
+//   - ctx context.Context
+//   - params v1.FlowFilterHintsRequest
+//   - includeFlow v1.FlowFilterFunc
+func (_e *StreamingFlowsBackend_Expecter) FilterHints(ctx any, params any, includeFlow any) *StreamingFlowsBackend_FilterHints_Call {
+	return &StreamingFlowsBackend_FilterHints_Call{Call: _e.mock.On("FilterHints", ctx, params, includeFlow)}
+}
+
+func (_c *StreamingFlowsBackend_FilterHints_Call) Run(run func(ctx context.Context, params v1.FlowFilterHintsRequest, includeFlow v1.FlowFilterFunc)) *StreamingFlowsBackend_FilterHints_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 v1.FlowFilterHintsRequest
+		if args[1] != nil {
+			arg1 = args[1].(v1.FlowFilterHintsRequest)
+		}
+		var arg2 v1.FlowFilterFunc
+		if args[2] != nil {
+			arg2 = args[2].(v1.FlowFilterFunc)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *StreamingFlowsBackend_FilterHints_Call) Return(meta apiutil.ListMeta, hints []v1.FlowFilterHintResponse, err error) *StreamingFlowsBackend_FilterHints_Call {
+	_c.Call.Return(meta, hints, err)
+	return _c
+}
+
+func (_c *StreamingFlowsBackend_FilterHints_Call) RunAndReturn(run func(ctx context.Context, params v1.FlowFilterHintsRequest, includeFlow v1.FlowFilterFunc) (apiutil.ListMeta, []v1.FlowFilterHintResponse, error)) *StreamingFlowsBackend_FilterHints_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// List provides a mock function for the type StreamingFlowsBackend
+func (_mock *StreamingFlowsBackend) List(ctx context.Context, params v1.ListFlowsParams) (apiutil.ListMeta, []v1.FlowResponse, error) {
+	ret := _mock.Called(ctx, params)
+
+	if len(ret) == 0 {
+		panic("no return value specified for List")
 	}
 
-	return r0, r1, ret.Error(2)
+	var r0 apiutil.ListMeta
+	var r1 []v1.FlowResponse
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v1.ListFlowsParams) (apiutil.ListMeta, []v1.FlowResponse, error)); ok {
+		return returnFunc(ctx, params)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v1.ListFlowsParams) apiutil.ListMeta); ok {
+		r0 = returnFunc(ctx, params)
+	} else {
+		r0 = ret.Get(0).(apiutil.ListMeta)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v1.ListFlowsParams) []v1.FlowResponse); ok {
+		r1 = returnFunc(ctx, params)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).([]v1.FlowResponse)
+		}
+	}
+	if returnFunc, ok := ret.Get(2).(func(context.Context, v1.ListFlowsParams) error); ok {
+		r2 = returnFunc(ctx, params)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// StreamingFlowsBackend_List_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'List'
+type StreamingFlowsBackend_List_Call struct {
+	*mock.Call
+}
+
+// List is a helper method to define mock.On call
+//   - ctx context.Context
+//   - params v1.ListFlowsParams
+func (_e *StreamingFlowsBackend_Expecter) List(ctx any, params any) *StreamingFlowsBackend_List_Call {
+	return &StreamingFlowsBackend_List_Call{Call: _e.mock.On("List", ctx, params)}
+}
+
+func (_c *StreamingFlowsBackend_List_Call) Run(run func(ctx context.Context, params v1.ListFlowsParams)) *StreamingFlowsBackend_List_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 v1.ListFlowsParams
+		if args[1] != nil {
+			arg1 = args[1].(v1.ListFlowsParams)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *StreamingFlowsBackend_List_Call) Return(meta apiutil.ListMeta, flows []v1.FlowResponse, err error) *StreamingFlowsBackend_List_Call {
+	_c.Call.Return(meta, flows, err)
+	return _c
+}
+
+func (_c *StreamingFlowsBackend_List_Call) RunAndReturn(run func(ctx context.Context, params v1.ListFlowsParams) (apiutil.ListMeta, []v1.FlowResponse, error)) *StreamingFlowsBackend_List_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // Stream provides a mock function for the type StreamingFlowsBackend
@@ -83,9 +212,61 @@ func (_mock *StreamingFlowsBackend) Stream(ctx context.Context, params v1.ListFl
 	}
 
 	var r0 v1.FlowStream
-	if ret.Get(0) != nil {
-		r0 = ret.Get(0).(v1.FlowStream)
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v1.ListFlowsParams) (v1.FlowStream, error)); ok {
+		return returnFunc(ctx, params)
 	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v1.ListFlowsParams) v1.FlowStream); ok {
+		r0 = returnFunc(ctx, params)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(v1.FlowStream)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v1.ListFlowsParams) error); ok {
+		r1 = returnFunc(ctx, params)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
 
-	return r0, ret.Error(1)
+// StreamingFlowsBackend_Stream_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Stream'
+type StreamingFlowsBackend_Stream_Call struct {
+	*mock.Call
+}
+
+// Stream is a helper method to define mock.On call
+//   - ctx context.Context
+//   - params v1.ListFlowsParams
+func (_e *StreamingFlowsBackend_Expecter) Stream(ctx any, params any) *StreamingFlowsBackend_Stream_Call {
+	return &StreamingFlowsBackend_Stream_Call{Call: _e.mock.On("Stream", ctx, params)}
+}
+
+func (_c *StreamingFlowsBackend_Stream_Call) Run(run func(ctx context.Context, params v1.ListFlowsParams)) *StreamingFlowsBackend_Stream_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 v1.ListFlowsParams
+		if args[1] != nil {
+			arg1 = args[1].(v1.ListFlowsParams)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *StreamingFlowsBackend_Stream_Call) Return(flowStream v1.FlowStream, err error) *StreamingFlowsBackend_Stream_Call {
+	_c.Call.Return(flowStream, err)
+	return _c
+}
+
+func (_c *StreamingFlowsBackend_Stream_Call) RunAndReturn(run func(ctx context.Context, params v1.ListFlowsParams) (v1.FlowStream, error)) *StreamingFlowsBackend_Stream_Call {
+	_c.Call.Return(run)
+	return _c
 }
