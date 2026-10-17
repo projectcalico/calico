@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"reflect"
@@ -34,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/lib/logrusr"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 type routeManager struct {
@@ -78,6 +80,11 @@ type routeManager struct {
 	// created and maintained by the V4 manager and the V6 manager is
 	// responsible only for assigning the right V6 IP to the device.
 	maintainIPOnly bool
+
+	// tunnelVNIs, if set, is the exact VNI filter of a VNI-filtering VXLAN device.
+	tunnelVNIs []uint32
+	// vniFilterIfIndex is the device whose VNI filter was last reconciled; a new device starts empty.
+	vniFilterIfIndex int
 }
 
 func newRouteManager(
@@ -655,6 +662,13 @@ func (m *routeManager) configureTunnelDevice(
 		}
 	}
 
+	if len(m.tunnelVNIs) > 0 && link.Attrs().Index != m.vniFilterIfIndex {
+		if err := m.ensureVNIFilter(link); err != nil {
+			return fmt.Errorf("failed to set VNI filter: %w", err)
+		}
+		m.vniFilterIfIndex = link.Attrs().Index
+	}
+
 	// Make sure the MTU is set correctly.
 	attrs := link.Attrs()
 	oldMTU := attrs.MTU
@@ -692,6 +706,62 @@ func (m *routeManager) configureTunnelDevice(
 	}
 
 	return nil
+}
+
+// ensureVNIFilter makes the device's VNI filter exactly tunnelVNIs, leaving other VNIs on its port free.
+func (m *routeManager) ensureVNIFilter(link netlink.Link) error {
+	all, err := m.nlHandle.BridgeVniList()
+	if err != nil {
+		return fmt.Errorf("failed to list VNI filters: %w", err)
+	}
+	desired := set.FromArray(m.tunnelVNIs)
+	present := set.New[uint32]()
+	for _, info := range all[int32(link.Attrs().Index)] {
+		start, end := info.Vni, max(info.VniEnd, info.Vni)
+		if allDesired(start, end, desired) {
+			for vni := start; vni <= end; vni++ {
+				present.Add(vni)
+			}
+			continue
+		}
+		m.logCtx.WithFields(logrus.Fields{"start": start, "end": end}).Info("Removing stale VNIs from tunnel device filter")
+		var err error
+		if end > start {
+			err = m.nlHandle.BridgeVniDelRange(link, start, end)
+		} else {
+			err = m.nlHandle.BridgeVniDel(link, start)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to remove VNIs %d-%d: %w", start, end, err)
+		}
+	}
+
+	for vni := range desired.All() {
+		if present.Contains(vni) {
+			continue
+		}
+		m.logCtx.WithField("vni", vni).Info("Adding VNI to tunnel device filter")
+		if err := m.nlHandle.BridgeVniAdd(link, vni); errors.Is(err, syscall.EEXIST) {
+			return fmt.Errorf("VNI %d is already used by another VXLAN device on port %d; "+
+				"change VXLANVNI or the other device's VNI: %w", vni, m.dpConfig.RulesConfig.VXLANPort, err)
+		} else if err != nil {
+			return fmt.Errorf("failed to add VNI %d: %w", vni, err)
+		}
+	}
+	return nil
+}
+
+// allDesired reports whether every VNI in [start, end] is desired; a range longer than the set cannot be.
+func allDesired(start, end uint32, desired set.Set[uint32]) bool {
+	if end-start >= uint32(desired.Len()) {
+		return false
+	}
+	for vni := start; vni <= end; vni++ {
+		if !desired.Contains(vni) {
+			return false
+		}
+	}
+	return true
 }
 
 // ensureAddressOnLink reconciles the Calico-managed address on the tunnel device so that the desired
