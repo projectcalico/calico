@@ -19,6 +19,3 @@ ci: static-checks ut
 ut:
 	mkdir -p report
 	$(DOCKER_GO_BUILD) gotestsum --junitfile report/webhooks_ut.xml -- ./... -coverprofile coverage.profile -race -count 1
-
-gen-mocks:
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'mockery'
