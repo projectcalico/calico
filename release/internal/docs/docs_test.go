@@ -21,10 +21,11 @@ import (
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
-func site(v string) Site {
+func site(t testing.TB, v string) Site {
+	t.Helper()
 	ver, err := version.New(v)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	return Site{Version: ver}
 }
@@ -43,7 +44,7 @@ func TestURL(t *testing.T) {
 			"other stream":   {"v3.31.0", "3.31"},
 		} {
 			t.Run(name, func(t *testing.T) {
-				got, err := site(tc.version).URL()
+				got, err := site(t, tc.version).URL()
 				if err != nil {
 					t.Fatalf("URL() = %v", err)
 				}
@@ -56,7 +57,7 @@ func TestURL(t *testing.T) {
 	})
 
 	t.Run("drops the version prefix", func(t *testing.T) {
-		got, err := site("v3.30.0").URL()
+		got, err := site(t, "v3.30.0").URL()
 		if err != nil {
 			t.Fatalf("URL() = %v", err)
 		}
@@ -72,7 +73,7 @@ func TestURL(t *testing.T) {
 		t.Cleanup(func() { ProductSlug = original })
 		ProductSlug = "other-product"
 
-		got, err := site("v3.30.0").URL()
+		got, err := site(t, "v3.30.0").URL()
 		if err != nil {
 			t.Fatalf("URL() = %v", err)
 		}
@@ -86,7 +87,7 @@ func TestDownloadsURL(t *testing.T) {
 	t.Run("uses the exact version", func(t *testing.T) {
 		for _, ver := range []string{"v3.30.0", "v3.30.1", "v3.30.0-1.0", "v3.30.0-0.dev-1-gabc123"} {
 			t.Run(ver, func(t *testing.T) {
-				got, err := site(ver).DownloadsURL()
+				got, err := site(t, ver).DownloadsURL()
 				if err != nil {
 					t.Fatalf("DownloadsURL() = %v", err)
 				}
@@ -98,7 +99,7 @@ func TestDownloadsURL(t *testing.T) {
 	})
 
 	t.Run("distinguishes patches that share a docs page", func(t *testing.T) {
-		first, second := site("v3.30.0"), site("v3.30.1")
+		first, second := site(t, "v3.30.0"), site(t, "v3.30.1")
 
 		firstDocs, err := first.URL()
 		if err != nil {
@@ -132,7 +133,7 @@ func TestDownloadsURL(t *testing.T) {
 		t.Cleanup(func() { BaseArtifactsURL = original })
 		BaseArtifactsURL = "https://example.test/artifacts"
 
-		got, err := site("v3.30.0").DownloadsURL()
+		got, err := site(t, "v3.30.0").DownloadsURL()
 		if err != nil {
 			t.Fatalf("DownloadsURL() = %v", err)
 		}
