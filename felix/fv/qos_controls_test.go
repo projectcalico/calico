@@ -1117,10 +1117,6 @@ var _ = infrastructure.DatastoreDescribe(
 							// the reap to entryDone's two-minute window.
 							By("Freezing the clients so the connections idle")
 							Expect(w[1].C.ExecMayFail("pkill", "-STOP", "-f", "test-connection")).NotTo(HaveOccurred())
-							pongsBefore := make([]int, len(pcs))
-							for i, pc := range pcs {
-								pongsBefore[i] = pc.PongCount()
-							}
 
 							By("Forging an out-of-window RST for each live connection")
 							for _, sp := range srcPorts {
@@ -1156,15 +1152,24 @@ var _ = infrastructure.DatastoreDescribe(
 
 							By("Resuming the clients")
 							Expect(w[1].C.ExecMayFail("pkill", "-CONT", "-f", "test-connection")).NotTo(HaveOccurred())
-							// Dying is a legitimate outcome here, so poll rather than assert.
-							time.Sleep(10 * time.Second)
-							survived := 0
-							for i, pc := range pcs {
-								if pc.PongCount() > pongsBefore[i] {
-									survived++
+							// A reply that landed as a client froze is read on resume; only later pongs count.
+							staleCutoff := time.Now().Add(time.Second)
+							survivors := func() int {
+								n := 0
+								for _, pc := range pcs {
+									if pc.LastPongTime().After(staleCutoff) {
+										n++
+									}
 								}
+								return n
 							}
-							logrus.Infof("CORE-13478: %d of %d connections survived the reap", survived, numConnections)
+							if viaNetfilter {
+								Eventually(survivors, "10s", "200ms").Should(Equal(numConnections),
+									"the connections did not survive the forged RSTs")
+							} else {
+								Consistently(survivors, "10s", "500ms").Should(BeZero(),
+									"a reaped connection survived with no conntrack state")
+							}
 
 							By("Measuring how many extra connections the reap bought")
 							extra := 0
@@ -1185,10 +1190,8 @@ var _ = infrastructure.DatastoreDescribe(
 								extra, numConnections, getBPFCurrentCount(1, 1, "egress")())
 
 							if viaNetfilter {
-								Expect(survived).To(Equal(numConnections), "the connections did not survive the forged RSTs")
 								Expect(extra).To(BeZero(), "a forged RST freed a slot its live connection still holds")
 							} else {
-								Expect(survived).To(BeZero(), "a reaped connection survived with no conntrack state")
 								Expect(extra).To(Equal(numConnections), "the reap did not free the dead connections' slots")
 							}
 						}
