@@ -39,6 +39,17 @@ source "$my_dir/bulk-create-vms"
 # shellcheck source=../../felix/.semaphore/batches.sh
 source "$repo_dir/$COMPONENT/.semaphore/batches.sh"
 
+all_batches=( "${batches[@]}" )
+if [ -n "${BATCH_MEMO_PREFIX:-}" ]; then
+  source "$my_dir/batch-memo"
+  batch_memo_skip_cached "$artifacts_dir"
+  if [ ${#batches[@]} -eq 0 ]; then
+    batch_memo_record_lane "$artifacts_dir" "${all_batches[@]}"
+    echo "===== Every batch passed on an earlier run with the same inputs; exiting with RC=0 ====="
+    exit 0
+  fi
+fi
+
 ###### Create the test VMs ######
 
 names=""
@@ -282,6 +293,9 @@ for batch in "${batches[@]}"; do
     else
       echo "$prefix Artifact retrieval FAILED (rc=$?)"
     fi
+    if [ $rc = 0 ] && [ -n "${BATCH_MEMO_PREFIX:-}" ]; then
+      batch_memo_record "$artifacts_dir" "$batch"
+    fi
 
     echo "$prefix Deleting test VM $vm_name"
     if timeout 300 gcloud --quiet beta compute instances delete "$vm_name" --zone="${zone}" --no-graceful-shutdown; then
@@ -466,6 +480,10 @@ for s in "${summary[@]}"; do
   echo "  $s"
 done
 echo
+
+if [ $final_result = 0 ] && [ -n "${BATCH_MEMO_PREFIX:-}" ]; then
+  batch_memo_record_lane "$artifacts_dir" "${all_batches[@]}"
+fi
 
 echo "===== Done, exiting with RC=$final_result ====="
 
