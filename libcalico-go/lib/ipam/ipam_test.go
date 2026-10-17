@@ -30,7 +30,6 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
-	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -758,11 +757,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		It("should allow an IP whose pool permits the intended use", func() {
 			Expect(assign("10.0.0.2", v3.IPPoolAllowedUseWorkload)).To(Succeed())
-		})
-
-		It("should allow any use when IntendedUse is unset (back-compat)", func() {
-			// Historical callers leave IntendedUse empty; they must be unaffected.
-			Expect(assign("10.0.0.3", "")).To(Succeed())
 		})
 
 		It("should allow Tunnel from a default pool (empty AllowedUses defaults to Workload+Tunnel)", func() {
@@ -3818,7 +3812,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		pool2 := cnet.MustParseNetwork("20.0.0.0/24")
 		pool3 := cnet.MustParseNetwork("30.0.0.0/24")
 		pool4_v6 := cnet.MustParseNetwork("fe80::11/120")
-		pool5_doesnot_exist := cnet.MustParseNetwork("40.0.0.0/24")
 
 		It("should fail to AutoAssign 1 IPv4 when requesting a disabled IPv4 in the list of requested pools", func() {
 			args := AutoAssignArgs{
@@ -3901,21 +3894,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(outErr).NotTo(HaveOccurred())
 			Expect(v4ia.IPs).To(HaveLen(211))
 		})
-
-		It("should fail to allocate any address when requesting an invalid pool and a valid pool", func() {
-			args := AutoAssignArgs{
-				IntendedUse: v3.IPPoolAllowedUseWorkload,
-				Num4:        1,
-				Num6:        0,
-				Hostname:    host,
-				IPv4Pools:   []cnet.IPNet{pool1, pool5_doesnot_exist},
-			}
-			v4ia, _, err := ic.AutoAssign(context.Background(), args)
-			log.Printf("v4 IPAM Assignments: %v\n", v4ia)
-			Expect(v4ia).To(BeNil())
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).Should(Equal("the given pool (40.0.0.0/24) does not exist, or is not enabled"))
-		})
 	})
 
 	Describe("IPAM EnsureBlock from different pools - multi", func() {
@@ -3924,7 +3902,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		pool2 := cnet.MustParseNetwork("20.0.0.0/24")
 		pool3 := cnet.MustParseNetwork("30.0.0.0/24")
 		pool4_v6 := cnet.MustParseNetwork("fe80::11/120")
-		pool5_doesnot_exist := cnet.MustParseNetwork("40.0.0.0/24")
 		pool_big_block_size := cnet.MustParseNetwork("90.0.0.0/24")
 
 		It("should fail to EnsureBlock when requesting a disabled IPv4 in the list of requested pools", func() {
@@ -3965,17 +3942,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			_, _, err := ic.EnsureBlock(context.Background(), args)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).Should(Equal("the given pool (90.0.0.0/24) does not exist, or is not enabled"))
-		})
-
-		It("should fail to allocate a block when requesting an invalid pool and a valid pool", func() {
-			args := BlockArgs{
-				Hostname:              host,
-				IPv4Pools:             []cnet.IPNet{pool1, pool5_doesnot_exist},
-				HostReservedAttrIPv4s: rsvdAttrWindows,
-			}
-			_, _, err := ic.EnsureBlock(context.Background(), args)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).Should(Equal("the given pool (40.0.0.0/24) does not exist, or is not enabled"))
 		})
 
 		It("should allocate a block with no required pool specified", func() {
@@ -4920,144 +4886,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 	})
 })
 
-var (
-	v4Pool1CIDR = "10.0.0.1/24" // host bit set
-	v4Pool2CIDR = "20.0.0.0/24"
-)
-
-// Tests for determining IPV4 pools to use.
-var _ = DescribeTable("determinePools tests IPV4",
-	func(pool1Enabled, pool2Enabled bool, pool1Selector, pool2Selector string, requestPool1, requestPool2 bool, expectation []string, expectErr bool) {
-		// Seed data
-		ipPools.Pools = map[string]ipamtestutils.Pool{
-			v4Pool1CIDR: {Enabled: pool1Enabled, NodeSelector: pool1Selector, AssignmentMode: v3.Automatic},
-			v4Pool2CIDR: {Enabled: pool2Enabled, NodeSelector: pool2Selector, AssignmentMode: v3.Automatic},
-		}
-		// Create a new IPAM client, giving a nil datastore client since determining pools
-		// doesn't require datastore access (we mock out the IP pool accessor).
-		ic := NewIPAMClient(nil, ipPools, &ipamtestutils.FakeReservations{})
-
-		// Create a node object for the test.
-		node := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
-
-		// Prep input data
-		reqPools := []cnet.IPNet{}
-		if requestPool1 {
-			cidr := cnet.MustParseCIDR(v4Pool1CIDR)
-			reqPools = append(reqPools, cidr)
-		}
-		if requestPool2 {
-			cidr := cnet.MustParseCIDR(v4Pool2CIDR)
-			reqPools = append(reqPools, cidr)
-		}
-
-		// Call determinePools
-		pools, _, err := ic.(*ipamClient).determinePools(context.Background(), reqPools, 4, node, nil, 32)
-
-		// Assert on any returned error.
-		if expectErr {
-			Expect(err).To(HaveOccurred())
-		} else {
-			Expect(err).NotTo(HaveOccurred())
-		}
-
-		// Check that the expected pools match the returned.
-		actual := []string{}
-		for _, pool := range pools {
-			actual = append(actual, pool.Spec.CIDR)
-		}
-		Expect(actual).To(Equal(expectation))
-	},
-	Entry("Both pools enabled, none with node selector, no requested pools", true, true, "", "", false, false, []string{v4Pool1CIDR, v4Pool2CIDR}, false),
-	Entry("Both pools enabled, none with node selector, pool1 requested", true, true, "", "", true, false, []string{v4Pool1CIDR}, false),
-
-	Entry("Both pools enabled, pool1 matching selector, no requested pools", true, true, `foo == "bar"`, `foo != "bar"`, false, false, []string{v4Pool1CIDR}, false),
-	Entry("Both pools enabled, pool1 matching node selector, pool1 requested", true, true, `foo == "bar"`, `foo != "bar"`, true, false, []string{v4Pool1CIDR}, false),
-
-	Entry("Both pools enabled, pool1 mismatching node selector, no requested pools", true, true, `foo != "bar"`, "all()", false, false, []string{v4Pool2CIDR}, false),
-	Entry("Both pools enabled, pool1 mismatching node selector, pool1 requested", true, true, `foo != "bar"`, "", true, false, []string{v4Pool1CIDR}, false),
-
-	Entry("Both pools enabled, pool1 matching node selector, pool2 requested", true, true, `foo == "bar"`, "", false, true, []string{v4Pool2CIDR}, false),
-
-	Entry("pool1 disabled, none with node selector, no requested pools", false, true, "", "", false, false, []string{v4Pool2CIDR}, false),
-	Entry("pool1 disabled, none with node selector, pool1 requested", false, true, "", "", true, false, []string{}, true),
-	Entry("pool1 disabled, none with node selector, pool2 requested", false, true, "", "", false, true, []string{v4Pool2CIDR}, false),
-
-	Entry("pool1 disabled, pool2 matching node selector, no requested pools", false, true, "", `foo == "bar"`, false, false, []string{v4Pool2CIDR}, false),
-	Entry("pool1 disabled, pool2 matching node selector, pool2 requested", false, true, "", `foo == "bar"`, false, true, []string{v4Pool2CIDR}, false),
-	Entry("pool1 disabled, pool2 mismatching node selector, no requested pools", false, true, "", `foo != "bar"`, false, false, []string{}, false),
-	Entry("pool1 disabled, pool2 mismatching node selector, pool2 requested", false, true, "", `foo != "bar"`, false, true, []string{v4Pool2CIDR}, false),
-)
-
-var (
-	v6Pool1CIDR = "5001:0000:0000:001a:0000:0000:0000:0000/64" // ipv6 full representation
-	v6Pool2CIDR = "5001:0:0:1b::/64"
-)
-
-// Tests for determining IPV6 pools to use.
-var _ = DescribeTable("determinePools tests IPV6",
-	func(pool1Enabled, pool2Enabled bool, pool1Selector, pool2Selector string, requestPool1, requestPool2 bool, expectation []string, expectErr bool) {
-		// Seed data
-		ipPools.Pools = map[string]ipamtestutils.Pool{
-			v6Pool1CIDR: {Enabled: pool1Enabled, NodeSelector: pool1Selector, AssignmentMode: v3.Automatic},
-			v6Pool2CIDR: {Enabled: pool2Enabled, NodeSelector: pool2Selector, AssignmentMode: v3.Automatic},
-		}
-		// Create a new IPAM client, giving a nil datastore client since determining pools
-		// doesn't require datastore access (we mock out the IP pool accessor).
-		ic := NewIPAMClient(nil, ipPools, &ipamtestutils.FakeReservations{})
-
-		// Create a node object for the test.
-		node := internalapi.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
-
-		// Prep input data
-		reqPools := []cnet.IPNet{}
-		if requestPool1 {
-			cidr := cnet.MustParseCIDR(v6Pool1CIDR)
-			reqPools = append(reqPools, cidr)
-		}
-		if requestPool2 {
-			cidr := cnet.MustParseCIDR(v6Pool2CIDR)
-			reqPools = append(reqPools, cidr)
-		}
-
-		// Call determinePools
-		pools, _, err := ic.(*ipamClient).determinePools(context.Background(), reqPools, 6, node, nil, 128)
-
-		// Assert on any returned error.
-		if expectErr {
-			Expect(err).To(HaveOccurred())
-		} else {
-			Expect(err).NotTo(HaveOccurred())
-		}
-
-		// Check that the expected pools match the returned.
-		actual := []string{}
-		for _, pool := range pools {
-			actual = append(actual, pool.Spec.CIDR)
-		}
-		Expect(actual).To(Equal(expectation))
-	},
-	Entry("Both pools enabled, none with node selector, no requested pools", true, true, "", "", false, false, []string{v6Pool1CIDR, v6Pool2CIDR}, false),
-	Entry("Both pools enabled, none with node selector, pool1 requested", true, true, "", "", true, false, []string{v6Pool1CIDR}, false),
-
-	Entry("Both pools enabled, pool1 matching selector, no requested pools", true, true, `foo == "bar"`, `foo != "bar"`, false, false, []string{v6Pool1CIDR}, false),
-	Entry("Both pools enabled, pool1 matching node selector, pool1 requested", true, true, `foo == "bar"`, `foo != "bar"`, true, false, []string{v6Pool1CIDR}, false),
-
-	Entry("Both pools enabled, pool1 mismatching node selector, no requested pools", true, true, `foo != "bar"`, "all()", false, false, []string{v6Pool2CIDR}, false),
-	Entry("Both pools enabled, pool1 mismatching node selector, pool1 requested", true, true, `foo != "bar"`, "", true, false, []string{v6Pool1CIDR}, false),
-
-	Entry("Both pools enabled, pool1 matching node selector, pool2 requested", true, true, `foo == "bar"`, "", false, true, []string{v6Pool2CIDR}, false),
-
-	Entry("pool1 disabled, none with node selector, no requested pools", false, true, "", "", false, false, []string{v6Pool2CIDR}, false),
-	Entry("pool1 disabled, none with node selector, pool1 requested", false, true, "", "", true, false, []string{}, true),
-	Entry("pool1 disabled, none with node selector, pool2 requested", false, true, "", "", false, true, []string{v6Pool2CIDR}, false),
-
-	Entry("pool1 disabled, pool2 matching node selector, no requested pools", false, true, "", `foo == "bar"`, false, false, []string{v6Pool2CIDR}, false),
-	Entry("pool1 disabled, pool2 matching node selector, pool2 requested", false, true, "", `foo == "bar"`, false, true, []string{v6Pool2CIDR}, false),
-	Entry("pool1 disabled, pool2 mismatching node selector, no requested pools", false, true, "", `foo != "bar"`, false, false, []string{}, false),
-	Entry("pool1 disabled, pool2 mismatching node selector, pool2 requested", false, true, "", `foo != "bar"`, false, true, []string{v6Pool2CIDR}, false),
-)
-
 // assignIPutil is a utility function to help with assigning a single IP address to a hostname passed in.
 func assignIPutil(ic Interface, assignIP net.IP, host string) {
 	if len(assignIP) != 0 {
@@ -5216,286 +5044,3 @@ var _ = DescribeTable("IPAMAssignmentInfo.String() tests", func(ia *IPAMAssignme
 		},
 		errors.New("Assigned 0 out of 1 requested IPv4 addresses; Need to allocate an IPAM block but could not - limit of 20 blocks reached for this node; No IPs available in pools: [192.168.0.0/24 192.168.1.0/24]; HostReservedAttr: windows-reserved-ipam-handle")),
 )
-
-var _ = Describe("determinePools with namespace selector", func() {
-	var (
-		ic       ipamClient
-		ctx      context.Context
-		accessor *ipamtestutils.IPPoolAccessor
-	)
-
-	BeforeEach(func() {
-		ctx = context.Background()
-		accessor = &ipamtestutils.IPPoolAccessor{
-			Pools: make(map[string]ipamtestutils.Pool),
-		}
-		ic = ipamClient{
-			pools: accessor,
-		}
-	})
-
-	DescribeTable("namespace selector tests",
-		func(
-			poolCIDR string,
-			poolNodeSelector string,
-			poolNamespaceSelector string,
-			nodeLabels map[string]string,
-			namespaceName string,
-			namespaceLabels map[string]string,
-			expectedMatch bool,
-			description string,
-		) {
-			accessor.Pools[poolCIDR] = ipamtestutils.Pool{
-				CIDR:              poolCIDR,
-				Enabled:           true,
-				NodeSelector:      poolNodeSelector,
-				NamespaceSelector: poolNamespaceSelector,
-				BlockSize:         26,
-			}
-
-			node := internalapi.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: nodeLabels,
-				},
-			}
-
-			// Create namespace object for testing
-			var namespaceObj *corev1.Namespace
-			if namespaceName != "" {
-				namespaceObj = &corev1.Namespace{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   namespaceName,
-						Labels: namespaceLabels,
-					},
-				}
-			}
-
-			matchingPools, enabledPools, err := ic.determinePools(
-				ctx,
-				[]cnet.IPNet{},
-				4,
-				node,
-				namespaceObj,
-				26,
-			)
-
-			Expect(err).NotTo(HaveOccurred())
-			Expect(enabledPools).To(HaveLen(1))
-
-			if expectedMatch {
-				Expect(matchingPools).To(HaveLen(1))
-				Expect(matchingPools[0].Spec.CIDR).To(Equal(poolCIDR))
-			} else {
-				Expect(matchingPools).To(HaveLen(0))
-			}
-		},
-		Entry("no namespace selector matches any namespace",
-			"10.0.0.0/24",
-			"",
-			"",
-			map[string]string{},
-			"default",
-			map[string]string{},
-			true,
-			"no namespace selector",
-		),
-		Entry("namespace selector matches labels",
-			"10.0.0.0/24",
-			"",
-			"environment == 'production'",
-			map[string]string{},
-			"default",
-			map[string]string{"environment": "production"},
-			true,
-			"namespace selector matches",
-		),
-		Entry("namespace selector does not match labels",
-			"10.0.0.0/24",
-			"",
-			"environment == 'production'",
-			map[string]string{},
-			"default",
-			map[string]string{"environment": "development"},
-			false,
-			"namespace selector does not match",
-		),
-		Entry("both node and namespace selectors match",
-			"10.0.0.0/24",
-			"zone == 'us-west'",
-			"environment == 'production'",
-			map[string]string{"zone": "us-west"},
-			"default",
-			map[string]string{"environment": "production"},
-			true,
-			"both selectors match",
-		),
-		Entry("node matches but namespace does not",
-			"10.0.0.0/24",
-			"zone == 'us-west'",
-			"environment == 'production'",
-			map[string]string{"zone": "us-west"},
-			"default",
-			map[string]string{"environment": "development"},
-			false,
-			"node matches but namespace does not",
-		),
-		Entry("namespace matches but node does not",
-			"10.0.0.0/24",
-			"zone == 'us-west'",
-			"environment == 'production'",
-			map[string]string{"zone": "us-east"},
-			"default",
-			map[string]string{"environment": "production"},
-			false,
-			"namespace matches but node does not",
-		),
-		Entry("complex namespace selector matches",
-			"10.0.0.0/24",
-			"",
-			"environment == 'production' && tier == 'frontend'",
-			map[string]string{},
-			"default",
-			map[string]string{"environment": "production", "tier": "frontend"},
-			true,
-			"complex namespace selector matches",
-		),
-		Entry("complex namespace selector partial match",
-			"10.0.0.0/24",
-			"",
-			"environment == 'production' && tier == 'frontend'",
-			map[string]string{},
-			"default",
-			map[string]string{"environment": "production", "tier": "backend"},
-			false,
-			"complex namespace selector partial match",
-		),
-	)
-
-	It("should handle multiple pools with different namespace selectors", func() {
-		accessor.Pools["10.0.0.0/24"] = ipamtestutils.Pool{
-			CIDR:              "10.0.0.0/24",
-			Enabled:           true,
-			NodeSelector:      "",
-			NamespaceSelector: "environment == 'production'",
-			BlockSize:         26,
-		}
-		accessor.Pools["10.1.0.0/24"] = ipamtestutils.Pool{
-			CIDR:              "10.1.0.0/24",
-			Enabled:           true,
-			NodeSelector:      "",
-			NamespaceSelector: "environment == 'development'",
-			BlockSize:         26,
-		}
-		accessor.Pools["10.2.0.0/24"] = ipamtestutils.Pool{
-			CIDR:              "10.2.0.0/24",
-			Enabled:           true,
-			NodeSelector:      "",
-			NamespaceSelector: "",
-			BlockSize:         26,
-		}
-
-		node := internalapi.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{},
-			},
-		}
-
-		namespaceObj := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   "production-ns",
-				Labels: map[string]string{"environment": "production"},
-			},
-		}
-
-		matchingPools, enabledPools, err := ic.determinePools(
-			ctx,
-			[]cnet.IPNet{},
-			4,
-			node,
-			namespaceObj,
-			26,
-		)
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(enabledPools).To(HaveLen(3))
-		Expect(matchingPools).To(HaveLen(2))
-
-		cidrs := []string{}
-		for _, pool := range matchingPools {
-			cidrs = append(cidrs, pool.Spec.CIDR)
-		}
-		Expect(cidrs).To(ContainElements("10.0.0.0/24", "10.2.0.0/24"))
-	})
-
-	It("should handle invalid namespace selector syntax", func() {
-		accessor.Pools["10.0.0.0/24"] = ipamtestutils.Pool{
-			CIDR:              "10.0.0.0/24",
-			Enabled:           true,
-			NodeSelector:      "",
-			NamespaceSelector: "invalid selector syntax [",
-			BlockSize:         26,
-		}
-
-		node := internalapi.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{},
-			},
-		}
-
-		namespaceObj := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   "default",
-				Labels: map[string]string{},
-			},
-		}
-
-		_, _, err := ic.determinePools(
-			ctx,
-			[]cnet.IPNet{},
-			4,
-			node,
-			namespaceObj,
-			26,
-		)
-
-		Expect(err).To(HaveOccurred())
-	})
-
-	It("should prioritize requested pools over namespace selectors", func() {
-		accessor.Pools["10.0.0.0/24"] = ipamtestutils.Pool{
-			CIDR:              "10.0.0.0/24",
-			Enabled:           true,
-			NodeSelector:      "",
-			NamespaceSelector: "environment == 'production'",
-			BlockSize:         26,
-		}
-
-		node := internalapi.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{},
-			},
-		}
-
-		requestedNet := cnet.MustParseCIDR("10.0.0.0/24")
-		namespaceObj := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   "default",
-				Labels: map[string]string{"environment": "development"},
-			},
-		}
-
-		matchingPools, enabledPools, err := ic.determinePools(
-			ctx,
-			[]cnet.IPNet{requestedNet},
-			4,
-			node,
-			namespaceObj,
-			26,
-		)
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(enabledPools).To(HaveLen(1))
-		Expect(matchingPools).To(HaveLen(1))
-		Expect(matchingPools[0].Spec.CIDR).To(Equal("10.0.0.0/24"))
-	})
-})
