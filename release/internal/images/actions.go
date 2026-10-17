@@ -263,7 +263,7 @@ func sendImagesToISS(s settings, unscanned []string) {
 			"images":  s.scan.Images,
 			"stream":  s.scan.Stream,
 			"release": s.scan.Release,
-		}).Info("Dry run: would send images to ISS")
+		}).Info("Dry run, not sending images to ISS")
 		return
 	}
 	s.Logger().Info("Sending images to ISS")

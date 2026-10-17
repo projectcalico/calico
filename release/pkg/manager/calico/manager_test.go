@@ -1071,7 +1071,7 @@ func TestResolveContainerImages(t *testing.T) {
 		}
 		var reported bool
 		for _, e := range hook.AllEntries() {
-			reported = reported || e.Message == "Dry run: would send images to ISS"
+			reported = reported || e.Message == "Dry run, not sending images to ISS"
 		}
 		if !reported {
 			t.Error("the dry run did not report its scan")

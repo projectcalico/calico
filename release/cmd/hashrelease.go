@@ -313,7 +313,7 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 		}
 
 		if c.Bool(imageScanFlag.Name) && c.Bool(localFlag.Name) {
-			logrus.Info("Dry run: would add the image scan result URL to the hashrelease")
+			logrus.Info("Dry run, no image scan result URL added to the hashrelease")
 		} else if c.Bool(imageScanFlag.Name) {
 			url, err := imagescanner.RetrieveResultURL(cfg.TmpDir)
 			// Only log error as a warning if the image scan result URL could not be retrieved
@@ -328,7 +328,7 @@ var hashreleasePublishAction = func(cfg *Config) func(_ context.Context, c *cli.
 
 		// Send a slack message to notify that the hashrelease has been published.
 		if c.Bool(publishHashreleaseFlag.Name) && c.Bool(notifyFlag.Name) && c.Bool(localFlag.Name) {
-			logrus.Info("Dry run: would announce the hashrelease on Slack")
+			logrus.Info("Dry run, not announcing the hashrelease on Slack")
 		} else if c.Bool(publishHashreleaseFlag.Name) && c.Bool(notifyFlag.Name) {
 			if _, err := tasks.AnnounceHashrelease(slackConfig(c), hashrel, ciJobURL(c)); err != nil {
 				logrus.WithError(err).Warn("Failed to send hashrelease announcement to Slack")
