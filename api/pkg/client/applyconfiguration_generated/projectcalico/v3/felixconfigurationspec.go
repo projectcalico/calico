@@ -101,7 +101,8 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// OpenstackRegion is the name of the region that a particular Felix belongs to. In a multi-region
 	// Calico/OpenStack deployment, this must be configured somehow for each Felix (here in the datamodel,
 	// or in felix.cfg or the environment on each compute node), and must match the [calico]
-	// openstack_region value configured in neutron.conf on each node. [Default: Empty]
+	// openstack_region value configured in neutron.conf on each node. The region is used in a
+	// namespace name, so it must be a DNS label of at most 46 characters. [Default: Empty]
 	OpenstackRegion *string `json:"openstackRegion,omitempty"`
 	// InterfacePrefix is the interface name prefix that identifies workload endpoints and so distinguishes
 	// them from host endpoint interfaces. Note: in environments other than bare metal, the orchestrators
@@ -363,6 +364,7 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	IPForwarding *string `json:"ipForwarding,omitempty"`
 	// ExternalNodesCIDRList is a list of CIDR's of external, non-Calico nodes from which VXLAN/IPIP overlay traffic
 	// will be allowed.  By default, external tunneled traffic is blocked to reduce attack surface.
+	// Entries must be IPv4 CIDRs or IPv4 addresses.
 	ExternalNodesCIDRList *[]string `json:"externalNodesList,omitempty"`
 	// DebugMemoryProfilePath is the path to write the memory profile to when triggered by signal.
 	DebugMemoryProfilePath *string `json:"debugMemoryProfilePath,omitempty"`
@@ -676,7 +678,8 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	RouteSource *string `json:"routeSource,omitempty"`
 	// Calico programs additional Linux route tables for various purposes.
 	// RouteTableRanges specifies a set of table index ranges that Calico should use.
-	// Deprecates`RouteTableRange`, overrides `RouteTableRange`.
+	// Deprecates`RouteTableRange`, overrides `RouteTableRange`. The ranges may target at most 65535
+	// tables in total.
 	RouteTableRanges *projectcalicov3.RouteTableRanges `json:"routeTableRanges,omitempty"`
 	// Deprecated in favor of RouteTableRanges.
 	// Calico programs additional Linux route tables for various purposes.
