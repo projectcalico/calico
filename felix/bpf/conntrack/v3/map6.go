@@ -249,10 +249,10 @@ func NewValueV6NATReverse(lastSeen time.Duration, flags uint16, legA, legB Leg,
 	v.SetLegA2B(legA)
 	v.SetLegB2A(legB)
 
-	copy(v[VoOrigIPV6:VoOrigIPV6+16], origIP.To4())
+	copy(v[VoOrigIPV6:VoOrigIPV6+16], origIP.To16())
 	binary.LittleEndian.PutUint16(v[VoOrigPortV6:VoOrigPortV6+2], origPort)
 
-	copy(v[VoTunIPV6:VoTunIPV6+16], tunnelIP.To4())
+	copy(v[VoTunIPV6:VoTunIPV6+16], tunnelIP.To16())
 
 	return v
 }
@@ -261,7 +261,7 @@ func NewValueV6NATReverse(lastSeen time.Duration, flags uint16, legA, legB Leg,
 func NewValueV6NATReverseSNAT(lastSeen time.Duration, flags uint16, legA, legB Leg,
 	tunnelIP, origIP, origSrcIP net.IP, origPort uint16) ValueV6 {
 	v := NewValueV6NATReverse(lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
-	copy(v[VoOrigSIPV6:VoOrigSIPV6+16], origIP.To4())
+	copy(v[VoOrigSIPV6:VoOrigSIPV6+16], origSrcIP.To16())
 
 	return v
 }
