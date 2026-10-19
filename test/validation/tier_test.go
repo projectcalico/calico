@@ -16,12 +16,17 @@ package validation_test
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 func TestTier_Validation(t *testing.T) {
@@ -139,5 +144,83 @@ func TestTier_Defaults(t *testing.T) {
 	}
 	if *got.Spec.DefaultAction != v3.Deny {
 		t.Fatalf("expected defaultAction=Deny, got %q", *got.Spec.DefaultAction)
+	}
+}
+
+// TestTier_DeletionProtection exercises the protect-builtin-tiers
+// ValidatingAdmissionPolicy (api/admission/protect-builtin-tiers.yaml).
+func TestTier_DeletionProtection(t *testing.T) {
+	if !admissionPoliciesEnabled {
+		t.Skip("ValidatingAdmissionPolicy not supported on this K8s version")
+	}
+
+	builtinTiers := []struct {
+		name          string
+		defaultAction v3.Action
+		order         float64
+	}{
+		{names.DefaultTierName, v3.Deny, v3.DefaultTierOrder},
+		{names.KubeAdminTierName, v3.Pass, v3.KubeAdminTierOrder},
+		{names.KubeBaselineTierName, v3.Pass, v3.KubeBaselineTierOrder},
+	}
+
+	for _, bt := range builtinTiers {
+		t.Run(bt.name+" cannot be deleted", func(t *testing.T) {
+			order := bt.order
+			newTier := func() *v3.Tier {
+				return &v3.Tier{
+					ObjectMeta: metav1.ObjectMeta{Name: bt.name},
+					Spec:       v3.TierSpec{DefaultAction: new(bt.defaultAction), Order: &order},
+				}
+			}
+
+			// ValidatingAdmissionPolicy enforcement becomes active
+			// asynchronously after the policy is installed, so poll:
+			// (re)create the tier and attempt to delete it until the delete is
+			// rejected (or we give up).
+			var lastErr error
+			deadline := time.Now().Add(30 * time.Second)
+			for {
+				if err := testClient.Create(context.Background(), newTier()); err != nil && !apierrors.IsAlreadyExists(err) {
+					t.Fatalf("failed to create tier %q: %v", bt.name, err)
+				}
+				lastErr = testClient.Delete(context.Background(), newTier())
+				if lastErr != nil {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatalf("deletion of built-in tier %q was not rejected within timeout", bt.name)
+				}
+				time.Sleep(500 * time.Millisecond)
+			}
+			if !strings.Contains(lastErr.Error(), "cannot be deleted") {
+				t.Fatalf("expected deletion of %q to be rejected with 'cannot be deleted', got: %v", bt.name, lastErr)
+			}
+		})
+	}
+
+	deletableTiers := []struct {
+		name          string
+		defaultAction v3.Action
+		order         float64
+	}{
+		{"adminnetworkpolicy", v3.Pass, v3.KubeAdminTierOrder},
+		{"baselineadminnetworkpolicy", v3.Pass, v3.KubeBaselineTierOrder},
+		{"user-defined-tier", v3.Pass, float64(5000)},
+	}
+	for _, dt := range deletableTiers {
+		t.Run(dt.name+" can be deleted", func(t *testing.T) {
+			order := dt.order
+			tier := &v3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: dt.name},
+				Spec:       v3.TierSpec{DefaultAction: new(dt.defaultAction), Order: &order},
+			}
+			if err := testClient.Create(context.Background(), tier); err != nil {
+				t.Fatalf("failed to create tier %q: %v", dt.name, err)
+			}
+			if err := testClient.Delete(context.Background(), tier); err != nil {
+				t.Fatalf("expected deletion of tier %q to succeed, got: %v", dt.name, err)
+			}
+		})
 	}
 }

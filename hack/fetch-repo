@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Check out a pinned revision. Use instead of git clone in build files.
+#
+#   hack/fetch-repo <repo-url> <revision> <dest>
+#
+# Fetches only that commit, with no history and no other tags, so `git describe`
+# resolves only when the revision is itself a tag.
+set -euo pipefail
+
+# Inherited from a make recipe, these point at the calling repo, not $dest.
+unset GIT_DIR GIT_WORK_TREE
+
+if [ $# -ne 3 ]; then
+	echo "usage: $0 <repo-url> <revision> <dest>" >&2
+	exit 1
+fi
+
+repo=$1
+rev=$2
+dest=$3
+
+# git fetches a commit by its full id only.
+if printf '%s' "$rev" | grep -qE '^[0-9a-f]{7,39}$'; then
+	echo "$0: revision must be a tag, branch or full 40-char SHA: $rev" >&2
+	exit 1
+fi
+
+# A throttled fetch fails instead of blocking on git's credential prompt.
+export GIT_TERMINAL_PROMPT=${GIT_TERMINAL_PROMPT:-0}
+
+mkdir -p "$dest"
+cd "$dest"
+
+git init -q .
+# GitHub throttles HTTP/2 harder than HTTP/1.1.
+git config http.version HTTP/1.1
+# GitHub raises its limits and relaxes abuse prevention for authenticated
+# traffic, so send GITHUB_TOKEN when there is one. The helper reads it at call
+# time, keeping it out of argv and off disk; unset, the fetch stays anonymous.
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+	# shellcheck disable=SC2016  # git expands $GITHUB_TOKEN, not this shell
+	git config credential."https://github.com".helper \
+		'!f() { echo username=x-access-token; echo "password=$GITHUB_TOKEN"; }; f'
+fi
+# Every run: a directory left by an earlier build may have a stale origin.
+git remote add origin "$repo" 2>/dev/null || git remote set-url origin "$repo"
+
+# A private ref, so a tag, a branch and a SHA all resolve the same way.
+target=refs/fetched/$rev
+if ! git rev-parse -q --verify "$target^{commit}" >/dev/null; then
+	# GitHub's throttle asks for about a minute and git ignores Retry-After, so
+	# the waits must outlast it.
+	n=1
+	until git fetch -q --depth 1 origin "$rev:$target"; do
+		if [ $n -ge 3 ]; then
+			exit 1
+		fi
+		echo "$0: fetch failed, retrying in $((n * 30))s..." >&2
+		sleep $((n * 30))
+		n=$((n + 1))
+	done
+fi
+git checkout -q --detach "$target"

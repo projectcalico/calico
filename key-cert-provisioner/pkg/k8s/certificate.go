@@ -48,7 +48,7 @@ func watchCSR(watcher *watch.Interface, cfg *cfg.Config, x509CSR *tls.X509CSR) e
 	for event := range (*watcher).ResultChan() {
 		chcsr, ok := event.Object.(*certv1.CertificateSigningRequest)
 		if !ok {
-			return fmt.Errorf("unexpected type in CertificateSigningRequest channel: %o", event.Object)
+			return fmt.Errorf("unexpected type in CertificateSigningRequest channel: %v", event.Object)
 		}
 		if chcsr.Name == cfg.CSRName && chcsr.Status.Conditions != nil && len(chcsr.Status.Certificate) > 0 {
 			approved := false

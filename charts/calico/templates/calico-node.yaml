@@ -89,13 +89,25 @@ spec:
               name: cni-bin-dir
           securityContext:
             privileged: true
+            runAsUser: 0
 {{- end }}
+        # This container stages the upstream CNI plugins that the CNI config
+        # references (portmap, host-local, loopback, tuning, flannel) for
+        # install-cni to copy onto the host.
+        - name: cni-plugins
+          image: {{.Values.cniPlugins.registry}}/{{.Values.cniPlugins.image}}:{{ .Values.version }}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
+          volumeMounts:
+            - mountPath: /stage
+              name: cni-plugins-stage
+          securityContext:
+            runAsUser: 0
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
           image: {{.Values.calico.registry}}/{{.Values.calico.image}}:{{ .Values.version }}
           imagePullPolicy: {{.Values.imagePullPolicy}}
-          args: ["cni", "install"]
+          args: ["component", "cni", "install"]
           envFrom:
             - configMapRef:
                 # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
@@ -182,12 +194,15 @@ spec:
               name: cni-bin-dir
             - mountPath: /host/etc/cni/net.d
               name: cni-net-dir
+            - mountPath: /opt/cni/bin
+              name: cni-plugins-stage
 {{- if eq .Values.datastore "etcd" }}
             - mountPath: /calico-secrets
               name: etcd-certs
 {{- end }}
           securityContext:
             privileged: true
+            runAsUser: 0
         # This init container mounts the necessary filesystems needed by the BPF data plane
         # i.e. bpf at /sys/fs/bpf and cgroup2 at /run/calico/cgroup. It also configures the initial
         # networking to allow communication with the API Server. Calico-node initialization is executed
@@ -638,6 +653,10 @@ spec:
           hostPath:
             path: /opt/cni/bin
             type: DirectoryOrCreate
+        # Staging area for the upstream CNI plugins, written by cni-plugins and
+        # read by install-cni.
+        - name: cni-plugins-stage
+          emptyDir: {}
         - name: cni-net-dir
           hostPath:
             path: /etc/cni/net.d

@@ -105,13 +105,14 @@ func (options IPPoolListOptions) KeyFromDefaultPath(path string) Key {
 }
 
 type IPPool struct {
-	CIDR             net.IPNet         `json:"cidr"`
-	IPIPInterface    string            `json:"ipip"`
-	IPIPMode         encap.Mode        `json:"ipip_mode"`
-	VXLANMode        encap.Mode        `json:"vxlan_mode"`
-	Masquerade       bool              `json:"masquerade"`
-	IPAM             bool              `json:"ipam"`
-	Disabled         bool              `json:"disabled"`
-	DisableBGPExport bool              `json:"disableBGPExport"`
-	AssignmentMode   v3.AssignmentMode `json:"assignment_mode"`
+	CIDR             net.IPNet             `json:"cidr"`
+	IPIPInterface    string                `json:"ipip"`
+	IPIPMode         encap.Mode            `json:"ipip_mode"`
+	VXLANMode        encap.Mode            `json:"vxlan_mode"`
+	Masquerade       bool                  `json:"masquerade"`
+	IPAM             bool                  `json:"ipam"`
+	Disabled         bool                  `json:"disabled"`
+	DisableBGPExport bool                  `json:"disableBGPExport"`
+	AssignmentMode   v3.AssignmentMode     `json:"assignment_mode"`
+	AllowedUses      []v3.IPPoolAllowedUse `json:"allowed_uses,omitempty"`
 }

@@ -24,9 +24,14 @@ CFLAGS +=  \
 	-Werror \
 	-fno-stack-protector \
 	-O2 \
-	-target bpf \
 	-emit-llvm \
 	-g
+
+BPF_TARGET := bpf
+ifeq ($(ARCH),s390x)
+BPF_TARGET := bpfeb
+endif
+CFLAGS += -target $(BPF_TARGET)
 
 # Host architecture define — BPF compilation uses "-target bpf" which
 # doesn't define the host arch, but glibc's gnu/stubs.h needs it to
@@ -49,7 +54,7 @@ all: $(OBJS)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 bin/%.o: %.ll | bin
-	$(LD) -march=bpf -filetype=obj -o $@ $<
+	$(LD) -march=$(BPF_TARGET) -filetype=obj -o $@ $<
 
 bin:
 	mkdir -p bin

@@ -16,6 +16,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -40,7 +41,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/cgroup"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/utils"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 const usage = `test-workload, test workload for Felix FV testing.
@@ -48,12 +49,12 @@ const usage = `test-workload, test workload for Felix FV testing.
 If <interface-name> is "", the workload will start in the current namespace.
 
 Usage:
-  test-workload [--protocol=<protocol>] [--namespace-path=<path>] [--sidecar-iptables] [--mtu=<mtu>] [--listen-any-ip] [--netkit] <interface-name> <ip-address> <ports>
+  test-workload [--protocol=<protocol>] [--namespace-path=<path>] [--sidecar-iptables] [--mtu=<mtu>] [--listen-any-ip] [--netkit] [--no-keepalive] <interface-name> <ip-address> <ports>
 `
 
 func main() {
 	log.SetLevel(log.DebugLevel)
-	logutils.ConfigureFormatter("test-workload")
+	logrusr.ConfigureFormatter("test-workload")
 
 	// If we've been told to, move into this felix's cgroup.
 	cgroup.MaybeMoveToFelixCgroupv2()
@@ -86,6 +87,11 @@ func main() {
 	useNetkit := false
 	if arg, ok := arguments["--netkit"]; ok && arg.(bool) {
 		useNetkit = true
+	}
+	// Go enables a 15s keepalive on accepted TCP connections by default.
+	var lc net.ListenConfig
+	if arg, ok := arguments["--no-keepalive"]; ok && arg.(bool) {
+		lc.KeepAlive = -1
 	}
 
 	ports := strings.Split(portsStr, ",")
@@ -388,7 +394,7 @@ func main() {
 					}()
 				} else {
 					logCxt.Info("About to listen for TCP connections")
-					l, err := net.Listen("tcp", myAddr)
+					l, err := lc.Listen(context.Background(), "tcp", myAddr)
 					panicIfError(err)
 					logCxt.Info("Listening for TCP connections")
 					go func() {
@@ -515,9 +521,11 @@ func doNetkitSetUp(
 		writeProcSysOrLog("/proc/sys/net/ipv4/conf/%s/forwarding", hostIfName, "1")
 	}
 	if hasIPv6 {
+		// No proxy_ndp, matching the real CNI plugin: it is not the IPv6
+		// equivalent of proxy_arp and Calico programs no NUD_PROXY entries for
+		// it to act on.  See felix/design/neighbour-discovery.md.
 		writeProcSysOrLog("/proc/sys/net/ipv6/conf/%s/accept_dad", hostIfName, "0")
 		writeProcSysOrLog("/proc/sys/net/ipv6/conf/%s/disable_ipv6", hostIfName, "0")
-		writeProcSysOrLog("/proc/sys/net/ipv6/conf/%s/proxy_ndp", hostIfName, "1")
 		writeProcSysOrLog("/proc/sys/net/ipv6/conf/%s/forwarding", hostIfName, "1")
 	}
 

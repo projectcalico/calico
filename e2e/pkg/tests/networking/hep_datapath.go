@@ -30,7 +30,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -215,16 +214,13 @@ var _ = describe.CalicoDescribe(
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			nodes, err := e2enode.GetBoundedReadySchedulableNodes(ctx, f.ClientSet, 6)
-			Expect(err).NotTo(HaveOccurred())
-			nodesInfo := utils.GetNodesInfo(f, nodes, false)
+			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
 			allNames := nodesInfo.GetNames()
-			Expect(len(allNames)).To(BeNumerically(">=", 2),
-				"HEP datapath tests require at least 2 schedulable worker nodes, found %d", len(allNames))
+			allIPs := nodesInfo.GetIPv4s()
+			Expect(len(allIPs)).To(BeNumerically(">=", 2),
+				"HEP datapath tests require at least 2 nodes with IPv4 addresses, found %d", len(allIPs))
 			nodeNames = allNames[:2]
-			nodeIPs = nodesInfo.GetIPv4s()[:2]
+			nodeIPs = allIPs[:2]
 			calicoNames = nodesInfo.GetCalicoNames()[:2]
 			logrus.Infof("HEP nodes: %v IPs: %v calico: %v", nodeNames, nodeIPs, calicoNames)
 
@@ -346,28 +342,7 @@ var _ = describe.CalicoDescribe(
 
 			// Create a GNP allowing kubectl exec to port 10250 on the HEP node.
 			// This must exist before the HEP to avoid breaking kubectl exec.
-			kubeletPolicy := &v3.GlobalNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: utils.GenerateRandomName("hep-kubelet")},
-				Spec: v3.GlobalNetworkPolicySpec{
-					Order:          ptr.To(800.0),
-					Selector:       `hep == "node0"`,
-					ApplyOnForward: false,
-					Ingress: []v3.Rule{{
-						Action:   v3.Allow,
-						Protocol: protocolTCP(),
-						Destination: v3.EntityRule{
-							Ports: []numorstring.Port{numorstring.SinglePort(10250)},
-						},
-					}},
-					Egress: []v3.Rule{{
-						Action:   v3.Allow,
-						Protocol: protocolTCP(),
-						Source: v3.EntityRule{
-							Ports: []numorstring.Port{numorstring.SinglePort(10250)},
-						},
-					}},
-				},
-			}
+			kubeletPolicy := hepBuildKubeletGNP(utils.GenerateRandomName("hep-kubelet"), false)
 			createCtx, createCancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer createCancel()
 			Expect(cli.Create(createCtx, kubeletPolicy)).To(Succeed())
@@ -415,6 +390,23 @@ var _ = describe.CalicoDescribe(
 			} else {
 				By("Verifying HEP does not block forwarded traffic without AOF policy")
 				checkConnection(ct, clientPod, target, baseline)
+			}
+
+			if applyOnForward {
+				// On managed Kubernetes, Konnectivity carries control-plane to node
+				// connections, so the HEP node dials other nodes' kubelets over forwarded
+				// traffic. Must land before the first AOF policy, which default-denies it.
+				kubeletForwardPolicy := hepBuildKubeletGNP(utils.GenerateRandomName("hep-kubelet-aof"), true)
+				fwdCtx, fwdCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer fwdCancel()
+				Expect(cli.Create(fwdCtx, kubeletForwardPolicy)).To(Succeed())
+				DeferCleanup(func() {
+					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cleanupCancel()
+					if err := cli.Delete(cleanupCtx, kubeletForwardPolicy); err != nil && !apierrors.IsNotFound(err) {
+						framework.Logf("WARNING: failed to delete kubelet forward policy: %v", err)
+					}
+				})
 			}
 
 			// Create the allow GNP (order 500).
@@ -511,6 +503,33 @@ var _ = describe.CalicoDescribe(
 		})
 	},
 )
+
+// hepBuildKubeletGNP creates a GlobalNetworkPolicy allowing the kubelet exec path
+// on the HEP node, in both the kubelet's own role and as a client of another node's.
+func hepBuildKubeletGNP(name string, applyOnForward bool) *v3.GlobalNetworkPolicy {
+	ports := []numorstring.Port{numorstring.SinglePort(10250)}
+	toKubelet := v3.Rule{
+		Action:      v3.Allow,
+		Protocol:    protocolTCP(),
+		Destination: v3.EntityRule{Ports: ports},
+	}
+	fromKubelet := v3.Rule{
+		Action:   v3.Allow,
+		Protocol: protocolTCP(),
+		Source:   v3.EntityRule{Ports: ports},
+	}
+
+	return &v3.GlobalNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec: v3.GlobalNetworkPolicySpec{
+			Order:          ptr.To(800.0),
+			Selector:       `hep == "node0"`,
+			ApplyOnForward: applyOnForward,
+			Ingress:        []v3.Rule{toKubelet, fromKubelet},
+			Egress:         []v3.Rule{fromKubelet, toKubelet},
+		},
+	}
+}
 
 // hepBuildGNP creates a GlobalNetworkPolicy for HEP testing.
 func hepBuildGNP(name string, order float64, applyOnForward bool, direction string, action v3.Action) *v3.GlobalNetworkPolicy {

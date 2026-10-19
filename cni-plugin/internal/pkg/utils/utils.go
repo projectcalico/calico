@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2015-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -212,9 +212,9 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 	case "host-local":
 		// We need to replace "usePodCidr" with a valid, but dummy podCidr string with "host-local" IPAM.
 		// host-local IPAM releases the IP by ContainerID, so podCidr isn't really used to release the IP.
-		// It just needs a valid CIDR, but it doesn't have to be the CIDR associated with the host.
-		dummyPodCidrv4 := "0.0.0.0/0"
-		dummyPodCidrv6 := "::/0"
+		// It just needs a valid CIDR that doesn't overlap the other configured ranges.
+		dummyPodCidrv4 := "0.0.0.0/24"
+		dummyPodCidrv6 := "::/120"
 		var stdinData map[string]any
 		err := json.Unmarshal(args.StdinData, &stdinData)
 		if err != nil {
@@ -278,8 +278,7 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 
 // ReplaceHostLocalIPAMPodCIDRs extracts the host-local IPAM config section and replaces our special-case "usePodCidr"
 // subnet value with pod CIDR retrieved by the passed-in getPodCIDR function.  Typically, the passed-in function
-// would access the datastore to retrieve the podCIDR. However, for tear-down we use a dummy value that returns
-// 0.0.0.0/0.
+// would access the datastore to retrieve the podCIDR. However, for tear-down we use dummy values instead.
 //
 // To make sure that unknown fields are round-tripped, we manipulate the JSON as maps and slices rather than by
 // unmarshaling it into a struct.  The structure of the JSON is as follows; we support replacing usePodCidr in
@@ -638,6 +637,38 @@ func GetHandleID(netName, containerID, workload string) string {
 	return handleID
 }
 
+// ParsedPodHandle is a pod's IPAM handle broken into its components.
+type ParsedPodHandle struct {
+	Network     string
+	ContainerID string
+}
+
+// ParsePodHandleID splits a pod's IPAM handle for the given network. Workload, VM and
+// load balancer handles use their own formats and are rejected; see
+// design/ipam/ipam-cni.md for the pod form.
+func ParsePodHandleID(handleID, netName string) (ParsedPodHandle, bool) {
+	// Handles written during the host-local migration can carry a trailing carriage
+	// return; see https://github.com/projectcalico/cni-plugin/issues/821.
+	handleID = strings.Split(handleID, "\r")[0]
+
+	containerID, ok := strings.CutPrefix(handleID, netName+".")
+	if !ok {
+		return ParsedPodHandle{}, false
+	}
+
+	// A dot left in the container ID means this is not a sandbox handle: pre-v3 handles
+	// name the workload (k8s-pod-network.default.mypod), VM handles name the VMI
+	// (k8s-pod-network.vmi.default.vm1).
+	if containerID == "" || strings.Contains(containerID, ".") {
+		return ParsedPodHandle{}, false
+	}
+
+	return ParsedPodHandle{
+		Network:     netName,
+		ContainerID: containerID,
+	}, true
+}
+
 func CreateClient(conf types.NetConf) (client.Interface, error) {
 	if err := ValidateNetworkName(conf.Name); err != nil {
 		return nil, err
@@ -735,9 +766,18 @@ func CreateClient(conf types.NetConf) (client.Interface, error) {
 }
 
 // ReleaseIPAllocation is called to cleanup IPAM allocations if something goes wrong during
-// CNI ADD execution. It forces the CNI_COMMAND to be DEL.
+// CNI ADD execution. It forces the CNI_COMMAND to be DEL for the duration of the cleanup.
 func ReleaseIPAllocation(logger *logrus.Entry, conf types.NetConf, args *skel.CmdArgs) {
 	logger.Info("Cleaning up IP allocations for failed ADD")
+
+	// The caller may carry on with the ADD after a cleanup it can recover from.
+	command := os.Getenv("CNI_COMMAND")
+	defer func() {
+		if err := os.Setenv("CNI_COMMAND", command); err != nil {
+			logger.WithError(err).Warning("Failed to restore CNI_COMMAND")
+		}
+	}()
+
 	if err := os.Setenv("CNI_COMMAND", "DEL"); err != nil {
 		// Failed to set CNI_COMMAND to DEL.
 		logger.Warning("Failed to set CNI_COMMAND=DEL")

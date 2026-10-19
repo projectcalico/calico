@@ -32,7 +32,6 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
@@ -58,19 +57,24 @@ func New(config apiconfig.CalicoAPIConfig) (Interface, error) {
 		return nil, err
 	}
 
-	// Enable in-process CRD validation (CEL rules, OpenAPI constraints,
-	// schema defaulting) for etcd mode. In KDD mode the kube-apiserver
-	// handles this on admission, so we skip it to avoid the expensive
-	// CEL compilation cost.
-	if config.Spec.DatastoreType == apiconfig.EtcdV3 {
-		validator.SetCRDValidationEnabled(true)
-	}
+	// Only etcd mode runs CRD validation (CEL rules, OpenAPI constraints,
+	// schema defaulting) in-process. In KDD mode the kube-apiserver handles
+	// it on admission.
+	validator.SetCRDValidationEnabled(config.Spec.DatastoreType == apiconfig.EtcdV3)
 
+	return NewFromBackend(config, be), nil
+}
+
+// NewFromBackend wraps an existing backend client (e.g. one backed by fakes
+// in tests) in a clientv3 Interface. config drives behavior that depends on
+// the datastore type (e.g. ensureClusterInformation tagging clusters with a
+// "kdd"/"k8s" suffix); pass the same CalicoAPIConfig that produced be.
+func NewFromBackend(config apiconfig.CalicoAPIConfig, be bapi.Client) Interface {
 	return client{
 		config:    config,
 		backend:   be,
 		resources: &resources{backend: be},
-	}, nil
+	}
 }
 
 // NewFromEnv loads the config from ENV variables and returns a connected client.
@@ -213,41 +217,12 @@ type poolAccessor struct {
 	client *client
 }
 
-func filterIPPool(pool *v3.IPPool, ipVersion int) bool {
-	if !pool.DeletionTimestamp.IsZero() {
-		log.Debugf("Skipping deleting IP pool (%s)", pool.Name)
-		return false
-	}
-	if pool.Spec.Disabled {
-		log.Debugf("Skipping disabled IP pool (%s)", pool.Name)
-		return false
-	}
-
-	if pool.Status != nil {
-		// Skip any pools that have been marked as unavailable for allocations by the IP pool controller in kube-controllers.
-		for _, condition := range pool.Status.Conditions {
-			if condition.Type == v3.IPPoolConditionAllocatable && condition.Status == metav1.ConditionFalse {
-				log.Debugf("Skipping IP pool (%s) with condition Allocatable=false", pool.Name)
-				return false
-			}
-		}
-	}
-
-	if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err == nil && cidr.Version() == ipVersion {
-		log.Debugf("Adding pool (%s) to the IPPool list", cidr.String())
-		return true
-	} else if err != nil {
-		log.Warnf("Failed to parse the IPPool: %s. Ignoring that IPPool", pool.Spec.CIDR)
-	} else {
-		log.Debugf("Ignoring IPPool: %s. IP version is different.", pool.Spec.CIDR)
-	}
-	return false
-}
-
 func (p poolAccessor) GetEnabledPools(ctx context.Context, ipVersion int) ([]v3.IPPool, error) {
-	return p.getPools(ctx, func(pool *v3.IPPool) bool {
-		return filterIPPool(pool, ipVersion)
-	})
+	pools, err := p.client.IPPools().List(ctx, options.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return selectAllocatablePools(pools.Items, ipVersion), nil
 }
 
 func (p poolAccessor) getPools(ctx context.Context, filter func(pool *v3.IPPool) bool) ([]v3.IPPool, error) {
@@ -458,6 +433,22 @@ func (c client) ensureClusterInformation(ctx context.Context, calicoVersion, clu
 // is created. A error is returned if there is any error other than when the
 // tier resource already exists, or when creating tiers is not allowed.
 func (c client) ensureTierExists(ctx context.Context, name string, defaultAction v3.Action, order float64) error {
+	// Get first so that the repeated calls from health checks don't write to the datastore
+	// on every pass.
+	_, err := c.Tiers().Get(ctx, name, options.GetOptions{})
+	switch err.(type) {
+	case nil:
+		log.Debugf("Tier %v already exists.", name)
+		return nil
+	case cerrors.ErrorResourceDoesNotExist:
+		// Fall through and create it.
+	case cerrors.ErrorConnectionUnauthorized:
+		log.WithError(err).Warnf("Unauthorized to read tier %v.", name)
+		return nil
+	default:
+		return err
+	}
+
 	tier := v3.NewTier()
 	tier.ObjectMeta = metav1.ObjectMeta{Name: name}
 	tier.Spec = v3.TierSpec{

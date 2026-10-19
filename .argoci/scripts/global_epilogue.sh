@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# global_epilogue.sh - ArgoCI e2e epilogue for OSS Calico.
+#
+# Ported from the Semaphore equivalent (since deleted), adapted for
+# ArgoCI: artifacts via the bundled `artifact` shim (no Semaphore `cache`/
+# `test-results` CLIs), diags/destroy via bz. Best-effort throughout (|| true)
+# so teardown always runs. Sourced by the e2e-test template.
+set -o pipefail
+
+echo "[INFO] starting global_epilogue"
+
+# bz diags/destroy must run from the profile dir (== BZ_HOME).
+cd "${BZ_HOME}" 2>/dev/null || echo "[WARN] could not cd to BZ_HOME=${BZ_HOME}"
+
+# The handler wraps the step body in an EXIT trap that exposes the body's exit
+# status as CI_STEP_EXIT_CODE (set in both the container and VM paths); plain
+# CI_EXIT_CODE is never set for container steps, so reading it here defaulted
+# every failure to 0 and skipped the diags capture below. Read the handler's
+# variable, falling back to CI_EXIT_CODE then 0.
+CI_EXIT_CODE=${CI_STEP_EXIT_CODE:-${CI_EXIT_CODE:-0}}
+
+# bz is Go, which restores SIGTERM's default even though this shell ignores it,
+# so the repeated SIGTERMs of a stop kill whatever bz is running. Its own session
+# keeps them off.
+destroy_cluster() {
+  if ! command -v bz >/dev/null 2>&1; then
+    echo "[INFO] bz never installed, so there is no cluster to destroy"
+    return 0
+  fi
+  echo "[INFO] destroying cluster ${CLUSTER_NAME}"
+  if command -v setsid >/dev/null 2>&1; then
+    setsid --wait bz destroy |& tee "${BZ_LOGS_DIR}/destroy.log" || true
+  else
+    bz destroy |& tee "${BZ_LOGS_DIR}/destroy.log" || true
+  fi
+  if [[ -f "${BZ_LOGS_DIR}/destroy.log" ]]; then
+    artifact push job "${BZ_LOGS_DIR}/destroy.log" -d logs/destroy.log -f || true
+  fi
+}
+
+# A stopped run has nothing worth diagnosing, and the destroy alone takes most of
+# the grace period, so it goes first and the slow extras are skipped.
+stopped=false
+if [[ "${CI_POD_STOPPED:-false}" == "true" ]]; then
+  stopped=true
+  destroy_cluster
+fi
+
+# The viewer lists artifacts under CI_ARTIFACT_STEP_STORAGE, which is where
+# `artifact push job` publishes.
+echo "[INFO] publishing artifacts to ${CI_ARTIFACT_STEP_STORAGE}"
+
+# e2e-vpp additionally keeps its own copy, laid out the way the CalicoVPP
+# maintainers' tooling expects (date/stream/provisioner/manifest/flags/time).
+# Only .argoci/cron/e2e-vpp.yaml sets the prefix, and only for scheduled runs,
+# so an empty or malformed value just means "no copy".
+# Run twice: once before `bz destroy` so the logs survive a destroy that hangs,
+# and again after so the prefix ends up holding whatever destroy left behind —
+# which is what the Semaphore layout contained.
+publish_vpp_logs() {
+  case "${VPP_RESULTS_PREFIX:-}" in gs://*) ;; *) return 0 ;; esac
+  # Guard on the directory: were BZ_LOGS_DIR empty the source would be "/.",
+  # which is readable, recurses, and succeeds.
+  if [[ -d "${BZ_LOGS_DIR:-}" ]]; then
+    gsutil -m cp -r "${BZ_LOGS_DIR}/." "${VPP_RESULTS_PREFIX}/logs/" || true
+  fi
+}
+
+publish_vpp_copy() {
+  case "${VPP_RESULTS_PREFIX:-}" in gs://*) ;; *) return 0 ;; esac
+  echo "[INFO] publishing vpp copy to ${VPP_RESULTS_PREFIX}"
+  if [[ -f "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" ]]; then
+    gsutil cp "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" \
+              "${VPP_RESULTS_PREFIX}/${DIAGS_ARCHIVE_FILENAME}" || true
+  fi
+  if [[ -f "${_junit}" ]]; then
+    gsutil cp "${_junit}" "${VPP_RESULTS_PREFIX}/junit.xml" || true
+  fi
+  publish_vpp_logs
+}
+
+# Capture diags on failure (or always for cert runs).
+if [[ "${stopped}" == "false" ]] && [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
+  echo "[INFO] capturing diags"
+  bz diags |& tee "${BZ_LOGS_DIR}/diagnostic.log" || true
+  artifact push job "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" -d diags.tgz -f || true
+
+  # Per-test diags, where the suite collects them (openstack-e2e does, into
+  # ${REPORT_DIR}/diags/) — distinct from the bz cluster diags above.
+  if [[ -d "${REPORT_DIR}/diags" ]]; then
+    artifact push job "${REPORT_DIR}/diags" -f || true
+  fi
+fi
+
+# Lens reads each top-level .xml in REPORT_DIR, so subdir reports go into
+# junit.xml and top-level ones stay out of it.
+_merge_junit="$(dirname "${BASH_SOURCE[0]}")/merge_junit.py"
+if [[ -d "${REPORT_DIR}" && ! -f "${REPORT_DIR}/junit.xml" ]]; then
+  python3 "${_merge_junit}" --scope=subdirs "${REPORT_DIR}" "${REPORT_DIR}/junit.xml" || true
+fi
+
+# The viewer shows one junit.xml; build it outside REPORT_DIR so Lens doesn't
+# read it twice.
+_junit="${REPORT_DIR}/junit.xml"
+if [[ -d "${REPORT_DIR}" ]] && [[ -n "$(find "${REPORT_DIR}" -maxdepth 1 -name '*.xml' ! -name junit.xml -print -quit)" ]]; then
+  _merged="${BZ_LOCAL_DIR:-/tmp}/junit-merged.xml"
+  rm -f "${_merged}"
+  python3 "${_merge_junit}" --scope=top "${REPORT_DIR}" "${_merged}" || true
+  # merge_junit.py writes nothing when no file parses as JUnit.
+  [[ -f "${_merged}" ]] && _junit="${_merged}"
+fi
+
+# Publish JUnit + logs.
+if [[ -f "${_junit}" ]]; then
+  artifact push job "${_junit}" -d junit.xml -f || true
+fi
+artifact push job "${BZ_LOGS_DIR}" -d logs -f || true
+publish_vpp_copy
+
+# Upload results to Lens (best-effort; token from banzai-secrets).
+if [[ "${stopped}" == "false" && -n "${GITHUB_ACCESS_TOKEN:-}" ]]; then
+  curl --retry 3 -fsSL -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
+    -H "Accept: application/vnd.github.v3.raw" \
+    -o /tmp/run-lens.sh \
+    https://raw.githubusercontent.com/tigera/banzai-lens/main/uploader/run-lens.sh && \
+    chmod +x /tmp/run-lens.sh && /tmp/run-lens.sh || true
+fi
+
+# Last otherwise, so the logs above are pushed even when destroy hangs.
+if [[ "${stopped}" == "false" ]]; then
+  destroy_cluster
+fi
+publish_vpp_logs
+
+echo "[INFO] exiting global_epilogue (CI_EXIT_CODE=${CI_EXIT_CODE})"

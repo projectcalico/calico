@@ -1,0 +1,32 @@
+{
+  "index_patterns": ["benchmark_data_nft_dataplane_*"],
+  "template": {
+    "mappings": {
+      "properties": {
+        "@timestamp":        {"type": "date"},
+        "git_commit":        {"type": "keyword"},
+        "git_branch":        {"type": "keyword"},
+        "code_version":      {"type": "keyword"},
+        "ci_run_id":         {"type": "keyword"},
+        "pr_number":         {"type": "keyword"},
+        "test_name":         {"type": "keyword"},
+        "dataplane":         {"type": "keyword"},
+        "env":               {"type": "keyword"},
+        "phase":             {"type": "keyword"},
+        "iter":              {"type": "integer"},
+        "ok":                {"type": "boolean"},
+        "error":             {"type": "keyword"},
+
+        "scale_ipsets":      {"type": "integer"},
+        "scale_set_members": {"type": "integer"},
+        "scale_chains":      {"type": "integer"},
+        "scale_rules":       {"type": "integer"},
+
+        "wall_ns_per_op":    {"type": "double"},
+        "cpu_ns_per_op":     {"type": "double"},
+        "bytes_per_op":      {"type": "double"},
+        "allocs_per_op":     {"type": "double"}
+      }
+    }
+  }
+}

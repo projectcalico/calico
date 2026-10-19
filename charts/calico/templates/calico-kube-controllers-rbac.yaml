@@ -121,6 +121,7 @@ rules:
       - ipreservations
     verbs:
       - list
+      - watch
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - blockaffinities
@@ -136,13 +137,16 @@ rules:
       - update
       - delete
       - watch
-  # Pools are watched to maintain a mapping of blocks to IP pools.
+  # Pools are watched to maintain a mapping of blocks to IP pools. The pool
+  # controller records which of a set of overlapping pools is allocatable.
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - ippools
+      - ippools/status
     verbs:
       - list
       - watch
+      - update
   # kube-controllers manages hostendpoints.
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
@@ -253,6 +257,15 @@ rules:
   - apiGroups: ["crd.projectcalico.org"]
     resources:
       - "*"
+    verbs:
+      - get
+      - list
+      - watch
+  # KubeVirt VM/VMI informers for IPAM garbage collection of KubeVirt workloads.
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      - virtualmachines
+      - virtualmachineinstances
     verbs:
       - get
       - list

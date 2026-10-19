@@ -58,4 +58,10 @@ type IPAMConfig struct {
 	// maintain persistent IP addresses across VM lifecycle events (reboot, migration, pod eviction).
 	// Valid values: "Enabled", "Disabled". Default: "Enabled" if not specified.
 	KubeVirtVMAddressPersistence *string `json:"kubeVirtVMAddressPersistence,omitempty"`
+
+	// IPCooldownSeconds defines the time period after an IP is released
+	// during which it will not be re-allocated. If set to zero, IPs can be
+	// re-used immediately (but are still handled with a FIFO queue to
+	// minimize immediate reuse).
+	IPCooldownSeconds int `json:"ipCooldownSeconds,omitempty"`
 }

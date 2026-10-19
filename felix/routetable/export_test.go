@@ -24,3 +24,9 @@ func (r *RouteTable) IfacesToARPLen() int {
 func (r *RouteTable) IfacesToARPAdd(ifaceName string) {
 	r.ifacesToARP.Add(ifaceName)
 }
+
+// GraceInfoCount returns the number of interface grace-period records
+// currently being tracked.
+func (r *RouteTable) GraceInfoCount() int {
+	return len(r.ifaceIndexToGraceInfo)
+}

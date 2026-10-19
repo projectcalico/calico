@@ -92,6 +92,27 @@ EOF
   fi
 }
 
+function kubectl_apply_retry() {
+  # Apply a manifest, retrying on failure. Right after ASO is installed its
+  # conversion webhook can still reject requests (cert-manager has not yet
+  # injected the CA into the CRDs), and a silently failed apply leaves the
+  # subsequent wait_for_aso_resource polling for a resource that was never
+  # admitted. Retry through the transient window and fail loudly otherwise.
+  local manifest=$1
+  local retries=${2:-12}
+  local delay=${3:-5}
+  local attempt
+  for ((attempt=1; attempt<=retries; attempt++)); do
+    if ${KUBECTL} apply -f "${manifest}"; then
+      return 0
+    fi
+    log_info "kubectl apply ${manifest} failed (attempt ${attempt}/${retries}); retrying in ${delay}s..."
+    sleep "${delay}"
+  done
+  log_error "kubectl apply ${manifest} failed after ${retries} attempts"
+  return 1
+}
+
 function apply_azure_crds() {
   log_info "Starting ASO v2 resource deployment"
 
@@ -123,7 +144,7 @@ EOF
 
   # Step 1: Resource Group (foundational)
   log_info "Creating Resource Group..."
-  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/resource-group.yaml
+  kubectl_apply_retry ${ASO_DIR}/infra/manifests/resource-group.yaml || return 1
 
   if ! wait_for_aso_resource "resourcegroup" "$AZURE_RESOURCE_GROUP" "aso" "300s"; then
     log_error "Failed to create Resource Group"
@@ -132,8 +153,8 @@ EOF
 
   # Step 2: Networking components
   log_info "Creating networking components..."
-  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/vnet.yaml
-  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/security-group.yaml
+  kubectl_apply_retry ${ASO_DIR}/infra/manifests/vnet.yaml || return 1
+  kubectl_apply_retry ${ASO_DIR}/infra/manifests/security-group.yaml || return 1
 
   # Wait for VNet to be ready before proceeding
   if ! wait_for_aso_resource "virtualnetwork" "vnet-aso" "aso" "300s"; then
@@ -156,12 +177,12 @@ EOF
 
   # Step 3: Secrets
   log_info "Creating secrets..."
-  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/password.yaml
+  kubectl_apply_retry ${ASO_DIR}/infra/manifests/password.yaml || return 1
 
   # Step 4: Virtual Machines and Network Resources
   log_info "Creating Virtual Machines and network resources..."
-  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/vmss-linux.yaml
-  ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/vmss-windows.yaml
+  kubectl_apply_retry ${ASO_DIR}/infra/manifests/vmss-linux.yaml || return 1
+  kubectl_apply_retry ${ASO_DIR}/infra/manifests/vmss-windows.yaml || return 1
 
   # Build list of all VMs to wait for based on node counts
   local vm_resources=()
@@ -197,6 +218,38 @@ EOF
     return 1
   fi
 
+  # VirtualMachine Ready means Azure provisioned the VM — NOT that the
+  # CustomScript extensions that install containerd (Linux) or configure
+  # OpenSSH / runtime (Windows) have finished. Without an explicit gate
+  # here, downstream scripts race the extension and time out 5+ minutes
+  # later inside the VM with no useful diagnostic.
+  log_info "Waiting for VM extensions to finish reconciling..."
+  local ext_resources=()
+  for ((i=1; i<=${LINUX_NODE_COUNT}; i++)); do
+    ext_resources+=("vm-linux-${i}-containerd")
+  done
+  for ((i=1; i<=${WINDOWS_NODE_COUNT}; i++)); do
+    ext_resources+=("vm-windows-${i}-openssh")
+    ext_resources+=("vm-windows-${i}-customextension")
+  done
+
+  local failed_exts=()
+  for ext in "${ext_resources[@]}"; do
+    if ! wait_for_aso_resource "virtualmachinesextension" "$ext" "aso" "$ASO_TIMEOUT_DEFAULT"; then
+      log_error "VirtualMachinesExtension $ext failed to become ready"
+      failed_exts+=("$ext")
+      ${KUBECTL} describe virtualmachinesextension "$ext" -n aso | tail -30
+    else
+      log_info "VirtualMachinesExtension $ext is ready"
+    fi
+  done
+
+  if [[ ${#failed_exts[@]} -gt 0 ]]; then
+    log_error "Failed VirtualMachinesExtension resources: ${failed_exts[*]}"
+    log_info "Use '${KUBECTL} describe virtualmachinesextension <name> -n aso' for more details"
+    return 1
+  fi
+
   log_info "All ASO v2 resources applied and reconciled successfully"
 }
 
@@ -212,8 +265,9 @@ function wait_for_aso_resource() {
 
   log_info "Waiting for $resource_type/$resource_name in namespace $namespace (timeout: $timeout)..."
 
-  # First, wait for the resource to exist (up to 120 seconds — controller restarts
-  # or webhook backpressure occasionally push past 60s).
+  # First, wait for the resource to exist (up to 120 seconds). Callers only get here
+  # after a successful apply, so this covers resources the ASO controller creates
+  # for us (e.g. subnets and extensions nested in a parent manifest)
   local wait_count=0
   while ! ${KUBECTL} get "$resource_type/$resource_name" -n "$namespace" >/dev/null 2>&1; do
     if [[ $wait_count -ge 120 ]]; then
@@ -693,6 +747,29 @@ function diagnose_aso_resources() {
       if ${KUBECTL} get virtualmachine $vm -n aso &>/dev/null; then
         echo "--- VirtualMachine: $vm ---"
         ${KUBECTL} get virtualmachine $vm -n aso -o yaml | grep -A 20 "status:" | grep -E "(conditions|ready|message|reason)"
+      fi
+    done
+
+    # Per-extension health. The summary above only shows finalizers, which
+    # tells us the resources exist but NOT whether the CustomScript
+    # extensions on each VM actually finished (Ready/provisioningState).
+    # That's what we need to debug "containerd not ready" style timeouts.
+    log_info "Detailed VirtualMachinesExtension status:"
+    local ext_names=()
+    for ((i=1; i<=${LINUX_NODE_COUNT}; i++)); do
+      ext_names+=("vm-linux-${i}-containerd")
+    done
+    for ((i=1; i<=${WINDOWS_NODE_COUNT}; i++)); do
+      ext_names+=("vm-windows-${i}-openssh")
+      ext_names+=("vm-windows-${i}-customextension")
+    done
+    for ext in "${ext_names[@]}"; do
+      if ${KUBECTL} get virtualmachinesextension "$ext" -n aso &>/dev/null; then
+        echo "--- VirtualMachinesExtension: $ext ---"
+        ${KUBECTL} get virtualmachinesextension "$ext" -n aso \
+          -o jsonpath='{range .status.conditions[*]}  type={.type} status={.status} reason={.reason} message={.message}{"\n"}{end}' 2>/dev/null
+        ${KUBECTL} get virtualmachinesextension "$ext" -n aso \
+          -o jsonpath='  provisioningState={.status.provisioningState}{"\n"}' 2>/dev/null
       fi
     done
   else

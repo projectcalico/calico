@@ -17,9 +17,11 @@ package calc
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"sort"
 	"time"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
@@ -588,12 +590,12 @@ func (c *L3RouteResolver) OnPoolUpdate(update api.Update) (_ bool) {
 	if update.Value != nil {
 		newPool = c.getPoolInfo(update)
 	}
-	if newPool != nil && newPool.PoolType != proto.IPPoolType_NONE {
+	if newPool != nil {
 		logrus.WithFields(logrus.Fields{
 			"oldType": oldPool.PoolType,
 			"newType": newPool.PoolType,
 			"newPool": *newPool,
-		}).Info("Pool is active")
+		}).Info("Pool update")
 		c.allPools[poolKey] = *newPool
 		c.trie.UpdatePool(newPool.CIDR, newPool.PoolType, newPool.NATOutgoing, newPool.CrossSubnet)
 	} else if oldPoolExists {
@@ -625,6 +627,9 @@ func (c *L3RouteResolver) poolTypeForPool(pool *model.IPPool) proto.IPPoolType {
 	if pool == nil {
 		return proto.IPPoolType_NONE
 	}
+	if isLoadBalancerOnlyPool(pool) {
+		return proto.IPPoolType_NONE
+	}
 	if pool.VXLANMode != encap.Never {
 		return proto.IPPoolType_VXLAN
 	}
@@ -632,6 +637,17 @@ func (c *L3RouteResolver) poolTypeForPool(pool *model.IPPool) proto.IPPoolType {
 		return proto.IPPoolType_IPIP
 	}
 	return proto.IPPoolType_NO_ENCAP
+}
+
+// isLoadBalancerOnlyPool returns true if the pool's AllowedUses contains only
+// "LoadBalancer". Such pools should not contribute to route pool type because
+// their CIDRs do not represent workload/tunnel addresses and traffic destined
+// to them should still be masqueraded (not exempted from SNAT via the
+// FlagInIPAMPool BPF route flag or the network-ip-pools ipset).
+//
+// NOTE: keep in sync with isLoadBalancerOnly in felix/dataplane/linux/masq_mgr.go.
+func isLoadBalancerOnlyPool(pool *model.IPPool) bool {
+	return len(pool.AllowedUses) == 1 && slices.Contains(pool.AllowedUses, apiv3.IPPoolAllowedUseLoadBalancer)
 }
 
 // routesFromBlock returns a list of routes which should exist based on the provided
@@ -717,6 +733,7 @@ func (c *L3RouteResolver) flush() {
 		var blockTypes proto.RouteType
 		var blockMatchesRoute bool
 		var hasTunnelRef bool
+		var hasHostRef bool
 		for _, entry := range buf {
 			ri := entry.Data.(RouteInfo)
 			if len(ri.Pools) > 0 {
@@ -766,6 +783,7 @@ func (c *L3RouteResolver) flush() {
 			}
 			if len(ri.Host.NodeNames) > 0 {
 				rt.DstNodeName = ri.Host.NodeNames[0]
+				hasHostRef = true
 
 				if rt.DstNodeName == c.myNodeName {
 					logCxt.Debug("Local host route.")
@@ -828,15 +846,19 @@ func (c *L3RouteResolver) flush() {
 			}
 		}
 
-		// Apply the accumulated block workload type flags unless the route is a tunnel
-		// IP that merely falls within a parent block. A tunnel IP inside a larger block
-		// (e.g., a /32 inside a /26) should not get REMOTE_WORKLOAD — that causes
-		// isRemoteTunnelRoute() in the route manager to program a spurious /32 route.
+		// Apply the accumulated block workload type flags, with two exceptions.
 		//
-		// However, if the block is at the same CIDR as the route (e.g., a /32 block from
-		// a dedicated tunnel pool), the workload type is still needed so the route manager
+		// A host IP never inherits the workload type from a containing block, even one at
+		// its exact CIDR. It's reachable via its own host route; tagging it REMOTE_WORKLOAD
+		// makes the route manager program the node's own IP via the tunnel device, which
+		// breaks connectivity to the node.
+		//
+		// A tunnel IP that merely falls within a larger parent block (e.g. a /32 inside a
+		// /24) also skips the workload type, since REMOTE_WORKLOAD makes
+		// isRemoteTunnelRoute() program a spurious /32 route. A tunnel IP whose block is at
+		// the same CIDR (a dedicated /32 tunnel pool) still needs it, so the route manager
 		// programs the correct directly-connected route.
-		if blockSeen && (!hasTunnelRef || blockMatchesRoute) {
+		if blockSeen && !hasHostRef && (blockMatchesRoute || !hasTunnelRef) {
 			rt.Types |= blockTypes
 		}
 

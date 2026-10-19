@@ -29,6 +29,8 @@ import (
 	"github.com/google/go-github/v53/github"
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/defaults"
+	igithub "github.com/projectcalico/calico/release/internal/github"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
@@ -45,7 +47,7 @@ const (
 var (
 	//go:embed templates/release-note.md.gotmpl
 	releaseNoteTemplate string
-	repos               = []string{utils.CalicoRepoName, utils.BirdRepoName}
+	repos               = []string{defaults.CalicoRepoName, defaults.BirdRepoName}
 	newlinePattern      = regexp.MustCompile(`\r\n|[\r\n\v\f\x{0085}\x{2028}\x{2029}]`)
 	releaseNotePattern  = regexp.MustCompile("(?s)```release-note\\s(.*?)\\s```")
 )
@@ -196,24 +198,21 @@ func outputReleaseNotes(issueDataList []*ReleaseNoteIssueData, outputFilePath st
 
 // ReleaseNotes generates release notes for a milestone
 // and outputs it to a file in <outputDir>/release-notes/<milestone>-release-notes.md
-func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version.Version) (string, error) {
-	if githubToken == "" {
-		return "", fmt.Errorf("github token not set, set GITHUB_TOKEN environment variable")
-	}
+func ReleaseNotes(owner, repoRootDir, outputDir string, ver version.Version) (string, error) {
 	if outputDir == "" && repoRootDir == "" {
 		return "", fmt.Errorf("either outputDir or repoRootDir must be set")
 	}
 	if outputDir == "" {
 		outputDir = releaseNoteDirPath(repoRootDir)
 	}
-	if owner != utils.ProjectCalicoOrg {
-		logrus.WithField("org", owner).Warnf("generating release notes outside of %s GitHub organization is not supported, switching back to %s", utils.ProjectCalicoOrg, utils.ProjectCalicoOrg)
-		owner = utils.ProjectCalicoOrg
+	if owner != defaults.ProjectCalicoOrg {
+		logrus.WithField("org", owner).Warnf("generating release notes outside of %s GitHub organization is not supported, switching back to %s", defaults.ProjectCalicoOrg, defaults.ProjectCalicoOrg)
+		owner = defaults.ProjectCalicoOrg
 	}
 
-	logrus.Infof("Generating release notes for %s", ver.FormattedString())
-	milestone := ver.Milestone(utils.ProductName)
-	githubClient := github.NewTokenClient(context.Background(), githubToken)
+	logrus.Infof("Generating release notes for %s", ver.String())
+	milestone := ver.Milestone(defaults.ProductName)
+	githubClient := igithub.Client()
 	releaseNoteDataList := []*ReleaseNoteIssueData{}
 	opts := &github.MilestoneListOptions{
 		State: string(openState),
@@ -262,7 +261,7 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 	if len(releaseNoteDataList) == 0 {
 		logrus.WithField("milestone", milestone).Warn("No closed issues requiring release notes found in milestone")
 	}
-	releaseNoteFilePath := releaseNoteFilePathFromDir(outputDir, ver.FormattedString())
+	releaseNoteFilePath := releaseNoteFilePathFromDir(outputDir, ver.String())
 	if err := outputReleaseNotes(releaseNoteDataList, releaseNoteFilePath); err != nil {
 		logrus.WithError(err).Error("Failed to output release notes")
 		return "", err

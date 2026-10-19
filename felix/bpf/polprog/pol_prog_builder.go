@@ -15,6 +15,7 @@
 package polprog
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/bits"
@@ -60,6 +61,7 @@ type Builder struct {
 	useJmps            bool
 	maxJumpsPerProgram int
 	numRulesInProgram  int
+	restUnreachable    bool
 	xdp                bool
 	flowLogsEnabled    bool
 	trampolineStride   int
@@ -243,7 +245,39 @@ func (p *Builder) Instructions(rules Rules) ([]asm.Insns, error) {
 	p.b.SetTrampolineStride(p.trampolineStride)
 	p.blocks = append(p.blocks, p.b)
 	p.writeProgramHeader()
+	p.writeRulesUntilUnreachable(rules)
+	if !p.restUnreachable {
+		// Otherwise the split already wrote the last sub-program's footer.
+		p.writeProgramFooter()
+	}
 
+	var progs []asm.Insns
+	for i, b := range p.blocks {
+		insns, err := b.Assemble()
+		if err != nil {
+			return nil, fmt.Errorf("failed to assemble policy program %d: %w", i, err)
+		}
+		progs = append(progs, insns)
+	}
+	return progs, nil
+}
+
+// restUnreachableSignal is panicked by maybeSplitProgram, and recovered by
+// writeRulesUntilUnreachable, to stop writing policy that nothing can reach.
+type restUnreachableSignal struct{}
+
+func (p *Builder) writeRulesUntilUnreachable(rules Rules) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(restUnreachableSignal); !ok {
+				panic(r)
+			}
+		}
+	}()
+	p.writeRules(rules)
+}
+
+func (p *Builder) writeRules(rules Rules) {
 	if p.xdp {
 		// For an XDP program HostNormalTiers continues the untracked policy to enforce;
 		// other fields are unused.
@@ -306,18 +340,6 @@ normalPolicy:
 		p.writeTiers(rules.Tiers, legDest, "allow")
 		p.writeProfiles(rules.Profiles, rules.NoProfileMatchID, "allow")
 	}
-
-	p.writeProgramFooter()
-
-	var progs []asm.Insns
-	for i, b := range p.blocks {
-		insns, err := b.Assemble()
-		if err != nil {
-			return nil, fmt.Errorf("failed to assemble policy program %d: %w", i, err)
-		}
-		progs = append(progs, insns)
-	}
-	return progs, nil
 }
 
 // writeProgramHeader emits instructions to load the state from the state map, leaving
@@ -386,7 +408,7 @@ func (p *Builder) writeProgramFooter() {
 		p.b.Exit()
 	}
 
-	if p.b.TargetIsUsed("allow") {
+	if p.b.HasPendingJumps("allow") {
 		p.b.LabelNextInsn("allow")
 		// Store the policy result in the state for the next program to see.
 		p.b.MovImm32(asm.R1, int32(state.PolicyAllow))
@@ -416,6 +438,10 @@ func (p *Builder) writeProgramFooter() {
 
 func (p *Builder) writeExitTarget() {
 	p.b.LabelNextInsn("exit")
+	p.writeDrop()
+}
+
+func (p *Builder) writeDrop() {
 	if p.xdp {
 		p.b.MovImm64(asm.R0, 1 /* XDP_DROP */)
 	} else {
@@ -544,9 +570,22 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 	for ruleIdx, rule := range policy.Rules {
 		log.Debugf("Start of %s rule %d", policy.NamespacedName(), ruleIdx)
 		p.b.AddCommentF("Start of rule %s %s", policy.NamespacedName(), rule)
-		ipsets := p.printIPSetIDs(rule)
-		if ipsets != "" {
-			p.b.AddCommentF("IPSets %s", p.printIPSetIDs(rule))
+		// Emit the positive match summary directly under the rule header so it
+		// sits next to "Rule:" in the dump, ahead of the hit count. Selector IP
+		// sets are folded into the src/dst tokens as hex IDs and resolved to
+		// live member IPs by the dump.
+		if p.policyDebugEnabled {
+			if filtered := rules.FilterRuleToIPVersion(p.ipVersion(), rule.Rule); filtered != nil {
+				s := formatRuleMatch(filtered,
+					p.ipSetHexIDs(filtered.SrcIpSetIds),
+					p.ipSetHexIDs(filtered.NotSrcIpSetIds),
+					p.ipSetHexIDs(filtered.DstIpSetIds),
+					p.ipSetHexIDs(filtered.NotDstIpSetIds),
+				)
+				if s != "" {
+					p.b.AddCommentF("Match: %s", s)
+				}
+			}
 		}
 		p.b.AddCommentF("Rule MatchID: %d", rule.MatchID)
 		action := strings.ToLower(rule.Action)
@@ -925,35 +964,21 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 	}
 }
 
-func (p *Builder) printIPSetIDs(r Rule) string {
-	str := ""
-	joinIDs := func(ipSets []string) string {
-		idString := []string{}
-		for _, ipSetID := range ipSets {
-			id := p.ipSetIDProvider.GetNoAlloc(ipSetID)
-			if id != 0 {
-				idString = append(idString, fmt.Sprintf("0x%x", id))
-			}
+// ipSetHexIDs maps a leg's selector IP set string IDs to their BPF hex IDs
+// (e.g. "0x1a2b"), skipping any that aren't currently programmed. The hex IDs
+// are folded into the rule's "Match:" summary and resolved to live member IPs
+// by the dump.
+func (p *Builder) ipSetHexIDs(ipSetIDs []string) []string {
+	if len(ipSetIDs) == 0 {
+		return nil
+	}
+	hexIDs := make([]string, 0, len(ipSetIDs))
+	for _, ipSetID := range ipSetIDs {
+		if id := p.ipSetIDProvider.GetNoAlloc(ipSetID); id != 0 {
+			hexIDs = append(hexIDs, fmt.Sprintf("0x%x", id))
 		}
-		return strings.Join(idString[:], ",")
 	}
-	srcIDString := joinIDs(r.SrcIpSetIds)
-	if srcIDString != "" {
-		str = str + fmt.Sprintf("src_ip_set_ids:<%s> ", srcIDString)
-	}
-	notSrcIDString := joinIDs(r.NotSrcIpSetIds)
-	if notSrcIDString != "" {
-		str = str + fmt.Sprintf("not_src_ip_set_ids:<%s> ", notSrcIDString)
-	}
-	dstIDString := joinIDs(r.DstIpSetIds)
-	if dstIDString != "" {
-		str = str + fmt.Sprintf("dst_ip_set_ids:<%s> ", dstIDString)
-	}
-	notDstIDString := joinIDs(r.NotDstIpSetIds)
-	if notDstIDString != "" {
-		str = str + fmt.Sprintf("not_dst_ip_set_ids:<%s> ", notDstIDString)
-	}
-	return str
+	return hexIDs
 }
 
 func (p *Builder) writeIPSetMatch(negate bool, leg matchLeg, ipSets []string) {
@@ -1161,6 +1186,7 @@ func (p *Builder) maybeSplitProgram() bool {
 	}
 
 	p.b.SetTrampolinesEnabled(false) // We're about to write a special trampoline...
+	splitIdx := p.b.NextInsnIdx()
 	p.b.AddCommentF("Splitting program after %d jumps", p.b.NumJumps)
 	p.b.MovImm64(asm.R0, 0)
 	p.b.Jump("next-program")
@@ -1195,6 +1221,12 @@ func (p *Builder) maybeSplitProgram() bool {
 			p.b.Jump("next-program")
 		}
 	}
+	if len(targets) == 0 && !p.b.HasPendingJumps("next-program") {
+		log.Debug("Remaining policy is unreachable, not adding a sub-program")
+		p.b.AddCommentAt(splitIdx, "Rest of the policy is unreachable and is not built")
+		p.restUnreachable = true
+		panic(restUnreachableSignal{})
+	}
 	p.b.LabelNextInsn("next-program")
 	// Stash the trampoline offset in the policy result so the next program
 	// can pick it up.
@@ -1211,7 +1243,7 @@ func (p *Builder) maybeSplitProgram() bool {
 	p.b.AddCommentF(fmt.Sprintf("Tail call to policy program at index %d * %d + %d = %d", p.policyMapStride, len(p.blocks), p.policyMapIndex, jumpIdx))
 	p.b.MovImm64(asm.R3, int32(jumpIdx)) // Third arg is index to jump to.
 	p.b.Call(asm.HelperTailCall)
-	p.writeExitTarget() // Drop if tail call fails.
+	p.writeDrop() // Drop if tail call fails.
 
 	// Now start the new program...
 	p.numRulesInProgram = 0
@@ -1241,6 +1273,32 @@ func (p *Builder) TrampolineStride() int {
 
 func SubProgramJumpIdx(polProgIdx, subProgIdx, stride int) int {
 	return polProgIdx + subProgIdx*stride
+}
+
+// CheckSubPrograms reports sub-programs that the verifier's CFG check rejects or that do not
+// tail-call the next one.
+func CheckSubPrograms(progs []asm.Insns, polProgIdx, stride int) error {
+	var errs []error
+	for i, p := range progs {
+		if err := asm.CheckCFG(p); err != nil {
+			errs = append(errs, fmt.Errorf("sub-program %d of %d: %w", i, len(progs), err))
+		}
+		if i == len(progs)-1 {
+			continue
+		}
+		next := asm.MakeInsn(asm.MovImm64, asm.R3, 0, 0, int32(SubProgramJumpIdx(polProgIdx, i+1, stride)))
+		found := false
+		for _, in := range p {
+			if in.Instruction == next.Instruction {
+				found = true
+				break
+			}
+		}
+		if !found {
+			errs = append(errs, fmt.Errorf("sub-program %d does not tail-call sub-program %d", i, i+1))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func protocolToNumber(protocol *proto.Protocol) uint8 {
@@ -1303,6 +1361,14 @@ func WithFlowLogs() Option {
 	}
 }
 
+// WithMaxJumpsPerProgram overrides the number of jumps after which the program
+// is split.
+func WithMaxJumpsPerProgram(n int) Option {
+	return func(p *Builder) {
+		p.maxJumpsPerProgram = n
+	}
+}
+
 func WithTrampolineStride(s int) Option {
 	return func(p *Builder) {
 		p.trampolineStride = s
@@ -1334,4 +1400,114 @@ func protoPortRangeToString(portRange *proto.PortRange) string {
 		return fmt.Sprintf("%d", portRange.First)
 	}
 	return fmt.Sprintf("%d-%d", portRange.First, portRange.Last)
+}
+
+// formatPortRanges renders a list of numeric port ranges plus an optional
+// count of named-port IP sets as a brace-enclosed token, e.g. "{8055,100-105}"
+// or "{8055,named(2)}". Returns "" when there is nothing to render.
+func formatPortRanges(ports []*proto.PortRange, namedPortSetIDs []string) string {
+	if len(ports) == 0 && len(namedPortSetIDs) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(ports)+1)
+	for _, portRange := range ports {
+		parts = append(parts, protoPortRangeToString(portRange))
+	}
+	if len(namedPortSetIDs) > 0 {
+		parts = append(parts, fmt.Sprintf("named(%d)", len(namedPortSetIDs)))
+	}
+	return "{" + strings.Join(parts, ",") + "}"
+}
+
+// formatICMP renders an ICMP type (and optional code) match as "type[/code]".
+func formatICMP(icmp, notICMP interface{}) string {
+	switch v := icmp.(type) {
+	case *proto.Rule_IcmpType:
+		return fmt.Sprintf("%d", v.IcmpType)
+	case *proto.Rule_IcmpTypeCode:
+		return fmt.Sprintf("%d/%d", v.IcmpTypeCode.Type, v.IcmpTypeCode.Code)
+	}
+	switch v := notICMP.(type) {
+	case *proto.Rule_NotIcmpType:
+		return fmt.Sprintf("%d", v.NotIcmpType)
+	case *proto.Rule_NotIcmpTypeCode:
+		return fmt.Sprintf("%d/%d", v.NotIcmpTypeCode.Type, v.NotIcmpTypeCode.Code)
+	}
+	return ""
+}
+
+// joinNetsAndSets renders the combined L3 match for one leg: literal CIDRs
+// plus any selector-resolved IP sets (passed as "0x..." hex IDs) as a single
+// brace-enclosed token, e.g. "{11.0.0.8/32,10.0.0.8/32,0x1a2b}". The hex IDs
+// are resolved to live member IPs later, by the dump. Returns "" when the leg
+// has no criteria.
+func joinNetsAndSets(nets, setHexIDs []string) string {
+	if len(nets) == 0 && len(setHexIDs) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(nets)+len(setHexIDs))
+	parts = append(parts, nets...)
+	parts = append(parts, setHexIDs...)
+	return "{" + strings.Join(parts, ",") + "}"
+}
+
+// formatRuleMatch renders a rule's positive L3/L4 match criteria as a one-line
+// summary, e.g.
+//
+//	proto=tcp src={11.0.0.8/32,10.0.0.8/32} sports={8055,100-105} dst={12.0.0.8/32} dports={9055,200-205}
+//
+// Negated fields are prefixed with '!' (e.g. "!proto=tcp", "!dports={...}").
+// Selector-resolved IP sets are folded into the matching src/dst token as
+// "0x..." hex IDs (one per leg argument); the dump resolves those to live
+// member IPs. Returns "" when the rule has no L3/L4 criteria (e.g. the implicit
+// default-deny rule), so the caller can skip emitting an empty "Match:" comment.
+//
+// The fields are walked in the same order that writeRule enforces them.
+func formatRuleMatch(rule *proto.Rule, srcSets, notSrcSets, dstSets, notDstSets []string) string {
+	var tokens []string
+	add := func(format string, args ...interface{}) {
+		tokens = append(tokens, fmt.Sprintf(format, args...))
+	}
+
+	if rule.Protocol != nil {
+		add("proto=%s", protocolToName(rule.Protocol))
+	}
+	if rule.NotProtocol != nil {
+		add("!proto=%s", protocolToName(rule.NotProtocol))
+	}
+
+	if s := joinNetsAndSets(rule.SrcNet, srcSets); s != "" {
+		add("src=%s", s)
+	}
+	if s := joinNetsAndSets(rule.NotSrcNet, notSrcSets); s != "" {
+		add("!src=%s", s)
+	}
+	if s := joinNetsAndSets(rule.DstNet, dstSets); s != "" {
+		add("dst=%s", s)
+	}
+	if s := joinNetsAndSets(rule.NotDstNet, notDstSets); s != "" {
+		add("!dst=%s", s)
+	}
+
+	if s := formatPortRanges(rule.SrcPorts, rule.SrcNamedPortIpSetIds); s != "" {
+		add("sports=%s", s)
+	}
+	if s := formatPortRanges(rule.NotSrcPorts, rule.NotSrcNamedPortIpSetIds); s != "" {
+		add("!sports=%s", s)
+	}
+	if s := formatPortRanges(rule.DstPorts, rule.DstNamedPortIpSetIds); s != "" {
+		add("dports=%s", s)
+	}
+	if s := formatPortRanges(rule.NotDstPorts, rule.NotDstNamedPortIpSetIds); s != "" {
+		add("!dports=%s", s)
+	}
+
+	if rule.Icmp != nil {
+		add("icmp=%s", formatICMP(rule.Icmp, nil))
+	}
+	if rule.NotIcmp != nil {
+		add("!icmp=%s", formatICMP(nil, rule.NotIcmp))
+	}
+
+	return strings.Join(tokens, " ")
 }

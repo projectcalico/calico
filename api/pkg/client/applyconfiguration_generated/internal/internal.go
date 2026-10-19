@@ -36,6 +36,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: handle_id
       type:
         scalar: string
+    - name: releasedAt
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Time
     - name: secondary
       type:
         map:
@@ -923,7 +926,6 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: bpfLogLevel
       type:
         scalar: string
-      default: ""
     - name: bpfMaglevMaxEndpointsPerService
       type:
         scalar: numeric
@@ -960,6 +962,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: bpfMapSizeRoute
       type:
         scalar: numeric
+    - name: bpfOverlayHostSourceIP
+      type:
+        scalar: string
     - name: bpfPSNATPorts
       type:
         namedType: com.github.projectcalico.api.pkg.lib.numorstring.Port
@@ -1062,6 +1067,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: flowLogsFlushInterval
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
+    - name: flowLogsGoldmaneIncludeIPs
+      type:
+        scalar: string
     - name: flowLogsGoldmaneServer
       type:
         scalar: string
@@ -1176,12 +1184,24 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: liveMigrationRouteConvergenceTime
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
+    - name: localSubnetL2Reachability
+      type:
+        scalar: string
+    - name: localSubnetL2ReachabilityRefreshInterval
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
     - name: logActionRateLimit
       type:
         scalar: string
     - name: logActionRateLimitBurst
       type:
         scalar: numeric
+    - name: logConnectionTransitions
+      type:
+        scalar: string
+    - name: logConnectionTransitionsPrefix
+      type:
+        scalar: string
     - name: logDebugFilenameRegex
       type:
         scalar: string
@@ -1228,6 +1248,12 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: string
     - name: nftablesFilterDenyAction
+      type:
+        scalar: string
+    - name: nftablesFlowTableDataIfacePattern
+      type:
+        scalar: string
+    - name: nftablesFlowTableOffload
       type:
         scalar: string
     - name: nftablesMangleAllowAction
@@ -1665,6 +1691,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: boolean
       default: false
+    - name: ipCooldownSeconds
+      type:
+        scalar: numeric
     - name: kubeVirtVMAddressPersistence
       type:
         scalar: string
@@ -1833,6 +1862,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ControllersConfig
       default: {}
+    - name: debugProfileHost
+      type:
+        scalar: string
     - name: debugProfilePort
       type:
         scalar: numeric
@@ -2335,6 +2367,11 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Template
   map:
     fields:
+    - name: annotations
+      type:
+        map:
+          elementType:
+            scalar: string
     - name: generateName
       type:
         scalar: string

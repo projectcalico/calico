@@ -26,7 +26,7 @@ import (
 	confdConfig "github.com/projectcalico/calico/confd/pkg/config"
 	confd "github.com/projectcalico/calico/confd/pkg/run"
 	felix "github.com/projectcalico/calico/felix/daemon"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/node/cmd/calico-node/bpf"
 	"github.com/projectcalico/calico/node/pkg/allocateip"
 	"github.com/projectcalico/calico/node/pkg/cni"
@@ -84,7 +84,7 @@ func newFelixCommand() *cobra.Command {
 		Use:   "felix",
 		Short: "Run the Felix policy agent",
 		Run: func(cmd *cobra.Command, args []string) {
-			logrus.SetFormatter(&logutils.Formatter{Component: "felix"})
+			logrus.SetFormatter(&logrusr.Formatter{Component: "felix"})
 			felix.Run("/etc/calico/felix.cfg", buildinfo.Version, buildinfo.BuildDate, buildinfo.GitRevision)
 		},
 	}
@@ -99,7 +99,7 @@ func newConfdCommand() *cobra.Command {
 		Use:   "confd",
 		Short: "Run the confd configuration daemon",
 		Run: func(cmd *cobra.Command, args []string) {
-			logrus.SetFormatter(&logutils.Formatter{Component: "confd"})
+			logrus.SetFormatter(&logrusr.Formatter{Component: "confd"})
 			cfg, err := confdConfig.InitConfig(true)
 			if err != nil {
 				logrus.WithError(err).Fatal("Failed to initialize confd config")
@@ -126,9 +126,9 @@ func newInitCommand() *cobra.Command {
 		Short: "Do privileged initialisation of a new node",
 		Run: func(cmd *cobra.Command, args []string) {
 			if bestEffort {
-				logrus.SetFormatter(&logutils.Formatter{Component: "init-best-effort"})
+				logrus.SetFormatter(&logrusr.Formatter{Component: "init-best-effort"})
 			} else {
-				logrus.SetFormatter(&logutils.Formatter{Component: "init"})
+				logrus.SetFormatter(&logrusr.Formatter{Component: "init"})
 			}
 			nodeinit.Run(bestEffort)
 		},
@@ -146,7 +146,7 @@ func newStartupCommand() *cobra.Command {
 		Use:   "startup",
 		Short: "Do non-privileged start-up routine",
 		Run: func(cmd *cobra.Command, args []string) {
-			logrus.SetFormatter(&logutils.Formatter{Component: "startup"})
+			logrus.SetFormatter(&logrusr.Formatter{Component: "startup"})
 			startup.Run()
 			if completeStartup {
 				if err := startup.MarkNetworkAvailable(); err != nil {
@@ -166,7 +166,7 @@ func newShutdownCommand() *cobra.Command {
 		Use:   "shutdown",
 		Short: "Do shutdown routine",
 		Run: func(cmd *cobra.Command, args []string) {
-			logrus.SetFormatter(&logutils.Formatter{Component: "shutdown"})
+			logrus.SetFormatter(&logrusr.Formatter{Component: "shutdown"})
 			shutdown.Run()
 		},
 	}
@@ -177,7 +177,7 @@ func newNodeServicesCommand() *cobra.Command {
 		Use:   "node-services",
 		Short: "Run consolidated node services (complete-startup, tunnel-ip-allocator, monitor-addresses, node-status-reporter, cni-config-monitor)",
 		Run: func(cmd *cobra.Command, args []string) {
-			logutils.ConfigureFormatter("node-services")
+			logrusr.ConfigureFormatter("node-services")
 			nodeservices.Run()
 		},
 	}
@@ -188,7 +188,7 @@ func newMonitorAddressesCommand() *cobra.Command {
 		Use:   "monitor-addresses",
 		Short: "Monitor change in node IP addresses",
 		Run: func(cmd *cobra.Command, args []string) {
-			logrus.SetFormatter(&logutils.Formatter{Component: "monitor-addresses"})
+			logrus.SetFormatter(&logrusr.Formatter{Component: "monitor-addresses"})
 			startup.ConfigureLogging()
 			if err := startup.MonitorIPAddressSubnetsWithContext(context.Background()); err != nil {
 				logrus.WithError(err).Fatal("Monitor addresses failed")
@@ -204,7 +204,7 @@ func newAllocateTunnelAddrsCommand() *cobra.Command {
 		Use:   "allocate-tunnel-addrs",
 		Short: "Configure tunnel addresses for this node",
 		Run: func(cmd *cobra.Command, args []string) {
-			logrus.SetFormatter(&logutils.Formatter{Component: "tunnel-ip-allocator"})
+			logrus.SetFormatter(&logrusr.Formatter{Component: "tunnel-ip-allocator"})
 			if err := allocateip.Run(context.Background(), runOnce); err != nil {
 				logrus.WithError(err).Fatal("Tunnel IP allocator failed")
 			}
@@ -221,7 +221,7 @@ func newMonitorTokenCommand() *cobra.Command {
 		Use:   "monitor-token",
 		Short: "Watch for Kubernetes token changes, update CNI config",
 		Run: func(cmd *cobra.Command, args []string) {
-			logrus.SetFormatter(&logutils.Formatter{Component: "cni-config-monitor"})
+			logrus.SetFormatter(&logrusr.Formatter{Component: "cni-config-monitor"})
 			if err := cni.RunWithContext(context.Background()); err != nil {
 				logrus.WithError(err).Fatal("CNI config monitor failed")
 			}
@@ -234,7 +234,7 @@ func newCompleteStartupCommand() *cobra.Command {
 		Use:   "complete-startup",
 		Short: "Update the NetworkUnavailable condition in Kubernetes on successful startup",
 		Run: func(cmd *cobra.Command, args []string) {
-			logrus.SetFormatter(&logutils.Formatter{Component: "complete-startup"})
+			logrus.SetFormatter(&logrusr.Formatter{Component: "complete-startup"})
 			ctx := context.Background()
 			if err := startup.ManageNodeCondition(ctx, 5*time.Minute); err != nil {
 				utils.Terminate()
@@ -248,7 +248,7 @@ func newHostpathInitCommand() *cobra.Command {
 		Use:   "hostpath-init",
 		Short: "Initialize hostpaths for non-root access",
 		Run: func(cmd *cobra.Command, args []string) {
-			logrus.SetFormatter(&logutils.Formatter{Component: "hostpath-init"})
+			logrus.SetFormatter(&logrusr.Formatter{Component: "hostpath-init"})
 			hostpathinit.Run()
 		},
 	}
@@ -289,7 +289,7 @@ func newStatusCommand() *cobra.Command {
 		Use:   "report",
 		Short: "Run node status reporter",
 		Run: func(cmd *cobra.Command, args []string) {
-			logrus.SetFormatter(&logutils.Formatter{Component: "status-reporter"})
+			logrus.SetFormatter(&logrusr.Formatter{Component: "status-reporter"})
 			if err := status.RunWithContext(context.Background()); err != nil {
 				logrus.WithError(err).Fatal("Status reporter failed")
 			}

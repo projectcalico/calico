@@ -148,9 +148,8 @@ func programHeader(b *asm.Block, maxData int, stateMapFD maps.FD) {
 	// Check if bpf_skb_load_bytes succeeded (returns 0 on success)
 	b.JumpNEImm64(asm.R0, 0, "exit")
 
-	// Set up R8 to point to the end of actually loaded data (R7 + actual length)
-	b.Mov64(asm.R8, asm.R7)
-	b.Add64(asm.R8, asm.R9)
+	// R9 holds the number of bytes loaded into the scratch buffer (R7);
+	// indirect loads bound their offset against it.
 
 	b.LabelNextInsn("filter")
 	// Zero R1 (A) and R2 (X)
@@ -205,129 +204,457 @@ func fromBE(b *asm.Block, size uint8) {
 	b.FromBE(asm.R1, sz)
 }
 
-func cBPF2eBPF(b *asm.Block, pcap []pcap.BPFInstruction, linkType layers.LinkType) error {
-	for i, cbpf := range pcap {
-		code := uint8(cbpf.Code)
+// loadBytes returns the number of bytes a cBPF load of the given size reads.
+func loadBytes(size uint8) int32 {
+	switch size {
+	case bpfSizeH:
+		return 2
+	case bpfSizeB:
+		return 1
+	default: // bpfSizeW
+		return 4
+	}
+}
 
-		op := bpfOp(code)
-		class := bpfClass(code)
-		src := bpfSrc(code)
-		size := bpfSize(code)
+// maxLoopUnroll bounds how many times cBPF2eBPF unrolls a backward-jump
+// loop in the compiled filter. libpcap emits such a loop for the
+// "ip6 protochain" primitive, which walks the IPv6 extension-header chain;
+// the eBPF verifier rejects the unbounded back-edge, so we unroll it a
+// fixed number of times instead. The bound caps how many extension headers
+// the filter steps over before giving up and treating the packet as
+// non-matching. The C dataplane walks up to 8 (felix/bpf-gpl/parsing6.h);
+// for a debug log filter a smaller bound is plenty, since headers past the
+// first maxData bytes of the packet are unreachable anyway (the filter
+// matches against the pre-loaded scratch buffer).
+const maxLoopUnroll = 4
 
-		offset := int16(cbpf.Jt)<<8 | int16(cbpf.Jf)
-		K := int32(cbpf.K)
+func cBPF2eBPF(b *asm.Block, prog []pcap.BPFInstruction, linkType layers.LinkType) error {
+	loop, err := findLoop(prog)
+	if err != nil {
+		return err
+	}
 
-		b.LabelNextInsn(fmt.Sprintf("orig_%d", i))
+	straight := func(t int) string { return fmt.Sprintf("orig_%d", t) }
 
-		switch class {
-		case bpfClassMisc:
-			return fmt.Errorf("misc class: %+v", cbpf)
-		case bpfClassRet:
-			// K is the return value and hit should be snap length, 0 otherwise.
-			// https://github.com/the-tcpdump-group/libpcap/blob/aa4fd0d411239f5cc98f0ae14018d3ad91a5ee15/gencode.c#L822
-			if K == 0 {
-				b.Jump("miss")
-			} else {
-				b.Jump("hit")
+	if loop == nil {
+		// No loop: translate each instruction once; jumps resolve to the
+		// single copy of their target.
+		for i := range prog {
+			b.LabelNextInsn(fmt.Sprintf("orig_%d", i))
+			if err := emitInsn(b, i, prog[i], linkType, straight); err != nil {
+				return err
 			}
-			continue
-		case bpfClassLd:
-			mode := bpfMode(code)
-			switch mode {
-			case bpfModeIND:
-				b.Mov64(asm.R3 /* tmp */, asm.R7 /* pkt */) // Load pkt to tmp
-				b.Add64(asm.R3 /* tmp */, asm.R2 /* X */)   // Move to pkt[X]
-				if K > 0 {
-					b.AddImm64(asm.R3, K) // Move to pkt[X+K]
-				}
-				b.JumpLE64(asm.R8, asm.R3, "exit")                                  // Check size
-				b.Load(asm.R1 /* A */, asm.R3, asm.FieldOffset{}, asm.OpCode(size)) // A = pkt[X + K]
-				if asm.OpCode(size) != asm.MemOpSize8 {
-					fromBE(b, size)
-				}
-				continue
-			case bpfModeABS:
-				b.Load(asm.R1, asm.R7, asm.FieldOffset{Offset: int16(K), Field: ""}, asm.OpCode(size))
-				if asm.OpCode(size) != asm.MemOpSize8 {
-					fromBE(b, size)
-				}
-				continue
-			case bpfModeLEN:
-				b.Load32(asm.R1, asm.R6, asm.SkbuffOffsetLen)
-				continue
+		}
+		return nil
+	}
+
+	// A backward-jump loop spans prog[loop.header .. loop.tail]. Emit the
+	// instructions before it once, then maxLoopUnroll copies of the loop
+	// body, then the instructions after it once. Within a copy a forward
+	// jump stays in that copy; a back-edge becomes a forward jump into the
+	// next copy's header, and the last copy's back-edge falls through to
+	// "miss" (chain longer than the unroll bound => no match).
+	for i := 0; i < loop.header; i++ {
+		b.LabelNextInsn(fmt.Sprintf("orig_%d", i))
+		if err := emitInsn(b, i, prog[i], linkType, straight); err != nil {
+			return err
+		}
+	}
+
+	for c := 0; c < maxLoopUnroll; c++ {
+		for i := loop.header; i <= loop.tail; i++ {
+			ci, cc := i, c
+			b.LabelNextInsn(loopLabel(ci, cc))
+			if err := emitInsn(b, ci, prog[ci], linkType, func(t int) string {
+				return loop.targetLabel(t, ci, cc)
+			}); err != nil {
+				return err
+			}
+		}
+	}
+
+	for i := loop.tail + 1; i < len(prog); i++ {
+		b.LabelNextInsn(fmt.Sprintf("orig_%d", i))
+		if err := emitInsn(b, i, prog[i], linkType, straight); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// emitInsn translates a single cBPF instruction at index i to eBPF. label
+// maps a cBPF target index to the eBPF label to jump to; the caller varies
+// it to implement loop unrolling.
+func emitInsn(b *asm.Block, i int, cbpf pcap.BPFInstruction, linkType layers.LinkType, label func(target int) string) error {
+	code := uint8(cbpf.Code)
+
+	op := bpfOp(code)
+	class := bpfClass(code)
+	src := bpfSrc(code)
+	size := bpfSize(code)
+
+	K := int32(cbpf.K)
+
+	switch class {
+	case bpfClassMisc:
+		switch op {
+		case bpfTAX:
+			b.Mov64(asm.R2, asm.R1) // X = A
+			return nil
+		case bpfTXA:
+			b.Mov64(asm.R1, asm.R2) // A = X
+			return nil
+		}
+		return fmt.Errorf("misc class: %+v op %d", cbpf, op)
+	case bpfClassRet:
+		// K is the return value and hit should be snap length, 0 otherwise.
+		// https://github.com/the-tcpdump-group/libpcap/blob/aa4fd0d411239f5cc98f0ae14018d3ad91a5ee15/gencode.c#L822
+		if K == 0 {
+			b.Jump("miss")
+		} else {
+			b.Jump("hit")
+		}
+		return nil
+	case bpfClassLd:
+		mode := bpfMode(code)
+		switch mode {
+		case bpfModeIND:
+			// Indirect load A = pkt[X+K]. X is a runtime scalar; in a loop
+			// (ip6 protochain) it can grow well past the buffer, and the
+			// verifier will not bound a pointer derived from a pointer
+			// comparison. Bound the scalar offset of the last byte read
+			// (X+K+width-1) against the loaded length (R9 <= maxData) first,
+			// then form the pointer, so the verifier can prove the load stays
+			// within the scratch buffer and we never match on bytes past the
+			// loaded data.
+			width := loadBytes(size)
+			b.Mov64(asm.R3 /* tmp */, asm.R2 /* X */) // tmp = X
+			if hi := K + width - 1; hi > 0 {
+				b.AddImm64(asm.R3, hi) // tmp = X + K + width-1 (last byte read)
+			}
+			b.JumpGE64(asm.R3, asm.R9, "exit") // if last byte >= len, out of range
+			if width > 1 {
+				b.AddImm64(asm.R3, -(width - 1)) // tmp = X + K (first byte read)
+			}
+			b.Add64(asm.R3, asm.R7 /* pkt */)                                   // tmp = &pkt[X+K]
+			b.Load(asm.R1 /* A */, asm.R3, asm.FieldOffset{}, asm.OpCode(size)) // A = pkt[X + K]
+			if asm.OpCode(size) != asm.MemOpSize8 {
+				fromBE(b, size)
+			}
+			return nil
+		case bpfModeABS:
+			b.Load(asm.R1, asm.R7, asm.FieldOffset{Offset: int16(K), Field: ""}, asm.OpCode(size))
+			if asm.OpCode(size) != asm.MemOpSize8 {
+				fromBE(b, size)
+			}
+			return nil
+		case bpfModeLEN:
+			b.Load32(asm.R1, asm.R6, asm.SkbuffOffsetLen)
+			return nil
+		case bpfModeIMM:
+			// eBPF has only 64bit imm instructions
+			b.LoadImm64(asm.R1, int64(K))
+
+			return nil
+		case bpfModeMEM:
+			// Load from scratch memory M[K] to A
+			if K >= 16 {
+				return fmt.Errorf("scratch memory index out of range: M[%d]", K)
+			}
+			b.Load32(asm.R1, asm.R10, asm.FieldOffset{Offset: -int16((K + 1) * 4), Field: fmt.Sprintf("M[%d]", K)})
+			return nil
+		default:
+			return fmt.Errorf("unsupported BPF_LD mode 0x%x: %+v", mode, cbpf)
+		}
+	case bpfClassLdx:
+		if cbpf.Code == uint16(bpfClassLdx|bpfModeMSH|bpfSizeB) {
+			switch {
+			case linkType == layers.LinkTypeEthernet && K == 14:
+				fallthrough
+			case linkType == layers.LinkTypeIPv4 && K == 0:
+				// We assume reading IP header size and we would assume that
+				// the size is fixed without IP options.
+				b.LoadImm64(asm.R2, 20)
+			default:
+				b.AddComment(fmt.Sprintf("Loadx 4 * (pkt[%d] & 0xf)", K))
+				b.Mov64(asm.R3 /* tmp */, asm.R1 /* A */)                                               // Save A
+				b.Load8(asm.R1 /* A */, asm.R7 /* pkt */, asm.FieldOffset{Offset: int16(K), Field: ""}) // Load pkt[K] to A
+				b.AndImm64(asm.R1 /* A */, 0xf)                                                         // A = A & 0xf
+				b.ShiftLImm64(asm.R1 /*A */, 2)                                                         // A << 2 resp. A *4
+				b.Mov64(asm.R2 /* X */, asm.R1 /* A */)                                                 // Move A to X
+				b.Mov64(asm.R1 /* A */, asm.R3 /* tmp */)                                               // Restore A from tmp
+			}
+			return nil
+		} else {
+			switch bpfMode(code) {
 			case bpfModeIMM:
 				// eBPF has only 64bit imm instructions
-				b.LoadImm64(asm.R1, int64(K))
-				continue
-			}
-		case bpfClassLdx:
-			if cbpf.Code == uint16(bpfClassLdx|bpfModeMSH|bpfSizeB) {
-				switch {
-				case linkType == layers.LinkTypeEthernet && K == 14:
-					fallthrough
-				case linkType == layers.LinkTypeIPv4 && K == 0:
-					// We assume reading IP header size and we would assume that
-					// the size is fixed without IP options.
-					b.LoadImm64(asm.R2, 20)
-				default:
-					b.AddComment(fmt.Sprintf("Loadx 4 * (pkt[%d] & 0xf)", K))
-					b.Mov64(asm.R3 /* tmp */, asm.R1 /* A */)                                               // Save A
-					b.Load8(asm.R1 /* A */, asm.R7 /* pkt */, asm.FieldOffset{Offset: int16(K), Field: ""}) // Load pkt[K] to A
-					b.AndImm64(asm.R1 /* A */, 0xf)                                                         // A = A & 0xf
-					b.ShiftLImm64(asm.R1 /*A */, 2)                                                         // A << 2 resp. A *4
-					b.Mov64(asm.R2 /* X */, asm.R1 /* A */)                                                 // Move A to X
-					b.Mov64(asm.R1 /* A */, asm.R3 /* tmp */)                                               // Restore A from tmp
+				b.LoadImm64(asm.R2, int64(K)) // X = K
+				return nil
+			case bpfModeMEM:
+				// Load from scratch memory M[K] to X
+				if K >= 16 {
+					return fmt.Errorf("scratch memory index out of range: M[%d]", K)
 				}
-				continue
+				b.Load32(asm.R2, asm.R10, asm.FieldOffset{Offset: -int16((K + 1) * 4), Field: fmt.Sprintf("M[%d]", K)})
+				return nil
+			case bpfModeLEN:
+				// Packet length into X.
+				b.Load32(asm.R2, asm.R6, asm.SkbuffOffsetLen)
+				return nil
+			default:
+				return fmt.Errorf("unsupported BPF_LDX mode 0x%x: %+v", bpfMode(code), cbpf)
 			}
-		case bpfClassJmp:
-
-			var srcR asm.Reg
-			if src == bpfX {
-				srcR = asm.R2
-			}
-
-			if op == asm.JumpOpA {
-				b.Jump(fmt.Sprintf("orig_%d", cbpf.Jt+1))
-				continue
-			}
-
-			if cbpf.Jt != 0 && cbpf.Jf != 0 {
-				neg := (code & 0xf) | uint8(jumpOpNegate[asm.OpCode(op)])
-
-				b.AddComment("Jump with two targets")
-				b.InstrWithOffsetFixup(asm.OpCode(code), asm.R1, srcR, fmt.Sprintf("orig_%d", i+int(cbpf.Jt+1)), K)
-				b.InstrWithOffsetFixup(asm.OpCode(neg), asm.R1, srcR, fmt.Sprintf("orig_%d", i+int(cbpf.Jf+1)), K)
-
-				continue
-			}
-
-			var target int
-
-			if cbpf.Jf != 0 {
-				b.AddComment("Jump with false target")
-				op = uint8(jumpOpNegate[asm.OpCode(op)])
-				target = i + int(cbpf.Jf) + 1
-			} else {
-				b.AddComment("Jump with true target")
-				target = i + int(cbpf.Jt) + 1
-			}
-			code = (code & 0xf) | op
-
-			b.InstrWithOffsetFixup(asm.OpCode(code), asm.R1, srcR, fmt.Sprintf("orig_%d", target), K)
-
-			continue
 		}
+	case bpfClassSt:
+		// Store A to scratch memory M[K]
+		// We use stack slots (R10 + offset) to emulate scratch memory
+		// Classic BPF has 16 scratch memory slots (M[0] through M[15])
+		// Each slot is 32 bits, so we store at offset -(K+1)*4
+		if K >= 16 {
+			return fmt.Errorf("scratch memory index out of range: M[%d]", K)
+		}
+		b.StoreStack32(asm.R1, -int16((K+1)*4))
+		return nil
+	case bpfClassStx:
+		// Store X to scratch memory M[K]
+		if K >= 16 {
+			return fmt.Errorf("scratch memory index out of range: M[%d]", K)
+		}
+		b.StoreStack32(asm.R2, -int16((K+1)*4))
+		return nil
+	case bpfClassAlu:
+		// Classic BPF ALU operations on A register
+		// src can be either K (immediate) or X (register R2)
+		switch op {
+		case bpfAluAdd:
+			if src == bpfX {
+				b.Add64(asm.R1, asm.R2) // A += X
+			} else {
+				b.AddImm64(asm.R1, K) // A += K
+			}
+			return nil
+		case bpfAluSub:
+			if src == bpfX {
+				b.Instr(asm.Sub64, asm.R1, asm.R2, 0, 0, "") // A -= X
+			} else {
+				b.Instr(asm.SubImm64, asm.R1, 0, 0, K, "") // A -= K
+			}
+			return nil
+		case bpfAluMul:
+			if src == bpfX {
+				b.Instr(asm.Mul64, asm.R1, asm.R2, 0, 0, "") // A *= X
+			} else {
+				b.Instr(asm.MulImm64, asm.R1, 0, 0, K, "") // A *= K
+			}
+			return nil
+		case bpfAluDiv:
+			if src == bpfX {
+				b.Instr(asm.Div64, asm.R1, asm.R2, 0, 0, "") // A /= X
+			} else {
+				b.Instr(asm.DivImm64, asm.R1, 0, 0, K, "") // A /= K
+			}
+			return nil
+		case bpfAluOr:
+			if src == bpfX {
+				b.Instr(asm.Or64, asm.R1, asm.R2, 0, 0, "") // A |= X
+			} else {
+				b.OrImm64(asm.R1, K) // A |= K
+			}
+			return nil
+		case bpfAluAnd:
+			if src == bpfX {
+				b.Instr(asm.And64, asm.R1, asm.R2, 0, 0, "") // A &= X
+			} else {
+				b.AndImm64(asm.R1, K) // A &= K
+			}
+			return nil
+		case bpfAluLsh:
+			if src == bpfX {
+				b.Instr(asm.ShiftL64, asm.R1, asm.R2, 0, 0, "") // A <<= X
+			} else {
+				b.ShiftLImm64(asm.R1, K) // A <<= K
+			}
+			return nil
+		case bpfAluRsh:
+			if src == bpfX {
+				b.Instr(asm.ShiftR64, asm.R1, asm.R2, 0, 0, "") // A >>= X
+			} else {
+				b.ShiftRImm64(asm.R1, K) // A >>= K
+			}
+			return nil
+		case bpfAluNeg:
+			b.Instr(asm.Negate64, asm.R1, 0, 0, 0, "") // A = -A
+			return nil
+		case bpfAluMod:
+			if src == bpfX {
+				b.Instr(asm.Mod64, asm.R1, asm.R2, 0, 0, "") // A %= X
+			} else {
+				b.Instr(asm.ModImm64, asm.R1, 0, 0, K, "") // A %= K
+			}
+			return nil
+		case bpfAluXor:
+			if src == bpfX {
+				b.Instr(asm.XOR64, asm.R1, asm.R2, 0, 0, "") // A ^= X
+			} else {
+				b.Instr(asm.XORImm64, asm.R1, 0, 0, K, "") // A ^= K
+			}
+			return nil
+		}
+		return fmt.Errorf("unsupported ALU operation: %+v op 0x%x", cbpf, op)
+	case bpfClassJmp:
 
-		dstR := asm.R1
-		srcR := asm.R1
+		var srcR asm.Reg
 		if src == bpfX {
 			srcR = asm.R2
 		}
 
-		b.Instr(asm.OpCode(code), dstR, srcR, offset, K, "")
+		if op == asm.JumpOpA {
+			// Unconditional jump; the relative offset is in K (signed,
+			// so it can point backwards - that is the loop back-edge).
+			b.Jump(label(jumpTargetA(i, K)))
+			return nil
+		}
+
+		if cbpf.Jt != 0 && cbpf.Jf != 0 {
+			neg := (code & 0xf) | uint8(jumpOpNegate[asm.OpCode(op)])
+
+			b.AddComment("Jump with two targets")
+			b.InstrWithOffsetFixup(asm.OpCode(code), asm.R1, srcR, label(i+int(cbpf.Jt)+1), K)
+			b.InstrWithOffsetFixup(asm.OpCode(neg), asm.R1, srcR, label(i+int(cbpf.Jf)+1), K)
+
+			return nil
+		}
+
+		var target int
+
+		if cbpf.Jf != 0 {
+			b.AddComment("Jump with false target")
+			op = uint8(jumpOpNegate[asm.OpCode(op)])
+			target = i + int(cbpf.Jf) + 1
+		} else {
+			b.AddComment("Jump with true target")
+			target = i + int(cbpf.Jt) + 1
+		}
+		code = (code & 0xf) | op
+
+		b.InstrWithOffsetFixup(asm.OpCode(code), asm.R1, srcR, label(target), K)
+
+		return nil
 	}
-	return nil
+
+	// bpfClass covers all 8 classes above, each of which returns; reaching
+	// here means an unexpected encoding.
+	return fmt.Errorf("unhandled instruction class %d: %+v", class, cbpf)
+}
+
+// jumpTargetA returns the absolute target index of a cBPF BPF_JMP|BPF_JA
+// instruction at index i. The offset lives in K and is signed, so libpcap
+// can encode a backward jump (e.g. the "ip6 protochain" loop back-edge).
+func jumpTargetA(i int, K int32) int {
+	return i + 1 + int(K)
+}
+
+func loopLabel(i, copyIdx int) string {
+	return fmt.Sprintf("orig_%d_%d", i, copyIdx)
+}
+
+// loopRegion describes a single backward-jump loop in the cBPF program,
+// spanning prog[header .. tail] inclusive. All back-edges jump to header.
+type loopRegion struct {
+	header int
+	tail   int
+}
+
+// targetLabel resolves a jump from instruction i inside copy c of the loop
+// body to the eBPF label of its target t.
+func (l *loopRegion) targetLabel(t, i, c int) string {
+	if t < l.header || t > l.tail {
+		// Exit out of the loop region: the pre-/post-amble is emitted once.
+		return fmt.Sprintf("orig_%d", t)
+	}
+	if t > i {
+		// Forward jump within the body stays in the current copy.
+		return loopLabel(t, c)
+	}
+	// Backward edge (t <= i, validated to target the header). Jump into the
+	// next copy; the last copy gives up and treats the packet as no-match.
+	if c < maxLoopUnroll-1 {
+		return loopLabel(t, c+1)
+	}
+	return "miss"
+}
+
+// findLoop locates a single backward-jump loop in a cBPF program. It returns
+// nil if there is none. Only BPF_JA can encode a backward jump (conditional
+// jumps use unsigned forward offsets), which is what libpcap emits for the
+// "ip6 protochain" extension-header walk. Anything more complex than a single
+// reducible loop (multiple headers, or an external jump into the body) is
+// rejected rather than mis-compiled.
+func findLoop(prog []pcap.BPFInstruction) (*loopRegion, error) {
+	header, tail := -1, -1
+
+	for i := range prog {
+		code := uint8(prog[i].Code)
+		if bpfClass(code) != bpfClassJmp || bpfOp(code) != asm.JumpOpA {
+			continue
+		}
+		t := jumpTargetA(i, int32(prog[i].K))
+		if t > i {
+			continue // forward JA, not a back-edge
+		}
+		if header == -1 {
+			header = t
+		} else if t != header {
+			return nil, fmt.Errorf("unsupported filter: multiple loop headers (%d and %d)", header, t)
+		}
+		if i > tail {
+			tail = i
+		}
+	}
+
+	if header == -1 {
+		return nil, nil
+	}
+
+	// The body is only entered by falling through to the header; a jump from
+	// outside the region into the body would need to pick a copy, which we do
+	// not support.
+	for i := range prog {
+		if i >= header && i <= tail {
+			continue
+		}
+		for _, t := range jumpTargets(i, prog[i]) {
+			if t >= header && t <= tail {
+				return nil, fmt.Errorf("unsupported filter: jump from %d into loop body [%d,%d]", i, header, tail)
+			}
+		}
+	}
+
+	return &loopRegion{header: header, tail: tail}, nil
+}
+
+// jumpTargets returns the absolute target indices a cBPF instruction may jump
+// to (empty for non-jumps).
+func jumpTargets(i int, cbpf pcap.BPFInstruction) []int {
+	code := uint8(cbpf.Code)
+	if bpfClass(code) != bpfClassJmp {
+		return nil
+	}
+	if bpfOp(code) == asm.JumpOpA {
+		return []int{jumpTargetA(i, int32(cbpf.K))}
+	}
+	// Jt/Jf are forward offsets; an offset of 0 is the fall-through to the
+	// next instruction, not an explicit jump target.
+	var targets []int
+	if cbpf.Jt != 0 {
+		targets = append(targets, i+int(cbpf.Jt)+1)
+	}
+	if cbpf.Jf != 0 {
+		targets = append(targets, i+int(cbpf.Jf)+1)
+	}
+	return targets
 }
 
 var jumpOpNegate = map[asm.OpCode]asm.OpCode{
@@ -346,6 +673,9 @@ var jumpOpNegate = map[asm.OpCode]asm.OpCode{
 const (
 	bpfClassLd   uint8 = 0x0
 	bpfClassLdx  uint8 = 0x1
+	bpfClassSt   uint8 = 0x2
+	bpfClassStx  uint8 = 0x3
+	bpfClassAlu  uint8 = 0x4
 	bpfClassJmp  uint8 = 0x5
 	bpfClassRet  uint8 = 0x6
 	bpfClassMisc uint8 = 0x7
@@ -379,6 +709,20 @@ const (
 	bpfModeMSH uint8 = 0xa0
 )
 
+const (
+	bpfAluAdd uint8 = 0x00
+	bpfAluSub uint8 = 0x10
+	bpfAluMul uint8 = 0x20
+	bpfAluDiv uint8 = 0x30
+	bpfAluOr  uint8 = 0x40
+	bpfAluAnd uint8 = 0x50
+	bpfAluLsh uint8 = 0x60
+	bpfAluRsh uint8 = 0x70
+	bpfAluNeg uint8 = 0x80
+	bpfAluMod uint8 = 0x90
+	bpfAluXor uint8 = 0xa0
+)
+
 var (
 	_ = bpfModeIMM
 	_ = bpfModeMEM
@@ -391,6 +735,11 @@ func bpfMode(code uint8) uint8 {
 func bpfOp(code uint8) uint8 {
 	return code & 0xf0
 }
+
+const (
+	bpfTAX uint8 = 0x00
+	bpfTXA uint8 = 0x80
+)
 
 const (
 	bpfK uint8 = 0

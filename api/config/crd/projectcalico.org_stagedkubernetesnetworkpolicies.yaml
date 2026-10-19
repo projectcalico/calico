@@ -13,7 +13,6 @@ spec:
     shortNames:
       - sknp
     singular: stagedkubernetesnetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v3

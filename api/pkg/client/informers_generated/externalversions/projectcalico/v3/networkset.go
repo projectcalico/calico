@@ -14,16 +14,45 @@ import (
 	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
 )
 
 // NetworkSetInformer provides access to a shared informer and lister for
-// NetworkSets.
+// NetworkSets. Prefer using the type-safe variant (see [TypedNetworkSetInformer]).
 type NetworkSetInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.NetworkSetLister
 }
+
+// TypedNetworkSetInformer provides access to a shared informer and lister for
+// NetworkSets, including the type-safe TypedInformer variant.
+// It is a superset of NetworkSetInformer.
+type TypedNetworkSetInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() NetworkSetIndexInformer
+	Lister() projectcalicov3.NetworkSetLister
+}
+
+// NetworkSetIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type NetworkSetIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.NetworkSet]
+
+// NetworkSetHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for NetworkSet.
+type NetworkSetHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.NetworkSet]
+
+// NetworkSetDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for NetworkSet.
+type NetworkSetDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.NetworkSet]
+
+// NetworkSetFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for NetworkSet.
+type NetworkSetFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.NetworkSet]
+
+// NetworkSetIndexers is a specialization of [cache.TypedIndexers] for NetworkSet.
+type NetworkSetIndexers = cache.TypedIndexers[*apisprojectcalicov3.NetworkSet]
+
+// DeletedNetworkSet is a specialization of [cache.DeletedObject] for NetworkSet.
+type DeletedNetworkSet = cache.DeletedObject[*apisprojectcalicov3.NetworkSet]
 
 type networkSetInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,55 +63,132 @@ type networkSetInformer struct {
 // NewNetworkSetInformer constructs a new informer for NetworkSet type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedNetworkSetInformer]).
 func NewNetworkSetInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredNetworkSetInformer(client, namespace, resyncPeriod, indexers, nil)
+	return NewNetworkSetInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedNetworkSetInformer constructs a new informer for NetworkSet type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedNetworkSetInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers NetworkSetIndexers) NetworkSetIndexInformer {
+	return NewTypedNetworkSetInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredNetworkSetInformer constructs a new informer for NetworkSet type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredNetworkSetInformer]).
 func NewFilteredNetworkSetInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return cache.NewSharedIndexInformer(
+	return NewTypedNetworkSetInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredNetworkSetInformer constructs a new informer for NetworkSet type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredNetworkSetInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers NetworkSetIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) NetworkSetIndexInformer {
+	return NewTypedNetworkSetInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
+}
+
+// NewNetworkSetInformerWithOptions constructs a new informer for NetworkSet type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedNetworkSetInformerWithOptions]).
+func NewNetworkSetInformerWithOptions(client clientset.Interface, namespace string, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedNetworkSetInformerWithOptions(client, namespace, options)
+}
+
+// NewTypedNetworkSetInformerWithOptions constructs a new informer for NetworkSet type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedNetworkSetInformerWithOptions(client clientset.Interface, namespace string, options internalinterfaces.InformerOptions) NetworkSetIndexInformer {
+	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "networksets"}
+	identifier := options.InformerName.WithResource(gvr)
+	tweakListOptions := options.TweakListOptions
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.NetworkSet](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
-			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
+			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().NetworkSets(namespace).List(context.Background(), options)
+				return client.ProjectcalicoV3().NetworkSets(namespace).List(context.Background(), opts)
 			},
-			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
+			WatchFunc: func(opts v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().NetworkSets(namespace).Watch(context.Background(), options)
+				return client.ProjectcalicoV3().NetworkSets(namespace).Watch(context.Background(), opts)
 			},
-			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+			ListWithContextFunc: func(ctx context.Context, opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().NetworkSets(namespace).List(ctx, options)
+				return client.ProjectcalicoV3().NetworkSets(namespace).List(ctx, opts)
 			},
-			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+			WatchFuncWithContext: func(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().NetworkSets(namespace).Watch(ctx, options)
+				return client.ProjectcalicoV3().NetworkSets(namespace).Watch(ctx, opts)
 			},
 		}, client),
 		&apisprojectcalicov3.NetworkSet{},
-		resyncPeriod,
-		indexers,
-	)
+		cache.SharedIndexInformerOptions{
+			ResyncPeriod: options.ResyncPeriod,
+			Indexers:     options.Indexers,
+			Identifier:   identifier,
+		},
+	))
 }
 
 func (f *networkSetInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredNetworkSetInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	return NewTypedNetworkSetInformerWithOptions(client, f.namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *networkSetInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.NetworkSet{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *networkSetInformer) TypedInformer() NetworkSetIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.NetworkSet](f.factory.InformerFor(&apisprojectcalicov3.NetworkSet{}, f.defaultInformer))
 }
 
 func (f *networkSetInformer) Lister() projectcalicov3.NetworkSetLister {
 	return projectcalicov3.NewNetworkSetLister(f.Informer().GetIndexer())
+}
+
+// ToTypedNetworkSetInformer converts an untyped informer into a TypedNetworkSetInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *NetworkSet. If that is not the case, calling type-safe methods of the returned
+// TypedNetworkSetInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedNetworkSetInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedNetworkSetInformer(informer NetworkSetInformer) TypedNetworkSetInformer {
+	if informer, ok := informer.(TypedNetworkSetInformer); ok {
+		return informer
+	}
+	return &networkSetTypedInformerAdapter{informer}
+}
+
+type networkSetTypedInformerAdapter struct {
+	NetworkSetInformer
+}
+
+func (a *networkSetTypedInformerAdapter) TypedInformer() NetworkSetIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.NetworkSet](a.Informer())
+}
+
+// ToNetworkSetIndexInformer converts an untyped informer into a NetworkSetIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *NetworkSet. If that is not the case, calling type-safe methods of the returned
+// NetworkSetIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a NetworkSetIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToNetworkSetIndexInformer(informer cache.SharedIndexInformer) NetworkSetIndexInformer {
+	if informer, ok := informer.(NetworkSetIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.NetworkSet](informer)
 }

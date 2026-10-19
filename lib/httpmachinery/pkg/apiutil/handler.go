@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,11 +47,10 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
 	apicontext "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/header"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // listOrStreamHandler is a handler that responds with either a json list or a server side event stream.
@@ -66,6 +65,16 @@ type responseType interface {
 
 // NewJSONListHandler creates a handler that responds strictly with a json list.
 func NewJSONListHandler[RequestParams any, ResponseBody any](f func(apicontext.Context, RequestParams) ListResponse[ResponseBody]) handler {
+	return genericHandler[RequestParams, ResponseBody]{
+		f: func(ctx apicontext.Context, params RequestParams) responseType {
+			return f(ctx, params)
+		},
+	}
+}
+
+// NewJSONObjectHandler creates a handler that responds with a single json
+// object, for a route addressing one resource rather than a list.
+func NewJSONObjectHandler[RequestParams any, ResponseBody any](f func(apicontext.Context, RequestParams) ObjectResponse[ResponseBody]) handler {
 	return genericHandler[RequestParams, ResponseBody]{
 		f: func(ctx apicontext.Context, params RequestParams) responseType {
 			return f(ctx, params)
@@ -92,7 +101,7 @@ func (l genericHandler[RequestParams, Body]) ServeHTTP(cfg RouterConfig, w http.
 
 	rsp := l.f(ctx, *params)
 	if err := rsp.ResponseWriter().WriteResponse(ctx, rsp.Status(), w); err != nil {
-		logrus.WithError(err).Error("failed to write response")
+		log.Error("failed to write response", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
 	}
 }
@@ -100,7 +109,7 @@ func (l genericHandler[RequestParams, Body]) ServeHTTP(cfg RouterConfig, w http.
 func parseRequestParams[RequestParams any](ctx apicontext.Context, cfg RouterConfig, w http.ResponseWriter, req *http.Request) *RequestParams {
 	params, err := codec.DecodeAndValidateRequestParams[RequestParams](ctx, cfg.URLVars, req)
 	if err != nil {
-		ctx.Logger().WithError(err).Debug("Failed to decode request params.")
+		ctx.Logger().Debug("Failed to decode request params.", "error", err)
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return nil
 	}
@@ -108,14 +117,18 @@ func parseRequestParams[RequestParams any](ctx apicontext.Context, cfg RouterCon
 	return params
 }
 
-func writeJSONResponse(w http.ResponseWriter, src any) {
+// writeJSONResponse writes src as the JSON body of a response with the given
+// status. It owns the status write because the content type has to be set
+// first: once WriteHeader has run, net/http ignores later header changes and
+// labels the response by sniffing the body instead.
+func writeJSONResponse(w http.ResponseWriter, status int, src any) {
 	w.Header().Set(header.ContentType, header.ApplicationJSON)
+	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(src); err != nil {
-		logrus.WithError(err).Error("Failed to encode response.")
+		log.Error("Failed to encode response.", "error", err)
 	}
 }
 
 func writeJSONError(w http.ResponseWriter, status int, message string) {
-	w.WriteHeader(status)
-	writeJSONResponse(w, ErrorResponse{Error: message})
+	writeJSONResponse(w, status, ErrorResponse{Error: message})
 }

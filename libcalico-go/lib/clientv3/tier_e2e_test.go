@@ -38,6 +38,20 @@ func init() {
 	format.MaxLength = 0
 }
 
+// filterProtectedTiers returns only the tiers that are not protected built-in
+// tiers. Tests that snapshot all tiers must filter these out, since whether
+// they are present depends on which other specs in the suite have run (they
+// always exist, can't be deleted, and are recreated by EnsureInitialized).
+func filterProtectedTiers(tiers []apiv3.Tier) []apiv3.Tier {
+	var out []apiv3.Tier
+	for _, tier := range tiers {
+		if !names.TierIsProtected(tier.Name) {
+			out = append(out, tier)
+		}
+	}
+	return out
+}
+
 var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 	ctx := context.Background()
 	defaultOrder := apiv3.DefaultTierOrder
@@ -512,10 +526,15 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			Expect(err).NotTo(HaveOccurred())
 			Expect(be.Clean()).NotTo(HaveOccurred())
 
-			By("Listing Tiers with the latest resource version and checking for two results with name1/spec2 and name2/spec2")
+			// be.Clean() cannot remove the built-in tiers (default, kube-admin,
+			// kube-baseline) - they are protected by a ValidatingAdmissionPolicy and
+			// recreated by EnsureInitialized. Whether they exist here depends on which
+			// other specs in the suite have already run, so filter them out rather than
+			// asserting an empty list.
+			By("Listing Tiers and checking there are no non-built-in tiers")
 			outList, outError := c.Tiers().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(0))
+			Expect(filterProtectedTiers(outList.Items)).To(HaveLen(0))
 			rev0 := outList.ResourceVersion
 
 			By("Configuring a Tier name1/spec1 and storing the response")
@@ -622,7 +641,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			By("Starting a watcher not specifying a rev - expect the current snapshot")
 			w, err = c.Tiers().Watch(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher3 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
+			testWatcher3 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w, names.ProtectedTierNames...)
 			defer testWatcher3.Stop()
 			testWatcher3.ExpectEvents(apiv3.KindTier, []watch.Event{
 				{
@@ -645,7 +664,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			By("Starting a watcher not specifying a rev - expect the current snapshot")
 			w, err = c.Tiers().Watch(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher4 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
+			testWatcher4 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w, names.ProtectedTierNames...)
 			defer testWatcher4.Stop()
 			testWatcher4.ExpectEventsAnyOrder(apiv3.KindTier, []watch.Event{
 				{

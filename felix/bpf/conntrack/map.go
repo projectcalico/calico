@@ -166,6 +166,7 @@ const (
 	ProtoTCP   = 6
 	ProtoUDP   = 17
 	ProtoICMP6 = 58
+	ProtoSCTP  = 132
 )
 
 func KeyFromBytes(k []byte) KeyInterface {

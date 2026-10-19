@@ -16,6 +16,8 @@ package polprog
 
 import (
 	"fmt"
+	"math/rand"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -142,6 +144,74 @@ func TestPolicyDump(t *testing.T) {
 	checkLabelsAndComments(&proto.Rule{NotIcmp: &proto.Rule_NotIcmpType{NotIcmpType: 10}}, "If ICMP type == 10, skip to next rule", "comment")
 }
 
+// TestPolicyDumpMatchComment checks the end-to-end wiring of the per-rule
+// "Match:" summary in the policy-debug build: that it is emitted with the
+// selector IP sets folded into the src/dst tokens as hex IDs, that the old
+// standalone "IPSets ..." summary comment is gone, and that it sits directly
+// under the rule header (ahead of the "Rule MatchID" hit-count comment).
+func TestPolicyDumpMatchComment(t *testing.T) {
+	RegisterTestingT(t)
+
+	alloc := idalloc.New()
+	const srcSet = "s:sbcdef1234567890"
+	const notDstSet = "d:sbcdef1234567890"
+	alloc.GetOrAlloc(srcSet)
+	alloc.GetOrAlloc(notDstSet)
+	srcHex := fmt.Sprintf("0x%x", alloc.GetNoAlloc(srcSet))
+	notDstHex := fmt.Sprintf("0x%x", alloc.GetNoAlloc(notDstSet))
+
+	pg := NewBuilder(alloc, 1, 2, 3, 4, WithAllowDenyJumps(666, 777), WithPolicyDebugEnabled())
+	insns, err := pg.Instructions(Rules{
+		Tiers: []Tier{{
+			Policies: []Policy{{
+				Rules: []Rule{{
+					Rule: &proto.Rule{
+						Action:         "Allow",
+						IpVersion:      4,
+						Protocol:       &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 6}},
+						SrcNet:         []string{"11.0.0.8/32", "10.0.0.8/32"},
+						SrcIpSetIds:    []string{srcSet},
+						NotDstNet:      []string{"13.0.0.8/32"},
+						NotDstIpSetIds: []string{notDstSet},
+					},
+				}},
+			}},
+		}},
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	_, comments := aggregateCommentsAndLabels(&insns[0])
+
+	// The selector IP sets are folded into the src/!dst tokens as hex IDs; the
+	// dump resolves those to live member IPs.
+	expectedMatch := fmt.Sprintf(
+		"Match: proto=tcp src={11.0.0.8/32,10.0.0.8/32,%s} !dst={13.0.0.8/32,%s}",
+		srcHex, notDstHex)
+	Expect(comments).To(ContainElement(expectedMatch))
+
+	// The standalone "IPSets ..." summary comment is no longer emitted.
+	for _, c := range comments {
+		Expect(c).NotTo(HavePrefix("IPSets "))
+	}
+
+	// The Match line sits directly under the rule header, ahead of the hit
+	// count ("Rule MatchID").
+	idxOf := func(prefix string) int {
+		for i, c := range comments {
+			if strings.HasPrefix(c, prefix) {
+				return i
+			}
+		}
+		return -1
+	}
+	startIdx := idxOf("Start of rule ")
+	matchIdx := idxOf("Match: ")
+	matchIDIdx := idxOf("Rule MatchID")
+	Expect(startIdx).To(BeNumerically(">=", 0), "missing 'Start of rule' comment")
+	Expect(matchIdx).To(BeNumerically(">", startIdx), "Match should follow the rule header")
+	Expect(matchIDIdx).To(BeNumerically(">", matchIdx), "Match should precede the hit count")
+}
+
 func aggregateCommentsAndLabels(insns *asm.Insns) ([]string, []string) {
 	labels := []string{}
 	comments := []string{}
@@ -207,4 +277,259 @@ func TestProgramSplitting(t *testing.T) {
 	// Allow leeway in program size for enterprise.
 	Expect(len(progs)).To(BeNumerically(">=", 6))
 	Expect(len(progs)).To(BeNumerically("<=", 8))
+}
+
+func TestFormatRuleMatch(t *testing.T) {
+	RegisterTestingT(t)
+
+	tcp := &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 6}}
+	udp := &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "UDP"}}
+
+	for _, tc := range []struct {
+		name                                     string
+		rule                                     *proto.Rule
+		srcSets, notSrcSets, dstSets, notDstSets []string
+		expected                                 string
+	}{
+		{
+			name:     "empty rule (default deny)",
+			rule:     &proto.Rule{},
+			expected: "",
+		},
+		{
+			name:     "action only, no L3/L4 match",
+			rule:     &proto.Rule{Action: "Allow"},
+			expected: "",
+		},
+		{
+			name: "tcp with nets and ports",
+			rule: &proto.Rule{
+				Protocol: tcp,
+				SrcNet:   []string{"11.0.0.8/32", "10.0.0.8/32"},
+				DstNet:   []string{"12.0.0.8/32"},
+				SrcPorts: []*proto.PortRange{{First: 8055, Last: 8055}, {First: 100, Last: 105}},
+				DstPorts: []*proto.PortRange{{First: 9055, Last: 9055}, {First: 200, Last: 205}},
+			},
+			expected: "proto=tcp src={11.0.0.8/32,10.0.0.8/32} dst={12.0.0.8/32} sports={8055,100-105} dports={9055,200-205}",
+		},
+		{
+			name: "negated protocol, nets and ports",
+			rule: &proto.Rule{
+				NotProtocol: tcp,
+				NotSrcNet:   []string{"11.0.0.8/32"},
+				NotDstNet:   []string{"13.0.0.8/32"},
+				NotSrcPorts: []*proto.PortRange{{First: 8055, Last: 8055}},
+				NotDstPorts: []*proto.PortRange{{First: 200, Last: 205}},
+			},
+			expected: "!proto=tcp !src={11.0.0.8/32} !dst={13.0.0.8/32} !sports={8055} !dports={200-205}",
+		},
+		{
+			name: "named ports marker",
+			rule: &proto.Rule{
+				Protocol:             udp,
+				SrcNamedPortIpSetIds: []string{"a", "b"},
+				DstPorts:             []*proto.PortRange{{First: 53, Last: 53}},
+				DstNamedPortIpSetIds: []string{"c"},
+			},
+			expected: "proto=udp sports={named(2)} dports={53,named(1)}",
+		},
+		{
+			name: "icmp type",
+			rule: &proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 1}},
+				Icmp:     &proto.Rule_IcmpType{IcmpType: 8},
+			},
+			expected: "proto=icmp icmp=8",
+		},
+		{
+			name: "icmp type/code and negated icmp",
+			rule: &proto.Rule{
+				Icmp:    &proto.Rule_IcmpTypeCode{IcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}},
+				NotIcmp: &proto.Rule_NotIcmpType{NotIcmpType: 3},
+			},
+			expected: "icmp=10/12 !icmp=3",
+		},
+		{
+			name: "selector IP sets folded into src/dst as hex IDs",
+			rule: &proto.Rule{
+				Protocol: tcp,
+				SrcNet:   []string{"11.0.0.8/32", "10.0.0.8/32"},
+			},
+			srcSets:    []string{"0x1a2b"},
+			notDstSets: []string{"0x3c4d", "0x5e6f"},
+			expected:   "proto=tcp src={11.0.0.8/32,10.0.0.8/32,0x1a2b} !dst={0x3c4d,0x5e6f}",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			RegisterTestingT(t)
+			Expect(formatRuleMatch(tc.rule, tc.srcSets, tc.notSrcSets, tc.dstSets, tc.notDstSets)).To(Equal(tc.expected))
+		})
+	}
+}
+
+// TestProgramSplitReachability moves the split point across every rule
+// boundary, including after unconditional jumps.
+func TestProgramSplitReachability(t *testing.T) {
+	RegisterTestingT(t)
+
+	var policy Policy
+	for i := range 20 {
+		policy.Rules = append(policy.Rules, Rule{
+			Rule:    &proto.Rule{Action: "Allow", SrcNet: []string{fmt.Sprintf("10.0.0.%d/32", i)}},
+			MatchID: uint64(i + 1),
+		})
+	}
+	policy.Rules = append(policy.Rules, Rule{Rule: &proto.Rule{Action: "Log"}, MatchID: 100})
+	rules := Rules{
+		Tiers: []Tier{
+			{Name: "pass", Policies: []Policy{{Rules: []Rule{{Rule: &proto.Rule{Action: "Pass"}, MatchID: 101}}}}, EndAction: TierEndDeny},
+			{Name: "default", Policies: []Policy{policy}, EndAction: TierEndDeny},
+		},
+		Profiles: []Profile{
+			{Name: "kns", Rules: []Rule{{Rule: &proto.Rule{Action: "Allow"}, MatchID: 102}}},
+			{Name: "ksa"},
+		},
+	}
+
+	sawUnreachableRest := false
+	for limit := 1; limit < 120; limit++ {
+		pg := NewBuilder(idalloc.New(), 1, 2, 3, 4,
+			WithAllowDenyJumps(666, 777),
+			WithPolicyMapIndexAndStride(15, 1000),
+			WithFlowLogs(),
+			WithPolicyDebugEnabled(),
+			WithMaxJumpsPerProgram(limit),
+		)
+		progs, err := pg.Instructions(rules)
+		Expect(err).NotTo(HaveOccurred(), "limit %d", limit)
+		expectValidSubPrograms(progs, 15, 1000, fmt.Sprintf("limit %d", limit))
+		if pg.restUnreachable {
+			sawUnreachableRest = true
+			last := progs[len(progs)-1]
+			Expect(last).To(ContainElement(HaveField("Comments", ContainElement("Rest of the policy is unreachable and is not built"))),
+				"limit %d", limit)
+		}
+	}
+	Expect(sawUnreachableRest).To(BeTrue(), "no limit put the split after unconditional code")
+}
+
+func TestCheckSubPrograms(t *testing.T) {
+	RegisterTestingT(t)
+
+	var policy Policy
+	for i := range 20 {
+		policy.Rules = append(policy.Rules, Rule{
+			Rule:    &proto.Rule{Action: "Allow", SrcNet: []string{fmt.Sprintf("10.0.0.%d/32", i)}},
+			MatchID: uint64(i + 1),
+		})
+	}
+	rules := Rules{Tiers: []Tier{{Name: "default", Policies: []Policy{policy}, EndAction: TierEndDeny}}}
+	build := func() []asm.Insns {
+		progs, err := NewBuilder(idalloc.New(), 1, 2, 3, 4,
+			WithAllowDenyJumps(666, 777),
+			WithPolicyMapIndexAndStride(15, 1000),
+			WithMaxJumpsPerProgram(20),
+		).Instructions(rules)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(progs)).To(BeNumerically(">", 1))
+		return progs
+	}
+	Expect(CheckSubPrograms(build(), 15, 1000)).NotTo(HaveOccurred())
+
+	progs := build()
+	tailCall := asm.MakeInsn(asm.MovImm64, asm.R3, 0, 0, int32(SubProgramJumpIdx(15, 1, 1000)))
+	for i := range progs[0] {
+		if progs[0][i].Instruction == tailCall.Instruction {
+			progs[0][i] = asm.MakeInsn(asm.MovImm64, asm.R3, 0, 0, int32(SubProgramJumpIdx(15, 2, 1000)))
+		}
+	}
+	Expect(CheckSubPrograms(progs, 15, 1000)).To(MatchError(ContainSubstring("does not tail-call sub-program 1")))
+
+	progs = build()
+	progs[1] = append(progs[1], asm.MakeInsn(asm.Exit, 0, 0, 0, 0))
+	Expect(CheckSubPrograms(progs, 15, 1000)).To(MatchError(ContainSubstring("sub-program 1 of")))
+}
+
+// TestProgramSplitRandomPolicies checks random policy shapes, split points and
+// trampoline strides for code the verifier would reject.
+func TestProgramSplitRandomPolicies(t *testing.T) {
+	RegisterTestingT(t)
+
+	r := rand.New(rand.NewSource(1))
+	actions := []string{"Allow", "Deny", "Pass", "Log"}
+	for iter := range 500 {
+		alloc := idalloc.New()
+		setID := func(id string) string {
+			alloc.GetOrAlloc(id)
+			return id
+		}
+		randomRule := func() *proto.Rule {
+			rule := &proto.Rule{Action: actions[r.Intn(len(actions))]}
+			if r.Intn(2) == 0 {
+				rule.Protocol = &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 6}}
+			}
+			if r.Intn(2) == 0 {
+				rule.SrcIpSetIds = []string{setID(fmt.Sprintf("s:%d", r.Intn(1000)))}
+			}
+			if r.Intn(3) == 0 {
+				for range r.Intn(40) {
+					rule.SrcNet = append(rule.SrcNet, fmt.Sprintf("10.%d.0.0/16", r.Intn(255)))
+				}
+			}
+			if r.Intn(3) == 0 {
+				rule.DstIpSetIds = []string{setID(fmt.Sprintf("s:%d", r.Intn(1000)))}
+			}
+			if r.Intn(2) == 0 {
+				for range r.Intn(100) {
+					first := int32(r.Intn(65000))
+					pr := &proto.PortRange{First: first, Last: first + int32(r.Intn(2)*r.Intn(100))}
+					if r.Intn(4) == 0 {
+						rule.NotDstPorts = append(rule.NotDstPorts, pr)
+					} else {
+						rule.DstPorts = append(rule.DstPorts, pr)
+					}
+				}
+				if r.Intn(3) == 0 {
+					rule.DstNamedPortIpSetIds = []string{setID(fmt.Sprintf("n:%d", r.Intn(1000)))}
+				}
+			}
+			return rule
+		}
+
+		var tiers []Tier
+		for ti := range 1 + r.Intn(3) {
+			tier := Tier{Name: fmt.Sprint("tier", ti), EndAction: []TierEndAction{TierEndDeny, TierEndPass}[r.Intn(2)]}
+			for range 1 + r.Intn(10) {
+				var pol Policy
+				for range 1 + r.Intn(10) {
+					pol.Rules = append(pol.Rules, Rule{Rule: randomRule(), MatchID: r.Uint64()})
+				}
+				tier.Policies = append(tier.Policies, pol)
+			}
+			tiers = append(tiers, tier)
+		}
+		rules := Rules{
+			Tiers:    tiers,
+			Profiles: []Profile{{Name: "kns", Rules: []Rule{{Rule: &proto.Rule{Action: "Allow"}}}}},
+		}
+
+		opts := []Option{
+			WithAllowDenyJumps(666, 777),
+			WithPolicyMapIndexAndStride(15, 1000),
+			WithTrampolineStride([]int{asm.TrampolineStrideDefault, 1000 + r.Intn(3000)}[r.Intn(2)]),
+		}
+		if r.Intn(2) == 0 {
+			opts = append(opts, WithFlowLogs())
+		}
+		opts = append(opts, WithMaxJumpsPerProgram(20+r.Intn(1000)))
+		pg := NewBuilder(alloc, 1, 2, 3, 4, opts...)
+		progs, err := pg.Instructions(rules)
+		Expect(err).NotTo(HaveOccurred(), "iteration %d", iter)
+		expectValidSubPrograms(progs, 15, 1000, fmt.Sprintf("iteration %d", iter))
+	}
+}
+
+// expectValidSubPrograms fails the test if CheckSubPrograms reports an error.
+func expectValidSubPrograms(progs []asm.Insns, polMapIdx, stride int, desc string) {
+	ExpectWithOffset(1, CheckSubPrograms(progs, polMapIdx, stride)).NotTo(HaveOccurred(), desc)
 }

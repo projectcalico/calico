@@ -31,7 +31,7 @@ import (
 func defaultNetConf() string {
 	netconf := `{
   "name": "Calico",
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "plugins": [
     {
       "type": "calico",

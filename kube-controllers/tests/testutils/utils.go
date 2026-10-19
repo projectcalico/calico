@@ -106,15 +106,17 @@ func ApplyCRDs(apiserver *containers.Container) {
 	// the apiserver needs additional time to register the CRD's API in discovery.
 	// Tests that hit the new CRD immediately race against that registration and can
 	// see a NoKindMatchError from the controller-runtime RESTMapper. Wait for all
-	// CRDs to report Established before returning.
+	// CRDs to report Established before returning. The budget is generous because a
+	// slow-starting apiserver on a loaded CI runner can take well over 30s to
+	// establish every CRD.
 	waitEstablished := func() error {
-		out, err := apiserver.ExecOutput("kubectl", "wait", "--for=condition=Established", "--all", "crds", "--timeout=5s")
+		out, err := apiserver.ExecOutput("kubectl", "wait", "--for=condition=Established", "--all", "crds", "--timeout=30s")
 		if err != nil {
 			return fmt.Errorf("%s: %s", err, out)
 		}
 		return nil
 	}
-	EventuallyWithOffset(1, waitEstablished, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+	EventuallyWithOffset(1, waitEstablished, 120*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 }
 
 func RunK8sApiserver(etcdIp string) *containers.Container {

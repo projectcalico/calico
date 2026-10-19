@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
@@ -73,7 +74,6 @@ func init() {
 	netv6_1 := "aabb:aabb::ffff/128"
 	netv6_2 := "aabb:aabb::/128"
 	netv6_3 := "aabb:aabb::0000/122"
-	netv6_4 := "aa00:0000::0000/10"
 	peerv4_1 := "9.9.9.9:4444"
 	peerv6_1 := "[aabb::ffff]:4444"
 
@@ -1164,35 +1164,35 @@ func init() {
 
 		// (API) IPPool
 		Entry("should accept IP pool with IPv4 CIDR /26",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec:       api.IPPoolSpec{CIDR: netv4_3},
 			}, true),
 		Entry("should accept IP pool with IPv4 CIDR /10",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec:       api.IPPoolSpec{CIDR: netv4_4},
 			}, true),
 		Entry("should accept IP pool with IPv6 CIDR /122",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
-					CIDR:      netv6_3,
+					CIDR:      "aabb:aabb::/122",
 					IPIPMode:  api.IPIPModeNever,
 					VXLANMode: api.VXLANModeNever,
 				},
 			}, true),
 		Entry("should accept IP pool with IPv6 CIDR /10",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
-					CIDR:      netv6_4,
+					CIDR:      "aa00::/10",
 					IPIPMode:  api.IPIPModeNever,
 					VXLANMode: api.VXLANModeNever,
 				},
 			}, true),
 		Entry("should accept a disabled IP pool with IPv4 CIDR /27",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:     netv4_5,
@@ -1200,7 +1200,7 @@ func init() {
 				},
 			}, true),
 		Entry("should accept a disabled IP pool with IPv6 CIDR /128",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:      netv6_1,
@@ -1209,12 +1209,12 @@ func init() {
 					Disabled:  true,
 				},
 			}, true),
-		Entry("should reject IP pool with IPv4 CIDR /27", api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: netv4_5}}, false),
-		Entry("should reject IP pool with IPv6 CIDR /128", api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: netv6_1}}, false),
-		Entry("should reject IP pool with IPv4 CIDR /33", api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: "1.2.3.4/33"}}, false),
-		Entry("should reject IP pool with IPv6 CIDR /129", api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: "aa:bb::/129"}}, false),
+		Entry("should reject IP pool with IPv4 CIDR /27", &api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: netv4_5}}, false),
+		Entry("should reject IP pool with IPv6 CIDR /128", &api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: netv6_1}}, false),
+		Entry("should reject IP pool with IPv4 CIDR /33", &api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: "1.2.3.4/33"}}, false),
+		Entry("should reject IP pool with IPv6 CIDR /129", &api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: "aa:bb::/129"}}, false),
 		Entry("should reject IPIPMode 'Always' for IPv6 pool",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:      netv6_1,
@@ -1223,7 +1223,7 @@ func init() {
 				},
 			}, false),
 		Entry("should reject VXLANMode 'Always' for IPv6 pool",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:      netv6_1,
@@ -1232,12 +1232,12 @@ func init() {
 				},
 			}, false),
 		Entry("should reject IPv4 pool with a CIDR range overlapping with Link Local range",
-			api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: "169.254.5.0/24"}}, false),
+			&api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: "169.254.5.0/24"}}, false),
 		Entry("should reject IPv6 pool with a CIDR range overlapping with Link Local range",
-			api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: "fe80::/120"}}, false),
+			&api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: "fe80::/120"}}, false),
 
 		Entry("should accept IP pool with valid allowed uses",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR: netv4_4,
@@ -1269,7 +1269,7 @@ func init() {
 				},
 			}, false),
 		Entry("should accept IP pool with valid AssignmentMode",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:           netv4_4,
@@ -1356,7 +1356,7 @@ func init() {
 				},
 			}, false),
 		Entry("should accept IP pool with Tunnel allowedUse and no namespaceSelector",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR: netv4_4,
@@ -1374,7 +1374,7 @@ func init() {
 				},
 			}, false),
 		Entry("should accept IP pool with valid nodeSelector",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:         netv4_4,
@@ -1382,7 +1382,7 @@ func init() {
 				},
 			}, true),
 		Entry("should accept IP pool with complex nodeSelector",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:         netv4_4,
@@ -1390,7 +1390,7 @@ func init() {
 				},
 			}, true),
 		Entry("should accept IP pool with set-based nodeSelector",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:         netv4_4,
@@ -1398,7 +1398,7 @@ func init() {
 				},
 			}, true),
 		Entry("should accept IP pool with existence check nodeSelector",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:         netv4_4,
@@ -1406,7 +1406,7 @@ func init() {
 				},
 			}, true),
 		Entry("should accept IP pool with all() nodeSelector",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:         netv4_4,
@@ -1422,7 +1422,7 @@ func init() {
 				},
 			}, false),
 		Entry("should accept IP pool with valid namespaceSelector",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:              netv4_4,
@@ -1430,7 +1430,7 @@ func init() {
 				},
 			}, true),
 		Entry("should accept IP pool with complex namespaceSelector",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:              netv4_4,
@@ -1438,7 +1438,7 @@ func init() {
 				},
 			}, true),
 		Entry("should accept IP pool with substring namespaceSelector",
-			api.IPPool{
+			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:              netv4_4,
@@ -4181,6 +4181,39 @@ func init() {
 				InterfaceCIDRs: []string{"not a real cidr"},
 			}, false,
 		),
+		Entry("should allow valid template annotations, including values not valid as label values",
+			api.Template{
+				Annotations: map[string]string{"projectcalico.org/note": "any value, including spaces & symbols!"},
+			}, true,
+		),
+		Entry("should reject template annotations with an invalid key",
+			api.Template{
+				Annotations: map[string]string{"not a valid key": "value"},
+			}, false,
+		),
+		// Templates are nested in a slice on AutoHostEndpointConfig; verify that
+		// per-template validation is actually reached (i.e. the slice dives).
+		Entry("should accept a nested template with valid annotations",
+			api.KubeControllersConfigurationSpec{Controllers: api.ControllersConfig{
+				Node: &api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{
+					Templates: []api.Template{{Annotations: map[string]string{"projectcalico.org/note": "ok"}}},
+				}},
+			}}, true,
+		),
+		Entry("should reject a nested template with an invalid annotation key",
+			api.KubeControllersConfigurationSpec{Controllers: api.ControllersConfig{
+				Node: &api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{
+					Templates: []api.Template{{Annotations: map[string]string{"not a valid key": "value"}}},
+				}},
+			}}, false,
+		),
+		Entry("should reject a nested template with an invalid generateName",
+			api.KubeControllersConfigurationSpec{Controllers: api.ControllersConfig{
+				Node: &api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{
+					Templates: []api.Template{{GenerateName: "test$set"}},
+				}},
+			}}, false,
+		),
 
 		// BGP Communities validation in BGPConfigurationSpec
 		Entry("should not accept community when PrefixAdvertisement is empty", &api.BGPConfiguration{
@@ -4356,7 +4389,14 @@ var _ = testutils.E2eDatastoreDescribe("e2e validation tests", testutils.Datasto
 		// Try to create the Tier.
 		_, err = client.Tiers().Create(context.Background(), &tierSpec, options.SetOptions{})
 		if errStr == "" {
-			Expect(err).NotTo(HaveOccurred())
+			// The built-in tiers (default, kube-admin, kube-baseline) can't be deleted,
+			// so Clean() leaves them in place between tests. A create that collides with
+			// one returns AlreadyExists, which still means validation admitted the spec.
+			if names.TierIsProtected(tierSpec.Name) && err != nil {
+				Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceAlreadyExists{}))
+			} else {
+				Expect(err).NotTo(HaveOccurred())
+			}
 		} else {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(errStr), "Expected error message to contain substring")

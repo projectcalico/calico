@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package nftables
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -22,6 +23,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/generictables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 )
 
 func NewTableLayer(name string, table generictables.Table) generictables.Table {
@@ -64,10 +66,10 @@ func (t *tableLayer) namespaceRules(rules []generictables.Rule) []generictables.
 	newRules := make([]generictables.Rule, len(rules))
 	for i, r := range rules {
 		newRule := r
-		if n, ok := r.Action.(namespaceable); ok {
+		if n, ok := r.Action.(nftrender.Namespaceable); ok {
 			newRule.Action = n.Namespace(t.name)
 		}
-		if n, ok := r.Match.(NFTMatchCriteria); ok {
+		if n, ok := r.Match.(nftrender.NFTMatchCriteria); ok {
 			newRule.Match = n.SetLayer(t.name)
 		}
 		newRules[i] = newRule
@@ -183,6 +185,10 @@ func (t *tableLayer) FinishMapUpdates(updates *MapUpdates) {
 	t.maps.FinishMapUpdates(updates)
 }
 
-func (t *tableLayer) LoadDataplaneState() error {
-	return t.maps.LoadDataplaneState()
+func (t *tableLayer) LoadDataplaneState(ctx context.Context, mapNames []string) error {
+	return t.maps.LoadDataplaneState(ctx, mapNames)
+}
+
+func (t *tableLayer) InvalidateMapsCache() {
+	t.maps.InvalidateMapsCache()
 }

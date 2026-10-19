@@ -5,9 +5,11 @@
 #ifndef __CALI_IP_V4_FRAGMENT_H__
 #define __CALI_IP_V4_FRAGMENT_H__
 
-#include <time.h>
+#include <linux/ip.h>
+#include <time.h> /* CLOCK_MONOTONIC */
 
-#include "bpf.h"
+#include "cali_bpf.h"
+#include "globals.h"
 #include "ip_addr.h"
 #include "log.h"
 #include "parsing.h"
@@ -31,13 +33,12 @@ struct frags4_value {
 	__u16 more_frags:1;
 	__u16 len;
 	__u32 __pad;
-	struct bpf_timer timer;
 	char data[MAX_FRAG];
 };
 
-CALI_MAP(cali_v4_frags, 2, BPF_MAP_TYPE_LRU_HASH, struct frags4_key, struct frags4_value, 10000, 0)
+CALI_MAP(cali_v4_frags, 3, BPF_MAP_TYPE_LRU_HASH, struct frags4_key, struct frags4_value, 10000, 0)
 
-CALI_MAP(cali_v4_frgtmp, 2,
+CALI_MAP(cali_v4_frgtmp, 3,
 		BPF_MAP_TYPE_PERCPU_ARRAY,
 		__u32, struct frags4_value,
 		1, 0)

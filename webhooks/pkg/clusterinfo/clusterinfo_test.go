@@ -45,6 +45,12 @@ func TestAdmit(t *testing.T) {
 			expectAllow: true,
 		},
 		{
+			name:        "calico-typha can update",
+			username:    "system:serviceaccount:calico-system:calico-typha",
+			operation:   v1.Update,
+			expectAllow: true,
+		},
+		{
 			name:        "calico-node in wrong namespace cannot create",
 			username:    "system:serviceaccount:default:calico-node",
 			operation:   v1.Create,
@@ -117,6 +123,7 @@ func TestIsAllowedUser(t *testing.T) {
 	}{
 		{"system:serviceaccount:calico-system:calico-node", true},
 		{"system:serviceaccount:calico-system:calico-kube-controllers", true},
+		{"system:serviceaccount:calico-system:calico-typha", true},
 		{"system:serviceaccount:kube-system:calico-node", false},
 		{"system:serviceaccount:default:calico-node", false},
 		{"system:serviceaccount:calico-system:my-app", false},

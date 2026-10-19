@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,12 +15,16 @@
 package intdataplane
 
 import (
+	"slices"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/labelindex"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -46,7 +50,11 @@ type masqManager struct {
 	dirty           bool
 	ruleRenderer    rules.RuleRenderer
 
-	logCxt *log.Entry
+	// Pool CIDRs may legitimately overlap, but nftables rejects overlapping elements in an
+	// interval set, so we only program the CIDRs that no other member covers.
+	suppressor labelindex.OverlapSuppressor
+
+	logCxt *logrus.Entry
 }
 
 func newMasqManager(
@@ -61,7 +69,7 @@ func newMasqManager(
 	// in sync, by which point we'll have added all our CIDRs into the sets.
 	ipsetsDataplane.AddOrReplaceIPSet(ipsets.IPSetMetadata{
 		MaxSize: maxIPSetSize,
-		SetID:   rules.IPSetIDAllPools,
+		SetID:   rules.IPSetIDNetworkPools,
 		Type:    ipsets.IPSetTypeHashNet,
 	}, []string{})
 	ipsetsDataplane.AddOrReplaceIPSet(ipsets.IPSetMetadata{
@@ -78,61 +86,121 @@ func newMasqManager(
 		masqPools:       set.New[string](),
 		dirty:           true,
 		ruleRenderer:    ruleRenderer,
-		logCxt:          log.WithField("ipVersion", ipVersion),
+		suppressor:      labelindex.NewMemberOverlapSuppressor(),
+		logCxt:          logrus.WithField("ipVersion", ipVersion),
 	}
 }
 
-func (d *masqManager) OnUpdate(msg any) {
+func (m *masqManager) OnUpdate(msg any) {
 	var poolID string
 	var newPool *proto.IPAMPool
 
 	switch msg := msg.(type) {
 	case *proto.IPAMPoolUpdate:
-		d.logCxt.WithField("id", msg.Id).Debug("IPAM pool update/create")
+		m.logCxt.WithField("id", msg.Id).Debug("IPAM pool update/create")
 		poolID = msg.Id
 		newPool = msg.Pool
 	case *proto.IPAMPoolRemove:
-		d.logCxt.WithField("id", msg.Id).Debug("IPAM pool removed")
+		m.logCxt.WithField("id", msg.Id).Debug("IPAM pool removed")
 		poolID = msg.Id
 	default:
 		return
 	}
 
-	logCxt := d.logCxt.WithField("id", poolID)
-	if oldPool := d.activePools[poolID]; oldPool != nil {
+	logCxt := m.logCxt.WithField("id", poolID)
+	if oldPool := m.activePools[poolID]; oldPool != nil {
 		// For simplicity (in case of an update to the CIDR, say) always
 		// remove the old values from the IP sets.  The IPSets object
 		// defers and coalesces the update so removing then adding the
 		// same IP is a no-op anyway.
 		logCxt.Debug("Removing old pool.")
-		d.ipsetsDataplane.RemoveMembers(rules.IPSetIDAllPools, []string{oldPool.Cidr})
+		if !isLoadBalancerOnly(oldPool) {
+			m.removePoolCIDR(rules.IPSetIDNetworkPools, oldPool.Cidr)
+		}
 		if oldPool.Masquerade {
 			logCxt.Debug("Masquerade was enabled on pool.")
-			d.ipsetsDataplane.RemoveMembers(rules.IPSetIDNATOutgoingMasqPools, []string{oldPool.Cidr})
+			m.removePoolCIDR(rules.IPSetIDNATOutgoingMasqPools, oldPool.Cidr)
 		}
-		delete(d.activePools, poolID)
-		d.masqPools.Discard(poolID)
+		delete(m.activePools, poolID)
+		m.masqPools.Discard(poolID)
 	}
 	if newPool != nil {
 		// An update/create.
 		newPoolIsV6 := strings.Contains(newPool.Cidr, ":")
-		weAreV6 := d.ipVersion == 6
+		weAreV6 := m.ipVersion == 6
 		if newPoolIsV6 != weAreV6 {
 			logCxt.Debug("Skipping IPAM pool of different version.")
 			return
 		}
 
 		// Update the IP sets.
-		logCxt.Debug("Adding IPAM pool to IP sets.")
-		d.ipsetsDataplane.AddMembers(rules.IPSetIDAllPools, []string{newPool.Cidr})
+		// Exclude pools that are exclusively for LoadBalancer use from the
+		// network-ip-pools ipset. These pools don't contain workload or tunnel
+		// addresses, so traffic destined to them should still be masqueraded.
+		if isLoadBalancerOnly(newPool) {
+			logCxt.Debug("Skipping LoadBalancer-only pool from network-ip-pools IP set.")
+		} else {
+			logCxt.Debug("Adding IPAM pool to network-ip-pools IP set.")
+			m.addPoolCIDR(rules.IPSetIDNetworkPools, newPool.Cidr)
+		}
 		if newPool.Masquerade {
 			logCxt.Debug("IPAM has masquerade enabled.")
-			d.ipsetsDataplane.AddMembers(rules.IPSetIDNATOutgoingMasqPools, []string{newPool.Cidr})
-			d.masqPools.Add(poolID)
+			m.addPoolCIDR(rules.IPSetIDNATOutgoingMasqPools, newPool.Cidr)
+			m.masqPools.Add(poolID)
 		}
-		d.activePools[poolID] = newPool
+		m.activePools[poolID] = newPool
 	}
-	d.dirty = true
+	m.dirty = true
+}
+
+// addPoolCIDR programs a pool CIDR into the given IP set and withdraws the members it now masks.
+func (m *masqManager) addPoolCIDR(setID, cidrStr string) {
+	cidr, ok := m.parsePoolCIDR(cidrStr)
+	if !ok {
+		return
+	}
+
+	// Withdraw the masked members first so the set never holds the new CIDR alongside one it covers.
+	add, masked := m.suppressor.Add(setID, cidr)
+	if len(masked) > 0 {
+		m.ipsetsDataplane.RemoveMembers(setID, cidrsToStrings(masked))
+	}
+	if add != nil {
+		m.ipsetsDataplane.AddMembers(setID, []string{add.String()})
+	}
+}
+
+// removePoolCIDR withdraws a pool CIDR from the given IP set and restores the members it was masking.
+func (m *masqManager) removePoolCIDR(setID, cidrStr string) {
+	cidr, ok := m.parsePoolCIDR(cidrStr)
+	if !ok {
+		return
+	}
+
+	rem, unmasked := m.suppressor.Remove(setID, cidr)
+	if rem != nil {
+		m.ipsetsDataplane.RemoveMembers(setID, []string{rem.String()})
+	}
+	if len(unmasked) > 0 {
+		m.ipsetsDataplane.AddMembers(setID, cidrsToStrings(unmasked))
+	}
+}
+
+func (m *masqManager) parsePoolCIDR(cidrStr string) (ip.CIDR, bool) {
+	cidr, err := ip.CIDRFromString(cidrStr)
+	if err != nil {
+		m.logCxt.WithError(err).WithField("cidr", cidrStr).Error("Ignoring IPAM pool with unparseable CIDR.")
+		return nil, false
+	}
+	return cidr, true
+}
+
+func cidrsToStrings(cidrs []ip.CIDR) []string {
+	strs := make([]string, len(cidrs))
+	for i, cidr := range cidrs {
+		strs[i] = cidr.String()
+	}
+	return strs
 }
 
 func (m *masqManager) CompleteDeferredWork() error {
@@ -148,4 +216,13 @@ func (m *masqManager) CompleteDeferredWork() error {
 	m.dirty = false
 
 	return nil
+}
+
+// isLoadBalancerOnly returns true if the pool's AllowedUses contains only
+// "LoadBalancer" and no workload/tunnel uses. Such pools should not be
+// included in the network-ip-pools ipset because their CIDRs do not represent
+// local workload addresses and traffic to them should still be masqueraded.
+func isLoadBalancerOnly(pool *proto.IPAMPool) bool {
+	uses := pool.GetAllowedUses()
+	return slices.Contains(uses, string(apiv3.IPPoolAllowedUseLoadBalancer)) && len(uses) == 1
 }

@@ -24,7 +24,7 @@ import (
 
 var expectedDefaultConfig string = `{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "plugins": [
     {
       "type": "calico",
@@ -302,6 +302,32 @@ PuB/TL+u2y+iQUyXxLy3
 
 	It("should fail when no directory is writeable", func() {
 		err := runCniContainer(tempDir, false, "-v", tempDir+"/secondary-bin-dir:/host/secondary-bin-dir:ro")
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should succeed on read-only bin dir when calico is pre-installed and UPDATE_CNI_BINARIES=false", func() {
+		// Pre-populate the host bin dir with stub calico and calico-ipam binaries
+		// so the install can detect that it has nothing left to do, even though the
+		// directory is mounted read-only. Covers projectcalico/calico#7486.
+		Expect(os.WriteFile(tempDir+"/bin/calico", []byte("stub"), 0o755)).To(Succeed())
+		Expect(os.WriteFile(tempDir+"/bin/calico-ipam", []byte("stub"), 0o755)).To(Succeed())
+		err := runCniContainer(
+			tempDir, false,
+			"-v", tempDir+"/secondary-bin-dir:/host/secondary-bin-dir:ro",
+			"-e", "UPDATE_CNI_BINARIES=false",
+		)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should fail on read-only bin dir when calico-ipam is missing and UPDATE_CNI_BINARIES=false", func() {
+		// Only calico is present, so the read-only fallback must not report
+		// success: kubelet would later fail when it invokes calico-ipam.
+		Expect(os.WriteFile(tempDir+"/bin/calico", []byte("stub"), 0o755)).To(Succeed())
+		err := runCniContainer(
+			tempDir, false,
+			"-v", tempDir+"/secondary-bin-dir:/host/secondary-bin-dir:ro",
+			"-e", "UPDATE_CNI_BINARIES=false",
+		)
 		Expect(err).To(HaveOccurred())
 	})
 

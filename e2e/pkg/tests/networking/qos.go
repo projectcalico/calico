@@ -16,6 +16,10 @@ package networking
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"strconv"
+	"strings"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -24,10 +28,11 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
+	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
+	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	"github.com/projectcalico/calico/e2e/pkg/utils/iperfcheck"
 )
 
@@ -47,16 +52,9 @@ var _ = describe.CalicoDescribe(
 		// limits via pod annotations and verify the actual throughput matches the
 		// configured limits within a tolerance.
 		It("should limit bandwidth with QoS annotations", func() {
-			ctx := context.Background()
-
 			By("Getting cluster node names")
-			nodeCtx, nodeCancel := context.WithTimeout(ctx, 30*time.Second)
-			defer nodeCancel()
-			nodes, err := e2enode.GetBoundedReadySchedulableNodes(nodeCtx, f.ClientSet, 3)
-			Expect(err).NotTo(HaveOccurred(), "failed to list schedulable nodes")
-			nodesInfo := utils.GetNodesInfo(f, nodes, true)
+			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, true)
 			nodeNames := nodesInfo.GetNames()
-			Expect(len(nodeNames)).To(BeNumerically(">=", 2), "QoS test requires at least 2 nodes")
 			serverNode := nodeNames[0]
 			clientNode := nodeNames[1]
 
@@ -97,8 +95,8 @@ var _ = describe.CalicoDescribe(
 			// Measure ingress-limited throughput. Use -R (reverse) so the server sends
 			// data to the client, testing the client's ingress limit.
 			By("Running iperf3 to measure ingress-limited throughput")
-			ingressResult, err := tester.MeasureBandwidth(client, server, iperfcheck.WithReverse(), iperfcheck.WithRetries(5, 5*time.Second))
-			Expect(err).NotTo(HaveOccurred(), "failed to measure ingress-limited throughput")
+			ingressResult := measureWithRateRetry(tester, client, server, 10_000_000.0*2.0,
+				iperfcheck.WithReverse(), iperfcheck.WithRetries(5, 5*time.Second))
 			logrus.Infof("Ingress-limited throughput (bps): %.0f", ingressResult.AverageRate)
 
 			// Expect the limited rate to be within 50% of the desired 10Mbit rate.
@@ -122,8 +120,8 @@ var _ = describe.CalicoDescribe(
 			// Measure egress-limited throughput. Normal mode (client sends to server)
 			// tests the client's egress limit.
 			By("Running iperf3 to measure egress-limited throughput")
-			egressResult, err := tester.MeasureBandwidth(client, server, iperfcheck.WithRetries(5, 5*time.Second))
-			Expect(err).NotTo(HaveOccurred(), "failed to measure egress-limited throughput")
+			egressResult := measureWithRateRetry(tester, client, server, 10_000_000.0*2.0,
+				iperfcheck.WithRetries(5, 5*time.Second))
 			logrus.Infof("Egress-limited throughput (bps): %.0f", egressResult.AverageRate)
 
 			Expect(egressResult.AverageRate).To(BeNumerically(">=", 10_000_000.0*0.5), "egress-limited rate too far below target")
@@ -144,19 +142,17 @@ var _ = describe.CalicoDescribe(
 			tester.Deploy()
 
 			By("Running iperf3 to measure ingress throughput with both limits applied")
-			bothIngressResult, err := tester.MeasureBandwidth(
-				client, server,
+			bothIngressResult := measureWithRateRetry(tester, client, server, 10_000_000.0*2.0,
 				iperfcheck.WithReverse(),
 				iperfcheck.WithRetries(5, 5*time.Second),
 			)
-			Expect(err).NotTo(HaveOccurred(), "failed to measure ingress throughput with both limits")
 			logrus.Infof("Both-limited ingress throughput (bps): %.0f", bothIngressResult.AverageRate)
 			Expect(bothIngressResult.AverageRate).To(BeNumerically(">=", 10_000_000.0*0.5), "combined ingress rate too far below target")
 			Expect(bothIngressResult.AverageRate).To(BeNumerically("<=", 10_000_000.0*2.0), "combined ingress rate too far above target")
 
 			By("Running iperf3 to measure egress throughput with both limits applied")
-			bothEgressResult, err := tester.MeasureBandwidth(client, server, iperfcheck.WithRetries(5, 5*time.Second))
-			Expect(err).NotTo(HaveOccurred(), "failed to measure egress throughput with both limits")
+			bothEgressResult := measureWithRateRetry(tester, client, server, 10_000_000.0*2.0,
+				iperfcheck.WithRetries(5, 5*time.Second))
 			logrus.Infof("Both-limited egress throughput (bps): %.0f", bothEgressResult.AverageRate)
 			Expect(bothEgressResult.AverageRate).To(BeNumerically(">=", 10_000_000.0*0.5), "combined egress rate too far below target")
 			Expect(bothEgressResult.AverageRate).To(BeNumerically("<=", 10_000_000.0*2.0), "combined egress rate too far above target")
@@ -164,16 +160,22 @@ var _ = describe.CalicoDescribe(
 
 		// Verifies that Calico's QoS packet rate annotations limit actual throughput.
 		It("should limit packet rate with QoS annotations", func() {
-			ctx := context.Background()
+			const (
+				// The packet rate the annotations below impose.
+				packetRateLimit = 100
+				// The datagram payload size iperf3 sends.  The baseline gate
+				// below reads iperf3's packet counters directly and so needs no
+				// conversion, but the throttled measurements are compared as bit
+				// rates; this is what turns the packet rate limit into one.
+				packetLengthBytes = 1000
+				// How far above the limit the unthrottled baseline has to reach
+				// for a throttled measurement to be distinguishable from it.
+				baselineHeadroom = 10
+			)
 
 			By("Getting cluster node names")
-			nodeCtx, nodeCancel := context.WithTimeout(ctx, 30*time.Second)
-			defer nodeCancel()
-			nodes, err := e2enode.GetBoundedReadySchedulableNodes(nodeCtx, f.ClientSet, 3)
-			Expect(err).NotTo(HaveOccurred(), "failed to list schedulable nodes")
-			nodesInfo := utils.GetNodesInfo(f, nodes, true)
+			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, true)
 			nodeNames := nodesInfo.GetNames()
-			Expect(len(nodeNames)).To(BeNumerically(">=", 2), "QoS test requires at least 2 nodes")
 			serverNode := nodeNames[0]
 			clientNode := nodeNames[1]
 
@@ -188,18 +190,32 @@ var _ = describe.CalicoDescribe(
 			By("Deploying iperf3 server and client pods")
 			tester.Deploy()
 
-			// Measure baseline UDP throughput to ensure the cluster can handle the test traffic.
-			By("Running iperf3 to measure baseline UDP throughput")
-			baseline, err := tester.MeasureBandwidth(
-				clientPeer, server,
+			// The baseline and the throttled measurements have to offer the same
+			// traffic to be comparable, so they share one set of options.
+			udpOpts := []iperfcheck.MeasureOption{
 				iperfcheck.WithUDP(),
-				iperfcheck.WithPacketLength(1000),
+				iperfcheck.WithPacketLength(packetLengthBytes),
 				iperfcheck.WithTargetBandwidth("100M"),
 				iperfcheck.WithRetries(5, 5*time.Second),
-			)
+			}
+
+			// Measure the unthrottled packet rate, so the throttled measurements
+			// below have something to be meaningfully lower than.
+			By("Running iperf3 to measure the baseline UDP packet rate")
+			baseline, err := tester.MeasureBandwidth(clientPeer, server, udpOpts...)
 			Expect(err).NotTo(HaveOccurred(), "failed to measure baseline UDP throughput")
-			logrus.Infof("Baseline UDP throughput (bps): %.0f", baseline.AverageRate)
-			Expect(baseline.AverageRate).To(BeNumerically(">=", 100_000_000.0*0.8), "baseline UDP throughput too low for packet rate test")
+			logrus.Infof("Baseline UDP packet rate (pps): %.0f, loss: %.1f%%",
+				baseline.DeliveredPacketsPerSecond, baseline.LostPercent)
+
+			// Gate on what this test actually needs -- headroom over the limit --
+			// rather than on an absolute throughput figure.  iperf3 UDP does not
+			// back off, so a node that cannot absorb the offered load simply drops
+			// datagrams; judging the environment on delivered bits then fails runs
+			// that had ample headroom to exercise the QoS limit.
+			minBaseline := float64(packetRateLimit * baselineHeadroom)
+			Expect(baseline.DeliveredPacketsPerSecond).To(BeNumerically(">=", minBaseline),
+				"baseline packet rate leaves too little headroom over the %d pps limit under test (%.1f%% of the offered datagrams were lost)",
+				packetRateLimit, baseline.LostPercent)
 
 			// --- Ingress packet rate limit ---
 			By("Replacing server with ingressPacketRate=100 annotation")
@@ -208,25 +224,22 @@ var _ = describe.CalicoDescribe(
 				iperfcheck.WithNodeName(serverNode),
 				iperfcheck.WithPeerCustomizer(func(pod *corev1.Pod) {
 					pod.Annotations = map[string]string{
-						"qos.projectcalico.org/ingressPacketRate": "100",
+						"qos.projectcalico.org/ingressPacketRate": strconv.Itoa(packetRateLimit),
 					}
 				}))
 			tester.AddPeer(server)
 			tester.Deploy()
 
 			// 1000 bytes * 8 bits * 100 pps = 800kbps; allow 20% margin -> 960kbps
-			maxRate := 1000.0 * 8 * 100 * 1.2
-			udpOpts := []iperfcheck.MeasureOption{
-				iperfcheck.WithUDP(),
-				iperfcheck.WithPacketLength(1000),
-				iperfcheck.WithTargetBandwidth("100M"),
-				iperfcheck.WithRetries(5, 5*time.Second),
-			}
+			maxRate := float64(packetLengthBytes) * 8 * packetRateLimit * 1.2
 
 			By("Running iperf3 to measure ingress-packet-rate-limited throughput")
 			ingressResult := measureWithRateRetry(tester, clientPeer, server, maxRate, udpOpts...)
-			logrus.Infof("Ingress packet-rate-limited throughput (bps): %.0f", ingressResult.AverageRate)
-			Expect(ingressResult.AverageRate).To(BeNumerically("<=", maxRate), "ingress packet rate limit not effective")
+			logrus.Infof("Ingress packet-rate-limited throughput (bps): %.0f, delivered %.0f pps",
+				ingressResult.AverageRate, ingressResult.DeliveredPacketsPerSecond)
+			Expect(ingressResult.AverageRate).To(BeNumerically("<=", maxRate),
+				"ingress packet rate limit not effective: delivered %.0f pps against a %d pps limit",
+				ingressResult.DeliveredPacketsPerSecond, packetRateLimit)
 
 			// --- Egress packet rate limit ---
 			By("Removing rate-limited server, re-deploying plain server")
@@ -240,7 +253,7 @@ var _ = describe.CalicoDescribe(
 				iperfcheck.WithNodeName(clientNode),
 				iperfcheck.WithPeerCustomizer(func(pod *corev1.Pod) {
 					pod.Annotations = map[string]string{
-						"qos.projectcalico.org/egressPacketRate": "100",
+						"qos.projectcalico.org/egressPacketRate": strconv.Itoa(packetRateLimit),
 					}
 				}))
 			tester.AddPeer(clientPeer)
@@ -248,14 +261,135 @@ var _ = describe.CalicoDescribe(
 
 			By("Running iperf3 to measure egress-packet-rate-limited throughput")
 			egressResult := measureWithRateRetry(tester, clientPeer, server, maxRate, udpOpts...)
-			logrus.Infof("Egress packet-rate-limited throughput (bps): %.0f", egressResult.AverageRate)
-			Expect(egressResult.AverageRate).To(BeNumerically("<=", maxRate), "egress packet rate limit not effective")
+			logrus.Infof("Egress packet-rate-limited throughput (bps): %.0f, delivered %.0f pps",
+				egressResult.AverageRate, egressResult.DeliveredPacketsPerSecond)
+			Expect(egressResult.AverageRate).To(BeNumerically("<=", maxRate),
+				"egress packet rate limit not effective: delivered %.0f pps against a %d pps limit",
+				egressResult.DeliveredPacketsPerSecond, packetRateLimit)
+		})
+
+		// Verifies that the qos.projectcalico.org/ingressMaxConnections annotation
+		// caps concurrent TCP connections to a workload, and that closing one frees
+		// a slot. Egress uses the same counter and is covered by the FV suite.
+		It("should limit concurrent connections with QoS annotations", func() {
+			const (
+				connLimitPort = 8080
+				maxConns      = 3
+			)
+
+			By("Getting cluster node names")
+			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, true)
+			nodeNames := nodesInfo.GetNames()
+			serverNode := nodeNames[0]
+			clientNode := nodeNames[1]
+
+			checker := conncheck.NewConnectionTester(f)
+			defer checker.Stop()
+
+			// socat rather than netcat: netshoot's OpenBSD `nc -k` accepts
+			// connections sequentially, and this test needs several held at once.
+			listenAddr := fmt.Sprintf("TCP-LISTEN:%d,fork,reuseaddr", connLimitPort)
+			server := conncheck.NewServer("qos-connlimit-server", f.Namespace,
+				conncheck.WithPorts(connLimitPort),
+				conncheck.WithAutoCreateService(false),
+				conncheck.WithServerPodCustomizer(conncheck.WithNodeName(serverNode)),
+				conncheck.WithServerPodCustomizer(func(pod *corev1.Pod) {
+					if pod.Annotations == nil {
+						pod.Annotations = map[string]string{}
+					}
+					pod.Annotations["qos.projectcalico.org/ingressMaxConnections"] = strconv.Itoa(maxConns)
+					ctr := &pod.Spec.Containers[0]
+					ctr.Image = images.Netshoot
+					ctr.Command = []string{"socat"}
+					ctr.Args = []string{listenAddr, "EXEC:sleep 3600"}
+					ctr.ReadinessProbe = nil
+				}),
+			)
+
+			client := conncheck.NewClient("qos-connlimit-client", f.Namespace,
+				conncheck.WithClientCustomizer(conncheck.WithNodeName(clientNode)),
+				conncheck.WithClientCustomizer(func(pod *corev1.Pod) {
+					pod.Spec.Containers[0].Image = images.Netshoot
+				}),
+			)
+
+			checker.AddServer(server)
+			checker.AddClient(client)
+
+			By("Deploying the connlimit server and client pods")
+			checker.Deploy()
+
+			serverIP := server.Pod().Status.PodIP
+			Expect(serverIP).NotTo(BeEmpty(), "server pod has no IP after becoming ready")
+
+			probeTarget := conncheck.NewTCPConnectTarget(serverIP, connLimitPort)
+
+			// No standalone reachability probe: its slot lingers until both
+			// ends FIN, so the holders below would race it.
+
+			// Each holder bridges to a sleep so neither end closes the socket; it
+			// stays ESTABLISHED, occupying a slot until stop() is called.
+			By(fmt.Sprintf("Holding %d concurrent connections open", maxConns))
+			connectAddr := fmt.Sprintf("TCP:%s:%d", serverIP, connLimitPort)
+			var holders []func() error
+			defer func() {
+				for _, stop := range holders {
+					_ = stop()
+				}
+			}()
+			for i := range maxConns {
+				stop, err := client.ExecStream(
+					context.Background(),
+					[]string{"socat", connectAddr, "EXEC:sleep 3600"},
+					io.Discard,
+				)
+				Expect(err).NotTo(HaveOccurred(), "failed to start held connection %d", i)
+				holders = append(holders, stop)
+			}
+
+			// ExecStream returns when the stream is up, not when socat has
+			// connected.
+			By("Waiting for the held connections to establish")
+			Eventually(func() (int, error) {
+				return countEstablished(client, serverIP, connLimitPort)
+			}, 30*time.Second, time.Second).Should(Equal(maxConns),
+				"the held connections did not all reach ESTABLISHED")
+
+			By("Verifying the (N+1)th connection is refused")
+			checker.ResetExpectations()
+			checker.ExpectFailure(client, probeTarget)
+			checker.Execute()
+
+			By("Freeing one connection and verifying a new one is admitted")
+			Expect(holders[len(holders)-1]()).To(Succeed(), "failed to stop a held connection")
+			holders = holders[:len(holders)-1]
+			checker.ResetExpectations()
+			checker.ExpectSuccess(client, probeTarget)
+			checker.Execute()
 		})
 	})
 
+// countEstablished reports how many ESTABLISHED TCP connections the client pod
+// holds to ip:port.
+func countEstablished(client conncheck.Client, ip string, port int) (int, error) {
+	out, err := client.Exec(context.Background(),
+		fmt.Sprintf("ss -Htn state established dst %s:%d | wc -l", ip, port))
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(strings.TrimSpace(out))
+}
+
 // measureWithRateRetry runs a bandwidth measurement and retries once if the
-// measured rate exceeds maxRate. This handles the race where iperf3 starts
-// before Felix has finished programming the QoS rules on a newly created pod.
+// measured rate exceeds maxRate. This handles two startup conditions on a
+// freshly created pod:
+//   - the race where iperf3 starts before Felix has finished programming the
+//     QoS rules, and
+//   - the token-bucket warm-up burst: bandwidth limits use a TBF qdisc whose
+//     bucket starts full (the default burst is 4Gi bits / 512MiB), so the first
+//     measurement transmits hundreds of MB at line rate before throttling
+//     engages, inflating the average. The retry re-measures on the same pod
+//     (no redeploy), so the drained bucket yields a steady-state rate.
 func measureWithRateRetry(
 	tester *iperfcheck.IperfTester,
 	client, server *iperfcheck.Peer,
@@ -263,13 +397,14 @@ func measureWithRateRetry(
 	opts ...iperfcheck.MeasureOption,
 ) *iperfcheck.Result {
 	result, err := tester.MeasureBandwidth(client, server, opts...)
-	Expect(err).NotTo(HaveOccurred(), "failed to measure bandwidth")
+	Expect(err).NotTo(HaveOccurred(), "failed to measure rate from %s to %s", client.Name(), server.Name())
 	if result.AverageRate <= maxRate {
 		return result
 	}
-	logrus.Infof("Rate %.0f bps exceeds limit %.0f bps, retrying in case rules weren't programmed yet", result.AverageRate, maxRate)
+	logrus.Infof("Rate %.0f bps from %s to %s exceeds limit %.0f bps, retrying once (QoS rules may not be programmed yet, or the token-bucket warm-up burst may not have drained)",
+		result.AverageRate, client.Name(), server.Name(), maxRate)
 	time.Sleep(5 * time.Second)
 	result, err = tester.MeasureBandwidth(client, server, opts...)
-	Expect(err).NotTo(HaveOccurred(), "failed to measure bandwidth on retry")
+	Expect(err).NotTo(HaveOccurred(), "failed to measure rate from %s to %s on retry", client.Name(), server.Name())
 	return result
 }

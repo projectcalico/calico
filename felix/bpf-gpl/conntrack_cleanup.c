@@ -2,16 +2,17 @@
 // Copyright (c) 2024 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#include <linux/types.h>
-#include <linux/bpf.h>
-#include <linux/pkt_cls.h>
-
-#include <stdbool.h>
-
+/* Log prefix for this program.  log.h only defines CALI_LOG if it is not
+ * already set, so this must come before any include. */
 #define CALI_LOG(fmt, ...) bpf_log("CT-CLEANER------: " fmt, ## __VA_ARGS__)
-#include "log.h"
 
+#include "cali_bpf.h"
+#include "conntrack.h"
 #include "conntrack_cleanup.h"
+#include "conntrack_types.h"
+#include "globals.h"
+#include "log.h"
+#include "qos.h"
 
 const volatile struct cali_ct_cleanup_globals __globals;
 
@@ -41,6 +42,10 @@ static long process_ccq_entry(void *map, struct calico_ct_key *key, struct cali_
 	if (!value->rev_key.protocol) {
 		actual_ct_value = cali_ct_lookup_elem(key);
 		if (actual_ct_value && (actual_ct_value->last_seen == value->last_seen)) {
+			// Decrement the per-pod connlimit counter if this entry
+			// carried one of the CONNLIMIT_* flags and the packet
+			// path didn't already decrement.
+			qos_connlimit_decrement_for_ct(actual_ct_value);
 			if (!cali_ct_delete_elem(key)) {
 				ictx->num_cleaned++;
 			}
@@ -58,6 +63,8 @@ static long process_ccq_entry(void *map, struct calico_ct_key *key, struct cali_
 		}
 		struct calico_ct_value *rev_ct_value = cali_ct_lookup_elem(rev_key);
 		if (rev_ct_value && (rev_ct_value->last_seen == value->rev_last_seen)) {
+			// The reverse leg holds the connlimit flags + ifindex.
+			qos_connlimit_decrement_for_ct(rev_ct_value);
 			if (!cali_ct_delete_elem(rev_key)) {
 				ictx->num_cleaned++;
 			}

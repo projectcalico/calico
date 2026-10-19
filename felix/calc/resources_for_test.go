@@ -434,7 +434,7 @@ var (
 		InboundRules: []model.Rule{
 			{
 				Protocol: &protoTCP,
-				SrcPorts: []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
+				SrcPorts: []numorstring.Port{{PortName: "tcpport"}},
 			},
 		},
 		OutboundRules: []model.Rule{
@@ -451,7 +451,7 @@ var policy1_order20_with_named_port_tcpport_negated = model.Policy{
 	InboundRules: []model.Rule{
 		{
 			Protocol:    &protoTCP,
-			NotSrcPorts: []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
+			NotSrcPorts: []numorstring.Port{{PortName: "tcpport"}},
 		},
 	},
 	OutboundRules: []model.Rule{
@@ -468,7 +468,7 @@ var policy_with_named_port_inherit = model.Policy{
 		{
 			Protocol:    &protoTCP,
 			SrcSelector: "profile == 'prof-1'",
-			SrcPorts:    []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
+			SrcPorts:    []numorstring.Port{{PortName: "tcpport"}},
 		},
 	},
 	OutboundRules: []model.Rule{},
@@ -483,7 +483,7 @@ var policy1_order20_with_selector_and_named_port_tcpport = model.Policy{
 		{
 			Protocol:    &protoTCP,
 			SrcSelector: allSelector,
-			SrcPorts:    []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
+			SrcPorts:    []numorstring.Port{{PortName: "tcpport"}},
 		},
 	},
 	OutboundRules: []model.Rule{
@@ -501,7 +501,7 @@ var policy1_order20_with_selector_and_negated_named_port_tcpport = model.Policy{
 			Protocol:       &protoTCP,
 			SrcSelector:    allSelector,
 			NotSrcSelector: "foo == 'bar'",
-			NotSrcPorts:    []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
+			NotSrcPorts:    []numorstring.Port{{PortName: "tcpport"}},
 		},
 	},
 	Types: []string{"ingress"},
@@ -516,7 +516,7 @@ var policy1_order20_with_selector_and_negated_named_port_tcpport_dest = model.Po
 			Protocol:       &protoTCP,
 			DstSelector:    allSelector,
 			NotDstSelector: "foo == 'bar'",
-			NotDstPorts:    []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
+			NotDstPorts:    []numorstring.Port{{PortName: "tcpport"}},
 		},
 	},
 	Types: []string{"ingress"},
@@ -530,7 +530,7 @@ var policy1_order20_with_selector_and_named_port_udpport = model.Policy{
 		{
 			Protocol:    &protoUDP,
 			SrcSelector: allSelector,
-			SrcPorts:    []numorstring.Port{numorstring.Port{PortName: "udpport"}},
+			SrcPorts:    []numorstring.Port{{PortName: "udpport"}},
 		},
 	},
 	OutboundRules: []model.Rule{
@@ -546,13 +546,13 @@ var policy1_order20_with_named_port_mismatched_protocol = model.Policy{
 	InboundRules: []model.Rule{
 		{
 			Protocol: &protoTCP,
-			SrcPorts: []numorstring.Port{numorstring.Port{PortName: "udpport"}},
+			SrcPorts: []numorstring.Port{{PortName: "udpport"}},
 		},
 	},
 	OutboundRules: []model.Rule{
 		{
 			Protocol: &protoUDP,
-			SrcPorts: []numorstring.Port{numorstring.Port{PortName: "tcpport"}},
+			SrcPorts: []numorstring.Port{{PortName: "tcpport"}},
 		},
 	},
 	Types: []string{"ingress", "egress"},
@@ -569,7 +569,7 @@ var policy1_order20_with_selector_and_named_port_tcpport2 = model.Policy{
 		{
 			Protocol:    &protoTCP,
 			SrcSelector: allSelector,
-			SrcPorts:    []numorstring.Port{numorstring.Port{PortName: "tcpport2"}},
+			SrcPorts:    []numorstring.Port{{PortName: "tcpport2"}},
 		},
 	},
 	Types: []string{"ingress", "egress"},
@@ -767,6 +767,43 @@ var (
 		Nets: []net.IPNet{
 			mustParseNet("12.0.0.0/24"), // Overlaps with netset-1
 			mustParseNet("13.1.0.0/24"),
+		},
+		Labels: uniquelabels.Make(map[string]string{
+			"a": "b",
+		}),
+	}
+)
+
+// netSetOverlap* model a NetworkSet whose CIDRs nest inside one another, exercising the
+// overlap-suppression dedup (CORE-13009). The a=="b" label matches all() (allSelectorId) but not
+// b=="b" (bEqBSelectorId), so the CIDRs land only in the all() IP set.
+var (
+	netSetOverlapKey = model.NetworkSetKey{Name: "netset-overlap"}
+
+	netSetOverlapAncestor = model.NetworkSet{
+		Nets: []net.IPNet{
+			mustParseNet("10.65.0.0/16"),
+		},
+		Labels: uniquelabels.Make(map[string]string{
+			"a": "b",
+		}),
+	}
+
+	netSetOverlapNested = model.NetworkSet{
+		Nets: []net.IPNet{
+			mustParseNet("10.65.0.0/16"), // ancestor
+			mustParseNet("10.65.1.0/24"), // nested under ancestor
+			mustParseNet("10.65.1.5/32"), // nested under both
+		},
+		Labels: uniquelabels.Make(map[string]string{
+			"a": "b",
+		}),
+	}
+
+	netSetOverlapMiddleRemoved = model.NetworkSet{
+		Nets: []net.IPNet{
+			mustParseNet("10.65.0.0/16"), // ancestor still present
+			mustParseNet("10.65.1.5/32"), // leaf still present, middle /24 gone
 		},
 		Labels: uniquelabels.Make(map[string]string{
 			"a": "b",

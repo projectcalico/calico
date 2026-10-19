@@ -2352,6 +2352,21 @@ func IterPerCpuMapCmdOutput(output []byte, f func(k, v []byte)) error {
 
 type ObjectConfigurator func(obj *libbpf.Obj) error
 
+// noTracePrintk, when true, makes loadObject set the no_trace_printk flag in
+// every loaded object's .rodata.prog_flags section, so the verifier eliminates
+// the bpf_trace_printk/bpf_trace_vprintk code paths at load time. Set once at
+// startup on nodes running with kernel lockdown=confidentiality, where loading
+// any program that references the helper spams the kernel log on every load.
+// See KernelLockdownConfidentiality.
+var noTracePrintk bool
+
+// SetNoTracePrintk configures whether subsequently loaded BPF programs have
+// their trace-printk code paths dead-code-eliminated at load time. It must be
+// called before any program is loaded.
+func SetNoTracePrintk(v bool) {
+	noTracePrintk = v
+}
+
 func LoadObject(file string, data libbpf.GlobalData, mapsToBePinned ...string) (*libbpf.Obj, error) {
 	return LoadObjectWithOptions(file, data, nil, mapsToBePinned...)
 }
@@ -2403,6 +2418,14 @@ func loadObject(obj *libbpf.Obj, data libbpf.GlobalData, mapPinOverrides map[str
 		// userspace before the program is loaded.
 		mapName := m.Name()
 		if m.IsMapInternal() {
+			// Per-object load-time feature flags (see struct prog_flags).
+			// Its own section so it does not disturb the main globals .rodata.
+			if strings.HasSuffix(mapName, ".rodata.prog_flags") {
+				if err := m.SetProgFlags(noTracePrintk); err != nil {
+					return nil, fmt.Errorf("failed to set rodata flags on %s map %s: %w", obj.Filename(), mapName, err)
+				}
+				continue
+			}
 			if !strings.HasSuffix(mapName, ".rodata") {
 				continue
 			}

@@ -2,9 +2,12 @@
 // Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#ifndef __CALI_BPF_JUMP_H__
-#define __CALI_BPF_JUMP_H__
+#ifndef __CALI_JUMP_H__
+#define __CALI_JUMP_H__
 
+#include "cali_bpf.h"
+#include "globals.h"
+#include "log.h"
 #include "types.h"
 
 #define STATE_SIZE 512
@@ -145,4 +148,4 @@ CALI_MAP_V1(cali_jump_prog_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 240000, 0
 	__CALI_JUMP_TO_POLICY(ctx, PROG_INDEX_ALLOWED, PROG_INDEX_DROP, PROG_INDEX_POLICY)
 #endif
 
-#endif /* __CALI_BPF_JUMP_H__ */
+#endif /* __CALI_JUMP_H__ */

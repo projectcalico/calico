@@ -173,6 +173,15 @@ var baseTests = []StateList{
 		hostEp1WithPolicyAndTwoNetworkSets,
 	},
 
+	// Overlap-suppression dedup remove path (CORE-13009): add a broad CIDR, nest CIDRs under it
+	// (suppressed), then remove a middle CIDR while the ancestor still covers the leaf. The removed
+	// CIDR was never programmed, so nothing must be emitted and the leaf must stay suppressed.
+	{
+		hostEp1WithPolicyAndOverlapAncestor,
+		hostEp1WithPolicyAndOverlapNested,
+		hostEp1WithPolicyAndOverlapMiddleRemoved,
+	},
+
 	// Untracked policy on its own.
 	{hostEp1WithUntrackedPolicy},
 	// Mixed policy.

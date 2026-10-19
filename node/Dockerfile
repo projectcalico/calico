@@ -38,12 +38,17 @@ ARG RUNIT_VER
 
 RUN dnf upgrade -y && dnf install -y epel-release
 
-RUN dnf --enablerepo=crb install -y \
-    iptables-legacy \
-    # Needed for building runit
-    gcc \
-    glibc-static \
-    patch
+# EPEL's mirror list fails transiently, this loop retries up to three times
+RUN for i in 1 2 3; do \
+      dnf --enablerepo=crb install -y \
+        iptables-legacy \
+        # Needed for building runit
+        gcc \
+        glibc-static \
+        patch && break; \
+      [ "$i" -lt 3 ] || exit 1; \
+      sleep 10; \
+    done
 
 RUN dnf clean all
 
@@ -146,6 +151,10 @@ COPY --from=bird /birdcl6 /bin/birdcl6
 # Copy in the filesystem - this contains licenses, etc...
 COPY filesystem/etc/ /etc
 COPY filesystem/included-source/ /included-source
+# Corresponding source for the patched nftables (GPL-2.0-only) and libnftnl
+# (GPL-2.0-or-later) we install above, shipped alongside the BIRD and Felix
+# GPL source already in this dir.
+COPY --from=nft-rpms /src/ /included-source/
 COPY filesystem/sbin/ /usr/sbin/
 COPY filesystem/usr/ /usr
 

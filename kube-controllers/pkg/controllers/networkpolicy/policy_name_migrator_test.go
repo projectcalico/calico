@@ -52,11 +52,6 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		err               error
 	)
 
-	// Define an interface to access the backend client from the Calico client.
-	type accessor interface {
-		Backend() bapi.Client
-	}
-
 	BeforeEach(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
@@ -74,7 +69,7 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		cli = testutils.GetCalicoClient(mode, etcd.IP, kubeconfig)
 		k8sClient, err = testutils.GetK8sClient(kubeconfig)
 		Expect(err).NotTo(HaveOccurred())
-		bcli = cli.(accessor).Backend()
+		bcli = cli.(bapi.BackendAccessor).Backend()
 
 		// Wait for the apiserver to be available.
 		Eventually(func() error {

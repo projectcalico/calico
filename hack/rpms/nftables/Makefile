@@ -1,6 +1,6 @@
 #################################################################################################
 # Producer for the calico/nftables-rpms image consumed by node/Dockerfile and
-# istio/Dockerfile-install-cni. The tag is content-addressed: any change to the
+# istio/Dockerfile.install-cni. The tag is content-addressed: any change to the
 # spec files, patches, or the version pins in metadata.mk produces a new tag,
 # so the cache cannot be wrong by construction.
 #################################################################################################

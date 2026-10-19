@@ -50,6 +50,84 @@ func TestChanUtil_Read_SuccessfulInPrefilledChan(t *testing.T) {
 	}
 }
 
+func TestChanUtil_ReadError_ContextCancelled(t *testing.T) {
+	ch := make(chan error)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	// Cancel the context immediately to force the context.Canceled error.
+	cancel()
+
+	err := chanutil.ReadError(ctx, ch)
+	if err == nil {
+		t.Fatal("Expected an error to be returned.")
+	} else if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Expected context canceled error, got '%s'", err)
+	}
+}
+
+// Closing the channel without sending is a valid way to signal success, so it must not be reported as an error.
+func TestChanUtil_ReadError_ChannelClosedIsSuccess(t *testing.T) {
+	ch := make(chan error)
+	close(ch)
+
+	err := chanutil.ReadError(context.Background(), ch)
+	if err != nil {
+		t.Fatalf("Expected error to be nil, got '%s'", err)
+	}
+}
+
+func TestChanUtil_ReadError_ReturnsErrorOffChannel(t *testing.T) {
+	expected := errors.New("foobar")
+
+	ch := make(chan error, 1)
+	ch <- expected
+
+	err := chanutil.ReadError(context.Background(), ch)
+	if !errors.Is(err, expected) {
+		t.Fatalf("Expected error to be '%s', got '%s'", expected, err)
+	}
+}
+
+// Sending an explicit nil is the other valid way to signal success.
+func TestChanUtil_ReadError_ReturnsNilOffChannel(t *testing.T) {
+	ch := make(chan error, 1)
+	ch <- nil
+
+	err := chanutil.ReadError(context.Background(), ch)
+	if err != nil {
+		t.Fatalf("Expected error to be nil, got '%s'", err)
+	}
+}
+
+// A buffered error is still delivered after the sender closes the channel.
+func TestChanUtil_ReadError_ChannelClosedWithBufferedError(t *testing.T) {
+	expected := errors.New("foobar")
+
+	ch := make(chan error, 1)
+	ch <- expected
+	close(ch)
+
+	err := chanutil.ReadError(context.Background(), ch)
+	if !errors.Is(err, expected) {
+		t.Fatalf("Expected error to be '%s', got '%s'", expected, err)
+	}
+}
+
+func TestChanUtil_ReadError_BlocksUntilWrite(t *testing.T) {
+	expected := errors.New("foobar")
+
+	ch := make(chan error)
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		ch <- expected
+	}()
+
+	err := chanutil.ReadError(context.Background(), ch)
+	if !errors.Is(err, expected) {
+		t.Fatalf("Expected error to be '%s', got '%s'", expected, err)
+	}
+}
+
 func TestChanUtil_ReadWithDeadline_ReturnsDeadlineExceeded(t *testing.T) {
 	ch := make(chan string, 1)
 

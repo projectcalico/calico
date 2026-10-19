@@ -23,8 +23,9 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -74,6 +75,11 @@ func Commands(cfg *Config) []*cli.Command {
 		hashreleaseCommand(cfg),
 		releaseCommand(cfg),
 		branchCommand(cfg),
+		binariesCommand(cfg),
+		imagesCommand(cfg),
+		chartsCommand(cfg),
+		manifestsCommand(cfg),
+		operatorCommand(cfg),
 	}
 }
 
@@ -83,11 +89,11 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to load configuration")
 	}
 
-	logutils.ConfigureFormatter("release")
+	logrusr.ConfigureFormatter("release")
 
 	app := &cli.Command{
 		Name:                  "release",
-		Usage:                 fmt.Sprintf("release tool for %s", utils.ProductName),
+		Usage:                 fmt.Sprintf("release tool for %s", defaults.ProductName),
 		Flags:                 globalFlags,
 		Commands:              Commands(cfg),
 		EnableShellCompletion: true,

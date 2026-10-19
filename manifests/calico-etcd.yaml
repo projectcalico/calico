@@ -85,7 +85,7 @@ data:
   cni_network_config: |-
     {
       "name": "k8s-pod-network",
-      "cniVersion": "0.3.1",
+      "cniVersion": "1.0.0",
       "plugins": [
         {
           "type": "calico",
@@ -362,12 +362,23 @@ spec:
       terminationGracePeriodSeconds: 0
       priorityClassName: system-node-critical
       initContainers:
+        # This container stages the upstream CNI plugins that the CNI config
+        # references (portmap, host-local, loopback, tuning, flannel) for
+        # install-cni to copy onto the host.
+        - name: cni-plugins
+          image: quay.io/calico/third-party-cni-plugins:master
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - mountPath: /stage
+              name: cni-plugins-stage
+          securityContext:
+            runAsUser: 0
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
           image: quay.io/calico/calico:master
           imagePullPolicy: IfNotPresent
-          args: ["cni", "install"]
+          args: ["component", "cni", "install"]
           envFrom:
             - configMapRef:
                 # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
@@ -403,10 +414,13 @@ spec:
               name: cni-bin-dir
             - mountPath: /host/etc/cni/net.d
               name: cni-net-dir
+            - mountPath: /opt/cni/bin
+              name: cni-plugins-stage
             - mountPath: /calico-secrets
               name: etcd-certs
           securityContext:
             privileged: true
+            runAsUser: 0
         # This init container mounts the necessary filesystems needed by the BPF data plane
         # i.e. bpf at /sys/fs/bpf and cgroup2 at /run/calico/cgroup. It also configures the initial
         # networking to allow communication with the API Server. Calico-node initialization is executed
@@ -629,6 +643,10 @@ spec:
           hostPath:
             path: /opt/cni/bin
             type: DirectoryOrCreate
+        # Staging area for the upstream CNI plugins, written by cni-plugins and
+        # read by install-cni.
+        - name: cni-plugins-stage
+          emptyDir: {}
         - name: cni-net-dir
           hostPath:
             path: /etc/cni/net.d
@@ -694,7 +712,7 @@ spec:
         - name: calico-kube-controllers
           image: quay.io/calico/calico:master
           imagePullPolicy: IfNotPresent
-          args: ["component", "kube-controllers"]
+          args: ["component", "kube-controllers", "--health-port=9440"]
           env:
             # The location of the etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -731,10 +749,9 @@ spec:
             exec:
               command:
                 - /usr/bin/calico
-                - component
-                - kube-controllers
-                - kube-controllers-health
-                - -l
+                - health
+                - --port=9440
+                - --type=liveness
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
@@ -743,10 +760,9 @@ spec:
             exec:
               command:
                 - /usr/bin/calico
-                - component
-                - kube-controllers
-                - kube-controllers-health
-                - -r
+                - health
+                - --port=9440
+                - --type=readiness
             periodSeconds: 10
           securityContext:
             runAsNonRoot: true

@@ -14,16 +14,45 @@ import (
 	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
 )
 
 // IPAMHandleInformer provides access to a shared informer and lister for
-// IPAMHandles.
+// IPAMHandles. Prefer using the type-safe variant (see [TypedIPAMHandleInformer]).
 type IPAMHandleInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.IPAMHandleLister
 }
+
+// TypedIPAMHandleInformer provides access to a shared informer and lister for
+// IPAMHandles, including the type-safe TypedInformer variant.
+// It is a superset of IPAMHandleInformer.
+type TypedIPAMHandleInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() IPAMHandleIndexInformer
+	Lister() projectcalicov3.IPAMHandleLister
+}
+
+// IPAMHandleIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type IPAMHandleIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.IPAMHandle]
+
+// IPAMHandleHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for IPAMHandle.
+type IPAMHandleHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.IPAMHandle]
+
+// IPAMHandleDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for IPAMHandle.
+type IPAMHandleDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.IPAMHandle]
+
+// IPAMHandleFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for IPAMHandle.
+type IPAMHandleFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.IPAMHandle]
+
+// IPAMHandleIndexers is a specialization of [cache.TypedIndexers] for IPAMHandle.
+type IPAMHandleIndexers = cache.TypedIndexers[*apisprojectcalicov3.IPAMHandle]
+
+// DeletedIPAMHandle is a specialization of [cache.DeletedObject] for IPAMHandle.
+type DeletedIPAMHandle = cache.DeletedObject[*apisprojectcalicov3.IPAMHandle]
 
 type iPAMHandleInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,55 +63,132 @@ type iPAMHandleInformer struct {
 // NewIPAMHandleInformer constructs a new informer for IPAMHandle type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedIPAMHandleInformer]).
 func NewIPAMHandleInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredIPAMHandleInformer(client, namespace, resyncPeriod, indexers, nil)
+	return NewIPAMHandleInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedIPAMHandleInformer constructs a new informer for IPAMHandle type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedIPAMHandleInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers IPAMHandleIndexers) IPAMHandleIndexInformer {
+	return NewTypedIPAMHandleInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredIPAMHandleInformer constructs a new informer for IPAMHandle type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredIPAMHandleInformer]).
 func NewFilteredIPAMHandleInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return cache.NewSharedIndexInformer(
+	return NewTypedIPAMHandleInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredIPAMHandleInformer constructs a new informer for IPAMHandle type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredIPAMHandleInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers IPAMHandleIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) IPAMHandleIndexInformer {
+	return NewTypedIPAMHandleInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
+}
+
+// NewIPAMHandleInformerWithOptions constructs a new informer for IPAMHandle type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedIPAMHandleInformerWithOptions]).
+func NewIPAMHandleInformerWithOptions(client clientset.Interface, namespace string, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedIPAMHandleInformerWithOptions(client, namespace, options)
+}
+
+// NewTypedIPAMHandleInformerWithOptions constructs a new informer for IPAMHandle type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedIPAMHandleInformerWithOptions(client clientset.Interface, namespace string, options internalinterfaces.InformerOptions) IPAMHandleIndexInformer {
+	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "ipamhandles"}
+	identifier := options.InformerName.WithResource(gvr)
+	tweakListOptions := options.TweakListOptions
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPAMHandle](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
-			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
+			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().IPAMHandles(namespace).List(context.Background(), options)
+				return client.ProjectcalicoV3().IPAMHandles(namespace).List(context.Background(), opts)
 			},
-			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
+			WatchFunc: func(opts v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().IPAMHandles(namespace).Watch(context.Background(), options)
+				return client.ProjectcalicoV3().IPAMHandles(namespace).Watch(context.Background(), opts)
 			},
-			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+			ListWithContextFunc: func(ctx context.Context, opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().IPAMHandles(namespace).List(ctx, options)
+				return client.ProjectcalicoV3().IPAMHandles(namespace).List(ctx, opts)
 			},
-			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+			WatchFuncWithContext: func(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().IPAMHandles(namespace).Watch(ctx, options)
+				return client.ProjectcalicoV3().IPAMHandles(namespace).Watch(ctx, opts)
 			},
 		}, client),
 		&apisprojectcalicov3.IPAMHandle{},
-		resyncPeriod,
-		indexers,
-	)
+		cache.SharedIndexInformerOptions{
+			ResyncPeriod: options.ResyncPeriod,
+			Indexers:     options.Indexers,
+			Identifier:   identifier,
+		},
+	))
 }
 
 func (f *iPAMHandleInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredIPAMHandleInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	return NewTypedIPAMHandleInformerWithOptions(client, f.namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *iPAMHandleInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.IPAMHandle{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *iPAMHandleInformer) TypedInformer() IPAMHandleIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPAMHandle](f.factory.InformerFor(&apisprojectcalicov3.IPAMHandle{}, f.defaultInformer))
 }
 
 func (f *iPAMHandleInformer) Lister() projectcalicov3.IPAMHandleLister {
 	return projectcalicov3.NewIPAMHandleLister(f.Informer().GetIndexer())
+}
+
+// ToTypedIPAMHandleInformer converts an untyped informer into a TypedIPAMHandleInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *IPAMHandle. If that is not the case, calling type-safe methods of the returned
+// TypedIPAMHandleInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedIPAMHandleInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedIPAMHandleInformer(informer IPAMHandleInformer) TypedIPAMHandleInformer {
+	if informer, ok := informer.(TypedIPAMHandleInformer); ok {
+		return informer
+	}
+	return &iPAMHandleTypedInformerAdapter{informer}
+}
+
+type iPAMHandleTypedInformerAdapter struct {
+	IPAMHandleInformer
+}
+
+func (a *iPAMHandleTypedInformerAdapter) TypedInformer() IPAMHandleIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPAMHandle](a.Informer())
+}
+
+// ToIPAMHandleIndexInformer converts an untyped informer into a IPAMHandleIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *IPAMHandle. If that is not the case, calling type-safe methods of the returned
+// IPAMHandleIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a IPAMHandleIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToIPAMHandleIndexInformer(informer cache.SharedIndexInformer) IPAMHandleIndexInformer {
+	if informer, ok := informer.(IPAMHandleIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.IPAMHandle](informer)
 }

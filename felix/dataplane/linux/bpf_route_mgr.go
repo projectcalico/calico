@@ -27,9 +27,9 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -94,7 +94,7 @@ type bpfRouteManager struct {
 	routesUpdateCB  func(routes.KeyInterface, routes.ValueInterface)
 	routesDeleteCB  func(routes.KeyInterface)
 
-	opReporter logutils.OpRecorder
+	opReporter logrusr.OpRecorder
 
 	wgEnabled         bool
 	ipFamily          proto.IPVersion
@@ -103,7 +103,7 @@ type bpfRouteManager struct {
 }
 
 func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVersion,
-	opReporter logutils.OpRecorder,
+	opReporter logrusr.OpRecorder,
 ) *bpfRouteManager {
 	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,
 	// which would restart Felix.
@@ -143,6 +143,13 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVe
 		dirtyCIDRs.Add(cidr)
 	}
 
+	// Wireguard is configured per address family; a route only belongs to the
+	// family this manager serves, so consult that family's setting alone.
+	wgEnabled := config.Wireguard.Enabled
+	if ipFamily == proto.IPVersion_IPV6 {
+		wgEnabled = config.Wireguard.EnabledV6
+	}
+
 	m := &bpfRouteManager{
 		myNodename:        config.Hostname,
 		cidrToRoute:       map[ip.CIDR]*proto.RouteUpdate{},
@@ -165,7 +172,7 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVe
 
 		opReporter: opReporter,
 
-		wgEnabled:         config.Wireguard.Enabled || config.Wireguard.EnabledV6,
+		wgEnabled:         wgEnabled,
 		ipFamily:          ipFamily,
 		svcLoopPrevention: config.ServiceLoopPrevention,
 	}

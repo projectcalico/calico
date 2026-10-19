@@ -1,0 +1,7 @@
+apiVersion: operator.tigera.io/v1
+kind: NonClusterHost
+metadata:
+  name: tigera-secure
+spec:
+  endpoint: https://127.0.0.1:6443
+  typhaEndpoint: 127.0.0.1:5473

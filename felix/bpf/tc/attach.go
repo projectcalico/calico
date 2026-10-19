@@ -20,6 +20,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 
@@ -70,11 +71,14 @@ type AttachPoint struct {
 	NATOutgoingExcludeHosts       bool
 	UDPOnly                       bool
 	RedirectPeer                  bool
+	IfaceEncaps                   bool
 	FlowLogsEnabled               bool
 	OverlayTunnelID               uint32
 	AttachType                    apiv3.BPFAttachOption
 	IngressPacketRateConfigured   bool
 	EgressPacketRateConfigured    bool
+	IngressConnLimitConfigured    bool
+	EgressConnLimitConfigured     bool
 	WorkloadSrcSpoofingConfigured bool
 	UDPGSOLinearize               bool
 	DSCP                          int8
@@ -95,6 +99,9 @@ type AttachPoint struct {
 // API — Felix sets Netkit=true on the AttachPoint when it detects a netkit
 // device and derives this string from that flag.
 const AttachOptionNetkit = "Netkit"
+
+// preambleProgName is the preamble's program name as the kernel truncates it.
+const preambleProgName = "cali_tc_preambl"
 
 // IsNetkit reports whether this attach point targets a netkit device.
 func (ap *AttachPoint) IsNetkit() bool {
@@ -208,7 +215,11 @@ func (ap *AttachPoint) AttachProgram() error {
 	// only need to load and configure the preamble that will pass the
 	// configuration further to the selected set of programs.
 
-	binaryToLoad := path.Join(bpfdefs.ObjectDir, fmt.Sprintf("tc_preamble_%s.o", ap.Hook))
+	preambleName := fmt.Sprintf("tc_preamble_%s", ap.Hook)
+	if ap.NoTracePrintk {
+		preambleName += "_notrace"
+	}
+	binaryToLoad := path.Join(bpfdefs.ObjectDir, preambleName+".o")
 	if ap.IsNetkit() {
 		err := ap.attachNetkitProgram(binaryToLoad)
 		if err != nil {
@@ -232,6 +243,10 @@ func (ap *AttachPoint) AttachProgram() error {
 		if err != nil {
 			log.Errorf("error removing qdisc from %s:%s", ap.Iface, err)
 		}
+		// A netkit device driven by TC/TCX still runs whatever netkit program is
+		// attached to it, so leaving one behind would mean two dataplanes on one
+		// device, each with its own policy and conntrack state.
+		ap.cleanUpNetkitAttach()
 		logCxt.Info("Program attached to tcx.")
 		return nil
 	}
@@ -265,7 +280,21 @@ func (ap *AttachPoint) AttachProgram() error {
 			logCxt.Warnf("error removing tcx program from %s", err)
 		}
 	}
+	ap.cleanUpNetkitAttach()
 	return nil
+}
+
+// cleanUpNetkitAttach removes a netkit attachment left over from an earlier run
+// that used the netkit mechanism on this interface. It is a no-op on the vast
+// majority of interfaces, which never had one.
+func (ap *AttachPoint) cleanUpNetkitAttach() {
+	if _, err := os.Stat(ap.NetkitProgPinPath()); err != nil {
+		return
+	}
+	ap.Log().Info("Removing existing netkit program")
+	if err := ap.detachNetkitProgram(); err != nil {
+		ap.Log().Warnf("error removing netkit program: %s", err)
+	}
 }
 
 func (ap *AttachPoint) ProgPinPath() string {
@@ -400,6 +429,31 @@ func ListAttachedTcxPrograms(iface, attachHook string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error querying program for %s:%s:%w", iface, attachHook, err)
 	}
+	return progNames(progId, progCnt), nil
+}
+
+// PreambleAttached reports whether the preamble is attached to hook h,
+// querying the mechanism AttachProgram uses.
+func (ap *AttachPoint) PreambleAttached(h hook.Hook) (bool, error) {
+	ingress := h == hook.Ingress
+	query := libbpf.ProgQueryTcx
+	switch {
+	case ap.IsNetkit():
+		query = libbpf.ProgQueryNetkit // Ingress is the peer side.
+	case ap.AttachType != apiv3.BPFAttachOptionTCX:
+		progs, err := ListAttachedPrograms(ap.Iface, h.String(), false)
+		return len(progs) > 0, err
+	}
+	progId, _, progCnt, err := query(ap.IfIndex, ingress)
+	if err != nil {
+		return false, fmt.Errorf("error querying programs for %s:%s: %w", ap.Iface, h, err)
+	}
+	return slices.ContainsFunc(progNames(progId, progCnt), func(name string) bool {
+		return strings.Contains(name, preambleProgName)
+	}), nil
+}
+
+func progNames(progId [64]uint32, progCnt uint32) []string {
 	progNames := []string{}
 	for i := range progCnt {
 		name, err := libbpf.ProgName(progId[i])
@@ -408,7 +462,7 @@ func ListAttachedTcxPrograms(iface, attachHook string) ([]string, error) {
 		}
 		progNames = append(progNames, name)
 	}
-	return progNames, nil
+	return progNames
 }
 
 func ListAttachedPrograms(iface, hook string, includeLegacy bool) ([]attachedProg, error) {
@@ -435,7 +489,7 @@ func ListAttachedPrograms(iface, hook string, includeLegacy bool) ([]attachedPro
 		if !ok {
 			continue
 		}
-		if strings.Contains(bpfFilter.Name, "cali_tc_preambl") || (includeLegacy && strings.Contains(bpfFilter.Name, "calico")) {
+		if strings.Contains(bpfFilter.Name, preambleProgName) || (includeLegacy && strings.Contains(bpfFilter.Name, "calico")) {
 			p := attachedProg{
 				Pref:   int(bpfFilter.Attrs().Priority),
 				Handle: bpfFilter.Attrs().Handle,
@@ -590,6 +644,14 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		globalData.Flags |= libbpf.GlobalsEgressPacketRateConfigured
 	}
 
+	if ap.IngressConnLimitConfigured {
+		globalData.Flags |= libbpf.GlobalsIngressConnLimitConfigured
+	}
+
+	if ap.EgressConnLimitConfigured {
+		globalData.Flags |= libbpf.GlobalsEgressConnLimitConfigured
+	}
+
 	switch ap.RPFEnforceOption {
 	case tcdefs.RPFEnforceOptionStrict:
 		globalData.Flags |= libbpf.GlobalsRPFOptionEnabled
@@ -604,6 +666,10 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 
 	if ap.RedirectPeer {
 		globalData.Flags |= libbpf.GlobalsRedirectPeer
+	}
+
+	if ap.IfaceEncaps {
+		globalData.Flags |= libbpf.GlobalsIfaceEncaps
 	}
 
 	if ap.FlowLogsEnabled {
@@ -622,11 +688,12 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		globalData.Flags |= libbpf.GlobalsUDPGSOLinearize
 	}
 
-	globalData.HostTunnelIPv4 = globalData.HostIPv4
-	globalData.HostTunnelIPv6 = globalData.HostIPv6
-
-	copy(globalData.HostTunnelIPv4[0:4], ap.HostTunnelIPv4.To4())
-	copy(globalData.HostTunnelIPv6[:], ap.HostTunnelIPv6.To16())
+	if ap.HostTunnelIPv4 != nil {
+		copy(globalData.HostTunnelIPv4[0:4], ap.HostTunnelIPv4.To4())
+	}
+	if ap.HostTunnelIPv6 != nil {
+		copy(globalData.HostTunnelIPv6[:], ap.HostTunnelIPv6.To16())
+	}
 
 	for i := range len(globalData.Jumps) {
 		globalData.Jumps[i] = 0xffffffff   /* uint32(-1) */
@@ -662,6 +729,24 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 	globalData.OverlayTunnelID = ap.OverlayTunnelID
 
 	return globalData
+}
+
+// ResolveAttachType maps a configured BPFAttachType onto the mechanism used for
+// attach points that are not netkit-attached, and reports whether netkit
+// attachment may be used at all. Netkit is not a mechanism that applies to every
+// device, only to workload netkit devices, so it resolves to TCX for everything
+// else; TCX in turn falls back to TC on kernels without it. Callers that only
+// care about the mechanism can therefore treat the result as a two-valued enum.
+func ResolveAttachType(attachType apiv3.BPFAttachOption) (mechanism apiv3.BPFAttachOption, netkitAllowed bool) {
+	mechanism = attachType
+	if mechanism == apiv3.BPFAttachOptionNetkit {
+		netkitAllowed = true
+		mechanism = apiv3.BPFAttachOptionTCX
+	}
+	if mechanism == apiv3.BPFAttachOptionTCX && !IsTcxSupported() {
+		mechanism = apiv3.BPFAttachOptionTC
+	}
+	return mechanism, netkitAllowed
 }
 
 var IsTcxSupported = sync.OnceValue(func() bool {

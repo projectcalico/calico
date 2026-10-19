@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -134,6 +135,27 @@ func clearDir(dirPath string) {
 	log.Infof("Directory %s cleared successfully!", dirPath)
 }
 
+// countInotifyFDs returns the number of inotify instances held open by this
+// process. Every fsnotify.Watcher owns exactly one.
+func countInotifyFDs() int {
+	entries, err := os.ReadDir("/proc/self/fd")
+	Expect(err).ShouldNot(HaveOccurred(), "cannot count inotify instances without procfs")
+
+	count := 0
+	for _, entry := range entries {
+		target, err := os.Readlink(filepath.Join("/proc/self/fd", entry.Name()))
+		if err != nil {
+			// The descriptor was closed while we were scanning.
+			continue
+		}
+		if strings.Contains(target, "inotify") {
+			count++
+		}
+	}
+
+	return count
+}
+
 var _ = Describe("Workload endpoint status file watcher test", func() {
 	var w *FileWatcher
 	var r *eventRecorder
@@ -242,6 +264,52 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 
 	})
 
+	driveSyntheticEvent := func(filePath string, op fsnotify.Op) {
+		watcher, err := fsnotify.NewWatcher()
+		Expect(err).NotTo(HaveOccurred())
+
+		loopDone := make(chan struct{})
+		go func() {
+			defer close(loopDone)
+			_ = w.runFsnotifyWatcher(watcher)
+		}()
+
+		watcher.Events <- fsnotify.Event{Name: filePath, Op: op}
+
+		_ = watcher.Close()
+		Eventually(loopDone, "2s").Should(BeClosed())
+	}
+
+	It("should fire OnFileCreation on a combined Create|Write event", func() {
+		filePath := filepath.Join(statusDir, "pod-create-write")
+		Expect(os.WriteFile(filePath, []byte("name: pod1"), 0644)).To(Succeed())
+
+		driveSyntheticEvent(filePath, fsnotify.Create|fsnotify.Write)
+		Expect(r.Events()[filePath]).To(Equal([]string{"create"}))
+	})
+
+	It("should fire OnFileUpdate on a combined Write|Chmod event", func() {
+		filePath := filepath.Join(statusDir, "pod-write-chmod")
+		Expect(os.WriteFile(filePath, []byte("name: pod1"), 0644)).To(Succeed())
+
+		driveSyntheticEvent(filePath, fsnotify.Write|fsnotify.Chmod)
+		Expect(r.Events()[filePath]).To(Equal([]string{"update"}))
+	})
+
+	It("should fire OnFileDeletion on a combined Remove|Rename event", func() {
+		filePath := filepath.Join(statusDir, "pod-remove-rename")
+		driveSyntheticEvent(filePath, fsnotify.Remove|fsnotify.Rename)
+		Expect(r.Events()[filePath]).To(Equal([]string{"delete"}))
+	})
+
+	It("should not fire any callback on a Chmod-only event", func() {
+		filePath := filepath.Join(statusDir, "pod-chmod-only")
+		Expect(os.WriteFile(filePath, []byte("name: pod1"), 0644)).To(Succeed())
+
+		driveSyntheticEvent(filePath, fsnotify.Chmod)
+		Expect(r.Events()[filePath]).To(BeNil())
+	})
+
 	It("should receive events when fsnotify fails", func() {
 		w.Start()
 		defer w.Stop()
@@ -265,5 +333,27 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 
 		Eventually(haveEvents, "15s", "1s").WithArguments(filePath, []string{"create", "update", "update"}).Should(BeTrue())
 		Eventually(lastInSync).Should(BeTrue())
+	})
+
+	It("should not leak inotify instances while the directory cannot be watched", func() {
+		// A missing directory makes fsnotify's Add fail, which sends the watcher
+		// goroutine round its retry loop once per poll interval.
+		missingDir := filepath.Join(tmpPath, "no-such-dir")
+		w = NewFileWatcherWithShim(missingDir, 100*time.Millisecond, fsnotifyErr.newFsnotifyWatcherShim, fsnotifyActivity)
+		w.SetCallbacks(Callbacks{
+			OnFileCreation: r.OnFileCreate,
+			OnFileUpdate:   r.OnFileUpdate,
+			OnFileDeletion: r.OnFileDeletion,
+			OnInSync:       r.OnInSync,
+		})
+
+		baseline := countInotifyFDs()
+
+		w.Start()
+		defer w.Stop()
+
+		// The retried watcher is closed within the same iteration, so at most one
+		// can be open when we sample.
+		Consistently(countInotifyFDs, "2s", "100ms").Should(BeNumerically("<=", baseline+1))
 	})
 })

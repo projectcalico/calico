@@ -35,10 +35,10 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/netlinkshim/handlemgr"
 	"github.com/projectcalico/calico/felix/timeshim"
+	"github.com/projectcalico/calico/lib/logrusr"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -171,7 +171,7 @@ type RouteTable struct {
 
 	nl *handlemgr.HandleManager
 
-	opReporter       logutils.OpRecorder
+	opReporter       logrusr.OpRecorder
 	livenessCallback func()
 
 	// The route deletion grace period.
@@ -265,7 +265,7 @@ func New(
 	defaultRouteProtocol netlink.RouteProtocol,
 	removeExternalRoutes bool,
 	tableIndex int,
-	opReporter logutils.OpRecorder,
+	opReporter logrusr.OpRecorder,
 	featureDetector environment.FeatureDetectorIface,
 	opts ...Opt,
 ) *RouteTable {
@@ -773,13 +773,15 @@ func (r *RouteTable) recalculateDesiredKernelRoute(routeKey RouteKey) {
 	kernRoute := kernelRoute{
 		Type:     bestTarget.RouteType(),
 		Scope:    bestTarget.RouteScope(),
-		GW:       bestTarget.GW,
 		Src:      src,
-		Ifindex:  bestIfaceIdx,
 		OnLink:   bestTarget.Flags()&unix.RTNH_F_ONLINK != 0,
 		Protocol: proto,
+		MTU:      bestTarget.MTU,
 	}
 	if len(bestTarget.MultiPath) > 0 {
+		// Note: GW/Ifindex deliberately left unset; the kernel reports
+		// multi-path routes with no top-level OIF (and InterfaceNone maps to
+		// ifindex 1 for IPv6, which would never round-trip).
 		for _, nh := range bestTarget.MultiPath {
 			ifIndex, ok := r.ifaceIndexForName(nh.IfaceName)
 			if !ok {
@@ -793,7 +795,6 @@ func (r *RouteTable) recalculateDesiredKernelRoute(routeKey RouteKey) {
 	} else {
 		kernRoute.GW = bestTarget.GW
 		kernRoute.Ifindex = bestIfaceIdx
-		kernRoute.MTU = bestTarget.MTU
 	}
 	if log.IsLevelEnabled(log.DebugLevel) && !reflect.DeepEqual(oldDesiredRoute, kernRoute) {
 		r.logCxt.WithFields(log.Fields{
@@ -934,11 +935,11 @@ func (r *RouteTable) attemptApply(attempt int) (err error) {
 }
 
 func (r *RouteTable) maybeCleanUpGracePeriods() {
-	if time.Since(r.lastGracePeriodCleanup) < r.routeCleanupGracePeriod {
+	if r.time.Since(r.lastGracePeriodCleanup) < r.routeCleanupGracePeriod {
 		return
 	}
 	for k, v := range r.ifaceIndexToGraceInfo {
-		if time.Since(v.FirstSeen) < r.routeCleanupGracePeriod {
+		if r.time.Since(v.FirstSeen) < r.routeCleanupGracePeriod {
 			continue
 		}
 		if _, ok := r.ifaceIndexToName[k]; ok {
@@ -948,6 +949,7 @@ func (r *RouteTable) maybeCleanUpGracePeriods() {
 
 		r.livenessCallback()
 	}
+	r.lastGracePeriodCleanup = r.time.Now()
 }
 
 func (r *RouteTable) maybeResyncWithDataplane() error {
@@ -1008,7 +1010,7 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 			}
 
 			routeKey, kernRoute := r.netlinkRouteToKernelRoute(&scratchRoute)
-			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(routeKey); !ok || oldRoute.Equals(kernRoute) {
+			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(routeKey); !ok || !oldRoute.Equals(kernRoute) {
 				r.kernelRoutes.Dataplane().Set(routeKey, kernRoute)
 			}
 			seenKeys.Add(routeKey)
@@ -1118,7 +1120,7 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 			}
 
 			routeKey, kernRoute := r.netlinkRouteToKernelRoute(&scratchRoute)
-			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(routeKey); !ok || oldRoute.Equals(kernRoute) {
+			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(routeKey); !ok || !oldRoute.Equals(kernRoute) {
 				r.kernelRoutes.Dataplane().Set(routeKey, kernRoute)
 			}
 			seenRoutes.Add(routeKey)

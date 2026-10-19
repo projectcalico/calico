@@ -25,11 +25,13 @@ import (
 	"github.com/projectcalico/calico/release/internal/slack"
 )
 
+const FilesDirName = "files"
+
 var hashreleaseOutputFileName = "hashrelease.yaml"
 
 // PublishedHashrelease represents the output of a hashrelease publication.
 type PublishedHashrelease struct {
-	Hashrelease    *hashreleaseserver.Hashrelease `yaml:"-,inline"`
+	Hashrelease    *hashreleaseserver.Hashrelease `yaml:",inline"`
 	HashreleaseURL string                         `yaml:"url"`
 	SlackResponse  *slack.MessageResponse         `yaml:"slack,omitempty"`
 }

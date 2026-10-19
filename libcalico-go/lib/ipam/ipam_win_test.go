@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/ipamtestutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
@@ -55,7 +56,7 @@ var (
 	rsvdAttrWindows = &HostReservedAttr{
 		StartOfBlock: 3,
 		EndOfBlock:   1,
-		Handle:       WindowsReservedHandle,
+		Handle:       accounting.WindowsReservedHandle,
 		Note:         "ipam ut",
 	}
 
@@ -63,7 +64,7 @@ var (
 	rsvdAttrTooBig = &HostReservedAttr{
 		StartOfBlock: 32,
 		EndOfBlock:   33,
-		Handle:       WindowsReservedHandle,
+		Handle:       accounting.WindowsReservedHandle,
 		Note:         "ipam ut",
 	}
 )
@@ -80,7 +81,7 @@ type testArgsClaimAff1 struct {
 var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
 	var bc bapi.Client
 	var ic Interface
-	var kc *kubernetes.Clientset
+	var kc kubernetes.Interface
 
 	BeforeEach(func() {
 		// Create a new backend client and an IPAM Client using the IP Pools Accessor.
@@ -667,11 +668,12 @@ func isValidWindowsHandle(backend bapi.Client, ipPoolsWindows *ipamtestutils.IPP
 	opts := model.BlockListOptions{IPVersion: 4}
 	datastoreObjs, _ := backend.List(context.Background(), opts, "")
 	var block allocationBlock
+	config := IPAMConfig{}
 	for _, o := range datastoreObjs.KVPairs {
 		k := o.Key.(model.BlockKey)
 		kCIDR := model.IPNetFromPrefix(k.CIDR)
 		if kCIDR.IP.String() == blockCIDR.IP.String() && kCIDR.Mask.String() == blockCIDR.Mask.String() {
-			block = allocationBlock{o.Value.(*model.AllocationBlock)}
+			block = blockFromBackend(&config, o.Value.(*model.AllocationBlock))
 		}
 
 	}

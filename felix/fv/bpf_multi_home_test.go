@@ -234,5 +234,59 @@ func describeBPFMultiHomedTests() bool {
 			Eventually(dump30.MatchCountFn("eth30-ingress"), "5s", "330ms").Should(BeNumerically("==", 1))
 			Eventually(dump20.MatchCountFn("eth20-egress"), "5s", "330ms").Should(BeNumerically("==", 1))
 		})
+
+		It("should not stamp the ext-to-service connmark on ordinary pod egress", func() {
+			// A node using source-based routing (e.g. AWS VPC CNI) gives
+			// each pod a source rule that selects the interface owning the
+			// pod's IP, and a higher-priority fwmark rule that sends traffic
+			// marked with the ext-to-service connmark out of the primary
+			// interface. Ordinary pod-originated egress must not carry that
+			// mark, otherwise the fwmark rule hijacks it onto the wrong
+			// interface. Here eth20 owns the pod's IP and eth30 stands in for
+			// the primary interface; the packet must leave via eth20.
+			var err error
+
+			Felix.Exec("ip", "addr", "add", "192.168.20.20/24", "dev", "eth20")
+			Felix.Exec("ip", "addr", "add", "192.168.30.30/24", "dev", "eth30")
+
+			Felix.Exec("bash", "-c", "echo 200 pod_eni >> /etc/iproute2/rt_tables")
+			Felix.Exec("bash", "-c", "echo 201 primary_eni >> /etc/iproute2/rt_tables")
+
+			// Pod's own interface, selected by the pod's source IP.
+			Felix.Exec("ip", "route", "add", "10.65.1.0/24", "dev", "eth20", "table", "pod_eni")
+			Felix.Exec("ip", "rule", "add", "from", w.IP, "table", "pod_eni", "priority", "1536")
+
+			// Primary interface, selected by the ext-to-service connmark and
+			// at a higher priority than the pod source rule.
+			Felix.Exec("ip", "route", "add", "10.65.1.0/24", "dev", "eth30", "table", "primary_eni")
+			Felix.Exec("ip", "rule", "add", "fwmark", "0x80/0x80", "table", "primary_eni", "priority", "1024")
+
+			Felix.Exec("ip", "route", "flush", "cache")
+			Felix.Exec("ip", "neigh", "add", "10.65.1.3", "lladdr", "ee:ee:ee:ee:ee:ee", "dev", "eth20")
+			Felix.Exec("ip", "neigh", "add", "10.65.1.3", "lladdr", "ee:ee:ee:ee:ee:ee", "dev", "eth30")
+
+			dump20 := Felix.AttachTCPDump("eth20")
+			dump20.SetLogEnabled(true)
+			dump20.AddMatcher("eth20-egress", regexp.MustCompile("10.65.0.2.30444 > 10.65.1.3.30444: UDP"))
+			dump20.Start(infra, "-v", "udp", "and", "dst", "host", "10.65.1.3")
+
+			dump30 := Felix.AttachTCPDump("eth30")
+			dump30.SetLogEnabled(true)
+			dump30.AddMatcher("eth30-egress", regexp.MustCompile("10.65.0.2.30444 > 10.65.1.3.30444: UDP"))
+			dump30.Start(infra, "-v", "udp", "and", "dst", "host", "10.65.1.3")
+
+			By("Sending packets from the workload")
+			_, err = w.RunCmd("pktgen", w.IP, "10.65.1.3", "udp", "--ip-id", "1",
+				"--port-src", "30444", "--port-dst", "30444")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = w.RunCmd("pktgen", w.IP, "10.65.1.3", "udp", "--ip-id", "2",
+				"--port-src", "30444", "--port-dst", "30444")
+			Expect(err).NotTo(HaveOccurred())
+
+			// The pod source rule must win: traffic leaves via eth20 and
+			// never via the fwmark-selected eth30.
+			Eventually(dump20.MatchCountFn("eth20-egress"), "5s", "330ms").Should(BeNumerically("==", 2))
+			Consistently(dump30.MatchCountFn("eth30-egress"), "1s", "330ms").Should(BeNumerically("==", 0))
+		})
 	})
 }

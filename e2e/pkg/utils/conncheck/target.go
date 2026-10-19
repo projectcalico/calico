@@ -33,6 +33,12 @@ const (
 	TCP  Protocol = "TCP"
 	HTTP Protocol = "HTTP"
 	UDP  Protocol = "UDP"
+	// TCPConnect probes raw TCP reachability via `nc -w 3 -z`. Pass/fail
+	// is driven by exit code (0 = port open, nonzero = blocked/unreachable).
+	// Stdout is not consulted for the assertion, but the conncheck retry
+	// loop still surfaces it in diagnostic logs. Use when the server isn't
+	// an HTTP responder, so the default `wget`-based TCP probe would fail.
+	TCPConnect Protocol = "TCPConnect"
 )
 
 // AccessType represents how the target is accessed. A Kubenretes pod can be accessed in a variety of ways, such as
@@ -145,6 +151,18 @@ func NewPodPingTarget(pod *v1.Pod) Target {
 		destination: pod.Status.PodIP,
 		targetType:  TypePodIP,
 		protocol:    ICMP,
+	}
+}
+
+// NewTCPConnectTarget returns a target that probes TCP reachability of ip:port
+// via `nc -z` (exit code is the signal). Use for raw-TCP servers; for HTTP
+// servers prefer NewTarget(..., TCP, ...).
+func NewTCPConnectTarget(ip string, port int) Target {
+	return &target{
+		destination: ip,
+		port:        port,
+		targetType:  TypePodIP,
+		protocol:    TCPConnect,
 	}
 }
 

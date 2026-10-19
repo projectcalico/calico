@@ -9,13 +9,13 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/guardian/pkg/conn"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 func TestForwardConnections(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
-	logutils.RedirectLogrusToTestingT(t)
-	logutils.ConfigureFormatter("test")
+	logrusr.RedirectLogrusToTestingT(t)
+	logrusr.ConfigureFormatter("test")
 	RegisterTestingT(t)
 	t.Run("Forward sends connection data back and forth between the connections", func(t *testing.T) {
 		var dst1, dst2 net.Conn

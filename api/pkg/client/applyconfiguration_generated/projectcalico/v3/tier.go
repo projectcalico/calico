@@ -20,7 +20,7 @@ import (
 // be created and each tier is applied in the order specified in the tier specification.
 // Tier is globally-scoped (i.e. not Namespaced).
 type TierApplyConfiguration struct {
-	v1.TypeMetaApplyConfiguration    `json:",inline"`
+	v1.TypeMetaApplyConfiguration    `json:""`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *TierSpecApplyConfiguration   `json:"spec,omitempty"`
 	Status                           *TierStatusApplyConfiguration `json:"status,omitempty"`

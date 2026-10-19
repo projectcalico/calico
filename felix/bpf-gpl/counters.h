@@ -5,10 +5,10 @@
 #ifndef __CALI_COUNTERS_H__
 #define __CALI_COUNTERS_H__
 
-#include "bpf.h"
+#include "cali_bpf.h"
 #include "types.h"
 
-#define MAX_COUNTERS_SIZE 26
+#define MAX_COUNTERS_SIZE 27
 
 typedef __u64 counters_t[MAX_COUNTERS_SIZE];
 

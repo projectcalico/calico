@@ -185,6 +185,7 @@ func (m *Map) IsMapInternal() bool {
 }
 
 const (
+	GlobalsIfaceEncaps                   uint32 = 1
 	GlobalsRPFOptionEnabled              uint32 = 16
 	GlobalsRPFOptionStrict               uint32 = 32
 	GlobalsNoDSRCidrs                    uint32 = 12345
@@ -197,6 +198,8 @@ const (
 	GlobalsEgressPacketRateConfigured    uint32 = 12345
 	GlobalsWorkloadSrcSpoofingConfigured uint32 = 12345
 	GlobalsUDPGSOLinearize               uint32 = 12345
+	GlobalsIngressConnLimitConfigured    uint32 = 12345
+	GlobalsEgressConnLimitConfigured     uint32 = 12345
 	AttachTypeTcxIngress                 uint32 = 12345
 	AttachTypeTcxEgress                  uint32 = 12345
 	AttachTypeXDP                        uint32 = 12345
@@ -244,7 +247,15 @@ func (t *CTLBGlobalData) Set(m *Map) error {
 	panic("LIBBPF syscall stub")
 }
 
+func (m *Map) SetProgFlags(noTracePrintk bool) error {
+	panic("LIBBPF syscall stub")
+}
+
 func ProgQueryTcx(ifindex int, ingress bool) ([64]uint32, [64]uint32, uint32, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func ProgQueryNetkit(ifindex int, peer bool) ([64]uint32, [64]uint32, uint32, error) {
 	panic("LIBBPF syscall stub")
 }
 

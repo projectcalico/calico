@@ -58,11 +58,11 @@ func (apiServerStrategy) Validate(ctx context.Context, obj runtime.Object) field
 	// return validation.ValidateTier(obj.(*calico.Tier))
 }
 
-func (apiServerStrategy) AllowCreateOnUpdate() bool {
+func (apiServerStrategy) AllowCreateOnUpdate(ctx context.Context) bool {
 	return false
 }
 
-func (apiServerStrategy) AllowUnconditionalUpdate() bool {
+func (apiServerStrategy) AllowUnconditionalUpdate(ctx context.Context) bool {
 	return false
 }
 

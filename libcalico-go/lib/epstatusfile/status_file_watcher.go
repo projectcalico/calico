@@ -116,6 +116,13 @@ func (w *FileWatcher) newFsnotifyWatcher() error {
 	err = watcher.Add(w.dir)
 	if err != nil {
 		log.WithError(err).Error("Error adding directory to fsnotify.")
+		// A watcher owns an inotify instance and a goroutine, and the GC
+		// reclaims neither, so it must be closed even though it never watched
+		// anything. runWatcher() retries on every poll tick, so anything left
+		// behind here accumulates for as long as the directory is unwatchable.
+		if closeErr := watcher.Close(); closeErr != nil {
+			log.WithError(closeErr).Info("Ignoring error following close of fsWatcher")
+		}
 		return err
 	}
 
@@ -141,7 +148,7 @@ func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
 			}).Debug("received file events")
 
 			filePath := event.Name
-			if event.Op == fsnotify.Remove {
+			if event.Op.Has(fsnotify.Remove) {
 				w.callbacks.OnFileDeletion(filePath)
 				delete(w.lastState, filePath)
 			} else {
@@ -149,11 +156,10 @@ func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
 				if err != nil {
 					log.WithError(err).Error("Failed to get file info on a fsnotify event.")
 				} else if !fileInfo.IsDir() {
-					if event.Op == fsnotify.Create {
+					if event.Op.Has(fsnotify.Create) {
 						w.lastState[filePath] = fileInfo
 						w.callbacks.OnFileCreation(filePath)
-					}
-					if event.Op == fsnotify.Write {
+					} else if event.Op.Has(fsnotify.Write) {
 						w.lastState[filePath] = fileInfo
 						w.callbacks.OnFileUpdate(filePath)
 					}

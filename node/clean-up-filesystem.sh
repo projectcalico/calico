@@ -53,6 +53,9 @@ bin_allow_list_patterns=(
   '/arp$'       # Used to add arp entries
   '/conntrack$' # Used to remove conntrack entries.
   '/ip$' # iproute2; used to add/manipulate routes etc.
+  # Not used by Felix; `calicoctl cluster diags` execs it to dump bridge
+  # state (VLAN membership, port flags, FDB), which `ip` does not expose.
+  '/bridge$'
   bpftool
 
   # iptables/ip sets
@@ -222,16 +225,6 @@ while read -r path; do
   # Well-known plugins, not directly linked.
   if [[ "$path" =~ xtables|netfilter|conntrack|ct_|libnss|libresolv ]] && ! [[ "$path" =~ systemd ]] ; then
     echo "PLUGIN: $path"
-    libs_to_keep[$path]=true
-    continue
-  fi
-  # These libraries and hmac files under /usr/lib64 are needed when ubi container
-  # is running in FIPS mode. They are not directly linked by the allowed binaries.
-  # * /usr/lib64/.libcrypto.so.x.y.z.hmac
-  # * /usr/lib64/.libssl.so.x.y.z.hmac
-  # * /usr/lib64/libssl.so.x.y.z
-  if [[ "$path" =~ .libcrypto|.libssl|libssl ]]; then
-    echo "FIPS PLUGIN: $path"
     libs_to_keep[$path]=true
     continue
   fi

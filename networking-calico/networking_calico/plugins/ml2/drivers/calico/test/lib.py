@@ -22,9 +22,23 @@ Common code for Neutron driver UT.
 import contextlib
 import logging
 import sys
+from types import SimpleNamespace
 
 import eventlet
 import mock
+
+# Grab the real classes and constants that the mocks below need to expose, while
+# the real packages are still importable: once sys.modules has been overwritten,
+# "from neutron_lib import constants" yields a MagicMock instead.
+#
+# It matters that these are the real objects.  A MagicMock attribute standing in
+# for an exception class is not a class, so "except that_attribute" raises
+# TypeError if it is ever evaluated, and a hand-written stand-in drifts from the
+# real thing without anything noticing.
+from neutron_lib.constants import IP_PROTOCOL_MAP
+from neutron_lib.exceptions import PortNotFound
+from oslo_db.exception import DBError
+from sqlalchemy.exc import SQLAlchemyError
 
 # When you're working on a test and need to see logging - both from the test
 # code and the code _under_ test - uncomment the following line.
@@ -74,20 +88,22 @@ sys.modules["oslo_context"] = m_oslo_context = mock.Mock()
 sys.modules["oslo_db"] = m_oslo_db = mock.Mock()
 sys.modules["oslo_log"] = m_oslo_log = mock.Mock()
 sys.modules["sqlalchemy"] = m_sqlalchemy = mock.Mock()
-sys.modules["sqlalchemy.orm"] = m_sqlalchemy.orm
-sys.modules["sqlalchemy.orm.exc"] = m_sqlalchemy.orm.exc
 sys.modules["networking_calico.plugins.ml2.drivers.calico.qos_driver"] = (
     m_qos_driver
 ) = mock.Mock()
 
-# Set up some IP protocol mappings to test.  (Unfortunately, importing
-# the real IP_PROTOCOL_MAP from neutron_lib.constants tries to pull in
-# too much other stuff.)
-m_neutron_lib.constants.IP_PROTOCOL_MAP = {
-    "esp": 50,
-    "ah": 51,
-    "rsvp": 46,
-}
+# Expose the real protocol map, so that policy.py maps the same protocol names
+# in test as it does in production.
+m_neutron_lib.constants.IP_PROTOCOL_MAP = IP_PROTOCOL_MAP
+
+# Likewise the real exception classes, so that the code under test raises and
+# catches what it really would.  sqlalchemy.exc is not itself mocked, so without
+# this SQLAlchemyError would be a MagicMock attribute, and the "except
+# sa_exc.SQLAlchemyError" in mech_calico would raise TypeError the first time a
+# non-DBError exception reached it.
+m_neutron_lib.exceptions.PortNotFound = PortNotFound
+m_oslo_db.exception.DBError = DBError
+m_sqlalchemy.exc.SQLAlchemyError = SQLAlchemyError
 
 port1 = {
     "binding:vif_type": "tap",
@@ -178,41 +194,26 @@ class EtcdKeyNotFound(Exception):
     pass
 
 
-class DBError(Exception):
-    pass
-
-
-m_oslo_db.exception.DBError = DBError
-
-
-class NoResultFound(Exception):
-    pass
-
-
-m_sqlalchemy.orm.exc.NoResultFound = NoResultFound
-
-
-class PortNotFound(Exception):
-
-    def __init__(self, port_id=None):
-        super(PortNotFound, self).__init__()
-        self.port_id = port_id
-
-
-m_neutron_lib.exceptions.PortNotFound = PortNotFound
-
-
-# Define a stub class, that we will use as the base class for
-# CalicoMechanismDriver.
+# Define a stub class, that we will use as the base class for CalicoMechanismDriver.
+# The real ``neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase``
+# stashes ``vif_details`` on the instance and exposes a ``get_vif_details`` accessor;
+# mirror both so overrides that call up to ``super().get_vif_details(...)`` behave the
+# same in tests as they do in production.
 class DriverBase(object):
     def __init__(self, agent_type, vif_type, vif_details):
-        pass
+        self.vif_details = dict(vif_details)
+
+    def get_vif_details(self, context, agent, segment):
+        return self.vif_details
 
 
 # Define another stub class that mocks out leader election: assume we're always
 # the leader. This is a fake elector: it never votes (get it!?).
 class GrandDukeOfSalzburg(object):
     def __init__(self, *args, **kwargs):
+        pass
+
+    def start(self):
         pass
 
     def master(self):
@@ -230,7 +231,7 @@ m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = Driver
 from networking_calico import datamodel_v3
 from networking_calico import etcdutils
 from networking_calico import etcdv3
-from networking_calico.plugins.calico.context import SGRUpdateContext
+from networking_calico.plugins.calico.context import SGUpdateContext
 from networking_calico.plugins.ml2.drivers.calico import election
 from networking_calico.plugins.ml2.drivers.calico import endpoints
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
@@ -263,6 +264,28 @@ REAL_EVENTLET_SLEEP_TIME = 0.01
 
 # Value used to indicate 'timeout' in poll and sleep processing.
 TIMEOUT_VALUE = object()
+
+
+class _AttrDict(dict):
+    """dict subclass that also supports attribute access.
+
+    Used to mock SQLAlchemy row objects returned from bulk queries: the
+    driver code reads these via both r["col"] (dict style) and r.col
+    (attribute style), so the mock must support both.  An optional set
+    of kwargs can be passed to extend the base dict with additional
+    virtual columns (e.g. qos_policy_id).
+    """
+
+    def __init__(self, base=None, **extra):
+        super(_AttrDict, self).__init__(base or {})
+        for k, v in extra.items():
+            self[k] = v
+
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError:
+            raise AttributeError(key)
 
 
 class Lib(object):
@@ -574,12 +597,12 @@ class Lib(object):
         the one UT process, which means:
 
         - Do the same startup preparations - DB connection etc. - that the API worker
-          process would do.  These are all coded in ``_post_fork_init()``.  This allows
-          tests to later call driver entrypoints like ``update_port_postcommit()``,
-          similarly as production Neutron would.
+          process would do.  These are all coded in ``_post_fork_init()``.
+          This allows tests to later call driver entrypoints like
+          ``update_port_postcommit()``, similarly as production Neutron would.
 
         - Spawn the threads for "other work" (as above) as the RPC worker process would
-          do.  This is achieved by calling ``_post_fork_init()`` with ``voting=True``.
+          do.  This is achieved by calling ``_post_fork_init()``.
 
         - Do the startup resync that the Calico resync process would do.  This is coded
           in ``_do_startup_resync()``.
@@ -589,7 +612,7 @@ class Lib(object):
         """
         cm = FixedUUID(uuid_str) if uuid_str else contextlib.nullcontext()
         with cm:
-            self.driver._post_fork_init(voting=True)
+            self.driver._post_fork_init()
             if mech_calico.cfg.CONF.calico.startup_resync == "always":
                 self.driver._do_startup_resync()
 
@@ -605,7 +628,7 @@ class Lib(object):
         try:
             return self.get_ports(context, filters={"id": [port_id]})[0]
         except IndexError:
-            raise mech_calico.n_exc.PortNotFound(port_id=port_id)
+            raise PortNotFound(port_id=port_id)
 
     def get_ports(self, context, filters=None):
         if filters is None:
@@ -629,6 +652,13 @@ class Lib(object):
             return {"gateway_ip": "10.65.0.1"}
 
     def get_subnets(self, context, filters=None):
+        # NB: unknown subnet IDs are filtered out (return list contains only
+        # IDs present in osdb_subnets).  Don't synthesise a "minimal" subnet
+        # to make this match get_subnet()'s fallback -- the narrow-resync
+        # delete-when-gone path needs an empty list for missing IDs to
+        # trigger the delete branch.  The bulk-prefetch in
+        # WorkloadEndpointSyncer already tolerates absent entries via
+        # ``subnets_by_id.get(...)``.
         if not filters:
             return list(self.osdb_subnets)
         if "id" in filters:
@@ -668,10 +698,8 @@ class Lib(object):
             self.db.get_port.return_value = port
 
         if type == "rule":
-            # Call security_groups_rule_updated with the new or changed ID.
-            self.driver.security_groups_rule_updated(
-                SGRUpdateContext(mock.MagicMock(), [id])
-            )
+            # Call security_groups_updated with the new or changed ID.
+            self.driver.security_groups_updated(SGUpdateContext(mock.MagicMock(), [id]))
 
     def get_port_security_group_bindings(self, context, filters):
         if filters is None:
@@ -686,20 +714,30 @@ class Lib(object):
 
     def db_query(self, model, **kw):
         m = mock.MagicMock()
+        # Set up both filter_by (per-port, legacy) and filter (bulk,
+        # IN-clause) side effects.  The bulk path returns all relevant
+        # rows across all ports/policies; the caller groups them by the
+        # relevant id (port_id, qos_policy_id, ...) and looks up per
+        # item.  Returning more rows than strictly needed is harmless.
         if "IPAllocation" in str(model.name):
             m.filter_by.side_effect = self.db_query_ip_allocation
+            m.filter.side_effect = self.db_query_ip_allocation_bulk
             return m
         if "FloatingIP" in str(model.name):
             m.filter_by.side_effect = self.db_query_floating_ip
+            m.filter.side_effect = self.db_query_floating_ip_bulk
             return m
         if "Network" in str(model.name):
             m.filter_by.side_effect = self.db_query_network
+            m.filter.side_effect = self.db_query_network_bulk
             return m
         if "QosBandwidthLimitRule" in str(model.name):
             m.filter_by.side_effect = self.db_query_qos_policy_bw_rule
+            m.filter.side_effect = self.db_query_qos_policy_bw_rule_bulk
             return m
         if "QosPacketRateLimitRule" in str(model.name):
             m.filter_by.side_effect = self.db_query_qos_policy_pr_rule
+            m.filter.side_effect = self.db_query_qos_policy_pr_rule_bulk
             return m
         raise Exception("db_query model=%r kw=%r" % (model, kw))
 
@@ -736,6 +774,51 @@ class Lib(object):
         if policy:
             return [r for r in policy["rules"] if r["type"] == "packet_rate_limit"]
         return []
+
+    # Bulk-filter (IN-clause) variants used by the resync prefetch.  Each
+    # returns all rows for the corresponding model; the real code then
+    # groups them by the relevant id.  SimpleNamespace is used so that
+    # attribute-style access (row.port_id, row.name, ...) works as it
+    # would on a real SQLAlchemy model row.
+    def db_query_ip_allocation_bulk(self, _expr):
+        return [
+            SimpleNamespace(
+                port_id=p["id"],
+                subnet_id=ip["subnet_id"],
+                ip_address=ip["ip_address"],
+            )
+            for p in self.osdb_ports
+            for ip in p["fixed_ips"]
+        ]
+
+    def db_query_floating_ip_bulk(self, _expr):
+        return [
+            SimpleNamespace(
+                fixed_port_id=fip["fixed_port_id"],
+                fixed_ip_address=fip["fixed_ip_address"],
+                floating_ip_address=fip["floating_ip_address"],
+            )
+            for fip in floating_ports
+        ]
+
+    def db_query_network_bulk(self, _expr):
+        return [SimpleNamespace(id=n["id"], name=n["name"]) for n in self.osdb_networks]
+
+    def db_query_qos_policy_bw_rule_bulk(self, _expr):
+        return [
+            _AttrDict(r, qos_policy_id=policy_id)
+            for policy_id, policy in self.qos_policies.items()
+            for r in policy.get("rules", [])
+            if r.get("type") == "bandwidth_limit"
+        ]
+
+    def db_query_qos_policy_pr_rule_bulk(self, _expr):
+        return [
+            _AttrDict(r, qos_policy_id=policy_id)
+            for policy_id, policy in self.qos_policies.items()
+            for r in policy.get("rules", [])
+            if r.get("type") == "packet_rate_limit"
+        ]
 
 
 class FixedUUID(object):

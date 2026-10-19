@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,8 +30,11 @@ var (
 	// may have failed.
 	validationMessageFunctions = map[string]func(fieldError validator.FieldError) string{
 		"required": func(fieldError validator.FieldError) string {
-			translated := fmt.Sprintf("Missing required field (%s).", fieldError.Field())
-			return translated
+			return fmt.Sprintf("%s is required", fieldName(fieldError))
+		},
+		"oneof": func(fieldError validator.FieldError) string {
+			return fmt.Sprintf("invalid %s %q, expected one of %s",
+				fieldName(fieldError), fieldError.Value(), strings.Join(strings.Fields(fieldError.Param()), ", "))
 		},
 	}
 )
@@ -56,6 +59,12 @@ func init() {
 
 		return name
 	})
+}
+
+// fieldName drops the index a "dive" failure adds, so kind[0] reads as kind.
+func fieldName(fieldError validator.FieldError) string {
+	name, _, _ := strings.Cut(fieldError.Field(), "[")
+	return name
 }
 
 // RegisterValidation wraps the validate.RegisterValidation function so that a messageFunc can also be registered with

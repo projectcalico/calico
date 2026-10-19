@@ -22,7 +22,7 @@ import (
 // size of the IP pool.  If large portions of an IP pool are reserved, Calico IPAM may hunt for a long time
 // to find a non-reserved IP.
 type IPReservationApplyConfiguration struct {
-	v1.TypeMetaApplyConfiguration    `json:",inline"`
+	v1.TypeMetaApplyConfiguration    `json:""`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *IPReservationSpecApplyConfiguration `json:"spec,omitempty"`
 }

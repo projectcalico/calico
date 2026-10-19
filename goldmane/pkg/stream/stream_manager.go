@@ -10,9 +10,9 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/lib/std/chanutil"
 	"github.com/projectcalico/calico/lib/std/time"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 var numStreams = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -51,9 +51,9 @@ func NewStreamManager() *streamManager {
 		streamRequests:   make(chan *streamRequest, 10),
 		backfillRequests: make(chan Stream, 10),
 		maxStreams:       maxStreams,
-		rl: logutils.NewRateLimitedLogger(
-			logutils.OptBurst(1),
-			logutils.OptInterval(15*time.Second),
+		rl: logrusr.NewRateLimitedLogger(
+			logrusr.OptBurst(1),
+			logrusr.OptInterval(15*time.Second),
 		),
 	}
 }
@@ -142,7 +142,7 @@ type streamManager struct {
 	in chan storage.FlowProvider
 
 	// rl is used to rate limit log messages that may happen frequently.
-	rl *logutils.RateLimitedLogger
+	rl *logrusr.RateLimitedLogger
 }
 
 func (m *streamManager) Run(ctx context.Context) {
@@ -230,9 +230,9 @@ func (m *streamManager) register(req *streamRequest) *stream {
 		done:   m.closedStreamsCh,
 		ctx:    ctx,
 		cancel: cancel,
-		rl: logutils.NewRateLimitedLogger(
-			logutils.OptBurst(1),
-			logutils.OptInterval(15*time.Second),
+		rl: logrusr.NewRateLimitedLogger(
+			logrusr.OptBurst(1),
+			logrusr.OptInterval(15*time.Second),
 		),
 	}
 	go stream.run()

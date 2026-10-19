@@ -596,6 +596,7 @@ func (buf *EventSequencer) OnEncapUpdate(encap config.Encapsulation) {
 		"IPIPEnabled":    encap.IPIPEnabled,
 		"VXLANEnabled":   encap.VXLANEnabled,
 		"VXLANEnabledV6": encap.VXLANEnabledV6,
+		"NoEncapNeeded":  encap.NoEncapNeeded,
 	}).Debug("Encapsulation update")
 	buf.pendingEncapUpdate = &encap
 }
@@ -606,6 +607,10 @@ func (buf *EventSequencer) flushEncapUpdate() {
 			IpipEnabled:    buf.pendingEncapUpdate.IPIPEnabled,
 			VxlanEnabled:   buf.pendingEncapUpdate.VXLANEnabled,
 			VxlanEnabledV6: buf.pendingEncapUpdate.VXLANEnabledV6,
+			// Note, "NoEncapEnabled" should have been named "NoEncapNeeded", but we
+			// can't change this now in the proto API, as 3rd parties might be relying
+			// on it.
+			NoEncapEnabled: buf.pendingEncapUpdate.NoEncapNeeded,
 		})
 		buf.pendingEncapUpdate = nil
 	}
@@ -664,13 +669,18 @@ func (buf *EventSequencer) OnIPPoolUpdate(key model.IPPoolKey, pool *model.IPPoo
 
 func (buf *EventSequencer) flushIPPoolUpdates() {
 	for key, pool := range buf.pendingIPPoolUpdates {
+		allowedUses := make([]string, len(pool.AllowedUses))
+		for i, u := range pool.AllowedUses {
+			allowedUses[i] = string(u)
+		}
 		buf.Callback(&proto.IPAMPoolUpdate{
 			Id: cidrToIPPoolID(key),
 			Pool: &proto.IPAMPool{
-				Cidr:       pool.CIDR.String(),
-				Masquerade: pool.Masquerade,
-				IpipMode:   string(pool.IPIPMode),
-				VxlanMode:  string(pool.VXLANMode),
+				Cidr:        pool.CIDR.String(),
+				Masquerade:  pool.Masquerade,
+				IpipMode:    string(pool.IPIPMode),
+				VxlanMode:   string(pool.VXLANMode),
+				AllowedUses: allowedUses,
 			},
 		})
 		buf.sentIPPools.Add(key)

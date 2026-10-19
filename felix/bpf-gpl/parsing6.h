@@ -5,8 +5,17 @@
 #ifndef __CALI_PARSING6_H__
 #define __CALI_PARSING6_H__
 
-#include "bpf.h"
+#include <linux/if_ether.h>
+#include <linux/in.h>
+
+#include "cali_bpf.h"
 #include "counters.h"
+#include "ip_addr.h"
+#include "log.h"
+#include "parsing_types.h"
+#include "reasons.h"
+#include "skb.h"
+#include "types.h"
 
 static CALI_BPF_INLINE int parse_packet_ip_v6(struct cali_tc_ctx *ctx) {
 	__u16 protocol = 0;
@@ -125,13 +134,13 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr_v6_offset(struct cali_tc_ct
 	for (i = 0; i < 8; i++) {
 		struct ipv6_opt_hdr opt;
 
-		CALI_DEBUG("loading extension at offset %d", ipoff + len);
 		if (bpf_load_bytes(ctx, ipoff + len, &opt, sizeof(opt))) {
 			CALI_DEBUG("Too short");
 			goto deny;
 		}
 
-		CALI_DEBUG("ext nexthdr %d hdrlen %d", opt.nexthdr, opt.hdrlen);
+		// We used to log out the offsets and lengths here, but that causes a
+		// combinatorial explosion in the verifier.
 
 		switch(hdr) {
 		case NEXTHDR_FRAGMENT:

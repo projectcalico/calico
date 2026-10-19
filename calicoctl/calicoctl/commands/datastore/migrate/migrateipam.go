@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,13 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
-var ipamHandlePrefixes []string = []string{"ipip-tunnel-addr-", "vxlan-tunnel-addr-", "wireguard-tunnel-addr-"}
+var ipamHandlePrefixes []string = []string{
+	"ipip-tunnel-addr-",
+	"vxlan-tunnel-addr-",
+	"vxlan-v6-tunnel-addr-",
+	"wireguard-tunnel-addr-",
+	"wireguard-v6-tunnel-addr-",
+}
 
 type migrateIPAM struct {
 	client          bapi.Client
@@ -77,10 +83,7 @@ type ipamResults struct {
 }
 
 func NewMigrateIPAM(c client.Interface) *migrateIPAM {
-	type accessor interface {
-		Backend() bapi.Client
-	}
-	bc := c.(accessor).Backend()
+	bc := c.(bapi.BackendAccessor).Backend()
 	return &migrateIPAM{
 		client: bc,
 	}

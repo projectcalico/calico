@@ -1,0 +1,57 @@
+# Operator CI, cross-architecture builds and FV.
+version: condensed-module
+
+defaults:
+  timeout: 1h
+  services:
+    - docker
+
+steps:
+  - name: operator-ci
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    depends: [check-go]
+    requests: {cpu: 5000m, memory: 6Gi}
+    commands: |
+      cd operator
+      make ci
+    epilogue: |
+      # Epilogues don't inherit the commands' `cd` or exports.
+      cd "${CI_HOME}/${CI_GIT_DIR}/operator"
+      artifact push job report --destination test-results || true
+
+  # Pure Go, so cross-compiling is all the per-architecture coverage it needs.
+  - name: operator-build
+    depends: [check-go]
+    requests: {cpu: 5000m, memory: 8Gi}
+    matrix:
+      - name: arm64
+        env: [{name: ARCH, value: arm64}]
+      - name: ppc64le
+        env: [{name: ARCH, value: ppc64le}]
+      - name: s390x
+        env: [{name: ARCH, value: s390x}]
+    commands: |
+      cd operator
+      make build ARCH=$ARCH
+
+  # Every image the FV installs must reach the local registry first; a missing
+  # producer shows up as calico-node stuck in Init.
+  - name: operator-fv
+    env:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    depends: [build-calico-image, build-node-image, build-whisker-image, check-go]
+    timeout: 1h
+    requests: {cpu: 3500m, memory: 7Gi}
+    commands: |
+      # The Makefiles call the kubectl they download by full path; the scripts
+      # underneath call it by name.
+      export PATH="$(pwd)/hack/test/kind:${PATH}"
+      .argoci/scripts/load-cached-images calico node whisker
+      cd operator
+      make fv
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}/operator"
+      artifact push job report --destination test-results || true

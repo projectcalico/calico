@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ package networking
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
@@ -25,7 +24,6 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	v1 "github.com/tigera/operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,6 +40,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithFeature("IPIP"),
 	describe.WithCategory(describe.Networking),
 	describe.RequiresNoEncap(),
+	describe.RequiresBGP(),
 	describe.WithSerial(),
 	"IP-in-IP tests",
 	func() {
@@ -72,14 +71,7 @@ var _ = describe.CalicoDescribe(
 			// We need a minimum of two nodes for BGP peering tests.
 			utils.RequireNodeCount(f, 2)
 
-			// Make sure the cluster is in BGP mode by querying the Installation resource. The tests in this file
-			// all require BGP, and all require Calico be installed by the operator.
-			installation := &v1.Installation{}
-			err = cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, installation)
-			Expect(err).NotTo(HaveOccurred(), "Error querying Installation resource")
-			Expect(installation.Spec.CalicoNetwork).NotTo(BeNil(), "CalicoNetwork is not configured in the Installation")
-			Expect(installation.Spec.CalicoNetwork.BGP).NotTo(BeNil(), "BGP is not enabled in the cluster")
-			Expect(*installation.Spec.CalicoNetwork.BGP).To(Equal(v1.BGPEnabled), "BGP is not enabled in the cluster")
+			utils.RequireBGPEnabled(cli)
 
 			// Create an IP pool for the test.
 			poolName = utils.GenerateRandomName("ipip-pool")
@@ -145,13 +137,13 @@ var _ = describe.CalicoDescribe(
 			// Wait for routes to converge before checking connectivity.
 			ginkgo.By("Verifying that node routes no longer use tunl0")
 			Eventually(func() error {
-				routes := getNodeRoutes(cli, "203.0.113")
+				routes := GetNodeRoutes(cli, "", "203.0.113")
 				if len(routes) == 0 {
 					return fmt.Errorf("no routes found for test IP pool")
 				}
 				for _, r := range routes {
-					if strings.Contains(r, "tunl0") {
-						return fmt.Errorf("route for test IP pool is still using tunl0: %s", r)
+					if r.Dev == "tunl0" {
+						return fmt.Errorf("route for test IP pool is still using tunl0: %s", r.Raw)
 					}
 				}
 				return nil
@@ -183,21 +175,22 @@ var _ = describe.CalicoDescribe(
 			err = cli.Update(context.Background(), pool)
 			Expect(err).NotTo(HaveOccurred(), "Error updating IP pool to set IPIP to Always")
 
-			// Routes should now be using tunl0 again.
-			ginkgo.By("Verifying that node routes are using tunl0")
+			// Routes should now be using tunl0 again, and be owned by whichever
+			// programmer (Felix or BIRD) the cluster is configured to use.
+			ginkgo.By("Verifying that node routes are using tunl0 with the expected protocol owner")
+			expectedProto := expectedIPIPClusterRouteProto(cli)
 			Eventually(func() error {
-				routes := getNodeRoutes(cli, "203.0.113")
+				routes := GetNodeRoutes(cli, "", "203.0.113")
 				if len(routes) == 0 {
 					return fmt.Errorf("no routes found for test IP pool")
 				}
 				for _, r := range routes {
-					if strings.Contains(r, "tunl0") {
-						// Found a route using tunl0, as expected.
+					if r.Dev == "tunl0" && r.Proto == expectedProto {
 						return nil
 					}
 				}
-				return fmt.Errorf("no routes for test IP pool are using tunl0: %v", routes)
-			}, 10*time.Second, 1*time.Second).Should(Succeed(), "Routes for the test IP pool are not using tunl0")
+				return fmt.Errorf("no tunl0 route for test IP pool with proto=%s: %v", expectedProto, routes)
+			}, 10*time.Second, 1*time.Second).Should(Succeed(), "Routes for the test IP pool are not using tunl0 with the expected protocol owner")
 
 			// Verify connectivity still works.
 			checker.ResetExpectations()
@@ -228,25 +221,3 @@ var _ = describe.CalicoDescribe(
 			}
 		})
 	})
-
-// getNodeRoutes execs into a calico/node pod and returns the output of "ip route show",
-// filtered to only include lines that contain the specified match string.
-func getNodeRoutes(cli ctrlclient.Client, match string) []string {
-	// Find a calico/node pod to exec into.
-	pods := corev1.PodList{}
-	err := cli.List(context.Background(), &pods, ctrlclient.MatchingLabels{"k8s-app": "calico-node"})
-	Expect(err).NotTo(HaveOccurred(), "Error querying calico/node pods")
-	Expect(pods.Items).NotTo(BeEmpty(), "No calico/node pods found")
-	p := &pods.Items[0]
-
-	out, err := conncheck.ExecInPod(p, "sh", "-c", "ip route show")
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying routes from pod %s", p.Name)
-
-	matches := []string{}
-	for s := range strings.SplitSeq(out, "\n") {
-		if strings.Contains(s, match) {
-			matches = append(matches, s)
-		}
-	}
-	return matches
-}

@@ -16,28 +16,27 @@ package intdataplane
 
 import (
 	"context"
-	"errors"
 	"net"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var _ = Describe("IPIPManager", func() {
 	var (
 		ipipMgr   *ipipManager
 		rt        *mockRouteTable
-		dataplane *mockTunnelDataplane
+		dataplane *mocknetlink.MockNetlinkDataplane
 	)
 
 	BeforeEach(func() {
@@ -45,14 +44,16 @@ var _ = Describe("IPIPManager", func() {
 			currentRoutes: map[string][]routetable.Target{},
 		}
 
-		la := netlink.NewLinkAttrs()
-		la.Name = "eth0"
-		opRecorder := logutils.NewSummarizer("test")
+		opRecorder := logrusr.NewSummarizer("test")
 
-		dataplane = &mockTunnelDataplane{
-			links:          []netlink.Link{&mockLink{attrs: la}},
-			tunnelLinkName: dataplanedefs.IPIPIfaceName,
-		}
+		dataplane = mocknetlink.New()
+		_, err := dataplane.NewMockNetlink()
+		Expect(err).NotTo(HaveOccurred())
+		dataplane.ImmediateLinkUp = true
+		eth0 := dataplane.AddIface(2, "eth0", true, true)
+		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
+		dataplane.ResetDeltas()
+
 		ipipMgr = newIPIPManagerWithShims(
 			rt, dataplanedefs.IPIPIfaceName,
 			4,
@@ -64,12 +65,36 @@ var _ = Describe("IPIPManager", func() {
 				RulesConfig: rules.Config{
 					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
 				},
-				ProgramClusterRoutes: true,
-				DeviceRouteProtocol:  dataplanedefs.DefaultRouteProto,
+				ProgramIPIPClusterRoutes: true,
+				DeviceRouteProtocol:      dataplanedefs.DefaultRouteProto,
 			},
 			opRecorder,
 			dataplane,
 		)
+	})
+
+	It("should mark the dataplane dirty when the parent device changes", func() {
+		dp := &InternalDataplane{}
+
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
+		Expect(dp.dataplaneNeedsSync).To(BeTrue())
+
+		dp.dataplaneNeedsSync = false
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
+		Expect(dp.dataplaneNeedsSync).To(BeFalse())
+
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "bond0")
+		Expect(dp.dataplaneNeedsSync).To(BeTrue())
+	})
+
+	It("should leave the parent device alone when handed an empty name", func() {
+		dp := &InternalDataplane{}
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
+
+		dp.dataplaneNeedsSync = false
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "")
+		Expect(dp.dataplaneNeedsSync).To(BeFalse())
+		Expect(ipipMgr.routeMgr.parentDevice).To(Equal("eth0"))
 	})
 
 	It("should configure tunnel properly", func() {
@@ -96,40 +121,59 @@ var _ = Describe("IPIPManager", func() {
 		Expect(noEncapDev).NotTo(BeNil())
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(dataplane.tunnelLink).ToNot(BeNil())
-		Expect(dataplane.tunnelLinkAttrs.MTU).To(Equal(1400))
-		Expect(dataplane.tunnelLinkAttrs.Flags).To(Equal(net.FlagUp))
-		Expect(dataplane.addrs).To(HaveLen(1))
-		Expect(dataplane.addrs[0].IP.String()).To(Equal("192.168.0.1"))
+		tunnelLink := dataplane.NameToLink[dataplanedefs.IPIPIfaceName]
+		Expect(tunnelLink).ToNot(BeNil())
+		Expect(tunnelLink.LinkAttrs.MTU).To(Equal(1400))
+		Expect(tunnelLink.LinkAttrs.Flags).To(Equal(net.FlagUp))
+		Expect(tunnelLink.Addrs).To(HaveLen(1))
+		Expect(tunnelLink.Addrs[0].IP.String()).To(Equal("192.168.0.1"))
 
-		dataplane.ResetCalls()
+		dataplane.ResetDeltas()
 		err = ipipMgr.routeMgr.configureTunnelDevice(link, addr, 50, false)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(dataplane.LinkAddCalled).To(BeFalse())
-		Expect(dataplane.LinkSetUpCalled).To(BeFalse())
-		Expect(dataplane.LinkSetMTUCalled).To(BeTrue())
-		Expect(dataplane.tunnelLinkAttrs.MTU).To(Equal(50))
-		Expect(dataplane.AddrUpdated).To(BeFalse())
+		Expect(dataplane.NumLinkAddCalls).To(BeZero())
+		Expect(dataplane.NumLinkSetUpCalls).To(BeZero())
+		Expect(dataplane.NumLinkSetMTUCalls).To(Equal(1))
+		Expect(tunnelLink.LinkAttrs.MTU).To(Equal(50))
+		Expect(dataplane.AddedAddrs.Len()).To(BeZero())
+		Expect(dataplane.DeletedAddrs.Len()).To(BeZero())
 
-		dataplane.ResetCalls()
+		dataplane.ResetDeltas()
 		err = ipipMgr.routeMgr.configureTunnelDevice(link, addr, 1500, false)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(dataplane.LinkAddCalled).To(BeFalse())
-		Expect(dataplane.LinkSetUpCalled).To(BeFalse())
-		Expect(dataplane.tunnelLinkAttrs.MTU).To(Equal(1500))
-		Expect(dataplane.addrs).To(HaveLen(1))
-		Expect(dataplane.addrs[0].IP.String()).To(Equal("192.168.0.1"))
+		Expect(dataplane.NumLinkAddCalls).To(BeZero())
+		Expect(dataplane.NumLinkSetUpCalls).To(BeZero())
+		Expect(tunnelLink.LinkAttrs.MTU).To(Equal(1500))
+		Expect(tunnelLink.Addrs).To(HaveLen(1))
+		Expect(tunnelLink.Addrs[0].IP.String()).To(Equal("192.168.0.1"))
 
-		dataplane.ResetCalls()
+		// Seed a kernel-managed IPv6 link-local address; reconciling to "no address" must remove the
+		// Calico-assigned global address but leave the link-local one in place.
+		llAddr := &netlink.Addr{IPNet: &net.IPNet{IP: net.ParseIP("fe80::1"), Mask: net.CIDRMask(64, 128)}}
+		Expect(dataplane.AddrAdd(link, llAddr)).To(Succeed())
+
+		// Seed an IPv4 link-local (169.254.0.0/16) address too. Unlike the IPv6 link-local it is not
+		// kernel-managed on the tunnel device, so reconciling to "no address" must remove it.
+		v4llAddr := &netlink.Addr{IPNet: &net.IPNet{IP: net.ParseIP("169.254.1.1"), Mask: net.CIDRMask(32, 32)}}
+		Expect(dataplane.AddrAdd(link, v4llAddr)).To(Succeed())
+
+		dataplane.ResetDeltas()
 		err = ipipMgr.routeMgr.configureTunnelDevice(link, "", 1500, false)
-		Expect(err).To(HaveOccurred())
-		Expect(dataplane.tunnelLink).ToNot(BeNil())
-		Expect(dataplane.LinkAddCalled).To(BeFalse())
-		Expect(dataplane.LinkSetUpCalled).To(BeFalse())
-		Expect(dataplane.tunnelLinkAttrs.MTU).To(Equal(1500))
-		Expect(dataplane.tunnelLinkAttrs.Flags).To(Equal(net.FlagUp))
-		Expect(dataplane.addrs).To(HaveLen(1))
-		Expect(dataplane.addrs[0].IP.String()).To(Equal("192.168.0.1"))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dataplane.NameToLink[dataplanedefs.IPIPIfaceName]).ToNot(BeNil())
+		Expect(dataplane.NumLinkAddCalls).To(BeZero())
+		Expect(dataplane.NumLinkSetUpCalls).To(BeZero())
+		Expect(tunnelLink.LinkAttrs.MTU).To(Equal(1500))
+		Expect(tunnelLink.LinkAttrs.Flags).To(Equal(net.FlagUp))
+		// Empty addr means no Calico address is wanted: the existing global address and the IPv4
+		// link-local address are removed (clean break) so they can't linger and influence source-IP
+		// selection, while the kernel-managed IPv6 link-local address is preserved.
+		Expect(dataplane.AddedAddrs.Len()).To(BeZero())
+		Expect(dataplane.DeletedAddrs.Contains("192.168.0.1/32")).To(BeTrue())
+		Expect(dataplane.DeletedAddrs.Contains("169.254.1.1/32")).To(BeTrue())
+		Expect(dataplane.DeletedAddrs.Len()).To(Equal(2))
+		Expect(tunnelLink.Addrs).To(HaveLen(1))
+		Expect(tunnelLink.Addrs[0].IP.String()).To(Equal("fe80::1"))
 	})
 
 	It("successfully adds a route to the noEncap interface", func() {
@@ -306,6 +350,37 @@ var _ = Describe("IPIPManager", func() {
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
 	})
 
+	It("should program no tunnel route for a local workload that borrowed a remote block's IP", func() {
+		By("Sending host updates")
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "172.0.2.2",
+		})
+
+		By("Sending a local workload holding an IP borrowed from node2's block")
+		// The calc graph flags a borrowed IP both ways and sets LocalWorkload.
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:         proto.RouteType_REMOTE_WORKLOAD | proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:    proto.IPPoolType_IPIP,
+			Dst:           "10.0.1.1/32",
+			DstNodeName:   "node1",
+			DstNodeIp:     "172.0.0.2",
+			LocalWorkload: true,
+			Borrowed:      true,
+		})
+
+		err := ipipMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Treating it as remote yields an onlink route via our own address, which
+		// the kernel rejects forever.
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(BeEmpty())
+	})
+
 	It("should only program black hole routes for local endpoints", func() {
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node1",
@@ -415,164 +490,100 @@ var _ = Describe("IPIPManager", func() {
 	})
 })
 
-const (
-	mockedTunnelIndex = 6
-)
+// The IPIP manager always runs, because it owns the tunnel device, but it must not program cluster
+// routes when confd and BIRD are the configured owner of them.
+var _ = Describe("IPIPManager with the IPIP cluster routes left to BIRD", func() {
+	var (
+		ipipMgr   *ipipManager
+		rt        *mockRouteTable
+		dataplane *mocknetlink.MockNetlinkDataplane
+	)
 
-var (
-	errNotFound    = errors.New("not found")
-	errMockFailure = errors.New("mock failure")
-)
-
-type mockTunnelDataplane struct {
-	tunnelLink      netlink.Link
-	tunnelLinkAttrs *netlink.LinkAttrs
-	tunnelLinkName  string
-	addrs           []netlink.Addr
-
-	LinkAddCalled    bool
-	LinkSetMTUCalled bool
-	LinkSetUpCalled  bool
-	AddrUpdated      bool
-
-	NumCalls    int
-	ErrorAtCall int
-
-	ipVersion uint8
-	links     []netlink.Link
-}
-
-func (d *mockTunnelDataplane) ResetCalls() {
-	d.LinkAddCalled = false
-	d.LinkSetMTUCalled = false
-	d.LinkSetUpCalled = false
-	d.AddrUpdated = false
-}
-
-func (d *mockTunnelDataplane) incCallCount() error {
-	d.NumCalls += 1
-	if d.NumCalls == d.ErrorAtCall {
-		logrus.Warn("Simulating an error due to call count")
-		return errMockFailure
-	}
-	return nil
-}
-
-func (d *mockTunnelDataplane) LinkByName(name string) (netlink.Link, error) {
-	logrus.WithField("name", name).Info("LinkByName called")
-
-	if err := d.incCallCount(); err != nil {
-		return nil, err
-	}
-
-	Expect(name).To(Equal(d.tunnelLinkName))
-	if d.tunnelLink == nil {
-		return nil, errNotFound
-	}
-	return d.tunnelLink, nil
-}
-
-func (d *mockTunnelDataplane) LinkSetMTU(link netlink.Link, mtu int) error {
-	d.LinkSetMTUCalled = true
-	if err := d.incCallCount(); err != nil {
-		return err
-	}
-	Expect(link.Attrs().Name).To(Equal(d.tunnelLinkName))
-	d.tunnelLinkAttrs.MTU = mtu
-	return nil
-}
-
-func (d *mockTunnelDataplane) LinkSetUp(link netlink.Link) error {
-	d.LinkSetUpCalled = true
-	if err := d.incCallCount(); err != nil {
-		return err
-	}
-	Expect(link.Attrs().Name).To(Equal(d.tunnelLinkName))
-	d.tunnelLinkAttrs.Flags |= net.FlagUp
-	return nil
-}
-
-func (d *mockTunnelDataplane) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
-	if err := d.incCallCount(); err != nil {
-		return nil, err
-	}
-
-	name := link.Attrs().Name
-	Expect(name).Should(BeElementOf(d.tunnelLinkName, "eth0"))
-	if name == "eth0" {
-		if d.ipVersion == 6 {
-			return []netlink.Addr{{
-				IPNet: &net.IPNet{
-					IP: net.ParseIP("fc00:10:96::2"),
-				}},
-			}, nil
+	BeforeEach(func() {
+		rt = &mockRouteTable{
+			currentRoutes: map[string][]routetable.Target{},
 		}
-		return []netlink.Addr{{
-			IPNet: &net.IPNet{
-				IP: net.IPv4(172, 0, 0, 2),
-			}},
-		}, nil
-	}
-	return d.addrs, nil
-}
 
-func (d *mockTunnelDataplane) AddrAdd(link netlink.Link, addr *netlink.Addr) error {
-	d.AddrUpdated = true
-	if err := d.incCallCount(); err != nil {
-		return err
-	}
-	Expect(d.addrs).NotTo(ContainElement(*addr))
-	d.addrs = append(d.addrs, *addr)
-	return nil
-}
+		dataplane = mocknetlink.New()
+		_, err := dataplane.NewMockNetlink()
+		Expect(err).NotTo(HaveOccurred())
+		dataplane.ImmediateLinkUp = true
+		eth0 := dataplane.AddIface(2, "eth0", true, true)
+		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
+		dataplane.ResetDeltas()
 
-func (d *mockTunnelDataplane) AddrDel(link netlink.Link, addr *netlink.Addr) error {
-	d.AddrUpdated = true
-	if err := d.incCallCount(); err != nil {
-		return err
-	}
-	Expect(d.addrs).To(HaveLen(1))
-	Expect(d.addrs[0].IP.String()).To(Equal(addr.IP.String()))
-	d.addrs = nil
-	return nil
-}
+		ipipMgr = newIPIPManagerWithShims(
+			rt, dataplanedefs.IPIPIfaceName,
+			4,
+			1400,
+			Config{
+				MaxIPSetSize:       1024,
+				Hostname:           "node1",
+				ExternalNodesCidrs: []string{"10.10.10.0/24"},
+				RulesConfig: rules.Config{
+					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
+				},
+				ProgramIPIPClusterRoutes: false,
+				DeviceRouteProtocol:      dataplanedefs.DefaultRouteProto,
+			},
+			logrusr.NewSummarizer("test"),
+			dataplane,
+		)
+	})
 
-func (d *mockTunnelDataplane) LinkList() ([]netlink.Link, error) {
-	return d.links, nil
-}
+	It("should program no routes at all", func() {
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "172.0.2.2",
+		})
+		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
-func (d *mockTunnelDataplane) LinkAdd(l netlink.Link) error {
-	d.LinkAddCalled = true
-	if err := d.incCallCount(); err != nil {
-		return err
-	}
-	Expect(l.Attrs().Name).To(Equal(d.tunnelLinkName))
-	if d.tunnelLink == nil {
-		logrus.Info("Creating tunnel link")
-		l.Attrs().Index = mockedTunnelIndex
-		d.tunnelLinkAttrs = l.Attrs()
-		d.tunnelLink = l
-	}
-	return nil
-}
+		// A remote workload route, which Felix would program via the tunnel if it owned the IPIP
+		// cluster routes...
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.2/26",
+			DstNodeName: "node2",
+			DstNodeIp:   "172.0.2.2",
+		})
+		// ...and a local one, which it would program as a blackhole.
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.100/26",
+			DstNodeName: "node1",
+			DstNodeIp:   "172.0.0.2",
+			SameSubnet:  true,
+		})
 
-func (d *mockTunnelDataplane) LinkDel(_ netlink.Link) error {
-	return nil
-}
+		Expect(ipipMgr.CompleteDeferredWork()).To(Succeed())
 
-type mockLink struct {
-	attrs netlink.LinkAttrs
-	typ   string
-}
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(BeEmpty())
+		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(BeEmpty())
+		Expect(rt.currentRoutes["eth0"]).To(BeEmpty())
+	})
 
-func (l *mockLink) Attrs() *netlink.LinkAttrs {
-	return &l.attrs
-}
+	It("should still configure the tunnel device", func() {
+		// The local host's address still has to reach the route manager, even though it will not
+		// program any routes with it.
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
+		parentDev, err := ipipMgr.routeMgr.detectParentIface()
+		Expect(err).NotTo(HaveOccurred())
 
-func (l *mockLink) Type() string {
-	if l.typ == "" {
-		return "not implemented"
-	}
+		link, addr, err := ipipMgr.device(parentDev)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link).NotTo(BeNil())
+		Expect(ipipMgr.routeMgr.configureTunnelDevice(link, addr, 1400, false)).To(Succeed())
 
-	return l.typ
-}
+		Expect(dataplane.NameToLink).To(HaveKey(dataplanedefs.IPIPIfaceName))
+	})
+})

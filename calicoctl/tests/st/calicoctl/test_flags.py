@@ -35,10 +35,10 @@ class TestCalicoctlCLIFlags(TestBase):
         """
         # no -m flag
         rc = calicoctl("-m")
-        rc.assert_error(text="Invalid option: '--allow-version-mismatch -m'.")
+        rc.assert_error(text="unknown shorthand flag: 'm' in -m")
         # no --unknown-flag flag
         rc = calicoctl("--unknown-flag")
-        rc.assert_error(text="Invalid option: '--allow-version-mismatch --unknown-flag'.")
+        rc.assert_error(text="unknown flag: --unknown-flag")
 
     def test_version_mismatch(self):
         """

@@ -14,16 +14,45 @@ import (
 	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
 )
 
 // BlockAffinityInformer provides access to a shared informer and lister for
-// BlockAffinities.
+// BlockAffinities. Prefer using the type-safe variant (see [TypedBlockAffinityInformer]).
 type BlockAffinityInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.BlockAffinityLister
 }
+
+// TypedBlockAffinityInformer provides access to a shared informer and lister for
+// BlockAffinities, including the type-safe TypedInformer variant.
+// It is a superset of BlockAffinityInformer.
+type TypedBlockAffinityInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() BlockAffinityIndexInformer
+	Lister() projectcalicov3.BlockAffinityLister
+}
+
+// BlockAffinityIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type BlockAffinityIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.BlockAffinity]
+
+// BlockAffinityHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for BlockAffinity.
+type BlockAffinityHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.BlockAffinity]
+
+// BlockAffinityDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for BlockAffinity.
+type BlockAffinityDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.BlockAffinity]
+
+// BlockAffinityFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for BlockAffinity.
+type BlockAffinityFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.BlockAffinity]
+
+// BlockAffinityIndexers is a specialization of [cache.TypedIndexers] for BlockAffinity.
+type BlockAffinityIndexers = cache.TypedIndexers[*apisprojectcalicov3.BlockAffinity]
+
+// DeletedBlockAffinity is a specialization of [cache.DeletedObject] for BlockAffinity.
+type DeletedBlockAffinity = cache.DeletedObject[*apisprojectcalicov3.BlockAffinity]
 
 type blockAffinityInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -33,55 +62,132 @@ type blockAffinityInformer struct {
 // NewBlockAffinityInformer constructs a new informer for BlockAffinity type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedBlockAffinityInformer]).
 func NewBlockAffinityInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredBlockAffinityInformer(client, resyncPeriod, indexers, nil)
+	return NewBlockAffinityInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedBlockAffinityInformer constructs a new informer for BlockAffinity type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedBlockAffinityInformer(client clientset.Interface, resyncPeriod time.Duration, indexers BlockAffinityIndexers) BlockAffinityIndexInformer {
+	return NewTypedBlockAffinityInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredBlockAffinityInformer constructs a new informer for BlockAffinity type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredBlockAffinityInformer]).
 func NewFilteredBlockAffinityInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return cache.NewSharedIndexInformer(
+	return NewTypedBlockAffinityInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredBlockAffinityInformer constructs a new informer for BlockAffinity type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredBlockAffinityInformer(client clientset.Interface, resyncPeriod time.Duration, indexers BlockAffinityIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) BlockAffinityIndexInformer {
+	return NewTypedBlockAffinityInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
+}
+
+// NewBlockAffinityInformerWithOptions constructs a new informer for BlockAffinity type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedBlockAffinityInformerWithOptions]).
+func NewBlockAffinityInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedBlockAffinityInformerWithOptions(client, options)
+}
+
+// NewTypedBlockAffinityInformerWithOptions constructs a new informer for BlockAffinity type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedBlockAffinityInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) BlockAffinityIndexInformer {
+	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "blockaffinities"}
+	identifier := options.InformerName.WithResource(gvr)
+	tweakListOptions := options.TweakListOptions
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.BlockAffinity](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
-			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
+			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().BlockAffinities().List(context.Background(), options)
+				return client.ProjectcalicoV3().BlockAffinities().List(context.Background(), opts)
 			},
-			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
+			WatchFunc: func(opts v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().BlockAffinities().Watch(context.Background(), options)
+				return client.ProjectcalicoV3().BlockAffinities().Watch(context.Background(), opts)
 			},
-			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+			ListWithContextFunc: func(ctx context.Context, opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().BlockAffinities().List(ctx, options)
+				return client.ProjectcalicoV3().BlockAffinities().List(ctx, opts)
 			},
-			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+			WatchFuncWithContext: func(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().BlockAffinities().Watch(ctx, options)
+				return client.ProjectcalicoV3().BlockAffinities().Watch(ctx, opts)
 			},
 		}, client),
 		&apisprojectcalicov3.BlockAffinity{},
-		resyncPeriod,
-		indexers,
-	)
+		cache.SharedIndexInformerOptions{
+			ResyncPeriod: options.ResyncPeriod,
+			Indexers:     options.Indexers,
+			Identifier:   identifier,
+		},
+	))
 }
 
 func (f *blockAffinityInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredBlockAffinityInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	return NewTypedBlockAffinityInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *blockAffinityInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.BlockAffinity{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *blockAffinityInformer) TypedInformer() BlockAffinityIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.BlockAffinity](f.factory.InformerFor(&apisprojectcalicov3.BlockAffinity{}, f.defaultInformer))
 }
 
 func (f *blockAffinityInformer) Lister() projectcalicov3.BlockAffinityLister {
 	return projectcalicov3.NewBlockAffinityLister(f.Informer().GetIndexer())
+}
+
+// ToTypedBlockAffinityInformer converts an untyped informer into a TypedBlockAffinityInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *BlockAffinity. If that is not the case, calling type-safe methods of the returned
+// TypedBlockAffinityInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedBlockAffinityInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedBlockAffinityInformer(informer BlockAffinityInformer) TypedBlockAffinityInformer {
+	if informer, ok := informer.(TypedBlockAffinityInformer); ok {
+		return informer
+	}
+	return &blockAffinityTypedInformerAdapter{informer}
+}
+
+type blockAffinityTypedInformerAdapter struct {
+	BlockAffinityInformer
+}
+
+func (a *blockAffinityTypedInformerAdapter) TypedInformer() BlockAffinityIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.BlockAffinity](a.Informer())
+}
+
+// ToBlockAffinityIndexInformer converts an untyped informer into a BlockAffinityIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *BlockAffinity. If that is not the case, calling type-safe methods of the returned
+// BlockAffinityIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a BlockAffinityIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToBlockAffinityIndexInformer(informer cache.SharedIndexInformer) BlockAffinityIndexInformer {
+	if informer, ok := informer.(BlockAffinityIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.BlockAffinity](informer)
 }

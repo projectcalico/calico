@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,14 +22,12 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
-	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/aws/smithy-go"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	clock "k8s.io/utils/clock/testing"
 
+	"github.com/projectcalico/calico/felix/aws/ec2query"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
@@ -66,28 +64,27 @@ func (c *mockClient) GetRegion(
 	}, nil
 }
 
-func (c *mockClient) ModifyNetworkInterfaceAttribute(ctx context.Context, params *ec2.ModifyNetworkInterfaceAttributeInput, optFns ...func(*ec2.Options)) (*ec2.ModifyNetworkInterfaceAttributeOutput, error) {
+func (c *mockClient) ModifyNetworkInterfaceAttribute(ctx context.Context, params *ec2query.ModifyNetworkInterfaceAttributeInput) (*ec2query.ModifyNetworkInterfaceAttributeOutput, error) {
 	c.UsageCounter++
 
-	return nil, nil
+	return &ec2query.ModifyNetworkInterfaceAttributeOutput{}, nil
 }
 
-func (c *mockClient) DescribeInstances(ctx context.Context, params *ec2.DescribeInstancesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error) {
+func (c *mockClient) DescribeInstances(ctx context.Context, params *ec2query.DescribeInstancesInput) (*ec2query.DescribeInstancesOutput, error) {
 	c.UsageCounter++
 
-	deviceIndexZero := int32(0)
+	deviceIndex := int32(0)
 	eniId := testEniId
-
-	return &ec2.DescribeInstancesOutput{
-		Reservations: []types.Reservation{
+	return &ec2query.DescribeInstancesOutput{
+		Reservations: []ec2query.Reservation{
 			{
-				Instances: []types.Instance{
+				Instances: []ec2query.Instance{
 					{
-						NetworkInterfaces: []types.InstanceNetworkInterface{
+						NetworkInterfaces: []ec2query.InstanceNetworkInterface{
 							{
 								NetworkInterfaceId: &eniId,
-								Attachment: &types.InstanceNetworkInterfaceAttachment{
-									DeviceIndex: &deviceIndexZero,
+								Attachment: &ec2query.InstanceNetworkInterfaceAttachment{
+									DeviceIndex: &deviceIndex,
 								},
 							},
 						},
@@ -141,10 +138,9 @@ func (updater *mockSrcDstCheckUpdater) Update(option apiv3.AWSSrcDstCheckOption)
 }
 
 func newAPIError(code, msg string) error {
-	err := &smithy.GenericAPIError{
+	err := &ec2query.APIError{
 		Code:    code,
 		Message: msg,
-		Fault:   0,
 	}
 	return fmt.Errorf("wrapped err: %w", err)
 }

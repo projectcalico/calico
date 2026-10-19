@@ -98,6 +98,24 @@ BPF functional tests live alongside the rest of Felix FV in
   network-policy semantics) and are largely the same regardless
   of dataplane. The prefix marks them as runnable under BPF mode.
 
+### The two name markers and how CI selects on them
+
+CI selects the BPF runs by test *name*, using two markers:
+
+- `_BPF-SAFE_` — "run this test in BPF mode". Required on shared
+  FV tests; the BPF jobs' Ginkgo focus is built from it.
+- `_BPF_` — "this test targets the BPF dataplane". The reduced BPF
+  jobs focus on it to run a slice of the BPF tests (e.g.
+  `FV_FOCUS='_BPF_.*ct=true'`), so a BPF-specific test wants it.
+
+`_BPF_` **implies** `_BPF-SAFE_`: the full BPF job's focus is
+`BPF-SAFE|_BPF_` (`felix/.semaphore/fv-prologue`).
+
+Ginkgo matches the focus against a spec's full text — every
+enclosing `Describe`/`Context` heading concatenated — so a marker
+on any ancestor container covers the specs beneath it. Convention
+for a BPF-specific test is to carry both, `_BPF_ _BPF-SAFE_`.
+
 A test in `fv/bpf_*_test.go` carries a **matrix prefix**
 identifying the dataplane parameter combination it represents:
 
@@ -118,6 +136,16 @@ The matrix expands one test specification across many parameter
 combinations and lets `GINKGO_FOCUS` regex-match a slice of the
 matrix when triaging a failure (e.g.
 `GINKGO_FOCUS="ipv4 udp, ct=true, log=debug, tunnel=none, dsr=false.*MyTest"`).
+
+### Infrastructure quirk: CTLB attaches globally
+
+The FV infrastructure attaches the cgroup connect-time program to
+every topology container, including the external client created by
+`infrastructure.RunExtClient`. Under `ctlbEnabled=true` the external
+client's `connect()` gets NodePort-resolved client-side, bypassing
+the receiving node's BPF nodeport-NAT-then-encap path. A test that
+needs an external client to exercise that path must restrict to
+`!ctlbEnabled` (see `fv/bpf_dual_stack_test.go` for an example).
 
 ### Review notes for this section
 
@@ -151,19 +179,11 @@ matrix when triaging a failure (e.g.
 
 ---
 
-## Keep this doc in sync with the code
+## Cross-cutting rules
 
-A change to how the BPF dataplane is tested in the area this file
-covers must update the relevant section in the same PR — new
-harness pattern, new matrix axis, new UT category, new
-verifier-time gate. Exemptions: (a) bug fix restoring documented
-behaviour, (b) mechanical refactor with no observable change,
-(c) comment / log-message edits, (d) dependency bumps. If in
-doubt, update.
-
-Cross-cutting rules that apply to **every** BPF change (map
-versioning, mark discipline, sub-program registration, kernel-
-version sensitivity) live in
+Rules that apply to **every** BPF change (map versioning, mark
+discipline, sub-program registration, kernel-version sensitivity)
+live in
 [`bpf-overview.md` → Cross-cutting review notes](./bpf-overview.md).
 Felix-wide test discipline lives in
 [`.claude/CLAUDE.md` → Tests required for code changes](../../.claude/CLAUDE.md).

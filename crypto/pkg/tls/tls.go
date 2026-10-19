@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,21 +96,20 @@ func ParseTLSCiphers(ciphers string) ([]uint16, error) {
 	return result, nil
 }
 
-// ParseTLSVersion parses TLS version string and returns the corresponding tls version constant
-// Accepts: "1.2", "1.3", or empty string (defaults to "1.2")
+// ParseTLSVersion parses TLS version string and returns the corresponding tls version constant.
+// Accepts numeric and Kubernetes TLS version names, or an empty string (defaults to TLS 1.2).
 func ParseTLSVersion(version string) (uint16, error) {
 	switch version {
-	case "", "1.2":
+	case "", "1.2", "VersionTLS12":
 		return tls.VersionTLS12, nil
-	case "1.3":
+	case "1.3", "VersionTLS13":
 		return tls.VersionTLS13, nil
 	default:
-		return 0, fmt.Errorf("unsupported TLS version: %s (supported versions: 1.2, 1.3)", version)
+		return 0, fmt.Errorf("unsupported TLS version: %s (supported versions: VersionTLS12, VersionTLS13)", version)
 	}
 }
 
-// NewTLSConfig returns a tls.Config with the recommended default settings for Calico components. Based on build flags,
-// boringCrypto may be used and fips strict mode may be enforced, which can override the parameters defined in this func.
+// NewTLSConfig returns a tls.Config with the recommended default settings for Calico components.
 func NewTLSConfig() (*tls.Config, error) {
 	env := os.Getenv("TLS_CIPHER_SUITES")
 	ciphers, err := ParseTLSCiphers(env)
@@ -162,15 +161,15 @@ func NewMutualTLSConfig(cert, key, ca string) (*tls.Config, error) {
 
 func StringToTLSClientAuthType(clientAuthType string) (tls.ClientAuthType, error) {
 	switch clientAuthType {
-	case string(apiv3.RequireAndVerifyClientCert), "":
+	case string(apiv3.RequireAndVerifyClientCert):
 		return tls.RequireAndVerifyClientCert, nil
 	case string(apiv3.RequireAnyClientCert):
 		return tls.RequireAnyClientCert, nil
 	case string(apiv3.VerifyClientCertIfGiven):
 		return tls.VerifyClientCertIfGiven, nil
-	case string(apiv3.NoClientCert):
+	case string(apiv3.NoClientCert), "":
 		return tls.NoClientCert, nil
 	default:
-		return tls.RequireAndVerifyClientCert, fmt.Errorf("invalid client authentication type: %s. Defaulting to RequireAndVerifyClientCert", clientAuthType)
+		return 0, fmt.Errorf("invalid client authentication type: %s", clientAuthType)
 	}
 }

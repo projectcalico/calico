@@ -6,8 +6,14 @@ metadata:
   name: default
 spec:
   variant: Calico
+  # win-fv local-build imports component images onto the nodes; IfNotPresent
+  # keeps kubelet from trying to pull them. Benign for the hashrelease path.
+  imagePullPolicy: IfNotPresent
   cni:
     type: Calico
+    # Skip the cni-plugins init container; the Windows FV doesn't need the
+    # upstream plugins and this avoids building/importing their image.
+    installMode: CalicoOnly
   calicoNetwork:
     bgp: Disabled
     linuxDataplane: {{$.Env.ASO_LINUX_DATAPLANE}}

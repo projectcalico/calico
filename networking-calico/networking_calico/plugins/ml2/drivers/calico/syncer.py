@@ -19,6 +19,12 @@ from oslo_log import log
 
 LOG = log.getLogger(__name__)
 
+# Retry budget for attempts to sync dynamic Neutron resource updates with etcd; for
+# example see the get-then-CAS-put loop in ``sync_subnet``.  Sized to tolerate moderate
+# per-key contention while bounding the worst case.  Drift beyond this is left for the
+# next resync (whether startup or on-demand) to repair.
+MAX_CAS_ATTEMPTS = 5
+
 
 class ResourceGone(Exception):
     pass
@@ -86,10 +92,19 @@ class ResourceSyncer(object):
     when the syncer read the incorrect data.
     """
 
-    def __init__(self, db, txn_from_context, resource_kind):
+    def __init__(self, db, resource_kind, inject_per_item_delay_ms=0):
         self.db = db
-        self.txn_from_context = txn_from_context
         self.resource_kind = resource_kind
+        # Test-only: when positive, sleep this many ms after each
+        # iteration of the compare loop below.  Used by the resync-
+        # concurrency test (CORE-12037).  Always 0 in production.  Clamp
+        # to 0 defensively: time.sleep() raises ValueError on a negative
+        # argument, which would silently turn a misconfigured test knob
+        # into a resync failure.  The two call sites (mech_calico's
+        # IntOpt and the calico-resync --inject-per-item-delay-ms flag)
+        # both have their own non-negativity checks, but a single guard
+        # here covers any future caller too.
+        self._inject_per_item_delay_secs = max(0, inject_per_item_delay_ms) / 1000.0
 
     def resync(self, context, scope):
         """Reconcile this resource type's etcd state with Neutron.
@@ -121,6 +136,12 @@ class ResourceSyncer(object):
         neutron_items, correct, updated, deleted, created).  The runner exposes these in
         the JSON ResyncResult; the same numbers are also logged in a single summary line
         on completion.
+
+        For each resource that needs fixing -- create, update or delete -- a single
+        per-item INFO line is emitted naming the resource kind and name.  Resources
+        whose etcd data already matches Neutron are not enumerated at INFO; they are
+        only logged at DEBUG.  This is the per-item observability surface for
+        CORE-12922 / PMREQ-839 User Story #2.
         """
         resync_start = time.monotonic()
 
@@ -141,8 +162,14 @@ class ResourceSyncer(object):
             etcd_map = self.get_from_etcd(scope)
             t_etcd_read = time.monotonic()
 
-            with self.txn_from_context(context, "get-all-" + self.resource_kind):
-                neutron_map = self.get_from_neutron(context, scope)
+            # ``get_from_neutron`` calls ``self.db.get_*`` methods (or, in the endpoint
+            # syncer's case, an internal helper that wraps its own raw queries in a
+            # CONTEXT_READER), all of which are ``@retry_if_session_inactive``-decorated
+            # and manage their own transactions.  We deliberately do NOT wrap them in an
+            # outer writer/reader: the Neutron devref calls that pattern an anti-pattern
+            # because the inner retry "would be always called from inside an active
+            # transaction making it useless".
+            neutron_map = self.get_from_neutron(context, scope)
             t_neutron_read = time.monotonic()
 
             # Resource-specific post-processing of etcd_map now that we have neutron_map
@@ -174,6 +201,12 @@ class ResourceSyncer(object):
         def _iter_order(n):
             return (0 if n.startswith("lm ") else 1, n)
 
+        # Compare-loop marker.  The resync-concurrency test (CORE-12037) waits
+        # for this line in the resync log before firing its in-resync burst, so
+        # the burst lands inside the test-injected per-item delay window rather
+        # than during the etcd read or the neutron read.
+        LOG.info("Resync for %s: starting compare loop", self.resource_kind)
+
         for name in sorted(set(etcd_map) | set(neutron_map), key=_iter_order):
             in_etcd = name in etcd_map
             in_neutron = name in neutron_map
@@ -184,16 +217,29 @@ class ResourceSyncer(object):
                 # is at least as fresh as our etcd read; the CAS on mod_revision
                 # protects against any etcd change since.
                 data, mod_revision = etcd_map[name]
-                with self.txn_from_context(context, "update-" + self.resource_kind):
-                    write_data = self.neutron_to_etcd_write_data(
-                        name, neutron_map[name], context, reread=False
-                    )
+                write_data = self.neutron_to_etcd_write_data(
+                    name, neutron_map[name], context, reread=False
+                )
                 if self.etcd_write_data_matches_existing(write_data, data):
+                    # CORE-12922: items already correct are not enumerated
+                    # at INFO -- only ones that need fixing (the create /
+                    # update / delete branches below) get a per-item line.
                     LOG.debug("etcd data good for %s %s", self.resource_kind, name)
                     n_correct += 1
                 else:
-                    LOG.warning(
-                        "etcd rewrite needed for %s %s", self.resource_kind, name
+                    # Include the existing etcd data and the new Neutron-derived
+                    # data so the operator can see what changed.  The shape of
+                    # each varies by resource kind -- for endpoints it's a
+                    # (spec, labels, annotations) tuple, for the others just the
+                    # spec dict -- but in every case both halves are comparable
+                    # because they're what etcd_write_data_matches_existing
+                    # just declared unequal.
+                    LOG.info(
+                        "Resync updating %s %s in etcd: old=%s, new=%s",
+                        self.resource_kind,
+                        name,
+                        data,
+                        write_data,
                     )
                     if self.update_in_etcd(name, write_data, mod_revision):
                         n_updated += 1
@@ -207,31 +253,39 @@ class ResourceSyncer(object):
             elif in_neutron:
                 # In Neutron but not in etcd: create.  reread=True so we don't race with
                 # a concurrent dynamic delete.
-                with self.txn_from_context(context, "create-" + self.resource_kind):
-                    try:
-                        write_data = self.neutron_to_etcd_write_data(
-                            name, neutron_map[name], context, reread=True
-                        )
-                        if self.create_in_etcd(name, write_data):
-                            n_created += 1
-                        else:
-                            LOG.warning(
-                                "failed etcd write for %s %s; presume"
-                                " data created by another writer",
-                                self.resource_kind,
-                                name,
-                            )
-                    except ResourceGone:
+                try:
+                    write_data = self.neutron_to_etcd_write_data(
+                        name, neutron_map[name], context, reread=True
+                    )
+                    LOG.info(
+                        "Resync creating %s %s in etcd",
+                        self.resource_kind,
+                        name,
+                    )
+                    if self.create_in_etcd(name, write_data):
+                        n_created += 1
+                    else:
                         LOG.warning(
-                            "Neutron resource gone for %s %s; presume"
-                            " deleted by another writer",
+                            "failed etcd write for %s %s; presume"
+                            " data created by another writer",
                             self.resource_kind,
                             name,
                         )
+                except ResourceGone:
+                    LOG.warning(
+                        "Neutron resource gone for %s %s; presume"
+                        " deleted by another writer",
+                        self.resource_kind,
+                        name,
+                    )
             elif in_etcd:
                 # In etcd but not in Neutron: delete.
                 _, mod_revision = etcd_map[name]
-                LOG.warning("etcd deletion needed for %s %s", self.resource_kind, name)
+                LOG.info(
+                    "Resync deleting %s %s from etcd",
+                    self.resource_kind,
+                    name,
+                )
                 if self.delete_from_etcd(name, mod_revision):
                     n_deleted += 1
                 else:
@@ -242,6 +296,8 @@ class ResourceSyncer(object):
                         name,
                     )
             # else: name was in scope but neither side has it -- nothing to do.
+            if self._inject_per_item_delay_secs:
+                time.sleep(self._inject_per_item_delay_secs)
         t_compare = time.monotonic()
 
         # Delete any legacy etcd data for this kind of resource.  Only makes sense in

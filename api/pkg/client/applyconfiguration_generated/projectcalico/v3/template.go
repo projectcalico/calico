@@ -18,6 +18,8 @@ type TemplateApplyConfiguration struct {
 	InterfacePattern *string `json:"interfacePattern,omitempty"`
 	// Labels adds the specified labels to the generated AutoHostEndpoint, labels from node with the same name will be overwritten by values from the template label
 	Labels map[string]string `json:"labels,omitempty"`
+	// Annotations adds the specified annotations to the generated AutoHostEndpoint.
+	Annotations map[string]string `json:"annotations,omitempty"`
 	// NodeSelector allows the AutoHostEndpoint to be created only for specific nodes
 	NodeSelector *string `json:"nodeSelector,omitempty"`
 }
@@ -64,6 +66,20 @@ func (b *TemplateApplyConfiguration) WithLabels(entries map[string]string) *Temp
 	}
 	for k, v := range entries {
 		b.Labels[k] = v
+	}
+	return b
+}
+
+// WithAnnotations puts the entries into the Annotations field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, the entries provided by each call will be put on the Annotations field,
+// overwriting an existing map entries in Annotations field with the same key.
+func (b *TemplateApplyConfiguration) WithAnnotations(entries map[string]string) *TemplateApplyConfiguration {
+	if b.Annotations == nil && len(entries) > 0 {
+		b.Annotations = make(map[string]string, len(entries))
+	}
+	for k, v := range entries {
+		b.Annotations[k] = v
 	}
 	return b
 }

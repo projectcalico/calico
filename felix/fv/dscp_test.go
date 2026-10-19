@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -131,19 +132,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 				felix.Exec("calico-bpf", "counters", "dump")
 			}
 		}
-
-		hostw.Stop()
-		ep1_1.Stop()
-		ep2_1.Stop()
-		ep1_2.Stop()
-		ep2_2.Stop()
-		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-		extWorkload.Stop()
-		extClient.Stop()
 	})
 
 	It("should have expected restriction on the rule jumping to DSCP chain static rules", func() {
@@ -156,11 +144,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			if ipVersion == 6 {
 				binary = "ip6tables-save"
 			}
-			allPoolsIPSet := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
-			thisHostIPSet := fmt.Sprintf("cali%v0this-host", ipVersion)
-			dscpIPSet := fmt.Sprintf("cali%v0dscp-src-net", ipVersion)
+			networkPoolsIPSet := utils.IPSetName(rules.IPSetIDNetworkPools, ipVersion)
+			thisHostIPSet := utils.IPSetName(rules.IPSetIDThisHostIPs, ipVersion)
+			dscpIPSet := utils.IPSetName(rules.IPSetIDDSCPEndpoints, ipVersion)
 			tmpl := "-m set --match-set %v src -m set ! --match-set %v dst -m set ! --match-set %v dst -j cali-egress-dscp"
-			expectedRule := fmt.Sprintf(tmpl, dscpIPSet, allPoolsIPSet, thisHostIPSet)
+			expectedRule := fmt.Sprintf(tmpl, dscpIPSet, networkPoolsIPSet, thisHostIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput(binary, "-t", "mangle")
 				return output
@@ -174,11 +162,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			if ipVersion == 6 {
 				ipFamily = "ip6"
 			}
-			allPoolsIPSet := fmt.Sprintf("@cali%v0all-ipam-pools", ipVersion)
-			thisHostIPSet := fmt.Sprintf("@cali%v0this-host", ipVersion)
-			dscpIPSet := fmt.Sprintf("@cali%v0dscp-src-net", ipVersion)
+			networkPoolsIPSet := utils.NFTSetName(rules.IPSetIDNetworkPools, ipVersion)
+			thisHostIPSet := utils.NFTSetName(rules.IPSetIDThisHostIPs, ipVersion)
+			dscpIPSet := utils.NFTSetName(rules.IPSetIDDSCPEndpoints, ipVersion)
 			tmpl := "%v saddr %v %v daddr != %v %v daddr != %v .* jump mangle-cali-egress-dscp"
-			pattern := fmt.Sprintf(tmpl, ipFamily, dscpIPSet, ipFamily, allPoolsIPSet, ipFamily, thisHostIPSet)
+			pattern := fmt.Sprintf(tmpl, ipFamily, dscpIPSet, ipFamily, networkPoolsIPSet, ipFamily, thisHostIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput("nft", "list", "chain", ipFamily, "calico", "mangle-cali-POSTROUTING")
 				return output
@@ -207,15 +195,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		extClient.Exec("ip", "route", "add", ep2_1.IP, "via", tc.Felixes[0].IP)
 
 		// Configure external client to only accept ipv4 packets with 0x14 DSCP value.
-		extClient.Exec("iptables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x14", "-j", "DROP")
+		extClient.Exec(v4IPTables(), "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x14", "-j", "DROP")
 
 		extClient.Exec("ip", "-6", "route", "add", ep1_2.IP6, "via", tc.Felixes[1].IPv6)
 		extClient.Exec("ip", "-6", "route", "add", ep2_2.IP6, "via", tc.Felixes[1].IPv6)
 
 		// Configure external client to only accept ipv6 packets with 0x28 DSCP value. ICMPv6 needs to be allowed
 		// regardless for neighbor discovery.
-		extClient.Exec("ip6tables", "-A", "INPUT", "-p", "ipv6-icmp", "-j", "ACCEPT")
-		extClient.Exec("ip6tables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x28", "-j", "DROP")
+		extClient.Exec(v6IPTables(), "-A", "INPUT", "-p", "ipv6-icmp", "-j", "ACCEPT")
+		extClient.Exec(v6IPTables(), "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x28", "-j", "DROP")
 
 		if !BPFMode() {
 			verifyQoSPolicies(tc.Felixes[0], nil, nil)
@@ -465,15 +453,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		extClient.Exec("ip", "route", "add", ep2_1.IP, "via", tc.Felixes[0].IP)
 
 		// Configure external client to only accept ipv4 packets with AF11(0x0A) DSCP value.
-		extClient.Exec("iptables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x0a", "-j", "DROP")
+		extClient.Exec(v4IPTables(), "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x0a", "-j", "DROP")
 
 		extClient.Exec("ip", "-6", "route", "add", ep1_2.IP6, "via", tc.Felixes[1].IPv6)
 		extClient.Exec("ip", "-6", "route", "add", ep2_2.IP6, "via", tc.Felixes[1].IPv6)
 
 		// Configure external client to only accept ipv6 packets with EF(0x2E) DSCP value. ICMPv6 needs to be allowed
 		// regardless for neighbor discovery.
-		extClient.Exec("ip6tables", "-A", "INPUT", "-p", "ipv6-icmp", "-j", "ACCEPT")
-		extClient.Exec("ip6tables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x2e", "-j", "DROP")
+		extClient.Exec(v6IPTables(), "-A", "INPUT", "-p", "ipv6-icmp", "-j", "ACCEPT")
+		extClient.Exec(v6IPTables(), "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x2e", "-j", "DROP")
 
 		if !BPFMode() {
 			verifyQoSPolicies(tc.Felixes[0], nil, nil)
@@ -554,4 +542,20 @@ func verifyQoSPoliciesWithIPFamily(felix *infrastructure.Felix, ipv6 bool, value
 		Should(BeTrue())
 	ConsistentlyWithOffset(2, assertRules, 3*time.Second, 100*time.Millisecond).
 		Should(BeTrue())
+}
+
+// v4IPTables returns the iptables binary for the external client, which has no /lib/modules and so
+// can only use the backend whose kernel modules Felix has already loaded on the host.
+func v4IPTables() string {
+	if NFTMode() {
+		return "iptables-nft"
+	}
+	return "iptables-legacy"
+}
+
+func v6IPTables() string {
+	if NFTMode() {
+		return "ip6tables-nft"
+	}
+	return "ip6tables-legacy"
 }

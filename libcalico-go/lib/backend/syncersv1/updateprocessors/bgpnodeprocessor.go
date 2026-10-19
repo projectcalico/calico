@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ func (c *bgpNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, er
 
 	// Extract the separate bits of BGP config - these are stored as separate keys in the
 	// v1 model.  For a delete these will all be nil.
-	var asNum, ipv4, netv4, ipv6, netv6, rrClusterID any
+	var asNum, ipv4, netv4, ipv6, netv6, rrClusterID, wgAddrV4, wgAddrV6 any
 	var node *internalapi.Node
 	var ok bool
 	if kvp.Value != nil {
@@ -68,6 +68,13 @@ func (c *bgpNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, er
 		ipv4 = ""
 		ipv6 = ""
 		rrClusterID = ""
+
+		// Emit the WireGuard keys as blank strings rather than leaving them nil when
+		// unset. confd treats a nil-valued node key as a signal that the node's config
+		// is being removed and drops the node from its BGP IP cache, which breaks
+		// unrelated per-peer logic (e.g. passive mode). Blank keeps the node present.
+		wgAddrV4 = ""
+		wgAddrV6 = ""
 		if bgp := node.Spec.BGP; bgp != nil {
 			if len(bgp.IPv4Address) != 0 {
 				ip, cidr, perr := net.ParseCIDROrIP(bgp.IPv4Address)
@@ -91,6 +98,15 @@ func (c *bgpNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, er
 				asNum = bgp.ASNumber.String()
 			}
 			rrClusterID = bgp.RouteReflectorClusterID
+		}
+
+		if wg := node.Spec.Wireguard; wg != nil {
+			if wg.InterfaceIPv4Address != "" {
+				wgAddrV4 = wg.InterfaceIPv4Address
+			}
+			if wg.InterfaceIPv6Address != "" {
+				wgAddrV6 = wg.InterfaceIPv6Address
+			}
 		}
 	}
 
@@ -141,6 +157,22 @@ func (c *bgpNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, er
 				Name:     "rr_cluster_id",
 			},
 			Value:    rrClusterID,
+			Revision: kvp.Revision,
+		},
+		{
+			Key: model.NodeBGPConfigKey{
+				Nodename: name,
+				Name:     "wireguard_addr_v4",
+			},
+			Value:    wgAddrV4,
+			Revision: kvp.Revision,
+		},
+		{
+			Key: model.NodeBGPConfigKey{
+				Nodename: name,
+				Name:     "wireguard_addr_v6",
+			},
+			Value:    wgAddrV6,
 			Revision: kvp.Revision,
 		},
 	}

@@ -20,7 +20,7 @@ Check `felix/.semaphore/fv-prologue` to find the image family for the failing CI
 |---|---|---|
 | `22.04` | `ubuntu-2204-lts` | 22.04 Jammy |
 | `24.04` | `ubuntu-2404-lts-amd64` | 24.04 Noble |
-| `25.10` | `ubuntu-2510-amd64` | 25.10 Plucky |
+| `26.04` | `ubuntu-2604-lts-amd64` | 26.04 |
 
 For example, the `bpf-24.04-ipt-with-ut` test group uses `ubuntu-2404-lts-amd64`.
 

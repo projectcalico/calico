@@ -37,6 +37,7 @@ import (
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/hostendpoints"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/ipam"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/istio"
+	_ "github.com/projectcalico/calico/e2e/pkg/tests/kubevirt"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/networking"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/operator"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/policy"
@@ -95,6 +96,12 @@ func applyTestConfig(path string) error {
 		logrus.Infof("Test config: ginkgo.label-filter = %s", flags.LabelFilter)
 		if err := flag.Set("ginkgo.label-filter", flags.LabelFilter); err != nil {
 			return fmt.Errorf("set ginkgo.label-filter: %w", err)
+		}
+	}
+	if focus := flags.FocusString(); focus != "" {
+		logrus.Infof("Test config: ginkgo.focus = %s", focus)
+		if err := flag.Set("ginkgo.focus", focus); err != nil {
+			return fmt.Errorf("set ginkgo.focus: %w", err)
 		}
 	}
 	if skip := flags.SkipString(); skip != "" {

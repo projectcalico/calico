@@ -178,6 +178,26 @@ var _ = Describe("IP pool lifecycle FV", func() {
 		expectPoolDeleted(cli, pool.Name)
 	})
 
+	It("should report a pool that is nearly full", func() {
+		pool.Spec.CIDR = "192.168.1.0/26"
+		err = cli.Create(context.Background(), pool)
+		Expect(err).NotTo(HaveOccurred())
+		expectPoolAllocatable(cli, pool.Name)
+
+		// 52 of 64 addresses is 81%, over the 80% threshold.
+		_, _, err = ipamcli.AutoAssign(context.Background(), ipam.AutoAssignArgs{
+			Num4:        52,
+			HandleID:    ptr.To("nearly-full-handle"),
+			IntendedUse: v3.IPPoolAllowedUseWorkload,
+			Hostname:    "test-node",
+		})
+		Expect(err).NotTo(HaveOccurred())
+		expectNearlyFull(cli, pool.Name, true)
+
+		Expect(ipamcli.ReleaseByHandle(context.Background(), "nearly-full-handle")).NotTo(HaveOccurred())
+		expectNearlyFull(cli, pool.Name, false)
+	})
+
 	It("should mark overlapping IP pools with a status condition", func() {
 		// Create the first IP pool.
 		err = cli.Create(context.Background(), pool)
@@ -312,6 +332,27 @@ func expectPoolNotAllocatable(cli ctrlclient.Client, poolName string) {
 		}
 		return fmt.Errorf("condition not found on pool %s", poolName)
 	}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred(), "IP pool should be not allocatable")
+}
+
+func expectNearlyFull(cli ctrlclient.Client, poolName string, want bool) {
+	EventuallyWithOffset(1, func() error {
+		pool := &v3.IPPool{}
+		if err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: poolName}, pool); err != nil {
+			return err
+		}
+		got := false
+		if pool.Status != nil {
+			for _, condition := range pool.Status.Conditions {
+				if condition.Type == v3.IPPoolConditionAddressSpaceNearlyFull && condition.Status == metav1.ConditionTrue {
+					got = true
+				}
+			}
+		}
+		if got != want {
+			return fmt.Errorf("pool %s AddressSpaceNearlyFull is %v, want %v", poolName, got, want)
+		}
+		return nil
+	}, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 }
 
 func expectPoolDeleted(cli ctrlclient.Client, poolName string) {

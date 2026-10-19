@@ -27,14 +27,13 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/registry"
 )
 
 const (
 
 	// BaseDomain is the base URL of the hashrelease
-	BaseDomain = "docs.eng.tigera.net"
+	BaseDomain = "hashrelease.tools.tigera.net"
 
 	releaseLibFileName = "all-releases"
 )
@@ -57,8 +56,14 @@ type Hashrelease struct {
 	// ProductVersion is the product version in the hashrelease
 	ProductVersion string `yaml:"version"`
 
+	// ChartVersion qualifies the chart version when the charts rev with the product version.
+	ChartVersion string `yaml:"chartVersion,omitempty"`
+
 	// Operator is the operator for the hashrelease
 	Operator registry.Component `yaml:"operator"`
+
+	// Components are the pinned components in the hashrelease.
+	Components map[string]registry.Component `yaml:"components,omitempty"`
 
 	// Source is the source of hashrelease content on the local filesystem
 	Source string `yaml:"source,omitempty"`
@@ -66,33 +71,30 @@ type Hashrelease struct {
 	// Latest is if the hashrelease is the latest for the stream
 	Latest bool `yaml:"latest,omitempty"`
 
+	// ImageScanResultURL is the URL to the image scan result for this hashrelease
 	ImageScanResultURL string `yaml:"iss_url,omitempty"`
 }
 
-func (h *Hashrelease) URL() string {
-	return fmt.Sprintf("https://%s.%s", h.Name, BaseDomain)
+// BucketURI is where the hashrelease's content is served from.
+func (h *Hashrelease) BucketURI(cfg *Config) string {
+	return fmt.Sprintf("gs://%s/%s", cfg.BucketName, h.Name)
 }
 
-// PublishHashrelease publishes the hashrelease in 3 parts
-//
-// 1. It publishes the hashrelease to the server via SSH and to cloud storage.
-//
-// 2. It adds the hashrelease to the hashrelease library on the server and cloud storage.
-//
-// 3. It sets it as the latest for its product stream if specified.
-func Publish(productCode string, h *Hashrelease, cfg *Config) error {
+func (h *Hashrelease) URL() string {
+	return HashreleaseURL(h.Name)
+}
+
+func HashreleaseURL(hashreleaseName string) string {
+	return fmt.Sprintf("https://%s.%s", hashreleaseName, BaseDomain)
+}
+
+// Uploading the content is the caller's, not this.
+func Record(productCode string, h *Hashrelease, cfg *Config) error {
 	logrus.WithFields(logrus.Fields{
 		"hashrelease": h.Name,
-		"srcDir":      h.Source,
 		"latest":      h.Latest,
-	}).Info("Publishing hashrelease")
+	}).Info("Recording hashrelease")
 
-	if err := publishFiles(h, cfg); err != nil {
-		logrus.WithError(err).Error("Failed to publish hashrelease")
-		return fmt.Errorf("failed to publish hashrelease %s: %w", h.Name, err)
-	}
-
-	// add the hashrelease to the library
 	if err := addToHashreleaseLibrary(*h, cfg); err != nil {
 		logrus.WithError(err).Error("failed to add hashrelease to library")
 		return err
@@ -100,33 +102,11 @@ func Publish(productCode string, h *Hashrelease, cfg *Config) error {
 
 	if h.Latest {
 		if err := setHashreleaseAsLatest(*h, productCode, cfg); err != nil {
-			// We don't want to fail the publish if we can't set it as latest, but we should log the error
+			// Being unreachable as "latest" is not worth failing a publish over.
 			logrus.WithError(err).Error("failed to set hashrelease as latest")
 		}
 	}
 
-	return nil
-}
-
-func publishFiles(h *Hashrelease, cfg *Config) error {
-	// publish to cloud storage
-	logrus.WithFields(logrus.Fields{
-		"hashrelease": h.Name,
-		"srcDir":      h.Source,
-	}).Debug("Publishing hashrelease to cloud storage")
-	args := []string{
-		"storage", "rsync",
-		h.Source, fmt.Sprintf("gs://%s/%s", cfg.BucketName, h.Name),
-		"--recursive", "--delete-unmatched-destination-objects",
-	}
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		args = append(args, "--verbosity=debug")
-	}
-	if _, err := command.Run("gcloud", args); err != nil {
-		logrus.WithError(err).Error("Failed to publish hashrelease to bucket")
-		return fmt.Errorf("failed to publish hashrelease %s to bucket: %w", h.Name, err)
-	}
-	logrus.WithField("hashrelease", h.Name).Debug("Published hashrelease without error")
 	return nil
 }
 

@@ -20,78 +20,15 @@ import (
 	"math"
 	"math/big"
 	"net"
-	"strconv"
-	"strings"
 
-	"github.com/docopt/docopt-go"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
-
-// Split parses the docopt-style arguments for `calicoctl ipam split` and
-// delegates to SplitPool.
-func Split(args []string) error {
-	doc := constants.DatastoreIntro + `Usage:
-  <BINARY_NAME> ipam split <NUMBER> [--cidr=<CIDR>] [--name=<POOL_NAME>] [--config=<CONFIG>] [--allow-version-mismatch]
-
-Options:
-  -h --help                    Show this screen.
-  -c --config=<CONFIG>         Path to the file containing connection configuration in
-                               YAML or JSON format.
-                               [default: ` + constants.DefaultConfigPath + `]
-     --cidr=<CIDR>             CIDR of the IP pool to split.
-     --name=<POOL_NAME>        Name of the IP pool to split.
-     --allow-version-mismatch  Allow client and cluster versions mismatch.
-
-Description:
-  The ipam split command splits an IP pool specified by the specified CIDR or name
-  into the specified number of smaller IP pools. Each child IP pool will be of equal
-  size. IP pools can only be split into a number of smaller pools that is a power
-  of 2.
-
-Examples:
-  # Split the IP pool specified by 172.0.0.0/8 into 2 smaller pools
-  <BINARY_NAME> ipam split --cidr=172.0.0.0/8 2
-`
-	name, _ := util.NameAndDescription()
-	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
-
-	parsedArgs, err := docopt.ParseArgs(doc, args, "")
-	if err != nil {
-		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
-	}
-	if len(parsedArgs) == 0 {
-		return nil
-	}
-
-	if err := common.CheckVersionMismatch(parsedArgs["--config"], parsedArgs["--allow-version-mismatch"]); err != nil {
-		return err
-	}
-
-	var cidr, poolName string
-	if v := parsedArgs["--cidr"]; v != nil {
-		cidr = v.(string)
-	}
-	if v := parsedArgs["--name"]; v != nil {
-		poolName = v.(string)
-	}
-	config := parsedArgs["--config"].(string)
-
-	numString := parsedArgs["<NUMBER>"].(string)
-	splitNum, err := strconv.Atoi(numString)
-	if err != nil {
-		return fmt.Errorf("error reading number to split IP pools into. %s is not a valid number: %v", numString, err)
-	}
-
-	return SplitPool(context.Background(), config, cidr, poolName, splitNum)
-}
 
 // SplitPool splits an IP pool identified by CIDR or name into the given number of smaller pools.
 func SplitPool(ctx context.Context, config, cidr, poolName string, splitNum int) error {

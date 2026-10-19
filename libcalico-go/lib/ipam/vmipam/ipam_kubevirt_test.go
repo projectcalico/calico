@@ -18,11 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -40,10 +42,31 @@ func TestVMIPAM(t *testing.T) {
 	RunSpecs(t, "VM IPAM Suite")
 }
 
+var _ = Describe("CreateVMHandleID", func() {
+	longName := strings.Repeat("v", 120)
+
+	It("should keep a handle that fits within the limit readable", func() {
+		Expect(CreateVMHandleID("", "test-ns", "test-vm")).To(Equal("k8s-pod-network.vmi.test-ns.test-vm"))
+	})
+
+	It("should hash a long namespace and name into a valid CRD name", func() {
+		handle := CreateVMHandleID("", "test-ns", longName)
+		Expect(len(handle)).To(BeNumerically("<=", 128))
+		Expect(validation.IsDNS1123Subdomain(handle)).To(BeEmpty())
+	})
+
+	It("should give different long names different handles and the same name the same handle", func() {
+		handle := CreateVMHandleID("", "test-ns", longName)
+		Expect(CreateVMHandleID("", "test-ns", longName)).To(Equal(handle))
+		Expect(CreateVMHandleID("", "test-ns", longName+"x")).NotTo(Equal(handle))
+		Expect(CreateVMHandleID("", "other-ns", longName)).NotTo(Equal(handle))
+	})
+})
+
 var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 	var bc bapi.Client
 	var ic ipam.Interface
-	var kc *kubernetes.Clientset
+	var kc kubernetes.Interface
 	var ipPools *ipamtestutils.IPPoolAccessor
 
 	BeforeEach(func() {
@@ -57,6 +80,29 @@ var _ = testutils.E2eDatastoreDescribe("VM IPAM tests", testutils.DatastoreAll, 
 		if config.Spec.DatastoreType == "kubernetes" {
 			kc = bc.(*k8s.KubeClient).ClientSet
 		}
+	})
+
+	Context("CreateVMHandleID", func() {
+		It("should hash a long namespace and name into a handle the datastore accepts", func() {
+			handle := CreateVMHandleID("", "test-ns", strings.Repeat("v", 120))
+
+			Expect(bc.Clean()).To(Succeed())
+			ipPools.Pools = map[string]ipamtestutils.Pool{"10.0.0.0/24": {Enabled: true}}
+			ipamtestutils.ApplyNode(bc, kc, "test-host-long", nil)
+
+			v4ia, _, err := ic.AutoAssign(context.Background(), ipam.AutoAssignArgs{
+				Num4:        1,
+				HandleID:    &handle,
+				Hostname:    "test-host-long",
+				IntendedUse: v3.IPPoolAllowedUseWorkload,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v4ia.IPs).To(HaveLen(1))
+
+			ips, err := ic.IPsByHandle(context.Background(), handle)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ips).To(HaveLen(1))
+		})
 	})
 
 	Context("EnsureActiveVMOwnerAttrs", func() {

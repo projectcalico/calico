@@ -25,6 +25,13 @@ scriptdir=$(dirname "$(realpath $0)")
 . ${scriptdir}/lib.sh
 rootdir=$(git_repo_root)
 
+# Build date to stamp into the Felix and calicoctl binaries, in place of the
+# current time that the Makefiles would otherwise use.  Those binaries go into
+# the .orig tarball that make-packages.sh generates, and that tarball has to be
+# identical every time we build the same commit; see the comment there.  The
+# format matches DATE in lib.Makefile.
+build_date=$(date -u -d "@$(git log -1 --format=%ct)" +'%FT%T%z')
+
 # Directory to copy package build output to. Ensure it exists
 # and is empty before each build.
 outputDir=${rootdir}/release/packaging/output/
@@ -37,7 +44,7 @@ fi
 
 # We used to have some Semaphore environment-dependent logic here, but we now
 # place that in the Semaphore YAML (which is a more appropriate place for it).
-: ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq ${pub_steps}}
+: ${STEPS:=bld_images net_cal felix calicoctl etcd3gw dnsmasq ${pub_steps}}
 
 function check_bin {
     which "$1" > /dev/null
@@ -53,6 +60,13 @@ function require_commands {
     check_bin dch || error_exit "This script requires the 'dch' command from the 'devscripts' package."
     check_bin patchelf || error_exit "This script requires the 'patchelf' command from the 'patchelf' package."
     check_bin jq || error_exit "This scruit requires the 'jq' command from the 'jq' package"
+    check_bin xz || error_exit "This script requires the 'xz' command from the 'xz-utils' package."
+
+    # make-packages.sh builds the .orig tarball on this host rather than in a
+    # build container, and asks dpkg for its default tar-ignore patterns while
+    # doing so.
+    perl -MDpkg::Source::Package -e 1 2>/dev/null ||
+        error_exit "This script requires the Dpkg::Source::Package Perl module from the 'libdpkg-perl' package."
 }
 
 function require_version {
@@ -141,6 +155,10 @@ function precheck_felix {
     require_version
 }
 
+function precheck_calicoctl {
+    require_version
+}
+
 function precheck_etcd3gw {
     :
 }
@@ -152,7 +170,7 @@ function precheck_dnsmasq {
 function precheck_pub_debs {
     # Check the PPA exists.
     require_repo_name
-    curl -fsSL -I "https://launchpad.net/~project-calico/+archive/ubuntu/${REPO_NAME}" > /dev/null
+    curl -fsSL -I --retry 3 --connect-timeout 30 "https://launchpad.net/~project-calico/+archive/ubuntu/${REPO_NAME}" > /dev/null
     if [[ $? != 0 ]]; then
             cat <<EOF
 
@@ -201,7 +219,10 @@ function do_net_cal {
             DEB_EPOCH=3: \
             "${rootdir}/release/packaging/utils/make-packages.sh" rpm deb
     # Packages are produced in rootDir/ - move them to the output dir.
-    find ../ -type f -name 'networking-calico_*-*' -exec mv '{}' "$outputDir" \;
+    # The glob has no '-' in it because the shared .orig tarball is named
+    # after the upstream version alone, with no Debian revision.  -maxdepth
+    # keeps that looser glob from reaching down into the source tree.
+    find ../ -maxdepth 1 -type f -name 'networking-calico_*' -exec mv '{}' "$outputDir" \;
     # Revert the changes made to networking-calico as part of the package build.
     git checkout setup.py
     popd
@@ -214,7 +235,7 @@ function do_felix {
     # content, because it's infeasible to work out a set of Debian and
     # RPM golang build dependencies that is exactly equivalent to our
     # containerized builds.
-    make bin/calico-felix
+    make bin/calico-felix DATE="${build_date}"
     # Remove all the files that were added by that build, except for the
     # bin/calico-felix binary.
     rm -f bin/calico-felix-amd64
@@ -236,7 +257,42 @@ function do_felix {
             "${rootdir}/release/packaging/utils/make-packages.sh" rpm deb
 
     # Packages are produced in rootDir/ - move them to the output dir.
-    find ../ -type f -name 'felix_*-*' -exec mv '{}' "$outputDir" \;
+    # The glob has no '-' in it because the shared .orig tarball is named
+    # after the upstream version alone, with no Debian revision.  -maxdepth
+    # keeps that looser glob from reaching down into the source tree.
+    find ../ -maxdepth 1 -type f -name 'felix_*' -exec mv '{}' "$outputDir" \;
+    popd
+}
+
+function do_calicoctl {
+    # Build calicoctl packages.
+    pushd "${rootdir}/calicoctl"
+
+    # As for Felix, we build the calicoctl binary and include it in our
+    # source package content, because it's infeasible to work out a set
+    # of Debian and RPM golang build dependencies that is exactly
+    # equivalent to our containerized builds.  Unlike Felix, calicoctl
+    # is statically linked (CGO_ENABLED=0), so it needs no patchelf
+    # fixups and has no shared library dependencies.
+    make bin/calicoctl DATE="${build_date}"
+
+    # Remove the arch-suffixed binary that the build also creates,
+    # keeping just bin/calicoctl.
+    rm -f bin/calicoctl-linux-amd64
+
+    # Override dpkg's default file exclusions, otherwise our binary
+    # won't get included.
+    PKG_NAME=calicoctl \
+            NAME=calicoctl \
+            RPM_TAR_ARGS='--exclude=bin/calicoctl-* --exclude=.gitignore --exclude=.go-pkg-cache --exclude=report --exclude=test-data --exclude=tests' \
+            DPKG_EXCL="-I'bin/calicoctl-*' -I.git -I.gitignore -I.go-pkg-cache -Ireport -Itest-data -Itests" \
+            "${rootdir}/release/packaging/utils/make-packages.sh" rpm deb
+
+    # Packages are produced in rootDir/ - move them to the output dir.
+    # The glob has no '-' in it because the shared .orig tarball is named
+    # after the upstream version alone, with no Debian revision.  -maxdepth
+    # keeps that looser glob from reaching down into the source tree.
+    find ../ -maxdepth 1 -type f -name 'calicoctl_*' -exec mv '{}' "$outputDir" \;
     popd
 }
 

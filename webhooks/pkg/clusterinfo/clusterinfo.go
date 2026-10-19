@@ -35,6 +35,7 @@ const saNamespaceFile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace
 var allowedServiceAccounts = map[string]struct{}{
 	"calico-node":             {},
 	"calico-kube-controllers": {},
+	"calico-typha":            {},
 }
 
 type webhook struct {

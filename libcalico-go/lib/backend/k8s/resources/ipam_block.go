@@ -216,6 +216,7 @@ func (c *ipamBlockClient) IPAMBlockV3toV1(kvpv3 *model.KVPair) (*model.KVPair, e
 				HandleID:            a.HandleID,
 				ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
 				AlternateOwnerAttrs: a.AlternateOwnerAttrs,
+				ReleasedAt:          a.ReleasedAt,
 			})
 		}
 
@@ -253,6 +254,7 @@ func (c *ipamBlockClient) IPAMBlockV3toV1(kvpv3 *model.KVPair) (*model.KVPair, e
 				HandleID:            a.HandleID,
 				ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
 				AlternateOwnerAttrs: a.AlternateOwnerAttrs,
+				ReleasedAt:          a.ReleasedAt,
 			})
 		}
 
@@ -291,6 +293,7 @@ func (c *ipamBlockClient) IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 				HandleID:            a.HandleID,
 				ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
 				AlternateOwnerAttrs: a.AlternateOwnerAttrs,
+				ReleasedAt:          a.ReleasedAt,
 			})
 		}
 
@@ -336,6 +339,7 @@ func (c *ipamBlockClient) IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 				HandleID:            a.HandleID,
 				ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
 				AlternateOwnerAttrs: a.AlternateOwnerAttrs,
+				ReleasedAt:          a.ReleasedAt,
 			})
 		}
 
@@ -376,4 +380,11 @@ func parseKey(k model.Key) (name, cidr string) {
 	cidr = k.(model.BlockKey).CIDR.Masked().String()
 	name = names.CIDRToName(model.IPNetFromPrefix(k.(model.BlockKey).CIDR))
 	return
+}
+
+// IPAMBlockV3toV1 converts an IPAMBlock KVPair to the v1 AllocationBlock model, for
+// callers that read blocks through an informer rather than the backend client.
+func IPAMBlockV3toV1(kvp *model.KVPair) (*model.KVPair, error) {
+	c := &ipamBlockClient{v3: false}
+	return c.IPAMBlockV3toV1(kvp)
 }

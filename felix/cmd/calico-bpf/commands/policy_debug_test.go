@@ -101,7 +101,7 @@ func TestExtractProtoField(t *testing.T) {
 	}
 }
 
-func TestFormatIPSets(t *testing.T) {
+func TestResolveMatchIPSets(t *testing.T) {
 	tests := []struct {
 		name     string
 		comment  string
@@ -109,55 +109,49 @@ func TestFormatIPSets(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "src only, no resolution",
-			comment:  "IPSets src_ip_set_ids:<0x1234abcd>",
+			name:     "no members map, hex IDs left as-is",
+			comment:  "Match: proto=tcp src={11.0.0.8/32,0x1234abcd}",
 			members:  nil,
-			expected: "IP sets: src=0x1234abcd",
+			expected: "Match: proto=tcp src={11.0.0.8/32,0x1234abcd}",
 		},
 		{
-			name:     "src and dst, no resolution",
-			comment:  "IPSets src_ip_set_ids:<0x1234> dst_ip_set_ids:<0x5678>",
-			members:  nil,
-			expected: "IP sets: src=0x1234 dst=0x5678",
-		},
-		{
-			name:     "negated sets, no resolution",
-			comment:  "IPSets not_src_ip_set_ids:<0xaaaa> not_dst_ip_set_ids:<0xbbbb>",
-			members:  nil,
-			expected: "IP sets: !src=0xaaaa !dst=0xbbbb",
-		},
-		{
-			name:    "resolved src",
-			comment: "IPSets src_ip_set_ids:<0xff>",
+			name:    "resolved src set folded next to nets",
+			comment: "Match: proto=tcp src={11.0.0.8/32,0xff} dport={9055}",
 			members: map[uint64][]string{
 				0xff: {"10.0.0.0/8", "192.168.0.0/16"},
 			},
-			expected: "IP sets: src={10.0.0.0/8, 192.168.0.0/16}",
+			expected: "Match: proto=tcp src={11.0.0.8/32,10.0.0.0/8,192.168.0.0/16} dport={9055}",
 		},
 		{
-			name:    "resolved src and dst",
-			comment: "IPSets src_ip_set_ids:<0xaa> dst_ip_set_ids:<0xbb>",
+			name:    "resolved src and negated dst sets",
+			comment: "Match: src={0xaa} !dst={12.0.0.8/32,0xbb}",
 			members: map[uint64][]string{
 				0xaa: {"10.0.0.1/32"},
 				0xbb: {"172.16.0.0/12", "192.168.1.0/24"},
 			},
-			expected: "IP sets: src={10.0.0.1/32} dst={172.16.0.0/12, 192.168.1.0/24}",
+			expected: "Match: src={10.0.0.1/32} !dst={12.0.0.8/32,172.16.0.0/12,192.168.1.0/24}",
 		},
 		{
-			name:    "partial resolution",
-			comment: "IPSets src_ip_set_ids:<0xaa> dst_ip_set_ids:<0xcc>",
+			name:    "partial resolution leaves unknown ID",
+			comment: "Match: src={0xaa} dst={0xcc}",
 			members: map[uint64][]string{
 				0xaa: {"10.0.0.1/32"},
 			},
-			expected: "IP sets: src={10.0.0.1/32} dst=0xcc",
+			expected: "Match: src={10.0.0.1/32} dst={0xcc}",
+		},
+		{
+			name:     "no hex IDs is a no-op",
+			comment:  "Match: proto=tcp src={11.0.0.8/32} dports={9055,200-205}",
+			members:  map[uint64][]string{0xff: {"10.0.0.1/32"}},
+			expected: "Match: proto=tcp src={11.0.0.8/32} dports={9055,200-205}",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := formatIPSets(tt.comment, tt.members)
+			got := resolveMatchIPSets(tt.comment, tt.members)
 			if got != tt.expected {
-				t.Errorf("formatIPSets(%q) = %q, want %q", tt.comment, got, tt.expected)
+				t.Errorf("resolveMatchIPSets(%q) = %q, want %q", tt.comment, got, tt.expected)
 			}
 		})
 	}

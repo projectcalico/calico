@@ -1,12 +1,29 @@
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package ipam
 
 import (
 	"slices"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/accounting"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -101,7 +118,7 @@ var _ = Describe("Getting summary information about a block", func() {
 
 	It("identifies a block with only IPs reserved for Windows as empty", func() {
 		block := makeTestBlock()
-		block.allocate([]int{255}, WindowsReservedHandle)
+		block.allocate([]int{255}, accounting.WindowsReservedHandle)
 		Expect(block.empty()).To(Equal(true))
 	})
 
@@ -143,6 +160,30 @@ var _ = Describe("Getting summary information about a block", func() {
 		block := makeTestBlock()
 		block.allocate([]int{10, 20, 210, 220}, "tens")
 		Expect(block.NumFreeAddresses(cidrSliceFilter([]cnet.IPNet{*wholeBlock}))).To(Equal(0))
+	})
+
+	It("returns no reserved addresses with no reservations", func() {
+		block := makeTestBlock()
+		block.allocate([]int{10, 20}, "tens")
+		Expect(block.NumReservedAddresses(nilAddrFilter{})).To(Equal(0))
+	})
+
+	It("returns reserved addresses with half the block reserved", func() {
+		_, secondHalf, err := cnet.ParseCIDR("100.64.0.128/25")
+		Expect(err).NotTo(HaveOccurred())
+		block := makeTestBlock()
+		block.allocate([]int{10, 20, 210, 220}, "tens")
+		// Counts the reserved addresses whether or not they are allocated, so
+		// the two allocations in the reserved half are still included.
+		Expect(block.NumReservedAddresses(cidrSliceFilter([]cnet.IPNet{*secondHalf}))).To(Equal(128))
+	})
+
+	It("returns reserved addresses with the entire block reserved", func() {
+		_, wholeBlock, err := cnet.ParseCIDR("100.64.0.128/24")
+		Expect(err).NotTo(HaveOccurred())
+		block := makeTestBlock()
+		block.allocate([]int{10, 20, 210, 220}, "tens")
+		Expect(block.NumReservedAddresses(cidrSliceFilter([]cnet.IPNet{*wholeBlock}))).To(Equal(256))
 	})
 
 	It("correctly returns IPs by handle, whether zero, one, or many", func() {
@@ -189,11 +230,12 @@ var _ = Describe("Getting summary information about a block", func() {
 })
 
 var _ = Describe("Releasing IPs", func() {
+	noCooldownCfg := IPAMConfig{}
 	It("deallocates a single IP", func() {
 		block := makeTestBlock()
 		block.allocate([]int{13}, "unlucky")
 
-		unallocated, countByHandle, err := block.release([]ReleaseOptions{{
+		unallocated, countByHandle, err := block.release(&noCooldownCfg, []ReleaseOptions{{
 			Address: "100.64.0.13",
 			Handle:  "unlucky",
 		}})
@@ -209,7 +251,7 @@ var _ = Describe("Releasing IPs", func() {
 		block := makeTestBlock()
 		block.allocate([]int{13, 26, 39}, "lucky")
 
-		unallocated, countByHandle, err := block.release([]ReleaseOptions{{
+		unallocated, countByHandle, err := block.release(&noCooldownCfg, []ReleaseOptions{{
 			Address: "100.64.0.13",
 		}})
 		Expect(err).To(Succeed())
@@ -227,7 +269,7 @@ var _ = Describe("Releasing IPs", func() {
 		block := makeTestBlock()
 		block.allocate([]int{13, 26, 39}, "lucky")
 
-		unallocated, countByHandle, err := block.release([]ReleaseOptions{
+		unallocated, countByHandle, err := block.release(&noCooldownCfg, []ReleaseOptions{
 			{Address: "100.64.0.13"},
 			{Address: "100.64.0.26"},
 			{Address: "100.64.0.39"},
@@ -244,7 +286,7 @@ var _ = Describe("Releasing IPs", func() {
 	It("does nothing when no such IP exists", func() {
 		block := makeTestBlock()
 
-		unallocated, countByHandle, err := block.release([]ReleaseOptions{{
+		unallocated, countByHandle, err := block.release(&noCooldownCfg, []ReleaseOptions{{
 			Address: "100.64.0.13",
 			Handle:  "unlucky",
 		}})
@@ -259,7 +301,7 @@ var _ = Describe("Releasing IPs", func() {
 		block := makeTestBlock()
 		block.allocate([]int{100}, "newstuff")
 
-		_, _, err := block.release([]ReleaseOptions{{
+		_, _, err := block.release(&noCooldownCfg, []ReleaseOptions{{
 			Address: "100.64.0.100",
 			Handle:  "oldstuff",
 		}})
@@ -273,7 +315,7 @@ var _ = Describe("Releasing IPs", func() {
 		block.allocate([]int{13}, "unlucky")
 		block.SequenceNumberForAllocation["13"] = 10
 
-		_, _, err := block.release([]ReleaseOptions{{
+		_, _, err := block.release(&noCooldownCfg, []ReleaseOptions{{
 			Address:        "100.64.0.13",
 			Handle:         "unlucky",
 			SequenceNumber: new(uint64(999)),
@@ -285,9 +327,10 @@ var _ = Describe("Releasing IPs", func() {
 })
 
 var _ = Describe("Releasing IPs by Handle", func() {
+	noCooldownCfg := IPAMConfig{}
 	It("does nothing when no such handle exists", func() {
 		block := makeTestBlock()
-		released := block.releaseByHandle(ReleaseOptions{
+		released := block.releaseByHandle(&noCooldownCfg, ReleaseOptions{
 			Address:        "100.64.0.99",
 			Handle:         "nosuchhandle",
 			SequenceNumber: nil,
@@ -301,7 +344,7 @@ var _ = Describe("Releasing IPs by Handle", func() {
 		block := makeTestBlock()
 		block.allocate([]int{15}, "fifteen")
 		block.allocate([]int{20}, "twenty")
-		released := block.releaseByHandle(ReleaseOptions{
+		released := block.releaseByHandle(&noCooldownCfg, ReleaseOptions{
 			Address:        "100.64.0.99", // No need for this to match ordinal.
 			Handle:         "fifteen",
 			SequenceNumber: nil,
@@ -324,7 +367,7 @@ var _ = Describe("Releasing IPs by Handle", func() {
 		block.SequenceNumberForAllocation["17"] = 999 // not removed
 		block.SequenceNumberForAllocation["18"] = 10
 
-		released := block.releaseByHandle(ReleaseOptions{
+		released := block.releaseByHandle(&noCooldownCfg, ReleaseOptions{
 			Handle:         "teens",
 			SequenceNumber: new(uint64(10)),
 		})
@@ -339,7 +382,7 @@ var _ = Describe("Releasing IPs by Handle", func() {
 		block.allocate([]int{15}, "several")
 		block.allocate([]int{25}, "several")
 		block.allocate([]int{35}, "several")
-		released := block.releaseByHandle(ReleaseOptions{
+		released := block.releaseByHandle(&noCooldownCfg, ReleaseOptions{
 			Address:        "100.64.0.99",
 			Handle:         "several",
 			SequenceNumber: nil,
@@ -355,7 +398,7 @@ var _ = Describe("Releasing IPs by Handle", func() {
 	It("removes multiple existing allocations with the same handle and attributes", func() {
 		block := makeTestBlock()
 		block.allocate([]int{15, 25, 35}, "several")
-		released := block.releaseByHandle(ReleaseOptions{
+		released := block.releaseByHandle(&noCooldownCfg, ReleaseOptions{
 			Address:        "100.64.0.99",
 			Handle:         "several",
 			SequenceNumber: nil,
@@ -367,4 +410,50 @@ var _ = Describe("Releasing IPs by Handle", func() {
 
 		block.validate()
 	})
+})
+
+var _ = Describe("Block garbage collection", func() {
+	It("produces valid block from an empty block", func() {
+		block := makeTestBlock()
+		Expect(block.garbageCollect(0)).To(Equal(false))
+		block.validate()
+	})
+
+	It("Clears unused attributes", func() {
+		block := makeTestBlock()
+		// Add some spurious attributes.
+		block.Attributes = append(block.Attributes,
+			model.AllocationAttribute{HandleID: new("spurious1")},
+			model.AllocationAttribute{HandleID: new("spurious2")},
+		)
+		// Add a regular allocation.
+		block.allocate([]int{32}, "thirty-two")
+
+		Expect(block.garbageCollect(0)).To(Equal(true))
+
+		Expect(block.allocatedOrdinals()).To(HaveLen(1))
+		Expect(block.Attributes).To(HaveLen(1))
+		block.validate()
+	})
+
+	It("produces valid block from a block with some old and some new released IPs", func() {
+		block := makeTestBlock()
+		// 31,33 are ready to deallocate.
+		block.allocateAttrib([]int{31, 33}, model.AllocationAttribute{
+			ReleasedAt: new(v1.NewTime(time.Now().Add(-time.Minute))),
+		})
+		// 42,44 are not.
+		block.allocateAttrib([]int{42, 44}, model.AllocationAttribute{
+			ReleasedAt: new(v1.NewTime(time.Now().Add(time.Minute))),
+		})
+		// 50,51 are not relased yet.
+		block.allocate([]int{52, 54}, "fifties")
+
+		Expect(block.garbageCollect(30)).To(Equal(true))
+
+		Expect(block.allocatedOrdinals()).To(HaveLen(4), "42, 44, 50, 51 are still in Allocated")
+		Expect(block.NumFreeAddresses(nilAddrFilter{})).To(Equal(256-4), "all but four addresses free")
+		block.validate()
+	})
+
 })

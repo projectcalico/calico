@@ -14,16 +14,45 @@ import (
 	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
 )
 
 // StagedNetworkPolicyInformer provides access to a shared informer and lister for
-// StagedNetworkPolicies.
+// StagedNetworkPolicies. Prefer using the type-safe variant (see [TypedStagedNetworkPolicyInformer]).
 type StagedNetworkPolicyInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.StagedNetworkPolicyLister
 }
+
+// TypedStagedNetworkPolicyInformer provides access to a shared informer and lister for
+// StagedNetworkPolicies, including the type-safe TypedInformer variant.
+// It is a superset of StagedNetworkPolicyInformer.
+type TypedStagedNetworkPolicyInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() StagedNetworkPolicyIndexInformer
+	Lister() projectcalicov3.StagedNetworkPolicyLister
+}
+
+// StagedNetworkPolicyIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type StagedNetworkPolicyIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.StagedNetworkPolicy]
+
+// StagedNetworkPolicyHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for StagedNetworkPolicy.
+type StagedNetworkPolicyHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.StagedNetworkPolicy]
+
+// StagedNetworkPolicyDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for StagedNetworkPolicy.
+type StagedNetworkPolicyDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.StagedNetworkPolicy]
+
+// StagedNetworkPolicyFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for StagedNetworkPolicy.
+type StagedNetworkPolicyFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.StagedNetworkPolicy]
+
+// StagedNetworkPolicyIndexers is a specialization of [cache.TypedIndexers] for StagedNetworkPolicy.
+type StagedNetworkPolicyIndexers = cache.TypedIndexers[*apisprojectcalicov3.StagedNetworkPolicy]
+
+// DeletedStagedNetworkPolicy is a specialization of [cache.DeletedObject] for StagedNetworkPolicy.
+type DeletedStagedNetworkPolicy = cache.DeletedObject[*apisprojectcalicov3.StagedNetworkPolicy]
 
 type stagedNetworkPolicyInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,55 +63,132 @@ type stagedNetworkPolicyInformer struct {
 // NewStagedNetworkPolicyInformer constructs a new informer for StagedNetworkPolicy type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedStagedNetworkPolicyInformer]).
 func NewStagedNetworkPolicyInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredStagedNetworkPolicyInformer(client, namespace, resyncPeriod, indexers, nil)
+	return NewStagedNetworkPolicyInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedStagedNetworkPolicyInformer constructs a new informer for StagedNetworkPolicy type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedStagedNetworkPolicyInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers StagedNetworkPolicyIndexers) StagedNetworkPolicyIndexInformer {
+	return NewTypedStagedNetworkPolicyInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredStagedNetworkPolicyInformer constructs a new informer for StagedNetworkPolicy type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredStagedNetworkPolicyInformer]).
 func NewFilteredStagedNetworkPolicyInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return cache.NewSharedIndexInformer(
+	return NewTypedStagedNetworkPolicyInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredStagedNetworkPolicyInformer constructs a new informer for StagedNetworkPolicy type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredStagedNetworkPolicyInformer(client clientset.Interface, namespace string, resyncPeriod time.Duration, indexers StagedNetworkPolicyIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) StagedNetworkPolicyIndexInformer {
+	return NewTypedStagedNetworkPolicyInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
+}
+
+// NewStagedNetworkPolicyInformerWithOptions constructs a new informer for StagedNetworkPolicy type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedStagedNetworkPolicyInformerWithOptions]).
+func NewStagedNetworkPolicyInformerWithOptions(client clientset.Interface, namespace string, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedStagedNetworkPolicyInformerWithOptions(client, namespace, options)
+}
+
+// NewTypedStagedNetworkPolicyInformerWithOptions constructs a new informer for StagedNetworkPolicy type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedStagedNetworkPolicyInformerWithOptions(client clientset.Interface, namespace string, options internalinterfaces.InformerOptions) StagedNetworkPolicyIndexInformer {
+	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "stagednetworkpolicies"}
+	identifier := options.InformerName.WithResource(gvr)
+	tweakListOptions := options.TweakListOptions
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.StagedNetworkPolicy](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
-			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
+			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().StagedNetworkPolicies(namespace).List(context.Background(), options)
+				return client.ProjectcalicoV3().StagedNetworkPolicies(namespace).List(context.Background(), opts)
 			},
-			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
+			WatchFunc: func(opts v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().StagedNetworkPolicies(namespace).Watch(context.Background(), options)
+				return client.ProjectcalicoV3().StagedNetworkPolicies(namespace).Watch(context.Background(), opts)
 			},
-			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+			ListWithContextFunc: func(ctx context.Context, opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().StagedNetworkPolicies(namespace).List(ctx, options)
+				return client.ProjectcalicoV3().StagedNetworkPolicies(namespace).List(ctx, opts)
 			},
-			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+			WatchFuncWithContext: func(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().StagedNetworkPolicies(namespace).Watch(ctx, options)
+				return client.ProjectcalicoV3().StagedNetworkPolicies(namespace).Watch(ctx, opts)
 			},
 		}, client),
 		&apisprojectcalicov3.StagedNetworkPolicy{},
-		resyncPeriod,
-		indexers,
-	)
+		cache.SharedIndexInformerOptions{
+			ResyncPeriod: options.ResyncPeriod,
+			Indexers:     options.Indexers,
+			Identifier:   identifier,
+		},
+	))
 }
 
 func (f *stagedNetworkPolicyInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredStagedNetworkPolicyInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	return NewTypedStagedNetworkPolicyInformerWithOptions(client, f.namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *stagedNetworkPolicyInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.StagedNetworkPolicy{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *stagedNetworkPolicyInformer) TypedInformer() StagedNetworkPolicyIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.StagedNetworkPolicy](f.factory.InformerFor(&apisprojectcalicov3.StagedNetworkPolicy{}, f.defaultInformer))
 }
 
 func (f *stagedNetworkPolicyInformer) Lister() projectcalicov3.StagedNetworkPolicyLister {
 	return projectcalicov3.NewStagedNetworkPolicyLister(f.Informer().GetIndexer())
+}
+
+// ToTypedStagedNetworkPolicyInformer converts an untyped informer into a TypedStagedNetworkPolicyInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *StagedNetworkPolicy. If that is not the case, calling type-safe methods of the returned
+// TypedStagedNetworkPolicyInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedStagedNetworkPolicyInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedStagedNetworkPolicyInformer(informer StagedNetworkPolicyInformer) TypedStagedNetworkPolicyInformer {
+	if informer, ok := informer.(TypedStagedNetworkPolicyInformer); ok {
+		return informer
+	}
+	return &stagedNetworkPolicyTypedInformerAdapter{informer}
+}
+
+type stagedNetworkPolicyTypedInformerAdapter struct {
+	StagedNetworkPolicyInformer
+}
+
+func (a *stagedNetworkPolicyTypedInformerAdapter) TypedInformer() StagedNetworkPolicyIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.StagedNetworkPolicy](a.Informer())
+}
+
+// ToStagedNetworkPolicyIndexInformer converts an untyped informer into a StagedNetworkPolicyIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *StagedNetworkPolicy. If that is not the case, calling type-safe methods of the returned
+// StagedNetworkPolicyIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a StagedNetworkPolicyIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToStagedNetworkPolicyIndexInformer(informer cache.SharedIndexInformer) StagedNetworkPolicyIndexInformer {
+	if informer, ok := informer.(StagedNetworkPolicyIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.StagedNetworkPolicy](informer)
 }

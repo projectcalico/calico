@@ -48,6 +48,7 @@ from neutron_lib.plugins import directory as plugin_dir
 from oslo_config import cfg
 
 from networking_calico.common import config as calico_config
+from networking_calico.plugins.ml2.drivers.calico import mech_calico
 from networking_calico.resync import scope as scope_mod
 
 
@@ -124,7 +125,23 @@ def _build_parser() -> argparse.ArgumentParser:
             "harder to parse cleanly."
         ),
     )
+    parser.add_argument(
+        "--inject-per-item-delay-ms",
+        type=_non_negative_int,
+        default=0,
+        metavar="MS",
+        help=argparse.SUPPRESS,  # test-only knob; CORE-12037
+    )
     return parser
+
+
+def _non_negative_int(s):
+    """argparse type: reject negative values up-front rather than letting
+    them flow into the ``time.sleep`` call in the syncer's compare loop."""
+    v = int(s)
+    if v < 0:
+        raise argparse.ArgumentTypeError("must be >= 0, got %d" % v)
+    return v
 
 
 def main(argv=None) -> int:
@@ -168,6 +185,11 @@ def main(argv=None) -> int:
     common_config.init(["--config-file=%s" % path for path in config_files])
     common_config.setup_logging()
 
+    # Fail fast on an unsupported MySQL driver, before doing any real work --
+    # this is the same check the mech driver does in initialize(), reading
+    # [database] connection from oslo.config.
+    mech_calico._check_mysql_driver()
+
     # Initialise the Neutron plugin registry so the core plugin is instantiated and
     # discoverable via directory.get_plugin().
     manager.init()
@@ -179,6 +201,7 @@ def main(argv=None) -> int:
         ports=args.ports,
         security_groups=args.security_groups,
         include_security_groups_for_ports=args.include_sgs_for_ports,
+        inject_per_item_delay_ms=args.inject_per_item_delay_ms,
     ).run()
 
     if args.output:

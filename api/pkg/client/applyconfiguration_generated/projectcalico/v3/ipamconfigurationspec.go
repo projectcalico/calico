@@ -17,6 +17,7 @@ type IPAMConfigurationSpecApplyConfiguration struct {
 	StrictAffinity *bool `json:"strictAffinity,omitempty"`
 	// MaxBlocksPerHost, if non-zero, is the max number of blocks that can be
 	// affine to each host.
+	//
 	MaxBlocksPerHost *int32 `json:"maxBlocksPerHost,omitempty"`
 	// Whether or not to auto allocate blocks to hosts.
 	AutoAllocateBlocks *bool `json:"autoAllocateBlocks,omitempty"`
@@ -30,6 +31,10 @@ type IPAMConfigurationSpecApplyConfiguration struct {
 	// address persistence.
 	// Defaults to Enabled if not specified.
 	KubeVirtVMAddressPersistence *projectcalicov3.VMAddressPersistence `json:"kubeVirtVMAddressPersistence,omitempty"`
+	// IPCooldownSeconds is the minimum age of a released IP in a block before it is re-used.
+	// If set to zero, IPs can be re-used immediately (but are still handled with a FIFO queue to
+	// minimize immediate reuse).
+	IPCooldownSeconds *int32 `json:"ipCooldownSeconds,omitempty"`
 }
 
 // IPAMConfigurationSpecApplyConfiguration constructs a declarative configuration of the IPAMConfigurationSpec type for use with
@@ -67,5 +72,13 @@ func (b *IPAMConfigurationSpecApplyConfiguration) WithAutoAllocateBlocks(value b
 // If called multiple times, the KubeVirtVMAddressPersistence field is set to the value of the last call.
 func (b *IPAMConfigurationSpecApplyConfiguration) WithKubeVirtVMAddressPersistence(value projectcalicov3.VMAddressPersistence) *IPAMConfigurationSpecApplyConfiguration {
 	b.KubeVirtVMAddressPersistence = &value
+	return b
+}
+
+// WithIPCooldownSeconds sets the IPCooldownSeconds field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the IPCooldownSeconds field is set to the value of the last call.
+func (b *IPAMConfigurationSpecApplyConfiguration) WithIPCooldownSeconds(value int32) *IPAMConfigurationSpecApplyConfiguration {
+	b.IPCooldownSeconds = &value
 	return b
 }

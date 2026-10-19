@@ -37,7 +37,7 @@ func StartDataplaneDriver(configParams *config.Config,
 	collector collector.Collector,
 	configChangedRestartCallback func(),
 	fatalErrorCallback func(error),
-	k8sClientSet *kubernetes.Clientset,
+	k8sClientSet kubernetes.Interface,
 	_ *calc.LookupsCache,
 	_ ipam.Interface,
 ) (DataplaneDriver, *exec.Cmd) {
@@ -57,6 +57,11 @@ func StartDataplaneDriver(configParams *config.Config,
 	winDP.Start()
 
 	return winDP, nil
+}
+
+// NFTablesEnabled resolves the configured NFTablesMode; Windows has no nftables dataplane.
+func NFTablesEnabled(configParams *config.Config) bool {
+	return false
 }
 
 func SupportsBPF() error {

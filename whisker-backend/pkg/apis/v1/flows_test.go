@@ -16,6 +16,7 @@ package v1_test
 
 import (
 	_ "embed"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"testing"
@@ -246,6 +247,34 @@ func TestFilters_DecodedFromRawString(t *testing.T) {
 			Expect(params.Filters).Should(Equal(tc.expected), cmp.Diff(params.Filters, tc.expected))
 		})
 	}
+}
+
+// TestFlowResponseEndpointTypeJSON pins the wire names of the endpoint type
+// fields, which the flow response carries for callers that group flows by the
+// kind of endpoint on each end.
+func TestFlowResponseEndpointTypeJSON(t *testing.T) {
+	RegisterTestingT(t)
+
+	body, err := json.Marshal(v1.FlowResponse{
+		SourceType: "WorkloadEndpoint",
+		DestType:   "NetworkSet",
+	})
+	Expect(err).ShouldNot(HaveOccurred())
+
+	var got map[string]any
+	Expect(json.Unmarshal(body, &got)).ShouldNot(HaveOccurred())
+	Expect(got).Should(HaveKeyWithValue("source_type", "WorkloadEndpoint"))
+	Expect(got).Should(HaveKeyWithValue("dest_type", "NetworkSet"))
+
+	// A type the upstream did not report is left out rather than sent as an
+	// empty string, so the flow details view has no blank row to render.
+	body, err = json.Marshal(v1.FlowResponse{})
+	Expect(err).ShouldNot(HaveOccurred())
+
+	got = map[string]any{}
+	Expect(json.Unmarshal(body, &got)).ShouldNot(HaveOccurred())
+	Expect(got).ShouldNot(HaveKey("source_type"))
+	Expect(got).ShouldNot(HaveKey("dest_type"))
 }
 
 func mustCreateGetRequest(method, path string, queryParams map[string][]string) *http.Request {

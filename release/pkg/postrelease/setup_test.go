@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectcalico/calico/release/internal/utils"
-	"github.com/projectcalico/calico/release/pkg/manager/operator"
+	"github.com/projectcalico/calico/release/internal/defaults"
+	"github.com/projectcalico/calico/release/internal/registry"
 )
 
 var (
@@ -15,20 +15,19 @@ var (
 )
 
 var (
-	releaseVersion, operatorVersion, flannelVersion  string
-	githubOrg, githubRepo, githubRemote, githubToken string
-	images                                           string
+	releaseVersion, operatorVersion, flannelVersion string
+	githubOrg, githubRepo, githubRemote             string
+	images                                          string
 )
 
 func init() {
 	flag.StringVar(&releaseVersion, "release-version", "", "Version for the release")
 	flag.StringVar(&operatorVersion, "operator-version", "", "Version for Tigera operator")
 	flag.StringVar(&flannelVersion, "flannel-version", "", "Version for flannel")
-	flag.StringVar(&githubOrg, "github-org", utils.ProjectCalicoOrg, "GitHub organization")
-	flag.StringVar(&githubRepo, "github-repo", utils.CalicoRepoName, "GitHub repository")
-	flag.StringVar(&githubRemote, "github-repo-remote", utils.DefaultRemote, "GitHub repository remote")
+	flag.StringVar(&githubOrg, "github-org", defaults.ProjectCalicoOrg, "GitHub organization")
+	flag.StringVar(&githubRepo, "github-repo", defaults.CalicoRepoName, "GitHub repository")
+	flag.StringVar(&githubRemote, "github-repo-remote", defaults.Remote(), "GitHub repository remote")
 	flag.StringVar(&images, "images", "", "List of images to check")
-	flag.StringVar(&githubToken, "github-token", "", "GitHub token")
 }
 
 func checkVersion(t testing.TB, version string) {
@@ -48,7 +47,7 @@ func checkImages(t testing.TB, images string) {
 		t.Fatal("No images provided")
 	}
 	for _, image := range list {
-		if strings.Contains(image, operator.DefaultImage) {
+		if strings.Contains(image, registry.OperatorImage) {
 			t.Fatal("Operator images are checked separately, do not include in list of images to check")
 		}
 	}

@@ -38,7 +38,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	ctls "github.com/projectcalico/calico/crypto/pkg/tls"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/webhooks/pkg/clusterinfo"
 	"github.com/projectcalico/calico/webhooks/pkg/rbac"
@@ -94,7 +94,7 @@ func configureLogging() {
 		logrus.WithError(err).Fatalf("Invalid log level: %s", logLevel)
 	}
 	logrus.SetLevel(l)
-	logutils.ConfigureFormatter("webhook")
+	logrusr.ConfigureFormatter("webhook")
 	logrus.SetOutput(os.Stdout)
 	logrus.Infof("Log level set to %s", logLevel)
 }
@@ -108,6 +108,13 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create in-cluster config")
 	}
+
+	// The client-go defaults (QPS 5 / burst 10) throttle the webhook under bursts of policy writes,
+	// since every admission review issues a SubjectAccessReview. Match kube-controllers' higher
+	// limits so a large batch of concurrent writes doesn't queue behind client-side rate limiting.
+	rc.QPS = 100
+	rc.Burst = 200
+
 	cs, err := kubernetes.NewForConfig(rc)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create Kubernetes clientset")
