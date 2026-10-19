@@ -284,6 +284,10 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "failed to install the CNI annotation admission policies: %v\n", err)
 		return
 	}
+	if err := installAdmissionPolicies(testClient, filepath.Join(admissionDir(), "aws-vpc-annotations"), skipUnserved); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to install the AWS VPC CNI annotation admission policy: %v\n", err)
+		return
+	}
 
 	code = m.Run()
 }

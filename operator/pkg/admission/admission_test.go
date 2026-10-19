@@ -273,6 +273,24 @@ var _ = Describe("MutatingAdmissionPolicies", func() {
 			Expect(GetValidatingAdmissionPolicies(opv1.Calico, PolicySetCNIAnnotations, "")).To(BeEmpty())
 		})
 	})
+
+	Describe("GetValidatingAdmissionPolicies for the AWS VPC CNI annotation set", func() {
+		It("returns only the AWS policy and its binding, in their own set", func() {
+			objs := GetValidatingAdmissionPolicies(opv1.Calico, PolicySetAWSVPCAnnotations, VersionV1)
+			Expect(objs).To(HaveLen(2))
+			for _, obj := range objs {
+				Expect(obj.GetName()).To(Equal("protect-aws-vpc-annotations.projectcalico.org"))
+				Expect(obj.GetLabels()).To(HaveKeyWithValue(ManagedVAPLabel, ManagedVAPLabelValue))
+				Expect(obj.GetLabels()).To(HaveKeyWithValue(PolicySetLabel, string(PolicySetAWSVPCAnnotations)))
+			}
+		})
+
+		It("is not returned with the Calico CNI's policies", func() {
+			for _, obj := range GetValidatingAdmissionPolicies(opv1.Calico, PolicySetCNIAnnotations, VersionV1) {
+				Expect(obj.GetName()).NotTo(Equal("protect-aws-vpc-annotations.projectcalico.org"))
+			}
+		})
+	})
 })
 
 const enterpriseMAP = `apiVersion: admissionregistration.k8s.io/v1

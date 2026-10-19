@@ -3323,6 +3323,110 @@ var _ = Describe("CNI annotation admission policies", func() {
 	})
 })
 
+// The AWS VPC CNI's annotation is protected by its own policy, left out while aws-node runs as an
+// account the calico-aws-vpc-annotations binding doesn't name.
+var _ = Describe("AWS VPC CNI annotation admission policy", func() {
+	const vapName = "protect-aws-vpc-annotations.projectcalico.org"
+
+	var (
+		ctx              context.Context
+		scheme           *runtime.Scheme
+		componentHandler *fakeComponentHandler
+		installation     *operator.Installation
+	)
+
+	awsNode := func(sa, deprecatedSA string) *appsv1.DaemonSet {
+		return &appsv1.DaemonSet{
+			ObjectMeta: metav1.ObjectMeta{Name: "aws-node", Namespace: metav1.NamespaceSystem},
+			Spec: appsv1.DaemonSetSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+				ServiceAccountName:       sa,
+				DeprecatedServiceAccount: deprecatedSA,
+			}}},
+		}
+	}
+
+	reconcilerWith := func(initial ...client.Object) ReconcileInstallation {
+		mockStatus := &status.MockStatus{}
+		mockStatus.On("SetDegraded", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return()
+		return ReconcileInstallation{
+			ext: coreExtensions.Installation(),
+			opts: options.ControllerOptions{
+				APIDiscovery: discovery.NewStaticAPIDiscovery(map[schema.GroupKind]string{admission.ValidatingPolicyGroupKind: admission.VersionV1}),
+			},
+			client: ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(initial...).Build(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
+				return componentHandler
+			},
+		}
+	}
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		scheme = runtime.NewScheme()
+		Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
+		Expect(operator.SchemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+		Expect(admissionregistrationv1.SchemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
+		Expect(appsv1.AddToScheme(scheme)).NotTo(HaveOccurred())
+		componentHandler = newFakeComponentHandler()
+		installation = &operator.Installation{
+			ObjectMeta: metav1.ObjectMeta{Name: "default"},
+			Spec:       operator.InstallationSpec{Variant: operator.Calico},
+		}
+	})
+
+	DescribeTable("should report aws-node's service account only when it isn't aws-node",
+		func(ds *appsv1.DaemonSet, want string) {
+			var initial []client.Object
+			if ds != nil {
+				initial = append(initial, ds)
+			}
+			r := reconcilerWith(initial...)
+			got, err := unexpectedAWSNodeServiceAccount(ctx, r.client)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(got).To(Equal(want))
+		},
+		Entry("no aws-node DaemonSet", nil, ""),
+		Entry("aws-node", awsNode("aws-node", ""), ""),
+		Entry("aws-node, in the deprecated field", awsNode("", "aws-node"), ""),
+		Entry("another account", awsNode("custom-cni", ""), "custom-cni"),
+		Entry("no account named, so default", awsNode("", ""), "default"),
+	)
+
+	It("should install the policy in its own set", func() {
+		r := reconcilerWith()
+		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, logr.Discard(), admission.PolicySetAWSVPCAnnotations)).NotTo(HaveOccurred())
+
+		var created []string
+		for _, obj := range componentHandler.objectsToCreate {
+			created = append(created, obj.GetName())
+			Expect(obj.GetLabels()).To(HaveKeyWithValue(admission.PolicySetLabel, string(admission.PolicySetAWSVPCAnnotations)))
+		}
+		Expect(created).To(ConsistOf(vapName, vapName))
+		Expect(componentHandler.objectsToDelete).To(BeEmpty())
+	})
+
+	It("should remove the policy and leave the Calico CNI's alone", func() {
+		labels := func(set admission.PolicySet) map[string]string {
+			return map[string]string{admission.ManagedVAPLabel: admission.ManagedVAPLabelValue, admission.PolicySetLabel: string(set)}
+		}
+		r := reconcilerWith(
+			&admissionregistrationv1.ValidatingAdmissionPolicy{ObjectMeta: metav1.ObjectMeta{Name: vapName, Labels: labels(admission.PolicySetAWSVPCAnnotations)}},
+			&admissionregistrationv1.ValidatingAdmissionPolicyBinding{ObjectMeta: metav1.ObjectMeta{Name: vapName, Labels: labels(admission.PolicySetAWSVPCAnnotations)}},
+			&admissionregistrationv1.ValidatingAdmissionPolicy{ObjectMeta: metav1.ObjectMeta{Name: "protect-cni-annotations.projectcalico.org", Labels: labels(admission.PolicySetCNIAnnotations)}},
+		)
+		Expect(r.removeValidatingAdmissionPolicies(ctx, installation, logr.Discard(), admission.PolicySetAWSVPCAnnotations)).NotTo(HaveOccurred())
+
+		var deleted []string
+		for _, obj := range componentHandler.objectsToDelete {
+			deleted = append(deleted, obj.GetName())
+		}
+		Expect(deleted).To(ConsistOf(vapName, vapName))
+		Expect(componentHandler.objectsToCreate).To(BeEmpty())
+	})
+})
+
 // rejectingInstallation rejects the configuration, so the controller's degrade path
 // runs without a variant extension in the tree.
 type rejectingInstallation struct {
