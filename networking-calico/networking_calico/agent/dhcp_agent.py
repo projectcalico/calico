@@ -479,11 +479,13 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             self, datamodel_v2.subnet_dir(self.region_string)
         )
 
-        # Map from each local endpoint ID to the names of the WEPs in etcd for it.  The
-        # cache below holds one port per ID, but a port's WEP name includes the VM's ID,
-        # so while a port moves to another VM there can briefly be a WEP under each
-        # name, and their sets and deletions can arrive in any order.
-        self.local_endpoint_names = collections.defaultdict(set)
+        # Map from each local endpoint ID to the WEPs in etcd for it, each as the port
+        # data its name last gave, most recently set last.  The cache below holds one
+        # port per ID, but a port's WEP name includes the VM's ID, so while a port
+        # moves to another VM there can briefly be a WEP under each name, with
+        # different data (such as the VM's hostname), and their sets and deletions can
+        # arrive in any order.
+        self.local_endpoint_names = collections.defaultdict(dict)
 
     def start(self):
         eventlet.spawn(self.dnsmasq_updater.start)
@@ -640,7 +642,9 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             LOG.info("New port: %s", port)
         else:
             LOG.debug("Refresh already known port: %s", port)
-        self.local_endpoint_names[endpoint_id].add(name)
+        names = self.local_endpoint_names[endpoint_id]
+        names.pop(name, None)
+        names[name] = port
 
         # Add this port into the NetModel.
         self.agent.cache.put_port(dhcp.DictModel(port))
@@ -760,19 +764,23 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             LOG.warning("Unexpected form for endpoint name: %s", name)
             return
 
-        # Keep the port while any other WEP name for it still exists.  Note, the
-        # endpoint might not be in our map at all, because we haven't checked whether
-        # the endpoint just deleted is a local one.
+        # Keep the port while any other WEP name for it still exists, with that name's
+        # data, since the cache may hold the deleted name's.  Note, the endpoint might
+        # not be in our map at all, because we haven't checked whether the endpoint
+        # just deleted is a local one.
         names = self.local_endpoint_names.get(endpoint_id)
         if names is not None:
-            names.discard(name)
+            names.pop(name, None)
             if names:
+                remaining_name, remaining_port = next(reversed(names.items()))
                 LOG.info(
                     "Deleted %s, but port %s is still served by %s",
                     name,
                     endpoint_id,
-                    names,
+                    remaining_name,
                 )
+                self.agent.cache.put_port(dhcp.DictModel(remaining_port))
+                self._update_dnsmasq(remaining_port["network_id"])
                 return
             del self.local_endpoint_names[endpoint_id]
 
