@@ -113,6 +113,7 @@ var _ = Describe("tier controller tests", func() {
 	It("reconciles the calico-system tier", func() {
 		mockStatus.On("ReadyToMonitor")
 		mockStatus.On("ClearDegraded")
+		mockStatus.On("ClearWarning", "dns-client-namespaces")
 
 		_, err := r.Reconcile(ctx, reconcile.Request{})
 		Expect(err).ShouldNot(HaveOccurred())
@@ -145,11 +146,26 @@ var _ = Describe("tier controller tests", func() {
 	})
 
 	It("allows DNS access to the namespaces the variant contributes", func() {
-		r.opts.Extensions = extensions.New(extensions.Set{Tiers: dnsClientNamespaces{"tigera-manager", "tigera-prometheus"}})
+		r.opts.Extensions = extensions.New(extensions.Set{Tiers: dnsClients{
+			Namespaces:        []string{"tigera-manager", "tigera-prometheus"},
+			NamespacePrefixes: []string{"example-"},
+		}})
+		mockStatus.On("ClearWarning", "dns-client-namespaces")
 
 		cfg, res := r.prepareTiersConfig(ctx, logr.Discard())
 		Expect(res).To(BeNil())
 		Expect(cfg.CalicoNamespaces).To(Equal([]string{common.CalicoNamespace, "tigera-manager", "tigera-prometheus"}))
+		Expect(cfg.CalicoNamespacePrefixes).To(Equal([]string{"example-"}))
+		mockStatus.AssertCalled(GinkgoT(), "ClearWarning", "dns-client-namespaces")
+	})
+
+	It("reports the variant's DNS client warning on the TigeraStatus", func() {
+		r.opts.Extensions = extensions.New(extensions.Set{Tiers: dnsClients{Warning: "something is off"}})
+		mockStatus.On("SetWarning", "dns-client-namespaces", "something is off")
+
+		_, res := r.prepareTiersConfig(ctx, logr.Discard())
+		Expect(res).To(BeNil())
+		mockStatus.AssertCalled(GinkgoT(), "SetWarning", "dns-client-namespaces", "something is off")
 	})
 
 	It("runs the extension's own tier work before rendering", func() {
@@ -157,6 +173,7 @@ var _ = Describe("tier controller tests", func() {
 		r.opts.Extensions = extensions.New(extensions.Set{Tiers: ext})
 		mockStatus.On("ReadyToMonitor")
 		mockStatus.On("ClearDegraded")
+		mockStatus.On("ClearWarning", "dns-client-namespaces")
 
 		_, err := r.Reconcile(ctx, reconcile.Request{})
 		Expect(err).ShouldNot(HaveOccurred())
@@ -173,22 +190,25 @@ var _ = Describe("tier controller tests", func() {
 	})
 
 	It("allows DNS access to the core namespace alone when the variant contributes none", func() {
+		mockStatus.On("ClearWarning", "dns-client-namespaces")
+
 		cfg, res := r.prepareTiersConfig(ctx, logr.Discard())
 		Expect(res).To(BeNil())
 		Expect(cfg.CalicoNamespaces).To(Equal([]string{common.CalicoNamespace}))
+		Expect(cfg.CalicoNamespacePrefixes).To(BeEmpty())
 	})
 })
 
-// dnsClientNamespaces is a variant that contributes namespaces and nothing else.
-type dnsClientNamespaces []string
+// dnsClients is a variant that contributes DNS clients and nothing else.
+type dnsClients extensions.DNSClients
 
-func (dnsClientNamespaces) Watches(ctrlruntime.Controller) error { return nil }
+func (dnsClients) Watches(ctrlruntime.Controller) error { return nil }
 
-func (n dnsClientNamespaces) DNSClientNamespaces(context.Context, client.Client) ([]string, error) {
-	return n, nil
+func (d dnsClients) DNSClientNamespaces(context.Context, client.Client) (extensions.DNSClients, error) {
+	return extensions.DNSClients(d), nil
 }
 
-func (dnsClientNamespaces) Reconcile(context.Context, client.Client) error { return nil }
+func (dnsClients) Reconcile(context.Context, client.Client) error { return nil }
 
 // recordingTiers is a variant that only reports whether its tier work ran.
 type recordingTiers struct {
@@ -198,8 +218,8 @@ type recordingTiers struct {
 
 func (recordingTiers) Watches(ctrlruntime.Controller) error { return nil }
 
-func (recordingTiers) DNSClientNamespaces(context.Context, client.Client) ([]string, error) {
-	return nil, nil
+func (recordingTiers) DNSClientNamespaces(context.Context, client.Client) (extensions.DNSClients, error) {
+	return extensions.DNSClients{}, nil
 }
 
 func (t *recordingTiers) Reconcile(context.Context, client.Client) error {

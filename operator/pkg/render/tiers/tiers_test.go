@@ -175,4 +175,18 @@ var _ = Describe("Tiers rendering tests", func() {
 			Expect(selectorFor()).To(Equal("projectcalico.org/namespace in {}"))
 		})
 	})
+
+	It("should include namespace prefixes in the selectors", func() {
+		cfg.CalicoNamespaces = []string{common.CalicoNamespace}
+		cfg.CalicoNamespacePrefixes = []string{"example-"}
+		expectedSelector := "projectcalico.org/namespace in {'calico-system'} || projectcalico.org/namespace starts with 'example-'"
+
+		resourcesToCreate, _ := tiers.Tiers(cfg).Objects()
+
+		dnsPolicy := testutils.GetCalicoSystemPolicyFromResources(types.NamespacedName{Name: "calico-system.cluster-dns", Namespace: "kube-system"}, resourcesToCreate)
+		Expect(dnsPolicy.Spec.Ingress[0].Source.Selector).To(Equal(expectedSelector))
+
+		nodeLocalDNSPolicy := testutils.GetCalicoSystemGlobalPolicyFromResources("calico-system.node-local-dns", resourcesToCreate)
+		Expect(nodeLocalDNSPolicy.Spec.Selector).To(Equal(expectedSelector))
+	})
 })
