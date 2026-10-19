@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/multidict"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/calico/libcalico-go/lib/packedmap"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -134,7 +135,6 @@ func (arc *ActiveRulesCalculator) RegisterWith(localEndpointDispatcher, allUpdDi
 	localEndpointDispatcher.Register(model.HostEndpointKey{}, arc.OnUpdate)
 	// ...as well as all the policies and profiles.
 	allUpdDispatcher.Register(model.PolicyKey{}, arc.OnUpdate)
-	allUpdDispatcher.Register(model.ProfileRulesKey{}, arc.OnUpdate)
 	allUpdDispatcher.Register(model.ResourceKey{}, arc.OnUpdate)
 	// ... and tiers as well. only required for stats update.
 	allUpdDispatcher.Register(model.TierKey{}, arc.OnUpdate)
@@ -175,48 +175,26 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 		}
 		arc.labelIndex.OnUpdate(update)
 	case model.ResourceKey:
-		arc.labelIndex.OnUpdate(update)
-	case model.ProfileRulesKey:
-		if update.Value != nil {
-			rules := update.Value.(*model.ProfileRules)
-			oldRules, _ := arc.allProfileRules.Get(key.Name)
-			if reflect.DeepEqual(oldRules, rules) {
-				if log.IsLevelEnabled(log.DebugLevel) {
-					log.WithField("key", update.Key).Debug("No-op profile change; ignoring.")
-				}
-				return
+		if key.Kind == v3.KindProfile {
+			var rules *model.ProfileRules
+			if update.Value != nil {
+				rules = updateprocessors.ProfileRulesAPIV3ToBackend(update.Value.(*v3.Profile))
 			}
-			arc.allProfileRules.Set(key.Name, rules)
-			if arc.profileIDToEndpointKeys.ContainsKey(key.Name) {
-				log.Debugf("Profile rules updated while active: %v", key.Name)
-				arc.sendProfileUpdate(key.Name, rules)
-			} else {
-				log.Debugf("Profile rules updated while inactive: %v", key.Name)
-			}
-		} else {
-			arc.allProfileRules.Delete(key.Name)
-			if arc.profileIDToEndpointKeys.ContainsKey(key.Name) {
-				log.Debug("Profile rules deleted while active, telling listener/felix")
-				arc.sendProfileUpdate(key.Name, nil)
-			} else {
-				log.Debugf("Profile rules deleted while inactive: %v", key.Name)
-			}
+			arc.onProfileRulesUpdate(key.Name, rules)
 		}
-		// Update the tier/policy/profile counts.
-		arc.updateStats()
+		arc.labelIndex.OnUpdate(update)
 	case model.PolicyKey:
 		oldPolicy, _ := arc.allPolicies.Get(key)
 		oldPolicyWasForceProgrammed := policyForceProgrammed(oldPolicy)
 		if update.Value != nil {
 			log.Debugf("Updating ARC for policy %v", key)
 			policy := update.Value.(*model.Policy)
-			if reflect.DeepEqual(oldPolicy, policy) {
+			if !arc.allPolicies.Set(key, policy) {
 				if log.IsLevelEnabled(log.DebugLevel) {
 					log.WithField("key", update.Key).Debug("No-op policy change; ignoring.")
 				}
 				return
 			}
-			arc.allPolicies.Set(key, policy)
 
 			// If the policy transitions to be force-programmed, simulate
 			// a match with a dummy endpoint key.
@@ -326,6 +304,33 @@ func policyForceProgrammed(policy *model.Policy) bool {
 		return false
 	}
 	return slices.Contains(policy.PerformanceHints, v3.PerfHintAssumeNeededOnEveryNode)
+}
+
+func (arc *ActiveRulesCalculator) onProfileRulesUpdate(name string, rules *model.ProfileRules) {
+	if rules != nil {
+		if !arc.allProfileRules.Set(name, rules) {
+			if log.IsLevelEnabled(log.DebugLevel) {
+				log.WithField("profile", name).Debug("No-op profile change; ignoring.")
+			}
+			return
+		}
+		if arc.profileIDToEndpointKeys.ContainsKey(name) {
+			log.Debugf("Profile rules updated while active: %v", name)
+			arc.sendProfileUpdate(name, rules)
+		} else {
+			log.Debugf("Profile rules updated while inactive: %v", name)
+		}
+	} else {
+		arc.allProfileRules.Delete(name)
+		if arc.profileIDToEndpointKeys.ContainsKey(name) {
+			log.Debug("Profile rules deleted while active, telling listener/felix")
+			arc.sendProfileUpdate(name, nil)
+		} else {
+			log.Debugf("Profile rules deleted while inactive: %v", name)
+		}
+	}
+	// Update the tier/policy/profile counts.
+	arc.updateStats()
 }
 
 func (arc *ActiveRulesCalculator) updateStats() {

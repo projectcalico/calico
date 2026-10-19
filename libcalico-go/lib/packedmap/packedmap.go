@@ -56,6 +56,11 @@ type Map[K comparable, V any] struct {
 	RawPackedMap[K, V, string]
 }
 
+// Set stores val and reports whether that changed the stored value; see setAndCompare.
+func (m Map[K, V]) Set(key K, val V) (changed bool) {
+	return setAndCompare(m.RawPackedMap, key, val)
+}
+
 // MakeDedupedCompressedJSON returns a new map that stores JSON-encoded values,
 // compressed with snappy compression and then deduped using the unique package.
 func MakeDedupedCompressedJSON[K comparable, V any]() Deduped[K, V] {
@@ -75,8 +80,23 @@ type Deduped[K comparable, V any] struct {
 	RawPackedMap[K, V, unique.Handle[string]]
 }
 
+// Set stores val and reports whether that changed the stored value; see setAndCompare.
+func (d Deduped[K, V]) Set(key K, val V) (changed bool) {
+	return setAndCompare(d.RawPackedMap, key, val)
+}
+
 func (pm RawPackedMap[K, VIn, VPacked]) Set(key K, val VIn) {
 	pm.m[key] = pm.encoder.Pack(val)
+}
+
+// setAndCompare compares on the packed form, so values that pack identically count as unchanged
+// even when reflect.DeepEqual would say they differ; for example, an empty but non-nil slice in an
+// omitempty field.
+func setAndCompare[K, VPacked comparable, VIn any](pm RawPackedMap[K, VIn, VPacked], key K, val VIn) bool {
+	packed := pm.encoder.Pack(val)
+	old, ok := pm.m[key]
+	pm.m[key] = packed
+	return !ok || old != packed
 }
 
 func (pm RawPackedMap[K, VIn, VPacked]) Get(key K) (val VIn, ok bool) {

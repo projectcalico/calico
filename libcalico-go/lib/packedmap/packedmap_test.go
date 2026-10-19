@@ -23,7 +23,7 @@ import (
 type exampleStruct struct {
 	Field1 string         `json:"field_one,omitempty"`
 	Field2 bool           `json:"field_two,omitempty"`
-	Field3 map[string]int `json:"field_three,omitemepty"`
+	Field3 map[string]int `json:"field_three,omitempty"`
 }
 
 func TestCompressedJSON(t *testing.T) {
@@ -107,5 +107,42 @@ func TestDedupe(t *testing.T) {
 	h2 := m.m["fullyLoadedCopy"]
 	if h1 != h2 {
 		t.Errorf("Expected dedupe")
+	}
+}
+
+func TestDedupedSetReportsChange(t *testing.T) {
+	m := MakeDedupedCompressedJSON[string, exampleStruct]()
+
+	if !m.Set("a", exampleStruct{Field1: "hello"}) {
+		t.Errorf("Expected first Set to report a change")
+	}
+	if m.Set("a", exampleStruct{Field1: "hello"}) {
+		t.Errorf("Expected identical Set to report no change")
+	}
+	if !m.Set("a", exampleStruct{Field1: "world"}) {
+		t.Errorf("Expected different value to report a change")
+	}
+
+}
+
+func TestSetIgnoresOmittedEmptySlice(t *testing.T) {
+	type withSlice struct {
+		Items []string `json:"items,omitempty"`
+	}
+	deduped := MakeDedupedCompressedJSON[string, withSlice]()
+	deduped.Set("a", withSlice{})
+	if deduped.Set("a", withSlice{Items: []string{}}) {
+		t.Errorf("Expected an empty slice to pack the same as nil in a Deduped map")
+	}
+
+	m := MakeCompressedJSON[string, withSlice]()
+	if !m.Set("a", withSlice{}) {
+		t.Errorf("Expected first Set to report a change")
+	}
+	if m.Set("a", withSlice{Items: []string{}}) {
+		t.Errorf("Expected an empty slice to pack the same as nil in a Map")
+	}
+	if !m.Set("a", withSlice{Items: []string{"x"}}) {
+		t.Errorf("Expected different value to report a change")
 	}
 }
