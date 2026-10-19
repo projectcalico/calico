@@ -750,13 +750,17 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self._agent_update_context, agent_state, use_call=False
         )
 
-    def on_port_status_changed(self, hostname, port_id, calico_status, priority="low"):
+    def on_port_status_changed(
+        self, hostname, port_id, calico_status, *, workload_id, priority="low"
+    ):
         """Called when etcd tells us that a port status has changed.
 
         :param hostname: hostname of the host containing the port.
         :param port_id: the port ID.
         :param calico_status: new status for the port, or None if the status
                was deleted.
+        :param workload_id: the workload segment of Felix's status key, as it
+               appears in the key.
         """
         port_status_key = (intern_string(hostname), port_id)
 
