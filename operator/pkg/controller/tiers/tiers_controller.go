@@ -49,6 +49,9 @@ import (
 
 var log = logf.Log.WithName("controller_tiers")
 
+// dnsClientsWarningKey is the TigeraStatus warning key for a warning reported with the DNS client namespaces.
+const dnsClientsWarningKey = "dns-client-namespaces"
+
 // ReconcilerOptions is what the Tiers reconciler needs to run.
 type ReconcilerOptions struct {
 	Client             client.Client
@@ -180,13 +183,20 @@ func (r *ReconcileTiers) prepareTiersConfig(ctx context.Context, reqLogger logr.
 	namespaces := []string{
 		common.CalicoNamespace,
 	}
-	extraNamespaces, err := r.opts.Extensions.Tiers().DNSClientNamespaces(ctx, r.client)
+	dnsClients, err := r.opts.Extensions.Tiers().DNSClientNamespaces(ctx, r.client)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying namespaces that need DNS access", err, reqLogger)
 		return nil, &reconcile.Result{RequeueAfter: utils.StandardRetry}
 	}
-	namespaces = append(namespaces, extraNamespaces...)
+	if dnsClients.Warning != "" {
+		reqLogger.Info(dnsClients.Warning)
+		r.status.SetWarning(dnsClientsWarningKey, dnsClients.Warning)
+	} else {
+		r.status.ClearWarning(dnsClientsWarningKey)
+	}
+	namespaces = append(namespaces, dnsClients.Namespaces...)
 	tiersConfig.CalicoNamespaces = namespaces
+	tiersConfig.CalicoNamespacePrefixes = dnsClients.NamespacePrefixes
 
 	// node-local-dns is not supported on openshift
 	if r.opts.DetectedProvider != operatorv1.ProviderOpenShift {

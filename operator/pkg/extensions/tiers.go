@@ -29,10 +29,22 @@ type TiersExtension interface {
 
 	// DNSClientNamespaces are the variant's namespaces that run product code and so
 	// need access to the DNS service.
-	DNSClientNamespaces(ctx context.Context, cli client.Client) ([]string, error)
+	DNSClientNamespaces(ctx context.Context, cli client.Client) (DNSClients, error)
 
 	// Reconcile does the extension's own work on the tiers, before the core render.
 	Reconcile(ctx context.Context, cli client.Client) error
+}
+
+// DNSClients describes the namespaces a variant needs to have access to the DNS service.
+type DNSClients struct {
+	// Namespaces are matched by name.
+	Namespaces []string
+
+	// NamespacePrefixes match every namespace whose name starts with one of them.
+	NamespacePrefixes []string
+
+	// Warning, if set, is surfaced on the tiers TigeraStatus.
+	Warning string
 }
 
 // noopTiers runs the core operator's behavior unchanged.
@@ -42,8 +54,8 @@ func (noopTiers) Watches(ctrlruntime.Controller) error {
 	return nil
 }
 
-func (noopTiers) DNSClientNamespaces(context.Context, client.Client) ([]string, error) {
-	return nil, nil
+func (noopTiers) DNSClientNamespaces(context.Context, client.Client) (DNSClients, error) {
+	return DNSClients{}, nil
 }
 
 func (noopTiers) Reconcile(context.Context, client.Client) error {
