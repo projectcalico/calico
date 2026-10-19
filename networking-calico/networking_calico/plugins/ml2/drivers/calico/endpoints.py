@@ -1220,9 +1220,10 @@ def _etcd_slots_can_exist_for(db_port, host, device_id):
 
 
 def _slot_kind_host_port(name):
-    """Map a "wep ", "dest-wep " or "lm " name to (kind, host, port_id).
+    """Map a "wep ", "dest-wep " or "lm " map key to (kind, host, port_id).
 
-    Returns None for a name not in our format, such as a legacy or hand-edited one.
+    Returns None if the WEP name after the prefix isn't in our format, such as a
+    legacy or hand-edited one.
     """
     kind, wep_name = name.split(" ", 1)
     parts = datamodel_v3.split_endpoint_name(wep_name)
