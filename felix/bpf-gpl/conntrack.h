@@ -379,8 +379,9 @@ create:
 
 	err = cali_ct_update_elem(k, &ct_value, BPF_NOEXIST);
 
-	/* A NAT'd SYN never looked up the post-NAT key, so a closed entry there was not recycled yet. */
 	if (err == -17 /* EEXIST */ && ct_ctx->type == CALI_CT_TYPE_NAT_REV && syn && !ack) {
+		/* Check if the colliding entry can be recycled. This is done at lookup
+		 * time for forward entries. */
 		struct calico_ct_value *old = cali_ct_lookup_elem(k);
 		if (old && old->type == CALI_CT_TYPE_NAT_FWD) {
 			/* Another flow's forward entry: judge the connection it tracks. */
