@@ -2431,6 +2431,26 @@ class TestLiveMigration(TestPluginEtcdBase):
             self.driver.create_port_postcommit(context)
         sync_wep.assert_not_called()
 
+    def test_delete_at_cutover_syncs_the_slot_once(self):
+        """Deleting a port whose ``migrating_to`` is its binding host syncs it once."""
+        self._do_initial_resync()
+        context = self._make_port_context()
+        context._port = {
+            **self.port,
+            "binding:profile": {"migrating_to": self.SOURCE_HOST},
+        }
+        self.osdb_ports = []
+
+        syncer = self.driver.endpoint_syncer
+        with mock.patch.object(syncer, "sync_wep", wraps=syncer.sync_wep) as sync_wep:
+            self.driver.delete_port_postcommit(context)
+
+        self.assertEqual(
+            [mock.call(context._port, self.SOURCE_HOST, mock.ANY)],
+            sync_wep.mock_calls,
+        )
+        self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_deletes)
+
     def test_nova_detach_removes_wep(self):
         """Nova's interface detach removes the WEP.
 

@@ -1321,7 +1321,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self.endpoint_syncer.sync_lm(port, migrating_to, plugin_context)
         self.endpoint_syncer.sync_wep(port, migrating_to, plugin_context)
 
-        self.endpoint_syncer.sync_wep(port, port.get("binding:host_id"), plugin_context)
+        if migrating_to != port.get("binding:host_id"):
+            self.endpoint_syncer.sync_wep(
+                port, port.get("binding:host_id"), plugin_context
+            )
 
     def security_groups_updated(self, context):
         """Called whenever security group rules, membership or existence change."""
