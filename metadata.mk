@@ -18,10 +18,12 @@ RUST_BUILD_VER=1.96.0
 CALICO_BASE_VER=ubi9-1790725174
 
 # Version of various tools used in the build and tests. Tools that are Go
-# programs (crane, gotestsum, setup-envtest, goimports) are not pinned here:
-# they are `tool` directives in the root go.mod, so Renovate's gomod manager
-# updates them with the rest of the module graph. See the GO_TOOL comment in
-# lib.Makefile.
+# programs (crane, ginkgo, gotestsum, setup-envtest, goimports, yq) are not
+# pinned here: they are `tool` directives in the root go.mod. Apart from
+# goimports (golang.org/x/tools, which follows Renovate's golang.org/x rules),
+# Renovate raises PRs for them only for security fixes; otherwise bump one by
+# hand with `go get -tool <pkg>@<version>`. See the CONTAINER_GO_TOOL comment
+# in lib.Makefile.
 COREDNS_VERSION=1.5.2
 ETCD_VERSION=v3.5.31
 GHR_VERSION=v0.18.3

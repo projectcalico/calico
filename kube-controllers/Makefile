@@ -102,7 +102,7 @@ ut-prereqs: $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
 
 # gotestsum runs on the host, not in the build container: run-uts invokes the
 # test binaries outside it so they can talk to docker.
-ut-no-prereqs: $(TEST_BINARIES) setup-envtest bin/test2json
+ut-no-prereqs: $(TEST_BINARIES) setup-envtest bin/test2json bin/gotestsum
 	KUBE_IMAGE=$(CALICO_BUILD) \
 		   ETCD_IMAGE=$(ETCD_IMAGE) \
 		   CALICO_API_GROUP=$(CALICO_API_GROUP) \
@@ -110,8 +110,8 @@ ut-no-prereqs: $(TEST_BINARIES) setup-envtest bin/test2json
 		   CRDS=$(REPO_ROOT)/$(CALICO_CRD_PATH) \
 		   CERTS_PATH=$(CERTS_PATH) \
 		   KUBEBUILDER_ASSETS=$$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1) \
-		   GOTESTSUM="$(GO_TOOL) gotestsum" \
-		   TEST2JSON=$(abspath bin/test2json) \
+		   GOTESTSUM=$(REPO_ROOT)/bin/gotestsum \
+		   TEST2JSON=$(REPO_ROOT)/bin/test2json \
 		   ./run-uts $(WHAT)
 
 # Produce test binaries for each package that needs them.

@@ -71,8 +71,8 @@ update-x-libraries:
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
 
-check-images-availability: bin/yq
-	cd ./hack && RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) CRANE="$(CRANE_CMD)" ./check-images-availability.sh
+check-images-availability: bin/crane
+	cd ./hack && RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) ./check-images-availability.sh
 
 check-language:
 	./hack/check-language.sh
@@ -127,7 +127,7 @@ generate:
 	$(MAKE) -C e2e gen-test-set
 	$(MAKE) fix-changed
 
-gen-manifests: bin/helm bin/yq
+gen-manifests: bin/helm
 	cd ./manifests && ./generate.sh
 
 # The operator's go:embed directives need these on disk before any target can
@@ -564,17 +564,17 @@ create-release-branch: release/bin/release
 
 # Test the release code
 release-test:
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r hack/release/pkg
+	$(DOCKER_RUN) $(CALICO_BUILD) $(GINKGO) -cover -r hack/release/pkg
 
 # Currently our openstack builds either build *or* build and publish,
 # hence why we have two separate jobs here that do almost the same thing.
-build-openstack: bin/yq
-	$(eval VERSION=$(shell bin/yq '.version' charts/calico/values.yaml))
+build-openstack:
+	$(eval VERSION=$(shell go tool yq '.version' charts/calico/values.yaml))
 	$(info Building openstack packages for version $(VERSION))
 	$(MAKE) -C release/packaging release VERSION=$(VERSION)
 
-publish-openstack: bin/yq
-	$(eval VERSION=$(shell bin/yq '.version' charts/calico/values.yaml))
+publish-openstack:
+	$(eval VERSION=$(shell go tool yq '.version' charts/calico/values.yaml))
 	$(info Publishing openstack packages for version $(VERSION))
 	$(MAKE) -C release/packaging release-publish VERSION=$(VERSION)
 
@@ -588,7 +588,7 @@ helm-index:
 			     $(MAKE) semaphore-run-workflow
 
 # Creates the tar file used for installing Calico on OpenShift.
-bin/ocp.tgz: manifests/ocp/ bin/yq
+bin/ocp.tgz: manifests/ocp/
 	tar czvf $@ --exclude='.gitattributes' -C manifests/ ocp
 
 ## Generates release notes for the given version.
@@ -616,5 +616,5 @@ endif
 ###############################################################################
 # Post-release validation
 ###############################################################################
-postrelease-checks release-validate: release/bin/release
+postrelease-checks release-validate: release/bin/release bin/gotestsum
 	@release/bin/release release validate

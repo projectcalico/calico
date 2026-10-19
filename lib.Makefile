@@ -358,20 +358,26 @@ CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 # The path DOCKER_RUN mounts the repo at inside the build container.
 CONTAINER_REPO_ROOT := /go/src/github.com/projectcalico/calico
 
-# Build tools (crane, gotestsum, setup-envtest, goimports) are declared with
-# `tool` directives in the root go.mod, so their versions move with the module
-# graph and Renovate updates them alongside every other dependency.
+# Build tools (crane, ginkgo, gotestsum, setup-envtest, goimports, yq) are
+# declared with `tool` directives in the root go.mod, which pins their
+# versions. Apart from goimports (golang.org/x/tools, which follows Renovate's
+# golang.org/x rules), Renovate raises PRs for them only for security fixes;
+# otherwise bump one by hand with `go get -tool <pkg>@<version>`.
 #
-# `go tool` resolves the directives from the module containing the working
-# directory and runs the tool there, so plain GO_TOOL is what component
-# Makefiles want: their relative arguments (report/x.xml, dist/windows/*.tar)
-# stay relative to the component. CONTAINER_GO_TOOL is for the callers that
-# cannot resolve the root module from where they stand - api/ is a separate
-# module, and DOCKER_GO_BUILD lands there in a directory that has no go.mod at
-# all. Because it moves the tool's working directory, only pass it absolute
-# paths.
-GO_TOOL           := go tool
+# Tools that run inside the build container use CONTAINER_GO_TOOL, which
+# resolves the directives from the root module wherever the container's working
+# directory is (api/ is a separate module, and DOCKER_GO_BUILD can land in a
+# directory with no go.mod at all). Because it moves the tool's working
+# directory, only pass it absolute paths. Tools that run on the host (crane,
+# gotestsum, test2json) are built into bin/ - see HOST_TOOLS. yq runs on the
+# host as plain `go tool yq`.
 CONTAINER_GO_TOOL := go -C $(CONTAINER_REPO_ROOT) tool
+
+# The ginkgo CLI, run in the build container from the component directory so
+# that -r and relative paths stay relative to it. `go tool` resolves it from the
+# module that directory is in, so the CLI always matches the library version the
+# tests link against (api/ declares it in its own go.mod for that reason).
+GINKGO := go tool ginkgo
 
 # Support for git worktrees.  In a worktree, .git is a file pointing to
 # <main-repo>/.git/worktrees/<name>.  When Docker containers need git access,
@@ -752,7 +758,7 @@ git-commit:
 ifdef LOCAL_CRANE
 CRANE_CMD         = crane
 else
-CRANE_CMD         = $(GO_TOOL) crane
+CRANE_CMD         = $(REPO_ROOT)/bin/crane
 endif
 
 ifdef LOCAL_PYTHON
@@ -1523,7 +1529,7 @@ release-retag-dev-images-in-registry-%:
 # release-retag-dev-image-in-registry-% retags the build image specified by $* in the dev registry specified by
 # DEV_REGISTRY with the release tag specified by RELEASE_TAG. If DEV_REGISTRY is in the list of registries specified by
 # RELEASE_REGISTRIES then the retag is not done
-release-retag-dev-image-in-registry-%:
+release-retag-dev-image-in-registry-%: bin/crane
 	$(if $(filter-out $(RELEASE_REGISTRIES),$(DEV_REGISTRY)),\
 		$(CRANE) cp $(DEV_REGISTRY)/$(call unescapefs,$*):$(DEV_TAG) $(DEV_REGISTRY)/$(call unescapefs,$*):$(RELEASE_TAG))
 
@@ -1535,7 +1541,7 @@ release-dev-images-to-registry-%:
 
 # release-dev-image-to-registry-% copies the build image and build arch images specified by $* and VALIDARCHES from
 # the dev repo specified by DEV_TAG and RELEASE.
-release-dev-image-to-registry-%:
+release-dev-image-to-registry-%: bin/crane
 	$(if $(SKIP_MANIFEST_RELEASE),,\
 		$(CRANE) cp $(DEV_REGISTRY)/$(call unescapefs,$*):$(DEV_TAG) $(RELEASE_REGISTRY)/$(call unescapefs,$*):$(RELEASE_TAG))
 	$(if $(SKIP_ARCH_RELEASE),,\
@@ -1543,7 +1549,7 @@ release-dev-image-to-registry-%:
 
 # release-dev-image-to-registry-% copies the build arch image specified by BUILD_IMAGE and ARCH from the dev repo
 # specified by DEV_TAG and RELEASE.
-release-dev-image-arch-to-registry-%:
+release-dev-image-arch-to-registry-%: bin/crane
 	$(CRANE) cp $(DEV_REGISTRY)/$(BUILD_IMAGE):$(DEV_TAG)-$* $(RELEASE_REGISTRY)/$(BUILD_IMAGE):$(RELEASE_TAG)-$*
 
 # release-prereqs checks that the environment is configured properly to create a release.
@@ -1558,12 +1564,23 @@ check-dirty:
 	@if [ "$$(git --no-pager diff --stat)" != "" ]; then \
 	echo "The following files are dirty"; git --no-pager diff; exit 1; fi
 
-bin/yq:
-	mkdir -p bin
-	$(eval TMP := $(shell mktemp -d))
-	$(call fetch_file,https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz,$(TMP)/yq4.tar.gz)
-	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
-	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
+# Host-run Go tools are built in the build container, at the version the root
+# go.mod's `tool` directives pin, so the host needs only docker - not a Go
+# toolchain. Depending on go.mod rebuilds them when Renovate bumps one; the
+# build cache makes that cheap when nothing they use changed. test2json ships
+# with the Go toolchain rather than in a module, so it has no `tool` directive
+# and its version follows the build image's Go.
+HOST_TOOLS              := crane gotestsum test2json
+HOST_TOOL_PKG_crane     := github.com/google/go-containerregistry/cmd/crane
+HOST_TOOL_PKG_gotestsum := gotest.tools/gotestsum
+HOST_TOOL_PKG_test2json := cmd/test2json
+
+# Not .PHONY: at the repo root bin/<tool> is the real file, and targets such as
+# bin/ocp.tgz that depend on it must not rebuild every time.
+$(addprefix bin/,$(HOST_TOOLS)): bin/%: $(REPO_ROOT)/bin/%
+$(addprefix $(REPO_ROOT)/bin/,$(HOST_TOOLS)): $(REPO_ROOT)/bin/%: $(REPO_ROOT)/go.mod
+	$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) \
+		go -C $(CONTAINER_REPO_ROOT) build -o $(CONTAINER_REPO_ROOT)/bin/$* $(HOST_TOOL_PKG_$*)
 
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.
@@ -2193,7 +2210,7 @@ image-windows: setup-windows-builder var-require-all-WINDOWS_VERSIONS
 		$(MAKE) windows-sub-image-$${version}; \
 	done;
 
-release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAGETAG-DEV_REGISTRIES image-windows
+release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAGETAG-DEV_REGISTRIES image-windows bin/crane
 	for registry in $(DEV_REGISTRIES); do \
 		echo Pushing Windows images to $${registry}; \
 		all_images=""; \
@@ -2219,12 +2236,12 @@ release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAG
 # retag-windows-image-with-registries copies the Windows image from DEV_TAG to
 # IMAGETAG in each registry. Windows images are single-arch manifests built by
 # buildx, so they have no local per-arch images to retag.
-retag-windows-image-with-registries: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE-DEV_TAG-IMAGETAG
+retag-windows-image-with-registries: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE-DEV_TAG-IMAGETAG bin/crane
 	for registry in $(DEV_REGISTRIES); do \
 		$(CRANE) cp $${registry}/$(WINDOWS_IMAGE):$(DEV_TAG) $${registry}/$(WINDOWS_IMAGE):$(IMAGETAG); \
 	done;
 
-release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE var-require-one-of-VERSION-BRANCH_NAME
+release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE var-require-one-of-VERSION-BRANCH_NAME bin/crane
 	describe_tag=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(shell git describe --tags --dirty --long --always --abbrev=12); \
 	release_tag=$(if $(VERSION),$(VERSION),$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME)); \
 	$(MAKE) release-windows-with-tag IMAGETAG=$${describe_tag}; \

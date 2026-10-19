@@ -313,7 +313,7 @@ ut fv: $(LIBBPF_A) run-k8s-apiserver
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
-	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --skip-package $(UT_PACKAGES_TO_SKIP) --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
+	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && $(GINKGO) -r --skip-package $(UT_PACKAGES_TO_SKIP) --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
 
 ###############################################################################
 # System tests
@@ -437,15 +437,15 @@ release-windows-archive: release-prereqs
 .PHONY: release-publish release-publish-linux release-publish-windows
 release-publish: release-publish-linux release-publish-windows
 
-release-publish-linux: release-prereqs
-	@if $(REPO_ROOT)/hack/image-published "$(CRANE_CMD)" "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
+release-publish-linux: release-prereqs bin/crane
+	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(BUILD_IMAGES)" "$(VERSION)" "$(VALIDARCHES)"; then \
 		echo "$(BUILD_IMAGES):$(VERSION) is already published, skipping"; \
 	else \
 		$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM); \
 	fi
 
-release-publish-windows: release-prereqs
-	@if $(REPO_ROOT)/hack/image-published "$(CRANE_CMD)" "$(DEV_REGISTRIES)" "$(WINDOWS_IMAGE)" "$(VERSION)"; then \
+release-publish-windows: release-prereqs bin/crane
+	@if $(REPO_ROOT)/hack/image-published $(CRANE_CMD) "$(DEV_REGISTRIES)" "$(WINDOWS_IMAGE)" "$(VERSION)"; then \
 		echo "$(WINDOWS_IMAGE):$(VERSION) is already published, skipping"; \
 	else \
 		$(MAKE) release-windows IMAGETAG=$(VERSION) CONFIRM=$(CONFIRM); \
