@@ -184,6 +184,55 @@ func TestCTDeltaMigration(t *testing.T) {
 	Expect(err).To(HaveOccurred(), "old conntrack map present")
 }
 
+// Copies span several write batches plus a partial one, in both the resize and the delta pass.
+func TestCTMigrationManyEntries(t *testing.T) {
+	RegisterTestingT(t)
+	fallbacks := bpfmaps.CopyFallbacks()
+	testCTMigrationManyEntries(t)
+	Expect(bpfmaps.CopyFallbacks()).To(Equal(fallbacks), "batched copy fell back to per-entry updates")
+}
+
+func TestCTMigrationBatchFallback(t *testing.T) {
+	RegisterTestingT(t)
+	bpfmaps.SetCopyBatchFailForTesting(true)
+	defer bpfmaps.SetCopyBatchFailForTesting(false)
+	fallbacks := bpfmaps.CopyFallbacks()
+	testCTMigrationManyEntries(t)
+	// Initial copy: batches of 1000, 1000, 500; delta copy: 1000, 500.
+	Expect(bpfmaps.CopyFallbacks() - fallbacks).To(BeNumerically("==", 5))
+}
+
+// testCTMigrationManyEntries uses counts that are not batch multiples, so the final flushes are partial.
+func testCTMigrationManyEntries(t *testing.T) {
+	const numEntries = 2500
+	for i := range numEntries {
+		Expect(insertNumberedKey(i)).To(Succeed())
+	}
+
+	conntrack.SetMapSize(2 * numEntries)
+	maps, err := bpfmap.CreateBPFMaps(false)
+	Expect(err).NotTo(HaveOccurred())
+	defer restoreMaps(maps)
+	Expect(saveCTMap(maps.V4.CtMap)).To(HaveLen(numEntries))
+
+	t.Log("STEP: add entries to the old map, then copy the delta")
+	for i := numEntries; i < numEntries+1500; i++ {
+		Expect(insertNumberedKey(i)).To(Succeed())
+	}
+	Expect(maps.V4.CtMap.CopyDeltaFromOldMap()).To(Succeed())
+
+	ctSaved := saveCTMap(maps.V4.CtMap)
+	Expect(ctSaved).To(HaveLen(numEntries + 1500))
+	for i := range numEntries + 1500 {
+		key := conntrack.NewKey(1, net.ParseIP("10.0.0.1"), uint16(i), net.ParseIP("10.0.0.2"), uint16(i>>16))
+		val := conntrack.Value{}
+		for j := range val {
+			val[j] = uint8(j + i)
+		}
+		Expect(ctSaved).To(HaveKeyWithValue(key, val))
+	}
+}
+
 func TestMapEntryDeletion(t *testing.T) {
 	k, err1 := setUpMapTestWithSingleKV(t)
 
@@ -405,6 +454,22 @@ func setUpConntrackMapEntries(b *testing.B, n int) {
 		}
 	}
 	b.StartTimer()
+}
+
+func BenchmarkCTMapResizeCopy400k(b *testing.B) {
+	RegisterTestingT(b)
+	logLevel := logrus.GetLevel()
+	logrus.SetLevel(logrus.InfoLevel)
+	defer logrus.SetLevel(logLevel)
+	for range b.N {
+		setUpConntrackMapEntries(b, 400000)
+		conntrack.SetMapSize(800000)
+		b.StartTimer()
+		maps, err := bpfmap.CreateBPFMaps(false)
+		b.StopTimer()
+		Expect(err).NotTo(HaveOccurred())
+		restoreMaps(maps)
+	}
 }
 
 func BenchmarkMapIteratorMulti10(b *testing.B) {
