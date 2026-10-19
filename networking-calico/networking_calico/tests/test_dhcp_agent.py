@@ -307,6 +307,20 @@ class TestDhcpAgent(base.BaseTestCase):
         self.assertEqual("vm-2", port.dns_assignment[0]["hostname"])
         agent.etcd.dnsmasq_updater.update_network.assert_called()
 
+    def test_stale_name_deletion_keeps_mtu_change(self):
+        """Restoring the remaining name's data keeps an MTU change made since."""
+        agent = self._make_agent_with_subnet()
+        old_name = make_endpoint_name("endpoint-1", "vm-1")
+        new_name = make_endpoint_name("endpoint-1", "vm-2")
+        agent.etcd.on_endpoint_set(self.ENDPOINT, old_name)
+        agent.etcd.on_endpoint_set(self.ENDPOINT, new_name)
+        agent.etcd.on_mtu_change("endpoint-1", 9000)
+
+        agent.etcd.on_endpoint_delete(None, old_name)
+
+        port = agent.cache.get_port_by_id("endpoint-1")
+        self.assertEqual("9000", port.extra_dhcp_opts[0].opt_value)
+
     def test_stale_name_deletion_keeps_port(self):
         """Deleting one WEP name for a port doesn't remove it while another exists.
 

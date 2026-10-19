@@ -669,6 +669,10 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
 
     # Note, on_mtu_change is called from MTU watcher's thread.
     def on_mtu_change(self, id, mtu):
+        # Each WEP name's stored data too, in case it is put back in the cache.
+        for named_port in self.local_endpoint_names.get(id, {}).values():
+            named_port["extra_dhcp_opts"] = [self.get_mtu_option(mtu)]
+
         port = self.agent.cache.get_port_by_id(id)
         if port:
             LOG.info("MTU changed to %s for %s (%s)", mtu, port.device_id, id)
@@ -780,7 +784,10 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
                     remaining_name,
                 )
                 self.agent.cache.put_port(dhcp.DictModel(remaining_port))
-                self._update_dnsmasq(remaining_port["network_id"])
+
+                # As when a port is first set, wait for its MTU before updating.
+                if remaining_port["extra_dhcp_opts"]:
+                    self._update_dnsmasq(remaining_port["network_id"])
                 return
             del self.local_endpoint_names[endpoint_id]
 
