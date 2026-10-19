@@ -292,6 +292,21 @@ func GetNodeSelector(overrides any) map[string]string {
 	return value.Interface().(map[string]string)
 }
 
+// GetResources returns the pod-level Spec.Template.Spec.Resources override, or nil
+// if unset. The shared override path doesn't apply it, because only the
+// component knows which container should receive it.
+func GetResources(overrides any) *corev1.ResourceRequirements {
+	value := getField(overrides, "Spec", "Template", "Spec", "Resources")
+	if !value.IsValid() || value.IsNil() {
+		return nil
+	}
+	r, ok := value.Interface().(*corev1.ResourceRequirements)
+	if !ok {
+		return nil
+	}
+	return r
+}
+
 func GetTopologySpreadConstraints(overrides any) []corev1.TopologySpreadConstraint {
 	value := getField(overrides, "Spec", "Template", "Spec", "TopologySpreadConstraints")
 	if !value.IsValid() || value.IsNil() {

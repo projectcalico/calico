@@ -77,6 +77,10 @@ const (
 	IstioIstiodServiceName            = "istiod"
 
 	istioFakeImageProxyv2 = "fake.io/fakeimg/proxyv2:faketag"
+
+	istiodContainerName   = "discovery"
+	istioCNIContainerName = "install-cni"
+	ztunnelContainerName  = "istio-proxy"
 )
 
 // Component names, which key the image overrides a variant resolves through.
@@ -190,19 +194,19 @@ func (c *IstioComponent) patchImages() (err error) {
 
 	for i := range c.resources.IstiodDeployment.Spec.Template.Spec.Containers {
 		container := &c.resources.IstiodDeployment.Spec.Template.Spec.Containers[i]
-		if container.Name == "discovery" {
+		if container.Name == istiodContainerName {
 			container.Image = c.IstioPilotImage
 		}
 	}
 	for i := range c.resources.CNIDaemonSet.Spec.Template.Spec.Containers {
 		container := &c.resources.CNIDaemonSet.Spec.Template.Spec.Containers[i]
-		if container.Name == "install-cni" {
+		if container.Name == istioCNIContainerName {
 			container.Image = c.IstioInstallCNIImage
 		}
 	}
 	for i := range c.resources.ZTunnelDaemonSet.Spec.Template.Spec.Containers {
 		container := &c.resources.ZTunnelDaemonSet.Spec.Template.Spec.Containers[i]
-		if container.Name == "istio-proxy" {
+		if container.Name == ztunnelContainerName {
 			container.Image = c.IstioZTunnelImage
 		}
 	}
@@ -277,7 +281,7 @@ func (c *IstioComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Obj
 	// Set required configs
 	for i := range res.ZTunnelDaemonSet.Spec.Template.Spec.Containers {
 		cont := &res.ZTunnelDaemonSet.Spec.Template.Spec.Containers[i]
-		if cont.Name == "istio-proxy" {
+		if cont.Name == ztunnelContainerName {
 			cont.Env = append(cont.Env, corev1.EnvVar{
 				Name:  "TRANSPARENT_NETWORK_POLICIES",
 				Value: "true",
@@ -287,13 +291,19 @@ func (c *IstioComponent) ObjectsBeforeOverrides() ([]client.Object, []client.Obj
 	}
 	for i := range res.CNIDaemonSet.Spec.Template.Spec.Containers {
 		cont := &res.CNIDaemonSet.Spec.Template.Spec.Containers[i]
-		if cont.Name == "install-cni" {
+		if cont.Name == istioCNIContainerName {
 			cont.Env = append(cont.Env, corev1.EnvVar{
 				Name:  "MAGIC_DSCP_MARK",
 				Value: strconv.FormatInt(int64(c.cfg.Istio.Spec.DSCPMark.ToUint8()), 10),
 			})
 		}
 	}
+
+	// The Istio CR's resources field sits at pod level, so the shared override
+	// path can't place it. Each workload has one main container to receive it.
+	setContainerResources(&res.IstiodDeployment.Spec.Template.Spec, istiodContainerName, rcomp.GetResources(c.cfg.Istio.Spec.IstiodDeployment))
+	setContainerResources(&res.CNIDaemonSet.Spec.Template.Spec, istioCNIContainerName, rcomp.GetResources(c.cfg.Istio.Spec.IstioCNIDaemonset))
+	setContainerResources(&res.ZTunnelDaemonSet.Spec.Template.Spec, ztunnelContainerName, rcomp.GetResources(c.cfg.Istio.Spec.ZTunnelDaemonset))
 
 	// Set additional pull secrets
 	res.IstiodDeployment.Spec.Template.Spec.ImagePullSecrets = append(
@@ -438,6 +448,15 @@ func (c *IstioComponentCRDs) ResolveImages(is *operatorv1.ImageSet) error {
 
 func (c *IstioComponentCRDs) SupportedOSType() rmeta.OSType {
 	return rmeta.OSTypeLinux
+}
+
+// setContainerResources replaces the resources of the named container with r.
+// A nil r leaves the Helm chart's defaults in place.
+func setContainerResources(spec *corev1.PodSpec, name string, r *corev1.ResourceRequirements) {
+	if r == nil {
+		return
+	}
+	render.MustContainer(spec, name).Resources = *r
 }
 
 func cniBinDir(installation *operatorv1.InstallationSpec) string {
