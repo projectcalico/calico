@@ -336,7 +336,6 @@ func (arc *ActiveRulesCalculator) onProfileRulesUpdate(name string, rules *model
 			log.Debugf("Profile rules deleted while inactive: %v", name)
 		}
 	}
-	// Update the tier/policy/profile counts.
 	arc.updateStats()
 }
 

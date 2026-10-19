@@ -429,18 +429,8 @@ func (r *recordingRuleScanner) OnProfileInactive(key model.ProfileRulesKey) {
 
 func TestARC_ProfileRulesComeFromV3Profile(t *testing.T) {
 	RegisterTestingT(t)
+	scanner, allUpdDispatcher := newRecordingARC()
 
-	arc := NewActiveRulesCalculator()
-	scanner := &recordingRuleScanner{profileRules: map[string]*model.ProfileRules{}, activePolicies: set.New[model.PolicyKey]()}
-	arc.RuleScanner = scanner
-	allUpdDispatcher := dispatcher.NewDispatcher()
-	arc.RegisterWith(dispatcher.NewDispatcher(), allUpdDispatcher)
-	arc.OnStatusUpdate(api.InSync)
-
-	arc.OnUpdate(api.Update{KVPair: model.KVPair{
-		Key:   model.WorkloadEndpointKey{Hostname: "host1", OrchestratorID: "orch", WorkloadID: "wl1", EndpointID: "ep1"},
-		Value: &model.WorkloadEndpoint{ProfileIDs: []string{"prof-1"}},
-	}})
 	profileKey := model.ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}
 	allUpdDispatcher.OnUpdate(api.Update{KVPair: model.KVPair{
 		Key: profileKey,
