@@ -409,6 +409,10 @@ func collectTigeraOperatorNamespace(dir string) {
 
 func collectKubernetesResource(dir string) {
 	fmt.Println("Collecting core kubernetes resources...")
+	common.ExecAllCmdsWriteToFile(kubernetesResourceCmds(dir))
+}
+
+func kubernetesResourceCmds(dir string) []common.Cmd {
 	commands := []common.Cmd{}
 	for _, resource := range []string{
 		"configmaps",
@@ -519,18 +523,33 @@ func collectKubernetesResource(dir string) {
 		Info:     "Collect k8s apiservices (yaml)",
 		CmdStr:   "kubectl get apiservices.apiregistration.k8s.io -o yaml",
 		FilePath: fmt.Sprintf("%s/apiservices.yaml", dir),
+	}, common.Cmd{
+		// Text only: events are the timeline of a failure, and their YAML is
+		// large on a busy cluster.
+		Info:     "Collect events (wide text)",
+		CmdStr:   "kubectl get events --all-namespaces --sort-by=.lastTimestamp -o wide",
+		FilePath: fmt.Sprintf("%s/events.txt", dir),
 	})
-	common.ExecAllCmdsWriteToFile(commands)
+	return commands
 }
 
 func collectThirdPartyResource(dir string) {
 	fmt.Println("Collecting third party resources...")
+	common.ExecAllCmdsWriteToFile(thirdPartyResourceCmds(dir))
+}
+
+func thirdPartyResourceCmds(dir string) []common.Cmd {
 	commands := []common.Cmd{}
 	for _, resource := range []string{
 		"elasticsearches",
 		"kibanas",
 		"prometheuses",
 		"alertmanagers",
+		// KubeVirt VMs on Calico networks, and the CDI volumes they boot from.
+		"virtualmachines.kubevirt.io",
+		"virtualmachineinstances.kubevirt.io",
+		"virtualmachineinstancemigrations.kubevirt.io",
+		"datavolumes.cdi.kubevirt.io",
 	} {
 		commands = append(commands, common.Cmd{
 			Info:     fmt.Sprintf("Collect %v (yaml)", resource),
@@ -542,7 +561,7 @@ func collectThirdPartyResource(dir string) {
 			FilePath: fmt.Sprintf("%s/%v.txt", dir, resource),
 		})
 	}
-	common.ExecAllCmdsWriteToFile(commands)
+	return commands
 }
 
 type tls struct {
