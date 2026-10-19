@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 
 	log "github.com/sirupsen/logrus"
@@ -579,6 +580,21 @@ func (b *PinnedMap) copyFromOldMap() error {
 // copyBatchSize bounds the buffer a copyWriter holds; 1000 conntrack entries are about 100KB.
 const copyBatchSize = 1000
 
+var (
+	copyFallbacks       atomic.Int64
+	copyBatchFailForced atomic.Bool
+)
+
+// CopyFallbacks returns how many batches were copied one entry at a time.
+func CopyFallbacks() int64 {
+	return copyFallbacks.Load()
+}
+
+// SetCopyBatchFailForTesting makes every batched copy fail so that the per-entry fallback runs.
+func SetCopyBatchFailForTesting(fail bool) {
+	copyBatchFailForced.Store(fail)
+}
+
 // copyWriter buffers entries copied from an old map and writes them to the new map in batches.
 type copyWriter struct {
 	m     *PinnedMap
@@ -617,10 +633,14 @@ func (w *copyWriter) flush() error {
 	defer func() {
 		w.keys, w.vals, w.n = w.keys[:0], w.vals[:0], 0
 	}()
-	_, err := w.m.BatchUpdateRaw(w.keys, w.vals, w.n, 0)
+	err := errors.New("batch copy disabled for testing")
+	if !copyBatchFailForced.Load() {
+		_, err = w.m.BatchUpdateRaw(w.keys, w.vals, w.n, 0)
+	}
 	if err == nil {
 		return nil
 	}
+	copyFallbacks.Add(1)
 	log.WithError(err).WithField("name", w.m.Name).Debug("Batch update failed, copying entries one by one.")
 	ks, vs := w.m.KeySize, w.m.ValueSize
 	for i := range w.n {

@@ -187,6 +187,23 @@ func TestCTDeltaMigration(t *testing.T) {
 // Copies span several write batches plus a partial one, in both the resize and the delta pass.
 func TestCTMigrationManyEntries(t *testing.T) {
 	RegisterTestingT(t)
+	fallbacks := bpfmaps.CopyFallbacks()
+	testCTMigrationManyEntries(t)
+	Expect(bpfmaps.CopyFallbacks()).To(Equal(fallbacks), "batched copy fell back to per-entry updates")
+}
+
+func TestCTMigrationBatchFallback(t *testing.T) {
+	RegisterTestingT(t)
+	bpfmaps.SetCopyBatchFailForTesting(true)
+	defer bpfmaps.SetCopyBatchFailForTesting(false)
+	fallbacks := bpfmaps.CopyFallbacks()
+	testCTMigrationManyEntries(t)
+	// Initial copy: batches of 1000, 1000, 500; delta copy: 1000, 500.
+	Expect(bpfmaps.CopyFallbacks() - fallbacks).To(BeNumerically("==", 5))
+}
+
+// testCTMigrationManyEntries uses counts that are not batch multiples, so the final flushes are partial.
+func testCTMigrationManyEntries(t *testing.T) {
 	const numEntries = 2500
 	for i := range numEntries {
 		Expect(insertNumberedKey(i)).To(Succeed())
