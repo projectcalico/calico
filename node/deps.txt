@@ -204,6 +204,7 @@ local:cni-plugin/pkg/wait
 local:crypto/pkg/tls
 local:felix/ip
 local:lib/logrusr
+local:lib/std/intervals
 local:lib/std/log
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
