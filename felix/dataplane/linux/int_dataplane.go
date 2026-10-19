@@ -3272,11 +3272,7 @@ func startBPFDataplaneComponents(
 // conntrackMapSizes returns the IPv4 and IPv6 conntrack map sizes: the
 // configured size, or the size the map grew to if larger.
 func conntrackMapSizes(configured int) (int, int) {
-	grownV4, grownV6, err := bpfconntrack.GrownMapSizes()
-	if err != nil {
-		log.WithError(err).Error("Failed to read the grown conntrack map sizes.")
-		return configured, configured
-	}
+	grownV4, grownV6 := bpfconntrack.GrownMapSizes(pinnedConntrackMapSize)
 	pick := func(grown, ipVersion int) int {
 		if grown > configured {
 			log.Infof("Using IPv%d conntrack map size %d recorded by BPFMapSizeConntrackScaling instead of the configured %d",
@@ -3286,6 +3282,26 @@ func conntrackMapSizes(configured int) (int, int) {
 		return configured
 	}
 	return pick(grownV4, 4), pick(grownV6, 6)
+}
+
+// pinnedConntrackMapSize returns the size of the conntrack map left pinned by
+// the previous Felix, 0 if there is none.
+func pinnedConntrackMapSize(ipVersion int) int {
+	params := bpfconntrack.MapParams
+	if ipVersion == 6 {
+		params = bpfconntrack.MapParamsV6
+	}
+	fd, err := bpfmaps.GetMapFDByPin(params.VersionedFilename())
+	if err != nil {
+		return 0
+	}
+	defer fd.Close()
+	info, err := bpfmaps.GetMapInfo(fd)
+	if err != nil {
+		log.WithError(err).Warn("Failed to read the size of the existing conntrack map.")
+		return 0
+	}
+	return info.MaxEntries
 }
 
 // calcRingBufSize computes the ring buffer size in bytes. It scales

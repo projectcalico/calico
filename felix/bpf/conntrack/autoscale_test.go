@@ -122,9 +122,11 @@ var _ = Describe("BPF Conntrack map autoscaling", func() {
 			Expect(os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644)).To(Succeed())
 		}
 
+		var pinned map[int]int
+		BeforeEach(func() { pinned = map[int]int{} })
+
 		expectSizes := func(v4, v6 int) {
-			gotV4, gotV6, err := conntrack.GrownMapSizes()
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			gotV4, gotV6 := conntrack.GrownMapSizes(func(ipVersion int) int { return pinned[ipVersion] })
 			ExpectWithOffset(1, []int{gotV4, gotV6}).To(Equal([]int{v4, v6}))
 		}
 
@@ -157,10 +159,28 @@ var _ = Describe("BPF Conntrack map autoscaling", func() {
 			expectSizes(2048000, 2048000)
 		})
 
-		It("fails on a corrupt file", func() {
+		It("uses the existing map size for a corrupt family file and repairs it", func() {
+			writeFile("bpf_ct4_map_size", "garbage")
+			writeFile("bpf_ct6_map_size", "2048000")
+			writeFile("bpf_ct_map_size", "2048000")
+			pinned[4] = 1024000
+			expectSizes(1024000, 2048000)
+			Expect(readFile("bpf_ct4_map_size")).To(Equal("1024000"))
+		})
+
+		It("removes a corrupt family file when there is no existing map", func() {
 			writeFile("bpf_ct6_map_size", "garbage")
-			_, _, err := conntrack.GrownMapSizes()
-			Expect(err).To(HaveOccurred())
+			expectSizes(0, 0)
+			_, err := os.Stat(filepath.Join(dir, "bpf_ct6_map_size"))
+			Expect(os.IsNotExist(err)).To(BeTrue())
+		})
+
+		It("repairs a corrupt shared file from the family sizes", func() {
+			writeFile("bpf_ct4_map_size", "1024000")
+			writeFile("bpf_ct6_map_size", "2048000")
+			writeFile("bpf_ct_map_size", "garbage")
+			expectSizes(1024000, 2048000)
+			Expect(readFile("bpf_ct_map_size")).To(Equal("2048000"))
 		})
 	})
 })

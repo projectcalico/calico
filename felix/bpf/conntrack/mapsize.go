@@ -42,20 +42,19 @@ func sizeFile(ipVersion int) string {
 }
 
 // GrownMapSizes returns the IPv4 and IPv6 conntrack map sizes recorded by
-// autoscaling, 0 for a family that never grew.
-func GrownMapSizes() (v4, v6 int, err error) {
-	if v4, err = readMapSizeFile(sizeFileV4); err != nil {
-		return 0, 0, err
-	}
-	if v6, err = readMapSizeFile(sizeFileV6); err != nil {
-		return 0, 0, err
-	}
-	shared, err := readMapSizeFile(sizeFileShared)
-	if err != nil {
-		return 0, 0, err
+// autoscaling, 0 for a family that never grew. currentSize returns the size of
+// a family's existing map, 0 if there is none.
+func GrownMapSizes(currentSize func(ipVersion int) int) (v4, v6 int) {
+	v4 = familyMapSize(4, currentSize)
+	v6 = familyMapSize(6, currentSize)
+	shared, ok := readMapSizeFile(sizeFileShared)
+	if !ok {
+		log.Warn("Unreadable conntrack map size file, rewriting it from the per-family sizes.")
+		repairMapSizeFile(sizeFileShared, max(v4, v6))
+		return v4, v6
 	}
 	if shared <= max(v4, v6) {
-		return v4, v6, nil
+		return v4, v6
 	}
 
 	// Only an older Felix grows the shared file past both; it sized both families from it.
@@ -64,7 +63,33 @@ func GrownMapSizes() (v4, v6 int, err error) {
 			log.WithError(err).Warn("Failed to record the conntrack map size.")
 		}
 	}
-	return shared, shared, nil
+	return shared, shared
+}
+
+// familyMapSize falls back to the existing map's size when the family's file is
+// unreadable, so a bad file never shrinks a populated map.
+func familyMapSize(ipVersion int, currentSize func(ipVersion int) int) int {
+	name := sizeFile(ipVersion)
+	if size, ok := readMapSizeFile(name); ok {
+		return size
+	}
+	size := currentSize(ipVersion)
+	log.WithField("file", name).Warnf("Unreadable conntrack map size file, using the current IPv%d map size %d.",
+		ipVersion, size)
+	repairMapSizeFile(name, size)
+	return size
+}
+
+func repairMapSizeFile(name string, size int) {
+	var err error
+	if size > 0 {
+		err = writeMapSizeFile(name, size)
+	} else {
+		err = os.Remove(filepath.Join(MapSizeDir, name))
+	}
+	if err != nil && !os.IsNotExist(err) {
+		log.WithError(err).Warn("Failed to repair the conntrack map size file.")
+	}
 }
 
 // recordGrowth records a family's new map size, keeping the shared file at the
@@ -73,22 +98,24 @@ func recordGrowth(ipVersion, size int) error {
 	if err := writeMapSizeFile(sizeFile(ipVersion), size); err != nil {
 		return err
 	}
-	shared, err := readMapSizeFile(sizeFileShared)
-	if err != nil || shared < size {
+	shared, ok := readMapSizeFile(sizeFileShared)
+	if !ok || shared < size {
 		return writeMapSizeFile(sizeFileShared, size)
 	}
 	return nil
 }
 
-func readMapSizeFile(name string) (int, error) {
+// readMapSizeFile returns 0 for a missing file and false for one it cannot read or parse.
+func readMapSizeFile(name string) (int, bool) {
 	data, err := os.ReadFile(filepath.Join(MapSizeDir, name))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return 0, nil
-		}
-		return 0, err
+	if os.IsNotExist(err) {
+		return 0, true
 	}
-	return strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return 0, false
+	}
+	size, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	return size, err == nil && size >= 0
 }
 
 func writeMapSizeFile(name string, size int) error {
