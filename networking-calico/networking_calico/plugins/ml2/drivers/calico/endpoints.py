@@ -396,25 +396,30 @@ class WorkloadEndpointSyncer(ResourceSyncer):
     def compare_order_key_fn(self, neutron_map):
         # A stale slot is deleted before the creates when nothing replaces it on the
         # same host, because a WEP for the same port on another node has the same IPs
-        # (break first, as for a cold migration).  It is deleted after them when a new
-        # name replaces it on the same host, because that is the same interface, which
-        # must not be left without a WEP (make first, as for a ``device_id`` change).
-        replaced = {_slot_kind_host_port(name) for name in neutron_map}
-        replaced.discard(None)
+        # (break first, as for a cold migration).  When a new name replaces it on the
+        # same host, it is deleted straight after that name is written, because that is
+        # the same interface, which must not be left without a WEP (make first, as for a
+        # ``device_id`` change) -- nor have two WEPs for longer than necessary.
+        replacements = {}
+        for name in neutron_map:
+            slot = _slot_kind_host_port(name)
+            if slot is not None:
+                replacements[slot] = name
+
+        def lm_first(name):
+            # LiveMigrations go first so that, when a mid-migration port is being
+            # created from scratch in etcd, Felix sees the LiveMigration before the
+            # destination WEP -- matching the dynamic postcommit path's ordering on
+            # migration start.
+            return 0 if name.startswith("lm ") else 1
 
         def order_key(name):
             if name in neutron_map:
-                phase = 1
-            elif _slot_kind_host_port(name) in replaced:
-                phase = 2
-            else:
-                phase = 0
-
-            # Within a phase, LiveMigrations go first so that, when a mid-migration port
-            # is being created from scratch in etcd, Felix sees the LiveMigration before
-            # the destination WEP -- matching the dynamic postcommit path's ordering on
-            # migration start.
-            return (phase, 0 if name.startswith("lm ") else 1)
+                return (1, lm_first(name), name, 0)
+            replacement = replacements.get(_slot_kind_host_port(name))
+            if replacement is not None:
+                return (1, lm_first(replacement), replacement, 1)
+            return (0, lm_first(name), name, 0)
 
         return order_key
 

@@ -2842,12 +2842,14 @@ class TestLiveMigration(TestPluginEtcdBase):
 
         self._trigger_resync()
 
+        # Each old name goes straight after its replacement, so that the interface
+        # has two WEPs for no longer than one step of the resync.
         for old_key in old_keys:
             new_key = old_key.replace("-openstack-instance--1-", "-openstack-zzz--vm-")
             self.assertIn(new_key, self.recent_writes)
             self.assertIn(old_key, self.recent_deletes)
-            self.assertLess(
-                self.etcd_ops.index(("put", new_key)),
+            self.assertEqual(
+                self.etcd_ops.index(("put", new_key)) + 1,
                 self.etcd_ops.index(("delete", old_key)),
                 new_key,
             )
