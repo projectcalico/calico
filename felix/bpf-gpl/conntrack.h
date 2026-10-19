@@ -200,6 +200,19 @@ static CALI_BPF_INLINE struct calico_ct_value *ct_fwd_tracking(struct calico_ct_
 	return rev;
 }
 
+/* ct_create_over_closed creates nv at k if the tracking entry old there is closed, else returns EEXIST. */
+static CALI_BPF_INLINE int ct_create_over_closed(struct cali_tc_ctx *ctx, struct calico_ct_key *k,
+						 struct calico_ct_value *old,
+						 struct calico_ct_value *nv)
+{
+	if (!tcp_recycled(true, old)) {
+		return -17; /* EEXIST */
+	}
+	CALI_DEBUG("CT-ALL recycling closed entry at the post-NAT key");
+	ct_recycle(old, k);
+	return cali_ct_update_elem(k, nv, BPF_NOEXIST);
+}
+
 static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 							struct ct_create_ctx *ct_ctx,
 							struct calico_ct_key *k)
@@ -396,10 +409,8 @@ create:
 				cali_ct_delete_elem(k);
 				err = cali_ct_update_elem(k, &ct_value, BPF_NOEXIST);
 			}
-		} else if (old && tcp_recycled(true, old)) {
-			CALI_DEBUG("CT-ALL recycling closed entry at the post-NAT key");
-			ct_recycle(old, k);
-			err = cali_ct_update_elem(k, &ct_value, BPF_NOEXIST);
+		} else if (old) {
+			err = ct_create_over_closed(ctx, k, old, &ct_value);
 		}
 	}
 
@@ -423,7 +434,14 @@ create:
 
 			fill_ct_key(k, src_lt_dst, ct_ctx->proto, &ct_ctx->src, &ct_ctx->dst, sport, dport);
 
-			if (!(err = cali_ct_update_elem(k, &ct_value, BPF_NOEXIST))) {
+			err = cali_ct_update_elem(k, &ct_value, BPF_NOEXIST);
+			if (err == -17 /* EEXIST */ && ct_ctx->type == CALI_CT_TYPE_NAT_REV && syn && !ack) {
+				struct calico_ct_value *old = cali_ct_lookup_elem(k);
+				if (old && old->type != CALI_CT_TYPE_NAT_FWD) {
+					err = ct_create_over_closed(ctx, k, old, &ct_value);
+				}
+			}
+			if (!err) {
 				ct_ctx->sport = sport;
 				break;
 			}
