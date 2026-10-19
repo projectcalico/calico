@@ -39,6 +39,14 @@ func TestCoalesced(t *testing.T) {
 		{"partial overlap chain", []pair{{1, 5}, {4, 8}, {7, 12}}, []pair{{1, 12}}},
 		{"contained", []pair{{1, 100}, {50, 60}, {99, 100}}, []pair{{1, 100}}},
 		{"container added last", []pair{{50, 60}, {70, 80}, {1, 100}}, []pair{{1, 100}}},
+		// Sorting by min is unstable, so intervals sharing a min may merge in
+		// either order.
+		{"same min, shorter first", []pair{{23, 27}, {23, 30}}, []pair{{23, 30}}},
+		{"same min, longer first", []pair{{23, 30}, {23, 27}}, []pair{{23, 30}}},
+		{"same min, many", []pair{{23, 25}, {23, 30}, {23, 23}, {23, 27}}, []pair{{23, 30}}},
+		{"same min, then disjoint", []pair{{40, 41}, {23, 30}, {23, 27}}, []pair{{23, 30}, {40, 41}}},
+		{"same min, shorter first at top", []pair{{5, 10}, {5, top}}, []pair{{5, top}}},
+		{"same min, longer first at top", []pair{{5, top}, {5, 10}}, []pair{{5, top}}},
 		{"disjoint unsorted", []pair{{9090, 9090}, {1, 4}, {80, 90}}, []pair{{1, 4}, {80, 90}, {9090, 9090}}},
 		{"full range", []pair{{0, top}}, []pair{{0, top}}},
 		{"full range absorbs others", []pair{{80, 80}, {0, top}, {top, top}, {1000, 2000}}, []pair{{0, top}}},
