@@ -22,10 +22,10 @@ import (
 	"github.com/golang/snappy"
 )
 
-// RawPackedMap is a map that stores input VIn values as packed VPacked values.
-// the packing/unpacking is done by an Encoder.  It's often more convenient to
-// use the Map and Deduped wrapper types, which hide the VPacked internal type.
-// See also MakeCompressedJSON and MakeDedupedCompressedJSON.
+// RawPackedMap is a map that stores input VIn values as packed VPacked values.  The
+// packing/unpacking is done by an Encoder.  Values are set through the Map and Deduped wrapper
+// types, whose packed types are comparable, so their Set can report whether a value changed.  See
+// also MakeCompressedJSON and MakeDedupedCompressedJSON.
 type RawPackedMap[K comparable, VIn, VPacked any] struct {
 	encoder Encoder[VIn, VPacked]
 	m       map[K]VPacked
@@ -83,10 +83,6 @@ type Deduped[K comparable, V any] struct {
 // Set stores val and reports whether that changed the stored value; see setAndCompare.
 func (d Deduped[K, V]) Set(key K, val V) (changed bool) {
 	return setAndCompare(d.RawPackedMap, key, val)
-}
-
-func (pm RawPackedMap[K, VIn, VPacked]) Set(key K, val VIn) {
-	pm.m[key] = pm.encoder.Pack(val)
 }
 
 // setAndCompare compares on the packed form, so values that pack identically count as unchanged

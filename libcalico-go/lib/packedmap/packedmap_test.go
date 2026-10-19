@@ -122,7 +122,6 @@ func TestDedupedSetReportsChange(t *testing.T) {
 	if !m.Set("a", exampleStruct{Field1: "world"}) {
 		t.Errorf("Expected different value to report a change")
 	}
-
 }
 
 func TestSetIgnoresOmittedEmptySlice(t *testing.T) {
