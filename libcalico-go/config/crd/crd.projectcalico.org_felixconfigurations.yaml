@@ -1171,6 +1171,18 @@ spec:
                     routes, rules, and other kernel objects. [Default: 10s]
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
+                networkStatusNetns:
+                  description: |-
+                    NetworkStatusNetns controls whether Felix trusts the netns recorded in
+                    the cni.projectcalico.org/network-status pod annotation when resolving
+                    a local pod's network namespace. Enable it only where the annotation is
+                    protected by the protect-cni-annotations admission policy;
+                    when Disabled, Felix falls back to the CRI and /proc lookups.
+                    [Default: Disabled]
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 nftablesFilterAllowAction:
                   description: |-
                     NftablesFilterAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict
@@ -1257,18 +1269,6 @@ spec:
                     Calico/OpenStack deployment, this must be configured somehow for each Felix (here in the datamodel,
                     or in felix.cfg or the environment on each compute node), and must match the [calico]
                     openstack_region value configured in neutron.conf on each node. [Default: Empty]
-                  type: string
-                podNetnsAnnotation:
-                  description: |-
-                    PodNetnsAnnotation controls whether Felix trusts the netns recorded in
-                    the cni.projectcalico.org/network-status pod annotation when resolving
-                    a local pod's network namespace. Enable it only where the annotation is
-                    protected by the protect-cni-annotations admission policy;
-                    when Disabled, Felix falls back to the CRI and /proc lookups.
-                    [Default: Disabled]
-                  enum:
-                    - Enabled
-                    - Disabled
                   type: string
                 policySyncPathPrefix:
                   description: |-

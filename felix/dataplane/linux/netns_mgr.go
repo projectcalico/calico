@@ -79,7 +79,7 @@ type resolvedNetns struct {
 // walks a three-tier fallback chain, first hit wins:
 //
 //  1. CNI-set netns path on the WEP (cni.projectcalico.org/network-status);
-//     only if trustAnnotation is set (FelixConfiguration.PodNetnsAnnotation).
+//     only if trustAnnotation is set (FelixConfiguration.NetworkStatusNetns).
 //  2. CRI runtime lookup by pod UID (felix/cri); only if a resolver was
 //     provided at construction.
 //  3. /proc-cgroup UID scan (felix/netns).

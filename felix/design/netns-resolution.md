@@ -67,11 +67,11 @@ of the Calico CNI plugin's annotations (`network-status` among them) on
 `cniannotations.projectcalico.org` or delete the policy. Its companion
 `MutatingAdmissionPolicy` strips those keys from new pods.
 
-Felix only trusts the annotation when `FelixConfiguration.PodNetnsAnnotation`
+Felix only trusts the annotation when `FelixConfiguration.NetworkStatusNetns`
 is `Enabled` (default `Disabled`); otherwise Tier 1 is skipped and the
 CRI and `/proc` tiers resolve the pod. The operator enables it when the
 CNI plugin is Calico and the policy and its binding exist, and clears it
-when either goes away. The manifests set `FELIX_PODNETNSANNOTATION=Enabled`
+when either goes away. The manifests set `FELIX_NETWORKSTATUSNETNS=Enabled`
 on the Kubernetes datastore, where they install the policy.
 
 ## Execution model
@@ -189,7 +189,7 @@ registration moves out of the BPF branch if a non-BPF consumer arrives.
 - The VAP and MAP live in `api/admission/cni-annotations/`, and both the
   operator and the manifests install them from there. A change to the
   protected keys or exemptions only needs that one edit.
-- The operator's `PodNetnsAnnotation` gate checks for the policy by name
+- The operator's `NetworkStatusNetns` gate checks for the policy by name
   (`admission.ProtectCNIAnnotationsName`); renaming the policy must update it.
 - The operator (`pkg/render/node.go`) and the manifests bind-mount the
   host procfs into calico-node at `/nodeproc`, reusing the `nodeproc`

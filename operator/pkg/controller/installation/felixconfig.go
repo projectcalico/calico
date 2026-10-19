@@ -39,8 +39,8 @@ const (
 	// bpfFieldManager owns spec.bpfEnabled, which both installation write sites declare.
 	bpfFieldManager = "installation-bpf"
 
-	// podNetnsFieldManager owns spec.podNetnsAnnotation, which follows the CNI annotation policy.
-	podNetnsFieldManager = "installation-podnetns"
+	// networkStatusNetnsFieldManager owns spec.networkStatusNetns, which follows the CNI annotation policy.
+	networkStatusNetnsFieldManager = "installation-networkstatusnetns"
 
 	// openShiftFelixHealthPort avoids the port OpenShift's SDN already holds.
 	openShiftFelixHealthPort = 9199
@@ -194,9 +194,9 @@ func (r *ReconcileInstallation) declareBPFEnabled(ctx context.Context, install *
 	}
 }
 
-// declarePodNetnsAnnotation declares spec.podNetnsAnnotation Enabled when Calico is the CNI and the
+// declareNetworkStatusNetns declares spec.networkStatusNetns Enabled when Calico is the CNI and the
 // policy protecting its pod annotations is in place, and clears it otherwise.
-func (r *ReconcileInstallation) declarePodNetnsAnnotation(ctx context.Context, install *operatorv1.Installation) managedfields.DeclareFn[*v3.FelixConfiguration] {
+func (r *ReconcileInstallation) declareNetworkStatusNetns(ctx context.Context, install *operatorv1.Installation) managedfields.DeclareFn[*v3.FelixConfiguration] {
 	return func(current *v3.FelixConfiguration) (*managedfields.Declaration[*v3.FelixConfiguration], error) {
 		felixConfig := &v3.FelixConfiguration{}
 		if install.Spec.CNI.Type == operatorv1.PluginCalico {
@@ -206,14 +206,14 @@ func (r *ReconcileInstallation) declarePodNetnsAnnotation(ctx context.Context, i
 				return nil, err
 			}
 			if protected {
-				felixConfig.Spec.PodNetnsAnnotation = ptr.To("Enabled")
+				felixConfig.Spec.NetworkStatusNetns = ptr.To("Enabled")
 			}
 		}
 		return &managedfields.Declaration[*v3.FelixConfiguration]{
-			Manager: podNetnsFieldManager,
+			Manager: networkStatusNetnsFieldManager,
 			Owned:   felixConfig,
 			Policies: map[string]managedfields.ConflictPolicy{
-				"spec.podNetnsAnnotation": managedfields.ConflictOverride,
+				"spec.networkStatusNetns": managedfields.ConflictOverride,
 			},
 		}, nil
 	}

@@ -974,14 +974,14 @@ type FelixConfigurationSpec struct {
 	// [Default: /proc]
 	ProcRootPath string `json:"procRootPath,omitempty"`
 
-	// PodNetnsAnnotation controls whether Felix trusts the netns recorded in
+	// NetworkStatusNetns controls whether Felix trusts the netns recorded in
 	// the cni.projectcalico.org/network-status pod annotation when resolving
 	// a local pod's network namespace. Enable it only where the annotation is
 	// protected by the protect-cni-annotations admission policy;
 	// when Disabled, Felix falls back to the CRI and /proc lookups.
 	// [Default: Disabled]
 	// +kubebuilder:validation:Enum=Enabled;Disabled
-	PodNetnsAnnotation *string `json:"podNetnsAnnotation,omitempty"`
+	NetworkStatusNetns *string `json:"networkStatusNetns,omitempty"`
 
 	// BPFMapSizeNATFrontend sets the size for NAT front end map.
 	// FrontendMap should be large enough to hold an entry for each nodeport,

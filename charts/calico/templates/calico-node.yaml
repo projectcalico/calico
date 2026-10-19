@@ -405,7 +405,7 @@ spec:
               value: "/nodeproc"
 {{- if eq .Values.datastore "kubernetes" }}
             # The protect-cni-annotations policy guards the network-status annotation, so Felix can trust it.
-            - name: FELIX_PODNETNSANNOTATION
+            - name: FELIX_NETWORKSTATUSNETNS
               value: "Enabled"
 {{- end }}
 {{- if .Values.node.env }}

@@ -210,7 +210,7 @@ type Config struct {
 	BPFConnectTimeLoadBalancing        string            `config:"oneof(TCP,Enabled,Disabled);TCP;non-zero"`
 	CRISocketPath                      string            `config:"string;;"`
 	ProcRootPath                       string            `config:"string;/proc"`
-	PodNetnsAnnotation                 string            `config:"oneof(Enabled,Disabled);Disabled"`
+	NetworkStatusNetns                 string            `config:"oneof(Enabled,Disabled);Disabled"`
 	BPFHostNetworkedNATWithoutCTLB     string            `config:"oneof(Enabled,Disabled);Enabled;non-zero"`
 	BPFExternalServiceMode             string            `config:"oneof(tunnel,dsr);tunnel;non-zero"`
 	BPFDSROptoutCIDRs                  []string          `config:"cidr-list;;"`
@@ -603,8 +603,8 @@ func (config *Config) TableRefreshInterval() time.Duration {
 	return config.IptablesRefreshInterval
 }
 
-func (config *Config) PodNetnsAnnotationEnabled() bool {
-	return config.PodNetnsAnnotation == "Enabled"
+func (config *Config) NetworkStatusNetnsEnabled() bool {
+	return config.NetworkStatusNetns == "Enabled"
 }
 
 func (config *Config) FlowLogsLocalReporterEnabled() bool {

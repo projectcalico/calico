@@ -3917,9 +3917,9 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
-					"podNetnsAnnotation": {
+					"networkStatusNetns": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PodNetnsAnnotation controls whether Felix trusts the netns recorded in the cni.projectcalico.org/network-status pod annotation when resolving a local pod's network namespace. Enable it only where the annotation is protected by the protect-cni-annotations admission policy; when Disabled, Felix falls back to the CRI and /proc lookups. [Default: Disabled]",
+							Description: "NetworkStatusNetns controls whether Felix trusts the netns recorded in the cni.projectcalico.org/network-status pod annotation when resolving a local pod's network namespace. Enable it only where the annotation is protected by the protect-cni-annotations admission policy; when Disabled, Felix falls back to the CRI and /proc lookups. [Default: Disabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},

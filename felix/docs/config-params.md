@@ -1281,7 +1281,7 @@ routes, rules, and other kernel objects.
 | `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `10s` |
 
-### `PodNetnsAnnotation` (config file) / `podNetnsAnnotation` (YAML)
+### `NetworkStatusNetns` (config file) / `networkStatusNetns` (YAML)
 
 Controls whether Felix trusts the netns recorded in
 the cni.projectcalico.org/network-status pod annotation when resolving
@@ -1291,10 +1291,10 @@ when Disabled, Felix falls back to the CRI and /proc lookups.
 
 | Detail |   |
 | --- | --- |
-| Environment variable | `FELIX_PodNetnsAnnotation` |
+| Environment variable | `FELIX_NetworkStatusNetns` |
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> |
 | Default value (above encoding) | `Disabled` |
-| `FelixConfiguration` field | `podNetnsAnnotation` (YAML) `PodNetnsAnnotation` (Go API) |
+| `FelixConfiguration` field | `networkStatusNetns` (YAML) `NetworkStatusNetns` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
 | Default value (YAML) | `Disabled` |
 

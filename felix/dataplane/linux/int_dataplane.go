@@ -244,7 +244,7 @@ type Config struct {
 	BPFCgroupV2                        string
 	CRISocketPath                      string
 	ProcRootPath                       string
-	PodNetnsAnnotationEnabled          bool
+	NetworkStatusNetnsEnabled          bool
 	BPFConnTimeLBEnabled               bool
 	BPFConnTimeLB                      string
 	BPFHostNetworkedNAT                string
@@ -1207,7 +1207,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			}
 		}
 		dp.netnsResolverWakeupC = make(chan struct{}, 1)
-		netnsMgr := newNetnsManager(config.ProcRootPath, config.PodNetnsAnnotationEnabled, criResolver, dp.netnsResolverWakeupC)
+		netnsMgr := newNetnsManager(config.ProcRootPath, config.NetworkStatusNetnsEnabled, criResolver, dp.netnsResolverWakeupC)
 		netnsMgr.Start()
 		dp.RegisterManager(netnsMgr)
 

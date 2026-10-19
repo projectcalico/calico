@@ -1843,8 +1843,8 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(numorstring.Port)
 		**out = **in
 	}
-	if in.PodNetnsAnnotation != nil {
-		in, out := &in.PodNetnsAnnotation, &out.PodNetnsAnnotation
+	if in.NetworkStatusNetns != nil {
+		in, out := &in.NetworkStatusNetns, &out.NetworkStatusNetns
 		*out = new(string)
 		**out = **in
 	}

@@ -563,13 +563,13 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// the host procfs (typically at /nodeproc) and points Felix at it here.
 	// [Default: /proc]
 	ProcRootPath *string `json:"procRootPath,omitempty"`
-	// PodNetnsAnnotation controls whether Felix trusts the netns recorded in
+	// NetworkStatusNetns controls whether Felix trusts the netns recorded in
 	// the cni.projectcalico.org/network-status pod annotation when resolving
 	// a local pod's network namespace. Enable it only where the annotation is
 	// protected by the protect-cni-annotations admission policy;
 	// when Disabled, Felix falls back to the CRI and /proc lookups.
 	// [Default: Disabled]
-	PodNetnsAnnotation *string `json:"podNetnsAnnotation,omitempty"`
+	NetworkStatusNetns *string `json:"networkStatusNetns,omitempty"`
 	// BPFMapSizeNATFrontend sets the size for NAT front end map.
 	// FrontendMap should be large enough to hold an entry for each nodeport,
 	// external IP and each port in each service.
@@ -1891,11 +1891,11 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithProcRootPath(value string
 	return b
 }
 
-// WithPodNetnsAnnotation sets the PodNetnsAnnotation field in the declarative configuration to the given value
+// WithNetworkStatusNetns sets the NetworkStatusNetns field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the PodNetnsAnnotation field is set to the value of the last call.
-func (b *FelixConfigurationSpecApplyConfiguration) WithPodNetnsAnnotation(value string) *FelixConfigurationSpecApplyConfiguration {
-	b.PodNetnsAnnotation = &value
+// If called multiple times, the NetworkStatusNetns field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithNetworkStatusNetns(value string) *FelixConfigurationSpecApplyConfiguration {
+	b.NetworkStatusNetns = &value
 	return b
 }
 

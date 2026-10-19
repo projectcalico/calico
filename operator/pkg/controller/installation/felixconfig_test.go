@@ -180,7 +180,7 @@ var _ = Describe("FelixConfiguration declarations", func() {
 	})
 })
 
-var _ = Describe("podNetnsAnnotation declaration", func() {
+var _ = Describe("networkStatusNetns declaration", func() {
 	var scheme *runtime.Scheme
 
 	BeforeEach(func() {
@@ -210,11 +210,11 @@ var _ = Describe("podNetnsAnnotation declaration", func() {
 	}
 
 	declared := func(r ReconcileInstallation, i *operatorv1.Installation) *string {
-		d, err := r.declarePodNetnsAnnotation(context.Background(), i)(&v3.FelixConfiguration{})
+		d, err := r.declareNetworkStatusNetns(context.Background(), i)(&v3.FelixConfiguration{})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(d.Manager).To(Equal(podNetnsFieldManager))
-		Expect(d.Policies).To(HaveKeyWithValue("spec.podNetnsAnnotation", managedfields.ConflictOverride))
-		return d.Owned.Spec.PodNetnsAnnotation
+		Expect(d.Manager).To(Equal(networkStatusNetnsFieldManager))
+		Expect(d.Policies).To(HaveKeyWithValue("spec.networkStatusNetns", managedfields.ConflictOverride))
+		return d.Owned.Spec.NetworkStatusNetns
 	}
 
 	policy := admission.ValidatingPolicyObjects(admission.VersionV1, admission.ProtectCNIAnnotationsName)
