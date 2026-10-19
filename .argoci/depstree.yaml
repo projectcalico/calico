@@ -39,6 +39,7 @@ components:
       - ^felix/ip/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
       - ^lib/std/uniquestr/[^/]*\.go$
@@ -123,6 +124,7 @@ components:
       - ^felix/types/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
       - ^lib/std/uniquestr/[^/]*\.go$
@@ -202,6 +204,7 @@ components:
       - ^kube-controllers/pkg/controllers/utils/[^/]*\.go$
       - ^kube-controllers/pkg/converter/[^/]*\.go$
       - ^lib/std/chanutil/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/time/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
@@ -526,6 +529,7 @@ components:
       - ^lib/logrusr/[^/]*\.go$
       - ^lib/std/chanutil/[^/]*\.go$
       - ^lib/std/cryptoutils/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/time/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
@@ -677,6 +681,7 @@ components:
       - ^felix/ip/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
       - ^lib/std/uniquestr/[^/]*\.go$
@@ -743,6 +748,7 @@ components:
       - ^felix/ip/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
       - ^lib/std/uniquestr/[^/]*\.go$
@@ -854,6 +860,7 @@ components:
       - ^lib/httpmachinery/pkg/codec/[^/]*\.go$
       - ^lib/httpmachinery/pkg/context/[^/]*\.go$
       - ^lib/httpmachinery/pkg/header/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/time/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
@@ -934,6 +941,7 @@ components:
       - ^lib/datastructures/hashring/[^/]*\.go$
       - ^lib/logrusr/[^/]*\.go$
       - ^lib/std/chanutil/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/time/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
@@ -1137,6 +1145,7 @@ components:
       - ^felix/ip/[^/]*\.go$
       - ^hack/
       - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
       - ^lib/std/uniquestr/[^/]*\.go$
@@ -1252,6 +1261,7 @@ components:
       - ^kube-controllers/
       - ^lib/logrusr/[^/]*\.go$
       - ^lib/std/chanutil/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/time/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
@@ -1336,6 +1346,7 @@ components:
       - ^felix/ip/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
       - ^lib/std/uniquestr/[^/]*\.go$
@@ -1509,6 +1520,7 @@ components:
       - ^lib/datastructures/hashring/[^/]*\.go$
       - ^lib/logrusr/[^/]*\.go$
       - ^lib/std/chanutil/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/time/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
@@ -1794,6 +1806,7 @@ components:
       - ^felix/ip/[^/]*\.go$
       - ^hack/test/certs/
       - ^lib/logrusr/[^/]*\.go$
+      - ^lib/std/intervals/[^/]*\.go$
       - ^lib/std/log/[^/]*\.go$
       - ^lib/std/uniquelabels/[^/]*\.go$
       - ^lib/std/uniquestr/[^/]*\.go$
@@ -1932,6 +1945,7 @@ components:
       - ^libcalico-go/lib/backend/encap/[^/]*\.go$
       - ^libcalico-go/lib/backend/model/[^/]*\.go$
       - ^libcalico-go/lib/errors/[^/]*\.go$
+      - ^libcalico-go/lib/health/[^/]*\.go$
       - ^libcalico-go/lib/namespace/[^/]*\.go$
       - ^libcalico-go/lib/net/[^/]*\.go$
       - ^metadata\.mk$
