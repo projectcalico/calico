@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // testComputedSelectorListener records calls to the ComputedSelectorListener interface.
@@ -405,6 +406,7 @@ type recordingRuleScanner struct {
 	profileRules        map[string]*model.ProfileRules
 	numProfileActivated int
 	numPolicyActivated  int
+	activePolicies      set.Set[model.PolicyKey]
 }
 
 func (r *recordingRuleScanner) OnProfileActive(key model.ProfileRulesKey, rules *model.ProfileRules) {
@@ -412,8 +414,13 @@ func (r *recordingRuleScanner) OnProfileActive(key model.ProfileRulesKey, rules 
 	r.numProfileActivated++
 }
 
-func (r *recordingRuleScanner) OnPolicyActive(model.PolicyKey, *model.Policy) {
+func (r *recordingRuleScanner) OnPolicyActive(key model.PolicyKey, _ *model.Policy) {
 	r.numPolicyActivated++
+	r.activePolicies.Add(key)
+}
+
+func (r *recordingRuleScanner) OnPolicyInactive(key model.PolicyKey) {
+	r.activePolicies.Discard(key)
 }
 
 func (r *recordingRuleScanner) OnProfileInactive(key model.ProfileRulesKey) {
@@ -424,7 +431,7 @@ func TestARC_ProfileRulesComeFromV3Profile(t *testing.T) {
 	RegisterTestingT(t)
 
 	arc := NewActiveRulesCalculator()
-	scanner := &recordingRuleScanner{profileRules: map[string]*model.ProfileRules{}}
+	scanner := &recordingRuleScanner{profileRules: map[string]*model.ProfileRules{}, activePolicies: set.New[model.PolicyKey]()}
 	arc.RuleScanner = scanner
 	allUpdDispatcher := dispatcher.NewDispatcher()
 	arc.RegisterWith(dispatcher.NewDispatcher(), allUpdDispatcher)
@@ -462,7 +469,7 @@ func TestARC_ProfileRulesComeFromV3Profile(t *testing.T) {
 // newRecordingARC returns an ARC with one local endpoint, which uses profile prof-1, and in-sync.
 func newRecordingARC() (*recordingRuleScanner, *dispatcher.Dispatcher) {
 	arc := NewActiveRulesCalculator()
-	scanner := &recordingRuleScanner{profileRules: map[string]*model.ProfileRules{}}
+	scanner := &recordingRuleScanner{profileRules: map[string]*model.ProfileRules{}, activePolicies: set.New[model.PolicyKey]()}
 	arc.RuleScanner = scanner
 	allUpdDispatcher := dispatcher.NewDispatcher()
 	arc.RegisterWith(dispatcher.NewDispatcher(), allUpdDispatcher)
@@ -515,4 +522,35 @@ func TestARC_PolicyUpdateWithEmptySliceIsNoOp(t *testing.T) {
 		Key: policyKey, Value: policyWithPorts([]numorstring.Port{}),
 	}})
 	Expect(scanner.numPolicyActivated).To(Equal(numPolicyActivated))
+}
+
+// A force-programmed policy is active without matching any endpoint, until it stops being
+// force-programmed or is deleted.
+func TestARC_ForceProgrammedPolicyLifecycle(t *testing.T) {
+	RegisterTestingT(t)
+	scanner, allUpdDispatcher := newRecordingARC()
+
+	policyKey := model.PolicyKey{Name: "pol-1", Kind: v3.KindGlobalNetworkPolicy}
+	policy := func(hints ...v3.PolicyPerformanceHint) *model.Policy {
+		return &model.Policy{Tier: "default", Selector: "has(nomatch)", PerformanceHints: hints}
+	}
+	sendPolicy := func(p *model.Policy) {
+		allUpdDispatcher.OnUpdate(api.Update{KVPair: model.KVPair{Key: policyKey, Value: p}})
+	}
+
+	sendPolicy(policy(v3.PerfHintAssumeNeededOnEveryNode))
+	Expect(scanner.activePolicies.Contains(policyKey)).To(BeTrue())
+
+	sendPolicy(policy())
+	Expect(scanner.activePolicies.Contains(policyKey)).To(BeFalse())
+
+	sendPolicy(policy(v3.PerfHintAssumeNeededOnEveryNode))
+	Expect(scanner.activePolicies.Contains(policyKey)).To(BeTrue())
+
+	allUpdDispatcher.OnUpdate(api.Update{KVPair: model.KVPair{Key: policyKey}})
+	Expect(scanner.activePolicies.Contains(policyKey)).To(BeFalse())
+
+	// Re-adding after a delete must start the dummy match again.
+	sendPolicy(policy(v3.PerfHintAssumeNeededOnEveryNode))
+	Expect(scanner.activePolicies.Contains(policyKey)).To(BeTrue())
 }

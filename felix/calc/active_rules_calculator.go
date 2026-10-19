@@ -79,6 +79,9 @@ type ActiveRulesCalculator struct {
 	// Caches for ALP policies for stat collector.
 	allALPPolicies set.Set[model.PolicyKey]
 
+	// forceProgrammedPolicies lets us see a policy's previous state without unpacking it.
+	forceProgrammedPolicies set.Set[model.PolicyKey]
+
 	// Policy/profile ID to matching endpoint sets.
 	policyIDToEndpointKeys  multidict.Multidict[any, any]
 	profileIDToEndpointKeys multidict.Multidict[string, any]
@@ -116,6 +119,8 @@ func NewActiveRulesCalculator() *ActiveRulesCalculator {
 		allTiers:        make(map[string]*model.Tier),
 
 		allALPPolicies: set.New[model.PolicyKey](),
+
+		forceProgrammedPolicies: set.New[model.PolicyKey](),
 
 		// Policy/profile ID to matching endpoint sets.
 		policyIDToEndpointKeys:  multidict.New[any, any](),
@@ -184,8 +189,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 		}
 		arc.labelIndex.OnUpdate(update)
 	case model.PolicyKey:
-		oldPolicy, _ := arc.allPolicies.Get(key)
-		oldPolicyWasForceProgrammed := policyForceProgrammed(oldPolicy)
+		oldPolicyWasForceProgrammed := arc.forceProgrammedPolicies.Contains(key)
 		if update.Value != nil {
 			log.Debugf("Updating ARC for policy %v", key)
 			policy := update.Value.(*model.Policy)
@@ -201,6 +205,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 			newPolicyForceProgrammed := policyForceProgrammed(policy)
 			if !oldPolicyWasForceProgrammed && newPolicyForceProgrammed {
 				log.Debugf("Policy %v force-programmed.", key)
+				arc.forceProgrammedPolicies.Add(key)
 				arc.onMatchStarted(key, forceProgrammedDummyKey)
 			}
 
@@ -219,6 +224,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 			// selector into the index to avoid flapping.
 			if oldPolicyWasForceProgrammed && !newPolicyForceProgrammed {
 				log.Debugf("Policy %v no longer force-programmed.", key)
+				arc.forceProgrammedPolicies.Discard(key)
 				arc.onMatchStopped(key, forceProgrammedDummyKey)
 			}
 
@@ -240,6 +246,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 			arc.allPolicies.Delete(key)
 			if oldPolicyWasForceProgrammed {
 				log.Debugf("Policy %v being deleted, was force-programmed.", key)
+				arc.forceProgrammedPolicies.Discard(key)
 				arc.onMatchStopped(key, forceProgrammedDummyKey)
 			}
 			arc.labelIndex.DeleteSelector(key)
