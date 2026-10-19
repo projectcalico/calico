@@ -1802,6 +1802,13 @@ func schema_libcalico_go_lib_apis_internalapi_WorkloadEndpointSpec(ref common.Re
 							Format:      "",
 						},
 					},
+					"netns": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Netns is the path of the workload's network namespace, as seen by the CNI plugin.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"ports": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Ports contains the endpoint's named ports, which may be referenced in security policy rules.",

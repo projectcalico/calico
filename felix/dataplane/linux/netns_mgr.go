@@ -78,7 +78,7 @@ type resolvedNetns struct {
 // pod's netns path + cookie and caches them for any consumer. Resolution
 // walks a three-tier fallback chain, first hit wins:
 //
-//  1. CNI-set netns path on the WEP (cni.projectcalico.org/podNetns);
+//  1. CNI-set netns path on the WEP (cni.projectcalico.org/network-status);
 //     only if trustAnnotation is set (FelixConfiguration.PodNetnsAnnotation).
 //  2. CRI runtime lookup by pod UID (felix/cri); only if a resolver was
 //     provided at construction.
@@ -104,7 +104,7 @@ type netnsManager struct {
 	resolveNetnsViaCRI  netnsCRIResolver
 	openNetns           netnsOpener
 
-	// trustAnnotation enables Tier 1. Off unless the podNetns annotation is
+	// trustAnnotation enables Tier 1. Off unless the network-status annotation is
 	// protected by the CNI-annotation admission policy.
 	trustAnnotation bool
 

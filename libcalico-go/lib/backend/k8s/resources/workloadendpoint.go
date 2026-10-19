@@ -138,11 +138,20 @@ func (c *WorkloadEndpointClient) calcCNIAnnotations(kvp *model.KVPair) map[strin
 		annotations[conversion.AnnotationContainerID] = containerID
 	}
 
-	// Forward the pod-netns annotation (set on the v3 WEP by the CNI plugin)
-	// so that the Pod ends up with the same annotation. Felix reads it to
-	// resolve the pod's netns and netns cookie locally.
-	if netnsPath, ok := wep.Annotations[conversion.AnnotationPodNetns]; ok && netnsPath != "" {
-		annotations[conversion.AnnotationPodNetns] = netnsPath
+	// Record this endpoint's identity as a per-interface network-status JSON
+	// annotation, keyed by the in-pod interface name.  The pod→WorkloadEndpoint
+	// conversion reads this back to populate Spec.Netns.
+	if wep.Spec.Endpoint != "" {
+		val, err := conversion.MarshalInterfaceStatus(conversion.NetworkStatus{
+			Netns: wep.Spec.Netns,
+		})
+		if err != nil {
+			log.WithError(err).WithFields(log.Fields{
+				"endpoint": wep.Spec.Endpoint,
+			}).Warn("Failed to marshal network-status annotation")
+		} else if val != "" {
+			annotations[conversion.AnnotationNetworkStatusForIface(wep.Spec.Endpoint)] = val
+		}
 	}
 	return annotations
 }

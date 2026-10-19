@@ -174,7 +174,7 @@ func hostMountRoot(procRoot string) string {
 // The path is the *canonical* host path (symlinks already resolved by
 // the CNI plugin at cmdAdd, e.g. /var/run/netns/cni-<uuid> is stored
 // as /run/netns/cni-<uuid>), as written into the
-// cni.projectcalico.org/podNetns Pod annotation. The file is pinned by
+// cni.projectcalico.org/network-status Pod annotation. The file is pinned by
 // the container runtime (containerd / cri-o) and only host-root can
 // replace it, so it is a trust-anchored input.
 //

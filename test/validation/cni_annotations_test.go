@@ -52,7 +52,6 @@ var protectedAnnotations = []annotation{
 	{conversion.AnnotationPodIP, "192.168.0.1"},
 	{conversion.AnnotationPodIPs, "192.168.0.1,fd00::1"},
 	{conversion.AnnotationContainerID, "abc123"},
-	{conversion.AnnotationPodNetns, "/proc/1234/ns/net"},
 	{conversion.AnnotationNetworkStatus, `{"name":"vlan100","vlan":100,"mac":"ee:ee:00:00:00:01"}`},
 	{annEth1NetworkStatus, `{"name":"vlan200","vlan":200,"mac":"ee:ee:00:00:00:02"}`},
 }

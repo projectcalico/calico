@@ -1514,7 +1514,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
-	// Felix only trusts the podNetns annotation once the policy above protects it.
+	// Felix only trusts the network-status annotation once the policy above protects it.
 	if _, err := r.fieldManager.Apply(ctx, r.declarePodNetnsAnnotation(ctx, defaulted)); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error updating resource", err, reqLogger)
 		return reconcile.Result{}, err

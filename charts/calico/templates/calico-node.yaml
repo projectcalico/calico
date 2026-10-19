@@ -404,7 +404,7 @@ spec:
             - name: FELIX_PROCROOTPATH
               value: "/nodeproc"
 {{- if eq .Values.datastore "kubernetes" }}
-            # The protect-cni-annotations policy guards the podNetns annotation, so Felix can trust it.
+            # The protect-cni-annotations policy guards the network-status annotation, so Felix can trust it.
             - name: FELIX_PODNETNSANNOTATION
               value: "Enabled"
 {{- end }}

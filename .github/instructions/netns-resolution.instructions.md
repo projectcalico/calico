@@ -25,7 +25,7 @@ Before writing code (Copilot coding agent) or reviewing a PR
    `pendingDeep` and the "still pending?" store race; the wakeup case
    that **must** set `dataplaneNeedsSync`; the `/nodeproc/1/root`
    host-root mechanism with `SecureJoin` (no `hostPID` dependency); and
-   that the `cni.projectcalico.org/podNetns` annotation is a trust
+   that the `netns` in the `cni.projectcalico.org/network-status` annotation is a trust
    anchor protected by the VAP.
 
 Follow links — the design references siblings (`calc-graph.md`,

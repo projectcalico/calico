@@ -39,7 +39,7 @@ Resolution walks a fallback chain, first non-empty result wins:
 
 | Tier | Source | Package | Notes |
 |---|---|---|---|
-| 1 | CNI-set annotation `cni.projectcalico.org/podNetns` on the WEP | (on `proto.WorkloadEndpoint.netns_path`) | Fast path for the Calico-CNI case. The CNI plugin canonicalises `args.Netns` with `EvalSymlinks` at `cmdAdd` and writes it via the `pods/status` subresource. |
+| 1 | `netns` field of the CNI-set `cni.projectcalico.org/network-status` annotation | (on `proto.WorkloadEndpoint.netns_path`) | Fast path for the Calico-CNI case. The CNI plugin canonicalises `args.Netns` with `EvalSymlinks` at `cmdAdd` and records it in the interface's `network-status` JSON. |
 | 2 | CRI runtime lookup by pod UID | `felix/cri` | Cross-CNI fallback. Lists the ready sandbox for the pod UID, extracts the sandbox PID from the runtime `Info` JSON, derives `<procRoot>/<pid>/ns/net`. Disabled when no CRI socket is available. |
 | 3 | `/proc`-cgroup UID scan | `felix/netns` | Last-resort safety net. Finds a live process whose cgroup path mentions the pod UID (dash or underscore form) and uses its `<procRoot>/<pid>/ns/net`. |
 
@@ -50,8 +50,8 @@ chain, pods pre-dating the annotation rollout, upgrade windows).
 ### Data flow (plumbing)
 
 ```
-Calico CNI (cmdAdd) → Pod annotation cni.projectcalico.org/podNetns = EvalSymlinks(args.Netns)
-libcalico-go syncer → v3 WorkloadEndpoint annotation + UID
+Calico CNI (cmdAdd) → Pod annotation cni.projectcalico.org/network-status = {"netns": EvalSymlinks(args.Netns)}
+libcalico-go syncer → WorkloadEndpoint Spec.Netns + UID
                     → model.WorkloadEndpoint{ NetnsPath, UID }
 felix calc graph    → proto.WorkloadEndpoint{ netns_path = 21, uid = 20 }
 netnsManager        → three-tier resolve → { wepKey → path, wepKey → cookie }
@@ -62,7 +62,7 @@ path and reads a cookie from it, so a user able to overwrite it could
 redirect Felix into an arbitrary netns. It is protected by the
 `protect-cni-annotations.projectcalico.org` `ValidatingAdmissionPolicy`
 (`api/admission/cni-annotations/`), which rejects any add/change/remove
-of the Calico CNI plugin's annotations (`podNetns` among them) on
+of the Calico CNI plugin's annotations (`network-status` among them) on
 `pods`, `pods/status` and `pods/binding` unless the caller may write
 `cniannotations.projectcalico.org` or delete the policy. Its companion
 `MutatingAdmissionPolicy` strips those keys from new pods.

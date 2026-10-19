@@ -297,6 +297,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Workload:           "",
 				ContainerID:        containerID,
 				Orchestrator:       api.OrchestratorKubernetes,
+				Netns:              testutils.CanonicalNetnsPath(contNs),
 			}))
 
 			// Routes and interface on host - there's is nothing to assert on the routes since felix adds those.
@@ -465,6 +466,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 						Protocol: numorstring.ProtocolFromString("TCP"),
 						Port:     555,
 					}},
+					Netns: testutils.CanonicalNetnsPath(contNs),
 				}))
 
 				// Assert sysctl values are set for what we would expect for an endpoint.
@@ -2170,6 +2172,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Workload:           "",
 				ContainerID:        containerID,
 				Orchestrator:       api.OrchestratorKubernetes,
+				Netns:              testutils.CanonicalNetnsPath(contNs),
 			}))
 
 			// Assert sysctl values are set for what we would expect for an endpoint.
@@ -2356,6 +2359,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Workload:           "",
 				ContainerID:        containerID,
 				Orchestrator:       api.OrchestratorKubernetes,
+				Netns:              testutils.CanonicalNetnsPath(netNS),
 			}))
 
 			// Check the pod's IP annotations.
@@ -2501,6 +2505,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				},
 				ContainerID:  containerID,
 				Orchestrator: api.OrchestratorKubernetes,
+				Netns:        testutils.CanonicalNetnsPath(netNS),
 			}))
 
 			// Check the pod's IP annotations.
@@ -3399,6 +3404,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					Protocol: numorstring.ProtocolFromString("TCP"),
 					Port:     555,
 				}},
+				Netns: testutils.CanonicalNetnsPath(contNs),
 			}))
 
 			// Assert sysctl values are set for what we would expect for an endpoint.
@@ -3551,6 +3557,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					Protocol: numorstring.ProtocolFromString("TCP"),
 					Port:     555,
 				}},
+				Netns: testutils.CanonicalNetnsPath(contNs),
 			}))
 
 			// Assert sysctl values are set for what we would expect for an endpoint.

@@ -46,9 +46,6 @@ const (
 	// on older Pods.
 	AnnotationContainerID = "cni.projectcalico.org/containerID"
 
-	// AnnotationPodNetns stores the path of the pod's network namespace.
-	AnnotationPodNetns = "cni.projectcalico.org/podNetns"
-
 	// AnnotationNetworkStatus is the annotation key for the primary pod interface
 	// (eth0 or empty) that records the interface's status.  The value is a JSON
 	// object (see NetworkStatus).

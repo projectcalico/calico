@@ -3372,9 +3372,9 @@ spec:
                   type: string
                 podNetnsAnnotation:
                   description: |-
-                    PodNetnsAnnotation controls whether Felix trusts the
-                    cni.projectcalico.org/podNetns pod annotation when resolving a local
-                    pod's network namespace. Enable it only where the annotation is
+                    PodNetnsAnnotation controls whether Felix trusts the netns recorded in
+                    the cni.projectcalico.org/network-status pod annotation when resolving
+                    a local pod's network namespace. Enable it only where the annotation is
                     protected by the protect-cni-annotations admission policy;
                     when Disabled, Felix falls back to the CRI and /proc lookups.
                     [Default: Disabled]
@@ -13111,7 +13111,7 @@ spec:
             # Read the host's procfs, mounted below, to resolve pod network namespaces.
             - name: FELIX_PROCROOTPATH
               value: "/nodeproc"
-            # The protect-cni-annotations policy guards the podNetns annotation, so Felix can trust it.
+            # The protect-cni-annotations policy guards the network-status annotation, so Felix can trust it.
             - name: FELIX_PODNETNSANNOTATION
               value: "Enabled"
           securityContext:
@@ -13466,7 +13466,6 @@ spec:
             'cni.projectcalico.org/podIP',
             'cni.projectcalico.org/podIPs',
             'cni.projectcalico.org/containerID',
-            'cni.projectcalico.org/podNetns',
             'cni.projectcalico.org/network-status'
           ] ||
           (k.startsWith('cni.projectcalico.org/') && k.endsWith('.network-status')))
@@ -13528,7 +13527,6 @@ spec:
           'cni.projectcalico.org/podIP',
           'cni.projectcalico.org/podIPs',
           'cni.projectcalico.org/containerID',
-          'cni.projectcalico.org/podNetns',
           'cni.projectcalico.org/network-status'
         ] + variables.perInterfaceKeys
     # Keys this write adds, changes or removes.

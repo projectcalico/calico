@@ -563,9 +563,9 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// the host procfs (typically at /nodeproc) and points Felix at it here.
 	// [Default: /proc]
 	ProcRootPath *string `json:"procRootPath,omitempty"`
-	// PodNetnsAnnotation controls whether Felix trusts the
-	// cni.projectcalico.org/podNetns pod annotation when resolving a local
-	// pod's network namespace. Enable it only where the annotation is
+	// PodNetnsAnnotation controls whether Felix trusts the netns recorded in
+	// the cni.projectcalico.org/network-status pod annotation when resolving
+	// a local pod's network namespace. Enable it only where the annotation is
 	// protected by the protect-cni-annotations admission policy;
 	// when Disabled, Felix falls back to the CRI and /proc lookups.
 	// [Default: Disabled]
