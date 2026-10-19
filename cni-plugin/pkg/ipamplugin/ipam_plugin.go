@@ -167,9 +167,8 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 	}
 
 	nodename := utils.DetermineNodename(conf)
-	lookups := utils.SandboxLookupsFrom(ctx)
 
-	calicoClient, err := calicoClientFor(lookups, conf)
+	calicoClient, err := calicoClientFor(ctx, conf)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +189,7 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 	})
 
 	// Always detect VMI info so we can reject migration targets when persistence is disabled.
-	vmiInfo, err := getVMIInfoForPod(ctx, conf, epIDs, lookups, logger)
+	vmiInfo, err := getVMIInfoForPod(ctx, conf, epIDs, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get VMI info: %w", err)
 	}
@@ -392,7 +391,7 @@ func add(ctx context.Context, args *skel.CmdArgs) (cnitypes.Result, error) {
 		if (conf.Kubernetes.Kubeconfig != "" || conf.Policy.PolicyType == "k8s") && namespace != "" {
 			logger.Debugf("Getting namespace for: %s", namespace)
 
-			namespaceObj, err = getNamespace(ctx, conf, namespace, lookups, logger)
+			namespaceObj, err = getNamespace(ctx, conf, namespace, logger)
 			if err != nil {
 				logger.WithError(err).Errorf("Failed to get namespace for %s", namespace)
 				return nil, fmt.Errorf("failed to get namespace %s: %w", namespace, err)
@@ -675,16 +674,16 @@ func acquireIPAMLockBestEffort(path string) unlockFn {
 }
 
 // calicoClientFor returns the Calico client the caller shared, or builds one from the netconf.
-func calicoClientFor(lookups utils.SandboxLookups, conf types.NetConf) (client.Interface, error) {
-	if lookups.CalicoClient != nil {
+func calicoClientFor(ctx context.Context, conf types.NetConf) (client.Interface, error) {
+	if lookups := utils.SandboxLookupsFrom(ctx); lookups.CalicoClient != nil {
 		return lookups.CalicoClient, nil
 	}
 	return utils.CreateClient(conf)
 }
 
 // k8sClientFor returns the Kubernetes client the caller shared, or builds one from the netconf.
-func k8sClientFor(lookups utils.SandboxLookups, conf types.NetConf, logger *logrus.Entry) (kubernetes.Interface, error) {
-	if lookups.K8sClient != nil {
+func k8sClientFor(ctx context.Context, conf types.NetConf, logger *logrus.Entry) (kubernetes.Interface, error) {
+	if lookups := utils.SandboxLookupsFrom(ctx); lookups.K8sClient != nil {
 		return lookups.K8sClient, nil
 	}
 	return k8s.NewK8sClient(conf, logger)
@@ -698,7 +697,7 @@ var errPodNotFound = fmt.Errorf("pod not found")
 // Returns (vmiInfo, nil) if the pod is a valid virt-launcher pod.
 // Returns (nil, nil) if the pod is not a virt-launcher pod.
 // Returns (nil, error) if there was an error retrieving or validating VMI information.
-func getVMIInfoForPod(ctx context.Context, conf types.NetConf, epIDs *utils.WEPIdentifiers, lookups utils.SandboxLookups, logger *logrus.Entry) (*kubevirt.PodVMIInfo, error) {
+func getVMIInfoForPod(ctx context.Context, conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *logrus.Entry) (*kubevirt.PodVMIInfo, error) {
 	// Only check for VMI info in Kubernetes orchestrator
 	if epIDs.Orchestrator != "k8s" || epIDs.Pod == "" || epIDs.Namespace == "" {
 		return nil, nil
@@ -709,9 +708,9 @@ func getVMIInfoForPod(ctx context.Context, conf types.NetConf, epIDs *utils.WEPI
 		return nil, nil
 	}
 
-	pod := lookups.Pod
+	pod := utils.SandboxLookupsFrom(ctx).Pod
 	if pod == nil {
-		k8sClient, err := k8sClientFor(lookups, conf, logger)
+		k8sClient, err := k8sClientFor(ctx, conf, logger)
 		if err != nil {
 			logger.WithError(err).Error("Failed to create Kubernetes client for VMI detection")
 			return nil, err
@@ -776,9 +775,8 @@ func del(ctx context.Context, args *skel.CmdArgs) error {
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
-	lookups := utils.SandboxLookupsFrom(ctx)
 
-	calicoClient, err := calicoClientFor(lookups, conf)
+	calicoClient, err := calicoClientFor(ctx, conf)
 	if err != nil {
 		return err
 	}
@@ -802,7 +800,7 @@ func del(ctx context.Context, args *skel.CmdArgs) error {
 	})
 
 	// Always detect VMI info for logging, but only use VM-based handle when persistence is enabled.
-	vmiInfo, err := getVMIInfoForPod(ctx, conf, epIDs, lookups, logger)
+	vmiInfo, err := getVMIInfoForPod(ctx, conf, epIDs, logger)
 	if err != nil {
 		if errors.Is(err, errPodNotFound) {
 			// During parallel CNI DEL calls (e.g., live migration), the pod may already
@@ -1034,15 +1032,15 @@ func del(ctx context.Context, args *skel.CmdArgs) error {
 
 // getNamespace returns the named namespace, or nil for an empty name. It uses the namespace the
 // calling plugin already fetched when there is one, and otherwise reads it from the Kubernetes API.
-func getNamespace(ctx context.Context, conf types.NetConf, namespace string, lookups utils.SandboxLookups, logger *logrus.Entry) (*corev1.Namespace, error) {
+func getNamespace(ctx context.Context, conf types.NetConf, namespace string, logger *logrus.Entry) (*corev1.Namespace, error) {
 	if namespace == "" {
 		return nil, nil
 	}
-	if lookups.Namespace != nil {
-		return lookups.Namespace, nil
+	if ns := utils.SandboxLookupsFrom(ctx).Namespace; ns != nil {
+		return ns, nil
 	}
 
-	k8sClient, err := k8sClientFor(lookups, conf, logger)
+	k8sClient, err := k8sClientFor(ctx, conf, logger)
 	if err != nil {
 		return nil, err
 	}
