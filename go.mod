@@ -6,6 +6,11 @@ tool (
 	github.com/google/go-containerregistry/cmd/crane
 	github.com/mikefarah/yq/v4
 	github.com/onsi/ginkgo/v2/ginkgo
+	github.com/projectcalico/calico/hack/cmd/calico-selector
+	github.com/projectcalico/calico/hack/cmd/coalesce-imports
+	github.com/projectcalico/calico/hack/cmd/deps
+	github.com/projectcalico/calico/hack/cmd/format-go-file
+	github.com/projectcalico/calico/hack/cmd/gomodder
 	golang.org/x/tools/cmd/goimports
 	gotest.tools/gotestsum
 	sigs.k8s.io/controller-runtime/tools/setup-envtest

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && go run ./hack/cmd/format-go-file --claude-hook"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && go tool format-go-file --claude-hook"
           }
         ]
       }

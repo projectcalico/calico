@@ -929,23 +929,21 @@ fix-changed go-fmt-changed goimports-changed:
 	  if [ -z "$(CI_GIT_COMMIT_RANGE)" ]; then \
 	    parent_branch=`release_prefix=$(RELEASE_BRANCH_PREFIX)-v git_repo_slug=$(GIT_REPO_SLUG) $(REPO_REL_DIR)/hack/find-parent-release-branch.sh`; \
 	  fi; \
-	  $(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
-	                -e git_repo_slug=$(GIT_REPO_SLUG) \
-	                -e parent_branch=$$parent_branch \
-	                -e CI_GIT_COMMIT_RANGE=$(CI_GIT_COMMIT_RANGE) \
-	                $(CALICO_BUILD) $(REPO_REL_DIR)/hack/format-changed-files.sh; \
+	  release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
+	  git_repo_slug=$(GIT_REPO_SLUG) \
+	  parent_branch=$$parent_branch \
+	  CI_GIT_COMMIT_RANGE=$(CI_GIT_COMMIT_RANGE) \
+	  $(REPO_REL_DIR)/hack/format-changed-files.sh; \
 	fi
 
 .PHONY: fix-all go-fmt-all goimports-all
-# $(DOCKER_GO_BUILD) is empty under NATIVE_GO_BUILD, so this runs the formatter directly.
 fix-all go-fmt-all goimports-all:
-	$(DOCKER_GO_BUILD) $(REPO_REL_DIR)/hack/format-all-files.sh
+	$(REPO_REL_DIR)/hack/format-all-files.sh
 
-GOMODDER=$(REPO_REL_DIR)/hack/cmd/gomodder/main.go
-
+# gomodder checks every module in the repo, so it always runs from the root.
 .PHONY: verify-go-mods
 verify-go-mods:
-	$(DOCKER_RUN) $(CALICO_BUILD) go run $(GOMODDER)
+	go -C $(REPO_ROOT) tool gomodder
 
 .PHONY: pre-commit
 pre-commit:

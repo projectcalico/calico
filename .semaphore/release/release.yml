@@ -48,6 +48,8 @@ blocks:
             - name: VAR_FILE
               value: /home/semaphore/secrets/release.tfvars
           commands:
+            # The release regenerates manifests, which reads the chart with yq.
+            - . hack/ensure-go.sh
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} release; fi
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} release-publish; fi
   - name: "Build Openstack Packages"
@@ -79,6 +81,7 @@ blocks:
           execution_time_limit:
             minutes: 60
           commands:
+            - . hack/ensure-go.sh
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make publish-openstack; fi
       epilogue:
         always:

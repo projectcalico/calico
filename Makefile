@@ -140,10 +140,10 @@ gen-semaphore-yaml: operator-charts
 ifdef CI_WORKFLOW_NAME
 	@echo "Skipping Semaphore config generation under ArgoCI"
 else
-	$(DOCKER_GO_BUILD) sh -c "DEFAULT_BRANCH_OVERRIDE=$(DEFAULT_BRANCH_OVERRIDE) \
-	                          SEMAPHORE_GIT_BRANCH=$(SEMAPHORE_GIT_BRANCH) \
-	                          RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) \
-	                          go run ./hack/cmd/deps $(DEPS_ARGS) generate-semaphore-yamls"
+	DEFAULT_BRANCH_OVERRIDE=$(DEFAULT_BRANCH_OVERRIDE) \
+	SEMAPHORE_GIT_BRANCH=$(SEMAPHORE_GIT_BRANCH) \
+	RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) \
+	go tool deps $(DEPS_ARGS) generate-semaphore-yamls
 endif
 
 GO_DIRS=$(shell ./hack/list-go-sources.sh dirs)
@@ -157,8 +157,8 @@ ARGOCI_DEPS_FILE=.argoci/depstree.yaml
 # They get a depstree entry but no deps.txt.
 ARGOCI_DEPS_SUBPACKAGES=felix/nftables test-tools/mocknode
 
-# Each job starts its own go-build container, so it is sized from the CPU a CI
-# step was given where there is one; nproc counts the node's cores instead.
+# Each job is a whole-repo `go list` pass, so it is sized from the CPU a CI step
+# was given where there is one; nproc counts the node's cores instead.
 gen-deps-files: operator-charts
 	$(MAKE) -j$(or $(GOMAXPROCS),$$(nproc)) $(DEP_FILES)
 	$(MAKE) $(ARGOCI_DEPS_FILE)
@@ -169,13 +169,13 @@ $(DEP_FILES): $(DEPS_SOURCES)
 	  echo "Run 'make gen-deps-files' to regenerate." && \
 	  echo && \
 	  grep '^go' go.mod && \
-	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps combined $(patsubst %/,%,$(dir $@))"; \
+	  go tool deps combined $(patsubst %/,%,$(dir $@)); \
 	} > $@
 
 # One invocation for every component, since each is a whole-repo `go list` pass.
 # Via a temporary, because a truncated file would silently gate nothing.
 $(ARGOCI_DEPS_FILE): $(DEPS_SOURCES)
-	@$(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps gen-argoci-deps $(GO_DIRS) $(ARGOCI_DEPS_SUBPACKAGES)" > $@.tmp \
+	@go tool deps gen-argoci-deps $(GO_DIRS) $(ARGOCI_DEPS_SUBPACKAGES) > $@.tmp \
 	  && mv $@.tmp $@ || { rm -f $@.tmp; exit 1; }
 
 # The pin file is what onboards a component: one without it is left out,

@@ -67,6 +67,8 @@ steps:
 
       gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
 
+      # The hashrelease regenerates manifests, which reads the chart with yq.
+      . "${CI_HOME}/${CI_GIT_DIR}/hack/ensure-go.sh"
       cd release
       make hashrelease
     epilogue: |

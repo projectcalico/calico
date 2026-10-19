@@ -38,8 +38,8 @@ ut:
 fv:
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 		sh -c 'cd /go/src/$(PACKAGE_NAME) && \
-		       go run ./cmd/calico-selector set-name "has(a)"&& \
-               go run ./cmd/calico-selector print-tree "a == \"b\" || has(d) || has(e) && has(g)"'
+		       go tool calico-selector set-name "has(a)"&& \
+               go tool calico-selector print-tree "a == \"b\" || has(d) || has(e) && has(g)"'
 
 st:
 	@echo "No STs available"

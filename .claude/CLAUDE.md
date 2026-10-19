@@ -107,7 +107,7 @@ line short and put the insight underneath.
 ### Formatting
 
 A repo-scoped PostToolUse hook (`.claude/settings.json`) runs
-`hack/cmd/format-go-file` after every Edit/Write/MultiEdit, which fixes gofmt
+`go tool format-go-file` after every Edit/Write/MultiEdit, which fixes gofmt
 and import grouping (stdlib, external, calico-internal). Don't hand-format
 imports.
 
