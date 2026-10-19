@@ -472,6 +472,107 @@ func TestTCPRecycleClosedNATReverseOtherService(t *testing.T) {
 	Expect(ct).To(HaveKeyWithValue(revKey, svc2Rev))
 }
 
+// TestTCPRecycleClosedNATReverseV6 checks create-time and lookup-time recycling of a closed reverse entry over IPv6.
+func TestTCPRecycleClosedNATReverseV6(t *testing.T) {
+	RegisterTestingT(t)
+
+	defer func() { bpfIfaceName = "" }()
+	bpfIfaceName = "Rc61"
+
+	resetCTMapV6(ctMapV6)
+	defer resetCTMapV6(ctMapV6)
+
+	natIP := net.ParseIP("abcd::ffff:0808:0808")
+	natPort := uint16(666)
+	svc1Port := uint16(7890)
+	svc2Port := uint16(7891)
+
+	tcpSyn := &layers.TCP{
+		SrcPort:    54321,
+		DstPort:    layers.TCPPort(svc1Port),
+		SYN:        true,
+		DataOffset: 5,
+	}
+	_, ipv6, _, _, svc1SynPkt, err := testPacketV6(nil, nil, tcpSyn, nil)
+	Expect(err).NotTo(HaveOccurred())
+	svcIP := ipv6.DstIP
+	svc2Syn := *tcpSyn
+	svc2Syn.DstPort = layers.TCPPort(svc2Port)
+	_, _, _, _, svc2SynPkt, err := testPacketV6(nil, nil, &svc2Syn, nil)
+	Expect(err).NotTo(HaveOccurred())
+	directIP := *ipv6Default
+	directIP.DstIP = natIP
+	directSyn := *tcpSyn
+	directSyn.DstPort = layers.TCPPort(natPort)
+	_, _, _, _, directSynPkt, err := testPacketV6(nil, &directIP, &directSyn, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	defer resetMap(natMapV6)
+	defer resetMap(natBEMapV6)
+	for id, port := range []uint16{svc1Port, svc2Port} {
+		Expect(natMapV6.Update(
+			nat.NewNATKeyV6(svcIP, port, uint8(layers.IPProtocolTCP)).AsBytes(),
+			nat.NewNATValueV6(uint32(id), 1, 0, 0).AsBytes(),
+		)).NotTo(HaveOccurred())
+		Expect(natBEMapV6.Update(
+			nat.NewNATBackendKeyV6(uint32(id), 0).AsBytes(),
+			nat.NewNATBackendValueV6(natIP, natPort).AsBytes(),
+		)).NotTo(HaveOccurred())
+	}
+
+	rtKey := routes.NewKeyV6(srcV6CIDR).AsBytes()
+	rtVal := routes.NewValueV6WithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	defer resetRTMap(rtMapV6)
+	Expect(rtMapV6.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+
+	revKey := conntrack.NewKeyV6(uint8(layers.IPProtocolTCP), srcIPv6, 54321, natIP, natPort)
+
+	closeRev := func() {
+		ct, err := conntrack.LoadMapMemV6(ctMapV6)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ct).To(HaveKey(revKey))
+		revVal := ct[revKey]
+		v := revVal.Data()
+		v.A2B.FinSeen = true
+		v.A2B.AckSeen = true
+		revVal.SetLegA2B(v.A2B)
+		v.B2A.FinSeen = true
+		v.B2A.AckSeen = true
+		revVal.SetLegB2A(v.B2A)
+		Expect(ctMapV6.Update(revKey.AsBytes(), revVal.AsBytes())).NotTo(HaveOccurred())
+	}
+
+	runSyn := func(iface string, pkt []byte) conntrack.MapMemV6 {
+		bpfIfaceName = iface
+		skbMark = 0
+		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pkt)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+		}, withIPv6())
+		ct, err := conntrack.LoadMapMemV6(ctMapV6)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ct).To(HaveKey(revKey))
+		Expect(ct[revKey].Data().FINsSeen()).To(BeFalse())
+		return ct
+	}
+
+	ct := runSyn("Rc61", svc1SynPkt)
+	Expect(ct[revKey].Type()).To(Equal(conntrack.TypeNATReverse))
+	Expect(ct[revKey].OrigPort()).To(Equal(svc1Port))
+
+	// Another service with the same backend recycles the closed entry when it creates its reverse entry.
+	closeRev()
+	ct = runSyn("Rc62", svc2SynPkt)
+	Expect(ct[revKey].Type()).To(Equal(conntrack.TypeNATReverse))
+	Expect(ct[revKey].OrigPort()).To(Equal(svc2Port))
+
+	// A direct SYN to the backend recycles the closed entry at lookup.
+	closeRev()
+	ct = runSyn("Rc63", directSynPkt)
+	Expect(ct[revKey].Type()).To(Equal(conntrack.TypeNormal))
+}
+
 // TestTCPRecycleNeedsFINsBothWays checks that only FINs both ways let a SYN recycle an entry; RST-closed ones are left to GC.
 func TestTCPRecycleNeedsFINsBothWays(t *testing.T) {
 	RegisterTestingT(t)
