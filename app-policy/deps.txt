@@ -166,6 +166,7 @@ local:felix/rules
 local:felix/serviceindex
 local:felix/stringutils
 local:felix/types
+local:lib/std/intervals
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
 local:libcalico-go/config

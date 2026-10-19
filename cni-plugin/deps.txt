@@ -141,6 +141,7 @@ local:cni-plugin/pkg/upgrade
 local:cni-plugin/pkg/wait
 local:cni-plugin/tests
 local:crypto/pkg/tls
+local:lib/std/intervals
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
 local:libcalico-go/lib/apiconfig
