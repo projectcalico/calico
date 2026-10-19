@@ -76,9 +76,7 @@ type L7Flow interface {
 	GetDestLabels() map[string]string
 }
 
-// flow abstracts the common data and behavior needed for the match algorithms.
-//go:generate mockery --name=Flow --output=mocks --outpkg=mocks
-
+// Flow abstracts the common data and behavior needed for the match algorithms.
 type Flow interface {
 	L4Flow
 	L7Flow

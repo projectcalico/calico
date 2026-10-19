@@ -19,13 +19,6 @@ KUSTOMIZE_DOWNLOAD_URL = https://github.com/kubernetes-sigs/kustomize/releases/d
 OPERATOR_SDK_VERSION = v1.42.2
 OPERATOR_SDK_URL = https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$(NATIVE_OS)_$(NATIVE_ARCH)
 
-# Our version of helm3 - Note that we use BUILD_ARCH here instead of NATIVE_ARCH because
-# that's what we used before and we don't want to break things if that's necessary.
-HELM3_VERSION = v3.21.3
-HELM3_URL = https://get.helm.sh/helm-$(HELM3_VERSION)-$(NATIVE_OS)-$(BUILDARCH).tar.gz
-HELM_BUILDARCH_BINARY = $(HACK_BIN)/helm-$(BUILDARCH)
-HELM_BUILDARCH_VERSIONED_BINARY = $(HELM_BUILDARCH_BINARY)-$(HELM3_VERSION)
-
 
 # The directory into which we download binaries we need to run certain
 # processes, e.g. generating bundles
@@ -85,9 +78,8 @@ CALICO_LDFLAGS = -X $(PACKAGE_NAME)/pkg/components.CalicoRelease=$(CALICO_VERSIO
                  -X $(PACKAGE_NAME)/pkg/components.operatorRegistry=$(OPERATOR_IMAGE_REGISTRY) \
                  -X $(PACKAGE_NAME)/pkg/components.operatorImagePath=$(OPERATOR_IMAGE_PATH)
 
-# To update the Istio version, see "Updating the bundled version of Istio" in docs/common_tasks.md.
+# The charts match the istio/ images, at metadata.mk's ISTIO_VERSION.
 ISTIO_HELM_REPO ?= https://istio-release.storage.googleapis.com/charts
-ISTIO_VERSION ?= 1.29.2
 ISTIO_RESOURCES_DIR = pkg/render/istio
 ISTIO_CHARTS = base istiod cni ztunnel
 ISTIO_CHART_FILES = $(addprefix $(ISTIO_RESOURCES_DIR)/,$(addsuffix .tgz,$(ISTIO_CHARTS)))
@@ -102,11 +94,10 @@ $(ISTIO_RESOURCES_DIR)/%.tgz:
 # To update the Envoy Gateway version, see "Updating the bundled version of
 # Envoy Gateway" in docs/common_tasks.md.
 ENVOY_GATEWAY_HELM_CHART ?= oci://docker.io/envoyproxy/gateway-helm
-ENVOY_GATEWAY_VERSION ?= v1.9.1
 ENVOY_GATEWAY_CHART = pkg/render/gatewayapi/gateway-helm.tgz
 
-$(ENVOY_GATEWAY_CHART): $(HACK_BIN)/helm-$(BUILDARCH)
-	$(HELM_BUILDARCH_BINARY) pull $(ENVOY_GATEWAY_HELM_CHART) \
+$(ENVOY_GATEWAY_CHART): bin/helm
+	bin/helm pull $(ENVOY_GATEWAY_HELM_CHART) \
 		--version $(ENVOY_GATEWAY_VERSION) \
 		--destination pkg/render/gatewayapi/
 	@mv pkg/render/gatewayapi/gateway-helm-$(ENVOY_GATEWAY_VERSION).tgz $@
@@ -115,16 +106,6 @@ $(ENVOY_GATEWAY_CHART): $(HACK_BIN)/helm-$(BUILDARCH)
 # directives point at, so anything outside this directory asks for them here.
 .PHONY: embedded_charts
 embedded_charts: $(ISTIO_CHART_FILES) $(ENVOY_GATEWAY_CHART)
-
-$(HELM_BUILDARCH_BINARY): $(HELM_BUILDARCH_VERSIONED_BINARY)
-	$(info ░▒▓ symlink $(HELM_BUILDARCH_VERSIONED_BINARY) -> $(HELM_BUILDARCH_BINARY))
-	@ln -sf helm-$(BUILDARCH)-$(HELM3_VERSION) $(HACK_BIN)/helm-$(BUILDARCH)
-
-$(HELM_BUILDARCH_VERSIONED_BINARY): | $(HACK_BIN)
-	$(info ░▒▓ Downloading helm3 $(HELM3_VERSION) for $(BUILDARCH) to $(HELM_BUILDARCH_VERSIONED_BINARY))
-	@rm -f $(HELM_BUILDARCH_VERSIONED_BINARY)
-	@curl -fsSL --retry 5 $(HELM3_URL) | tar --extract --gzip -C $(HACK_BIN) --strip-components=1 $(NATIVE_OS)-$(BUILDARCH)/helm -O > $(HELM_BUILDARCH_VERSIONED_BINARY)
-	@chmod a+x $(HELM_BUILDARCH_VERSIONED_BINARY)
 
 
 build: $(BINDIR)/$(BINARY_NAME)-$(ARCH)
@@ -190,17 +171,15 @@ FV_TEST_TIMEOUT ?= 60m
 # UT_DIR/FV_DIR to those packages as well.
 GINKGO_FOCUS ?=
 GINKGO_FOCUS_ARG = $(if $(GINKGO_FOCUS),-ginkgo.focus="$(GINKGO_FOCUS)")
-ENVTEST_K8S_VERSION?=1.34.x
 
 # gotestsum, rather than the ginkgo CLI, because it writes one JUnit report from the
 # directory it runs in. Ginkgo resolves its report path against each suite instead,
 # which scatters the reports through the package tree where CI cannot collect them.
 .PHONY: ut
-ut: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
+ut: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES) setup-envtest
 	-mkdir -p .go-pkg-cache report
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-	go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.22 && \
-	export KUBEBUILDER_ASSETS=$$(setup-envtest use $(ENVTEST_K8S_VERSION) --bin-dir /tmp/envtest-bins -p path) && \
+	export KUBEBUILDER_ASSETS=$$(ls -d $(ENVTEST_CONTAINER_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1) && \
 	gotestsum --format testname --junitfile report/operator_ut.xml -- $(UT_DIR)/... $(GO_TEST_ARGS) $(GINKGO_FOCUS_ARG)'
 
 ## Run the functional tests against a local kind cluster.
@@ -259,10 +238,10 @@ OPERATOR_RBAC_TEMPLATES = \
 	02-rolebinding-tigera-operator.yaml \
 	02-rolebinding-tigera-operator-secrets.yaml
 
-deploy-operator-rbac: $(KUBECTL) $(HELM_BUILDARCH_BINARY)
+deploy-operator-rbac: $(KUBECTL) bin/helm
 	@export KUBECONFIG=$(KIND_KUBECONFIG) && \
 		$(KUBECTL) create ns tigera-operator --dry-run=client -o yaml | $(KUBECTL) apply -f - && \
-		$(HELM_BUILDARCH_BINARY) template ../charts/tigera-operator --namespace tigera-operator \
+		bin/helm template ../charts/tigera-operator --namespace tigera-operator \
 			$(addprefix --show-only templates/tigera-operator/,$(OPERATOR_RBAC_TEMPLATES)) \
 		| $(KUBECTL) apply -f -
 
@@ -414,7 +393,8 @@ deploy: manifests kustomize
 manifests:
 	# Prune stale CRDs so one whose Go type is gone leaves the tree too.
 	rm -f pkg/crds/operator/*.yaml
-	$(DOCKER_GO_BUILD) sh -c 'controller-gen crd paths="./api/..." output:crd:artifacts:config=pkg/crds/operator'
+	$(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
+	$(DOCKER_GO_BUILD) sh -c '$(CALICO_CONTROLLER_GEN) crd paths="./api/..." output:crd:artifacts:config=pkg/crds/operator'
 	for x in $$(find pkg/crds/operator/*); do sed -i -e '/creationTimestamp: null/d' -e '/^---/d' -e '/^\s*$$/d' $$x; done
 	@docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/pkg/crds/operator/:/work/crds/operator/ tmknom/prettier --write --parser=yaml /work
 
@@ -431,12 +411,11 @@ vet: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	go vet ./...'
 
 # Generate code
-# We use the upstream latest release of controller-gen as this is compatible with golang 1.19+ and we have no need
-# for custom projectcalico.org types.
 generate: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
-	$(DOCKER_GO_BUILD) sh -c 'controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./api/..." && \
-		controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./pkg/..." && \
-		controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./internal/controller/..."'
+	$(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
+	$(DOCKER_GO_BUILD) sh -c '$(CALICO_CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./api/..." && \
+		$(CALICO_CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./pkg/..." && \
+		$(CALICO_CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./internal/controller/..."'
 	-# controller-gen drops `//go:build !ignore_autogenerated` from the generated
 	-# files, and the formatter puts it back.
 	$(MAKE) fix-changed
@@ -614,9 +593,6 @@ else
 OPERATOR_IMAGE ?= $(OPERATOR_IMAGE_NAME):latest
 endif
 
-double_quote := $(shell echo '"')
-CRANE=docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root/.docker/config.json $(CALICO_BUILD) -c $(double_quote)crane
-
 define imageset_header
 apiVersion: operator.tigera.io/v1
 kind: ImageSet
@@ -640,7 +616,7 @@ gen-imageset: gen-calico-imageset $(BUILD_DIR)
 	@echo Imageset written to file $(BUILD_DIR)/imageset.yaml
 
 .PHONY: gen-calico-imageset
-gen-calico-imageset: $(BUILD_DIR)
+gen-calico-imageset: $(BUILD_DIR) bin/crane
 	$(eval IMAGESET_VER = $(shell docker run $(OPERATOR_IMAGE) --version 2>/dev/null | \
 		grep "Calico:" | sed -e 's/Calico://'))
 	@echo Calico version: $(IMAGESET_VER)
@@ -652,7 +628,7 @@ gen-calico-imageset: $(BUILD_DIR)
 	  grep -v "Failed to read" | \
 	while read -r line; do \
 	  echo "Adding digest for $${line}"; \
-	  digest=$$($(CRANE) digest $${line}$(double_quote)); \
+	  digest=$$($(CRANE_CMD) digest $${line}); \
 	  echo "  - image: \"$$(echo $${line} | sed -e 's|^.*/\([^/]*/[^/]*\):.*$$|\1|')\"" >> $(BUILD_DIR)/imageset-calico.yaml; \
 	  echo "    digest: $${digest}" >> $(BUILD_DIR)/imageset-calico.yaml; \
 	done
@@ -662,7 +638,7 @@ ifeq ($(OLD_STYLE_PRINT_IMAGE),true)
 	  grep -e 'tigera/key-cert-provisioner' | \
 	while read -r line; do \
 	  echo "Adding digest for $${line}"; \
-	  digest=$$($(CRANE) digest $${line}$(double_quote)); \
+	  digest=$$($(CRANE_CMD) digest $${line}); \
 	  echo "  - image: \"$$(echo $${line} | sed -e 's|^.*/\([^/]*/[^/]*\):.*$$|\1|')\"" >> $(BUILD_DIR)/imageset-calico.yaml; \
 	  echo "    digest: $${digest}" >> $(BUILD_DIR)/imageset-calico.yaml; \
 	done

@@ -17,10 +17,19 @@ func NewConn(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *Conn {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &Conn{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -161,7 +170,7 @@ type Conn_Read_Call struct {
 
 // Read is a helper method to define mock.On call
 //   - b []byte
-func (_e *Conn_Expecter) Read(b interface{}) *Conn_Read_Call {
+func (_e *Conn_Expecter) Read(b any) *Conn_Read_Call {
 	return &Conn_Read_Call{Call: _e.mock.On("Read", b)}
 }
 
@@ -258,7 +267,7 @@ type Conn_SetDeadline_Call struct {
 
 // SetDeadline is a helper method to define mock.On call
 //   - t time.Time
-func (_e *Conn_Expecter) SetDeadline(t interface{}) *Conn_SetDeadline_Call {
+func (_e *Conn_Expecter) SetDeadline(t any) *Conn_SetDeadline_Call {
 	return &Conn_SetDeadline_Call{Call: _e.mock.On("SetDeadline", t)}
 }
 
@@ -309,7 +318,7 @@ type Conn_SetReadDeadline_Call struct {
 
 // SetReadDeadline is a helper method to define mock.On call
 //   - t time.Time
-func (_e *Conn_Expecter) SetReadDeadline(t interface{}) *Conn_SetReadDeadline_Call {
+func (_e *Conn_Expecter) SetReadDeadline(t any) *Conn_SetReadDeadline_Call {
 	return &Conn_SetReadDeadline_Call{Call: _e.mock.On("SetReadDeadline", t)}
 }
 
@@ -360,7 +369,7 @@ type Conn_SetWriteDeadline_Call struct {
 
 // SetWriteDeadline is a helper method to define mock.On call
 //   - t time.Time
-func (_e *Conn_Expecter) SetWriteDeadline(t interface{}) *Conn_SetWriteDeadline_Call {
+func (_e *Conn_Expecter) SetWriteDeadline(t any) *Conn_SetWriteDeadline_Call {
 	return &Conn_SetWriteDeadline_Call{Call: _e.mock.On("SetWriteDeadline", t)}
 }
 
@@ -420,7 +429,7 @@ type Conn_Write_Call struct {
 
 // Write is a helper method to define mock.On call
 //   - b []byte
-func (_e *Conn_Expecter) Write(b interface{}) *Conn_Write_Call {
+func (_e *Conn_Expecter) Write(b any) *Conn_Write_Call {
 	return &Conn_Write_Call{Call: _e.mock.On("Write", b)}
 }
 

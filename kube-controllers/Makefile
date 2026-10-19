@@ -1,3 +1,17 @@
+# Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/kube-controllers
@@ -92,7 +106,7 @@ TEST_BINARIES=$(addsuffix /ut.test,$(WHAT))
 # binary runs on the host because run-uts invokes test binaries outside the
 # container so they can talk to docker.
 bin/gotestsum:
-	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
+	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install gotest.tools/gotestsum
 
 # gotestsum converts test output with this, and the host it runs on has no Go
 # toolchain to reach `go tool test2json` in.
@@ -112,8 +126,9 @@ ut fv: ut-prereqs
 
 ut-prereqs: $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
 
-ut-no-prereqs: $(TEST_BINARIES) setup-envtest bin/gotestsum bin/test2json
+ut-no-prereqs: $(TEST_BINARIES) setup-envtest bin/gotestsum bin/test2json $(K8S_BIN_FILES)
 	KUBE_IMAGE=$(CALICO_BUILD) \
+		   K8S_BIN_DIR=$(K8S_BIN_DIR) \
 		   ETCD_IMAGE=$(ETCD_IMAGE) \
 		   CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		   CONTAINER_NAME=calico/calico:latest-$(ARCH) \

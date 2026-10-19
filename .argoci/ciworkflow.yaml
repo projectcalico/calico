@@ -1,3 +1,17 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # PR and merge CI. One workflow, not one per component, because `depends:` and
 # artifacts are both workflow-scoped.
 #
@@ -73,6 +87,20 @@ globalPrologue: |
       sleep 10
     done
   fi
+  # A run that built toolchain images hands them on in CI_TOOLCHAIN_ENV, as
+  # NAME=image lines that override the Makefiles' published tags (see
+  # .argoci/modules/10-toolchain.yaml). They live in a private registry: a pod
+  # logs in with the key every pod mounts, a VM with its own service account.
+  if [ -n "${CI_TOOLCHAIN_ENV:-}" ]; then
+    while IFS= read -r __kv; do
+      [ -n "${__kv}" ] && export "${__kv}"
+    done <<< "${CI_TOOLCHAIN_ENV}"
+    if [ -f /etc/argoci/artifacts-sa/key.json ] && docker info >/dev/null 2>&1; then
+      docker login -u _json_key --password-stdin https://gcr.io < /etc/argoci/artifacts-sa/key.json
+    elif command -v gcloud >/dev/null 2>&1; then
+      gcloud auth configure-docker gcr.io --quiet || echo "[WARN] cannot log in to gcr.io; pulls of this run's toolchain images will fail"
+    fi
+  fi
   # One place for the Go build cache, whether a build runs in docker or on the
   # host, so what is restored is what the build reads.
   export LOCAL_GO_PKG_CACHE="${CI_HOME}/${CI_GIT_DIR}/.go-pkg-cache"
@@ -133,6 +161,9 @@ defaults:
 includes:
   # Each check inside carries its own gate.
   - path: .argoci/modules/10-prerequisites.yaml
+
+  # Each image's steps carry their own gate.
+  - path: .argoci/modules/10-toolchain.yaml
 
   # Ungated: the sweep must run on every build.
   - path: .argoci/modules/99-cleanup.yaml

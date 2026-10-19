@@ -3,7 +3,8 @@ PACKAGE_NAME = github.com/projectcalico/calico
 include metadata.mk
 include lib.Makefile
 
-DOCKER_RUN := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
+DOCKER_RUN := $(MAKE) --no-print-directory -s -C $(REPO_ROOT) build-tools && \
+	mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--net=host \
 		--init \
@@ -11,6 +12,7 @@ DOCKER_RUN := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 		$(DOCKER_GIT_WORKTREE_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
+		-e BUILD_TOOLS_PATH=$(BUILD_TOOLS_DIR) \
 		$(GOARCH_FLAGS) \
 		-e GOPATH=/go \
 		-e OS=$(BUILDOS) \
@@ -82,11 +84,6 @@ check-mockery-config:
 
 check-ginkgo-v2:
 	./hack/check-ginkgo-v2.sh
-
-# Exported so the script sees make's fully expanded value.
-check-argoci-image: export GO_BUILD_VER := $(GO_BUILD_VER)
-check-argoci-image:
-	./hack/check-argoci-image.sh
 
 check-ocp-no-crds:
 	@echo "Checking for files in manifests/ocp with CustomResourceDefinitions"
@@ -538,10 +535,6 @@ release/bin/release: $(shell find ./release -type f -name '*.go') metadata.mk
 release-prep: release/bin/release bin/gh
 	@release/bin/release release prep
 
-# Install ghr for publishing to github.
-bin/ghr:
-	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@$(GHR_VERSION)
-
 # Install GitHub CLI
 bin/gh:
 	@mkdir -p bin
@@ -555,7 +548,7 @@ release: release/bin/release
 	@release/bin/release release build
 
 # Publish an already built release.
-release-publish: release/bin/release bin/gh bin/ghr bin/helm
+release-publish: release/bin/release bin/gh bin/helm
 	@release/bin/release release publish
 
 # Create a release branch.
@@ -617,7 +610,7 @@ endif
 # Post-release validation
 ###############################################################################
 bin/gotestsum:
-	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
+	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum
 
 postrelease-checks release-validate: release/bin/release bin/gotestsum
 	@release/bin/release release validate

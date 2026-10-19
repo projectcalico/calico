@@ -28,6 +28,9 @@ type Config struct {
 	BucketName string
 
 	gcsClient *storage.Client
+
+	// objs stands in for the bucket in tests.
+	objs textObjects
 }
 
 func (s *Config) Valid() bool {
@@ -43,4 +46,15 @@ func (s *Config) Bucket() (*storage.BucketHandle, error) {
 		s.gcsClient = cli
 	}
 	return s.gcsClient.Bucket(s.BucketName), nil
+}
+
+func (s *Config) objects() (textObjects, error) {
+	if s.objs != nil {
+		return s.objs, nil
+	}
+	bucket, err := s.Bucket()
+	if err != nil {
+		return nil, err
+	}
+	return bucketObjects{bucket: bucket}, nil
 }

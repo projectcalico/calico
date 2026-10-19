@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,10 @@ func Make(args []string, envs []string) (string, error) {
 }
 
 // MakeInDir runs a make command in a specific directory.
+//
+// Callers parse its output, so it must not carry "Entering directory" lines,
+// which a parent make run with -C turns on through MAKEFLAGS.
 func MakeInDir(dir string, args []string, envs []string) (string, error) {
-	args = append([]string{"-C", dir}, args...)
+	args = append([]string{"--no-print-directory", "-C", dir}, args...)
 	return Make(args, envs)
 }

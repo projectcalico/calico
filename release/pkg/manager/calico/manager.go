@@ -700,7 +700,6 @@ func (r *CalicoManager) hashreleaseUpload() distribution.Upload {
 			Config:      &r.hashreleaseConfig,
 			ProductCode: r.productCode,
 			DryRun:      r.dryRun,
-			Runner:      r.runner,
 		},
 	}
 }

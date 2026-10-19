@@ -1795,6 +1795,21 @@ components:
       - ^(?:[^/]+/)*SECURITY\.md$
       - ^(?:[^/]+/)*[^/]*\.md$
       - ^(?:[^/]+/)*\.gitignore$
+  toolchain:
+    in:
+      - ^hack/test/certs/
+      - ^lib\.Makefile$
+      - ^metadata\.mk$
+      - ^toolchain/
+    exclude:
+      - ^(?:[^/]+/)*AUTHORS[^/]*$
+      - ^(?:[^/]+/)*CONTRIBUTING[^/]*$
+      - ^(?:[^/]+/)*DEVELOPER_GUIDE[^/]*$
+      - ^(?:[^/]+/)*LICENSE[^/]*$
+      - ^(?:[^/]+/)*README[^/]*$
+      - ^(?:[^/]+/)*SECURITY\.md$
+      - ^(?:[^/]+/)*[^/]*\.md$
+      - ^(?:[^/]+/)*\.gitignore$
   typha:
     in:
       - ^api/[^/]*\.go$

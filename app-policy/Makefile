@@ -59,6 +59,10 @@ ut: protobuf
 	mkdir -p report
 	$(DOCKER_RUN) $(CALICO_BUILD) /bin/bash -c "cd /go/src/$(PACKAGE_NAME) && gotestsum --junitfile report/app_policy_ut.xml -- -v -race ./..."
 
+.PHONY: gen-mocks
+gen-mocks:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'mockery'
+
 ###############################################################################
 # CI
 ###############################################################################

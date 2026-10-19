@@ -185,9 +185,7 @@ spec:
 
 ## Updating the bundled version of Envoy Gateway
 
-1. In the repo root `go.mod`, update `github.com/envoyproxy/gateway`, and `sigs.k8s.io/gateway-api` (plus `/conformance`) to the version that Envoy Gateway release requires. Run `make mod-tidy`. If the new version needs a newer Go than `GO_BUILD_VER` in `metadata.mk` provides, that has to move first.
-
-1. In `operator/Makefile`, update `ENVOY_GATEWAY_VERSION`.
+1. In the repo root `go.mod`, update `github.com/envoyproxy/gateway`, which sets the chart and image version everywhere, and `sigs.k8s.io/gateway-api` (plus `/conformance`) to the version that Envoy Gateway release requires. Run `make mod-tidy`. If the new version needs a newer Go than `GO_BUILD_VER` in `metadata.mk` provides, that has to move first.
 
 1. Delete `operator/pkg/render/gatewayapi/gateway-helm.tgz`. It is gitignored and only downloaded when absent, so a stale chart is otherwise reused silently.
 
@@ -196,8 +194,6 @@ spec:
 1. Identify the matching `proxy` and `ratelimit` images. Read them from `charts/gateway-helm/values.tmpl.yaml` in the envoyproxy/gateway repo at the exact tag you are moving to; the [compatibility matrix](https://gateway.envoyproxy.io/news/releases/matrix/) can lag behind patch releases.
 
 1. Update `third_party/` at the repo root to build those images:
-
-   - `third_party/envoy-gateway/Makefile`: `ENVOY_GATEWAY_VERSION`.
 
    - `third_party/envoy-ratelimit/Makefile`: `ENVOY_RATELIMIT_VERSION`, as a full commit SHA.
 

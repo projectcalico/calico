@@ -63,6 +63,7 @@ cd ../..
 # Excluding Typha binaries because we only need the image.
 tar -czf /tmp/working-copy.tgz \
   --exclude=${CALICO_DIR_NAME}/.go-pkg-cache \
+  --exclude=${CALICO_DIR_NAME}/hack/test/k8s \
   --exclude=${CALICO_DIR_NAME}/typha/bin \
   --exclude=${CALICO_DIR_NAME}/typha/docker-image/bin \
   --exclude=${CALICO_DIR_NAME}/artifacts \

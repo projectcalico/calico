@@ -1,3 +1,17 @@
+# Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # The tests in this directory use the projectcalico.org/v3 API group for CRDs.
 CALICO_API_GROUP ?= projectcalico.org/v3
 
@@ -37,7 +51,8 @@ endif
 
 # Override DOCKER_RUN from lib.Makefile. We need to trick this particular directory to think
 # that its package is github.com/projectcalico/api for easier mirroring.
-DOCKER_RUN := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
+DOCKER_RUN := $(MAKE) --no-print-directory -s -C $(REPO_ROOT) build-tools && \
+	mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--net=host \
 		--init \
@@ -45,6 +60,7 @@ DOCKER_RUN := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 		$(DOCKER_GIT_WORKTREE_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
+		-e BUILD_TOOLS_PATH=$(BUILD_TOOLS_DIR) \
 		$(GOARCH_FLAGS) \
 		-e GOPATH=/go \
 		-e OS=$(BUILDOS) \
@@ -79,7 +95,8 @@ gen-files .generate_files: lint-cache-dir clean-generated
 	# can be shared with the standalone projectcalico/api and tigera/api repos,
 	# which mirror build/ but keep their own Makefile. CRD generation stays above
 	# because it uses the monorepo-only Calico-patched controller-gen.
-	$(DOCKER_RUN) -e PACKAGE_NAME=$(PACKAGE_NAME) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(BUILD_DIR)/codegen.sh'
+	$(MAKE) -C $(REPO_ROOT) $(K8S_CODEGEN_BIN)/.installed
+	$(DOCKER_RUN) -e PACKAGE_NAME=$(PACKAGE_NAME) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) PATH=$(K8S_CODEGEN_DIR):$$PATH $(BUILD_DIR)/codegen.sh'
 
 	touch .generate_files
 	$(MAKE) fix

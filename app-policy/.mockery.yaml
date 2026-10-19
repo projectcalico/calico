@@ -1,0 +1,11 @@
+template: testify
+inpackage: false
+dir: "{{.InterfaceDir}}/mocks"
+filename: "{{.InterfaceName}}.go"
+packages:
+  github.com/projectcalico/calico/app-policy/checker:
+    config:
+      pkgname: "mocks"
+      structname: "{{.InterfaceName}}"
+    interfaces:
+      Flow:

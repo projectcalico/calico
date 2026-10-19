@@ -94,7 +94,7 @@ func ApplyCRDs(apiserver *containers.Container) {
 	// Apply the necessary CRDs. There can sometimes be a delay between starting
 	// the API server and when CRDs are apply-able, so retry here.
 	apply := func() error {
-		out, err := apiserver.ExecOutput("kubectl", "apply", "-f", "/crds/")
+		out, err := apiserver.ExecOutput(Kubectl, "apply", "-f", "/crds/")
 		if err != nil {
 			return fmt.Errorf("%s: %s", err, out)
 		}
@@ -110,7 +110,7 @@ func ApplyCRDs(apiserver *containers.Container) {
 	// slow-starting apiserver on a loaded CI runner can take well over 30s to
 	// establish every CRD.
 	waitEstablished := func() error {
-		out, err := apiserver.ExecOutput("kubectl", "wait", "--for=condition=Established", "--all", "crds", "--timeout=30s")
+		out, err := apiserver.ExecOutput(Kubectl, "wait", "--for=condition=Established", "--all", "crds", "--timeout=30s")
 		if err != nil {
 			return fmt.Errorf("%s: %s", err, out)
 		}
@@ -124,9 +124,10 @@ func RunK8sApiserver(etcdIp string) *containers.Container {
 		containers.RunOpts{AutoRemove: true},
 		"-v", os.Getenv("CERTS_PATH")+":/home/user/certs", // Mount in location of certificates.
 		"-v", os.Getenv("CRDS")+":/crds",
+		"-v", k8sBinVolume(),
 		"-e", "KUBECONFIG=/home/user/certs/kubeconfig", // We run kubectl from within this container.
 		os.Getenv("KUBE_IMAGE"),
-		"kube-apiserver",
+		K8sBinMount+"/kube-apiserver",
 		"--v=0",
 		"--service-cluster-ip-range=10.101.0.0/16",
 		"--authorization-mode=RBAC",
@@ -148,8 +149,9 @@ func RunK8sControllerManager(apiserverIp string) *containers.Container {
 	c := containers.Run("st-controller-manager",
 		containers.RunOpts{AutoRemove: true},
 		"-v", os.Getenv("CERTS_PATH")+":/home/user/certs", // Mount in location of certificates.
+		"-v", k8sBinVolume(),
 		os.Getenv("KUBE_IMAGE"),
-		"kube-controller-manager",
+		K8sBinMount+"/kube-controller-manager",
 		fmt.Sprintf("--master=https://%v:6443", apiserverIp),
 		"--cluster-cidr=192.168.0.0/16",
 		"--min-resync-period=3m",
@@ -167,6 +169,20 @@ func RunK8sControllerManager(apiserverIp string) *containers.Container {
 		"--concurrent-gc-syncs=50",
 	)
 	return c
+}
+
+// K8sBinMount is where KUBE_IMAGE containers see the K8S_BIN_DIR host directory.
+const K8sBinMount = "/usr/local/k8s/bin"
+
+// Kubectl is the path to exec in the apiserver container.
+const Kubectl = K8sBinMount + "/kubectl"
+
+func k8sBinVolume() string {
+	dir := os.Getenv("K8S_BIN_DIR")
+	if dir == "" {
+		log.Panic("K8S_BIN_DIR must name the host directory holding kube-apiserver, kube-controller-manager and kubectl")
+	}
+	return dir + ":" + K8sBinMount + ":ro"
 }
 
 func RunEtcd() *containers.Container {

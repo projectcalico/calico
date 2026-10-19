@@ -16,10 +16,19 @@ func NewTimer(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *Timer {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &Timer{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -73,8 +82,8 @@ func (_c *Timer_Chan_Call) Run(run func()) *Timer_Chan_Call {
 	return _c
 }
 
-func (_c *Timer_Chan_Call) Return(vCh <-chan time.Time) *Timer_Chan_Call {
-	_c.Call.Return(vCh)
+func (_c *Timer_Chan_Call) Return(timeCh <-chan time.Time) *Timer_Chan_Call {
+	_c.Call.Return(timeCh)
 	return _c
 }
 
@@ -107,7 +116,7 @@ type Timer_Reset_Call struct {
 
 // Reset is a helper method to define mock.On call
 //   - d time.Duration
-func (_e *Timer_Expecter) Reset(d interface{}) *Timer_Reset_Call {
+func (_e *Timer_Expecter) Reset(d any) *Timer_Reset_Call {
 	return &Timer_Reset_Call{Call: _e.mock.On("Reset", d)}
 }
 

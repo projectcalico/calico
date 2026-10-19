@@ -21,7 +21,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
@@ -36,15 +35,12 @@ import (
 )
 
 const (
-	gcloudCmd = "gcloud"
-	awsCmd    = "aws"
+	awsCmd = "aws"
 
-	s3Cmd      = "s3"
-	storageCmd = "storage"
+	s3Cmd = "s3"
 
-	cpVerb    = "cp"
-	syncVerb  = "sync"
-	rsyncVerb = "rsync"
+	cpVerb   = "cp"
+	syncVerb = "sync"
 
 	recursiveFlag    = "--recursive"
 	cacheControlFlag = "--cache-control"
@@ -183,59 +179,6 @@ func addTrailingSlash(s string) string {
 		return s + "/"
 	}
 	return s
-}
-
-type GCS struct {
-	URI string
-
-	Sync bool
-
-	DryRun bool
-
-	Runner command.CommandRunner
-}
-
-func (d GCS) Name() string { return d.URI }
-
-func (d GCS) Publish(_ context.Context, src string) error {
-	p, err := newPaths(src, d.URI)
-	if err != nil {
-		return err
-	}
-
-	args := []string{storageCmd, cpVerb}
-	switch {
-	case d.Sync:
-		args = []string{storageCmd, rsyncVerb, recursiveFlag, "--delete-unmatched-destination-objects"}
-	case d.DryRun && p.dir:
-		args = []string{storageCmd, rsyncVerb, recursiveFlag}
-	case d.DryRun:
-		// cp has no dry-run of its own and rsync cannot take a file, so a
-		// single file is reported rather than previewed.
-		logrus.WithFields(logrus.Fields{
-			"cmd":  gcloudCmd,
-			"args": append(slices.Clone(args), p.src, p.dest),
-		}).Info("Dry run, not copying")
-		return nil
-	case p.dir:
-		args = append(args, recursiveFlag)
-	}
-	if d.DryRun {
-		args = append(args, "--dry-run")
-	}
-	args = append(args, p.src, p.dest)
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		args = append(args, "--verbosity=debug")
-	}
-	err = p.run(d.Runner, gcloudCmd, args)
-	if err != nil {
-		return fmt.Errorf("%s %s: %w", gcloudCmd, storageCmd, err)
-	}
-	return nil
-}
-
-func (d GCS) Validate(u Upload) error {
-	return validSource(u)
 }
 
 type GithubRelease struct {
@@ -484,7 +427,7 @@ type HashreleaseServer struct {
 
 	DryRun bool
 
-	Runner command.CommandRunner
+	store objectStore
 }
 
 func (d HashreleaseServer) Name() string { return fmt.Sprintf("%s hashrelease", d.Release.Name) }
@@ -494,7 +437,7 @@ func (d HashreleaseServer) Publish(ctx context.Context, src string) error {
 		URI:    d.Release.BucketURI(d.Config),
 		Sync:   true,
 		DryRun: d.DryRun,
-		Runner: d.Runner,
+		store:  d.store,
 	}
 	if err := bucket.Publish(ctx, src); err != nil {
 		return err
