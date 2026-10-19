@@ -669,8 +669,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Mapping from (hostname, workload, port-id) -- the identity of Felix's
         # status key -- to Calico's status for a port.  The hostname is included to
         # disambiguate between multiple copies of a port, which may exist during a
-        # migration or a re-schedule.  The workload is the port's device_id, which
-        # changes when a port moves to another VM.
+        # migration or a re-schedule.  The workload segment is derived from the port's
+        # device_id, which changes when a port moves to another VM.
         self._port_status_cache = {}
         self._status_namespace = datamodel_v3.get_namespace(
             calico_config.get_region_string()
