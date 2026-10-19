@@ -186,7 +186,6 @@ rules:
     resources:
       - resourcequotas
     verbs:
-      - create
       - get
       - list
       - update
@@ -195,6 +194,12 @@ rules:
     resourceNames:
       - calico-critical-pods
       - tigera-critical-pods
+  - apiGroups:
+      - ""
+    resources:
+      - resourcequotas
+    verbs:
+      - create
   - apiGroups:
       - ""
     resources:
