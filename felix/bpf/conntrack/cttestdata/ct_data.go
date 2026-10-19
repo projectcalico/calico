@@ -188,6 +188,21 @@ func init() {
 			ExpectedDeletions: []conntrack.Key{tcpFwdKey},
 		},
 		CTCleanupTest{
+			Description: "forward NAT entry whose reverse key holds another client port's live reverse entry",
+			KVs: map[conntrack.Key]conntrack.Value{
+				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
+				tcpRevKey: makeNATReverseFrom(Now-1*time.Minute, 6666),
+			},
+			ExpectedDeletions: []conntrack.Key{tcpFwdKey},
+		},
+		CTCleanupTest{
+			Description: "forward NAT entry whose reverse entry names its client",
+			KVs: map[conntrack.Key]conntrack.Value{
+				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
+				tcpRevKey: makeNATReverseFrom(Now-1*time.Minute, 5555),
+			},
+		},
+		CTCleanupTest{
 			Description: "forward NAT entry without reverse out of grace period",
 			KVs: map[conntrack.Key]conntrack.Value{
 				tcpFwdKey: conntrack.NewValueNATForward(Now-11*time.Second, 0, tcpRevKey),
@@ -223,6 +238,15 @@ func init() {
 
 	addSingleKVTest("icmp almost timed out", icmpKey, icmpAlmostTimedOut, false)
 	addSingleKVTest("icmp timed out", icmpKey, icmpTimedOut, true)
+}
+
+// makeNATReverseFrom makes a live TCP reverse entry for ipSvc:80 opened from client port origSport.
+func makeNATReverseFrom(lastSeen time.Duration, origSport uint16) conntrack.Value {
+	v := conntrack.NewValueNATReverse(lastSeen, 0,
+		conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true},
+		nil, ipSvc, 80)
+	v.SetOrigSport(origSport)
+	return v
 }
 
 func makeValue(lastSeen time.Duration, legA conntrack.Leg, legB conntrack.Leg) conntrack.Value {

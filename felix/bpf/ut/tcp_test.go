@@ -681,14 +681,19 @@ func TestTCPNATCreateOverForwardEntry(t *testing.T) {
 	}
 
 	closedRev, liveRev := otherRev(true), otherRev(false)
+	// The forward entry's client port is 54321, so this reverse entry belongs to another flow.
+	otherClientRev := otherRev(false)
+	otherClientRev.SetOrigSport(54322)
 
 	for _, tc := range []struct {
 		name       string
 		rev        *conntrack.Value
 		expCreated bool
+		expKeepRev bool
 	}{
 		{name: "stale forward entry", expCreated: true},
 		{name: "closed connection", rev: &closedRev, expCreated: true},
+		{name: "another client port's live connection", rev: &otherClientRev, expCreated: true, expKeepRev: true},
 		{name: "live connection", rev: &liveRev},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -719,7 +724,11 @@ func TestTCPNATCreateOverForwardEntry(t *testing.T) {
 			if tc.expCreated {
 				Expect(ct[postNATKey].Type()).To(Equal(conntrack.TypeNATReverse))
 				Expect(ct[postNATKey].OrigPort()).To(Equal(uint16(7890)))
-				Expect(ct).NotTo(HaveKey(otherRevKey))
+				if tc.expKeepRev {
+					Expect(ct).To(HaveKeyWithValue(otherRevKey, *tc.rev))
+				} else {
+					Expect(ct).NotTo(HaveKey(otherRevKey))
+				}
 			} else {
 				Expect(ct).To(HaveKeyWithValue(postNATKey, otherFwd))
 				Expect(ct).To(HaveKeyWithValue(otherRevKey, *tc.rev))

@@ -182,11 +182,23 @@ static CALI_BPF_INLINE void ct_recycle(struct calico_ct_value *tracking_v, struc
 	cali_ct_delete_elem(k);
 }
 
-/* ct_fwd_matches_rev reports whether rev's original destination is fk's service end. Mirrored by fwdMatchesRev in cleanup.go. */
+/* ct_fwd_client_matches_rev reports whether ip:port is rev's original client. Port 0 is a host PSNAT forward entry's wildcard. */
+static CALI_BPF_INLINE bool ct_fwd_client_matches_rev(ipv46_addr_t ip, __u16 port, struct calico_ct_value *rev)
+{
+	return (ip_void(rev->orig_sip) || ip_equal(ip, rev->orig_sip)) &&
+		(rev->orig_sport == 0 || port == 0 || port == rev->orig_sport);
+}
+
+/* ct_fwd_matches_rev reports whether fk is rev's original client and service. Mirrored by fwdMatchesRev in cleanup.go. */
 static CALI_BPF_INLINE bool ct_fwd_matches_rev(struct calico_ct_key *fk, struct calico_ct_value *rev)
 {
-	return (ip_equal(fk->addr_a, rev->orig_ip) && fk->port_a == rev->orig_port) ||
-		(ip_equal(fk->addr_b, rev->orig_ip) && fk->port_b == rev->orig_port);
+	if (ip_equal(fk->addr_a, rev->orig_ip) && fk->port_a == rev->orig_port) {
+		return ct_fwd_client_matches_rev(fk->addr_b, fk->port_b, rev);
+	}
+	if (ip_equal(fk->addr_b, rev->orig_ip) && fk->port_b == rev->orig_port) {
+		return ct_fwd_client_matches_rev(fk->addr_a, fk->port_a, rev);
+	}
+	return false;
 }
 
 /* ct_fwd_tracking returns the reverse entry that forward entry fwd, keyed fk, tracks, or NULL if fwd is stale. */

@@ -273,12 +273,20 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 	return ScanVerdictOK, lastSeen
 }
 
-// fwdMatchesRev mirrors ct_fwd_matches_rev in conntrack.h (keep in sync): rev's
-// original destination is fwdKey's service end.
+// fwdMatchesRev reports whether fwdKey is rev's original client and service. Keep in sync with ct_fwd_matches_rev.
 func fwdMatchesRev(fwdKey KeyInterface, rev ValueInterface) bool {
 	origIP, origPort := rev.OrigIP(), rev.OrigPort()
-	return (fwdKey.AddrA().Equal(origIP) && fwdKey.PortA() == origPort) ||
-		(fwdKey.AddrB().Equal(origIP) && fwdKey.PortB() == origPort)
+	clientMatches := func(ip net.IP, port uint16) bool {
+		return (rev.OrigSrcIP().IsUnspecified() || ip.Equal(rev.OrigSrcIP())) &&
+			(rev.OrigSPort() == 0 || port == 0 || port == rev.OrigSPort())
+	}
+	if fwdKey.AddrA().Equal(origIP) && fwdKey.PortA() == origPort {
+		return clientMatches(fwdKey.AddrB(), fwdKey.PortB())
+	}
+	if fwdKey.AddrB().Equal(origIP) && fwdKey.PortB() == origPort {
+		return clientMatches(fwdKey.AddrA(), fwdKey.PortA())
+	}
+	return false
 }
 
 // expired is EntryExpired, except that an RST reap of a connlimit entry waits
