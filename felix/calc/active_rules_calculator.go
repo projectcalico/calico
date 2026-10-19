@@ -189,13 +189,12 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 		if update.Value != nil {
 			log.Debugf("Updating ARC for policy %v", key)
 			policy := update.Value.(*model.Policy)
-			if reflect.DeepEqual(oldPolicy, policy) {
+			if !arc.allPolicies.Set(key, policy) {
 				if log.IsLevelEnabled(log.DebugLevel) {
 					log.WithField("key", update.Key).Debug("No-op policy change; ignoring.")
 				}
 				return
 			}
-			arc.allPolicies.Set(key, policy)
 
 			// If the policy transitions to be force-programmed, simulate
 			// a match with a dummy endpoint key.
