@@ -77,6 +77,16 @@ def get_endpoint_id_from_key(region_string, key):
         return None
 
 
+def felix_status_workload_id(namespace, device_id):
+    """The workload segment of the status key Felix writes for an OpenStack port.
+
+    Felix's WorkloadID for an OpenStack WEP is ``<namespace>/<device_id>``, and the
+    key escapes its "/" as "%2f".  Neither part can itself contain "/" or "%": the
+    namespace is a DNS label and ``device_id`` a Nova UUID.
+    """
+    return namespace + "%2f" + device_id
+
+
 def _reset_globals():
     global _cached_endpoint_key_re
     _cached_endpoint_key_re = None
