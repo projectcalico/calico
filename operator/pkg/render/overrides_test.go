@@ -213,9 +213,6 @@ var _ = Describe("Overridable components", func() {
 				Expect(slices.ContainsFunc(objs, t.Matches)).To(BeTrue(), "%T declares override target %s but didn't render it", comp, t)
 			}
 
-			// Istio's pod-level resources field is never applied (CORE-13783).
-			delete(filled.Fields, "Spec.Template.Spec.Resources")
-
 			obj := target(objs)
 			Expect(obj).NotTo(BeNil(), "%s rendered no target workload", entry.path)
 			rtest.ExpectOverridesApplied(obj, filled, map[string]string{"mount-bpffs": "ebpf-bootstrap"})
