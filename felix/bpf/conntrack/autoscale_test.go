@@ -152,6 +152,22 @@ var _ = Describe("BPF Conntrack map autoscaling", func() {
 			expectSizes(2048000, 1024000)
 		})
 
+		It("rewrites size files in place without leaving temp files", func() {
+			writeFile("bpf_ct_map_size", "1024000")
+			expectSizes(1024000, 1024000)
+			writeFile("bpf_ct_map_size", "2048000")
+			expectSizes(2048000, 2048000)
+			Expect(readFile("bpf_ct4_map_size")).To(Equal("2048000"))
+			Expect(readFile("bpf_ct6_map_size")).To(Equal("2048000"))
+			entries, err := os.ReadDir(dir)
+			Expect(err).NotTo(HaveOccurred())
+			var names []string
+			for _, e := range entries {
+				names = append(names, e.Name())
+			}
+			Expect(names).To(ConsistOf("bpf_ct_map_size", "bpf_ct4_map_size", "bpf_ct6_map_size"))
+		})
+
 		It("adopts growth an older Felix recorded after a downgrade", func() {
 			writeFile("bpf_ct4_map_size", "1024000")
 			writeFile("bpf_ct6_map_size", "1024000")

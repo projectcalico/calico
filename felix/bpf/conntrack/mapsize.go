@@ -125,7 +125,27 @@ func writeMapSizeFile(name string, size int) error {
 
 	filename := filepath.Join(MapSizeDir, name)
 	log.Debugf("Writing %d to %s", size, filename)
-	if err := os.WriteFile(filename, fmt.Appendf(nil, "%d", size), 0o644); err != nil {
+	// Write and sync a temp file, then rename it, so a crash or power loss never leaves a partial file.
+	tmp, err := os.CreateTemp(MapSizeDir, name+".tmp*")
+	if err != nil {
+		return fmt.Errorf("unable to write to %s: %w", filename, err)
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := fmt.Fprintf(tmp, "%d", size); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("unable to write to %s: %w", filename, err)
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("unable to write to %s: %w", filename, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("unable to write to %s: %w", filename, err)
+	}
+	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+		return fmt.Errorf("unable to write to %s: %w", filename, err)
+	}
+	if err := os.Rename(tmp.Name(), filename); err != nil {
 		return fmt.Errorf("unable to write to %s: %w", filename, err)
 	}
 	return nil
