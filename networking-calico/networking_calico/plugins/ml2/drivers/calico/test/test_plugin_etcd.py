@@ -3090,6 +3090,36 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.assertNotIn(self._lm_key(self.DEST_HOST), self.recent_deletes)
         self.assertNotIn(self._ep_key(self.DEST_HOST), self.recent_deletes)
 
+    def test_slot_kind_host_port(self):
+        """Names parse to their kind, host and port, whatever the host is called."""
+        from networking_calico.plugins.ml2.drivers.calico.endpoints import (
+            _slot_kind_host_port,
+        )
+
+        cases = {
+            "wep felix--host--1-openstack-vm--id-port--id": (
+                "wep",
+                "felix-host-1",
+                "port-id",
+            ),
+            "dest-wep openstack--ctrl--1-openstack-vm--id-port--id": (
+                "wep",
+                "openstack-ctrl-1",
+                "port-id",
+            ),
+            "lm host--openstack-openstack-vm--id-port--id": (
+                "lm",
+                "host-openstack",
+                "port-id",
+            ),
+            "wep openstack-openstack-vm--id-port--id": ("wep", "openstack", "port-id"),
+            # Not in our format.
+            "lm stale--lm--name": None,
+            "wep host-other-vm-port": None,
+        }
+        for name, expected in cases.items():
+            self.assertEqual(_slot_kind_host_port(name), expected, name)
+
     def test_endpoint_name_without_host_with_openstack_in_host(self):
         """endpoint_name_without_host strips host even when it contains 'openstack'.
 

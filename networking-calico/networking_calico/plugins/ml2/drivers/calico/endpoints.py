@@ -1210,17 +1210,18 @@ def endpoint_name(port):
 
 
 def _slot_kind_host_port(name):
-    """Map a "wep ", "dest-wep " or "lm " name to (kind, escaped host, escaped port).
+    """Map a "wep ", "dest-wep " or "lm " name to (kind, host, port_id).
 
     Returns None for a name not in our format, such as a legacy or hand-edited one.
     """
     kind, wep_name = name.split(" ", 1)
-    rest = endpoint_name_without_host(wep_name)
-    port = re.search(r"(?<!-)-((?:[^-]|--)+)$", rest)
-    if rest == wep_name or port is None:
+    # "-" separates a WEP name's four parts, and "--" is a dash within one.  "#" can't
+    # appear in a host name or a UUID, so it can stand in for "--" while splitting.
+    parts = wep_name.replace("--", "#").split("-")
+    if len(parts) != 4 or parts[1] != "openstack":
         return None
-    host = wep_name[: -len(rest) - 1]
-    return ("lm" if kind == "lm" else "wep", host, port.group(1))
+    host, port_id = (part.replace("#", "-") for part in (parts[0], parts[3]))
+    return ("lm" if kind == "lm" else "wep", host, port_id)
 
 
 def endpoint_name_without_host(name):
