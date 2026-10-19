@@ -750,22 +750,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self._agent_update_context, agent_state, use_call=False
         )
 
-    def on_port_status_changed(self, hostname, port_id, status_dict, priority="low"):
+    def on_port_status_changed(self, hostname, port_id, calico_status, priority="low"):
         """Called when etcd tells us that a port status has changed.
 
         :param hostname: hostname of the host containing the port.
         :param port_id: the port ID.
-        :param status_dict: new status dict for the port or None if the
-               status was deleted.
+        :param calico_status: new status for the port, or None if the status
+               was deleted.
         """
         port_status_key = (intern_string(hostname), port_id)
-        # Unwrap the dict around the actual status.
-        if status_dict is not None:
-            # Update.
-            calico_status = status_dict.get("status")
-        else:
-            # Deletion.
-            calico_status = None
 
         # Check whether this update gives us new information to pass to
         # Neutron.  "high" priority updates come from changes spotted by Felix,

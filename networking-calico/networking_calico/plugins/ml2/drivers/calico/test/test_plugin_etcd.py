@@ -3293,9 +3293,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         self.driver._last_status_queue_log_time = monotonic_time() - 100
         with mock.patch.object(self.driver, "_port_status_queue") as m_queue:
             m_queue.qsize.return_value = 100
-            self.driver.on_port_status_changed(
-                "host", "port_id", {"status": "up"}, priority="high"
-            )
+            self.driver.on_port_status_changed("host", "port_id", "up", priority="high")
             self.assertEqual("up", self.driver._port_status_cache[("host", "port_id")])
             self.assertEqual(
                 [mock.call(((0, mock.ANY), ("host", "port_id")))],
@@ -3303,9 +3301,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             )
             m_queue.put.reset_mock()
             # Send a duplicate low-priority change.
-            self.driver.on_port_status_changed(
-                "host", "port_id", {"status": "up"}, priority="low"
-            )
+            self.driver.on_port_status_changed("host", "port_id", "up", priority="low")
             # Should have no effect on the cache.
             self.assertEqual("up", self.driver._port_status_cache[("host", "port_id")])
             # And the queue update should be skipped.
@@ -3313,9 +3309,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             m_queue.put.reset_mock()
 
             # Send a duplicate high-priority change.
-            self.driver.on_port_status_changed(
-                "host", "port_id", {"status": "up"}, priority="high"
-            )
+            self.driver.on_port_status_changed("host", "port_id", "up", priority="high")
             # Should have no effect on the cache.
             self.assertEqual("up", self.driver._port_status_cache[("host", "port_id")])
             # But the queue update should happen.
@@ -3330,7 +3324,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             self.assertEqual({}, self.driver._port_status_cache)
             # Unknown value should be treated as deletion.
             self.driver.on_port_status_changed(
-                "host", "port_id", {"status": "unknown"}, priority="low"
+                "host", "port_id", "unknown", priority="low"
             )
             self.assertEqual({}, self.driver._port_status_cache)
             # One queue put for each deletion.
@@ -3581,8 +3575,8 @@ class TestStatusWatcher(TestStatusWatcherBase):
 
         self.driver.on_port_status_changed.assert_has_calls(
             [
-                mock.call("unknown", "ep2", {"status": "up"}, priority="low"),
-                mock.call("hostname", "ep1", {"status": "up"}, priority="low"),
+                mock.call("unknown", "ep2", "up", priority="low"),
+                mock.call("hostname", "ep1", "up", priority="low"),
             ],
             any_order=True,
         )
@@ -3594,8 +3588,8 @@ class TestStatusWatcher(TestStatusWatcherBase):
         self.endpoint_watcher.start()
         self.driver.on_port_status_changed.assert_has_calls(
             [
-                mock.call("unknown", "ep2", {"status": "up"}, priority="low"),
-                mock.call("hostname", "ep1", {"status": "up"}, priority="low"),
+                mock.call("unknown", "ep2", "up", priority="low"),
+                mock.call("hostname", "ep1", "up", priority="low"),
             ],
             any_order=True,
         )
@@ -3609,7 +3603,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
         self.driver.on_port_status_changed.assert_has_calls(
             [
                 mock.call("unknown", "ep2", None, priority="low"),
-                mock.call("hostname", "ep1", {"status": "up"}, priority="low"),
+                mock.call("hostname", "ep1", "up", priority="low"),
             ],
             any_order=True,
         )
@@ -3633,7 +3627,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
         self.endpoint_watcher.start()
         self.driver.on_port_status_changed.assert_has_calls(
             [
-                mock.call("hostname", "ep1", {"status": "up"}, priority="high"),
+                mock.call("hostname", "ep1", "up", priority="high"),
             ],
             any_order=True,
         )
@@ -3647,7 +3641,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
 
         self.assertEqual(
             [
-                mock.call("hostname", "ep1", {"status": "up"}, priority="high"),
+                mock.call("hostname", "ep1", "up", priority="high"),
                 mock.call("hostname", "ep1", None, priority="high"),
             ],
             self.driver.on_port_status_changed.mock_calls,
@@ -3670,6 +3664,20 @@ class TestStatusWatcher(TestStatusWatcherBase):
             self.driver.on_port_status_changed.mock_calls,
         )
         self.assertEqual({}, self.endpoint_watcher._endpoints_by_host)
+
+    def test_endpoint_status_add_json_not_a_dict(self):
+        m_port_status_node = mock.Mock()
+        m_port_status_node.key = (
+            "/calico/felix/v2/no-region/host/hostname/workload/"
+            "openstack/wlid/endpoint/ep1"
+        )
+        m_port_status_node.value = '"up"'
+        self.endpoint_watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
+
+        self.assertEqual(
+            [mock.call("hostname", "ep1", None, priority="high")],
+            self.driver.on_port_status_changed.mock_calls,
+        )
 
     def test_endpoint_status_add_bad_id(self):
         m_port_status_node = mock.Mock()
@@ -3708,7 +3716,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
         # impact at high scale.)
         self.assertEqual(
             [
-                mock.call("hostname", "epid", {"status": "up"}, priority="high"),
+                mock.call("hostname", "epid", "up", priority="high"),
             ],
             self.driver.on_port_status_changed.mock_calls,
         )
@@ -3729,7 +3737,7 @@ class TestMultiRegionStatusWatcher(TestStatusWatcherBase):
 
         self.assertEqual(
             [
-                mock.call("hostname", "ep1", {"status": "up"}, priority="high"),
+                mock.call("hostname", "ep1", "up", priority="high"),
                 mock.call("hostname", "ep1", None, priority="high"),
             ],
             self.driver.on_port_status_changed.mock_calls,
@@ -3749,7 +3757,7 @@ class TestMultiRegionStatusWatcher(TestStatusWatcherBase):
         self.endpoint_watcher.dispatcher.handle_event(m_port_status_node)
         self.assertEqual(
             [
-                mock.call("hostname", "ep1", {"status": "up"}, priority="high"),
+                mock.call("hostname", "ep1", "up", priority="high"),
             ],
             self.driver.on_port_status_changed.mock_calls,
         )

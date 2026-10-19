@@ -259,7 +259,7 @@ class EndpointStatusWatcher(StatusWatcher):
 
     def _report_status(self, endpoint_id, raw_json):
         try:
-            status = json.loads(raw_json)
+            status_dict = json.loads(raw_json)
         except (ValueError, TypeError):
             LOG.error("Bad JSON data for %s: %s", endpoint_id, raw_json)
             status = None  # Report as error
@@ -268,6 +268,10 @@ class EndpointStatusWatcher(StatusWatcher):
                 del self._endpoints_by_host[endpoint_id.host]
         else:
             self._endpoints_by_host[endpoint_id.host].add(endpoint_id)
+            # Unwrap the dict around the actual status.
+            status = (
+                status_dict.get("status") if isinstance(status_dict, dict) else None
+            )
         LOG.debug("Port %s updated to status %s", endpoint_id, status)
         self.calico_driver.on_port_status_changed(
             endpoint_id.host,
