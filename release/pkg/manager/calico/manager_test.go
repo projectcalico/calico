@@ -231,6 +231,53 @@ func TestTagRelease(t *testing.T) {
 	}
 }
 
+func TestBuild(t *testing.T) {
+	const (
+		ver     = "v3.30.0"
+		headSHA = "1111111111111111111111111111111111111111"
+	)
+
+	tests := []struct {
+		name          string
+		isHashRelease bool
+		wantDelete    bool
+	}{
+		{
+			name:       "a failed release deletes the tag it created",
+			wantDelete: true,
+		},
+		{
+			name:          "a failed hashrelease takes no tag and deletes none",
+			isHashRelease: true,
+			wantDelete:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeRunner()
+			m, root := imageManager(t, f, "")
+			m.calicoVersion = testVersion(t, ver)
+			m.tmpDir = t.TempDir()
+			m.isHashRelease = tt.isHashRelease
+			m.images = false
+			m.binaries = true
+			f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30", nil)
+			f.on("git rev-parse HEAD", headSHA, nil)
+			f.on(fmt.Sprintf("git rev-parse -q --verify refs/tags/%s^{commit}", ver), "", fmt.Errorf("exit status 1"))
+			// Fail a binaries target so Build returns after the tag is taken.
+			f.on("make -C "+root+"/felix release-build", "", fmt.Errorf("boom"))
+
+			if err := m.Build(); err == nil {
+				t.Fatal("Build() = nil, want error")
+			}
+			if got := f.ran("git tag -d " + ver); got != tt.wantDelete {
+				t.Errorf("git tag -d issued = %v, want %v (calls: %v)", got, tt.wantDelete, f.calls)
+			}
+		})
+	}
+}
+
 // The tag/HEAD comparison is consulted by both releasePrereqs (fail-fast) and
 // TagRelease (authoritative), but the rev-parse must run only once per release.
 func TestTagStateMemoized(t *testing.T) {
