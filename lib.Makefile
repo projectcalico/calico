@@ -145,7 +145,7 @@ NUM_BUILD_JOBS ?= 4
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
-GO_BUILD_IMAGE ?= calico/go-build
+GO_BUILD_IMAGE ?= quay.io/danieljfox/go-build
 CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
 
 RUST_BUILD_IMAGE ?= calico/rust-build
@@ -451,7 +451,20 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 		-e "GOFLAGS=$(GOFLAGS)" \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
 		-v $(LOCAL_GO_PKG_CACHE):/go-cache:rw \
-		-w /go/src/$(PACKAGE_NAME)
+		-w /go/src/$(PACKAGE_NAME) \
+		-e GOCACHEPROG=cacheprog \
+		-e CACHEPROG_ROOT_DIRECTORY=/go-cache/cacheprog \
+		-e CACHEPROG_REMOTE_STORAGE_TYPE=$(CACHEPROG_REMOTE_STORAGE_TYPE) \
+		-e CACHEPROG_S3_ENDPOINT=$(CACHEPROG_S3_ENDPOINT) \
+		-e CACHEPROG_S3_REGION=$(CACHEPROG_S3_REGION) \
+		-e CACHEPROG_S3_BUCKET=$(CACHEPROG_S3_BUCKET) \
+		-e CACHEPROG_S3_EXCLUDE_HEADERS_FROM_SIGNING=$(CACHEPROG_S3_EXCLUDE_HEADERS_FROM_SIGNING) \
+		-e CACHEPROG_S3_EXPIRATION=$(CACHEPROG_S3_EXPIRATION) \
+		-e CACHEPROG_S3_PREFIX=$(CACHEPROG_S3_PREFIX) \
+		-e CACHEPROG_S3_ACCESS_KEY_ID=$(CACHEPROG_S3_ACCESS_KEY_ID) \
+		-e CACHEPROG_S3_ACCESS_KEY_SECRET=$(CACHEPROG_S3_ACCESS_KEY_SECRET) \
+
+
 
 DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 
