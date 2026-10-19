@@ -2355,6 +2355,7 @@ class TestLiveMigration(TestPluginEtcdBase):
             self.recent_writes[self._ep_key(self.DEST_HOST)]["spec"]["node"],
             self.DEST_HOST,
         )
+
         # The source WEP and the LiveMigration are deleted: the VM has left.
         self.assertIn(self._ep_key(self.SOURCE_HOST), self.recent_deletes)
         self.assertIn(self._lm_key(self.DEST_HOST), self.recent_deletes)

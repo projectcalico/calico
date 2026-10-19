@@ -1225,6 +1225,7 @@ def _slot_kind_host_port(name):
     Returns None for a name not in our format, such as a legacy or hand-edited one.
     """
     kind, wep_name = name.split(" ", 1)
+
     # "-" separates a WEP name's four parts, and "--" is a dash within one.  "#" can't
     # appear in a host name or a UUID, so it can stand in for "--" while splitting.
     parts = wep_name.replace("--", "#").split("-")

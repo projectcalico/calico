@@ -675,6 +675,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self._status_namespace = datamodel_v3.get_namespace(
             calico_config.get_region_string()
         )
+
         # Queue used to fan out port status updates to worker threads.  Notes:
         # * the queue contains tuples (priority, <status key>); we use a
         #   higher priority for events and a lower priority for snapshot

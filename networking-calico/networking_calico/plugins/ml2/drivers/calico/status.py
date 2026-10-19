@@ -272,6 +272,7 @@ class EndpointStatusWatcher(StatusWatcher):
                 del self._endpoints_by_host[endpoint_id.host]
         else:
             self._endpoints_by_host[endpoint_id.host].add(endpoint_id)
+
             # Unwrap the dict around the actual status.
             status = (
                 status_dict.get("status") if isinstance(status_dict, dict) else None
