@@ -673,7 +673,7 @@ func acquireIPAMLockBestEffort(path string) unlockFn {
 	}
 }
 
-// calicoClientFor returns the Calico client the caller shared, or builds one from the netconf.
+// calicoClientFor returns the Calico client the calling plugin put in ctx, or builds one from the netconf.
 func calicoClientFor(ctx context.Context, conf types.NetConf) (client.Interface, error) {
 	if lookups := utils.SandboxLookupsFrom(ctx); lookups.CalicoClient != nil {
 		return lookups.CalicoClient, nil
@@ -681,7 +681,7 @@ func calicoClientFor(ctx context.Context, conf types.NetConf) (client.Interface,
 	return utils.CreateClient(conf)
 }
 
-// k8sClientFor returns the Kubernetes client the caller shared, or builds one from the netconf.
+// k8sClientFor returns the Kubernetes client the calling plugin put in ctx, or builds one from the netconf.
 func k8sClientFor(ctx context.Context, conf types.NetConf, logger *logrus.Entry) (kubernetes.Interface, error) {
 	if lookups := utils.SandboxLookupsFrom(ctx); lookups.K8sClient != nil {
 		return lookups.K8sClient, nil
