@@ -53,6 +53,8 @@ env:
   TARGET_BRANCH: master
   EXTRA_LABELS: merge-oss-cherry-pick
   TITLE_PREFIX: "[OSS pick] "
+  # Enterprise names the API module github.com/tigera/api.
+  IMPORT_REWRITES: github.com/projectcalico/api=github.com/tigera/api
 
 jobs:
   # =========================================================================
@@ -246,6 +248,9 @@ jobs:
             - Match Enterprise conventions: keep Enterprise branding/wording,
               keep Enterprise copyright headers (do not revert them to Apache),
               keep Enterprise import groupings.
+            - Go imports: Enterprise renames some OSS modules (`${{ env.IMPORT_REWRITES }}`,
+              as old=new). Code you write or keep must import the Enterprise path;
+              a later step also rewrites them in every file the pick touches.
             - Generated goldens under `confd/tests/compiled_templates/**`: take
               the incoming OSS side (write the `.theirs` file's contents) for
               every conflicted snapshot,

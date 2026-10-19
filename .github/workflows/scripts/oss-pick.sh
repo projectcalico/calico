@@ -20,6 +20,7 @@
 #             PICK_PATHS_FILE(=$RUNNER_TEMP/pick-paths, outside the agent's reach)
 #             PICK_CONFLICTS_FILE(=$RUNNER_TEMP/pick-conflicts) ESCALATION_NOTES
 #             PICK_CONTEXT_DIR(=/tmp/pick-context) PICK_DELETE_FILE(=/tmp/pick-delete)
+#             IMPORT_REWRITES (pick/finalize: "old=new" Go module paths)
 set -o errexit -o nounset -o pipefail
 
 : "${SOURCE_REPO:?}" "${TARGET_REPO:?}" "${TARGET_BRANCH:?}"
@@ -93,7 +94,9 @@ do_pick() {
   fi
 
   if [ "$rc" -eq 0 ]; then
-    echo "Clean cherry-pick."; record_pick_paths HEAD~1 HEAD; emit "outcome=clean"
+    echo "Clean cherry-pick."; record_pick_paths HEAD~1 HEAD
+    if rewrite_imports; then git commit -q -a --amend --no-edit; fi
+    emit "outcome=clean"
   elif git diff --name-only --diff-filter=U | grep -q .; then
     echo "Conflicts:"; git diff --name-only --diff-filter=U | tee "$PICK_CONFLICTS_FILE"
     record_pick_paths HEAD; write_pick_context; emit "outcome=conflict"
@@ -115,6 +118,27 @@ do_pick() {
 record_pick_paths() {
   { git diff --name-only "$@"; git diff --name-only "${MERGE_SHA}^1" "$MERGE_SHA"; } |
     sort -u > "$PICK_PATHS_FILE"
+}
+
+# The target renames some source Go modules (IMPORT_REWRITES). Returns 0 if a
+# pick file changed.
+rewrite_imports() {
+  [ -n "${IMPORT_REWRITES:-}" ] || return 1
+  local pair old new old_re f changed=()
+  for pair in $IMPORT_REWRITES; do
+    old="${pair%%=*}"; new="${pair#*=}"
+    old_re="$(printf '%s' "$old" | sed 's/[].[\*^$#]/\\&/g')"
+    while IFS= read -r f; do
+      [[ "$f" == *.go ]] && [ -f "$f" ] || continue
+      grep -q "\"${old_re}[/\"]" "$f" || continue
+      sed -i "s#\"${old_re}\([/\"]\)#\"${new}\1#g" "$f"
+      changed+=("$f")
+    done < "$PICK_PATHS_FILE"
+  done
+  [ "${#changed[@]}" -gt 0 ] || return 1
+  # The renamed import may now sort elsewhere in its group.
+  if command -v gofmt >/dev/null; then gofmt -w "${changed[@]}" || true; fi
+  printf 'Rewrote imports in %s\n' "${changed[@]}" | sort -u
 }
 
 # The agent may not run git with arguments (--output writes any file), so
@@ -155,6 +179,9 @@ do_finalize() {
       *) echo "::error::marker check failed (git grep exit $rc)"; exit 1 ;;
     esac
   fi
+
+  # Also covers the files that applied cleanly, which the agent never sees.
+  rewrite_imports || true
 
   extra="$( { git diff --name-only HEAD; git ls-files --others --exclude-standard; } |
     sort -u | comm -23 - "$PICK_PATHS_FILE")"
