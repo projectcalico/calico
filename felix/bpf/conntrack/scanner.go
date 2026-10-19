@@ -436,12 +436,13 @@ func (s *Scanner) Scan() {
 	// If the ct map keeps filling up and gets over 85% full or if it hits 90%
 	// no matter what, resize the map.
 	if s.higherCount >= 3 && full > 0.85 || full > 0.90 {
-		if err := s.writeNewSizeFile(); err != nil {
+		newSize := 2 * s.ctMap.Size()
+		if err := recordGrowth(s.ipFamily, newSize); err != nil {
 			log.WithError(err).Warn("Failed to start resizing conntrack map when running out of space")
 		} else {
 			if s.configChangedRestartCallback != nil {
 				log.Warnf("The eBPF conntrack table is becoming full. To prevent connections from failing, "+
-					"resizing from %d to %d entries. Restarting Felix to apply the new size.", s.maxEntries, 2*s.maxEntries)
+					"resizing from %d to %d entries. Restarting Felix to apply the new size.", s.maxEntries, newSize)
 				s.configChangedRestartCallback()
 			}
 		}
@@ -463,10 +464,6 @@ func (s *Scanner) runBPFCleaner() int {
 		return int(cr.NumKVsCleaned)
 	}
 	return 0
-}
-
-func (s *Scanner) writeNewSizeFile() error {
-	return recordGrowth(s.ipFamily, 2*s.ctMap.Size())
 }
 
 func (s *Scanner) get(k KeyInterface) (ValueInterface, error) {
