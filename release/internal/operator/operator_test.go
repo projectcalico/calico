@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/outputs"
@@ -561,6 +562,23 @@ func TestVerbs(t *testing.T) {
 		}
 		if len(rec.refs) != 0 {
 			t.Errorf("refs = %v, want none", rec.refs)
+		}
+	})
+
+	t.Run("dry run says it publishes nothing", func(t *testing.T) {
+		hook := logtest.NewGlobal()
+		t.Cleanup(hook.Reset)
+		resolve := fakeResolver{"quay.io/a/operator:v1.44.0": "sha256:a"}
+		if err := Publish(oneRegistryOperator(), oneVariant(), false, WithRunner(&fakeRunner{}), WithDryRun(true),
+			WithResolver(resolve.resolve)); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		var reported bool
+		for _, e := range hook.AllEntries() {
+			reported = reported || e.Message == "Dry run, not publishing operator images"
+		}
+		if !reported {
+			t.Error("the dry run did not say it publishes nothing")
 		}
 	})
 
