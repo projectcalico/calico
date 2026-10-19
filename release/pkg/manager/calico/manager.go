@@ -1280,7 +1280,7 @@ func (r *CalicoManager) resolveContainerImages() error {
 	)
 	// A dry run pushes nothing, so images it built are never in the registry.
 	if missing, onlyMissing := images.OnlyMissing(err); onlyMissing && r.dryRun {
-		logrus.WithField("images", missing).Warn("Dry run: images are not published")
+		logrus.WithField("images", missing).Warn("Dry run, not resolving unpublished images")
 		return nil
 	}
 	if err != nil {
@@ -1784,7 +1784,7 @@ func (r *CalicoManager) pushPrepBranch(baseBranch, prepBranch string) error {
 		return fmt.Errorf("failed to push %q branch: %w", prepBranch, err)
 	}
 	if r.dryRun {
-		logrus.WithField("branch", prepBranch).Warn("Dry run: skipping PR creation")
+		logrus.WithField("branch", prepBranch).Warn("Dry run, not creating PR")
 		return r.switchToBaseBranch(baseBranch)
 	}
 	logrus.WithField("branch", prepBranch).Info("Pushed preparation branch to remote")
