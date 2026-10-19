@@ -151,6 +151,7 @@ local:kube-controllers/pkg/controllers/networkpolicy
 local:kube-controllers/pkg/controllers/utils
 local:kube-controllers/pkg/converter
 local:lib/std/chanutil
+local:lib/std/intervals
 local:lib/std/log
 local:lib/std/time
 local:lib/std/uniquelabels

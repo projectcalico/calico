@@ -205,6 +205,7 @@ local:kube-controllers/pkg/kubecontrollers
 local:kube-controllers/pkg/status
 local:lib/logrusr
 local:lib/std/chanutil
+local:lib/std/intervals
 local:lib/std/log
 local:lib/std/time
 local:lib/std/uniquelabels
