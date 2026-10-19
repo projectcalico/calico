@@ -343,7 +343,7 @@ func (r *CalicoManager) Build() error {
 	}
 
 	// Build binaries for release.
-	if err := r.buildBinaries(); err != nil {
+	if err = r.buildBinaries(); err != nil {
 		return err
 	}
 
