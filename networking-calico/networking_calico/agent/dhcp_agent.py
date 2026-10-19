@@ -167,11 +167,6 @@ def make_net_model(net_spec):
     return net_model
 
 
-def split_endpoint_name(name):
-    parts = name.replace("--", "#").split("-")
-    return tuple([p.replace("#", "-") for p in parts])
-
-
 class MTUWatcher(object):
 
     # -----------------------------------------------------------------
@@ -539,7 +534,9 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
           'ipv6_ra_mode': 'dhcpv6-stateful' | 'dhcpv6-stateless' }
         """
         try:
-            hostname, orchestrator, workload_id, endpoint_id = split_endpoint_name(name)
+            hostname, orchestrator, workload_id, endpoint_id = (
+                datamodel_v3.split_endpoint_name(name)
+            )
         except ValueError:
             # For some reason this endpoint's name does not have the expected
             # form.  Ignore it.
@@ -761,7 +758,9 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
     def on_endpoint_delete(self, response_ignored, name):
         """Handler for endpoint deletion."""
         try:
-            hostname, orchestrator, workload_id, endpoint_id = split_endpoint_name(name)
+            hostname, orchestrator, workload_id, endpoint_id = (
+                datamodel_v3.split_endpoint_name(name)
+            )
         except ValueError:
             # For some reason this endpoint's name does not have the expected
             # form.  Ignore it.

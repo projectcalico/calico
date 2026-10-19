@@ -1225,14 +1225,10 @@ def _slot_kind_host_port(name):
     Returns None for a name not in our format, such as a legacy or hand-edited one.
     """
     kind, wep_name = name.split(" ", 1)
-
-    # "-" separates a WEP name's four parts, and "--" is a dash within one.  "#" can't
-    # appear in a host name or a UUID, so it can stand in for "--" while splitting.
-    parts = wep_name.replace("--", "#").split("-")
+    parts = datamodel_v3.split_endpoint_name(wep_name)
     if len(parts) != 4 or parts[1] != "openstack":
         return None
-    host, port_id = (part.replace("#", "-") for part in (parts[0], parts[3]))
-    return ("lm" if kind == "lm" else "wep", host, port_id)
+    return ("lm" if kind == "lm" else "wep", parts[0], parts[3])
 
 
 def endpoint_name_without_host(name):
