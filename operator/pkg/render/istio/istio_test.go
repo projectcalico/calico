@@ -528,20 +528,30 @@ var _ = Describe("Istio Component Rendering", func() {
 					},
 				},
 				func(deployment *appsv1.Deployment) {
-					// Resources are applied to the deployment
-					// The override system applies resources to the pod spec, not individual containers
-					// So we just verify that the deployment has at least one container with resources set
-					hasResourcesSet := false
-					for _, container := range deployment.Spec.Template.Spec.Containers {
-						if container.Resources.Limits != nil || container.Resources.Requests != nil {
-							hasResourcesSet = true
-							break
-						}
-					}
-					Expect(hasResourcesSet).To(BeTrue(), "Expected at least one container to have resources set")
+					Expect(deployment.Spec.Template.Spec.Containers).To(ContainElement(SatisfyAll(
+						HaveField("Name", "discovery"),
+						HaveField("Resources", corev1.ResourceRequirements{
+							Limits:   corev1.ResourceList{"memory": resource.MustParse("2Gi")},
+							Requests: corev1.ResourceList{"memory": resource.MustParse("1Gi")},
+						}),
+					)))
 				},
 			),
 		)
+
+		It("should keep the chart's default resources when no override is set", func() {
+			_, component, err := istio.Istio(cfg)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			objsToCreate, _ := component.Objects()
+			deployment, err := rtest.GetResourceOfType[*appsv1.Deployment](objsToCreate, istio.IstioIstiodDeploymentName, istio.IstioNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			Expect(deployment.Spec.Template.Spec.Containers).To(ContainElement(SatisfyAll(
+				HaveField("Name", "discovery"),
+				HaveField("Resources.Requests", Not(BeEmpty())),
+			)))
+		})
 	})
 
 	Describe("DaemonSet Overrides", func() {
