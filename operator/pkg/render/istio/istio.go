@@ -456,11 +456,7 @@ func setContainerResources(spec *corev1.PodSpec, name string, r *corev1.Resource
 	if r == nil {
 		return
 	}
-	for i := range spec.Containers {
-		if spec.Containers[i].Name == name {
-			spec.Containers[i].Resources = *r
-		}
-	}
+	render.MustContainer(spec, name).Resources = *r
 }
 
 func cniBinDir(installation *operatorv1.InstallationSpec) string {

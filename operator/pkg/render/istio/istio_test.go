@@ -547,10 +547,7 @@ var _ = Describe("Istio Component Rendering", func() {
 			deployment, err := rtest.GetResourceOfType[*appsv1.Deployment](objsToCreate, istio.IstioIstiodDeploymentName, istio.IstioNamespace)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(deployment.Spec.Template.Spec.Containers).To(ContainElement(SatisfyAll(
-				HaveField("Name", "discovery"),
-				HaveField("Resources.Requests", Not(BeEmpty())),
-			)))
+			Expect(deployment.Spec.Template.Spec.Containers).To(ContainElement(SatisfyAll(HaveField("Name", "discovery"), HaveField("Resources.Requests", Not(BeEmpty())))))
 		})
 	})
 
