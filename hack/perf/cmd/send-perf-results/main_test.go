@@ -105,34 +105,86 @@ func TestApplyTemplatesPutsMappingsToLiveIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var mapping *recordedRequest
-	for _, r := range requests() {
-		if r.path == "/benchmark_data_fam_2026/_mapping" {
-			mapping = &r
+	assertMappingPut(t, requests(), `{"properties": {"cpu_model": {"type": "keyword"}}}`)
+	if !strings.Contains(logs.String(), "mapped new fields in benchmark_data_fam_2026: cpu_model") {
+		t.Errorf("success not logged; log:\n%s", logs)
+	}
+}
+
+// assertMappingPut checks that exactly one mapping PUT reached the live index, with body want.
+func assertMappingPut(t *testing.T, reqs []recordedRequest, want string) {
+	t.Helper()
+	var puts []recordedRequest
+	for _, r := range reqs {
+		if r.method == http.MethodPut && r.path == "/benchmark_data_fam_2026/_mapping" {
+			puts = append(puts, r)
 		}
 	}
-	if mapping == nil {
-		t.Fatalf("no mapping PUT to the live index; requests: %v", requests())
+	if len(puts) != 1 {
+		t.Fatalf("got %d mapping PUTs to the live index, want 1; requests: %v", len(puts), reqs)
 	}
-	if mapping.method != http.MethodPut {
-		t.Errorf("mapping request method = %s, want PUT", mapping.method)
-	}
-	var got, want any
-	if err := json.Unmarshal(mapping.body, &got); err != nil {
+	var got, wantJSON any
+	if err := json.Unmarshal(puts[0].body, &got); err != nil {
 		t.Fatalf("mapping body is not JSON: %v", err)
 	}
-	_ = json.Unmarshal([]byte(`{"properties": {"cpu_model": {"type": "keyword"}}}`), &want)
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("mapping body = %s, want the template's mappings", mapping.body)
+	_ = json.Unmarshal([]byte(want), &wantJSON)
+	if !reflect.DeepEqual(got, wantJSON) {
+		t.Errorf("mapping body = %s, want %s", puts[0].body, want)
 	}
-	if !strings.Contains(logs.String(), "applied mappings to benchmark_data_fam_2026") {
-		t.Errorf("success not logged; log:\n%s", logs)
+}
+
+const liveMapping2026 = `{"benchmark_data_fam_2026": {"mappings": {"properties": {
+  "cpu_model": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+  "total_ms": {"type": "double"}
+}}}}`
+
+func TestApplyTemplatesPutsOnlyUnmappedFields(t *testing.T) {
+	// One field differs in type from the live index.  ES would reject a PUT naming it, and
+	// with it every new field.
+	tmpl := `{"template": {"mappings": {"properties": {
+	  "cpu_model": {"type": "keyword"},
+	  "cpu_platform": {"type": "keyword"},
+	  "total_ms": {"type": "double"}
+	}}}}`
+	srv, requests := fakeES(t, map[string]fakeResponse{
+		"GET /benchmark_data_fam_2026/_mapping": {http.StatusOK, liveMapping2026},
+	})
+	logs := captureLog(t)
+
+	if err := applyTemplates(srv.Client(), srv.URL, "", writeTemplate(t, tmpl), "2026"); err != nil {
+		t.Fatal(err)
+	}
+
+	assertMappingPut(t, requests(), `{"properties": {"cpu_platform": {"type": "keyword"}}}`)
+	if !strings.Contains(logs.String(), "warning: benchmark_data_fam_2026 maps cpu_model as text, the template as keyword") {
+		t.Errorf("type difference not warned about; log:\n%s", logs)
+	}
+}
+
+func TestApplyTemplatesSkipsPutWhenAllMapped(t *testing.T) {
+	tmpl := `{"template": {"mappings": {"properties": {"total_ms": {"type": "double"}}}}}`
+	srv, requests := fakeES(t, map[string]fakeResponse{
+		"GET /benchmark_data_fam_2026/_mapping": {http.StatusOK, liveMapping2026},
+	})
+	logs := captureLog(t)
+
+	if err := applyTemplates(srv.Client(), srv.URL, "", writeTemplate(t, tmpl), "2026"); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, r := range requests() {
+		if r.method == http.MethodPut && strings.HasSuffix(r.path, "/_mapping") {
+			t.Errorf("mapping PUT with nothing new to map: %s", r.body)
+		}
+	}
+	if strings.Contains(logs.String(), "warning") {
+		t.Errorf("unexpected warning; log:\n%s", logs)
 	}
 }
 
 func TestApplyTemplatesSkipsMissingIndex(t *testing.T) {
 	srv, _ := fakeES(t, map[string]fakeResponse{
-		"PUT /benchmark_data_fam_2026/_mapping": {http.StatusNotFound, "{}"},
+		"GET /benchmark_data_fam_2026/_mapping": {http.StatusNotFound, "{}"},
 	})
 	logs := captureLog(t)
 
@@ -242,6 +294,28 @@ func TestPRRunHoldsBackUnmappedFields(t *testing.T) {
 	}
 	if !strings.Contains(logs.String(), "held back fields not yet mapped, until a run after merge: cpu_model") {
 		t.Errorf("held-back field not logged; log:\n%s", logs)
+	}
+}
+
+func TestPRRunWarnsOnUndeclaredHeldBackFields(t *testing.T) {
+	index := "benchmark_data_fam_" + indexYear()
+	srv, _ := fakeES(t, map[string]fakeResponse{
+		"GET /" + index + "/_mapping": {http.StatusOK,
+			`{"` + index + `": {"mappings": {"properties": {"total_ms": {"type": "double"}}}}}`},
+	})
+	logs := captureLog(t)
+
+	if _, _, err := publish(srv.Client(), srv.URL, "", writeDoc(t, `{"total_ms": 5, "cpu_model": "x", "forgotten": 1}`),
+		writeTemplate(t, testTemplate), prMetadata, false); err != nil {
+		t.Fatal(err)
+	}
+
+	// pr_number is injected metadata the test template does not declare.
+	if !strings.Contains(logs.String(), "held back fields not yet mapped, until a run after merge: cpu_model") {
+		t.Errorf("declared field not reported as pending; log:\n%s", logs)
+	}
+	if !strings.Contains(logs.String(), "warning: family benchmark_data_fam: held back fields its index template does not declare: forgotten, pr_number") {
+		t.Errorf("undeclared field not warned about; log:\n%s", logs)
 	}
 }
 

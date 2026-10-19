@@ -196,8 +196,12 @@ func publish(client *http.Client, esURL, auth, dir, tmplDir string, metadata map
 	case dryRun:
 	case prRun:
 		log.Printf("PR run: leaving index templates and mappings unchanged")
-		fields = func(family string) (set.Set[string], error) {
-			return mappedFields(client, esURL, auth, family, year)
+		fields = func(family string) (mapped, declared set.Set[string], err error) {
+			live, err := liveProperties(client, esURL, auth, family+"_"+year)
+			if err != nil {
+				return nil, nil, err
+			}
+			return live.names(), declaredFields(tmplDir, family), nil
 		}
 	default:
 		// Failures here are warnings -- a missing mapping means new fields get default
@@ -209,18 +213,28 @@ func publish(client *http.Client, esURL, auth, dir, tmplDir string, metadata map
 	return walkAndSend(client, esURL, auth, dir, year, metadata, fields, dryRun)
 }
 
-// fieldFilter returns the set of fields a family's documents may carry, or nil for no limit.
-type fieldFilter func(family string) (set.Set[string], error)
+// fieldFilter returns the fields a family's index has mapped, which are all its documents may
+// carry, and the fields its committed template declares.  A nil filter means no limit.
+type fieldFilter func(family string) (mapped, declared set.Set[string], err error)
 
 // errIndexNotCreated means the year's index does not exist yet.  A PR run must not create it:
 // it would be built from whatever template ES holds, and any field that template lacks would
 // then be mapped by inference.
 var errIndexNotCreated = errors.New("index not created yet")
 
-// mappedFields returns the top-level fields that the family's index for year has mapped, or
-// errIndexNotCreated.
-func mappedFields(client *http.Client, esURL, auth, family, year string) (set.Set[string], error) {
-	index := family + "_" + year
+// properties is the "properties" object of an ES mapping: each top-level field's own mapping.
+type properties map[string]json.RawMessage
+
+func (p properties) names() set.Set[string] {
+	names := set.New[string]()
+	for name := range p {
+		names.Add(name)
+	}
+	return names
+}
+
+// liveProperties returns the top-level fields that index has mapped, or errIndexNotCreated.
+func liveProperties(client *http.Client, esURL, auth, index string) (properties, error) {
 	endpoint := fmt.Sprintf("%s/%s/_mapping", strings.TrimRight(esURL, "/"), url.PathEscape(index))
 	body, err := esGet(client, endpoint, auth)
 	var httpErr *esHTTPError
@@ -232,19 +246,49 @@ func mappedFields(client *http.Client, esURL, auth, family, year string) (set.Se
 	// Keyed by concrete index name, which differs from the one asked for if that is an alias.
 	var resp map[string]struct {
 		Mappings struct {
-			Properties map[string]json.RawMessage `json:"properties"`
+			Properties properties `json:"properties"`
 		} `json:"mappings"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("parse mapping of %s: %w", index, err)
 	}
-	fields := set.New[string]()
+	live := properties{}
 	for _, idx := range resp {
-		for name := range idx.Mappings.Properties {
-			fields.Add(name)
+		for name, mapping := range idx.Mappings.Properties {
+			live[name] = mapping
 		}
 	}
-	return fields, nil
+	return live, nil
+}
+
+// templateProperties returns the top-level fields an index template declares.
+func templateProperties(templateBody []byte) (properties, error) {
+	var tmpl struct {
+		Template struct {
+			Mappings struct {
+				Properties properties `json:"properties"`
+			} `json:"mappings"`
+		} `json:"template"`
+	}
+	if err := json.Unmarshal(templateBody, &tmpl); err != nil {
+		return nil, err
+	}
+	return tmpl.Template.Mappings.Properties, nil
+}
+
+// declaredFields returns the fields tmplDir's template for family declares.  An unreadable
+// template declares nothing, so every new field is reported as undeclared.
+func declaredFields(tmplDir, family string) set.Set[string] {
+	path := filepath.Join(tmplDir, family+".json")
+	body, err := os.ReadFile(path)
+	if err == nil {
+		var props properties
+		if props, err = templateProperties(body); err == nil {
+			return props.names()
+		}
+	}
+	log.Printf("warning: read template %s: %v", path, err)
+	return set.New[string]()
 }
 
 // applyTemplates PUTs each <family>.json in tmplDir to ES at /_index_template/<family>, and its
@@ -291,35 +335,65 @@ func applyTemplates(client *http.Client, esURL, auth, tmplDir, year string) erro
 	return nil
 }
 
-// applyLiveMapping PUTs the mappings from a template body to the family's index for year.  Adding
-// a field is allowed on a live index; changing an existing field's type is not, and ES rejects the
-// whole PUT, which is logged here as a warning.
+// applyLiveMapping PUTs to the family's index for year those fields of the template that the
+// index has not mapped yet.  Only those: ES applies a mapping PUT all or nothing, so a field whose
+// type differs -- a type change, waiting for the next index -- would otherwise block every new
+// field until then.
 func applyLiveMapping(client *http.Client, esURL, auth, family, year string, templateBody []byte) {
-	var tmpl struct {
-		Template struct {
-			Mappings json.RawMessage `json:"mappings"`
-		} `json:"template"`
-	}
-	if err := json.Unmarshal(templateBody, &tmpl); err != nil {
+	declared, err := templateProperties(templateBody)
+	if err != nil {
 		log.Printf("warning: parse template %s: %v", family, err)
 		return
 	}
-	if len(tmpl.Template.Mappings) == 0 {
+	if len(declared) == 0 {
 		return
 	}
 	index := family + "_" + year
-	endpoint := fmt.Sprintf("%s/%s/_mapping", strings.TrimRight(esURL, "/"), url.PathEscape(index))
-	err := esRequest(client, "PUT", endpoint, auth, tmpl.Template.Mappings)
-	var httpErr *esHTTPError
-	switch {
-	case err == nil:
-		log.Printf("applied mappings to %s", index)
-	case errors.As(err, &httpErr) && httpErr.status == http.StatusNotFound:
+	live, err := liveProperties(client, esURL, auth, index)
+	if errors.Is(err, errIndexNotCreated) {
 		// The year's first document will create the index from the template.
 		log.Printf("index %s does not exist yet; it will be created from the template", index)
-	default:
-		log.Printf("warning: PUT mappings to %s: %v", index, err)
+		return
+	} else if err != nil {
+		log.Printf("warning: read mappings of %s: %v", index, err)
+		return
 	}
+
+	names := declared.names().Slice()
+	sort.Strings(names)
+	missing := properties{}
+	for _, name := range names {
+		liveMapping, ok := live[name]
+		if !ok {
+			missing[name] = declared[name]
+		} else if lt, tt := fieldType(liveMapping), fieldType(declared[name]); lt != tt {
+			log.Printf("warning: %s maps %s as %s, the template as %s; the template's type applies from the next index",
+				index, name, lt, tt)
+		}
+	}
+	if len(missing) == 0 {
+		return
+	}
+	body, _ := json.Marshal(map[string]properties{"properties": missing})
+	endpoint := fmt.Sprintf("%s/%s/_mapping", strings.TrimRight(esURL, "/"), url.PathEscape(index))
+	added := missing.names().Slice()
+	sort.Strings(added)
+	if err := esRequest(client, "PUT", endpoint, auth, body); err != nil {
+		log.Printf("warning: PUT mappings to %s: %v", index, err)
+		return
+	}
+	log.Printf("mapped new fields in %s: %s", index, strings.Join(added, ", "))
+}
+
+// fieldType is a field mapping's "type"; ES leaves it out for an object field.
+func fieldType(mapping json.RawMessage) string {
+	var m struct {
+		Type string `json:"type"`
+	}
+	if json.Unmarshal(mapping, &m) != nil || m.Type == "" {
+		return "object"
+	}
+	return m.Type
 }
 
 // indexYear is the suffix of the indices this run writes to.
@@ -351,10 +425,10 @@ func walkAndSend(client *http.Client, esURL, auth, dir, year string, metadata ma
 		}
 		family := e.Name()
 		familyDir := filepath.Join(dir, family)
-		var allowed set.Set[string]
+		var allowed, declared set.Set[string]
 		if fields != nil {
 			var aerr error
-			allowed, aerr = fields(family)
+			allowed, declared, aerr = fields(family)
 			if errors.Is(aerr, errIndexNotCreated) {
 				log.Printf("family %s: not sent, %s_%s is not created yet; a run after merge creates it", family, family, year)
 				continue
@@ -366,7 +440,7 @@ func walkAndSend(client *http.Client, esURL, auth, dir, year string, metadata ma
 				continue
 			}
 		}
-		sent, failed, ferr := sendFamily(client, esURL, auth, familyDir, family, year, metadata, allowed, dryRun)
+		sent, failed, ferr := sendFamily(client, esURL, auth, familyDir, family, year, metadata, allowed, declared, dryRun)
 		if ferr != nil {
 			log.Printf("warning: family %s: %v", family, ferr)
 			// A family that could not be walked published nothing, and has no
@@ -383,8 +457,9 @@ func walkAndSend(client *http.Client, esURL, auth, dir, year string, metadata ma
 
 // sendFamily handles one <family> subdirectory: walks all *.json under it,
 // augments with metadata, and POSTs to <family>_<year>.  A non-nil allowed
-// drops every field not in it.
-func sendFamily(client *http.Client, esURL, auth, familyDir, family, year string, metadata map[string]any, allowed set.Set[string], dryRun bool) (sent, failed int, err error) {
+// drops every field not in it; declared says which of those the template
+// declares.
+func sendFamily(client *http.Client, esURL, auth, familyDir, family, year string, metadata map[string]any, allowed, declared set.Set[string], dryRun bool) (sent, failed int, err error) {
 	files, err := filepath.Glob(filepath.Join(familyDir, "*.json"))
 	if err != nil {
 		return 0, 0, fmt.Errorf("glob %s: %w", familyDir, err)
@@ -396,10 +471,23 @@ func sendFamily(client *http.Client, esURL, auth, familyDir, family, year string
 	)
 	heldBack := set.New[string]()
 	defer func() {
-		if heldBack.Len() > 0 {
-			names := heldBack.Slice()
-			sort.Strings(names)
-			log.Printf("family %s: held back fields not yet mapped, until a run after merge: %s", family, strings.Join(names, ", "))
+		var pending, undeclared []string
+		for name := range heldBack.All() {
+			if declared != nil && declared.Contains(name) {
+				pending = append(pending, name)
+			} else {
+				undeclared = append(undeclared, name)
+			}
+		}
+		sort.Strings(pending)
+		sort.Strings(undeclared)
+		if len(pending) > 0 {
+			log.Printf("family %s: held back fields not yet mapped, until a run after merge: %s", family, strings.Join(pending, ", "))
+		}
+		if len(undeclared) > 0 {
+			// After merge these would be mapped by inference, which the template exists
+			// to prevent.
+			log.Printf("warning: family %s: held back fields its index template does not declare: %s", family, strings.Join(undeclared, ", "))
 		}
 	}()
 	for _, f := range files {
