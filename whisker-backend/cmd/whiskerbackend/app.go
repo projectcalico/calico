@@ -26,11 +26,14 @@ import (
 	gorillaadpt "github.com/projectcalico/calico/lib/httpmachinery/pkg/server/adaptors/gorilla"
 	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/lib/std/log"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 	"github.com/projectcalico/calico/whisker-backend/pkg/config"
 	v1 "github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
 	goldmaneupstream "github.com/projectcalico/calico/whisker-backend/pkg/upstream/goldmane"
 )
+
+const healthReporterName = "whisker-backend"
 
 // Option customizes Run. Production wiring needs none; options exist for tests.
 type Option func(*runOptions)
@@ -87,10 +90,14 @@ func Run(ctx context.Context, cfg *config.Config, options ...Option) {
 		logrus.WithError(err).Fatal("Failed to create server.")
 	}
 
+	healthAggregator := newHealthAggregator(cfg)
+
 	logrus.Infof("Listening on %s.", cfg.HostAddr())
 	if err := srv.ListenAndServeTLS(ctx); err != nil {
 		logrus.WithError(err).Fatal("Failed to start server.")
 	}
+
+	healthAggregator.Report(healthReporterName, &health.HealthReport{Live: true, Ready: true})
 
 	if err := srv.WaitForShutdown(); err != nil {
 		logrus.WithError(err).Fatal("An unexpected error occurred while waiting for shutdown.")
@@ -105,6 +112,17 @@ func withMiddleware(endpoints []apiutil.Endpoint, middleware ...apiutil.Middlewa
 		endpoints[i].Middleware = append(endpoints[i].Middleware, middleware...)
 	}
 	return endpoints
+}
+
+// newHealthAggregator starts the plain-HTTP /liveness and /readiness endpoints,
+// as the other Calico components do. The check is deliberately trivial: the
+// process is live from the start and ready once the API server is listening.
+func newHealthAggregator(cfg *config.Config) *health.HealthAggregator {
+	agg := health.NewHealthAggregator()
+	agg.RegisterReporter(healthReporterName, &health.HealthReport{Live: true, Ready: true}, 0)
+	agg.Report(healthReporterName, &health.HealthReport{Live: true, Ready: false})
+	agg.ServeHTTP(cfg.HealthEnabled, cfg.HealthHost, cfg.HealthPort)
+	return agg
 }
 
 func newGoldmaneBackend(cfg *config.Config) whiskerv1.FlowsBackend {

@@ -54,6 +54,7 @@ enum cali_ct_type {
 /* Set at to-wep when policy was skipped because the source is a local host
  * route. The ingress connlimit check is skipped for the same reason. */
 #define CALI_CT_FLAG_HOST_ORIGIN	0x400000
+#define CALI_CT_FLAG_OVERLAY_REPLY	0x800000 /* reply of a host-originated overlay flow must be re-encapsulated (BPFOverlayHostSourceIP=HostAddress) */
 
 /* Flags kept in calico_ct_leg's bits_word. felix/bpf/conntrack/v4 map.go and
  * map6.go mirror these bit positions.
@@ -190,6 +191,9 @@ struct calico_ct_value {
 			struct calico_ct_leg b_to_a;	// 48
 
 			// CALI_CT_TYPE_NAT_REV
+			// tun_ip is set only when a NodePort connection is forwarded to a
+			// backend on another node; it holds that node's IP so the reply can
+			// be tunneled back via the forwarding node (dnat_return_should_encap).
 			ipv46_addr_t tun_ip;	// 72
 			ipv46_addr_t orig_ip;	// 76
 			__u16 orig_port;	// 80
@@ -360,7 +364,8 @@ struct calico_ct_result {
 	ipv46_addr_t nat_sip;
 	__u16 nat_port;
 	__u16 nat_sport;
-	ipv46_addr_t tun_ip;
+	ipv46_addr_t tun_ip;   /* NodePort-forwarding node IP from the NAT_REV entry;
+				* a reply with tun_ip set must encap back to that node. */
 	__u32 ifindex_fwd; /* if set, the ifindex where the packet should be forwarded */
 	__u32 ifindex_created; /* For a CT state that was created by a packet ingressing
 				* through an interface towards the host, this is the

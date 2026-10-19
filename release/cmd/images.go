@@ -20,6 +20,7 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/operatorimages"
@@ -53,7 +54,7 @@ var (
 				return err
 			}
 			return images.Build(
-				cfg.RepoRootDir, ver.FormattedString(),
+				cfg.RepoRootDir, ver.String(),
 				images.NarrowVariants(images.BuildVariants, c.StringSlice(imageReleaseDirsFlag.Name)),
 				images.WithRunner(commandRunner),
 				images.WithRegistries(c.StringSlice(registryFlag.Name)...),
@@ -91,11 +92,11 @@ var (
 			if len(scanDirs) == 0 {
 				scanDirs = images.ReleaseDirs()
 			}
-			scan, err := scanRequest(c, cfg, scanDirs, ver.PrimaryStream(), utils.CalicoProductCode)
+			scan, err := scanRequest(c, cfg, scanDirs, ver.PrimaryStream(), defaults.ProductCode)
 			if err != nil {
 				return err
 			}
-			records, err := recordsDir(cfg, c, oncePin(pinForPublish), ver.FormattedString())
+			records, err := recordsDir(cfg, c, oncePin(pinForPublish), ver.String())
 			if err != nil {
 				return err
 			}
@@ -128,7 +129,7 @@ var (
 			}
 
 			return images.Publish(
-				cfg.RepoRootDir, ver.FormattedString(),
+				cfg.RepoRootDir, ver.String(),
 				images.NarrowVariants(images.PublishVariants, dirs),
 				!c.Bool(localFlag.Name), registryDigestResolver, opts...,
 			)

@@ -19,9 +19,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
-	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/defaults"
 )
 
 var errFake = fmt.Errorf("fake")
@@ -44,7 +45,7 @@ func (r *gitRec) fn() git {
 func TestLocalBranchExists(t *testing.T) {
 	// rev-parse succeeds -> exists
 	g := &gitRec{out: map[string]string{"rev-parse --verify": "abc\n"}}
-	require.True(t, localBranchExists(g.fn(), utils.ReleaseBranchPrefix()+"-v3.33-2"))
+	require.True(t, localBranchExists(g.fn(), defaults.ReleaseBranchPrefix()+"-v3.33-2"))
 
 	// rev-parse errors -> not exists
 	g2 := &gitRec{errs: map[string]error{"rev-parse --verify": errFake}}
@@ -52,25 +53,25 @@ func TestLocalBranchExists(t *testing.T) {
 }
 
 func TestLocalTagPointsAt(t *testing.T) {
-	tagRef := "rev-parse refs/tags/v3.33.0-" + utils.DevTagSuffix()
-	branchRef := "rev-parse refs/heads/" + utils.ReleaseBranchPrefix() + "-v3.33"
+	tagRef := "rev-parse refs/tags/v3.33.0-" + defaults.DevTagSuffix()
+	branchRef := "rev-parse refs/heads/" + defaults.ReleaseBranchPrefix() + "-v3.33"
 
 	// tag and branch resolve to the same sha -> points at.
 	g := &gitRec{out: map[string]string{tagRef: "abc\n", branchRef: "abc\n"}}
-	require.True(t, localTagPointsAt(g.fn(), "v3.33.0-"+utils.DevTagSuffix(), utils.ReleaseBranchPrefix()+"-v3.33"))
+	require.True(t, localTagPointsAt(g.fn(), "v3.33.0-"+defaults.DevTagSuffix(), defaults.ReleaseBranchPrefix()+"-v3.33"))
 
 	// tag resolves to a different sha than the branch head -> not.
 	g2 := &gitRec{out: map[string]string{tagRef: "abc\n", branchRef: "def\n"}}
-	require.False(t, localTagPointsAt(g2.fn(), "v3.33.0-"+utils.DevTagSuffix(), utils.ReleaseBranchPrefix()+"-v3.33"))
+	require.False(t, localTagPointsAt(g2.fn(), "v3.33.0-"+defaults.DevTagSuffix(), defaults.ReleaseBranchPrefix()+"-v3.33"))
 
 	// tag does not exist -> not pointing at.
 	g3 := &gitRec{errs: map[string]error{tagRef: errFake}}
-	require.False(t, localTagPointsAt(g3.fn(), "v3.33.0-"+utils.DevTagSuffix(), utils.ReleaseBranchPrefix()+"-v3.33"))
+	require.False(t, localTagPointsAt(g3.fn(), "v3.33.0-"+defaults.DevTagSuffix(), defaults.ReleaseBranchPrefix()+"-v3.33"))
 }
 
 func TestRemoteRefMatches(t *testing.T) {
 	const sha = "1111111111111111111111111111111111111111"
-	ref := utils.ReleaseBranchPrefix() + "-v3.33-2"
+	ref := defaults.ReleaseBranchPrefix() + "-v3.33-2"
 
 	// present and pointing at the local sha.
 	g := &gitRec{out: map[string]string{"ls-remote origin": sha + "\trefs/heads/" + ref + "\n"}}
@@ -96,9 +97,25 @@ func TestRemoteRefMatches(t *testing.T) {
 }
 
 func TestPushRefs(t *testing.T) {
-	g := &gitRec{}
-	require.NoError(t, pushRefs(g.fn(), "origin", utils.ReleaseBranchPrefix()+"-v3.33-2", "v3.33.0-2.0-"+utils.DevTagSuffix()))
-	require.Equal(t, []string{"push", "origin", utils.ReleaseBranchPrefix() + "-v3.33-2", "v3.33.0-2.0-" + utils.DevTagSuffix()}, g.runs[0])
+	branch, tag := defaults.ReleaseBranchPrefix()+"-v3.33-2", "v3.33.0-2.0-"+defaults.DevTagSuffix()
+	for _, tc := range []struct {
+		name   string
+		dryRun bool
+		want   []string
+	}{
+		{name: "pushes the refs", want: []string{"push", "origin", branch, tag}},
+		{name: "dry run", dryRun: true, want: []string{"push", "origin", "--dry-run", branch, tag}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &gitRec{}
+			if err := pushRefs(g.fn(), "origin", tc.dryRun, branch, tag); err != nil {
+				t.Fatalf("pushRefs() unexpected error: %v", err)
+			}
+			if diff := cmp.Diff([][]string{tc.want}, g.runs); diff != "" {
+				t.Errorf("git calls (-want +got):\n%s", diff)
+			}
+		})
+	}
 }
 
 // gitScriptRec matches scripted responses by the full joined command and
@@ -133,7 +150,7 @@ func gitScript(out map[string]string, errs map[string]error) git {
 }
 
 func TestCheckBranchCurrent(t *testing.T) {
-	src := utils.ReleaseBranchPrefix() + "-v3.33-1"
+	src := defaults.ReleaseBranchPrefix() + "-v3.33-1"
 	up := "origin/" + src
 	const sha = "1111111111111111111111111111111111111111"
 	const other = "2222222222222222222222222222222222222222"
@@ -206,13 +223,13 @@ func TestCheckBranchCurrent(t *testing.T) {
 
 func TestCreateBranch(t *testing.T) {
 	g := &gitRec{}
-	require.NoError(t, createBranch(g.fn(), utils.ReleaseBranchPrefix()+"-v3.33-2", utils.ReleaseBranchPrefix()+"-v3.33-1"))
-	require.Equal(t, []string{"branch", utils.ReleaseBranchPrefix() + "-v3.33-2", utils.ReleaseBranchPrefix() + "-v3.33-1"}, g.runs[0])
+	require.NoError(t, createBranch(g.fn(), defaults.ReleaseBranchPrefix()+"-v3.33-2", defaults.ReleaseBranchPrefix()+"-v3.33-1"))
+	require.Equal(t, []string{"branch", defaults.ReleaseBranchPrefix() + "-v3.33-2", defaults.ReleaseBranchPrefix() + "-v3.33-1"}, g.runs[0])
 }
 
 func TestTagWithEmptyCommit(t *testing.T) {
-	branch := utils.ReleaseBranchPrefix() + "-v3.33-2"
-	tag := "v3.33.0-2.0-" + utils.DevTagSuffix()
+	branch := defaults.ReleaseBranchPrefix() + "-v3.33-2"
+	tag := "v3.33.0-2.0-" + defaults.DevTagSuffix()
 
 	g := &gitRec{}
 	require.NoError(t, tagWithEmptyCommit(g.fn(), branch, tag))
