@@ -121,7 +121,11 @@ class StatusWatcher(etcdutils.EtcdWatcher):
             for ep_id in ep_ids.difference(new_ep_ids):
                 LOG.info("signal None for %s", ep_id.endpoint)
                 self.calico_driver.on_port_status_changed(
-                    hostname, ep_id.endpoint, None, priority="low"
+                    hostname,
+                    ep_id.endpoint,
+                    None,
+                    workload_id=ep_id.workload,
+                    priority="low",
                 )
         self.processing_snapshot = False
 
@@ -259,7 +263,7 @@ class EndpointStatusWatcher(StatusWatcher):
 
     def _report_status(self, endpoint_id, raw_json):
         try:
-            status = json.loads(raw_json)
+            status_dict = json.loads(raw_json)
         except (ValueError, TypeError):
             LOG.error("Bad JSON data for %s: %s", endpoint_id, raw_json)
             status = None  # Report as error
@@ -268,11 +272,16 @@ class EndpointStatusWatcher(StatusWatcher):
                 del self._endpoints_by_host[endpoint_id.host]
         else:
             self._endpoints_by_host[endpoint_id.host].add(endpoint_id)
+            # Unwrap the dict around the actual status.
+            status = (
+                status_dict.get("status") if isinstance(status_dict, dict) else None
+            )
         LOG.debug("Port %s updated to status %s", endpoint_id, status)
         self.calico_driver.on_port_status_changed(
             endpoint_id.host,
             endpoint_id.endpoint,
             status,
+            workload_id=endpoint_id.workload,
             priority="low" if self.processing_snapshot else "high",
         )
 
@@ -293,5 +302,6 @@ class EndpointStatusWatcher(StatusWatcher):
             hostname,
             endpoint,
             None,
+            workload_id=workload,
             priority="low" if self.processing_snapshot else "high",
         )

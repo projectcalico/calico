@@ -32,6 +32,7 @@ from oslo_config import cfg
 
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
+from networking_calico import datamodel_v3
 from networking_calico.agent.dhcp_agent import CalicoDhcpAgent
 from networking_calico.agent.dhcp_agent import FakePlugin
 from networking_calico.agent.linux.dhcp import DnsmasqRouted
@@ -43,8 +44,8 @@ LOG = logging.getLogger(__name__)
 EtcdResponse = namedtuple("EtcdResponse", ["value"])
 
 
-def make_endpoint_name(endpoint_id):
-    parts = [socket.gethostname(), "openstack", "workload-ignored", endpoint_id]
+def make_endpoint_name(endpoint_id, workload_id="workload-ignored"):
+    parts = [socket.gethostname(), "openstack", workload_id, endpoint_id]
     return "-".join([p.replace("-", "--") for p in parts])
 
 
@@ -241,6 +242,112 @@ class TestDhcpAgent(base.BaseTestCase):
         # Check DHCP driver was asked to restart.
         agent.etcd.dnsmasq_updater.update_network.assert_called()
         agent.etcd.dnsmasq_updater.update_network.reset_mock()
+
+    def _make_agent_with_subnet(self):
+        agent = CalicoDhcpAgent()
+        agent.etcd.mtu_watcher = mock.Mock()
+        agent.etcd.mtu_watcher.get_mtu.return_value = 1500
+        agent.etcd.dnsmasq_updater = mock.Mock()
+        agent.etcd.subnet_watcher.on_subnet_set(
+            EtcdResponse(
+                value=json.dumps({"cidr": "10.28.0.0/24", "gateway_ip": "10.28.0.1"})
+            ),
+            "v4subnet-1",
+        )
+        return agent
+
+    ENDPOINT = EtcdResponse(
+        value=json.dumps(
+            {
+                "spec": {
+                    "interfaceName": "tap1234",
+                    "mac": "fe:16:65:12:33:44",
+                    "ipNetworks": ["10.28.0.2/32"],
+                    "ipv4Gateway": "10.28.0.1",
+                }
+            }
+        )
+    )
+
+    @staticmethod
+    def _endpoint_with_fqdn(fqdn):
+        return EtcdResponse(
+            value=json.dumps(
+                {
+                    "metadata": {
+                        "annotations": {datamodel_v3.ANN_KEY_FQDN: fqdn},
+                    },
+                    "spec": {
+                        "interfaceName": "tap1234",
+                        "mac": "fe:16:65:12:33:44",
+                        "ipNetworks": ["10.28.0.2/32"],
+                        "ipv4Gateway": "10.28.0.1",
+                    },
+                }
+            )
+        )
+
+    def test_stale_name_deletion_restores_current_data(self):
+        """Deleting a stale name puts the remaining name's data back in the cache.
+
+        Here the stale name's refresh lands last, so the cache holds the old VM's
+        data -- its hostname, for one -- until the stale name is deleted.
+        """
+        agent = self._make_agent_with_subnet()
+        old_name = make_endpoint_name("endpoint-1", "vm-1")
+        new_name = make_endpoint_name("endpoint-1", "vm-2")
+        agent.etcd.on_endpoint_set(self._endpoint_with_fqdn("vm-1.example"), old_name)
+        agent.etcd.on_endpoint_set(self._endpoint_with_fqdn("vm-2.example"), new_name)
+        agent.etcd.on_endpoint_set(self._endpoint_with_fqdn("vm-1.example"), old_name)
+        agent.etcd.dnsmasq_updater.update_network.reset_mock()
+
+        agent.etcd.on_endpoint_delete(None, old_name)
+
+        port = agent.cache.get_port_by_id("endpoint-1")
+        self.assertEqual("vm-2", port.dns_assignment[0]["hostname"])
+        agent.etcd.dnsmasq_updater.update_network.assert_called()
+
+    def test_stale_name_deletion_keeps_port(self):
+        """Deleting one WEP name for a port doesn't remove it while another exists.
+
+        When a port moves to another VM, its WEP is recreated under a name with the new
+        VM's ID, so briefly there is a WEP under each name.  Their sets and deletions
+        can arrive in any order: here a refresh of the old name lands after the new
+        one's creation, and the old name's deletion after that.
+        """
+        agent = self._make_agent_with_subnet()
+        old_name = make_endpoint_name("endpoint-1", "vm-1")
+        new_name = make_endpoint_name("endpoint-1", "vm-2")
+        agent.etcd.on_endpoint_set(self.ENDPOINT, old_name)
+        agent.etcd.on_endpoint_set(self.ENDPOINT, new_name)
+        agent.etcd.on_endpoint_set(self.ENDPOINT, old_name)
+        agent.etcd.dnsmasq_updater.update_network.reset_mock()
+
+        agent.etcd.on_endpoint_delete(None, old_name)
+
+        self.assertIsNotNone(agent.cache.get_port_by_id("endpoint-1"))
+
+        agent.etcd.on_endpoint_delete(None, new_name)
+
+        self.assertIsNone(agent.cache.get_port_by_id("endpoint-1"))
+        agent.etcd.dnsmasq_updater.update_network.assert_called()
+
+    def test_snapshot_forgets_names_deleted_while_disconnected(self):
+        """A name missing from a new snapshot no longer keeps its port alive."""
+        agent = self._make_agent_with_subnet()
+        old_name = make_endpoint_name("endpoint-1", "vm-1")
+        new_name = make_endpoint_name("endpoint-1", "vm-2")
+        agent.etcd.on_endpoint_set(self.ENDPOINT, old_name)
+
+        # The old name was deleted while the watcher was disconnected, so the new
+        # snapshot has only the new one.
+        snapshot_data = agent.etcd._pre_snapshot_hook()
+        agent.etcd.on_endpoint_set(self.ENDPOINT, new_name)
+        agent.etcd._post_snapshot_hook(snapshot_data)
+
+        agent.etcd.on_endpoint_delete(None, new_name)
+
+        self.assertIsNone(agent.cache.get_port_by_id("endpoint-1"))
 
     def test_initial_snapshot(self):
         # Create the DHCP agent.
