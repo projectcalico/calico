@@ -75,6 +75,16 @@ type Deduped[K comparable, V any] struct {
 	RawPackedMap[K, V, unique.Handle[string]]
 }
 
+// Set stores val and reports whether that changed the stored value.  The comparison is on the
+// packed form, so values that pack identically count as unchanged even when reflect.DeepEqual
+// would say they differ; for example, an empty but non-nil slice in an omitempty field.
+func (d Deduped[K, V]) Set(key K, val V) (changed bool) {
+	packed := d.encoder.Pack(val)
+	old, ok := d.m[key]
+	d.m[key] = packed
+	return !ok || old != packed
+}
+
 func (pm RawPackedMap[K, VIn, VPacked]) Set(key K, val VIn) {
 	pm.m[key] = pm.encoder.Pack(val)
 }

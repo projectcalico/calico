@@ -309,14 +309,12 @@ func policyForceProgrammed(policy *model.Policy) bool {
 
 func (arc *ActiveRulesCalculator) onProfileRulesUpdate(name string, rules *model.ProfileRules) {
 	if rules != nil {
-		oldRules, _ := arc.allProfileRules.Get(name)
-		if reflect.DeepEqual(oldRules, rules) {
+		if !arc.allProfileRules.Set(name, rules) {
 			if log.IsLevelEnabled(log.DebugLevel) {
 				log.WithField("profile", name).Debug("No-op profile change; ignoring.")
 			}
 			return
 		}
-		arc.allProfileRules.Set(name, rules)
 		if arc.profileIDToEndpointKeys.ContainsKey(name) {
 			log.Debugf("Profile rules updated while active: %v", name)
 			arc.sendProfileUpdate(name, rules)

@@ -109,3 +109,30 @@ func TestDedupe(t *testing.T) {
 		t.Errorf("Expected dedupe")
 	}
 }
+
+func TestDedupedSetReportsChange(t *testing.T) {
+	m := MakeDedupedCompressedJSON[string, exampleStruct]()
+
+	if !m.Set("a", exampleStruct{Field1: "hello"}) {
+		t.Errorf("Expected first Set to report a change")
+	}
+	if m.Set("a", exampleStruct{Field1: "hello"}) {
+		t.Errorf("Expected identical Set to report no change")
+	}
+	if !m.Set("a", exampleStruct{Field1: "world"}) {
+		t.Errorf("Expected different value to report a change")
+	}
+
+}
+
+func TestDedupedSetIgnoresOmittedEmptySlice(t *testing.T) {
+	type withSlice struct {
+		Items []string `json:"items,omitempty"`
+	}
+	m := MakeDedupedCompressedJSON[string, withSlice]()
+
+	m.Set("a", withSlice{})
+	if m.Set("a", withSlice{Items: []string{}}) {
+		t.Errorf("Expected an empty slice to pack the same as nil")
+	}
+}
