@@ -73,7 +73,6 @@ github.com/vishvananda/netns v0.0.5
 github.com/x448/float16 v0.8.4
 go.etcd.io/etcd/api/v3 v3.7.0
 go.etcd.io/etcd/client/pkg/v3 v3.7.0
-go.etcd.io/etcd/client/v2 v2.305.31
 go.etcd.io/etcd/client/v3 v3.7.0
 go.opentelemetry.io/otel v1.45.0
 go.opentelemetry.io/otel/trace v1.45.0
