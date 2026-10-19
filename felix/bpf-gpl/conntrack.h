@@ -264,6 +264,11 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 			}
 			goto create;
 		}
+		if (ct_value->type != CALI_CT_TYPE_NORMAL && ct_value->type != CALI_CT_TYPE_NAT_REV) {
+			/* An earlier hop created a tracking entry here; anything else is corrupt state. */
+			CALI_DEBUG("CT-ALL marked packet found entry type %d, not a tracking entry", ct_value->type);
+			return -1;
+		}
 		struct calico_ct_leg *pkt_leg, *other_leg;
 
 		if (srcLTDest) {
