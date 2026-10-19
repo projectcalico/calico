@@ -114,6 +114,7 @@ declare -A only=(
   [nat.h]="$tc" [icmp.h]="$tc" [qos.h]="$tc" [rpf.h]="$tc" [events.h]="$tc" [tc.h]="$tc"
   [nat4.h]="$tc4" [icmp4.h]="$tc4" [parsing4.h]="$tc4 $xdp4" [tcp4.h]="$tc4" [ip_v4_fragment.h]="$tc4"
   [nat6.h]="$tc6" [icmp6.h]="$tc6" [parsing6.h]="$tc6 $xdp6" [tcp6.h]="$tc6"
+  [nodeport_tun.h]="$tc"
 )
 
 fail=0
