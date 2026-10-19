@@ -129,6 +129,10 @@ type NodeConfiguration struct {
 	// For details on why this is needed see 'Node and Installation finalizer' in the core_controller.
 	CanRemoveCNIFinalizer bool
 
+	// OmitAWSVPCAnnotationsGrant removes the calico-aws-vpc-annotations ClusterRole and binding, for
+	// when the AWS VPC CNI doesn't run as kube-system:aws-node and its annotation is left unprotected.
+	OmitAWSVPCAnnotationsGrant bool
+
 	// BGPLayouts is returned by the rendering code after modifying its namespace
 	// so that it can be deployed into the cluster.
 	// TODO: The controller should pass the contents, the renderer should build its own
@@ -219,8 +223,14 @@ func (c *nodeComponent) Objects() ([]client.Object, []client.Object) {
 		c.cniPluginServiceAccount(),
 		c.cniPluginRole(),
 		c.cniPluginRoleBinding(),
-		c.awsVPCAnnotationsRole(),
-		c.awsVPCAnnotationsRoleBinding(),
+	}
+
+	var objsToDelete []client.Object
+
+	if c.cfg.OmitAWSVPCAnnotationsGrant {
+		objsToDelete = append(objsToDelete, c.awsVPCAnnotationsRole(), c.awsVPCAnnotationsRoleBinding())
+	} else {
+		objs = append(objs, c.awsVPCAnnotationsRole(), c.awsVPCAnnotationsRoleBinding())
 	}
 
 	// These are objects to keep even when we're terminating. They will be deleted by the Kubernetes
@@ -235,8 +245,6 @@ func (c *nodeComponent) Objects() ([]client.Object, []client.Object) {
 	if c.cfg.BGPLayouts != nil {
 		objs = append(objs, configmap.ToRuntimeObjects(configmap.CopyToNamespace(common.CalicoNamespace, c.cfg.BGPLayouts)...)...)
 	}
-
-	var objsToDelete []client.Object
 
 	cniConfig := c.nodeCNIConfigMap()
 	if cniConfig != nil {
@@ -382,7 +390,7 @@ func (c *nodeComponent) cniPluginRoleBinding() *rbacv1.ClusterRoleBinding {
 }
 
 // awsVPCAnnotationsRole lets the AWS VPC CNI write its pod IP annotation through
-// protect-cni-annotations.projectcalico.org. Binding it to anyone else lets them edit that annotation too.
+// protect-aws-vpc-annotations.projectcalico.org. Binding it to anyone else lets them edit that annotation too.
 func (c *nodeComponent) awsVPCAnnotationsRole() *rbacv1.ClusterRole {
 	return &rbacv1.ClusterRole{
 		TypeMeta:   metav1.TypeMeta{Kind: "ClusterRole", APIVersion: "rbac.authorization.k8s.io/v1"},

@@ -83,8 +83,8 @@ func cniAnnotationWriteRules() []rbacv1.PolicyRule {
 	}}
 }
 
-// awsAnnotationWriteRules grants the made-up permission the policy lets through on the AWS VPC CNI's
-// pod IP annotation, as the calico-aws-vpc-annotations ClusterRole does in charts/calico and
+// awsAnnotationWriteRules grants the made-up permission awsPolicyName lets through on the AWS VPC
+// CNI's pod IP annotation, as the calico-aws-vpc-annotations ClusterRole does in charts/calico and
 // operator/pkg/render/node.go.
 func awsAnnotationWriteRules() []rbacv1.PolicyRule {
 	return []rbacv1.PolicyRule{{
@@ -104,6 +104,7 @@ const (
 	cniAnnotationDenial = "Only identities allowed to write cniannotations.projectcalico.org, or to delete this policy, may set, change or remove these pod annotations"
 	awsAnnotationDenial = "Only identities allowed to write awsvpcannotations.projectcalico.org, or to delete this policy, may set, change or remove these pod annotations"
 	policyName          = "protect-cni-annotations.projectcalico.org"
+	awsPolicyName       = "protect-aws-vpc-annotations.projectcalico.org"
 	podWritePath        = "pods"
 	podStatusWritePath  = "pods/status"
 )
@@ -161,6 +162,12 @@ func TestProtectCNIAnnotations_PolicyShape(t *testing.T) {
 		t.Errorf("expected the rule to match exactly [CREATE UPDATE], got %v", rule.Operations)
 	}
 
+	if data, err := os.ReadFile(cniAnnotationPolicyPath()); err != nil {
+		t.Fatalf("failed to read the policy: %v", err)
+	} else if strings.Contains(string(data), conversion.AnnotationAWSPodIPs) {
+		t.Errorf("expected %s to be left to %s", conversion.AnnotationAWSPodIPs, awsPolicyName)
+	}
+
 	protectedKeys := policyCELVariableExpression(t, policy, "protectedKeys")
 	if got := namedCNIKeys(protectedKeys); !slices.Equal(got, fixedProtectedKeys()) {
 		t.Errorf("expected the protectedKeys variable to name exactly %v, got %v", fixedProtectedKeys(), got)
@@ -189,42 +196,24 @@ func TestProtectCNIAnnotations_PolicyShape(t *testing.T) {
 			t.Errorf("expected the canWriteCNIAnnotations variable to check %s, got: %s", want, canWrite)
 		}
 	}
-
-	awsKeys := policyCELVariableExpression(t, policy, "awsKeys")
-	if got := regexp.MustCompile(`'([^']+)'`).FindAllStringSubmatch(awsKeys, -1); len(got) != 1 || got[0][1] != conversion.AnnotationAWSPodIPs {
-		t.Errorf("expected the awsKeys variable to name exactly %s, got: %s", conversion.AnnotationAWSPodIPs, awsKeys)
-	}
-	canWriteAWS := policyCELVariableExpression(t, policy, "canWriteAWSAnnotations")
-	for _, want := range []string{"'projectcalico.org'", "'awsvpcannotations'", "'write'"} {
-		if !strings.Contains(canWriteAWS, want) {
-			t.Errorf("expected the canWriteAWSAnnotations variable to check %s, got: %s", want, canWriteAWS)
+	for i, v := range policy.Spec.Validations {
+		if !strings.Contains(v.Expression, "variables.canWriteCNIAnnotations") {
+			t.Errorf("validation %d: expected it to let canWriteCNIAnnotations through, got: %s", i, v.Expression)
+		}
+		if strings.Contains(v.Expression, "awsvpcannotations") || strings.Contains(v.Expression, "canWriteAWSAnnotations") {
+			t.Errorf("validation %d: expected it not to let the AWS VPC CNI's permission through, got: %s", i, v.Expression)
 		}
 	}
 
-	// One validation per writer, so neither writer's exemption covers the other's keys.
-	if len(policy.Spec.Validations) != 2 {
-		t.Fatalf("expected exactly two validations, got %d", len(policy.Spec.Validations))
+	if len(policy.Spec.Validations) == 0 {
+		t.Fatal("expected the policy to carry at least one validation")
 	}
-	for i, tc := range []struct {
-		changed, exempt, notExempt, denial string
-	}{
-		{"variables.changedCalicoKeys", "variables.canWriteCNIAnnotations", "variables.canWriteAWSAnnotations", cniAnnotationDenial},
-		{"variables.changedAWSKeys", "variables.canWriteAWSAnnotations", "variables.canWriteCNIAnnotations", awsAnnotationDenial},
-	} {
-		v := policy.Spec.Validations[i]
-		for _, want := range []string{tc.changed, tc.exempt, "variables.canDeletePolicy"} {
-			if !strings.Contains(v.Expression, want) {
-				t.Errorf("validation %d: expected it to use %s, got: %s", i, want, v.Expression)
-			}
+	for i, v := range policy.Spec.Validations {
+		if !strings.Contains(v.Message, cniAnnotationDenial) {
+			t.Errorf("validation %d: expected message to contain %q, got %q", i, cniAnnotationDenial, v.Message)
 		}
-		if strings.Contains(v.Expression, tc.notExempt) {
-			t.Errorf("validation %d: expected it not to let %s through, got: %s", i, tc.notExempt, v.Expression)
-		}
-		if !strings.Contains(v.Message, tc.denial) {
-			t.Errorf("validation %d: expected message to contain %q, got %q", i, tc.denial, v.Message)
-		}
-		if v.MessageExpression != "" && !strings.Contains(v.MessageExpression, tc.denial) {
-			t.Errorf("validation %d: expected messageExpression to contain %q, got %q", i, tc.denial, v.MessageExpression)
+		if v.MessageExpression != "" && !strings.Contains(v.MessageExpression, cniAnnotationDenial) {
+			t.Errorf("validation %d: expected messageExpression to contain %q, got %q", i, cniAnnotationDenial, v.MessageExpression)
 		}
 	}
 }
@@ -617,7 +606,7 @@ func TestProtectCNIAnnotations_PolicyDeletersAllowed(t *testing.T) {
 			waitForPolicyDeleteAccess(t, tc.user, true)
 			c := clientAs(t, tc.user)
 
-			for _, a := range append(slices.Clone(protectedAnnotations), awsPodIPsAnnotation) {
+			for _, a := range protectedAnnotations {
 				pod := mustCreatePodAs(t, c, nil)
 				expectAllowed(t, updatePod(t, c, pod, podStatusWritePath, func(p *corev1.Pod) {
 					setAnnotation(p, a.key, a.value)
@@ -657,6 +646,123 @@ func TestProtectCNIAnnotations_PolicyDeletersAllowed(t *testing.T) {
 		expectRefusedBy(t, updatePod(t, tenant, pod, podStatusWritePath, func(p *corev1.Pod) {
 			setAnnotation(p, awsPodIPsAnnotation.key, "192.168.0.99")
 		}), awsAnnotationDenial, awsPodIPsAnnotation.key)
+	})
+}
+
+// awsAnnotationPolicyPath returns the path of the shipped AWS VPC CNI annotation policy.
+func awsAnnotationPolicyPath() string {
+	return filepath.Join(testutils.FindRepoRoot(), "api", "admission", "aws-vpc-annotations", "protect-aws-vpc-annotations.yaml")
+}
+
+// TestProtectAWSPodIPs_PolicyShape checks the shipped YAML of the AWS VPC CNI's policy, which is
+// separate so it can be left out where the AWS VPC CNI runs as an unexpected account.
+func TestProtectAWSPodIPs_PolicyShape(t *testing.T) {
+	policy, binding := loadValidatingPolicy(t, awsAnnotationPolicyPath())
+
+	if policy.Name != awsPolicyName || binding.Name != awsPolicyName || binding.Spec.PolicyName != awsPolicyName {
+		t.Errorf("expected the policy and binding to be %q, got %q, %q bound to %q", awsPolicyName, policy.Name, binding.Name, binding.Spec.PolicyName)
+	}
+	if !slices.Equal(binding.Spec.ValidationActions, []admissionregistrationv1.ValidationAction{admissionregistrationv1.Deny}) {
+		t.Errorf("expected the binding to deny, got %v", binding.Spec.ValidationActions)
+	}
+	if policy.Spec.FailurePolicy == nil || *policy.Spec.FailurePolicy != admissionregistrationv1.Fail {
+		t.Errorf("expected failurePolicy Fail, got %v", policy.Spec.FailurePolicy)
+	}
+	if policy.Spec.MatchConstraints == nil || len(policy.Spec.MatchConstraints.ResourceRules) != 1 {
+		t.Fatalf("expected exactly one resource rule, got %+v", policy.Spec.MatchConstraints)
+	}
+	rule := policy.Spec.MatchConstraints.ResourceRules[0]
+	if !slices.Equal(rule.Resources, []string{podWritePath, podStatusWritePath, "pods/binding"}) {
+		t.Errorf("expected the rule to match exactly [pods pods/status pods/binding], got %v", rule.Resources)
+	}
+	if !slices.Equal(rule.Operations, []admissionregistrationv1.OperationType{admissionregistrationv1.Create, admissionregistrationv1.Update}) {
+		t.Errorf("expected the rule to match exactly [CREATE UPDATE], got %v", rule.Operations)
+	}
+
+	awsKeys := policyCELVariableExpression(t, policy, "awsKeys")
+	if got := regexp.MustCompile(`'([^']+)'`).FindAllStringSubmatch(awsKeys, -1); len(got) != 1 || got[0][1] != conversion.AnnotationAWSPodIPs {
+		t.Errorf("expected the awsKeys variable to name exactly %s, got: %s", conversion.AnnotationAWSPodIPs, awsKeys)
+	}
+	canWrite := policyCELVariableExpression(t, policy, "canWriteAWSAnnotations")
+	for _, want := range []string{"'projectcalico.org'", "'awsvpcannotations'", "'write'"} {
+		if !strings.Contains(canWrite, want) {
+			t.Errorf("expected the canWriteAWSAnnotations variable to check %s, got: %s", want, canWrite)
+		}
+	}
+	if canDelete := policyCELVariableExpression(t, policy, "canDeletePolicy"); !strings.Contains(canDelete, "'"+awsPolicyName+"'") {
+		t.Errorf("expected the canDeletePolicy variable to check this policy by name, got: %s", canDelete)
+	}
+
+	if len(policy.Spec.Validations) != 1 {
+		t.Fatalf("expected exactly one validation, got %d", len(policy.Spec.Validations))
+	}
+	v := policy.Spec.Validations[0]
+	for _, want := range []string{"variables.changed", "variables.canWriteAWSAnnotations", "variables.canDeletePolicy"} {
+		if !strings.Contains(v.Expression, want) {
+			t.Errorf("expected the validation to use %s, got: %s", want, v.Expression)
+		}
+	}
+	if strings.Contains(v.Expression, "cniannotations") || strings.Contains(v.Expression, "canWriteCNIAnnotations") {
+		t.Errorf("expected the validation not to let the Calico CNI's permission through, got: %s", v.Expression)
+	}
+	if !strings.Contains(v.Message, awsAnnotationDenial) || !strings.Contains(v.MessageExpression, awsAnnotationDenial) {
+		t.Errorf("expected the messages to contain %q, got %q and %q", awsAnnotationDenial, v.Message, v.MessageExpression)
+	}
+}
+
+// TestProtectAWSPodIPs_PolicyDeletersAllowed checks that anyone allowed to delete the AWS VPC CNI's
+// policy can write its annotation, and that each policy's deleters are let through that policy only.
+func TestProtectAWSPodIPs_PolicyDeletersAllowed(t *testing.T) {
+	requireCNIAnnotationPolicy(t)
+	a := awsPodIPsAnnotation
+
+	for _, tc := range []struct {
+		user  string
+		rules []rbacv1.PolicyRule
+		role  string
+	}{
+		{user: "aws-cluster-admin-user", role: "cluster-admin"},
+		{user: "aws-policy-deleter", rules: deletePolicyRules(awsPolicyName)},
+	} {
+		t.Run(tc.user, func(t *testing.T) {
+			bindClusterRole(t, tc.user, tc.role, tc.rules)
+			waitForNamedPolicyDeleteAccess(t, tc.user, awsPolicyName, true)
+			c := clientAs(t, tc.user)
+
+			pod := seedAWSPod(t, a.value)
+			for _, path := range []string{podWritePath, podStatusWritePath} {
+				expectAllowed(t, updatePod(t, c, pod, path, func(p *corev1.Pod) {
+					setAnnotation(p, a.key, "192.168.0.2-"+path)
+				}))
+			}
+			expectAllowed(t, updatePod(t, c, pod, podStatusWritePath, func(p *corev1.Pod) {
+				delete(p.Annotations, a.key)
+			}))
+		})
+	}
+
+	t.Run("deleter of the Calico CNI's policy", func(t *testing.T) {
+		const user = "calico-policy-deleter"
+		bindClusterRole(t, user, "", deletePolicyRules(policyName))
+		waitForPolicyDeleteAccess(t, user, true)
+		waitForNamedPolicyDeleteAccess(t, user, awsPolicyName, false)
+
+		pod := seedAWSPod(t, a.value)
+		expectRefusedBy(t, updatePod(t, clientAs(t, user), pod, podStatusWritePath, func(p *corev1.Pod) {
+			setAnnotation(p, a.key, "192.168.0.99")
+		}), awsAnnotationDenial, a.key)
+	})
+
+	t.Run("deleter of the AWS VPC CNI's policy", func(t *testing.T) {
+		const user = "aws-only-policy-deleter"
+		bindClusterRole(t, user, "", deletePolicyRules(awsPolicyName))
+		waitForNamedPolicyDeleteAccess(t, user, awsPolicyName, true)
+		waitForPolicyDeleteAccess(t, user, false)
+
+		for _, k := range protectedAnnotations {
+			pod := mustCreatePodAs(t, testClient, nil)
+			expectRefused(t, patchAnnotation(t, clientAs(t, user), pod, k.key, k.value), k.key)
+		}
 	})
 }
 
@@ -879,13 +985,20 @@ func bindClusterRole(t *testing.T, user, role string, rules []rbacv1.PolicyRule)
 }
 
 // waitForPolicyDeleteAccess waits until the authorizer answers want for whether user may delete
-// the policy.
+// the Calico CNI's policy.
 func waitForPolicyDeleteAccess(t *testing.T, user string, want bool) {
+	t.Helper()
+	waitForNamedPolicyDeleteAccess(t, user, policyName, want)
+}
+
+// waitForNamedPolicyDeleteAccess waits until the authorizer answers want for whether user may
+// delete the named policy.
+func waitForNamedPolicyDeleteAccess(t *testing.T, user, name string, want bool) {
 	t.Helper()
 	waitForAccess(t, user, &authorizationv1.ResourceAttributes{
 		Group:    "admissionregistration.k8s.io",
 		Resource: "validatingadmissionpolicies",
-		Name:     policyName,
+		Name:     name,
 		Verb:     "delete",
 	}, want)
 }
@@ -1030,8 +1143,14 @@ func namedCNIKeys(expression string) []string {
 // loadCNIAnnotationPolicy reads the policy and its binding out of the shipped YAML.
 func loadCNIAnnotationPolicy(t *testing.T) (*admissionregistrationv1.ValidatingAdmissionPolicy, *admissionregistrationv1.ValidatingAdmissionPolicyBinding) {
 	t.Helper()
+	return loadValidatingPolicy(t, cniAnnotationPolicyPath())
+}
 
-	data, err := os.ReadFile(cniAnnotationPolicyPath())
+// loadValidatingPolicy parses the ValidatingAdmissionPolicy and binding in the file at path.
+func loadValidatingPolicy(t *testing.T, path string) (*admissionregistrationv1.ValidatingAdmissionPolicy, *admissionregistrationv1.ValidatingAdmissionPolicyBinding) {
+	t.Helper()
+
+	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("failed to read the policy: %v", err)
 	}
@@ -1046,7 +1165,7 @@ func loadCNIAnnotationPolicy(t *testing.T) (*admissionregistrationv1.ValidatingA
 			Kind string `json:"kind"`
 		}
 		if err := yaml.Unmarshal([]byte(doc), &kind); err != nil {
-			t.Fatalf("failed to read the kind of a document in %s: %v", cniAnnotationPolicyPath(), err)
+			t.Fatalf("failed to read the kind of a document in %s: %v", path, err)
 		}
 		switch kind.Kind {
 		case "ValidatingAdmissionPolicy":
@@ -1219,6 +1338,9 @@ func requireCNIAnnotationPolicy(t *testing.T) {
 			return
 		}
 		cniPolicyErr = waitForCNIAnnotationPolicy(tenant)
+		if cniPolicyErr == nil {
+			cniPolicyErr = waitForAWSAnnotationPolicy(tenant)
+		}
 		if cniPolicyErr == nil && admissionPoliciesEnabled {
 			cniPolicyErr = waitForCNIAnnotationStripping(tenant)
 		}
@@ -1271,6 +1393,34 @@ func waitForCNIAnnotationPolicy(c client.Client) error {
 		if time.Now().After(deadline) {
 			return fmt.Errorf("adding %s to a Pod was still not refused after 60s; is %s installed and bound? last result: %v",
 				conversion.AnnotationPodIP, cniAnnotationPolicyPath(), lastErr)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// waitForAWSAnnotationPolicy polls until adding the AWS VPC CNI's annotation to a Pod is refused.
+func waitForAWSAnnotationPolicy(c client.Client) error {
+	ctx := context.Background()
+	probe := newTestPod(nil)
+	if err := testClient.Create(ctx, probe); err != nil {
+		return fmt.Errorf("failed to create the probe Pod: %w", err)
+	}
+	defer func() { _ = testClient.Delete(ctx, probe) }()
+
+	var lastErr error
+	deadline := time.Now().Add(60 * time.Second)
+	for attempt := 0; ; attempt++ {
+		got := &corev1.Pod{}
+		if lastErr = testClient.Get(ctx, client.ObjectKeyFromObject(probe), got); lastErr == nil {
+			got.Annotations = map[string]string{conversion.AnnotationAWSPodIPs: fmt.Sprintf("probe-%d", attempt)}
+			lastErr = c.Status().Update(ctx, got)
+			if lastErr != nil && strings.Contains(lastErr.Error(), awsAnnotationDenial) {
+				return nil
+			}
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("adding %s to a Pod was still not refused after 60s; is %s installed and bound? last result: %v",
+				conversion.AnnotationAWSPodIPs, awsAnnotationPolicyPath(), lastErr)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}

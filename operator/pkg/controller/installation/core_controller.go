@@ -81,6 +81,11 @@ import (
 
 const (
 	techPreviewFeatureSeccompApparmor = "tech-preview.operator.tigera.io/node-apparmor-profile"
+
+	// awsNodeName names the AWS VPC CNI's DaemonSet in kube-system, and the service account AWS runs it as.
+	awsNodeName = "aws-node"
+	// awsNodeServiceAccountWarning keys the warning shown while aws-node runs as another account.
+	awsNodeServiceAccountWarning = "aws-node-service-account"
 )
 
 const InstallationName string = "calico"
@@ -200,6 +205,12 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		if err = utils.AddNamespacedWatch(c, obj, &handler.EnqueueRequestForObject{}); err != nil {
 			return fmt.Errorf("tigera-installation-controller failed to watch %s: %w", obj, err)
 		}
+	}
+
+	// The AWS VPC CNI's service account decides whether its annotation is protected.
+	awsNode := &appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: awsNodeName, Namespace: metav1.NamespaceSystem}}
+	if err = utils.AddNamespacedWatch(c, awsNode, &handler.EnqueueRequestForObject{}); err != nil {
+		return fmt.Errorf("tigera-installation-controller failed to watch the aws-node DaemonSet: %w", err)
 	}
 
 	// Watch for changes to KubeControllersConfiguration.
@@ -404,7 +415,7 @@ func updateInstallationWithDefaults(ctx context.Context, client client.Client, i
 	}
 
 	awsNode := &appsv1.DaemonSet{}
-	key := types.NamespacedName{Name: "aws-node", Namespace: metav1.NamespaceSystem}
+	key := types.NamespacedName{Name: awsNodeName, Namespace: metav1.NamespaceSystem}
 	err = client.Get(ctx, key, awsNode)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
@@ -1372,6 +1383,23 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		}
 	}
 
+	// AWS's manifests, add-on and docs run the AWS VPC CNI as kube-system:aws-node, which is who
+	// calico-aws-vpc-annotations is bound to. Under any other account its annotation writes would be
+	// refused, failing every CNI ADD, so its annotation is left unprotected instead.
+	unexpectedAWSNodeSA, err := unexpectedAWSNodeServiceAccount(ctx, r.client)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Unable to read the aws-node DaemonSet", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+	if unexpectedAWSNodeSA != "" {
+		r.status.SetWarning(awsNodeServiceAccountWarning, fmt.Sprintf(
+			"The aws-node DaemonSet runs as service account %q, not %q, so the vpc.amazonaws.com/pod-ips pod annotation is not protected",
+			unexpectedAWSNodeSA, awsNodeName,
+		))
+	} else {
+		r.status.ClearWarning(awsNodeServiceAccountWarning)
+	}
+
 	// Build a configuration for rendering calico/node.
 	nodeCfg := render.NodeConfiguration{
 		GoldmaneRunning:       goldmaneRunning,
@@ -1390,6 +1418,8 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		CanRemoveCNIFinalizer: canRemoveCNI,
 		FelixConfiguration:    felixConfiguration,
 		V3CRDs:                r.opts.UseV3CRDs,
+
+		OmitAWSVPCAnnotationsGrant: unexpectedAWSNodeSA != "",
 	}
 
 	if bgpConfiguration.Spec.BindMode != nil {
@@ -1488,6 +1518,13 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
+	// The AWS VPC CNI's policy comes out before its grant, which the components below remove.
+	if unexpectedAWSNodeSA != "" {
+		if err = r.removeValidatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetAWSVPCAnnotations); err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
 	for _, component := range components {
 		if err := handler.CreateOrUpdateOrDelete(ctx, component, nil); err != nil {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error creating / updating resource", err, reqLogger)
@@ -1496,10 +1533,17 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	// The CNI plugin's ClusterRole, and the AWS VPC CNI's calico-aws-vpc-annotations ClusterRole,
-	// both rendered above, carry the permissions these policies check, so they go in only after them. The CRD-only manifests don't carry them, so they're installed whether
-	// or not the operator manages CRDs.
+	// both rendered above, carry the permissions these policies check, so they go in only after
+	// them. The CRD-only manifests don't carry them, so they're installed whether or not the
+	// operator manages CRDs.
 	if err = r.updateValidatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetCNIAnnotations); err != nil {
 		return reconcile.Result{}, err
+	}
+
+	if unexpectedAWSNodeSA == "" {
+		if err = r.updateValidatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetAWSVPCAnnotations); err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 
 	if err = r.updateMutatingAdmissionPolicies(ctx, defaulted, reqLogger, admission.PolicySetCNIAnnotations); err != nil {
@@ -1889,6 +1933,22 @@ func (r *ReconcileInstallation) updateValidatingAdmissionPolicies(ctx context.Co
 	return r.syncManagedAdmissionPolicies(ctx, install, log, desired, existingVAPs, existingVAPBs, admission.IsValidatingPolicyKind, admission.IsValidatingBindingKind, "Error syncing ValidatingAdmissionPolicy resources")
 }
 
+// removeValidatingAdmissionPolicies deletes the operator's ValidatingAdmissionPolicies in the given set.
+func (r *ReconcileInstallation) removeValidatingAdmissionPolicies(ctx context.Context, install *operatorv1.Installation, log logr.Logger, set admission.PolicySet) error {
+	vapAPIVersion := r.opts.APIDiscovery.ServedVersion(admission.APIGroup, admission.KindValidatingPolicy)
+	if vapAPIVersion == "" {
+		return nil
+	}
+
+	existingVAPs, existingVAPBs, err := admission.ListManagedValidating(ctx, r.client, vapAPIVersion, set)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error listing managed ValidatingAdmissionPolicy resources", err, log)
+		return err
+	}
+
+	return r.syncManagedAdmissionPolicies(ctx, install, log, nil, existingVAPs, existingVAPBs, admission.IsValidatingPolicyKind, admission.IsValidatingBindingKind, "Error removing ValidatingAdmissionPolicy resources")
+}
+
 // syncManagedAdmissionPolicies creates or updates the desired admission policies and bindings and
 // deletes any operator-managed ones that are no longer desired, in a single pass. isPolicy/isBinding
 // bucket the desired objects by kind so stale existing resources can be identified by name.
@@ -1966,6 +2026,30 @@ func isHostedOpenShift(ctx context.Context, client client.Client) (bool, error) 
 		return false, fmt.Errorf("unable to read OpenShift infrastructure configuration: %w", err)
 	}
 	return (infra.Status.ControlPlaneTopology == "External"), nil
+}
+
+// unexpectedAWSNodeServiceAccount returns the service account the aws-node DaemonSet runs as when
+// that isn't aws-node. It returns "" when it is, or when there is no aws-node DaemonSet.
+func unexpectedAWSNodeServiceAccount(ctx context.Context, c client.Client) (string, error) {
+	ds := &appsv1.DaemonSet{}
+	err := c.Get(ctx, types.NamespacedName{Name: awsNodeName, Namespace: metav1.NamespaceSystem}, ds)
+	if apierrors.IsNotFound(err) {
+		return "", nil
+	} else if err != nil {
+		return "", err
+	}
+
+	sa := ds.Spec.Template.Spec.ServiceAccountName
+	if sa == "" {
+		sa = ds.Spec.Template.Spec.DeprecatedServiceAccount
+	}
+	if sa == "" {
+		sa = "default"
+	}
+	if sa == awsNodeName {
+		return "", nil
+	}
+	return sa, nil
 }
 
 func updateInstallationForAWSNode(i *operatorv1.Installation, ds *appsv1.DaemonSet) error {

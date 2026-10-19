@@ -122,25 +122,28 @@ func TestCalicoWebhooksInvokesTheNestedWebhookCommand(t *testing.T) {
 	}))
 }
 
-// The CNI annotation policies apply whichever Calico API the manifest serves.
+// The CNI annotation policies, the Calico CNI's and the AWS VPC CNI's, apply whichever Calico API
+// and CNI the manifest is for.
 func TestCalicoRendersTheCNIAnnotationPolicy(t *testing.T) {
-	const name = "protect-cni-annotations.projectcalico.org"
+	for _, name := range []string{"protect-cni-annotations.projectcalico.org", "protect-aws-vpc-annotations.projectcalico.org"} {
+		for _, network := range []string{"calico", "flannel"} {
+			for _, useV3CRDs := range []string{"true", "false"} {
+				t.Run(name+"/"+network+"/useV3CRDs="+useV3CRDs, func(t *testing.T) {
+					values := map[string]string{
+						"datastore": "kubernetes",
+						"network":   network,
+						"useV3CRDs": useV3CRDs,
+					}
 
-	for _, useV3CRDs := range []string{"true", "false"} {
-		t.Run("useV3CRDs="+useV3CRDs, func(t *testing.T) {
-			values := map[string]string{
-				"datastore": "kubernetes",
-				"network":   "calico",
-				"useV3CRDs": useV3CRDs,
+					var policy admissionregistrationv1.ValidatingAdmissionPolicy
+					renderCalicoResourceWith(t, values, "templates/admission-policies.yaml", "ValidatingAdmissionPolicy", name, &policy)
+
+					var binding admissionregistrationv1.ValidatingAdmissionPolicyBinding
+					renderCalicoResourceWith(t, values, "templates/admission-policies.yaml", "ValidatingAdmissionPolicyBinding", name, &binding)
+					NewWithT(t).Expect(binding.Spec.PolicyName).To(Equal(name))
+				})
 			}
-
-			var policy admissionregistrationv1.ValidatingAdmissionPolicy
-			renderCalicoResourceWith(t, values, "templates/admission-policies.yaml", "ValidatingAdmissionPolicy", name, &policy)
-
-			var binding admissionregistrationv1.ValidatingAdmissionPolicyBinding
-			renderCalicoResourceWith(t, values, "templates/admission-policies.yaml", "ValidatingAdmissionPolicyBinding", name, &binding)
-			NewWithT(t).Expect(binding.Spec.PolicyName).To(Equal(name))
-		})
+		}
 	}
 }
 
@@ -244,7 +247,7 @@ func TestCalicoGrantsTheAWSVPCCNIItsAnnotationPermission(t *testing.T) {
 }
 
 // On etcd the CNI plugin writes workload endpoints to etcd, not to these pod annotations, so neither
-// policy, nor the AWS VPC CNI's grant, is rendered.
+// policy, nor the AWS VPC CNI's policy and grant, is rendered.
 func TestCalicoOmitsTheCNIAnnotationPoliciesOnEtcd(t *testing.T) {
 	g := NewWithT(t)
 	if _, err := exec.LookPath("helm"); err != nil {
@@ -259,6 +262,7 @@ func TestCalicoOmitsTheCNIAnnotationPoliciesOnEtcd(t *testing.T) {
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(output).NotTo(ContainSubstring("protect-cni-annotations.projectcalico.org"), network)
 		g.Expect(output).NotTo(ContainSubstring("strip-cni-annotations.projectcalico.org"), network)
+		g.Expect(output).NotTo(ContainSubstring("protect-aws-vpc-annotations.projectcalico.org"), network)
 		g.Expect(output).NotTo(ContainSubstring("calico-aws-vpc-annotations"), network)
 	}
 }

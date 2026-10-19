@@ -172,6 +172,18 @@ var _ = Describe("Node rendering tests", func() {
 				}))
 			})
 
+			It("should remove the AWS VPC CNI's annotation grant when told to", func() {
+				cfg.OmitAWSVPCAnnotationsGrant = true
+				component := render.Node(&cfg)
+				Expect(component.ResolveImages(nil)).To(BeNil())
+				resources, toDelete := component.Objects()
+
+				for _, kind := range []string{"ClusterRole", "ClusterRoleBinding"} {
+					Expect(rtest.GetResource(resources, "calico-aws-vpc-annotations", "", "rbac.authorization.k8s.io", "v1", kind)).To(BeNil(), kind)
+					Expect(rtest.GetResource(toDelete, "calico-aws-vpc-annotations", "", "rbac.authorization.k8s.io", "v1", kind)).NotTo(BeNil(), kind)
+				}
+			})
+
 			It("should render all resources for a default configuration", func() {
 				expectedResources := []struct {
 					name    string

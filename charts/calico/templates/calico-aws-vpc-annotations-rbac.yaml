@@ -1,6 +1,6 @@
-{{- /* Shipped wherever protect-cni-annotations.projectcalico.org is, see admission-policies.yaml. */}}
+{{- /* Shipped wherever protect-aws-vpc-annotations.projectcalico.org is, see admission-policies.yaml. */}}
 {{- if eq .Values.datastore "kubernetes" }}
-# Lets the AWS VPC CNI write its pod IP annotation through protect-cni-annotations.projectcalico.org.
+# Lets the AWS VPC CNI write its pod IP annotation through protect-aws-vpc-annotations.projectcalico.org.
 # Nothing serves this resource; it exists only to be granted. Bind this ClusterRole to anyone else
 # who must edit that annotation.
 kind: ClusterRole
