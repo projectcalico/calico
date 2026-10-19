@@ -16,7 +16,9 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.25
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.36
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.37
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.17
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.307.0
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.2
 	github.com/aws/smithy-go v1.27.8
 	github.com/bits-and-blooms/bitset v1.24.5
 	github.com/buger/jsonparser v1.2.0
@@ -115,6 +117,7 @@ require (
 	golang.org/x/text v0.42.0
 	golang.org/x/time v0.16.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
+	google.golang.org/api v0.276.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.12
@@ -180,7 +183,6 @@ require (
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.18 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.17 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.37 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.37 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.38 // indirect
@@ -200,7 +202,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.89.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/rds v1.118.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/route53 v1.62.6 // indirect
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.41.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.5.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sns v1.39.16 // indirect
@@ -411,7 +412,6 @@ require (
 	golang.org/x/tools v0.50.0 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
-	google.golang.org/api v0.276.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260803160001-6ac0973c030d // indirect
