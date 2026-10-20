@@ -14,8 +14,8 @@ This sub-design covers the CNI plugin's use of IPAM: `cni-plugin/pkg/ipamplugin/
 cross-component picture - data model, consumers, repo split - lives in the [index](./DESIGN.md). Handle-ID conventions are defined in
 [`./ipam-core-library.md`](./ipam-core-library.md) and referenced here, not re-derived.
 
-The CNI plugin ships two binaries: `calico` (main CNI) and `calico-ipam` (invoked when `conf.IPAM.Type == "calico-ipam"`). The dispatcher in
-[`cni-plugin/cmd/calico/calico.go`](../../cni-plugin/cmd/calico/calico.go) routes by binary name.
+The CNI plugin ships two binaries: `calico` (main CNI) and `calico-ipam` (used when `conf.IPAM.Type == "calico-ipam"`). The dispatcher in
+[`cni-plugin/cmd/calico/calico.go`](../../cni-plugin/cmd/calico/calico.go) routes by binary name. `calico` runs the `calico-ipam` code in its own process instead of exec'ing the `calico-ipam` binary.
 
 ## ADD flow
 
@@ -25,6 +25,12 @@ Invariants:
   for the next CNI invocation to trip on.
 - **Lock then clock.** The 90s allocation timeout starts *after* the host-wide IPAM lock is acquired (see [The IPAM lock](#the-ipam-lock)). Otherwise lock contention burns the
   budget before any allocation work runs.
+- **IPAM dies with the plugin.** A runtime that gives up on a sandbox kills `calico`. A separate `calico-ipam` process would outlive it and could later move the pod's address
+  onto the abandoned sandbox, whose cleanup DEL then frees it out from under the live one. Under a meta-plugin such as Multus the runtime kills the meta-plugin instead, and
+  `calico` keeps running, so the next invariant has to hold as well.
+- **A stale ADD never takes a newer sandbox's address.** An ADD refuses to move an address whose allocation was stamped after the ADD started, since only a sandbox kubelet
+  created later could have claimed it. It fails with `ErrCodeSandboxSuperseded` instead of falling back to a fresh address, because networking the abandoned sandbox would
+  replace the live one's host interface. Both times come from the node's wall clock.
 
 `cmdAdd` in [`cni-plugin/pkg/ipamplugin/ipam_plugin.go`](../../cni-plugin/pkg/ipamplugin/ipam_plugin.go) is the entry point. The flow is straightforward client construction →
 pool resolution → lock → `AutoAssign` → return. The design-relevant steps are:
