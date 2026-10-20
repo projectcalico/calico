@@ -6,7 +6,7 @@
 
 # libcalico-go
 
-<img src="http://docs.projectcalico.org/images/felix.png" width="100" height="100">
+<img src="https://docs.projectcalico.org/images/felix.png" width="100" height="100">
 
 **Note: This library is intended for internal use only. See [github.com/projectcalico/api](https://github.com/projectcalico/api) for the officially supported API
 definition and golang clients.**
@@ -17,7 +17,7 @@ Calico is a Tigera open source project, and is primarily maintained by the Tiger
 
 ## Get Started Using Calico
 
-For users who want to learn more about the project or get started with Calico, see the documentation on [docs.projectcalico.org](https://docs.projectcalico.org).
+For users who want to learn more about the project or get started with Calico, see the documentation on [docs.tigera.io](https://docs.tigera.io/).
 
 ## Get Started Developing Calico
 
