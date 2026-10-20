@@ -1,4 +1,4 @@
-// Copyright (c) 2016, 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,9 @@ import (
 )
 
 const parserDebug = false
+
+// MaxNestingDepth limits the nesting of parentheses in a selector.
+const MaxNestingDepth = 100
 
 var (
 	sharedParserLock sync.Mutex
@@ -102,7 +105,7 @@ func (p *Parser) parseRoot(selector string, validateOnly bool) (sel *Selector, e
 
 		// The "||" operator has the lowest precedence so we start with that.
 		var remTokens []tokenizer.Token
-		node, remTokens, err = p.parseOrExpression(tokens, validateOnly)
+		node, remTokens, err = p.parseOrExpression(tokens, 0, validateOnly)
 		if err != nil {
 			return
 		}
@@ -124,13 +127,13 @@ func (p *Parser) parseRoot(selector string, validateOnly bool) (sel *Selector, e
 }
 
 // parseOrExpression parses a one or more "&&" terms, separated by "||" operators.
-func (p *Parser) parseOrExpression(tokens []tokenizer.Token, validateOnly bool) (sel Node, remTokens []tokenizer.Token, err error) {
+func (p *Parser) parseOrExpression(tokens []tokenizer.Token, depth int, validateOnly bool) (sel Node, remTokens []tokenizer.Token, err error) {
 	if parserDebug {
 		log.Debugf("Parsing ||s from %v", tokens)
 	}
 	// Look for the first expression.
 	var andNodes []Node
-	sel, remTokens, err = p.parseAndExpression(tokens, validateOnly)
+	sel, remTokens, err = p.parseAndExpression(tokens, depth, validateOnly)
 	if err != nil {
 		return
 	}
@@ -143,7 +146,7 @@ func (p *Parser) parseOrExpression(tokens []tokenizer.Token, validateOnly bool) 
 		switch remTokens[0].Kind {
 		case tokenizer.TokOr:
 			remTokens = remTokens[1:]
-			sel, remTokens, err = p.parseAndExpression(remTokens, validateOnly)
+			sel, remTokens, err = p.parseAndExpression(remTokens, depth, validateOnly)
 			if err != nil {
 				return
 			}
@@ -168,6 +171,7 @@ func (p *Parser) parseOrExpression(tokens []tokenizer.Token, validateOnly bool) 
 // parseAndExpression parses a one or more operations, separated by "&&" operators.
 func (p *Parser) parseAndExpression(
 	tokens []tokenizer.Token,
+	depth int,
 	validateOnly bool,
 ) (sel Node, remTokens []tokenizer.Token, err error) {
 	if parserDebug {
@@ -175,7 +179,7 @@ func (p *Parser) parseAndExpression(
 	}
 	// Look for the first operation.
 	var opNodes []Node
-	sel, remTokens, err = p.parseOperation(tokens, validateOnly)
+	sel, remTokens, err = p.parseOperation(tokens, depth, validateOnly)
 	if err != nil {
 		return
 	}
@@ -188,7 +192,7 @@ func (p *Parser) parseAndExpression(
 		switch remTokens[0].Kind {
 		case tokenizer.TokAnd:
 			remTokens = remTokens[1:]
-			sel, remTokens, err = p.parseOperation(remTokens, validateOnly)
+			sel, remTokens, err = p.parseOperation(remTokens, depth, validateOnly)
 			if err != nil {
 				return
 			}
@@ -216,11 +220,12 @@ var (
 	ErrExpectedRBrace = errors.New("expected }")
 	ErrExpectedString = errors.New("expected string")
 	ErrExpectedSetLit = errors.New("expected set literal")
+	ErrNestingTooDeep = fmt.Errorf("parentheses nested more than %d deep", MaxNestingDepth)
 )
 
 // parseOperations parses a single, possibly negated operation (i.e. ==, !=, has()).
 // It also handles calling parseOrExpression recursively for parenthesized expressions.
-func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (sel Node, remTokens []tokenizer.Token, err error) {
+func (p *Parser) parseOperation(tokens []tokenizer.Token, depth int, validateOnly bool) (sel Node, remTokens []tokenizer.Token, err error) {
 	if parserDebug {
 		log.Debugf("Parsing op from %v", tokens)
 	}
@@ -354,7 +359,11 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 		}
 	case tokenizer.TokLParen:
 		// We hit a paren, skip past it, then recurse.
-		sel, remTokens, err = p.parseOrExpression(tokens[1:], validateOnly)
+		if depth >= MaxNestingDepth {
+			err = ErrNestingTooDeep
+			return
+		}
+		sel, remTokens, err = p.parseOrExpression(tokens[1:], depth+1, validateOnly)
 		if err != nil {
 			return
 		}
