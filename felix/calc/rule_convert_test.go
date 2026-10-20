@@ -193,11 +193,40 @@ var _ = DescribeTable("ParsedRulesToProtoRules",
 			portFromString("123"),
 		}},
 		&proto.Rule{SrcPorts: []*proto.PortRange{
-			{First: 10, Last: 10},
-			{First: 11, Last: 11},
-			{First: 12, Last: 13},
+			{First: 10, Last: 13},
 			{First: 123, Last: 123},
 		}}),
+	Entry("Unsorted, duplicate and overlapping ports",
+		ParsedRule{DstPorts: []numorstring.Port{
+			numorstring.SinglePort(9090),
+			portFromRange(81, 90),
+			numorstring.SinglePort(9090),
+			portFromRange(80, 81),
+			numorstring.SinglePort(443),
+		}},
+		&proto.Rule{DstPorts: []*proto.PortRange{
+			{First: 80, Last: 90},
+			{First: 443, Last: 443},
+			{First: 9090, Last: 9090},
+		}}),
+	Entry("Full port range absorbs others",
+		ParsedRule{DstPorts: []numorstring.Port{
+			numorstring.SinglePort(80),
+			portFromRange(0, 65535),
+			numorstring.SinglePort(65535),
+		}},
+		&proto.Rule{DstPorts: []*proto.PortRange{
+			{First: 0, Last: 65535},
+		}}),
+	Entry("Negated ports",
+		ParsedRule{
+			NotSrcPorts: []numorstring.Port{portFromRange(20, 30), portFromRange(10, 20)},
+			NotDstPorts: []numorstring.Port{numorstring.SinglePort(22), numorstring.SinglePort(22)},
+		},
+		&proto.Rule{
+			NotSrcPorts: []*proto.PortRange{{First: 10, Last: 30}},
+			NotDstPorts: []*proto.PortRange{{First: 22, Last: 22}},
+		}),
 	Entry("ICMP type-only rule",
 		ParsedRule{
 			ICMPType:    &icmpType10,
