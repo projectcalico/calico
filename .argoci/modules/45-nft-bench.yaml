@@ -18,6 +18,10 @@ steps:
           - name: LENS_ELASTICSEARCH_USER
           - name: LENS_ELASTICSEARCH_TOKEN
       - name: argoci-gcp-gocache-s3api-hmac
+        keys:
+          - GOCACHE_ACCESS_KEY
+          - GOCACHE_SECRET_KEY
+          - GOCACHE_BUCKET_NAME
     commands: |
       sudo apt-get update -y && sudo apt-get install -y nftables make
       make -C felix bin/nft.test
