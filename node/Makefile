@@ -262,6 +262,8 @@ nft-rpms-image: | register
 # builds, fresh local builds). Other base images (UBI_IMAGE, BIRD_IMAGE,
 # BPFTOOL_IMAGE) are pinned by tag so cache freshness is fine without --pull.
 $(NODE_CONTAINER_CREATED): DOCKER_PULL :=
+# The s3 cache's builder cannot see the locally loaded nft-rpms image either.
+$(NODE_CONTAINER_CREATED): DOCKER_BUILD_CACHE :=
 
 $(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register nft-rpms-image
 	$(DOCKER_BUILD) \
