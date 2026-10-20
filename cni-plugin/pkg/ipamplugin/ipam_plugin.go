@@ -708,23 +708,13 @@ func getVMIInfoForPod(ctx context.Context, conf types.NetConf, epIDs *utils.WEPI
 		return nil, nil
 	}
 
-	pod := utils.SandboxLookupsFrom(ctx).Pod
-	if pod == nil {
-		k8sClient, err := k8sClientFor(ctx, conf, logger)
-		if err != nil {
-			logger.WithError(err).Error("Failed to create Kubernetes client for VMI detection")
-			return nil, err
-		}
-
-		pod, err = k8sClient.CoreV1().Pods(epIDs.Namespace).Get(ctx, epIDs.Pod, metav1.GetOptions{})
-		if err != nil {
-			if kerrors.IsNotFound(err) {
-				logger.Info("Pod not found, it may have been deleted")
-				return nil, errPodNotFound
-			}
-			logger.WithError(err).Error("Failed to get pod for VMI detection")
-			return nil, err
-		}
+	pod, err := getPod(ctx, conf, epIDs, logger)
+	if errors.Is(err, errPodNotFound) {
+		logger.Info("Pod not found, it may have been deleted")
+		return nil, err
+	} else if err != nil {
+		logger.WithError(err).Error("Failed to get pod for VMI detection")
+		return nil, err
 	}
 
 	// Check ownerReferences before creating the KubeVirt client.
@@ -1028,6 +1018,26 @@ func del(ctx context.Context, args *skel.CmdArgs) error {
 	}
 
 	return nil
+}
+
+// getPod returns the sandbox's pod. It uses the pod the calling plugin already fetched when
+// calico-ipam runs in-process, and otherwise reads it from the Kubernetes API, returning
+// errPodNotFound if the pod is gone.
+func getPod(ctx context.Context, conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *logrus.Entry) (*corev1.Pod, error) {
+	if pod := utils.SandboxLookupsFrom(ctx).Pod; pod != nil {
+		return pod, nil
+	}
+
+	k8sClient, err := k8sClientFor(ctx, conf, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	pod, err := k8sClient.CoreV1().Pods(epIDs.Namespace).Get(ctx, epIDs.Pod, metav1.GetOptions{})
+	if kerrors.IsNotFound(err) {
+		return nil, errPodNotFound
+	}
+	return pod, err
 }
 
 // getNamespace returns the named namespace, or nil for an empty name. It uses the namespace the
