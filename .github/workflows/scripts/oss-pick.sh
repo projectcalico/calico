@@ -20,6 +20,8 @@
 #             PICK_PATHS_FILE(=$RUNNER_TEMP/pick-paths, outside the agent's reach)
 #             PICK_CONFLICTS_FILE(=$RUNNER_TEMP/pick-conflicts) ESCALATION_NOTES
 #             PICK_CONTEXT_DIR(=/tmp/pick-context) PICK_DELETE_FILE(=/tmp/pick-delete)
+#             IMPORT_REWRITES (pick/finalize/apply: "old=new" Go module paths)
+#             PICK_REWRITES_FILE(=$RUNNER_TEMP/pick-rewrites)
 set -o errexit -o nounset -o pipefail
 
 : "${SOURCE_REPO:?}" "${TARGET_REPO:?}" "${TARGET_BRANCH:?}"
@@ -34,6 +36,7 @@ PICK_PATHS_FILE="${PICK_PATHS_FILE:-${RUNNER_TEMP:-/tmp}/pick-paths}"
 PICK_CONFLICTS_FILE="${PICK_CONFLICTS_FILE:-${RUNNER_TEMP:-/tmp}/pick-conflicts}"
 PICK_CONTEXT_DIR="${PICK_CONTEXT_DIR:-/tmp/pick-context}"
 PICK_DELETE_FILE="${PICK_DELETE_FILE:-/tmp/pick-delete}"
+PICK_REWRITES_FILE="${PICK_REWRITES_FILE:-${RUNNER_TEMP:-/tmp}/pick-rewrites}"
 
 src_org="${SOURCE_REPO%%/*}"; src_name="${SOURCE_REPO##*/}"
 
@@ -59,6 +62,7 @@ do_pick() {
   git config --global user.name  "oss-pick-bot"
   git config --global user.email "oss-pick-bot@users.noreply.github.com"
   emit "branch=$BRANCH_NAME"
+  : > "$PICK_REWRITES_FILE"
 
   if ! git ls-remote "$tgt_url" HEAD >/dev/null 2>&1; then
     echo "::error::cannot reach ${TARGET_REPO} with the supplied token"; exit 1
@@ -93,7 +97,9 @@ do_pick() {
   fi
 
   if [ "$rc" -eq 0 ]; then
-    echo "Clean cherry-pick."; record_pick_paths HEAD~1 HEAD; emit "outcome=clean"
+    echo "Clean cherry-pick."; record_pick_paths HEAD~1 HEAD
+    if rewrite_imports; then git commit -q -a --amend --no-edit; fi
+    emit "outcome=clean"
   elif git diff --name-only --diff-filter=U | grep -q .; then
     echo "Conflicts:"; git diff --name-only --diff-filter=U | tee "$PICK_CONFLICTS_FILE"
     record_pick_paths HEAD; write_pick_context; emit "outcome=conflict"
@@ -115,6 +121,42 @@ do_pick() {
 record_pick_paths() {
   { git diff --name-only "$@"; git diff --name-only "${MERGE_SHA}^1" "$MERGE_SHA"; } |
     sort -u > "$PICK_PATHS_FILE"
+}
+
+# The target renames some source Go modules (IMPORT_REWRITES). Returns 0 if a
+# pick file changed, and lists it in PICK_REWRITES_FILE for the PR body.
+rewrite_imports() {
+  [ -n "${IMPORT_REWRITES:-}" ] || return 1
+  local pair old new script="" f tmp changed=()
+  for pair in $IMPORT_REWRITES; do
+    old="${pair%%=*}"; new="${pair#*=}"
+    if [[ "$pair" != *=* || -z "$old" || -z "$new" || "$old" == "$new" ]]; then
+      echo "::error::bad IMPORT_REWRITES entry, want old=new: $pair"; exit 1
+    fi
+    old="$(printf '%s' "$old" | sed 's/[].[\*^$#]/\\&/g')"
+    new="$(printf '%s' "$new" | sed 's/[\&#]/\\&/g')"
+    script+="s#\"${old}\([/\"]\)#\"${new}\1#g;"
+  done
+  # Only import specs: Enterprise code may name the OSS path on purpose.
+  tmp="$(mktemp)"
+  while IFS= read -r f; do
+    [[ "$f" == *.go ]] && [ -f "$f" ] || continue
+    sed -e "/^import (/,/^)/{${script}}" -e "/^import [^(]/{${script}}" "$f" > "$tmp"
+    cmp -s "$f" "$tmp" && continue
+    cat "$tmp" > "$f"
+    changed+=("$f")
+  done < "$PICK_PATHS_FILE"
+  rm -f "$tmp"
+  [ "${#changed[@]}" -gt 0 ] || return 1
+  printf '%s\n' "${changed[@]}" >> "$PICK_REWRITES_FILE"
+  # The run log is public, so it gets the count, not the file names.
+  echo "Rewrote imports in ${#changed[@]} file(s)."
+  # The renamed import may now sort elsewhere in its group.
+  if ! command -v gofmt >/dev/null; then
+    echo "::warning::gofmt not found; rewritten imports may be unsorted"
+  elif ! gofmt -w "${changed[@]}"; then
+    echo "::warning::gofmt failed; rewritten imports may be unsorted"
+  fi
 }
 
 # The agent may not run git with arguments (--output writes any file), so
@@ -155,6 +197,9 @@ do_finalize() {
       *) echo "::error::marker check failed (git grep exit $rc)"; exit 1 ;;
     esac
   fi
+
+  # Also covers the files that applied cleanly, which the agent never sees.
+  rewrite_imports || true
 
   extra="$( { git diff --name-only HEAD; git ls-files --others --exclude-standard; } |
     sort -u | comm -23 - "$PICK_PATHS_FILE")"
@@ -259,6 +304,9 @@ do_export() {
   if [ -n "${RESOLUTION_REPORT:-}" ] && [ -s "$RESOLUTION_REPORT" ]; then
     cp "$RESOLUTION_REPORT" "$EXPORT_DIR/report.md"
   fi
+  if [ -s "$PICK_REWRITES_FILE" ]; then
+    sort -u "$PICK_REWRITES_FILE" > "$EXPORT_DIR/rewrites.txt"
+  fi
   echo "exported $(ls "$EXPORT_DIR"/patches/*.patch | wc -l) patch(es) to $EXPORT_DIR"
   emit "export=ready"
 }
@@ -313,6 +361,10 @@ build_pr_text() {
     conflicts_block="$(printf '## Conflicts resolved\n%s\n\n<details>\n<summary><b>AI conflict-resolution report</b> (click to expand)</summary>\n\n%s\n</details>' "$sevnote" "$conflicts")"
   else
     conflicts_block="$(printf '## Conflicts\n%s' "$conflicts")"
+  fi
+  # The script edited these files after git applied the OSS change.
+  if [ -s "$EXPORT_DIR/rewrites.txt" ]; then
+    conflicts_block+="$(printf '\n\n## Imports rewritten\nThe pick renamed OSS Go module imports (`%s`, as old=new) in these files. Review them:\n' "${IMPORT_REWRITES:-}"; sed 's/.*/- `&`/' "$EXPORT_DIR/rewrites.txt")"
   fi
 
   # Conflicts get a banner at the top so the author reviews the resolution
