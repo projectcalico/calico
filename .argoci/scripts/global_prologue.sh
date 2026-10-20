@@ -271,12 +271,14 @@ echo "[INFO] initialising bz profile..."
   || { echo "[ERROR] bz init profile failed — see ${BZ_LOGS_DIR}/initialize.log"; exit 1; }
 mkdir -p "${BZ_LOCAL_DIR}" "${REPORT_DIR}" "${BZ_LOCAL_DIR}/config"
 # bz provision prereq wants the docker auth at <profile>/.local/config/docker_auth.json
-# (the DOCKER_AUTH_FILE env alone does not redirect the prereq check).
+# (the DOCKER_AUTH_FILE env alone does not redirect the prereq check); sto:install
+# (benchmarks) builds its pull secrets from docker_cfg.json.
 if [[ -f "${HOME}/.docker/config.json" ]]; then
   cp "${HOME}/.docker/config.json" "${BZ_LOCAL_DIR}/config/docker_auth.json"
-  echo "[INFO] staged docker_auth.json into ${BZ_LOCAL_DIR}/config"
+  cp "${HOME}/.docker/config.json" "${BZ_LOCAL_DIR}/config/docker_cfg.json"
+  echo "[INFO] staged docker_auth.json and docker_cfg.json into ${BZ_LOCAL_DIR}/config"
 else
-  echo "[WARN] ${HOME}/.docker/config.json missing; docker_auth not staged"
+  echo "[WARN] ${HOME}/.docker/config.json missing; docker_auth/docker_cfg not staged"
 fi
 # aws-openshift:check-prereqs expects the Red Hat pull secret at this path.
 if [[ -f "${HOME}/secrets/redhat-pull-secret.txt" ]]; then
