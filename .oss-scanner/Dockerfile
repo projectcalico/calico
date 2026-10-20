@@ -18,6 +18,9 @@ FROM calico/go-build:1.27.1-llvm21.1.8-k8s1.37.1
 # go-build's entrypoint switches to UID 9001, which cannot write /src or use root's build cache.
 ENTRYPOINT []
 
+# The scanner's own layer runs `dnf install curl`, which conflicts with go-build's preinstalled curl-minimal.
+RUN dnf swap -y curl-minimal curl && dnf clean all
+
 # A go.mod newer than the image fetches its toolchain here, while the network is up, instead of failing.
 ENV GOTOOLCHAIN=auto
 
