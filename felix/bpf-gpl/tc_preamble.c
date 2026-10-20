@@ -103,5 +103,7 @@ int  cali_tc_preamble(struct __sk_buff *skb)
 static CALI_BPF_INLINE void __compile_tc_asserts(void) {
 /* We store globals in the state map to pass them between programs, they must fit! */
 COMPILE_TIME_ASSERT(sizeof(struct cali_tc_globals) < sizeof(struct cali_tc_state))
+/* The scratch area lives in the same state-map slot, right after the globals. */
+COMPILE_TIME_ASSERT(sizeof(struct cali_tc_globals) + sizeof(struct pkt_scratch) <= sizeof(struct cali_tc_state))
 }
 #pragma clang diagnostic pop
